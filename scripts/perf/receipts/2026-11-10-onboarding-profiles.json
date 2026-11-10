@@ -256,5 +256,143 @@
     "catalog_baseline_failures_reproduced": 4,
     "validation_status_check_and_drift": "passed",
     "limits": "Existing baseline values and performance thresholds remain unchanged; exact-profile timer/IRQ execution coverage does not establish silicon or full peripheral conformance."
+  },
+  "post_main_validation": {
+    "checked_at": "2026-11-10T20:24:15.210441+00:00",
+    "source": {
+      "repository": "w1ne/labwired-core",
+      "pr": "https://github.com/w1ne/labwired-core/pull/1812",
+      "previous_sha": "1c92c5a77bdcf6a5a4029f98ca77f6a8aa30e372",
+      "remote_sha": "5efd6c1d6751ee15ac00ce8b22f43c0750f51549",
+      "local_sha": "0e5a39b69454b8f6cd94598ca8e293c66237ba9a",
+      "tree": "4adbb74705aea1abc92b44642661d618209eaed0",
+      "upstream_main": "841be9961e8e718f5c0f11ded698e1ccf7f81a0e",
+      "upstream_source_files_preserved": 10,
+      "manifest_and_generated_doc_blobs_verified": true,
+      "published_tree_matches_local": true,
+      "validation": "Generated documentation check/drift and diff check pass. Targeted native/performance verification of the upstream merge is pending; earlier receipts remain revision-scoped."
+    },
+    "baseline_sha256": "2cdbfce68ca1a0b168904d212b580916dd45b51345a153406813af2fe7159ede",
+    "baseline_policy": "No change to the existing baselines or thresholds in post-main verification.",
+    "python_tests": {
+      "passed": 57,
+      "failed": 0,
+      "log": "perf-current-main-tests.log"
+    },
+    "catalog_compatibility": {
+      "passed": 19,
+      "failed": 0,
+      "report": "../ci/core-cra-triage/current-main/results.json",
+      "scope": "PR1812 exact tests/configurations with the recorded current-main thermal candidate engine; not isolated PR1812 engine equivalence."
+    },
+    "unwind_candidate_probe": {
+      "cli_sha256": "8480d53e4af6c35677703fd55658a68f2fa08ab1e695f1f93af6931b83be1e36",
+      "build": "opt3, panic unwind, LTO disabled, debug0, overflow checks enabled",
+      "engine": "current-main thermal candidate; full provenance in editor/thermal-audit/final-build-provenance.json",
+      "measured_modes": 6,
+      "skipped": 0,
+      "result": "Three step modes exceed standard-profile baselines. Compiler settings differ; this is not a comparable source-regression measurement.",
+      "status_json": "perf-current-main-unwind-regression.json"
+    },
+    "standard_profile_verification": {
+      "state": "passed",
+      "command": "cargo build --locked --offline --release -p labwired-cli --features event-scheduler",
+      "profile": "workspace release defaults: opt3, panic abort, thin LTO, debug enabled, overflow checks enabled",
+      "source_sha": "0e5a39b69454b8f6cd94598ca8e293c66237ba9a",
+      "source_tree": "4adbb74705aea1abc92b44642661d618209eaed0",
+      "build_exit_code": 0,
+      "build_log": "perf-current-main-standard-build.log",
+      "cli_sha256": "e4a020981e9e768618728dfab3f43d124e8ba19db816527a21b769dfb213d2f0",
+      "normal_regression_check": {
+        "contract_failures": [],
+        "matched": {
+          "esp32-devkitc-32e-gpio-smoke": {
+            "fixture": "esp32",
+            "modes": [
+              "step",
+              "batch"
+            ]
+          },
+          "esp32-devkitc-32e-uart1": {
+            "fixture": "esp32",
+            "modes": [
+              "step",
+              "batch"
+            ]
+          },
+          "stm32f103rb-nucleo-bme280-smoke": {
+            "fixture": "stm32",
+            "modes": [
+              "step",
+              "batch"
+            ]
+          }
+        },
+        "measured": {
+          "esp32-devkitc-32e-gpio-smoke": {
+            "batch": 1.4,
+            "step": 977.7
+          },
+          "esp32-devkitc-32e-uart1": {
+            "batch": 1.4,
+            "step": 977.7
+          },
+          "stm32f103rb-nucleo-bme280-smoke": {
+            "batch": 1.5,
+            "step": 921.9
+          }
+        },
+        "never_measured": [],
+        "ok": true,
+        "regressions": [],
+        "skipped": {},
+        "stale": [],
+        "unmeasurable": [],
+        "waived": {}
+      },
+      "absolute_spin_gate": {
+        "failures": [],
+        "measured": {
+          "esp32-devkitc-32e-gpio-smoke": {
+            "clock_hz": 240000000,
+            "max_rtx": 32.30485340733074,
+            "median_rtx": 30.442653226396363,
+            "min_rtx": 23.56295210289021,
+            "repeats": 3,
+            "steps": 240000000,
+            "steps_per_batch": 1023.8
+          },
+          "esp32-devkitc-32e-uart1": {
+            "clock_hz": 240000000,
+            "max_rtx": 30.79828634699428,
+            "median_rtx": 30.025230500897788,
+            "min_rtx": 28.79868724073617,
+            "repeats": 3,
+            "steps": 240000000,
+            "steps_per_batch": 1023.8
+          },
+          "stm32f103rb-nucleo-bme280-smoke": {
+            "clock_hz": 8000000,
+            "max_rtx": 145.96963249452182,
+            "median_rtx": 120.13864959049658,
+            "min_rtx": 115.18789218797012,
+            "repeats": 3,
+            "steps": 8000000,
+            "steps_per_batch": 1023.8
+          }
+        },
+        "minimum_required_rtx": 1.0,
+        "not_measured": {},
+        "ok": true,
+        "rtf": null
+      },
+      "pre_existing_baseline_entries_unchanged": 94,
+      "config_sha256": {
+        "esp32-devkitc-32e-gpio-smoke": "6b3aff2af20a31c6d580bdbfd2a40314db3dbcc7458764cd2dc407f3ff6ecbf8",
+        "esp32-devkitc-32e-uart1": "9f7ad2d1233db207caeb2f9ea2d950a50526f41d02abe022a3169d852e53e4c8",
+        "stm32f103rb-nucleo-bme280-smoke": "5acca6145e71b40bd316c9321fa6828e9f032a9582edc00eb0d491e9496f4c29"
+      },
+      "scope": "Exact PR1812 compiled source after main841 merge. Only synthetic CPU ALU spin; no application or silicon timing claim. The three-repeat RTx measurements were made on a shared host."
+    }
   }
 }
