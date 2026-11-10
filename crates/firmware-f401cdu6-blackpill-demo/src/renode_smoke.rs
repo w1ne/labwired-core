@@ -18,11 +18,12 @@
 //!          (25 °C = 0x1900), plus TXE/RXNE buffer IRQs, master-transmit and
 //!          master-receive BTF event IRQs, absent-address NACK and error IRQ
 //!          checks
-//!   I2C2   a separate TMP102 repeated-start read, SB/ADDR/BTF event IRQs and
-//!          TXE isolation on the imported second controller instance
+//!   I2C2   a separate TMP102 repeated-start read, SB/ADDR/BTF event IRQs,
+//!          TXE isolation, and receive BTF/RXNE source and release checks on
+//!          the imported second controller instance
 //!   SPI1   MAX31855 reset frame plus TXEIE/RXNEIE level IRQ assertions
 //!   USART1 TXEIE and RXNEIE assert and release their NVIC line
-//! A summary word goes to RAM at 0x20017F00 (one bit per block passed).
+//! A summary word goes to RAM at 0x20017F00 (one bit per smoke group passed).
 
 use core::ptr::{read_volatile, write_volatile};
 
@@ -203,6 +204,25 @@ fn main() -> ! {
     send(if i2c2_ok { b" ok\r\n" } else { b" FAIL\r\n" });
     passed |= (i2c2_ok as u32) << 7;
 
+    let (i2c2_rx_btf_data, i2c2_rx_btf_irq, i2c2_rxne_isolated, i2c2_rx_btf_released) =
+        smoke_i2c2_receive_btf();
+    let i2c2_rx_btf_ok =
+        i2c2_rx_btf_data == 0x1980 && i2c2_rx_btf_irq && i2c2_rxne_isolated && i2c2_rx_btf_released;
+    send(b"i2c2 btf_rx_irq=");
+    send(if i2c2_rx_btf_irq { b"1" } else { b"0" });
+    send(b" rxne_isolated=");
+    send(if i2c2_rxne_isolated { b"1" } else { b"0" });
+    send(b" release=");
+    send(if i2c2_rx_btf_released { b"1" } else { b"0" });
+    send(b" data=");
+    put_hex32(u32::from(i2c2_rx_btf_data));
+    send(if i2c2_rx_btf_ok {
+        b" ok\r\n"
+    } else {
+        b" FAIL\r\n"
+    });
+    passed |= (i2c2_rx_btf_ok as u32) << 8;
+
     let spi_ok = smoke_spi1();
     passed |= (spi_ok as u32) << 4;
 
@@ -212,7 +232,7 @@ fn main() -> ! {
     passed |= (usart1_rx_irq_ok as u32) << 6;
 
     wr(RESULT, 0xB1AC_0000 | passed);
-    send(if passed == 0xFF {
+    send(if passed == 0x1FF {
         b"BLACKPILL PASS\r\n"
     } else {
         b"BLACKPILL FAIL\r\n"
@@ -681,6 +701,77 @@ fn smoke_i2c2() -> (u16, bool, bool, bool, bool) {
         addr_irq,
         txe_isolated,
         btf_irq,
+    )
+}
+
+/// Read two bytes from the I2C2 TMP102 without consuming the first until BTF.
+/// With ITEVTEN enabled and ITBUFEN disabled, RXNE must not assert EV; BTF
+/// must assert the configured EV line (IRQ 33) and release it when DR is read.
+fn smoke_i2c2_receive_btf() -> (u16, bool, bool, bool) {
+    const PE: u32 = 1;
+    const ACK: u32 = 1 << 10;
+    const START: u32 = 1 << 8;
+    const STOP: u32 = 1 << 9;
+    const SB: u32 = 1;
+    const ADDR: u32 = 1 << 1;
+    const BTF: u32 = 1 << 2;
+    const RXNE: u32 = 1 << 6;
+
+    // ITEVTEN only; ITBUFEN remains clear for receive source isolation.
+    wr(I2C2_CR2, 16 | (1 << 9));
+    wr(I2C2_CR1, PE | ACK | START);
+    if !wait(I2C2_SR1, SB, SB) {
+        return (0xFFFF, false, false, false);
+    }
+    wr(I2C2_DR, 0x92); // TMP102 at 0x49, write
+    if !wait(I2C2_SR1, ADDR, ADDR) {
+        return (0xFFFF, false, false, false);
+    }
+    let _ = rd(I2C2_SR1);
+    let _ = rd(I2C2_SR2);
+    wr(I2C2_DR, 0); // temperature register pointer
+    if !wait(I2C2_SR1, BTF, BTF) {
+        return (0xFFFF, false, false, false);
+    }
+
+    wr(I2C2_CR1, PE | ACK | START);
+    if !wait(I2C2_SR1, SB, SB) {
+        return (0xFFFF, false, false, false);
+    }
+    wr(I2C2_DR, 0x93); // TMP102 at 0x49, read
+    if !wait(I2C2_SR1, ADDR, ADDR) {
+        return (0xFFFF, false, false, false);
+    }
+    let _ = rd(I2C2_SR1);
+    let _ = rd(I2C2_SR2);
+    wr(NVIC_ICPR1, I2C2_EV_IRQ_BIT);
+
+    if !wait(I2C2_SR1, RXNE, RXNE) {
+        return (0xFFFF, false, false, false);
+    }
+    let rxne_isolated = rd(NVIC_ISPR1) & I2C2_EV_IRQ_BIT == 0;
+    wr(I2C2_CR1, PE); // NACK the second (final) byte while the first stays in DR
+    if !wait(I2C2_SR1, BTF, BTF) {
+        return (0xFFFF, false, rxne_isolated, false);
+    }
+    let btf_irq = rd(NVIC_ISPR1) & I2C2_EV_IRQ_BIT != 0;
+
+    let msb = rd(I2C2_DR) as u8;
+    wr(NVIC_ICPR1, I2C2_EV_IRQ_BIT);
+    let mut btf_released = true;
+    for _ in 0..16 {
+        btf_released &= rd(I2C2_SR1) & BTF == 0;
+        btf_released &= rd(NVIC_ISPR1) & I2C2_EV_IRQ_BIT == 0;
+    }
+
+    wr(I2C2_CR1, PE | STOP);
+    let idle = wait(I2C2_SR2, 0x0002, 0);
+    let lsb = rd(I2C2_DR) as u8;
+    (
+        u16::from_be_bytes([msb, lsb]),
+        btf_irq,
+        rxne_isolated,
+        btf_released && idle,
     )
 }
 

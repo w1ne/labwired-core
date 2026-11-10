@@ -11,10 +11,11 @@
 # first byte in DR to check receive BTF with ITEVTEN alone, RXNE source
 # isolation, and the IRQ release when DR is read.
 # A second TMP102 on I2C2 checks its event vector and an independent
-# repeated-start 25 °C read, including TXE isolation under ITEVTEN.
+# repeated-start 25 °C read, including TXE isolation under ITEVTEN. A second
+# read checks RXNE isolation, receive BTF IRQ assertion, and release after DR.
 # A later absent-address probe checks ER IRQ 32. Results print on
 # USART2; USART1 checks TXEIE and RXNEIE assertion/release on IRQ 37, with an
-# injected RX byte. The summary word lands at 0x20017F00 and is 0xB1AC00FF on
+# injected RX byte. The summary word lands at 0x20017F00 and is 0xB1AC01FF on
 # success. PC13 resets low, so three on/off toggles give 5 edges, not 6. ADC,
 # EXTI, other timers and other USARTs claimed by the chip are not exercised.
 schema_version: "1.2"
@@ -38,6 +39,7 @@ assertions:
       - "i2c1 btf_rx_irq=1 rxne_isolated=1 release=1 data=00001980 ok"
       - "i2c1 tmp102=00001900 nack=00000400 buf_irq=1 buf_release=1 ev_irq=1 ev_release=1 er_irq=1 irq_released=1 ok"
       - "i2c2 tmp102=00001900 sb_irq=1 addr_irq=1 txe_isolated=1 btf_irq=1 ok"
+      - "i2c2 btf_rx_irq=1 rxne_isolated=1 release=1 data=00001980 ok"
       - "spi1 max31855=01901600 txe_irq=1 rxne_irq=1 released=1 ok"
       - "usart1 txe_irq=1 released=1 ok"
       - "usart1 rxne_irq=1 data=00000052 released=1 ok"
@@ -47,6 +49,6 @@ assertions:
       min_edges: 5
   - memory_value:
       address: 0x20017F00
-      expected_value: 0xB1AC00FF
+      expected_value: 0xB1AC01FF
       size: 4
   - expected_stop_reason: max_steps

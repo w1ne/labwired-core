@@ -8,6 +8,7 @@ i2c1 rxne_buf_irq=1 release=1 ok
 i2c1 btf_rx_irq=1 rxne_isolated=1 release=1 data=00001980 ok
 i2c1 tmp102=00001900 nack=00000400 buf_irq=1 buf_release=1 ev_irq=1 ev_release=1 er_irq=1 irq_released=1 ok
 i2c2 tmp102=00001900 sb_irq=1 addr_irq=1 txe_isolated=1 btf_irq=1 ok
+i2c2 btf_rx_irq=1 rxne_isolated=1 release=1 data=00001980 ok
 spi1 max31855=01901600 txe_irq=1 rxne_irq=1 released=1 ok
 usart1 txe_irq=1 released=1 ok
 usart1 rxne_irq=1 data=00000052 released=1 ok
