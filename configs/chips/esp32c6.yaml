@@ -278,9 +278,10 @@ peripherals:
     base_address: 0x60013000
     size: "1KB"
   - id: "mcpwm0"
-    type: "stub"
+    type: "esp32c6_mcpwm"
+    irq: 61 # MCPWM0 (esp32c6.svd)
     base_address: 0x60014000
-    size: "1KB"
+    size: "304B" # 0x130-byte MCPWM0 register block from esp32c6.svd
   - id: "parl_io"
     type: "stub"
     base_address: 0x60015000

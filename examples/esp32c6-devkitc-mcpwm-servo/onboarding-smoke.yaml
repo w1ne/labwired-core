@@ -1,0 +1,17 @@
+# ESP32-C6-DevKitC-1 v1.2: MCPWM0 PWM0A drives an SG90 servo on J1 GPIO4.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/riscv32imc-unknown-none-elf/release/mcpwm-servo"
+  system: "../../configs/systems/esp32c6-devkitc-mcpwm-servo.yaml"
+limits:
+  max_steps: 9000000
+assertions:
+  - uart_contains: "ESP32_C6_MCPWM0_SERVO_OK"
+  - memory_value:
+      address: 0x60014040
+      size: 32
+      expected_value: 1500
+  - gpio_edges:
+      pin: "gpio:4"
+      min_edges: 2
+  - expected_stop_reason: max_steps

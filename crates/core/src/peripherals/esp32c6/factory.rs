@@ -69,6 +69,17 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         // C6's two-channel RMT TX path, symbol RAM, TX-end status and timed
         // output through GPIO matrix signals 71/72. Source 49 is ETS_RMT_INTR_SOURCE.
         "esp32c6_rmt" => Box::new(super::rmt::Esp32c6Rmt::new(p_cfg.irq.unwrap_or(49))),
+        // MCPWM0 timer/operator engine. The shared state engine selects the
+        // C6 register layout: START/MOD in CFG1, C6 interrupt bits, and
+        // PWM0_OUT0A..2B matrix signals 87..92.
+        "esp32c6_mcpwm" => Box::new(
+            crate::peripherals::esp32s3::mcpwm::Esp32s3Mcpwm::new_esp32c6(
+                p_cfg
+                    .irq
+                    .unwrap_or(crate::peripherals::esp32s3::mcpwm::ESP32C6_MCPWM0_INTR_SOURCE),
+                160_000_000,
+            ),
+        ),
         // EXTMEM / L1 cache — launch/done handshakes for Arduino cache_hal.
         "esp32c6_extmem" => Box::new(super::extmem::Esp32c6Extmem::new()),
         // SYSTIMER — same IP as C3/S3. TARGET0 matrix source 57 on C6.
@@ -146,6 +157,7 @@ pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32c6_pcr",
     "esp32c61_pcr",
     "esp32c6_rmt",
+    "esp32c6_mcpwm",
     "esp32c6_extmem",
     "esp32c6_systimer",
     "esp32c6_gdma",

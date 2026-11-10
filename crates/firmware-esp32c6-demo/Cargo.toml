@@ -15,3 +15,9 @@ name = "firmware-esp32c6-demo"
 path = "src/main.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "mcpwm-servo"
+path = "src/bin/mcpwm_servo.rs"
+test = false
+bench = false

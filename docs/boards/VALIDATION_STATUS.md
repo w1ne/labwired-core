@@ -54,7 +54,7 @@ The models column is a content digest over everything that board's `models` list
 | `stm32f7-discovery` | 🟡 smoke-manual | — | `135757c1cce91ccc` | no silicon capture |
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `31b7efdeee78a182` | no silicon capture |
 | `nucleo-g0b1re` | 🟡 smoke-manual | — | `890c926a6a78a574` | no silicon capture |
-| `esp32c6-devkitc` | 🟡 smoke-manual | — | `43f926d8ee315932` | no silicon capture |
+| `esp32c6-devkitc` | 🟡 smoke-manual | — | `43f926d8ee315932` | no silicon capture; MCPWM0 GPIO4 servo smoke passes locally |
 | `litex-vexriscv` | 🟡 smoke-manual | — | `d9947e9997d21930` | no silicon capture |
 | `stm32l552` | 🟡 smoke-manual | — | `eaaf811ab1bece21` | no silicon capture |
 | `cc2538sf53` | 🟡 smoke-manual | — | `124f6b16850cfd50` | no silicon capture |
@@ -466,7 +466,7 @@ The models column is a content digest over everything that board's `models` list
 ## `esp32c6-devkitc` — 🟡 smoke-manual
 
 - Doc: [`docs/boards/esp32c6-devkitc.md`](esp32c6-devkitc.md)  ·  Chip: `configs/chips/esp32c6.yaml`
-- Note: ESP32-C6-DevKitC-1 (ESP32-C6-WROOM-1, 8 MB flash). Bare-metal RV32IMAC HP-core Tier-1 fixture passes all 12 classes (clock gpio uart timer dma irq i2c spi adc pwm wdt rtc) with raw-register checks over UART0. Reuses the C3's Espressif IP models where the register head is offset-identical (UART, GPIO, I2C0, GP-SPI2, LEDC, APB_SARADC, TIMG) with C6 bases and interrupt-matrix source ids from esp32c6.svd; C6-only models are PCR, GDMA, the MWDT path in the shared TIMG, and LP_TIMER. The LP core, ROM boot path, peripheral-coupled DMA, radios, LP_WDT/LP_* windows and most electrical pad behavior remain unmodelled; see docs/boards/esp32c6-devkitc.md for the honest per-class boundary. SIM-DERIVED — no silicon diff; no executing-fidelity differential.
+- Note: ESP32-C6-DevKitC-1 (ESP32-C6-WROOM-1, 8 MB flash). Bare-metal RV32IMAC HP-core Tier-1 fixture passes all 12 classes (clock gpio uart timer dma irq i2c spi adc pwm wdt rtc) with raw-register checks over UART0. A separate local onboarding smoke passes 4/4 checks for C6 MCPWM0 timer 0/operator 0 driving PWM0A on GPIO4 (50 Hz, 1.5 ms pulse); evidence is in `examples/esp32c6-devkitc-mcpwm-servo/evidence/`. Reuses the C3's Espressif IP models where the register head is offset-identical (UART, GPIO, I2C0, GP-SPI2, LEDC, APB_SARADC, TIMG) with C6 bases and interrupt-matrix source ids from esp32c6.svd; C6-specific models include PCR, GDMA, the MWDT path in shared TIMG, LP_TIMER, and the MCPWM timer/operator PWM path. The LP core, ROM boot path, peripheral-coupled DMA, radios, LP_WDT/LP_* windows and most electrical pad behavior remain unmodelled; see docs/boards/esp32c6-devkitc.md for the honest per-class boundary. SIM-DERIVED — no silicon diff; no executing-fidelity differential.
 - Silicon: none — not validated against real hardware.
   - offline (CI): firmware_survival::test_esp32c6_demo_survival
   - offline (CI): svd_conformance::chip_configs_match_their_svd (configs/chips/esp32c6.yaml vs tests/fixtures/real_world/esp32c6.svd)

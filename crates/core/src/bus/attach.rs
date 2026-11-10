@@ -386,6 +386,38 @@ impl SystemBus {
         }
     }
 
+    /// Bind the ESP32-C6 MCPWM0 outputs (GPIO-matrix signals 87..92) to the
+    /// C6-layout GPIO model. The generic matrix-output capability is not
+    /// implemented by the shared C3/C6 GPIO block, so this route is explicit.
+    pub(crate) fn wire_esp32c6_mcpwm_pads(&mut self) {
+        use crate::peripherals::esp32c3::gpio::Esp32c3Gpio;
+        use crate::peripherals::esp32s3::mcpwm::Esp32s3Mcpwm;
+
+        let gpio_idx = self
+            .peripherals
+            .iter()
+            .position(|p| p.dev.as_any().is_some_and(|any| any.is::<Esp32c3Gpio>()));
+        let mcpwm_idx = self
+            .peripherals
+            .iter()
+            .position(|p| p.dev.as_any().is_some_and(|any| any.is::<Esp32s3Mcpwm>()));
+        let (Some(gpio_idx), Some(mcpwm_idx)) = (gpio_idx, mcpwm_idx) else {
+            return;
+        };
+
+        let Some((first_signal, lines)) = self.peripherals[mcpwm_idx].dev.matrix_output_lines()
+        else {
+            return;
+        };
+        if let Some(gpio) = self.peripherals[gpio_idx]
+            .dev
+            .as_any_mut()
+            .and_then(|any| any.downcast_mut::<Esp32c3Gpio>())
+        {
+            gpio.bind_mcpwm_lines(first_signal, &lines);
+        }
+    }
+
     /// Bind the classic-ESP32 LEDC controller's 16 channel outputs to the pads
     /// the GPIO output matrix can route them to (signals 71..86,
     /// `LEDC_HS_SIG_OUT0_IDX`..`LEDC_LS_SIG_OUT7_IDX`), so a pad attached with

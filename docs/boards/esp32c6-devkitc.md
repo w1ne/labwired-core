@@ -1,10 +1,10 @@
 # ESP32-C6-DevKitC-1
 
-Espressif **ESP32-C6** on the **ESP32-C6-DevKitC-1** (v1.2) — single HP core **RISC-V RV32IMAC @ 160 MHz**, 512 KB HP SRAM, 320 KB ROM, 8 MB external SPI flash on the WROOM-1 module, plus an LP core and Wi-Fi 6 / Bluetooth 5 / IEEE 802.15.4 radios on silicon. The bare-metal smoke sends a GRB frame from RMT channel 0 through the GPIO8 output matrix to the built-in WS2812B, sends `OK` through UART0, and observes a scripted press/release on the active-low GPIO9 BOOT input. Reset-time download-mode selection, RMT RX capture, pad-level propagation to the USB-to-UART bridge, and radio behavior are not claimed.
+Espressif **ESP32-C6** on the **ESP32-C6-DevKitC-1** (v1.2) — single HP core **RISC-V RV32IMAC @ 160 MHz**, 512 KB HP SRAM, 320 KB ROM, 8 MB external SPI flash on the WROOM-1 module, plus an LP core and Wi-Fi 6 / Bluetooth 5 / IEEE 802.15.4 radios on silicon. The base bare-metal smoke sends a GRB frame from RMT channel 0 through the GPIO8 output matrix to the built-in WS2812B, sends `OK` through UART0, and observes a scripted press/release on the active-low GPIO9 BOOT input. A separate MCPWM smoke drives a 50 Hz PWM0A waveform on J1 GPIO4 for an external SG90 servo. Reset-time download-mode selection, RMT RX capture, pad-level propagation to the USB-to-UART bridge, and radio behavior are not claimed.
 
-**Vendor availability checked live 2026-11-09:** [Espressif's devkit listing](https://www.espressif.com/en/products/devkits/esp32-devkitc/overview) lists `ESP32-C6-DevKitC-1-N8`, a $9 reference sample price, and purchase links for AliExpress, DigiKey, Mouser, Amazon US, Adafruit, Robu India, and Akizuki. The [v1.2 user guide](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c6/esp32-c6-devkitc-1/user_guide.html) identifies the N8/WROOM-1 configuration and the GPIO9 BOOT switch.
+**Vendor availability checked live 2026-11-10:** Espressif's [current DevKit catalog](https://www.espressif.com/en/products/devkits) lists `ESP32-C6-DevKitC-1-N8`. The [v1.2 user guide](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c6/esp32-c6-devkitc-1/user_guide.html) identifies the N8/WROOM-1 configuration, confirms retail ordering, documents GPIO4 on header J1, GPIO9 on the BOOT button, and the onboard GPIO8 RGB LED. The servo is an external test fixture.
 
-This is an **L3 (production-ready)** target by the [target support rubric](../target_support_rubric.md): the full twelve-cell tier-1 row — clock (PCR), GPIO, UART, timer (TIMG), DMA (GDMA), interrupt delivery, I²C, SPI, ADC, PWM (LEDC), watchdog (TIMG MWDT) and RTC (LP_TIMER) — is proven by the tier-1 fixture, and the L2 package (CI lanes, known-limitations file, unsupported-instruction audit) is in place. The C3-shared Espressif IP (UART, GPIO, I²C0, GP-SPI2, LEDC, APB_SARADC, TIMG) is reused where the C6 SVD register head is offset-identical; PCR, GDMA, the MWDT path and LP_TIMER are C6-specific models. No silicon capture exists: register behaviour is SIM-DERIVED.
+This is an **L3 (production-ready)** target by the [target support rubric](../target_support_rubric.md): the full twelve-cell tier-1 row — clock (PCR), GPIO, UART, timer (TIMG), DMA (GDMA), interrupt delivery, I²C, SPI, ADC, PWM (LEDC), watchdog (TIMG MWDT) and RTC (LP_TIMER) — is proven by the tier-1 fixture, and the L2 package (CI lanes, known-limitations file, unsupported-instruction audit) is in place. The C3-shared Espressif IP (UART, GPIO, I²C0, GP-SPI2, LEDC, APB_SARADC, TIMG) is reused where the C6 SVD register head is offset-identical; PCR, GDMA, the MWDT path, LP_TIMER, and the MCPWM timer/operator PWM path are C6-specific models. No silicon capture exists: register behaviour is SIM-DERIVED.
 
 !!! tip "Live status"
     The tables below are a maintained snapshot. Authoritative automation:
@@ -21,9 +21,11 @@ This is an **L3 (production-ready)** target by the [target support rubric](../ta
 |--------|--------|
 | Chip descriptor | [`configs/chips/esp32c6.yaml`](../../configs/chips/esp32c6.yaml) |
 | Example system | [`configs/systems/esp32c6-devkitc.yaml`](../../configs/systems/esp32c6-devkitc.yaml) |
+| MCPWM servo system | [`configs/systems/esp32c6-devkitc-mcpwm-servo.yaml`](../../configs/systems/esp32c6-devkitc-mcpwm-servo.yaml) |
 | Reference firmware | [`crates/firmware-esp32c6-demo/`](../../crates/firmware-esp32c6-demo/) |
 | TIER1 fixture | [`examples/tier1-fixture/esp32c6/`](../../examples/tier1-fixture/esp32c6/) → `tests/fixtures/tier1/esp32c6.elf` |
 | Example | [`examples/esp32c6-devkitc/`](../../examples/esp32c6-devkitc/) |
+| MCPWM servo example | [`examples/esp32c6-devkitc-mcpwm-servo/`](../../examples/esp32c6-devkitc-mcpwm-servo/) — local smoke passes 4/4 assertions |
 | Committed artifact | `tests/fixtures/esp32c6-demo.elf` (`OK\n` + GPIO8 red WS2812 frame; the scripted smoke also exercises GPIO9 press/release) |
 | Register/interrupt source | Vendored `tests/fixtures/real_world/esp32c6.svd` (espressif/svd) |
 | Tier (snapshot) | **L3** — SIM-DERIVED, no silicon diff. Tier-1 row: all 12 classes pass (`clock` `gpio` `uart` `timer` `dma` `irq` `i2c` `spi` `adc` `pwm` `wdt` `rtc`) |
@@ -61,6 +63,7 @@ var the window stays zero.
 | TX (J3-2) | GPIO16 | **U0TXD** | USB-to-UART console |
 | RX (J3-3) | GPIO17 | **U0RXD** | USB-to-UART console |
 | — | GPIO8 | **Addressable RGB LED** (WS2812B) | Smoke sends a red GRB frame through RMT TX channel 0 and GPIO matrix signal 71 |
+| J1-3 | GPIO4 | MCPWM0 PWM0A | Separate smoke drives a 50 Hz waveform for an external SG90 fixture; no mechanical motion claim |
 | BOOT (J3-11) | GPIO9 | BOOT button (active low) | Running-system contact is modeled and smoke-tested; reset-time download-mode strap is not modeled |
 | D0… | GPIO0–GPIO7 | LP-capable / ADC1 / strapping (MTMS/MTDI) | Advertised via the shared GPIO matrix model |
 | D1… | GPIO10, GPIO11, GPIO15, GPIO18–GPIO23 | Header pins | Not modelled beyond the GPIO window |
@@ -95,7 +98,7 @@ The GPIO matrix reuses the engine's C3-sized register block (pins 0–25), so
 | Block | Status | Notes |
 |-------|--------|-------|
 | UART0 / UART1 | ✅ / ⚠️ | Espressif UART IP + 128-byte FIFOs, clocked at 160 MHz (`esp32c6_uart`). Head map only: the C6 register tail (`SLEEP_CONF*`, `CLK_CONF` @0x88, `DATE` @0x8C, `ID` @0x9C) is unmodelled and reads as the C3's old offsets |
-| GPIO matrix | ⚠️ | Shared C3-sized model (26 pins), with observable direct GPIO pad transitions and externally driven GPIO input. The C6 RMT TX model routes signals 71/72 through this matrix and exposes timed pad changes. The board smoke checks the GPIO9 BOOT-button input and GPIO8 WS2812 output. GPIO26–GPIO30, GPIO interrupt delivery, and IO_MUX electrical enforcement remain unmodeled |
+| GPIO matrix | ⚠️ | Shared C3-sized model (26 pins), with observable direct GPIO pad transitions and externally driven GPIO input. The C6 RMT TX model routes signals 71/72 through this matrix; the C6 MCPWM path binds PWM0A..2B signals 87..92 to pads, with PWM0A/GPIO4 covered by the separate servo smoke. GPIO26–GPIO30, GPIO interrupt delivery, and general IO_MUX electrical enforcement remain unmodeled |
 | RMT | ⚠️ | C6 TX channels 0/1, 192-word symbol RAM, TX_END status/interrupt registers, and timed matrix output are modeled; RX capture, carrier modulation, DMA, fractional clock selection, and channel refill behavior are not |
 | IO_MUX | ⚠️ | Register-backed stub: pad function writes are recorded, not electrically enforced — the console shifts bytes regardless of routing |
 | USB Serial/JTAG | ⚠️ | `UsbSerialJtag` @ `0x6000_F000` (irq 48); system `debug_uart` still `uart0` |
@@ -103,6 +106,7 @@ The GPIO matrix reuses the engine's C3-sized register block (pins 0–25), so
 | GP-SPI2 | ✅ / ⚠️ | Behavioral GP-SPI transaction engine shared with the C3 (`esp32c3_spi`), C6 base `0x6008_1000` + source 72. No external-device/CS-gating or DMA-coupled path |
 | APB_SARADC | ✅ / ⚠️ | Behavioral one-shot engine shared with the C3 (`esp32c3_apb_saradc`), C6 base `0x6000_E000` + source 60. Register reset seeds are the C3 silicon capture; no DMA mode, thresholds or TSENS |
 | LEDC | ✅ / ⚠️ | Live timer/counter/wrap engine shared with the C3 (`esp32c3_ledc`), C6 base `0x6000_7000` + source 45. The C6-only gamma/event/compare/capture tail is not modelled; no pad-drive claim |
+| MCPWM0 | ⚠️ | C6-layout timer/operator engine at `0x6001_4000`, source 61; the smoke configures timer 0/operator 0 for a 50 Hz up-count and observes PWM0A on GPIO4 (signal 87). EVT/TASK, capture, trip/fault behavior, interrupt delivery, and the PCR clock tree are not modeled |
 | TIMG0/TIMG1 | ✅ / ⚠️ | Shared `esp32_timg` GP timer plus the real C3/C6 **MWDT** path (`esp32c6_mwdt`): WDTWPROTECT write lock, `WDTCONFIG0..5` round-trip, walk-driven **four-stage chain** (`0→1→2→3→0`, WDTCONFIG2..5 stage holds, STG0..3 interrupt-action encodings), WDTFEED reload to stage 0, `INT_RAW_TIMERS.WDT_INT_RAW` latch + W1C. The CPU/system reset actions are **not** performed (advanced through, never triggered) |
 | LP_TIMER (RTC) | ✅ / ⚠️ | C6-only `esp32c6_lp_rtc`: free-running 48-bit counter + `UPDATE` snapshot into `MAIN_BUF0`/`MAIN_BUF1`. No RTC-slow rate, alarms/overflow IRQs, or sleep retention |
 | SPI0/SPI1, I2S, TWAI, crypto, eFuse, PMU, LP_WDT, LP_I2C/LP_UART, LP core | ❌ | No behavioral model; explicit stubs are used where the chip descriptor reserves those windows |
@@ -217,7 +221,8 @@ RISC-V trap delivery from both the software doorbell and a peripheral source
 (UART0 `TX_DONE`); the C3-shared Espressif IP at C6 bases (I²C command lists,
 GP-SPI transactions, one-shot SAR conversions, LEDC timer/wrap/pause, TIMG
 counters, the MWDT write-lock/feed/stage-chain contract, LP_TIMER snapshots);
-deterministic CI of a C6 image.
+deterministic CI of a C6 image; MCPWM0 PWM0A waveform output to a GPIO pad
+(separate servo smoke; not part of the tier-1 LEDC cell).
 
 **Still use silicon for:** the ROM bootloader and flash/partition images,
 peripheral sources beyond UART0 (GPIO edges, I²C/SPI/ADC/LEDC/GDMA matrix

@@ -501,6 +501,22 @@ impl Esp32c3Gpio {
         }
     }
 
+    /// Bind an MCPWM unit's GPIO-matrix outputs to every C6 GPIO pad. The C6
+    /// maps `PWM0_OUT0A..2B` to signals 87..92; pad selection remains governed
+    /// by the firmware's `FUNCn_OUT_SEL_CFG` writes.
+    pub(crate) fn bind_mcpwm_lines(
+        &mut self,
+        first_signal: u32,
+        lines: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
+    ) {
+        for pin in 0..PIN_COUNT {
+            for (line, func) in lines.names().iter().enumerate() {
+                self.pad_routes
+                    .bind(lines, pin, Some(first_signal + line as u32), line, func);
+            }
+        }
+    }
+
     /// Bind one UART's TX wire to every pad the output matrix can route it to.
     ///
     /// TX ONLY. Nothing in the engine drives the RX line, so a bound RX pad

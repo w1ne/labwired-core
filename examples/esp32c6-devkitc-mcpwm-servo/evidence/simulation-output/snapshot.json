@@ -1,0 +1,107 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      1107296568,
+      1082654704,
+      1082132480,
+      0,
+      0,
+      1082654720,
+      0,
+      1082654720,
+      0,
+      1610612736,
+      1107297033,
+      1107297033,
+      10,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1107296972,
+    "mstatus": 0,
+    "mie": 0,
+    "mip": 0,
+    "mtvec": 1107296568,
+    "mscratch": 0,
+    "mepc": 0,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 9000000,
+    "mtimecmp": 18446744073709551615,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 9000000,
+  "cycles": 18000274,
+  "instructions": 9000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 9000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 9000000
+    }
+  },
+  "limits": {
+    "max_steps": 9000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "5607c60d11ad0f93b54226bbd175da17aaddc8b9b89e2d091788cd27f4d12657",
+  "config": {
+    "firmware": "examples/esp32c6-devkitc-mcpwm-servo/../../target/riscv32imc-unknown-none-elf/release/mcpwm-servo",
+    "system": "examples/esp32c6-devkitc-mcpwm-servo/../../configs/systems/esp32c6-devkitc-mcpwm-servo.yaml",
+    "script": "examples/esp32c6-devkitc-mcpwm-servo/onboarding-smoke.yaml"
+  }
+}

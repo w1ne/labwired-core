@@ -110,6 +110,8 @@ pub const MCPWM_SIZE: u64 = 0x1000;
 pub const MCPWM0_INTR_SOURCE: u32 = 38;
 /// `ETS_PWM1_INTR_SOURCE = 39`.
 pub const MCPWM1_INTR_SOURCE: u32 = 39;
+/// ESP32-C6 MCPWM0 interrupt source from `esp32c6.svd`.
+pub const ESP32C6_MCPWM0_INTR_SOURCE: u32 = 61;
 
 /// MCPWM's documented CLK_160M input, distinct from the S3 APB clock.
 const PWM_CLOCK_HZ: u64 = 160_000_000;
@@ -117,8 +119,16 @@ const PWM_CLOCK_HZ: u64 = 160_000_000;
 /// ESP-IDF `gpio_sig_map.h` indices for each MCPWM unit's six outputs.
 pub const MCPWM0_SIG_OUT0: u32 = 160;
 pub const MCPWM1_SIG_OUT0: u32 = 166;
+/// ESP-IDF `esp32c6/include/soc/gpio_sig_map.h` `PWM0_OUT0A_IDX`.
+pub const ESP32C6_MCPWM0_SIG_OUT0: u32 = 87;
 pub(crate) const MCPWM_LINE_NAMES: &[&str] =
     &["PWM0A", "PWM0B", "PWM1A", "PWM1B", "PWM2A", "PWM2B"];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum McpwmLayout {
+    Esp32S3,
+    Esp32C6,
+}
 
 const NUM_TIMERS: usize = 3;
 const NUM_OPERATORS: usize = 3;
@@ -217,6 +227,43 @@ const fn int_teb_bit(op: usize) -> u32 {
 const INT_MODELED_MASK: u32 = 0x0FFF;
 /// All 30 architected interrupt bits (SVD wmask of INT_ENA/RAW/CLR).
 const INT_WMASK: u32 = 0x3FFF_FFFF;
+/// C6 keeps STOP at bits 0..2, then TEZ/TEP, followed by compare events.
+const ESP32C6_INT_MODELED_MASK: u32 = 0x001F_FFFF;
+
+const fn modeled_int_mask(layout: McpwmLayout) -> u32 {
+    match layout {
+        McpwmLayout::Esp32S3 => INT_MODELED_MASK,
+        McpwmLayout::Esp32C6 => ESP32C6_INT_MODELED_MASK,
+    }
+}
+
+const fn int_tez_bit_for(layout: McpwmLayout, t: usize) -> u32 {
+    match layout {
+        McpwmLayout::Esp32S3 => int_tez_bit(t),
+        McpwmLayout::Esp32C6 => 1 << (3 + t),
+    }
+}
+
+const fn int_tep_bit_for(layout: McpwmLayout, t: usize) -> u32 {
+    match layout {
+        McpwmLayout::Esp32S3 => int_tep_bit(t),
+        McpwmLayout::Esp32C6 => 1 << (6 + t),
+    }
+}
+
+const fn int_tea_bit_for(layout: McpwmLayout, op: usize) -> u32 {
+    match layout {
+        McpwmLayout::Esp32S3 => int_tea_bit(op),
+        McpwmLayout::Esp32C6 => 1 << (15 + op),
+    }
+}
+
+const fn int_teb_bit_for(layout: McpwmLayout, op: usize) -> u32 {
+    match layout {
+        McpwmLayout::Esp32S3 => int_teb_bit(op),
+        McpwmLayout::Esp32C6 => 1 << (18 + op),
+    }
+}
 
 /// One PWM timer: a 16-bit counter advanced deterministically by `tick()`.
 #[derive(Debug, Clone, Copy)]
@@ -254,17 +301,24 @@ impl TimerState {
         }
     }
 
-    fn mode(&self) -> u32 {
-        (self.cfg1 >> TIMER_CFG1_MODE_SHIFT) & TIMER_CFG1_MODE_MASK
+    fn mode(&self, layout: McpwmLayout) -> u32 {
+        match layout {
+            McpwmLayout::Esp32S3 => (self.cfg1 >> TIMER_CFG1_MODE_SHIFT) & TIMER_CFG1_MODE_MASK,
+            // C6 TIMERx_CFG1 places START in [2:0] and MOD in [4:3].
+            McpwmLayout::Esp32C6 => (self.cfg1 >> 3) & 0x3,
+        }
     }
 
-    fn start(&self) -> u32 {
-        (self.cfg1 >> TIMER_CFG1_START_SHIFT) & TIMER_CFG1_START_MASK
+    fn start(&self, layout: McpwmLayout) -> u32 {
+        match layout {
+            McpwmLayout::Esp32S3 => (self.cfg1 >> TIMER_CFG1_START_SHIFT) & TIMER_CFG1_START_MASK,
+            McpwmLayout::Esp32C6 => self.cfg1 & 0x7,
+        }
     }
 
     /// Running iff a non-frozen count mode is selected and START is non-zero.
-    fn running(&self) -> bool {
-        self.mode() != TIMER_MODE_FROZEN && self.start() != 0
+    fn running(&self, layout: McpwmLayout) -> bool {
+        self.mode(layout) != TIMER_MODE_FROZEN && self.start(layout) != 0
     }
 
     fn timer_prescale(&self) -> u64 {
@@ -284,8 +338,8 @@ impl TimerState {
     }
 }
 
-/// One word past the last architected register (`VERSION` @ 0x124).
-const NWORDS: usize = 0x128 / 4;
+/// One word past the last architected register (C6 `VERSION` @ 0x12C).
+const NWORDS: usize = 0x130 / 4;
 
 /// `(reset value, writable-bit mask)` for the architected register at word
 /// index `word` (offset `word * 4`), exactly per the ESP32-S3 SVD `MCPWM0`
@@ -341,6 +395,21 @@ const fn spec(word: usize) -> Option<(u32, u32)> {
     }
 }
 
+/// C6's extra task/event/clock/version tail differs from the S3 tail. Shared
+/// timer/operator registers use the S3 masks only where their SVD fields match.
+const fn spec_for(layout: McpwmLayout, word: usize) -> Option<(u32, u32)> {
+    if matches!(layout, McpwmLayout::Esp32C6) {
+        match (word as u64) * 4 {
+            0x120 => return Some((0x0000_0000, 0x3FFF_FFFF)), // EVT_EN
+            0x124 => return Some((0x0000_0000, 0x003F_FFFF)), // TASK_EN
+            0x128 => return Some((0x0000_0000, 0x0000_0001)), // CLK.EN
+            0x12C => return Some((0x0220_1240, 0x0FFF_FFFF)), // VERSION
+            _ => {}
+        }
+    }
+    spec(word)
+}
+
 /// One operator: two comparators + masked generator/dead-time words.
 #[derive(Debug, Clone, Copy, Default)]
 struct OperatorState {
@@ -370,8 +439,10 @@ impl OperatorState {
     }
 }
 
-/// ESP32-S3 MCPWM unit — 3 timers, 3 operators, one interrupt source.
+/// ESP32-S3/C6 MCPWM unit — 3 timers, 3 operators, one interrupt source.
+/// C6 construction selects its own CFG1, interrupt and GPIO-matrix layout.
 pub struct Esp32s3Mcpwm {
+    layout: McpwmLayout,
     /// Interrupt-matrix source id emitted while any enabled interrupt latches.
     intr_source_id: u32,
     /// CPU clock used to convert the 160 MHz MCPWM source clock to sim ticks.
@@ -386,7 +457,7 @@ pub struct Esp32s3Mcpwm {
 
     /// Masked register file for the remaining architected registers —
     /// sync-input cfg, operator-timer-sel, dead-time RED, chopper,
-    /// trip-zone/fault, capture, UPDATE_CFG, VERSION. Seeded from `spec()`
+    /// trip-zone/fault, capture, UPDATE_CFG and chip-specific tail. Seeded from `spec_for()`
     /// resets; writes apply the SVD writable mask. Word-indexed; the
     /// FSM-modeled offsets are dispatched before this file is consulted.
     extras: [u32; NWORDS],
@@ -415,15 +486,27 @@ impl Esp32s3Mcpwm {
     /// Construct with an explicit CPU clock (mirrors `Esp32s3TimerGroup::new`'s
     /// clock argument; the prescaler maths is sim-tick-relative).
     pub fn new_with_clock(base_source_id: u32, cpu_clock_hz: u32) -> Self {
+        Self::new_with_layout(McpwmLayout::Esp32S3, base_source_id, cpu_clock_hz)
+    }
+
+    /// Construct the ESP32-C6 MCPWM0 model (160 MHz source, source id 61,
+    /// `PWM0_OUT0A_IDX` 87). Its CFG1 bit positions and interrupt layout are
+    /// C6-specific even though the timer/operator register offsets are shared.
+    pub fn new_esp32c6(base_source_id: u32, cpu_clock_hz: u32) -> Self {
+        Self::new_with_layout(McpwmLayout::Esp32C6, base_source_id, cpu_clock_hz)
+    }
+
+    fn new_with_layout(layout: McpwmLayout, base_source_id: u32, cpu_clock_hz: u32) -> Self {
         let mut extras = [0u32; NWORDS];
         let mut w = 0;
         while w < NWORDS {
-            if let Some((reset, _)) = spec(w) {
+            if let Some((reset, _)) = spec_for(layout, w) {
                 extras[w] = reset;
             }
             w += 1;
         }
         Self {
+            layout,
             intr_source_id: base_source_id,
             cpu_clock_hz,
             clk_cfg: 0,
@@ -437,10 +520,10 @@ impl Esp32s3Mcpwm {
             last_tick: 0,
             scheduled: false,
             duty_observers: Vec::new(),
-            matrix_sig_out0: if base_source_id == MCPWM1_INTR_SOURCE {
-                MCPWM1_SIG_OUT0
-            } else {
-                MCPWM0_SIG_OUT0
+            matrix_sig_out0: match layout {
+                McpwmLayout::Esp32S3 if base_source_id == MCPWM1_INTR_SOURCE => MCPWM1_SIG_OUT0,
+                McpwmLayout::Esp32S3 => MCPWM0_SIG_OUT0,
+                McpwmLayout::Esp32C6 => ESP32C6_MCPWM0_SIG_OUT0,
             },
             pads: None,
         }
@@ -450,7 +533,7 @@ impl Esp32s3Mcpwm {
     /// holes and offsets past VERSION read zero.
     fn extra(&self, offset: u64) -> u32 {
         let w = (offset / 4) as usize;
-        if w < NWORDS && spec(w).is_some() {
+        if w < NWORDS && spec_for(self.layout, w).is_some() {
             self.extras[w]
         } else {
             0
@@ -461,7 +544,7 @@ impl Esp32s3Mcpwm {
     fn set_extra_masked(&mut self, offset: u64, value: u32) {
         let w = (offset / 4) as usize;
         if w < NWORDS {
-            if let Some((_, wmask)) = spec(w) {
+            if let Some((_, wmask)) = spec_for(self.layout, w) {
                 self.extras[w] = (self.extras[w] & !wmask) | (value & wmask);
             }
         }
@@ -470,6 +553,13 @@ impl Esp32s3Mcpwm {
     /// MCPWM module clock prescale: PWM_clk = MCPWM_clk / (CLK_PRESCALE + 1).
     fn clk_prescale(&self) -> u64 {
         ((self.clk_cfg & CLK_PRESCALE_MASK) as u64) + 1
+    }
+
+    fn clock_enabled(&self) -> bool {
+        match self.layout {
+            McpwmLayout::Esp32S3 => true,
+            McpwmLayout::Esp32C6 => self.extra(0x128) & 1 != 0,
+        }
     }
 
     /// Register an actuator notified whenever an operator commits a new
@@ -489,7 +579,7 @@ impl Esp32s3Mcpwm {
         };
         let sel = self.extra(REG_OPERATOR_TIMERSEL);
         let timer = &self.timers[((sel >> (op * 2)) & 0x3) as usize % NUM_TIMERS];
-        let peak = match timer.mode() {
+        let peak = match timer.mode(self.layout) {
             TIMER_MODE_UPDOWN => timer.period(),
             _ => timer.period() + 1,
         };
@@ -574,16 +664,17 @@ impl Esp32s3Mcpwm {
             match reg {
                 TIMER_CFG0 => self.timers[t].cfg0 = value & 0x03FF_FFFF,
                 TIMER_CFG1 => {
-                    let was_running = self.timers[t].running();
+                    let was_running = self.timers[t].running(self.layout);
                     self.timers[t].cfg1 = value & 0x0000_001F;
                     // On a fresh start, seed the direction from the count mode
                     // and reset the fractional accumulator so timing is
                     // deterministic from the start edge.
-                    if !was_running && self.timers[t].running() {
-                        self.timers[t].counting_down = self.timers[t].mode() == TIMER_MODE_DOWN;
+                    if !was_running && self.timers[t].running(self.layout) {
+                        self.timers[t].counting_down =
+                            self.timers[t].mode(self.layout) == TIMER_MODE_DOWN;
                         self.timers[t].accum = 0;
                         self.timers[t].start_pending = true;
-                        if self.timers[t].mode() == TIMER_MODE_DOWN {
+                        if self.timers[t].mode(self.layout) == TIMER_MODE_DOWN {
                             // Down mode begins from the period value.
                             self.timers[t].counter = self.timers[t].period();
                         }
@@ -628,7 +719,7 @@ impl Esp32s3Mcpwm {
             REG_INT_ENA => self.int_ena = value & INT_WMASK,
             // INT_RAW is HW-set; firmware may force modeled bits (some drivers
             // do for self-test). Restrict to modeled bits.
-            REG_INT_RAW => self.int_raw = value & INT_MODELED_MASK,
+            REG_INT_RAW => self.int_raw = value & modeled_int_mask(self.layout),
             REG_INT_ST => {}                       // read-only
             REG_INT_CLR => self.int_raw &= !value, // W1C
             _ => self.set_extra_masked(offset, value),
@@ -660,6 +751,7 @@ impl Esp32s3Mcpwm {
     /// matching generator actions. The S3 source clock is 160 MHz; a rational
     /// accumulator preserves its ratio to 240 MHz (or another configured core).
     fn advance_timer(
+        layout: McpwmLayout,
         timer: &mut TimerState,
         op: &mut OperatorState,
         t_index: usize,
@@ -668,7 +760,7 @@ impl Esp32s3Mcpwm {
         clk_prescale: u64,
         int_raw: &mut u32,
     ) {
-        if !timer.running() {
+        if !timer.running(layout) {
             return;
         }
         let period = timer.period();
@@ -677,7 +769,7 @@ impl Esp32s3Mcpwm {
         }
 
         if timer.start_pending {
-            let down = timer.mode() == TIMER_MODE_DOWN;
+            let down = timer.mode(layout) == TIMER_MODE_DOWN;
             Self::apply_timer_event(op, down, if down { 1 } else { 0 });
             timer.start_pending = false;
         }
@@ -698,16 +790,16 @@ impl Esp32s3Mcpwm {
 
         while steps > 0 {
             steps -= 1;
-            match timer.mode() {
+            match timer.mode(layout) {
                 TIMER_MODE_UP => {
                     if timer.counter >= period {
                         timer.counter = 0;
-                        *int_raw |= int_tez_bit(t_index);
+                        *int_raw |= int_tez_bit_for(layout, t_index);
                         Self::apply_timer_event(op, false, 0);
                     } else {
                         timer.counter += 1;
                         if timer.counter == period {
-                            *int_raw |= int_tep_bit(t_index);
+                            *int_raw |= int_tep_bit_for(layout, t_index);
                             Self::apply_timer_event(op, false, 1);
                         }
                     }
@@ -716,12 +808,12 @@ impl Esp32s3Mcpwm {
                 TIMER_MODE_DOWN => {
                     if timer.counter == 0 {
                         timer.counter = period;
-                        *int_raw |= int_tep_bit(t_index);
+                        *int_raw |= int_tep_bit_for(layout, t_index);
                         Self::apply_timer_event(op, true, 1);
                     } else {
                         timer.counter -= 1;
                         if timer.counter == 0 {
-                            *int_raw |= int_tez_bit(t_index);
+                            *int_raw |= int_tez_bit_for(layout, t_index);
                             Self::apply_timer_event(op, true, 0);
                         }
                     }
@@ -730,7 +822,7 @@ impl Esp32s3Mcpwm {
                 TIMER_MODE_UPDOWN => {
                     if !timer.counting_down {
                         if timer.counter >= period {
-                            *int_raw |= int_tep_bit(t_index);
+                            *int_raw |= int_tep_bit_for(layout, t_index);
                             Self::apply_timer_event(op, false, 1);
                             timer.counting_down = true;
                             if timer.counter > 0 {
@@ -739,20 +831,20 @@ impl Esp32s3Mcpwm {
                         } else {
                             timer.counter += 1;
                             if timer.counter == period {
-                                *int_raw |= int_tep_bit(t_index);
+                                *int_raw |= int_tep_bit_for(layout, t_index);
                                 Self::apply_timer_event(op, false, 1);
                                 timer.counting_down = true;
                             }
                         }
                     } else if timer.counter == 0 {
-                        *int_raw |= int_tez_bit(t_index);
+                        *int_raw |= int_tez_bit_for(layout, t_index);
                         Self::apply_timer_event(op, true, 0);
                         timer.counting_down = false;
                         timer.counter += 1;
                     } else {
                         timer.counter -= 1;
                         if timer.counter == 0 {
-                            *int_raw |= int_tez_bit(t_index);
+                            *int_raw |= int_tez_bit_for(layout, t_index);
                             Self::apply_timer_event(op, true, 0);
                             timer.counting_down = false;
                         }
@@ -762,11 +854,11 @@ impl Esp32s3Mcpwm {
             }
 
             if timer.counter == (op.cmpr_value0 & CMPR_VALUE_MASK) {
-                *int_raw |= int_tea_bit(t_index);
+                *int_raw |= int_tea_bit_for(layout, t_index);
                 Self::apply_timer_event(op, timer.counting_down, 2);
             }
             if timer.counter == (op.cmpr_value1 & CMPR_VALUE_MASK) {
-                *int_raw |= int_teb_bit(t_index);
+                *int_raw |= int_teb_bit_for(layout, t_index);
                 Self::apply_timer_event(op, timer.counting_down, 3);
             }
         }
@@ -834,17 +926,20 @@ impl Peripheral for Esp32s3Mcpwm {
     fn tick(&mut self) -> PeripheralTickResult {
         let clk_prescale = self.clk_prescale();
         let mut int_raw = self.int_raw;
-        for t in 0..NUM_TIMERS {
-            // Operator t shares timer t's index in our 1:1 wiring model.
-            Self::advance_timer(
-                &mut self.timers[t],
-                &mut self.operators[t],
-                t,
-                PWM_CLOCK_HZ,
-                (self.cpu_clock_hz as u64).max(1),
-                clk_prescale,
-                &mut int_raw,
-            );
+        if self.clock_enabled() {
+            for t in 0..NUM_TIMERS {
+                // Operator t shares timer t's index in our 1:1 wiring model.
+                Self::advance_timer(
+                    self.layout,
+                    &mut self.timers[t],
+                    &mut self.operators[t],
+                    t,
+                    PWM_CLOCK_HZ,
+                    (self.cpu_clock_hz as u64).max(1),
+                    clk_prescale,
+                    &mut int_raw,
+                );
+            }
         }
         self.int_raw = int_raw;
 
@@ -859,7 +954,7 @@ impl Peripheral for Esp32s3Mcpwm {
             ]);
         }
 
-        let asserted = (self.int_raw & self.int_ena & INT_MODELED_MASK) != 0;
+        let asserted = (self.int_raw & self.int_ena & modeled_int_mask(self.layout)) != 0;
         PeripheralTickResult {
             explicit_irqs: if asserted {
                 Some(vec![self.intr_source_id])
@@ -913,7 +1008,7 @@ impl Peripheral for Esp32s3Mcpwm {
     }
 
     fn matrix_irq_sources_into(&self, out: &mut Vec<u32>) {
-        if (self.int_raw & self.int_ena & INT_MODELED_MASK) != 0 {
+        if (self.int_raw & self.int_ena & modeled_int_mask(self.layout)) != 0 {
             out.push(self.intr_source_id);
         }
     }
@@ -922,7 +1017,7 @@ impl Peripheral for Esp32s3Mcpwm {
         if !self.uses_scheduler() {
             return Vec::new();
         }
-        let running = self.timers.iter().any(|t| (t.cfg1 & 0x7) != 0);
+        let running = self.clock_enabled() && self.timers.iter().any(|t| t.running(self.layout));
         if running && !self.scheduled {
             self.scheduled = true;
             return vec![(1, MCPWM_WAKE_TOKEN)];
@@ -941,7 +1036,7 @@ impl Peripheral for Esp32s3Mcpwm {
             let _ = self.tick();
             self.last_tick = self.last_tick.saturating_add(1);
         }
-        let keep = self.timers.iter().any(|t| (t.cfg1 & 0x7) != 0);
+        let keep = self.clock_enabled() && self.timers.iter().any(|t| t.running(self.layout));
         self.scheduled = keep;
         let mut explicit_irqs = Vec::new();
         self.matrix_irq_sources_into(&mut explicit_irqs);

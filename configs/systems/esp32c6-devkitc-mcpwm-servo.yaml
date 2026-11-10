@@ -1,0 +1,28 @@
+# ESP32-C6-DevKitC-1 v1.2 with its onboard RGB LED and a GPIO4 SG90 servo
+# fixture. The profile covers UART0, GPIO8/RMT TX, GPIO9 BOOT input, and the
+# MCPWM0 PWM0A output routed to J1 GPIO4. Radio and USB remain outside scope.
+name: "esp32c6-devkitc-mcpwm-servo"
+chip: "../chips/esp32c6.yaml"
+cpu_hz: 160_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "rgb_led"
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO8"
+      num_pixels: 1
+      cpu_hz: 160_000_000
+  - id: "servo"
+    type: "servo"
+    connection: "gpio"
+    config:
+      signal_pin: "GPIO4"
+      model: "sg90"
+board_io:
+  - id: "button_boot"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 9
+    signal: "input"
+    active_high: false

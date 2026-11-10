@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="5" failures="0" errors="0" time="7.881327">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="5607c60d11ad0f93b54226bbd175da17aaddc8b9b89e2d091788cd27f4d12657"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="7.881327">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: ESP32_C6_MCPWM0_SERVO_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: memory_value: @0x60014040=0x5dc" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: gpio_edges: gpio:4 &gt;= 2 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

@@ -82,3 +82,7 @@ Expected result:
 The committed [`evidence/`](evidence/) directory contains the build and local
 Core CLI smoke logs, a generated onboarding scoreboard, vendor availability,
 and the hosted-verifier limitation.
+
+The separate [MCPWM0 servo smoke](../esp32c6-devkitc-mcpwm-servo/README.md)
+covers GPIO4/PWM0A at 50 Hz. It is an ESP32-family depth improvement (MCU
+demand rank 1; ESP32 kits rank 2), not a new board SKU.
