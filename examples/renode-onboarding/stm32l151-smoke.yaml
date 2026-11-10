@@ -1,4 +1,5 @@
 # Cortex-M3 smoke against the imported STM32L151xD profile: USART1/2/3 TX,
+# plus USART2 UE/RE receiver gates, ordered two-byte RXNE and IRQ 38 behavior;
 # GPIOA..H reset values and set/reset, EXTI software and pad edges through
 # the SYSCFG port mux (L1 codes: PH = 5, PG = 7), and TIM2..TIM7/TIM9..TIM11
 # width, counting and update interrupt on the right NVIC line; SPI1..3 each
@@ -15,6 +16,9 @@ inputs:
   system: "../../configs/systems/onboarding/stm32l151.yaml"
 limits:
   max_steps: 4000000
+uart_injections:
+  - uart: "usart2"
+    bytes: "RS"
 stimuli:
   - target: { component: "tc_spi2", channel: "temperature" }
     trigger: !after_cycles { cycles: 1000 }
@@ -45,9 +49,11 @@ stimuli:
     value: 0.0
 assertions:
   - uart_contains: "STM32L151 Cortex-M3 smoke"
+  - uart_contains: "usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,released ok"
   - uart_contains: "usart2 ok"
   - uart_contains: "usart3 ok"
   - uart_ordered:
+      - "usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,released ok"
       - "gpio pa=1 pb=1 pc=1 ph=1 fg=1 ok"
       - "exti swier masked=1 routed=1 ok"
       - "tim2 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
@@ -69,11 +75,11 @@ assertions:
       - "dma1 spi1 frame=0x01901600 data=1 flags=1 pend=1 alone=1 released=1 ok"
       - "i2c1 tmp102=0x00001900 oar=1 data=1 ev=1 af=1 er_pend=1 ev_quiet=1 stop=1 released=1 ok"
       - "spi1 shared a=0x01901600 b=0x03201600 after_cut=0x01901600 a=1 b=1 restart=1 ok"
-      - "summary 0x1513FFFF"
+      - "summary 0x1517FFFF"
       - "DONE"
   - memory_value:
       address: 0x20008000
-      expected_value: 0x1513FFFF
+      expected_value: 0x1517FFFF
       size: 4
   - gpio_edges:
       pin: "gpioh:0"

@@ -36,6 +36,12 @@
     },
     {
       "assertion": {
+        "uart_contains": "usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,released ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "uart_contains": "usart2 ok"
       },
       "passed": true
@@ -49,6 +55,7 @@
     {
       "assertion": {
         "uart_ordered": [
+          "usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,released ok",
           "gpio pa=1 pb=1 pc=1 ph=1 fg=1 ok",
           "exti swier masked=1 routed=1 ok",
           "tim2 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
@@ -70,7 +77,7 @@
           "dma1 spi1 frame=0x01901600 data=1 flags=1 pend=1 alone=1 released=1 ok",
           "i2c1 tmp102=0x00001900 oar=1 data=1 ev=1 af=1 er_pend=1 ev_quiet=1 stop=1 released=1 ok",
           "spi1 shared a=0x01901600 b=0x03201600 after_cut=0x01901600 a=1 b=1 restart=1 ok",
-          "summary 0x1513FFFF",
+          "summary 0x1517FFFF",
           "DONE"
         ]
       },
@@ -80,7 +87,7 @@
       "assertion": {
         "memory_value": {
           "address": 536903680,
-          "expected_value": 353632255,
+          "expected_value": 353894399,
           "mask": null,
           "size": 4
         }
@@ -111,19 +118,19 @@
       1073821700,
       4294867296,
       1,
-      262143,
-      1,
+      4294867296,
+      1073821696,
       536920048,
       1,
       26220032,
-      1073821696,
-      4294867296,
+      26220032,
+      524287,
       70,
-      536919992,
+      536919952,
       70,
-      134233442
+      134238568
     ],
-    "pc": 134233442,
+    "pc": 134238568,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -136,7 +143,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "79f7cf9c97501feb22ea7dcd4ace975c129b0312500ec4ba175d7d50dd8c86b4",
+  "firmware_hash": "320e9679a85327a3801bdcfbd71b5970812528138f32d5d6b6cc6783e3d2db10",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-stm32l151-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32l151.yaml",
@@ -498,19 +505,19 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 450,
+            "cycle": 1309,
             "value": 1
           },
           {
-            "cycle": 457,
+            "cycle": 1316,
             "value": 0
           },
           {
-            "cycle": 461,
+            "cycle": 1320,
             "value": 1
           },
           {
-            "cycle": 469,
+            "cycle": 1328,
             "value": 0
           }
         ],
@@ -518,23 +525,23 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 449,
+            "cycle": 1308,
             "state": "0"
           },
           {
-            "cycle": 450,
+            "cycle": 1309,
             "state": "1"
           },
           {
-            "cycle": 457,
+            "cycle": 1316,
             "state": "0"
           },
           {
-            "cycle": 461,
+            "cycle": 1320,
             "state": "1"
           },
           {
-            "cycle": 469,
+            "cycle": 1328,
             "state": "0"
           }
         ],
@@ -565,27 +572,33 @@
         "end_cycle": 1000
       },
       {
-        "text": "usart2 ok",
+        "text": "usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,released ok",
         "cycle_lo": 0,
         "cycle": 1000,
-        "end_cycle": 1000
+        "end_cycle": 11000
+      },
+      {
+        "text": "usart2 ok",
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
       },
       {
         "text": "usart3 ok",
-        "cycle_lo": 0,
-        "cycle": 1000,
-        "end_cycle": 1000
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
       },
       {
         "text": "gpio pa=1 pb=1 pc=1 ph=1 fg=1 ok",
-        "cycle_lo": 0,
-        "cycle": 1000,
-        "end_cycle": 1000
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
       },
       {
         "text": "exti swier masked=1 routed=1 ok",
-        "cycle_lo": 0,
-        "cycle": 1000,
+        "cycle_lo": 1000,
+        "cycle": 11000,
         "end_cycle": 11000
       },
       {
@@ -703,7 +716,7 @@
         "end_cycle": 2920000
       },
       {
-        "text": "summary 0x1513FFFF",
+        "text": "summary 0x1517FFFF",
         "cycle_lo": 2910000,
         "cycle": 2920000,
         "end_cycle": 2920000
@@ -829,14 +842,14 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 18168,
+    "text_bytes": 23324,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 18168,
+    "flash_used_bytes": 23324,
     "ram_static_bytes": 0,
     "flash_total_bytes": 393216,
     "ram_total_bytes": 49152,
-    "flash_used_pct": 4.62,
+    "flash_used_pct": 5.93,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -846,15 +859,15 @@
   "memory": {
     "main_stack_method": "paint",
     "main_stack_limit_bytes": 49152,
-    "main_stack_high_water_bytes": 104,
-    "main_stack_free_min_bytes": 49036,
+    "main_stack_high_water_bytes": 108,
+    "main_stack_free_min_bytes": 49000,
     "main_stack_base": 536870912,
     "main_stack_top": 536920064,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
     "heap_limit_bytes": 49152,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 49036,
+    "heap_free_min_bytes": 49000,
     "heap_base": 536870912,
     "heap_top": 536920064
   },
@@ -862,89 +875,89 @@
     "cycles": 4000000,
     "instructions": 4000000,
     "steps_executed": 4000000,
-    "memory_reads": 6661,
-    "memory_writes": 805,
-    "peripheral_accesses": 761830,
+    "memory_reads": 7740,
+    "memory_writes": 844,
+    "peripheral_accesses": 757104,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134223388,
+        "pc": 134229252,
         "count": 547,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134223392,
+        "pc": 134229254,
         "count": 547,
         "symbol": "firmware_stm32l151_smoke::wait_level"
       },
       {
-        "pc": 134223410,
+        "pc": 134229256,
         "count": 547,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134223414,
+        "pc": 134229258,
+        "count": 547,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134229276,
         "count": 547,
         "symbol": "firmware_stm32l151_smoke::wait_level"
       },
       {
-        "pc": 134223416,
-        "count": 547,
-        "symbol": "firmware_stm32l151_smoke::wait_level"
-      },
-      {
-        "pc": 134223396,
+        "pc": 134229264,
         "count": 542,
-        "symbol": "core::ptr::read_volatile"
+        "symbol": "firmware_stm32l151_smoke::wait_level"
       },
       {
-        "pc": 134223394,
-        "count": 508,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134223400,
+        "pc": 134229260,
         "count": 508,
         "symbol": "firmware_stm32l151_smoke::wait_level"
       },
       {
-        "pc": 134223404,
-        "count": 508,
-        "symbol": "firmware_stm32l151_smoke::wait_level"
-      },
-      {
-        "pc": 134223406,
+        "pc": 134229266,
         "count": 508,
         "symbol": "<i32 as core::cmp::PartialOrd>::lt"
       },
       {
-        "pc": 134223408,
+        "pc": 134229268,
         "count": 508,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
-        "pc": 134223436,
-        "count": 274,
-        "symbol": "firmware_stm32l151_smoke::wait_level"
-      },
-      {
-        "pc": 134223422,
-        "count": 273,
+        "pc": 134229272,
+        "count": 508,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134233442,
+        "pc": 134229274,
+        "count": 508,
+        "symbol": "firmware_stm32l151_smoke::wait_level"
+      },
+      {
+        "pc": 134238568,
         "count": 239,
         "symbol": "firmware_stm32l151_smoke::__cortex_m_rt_main"
       },
       {
-        "pc": 134223448,
-        "count": 234,
+        "pc": 134229400,
+        "count": 157,
         "symbol": "firmware_stm32l151_smoke::wait_level"
       },
       {
-        "pc": 134223582,
+        "pc": 134229402,
         "count": 157,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134229524,
+        "count": 157,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134229398,
+        "count": 156,
         "symbol": "core::ptr::read_volatile"
       }
     ]

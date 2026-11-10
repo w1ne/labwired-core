@@ -1,7 +1,8 @@
 #![no_std]
 #![no_main]
 
-//! STM32L151xD smoke for the imported Renode platform: USART1/2/3, GPIOA..H,
+//! STM32L151xD smoke for the imported Renode platform: USART1/2/3 (including
+//! USART2 receiver enable and RXNE interrupt behavior), GPIOA..H,
 //! SYSCFG EXTICR + EXTI, TIM2..TIM7 and TIM9..TIM11, SPI1..3, I2C1 and DMA1.
 //! Register offsets, bases and IRQ numbers are ST's CMSIS `stm32l151xd.h`.
 //!
@@ -173,6 +174,96 @@ fn send(base: u32, bytes: &[u8]) {
         }
         wr(base + U_DR, u32::from(*byte));
     }
+}
+
+/// USART2 receives two start-injected bytes only after both legacy CR1.UE and
+/// CR1.RE are set. RXNEIE then gates IRQ 38 until the two-byte DR queue drains.
+fn check_usart2_rx_gate() -> bool {
+    const RXNE: u32 = 1 << 5;
+    const RXNEIE: u32 = 1 << 5;
+    const UE: u32 = 1 << 13;
+    const RE: u32 = 1 << 2;
+    const TE: u32 = 1 << 3;
+    const IRQ: u32 = 38;
+    const EXPECTED: u32 = 0x5253; // "RS"
+
+    let mut re_off = true;
+    for _ in 0..16 {
+        re_off &= rd(USART2 + U_SR) & RXNE == 0;
+    }
+    wr(USART2 + U_CR1, RE | TE); // RE set, UE clear
+    let mut ue_off = true;
+    for _ in 0..16 {
+        ue_off &= rd(USART2 + U_SR) & RXNE == 0;
+    }
+
+    unpend(IRQ);
+    wr(USART2 + U_CR1, UE | RE | TE);
+    let mut rxne_seen = false;
+    for _ in 0..4096 {
+        if rd(USART2 + U_SR) & RXNE != 0 {
+            rxne_seen = true;
+            break;
+        }
+    }
+    let irq_isolated = rxne_seen && !pending(IRQ);
+    wr(USART2 + U_CR1, UE | RE | TE | RXNEIE);
+    let mut irq_asserted = false;
+    for _ in 0..4096 {
+        if pending(IRQ) {
+            irq_asserted = true;
+            break;
+        }
+    }
+
+    let first = rd(USART2 + U_DR) & 0xFF;
+    let rxne_after_first = rd(USART2 + U_SR) & RXNE != 0;
+    let second = if rxne_after_first {
+        rd(USART2 + U_DR) & 0xFF
+    } else {
+        0
+    };
+    let rxne_cleared = rd(USART2 + U_SR) & RXNE == 0;
+    wr(USART2 + U_CR1, UE | TE); // keep USART2 TX available, disable its RX
+    unpend(IRQ);
+    let irq_released = !pending(IRQ);
+
+    let data = (first << 8) | second;
+    let ok = re_off
+        && ue_off
+        && irq_isolated
+        && irq_asserted
+        && data == EXPECTED
+        && rxne_after_first
+        && rxne_cleared
+        && irq_released;
+    puts("usart2 rx_gate re_off=");
+    puts(if re_off { "1" } else { "0" });
+    puts(" ue_off=");
+    puts(if ue_off { "1" } else { "0" });
+    puts(" data=");
+    hex(data);
+    puts(" rxne_after_first=");
+    puts(if rxne_after_first { "1" } else { "0" });
+    puts(" irq=");
+    puts(if irq_isolated {
+        "isolated"
+    } else {
+        "not_isolated"
+    });
+    puts(if irq_asserted {
+        ",asserted"
+    } else {
+        ",not_asserted"
+    });
+    puts(if irq_released {
+        ",released"
+    } else {
+        ",not_released"
+    });
+    puts(" ");
+    verdict(ok);
+    ok
 }
 
 fn puts(s: &str) {
@@ -672,6 +763,7 @@ fn main() -> ! {
     uart_init(USART2);
     uart_init(USART3);
     puts("STM32L151 Cortex-M3 smoke\r\n");
+    let usart2_rx_gate_ok = check_usart2_rx_gate();
     send(USART2, b"usart2 ok\r\n");
     send(USART3, b"usart3 ok\r\n");
 
@@ -681,6 +773,7 @@ fn main() -> ! {
             summary |= 1 << bit;
         }
     };
+    mark(18, usart2_rx_gate_ok);
     mark(0, check_gpio());
     mark(1, check_exti_swier());
     for (i, &(name, base, irq, width)) in TIMERS.iter().enumerate() {

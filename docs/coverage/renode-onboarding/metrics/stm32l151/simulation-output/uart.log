@@ -1,4 +1,5 @@
 STM32L151 Cortex-M3 smoke
+usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,released ok
 usart2 ok
 usart3 ok
 gpio pa=1 pb=1 pc=1 ph=1 fg=1 ok
@@ -22,5 +23,5 @@ spi3 TXEIE pend=1 released=1 ok
 dma1 spi1 frame=0x01901600 data=1 flags=1 pend=1 alone=1 released=1 ok
 i2c1 tmp102=0x00001900 oar=1 data=1 ev=1 af=1 er_pend=1 ev_quiet=1 stop=1 released=1 ok
 spi1 shared a=0x01901600 b=0x03201600 after_cut=0x01901600 a=1 b=1 restart=1 ok
-summary 0x1513FFFF
+summary 0x1517FFFF
 DONE
