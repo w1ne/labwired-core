@@ -17,8 +17,14 @@ const PADDED_EXCEPTION_CONTEXT: *mut u32 = 0x2000_0024 as *mut u32;
 const PADDED_EXCEPTION_FRAME_XPSR: *mut u32 = 0x2000_0028 as *mut u32;
 const PADDED_EXCEPTION_FRAME_SP: *mut u32 = 0x2000_002C as *mut u32;
 const PADDED_EXCEPTION_PSP_AFTER: *mut u32 = 0x2000_0030 as *mut u32;
+const UNALIGNED_EXCEPTION_CONTEXT: *mut u32 = 0x2000_0034 as *mut u32;
+const UNALIGNED_EXCEPTION_FRAME_XPSR: *mut u32 = 0x2000_0038 as *mut u32;
+const UNALIGNED_EXCEPTION_FRAME_SP: *mut u32 = 0x2000_003C as *mut u32;
+const UNALIGNED_EXCEPTION_PSP_AFTER: *mut u32 = 0x2000_0040 as *mut u32;
 
 const FLEXCOMM0: usize = 0x4011_0000;
+const SCB_CCR: usize = 0xE000_ED14;
+const SCB_CCR_STKALIGN: u32 = 1 << 9;
 const NVIC_ISER0: usize = 0xE000_E100;
 const NVIC_ICER0: usize = 0xE000_E180;
 const NVIC_ISPR0: usize = 0xE000_E200;
@@ -63,6 +69,10 @@ static IRQ_PADDED_R0: AtomicU32 = AtomicU32::new(0);
 static IRQ_PADDED_PC: AtomicU32 = AtomicU32::new(0);
 static IRQ_PADDED_XPSR: AtomicU32 = AtomicU32::new(0);
 static IRQ_PADDED_SP: AtomicU32 = AtomicU32::new(0);
+static IRQ_UNALIGNED_R0: AtomicU32 = AtomicU32::new(0);
+static IRQ_UNALIGNED_PC: AtomicU32 = AtomicU32::new(0);
+static IRQ_UNALIGNED_XPSR: AtomicU32 = AtomicU32::new(0);
+static IRQ_UNALIGNED_SP: AtomicU32 = AtomicU32::new(0);
 
 const PSP_STACK_WORDS: usize = 64;
 static mut PSP_STACK: [u32; PSP_STACK_WORDS] = [0; PSP_STACK_WORDS];
@@ -251,6 +261,96 @@ fn exercise_irq_exception_on_misaligned_psp() -> bool {
     handler_entered && context == 0b1111
 }
 
+/// Clear CCR.STKALIGN and confirm that a four-byte-aligned PSP is preserved
+/// without the optional exception-frame word or stacked xPSR marker.
+fn exercise_irq_exception_without_stack_alignment() -> bool {
+    IRQ_CASE.store(3, Ordering::Relaxed);
+    IRQ_ENTRY.store(0, Ordering::Relaxed);
+    IRQ_EXC_RETURN.store(0, Ordering::Relaxed);
+    IRQ_UNALIGNED_R0.store(0, Ordering::Relaxed);
+    IRQ_UNALIGNED_PC.store(0, Ordering::Relaxed);
+    IRQ_UNALIGNED_XPSR.store(0, Ordering::Relaxed);
+    IRQ_UNALIGNED_SP.store(0, Ordering::Relaxed);
+
+    let psp_top = addr_of_mut!(PSP_STACK) as u32 + (PSP_STACK_WORDS as u32) * 4;
+    let psp_before = psp_top - 4;
+    let msp_before: u32;
+    let psp_after: u32;
+    let msp_after: u32;
+
+    unsafe {
+        let ccr = read_volatile(SCB_CCR as *const u32);
+        write_volatile(SCB_CCR as *mut u32, ccr & !SCB_CCR_STKALIGN);
+        let ccr_after = read_volatile(SCB_CCR as *const u32);
+        core::arch::asm!(
+            "msr psp, {top}",
+            "mrs {msp_before}, msp",
+            "movs {tmp}, #2",
+            "msr control, {tmp}",
+            "isb",
+            "movw r0, #0x2468",
+            "movt r0, #0xace0",
+            "str {irq_bit}, [{iser}]",
+            "movw {count}, #10000",
+            "1:",
+            "ldr {seen}, [{entry}]",
+            "cmp {seen}, {mark}",
+            "beq 2f",
+            "subs {count}, #1",
+            "bne 1b",
+            "2:",
+            "mrs {psp_after}, psp",
+            "movs {tmp}, #0",
+            "msr control, {tmp}",
+            "isb",
+            "mrs {msp_after}, msp",
+            top = in(reg) psp_before,
+            msp_before = out(reg) msp_before,
+            psp_after = out(reg) psp_after,
+            msp_after = out(reg) msp_after,
+            tmp = out(reg) _,
+            irq_bit = in(reg) FLEXCOMM0_IRQ_BIT,
+            iser = in(reg) NVIC_ISER0 as u32,
+            count = out(reg) _,
+            seen = out(reg) _,
+            entry = in(reg) addr_of!(IRQ_ENTRY) as u32,
+            mark = in(reg) FLEXCOMM0_HANDLER_MARK,
+            out("r0") _,
+            options(nostack),
+        );
+        write_volatile(
+            UNALIGNED_EXCEPTION_CONTEXT,
+            u32::from(ccr_after & SCB_CCR_STKALIGN == 0),
+        );
+    }
+
+    let exc_return = IRQ_EXC_RETURN.load(Ordering::Relaxed);
+    let handler_entered = IRQ_ENTRY.load(Ordering::Relaxed) == FLEXCOMM0_HANDLER_MARK;
+    let frame_r0 = IRQ_UNALIGNED_R0.load(Ordering::Relaxed);
+    let frame_pc = IRQ_UNALIGNED_PC.load(Ordering::Relaxed);
+    let frame_xpsr = IRQ_UNALIGNED_XPSR.load(Ordering::Relaxed);
+    let frame_sp = IRQ_UNALIGNED_SP.load(Ordering::Relaxed);
+    let frame_ok = frame_r0 == 0xACE0_2468
+        && frame_pc & 1 == 0
+        && (0x3800_0000..0x4000_0000).contains(&frame_pc)
+        && frame_xpsr & (1 << 24) != 0
+        && frame_xpsr & 0x1FF == 0
+        && frame_xpsr & (1 << 9) == 0
+        && frame_sp == psp_top - 9 * 4;
+    let context = u32::from(exc_return == 0xFFFF_FFFD)
+        | (u32::from(psp_after == psp_before) << 1)
+        | (u32::from(msp_before == msp_after) << 2)
+        | (u32::from(frame_ok) << 3)
+        | (unsafe { read_volatile(UNALIGNED_EXCEPTION_CONTEXT) } << 4);
+    unsafe {
+        write_volatile(UNALIGNED_EXCEPTION_CONTEXT, context);
+        write_volatile(UNALIGNED_EXCEPTION_FRAME_XPSR, frame_xpsr);
+        write_volatile(UNALIGNED_EXCEPTION_FRAME_SP, frame_sp);
+        write_volatile(UNALIGNED_EXCEPTION_PSP_AFTER, psp_after);
+    }
+    handler_entered && context == 0b1_1111
+}
+
 fn wait_nvic_irq_pending(expected: bool) -> bool {
     for _ in 0..10_000 {
         if nvic_irq_pending() == expected {
@@ -319,6 +419,7 @@ fn smoke_lpuart_rx() -> bool {
     let irq_handler_entered = IRQ_ENTRY.load(Ordering::Relaxed) == FLEXCOMM0_HANDLER_MARK;
     let irq_exc_return = IRQ_EXC_RETURN.load(Ordering::Relaxed);
     let irq_padded_psp_context_restored = exercise_irq_exception_on_misaligned_psp();
+    let irq_unaligned_psp_context_restored = exercise_irq_exception_without_stack_alignment();
 
     let first = rd(LPUART_DATA) & 0xFF;
     let second_still_queued = rd(LPUART_STAT) & STAT_RDRF != 0;
@@ -344,6 +445,7 @@ fn smoke_lpuart_rx() -> bool {
         && irq_handler_entered
         && irq_psp_context_restored
         && irq_padded_psp_context_restored
+        && irq_unaligned_psp_context_restored
         && first == b'R' as u32
         && second_still_queued
         && rx_masked_with_data
@@ -396,6 +498,12 @@ fn smoke_lpuart_rx() -> bool {
     hex(IRQ_PADDED_XPSR.load(Ordering::Relaxed));
     puts(" padded_sp=");
     hex(IRQ_PADDED_SP.load(Ordering::Relaxed));
+    puts(" unaligned_context=");
+    hex(unsafe { read_volatile(UNALIGNED_EXCEPTION_CONTEXT) });
+    puts(" unaligned_xpsr=");
+    hex(IRQ_UNALIGNED_XPSR.load(Ordering::Relaxed));
+    puts(" unaligned_sp=");
+    hex(IRQ_UNALIGNED_SP.load(Ordering::Relaxed));
     puts(if ok { " ok\r\n" } else { " FAIL\r\n" });
     ok
 }
@@ -462,6 +570,9 @@ fn main() -> ! {
     if unsafe { read_volatile(PADDED_EXCEPTION_CONTEXT) } == 0b1111 {
         pass |= 1 << 8;
     }
+    if unsafe { read_volatile(UNALIGNED_EXCEPTION_CONTEXT) } == 0b1_1111 {
+        pass |= 1 << 9;
+    }
 
     puts("flexcomm0 pselid=");
     hex(pselid_reset);
@@ -524,6 +635,11 @@ unsafe fn DefaultHandler(irqn: i16) {
             IRQ_PADDED_PC.store(stacked_pc, Ordering::Relaxed);
             IRQ_PADDED_XPSR.store(stacked_xpsr, Ordering::Relaxed);
             IRQ_PADDED_SP.store(psp, Ordering::Relaxed);
+        } else if IRQ_CASE.load(Ordering::Relaxed) == 3 {
+            IRQ_UNALIGNED_R0.store(stacked_r0, Ordering::Relaxed);
+            IRQ_UNALIGNED_PC.store(stacked_pc, Ordering::Relaxed);
+            IRQ_UNALIGNED_XPSR.store(stacked_xpsr, Ordering::Relaxed);
+            IRQ_UNALIGNED_SP.store(psp, Ordering::Relaxed);
         } else {
             IRQ_STACKED_R0.store(stacked_r0, Ordering::Relaxed);
             IRQ_STACKED_PC.store(stacked_pc, Ordering::Relaxed);
