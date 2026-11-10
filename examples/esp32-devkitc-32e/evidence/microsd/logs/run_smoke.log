@@ -15,12 +15,12 @@ warning: function `default_events_per_channel` is never used
 125 | fn default_events_per_channel() -> u32 {
     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-2026-11-10T02:21:02.952251Z  INFO labwired_loader: ELF Entry Point: 0x40081be0
-2026-11-10T02:21:02.953245Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/esp32-devkitc-32e-gpio-smoke.yaml
+2026-11-10T03:14:26.409078Z  INFO labwired_loader: ELF Entry Point: 0x40081be0
+2026-11-10T03:14:26.410010Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/esp32-devkitc-32e-gpio-smoke.yaml
 labwired-cli test: seeded examples/esp32-devkitc-32e/firmware/.pio/build/devkitc32e_microsd/partitions.bin (3072 bytes) @ flash 0x8000
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: seeded g_rom_flashchip @0x3ffae270 (post-BROM flash attach state)
 labwired-cli test: pxCurrentTCBs @0x3ffc29cc (hybrid preserve key)
 labwired-cli test: installed xthal_window_spill_nw CPU spill workaround @0x40090994
-ESP32_DEVKITC32E_MICROSD_READ=PASS
-PASS  3/3 checks · microsd-smoke · 10470000 steps · 1.85s
+ESP32_DEVKITC32E_MICROSD_RW=PASS
+PASS  3/3 checks · microsd-smoke · 10730000 steps · 1.91s

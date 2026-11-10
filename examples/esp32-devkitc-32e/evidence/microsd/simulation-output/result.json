@@ -1,9 +1,9 @@
 {
   "result_schema_version": "1.0",
   "status": "pass",
-  "steps_executed": 10470000,
-  "cycles": 10470000,
-  "instructions": 10470000,
+  "steps_executed": 10730000,
+  "cycles": 10730000,
+  "instructions": 10730000,
   "stop_reason": "assertions_passed",
   "stop_reason_details": {
     "triggered_stop_condition": "assertions_passed",
@@ -24,7 +24,7 @@
   "assertions": [
     {
       "assertion": {
-        "uart_contains": "ESP32_DEVKITC32E_MICROSD_READ=PASS"
+        "uart_contains": "ESP32_DEVKITC32E_MICROSD_RW=PASS"
       },
       "passed": true
     },
@@ -50,15 +50,15 @@
   "cpu_state": {
     "type": "xtensa_lx7",
     "registers": [
-      2148540596,
+      2148540900,
       1073469584,
       0,
       181,
       3007315967,
-      1061159356,
+      1061159392,
       0,
       181,
-      2148405682,
+      2148405986,
       1073469520,
       0,
       0,
@@ -73,7 +73,7 @@
     "window_start": 22008,
     "vecbase": 1074266112
   },
-  "firmware_hash": "3184f02b7c2424d6022cb9089033002c1af8e32e5273fe0ce295a11011cbc1c2",
+  "firmware_hash": "65e130d1ec1d40ed3b418a51ee25baaceaf3ee34cff2027e20e119fa3d05fb80",
   "config": {
     "firmware": "examples/esp32-devkitc-32e/firmware/.pio/build/devkitc32e_microsd/firmware.elf",
     "system": "examples/esp32-devkitc-32e/../../configs/systems/esp32-devkitc-32e-microsd.yaml",
@@ -12493,7 +12493,7 @@
   ],
   "logic_edges": {
     "dropped": 0,
-    "now_cycle": 10470000,
+    "now_cycle": 10730000,
     "channels": [
       {
         "ch": 0,
@@ -12511,7 +12511,7 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 664605,
+            "cycle": 664607,
             "state": "0"
           },
           {
@@ -12530,7 +12530,7 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 10359041,
+            "cycle": 10614891,
             "value": 1
           }
         ],
@@ -12538,11 +12538,11 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 662948,
+            "cycle": 662950,
             "state": "0"
           },
           {
-            "cycle": 10359041,
+            "cycle": 10614891,
             "state": "1"
           }
         ],
@@ -12578,25 +12578,25 @@
   "uart_lines": {
     "lines": [
       {
-        "text": "ESP32_DEVKITC32E_MICROSD_READ=PASS",
-        "cycle_lo": 10360000,
-        "cycle": 10370000,
-        "end_cycle": 10370000
+        "text": "ESP32_DEVKITC32E_MICROSD_RW=PASS",
+        "cycle_lo": 10610000,
+        "cycle": 10620000,
+        "end_cycle": 10630000
       }
     ],
     "dropped_lines": 0
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 284627,
-    "data_bytes": 74587,
+    "text_bytes": 284935,
+    "data_bytes": 74663,
     "bss_bytes": 5426,
-    "flash_used_bytes": 359214,
-    "ram_static_bytes": 80013,
+    "flash_used_bytes": 359598,
+    "ram_static_bytes": 80089,
     "flash_total_bytes": 4194304,
     "ram_total_bytes": 196608,
-    "flash_used_pct": 8.56,
-    "ram_static_pct": 40.7,
+    "flash_used_pct": 8.57,
+    "ram_static_pct": 40.74,
     "notes": [
       "section_sum_not_bin_image",
       "totals_from_chip_catalog"
@@ -12608,17 +12608,17 @@
     "heap_method": "unsupported"
   },
   "metrics": {
-    "cycles": 10470000,
-    "instructions": 10470000,
-    "steps_executed": 10470000,
+    "cycles": 10730000,
+    "instructions": 10730000,
+    "steps_executed": 10730000,
     "memory_reads": 0,
     "memory_writes": 0,
-    "peripheral_accesses": 511976,
+    "peripheral_accesses": 612439,
     "exceptions": 0,
     "pc_samples": [
       {
         "pc": 1074294274,
-        "count": 38438,
+        "count": 39454,
         "symbol": "esp_cpu_wait_for_intr"
       },
       {

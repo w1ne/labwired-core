@@ -1,4 +1,5 @@
-# ESP32-DevKitC-32E mounts the demo FAT16 image and reads /README.TXT over VSPI.
+# ESP32-DevKitC-32E mounts the demo FAT16 image, reads /README.TXT, then writes
+# and reads back /ROUND54.TXT over VSPI.
 schema_version: "1.2"
 inputs:
   firmware: "firmware/.pio/build/devkitc32e_microsd/firmware.elf"
@@ -7,7 +8,7 @@ limits:
   max_steps: 30000000
   stop_when_assertions_pass: true
 assertions:
-  - uart_contains: "ESP32_DEVKITC32E_MICROSD_READ=PASS"
+  - uart_contains: "ESP32_DEVKITC32E_MICROSD_RW=PASS"
   - gpio_edges:
       pin: "gpio:17"
       min_edges: 1

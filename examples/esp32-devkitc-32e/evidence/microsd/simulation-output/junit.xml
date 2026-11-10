@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="4" failures="0" errors="0" time="1.847413">
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="1.910688">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="AssertionsPassed"/>
-    <property name="firmware_hash" value="3184f02b7c2424d6022cb9089033002c1af8e32e5273fe0ce295a11011cbc1c2"/>
+    <property name="firmware_hash" value="65e130d1ec1d40ed3b418a51ee25baaceaf3ee34cff2027e20e119fa3d05fb80"/>
   </properties>
-  <testcase classname="labwired" name="run" time="1.847413">
+  <testcase classname="labwired" name="run" time="1.910688">
   </testcase>
-  <testcase classname="labwired" name="assertion 1: uart_contains: ESP32_DEVKITC32E_MICROSD_READ=PASS" time="0.000000">
+  <testcase classname="labwired" name="assertion 1: uart_contains: ESP32_DEVKITC32E_MICROSD_RW=PASS" time="0.000000">
   </testcase>
   <testcase classname="labwired" name="assertion 2: gpio_edges: gpio:17 &gt;= 1 edges" time="0.000000">
   </testcase>

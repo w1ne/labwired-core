@@ -2,10 +2,10 @@
 
 **Demand rank:** ESP32 is rank 1 in the standing list (38% of reported MCU
 use). An earlier round added an I2C1 BME280 profile on GPIO16/GPIO17. This
-round extends the SPI microSD model on VSPI to mount a read-only FAT16 demo
-volume and read `/README.TXT`. This is coverage depth on the same customer
-board, not a new board/MCU demand pick. Earlier rounds also added PCNT unit 0,
-the stock Arduino VSPI path
+round extends the SPI microSD model on VSPI to mount a FAT16 demo volume, read
+`/README.TXT`, and write/read back `/ROUND54.TXT`. This is coverage depth on
+the same customer board, not a new board/MCU demand pick. Earlier rounds also
+added PCNT unit 0, the stock Arduino VSPI path
 to a 128x64 SSD1306 display, and MCPWM0 servo control.
 
 ## Board and modeled scope
@@ -26,7 +26,7 @@ blink, connect an LED in series with a resistor from GPIO23 to GND.
 | J2 GPIO21/GPIO22 | I2C0 SDA/SCL | BME280 smoke reads sensor ID and temperature ADC data |
 | J3 GPIO16/GPIO17 | I2C1 SDA/SCL | I2C1 smoke reads BME280 ID `0x60` and raw temperature `0x082DC0` |
 | J3 GPIO18/19/23/5, GPIO17 | VSPI/SPI3 clock, MISO, MOSI, CS, and OLED D/C | SPI OLED smoke sends SSD1306 init commands and paints the first 8-row page |
-| J3 GPIO18/19/23/5, GPIO17, GPIO16 | VSPI/SPI3 microSD SCK, MISO, MOSI, CS; mount and file-read pass outputs | microSD smoke mounts the FAT16 demo volume and reads `/README.TXT` |
+| J3 GPIO18/19/23/5, GPIO17, GPIO16 | VSPI/SPI3 microSD SCK, MISO, MOSI, CS; mount and file-write/read pass outputs | microSD smoke reads `/README.TXT`, writes `/ROUND54.TXT`, and verifies its contents after reopening |
 | J2 pin 3 / VP (GPIO36) | ADC1 channel 0 | ADC smoke reads a 1650 mV potentiometer through `analogRead(36)` and expects 2047 at 12-bit resolution |
 | J3 pin 2 (GPIO23) | LEDC high-speed channel 0 PWM output | LEDC smoke runs 50 Hz, 14-bit PWM to an external SG90-class servo twin and requires committed duty plus GPIO edges |
 | J3 pin 2 (GPIO23) | MCPWM0 operator A duty observer | MCPWM smoke sets a 50 Hz, 7.5% center command and checks the compare-A register; the servo twin follows duty, while pad-level MCPWM waveforms are outside the model |
@@ -502,7 +502,7 @@ current exact-board and display availability check is in
 The smoke log and deterministic local display assertion are committed under
 [`evidence/spi-oled/`](evidence/spi-oled/).
 
-Run the microSD filesystem read smoke from the repository root:
+Run the microSD filesystem write/read smoke from the repository root:
 
 ```sh
 RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
@@ -515,8 +515,9 @@ RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
 
 Copy-paste Arduino example for an Adafruit Micro SD SPI/SDIO breakout (PID
 4682) and a microSD card supporting SPI mode. Connect 3V3/GND, CLK to GPIO18,
-DO to GPIO19, CMD/SI to GPIO23, and CS to GPIO5. GPIO16 is an optional pass
-output:
+DO to GPIO19, CMD/SI to GPIO23, and CS to GPIO5. This example checks the seeded
+file, creates `/ROUND54.TXT`, writes a marker, and reads the file back. GPIO16
+is an optional pass output:
 
 ```cpp
 #include <Arduino.h>
@@ -527,6 +528,7 @@ output:
 
 constexpr int kCs = 5;
 constexpr int kPass = 16;
+constexpr char kWriteText[] = "round-trip write passed\r\n";
 
 void setup() {
   Serial.begin(115200);
@@ -549,20 +551,45 @@ void setup() {
     }
     file.close();
   }
-  if (count == sizeof(expected) - 1 &&
-      memcmp(contents, expected, sizeof(expected) - 1) == 0) {
+  const bool initialReadOk = count == sizeof(expected) - 1 &&
+      memcmp(contents, expected, sizeof(expected) - 1) == 0;
+
+  File output = SD.open("/ROUND54.TXT", FILE_WRITE);
+  size_t written = output
+      ? output.write(reinterpret_cast<const uint8_t *>(kWriteText),
+                     sizeof(kWriteText) - 1)
+      : 0;
+  if (output) output.close();
+
+  File input = SD.open("/ROUND54.TXT", FILE_READ);
+  char readback[sizeof(kWriteText)] = {};
+  size_t readbackCount = 0;
+  if (input) {
+    while (input.available() && readbackCount < sizeof(readback)) {
+      readback[readbackCount++] = static_cast<char>(input.read());
+    }
+    input.close();
+  }
+  const bool roundTripOk = written == sizeof(kWriteText) - 1 &&
+      readbackCount == sizeof(kWriteText) - 1 &&
+      memcmp(readback, kWriteText, sizeof(kWriteText) - 1) == 0;
+
+  if (initialReadOk && roundTripOk) {
     digitalWrite(kPass, HIGH);
-    Serial.println("microSD file read OK");
+    Serial.println("microSD file write/read OK");
+  } else {
+    Serial.println("microSD file write/read failed");
   }
 }
 
 void loop() {}
 ```
 
-The simulation card is a fixed, read-only 32 MiB SDHC image with a FAT16 volume
-and `/README.TXT`. It supports CSD reads and single-block reads needed to mount
-the volume; writes are rejected. A physical microSD card is not included with
-the breakout. The committed local smoke and hosted initialization oracle
-evidence are in
+The simulation card starts from a fixed 32 MiB SDHC image with a FAT16 volume
+and `/README.TXT`. It supports CSD reads and single-block reads/writes; writes
+are retained in memory for that simulation run and the seeded image is restored
+for the next run. This is a deterministic profile, not a raw-flash or wear
+model. A physical microSD card is not included with the breakout. The
+committed local smoke and hosted initialization oracle evidence are in
 [`evidence/microsd/`](evidence/microsd/); live board and breakout availability
 is recorded in [`evidence/microsd/vendor-status.md`](evidence/microsd/vendor-status.md).

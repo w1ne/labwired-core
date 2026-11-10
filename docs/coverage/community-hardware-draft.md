@@ -21,15 +21,17 @@ controller, routed to GPIO16/GPIO17 (J3 pins 12/11). The smoke reads BME280 ID
 extension on the existing board, not a new board or MCU demand pick.
 
 This round extends the existing external microSD SPI profile on the same
-rank-1 board. It uses VSPI/SPI3 on GPIO18/19/23 with CS=GPIO5, mounts a fixed,
-read-only FAT16 image, reads `/README.TXT`, and raises GPIO16 when the contents
-match. The model supports CSD and single-block reads; writes and custom card
-images are outside the profile. This is ESP32 family coverage depth on an
-existing board, not a new board/MCU demand pick. Live component availability is recorded in
+rank-1 board. It uses VSPI/SPI3 on GPIO18/19/23 with CS=GPIO5, mounts a fixed
+FAT16 image, reads `/README.TXT`, creates `/ROUND54.TXT`, and verifies the bytes
+after writing and reopening it. GPIO16 marks a successful round trip. Single
+sector writes persist during one simulation run; the seeded image resets on the
+next run. This is ESP32 family coverage depth on an existing board, not a new
+board/MCU demand pick. Live component availability is recorded in
 [`microsd/vendor-status.md`](../../examples/esp32-devkitc-32e/evidence/microsd/vendor-status.md).
-The repository-local smoke passes 3/3 assertions. The separate hosted catalog
-still provides only initialization and zero-filled block reads; its filesystem
-verification attempt failed at the step limit. See
+The repository-local smoke record is in the evidence directory. The separate
+hosted catalog's independent microSD model does not carry this local FAT16
+image or its mutable sectors, so the repo-local smoke is the evidence for the
+write/read behavior. See
 [`hosted-verification.md`](../../examples/esp32-devkitc-32e/evidence/microsd/hosted-verification.md).
 
 Copy-paste Arduino example for the Adafruit Micro SD SPI/SDIO breakout (PID
@@ -67,7 +69,28 @@ void setup() {
   }
   if (count == sizeof(expected) - 1 &&
       memcmp(contents, expected, sizeof(expected) - 1) == 0) {
-    Serial.println("microSD file read OK");
+    const char text[] = "round-trip write passed\r\n";
+    File output = SD.open("/ROUND54.TXT", FILE_WRITE);
+    size_t written = output
+        ? output.write(reinterpret_cast<const uint8_t *>(text), sizeof(text) - 1)
+        : 0;
+    if (output) output.close();
+
+    File input = SD.open("/ROUND54.TXT", FILE_READ);
+    char readback[sizeof(text)] = {};
+    size_t readback_count = 0;
+    if (input) {
+      while (input.available() && readback_count < sizeof(readback)) {
+        readback[readback_count++] = static_cast<char>(input.read());
+      }
+      input.close();
+    }
+    if (written == sizeof(text) - 1 && readback_count == sizeof(text) - 1 &&
+        memcmp(readback, text, sizeof(text) - 1) == 0) {
+      Serial.println("microSD file write/read OK");
+    } else {
+      Serial.println("microSD file write/read failed");
+    }
   } else {
     Serial.println("microSD file read failed");
   }

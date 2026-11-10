@@ -1,5 +1,6 @@
 # ESP32-DevKitC-32E with an external SPI microSD socket on the stock VSPI pins.
-# The modeled card supports the initialization command sequence, not a filesystem.
+# The modeled SDHC card exposes a fixed FAT16 volume and retains single-block
+# writes for the duration of this simulation run.
 name: "esp32-devkitc-32e-microsd"
 chip: "../chips/esp32-devkitc-32e-gpio-smoke.yaml"
 cpu_hz: 240000000

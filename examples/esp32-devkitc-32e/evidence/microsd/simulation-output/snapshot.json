@@ -3,15 +3,15 @@
   "cpu": {
     "type": "xtensa_lx7",
     "registers": [
-      2148540596,
+      2148540900,
       1073469584,
       0,
       181,
       3007315967,
-      1061159356,
+      1061159392,
       0,
       181,
-      2148405682,
+      2148405986,
       1073469520,
       0,
       0,
@@ -26,9 +26,9 @@
     "window_start": 22008,
     "vecbase": 1074266112
   },
-  "steps_executed": 10470000,
-  "cycles": 10470000,
-  "instructions": 10470000,
+  "steps_executed": 10730000,
+  "cycles": 10730000,
+  "instructions": 10730000,
   "stop_reason": "assertions_passed",
   "stop_reason_details": {
     "triggered_stop_condition": "assertions_passed",
@@ -46,7 +46,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "3184f02b7c2424d6022cb9089033002c1af8e32e5273fe0ce295a11011cbc1c2",
+  "firmware_hash": "65e130d1ec1d40ed3b418a51ee25baaceaf3ee34cff2027e20e119fa3d05fb80",
   "config": {
     "firmware": "examples/esp32-devkitc-32e/firmware/.pio/build/devkitc32e_microsd/firmware.elf",
     "system": "examples/esp32-devkitc-32e/../../configs/systems/esp32-devkitc-32e-microsd.yaml",

@@ -4,15 +4,16 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-//! microSD SPI card with a small read-only FAT16 demo volume.
+//! microSD SPI card with a small FAT16 demo volume.
 //!
 //! Handles CMD0 (GO_IDLE), CMD8 (SEND_IF_COND), CMD55/ACMD41, CMD58 (OCR),
-//! CMD9 (SEND_CSD), and CMD17 (READ_SINGLE_BLOCK). The fixed 32 MiB SDHC image
-//! contains a FAT16 volume with `/README.TXT`; writes are rejected.
+//! CMD9 (SEND_CSD), CMD17 (READ_SINGLE_BLOCK), and CMD24 (WRITE_BLOCK). The
+//! fixed 32 MiB SDHC image contains a FAT16 volume with `/README.TXT`; sector
+//! writes are retained for the lifetime of the simulated card.
 
 use crate::peripherals::spi::SpiDevice;
 use std::any::Any;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 
 const CARD_SECTORS: u32 = 65_536;
 const PARTITION_START: u32 = 1;
@@ -109,6 +110,21 @@ fn queue_data_block(out: &mut VecDeque<u8>, data: &[u8]) {
     out.push_back(crc as u8);
 }
 
+enum WriteState {
+    AwaitToken {
+        lba: u32,
+    },
+    Data {
+        lba: u32,
+        bytes: Vec<u8>,
+    },
+    Crc {
+        lba: u32,
+        bytes: Vec<u8>,
+        remaining: u8,
+    },
+}
+
 pub struct MicroSd {
     cs_pin: String,
     cmd_buf: Vec<u8>,
@@ -116,6 +132,8 @@ pub struct MicroSd {
     idle: bool,
     initialized: bool,
     component_id: Option<String>,
+    written_sectors: HashMap<u32, [u8; 512]>,
+    write_state: Option<WriteState>,
 }
 
 impl MicroSd {
@@ -127,6 +145,8 @@ impl MicroSd {
             idle: true,
             initialized: false,
             component_id: None,
+            written_sectors: HashMap::new(),
+            write_state: None,
         }
     }
 
@@ -152,6 +172,7 @@ impl MicroSd {
                 // CMD0 GO_IDLE_STATE
                 self.idle = true;
                 self.initialized = false;
+                self.write_state = None;
                 self.out.push_back(self.r1(0x01)); // idle
             }
             8 => {
@@ -207,12 +228,25 @@ impl MicroSd {
                     self.out.push_back(self.r1(0x20)); // address error
                 } else {
                     self.out.push_back(self.r1(0x00));
-                    queue_data_block(&mut self.out, &demo_sector(arg));
+                    let sector = self
+                        .written_sectors
+                        .get(&arg)
+                        .copied()
+                        .unwrap_or_else(|| demo_sector(arg));
+                    queue_data_block(&mut self.out, &sector);
                 }
             }
             24 => {
-                // The demo image is read-only; report an illegal command.
-                self.out.push_back(self.r1(0x04));
+                // CMD24 WRITE_BLOCK; the host follows with a data token,
+                // 512-byte sector and two CRC bytes. SDHC addresses are LBAs.
+                if self.idle {
+                    self.out.push_back(self.r1(0x01));
+                } else if arg >= CARD_SECTORS {
+                    self.out.push_back(self.r1(0x20)); // address error
+                } else {
+                    self.out.push_back(self.r1(0x00));
+                    self.write_state = Some(WriteState::AwaitToken { lba: arg });
+                }
             }
             _ => {
                 self.out
@@ -234,6 +268,7 @@ impl SpiDevice for MicroSd {
 
     fn cs_release(&mut self) {
         self.cmd_buf.clear();
+        self.write_state = None;
     }
 
     fn transfer(&mut self, mosi: u8) -> u8 {
@@ -248,6 +283,60 @@ impl SpiDevice for MicroSd {
                 }
             }
             return b;
+        }
+
+        if let Some(state) = self.write_state.take() {
+            match state {
+                WriteState::AwaitToken { lba } if mosi == 0xFE => {
+                    self.write_state = Some(WriteState::Data {
+                        lba,
+                        bytes: Vec::with_capacity(512),
+                    });
+                }
+                WriteState::AwaitToken { lba } if mosi == 0xFF => {
+                    self.write_state = Some(WriteState::AwaitToken { lba });
+                }
+                WriteState::AwaitToken { .. } => {
+                    // 0x0D is the SD data-error token. Unsupported write
+                    // tokens do not alter the fixed demo volume.
+                    self.out.push_back(0x0D);
+                }
+                WriteState::Data { lba, mut bytes } => {
+                    bytes.push(mosi);
+                    if bytes.len() == 512 {
+                        self.write_state = Some(WriteState::Crc {
+                            lba,
+                            bytes,
+                            remaining: 2,
+                        });
+                    } else {
+                        self.write_state = Some(WriteState::Data { lba, bytes });
+                    }
+                }
+                WriteState::Crc {
+                    lba,
+                    bytes,
+                    remaining,
+                } if remaining > 1 => {
+                    self.write_state = Some(WriteState::Crc {
+                        lba,
+                        bytes,
+                        remaining: remaining - 1,
+                    });
+                }
+                WriteState::Crc { lba, bytes, .. } => {
+                    if let Ok(sector) = <Vec<u8> as TryInto<[u8; 512]>>::try_into(bytes) {
+                        self.written_sectors.insert(lba, sector);
+                        // Accepted data block, brief busy interval, then
+                        // ready. The two supplied CRC bytes are ignored while
+                        // card CRC checking is disabled in SPI mode.
+                        self.out.extend([0x05, 0x00, 0xFF]);
+                    } else {
+                        self.out.push_back(0x0D);
+                    }
+                }
+            }
+            return 0xFF;
         }
 
         // Idle MISO is 0xFF until a command starts
@@ -285,11 +374,12 @@ static MICROSD_METADATA: KitMetadata = KitMetadata {
     device_type: std::borrow::Cow::Borrowed("microsd"),
     label: std::borrow::Cow::Borrowed("microSD (SPI)"),
     summary: std::borrow::Cow::Borrowed(
-        "Read-only SDHC card image with a FAT16 demo volume and README.TXT.",
+        "SDHC card image with a FAT16 demo volume and README.TXT; single-block writes are retained in simulation.",
     ),
     detail: std::borrow::Cow::Borrowed(
-        "CMD0/8/9/55/41/58/17 SDHC profile with a fixed 32 MiB read-only FAT16 \
-             volume containing /README.TXT. Writes are rejected.",
+        "CMD0/8/9/13/17/24/55/41/42/58 SDHC profile with a fixed 32 MiB FAT16 \
+             volume containing /README.TXT. Single-block writes persist for the \
+             lifetime of this simulated card; the image resets between runs.",
     ),
     transport: Transport::Spi,
     category: Category::Spi,

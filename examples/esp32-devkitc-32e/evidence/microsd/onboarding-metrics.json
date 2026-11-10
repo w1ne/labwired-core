@@ -6,24 +6,24 @@
   "script": "examples/esp32-devkitc-32e/microsd-smoke.yaml",
   "system": "configs/systems/esp32-devkitc-32e-microsd.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-10T02:20:58Z",
-  "finished_at_utc": "2026-11-10T02:21:05Z",
-  "elapsed_seconds": 7,
-  "elapsed_ms": 6558,
+  "started_at_utc": "2026-11-10T03:09:06Z",
+  "finished_at_utc": "2026-11-10T03:14:28Z",
+  "elapsed_seconds": 322,
+  "elapsed_ms": 321875,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.31,
-    "build_firmware": 3.794,
-    "run_smoke": 2.42
+    "build_cli": 314.371,
+    "build_firmware": 4.825,
+    "run_smoke": 2.641
   },
   "stages_ms": {
-    "build_cli": 310,
-    "build_firmware": 3794,
-    "run_smoke": 2420
+    "build_cli": 314371,
+    "build_firmware": 4825,
+    "run_smoke": 2641
   },
   "firmware_build_script": "scripts/build-esp32-devkitc-32e-microsd-smoke.sh"
 }

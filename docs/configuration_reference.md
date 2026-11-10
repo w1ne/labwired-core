@@ -492,7 +492,7 @@ canonical `type:`; the table below is rendered from that file by
 | `max31855` | SPI | K-type thermocouple-to-digital converter over SPI (read-only 32-bit frame) |
 | `mcp2515` | SPI | Functional SPI classical CAN controller for standard 11-bit data frames |
 | `mcp3008` | SPI | 8-channel 10-bit SPI ADC (single-ended / differential, Figure 6-1 framing) |
-| `microsd` | SPI | Read-only SDHC card image with a FAT16 demo volume and README.TXT |
+| `microsd` | SPI | SDHC card image with a FAT16 demo volume; single-sector writes persist during the simulation run |
 | `nrf24l01` | SPI | 2.4 GHz SPI transceiver register shell (no air link) |
 | `oled-ssd1306-spi` | SPI | 128×64 monochrome OLED, the 7-pin 4-wire SPI module, with a paged framebuffer |
 | `pcd8544` | SPI | Nokia 5110 (PCD8544) monochrome 84×48 LCD over SPI |

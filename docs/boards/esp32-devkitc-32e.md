@@ -28,13 +28,14 @@ ESP32-WROOM-32E module. The GPIO/UART profile is
   temperature data through the second controller. This is a low-cost profile
   extension on the existing board, not a new board/MCU demand pick.
 - Demand rank: ESP32 is rank 1 (38% MCU use). This coverage-depth update keeps
-  the same DevKitC-32E and microSD breakout, and replaces the initialization
-  check with a stock Arduino SD filesystem read. The VSPI/SPI3 card uses
-  SCK=GPIO18, MISO=GPIO19, MOSI=GPIO23, CS=GPIO5; firmware mounts the fixed
-  32 MiB SDHC image, reads `/README.TXT`, verifies its contents, raises GPIO17
-  after mount, and raises GPIO16 after the exact file read. The model is
-  read-only: it supports CMD9/CSD and CMD17 block reads, rejects writes, and
-  does not accept a configurable card image.
+  the same DevKitC-32E and microSD breakout, and extends the stock Arduino SD
+  filesystem smoke from reading to a write/read round trip. The VSPI/SPI3 card
+  uses SCK=GPIO18, MISO=GPIO19, MOSI=GPIO23, CS=GPIO5; firmware mounts the fixed
+  32 MiB SDHC image, reads `/README.TXT`, writes `/ROUND54.TXT`, and checks the
+  same bytes after reopening it. GPIO17 marks a successful mount; GPIO16 marks
+  the completed round trip. Single-sector writes persist during one simulation
+  run, while the demo image resets between runs and cannot be replaced by a
+  custom image.
 - The earlier SPI addition connects an external 128x64 SSD1306 OLED using
   SCK=GPIO18, MISO=GPIO19, MOSI=GPIO23, CS=GPIO5, and
   D/C=GPIO17. Its smoke sends the controller initialization sequence and
@@ -95,7 +96,7 @@ Its committed local log reads BME280 ID `0x60` and temperature ADC `0x082DC0`
 on GPIO16/GPIO17. The simulator smoke uses the ESP32 command-list registers;
 the Arduino `Wire1` driver path is not covered by this evidence.
 
-The ESP32 rank-1 microSD filesystem-read smoke is in
+The ESP32 rank-1 microSD filesystem write/read smoke is in
 [`examples/esp32-devkitc-32e/microsd-smoke.yaml`](../../examples/esp32-devkitc-32e/microsd-smoke.yaml).
 Its copy-paste Arduino example in the
 [`DevKitC README`](../../examples/esp32-devkitc-32e/README.md) uses `SD.begin`
