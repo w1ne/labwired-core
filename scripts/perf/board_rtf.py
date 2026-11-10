@@ -45,12 +45,19 @@ DEFAULT_TOLERANCE = 0.25
 
 
 @dataclass(frozen=True)
+class FramebufferCadence:
+    device: str
+    period_us: int
+
+
+@dataclass(frozen=True)
 class Workload:
     id: str
     board: str
     chip: str
     cpu_hz: int
     guest_s: float
+    framebuffer_cadence: tuple[FramebufferCadence, ...] = ()
 
     @property
     def dir(self) -> Path:
@@ -59,7 +66,10 @@ class Workload:
 
 WORKLOADS = (
     Workload("uno_feeder", "Arduino Uno", "atmega328p", 16_000_000, 2.0),
-    Workload("pico_oled_pwm", "Raspberry Pi Pico", "rp2040", 125_000_000, 8.0),
+    Workload(
+        "pico_oled_pwm", "Raspberry Pi Pico", "rp2040", 125_000_000, 8.0,
+        framebuffer_cadence=(FramebufferCadence("oled", 100_000),),
+    ),
     Workload("c3_i2c_uart", "ESP32-C3 DevKitM-1", "esp32c3", 160_000_000, 0.5),
     Workload("f411_timer_uart", "Black Pill F411", "stm32f411ceu6", 100_000_000, 0.5),
 )
@@ -130,7 +140,62 @@ def parse_result(w: Workload, result: dict, wall: float, returncode: int) -> dic
     # inflated RTF for less guest time, so it is refused.
     if result.get("stop_reason") != "max_cycles":
         raise RuntimeError(f"{w.id}: stopped on {result.get('stop_reason')!r}, not max_cycles")
-    return {"cycles": want, "wall_s": wall}
+    progress = check_framebuffer_progress(w, result)
+    return {"cycles": want, "wall_s": wall, "progress": progress}
+
+
+def check_framebuffer_progress(w: Workload, result: dict) -> dict:
+    """Require timed display work, not just a boot marker and a spent budget.
+
+    The pinned Pico sketch redraws a different counter frame every 100 ms.
+    Allow two update periods for startup and the final budget boundary, then
+    require both the number of distinct frames and a recent final update.
+    This rejects a ROM that prints RTF_READY, draws once, then stalls forever.
+    """
+    progress = {}
+    guest_us = round(w.guest_s * 1_000_000)
+    for cadence in w.framebuffer_cadence:
+        metas = [
+            artifact.get("meta", {})
+            for device in result.get("inspect", {}).get("devices", [])
+            if device.get("id") == cadence.device
+            for artifact in device.get("artifacts", [])
+            if artifact.get("kind") == "framebuffer"
+        ]
+        if len(metas) != 1 or not isinstance(metas[0].get("frames_seen"), list):
+            raise RuntimeError(
+                f"{w.id}: missing framebuffer progress for {cadence.device}"
+            )
+        frames = metas[0]["frames_seen"]
+        if any(
+            not isinstance(frame, dict)
+            or not isinstance(frame.get("sha256"), str)
+            or len(frame["sha256"]) != 64
+            or any(c not in "0123456789abcdef" for c in frame["sha256"])
+            or not isinstance(frame.get("t_us"), int)
+            or not 0 <= frame["t_us"] <= guest_us
+            for frame in frames
+        ):
+            raise RuntimeError(f"{w.id}: invalid framebuffer history for {cadence.device}")
+        distinct = len({frame["sha256"] for frame in frames})
+        first_us = min((frame["t_us"] for frame in frames), default=0)
+        last_us = max((frame["t_us"] for frame in frames), default=0)
+        minimum_frames = max(2, guest_us // cadence.period_us - 2)
+        minimum_last_us = max(0, guest_us - 2 * cadence.period_us)
+        if distinct < minimum_frames or last_us < minimum_last_us:
+            raise RuntimeError(
+                f"{w.id}: {cadence.device} made {distinct} distinct frames, last at "
+                f"{last_us} us; need at least {minimum_frames} frames and an update "
+                f"at or after {minimum_last_us} us"
+            )
+        progress[cadence.device] = {
+            "distinct_frames": distinct,
+            "first_update_us": first_us,
+            "last_update_us": last_us,
+            "minimum_frames": minimum_frames,
+            "minimum_last_update_us": minimum_last_us,
+        }
+    return progress
 
 
 def measure(cli: Path, w: Workload, repeats: int) -> dict:
@@ -145,11 +210,13 @@ def measure(cli: Path, w: Workload, repeats: int) -> dict:
         "cpu_hz": w.cpu_hz,
         "guest_s": pick["cycles"] / w.cpu_hz,
         "wall_s": round(pick["wall_s"], 4),
+        "wall_s_samples": [round(run["wall_s"], 6) for run in runs],
         "mcycles_per_s": round(pick["cycles"] / pick["wall_s"] / 1e6, 3),
         "rtf": round(med, 4),
         "rtf_min": round(min(rtfs), 4),
         "rtf_best": round(max(rtfs), 5),
         "repeats": repeats,
+        "progress": pick["progress"],
     }
 
 
@@ -167,6 +234,7 @@ def judge(rows: list[dict], spin_rtx: dict[str, float], baselines: dict,
         if not spin:
             row["index"] = None
             continue
+        row["spin_rtx"] = spin
         row["index"] = float(f"{row.get('rtf_best', row['rtf']) / spin:.4g}")
         base = (baselines.get(row["workload"]) or {}).get("index")
         row["baseline_index"] = base

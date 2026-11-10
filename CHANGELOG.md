@@ -292,6 +292,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Debian 12, Ubuntu 22.04 and AlmaLinux 9 with the GLIBC 2.31 floor preserved.
 - Smoke-test Python wheels on every supported native architecture, including
   the cross-built Linux ARM64 wheel, before publication.
+- Require sustained OLED updates in the RP2040 performance workload. Remeasure
+  its invalid reference, which used a ROM that drew one frame and then stalled
+  before enabling PWM. Keep the 25% regression tolerance and other workload
+  baselines unchanged.
 - Complete three onboarding profiles with shipped-board execution oracles:
   STM32F103RB BME280 SysTick, classic ESP32 GPIO and UART1. Correct the
   descriptors and validate interrupt delivery with disabled-interrupt controls.

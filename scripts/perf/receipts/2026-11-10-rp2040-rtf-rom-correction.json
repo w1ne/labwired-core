@@ -1,0 +1,365 @@
+{
+  "schema": 1,
+  "purpose": "Replace a baseline that timed a stalled Pico sketch with the same firmware executing its intended OLED and PWM work; require continuing work in every timed run.",
+  "generated_at": "2026-11-10T20:10:58Z",
+  "source_commit": "bccf2930ec8f3b237ff60a9352046e862f08db4f",
+  "native_source_dirty_paths": [],
+  "build": {
+    "command": "CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR=/data/cache/labwired-release-026-target cargo build --offline --locked --release -p labwired-cli -p labwired-dap",
+    "cli_default_feature": "event-scheduler",
+    "binary_sha256": "db3ad5e5f2c088bf40a00ed6320f5d3b5a51e22abe5e51e51ca1742178e4431a",
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.95.0\nLLVM version: 22.1.2",
+    "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+    "python": "Python 3.12.3"
+  },
+  "host": {
+    "runner": "work-1",
+    "os": "Linux 6.8.0-147-generic x86_64 GNU/Linux",
+    "cpu_model": "AMD EPYC-Milan Processor",
+    "architecture": "x86_64",
+    "logical_cpus": 16,
+    "background_load": "Other agents left their Cargo jobs idle for the measurement. After the timing window, a separate priority_group Cargo/rustc job was reported at approximately 190% CPU on this 16-vCPU host. This process was not stopped. The best-of-three workload/spin normalization is unchanged. Earlier local index 0.04298 and independent CI index 0.03649 corroborate this result within the retained 25% tolerance."
+  },
+  "inputs": {
+    "tests/fixtures/rtf/pico_oled_pwm/firmware.elf": {
+      "sha256": "6ae809c30f63041b6fade7975ec3eb7313da04d803c160df01c57b206dee55ef",
+      "bytes": 157184
+    },
+    "tests/fixtures/rtf/pico_oled_pwm/pico_oled_pwm.ino": {
+      "sha256": "c33aea57ae06342b249dfabafb642ccfda88a7739ea6fb14070f5a80d5e214b9",
+      "bytes": 1066
+    },
+    "tests/fixtures/rtf/pico_oled_pwm/system.yaml": {
+      "sha256": "57e6002acc7aaf5ecf7575f02809f5728ba82e083c3dc5eb0bd7f9938cd07293",
+      "bytes": 277
+    },
+    "crates/core/roms/rp2040/bootrom.bin": {
+      "sha256": "0adc5e3fe44b328b425eb5ca67379f170979c8f0ac6e67ede4dc287556e321b1",
+      "bytes": 16384
+    },
+    "target/perf-fixtures/perf-spin-rp2xxx": {
+      "sha256": "8387220886841b5ea9e05c6259aef7aaa7f28c502f045f41e3e59221da79091e",
+      "bytes": 71604
+    },
+    "scripts/perf/board_rtf.py": {
+      "sha256": "ec01b2133519683ef5758fc774d1258a90de03f4eec1adf64e2da75c0519aff7",
+      "bytes": 12047
+    },
+    "scripts/perf/board_rtx.py": {
+      "sha256": "ff1885492ae940007848dbf84d94cf1996dab64a9e4ecbe779de783ab2e98693",
+      "bytes": 10550
+    },
+    "Cargo.lock": {
+      "sha256": "57a550b9aba2e018798953138374cfd2bf495982b7ae3cd2af443919c77593a3",
+      "bytes": 131726
+    }
+  },
+  "baseline_change": {
+    "workload": "pico_oled_pwm",
+    "previous_index": 0.0776,
+    "measured_index": 0.04132,
+    "tolerance": 0.25,
+    "failure_floor": 0.03099,
+    "other_baselines_unchanged": {
+      "c3_i2c_uart": {
+        "index": 0.001212,
+        "source": "CI board-throughput run 42653202653 (main 02d50a5 + this PR)"
+      },
+      "f411_timer_uart": {
+        "index": 0.0006415,
+        "source": "CI board-throughput run 42653202653 (main 02d50a5 + this PR)"
+      },
+      "uno_feeder": {
+        "index": 0.0003379,
+        "source": "CI board-throughput run 42653202653 (main 02d50a5 + this PR)"
+      }
+    }
+  },
+  "measurement": {
+    "command": [
+      "/data/cache/labwired-release-026-venv/bin/python",
+      "scripts/perf/board_rtx.py",
+      "--boards",
+      "rp2040",
+      "--repeats",
+      "3",
+      "--cli",
+      "/data/agent-scratch/release-026-rp2040-final/labwired-integrated",
+      "--status-json",
+      "/data/agent-scratch/release-026-rp2040-final/rtx-status.json",
+      "--rtf-json",
+      "/data/agent-scratch/release-026-rp2040-final/rtf.json"
+    ],
+    "exit_code_before_baseline_replacement": 1,
+    "report": {
+      "schema": 1,
+      "generated_at": "2026-11-10T20:10:46Z",
+      "commit": "bccf2930ec8f3b237ff60a9352046e862f08db4f",
+      "runner": "work-1",
+      "host": {
+        "machine": "x86_64",
+        "processor": "x86_64"
+      },
+      "tolerance": 0.25,
+      "ok": false,
+      "failures": [
+        "pico_oled_pwm (rp2040): index 0.04132 is 47% below baseline 0.0776 (tolerance 25%)"
+      ],
+      "boards": [
+        {
+          "board": "Raspberry Pi Pico",
+          "chip": "rp2040",
+          "workload": "pico_oled_pwm",
+          "cpu_hz": 125000000,
+          "guest_s": 8.0,
+          "wall_s": 2.5359,
+          "wall_s_samples": [
+            2.53589,
+            2.568011,
+            2.522019
+          ],
+          "mcycles_per_s": 394.339,
+          "rtf": 3.1547,
+          "rtf_min": 3.1153,
+          "rtf_best": 3.17206,
+          "repeats": 3,
+          "progress": {
+            "oled": {
+              "distinct_frames": 79,
+              "first_update_us": 101443,
+              "last_update_us": 7901413,
+              "minimum_frames": 78,
+              "minimum_last_update_us": 7800000
+            }
+          },
+          "spin_rtx": 76.76201218821701,
+          "index": 0.04132,
+          "baseline_index": 0.0776
+        }
+      ]
+    },
+    "note": "The pre-replacement command failed solely against the old 0.0776 index. It passed the new progress check in all three timed workload repetitions."
+  },
+  "original_baseline_provenance": {
+    "run": "https://github.com/w1ne/labwired-core/actions/runs/42653202653",
+    "pr_head": "9b568436fadf0b5e0abf82d434122e6cdbbf17f4",
+    "merge_commit": "ea2e47b9fc1aef823c168e34d640d78880e32202",
+    "rom_sha256": "8387e24d11e99fe3a080ba29ec9c5108fa30ff09d2af8154998c3dd5ec650343",
+    "firmware_git_blob": "5b27edaaea07b576d1998b278a215b2bd9fe4466",
+    "firmware_identical_to_current": true
+  },
+  "corroborating_ci": {
+    "run": "https://github.com/w1ne/labwired-core/actions/runs/42880646660",
+    "merge_commit": "1845e7d358367114cddc28588b6b8c80e3988233",
+    "index": 0.03649,
+    "rtf_best": 4.32107,
+    "used_as_new_baseline": false
+  },
+  "same_binary_rom_controls": {
+    "rom_sha256": {
+      "old": "8387e24d11e99fe3a080ba29ec9c5108fa30ff09d2af8154998c3dd5ec650343",
+      "new": "0adc5e3fe44b328b425eb5ca67379f170979c8f0ac6e67ede4dc287556e321b1"
+    },
+    "old_rom_command": "git show 15717d9f13^:crates/core/roms/rp2040/bootrom.bin > /tmp/rp2040-old-rom.bin",
+    "run_command": "LABWIRED_RP2040_BOOTROM=<old-or-current-ROM> labwired test --script <board_rtf.write_script output> --output-dir <output> --no-uart-stdout",
+    "samples": [
+      {
+        "rom": "old",
+        "repeat": 0,
+        "exit_code": 0,
+        "wall_s": 0.2968693359871395,
+        "rtf": 26.9478825537797,
+        "status": "pass",
+        "stop_reason": "max_cycles",
+        "cycles": 1000000000,
+        "instructions": 1718229,
+        "distinct_frames": 1,
+        "first_frame_us": 101531,
+        "last_frame_us": 101531,
+        "idle_ff": [
+          "labwired-cli test: idle_ff skipped 998689131 of 1000000000 device cycles (1310869 interpreted)"
+        ],
+        "progress_verdict": "rejected",
+        "progress_error": "pico_oled_pwm: oled made 1 distinct frames, last at 101531 us; need at least 78 frames and an update at or after 7800000 us"
+      },
+      {
+        "rom": "new",
+        "repeat": 0,
+        "exit_code": 0,
+        "wall_s": 2.685426584968809,
+        "rtf": 2.9790425270899443,
+        "status": "pass",
+        "stop_reason": "max_cycles",
+        "cycles": 1000000000,
+        "instructions": 29577628,
+        "distinct_frames": 79,
+        "first_frame_us": 101443,
+        "last_frame_us": 7901413,
+        "idle_ff": [
+          "labwired-cli test: idle_ff skipped 970422372 of 1000000000 device cycles (29577628 interpreted)"
+        ],
+        "progress_verdict": "accepted",
+        "progress": {
+          "oled": {
+            "distinct_frames": 79,
+            "first_update_us": 101443,
+            "last_update_us": 7901413,
+            "minimum_frames": 78,
+            "minimum_last_update_us": 7800000
+          }
+        }
+      },
+      {
+        "rom": "old",
+        "repeat": 1,
+        "exit_code": 0,
+        "wall_s": 0.3075269630062394,
+        "rtf": 26.01397913794534,
+        "status": "pass",
+        "stop_reason": "max_cycles",
+        "cycles": 1000000000,
+        "instructions": 1718229,
+        "distinct_frames": 1,
+        "first_frame_us": 101531,
+        "last_frame_us": 101531,
+        "idle_ff": [
+          "labwired-cli test: idle_ff skipped 998689131 of 1000000000 device cycles (1310869 interpreted)"
+        ],
+        "progress_verdict": "rejected",
+        "progress_error": "pico_oled_pwm: oled made 1 distinct frames, last at 101531 us; need at least 78 frames and an update at or after 7800000 us"
+      },
+      {
+        "rom": "new",
+        "repeat": 1,
+        "exit_code": 0,
+        "wall_s": 2.6382834740215912,
+        "rtf": 3.032274612934383,
+        "status": "pass",
+        "stop_reason": "max_cycles",
+        "cycles": 1000000000,
+        "instructions": 29577628,
+        "distinct_frames": 79,
+        "first_frame_us": 101443,
+        "last_frame_us": 7901413,
+        "idle_ff": [
+          "labwired-cli test: idle_ff skipped 970422372 of 1000000000 device cycles (29577628 interpreted)"
+        ],
+        "progress_verdict": "accepted",
+        "progress": {
+          "oled": {
+            "distinct_frames": 79,
+            "first_update_us": 101443,
+            "last_update_us": 7901413,
+            "minimum_frames": 78,
+            "minimum_last_update_us": 7800000
+          }
+        }
+      },
+      {
+        "rom": "old",
+        "repeat": 2,
+        "exit_code": 0,
+        "wall_s": 0.30532760301139206,
+        "rtf": 26.201365094729127,
+        "status": "pass",
+        "stop_reason": "max_cycles",
+        "cycles": 1000000000,
+        "instructions": 1718229,
+        "distinct_frames": 1,
+        "first_frame_us": 101531,
+        "last_frame_us": 101531,
+        "idle_ff": [
+          "labwired-cli test: idle_ff skipped 998689131 of 1000000000 device cycles (1310869 interpreted)"
+        ],
+        "progress_verdict": "rejected",
+        "progress_error": "pico_oled_pwm: oled made 1 distinct frames, last at 101531 us; need at least 78 frames and an update at or after 7800000 us"
+      },
+      {
+        "rom": "new",
+        "repeat": 2,
+        "exit_code": 0,
+        "wall_s": 2.6831256260047667,
+        "rtf": 2.981597254509539,
+        "status": "pass",
+        "stop_reason": "max_cycles",
+        "cycles": 1000000000,
+        "instructions": 29577628,
+        "distinct_frames": 79,
+        "first_frame_us": 101443,
+        "last_frame_us": 7901413,
+        "idle_ff": [
+          "labwired-cli test: idle_ff skipped 970422372 of 1000000000 device cycles (29577628 interpreted)"
+        ],
+        "progress_verdict": "accepted",
+        "progress": {
+          "oled": {
+            "distinct_frames": 79,
+            "first_update_us": 101443,
+            "last_update_us": 7901413,
+            "minimum_frames": 78,
+            "minimum_last_update_us": 7800000
+          }
+        }
+      }
+    ]
+  },
+  "diagnostic_output_assertions": [
+    {
+      "rom": "old",
+      "status": "pass",
+      "exit_code": 0,
+      "addresses": {
+        "frame": "0x20001f14",
+        "last_draw": "0x20002320",
+        "pwm_enable": "0x400500a0",
+        "fmul_pointer": "0x20002448"
+      },
+      "expected_values": {
+        "frame": 1,
+        "last_draw": 100,
+        "pwm_enable": 0,
+        "fmul_pointer": 49
+      },
+      "assertions_passed": 5,
+      "assertions_total": 5
+    },
+    {
+      "rom": "new",
+      "status": "pass",
+      "exit_code": 0,
+      "addresses": {
+        "frame": "0x20001f14",
+        "last_draw": "0x20002320",
+        "pwm_enable": "0x400500a0",
+        "fmul_pointer": "0x20002448"
+      },
+      "expected_values": {
+        "frame": 79,
+        "last_draw": 7900,
+        "pwm_enable": 128,
+        "fmul_pointer": 337
+      },
+      "assertions_passed": 5,
+      "assertions_total": 5
+    }
+  ],
+  "progress_contract": {
+    "fixture_period_us": 100000,
+    "guest_us": 8000000,
+    "startup_and_boundary_allowance_periods": 2,
+    "minimum_distinct_frame_hashes": 78,
+    "minimum_final_update_us": 7800000,
+    "current_observed_distinct_frames": 79,
+    "current_final_update_us": 7901413,
+    "old_observed_distinct_frames": 1,
+    "old_final_update_us": 101531,
+    "old_rom_gate_verdict": "rejected in all three fresh-binary controls despite raw CLI status pass, readiness marker and max_cycles"
+  },
+  "validation": {
+    "performance_python_tests": 64,
+    "performance_python_failures": 0,
+    "unchanged_default_tolerance": 0.25,
+    "synthetic_30_percent_slowdown_expected": "rejected",
+    "prior_step_batch_performance_baselines_changed": false
+  }
+}
