@@ -102,6 +102,13 @@ loads to explicit `adc.adc1.<channel>_volts` co-simulation endpoints. The core t
 the NTC, diode, and level-1 NMOS load lines through ADC1's modeled data-register path. These
 fixtures do not define physical H563 pad aliases or claim silicon conversion parity.
 
+`analog-bjt-recombination-adc-system.yaml` adds matched generic Gummel–Poon branches with
+base-emitter recombination, base-collector recombination, both effects, and neither effect.
+The core test compares the solved collector load lines against an independent reference and
+reads each branch through ADC1 channels 2–5 alongside isolated NTC and diode inputs on
+channels 0–1. These are explicit co-simulation routes; they do not claim physical pad aliases
+or silicon ADC parity.
+
 ## References
 
 - Chip config: `../../configs/chips/stm32h563.yaml`
