@@ -21,8 +21,9 @@
 # 32. The I2C2 absent-address probe checks AF status, event/error-line
 # isolation, ITERREN-gated ER IRQ 34 assertion/release, AF clearing and recovery.
 # Results print on USART2; USART1 checks TXEIE and TCIE gating on IRQ 37, plus
-# RXNEIE assertion/release with an injected RX byte. The summary word lands at
-# 0x20017F00 and is 0xB1AC07FF on
+# RXNEIE assertion/release with an injected RX byte. USART2 keeps its injected
+# `RS` bytes hidden until UE and RE are both set, reads them in order, and gates
+# RXNE IRQ 38. The summary word lands at 0x20017F00 and is 0xB1AC0FFF on
 # success. PC13 resets low, so three on/off toggles give 5 edges, not 6. ADC,
 # EXTI, other timers and other USARTs claimed by the chip are not exercised.
 schema_version: "1.2"
@@ -34,6 +35,8 @@ limits:
 uart_injections:
   - uart: "usart1"
     bytes: "R"
+  - uart: "usart2"
+    bytes: "RS"
 assertions:
   - uart_ordered:
       - "BLACKPILL F401 SMOKE"
@@ -53,12 +56,13 @@ assertions:
       - "usart1 txe_isolated=1 gate_asserted=1 released=1 ok"
       - "usart1 tc_isolated=1 gate_asserted=1 released=1 ok"
       - "usart1 rxne_isolated=1 gate_asserted=1 data=00000052 released=1 ok"
+      - "usart2 rx_gate re_off=1 ue_off=1 data=00005253 rxne_after_first=1 rxne_after=0 irq=isolated,asserted,released ok"
       - "BLACKPILL PASS"
   - gpio_edges:
       pin: "gpioc:13"
       min_edges: 5
   - memory_value:
       address: 0x20017F00
-      expected_value: 0xB1AC07FF
+      expected_value: 0xB1AC0FFF
       size: 4
   - expected_stop_reason: max_steps

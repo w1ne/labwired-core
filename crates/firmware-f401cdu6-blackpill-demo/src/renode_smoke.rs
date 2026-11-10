@@ -27,7 +27,9 @@
 //!          status, event/error-line isolation, ITERREN-gated ER IRQ assertion
 //!          and release, and recovery
 //!   SPI1   MAX31855 reset frame plus TXEIE/RXNEIE level IRQ assertions
-//!   USART1 TXEIE, TCIE and RXNEIE assert and release their NVIC line
+//!   USART1 TXEIE, TCIE and RXNEIE assert and release their NVIC line;
+//!   USART2 keeps injected bytes hidden until UE and RE are set, then drains
+//!   two bytes in order and gates RXNE IRQ 38
 //! A summary word goes to RAM at 0x20017F00 (one bit per smoke group passed).
 
 use core::ptr::{read_volatile, write_volatile};
@@ -88,6 +90,7 @@ const NVIC_ISPR0: u32 = 0xE000_E200;
 const NVIC_ICPR0: u32 = 0xE000_E280;
 const NVIC_ICPR1: u32 = 0xE000_E284;
 const SPI1_IRQ_BIT: u32 = 1 << (35 - 32);
+const USART2_IRQ_BIT: u32 = 1 << (38 - 32);
 const USART1_IRQ_BIT: u32 = 1 << (37 - 32);
 const I2C1_EV_IRQ_BIT: u32 = 1 << 31;
 const I2C1_ER_IRQ_BIT: u32 = 1;
@@ -334,9 +337,11 @@ fn main() -> ! {
     passed |= (usart1_tc_irq_ok as u32) << 10;
     let usart1_rx_irq_ok = smoke_usart1_rxne_irq();
     passed |= (usart1_rx_irq_ok as u32) << 6;
+    let usart2_rx_gate_ok = smoke_usart2_rx_gate();
+    passed |= (usart2_rx_gate_ok as u32) << 11;
 
     wr(RESULT, 0xB1AC_0000 | passed);
-    send(if passed == 0x7FF {
+    send(if passed == 0xFFF {
         b"BLACKPILL PASS\r\n"
     } else {
         b"BLACKPILL FAIL\r\n"
@@ -1319,6 +1324,97 @@ fn smoke_usart1_rxne_irq() -> bool {
         },
     );
     rxne_isolated && rxne_pended && data == EXPECTED && rxne_cleared && irq_released
+}
+
+/// USART2 is both the smoke console and the imported Black Pill's IRQ 38
+/// receiver. The script queues two bytes before reset. Neither may appear in
+/// SR.RXNE until both legacy CR1.UE and CR1.RE are set; with RXNEIE clear the
+/// line stays low, then asserts and releases as DR is drained.
+fn smoke_usart2_rx_gate() -> bool {
+    const RXNE: u32 = 1 << 5;
+    const RXNEIE: u32 = 1 << 5;
+    const UE: u32 = 1 << 13;
+    const RE: u32 = 1 << 2;
+    const TE: u32 = 1 << 3;
+    const EXPECTED: u32 = 0x5253; // "RS"
+
+    // main enabled UE|TE for the console, leaving RE disabled. Start-injected
+    // bytes must remain on the wire through both one-bit-only configurations.
+    let mut re_off = true;
+    for _ in 0..16 {
+        re_off &= rd(USART_SR) & RXNE == 0;
+    }
+    wr(USART_CR1, RE | TE); // RE set, UE clear
+    let mut ue_off = true;
+    for _ in 0..16 {
+        ue_off &= rd(USART_SR) & RXNE == 0;
+    }
+
+    wr(NVIC_ICPR1, USART2_IRQ_BIT);
+    wr(USART_CR1, UE | RE | TE); // both receiver enables; RXNEIE stays clear
+    let mut rxne_seen = false;
+    for _ in 0..4096 {
+        if rd(USART_SR) & RXNE != 0 {
+            rxne_seen = true;
+            break;
+        }
+    }
+    let irq_isolated = rxne_seen && rd(NVIC_ISPR1) & USART2_IRQ_BIT == 0;
+    wr(USART_CR1, UE | RE | TE | RXNEIE);
+    let irq_asserted = rxne_seen && wait(NVIC_ISPR1, USART2_IRQ_BIT, USART2_IRQ_BIT);
+
+    let first = rd(USART_DR) & 0xFF;
+    let rxne_after_first = rd(USART_SR) & RXNE != 0;
+    let second = if rxne_after_first {
+        rd(USART_DR) & 0xFF
+    } else {
+        0
+    };
+    let rxne_cleared = rd(USART_SR) & RXNE == 0;
+    wr(USART_CR1, UE | TE); // disable RXNEIE and RE before final console output
+    wr(NVIC_ICPR1, USART2_IRQ_BIT);
+    let mut irq_released = true;
+    for _ in 0..16 {
+        irq_released &= rd(NVIC_ISPR1) & USART2_IRQ_BIT == 0;
+    }
+
+    let data = (first << 8) | second;
+    let ok = re_off
+        && ue_off
+        && irq_isolated
+        && irq_asserted
+        && data == EXPECTED
+        && rxne_after_first
+        && rxne_cleared
+        && irq_released;
+    send(b"usart2 rx_gate re_off=");
+    send(if re_off { b"1" } else { b"0" });
+    send(b" ue_off=");
+    send(if ue_off { b"1" } else { b"0" });
+    send(b" data=");
+    put_hex32(data);
+    send(b" rxne_after_first=");
+    send(if rxne_after_first { b"1" } else { b"0" });
+    send(b" rxne_after=");
+    send(if rxne_cleared { b"0" } else { b"1" });
+    send(b" irq=");
+    send(if irq_isolated {
+        b"isolated"
+    } else {
+        b"not_isolated"
+    });
+    send(if irq_asserted {
+        b",asserted"
+    } else {
+        b",not_asserted"
+    });
+    send(if irq_released {
+        b",released"
+    } else {
+        b",not_released"
+    });
+    send(if ok { b" ok\r\n" } else { b" FAIL\r\n" });
+    ok
 }
 
 fn wait(addr: u32, mask: u32, want: u32) -> bool {

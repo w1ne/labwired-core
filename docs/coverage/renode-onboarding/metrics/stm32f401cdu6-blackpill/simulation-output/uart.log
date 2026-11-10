@@ -15,4 +15,5 @@ spi1 max31855=01901600 txe_irq=1 rxne_irq=1 released=1 ok
 usart1 txe_isolated=1 gate_asserted=1 released=1 ok
 usart1 tc_isolated=1 gate_asserted=1 released=1 ok
 usart1 rxne_isolated=1 gate_asserted=1 data=00000052 released=1 ok
+usart2 rx_gate re_off=1 ue_off=1 data=00005253 rxne_after_first=1 rxne_after=0 irq=isolated,asserted,released ok
 BLACKPILL PASS
