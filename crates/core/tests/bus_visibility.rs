@@ -523,6 +523,11 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         BusKind::Uart,
         "no edge bring-up path for i.MX LPUART in this gate yet",
     ),
+    (
+        "stm32f103rb-nucleo-bme280-smoke",
+        BusKind::Uart,
+        "this profile exposes only USART2 (the NUCLEO VCP); the F1 harness          produces no analyzer edges on pad-gated USART2 (parent stm32f103          passes on USART3, which this YAML does not include). Bytes are          proven by the boards.yml nucleo-f103rb-bme280 cell          (NUCLEO_F103RB_BME280_OK over USART2)",
+    ),
 ];
 
 fn is_excluded(chip: &str, kind: BusKind) -> Option<&'static str> {

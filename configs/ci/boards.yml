@@ -41,6 +41,14 @@ boards:
     kind: sim-validate
     path: examples/esp32-devkitc-32e-gpio-smoke
     gate: true
+  # Narrow NUCLEO-F103RB + BME280 onboarding profile. Builds the in-repo
+  # firmware crate and runs onboarding-smoke.yaml on every PR (chip-coverage
+  # ceiling forbids another waiver).
+  - id: nucleo-f103rb-bme280
+    kind: sim-validate
+    path: examples/nucleo-f103rb-bme280
+    rust_targets: [thumbv7m-none-eabi]
+    gate: true
   # atmega2560's only CLI proof. Committed ELF, no toolchain, seconds to run.
   - id: arduino-mega-2560-io
     kind: sim-validate

@@ -526,6 +526,17 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: None,
     },
+    ChipConf {
+        name: "stm32f103rb-nucleo-bme280-smoke",
+        yaml: "configs/chips/stm32f103rb-nucleo-bme280-smoke.yaml",
+        reset_oracle: None,
+        // Narrow NUCLEO-F103RB + external BME280 onboarding profile of the
+        // same F103 map as `stm32f103rb`. The firmware crate is built and
+        // run by the boards.yml cell; there is no committed ELF and no
+        // dedicated firmware_survival rust test yet, so this stays an honest
+        // L0 until that gate exists. No silicon capture is claimed.
+        behavior_gate: None,
+    },
     // Exact low-density F103 order codes share the F103 engine. Geometry is
     // checked per part, but there is no per-order-code silicon capture or
     // executing-fidelity differential, so these remain honest L0 entries.
