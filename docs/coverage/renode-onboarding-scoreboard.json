@@ -10325,24 +10325,24 @@
       "script": "examples/renode-onboarding/stm32l552-smoke.yaml",
       "system": "configs/systems/onboarding/stm32l552.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-10T10:47:47Z",
-      "finished_at_utc": "2026-11-10T10:47:49Z",
+      "started_at_utc": "2026-11-10T11:56:29Z",
+      "finished_at_utc": "2026-11-10T11:56:31Z",
       "elapsed_seconds": 2,
-      "elapsed_ms": 1659,
+      "elapsed_ms": 1759,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.257,
-        "build_firmware": 0.416,
-        "run_smoke": 0.977
+        "build_cli": 0.273,
+        "build_firmware": 0.634,
+        "run_smoke": 0.842
       },
       "stages_ms": {
-        "build_cli": 257,
-        "build_firmware": 416,
-        "run_smoke": 977
+        "build_cli": 273,
+        "build_firmware": 634,
+        "run_smoke": 842
       },
       "_artifact_path": "stm32l552",
       "zero_answering_windows": [],

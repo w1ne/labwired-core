@@ -66,10 +66,13 @@ const NVIC_ICPR2: *mut u32 = 0xE000_E288 as *mut u32;
 const NVIC_LPUART1_PENDING: u32 = 1 << 2; // IRQ 66, from the full STM32L552 profile.
 
 const USART_ISR_TXE: u32 = 1 << 7;
+const USART_ISR_TC: u32 = 1 << 6;
 const USART_ISR_RXNE: u32 = 1 << 5;
 const USART_CR1_UE: u32 = 1 << 0;
 const USART_CR1_RE: u32 = 1 << 2;
 const USART_CR1_TE: u32 = 1 << 3;
+const USART_CR1_TCIE: u32 = 1 << 6;
+const USART_CR1_TXEIE: u32 = 1 << 7;
 const USART_CR1_RXNEIE: u32 = 1 << 5;
 
 #[derive(Clone, Copy)]
@@ -214,6 +217,134 @@ fn smoke_lpuart_rx() {
     puts(if ok { b" ok\n" } else { b" FAIL\n" });
 }
 
+/// Check that LPUART1 TXE and TC independently drive IRQ 66, re-pend while
+/// their source remains active, and combine on the same NVIC line.
+fn smoke_lpuart_tx_irq() {
+    let cr1 = unsafe { read_volatile(LPUART_CR1) } & !(USART_CR1_TXEIE | USART_CR1_TCIE);
+    unsafe { write_volatile(LPUART_CR1, cr1) };
+
+    let mut txe_ready = false;
+    for _ in 0..100_000 {
+        if unsafe { read_volatile(LPUART_ISR) } & USART_ISR_TXE != 0 {
+            txe_ready = true;
+            break;
+        }
+    }
+    unsafe { write_volatile(NVIC_ICPR2, NVIC_LPUART1_PENDING) };
+    spin(4);
+    let txe_isolated =
+        txe_ready && unsafe { read_volatile(NVIC_ISPR2) } & NVIC_LPUART1_PENDING == 0;
+    unsafe { write_volatile(LPUART_CR1, cr1 | USART_CR1_TXEIE) };
+    let mut txe_asserted = false;
+    for _ in 0..10_000 {
+        if unsafe { read_volatile(NVIC_ISPR2) } & NVIC_LPUART1_PENDING != 0 {
+            txe_asserted = true;
+            break;
+        }
+    }
+    unsafe { write_volatile(NVIC_ICPR2, NVIC_LPUART1_PENDING) };
+    let mut txe_repended = false;
+    for _ in 0..10_000 {
+        if unsafe { read_volatile(NVIC_ISPR2) } & NVIC_LPUART1_PENDING != 0 {
+            txe_repended = true;
+            break;
+        }
+    }
+    unsafe {
+        write_volatile(LPUART_CR1, cr1);
+        write_volatile(NVIC_ICPR2, NVIC_LPUART1_PENDING);
+    }
+    let mut txe_released = true;
+    for _ in 0..10_000 {
+        if unsafe { read_volatile(NVIC_ISPR2) } & NVIC_LPUART1_PENDING != 0 {
+            txe_released = false;
+            break;
+        }
+    }
+
+    let mut tc_ready = false;
+    for _ in 0..100_000 {
+        if unsafe { read_volatile(LPUART_ISR) } & USART_ISR_TC != 0 {
+            tc_ready = true;
+            break;
+        }
+    }
+    unsafe { write_volatile(NVIC_ICPR2, NVIC_LPUART1_PENDING) };
+    spin(4);
+    let tc_isolated = tc_ready && unsafe { read_volatile(NVIC_ISPR2) } & NVIC_LPUART1_PENDING == 0;
+    unsafe { write_volatile(LPUART_CR1, cr1 | USART_CR1_TCIE) };
+    let mut tc_asserted = false;
+    for _ in 0..10_000 {
+        if unsafe { read_volatile(NVIC_ISPR2) } & NVIC_LPUART1_PENDING != 0 {
+            tc_asserted = true;
+            break;
+        }
+    }
+    unsafe { write_volatile(NVIC_ICPR2, NVIC_LPUART1_PENDING) };
+    let mut tc_repended = false;
+    for _ in 0..10_000 {
+        if unsafe { read_volatile(NVIC_ISPR2) } & NVIC_LPUART1_PENDING != 0 {
+            tc_repended = true;
+            break;
+        }
+    }
+    unsafe {
+        write_volatile(LPUART_CR1, cr1);
+        write_volatile(NVIC_ICPR2, NVIC_LPUART1_PENDING);
+    }
+    let mut tc_released = true;
+    for _ in 0..10_000 {
+        if unsafe { read_volatile(NVIC_ISPR2) } & NVIC_LPUART1_PENDING != 0 {
+            tc_released = false;
+            break;
+        }
+    }
+
+    unsafe { write_volatile(LPUART_CR1, cr1 | USART_CR1_TXEIE | USART_CR1_TCIE) };
+    let mut both_asserted = false;
+    for _ in 0..10_000 {
+        if unsafe { read_volatile(NVIC_ISPR2) } & NVIC_LPUART1_PENDING != 0 {
+            both_asserted = true;
+            break;
+        }
+    }
+    unsafe { write_volatile(LPUART_CR1, cr1 | USART_CR1_TCIE) };
+    unsafe { write_volatile(NVIC_ICPR2, NVIC_LPUART1_PENDING) };
+    let mut tc_survives_txe_disable = false;
+    for _ in 0..10_000 {
+        if unsafe { read_volatile(NVIC_ISPR2) } & NVIC_LPUART1_PENDING != 0 {
+            tc_survives_txe_disable = true;
+            break;
+        }
+    }
+    unsafe {
+        write_volatile(LPUART_CR1, cr1);
+        write_volatile(NVIC_ICPR2, NVIC_LPUART1_PENDING);
+    }
+    let mut combined_released = true;
+    for _ in 0..10_000 {
+        if unsafe { read_volatile(NVIC_ISPR2) } & NVIC_LPUART1_PENDING != 0 {
+            combined_released = false;
+            break;
+        }
+    }
+
+    let txe_ok = txe_isolated && txe_asserted && txe_repended && txe_released;
+    let tc_ok = tc_isolated && tc_asserted && tc_repended && tc_released;
+    let combined_ok = both_asserted && tc_survives_txe_disable && combined_released;
+    puts(b"tx_irq lpuart1 txe=");
+    putc(if txe_ok { b'1' } else { b'0' });
+    puts(b" tc=");
+    putc(if tc_ok { b'1' } else { b'0' });
+    puts(b" both=");
+    putc(if combined_ok { b'1' } else { b'0' });
+    puts(if txe_ok && tc_ok && combined_ok {
+        b" ok\n"
+    } else {
+        b" FAIL\n"
+    });
+}
+
 #[inline(never)]
 fn spin(iterations: u32) {
     for _ in 0..iterations {
@@ -270,6 +401,7 @@ fn main() -> ! {
     puts(b"NUCLEO-L552ZE-Q SMOKE\n");
     puts(b"cpu=cortex-m33 uart=lpuart1\n");
     smoke_lpuart_rx();
+    smoke_lpuart_tx_irq();
 
     for led in LEDS {
         led_drive(led, true);
