@@ -1,0 +1,28 @@
+{
+  "target_id": "stm32f103c8-bluepill-bme280",
+  "status": "pass",
+  "crate": "firmware-stm32f103c8-bluepill-bme280-smoke",
+  "target_triple": "thumbv7m-none-eabi",
+  "script": "examples/stm32f103c8-bluepill-bme280/io-smoke.yaml",
+  "system": "configs/systems/stm32f103c8-bluepill-bme280.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-10T04:32:15Z",
+  "finished_at_utc": "2026-11-10T04:32:16Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1062,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.296,
+    "build_firmware": 0.345,
+    "run_smoke": 0.382
+  },
+  "stages_ms": {
+    "build_cli": 296,
+    "build_firmware": 345,
+    "run_smoke": 382
+  }
+}

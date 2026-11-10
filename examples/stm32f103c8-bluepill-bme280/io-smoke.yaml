@@ -1,0 +1,13 @@
+# Read the BME280 chip ID on I2C1 and exercise the Blue Pill onboard LED.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-stm32f103c8-bluepill-bme280-smoke"
+  system: "../../configs/systems/stm32f103c8-bluepill-bme280.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "BLUEPILL_BME280_ID=0x60"
+  - gpio_edges:
+      pin: "gpioc:13"
+      min_edges: 4
+  - expected_stop_reason: max_steps

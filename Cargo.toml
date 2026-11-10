@@ -159,6 +159,7 @@ members = [
     "crates/firmware-stm32f103r8-gpio-smoke",
     "crates/firmware-stm32f103r6-gpio-smoke",
     "crates/firmware-stm32f103c8-bluepill-smoke",
+    "crates/firmware-stm32f103c8-bluepill-bme280-smoke",
     "crates/firmware-nucleo-f207zg-smoke",
     "crates/firmware-stm32f103-lowdensity-smoke",
     "crates/firmware-f401-lowram-smoke",

@@ -1,8 +1,8 @@
 # STM32F103C8T6 Blue Pill
 
-This system models the STM32F103C8T6 Blue Pill's onboard PC13 LED. The MCU is
-the survey's **rank 4** MCU target (STM32F103, 17% in JetBrains State of
-Embedded 2025). The board schematic wires its user LED from 3.3 V through a
+This system models the STM32F103C8T6 Blue Pill's onboard PC13 LED. STM32F103 is
+**rank 3** by MCU usage (17% in JetBrains State of Embedded 2025; target-list
+item 4). The board schematic wires its user LED from 3.3 V through a
 resistor to PC13, so the LED is active-low.
 
 ## Smoke scope

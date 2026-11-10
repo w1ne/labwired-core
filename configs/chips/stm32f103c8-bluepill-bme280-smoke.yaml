@@ -1,0 +1,92 @@
+# Narrow STM32F103C8T6 Blue Pill + BME280 I2C smoke profile.
+# This declares only RCC, GPIOA/B/C, USART1, I2C1 and SysTick, which the
+# firmware uses for the UART1 report, PC13 LED and BME280 ID read on PB6/PB7.
+# SPI, timers, ADC, CAN, USB, DMA, and the other I2C/UART instances are outside
+# this board slice and are deliberately not advertised here.
+
+name: "stm32f103c8-bluepill-bme280-smoke"
+arch: "arm"
+core: "cortex-m3"
+registers_count: 125
+cpu_hz: 8_000_000
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.35
+  vih: 0.65
+
+package: "LQFP48"
+pin_count: 48
+gpio_pin_count: 37
+variant: "x8"
+orderable_suffixes: ["T6", "T6TR", "T7", "T7TR"]
+
+flash:
+  base: 0x08000000
+  size: "64KB"
+ram:
+  base: 0x20000000
+  size: "20KB"
+
+pins:
+  PA9: { gpio: "gpioa", bit: 9 }
+  PB6: { gpio: "gpiob", bit: 6 }
+  PB7: { gpio: "gpiob", bit: 7 }
+  PC13: { gpio: "gpioc", bit: 13 }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f103/rcc.yaml"
+
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x40010800
+    size: "1KB"
+    clock: { reg: "apb2enr", bit: 2 }
+    config:
+      debug_schema: "../peripherals/stm32f103/gpioa.yaml"
+      profile: "stm32f1"
+
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x40010C00
+    size: "1KB"
+    clock: { reg: "apb2enr", bit: 3 }
+    config:
+      debug_schema: "../peripherals/stm32f103/gpiob.yaml"
+      profile: "stm32f1"
+
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x40011000
+    size: "1KB"
+    clock: { reg: "apb2enr", bit: 4 }
+    config:
+      debug_schema: "../peripherals/stm32f103/gpioc.yaml"
+      profile: "stm32f1"
+
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 31
+    clock: { reg: "apb1enr", bit: 21 }
+    config:
+      debug_schema: "../peripherals/stm32f103/i2c1.yaml"
+      irq_error: 32
+
+  - id: "uart1"
+    type: "uart"
+    base_address: 0x40013800
+    size: "1KB"
+    irq: 37
+    clock: { reg: "apb2enr", bit: 14 }
+    config:
+      debug_schema: "../peripherals/stm32f103/usart1.yaml"
+
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
