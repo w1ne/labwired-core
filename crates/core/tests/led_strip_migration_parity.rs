@@ -6,7 +6,7 @@
 //! replace.**
 //!
 //! `components/apa102.rs` and `components/ws2812.rs` were deleted when the
-//! `led_strip` primitive landed. This file is the evidence that nothing moved.
+//! `led_strip` primitive landed. This file pins their shared decoding behavior.
 //! The template is `display_migration_parity.rs`, and the rule is the same: the
 //! deleted models live on VERBATIM in `led_strip_oracle/`, both implementations
 //! are driven by the SAME script, and three things are compared rather than one:
@@ -16,8 +16,10 @@
 //!     claim worth pinning);
 //!   * the WHOLE LED COLOUR ARRAY, LED by LED, including the brightness field —
 //!     not a count and not a checksum;
-//!   * every field of the paint artifact's `meta`, which is what the browser's
-//!     strip overlay and the CLI's `painted bytes=` line read.
+//!   * every shared field of the paint artifact's `meta`, which is what the
+//!     browser's strip overlay and the CLI's `painted bytes=` line read. The
+//!     newer WS2812 `frames_seen` evidence is checked against explicit expected
+//!     histories; the frozen oracle predates that additive field.
 //!
 //! The two wires are driven differently BECAUSE THEY ARE DIFFERENT WIRES, and
 //! that is the whole reason the primitive has two doors:
@@ -29,11 +31,12 @@
 //!     transitions into both implementations, which is the same idea: one
 //!     stimulus, two models, compare everything.
 //!
-//! ── NO DELIBERATE DIFFERENCES ───────────────────────────────────────────────
+//! ── SHARED BEHAVIOUR AND ADDITIVE EVIDENCE ──────────────────────────────────
 //!
-//! Unlike the display ports, neither strip changed behaviour. Every assertion
-//! below is `old == new`. Two facts that LOOK like bugs are pinned as shared
-//! behaviour instead, so a later "fix" to one implementation fails here:
+//! Pixel decoding and the original artifact fields retain `old == new` parity.
+//! The WS2812 frame history added later is asserted separately without changing
+//! the frozen oracle. Two facts that LOOK like bugs are pinned as shared
+//! behaviour, so a later "fix" to one implementation fails here:
 //!
 //!   1. **An APA102 ones end frame decodes as one more white LED.** The end
 //!      frame is 32 clocks whose level the APA102 datasheet leaves to the
@@ -120,6 +123,26 @@ fn assert_same_artifact(old: &Artifact, new: &Artifact, what: &str) {
             );
         }
     }
+}
+
+/// The frozen WS2812 oracle has no history field. Check the newer evidence
+/// explicitly, then retain strict equality for every shared artifact field and
+/// reject any other added metadata.
+fn assert_same_ws2812_artifact(
+    old: &Artifact,
+    new: &Artifact,
+    expected_history: serde_json::Value,
+    what: &str,
+) {
+    let mut shared = new.clone();
+    let history = shared
+        .meta
+        .as_object_mut()
+        .expect("new meta is an object")
+        .remove("frames_seen")
+        .expect("WS2812 artifact must publish frame history");
+    assert_eq!(history, expected_history, "{what}: WS2812 frame history");
+    assert_same_artifact(old, &shared, what);
 }
 
 /// The oracle's `([r, g, b], brightness)` pixel in the descriptor's shape, so
@@ -414,7 +437,12 @@ fn ws_frame(pixels: &[u32], latch: bool) -> Vec<(bool, u64)> {
 }
 
 /// Compare both WS2812 implementations after one edge list.
-fn ws2812_parity(what: &str, edges: &[(bool, u64)], pixels: usize) -> Vec<LedPixel> {
+fn ws2812_parity(
+    what: &str,
+    edges: &[(bool, u64)],
+    pixels: usize,
+    expected_history: serde_json::Value,
+) -> Vec<LedPixel> {
     let old = OldWs2812::new(DATA_PIN, pixels, CPU_HZ).with_component_id("strip");
     let mut new = ws2812(DATA_PIN, pixels, CPU_HZ);
     new.set_component_id("strip");
@@ -428,9 +456,43 @@ fn ws2812_parity(what: &str, edges: &[(bool, u64)], pixels: usize) -> Vec<LedPix
     let a_new = DeviceEvidence::artifacts(&new, "strip", &opts());
     assert_eq!(a_old.len(), a_new.len(), "{what}: artifact count");
     for (o, n) in a_old.iter().zip(a_new.iter()) {
-        assert_same_artifact(o, n, what);
+        assert_same_ws2812_artifact(o, n, expected_history.clone(), what);
     }
     p_new
+}
+
+#[test]
+fn ws2812_history_comparison_rejects_missing_or_changed_evidence() {
+    let old = OldWs2812::new(DATA_PIN, 1, CPU_HZ);
+    let new = ws2812(DATA_PIN, 1, CPU_HZ);
+    feed_edges(&old, &new, &ws_frame(&[0x01_02_03], true));
+    let old = &old.artifacts("strip", &opts())[0];
+    let actual = &DeviceEvidence::artifacts(&new, "strip", &opts())[0];
+    let expected = serde_json::json!([{"bytes": [1, 2, 3], "lit_pixels": 1}]);
+    assert_same_ws2812_artifact(old, actual, expected.clone(), "history control");
+
+    let mut missing = actual.clone();
+    missing.meta.as_object_mut().unwrap().remove("frames_seen");
+    let mut wrong_byte = actual.clone();
+    wrong_byte.meta["frames_seen"][0]["bytes"][0] = serde_json::json!(255);
+    let mut wrong_lit_count = actual.clone();
+    wrong_lit_count.meta["frames_seen"][0]["lit_pixels"] = serde_json::json!(0);
+    let mut unexpected_field = actual.clone();
+    unexpected_field.meta["unexpected"] = serde_json::json!(true);
+    for (what, changed) in [
+        ("missing frame history", missing),
+        ("changed frame bytes", wrong_byte),
+        ("changed lit count", wrong_lit_count),
+        ("unreviewed metadata field", unexpected_field),
+    ] {
+        assert!(
+            std::panic::catch_unwind(|| {
+                assert_same_ws2812_artifact(old, &changed, expected.clone(), what);
+            })
+            .is_err(),
+            "the artifact comparison must reject {what}"
+        );
+    }
 }
 
 #[test]
@@ -441,6 +503,10 @@ fn ws2812_a_three_pixel_frame_decodes_identically() {
         "ws2812 rgb frame",
         &ws_frame(&[0x00_FF_00, 0xFF_00_00, 0x00_00_FF], false),
         3,
+        serde_json::json!([{
+            "bytes": [0, 255, 0, 255, 0, 0, 0, 0, 255],
+            "lit_pixels": 3,
+        }]),
     );
     assert_eq!(
         px.iter().map(|p| p.wire).collect::<Vec<_>>(),
@@ -455,6 +521,10 @@ fn ws2812_a_reset_gap_latches_the_frame_in_both_models() {
         "ws2812 latched frame",
         &ws_frame(&[0x11_22_33, 0x44_55_66], true),
         2,
+        serde_json::json!([{
+            "bytes": [0x11, 0x22, 0x33, 0x44, 0x55, 0x66],
+            "lit_pixels": 2,
+        }]),
     );
     assert_eq!(
         px.iter().map(|p| p.wire).collect::<Vec<_>>(),
@@ -487,6 +557,15 @@ fn ws2812_a_second_frame_replaces_the_first_in_both_models() {
         vec![[0x01, 0x02, 0x03], [0x04, 0x05, 0x06]],
         "the second frame replaced the first"
     );
+    assert_same_ws2812_artifact(
+        &old.artifacts("strip", &opts())[0],
+        &DeviceEvidence::artifacts(&new, "strip", &opts())[0],
+        serde_json::json!([
+            {"bytes": [0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF], "lit_pixels": 2},
+            {"bytes": [0x01, 0x02, 0x03, 0x04, 0x05, 0x06], "lit_pixels": 2},
+        ]),
+        "ws2812 replaced frame and retained history",
+    );
 }
 
 #[test]
@@ -495,13 +574,17 @@ fn ws2812_a_frame_longer_than_the_strip_is_clipped_identically() {
         "ws2812 over-long frame",
         &ws_frame(&[0x11_11_11, 0x22_22_22, 0x33_33_33], false),
         2,
+        serde_json::json!([{
+            "bytes": [0x11, 0x11, 0x11, 0x22, 0x22, 0x22],
+            "lit_pixels": 2,
+        }]),
     );
     assert_eq!(px.len(), 2, "a 2-LED strip keeps two LEDs");
 }
 
 #[test]
 fn ws2812_a_strip_that_saw_no_edges_reports_nothing_in_both_models() {
-    let px = ws2812_parity("ws2812 silent pad", &[], 4);
+    let px = ws2812_parity("ws2812 silent pad", &[], 4, serde_json::json!([]));
     assert!(px.is_empty(), "no edges decode to no pixels");
 
     // The artifact still reports the strip's CONFIGURED width — the asymmetry
@@ -527,12 +610,22 @@ fn ws2812_edges_on_another_pad_are_ignored_by_both_models() {
     }
     assert!(old.pixels().is_empty(), "the Rust model ignores other pads");
     assert_eq!(old_ws_pixels(&old), new.pixels(), "both ignore other pads");
+    assert_same_ws2812_artifact(
+        &old.artifacts("strip", &opts())[0],
+        &DeviceEvidence::artifacts(&new, "strip", &opts())[0],
+        serde_json::json!([]),
+        "ws2812 wrong pad",
+    );
 
     // The positive control: the SAME waveform on the right pad decodes.
     let px = ws2812_parity(
         "ws2812 right pad control",
         &ws_frame(&[0x11_22_33, 0x44_55_66], true),
         2,
+        serde_json::json!([{
+            "bytes": [0x11, 0x22, 0x33, 0x44, 0x55, 0x66],
+            "lit_pixels": 2,
+        }]),
     );
     assert_eq!(px.len(), 2, "the waveform itself was decodable");
 }
