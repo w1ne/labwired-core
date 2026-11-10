@@ -2,12 +2,12 @@
 
 The base smoke boots firmware on the ESP32-S3-DevKitC-1 v1.1 N16R8, sends a
 GRB frame to its onboard WS2812 RGB LED with RMT channel 0 through GPIO38, and
-sends a UART0 marker. The I²C
-extension also reads an Adafruit BME280 breakout through I²C0. The system
-profiles are
-[`configs/systems/esp32-s3-devkitc-1-n16r8.yaml`](../../../configs/systems/esp32-s3-devkitc-1-n16r8.yaml).
-The sensor profile is
-[`configs/systems/esp32-s3-devkitc-1-n16r8-bme280.yaml`](../../../configs/systems/esp32-s3-devkitc-1-n16r8-bme280.yaml).
+sends a UART0 marker. The I²C extension reads an Adafruit BME280 breakout
+through I²C0, and the ADC extension samples a potentiometer on GPIO4 / ADC1_CH3.
+The system profiles are
+[`configs/systems/esp32-s3-devkitc-1-n16r8.yaml`](../../../configs/systems/esp32-s3-devkitc-1-n16r8.yaml),
+[`configs/systems/esp32-s3-devkitc-1-n16r8-bme280.yaml`](../../../configs/systems/esp32-s3-devkitc-1-n16r8-bme280.yaml),
+and [`configs/systems/esp32-s3-devkitc-1-n16r8-adc.yaml`](../../../configs/systems/esp32-s3-devkitc-1-n16r8-adc.yaml).
 
 ## Pin map
 
@@ -16,6 +16,7 @@ The sensor profile is
 | Onboard RGB LED DIN (v1.1) | RMT TX channel 0 through GPIO matrix | GPIO38 | Timed WS2812 GRB symbols are decoded by the attached LED model |
 | J3-2 TX | UART0 TX / U0TXD | GPIO43 | UART FIFO is exercised; USB bridge is omitted |
 | J3-3 RX | UART0 RX / U0RXD | GPIO44 | Pin is mapped; receive path is not exercised |
+| J1-4 | ADC1_CH3 | GPIO4 | ADC extension samples a 1650 mV potentiometer input |
 | Header IO8 | I²C0 SDA | GPIO8 | BME280 register reads in the I²C extension |
 | Header IO9 | I²C0 SCL | GPIO9 | BME280 register reads in the I²C extension |
 
@@ -32,6 +33,9 @@ or claim physical USB serial behavior.
   channel 0's TX_END status; the smoke also asserts the decoded red pixel.
 - The BME280 profile adds the S3 I²C0 model and the BME280 component model. It
   checks the `0x60` chip ID and the modeled raw temperature register sample.
+- The ADC profile attaches a potentiometer to SENS ADC1 channel 3, which the
+  current board guide maps to GPIO4 / J1 pin 4. Firmware starts a SENS oneshot
+  conversion and requires the 1650 mV input to produce code 2047.
 - RMT TX completion is instantaneous in the model while the GPIO waveform is
   timed. The playback clock uses the declared CPU clock and default RMT source
   selection; fractional-divider changes and alternate source selections are
@@ -79,6 +83,46 @@ local smoke uses the fast-boot register-level harness in
 [`firmware/bme280_smoke.c`](firmware/bme280_smoke.c).
 The checked-in availability receipt is
 [`evidence/bme280/vendor-status.md`](evidence/bme280/vendor-status.md).
+
+## ADC1_CH3 potentiometer extension
+
+Use a 10 kΩ potentiometer between 3V3 and GND, with its wiper on GPIO4 / J1
+pin 4. The ADC system profile drives the same input from a centered 1650 mV
+potentiometer model. Its register-level firmware smoke selects SENS ADC1 channel
+3, starts a conversion, and requires code 2047. This proves the board-to-ADC
+input path in the local model; it is not an analog accuracy or physical-board
+measurement.
+
+Copy-paste Arduino example for a 12-bit raw reading:
+
+```cpp
+#include <Arduino.h>
+
+void setup() {
+  Serial.begin(115200);
+  analogReadResolution(12);
+  Serial.printf("GPIO4_ADC1_CH3=%d\n", analogRead(4));
+}
+
+void loop() {}
+```
+
+Reproduce the local repository smoke from the repository root:
+
+```sh
+RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
+  --target-id esp32-s3-devkitc-1-n16r8-adc \
+  --script examples/esp32-s3-devkitc-1-n16r8/adc-smoke.yaml \
+  --system configs/systems/esp32-s3-devkitc-1-n16r8-adc.yaml \
+  --firmware-build-script examples/esp32-s3-devkitc-1-n16r8/ci/build-adc-firmware.sh \
+  --out-dir examples/esp32-s3-devkitc-1-n16r8/evidence/adc
+```
+
+The local register-level harness is
+[`firmware/adc_smoke.c`](firmware/adc_smoke.c); the script checks for
+`ESP32_S3_DEVKITC1_ADC1_CH3_2047_OK`. See the dated
+[vendor-status receipt](evidence/adc/vendor-status.md) and committed build and
+simulation artifacts under [`evidence/adc/`](evidence/adc/).
 
 ## Reproduce the local repository smoke
 

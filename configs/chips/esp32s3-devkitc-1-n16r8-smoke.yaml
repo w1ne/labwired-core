@@ -16,6 +16,8 @@ ram:
   size: "512KB"
 
 pins:
+  # J1 pin 4: GPIO4 / ADC1_CH3 on the v1.1 DevKitC-1.
+  GPIO4: { gpio: "gpio", bit: 4, functions: [{ type: gpio, peripheral: gpio }] }
   GPIO8: { gpio: "gpio", bit: 8, functions: [{ type: gpio, peripheral: gpio }] }
   GPIO9: { gpio: "gpio", bit: 9, functions: [{ type: gpio, peripheral: gpio }] }
   GPIO38: { gpio: "gpio", bit: 38, functions: [{ type: gpio, peripheral: gpio }] }

@@ -39,6 +39,37 @@ smoke, wiring notes and run instructions are in
 availability record is in
 [`evidence/vendor-status.md`](../../examples/esp32c5-devkitc/evidence/vendor-status.md).
 
+### ESP32-S3-DevKitC-1 v1.1 N16R8 — ADC input
+
+ESP32 remains demand rank **#1**. This extends the existing DevKitC board
+coverage; it is not a new MCU or board pick. The S3 SENS model samples a
+potentiometer on GPIO4 / ADC1_CH3. A centered 1650 mV input returns 2047 in the
+local deterministic smoke. The register-level smoke evidence and current board
+availability receipt are in
+[`examples/esp32-s3-devkitc-1-n16r8/`](../../examples/esp32-s3-devkitc-1-n16r8/).
+
+Copy-paste Arduino example for a raw 12-bit reading. Connect a 10 kΩ
+potentiometer between 3V3 and GND, with the wiper on J1 pin 4 / GPIO4:
+
+```cpp
+#include <Arduino.h>
+
+void setup() {
+  Serial.begin(115200);
+  analogReadResolution(12);
+  Serial.printf("GPIO4_ADC1_CH3=%d\n", analogRead(4));
+}
+
+void loop() {}
+```
+
+Espressif's [live DevKits catalog](https://www.espressif.com/products/devkits)
+lists the exact N16R8 ordering SKU with a Mouser link. Its [current v1.1 board
+guide](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32s3/esp32-s3-devkitc-1/user_guide_v1.1.html)
+maps GPIO4 to ADC1_CH3 and marks older N8 and N8R2 SKUs EOL, not N16R8. The
+dated receipt is in
+[`evidence/adc/vendor-status.md`](../../examples/esp32-s3-devkitc-1-n16r8/evidence/adc/vendor-status.md).
+
 ### ESP32-DevKitC-32E / ESP32-WROOM-32E
 
 The board profile boots Arduino firmware and exercises UART0, UART1 TX, GPIO,

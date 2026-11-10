@@ -25,7 +25,7 @@ The shared ESP32-S3 chip yamls are:
   full-featured ESP32-S3 work** — the simulator's `configure_xtensa_esp32s3` is the
   authoritative wiring code that this yaml documents.
 - `configs/chips/esp32s3-devkitc-1-n16r8-smoke.yaml` — board-specific narrow
-  descriptor for the DevKitC v1.1 UART0 + GPIO38 RMT LED smoke below.
+  descriptor for the DevKitC v1.1 UART0, GPIO38 RMT LED, and GPIO4 ADC smokes below.
 - `configs/chips/esp32s3-devkitc-1-n16r8-v10-smoke.yaml` — board-revision
   profile for the v1.0 UART0 + GPIO48 RMT LED and GPIO4 LEDC-servo smokes.
 - `configs/chips/esp32s3-arduino-nano-smoke.yaml` — board-specific narrow
@@ -42,10 +42,10 @@ The shared ESP32-S3 chip yamls are:
 
 | Aspect              | Status                                                                          |
 |---------------------|---------------------------------------------------------------------------------|
-| Chip yamls          | [`esp32s3.yaml`](../../configs/chips/esp32s3.yaml) (minimal) · [`esp32s3-zero.yaml`](../../configs/chips/esp32s3-zero.yaml) (Plan 2/4) · [DevKitC-1 N16R8 UART0 profile](../../configs/chips/esp32s3-devkitc-1-n16r8-smoke.yaml) · [DevKitC v1.0 GPIO4/LEDC profile](../../configs/chips/esp32s3-devkitc-1-n16r8-v10-smoke.yaml) · [Arduino Nano ESP32 GPIO profile](../../configs/chips/esp32s3-arduino-nano-smoke.yaml) · [Arduino Nano ESP32 BME280 profile](../../configs/chips/esp32s3-arduino-nano-bme280-smoke.yaml) · [M5Stack AtomS3-Lite GPIO LED profile](../../configs/chips/esp32s3-atoms3-lite-smoke.yaml) |
-| System yaml         | [`configs/systems/esp32s3-zero.yaml`](../../configs/systems/esp32s3-zero.yaml) · [DevKitC-1 N16R8 UART0 profile](../../configs/systems/esp32-s3-devkitc-1-n16r8.yaml) · [DevKitC v1.0 servo profile](../../configs/systems/esp32-s3-devkitc-1-n16r8-v10-servo.yaml) · [Arduino Nano ESP32 GPIO profile](../../configs/systems/arduino-nano-esp32.yaml) · [Arduino Nano ESP32 BME280 profile](../../configs/systems/arduino-nano-esp32-bme280.yaml) · [M5Stack AtomS3-Lite GPIO LED profile](../../configs/systems/m5stack-atoms3-lite.yaml) |
+| Chip yamls          | [`esp32s3.yaml`](../../configs/chips/esp32s3.yaml) (minimal) · [`esp32s3-zero.yaml`](../../configs/chips/esp32s3-zero.yaml) (Plan 2/4) · [DevKitC-1 N16R8 UART0/RMT/ADC profile](../../configs/chips/esp32s3-devkitc-1-n16r8-smoke.yaml) · [DevKitC v1.0 GPIO4/LEDC profile](../../configs/chips/esp32s3-devkitc-1-n16r8-v10-smoke.yaml) · [Arduino Nano ESP32 GPIO profile](../../configs/chips/esp32s3-arduino-nano-smoke.yaml) · [Arduino Nano ESP32 BME280 profile](../../configs/chips/esp32s3-arduino-nano-bme280-smoke.yaml) · [M5Stack AtomS3-Lite GPIO LED profile](../../configs/chips/esp32s3-atoms3-lite-smoke.yaml) |
+| System yaml         | [`configs/systems/esp32s3-zero.yaml`](../../configs/systems/esp32s3-zero.yaml) · [DevKitC-1 N16R8 UART0 profile](../../configs/systems/esp32-s3-devkitc-1-n16r8.yaml) · [DevKitC-1 N16R8 ADC profile](../../configs/systems/esp32-s3-devkitc-1-n16r8-adc.yaml) · [DevKitC v1.0 servo profile](../../configs/systems/esp32-s3-devkitc-1-n16r8-v10-servo.yaml) · [Arduino Nano ESP32 GPIO profile](../../configs/systems/arduino-nano-esp32.yaml) · [Arduino Nano ESP32 BME280 profile](../../configs/systems/arduino-nano-esp32-bme280.yaml) · [M5Stack AtomS3-Lite GPIO LED profile](../../configs/systems/m5stack-atoms3-lite.yaml) |
 | Reference firmware  | [`examples/esp32s3-i2c-tmp102/`](../../examples/esp32s3-i2c-tmp102/) (Plan 4, canonical) · [DevKitC-1 N16R8 smokes](../../examples/esp32-s3-devkitc-1-n16r8/) · [DevKitC-1 servo quickstart](../../examples/esp32-s3-devkitc-servo/) · [Arduino Nano ESP32 GPIO smoke](../../examples/arduino-nano-esp32/) · [Arduino Nano ESP32 BME280 smoke](../../examples/arduino-nano-esp32-bme280/) · [M5Stack AtomS3-Lite GPIO LED smoke](../../examples/m5stack-atoms3-lite/) · `examples/esp32s3-blinky/` · `examples/esp32s3-hello-world/` |
-| Validation          | Plan 4 end-to-end test: `crates/core/tests/e2e_i2c_tmp102.rs`; local DevKitC UART/LEDC/GPIO smoke in the linked example's `evidence/` directory |
+| Validation          | Plan 4 end-to-end test: `crates/core/tests/e2e_i2c_tmp102.rs`; local DevKitC UART/RMT/ADC smokes in the linked example's `evidence/` directory |
 | Tier                | structural — declarative + Plan 2/4 peripheral models                           |
 
 ## ESP32-S3-DevKitC-1-N16R8 UART0 + RMT LED smoke
@@ -67,6 +67,18 @@ ESP-IDF boot-ROM startup are outside the smoke. The hosted verifier assumes an
 ideal VDD rail, so reset behavior under power faults is not covered. The
 broader `configs/chips/esp32s3.yaml` still declares a `system_stub`; this narrow
 board profile does not reference it.
+
+## GPIO4 / ADC1_CH3 potentiometer smoke
+
+The [N16R8 ADC profile](../../configs/systems/esp32-s3-devkitc-1-n16r8-adc.yaml)
+connects a modeled potentiometer to the S3 SENS ADC1 channel 3. This matches
+Espressif's v1.1 board guide, which maps GPIO4 / J1 pin 4 to ADC1_CH3. The
+register-level firmware selects that channel and requires the centered 1650 mV
+input to return 2047. Its local build, run, and structured assertion evidence
+are committed in
+[`examples/esp32-s3-devkitc-1-n16r8/evidence/adc/`](../../examples/esp32-s3-devkitc-1-n16r8/evidence/adc/).
+The analog path is deterministic and does not model noise, calibration,
+attenuation curves, or physical ADC accuracy.
 
 ## GPIO4 LEDC servo extension
 

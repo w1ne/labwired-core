@@ -1,0 +1,19 @@
+# ESP32-S3-DevKitC-1 v1.1 N16R8 with an external potentiometer on GPIO4 / ADC1_CH3.
+name: "esp32-s3-devkitc-1-n16r8-adc"
+chip: "../chips/esp32s3-devkitc-1-n16r8-smoke.yaml"
+cpu_hz: 240000000
+debug_uart: "uart0"
+external_devices:
+  - id: "pot"
+    type: "potentiometer"
+    connection: "sens_s3"
+    config:
+      channel: 3
+board_io:
+  - id: "pot"
+    kind: "adc_input"
+    peripheral: "sens_s3"
+    pin: 3
+    signal: "input"
+    active_high: true
+    device_type: "potentiometer"
