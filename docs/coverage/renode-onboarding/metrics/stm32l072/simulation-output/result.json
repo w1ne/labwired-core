@@ -851,6 +851,9 @@
     ],
     "dropped_lines": 0
   },
+  "i2c_addresses": [
+    72
+  ],
   "stimuli": [
     {
       "channel": "position",
