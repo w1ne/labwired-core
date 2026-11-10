@@ -25,7 +25,7 @@ use std::sync::Arc;
 /// off changes nothing" true by construction rather than by measurement alone —
 /// no firmware can observe a new read-back, not even the `SHCSR |= BUSFAULTENA`
 /// round-trip that `cortex-m-rt` and Zephyr perform at boot.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ScbFaultState {
     /// Master switch for ARMv7-M fault escalation (ARMv7-M ARM B1.5.14) and for
     /// the fault register surface below. Default **false**.
@@ -47,6 +47,10 @@ pub struct ScbFaultState {
     /// reads this bit on SDIV/UDIV with a zero divisor to decide whether to
     /// raise UsageFault(DIVBYZERO). Written on every CCR write.
     pub ccr_div_0_trp: AtomicBool,
+    /// Mirror of `CCR.STKALIGN` (0xE000ED14 bit 9). The SCB owns CCR; the CPU
+    /// reads this bit while stacking an exception frame. Reset enables the
+    /// double-word alignment behavior.
+    pub ccr_stkalign: AtomicBool,
     /// The core is ARMv6-M (Cortex-M0/M0+/M1). Its SCB has no CFSR, HFSR,
     /// MMFAR or BFAR (ARMv6-M ARM B3.2.2: 0xE000ED28..0xE000ED3C reserved),
     /// so firmware reads zero there and its writes are dropped, and SHCSR
@@ -54,6 +58,22 @@ pub struct ScbFaultState {
     /// enable can be set and every fault is a HardFault. The core still
     /// records the cause in the fields above for the fault report.
     pub armv6m: AtomicBool,
+}
+
+impl Default for ScbFaultState {
+    fn default() -> Self {
+        Self {
+            enabled: AtomicBool::new(false),
+            shcsr: AtomicU32::new(0),
+            cfsr: AtomicU32::new(0),
+            hfsr: AtomicU32::new(0),
+            mmfar: AtomicU32::new(0),
+            bfar: AtomicU32::new(0),
+            ccr_div_0_trp: AtomicBool::new(false),
+            ccr_stkalign: AtomicBool::new(true),
+            armv6m: AtomicBool::new(false),
+        }
+    }
 }
 
 /// `SHCSR.MEMFAULTENA`, bit 16 (ARMv7-M ARM B3.2.13).
@@ -81,6 +101,9 @@ pub const CFSR_UFSR_UNDEFINSTR: u32 = 1 << 16;
 pub const CFSR_UFSR_DIVBYZERO: u32 = 1 << 25;
 /// `CCR.DIV_0_TRP`, bit 4 (B3.2.8): trap divide by zero.
 pub const CCR_DIV_0_TRP: u32 = 1 << 4;
+/// `CCR.STKALIGN`, bit 9: align exception stack frames to a double-word
+/// boundary and record the optional padding word in stacked xPSR[9].
+pub const CCR_STKALIGN: u32 = 1 << 9;
 /// `HFSR.FORCED`, bit 30 (B3.2.16): set when a configurable-priority fault
 /// escalates to HardFault.
 pub const HFSR_FORCED: u32 = 1 << 30;
@@ -320,7 +343,7 @@ impl Scb {
             aircr: 0,
             scr: 0,
             event_state: None,
-            ccr: 0,
+            ccr: CCR_STKALIGN,
             shpr1: s.shpr1,
             shpr2: s.shpr2,
             shpr3: s.shpr3,
@@ -538,10 +561,20 @@ impl Scb {
                 }
             }
             0x14 => {
+                let value = if self.faults.armv6m.load(Ordering::Relaxed) {
+                    // ARMv6-M implements STKALIGN as read-as-one; software
+                    // cannot disable the automatic exception-frame alignment.
+                    value | CCR_STKALIGN
+                } else {
+                    value
+                };
                 self.ccr = value;
                 self.faults
                     .ccr_div_0_trp
                     .store(value & CCR_DIV_0_TRP != 0, Ordering::Relaxed);
+                self.faults
+                    .ccr_stkalign
+                    .store(value & CCR_STKALIGN != 0, Ordering::Relaxed);
             }
             0x18 => self.shpr1.store(value, Ordering::Relaxed),
             0x1C => self.shpr2.store(value, Ordering::Relaxed),
@@ -696,6 +729,27 @@ impl crate::Peripheral for Scb {
 mod tests {
     use super::*;
     use crate::Peripheral;
+
+    #[test]
+    fn ccr_stkalign_tracks_the_cpu_visible_shared_state() {
+        let mut scb = Scb::new(Arc::new(AtomicU32::new(0)));
+        let state = scb.fault_state();
+        assert_eq!(scb.read_register(0x14), CCR_STKALIGN);
+        assert!(state.ccr_stkalign.load(Ordering::Relaxed));
+
+        scb.write_register(0x14, 0);
+        assert_eq!(scb.read_register(0x14), 0);
+        assert!(!state.ccr_stkalign.load(Ordering::Relaxed));
+
+        scb.write_register(0x14, CCR_STKALIGN | CCR_DIV_0_TRP);
+        assert!(state.ccr_stkalign.load(Ordering::Relaxed));
+        assert!(state.ccr_div_0_trp.load(Ordering::Relaxed));
+
+        state.armv6m.store(true, Ordering::Relaxed);
+        scb.write_register(0x14, 0);
+        assert_eq!(scb.read_register(0x14) & CCR_STKALIGN, CCR_STKALIGN);
+        assert!(state.ccr_stkalign.load(Ordering::Relaxed));
+    }
 
     #[test]
     fn cache_id_registers_follow_the_declared_m7_geometry() {

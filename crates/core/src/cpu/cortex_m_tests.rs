@@ -2561,6 +2561,56 @@ fn exception_entry_from_thread_psp_sets_exc_return_fd() {
 }
 
 #[test]
+fn exception_stack_alignment_padding_round_trips_for_psp() {
+    let mut cpu = CortexM::new();
+    let mut bus = MockBus::new();
+    let scb_state = Arc::new(ScbFaultState::default());
+    cpu.set_shared_faults(scb_state.clone());
+    cpu.pc = 0x1000;
+    cpu.xpsr = 0x0100_0000;
+    cpu.control = 0x2; // Thread/PSP
+    cpu.sp = 0x6004; // Bit 2 set: exception entry must align down to 8 bytes.
+    cpu.msp = 0x8000;
+
+    take_exception(&mut cpu, &mut bus, 16, 0x2000);
+
+    assert_eq!(cpu.psp, 0x5FE0, "frame is padded to an 8-byte boundary");
+    assert_eq!(
+        bus.read_u32(0x5FE0 + 28).unwrap(),
+        0x0100_0200,
+        "stacked xPSR marks the alignment word"
+    );
+    assert_eq!(
+        bus.read_u32(0x6000).unwrap(),
+        0,
+        "padding word is deterministic"
+    );
+
+    cpu.exception_return(cpu.lr, &mut bus).unwrap();
+    assert_eq!(cpu.psp, 0x6004, "return consumes the alignment word");
+    assert_eq!(cpu.sp, 0x6004, "Thread mode resumes on the original PSP");
+    assert_eq!(
+        cpu.xpsr, 0x0100_0000,
+        "stack metadata is not restored to xPSR"
+    );
+
+    // CCR.STKALIGN is writable. When software clears it, entry preserves the
+    // four-byte alignment and does not add the metadata/padding word.
+    scb_state.ccr_stkalign.store(false, Ordering::Relaxed);
+    cpu.pc = 0x1000;
+    cpu.sp = 0x6004;
+    cpu.control = 0x2;
+    cpu.active_exception = 0;
+    cpu.xpsr = 0x0100_0000;
+    take_exception(&mut cpu, &mut bus, 16, 0x2000);
+    assert_eq!(cpu.psp, 0x5FE4);
+    assert_eq!(bus.read_u32(0x5FE4 + 28).unwrap(), 0x0100_0000);
+    cpu.exception_return(cpu.lr, &mut bus).unwrap();
+    assert_eq!(cpu.psp, 0x6004);
+    assert_eq!(cpu.xpsr, 0x0100_0000);
+}
+
+#[test]
 fn exception_entry_from_thread_msp_sets_exc_return_f9() {
     let mut cpu = CortexM::new();
     let mut bus = MockBus::new();

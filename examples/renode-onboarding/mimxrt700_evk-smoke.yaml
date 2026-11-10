@@ -14,17 +14,18 @@ uart_injections:
 assertions:
   - uart_contains: "MIMXRT700 LP_FLEXCOMM0 LPUART SMOKE"
   - uart_contains: "rx lpuart0 re_off=1 queued=2 masked=1 asserted=1 masked_data=1 unmasked=1 data=00000052,00000053 released=1 irq=11111 handler=1 ipsr=00000017 exc_return=fffffffd psp_context=1 frame_r0=12345678 frame_pc="
+  - uart_contains: "padded_context=0000000f padded_xpsr=01000200 padded_sp=200000d8 ok"
   - uart_ordered:
       - "flexcomm0 pselid=00103070->00103071->00103079"
       - "lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00880000 istat=00000001"
-      - "pass=000000ff"
+      - "pass=000001ff"
   - memory_value:
       address: 0x20000008
       expected_value: 0x00000143
       size: 4
   - memory_value:
       address: 0x2000000c
-      expected_value: 0x700000ff
+      expected_value: 0x700001ff
       size: 4
   - memory_value:
       address: 0x20000010
@@ -41,5 +42,21 @@ assertions:
   - memory_value:
       address: 0x20000020
       expected_value: 0x200000e0
+      size: 4
+  - memory_value:
+      address: 0x20000024
+      expected_value: 0x0000000f
+      size: 4
+  - memory_value:
+      address: 0x20000028
+      expected_value: 0x01000200
+      size: 4
+  - memory_value:
+      address: 0x2000002c
+      expected_value: 0x200000d8
+      size: 4
+  - memory_value:
+      address: 0x20000030
+      expected_value: 0x200000fc
       size: 4
   - expected_stop_reason: max_steps

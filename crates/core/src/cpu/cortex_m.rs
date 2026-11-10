@@ -15,6 +15,8 @@ use crate::peripherals::scb::{
 };
 use crate::{Bus, Cpu, SimResult, SimulationConfig, SimulationError, SimulationObserver};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+
+const XPSR_STACK_ALIGN: u32 = 1 << 9;
 use std::sync::Arc;
 
 /// `step_execute`'s instruction match arm bodies, one method per arm, grouped
@@ -2442,7 +2444,14 @@ impl CortexM {
         self.r12 = bus.read_u32(frame_ptr.wrapping_add(16) as u64)?;
         self.lr = bus.read_u32(frame_ptr.wrapping_add(20) as u64)?;
         self.pc = bus.read_u32(frame_ptr.wrapping_add(24) as u64)? & !1;
-        self.xpsr = bus.read_u32(frame_ptr.wrapping_add(28) as u64)?;
+        let stacked_xpsr = bus.read_u32(frame_ptr.wrapping_add(28) as u64)?;
+        let stack_alignment_padding = if stacked_xpsr & XPSR_STACK_ALIGN != 0 {
+            4
+        } else {
+            0
+        };
+        // xPSR[9] is metadata in the stacked frame, not a live xPSR bit.
+        self.xpsr = stacked_xpsr & !XPSR_STACK_ALIGN;
         self.it_state = Self::itstate_from_xpsr(self.xpsr);
         self.it_state_restored = true;
 
@@ -2465,7 +2474,9 @@ impl CortexM {
         }
 
         // Advance the bank the frame was popped from.
-        let new_sp = frame_ptr.wrapping_add(frame_len);
+        let new_sp = frame_ptr
+            .wrapping_add(frame_len)
+            .wrapping_add(stack_alignment_padding);
         if frame_on_psp {
             self.psp = new_sp;
         } else {
@@ -4063,12 +4074,28 @@ impl CortexM {
                     // extended one: S0-S15 and FPSCR above the basic eight.
                     let sp = self.sp;
                     let fp_frame = self.fp_ctx.is_some() && self.control & 0x4 != 0;
-                    let frame_ptr = sp.wrapping_sub(if fp_frame { 0x68 } else { 32 });
+                    let frame_len = if fp_frame { 0x68 } else { 32 };
+                    // When CCR.STKALIGN is enabled, keep exception frames
+                    // double-word aligned and record the optional word in
+                    // stacked xPSR[9]. Hand-built cores without an SCB use the
+                    // architectural reset behavior.
+                    let stkalign = self
+                        .faults
+                        .as_ref()
+                        .is_none_or(|faults| faults.ccr_stkalign.load(Ordering::Relaxed));
+                    let stack_alignment_padding = if stkalign && sp & 0x4 != 0 { 4 } else { 0 };
+                    let frame_ptr = sp
+                        .wrapping_sub(frame_len)
+                        .wrapping_sub(stack_alignment_padding);
 
                     // Save the previous active_exception in xPSR IPSR bits [8:0] so that
                     // exception_return can restore the correct nesting level.
-                    let save_xpsr =
-                        self.xpsr_with_itstate((self.xpsr & !0x1FF) | self.active_exception);
+                    let mut save_xpsr = self.xpsr_with_itstate(
+                        (self.xpsr & !(0x1FF | XPSR_STACK_ALIGN)) | self.active_exception,
+                    );
+                    if stack_alignment_padding != 0 {
+                        save_xpsr |= XPSR_STACK_ALIGN;
+                    }
 
                     // Stack: R0, R1, R2, R3, R12, LR, PC, xPSR (with previous IPSR)
                     let stacked_lr = self.lr;
@@ -4094,6 +4121,16 @@ impl CortexM {
                         AccessWidth::Word,
                         save_xpsr,
                     )?;
+                    if stack_alignment_padding != 0 {
+                        // The padding word's value is architecturally
+                        // unspecified. Zero it so reads remain deterministic.
+                        Self::bus_store(
+                            bus,
+                            frame_ptr.wrapping_add(frame_len),
+                            AccessWidth::Word,
+                            0,
+                        )?;
+                    }
                     if fp_frame {
                         // Eager, not lazy: the S0-S15/FPSCR slots are filled
                         // now even with FPCCR.LSPEN set (LSPACT stays 0).
