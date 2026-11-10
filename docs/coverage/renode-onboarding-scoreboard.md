@@ -14,8 +14,8 @@
 - pass_depth_unknown: `0/226`
 - pass_claimed_peripherals_total: `1465`
 - pass_claimed_peripherals_median: `2`
-- median_elapsed_ms: `1406`
-- median_elapsed_seconds: `1.406`
+- median_elapsed_ms: `1395`
+- median_elapsed_seconds: `1.395`
 - threshold_seconds: `3600`
 - threshold_met: `226/226`
 
@@ -229,7 +229,7 @@
 | `stm32f072b_discovery` | `pass` | `True` | `yes` | `yes` | `3557` | `3.557` | `True` | `observable` | `28` | `uart_contains`, `uart_ordered`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `stm32f103` | `pass` | `True` | `yes` | `yes` | `4227` | `4.227` | `True` | `observable` | `6` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `stm32f4` | `pass` | `True` | `yes` | `yes` | `188900` | `188.9` | `True` | `observable` | `4` | `uart_contains`, `uart_ordered` | 0 | `n/a` | n/a | n/a |
-| `stm32f401cdu6-blackpill` | `pass` | `True` | `yes` | `yes` | `4078` | `4.078` | `True` | `observable` | `28` | `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
+| `stm32f401cdu6-blackpill` | `pass` | `True` | `yes` | `yes` | `911` | `0.911` | `True` | `observable` | `28` | `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `stm32f412` | `pass` | `True` | `yes` | `yes` | `1588` | `1.588` | `True` | `observable` | `4` | `uart_contains`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `stm32f429` | `pass` | `True` | `yes` | `yes` | `1112` | `1.112` | `True` | `observable` | `4` | `uart_contains`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `stm32f4_discovery` | `pass` | `True` | `yes` | `yes` | `8107` | `8.107` | `True` | `observable` | `5` | `uart_contains`, `uart_ordered` | 0 | `n/a` | n/a | n/a |

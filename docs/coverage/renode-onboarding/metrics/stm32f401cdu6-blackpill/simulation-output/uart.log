@@ -12,6 +12,6 @@ i2c2 tmp102=00001900 sb_irq_gate=1 addr_irq_gate=1 txe_isolated=1 txe_buf_irq=1 
 pos=1 i2c2 btf_rx_irq=1 rxne_isolated=1 stop_before_dr=1 rxne_after_first=1 release=1 rxne_cleared=1 data=00001980 ok
 i2c2 nack=00000400 no_addr=1 ev_isolated=1 er_isolated=1 er_irq=1 er_masked_release=1 af_cleared=1 idle=1 er_released=1 ok
 spi1 max31855=01901600 txe_irq=1 rxne_irq=1 released=1 ok
-usart1 txe_irq=1 released=1 ok
+usart1 txe_isolated=1 gate_asserted=1 released=1 ok
 usart1 rxne_isolated=1 gate_asserted=1 data=00000052 released=1 ok
 BLACKPILL PASS

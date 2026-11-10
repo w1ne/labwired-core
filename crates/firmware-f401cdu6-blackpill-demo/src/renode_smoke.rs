@@ -1193,14 +1193,20 @@ fn smoke_spi1() -> bool {
     ok
 }
 
-/// USART1 is imported with NVIC IRQ 37. Its idle TXE level must pend when
-/// TXEIE is enabled and release when firmware disables TXEIE.
+/// USART1 is imported with NVIC IRQ 37. TXE must stay off the line while
+/// TXEIE is clear, pend when TXEIE is enabled, and release when disabled.
 fn smoke_usart1_txe_irq() -> bool {
+    const TXE: u32 = 1 << 7;
+    const TXEIE: u32 = 1 << 7;
+
     wr(RCC_APB2ENR, rd(RCC_APB2ENR) | (1 << 4)); // USART1EN
     wr(NVIC_ICPR1, USART1_IRQ_BIT);
-    wr(USART1_CR1, (1 << 13) | (1 << 3) | (1 << 7)); // UE | TE | TXEIE
+    wr(USART1_CR1, (1 << 13) | (1 << 3)); // UE | TE; TXEIE remains clear
 
-    let txe_pended = rd(USART1_SR) & (1 << 7) != 0 && rd(NVIC_ISPR1) & USART1_IRQ_BIT != 0;
+    let txe_isolated = rd(USART1_SR) & TXE != 0 && rd(NVIC_ISPR1) & USART1_IRQ_BIT == 0;
+    wr(USART1_CR1, (1 << 13) | (1 << 3) | TXEIE); // enable TXEIE with TXE already set
+    let txe_pended = txe_isolated && wait(NVIC_ISPR1, USART1_IRQ_BIT, USART1_IRQ_BIT);
+
     wr(USART1_CR1, (1 << 13) | (1 << 3)); // UE | TE, TXEIE off
                                           // Clear the latched NVIC pending bit, then allow the level source to
                                           // settle. A still-asserted USART line will immediately re-pend IRQ 37.
@@ -1210,16 +1216,18 @@ fn smoke_usart1_txe_irq() -> bool {
     }
     let txe_released = rd(NVIC_ISPR1) & USART1_IRQ_BIT == 0;
 
-    send(b"usart1 txe_irq=");
+    send(b"usart1 txe_isolated=");
+    putc(if txe_isolated { b'1' } else { b'0' });
+    send(b" gate_asserted=");
     putc(if txe_pended { b'1' } else { b'0' });
     send(b" released=");
     putc(if txe_released { b'1' } else { b'0' });
-    send(if txe_pended && txe_released {
+    send(if txe_isolated && txe_pended && txe_released {
         b" ok\r\n"
     } else {
         b" FAIL\r\n"
     });
-    txe_pended && txe_released
+    txe_isolated && txe_pended && txe_released
 }
 
 /// The onboarding stimulus queues `R` on USART1 before reset. RXNE must stay
