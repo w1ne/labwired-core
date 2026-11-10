@@ -87,6 +87,18 @@ fn check_uart_rx() {
         first = unsafe { read_volatile(USART_RDR) } & 0xFF;
     }
 
+    // The injected stream has a second byte queued. Clearing NVIC pending
+    // while RXNE remains set must let the USART level re-pend the same line.
+    let second_still_pending = first_ready && unsafe { read_volatile(USART_ISR) } & RXNE != 0;
+    unsafe { write_volatile(NVIC_ICPR1, USART3_IRQ_BIT) };
+    let mut second_irq_reasserted = false;
+    for _ in 0..10_000 {
+        if unsafe { read_volatile(NVIC_ISPR1) } & USART3_IRQ_BIT != 0 {
+            second_irq_reasserted = true;
+            break;
+        }
+    }
+
     let mut second = 0;
     let mut second_ready = false;
     for _ in 0..1_000_000 {
@@ -114,9 +126,11 @@ fn check_uart_rx() {
         && cleared
         && rxne_irq_isolated
         && rxne_irq_asserted
+        && second_still_pending
+        && second_irq_reasserted
         && rxne_irq_released
     {
-        send(b"usart3 rx=00000052,00000053 rxne_irq=isolated,asserted,released ok\r\n");
+        send(b"usart3 rx=00000052,00000053 rxne_irq=isolated,asserted,reasserted,released ok\r\n");
     } else {
         send(b"usart3 rx=fail rxne_irq=fail fail\r\n");
     }

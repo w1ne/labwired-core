@@ -36,7 +36,7 @@
     },
     {
       "assertion": {
-        "uart_contains": "usart3 rx=00000052,00000053 rxne_irq=isolated,asserted,released ok"
+        "uart_contains": "usart3 rx=00000052,00000053 rxne_irq=isolated,asserted,reasserted,released ok"
       },
       "passed": true
     },
@@ -83,12 +83,12 @@
       48,
       61,
       104,
-      25664,
-      537001968,
+      28224,
+      537001960,
       13,
-      134223024
+      134223194
     ],
-    "pc": 134223024,
+    "pc": 134223194,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -101,7 +101,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "75b2b9338b65bac1911e97fca4958a26fa10045a648ff8d4f67dd966a8a08966",
+  "firmware_hash": "e8b60d07832486b4e5cc41af16382bb3473968ebdcb5bdcd84bdf55dc74661f5",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-stm32h743-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/nucleo_h753zi.yaml",
@@ -189,79 +189,79 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 106611,
+            "cycle": 109224,
             "value": 1
           },
           {
-            "cycle": 312922,
+            "cycle": 315535,
             "value": 0
           },
           {
-            "cycle": 519231,
+            "cycle": 521844,
             "value": 1
           },
           {
-            "cycle": 725542,
+            "cycle": 728155,
             "value": 0
           },
           {
-            "cycle": 931851,
+            "cycle": 934464,
             "value": 1
           },
           {
-            "cycle": 1138162,
+            "cycle": 1140775,
             "value": 0
           },
           {
-            "cycle": 1344471,
+            "cycle": 1347084,
             "value": 1
           },
           {
-            "cycle": 1550782,
+            "cycle": 1553395,
             "value": 0
           },
           {
-            "cycle": 1757091,
+            "cycle": 1759704,
             "value": 1
           },
           {
-            "cycle": 1963402,
+            "cycle": 1966015,
             "value": 0
           },
           {
-            "cycle": 2169711,
+            "cycle": 2172324,
             "value": 1
           },
           {
-            "cycle": 2376022,
+            "cycle": 2378635,
             "value": 0
           },
           {
-            "cycle": 2582331,
+            "cycle": 2584944,
             "value": 1
           },
           {
-            "cycle": 2788642,
+            "cycle": 2791255,
             "value": 0
           },
           {
-            "cycle": 2994951,
+            "cycle": 2997564,
             "value": 1
           },
           {
-            "cycle": 3201262,
+            "cycle": 3203875,
             "value": 0
           },
           {
-            "cycle": 3407571,
+            "cycle": 3410184,
             "value": 1
           },
           {
-            "cycle": 3613882,
+            "cycle": 3616495,
             "value": 0
           },
           {
-            "cycle": 3820191,
+            "cycle": 3822804,
             "value": 1
           }
         ],
@@ -269,83 +269,83 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 44,
+            "cycle": 45,
             "state": "0"
           },
           {
-            "cycle": 106611,
+            "cycle": 109224,
             "state": "1"
           },
           {
-            "cycle": 312922,
+            "cycle": 315535,
             "state": "0"
           },
           {
-            "cycle": 519231,
+            "cycle": 521844,
             "state": "1"
           },
           {
-            "cycle": 725542,
+            "cycle": 728155,
             "state": "0"
           },
           {
-            "cycle": 931851,
+            "cycle": 934464,
             "state": "1"
           },
           {
-            "cycle": 1138162,
+            "cycle": 1140775,
             "state": "0"
           },
           {
-            "cycle": 1344471,
+            "cycle": 1347084,
             "state": "1"
           },
           {
-            "cycle": 1550782,
+            "cycle": 1553395,
             "state": "0"
           },
           {
-            "cycle": 1757091,
+            "cycle": 1759704,
             "state": "1"
           },
           {
-            "cycle": 1963402,
+            "cycle": 1966015,
             "state": "0"
           },
           {
-            "cycle": 2169711,
+            "cycle": 2172324,
             "state": "1"
           },
           {
-            "cycle": 2376022,
+            "cycle": 2378635,
             "state": "0"
           },
           {
-            "cycle": 2582331,
+            "cycle": 2584944,
             "state": "1"
           },
           {
-            "cycle": 2788642,
+            "cycle": 2791255,
             "state": "0"
           },
           {
-            "cycle": 2994951,
+            "cycle": 2997564,
             "state": "1"
           },
           {
-            "cycle": 3201262,
+            "cycle": 3203875,
             "state": "0"
           },
           {
-            "cycle": 3407571,
+            "cycle": 3410184,
             "state": "1"
           },
           {
-            "cycle": 3613882,
+            "cycle": 3616495,
             "state": "0"
           },
           {
-            "cycle": 3820191,
+            "cycle": 3822804,
             "state": "1"
           }
         ],
@@ -376,7 +376,7 @@
         "end_cycle": 10000
       },
       {
-        "text": "usart3 rx=00000052,00000053 rxne_irq=isolated,asserted,released ok",
+        "text": "usart3 rx=00000052,00000053 rxne_irq=isolated,asserted,reasserted,released ok",
         "cycle_lo": 30000,
         "cycle": 40000,
         "end_cycle": 40000
@@ -407,9 +407,9 @@
       },
       {
         "text": "gpiob0=high",
-        "cycle_lo": 510000,
-        "cycle": 520000,
-        "end_cycle": 520000
+        "cycle_lo": 520000,
+        "cycle": 530000,
+        "end_cycle": 530000
       },
       {
         "text": "gpiob0=low",
@@ -425,9 +425,9 @@
       },
       {
         "text": "gpiob0=low",
-        "cycle_lo": 1130000,
-        "cycle": 1140000,
-        "end_cycle": 1140000
+        "cycle_lo": 1140000,
+        "cycle": 1150000,
+        "end_cycle": 1150000
       },
       {
         "text": "gpiob0=high",
@@ -455,9 +455,9 @@
       },
       {
         "text": "gpiob0=high",
-        "cycle_lo": 2160000,
-        "cycle": 2170000,
-        "end_cycle": 2170000
+        "cycle_lo": 2170000,
+        "cycle": 2180000,
+        "end_cycle": 2180000
       },
       {
         "text": "gpiob0=low",
@@ -473,9 +473,9 @@
       },
       {
         "text": "gpiob0=low",
-        "cycle_lo": 2780000,
-        "cycle": 2790000,
-        "end_cycle": 2790000
+        "cycle_lo": 2790000,
+        "cycle": 2800000,
+        "end_cycle": 2800000
       },
       {
         "text": "gpiob0=high",
@@ -491,9 +491,9 @@
       },
       {
         "text": "gpiob0=high",
-        "cycle_lo": 3400000,
-        "cycle": 3410000,
-        "end_cycle": 3410000
+        "cycle_lo": 3410000,
+        "cycle": 3420000,
+        "end_cycle": 3420000
       },
       {
         "text": "gpiob0=low",
@@ -512,14 +512,14 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 5648,
+    "text_bytes": 5776,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 5648,
+    "flash_used_bytes": 5776,
     "ram_static_bytes": 0,
     "flash_total_bytes": 1048576,
     "ram_total_bytes": 131072,
-    "flash_used_pct": 0.54,
+    "flash_used_pct": 0.55,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -529,15 +529,15 @@
   "memory": {
     "main_stack_method": "paint",
     "main_stack_limit_bytes": 131072,
-    "main_stack_high_water_bytes": 16,
-    "main_stack_free_min_bytes": 131056,
+    "main_stack_high_water_bytes": 24,
+    "main_stack_free_min_bytes": 131048,
     "main_stack_base": 536870912,
     "main_stack_top": 537001984,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
     "heap_limit_bytes": 131072,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 131056,
+    "heap_free_min_bytes": 131048,
     "heap_base": 536870912,
     "heap_top": 537001984
   },
@@ -545,88 +545,88 @@
     "cycles": 4000000,
     "instructions": 4000000,
     "steps_executed": 4000000,
-    "memory_reads": 865,
-    "memory_writes": 6,
-    "peripheral_accesses": 3805228,
+    "memory_reads": 914,
+    "memory_writes": 8,
+    "peripheral_accesses": 3802720,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134223024,
-        "count": 313,
+        "pc": 134223078,
+        "count": 274,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134222984,
+        "pc": 134223154,
         "count": 274,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134223194,
+        "count": 274,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134223114,
+        "count": 273,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134223126,
+        "count": 273,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134223184,
+        "count": 273,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134223190,
+        "count": 273,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134223074,
+        "count": 235,
         "symbol": "core::ptr::read_volatile"
       },
       {
         "pc": 134223080,
-        "count": 274,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134222956,
-        "count": 273,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134222958,
-        "count": 273,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134223020,
-        "count": 273,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134223060,
-        "count": 273,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134222950,
-        "count": 235,
-        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
-      },
-      {
-        "pc": 134222960,
         "count": 235,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134222964,
+        "pc": 134223086,
         "count": 235,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134222972,
+        "pc": 134223088,
         "count": 235,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134222992,
+        "pc": 134223110,
         "count": 235,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134223010,
+        "pc": 134223118,
         "count": 235,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134223016,
+        "pc": 134223120,
         "count": 235,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134223018,
+        "pc": 134223122,
         "count": 235,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134223028,
+        "pc": 134223130,
         "count": 235,
         "symbol": "core::ptr::read_volatile"
       }
@@ -634,7 +634,7 @@
     "stalled_poll": {
       "peripheral": "gpioPortB",
       "offset": 20,
-      "accesses": 174307
+      "accesses": 171774
     }
   }
 }

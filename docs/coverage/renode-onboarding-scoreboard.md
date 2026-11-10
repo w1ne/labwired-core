@@ -142,7 +142,7 @@
 | `nrf52840` | `pass` | `True` | `yes` | `yes` | `2988` | `2.988` | `True` | `observable` | `49` | `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `nrf52840dk_nrf52840` | `pass` | `True` | `yes` | `yes` | `203815` | `203.815` | `True` | `observable` | `49` | `uart_ordered`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `nucleo_f767zi` | `pass` | `True` | `yes` | `yes` | `2328` | `2.328` | `True` | `observable` | `50` | `uart_contains`, `uart_ordered`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
-| `nucleo_h753zi` | `pass` | `True` | `yes` | `yes` | `2082` | `2.082` | `True` | `observable` | `4` | `uart_contains`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
+| `nucleo_h753zi` | `pass` | `True` | `yes` | `yes` | `1998` | `1.998` | `True` | `observable` | `4` | `uart_contains`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `nucleo_wba52cg` | `pass` | `True` | `yes` | `yes` | `2299` | `2.299` | `True` | `observable` | `4` | `uart_contains`, `uart_ordered`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `nuvoton_npcx9` | `pass` | `True` | `yes` | `yes` | `1314` | `1.314` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `nuvoton_npcx9m6fb_evb` | `pass` | `True` | `yes` | `yes` | `813` | `0.813` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
