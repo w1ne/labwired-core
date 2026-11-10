@@ -1,0 +1,40 @@
+# Narrow chip profile for the currently listed ESP32-S3-DevKitC-1-N8R8.
+# This smoke exposes UART0, GPIO, and I2C0 only; PSRAM, USB, radios, and other
+# peripherals are outside the tested system profile.
+name: "esp32s3-devkitc-1-n8r8-smoke"
+arch: "xtensa-lx7"
+cpu_hz: 240_000_000
+
+flash:
+  base: 0x42000000
+  size: "8192KB"
+ram:
+  base: 0x3FC88000
+  size: "512KB"
+
+pins:
+  GPIO8: { gpio: "gpio", bit: 8, functions: [{ type: gpio, peripheral: gpio }] }
+  GPIO9: { gpio: "gpio", bit: 9, functions: [{ type: gpio, peripheral: gpio }] }
+  GPIO43: { gpio: "gpio", bit: 43, functions: [{ type: uart, peripheral: uart0, role: tx }] }
+  GPIO44: { gpio: "gpio", bit: 44, functions: [{ type: uart, peripheral: uart0, role: rx }] }
+
+peripherals:
+  - id: "gpio"
+    type: "esp32s3_gpio"
+    base_address: 0x60004000
+    size: "2KB"
+
+  - id: "uart0"
+    type: "uart"
+    base_address: 0x60000000
+    size: "512B"
+    config:
+      debug_schema: "../peripherals/esp32s3/uart0.yaml"
+
+  - id: "i2c0"
+    type: "i2c"
+    base_address: 0x60013000
+    size: "4KB"
+    irq: 42
+    config:
+      debug_schema: "../peripherals/esp32s3/i2c0.yaml"

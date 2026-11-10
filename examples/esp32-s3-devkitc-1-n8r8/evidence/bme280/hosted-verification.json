@@ -1,0 +1,35 @@
+{
+  "checked_at": "2026-11-10",
+  "tool": "labwired_pcb_labwired_verify",
+  "target_board": "esp32-s3-devkitc-1",
+  "exact_n8r8_target_in_catalog": false,
+  "wiring": {
+    "mcu": "esp32-s3-devkitc-1",
+    "sensor": "bme280",
+    "i2c0_sda": "GPIO8",
+    "i2c0_scl": "GPIO9",
+    "sensor_address": "0x77"
+  },
+  "firmware": {
+    "language": "arduino",
+    "library": "adafruit/Adafruit BME280 Library",
+    "entry_path": "src/main.ino"
+  },
+  "max_steps": 100000000,
+  "status": "model_verified",
+  "oracle": {
+    "kind": "serial",
+    "contains": "BME280_ID=0x60",
+    "passed": true
+  },
+  "serial_excerpt": "entry 0x403c88b8\r\nBME280_ID=0x60\n",
+  "gaps": [
+    {
+      "code": "approximation",
+      "scope": "model",
+      "detail": "No board.power.vdd_volts net is routed; VDD is assumed ideal, so power-on and brown-out reset are not simulated.",
+      "blocking": false
+    }
+  ],
+  "scope_note": "Hosted verification uses the generic catalog DevKitC-1 target. The exact N8R8 8 MB flash descriptor is exercised by the committed local onboarding smoke. No physical-board test is claimed."
+}

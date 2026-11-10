@@ -100,23 +100,30 @@ impl Default for Esp32s3Opts {
 }
 
 impl Esp32s3Opts {
-    /// Defaults with the core clock taken from the chip descriptor.
+    /// Defaults with the core clock and flash capacity taken from the chip
+    /// descriptor.
     ///
-    /// Use this wherever a `ChipDescriptor` is already in hand: it is what
-    /// makes `cpu_hz:` in the chip YAML authoritative over the engine's
-    /// constant, so a variant part or an S3 board that runs at 160 MHz is
-    /// modelled at 160 MHz rather than at whatever the default happens to say.
+    /// Use this wherever a `ChipDescriptor` is already in hand: it makes
+    /// `cpu_hz:` and `flash.size:` in the chip YAML authoritative over the
+    /// engine defaults, so each S3 variant uses its declared clock and physical
+    /// flash capacity.
     ///
     /// A descriptor written before the field existed parses `cpu_hz` as `0`
     /// (see `ChipDescriptor::cpu_hz`); that is not a clock, so it falls back to
-    /// [`ESP32S3_CPU_CLOCK_HZ`] rather than dividing by zero downstream.
+    /// [`ESP32S3_CPU_CLOCK_HZ`] rather than dividing by zero downstream. A
+    /// zero flash size similarly keeps the default flash capacity.
     pub fn for_chip(chip: &labwired_config::ChipDescriptor) -> Self {
         let cpu_clock_hz = u32::try_from(chip.cpu_hz)
             .ok()
             .filter(|hz| *hz > 0)
             .unwrap_or(ESP32S3_CPU_CLOCK_HZ);
+        let flash_size = u32::try_from(chip.flash.size)
+            .ok()
+            .filter(|size| *size > 0)
+            .unwrap_or_else(|| Self::default().flash_size);
         Self {
             cpu_clock_hz,
+            flash_size,
             ..Self::default()
         }
     }

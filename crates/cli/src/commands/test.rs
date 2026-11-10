@@ -1272,6 +1272,11 @@ pub(crate) fn run_test(
                 use labwired_core::system::xtensa::{
                     configure_xtensa_esp32s3, Esp32s3BootMode, Esp32s3Opts,
                 };
+                let chip_descriptor = resolved_system.as_ref().and_then(|system| {
+                    system
+                        .chip_with_plugins(&crate::plugin_chip_yaml(plugins))
+                        .ok()
+                });
                 if args.rom_boot {
                     // Faithful BROM path (mirrors `run`): needs flash image.
                     if std::env::var("LABWIRED_ESP32S3_FLASH").is_err() {
@@ -1292,7 +1297,10 @@ pub(crate) fn run_test(
                     let mut bus = labwired_core::bus::SystemBus::new();
                     let opts = Esp32s3Opts {
                         real_reset_boot: true,
-                        ..Esp32s3Opts::default()
+                        ..chip_descriptor
+                            .as_ref()
+                            .map(Esp32s3Opts::for_chip)
+                            .unwrap_or_default()
                     };
                     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
                     // Wire matrix kits (INA219, OLED, …) the same way classic ESP32 does.
@@ -1378,7 +1386,10 @@ pub(crate) fn run_test(
                     if factory_layout {
                         std::env::set_var("LABWIRED_ESP32S3_MMU_XIP", "1");
                     }
-                    let opts = Esp32s3Opts::default();
+                    let opts = chip_descriptor
+                        .as_ref()
+                        .map(Esp32s3Opts::for_chip)
+                        .unwrap_or_default();
                     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
                     if _fast.is_none() {
                         std::env::remove_var("LABWIRED_ESP32S3_FASTBOOT");
@@ -1522,7 +1533,7 @@ pub(crate) fn run_test(
                     // aborts. Seed the descriptor with the configured flash size.
                     labwired_core::boot::esp32s3::seed_esp32s3_rom_flashchip(
                         &mut bus,
-                        4 * 1024 * 1024,
+                        opts.flash_size,
                     );
                     // Arduino dual-core: `system_early_init` calls
                     // `ets_set_appcpu_boot_addr(call_start_cpu1)` then spins on

@@ -5,7 +5,7 @@ flash, Wi-Fi + BLE 5, USB) is LabWired's reference Xtensa target. All
 declared peripherals are **declarative** — the chip yaml references
 external YAML descriptors under `configs/peripherals/esp32s3/`.
 
-There are two chip yamls for ESP32-S3 today:
+The shared chip descriptors for ESP32-S3 include:
 
 - `configs/chips/esp32s3.yaml` — minimal declarative model (UART0 + GPIO +
   TIMG0 + INTERRUPT_CORE0) used by older blinky / hello-world examples.
@@ -15,6 +15,8 @@ There are two chip yamls for ESP32-S3 today:
   IRAM + ROM-thunks + flash-XIP mapping. **Use this variant for new
   ESP32-S3 work** — the simulator's `configure_xtensa_esp32s3` is the
   authoritative wiring code that this yaml documents.
+- `configs/chips/esp32s3-devkitc-1-n8r8-smoke.yaml` — narrow current N8R8
+  profile for the GPIO-matrix I2C0 BME280 smoke and UART0 console.
 
 ## Status at a glance
 
@@ -23,11 +25,28 @@ There are two chip yamls for ESP32-S3 today:
 
 | Aspect              | Status                                                                          |
 |---------------------|---------------------------------------------------------------------------------|
-| Chip yamls          | [`esp32s3.yaml`](../../configs/chips/esp32s3.yaml) (minimal) · [`esp32s3-zero.yaml`](../../configs/chips/esp32s3-zero.yaml) (Plan 2/4) |
-| System yaml         | [`configs/systems/esp32s3-zero.yaml`](../../configs/systems/esp32s3-zero.yaml)  |
-| Reference firmware  | [`examples/esp32s3-i2c-tmp102/`](../../examples/esp32s3-i2c-tmp102/) (Plan 4, canonical) · `examples/esp32s3-blinky/` · `examples/esp32s3-hello-world/` |
-| Validation          | Plan 4 end-to-end test: `crates/core/tests/e2e_i2c_tmp102.rs`                   |
+| Chip yamls          | [`esp32s3.yaml`](../../configs/chips/esp32s3.yaml) (minimal) · [`esp32s3-zero.yaml`](../../configs/chips/esp32s3-zero.yaml) (Plan 2/4) · [DevKitC-1 N8R8 narrow profile](../../configs/chips/esp32s3-devkitc-1-n8r8-smoke.yaml) |
+| System yaml         | [`configs/systems/esp32s3-zero.yaml`](../../configs/systems/esp32s3-zero.yaml) · [DevKitC-1 N8R8 + BME280](../../configs/systems/esp32-s3-devkitc-1-n8r8-bme280.yaml) |
+| Reference firmware  | [`examples/esp32s3-i2c-tmp102/`](../../examples/esp32s3-i2c-tmp102/) (Plan 4, canonical) · [DevKitC-1 N8R8 + BME280](../../examples/esp32-s3-devkitc-1-n8r8/) · `examples/esp32s3-blinky/` · `examples/esp32s3-hello-world/` |
+| Validation          | Plan 4 end-to-end test: `crates/core/tests/e2e_i2c_tmp102.rs`; local N8R8 BME280 smoke in the linked example's `evidence/` directory |
 | Tier                | structural — declarative + Plan 2/4 peripheral models                           |
+
+## ESP32-S3-DevKitC-1 N8R8 + BME280
+
+Espressif's current guide lists the N8R8 variant with 8 MB flash and 8 MB
+PSRAM and provides a retail sample-order path. The [narrow system
+profile](../../configs/systems/esp32-s3-devkitc-1-n8r8-bme280.yaml) models the
+8 MB flash window, GPIO, UART0, I2C0, and an external BME280 at address 0x77.
+Local firmware reads chip ID `0x60` and raw temperature `0x082DC0` over I2C0
+on GPIO8/GPIO9; the committed local smoke boots this exact N8R8 descriptor.
+
+The hosted Arduino sketch returned `model_verified` on the generic DevKitC-1
+catalog target, not an exact N8R8 target. The hosted result has an ideal-VDD
+approximation, so power-on/brown-out reset is outside scope. PSRAM, USB,
+wireless, board buttons, and physical hardware are not tested. See the
+[quickstart](../../examples/esp32-s3-devkitc-1-n8r8/README.md),
+[local smoke evidence](../../examples/esp32-s3-devkitc-1-n8r8/evidence/bme280/),
+and [live availability receipt](../../examples/esp32-s3-devkitc-1-n8r8/evidence/bme280/vendor-status.md).
 
 ## Peripherals (esp32s3-zero, Plan 2/4 model)
 
