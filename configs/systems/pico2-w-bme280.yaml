@@ -1,0 +1,15 @@
+# Raspberry Pi Pico 2 W, narrowly profiled for UART0 and a BME280 on I2C0.
+# The CYW43439 radio and its wireless GPIO/user LED are not modeled here.
+name: "pico2-w-bme280"
+chip: "../chips/rp2350-pico2-w-bme280-smoke.yaml"
+cpu_hz: 150_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GPIO4"
+      scl: "GPIO5"
+    config:
+      i2c_address: 0x77

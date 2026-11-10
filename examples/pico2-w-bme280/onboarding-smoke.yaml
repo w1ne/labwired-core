@@ -1,0 +1,11 @@
+# Pico 2 W firmware reads the BME280 ID and temperature bytes on I2C0.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-pico2-w-bme280-smoke"
+  system: "../../configs/systems/pico2-w-bme280.yaml"
+limits:
+  max_steps: 300000
+assertions:
+  - uart_contains: "BME280_ID=0x60"
+  - uart_contains: "PICO2W_BME280_SMOKE_OK"
+  - expected_stop_reason: max_steps
