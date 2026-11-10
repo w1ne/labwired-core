@@ -54,6 +54,9 @@ peripherals:
     base_address: 0x40005400
     size: "1KB"
     irq: 31
+    config:
+      # F1I2c's separate error output is routed through this explicit vector.
+      irq_error: 32
   - id: "i2c2"
     type: "stm32f1_i2c"
     base_address: 0x40005800

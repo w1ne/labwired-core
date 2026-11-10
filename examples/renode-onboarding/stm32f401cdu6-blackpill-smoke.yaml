@@ -3,7 +3,8 @@
 # LED through BSRR with ODR readback, runs TIM2 (PSC/ARR readback, counter
 # advance, UIF latch + W1C clear), and drives an I2C1 TMP102 temperature read
 # (25 °C) plus an absent-address NACK. SPI1 reads
-# a MAX31855 reset frame and checks TXE/RXNE interrupt levels. Results print on
+# a MAX31855 reset frame and checks TXE/RXNE interrupt levels. The I2C1 NACK
+# also checks its configured EV/ER lines (IRQs 31/32) assert and release. Results print on
 # USART2; USART1 checks TXEIE and RXNEIE assertion/release on IRQ 37, with an
 # injected RX byte. The summary word lands at 0x20017F00 and is 0xB1AC007F on
 # success. PC13 resets
@@ -25,7 +26,7 @@ assertions:
       - "rcc apb1=00220001 ok"
       - "led pc13 odr=00002000 ok"
       - "tim2 arr=00000040 ok"
-      - "i2c1 tmp102=00001900 nack=00000400 ok"
+      - "i2c1 tmp102=00001900 nack=00000400 ev_irq=1 er_irq=1 irq_released=1 ok"
       - "spi1 max31855=01901600 txe_irq=1 rxne_irq=1 released=1 ok"
       - "usart1 txe_irq=1 released=1 ok"
       - "usart1 rxne_irq=1 data=00000052 released=1 ok"

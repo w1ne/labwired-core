@@ -15,7 +15,7 @@
 //!          ODR read back after each write
 //!   TIM2   PSC/ARR readback, up-counter advances, UIF latches and clears (W1C 0)
 //!   I2C1   TMP102 temperature-register pointer write + repeated-start read
-//!          (25 °C = 0x1900), plus an absent-address AF (NACK) and STOP
+//!          (25 °C = 0x1900), plus an absent-address NACK and EV/ER IRQ checks
 //!   SPI1   MAX31855 reset frame plus TXEIE/RXNEIE level IRQ assertions
 //!   USART1 TXEIE and RXNEIE assert and release their NVIC line
 //! A summary word goes to RAM at 0x20017F00 (one bit per block passed).
@@ -66,9 +66,13 @@ const SPI_CR2: u32 = SPI1 + 0x04;
 const SPI_SR: u32 = SPI1 + 0x08;
 const SPI_DR: u32 = SPI1 + 0x0C;
 const NVIC_ISPR1: u32 = 0xE000_E204;
+const NVIC_ISPR0: u32 = 0xE000_E200;
+const NVIC_ICPR0: u32 = 0xE000_E280;
 const NVIC_ICPR1: u32 = 0xE000_E284;
 const SPI1_IRQ_BIT: u32 = 1 << (35 - 32);
 const USART1_IRQ_BIT: u32 = 1 << (37 - 32);
+const I2C1_EV_IRQ_BIT: u32 = 1 << 31;
+const I2C1_ER_IRQ_BIT: u32 = 1;
 
 const RESULT: u32 = 0x2001_7F00;
 
@@ -136,11 +140,17 @@ fn main() -> ! {
     let tim_ok = smoke_tim2();
     passed |= (tim_ok as u32) << 2;
 
-    let (temperature, nack_sr1, i2c_ok) = smoke_i2c1();
+    let (temperature, nack_sr1, i2c_ev_irq, i2c_er_irq, i2c_irq_released, i2c_ok) = smoke_i2c1();
     send(b"i2c1 tmp102=");
     put_hex32(u32::from(temperature));
     send(b" nack=");
     put_hex32(nack_sr1);
+    send(b" ev_irq=");
+    send(if i2c_ev_irq { b"1" } else { b"0" });
+    send(b" er_irq=");
+    send(if i2c_er_irq { b"1" } else { b"0" });
+    send(b" irq_released=");
+    send(if i2c_irq_released { b"1" } else { b"0" });
     send(if i2c_ok { b" ok\r\n" } else { b" FAIL\r\n" });
     passed |= (i2c_ok as u32) << 3;
 
@@ -213,12 +223,13 @@ fn smoke_tim2() -> bool {
 
 /// Read the fixture TMP102 through the legacy STM32 I2C controller, then probe
 /// an absent address. The exact imported system wires TMP102 at 0x48.
-fn smoke_i2c1() -> (u16, u32, bool) {
+fn smoke_i2c1() -> (u16, u32, bool, bool, bool, bool) {
     wr(I2C_OAR1, 0x4000 | 0xAA); // bit 14 must be kept at 1 by software
     if rd(I2C_OAR1) & 0xFFFF != 0x40AA {
-        return (0xFFFF, 0, false);
+        return (0xFFFF, 0, false, false, false, false);
     }
-    wr(I2C_CR2, 16); // FREQ = 16 MHz APB1 (HSI)
+    // FREQ = 16 MHz APB1 (HSI); enable ITERREN, ITEVTEN and ITBUFEN.
+    wr(I2C_CR2, 16 | (1 << 8) | (1 << 9) | (1 << 10));
     wr(I2C_CCR, 80); // 100 kHz standard mode
     wr(I2C_TRISE, 17);
     wr(I2C_CR1, 1); // PE
@@ -228,39 +239,39 @@ fn smoke_i2c1() -> (u16, u32, bool) {
     // after the first byte, clear ACK so the final byte is NACKed.
     wr(I2C_CR1, rd(I2C_CR1) | (1 << 8)); // START
     if !wait(I2C_SR1, 0x0001, 0x0001) {
-        return (0xFFFF, 0, false);
+        return (0xFFFF, 0, false, false, false, false);
     }
     wr(I2C_DR, 0x90); // TMP102 7-bit address 0x48, write
     if !wait(I2C_SR1, 0x0002, 0x0002) {
-        return (0xFFFF, 0, false);
+        return (0xFFFF, 0, false, false, false, false);
     }
     let _ = rd(I2C_SR1);
     let _ = rd(I2C_SR2); // clear ADDR
     wr(I2C_DR, 0x00); // temperature register pointer
     if !wait(I2C_SR1, 0x0004, 0x0004) {
         // BTF: pointer byte sent
-        return (0xFFFF, 0, false);
+        return (0xFFFF, 0, false, false, false, false);
     }
 
     wr(I2C_CR1, 1 | (1 << 8) | (1 << 10)); // PE | START | ACK
     if !wait(I2C_SR1, 0x0001, 0x0001) {
-        return (0xFFFF, 0, false);
+        return (0xFFFF, 0, false, false, false, false);
     }
     wr(I2C_DR, 0x91); // TMP102 address, read
     if !wait(I2C_SR1, 0x0002, 0x0002) {
-        return (0xFFFF, 0, false);
+        return (0xFFFF, 0, false, false, false, false);
     }
     let _ = rd(I2C_SR1);
     let _ = rd(I2C_SR2); // clear ADDR; receiver starts clocking
     if !wait(I2C_SR1, 0x0040, 0x0040) {
         // RXNE
-        return (0xFFFF, 0, false);
+        return (0xFFFF, 0, false, false, false, false);
     }
     let msb = rd(I2C_DR) as u8;
     wr(I2C_CR1, 1); // PE; NACK the final byte
     wr(I2C_CR1, 1 | (1 << 9)); // request STOP after the final byte
     if !wait(I2C_SR1, 0x0040, 0x0040) {
-        return (0xFFFF, 0, false);
+        return (0xFFFF, 0, false, false, false, false);
     }
     let lsb = rd(I2C_DR) as u8;
     let temperature = u16::from_be_bytes([msb, lsb]);
@@ -268,25 +279,54 @@ fn smoke_i2c1() -> (u16, u32, bool) {
 
     // The system has no device at 0x50. Silicon sets AF, no ADDR, and keeps
     // MSL|BUSY until STOP; AF is rc_w0.
+    wr(NVIC_ICPR0, I2C1_EV_IRQ_BIT);
+    wr(NVIC_ICPR1, I2C1_ER_IRQ_BIT);
+    let mut irq_released = true;
+    for _ in 0..16 {
+        let _ = rd(I2C_SR1);
+        irq_released &= rd(NVIC_ISPR0) & I2C1_EV_IRQ_BIT == 0;
+        irq_released &= rd(NVIC_ISPR1) & I2C1_ER_IRQ_BIT == 0;
+    }
     wr(I2C_CR1, rd(I2C_CR1) | (1 << 8)); // START
     if !wait(I2C_SR1, 0x0001, 0x0001) {
-        return (temperature, 0, false);
+        return (temperature, 0, false, false, irq_released, false);
     }
     wr(I2C_DR, 0xA0); // absent EEPROM-style address 0x50, write
     if !wait(I2C_SR1, 0x0400, 0x0400) {
-        return (temperature, 0, false);
+        return (temperature, 0, false, false, irq_released, false);
     }
     let sr1 = rd(I2C_SR1);
     let sr2 = rd(I2C_SR2);
     let nack_ok = sr1 & 0x0002 == 0 && sr2 & 0x3 == 0x3; // no ADDR; MSL|BUSY
+    let ev_irq = rd(NVIC_ISPR0) & I2C1_EV_IRQ_BIT != 0;
+    let er_irq = rd(NVIC_ISPR1) & I2C1_ER_IRQ_BIT != 0;
     wr(I2C_CR1, rd(I2C_CR1) | (1 << 9)); // STOP
     wr(I2C_SR1, !0x0400 & 0xFFFF); // clear AF (rc_w0)
     let af_cleared = rd(I2C_SR1) & 0x0400 == 0;
     let nack_idle = wait(I2C_SR2, 0x0002, 0);
+    // Clear the sticky NVIC bits only after STOP and AF clear. With the
+    // source flags gone, neither I2C line should pend again while polled.
+    wr(NVIC_ICPR0, I2C1_EV_IRQ_BIT);
+    wr(NVIC_ICPR1, I2C1_ER_IRQ_BIT);
+    for _ in 0..64 {
+        let _ = rd(I2C_SR1);
+        irq_released &= rd(NVIC_ISPR0) & I2C1_EV_IRQ_BIT == 0;
+        irq_released &= rd(NVIC_ISPR1) & I2C1_ER_IRQ_BIT == 0;
+    }
     (
         temperature,
         sr1,
-        temperature == 0x1900 && idle && nack_ok && af_cleared && nack_idle,
+        ev_irq,
+        er_irq,
+        irq_released,
+        temperature == 0x1900
+            && idle
+            && nack_ok
+            && af_cleared
+            && nack_idle
+            && ev_irq
+            && er_irq
+            && irq_released,
     )
 }
 
