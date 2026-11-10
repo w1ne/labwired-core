@@ -59,6 +59,6 @@ and raw temperature `0x082DC0` through I2C0. Reproduce it using
 
 This profile intentionally leaves the CYW43439 out. It does not claim Wi-Fi,
 Bluetooth, the WL_GPIO0 user LED, USB, radio/SPI routing, or electrical pad and
-pull-up behavior. The RP2350 descriptor's TBMAN window remains a zero-answering
-stub. UART0 output is captured for simulator diagnostics and does not represent
-a physical USB or serial bridge.
+pull-up behavior. The RP2350 descriptor's POWERMAN and TBMAN windows remain
+zero-answering stubs. UART0 output is captured for simulator diagnostics and
+does not represent a physical USB or serial bridge.
