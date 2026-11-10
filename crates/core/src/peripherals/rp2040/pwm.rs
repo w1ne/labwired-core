@@ -619,9 +619,10 @@ impl Peripheral for Rp2040Pwm {
             return Vec::new();
         }
         self.arm_seq = self.arm_seq.wrapping_add(1);
-        if let Some(clock) = self.clock.as_ref() {
-            self.last_sync = clock.now();
-        }
+        // Do not move `last_sync` here. `on_event` advances by
+        // `now - last_sync`; bumping the watermark without applying
+        // those cycles dropped the enable-to-first-step interval and
+        // stretched the first PWM period by one cycle.
         let delay = self.cycles_until_next_wake().unwrap_or(1).saturating_sub(1);
         vec![(delay, self.arm_seq)]
     }
