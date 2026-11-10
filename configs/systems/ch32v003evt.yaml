@@ -1,0 +1,17 @@
+# WCH CH32V003F4P6-EVT-R0-1v1 evaluation board.
+# The WCH board's LED1 header is unconnected until jumpered to a GPIO. The
+# example uses PC0 -> P4 LED1; the LED is active-low. The board USB connector
+# supplies power only, and the board's external 24 MHz crystal is not selected
+# by this reset-state smoke (the CH32V003 starts from 24 MHz HSI). Board wiring:
+# WCH CH32V00x Evaluation Board Reference and https://ch405labs.net/ch32v003_intro/.
+name: "ch32v003evt"
+chip: "../chips/ch32v003f4p6.yaml"
+cpu_hz: 24_000_000
+external_devices: []
+board_io:
+  - id: "led1"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 0
+    signal: "output"
+    active_high: false

@@ -1,5 +1,8 @@
 # CH32V003F4P6 GPIO blink and USART1 hello
 
+Demand target: **Tier C WCH vendor bet** from the demand-ordered list; it has no
+numeric percentage rank in the survey table.
+
 This is a small bare-metal C example for the WCH CH32V003F4P6. It enables the
 GPIOC clock, configures PC0 as push-pull output, then toggles PC0 through the
 WCH set/reset registers. The build targets RV32E instructions, a subset of the
@@ -12,9 +15,9 @@ Build the ELF with a RISC-V GCC that supports `-march=rv32e -mabi=ilp32e`:
 ```
 
 The committed `tests/fixtures/ch32v003f4p6-blink.elf` was built with
-`riscv32-esp-elf-gcc` 14.2.0 (crosstool-NG `esp-14.2.0_20260121`, as recorded
-in the ELF's `.comment` section). Its sha256 is
-`67196d739f228401711ced1702295e3129f6df7136f1c2244cc051e14dfba329`. A
+`riscv64-unknown-elf-gcc` 13.2.0-11ubuntu1+12, as recorded in the ELF's
+`.comment` section. Its sha256 is
+`ffe97d1a4de4493b58bd959d5fb0e23f0dfb31cedd43e82644a0d0e76687bbc4`. A
 different GCC may produce different bytes; the smoke checks behaviour, not the
 hash.
 
@@ -29,6 +32,41 @@ cargo run -q -p labwired-cli -- test \
 The smoke requires at least two PC0 output edges. The bare chip model has no
 external LED attached; on a physical part, wire PC0 through a current-limiting
 resistor to an LED and ground.
+
+## WCH CH32V003EVT board
+
+The exact WCH evaluation board is modelled in
+[`configs/systems/ch32v003evt.yaml`](../../configs/systems/ch32v003evt.yaml).
+It maps the board's active-low LED1 header to PC0. The board leaves LED1
+unconnected by default, so add a jumper from PC0 to LED1 on header P4 before
+running this smoke on a physical board. The [WCH board reference](https://www.olimex.com/Products/RISC-V/WCH-CH32V003EVT/resources/CH32V00x-Evaluation-Board-Reference-EN.pdf)
+documents P4; the [board wiring guide](https://ch405labs.net/ch32v003_intro/)
+shows the LED cathode at LED1, so a low PC0 level lights it. The board's USB
+connector supplies power only.
+
+Run the board smoke against the committed firmware:
+
+```sh
+cargo run -q -p labwired-cli -- test \
+  --script examples/ch32v003f4p6/evt-smoke.yaml \
+  --output-dir out/boards/ch32v003evt/led1 --no-uart-stdout
+```
+
+The smoke asserts PC0 edges through the board system's LED1 wiring. The model
+does not claim the evaluation board's USB data path, PFIC interrupts, or
+unverified peripherals. Current WCH and distributor availability notes are in
+[`vendor-status.md`](vendor-status.md).
+
+The separate USART1 smoke exercises the board's exposed PD5 transmit pin:
+
+```sh
+cargo run -q -p labwired-cli -- test \
+  --script examples/ch32v003f4p6/evt-uart-smoke.yaml \
+  --output-dir out/boards/ch32v003evt/usart1 --no-uart-stdout
+```
+
+On the physical board, connect PD5 to the RX input of a 3.3 V USB-serial
+adapter. The board has no onboard USB-to-UART bridge.
 
 ## USART1 hello
 
@@ -58,8 +96,12 @@ PFIC is not modelled, so USART1 interrupts are not delivered. On a physical
 part, PD5 goes to the RX pin of a 3.3 V USB-serial adapter at 115200 8N1.
 
 The committed `tests/fixtures/ch32v003f4p6-uart-hello.elf` was built by
-`build.sh` with the same `riscv32-esp-elf-gcc` 14.2.0. Its sha256 is
-`b2cb6f34eb4c907054d4fc9bdfa1c13ec162579e7285343e182c628b0bea463a`.
+`build.sh` with the same `riscv64-unknown-elf-gcc` 13.2.0-11ubuntu1+12. Its
+sha256 is
+`f77a83f95286c1f08ffc4e545645bdba435d84e8543f3988679e2452fa4570fd`.
+
+Both board smoke receipts are summarized in
+[`evidence/onboarding-scoreboard.md`](evidence/onboarding-scoreboard.md).
 
 These fixtures exercise the local simulator's RV32E/RV32EC, reset/flash
 loading, RCC, GPIO and USART1 paths. CH32V003 is not yet a hosted LabWired

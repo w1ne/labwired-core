@@ -1,0 +1,4 @@
+2026-11-10T22:27:26.269625Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/ch32v003f4p6.yaml
+2026-11-10T22:27:26.271022Z  INFO labwired_loader: ELF Entry Point: 0x8000000
+labwired-cli test: idle_ff=on (event_scheduler=on)
+PASS  1/1 checks · evt-smoke · 200000 steps · 0.03s

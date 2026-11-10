@@ -1,0 +1,12 @@
+# WCH CH32V003F4P6-EVT-R0-1v1 board smoke.
+# The firmware toggles PC0, which is jumpered to the board's LED1 header.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/ch32v003f4p6-blink.elf"
+  system: "../../configs/systems/ch32v003evt.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - gpio_edges:
+      pin: "gpioc:0"
+      min_edges: 2

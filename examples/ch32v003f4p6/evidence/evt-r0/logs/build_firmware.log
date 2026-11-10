@@ -1,0 +1,3 @@
+riscv64-unknown-elf-gcc (13.2.0-11ubuntu1+12) 13.2.0
+Built /home/andrii/worktrees/labwired-core/hw-onboarding/tests/fixtures/ch32v003f4p6-blink.elf
+Built /home/andrii/worktrees/labwired-core/hw-onboarding/tests/fixtures/ch32v003f4p6-uart-hello.elf
