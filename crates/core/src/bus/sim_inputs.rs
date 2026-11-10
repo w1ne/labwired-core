@@ -475,4 +475,9 @@ impl SystemBus {
     pub fn bus_trace_snapshot(&self) -> Vec<bus_trace::BusTraceEvent> {
         self.bus_trace.snapshot()
     }
+
+    /// Events the shared bus-trace ring dropped because it was full.
+    pub fn bus_trace_evicted(&self) -> u64 {
+        self.bus_trace.evicted()
+    }
 }
