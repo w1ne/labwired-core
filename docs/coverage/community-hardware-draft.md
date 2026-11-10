@@ -99,6 +99,52 @@ void setup() {
 void loop() {}
 ```
 
+### ESP32-S3-DevKitC-1 N16R8 — SHT40 temperature and humidity
+
+ESP32 remains demand rank **#1**. This is maintenance/depth work on the
+existing DevKitC board: it attaches the buyable SHT40 breakout to I²C1 on
+GPIO41/GPIO42 and adds a new environmental-sensor use case. The local firmware
+checks the SHT40 serial response, the 25 °C / 50% RH modeled sample, and both
+Sensirion CRC-8 bytes. It reuses the existing I²C1 and SHT40 models.
+
+Wire an Adafruit SHT40 STEMMA QT breakout (PID 4885) to 3V3, GND, SDA=GPIO41,
+and SCL=GPIO42. This copy-paste Arduino example uses Adafruit's SHT4x library:
+
+~~~cpp
+#include <Adafruit_SHT4x.h>
+#include <Arduino.h>
+#include <Wire.h>
+
+Adafruit_SHT4x sht4;
+
+void setup() {
+  Serial.begin(115200);
+  Wire1.begin(41, 42, 100000);
+  if (!sht4.begin(&Wire1)) {
+    Serial.println("SHT40 not found on I2C1");
+    return;
+  }
+  sht4.setPrecision(SHT4X_HIGH_PRECISION);
+  sensors_event_t humidity, temperature;
+  if (sht4.getEvent(&humidity, &temperature)) {
+    Serial.printf("Temperature: %.2f C, RH: %.2f %%\n",
+                  temperature.temperature, humidity.relative_humidity);
+  }
+}
+
+void loop() {}
+~~~
+
+The [current ESP32-S3-DevKitC-1 v1.1 guide](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32s3/esp32-s3-devkitc-1/user_guide_v1.1.html)
+lists the N16R8 variant and documents GPIO41/GPIO42 on the J3 header. Mouser's
+[exact N16R8 listing](https://www.mouser.com/ProductDetail/Espressif-Systems/ESP32-S3-DevKitC-1-N16R8)
+showed 77 in stock on 2026-11-10. Adafruit's [SHT40 breakout page](https://www.adafruit.com/product/4885)
+showed PID 4885 at $5.95 with Add to Cart available. The local firmware, smoke
+logs, and dated availability receipt are in
+[the SHT40 evidence directory](../../examples/esp32-s3-devkitc-1-n16r8/evidence/sht40/).
+The hosted catalog does not contain an SHT40 entry, so this has no hosted
+model_verified result.
+
 ### ESP32-DevKitC-32E / ESP32-WROOM-32E
 
 The board profile boots Arduino firmware and exercises UART0, UART1 TX, GPIO,

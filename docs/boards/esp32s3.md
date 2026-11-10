@@ -43,9 +43,9 @@ The shared ESP32-S3 chip yamls are:
 | Aspect              | Status                                                                          |
 |---------------------|---------------------------------------------------------------------------------|
 | Chip yamls          | [`esp32s3.yaml`](../../configs/chips/esp32s3.yaml) (minimal) · [`esp32s3-zero.yaml`](../../configs/chips/esp32s3-zero.yaml) (Plan 2/4) · [DevKitC-1 N16R8 UART0/RMT/ADC/I²C0/I²C1 profile](../../configs/chips/esp32s3-devkitc-1-n16r8-smoke.yaml) · [DevKitC v1.0 GPIO4/LEDC profile](../../configs/chips/esp32s3-devkitc-1-n16r8-v10-smoke.yaml) · [Arduino Nano ESP32 GPIO profile](../../configs/chips/esp32s3-arduino-nano-smoke.yaml) · [Arduino Nano ESP32 BME280 profile](../../configs/chips/esp32s3-arduino-nano-bme280-smoke.yaml) · [M5Stack AtomS3-Lite GPIO LED profile](../../configs/chips/esp32s3-atoms3-lite-smoke.yaml) |
-| System yaml         | [`configs/systems/esp32s3-zero.yaml`](../../configs/systems/esp32s3-zero.yaml) · [DevKitC-1 N16R8 UART0 profile](../../configs/systems/esp32-s3-devkitc-1-n16r8.yaml) · [DevKitC-1 N16R8 ADC profile](../../configs/systems/esp32-s3-devkitc-1-n16r8-adc.yaml) · [DevKitC-1 N16R8 I²C1 BME280 profile](../../configs/systems/esp32-s3-devkitc-1-n16r8-i2c1-bme280.yaml) · [DevKitC v1.0 servo profile](../../configs/systems/esp32-s3-devkitc-1-n16r8-v10-servo.yaml) · [Arduino Nano ESP32 GPIO profile](../../configs/systems/arduino-nano-esp32.yaml) · [Arduino Nano ESP32 BME280 profile](../../configs/systems/arduino-nano-esp32-bme280.yaml) · [M5Stack AtomS3-Lite GPIO LED profile](../../configs/systems/m5stack-atoms3-lite.yaml) |
+| System yaml         | [`configs/systems/esp32s3-zero.yaml`](../../configs/systems/esp32s3-zero.yaml) · [DevKitC-1 N16R8 UART0 profile](../../configs/systems/esp32-s3-devkitc-1-n16r8.yaml) · [DevKitC-1 N16R8 ADC profile](../../configs/systems/esp32-s3-devkitc-1-n16r8-adc.yaml) · [DevKitC-1 N16R8 I²C1 BME280 profile](../../configs/systems/esp32-s3-devkitc-1-n16r8-i2c1-bme280.yaml) · [DevKitC-1 N16R8 I²C1 SHT40 profile](../../configs/systems/esp32-s3-devkitc-1-n16r8-i2c1-sht40.yaml) · [DevKitC v1.0 servo profile](../../configs/systems/esp32-s3-devkitc-1-n16r8-v10-servo.yaml) · [Arduino Nano ESP32 GPIO profile](../../configs/systems/arduino-nano-esp32.yaml) · [Arduino Nano ESP32 BME280 profile](../../configs/systems/arduino-nano-esp32-bme280.yaml) · [M5Stack AtomS3-Lite GPIO LED profile](../../configs/systems/m5stack-atoms3-lite.yaml) |
 | Reference firmware  | [`examples/esp32s3-i2c-tmp102/`](../../examples/esp32s3-i2c-tmp102/) (Plan 4, canonical) · [DevKitC-1 N16R8 smokes](../../examples/esp32-s3-devkitc-1-n16r8/) · [DevKitC-1 servo quickstart](../../examples/esp32-s3-devkitc-servo/) · [Arduino Nano ESP32 GPIO smoke](../../examples/arduino-nano-esp32/) · [Arduino Nano ESP32 BME280 smoke](../../examples/arduino-nano-esp32-bme280/) · [M5Stack AtomS3-Lite GPIO LED smoke](../../examples/m5stack-atoms3-lite/) · `examples/esp32s3-blinky/` · `examples/esp32s3-hello-world/` |
-| Validation          | Plan 4 end-to-end test: `crates/core/tests/e2e_i2c_tmp102.rs`; local DevKitC UART/RMT/ADC/I²C1 smokes in the linked example's `evidence/` directory |
+| Validation          | Plan 4 end-to-end test: `crates/core/tests/e2e_i2c_tmp102.rs`; local DevKitC UART/RMT/ADC/I²C1 BME280/SHT40 smokes in the linked example's `evidence/` directory |
 | Tier                | structural — declarative + Plan 2/4 peripheral models                           |
 
 ## ESP32-S3-DevKitC-1-N16R8 UART0 + RMT LED smoke
@@ -79,6 +79,17 @@ This is maintenance/depth work on the existing rank-1 ESP32 board and I²C
 model, not a new board or peripheral model. The firmware uses one I²C
 controller per run; bus contention, pull-up electrical behavior, and supply
 rails are not modeled.
+
+## DevKitC N16R8 I²C1 SHT40 extension
+
+The [SHT40 system profile](../../configs/systems/esp32-s3-devkitc-1-n16r8-i2c1-sht40.yaml)
+attaches the sensor at address 0x44 to GPIO-matrix I²C1 on GPIO41/GPIO42.
+Bare-metal firmware reads the fixed serial number, requests a high-precision
+measurement, waits 8.5 ms, and checks the temperature word (0x6666), humidity
+word (0x72B0), and both Sensirion CRC-8 bytes. This adds a sensor use case to
+the rank-1 ESP32 board; it reuses the existing SHT40 device model and I²C1
+model. The local smoke and current vendor receipt are in
+[SHT40 evidence](../../examples/esp32-s3-devkitc-1-n16r8/evidence/sht40/).
 
 ## GPIO4 / ADC1_CH3 potentiometer smoke
 

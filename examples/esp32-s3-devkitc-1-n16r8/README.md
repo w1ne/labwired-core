@@ -2,12 +2,13 @@
 
 The base smoke boots firmware on the ESP32-S3-DevKitC-1 v1.1 N16R8, sends a
 GRB frame to its onboard WS2812 RGB LED with RMT channel 0 through GPIO38, and
-sends a UART0 marker. The I²C extension reads an Adafruit BME280 breakout
-through I²C0, and the ADC extension samples a potentiometer on GPIO4 / ADC1_CH3.
+sends a UART0 marker. The board extensions read BME280 and SHT40 sensors over
+I²C0 and I²C1, and sample a potentiometer on GPIO4 / ADC1_CH3.
 The system profiles are
 [`configs/systems/esp32-s3-devkitc-1-n16r8.yaml`](../../../configs/systems/esp32-s3-devkitc-1-n16r8.yaml),
 [`configs/systems/esp32-s3-devkitc-1-n16r8-bme280.yaml`](../../../configs/systems/esp32-s3-devkitc-1-n16r8-bme280.yaml),
 [`configs/systems/esp32-s3-devkitc-1-n16r8-i2c1-bme280.yaml`](../../../configs/systems/esp32-s3-devkitc-1-n16r8-i2c1-bme280.yaml),
+[`configs/systems/esp32-s3-devkitc-1-n16r8-i2c1-sht40.yaml`](../../../configs/systems/esp32-s3-devkitc-1-n16r8-i2c1-sht40.yaml),
 and [`configs/systems/esp32-s3-devkitc-1-n16r8-adc.yaml`](../../../configs/systems/esp32-s3-devkitc-1-n16r8-adc.yaml).
 
 ## Pin map
@@ -20,10 +21,10 @@ and [`configs/systems/esp32-s3-devkitc-1-n16r8-adc.yaml`](../../../configs/syste
 | J1-4 | ADC1_CH3 | GPIO4 | ADC extension samples a 1650 mV potentiometer input |
 | Header IO8 | I²C0 SDA | GPIO8 | BME280 register reads in the I²C extension |
 | Header IO9 | I²C0 SCL | GPIO9 | BME280 register reads in the I²C extension |
-| J3-7 | I²C1 SDA | GPIO41 | Second-controller BME280 profile |
-| J3-6 | I²C1 SCL | GPIO42 | Second-controller BME280 profile |
+| J3-7 | I²C1 SDA | GPIO41 | BME280 and SHT40 profiles |
+| J3-6 | I²C1 SCL | GPIO42 | BME280 and SHT40 profiles |
 
-Espressif's [current user guide](https://documentation.espressif.com/esp-dev-kits/en/latest/esp32s3/esp32-s3-devkitc-1/user_guide_v1.1.html)
+Espressif's [current user guide](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32s3/esp32-s3-devkitc-1/user_guide_v1.1.html)
 documents the header signals and the LED pin. The v1.1 LED is wired to GPIO38;
 the v1.0 LED is wired to GPIO48, so this profile explicitly models v1.1. The
 twin captures UART0 output directly; it does not model the USB-to-UART bridge
@@ -138,6 +139,58 @@ RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
 
 The live availability check is in
 [`evidence/i2c1-bme280/vendor-status.md`](evidence/i2c1-bme280/vendor-status.md).
+
+## SHT40 temperature and humidity on I²C1
+
+The [I²C1 SHT40 system](../../../configs/systems/esp32-s3-devkitc-1-n16r8-i2c1-sht40.yaml)
+attaches an Adafruit SHT40 STEMMA QT breakout (PID 4885) at address 0x44. Wire
+VIN to 3V3, GND to GND, SDA to J3 pin 7 / GPIO41, and SCL to J3 pin 6 / GPIO42.
+The profile runs a high-precision measurement and validates both data words
+and their CRC bytes against the attached SHT40 model.
+
+Copy-paste Arduino example using Adafruit's SHT4x library:
+
+~~~cpp
+#include <Adafruit_SHT4x.h>
+#include <Arduino.h>
+#include <Wire.h>
+
+Adafruit_SHT4x sht4;
+
+void setup() {
+  Serial.begin(115200);
+  Wire1.begin(41, 42, 100000);  // I2C1 SDA=GPIO41, SCL=GPIO42
+  if (!sht4.begin(&Wire1)) {
+    Serial.println("SHT40 not found on I2C1");
+    return;
+  }
+  sht4.setPrecision(SHT4X_HIGH_PRECISION);
+  sensors_event_t humidity, temperature;
+  if (sht4.getEvent(&humidity, &temperature)) {
+    Serial.printf("Temperature: %.2f C, RH: %.2f %%\n",
+                  temperature.temperature, humidity.relative_humidity);
+  }
+}
+
+void loop() {}
+~~~
+
+Reproduce the local register-level smoke from the repository root:
+
+~~~sh
+RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
+  --target-id esp32-s3-devkitc-1-n16r8-i2c1-sht40 \
+  --script examples/esp32-s3-devkitc-1-n16r8/sht40-smoke.yaml \
+  --system configs/systems/esp32-s3-devkitc-1-n16r8-i2c1-sht40.yaml \
+  --firmware-build-script examples/esp32-s3-devkitc-1-n16r8/ci/build-sht40-firmware.sh \
+  --out-dir examples/esp32-s3-devkitc-1-n16r8/evidence/sht40
+~~~
+
+The committed local smoke is in
+[evidence/sht40/](evidence/sht40/). Its live vendor availability receipt is
+[evidence/sht40/vendor-status.md](evidence/sht40/vendor-status.md), and the
+hosted catalog limitation is recorded in
+[evidence/sht40/hosted-catalog.md](evidence/sht40/hosted-catalog.md).
 
 ## ADC1_CH3 potentiometer extension
 

@@ -1,0 +1,13 @@
+# ESP32-S3-DevKitC-1 N16R8 + SHT40: measure and validate both Sensirion CRCs on I2C1.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/xtensa-esp32s3-none-elf/release/firmware-esp32s3-devkitc-n16r8-sht40-i2c1-smoke"
+  system: "../../configs/systems/esp32-s3-devkitc-1-n16r8-i2c1-sht40.yaml"
+limits:
+  max_steps: 6000000
+assertions:
+  - uart_contains: "SHT40_SERIAL_OK"
+  - uart_contains: "SHT40_TEMP_RAW=0x6666"
+  - uart_contains: "SHT40_RH_RAW=0x72B0"
+  - uart_contains: "SHT40_CRC_OK"
+  - expected_stop_reason: max_steps
