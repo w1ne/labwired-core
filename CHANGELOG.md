@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   feature's scope and limitations.
 
 ### Added
+- Classic ESP32 RMT transmit channels drive GPIO and NeoPixel/WS2812 LED
+  strips, with firmware-backed output checks (#1692).
 - Batch 5: ten more declarative parts, closing the high-demand list. LoRa:
   `sx1276` (the LoRa register page with §6.4 reset values, RSSI / packet RSSI /
   SNR from stimulus, write-1-to-clear RegIrqFlags, TX → TxDone) and `sx1262`
@@ -286,9 +288,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reviewed release title and body.
 - Move Python wheel builds to supported macOS ARM64 and Intel runners and run
   the existing native wheel smoke test on both architectures.
-- Classify three narrow onboarding profiles in the board coverage gate and
-  replace their invalid performance waivers with six measured step/batch
-  baselines. Existing measured baseline values remain unchanged.
+- Complete three onboarding profiles with shipped-board execution oracles:
+  STM32F103RB BME280 SysTick, classic ESP32 GPIO and UART1. Correct the
+  descriptors and validate interrupt delivery with disabled-interrupt controls.
+  Replace their invalid performance waivers with six measured step/batch
+  baselines; preserve all 186 pre-existing board baseline values (#1812).
+- Parse secure-boot P-256 public keys by their DER/SPKI header and length, so
+  a coordinate containing `0x04` cannot be mistaken for the point prefix (#1807).
+- Use the machine clock for observer-path result cycles and resource budgets,
+  matching the clock that enforces cycle limits (#1808).
 - Update installed-CLI documentation fixtures for CH32V003 and STM32F4 paths
   that the v0.26.0 engine can run. The BlackPill entry uses its dedicated UART
   smoke fixture; it does not claim the broader family fixture passes.
