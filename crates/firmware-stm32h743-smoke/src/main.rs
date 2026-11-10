@@ -50,25 +50,31 @@ fn send(text: &[u8]) {
 
 #[cfg(feature = "nucleo-h753zi-rx")]
 fn check_uart_rx() {
-    let mut ready = false;
+    let mut first = 0;
+    let mut first_ready = false;
     for _ in 0..1_000_000 {
         if unsafe { read_volatile(USART_ISR) } & RXNE != 0 {
-            ready = true;
+            first = unsafe { read_volatile(USART_RDR) } & 0xFF;
+            first_ready = true;
             break;
         }
     }
 
-    let mut received = 0;
-    let mut cleared = false;
-    if ready {
-        received = unsafe { read_volatile(USART_RDR) } & 0xFF;
-        cleared = unsafe { read_volatile(USART_ISR) } & RXNE == 0;
+    let mut second = 0;
+    let mut second_ready = false;
+    for _ in 0..1_000_000 {
+        if unsafe { read_volatile(USART_ISR) } & RXNE != 0 {
+            second = unsafe { read_volatile(USART_RDR) } & 0xFF;
+            second_ready = true;
+            break;
+        }
     }
 
-    if ready && received == b'R' as u32 && cleared {
-        send(b"usart3 rxne=1 data=00000052 rxne_after=0 ok\r\n");
+    let cleared = unsafe { read_volatile(USART_ISR) } & RXNE == 0;
+    if first_ready && first == b'R' as u32 && second_ready && second == b'S' as u32 && cleared {
+        send(b"usart3 rx=00000052,00000053 rxne_after=0 ok\r\n");
     } else {
-        send(b"usart3 rxne=0 data=00000000 rxne_after=0 fail\r\n");
+        send(b"usart3 rx=fail rxne_after=unknown fail\r\n");
     }
 }
 
