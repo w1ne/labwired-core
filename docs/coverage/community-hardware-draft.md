@@ -15,10 +15,68 @@ I2C0 and I2C1 with a BME280, SPI3 to an SSD1306 OLED, RMT output, ADC1 channel
 checks `analogRead(36)` on GPIO36 / ADC1_CH0 with a potentiometer fixture; a
 1650 mV input returns 2047 at 12-bit resolution. The LEDC smoke uses stock
 `ledcAttach` / `ledcWrite` output on GPIO23 / J3 pin 2 for an external
-SG90-class servo fixture. This round adds a BME280 to the second I2C
+SG90-class servo fixture. An earlier round added a BME280 to the second I2C
 controller, routed to GPIO16/GPIO17 (J3 pins 12/11). The smoke reads BME280 ID
 `0x60` and raw temperature `0x082DC0`. This is an ESP32 rank-1 coverage
 extension on the existing board, not a new board or MCU demand pick.
+
+This round also adds an external microSD SPI card profile on the same rank-1
+board. It uses VSPI/SPI3 on GPIO18/19/23 with CS=GPIO5, and checks CMD0,
+CMD8/R7, CMD55 and ACMD41 before raising GPIO16. The model covers
+initialization and zero-filled CMD17 reads only; it does not provide a
+filesystem or persistent card image. This is inexpensive integration work,
+not a new board/MCU demand pick. Live component availability is recorded in
+[`microsd/vendor-status.md`](../../examples/esp32-devkitc-32e/evidence/microsd/vendor-status.md).
+
+Copy-paste Arduino example for the Adafruit Micro SD SPI/SDIO breakout (PID
+4682) with a card supporting SPI mode. Wire 3V3/GND, CLK=GPIO18, DO=GPIO19,
+CMD/SI=GPIO23, and CS=GPIO5:
+
+```cpp
+#include <Arduino.h>
+#include <SPI.h>
+
+constexpr int CS_PIN = 5;
+uint8_t command(uint8_t cmd, uint32_t arg, uint8_t crc,
+                uint8_t *tail = nullptr, uint8_t n = 0) {
+  digitalWrite(CS_PIN, LOW);
+  SPI.transfer(0x40 | cmd);
+  SPI.transfer(arg >> 24); SPI.transfer(arg >> 16);
+  SPI.transfer(arg >> 8);  SPI.transfer(arg);
+  uint8_t r1 = SPI.transfer(crc);
+  for (uint8_t i = 0; i < n; ++i) tail[i] = SPI.transfer(0xFF);
+  digitalWrite(CS_PIN, HIGH);
+  return r1;
+}
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(CS_PIN, OUTPUT); digitalWrite(CS_PIN, HIGH);
+  SPI.begin(18, 19, 23, CS_PIN);
+  SPI.beginTransaction(SPISettings(400000, MSBFIRST, SPI_MODE0));
+  for (int i = 0; i < 10; ++i) SPI.transfer(0xFF);  // 80 clocks with CS high
+  uint8_t r7[4] = {};
+  bool ready = command(0, 0, 0x95) == 1 &&
+               command(8, 0x1AA, 0x87, r7, sizeof(r7)) == 1 &&
+               r7[0] == 0 && r7[1] == 0 && r7[2] == 1 && r7[3] == 0xAA &&
+               command(55, 0, 1) == 1 && command(41, 0x40000000, 1) == 0;
+  SPI.endTransaction();
+  if (ready) Serial.println("microSD initialized");
+}
+
+void loop() {}
+```
+
+Run the committed board smoke with:
+
+```sh
+RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
+  --target-id esp32-devkitc-32e-microsd \
+  --script examples/esp32-devkitc-32e/microsd-smoke.yaml \
+  --system configs/systems/esp32-devkitc-32e-microsd.yaml \
+  --out-dir examples/esp32-devkitc-32e/evidence/microsd \
+  --firmware-build-script scripts/build-esp32-devkitc-32e-microsd-smoke.sh
+```
 
 Espressif's [current DevKitC V4 guide](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32/esp32-devkitc/user_guide.html)
 lists the exact 32E board and maps J2 pin 3 / VP to GPIO36 / ADC1_CH0. The

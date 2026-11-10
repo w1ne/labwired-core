@@ -1,11 +1,12 @@
-# ESP32-DevKitC-32E GPIO, PCNT, UART, BME280 I2C, SPI OLED, RMT, ADC, DAC, LEDC, and MCPWM smokes
+# ESP32-DevKitC-32E GPIO, PCNT, UART, BME280 I2C, SPI OLED, microSD, RMT, ADC, DAC, LEDC, and MCPWM smokes
 
 **Demand rank:** ESP32 is rank 1 in the standing list (38% of reported MCU
-use). This round adds an I2C1 BME280 profile on GPIO16/GPIO17 and reads the
-sensor ID and raw temperature data through the second classic-ESP32 I2C
-controller. This is low-cost coverage integration on the same customer board,
-not a new board/MCU demand pick. Earlier rounds added PCNT unit 0, the stock
-Arduino VSPI path to a 128x64 SSD1306 display, and MCPWM0 servo control.
+use). An earlier round added an I2C1 BME280 profile on GPIO16/GPIO17. This
+round connects the SPI microSD model to VSPI and exercises the card
+initialization commands; the filesystem remains outside the model. This is
+low-cost coverage integration on the same customer board, not a new board/MCU
+demand pick. Earlier rounds also added PCNT unit 0, the stock Arduino VSPI path
+to a 128x64 SSD1306 display, and MCPWM0 servo control.
 
 ## Board and modeled scope
 
@@ -25,6 +26,7 @@ blink, connect an LED in series with a resistor from GPIO23 to GND.
 | J2 GPIO21/GPIO22 | I2C0 SDA/SCL | BME280 smoke reads sensor ID and temperature ADC data |
 | J3 GPIO16/GPIO17 | I2C1 SDA/SCL | I2C1 smoke reads BME280 ID `0x60` and raw temperature `0x082DC0` |
 | J3 GPIO18/19/23/5, GPIO17 | VSPI/SPI3 clock, MISO, MOSI, CS, and OLED D/C | SPI OLED smoke sends SSD1306 init commands and paints the first 8-row page |
+| J3 GPIO18/19/23/5, GPIO16 | VSPI/SPI3 microSD SCK, MISO, MOSI, CS, and initialization pass output | microSD smoke checks CMD0, CMD8/R7, CMD55, and ACMD41 response bytes |
 | J2 pin 3 / VP (GPIO36) | ADC1 channel 0 | ADC smoke reads a 1650 mV potentiometer through `analogRead(36)` and expects 2047 at 12-bit resolution |
 | J3 pin 2 (GPIO23) | LEDC high-speed channel 0 PWM output | LEDC smoke runs 50 Hz, 14-bit PWM to an external SG90-class servo twin and requires committed duty plus GPIO edges |
 | J3 pin 2 (GPIO23) | MCPWM0 operator A duty observer | MCPWM smoke sets a 50 Hz, 7.5% center command and checks the compare-A register; the servo twin follows duty, while pad-level MCPWM waveforms are outside the model |
@@ -499,3 +501,62 @@ current exact-board and display availability check is in
 [`evidence/spi-oled/vendor-status.md`](evidence/spi-oled/vendor-status.md).
 The smoke log and deterministic local display assertion are committed under
 [`evidence/spi-oled/`](evidence/spi-oled/).
+
+Run the microSD initialization smoke from the repository root:
+
+```sh
+RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
+  --target-id esp32-devkitc-32e-microsd \
+  --script examples/esp32-devkitc-32e/microsd-smoke.yaml \
+  --system configs/systems/esp32-devkitc-32e-microsd.yaml \
+  --out-dir examples/esp32-devkitc-32e/evidence/microsd \
+  --firmware-build-script scripts/build-esp32-devkitc-32e-microsd-smoke.sh
+```
+
+Copy-paste Arduino example for an Adafruit Micro SD SPI/SDIO breakout (PID
+4682) and a card supporting SPI mode. Connect 3V3/GND, CLK to GPIO18, DO to
+GPIO19, CMD/SI to GPIO23, and CS to GPIO5. GPIO16 is an optional pass output:
+
+```cpp
+#include <Arduino.h>
+#include <SPI.h>
+
+constexpr int kCs = 5;
+constexpr int kPass = 16;
+
+uint8_t command(uint8_t index, uint32_t arg, uint8_t crc,
+                uint8_t *tail = nullptr, uint8_t count = 0) {
+  digitalWrite(kCs, LOW);
+  SPI.transfer(0x40 | index);
+  SPI.transfer(arg >> 24); SPI.transfer(arg >> 16);
+  SPI.transfer(arg >> 8);  SPI.transfer(arg);
+  const uint8_t r1 = SPI.transfer(crc);
+  for (uint8_t i = 0; i < count; ++i) tail[i] = SPI.transfer(0xFF);
+  digitalWrite(kCs, HIGH);
+  return r1;
+}
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(kCs, OUTPUT); pinMode(kPass, OUTPUT);
+  digitalWrite(kCs, HIGH); digitalWrite(kPass, LOW);
+  SPI.begin(18, 19, 23, kCs);
+  SPI.beginTransaction(SPISettings(400000, MSBFIRST, SPI_MODE0));
+  for (int i = 0; i < 10; ++i) SPI.transfer(0xFF);  // 80 startup clocks, CS high
+  uint8_t r7[4] = {};
+  bool ok = command(0, 0, 0x95) == 1 &&
+            command(8, 0x1AA, 0x87, r7, sizeof(r7)) == 1 &&
+            r7[0] == 0 && r7[1] == 0 && r7[2] == 1 && r7[3] == 0xAA &&
+            command(55, 0, 1) == 1 && command(41, 0x40000000, 1) == 0;
+  SPI.endTransaction();
+  if (ok) { digitalWrite(kPass, HIGH); Serial.println("microSD initialized"); }
+}
+
+void loop() {}
+```
+
+This profile checks the SPI card initialization commands only. The component
+model does not implement a filesystem, card image, or persistent writes. The
+committed local smoke and hosted oracle evidence are in
+[`evidence/microsd/`](evidence/microsd/); live board and breakout availability
+is recorded in [`evidence/microsd/vendor-status.md`](evidence/microsd/vendor-status.md).

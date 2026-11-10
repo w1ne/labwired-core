@@ -1,0 +1,12 @@
+# ESP32-DevKitC-32E with an external SPI microSD socket on the stock VSPI pins.
+# The modeled card supports the initialization command sequence, not a filesystem.
+name: "esp32-devkitc-32e-microsd"
+chip: "../chips/esp32-devkitc-32e-gpio-smoke.yaml"
+cpu_hz: 240000000
+debug_uart: "uart0"
+external_devices:
+  - id: "sd"
+    type: "microsd"
+    connection: "spi3"
+    config:
+      cs_pin: "GPIO5"

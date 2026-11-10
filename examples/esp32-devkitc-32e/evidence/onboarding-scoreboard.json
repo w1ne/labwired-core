@@ -1,12 +1,12 @@
 {
   "summary": {
-    "targets_total": 11,
-    "pass": 11,
+    "targets_total": 12,
+    "pass": 12,
     "fail": 0,
-    "median_elapsed_ms": 39121,
+    "median_elapsed_ms": 38244,
     "threshold_seconds": 3600,
-    "threshold_met": 11,
-    "median_elapsed_seconds": 39.121
+    "threshold_met": 12,
+    "median_elapsed_seconds": 38.244
   },
   "targets": [
     {
@@ -188,6 +188,36 @@
       },
       "firmware_build_script": "scripts/build-esp32-devkitc-32e-mcpwm-smoke.sh",
       "_artifact_path": "examples/esp32-devkitc-32e/evidence/mcpwm"
+    },
+    {
+      "target_id": "esp32-devkitc-32e-microsd",
+      "status": "pass",
+      "crate": "",
+      "target_triple": "",
+      "script": "examples/esp32-devkitc-32e/microsd-smoke.yaml",
+      "system": "configs/systems/esp32-devkitc-32e-microsd.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-10T01:47:56Z",
+      "finished_at_utc": "2026-11-10T01:48:01Z",
+      "elapsed_seconds": 5,
+      "elapsed_ms": 4570,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.307,
+        "build_firmware": 3.303,
+        "run_smoke": 0.925
+      },
+      "stages_ms": {
+        "build_cli": 307,
+        "build_firmware": 3303,
+        "run_smoke": 925
+      },
+      "firmware_build_script": "scripts/build-esp32-devkitc-32e-microsd-smoke.sh",
+      "_artifact_path": "examples/esp32-devkitc-32e/evidence/microsd"
     },
     {
       "target_id": "esp32-devkitc-32e",

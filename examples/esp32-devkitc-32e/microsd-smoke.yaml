@@ -1,0 +1,13 @@
+# ESP32-DevKitC-32E VSPI reaches the microSD command model and initializes it.
+schema_version: "1.2"
+inputs:
+  firmware: "firmware/.pio/build/devkitc32e_microsd/firmware.elf"
+  system: "../../configs/systems/esp32-devkitc-32e-microsd.yaml"
+limits:
+  max_steps: 30000000
+  stop_when_assertions_pass: true
+assertions:
+  - uart_contains: "ESP32_DEVKITC32E_MICROSD_INIT=PASS"
+  - gpio_edges:
+      pin: "gpio:16"
+      min_edges: 1
