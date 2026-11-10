@@ -55,6 +55,8 @@ void loop() {}
 ```sh
 RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
   --target-id esp32c6-devkitc-1-n8-bme280 \
+  --crate firmware-esp32c6-devkitc-bme280-smoke \
+  --target riscv32imc-unknown-none-elf \
   --script examples/esp32c6-devkitc-1-n8-bme280/bme280-smoke.yaml \
   --system configs/systems/esp32c6-devkitc-1-n8-bme280.yaml \
   --firmware-build-script examples/esp32c6-devkitc-1-n8-bme280/ci/build-bme280-firmware.sh \
