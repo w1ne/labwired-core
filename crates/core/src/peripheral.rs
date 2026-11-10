@@ -637,6 +637,23 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// GPIO-matrix capability: pads whose output select is `signal_idx`.
+    /// Empty (the default) for a peripheral that does not own a matrix.
+    fn pads_for_output_signal(&self, _signal_idx: u32) -> Vec<u8> {
+        Vec::new()
+    }
+
+    /// GPIO-matrix capability: drive an output pad to `level`, returning
+    /// whether the level actually changed. Default is a no-op.
+    fn drive_pad_output(&mut self, _pin: u8, _level: bool) -> bool {
+        false
+    }
+
+    /// GPIO-matrix capability: publish `now` to this port's observers so a
+    /// subsequent [`Self::drive_pad_output`] edge is timestamped. Default is
+    /// a no-op.
+    fn sync_observer_cycle(&mut self, _now: u64) {}
+
     /// GPIO capability: the pad level a logic probe clipped to `pin` would
     /// see. Shim over [`pins::PinPort::level`] (kept because many callers
     /// only want a level); a peripheral without pins falls back to the output

@@ -275,9 +275,10 @@ peripherals:
     config:
       debug_schema: "../peripherals/esp32/uhci0.yaml"
   - id: "rmt"
-    type: "system_stub"
+    type: "esp32_rmt"
     base_address: 0x3FF56000
     size: "4KB"
+    irq: 47
     config:
       debug_schema: "../peripherals/esp32/rmt.yaml"
   - id: "pcnt"
