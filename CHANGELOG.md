@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Classic ESP32 RMT transmit channels drive GPIO and NeoPixel/WS2812 LED
-  strips, with firmware-backed output checks (#1692).
+  strips, with decoded WS2812 output checks through the GPIO path (#1692).
 - Batch 5: ten more declarative parts, closing the high-demand list. LoRa:
   `sx1276` (the LoRa register page with §6.4 reset values, RSSI / packet RSSI /
   SNR from stimulus, write-1-to-clear RegIrqFlags, TX → TxDone) and `sx1262`
@@ -292,6 +292,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Debian 12, Ubuntu 22.04 and AlmaLinux 9 with the GLIBC 2.31 floor preserved.
 - Smoke-test Python wheels on every supported native architecture, including
   the cross-built Linux ARM64 wheel, before publication.
+- Correct classic ESP32 RMT read-only interrupt register handling and the
+  DATE register reset/access contract. Align the register coverage reference
+  with the removal of false write-echo credits from the former stub.
 - Require sustained OLED updates in the RP2040 performance workload. Remeasure
   its invalid reference, which used a ROM that drew one frame and then stalled
   before enabling PWM. Keep the 25% regression tolerance and other workload

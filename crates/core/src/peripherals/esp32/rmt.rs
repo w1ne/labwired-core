@@ -11,6 +11,8 @@
 //! whose `FUNCn_OUT_SEL` selects `RMT_SIG_OUTn`, raises `TX_THR` so the IDF
 //! ISR can refill, and latches `TX_END` when an END marker (duration 0) is
 //! seen. RX, carrier, and loop modes are out of scope.
+//! STATUS and APB address progress fields remain reset-zero placeholders;
+//! their read-only access does not claim full status-machine modeling.
 
 use crate::peripherals::esp32::gpio::{
     RMT_SIG_OUT0, RMT_SIG_OUT1, RMT_SIG_OUT2, RMT_SIG_OUT3, RMT_SIG_OUT4, RMT_SIG_OUT5,
@@ -107,6 +109,7 @@ pub struct Esp32Rmt {
     int_raw: u32,
     int_ena: u32,
     apb_conf: u32,
+    date: u32,
     playback: Option<TxPlayback>,
     /// Hold TX-done level IRQ so IDF can reach WaitBits (S3 pattern).
     irq_holdoff_cycles: u32,
@@ -139,6 +142,7 @@ impl Esp32Rmt {
             int_raw: 0,
             int_ena: 0,
             apb_conf: 0,
+            date: 0x1602_2600, // vendor SVD: 32-bit R/W version register
             playback: None,
             irq_holdoff_cycles: 0,
             tx_start_count: 0,
@@ -329,7 +333,7 @@ impl Esp32Rmt {
             0xA8 => self.int_ena,
             0xAC => 0, // INT_CLR W1C
             0xF0 => self.apb_conf,
-            0xFC => 0x0000_0001, // DATE-ish
+            0xFC => self.date,
             _ => {
                 crate::census_reg!("esp32.rmt:Esp32Rmt", offset, "read");
                 0
@@ -380,10 +384,11 @@ impl Esp32Rmt {
             }
         }
         match offset {
-            0xA0 => self.int_raw &= !(value & INT_VALID_MASK),
+            0xA0 | 0xA4 => {} // INT_RAW and INT_ST are hardware-owned (RO).
             0xA8 => self.int_ena = value & INT_VALID_MASK,
             0xAC => self.int_raw &= !(value & INT_VALID_MASK),
             0xF0 => self.apb_conf = value,
+            0xFC => self.date = value,
             _ => {
                 crate::census_reg!("esp32.rmt:Esp32Rmt", offset, "write");
             }
