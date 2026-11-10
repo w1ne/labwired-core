@@ -23,6 +23,12 @@ The committed evidence is under `evidence/`. The smoke requires BME280 ID
 digital-twin evidence. It does not confirm the physical board, the electrical
 I2C path, or silicon parity.
 
+RAM accounting differs between the two reports: the CLI's raw ELF-section
+aggregate in `simulation-output/result.json` is 585,649 bytes (111.7% of its
+512 KiB catalog figure), while PlatformIO's linker report records 23,024 of
+327,680 bytes (7.0%). This smoke therefore makes no RAM-footprint claim; the
+reported figures need a separate accounting reconciliation.
+
 The hosted LabWired oracle gate also returned `status: model_verified` for the
 same serial marker; the result is saved in
 [`evidence/model-verification.json`](evidence/model-verification.json). The
