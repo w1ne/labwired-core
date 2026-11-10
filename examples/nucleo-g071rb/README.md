@@ -72,7 +72,12 @@ physics stress case rather than a typical diode parameter set.
 [`analog-bjt-recombination-adc-system.yaml`](analog-bjt-recombination-adc-system.yaml)
 compares generic Gummel–Poon branches with base-emitter recombination, base-
 collector recombination, both, and neither on ADC1 IN8–IN11, alongside the
-independent NTC and diode routes. Run the end-to-end proofs from `core/` with:
+independent NTC and diode routes.
+[`analog-bjt-terminal-resistance-adc-system.yaml`](analog-bjt-terminal-resistance-adc-system.yaml)
+compares RB, RC, and RE model-card branches with a matched branch using explicit
+external resistors on ADC1 IN8–IN13. It asserts the load-line changes and
+equivalent circuit result through the modeled ADC alongside the NTC and diode.
+Run the end-to-end proofs from `core/` with:
 
 ```bash
 cargo test -p labwired-core --test cosim_nucleo_g071rb_analog

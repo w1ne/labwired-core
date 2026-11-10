@@ -1206,3 +1206,142 @@ fn nucleo_g071rb_bjt_base_recombination_reaches_adc1_alongside_ntc_and_diode() {
         "forward-biased ISC/NC recombination changes the collector load line"
     );
 }
+
+#[test]
+fn nucleo_g071rb_bjt_terminal_resistances_reach_adc1_with_explicit_network_reference() {
+    let system_path = root("configs/systems/nucleo-g071rb.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-G071RB profile");
+    let generic = SystemManifest::from_file(root(
+        "examples/nucleo-g071rb/analog-ntc-diode-adc-system.yaml",
+    ))
+    .expect("load unrelated generic NTC and Shockley diode netlists");
+    let terminal_resistances = SystemManifest::from_file(root(
+        "examples/nucleo-g071rb/analog-bjt-terminal-resistance-adc-system.yaml",
+    ))
+    .expect("load matched generic BJT terminal-resistance netlists");
+    profile.cosim_models = generic.cosim_models;
+    profile
+        .cosim_models
+        .extend(terminal_resistances.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32G071 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-G071RB bus");
+
+    const ADCEN: u32 = 1 << 20;
+    bus.write_u32(RCC_APBENR2, ADCEN)
+        .expect("enable ADC1 clock");
+    bus.write_u32(ADC1_CR, 0)
+        .expect("leave ADC deep power-down");
+    bus.write_u32(ADC1_CR, 1 << 28)
+        .expect("enable ADC voltage regulator");
+    bus.write_u32(ADC1_CR, (1 << 28) | 1).expect("enable ADC1");
+    assert_ne!(bus.read_u32(ADC1_ISR).unwrap() & 1, 0, "ADC1 reports ADRDY");
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries an NTC, diode, and six matched BJT branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices bind to independent ADC1 channels"
+    );
+    for channel in [8, 9, 10, 11, 12, 13] {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            u16::MAX,
+            "ADC1 channel {channel} begins without a BJT source"
+        );
+    }
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.bjt_terminal.base_v", 0.0)
+        .expect("initialize matched BJT base-drive sources");
+
+    let mut cycles = 0;
+    let mut settled = None;
+    for base_drive_v in [0.7_f64, 0.8, 0.9] {
+        session
+            .set_signal_number("ui.bjt_terminal.base_v", base_drive_v)
+            .expect("step all matched BJT base drives");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and BJT terminal-resistance branches");
+        assert_eq!(steps.len(), 8, "all eight generic analog branches solve");
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "adc.adc1.4_volts");
+        let diode_v = signal_voltage(&session, "adc.adc1.5_volts");
+        assert!(
+            (ntc_v - 1.65).abs() < 1e-9,
+            "the unrelated NTC stays isolated"
+        );
+        assert!(
+            (diode_v - diode_load_line_voltage()).abs() < 2e-5,
+            "the unrelated Shockley diode stays on its independent load line"
+        );
+
+        let bjt_voltages = [
+            signal_voltage(&session, "adc.adc1.8_volts"),
+            signal_voltage(&session, "adc.adc1.9_volts"),
+            signal_voltage(&session, "adc.adc1.10_volts"),
+            signal_voltage(&session, "adc.adc1.11_volts"),
+            signal_voltage(&session, "adc.adc1.12_volts"),
+            signal_voltage(&session, "adc.adc1.13_volts"),
+        ];
+        assert!(
+            (bjt_voltages[0] - bjt_collector_voltage(base_drive_v, Some(50.0))).abs() < 5e-5,
+            "zero-resistance Gummel–Poon branch matches the independent load line"
+        );
+        assert!(
+            (bjt_voltages[4] - bjt_voltages[5]).abs() < 1e-7,
+            "model-card RB/RC/RE matches the equivalent explicit resistor network: {} V vs {} V",
+            bjt_voltages[4],
+            bjt_voltages[5]
+        );
+
+        if base_drive_v == 0.9 {
+            for (label, voltage) in [
+                ("RB", bjt_voltages[1]),
+                ("RC", bjt_voltages[2]),
+                ("RE", bjt_voltages[3]),
+                ("RB+RC+RE", bjt_voltages[4]),
+            ] {
+                assert!(
+                    (voltage - bjt_voltages[0]).abs() > 1e-3,
+                    "{label} must change the collector load line: no-R={} V, actual={voltage} V",
+                    bjt_voltages[0]
+                );
+            }
+        }
+        settled = Some((ntc_v, diode_v, bjt_voltages));
+    }
+
+    let (ntc_v, diode_v, bjt_voltages) = settled.expect("final base-drive sample exists");
+    for (channel, voltage_v) in [(4, ntc_v), (5, diode_v)]
+        .into_iter()
+        .chain((8..=13).zip(bjt_voltages))
+    {
+        let expected_count = expected_adc_count(voltage_v);
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            expected_count,
+            "solved voltage seeds ADC1 channel {channel}"
+        );
+        assert_eq!(
+            stm32g0_adc_convert(&mut bus, channel),
+            u32::from(expected_count),
+            "modeled ADC1 conversion follows the generic device on channel {channel}"
+        );
+    }
+    for channel in [6, 7, 14, 15] {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            u16::MAX,
+            "unrelated ADC1_IN{channel} remains undriven"
+        );
+    }
+}
