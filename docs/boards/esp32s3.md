@@ -33,8 +33,11 @@ The shared chip descriptors for ESP32-S3 include:
 
 ## ESP32-S3-DevKitC-1 N8R8 + BME280
 
-Espressif's current guide lists the N8R8 variant with 8 MB flash and 8 MB
-PSRAM and provides a retail sample-order path. The [narrow system
+Espressif's current DevKits catalog lists the N8R8 variant and links to a
+retailer. The v1.0 guide specifies 8 MB flash and 8 MB PSRAM; the newer v1.1
+guide omits N8R8 but does not mark it EOL (it explicitly marks N8 and N8R2
+EOL). See the [live availability receipt](../../examples/esp32-s3-devkitc-1-n8r8/evidence/bme280/vendor-status.md)
+for this discrepancy and source URLs. The [narrow system
 profile](../../configs/systems/esp32-s3-devkitc-1-n8r8-bme280.yaml) models the
 8 MB flash window, GPIO, UART0, I2C0, and an external BME280 at address 0x77.
 Local firmware reads chip ID `0x60` and raw temperature `0x082DC0` over I2C0

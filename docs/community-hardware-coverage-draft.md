@@ -10,8 +10,10 @@ and simulator evidence. More demand-ranked targets remain to be added.
 
 ### ESP32-S3-DevKitC-1 N8R8 + BME280
 
-Espressif's current guide lists the N8R8 ordering code and a retail sample path.
-The local N8R8 profile boots a direct-register smoke and reads the BME280 ID
+Espressif's current DevKits catalog lists the N8R8 ordering code with a retailer
+link; the v1.0 guide specifies its flash and PSRAM, while the newer v1.1 guide
+omits N8R8 without labelling it EOL (it does label N8 and N8R2 EOL). The local
+N8R8 profile boots a direct-register smoke and reads the BME280 ID
 `0x60` and raw-temperature sample over I2C0 on GPIO8/GPIO9. The hosted Arduino
 example returned `model_verified` on the generic DevKitC-1 catalog target;
 that target does not model the exact N8R8 flash size, which the local smoke

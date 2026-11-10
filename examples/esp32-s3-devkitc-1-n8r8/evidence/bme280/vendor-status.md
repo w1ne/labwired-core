@@ -4,15 +4,21 @@ Checked live on 2026-11-10:
 
 ## Board
 
-- Espressif lists `ESP32-S3-DevKitC-1-N8R8` with an ESP32-S3-WROOM-1-N8R8,
-  8 MB quad flash, 8 MB octal PSRAM, and 3.3 V SPI voltage in the current
-  ordering table.
-- The same guide gives a retail sample-order path. The N8R8 line is not marked
-  EOL in the current table.
+- Espressif's current DevKits catalog lists the exact
+  `ESP32-S3-DevKitC-1-N8R8` ordering code and links it to an AliExpress purchase
+  page. The catalog does not show an EOL label for this listing.
+- The live v1.0 user guide identifies its module as ESP32-S3-WROOM-1-N8R8,
+  with 8 MB quad flash, 8 MB octal PSRAM, and 3.3 V SPI voltage, and links a
+  retail sample-order path.
+- The newer v1.1 user-guide table omits N8R8, while explicitly marking the N8
+  and N8R2 variants EOL. It does not label N8R8 EOL. Because this differs from
+  the current catalog listing, the board's live retailer link is recorded
+  below as the purchase evidence; the guide discrepancy is kept visible.
 
-Source: [ESP32-S3-DevKitC-1 User Guide — Ordering Information and Retail
-Orders](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32s3/esp-dev-kits-en-master-esp32s3.pdf)
-(checked 2026-11-10; lines 157–171 in the live HTML/PDF view).
+Sources: [Espressif current ESP32-S3 DevKit catalog](https://www.espressif.com/en/products/devkits/esp32-s3-series/esp32-s3-devkitc-1),
+[ESP32-S3-DevKitC-1 v1.0 User Guide](https://documentation.espressif.com/esp-dev-kits/en/latest/esp32s3/esp32-s3-devkitc-1/user_guide_v1.0.html),
+and [ESP32-S3-DevKitC-1 v1.1 User Guide](https://documentation.espressif.com/esp-dev-kits/en/latest/esp32s3/esp32-s3-devkitc-1/user_guide_v1.1.html)
+(checked live 2026-11-10).
 
 ## Sensor breakout
 

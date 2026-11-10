@@ -13,9 +13,4 @@ workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/Ca
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
 package:   /home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/examples/tier1-fixture/rp2040/Cargo.toml
 workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/Cargo.toml
-   Compiling labwired-core v0.25.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/crates/core)
-   Compiling labwired-loader v0.25.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/crates/loader)
-   Compiling labwired-fuzz v0.25.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/crates/labwired-fuzz)
-   Compiling labwired-gdbstub v0.25.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/crates/gdbstub)
-   Compiling labwired-cli v0.25.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/crates/cli)
-    Finished `dev` profile [optimized + debuginfo] target(s) in 2m 15s
+    Finished `dev` profile [optimized + debuginfo] target(s) in 0.23s
