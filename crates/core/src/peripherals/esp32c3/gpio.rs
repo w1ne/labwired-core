@@ -138,6 +138,24 @@ pub(crate) const C6_MATRIX: MatrixLayout = MatrixLayout {
     },
 };
 
+/// The ESP32-C5 I²C0 matrix subset. The signal IDs and input selector layout
+/// come from Espressif's `esp32c5` `gpio_sig_map.h` and `gpio_reg.h`; other C5
+/// matrix functions are deliberately not claimed by this adapter.
+pub(crate) const C5_MATRIX: MatrixLayout = MatrixLayout {
+    i2c_scl: 46,
+    i2c_sda: 47,
+    // Keep unmodelled C5 signal blocks out of the recognized-route subset.
+    fspiclk: u32::MAX,
+    fspiq: u32::MAX,
+    fspid: u32::MAX,
+    fspics0: u32::MAX,
+    ledc_ls_out0: None,
+    in_sel: crate::peripherals::esp_gpio_net::InSelLayout {
+        pad_mask: 0x7F,
+        sel_bit: 1 << 8,
+    },
+};
+
 impl MatrixLayout {
     /// Output signal index → name, for `gpio_routing`.
     fn out_signal_name(&self, idx: u32) -> Option<&'static str> {
@@ -230,10 +248,11 @@ pub struct Esp32c3Gpio {
     /// `ETS_GPIO_INTR_SOURCE` of the chip this block sits on: 16 on the C3,
     /// 30 on the C6 (which reuses this model).
     intr_source: u32,
-    /// Matrix numbering of the chip this block sits on (C3 or C6).
+    /// Matrix numbering of the chip this block sits on (C3, C5 or C6).
     layout: MatrixLayout,
-    /// The C5 keeps the OUT register head but moves GPIO_ENABLE and GPIO_IN.
-    /// Normalize those documented C5 offsets to this model's canonical map.
+    /// The C5 keeps the OUT register head but moves GPIO_ENABLE, GPIO_IN, and
+    /// both GPIO-matrix selector windows. Normalize the supported C5 registers
+    /// to this model's canonical C3-offset map.
     c5_register_map: bool,
     /// Peripheral input signals bound to wire lines (`FUNCn_IN_SEL_CFG`).
     in_routes: crate::peripherals::esp_gpio_net::MatrixInputs,
@@ -301,12 +320,14 @@ impl Esp32c3Gpio {
         }
     }
 
-    /// ESP32-C5 direct GPIO register head. OUT/W1TS/W1TC share the C3 offsets,
-    /// while ENABLE is at 0x34..0x3C and IN is at 0x64 (esp-idf
-    /// `components/soc/esp32c5/register/soc/gpio_reg.h`). Matrix routing and
-    /// the remaining C5 GPIO register tail are not represented by this alias.
+    /// ESP32-C5 GPIO subset: direct GPIO0..25 plus the I²C0 matrix selectors.
+    /// OUT/W1TS/W1TC share the C3 offsets, ENABLE is at 0x34..0x3C, IN is at
+    /// 0x64, and matrix selectors start at 0x2D4/0xAD4 (ESP-IDF C5
+    /// `gpio_reg.h`). Other matrix signals and GPIO26..28 are outside this
+    /// adapter.
     pub fn for_esp32c5() -> Self {
         Self {
+            layout: C5_MATRIX,
             c5_register_map: true,
             ..Self::new()
         }
@@ -318,6 +339,12 @@ impl Esp32c3Gpio {
         }
         let word = offset & !3;
         let byte = offset & 3;
+        if (0x2D4..0x2D4 + (INPUT_SIGNAL_COUNT as u64) * 4).contains(&word) {
+            return FUNC_IN_SEL + (word - 0x2D4) + byte;
+        }
+        if (0xAD4..0xAD4 + (PIN_COUNT as u64) * 4).contains(&word) {
+            return FUNC_OUT_SEL + (word - 0xAD4) + byte;
+        }
         let canonical = match word {
             0x34 => ENABLE,
             0x38 => ENABLE_W1TS,
@@ -1142,7 +1169,11 @@ impl Peripheral for Esp32c3Gpio {
 
     fn snapshot(&self) -> serde_json::Value {
         serde_json::json!({
-            "layout": if self.c5_register_map { "esp32c5_direct_gpio" } else { "esp32c3" },
+            "layout": if self.c5_register_map {
+                "esp32c5_direct_gpio_i2c_matrix"
+            } else {
+                "esp32c3"
+            },
             "odr": self.out,
             "idr": self.effective_input(),
             "enable": self.enable,

@@ -1260,7 +1260,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "firmware-esp32c5-devkitc-1-gpio-smoke"
+name = "firmware-esp32c5-devkitc-1-bme280-smoke"
 version = "0.1.0"
 
 [[package]]

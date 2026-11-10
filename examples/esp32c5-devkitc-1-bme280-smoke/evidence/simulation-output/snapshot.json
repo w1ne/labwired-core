@@ -4,7 +4,7 @@
     "type": "risc_v",
     "registers": [
       0,
-      1082130550,
+      1082130898,
       1082523632,
       0,
       0,
@@ -13,14 +13,14 @@
       0,
       1611206656,
       32,
-      652,
-      4096,
-      1611202560,
-      75,
+      588,
+      10,
+      69,
+      536000,
+      536000,
       0,
-      0,
-      0,
-      0,
+      95,
+      32,
       0,
       0,
       0,
@@ -36,7 +36,7 @@
       0,
       0
     ],
-    "pc": 1082130570,
+    "pc": 1082131220,
     "mstatus": 0,
     "mie": 0,
     "mip": 128,
@@ -73,7 +73,7 @@
     }
   },
   "steps_executed": 500000,
-  "cycles": 1001030,
+  "cycles": 1175964,
   "instructions": 500000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -98,10 +98,10 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "2d113a40b86f0f5cd11caae1289482d1203f3aeb0664d7343a7926ceda9e016e",
+  "firmware_hash": "68884cd703891b0e3e8672075f371cb1617efba63f36843e2c3ae8e5e59295d1",
   "config": {
-    "firmware": "examples/esp32c5-devkitc-1-gpio-smoke/../../target/riscv32imac-unknown-none-elf/release/firmware-esp32c5-devkitc-1-gpio-smoke",
-    "system": "examples/esp32c5-devkitc-1-gpio-smoke/../../configs/systems/esp32c5-devkitc-1-n8r8-gpio.yaml",
-    "script": "examples/esp32c5-devkitc-1-gpio-smoke/io-smoke.yaml"
+    "firmware": "examples/esp32c5-devkitc-1-bme280-smoke/../../target/riscv32imac-unknown-none-elf/release/firmware-esp32c5-devkitc-1-bme280-smoke",
+    "system": "examples/esp32c5-devkitc-1-bme280-smoke/../../configs/systems/esp32c5-devkitc-1-n8r8-bme280.yaml",
+    "script": "examples/esp32c5-devkitc-1-bme280-smoke/io-smoke.yaml"
   }
 }

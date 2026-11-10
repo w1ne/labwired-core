@@ -2,7 +2,7 @@
   "result_schema_version": "1.0",
   "status": "pass",
   "steps_executed": 500000,
-  "cycles": 1001030,
+  "cycles": 1175964,
   "instructions": 500000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -30,7 +30,7 @@
   "assertions": [
     {
       "assertion": {
-        "uart_contains": "C5_UART_OK"
+        "uart_contains": "C5_BME280_OK"
       },
       "passed": true
     },
@@ -54,7 +54,7 @@
     "type": "risc_v",
     "registers": [
       0,
-      1082130550,
+      1082130898,
       1082523632,
       0,
       0,
@@ -63,14 +63,14 @@
       0,
       1611206656,
       32,
-      652,
-      4096,
-      1611202560,
-      75,
+      588,
+      10,
+      69,
+      536000,
+      536000,
       0,
-      0,
-      0,
-      0,
+      95,
+      32,
       0,
       0,
       0,
@@ -86,7 +86,7 @@
       0,
       0
     ],
-    "pc": 1082130570,
+    "pc": 1082131220,
     "mstatus": 0,
     "mie": 0,
     "mip": 128,
@@ -122,11 +122,11 @@
       "tcontrol": 0
     }
   },
-  "firmware_hash": "2d113a40b86f0f5cd11caae1289482d1203f3aeb0664d7343a7926ceda9e016e",
+  "firmware_hash": "68884cd703891b0e3e8672075f371cb1617efba63f36843e2c3ae8e5e59295d1",
   "config": {
-    "firmware": "examples/esp32c5-devkitc-1-gpio-smoke/../../target/riscv32imac-unknown-none-elf/release/firmware-esp32c5-devkitc-1-gpio-smoke",
-    "system": "examples/esp32c5-devkitc-1-gpio-smoke/../../configs/systems/esp32c5-devkitc-1-n8r8-gpio.yaml",
-    "script": "examples/esp32c5-devkitc-1-gpio-smoke/io-smoke.yaml"
+    "firmware": "examples/esp32c5-devkitc-1-bme280-smoke/../../target/riscv32imac-unknown-none-elf/release/firmware-esp32c5-devkitc-1-bme280-smoke",
+    "system": "examples/esp32c5-devkitc-1-bme280-smoke/../../configs/systems/esp32c5-devkitc-1-n8r8-bme280.yaml",
+    "script": "examples/esp32c5-devkitc-1-bme280-smoke/io-smoke.yaml"
   },
   "inspect": {
     "peripherals": [
@@ -448,6 +448,56 @@
         "base": 1611206656,
         "registers": [],
         "artifacts": []
+      },
+      {
+        "name": "i2c0",
+        "kind": "i2c",
+        "base": 1610629120,
+        "registers": [],
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "i2c@0x77",
+            "meta": {
+              "inputs": {
+                "humidity": 50.0,
+                "pressure": 1013.25,
+                "temperature": 25.0
+              },
+              "powered": true,
+              "registers": {
+                "CHIP_ID": 96,
+                "CONFIG": 0,
+                "CTRL_HUM": 0,
+                "CTRL_MEAS": 0,
+                "DIG_H1": 75,
+                "DIG_H2": 350,
+                "DIG_H3": 0,
+                "DIG_H4_H5_LOW": 5,
+                "DIG_H4_HIGH": 19,
+                "DIG_H5_HIGH": 0,
+                "DIG_H6": 30,
+                "DIG_P1": 38221,
+                "DIG_P2": 54959,
+                "DIG_P3": 3024,
+                "DIG_P4": 7421,
+                "DIG_P5": 65351,
+                "DIG_P6": 65529,
+                "DIG_P7": 9900,
+                "DIG_P8": 55306,
+                "DIG_P9": 4285,
+                "DIG_T1": 28528,
+                "DIG_T2": 26435,
+                "DIG_T3": 64536,
+                "HUM": 28995,
+                "PRESS": 4955584,
+                "STATUS": 0,
+                "TEMP": 8576000
+              },
+              "supply_generation": null
+            }
+          }
+        ]
       },
       {
         "name": "io_mux",
@@ -1226,7 +1276,7 @@
             "name": "GPIO7",
             "offset": 32,
             "size": 32,
-            "value": 2048,
+            "value": 6144,
             "fields": [
               {
                 "name": "MCU_OE",
@@ -1314,7 +1364,7 @@
                   14,
                   12
                 ],
-                "value": 0
+                "value": 1
               },
               {
                 "name": "FILTER_EN",
@@ -1331,7 +1381,7 @@
             "name": "GPIO8",
             "offset": 36,
             "size": 32,
-            "value": 2048,
+            "value": 6144,
             "fields": [
               {
                 "name": "MCU_OE",
@@ -1419,7 +1469,7 @@
                   14,
                   12
                 ],
-                "value": 0
+                "value": 1
               },
               {
                 "name": "FILTER_EN",
@@ -3780,9 +3830,71 @@
         "artifacts": []
       }
     ],
-    "devices": []
+    "devices": [
+      {
+        "id": "bme280",
+        "device_type": "bme280",
+        "declared": true,
+        "attachment": {
+          "transport": "i2c",
+          "bus": "i2c0",
+          "address": 119
+        },
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "bme280",
+            "meta": {
+              "inputs": {
+                "humidity": 50.0,
+                "pressure": 1013.25,
+                "temperature": 25.0
+              },
+              "powered": true,
+              "registers": {
+                "CHIP_ID": 96,
+                "CONFIG": 0,
+                "CTRL_HUM": 0,
+                "CTRL_MEAS": 0,
+                "DIG_H1": 75,
+                "DIG_H2": 350,
+                "DIG_H3": 0,
+                "DIG_H4_H5_LOW": 5,
+                "DIG_H4_HIGH": 19,
+                "DIG_H5_HIGH": 0,
+                "DIG_H6": 30,
+                "DIG_P1": 38221,
+                "DIG_P2": 54959,
+                "DIG_P3": 3024,
+                "DIG_P4": 7421,
+                "DIG_P5": 65351,
+                "DIG_P6": 65529,
+                "DIG_P7": 9900,
+                "DIG_P8": 55306,
+                "DIG_P9": 4285,
+                "DIG_T1": 28528,
+                "DIG_T2": 26435,
+                "DIG_T3": 64536,
+                "HUM": 28995,
+                "PRESS": 4955584,
+                "STATUS": 0,
+                "TEMP": 8576000
+              },
+              "supply_generation": null
+            }
+          }
+        ]
+      }
+    ]
   },
   "fidelity": [
+    {
+      "kind": "derived_device_time",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "device time derived from cpu_hz (240000000 Hz); PLL reconfiguration is not tracked"
+    },
     {
       "kind": "unpowered_rail_assumed",
       "address": "0x0",
@@ -3803,1352 +3915,768 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 41,
+            "cycle": 219250,
             "value": 1
           },
           {
-            "cycle": 3046,
+            "cycle": 222255,
             "value": 0
           },
           {
-            "cycle": 6052,
+            "cycle": 225261,
             "value": 1
           },
           {
-            "cycle": 9057,
+            "cycle": 228266,
             "value": 0
           },
           {
-            "cycle": 12063,
+            "cycle": 231272,
             "value": 1
           },
           {
-            "cycle": 15068,
+            "cycle": 234277,
             "value": 0
           },
           {
-            "cycle": 18074,
+            "cycle": 237283,
             "value": 1
           },
           {
-            "cycle": 21079,
+            "cycle": 240288,
             "value": 0
           },
           {
-            "cycle": 24085,
+            "cycle": 243294,
             "value": 1
           },
           {
-            "cycle": 27090,
+            "cycle": 246299,
             "value": 0
           },
           {
-            "cycle": 30096,
+            "cycle": 249305,
             "value": 1
           },
           {
-            "cycle": 33101,
+            "cycle": 252310,
             "value": 0
           },
           {
-            "cycle": 36107,
+            "cycle": 255316,
             "value": 1
           },
           {
-            "cycle": 39112,
+            "cycle": 258321,
             "value": 0
           },
           {
-            "cycle": 42118,
+            "cycle": 261327,
             "value": 1
           },
           {
-            "cycle": 45123,
+            "cycle": 264332,
             "value": 0
           },
           {
-            "cycle": 48129,
+            "cycle": 267338,
             "value": 1
           },
           {
-            "cycle": 51134,
+            "cycle": 270343,
             "value": 0
           },
           {
-            "cycle": 54140,
+            "cycle": 273349,
             "value": 1
           },
           {
-            "cycle": 57145,
+            "cycle": 276354,
             "value": 0
           },
           {
-            "cycle": 60151,
+            "cycle": 279360,
             "value": 1
           },
           {
-            "cycle": 63156,
+            "cycle": 282365,
             "value": 0
           },
           {
-            "cycle": 66162,
+            "cycle": 285371,
             "value": 1
           },
           {
-            "cycle": 69167,
+            "cycle": 288376,
             "value": 0
           },
           {
-            "cycle": 72173,
+            "cycle": 291382,
             "value": 1
           },
           {
-            "cycle": 75178,
+            "cycle": 294387,
             "value": 0
           },
           {
-            "cycle": 78184,
+            "cycle": 297393,
             "value": 1
           },
           {
-            "cycle": 81189,
+            "cycle": 300398,
             "value": 0
           },
           {
-            "cycle": 84195,
+            "cycle": 303404,
             "value": 1
           },
           {
-            "cycle": 87200,
+            "cycle": 306409,
             "value": 0
           },
           {
-            "cycle": 90206,
+            "cycle": 309415,
             "value": 1
           },
           {
-            "cycle": 93211,
+            "cycle": 312420,
             "value": 0
           },
           {
-            "cycle": 96217,
+            "cycle": 315426,
             "value": 1
           },
           {
-            "cycle": 99222,
+            "cycle": 318431,
             "value": 0
           },
           {
-            "cycle": 102228,
+            "cycle": 321437,
             "value": 1
           },
           {
-            "cycle": 105233,
+            "cycle": 324442,
             "value": 0
           },
           {
-            "cycle": 108239,
+            "cycle": 327448,
             "value": 1
           },
           {
-            "cycle": 111244,
+            "cycle": 330453,
             "value": 0
           },
           {
-            "cycle": 114250,
+            "cycle": 333459,
             "value": 1
           },
           {
-            "cycle": 117255,
+            "cycle": 336464,
             "value": 0
           },
           {
-            "cycle": 120261,
+            "cycle": 339470,
             "value": 1
           },
           {
-            "cycle": 123266,
+            "cycle": 342475,
             "value": 0
           },
           {
-            "cycle": 126272,
+            "cycle": 345481,
             "value": 1
           },
           {
-            "cycle": 129277,
+            "cycle": 348486,
             "value": 0
           },
           {
-            "cycle": 132283,
+            "cycle": 351492,
             "value": 1
           },
           {
-            "cycle": 135288,
+            "cycle": 354497,
             "value": 0
           },
           {
-            "cycle": 138294,
+            "cycle": 357503,
             "value": 1
           },
           {
-            "cycle": 141299,
+            "cycle": 360508,
             "value": 0
           },
           {
-            "cycle": 144305,
+            "cycle": 363514,
             "value": 1
           },
           {
-            "cycle": 147310,
+            "cycle": 366519,
             "value": 0
           },
           {
-            "cycle": 150316,
+            "cycle": 369525,
             "value": 1
           },
           {
-            "cycle": 153321,
+            "cycle": 372530,
             "value": 0
           },
           {
-            "cycle": 156327,
+            "cycle": 375536,
             "value": 1
           },
           {
-            "cycle": 159332,
+            "cycle": 378541,
             "value": 0
           },
           {
-            "cycle": 162338,
+            "cycle": 381547,
             "value": 1
           },
           {
-            "cycle": 165343,
+            "cycle": 384552,
             "value": 0
           },
           {
-            "cycle": 168349,
+            "cycle": 387558,
             "value": 1
           },
           {
-            "cycle": 171354,
+            "cycle": 390563,
             "value": 0
           },
           {
-            "cycle": 174360,
+            "cycle": 393569,
             "value": 1
           },
           {
-            "cycle": 177365,
+            "cycle": 396574,
             "value": 0
           },
           {
-            "cycle": 180371,
+            "cycle": 399580,
             "value": 1
           },
           {
-            "cycle": 183376,
+            "cycle": 402585,
             "value": 0
           },
           {
-            "cycle": 186382,
+            "cycle": 405591,
             "value": 1
           },
           {
-            "cycle": 189387,
+            "cycle": 408596,
             "value": 0
           },
           {
-            "cycle": 192393,
+            "cycle": 411602,
             "value": 1
           },
           {
-            "cycle": 195398,
+            "cycle": 414607,
             "value": 0
           },
           {
-            "cycle": 198404,
+            "cycle": 417613,
             "value": 1
           },
           {
-            "cycle": 201409,
+            "cycle": 420618,
             "value": 0
           },
           {
-            "cycle": 204415,
+            "cycle": 423624,
             "value": 1
           },
           {
-            "cycle": 207420,
+            "cycle": 426629,
             "value": 0
           },
           {
-            "cycle": 210426,
+            "cycle": 429635,
             "value": 1
           },
           {
-            "cycle": 213431,
+            "cycle": 432640,
             "value": 0
           },
           {
-            "cycle": 216437,
+            "cycle": 435646,
             "value": 1
           },
           {
-            "cycle": 219442,
+            "cycle": 438651,
             "value": 0
           },
           {
-            "cycle": 222448,
+            "cycle": 441657,
             "value": 1
           },
           {
-            "cycle": 225453,
+            "cycle": 444662,
             "value": 0
           },
           {
-            "cycle": 228459,
+            "cycle": 447668,
             "value": 1
           },
           {
-            "cycle": 231464,
+            "cycle": 450673,
             "value": 0
           },
           {
-            "cycle": 234470,
+            "cycle": 453679,
             "value": 1
           },
           {
-            "cycle": 237475,
+            "cycle": 456684,
             "value": 0
           },
           {
-            "cycle": 240481,
+            "cycle": 459690,
             "value": 1
           },
           {
-            "cycle": 243486,
+            "cycle": 462695,
             "value": 0
           },
           {
-            "cycle": 246492,
+            "cycle": 465701,
             "value": 1
           },
           {
-            "cycle": 249497,
+            "cycle": 468706,
             "value": 0
           },
           {
-            "cycle": 252503,
+            "cycle": 471712,
             "value": 1
           },
           {
-            "cycle": 255508,
+            "cycle": 474717,
             "value": 0
           },
           {
-            "cycle": 258514,
+            "cycle": 477723,
             "value": 1
           },
           {
-            "cycle": 261519,
+            "cycle": 480728,
             "value": 0
           },
           {
-            "cycle": 264525,
+            "cycle": 483734,
             "value": 1
           },
           {
-            "cycle": 267530,
+            "cycle": 486739,
             "value": 0
           },
           {
-            "cycle": 270536,
+            "cycle": 489745,
             "value": 1
           },
           {
-            "cycle": 273541,
+            "cycle": 492750,
             "value": 0
           },
           {
-            "cycle": 276547,
+            "cycle": 495756,
             "value": 1
           },
           {
-            "cycle": 279552,
+            "cycle": 498761,
             "value": 0
-          },
-          {
-            "cycle": 282558,
-            "value": 1
-          },
-          {
-            "cycle": 285563,
-            "value": 0
-          },
-          {
-            "cycle": 288569,
-            "value": 1
-          },
-          {
-            "cycle": 291574,
-            "value": 0
-          },
-          {
-            "cycle": 294580,
-            "value": 1
-          },
-          {
-            "cycle": 297585,
-            "value": 0
-          },
-          {
-            "cycle": 300591,
-            "value": 1
-          },
-          {
-            "cycle": 303596,
-            "value": 0
-          },
-          {
-            "cycle": 306602,
-            "value": 1
-          },
-          {
-            "cycle": 309607,
-            "value": 0
-          },
-          {
-            "cycle": 312613,
-            "value": 1
-          },
-          {
-            "cycle": 315618,
-            "value": 0
-          },
-          {
-            "cycle": 318624,
-            "value": 1
-          },
-          {
-            "cycle": 321629,
-            "value": 0
-          },
-          {
-            "cycle": 324635,
-            "value": 1
-          },
-          {
-            "cycle": 327640,
-            "value": 0
-          },
-          {
-            "cycle": 330646,
-            "value": 1
-          },
-          {
-            "cycle": 333651,
-            "value": 0
-          },
-          {
-            "cycle": 336657,
-            "value": 1
-          },
-          {
-            "cycle": 339662,
-            "value": 0
-          },
-          {
-            "cycle": 342668,
-            "value": 1
-          },
-          {
-            "cycle": 345673,
-            "value": 0
-          },
-          {
-            "cycle": 348679,
-            "value": 1
-          },
-          {
-            "cycle": 351684,
-            "value": 0
-          },
-          {
-            "cycle": 354690,
-            "value": 1
-          },
-          {
-            "cycle": 357695,
-            "value": 0
-          },
-          {
-            "cycle": 360701,
-            "value": 1
-          },
-          {
-            "cycle": 363706,
-            "value": 0
-          },
-          {
-            "cycle": 366712,
-            "value": 1
-          },
-          {
-            "cycle": 369717,
-            "value": 0
-          },
-          {
-            "cycle": 372723,
-            "value": 1
-          },
-          {
-            "cycle": 375728,
-            "value": 0
-          },
-          {
-            "cycle": 378734,
-            "value": 1
-          },
-          {
-            "cycle": 381739,
-            "value": 0
-          },
-          {
-            "cycle": 384745,
-            "value": 1
-          },
-          {
-            "cycle": 387750,
-            "value": 0
-          },
-          {
-            "cycle": 390756,
-            "value": 1
-          },
-          {
-            "cycle": 393761,
-            "value": 0
-          },
-          {
-            "cycle": 396767,
-            "value": 1
-          },
-          {
-            "cycle": 399772,
-            "value": 0
-          },
-          {
-            "cycle": 402778,
-            "value": 1
-          },
-          {
-            "cycle": 405783,
-            "value": 0
-          },
-          {
-            "cycle": 408789,
-            "value": 1
-          },
-          {
-            "cycle": 411794,
-            "value": 0
-          },
-          {
-            "cycle": 414800,
-            "value": 1
-          },
-          {
-            "cycle": 417805,
-            "value": 0
-          },
-          {
-            "cycle": 420811,
-            "value": 1
-          },
-          {
-            "cycle": 423816,
-            "value": 0
-          },
-          {
-            "cycle": 426822,
-            "value": 1
-          },
-          {
-            "cycle": 429827,
-            "value": 0
-          },
-          {
-            "cycle": 432833,
-            "value": 1
-          },
-          {
-            "cycle": 435838,
-            "value": 0
-          },
-          {
-            "cycle": 438844,
-            "value": 1
-          },
-          {
-            "cycle": 441849,
-            "value": 0
-          },
-          {
-            "cycle": 444855,
-            "value": 1
-          },
-          {
-            "cycle": 447860,
-            "value": 0
-          },
-          {
-            "cycle": 450866,
-            "value": 1
-          },
-          {
-            "cycle": 453871,
-            "value": 0
-          },
-          {
-            "cycle": 456877,
-            "value": 1
-          },
-          {
-            "cycle": 459882,
-            "value": 0
-          },
-          {
-            "cycle": 462888,
-            "value": 1
-          },
-          {
-            "cycle": 465893,
-            "value": 0
-          },
-          {
-            "cycle": 468899,
-            "value": 1
-          },
-          {
-            "cycle": 471904,
-            "value": 0
-          },
-          {
-            "cycle": 474910,
-            "value": 1
-          },
-          {
-            "cycle": 477915,
-            "value": 0
-          },
-          {
-            "cycle": 480921,
-            "value": 1
-          },
-          {
-            "cycle": 483926,
-            "value": 0
-          },
-          {
-            "cycle": 486932,
-            "value": 1
-          },
-          {
-            "cycle": 489937,
-            "value": 0
-          },
-          {
-            "cycle": 492943,
-            "value": 1
-          },
-          {
-            "cycle": 495948,
-            "value": 0
-          },
-          {
-            "cycle": 498954,
-            "value": 1
           }
         ],
         "gaps": [],
         "initial_state": "z",
         "states": [
           {
-            "cycle": 40,
+            "cycle": 19,
             "state": "0"
           },
           {
-            "cycle": 41,
+            "cycle": 219250,
             "state": "1"
           },
           {
-            "cycle": 3046,
+            "cycle": 222255,
             "state": "0"
           },
           {
-            "cycle": 6052,
+            "cycle": 225261,
             "state": "1"
           },
           {
-            "cycle": 9057,
+            "cycle": 228266,
             "state": "0"
           },
           {
-            "cycle": 12063,
+            "cycle": 231272,
             "state": "1"
           },
           {
-            "cycle": 15068,
+            "cycle": 234277,
             "state": "0"
           },
           {
-            "cycle": 18074,
+            "cycle": 237283,
             "state": "1"
           },
           {
-            "cycle": 21079,
+            "cycle": 240288,
             "state": "0"
           },
           {
-            "cycle": 24085,
+            "cycle": 243294,
             "state": "1"
           },
           {
-            "cycle": 27090,
+            "cycle": 246299,
             "state": "0"
           },
           {
-            "cycle": 30096,
+            "cycle": 249305,
             "state": "1"
           },
           {
-            "cycle": 33101,
+            "cycle": 252310,
             "state": "0"
           },
           {
-            "cycle": 36107,
+            "cycle": 255316,
             "state": "1"
           },
           {
-            "cycle": 39112,
+            "cycle": 258321,
             "state": "0"
           },
           {
-            "cycle": 42118,
+            "cycle": 261327,
             "state": "1"
           },
           {
-            "cycle": 45123,
+            "cycle": 264332,
             "state": "0"
           },
           {
-            "cycle": 48129,
+            "cycle": 267338,
             "state": "1"
           },
           {
-            "cycle": 51134,
+            "cycle": 270343,
             "state": "0"
           },
           {
-            "cycle": 54140,
+            "cycle": 273349,
             "state": "1"
           },
           {
-            "cycle": 57145,
+            "cycle": 276354,
             "state": "0"
           },
           {
-            "cycle": 60151,
+            "cycle": 279360,
             "state": "1"
           },
           {
-            "cycle": 63156,
+            "cycle": 282365,
             "state": "0"
           },
           {
-            "cycle": 66162,
+            "cycle": 285371,
             "state": "1"
           },
           {
-            "cycle": 69167,
+            "cycle": 288376,
             "state": "0"
           },
           {
-            "cycle": 72173,
+            "cycle": 291382,
             "state": "1"
           },
           {
-            "cycle": 75178,
+            "cycle": 294387,
             "state": "0"
           },
           {
-            "cycle": 78184,
+            "cycle": 297393,
             "state": "1"
           },
           {
-            "cycle": 81189,
+            "cycle": 300398,
             "state": "0"
           },
           {
-            "cycle": 84195,
+            "cycle": 303404,
             "state": "1"
           },
           {
-            "cycle": 87200,
+            "cycle": 306409,
             "state": "0"
           },
           {
-            "cycle": 90206,
+            "cycle": 309415,
             "state": "1"
           },
           {
-            "cycle": 93211,
+            "cycle": 312420,
             "state": "0"
           },
           {
-            "cycle": 96217,
+            "cycle": 315426,
             "state": "1"
           },
           {
-            "cycle": 99222,
+            "cycle": 318431,
             "state": "0"
           },
           {
-            "cycle": 102228,
+            "cycle": 321437,
             "state": "1"
           },
           {
-            "cycle": 105233,
+            "cycle": 324442,
             "state": "0"
           },
           {
-            "cycle": 108239,
+            "cycle": 327448,
             "state": "1"
           },
           {
-            "cycle": 111244,
+            "cycle": 330453,
             "state": "0"
           },
           {
-            "cycle": 114250,
+            "cycle": 333459,
             "state": "1"
           },
           {
-            "cycle": 117255,
+            "cycle": 336464,
             "state": "0"
           },
           {
-            "cycle": 120261,
+            "cycle": 339470,
             "state": "1"
           },
           {
-            "cycle": 123266,
+            "cycle": 342475,
             "state": "0"
           },
           {
-            "cycle": 126272,
+            "cycle": 345481,
             "state": "1"
           },
           {
-            "cycle": 129277,
+            "cycle": 348486,
             "state": "0"
           },
           {
-            "cycle": 132283,
+            "cycle": 351492,
             "state": "1"
           },
           {
-            "cycle": 135288,
+            "cycle": 354497,
             "state": "0"
           },
           {
-            "cycle": 138294,
+            "cycle": 357503,
             "state": "1"
           },
           {
-            "cycle": 141299,
+            "cycle": 360508,
             "state": "0"
           },
           {
-            "cycle": 144305,
+            "cycle": 363514,
             "state": "1"
           },
           {
-            "cycle": 147310,
+            "cycle": 366519,
             "state": "0"
           },
           {
-            "cycle": 150316,
+            "cycle": 369525,
             "state": "1"
           },
           {
-            "cycle": 153321,
+            "cycle": 372530,
             "state": "0"
           },
           {
-            "cycle": 156327,
+            "cycle": 375536,
             "state": "1"
           },
           {
-            "cycle": 159332,
+            "cycle": 378541,
             "state": "0"
           },
           {
-            "cycle": 162338,
+            "cycle": 381547,
             "state": "1"
           },
           {
-            "cycle": 165343,
+            "cycle": 384552,
             "state": "0"
           },
           {
-            "cycle": 168349,
+            "cycle": 387558,
             "state": "1"
           },
           {
-            "cycle": 171354,
+            "cycle": 390563,
             "state": "0"
           },
           {
-            "cycle": 174360,
+            "cycle": 393569,
             "state": "1"
           },
           {
-            "cycle": 177365,
+            "cycle": 396574,
             "state": "0"
           },
           {
-            "cycle": 180371,
+            "cycle": 399580,
             "state": "1"
           },
           {
-            "cycle": 183376,
+            "cycle": 402585,
             "state": "0"
           },
           {
-            "cycle": 186382,
+            "cycle": 405591,
             "state": "1"
           },
           {
-            "cycle": 189387,
+            "cycle": 408596,
             "state": "0"
           },
           {
-            "cycle": 192393,
+            "cycle": 411602,
             "state": "1"
           },
           {
-            "cycle": 195398,
+            "cycle": 414607,
             "state": "0"
           },
           {
-            "cycle": 198404,
+            "cycle": 417613,
             "state": "1"
           },
           {
-            "cycle": 201409,
+            "cycle": 420618,
             "state": "0"
           },
           {
-            "cycle": 204415,
+            "cycle": 423624,
             "state": "1"
           },
           {
-            "cycle": 207420,
+            "cycle": 426629,
             "state": "0"
           },
           {
-            "cycle": 210426,
+            "cycle": 429635,
             "state": "1"
           },
           {
-            "cycle": 213431,
+            "cycle": 432640,
             "state": "0"
           },
           {
-            "cycle": 216437,
+            "cycle": 435646,
             "state": "1"
           },
           {
-            "cycle": 219442,
+            "cycle": 438651,
             "state": "0"
           },
           {
-            "cycle": 222448,
+            "cycle": 441657,
             "state": "1"
           },
           {
-            "cycle": 225453,
+            "cycle": 444662,
             "state": "0"
           },
           {
-            "cycle": 228459,
+            "cycle": 447668,
             "state": "1"
           },
           {
-            "cycle": 231464,
+            "cycle": 450673,
             "state": "0"
           },
           {
-            "cycle": 234470,
+            "cycle": 453679,
             "state": "1"
           },
           {
-            "cycle": 237475,
+            "cycle": 456684,
             "state": "0"
           },
           {
-            "cycle": 240481,
+            "cycle": 459690,
             "state": "1"
           },
           {
-            "cycle": 243486,
+            "cycle": 462695,
             "state": "0"
           },
           {
-            "cycle": 246492,
+            "cycle": 465701,
             "state": "1"
           },
           {
-            "cycle": 249497,
+            "cycle": 468706,
             "state": "0"
           },
           {
-            "cycle": 252503,
+            "cycle": 471712,
             "state": "1"
           },
           {
-            "cycle": 255508,
+            "cycle": 474717,
             "state": "0"
           },
           {
-            "cycle": 258514,
+            "cycle": 477723,
             "state": "1"
           },
           {
-            "cycle": 261519,
+            "cycle": 480728,
             "state": "0"
           },
           {
-            "cycle": 264525,
+            "cycle": 483734,
             "state": "1"
           },
           {
-            "cycle": 267530,
+            "cycle": 486739,
             "state": "0"
           },
           {
-            "cycle": 270536,
+            "cycle": 489745,
             "state": "1"
           },
           {
-            "cycle": 273541,
+            "cycle": 492750,
             "state": "0"
           },
           {
-            "cycle": 276547,
+            "cycle": 495756,
             "state": "1"
           },
           {
-            "cycle": 279552,
+            "cycle": 498761,
             "state": "0"
-          },
-          {
-            "cycle": 282558,
-            "state": "1"
-          },
-          {
-            "cycle": 285563,
-            "state": "0"
-          },
-          {
-            "cycle": 288569,
-            "state": "1"
-          },
-          {
-            "cycle": 291574,
-            "state": "0"
-          },
-          {
-            "cycle": 294580,
-            "state": "1"
-          },
-          {
-            "cycle": 297585,
-            "state": "0"
-          },
-          {
-            "cycle": 300591,
-            "state": "1"
-          },
-          {
-            "cycle": 303596,
-            "state": "0"
-          },
-          {
-            "cycle": 306602,
-            "state": "1"
-          },
-          {
-            "cycle": 309607,
-            "state": "0"
-          },
-          {
-            "cycle": 312613,
-            "state": "1"
-          },
-          {
-            "cycle": 315618,
-            "state": "0"
-          },
-          {
-            "cycle": 318624,
-            "state": "1"
-          },
-          {
-            "cycle": 321629,
-            "state": "0"
-          },
-          {
-            "cycle": 324635,
-            "state": "1"
-          },
-          {
-            "cycle": 327640,
-            "state": "0"
-          },
-          {
-            "cycle": 330646,
-            "state": "1"
-          },
-          {
-            "cycle": 333651,
-            "state": "0"
-          },
-          {
-            "cycle": 336657,
-            "state": "1"
-          },
-          {
-            "cycle": 339662,
-            "state": "0"
-          },
-          {
-            "cycle": 342668,
-            "state": "1"
-          },
-          {
-            "cycle": 345673,
-            "state": "0"
-          },
-          {
-            "cycle": 348679,
-            "state": "1"
-          },
-          {
-            "cycle": 351684,
-            "state": "0"
-          },
-          {
-            "cycle": 354690,
-            "state": "1"
-          },
-          {
-            "cycle": 357695,
-            "state": "0"
-          },
-          {
-            "cycle": 360701,
-            "state": "1"
-          },
-          {
-            "cycle": 363706,
-            "state": "0"
-          },
-          {
-            "cycle": 366712,
-            "state": "1"
-          },
-          {
-            "cycle": 369717,
-            "state": "0"
-          },
-          {
-            "cycle": 372723,
-            "state": "1"
-          },
-          {
-            "cycle": 375728,
-            "state": "0"
-          },
-          {
-            "cycle": 378734,
-            "state": "1"
-          },
-          {
-            "cycle": 381739,
-            "state": "0"
-          },
-          {
-            "cycle": 384745,
-            "state": "1"
-          },
-          {
-            "cycle": 387750,
-            "state": "0"
-          },
-          {
-            "cycle": 390756,
-            "state": "1"
-          },
-          {
-            "cycle": 393761,
-            "state": "0"
-          },
-          {
-            "cycle": 396767,
-            "state": "1"
-          },
-          {
-            "cycle": 399772,
-            "state": "0"
-          },
-          {
-            "cycle": 402778,
-            "state": "1"
-          },
-          {
-            "cycle": 405783,
-            "state": "0"
-          },
-          {
-            "cycle": 408789,
-            "state": "1"
-          },
-          {
-            "cycle": 411794,
-            "state": "0"
-          },
-          {
-            "cycle": 414800,
-            "state": "1"
-          },
-          {
-            "cycle": 417805,
-            "state": "0"
-          },
-          {
-            "cycle": 420811,
-            "state": "1"
-          },
-          {
-            "cycle": 423816,
-            "state": "0"
-          },
-          {
-            "cycle": 426822,
-            "state": "1"
-          },
-          {
-            "cycle": 429827,
-            "state": "0"
-          },
-          {
-            "cycle": 432833,
-            "state": "1"
-          },
-          {
-            "cycle": 435838,
-            "state": "0"
-          },
-          {
-            "cycle": 438844,
-            "state": "1"
-          },
-          {
-            "cycle": 441849,
-            "state": "0"
-          },
-          {
-            "cycle": 444855,
-            "state": "1"
-          },
-          {
-            "cycle": 447860,
-            "state": "0"
-          },
-          {
-            "cycle": 450866,
-            "state": "1"
-          },
-          {
-            "cycle": 453871,
-            "state": "0"
-          },
-          {
-            "cycle": 456877,
-            "state": "1"
-          },
-          {
-            "cycle": 459882,
-            "state": "0"
-          },
-          {
-            "cycle": 462888,
-            "state": "1"
-          },
-          {
-            "cycle": 465893,
-            "state": "0"
-          },
-          {
-            "cycle": 468899,
-            "state": "1"
-          },
-          {
-            "cycle": 471904,
-            "state": "0"
-          },
-          {
-            "cycle": 474910,
-            "state": "1"
-          },
-          {
-            "cycle": 477915,
-            "state": "0"
-          },
-          {
-            "cycle": 480921,
-            "state": "1"
-          },
-          {
-            "cycle": 483926,
-            "state": "0"
-          },
-          {
-            "cycle": 486932,
-            "state": "1"
-          },
-          {
-            "cycle": 489937,
-            "state": "0"
-          },
-          {
-            "cycle": 492943,
-            "state": "1"
-          },
-          {
-            "cycle": 495948,
-            "state": "0"
-          },
-          {
-            "cycle": 498954,
-            "state": "1"
           }
         ],
         "mode": "output",
-        "edge_count": 167
+        "edge_count": 94
       }
     ]
   },
@@ -5159,33 +4687,36 @@
       "number": 5,
       "mode": "output",
       "func": null,
-      "output": true,
-      "input": true,
-      "pad": true,
-      "drive": "1"
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
     }
   ],
   "uart_lines": {
     "lines": [
       {
-        "text": "C5_UART_OK",
-        "cycle_lo": 20000,
-        "cycle": 30000,
-        "end_cycle": 230000
+        "text": "C5_BME280_OK",
+        "cycle_lo": 240000,
+        "cycle": 250000,
+        "end_cycle": 490000
       }
     ],
     "dropped_lines": 0
   },
+  "i2c_addresses": [
+    119
+  ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 142,
+    "text_bytes": 796,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 142,
+    "flash_used_bytes": 796,
     "ram_static_bytes": 0,
     "flash_total_bytes": 8388608,
     "ram_total_bytes": 393216,
-    "flash_used_pct": 0.0,
+    "flash_used_pct": 0.01,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -5198,28 +4729,38 @@
     "heap_method": "unsupported"
   },
   "metrics": {
-    "cycles": 1001030,
+    "cycles": 1175964,
     "instructions": 500000,
     "steps_executed": 500000,
     "memory_reads": 500000,
     "memory_writes": 3,
-    "peripheral_accesses": 183,
+    "peripheral_accesses": 43982,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 1082130566,
-        "count": 703,
-        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
-      },
-      {
-        "pc": 1082130570,
-        "count": 626,
+        "pc": 1082130732,
+        "count": 508,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
-        "pc": 1082130568,
-        "count": 624,
-        "symbol": "firmware_esp32c5_devkitc_1_gpio_smoke::delay"
+        "pc": 1082131220,
+        "count": 431,
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 1082131222,
+        "count": 351,
+        "symbol": "firmware_esp32c5_devkitc_1_bme280_smoke::delay"
+      },
+      {
+        "pc": 1082131224,
+        "count": 351,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 1082130640,
+        "count": 312,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       }
     ]
   }

@@ -205,14 +205,14 @@ _Richest Espressif rubric coverage: the tier-1 fixture drives all 12 of its decl
 
 ### `esp32c5`
 
-_ESP32 is demand rank #1 (38% survey use). The ESP32-C5-DevKitC-1-N8R8 profile loads a base-IMAC ELF into HP SRAM, sends a UART0 marker, and observes at least four GPIO5 output edges. The C5 UART model covers the shared FIFO/register path at the 240 MHz HP clock; PCR clock gating and UART IOMUX routing are not enforced. ROM/flash boot, PSRAM, CLIC/LP core, radio, USB, GPIO26..28 matrix behavior, and the GPIO27 addressable LED remain outside this focused profile; no silicon confirmation is claimed._
+_ESP32 is demand rank #1 (38% survey use). The ESP32-C5-DevKitC-1-N8R8 smoke loads a base-IMAC ELF into HP SRAM, reads BME280 ID and raw temperature over I2C0 via the GPIO8/9 matrix route, checks ID=0x60/raw=0x082DC0, emits a UART0 success marker, and observes GPIO5 edges. The C5 I2C model uses the 240 MHz HP clock. PCR gating and IOMUX electrical routing are not enforced. ROM/flash boot, PSRAM, CLIC/LP core, radio, USB, other matrix functions, and the GPIO27 addressable LED remain outside this focused profile; no silicon confirmation is claimed._
 
 **Functional firmware exercises** (including decoded device/protocol reads):
-- ESP32-C5-DevKitC-1-N8R8: UART0 console marker plus GPIO5 (J3 pin 9) edges — `firmware-esp32c5-devkitc-1-gpio-smoke` · examples/esp32c5-devkitc-1-gpio-smoke/evidence/ (nightly CI)
+- ESP32-C5-DevKitC-1-N8R8: BME280 ID/raw-temperature read on GPIO8/9 I2C0, UART0 success marker, and GPIO5 (J3 pin 9) edges — `firmware-esp32c5-devkitc-1-bme280-smoke` · examples/esp32c5-devkitc-1-bme280-smoke/evidence/ (nightly CI)
 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `io_mux` (configs/chips/esp32c5.yaml (declarative; configs/peripherals/esp32c6/io_mux.yaml)) — CLOSABLE: function-select writes are stored but pad routing is not electrically enforced; UART0 console output and GPIO model edges do not prove package-pin voltage.
-- `pcr` (ESP32-C5 PCR clock/reset window is outside the focused descriptor) — C5 UART model does not enforce PCR clock/reset gating; smoke verifies the UART register/FIFO path only.
+- `pcr` (ESP32-C5 PCR clock/reset window is outside the focused descriptor) — C5 models do not enforce PCR clock/reset gating; the local smoke verifies UART/I2C register behavior without PCR.
 
 ### `esp32s3-zero`
 

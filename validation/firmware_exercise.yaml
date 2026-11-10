@@ -246,17 +246,17 @@ chips:
 
   - id: esp32c5
     arch: riscv32imac
-    headline: "ESP32 is demand rank #1 (38% survey use). The ESP32-C5-DevKitC-1-N8R8 profile loads a base-IMAC ELF into HP SRAM, sends a UART0 marker, and observes at least four GPIO5 output edges. The C5 UART model covers the shared FIFO/register path at the 240 MHz HP clock; PCR clock gating and UART IOMUX routing are not enforced. ROM/flash boot, PSRAM, CLIC/LP core, radio, USB, GPIO26..28 matrix behavior, and the GPIO27 addressable LED remain outside this focused profile; no silicon confirmation is claimed."
+    headline: "ESP32 is demand rank #1 (38% survey use). The ESP32-C5-DevKitC-1-N8R8 profile loads a base-IMAC ELF into HP SRAM, reads BME280 ID and raw temperature over I2C0 through the GPIO8/9 matrix route, checks ID=0x60/raw=0x082DC0, emits a UART0 success marker, and observes GPIO5 edges. I2C pacing uses the C5 240 MHz core rate. PCR gating, IOMUX electrical routing, ROM/flash boot, PSRAM, CLIC/LP core, radio, USB, other matrix functions, and the GPIO27 addressable LED remain outside this focused profile; this is local simulator evidence, not silicon confirmation."
     functional:
-      - what: "ESP32-C5-DevKitC-1-N8R8: UART0 console marker plus GPIO5 (J3 pin 9) edges"
-        fw: firmware-esp32c5-devkitc-1-gpio-smoke
-        ev: "examples/esp32c5-devkitc-1-gpio-smoke/evidence/"
+      - what: "ESP32-C5-DevKitC-1-N8R8: BME280 I2C0 ID/temp read on GPIO8/9, UART0 success marker, and GPIO5 (J3 pin 9) edges"
+        fw: firmware-esp32c5-devkitc-1-bme280-smoke
+        ev: "examples/esp32c5-devkitc-1-bme280-smoke/evidence/"
         gate: nightly
     advanced_unit_only: []
     advanced_dead: []
     shim:
       - {p: io_mux, ev: "configs/chips/esp32c5.yaml (declarative; configs/peripherals/esp32c6/io_mux.yaml)", note: "CLOSABLE: function-select writes are stored but pad routing is not electrically enforced; UART0 console output and GPIO model edges do not prove package-pin voltage."}
-      - {p: pcr, ev: "ESP32-C5 PCR clock/reset window is outside the focused descriptor", note: "C5 UART model does not enforce PCR clock/reset gating; smoke verifies the UART register/FIFO path only."}
+      - {p: pcr, ev: "ESP32-C5 PCR clock/reset window is outside the focused descriptor", note: "Smoke does not enforce C5 PCR clock/reset gating; UART bytes and I2C transactions reach modeled controllers independently of PCR state."}
 
   - id: esp32s3-zero
     arch: xtensa-lx7
