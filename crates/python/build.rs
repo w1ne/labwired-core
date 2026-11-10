@@ -40,4 +40,24 @@ fn main() {
         fs::remove_dir_all(&sdist_configs).unwrap();
     }
     copy_tree(&source, &sdist_configs);
+
+    // Core includes these JSON files at compile time. Stage them under the
+    // same archive-root paths before packing an sdist; rebuilding an archive
+    // must not depend on this build script racing core's compilation.
+    let sdist_examples = root.join("examples/luckfox-pico-mini-a-linux");
+    if sdist_examples.exists() {
+        fs::remove_dir_all(&sdist_examples).unwrap();
+    }
+    for relative in [
+        "examples/luckfox-pico-mini-a-linux/basket/trusted-prepared.json",
+        "examples/luckfox-pico-mini-a-linux/basket/trusted-newc.json",
+        "examples/luckfox-pico-mini-a-linux/basket-native-runtime/system.json",
+        "examples/luckfox-pico-mini-a-linux/basket-native-runtime/receipt.json",
+    ] {
+        let source = root.join("../..").join(relative);
+        println!("cargo:rerun-if-changed={}", source.display());
+        let dest = root.join(relative);
+        fs::create_dir_all(dest.parent().unwrap()).unwrap();
+        fs::copy(&source, &dest).unwrap();
+    }
 }

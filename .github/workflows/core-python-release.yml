@@ -165,7 +165,7 @@ jobs:
   sdist:
     name: sdist
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -176,10 +176,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      # crates/python/build.rs stages the chip catalog twice (for the wheel
-      # and for the sdist's relocated config crate). It runs on any cargo
-      # build, and `maturin sdist` alone never runs it, so run it first.
-      # Without this the sdist packs no catalog and cannot build.
+      # build.rs stages both chip catalogs and core's compile-time source
+      # assets. maturin sdist does not run build scripts, so stage them first.
       - name: Build sdist
         run: |
           set -euo pipefail
@@ -187,6 +185,54 @@ jobs:
           python -m pip install --quiet 'maturin>=1.5,<2'
           maturin sdist --manifest-path crates/python/Cargo.toml --out dist
           bash scripts/ci/python-sdk-gate.sh --check-sdist dist/*.tar.gz
+
+      - name: Build and smoke the source distribution
+        env:
+          CARGO_BUILD_JOBS: "2"
+          CARGO_TARGET_DIR: ${{ runner.temp }}/sdist-target
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import tarfile
+          archives = list(Path("dist").glob("*.tar.gz"))
+          assert len(archives) == 1, archives
+          prefix = archives[0].name.removesuffix(".tar.gz")
+          assets = (
+              "examples/luckfox-pico-mini-a-linux/basket/trusted-prepared.json",
+              "examples/luckfox-pico-mini-a-linux/basket/trusted-newc.json",
+              "examples/luckfox-pico-mini-a-linux/basket-native-runtime/system.json",
+              "examples/luckfox-pico-mini-a-linux/basket-native-runtime/receipt.json",
+          )
+          with tarfile.open(archives[0]) as archive:
+              for asset in assets:
+                  assert archive.getmember(f"{prefix}/{asset}").isfile(), asset
+          PY
+          # pip extracts and builds the archive outside the checkout. Keep this
+          # local verification wheel separate from the five published wheels.
+          mkdir -p "$RUNNER_TEMP/sdist-build" "$RUNNER_TEMP/sdist-wheel"
+          export TMPDIR="$RUNNER_TEMP/sdist-build"
+          env -u PYTHONPATH -u LABWIRED_CONFIG_DIR python -m pip wheel \
+            --no-deps --no-build-isolation \
+            --wheel-dir "$RUNNER_TEMP/sdist-wheel" dist/*.tar.gz
+          python -m venv "$RUNNER_TEMP/sdist-smoke"
+          py="$RUNNER_TEMP/sdist-smoke/bin/python"
+          "$py" -m pip install --quiet "$RUNNER_TEMP/sdist-wheel/"*.whl
+          elf="$PWD/tests/fixtures/uart-ok-thumbv7m.elf"
+          expected="$(python -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')"
+          cd "$RUNNER_TEMP"
+          env -u PYTHONPATH -u LABWIRED_CONFIG_DIR "$py" - "$elf" "$expected" <<'PY'
+          from importlib.metadata import version
+          from pathlib import Path
+          import sys
+          import labwired
+          assert version("labwired") == sys.argv[2]
+          assert Path(labwired.__file__).resolve().is_relative_to(Path(sys.prefix).resolve())
+          with labwired.Sim(sys.argv[1], chip="ci-fixture-cortex-m3-uart1") as sim:
+              assert sim.expect("OK", timeout="1ms").text == "OK"
+              assert sim.read_uart_bytes() == b"\n"
+          print("sdist build/install/UART smoke ok:", labwired.__file__)
+          PY
 
       - uses: actions/upload-artifact@v4
         with:

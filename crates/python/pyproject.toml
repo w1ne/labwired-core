@@ -35,4 +35,12 @@ python-source = "python"
 module-name = "labwired._native"
 # Release builds carry debuginfo; strip it from the shipped extension.
 strip = true
-include = [{path = "python/labwired/configs/**/*", format = ["sdist", "wheel"]}, {path = "configs/**/*", format = "sdist"}]
+# build.rs stages catalogs and the core's compile-time JSON inputs.
+include = [
+    {path = "python/labwired/configs/**/*", format = ["sdist", "wheel"]},
+    {path = "configs/**/*", format = "sdist"},
+    {path = "examples/luckfox-pico-mini-a-linux/basket/trusted-prepared.json", format = "sdist"},
+    {path = "examples/luckfox-pico-mini-a-linux/basket/trusted-newc.json", format = "sdist"},
+    {path = "examples/luckfox-pico-mini-a-linux/basket-native-runtime/system.json", format = "sdist"},
+    {path = "examples/luckfox-pico-mini-a-linux/basket-native-runtime/receipt.json", format = "sdist"},
+]

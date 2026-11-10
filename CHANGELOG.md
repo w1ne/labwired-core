@@ -297,9 +297,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Debian 12, Ubuntu 22.04 and AlmaLinux 9 with the GLIBC 2.31 floor preserved.
 - Smoke-test Python wheels on every supported native architecture, including
   the cross-built Linux ARM64 wheel, before publication.
-- Correct classic ESP32 RMT read-only interrupt register handling and the
-  DATE register reset/access contract. Align the register coverage reference
+- Correct classic ESP32 RMT read-only status, address and interrupt register
+  handling. Restore the documented CONF0, CONF1 and TX_LIM reset values and
+  the 32-bit read/write DATE contract. Align the register coverage reference
   with the removal of false write-echo credits from the former stub.
+- Include the four required RV1103 compile-time JSON inputs in Python source
+  distributions. Rebuild an isolated wheel from the archive and execute UART
+  firmware before publishing the source archive.
 - Require sustained OLED updates in the RP2040 performance workload. Remeasure
   its invalid reference, which used a ROM that drew one frame and then stalled
   before enabling PWM. Keep the 25% regression tolerance and other workload
