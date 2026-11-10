@@ -121,6 +121,24 @@
         "lane": "none"
       }
     },
+    "atmega32u4": {
+      "in_boards": false,
+      "uart": {
+        "state": "none",
+        "gap": "Serial is native USB CDC on the CPU's USB device model (cpu/avr/usb.rs, unit-tested in cpu::avr::usb::tests) and the Arduino matrix row arduino-leonardo prints through it (stock ArduinoCore-avr L0-L7), but that row needs PlatformIO and runs nightly; USART1 (Serial1) has no firmware lane. No PR-gated firmware lane yet.",
+        "lane": "none"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "SPI is the CPU-owned SPCR/SPDR shared with the 328P and the Arduino matrix row arduino-leonardo reads a MAX31855 frame through stock SPI (L4), but that row needs PlatformIO and runs nightly; no PR-gated firmware lane yet.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "TWI is the CPU-owned model shared with the 328P and the Arduino matrix row arduino-leonardo reads an INA219 through stock Wire (L3), but that row needs PlatformIO and runs nightly; no PR-gated firmware lane yet.",
+        "lane": "none"
+      }
+    },
     "atmega328pb": {
       "in_boards": false,
       "uart": {

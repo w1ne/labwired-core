@@ -62,6 +62,10 @@ pub enum AvrModel {
     Atmega328pb,
     Atmega1281,
     Atmega2560,
+    /// ATmega32U4 (Arduino Leonardo / Micro): the classic mega core with
+    /// 32 KB flash, 2.5 KB SRAM at 0x0100, ports B..F, a USB device
+    /// controller (`avr/usb.rs`) and its own vector table ([`m32u4_vector`]).
+    Atmega32u4,
     Attiny202,
     Attiny204,
     Attiny402,
@@ -160,13 +164,15 @@ impl AvrModel {
             AvrModel::Atmega2560
         } else if n.contains("328pb") {
             AvrModel::Atmega328pb
+        } else if n.contains("32u4") {
+            AvrModel::Atmega32u4
         } else {
             AvrModel::Atmega328p
         }
     }
     pub fn flash_size(self) -> usize {
         match self {
-            AvrModel::Atmega328p | AvrModel::Atmega328pb => FLASH_SIZE,
+            AvrModel::Atmega328p | AvrModel::Atmega328pb | AvrModel::Atmega32u4 => FLASH_SIZE,
             AvrModel::Atmega1281 => 128 * 1024,
             AvrModel::Atmega2560 => 256 * 1024,
             AvrModel::Attiny202 | AvrModel::Attiny204 => 2 * 1024,
@@ -186,7 +192,7 @@ impl AvrModel {
     }
     pub fn sram_start(self) -> u16 {
         match self {
-            AvrModel::Atmega328p | AvrModel::Atmega328pb => SRAM_START,
+            AvrModel::Atmega328p | AvrModel::Atmega328pb | AvrModel::Atmega32u4 => SRAM_START,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x0200,
             AvrModel::Attiny202 | AvrModel::Attiny204 => 0x3F80,
             AvrModel::Attiny402 | AvrModel::Attiny404 | AvrModel::Attiny406 => 0x3F00,
@@ -212,6 +218,8 @@ impl AvrModel {
         match self {
             AvrModel::Atmega328p | AvrModel::Atmega328pb => RAMEND,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x21FF,
+            // 2.5 KB at 0x0100 (DS7766 section 5.2, Figure 5-2).
+            AvrModel::Atmega32u4 => 0x0AFF,
             AvrModel::Attiny202
             | AvrModel::Attiny204
             | AvrModel::Attiny402
@@ -238,7 +246,10 @@ impl AvrModel {
     pub fn adc_input_base(self) -> u64 {
         match self {
             AvrModel::Atmega328p | AvrModel::Atmega328pb => AVR_ADC_INPUT_BASE,
-            AvrModel::Atmega1281 | AvrModel::Atmega2560 => AVR_MEGA_ADC_INPUT_BASE,
+            // The 32U4's PINF (0x2F) mirror sits where the 328P window starts.
+            AvrModel::Atmega1281 | AvrModel::Atmega2560 | AvrModel::Atmega32u4 => {
+                AVR_MEGA_ADC_INPUT_BASE
+            }
             AvrModel::Attiny202
             | AvrModel::Attiny204
             | AvrModel::Attiny402
@@ -277,8 +288,10 @@ impl AvrModel {
 
     /// The ATmega328PB has a second polling USART at data-space 0xC8..0xCE.
     /// Its USART interrupts are not yet modelled.
+    ///
+    /// The ATmega32U4's only USART is USART1, at the same addresses.
     pub const fn has_usart1(self) -> bool {
-        matches!(self, AvrModel::Atmega328pb)
+        matches!(self, AvrModel::Atmega328pb | AvrModel::Atmega32u4)
     }
 
     /// Whether this part uses the AVRxt data-space map and direct I/O
@@ -299,6 +312,32 @@ impl AvrModel {
                 | AvrModel::Attiny1606
                 | AvrModel::Attiny1607
         )
+    }
+}
+
+/// ATmega32U4 data-space addresses of PINx for ports B..F (DDRx = +1, PORTx = +2).
+pub const M32U4_PIN_ADDRS: [u16; 5] = [0x23, 0x26, 0x29, 0x2C, 0x2F];
+
+/// ATmega32U4 vector number (1-based, DS7766 Table 9-1) for a vector this
+/// core numbers the ATmega328P way, plus USB_GEN/USB_COM (internal 27/28).
+/// Timer2, PCINT1/2 and USART0 do not exist on the 32U4 and are never raised;
+/// they pass through unchanged.
+pub fn m32u4_vector(vec328: u32) -> u32 {
+    match vec328 {
+        2 | 3 => vec328,       // INT0, INT1
+        4 => 10,               // PCINT0
+        7 => 13,               // WDT
+        11..=13 => vec328 + 6, // TIMER1 CAPT/COMPA/COMPB -> 17..19
+        14 => 21,              // TIMER1 OVF
+        15..=21 => vec328 + 7, // TIMER0 COMPA/B/OVF -> 22..24, SPI 25, USART1 RX/UDRE/TX -> 26..28
+        22 => 30,              // ADC
+        23 => 31,              // EE READY
+        24 => 29,              // ANALOG COMP
+        25 => 37,              // TWI
+        26 => 38,              // SPM READY
+        usb::VEC_USB_GEN => 11,
+        usb::VEC_USB_COM => 12,
+        v => v,
     }
 }
 
@@ -465,6 +504,8 @@ pub struct Avr {
     /// Ports sampled at every boundary (bit 0 = B, 1 = C, 2 = D); zero while
     /// no INT/PCINT is configured, which keeps the step cost unchanged.
     ext_watch: u8,
+    /// ATmega32U4 USB device controller and its host (`avr/usb.rs`).
+    usb: usb::UsbDevice,
 }
 
 impl std::fmt::Debug for Avr {
@@ -756,6 +797,7 @@ impl Avr {
             ext_last: [0; 3],
             ext_watch: 0,
             irq_shadow: false,
+            usb: usb::UsbDevice::default(),
         }
     }
 
@@ -784,6 +826,27 @@ impl Avr {
     }
 
     #[inline]
+    fn is_32u4(&self) -> bool {
+        self.model == AvrModel::Atmega32u4
+    }
+
+    /// INT0/INT1 and PCINT0..2 on the 328P pins (`avr/ext_int.rs`). The mega
+    /// and 32U4 bond them elsewhere; there only SMCR is live.
+    #[inline]
+    fn ext_int_328_pins(&self) -> bool {
+        !self.is_mega() && !self.is_32u4()
+    }
+
+    /// ATmega32U4 registers the 328P map would misread: PLLCSR and the USB
+    /// block go to `avr/usb.rs`; 0xC0..0xC7 are Timer4 (TCCR4A..E, stored
+    /// only), not USART0.
+    #[inline]
+    fn is_32u4_own_reg(&self, addr: u16) -> bool {
+        self.is_32u4()
+            && matches!(addr, usb::ADDR_PLLCSR | 0xC0..=0xC7 | usb::ADDR_UHWCON..=usb::ADDR_UEINT)
+    }
+
+    #[inline]
     fn is_avrxt(&self) -> bool {
         self.model.uses_avrxt_data_map()
     }
@@ -806,6 +869,7 @@ impl Avr {
                 matches!(addr, AVR_PINB | AVR_PINC | AVR_PIND)
             }
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => MEGA2560_PIN_ADDRS.contains(&addr),
+            AvrModel::Atmega32u4 => M32U4_PIN_ADDRS.contains(&addr),
             AvrModel::Attiny202 | AvrModel::Attiny204 => false,
             AvrModel::Attiny402
             | AvrModel::Attiny404
@@ -841,6 +905,7 @@ impl Avr {
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => {
                 (0x20..=0x34).contains(&addr) || (0x100..=0x10B).contains(&addr)
             }
+            AvrModel::Atmega32u4 => (0x23..=0x31).contains(&addr),
             AvrModel::Attiny202 | AvrModel::Attiny204 => false,
             AvrModel::Attiny402
             | AvrModel::Attiny404
@@ -958,6 +1023,9 @@ impl Avr {
         }
         match addr {
             0x0000..=0x001F => Ok(self.r[addr as usize]),
+            a if self.is_32u4_own_reg(a) => {
+                Ok(self.usb_read(a).unwrap_or(self.io[usize::from(a - 0x20)]))
+            }
             // PINB/PINC/PIND — the registers on this part whose value the
             // OUTSIDE WORLD moves, so they are the ones the IO shadow cannot
             // answer alone.
@@ -1077,7 +1145,7 @@ impl Avr {
             | ext_int::ADDR_PCICR
             | ext_int::ADDR_EICRA
             | ext_int::ADDR_PCMSK0..=ext_int::ADDR_PCMSK2
-                if !self.is_mega() || addr == ext_int::ADDR_SMCR =>
+                if self.ext_int_328_pins() || addr == ext_int::ADDR_SMCR =>
             {
                 Ok(self.ext_read(addr).unwrap_or_default())
             }
@@ -1099,6 +1167,14 @@ impl Avr {
         match addr {
             0x0000..=0x001F => {
                 self.r[addr as usize] = value;
+                Ok(())
+            }
+            a if self.is_32u4_own_reg(a) => {
+                if (0xC0..=0xC7).contains(&a) {
+                    self.io[usize::from(a - 0x20)] = value;
+                } else {
+                    self.usb_write(a, value);
+                }
                 Ok(())
             }
             0x005D => {
@@ -1391,7 +1467,7 @@ impl Avr {
             | ext_int::ADDR_PCICR
             | ext_int::ADDR_EICRA
             | ext_int::ADDR_PCMSK0..=ext_int::ADDR_PCMSK2
-                if !self.is_mega() || addr == ext_int::ADDR_SMCR =>
+                if self.ext_int_328_pins() || addr == ext_int::ADDR_SMCR =>
             {
                 self.ext_write(addr, value, bus);
                 Ok(())
@@ -1524,7 +1600,19 @@ impl Avr {
     /// 0x00..0x07 are ADC0..7, 0x20..0x27 are ADC8..15 (Arduino A8..A15),
     /// 0x1E is the 1.1 V bandgap. Differential/gain codes read 0.
     fn adc_convert(&self, bus: &dyn Bus) -> SimResult<u16> {
-        let channel: Option<u8> = if self.is_mega() {
+        let channel: Option<u8> = if self.is_32u4() {
+            // DS7766 Table 24-4: MUX5 is ADCSRB bit 5. 0x00..0x07 are
+            // ADC0..7 (ADC2/3 are not bonded), 0x20..0x25 ADC8..13, 0x1E the
+            // 1.1 V bandgap; 0x1F is GND. The temperature sensor (0x27) and
+            // the differential/gain codes are not modelled and read 0.
+            let mux5 = self.io[(0x7B - 0x20) as usize] & (1 << 5) != 0;
+            match (self.admux & 0x1F) | if mux5 { 0x20 } else { 0 } {
+                m @ 0x00..=0x07 => Some(m),
+                m @ 0x20..=0x25 => Some(m - 0x18),
+                0x1E => None,
+                _ => Some(0xFF),
+            }
+        } else if self.is_mega() {
             let mux5 = self.io[(0x7B - 0x20) as usize] & (1 << 3) != 0;
             match (self.admux & 0x1F) | if mux5 { 0x20 } else { 0 } {
                 m @ 0x00..=0x07 => Some(m),
@@ -2072,6 +2160,8 @@ impl Avr {
         self.push_pc(bus)?;
         let slot = if self.is_mega() {
             mega2560_vector(vec)
+        } else if self.is_32u4() {
+            m32u4_vector(vec)
         } else {
             vec
         };
@@ -2321,6 +2411,7 @@ impl Cpu for Avr {
                 self.timer0_wake_cycles(),
                 self.timer1_wake_cycles(),
                 self.timer2_wake_cycles(),
+                self.usb.wake_cycles(self.cycles),
             ]
             .into_iter()
             .flatten()
@@ -2403,6 +2494,8 @@ impl Cpu for Avr {
         self.twi_slave = None;
         self.ext_reset();
         self.irq_shadow = false;
+        // A reset drops the pull-up: the host sees a disconnect.
+        self.usb = usb::UsbDevice::default();
         // Keep attached SPI/I2C slaves across reset (same wiring as real board).
         Ok(())
     }
@@ -2440,6 +2533,10 @@ impl Cpu for Avr {
         config: &SimulationConfig,
     ) -> SimResult<()> {
         let before = self.cycles;
+
+        // ATmega32U4: bus reset and SOF frames up to now (a compare while the
+        // device is detached; every other model never attaches).
+        self.usb_tick();
 
         // RX-complete interrupt: level-sensitive on RXC0 while RXCIE0 is set.
         // The queue lives on the bus-side USART model, so look at it every 32nd
@@ -2553,7 +2650,9 @@ impl Cpu for Avr {
         let irq_takeable = self.flag_i() && self.pending_irq != 0;
         // A sleeping core, or pads that must be sampled at every boundary for
         // INT/PCINT, keep the one-instruction path.
-        let irq_takeable = irq_takeable || self.sleeping || self.ext_watch != 0;
+        // So does an attached USB device: its frames come on cycle deadlines.
+        let irq_takeable =
+            irq_takeable || self.sleeping || self.ext_watch != 0 || self.usb.active();
         // The INC/RJMP spin touches no bus, so it can never push a pad edge:
         // it stays available under push capture, as long as the tap clock is
         // carried across the cycles it retires.
@@ -2669,6 +2768,8 @@ mod ext_int;
 mod oc_pins;
 #[path = "avr/timer1.rs"]
 mod timer1;
+/// ATmega32U4 USB device controller.
+mod usb;
 pub use ext_int::{VEC_INT0, VEC_INT1, VEC_PCINT0, VEC_PCINT1, VEC_PCINT2};
 
 #[cfg(test)]

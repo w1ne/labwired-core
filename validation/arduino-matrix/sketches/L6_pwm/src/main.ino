@@ -55,6 +55,11 @@
 // ATmega328P, so analogWrite(13, 128) is digitalWrite(HIGH). Use D9 = PB1 =
 // OC1A (Timer1, phase-correct 8-bit, 16 MHz / 64 / 510 = 490 Hz).
 #    define LW_PWM_PIN 9
+#  elif defined(__AVR_ATmega32U4__)
+// Leonardo LED_BUILTIN is D13 = PC7 = OC4A, the 10-bit high-speed Timer4,
+// which the twin does not model. Use D9 = PB5 = OC1A (Timer1, phase-correct
+// 8-bit, 16 MHz / 64 / 510 = 490 Hz), the same unit the Uno row drives.
+#    define LW_PWM_PIN 9
 #  elif defined(LED_BUILTIN)
 #    define LW_PWM_PIN LED_BUILTIN
 #  elif defined(ARDUINO_ARCH_ESP32)
