@@ -63,6 +63,7 @@ GATE_BADGES = {
     "release": " (release CI)",
     "nightly": " (nightly CI)",
     "ignored": " (on-demand)",
+    "manual": " (manual local smoke)",
     "none": " (ungated)",
 }
 

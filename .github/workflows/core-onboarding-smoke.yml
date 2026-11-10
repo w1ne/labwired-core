@@ -71,6 +71,10 @@ jobs:
             target: thumbv6m-none-eabi
             script: examples/rp2040-pio/io-smoke.yaml
             system: examples/rp2040-pio/system.yaml
+          - id: esp32s3-devkitc-1-n16r8-bme280
+            firmware_build_script: examples/esp32s3-devkitc-1-n16r8-bme280/build-firmware.sh
+            script: examples/esp32s3-devkitc-1-n16r8-bme280/bme280-smoke.yaml
+            system: configs/systems/esp32s3-devkitc-1-n16r8-bme280.yaml
 
     steps:
       - uses: actions/checkout@v4
@@ -87,13 +91,36 @@ jobs:
           workspaces: |
             . -> target
 
+      - name: Install PlatformIO
+        if: ${{ matrix.firmware_build_script != '' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install PlatformIO package
+        if: ${{ matrix.firmware_build_script != '' }}
+        run: python -m pip install platformio==6.1.19
+
       - name: Run onboarding smoke
+        if: ${{ matrix.firmware_build_script == '' }}
         run: |
           chmod +x scripts/onboarding_smoke.sh
           scripts/onboarding_smoke.sh \
             --target-id "${{ matrix.id }}" \
             --crate "${{ matrix.crate }}" \
             --target "${{ matrix.target }}" \
+            --script "${{ matrix.script }}" \
+            --system "${{ matrix.system }}" \
+            --out-dir "out/onboarding-smoke/${{ matrix.id }}" \
+            --threshold-seconds 3600
+
+      - name: Run PlatformIO onboarding smoke
+        if: ${{ matrix.firmware_build_script != '' }}
+        run: |
+          chmod +x scripts/onboarding_smoke.sh
+          scripts/onboarding_smoke.sh \
+            --target-id "${{ matrix.id }}" \
+            --firmware-build-script "${{ matrix.firmware_build_script }}" \
             --script "${{ matrix.script }}" \
             --system "${{ matrix.system }}" \
             --out-dir "out/onboarding-smoke/${{ matrix.id }}" \

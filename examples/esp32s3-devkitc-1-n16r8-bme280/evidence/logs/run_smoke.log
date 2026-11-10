@@ -1,0 +1,17 @@
+2026-11-10T17:50:44.355969Z  INFO labwired_loader: ELF Entry Point: 0x40375ad4
+configure_xtensa_esp32s3: ESP32-S3 ROM harness (thunk code + 131072 B DROM)
+labwired-cli test: seeded S3 dcache partitions (3072 bytes) from examples/esp32s3-devkitc-1-n16r8-bme280/./firmware/.pio/build/devkitc_n16r8/partitions.bin
+2026-11-10T17:50:44.441463Z  INFO labwired_core::boot::esp32s3: esp32s3: seeded factory MMU (12 entries, app0 @ flash 0x10000) for cache2phys
+labwired-cli test: seeded S3 factory MMU for cache2phys (app0 @ 0x10000)
+2026-11-10T17:50:44.441484Z  INFO labwired_core::boot::esp32s3: esp32s3: seeded rom_spiflash_legacy_data -> chip@0x3fceff00 (chip_size=0x1000000)
+labwired-cli test: S3 APP handshake flags @ [
+    0x3fc97a77,
+    0x3fc97a78,
+    0x3fc97a75,
+    0x3fc97a76,
+]
+labwired-cli test: pxCurrentTCBs @0x3fc97fc4 (hybrid preserve key)
+labwired-cli test: pxCurrentTCBs @0x3fc97fc4 (hybrid preserve key)
+labwired-cli test: installed xthal_window_spill_nw CPU spill workaround @0x40383254
+labwired-cli test: ESP32-S3 fast-boot entry=0x40375ad4 (dual-core APP_CPU)
+PASS  2/2 checks · bme280-smoke · 50000000 steps · 3.11s

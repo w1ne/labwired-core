@@ -74,11 +74,15 @@ chips:
 
   - id: esp32s3
     arch: xtensa-lx7
-    headline: "Broad model surface (~35); the rubric grid proves ~9, plus a TMP102 functional read in the nightly fixtures lane. GDMA is a real 65-test mem-to-mem engine (proven via the dma rubric cell), not a stub. `spi_mem_flash`/`extmem` stay unit-only: mask-ROM bring-up reads are not firmware exercise."
+    headline: "Broad model surface (~35); the rubric grid proves ~9, plus TMP102 and BME280 functional reads. The ESP32-S3-DevKitC-1-N16R8 smoke records the 16 MiB flash capacity and reads BME280 ID/raw temperature over I2C0. GDMA is a real 65-test mem-to-mem engine (proven via the dma rubric cell), not a stub. `spi_mem_flash`/`extmem` stay unit-only: mask-ROM bring-up reads are not firmware exercise."
     functional:
       - what: "TMP102 temperature read over I2C (real driver, decoded value + GPIO threshold)"
         fw: esp32s3-i2c-tmp102
         ev: "e2e_i2c_tmp102.rs:147-188"
+        gate: nightly
+      - what: "ESP32-S3-DevKitC-1-N16R8 + BME280: chip ID and raw temperature read over I2C0 (GPIO8/GPIO9)"
+        fw: esp32s3-devkitc-1-n16r8-bme280
+        ev: "examples/esp32s3-devkitc-1-n16r8-bme280/evidence (committed local onboarding smoke)"
         gate: nightly
     advanced_unit_only: [aes, ds, hmac, rsa, rng, sha, i2s, lcd_cam, sdmmc, usb_otg, gpspi,
                          pcnt, io_mux, extmem, spi_mem_flash, sens, system,
@@ -929,7 +933,7 @@ chips:
       - what: "RP2350 I2C0 repeated-start read from BME280: CHIP_ID 0x60 and raw temperature 0x082DC0, followed by four Pico 2 GP25 LED transitions"
         fw: firmware-rp2350-pico2-bme280-smoke
         ev: examples/pico2/bme280-smoke.yaml
-        gate: "manual local onboarding smoke; evidence committed under examples/pico2/evidence/bme280/"
+        gate: manual
     advanced_unit_only: [PIO0, PIO1, PIO2]
     advanced_dead: []
     shim:

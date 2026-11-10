@@ -70,10 +70,11 @@ _Leo air-quality is the sensor-depth proof: the nightly example e2e asserts it e
 
 ### `esp32s3`
 
-_Broad model surface (~35); the rubric grid proves ~9, plus a TMP102 functional read in the nightly fixtures lane. GDMA is a real 65-test mem-to-mem engine (proven via the dma rubric cell), not a stub. `spi_mem_flash`/`extmem` stay unit-only: mask-ROM bring-up reads are not firmware exercise._
+_Broad model surface (~35); the rubric grid proves ~9, plus TMP102 and BME280 functional reads. The ESP32-S3-DevKitC-1-N16R8 smoke records the 16 MiB flash capacity and reads BME280 ID/raw temperature over I2C0. GDMA is a real 65-test mem-to-mem engine (proven via the dma rubric cell), not a stub. `spi_mem_flash`/`extmem` stay unit-only: mask-ROM bring-up reads are not firmware exercise._
 
 **Functional device/protocol reads** (real driver, decoded value):
 - TMP102 temperature read over I2C (real driver, decoded value + GPIO threshold) — `esp32s3-i2c-tmp102` · e2e_i2c_tmp102.rs:147-188 (nightly CI)
+- ESP32-S3-DevKitC-1-N16R8 + BME280: chip ID and raw temperature read over I2C0 (GPIO8/GPIO9) — `esp32s3-devkitc-1-n16r8-bme280` · examples/esp32s3-devkitc-1-n16r8-bme280/evidence (committed local onboarding smoke) (nightly CI)
 
 **Advanced peripherals — unit-tested only** (no firmware drives them): `aes`, `ds`, `hmac`, `rsa`, `rng`, `sha`, `i2s`, `lcd_cam`, `sdmmc`, `usb_otg`, `gpspi`, `pcnt`, `io_mux`, `extmem`, `spi_mem_flash`, `sens`, `system`, `core1_control`, `crosscore_ipi`
 
@@ -630,7 +631,10 @@ _No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware th
 
 ### `rp2350`
 
-_No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware that runs: the committed bare-metal M33 UART0 smoke, PR-gated as firmware_survival::test_rp2350_demo_survival (case firmware_survival.rs:1523-1533) and rebuilt by the nightly coverage-matrix cell examples/rp2350-demo/io-smoke.yaml (core-coverage-matrix-smoke.yml:276-283); strict_onboarding builds and runs the same ELF through examples/pico2/io-smoke.yaml in the nightly core-full workspace step (core-ci.yml:2062; cross-build-excluded from the PR shards — scripts/ci/workspace-test-shards.json strict_onboarding entry). It proves the RP2350 base map (UART0 at 0x40070000, not the RP2040's 0x40034000) and that a cortex-m-rt image boots from XIP flash 0x10000000; its only other MMIO is a scratch store into the PIO0 window used as a mocked LED (crates/firmware-rp2350-demo/src/main.rs:9-10), so no PIO program is loaded and no state machine is observed. rp2350_clkrst_profile.rs (3 unit tests) pins the moved CLOCKS/RESETS/XOSC/PLL map. Beyond the rubric SYSINFO/XIP_CTRL are engine-less declarative files and POWERMAN/TBMAN are zero stubs; PIO0/1/2 are the shared RP2040 PIO model (9 pio.rs unit tests; hardware_fidelity.rs:194-268 drives it at the RP2040 base, and the PIO onboarding lane boots the rp2040 descriptor, not this one), so all three are firmware-untouched here._
+_No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). The committed bare-metal M33 UART0 simulator smoke remains PR-gated as firmware_survival::test_rp2350_demo_survival and rebuilt by the nightly coverage-matrix cell examples/rp2350-demo/io-smoke.yaml; strict_onboarding also runs examples/pico2/io-smoke.yaml. A separate local onboarding smoke builds Cortex-M33 firmware and reads BME280 CHIP_ID 0x60 plus raw temperature 0x082DC0 over RP2350 I2C0 on the Pico 2 profile, then toggles GP25 four times (examples/pico2/bme280-smoke.yaml; evidence at examples/pico2/evidence/bme280/). This is local simulator evidence, not hardware confirmation; the I2C model attaches the device directly and does not electrically enforce GP4/GP5 routing. UART text is simulator-only diagnostic output in this smoke, not physical UART confirmation. The UART smoke proves the RP2350 base map (UART0 at 0x40070000) and that a cortex-m-rt image boots from XIP flash 0x10000000. Beyond the rubric SYSINFO/XIP_CTRL are engine-less declarative files and POWERMAN/TBMAN are zero stubs; PIO0/1/2 are firmware-untouched here._
+
+**Functional device/protocol reads** (real driver, decoded value):
+- RP2350 I2C0 repeated-start read from BME280: CHIP_ID 0x60 and raw temperature 0x082DC0, followed by four Pico 2 GP25 LED transitions — `firmware-rp2350-pico2-bme280-smoke` · examples/pico2/bme280-smoke.yaml (manual local smoke)
 
 **Advanced peripherals — unit-tested only** (no firmware drives them): `PIO0`, `PIO1`, `PIO2`
 

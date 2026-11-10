@@ -1,0 +1,15 @@
+# Espressif ESP32-S3-DevKitC-1-N16R8 with an Adafruit BME280 STEMMA QT sensor.
+# GPIO8/GPIO9 are I2C0 SDA/SCL; the firmware reads the sensor at 0x77.
+name: "esp32s3-devkitc-1-n16r8-bme280"
+chip: "../chips/esp32s3.yaml"
+debug_uart: "uart0"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GPIO8"
+      scl: "GPIO9"
+    config:
+      i2c_address: 0x77
+board_io: []
