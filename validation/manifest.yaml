@@ -8961,8 +8961,12 @@ boards:
     # the real FreeRTOS routine runs so IDF5 tx_mux spinlocks are initialised.
     # Firmware-library thunk only: no peripheral register map, reset value
     # or captured reset-state window changes. ACK, NOT A CAPTURE.
-    drift_ack: 2026-11-06
-    drift_ack_digest: 688e14f97c4f031e6adceca987640b45b5f96d450292dd4c8ab7201429f55d38
+    # 2026-11-10 (#1759 feat/esp32-nvs-flash): watched SPI / spi_mem_flash
+    # models gained program/erase + WEL behaviour so stock Preferences/NVS
+    # keeps its writes. This is not an S3 reset-state recapture; the nine
+    # captured S3 windows are unchanged. ACK, NOT A CAPTURE.
+    drift_ack: 2026-11-10
+    drift_ack_digest: bd3f7a6bedaf222f64a8b1717d6fb0635c09f8770ee8c662144678ae64cbba93
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.
