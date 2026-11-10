@@ -1,11 +1,12 @@
 # ESP32-S3
 
 The Espressif ESP32-S3 (dual-core Xtensa LX7, 512 KB SRAM, external QSPI
-flash, Wi-Fi + BLE 5, USB) is LabWired's reference Xtensa target. All
-declared peripherals are **declarative** — the chip yaml references
-external YAML descriptors under `configs/peripherals/esp32s3/`.
+flash, Wi-Fi + BLE 5, USB) is LabWired's reference Xtensa target. The general
+chip YAMLs use declarative peripherals under `configs/peripherals/esp32s3/`;
+the narrow DevKitC ADC profile documents the UART and SENS ADC used by its
+board smoke.
 
-There are two chip yamls for ESP32-S3 today:
+There are three chip yamls for ESP32-S3 today:
 
 - `configs/chips/esp32s3.yaml` — minimal declarative model (UART0 + GPIO +
   TIMG0 + INTERRUPT_CORE0) used by older blinky / hello-world examples.
@@ -15,6 +16,8 @@ There are two chip yamls for ESP32-S3 today:
   IRAM + ROM-thunks + flash-XIP mapping. **Use this variant for new
   ESP32-S3 work** — the simulator's `configure_xtensa_esp32s3` is the
   authoritative wiring code that this yaml documents.
+- `configs/chips/esp32s3-devkitc-1-n16r8-adc.yaml` — a narrow DevKitC-1
+  v1.1 profile for UART0 output and GPIO4 / ADC1_CH3 input.
 
 ## Status at a glance
 
@@ -23,11 +26,21 @@ There are two chip yamls for ESP32-S3 today:
 
 | Aspect              | Status                                                                          |
 |---------------------|---------------------------------------------------------------------------------|
-| Chip yamls          | [`esp32s3.yaml`](../../configs/chips/esp32s3.yaml) (minimal) · [`esp32s3-zero.yaml`](../../configs/chips/esp32s3-zero.yaml) (Plan 2/4) |
-| System yaml         | [`configs/systems/esp32s3-zero.yaml`](../../configs/systems/esp32s3-zero.yaml)  |
-| Reference firmware  | [`examples/esp32s3-i2c-tmp102/`](../../examples/esp32s3-i2c-tmp102/) (Plan 4, canonical) · `examples/esp32s3-blinky/` · `examples/esp32s3-hello-world/` |
-| Validation          | Plan 4 end-to-end test: `crates/core/tests/e2e_i2c_tmp102.rs`                   |
+| Chip yamls          | [`esp32s3.yaml`](../../configs/chips/esp32s3.yaml) (minimal) · [`esp32s3-zero.yaml`](../../configs/chips/esp32s3-zero.yaml) (Plan 2/4) · [DevKitC N16R8 ADC profile](../../configs/chips/esp32s3-devkitc-1-n16r8-adc.yaml) |
+| System yaml         | [`configs/systems/esp32s3-zero.yaml`](../../configs/systems/esp32s3-zero.yaml) · [DevKitC N16R8 ADC profile](../../configs/systems/esp32-s3-devkitc-1-n16r8-adc.yaml) |
+| Reference firmware  | [`examples/esp32s3-i2c-tmp102/`](../../examples/esp32s3-i2c-tmp102/) (Plan 4, canonical) · [DevKitC N16R8 ADC smoke](../../examples/esp32-s3-devkitc-1-n16r8/) · `examples/esp32s3-blinky/` · `examples/esp32s3-hello-world/` |
+| Validation          | Plan 4 end-to-end test: `crates/core/tests/e2e_i2c_tmp102.rs`; DevKitC ADC assertion log in the linked example's `evidence/adc/` |
 | Tier                | structural — declarative + Plan 2/4 peripheral models                           |
+
+## ESP32-S3-DevKitC-1 v1.1 N16R8 ADC input
+
+The narrow board profile connects the potentiometer model to the S3 SENS ADC1
+channel 3, corresponding to GPIO4 / J1 pin 4. The register-level firmware
+starts a one-shot conversion and asserts code 2047 for the centered 1650 mV
+input. Local build and run artifacts are committed in
+[`examples/esp32-s3-devkitc-1-n16r8/evidence/adc/`](../../examples/esp32-s3-devkitc-1-n16r8/evidence/adc/).
+The local analog model is deterministic; it does not model noise, calibration,
+attenuation curves, or physical ADC accuracy. This is not a physical-board run.
 
 ## Peripherals (esp32s3-zero, Plan 2/4 model)
 
