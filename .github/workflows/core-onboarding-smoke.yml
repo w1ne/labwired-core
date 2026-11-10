@@ -175,6 +175,9 @@ on:
       - "examples/ch32v003-evt/**"
       - "crates/firmware-l073-demo/**"
       - "crates/firmware-rp2040-demo/**"
+      - "crates/firmware-pico-pwm-servo/**"
+      - "configs/systems/rp2040-pico-pwm-servo.yaml"
+      - "examples/pico-pwm-servo/**"
       - "crates/firmware-feather-rp2040-smoke/**"
       - "crates/firmware-itsybitsy-rp2040-smoke/**"
       - "crates/firmware-feather-m4-express-smoke/**"
@@ -790,6 +793,11 @@ jobs:
             target: thumbv6m-none-eabi
             script: examples/pico/io-smoke.yaml
             system: configs/systems/rp2040-pico.yaml
+          - id: pico-pwm-servo
+            crate: firmware-pico-pwm-servo
+            target: thumbv6m-none-eabi
+            script: examples/pico-pwm-servo/onboarding-smoke.yaml
+            system: configs/systems/rp2040-pico-pwm-servo.yaml
           - id: adafruit-feather-rp2040
             crate: firmware-feather-rp2040-smoke
             target: thumbv6m-none-eabi

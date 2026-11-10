@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="7" failures="0" errors="0" time="1.344577">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="ef185a8bcbdde31fc39762f4454c14bea38ae79123a3820f7550e0c428f3d87d"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="1.344577">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: PICO_PWM_SERVO_GP16_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: memory_value: @0x40050004=0x7d0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: memory_value: @0x4005000c=0x5dc" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x40050010=0x4e1f" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: gpio_edges: sio:16 &gt;= 4 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

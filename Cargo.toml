@@ -186,6 +186,7 @@ members = [
     "crates/firmware-perf-spin",
     "crates/firmware-perf-spin-riscv",
     "crates/firmware-rp2040-demo",
+    "crates/firmware-pico-pwm-servo",
     "crates/firmware-feather-rp2040-smoke",
     "crates/firmware-itsybitsy-rp2040-smoke",
     "crates/firmware-feather-m4-express-smoke",

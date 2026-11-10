@@ -125,10 +125,11 @@ _Shares the nRF52 model with nrf52840/nrf52832; tier-1 drives 12 rubric classes 
 
 ### `rp2040`
 
-_The Raspberry Pi Pico 1 system now has an onboarding smoke in core-onboarding-smoke.yml that drives UART0 and toggles the onboard GP25 LED through IO_BANK0/SIO; the assertions require the RP2040_SMOKE_OK transcript and at least eight GP25 edges. The tier1 fixture separately drives clock/timer/gpio/spi/i2c and boots unmodified Zephyr. PIO0 is exercised by the required nightly PIO onboarding lane — not by a tier-1 fixture: firmware-rp2040-pio-onboarding boots through this descriptor and must reach PIO_OK (crates/core/tests/rp2040_pio_onboarding.rs:82-135), built and required by the core-full job's LABWIRED_REQUIRE_FIRMWARE (core-ci.yml:2014, :2034, run at :2062; cross-build-excluded from the PR shards). The Pico smoke does not exercise USB CDC or the TBMAN zero stub._
+_The Raspberry Pi Pico 1 system has an onboarding smoke in core-onboarding-smoke.yml that drives UART0 and toggles the onboard GP25 LED through IO_BANK0/SIO; the assertions require the RP2040_SMOKE_OK transcript and at least eight GP25 edges. A separate Pico GP16/PWM0A servo profile checks DIV=125, TOP=19,999, CC_A=1,500, and at least four GP16 transitions locally; the hosted oracle also model-verifies the UART marker and GP16 edges. The tier1 fixture separately drives clock/timer/gpio/spi/i2c and boots unmodified Zephyr. PIO0 is exercised by the required nightly PIO onboarding lane — not by a tier-1 fixture: firmware-rp2040-pio-onboarding boots through this descriptor and must reach PIO_OK (crates/core/tests/rp2040_pio_onboarding.rs:82-135), built and required by the core-full job's LABWIRED_REQUIRE_FIRMWARE (core-ci.yml:2014, :2034, run at :2062; cross-build-excluded from the PR shards). The Pico smokes do not exercise USB CDC or the TBMAN zero stub._
 
 **Functional device/protocol reads** (real driver, decoded value):
 - Raspberry Pi Pico D13 LED and UART0 console — onboard GP25 GPIO edges plus RP2040_SMOKE_OK transcript — `firmware-rp2040-demo` · examples/pico/io-smoke.yaml + examples/pico/evidence/simulation-output/result.json (nightly CI)
+- Raspberry Pi Pico PWM servo — GP16/PWM0A waveform with DIV=125, TOP=19,999, CC_A=1,500 — `firmware-pico-pwm-servo` · examples/pico-pwm-servo/onboarding-smoke.yaml + examples/pico-pwm-servo/evidence/simulation-output/result.json (onboarding CI)
 
 ### `rp2040-itsybitsy-smoke`
 

@@ -1,0 +1,25 @@
+# Raspberry Pi Pico: PWM slice 0 channel A drives an external servo on GP16.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-pico-pwm-servo"
+  system: "../../configs/systems/rp2040-pico-pwm-servo.yaml"
+limits:
+  max_steps: 5500000
+assertions:
+  - uart_contains: "PICO_PWM_SERVO_GP16_OK"
+  - memory_value:
+      address: 0x40050004
+      size: 32
+      expected_value: 2000
+  - memory_value:
+      address: 0x4005000C
+      size: 32
+      expected_value: 1500
+  - memory_value:
+      address: 0x40050010
+      size: 32
+      expected_value: 19999
+  - gpio_edges:
+      pin: "sio:16"
+      min_edges: 4
+  - expected_stop_reason: max_steps

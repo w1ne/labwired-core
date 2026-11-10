@@ -1,0 +1,14 @@
+# Raspberry Pi Pico (RP2040) with an external SG90-compatible servo on GP16.
+# GP16 is header pin 21 and carries PWM slice 0 channel A. The onboard LED,
+# USB, BOOTSEL, and other GPIOs are outside this narrow system profile.
+name: "rp2040-pico-pwm-servo"
+chip: "../chips/rp2040.yaml"
+cpu_hz: 125_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "servo"
+    type: "servo"
+    connection: "gpio"
+    config:
+      signal_pin: "GP16"
+      model: "sg90"

@@ -30,7 +30,7 @@ NRND. The page remains unpublished pending Andrii's approval.
 | **#2 ATmega328 family, 30%** | [ATmega328PB Xplained Mini](../../examples/atmega328pb-xplained-mini/README.md) (active sibling; the survey does not separate PB) | USART0 CDC transcript and the board's D200/PB5 LED transitions. ATmega328P remains excluded because it is NRND. | [Live MCU status and board stock, checked 2026-11-06](../../examples/atmega328pb-xplained-mini/evidence/vendor-status.md) |
 | **#3 STM32F103, 17%** | [NUCLEO-F103RB](../../examples/nucleo-f103rb/README.md) | USART2 output and LD2 on PA5 | [ST status and stock, checked 2026-11-03](../../examples/nucleo-f103rb/evidence/vendor-status.md) |
 | **#4 other STM32, 13%** | [STM32G071B-DISCO](../../examples/stm32g071b-disco/README.md); [NUCLEO-H723ZG + BME280](../../examples/nucleo-h723zg-bme280/README.md) | G071B-DISCO USART3 output on the ST-LINK virtual COM route; H723ZG reads BME280 ID `0x60` over I2C1 on PB8/PB9 and gates LD1 pulses on the read | [G071B-DISCO status and stock, checked 2026-11-03](../../examples/stm32g071b-disco/evidence/vendor-status.md); [H723ZG and BME280 status, checked 2026-11-09](../../examples/nucleo-h723zg-bme280/evidence/vendor-status.md) |
-| **#5 RP2040, 12%; RP2350 is the current successor in target #2** | [Raspberry Pi Pico](../../examples/pico/README.md); [Pico 2 / RP2350](../../examples/pico2/README.md) | Pico: UART0, GP25 LED, and internal temperature ADC. Pico 2: UART0, GP25 LED, and GP26/ADC0 conversion from a modeled potentiometer. RP2350 was not a separate survey row. | [Pico availability checked 2026-11-06](../../examples/pico/evidence/vendor-status.md); [Pico 2 checked 2026-11-09](../../examples/pico2/evidence/adc/vendor-status.md) |
+| **#5 RP2040, 12%; RP2350 is the current successor in target #2** | [Raspberry Pi Pico](../../examples/pico/README.md); [Pico GP16 PWM servo](../../examples/pico-pwm-servo/README.md); [Pico 2 / RP2350](../../examples/pico2/README.md) | Pico: UART0, GP25 LED, internal temperature ADC, and an external servo driven by PWM0A on GP16. Pico 2: UART0, GP25 LED, and GP26/ADC0 conversion from a modeled potentiometer. RP2350 was not a separate survey row. | [Pico availability checked 2026-11-10](../../examples/pico-pwm-servo/evidence/vendor-status.md); [Pico 2 checked 2026-11-09](../../examples/pico2/evidence/adc/vendor-status.md) |
 
 ### #1 — ESP32: ESP-Mosaico V1.2 / ESP32-S31
 
@@ -318,6 +318,37 @@ The smoke checks that a non-zero ADC conversion reaches the result register;
 it does not claim a calibrated temperature. It also checks UART0 output and
 GP25 GPIO edges. See the [Pico guide](../../examples/pico/README.md) and
 [committed run evidence](../../examples/pico/evidence/).
+
+For a hobby servo, connect its signal to GP16 (header pin 21), use a separate
+5 V supply, and join the supply ground to Pico GND. The Pico SDK config below
+sets PWM0A to a 50 Hz period and a 1.5 ms centre pulse:
+
+```c
+#include "pico/stdlib.h"
+#include "hardware/pwm.h"
+
+int main(void) {
+    const uint gpio = 16;
+    gpio_set_function(gpio, GPIO_FUNC_PWM);
+    const uint slice = pwm_gpio_to_slice_num(gpio);
+    const uint channel = pwm_gpio_to_channel(gpio);
+    pwm_config config = pwm_get_default_config();
+    pwm_config_set_clkdiv(&config, 125.0f);
+    pwm_config_set_wrap(&config, 19999);
+    pwm_init(slice, &config, false);
+    pwm_set_chan_level(slice, channel, 1500);
+    pwm_set_enabled(slice, true);
+    while (true) tight_loop_contents();
+}
+```
+
+The [Pico PWM servo profile](../../examples/pico-pwm-servo/README.md) checks
+the PWM divider, wrap and compare registers plus GP16 transitions in the local
+smoke; its hosted verifier separately model-verifies the UART marker and four
+GP16 edges. This does not assert servo angle, mechanical movement or physical
+power behavior. The [official pinout](https://pip-assets.raspberrypi.com/categories/610-raspberry-pi-pico/documents/RP-008309-DS-1-Pico-R3-A4-Pinout.pdf?disposition=inline)
+maps GP16 to header pin 21, and the [live Pico page](https://www.raspberrypi.com/products/raspberry-pi-pico/)
+lists the Pico 1 production-through date.
 
 ## Other community-relevant boards
 

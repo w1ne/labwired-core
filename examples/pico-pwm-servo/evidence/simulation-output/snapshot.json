@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      1073954816,
+      10,
+      54,
+      95,
+      71,
+      0,
+      0,
+      537141232,
+      0,
+      0,
+      0,
+      0,
+      0,
+      537141232,
+      268436173,
+      268436226
+    ],
+    "pc": 268436226,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 268435712,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 5500000,
+  "cycles": 5500000,
+  "instructions": 5500000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 5500000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 5500000
+    }
+  },
+  "limits": {
+    "max_steps": 5500000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "ef185a8bcbdde31fc39762f4454c14bea38ae79123a3820f7550e0c428f3d87d",
+  "config": {
+    "firmware": "examples/pico-pwm-servo/../../target/thumbv6m-none-eabi/release/firmware-pico-pwm-servo",
+    "system": "examples/pico-pwm-servo/../../configs/systems/rp2040-pico-pwm-servo.yaml",
+    "script": "examples/pico-pwm-servo/onboarding-smoke.yaml"
+  }
+}

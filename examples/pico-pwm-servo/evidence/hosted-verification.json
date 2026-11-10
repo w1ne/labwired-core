@@ -1,0 +1,58 @@
+{
+  "checked_at_utc": "2026-11-10",
+  "tool": "labwired_verify",
+  "board": "rpi-pico",
+  "language": "arduino",
+  "max_steps": 50000000,
+  "oracle": {
+    "serial": [
+      { "contains": "PICO_PWM_SERVO_GP16_OK" }
+    ],
+    "gpio_edges": [
+      { "pin": "GP16", "min_edges": 4 }
+    ]
+  },
+  "diagram": {
+    "board": "rpi-pico",
+    "parts": [
+      { "id": "mcu", "type": "rpi-pico" },
+      { "id": "servo", "type": "servo" }
+    ],
+    "wires": [
+      { "from": { "part": "mcu", "pin": "GP16" }, "to": { "part": "servo", "pin": "PWM" } },
+      { "from": { "part": "mcu", "pin": "GND" }, "to": { "part": "servo", "pin": "GND" } }
+    ]
+  },
+  "source": "#include <Arduino.h>\n#include <stdint.h>\n\nstatic volatile uint32_t *reg32(uint32_t address) {\n  return reinterpret_cast<volatile uint32_t *>(address);\n}\n\nvoid setup() {\n  Serial.begin(115200);\n  *reg32(0x40014084) = 4;         // GPIO16_CTRL.FUNCSEL = PWM\n  *reg32(0x40050004) = 125u << 4; // PWM0 DIV = 125.0\n  *reg32(0x40050010) = 19999;    // PWM0 TOP\n  *reg32(0x4005000C) = 1500;     // PWM0 CC_A\n  *reg32(0x40050000) = 1;        // PWM0 CSR.EN\n  Serial.println(\"PICO_PWM_SERVO_GP16_OK\");\n}\n\nvoid loop() {}\n",
+  "status": "model_verified",
+  "run_status": "pass",
+  "stop_reason": "assertions_passed",
+  "verification": "serial contains \"PICO_PWM_SERVO_GP16_OK\"; GP16 transitioned 4 time(s) (>= 4). Model-verified deterministically.",
+  "oracle_results": [
+    { "kind": "serial", "passed": true, "detail": "serial contains \"PICO_PWM_SERVO_GP16_OK\"" },
+    { "kind": "gpio_edges", "passed": true, "detail": "GP16 transitioned 4 time(s) (>= 4)" }
+  ],
+  "gaps": [
+    {
+      "code": "approximation",
+      "scope": "model",
+      "detail": "device time derived from cpu_hz (125000000 Hz); PLL reconfiguration is not tracked"
+    },
+    {
+      "code": "approximation",
+      "scope": "model",
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "history": [
+    {
+      "max_steps": 5500000,
+      "status": "failed",
+      "reason": "The hosted Pico Arduino startup did not reach setup within this budget; no serial output or GP16 transitions were observed."
+    },
+    {
+      "max_steps": 50000000,
+      "status": "model_verified"
+    }
+  ]
+}
