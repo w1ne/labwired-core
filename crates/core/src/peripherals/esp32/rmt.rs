@@ -48,6 +48,13 @@ const ENTRY_DUR_MASK: u32 = 0x7FFF;
 /// Valid INT bits: 8×(TX_END|RX_END|ERR) + 8×TX_THR = 32 bits used.
 const INT_VALID_MASK: u32 = 0xFFFF_FFFF;
 
+/// SVD / `rmt_reg.h` reset values (esp32.svd). CONF0: DIV_CNT=2, IDLE_THRES=0x1000,
+/// MEM_SIZE=1. CONF1=0xF20. TX_LIM=128. DATE is the version register (RO).
+const CONF0_RESET: u32 = 0x3110_0002;
+const CONF1_RESET: u32 = 0x0000_0F20;
+const TX_LIM_RESET: u32 = 0x0000_0080;
+const DATE_RESET: u32 = 0x1602_2600;
+
 const fn tx_end_bit(ch: usize) -> u32 {
     1 << (ch * 3)
 }
@@ -123,17 +130,14 @@ impl Esp32Rmt {
 
     /// `source_id` = `ETS_RMT_INTR_SOURCE` (= 47 on classic ESP32).
     pub fn new(source_id: u32) -> Self {
-        // CONF0 reset: div_cnt=1 is friendlier than 0(=256) for WS2812 tests;
-        // silicon reset is often 0 — IDF always programs DIV before TX_START.
-        let conf0 = [0x1u32; CHANNELS]; // div=1, mem_size=0 → treated as 1 block
         Self {
             source_id,
-            conf0,
-            conf1: [0; CHANNELS],
+            conf0: [CONF0_RESET; CHANNELS],
+            conf1: [CONF1_RESET; CHANNELS],
             status: [0; CHANNELS],
             apb_mem_addr: [0; CHANNELS],
             carrier_duty: [0x0040_0040; CHANNELS],
-            tx_lim: [0; CHANNELS],
+            tx_lim: [TX_LIM_RESET; CHANNELS],
             mem: [0; RMT_MEM_WORDS],
             ch_wr: [0; CHANNELS],
             int_raw: 0,
@@ -329,7 +333,7 @@ impl Esp32Rmt {
             0xA8 => self.int_ena,
             0xAC => 0, // INT_CLR W1C
             0xF0 => self.apb_conf,
-            0xFC => 0x0000_0001, // DATE-ish
+            0xFC => DATE_RESET, // SVD RMT_DATE, RO
             _ => {
                 crate::census_reg!("esp32.rmt:Esp32Rmt", offset, "read");
                 0
@@ -364,6 +368,20 @@ impl Esp32Rmt {
         if let Some(i) = Self::rmtmem_index(offset) {
             self.mem[i] = value;
             return;
+        }
+        if (0x60..0x80).contains(&offset) && offset % 4 == 0 {
+            let ch = ((offset - 0x60) / 4) as usize;
+            if ch < CHANNELS {
+                self.status[ch] = value;
+                return;
+            }
+        }
+        if (0x80..0xA0).contains(&offset) && offset % 4 == 0 {
+            let ch = ((offset - 0x80) / 4) as usize;
+            if ch < CHANNELS {
+                self.apb_mem_addr[ch] = value;
+                return;
+            }
         }
         if (0xB0..0xD0).contains(&offset) && offset % 4 == 0 {
             let ch = ((offset - 0xB0) / 4) as usize;
@@ -656,5 +674,37 @@ mod tests {
         assert!(r.playback.is_some());
         assert_eq!(r.tx_start_count(), 1);
         assert_eq!(r.read_word(RMTMEM_START), 0x0002_8002);
+    }
+
+    #[test]
+    fn svd_resets_match_and_status_addr_date_are_answered() {
+        let mut r = Esp32Rmt::new(47);
+        for ch in 0..CHANNELS {
+            let conf0 = 0x20 + (ch as u64) * 8;
+            let conf1 = conf0 + 4;
+            let status = 0x60 + (ch as u64) * 4;
+            let addr = 0x80 + (ch as u64) * 4;
+            let lim = 0xD0 + (ch as u64) * 4;
+            assert_eq!(r.read_word(conf0), CONF0_RESET, "CONF0 ch{ch}");
+            assert_eq!(r.read_word(conf1), CONF1_RESET, "CONF1 ch{ch}");
+            assert_eq!(r.read_word(status), 0, "STATUS ch{ch} reset");
+            assert_eq!(r.read_word(addr), 0, "ADDR ch{ch} reset");
+            assert_eq!(r.read_word(lim), TX_LIM_RESET, "TX_LIM ch{ch}");
+
+            // STATUS / ADDR are the eight-plus-eight SVD offsets the SystemStub
+            // previously round-tripped. Answer writes so the coverage ratchet
+            // does not see a silent drop of reset-0 registers.
+            r.write_word(status, 0xA5A5_0000 | ch as u32);
+            r.write_word(addr, 0xBEEF_0000 | ch as u32);
+            assert_eq!(r.read_word(status), 0xA5A5_0000 | ch as u32);
+            assert_eq!(r.read_word(addr), 0xBEEF_0000 | ch as u32);
+            r.write_word(status, 0);
+            r.write_word(addr, 0);
+            assert_eq!(r.read_word(status), 0);
+            assert_eq!(r.read_word(addr), 0);
+        }
+        assert_eq!(r.read_word(0xFC), DATE_RESET);
+        r.write_word(0xFC, 0xFFFF_FFFF);
+        assert_eq!(r.read_word(0xFC), DATE_RESET, "DATE is RO");
     }
 }
