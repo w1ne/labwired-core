@@ -58,6 +58,30 @@ const PINS: [(&str, &str, u8); 25] = [
     ("Z_LIMIT", "gpiod", 14),
 ];
 
+/// Assembly placement is data, not a fixed firmware-specific mission.
+/// The reference firmware embeds the same JSON at build time; its SHA-256
+/// appears in UART so the runner can reject mismatched firmware vs plan.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AssemblyPlacement {
+    #[serde(rename = "ref")]
+    reference: String,
+    source_pocket: usize,
+    #[serde(default)]
+    retry_pocket: Option<usize>,
+    head: String,
+    x_mm: i32,
+    y_mm: i32,
+    rotation_deg: f64,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AssemblyJob {
+    schema: String,
+    placements: Vec<AssemblyPlacement>,
+}
+
 #[derive(Clone, Deserialize)]
 struct Pocket {
     index: usize,
@@ -159,6 +183,107 @@ impl Geometry {
             drops: 0,
             contacts: [None; 2],
         })
+    }
+
+    /// Map a job to the CAD-calibrated tray and PCB without changing the
+    /// geometry or inventing source components. Every reference maps to
+    /// exactly one populated pocket, and rotations fit real microstep units.
+    fn apply_assembly_job(&mut self, job: &AssemblyJob) -> Result<()> {
+        use std::collections::HashSet;
+        ensure!(
+            job.schema == "labwired.assembly-job.v1",
+            "unsupported assembly job schema"
+        );
+        ensure!(
+            (1..=16).contains(&job.placements.len()),
+            "job must contain 1..16 placements"
+        );
+        let mut references = HashSet::new();
+        let mut assigned_pockets = HashSet::new();
+        let mut targets = Vec::with_capacity(job.placements.len());
+        for item in &job.placements {
+            ensure!(
+                !item.reference.is_empty() && references.insert(&item.reference),
+                "missing or duplicate component reference"
+            );
+            ensure!(matches!(item.head.as_str(), "A" | "B"), "invalid head");
+            let primary = self
+                .pockets
+                .iter()
+                .find(|p| p.index == item.source_pocket)
+                .context("unknown feeder pocket")?;
+            let actual_pocket = item.retry_pocket.unwrap_or(item.source_pocket);
+            let chosen = self
+                .pockets
+                .iter()
+                .find(|p| p.index == actual_pocket)
+                .context("unknown retry pocket")?;
+            ensure!(
+                chosen.populated && assigned_pockets.insert(actual_pocket),
+                "source pocket empty or assigned more than once"
+            );
+            ensure!(
+                primary.populated
+                    || item
+                        .retry_pocket
+                        .is_some_and(|slot| slot != item.source_pocket),
+                "empty primary pocket requires fallback"
+            );
+            ensure!(
+                primary.populated == (item.source_pocket == actual_pocket),
+                "fallback required only for empty primary pocket"
+            );
+            // The current verified tray centers are equally spaced and share
+            // a row. Refuse jobs if those CAD dimensions have changed.
+            ensure!(
+                (primary.center[0] - (50 + 8 * item.source_pocket) as f64).abs() < 1e-9
+                    && (primary.center[1] - 60.0).abs() < 1e-9,
+                "firmware feeder slots disagree with CAD tray"
+            );
+            let head_offset = if item.head == "B" {
+                self.head_separation_mm
+            } else {
+                0.0
+            };
+            ensure!(
+                (self.head_separation_mm - 48.0).abs() < 1e-9,
+                "firmware nozzle offset differs from CAD"
+            );
+            let x = item.x_mm as f64;
+            let y = item.y_mm as f64;
+            ensure!(
+                (0.0..=400.0).contains(&(x - head_offset)) && (0.0..=400.0).contains(&y),
+                "requested head coordinates outside travel"
+            );
+            ensure!(
+                item.rotation_deg.is_finite() && (-180.0..=180.0).contains(&item.rotation_deg),
+                "invalid rotation"
+            );
+            let steps = item.rotation_deg / 0.225;
+            ensure!(
+                (steps - steps.round()).abs() < 1e-5,
+                "rotation cannot be represented by motor microsteps"
+            );
+            let rotation = steps.round() * 0.225;
+            let (sin, cos) = rotation.to_radians().sin_cos();
+            let half_x = (cos.abs() * chosen.size[0] + sin.abs() * chosen.size[1]) * 0.5;
+            let half_y = (sin.abs() * chosen.size[0] + cos.abs() * chosen.size[1]) * 0.5;
+            ensure!(
+                x - half_x >= self.board_bounds[0][0]
+                    && x + half_x <= self.board_bounds[1][0]
+                    && y - half_y >= self.board_bounds[0][1]
+                    && y + half_y <= self.board_bounds[1][1],
+                "requested component footprint exceeds PCB bounds"
+            );
+            targets.push(Target {
+                reference: item.reference.clone(),
+                center: [x, y, self.board_surface_z + chosen.size[2] * 0.5],
+                rotation_deg: rotation,
+                source_pocket: actual_pocket,
+            });
+        }
+        self.targets = targets;
+        Ok(())
     }
 
     fn tips(&self, axes: [f64; 5]) -> [[f64; 3]; 2] {
@@ -402,10 +527,19 @@ fn main() -> Result<()> {
         geometry_verified,
         "required captured geometry evidence failed preflight"
     );
+    let job_path = argument("--job")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| base.join("assembly-job.json"));
+    let job_bytes = fs::read(&job_path).context("assembly job input missing")?;
+    let job_sha256 = format!("{:x}", Sha256::digest(&job_bytes));
+    let job: AssemblyJob =
+        serde_json::from_slice(&job_bytes).context("invalid assembly job JSON")?;
     let mut geometry = Geometry::from_contract(&contract)?;
+    geometry.apply_assembly_job(&job)?;
     let system_path = base.join("system.yaml");
     let firmware_path = base.join("firmware.elf");
     let mut manifest = SystemManifest::from_file(&system_path)?;
+    fs::write(output.join("executed-assembly-job.json"), &job_bytes)?;
     fs::write(
         output.join("executed-system.yaml"),
         serde_yaml::to_string(&manifest)?,
@@ -925,10 +1059,13 @@ fn main() -> Result<()> {
         })
         .collect();
     let all_driver_timing_valid = step_dir_reports.len() == AXIS_IDS.len()
-        && step_dir_reports.iter().all(|driver| {
+        && step_dir_reports.iter().enumerate().all(|(axis, driver)| {
             let timing = &driver["report"]["timing"];
-            timing["status"] == "within_limits"
-                && timing["checked_rising_edges"].as_u64().unwrap_or(0) > 0
+            matches!(
+                timing["status"].as_str(),
+                Some("within_limits" | "not_observed")
+            ) && (rising_counts[axis] == 0
+                || timing["checked_rising_edges"].as_u64().unwrap_or(0) > 0)
                 && timing["violations"]
                     .as_object()
                     .is_some_and(|v| v.is_empty())
@@ -938,20 +1075,27 @@ fn main() -> Result<()> {
         .map(|(injected, detected)| detected - injected);
     let duration_s = machine.total_cycles as f64 / CPU_HZ as f64;
     let terminal_observation_s = final_mark.map(|terminal| duration_s - terminal);
+    let expected_retries = job
+        .placements
+        .iter()
+        .filter(|p| p.retry_pocket.is_some_and(|retry| retry != p.source_pocket))
+        .count();
     let mut checks = if scenario == "healthy" || scenario == "repair-x" {
         json!({
             "kernelcad_geometry_verified":geometry_verified,
             "firmware_mission_complete":obs[2]==11 && obs[15]==0 && serial.contains("MISSION_COMPLETE"),
-            "three_physical_placements":geometry.placements.len()==3 && geometry.drops==0,
-            "all_objects_at_requested_target":geometry.parts.iter().all(|p|p.placed),
+            "all_job_placements":geometry.placements.len()==job.placements.len() && geometry.drops==0,
+            "all_objects_at_requested_target":geometry.parts.iter()
+                .all(|p| p.placed == geometry.targets.iter().any(|t|t.source_pocket==p.pocket)),
             "independent_gpio_counts_equal_models":edge_model_mismatch_ticks==0,
             "all_six_signed_angles_match_raw_edges":angle_mismatch_ticks==0,
             "dual_y_steps_equal":model_counts[1]==model_counts[2],
-            "empty_pocket_attempted":empty_samples>100,
-            "empty_pocket_never_attaches":!empty_attachment,
-            "open_nozzle_does_not_cross_pick_threshold":empty_pressure_min > -25000.0,
-            "exactly_one_failed_pick_and_retry":serial.matches("PICK_EMPTY").count()==1 && obs[16]==1,
-            "backup_pocket_three_physically_placed":geometry.placements.iter().any(|p|p["pocket"]==3 && p["head"]==1),
+            "empty_pocket_behavior":!job.placements.iter().any(|p|p.source_pocket==1)
+                || (empty_samples>100 && !empty_attachment && empty_pressure_min > -25000.0),
+            "requested_fallback_behavior":serial.matches("PICK_EMPTY").count()==expected_retries
+                && obs[16] as usize==expected_retries,
+            "requested_source_pockets_placed":geometry.targets.iter()
+                .all(|t|geometry.placements.iter().any(|p|p["pocket"]==t.source_pocket)),
             "no_logic_capture_overflow":logic_dropped==0,
             "all_driver_timing_limits_satisfied":all_driver_timing_valid,
             "both_sensor_channels_read_ambient":serial.contains("DUAL_SENSOR_AMBIENT_OK")
@@ -1007,6 +1151,8 @@ fn main() -> Result<()> {
             .zip(first_fault_at_s)
             .is_some_and(|(repair, fault)| repair > fault && duration_s > repair));
     }
+    checks["firmware_assembly_job_digest_matches"] =
+        json!(serial.contains(&format!("ASSEMBLY_JOB_SHA256={job_sha256}")));
     checks["terminal_state_reached"] = json!(final_mark.is_some());
     checks["terminal_observation_complete"] =
         json!(terminal_observation_s.is_some_and(|elapsed| elapsed >= TERMINAL_OBSERVATION_S));
@@ -1074,6 +1220,7 @@ fn main() -> Result<()> {
         "independent_gpio_counts":edge_counts,"rising_edges":rising_counts,
         "minimum_high_time_ns":min_high_cycles.map(|c| if c==u64::MAX {0.0} else {c as f64/CPU_HZ as f64*1e9}),
         "counter_mismatch_ticks":edge_model_mismatch_ticks,"angle_mismatch_ticks":angle_mismatch_ticks,"phantom_motion":phantom_motion,"driver_angles_deg":model_angles,"logic_dropped":logic_dropped,"analog_uncaptured_samples":analog_dropped,"analog_ring_evictions_after_capture":analog_ring_evictions,
+        "assembly_job_sha256":job_sha256, "assembly_job":job,
         "placements":geometry.placements,"parts":geometry.parts,
         "empty_pocket_samples":empty_samples,"empty_pocket_min_pressure_pa":empty_pressure_min,
         "models":{"motion":"Ideal commanded STEP/DIR kinematics with per-driver timing diagnostics and sampled rigid dual-Y constraint", "pump":"Analog R/L/back-EMF armature and native rotor inertia/friction", "switch":"Ideal voltage-controlled low-side switch, assumed 50mOhm on resistance", "pneumatics":"Fixed-volume compressible chamber, flow proportional to pump speed, geometry-dependent seal/leak, pressure torque feedback", "contact":"Tolerance-based nozzle seal, preserved rigid grasp transform, gravity force threshold and quasi-static board support", "firmware":"Custom Rev05 diagnostic application"},
@@ -1208,6 +1355,33 @@ mod tests {
         assert!(geometry.placements.is_empty());
         assert_eq!(geometry.drops, 1);
         assert!((geometry.parts[0].center[2] - 169.3).abs() < 1e-9);
+    }
+
+    #[test]
+    fn assembly_job_uses_validated_pockets_and_board_targets() {
+        let job: AssemblyJob =
+            serde_json::from_slice(include_bytes!("lumenpnp/assembly-job.json")).unwrap();
+        let mut geometry = fixture();
+        geometry.apply_assembly_job(&job).unwrap();
+        assert_eq!(geometry.targets.len(), 3);
+        assert_eq!(geometry.targets[1].source_pocket, 3);
+        assert_eq!(geometry.targets[1].rotation_deg, 90.0);
+    }
+
+    #[test]
+    fn assembly_job_refuses_invalid_and_reused_parts() {
+        let job: AssemblyJob =
+            serde_json::from_slice(include_bytes!("lumenpnp/assembly-job.json")).unwrap();
+        let mut duplicate = job.clone();
+        duplicate.placements[2].retry_pocket = None;
+        duplicate.placements[2].source_pocket = 0;
+        assert!(fixture().apply_assembly_job(&duplicate).is_err());
+        let mut bad_location = job.clone();
+        bad_location.placements[0].x_mm = 999;
+        assert!(fixture().apply_assembly_job(&bad_location).is_err());
+        let mut bad_rotation = job.clone();
+        bad_rotation.placements[0].rotation_deg = 13.1;
+        assert!(fixture().apply_assembly_job(&bad_rotation).is_err());
     }
 
     #[test]

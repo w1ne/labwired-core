@@ -1,0 +1,6 @@
+{
+  "schema": "labwired.assembly-job.v1",
+  "placements": [
+    {"ref":"U1", "source_pocket":0, "head":"A", "x_mm":232, "y_mm":228, "rotation_deg":45}
+  ]
+}

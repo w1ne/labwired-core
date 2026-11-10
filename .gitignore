@@ -62,3 +62,6 @@ __pycache__/
 # PlatformIO build output in any example (sources, platformio.ini and the
 # committed fixture ELF under tests/fixtures/ are what matter).
 .pio/
+
+# Reference machine: validated build-time assembly job
+/crates/core/examples/lumenpnp/assembly-job.generated.h

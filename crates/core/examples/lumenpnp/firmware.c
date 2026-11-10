@@ -23,6 +23,7 @@
 #define XY_STEPS_MM 40
 #define Z_STEPS_MM 40
 #define ROTATION_STEPS_REV 1600
+#include "assembly-job.generated.h"
 #define PICK_THRESHOLD_PA (-25000)
 #define RELEASE_THRESHOLD_PA (-250)
 
@@ -444,6 +445,7 @@ int main(void) {
     init();
     snapshot();
     uart_text("LUMENPNP_REV05_DIAGNOSTIC\r\n");
+    uart_text("ASSEMBLY_JOB_SHA256="); uart_text(ASSEMBLY_JOB_SHA256); uart_text("\r\n");
     read_pressure(0);
     read_pressure(1);
     if (magnitude(pressure_pa[0]) > 1000 || magnitude(pressure_pa[1]) > 1000) stop(50);
@@ -457,16 +459,15 @@ int main(void) {
     move_to(0, 0, 25 * Z_STEPS_MM, 0, 0);
     event("HOME_OK");
 
-    const int32_t board_x[3] = {230, 265, 290};
-    const int32_t board_y[3] = {225, 225, 250};
-    const int32_t rotations[3] = {0, 400, 200};
-    for (job_index = 0; job_index < 3; job_index++) {
-        active_nozzle = job_index == 1 ? 1 : 0;
+    for (job_index = 0; job_index < ASSEMBLY_JOB_COUNT; job_index++) {
+        const PlacementTask *task = &ASSEMBLY_JOB[job_index];
+        active_nozzle = task->head;
         const int32_t x_offset = active_nozzle ? 48 : 0;
         const int32_t contact_z = active_nozzle ? 1944 : 56;
         unsigned success = 0;
-        for (attempt = 0; attempt < 2; attempt++) {
-            const int32_t slot = attempt ? 3 : (int32_t)job_index;
+        const unsigned max_attempts = task->primary_pocket == task->retry_pocket ? 1 : 2;
+        for (attempt = 0; attempt < max_attempts; attempt++) {
+            const int32_t slot = (int32_t)(attempt ? task->retry_pocket : task->primary_pocket);
             const int32_t feeder_x = (50 + 8 * slot - x_offset) * XY_STEPS_MM;
             phase = FEEDER_TRAVEL;
             event("MOVE_FEEDER");
@@ -488,10 +489,10 @@ int main(void) {
         if (!success) stop(60);
         phase = BOARD_TRAVEL;
         event("MOVE_BOARD");
-        move_to((board_x[job_index] - x_offset) * XY_STEPS_MM,
-                board_y[job_index] * XY_STEPS_MM, 25 * Z_STEPS_MM,
-                active_nozzle ? position[A_AXIS] : rotations[job_index],
-                active_nozzle ? rotations[job_index] : position[B_AXIS]);
+        move_to((task->x_mm - x_offset) * XY_STEPS_MM,
+                task->y_mm * XY_STEPS_MM, 25 * Z_STEPS_MM,
+                active_nozzle ? position[A_AXIS] : task->rotation_steps,
+                active_nozzle ? task->rotation_steps : position[B_AXIS]);
         if (read_pressure(active_nozzle) >= PICK_THRESHOLD_PA) stop(61);
         phase = PLACE_LOWER;
         event("LOWER_PLACE");

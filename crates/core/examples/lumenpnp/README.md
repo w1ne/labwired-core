@@ -134,3 +134,33 @@ separate KernelCAD evaluations at [20,20,50,0,0] and [50,60,25,0,0]
 finished at [290,250,25,45,90], with 32/32 native checks passed.
 Full swept-collision verification and physical load qualification remain
 outside the simulator's demonstrated scope.
+
+## Data-driven assembly jobs (reference machine)
+
+The mission uses assembly-job.json rather than hard-coded placement coordinates.
+A job contains 1–16 placement records with a unique component ref, populated
+source pocket (or an empty primary with a populated retry pocket), head A/B,
+integer PCB X/Y coordinates in millimetres and rotation in degrees. The
+build-time generator verifies pocket identities, source uniqueness, board
+footprint boundaries, axis travel and 0.225-degree motor-step resolution.
+
+Build the ordinary ARM ELF with build.sh; it generates the job's read-only C
+table from assembly-job.json. To build a different job, set ASSEMBLY_JOB_FILE
+to its absolute JSON path. Run the unchanged native runner with --job pointing
+to the SAME source JSON file, together with --base, --scenario and --out.
+The ELF prints the assembly job's full SHA256 to USART1; Core independently
+loads and hashes the input job and refuses mismatched firmware and job bytes.
+
+Examples:
+- assembly-job.json: three placements with one empty-pocket retry.
+- assembly-job-variant.json: three placements in a different order and at
+  different target coordinates.
+- assembly-job-single.json: one placement, proving job length is not fixed.
+
+The native model still uses the documented mechanical tray, nozzles and board
+envelope. This is a reusable assembly-job DATA contract inside the existing
+Core simulator, not an SMT-specific MCP tool. ChatGPT's generic hosted
+labwired_run / labwired_verify cannot yet run this complete mechanical plant:
+the hosted component catalog does not expose the required TMC2226 driver,
+XGZP6857D sensor or PCA9545A switch as executable diagram parts. Do not
+infer hosted full-machine verification from native runner evidence.

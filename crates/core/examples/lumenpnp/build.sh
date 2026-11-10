@@ -8,6 +8,12 @@ arm_cc=${ARM_CC:-arm-none-eabi-gcc}
 arm_size=${ARM_SIZE:-arm-none-eabi-size}
 arm_nm=${ARM_NM:-arm-none-eabi-nm}
 cd "$example_dir"
+job_path="$example_dir/assembly-job.json"
+if printenv ASSEMBLY_JOB_FILE >/dev/null; then job_path="$(printenv ASSEMBLY_JOB_FILE)"; fi
+python3 "$example_dir/generate_job_header.py" \
+  --job "$job_path" \
+  --geometry "$example_dir/geometry-contract.json" \
+  --out "$example_dir/assembly-job.generated.h"
 "$arm_cc" -mcpu=cortex-m4 -mthumb -mfloat-abi=soft \
   -O2 -g3 -ffunction-sections -fdata-sections -ffreestanding -fno-builtin \
   -ffile-prefix-map="$example_dir"=. -Wa,--debug-prefix-map="$example_dir"=. \
