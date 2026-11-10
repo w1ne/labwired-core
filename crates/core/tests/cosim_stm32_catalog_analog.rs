@@ -49,6 +49,48 @@ fn diode_load_line_voltage() -> f64 {
     junction_v + current_at_junction_voltage(junction_v) * DIODE_RS_OHMS
 }
 
+/// Independent level-1 NMOS load-line reference with optional model sheet
+/// resistance multiplied by the instance's drain/source square counts.
+fn mosfet_drain_voltage(gate_v: f64, drain_resistance: f64, source_resistance: f64) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const LOAD_OHMS: f64 = 10_000.0;
+    const VTO: f64 = 1.0;
+    const KP_A_PER_V2: f64 = 20e-6;
+    const W_M: f64 = 100e-6;
+    const L_M: f64 = 10e-6;
+    const LAMBDA_PER_V: f64 = 0.02;
+
+    let beta = KP_A_PER_V2 * W_M / L_M;
+    let current_at = |current: f64| {
+        let source_internal_v = current * source_resistance;
+        let drain_internal_v = SUPPLY_V - current * (LOAD_OHMS + drain_resistance);
+        let vgs = gate_v - source_internal_v;
+        let vds = (drain_internal_v - source_internal_v).max(0.0);
+        let overdrive = vgs - VTO;
+        if overdrive <= 0.0 {
+            0.0
+        } else if vds < overdrive {
+            beta * (1.0 + LAMBDA_PER_V * vds) * vds * (overdrive - 0.5 * vds)
+        } else {
+            0.5 * beta * (1.0 + LAMBDA_PER_V * vds) * overdrive * overdrive
+        }
+    };
+    let (mut low, mut high) = (
+        0.0,
+        SUPPLY_V / (LOAD_OHMS + drain_resistance + source_resistance),
+    );
+    for _ in 0..100 {
+        let current = 0.5 * (low + high);
+        if current_at(current) > current {
+            low = current;
+        } else {
+            high = current;
+        }
+    }
+    let current = 0.5 * (low + high);
+    SUPPLY_V - current * LOAD_OHMS
+}
+
 /// Independent Gummel–Poon load line. Each matched branch adds one optional
 /// base-junction recombination path (`ISE`/`NE` or `ISC`/`NC`).
 fn bjt_collector_voltage(
@@ -422,6 +464,13 @@ fn generic_netlists(diode_pad: &str) -> SystemManifest {
     analog
 }
 
+fn mosfet_sheet_resistance_netlists() -> SystemManifest {
+    SystemManifest::from_file(root(
+        "examples/stm32-catalog/analog-mosfet-sheet-resistance.yaml",
+    ))
+    .expect("load generic MOSFET sheet-resistance branches")
+}
+
 fn assert_catalog_profile_routes_generic_analog(system_path: &Path) {
     let mut profile = SystemManifest::from_file(system_path)
         .unwrap_or_else(|e| panic!("load {}: {e}", system_path.display()));
@@ -757,5 +806,140 @@ fn every_stm32_catalog_profile_routes_ntc_diode_and_bjt_recombination_into_adc1(
     );
     for system_path in &profiles {
         assert_catalog_profile_routes_generic_analog(system_path);
+    }
+}
+
+#[test]
+fn every_stm32_catalog_profile_routes_mosfet_sheet_resistance_into_adc1() {
+    let profiles = catalog_profiles();
+    assert_eq!(
+        profiles.len(),
+        26,
+        "catalog profile count changed; update the coverage doc"
+    );
+    for system_path in profiles {
+        let mut profile = SystemManifest::from_file(&system_path)
+            .unwrap_or_else(|e| panic!("load {}: {e}", system_path.display()));
+        let chip_path = system_path.parent().unwrap().join(&profile.chip);
+        let chip = ChipDescriptor::from_file(&chip_path).expect("load catalog part descriptor");
+        let part = chip.name.clone();
+        let adc1 = Adc1::from_chip(&chip);
+        for (pad, channel) in [("PA4", 4), ("PA5", 5), ("PA6", 6)] {
+            assert_eq!(
+                chip.analog_pins[pad].channel, channel,
+                "{part}: {pad} is ADC1_IN{channel}"
+            );
+            assert_eq!(
+                chip.analog_pins[pad].peripheral, "adc1",
+                "{part}: {pad} routes to ADC1"
+            );
+        }
+        let (top_pad, top_channel) = top_adc1_pad(&chip);
+        let mut analog = generic_netlists(&top_pad);
+        analog
+            .cosim_models
+            .extend(mosfet_sheet_resistance_netlists().cosim_models);
+        profile.cosim_models = analog.cosim_models;
+
+        let mut bus = SystemBus::from_config(&chip, &profile).expect("build catalog part bus");
+        let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+            .expect("build analog co-simulation")
+            .expect("profile carries NTC, diode, BJT, and MOSFET devices");
+        assert_eq!(
+            session.binding_errors(),
+            &[] as &[RoutingError],
+            "{part}: generic MOSFET branches resolve through PA4/PA5/PA6"
+        );
+        for channel in [0, 1, 2, 3, 4, 5, 6, top_channel] {
+            assert_eq!(
+                adc1.channel_count(&mut bus, channel),
+                0xFFFF,
+                "{part}: ADC1 channel {channel} starts without an analog source"
+            );
+        }
+
+        session
+            .set_signal_number("ui.ntc.temperature_c", 25.0)
+            .expect("hold unrelated NTC at nominal temperature");
+        let mut cycles = 0;
+        for gate_v in [0.5_f64, 2.5] {
+            session
+                .set_signal_number("ui.mosfet.gate_v", gate_v)
+                .expect("set shared generic MOSFET gate drive");
+            cycles += session.cycles_until_boundary(cycles);
+            let (steps, errors) = session
+                .advance_to(cycles, &mut bus)
+                .expect("solve and route all generic analog netlists");
+            assert_eq!(
+                steps.len(),
+                8,
+                "{part}: NTC, diode, three BJT, and three MOSFET branches solve"
+            );
+            assert!(
+                errors.is_empty(),
+                "{part}: unexpected route errors: {errors:?}"
+            );
+
+            let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+            let diode_path = format!("board.analog.{}_volts", top_pad.to_ascii_lowercase());
+            let diode_v = signal_voltage(&session, &diode_path);
+            assert!(
+                (ntc_v - 1.65).abs() < 1e-9,
+                "{part}: unrelated nominal NTC remains isolated at {gate_v} V gate drive"
+            );
+            assert!(
+                (diode_v - diode_load_line_voltage()).abs() < 2e-5,
+                "{part}: unrelated Shockley diode remains isolated at {gate_v} V gate drive"
+            );
+
+            let expected = [
+                ("board.analog.pa4_volts", 0.0, 0.0),
+                ("board.analog.pa5_volts", 2.0 * 500.0, 0.0),
+                ("board.analog.pa6_volts", 0.0, 4.0 * 500.0),
+            ];
+            let mut mosfet_voltages = Vec::new();
+            for (path, drain_resistance, source_resistance) in expected {
+                let volts = signal_voltage(&session, path);
+                let reference = mosfet_drain_voltage(gate_v, drain_resistance, source_resistance);
+                assert!(
+                    (volts - reference).abs() < 5e-5,
+                    "{part}: gate {gate_v} V, RD={drain_resistance} Ω, RS={source_resistance} Ω should solve to {reference} V, got {volts} V"
+                );
+                mosfet_voltages.push(volts);
+            }
+            if gate_v < 1.0 {
+                assert!(
+                    mosfet_voltages.iter().all(|v| (v - 3.3).abs() < 5e-5),
+                    "{part}: all matched MOSFETs remain cut off below threshold: {mosfet_voltages:?}"
+                );
+            } else {
+                assert!(
+                    (mosfet_voltages[1] - mosfet_voltages[0]).abs() > 0.05,
+                    "{part}: drain sheet resistance changes the channel load line: {mosfet_voltages:?}"
+                );
+                assert!(
+                    (mosfet_voltages[2] - mosfet_voltages[0]).abs() > 0.1,
+                    "{part}: source sheet resistance changes the channel load line: {mosfet_voltages:?}"
+                );
+            }
+
+            for (channel, volts) in [
+                (4, mosfet_voltages[0]),
+                (5, mosfet_voltages[1]),
+                (6, mosfet_voltages[2]),
+            ] {
+                let expected_count = expected_adc_count(volts);
+                assert_eq!(
+                    adc1.channel_count(&mut bus, channel),
+                    expected_count,
+                    "{part}: solved MOSFET voltage seeds ADC1 channel {channel}"
+                );
+                assert_eq!(
+                    adc1.convert(&mut bus, channel),
+                    u32::from(expected_count),
+                    "{part}: firmware-visible MOSFET conversion on ADC1 channel {channel}"
+                );
+            }
+        }
     }
 }

@@ -1,0 +1,64 @@
+# Generic level-1 NMOS branches routed through PA4/PA5/PA6 ADC1.
+# The matched branch models isolate drain versus source RSH*squares effects.
+name: "stm32-catalog-analog-mosfet-sheet-resistance"
+chip: "../../configs/chips/stm32f103rb.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "mosfet_without_sheet_resistance"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_v: "ui.mosfet.gate_v"
+    outputs:
+      drain_voltage: "board.analog.pa4_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply drain 10k
+        Vgate gate_drive 0 dc 0
+        M1 drain gate_drive 0 0 NMOS_REFERENCE W=100u L=10u
+        .model NMOS_REFERENCE NMOS(VTO=1 KP=20u LAMBDA=0.02 IS=1e-30)
+      probes:
+        drain_voltage: "v(drain)"
+      sources:
+        gate_v: "Vgate"
+      vdd: 3.3
+  - id: "mosfet_with_drain_sheet_resistance"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_v: "ui.mosfet.gate_v"
+    outputs:
+      drain_voltage: "board.analog.pa5_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply drain 10k
+        Vgate gate_drive 0 dc 0
+        M1 drain gate_drive 0 0 NMOS_DRAIN_SHEET W=100u L=10u NRD=2 NRS=0
+        .model NMOS_DRAIN_SHEET NMOS(VTO=1 KP=20u LAMBDA=0.02 IS=1e-30 RSH=500)
+      probes:
+        drain_voltage: "v(drain)"
+      sources:
+        gate_v: "Vgate"
+      vdd: 3.3
+  - id: "mosfet_with_source_sheet_resistance"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_v: "ui.mosfet.gate_v"
+    outputs:
+      drain_voltage: "board.analog.pa6_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply drain 10k
+        Vgate gate_drive 0 dc 0
+        M1 drain gate_drive 0 0 NMOS_SOURCE_SHEET W=100u L=10u NRD=0 NRS=4
+        .model NMOS_SOURCE_SHEET NMOS(VTO=1 KP=20u LAMBDA=0.02 IS=1e-30 RSH=500)
+      probes:
+        drain_voltage: "v(drain)"
+      sources:
+        gate_v: "Vgate"
+      vdd: 3.3
