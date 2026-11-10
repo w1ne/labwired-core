@@ -49,11 +49,11 @@ jobs:
             target: aarch64
             manylinux: "2_28"
           - name: macos-arm64
-            runner: macos-14
+            runner: macos-15
             target: aarch64
             manylinux: ""
           - name: macos-x86_64
-            runner: macos-14
+            runner: macos-15-intel
             target: x86_64
             manylinux: ""
           - name: windows-x64
@@ -90,10 +90,10 @@ jobs:
             esac
           done
 
-      # A native wheel can be imported and exercised here; a cross-built one
-      # (linux aarch64, macOS x86_64 on an arm64 runner) cannot.
+      # Both macOS wheels now build on their native architecture. Smoke every
+      # native wheel; the cross-built Linux aarch64 wheel cannot run here.
       - name: Smoke test the native wheel
-        if: matrix.name == 'linux-x86_64' || matrix.name == 'macos-arm64' || matrix.name == 'windows-x64'
+        if: matrix.name == 'linux-x86_64' || matrix.name == 'macos-arm64' || matrix.name == 'macos-x86_64' || matrix.name == 'windows-x64'
         shell: bash
         run: |
           set -euo pipefail

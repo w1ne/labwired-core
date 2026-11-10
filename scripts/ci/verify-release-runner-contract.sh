@@ -231,6 +231,14 @@ python_publish_block=$(awk '
 ' "$python_release_workflow")
 require_block_literal "$python_publish_block" "if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')" 'Python SDK publication rejects manual dispatch, including a tag ref'
 
+# macOS 14 GitHub Actions runners retired on 2026-11-02. A queued release
+# matrix leg using that label is rejected before any build step starts.
+require_absent_literal "$python_release_workflow" 'runner: macos-13' 'Python release does not request retired macOS 13 runners'
+require_absent_literal "$python_release_workflow" 'runner: macos-14' 'Python release does not request retired macOS 14 runners'
+require_literal "$python_release_workflow" 'runner: macos-15-intel' 'Python x86_64 wheel has a supported native Intel runner'
+require_literal "$python_release_workflow" 'runner: macos-15' 'Python arm64 wheel has a supported macOS 15 runner'
+require_literal "$python_release_workflow" "if: matrix.name == 'linux-x86_64' || matrix.name == 'macos-arm64' || matrix.name == 'macos-x86_64' || matrix.name == 'windows-x64'" 'Python release smoke-tests both native macOS architectures'
+
 require_literal "$workflow" 'packages: write' 'release workflow grants GHCR package publishing permission'
 require_literal "$workflow" 'docker/setup-buildx-action@v3' 'publish job configures Docker Buildx'
 require_literal "$workflow" 'docker/login-action@v3' 'publish job logs into GHCR'

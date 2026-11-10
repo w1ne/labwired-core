@@ -284,6 +284,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   publish even when dispatched against a tag. Release builds validate the
   workspace version and tracked notes, use the lockfile, and publish the
   reviewed release title and body.
+- Move Python wheel builds to supported macOS ARM64 and Intel runners and run
+  the existing native wheel smoke test on both architectures.
 - Classify three narrow onboarding profiles in the board coverage gate and
   replace their invalid performance waivers with six measured step/batch
   baselines. Existing measured baseline values remain unchanged.
