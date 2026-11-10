@@ -95,6 +95,13 @@ Real board checks:
 Repository hygiene note:
 - Recording artifacts/logs are written to `/tmp` unless `--artifacts-dir` is provided.
 
+## Mixed-signal regression fixtures
+
+`analog-ntc-diode-adc-system.yaml` and `analog-mosfet-adc-system.yaml` route generic MNA
+loads to explicit `adc.adc1.<channel>_volts` co-simulation endpoints. The core test asserts
+the NTC, diode, and level-1 NMOS load lines through ADC1's modeled data-register path. These
+fixtures do not define physical H563 pad aliases or claim silicon conversion parity.
+
 ## References
 
 - Chip config: `../../configs/chips/stm32h563.yaml`

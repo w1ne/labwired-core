@@ -11,6 +11,7 @@ use common::root;
 use labwired_config::{ChipDescriptor, GpioInputThresholds, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::cosim::{CosimSession, CosimSignalValue, RoutingError};
+use labwired_core::peripherals::adc::Adc;
 use labwired_core::Bus;
 use std::path::Path;
 
@@ -18,6 +19,19 @@ const RCC_AHB2ENR: u64 = 0x4402_0C8C;
 const GPIOA_BASE: u64 = 0x4202_0000;
 const GPIOA_MODER: u64 = GPIOA_BASE;
 const GPIOA_IDR: u64 = GPIOA_BASE + 0x10;
+const ADC1_BASE: u64 = 0x4202_8000;
+const ADC_ISR: u64 = ADC1_BASE;
+const ADC_CR: u64 = ADC1_BASE + 0x08;
+const ADC_CFGR: u64 = ADC1_BASE + 0x0C;
+const ADC_SQR1: u64 = ADC1_BASE + 0x30;
+const ADC_DR: u64 = ADC1_BASE + 0x40;
+const ADCEN: u32 = 1 << 10;
+const ADC_ADVREGEN: u32 = 1 << 28;
+const ADC_ADEN: u32 = 1;
+const ADC_ADSTART: u32 = 1 << 2;
+const ADC_ADCAL: u32 = 1 << 31;
+const ADC_ISR_ADRDY: u32 = 1;
+const ADC_ISR_EOC_EOS: u32 = (1 << 2) | (1 << 3);
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
@@ -99,6 +113,105 @@ fn bjt_collector_voltage(base_drive_v: f64, early_voltage_v: Option<f64>) -> f64
         }
     }
     collector_for_vbe((low + high) / 2.0)
+}
+
+/// Independent level-1 NMOS load-line reference for the explicit ADC route.
+fn mosfet_drain_voltage(gate_v: f64) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const LOAD_OHMS: f64 = 1_000.0;
+    const VTO: f64 = 1.0;
+    const KP_A_PER_V2: f64 = 20e-6;
+    const W_M: f64 = 100e-6;
+    const L_M: f64 = 10e-6;
+    const LAMBDA_PER_V: f64 = 0.02;
+
+    let overdrive = gate_v - VTO;
+    if overdrive <= 0.0 {
+        return SUPPLY_V;
+    }
+    let beta = KP_A_PER_V2 * W_M / L_M;
+    let drain_current = |vds: f64| {
+        if vds < overdrive {
+            beta * (1.0 + LAMBDA_PER_V * vds) * vds * (overdrive - 0.5 * vds)
+        } else {
+            0.5 * beta * (1.0 + LAMBDA_PER_V * vds) * overdrive * overdrive
+        }
+    };
+    let residual = |vds: f64| SUPPLY_V - vds - LOAD_OHMS * drain_current(vds);
+    let (mut low, mut high) = (0.0, SUPPLY_V);
+    for _ in 0..100 {
+        let mid = (low + high) / 2.0;
+        if residual(mid) > 0.0 {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    (low + high) / 2.0
+}
+
+fn adc_channel_count(bus: &mut SystemBus, channel: u8) -> u16 {
+    let index = bus
+        .find_peripheral_index_by_name("adc1")
+        .expect("H563 profile declares ADC1");
+    bus.peripherals[index]
+        .dev
+        .as_any_mut()
+        .expect("ADC1 downcasts")
+        .downcast_mut::<Adc>()
+        .expect("ADC1 uses the shared STM32 ADC model")
+        .channel_input_count(channel)
+}
+
+fn expected_adc12_count(voltage_v: f64) -> u32 {
+    let millivolts = (voltage_v * 1000.0).round() as u32;
+    (millivolts * 4095 / 3300).min(4095)
+}
+
+fn adc_power_up(bus: &mut SystemBus) {
+    let ahb2enr = bus.read_u32(RCC_AHB2ENR).expect("read RCC AHB2ENR");
+    bus.write_u32(RCC_AHB2ENR, ahb2enr | ADCEN)
+        .expect("clock ADC1");
+    assert_eq!(
+        bus.read_u32(ADC_CR).unwrap(),
+        1 << 29,
+        "clocked ADC CR reset has DEEPPWD set"
+    );
+    bus.write_u32(ADC_CR, 0).expect("leave deep power-down");
+    bus.write_u32(ADC_CR, ADC_ADVREGEN)
+        .expect("enable ADC voltage regulator");
+    bus.write_u32(ADC_CR, ADC_ADVREGEN | ADC_ADCAL)
+        .expect("calibrate ADC");
+    assert_eq!(bus.read_u32(ADC_CR).unwrap() & ADC_ADCAL, 0, "ADCAL clears");
+    bus.write_u32(ADC_CR, ADC_ADVREGEN | ADC_ADEN)
+        .expect("enable ADC");
+    assert_ne!(
+        bus.read_u32(ADC_ISR).unwrap() & ADC_ISR_ADRDY,
+        0,
+        "ADEN raises ADRDY"
+    );
+    bus.write_u32(ADC_CFGR, 0)
+        .expect("select 12-bit conversion");
+}
+
+fn adc_convert(bus: &mut SystemBus, channel: u8) -> u32 {
+    bus.write_u32(ADC_SQR1, u32::from(channel) << 6)
+        .expect("select ADC1 regular sequence channel");
+    bus.write_u32(ADC_ISR, ADC_ISR_EOC_EOS)
+        .expect("clear ADC1 completion flags");
+    bus.write_u32(ADC_CR, ADC_ADVREGEN | ADC_ADEN | ADC_ADSTART)
+        .expect("start ADC1 conversion");
+    assert_eq!(
+        bus.read_u32(ADC_ISR).unwrap() & ADC_ISR_EOC_EOS,
+        ADC_ISR_EOC_EOS,
+        "ADC conversion completes with EOC and EOS"
+    );
+    assert_eq!(
+        bus.read_u32(ADC_CR).unwrap() & ADC_ADSTART,
+        0,
+        "ADSTART self-clears"
+    );
+    bus.read_u32(ADC_DR).expect("read firmware-visible ADC1 DR")
 }
 
 fn signal_voltage(session: &CosimSession, path: &str) -> f64 {
@@ -337,4 +450,102 @@ fn nucleo_h563zi_bjt_early_effect_reaches_pa2_pa3_gpio_inputs() {
             "PA3 follows the no-Early-effect collector voltage"
         );
     }
+}
+
+#[test]
+fn nucleo_h563zi_ntc_diode_and_mosfet_netlists_reach_adc1_end_to_end() {
+    let system_path = root("configs/systems/nucleo-h563zi-demo.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-H563ZI profile");
+    let adc_analog = SystemManifest::from_file(root(
+        "examples/nucleo-h563zi/analog-ntc-diode-adc-system.yaml",
+    ))
+    .expect("load generic NTC and diode ADC routes");
+    let mosfet =
+        SystemManifest::from_file(root("examples/nucleo-h563zi/analog-mosfet-adc-system.yaml"))
+            .expect("load generic level-1 NMOS route");
+    profile.cosim_models = adc_analog.cosim_models;
+    profile.cosim_models.extend(mosfet.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32H563 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-H563ZI bus");
+    adc_power_up(&mut bus);
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixtures carry NTC, diode, and MOSFET models");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must bind to three explicit ADC1 channel endpoints"
+    );
+    assert_eq!(
+        adc_channel_count(&mut bus, 3),
+        u16::MAX,
+        "the neighboring ADC1 channel begins undriven"
+    );
+
+    let expected_diode_v = diode_load_line_voltage();
+    let expected_ntc_v = 1.65;
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set independent NTC temperature");
+    let mut cycles = 0;
+    let mut mosfet_samples = Vec::new();
+    for gate_v in [0.0_f64, 0.8, 1.0, 2.0, 3.3] {
+        session
+            .set_signal_number("ui.mosfet.gate_v", gate_v)
+            .expect("set MOSFET gate voltage");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route all three analog devices");
+        assert_eq!(steps.len(), 3, "all three netlists solve at each boundary");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let drain_v = signal_voltage(&session, "adc.adc1.2_volts");
+        let expected_drain_v = mosfet_drain_voltage(gate_v);
+        assert!(
+            (drain_v - expected_drain_v).abs() < 5e-5,
+            "level-1 NMOS load line at Vgs={gate_v} V should be {expected_drain_v} V, got {drain_v} V"
+        );
+        assert!(
+            (signal_voltage(&session, "adc.adc1.0_volts") - expected_ntc_v).abs() < 1e-9,
+            "independent Beta NTC remains on ADC1 channel 0"
+        );
+        assert!(
+            (signal_voltage(&session, "adc.adc1.1_volts") - expected_diode_v).abs() < 2e-5,
+            "independent Shockley diode remains on ADC1 channel 1"
+        );
+
+        for (channel, volts) in [(0, expected_ntc_v), (1, expected_diode_v), (2, drain_v)] {
+            let expected = expected_adc12_count(volts);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected as u16,
+                "solved voltage seeds ADC1 channel {channel}"
+            );
+            assert_eq!(
+                adc_convert(&mut bus, channel),
+                expected,
+                "modeled ADC1 data-register conversion follows its analog device on channel {channel}"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 3),
+            u16::MAX,
+            "adjacent ADC1 channel remains isolated"
+        );
+        mosfet_samples.push(drain_v);
+    }
+    assert!(
+        mosfet_samples
+            .windows(2)
+            .all(|pair| pair[1] <= pair[0] + 1e-9),
+        "MOSFET drain voltage cannot rise as gate drive increases"
+    );
+    assert!(
+        *mosfet_samples.last().unwrap() < mosfet_samples[0] - 0.1,
+        "the conducting MOSFET must pull its drain below the cutoff level"
+    );
 }
