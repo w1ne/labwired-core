@@ -42,10 +42,10 @@ The shared ESP32-S3 chip yamls are:
 
 | Aspect              | Status                                                                          |
 |---------------------|---------------------------------------------------------------------------------|
-| Chip yamls          | [`esp32s3.yaml`](../../configs/chips/esp32s3.yaml) (minimal) · [`esp32s3-zero.yaml`](../../configs/chips/esp32s3-zero.yaml) (Plan 2/4) · [DevKitC-1 N16R8 UART0/RMT/ADC profile](../../configs/chips/esp32s3-devkitc-1-n16r8-smoke.yaml) · [DevKitC v1.0 GPIO4/LEDC profile](../../configs/chips/esp32s3-devkitc-1-n16r8-v10-smoke.yaml) · [Arduino Nano ESP32 GPIO profile](../../configs/chips/esp32s3-arduino-nano-smoke.yaml) · [Arduino Nano ESP32 BME280 profile](../../configs/chips/esp32s3-arduino-nano-bme280-smoke.yaml) · [M5Stack AtomS3-Lite GPIO LED profile](../../configs/chips/esp32s3-atoms3-lite-smoke.yaml) |
-| System yaml         | [`configs/systems/esp32s3-zero.yaml`](../../configs/systems/esp32s3-zero.yaml) · [DevKitC-1 N16R8 UART0 profile](../../configs/systems/esp32-s3-devkitc-1-n16r8.yaml) · [DevKitC-1 N16R8 ADC profile](../../configs/systems/esp32-s3-devkitc-1-n16r8-adc.yaml) · [DevKitC v1.0 servo profile](../../configs/systems/esp32-s3-devkitc-1-n16r8-v10-servo.yaml) · [Arduino Nano ESP32 GPIO profile](../../configs/systems/arduino-nano-esp32.yaml) · [Arduino Nano ESP32 BME280 profile](../../configs/systems/arduino-nano-esp32-bme280.yaml) · [M5Stack AtomS3-Lite GPIO LED profile](../../configs/systems/m5stack-atoms3-lite.yaml) |
+| Chip yamls          | [`esp32s3.yaml`](../../configs/chips/esp32s3.yaml) (minimal) · [`esp32s3-zero.yaml`](../../configs/chips/esp32s3-zero.yaml) (Plan 2/4) · [DevKitC-1 N16R8 UART0/RMT/ADC/I²C0/I²C1 profile](../../configs/chips/esp32s3-devkitc-1-n16r8-smoke.yaml) · [DevKitC v1.0 GPIO4/LEDC profile](../../configs/chips/esp32s3-devkitc-1-n16r8-v10-smoke.yaml) · [Arduino Nano ESP32 GPIO profile](../../configs/chips/esp32s3-arduino-nano-smoke.yaml) · [Arduino Nano ESP32 BME280 profile](../../configs/chips/esp32s3-arduino-nano-bme280-smoke.yaml) · [M5Stack AtomS3-Lite GPIO LED profile](../../configs/chips/esp32s3-atoms3-lite-smoke.yaml) |
+| System yaml         | [`configs/systems/esp32s3-zero.yaml`](../../configs/systems/esp32s3-zero.yaml) · [DevKitC-1 N16R8 UART0 profile](../../configs/systems/esp32-s3-devkitc-1-n16r8.yaml) · [DevKitC-1 N16R8 ADC profile](../../configs/systems/esp32-s3-devkitc-1-n16r8-adc.yaml) · [DevKitC-1 N16R8 I²C1 BME280 profile](../../configs/systems/esp32-s3-devkitc-1-n16r8-i2c1-bme280.yaml) · [DevKitC v1.0 servo profile](../../configs/systems/esp32-s3-devkitc-1-n16r8-v10-servo.yaml) · [Arduino Nano ESP32 GPIO profile](../../configs/systems/arduino-nano-esp32.yaml) · [Arduino Nano ESP32 BME280 profile](../../configs/systems/arduino-nano-esp32-bme280.yaml) · [M5Stack AtomS3-Lite GPIO LED profile](../../configs/systems/m5stack-atoms3-lite.yaml) |
 | Reference firmware  | [`examples/esp32s3-i2c-tmp102/`](../../examples/esp32s3-i2c-tmp102/) (Plan 4, canonical) · [DevKitC-1 N16R8 smokes](../../examples/esp32-s3-devkitc-1-n16r8/) · [DevKitC-1 servo quickstart](../../examples/esp32-s3-devkitc-servo/) · [Arduino Nano ESP32 GPIO smoke](../../examples/arduino-nano-esp32/) · [Arduino Nano ESP32 BME280 smoke](../../examples/arduino-nano-esp32-bme280/) · [M5Stack AtomS3-Lite GPIO LED smoke](../../examples/m5stack-atoms3-lite/) · `examples/esp32s3-blinky/` · `examples/esp32s3-hello-world/` |
-| Validation          | Plan 4 end-to-end test: `crates/core/tests/e2e_i2c_tmp102.rs`; local DevKitC UART/RMT/ADC smokes in the linked example's `evidence/` directory |
+| Validation          | Plan 4 end-to-end test: `crates/core/tests/e2e_i2c_tmp102.rs`; local DevKitC UART/RMT/ADC/I²C1 smokes in the linked example's `evidence/` directory |
 | Tier                | structural — declarative + Plan 2/4 peripheral models                           |
 
 ## ESP32-S3-DevKitC-1-N16R8 UART0 + RMT LED smoke
@@ -67,6 +67,18 @@ ESP-IDF boot-ROM startup are outside the smoke. The hosted verifier assumes an
 ideal VDD rail, so reset behavior under power faults is not covered. The
 broader `configs/chips/esp32s3.yaml` still declares a `system_stub`; this narrow
 board profile does not reference it.
+
+## DevKitC N16R8 I²C1 BME280 extension
+
+The [I²C1 system profile](../../configs/systems/esp32-s3-devkitc-1-n16r8-i2c1-bme280.yaml)
+routes controller 1 at `0x60027000` through GPIO-matrix signals 92/91 to J3
+GPIO41/GPIO42, then reads BME280 ID `0x60` and modeled raw temperature
+`0x082DC0`. Its committed local build/run/assertion logs are in
+[`examples/esp32-s3-devkitc-1-n16r8/evidence/i2c1-bme280/`](../../examples/esp32-s3-devkitc-1-n16r8/evidence/i2c1-bme280/).
+This is maintenance/depth work on the existing rank-1 ESP32 board and I²C
+model, not a new board or peripheral model. The firmware uses one I²C
+controller per run; bus contention, pull-up electrical behavior, and supply
+rails are not modeled.
 
 ## GPIO4 / ADC1_CH3 potentiometer smoke
 

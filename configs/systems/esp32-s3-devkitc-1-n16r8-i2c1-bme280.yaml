@@ -1,0 +1,14 @@
+# ESP32-S3-DevKitC-1 v1.1 N16R8 with an external BME280 on I2C1.
+name: "esp32-s3-devkitc-1-n16r8-i2c1-bme280"
+chip: "../chips/esp32s3-devkitc-1-n16r8-smoke.yaml"
+cpu_hz: 240000000
+debug_uart: "uart0"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c1"
+    route:
+      sda: "GPIO41"
+      scl: "GPIO42"
+    config:
+      i2c_address: 0x77

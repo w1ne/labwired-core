@@ -7,6 +7,7 @@ through I²C0, and the ADC extension samples a potentiometer on GPIO4 / ADC1_CH3
 The system profiles are
 [`configs/systems/esp32-s3-devkitc-1-n16r8.yaml`](../../../configs/systems/esp32-s3-devkitc-1-n16r8.yaml),
 [`configs/systems/esp32-s3-devkitc-1-n16r8-bme280.yaml`](../../../configs/systems/esp32-s3-devkitc-1-n16r8-bme280.yaml),
+[`configs/systems/esp32-s3-devkitc-1-n16r8-i2c1-bme280.yaml`](../../../configs/systems/esp32-s3-devkitc-1-n16r8-i2c1-bme280.yaml),
 and [`configs/systems/esp32-s3-devkitc-1-n16r8-adc.yaml`](../../../configs/systems/esp32-s3-devkitc-1-n16r8-adc.yaml).
 
 ## Pin map
@@ -19,6 +20,8 @@ and [`configs/systems/esp32-s3-devkitc-1-n16r8-adc.yaml`](../../../configs/syste
 | J1-4 | ADC1_CH3 | GPIO4 | ADC extension samples a 1650 mV potentiometer input |
 | Header IO8 | I²C0 SDA | GPIO8 | BME280 register reads in the I²C extension |
 | Header IO9 | I²C0 SCL | GPIO9 | BME280 register reads in the I²C extension |
+| J3-7 | I²C1 SDA | GPIO41 | Second-controller BME280 profile |
+| J3-6 | I²C1 SCL | GPIO42 | Second-controller BME280 profile |
 
 Espressif's [current user guide](https://documentation.espressif.com/esp-dev-kits/en/latest/esp32s3/esp32-s3-devkitc-1/user_guide_v1.1.html)
 documents the header signals and the LED pin. The v1.1 LED is wired to GPIO38;
@@ -33,6 +36,9 @@ or claim physical USB serial behavior.
   channel 0's TX_END status; the smoke also asserts the decoded red pixel.
 - The BME280 profile adds the S3 I²C0 model and the BME280 component model. It
   checks the `0x60` chip ID and the modeled raw temperature register sample.
+- The I²C1 profile exercises the second external controller at `0x60027000`,
+  routed through GPIO matrix signals 91/92 to J3 GPIO42/GPIO41. It uses the
+  same BME280 component model and adds no new peripheral model.
 - The ADC profile attaches a potentiometer to SENS ADC1 channel 3, which the
   current board guide maps to GPIO4 / J1 pin 4. Firmware starts a SENS oneshot
   conversion and requires the 1650 mV input to produce code 2047.
@@ -57,6 +63,10 @@ or claim physical USB serial behavior.
   either BME280 marker. See
   [`evidence/bme280/hosted-verification.md`](evidence/bme280/hosted-verification.md);
   this result is not a hosted model-verification pass.
+- The hosted `Wire1` BME280 attempt on GPIO41/GPIO42 did not find the sensor;
+  the catalog exposes I²C0 but not I²C1 in its board bus summary. The local
+  I²C1 register-level smoke passes. See
+  [`evidence/i2c1-bme280/hosted-verification.md`](evidence/i2c1-bme280/hosted-verification.md).
 
 ## BME280 I²C extension
 
@@ -83,6 +93,51 @@ local smoke uses the fast-boot register-level harness in
 [`firmware/bme280_smoke.c`](firmware/bme280_smoke.c).
 The checked-in availability receipt is
 [`evidence/bme280/vendor-status.md`](evidence/bme280/vendor-status.md).
+
+## BME280 I²C1 extension
+
+This is maintenance/depth work on the same rank-1 ESP32 family board, not a
+new board or MCU pick. It exercises the second external I²C controller while
+keeping the existing I²C0 profile on GPIO8/GPIO9. Connect the Adafruit BME280
+breakout VIN/3V and GND to board 3V3 and GND, SDA to J3 pin 7 / GPIO41, and
+SCL to J3 pin 6 / GPIO42. Set SDO high for I²C address `0x77`.
+
+Copy-paste Arduino example:
+
+```cpp
+#include <Adafruit_BME280.h>
+#include <Arduino.h>
+#include <Wire.h>
+
+Adafruit_BME280 bme;
+
+void setup() {
+  Serial.begin(115200);
+  Wire1.begin(41, 42, 100000);  // I2C1 SDA=GPIO41, SCL=GPIO42
+  if (!bme.begin(0x77, &Wire1)) {
+    Serial.println("BME280 not found on I2C1");
+    return;
+  }
+  Serial.printf("BME280_ID=0x%02X\n", bme.sensorID());
+  Serial.printf("Temperature C: %.2f\n", bme.readTemperature());
+}
+
+void loop() {}
+```
+
+Reproduce the local register-level smoke from the repository root:
+
+```sh
+RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
+  --target-id esp32-s3-devkitc-1-n16r8-i2c1-bme280 \
+  --script examples/esp32-s3-devkitc-1-n16r8/i2c1-bme280-smoke.yaml \
+  --system configs/systems/esp32-s3-devkitc-1-n16r8-i2c1-bme280.yaml \
+  --firmware-build-script examples/esp32-s3-devkitc-1-n16r8/ci/build-i2c1-bme280-firmware.sh \
+  --out-dir examples/esp32-s3-devkitc-1-n16r8/evidence/i2c1-bme280
+```
+
+The live availability check is in
+[`evidence/i2c1-bme280/vendor-status.md`](evidence/i2c1-bme280/vendor-status.md).
 
 ## ADC1_CH3 potentiometer extension
 

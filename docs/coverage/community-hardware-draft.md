@@ -70,6 +70,35 @@ maps GPIO4 to ADC1_CH3 and marks older N8 and N8R2 SKUs EOL, not N16R8. The
 dated receipt is in
 [`evidence/adc/vendor-status.md`](../../examples/esp32-s3-devkitc-1-n16r8/evidence/adc/vendor-status.md).
 
+### ESP32-S3-DevKitC-1 N16R8 — second I²C controller
+
+This is maintenance/depth work on the existing ESP32 rank-1 board, not a new
+board or MCU pick. It routes I²C1 through GPIO41/GPIO42 and reads the BME280
+ID (`0x60`) and modeled raw temperature (`0x082DC0`). Copy-paste Arduino code,
+wiring, local smoke logs, and the live vendor receipt are in the board
+[README and evidence](../../examples/esp32-s3-devkitc-1-n16r8/README.md).
+
+With an Adafruit BME280 at address `0x77`, on GPIO41 SDA and GPIO42 SCL:
+
+```cpp
+#include <Adafruit_BME280.h>
+#include <Arduino.h>
+#include <Wire.h>
+
+Adafruit_BME280 bme;
+
+void setup() {
+  Serial.begin(115200);
+  Wire1.begin(41, 42, 100000);
+  if (bme.begin(0x77, &Wire1)) {
+    Serial.printf("BME280_ID=0x%02X\n", bme.sensorID());
+    Serial.printf("Temperature C: %.2f\n", bme.readTemperature());
+  }
+}
+
+void loop() {}
+```
+
 ### ESP32-DevKitC-32E / ESP32-WROOM-32E
 
 The board profile boots Arduino firmware and exercises UART0, UART1 TX, GPIO,

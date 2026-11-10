@@ -1,0 +1,8 @@
+Using toolchain-xtensa-esp-elf@14.2.0+20260121 package
+/home/andrii/worktrees/labwired-core/hw-onboarding/examples/esp32-s3-devkitc-1-n16r8/firmware/bme280_smoke.c: In function 'setup_i2c':
+/home/andrii/worktrees/labwired-core/hw-onboarding/examples/esp32-s3-devkitc-1-n16r8/firmware/bme280_smoke.c:103:32: warning: left shift count >= width of type [-Wshift-count-overflow]
+  103 |   REG32(GPIO_ENABLE_W1TS) = (1 << SDA_PIN) | (1 << SCL_PIN);
+      |                                ^~
+/home/andrii/worktrees/labwired-core/hw-onboarding/examples/esp32-s3-devkitc-1-n16r8/firmware/bme280_smoke.c:103:49: warning: left shift count >= width of type [-Wshift-count-overflow]
+  103 |   REG32(GPIO_ENABLE_W1TS) = (1 << SDA_PIN) | (1 << SCL_PIN);
+      |                                                 ^~

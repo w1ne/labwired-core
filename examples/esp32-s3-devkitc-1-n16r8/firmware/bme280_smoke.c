@@ -1,7 +1,23 @@
-/* ESP32-S3-DevKitC-1 N16R8: read BME280 ID and temperature over I2C0. */
+/* ESP32-S3-DevKitC-1 N16R8: read BME280 ID and temperature over I2C0/I2C1. */
 #include <stdint.h>
 
 #define REG32(addr) (*(volatile uint32_t *)(uintptr_t)(addr))
+
+#if defined(ESP32S3_I2C1)
+#define I2C_BASE 0x60027000
+#define I2C_SDA_SIGNAL 92
+#define I2C_SCL_SIGNAL 91
+#define I2C_CLOCK_ENABLE (1U << 18)
+#define SDA_PIN 41
+#define SCL_PIN 42
+#else
+#define I2C_BASE 0x60013000
+#define I2C_SDA_SIGNAL 90
+#define I2C_SCL_SIGNAL 89
+#define I2C_CLOCK_ENABLE (1U << 7)
+#define SDA_PIN 8
+#define SCL_PIN 9
+#endif
 
 enum {
   UART0_FIFO = 0x60000000,
@@ -9,33 +25,28 @@ enum {
   SYS_PERIP_RST_EN0 = 0x600C0020,
   GPIO_BASE = 0x60004000,
   GPIO_ENABLE_W1TS = GPIO_BASE + 0x24,
-  GPIO_PIN8 = GPIO_BASE + 0x74 + 8 * 4,
-  GPIO_PIN9 = GPIO_BASE + 0x74 + 9 * 4,
-  GPIO_OUT_SEL8 = GPIO_BASE + 0x554 + 8 * 4,
-  GPIO_OUT_SEL9 = GPIO_BASE + 0x554 + 9 * 4,
-  GPIO_IN_SEL_SDA = GPIO_BASE + 0x154 + 90 * 4,
-  GPIO_IN_SEL_SCL = GPIO_BASE + 0x154 + 89 * 4,
+  GPIO_PIN_SDA = GPIO_BASE + 0x74 + SDA_PIN * 4,
+  GPIO_PIN_SCL = GPIO_BASE + 0x74 + SCL_PIN * 4,
+  GPIO_OUT_SEL_SDA = GPIO_BASE + 0x554 + SDA_PIN * 4,
+  GPIO_OUT_SEL_SCL = GPIO_BASE + 0x554 + SCL_PIN * 4,
+  GPIO_IN_SEL_SDA = GPIO_BASE + 0x154 + I2C_SDA_SIGNAL * 4,
+  GPIO_IN_SEL_SCL = GPIO_BASE + 0x154 + I2C_SCL_SIGNAL * 4,
   IO_MUX_BASE = 0x60009000,
-  I2C0 = 0x60013000,
-  I2C_CTR = I2C0 + 0x04,
-  I2C_FIFO_CONF = I2C0 + 0x18,
-  I2C_DATA = I2C0 + 0x1C,
-  I2C_INT_RAW = I2C0 + 0x20,
-  I2C_INT_CLR = I2C0 + 0x24,
-  I2C_CLK_CONF = I2C0 + 0x54,
-  I2C_COMD0 = I2C0 + 0x58,
-  I2C_SCL_LOW = I2C0 + 0x00,
-  I2C_SDA_HOLD = I2C0 + 0x30,
-  I2C_SDA_SAMPLE = I2C0 + 0x34,
-  I2C_SCL_HIGH = I2C0 + 0x38,
-  I2C_START_HOLD = I2C0 + 0x40,
-  I2C_RSTART_SETUP = I2C0 + 0x44,
-  I2C_STOP_HOLD = I2C0 + 0x48,
-  I2C_STOP_SETUP = I2C0 + 0x4C,
-  I2C_SDA_SIGNAL = 90,
-  I2C_SCL_SIGNAL = 89,
-  SDA_PIN = 8,
-  SCL_PIN = 9,
+  I2C_CTR = I2C_BASE + 0x04,
+  I2C_FIFO_CONF = I2C_BASE + 0x18,
+  I2C_DATA = I2C_BASE + 0x1C,
+  I2C_INT_RAW = I2C_BASE + 0x20,
+  I2C_INT_CLR = I2C_BASE + 0x24,
+  I2C_CLK_CONF = I2C_BASE + 0x54,
+  I2C_COMD0 = I2C_BASE + 0x58,
+  I2C_SCL_LOW = I2C_BASE + 0x00,
+  I2C_SDA_HOLD = I2C_BASE + 0x30,
+  I2C_SDA_SAMPLE = I2C_BASE + 0x34,
+  I2C_SCL_HIGH = I2C_BASE + 0x38,
+  I2C_START_HOLD = I2C_BASE + 0x40,
+  I2C_RSTART_SETUP = I2C_BASE + 0x44,
+  I2C_STOP_HOLD = I2C_BASE + 0x48,
+  I2C_STOP_SETUP = I2C_BASE + 0x4C,
   GPIO_INPUT_MATRIX = 1 << 7,
   I2C_FORCE_OUT = 3,
   I2C_MS_MODE = 1 << 4,
@@ -79,16 +90,16 @@ static void i2c_command(unsigned index, uint32_t opcode, uint32_t bytes,
 }
 
 static void setup_i2c(void) {
-  REG32(SYS_PERIP_CLK_EN0) |= 1 << 7; /* I2C_EXT0 clock */
+  REG32(SYS_PERIP_CLK_EN0) |= I2C_CLOCK_ENABLE;
   REG32(SYS_PERIP_RST_EN0) = 0;       /* release peripheral reset */
 
-  /* GPIO-matrix I2C0: SDA=GPIO8, SCL=GPIO9, with open-drain pads. */
+  /* GPIO-matrix I2C: SDA/SCL use this profile's selected exposed pads. */
   REG32(IO_MUX_BASE + 4 + 4 * SDA_PIN) = (1 << 12) | (2 << 10) | (1 << 9) | (1 << 8);
   REG32(IO_MUX_BASE + 4 + 4 * SCL_PIN) = (1 << 12) | (2 << 10) | (1 << 9) | (1 << 8);
-  REG32(GPIO_PIN8) = 1 << 2;
-  REG32(GPIO_PIN9) = 1 << 2;
-  REG32(GPIO_OUT_SEL8) = I2C_SDA_SIGNAL;
-  REG32(GPIO_OUT_SEL9) = I2C_SCL_SIGNAL;
+  REG32(GPIO_PIN_SDA) = 1 << 2;
+  REG32(GPIO_PIN_SCL) = 1 << 2;
+  REG32(GPIO_OUT_SEL_SDA) = I2C_SDA_SIGNAL;
+  REG32(GPIO_OUT_SEL_SCL) = I2C_SCL_SIGNAL;
   REG32(GPIO_ENABLE_W1TS) = (1 << SDA_PIN) | (1 << SCL_PIN);
   REG32(GPIO_IN_SEL_SDA) = GPIO_INPUT_MATRIX | SDA_PIN;
   REG32(GPIO_IN_SEL_SCL) = GPIO_INPUT_MATRIX | SCL_PIN;

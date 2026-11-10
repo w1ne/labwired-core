@@ -1,0 +1,31 @@
+{
+  "tool": "labwired_verify",
+  "board": "esp32-s3-devkitc-1-n16r8",
+  "target": "esp32-s3-devkitc-1-n16r8",
+  "language": "arduino",
+  "entryPath": "src/main.ino",
+  "diagram": {
+    "board": "esp32-s3-devkitc-1-n16r8",
+    "parts": [
+      {
+        "id": "mcu",
+        "type": "esp32-s3-devkitc-1-n16r8",
+        "attrs": { "internal_pullups": "GPIO41,GPIO42" }
+      },
+      { "id": "bme280", "type": "bme280" }
+    ],
+    "wires": [
+      { "from": { "part": "mcu", "pin": "GPIO41" }, "to": { "part": "bme280", "pin": "SDA" } },
+      { "from": { "part": "mcu", "pin": "GPIO42" }, "to": { "part": "bme280", "pin": "SCL" } },
+      { "from": { "part": "mcu", "pin": "3V3" }, "to": { "part": "bme280", "pin": "VCC" } },
+      { "from": { "part": "mcu", "pin": "GND" }, "to": { "part": "bme280", "pin": "GND" } },
+      { "from": { "part": "mcu", "pin": "3V3" }, "to": { "part": "bme280", "pin": "SDO" } }
+    ]
+  },
+  "oracle": {
+    "serial": [{ "contains": "BME280_ID=0x60" }]
+  },
+  "max_steps": 100000000,
+  "source_file": "firmware/arduino-bme280-i2c1/main.ino",
+  "lib_deps": ["adafruit/Adafruit BME280 Library"]
+}

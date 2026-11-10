@@ -6,24 +6,24 @@
   "script": "examples/esp32-s3-devkitc-1-n16r8/bme280-smoke.yaml",
   "system": "configs/systems/esp32-s3-devkitc-1-n16r8-bme280.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-06T02:13:32Z",
-  "finished_at_utc": "2026-11-06T02:13:49Z",
-  "elapsed_seconds": 17,
-  "elapsed_ms": 16827,
+  "started_at_utc": "2026-11-10T11:39:26Z",
+  "finished_at_utc": "2026-11-10T11:39:27Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1389,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 15.468,
-    "build_firmware": 0.687,
-    "run_smoke": 0.633
+    "build_cli": 0.338,
+    "build_firmware": 0.475,
+    "run_smoke": 0.537
   },
   "stages_ms": {
-    "build_cli": 15468,
-    "build_firmware": 687,
-    "run_smoke": 633
+    "build_cli": 338,
+    "build_firmware": 475,
+    "run_smoke": 537
   },
   "firmware_build_script": "examples/esp32-s3-devkitc-1-n16r8/ci/build-bme280-firmware.sh"
 }
