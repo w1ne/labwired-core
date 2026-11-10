@@ -188,6 +188,16 @@ pub(crate) struct TestResult {
     /// printed. See `crate::uart_lines` for the resolution contract.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) uart_lines: Option<crate::uart_lines::UartLinesResult>,
+    /// Unique 7-bit I²C addresses observed on the universal bus-trace ring
+    /// (sorted). Omitted when none were seen, so runs without I²C stay
+    /// byte-identical. Address phases only — data bytes are not addresses.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) i2c_addresses: Vec<u8>,
+    /// True when the shared bus-trace ring evicted events, so an exclusivity
+    /// claim ("only address 0x68") cannot be proved from this summary. Omitted
+    /// when the ring did not evict, keeping non-I²C runs byte-identical.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) i2c_trace_evicted: bool,
     /// Final + peak motor evidence (omitted when the manifest declared no
     /// motors, keeping result.json byte-identical for every other run). The
     /// oracle evaluates the peak `|speed_rpm|` post-hoc: a continuous
