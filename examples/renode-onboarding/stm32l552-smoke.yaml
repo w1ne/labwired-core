@@ -1,14 +1,18 @@
 # Cortex-M33 smoke against the imported Renode STM32L552 system.
-schema_version: "1.0"
+schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-l552ze-smoke"
   system: "../../configs/systems/onboarding/stm32l552.yaml"
 limits:
   max_steps: 2000000
+uart_injections:
+  - uart: "lpuart1"
+    bytes: "R"
 assertions:
   - uart_contains: "NUCLEO-L552ZE-Q SMOKE"
   - uart_ordered:
       - "cpu=cortex-m33 uart=lpuart1"
+      - "rx=lpuart1 rxne_before=1 data=00000052 rxne_after=0 ok"
       - "led=ld1 odr=00000080"
       - "led=ld1_off odr=00000000"
       - "led=ld2 odr=00000080"

@@ -59,9 +59,11 @@ const LPUART1: u32 = 0x4000_8000;
 const LPUART_CR1: *mut u32 = LPUART1 as *mut u32;
 const LPUART_BRR: *mut u32 = (LPUART1 + 0x0C) as *mut u32;
 const LPUART_ISR: *const u32 = (LPUART1 + 0x1C) as *const u32;
+const LPUART_RDR: *const u32 = (LPUART1 + 0x24) as *const u32;
 const LPUART_TDR: *mut u32 = (LPUART1 + 0x28) as *mut u32;
 
 const USART_ISR_TXE: u32 = 1 << 7;
+const USART_ISR_RXNE: u32 = 1 << 5;
 const USART_CR1_UE: u32 = 1 << 0;
 const USART_CR1_RE: u32 = 1 << 2;
 const USART_CR1_TE: u32 = 1 << 3;
@@ -170,6 +172,21 @@ fn button_level() -> u32 {
     unsafe { (read_volatile((GPIOC + IDR) as *const u32) >> 13) & 1 }
 }
 
+fn smoke_lpuart_rx() {
+    let rxne_before = unsafe { read_volatile(LPUART_ISR) & USART_ISR_RXNE != 0 };
+    let data = unsafe { (read_volatile(LPUART_RDR) & 0xFF) as u8 };
+    let rxne_after = unsafe { read_volatile(LPUART_ISR) & USART_ISR_RXNE != 0 };
+    let ok = rxne_before && data == b'R' && !rxne_after;
+
+    puts(b"rx=lpuart1 rxne_before=");
+    putc(if rxne_before { b'1' } else { b'0' });
+    puts(b" data=");
+    put_hex32(u32::from(data));
+    puts(b" rxne_after=");
+    putc(if rxne_after { b'1' } else { b'0' });
+    puts(if ok { b" ok\n" } else { b" FAIL\n" });
+}
+
 #[inline(never)]
 fn spin(iterations: u32) {
     for _ in 0..iterations {
@@ -223,6 +240,7 @@ fn main() -> ! {
 
     puts(b"NUCLEO-L552ZE-Q SMOKE\n");
     puts(b"cpu=cortex-m33 uart=lpuart1\n");
+    smoke_lpuart_rx();
 
     for led in LEDS {
         led_drive(led, true);
