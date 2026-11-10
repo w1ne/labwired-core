@@ -553,6 +553,13 @@ fn every_shipped_descriptor_is_ratcheted() {
         "atsamd21j16a",
         "atsamd21j17a",
         "atsamd21j18a",
+        // Narrow DevKitC-32E onboarding profiles: GPIO/RTC sleep and UART1 TX.
+        // Neither descriptor is registered in the Playground board catalog.
+        // Chip conformance and committed smoke receipts cover these slices,
+        // but neither has its own executing-fidelity differential. They must
+        // not inherit that credit from the parent ESP32 descriptor.
+        "esp32-devkitc-32e-gpio-smoke",
+        "esp32-devkitc-32e-uart1",
         "esp32",         // classic Xtensa, separate e2e lane, not a catalog board
         "esp32s3-zero",  // board variant of esp32s3 (covered by esp32s3)
         "stm32f401cdu6", // BlackPill variant of stm32f401 (covered by stm32f401)
@@ -570,6 +577,11 @@ fn every_shipped_descriptor_is_ratcheted() {
         "stm32f103r6h",
         "stm32f103r8",
         "stm32f103rb",
+        // NUCLEO-F103RB + BME280 narrow USART2/LD2/I2C1 smoke profile.
+        // This descriptor is not registered in the Playground board catalog.
+        // Its committed onboarding receipt is functional evidence, not an
+        // executing-fidelity differential or a silicon reference.
+        "stm32f103rb-nucleo-bme280-smoke",
         "stm32f103t4",
         "stm32f103t6",
         // STM32G431RB (demand-ordered onboarding; JetBrains State of Embedded

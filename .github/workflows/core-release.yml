@@ -60,6 +60,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check release version and notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(awk '
+            { sub(/\r$/, "") }
+            /^\[workspace\.package\]$/ { package_section = 1; next }
+            /^\[/ { package_section = 0 }
+            package_section && /^version[[:space:]]*=/ {
+              gsub(/"/, "", $3); print $3; exit
+            }
+          ' Cargo.toml)"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Cannot read the workspace release version from Cargo.toml."
+            exit 1
+          fi
+          if [[ "$GITHUB_REF_TYPE" == tag && "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "::error::Release tag $GITHUB_REF_NAME disagrees with workspace version v$version."
+            exit 1
+          fi
+          notes="docs/releases/v$version.md"
+          git ls-files --error-unmatch "$notes" >/dev/null
+          test -s "$notes"
+          IFS= read -r title < "$notes"
+          title=${title%$'\r'}
+          if [[ "$title" != "# Release v$version: "?* ]]; then
+            echo "::error::$notes must start with '# Release v$version: <summary>'."
+            exit 1
+          fi
+
       - name: Install Rust
         if: matrix.container == ''
         uses: dtolnay/rust-toolchain@1.95.0
@@ -76,7 +106,7 @@ jobs:
       # runner, aarch64 on an arm64 runner — so there is no `cross` and no
       # unpinned toolchain image deciding our glibc floor for us.
       - name: Build
-        run: cargo build -p labwired-cli -p labwired-dap --release --target ${{ matrix.target }}
+        run: cargo build -p labwired-cli -p labwired-dap --release --target ${{ matrix.target }} --locked
 
       - name: Package binary
         shell: bash
@@ -168,7 +198,7 @@ jobs:
     needs: [build, linux-smoke]
     # Publishing only ever happens for a tag; a dispatch run stops after
     # the artifacts have been built, asserted and smoked.
-    if: github.ref_type == 'tag'
+    if: github.event_name == 'push' && github.ref_type == 'tag'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -179,31 +209,32 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - name: Read the tracked release notes
+        id: notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          notes="docs/releases/$GITHUB_REF_NAME.md"
+          git ls-files --error-unmatch "$notes" >/dev/null
+          IFS= read -r title < "$notes"
+          title=${title%$'\r'}
+          printf 'title=%s\n' "${title#\# }" >> "$GITHUB_OUTPUT"
+          printf 'path=%s\n' "$notes" >> "$GITHUB_OUTPUT"
+
       - name: Create release and upload assets
         uses: softprops/action-gh-release@v2
         with:
-          name: LabWired ${{ github.ref_name }}
-          body: |
-            ## Installation
-
-            ```sh
-            curl -fsSL https://labwired.com/install.sh | sh
-            ```
-
-            Or with a specific version:
-
-            ```sh
-            curl -fsSL https://labwired.com/install.sh | LABWIRED_VERSION=${{ github.ref_name }} sh
-            ```
-
-            See the [full changelog](CHANGELOG.md) for what's new.
+          name: ${{ steps.notes.outputs.title }}
+          body_path: ${{ steps.notes.outputs.path }}
+          # The reviewed draft becomes public only in this tag-push job.
+          draft: false
           files: dist/*.tar.gz
           fail_on_unmatched_files: true
 
   publish:
     name: Publish CI runner image
     needs: release
-    if: github.ref_type == 'tag'
+    if: github.event_name == 'push' && github.ref_type == 'tag'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -256,7 +287,7 @@ jobs:
   release-smoke:
     name: Smoke released archives and runner image
     needs: [release, publish]
-    if: github.ref_type == 'tag'
+    if: github.event_name == 'push' && github.ref_type == 'tag'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

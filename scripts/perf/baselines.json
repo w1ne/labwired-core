@@ -83,6 +83,14 @@
     "batch": 1.4,
     "step": 955.5
   },
+  "esp32-devkitc-32e-gpio-smoke": {
+    "batch": 1.4,
+    "step": 977.8
+  },
+  "esp32-devkitc-32e-uart1": {
+    "batch": 1.4,
+    "step": 977.7
+  },
   "esp32c3": {
     "batch": 2.5
   },
@@ -208,6 +216,10 @@
   "stm32f103rb": {
     "step": 935.4,
     "batch": 1.6
+  },
+  "stm32f103rb-nucleo-bme280-smoke": {
+    "batch": 1.5,
+    "step": 921.9
   },
   "stm32f103t4": {
     "step": 936.4,

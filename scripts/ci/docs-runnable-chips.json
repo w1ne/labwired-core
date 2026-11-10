@@ -16,8 +16,10 @@
   "firmware_release": "firmware-demos-v3",
   "chips": {
     "ch32v003f4p6": {
-      "how": "needs-build",
-      "why": "Requires unreleased CH32V003/RV32E core support from PR #1698; the installed LabWired CLI v0.25.0 cannot run this branch-only model yet."
+      "how": "committed",
+      "firmware": "tests/fixtures/ch32v003f4p6-uart-hello.elf",
+      "expect": "Hello from CH32V003",
+      "note": "The CH32V003/RV32E support from #1698 is included in v0.26.0. The candidate runs this committed RV32EC UART fixture without a cross toolchain. This entry proves polled USART1 output, not full CH32V003 peripheral coverage."
     },
     "dspic33fj32mc204": {
       "how": "committed",
@@ -133,11 +135,10 @@
       "why": "Exact orderable geometry slice on the shared medium-density STM32F103 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f103 and exact geometry is checked by stm32_variant_geometry."
     },
     "stm32f401": {
-      "how": "blocked",
-      "firmware": "demo-nucleo-f401.elf",
-      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
-      "expect": null,
-      "note": "v0.25.0 refuses adc1 profile 'stm32f4' (unsupported ADC register layout; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5). Fixed on main by #1222 (AdcRegisterLayout::Stm32F4). This entry flips back to committed in the first release that carries that fix; the gate fails if it starts passing while still marked blocked. Prior map: how=committed firmware=tests/fixtures/tier1/stm32f401.elf expect='TIER1 clock PASS'."
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32f401.elf",
+      "expect": "TIER1 clock PASS",
+      "note": "Restored for v0.26.0 after #1222 added the STM32F4 ADC register layout. The v0.26.0 candidate runs this committed fixture with the expected transcript and no TIER1 FAIL lines."
     },
     "stm32f401cb": {
       "how": "needs-build",
@@ -188,11 +189,10 @@
       "why": "Exact orderable geometry slice on the shared STM32F401 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f401 and exact geometry is checked by stm32_variant_geometry."
     },
     "stm32f411ceu6": {
-      "how": "blocked",
-      "firmware": "demo-nucleo-f401.elf",
-      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
-      "expect": null,
-      "note": "v0.25.0 refuses adc1 profile 'stm32f4' (unsupported ADC register layout; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5). Fixed on main by #1222 (AdcRegisterLayout::Stm32F4). This entry flips back to committed in the first release that carries that fix; the gate fails if it starts passing while still marked blocked. Prior map: how=committed firmware=tests/fixtures/tier1/stm32f411.elf expect='TIER1 clock PASS'."
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32f411.elf",
+      "expect": "TIER1 clock PASS",
+      "note": "Restored for v0.26.0 after #1222 added the STM32F4 ADC register layout. The v0.26.0 candidate runs this committed fixture with the expected transcript and no TIER1 FAIL lines."
     },
     "stm32h563": {
       "how": "committed",
@@ -257,25 +257,22 @@
       "note": "Board variant of esp32s3; runs the same TIER1 image."
     },
     "stm32f401cdu6": {
-      "how": "blocked",
-      "firmware": "demo-nucleo-f401.elf",
-      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
-      "expect": null,
-      "note": "v0.25.0 refuses adc1 profile 'stm32f4' (unsupported ADC register layout; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5). Fixed on main by #1222 (AdcRegisterLayout::Stm32F4). This entry flips back to committed in the first release that carries that fix; the gate fails if it starts passing while still marked blocked. Prior map: how=committed firmware=tests/fixtures/tier1/stm32f401.elf expect='TIER1 clock PASS'."
+      "how": "committed",
+      "firmware": "tests/fixtures/stm32f401cdu6-blackpill-demo.elf",
+      "expect": "OK",
+      "note": "Dedicated Black Pill UART smoke, verified with the v0.26.0 candidate. This proves installed-CLI execution and UART output only. The shared stm32f401 TIER1 fixture still reports timer-gated, spi-gated, adc-gated, wdt-unprotected, rtc-dr-reset, dma-ndtr and pwm-gated failures on this descriptor; it is not full peripheral qualification."
     },
     "stm32f405": {
-      "how": "blocked",
-      "firmware": "demo-nucleo-f401.elf",
-      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
-      "expect": null,
-      "note": "v0.25.0 refuses adc1 profile 'stm32f4' (unsupported ADC register layout; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5). Fixed on main by #1222 (AdcRegisterLayout::Stm32F4). This entry flips back to committed in the first release that carries that fix; the gate fails if it starts passing while still marked blocked. Prior map: how=committed firmware=tests/fixtures/tier1/stm32f405.elf expect='TIER1 i2c PASS'."
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32f405.elf",
+      "expect": "TIER1 i2c PASS",
+      "note": "Restored for v0.26.0 after #1222 added the STM32F4 ADC register layout. The v0.26.0 candidate runs this committed fixture with the expected transcript and no TIER1 FAIL lines."
     },
     "stm32f407": {
-      "how": "blocked",
-      "firmware": "demo-nucleo-f401.elf",
-      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
-      "expect": null,
-      "note": "v0.25.0 refuses adc1 profile 'stm32f4' (unsupported ADC register layout; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5). Fixed on main by #1222 (AdcRegisterLayout::Stm32F4). This entry flips back to committed in the first release that carries that fix; the gate fails if it starts passing while still marked blocked. Prior map: how=committed firmware=tests/fixtures/tier1/stm32f407.elf expect='TIER1 clock PASS'."
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32f407.elf",
+      "expect": "TIER1 clock PASS",
+      "note": "Restored for v0.26.0 after #1222 added the STM32F4 ADC register layout. The v0.26.0 candidate runs this committed fixture with the expected transcript and no TIER1 FAIL lines."
     },
     "stm32f407ie": {
       "how": "needs-build",
@@ -302,11 +299,10 @@
       "why": "Exact orderable geometry slice on the shared STM32F407 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f407 and exact geometry is checked by stm32_variant_geometry."
     },
     "stm32f767": {
-      "how": "blocked",
-      "firmware": "demo-nucleo-f401.elf",
-      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
-      "expect": null,
-      "note": "v0.25.0 refuses adc1 profile 'stm32f4' (unsupported ADC register layout; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5). Fixed on main by #1222 (AdcRegisterLayout::Stm32F4). This entry flips back to committed in the first release that carries that fix; the gate fails if it starts passing while still marked blocked. Prior map: how=committed firmware=tests/fixtures/tier1/stm32f767.elf expect='TIER1 i2c PASS'."
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32f767.elf",
+      "expect": "TIER1 i2c PASS",
+      "note": "Restored for v0.26.0 after #1222 added the STM32F4 ADC register layout. The v0.26.0 candidate runs this committed fixture with the expected transcript and no TIER1 FAIL lines."
     },
     "stm32g474re": {
       "how": "committed",

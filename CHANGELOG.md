@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.26.0] - 2026-11-10
+
+### Release highlights
+- Multi-MCU systems now exchange timed GPIO, SPI, I2C, UART and CAN traffic;
+  ESP32-C3 nodes can connect and exchange BLE GATT data. The Python SDK and
+  pytest integration use the same core, including multi-node worlds.
+- Source debugging, GDB watchpoints, firmware branch coverage and LCOV/Cobertura
+  exports improve fault diagnosis and regression reporting.
+- New CPU and board paths include PIC16/PIC18/PIC24, RV64, AArch64,
+  Cortex-R5F, Renesas RX, MIPS32 and CH32V003. Coverage remains specific to the
+  documented board and firmware tests. Native ARM system execution is opt-in.
+- Analog work adds device models, supply-aware reset, motor winding circuits,
+  routed resistance and INA219 circuit coupling. New parts include the
+  STM32G0B1RE/TIOL112 IO-Link path, ACS712, joystick and limit-switch models,
+  expanded sensor/display sets and OV3660 camera JPEG output.
+- Recent compatibility fixes cover ESP32 Arduino/IDF 5 startup, NVS persistence,
+  RP2040 boot ROM and flash operations, AVR EEPROM/watchdog behavior, servo pulse
+  timing and AHT20 initialization.
+- See [the release notes](docs/releases/v0.26.0.md) for migration details and
+  links to the merged changes. The detailed entries below preserve each
+  feature's scope and limitations.
+
 ### Added
 - Batch 5: ten more declarative parts, closing the high-demand list. LoRa:
   `sx1276` (the LoRa register page with §6.4 reset values, RSSI / packet RSSI /
@@ -42,9 +65,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a real CASET/RASET/RAMWR (or page/column pointer) sequence and checks the
   exact frame-memory bytes. Its negative control requires every check to FAIL
   against a panel that reads all 0x00 or 0xFF, including one with live flags
-  over mute memory. Each part has a `docs/parts/` page. SSD1327 (needs a
-  4-bit grayscale pixel format) and SK6812 (needs a 32-bit-per-LED strip
-  decoder) were not added.
+  over mute memory. Each part has a `docs/parts/` page. SSD1327 remains unavailable because it needs a 4-bit grayscale pixel
+  format. SK6812 RGBW support is included in the batch 5 entry above.
 - Four more everyday I²C parts as declarative `configs/devices/*.yaml`
   descriptors: `mpu9250` (accel/gyro/temp; AK8963 magnetometer not modelled),
   `ens160` (TVOC/eCO2/AQI, live only in STANDARD mode), `ina260` (fixed-LSB
@@ -62,8 +84,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Darlington sink, `logic_gate`) and `rfm95` (RFM95W / SX1276 SPI register
   shell, no RF air link). Each is in `everyday_sensor_set.rs` with a smoke
   check, a negative control and a stimulus test; the SPI and GPIO parts get
-  their own stand-ins. MCP3008 and ADS1256 are not included: their SPI
-  framings need engine support that does not exist yet.
+  their own stand-ins. MCP3008 and ADS1256 are included in the batch 5 entry above,
+  which adds the required SPI reply handling.
 - Nine everyday I²C sensors as declarative `configs/devices/*.yaml` parts, no
   Rust model: `sht40`, `bme680` (T/P/H; gas not modelled), `icm42688`,
   `icm20948` (accel/gyro/temp; magnetometer not modelled), `sgp40`, `tsl2591`,
@@ -258,6 +280,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a run without any skip. The four-servo trajectory lab (two cores, loopTask
   on APP_CPU) goes from 0.03x to 2.0x real time in WASM (Node, 12 s).
 ### Fixed
+- Release publication now requires a tag push. Manual artifact dry-runs cannot
+  publish even when dispatched against a tag. Release builds validate the
+  workspace version and tracked notes, use the lockfile, and publish the
+  reviewed release title and body.
+- Classify three narrow onboarding profiles in the board coverage gate and
+  replace their invalid performance waivers with six measured step/batch
+  baselines. Existing measured baseline values remain unchanged.
+- Update installed-CLI documentation fixtures for CH32V003 and STM32F4 paths
+  that the v0.26.0 engine can run. The BlackPill entry uses its dedicated UART
+  smoke fixture; it does not claim the broader family fixture passes.
 - A WAITI-parked secondary core that an interrupt wakes in the middle of a
   quantum-1 window runs from the next cycle. The window stepped a secondary
   only while it was parked, so after a mid-window wake it sat unstepped
@@ -317,7 +349,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   follow the window and format the driver programs (RGB565, YUV422, Y8);
   the scene is synthetic and stimulus-driven (`pattern`, `brightness`,
   `motion`). Espressif's `take_picture` example runs unmodified apart from
-  board pins. JPEG is not modelled (no frames). Under the event scheduler
+  board pins. JPEG output is covered by the baseline-JPEG entry above.
+  Under the event scheduler
   the camera's GDMA pump runs from its own wake-ups rather than the
   per-boundary bus-tick pass, so the CPU keeps batching while frames flow
   (camera-to-ST7789 preview: ~3x faster per frame). Tested in
@@ -719,7 +752,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cortex-M4F/M7: `VMOV Dm, Rt, Rt2`, `VMOV Rt, Rt2, Dm` and their single-precision pair forms decode as register moves. They used to run as a 16-word VSTM/VLDM below `Rt2`, so `Serial.print(float)` on STM32duino 3 (NUCLEO-L476RG, -F401RE) HardFaulted with a BusFault at an address made of the float's high word.
 - The RISC-V cycle counter (ESP32-C3 `PCCR` CSR 0x7E2/0x802, standard `cycle`) counts one tick per simulated CPU clock, the clock SYSTIMER and `micros()` run on. It counted 256 per clock, so Arduino `pulseIn` on the ESP32-C3 gave up after about 117 µs and an HC-SR04 always read 0 (timeout).
 - A `servo` on the ESP32-C3 follows the C3 LEDC duty (`ledcWrite`, ESP32Servo `write()`), as it already did on the classic ESP32. Before, the shaft stayed at its minimum angle.
-- ATmega328P Timer2 now counts in normal and CTC modes (`TCCR2A`/`TCCR2B`/`TCNT2`/`OCR2A`/`OCR2B`/`TIMSK2`/`TIFR2`/`ASSR`, including the `/32` and `/128` prescalers). Compare-match A/B and overflow raise the datasheet vectors, so Arduino `tone()` / `noTone()` on an Uno toggles the requested pin. OC2A/OC2B PWM outputs and Timer1 are still not driven.
+- ATmega328P Timer2 now counts in normal and CTC modes (`TCCR2A`/`TCCR2B`/`TCNT2`/`OCR2A`/`OCR2B`/`TIMSK2`/`TIFR2`/`ASSR`, including the `/32` and `/128` prescalers). Compare-match A/B and overflow raise the datasheet vectors, so Arduino `tone()` / `noTone()` on an Uno toggles the requested pin. OC0A/OC0B/OC2A/OC2B PWM and Timer1 servo support were added in follow-up changes.
 - ESP32-C3/C6 GPIO `FUNCn_OUT_SEL_CFG` resets to 0x80 (`SIG_GPIO_OUT`, the
   matrix bypass, per `esp32c3.svd`) instead of 0, so a bare-metal output pad
   reads as a plain GPIO output rather than as routed to matrix signal 0.

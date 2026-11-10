@@ -8,6 +8,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 
 workflow=.github/workflows/core-release.yml
+python_release_workflow=.github/workflows/core-python-release.yml
 core_ci_workflow=.github/workflows/core-ci.yml
 backfill_workflow=.github/workflows/core-backfill-runner-image.yml
 dockerfile=Dockerfile.ci
@@ -81,6 +82,7 @@ job_line() {
 }
 
 require_file "$workflow"
+require_file "$python_release_workflow"
 require_file "$core_ci_workflow"
 require_file "$backfill_workflow"
 require_file "$dockerfile"
@@ -179,6 +181,14 @@ require_literal "$workflow" 'cp "target/${{ matrix.target }}/release/labwired${E
 # through v0.19.2, which made editor debugging work only on machines that had
 # built core from source. Pin it so it cannot be dropped again unnoticed.
 require_literal "$workflow" 'cargo build -p labwired-cli -p labwired-dap --release --target ${{ matrix.target }}' 'release builds both the CLI and the debug adapter'
+require_literal "$workflow" 'cargo build -p labwired-cli -p labwired-dap --release --target ${{ matrix.target }} --locked' 'release builds use the committed dependency lockfile'
+build_block=$(job_block build)
+require_block_literal "$build_block" 'name: Check release version and notes' 'release builds validate version and notes before compiling'
+require_block_literal "$build_block" 'if [[ "$GITHUB_REF_TYPE" == tag && "$GITHUB_REF_NAME" != "v$version" ]]; then' 'release builds reject a tag that disagrees with the workspace version'
+require_block_literal "$build_block" 'notes="docs/releases/v$version.md"' 'release builds select notes for the workspace version'
+require_block_literal "$build_block" 'git ls-files --error-unmatch "$notes"' 'release builds require tracked release notes'
+require_block_literal "$build_block" 'test -s "$notes"' 'release builds reject empty release notes'
+require_block_literal "$build_block" 'if [[ "$title" != "# Release v$version: "?* ]]; then' 'release builds require a versioned release title'
 require_literal "$workflow" 'cp "target/${{ matrix.target }}/release/labwired-dap${EXE}" "dist/labwired-dap${EXE}"' 'archive package copies the labwired-dap binary'
 require_literal "$workflow" 'tar -czf "${ARCHIVE}" -C dist "labwired${EXE}" "labwired-dap${EXE}"' 'archive package contains both the CLI and the debug adapter'
 require_literal "$workflow" 'name: labwired-${{ matrix.platform }}' 'archive artifact names follow the platform matrix'
@@ -200,6 +210,26 @@ release_block=$(job_block release)
 require_block_literal "$release_block" 'needs: [build, linux-smoke]' 'release waits for all archive builds and the old-distro smoke'
 require_block_literal "$release_block" 'softprops/action-gh-release@v2' 'release creates the GitHub release with action-gh-release'
 require_block_literal "$release_block" 'files: dist/*.tar.gz' 'release uploads every generated archive asset'
+require_block_literal "$release_block" 'notes="docs/releases/$GITHUB_REF_NAME.md"' 'release selects notes for the pushed release tag'
+require_block_literal "$release_block" 'git ls-files --error-unmatch "$notes"' 'release publishes tracked notes'
+require_block_literal "$release_block" 'name: ${{ steps.notes.outputs.title }}' 'release takes its title from the tracked notes'
+require_block_literal "$release_block" 'body_path: ${{ steps.notes.outputs.path }}' 'release publishes the tracked notes body'
+require_block_literal "$release_block" 'draft: false' 'tag publication finalizes a prepared GitHub Release draft'
+require_block_absent_literal "$release_block" 'body: |' 'release does not replace reviewed notes with installation boilerplate'
+
+# A manual dispatch can name a tag. A ref-type-only condition would publish in
+# that case, despite the documented dry-run behavior.
+for publishing_job in release publish release-smoke; do
+  publishing_block=$(job_block "$publishing_job")
+  require_block_literal "$publishing_block" "if: github.event_name == 'push' && github.ref_type == 'tag'" "$publishing_job publishes only for tag pushes, never manual dispatch"
+done
+
+python_publish_block=$(awk '
+  $0 == "  publish:" { inside = 1; next }
+  inside && $0 ~ /^  [[:alnum:]_-]+:$/ { exit }
+  inside { print }
+' "$python_release_workflow")
+require_block_literal "$python_publish_block" "if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')" 'Python SDK publication rejects manual dispatch, including a tag ref'
 
 require_literal "$workflow" 'packages: write' 'release workflow grants GHCR package publishing permission'
 require_literal "$workflow" 'docker/setup-buildx-action@v3' 'publish job configures Docker Buildx'
@@ -305,7 +335,7 @@ if [[ -f "$dockerignore" ]]; then
   done
 fi
 
-require_literal "$action" 'default: "v0.25.0"' 'core action defaults to the supported public release'
+require_literal "$action" 'default: "v0.26.0"' 'core action defaults to the supported public release'
 action_inputs=$(awk '
   /^inputs:$/ { inside = 1; next }
   inside && /^[^[:space:]]/ { exit }
@@ -555,9 +585,9 @@ require_literal docs/configuration_reference.md 'including `{}` and `null`' 'con
 require_literal docs/configuration_reference.md 'stop_when_assertions_pass' 'configuration reference documents world assertion completion'
 require_literal examples/egress-demo/README.md 'config` is a closed mapping' 'egress example documents its closed config mapping'
 require_literal examples/egress-demo/README.md 'positive integer' 'egress example documents buffer_max type validation'
-require_literal Cargo.toml 'version = "0.25.0"' 'workspace metadata uses the current release version'
-require_literal CHANGELOG.md '## [0.25.0] - 2026-09-22' 'changelog records the current release version'
-require_literal README.md 'LABWIRED_VERSION=v0.25.0' 'public README pins the current release version'
+require_literal Cargo.toml 'version = "0.26.0"' 'workspace metadata uses the current release version'
+require_literal CHANGELOG.md '## [0.26.0] - 2026-11-10' 'changelog records the current release version'
+require_literal README.md 'LABWIRED_VERSION=v0.26.0' 'public README pins the current release version'
 require_absent_literal README.md 'LABWIRED_VERSION=v0.20.0' 'public README does not retain the superseded release version'
 
 if (( failures > 0 )); then
