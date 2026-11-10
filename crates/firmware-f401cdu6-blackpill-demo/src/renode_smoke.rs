@@ -19,7 +19,8 @@
 //!          master-receive BTF event IRQs, absent-address NACK and error IRQ
 //!          checks
 //!   I2C2   a separate TMP102 repeated-start read, SB/ADDR/BTF event IRQs,
-//!          TXE isolation, and a POS-sequenced two-byte receive with
+//!          TXE isolation under ITEVTEN and assertion/release under ITBUFEN,
+//!          and a POS-sequenced two-byte receive with
 //!          STOP-before-DR, BTF/RXNE source isolation, and both final DR reads
 //!          on the imported second controller instance; absent-address AF
 //!          status, event/error-line isolation, ER IRQ assertion, and recovery
@@ -187,12 +188,21 @@ fn main() -> ! {
     send(if i2c_ok { b" ok\r\n" } else { b" FAIL\r\n" });
     passed |= (i2c_ok as u32) << 3;
 
-    let (i2c2_temperature, i2c2_sb_irq, i2c2_addr_irq, i2c2_txe_isolated, i2c2_btf_irq) =
-        smoke_i2c2();
+    let (
+        i2c2_temperature,
+        i2c2_sb_irq,
+        i2c2_addr_irq,
+        i2c2_txe_isolated,
+        i2c2_txe_buf_irq,
+        i2c2_txe_buf_released,
+        i2c2_btf_irq,
+    ) = smoke_i2c2();
     let i2c2_ok = i2c2_temperature == 0x1900
         && i2c2_sb_irq
         && i2c2_addr_irq
         && i2c2_txe_isolated
+        && i2c2_txe_buf_irq
+        && i2c2_txe_buf_released
         && i2c2_btf_irq;
     send(b"i2c2 tmp102=");
     put_hex32(u32::from(i2c2_temperature));
@@ -202,6 +212,10 @@ fn main() -> ! {
     send(if i2c2_addr_irq { b"1" } else { b"0" });
     send(b" txe_isolated=");
     send(if i2c2_txe_isolated { b"1" } else { b"0" });
+    send(b" txe_buf_irq=");
+    send(if i2c2_txe_buf_irq { b"1" } else { b"0" });
+    send(b" txe_buf_release=");
+    send(if i2c2_txe_buf_released { b"1" } else { b"0" });
     send(b" btf_irq=");
     send(if i2c2_btf_irq { b"1" } else { b"0" });
     send(if i2c2_ok { b" ok\r\n" } else { b" FAIL\r\n" });
@@ -695,8 +709,9 @@ fn smoke_i2c1_receive_btf() -> (u16, bool, bool, bool) {
 
 /// Exercise the imported F401's second legacy I2C controller with its own
 /// TMP102 and event vector. This catches instance wiring/configuration mistakes
-/// that an I2C1-only transaction cannot see.
-fn smoke_i2c2() -> (u16, bool, bool, bool, bool) {
+/// that an I2C1-only transaction cannot see. It also isolates TXE from ITEVTEN,
+/// then checks TXE assertion and release with ITBUFEN enabled and disabled.
+fn smoke_i2c2() -> (u16, bool, bool, bool, bool, bool, bool) {
     const PE: u32 = 1;
     const ACK: u32 = 1 << 10;
     const START: u32 = 1 << 8;
@@ -713,13 +728,13 @@ fn smoke_i2c2() -> (u16, bool, bool, bool, bool) {
 
     wr(I2C2_CR1, PE | START);
     if !wait(I2C2_SR1, SB, SB) {
-        return (0xFFFF, false, false, false, false);
+        return (0xFFFF, false, false, false, false, false, false);
     }
     let sb_irq = rd(NVIC_ISPR1) & I2C2_EV_IRQ_BIT != 0;
     wr(NVIC_ICPR1, I2C2_EV_IRQ_BIT);
     wr(I2C2_DR, 0x92); // independent TMP102 at 0x49, write
     if !wait(I2C2_SR1, ADDR, ADDR) {
-        return (0xFFFF, sb_irq, false, false, false);
+        return (0xFFFF, sb_irq, false, false, false, false, false);
     }
     let addr_irq = rd(NVIC_ISPR1) & I2C2_EV_IRQ_BIT != 0;
     let _ = rd(I2C2_SR1);
@@ -731,41 +746,107 @@ fn smoke_i2c2() -> (u16, bool, bool, bool, bool) {
         txe_isolated &= rd(NVIC_ISPR1) & I2C2_EV_IRQ_BIT == 0;
     }
 
+    // The same TXE source must assert the same EV vector once ITBUFEN is
+    // enabled alongside ITEVTEN, then release when ITBUFEN is removed.
+    wr(I2C2_CR2, 16 | (1 << 9) | (1 << 10));
+    let mut txe_buf_irq = true;
+    for _ in 0..16 {
+        let _ = rd(I2C2_SR1);
+        txe_buf_irq &= rd(NVIC_ISPR1) & I2C2_EV_IRQ_BIT != 0;
+    }
+    wr(I2C2_CR2, 16 | (1 << 9));
+    wr(NVIC_ICPR1, I2C2_EV_IRQ_BIT);
+    let mut txe_buf_released = true;
+    for _ in 0..16 {
+        let _ = rd(I2C2_SR1);
+        txe_buf_released &= rd(NVIC_ISPR1) & I2C2_EV_IRQ_BIT == 0;
+    }
+
     wr(I2C2_DR, 0); // temperature register pointer
     if !wait(I2C2_SR1, BTF, BTF) {
-        return (0xFFFF, sb_irq, addr_irq, txe_isolated, false);
+        return (
+            0xFFFF,
+            sb_irq,
+            addr_irq,
+            txe_isolated,
+            txe_buf_irq,
+            txe_buf_released,
+            false,
+        );
     }
     let btf_irq = rd(NVIC_ISPR1) & I2C2_EV_IRQ_BIT != 0;
 
     // Repeated START, then read the independent sensor's two-byte result.
     wr(I2C2_CR1, PE | ACK | START);
     if !wait(I2C2_SR1, SB, SB) {
-        return (0xFFFF, sb_irq, addr_irq, txe_isolated, btf_irq);
+        return (
+            0xFFFF,
+            sb_irq,
+            addr_irq,
+            txe_isolated,
+            txe_buf_irq,
+            txe_buf_released,
+            btf_irq,
+        );
     }
     wr(I2C2_DR, 0x93);
     if !wait(I2C2_SR1, ADDR, ADDR) {
-        return (0xFFFF, sb_irq, addr_irq, txe_isolated, btf_irq);
+        return (
+            0xFFFF,
+            sb_irq,
+            addr_irq,
+            txe_isolated,
+            txe_buf_irq,
+            txe_buf_released,
+            btf_irq,
+        );
     }
     let _ = rd(I2C2_SR1);
     let _ = rd(I2C2_SR2);
     if !wait(I2C2_SR1, RXNE, RXNE) {
-        return (0xFFFF, sb_irq, addr_irq, txe_isolated, btf_irq);
+        return (
+            0xFFFF,
+            sb_irq,
+            addr_irq,
+            txe_isolated,
+            txe_buf_irq,
+            txe_buf_released,
+            btf_irq,
+        );
     }
     let msb = rd(I2C2_DR) as u8;
     wr(I2C2_CR1, PE); // NACK the final byte
     wr(I2C2_CR1, PE | STOP);
     if !wait(I2C2_SR1, RXNE, RXNE) {
-        return (0xFFFF, sb_irq, addr_irq, txe_isolated, btf_irq);
+        return (
+            0xFFFF,
+            sb_irq,
+            addr_irq,
+            txe_isolated,
+            txe_buf_irq,
+            txe_buf_released,
+            btf_irq,
+        );
     }
     let lsb = rd(I2C2_DR) as u8;
     if !wait(I2C2_SR2, 0x0002, 0) {
-        return (0xFFFF, sb_irq, addr_irq, txe_isolated, btf_irq);
+        return (
+            0xFFFF,
+            sb_irq,
+            addr_irq,
+            txe_isolated,
+            txe_buf_irq,
+            txe_buf_released,
+            btf_irq,
+        );
     }
     (
         u16::from_be_bytes([msb, lsb]),
         sb_irq,
         addr_irq,
         txe_isolated,
+        txe_buf_irq,
+        txe_buf_released,
         btf_irq,
     )
 }
