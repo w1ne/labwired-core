@@ -1,0 +1,17 @@
+# Espressif ESP32-DevKitC-32E with an external BME280 on I2C1.
+# The WROOM-32E variant exposes GPIO16/17 on J3; the breakout is powered from
+# the board's 3V3/GND headers.
+name: "esp32-devkitc-32e-i2c1-bme280"
+chip: "../chips/esp32-devkitc-32e-gpio-smoke.yaml"
+cpu_hz: 240000000
+debug_uart: "uart0"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c1"
+    route:
+      sda: "GPIO16"
+      scl: "GPIO17"
+    config:
+      i2c_address: 0x77
+      powered: true

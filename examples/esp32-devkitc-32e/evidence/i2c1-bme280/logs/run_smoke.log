@@ -1,0 +1,28 @@
+warning: method `pad_lines_arc` is never used
+   --> crates/core/src/peripherals/esp32s3/ledc.rs:271:19
+    |
+203 | impl Esp32s3Ledc {
+    | ---------------- method in this implementation
+...
+271 |     pub(crate) fn pad_lines_arc(&mut self) -> Arc<PadLines> {
+    |                   ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `default_events_per_channel` is never used
+   --> crates/core/src/peripherals/ra_gpt.rs:125:4
+    |
+125 | fn default_events_per_channel() -> u32 {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+2026-11-10T01:24:38.817155Z  INFO labwired_loader: ELF Entry Point: 0x40081a7c
+2026-11-10T01:24:38.817969Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/esp32-devkitc-32e-gpio-smoke.yaml
+labwired-cli test: seeded examples/esp32-devkitc-32e/firmware/.pio/build/devkitc32e_i2c1_bme280/partitions.bin (3072 bytes) @ flash 0x8000
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: seeded g_rom_flashchip @0x3ffae270 (post-BROM flash attach state)
+labwired-cli test: pxCurrentTCBs @0x3ffc27e4 (hybrid preserve key)
+labwired-cli test: installed xthal_window_spill_nw CPU spill workaround @0x4008f2bc
+BME280_I2C1_BOOT
+BME280_I2C1_ID=0x60
+BME280_I2C1_TEMP_RAW=0x082DC0
+PASS  2/2 checks · i2c1-bme280-smoke · 1501000 steps · 0.76s

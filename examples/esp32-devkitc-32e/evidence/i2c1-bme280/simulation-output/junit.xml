@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.760750">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="AssertionsPassed"/>
+    <property name="firmware_hash" value="5e11949bcc99a018ae6ec74581adb597e7d4f0692b5aedfbde238021630fe8f1"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.760750">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: BME280_I2C1_ID=0x60" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: BME280_I2C1_TEMP_RAW=0x082DC0" time="0.000000">
+  </testcase>
+</testsuite>

@@ -22,6 +22,11 @@ ESP32-WROOM-32E module. The GPIO/UART profile is
 - `configs/systems/esp32-devkitc-32e-bme280.yaml` adds an external BME280 model
   at I2C0 address `0x77`, with SDA=GPIO21 (J3 pin 6) and SCL=GPIO22 (J3 pin 3).
   The breakout uses 3V3/GND from J2/J3.
+- The rank-1 I2C1 profile attaches the same BME280 model to I2C1 at `0x77`,
+  with SDA=GPIO16 (J3 pin 12) and SCL=GPIO17 (J3 pin 11). GPIO16/17 are exposed
+  on the exact WROOM-32E variant; the smoke reads the chip ID and raw
+  temperature data through the second controller. This is a low-cost profile
+  extension on the existing board, not a new board/MCU demand pick.
 - The earlier SPI addition connects an external 128x64 SSD1306 OLED using
   SCK=GPIO18, MISO=GPIO19, MOSI=GPIO23, CS=GPIO5, and
   D/C=GPIO17. Its smoke sends the controller initialization sequence and
@@ -75,6 +80,12 @@ The rank-1 PCNT smoke is in
 with copy-paste Arduino code in the
 [`DevKitC README`](../../examples/esp32-devkitc-32e/README.md). It counts eight
 GPIO23 rising edges and drives GPIO16 high after a matching count.
+
+The rank-1 I2C1 BME280 smoke is in
+[`examples/esp32-devkitc-32e/i2c1-bme280-smoke.yaml`](../../examples/esp32-devkitc-32e/i2c1-bme280-smoke.yaml).
+Its committed local log reads BME280 ID `0x60` and temperature ADC `0x082DC0`
+on GPIO16/GPIO17. The simulator smoke uses the ESP32 command-list registers;
+the Arduino `Wire1` driver path is not covered by this evidence.
 
 Live board, module, and sensor status is recorded in
 [`examples/esp32-devkitc-32e/evidence/vendor-status.md`](../../examples/esp32-devkitc-32e/evidence/vendor-status.md).

@@ -1,22 +1,18 @@
 # ESP32-DevKitC-32E GPIO, PCNT, UART, BME280 I2C, SPI OLED, RMT, ADC, DAC, LEDC, and MCPWM smokes
 
 **Demand rank:** ESP32 is rank 1 in the standing list (38% of reported MCU
-use). This round maps PCNT unit 0 to this board profile. Arduino firmware
-generates eight rising edges on GPIO23 / J3 pin 2, counts them through PCNT,
-and sets GPIO16 / J3 pin 12 high only after reading back 8. This is low-cost
-coverage integration of an existing model on the same customer board, not a
-new board/MCU demand pick. An earlier round added the stock Arduino VSPI path
-to a 128x64 SSD1306 display. The new MCPWM profile exercises MCPWM0 operator A
-with Espressif's legacy driver at 50 Hz and 7.5% duty for a center-position
-servo command; it is another rank-1 coverage extension using the existing
-classic ESP32 peripheral model.
+use). This round adds an I2C1 BME280 profile on GPIO16/GPIO17 and reads the
+sensor ID and raw temperature data through the second classic-ESP32 I2C
+controller. This is low-cost coverage integration on the same customer board,
+not a new board/MCU demand pick. Earlier rounds added PCNT unit 0, the stock
+Arduino VSPI path to a 128x64 SSD1306 display, and MCPWM0 servo control.
 
 ## Board and modeled scope
 
 The board is Espressif's exact **ESP32-DevKitC-32E** with an ESP32-WROOM-32E
 module and 4 MB flash. The narrow board profile exposes classic ESP32 GPIO,
-PCNT unit 0, UART0 console, UART1 TX routed to GPIO16, I2C0, VSPI/SPI3, ADC1
-channel 0, DAC1/2, LEDC, MCPWM0 operator A, and RMT TX.
+PCNT unit 0, UART0 console, UART1 TX routed to GPIO16, I2C0 and I2C1, VSPI/SPI3,
+ADC1 channel 0, DAC1/2, LEDC, MCPWM0 operator A, and RMT TX.
 GPIO23 maps to J3 pin 2; it is a header pin, not a built-in LED. For a physical
 blink, connect an LED in series with a resistor from GPIO23 to GND.
 
@@ -27,6 +23,7 @@ blink, connect an LED in series with a resistor from GPIO23 to GND.
 | UART0 output | Serial console capture | Base smoke asserts `ESP32_DEVKITC32E_UART0_OK` |
 | J3 pin 12 | UART1 TX routed to GPIO16 | UART1 smoke sends `UUUUUUUU` at 115200 baud and requires GPIO16 edges |
 | J2 GPIO21/GPIO22 | I2C0 SDA/SCL | BME280 smoke reads sensor ID and temperature ADC data |
+| J3 GPIO16/GPIO17 | I2C1 SDA/SCL | I2C1 smoke reads BME280 ID `0x60` and raw temperature `0x082DC0` |
 | J3 GPIO18/19/23/5, GPIO17 | VSPI/SPI3 clock, MISO, MOSI, CS, and OLED D/C | SPI OLED smoke sends SSD1306 init commands and paints the first 8-row page |
 | J2 pin 3 / VP (GPIO36) | ADC1 channel 0 | ADC smoke reads a 1650 mV potentiometer through `analogRead(36)` and expects 2047 at 12-bit resolution |
 | J3 pin 2 (GPIO23) | LEDC high-speed channel 0 PWM output | LEDC smoke runs 50 Hz, 14-bit PWM to an external SG90-class servo twin and requires committed duty plus GPIO edges |
@@ -199,6 +196,37 @@ temperature registers. The Arduino ESP32 3.3.12 `Wire` driver stalls after its
 first split-command `END_DETECT` boundary in the current simulator, so the
 local smoke does not claim to verify that driver path.
 
+For the second bus, connect BME280 SDA to GPIO16 / J3 pin 12 and SCL to
+GPIO17 / J3 pin 11. On physical hardware, the Arduino API is `Wire1`:
+
+```cpp
+#include <Arduino.h>
+#include <Wire.h>
+
+constexpr uint8_t kBme280Address = 0x77;
+
+void setup() {
+  Serial.begin(115200);
+  Wire1.begin(16, 17, 100000);  // SDA=GPIO16, SCL=GPIO17
+  Wire1.beginTransmission(kBme280Address);
+  Wire1.write(0xD0);            // BME280 chip ID register
+  if (Wire1.endTransmission(false) != 0) return;
+  if (Wire1.requestFrom(kBme280Address, static_cast<uint8_t>(1)) == 1 &&
+      Wire1.read() == 0x60) {
+    Serial.println("BME280 found on I2C1");
+  }
+}
+
+void loop() {}
+```
+
+The local I2C1 smoke is
+[`firmware/src/bme280_i2c1_smoke.cpp`](firmware/src/bme280_i2c1_smoke.cpp).
+It drives the second controller's command-list registers directly and reads
+ID `0x60` plus raw temperature `0x082DC0`. The sketch above documents the
+Arduino driver usage; the smoke does not claim that `Wire1` itself is verified
+in the current simulator.
+
 The ADC acceptance firmware is [`firmware/src/adc_smoke.cpp`](firmware/src/adc_smoke.cpp).
 It calls the Arduino `analogRead(36)` API and checks the resulting ADC1_CH0
 value against the potentiometer fixture. The run log and metrics are committed
@@ -250,6 +278,22 @@ The build log, local simulator output, and generated metrics are committed
 under `evidence/bme280/`. This is deterministic digital-twin evidence, not a
 physical-board run. The classic ESP32 hosted verifier does not support its
 serial oracle; the committed local CLI smoke is the acceptance evidence.
+
+Run the second-controller I2C1 smoke from the repository root:
+
+```sh
+RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
+  --target-id esp32-devkitc-32e-i2c1-bme280 \
+  --script examples/esp32-devkitc-32e/i2c1-bme280-smoke.yaml \
+  --system configs/systems/esp32-devkitc-32e-i2c1-bme280.yaml \
+  --out-dir examples/esp32-devkitc-32e/evidence/i2c1-bme280 \
+  --firmware-build-script scripts/build-esp32-devkitc-32e-i2c1-bme280-smoke.sh
+```
+
+The local smoke reads BME280 ID `0x60` and raw temperature `0x082DC0` through
+I2C1. It is controller-level simulator evidence, not a physical-board run or
+verification of the Arduino `Wire1` driver. The live lifecycle and availability
+record is in [`evidence/i2c1-bme280/vendor-status.md`](evidence/i2c1-bme280/vendor-status.md).
 
 Run the LEDC servo smoke from the repository root:
 

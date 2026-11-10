@@ -10,14 +10,15 @@ reviewed before publication.
 ### ESP32-DevKitC-32E / ESP32-WROOM-32E
 
 The board profile boots Arduino firmware and exercises UART0, UART1 TX, GPIO,
-I2C with a BME280, SPI3 to an SSD1306 OLED, RMT output, ADC1 channel 0, DAC,
-and LEDC PWM. The ADC smoke
+I2C0 and I2C1 with a BME280, SPI3 to an SSD1306 OLED, RMT output, ADC1 channel
+0, DAC, LEDC PWM, PCNT, and MCPWM. The ADC smoke
 checks `analogRead(36)` on GPIO36 / ADC1_CH0 with a potentiometer fixture; a
 1650 mV input returns 2047 at 12-bit resolution. The LEDC smoke uses stock
 `ledcAttach` / `ledcWrite` output on GPIO23 / J3 pin 2 for an external
-SG90-class servo fixture. This round adds stock `Serial1` TX routed to GPIO16 /
-J3 pin 12 at 115200 baud; it sends `UUUUUUUU` and the smoke requires signal
-edges on that header pin.
+SG90-class servo fixture. This round adds a BME280 to the second I2C
+controller, routed to GPIO16/GPIO17 (J3 pins 12/11). The smoke reads BME280 ID
+`0x60` and raw temperature `0x082DC0`. This is an ESP32 rank-1 coverage
+extension on the existing board, not a new board or MCU demand pick.
 
 Espressif's [current DevKitC V4 guide](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32/esp32-devkitc/user_guide.html)
 lists the exact 32E board and maps J2 pin 3 / VP to GPIO36 / ADC1_CH0. The
@@ -25,6 +26,35 @@ lists the exact 32E board and maps J2 pin 3 / VP to GPIO36 / ADC1_CH0. The
 reported immediate stock during the current check; DigiKey lists the SKU as
 Active, though its stock view differed. Full lifecycle evidence is in
 [`vendor-status.md`](../../examples/esp32-devkitc-32e/evidence/adc/vendor-status.md).
+
+Copy-paste Arduino example for a BME280 on I2C1, with SDA on GPIO16 and SCL on
+GPIO17:
+
+```cpp
+#include <Arduino.h>
+#include <Wire.h>
+
+constexpr uint8_t kBme280Address = 0x77;
+
+void setup() {
+  Serial.begin(115200);
+  Wire1.begin(16, 17, 100000);
+  Wire1.beginTransmission(kBme280Address);
+  Wire1.write(0xD0);
+  if (Wire1.endTransmission(false) != 0) return;
+  if (Wire1.requestFrom(kBme280Address, static_cast<uint8_t>(1)) == 1 &&
+      Wire1.read() == 0x60) {
+    Serial.println("BME280 found on I2C1");
+  }
+}
+
+void loop() {}
+```
+
+The committed simulator smoke drives I2C1's command registers directly. It
+does not claim to verify the higher-level `Wire1` driver. Live board and sensor
+availability evidence is in
+[`i2c1-bme280/vendor-status.md`](../../examples/esp32-devkitc-32e/evidence/i2c1-bme280/vendor-status.md).
 
 Copy-paste Arduino example for a potentiometer wired from 3V3 to GND with its
 wiper connected to J2 pin 3 / GPIO36:
