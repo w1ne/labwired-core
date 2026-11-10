@@ -43,10 +43,10 @@ jobs:
             container: rust:1.95-bullseye
             glibc_max: GLIBC_2.31
           - target: x86_64-apple-darwin
-            runner: macos-latest
+            runner: macos-15-intel
             platform: darwin-x86_64
           - target: aarch64-apple-darwin
-            runner: macos-latest
+            runner: macos-15
             platform: darwin-aarch64
           # Windows was never built — not because anything blocked it, but
           # because no leg ever asked for it, and "Windows via WSL2" in the
@@ -61,6 +61,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Check release version and notes
+        id: metadata
         shell: bash
         run: |
           set -euo pipefail
@@ -91,6 +92,13 @@ jobs:
             echo "::error::$notes must start with '# Release v$version: <summary>'."
             exit 1
           fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Install Python for native archive smoke
+        if: matrix.container == ''
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
       - name: Install Rust
         if: matrix.container == ''
@@ -138,6 +146,17 @@ jobs:
           tar -czf "${ARCHIVE}" -C dist "labwired${EXE}" "labwired-dap${EXE}"
           echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
 
+      # Execute the packaged bytes on each native macOS/Windows architecture.
+      # Linux archives run in the older-distribution matrix below.
+      - name: Smoke native CLI and DAP archives
+        if: matrix.container == ''
+        shell: bash
+        run: |
+          python scripts/ci/release-artifact-smoke.py \
+            --archive "$ARCHIVE" \
+            --version "${{ steps.metadata.outputs.version }}" \
+            --platform "${{ matrix.platform }}"
+
       # The floor is a claim, so it gets checked. Without this the next runner
       # image bump silently raises it again.
       - name: Assert glibc floor
@@ -165,9 +184,9 @@ jobs:
           retention-days: 14
 
   # Run the artifact somewhere old before anyone can download it. The symbol
-  # assert above proves what the binary asks for; this proves the binary starts.
+  # assert above checks runtime symbols; this boots firmware and speaks DAP.
   linux-smoke:
-    name: Start on ${{ matrix.image }} (${{ matrix.platform }})
+    name: Smoke on ${{ matrix.image }} (${{ matrix.platform }})
     needs: build
     runs-on: ${{ matrix.runner }}
     strategy:
@@ -180,19 +199,29 @@ jobs:
           - { platform: linux-aarch64, runner: ubuntu-24.04-arm, image: 'debian:12-slim' }
           - { platform: linux-aarch64, runner: ubuntu-24.04-arm, image: 'ubuntu:22.04' }
     steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Download the release archive
         uses: actions/download-artifact@v4
         with:
           name: labwired-${{ matrix.platform }}
           path: archive
 
-      - name: Extract and run it
+      - name: Smoke the archive on the older distribution
+        shell: bash
         run: |
           set -euo pipefail
-          mkdir -p dist
-          tar -xzf archive/*.tar.gz -C dist
-          docker run --rm -v "$PWD/dist:/d" "${{ matrix.image }}" /d/labwired --version
-          docker run --rm -v "$PWD/dist:/d" "${{ matrix.image }}" /d/labwired-dap --version
+          version="$(python -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')"
+          docker pull "${{ matrix.image }}"
+          python scripts/ci/release-artifact-smoke.py \
+            --archive archive/*.tar.gz \
+            --version "$version" \
+            --platform "${{ matrix.platform }}" \
+            --container "${{ matrix.image }}"
 
   release:
     name: Create GitHub Release

@@ -9,6 +9,7 @@ cd "$repo_root"
 
 workflow=.github/workflows/core-release.yml
 python_release_workflow=.github/workflows/core-python-release.yml
+native_archive_smoke=scripts/ci/release-artifact-smoke.py
 core_ci_workflow=.github/workflows/core-ci.yml
 backfill_workflow=.github/workflows/core-backfill-runner-image.yml
 dockerfile=Dockerfile.ci
@@ -83,6 +84,7 @@ job_line() {
 
 require_file "$workflow"
 require_file "$python_release_workflow"
+require_file "$native_archive_smoke"
 require_file "$core_ci_workflow"
 require_file "$backfill_workflow"
 require_file "$dockerfile"
@@ -169,10 +171,11 @@ for target in \
   x86_64-unknown-linux-gnu \
   aarch64-unknown-linux-gnu \
   x86_64-apple-darwin \
-  aarch64-apple-darwin; do
+  aarch64-apple-darwin \
+  x86_64-pc-windows-msvc; do
   require_literal "$workflow" "target: $target" "archive matrix includes $target"
 done
-for platform in linux-x86_64 linux-aarch64 darwin-x86_64 darwin-aarch64; do
+for platform in linux-x86_64 linux-aarch64 darwin-x86_64 darwin-aarch64 windows-x86_64; do
   require_literal "$workflow" "platform: $platform" "archive matrix includes $platform"
 done
 require_literal "$workflow" 'ARCHIVE="labwired-${VERSION}-${PLATFORM}.tar.gz"' 'archive names include the release version and platform'
@@ -193,6 +196,21 @@ require_literal "$workflow" 'cp "target/${{ matrix.target }}/release/labwired-da
 require_literal "$workflow" 'tar -czf "${ARCHIVE}" -C dist "labwired${EXE}" "labwired-dap${EXE}"' 'archive package contains both the CLI and the debug adapter'
 require_literal "$workflow" 'name: labwired-${{ matrix.platform }}' 'archive artifact names follow the platform matrix'
 
+require_block_literal "$build_block" 'runner: macos-15-intel' 'Intel archives execute on a native Intel runner'
+require_block_literal "$build_block" 'runner: macos-15' 'ARM64 archives execute on a native Apple Silicon runner'
+require_block_literal "$build_block" 'id: metadata' 'release metadata exposes the verified workspace version'
+require_block_literal "$build_block" 'echo "version=$version" >> "$GITHUB_OUTPUT"' 'native archive smoke uses the verified version'
+native_archive_smoke_block=$(awk '
+  $0 == "      - name: Smoke native CLI and DAP archives" { inside = 1; next }
+  inside && /^      - (name:|uses:)/ { exit }
+  inside { print }
+' "$workflow")
+require_block_literal "$native_archive_smoke_block" "if: matrix.container == ''" 'native archive smoke runs on every macOS and Windows build'
+require_block_literal "$native_archive_smoke_block" 'python scripts/ci/release-artifact-smoke.py' 'native archive smoke executes the CLI and DAP protocol check'
+require_block_literal "$native_archive_smoke_block" '--archive "$ARCHIVE"' 'native archive smoke tests the packaged artifact'
+require_block_literal "$native_archive_smoke_block" '--version "${{ steps.metadata.outputs.version }}"' 'native archive smoke checks the released version'
+require_block_literal "$native_archive_smoke_block" '--platform "${{ matrix.platform }}"' 'native archive smoke verifies the host architecture'
+
 # The two guards that would have caught the v0.21.0 Linux archives, which
 # installed fine and then died with `GLIBC_2.39 not found` on Debian 12 and
 # Ubuntu 22.04. Both are pinned here because a build-host bump is exactly the
@@ -203,6 +221,16 @@ require_literal "$workflow" 'name: Assert glibc floor' 'the declared glibc floor
 smoke_block=$(job_block linux-smoke)
 require_block_literal "$smoke_block" "image: 'debian:12-slim'" 'archives are started on Debian 12 before release'
 require_block_literal "$smoke_block" "image: 'ubuntu:22.04'" 'archives are started on Ubuntu 22.04 LTS before release'
+require_block_literal "$smoke_block" "image: 'almalinux:9'" 'archives are started on AlmaLinux 9 before release'
+require_block_literal "$smoke_block" 'uses: actions/checkout@v4' 'Linux smoke reads the exact candidate version and fixtures'
+require_block_literal "$smoke_block" 'uses: actions/setup-python@v5' 'Linux smoke runs the protocol driver on the host'
+require_block_literal "$smoke_block" 'tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"]' 'Linux smoke checks the workspace version'
+require_block_literal "$smoke_block" 'python scripts/ci/release-artifact-smoke.py' 'Linux smoke exercises firmware and the DAP protocol'
+require_block_literal "$smoke_block" '--container "${{ matrix.image }}"' 'Linux smoke executes inside each older distribution'
+require_block_absent_literal "$smoke_block" 'labwired-dap --version' 'Linux smoke does not mistake DAP stdin EOF for a protocol check'
+require_literal "$native_archive_smoke" 'f"type=bind,source={directory},target=/d,readonly"' 'Linux smoke mounts release files read-only'
+require_literal "$native_archive_smoke" '"limits": {"max_steps": 1000}' 'archive firmware smoke is bounded'
+require_literal "$native_archive_smoke" '"assertions": [{"uart_contains": "OK"}]' 'archive firmware smoke asserts the firmware UART result'
 
 release_block=$(job_block release)
 # The release job must wait for the archives AND for the smoke run that proves
@@ -230,6 +258,21 @@ python_publish_block=$(awk '
   inside { print }
 ' "$python_release_workflow")
 require_block_literal "$python_publish_block" "if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')" 'Python SDK publication rejects manual dispatch, including a tag ref'
+require_block_literal "$python_publish_block" 'needs: [wheels, sdist, linux-arm64-smoke]' 'Python publication waits for the native ARM64 wheel smoke'
+python_arm64_smoke_block=$(awk '
+  $0 == "  linux-arm64-smoke:" { inside = 1; next }
+  inside && $0 ~ /^  [[:alnum:]_-]+:$/ { exit }
+  inside { print }
+' "$python_release_workflow")
+require_block_literal "$python_arm64_smoke_block" 'needs: wheels' 'ARM64 wheel smoke waits for the wheel artifact'
+require_block_literal "$python_arm64_smoke_block" 'runs-on: ubuntu-24.04-arm' 'ARM64 wheel smoke uses a native Linux ARM64 runner'
+require_block_literal "$python_arm64_smoke_block" 'uses: actions/download-artifact@v4' 'ARM64 wheel smoke downloads the built artifact'
+require_block_literal "$python_arm64_smoke_block" 'name: wheel-linux-aarch64' 'ARM64 wheel smoke selects the released ARM64 wheel'
+require_block_literal "$python_arm64_smoke_block" '"$py" -m pip install --quiet dist/*.whl' 'ARM64 wheel smoke installs the built wheel'
+require_block_literal "$python_arm64_smoke_block" 'cd "$RUNNER_TEMP"' 'ARM64 wheel smoke runs outside the checkout'
+require_block_literal "$python_arm64_smoke_block" 'assert platform.machine() == "aarch64"' 'ARM64 wheel smoke asserts native execution'
+require_block_literal "$python_arm64_smoke_block" 'with labwired.Sim(sys.argv[1], chip="ci-fixture-cortex-m3-uart1") as sim:' 'ARM64 wheel smoke boots the packaged simulator'
+require_block_literal "$python_arm64_smoke_block" 'assert sim.expect("OK", timeout="1ms").text == "OK"' 'ARM64 wheel smoke requires the firmware UART result'
 
 # macOS 14 GitHub Actions runners retired on 2026-11-02. A queued release
 # matrix leg using that label is rejected before any build step starts.

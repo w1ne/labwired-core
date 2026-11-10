@@ -286,8 +286,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   publish even when dispatched against a tag. Release builds validate the
   workspace version and tracked notes, use the lockfile, and publish the
   reviewed release title and body.
-- Move Python wheel builds to supported macOS ARM64 and Intel runners and run
-  the existing native wheel smoke test on both architectures.
+- Move release builds to supported native macOS ARM64 and Intel runners.
+  Require every packaged CLI to execute a UART firmware test and every DAP
+  to complete an initialize/disconnect exchange. Run the Linux archives on
+  Debian 12, Ubuntu 22.04 and AlmaLinux 9 with the GLIBC 2.31 floor preserved.
+- Smoke-test Python wheels on every supported native architecture, including
+  the cross-built Linux ARM64 wheel, before publication.
 - Complete three onboarding profiles with shipped-board execution oracles:
   STM32F103RB BME280 SysTick, classic ESP32 GPIO and UART1. Correct the
   descriptors and validate interrupt delivery with disabled-interrupt controls.

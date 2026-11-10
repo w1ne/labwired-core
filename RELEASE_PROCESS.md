@@ -71,7 +71,10 @@ cargo build -p labwired-cli -p labwired-dap --release --locked
   skipped, or timed-out check is not a successful release validation.
 - [ ] Confirm that every configured Linux, macOS, and Windows runner label can
   execute its release job. Dispatch both artifact workflows on the candidate
-  branch, and confirm each completed run reports the intended candidate SHA:
+  branch, and confirm each completed run reports the intended candidate SHA.
+  Each packaged CLI must execute the committed UART firmware, and each DAP must
+  complete an initialize/disconnect exchange. Python wheels must boot the same
+  firmware on their native architecture, including Linux ARM64:
 
   ```bash
   gh workflow run core-release.yml --repo w1ne/labwired-core --ref release/vX.Y.Z
@@ -122,9 +125,10 @@ cargo build -p labwired-cli -p labwired-dap --release --locked
   | macOS aarch64 | `labwired`, `labwired-dap` |
   | Windows x86_64 | `labwired.exe`, `labwired-dap.exe` |
 
-- [ ] Confirm the Linux glibc floor checks and older-distribution startup tests
-  passed. Verify that the installed CLI reports the intended version and that
-  the DAP completes its initialize/disconnect protocol exchange.
+- [ ] Confirm the Linux glibc floor checks and all five older-distribution
+  smoke cases passed. On every macOS, Windows and Linux target, verify that the
+  packaged CLI reports the intended version and executes the UART firmware,
+  and that the DAP completes its initialize/disconnect protocol exchange.
 - [ ] Confirm GHCR contains `ghcr.io/w1ne/labwired:vX.Y.Z` for Linux amd64 and
   arm64. Use the immutable version tag in CI. The workflow also updates its
   moving convenience tag.
