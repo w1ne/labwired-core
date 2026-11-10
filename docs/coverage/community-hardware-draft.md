@@ -13,9 +13,10 @@ This is more coverage within the already top-ranked ESP32 family, not a new
 board or MCU demand pick. The v1.2 board guide lists the N8R8 variant with
 8 MB flash and 8 MB PSRAM, and DigiKey currently lists the exact board as
 Active and in stock. The focused LabWired profile exercises UART0, a BME280 on
-I2C0 (GPIO6/GPIO10), and the onboard GPIO27 addressable RGB LED through RMT
-TX0. The committed local smoke checks the BME280 ID and temperature register,
-RMT TX completion, GPIO edges, and a decoded red LED pixel. It does not claim a
+I2C0 (GPIO6/GPIO10), an SSD1306 OLED sharing that bus, and the onboard GPIO27
+addressable RGB LED through RMT TX0. The committed local smoke checks the
+BME280 ID and temperature register, a painted SSD1306 framebuffer, RMT TX
+completion, GPIO edges, and a decoded red LED pixel. It does not claim a
 ROM/ESP-IDF boot, physical-board result, or hosted `model_verified` result.
 
 Copy-paste Arduino example for the onboard GPIO27 RGB LED with the Espressif
@@ -38,6 +39,37 @@ smoke, wiring notes and run instructions are in
 [`examples/esp32c5-devkitc/`](../../examples/esp32c5-devkitc/); its detailed
 availability record is in
 [`evidence/vendor-status.md`](../../examples/esp32c5-devkitc/evidence/vendor-status.md).
+
+Copy-paste Arduino example for an Adafruit SSD1306 OLED (PID 326), sharing the
+GPIO6/GPIO10 I2C bus with the BME280:
+
+```cpp
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <Wire.h>
+
+Adafruit_SSD1306 display(128, 64, &Wire, -1);
+
+void setup() {
+  Wire.begin(6, 10);
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) return;
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.println("ESP32-C5");
+  display.println("BME280 ready");
+  display.display();
+}
+
+void loop() {}
+```
+
+Adafruit's [PID 326 product page](https://www.adafruit.com/product/326) showed
+US$17.50, in stock, and Add to Cart on 2026-11-10. The page says I2C is the
+default configuration and the interface can be selected by jumpers. The
+committed firmware smoke uses raw I2C register writes and paints a checker
+pattern; this Arduino library sketch was not compiled by that run.
 
 ### ESP32-S3-DevKitC-1 v1.1 N16R8 — ADC input
 

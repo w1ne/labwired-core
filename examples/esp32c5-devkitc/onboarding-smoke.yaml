@@ -1,15 +1,17 @@
-# ESP32-C5-DevKitC-1 v1.2 smoke: UART0, BME280 over I2C0, and RGB LED via RMT.
+# ESP32-C5-DevKitC-1 v1.2 smoke: UART0, BME280 and SSD1306 over I2C0, and
+# the onboard RGB LED via RMT.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c5-devkitc-smoke"
   system: "../../configs/systems/esp32c5-devkitc.yaml"
 limits:
   # UART0 output includes the BME280 readings and RMT completion marker.
-  max_steps: 2500000
+  max_steps: 50000000
 assertions:
   - uart_contains: "ESP32_C5_UART0_OK"
   - uart_contains: "BME280_ID=0x60"
   - uart_contains: "BME280_TEMP_RAW=0x082DC0"
+  - uart_contains: "ESP32_C5_SSD1306=PAINTED"
   - uart_contains: "ESP32_C5_RMT_TX_END=PASS"
   - gpio_edges:
       pin: "gpio:27"
@@ -19,4 +21,11 @@ assertions:
       min_ink: 1.0
       colour: "0xF800"
       min_colour_pixels: 1
+  - display_region:
+      id: "oled"
+      x: 0
+      y: 0
+      w: 128
+      h: 64
+      min_ink: 0.45
   - expected_stop_reason: max_steps

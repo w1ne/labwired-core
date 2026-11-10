@@ -1,7 +1,7 @@
 # Live vendor availability — ESP32-C5-DevKitC-1-N8R8
 
 Board availability rechecked live on 2026-11-10; sensor listings were checked
-on 2026-11-06:
+on 2026-11-06. The SSD1306 was checked live on 2026-11-10:
 
 - Espressif's [ESP32-C5-DevKitC-1 v1.2 guide](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c5/esp32-c5-devkitc-1/user_guide.html)
   lists the current `ESP32-C5-DevKitC-1-N8R8` variant, identifies its
@@ -16,11 +16,16 @@ on 2026-11-06:
 - Adafruit's [BME280 breakout PID 2652](https://www.adafruit.com/product/2652)
   page offered the sensor for purchase. DigiKey's [matching PID 2652 listing](https://www.digikey.com/en/products/detail/adafruit-industries-llc/2652/5604372)
   showed **Part Status: Active** and **1,990 in stock** on 2026-11-06.
+- Adafruit's [SSD1306 128x64 OLED PID 326](https://www.adafruit.com/product/326)
+  was **US$17.50**, **in stock**, and offered **Add to Cart**. The live product
+  page says the interface is selectable between SPI and I2C; its current
+  revision defaults to I2C and has the STEMMA QT connectors.
 
 The model targets the current v1.2 board guide. It does not claim the older
 v1.1 board revision or the C5 v0.1 silicon described in the older guide.
 
 The current board guide identifies the addressable RGB LED on GPIO27 and the
 J1 header locations for GPIO6 and GPIO10. The board smoke exercises those I2C
-pads with a BME280 model and drives the LED through RMT TX0 and GPIO27. Source:
+pads with a BME280 and SSD1306 model, and drives the LED through RMT TX0 and
+GPIO27. Source:
 [ESP32-C5-DevKitC-1 v1.2 guide](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c5/esp32-c5-devkitc-1/user_guide.html).

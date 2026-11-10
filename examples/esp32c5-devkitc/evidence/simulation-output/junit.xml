@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="8" failures="0" errors="0" time="1.162919">
+<testsuite name="labwired" tests="10" failures="0" errors="0" time="27.517366">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="cfdfa0f72ed08763b7169857aaee20cee8032bfd5b6084790b1766ca1279e84d"/>
+    <property name="firmware_hash" value="9ebea2a6390c74f7e80f3dc1c2a7fdd50e5aadd07bfc6ee35f56054f8e7cf181"/>
   </properties>
-  <testcase classname="labwired" name="run" time="1.162919">
+  <testcase classname="labwired" name="run" time="27.517366">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: ESP32_C5_UART0_OK" time="0.000000">
   </testcase>
@@ -13,12 +13,16 @@
   </testcase>
   <testcase classname="labwired" name="assertion 3: uart_contains: BME280_TEMP_RAW=0x082DC0" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 4: uart_contains: ESP32_C5_RMT_TX_END=PASS" time="0.000000">
+  <testcase classname="labwired" name="assertion 4: uart_contains: ESP32_C5_SSD1306=PAINTED" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 5: gpio_edges: gpio:27 &gt;= 48 edges" time="0.000000">
+  <testcase classname="labwired" name="assertion 5: uart_contains: ESP32_C5_RMT_TX_END=PASS" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 6: display_region: rgb_led (0,0) *x* ink 1.00..=1.00 colour 0xF800 min_colour_pixels=1" time="0.000000">
+  <testcase classname="labwired" name="assertion 6: gpio_edges: gpio:27 &gt;= 48 edges" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 7: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 7: display_region: rgb_led (0,0) *x* ink 1.00..=1.00 colour 0xF800 min_colour_pixels=1" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 8: display_region: oled (0,0) 128x64 ink 0.45..=1.00" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 9: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>

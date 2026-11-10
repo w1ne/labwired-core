@@ -15,7 +15,8 @@ CARGO_BUILD_RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
 
 Pass criteria: the structured result is `pass`, UART output contains
 `ESP32_C5_UART0_OK`, `BME280_ID=0x60`, `BME280_TEMP_RAW=0x082DC0` and
-`ESP32_C5_RMT_TX_END=PASS`, GPIO27 produces at least 48 timed RMT edges, the
+`ESP32_C5_SSD1306=PAINTED`, and `ESP32_C5_RMT_TX_END=PASS`; the OLED display
+region is at least 45% inked, GPIO27 produces at least 48 timed RMT edges, the
 RGB LED decodes a red pixel (`0xF800`), and the run stops at the configured
 step limit. The onboarding script checks
 `result.json` so failed assertions cannot leave the metrics marked as passing.

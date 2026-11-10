@@ -4,18 +4,18 @@
     "type": "risc_v",
     "registers": [
       0,
-      1107296588,
-      1082523584,
+      1611210752,
+      1082523536,
       1082132480,
       0,
       77,
       82,
       67,
-      80,
+      95,
       80,
       83,
-      10,
       95,
+      10,
       1610612736,
       83,
       95,
@@ -23,20 +23,20 @@
       78,
       88,
       69,
+      84,
+      84,
       51,
-      84,
-      84,
-      53,
+      80,
       83,
-      95,
-      0,
-      0,
+      53,
+      51,
+      80,
       95,
       65,
       61,
       50
     ],
-    "pc": 1107298338,
+    "pc": 1107299258,
     "mstatus": 0,
     "mie": 0,
     "mip": 128,
@@ -45,7 +45,7 @@
     "mepc": 0,
     "mcause": 0,
     "mtval": 0,
-    "mtime": 2500000,
+    "mtime": 50000000,
     "mtimecmp": 0,
     "triggers": {
       "tselect": 0,
@@ -72,23 +72,23 @@
       "tcontrol": 0
     }
   },
-  "steps_executed": 2500000,
-  "cycles": 5168908,
-  "instructions": 2500000,
+  "steps_executed": 50000000,
+  "cycles": 118898102,
+  "instructions": 50000000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 2500000
+      "value": 50000000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 2500000
+      "value": 50000000
     }
   },
   "limits": {
-    "max_steps": 2500000,
+    "max_steps": 50000000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "cfdfa0f72ed08763b7169857aaee20cee8032bfd5b6084790b1766ca1279e84d",
+  "firmware_hash": "9ebea2a6390c74f7e80f3dc1c2a7fdd50e5aadd07bfc6ee35f56054f8e7cf181",
   "config": {
     "firmware": "examples/esp32c5-devkitc/../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c5-devkitc-smoke",
     "system": "examples/esp32c5-devkitc/../../configs/systems/esp32c5-devkitc.yaml",

@@ -2,12 +2,13 @@
 #![no_main]
 #![allow(clippy::empty_loop)]
 
-//! ESP32-C5-DevKitC-1 v1.2 UART0, BME280 I2C, and GPIO27 RMT RGB LED smoke.
+//! ESP32-C5-DevKitC-1 v1.2 UART0, I2C BME280/SSD1306, and GPIO27 RMT RGB LED smoke.
 //!
 //! This bare-metal image runs on the HP RISC-V core, reads the BME280 ID and
 //! temperature ADC through the GPIO6/GPIO10 I2C0 route, sends a UART0 marker,
-//! and transmits one red WS2812 frame through RMT TX0 on GPIO27. It does not
-//! start the ESP-IDF ROM/bootloader.
+//! paints a checker pattern to an SSD1306 sharing I2C0 with the BME280, and
+//! transmits one red WS2812 frame through RMT TX0 on GPIO27. It does not start
+//! the ESP-IDF ROM/bootloader.
 
 use panic_halt as _;
 use riscv_rt::entry;
@@ -57,6 +58,7 @@ const SCL_PIN: u32 = 10;
 const I2C0_SCL_SIGNAL: u32 = 46;
 const I2C0_SDA_SIGNAL: u32 = 47;
 const BME280_ADDR: u8 = 0x77;
+const SSD1306_ADDR: u8 = 0x3C;
 const OP_RSTART: u32 = 6;
 const OP_WRITE: u32 = 1;
 const OP_READ: u32 = 3;
@@ -130,6 +132,60 @@ unsafe fn read_bme280_register(register: u8) -> Result<u8, ()> {
         }
     }
     Err(())
+}
+
+/// Send one bounded write transaction to an I2C slave. The SSD1306 payload
+/// includes its control byte; address plus payload stays within the 32-byte
+/// transmit FIFO.
+unsafe fn i2c_write(address: u8, payload: &[u8]) -> Result<(), ()> {
+    if payload.is_empty() || payload.len() > 31 {
+        return Err(());
+    }
+
+    core::ptr::write_volatile(I2C_FIFO_CONF, (1 << 12) | (1 << 13));
+    core::ptr::write_volatile(I2C_INT_CLR, u32::MAX);
+    i2c_command(0, OP_RSTART, 0);
+    i2c_command(1, OP_WRITE, (payload.len() + 1) as u32);
+    i2c_command(2, OP_STOP, 0);
+    core::ptr::write_volatile(I2C_DATA, u32::from(address << 1));
+    for &byte in payload {
+        core::ptr::write_volatile(I2C_DATA, u32::from(byte));
+    }
+    core::ptr::write_volatile(I2C_CTR, 1 << 5);
+
+    for _ in 0..200_000 {
+        let status = core::ptr::read_volatile(I2C_INT_RAW);
+        if status & INT_NACK != 0 {
+            return Err(());
+        }
+        if status & (INT_TRANS_COMPLETE | INT_END_DETECT) != 0 {
+            return Ok(());
+        }
+    }
+    Err(())
+}
+
+/// Initialize the SSD1306 and write a visible 50%-ink checker pattern.
+unsafe fn smoke_ssd1306() -> Result<(), ()> {
+    // Canonical 128x64 SSD1306 initialization using its I2C command control byte.
+    const INIT: &[u8] = &[
+        0x00, 0xAE, 0xD5, 0x80, 0xA8, 0x3F, 0xD3, 0x00, 0x40, 0x8D, 0x14, 0x20, 0x00, 0xA1, 0xC8,
+        0xDA, 0x12, 0x81, 0xCF, 0xD9, 0xF1, 0xDB, 0x40, 0xA4, 0xA6, 0xAF,
+    ];
+    i2c_write(SSD1306_ADDR, INIT)?;
+    i2c_write(SSD1306_ADDR, &[0x00, 0x20, 0x00])?;
+    i2c_write(SSD1306_ADDR, &[0x00, 0x21, 0x00, 0x7F])?;
+    i2c_write(SSD1306_ADDR, &[0x00, 0x22, 0x00, 0x07])?;
+
+    let mut payload = [0x55; 31];
+    payload[0] = 0x40; // SSD1306 data stream control byte.
+    let mut remaining = 128 * 8;
+    while remaining != 0 {
+        let count = remaining.min(payload.len() - 1);
+        i2c_write(SSD1306_ADDR, &payload[..count + 1])?;
+        remaining -= count;
+    }
+    Ok(())
 }
 
 unsafe fn setup_i2c() {
@@ -257,6 +313,11 @@ fn main() -> ! {
 
         setup_i2c();
         smoke_bme280();
+
+        match smoke_ssd1306() {
+            Ok(()) => uart_str("ESP32_C5_SSD1306=PAINTED\n"),
+            Err(()) => uart_str("ESP32_C5_SSD1306=ERROR\n"),
+        }
 
         smoke_rmt_ws2812();
     }

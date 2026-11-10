@@ -1,14 +1,15 @@
 # ESP32-C5-DevKitC-1 v1.2
 
 This focused board profile runs a bare-metal RISC-V smoke on the ESP32-C5 HP
-core. Firmware writes `ESP32_C5_UART0_OK` through UART0, reads the BME280 chip
-ID and raw temperature ADC over I2C0 on GPIO6/GPIO10, and sends a red GRB
-WS2812 frame through RMT TX0 to the onboard RGB LED on GPIO27. The C5-specific
-GPIO matrix, IO_MUX, PCR clock controls and timed RMT TX path are modeled for
-these paths. UART0 TX/RX are GPIO11/GPIO12 on J3 pins 2/3.
+core. Firmware writes `ESP32_C5_UART0_OK` through UART0, reads a BME280 over
+I2C0, paints an SSD1306 OLED on the same I2C bus, and sends a red GRB WS2812
+frame through RMT TX0 to the onboard RGB LED on GPIO27. The BME280 and OLED
+share GPIO6/GPIO10. The C5-specific GPIO matrix, IO_MUX, PCR clock controls,
+I2C transactions, and timed RMT TX path are modeled for these paths. UART0
+TX/RX are GPIO11/GPIO12 on J3 pins 2/3.
 
 Demand rank: **ESP32 family #1** in the 2025 JetBrains MCU-use survey (38%).
-This round adds modeled RMT TX for the existing board's onboard RGB LED. It is
+This round adds an SSD1306 I2C display to an existing DevKitC profile. It is
 coverage depth in the top-ranked family, not a new MCU or board demand pick.
 
 ## Wiring
@@ -24,6 +25,16 @@ Connect an Adafruit BME280 breakout (PID 2652) to the ESP32-C5-DevKitC-1:
 
 The board guide marks GPIO7 as a strapping pin; this example uses GPIO6 and
 GPIO10. The breakout's default I2C address is `0x77`.
+
+Connect an Adafruit SSD1306 OLED breakout (PID 326) to the same bus. Leave its
+interface jumpers in their default I2C configuration. It uses address `0x3C`.
+
+| SSD1306 | ESP32-C5-DevKitC-1 |
+|---|---|
+| VIN | 3V3 |
+| GND | GND |
+| SDA | GPIO6 (J1 pin 7) |
+| SCL | GPIO10 (J1 pin 11) |
 
 ## Copy-paste Arduino example
 
@@ -51,6 +62,30 @@ void setup() {
   Serial.println(bme.readPressure() / 100.0F);
   Serial.print("Humidity %: ");
   Serial.println(bme.readHumidity());
+}
+
+void loop() {}
+```
+
+For the SSD1306, install Adafruit SSD1306 and Adafruit GFX, then upload:
+
+```cpp
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <Wire.h>
+
+Adafruit_SSD1306 display(128, 64, &Wire, -1);
+
+void setup() {
+  Wire.begin(6, 10);  // SDA=GPIO6, SCL=GPIO10; shared with the BME280
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) return;
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.println("ESP32-C5");
+  display.println("BME280 ready");
+  display.display();
 }
 
 void loop() {}
@@ -84,9 +119,12 @@ cargo run -q -p labwired-cli -- test \
 
 The committed [`evidence/`](evidence/) directory contains the onboarding
 runner's build logs, smoke transcript, simulation output, and metrics. The
-fixture checks UART output, the BME280 ID (`0x60`), the modeled raw temperature
-sample (`0x082DC0`), RMT TX completion, GPIO27 edges, and the decoded red LED
-frame. To run the bare-metal firmware, use
+fixture checks UART output, BME280 ID (`0x60`) and raw temperature
+(`0x082DC0`), an SSD1306 paint over the shared I2C bus, RMT TX completion,
+GPIO27 edges, and the decoded red LED frame. The committed simulator smoke
+uses a register-level bare-metal SSD1306 driver; the Arduino snippet is a
+copy-paste starting point and was not compiled by that run. To run the firmware,
+use
 [`src/main.rs`](../../crates/firmware-esp32c5-devkitc-smoke/src/main.rs) with
 the Cargo command above.
 
