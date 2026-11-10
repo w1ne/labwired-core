@@ -264,34 +264,47 @@ impl Rp2040Usb {
         self
     }
 
-    /// True while the host state machine or a held IRQ level still needs ticks.
+    /// True while the host state machine still has work it can do *this*
+    /// tick. A delay-1 chain that stays live just because USB is attached
+    /// (EP0 left armed waiting for the next SETUP, or a held IRQ level)
+    /// pins every CPU window to one instruction and blocks timer-poll idle
+    /// fast-forward on sketches that only call `millis()` after enumerate.
+    /// Waiting for the device is MMIO-driven: the write that clears
+    /// `BUS_RESET`, arms a buffer, or fills a bulk-IN harvests a new chain
+    /// via [`Peripheral::take_scheduled_events`].
     fn needs_event_chain(&self) -> bool {
-        if self.ints() != 0 {
-            return true;
-        }
         match self.host {
             HostState::Detached => {
                 // Attach debounce countdown after pull-up.
                 self.reg(MAIN_CTRL) & MAIN_CTRL_CONTROLLER_EN != 0
                     && self.reg(SIE_CTRL) & SIE_CTRL_PULLUP_EN != 0
             }
-            HostState::ResetIssued | HostState::Transfer => true,
-            HostState::Configured => self.service_needed(),
+            HostState::ResetIssued => {
+                // Progress is the device clearing BUS_RESET (an MMIO write).
+                self.reg(SIE_STATUS) & SIE_STATUS_BUS_RESET == 0
+            }
+            HostState::Transfer | HostState::Configured => self.service_needed(),
         }
     }
 
-    /// Cheap check: any bulk/control buffer the host should service this cycle.
+    /// Cheap check: any bulk/control buffer the host can complete this cycle.
+    /// Empty-armed endpoints (AVAIL but not FULL) do not count — the driver
+    /// typically leaves EP0 OUT armed between control transfers.
     fn service_needed(&self) -> bool {
         if self.awaiting_idle {
+            return self.device_idle();
+        }
+        let in_ctrl = self.dpram_u32(ep_in_buf_ctrl(0));
+        if in_ctrl & BUF_CTRL_AVAIL != 0 && in_ctrl & BUF_CTRL_FULL != 0 {
             return true;
         }
-        // EP0 armed?
-        if self.dpram_u32(ep_in_buf_ctrl(0)) & BUF_CTRL_AVAIL != 0
-            || self.dpram_u32(ep_out_buf_ctrl(0)) & BUF_CTRL_AVAIL != 0
+        // During a control transfer the host has OUT data or a status ZLP
+        // to write as soon as the device arms EP0 OUT.
+        if self.host == HostState::Transfer
+            && self.dpram_u32(ep_out_buf_ctrl(0)) & BUF_CTRL_AVAIL != 0
         {
             return true;
         }
-        // Any bulk-IN armed?
         for ep in 1..16usize {
             let bc = self.dpram_u32(ep_in_buf_ctrl(ep));
             if bc & BUF_CTRL_AVAIL != 0 && bc & BUF_CTRL_FULL != 0 {
@@ -610,8 +623,9 @@ impl Peripheral for Rp2040Usb {
     }
 
     /// Always event-driven under `event-scheduler` builds so USB does not pin
-    /// the walk. Attach debounce, enumeration, and held IRQ levels ride a
-    /// delay-1 self-perpetuating chain re-armed from MMIO writes.
+    /// the walk. Attach debounce rides a short delay-1 chain; enumeration and
+    /// configured traffic tick only while a buffer is completable, then the
+    /// next MMIO write re-arms the chain.
     fn uses_scheduler(&self) -> bool {
         true
     }
@@ -769,6 +783,29 @@ mod tests {
         let bc = u.dpram_u32(ep_in_buf_ctrl(1));
         assert_eq!(bc & (BUF_CTRL_FULL | BUF_CTRL_AVAIL), 0);
         assert_ne!(rd(&u, BUFF_STATUS) & (1 << 2), 0, "EP1_IN buff status set");
+    }
+
+    #[test]
+    fn idle_configured_usb_does_not_keep_a_delay_one_chain() {
+        let mut u = Rp2040Usb::new();
+        u.host = HostState::Configured;
+        // TinyUSB / arduino-pico leave EP0 OUT armed between control transfers.
+        u.set_dpram_u32(ep_out_buf_ctrl(0), BUF_CTRL_AVAIL | 64);
+        assert!(
+            !u.needs_event_chain(),
+            "an empty-armed EP0 must not pin the scheduler to delay-1"
+        );
+
+        let buf = 0x1c0usize;
+        u.set_dpram_u32(ep_in_ctrl(1), 0x8000_0000 | (2 << 26) | buf as u32);
+        u.set_dpram_u32(ep_in_buf_ctrl(1), BUF_CTRL_FULL | BUF_CTRL_AVAIL | 3);
+        assert!(u.needs_event_chain(), "a full bulk-IN buffer needs a host tick");
+
+        u.tick();
+        assert!(
+            !u.needs_event_chain(),
+            "after the bulk-IN is drained the chain must stop"
+        );
     }
 
     #[test]

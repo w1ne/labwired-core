@@ -206,6 +206,72 @@ impl Slice {
         let cc = (self.cc >> (16 * ch)) as u16;
         (self.ctr < cc) ^ (self.csr & (CSR_A_INV << ch) != 0)
     }
+
+    /// Advance the counter by `fires` divider ticks. Returns true if the
+    /// slice wrapped at least once (`INTR` latch).
+    fn advance_steps(&mut self, fires: u64) -> bool {
+        if fires == 0 {
+            return false;
+        }
+        let period = u64::from(self.top) + 1;
+        if u64::from(self.ctr) >= u64::from(self.top) {
+            let rest = fires - 1;
+            self.ctr = (rest % period) as u16;
+            return true;
+        }
+        let first_wrap = u64::from(self.top - self.ctr) + 1;
+        if fires < first_wrap {
+            self.ctr = self.ctr.saturating_add(fires as u16);
+            false
+        } else {
+            let rest = fires - first_wrap;
+            self.ctr = (rest % period) as u16;
+            true
+        }
+    }
+
+    fn cycles_per_step(&self) -> u64 {
+        u64::from((self.div & 0xFFF).max(0x010) / 0x10).max(1)
+    }
+
+    fn cycles_until_next_step(&self) -> u64 {
+        let step = (self.div & 0xFFF).max(0x010);
+        if self.frac_acc >= step {
+            1
+        } else {
+            u64::from((step - self.frac_acc + 0x0F) / 0x10).max(1)
+        }
+    }
+
+    /// Counter steps until wrap or an A/B compare match (an output edge).
+    fn steps_until_next_edge(&self) -> u64 {
+        if self.csr & CSR_PH_CORRECT != 0 {
+            return 1;
+        }
+        let to_wrap = if self.ctr >= self.top {
+            1
+        } else {
+            u64::from(self.top - self.ctr) + 1
+        };
+        let mut best = to_wrap;
+        for ch in 0..2 {
+            let cc = (self.cc >> (16 * ch)) as u16;
+            if self.ctr < cc {
+                best = best.min(u64::from(cc - self.ctr));
+            }
+        }
+        best.max(1)
+    }
+
+    fn cycles_until_next_edge(&self) -> u64 {
+        let steps = self.steps_until_next_edge();
+        let first = self.cycles_until_next_step();
+        if steps == 1 {
+            first
+        } else {
+            first + (steps - 1) * self.cycles_per_step()
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -222,6 +288,7 @@ pub struct Rp2040Pwm {
     clock: Option<CycleClock>,
     /// Bumped each arm so stale slice events die on arrival.
     arm_seq: u32,
+    last_sync: u64,
     /// The A/B output wire ([`LINE_NAMES`]), created when the bus routes a pad
     /// to it.
     lines: Option<Arc<PadLines>>,
@@ -245,6 +312,7 @@ impl Rp2040Pwm {
             intf: [0; 2],
             clock: None,
             arm_seq: 0,
+            last_sync: 0,
             lines: None,
             wired: false,
         }
@@ -305,6 +373,67 @@ impl Rp2040Pwm {
 
     fn needs_scheduler_wake(&self) -> bool {
         self.free_running_active() || self.any_ints()
+    }
+
+    fn cycles_until_next_wake(&self) -> Option<u64> {
+        if self.any_ints() {
+            return Some(1);
+        }
+        let mut best: Option<u64> = None;
+        for s in &self.slices[..self.slice_count()] {
+            if s.enabled() && s.free_running() {
+                let d = s.cycles_until_next_edge();
+                best = Some(best.map_or(d, |b| b.min(d)));
+            }
+        }
+        best
+    }
+
+    /// Advance free-running slices by `n` CPU cycles and publish the resulting
+    /// levels. Used so a scheduler wake can cover a whole PWM edge instead of
+    /// firing every cycle (which pinned idle-ff after `analogWrite`).
+    fn advance_cycles(&mut self, n: u64, at: Option<u64>) -> PeripheralTickResult {
+        if n == 0 {
+            return self.step_one(at);
+        }
+        for i in 0..self.slice_count() {
+            if !self.slices[i].enabled() || !self.slices[i].free_running() {
+                continue;
+            }
+            if self.slices[i].csr & CSR_PH_CORRECT != 0 {
+                for _ in 0..n {
+                    if self.slices[i].divider_fires() && self.slices[i].step() {
+                        self.intr |= 1 << i;
+                    }
+                }
+                self.publish_slice(i, at);
+                continue;
+            }
+            // Exact 8.4 DIV: each CPU cycle adds 0x10 to the accumulator.
+            let step = u64::from((self.slices[i].div & 0xFFF).max(0x010));
+            let new_acc = u64::from(self.slices[i].frac_acc) + n * 0x10;
+            let fires = new_acc / step;
+            self.slices[i].frac_acc = (new_acc % step) as u32;
+            if self.slices[i].advance_steps(fires) {
+                self.intr |= 1 << i;
+            }
+            if fires > 0 {
+                self.publish_slice(i, at);
+            }
+        }
+        let irqs: Vec<u32> = self
+            .layout
+            .wrap_irqs()
+            .iter()
+            .enumerate()
+            .filter(|&(g, _)| self.ints(g) != 0)
+            .map(|(_, &irq)| irq)
+            .collect();
+        let explicit_irqs = (!irqs.is_empty()).then_some(irqs);
+        PeripheralTickResult {
+            explicit_irqs,
+            ..Default::default()
+        }
     }
 
     /// One peripheral-tick of free-running counter work + level IRQ vector,
@@ -490,7 +619,11 @@ impl Peripheral for Rp2040Pwm {
             return Vec::new();
         }
         self.arm_seq = self.arm_seq.wrapping_add(1);
-        vec![(0, self.arm_seq)]
+        if let Some(clock) = self.clock.as_ref() {
+            self.last_sync = clock.now();
+        }
+        let delay = self.cycles_until_next_wake().unwrap_or(1).saturating_sub(1);
+        vec![(delay, self.arm_seq)]
     }
 
     fn on_event(
@@ -502,10 +635,13 @@ impl Peripheral for Rp2040Pwm {
         if !self.scheduler_mode() || event_token != self.arm_seq {
             return crate::sched::EventResult::default();
         }
-        let res = self.step_one(Some(sched.now()));
+        let now = sched.now();
+        let elapsed = now.saturating_sub(self.last_sync).max(1);
+        self.last_sync = now;
+        let res = self.advance_cycles(elapsed, Some(now));
         crate::sched::EventResult {
             explicit_irqs: res.explicit_irqs.unwrap_or_default(),
-            reschedule_delay: self.needs_scheduler_wake().then_some(1),
+            reschedule_delay: self.cycles_until_next_wake(),
             ..Default::default()
         }
     }
@@ -536,6 +672,19 @@ mod tests {
     }
 
     /// Enabled slice counts to TOP, wraps, and latches its INTR bit.
+    #[test]
+    fn free_running_slice_reports_cycles_until_wrap() {
+        let mut p = Rp2040Pwm::new();
+        p.write_u32(slice_reg(0, 0x10), 4).unwrap(); // TOP = 4
+        p.write_u32(slice_reg(0, 0x00), CSR_EN).unwrap();
+        // CTR=0, TOP=4, div=1.0 → wrap in 5 steps / 5 cycles.
+        assert_eq!(p.slices[0].cycles_until_next_edge(), 5);
+        let res = p.advance_cycles(5, Some(10));
+        assert_eq!(p.read_u32(slice_reg(0, 0x08)).unwrap(), 0);
+        assert_eq!(p.read_u32(INTR).unwrap(), 1);
+        let _ = res;
+    }
+
     #[test]
     fn slice_wraps_at_top_and_latches_intr() {
         let mut p = Rp2040Pwm::new();

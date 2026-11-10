@@ -1714,10 +1714,12 @@ impl<C: Cpu> Machine<C> {
                 }
                 budget = budget.min(deadline_cycle - self.total_cycles);
             } else if timer_poll && wfi_budget.is_none() {
-                // No scheduled event and not WFI: cap pure millis spins so a
-                // single batch cannot leap the whole step budget when the heap
-                // is empty (still advances real device time, just bounded).
-                budget = budget.min(1_000_000);
+                // Nothing queued: `sleep_until` reads TIMERAW *before* it
+                // arms the alarm pool entry. A 1M-cycle leap here jumped
+                // past that pending WFE wake, so pico_oled_pwm never
+                // reached `Serial1.println("RTF_READY")`. Only skip to a
+                // real scheduler deadline (an armed alarm or other wake).
+                return 0;
             }
 
             // Tiny windows are not worth the skip bookkeeping on the timer-poll
