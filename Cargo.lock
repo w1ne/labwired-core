@@ -2362,6 +2362,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-pico2-w-microsd-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-pico2-w-smoke"
 version = "0.1.0"
 dependencies = [

@@ -1,0 +1,13 @@
+# Raspberry Pi Pico 2 W reads README.TXT from the modeled SPI microSD volume.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-pico2-w-microsd-smoke"
+  system: "../../configs/systems/raspberry-pi-pico-2-w-microsd.yaml"
+limits:
+  max_steps: 5000000
+assertions:
+  - gpio_edges:
+      pin: "sio:17"
+      min_edges: 2
+  - uart_contains: "PICO2W_MICROSD_READ=PASS"
+  - expected_stop_reason: max_steps

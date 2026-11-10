@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      25,
+      1074200576,
+      268438457,
+      10,
+      3489660948,
+      1074266112,
+      131072,
+      537403376,
+      192,
+      255,
+      128,
+      0,
+      255,
+      537403376,
+      268438287,
+      268438400
+    ],
+    "pc": 268438400,
+    "xpsr": 1627389952,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 5000000,
+  "cycles": 1010000,
+  "instructions": 5000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 5000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 5000000
+    }
+  },
+  "limits": {
+    "max_steps": 5000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "2c53cbe126b4a932b6995c746cbe7395a196a192f8e65123af295aba174b8450",
+  "config": {
+    "firmware": "examples/raspberry-pi-pico-2-w-microsd/../../target/thumbv8m.main-none-eabi/release/firmware-pico2-w-microsd-smoke",
+    "system": "examples/raspberry-pi-pico-2-w-microsd/../../configs/systems/raspberry-pi-pico-2-w-microsd.yaml",
+    "script": "examples/raspberry-pi-pico-2-w-microsd/onboarding-smoke.yaml"
+  }
+}

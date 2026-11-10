@@ -1,0 +1,60 @@
+# Narrow Raspberry Pi Pico 2 W profile for UART0 and SPI0 microSD reads.
+# CYW43439 radio/LED, USB, ADC, and the rest of the board are omitted.
+name: "rp2350-pico2-w-microsd-smoke"
+arch: "arm"
+core: "cortex-m33"
+cpu_hz: 150_000_000
+reset_vector_offset: 0x0
+
+flash:
+  base: 0x10000000
+  size: "4096KB"
+ram:
+  base: 0x20000000
+  size: "520KB"
+
+pins:
+  # Pico 2 W header: GP16=MISO, GP17=CS, GP18=SCK, GP19=MOSI.
+  GP16:
+    gpio: "sio"
+    bit: 16
+    functions: [{ type: spi, peripheral: "spi0", role: miso }]
+  GP17: { gpio: "sio", bit: 17 }
+  GP18:
+    gpio: "sio"
+    bit: 18
+    functions: [{ type: spi, peripheral: "spi0", role: sck }]
+  GP19:
+    gpio: "sio"
+    bit: 19
+    functions: [{ type: spi, peripheral: "spi0", role: mosi }]
+
+peripherals:
+  - id: "uart0"
+    type: "uart"
+    base_address: 0x40070000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/rp2350/uart0.yaml"
+      profile: "pl011"
+
+  - id: "spi0"
+    type: "rp2040_spi"
+    base_address: 0x40080000
+    size: "4KB"
+    irq: 31
+
+  - id: "io_bank0"
+    type: "rp2040_io_bank0"
+    base_address: 0x40028000
+    size: "4KB"
+    irq: 21
+    config:
+      profile: "rp2350"
+
+  - id: "sio"
+    type: "rp2040_sio"
+    base_address: 0xD0000000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2350/sio.yaml"

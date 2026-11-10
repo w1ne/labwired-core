@@ -1,0 +1,12 @@
+# Raspberry Pi Pico 2 W with one external SPI microSD breakout on SPI0.
+# The CYW43439 Wi-Fi/Bluetooth module and its wireless-controlled LED are omitted.
+name: "raspberry-pi-pico-2-w-microsd"
+chip: "../chips/rp2350-pico2-w-microsd-smoke.yaml"
+debug_uart: "uart0"
+external_devices:
+  - id: "sd"
+    type: "microsd"
+    connection: "spi0"
+    config:
+      cs_pin: "GP17"
+board_io: []

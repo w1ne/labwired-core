@@ -1,0 +1,28 @@
+{
+  "target_id": "raspberry-pi-pico-2-w-microsd",
+  "status": "pass",
+  "crate": "firmware-pico2-w-microsd-smoke",
+  "target_triple": "thumbv8m.main-none-eabi",
+  "script": "examples/raspberry-pi-pico-2-w-microsd/onboarding-smoke.yaml",
+  "system": "configs/systems/raspberry-pi-pico-2-w-microsd.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-10T02:47:52Z",
+  "finished_at_utc": "2026-11-10T02:47:53Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1413,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.361,
+    "build_firmware": 0.531,
+    "run_smoke": 0.482
+  },
+  "stages_ms": {
+    "build_cli": 361,
+    "build_firmware": 531,
+    "run_smoke": 482
+  }
+}

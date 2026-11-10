@@ -199,6 +199,10 @@ on:
       - "configs/systems/raspberry-pi-pico-w-bme280.yaml"
       - "examples/raspberry-pi-pico-w-bme280/**"
       - "crates/firmware-pico2-w-smoke/**"
+      - "crates/firmware-pico2-w-microsd-smoke/**"
+      - "configs/chips/rp2350-pico2-w-microsd-smoke.yaml"
+      - "configs/systems/raspberry-pi-pico-2-w-microsd.yaml"
+      - "examples/raspberry-pi-pico-2-w-microsd/**"
       - "crates/firmware-xiao-rp2350-smoke/**"
       - "crates/firmware-adafruit-feather-rp2350-smoke/**"
       - "examples/adafruit-feather-esp32-v2/**"
@@ -763,6 +767,12 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/raspberry-pi-pico-2-w/io-smoke.yaml
             system: configs/systems/raspberry-pi-pico-2-w.yaml
+          - id: raspberry-pi-pico-2-w-microsd
+            crate: firmware-pico2-w-microsd-smoke
+            firmware_build_dir: crates/firmware-pico2-w-microsd-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/raspberry-pi-pico-2-w-microsd/onboarding-smoke.yaml
+            system: configs/systems/raspberry-pi-pico-2-w-microsd.yaml
           - id: seeed-xiao-rp2350
             crate: firmware-xiao-rp2350-smoke
             firmware_build_dir: crates/firmware-xiao-rp2350-smoke

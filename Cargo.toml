@@ -196,6 +196,7 @@ members = [
     "crates/firmware-adafruit-feather-rp2350-smoke",
     "crates/firmware-nano-rp2040-connect-smoke",
     "crates/firmware-pico2-w-smoke",
+    "crates/firmware-pico2-w-microsd-smoke",
     "crates/firmware-samd21-demo",
     "crates/firmware-samd21-lowram-smoke",
     "crates/firmware-arduino-zero-demo",
@@ -626,6 +627,10 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-pico2-w-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-pico2-w-microsd-smoke]
 codegen-units = 1
 opt-level = "s"
 
