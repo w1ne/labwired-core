@@ -30,6 +30,12 @@
   "assertions": [
     {
       "assertion": {
+        "uart_regex": "^STM32H7 register smoke"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "uart_contains": "STM32H7 register smoke"
       },
       "passed": true
@@ -71,8 +77,8 @@
   "cpu_state": {
     "type": "arm",
     "registers": [
-      1476527124,
       1073760284,
+      1476527124,
       105,
       103,
       111,
@@ -101,7 +107,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "df05da6f2da77e30ae66a30fac5f8b9d9de44492303b2d87d0b028987dd9a715",
+  "firmware_hash": "ff704a469f076f4c5fb07bec35dce689a1e75dd8ab3d4897d40e4dc83684c799",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-stm32h743-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/nucleo_h753zi.yaml",
@@ -189,79 +195,79 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 109426,
+            "cycle": 109428,
             "value": 1
           },
           {
-            "cycle": 315737,
+            "cycle": 315739,
             "value": 0
           },
           {
-            "cycle": 522046,
+            "cycle": 522048,
             "value": 1
           },
           {
-            "cycle": 728357,
+            "cycle": 728359,
             "value": 0
           },
           {
-            "cycle": 934666,
+            "cycle": 934668,
             "value": 1
           },
           {
-            "cycle": 1140977,
+            "cycle": 1140979,
             "value": 0
           },
           {
-            "cycle": 1347286,
+            "cycle": 1347288,
             "value": 1
           },
           {
-            "cycle": 1553597,
+            "cycle": 1553599,
             "value": 0
           },
           {
-            "cycle": 1759906,
+            "cycle": 1759908,
             "value": 1
           },
           {
-            "cycle": 1966217,
+            "cycle": 1966219,
             "value": 0
           },
           {
-            "cycle": 2172526,
+            "cycle": 2172528,
             "value": 1
           },
           {
-            "cycle": 2378837,
+            "cycle": 2378839,
             "value": 0
           },
           {
-            "cycle": 2585146,
+            "cycle": 2585148,
             "value": 1
           },
           {
-            "cycle": 2791457,
+            "cycle": 2791459,
             "value": 0
           },
           {
-            "cycle": 2997766,
+            "cycle": 2997768,
             "value": 1
           },
           {
-            "cycle": 3204077,
+            "cycle": 3204079,
             "value": 0
           },
           {
-            "cycle": 3410386,
+            "cycle": 3410388,
             "value": 1
           },
           {
-            "cycle": 3616697,
+            "cycle": 3616699,
             "value": 0
           },
           {
-            "cycle": 3823006,
+            "cycle": 3823008,
             "value": 1
           }
         ],
@@ -269,83 +275,83 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 45,
+            "cycle": 49,
             "state": "0"
           },
           {
-            "cycle": 109426,
+            "cycle": 109428,
             "state": "1"
           },
           {
-            "cycle": 315737,
+            "cycle": 315739,
             "state": "0"
           },
           {
-            "cycle": 522046,
+            "cycle": 522048,
             "state": "1"
           },
           {
-            "cycle": 728357,
+            "cycle": 728359,
             "state": "0"
           },
           {
-            "cycle": 934666,
+            "cycle": 934668,
             "state": "1"
           },
           {
-            "cycle": 1140977,
+            "cycle": 1140979,
             "state": "0"
           },
           {
-            "cycle": 1347286,
+            "cycle": 1347288,
             "state": "1"
           },
           {
-            "cycle": 1553597,
+            "cycle": 1553599,
             "state": "0"
           },
           {
-            "cycle": 1759906,
+            "cycle": 1759908,
             "state": "1"
           },
           {
-            "cycle": 1966217,
+            "cycle": 1966219,
             "state": "0"
           },
           {
-            "cycle": 2172526,
+            "cycle": 2172528,
             "state": "1"
           },
           {
-            "cycle": 2378837,
+            "cycle": 2378839,
             "state": "0"
           },
           {
-            "cycle": 2585146,
+            "cycle": 2585148,
             "state": "1"
           },
           {
-            "cycle": 2791457,
+            "cycle": 2791459,
             "state": "0"
           },
           {
-            "cycle": 2997766,
+            "cycle": 2997768,
             "state": "1"
           },
           {
-            "cycle": 3204077,
+            "cycle": 3204079,
             "state": "0"
           },
           {
-            "cycle": 3410386,
+            "cycle": 3410388,
             "state": "1"
           },
           {
-            "cycle": 3616697,
+            "cycle": 3616699,
             "state": "0"
           },
           {
-            "cycle": 3823006,
+            "cycle": 3823008,
             "state": "1"
           }
         ],
@@ -512,10 +518,10 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 5944,
+    "text_bytes": 5948,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 5944,
+    "flash_used_bytes": 5948,
     "ram_static_bytes": 0,
     "flash_total_bytes": 1048576,
     "ram_total_bytes": 131072,
@@ -545,16 +551,11 @@
     "cycles": 4000000,
     "instructions": 4000000,
     "steps_executed": 4000000,
-    "memory_reads": 972,
+    "memory_reads": 974,
     "memory_writes": 8,
-    "peripheral_accesses": 3802572,
+    "peripheral_accesses": 3802571,
     "exceptions": 0,
     "pc_samples": [
-      {
-        "pc": 134223216,
-        "count": 274,
-        "symbol": "core::ptr::read_volatile"
-      },
       {
         "pc": 134223292,
         "count": 274,
@@ -564,6 +565,11 @@
         "pc": 134223332,
         "count": 274,
         "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134223348,
+        "count": 274,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
         "pc": 134223252,
@@ -586,9 +592,9 @@
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134223218,
+        "pc": 134223216,
         "count": 235,
-        "symbol": "core::ptr::read_volatile"
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
       },
       {
         "pc": 134223224,
@@ -634,7 +640,7 @@
     "stalled_poll": {
       "peripheral": "gpioPortB",
       "offset": 20,
-      "accesses": 171578
+      "accesses": 171576
     }
   }
 }

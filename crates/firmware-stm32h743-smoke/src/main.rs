@@ -274,6 +274,11 @@ fn main() -> ! {
         write_volatile(RCC_APB1LENR, read_volatile(RCC_APB1LENR) | (1 << 18));
     }
 
+    // The imported model must not capture a TDR byte while UE/TE are clear.
+    // The smoke's anchored UART regex checks that the next output starts at
+    // the banner, with no byte from this disabled-transmitter probe before it.
+    unsafe { write_volatile(USART_TDR, b'!' as u32) };
+
     // Route PD8 to USART3_TX (AF7), configure USART3, and make PB0 an output.
     register_rmw(GPIOD + MODER, 0b11 << 16, 0b10 << 16);
     register_rmw(GPIOD + AFRH, 0xF << 0, 7);
