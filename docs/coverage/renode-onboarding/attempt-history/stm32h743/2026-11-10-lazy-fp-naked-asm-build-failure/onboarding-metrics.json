@@ -1,0 +1,33 @@
+{
+  "target_id": "stm32h743",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": false,
+  "booted": null,
+  "boot_evidence": null,
+  "smoke_passed": null,
+  "crate": "firmware-stm32h743-smoke",
+  "target_triple": "thumbv7em-none-eabihf",
+  "script": "examples/renode-onboarding/stm32h743-smoke.yaml",
+  "system": "configs/systems/onboarding/stm32h743.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-10T23:23:07Z",
+  "finished_at_utc": "2026-11-10T23:23:08Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1061,
+  "failure_stage": "build_firmware",
+  "first_error_signature": "error: <inline asm>:27:1: instruction requires: fp registers",
+  "failure_hint": "Firmware build failed. Start with the first compiler error in logs/build_firmware.log.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.535,
+    "build_firmware": 0.507,
+    "run_smoke": null
+  },
+  "stages_ms": {
+    "build_cli": 535,
+    "build_firmware": 507,
+    "run_smoke": null
+  }
+}

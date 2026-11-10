@@ -4284,6 +4284,8 @@ fn new_fp_context_starts_from_fpdscr() {
 #[test]
 fn fp_context_extended_frame_round_trip() {
     let (mut cpu, mut bus, fp) = fp_core();
+    // Exercise eager stacking independently of the reset LSPEN setting.
+    fp.set_fpccr(crate::peripherals::cortex_m_fpu::FPCCR_ASPEN);
     cpu.pc = 0x1000;
     cpu.sp = 0x8000; // Thread/MSP
     cpu.control = 0x4; // FPCA
@@ -4308,6 +4310,7 @@ fn fp_context_extended_frame_round_trip() {
     }
     assert_eq!(bus.read_u32(0x8000 - 0x68 + 0x60).unwrap(), 0x0100_0000);
     assert_eq!(fp.fpcar(), 0x8000 - 0x68 + 0x20);
+    assert!(!fp.lspact());
 
     // The handler clobbers caller-saved S0-S15 and FPSCR.
     for i in 0..16 {
@@ -4328,6 +4331,100 @@ fn fp_context_extended_frame_round_trip() {
     assert_eq!(cpu.fpu_s[20], 0xAAAA_AAAA);
     assert_eq!(cpu.fpscr, 0x0100_0000);
     assert_eq!(cpu.control & 0x4, 0x4, "FPCA = NOT EXC_RETURN[4]");
+}
+
+/// Lazy exception entry reserves the FP area and leaves it untouched. If the
+/// handler does not execute an FP instruction, exception return keeps the
+/// still-live FP registers and discards the reserved area.
+#[test]
+fn fp_lazy_frame_is_skipped_when_handler_does_not_use_fpu() {
+    let (mut cpu, mut bus, fp) = fp_core();
+    cpu.pc = 0x1000;
+    cpu.sp = 0x8000;
+    cpu.control = 0x4;
+    for i in 0..32 {
+        cpu.fpu_s[i] = 0x3F80_0000 + i as u32;
+    }
+    cpu.fpscr = 0x0100_0000;
+    let frame = 0x8000 - 0x68;
+    for i in 0..17u32 {
+        bus.write_u32((frame + 0x20 + i * 4) as u64, 0xDEAD_0000 + i)
+            .unwrap();
+    }
+
+    take_exception(&mut cpu, &mut bus, 16, 0x2000);
+
+    assert_eq!(cpu.lr, 0xFFFF_FFE9);
+    assert_eq!(cpu.sp, frame);
+    assert_eq!(fp.fpcar(), frame + 0x20);
+    assert_eq!(
+        fp.fpccr() & crate::peripherals::cortex_m_fpu::FPCCR_LSPACT,
+        1
+    );
+    for i in 0..17u32 {
+        assert_eq!(
+            bus.read_u32((frame + 0x20 + i * 4) as u64).unwrap(),
+            0xDEAD_0000 + i,
+            "reserved FP word {i} must not be written before the handler uses the FPU"
+        );
+    }
+
+    run_test_instr(&mut cpu, &mut bus, 0x0000_4770, false); // bx lr
+
+    assert_eq!(
+        fp.fpccr() & crate::peripherals::cortex_m_fpu::FPCCR_LSPACT,
+        0
+    );
+    assert_eq!(cpu.sp, 0x8000);
+    assert_eq!(cpu.control & 0x4, 0x4);
+    for i in 0..16 {
+        assert_eq!(cpu.fpu_s[i], 0x3F80_0000 + i as u32, "S{i} remains live");
+    }
+    assert_eq!(cpu.fpscr, 0x0100_0000);
+}
+
+/// The first handler FP instruction completes the pending save before it can
+/// change an FP register; exception return then restores from that stack area.
+#[test]
+fn fp_lazy_frame_is_saved_before_handler_fp_instruction() {
+    let (mut cpu, mut bus, fp) = fp_core();
+    cpu.pc = 0x1000;
+    cpu.sp = 0x8000;
+    cpu.control = 0x4;
+    for i in 0..32 {
+        cpu.fpu_s[i] = 0x4000_0000 + i as u32;
+    }
+    cpu.fpscr = 0x2100_0000;
+    let frame = 0x8000 - 0x68;
+
+    take_exception(&mut cpu, &mut bus, 16, 0x2000);
+    assert_ne!(
+        fp.fpccr() & crate::peripherals::cortex_m_fpu::FPCCR_LSPACT,
+        0
+    );
+
+    // VMOV.F32 s0, s1 triggers lazy preservation before executing.
+    run_test_instr(&mut cpu, &mut bus, 0xEEB0_0A60, true);
+    assert_eq!(
+        fp.fpccr() & crate::peripherals::cortex_m_fpu::FPCCR_LSPACT,
+        0
+    );
+    for i in 0..16u64 {
+        assert_eq!(
+            bus.read_u32((frame + 0x20 + 4 * i as u32) as u64).unwrap(),
+            0x4000_0000 + i as u32,
+            "lazy save S{i}"
+        );
+    }
+    assert_eq!(bus.read_u32((frame + 0x60) as u64).unwrap(), 0x2100_0000);
+
+    run_test_instr(&mut cpu, &mut bus, 0x0000_4770, false); // bx lr
+    assert_eq!(cpu.sp, 0x8000);
+    assert_eq!(cpu.control & 0x4, 0x4);
+    for i in 0..16 {
+        assert_eq!(cpu.fpu_s[i], 0x4000_0000 + i as u32, "S{i} restored");
+    }
+    assert_eq!(cpu.fpscr, 0x2100_0000);
 }
 
 /// FPCA clear on an FP-extension core: basic frame, EXC_RETURN bit 4 set, and

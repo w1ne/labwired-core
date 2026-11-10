@@ -122,8 +122,8 @@ pub struct CortexM {
     /// stale — `sp` is authoritative for it until the next stack switch.
     pub msp: u32,
     pub psp: u32,
-    /// CONTROL register. Only SPSEL (bit 1) and nPRIV (bit 0) are modelled;
-    /// FPCA (bit 2) is not (no lazy FP stacking).
+    /// CONTROL register. SPSEL (bit 1), nPRIV (bit 0), and FPCA (bit 2) are
+    /// modelled when their corresponding core features are present.
     pub control: u32,
     pub lr: u32, // R14
     pub pc: u32, // R15
@@ -1949,27 +1949,44 @@ impl CortexM {
     }
 
     /// The architecture's `ExecuteFPCheck`, run before every executed FP
-    /// instruction on a core with the FP extension: with FPCCR.ASPEN set, the
-    /// first FP instruction of a context sets CONTROL.FPCA and starts FPSCR's
-    /// AHP/DN/FZ/RMode from FPDSCR.
+    /// instruction on a core with the FP extension. It completes any pending
+    /// lazy context save before the instruction can change FP state; with
+    /// FPCCR.ASPEN set, the first FP instruction of a context then sets
+    /// CONTROL.FPCA and starts FPSCR's AHP/DN/FZ/RMode from FPDSCR.
     #[inline]
-    fn fp_execute_check(&mut self) {
-        if let Some(fp) = self.fp_ctx.as_ref() {
+    fn fp_execute_check<B: Bus + ?Sized>(&mut self, bus: &mut B) -> SimResult<()> {
+        if let Some(fp) = self.fp_ctx.as_ref().cloned() {
+            if fp.lspact() {
+                let fpcar = fp.fpcar();
+                for i in 0..16 {
+                    Self::bus_store(
+                        bus,
+                        fpcar.wrapping_add(4 * i as u32),
+                        AccessWidth::Word,
+                        self.fpu_s[i],
+                    )?;
+                }
+                Self::bus_store(bus, fpcar.wrapping_add(0x40), AccessWidth::Word, self.fpscr)?;
+                fp.set_lspact(false);
+            }
             if self.control & 0x4 == 0 && fp.aspen() {
                 let m = crate::peripherals::cortex_m_fpu::FPDSCR_MASK;
                 self.fpscr = (self.fpscr & !m) | (fp.fpdscr() & m);
                 self.control |= 0x4;
             }
         }
+        Ok(())
     }
 
     /// The JIT does not run `ExecuteFPCheck`, so while a context could still
-    /// create its FP state (ASPEN set, FPCA clear) the core stays on the
-    /// interpreter.
+    /// create its FP state (ASPEN set, FPCA clear) or a lazy save is pending,
+    /// the core stays on the interpreter.
     #[cfg(feature = "jit")]
     #[inline]
     fn fp_context_pending(&self) -> bool {
-        self.control & 0x4 == 0 && self.fp_ctx.as_ref().is_some_and(|fp| fp.aspen())
+        self.fp_ctx
+            .as_ref()
+            .is_some_and(|fp| fp.lspact() || (self.control & 0x4 == 0 && fp.aspen()))
     }
 
     /// Turn ARMv7-M fault escalation (and the SCB fault register surface) on or
@@ -2522,11 +2539,21 @@ impl CortexM {
         let mut frame_len = 32;
         if self.fp_ctx.is_some() {
             if exc_return & 0x10 == 0 {
-                for i in 0..16 {
-                    self.fpu_s[i] =
-                        bus.read_u32(frame_ptr.wrapping_add(0x20 + 4 * i as u32) as u64)?;
+                let lazy_save_pending = self.fp_ctx.as_ref().is_some_and(|fp| fp.lspact());
+                if lazy_save_pending {
+                    // No handler FP instruction triggered the save. The live
+                    // FP registers still belong to the interrupted context,
+                    // so discard the reserved stack area without unstacking it.
+                    if let Some(fp) = self.fp_ctx.as_ref() {
+                        fp.set_lspact(false);
+                    }
+                } else {
+                    for i in 0..16 {
+                        self.fpu_s[i] =
+                            bus.read_u32(frame_ptr.wrapping_add(0x20 + 4 * i as u32) as u64)?;
+                    }
+                    self.fpscr = bus.read_u32(frame_ptr.wrapping_add(0x60) as u64)?;
                 }
-                self.fpscr = bus.read_u32(frame_ptr.wrapping_add(0x60) as u64)?;
                 frame_len = 0x68;
                 self.control |= 0x4;
             } else {
@@ -4197,24 +4224,34 @@ impl CortexM {
                         )?;
                     }
                     if fp_frame {
-                        // Eager, not lazy: the S0-S15/FPSCR slots are filled
-                        // now even with FPCCR.LSPEN set (LSPACT stays 0).
-                        for i in 0..16 {
+                        let lazy_save = self.fp_ctx.as_ref().is_some_and(|fp| fp.lspen());
+                        if lazy_save {
+                            if let Some(fp) = self.fp_ctx.as_ref() {
+                                fp.set_fpcar(frame_ptr.wrapping_add(0x20));
+                                fp.set_lspact(true);
+                            }
+                        } else {
+                            // With LSPEN clear, save the extended frame during
+                            // exception entry instead of deferring it to the
+                            // handler's first FP instruction.
+                            for i in 0..16 {
+                                Self::bus_store(
+                                    bus,
+                                    frame_ptr.wrapping_add(0x20 + 4 * i as u32),
+                                    AccessWidth::Word,
+                                    self.fpu_s[i],
+                                )?;
+                            }
                             Self::bus_store(
                                 bus,
-                                frame_ptr.wrapping_add(0x20 + 4 * i as u32),
+                                frame_ptr.wrapping_add(0x60),
                                 AccessWidth::Word,
-                                self.fpu_s[i],
+                                self.fpscr,
                             )?;
-                        }
-                        Self::bus_store(
-                            bus,
-                            frame_ptr.wrapping_add(0x60),
-                            AccessWidth::Word,
-                            self.fpscr,
-                        )?;
-                        if let Some(fp) = self.fp_ctx.as_ref() {
-                            fp.set_fpcar(frame_ptr.wrapping_add(0x20));
+                            if let Some(fp) = self.fp_ctx.as_ref() {
+                                fp.set_fpcar(frame_ptr.wrapping_add(0x20));
+                                fp.set_lspact(false);
+                            }
                         }
                     }
 
@@ -4388,7 +4425,7 @@ impl CortexM {
             );
 
             if self.fp_ctx.is_some() && instruction.is_vfp() {
-                self.fp_execute_check();
+                self.fp_execute_check(bus)?;
             }
 
             // Execute

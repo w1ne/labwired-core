@@ -1,0 +1,87 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+   Compiling firmware-stm32h743-smoke v0.1.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/renode/crates/firmware-stm32h743-smoke)
+warning: constant `USART_RDR` is never used
+   --> crates/firmware-stm32h743-smoke/src/main.rs:113:7
+    |
+113 | const USART_RDR: *const u32 = (USART3 + 0x24) as *const u32;
+    |       ^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `USART_RXNEIE` is never used
+   --> crates/firmware-stm32h743-smoke/src/main.rs:115:7
+    |
+115 | const USART_RXNEIE: u32 = 1 << 5;
+    |       ^^^^^^^^^^^^
+
+warning: constant `USART_TXEIE` is never used
+   --> crates/firmware-stm32h743-smoke/src/main.rs:116:7
+    |
+116 | const USART_TXEIE: u32 = 1 << 7;
+    |       ^^^^^^^^^^^
+
+warning: constant `USART_TCIE` is never used
+   --> crates/firmware-stm32h743-smoke/src/main.rs:117:7
+    |
+117 | const USART_TCIE: u32 = 1 << 6;
+    |       ^^^^^^^^^^
+
+warning: constant `USART_RE` is never used
+   --> crates/firmware-stm32h743-smoke/src/main.rs:120:7
+    |
+120 | const USART_RE: u32 = 1 << 2;
+    |       ^^^^^^^^
+
+warning: constant `NVIC_ISPR1` is never used
+   --> crates/firmware-stm32h743-smoke/src/main.rs:121:7
+    |
+121 | const NVIC_ISPR1: *const u32 = 0xE000_E204 as *const u32;
+    |       ^^^^^^^^^^
+
+warning: constant `NVIC_ICPR1` is never used
+   --> crates/firmware-stm32h743-smoke/src/main.rs:122:7
+    |
+122 | const NVIC_ICPR1: *mut u32 = 0xE000_E284 as *mut u32;
+    |       ^^^^^^^^^^
+
+warning: constant `USART3_IRQ_BIT` is never used
+   --> crates/firmware-stm32h743-smoke/src/main.rs:123:7
+    |
+123 | const USART3_IRQ_BIT: u32 = 1 << (39 - 32);
+    |       ^^^^^^^^^^^^^^
+
+warning: constant `RXNE` is never used
+   --> crates/firmware-stm32h743-smoke/src/main.rs:125:7
+    |
+125 | const RXNE: u32 = 1 << 5;
+    |       ^^^^
+
+warning: constant `TC` is never used
+   --> crates/firmware-stm32h743-smoke/src/main.rs:126:7
+    |
+126 | const TC: u32 = 1 << 6;
+    |       ^^
+
+error: <inline asm>:27:1: instruction requires: fp registers
+vldmia r2!, {s0-s15}
+^
+
+warning: `firmware-stm32h743-smoke` (bin "firmware-stm32h743-smoke") generated 10 warnings
+error: could not compile `firmware-stm32h743-smoke` (bin "firmware-stm32h743-smoke"); 10 warnings emitted
+
+Caused by:
+  process didn't exit successfully: `/home/andrii/.local/bin/sccache /home/andrii/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/rustc --crate-name firmware_stm32h743_smoke --edition=2021 crates/firmware-stm32h743-smoke/src/main.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type bin --emit=dep-info,link -C opt-level=3 -C panic=abort -C lto=thin -C debuginfo=2 -C overflow-checks=on --cfg 'feature="stm32h743-exception-frame"' --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("nucleo-h753zi-rx", "nucleo-h753zi-usart3-irq", "stm32h743-exception-frame"))' -C metadata=de66b7573ea14400 -C extra-filename=-4267004653792890 --out-dir /home/andrii/worktrees-legacy-20261109/labwired-core/renode/target/thumbv7em-none-eabihf/release/deps --target thumbv7em-none-eabihf -L dependency=/home/andrii/worktrees-legacy-20261109/labwired-core/renode/target/thumbv7em-none-eabihf/release/deps -L dependency=/home/andrii/worktrees-legacy-20261109/labwired-core/renode/target/release/deps --extern cortex_m_rt=/home/andrii/worktrees-legacy-20261109/labwired-core/renode/target/thumbv7em-none-eabihf/release/deps/libcortex_m_rt-1ba2adfefd822a98.rlib --extern panic_halt=/home/andrii/worktrees-legacy-20261109/labwired-core/renode/target/thumbv7em-none-eabihf/release/deps/libpanic_halt-d168307f0e7aba15.rlib -L /home/andrii/worktrees-legacy-20261109/labwired-core/renode/target/thumbv7em-none-eabihf/release/build/firmware-stm32h743-smoke-7fceff21b6d48abf/out -L /home/andrii/worktrees-legacy-20261109/labwired-core/renode/target/thumbv7em-none-eabihf/release/build/cortex-m-rt-5882c09120b569d4/out -C link-arg=-Tlink.x` (exit status: 1)

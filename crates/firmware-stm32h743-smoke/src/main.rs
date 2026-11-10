@@ -68,7 +68,35 @@ static FP_SENTINELS: [u32; 16] = [
 static mut FP_CAPTURE: [u32; 17] = [0; 17];
 
 #[cfg(feature = "stm32h743-exception-frame")]
+static mut FP_LAZY_TOUCH: u32 = 0;
+
+#[cfg(feature = "stm32h743-exception-frame")]
+static mut FP_LAZY_FPCCR: [u32; 2] = [0; 2];
+
+#[cfg(feature = "stm32h743-exception-frame")]
+static FP_LAZY_CLOBBER: [u32; 16] = [
+    0xC000_0000,
+    0xC000_0001,
+    0xC000_0002,
+    0xC000_0003,
+    0xC000_0004,
+    0xC000_0005,
+    0xC000_0006,
+    0xC000_0007,
+    0xC000_0008,
+    0xC000_0009,
+    0xC000_000A,
+    0xC000_000B,
+    0xC000_000C,
+    0xC000_000D,
+    0xC000_000E,
+    0xC000_000F,
+];
+
+#[cfg(feature = "stm32h743-exception-frame")]
 const FPU_FPCAR: *const u32 = 0xE000_EF38 as *const u32;
+#[cfg(feature = "stm32h743-exception-frame")]
+const FPU_FPCCR: *mut u32 = 0xE000_EF34 as *mut u32;
 
 const RCC_AHB4ENR: *mut u32 = 0x5802_44E0 as *mut u32;
 const RCC_APB1LENR: *mut u32 = 0x5802_44E8 as *mut u32;
@@ -162,9 +190,22 @@ fn send_hex32(value: u32) {
     }
 }
 
+/// Execute one FP load through a normal function body so Rust applies the
+/// target's FP-register features while assembling the instruction.
+#[cfg(feature = "stm32h743-exception-frame")]
+unsafe fn touch_fp_in_handler() {
+    let values = core::ptr::addr_of!(FP_LAZY_CLOBBER).cast::<u32>();
+    asm!(
+        "vldmia r0!, {{s0-s15}}",
+        inout("r0") values => _,
+        options(nostack)
+    );
+}
+
 /// Capture the hardware-created Cortex-M7 frame before a compiler prologue
-/// changes the active stack. r4 is saved because it is not part of the basic
-/// exception frame; caller-saved registers are restored by exception return.
+/// changes the active stack. r4/r5 are saved because they are not part of the
+/// basic exception frame; caller-saved registers are restored by exception
+/// return.
 #[cfg(feature = "stm32h743-exception-frame")]
 #[unsafe(naked)]
 unsafe extern "C" fn smoke_exception_handler() {
@@ -174,11 +215,30 @@ unsafe extern "C" fn smoke_exception_handler() {
         "ite eq",
         "mrseq r0, msp",
         "mrsne r0, psp",
-        "push {{r4}}",
+        "push {{r4-r5}}",
         "ldr r1, ={record}",
         "str r2, [r1, #32]",
         "str r0, [r1, #36]",
         "mov r4, r0",
+        "mov r5, r2",
+        // Record LSPACT at handler entry, optionally touch the FPU, then
+        // record it again to distinguish a reserved lazy frame from a save
+        // triggered by the handler's first FP instruction.
+        "ldr r3, ={fpccr_record}",
+        "ldr r2, =0xE000EF34",
+        "ldr r0, [r2]",
+        "str r0, [r3]",
+        "ldr r2, ={fp_lazy_touch}",
+        "ldr r2, [r2]",
+        "cbz r2, 4f",
+        "bl {fp_lazy_touch_fn}",
+        "4:",
+        "mov lr, r5",
+        "ldr r1, ={record}",
+        "ldr r3, ={fpccr_record}",
+        "ldr r2, =0xE000EF34",
+        "ldr r0, [r2]",
+        "str r0, [r3, #4]",
         "movs r2, #8",
         "2:",
         "ldr r3, [r4]",
@@ -211,9 +271,12 @@ unsafe extern "C" fn smoke_exception_handler() {
         "ldr r2, =0xE000E200",
         "ldr r0, [r2]",
         "str r0, [r1, #48]",
-        "pop {{r4}}",
+        "pop {{r4-r5}}",
         "bx lr",
         record = sym EXCEPTION_RECORD,
+        fpccr_record = sym FP_LAZY_FPCCR,
+        fp_lazy_touch = sym FP_LAZY_TOUCH,
+        fp_lazy_touch_fn = sym touch_fp_in_handler,
     );
 }
 
@@ -566,9 +629,11 @@ fn check_cortex_m7_exception_frame() -> bool {
     let ccr_restored = unsafe { read_volatile(SCB_CCR) } == source_ccr;
 
     // First use of the FPU marks Thread mode's FP context active. The IRQ must
-    // stack the extended frame, return with EXC_RETURN[4] clear, and restore
-    // S0-S15/FPSCR before resuming this context.
+    // eagerly stack the extended frame with LSPEN clear, return with
+    // EXC_RETURN[4] clear, and restore S0-S15/FPSCR before resuming this context.
     unsafe {
+        write_volatile(FPU_FPCCR, 1 << 31); // ASPEN=1, LSPEN=0
+        write_volatile(core::ptr::addr_of_mut!(FP_LAZY_TOUCH), 0);
         for index in 0..18 {
             write_volatile(record.add(index), 0);
         }
@@ -607,6 +672,10 @@ fn check_cortex_m7_exception_frame() -> bool {
     let fp_pending_during = read_record(12);
     let fp_msp_before_irq = read_record(13);
     let fp_fpcar = unsafe { read_volatile(FPU_FPCAR) };
+    let fp_lazy_entry_ccr =
+        unsafe { read_volatile(core::ptr::addr_of!(FP_LAZY_FPCCR).cast::<u32>()) };
+    let fp_lazy_after_ccr =
+        unsafe { read_volatile(core::ptr::addr_of!(FP_LAZY_FPCCR).cast::<u32>().add(1)) };
     let fp_capture = core::ptr::addr_of_mut!(FP_CAPTURE).cast::<u32>();
     let fp_registers_restored =
         (0..16).all(|index| unsafe { read_volatile(fp_capture.add(index)) == FP_SENTINELS[index] });
@@ -628,6 +697,8 @@ fn check_cortex_m7_exception_frame() -> bool {
         && fp_frame_sp == fp_msp_before_irq.wrapping_sub(0x68)
         && (0x2000_0000..0x2002_0000).contains(&fp_frame_sp)
         && fp_fpcar == fp_frame_sp.wrapping_add(0x20)
+        && fp_lazy_entry_ccr & 1 == 0
+        && fp_lazy_after_ccr & 1 == 0
         && control_after_fp & 0x4 != 0
         && fp_registers_restored
         && fp_fpscr_restored;
@@ -640,6 +711,142 @@ fn check_cortex_m7_exception_frame() -> bool {
         && fp_active_and_pending_ok
         && fp_returned
         && msp_after_fp_irq == msp_before_fp_irq;
+
+    // With LSPEN set, the same handler does not use the FPU. The frame still
+    // reserves 0x68 bytes, but the S0-S15/FPSCR region must remain untouched;
+    // LSPACT stays set inside the handler and clears when it returns.
+    unsafe {
+        write_volatile(FPU_FPCCR, (1 << 31) | (1 << 30));
+        write_volatile(core::ptr::addr_of_mut!(FP_LAZY_TOUCH), 0);
+        write_volatile(core::ptr::addr_of_mut!(FP_LAZY_FPCCR).cast::<u32>(), 0);
+        write_volatile(
+            core::ptr::addr_of_mut!(FP_LAZY_FPCCR).cast::<u32>().add(1),
+            0,
+        );
+        load_fp_sentinels();
+    }
+    let msp_before_lazy_unused: u32;
+    unsafe {
+        asm!(
+            "mrs {}, msp",
+            out(reg) msp_before_lazy_unused,
+            options(nomem, nostack, preserves_flags)
+        )
+    };
+    // The naked IRQ-pender saves r4/r7 before recording the interrupted MSP.
+    let lazy_unused_before_irq = msp_before_lazy_unused.wrapping_sub(8);
+    let lazy_unused_frame_sp = lazy_unused_before_irq.wrapping_sub(0x68);
+    unsafe {
+        for index in 0..17u32 {
+            write_volatile(
+                (lazy_unused_frame_sp + 0x20 + 4 * index) as *mut u32,
+                0xDEAD_0000 + index,
+            );
+        }
+        for index in 0..18 {
+            write_volatile(record.add(index), 0);
+        }
+    }
+    unsafe { pend_exception_irq_with_sentinels() };
+    let msp_after_lazy_unused: u32;
+    unsafe {
+        asm!(
+            "mrs {}, msp",
+            out(reg) msp_after_lazy_unused,
+            options(nomem, nostack, preserves_flags)
+        )
+    };
+    let lazy_unused_pre_fpccr =
+        unsafe { read_volatile(core::ptr::addr_of!(FP_LAZY_FPCCR).cast::<u32>()) };
+    let lazy_unused_post_fpccr =
+        unsafe { read_volatile(core::ptr::addr_of!(FP_LAZY_FPCCR).cast::<u32>().add(1)) };
+    let lazy_unused_fpccr_after_return = unsafe { read_volatile(FPU_FPCCR) };
+    unsafe { capture_fp_sentinels() };
+    let lazy_unused_capture = core::ptr::addr_of_mut!(FP_CAPTURE).cast::<u32>();
+    let lazy_unused_regs_ok = (0..16).all(|index| unsafe {
+        read_volatile(lazy_unused_capture.add(index)) == FP_SENTINELS[index]
+    }) && unsafe { read_volatile(lazy_unused_capture.add(16)) }
+        == 0xA000_0000;
+    let lazy_unused_area_untouched = (0..17u32).all(|index| unsafe {
+        read_volatile((lazy_unused_frame_sp + 0x20 + 4 * index) as *const u32)
+            == 0xDEAD_0000 + index
+    });
+    let lazy_unused_ok = read_record(8) == 0xFFFF_FFE9
+        && read_record(9) == lazy_unused_frame_sp
+        && read_record(13) == lazy_unused_before_irq
+        && lazy_unused_pre_fpccr & 1 != 0
+        && lazy_unused_post_fpccr & 1 != 0
+        && lazy_unused_fpccr_after_return & 1 == 0
+        && lazy_unused_area_untouched
+        && lazy_unused_regs_ok
+        && msp_after_lazy_unused == msp_before_lazy_unused;
+
+    // When the handler executes its first FP instruction, the model must save
+    // the interrupted context into the reserved area first, then clear LSPACT.
+    unsafe {
+        write_volatile(core::ptr::addr_of_mut!(FP_LAZY_TOUCH), 1);
+        write_volatile(core::ptr::addr_of_mut!(FP_LAZY_FPCCR).cast::<u32>(), 0);
+        write_volatile(
+            core::ptr::addr_of_mut!(FP_LAZY_FPCCR).cast::<u32>().add(1),
+            0,
+        );
+        load_fp_sentinels();
+    }
+    let msp_before_lazy_used: u32;
+    unsafe {
+        asm!(
+            "mrs {}, msp",
+            out(reg) msp_before_lazy_used,
+            options(nomem, nostack, preserves_flags)
+        )
+    };
+    // Keep this aligned with the IRQ-pender's two saved registers above.
+    let lazy_used_before_irq = msp_before_lazy_used.wrapping_sub(8);
+    let lazy_used_frame_sp = lazy_used_before_irq.wrapping_sub(0x68);
+    unsafe {
+        for index in 0..17u32 {
+            write_volatile(
+                (lazy_used_frame_sp + 0x20 + 4 * index) as *mut u32,
+                0xBEEF_0000 + index,
+            );
+        }
+        for index in 0..18 {
+            write_volatile(record.add(index), 0);
+        }
+    }
+    unsafe { pend_exception_irq_with_sentinels() };
+    let msp_after_lazy_used: u32;
+    unsafe {
+        asm!(
+            "mrs {}, msp",
+            out(reg) msp_after_lazy_used,
+            options(nomem, nostack, preserves_flags)
+        )
+    };
+    let lazy_used_pre_fpccr =
+        unsafe { read_volatile(core::ptr::addr_of!(FP_LAZY_FPCCR).cast::<u32>()) };
+    let lazy_used_post_fpccr =
+        unsafe { read_volatile(core::ptr::addr_of!(FP_LAZY_FPCCR).cast::<u32>().add(1)) };
+    let lazy_used_fpccr_after_return = unsafe { read_volatile(FPU_FPCCR) };
+    let lazy_used_saved =
+        (0..16u32).all(|index| unsafe {
+            read_volatile((lazy_used_frame_sp + 0x20 + 4 * index) as *const u32)
+                == FP_SENTINELS[index as usize]
+        }) && unsafe { read_volatile((lazy_used_frame_sp + 0x60) as *const u32) == 0xA000_0000 };
+    unsafe { capture_fp_sentinels() };
+    let lazy_used_capture = core::ptr::addr_of_mut!(FP_CAPTURE).cast::<u32>();
+    let lazy_used_regs_ok = (0..16)
+        .all(|index| unsafe { read_volatile(lazy_used_capture.add(index)) == FP_SENTINELS[index] })
+        && unsafe { read_volatile(lazy_used_capture.add(16)) } == 0xA000_0000;
+    let lazy_used_ok = read_record(8) == 0xFFFF_FFE9
+        && read_record(9) == lazy_used_frame_sp
+        && read_record(13) == lazy_used_before_irq
+        && lazy_used_pre_fpccr & 1 != 0
+        && lazy_used_post_fpccr & 1 == 0
+        && lazy_used_fpccr_after_return & 1 == 0
+        && lazy_used_saved
+        && lazy_used_regs_ok
+        && msp_after_lazy_used == msp_before_lazy_used;
 
     unsafe {
         write_volatile(NVIC_ICER0, EXCEPTION_IRQ_BIT);
@@ -657,6 +864,8 @@ fn check_cortex_m7_exception_frame() -> bool {
         && aligned_psp_ok
         && unaligned_psp_ok
         && fp_ok
+        && lazy_unused_ok
+        && lazy_used_ok
         && ccr_restored;
 
     send(b"cortex-m7 irq ipsr=");
@@ -805,6 +1014,34 @@ fn check_cortex_m7_exception_frame() -> bool {
     send_hex32(fp_exc_return);
     send(b" sp=");
     send_hex32(fp_frame_sp);
+    send(b"\r\ncortex-m7 fp lazy unused=");
+    send(if lazy_unused_ok { b"1" } else { b"0" });
+    send(b" lspact=");
+    send_hex32(lazy_unused_pre_fpccr & 1);
+    send(b",");
+    send_hex32(lazy_unused_post_fpccr & 1);
+    send(b"->");
+    send_hex32(lazy_unused_fpccr_after_return & 1);
+    send(b" untouched=");
+    send(if lazy_unused_area_untouched {
+        b"1"
+    } else {
+        b"0"
+    });
+    send(b" regs=");
+    send(if lazy_unused_regs_ok { b"1" } else { b"0" });
+    send(b"\r\ncortex-m7 fp lazy used=");
+    send(if lazy_used_ok { b"1" } else { b"0" });
+    send(b" lspact=");
+    send_hex32(lazy_used_pre_fpccr & 1);
+    send(b",");
+    send_hex32(lazy_used_post_fpccr & 1);
+    send(b"->");
+    send_hex32(lazy_used_fpccr_after_return & 1);
+    send(b" saved=");
+    send(if lazy_used_saved { b"1" } else { b"0" });
+    send(b" regs=");
+    send(if lazy_used_regs_ok { b"1" } else { b"0" });
     send(b"\r\n");
     ok
 }
