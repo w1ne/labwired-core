@@ -51,6 +51,7 @@ const DEFERRED_IRQ_BIT: u32 = 1 << 9;
 const DEFERRED_IRQN: i16 = 9;
 const DEFERRED_CONTEXT: *mut u32 = 0x2000_0064 as *mut u32;
 const BASEPRI_CONTEXT: *mut u32 = 0x2000_0068 as *mut u32;
+const PRIMASK_CONTEXT: *mut u32 = 0x2000_006C as *mut u32;
 const LPUART_VERID: usize = 0x00;
 const LPUART_PARAM: usize = 0x04;
 const LPUART_BAUD: usize = 0x10;
@@ -112,6 +113,14 @@ static BASEPRI_ACTIVE_DURING: AtomicU32 = AtomicU32::new(0);
 static BASEPRI_PENDING_DURING: AtomicU32 = AtomicU32::new(0);
 static BASEPRI_EQUAL_ORDER: AtomicU32 = AtomicU32::new(0);
 static BASEPRI_LOWER_ORDER: AtomicU32 = AtomicU32::new(0);
+static PRIMASK_SEQUENCE: AtomicU32 = AtomicU32::new(0);
+static PRIMASK_HIGH_IPSR: AtomicU32 = AtomicU32::new(0);
+static PRIMASK_HIGH_EXC_RETURN: AtomicU32 = AtomicU32::new(0);
+static PRIMASK_HIGH_VALUE: AtomicU32 = AtomicU32::new(0);
+static PRIMASK_ACTIVE_DURING: AtomicU32 = AtomicU32::new(0);
+static PRIMASK_PENDING_DURING: AtomicU32 = AtomicU32::new(0);
+static PRIMASK_EQUAL_ORDER: AtomicU32 = AtomicU32::new(0);
+static PRIMASK_LOWER_ORDER: AtomicU32 = AtomicU32::new(0);
 
 const PSP_STACK_WORDS: usize = 64;
 static mut PSP_STACK: [u32; PSP_STACK_WORDS] = [0; PSP_STACK_WORDS];
@@ -972,6 +981,139 @@ fn exercise_basepri_masking() -> bool {
     context == 0x3FF
 }
 
+/// PRIMASK holds every configurable priority pending, then release dispatches
+/// the high, equal and low IRQs from Thread mode in priority order.
+fn exercise_primask_masking() -> bool {
+    IRQ_CASE.store(9, Ordering::Relaxed);
+    PRIMASK_SEQUENCE.store(0, Ordering::Relaxed);
+    PRIMASK_HIGH_IPSR.store(0, Ordering::Relaxed);
+    PRIMASK_HIGH_EXC_RETURN.store(0, Ordering::Relaxed);
+    PRIMASK_HIGH_VALUE.store(0, Ordering::Relaxed);
+    PRIMASK_ACTIVE_DURING.store(0, Ordering::Relaxed);
+    PRIMASK_PENDING_DURING.store(0, Ordering::Relaxed);
+    PRIMASK_EQUAL_ORDER.store(0, Ordering::Relaxed);
+    PRIMASK_LOWER_ORDER.store(0, Ordering::Relaxed);
+
+    let irq_bits = FLEXCOMM0_IRQ_BIT | NESTED_IRQ_BIT | DEFERRED_IRQ_BIT;
+    unsafe {
+        write_volatile(NVIC_ICER0 as *mut u32, irq_bits);
+        write_volatile(NVIC_ICPR0 as *mut u32, irq_bits);
+        write_volatile((NVIC_IPR0 as *mut u8).add(7), 0x80);
+        write_volatile((NVIC_IPR0 as *mut u8).add(8), 0x20);
+        write_volatile((NVIC_IPR0 as *mut u8).add(9), 0xC0);
+    }
+
+    let msp_before: u32;
+    unsafe {
+        core::arch::asm!(
+            "mrs {msp_before}, msp",
+            msp_before = out(reg) msp_before,
+            options(nostack),
+        );
+        core::arch::asm!("cpsid i", options(nostack));
+    }
+    let primask_masked: u32;
+    unsafe {
+        core::arch::asm!(
+            "mrs {primask}, PRIMASK",
+            primask = out(reg) primask_masked,
+            options(nostack),
+        );
+        write_volatile(NVIC_ISPR0 as *mut u32, irq_bits);
+        write_volatile(NVIC_ISER0 as *mut u32, irq_bits);
+    }
+    let pending_masked = unsafe { read_volatile(NVIC_ISPR0 as *const u32) } & irq_bits;
+    let active_masked = unsafe { read_volatile(NVIC_IABR0 as *const u32) } & irq_bits;
+
+    unsafe { core::arch::asm!("cpsie i", "isb", options(nostack)) };
+    for _ in 0..100_000 {
+        if PRIMASK_SEQUENCE.load(Ordering::SeqCst) == 3 {
+            break;
+        }
+    }
+
+    let primask_after: u32;
+    let msp_after: u32;
+    unsafe {
+        core::arch::asm!(
+            "mrs {primask}, PRIMASK",
+            "mrs {msp}, MSP",
+            primask = out(reg) primask_after,
+            msp = out(reg) msp_after,
+            options(nostack),
+        );
+    }
+    let high_ipsr = PRIMASK_HIGH_IPSR.load(Ordering::Relaxed);
+    let high_exc_return = PRIMASK_HIGH_EXC_RETURN.load(Ordering::Relaxed);
+    let high_primask = PRIMASK_HIGH_VALUE.load(Ordering::Relaxed);
+    let active_during = PRIMASK_ACTIVE_DURING.load(Ordering::Relaxed) & irq_bits;
+    let pending_during = PRIMASK_PENDING_DURING.load(Ordering::Relaxed) & irq_bits;
+    let equal_order = PRIMASK_EQUAL_ORDER.load(Ordering::Relaxed);
+    let lower_order = PRIMASK_LOWER_ORDER.load(Ordering::Relaxed);
+    let active_after = unsafe { read_volatile(NVIC_IABR0 as *const u32) } & irq_bits;
+    let pending_after = unsafe { read_volatile(NVIC_ISPR0 as *const u32) } & irq_bits;
+    let priorities_ok = unsafe {
+        read_volatile((NVIC_IPR0 as *const u8).add(7)) == 0x80
+            && read_volatile((NVIC_IPR0 as *const u8).add(8)) == 0x20
+            && read_volatile((NVIC_IPR0 as *const u8).add(9)) == 0xC0
+    };
+    unsafe {
+        write_volatile(NVIC_ICER0 as *mut u32, irq_bits);
+        write_volatile(NVIC_ICPR0 as *mut u32, irq_bits);
+    }
+    let context = u32::from(priorities_ok)
+        | (u32::from(primask_masked == 1 && pending_masked == irq_bits && active_masked == 0) << 1)
+        | (u32::from(high_ipsr == NESTED_EXCEPTION_NUMBER && high_exc_return == 0xFFFF_FFF9) << 2)
+        | (u32::from(high_primask == 0 && primask_after == 0) << 3)
+        | (u32::from(active_during == NESTED_IRQ_BIT) << 4)
+        | (u32::from(pending_during == (FLEXCOMM0_IRQ_BIT | DEFERRED_IRQ_BIT)) << 5)
+        | (u32::from(equal_order == 2) << 6)
+        | (u32::from(lower_order == 3) << 7)
+        | (u32::from(active_after == 0 && pending_after == 0) << 8)
+        | (u32::from(msp_after == msp_before) << 9);
+    unsafe { write_volatile(PRIMASK_CONTEXT, context) };
+
+    puts("\r\nprimask=");
+    hex(context);
+    puts(" mask=");
+    hex(primask_masked);
+    putc(b'/');
+    hex(primask_after);
+    puts(" pending=");
+    hex(pending_masked);
+    putc(b'/');
+    hex(pending_during);
+    puts(" active=");
+    hex(active_masked);
+    putc(b'/');
+    hex(active_during);
+    puts(" high=");
+    hex(high_ipsr);
+    putc(b'/');
+    hex(high_exc_return);
+    putc(b'/');
+    hex(high_primask);
+    puts(" order=");
+    hex(equal_order);
+    putc(b',');
+    hex(lower_order);
+    puts(" after=");
+    hex(active_after);
+    putc(b',');
+    hex(pending_after);
+    puts(" stack=");
+    putc(if msp_after == msp_before { b'1' } else { b'0' });
+    puts(" priorities=");
+    hex(unsafe { read_volatile((NVIC_IPR0 as *const u8).add(7)) as u32 });
+    putc(b',');
+    hex(unsafe { read_volatile((NVIC_IPR0 as *const u8).add(8)) as u32 });
+    putc(b',');
+    hex(unsafe { read_volatile((NVIC_IPR0 as *const u8).add(9)) as u32 });
+    puts("\r\n");
+
+    context == 0x3FF
+}
+
 fn wait_nvic_irq_pending(expected: bool) -> bool {
     for _ in 0..10_000 {
         if nvic_irq_pending() == expected {
@@ -1062,6 +1204,7 @@ fn smoke_lpuart_rx() -> bool {
     let released =
         rd(LPUART_STAT) & STAT_RDRF == 0 && rd(LPFC_ISTAT) & ISTAT_UARTRX == 0 && irq_released;
     let irq_basepri_masking = exercise_basepri_masking();
+    let irq_primask_masking = exercise_primask_masking();
     let ok = receiver_off
         && queued
         && rx_masked
@@ -1075,6 +1218,7 @@ fn smoke_lpuart_rx() -> bool {
         && irq_nested_priority
         && irq_deferred_priority
         && irq_basepri_masking
+        && irq_primask_masking
         && first == b'R' as u32
         && second_still_queued
         && rx_masked_with_data
@@ -1228,6 +1372,9 @@ fn main() -> ! {
     if unsafe { read_volatile(BASEPRI_CONTEXT) } == 0x3FF {
         pass |= 1 << 13;
     }
+    if unsafe { read_volatile(PRIMASK_CONTEXT) } == 0x3FF {
+        pass |= 1 << 14;
+    }
 
     puts("flexcomm0 pselid=");
     hex(pselid_reset);
@@ -1258,6 +1405,57 @@ fn main() -> ! {
 
 #[exception]
 unsafe fn DefaultHandler(irqn: i16) {
+    if IRQ_CASE.load(Ordering::Relaxed) == 9 {
+        let exc_return: u32;
+        let ipsr: u32;
+        unsafe {
+            core::arch::asm!(
+                "mov {exc_return}, lr",
+                exc_return = out(reg) exc_return,
+                options(nomem, nostack, preserves_flags),
+            );
+            core::arch::asm!(
+                "mrs {ipsr}, IPSR",
+                ipsr = out(reg) ipsr,
+                options(nomem, nostack, preserves_flags),
+            );
+        }
+        if irqn == NESTED_IRQN {
+            let primask: u32;
+            unsafe {
+                core::arch::asm!(
+                    "mrs {primask}, PRIMASK",
+                    primask = out(reg) primask,
+                    options(nomem, nostack, preserves_flags),
+                );
+            }
+            PRIMASK_HIGH_IPSR.store(ipsr, Ordering::Relaxed);
+            PRIMASK_HIGH_EXC_RETURN.store(exc_return, Ordering::Relaxed);
+            PRIMASK_HIGH_VALUE.store(primask, Ordering::Relaxed);
+            PRIMASK_ACTIVE_DURING.store(
+                unsafe { read_volatile(NVIC_IABR0 as *const u32) },
+                Ordering::Relaxed,
+            );
+            PRIMASK_PENDING_DURING.store(
+                unsafe { read_volatile(NVIC_ISPR0 as *const u32) },
+                Ordering::Relaxed,
+            );
+            PRIMASK_SEQUENCE.store(1, Ordering::SeqCst);
+            unsafe { write_volatile(NVIC_ICER0 as *mut u32, NESTED_IRQ_BIT) };
+        } else if irqn == FLEXCOMM0_IRQN {
+            let phase = PRIMASK_SEQUENCE.load(Ordering::Relaxed);
+            PRIMASK_EQUAL_ORDER.store(if phase == 1 { 2 } else { 0x101 }, Ordering::Relaxed);
+            PRIMASK_SEQUENCE.store(2, Ordering::SeqCst);
+            unsafe { write_volatile(NVIC_ICER0 as *mut u32, FLEXCOMM0_IRQ_BIT) };
+        } else if irqn == DEFERRED_IRQN {
+            let phase = PRIMASK_SEQUENCE.load(Ordering::Relaxed);
+            PRIMASK_LOWER_ORDER.store(if phase == 2 { 3 } else { 0x101 }, Ordering::Relaxed);
+            PRIMASK_SEQUENCE.store(3, Ordering::SeqCst);
+            unsafe { write_volatile(NVIC_ICER0 as *mut u32, DEFERRED_IRQ_BIT) };
+        }
+        return;
+    }
+
     if IRQ_CASE.load(Ordering::Relaxed) == 8 {
         let exc_return: u32;
         let ipsr: u32;
