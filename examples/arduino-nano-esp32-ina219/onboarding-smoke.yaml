@@ -1,0 +1,21 @@
+# Arduino Nano ESP32 + INA219: assert a live I2C measurement and input update.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/xtensa-esp32s3-none-elf/release/firmware-arduino-nano-esp32-ina219-smoke"
+  system: "../../configs/systems/arduino-nano-esp32-ina219.yaml"
+limits:
+  max_steps: 5000000
+assertions:
+  - uart_contains: "INA219_NANO_ESP32_READY"
+  - uart_contains: "INA219_CONFIG=0x399F"
+  - uart_ordered:
+      - "INA219_VBUS_MV=3300 I_MA=0 P_MW=0"
+      - "INA219_VBUS_MV=12000 I_MA=250 P_MW=3000"
+  - expected_stop_reason: max_steps
+stimuli:
+  - target: { component: "ina219", channel: "bus_voltage" }
+    trigger: !after_cycles { cycles: 50000 }
+    value: 12.0
+  - target: { component: "ina219", channel: "current" }
+    trigger: !after_cycles { cycles: 50000 }
+    value: 0.25

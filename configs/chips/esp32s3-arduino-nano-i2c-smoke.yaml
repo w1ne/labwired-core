@@ -1,0 +1,40 @@
+# Narrow ESP32-S3 profile for the Arduino Nano ESP32 GPIO matrix, UART0 and
+# A4/A5 I2C0 board smoke paths. Arduino maps A4/SDA to GPIO11 and A5/SCL to
+# GPIO12. Only the blocks needed by these examples are declared here.
+name: "esp32s3-arduino-nano-i2c-smoke"
+arch: "xtensa-lx7"
+cpu_hz: 240_000_000
+
+flash:
+  base: 0x42000000
+  size: "16384KB"
+ram:
+  base: 0x3FC88000
+  size: "512KB"
+
+pins:
+  GPIO11: { gpio: "gpio", bit: 11, functions: [{ type: i2c, peripheral: i2c0, role: sda }] }
+  GPIO12: { gpio: "gpio", bit: 12, functions: [{ type: i2c, peripheral: i2c0, role: scl }] }
+  GPIO43: { gpio: "gpio", bit: 43, functions: [{ type: uart, peripheral: uart0, role: tx }] }
+  GPIO44: { gpio: "gpio", bit: 44, functions: [{ type: uart, peripheral: uart0, role: rx }] }
+
+peripherals:
+  - id: "gpio"
+    type: "esp32s3_gpio"
+    base_address: 0x60004000
+    size: "2KB"
+
+  - id: "uart0"
+    type: "uart"
+    base_address: 0x60000000
+    size: "512B"
+    config:
+      debug_schema: "../peripherals/esp32s3/uart0.yaml"
+
+  - id: "i2c0"
+    type: "esp32s3_i2c"
+    base_address: 0x60013000
+    size: "4KB"
+    irq: 42
+    config:
+      debug_schema: "../peripherals/esp32s3/i2c0.yaml"

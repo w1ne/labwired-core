@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="5" failures="0" errors="0" time="0.548845">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="28b982692053b15d0f5212d1fc73dcf7685387b455f84270b7c9bb9976c0f50d"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.548845">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: INA219_NANO_ESP32_READY" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: INA219_CONFIG=0x399F" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_ordered: [&quot;INA219_VBUS_MV=3300 I_MA=0 P_MW=0&quot;, &quot;INA219_VBUS_MV=12000 I_MA=250 P_MW=3000&quot;]" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>
