@@ -2462,7 +2462,7 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-09
+    drift_ack: 2026-11-10
     # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
     # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
     # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
@@ -2470,7 +2470,10 @@ boards:
     # immediate range still Halt, same as before. Shared interpreter
     # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack_digest: cc3fa97b80b4984d9fd68c6e673fc73ea222f80abe4051c6e0aeefcd26d243c9
+    # 2026-11-10 (#1810): Andrii approved this digest at 7e59f530 after
+    # reviewing the UART peer-diagnostic visitor and 10 passing offline oracle tests.
+    # Model-drift acknowledgment only; live silicon re-capture remains pending.
+    drift_ack_digest: 4898e5c18e62d602e66c0c95da15909dc7d5ee1599aa1647e09608258887535e
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -2710,7 +2713,10 @@ boards:
     # the live capture reads the clock-gated window as bus junk (0x0008fe10).
     # This acknowledges model drift, NOT a recapture.
     # Re-stamped 2026-11-08 (round 347) over both changes above after merging main.
-    drift_ack_digest: afcf8ea391f732b54fbedeea7e983b71a7ca9cc41a2c4000073c9ab7b0f93971
+    # 2026-11-10 (#1810): Andrii approved this digest at 7e59f530 after
+    # reviewing the UART peer-diagnostic visitor and 2 passing offline oracle tests.
+    # Model-drift acknowledgment only; live silicon re-capture remains pending.
+    drift_ack_digest: a5637220de294d7d0ae93204f5f94f76b5999b1b98420a29b26fdac9096b862e
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -4696,7 +4702,7 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-09
+    drift_ack: 2026-11-10
     # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
     # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
     # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
@@ -4704,7 +4710,10 @@ boards:
     # immediate range still Halt, same as before. Shared interpreter
     # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack_digest: ea61614e87455985b6f507bebc6ffbe3a2de2e18779514665742fac10a9c196d
+    # 2026-11-10 (#1810): Andrii approved this digest at 7e59f530 after
+    # reviewing the UART peer-diagnostic visitor and 2 passing offline oracle tests.
+    # Model-drift acknowledgment only; live silicon re-capture remains pending.
+    drift_ack_digest: 29231873e77536c0c6bf187be493d47ba552f7e9dc573166978d320cb8fa59fc
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -5200,7 +5209,10 @@ boards:
     # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
     # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
     # does not use it. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: f299e2a4b0027fd78905a4ff867c82a8b9894abed6480c7cc12513115b61e6df
+    # 2026-11-10 (#1810): Andrii approved this digest at 7e59f530 after
+    # reviewing the UART peer-diagnostic visitor and 2 passing offline oracle tests.
+    # Model-drift acknowledgment only; live silicon re-capture remains pending.
+    drift_ack_digest: deef41e3ebdd4a3ba549d25a044b9af0938d7385d0c31413ffdeec6f809c8c32
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5756,7 +5768,7 @@ boards:
     #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
     #   OOM-killed on the authoring host, so the full --lib result is the PR's
     #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-09
+    drift_ack: 2026-11-10
     # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
     # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
     # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
@@ -6964,7 +6976,7 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-09
+    drift_ack: 2026-11-10
     # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
     # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
     # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
@@ -6972,7 +6984,10 @@ boards:
     # immediate range still Halt, same as before. Shared interpreter
     # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack_digest: 11ccb9e80e02ed99d39d7182ceffc87a835d7295705db9bb4e8c7edc21d98250
+    # 2026-11-10 (#1810): Andrii approved this digest at 7e59f530 after
+    # reviewing the UART peer-diagnostic visitor and 4 passing offline oracle tests.
+    # Model-drift acknowledgment only; live silicon re-capture remains pending.
+    drift_ack_digest: f65e8756ed3fbdf791a674a5c3b24f7e9ea4f14d43764efed0b05b649a399d36
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -7489,7 +7504,10 @@ boards:
     # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
     # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
     # does not use it. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: e3f6c4c992fca162699f23acaa7a2a580b62936718e33e96e46e17a8aca402ae
+    # 2026-11-10 (#1810): Andrii approved this digest at 7e59f530 after
+    # reviewing the UART peer-diagnostic visitor and 3 passing offline oracle tests.
+    # Model-drift acknowledgment only; live silicon re-capture remains pending.
+    drift_ack_digest: b2880e1fd08102981aef4640e2f182ed260be1882c26bf9f062d21e1ef022c3c
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -8047,7 +8065,7 @@ boards:
     #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
     #   OOM-killed on the authoring host, so the full --lib result is the PR's
     #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-09
+    drift_ack: 2026-11-10
     # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
     # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
     # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
@@ -8975,7 +8993,10 @@ boards:
     # keeps its writes. This is not an S3 reset-state recapture; the nine
     # captured S3 windows are unchanged. ACK, NOT A CAPTURE.
     drift_ack: 2026-11-10
-    drift_ack_digest: c30213b480a08adac0801cc2ebe2947169beaadcd9bd2d11b8cfd601c1286102
+    # 2026-11-10 (#1810): Andrii approved this digest at 7e59f530 after
+    # reviewing the UART peer-diagnostic visitor and 1 passing offline oracle test.
+    # Model-drift acknowledgment only; live silicon re-capture remains pending.
+    drift_ack_digest: a7658f4294d873a6fa78a72feabe548517f40125e59b23242d8630de8a37bec9
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.
