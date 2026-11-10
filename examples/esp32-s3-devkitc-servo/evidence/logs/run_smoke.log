@@ -1,6 +1,23 @@
-2026-11-06T17:18:22.777815Z  INFO labwired_loader: ELF Entry Point: 0x40378058
+warning: method `pad_lines_arc` is never used
+   --> crates/core/src/peripherals/esp32s3/ledc.rs:271:19
+    |
+203 | impl Esp32s3Ledc {
+    | ---------------- method in this implementation
+...
+271 |     pub(crate) fn pad_lines_arc(&mut self) -> Arc<PadLines> {
+    |                   ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `default_events_per_channel` is never used
+   --> crates/core/src/peripherals/ra_gpt.rs:125:4
+    |
+125 | fn default_events_per_channel() -> u32 {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+2026-11-10T06:08:48.852600Z  INFO labwired_loader: ELF Entry Point: 0x4037804c
 configure_xtensa_esp32s3: ESP32-S3 ROM harness (thunk code + 131072 B DROM)
 labwired-cli test: no partitions.bin beside examples/esp32-s3-devkitc-servo/../../target/xtensa-esp32s3-none-elf/release/firmware-esp32-s3-devkitc-servo-smoke — booting on identity XIP (bare-metal layout). An Arduino/ESP-IDF app needs its partition table (flash 0x8000) next to the ELF or it aborts in esp_partition ("No MD5 found in partition table") before printing anything.
-2026-11-06T17:18:22.868871Z  INFO labwired_core::boot::esp32s3: esp32s3: seeded rom_spiflash_legacy_data -> chip@0x3fceff00 (chip_size=0x1000000)
-labwired-cli test: ESP32-S3 fast-boot entry=0x40378058 (dual-core APP_CPU)
-PASS  5/5 checks · onboarding-smoke · 9000000 steps · 1.04s
+2026-11-10T06:08:48.931535Z  INFO labwired_core::boot::esp32s3: esp32s3: seeded rom_spiflash_legacy_data -> chip@0x3fceff00 (chip_size=0x1000000)
+labwired-cli test: ESP32-S3 fast-boot entry=0x4037804c (dual-core APP_CPU)
+PASS  5/5 checks · onboarding-smoke · 9000000 steps · 2.77s

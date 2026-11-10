@@ -1,5 +1,5 @@
 # ESP32-S3-DevKitC-1 v1.0 N16R8 narrow smoke: UART0, the GPIO48 RGB LED, and
-# GPIO4 for the external LEDC-servo system. The v1.1 board's RGB LED is on
+# GPIO4 for the external MCPWM-servo system. The v1.1 board's RGB LED is on
 # GPIO38; see its separate profile. GPIO4 is J1 pin 4 on both revisions.
 name: "esp32s3-devkitc-1-n16r8-v10-smoke"
 arch: "xtensa-lx7"
@@ -41,3 +41,11 @@ peripherals:
     config:
       cpu_clock_hz: 240000000
       debug_schema: "../peripherals/esp32s3/rmt.yaml"
+
+  - id: "mcpwm0"
+    type: "esp32s3_mcpwm"
+    base_address: 0x6001E000
+    size: "4KB"
+    irq: 38
+    config:
+      debug_schema: "../peripherals/esp32s3/mcpwm0.yaml"

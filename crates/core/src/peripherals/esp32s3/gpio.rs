@@ -270,6 +270,10 @@ pub const RMT_SIG_OUT1: u32 = 82;
 pub const RMT_SIG_OUT2: u32 = 83;
 pub const RMT_SIG_OUT3: u32 = 84;
 
+/// ESP-IDF `gpio_sig_map.h` MCPWM generator output selectors.
+const MCPWM0_SIG_OUT0: u32 = 160;
+const MCPWM1_SIG_OUT0: u32 = 166;
+
 /// GPIO-matrix OUTPUT signal index → name, for the signals the S3 model cares
 /// about (currently the RMT TX channels). Unmapped indices → `None` (never a
 /// guess), matching the C3 `c3_out_signal_name` convention.
@@ -290,6 +294,8 @@ fn s3_out_signal_name(idx: u32) -> Option<&'static str> {
         RMT_SIG_OUT1 => "RMT_SIG_OUT1",
         RMT_SIG_OUT2 => "RMT_SIG_OUT2",
         RMT_SIG_OUT3 => "RMT_SIG_OUT3",
+        MCPWM0_SIG_OUT0..=165 => super::mcpwm::MCPWM_LINE_NAMES[(idx - MCPWM0_SIG_OUT0) as usize],
+        MCPWM1_SIG_OUT0..=171 => super::mcpwm::MCPWM_LINE_NAMES[(idx - MCPWM1_SIG_OUT0) as usize],
         _ => return None,
     })
 }

@@ -805,6 +805,7 @@ pub(crate) fn register_esp32s3_peripherals(bus: &mut SystemBus, opts: &Esp32s3Op
     bus.wire_esp32s3_spi_pads();
     bus.wire_esp32s3_uart_pads();
     bus.wire_esp32s3_ledc_pads();
+    bus.wire_matrix_output_lines();
 
     // Share the IO_MUX per-pad register bank with GPIO now that both models
     // exist, so a `FUN_WPU` write (Arduino `INPUT_PULLUP`) changes the level a

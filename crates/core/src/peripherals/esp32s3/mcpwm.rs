@@ -25,7 +25,7 @@
 //! field masks and the interrupt block follows the standard
 //! `INT_ST = INT_RAW & INT_ENA`, W1C-over-`INT_CLR` pattern. The three timers
 //! **auto-advance on `tick()`**: each enabled timer accumulates sim (CPU)
-//! cycles, divides by `(clk_prescale+1) * (timer_prescale+1) * cpu_per_apb`,
+//! cycles, divides by `(clk_prescale+1) * (timer_prescale+1)` source clocks,
 //! and steps its counter through the configured count mode. Reaching the period
 //! latches **TEP**; returning to zero latches **TEZ**. A comparator-equal latch
 //! fires when the counter matches `CMPRx_VALUE0`/`VALUE1` of the operator that
@@ -95,6 +95,7 @@
 //! source per unit; firmware reads `INT_ST` to learn which timer/operator
 //! fired. `new(base_source_id)` takes that id (38 or 39).
 
+use crate::peripherals::pad_lines::PadLines;
 use crate::peripherals::McpwmDutyObserver;
 use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 use std::sync::Arc;
@@ -110,8 +111,14 @@ pub const MCPWM0_INTR_SOURCE: u32 = 38;
 /// `ETS_PWM1_INTR_SOURCE = 39`.
 pub const MCPWM1_INTR_SOURCE: u32 = 39;
 
-/// APB clock feeding the MCPWM prescaler (80 MHz).
-const APB_CLOCK_HZ: u64 = 80_000_000;
+/// MCPWM's documented CLK_160M input, distinct from the S3 APB clock.
+const PWM_CLOCK_HZ: u64 = 160_000_000;
+
+/// ESP-IDF `gpio_sig_map.h` indices for each MCPWM unit's six outputs.
+pub const MCPWM0_SIG_OUT0: u32 = 160;
+pub const MCPWM1_SIG_OUT0: u32 = 166;
+pub(crate) const MCPWM_LINE_NAMES: &[&str] =
+    &["PWM0A", "PWM0B", "PWM1A", "PWM1B", "PWM2A", "PWM2B"];
 
 const NUM_TIMERS: usize = 3;
 const NUM_OPERATORS: usize = 3;
@@ -225,9 +232,12 @@ struct TimerState {
     /// Current count direction (false = up, true = down). Meaningful in
     /// up-down mode; in up/down modes it tracks the fixed direction.
     counting_down: bool,
-    /// Fractional clock accumulator (sim/CPU ticks) — when it reaches the
-    /// per-count divisor the counter steps once. Mirrors timer_group's `accum`.
+    /// Accumulated MCPWM source-clock numerator. Each CPU cycle adds
+    /// `PWM_CLOCK_HZ`; one counter step consumes `cpu_clock_hz * divider`.
     accum: u64,
+    /// A fresh start applies the generator's timer-boundary action once before
+    /// the first counter step.
+    start_pending: bool,
 }
 
 impl TimerState {
@@ -240,6 +250,7 @@ impl TimerState {
             counter: 0,
             counting_down: false,
             accum: 0,
+            start_pending: false,
         }
     }
 
@@ -344,6 +355,8 @@ struct OperatorState {
     gen_b: u32,
     dt_cfg: u32,
     dt_fed: u32,
+    /// Current generator output levels, A then B.
+    output_levels: [bool; 2],
 }
 
 impl OperatorState {
@@ -361,7 +374,7 @@ impl OperatorState {
 pub struct Esp32s3Mcpwm {
     /// Interrupt-matrix source id emitted while any enabled interrupt latches.
     intr_source_id: u32,
-    /// CPU clock used to scale the APB prescaler to sim ticks.
+    /// CPU clock used to convert the 160 MHz MCPWM source clock to sim ticks.
     cpu_clock_hz: u32,
 
     clk_cfg: u32,
@@ -384,12 +397,16 @@ pub struct Esp32s3Mcpwm {
 
     /// Actuators notified on each compare-A commit (`mcpwm_set_duty`).
     duty_observers: Vec<Arc<dyn McpwmDutyObserver>>,
+    /// GPIO-matrix output base: 160 for MCPWM0, 166 for MCPWM1.
+    matrix_sig_out0: u32,
+    /// Six output wires, created lazily during bus wiring.
+    pads: Option<Arc<PadLines>>,
 }
 
 impl Esp32s3Mcpwm {
     /// Construct one MCPWM unit bound to interrupt-matrix `base_source_id`
     /// (`MCPWM0_INTR_SOURCE` = 38 for MCPWM0, `MCPWM1_INTR_SOURCE` = 39 for
-    /// MCPWM1). The CPU clock defaults to 240 MHz for the APB→sim-tick scaling;
+    /// MCPWM1). The CPU clock defaults to 240 MHz for source-clock scaling;
     /// use `new_with_clock` to override.
     pub fn new(base_source_id: u32) -> Self {
         Self::new_with_clock(base_source_id, 240_000_000)
@@ -420,6 +437,12 @@ impl Esp32s3Mcpwm {
             last_tick: 0,
             scheduled: false,
             duty_observers: Vec::new(),
+            matrix_sig_out0: if base_source_id == MCPWM1_INTR_SOURCE {
+                MCPWM1_SIG_OUT0
+            } else {
+                MCPWM0_SIG_OUT0
+            },
+            pads: None,
         }
     }
 
@@ -442,13 +465,6 @@ impl Esp32s3Mcpwm {
                 self.extras[w] = (self.extras[w] & !wmask) | (value & wmask);
             }
         }
-    }
-
-    /// Sim (CPU) ticks per APB cycle (≥1). At 240/80 this is 3.
-    fn cpu_per_apb(&self) -> u64 {
-        (self.cpu_clock_hz as u64)
-            .saturating_div(APB_CLOCK_HZ)
-            .max(1)
     }
 
     /// MCPWM module clock prescale: PWM_clk = MCPWM_clk / (CLK_PRESCALE + 1).
@@ -566,6 +582,7 @@ impl Esp32s3Mcpwm {
                     if !was_running && self.timers[t].running() {
                         self.timers[t].counting_down = self.timers[t].mode() == TIMER_MODE_DOWN;
                         self.timers[t].accum = 0;
+                        self.timers[t].start_pending = true;
                         if self.timers[t].mode() == TIMER_MODE_DOWN {
                             // Down mode begins from the period value.
                             self.timers[t].counter = self.timers[t].period();
@@ -618,13 +635,36 @@ impl Esp32s3Mcpwm {
         }
     }
 
-    /// Advance one timer by one sim tick, latching TEZ/TEP and the matching
-    /// operator's comparator-equal events into `int_raw`.
+    fn apply_generator_action(op: &mut OperatorState, generator: usize, down: bool, event: usize) {
+        // GENx_A / GENx_B action fields are TEZ, TEP, TEA, TEB, T0, T1 for
+        // increasing direction at bits 0..11 and decreasing direction at
+        // bits 12..23. 0=keep, 1=low, 2=high, 3=toggle.
+        let actions = if generator == 0 { op.gen_a } else { op.gen_b };
+        let shift = if down { 12 + event * 2 } else { event * 2 };
+        let action = (actions >> shift) & 0x3;
+        let level = &mut op.output_levels[generator];
+        match action {
+            1 => *level = false,
+            2 => *level = true,
+            3 => *level = !*level,
+            _ => {}
+        }
+    }
+
+    fn apply_timer_event(op: &mut OperatorState, down: bool, event: usize) {
+        Self::apply_generator_action(op, 0, down, event);
+        Self::apply_generator_action(op, 1, down, event);
+    }
+
+    /// Advance one timer by one CPU cycle, latching events and applying the
+    /// matching generator actions. The S3 source clock is 160 MHz; a rational
+    /// accumulator preserves its ratio to 240 MHz (or another configured core).
     fn advance_timer(
         timer: &mut TimerState,
-        op: &OperatorState,
+        op: &mut OperatorState,
         t_index: usize,
-        cpu_per_apb: u64,
+        source_hz: u64,
+        cpu_clock_hz: u64,
         clk_prescale: u64,
         int_raw: &mut u32,
     ) {
@@ -633,49 +673,56 @@ impl Esp32s3Mcpwm {
         }
         let period = timer.period();
         if period == 0 {
-            return; // degenerate config; nothing to count toward
-        }
-
-        // sim ticks per single counter step.
-        let cpu_per_count = clk_prescale
-            .saturating_mul(timer.timer_prescale())
-            .saturating_mul(cpu_per_apb)
-            .max(1);
-        timer.accum += 1;
-        if timer.accum < cpu_per_count {
             return;
         }
-        let mut steps = timer.accum / cpu_per_count;
-        timer.accum %= cpu_per_count;
 
-        // Step one count at a time so every TEZ/TEP/compare crossing latches,
-        // even when multiple counts elapse in a single tick.
+        if timer.start_pending {
+            let down = timer.mode() == TIMER_MODE_DOWN;
+            Self::apply_timer_event(op, down, if down { 1 } else { 0 });
+            timer.start_pending = false;
+        }
+
+        // One timer count consumes (CLK_CFG + 1) * (TIMERx_PRESCALE + 1)
+        // source cycles. Accumulating source_hz per CPU tick makes the divider
+        // exact even when CPU_CLOCK_HZ / PWM_CLOCK_HZ is fractional.
+        let per_count = cpu_clock_hz
+            .saturating_mul(clk_prescale)
+            .saturating_mul(timer.timer_prescale())
+            .max(1);
+        timer.accum = timer.accum.saturating_add(source_hz);
+        if timer.accum < per_count {
+            return;
+        }
+        let mut steps = timer.accum / per_count;
+        timer.accum %= per_count;
+
         while steps > 0 {
             steps -= 1;
             match timer.mode() {
                 TIMER_MODE_UP => {
                     if timer.counter >= period {
-                        // At/over period: wrap to 0 → TEP then TEZ.
-                        *int_raw |= int_tep_bit(t_index);
                         timer.counter = 0;
                         *int_raw |= int_tez_bit(t_index);
+                        Self::apply_timer_event(op, false, 0);
                     } else {
                         timer.counter += 1;
                         if timer.counter == period {
                             *int_raw |= int_tep_bit(t_index);
+                            Self::apply_timer_event(op, false, 1);
                         }
                     }
                     timer.counting_down = false;
                 }
                 TIMER_MODE_DOWN => {
                     if timer.counter == 0 {
-                        *int_raw |= int_tez_bit(t_index);
                         timer.counter = period;
                         *int_raw |= int_tep_bit(t_index);
+                        Self::apply_timer_event(op, true, 1);
                     } else {
                         timer.counter -= 1;
                         if timer.counter == 0 {
                             *int_raw |= int_tez_bit(t_index);
+                            Self::apply_timer_event(op, true, 0);
                         }
                     }
                     timer.counting_down = true;
@@ -684,6 +731,7 @@ impl Esp32s3Mcpwm {
                     if !timer.counting_down {
                         if timer.counter >= period {
                             *int_raw |= int_tep_bit(t_index);
+                            Self::apply_timer_event(op, false, 1);
                             timer.counting_down = true;
                             if timer.counter > 0 {
                                 timer.counter -= 1;
@@ -692,17 +740,20 @@ impl Esp32s3Mcpwm {
                             timer.counter += 1;
                             if timer.counter == period {
                                 *int_raw |= int_tep_bit(t_index);
+                                Self::apply_timer_event(op, false, 1);
                                 timer.counting_down = true;
                             }
                         }
                     } else if timer.counter == 0 {
                         *int_raw |= int_tez_bit(t_index);
+                        Self::apply_timer_event(op, true, 0);
                         timer.counting_down = false;
                         timer.counter += 1;
                     } else {
                         timer.counter -= 1;
                         if timer.counter == 0 {
                             *int_raw |= int_tez_bit(t_index);
+                            Self::apply_timer_event(op, true, 0);
                             timer.counting_down = false;
                         }
                     }
@@ -710,14 +761,13 @@ impl Esp32s3Mcpwm {
                 _ => {}
             }
 
-            // Comparator-equal events for the operator sharing this index
-            // (modeled 1:1 op↔timer wiring). Compare against the post-step
-            // counter value.
             if timer.counter == (op.cmpr_value0 & CMPR_VALUE_MASK) {
                 *int_raw |= int_tea_bit(t_index);
+                Self::apply_timer_event(op, timer.counting_down, 2);
             }
             if timer.counter == (op.cmpr_value1 & CMPR_VALUE_MASK) {
                 *int_raw |= int_teb_bit(t_index);
+                Self::apply_timer_event(op, timer.counting_down, 3);
             }
         }
     }
@@ -779,25 +829,35 @@ impl Peripheral for Esp32s3Mcpwm {
     }
 
     /// One CPU cycle elapses per tick. Advance all running timers at their
-    /// divided PWM-clock rate, latch TEZ/TEP + comparator events, and emit the
-    /// unit's matrix source while any enabled interrupt is latched (level).
+    /// divided PWM-clock rate, apply generator actions, and publish the output
+    /// levels to the GPIO matrix wire cell.
     fn tick(&mut self) -> PeripheralTickResult {
-        let cpu_per_apb = self.cpu_per_apb();
         let clk_prescale = self.clk_prescale();
         let mut int_raw = self.int_raw;
         for t in 0..NUM_TIMERS {
             // Operator t shares timer t's index in our 1:1 wiring model.
-            let op = self.operators[t];
             Self::advance_timer(
                 &mut self.timers[t],
-                &op,
+                &mut self.operators[t],
                 t,
-                cpu_per_apb,
+                PWM_CLOCK_HZ,
+                (self.cpu_clock_hz as u64).max(1),
                 clk_prescale,
                 &mut int_raw,
             );
         }
         self.int_raw = int_raw;
+
+        if let Some(pads) = self.pads.as_ref() {
+            pads.set(&[
+                self.operators[0].output_levels[0],
+                self.operators[0].output_levels[1],
+                self.operators[1].output_levels[0],
+                self.operators[1].output_levels[1],
+                self.operators[2].output_levels[0],
+                self.operators[2].output_levels[1],
+            ]);
+        }
 
         let asserted = (self.int_raw & self.int_ena & INT_MODELED_MASK) != 0;
         PeripheralTickResult {
@@ -821,6 +881,21 @@ impl Peripheral for Esp32s3Mcpwm {
     fn attach_cycle_clock(&mut self, clock: CycleClock) {
         self.last_tick = clock.now();
         self.clock = Some(clock);
+    }
+
+    fn matrix_output_lines(&mut self) -> Option<(u32, Arc<PadLines>)> {
+        let pads = self
+            .pads
+            .get_or_insert_with(|| Arc::new(PadLines::new(MCPWM_LINE_NAMES, &[false; 6])));
+        Some((self.matrix_sig_out0, Arc::clone(pads)))
+    }
+
+    fn line_names(&self) -> &'static [&'static str] {
+        MCPWM_LINE_NAMES
+    }
+
+    fn wire_lines(&self) -> Option<&PadLines> {
+        self.pads.as_deref()
     }
 
     fn sync_to(&mut self, now_cycle: u64) {
@@ -908,9 +983,10 @@ mod tests {
             | ((start & TIMER_CFG1_START_MASK) << TIMER_CFG1_START_SHIFT)
     }
 
-    /// Run a CPU-80MHz unit so cpu_per_apb == 1 (simplest timing).
+    /// Run at the MCPWM source clock so one configured timer count takes one
+    /// simulation tick (the simplest timing for register-level tests).
     fn new_unit() -> Esp32s3Mcpwm {
-        Esp32s3Mcpwm::new_with_clock(MCPWM0_INTR_SOURCE, 80_000_000)
+        Esp32s3Mcpwm::new_with_clock(MCPWM0_INTR_SOURCE, 160_000_000)
     }
 
     #[test]
@@ -988,8 +1064,8 @@ mod tests {
 
     #[test]
     fn up_mode_counter_advances_at_prescale_rate() {
-        let mut p = new_unit(); // cpu_per_apb == 1
-                                // prescale 0 → div (0+1)*(clk0+1)=1 → 1 count/tick. period large.
+        let mut p = new_unit();
+        // prescale 0 → div (0+1)*(clk0+1)=1 → 1 count/tick. period large.
         p.write_u32(timer_off(0, TIMER_CFG0), cfg0(0, 10_000))
             .unwrap();
         p.write_u32(timer_off(0, TIMER_CFG1), cfg1(TIMER_MODE_UP, 2))
@@ -1160,7 +1236,7 @@ mod tests {
 
     #[test]
     fn unit1_uses_source_39() {
-        let mut p = Esp32s3Mcpwm::new_with_clock(MCPWM1_INTR_SOURCE, 80_000_000);
+        let mut p = Esp32s3Mcpwm::new_with_clock(MCPWM1_INTR_SOURCE, 160_000_000);
         p.write_u32(REG_INT_RAW, int_tez_bit(0)).unwrap();
         p.write_u32(REG_INT_ENA, int_tez_bit(0)).unwrap();
         assert_eq!(p.tick().explicit_irqs, Some(vec![39]));
@@ -1253,5 +1329,22 @@ mod tests {
             .unwrap();
         p.write_u32(op_off(1, OP_CMPR_VALUE0), 2_500).unwrap();
         assert!((rec.0.lock().unwrap()[1].1 - 0.25).abs() < 1e-12);
+    }
+
+    #[test]
+    fn generator_a_drives_its_gpio_matrix_wire() {
+        let mut p = new_unit();
+        let (_, lines) = p.matrix_output_lines().expect("MCPWM publishes outputs");
+        p.write_u32(op_off(0, OP_CMPR_VALUE0), 3).unwrap();
+        p.write_u32(op_off(0, OP_GEN_A), 0x12).unwrap(); // TEZ high, TEA low.
+        p.write_u32(timer_off(0, TIMER_CFG0), cfg0(0, 5)).unwrap();
+        p.write_u32(timer_off(0, TIMER_CFG1), cfg1(TIMER_MODE_UP, 2))
+            .unwrap();
+
+        p.tick(); // timer starts at TEZ and counts to 1
+        assert_eq!(lines.level_of("PWM0A"), Some(true));
+        p.tick(); // 2
+        p.tick(); // compare A at 3 pulls generator A low
+        assert_eq!(lines.level_of("PWM0A"), Some(false));
     }
 }

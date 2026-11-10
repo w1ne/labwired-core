@@ -1,4 +1,6 @@
 - Espressif [ESP32-S3-DevKitC-1 v1.0 User Guide](https://documentation.espressif.com/esp-dev-kits/en/latest/esp32s3/esp32-s3-devkitc-1/user_guide_v1.0.html): GPIO4 is J1 pin 4; both initial and v1.1 revisions remain on the market.
 - Espressif [ESP32-S3-DevKitC-1 catalog](https://www.espressif.com/en/products/devkits/esp32-s3-series/esp32-s3-devkitc-1): exact board variant and distributor links.
 - Mouser [ESP32-S3-DevKitC-1-N16R8](https://www.mouser.com/en/ProductDetail/Espressif-Systems/ESP32-S3-DevKitC-1-N16R8): current retail availability.
-- Espressif [Arduino-ESP32 LEDC API](https://docs.espressif.com/projects/arduino-esp32/en/latest/api/ledc.html): LEDC generates PWM, `ledcAttach` configures pin/frequency/resolution, and `ledcWrite` sets duty.
+- Espressif [ESP-IDF MCPWM guide](https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-reference/peripherals/mcpwm.html): the S3 MCPWM timer/operator/comparator/generator path used for servo PWM.
+- Espressif [ESP32-S3 Technical Reference Manual](https://documentation.espressif.com/esp32-s3_technical_reference_manual_en.pdf): MCPWM uses `CLK_160M` and routes generator outputs through the GPIO matrix.
+- Espressif [Arduino-ESP32 LEDC API](https://docs.espressif.com/projects/arduino-esp32/en/latest/api/ledc.html): the optional Arduino sketch uses LEDC as an alternate PWM implementation.

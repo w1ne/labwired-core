@@ -1,4 +1,4 @@
-/* ESP32-S3-DevKitC-1 v1.0 N16R8: UART0, GPIO48 WS2812, and GPIO4 LEDC servo. */
+/* ESP32-S3-DevKitC-1 v1.0 N16R8: UART0, GPIO48 WS2812, and GPIO4 MCPWM servo. */
 typedef unsigned int uint32_t;
 typedef unsigned char uint8_t;
 
@@ -12,21 +12,19 @@ typedef unsigned char uint8_t;
 #define RMT_INT_CLR (*(volatile uint32_t *)0x6001607Cu)
 #define RMT_CH0_CONF0 (*(volatile uint32_t *)0x60016020u)
 #define RMT_MEM ((volatile uint32_t *)0x60016400u)
-#define LEDC_CH3_CONF0 (*(volatile uint32_t *)0x6001903Cu)
-#define LEDC_CH3_HPOINT (*(volatile uint32_t *)0x60019040u)
-#define LEDC_CH3_DUTY (*(volatile uint32_t *)0x60019044u)
-#define LEDC_CH3_CONF1 (*(volatile uint32_t *)0x60019048u)
-#define LEDC_CH3_DUTY_R (*(volatile uint32_t *)0x6001904Cu)
-#define LEDC_TIMER2_CONF (*(volatile uint32_t *)0x600190B0u)
+#define MCPWM0_CLK_CFG (*(volatile uint32_t *)0x6001E000u)
+#define MCPWM0_TIMER0_CFG0 (*(volatile uint32_t *)0x6001E004u)
+#define MCPWM0_TIMER0_CFG1 (*(volatile uint32_t *)0x6001E008u)
+#define MCPWM0_GEN0_TSTMP_A (*(volatile uint32_t *)0x6001E040u)
+#define MCPWM0_GEN0_A (*(volatile uint32_t *)0x6001E050u)
 
 #define GPIO4_BIT (1u << 4)
 #define GPIO48_BIT (1u << 16)
-#define LEDC_SIG_OUT3 76u
+#define MCPWM0_OUT0A 160u
 #define RMT_SIG_OUT0 81u
 #define RMT_TX_START (1u << 0)
 #define RMT_CONF_UPDATE (1u << 24)
 #define RMT_CH0_TX_END (1u << 0)
-#define LEDC_DUTY_START (1u << 31)
 #define TXFIFO_LEN 128u
 
 static void write_ws2812_byte(uint8_t value, uint32_t *symbol_index) {
@@ -51,7 +49,7 @@ static void uart_write(const uint8_t *bytes) {
 
 __attribute__((noreturn, used, section(".entry")))
 void _start(void) {
-  static const uint8_t marker[] = "ESP32_S3_DEVKITC1_V10_LEDC_SERVO_OK\n";
+  static const uint8_t marker[] = "ESP32_S3_DEVKITC1_V10_MCPWM_SERVO_OK\n";
 
   /* v1.0 DevKitC-1 routes its onboard WS2812 DIN to GPIO48. */
   GPIO_ENABLE1_W1TS = GPIO48_BIT;
@@ -80,27 +78,27 @@ void _start(void) {
   RMT_INT_CLR = RMT_CH0_TX_END;
 
   /*
-   * 50 Hz, 14-bit LEDC on REF_TICK (1 MHz). Divider 313 gives 49.92 Hz:
-   * 1 MHz * 256 / (313 * 2^14). GPIO4 is J1 pin 4; signal 76 is LEDC ch3.
-   * 1187 / 16384 of the period is 1449 us, the SG90 model's 90-degree pulse.
+   * MCPWM uses CLK_160M / 16 / 10 = 1 MHz; up-count period 19999 is 50 Hz.
+   * GPIO4 is J1 pin 4; GPIO matrix selector 160 is MCPWM0 PWM0A. The
+   * generator drives high at TEZ and low at compare A=1500 for a 1.5 ms pulse.
    */
   GPIO_ENABLE_W1TS = GPIO4_BIT;
-  GPIO_FUNC4_OUT_SEL_CFG = LEDC_SIG_OUT3;
-  LEDC_TIMER2_CONF = 14u | (313u << 4) | (1u << 24);
-  LEDC_CH3_CONF0 = 2u | (1u << 2); /* timer 2 and output enabled */
-  LEDC_CH3_HPOINT = 0;
-  LEDC_CH3_DUTY = 1187u << 4;
-  LEDC_CH3_CONF1 = LEDC_DUTY_START;
+  GPIO_FUNC4_OUT_SEL_CFG = MCPWM0_OUT0A;
+  MCPWM0_CLK_CFG = 15u; /* CLK_160M / 16 = 10 MHz */
+  MCPWM0_GEN0_TSTMP_A = 1500u;
+  MCPWM0_GEN0_A = 0x12u; /* up-count TEZ: high; TEA: low */
+  MCPWM0_TIMER0_CFG0 = 9u | (19999u << 8); /* 10 MHz / 10, period=20 ms */
+  MCPWM0_TIMER0_CFG1 = 1u | (2u << 3); /* up-count, start continuous */
 
-  /* Do not report success unless the modeled LEDC path committed its duty. */
-  if (LEDC_CH3_DUTY_R != (1187u << 4)) {
+  /* Do not report success unless the modeled MCPWM committed compare A. */
+  if (MCPWM0_GEN0_TSTMP_A != 1500u) {
     for (;;) {
       __asm__ volatile("nop" ::: "memory");
     }
   }
   uart_write(marker);
 
-  /* Leave the 49.92 Hz waveform running for the smoke's GPIO edge oracle. */
+  /* Leave the 50 Hz waveform running for the smoke's GPIO edge oracle. */
   for (;;) {
     __asm__ volatile("nop" ::: "memory");
   }

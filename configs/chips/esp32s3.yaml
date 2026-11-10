@@ -75,7 +75,7 @@ peripherals:
     config:
       debug_schema: "../peripherals/esp32s3/dma.yaml"
   - id: "mcpwm0"
-    type: "mcpwm"
+    type: "esp32s3_mcpwm"
     base_address: 0x6001E000
     size: "4KB"
     config:

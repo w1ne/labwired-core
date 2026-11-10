@@ -1,4 +1,4 @@
-# ESP32-S3-DevKitC-1 v1.0: UART, built-in GPIO48 LED, and a GPIO4 LEDC servo.
+# ESP32-S3-DevKitC-1 v1.0: UART, built-in GPIO48 LED, and a GPIO4 MCPWM servo.
 schema_version: "1.2"
 inputs:
   firmware: "../../target/xtensa-esp32s3-none-elf/release/firmware-esp32-s3-devkitc-servo-smoke"
@@ -6,14 +6,14 @@ inputs:
 limits:
   max_steps: 9000000
 assertions:
-  - uart_contains: "ESP32_S3_DEVKITC1_V10_LEDC_SERVO_OK"
+  - uart_contains: "ESP32_S3_DEVKITC1_V10_MCPWM_SERVO_OK"
   - display_region:
       id: "rgb_led"
       min_ink: 1.0
   - memory_value:
-      address: 0x6001904C
+      address: 0x6001E040
       size: 32
-      expected_value: 18992
+      expected_value: 1500
   - gpio_edges:
       pin: "gpio:4"
       min_edges: 2

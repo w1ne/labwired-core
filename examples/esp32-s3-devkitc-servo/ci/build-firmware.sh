@@ -18,4 +18,4 @@ pio pkg exec -p toolchain-xtensa-esp-elf -- xtensa-esp32s3-elf-gcc \
   -Wl,-T,"${EXAMPLE_DIR}/firmware/link.ld" \
   -Wl,-e,_start \
   -o "${FIRMWARE_DIR}/firmware-esp32-s3-devkitc-servo-smoke" \
-  "${EXAMPLE_DIR}/firmware/ledc_servo_smoke.c"
+  "${EXAMPLE_DIR}/firmware/mcpwm_servo_smoke.c"

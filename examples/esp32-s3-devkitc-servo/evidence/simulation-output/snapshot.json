@@ -11,16 +11,16 @@
       0,
       0,
       1070464960,
-      2151121270,
+      2151121258,
       1070464896,
-      1077379672,
+      1077379660,
       1070464972,
       0,
       0,
       0,
       1070464896
     ],
-    "pc": 1077379446,
+    "pc": 1077379434,
     "ps": 262144,
     "window_base": 0,
     "window_start": 1,
@@ -52,7 +52,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "2737481aad35404da8f801c48fe5a96732aa97d62bf1ea4318d622e59cdea78b",
+  "firmware_hash": "48765b55839bd5ae16e063eb109f240f787baf85212809d3e93d234d774d1beb",
   "config": {
     "firmware": "examples/esp32-s3-devkitc-servo/../../target/xtensa-esp32s3-none-elf/release/firmware-esp32-s3-devkitc-servo-smoke",
     "system": "examples/esp32-s3-devkitc-servo/../../configs/systems/esp32-s3-devkitc-1-n16r8-v10-servo.yaml",
