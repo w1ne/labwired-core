@@ -300,6 +300,25 @@ pub enum StopReason {
     FirmwareExit(u32),
 }
 
+/// Classic ESP32 state a deep-sleep wake-up reboots into. See
+/// [`Machine::capture_esp32_deep_sleep_boot`].
+#[derive(Debug, Clone)]
+struct Esp32DeepSleepBoot {
+    /// `(start, bytes)` of every internal-SRAM segment of the app image.
+    segments: Vec<(u64, Vec<u8>)>,
+    entry_pc: u32,
+    pro_sp: u32,
+    app_sp: u32,
+}
+
+/// Classic ESP32 internal SRAM: DRAM `0x3FFA_E000..0x4000_0000` and IRAM
+/// `0x4007_0000..0x400C_0000` (ESP32 TRM §3.1.3). RTC memory
+/// (`0x3FF8_0000`, `0x400C_0000`, `0x5000_0000`) and the flash cache windows
+/// are outside both ranges.
+fn is_esp32_internal_sram(addr: u64) -> bool {
+    (0x3FFA_E000..0x4000_0000).contains(&addr) || (0x4007_0000..0x400C_0000).contains(&addr)
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 /// Counters collected during one measured machine run.
 ///
@@ -428,6 +447,15 @@ pub struct Machine<C: Cpu> {
     /// indexed access + one downcast. `None` for configs that don't register
     /// an RTC_CNTL peripheral (every non-ESP32-classic target).
     rtc_cntl_index: Option<usize>,
+    /// Classic ESP32 only: the internal-SRAM ranges `load_firmware` filled
+    /// from the image (IRAM and DRAM segments; never RTC memory or the flash
+    /// cache windows). [`Self::capture_esp32_deep_sleep_boot`] reads them back
+    /// once the runner has finished its post-load setup.
+    esp32_sram_segments: Vec<(u64, usize)>,
+    /// Classic ESP32 only: the state the 2nd-stage bootloader leaves after a
+    /// deep-sleep wake-up. `None` until a runner captures it; a deep sleep
+    /// that ends without it halts both cores.
+    esp32_deep_sleep_boot: Option<Esp32DeepSleepBoot>,
     /// Cached bus index of the FLASH peripheral (H5 layout). Resolved once at
     /// construction; `step()` drains pending FLASH ops (sector erase,
     /// bank-swap+reset) at clean instruction boundaries without walking the
@@ -1229,6 +1257,8 @@ impl<C: Cpu> Machine<C> {
             sched: sched::EventScheduler::new(),
             clocks: sched::ClockGraph::new(),
             rtc_cntl_index,
+            esp32_sram_segments: Vec::new(),
+            esp32_deep_sleep_boot: None,
             flash_index,
             simctl_index,
             scb_index,
@@ -1940,6 +1970,14 @@ impl<C: Cpu> Machine<C> {
 
 impl<C: Cpu> Machine<C> {
     pub fn load_firmware(&mut self, image: &memory::ProgramImage) -> SimResult<()> {
+        if self.rtc_cntl_index.is_some() {
+            self.esp32_sram_segments = image
+                .segments
+                .iter()
+                .filter(|s| is_esp32_internal_sram(s.start_addr))
+                .map(|s| (s.start_addr, s.data.len()))
+                .collect();
+        }
         for segment in &image.segments {
             // 0. A segment linked into a same-backing mirror (the RT500
             //    secure FlexSPI/SRAM views) loads into the mirror's target.
@@ -2119,6 +2157,73 @@ impl<C: Cpu> Machine<C> {
         ] {
             let _ = self.bus.write_u32(addr, 0);
         }
+    }
+
+    /// Classic ESP32: record the state a deep-sleep wake-up reboots into.
+    ///
+    /// On silicon a deep-sleep wake-up is a reset: the ROM and the 2nd-stage
+    /// bootloader load the app's IRAM and DRAM segments again but skip the
+    /// RTC segments, so `RTC_DATA_ATTR` variables survive. Fast boot has no
+    /// bootloader, so the runner calls this once its post-load setup is done.
+    /// It copies the current bytes of every SRAM segment `load_firmware`
+    /// placed, with the entry PC and the stack pointers the runner gave the
+    /// two cores. A no-op on every other target.
+    pub fn capture_esp32_deep_sleep_boot(&mut self, entry_pc: u32, pro_sp: u32, app_sp: u32) {
+        if self.rtc_cntl_index.is_none() {
+            return;
+        }
+        let mut segments = Vec::with_capacity(self.esp32_sram_segments.len());
+        for &(start, len) in &self.esp32_sram_segments {
+            let bytes: Vec<u8> = (0..len as u64)
+                .map(|i| self.bus.read_u8(start + i).unwrap_or(0))
+                .collect();
+            segments.push((start, bytes));
+        }
+        self.esp32_deep_sleep_boot = Some(Esp32DeepSleepBoot {
+            segments,
+            entry_pc,
+            pro_sp,
+            app_sp,
+        });
+    }
+
+    /// Reboot the app after a deep sleep: what the ROM and the bootloader do
+    /// on silicon. RTC_CNTL, RTC slow memory and RTC fast memory are not
+    /// touched, so the reset cause, the wake-up cause and `RTC_DATA_ATTR`
+    /// data carry over. Without a captured boot state both cores halt.
+    fn reboot_esp32_from_deep_sleep(&mut self) -> SimResult<()> {
+        let Some(boot) = self.esp32_deep_sleep_boot.take() else {
+            self.cpu.halt();
+            if let Some(cpu1) = self.cpu_secondary.as_mut() {
+                cpu1.halt();
+            }
+            tracing::warn!("ESP32 deep-sleep wake-up with no captured boot state: cores halted");
+            return Ok(());
+        };
+        self.bus.with_debug_watch_bypass(|bus| {
+            bus.with_memory_policy_bypass(|bus| {
+                for (start, bytes) in &boot.segments {
+                    for (i, b) in bytes.iter().enumerate() {
+                        let _ = bus.write_u8(start + i as u64, *b);
+                    }
+                }
+            })
+        });
+        self.reset()?;
+        self.cpu.set_pc(boot.entry_pc);
+        self.cpu.set_sp(boot.pro_sp);
+        if let Some(cpu1) = self.cpu_secondary.as_mut() {
+            // APP_CPU waits for PRO_CPU to release it, as at power-on.
+            cpu1.halt();
+            cpu1.set_sp(boot.app_sp);
+        }
+        self.system_reset_peripherals();
+        tracing::debug!(
+            "RTC_CNTL deep-sleep wake-up: app rebooted at 0x{:08X}",
+            boot.entry_pc
+        );
+        self.esp32_deep_sleep_boot = Some(boot);
+        Ok(())
     }
 
     pub fn reset(&mut self) -> SimResult<()> {
@@ -2521,24 +2626,25 @@ impl<C: Cpu> Machine<C> {
         }
     }
 
-    /// Returns true (and clears the latch) if the registered RTC_CNTL
-    /// peripheral has a pending software-system-reset request. Used by
-    /// `step()` to honor OPTIONS0 bit 31 writes at a clean instruction
-    /// boundary. Uses the cached `rtc_cntl_index` resolved at construction
-    /// — non-ESP32-classic configs (no RTC_CNTL on the bus) short-circuit
-    /// to `false` without touching the peripheral vector at all.
-    fn drain_rtc_cntl_reset_request(&self) -> bool {
+    /// Drain both RTC_CNTL latches: `(sw_sys_rst, deep_sleep_wake)`. Each is
+    /// true (and cleared) if the registered RTC_CNTL peripheral latched it
+    /// since the last drain. Used by `step()` to honor OPTIONS0 bit 31 writes
+    /// and timer-ended deep sleeps at a clean instruction boundary. Uses the
+    /// cached `rtc_cntl_index` resolved at construction — non-ESP32-classic
+    /// configs (no RTC_CNTL on the bus) short-circuit to `(false, false)`
+    /// without touching the peripheral vector at all.
+    fn drain_rtc_cntl_requests(&self) -> (bool, bool) {
         let Some(idx) = self.rtc_cntl_index else {
-            return false;
+            return (false, false);
         };
         let Some(p) = self.bus.peripherals.get(idx) else {
-            return false;
+            return (false, false);
         };
         p.dev
             .as_any()
             .and_then(|a| a.downcast_ref::<crate::peripherals::esp32::rtc_cntl::RtcCntl>())
-            .map(|rtc| rtc.drain_reset_request())
-            .unwrap_or(false)
+            .map(|rtc| (rtc.drain_reset_request(), rtc.drain_deep_sleep_wake()))
+            .unwrap_or((false, false))
     }
 
     /// True while RTC_CNTL has a latched SW_SYS_RST (not yet drained).
