@@ -1,6 +1,7 @@
 # Generic Beta NTC divider and Shockley diode for the NUCLEO-G071RB model.
-# Their solved voltages route through the modeled PA0/PA1 GPIO inputs. The
-# board's current ADC model has no externally routable input path.
+# This fixture routes through PA0/PA1 GPIO thresholds. A separate fixture
+# proves direct ADC channel injection; neither fixture claims physical pad
+# aliases or silicon ADC validation.
 name: nucleo-g071rb-analog
 chip: ../../configs/chips/stm32g071.yaml
 external_devices: []

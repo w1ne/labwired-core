@@ -2,10 +2,10 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Generic MNA devices drive the NUCLEO-G071RB model's PA0/PA1 GPIO inputs.
-//! This proves voltage solving, routing, and firmware-visible GPIO threshold
-//! behavior. Threshold ratios are test assumptions; ADC external inputs and
-//! silicon behavior are not claimed.
+//! Generic MNA devices drive NUCLEO-G071RB GPIO inputs and explicit ADC1
+//! channels. The ADC test proves routed conversion through the modeled L4
+//! register interface; channel-to-pad aliases and silicon analog behavior are
+//! not claimed.
 
 mod common;
 use common::root;
@@ -16,9 +16,15 @@ use labwired_core::Bus;
 use std::path::Path;
 
 const RCC_IOPENR: u64 = 0x4002_1034;
+const RCC_APBENR2: u64 = 0x4002_1040;
 const GPIOA_BASE: u64 = 0x5000_0000;
 const GPIOA_MODER: u64 = GPIOA_BASE;
 const GPIOA_IDR: u64 = GPIOA_BASE + 0x10;
+const ADC1_BASE: u64 = 0x4001_2400;
+const ADC1_ISR: u64 = ADC1_BASE;
+const ADC1_CR: u64 = ADC1_BASE + 0x08;
+const ADC1_SQR1: u64 = ADC1_BASE + 0x30;
+const ADC1_DR: u64 = ADC1_BASE + 0x40;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
@@ -107,6 +113,57 @@ fn signal_voltage(session: &CosimSession, path: &str) -> f64 {
         Some(CosimSignalValue::F64(volts)) => *volts,
         other => panic!("expected solved voltage at {path}, got {other:?}"),
     }
+}
+
+fn adc_channel_count(bus: &mut SystemBus, channel: u8) -> u16 {
+    let index = bus
+        .find_peripheral_index_by_name("adc1")
+        .expect("STM32G071 declares ADC1");
+    bus.peripherals[index]
+        .dev
+        .as_any_mut()
+        .expect("ADC1 downcasts")
+        .downcast_mut::<labwired_core::peripherals::adc::Adc>()
+        .expect("ADC1 uses the shared STM32 ADC model")
+        .channel_input_count(channel)
+}
+
+/// Convert one explicit L4-family ADC channel through firmware-visible MMIO.
+fn stm32g0_adc_convert(bus: &mut SystemBus, channel: u8) -> u32 {
+    const ADRDY: u32 = 1;
+    const EOC: u32 = 1 << 2;
+    const EOS: u32 = 1 << 3;
+    const ADEN: u32 = 1;
+    const ADSTART: u32 = 1 << 2;
+
+    bus.write_u32(ADC1_SQR1, u32::from(channel) << 6)
+        .expect("select ADC1 SQ1 channel");
+    // ISR is write-one-to-clear. A low-byte write clears only the flags we
+    // intend to clear and preserves ADRDY on this L4-family register block.
+    bus.write_u8(ADC1_ISR, (EOC | EOS) as u8)
+        .expect("clear prior conversion flags");
+    let cr = bus.read_u32(ADC1_CR).expect("read ADC1 CR");
+    assert_ne!(cr & ADEN, 0, "ADC1 is enabled");
+    let isr = bus.read_u32(ADC1_ISR).unwrap();
+    assert_ne!(
+        isr & ADRDY,
+        0,
+        "ADC1 is ready after routed advance; ISR={isr:#010x}, CR={:#010x}",
+        bus.read_u32(ADC1_CR).unwrap()
+    );
+    bus.write_u32(ADC1_CR, cr | ADSTART)
+        .expect("start one regular conversion");
+    let isr = bus.read_u32(ADC1_ISR).expect("read ADC1 ISR");
+    assert_ne!(isr & EOC, 0, "conversion sets EOC");
+    assert_ne!(isr & EOS, 0, "single-channel sequence sets EOS");
+    bus.read_u32(ADC1_DR)
+        .expect("read firmware-visible ADC1 DR")
+        & 0x0FFF
+}
+
+fn expected_adc_count(voltage_v: f64) -> u16 {
+    let millivolts = (voltage_v * 1000.0).round();
+    (millivolts * 4095.0 / 3300.0).floor().clamp(0.0, 4095.0) as u16
 }
 
 #[test]
@@ -331,6 +388,95 @@ fn nucleo_g071rb_bjt_early_effect_reaches_pa2_pa3_gpio_inputs() {
             idr & 8 != 0,
             reference_high,
             "PA3 follows the no-Early-effect collector voltage"
+        );
+    }
+}
+
+#[test]
+fn nucleo_g071rb_ntc_and_diode_netlists_convert_through_adc1_channels() {
+    let system_path = root("configs/systems/nucleo-g071rb.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-G071RB profile");
+    let analog = SystemManifest::from_file(root(
+        "examples/nucleo-g071rb/analog-ntc-diode-adc-system.yaml",
+    ))
+    .expect("load generic NTC and diode ADC-channel netlists");
+    profile.cosim_models = analog.cosim_models;
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32G071 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-G071RB bus");
+
+    const ADCEN: u32 = 1 << 20;
+    bus.write_u32(RCC_APBENR2, ADCEN)
+        .expect("enable ADC1 clock");
+    bus.write_u32(ADC1_CR, 0)
+        .expect("leave ADC deep power-down");
+    bus.write_u32(ADC1_CR, 1 << 28)
+        .expect("enable ADC voltage regulator");
+    bus.write_u32(ADC1_CR, (1 << 28) | 1).expect("enable ADC1");
+    assert_ne!(bus.read_u32(ADC1_ISR).unwrap() & 1, 0, "ADC1 reports ADRDY");
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries an NTC and an unrelated diode");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic models bind to separate explicit ADC1 channels"
+    );
+    for channel in [4, 5, 6] {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            u16::MAX,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    let diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    for temperature_c in [-10.0_f64, 25.0, 80.0] {
+        session
+            .set_signal_number("ui.ntc.temperature_c", temperature_c)
+            .expect("set NTC temperature");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve both netlists and route their ADC1 inputs");
+        assert_eq!(steps.len(), 2, "both netlists cross the 1 us boundary");
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "adc.adc1.4_volts");
+        let resistance = ntc_resistance_ohms(temperature_c);
+        let expected_ntc_v = 3.3 * resistance / (10_000.0 + resistance);
+        assert!(
+            (ntc_v - expected_ntc_v).abs() < 1e-9,
+            "at {temperature_c} °C the NTC divider should be {expected_ntc_v} V, got {ntc_v} V"
+        );
+        let routed_diode_v = signal_voltage(&session, "adc.adc1.5_volts");
+        assert!(
+            (routed_diode_v - diode_v).abs() < 2e-5,
+            "the independent Shockley diode load line should be {diode_v} V, got {routed_diode_v} V"
+        );
+
+        let ntc_code = expected_adc_count(ntc_v);
+        let diode_code = expected_adc_count(routed_diode_v);
+        assert_eq!(adc_channel_count(&mut bus, 4), ntc_code, "NTC seeds IN4");
+        assert_eq!(
+            adc_channel_count(&mut bus, 5),
+            diode_code,
+            "diode seeds IN5"
+        );
+        assert_eq!(stm32g0_adc_convert(&mut bus, 4), u32::from(ntc_code));
+        assert_eq!(stm32g0_adc_convert(&mut bus, 5), u32::from(diode_code));
+        assert_eq!(
+            adc_channel_count(&mut bus, 6),
+            u16::MAX,
+            "unrelated IN6 stays undriven"
+        );
+        assert_eq!(
+            stm32g0_adc_convert(&mut bus, 6),
+            3723,
+            "undriven IN6 retains the L4-family modeled 3.0 V source"
         );
     }
 }
