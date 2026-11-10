@@ -49,6 +49,66 @@ fn diode_load_line_voltage() -> f64 {
     junction_v + current_at_junction_voltage(junction_v) * DIODE_RS_OHMS
 }
 
+/// Independent Gummel–Poon load line. The matched branches differ only by
+/// forward base-emitter recombination (`ISE`/`NE`).
+fn bjt_collector_voltage(base_drive_v: f64, base_recombination: bool) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const COLLECTOR_OHMS: f64 = 1_000.0;
+    const BASE_OHMS: f64 = 10_000.0;
+    const IS_A: f64 = 1e-16;
+    const BF: f64 = 80.0;
+    const BR: f64 = 4.0;
+    const VAF: f64 = 50.0;
+    const VAR: f64 = 75.0;
+    const ISE_A: f64 = 2e-12;
+    const NE: f64 = 1.5;
+    const VT: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+
+    let currents = |vbe: f64, collector_v: f64| {
+        let vbc = vbe - collector_v;
+        let forward = (vbe / VT).exp();
+        let reverse = (vbc / VT).exp();
+        let base_width = 1.0 - vbc / VAF - vbe / VAR;
+        let transport = IS_A * (forward - reverse) * base_width;
+        let base_collector = (IS_A / BR) * (reverse - 1.0);
+        let base_emitter = (IS_A / BF) * (forward - 1.0)
+            + if base_recombination {
+                ISE_A * ((vbe / (NE * VT)).exp() - 1.0)
+            } else {
+                0.0
+            };
+        (transport - base_collector, base_emitter + base_collector)
+    };
+
+    let collector_for_vbe = |vbe: f64| {
+        let (mut low, mut high) = (0.0, SUPPLY_V);
+        for _ in 0..100 {
+            let collector_v = 0.5 * (low + high);
+            let (collector_current, _) = currents(vbe, collector_v);
+            let residual = (SUPPLY_V - collector_v) / COLLECTOR_OHMS - collector_current;
+            if residual > 0.0 {
+                low = collector_v;
+            } else {
+                high = collector_v;
+            }
+        }
+        0.5 * (low + high)
+    };
+
+    let (mut low, mut high) = (0.0, base_drive_v);
+    for _ in 0..100 {
+        let vbe = 0.5 * (low + high);
+        let collector_v = collector_for_vbe(vbe);
+        let (_, base_current) = currents(vbe, collector_v);
+        if (base_drive_v - vbe) / BASE_OHMS > base_current {
+            low = vbe;
+        } else {
+            high = vbe;
+        }
+    }
+    collector_for_vbe(0.5 * (low + high))
+}
+
 fn signal_voltage(session: &CosimSession, path: &str) -> f64 {
     match session.signals().get(path) {
         Some(CosimSignalValue::F64(volts)) => *volts,
@@ -344,6 +404,10 @@ fn generic_netlists(diode_pad: &str) -> SystemManifest {
         "v_diode".into(),
         format!("board.analog.{}_volts", diode_pad.to_ascii_lowercase()),
     );
+    let recombination =
+        SystemManifest::from_file(root("examples/stm32-catalog/analog-bjt-recombination.yaml"))
+            .expect("load matched generic BJT recombination branches");
+    analog.cosim_models.extend(recombination.cosim_models);
     analog
 }
 
@@ -361,6 +425,16 @@ fn assert_catalog_profile_routes_generic_analog(system_path: &Path) {
         chip.analog_pins["PA0"].channel, 0,
         "{part}: PA0 is ADC1_IN0"
     );
+    for (pad, channel) in [("PA1", 1), ("PA2", 2)] {
+        assert_eq!(
+            chip.analog_pins[pad].channel, channel,
+            "{part}: {pad} is ADC1_IN{channel}"
+        );
+        assert_eq!(
+            chip.analog_pins[pad].peripheral, "adc1",
+            "{part}: {pad} routes to ADC1"
+        );
+    }
     let (top_pad, top_channel) = top_adc1_pad(&chip);
     let small_package = !chip.analog_pins.contains_key("PC0");
     let expected_top = if small_package {
@@ -382,10 +456,10 @@ fn assert_catalog_profile_routes_generic_analog(system_path: &Path) {
     assert_eq!(
         session.binding_errors(),
         &[] as &[RoutingError],
-        "{part}: generic netlists resolve through PA0/{top_pad}"
+        "{part}: generic netlists resolve through PA0/PA1/PA2/{top_pad}"
     );
-    let idle_channel = 1;
-    for channel in [0, idle_channel, top_channel] {
+    let idle_channel = 3;
+    for channel in [0, 1, 2, idle_channel, top_channel] {
         assert_eq!(
             adc1.channel_count(&mut bus, channel),
             0xFFFF,
@@ -397,6 +471,9 @@ fn assert_catalog_profile_routes_generic_analog(system_path: &Path) {
     let diode_path = format!("board.analog.{}_volts", top_pad.to_ascii_lowercase());
     let mut cycles = 0;
     let mut ntc_counts = Vec::new();
+    session
+        .set_signal_number("ui.bjt.base_v", 0.8)
+        .expect("set generic BJT base drive");
     for temperature_c in [-10.0_f64, 25.0, 80.0] {
         session
             .set_signal_number("ui.ntc.temperature_c", temperature_c)
@@ -404,11 +481,11 @@ fn assert_catalog_profile_routes_generic_analog(system_path: &Path) {
         cycles += session.cycles_until_boundary(cycles);
         let (steps, errors) = session
             .advance_to(cycles, &mut bus)
-            .expect("solve and route both analog netlists");
+            .expect("solve and route all generic analog netlists");
         assert_eq!(
             steps.len(),
-            2,
-            "{part}: both netlists cross the 1 us boundary"
+            4,
+            "{part}: NTC, diode, and both BJT branches cross the 1 us boundary"
         );
         assert!(
             errors.is_empty(),
@@ -426,8 +503,29 @@ fn assert_catalog_profile_routes_generic_analog(system_path: &Path) {
             (diode_v - expected_diode_v).abs() < 2e-5,
             "{part}: Shockley load line should be {expected_diode_v} V, got {diode_v} V"
         );
+        let bjt_reference_v = signal_voltage(&session, "board.analog.pa1_volts");
+        let bjt_recombination_v = signal_voltage(&session, "board.analog.pa2_volts");
+        let expected_bjt_reference_v = bjt_collector_voltage(0.8, false);
+        let expected_bjt_recombination_v = bjt_collector_voltage(0.8, true);
+        assert!(
+            (bjt_reference_v - expected_bjt_reference_v).abs() < 5e-5,
+            "{part}: BJT without recombination should be {expected_bjt_reference_v} V, got {bjt_reference_v} V"
+        );
+        assert!(
+            (bjt_recombination_v - expected_bjt_recombination_v).abs() < 5e-5,
+            "{part}: BJT with ISE/NE recombination should be {expected_bjt_recombination_v} V, got {bjt_recombination_v} V"
+        );
+        assert!(
+            bjt_recombination_v > bjt_reference_v + 0.005,
+            "{part}: recombination current loads the base drive and lowers collector current"
+        );
 
-        for (channel, volts) in [(0, ntc_v), (top_channel, diode_v)] {
+        for (channel, volts) in [
+            (0, ntc_v),
+            (1, bjt_reference_v),
+            (2, bjt_recombination_v),
+            (top_channel, diode_v),
+        ] {
             let expected_count = expected_adc_count(volts);
             assert_eq!(
                 adc1.channel_count(&mut bus, channel),
@@ -538,13 +636,69 @@ fn assert_catalog_profile_routes_generic_analog(system_path: &Path) {
         "{part}: 25 °C NTC divider is half scale"
     );
 
+    // Sweep the BJT stimulus at a fixed NTC temperature. The independent
+    // diode and NTC retain their own solutions while recombination changes
+    // the base current and therefore the BJT collector load line.
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold unrelated NTC at nominal temperature");
+    for base_drive_v in [0.7_f64, 0.9] {
+        session
+            .set_signal_number("ui.bjt.base_v", base_drive_v)
+            .expect("step matched BJT base drives");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route all generic analog netlists");
+        assert_eq!(steps.len(), 4, "{part}: all four analog netlists solve");
+        assert!(
+            errors.is_empty(),
+            "{part}: unexpected route errors: {errors:?}"
+        );
+
+        let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let diode_v = signal_voltage(&session, &diode_path);
+        let reference_v = signal_voltage(&session, "board.analog.pa1_volts");
+        let recombination_v = signal_voltage(&session, "board.analog.pa2_volts");
+        assert!((ntc_v - 1.65).abs() < 1e-9, "{part}: NTC remains isolated");
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "{part}: unrelated diode remains isolated"
+        );
+        assert!(
+            (reference_v - bjt_collector_voltage(base_drive_v, false)).abs() < 5e-5,
+            "{part}: reference BJT follows its independent load line at {base_drive_v} V"
+        );
+        assert!(
+            (recombination_v - bjt_collector_voltage(base_drive_v, true)).abs() < 5e-5,
+            "{part}: recombination BJT follows its independent load line at {base_drive_v} V"
+        );
+        assert!(
+            recombination_v > reference_v + 0.005,
+            "{part}: recombination changes the BJT collector load line at {base_drive_v} V"
+        );
+        for (channel, volts) in [(1, reference_v), (2, recombination_v)] {
+            let expected = expected_adc_count(volts);
+            assert_eq!(
+                adc1.channel_count(&mut bus, channel),
+                expected,
+                "{part}: BJT voltage seeds ADC1 channel {channel}"
+            );
+            assert_eq!(
+                adc1.convert(&mut bus, channel),
+                u32::from(expected),
+                "{part}: firmware-visible BJT conversion on ADC1 channel {channel}"
+            );
+        }
+    }
+
     // A pad the package does not bond to an ADC input must be refused at
     // binding time, not silently land on some other channel.
     if small_package {
         let rejected = generic_netlists("PC0");
         let session = CosimSession::new(&rejected.cosim_models, Path::new("."), &bus)
             .expect("build analog co-simulation")
-            .expect("profile carries both generic devices");
+            .expect("profile carries the generic analog devices");
         assert!(
             session
                 .binding_errors()
@@ -557,7 +711,7 @@ fn assert_catalog_profile_routes_generic_analog(system_path: &Path) {
 }
 
 #[test]
-fn every_stm32_catalog_profile_routes_ntc_and_diode_netlists_into_adc1() {
+fn every_stm32_catalog_profile_routes_ntc_diode_and_bjt_recombination_into_adc1() {
     let profiles = catalog_profiles();
     assert_eq!(
         profiles.len(),
