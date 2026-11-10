@@ -432,6 +432,18 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_esp32s3_zero_tier1_survival"),
     },
     ChipConf {
+        name: "esp32-devkitc-32e-gpio-smoke",
+        yaml: "configs/chips/esp32-devkitc-32e-gpio-smoke.yaml",
+        reset_oracle: None,
+        // Narrow DevKitC-32E onboarding profile of the same LX6 SoC as `esp32`.
+        // The committed Tier-1 fixture runs through this descriptor/system so a
+        // regression in the YAML pair's load/parse/dispatch fails here, not
+        // only in the CLI cell. Same documented dma gap as parent `esp32`.
+        behavior_gate: Some(
+            "firmware_survival::test_esp32_devkitc_32e_gpio_smoke_tier1_survival",
+        ),
+    },
+    ChipConf {
         name: "stm32f401cdu6",
         yaml: "configs/chips/stm32f401cdu6.yaml",
         reset_oracle: None,

@@ -27,7 +27,11 @@ pins:
 
 peripherals:
   - id: "uart0"
-    type: "uart"
+    # Real Esp32Uart model (same type parent `esp32` uses for uart1/uart2).
+    # Generic `type: uart` is an STM32-map stub; this gate's Esp32 bring-up
+    # cannot produce TX edges on that stub, and this profile does not declare
+    # uart1/uart2. debug_schema already points at the ESP32 UART0 map.
+    type: "esp32_uart"
     base_address: 0x3FF40000
     size: "256B"
     config:
