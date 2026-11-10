@@ -48,6 +48,7 @@ const IRQ_IPSR: u32 = SUMMARY + 8;
 const IRQ_ACTIVE: u32 = SUMMARY + 12;
 const IRQ_PENDING: u32 = SUMMARY + 16;
 const IRQ_FRAME: u32 = SUMMARY + 20;
+const IRQ_EXCEPTION_MSP: u32 = SUMMARY + 60;
 
 // RCC (RM0091 §6.4).
 const RCC: u32 = 0x4002_1000;
@@ -254,6 +255,9 @@ unsafe extern "C" fn smoke_exti0_1_handler() {
 unsafe extern "C" fn pend_exti0_1_irq_with_sentinels() {
     core::arch::naked_asm!(
         "push {{r4, r7}}",
+        "mrs r7, msp",
+        "ldr r4, =0x2000303c",
+        "str r7, [r4]",
         "ldr r7, =0xe000e200",
         "movs r4, #0x20",
         "movs r0, #0x11",
@@ -295,8 +299,12 @@ fn check_exception_entry() -> bool {
             == ((smoke_exti0_1_handler as *const () as usize as u32) | 1)
     };
 
+    let msp_before: u32;
+    unsafe { asm!("mrs {}, msp", out(reg) msp_before, options(nomem, nostack, preserves_flags)) };
     wr(NVIC_ISER0, irq_bit);
     unsafe { pend_exti0_1_irq_with_sentinels() };
+    let msp_after: u32;
+    unsafe { asm!("mrs {}, msp", out(reg) msp_after, options(nomem, nostack, preserves_flags)) };
     for _ in 0..100_000 {
         if rd(IRQ_HIT) != 0 {
             break;
@@ -323,6 +331,7 @@ fn check_exception_entry() -> bool {
     let frame_xpsr = unsafe { read_volatile((IRQ_FRAME + 28) as *const u32) };
     let exc_return = unsafe { read_volatile((IRQ_FRAME + 32) as *const u32) };
     let frame_sp = unsafe { read_volatile((IRQ_FRAME + 36) as *const u32) };
+    let exception_msp = rd(IRQ_EXCEPTION_MSP);
     let frame_ok = frame_r0 == 0x11
         && frame_r1 == 0x22
         && frame_r2 == 0x33
@@ -334,6 +343,9 @@ fn check_exception_entry() -> bool {
         && frame_xpsr & 0x0000_03ff == 0
         && exc_return == 0xffff_fff9
         && frame_sp & 7 == 0
+        && exception_msp == msp_before.wrapping_sub(8)
+        && frame_sp == exception_msp.wrapping_sub(32)
+        && msp_after == msp_before
         && (0x2000_0000..0x2000_4000).contains(&frame_sp);
     let returned = active_after == 0 && pending_after == 0 && vtor_restored;
     let ok = vtor_installed
@@ -375,6 +387,10 @@ fn check_exception_entry() -> bool {
     hex(exc_return);
     puts(" sp=");
     hex(frame_sp);
+    puts(" expected_sp=");
+    hex(exception_msp.wrapping_sub(32));
+    puts(" restored_msp=");
+    hex(msp_after);
     puts(" returned=");
     puts(if returned { "1 " } else { "0 " });
     verdict(ok);
