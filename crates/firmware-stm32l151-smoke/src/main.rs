@@ -177,7 +177,7 @@ fn send(base: u32, bytes: &[u8]) {
 }
 
 /// USART2 receives two start-injected bytes only after both legacy CR1.UE and
-/// CR1.RE are set. RXNEIE then gates IRQ 38 until the two-byte DR queue drains.
+/// CR1.RE are set. RXNEIE gates IRQ 38, which re-pends until the DR queue drains.
 fn check_usart2_rx_gate() -> bool {
     const RXNE: u32 = 1 << 5;
     const RXNEIE: u32 = 1 << 5;
@@ -216,23 +216,36 @@ fn check_usart2_rx_gate() -> bool {
         }
     }
 
-    let first = rd(USART2 + U_DR) & 0xFF;
-    let rxne_after_first = rd(USART2 + U_SR) & RXNE != 0;
+    let first = if rxne_seen {
+        rd(USART2 + U_DR) & 0xFF
+    } else {
+        0
+    };
+    let rxne_after_first = rxne_seen && rd(USART2 + U_SR) & RXNE != 0;
+    unpend(IRQ);
+    let mut irq_reasserted = false;
+    for _ in 0..4096 {
+        if pending(IRQ) {
+            irq_reasserted = true;
+            break;
+        }
+    }
     let second = if rxne_after_first {
         rd(USART2 + U_DR) & 0xFF
     } else {
         0
     };
     let rxne_cleared = rd(USART2 + U_SR) & RXNE == 0;
-    wr(USART2 + U_CR1, UE | TE); // keep USART2 TX available, disable its RX
     unpend(IRQ);
     let irq_released = !pending(IRQ);
+    wr(USART2 + U_CR1, UE | TE); // keep USART2 TX available, disable its RX
 
     let data = (first << 8) | second;
     let ok = re_off
         && ue_off
         && irq_isolated
         && irq_asserted
+        && irq_reasserted
         && data == EXPECTED
         && rxne_after_first
         && rxne_cleared
@@ -255,6 +268,11 @@ fn check_usart2_rx_gate() -> bool {
         ",asserted"
     } else {
         ",not_asserted"
+    });
+    puts(if irq_reasserted {
+        ",reasserted"
+    } else {
+        ",not_reasserted"
     });
     puts(if irq_released {
         ",released"

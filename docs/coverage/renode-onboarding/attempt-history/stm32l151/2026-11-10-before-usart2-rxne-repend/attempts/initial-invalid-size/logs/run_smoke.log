@@ -1,0 +1,2 @@
+2026-11-03T21:34:20.284477Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32l151.yaml
+2026-11-03T21:34:20.284589Z ERROR labwired_cli::commands::test: Failed to parse Chip Descriptor YAML: flash: Invalid size format: invalid multiple at line 9 column 3

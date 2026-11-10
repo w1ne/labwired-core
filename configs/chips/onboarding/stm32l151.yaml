@@ -8,8 +8,8 @@
 # to NVIC 45, which is SDIO_IRQn; TIM5_IRQn is 46.
 #
 # Claimed and exercised by examples/renode-onboarding/stm32l151-smoke.yaml:
-# USART1/2/3 TX plus the USART2 UE/RE, RXNE and IRQ 38 smoke; GPIOA..H (with
-# the RM0038 reset values of PA/PB), SYSCFG
+# USART1/2/3 TX plus the USART2 UE/RE, RXNE, and IRQ 38 assertion/re-pend
+# smoke; GPIOA..H (with the RM0038 reset values of PA/PB), SYSCFG
 # EXTICR + EXTI lines 0..15, TIM2..TIM7 and TIM9..TIM11, SPI1..3 (master,
 # full duplex), I2C1 (master) and DMA1 (SPI1 requests, per-channel lines).
 #

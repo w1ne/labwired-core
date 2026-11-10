@@ -1,5 +1,6 @@
 # Cortex-M3 smoke against the imported STM32L151xD profile: USART1/2/3 TX,
-# plus USART2 UE/RE receiver gates, ordered two-byte RXNE and IRQ 38 behavior;
+# plus USART2 UE/RE receiver gates, ordered two-byte RXNE and IRQ 38
+# assertion, re-pend and release behavior;
 # GPIOA..H reset values and set/reset, EXTI software and pad edges through
 # the SYSCFG port mux (L1 codes: PH = 5, PG = 7), and TIM2..TIM7/TIM9..TIM11
 # width, counting and update interrupt on the right NVIC line; SPI1..3 each
@@ -49,11 +50,11 @@ stimuli:
     value: 0.0
 assertions:
   - uart_contains: "STM32L151 Cortex-M3 smoke"
-  - uart_contains: "usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,released ok"
+  - uart_contains: "usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,reasserted,released ok"
   - uart_contains: "usart2 ok"
   - uart_contains: "usart3 ok"
   - uart_ordered:
-      - "usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,released ok"
+      - "usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,reasserted,released ok"
       - "gpio pa=1 pb=1 pc=1 ph=1 fg=1 ok"
       - "exti swier masked=1 routed=1 ok"
       - "tim2 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"

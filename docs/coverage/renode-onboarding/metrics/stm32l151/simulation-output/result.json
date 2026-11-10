@@ -36,7 +36,7 @@
     },
     {
       "assertion": {
-        "uart_contains": "usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,released ok"
+        "uart_contains": "usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,reasserted,released ok"
       },
       "passed": true
     },
@@ -55,7 +55,7 @@
     {
       "assertion": {
         "uart_ordered": [
-          "usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,released ok",
+          "usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,reasserted,released ok",
           "gpio pa=1 pb=1 pc=1 ph=1 fg=1 ok",
           "exti swier masked=1 routed=1 ok",
           "tim2 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
@@ -128,9 +128,9 @@
       70,
       536919952,
       70,
-      134238568
+      134239768
     ],
-    "pc": 134238568,
+    "pc": 134239768,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -143,7 +143,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "320e9679a85327a3801bdcfbd71b5970812528138f32d5d6b6cc6783e3d2db10",
+  "firmware_hash": "90afbd64dd45b795f212c39112e2e17bc1e7d4f720906e2cc62ae9c575a55ef3",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-stm32l151-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32l151.yaml",
@@ -505,19 +505,19 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 1309,
+            "cycle": 1389,
             "value": 1
           },
           {
-            "cycle": 1316,
+            "cycle": 1396,
             "value": 0
           },
           {
-            "cycle": 1320,
+            "cycle": 1400,
             "value": 1
           },
           {
-            "cycle": 1328,
+            "cycle": 1408,
             "value": 0
           }
         ],
@@ -525,23 +525,23 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 1308,
+            "cycle": 1388,
             "state": "0"
           },
           {
-            "cycle": 1309,
+            "cycle": 1389,
             "state": "1"
           },
           {
-            "cycle": 1316,
+            "cycle": 1396,
             "state": "0"
           },
           {
-            "cycle": 1320,
+            "cycle": 1400,
             "state": "1"
           },
           {
-            "cycle": 1328,
+            "cycle": 1408,
             "state": "0"
           }
         ],
@@ -572,7 +572,7 @@
         "end_cycle": 1000
       },
       {
-        "text": "usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,released ok",
+        "text": "usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,reasserted,released ok",
         "cycle_lo": 0,
         "cycle": 1000,
         "end_cycle": 11000
@@ -629,7 +629,7 @@
         "text": "tim6 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
         "cycle_lo": 1000,
         "cycle": 11000,
-        "end_cycle": 11000
+        "end_cycle": 21000
       },
       {
         "text": "tim7 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
@@ -842,14 +842,14 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 23324,
+    "text_bytes": 24528,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 23324,
+    "flash_used_bytes": 24528,
     "ram_static_bytes": 0,
     "flash_total_bytes": 393216,
     "ram_total_bytes": 49152,
-    "flash_used_pct": 5.93,
+    "flash_used_pct": 6.24,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -875,88 +875,88 @@
     "cycles": 4000000,
     "instructions": 4000000,
     "steps_executed": 4000000,
-    "memory_reads": 7740,
-    "memory_writes": 844,
-    "peripheral_accesses": 757104,
+    "memory_reads": 7777,
+    "memory_writes": 843,
+    "peripheral_accesses": 757106,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134229252,
+        "pc": 134230454,
         "count": 547,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134229254,
+        "pc": 134230470,
+        "count": 547,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 134230474,
+        "count": 547,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134230476,
         "count": 547,
         "symbol": "firmware_stm32l151_smoke::wait_level"
       },
       {
-        "pc": 134229256,
-        "count": 547,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134229258,
-        "count": 547,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134229276,
+        "pc": 134230478,
         "count": 547,
         "symbol": "firmware_stm32l151_smoke::wait_level"
       },
       {
-        "pc": 134229264,
+        "pc": 134230458,
         "count": 542,
-        "symbol": "firmware_stm32l151_smoke::wait_level"
+        "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134229260,
+        "pc": 134230456,
         "count": 508,
         "symbol": "firmware_stm32l151_smoke::wait_level"
       },
       {
-        "pc": 134229266,
+        "pc": 134230460,
+        "count": 508,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134230462,
+        "count": 508,
+        "symbol": "firmware_stm32l151_smoke::wait_level"
+      },
+      {
+        "pc": 134230466,
+        "count": 508,
+        "symbol": "firmware_stm32l151_smoke::wait_level"
+      },
+      {
+        "pc": 134230468,
         "count": 508,
         "symbol": "<i32 as core::cmp::PartialOrd>::lt"
       },
       {
-        "pc": 134229268,
-        "count": 508,
-        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
-      },
-      {
-        "pc": 134229272,
-        "count": 508,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134229274,
-        "count": 508,
-        "symbol": "firmware_stm32l151_smoke::wait_level"
-      },
-      {
-        "pc": 134238568,
+        "pc": 134239768,
         "count": 239,
         "symbol": "firmware_stm32l151_smoke::__cortex_m_rt_main"
       },
       {
-        "pc": 134229400,
+        "pc": 134230606,
+        "count": 157,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134230608,
         "count": 157,
         "symbol": "firmware_stm32l151_smoke::wait_level"
       },
       {
-        "pc": 134229402,
+        "pc": 134230728,
         "count": 157,
-        "symbol": "core::ptr::read_volatile"
+        "symbol": "firmware_stm32l151_smoke::wait_level"
       },
       {
-        "pc": 134229524,
-        "count": 157,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134229398,
+        "pc": 134230600,
         "count": 156,
         "symbol": "core::ptr::read_volatile"
       }

@@ -1,21 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="9" failures="0" errors="0" time="0.396902">
+<testsuite name="labwired" tests="9" failures="0" errors="0" time="0.398458">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="320e9679a85327a3801bdcfbd71b5970812528138f32d5d6b6cc6783e3d2db10"/>
+    <property name="firmware_hash" value="90afbd64dd45b795f212c39112e2e17bc1e7d4f720906e2cc62ae9c575a55ef3"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.396902">
+  <testcase classname="labwired" name="run" time="0.398458">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: STM32L151 Cortex-M3 smoke" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 2: uart_contains: usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,released ok" time="0.000000">
+  <testcase classname="labwired" name="assertion 2: uart_contains: usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,reasserted,rel…" time="0.000000">
   </testcase>
   <testcase classname="labwired" name="assertion 3: uart_contains: usart2 ok" time="0.000000">
   </testcase>
   <testcase classname="labwired" name="assertion 4: uart_contains: usart3 ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 5: uart_ordered: [&quot;usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,released ok&quot;,…" time="0.000000">
+  <testcase classname="labwired" name="assertion 5: uart_ordered: [&quot;usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,reasserted,re…" time="0.000000">
   </testcase>
   <testcase classname="labwired" name="assertion 6: memory_value: @0x20008000=0x1517ffff" time="0.000000">
   </testcase>
