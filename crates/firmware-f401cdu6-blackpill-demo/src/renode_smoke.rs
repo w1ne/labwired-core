@@ -1222,8 +1222,9 @@ fn smoke_usart1_txe_irq() -> bool {
     txe_pended && txe_released
 }
 
-/// The onboarding stimulus queues `R` on USART1 before reset. RXNEIE must
-/// pend IRQ 37 while RXNE is set, and reading DR must release the source.
+/// The onboarding stimulus queues `R` on USART1 before reset. RXNE must stay
+/// off IRQ 37 while RXNEIE is clear, then pend it when RXNEIE is enabled with
+/// the byte still waiting. Reading DR must release the source.
 fn smoke_usart1_rxne_irq() -> bool {
     const RXNE: u32 = 1 << 5;
     const RXNEIE: u32 = 1 << 5;
@@ -1231,15 +1232,18 @@ fn smoke_usart1_rxne_irq() -> bool {
 
     wr(RCC_APB2ENR, rd(RCC_APB2ENR) | (1 << 4)); // USART1EN
     wr(NVIC_ICPR1, USART1_IRQ_BIT);
-    wr(USART1_CR1, (1 << 13) | (1 << 2) | RXNEIE); // UE | RE | RXNEIE
+    wr(USART1_CR1, (1 << 13) | (1 << 2)); // UE | RE; RXNEIE remains clear
 
-    let mut rxne_pended = false;
+    let mut rxne_seen = false;
     for _ in 0..4096 {
-        if rd(USART1_SR) & RXNE != 0 && rd(NVIC_ISPR1) & USART1_IRQ_BIT != 0 {
-            rxne_pended = true;
+        if rd(USART1_SR) & RXNE != 0 {
+            rxne_seen = true;
             break;
         }
     }
+    let rxne_isolated = rxne_seen && rd(NVIC_ISPR1) & USART1_IRQ_BIT == 0;
+    wr(USART1_CR1, (1 << 13) | (1 << 2) | RXNEIE); // enable RXNEIE with RXNE pending
+    let rxne_pended = wait(NVIC_ISPR1, USART1_IRQ_BIT, USART1_IRQ_BIT);
     let data = rd(USART1_DR) & 0xFF;
     let rxne_cleared = rd(USART1_SR) & RXNE == 0;
     // NVIC pending is sticky. Clear it after consuming DR and make sure the
@@ -1250,7 +1254,9 @@ fn smoke_usart1_rxne_irq() -> bool {
     }
     let irq_released = rd(NVIC_ISPR1) & USART1_IRQ_BIT == 0;
 
-    send(b"usart1 rxne_irq=");
+    send(b"usart1 rxne_isolated=");
+    putc(if rxne_isolated { b'1' } else { b'0' });
+    send(b" gate_asserted=");
     putc(if rxne_pended { b'1' } else { b'0' });
     send(b" data=");
     put_hex32(data);
@@ -1261,13 +1267,13 @@ fn smoke_usart1_rxne_irq() -> bool {
         b'0'
     });
     send(
-        if rxne_pended && data == EXPECTED && rxne_cleared && irq_released {
+        if rxne_isolated && rxne_pended && data == EXPECTED && rxne_cleared && irq_released {
             b" ok\r\n"
         } else {
             b" FAIL\r\n"
         },
     );
-    rxne_pended && data == EXPECTED && rxne_cleared && irq_released
+    rxne_isolated && rxne_pended && data == EXPECTED && rxne_cleared && irq_released
 }
 
 fn wait(addr: u32, mask: u32, want: u32) -> bool {

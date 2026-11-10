@@ -51,7 +51,7 @@ assertions:
       - "i2c2 nack=00000400 no_addr=1 ev_isolated=1 er_isolated=1 er_irq=1 er_masked_release=1 af_cleared=1 idle=1 er_released=1 ok"
       - "spi1 max31855=01901600 txe_irq=1 rxne_irq=1 released=1 ok"
       - "usart1 txe_irq=1 released=1 ok"
-      - "usart1 rxne_irq=1 data=00000052 released=1 ok"
+      - "usart1 rxne_isolated=1 gate_asserted=1 data=00000052 released=1 ok"
       - "BLACKPILL PASS"
   - gpio_edges:
       pin: "gpioc:13"

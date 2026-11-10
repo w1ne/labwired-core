@@ -46,7 +46,7 @@
           "i2c2 nack=00000400 no_addr=1 ev_isolated=1 er_isolated=1 er_irq=1 er_masked_release=1 af_cleared=1 idle=1 er_released=1 ok",
           "spi1 max31855=01901600 txe_irq=1 rxne_irq=1 released=1 ok",
           "usart1 txe_irq=1 released=1 ok",
-          "usart1 rxne_irq=1 data=00000052 released=1 ok",
+          "usart1 rxne_isolated=1 gate_asserted=1 data=00000052 released=1 ok",
           "BLACKPILL PASS"
         ]
       },
@@ -90,16 +90,16 @@
       1,
       1073759232,
       536969208,
-      959,
-      192,
       0,
+      0,
+      192,
       3758154244,
-      134260386,
+      134260974,
       536969024,
-      134257667,
-      134259854
+      134258235,
+      134260456
     ],
-    "pc": 134259854,
+    "pc": 134260456,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -112,7 +112,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "4b7543d0891b3193af8b707340dff633c8c4b61dad34c0f6516c5d9a92954b43",
+  "firmware_hash": "d287d8233a150b0553a15297d0d0cc106433ad8c253b6bc4c9c7f4ef8ee361f1",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-f401cdu6-blackpill-renode-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f401cdu6-blackpill.yaml",
@@ -634,7 +634,7 @@
         "end_cycle": 20000
       },
       {
-        "text": "usart1 rxne_irq=1 data=00000052 released=1 ok",
+        "text": "usart1 rxne_isolated=1 gate_asserted=1 data=00000052 released=1 ok",
         "cycle_lo": 10000,
         "cycle": 20000,
         "end_cycle": 30000
@@ -650,14 +650,14 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 42687,
+    "text_bytes": 43275,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 42687,
+    "flash_used_bytes": 43275,
     "ram_static_bytes": 0,
     "flash_total_bytes": 393216,
     "ram_total_bytes": 98304,
-    "flash_used_pct": 10.86,
+    "flash_used_pct": 11.01,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -683,13 +683,13 @@
     "cycles": 200000,
     "instructions": 200000,
     "steps_executed": 200000,
-    "memory_reads": 9199,
-    "memory_writes": 359,
-    "peripheral_accesses": 6062,
+    "memory_reads": 9278,
+    "memory_writes": 360,
+    "peripheral_accesses": 6106,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134259854,
+        "pc": 134260456,
         "count": 703,
         "symbol": "firmware_f401cdu6_blackpill_renode_smoke::main"
       },
@@ -699,9 +699,9 @@
         "symbol": "firmware_f401cdu6_blackpill_renode_smoke::putc"
       },
       {
-        "pc": 134257504,
+        "pc": 134257368,
         "count": 39,
-        "symbol": "firmware_f401cdu6_blackpill_renode_smoke::putc"
+        "symbol": "core::ptr::write_volatile"
       }
     ]
   }
