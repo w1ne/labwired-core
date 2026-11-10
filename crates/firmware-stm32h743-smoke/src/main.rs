@@ -19,6 +19,10 @@ const USART_BRR: *mut u32 = (USART3 + 0x0C) as *mut u32;
 const USART_ISR: *const u32 = (USART3 + 0x1C) as *const u32;
 const USART_RDR: *const u32 = (USART3 + 0x24) as *const u32;
 const USART_TDR: *mut u32 = (USART3 + 0x28) as *mut u32;
+const USART_RXNEIE: u32 = 1 << 5;
+const NVIC_ISPR1: *const u32 = 0xE000_E204 as *const u32;
+const NVIC_ICPR1: *mut u32 = 0xE000_E284 as *mut u32;
+const USART3_IRQ_BIT: u32 = 1 << (39 - 32);
 const TXE: u32 = 1 << 7;
 const RXNE: u32 = 1 << 5;
 const USART_RECEIVER_ENABLE: u32 = if cfg!(feature = "nucleo-h753zi-rx") {
@@ -54,10 +58,30 @@ fn check_uart_rx() {
     let mut first_ready = false;
     for _ in 0..1_000_000 {
         if unsafe { read_volatile(USART_ISR) } & RXNE != 0 {
-            first = unsafe { read_volatile(USART_RDR) } & 0xFF;
             first_ready = true;
             break;
         }
+    }
+
+    // USART3_IRQn is 39 on STM32H753; observe its pending bit in NVIC ISPR1.
+    // The imported profile wires this line only for the exact NUCLEO-H753ZI.
+    unsafe { write_volatile(NVIC_ICPR1, USART3_IRQ_BIT) };
+    let rxne_irq_isolated =
+        first_ready && unsafe { read_volatile(NVIC_ISPR1) } & USART3_IRQ_BIT == 0;
+    unsafe {
+        let cr1 = read_volatile(USART_CR1);
+        write_volatile(USART_CR1, cr1 | USART_RXNEIE);
+    }
+    let mut rxne_irq_asserted = false;
+    for _ in 0..10_000 {
+        if unsafe { read_volatile(NVIC_ISPR1) } & USART3_IRQ_BIT != 0 {
+            rxne_irq_asserted = true;
+            break;
+        }
+    }
+
+    if first_ready {
+        first = unsafe { read_volatile(USART_RDR) } & 0xFF;
     }
 
     let mut second = 0;
@@ -71,10 +95,27 @@ fn check_uart_rx() {
     }
 
     let cleared = unsafe { read_volatile(USART_ISR) } & RXNE == 0;
-    if first_ready && first == b'R' as u32 && second_ready && second == b'S' as u32 && cleared {
-        send(b"usart3 rx=00000052,00000053 rxne_after=0 ok\r\n");
+    unsafe { write_volatile(NVIC_ICPR1, USART3_IRQ_BIT) };
+    let mut rxne_irq_released = true;
+    for _ in 0..10_000 {
+        if unsafe { read_volatile(NVIC_ISPR1) } & USART3_IRQ_BIT != 0 {
+            rxne_irq_released = false;
+            break;
+        }
+    }
+
+    if first_ready
+        && first == b'R' as u32
+        && second_ready
+        && second == b'S' as u32
+        && cleared
+        && rxne_irq_isolated
+        && rxne_irq_asserted
+        && rxne_irq_released
+    {
+        send(b"usart3 rx=00000052,00000053 rxne_irq=isolated,asserted,released ok\r\n");
     } else {
-        send(b"usart3 rx=fail rxne_after=unknown fail\r\n");
+        send(b"usart3 rx=fail rxne_irq=fail fail\r\n");
     }
 }
 

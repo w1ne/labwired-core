@@ -45,5 +45,7 @@ peripherals:
   bus: sysbus
   base_address: 0x40004800
   size: 1KB
+  # USART3_IRQn = 39 on STM32H753ZIT6; this line is exercised by the RX smoke.
+  irq: 39
   config:
     profile: stm32v2
