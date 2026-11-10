@@ -495,5 +495,9 @@ fn adafruit_ahtx0_begin_sees_calibrated_idle_status() {
     d.start();
     let status = d.read();
     assert_eq!(status & 0x80, 0, "BUSY must be clear after 0xE1");
-    assert_eq!(status & 0x08, 0x08, "CAL must be set so begin() returns true");
+    assert_eq!(
+        status & 0x08,
+        0x08,
+        "CAL must be set so begin() returns true"
+    );
 }
