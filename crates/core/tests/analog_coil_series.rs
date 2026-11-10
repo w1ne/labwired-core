@@ -34,6 +34,7 @@ mod analog {
             sources: BTreeMap::from([("gate".to_string(), "Vgate".to_string())]),
             trace: vec!["v(d)".to_string()],
             trace_samples: ring,
+            thermistors: BTreeMap::new(),
         }
     }
 
