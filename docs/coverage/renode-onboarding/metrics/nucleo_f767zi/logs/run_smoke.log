@@ -1,11 +1,11 @@
-2026-11-10T11:28:56.924892Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/nucleo_f767zi.yaml
-2026-11-10T11:28:56.931656Z  INFO labwired_loader: ELF Entry Point: 0x8000401
+2026-11-10T11:38:05.216959Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/nucleo_f767zi.yaml
+2026-11-10T11:38:05.224010Z  INFO labwired_loader: ELF Entry Point: 0x8000401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-2026-11-10T11:28:56.936958Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'usart3'
-2026-11-10T11:28:57.008021Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
-2026-11-10T11:28:57.028233Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
-2026-11-10T11:28:57.045681Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
-2026-11-10T11:28:57.083468Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
-labwired-cli test: idle_ff skipped 4833892 of 6000000 device cycles (1166108 interpreted)
-PASS  9/9 checks · nucleo_f767zi-smoke · 6000000 steps · 0.30s
+2026-11-10T11:38:05.229331Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'usart3'
+2026-11-10T11:38:05.300074Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-10T11:38:05.334358Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-10T11:38:05.368184Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-10T11:38:05.404362Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+labwired-cli test: idle_ff skipped 4833890 of 6000000 device cycles (1166110 interpreted)
+PASS  9/9 checks · nucleo_f767zi-smoke · 6000000 steps · 0.33s

@@ -56,6 +56,10 @@ const USART3_IRQ: u32 = 39;
 const USART_RXNE: u32 = 1 << 5;
 const USART_RXNEIE: u32 = 1 << 5;
 const USART_RE: u32 = 1 << 2;
+const USART_TXE: u32 = 1 << 7;
+const USART_TC: u32 = 1 << 6;
+const USART_TXEIE: u32 = 1 << 7;
+const USART_TCIE: u32 = 1 << 6;
 
 /// Each LED as a push-pull output: three blinks through BSRR, each level
 /// visible in ODR and IDR, and only its own ODR bit set while lit.
@@ -208,6 +212,105 @@ fn check_usart3_rx() -> bool {
     ok
 }
 
+/// Check USART3 TXE and TC interrupt levels independently. Each source must
+/// stay isolated while its enable is clear, assert when enabled, re-pend after
+/// NVIC pending is cleared while the source remains active, and release when
+/// its enable is cleared.
+fn check_usart3_tx_irq() -> bool {
+    let mut txe_ready = false;
+    for _ in 0..100_000 {
+        if rd(USART3_ISR) & USART_TXE != 0 {
+            txe_ready = true;
+            break;
+        }
+    }
+
+    let cr1 = rd(USART3_CR1) & !(USART_TXEIE | USART_TCIE);
+    wr(USART3_CR1, cr1);
+    unpend(USART3_IRQ);
+    let txe_irq_isolated = txe_ready && !pending(USART3_IRQ);
+    wr(USART3_CR1, cr1 | USART_TXEIE);
+    let mut txe_irq_asserted = false;
+    for _ in 0..10_000 {
+        if pending(USART3_IRQ) {
+            txe_irq_asserted = true;
+            break;
+        }
+    }
+    unpend(USART3_IRQ);
+    let mut txe_irq_reasserted = false;
+    for _ in 0..10_000 {
+        if pending(USART3_IRQ) {
+            txe_irq_reasserted = true;
+            break;
+        }
+    }
+    wr(USART3_CR1, cr1);
+    unpend(USART3_IRQ);
+    let mut txe_irq_released = true;
+    for _ in 0..10_000 {
+        if pending(USART3_IRQ) {
+            txe_irq_released = false;
+            break;
+        }
+    }
+
+    let mut tc_ready = false;
+    for _ in 0..100_000 {
+        if rd(USART3_ISR) & USART_TC != 0 {
+            tc_ready = true;
+            break;
+        }
+    }
+    unpend(USART3_IRQ);
+    let tc_irq_isolated = tc_ready && !pending(USART3_IRQ);
+    wr(USART3_CR1, cr1 | USART_TCIE);
+    let mut tc_irq_asserted = false;
+    for _ in 0..10_000 {
+        if pending(USART3_IRQ) {
+            tc_irq_asserted = true;
+            break;
+        }
+    }
+    unpend(USART3_IRQ);
+    let mut tc_irq_reasserted = false;
+    for _ in 0..10_000 {
+        if pending(USART3_IRQ) {
+            tc_irq_reasserted = true;
+            break;
+        }
+    }
+    wr(USART3_CR1, cr1);
+    unpend(USART3_IRQ);
+    let mut tc_irq_released = true;
+    for _ in 0..10_000 {
+        if pending(USART3_IRQ) {
+            tc_irq_released = false;
+            break;
+        }
+    }
+
+    let ok = txe_irq_isolated
+        && txe_irq_asserted
+        && txe_irq_reasserted
+        && txe_irq_released
+        && tc_irq_isolated
+        && tc_irq_asserted
+        && tc_irq_reasserted
+        && tc_irq_released;
+    puts("usart3 tx_irq ");
+    flag(
+        "txe",
+        txe_irq_isolated && txe_irq_asserted && txe_irq_reasserted && txe_irq_released,
+    );
+    flag(
+        "tc",
+        tc_irq_isolated && tc_irq_asserted && tc_irq_reasserted && tc_irq_released,
+    );
+    verdict(ok);
+    ok
+}
+
 #[entry]
 fn main() -> ! {
     let (rcc_reset, rcc_gate, rcc_mask) = rcc_bringup_f767();
@@ -235,7 +338,8 @@ fn main() -> ! {
     mark(1, check_geometry());
     let usart_irqs = check_usart_irqs();
     let usart3_rx = check_usart3_rx();
-    mark(2, usart_irqs && usart3_rx);
+    let usart3_tx = check_usart3_tx_irq();
+    mark(2, usart_irqs && usart3_rx && usart3_tx);
     mark(3, check_leds());
     mark(4, check_syscfg_f767());
     mark(5, check_exti_swier() && check_exti_line24());
