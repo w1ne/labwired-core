@@ -11,6 +11,10 @@ use core::arch::asm;
 #[cfg(feature = "stm32h743-exception-frame")]
 const SCB_VTOR: *mut u32 = 0xE000_ED08 as *mut u32;
 #[cfg(feature = "stm32h743-exception-frame")]
+const SCB_CCR: *mut u32 = 0xE000_ED14 as *mut u32;
+#[cfg(feature = "stm32h743-exception-frame")]
+const SCB_CCR_STKALIGN: u32 = 1 << 9;
+#[cfg(feature = "stm32h743-exception-frame")]
 const NVIC_ISER0: *mut u32 = 0xE000_E100 as *mut u32;
 #[cfg(feature = "stm32h743-exception-frame")]
 const NVIC_ICER0: *mut u32 = 0xE000_E180 as *mut u32;
@@ -240,6 +244,7 @@ fn check_cortex_m7_exception_frame() -> bool {
     let vector_table = unsafe { core::ptr::addr_of_mut!(RAM_VECTOR_TABLE.0).cast::<u32>() };
     let record = unsafe { core::ptr::addr_of_mut!(EXCEPTION_RECORD).cast::<u32>() };
     let source_vtor = unsafe { read_volatile(SCB_VTOR) };
+    let source_ccr = unsafe { read_volatile(SCB_CCR) };
 
     unsafe {
         write_volatile(NVIC_ICER0, EXCEPTION_IRQ_BIT);
@@ -420,6 +425,70 @@ fn check_cortex_m7_exception_frame() -> bool {
         && aligned_psp_after == aligned_psp_before_irq
         && msp_after_aligned_psp_irq == msp_before_aligned_psp_irq;
 
+    // With CCR.STKALIGN clear, exception entry must leave a four-byte-aligned
+    // PSP as-is apart from the eight-word frame and must not set xPSR[9].
+    unsafe {
+        write_volatile(SCB_CCR, source_ccr & !SCB_CCR_STKALIGN);
+        for index in 0..14 {
+            write_volatile(record.add(index), 0);
+        }
+    }
+    let ccr_stkalign_cleared = unsafe { read_volatile(SCB_CCR) } & SCB_CCR_STKALIGN == 0;
+    let msp_before_unaligned_psp_irq: u32;
+    unsafe {
+        asm!(
+            "mrs {}, msp",
+            out(reg) msp_before_unaligned_psp_irq,
+            options(nomem, nostack, preserves_flags)
+        )
+    };
+    unsafe { pend_exception_irq_with_psp_sentinels(0x2001_F004) };
+    let msp_after_unaligned_psp_irq: u32;
+    let unaligned_psp_after: u32;
+    unsafe {
+        asm!(
+            "mrs {}, msp",
+            "mrs {}, psp",
+            out(reg) msp_after_unaligned_psp_irq,
+            out(reg) unaligned_psp_after,
+            options(nomem, nostack, preserves_flags)
+        )
+    };
+    let unaligned_psp_exc_return = read_record(8);
+    let unaligned_psp_frame_sp = read_record(9);
+    let unaligned_psp_ipsr = read_record(10);
+    let unaligned_psp_active_during = read_record(11);
+    let unaligned_psp_pending_during = read_record(12);
+    let unaligned_psp_before_irq = read_record(13);
+    let unaligned_psp_xpsr = read_record(7);
+    let unaligned_psp_frame_ok = read_record(0) == 0x11
+        && read_record(1) == 0x22
+        && read_record(2) == 0x33
+        && read_record(3) == 0x44
+        && read_record(4) == 0x55
+        && read_record(5) & 1 != 0
+        && (0x0800_0000..0x0810_0000).contains(&read_record(6))
+        && unaligned_psp_xpsr & 0x0100_0000 != 0
+        && unaligned_psp_xpsr & 0x0000_0200 == 0
+        && unaligned_psp_exc_return == 0xffff_fffd
+        && unaligned_psp_before_irq & 7 == 4
+        && unaligned_psp_frame_sp == unaligned_psp_before_irq.wrapping_sub(32)
+        && unaligned_psp_frame_sp & 7 == 4
+        && (0x2000_0000..0x2002_0000).contains(&unaligned_psp_frame_sp);
+    let unaligned_psp_active_and_pending_ok = unaligned_psp_ipsr == 16 + EXCEPTION_IRQ
+        && unaligned_psp_active_during & EXCEPTION_IRQ_BIT != 0
+        && unaligned_psp_pending_during & EXCEPTION_IRQ_BIT == 0;
+    let unaligned_psp_returned = unsafe { read_volatile(NVIC_ISPR0) } & EXCEPTION_IRQ_BIT == 0
+        && unsafe { read_volatile(NVIC_IABR0) } & EXCEPTION_IRQ_BIT == 0;
+    let unaligned_psp_ok = ccr_stkalign_cleared
+        && unaligned_psp_frame_ok
+        && unaligned_psp_active_and_pending_ok
+        && unaligned_psp_returned
+        && unaligned_psp_after == unaligned_psp_before_irq
+        && msp_after_unaligned_psp_irq == msp_before_unaligned_psp_irq;
+    unsafe { write_volatile(SCB_CCR, source_ccr) };
+    let ccr_restored = unsafe { read_volatile(SCB_CCR) } == source_ccr;
+
     unsafe {
         write_volatile(NVIC_ICER0, EXCEPTION_IRQ_BIT);
         write_volatile(NVIC_ICPR0, EXCEPTION_IRQ_BIT);
@@ -433,7 +502,9 @@ fn check_cortex_m7_exception_frame() -> bool {
         && returned
         && vtor_restored
         && psp_ok
-        && aligned_psp_ok;
+        && aligned_psp_ok
+        && unaligned_psp_ok
+        && ccr_restored;
 
     send(b"cortex-m7 irq ipsr=");
     send_hex32(ipsr);
@@ -513,6 +584,43 @@ fn check_cortex_m7_exception_frame() -> bool {
     send_hex32(aligned_psp_xpsr);
     send(b" sp=");
     send_hex32(aligned_psp_frame_sp);
+    send(b"\r\n");
+    send(b"cortex-m7 psp noalign exception=");
+    send(
+        if unaligned_psp_frame_ok && unaligned_psp_active_and_pending_ok {
+            b"1"
+        } else {
+            b"0"
+        },
+    );
+    send(b" frame=");
+    send(if unaligned_psp_frame_ok { b"1" } else { b"0" });
+    send(b" stack=");
+    send(if unaligned_psp_after == unaligned_psp_before_irq {
+        b"1"
+    } else {
+        b"0"
+    });
+    send(b" msp=");
+    send(
+        if msp_after_unaligned_psp_irq == msp_before_unaligned_psp_irq {
+            b"1"
+        } else {
+            b"0"
+        },
+    );
+    send(b" return=");
+    send(if unaligned_psp_returned { b"1" } else { b"0" });
+    send(b" ccr=");
+    send(if ccr_stkalign_cleared && ccr_restored {
+        b"1"
+    } else {
+        b"0"
+    });
+    send(b" xpsr=");
+    send_hex32(unaligned_psp_xpsr);
+    send(b" sp=");
+    send_hex32(unaligned_psp_frame_sp);
     send(b"\r\n");
     ok
 }

@@ -12,6 +12,7 @@ assertions:
   - uart_contains: "cortex-m7 return=1 stack=1 vtor=1"
   - uart_contains: "cortex-m7 psp exception=1 stack=1 msp=1 return=1 exc_return=FFFFFFFD"
   - uart_contains: "cortex-m7 psp align exception=1 frame=1 stack=1 msp=1 return=1"
+  - uart_contains: "cortex-m7 psp noalign exception=1 frame=1 stack=1 msp=1 return=1 ccr=1"
   - uart_contains: "cortex-m7 exception ok"
   - gpio_edges:
       pin: "gpioPortB:0"

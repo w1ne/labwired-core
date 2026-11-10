@@ -1,0 +1,27 @@
+STM32H7 register smoke
+cortex-m7 irq ipsr=00000015 active=00000020 pending=00000000
+cortex-m7 frame=1 regs=00000011,00000022,00000033,00000044,00000055
+cortex-m7 return=1 stack=1 vtor=1
+cortex-m7 psp exception=1 stack=1 msp=1 return=1 exc_return=FFFFFFFD
+cortex-m7 psp align exception=1 frame=1 stack=1 msp=1 return=1 xpsr=01000200 sp=2001EFE0
+cortex-m7 exception ok
+gpiob0=high
+gpiob0=low
+gpiob0=high
+gpiob0=low
+gpiob0=high
+gpiob0=low
+gpiob0=high
+gpiob0=low
+gpiob0=high
+gpiob0=low
+gpiob0=high
+gpiob0=low
+gpiob0=high
+gpiob0=low
+gpiob0=high
+gpiob0=low
+gpiob0=high
+gpiob0=low
+gpiob0=high
+gpiob0=low
