@@ -303,6 +303,29 @@ fn esp32_high_bank_pads_resolve_to_the_out1_register() {
 }
 
 #[test]
+fn esp32_wdev_rnd_varies_per_read() {
+    // esp_random() (and so Arduino random(n)) reads WDEV_RND_REG at
+    // 0x6003_5144. On the wifi_mac_phy stub it read 0 every time.
+    let mut bus = SystemBus::empty();
+    let _cpu = configure_xtensa_esp32(&mut bus);
+
+    assert_eq!(
+        bus.resolve_window(0x6003_5144),
+        Some((0x6003_5144, 4)),
+        "RNG window must win over wifi_mac_phy stub"
+    );
+    let words: Vec<u32> = (0..4).map(|_| bus.read_u32(0x6003_5144).unwrap()).collect();
+    assert!(words.iter().all(|&w| w != 0), "RNG reads {words:08x?}");
+    assert!(
+        words.windows(2).all(|p| p[0] != p[1]),
+        "RNG reads {words:08x?}"
+    );
+    // Neighbouring stub words still round-trip.
+    bus.write_u32(0x6003_5140, 0x1234_5678).unwrap();
+    assert_eq!(bus.read_u32(0x6003_5140).unwrap(), 0x1234_5678);
+}
+
+#[test]
 fn esp32_uart0_ahb_fifo_emits_to_sink() {
     // Classic ESP32 IDF writes TX via UART_FIFO_AHB_REG(0)=0x6000_0000, not APB.
     let mut bus = SystemBus::empty();
