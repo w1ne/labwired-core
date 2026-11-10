@@ -18,9 +18,9 @@
       1207959576,
       537001976,
       134217745,
-      134219584
+      134219658
     ],
-    "pc": 134219584,
+    "pc": 134219658,
     "xpsr": 1627389952,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "0fce6080f09d1c5de3e24baa9f7831f9527672a27fa706ad3ad0c8b320908341",
+  "firmware_hash": "28e5edb9ced5b023458b1398c7adf2c6a20cffe6b05b7ed9bd94447b1794138a",
   "config": {
     "firmware": "examples/nucleo_g474re/./board_firmware/target/thumbv7em-none-eabi/release/firmware-nucleo_g474re-demo",
     "system": "examples/nucleo_g474re/../../configs/systems/nucleo_g474re.yaml",

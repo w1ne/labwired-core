@@ -3,23 +3,35 @@
 #![allow(clippy::empty_loop)]
 
 // STM32G474RE, RM0440. The NUCLEO-G474RE's default STLINK-V3E VCP is
-// LPUART1 on PA2/PA3. PA5 drives the active-high LD2 user LED.
+// LPUART1 on PA2/PA3. PA5 drives LD2; PA8 outputs TIM1_CH1 PWM (AF6).
 const RCC_BASE: usize = 0x4002_1000;
 const RCC_CR: *mut u32 = RCC_BASE as *mut u32;
 const RCC_AHB2ENR: *mut u32 = (RCC_BASE + 0x4c) as *mut u32;
 const RCC_APB1ENR2: *mut u32 = (RCC_BASE + 0x5c) as *mut u32;
+const RCC_APB2ENR: *mut u32 = (RCC_BASE + 0x60) as *mut u32;
 const GPIOA_BASE: usize = 0x4800_0000;
 const GPIOA_MODER: *mut u32 = GPIOA_BASE as *mut u32;
 const GPIOA_AFRL: *mut u32 = (GPIOA_BASE + 0x20) as *mut u32;
+const GPIOA_AFRH: *mut u32 = (GPIOA_BASE + 0x24) as *mut u32;
 const GPIOA_BSRR: *mut u32 = (GPIOA_BASE + 0x18) as *mut u32;
 const LPUART1_BASE: usize = 0x4000_8000;
 const LPUART1_CR1: *mut u32 = LPUART1_BASE as *mut u32;
 const LPUART1_BRR: *mut u32 = (LPUART1_BASE + 0x0c) as *mut u32;
 const LPUART1_ISR: *const u32 = (LPUART1_BASE + 0x1c) as *const u32;
 const LPUART1_TDR: *mut u32 = (LPUART1_BASE + 0x28) as *mut u32;
+const TIM1_BASE: usize = 0x4001_2c00;
+const TIM1_CR1: *mut u32 = TIM1_BASE as *mut u32;
+const TIM1_EGR: *mut u32 = (TIM1_BASE + 0x14) as *mut u32;
+const TIM1_CCMR1: *mut u32 = (TIM1_BASE + 0x18) as *mut u32;
+const TIM1_CCER: *mut u32 = (TIM1_BASE + 0x20) as *mut u32;
+const TIM1_PSC: *mut u32 = (TIM1_BASE + 0x28) as *mut u32;
+const TIM1_ARR: *mut u32 = (TIM1_BASE + 0x2c) as *mut u32;
+const TIM1_CCR1: *mut u32 = (TIM1_BASE + 0x34) as *mut u32;
+const TIM1_BDTR: *mut u32 = (TIM1_BASE + 0x44) as *mut u32;
 
 const GPIOAEN: u32 = 1 << 0;
 const LPUART1EN: u32 = 1 << 0;
+const TIM1EN: u32 = 1 << 11;
 const HSI16ON: u32 = 1 << 8;
 const HSIRDY: u32 = 1 << 10;
 const USART_UE: u32 = 1 << 0;
@@ -27,6 +39,7 @@ const USART_TE: u32 = 1 << 3;
 const USART_TXE: u32 = 1 << 7;
 const LED_PIN: u32 = 5;
 const LPUART_AF: u32 = 12;
+const TIM1_AF: u32 = 6;
 // LPUART BRR = 256 * f_kernel / baud. At reset, PCLK1 is HSI16 (16 MHz).
 const LPUART_BRR_115200: u32 = (256 * 16_000_000 + 57_600) / 115_200;
 const SPIN_LIMIT: u32 = 20_000;
@@ -50,21 +63,43 @@ fn main() -> ! {
             RCC_APB1ENR2,
             core::ptr::read_volatile(RCC_APB1ENR2) | LPUART1EN,
         );
+        core::ptr::write_volatile(
+            RCC_APB2ENR,
+            core::ptr::read_volatile(RCC_APB2ENR) | TIM1EN,
+        );
 
-        // PA2/PA3 use alternate function 12 for LPUART1. PA5 is the board's
-        // user LED (LD2), active high.
+        // PA2/PA3 use AF12 for LPUART1. PA5 is LD2, active high. PA8 is
+        // TIM1_CH1 on AF6 per DS12288 Table 13.
         let mut moder = core::ptr::read_volatile(GPIOA_MODER);
-        moder &= !((0b11 << (2 * 2)) | (0b11 << (3 * 2)) | (0b11 << (LED_PIN * 2)));
+        moder &= !((0b11 << (2 * 2))
+            | (0b11 << (3 * 2))
+            | (0b11 << (LED_PIN * 2))
+            | (0b11 << (8 * 2)));
         moder |= (0b10 << (2 * 2)) | (0b10 << (3 * 2)) | (0b01 << (LED_PIN * 2));
+        moder |= 0b10 << (8 * 2);
         core::ptr::write_volatile(GPIOA_MODER, moder);
         let mut afrl = core::ptr::read_volatile(GPIOA_AFRL);
         afrl &= !((0xf << (2 * 4)) | (0xf << (3 * 4)));
         afrl |= (LPUART_AF << (2 * 4)) | (LPUART_AF << (3 * 4));
         core::ptr::write_volatile(GPIOA_AFRL, afrl);
+        let mut afrh = core::ptr::read_volatile(GPIOA_AFRH);
+        afrh = (afrh & !0xf) | TIM1_AF;
+        core::ptr::write_volatile(GPIOA_AFRH, afrh);
 
         // Configure 115200 8N1. LPUART uses BRR = 256*f_kernel/baud.
         core::ptr::write_volatile(LPUART1_BRR, LPUART_BRR_115200);
         core::ptr::write_volatile(LPUART1_CR1, USART_UE | USART_TE);
+
+        // Center a 50% PWM on PA8: 16 MHz / (ARR + 1) = 1 kHz. TIM1 is
+        // advanced-control, so BDTR.MOE must be set before its output drives.
+        core::ptr::write_volatile(TIM1_PSC, 0);
+        core::ptr::write_volatile(TIM1_ARR, 15_999);
+        core::ptr::write_volatile(TIM1_CCR1, 8_000);
+        core::ptr::write_volatile(TIM1_CCMR1, (0b110 << 4) | (1 << 3));
+        core::ptr::write_volatile(TIM1_CCER, 1);
+        core::ptr::write_volatile(TIM1_EGR, 1);
+        core::ptr::write_volatile(TIM1_BDTR, 1 << 15);
+        core::ptr::write_volatile(TIM1_CR1, (1 << 7) | 1);
     }
 
     print_str("NUCLEO_G474RE_OK\n");

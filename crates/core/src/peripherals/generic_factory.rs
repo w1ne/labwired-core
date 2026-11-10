@@ -921,25 +921,26 @@ pub fn try_build(
                     .get("basic")
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false);
-                // `input_capture: stm32f4` — the F2/F4-generation input
-                // stage: CCxNP writable (both-edge capture) and the F4 AF
-                // pad map routes TIMx_CHn pads to this timer. Anything else
-                // is refused rather than guessed.
-                let ccer_np = match p_cfg.config.get("input_capture").and_then(|v| v.as_str()) {
-                    None => false,
-                    Some("stm32f4") => true,
+                // `input_capture` selects a generation-specific CCER layout
+                // and timer/GPIO pad map. Anything else is refused rather
+                // than guessed.
+                let input_stage = match p_cfg.config.get("input_capture").and_then(|v| v.as_str()) {
+                    None => None,
+                    Some("stm32f4") => Some(crate::peripherals::timer::TimerInputStage::F4),
+                    Some("stm32g4") => Some(crate::peripherals::timer::TimerInputStage::G4),
                     Some(other) => {
                         return Err(anyhow::anyhow!(
-                            "timer '{}': unknown input_capture '{other}' (supported: stm32f4)",
+                            "timer '{}': unknown input_capture '{other}' (supported: stm32f4, stm32g4)",
                             p_cfg.id
-                        ))
+                        ));
                     }
                 };
-                Box::new(
-                    crate::peripherals::timer::Timer::new_with_layout(width, advanced)
-                        .basic(basic)
-                        .ccer_np(ccer_np),
-                )
+                let timer =
+                    crate::peripherals::timer::Timer::new_with_layout(width, advanced).basic(basic);
+                Box::new(match input_stage {
+                    Some(stage) => timer.input_stage(stage),
+                    None => timer,
+                })
             }
         }
         "avr_gpio" => {

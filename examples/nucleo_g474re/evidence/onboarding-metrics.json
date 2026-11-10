@@ -6,23 +6,23 @@
   "script": "examples/nucleo_g474re/uart-smoke.yaml",
   "system": "configs/systems/nucleo_g474re.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-03T10:47:41Z",
-  "finished_at_utc": "2026-11-03T10:47:57Z",
-  "elapsed_seconds": 16,
-  "elapsed_ms": 15619,
+  "started_at_utc": "2026-11-10T05:18:21Z",
+  "finished_at_utc": "2026-11-10T05:19:47Z",
+  "elapsed_seconds": 86,
+  "elapsed_ms": 85948,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 14.771,
-    "build_firmware": 0.025,
-    "run_smoke": 0.812
+    "build_cli": 57.649,
+    "build_firmware": 0.177,
+    "run_smoke": 28.082
   },
   "stages_ms": {
-    "build_cli": 14771,
-    "build_firmware": 25,
-    "run_smoke": 812
+    "build_cli": 57649,
+    "build_firmware": 177,
+    "run_smoke": 28082
   }
 }

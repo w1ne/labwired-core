@@ -1,4 +1,4 @@
-# NUCLEO-G474RE smoke: default STLINK-V3E VCP on LPUART1 and LD2 on PA5.
+# NUCLEO-G474RE smoke: LPUART1 VCP, LD2 on PA5, and TIM1_CH1 PWM on PA8.
 schema_version: "1.2"
 inputs:
   firmware: "./board_firmware/target/thumbv7em-none-eabi/release/firmware-nucleo_g474re-demo"
@@ -9,5 +9,8 @@ assertions:
   - uart_contains: "NUCLEO_G474RE_OK"
   - gpio_edges:
       pin: "gpioa:5"
+      min_edges: 8
+  - gpio_edges:
+      pin: "gpioa:8"
       min_edges: 8
   - expected_stop_reason: max_steps

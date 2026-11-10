@@ -5,10 +5,11 @@ system manifest maps the default STLINK-V3E virtual COM port to LPUART1 on
 PA2/PA3, LD2 to PA5, and B1 to PC13. These assignments follow ST's [UM2505
 board manual](https://www.st.com/resource/en/user_manual/um2505-stm32g4-nucleo64-boards-mb1367-stmicroelectronics.pdf).
 
-The smoke boots a bare-metal Cortex-M4 image, enables the GPIOA and LPUART1
-clock gates, prints `NUCLEO_G474RE_OK` through LPUART1, and toggles LD2 four
-times. Its assertions check the UART transcript and at least eight PA5 edges.
-This is simulator evidence; it is not a hardware capture.
+The smoke boots a bare-metal Cortex-M4 image, enables GPIOA, LPUART1, and TIM1,
+prints `NUCLEO_G474RE_OK` through LPUART1, toggles LD2 four times, and emits
+1 kHz, 50% PWM from TIM1_CH1 on PA8 (AF6). Its assertions check the UART
+transcript and at least eight edges on both PA5 and PA8. This is simulator
+evidence; it is not a hardware capture.
 
 ## Reproduce
 
@@ -40,21 +41,24 @@ python3 scripts/generate_onboarding_scoreboard.py \
 
 The chip profile declares RCC, GPIOA-D, SysTick, USART1/2, LPUART1, FLASH, PWR,
 CRC, TIM1/2, I2C1, SPI1, ADC1, DMA1, IWDG, RTC, NVIC, and DBGMCU. This smoke
-exercises only boot, RCC clock enables, GPIOA/PA5, and LPUART1. ADC1 models its
-power-up path but does not provide an analog conversion engine. The other
-declared peripherals are outside this smoke's claim. The chip/system descriptor
-does not declare any `type: stub` zero-answering windows. The simulated UART
-transcript is captured from the LPUART1 model; no UART pad waveform or silicon
-measurement is included.
+exercises boot, RCC clock enables, GPIOA/PA5, LPUART1, and TIM1_CH1 routed to
+GPIOA/PA8. The G4 timer pad map currently includes only PA8/TIM1_CH1; other G4
+timer outputs remain unrouted. ADC1 models its power-up path but does not
+provide an analog conversion engine. The other declared peripherals are
+outside this smoke's claim. The chip/system descriptor does not declare any
+`type: stub` zero-answering windows. The simulated UART transcript is captured
+from the LPUART1 model; no UART pad waveform or silicon measurement is included.
 
-## Vendor status checked 2026-11-03
+## Vendor status checked 2026-11-10
 
 ST's live [NUCLEO-G474RE product page](https://www.st.com/en/evaluation-tools/nucleo-g474re.html)
-states **Active** and “Product is in volume production.” ST's live [eStore
+states **Active** and “Product is in volume production.” The live [ST eStore
 listing](https://estore.st.com/en/products/evaluation-tools/product-evaluation-tools/mcu-mpu-eval-tools/stm32-mcu-mpu-eval-tools/stm32-nucleo-boards/nucleo-g474re.html)
-showed **In Stock** and **Add to Cart**. ST's [STM32G474RE product
+states **In Stock** and offers **Add to Cart**. ST's [STM32G474RE product
 page](https://www.st.com/en/microcontrollers-microprocessors/stm32g474re.html)
-also states **Active** and “Product is in volume production.”
+also states **Active** and “Product is in volume production.” The [STM32G474RE
+datasheet](https://www.st.com/resource/en/datasheet/stm32g474re.pdf) assigns
+PA8/TIM1_CH1 to AF6 (Table 13).
 
 See [the G474 board validation page](../../docs/boards/stm32g474re.md) for
 existing validation coverage and remaining model limits.

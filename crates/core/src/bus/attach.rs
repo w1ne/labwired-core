@@ -2969,6 +2969,13 @@ impl SystemBus {
                     }
                 }
             }
+            for &(tim, p, pin, af, ch, func) in STM32G4_TIMER_AF_PADS {
+                if p == port {
+                    if let Some((t_idx, TimerInputStage::G4)) = timer(self, tim) {
+                        routes.push((t_idx, pin, Some(af), ch, func));
+                    }
+                }
+            }
             for (t_idx, pin, af, ti, func) in routes {
                 if self.peripherals[gpio_idx]
                     .dev
@@ -3158,6 +3165,36 @@ impl SystemBus {
                     continue;
                 };
                 if self.peripherals[t_idx].dev.timer_input_stage() != Some(TimerInputStage::F4) {
+                    continue;
+                }
+                let Some(gpio_idx) = self.find_peripheral_index_by_name(&format!("gpio{port}"))
+                else {
+                    continue;
+                };
+                let Some(lines) = self.peripherals[t_idx].dev.timer_output_lines(false) else {
+                    continue;
+                };
+                if self.peripherals[gpio_idx]
+                    .dev
+                    .bind_timer_output_pad_function(
+                        &lines,
+                        pin,
+                        u32::from(af),
+                        usize::from(ch),
+                        func,
+                    )
+                {
+                    self.peripherals[t_idx].dev.timer_output_lines(true);
+                }
+            }
+            for &(tim, port, pin, af, ch, func) in STM32G4_TIMER_AF_PADS {
+                let Some(t_idx) = self
+                    .find_peripheral_index_by_name(tim)
+                    .or_else(|| self.find_peripheral_index_by_name(&format!("{tim}_pwm")))
+                else {
+                    continue;
+                };
+                if self.peripherals[t_idx].dev.timer_input_stage() != Some(TimerInputStage::G4) {
                     continue;
                 }
                 let Some(gpio_idx) = self.find_peripheral_index_by_name(&format!("gpio{port}"))
@@ -4533,6 +4570,12 @@ const STM32F4_TIMER_AF_PADS: &[(&str, char, u8, u8, u8, &str)] = &[
     ("tim10", 'b', 8, 3, 0, "TIM10_CH1"),
     ("tim11", 'b', 9, 3, 0, "TIM11_CH1"),
 ];
+
+/// STM32G4 timer channel pads by alternate function. Only rows currently
+/// exercised by a board smoke are listed. STM32G474xB/xC/xE DS12288 Rev 6
+/// Table 13 assigns PA8/TIM1_CH1 to AF6.
+const STM32G4_TIMER_AF_PADS: &[(&str, char, u8, u8, u8, &str)] =
+    &[("tim1", 'a', 8, 6, 0, "TIM1_CH1")];
 
 // WCH CH32V003 timer pads, shared by the output and input-capture
 // routers. The register block is the F1 timer; only the pads differ, and AFIO_PCFR1 moves them, so every row names the remap

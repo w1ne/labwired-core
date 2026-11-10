@@ -176,6 +176,10 @@ pub struct Timer {
     /// `config: { input_capture: stm32f4 }` sets it.
     #[serde(skip)]
     ccer_np: bool,
+    /// AF pad-map family paired with the CCER generation. `None` preserves
+    /// the legacy F4 meaning of `ccer_np: true` for existing descriptors.
+    #[serde(skip)]
+    input_stage: Option<TimerInputStage>,
     /// Per-channel ICxPSC event counter: a capture happens on every
     /// 1st/2nd/4th/8th accepted edge. Reset when CCxE is cleared.
     #[serde(skip)]
@@ -315,6 +319,8 @@ pub enum TimerInputStage {
     F1,
     /// F2/F4 generation (`input_capture: stm32f4`): CCxNP, F4 AF pad map.
     F4,
+    /// STM32G4 generation (`input_capture: stm32g4`): CCxNP, G4 AF pad map.
+    G4,
 }
 
 /// SR flag bits the input-capture path sets (RM0368 §13.4.5 / RM0008 §15.4.5).
@@ -495,6 +501,7 @@ impl Timer {
             freeze_revision: Cell::new(0),
             clock: None,
             ccer_np: false,
+            input_stage: None,
             ic_psc_count: [0; 4],
             ti_level: [false; 4],
             ic_pending: Vec::new(),
@@ -510,6 +517,13 @@ impl Timer {
     /// [`Self::basic`].
     pub fn ccer_np(mut self, np: bool) -> Self {
         self.ccer_np = np;
+        self
+    }
+
+    /// Select the timer's generation-specific GPIO pad map and CCER layout.
+    pub fn input_stage(mut self, stage: TimerInputStage) -> Self {
+        self.ccer_np = true;
+        self.input_stage = Some(stage);
         self
     }
 
@@ -2005,7 +2019,7 @@ impl crate::Peripheral for Timer {
         if self.basic {
             None
         } else if self.ccer_np {
-            Some(TimerInputStage::F4)
+            Some(self.input_stage.unwrap_or(TimerInputStage::F4))
         } else {
             Some(TimerInputStage::F1)
         }

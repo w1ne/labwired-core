@@ -1,8 +1,8 @@
 # Onboarding Smoke: nucleo-g474re
 
 - status: `pass`
-- elapsed_seconds: `16`
-- elapsed_ms: `15619`
+- elapsed_seconds: `86`
+- elapsed_ms: `85948`
 - threshold_seconds: `3600`
 - threshold_met: `True`
 - failure_stage: `n/a`

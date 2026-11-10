@@ -21,11 +21,14 @@ Expected evidence:
 
 - The firmware boots from the declared flash map and prints its LPUART1 marker.
 - GPIOA clock enable and LD2/PA5 output produce at least eight edges.
+- TIM1 runs channel 1 in 1 kHz, 50% PWM mode; its PA8/AF6 route produces at
+  least eight edges.
 - `evidence/logs/run_smoke.log` records a passing CLI smoke.
 
 The smoke does not validate USART1, the other declared peripherals, the UART
-pad waveform, or physical silicon. The broader chip descriptor's current
-coverage is summarized in [`docs/boards/stm32g474re.md`](../../docs/boards/stm32g474re.md).
+pad waveform, other G4 timer pad mappings, or physical silicon. The broader
+chip descriptor's current coverage is summarized in
+[`docs/boards/stm32g474re.md`](../../docs/boards/stm32g474re.md).
 
 ```bash
 ./scripts/unsupported_instruction_audit.sh \

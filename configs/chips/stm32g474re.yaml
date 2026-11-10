@@ -15,11 +15,13 @@ ram:
   size: "128KB"
 
 # Board-facing pads used by the NUCLEO-G474RE smoke (ST UM2505): the default
-# STLINK-V3E VCP is LPUART1 on PA2/PA3, LD2 is PA5, and B1 is PC13.
+# STLINK-V3E VCP is LPUART1 on PA2/PA3, LD2 is PA5, B1 is PC13, and PA8 is
+# exposed as TIM1_CH1 on AF6 for timer-output smoke coverage.
 pins:
   PA2: { gpio: "gpioa", bit: 2 }
   PA3: { gpio: "gpioa", bit: 3 }
   PA5: { gpio: "gpioa", bit: 5 }
+  PA8: { gpio: "gpioa", bit: 8 }
   PC13: { gpio: "gpioc", bit: 13 }
 
 peripherals:
@@ -138,6 +140,7 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32g474re/tim1.yaml"
       advanced: true
+      input_capture: "stm32g4"
     clock: { reg: "apb2enr", bit: 11 }
   # I2C1 (APB1) — modern v2 controller. RCC_APB1ENR1.I2C1EN (bit 21).
   - id: "i2c1"
