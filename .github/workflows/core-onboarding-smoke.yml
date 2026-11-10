@@ -76,6 +76,11 @@ jobs:
             target: thumbv6m-none-eabi
             script: examples/rp2040-pico-bme280/bme280-smoke.yaml
             system: configs/systems/rp2040-pico-bme280.yaml
+          - id: esp32c5-devkitc-1-n8r8-gpio
+            crate: firmware-esp32c5-devkitc-1-gpio-smoke
+            target: riscv32imac-unknown-none-elf
+            script: examples/esp32c5-devkitc-1-gpio-smoke/io-smoke.yaml
+            system: configs/systems/esp32c5-devkitc-1-n8r8-gpio.yaml
           - id: esp32s3-devkitc-1-n16r8-bme280
             firmware_build_script: examples/esp32s3-devkitc-1-n16r8-bme280/build-firmware.sh
             script: examples/esp32s3-devkitc-1-n16r8-bme280/bme280-smoke.yaml
@@ -100,7 +105,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
         with:
-          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv8m.main-none-eabi
+          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv8m.main-none-eabi,riscv32imac-unknown-none-elf
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2

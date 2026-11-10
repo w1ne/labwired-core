@@ -1,0 +1,41 @@
+# ESP32-C5 HP-core slice used by ESP32-C5-DevKitC-1-N8R8 GPIO smoke.
+# Sources: ESP32-C5 Datasheet v1.5, ESP32-C5 TRM v1.0, and Espressif
+# esp-idf components/soc/esp32c5 register headers. Only the RV32IMAC HP core,
+# internal HP SRAM, and direct GPIO0..25 register behavior are exercised.
+# This is not a full ESP32-C5 or wireless model.
+
+name: "esp32c5"
+arch: "riscv"
+core: "rv32imac"
+registers_count: 31
+cpu_hz: 240_000_000
+
+# ESP32-C5 memory map: HP SRAM 0x40800000..0x4085FFFF; the N8R8 module has
+# 8 MiB flash and 8 MiB PSRAM mapped in the external-memory window. The smoke
+# image is loaded directly into HP SRAM and does not exercise XIP or PSRAM.
+flash:
+  base: 0x42000000
+  size: "8192KB"
+ram:
+  base: 0x40800000
+  size: "384KB"
+
+peripherals:
+  # C5 GPIO register head: GPIO_OUT @+0x04, W1TS/W1TC @+0x08/+0x0C,
+  # GPIO_ENABLE @+0x34, W1TS @+0x38. The C5-aware adapter supports direct GPIO
+  # output on pins 0..25; GPIO26..28 and matrix signal behavior are not claimed
+  # here. Base 0x60091000 from Espressif's C5 GPIO register map.
+  - id: "gpio"
+    type: "esp32c5_gpio"
+    base_address: 0x60091000
+    size: "4KB"
+
+  # C5 IOMUX pad words are declared register storage only. This lets the
+  # firmware select GPIO5 function 1; pad routing is not electrically enforced
+  # by this descriptor, so the smoke oracle observes the GPIO model output.
+  - id: "io_mux"
+    type: "declarative"
+    base_address: 0x60090000
+    size: "4KB"
+    config:
+      path: "../peripherals/esp32c6/io_mux.yaml"

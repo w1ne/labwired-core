@@ -1,0 +1,11 @@
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/riscv32imac-unknown-none-elf/release/firmware-esp32c5-devkitc-1-gpio-smoke"
+  system: "../../configs/systems/esp32c5-devkitc-1-n8r8-gpio.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - gpio_edges:
+      pin: "gpio:5"
+      min_edges: 4
+  - expected_stop_reason: max_steps

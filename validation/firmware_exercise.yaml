@@ -244,6 +244,19 @@ chips:
       - {p: io_mux, ev: "configs/chips/esp32c6.yaml:491 (declarative; configs/peripherals/esp32c6/io_mux.yaml)", note: "CLOSABLE: reset-value register storage; pad function writes are recorded but never read back or electrically enforced — the DevKitC demo writes U0TXD's MCU_SEL and the tier-1 console both pass regardless of routing. The S3's real io_mux model is the port path."}
       - {p: hp_sys, ev: "configs/chips/esp32c6.yaml:516 (declarative; configs/peripherals/esp32c6/hp_sys.yaml)", note: "CLOSABLE: declarative register file with no engine; nothing drives it today, so the false-success path is latent — timeout monitor, SDIO control, ROM-table lock and memory test are not modelled."}
 
+  - id: esp32c5
+    arch: riscv32imac
+    headline: "New ESP32-C5-DevKitC-1-N8R8 profile with a narrow HP-core/RAM/GPIO5 scope. Local onboarding smoke loads a base-IMAC ELF directly into HP SRAM and observes at least four GPIO5 output edges; it does not exercise C5 ROM/flash boot, PSRAM, CLIC/LP core, radio, USB, UART, IOMUX electrical routing, or the GPIO27 addressable LED. The GPIO adapter translates C5 ENABLE/IN offsets and covers direct GPIO0..25 output only; this is not broad C5 or silicon-confirmed coverage."
+    functional:
+      - what: "ESP32-C5-DevKitC-1-N8R8: base-IMAC firmware toggles header GPIO5 (J3 pin 9)"
+        fw: firmware-esp32c5-devkitc-1-gpio-smoke
+        ev: "examples/esp32c5-devkitc-1-gpio-smoke/evidence/"
+        gate: nightly
+    advanced_unit_only: []
+    advanced_dead: []
+    shim:
+      - {p: io_mux, ev: "configs/chips/esp32c5.yaml:34-39 (declarative; configs/peripherals/esp32c6/io_mux.yaml)", note: "CLOSABLE: function-select writes are stored but pad routing is not electrically enforced; the smoke asserts GPIO model edges, not package-pin voltage."}
+
   - id: esp32s3-zero
     arch: xtensa-lx7
     headline: "Board variant of the esp32s3 die: same configure_xtensa_esp32s3 wiring and the same committed tier-1 ELF, which non-ignored CLI/workspace tests boot under this chip's name and assert through `TIER1 ... PASS` (SYSTIMER runs the clock check; USB-Serial/JTAG is the console of the TMP102 e2e, so neither is a gap). The yaml's IRAM/ROM-thunk/XIP windows are memory-map declarations, not per-chip models, and its eFuse/RTC_CNTL stubs are the shared family stubs listed on the esp32s3 entry. `spi_mem_flash`/`extmem` stay unit-only here too: mask-ROM bring-up reads are not firmware exercise."

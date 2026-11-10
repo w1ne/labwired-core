@@ -104,6 +104,7 @@ members = [
     "crates/firmware-rp2040-demo",
     "crates/firmware-rp2040-pico-bme280-smoke",
     "crates/firmware-rp2350-pico2-bme280-smoke",
+    "crates/firmware-esp32c5-devkitc-1-gpio-smoke",
     "crates/firmware-samd21-demo",
     "crates/firmware-samd21-lowram-smoke",
     "crates/firmware-arduino-zero-demo",

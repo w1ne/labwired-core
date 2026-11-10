@@ -132,6 +132,8 @@ pub const MODEL_TYPES: &[&str] = &[
     // would resolve them to the STM32 maps.
     "esp32c6_uart",
     "esp32c6_gpio",
+    // C5's GPIO register head is shared for the modeled direct-output subset.
+    "esp32c5_gpio",
     // C6-only behavioral blocks: PCR (clock/reset, full SVD register map) and
     // GDMA (3 channels, C6 register layout). The fuzzy `contains("dma")`
     // fallback would otherwise coerce `esp32c6_gdma` onto the STM32 DMA

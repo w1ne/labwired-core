@@ -40,6 +40,11 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         // is built with the C6 layout; the FSPI and UART TX numbers match.
         // Its GPIO interrupt is matrix source 30 (esp32c6.svd), not the C3's 16.
         "esp32c6_gpio" => Box::new(crate::peripherals::esp32c3::gpio::Esp32c3Gpio::for_esp32c6()),
+        // C5 shares the OUT/W1TS/W1TC offsets but moves ENABLE to 0x34..0x3C
+        // and IN to 0x64. Reuse the direct-GPIO behavior with that register
+        // translation; C5 matrix IDs, GPIO26+, and the remaining tail are not
+        // claimed by the current C5 board profile.
+        "esp32c5_gpio" => Box::new(crate::peripherals::esp32c3::gpio::Esp32c3Gpio::for_esp32c5()),
         // PCR — the C6's clock/reset block. Register-backed (full SVD map) and
         // the clock controller the chip yaml's `clock:` gates resolve through
         // (`Peripheral::clock_gate_reg_offset`); see super::pcr for exactly
@@ -134,6 +139,7 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
 pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32c6_uart",
     "esp32c6_gpio",
+    "esp32c5_gpio",
     "esp32c6_pcr",
     "esp32c6_extmem",
     "esp32c6_systimer",
