@@ -18,7 +18,7 @@
 //!          (25 °C = 0x1900), plus TXE/RXNE buffer IRQs, master-transmit and
 //!          master-receive BTF event IRQs, absent-address NACK and error IRQ
 //!          checks
-//!   I2C2   a separate TMP102 repeated-start read, SB/ADDR/BTF event IRQs,
+//!   I2C2   a separate TMP102 repeated-start read, ITEVTEN-gated SB/ADDR/BTF event IRQs,
 //!          TXE isolation under ITEVTEN and TXE/RXNE assertion/release under
 //!          ITBUFEN,
 //!          and a POS-sequenced two-byte receive with
@@ -192,7 +192,7 @@ fn main() -> ! {
 
     let (
         i2c2_temperature,
-        i2c2_sb_irq,
+        i2c2_sb_gate,
         i2c2_addr_irq,
         i2c2_txe_isolated,
         i2c2_txe_buf_irq,
@@ -202,7 +202,7 @@ fn main() -> ! {
         i2c2_rxne_buf_released,
     ) = smoke_i2c2();
     let i2c2_ok = i2c2_temperature == 0x1900
-        && i2c2_sb_irq
+        && i2c2_sb_gate
         && i2c2_addr_irq
         && i2c2_txe_isolated
         && i2c2_txe_buf_irq
@@ -212,8 +212,8 @@ fn main() -> ! {
         && i2c2_rxne_buf_released;
     send(b"i2c2 tmp102=");
     put_hex32(u32::from(i2c2_temperature));
-    send(b" sb_irq=");
-    send(if i2c2_sb_irq { b"1" } else { b"0" });
+    send(b" sb_irq_gate=");
+    send(if i2c2_sb_gate { b"1" } else { b"0" });
     send(b" addr_irq=");
     send(if i2c2_addr_irq { b"1" } else { b"0" });
     send(b" txe_isolated=");
@@ -731,8 +731,9 @@ fn smoke_i2c1_receive_btf() -> (u16, bool, bool, bool) {
 
 /// Exercise the imported F401's second legacy I2C controller with its own
 /// TMP102 and event vector. This catches instance wiring/configuration mistakes
-/// that an I2C1-only transaction cannot see. It also isolates TXE from ITEVTEN,
-/// then checks TXE and RXNE buffer IRQ assertion/release under ITBUFEN.
+/// that an I2C1-only transaction cannot see. It checks that SB stays off the EV
+/// line until ITEVTEN is enabled, isolates TXE from ITEVTEN, then checks TXE and
+/// RXNE buffer IRQ assertion/release under ITBUFEN.
 fn smoke_i2c2() -> (u16, bool, bool, bool, bool, bool, bool, bool, bool) {
     const PE: u32 = 1;
     const ACK: u32 = 1 << 10;
@@ -743,23 +744,35 @@ fn smoke_i2c2() -> (u16, bool, bool, bool, bool, bool, bool, bool, bool) {
     const BTF: u32 = 1 << 2;
     const RXNE: u32 = 1 << 6;
 
-    wr(I2C2_CR2, 16 | (1 << 9)); // ITEVTEN only
+    wr(I2C2_CR2, 16); // all I2C interrupt sources disabled
     wr(I2C2_CCR, 80);
     wr(I2C2_TRISE, 17);
     wr(I2C2_CR1, PE);
 
+    wr(NVIC_ICPR1, I2C2_EV_IRQ_BIT);
     wr(I2C2_CR1, PE | START);
     if !wait(I2C2_SR1, SB, SB) {
         return (
             0xFFFF, false, false, false, false, false, false, false, false,
         );
     }
-    let sb_irq = rd(NVIC_ISPR1) & I2C2_EV_IRQ_BIT != 0;
+    let sb_isolated = rd(NVIC_ISPR1) & I2C2_EV_IRQ_BIT == 0;
+    // Enabling ITEVTEN while SB is still set must assert the EV line.
+    wr(I2C2_CR2, 16 | (1 << 9));
+    let sb_event_gate = sb_isolated && wait(NVIC_ISPR1, I2C2_EV_IRQ_BIT, I2C2_EV_IRQ_BIT);
     wr(NVIC_ICPR1, I2C2_EV_IRQ_BIT);
     wr(I2C2_DR, 0x92); // independent TMP102 at 0x49, write
     if !wait(I2C2_SR1, ADDR, ADDR) {
         return (
-            0xFFFF, sb_irq, false, false, false, false, false, false, false,
+            0xFFFF,
+            sb_event_gate,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
         );
     }
     let addr_irq = rd(NVIC_ISPR1) & I2C2_EV_IRQ_BIT != 0;
@@ -792,7 +805,7 @@ fn smoke_i2c2() -> (u16, bool, bool, bool, bool, bool, bool, bool, bool) {
     if !wait(I2C2_SR1, BTF, BTF) {
         return (
             0xFFFF,
-            sb_irq,
+            sb_event_gate,
             addr_irq,
             txe_isolated,
             txe_buf_irq,
@@ -809,7 +822,7 @@ fn smoke_i2c2() -> (u16, bool, bool, bool, bool, bool, bool, bool, bool) {
     if !wait(I2C2_SR1, SB, SB) {
         return (
             0xFFFF,
-            sb_irq,
+            sb_event_gate,
             addr_irq,
             txe_isolated,
             txe_buf_irq,
@@ -823,7 +836,7 @@ fn smoke_i2c2() -> (u16, bool, bool, bool, bool, bool, bool, bool, bool) {
     if !wait(I2C2_SR1, ADDR, ADDR) {
         return (
             0xFFFF,
-            sb_irq,
+            sb_event_gate,
             addr_irq,
             txe_isolated,
             txe_buf_irq,
@@ -840,7 +853,7 @@ fn smoke_i2c2() -> (u16, bool, bool, bool, bool, bool, bool, bool, bool) {
     if !wait(I2C2_SR1, RXNE, RXNE) {
         return (
             0xFFFF,
-            sb_irq,
+            sb_event_gate,
             addr_irq,
             txe_isolated,
             txe_buf_irq,
@@ -863,7 +876,7 @@ fn smoke_i2c2() -> (u16, bool, bool, bool, bool, bool, bool, bool, bool) {
     if !wait(I2C2_SR1, RXNE, RXNE) {
         return (
             0xFFFF,
-            sb_irq,
+            sb_event_gate,
             addr_irq,
             txe_isolated,
             txe_buf_irq,
@@ -877,7 +890,7 @@ fn smoke_i2c2() -> (u16, bool, bool, bool, bool, bool, bool, bool, bool) {
     if !wait(I2C2_SR2, 0x0002, 0) {
         return (
             0xFFFF,
-            sb_irq,
+            sb_event_gate,
             addr_irq,
             txe_isolated,
             txe_buf_irq,
@@ -889,7 +902,7 @@ fn smoke_i2c2() -> (u16, bool, bool, bool, bool, bool, bool, bool, bool) {
     }
     (
         u16::from_be_bytes([msb, lsb]),
-        sb_irq,
+        sb_event_gate,
         addr_irq,
         txe_isolated,
         txe_buf_irq,
