@@ -9774,6 +9774,10 @@ boards:
       # 2026-11-08: the PCNT pulse counter (was a round-trip stub), inputs from
       # the GPIO input matrix. No silicon capture on this board.
       - crates/core/src/peripherals/esp32/pcnt.rs
+      # 2026-11-10: classic RMT TX → GPIO (was a system_stub). This board
+      # records no silicon capture, so there is no silicon-verified claim
+      # for the digest to invalidate — no ack is implied.
+      - crates/core/src/peripherals/esp32/rmt.rs
       # 2026-11-09: RTC_CNTL light/deep sleep on the RTC timer (deep sleep
       # reboots the app with RTC memory kept). No silicon capture on this board.
       - crates/core/src/peripherals/esp32/rtc_cntl.rs

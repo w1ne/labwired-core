@@ -33,7 +33,7 @@ The models column is a content digest over everything that board's `models` list
 | `nucleo-u545re` | 🔵 sim-validated (deep model, no HW diff) | — | `cb3066ad44541145` | no silicon capture |
 | `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | `924f7d7b36bf7057` | no silicon capture |
 | `brd2709a` | 🟡 smoke-manual | — | `030ab976a130a431` | no silicon capture |
-| `esp32` | ⚪ structural | — | `ca8514b6e541df01` | no silicon capture |
+| `esp32` | ⚪ structural | — | `429aadf55b37ba03` | no silicon capture |
 | `mkw41z4` | 🔵 sim-validated (deep model, no HW diff) | — | `38961228796354d6` | no silicon capture |
 | `stm32f405` | 🔵 sim-validated (deep model, no HW diff) | — | `ca9d1f548bb61af8` | no silicon capture |
 | `stm32f767` | 🔵 sim-validated (deep model, no HW diff) | — | `8287bdd426e5021e` | no silicon capture |
@@ -69,8 +69,8 @@ The models column is a content digest over everything that board's `models` list
 | `am6234` | 🟡 smoke-manual | — | `a4121d04d9617675` | no silicon capture |
 | `r5f52618bgfp` | 🟡 smoke-manual | — | `1a614ca5474b69f2` | no silicon capture |
 | `pic32mz2048efm144` | 🟡 smoke-manual | — | `6f3fe972ec1b94a8` | no silicon capture |
-| `esp32-devkitc-32e-gpio-smoke` | ⚪ structural | — | `fc9c593ee907a409` | no silicon capture |
-| `esp32-devkitc-32e-uart1` | ⚪ structural | — | `374142abf7ceb131` | no silicon capture |
+| `esp32-devkitc-32e-gpio-smoke` | ⚪ structural | — | `248b856e2ca53f39` | no silicon capture |
+| `esp32-devkitc-32e-uart1` | ⚪ structural | — | `2694622dc1dd1733` | no silicon capture |
 | `nucleo-f103rb-bme280` | ⚪ structural | — | `95db504f6b27b85b` | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
