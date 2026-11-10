@@ -24,7 +24,8 @@
 //!          and a POS-sequenced two-byte receive with
 //!          STOP-before-DR, BTF/RXNE source isolation, and both final DR reads
 //!          on the imported second controller instance; absent-address AF
-//!          status, event/error-line isolation, ER IRQ assertion, and recovery
+//!          status, event/error-line isolation, ITERREN-gated ER IRQ assertion
+//!          and release, and recovery
 //!   SPI1   MAX31855 reset frame plus TXEIE/RXNEIE level IRQ assertions
 //!   USART1 TXEIE and RXNEIE assert and release their NVIC line
 //! A summary word goes to RAM at 0x20017F00 (one bit per smoke group passed).
@@ -280,14 +281,18 @@ fn main() -> ! {
         i2c2_nack_sr1,
         i2c2_nack_flags,
         i2c2_nack_event_isolated,
+        i2c2_nack_er_isolated,
         i2c2_nack_er_irq,
+        i2c2_nack_er_masked_release,
         i2c2_nack_af_cleared,
         i2c2_nack_idle,
         i2c2_nack_er_released,
     ) = smoke_i2c2_nack();
     let i2c2_nack_ok = i2c2_nack_flags
         && i2c2_nack_event_isolated
+        && i2c2_nack_er_isolated
         && i2c2_nack_er_irq
+        && i2c2_nack_er_masked_release
         && i2c2_nack_af_cleared
         && i2c2_nack_idle
         && i2c2_nack_er_released;
@@ -297,8 +302,16 @@ fn main() -> ! {
     send(if i2c2_nack_flags { b"1" } else { b"0" });
     send(b" ev_isolated=");
     send(if i2c2_nack_event_isolated { b"1" } else { b"0" });
+    send(b" er_isolated=");
+    send(if i2c2_nack_er_isolated { b"1" } else { b"0" });
     send(b" er_irq=");
     send(if i2c2_nack_er_irq { b"1" } else { b"0" });
+    send(b" er_masked_release=");
+    send(if i2c2_nack_er_masked_release {
+        b"1"
+    } else {
+        b"0"
+    });
     send(b" af_cleared=");
     send(if i2c2_nack_af_cleared { b"1" } else { b"0" });
     send(b" idle=");
@@ -983,9 +996,9 @@ fn smoke_i2c2_receive_btf() -> (u16, bool, bool, bool, bool, bool, bool, bool) {
 }
 
 /// Probe an absent address on the imported I2C2 instance. Check that the
-/// controller records AF while ADDR is clear and the event IRQ stays low, then
-/// request STOP, clear AF, and verify the bus and error source recover.
-fn smoke_i2c2_nack() -> (u32, bool, bool, bool, bool, bool, bool) {
+/// controller records AF while ADDR is clear, that ITERREN gates the ER vector,
+/// then request STOP, clear AF, and verify the bus and error source recover.
+fn smoke_i2c2_nack() -> (u32, bool, bool, bool, bool, bool, bool, bool, bool) {
     const PE: u32 = 1;
     const START: u32 = 1 << 8;
     const STOP: u32 = 1 << 9;
@@ -994,27 +1007,54 @@ fn smoke_i2c2_nack() -> (u32, bool, bool, bool, bool, bool, bool) {
     const AF: u32 = 1 << 10;
     const MSL_BUSY: u32 = 0x3;
 
-    // ITERREN and ITEVTEN are independent. Keep ITBUFEN disabled so the NACK
-    // must pend the configured ER vector while the event vector stays low.
-    wr(I2C2_CR2, 16 | (1 << 8) | (1 << 9));
+    // Keep ITERREN and ITBUFEN disabled initially. The NACK should set AF with
+    // neither I2C2 interrupt vector active; enabling ITERREN should then pend
+    // only the error vector.
+    wr(I2C2_CR2, 16 | (1 << 9));
     wr(NVIC_ICPR1, I2C2_EV_IRQ_BIT | I2C2_ER_IRQ_BIT);
     wr(I2C2_CR1, PE | START);
     if !wait(I2C2_SR1, SB, SB) {
-        return (0, false, false, false, false, false, false);
+        return (0, false, false, false, false, false, false, false, false);
     }
     wr(I2C2_DR, 0xA0); // absent 7-bit address 0x50, write
     if !wait(I2C2_SR1, AF, AF) {
-        return (rd(I2C2_SR1), false, false, false, false, false, false);
+        return (
+            rd(I2C2_SR1),
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+        );
     }
 
     // The START event left a sticky NVIC pending bit. Clear it after the DR
-    // write cleared SB so the following observation isolates the NACK phase.
+    // write cleared SB so the following observations isolate the NACK phase.
     wr(NVIC_ICPR1, I2C2_EV_IRQ_BIT);
     let sr1 = rd(I2C2_SR1);
     let sr2 = rd(I2C2_SR2);
     let nack_flags = sr1 & AF != 0 && sr1 & ADDR == 0 && sr2 & MSL_BUSY == MSL_BUSY;
     let event_isolated = rd(NVIC_ISPR1) & I2C2_EV_IRQ_BIT == 0;
+
+    let er_isolated = rd(NVIC_ISPR1) & I2C2_ER_IRQ_BIT == 0;
+    wr(I2C2_CR2, 16 | (1 << 8) | (1 << 9)); // enable ITERREN
+    for _ in 0..16 {
+        let _ = rd(I2C2_SR1);
+    }
     let er_irq = rd(NVIC_ISPR1) & I2C2_ER_IRQ_BIT != 0;
+
+    // ITERREN gates the level source even while AF remains set. Clear the
+    // sticky NVIC bit after disabling it, then ensure it does not re-pend.
+    wr(I2C2_CR2, 16 | (1 << 9));
+    wr(NVIC_ICPR1, I2C2_ER_IRQ_BIT);
+    let mut er_masked_release = true;
+    for _ in 0..16 {
+        let _ = rd(I2C2_SR1);
+        er_masked_release &= rd(NVIC_ISPR1) & I2C2_ER_IRQ_BIT == 0;
+    }
 
     wr(I2C2_CR1, PE | STOP);
     wr(I2C2_SR1, !(AF) & 0xFFFF); // AF is cleared by writing zero to the flag
@@ -1032,7 +1072,9 @@ fn smoke_i2c2_nack() -> (u32, bool, bool, bool, bool, bool, bool) {
         sr1,
         nack_flags,
         event_isolated && event_released,
+        er_isolated,
         er_irq,
+        er_masked_release,
         af_cleared,
         idle,
         er_released,
