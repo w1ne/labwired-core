@@ -1,0 +1,4 @@
+PASS  1/1 checks · nvs-esp32 · 57205148 steps · 13.87s
+PASS  1/1 checks · nvs-esp32c3 · 25750823 steps · 5.95s
+PASS  1/1 checks · nvs-esp32s3 · 69824001 steps · 20.71s
+PASS  1/1 checks · nvs-esp32c6 · 33328875 steps · 13.42s

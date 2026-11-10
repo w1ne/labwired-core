@@ -8970,8 +8970,12 @@ boards:
     # moved for classic ESP32 timer-wake deep/light sleep. S3 UART0 remains
     # outside the nine captured reset-state windows; no S3 register map or
     # reset-value change. ACK, NOT A CAPTURE.
+    # 2026-11-10 (#1759 feat/esp32-nvs-flash): watched SPI / spi_mem_flash
+    # models gained program/erase + WEL behaviour so stock Preferences/NVS
+    # keeps its writes. This is not an S3 reset-state recapture; the nine
+    # captured S3 windows are unchanged. ACK, NOT A CAPTURE.
     drift_ack: 2026-11-10
-    drift_ack_digest: 16d0c8b3ab6ace0d2f8d7404af27dc1da5eae4e3ae9ce033834cc7804041e61c
+    drift_ack_digest: c30213b480a08adac0801cc2ebe2947169beaadcd9bd2d11b8cfd601c1286102
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.
