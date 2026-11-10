@@ -12,9 +12,8 @@
 //! ISR can refill, and latches `TX_END` when an END marker (duration 0) is
 //! seen. RX, carrier, and loop modes are out of scope.
 
-use crate::bus::SystemBus;
 use crate::peripherals::esp32::gpio::{
-    Esp32Gpio, RMT_SIG_OUT0, RMT_SIG_OUT1, RMT_SIG_OUT2, RMT_SIG_OUT3, RMT_SIG_OUT4, RMT_SIG_OUT5,
+    RMT_SIG_OUT0, RMT_SIG_OUT1, RMT_SIG_OUT2, RMT_SIG_OUT3, RMT_SIG_OUT4, RMT_SIG_OUT5,
     RMT_SIG_OUT6, RMT_SIG_OUT7,
 };
 use crate::{Bus, CycleClock, Peripheral, PeripheralTickResult, SimResult};
@@ -120,6 +119,8 @@ pub struct Esp32Rmt {
 const RMT_HOLDOFF_TOKEN: u32 = 1;
 
 impl Esp32Rmt {
+    crate::cycle_clock::scheduler_mode!();
+
     /// `source_id` = `ETS_RMT_INTR_SOURCE` (= 47 on classic ESP32).
     pub fn new(source_id: u32) -> Self {
         // CONF0 reset: div_cnt=1 is friendlier than 0(=256) for WS2812 tests;
@@ -235,14 +236,17 @@ impl Esp32Rmt {
         });
     }
 
-    fn with_gpio<R>(bus: &mut dyn Bus, f: impl FnOnce(&mut Esp32Gpio) -> R) -> Option<R> {
-        let sb = bus.as_any_mut()?.downcast_mut::<SystemBus>()?;
-        let idx = sb.find_peripheral_index_by_name("gpio")?;
-        let gpio = sb.peripherals[idx]
-            .dev
-            .as_any_mut()?
-            .downcast_mut::<Esp32Gpio>()?;
-        Some(f(gpio))
+    /// Reach the sibling GPIO through the bus's named-peripheral capability
+    /// so pad lookup / drive does not add `as_any_mut` / `downcast_mut` sites.
+    fn with_gpio<R>(bus: &mut dyn Bus, f: impl FnOnce(&mut dyn Peripheral) -> R) -> Option<R> {
+        let mut out = None;
+        let mut f = Some(f);
+        bus.with_peripheral_mut("gpio", &mut |p| {
+            if let Some(cb) = f.take() {
+                out = Some(cb(p));
+            }
+        });
+        out
     }
 
     fn load_next_symbol(pb: &mut TxPlayback, mem: &[u32], window: usize, wrap: bool) -> bool {
@@ -435,11 +439,18 @@ impl Peripheral for Esp32Rmt {
     }
 
     fn uses_scheduler(&self) -> bool {
-        cfg!(feature = "event-scheduler") && self.clock.is_some()
+        self.scheduler_mode()
     }
 
     fn needs_legacy_walk(&self) -> bool {
-        !self.uses_scheduler()
+        !self.scheduler_mode()
+    }
+
+    fn idle_poll_bus_tick(&self) -> bool {
+        // Playback and TX_END holdoff must still advance when the guest is
+        // idle-fast-forwarding: uses_scheduler() removes this model from the
+        // legacy walk, and arm_tx does not otherwise get a guaranteed tick.
+        self.needs_bus_tick()
     }
 
     fn attach_cycle_clock(&mut self, clock: CycleClock) {

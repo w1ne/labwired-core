@@ -687,16 +687,6 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     // LEDC, etc). Most are touched briefly during esp-idf init; round-
     // trip stubs satisfy the access pattern even without modeling
     // any specific peripheral semantics.
-    // RMT (TRM §12) at 0x3FF5_6000 — real TX→GPIO model (NeoPixel / WS2812).
-    // Must win over the catch-all stubs below; ETS_RMT_INTR_SOURCE = 47.
-    bus.add_peripheral(
-        "rmt",
-        0x3FF5_6000,
-        0x1000,
-        Some(47),
-        Box::new(crate::peripherals::esp32::rmt::Esp32Rmt::new(47)),
-    );
-
     for (name, base) in [
         ("sdio_host", 0x3FF4_A000u64),
         ("sar_adc", 0x3FF4_C000),

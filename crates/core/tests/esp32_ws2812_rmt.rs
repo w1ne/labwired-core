@@ -8,7 +8,7 @@
 
 use labwired_core::bus::SystemBus;
 use labwired_core::peripherals::components::declarative_led_strip::ws2812;
-use labwired_core::peripherals::esp32::gpio::{Esp32Gpio, GpioObserver, RMT_SIG_OUT0};
+use labwired_core::peripherals::esp32::gpio::{Esp32Gpio, RMT_SIG_OUT0};
 use labwired_core::peripherals::esp32::rmt::{Esp32Rmt, TX_START_BIT};
 use labwired_core::Bus;
 use std::sync::Arc;
@@ -51,16 +51,10 @@ fn classic_rmt_drives_ws2812_frame_decoded_end_to_end() {
     );
 
     let strip = Arc::new(ws2812(DATA_PIN, 3, CPU_HZ));
-    {
-        let idx = bus.find_peripheral_index_by_name("gpio").unwrap();
-        let gpio = bus.peripherals[idx]
-            .dev
-            .as_any_mut()
-            .unwrap()
-            .downcast_mut::<Esp32Gpio>()
-            .unwrap();
-        gpio.add_observer(strip.clone() as Arc<dyn GpioObserver>);
-    }
+    assert!(
+        SystemBus::install_gpio_observer(&mut bus, strip.clone()),
+        "classic ESP32 GPIO must accept a WS2812 observer"
+    );
 
     // pinMode(OUTPUT) + gpio_matrix_out — what Adafruit_NeoPixel / IDF do.
     bus.write_u32(ENABLE_W1TS, 1u32 << DATA_PIN).unwrap();
