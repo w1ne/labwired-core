@@ -15,7 +15,8 @@
 //!          ODR read back after each write
 //!   TIM2   PSC/ARR readback, up-counter advances, UIF latches and clears (W1C 0)
 //!   I2C1   TMP102 temperature-register pointer write + repeated-start read
-//!          (25 °C = 0x1900), plus an absent-address NACK and EV/ER IRQ checks
+//!          (25 °C = 0x1900), plus TXE/RXNE buffer IRQs, ADDR event IRQ,
+//!          absent-address NACK and error IRQ checks
 //!   SPI1   MAX31855 reset frame plus TXEIE/RXNEIE level IRQ assertions
 //!   USART1 TXEIE and RXNEIE assert and release their NVIC line
 //! A summary word goes to RAM at 0x20017F00 (one bit per block passed).
@@ -307,6 +308,9 @@ fn smoke_i2c1() -> (u16, u32, bool, bool, bool, bool, bool, bool, bool) {
         );
     }
 
+    // For the receiver phase, leave only ITBUFEN set. The subsequent RXNE
+    // flag must assert EV by itself, then DR must clear the level source.
+    wr(I2C_CR2, 16 | (1 << 8) | (1 << 10)); // ITERREN | ITBUFEN; ITEVTEN off
     wr(I2C_CR1, 1 | (1 << 8) | (1 << 10)); // PE | START | ACK
     if !wait(I2C_SR1, 0x0001, 0x0001) {
         return (
@@ -337,6 +341,7 @@ fn smoke_i2c1() -> (u16, u32, bool, bool, bool, bool, bool, bool, bool) {
     }
     let _ = rd(I2C_SR1);
     let _ = rd(I2C_SR2); // clear ADDR; receiver starts clocking
+    wr(NVIC_ICPR0, I2C1_EV_IRQ_BIT);
     if !wait(I2C_SR1, 0x0040, 0x0040) {
         // RXNE
         return (
@@ -351,7 +356,17 @@ fn smoke_i2c1() -> (u16, u32, bool, bool, bool, bool, bool, bool, bool) {
             false,
         );
     }
+    let rxne_irq = rd(NVIC_ISPR0) & I2C1_EV_IRQ_BIT != 0;
     let msb = rd(I2C_DR) as u8;
+    // RXNE clears on the DR read. Clear the sticky NVIC pending bit and allow
+    // a short interval before the next 1440-cycle byte arrives; EV must stay
+    // low even though ITBUFEN remains enabled.
+    wr(NVIC_ICPR0, I2C1_EV_IRQ_BIT);
+    let mut rxne_released = true;
+    for _ in 0..16 {
+        let _ = rd(I2C_SR1);
+        rxne_released &= rd(NVIC_ISPR0) & I2C1_EV_IRQ_BIT == 0;
+    }
     wr(I2C_CR1, 1); // PE; NACK the final byte
     wr(I2C_CR1, 1 | (1 << 9)); // request STOP after the final byte
     if !wait(I2C_SR1, 0x0040, 0x0040) {
@@ -426,6 +441,12 @@ fn smoke_i2c1() -> (u16, u32, bool, bool, bool, bool, bool, bool, bool) {
         irq_released &= rd(NVIC_ISPR0) & I2C1_EV_IRQ_BIT == 0;
         irq_released &= rd(NVIC_ISPR1) & I2C1_ER_IRQ_BIT == 0;
     }
+    let rxne_ok = rxne_irq && rxne_released;
+    send(b"i2c1 rxne_buf_irq=");
+    putc(if rxne_irq { b'1' } else { b'0' });
+    send(b" release=");
+    putc(if rxne_released { b'1' } else { b'0' });
+    send(if rxne_ok { b" ok\r\n" } else { b" FAIL\r\n" });
     (
         temperature,
         sr1,
@@ -442,6 +463,7 @@ fn smoke_i2c1() -> (u16, u32, bool, bool, bool, bool, bool, bool, bool) {
             && nack_idle
             && buffer_irq
             && buffer_irq_released
+            && rxne_ok
             && event_irq
             && event_irq_released
             && er_irq
