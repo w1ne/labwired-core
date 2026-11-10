@@ -38,6 +38,7 @@
           "i2c1 nack sr1=00000400 ok",
           "spi1 max31855=01901600 txe_irq=1 rxne_irq=1 released=1 ok",
           "usart1 txe_irq=1 released=1 ok",
+          "usart1 rxne_irq=1 data=00000052 released=1 ok",
           "BLACKPILL PASS"
         ]
       },
@@ -56,7 +57,7 @@
       "assertion": {
         "memory_value": {
           "address": 536968960,
-          "expected_value": 2980839487,
+          "expected_value": 2980839551,
           "mask": null,
           "size": 4
         }
@@ -74,23 +75,23 @@
     "type": "arm",
     "registers": [
       10,
-      2980839487,
+      2980839551,
       536968960,
+      53,
+      82,
       1,
-      26220032,
-      8200,
       1073759232,
       536969208,
-      1,
-      3,
+      63,
+      192,
+      0,
       3758154244,
-      1,
-      134226582,
+      134228936,
       536969192,
-      134222423,
-      134226222
+      134226391,
+      134228574
     ],
-    "pc": 134226222,
+    "pc": 134228574,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -103,7 +104,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "bb60987d377b082c86a700a7208c18b381e0136103b946dd93ecbc189ce5da77",
+  "firmware_hash": "cf61b7c4ce044cd3e2f43937c435951ccdec165b621b8bad728aa51dfd4834de",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-f401cdu6-blackpill-renode-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f401cdu6-blackpill.yaml",
@@ -380,23 +381,23 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 328,
+            "cycle": 329,
             "value": 1
           },
           {
-            "cycle": 331,
+            "cycle": 332,
             "value": 0
           },
           {
-            "cycle": 333,
+            "cycle": 334,
             "value": 1
           },
           {
-            "cycle": 335,
+            "cycle": 336,
             "value": 0
           },
           {
-            "cycle": 338,
+            "cycle": 339,
             "value": 1
           }
         ],
@@ -404,27 +405,27 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 322,
+            "cycle": 323,
             "state": "0"
           },
           {
-            "cycle": 328,
+            "cycle": 329,
             "state": "1"
           },
           {
-            "cycle": 331,
+            "cycle": 332,
             "state": "0"
           },
           {
-            "cycle": 333,
+            "cycle": 334,
             "state": "1"
           },
           {
-            "cycle": 335,
+            "cycle": 336,
             "state": "0"
           },
           {
-            "cycle": 338,
+            "cycle": 339,
             "state": "1"
           }
         ],
@@ -491,6 +492,12 @@
         "end_cycle": 10000
       },
       {
+        "text": "usart1 rxne_irq=1 data=00000052 released=1 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
         "text": "BLACKPILL PASS",
         "cycle_lo": 0,
         "cycle": 10000,
@@ -501,14 +508,14 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 8883,
+    "text_bytes": 11237,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 8883,
+    "flash_used_bytes": 11237,
     "ram_static_bytes": 0,
     "flash_total_bytes": 393216,
     "ram_total_bytes": 98304,
-    "flash_used_pct": 2.26,
+    "flash_used_pct": 2.86,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -534,13 +541,13 @@
     "cycles": 200000,
     "instructions": 200000,
     "steps_executed": 200000,
-    "memory_reads": 1649,
-    "memory_writes": 40,
-    "peripheral_accesses": 774,
+    "memory_reads": 2003,
+    "memory_writes": 42,
+    "peripheral_accesses": 942,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134226222,
+        "pc": 134228574,
         "count": 781,
         "symbol": "firmware_f401cdu6_blackpill_renode_smoke::main"
       }

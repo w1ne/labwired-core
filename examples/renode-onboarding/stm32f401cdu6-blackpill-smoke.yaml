@@ -5,17 +5,21 @@
 # (OAR1 readback, START/SB, then the address NACKs — SR1.AF, no ADDR — because
 # the bare board has nothing on I2C1; AF clear, STOP releases BUSY). SPI1 reads
 # a MAX31855 reset frame and checks TXE/RXNE interrupt levels. Results print on
-# USART2; USART1 additionally checks TXEIE assertion/release on IRQ 37. The
-# summary word lands at 0x20017F00 and is 0xB1AC003F on success. PC13 resets
+# USART2; USART1 checks TXEIE and RXNEIE assertion/release on IRQ 37, with an
+# injected RX byte. The summary word lands at 0x20017F00 and is 0xB1AC007F on
+# success. PC13 resets
 # low, so three on/off toggles give 5 edges, not 6. ADC, EXTI, other timers and
 # other USARTs
 # claimed by the chip are not exercised here.
-schema_version: "1.0"
+schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv7em-none-eabi/release/firmware-f401cdu6-blackpill-renode-smoke"
   system: "../../configs/systems/onboarding/stm32f401cdu6-blackpill.yaml"
 limits:
   max_steps: 200000
+uart_injections:
+  - uart: "usart1"
+    bytes: "R"
 assertions:
   - uart_ordered:
       - "BLACKPILL F401 SMOKE"
@@ -25,12 +29,13 @@ assertions:
       - "i2c1 nack sr1=00000400 ok"
       - "spi1 max31855=01901600 txe_irq=1 rxne_irq=1 released=1 ok"
       - "usart1 txe_irq=1 released=1 ok"
+      - "usart1 rxne_irq=1 data=00000052 released=1 ok"
       - "BLACKPILL PASS"
   - gpio_edges:
       pin: "gpioc:13"
       min_edges: 5
   - memory_value:
       address: 0x20017F00
-      expected_value: 0xB1AC003F
+      expected_value: 0xB1AC007F
       size: 4
   - expected_stop_reason: max_steps

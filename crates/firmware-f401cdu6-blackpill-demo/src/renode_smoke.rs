@@ -17,7 +17,7 @@
 //!   I2C1   OAR1 readback, START -> SB, address with no slave -> AF (NACK),
 //!          AF rc_w0 clear, STOP releases BUSY (the bare board has no I2C parts)
 //!   SPI1   MAX31855 reset frame plus TXEIE/RXNEIE level IRQ assertions
-//!   USART1 TXEIE asserts and releases its own NVIC line
+//!   USART1 TXEIE and RXNEIE assert and release their NVIC line
 //! A summary word goes to RAM at 0x20017F00 (one bit per block passed).
 
 use core::ptr::{read_volatile, write_volatile};
@@ -39,6 +39,7 @@ const USART_BRR: u32 = USART2 + 0x08;
 const USART_CR1: u32 = USART2 + 0x0C;
 const USART1: u32 = 0x4001_1000;
 const USART1_SR: u32 = USART1;
+const USART1_DR: u32 = USART1 + 0x04;
 const USART1_CR1: u32 = USART1 + 0x0C;
 
 const TIM2: u32 = 0x4000_0000;
@@ -144,9 +145,11 @@ fn main() -> ! {
 
     let usart1_irq_ok = smoke_usart1_txe_irq();
     passed |= (usart1_irq_ok as u32) << 5;
+    let usart1_rx_irq_ok = smoke_usart1_rxne_irq();
+    passed |= (usart1_rx_irq_ok as u32) << 6;
 
     wr(RESULT, 0xB1AC_0000 | passed);
-    send(if passed == 0x3F {
+    send(if passed == 0x7F {
         b"BLACKPILL PASS\r\n"
     } else {
         b"BLACKPILL FAIL\r\n"
@@ -334,6 +337,54 @@ fn smoke_usart1_txe_irq() -> bool {
         b" FAIL\r\n"
     });
     txe_pended && txe_released
+}
+
+/// The onboarding stimulus queues `R` on USART1 before reset. RXNEIE must
+/// pend IRQ 37 while RXNE is set, and reading DR must release the source.
+fn smoke_usart1_rxne_irq() -> bool {
+    const RXNE: u32 = 1 << 5;
+    const RXNEIE: u32 = 1 << 5;
+    const EXPECTED: u32 = b'R' as u32;
+
+    wr(RCC_APB2ENR, rd(RCC_APB2ENR) | (1 << 4)); // USART1EN
+    wr(NVIC_ICPR1, USART1_IRQ_BIT);
+    wr(USART1_CR1, (1 << 13) | (1 << 2) | RXNEIE); // UE | RE | RXNEIE
+
+    let mut rxne_pended = false;
+    for _ in 0..4096 {
+        if rd(USART1_SR) & RXNE != 0 && rd(NVIC_ISPR1) & USART1_IRQ_BIT != 0 {
+            rxne_pended = true;
+            break;
+        }
+    }
+    let data = rd(USART1_DR) & 0xFF;
+    let rxne_cleared = rd(USART1_SR) & RXNE == 0;
+    // NVIC pending is sticky. Clear it after consuming DR and make sure the
+    // still-enabled RXNEIE source does not pend again with an empty queue.
+    wr(NVIC_ICPR1, USART1_IRQ_BIT);
+    for _ in 0..64 {
+        let _ = rd(USART1_SR);
+    }
+    let irq_released = rd(NVIC_ISPR1) & USART1_IRQ_BIT == 0;
+
+    send(b"usart1 rxne_irq=");
+    putc(if rxne_pended { b'1' } else { b'0' });
+    send(b" data=");
+    put_hex32(data);
+    send(b" released=");
+    putc(if rxne_cleared && irq_released {
+        b'1'
+    } else {
+        b'0'
+    });
+    send(
+        if rxne_pended && data == EXPECTED && rxne_cleared && irq_released {
+            b" ok\r\n"
+        } else {
+            b" FAIL\r\n"
+        },
+    );
+    rxne_pended && data == EXPECTED && rxne_cleared && irq_released
 }
 
 fn wait(addr: u32, mask: u32, want: u32) -> bool {
