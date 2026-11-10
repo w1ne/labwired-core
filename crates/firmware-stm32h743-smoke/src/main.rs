@@ -27,11 +27,19 @@ const NVIC_ICPR0: *mut u32 = 0xE000_E280 as *mut u32;
 #[cfg(feature = "stm32h743-exception-frame")]
 const NVIC_IABR0: *const u32 = 0xE000_E300 as *const u32;
 #[cfg(feature = "stm32h743-exception-frame")]
+const NVIC_IPR0: *mut u8 = 0xE000_E400 as *mut u8;
+#[cfg(feature = "stm32h743-exception-frame")]
 const EXCEPTION_IRQ: u32 = 5;
 #[cfg(feature = "stm32h743-exception-frame")]
 const EXCEPTION_IRQ_BIT: u32 = 1 << EXCEPTION_IRQ;
 #[cfg(feature = "stm32h743-exception-frame")]
 const EXCEPTION_VECTOR_INDEX: usize = 16 + EXCEPTION_IRQ as usize;
+#[cfg(feature = "stm32h743-exception-frame")]
+const NESTED_IRQ: u32 = 6;
+#[cfg(feature = "stm32h743-exception-frame")]
+const NESTED_IRQ_BIT: u32 = 1 << NESTED_IRQ;
+#[cfg(feature = "stm32h743-exception-frame")]
+const NESTED_VECTOR_INDEX: usize = 16 + NESTED_IRQ as usize;
 
 #[cfg(feature = "stm32h743-exception-frame")]
 #[repr(C, align(1024))]
@@ -71,7 +79,13 @@ static mut FP_CAPTURE: [u32; 17] = [0; 17];
 static mut FP_LAZY_TOUCH: u32 = 0;
 
 #[cfg(feature = "stm32h743-exception-frame")]
+static mut FP_LAZY_NEST: u32 = 0;
+
+#[cfg(feature = "stm32h743-exception-frame")]
 static mut FP_LAZY_FPCCR: [u32; 2] = [0; 2];
+
+#[cfg(feature = "stm32h743-exception-frame")]
+static mut FP_NEST_RECORD: [u32; 5] = [0; 5];
 
 #[cfg(feature = "stm32h743-exception-frame")]
 static FP_LAZY_CLOBBER: [u32; 16] = [
@@ -228,6 +242,15 @@ unsafe extern "C" fn smoke_exception_handler() {
         "ldr r2, =0xE000EF34",
         "ldr r0, [r2]",
         "str r0, [r3]",
+        "ldr r2, ={fp_lazy_nest}",
+        "ldr r2, [r2]",
+        "cbz r2, 5f",
+        // IRQ 6 has higher priority than IRQ 5. It must preserve the pending
+        // outer lazy save while it takes and returns from a basic frame.
+        "ldr r2, =0xE000E200",
+        "movs r3, #0x40",
+        "str r3, [r2]",
+        "5:",
         "ldr r2, ={fp_lazy_touch}",
         "ldr r2, [r2]",
         "cbz r2, 4f",
@@ -275,8 +298,33 @@ unsafe extern "C" fn smoke_exception_handler() {
         "bx lr",
         record = sym EXCEPTION_RECORD,
         fpccr_record = sym FP_LAZY_FPCCR,
+        fp_lazy_nest = sym FP_LAZY_NEST,
         fp_lazy_touch = sym FP_LAZY_TOUCH,
         fp_lazy_touch_fn = sym touch_fp_in_handler,
+    );
+}
+
+/// Observe the pending outer lazy FP save from a higher-priority nested IRQ.
+#[cfg(feature = "stm32h743-exception-frame")]
+#[unsafe(naked)]
+unsafe extern "C" fn smoke_nested_exception_handler() {
+    core::arch::naked_asm!(
+        "ldr r0, =0xE000EF34",
+        "ldr r1, [r0]",
+        "ldr r0, ={record}",
+        "str r1, [r0, #0]",
+        "ldr r1, =0xE000EF38",
+        "ldr r1, [r1]",
+        "str r1, [r0, #4]",
+        "mrs r1, ipsr",
+        "str r1, [r0, #8]",
+        "ldr r1, =0xE000E300",
+        "ldr r1, [r1]",
+        "str r1, [r0, #12]",
+        "mov r1, lr",
+        "str r1, [r0, #16]",
+        "bx lr",
+        record = sym FP_NEST_RECORD,
     );
 }
 
@@ -386,18 +434,30 @@ fn check_cortex_m7_exception_frame() -> bool {
     let source_ccr = unsafe { read_volatile(SCB_CCR) };
 
     unsafe {
-        write_volatile(NVIC_ICER0, EXCEPTION_IRQ_BIT);
-        write_volatile(NVIC_ICPR0, EXCEPTION_IRQ_BIT);
+        write_volatile(NVIC_ICER0, EXCEPTION_IRQ_BIT | NESTED_IRQ_BIT);
+        write_volatile(NVIC_ICPR0, EXCEPTION_IRQ_BIT | NESTED_IRQ_BIT);
         for index in 0..64 {
             write_volatile(vector_table.add(index), 0);
         }
         for index in 0..18 {
             write_volatile(record.add(index), 0);
         }
+        for index in 0..5 {
+            write_volatile(
+                core::ptr::addr_of_mut!(FP_NEST_RECORD)
+                    .cast::<u32>()
+                    .add(index),
+                0,
+            );
+        }
         let handler = (smoke_exception_handler as *const () as usize as u32) | 1;
+        let nested_handler = (smoke_nested_exception_handler as *const () as usize as u32) | 1;
         write_volatile(vector_table.add(EXCEPTION_VECTOR_INDEX), handler);
+        write_volatile(vector_table.add(NESTED_VECTOR_INDEX), nested_handler);
+        write_volatile(NVIC_IPR0.add(EXCEPTION_IRQ as usize), 0x80);
+        write_volatile(NVIC_IPR0.add(NESTED_IRQ as usize), 0x20);
         write_volatile(SCB_VTOR, vector_table as u32);
-        write_volatile(NVIC_ISER0, EXCEPTION_IRQ_BIT);
+        write_volatile(NVIC_ISER0, EXCEPTION_IRQ_BIT | NESTED_IRQ_BIT);
     }
 
     let vector_installed = unsafe {
@@ -848,9 +908,100 @@ fn check_cortex_m7_exception_frame() -> bool {
         && lazy_used_regs_ok
         && msp_after_lazy_used == msp_before_lazy_used;
 
+    // A higher-priority IRQ nests while IRQ 5 owns an outstanding lazy save.
+    // IRQ 6 must see the same FPCAR/LSPACT and return without forcing the save;
+    // IRQ 5's first FP instruction then performs the deferred context store.
     unsafe {
-        write_volatile(NVIC_ICER0, EXCEPTION_IRQ_BIT);
-        write_volatile(NVIC_ICPR0, EXCEPTION_IRQ_BIT);
+        write_volatile(core::ptr::addr_of_mut!(FP_LAZY_NEST), 1);
+        write_volatile(core::ptr::addr_of_mut!(FP_LAZY_FPCCR).cast::<u32>(), 0);
+        write_volatile(
+            core::ptr::addr_of_mut!(FP_LAZY_FPCCR).cast::<u32>().add(1),
+            0,
+        );
+        for index in 0..5 {
+            write_volatile(
+                core::ptr::addr_of_mut!(FP_NEST_RECORD)
+                    .cast::<u32>()
+                    .add(index),
+                0,
+            );
+        }
+        load_fp_sentinels();
+    }
+    let msp_before_nested_lazy: u32;
+    unsafe {
+        asm!(
+            "mrs {}, msp",
+            out(reg) msp_before_nested_lazy,
+            options(nomem, nostack, preserves_flags)
+        )
+    };
+    let nested_lazy_before_irq = msp_before_nested_lazy.wrapping_sub(8);
+    let nested_lazy_frame_sp = nested_lazy_before_irq.wrapping_sub(0x68);
+    unsafe {
+        for index in 0..17u32 {
+            write_volatile(
+                (nested_lazy_frame_sp + 0x20 + 4 * index) as *mut u32,
+                0xCAFE_0000 + index,
+            );
+        }
+        for index in 0..18 {
+            write_volatile(record.add(index), 0);
+        }
+        pend_exception_irq_with_sentinels();
+        write_volatile(core::ptr::addr_of_mut!(FP_LAZY_NEST), 0);
+    }
+    let msp_after_nested_lazy: u32;
+    unsafe {
+        asm!(
+            "mrs {}, msp",
+            out(reg) msp_after_nested_lazy,
+            options(nomem, nostack, preserves_flags)
+        )
+    };
+    let nested_record = core::ptr::addr_of!(FP_NEST_RECORD).cast::<u32>();
+    let nested_fpccr = unsafe { read_volatile(nested_record.add(0)) };
+    let nested_fpcar = unsafe { read_volatile(nested_record.add(1)) };
+    let nested_ipsr = unsafe { read_volatile(nested_record.add(2)) };
+    let nested_active = unsafe { read_volatile(nested_record.add(3)) };
+    let nested_exc_return = unsafe { read_volatile(nested_record.add(4)) };
+    let nested_lazy_pre_fpccr =
+        unsafe { read_volatile(core::ptr::addr_of!(FP_LAZY_FPCCR).cast::<u32>()) };
+    let nested_lazy_post_fpccr =
+        unsafe { read_volatile(core::ptr::addr_of!(FP_LAZY_FPCCR).cast::<u32>().add(1)) };
+    let nested_lazy_fpccr_after_return = unsafe { read_volatile(FPU_FPCCR) };
+    let nested_lazy_saved =
+        (0..16u32).all(|index| unsafe {
+            read_volatile((nested_lazy_frame_sp + 0x20 + 4 * index) as *const u32)
+                == FP_SENTINELS[index as usize]
+        }) && unsafe { read_volatile((nested_lazy_frame_sp + 0x60) as *const u32) == 0xA000_0000 };
+    unsafe { capture_fp_sentinels() };
+    let nested_lazy_capture = core::ptr::addr_of_mut!(FP_CAPTURE).cast::<u32>();
+    let nested_lazy_regs_ok = (0..16).all(|index| unsafe {
+        read_volatile(nested_lazy_capture.add(index)) == FP_SENTINELS[index]
+    }) && unsafe { read_volatile(nested_lazy_capture.add(16)) }
+        == 0xA000_0000;
+    let nested_lazy_ok = read_record(8) == 0xFFFF_FFE9
+        && read_record(9) == nested_lazy_frame_sp
+        && read_record(13) == nested_lazy_before_irq
+        && nested_fpccr & 1 != 0
+        && nested_fpcar == nested_lazy_frame_sp.wrapping_add(0x20)
+        && nested_ipsr == 16 + NESTED_IRQ
+        && nested_active & (EXCEPTION_IRQ_BIT | NESTED_IRQ_BIT)
+            == EXCEPTION_IRQ_BIT | NESTED_IRQ_BIT
+        && nested_exc_return == 0xFFFF_FFF1
+        && nested_lazy_pre_fpccr & 1 != 0
+        && nested_lazy_post_fpccr & 1 == 0
+        && nested_lazy_fpccr_after_return & 1 == 0
+        && nested_lazy_saved
+        && nested_lazy_regs_ok
+        && unsafe { read_volatile(NVIC_IABR0) } & (EXCEPTION_IRQ_BIT | NESTED_IRQ_BIT) == 0
+        && unsafe { read_volatile(NVIC_ISPR0) } & (EXCEPTION_IRQ_BIT | NESTED_IRQ_BIT) == 0
+        && msp_after_nested_lazy == msp_before_nested_lazy;
+
+    unsafe {
+        write_volatile(NVIC_ICER0, EXCEPTION_IRQ_BIT | NESTED_IRQ_BIT);
+        write_volatile(NVIC_ICPR0, EXCEPTION_IRQ_BIT | NESTED_IRQ_BIT);
         write_volatile(SCB_VTOR, source_vtor);
     }
     let vtor_restored = unsafe { read_volatile(SCB_VTOR) } == source_vtor;
@@ -866,6 +1017,7 @@ fn check_cortex_m7_exception_frame() -> bool {
         && fp_ok
         && lazy_unused_ok
         && lazy_used_ok
+        && nested_lazy_ok
         && ccr_restored;
 
     send(b"cortex-m7 irq ipsr=");
@@ -1042,6 +1194,24 @@ fn check_cortex_m7_exception_frame() -> bool {
     send(if lazy_used_saved { b"1" } else { b"0" });
     send(b" regs=");
     send(if lazy_used_regs_ok { b"1" } else { b"0" });
+    send(b"\r\ncortex-m7 fp lazy nested=");
+    send(if nested_lazy_ok { b"1" } else { b"0" });
+    send(b" lspact=");
+    send_hex32(nested_fpccr & 1);
+    send(b"->");
+    send_hex32(nested_lazy_pre_fpccr & 1);
+    send(b",");
+    send_hex32(nested_lazy_post_fpccr & 1);
+    send(b" saved=");
+    send(if nested_lazy_saved { b"1" } else { b"0" });
+    send(b" regs=");
+    send(if nested_lazy_regs_ok { b"1" } else { b"0" });
+    send(b" irq=");
+    send_hex32(nested_ipsr);
+    send(b" active=");
+    send_hex32(nested_active);
+    send(b" exc_return=");
+    send_hex32(nested_exc_return);
     send(b"\r\n");
     ok
 }

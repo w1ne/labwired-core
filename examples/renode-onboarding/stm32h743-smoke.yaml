@@ -16,6 +16,7 @@ assertions:
   - uart_contains: "cortex-m7 fp exception=1 frame=1 stack=1 return=1 regs=1 fpscr=1 fpcar=1 exc_return=FFFFFFE9"
   - uart_contains: "cortex-m7 fp lazy unused=1 lspact=00000001,00000001->00000000 untouched=1 regs=1"
   - uart_contains: "cortex-m7 fp lazy used=1 lspact=00000001,00000000->00000000 saved=1 regs=1"
+  - uart_contains: "cortex-m7 fp lazy nested=1 lspact=00000001->00000001,00000000 saved=1 regs=1 irq=00000016 active=00000060 exc_return=FFFFFFF1"
   - uart_contains: "cortex-m7 exception ok"
   - gpio_edges:
       pin: "gpioPortB:0"
