@@ -2,7 +2,7 @@
 # TX, injected RX/NVIC, and PSP/MSP exception frames with CCR.STKALIGN enabled
 # and disabled on PSP and MSP stacks, plus nested external IRQ preemption, on
 # the exact imported MIMXRT700-EVK system. The smoke checks nested external IRQ
-# preemption and equal/lower-priority deferral until the active handler returns.
+# preemption, PRIGROUP group-priority deferral, and subpriority ordering.
 # BASEPRI and BASEPRI_MAX exercise priority masking and threshold updates;
 # BASEPRI_MAX may tighten, but not loosen or clear, an active threshold.
 # PRIMASK holds all three priority levels
@@ -16,7 +16,7 @@ inputs:
   firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt700-evk-smoke"
   system: "../../configs/systems/onboarding/mimxrt700_evk.yaml"
 limits:
-  max_steps: 24000000
+  max_steps: 25000000
 uart_injections:
   - uart: "flexcomm0"
     bytes: "RS"
@@ -28,7 +28,7 @@ assertions:
   - uart_contains: "msp_context=000003ff msp_r0=9bdf1357 msp_xpsr="
   - uart_contains: "msp_noalign_context=0000001f msp_noalign_r0=2468ace0 msp_noalign_xpsr=01000000 msp_noalign_sp=200000dc msp_noalign_after=200000fc restore=1"
   - uart_contains: "nested=000000ff outer=00000017 nested_ipsr=00000018 exc=fffffffd,fffffff1 order=00000002,00000003 active=00000180->00000000 stack=1,1 priorities=00000080,00000020"
-  - uart_contains: "deferred=0000007f outer=00000017 exc=fffffffd active=00000080 order=00000002,00000003 after=00000000 stack=1,1 priorities=00000080,00000080,000000c0"
+  - uart_contains: "deferred=000000ff outer=00000017 exc=fffffffd active=00000080 order=00000003,00000002 group=00000500 after=00000000 stack=1,1 priorities=00000080,000000a0,00000090"
   - uart_contains: "basepri=000007ff max=00000080 high=00000018/fffffff9 threshold=00000080 active=00000100 pending=00000280 order=00000002,00000003 after=00000000,00000000 stack=1 priorities=00000080,00000020,000000c0"
   - uart_contains: "primask=000003ff mask=00000001/00000000 pending=00000380/00000280 active=00000000/00000100 high=00000018/fffffff9/00000000 order=00000002,00000003 after=00000000,00000000 stack=1 priorities=00000080,00000020,000000c0"
   - uart_contains: "faultmask=000003ff mask=00000001/00000000 pending=00000380/00000280 active=00000000/00000100 high=00000018/fffffff9/00000000 order=00000002,00000003 after=00000000,00000000 stack=1 priorities=00000080,00000020,000000c0"
@@ -114,7 +114,7 @@ assertions:
       size: 4
   - memory_value:
       address: 0x20000064
-      expected_value: 0x0000007f
+      expected_value: 0x000000ff
       size: 4
   - memory_value:
       address: 0x20000068

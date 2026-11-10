@@ -79,6 +79,7 @@ impl SystemBus {
             native_code_identity: next_native_code_identity(),
             bit_band_enabled: true,
             armv6m: false,
+            armv8m_baseline: false,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
             esp32c3_io_mux_idx: None,
@@ -197,6 +198,7 @@ impl SystemBus {
             native_code_identity: next_native_code_identity(),
             bit_band_enabled: false,
             armv6m: false,
+            armv8m_baseline: false,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
             esp32c3_io_mux_idx: None,
@@ -1298,6 +1300,16 @@ impl SystemBus {
             let c = core.trim().to_ascii_lowercase();
             let c = c.strip_prefix("cortex-").unwrap_or(&c);
             matches!(c, "m0" | "m0+" | "m0plus" | "m1")
+        })
+    }
+
+    /// True for ARMv8-M Baseline cores, whose AIRCR does not implement
+    /// PRIGROUP. The Cortex-M23 is the in-tree core in this profile.
+    pub(crate) fn chip_is_armv8m_baseline(chip: &ChipDescriptor) -> bool {
+        chip.core.as_deref().is_some_and(|core| {
+            let c = core.trim().to_ascii_lowercase();
+            let c = c.strip_prefix("cortex-").unwrap_or(&c);
+            c == "m23"
         })
     }
 

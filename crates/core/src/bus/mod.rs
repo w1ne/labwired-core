@@ -464,6 +464,9 @@ pub struct SystemBus {
     /// CFSR/HFSR/MMFAR/BFAR and SHCSR holds only SVCALLPENDED, so every fault
     /// is a HardFault. `configure_cortex_m` hands this to the SCB fault state.
     pub armv6m: bool,
+    /// The chip's core is ARMv8-M Baseline (Cortex-M23), where AIRCR.PRIGROUP
+    /// is reserved and all implemented priority bits are group priority.
+    pub armv8m_baseline: bool,
     /// Offset (bytes) from the flash base to the application vector table when
     /// a second-stage bootloader precedes it (RP2040 boot2 = `0x100`). `0`
     /// means the vector table sits at the flash base. Carried from the chip

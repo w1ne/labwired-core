@@ -35,6 +35,8 @@ const MSP_EXCEPTION_PADDING: *mut u32 = 0x2000_005C as *mut u32;
 
 const FLEXCOMM0: usize = 0x4011_0000;
 const SCB_VTOR: usize = 0xE000_ED08;
+const SCB_AIRCR: usize = 0xE000_ED0C;
+const AIRCR_VECTKEY: u32 = 0x05FA << 16;
 const SCB_CCR: usize = 0xE000_ED14;
 const SCB_CCR_STKALIGN: u32 = 1 << 9;
 const NVIC_ISER0: usize = 0xE000_E100;
@@ -710,8 +712,9 @@ fn exercise_nested_irq_priority() -> bool {
     context == 0xFF
 }
 
-/// Equal- and lower-priority IRQs stay pending while IRQ 7 is active, then
-/// run in priority order after the outer handler returns to Thread mode.
+/// IRQs in the same PRIGROUP priority group cannot preempt IRQ 7, even when
+/// their subpriority differs. On return to Thread mode, subpriority orders
+/// the two pending handlers.
 fn exercise_deferred_irq_priority() -> bool {
     IRQ_CASE.store(7, Ordering::Relaxed);
     DEFERRED_SEQUENCE.store(0, Ordering::SeqCst);
@@ -722,6 +725,9 @@ fn exercise_deferred_irq_priority() -> bool {
     DEFERRED_LOWER_ORDER.store(0, Ordering::Relaxed);
 
     unsafe {
+        // PRIGROUP=5 gives the high two priority bits to preemption and the
+        // low six bits to subpriority on this ARMv8-M Mainline core.
+        write_volatile(SCB_AIRCR as *mut u32, AIRCR_VECTKEY | (5 << 8));
         write_volatile(
             NVIC_ICER0 as *mut u32,
             FLEXCOMM0_IRQ_BIT | NESTED_IRQ_BIT | DEFERRED_IRQ_BIT,
@@ -731,8 +737,10 @@ fn exercise_deferred_irq_priority() -> bool {
             FLEXCOMM0_IRQ_BIT | NESTED_IRQ_BIT | DEFERRED_IRQ_BIT,
         );
         write_volatile((NVIC_IPR0 as *mut u8).add(7), 0x80);
-        write_volatile((NVIC_IPR0 as *mut u8).add(8), 0x80);
-        write_volatile((NVIC_IPR0 as *mut u8).add(9), 0xC0);
+        // Keep subpriority differences in the high three priority bits so
+        // they remain observable on implementations with only three bits.
+        write_volatile((NVIC_IPR0 as *mut u8).add(8), 0xA0);
+        write_volatile((NVIC_IPR0 as *mut u8).add(9), 0x90);
         write_volatile(NVIC_ISPR0 as *mut u32, FLEXCOMM0_IRQ_BIT);
     }
 
@@ -797,20 +805,22 @@ fn exercise_deferred_irq_priority() -> bool {
     let active_during = DEFERRED_ACTIVE_DURING.load(Ordering::Relaxed);
     let equal_order = DEFERRED_EQUAL_ORDER.load(Ordering::Relaxed);
     let lower_order = DEFERRED_LOWER_ORDER.load(Ordering::Relaxed);
+    let priority_group = unsafe { read_volatile(SCB_AIRCR as *const u32) & 0x700 };
     let priorities_ok = unsafe {
         read_volatile((NVIC_IPR0 as *const u8).add(7)) == 0x80
-            && read_volatile((NVIC_IPR0 as *const u8).add(8)) == 0x80
-            && read_volatile((NVIC_IPR0 as *const u8).add(9)) == 0xC0
+            && read_volatile((NVIC_IPR0 as *const u8).add(8)) == 0xA0
+            && read_volatile((NVIC_IPR0 as *const u8).add(9)) == 0x90
     };
     let outer_ok = outer_ipsr == FLEXCOMM0_EXCEPTION_NUMBER && outer_exc_return == 0xFFFF_FFFD;
     let no_nested_activation = active_during == FLEXCOMM0_IRQ_BIT;
-    let deferred_order_ok = equal_order == 2 && lower_order == 3;
+    let deferred_order_ok = equal_order == 3 && lower_order == 2;
     let handlers_returned = unsafe {
         read_volatile(NVIC_IABR0 as *const u32)
             & (FLEXCOMM0_IRQ_BIT | NESTED_IRQ_BIT | DEFERRED_IRQ_BIT)
             == 0
     };
     let context = u32::from(priorities_ok)
+        | (u32::from(priority_group == 5 << 8) << 7)
         | (u32::from(outer_ok) << 1)
         | (u32::from(no_nested_activation) << 2)
         | (u32::from(deferred_order_ok) << 3)
@@ -831,6 +841,8 @@ fn exercise_deferred_irq_priority() -> bool {
     hex(equal_order);
     putc(b',');
     hex(lower_order);
+    puts(" group=");
+    hex(priority_group);
     puts(" after=");
     hex(unsafe { read_volatile(NVIC_IABR0 as *const u32) });
     puts(" stack=");
@@ -845,7 +857,8 @@ fn exercise_deferred_irq_priority() -> bool {
     hex(unsafe { read_volatile((NVIC_IPR0 as *const u8).add(9)) as u32 });
     puts("\r\n");
 
-    context == 0x7F
+    unsafe { write_volatile(SCB_AIRCR as *mut u32, AIRCR_VECTKEY) };
+    context == 0xFF
 }
 
 /// BASEPRI allows a priority 0x20 interrupt through while holding priority
@@ -1633,7 +1646,7 @@ fn main() -> ! {
     if unsafe { read_volatile(NESTED_CONTEXT) } == 0xFF {
         pass |= 1 << 11;
     }
-    if unsafe { read_volatile(DEFERRED_CONTEXT) } == 0x7F {
+    if unsafe { read_volatile(DEFERRED_CONTEXT) } == 0xFF {
         pass |= 1 << 12;
     }
     if unsafe { read_volatile(BASEPRI_CONTEXT) } == 0x7FF {
@@ -1867,11 +1880,11 @@ unsafe fn DefaultHandler(irqn: i16) {
             DEFERRED_SEQUENCE.store(2, Ordering::SeqCst);
         } else if irqn == NESTED_IRQN {
             let phase = DEFERRED_SEQUENCE.load(Ordering::Relaxed);
-            DEFERRED_EQUAL_ORDER.store(if phase == 1 { 0x101 } else { 2 }, Ordering::Relaxed);
+            DEFERRED_EQUAL_ORDER.store(if phase == 1 { 0x101 } else { 3 }, Ordering::Relaxed);
             unsafe { write_volatile(NVIC_ICER0 as *mut u32, NESTED_IRQ_BIT) };
         } else if irqn == DEFERRED_IRQN {
             let phase = DEFERRED_SEQUENCE.load(Ordering::Relaxed);
-            DEFERRED_LOWER_ORDER.store(if phase == 1 { 0x101 } else { 3 }, Ordering::Relaxed);
+            DEFERRED_LOWER_ORDER.store(if phase == 1 { 0x101 } else { 2 }, Ordering::Relaxed);
             unsafe { write_volatile(NVIC_ICER0 as *mut u32, DEFERRED_IRQ_BIT) };
         }
         return;

@@ -166,6 +166,10 @@ pub struct CortexM {
     /// PENDSVSET and only have it dispatch on return-to-thread — the
     /// load-bearing semantics for context switching.
     pub shpr3: Arc<AtomicU32>,
+    /// Shared AIRCR.PRIGROUP. Priority-group bits gate preemption while
+    /// subpriority bits only order simultaneous pending exceptions. Baseline
+    /// cores report PRIGROUP as reserved and use all priority bits for groups.
+    pub priority_group: Arc<AtomicU32>,
     /// Shared NVIC state for IRQ priority lookups via IPR.
     pub nvic_state: Option<Arc<crate::peripherals::nvic::NvicState>>,
     /// Shared with SCB: AIRCR.SYSRESETREQ latched by firmware. `step_batch`
@@ -339,6 +343,7 @@ impl Default for CortexM {
             shpr1: Arc::new(AtomicU32::new(0)),
             shpr2: Arc::new(AtomicU32::new(0)),
             shpr3: Arc::new(AtomicU32::new(0)),
+            priority_group: Arc::new(AtomicU32::new(0)),
             nvic_state: None,
             sysreset_signal: None,
             debug_halt: None,
@@ -1801,6 +1806,11 @@ impl CortexM {
         self.shpr3 = shpr3;
     }
 
+    /// Wire AIRCR.PRIGROUP from the shared SCB state.
+    pub fn set_shared_priority_group(&mut self, priority_group: Arc<AtomicU32>) {
+        self.priority_group = priority_group;
+    }
+
     /// Wire the NVIC's shared state so `exception_priority` can read
     /// IPR bytes for IRQs (exception number ≥ 16).
     pub fn set_shared_nvic_state(&mut self, state: Arc<crate::peripherals::nvic::NvicState>) {
@@ -2062,13 +2072,37 @@ impl CortexM {
         }
     }
 
+    /// Convert a raw exception priority into the group priority used for
+    /// preemption and priority boosting. AIRCR.PRIGROUP assigns PRIGROUP+1
+    /// low-order bits to subpriority on ARMv7-M/ARMv8-M Mainline. ARMv6-M and
+    /// ARMv8-M Baseline have no priority grouping and use every implemented
+    /// priority bit for preemption.
+    #[inline]
+    fn group_priority(&self, priority: i32) -> i32 {
+        if !(0..=0xFF).contains(&priority)
+            || self
+                .faults
+                .as_ref()
+                .is_some_and(|faults| !faults.priority_group_supported.load(Ordering::Relaxed))
+        {
+            return priority;
+        }
+        let subpriority_bits = (self.priority_group.load(Ordering::Relaxed) & 0x7) + 1;
+        priority & !((1_i32 << subpriority_bits) - 1)
+    }
+
+    #[inline]
+    fn exception_group_priority(&self, exc: u32) -> i32 {
+        self.group_priority(self.exception_priority(exc))
+    }
+
     /// True if BASEPRI masks an exception of the given priority. A non-zero
-    /// BASEPRI masks any exception whose priority value is numerically >=
-    /// BASEPRI (equal or lower priority). NMI/HardFault (negative priority) are
-    /// never masked.
+    /// BASEPRI masks any exception whose group priority is numerically >= its
+    /// own group priority. Subpriority does not affect priority boosting.
+    /// NMI/HardFault (negative priority) are never masked.
     #[inline]
     fn masked_by_basepri(&self, prio: i32) -> bool {
-        self.basepri != 0 && prio >= self.basepri as i32
+        self.basepri != 0 && self.group_priority(prio) >= self.group_priority(self.basepri as i32)
     }
 
     /// Whether ANY exception is pending — the cheap precondition every
@@ -2325,8 +2359,8 @@ impl CortexM {
         let Some(exc) = self.highest_priority_pending() else {
             return false;
         };
-        let exc_prio = self.exception_priority(exc);
-        let active_prio = self.exception_priority(self.active_exception);
+        let exc_prio = self.exception_group_priority(exc);
+        let active_prio = self.exception_group_priority(self.active_exception);
         exc_prio < active_prio && !self.masked_by_basepri(exc_prio) && !self.faultmask_blocks(exc)
     }
 
@@ -2379,9 +2413,9 @@ impl CortexM {
                         }
                     }
                 }
-                let priority = self.exception_priority(exc);
+                let priority = self.exception_group_priority(exc);
                 if !self.masked_by_primask(exc)
-                    && priority < self.exception_priority(self.active_exception)
+                    && priority < self.exception_group_priority(self.active_exception)
                     && !self.masked_by_basepri(priority)
                     && !self.faultmask_blocks(exc)
                 {
@@ -2571,8 +2605,8 @@ impl CortexM {
         let Some(exc) = self.highest_priority_pending() else {
             return false;
         };
-        let exc_prio = self.exception_priority(exc);
-        let active_prio = self.exception_priority(self.active_exception);
+        let exc_prio = self.exception_group_priority(exc);
+        let active_prio = self.exception_group_priority(self.active_exception);
         !self.masked_by_primask(exc)
             && exc_prio < active_prio
             && !self.masked_by_basepri(exc_prio)
@@ -3303,8 +3337,8 @@ impl Cpu for CortexM {
                 // pointless if an armed SysTick freezes the run loop).
                 if executed > 0 && self.any_exception_pending() {
                     if let Some(exc) = self.highest_priority_pending() {
-                        let exc_prio = self.exception_priority(exc);
-                        let active_prio = self.exception_priority(self.active_exception);
+                        let exc_prio = self.exception_group_priority(exc);
+                        let active_prio = self.exception_group_priority(self.active_exception);
                         if !self.masked_by_primask(exc)
                             && exc_prio < active_prio
                             && !self.masked_by_basepri(exc_prio)
@@ -3415,8 +3449,8 @@ impl Cpu for CortexM {
                 // exception is dispatched by `step_internal`, never spun on.
                 if executed > 0 && self.any_exception_pending() {
                     if let Some(exc) = self.highest_priority_pending() {
-                        let exc_prio = self.exception_priority(exc);
-                        let active_prio = self.exception_priority(self.active_exception);
+                        let exc_prio = self.exception_group_priority(exc);
+                        let active_prio = self.exception_group_priority(self.active_exception);
                         if !self.masked_by_primask(exc)
                             && exc_prio < active_prio
                             && !self.masked_by_basepri(exc_prio)
@@ -3660,16 +3694,16 @@ impl CortexM {
     }
 
     /// ARMv7-M **execution priority** (B1.5.4 "Execution priority and priority
-    /// boosting"): the priority of the currently executing code, which an
-    /// exception must beat (numerically smaller) to be taken.
+    /// boosting"): the group priority of the currently executing code, which
+    /// an exception must beat (numerically smaller) to be taken.
     ///
-    /// It is the minimum of the active exception's priority and the three
-    /// priority-boosting registers: `FAULTMASK` boosts to -1, `PRIMASK` to 0,
-    /// and a non-zero `BASEPRI` to its own value. Thread mode with nothing
+    /// It is the minimum of the active exception's group priority and the
+    /// three priority-boosting registers: `FAULTMASK` boosts to -1, `PRIMASK`
+    /// to 0, and a non-zero `BASEPRI` to its group priority. Thread mode with nothing
     /// boosting is 256, the "lower than anything configurable" baseline the rest
     /// of this file already uses.
     fn execution_priority(&self) -> i32 {
-        let mut prio = self.exception_priority(self.active_exception);
+        let mut prio = self.exception_group_priority(self.active_exception);
         if self.faultmask {
             prio = prio.min(-1);
         }
@@ -3677,7 +3711,7 @@ impl CortexM {
             prio = prio.min(0);
         }
         if self.basepri != 0 {
-            prio = prio.min(self.basepri as i32);
+            prio = prio.min(self.group_priority(self.basepri as i32));
         }
         prio
     }
@@ -3735,7 +3769,7 @@ impl CortexM {
 
         let busfault_enabled = faults.shcsr.load(Ordering::Relaxed) & SHCSR_BUSFAULTENA != 0;
         let exec_prio = self.execution_priority();
-        let target = if busfault_enabled && self.exception_priority(5) < exec_prio {
+        let target = if busfault_enabled && self.exception_group_priority(5) < exec_prio {
             5
         } else {
             // Escalated: the HardFault handler needs to know it is standing in
@@ -3743,7 +3777,7 @@ impl CortexM {
             faults.hfsr.fetch_or(HFSR_FORCED, Ordering::Relaxed);
             3
         };
-        if self.exception_priority(target) >= exec_prio {
+        if self.exception_group_priority(target) >= exec_prio {
             return false; // LOCKUP — see the doc comment.
         }
         if trace_exc_enabled() {
@@ -3884,13 +3918,13 @@ impl CortexM {
         }
         let memfault_enabled = faults.shcsr.load(Ordering::Relaxed) & SHCSR_MEMFAULTENA != 0;
         let exec_prio = self.execution_priority();
-        let target = if memfault_enabled && self.exception_priority(4) < exec_prio {
+        let target = if memfault_enabled && self.exception_group_priority(4) < exec_prio {
             4
         } else {
             faults.hfsr.fetch_or(HFSR_FORCED, Ordering::Relaxed);
             3
         };
-        if self.exception_priority(target) >= exec_prio {
+        if self.exception_group_priority(target) >= exec_prio {
             return false; // LOCKUP
         }
         if trace_exc_enabled() {
@@ -3928,13 +3962,13 @@ impl CortexM {
 
         let usagefault_enabled = faults.shcsr.load(Ordering::Relaxed) & SHCSR_USGFAULTENA != 0;
         let exec_prio = self.execution_priority();
-        let target = if usagefault_enabled && self.exception_priority(6) < exec_prio {
+        let target = if usagefault_enabled && self.exception_group_priority(6) < exec_prio {
             6
         } else {
             faults.hfsr.fetch_or(HFSR_FORCED, Ordering::Relaxed);
             3
         };
-        if self.exception_priority(target) >= exec_prio {
+        if self.exception_group_priority(target) >= exec_prio {
             return false; // LOCKUP — see the doc comment.
         }
         if trace_exc_enabled() {
@@ -4066,8 +4100,8 @@ impl CortexM {
             0
         };
         if exception_num != 0 && !self.masked_by_primask(exception_num) {
-            let take_prio = self.exception_priority(exception_num);
-            let active_prio = self.exception_priority(self.active_exception);
+            let take_prio = self.exception_group_priority(exception_num);
+            let active_prio = self.exception_group_priority(self.active_exception);
             let can_take = take_prio < active_prio
                 && !self.masked_by_basepri(take_prio)
                 && !self.faultmask_blocks(exception_num)

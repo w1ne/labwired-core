@@ -665,6 +665,36 @@ fn basepri_masks_equal_or_lower_priority_exceptions() {
 }
 
 #[test]
+fn aircr_priority_group_uses_only_group_bits_for_preemption_and_basepri() {
+    use std::sync::atomic::Ordering;
+    use std::sync::Arc;
+
+    let mut cpu = CortexM::new();
+    cpu.priority_group.store(5, Ordering::Relaxed);
+
+    // PRIGROUP=5 assigns [7:6] to group priority and [5:0] to subpriority.
+    assert_eq!(cpu.group_priority(0x80), 0x80);
+    assert_eq!(cpu.group_priority(0x9F), 0x80);
+    assert_eq!(cpu.group_priority(0xC0), 0xC0);
+
+    // Priority boosting is qualified by the same group split: BASEPRI=0x80
+    // masks a priority in that group even when its subpriority bits differ.
+    cpu.basepri = 0x80;
+    assert!(cpu.masked_by_basepri(0x9F));
+    assert!(!cpu.masked_by_basepri(0x7F));
+
+    // On ARMv6-M and ARMv8-M Baseline, PRIGROUP is reserved and all
+    // implemented priority bits are group priority.
+    let faults = Arc::new(crate::peripherals::scb::ScbFaultState::default());
+    faults.armv6m.store(true, Ordering::Relaxed);
+    faults
+        .priority_group_supported
+        .store(false, Ordering::Relaxed);
+    cpu.set_shared_faults(faults);
+    assert_eq!(cpu.group_priority(0x9F), 0x9F);
+}
+
+#[test]
 fn mrs_ipsr_reads_active_exception() {
     // `mrs Rd, IPSR` (sysm = 5) must return the current exception number,
     // not 0. Zephyr's _isr_wrapper computes the IRQ line as `IPSR - 16` to

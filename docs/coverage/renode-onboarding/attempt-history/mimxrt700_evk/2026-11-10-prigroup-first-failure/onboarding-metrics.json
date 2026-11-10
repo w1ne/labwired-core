@@ -1,0 +1,37 @@
+{
+  "target_id": "mimxrt700_evk",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 24000000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-mimxrt700-evk-smoke",
+  "target_triple": "thumbv8m.main-none-eabi",
+  "script": "examples/renode-onboarding/mimxrt700_evk-smoke.yaml",
+  "system": "configs/systems/onboarding/mimxrt700_evk.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-10T20:16:24Z",
+  "finished_at_utc": "2026-11-10T20:18:05Z",
+  "elapsed_seconds": 102,
+  "elapsed_ms": 101101,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "2026-11-10T20:18:05.477771Z ERROR labwired_cli::execute: Memory assertion failed at 0x2000000c (size 4): expected 0x7001ffff, got 0x0 (mask 0xffffffff)",
+  "failure_hint": "Smoke assertion mismatch. Compare expected stop/assertions with current deterministic output.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 95.779,
+    "build_firmware": 1.359,
+    "run_smoke": 3.909
+  },
+  "stages_ms": {
+    "build_cli": 95779,
+    "build_firmware": 1359,
+    "run_smoke": 3909
+  }
+}

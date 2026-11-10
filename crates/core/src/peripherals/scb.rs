@@ -58,6 +58,9 @@ pub struct ScbFaultState {
     /// enable can be set and every fault is a HardFault. The core still
     /// records the cause in the fields above for the fault report.
     pub armv6m: AtomicBool,
+    /// AIRCR implements priority grouping. False on ARMv6-M and ARMv8-M
+    /// Baseline, whose SCBs read PRIGROUP as zero.
+    pub priority_group_supported: AtomicBool,
 }
 
 impl Default for ScbFaultState {
@@ -72,6 +75,7 @@ impl Default for ScbFaultState {
             ccr_div_0_trp: AtomicBool::new(false),
             ccr_stkalign: AtomicBool::new(true),
             armv6m: AtomicBool::new(false),
+            priority_group_supported: AtomicBool::new(true),
         }
     }
 }
@@ -192,6 +196,8 @@ pub struct SharedScbState {
     pub shpr1: Arc<AtomicU32>,
     pub shpr2: Arc<AtomicU32>,
     pub shpr3: Arc<AtomicU32>,
+    /// AIRCR.PRIGROUP, shared with Cortex-M exception arbitration.
+    pub priority_group: Arc<AtomicU32>,
     /// Mirror of `pending_reset` the CPU can read without reaching the bus.
     /// See the field docs on [`Scb::sysreset_signal`].
     pub sysreset_signal: Arc<AtomicBool>,
@@ -233,6 +239,9 @@ pub struct Scb {
     /// other interrupt is active — that's the load-bearing semantics
     /// for `loopTask` to ever get CPU time.
     pub shpr3: Arc<AtomicU32>,
+    #[serde(skip)]
+    /// AIRCR.PRIGROUP, shared with Cortex-M exception arbitration.
+    pub priority_group: Arc<AtomicU32>,
     /// PendSV exception pend bit. Set by an ICSR.PENDSVSET write
     /// (bit 28); drained into the CPU's pending_exceptions via tick().
     pub pendsv_pending: bool,
@@ -317,6 +326,7 @@ impl Scb {
             shpr1: Arc::new(AtomicU32::new(0)),
             shpr2: Arc::new(AtomicU32::new(0)),
             shpr3: Arc::new(AtomicU32::new(0)),
+            priority_group: Arc::new(AtomicU32::new(0)),
             sysreset_signal: Arc::new(AtomicBool::new(false)),
             faults: Arc::new(ScbFaultState::default()),
         })
@@ -329,6 +339,7 @@ impl Scb {
             shpr1: Arc::new(AtomicU32::new(0)),
             shpr2: Arc::new(AtomicU32::new(0)),
             shpr3: Arc::new(AtomicU32::new(0)),
+            priority_group: Arc::new(AtomicU32::new(0)),
             sysreset_signal: Arc::new(AtomicBool::new(false)),
             faults: Arc::new(ScbFaultState::default()),
         })
@@ -347,6 +358,7 @@ impl Scb {
             shpr1: s.shpr1,
             shpr2: s.shpr2,
             shpr3: s.shpr3,
+            priority_group: s.priority_group,
             pendsv_pending: false,
             systick_pending: false,
             nmi_pending: false,
@@ -543,14 +555,28 @@ impl Scb {
             }
             0x08 => self.vtor.store(value, Ordering::Relaxed),
             0x0C => {
-                if (value >> 16) == 0x05FA && value & (1 << 2) != 0 {
-                    self.pending_reset.set(true);
-                    // Cut the CPU batch at this instruction so the machine
-                    // drains the reset on the very next boundary.
-                    self.sysreset_signal.store(true, Ordering::Relaxed);
+                // AIRCR ignores writes with a bad VECTKEY. VECTKEYSTAT reads
+                // as zero; the PRIGROUP field is also shared with the CPU so
+                // exception preemption sees the same value firmware reads.
+                if value >> 16 == 0x05FA {
+                    if value & (1 << 2) != 0 {
+                        self.pending_reset.set(true);
+                        // Cut the CPU batch at this instruction so the machine
+                        // drains the reset on the very next boundary.
+                        self.sysreset_signal.store(true, Ordering::Relaxed);
+                    }
+                    let priority_group =
+                        if !self.faults.priority_group_supported.load(Ordering::Relaxed) {
+                            // AIRCR.PRIGROUP is reserved on ARMv6-M and ARMv8-M
+                            // Baseline.
+                            0
+                        } else {
+                            (value >> 8) & 0x7
+                        };
+                    self.priority_group.store(priority_group, Ordering::Relaxed);
+                    // Store masked: VECTKEY reads as 0 (matches silicon).
+                    self.aircr = (value & 0x0000_FFFF & !0x700) | (priority_group << 8);
                 }
-                // Store masked: VECTKEY field reads back as 0 (matches silicon).
-                self.aircr = value & 0x0000_FFFF;
             }
             0x10 => {
                 self.scr = value;
@@ -785,6 +811,30 @@ mod tests {
         let mut scb = Scb::new(Arc::new(AtomicU32::new(0)));
         scb.write_register(0x0C, 1 << 2); // SYSRESETREQ but no key
         assert!(!scb.drain_reset_request());
+    }
+
+    #[test]
+    fn aircr_prigroup_is_keyed_shared_and_zero_when_unsupported() {
+        let mut scb = Scb::new(Arc::new(AtomicU32::new(0)));
+        let priority_group = Arc::clone(&scb.priority_group);
+
+        scb.write_register(0x0C, (0x05FA << 16) | (5 << 8));
+        assert_eq!(scb.read_register(0x0C) & 0x700, 5 << 8);
+        assert_eq!(priority_group.load(Ordering::Relaxed), 5);
+
+        // A bad VECTKEY leaves both the visible register and CPU mirror as-is.
+        scb.write_register(0x0C, 3 << 8);
+        assert_eq!(scb.read_register(0x0C) & 0x700, 5 << 8);
+        assert_eq!(priority_group.load(Ordering::Relaxed), 5);
+
+        // ARMv6-M reserves PRIGROUP and reads it as zero.
+        scb.fault_state().armv6m.store(true, Ordering::Relaxed);
+        scb.fault_state()
+            .priority_group_supported
+            .store(false, Ordering::Relaxed);
+        scb.write_register(0x0C, (0x05FA << 16) | (3 << 8));
+        assert_eq!(scb.read_register(0x0C) & 0x700, 0);
+        assert_eq!(priority_group.load(Ordering::Relaxed), 0);
     }
 
     #[test]

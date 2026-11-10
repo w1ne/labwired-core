@@ -17,10 +17,10 @@
       1074855956,
       3758157076,
       542637992,
-      939574847,
-      939574968
+      939575207,
+      939575330
     ],
-    "pc": 939574968,
+    "pc": 939575330,
     "xpsr": 2701131776,
     "primask": false,
     "pending_exceptions": 0,
@@ -33,23 +33,23 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "steps_executed": 24000000,
-  "cycles": 24000000,
-  "instructions": 24000000,
+  "steps_executed": 25000000,
+  "cycles": 25000000,
+  "instructions": 25000000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 24000000
+      "value": 25000000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 24000000
+      "value": 25000000
     }
   },
   "limits": {
-    "max_steps": 24000000,
+    "max_steps": 25000000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "d632b4a5dcbabf4332c24a26271ad6b8265c304a80b727cebd81332aadb0c611",
+  "firmware_hash": "5910bbf18b2176cc6ef617524ba87257fd7623cc92eab56e9aa8dc6b73a64566",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt700-evk-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/mimxrt700_evk.yaml",
