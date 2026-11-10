@@ -1,0 +1,11 @@
+# Realtime-factor workload system: WeAct Black Pill STM32F411CEU6, bare board.
+name: "rtf-f411-timer-uart"
+chip: "../../../../configs/chips/stm32f411ceu6.yaml"
+external_devices: []
+board_io:
+  - id: "led_pc13"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "output"
+    active_high: false

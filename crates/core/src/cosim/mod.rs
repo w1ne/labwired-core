@@ -98,6 +98,12 @@ pub trait CosimAdapter: Send {
         let _ = (trace, channel_prefix);
     }
 
+    /// Optional initial value for a routed input whose physical default is not zero.
+    fn input_initial_value(&self, name: &str) -> Option<CosimSignalValue> {
+        let _ = name;
+        None
+    }
+
     /// The value shape model input `name` expects, or `None` when this adapter
     /// cannot say (it ignores the input, or passes it to a process it does not
     /// understand). See [`CosimInputKind`].

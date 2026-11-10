@@ -20,12 +20,34 @@ impl SystemBus {
     /// True when the just-finished batch only performed freerunning-timer
     /// polls (no side-effecting MMIO). Consumes and clears the counters.
     /// Chip-specific which regs count as polls — decided by each peripheral.
+    ///
+    /// Hosted Cortex-M windows often retire one MMIO and stop, so RP2040
+    /// `time_us_64` (TIMERAWH, TIMERAWL, TIMERAWH) is split across batches.
+    /// A same-batch pair (`timer >= 2`, e.g. ESP SYSTIMER) still coalesces
+    /// immediately. Split reads accumulate in `timer_poll_carry` until four
+    /// timer-only accesses land with no side-effecting MMIO — more than one
+    /// complete `time_us_64`, so a one-shot timestamp cannot skip. Skipping
+    /// after two loads jumped toward a background 1 ms alarm pool tick and
+    /// `pico_oled_pwm` never reached `Serial1.println("RTF_READY")`.
     #[inline]
     pub fn take_timer_poll_coalesce_eligible(&self) -> bool {
         let timer = self.freerunning_timer_poll_mmio.replace(0);
         let side = self.side_effecting_mmio.replace(0);
-        // At least two poll accesses (e.g. OP update + value read).
-        timer >= 2 && side == 0
+        if side != 0 {
+            self.timer_poll_carry.set(0);
+            return false;
+        }
+        if timer >= 2 {
+            self.timer_poll_carry.set(0);
+            return true;
+        }
+        let carry = self.timer_poll_carry.get().saturating_add(timer);
+        if carry >= 4 {
+            self.timer_poll_carry.set(0);
+            return true;
+        }
+        self.timer_poll_carry.set(carry);
+        false
     }
 
     /// `(memory_reads, memory_writes, peripheral_accesses)` — run-lifetime
