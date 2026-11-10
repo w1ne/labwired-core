@@ -1,0 +1,10 @@
+# Read BME280 CHIP_ID and raw temperature over C3 I2C0 on GPIO4/5.
+schema_version: "1.0"
+inputs:
+  firmware: "./firmware/.pio/build/devkitm1_n4x/firmware.elf"
+  system: "../../configs/systems/esp32c3-devkitm-1-n4x-bme280.yaml"
+limits:
+  max_steps: 50000000
+assertions:
+  - uart_contains: "ESP32C3_DEVKITM1_N4X_BME280_OK ID=0x60 TEMP_RAW=0x082DC0 I2C0=GPIO4/5"
+  - expected_stop_reason: max_steps

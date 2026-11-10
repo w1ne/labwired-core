@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="3" failures="0" errors="0" time="22.685200">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="a66721c673a132aa9c10007eef8d59003c911568b2cc4c9fe2033f7f02d86897"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="22.685200">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: ESP32C3_DEVKITM1_N4X_BME280_OK ID=0x60 TEMP_RAW=0x082DC0 I2C0=GPIO4/5" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

@@ -79,6 +79,11 @@ jobs:
             firmware_build_script: examples/esp32c6-devkitc-1-n8-bme280/firmware/build-firmware.sh
             script: examples/esp32c6-devkitc-1-n8-bme280/bme280-smoke.yaml
             system: configs/systems/esp32c6-devkitc-1-n8-bme280.yaml
+          - id: esp32c3-devkitm-1-n4x-bme280
+            firmware_build_script: examples/esp32c3-devkitm-1-n4x-bme280/firmware/build-firmware.sh
+            script: examples/esp32c3-devkitm-1-n4x-bme280/bme280-smoke.yaml
+            system: configs/systems/esp32c3-devkitm-1-n4x-bme280.yaml
+            rom_boot: true
           - id: arduino-nano-esp32-bme280
             firmware_build_script: examples/arduino-nano-esp32-bme280/firmware/build-firmware.sh
             script: examples/arduino-nano-esp32-bme280/bme280-smoke.yaml
@@ -126,13 +131,19 @@ jobs:
         if: ${{ matrix.firmware_build_script != '' }}
         run: |
           chmod +x scripts/onboarding_smoke.sh
+          rom_boot_args=()
+          if [[ "${{ matrix.rom_boot }}" == "true" ]]; then
+            export LABWIRED_ESP32C3_FLASH="${GITHUB_WORKSPACE}/examples/esp32c3-devkitm-1-n4x-bme280/firmware/.pio/build/devkitm1_n4x/merged.bin"
+            rom_boot_args+=(--rom-boot)
+          fi
           scripts/onboarding_smoke.sh \
             --target-id "${{ matrix.id }}" \
             --firmware-build-script "${{ matrix.firmware_build_script }}" \
             --script "${{ matrix.script }}" \
             --system "${{ matrix.system }}" \
             --out-dir "out/onboarding-smoke/${{ matrix.id }}" \
-            --threshold-seconds 3600
+            --threshold-seconds 3600 \
+            "${rom_boot_args[@]}"
 
       - name: Publish onboarding summary
         if: always()

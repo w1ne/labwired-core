@@ -59,10 +59,11 @@ _Richest ARM coverage: drives 11 rubric classes via real firmware, plus the gate
 
 ### `esp32c3`
 
-_Leo air-quality is the sensor-depth proof: the nightly example e2e asserts it explicitly, and the advisory PR workspace shards also exercise it. clock/dma stay unrecorded by design — esp32c3 wires system/rtc_cntl/dma as declarative register files with no behavioural engine, so a PASS would overclaim. The non-rubric declarative wall (crypto, USB device, I2S, UHCI, radio) is not yet swept into this entry — tracked for a later ledger pass._
+_Leo air-quality remains the deeper multi-sensor proof. The ESP32-C3-DevKitM-1-N4X + BME280 smoke now exercises the C3 mask-ROM boot, UART0 and I2C0 on GPIO4/5 against the real BME280 model. clock/dma stay unrecorded by design — esp32c3 wires system/rtc_cntl/dma as declarative register files with no behavioural engine, so a PASS would overclaim. The non-rubric declarative wall (crypto, USB device, I2S, UHCI, radio) is not yet swept into this entry — tracked for a later ledger pass._
 
 **Functional device/protocol reads** (real driver, decoded value):
 - Leo air-quality — real Sensirion SCD41/SGP41/SPS30 + Melexis MLX90614 + Vishay VEML7700 decode CO2 / humidity / surface condensation to plain-language verdicts — `leo-airquality` · e2e_leo_airquality.rs:121-143 (nightly CI)
+- ESP32-C3-DevKitM-1-N4X + BME280: chip ID and raw temperature read over I2C0 (header GPIO4/GPIO5) after mask-ROM flash boot — `esp32c3-devkitm-1-n4x-bme280` · examples/esp32c3-devkitm-1-n4x-bme280/evidence (committed local onboarding smoke) (nightly CI)
 
 **Advanced peripherals — unit-tested only** (no firmware drives them): `ana_i2c`, `sha`, `virtual_wifi (real shared-802.11 medium model two C3 firmwares associate over, 2 tests)`, `wifi_mac (RE'd MAC<->SimNet bridge, RX descriptor ring, 5 tests)`
 

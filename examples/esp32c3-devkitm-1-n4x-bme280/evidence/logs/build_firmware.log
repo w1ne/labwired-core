@@ -1,0 +1,33 @@
+Processing devkitm1_n4x (platform: espressif32@8.0.0; board: esp32-c3-devkitm-1; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/espressif32/esp32-c3-devkitm-1.html
+PLATFORM: Espressif 32 (8.0.0) > Espressif ESP32-C3-DevKitM-1
+HARDWARE: ESP32C3 160MHz, 320KB RAM, 4MB Flash
+DEBUG: Current (cmsis-dap) External (cmsis-dap, esp-bridge, esp-builtin, esp-prog, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa)
+PACKAGES:
+ - framework-arduinoespressif32 @ 4.30312.261024 (3.3.12)
+ - framework-arduinoespressif32-esp32c3-libs @ 3.3.12
+ - tool-esptool @ 2.50400.0 (5.4.0)
+ - tool-riscv32-esp-elf-gdb @ 12.1.0+20221002
+ - tool-xtensa-esp-elf-gdb @ 12.1.0+20221002
+ - toolchain-riscv32-esp @ 14.2.0+20260121
+ - toolchain-xtensa-esp-elf @ 14.2.0+20260121
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 44 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- Wire @ 3.3.12
+Building in release mode
+Retrieving maximum program size .pio/build/devkitm1_n4x/firmware.elf
+Checking size .pio/build/devkitm1_n4x/firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [          ]   4.2% (used 13888 bytes from 327680 bytes)
+Flash: [==        ]  24.3% (used 318870 bytes from 1310720 bytes)
+========================= [SUCCESS] Took 0.75 seconds =========================
+Using tool-esptool@2.50400.0 package
+esptool v5.4.0
+HINT: Consider using --format hex to avoid flashing unused 0xFF padding between input regions.
+SHA digest in image updated.
+Wrote 0x61b80 bytes to file '/home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/examples/esp32c3-devkitm-1-n4x-bme280/firmware/.pio/build/devkitm1_n4x/merged.bin', ready to flash to offset 0x0.

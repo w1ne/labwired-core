@@ -164,7 +164,9 @@ Details: [First agent run](../agent/first-run.md) · [Tools](../agent/tools.md).
 |------|------|
 | `configs/systems/esp32c3-devkit.yaml` | Baseline system |
 | `configs/systems/esp32c3-oled-demo.yaml` | Display lab |
+| [`configs/systems/esp32c3-devkitm-1-n4x-bme280.yaml`](../../configs/systems/esp32c3-devkitm-1-n4x-bme280.yaml) | Official ESP32-C3-DevKitM-1-N4X + BME280 system |
 | `examples/esp32c3-blinky` | Minimal bring-up |
+| [`examples/esp32c3-devkitm-1-n4x-bme280`](../../examples/esp32c3-devkitm-1-n4x-bme280/) | Copy-paste mask-ROM boot + BME280 I²C smoke and committed evidence |
 | `docs/esp32c3_wifi_mac_bridge.md` | Wi-Fi fidelity |
 | [Parts index](../parts/index.md) | External components |
 

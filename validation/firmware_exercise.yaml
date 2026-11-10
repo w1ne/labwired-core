@@ -58,11 +58,15 @@ chips:
 
   - id: esp32c3
     arch: riscv32imc
-    headline: "Leo air-quality is the sensor-depth proof: the nightly example e2e asserts it explicitly, and the advisory PR workspace shards also exercise it. clock/dma stay unrecorded by design — esp32c3 wires system/rtc_cntl/dma as declarative register files with no behavioural engine, so a PASS would overclaim. The non-rubric declarative wall (crypto, USB device, I2S, UHCI, radio) is not yet swept into this entry — tracked for a later ledger pass."
+    headline: "Leo air-quality remains the deeper multi-sensor proof. The ESP32-C3-DevKitM-1-N4X + BME280 smoke now exercises the C3 mask-ROM boot, UART0 and I2C0 on GPIO4/5 against the real BME280 model. clock/dma stay unrecorded by design — esp32c3 wires system/rtc_cntl/dma as declarative register files with no behavioural engine, so a PASS would overclaim. The non-rubric declarative wall (crypto, USB device, I2S, UHCI, radio) is not yet swept into this entry — tracked for a later ledger pass."
     functional:
       - what: "Leo air-quality — real Sensirion SCD41/SGP41/SPS30 + Melexis MLX90614 + Vishay VEML7700 decode CO2 / humidity / surface condensation to plain-language verdicts"
         fw: leo-airquality
         ev: "e2e_leo_airquality.rs:121-143"
+        gate: nightly
+      - what: "ESP32-C3-DevKitM-1-N4X + BME280: chip ID and raw temperature read over I2C0 (header GPIO4/GPIO5) after mask-ROM flash boot"
+        fw: esp32c3-devkitm-1-n4x-bme280
+        ev: "examples/esp32c3-devkitm-1-n4x-bme280/evidence (committed local onboarding smoke)"
         gate: nightly
     advanced_unit_only:
       - ana_i2c

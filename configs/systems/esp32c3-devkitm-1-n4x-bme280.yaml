@@ -1,0 +1,18 @@
+# Espressif ESP32-C3-DevKitM-1-N4X with an Adafruit BME280 STEMMA QT breakout.
+# The N4X module is the currently listed 4 MB variant. BME280 uses GPIO4/5;
+# the board's addressable RGB LED on GPIO8 is intentionally not modeled as a
+# plain GPIO LED.
+name: "esp32c3-devkitm-1-n4x-bme280"
+chip: "../chips/esp32c3.yaml"
+cpu_hz: 160_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GPIO4"
+      scl: "GPIO5"
+    config:
+      i2c_address: 0x77
+board_io: []
