@@ -19,8 +19,8 @@
 //!          master-receive BTF event IRQs, absent-address NACK and error IRQ
 //!          checks
 //!   I2C2   a separate TMP102 repeated-start read, ITEVTEN-gated SB/ADDR/BTF event IRQs,
-//!          TXE isolation under ITEVTEN and TXE/RXNE assertion/release under
-//!          ITBUFEN,
+//!          TXE/RXNE isolation under ITEVTEN and TXE/RXNE assertion/release
+//!          under ITBUFEN,
 //!          and a POS-sequenced two-byte receive with
 //!          STOP-before-DR, BTF/RXNE source isolation, and both final DR reads
 //!          on the imported second controller instance; absent-address AF
@@ -860,7 +860,7 @@ fn smoke_i2c2() -> (u16, bool, bool, bool, bool, bool, bool, bool, bool) {
     }
     let _ = rd(I2C2_SR1);
     let _ = rd(I2C2_SR2);
-    wr(I2C2_CR2, 16 | (1 << 9) | (1 << 10)); // ITEVTEN | ITBUFEN
+    wr(I2C2_CR2, 16 | (1 << 9)); // ITEVTEN only; RXNE must stay isolated
     wr(NVIC_ICPR1, I2C2_EV_IRQ_BIT);
     if !wait(I2C2_SR1, RXNE, RXNE) {
         return (
@@ -875,7 +875,11 @@ fn smoke_i2c2() -> (u16, bool, bool, bool, bool, bool, bool, bool, bool) {
             false,
         );
     }
-    let rxne_buf_irq = rd(NVIC_ISPR1) & I2C2_EV_IRQ_BIT != 0;
+    let rxne_isolated = rd(NVIC_ISPR1) & I2C2_EV_IRQ_BIT == 0;
+    // RXNE remains set; enabling ITBUFEN must assert EV without another byte.
+    wr(I2C2_CR2, 16 | (1 << 9) | (1 << 10)); // ITEVTEN | ITBUFEN
+    let rxne_irq_asserted = wait(NVIC_ISPR1, I2C2_EV_IRQ_BIT, I2C2_EV_IRQ_BIT);
+    let rxne_buf_irq = rxne_isolated && rxne_irq_asserted;
     let msb = rd(I2C2_DR) as u8;
     wr(NVIC_ICPR1, I2C2_EV_IRQ_BIT);
     let mut rxne_buf_released = true;
@@ -883,6 +887,17 @@ fn smoke_i2c2() -> (u16, bool, bool, bool, bool, bool, bool, bool, bool) {
         rxne_buf_released &= rd(I2C2_SR1) & RXNE == 0;
         rxne_buf_released &= rd(NVIC_ISPR1) & I2C2_EV_IRQ_BIT == 0;
     }
+    send(b"i2c2 rxne_isolated=");
+    send(if rxne_isolated { b"1" } else { b"0" });
+    send(b" gate_asserted=");
+    send(if rxne_irq_asserted { b"1" } else { b"0" });
+    send(b" release=");
+    send(if rxne_buf_released { b"1" } else { b"0" });
+    send(if rxne_buf_irq && rxne_buf_released {
+        b" ok\r\n"
+    } else {
+        b" FAIL\r\n"
+    });
     wr(I2C2_CR1, PE); // NACK the final byte
     wr(I2C2_CR1, PE | STOP);
     if !wait(I2C2_SR1, RXNE, RXNE) {
