@@ -56,14 +56,14 @@ IOLINKI_SRC := \
   $(IOLINKI_DIR)/src/platform_stubs.c \
   $(IOLINKI_DIR)/src/platform/baremetal/time_utils.c
 
-APP_SRC := startup.S c3_uart.c mlx90640_i2c_c3.c fingerprint.c fast_math.c \
+APP_SRC := startup.S c3_uart.c c3_time.c mlx90640_i2c_c3.c fingerprint.c fast_math.c \
            phy_c3_iolink.c main.c
 DRV_SRC := $(MLX_DIR)/functions/MLX90640_API.c
 ELF     := thermal_fingerprint.elf
 
 all: $(ELF)
 
-$(ELF): $(APP_SRC) $(DRV_SRC) $(IOLINKI_SRC) c3.ld Makefile
+$(ELF): $(APP_SRC) $(wildcard *.h) $(DRV_SRC) $(IOLINKI_SRC) c3.ld Makefile
 	@if [ -z "$(strip $(CC))" ]; then \
 	  echo "ERROR: riscv32-esp-elf-gcc not found. Install via PlatformIO or ESP-IDF,"; \
 	  echo "       or pass CC=/path/to/riscv32-esp-elf-gcc."; exit 1; fi

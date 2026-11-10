@@ -8,6 +8,152 @@ use labwired_core::peripherals::components::iolink_master::{
 };
 use labwired_core::peripherals::uart::{Uart, UartStreamDevice};
 use labwired_core::sim_input::SimInput;
+use labwired_core::Bus;
+use std::sync::{Arc, Mutex};
+
+fn thermal_bus() -> SystemBus {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let system_path = root.join("examples/esp32c3-mlx90640-thermal/system-iolink.yaml");
+    let mut system = SystemManifest::from_file(&system_path).unwrap();
+    let chip_path = system_path.parent().unwrap().join(&system.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).unwrap();
+    system.chip = chip_path.to_string_lossy().into_owned();
+    SystemBus::from_config(&chip, &system).expect(
+        "the committed thermal manifest must attach its IO-Link master to the native C3 UART",
+    )
+}
+
+fn receive_esp_uart(bus: &mut SystemBus, idx: usize, count: usize) -> Vec<u8> {
+    let base = bus.peripherals[idx].base;
+    let mut received = Vec::new();
+    for _ in 0..1_000 {
+        bus.peripherals[idx].dev.tick_elapsed(1);
+        if bus.read_u32(base + 0x1C).unwrap() & 0x3FF != 0 {
+            received.push(bus.read_u32(base).unwrap() as u8);
+        }
+        if received.len() == count {
+            break;
+        }
+    }
+    received
+}
+
+#[test]
+fn thermal_manifest_master_reaches_native_esp_uart_rx() {
+    let mut bus = thermal_bus();
+    let idx = bus.find_peripheral_index_by_name("uart1").unwrap();
+    assert!(bus.peripherals[idx]
+        .dev
+        .as_any()
+        .unwrap()
+        .is::<labwired_core::peripherals::esp_uart::EspUart>());
+    assert!(bus.peripherals[idx]
+        .dev
+        .as_uart_stream_host()
+        .unwrap()
+        .hosts_protocol_peer());
+
+    // Observe real RX FIFO bytes through the native UART register map, rather
+    // than reaching into a concrete host's private stream list. This pins
+    // attachment and startup framing, not physical COM2 line timing.
+    assert_eq!(
+        receive_esp_uart(&mut bus, idx, 3),
+        [0x55, 0xA2, 0x00],
+        "master wake + startup must reach UART1 RX"
+    );
+}
+
+fn thermal_fault_reply() -> Vec<u8> {
+    let mut reply = vec![0x1C, 0xC5, 0x00, 0xBB, 0x03, 0x00, 0xFF, 0xFF, 0x17];
+    reply.push(oracle_cks(&reply, 0x80));
+    reply
+}
+
+const THERMAL_FAULT_LOG: &str = "MASTER PD=1CC500BB0300FFFF17\r\n\
+    MASTER VERDICT state=FAULT health=0 fault=OVERTEMP\r\n\
+    MASTER EVENT pending (device diagnostic event)\r\n";
+
+#[test]
+fn native_esp_uart_master_logs_decoded_reply_without_raw_console_bytes() {
+    let mut bus = thermal_bus();
+    let sink = Arc::new(Mutex::new(Vec::new()));
+    bus.attach_uart_tx_sink(sink.clone(), false);
+    bus.attach_iolink_master_log_sink(sink.clone());
+    let idx = bus.find_peripheral_index_by_name("uart1").unwrap();
+    let base = bus.peripherals[idx].base;
+    assert_eq!(
+        receive_esp_uart(&mut bus, idx, 9),
+        [0x55, 0xA2, 0x00, 0x20, 0x06, 0x99, 0x00, 0x85, 0x00],
+        "startup must reach the first cyclic request",
+    );
+    assert!(sink.lock().unwrap().is_empty());
+
+    let reply = thermal_fault_reply();
+    let mut corrupt = reply.clone();
+    *corrupt.last_mut().unwrap() ^= 1;
+    for (invalid, bytes) in [(true, &corrupt), (false, &reply)] {
+        // Firmware writes the native UART TX FIFO. The host's real drain path
+        // delivers those bytes to the master; no direct peer callback is used.
+        for byte in bytes {
+            bus.write_u32(base, u32::from(*byte)).unwrap();
+        }
+        bus.peripherals[idx].dev.tick_elapsed(16_000_000);
+        if invalid {
+            assert!(
+                sink.lock().unwrap().is_empty(),
+                "bad checksum must not produce diagnostics or leak binary TX"
+            );
+        }
+    }
+    let log = String::from_utf8(sink.lock().unwrap().clone()).unwrap();
+    assert_eq!(
+        log, THERMAL_FAULT_LOG,
+        "only decoded IO-Link diagnostics belong in the capture"
+    );
+}
+
+#[test]
+fn generic_uart_master_keeps_decoded_log_capture() {
+    let mut bus = bus_from_yaml("pd_in_len: 9\nm_seq_type: 1").unwrap();
+    let sink = Arc::new(Mutex::new(Vec::new()));
+    bus.attach_iolink_master_log_sink(sink.clone());
+    let master = attached_master(&mut bus);
+    enter_operate(master);
+    feed(master, &thermal_fault_reply());
+    assert_eq!(
+        String::from_utf8(sink.lock().unwrap().clone()).unwrap(),
+        THERMAL_FAULT_LOG
+    );
+}
+
+#[test]
+fn capability_attachment_keeps_transport_and_evaluation_checks() {
+    let chip = ChipDescriptor::from_file(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../configs/chips/esp32c3.yaml"
+    ))
+    .unwrap();
+    for (connection, config, expected_error) in [
+        ("i2c0", "{}", "External device 'master' type 'iolink-master' connection 'i2c0' is not a UART peripheral"),
+        (
+            "uart1",
+            "{pd_in_len: 32, pd_out_len: 1, m_seq_type: 6, od_len: 1, startup_profile: tiol112-eval}",
+            "tiol112-eval requires a TIOL112-capable UART host",
+        ),
+    ] {
+        let system: SystemManifest = serde_yaml::from_str(&format!(
+            "name: invalid-iolink-attachment\nchip: ignored\nexternal_devices:\n- id: master\n  type: iolink-master\n  connection: {connection}\n  config: {config}\n"
+        ))
+        .unwrap();
+        let error = SystemBus::from_config(&chip, &system)
+            .err()
+            .expect("must reject the unsupported attachment");
+        assert!(
+            format!("{error:#}").contains(expected_error),
+            "expected attachment error {expected_error:?}, got {error:#}",
+        );
+    }
+}
 
 fn requested(od: usize) -> IolinkMaster {
     IolinkMaster::new_configured(32, 1, 6, od, IolinkComSpeed::Com3, 8).unwrap()

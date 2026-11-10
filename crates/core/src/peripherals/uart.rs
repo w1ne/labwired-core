@@ -2396,6 +2396,12 @@ impl UartStreamHost for Uart {
         self.attach_stream(dev);
     }
 
+    fn visit_stream_devices(&mut self, visitor: &mut dyn FnMut(&mut dyn UartStreamDevice)) {
+        for stream in &mut self.attached_streams {
+            visitor(stream.as_mut());
+        }
+    }
+
     fn detach_console_sink(&mut self) {
         self.set_sink(None, false);
     }

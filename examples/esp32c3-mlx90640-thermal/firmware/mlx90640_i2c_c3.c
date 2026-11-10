@@ -17,6 +17,9 @@
 #include <stdint.h>
 #include "MLX90640_I2C_Driver.h"
 
+/* Application background service; the vendored Melexis driver stays intact. */
+void thermal_wait_for_sensor(void);
+
 /* ── ESP32-C3 I2C0 register map (subset; offsets per the C3 i2c0 SVD) ──────── */
 #define I2C0_BASE 0x60013000u
 #define I2C_REG(o) (*(volatile uint32_t *)(I2C0_BASE + (o)))
@@ -157,6 +160,13 @@ int MLX90640_I2CRead(uint8_t slaveAddr, uint16_t startAddress,
             return rc;
         }
         done = (uint16_t)(done + chunk);
+    }
+    /* GetFrameData polls STATUS until the next 2 Hz conversion. Let the CPU
+     * sleep between unsuccessful polls; acknowledgment does not advance time.
+     * The I2C transaction itself remains unchanged and runs on the real bus. */
+    if (startAddress == 0x8000u && nMemAddressRead == 1u &&
+        (data[0] & 0x0008u) == 0u) {
+        thermal_wait_for_sensor();
     }
     return MLX90640_NO_ERROR;
 }

@@ -12,6 +12,7 @@
 #include <stdint.h>
 
 void uart_putc(char c);
+void uart_flush(void);
 void uart_puts(const char *s);
 /* Print a signed integer in decimal. */
 void uart_puti(int32_t v);

@@ -4,19 +4,22 @@
 # per-pixel °C with the unmodified Melexis driver ON-TARGET, runs the spatial
 # thermal-fingerprint state machine, and prints a verdict per frame.
 #
-# NORMAL: the fan-cooled hotspot warms up to a bounded ~49 °C plateau and never
+# NORMAL: the fan-cooled hotspot warms up to a bounded 46.2 °C plateau and never
 # faults. Assert the firmware boots, reaches the STABLE state, and reports
 # fault=NONE with full health (100). The frame loop is driven by I²C
-# status-poll → frame-read → STATUS-clear, which advances the thermal scene.
+# status-poll → frame-read → STATUS-clear. Conversions follow elapsed bus time
+# at the programmed 2 Hz; clearing STATUS only acknowledges the last sample.
 #
-# NB: the simple_regex engine supports only `.`, `*`, `^`, `$` — no char
-# classes or alternation — so all assertions below are literal substrings.
+# Completion includes the newline so a partial final message cannot pass.
 schema_version: "1.0"
 inputs:
   system: "./system.yaml"
   firmware: "./firmware/thermal_fingerprint.elf"
 limits:
-  max_steps: 50000000
+  max_steps: 1000000000
+  max_cycles: 5000000000
+  wall_time_ms: 180000
+  stop_when_assertions_pass: true
 assertions:
   # Boot banner + sensor brought up over real I²C.
   - uart_contains: "TFS BOOT"
@@ -26,5 +29,7 @@ assertions:
   - uart_contains: "state=STABLE"
   # NORMAL never faults; the per-frame verdict reports fault=NONE.
   - uart_contains: "fault=NONE"
-  # Health stays at full margin in the bounded-plateau regime.
+  # Health reaches full margin in the bounded-plateau regime.
   - uart_contains: "health=100"
+  # Complete all 52 subpages, with no classified fault anywhere in the run.
+  - uart_contains: "TFS DONE frames=52 faults=0\r\n"

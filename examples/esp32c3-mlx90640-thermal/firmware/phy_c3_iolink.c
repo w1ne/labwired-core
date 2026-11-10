@@ -1,27 +1,26 @@
 /* IO-Link PHY over the simulated ESP32-C3 UART1 — see phy_c3_iolink.h.
  *
- * The LabWired generic UART model (Stm32F1 layout) at 0x60010000:
- *   - SR (status) at offset 0x00: read returns TX-ready bits, with RXNE (bit 5)
- *     set whenever the RX buffer (fed by the IO-Link master) has a byte.
- *   - DR at offset 0x04: write transmits one byte; read pops one RX byte.
- *   - A byte write to offset 0x00 is also a legacy TX alias.
- * The IO-Link line speed is irrelevant in the cycle-stepped sim, so set_baudrate
- * is a no-op. detect_wakeup scans for the 0x55 wake-up byte the master sends
- * first (mirrors the iolink-dido phy_labwired / iolinki phy_virtual). No timing is
- * enforced here — the device firmware calls
- * iolink_device_set_timing_enforcement(false) and the handshake is driven purely
- * by byte arrival. */
+ * Uses the native C3 FIFO at 0x00 and RXFIFO_CNT in STATUS at 0x1c. The old
+ * STM32 SR/DR offsets read the FIFO as status and wrote INT_RAW, so no reply
+ * reached the peer. This fixture uses a fixed COM2 UART, not a transceiver's
+ * electrical wake-up or baud negotiation. The synthetic peer sends 0x55 as
+ * its wake marker. Device DLL timing enforcement remains disabled. */
 #include "phy_c3_iolink.h"
+#include "c3_time.h"
 #include <stdint.h>
 
 #define UART1_BASE 0x60010000u
-#define U1_SR (*(volatile uint32_t *)(UART1_BASE + 0x00u))
-#define U1_DR (*(volatile uint32_t *)(UART1_BASE + 0x04u))
-#define SR_RXNE (1u << 5)
+#define U1_FIFO (*(volatile uint32_t *)(UART1_BASE + 0x00u))
+#define U1_CLKDIV (*(volatile uint32_t *)(UART1_BASE + 0x14u))
+#define U1_STATUS (*(volatile uint32_t *)(UART1_BASE + 0x1cu))
+#define U1_CONF0 (*(volatile uint32_t *)(UART1_BASE + 0x20u))
+#define U1_CLK_CONF (*(volatile uint32_t *)(UART1_BASE + 0x78u))
 
 static int phy_init(void *user) {
     (void)user;
-    /* The generic UART model needs no explicit enable to TX/RX in the sim. */
+    U1_CLK_CONF = (1u << 20) | (1u << 22) | (1u << 24) | (1u << 25);
+    U1_CLKDIV = 2083u; /* 80 MHz APB / 38400 baud, integer divisor */
+    U1_CONF0 = (1u << 1) | (3u << 2) | (1u << 4); /* 8E1 */
     return 0;
 }
 
@@ -38,18 +37,26 @@ static void phy_set_baudrate(void *user, iolink_baudrate_t baudrate) {
 static int phy_send(void *user, const uint8_t *data, size_t len) {
     (void)user;
     for (size_t i = 0; i < len; i++) {
-        U1_DR = (uint32_t)data[i];
+        while (((U1_STATUS >> 16) & 0x3ffu) >= 128u) {
+        }
+        U1_FIFO = (uint32_t)data[i];
     }
     return (int)len;
 }
 
 static int phy_recv_byte(void *user, uint8_t *byte) {
     (void)user;
-    if (U1_SR & SR_RXNE) {
-        *byte = (uint8_t)U1_DR;
+    if ((U1_STATUS & 0x3ffu) != 0u) {
+        *byte = (uint8_t)U1_FIFO;
         return 1;
     }
     return 0;
+}
+
+void iolink_phy_c3_flush_tx(void) {
+    while (((U1_STATUS >> 16) & 0x3ffu) != 0u) {
+        c3_sleep_us(100u);
+    }
 }
 
 static int phy_detect_wakeup(void *user) {

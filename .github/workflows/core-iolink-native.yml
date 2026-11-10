@@ -8,7 +8,16 @@ on:
       - "crates/core/Cargo.toml"
       - "crates/core/build.rs"
       - "crates/core/native/**"
+      - "crates/cli/src/execute.rs"
+      - "crates/cli/tests/uart_ordered_cache.rs"
+      - "crates/core/src/bus/construct.rs"
+      - "crates/core/src/peripherals/device.rs"
+      - "crates/core/src/peripherals/esp_uart.rs"
+      - "crates/core/src/peripherals/uart.rs"
       - "crates/core/src/peripherals/components/iolink_master.rs"
+      - "crates/core/src/peripherals/components/mlx90640.rs"
+      - "crates/core/tests/iolink_master_config.rs"
+      - "crates/core/tests/mlx90640_clock.rs"
       - "crates/core/src/peripherals/components/iolink_native.rs"
       - "crates/core/src/peripherals/components/iolink_station.rs"
       - "crates/core/src/world.rs"
@@ -32,7 +41,16 @@ on:
       - "crates/core/Cargo.toml"
       - "crates/core/build.rs"
       - "crates/core/native/**"
+      - "crates/cli/src/execute.rs"
+      - "crates/cli/tests/uart_ordered_cache.rs"
+      - "crates/core/src/bus/construct.rs"
+      - "crates/core/src/peripherals/device.rs"
+      - "crates/core/src/peripherals/esp_uart.rs"
+      - "crates/core/src/peripherals/uart.rs"
       - "crates/core/src/peripherals/components/iolink_master.rs"
+      - "crates/core/src/peripherals/components/mlx90640.rs"
+      - "crates/core/tests/iolink_master_config.rs"
+      - "crates/core/tests/mlx90640_clock.rs"
       - "crates/core/src/peripherals/components/iolink_native.rs"
       - "crates/core/src/peripherals/components/iolink_station.rs"
       - "crates/core/src/world.rs"
@@ -147,3 +165,53 @@ jobs:
 
       - name: Build thermal-fingerprint firmware against the pinned iolinki
         run: make -C examples/esp32c3-mlx90640-thermal/firmware
+
+      - name: Upload the source-built thermal firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: thermal-firmware-${{ github.run_id }}
+          path: examples/esp32c3-mlx90640-thermal/firmware/thermal_fingerprint.elf
+          if-no-files-found: error
+
+  thermal-scenarios:
+    name: thermal clock and IO-Link scenarios
+    needs: thermal-firmware-build
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 30
+    env:
+      CARGO_BUILD_JOBS: "1"
+      CARGO_PROFILE_RELEASE_DEBUG: "0"
+      CARGO_PROFILE_RELEASE_LTO: "false"
+      # Match the test harness so the CLI reuses the same compiled Core.
+      CARGO_PROFILE_RELEASE_PANIC: "unwind"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/download-artifact@v4
+        with:
+          name: thermal-firmware-${{ github.run_id }}
+          path: examples/esp32c3-mlx90640-thermal/firmware
+      # Select both packages in one invocation so CLI's IR/SVD dependency
+      # features and the unwind test profile use one compiled Core artifact.
+      # Cargo also builds the labwired binary used by the integration test.
+      - name: Check calibration, native UART, and ordered verdict contracts
+        run: >-
+          cargo test --locked --release -p labwired-core -p labwired-cli
+          --features labwired-core/event-scheduler
+          --test mlx90640_clock --test iolink_master_config --test uart_ordered_cache
+      - name: Complete normal and fault scenarios, with and without IO-Link
+        run: |
+          for script in test test-fault test-iolink test-iolink-fault; do
+            target/release/labwired test \
+              --script "examples/esp32c3-mlx90640-thermal/$script.yaml" \
+              --output-dir "out/thermal/$script"
+          done
+      - name: Upload complete scenario receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: thermal-scenarios-${{ github.run_id }}
+          path: out/thermal
+          if-no-files-found: warn

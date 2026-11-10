@@ -17,6 +17,32 @@ fn words(dev: &mut Mlx90640, address: u16, count: usize) -> Vec<u16> {
 }
 
 #[test]
+fn clocked_calibration_is_readable_before_first_conversion_and_immutable() {
+    let mut dev = Mlx90640::with_default_scene(MLX90640_ADDR);
+
+    // Firmware caches the EEPROM during boot, before waiting for new data.
+    // vPTAT25 must already match the later PTAT auxiliary words; leaving it
+    // zero until the first capture makes the real driver report 5850.42 C.
+    let boot_eeprom = words(&mut dev, 0x2400, 832);
+    assert_eq!(boot_eeprom[49], 29127, "vPTAT25 must exist at power-on");
+    assert_eq!(words(&mut dev, 0x8000, 1)[0] & 8, 0);
+
+    dev.advance_time_us(499_999);
+    assert_eq!(words(&mut dev, 0x8000, 1)[0] & 8, 0);
+    assert_eq!(words(&mut dev, 0x2400, 832), boot_eeprom);
+
+    for elapsed in [1, 500_000, 500_000] {
+        dev.advance_time_us(elapsed);
+        assert_ne!(words(&mut dev, 0x8000, 1)[0] & 8, 0);
+        assert_eq!(
+            words(&mut dev, 0x2400, 832),
+            boot_eeprom,
+            "conversions must not change cached factory calibration"
+        );
+    }
+}
+
+#[test]
 fn odd_skipped_conversions_with_prior_partial_period_match_fine_ticks() {
     let scene = ThermalScene::from_config(25.0, 12, 16, 2, 75.0, 1.0, 0.4, 0.7, Some(1.8), 0.5);
     let mut coarse = Mlx90640::new(MLX90640_ADDR, scene.clone());

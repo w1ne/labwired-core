@@ -1,20 +1,23 @@
 # Headless run of the ESP32-C3 thermal-fingerprint firmware — FAULT scenario.
 #
 # Same firmware, same thresholds — only the scene differs (cooling collapses at
-# t=30 s). The firmware must FIRST behave normally (reach STABLE, fault=NONE),
+# t=18 s). The firmware must FIRST behave normally (reach STABLE, fault=NONE),
 # THEN detect the runaway from the thermal frames alone and transition the
 # verdict to fault=COOLING_FAILURE (and ultimately OVERTEMP), with health
 # dropping to 0. The algorithm never reads `cooling_fault_at_s` — it infers the
 # fault from the heating-rate failing to decay past the expected time constant.
 #
-# NB: the simple_regex engine supports only `.`, `*`, `^`, `$` — no char
-# classes or alternation — so all assertions below are literal substrings.
+# The completion line must include a nonzero fault count and its newline;
+# a successful prefix before an incomplete run cannot satisfy this script.
 schema_version: "1.0"
 inputs:
   system: "./system-fault.yaml"
   firmware: "./firmware/thermal_fingerprint.elf"
 limits:
-  max_steps: 50000000
+  max_steps: 1000000000
+  max_cycles: 5000000000
+  wall_time_ms: 180000
+  stop_when_assertions_pass: true
 assertions:
   # Boot + sensor up, and the run STARTS normal (proves it is not pre-tripped).
   - uart_contains: "TFS BOOT"
@@ -28,3 +31,9 @@ assertions:
   - uart_contains: "fault=OVERTEMP"
   # Health collapses to zero once the hotspot reaches critical.
   - uart_contains: "health=0 "
+  - uart_regex: "TFS DONE frames=52 faults=[1-9][0-9]*\r\n"
+  - uart_ordered:
+      - "state=STABLE"
+      - "fault=COOLING_FAILURE"
+      - "fault=OVERTEMP"
+      - "TFS DONE frames=52"

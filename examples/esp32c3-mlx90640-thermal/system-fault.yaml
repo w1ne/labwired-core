@@ -1,8 +1,8 @@
 # LabWired - ESP32-C3 + MLX90640 thermal-fingerprint system (FAULT scenario)
 #
-# Identical wiring to system.yaml, but the cooling collapses at t=30 s
+# Identical wiring to system.yaml, but the cooling collapses at t=18 s
 # (`cooling_fault_at_s: 18.0`). The hotspot first settles to the cooled plateau
-# (~49 °C, NORMAL), then climbs toward the un-cooled driven target (85 °C) once
+# (46.2 °C, NORMAL), then climbs toward the un-cooled driven target (78 °C) once
 # cooling fails — crossing the firmware's warn/critical thresholds.
 #
 # The fingerprint algorithm DOES NOT read `cooling_fault_at_s`. It detects the
@@ -33,7 +33,6 @@ external_devices:
       tau_s: 4.0               # heating time constant τ, seconds
       cooling_efficiency: 0.6  # fan/cooling efficiency 0..1 (pulls peak down)
       cooling_fault_at_s: 18.0 # at t=18 s cooling collapses → hotspot climbs
-      frame_period_s: 4.0      # simulated time advanced per captured frame
 
 # The thermal camera declares its physical I²C0 route (SDA=GPIO4, SCL=GPIO5);
 # no GPIO board_io binding is needed.

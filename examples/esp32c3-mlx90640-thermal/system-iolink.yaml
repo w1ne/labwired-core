@@ -1,4 +1,4 @@
-# LabWired - ESP32-C3 MLX90640 thermal-fingerprint AS A TRUE IO-LINK DEVICE
+# LabWired - ESP32-C3 MLX90640 thermal-fingerprint IO-Link byte-stream fixture
 #                                                              (NORMAL scenario)
 #
 # Same C3 + MLX90640 thermal stack as system.yaml, but the firmware now also
@@ -36,8 +36,7 @@ external_devices:
       load: 1.0
       tau_s: 4.0
       cooling_efficiency: 0.6
-      # cooling_fault_at_s omitted → bounded ~49 °C plateau, never faults.
-      frame_period_s: 4.0
+      # No fault: bounded 46.2 °C plateau, sampled at the configured 2 Hz.
 
   # Native IO-Link master peer driving the device firmware over UART1 (the
   # IO-Link C/Q line). pd_in_len=9 matches the firmware's 9-byte verdict frame.
@@ -46,11 +45,11 @@ external_devices:
     connection: "uart1"
     config:
       pd_in_len: 9
-      m_seq_type: 1
+      m_seq_type: 6 # TYPE_2_V: typed cyclic and diagnosis exchanges in OPERATE
+      od_len: 1
       com: "COM2"
-      # The C3 device firmware is built -O2 and processes each IO-Link frame in
-      # few instructions, so a small inter-frame gap is safe and lets many
-      # cyclic verdict reads fit the runner's step budget.
-      frame_gap_ticks: 30000
+      # The native UART polls its peer once per modeled byte time. Leave
+      # 64 polls between requests, enough for the 11-byte COM2 response.
+      frame_gap_ticks: 64
 
 board_io: []

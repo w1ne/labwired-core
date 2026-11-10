@@ -1,4 +1,4 @@
-# LabWired - ESP32-C3 MLX90640 thermal-fingerprint AS A TRUE IO-LINK DEVICE
+# LabWired - ESP32-C3 MLX90640 thermal-fingerprint IO-Link byte-stream fixture
 #                                                              (FAULT scenario)
 #
 # Identical wiring to system-iolink.yaml, but the cooling collapses (the scene's
@@ -33,15 +33,15 @@ external_devices:
       tau_s: 4.0
       cooling_efficiency: 0.6
       cooling_fault_at_s: 18.0 # at t=18 s cooling collapses → hotspot climbs
-      frame_period_s: 4.0
 
   - id: "iolink_master"
     type: "iolink-master"
     connection: "uart1"
     config:
       pd_in_len: 9
-      m_seq_type: 1
+      m_seq_type: 6 # TYPE_2_V: typed cyclic and diagnosis exchanges in OPERATE
+      od_len: 1
       com: "COM2"
-      frame_gap_ticks: 30000
+      frame_gap_ticks: 64 # native UART peer polls, not CPU instructions
 
 board_io: []

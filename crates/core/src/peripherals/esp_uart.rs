@@ -901,6 +901,15 @@ impl crate::peripherals::uart::UartStreamHost for EspUart {
         self.attached_streams.push(dev);
     }
 
+    fn visit_stream_devices(
+        &mut self,
+        visitor: &mut dyn FnMut(&mut dyn crate::peripherals::uart::UartStreamDevice),
+    ) {
+        for stream in &mut self.attached_streams {
+            visitor(stream.as_mut());
+        }
+    }
+
     fn detach_console_sink(&mut self) {
         self.sink = None;
         self.merge = None;
