@@ -1,0 +1,10 @@
+# ESP32-S3-DevKitC-1 N16R8: test the mapped 8 MiB PSRAM window and UART0.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/xtensa-esp32s3-none-elf/release/firmware-esp32s3-devkitc-n16r8-psram-smoke"
+  system: "../../configs/systems/esp32-s3-devkitc-1-n16r8.yaml"
+limits:
+  max_steps: 1000000
+assertions:
+  - uart_contains: "ESP32_S3_N16R8_PSRAM_PASS bytes=8388608"
+  - expected_stop_reason: max_steps

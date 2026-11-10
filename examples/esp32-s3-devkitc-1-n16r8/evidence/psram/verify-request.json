@@ -1,0 +1,19 @@
+{
+  "board": "esp32-s3-devkitc-1-n16r8",
+  "diagram": {
+    "version": 1,
+    "board": "esp32-s3-devkitc-1-n16r8",
+    "parts": [
+      { "id": "mcu", "type": "esp32-s3-devkitc-1-n16r8" }
+    ],
+    "wires": []
+  },
+  "language": "arduino",
+  "entryPath": "src/main.ino",
+  "oracle": {
+    "serial": [
+      { "contains": "ESP32_S3_N16R8_PSRAM_PASS bytes=4096" }
+    ]
+  },
+  "source_file": "../../firmware/arduino-psram/main.ino"
+}

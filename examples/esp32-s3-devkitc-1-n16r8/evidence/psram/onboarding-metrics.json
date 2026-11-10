@@ -1,0 +1,29 @@
+{
+  "target_id": "esp32-s3-devkitc-1-n16r8-psram",
+  "status": "pass",
+  "crate": "",
+  "target_triple": "",
+  "script": "examples/esp32-s3-devkitc-1-n16r8/psram-smoke.yaml",
+  "system": "configs/systems/esp32-s3-devkitc-1-n16r8.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-10T13:50:09Z",
+  "finished_at_utc": "2026-11-10T13:50:47Z",
+  "elapsed_seconds": 39,
+  "elapsed_ms": 38043,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 36.999,
+    "build_firmware": 0.457,
+    "run_smoke": 0.553
+  },
+  "stages_ms": {
+    "build_cli": 36999,
+    "build_firmware": 457,
+    "run_smoke": 553
+  },
+  "firmware_build_script": "examples/esp32-s3-devkitc-1-n16r8/ci/build-psram-firmware.sh"
+}

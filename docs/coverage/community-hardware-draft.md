@@ -170,12 +170,77 @@ void loop() {}
 The [current ESP32-S3-DevKitC-1 v1.1 guide](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32s3/esp32-s3-devkitc-1/user_guide_v1.1.html)
 lists the N16R8 variant and documents GPIO41/GPIO42 on the J3 header. Mouser's
 [exact N16R8 listing](https://www.mouser.com/ProductDetail/Espressif-Systems/ESP32-S3-DevKitC-1-N16R8)
-showed 77 in stock on 2026-11-10. Adafruit's [SHT40 breakout page](https://www.adafruit.com/product/4885)
+showed 77 in stock in an earlier 2026-11-10 snapshot; a later check found no
+Mouser on-hand stock but an orderable factory lead time. Wavtron currently
+lists an in-stock N16R8 DevKitC board, but does not identify its PCB revision.
+Adafruit's [SHT40 breakout page](https://www.adafruit.com/product/4885)
 showed PID 4885 at $5.95 with Add to Cart available. The local firmware, smoke
 logs, and dated availability receipt are in
 [the SHT40 evidence directory](../../examples/esp32-s3-devkitc-1-n16r8/evidence/sht40/).
 The hosted catalog does not contain an SHT40 entry, so this has no hosted
 model_verified result.
+
+### ESP32-S3-DevKitC-1 v1.1 N16R8 — OPI PSRAM
+
+ESP32 remains demand rank **#1**. This is maintenance/depth work on the
+existing DevKitC board, not a new board pick. The N16R8 module has 8 MiB OPI
+PSRAM. The local direct-entry smoke programs the 128 × 64 KiB S3 cache-MMU
+entries, checks a data pattern, and probes the first, middle, and final words
+in the PSRAM window. It uses LabWired's modeled OPI PSRAM device through the
+cache mapping; OPI initialization and memory timing remain outside this local
+smoke.
+
+Copy-paste Arduino example (select **ESP32-S3-DevKitC-1 N16R8**):
+
+```cpp
+#include <Arduino.h>
+#include <esp_heap_caps.h>
+
+void setup() {
+  Serial.begin(115200);
+  if (!psramFound()) {
+    Serial.println("ESP32_S3_N16R8_PSRAM_NOT_FOUND");
+    return;
+  }
+
+  const size_t bytes = 4096;
+  volatile uint32_t *buffer = (volatile uint32_t *)heap_caps_malloc(
+      bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+  if (buffer == nullptr) {
+    Serial.println("ESP32_S3_N16R8_PSRAM_ALLOC_FAILED");
+    return;
+  }
+
+  for (size_t i = 0; i < bytes / sizeof(uint32_t); ++i) {
+    buffer[i] = 0xA5C30000u ^ (uint32_t)i;
+  }
+  for (size_t i = 0; i < bytes / sizeof(uint32_t); ++i) {
+    if (buffer[i] != (0xA5C30000u ^ (uint32_t)i)) {
+      Serial.println("ESP32_S3_N16R8_PSRAM_VERIFY_FAILED");
+      heap_caps_free((void *)buffer);
+      return;
+    }
+  }
+
+  Serial.printf("ESP32_S3_N16R8_PSRAM_PASS bytes=%u\n", (unsigned)bytes);
+  heap_caps_free((void *)buffer);
+}
+
+void loop() {
+  delay(1000);
+}
+```
+
+The hosted `labwired_verify` result is `model_verified` for the 4 KiB
+allocation and data round trip; it reports an ideal-VDD approximation, so
+power-on and brown-out reset behavior are not covered. The local direct-entry
+smoke and hosted Arduino result are recorded in
+[`examples/esp32-s3-devkitc-1-n16r8/evidence/psram/`](../../examples/esp32-s3-devkitc-1-n16r8/evidence/psram/).
+Espressif's [current board guide](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32s3/esp32-s3-devkitc-1/user_guide_v1.1.html)
+lists the N16R8 with 8 MB PSRAM and does not mark it EOL. The latest live
+[Mouser listing](https://www.mouser.com/en/ProductDetail/Espressif-Systems/ESP32-S3-DevKitC-1-N16R8?qs=LnCj936TGbUBJEUUxFQ%252B%252BQ%3D%3D)
+check showed no on-hand stock but an orderable factory lead-time listing; see
+the dated [availability receipt](../../examples/esp32-s3-devkitc-1-n16r8/evidence/psram/vendor-status.md).
 
 ## RP2040 / RP2350 — demand target #2
 

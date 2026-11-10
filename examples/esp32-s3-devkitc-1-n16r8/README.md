@@ -3,7 +3,8 @@
 The base smoke boots firmware on the ESP32-S3-DevKitC-1 v1.1 N16R8, sends a
 GRB frame to its onboard WS2812 RGB LED with RMT channel 0 through GPIO38, and
 sends a UART0 marker. The board extensions read BME280 and SHT40 sensors over
-I²C0 and I²C1, and sample a potentiometer on GPIO4 / ADC1_CH3.
+I²C0 and I²C1, sample a potentiometer on GPIO4 / ADC1_CH3, and exercise the
+module's 8 MiB OPI PSRAM through the ESP32-S3 cache MMU.
 The system profiles are
 [`configs/systems/esp32-s3-devkitc-1-n16r8.yaml`](../../../configs/systems/esp32-s3-devkitc-1-n16r8.yaml),
 [`configs/systems/esp32-s3-devkitc-1-n16r8-bme280.yaml`](../../../configs/systems/esp32-s3-devkitc-1-n16r8-bme280.yaml),
@@ -43,11 +44,19 @@ or claim physical USB serial behavior.
 - The ADC profile attaches a potentiometer to SENS ADC1 channel 3, which the
   current board guide maps to GPIO4 / J1 pin 4. Firmware starts a SENS oneshot
   conversion and requires the 1650 mV input to produce code 2047.
+- The PSRAM profile uses the modeled APS6408 OPI device and S3 cache/MMU path.
+  Its local direct-entry firmware writes the MMU entries for the 128 × 64 KiB
+  PSRAM pages, checks a data pattern, and probes the first, middle, and final
+  words in the 8 MiB address window. This does not exercise OPI initialization
+  or memory timing. A separate hosted Arduino verification allocates 4 KiB
+  with `heap_caps_malloc(..., MALLOC_CAP_SPIRAM)` and checks the data round
+  trip after the hosted board boot.
 - RMT TX completion is instantaneous in the model while the GPIO waveform is
   timed. The playback clock uses the declared CPU clock and default RMT source
   selection; fractional-divider changes and alternate source selections are
-  outside this profile. RMT RX, PSRAM, Wi-Fi/BLE, buttons, native USB, the
-  USB-to-UART bridge, and ESP-IDF boot-ROM startup are outside both smokes.
+  outside this profile. RMT RX, Wi-Fi/BLE, buttons, native USB, and the
+  USB-to-UART bridge are outside the board profiles. The base and sensor
+  profiles use direct-entry firmware and do not claim ESP-IDF boot-ROM startup.
 - The generic GPIO edge assertion undercounts this batched RMT waveform (29
   observed for a 48-transition frame). The smoke gates on RMT TX_END and the
   decoded red pixel; complete logic-analyzer edge capture is not claimed.
@@ -59,9 +68,9 @@ or claim physical USB serial behavior.
 - The simulation assumes an ideal VDD rail. Power-on and brown-out reset
   behavior are outside this evidence.
 - This is local simulation evidence; no physical-board capture is recorded.
-- The copy-paste Arduino sketch compiles on the hosted ESP32-S3 toolchain, but
-  its hosted run currently stalls in the UART0 status wait before producing
-  either BME280 marker. See
+- The BME280 copy-paste Arduino sketch compiles on the hosted ESP32-S3
+  toolchain, but its hosted run currently stalls in the UART0 status wait
+  before producing either BME280 marker. See
   [`evidence/bme280/hosted-verification.md`](evidence/bme280/hosted-verification.md);
   this result is not a hosted model-verification pass.
 - The hosted `Wire1` BME280 attempt on GPIO41/GPIO42 did not find the sensor;
@@ -271,6 +280,81 @@ smoke asserts that the LED model decodes a red pixel.
 - [`firmware/board_smoke.c`](firmware/board_smoke.c) and `firmware/link.ld` are
   the local fast-boot firmware.
 
+## OPI PSRAM extension
+
+This is maintenance/depth work on the existing ESP32 rank-1 board, not a new
+board or MCU pick. The N16R8 module has 8 MiB OPI PSRAM. The local register-level
+smoke maps 128 pages at `0x3D000000`, writes and verifies a pattern, and checks
+the first, middle, and last words. It uses the existing S3 OPI PSRAM device
+model through the flash cache's MMU mapping; no MMIO stub stands in for PSRAM.
+
+Reproduce the local smoke from the repository root:
+
+```sh
+LABWIRED_ESP32S3_MMU_XIP=1 RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
+  --target-id esp32-s3-devkitc-1-n16r8-psram \
+  --script examples/esp32-s3-devkitc-1-n16r8/psram-smoke.yaml \
+  --system configs/systems/esp32-s3-devkitc-1-n16r8.yaml \
+  --firmware-build-script examples/esp32-s3-devkitc-1-n16r8/ci/build-psram-firmware.sh \
+  --out-dir examples/esp32-s3-devkitc-1-n16r8/evidence/psram
+```
+
+The local test writes the MMU table before it accesses PSRAM, which is the
+post-startup mapping step normally performed by the boot path. The committed
+local transcript is in
+[`evidence/psram/logs/run_smoke.log`](evidence/psram/logs/run_smoke.log); it
+asserts the UART marker and the `MaxSteps` stop after 1,000,000 simulated
+cycles. The per-target
+[scoreboard](evidence/psram/onboarding-scoreboard.md) records 1/1 passing
+assertions. This is a direct-entry smoke and does not model OPI startup or
+timings.
+
+Copy-paste Arduino example (select **ESP32-S3-DevKitC-1 N16R8**):
+
+```cpp
+#include <Arduino.h>
+#include <esp_heap_caps.h>
+
+void setup() {
+  Serial.begin(115200);
+  if (!psramFound()) {
+    Serial.println("ESP32_S3_N16R8_PSRAM_NOT_FOUND");
+    return;
+  }
+
+  const size_t bytes = 4096;
+  volatile uint32_t *buffer = (volatile uint32_t *)heap_caps_malloc(
+      bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+  if (buffer == nullptr) {
+    Serial.println("ESP32_S3_N16R8_PSRAM_ALLOC_FAILED");
+    return;
+  }
+
+  for (size_t i = 0; i < bytes / sizeof(uint32_t); ++i)
+    buffer[i] = 0xA5C30000u ^ (uint32_t)i;
+  for (size_t i = 0; i < bytes / sizeof(uint32_t); ++i) {
+    if (buffer[i] != (0xA5C30000u ^ (uint32_t)i)) {
+      Serial.println("ESP32_S3_N16R8_PSRAM_VERIFY_FAILED");
+      heap_caps_free((void *)buffer);
+      return;
+    }
+  }
+
+  Serial.printf("ESP32_S3_N16R8_PSRAM_PASS bytes=%u\n", (unsigned)bytes);
+  heap_caps_free((void *)buffer);
+}
+
+void loop() {
+  delay(1000);
+}
+```
+
+The hosted `labwired_verify` run returned `status: model_verified` for the
+4 KiB allocation and data round trip. It assumes an ideal VDD rail, so
+power-on and brown-out reset behavior remain outside the result. See
+[`evidence/psram/hosted-verification.md`](evidence/psram/hosted-verification.md)
+and the [live board availability receipt](evidence/psram/vendor-status.md).
+
 ## ESP32-S3-DevKitC-1 N16R8 v1.0
 
 The current base smoke above covers v1.1, whose onboard WS2812 LED is on
@@ -280,8 +364,8 @@ and [chip profile](../../configs/chips/esp32s3-devkitc-1-n16r8-v10-smoke.yaml)
 model that exact wiring. The narrow simulation assumes an ideal VDD rail and boots a register-level image,
 routes RMT channel 0 to GPIO48, checks a non-black decoded pixel, and captures
 UART0 marker `ESP32_S3_DEVKITC1_V10_RMT_OK`. It does not assert the pixel's
-color or claim the ESP-IDF boot path, USB bridge, radio, PSRAM, or a physical
-board run.
+color or claim the ESP-IDF boot path, USB bridge, radio, or a physical board
+run. The separate PSRAM smoke in this README targets the v1.1 profile only.
 
 For a copy-paste Arduino example, select **ESP32-S3 Dev Module** and use
 [`firmware/arduino-v10/main.ino`](firmware/arduino-v10/main.ino). It configures
