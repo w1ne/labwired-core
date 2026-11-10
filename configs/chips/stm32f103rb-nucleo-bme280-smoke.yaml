@@ -39,6 +39,11 @@ pins:
   PB9: { gpio: "gpiob", bit: 9, functions: [{ type: i2c, peripheral: i2c1, role: sda }] }
 
 peripherals:
+  # Cortex-M3 private peripheral bus timer (RM0008, ARMv7-M PPB).
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+
   - id: "rcc"
     type: "rcc"
     base_address: 0x40021000

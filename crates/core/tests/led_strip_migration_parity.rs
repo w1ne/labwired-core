@@ -93,6 +93,21 @@ fn assert_same_artifact(old: &Artifact, new: &Artifact, what: &str) {
     keys.sort();
     keys.dedup();
     for k in keys {
+        // NRZ frame history is additive evidence on the declarative model.
+        // The frozen Rust oracle never recorded it. Compare the shared
+        // framebuffer contract here and check the new history explicitly
+        // below, rather than deleting evidence to satisfy migration parity.
+        if k.as_str() == "frames_seen" {
+            assert!(
+                o.get(k).is_none(),
+                "{what}: oracle unexpectedly has frame history"
+            );
+            assert!(
+                n.get(k).is_some_and(serde_json::Value::is_array),
+                "{what}: declarative frames_seen must be an array"
+            );
+            continue;
+        }
         assert_eq!(
             o.get(k),
             n.get(k),
@@ -431,6 +446,25 @@ fn ws2812_parity(what: &str, edges: &[(bool, u64)], pixels: usize) -> Vec<LedPix
         assert_same_artifact(o, n, what);
     }
     p_new
+}
+
+#[test]
+fn ws2812_frame_history_is_published_without_changing_the_oracle() {
+    let strip = ws2812(DATA_PIN, 2, CPU_HZ);
+    let old = OldWs2812::new(DATA_PIN, 2, CPU_HZ);
+    feed_edges(&old, &strip, &ws_frame(&[0x11_22_33, 0x44_55_66], true));
+
+    let artifacts = DeviceEvidence::artifacts(&strip, "strip", &opts());
+    assert_eq!(artifacts.len(), 1);
+    let frames = artifacts[0].meta["frames_seen"]
+        .as_array()
+        .expect("the declarative NRZ strip publishes frame history");
+    assert_eq!(frames.len(), 1);
+    assert_eq!(frames[0]["lit_pixels"], serde_json::json!(2));
+    assert_eq!(
+        frames[0]["bytes"],
+        serde_json::json!([0x11, 0x22, 0x33, 0x44, 0x55, 0x66])
+    );
 }
 
 #[test]
