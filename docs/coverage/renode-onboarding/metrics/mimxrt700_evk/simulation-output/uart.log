@@ -1,5 +1,5 @@
 MIMXRT700 LP_FLEXCOMM0 LPUART SMOKE
-rx lpuart0 re_off=1 queued=2 masked=1 asserted=1 masked_data=1 unmasked=1 data=00000052,00000053 released=1 irq=11111 handler=1 ipsr=00000017 ok
+rx lpuart0 re_off=1 queued=2 masked=1 asserted=1 masked_data=1 unmasked=1 data=00000052,00000053 released=1 irq=11111 handler=1 ipsr=00000017 exc_return=fffffffd psp_context=1 ok
 flexcomm0 pselid=00103070->00103071->00103079
 lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00880000 istat=00000001
-pass=0000003f
+pass=0000007f

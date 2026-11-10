@@ -1,13 +1,14 @@
 #![no_std]
 #![no_main]
 
-use core::ptr::{read_volatile, write_volatile};
+use core::ptr::{addr_of, addr_of_mut, read_volatile, write_volatile};
 use core::sync::atomic::{AtomicU32, Ordering};
 use cortex_m_rt::{entry, exception};
 use panic_halt as _;
 
 const RESULT: *mut u32 = 0x2000_0008 as *mut u32;
 const PASS: *mut u32 = 0x2000_000C as *mut u32;
+const EXCEPTION_CONTEXT: *mut u32 = 0x2000_0010 as *mut u32;
 
 const FLEXCOMM0: usize = 0x4011_0000;
 const NVIC_ISER0: usize = 0xE000_E100;
@@ -44,6 +45,10 @@ const WATER_RXCOUNT_SHIFT: u32 = 24;
 const ISTAT_UARTRX: u32 = 1 << 1;
 
 static IRQ_ENTRY: AtomicU32 = AtomicU32::new(0);
+static IRQ_EXC_RETURN: AtomicU32 = AtomicU32::new(0);
+
+const PSP_STACK_WORDS: usize = 64;
+static mut PSP_STACK: [u32; PSP_STACK_WORDS] = [0; PSP_STACK_WORDS];
 
 fn rd(off: usize) -> u32 {
     unsafe { read_volatile((FLEXCOMM0 + off) as *const u32) }
@@ -61,8 +66,60 @@ fn clear_nvic_irq_pending() {
     unsafe { write_volatile(NVIC_ICPR0 as *mut u32, FLEXCOMM0_IRQ_BIT) }
 }
 
-fn enable_nvic_irq() {
-    unsafe { write_volatile(NVIC_ISER0 as *mut u32, FLEXCOMM0_IRQ_BIT) }
+/// Take the already-pending FLEXCOMM0 interrupt from Thread mode using PSP.
+/// The handler records EXC_RETURN; after exception return this checks that PSP
+/// popped the frame and MSP was restored after running the handler.
+fn exercise_irq_exception_on_psp() -> bool {
+    IRQ_ENTRY.store(0, Ordering::Relaxed);
+    IRQ_EXC_RETURN.store(0, Ordering::Relaxed);
+    let psp_top = addr_of_mut!(PSP_STACK) as u32 + (PSP_STACK_WORDS as u32) * 4;
+    let msp_before: u32;
+    let psp_after: u32;
+    let msp_after: u32;
+
+    unsafe {
+        core::arch::asm!(
+            "msr psp, {top}",
+            "mrs {msp_before}, msp",
+            "movs {tmp}, #2",
+            "msr control, {tmp}",
+            "isb",
+            "str {irq_bit}, [{iser}]",
+            "movw {count}, #10000",
+            "1:",
+            "ldr {seen}, [{entry}]",
+            "cmp {seen}, {mark}",
+            "beq 2f",
+            "subs {count}, #1",
+            "bne 1b",
+            "2:",
+            "mrs {psp_after}, psp",
+            "movs {tmp}, #0",
+            "msr control, {tmp}",
+            "isb",
+            "mrs {msp_after}, msp",
+            top = in(reg) psp_top,
+            msp_before = out(reg) msp_before,
+            psp_after = out(reg) psp_after,
+            msp_after = out(reg) msp_after,
+            tmp = out(reg) _,
+            irq_bit = in(reg) FLEXCOMM0_IRQ_BIT,
+            iser = in(reg) NVIC_ISER0 as u32,
+            count = out(reg) _,
+            seen = out(reg) _,
+            entry = in(reg) addr_of!(IRQ_ENTRY) as u32,
+            mark = in(reg) FLEXCOMM0_HANDLER_MARK,
+            options(nostack),
+        );
+    }
+
+    let exc_return = IRQ_EXC_RETURN.load(Ordering::Relaxed);
+    let handler_entered = IRQ_ENTRY.load(Ordering::Relaxed) == FLEXCOMM0_HANDLER_MARK;
+    let context = u32::from(exc_return == 0xFFFF_FFFD)
+        | (u32::from(psp_after == psp_top) << 1)
+        | (u32::from(msp_before == msp_after) << 2);
+    unsafe { write_volatile(EXCEPTION_CONTEXT, context) };
+    handler_entered && context == 0b111
 }
 
 fn wait_nvic_irq_pending(expected: bool) -> bool {
@@ -125,13 +182,13 @@ fn smoke_lpuart_rx() -> bool {
     clear_nvic_irq_pending();
     let rx_repend = wait_nvic_irq_pending(true);
 
-    // Enable the already-pending external IRQ and require the Cortex-M
-    // exception path to call DefaultHandler. The handler disables IRQ 7
-    // before returning so the still-asserted RX level cannot retrigger it.
-    // The handler also records IPSR, which is exception number 16 + IRQn.
-    enable_nvic_irq();
-    let irq_handler_entered =
-        (0..10_000).any(|_| IRQ_ENTRY.load(Ordering::Relaxed) == FLEXCOMM0_HANDLER_MARK);
+    // Enable the already-pending external IRQ from Thread/PSP and require the
+    // Cortex-M exception path to call DefaultHandler. The handler disables IRQ
+    // 7 before returning so the active RX level cannot retrigger it. It records
+    // IPSR and EXC_RETURN; the interrupted thread then checks PSP and MSP.
+    let irq_psp_context_restored = exercise_irq_exception_on_psp();
+    let irq_handler_entered = IRQ_ENTRY.load(Ordering::Relaxed) == FLEXCOMM0_HANDLER_MARK;
+    let irq_exc_return = IRQ_EXC_RETURN.load(Ordering::Relaxed);
 
     let first = rd(LPUART_DATA) & 0xFF;
     let second_still_queued = rd(LPUART_STAT) & STAT_RDRF != 0;
@@ -155,6 +212,7 @@ fn smoke_lpuart_rx() -> bool {
         && rx_asserted
         && rx_repend
         && irq_handler_entered
+        && irq_psp_context_restored
         && first == b'R' as u32
         && second_still_queued
         && rx_masked_with_data
@@ -191,6 +249,10 @@ fn smoke_lpuart_rx() -> bool {
     putc(if irq_handler_entered { b'1' } else { b'0' });
     puts(" ipsr=");
     hex(IRQ_ENTRY.load(Ordering::Relaxed) >> 16);
+    puts(" exc_return=");
+    hex(irq_exc_return);
+    puts(" psp_context=");
+    putc(if irq_psp_context_restored { b'1' } else { b'0' });
     puts(if ok { " ok\r\n" } else { " FAIL\r\n" });
     ok
 }
@@ -248,6 +310,9 @@ fn main() -> ! {
     if IRQ_ENTRY.load(Ordering::Relaxed) == FLEXCOMM0_HANDLER_MARK {
         pass |= 1 << 5;
     }
+    if unsafe { read_volatile(EXCEPTION_CONTEXT) } == 0b111 {
+        pass |= 1 << 6;
+    }
 
     puts("flexcomm0 pselid=");
     hex(pselid_reset);
@@ -279,14 +344,21 @@ fn main() -> ! {
 #[exception]
 unsafe fn DefaultHandler(irqn: i16) {
     if irqn == FLEXCOMM0_IRQN {
+        let exc_return: u32;
         let ipsr: u32;
         unsafe {
+            core::arch::asm!(
+                "mov {exc_return}, lr",
+                exc_return = out(reg) exc_return,
+                options(nomem, nostack, preserves_flags),
+            );
             core::arch::asm!(
                 "mrs {ipsr}, IPSR",
                 ipsr = out(reg) ipsr,
                 options(nomem, nostack, preserves_flags),
             );
         }
+        IRQ_EXC_RETURN.store(exc_return, Ordering::Relaxed);
         IRQ_ENTRY.store((ipsr << 16) | (irqn as u32 + 1), Ordering::Relaxed);
         unsafe { write_volatile(NVIC_ICER0 as *mut u32, FLEXCOMM0_IRQ_BIT) };
     }
