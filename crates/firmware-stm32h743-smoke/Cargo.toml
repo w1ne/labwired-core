@@ -8,6 +8,7 @@ license = "MIT"
 [features]
 nucleo-h753zi-rx = []
 nucleo-h753zi-usart3-irq = ["nucleo-h753zi-rx"]
+stm32h743-exception-frame = []
 
 [dependencies]
 cortex-m-rt = "0.7"

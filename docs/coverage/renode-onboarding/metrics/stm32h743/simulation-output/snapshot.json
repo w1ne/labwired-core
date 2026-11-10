@@ -3,24 +3,24 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      1476527124,
-      1073760284,
+      61,
       0,
       103,
-      105,
-      111,
+      104,
       13,
+      111,
+      105,
       537001968,
+      1476527124,
+      1073760284,
       10,
       98,
+      126080,
+      537001904,
       48,
-      61,
-      122496,
-      537001968,
-      104,
-      134220458
+      134228616
     ],
-    "pc": 134220458,
+    "pc": 134228616,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -31,7 +31,7 @@
     ],
     "vtor": 0,
     "waiting_for_event": false,
-    "event_register": false
+    "event_register": true
   },
   "steps_executed": 4000000,
   "cycles": 4000000,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "dc27e0ad511f864e9e851cb9bd06afbcbcf94c737325e076dea5dd02669aab13",
+  "firmware_hash": "aa646f44f4ebb684a276e0392aa18f9b79c578bed23455d7248dfa08c2d3ba58",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-stm32h743-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32h743.yaml",

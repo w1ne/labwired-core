@@ -5,6 +5,39 @@ use core::ptr::{read_volatile, write_volatile};
 use cortex_m_rt::entry;
 use panic_halt as _;
 
+#[cfg(feature = "stm32h743-exception-frame")]
+use core::arch::asm;
+
+#[cfg(feature = "stm32h743-exception-frame")]
+const SCB_VTOR: *mut u32 = 0xE000_ED08 as *mut u32;
+#[cfg(feature = "stm32h743-exception-frame")]
+const NVIC_ISER0: *mut u32 = 0xE000_E100 as *mut u32;
+#[cfg(feature = "stm32h743-exception-frame")]
+const NVIC_ICER0: *mut u32 = 0xE000_E180 as *mut u32;
+#[cfg(feature = "stm32h743-exception-frame")]
+const NVIC_ISPR0: *const u32 = 0xE000_E200 as *const u32;
+#[cfg(feature = "stm32h743-exception-frame")]
+const NVIC_ICPR0: *mut u32 = 0xE000_E280 as *mut u32;
+#[cfg(feature = "stm32h743-exception-frame")]
+const NVIC_IABR0: *const u32 = 0xE000_E300 as *const u32;
+#[cfg(feature = "stm32h743-exception-frame")]
+const EXCEPTION_IRQ: u32 = 5;
+#[cfg(feature = "stm32h743-exception-frame")]
+const EXCEPTION_IRQ_BIT: u32 = 1 << EXCEPTION_IRQ;
+#[cfg(feature = "stm32h743-exception-frame")]
+const EXCEPTION_VECTOR_INDEX: usize = 16 + EXCEPTION_IRQ as usize;
+
+#[cfg(feature = "stm32h743-exception-frame")]
+#[repr(C, align(1024))]
+struct RamVectorTable([u32; 64]);
+
+#[cfg(feature = "stm32h743-exception-frame")]
+static mut RAM_VECTOR_TABLE: RamVectorTable = RamVectorTable([0; 64]);
+
+// Handler scratch and the stacked frame captured before exception return.
+#[cfg(feature = "stm32h743-exception-frame")]
+static mut EXCEPTION_RECORD: [u32; 14] = [0; 14];
+
 const RCC_AHB4ENR: *mut u32 = 0x5802_44E0 as *mut u32;
 const RCC_APB1LENR: *mut u32 = 0x5802_44E8 as *mut u32;
 const GPIOB: u32 = 0x5802_0400;
@@ -83,6 +116,194 @@ fn send(text: &[u8]) {
     for byte in text {
         putc(*byte);
     }
+}
+
+#[cfg(feature = "stm32h743-exception-frame")]
+fn send_hex32(value: u32) {
+    for shift in (0..8).rev() {
+        let digit = ((value >> (shift * 4)) & 0xF) as u8;
+        putc(if digit < 10 {
+            b'0' + digit
+        } else {
+            b'A' + digit - 10
+        });
+    }
+}
+
+/// Capture the hardware-created Cortex-M7 frame before a compiler prologue
+/// changes MSP. r4 is saved because it is not part of the basic exception
+/// frame; caller-saved registers are restored by exception return.
+#[cfg(feature = "stm32h743-exception-frame")]
+#[unsafe(naked)]
+unsafe extern "C" fn smoke_exception_handler() {
+    core::arch::naked_asm!(
+        "mrs r0, msp",
+        "push {{r4}}",
+        "ldr r1, ={record}",
+        "str r0, [r1, #36]",
+        "mov r2, lr",
+        "str r2, [r1, #32]",
+        "mov r4, r0",
+        "movs r2, #8",
+        "2:",
+        "ldr r3, [r4]",
+        "str r3, [r1]",
+        "adds r4, #4",
+        "adds r1, #4",
+        "subs r2, #1",
+        "bne 2b",
+        "mrs r0, ipsr",
+        "ldr r1, ={record}",
+        "str r0, [r1, #40]",
+        "ldr r2, =0xE000E300",
+        "ldr r0, [r2]",
+        "str r0, [r1, #44]",
+        "ldr r2, =0xE000E200",
+        "ldr r0, [r2]",
+        "str r0, [r1, #48]",
+        "pop {{r4}}",
+        "bx lr",
+        record = sym EXCEPTION_RECORD,
+    );
+}
+
+/// Pend IRQ 5 after setting sentinels in every caller-saved register which
+/// Cortex-M stacks automatically. The recorded pre-exception MSP is eight
+/// bytes below the Rust caller's MSP because r4/r7 are saved here.
+#[cfg(feature = "stm32h743-exception-frame")]
+#[unsafe(naked)]
+unsafe extern "C" fn pend_exception_irq_with_sentinels() {
+    core::arch::naked_asm!(
+        "push {{r4, r7}}",
+        "mrs r7, msp",
+        "ldr r4, ={record}",
+        "str r7, [r4, #52]",
+        "ldr r7, =0xE000E200",
+        "movs r4, #0x20",
+        "movs r0, #0x11",
+        "movs r1, #0x22",
+        "movs r2, #0x33",
+        "movs r3, #0x44",
+        "movs r4, #0x55",
+        "mov r12, r4",
+        "movs r4, #0x20",
+        "str r4, [r7]",
+        "pop {{r4, r7}}",
+        "bx lr",
+        record = sym EXCEPTION_RECORD,
+    );
+}
+
+#[cfg(feature = "stm32h743-exception-frame")]
+fn check_cortex_m7_exception_frame() -> bool {
+    let vector_table = unsafe { core::ptr::addr_of_mut!(RAM_VECTOR_TABLE.0).cast::<u32>() };
+    let record = unsafe { core::ptr::addr_of_mut!(EXCEPTION_RECORD).cast::<u32>() };
+    let source_vtor = unsafe { read_volatile(SCB_VTOR) };
+
+    unsafe {
+        write_volatile(NVIC_ICER0, EXCEPTION_IRQ_BIT);
+        write_volatile(NVIC_ICPR0, EXCEPTION_IRQ_BIT);
+        for index in 0..64 {
+            write_volatile(vector_table.add(index), 0);
+        }
+        for index in 0..14 {
+            write_volatile(record.add(index), 0);
+        }
+        let handler = (smoke_exception_handler as *const () as usize as u32) | 1;
+        write_volatile(vector_table.add(EXCEPTION_VECTOR_INDEX), handler);
+        write_volatile(SCB_VTOR, vector_table as u32);
+        write_volatile(NVIC_ISER0, EXCEPTION_IRQ_BIT);
+    }
+
+    let vector_installed = unsafe {
+        read_volatile(vector_table.add(EXCEPTION_VECTOR_INDEX))
+            == ((smoke_exception_handler as *const () as usize as u32) | 1)
+    };
+    let vtor_installed = unsafe { read_volatile(SCB_VTOR) } == vector_table as u32;
+
+    let msp_before: u32;
+    unsafe { asm!("mrs {}, msp", out(reg) msp_before, options(nomem, nostack, preserves_flags)) };
+    unsafe { pend_exception_irq_with_sentinels() };
+    let msp_after: u32;
+    unsafe { asm!("mrs {}, msp", out(reg) msp_after, options(nomem, nostack, preserves_flags)) };
+
+    let read_record = |index: usize| unsafe { read_volatile(record.add(index)) };
+    let frame_r0 = read_record(0);
+    let frame_r1 = read_record(1);
+    let frame_r2 = read_record(2);
+    let frame_r3 = read_record(3);
+    let frame_r12 = read_record(4);
+    let frame_lr = read_record(5);
+    let frame_pc = read_record(6);
+    let frame_xpsr = read_record(7);
+    let exc_return = read_record(8);
+    let frame_sp = read_record(9);
+    let ipsr = read_record(10);
+    let active_during = read_record(11);
+    let pending_during = read_record(12);
+    let msp_before_irq = read_record(13);
+
+    unsafe {
+        write_volatile(NVIC_ICER0, EXCEPTION_IRQ_BIT);
+        write_volatile(NVIC_ICPR0, EXCEPTION_IRQ_BIT);
+        write_volatile(SCB_VTOR, source_vtor);
+    }
+    let returned = unsafe { read_volatile(NVIC_ISPR0) } & EXCEPTION_IRQ_BIT == 0
+        && unsafe { read_volatile(NVIC_IABR0) } & EXCEPTION_IRQ_BIT == 0;
+    let vtor_restored = unsafe { read_volatile(SCB_VTOR) } == source_vtor;
+    let frame_ok = frame_r0 == 0x11
+        && frame_r1 == 0x22
+        && frame_r2 == 0x33
+        && frame_r3 == 0x44
+        && frame_r12 == 0x55
+        && frame_lr & 1 != 0
+        && (0x0800_0000..0x0810_0000).contains(&frame_pc)
+        && frame_xpsr & 0x0100_0000 != 0
+        && exc_return == 0xffff_fff9
+        && frame_sp & 7 == 0
+        && frame_sp == msp_before_irq.wrapping_sub(32)
+        && (0x2000_0000..0x2002_0000).contains(&frame_sp)
+        && msp_after == msp_before;
+    let active_and_pending_ok = ipsr == 16 + EXCEPTION_IRQ
+        && active_during & EXCEPTION_IRQ_BIT != 0
+        && pending_during & EXCEPTION_IRQ_BIT == 0;
+    let ok = vector_installed
+        && vtor_installed
+        && frame_ok
+        && active_and_pending_ok
+        && returned
+        && vtor_restored;
+
+    send(b"cortex-m7 irq ipsr=");
+    send_hex32(ipsr);
+    send(b" active=");
+    send_hex32(active_during);
+    send(b" pending=");
+    send_hex32(pending_during);
+    send(b"\r\ncortex-m7 frame=");
+    send(if frame_ok { b"1" } else { b"0" });
+    send(b" regs=");
+    send_hex32(frame_r0);
+    send(b",");
+    send_hex32(frame_r1);
+    send(b",");
+    send_hex32(frame_r2);
+    send(b",");
+    send_hex32(frame_r3);
+    send(b",");
+    send_hex32(frame_r12);
+    send(b"\r\ncortex-m7 return=");
+    send(if returned { b"1" } else { b"0" });
+    send(b" stack=");
+    send(if msp_after == msp_before { b"1" } else { b"0" });
+    send(b" vtor=");
+    send(if vtor_installed && vtor_restored {
+        b"1"
+    } else {
+        b"0"
+    });
+    send(b"\r\n");
+    ok
 }
 
 #[cfg(feature = "nucleo-h753zi-rx")]
@@ -331,6 +552,15 @@ fn main() -> ! {
 
     set_led(false);
     send(b"STM32H7 register smoke\r\n");
+    #[cfg(feature = "stm32h743-exception-frame")]
+    {
+        let exception_ok = check_cortex_m7_exception_frame();
+        send(if exception_ok {
+            b"cortex-m7 exception ok\r\n"
+        } else {
+            b"cortex-m7 exception fail\r\n"
+        });
+    }
     #[cfg(feature = "nucleo-h753zi-rx")]
     send(if rx_enable_gates_ok {
         b"usart3 rx_gate re_off=1 ue_off=1 ok\r\n"

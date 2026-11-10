@@ -872,6 +872,7 @@ SMOKE_MAPPINGS = {
     "stm32h743": {
         "crate": "firmware-stm32h743-smoke",
         "target": "thumbv7em-none-eabi",
+        "features": "stm32h743-exception-frame",
         "script": "examples/renode-onboarding/stm32h743-smoke.yaml",
     },
     "stm32h7": {
