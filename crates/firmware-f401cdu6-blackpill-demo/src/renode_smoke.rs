@@ -19,9 +19,9 @@
 //!          master-receive BTF event IRQs, absent-address NACK and error IRQ
 //!          checks
 //!   I2C2   a separate TMP102 repeated-start read, SB/ADDR/BTF event IRQs,
-//!          TXE isolation, and a POS-sequenced two-byte receive with BTF/RXNE
-//!          source and release checks on the imported second controller
-//!          instance
+//!          TXE isolation, and a POS-sequenced two-byte receive with
+//!          STOP-before-DR, BTF/RXNE source isolation, and both final DR reads
+//!          on the imported second controller instance
 //!   SPI1   MAX31855 reset frame plus TXEIE/RXNEIE level IRQ assertions
 //!   USART1 TXEIE and RXNEIE assert and release their NVIC line
 //! A summary word goes to RAM at 0x20017F00 (one bit per smoke group passed).
@@ -210,13 +210,19 @@ fn main() -> ! {
         i2c2_pos_armed,
         i2c2_rx_btf_irq,
         i2c2_rxne_isolated,
+        i2c2_stop_before_dr,
+        i2c2_first_read_keeps_rxne,
         i2c2_rx_btf_released,
+        i2c2_final_rxne_cleared,
     ) = smoke_i2c2_receive_btf();
     let i2c2_rx_btf_ok = i2c2_rx_btf_data == 0x1980
         && i2c2_pos_armed
         && i2c2_rx_btf_irq
         && i2c2_rxne_isolated
-        && i2c2_rx_btf_released;
+        && i2c2_stop_before_dr
+        && i2c2_first_read_keeps_rxne
+        && i2c2_rx_btf_released
+        && i2c2_final_rxne_cleared;
     send(b"pos=");
     send(if i2c2_pos_armed { b"1" } else { b"0" });
     send(b" ");
@@ -224,8 +230,18 @@ fn main() -> ! {
     send(if i2c2_rx_btf_irq { b"1" } else { b"0" });
     send(b" rxne_isolated=");
     send(if i2c2_rxne_isolated { b"1" } else { b"0" });
+    send(b" stop_before_dr=");
+    send(if i2c2_stop_before_dr { b"1" } else { b"0" });
+    send(b" rxne_after_first=");
+    send(if i2c2_first_read_keeps_rxne {
+        b"1"
+    } else {
+        b"0"
+    });
     send(b" release=");
     send(if i2c2_rx_btf_released { b"1" } else { b"0" });
+    send(b" rxne_cleared=");
+    send(if i2c2_final_rxne_cleared { b"1" } else { b"0" });
     send(b" data=");
     put_hex32(u32::from(i2c2_rx_btf_data));
     send(if i2c2_rx_btf_ok {
@@ -718,9 +734,10 @@ fn smoke_i2c2() -> (u16, bool, bool, bool, bool) {
 
 /// Read two bytes from the I2C2 TMP102 with POS delaying the ACK decision by
 /// one byte. With ITEVTEN enabled and ITBUFEN disabled, RXNE must not assert
-/// EV; BTF must assert the configured EV line (IRQ 33) and release it when DR
-/// is read.
-fn smoke_i2c2_receive_btf() -> (u16, bool, bool, bool, bool) {
+/// EV; BTF must assert the configured EV line (IRQ 33). STOP is issued while
+/// both bytes remain pending, then both DR reads must preserve the bytes and
+/// clear BTF/RXNE in order.
+fn smoke_i2c2_receive_btf() -> (u16, bool, bool, bool, bool, bool, bool, bool) {
     const PE: u32 = 1;
     const ACK: u32 = 1 << 10;
     const POS: u32 = 1 << 11;
@@ -730,33 +747,35 @@ fn smoke_i2c2_receive_btf() -> (u16, bool, bool, bool, bool) {
     const ADDR: u32 = 1 << 1;
     const BTF: u32 = 1 << 2;
     const RXNE: u32 = 1 << 6;
+    const FAILED: (u16, bool, bool, bool, bool, bool, bool, bool) =
+        (0xFFFF, false, false, false, false, false, false, false);
 
     // ITEVTEN only; ITBUFEN remains clear for receive source isolation.
     wr(I2C2_CR2, 16 | (1 << 9));
     wr(I2C2_CR1, PE | ACK | START);
     if !wait(I2C2_SR1, SB, SB) {
-        return (0xFFFF, false, false, false, false);
+        return FAILED;
     }
     wr(I2C2_DR, 0x92); // TMP102 at 0x49, write
     if !wait(I2C2_SR1, ADDR, ADDR) {
-        return (0xFFFF, false, false, false, false);
+        return FAILED;
     }
     let _ = rd(I2C2_SR1);
     let _ = rd(I2C2_SR2);
     wr(I2C2_DR, 0); // temperature register pointer
     if !wait(I2C2_SR1, BTF, BTF) {
-        return (0xFFFF, false, false, false, false);
+        return FAILED;
     }
 
     // Arm POS while ACK is set so the address phase captures an ACK for the
     // first byte; the write after ADDR clears ACK for the second byte.
     wr(I2C2_CR1, PE | ACK | POS | START);
     if !wait(I2C2_SR1, SB, SB) {
-        return (0xFFFF, false, false, false, false);
+        return FAILED;
     }
     wr(I2C2_DR, 0x93); // TMP102 at 0x49, read
     if !wait(I2C2_SR1, ADDR, ADDR) {
-        return (0xFFFF, false, false, false, false);
+        return FAILED;
     }
     let _ = rd(I2C2_SR1);
     let _ = rd(I2C2_SR2);
@@ -765,31 +784,46 @@ fn smoke_i2c2_receive_btf() -> (u16, bool, bool, bool, bool) {
     wr(I2C2_CR1, PE | POS); // POS delays the NACK so the first byte is ACKed.
 
     if !wait(I2C2_SR1, RXNE, RXNE) {
-        return (0xFFFF, pos_armed, false, false, false);
+        return (0xFFFF, pos_armed, false, false, false, false, false, false);
     }
     let rxne_isolated = rd(NVIC_ISPR1) & I2C2_EV_IRQ_BIT == 0;
     if !wait(I2C2_SR1, BTF, BTF) {
-        return (0xFFFF, pos_armed, false, rxne_isolated, false);
+        return (
+            0xFFFF,
+            pos_armed,
+            false,
+            rxne_isolated,
+            false,
+            false,
+            false,
+            false,
+        );
     }
     let btf_irq = rd(NVIC_ISPR1) & I2C2_EV_IRQ_BIT != 0;
 
+    // Complete the receive before draining DR. STOP must release BUSY while
+    // retaining both completed bytes for the following two DR reads.
+    wr(I2C2_CR1, PE | POS | STOP);
+    let stop_before_dr = wait(I2C2_SR2, 0x0002, 0);
     let msb = rd(I2C2_DR) as u8;
+    let first_read_keeps_rxne = rd(I2C2_SR1) & RXNE != 0;
     wr(NVIC_ICPR1, I2C2_EV_IRQ_BIT);
     let mut btf_released = true;
     for _ in 0..16 {
         btf_released &= rd(I2C2_SR1) & BTF == 0;
         btf_released &= rd(NVIC_ISPR1) & I2C2_EV_IRQ_BIT == 0;
     }
-
-    wr(I2C2_CR1, PE | STOP);
-    let idle = wait(I2C2_SR2, 0x0002, 0);
     let lsb = rd(I2C2_DR) as u8;
+    let final_rxne_cleared = rd(I2C2_SR1) & RXNE == 0;
     (
         u16::from_be_bytes([msb, lsb]),
         pos_armed,
         btf_irq,
         rxne_isolated,
-        btf_released && idle,
+        stop_before_dr,
+        first_read_keeps_rxne,
+        btf_released,
+        final_rxne_cleared,
     )
 }
 

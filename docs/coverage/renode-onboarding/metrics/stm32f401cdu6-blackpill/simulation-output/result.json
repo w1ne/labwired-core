@@ -41,7 +41,7 @@
           "i2c1 btf_rx_irq=1 rxne_isolated=1 release=1 data=00001980 ok",
           "i2c1 tmp102=00001900 nack=00000400 buf_irq=1 buf_release=1 ev_irq=1 ev_release=1 er_irq=1 irq_released=1 ok",
           "i2c2 tmp102=00001900 sb_irq=1 addr_irq=1 txe_isolated=1 btf_irq=1 ok",
-          "pos=1 i2c2 btf_rx_irq=1 rxne_isolated=1 release=1 data=00001980 ok",
+          "pos=1 i2c2 btf_rx_irq=1 rxne_isolated=1 stop_before_dr=1 rxne_after_first=1 release=1 rxne_cleared=1 data=00001980 ok",
           "spi1 max31855=01901600 txe_irq=1 rxne_irq=1 released=1 ok",
           "usart1 txe_irq=1 released=1 ok",
           "usart1 rxne_irq=1 data=00000052 released=1 ok",
@@ -92,12 +92,12 @@
       192,
       0,
       26220032,
-      134247332,
+      134249014,
       536969024,
-      134244511,
-      134246698
+      134246367,
+      134248554
     ],
-    "pc": 134246698,
+    "pc": 134248554,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -110,7 +110,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "103ab593d5226f3f8842e233e5215925df9ea100cc6615df53c8353bb2c189b5",
+  "firmware_hash": "0506b8e9551c4c6ec6f7ab2e6cf21ea319dffa3c2d870348a0b006de393d8d00",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-f401cdu6-blackpill-renode-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f401cdu6-blackpill.yaml",
@@ -602,7 +602,7 @@
         "end_cycle": 20000
       },
       {
-        "text": "pos=1 i2c2 btf_rx_irq=1 rxne_isolated=1 release=1 data=00001980 ok",
+        "text": "pos=1 i2c2 btf_rx_irq=1 rxne_isolated=1 stop_before_dr=1 rxne_after_first=1 release=1 rxne_cleared=1 data=00001980 ok",
         "cycle_lo": 10000,
         "cycle": 20000,
         "end_cycle": 20000
@@ -636,14 +636,14 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 29633,
+    "text_bytes": 31315,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 29633,
+    "flash_used_bytes": 31315,
     "ram_static_bytes": 0,
     "flash_total_bytes": 393216,
     "ram_total_bytes": 98304,
-    "flash_used_pct": 7.54,
+    "flash_used_pct": 7.96,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -669,18 +669,18 @@
     "cycles": 200000,
     "instructions": 200000,
     "steps_executed": 200000,
-    "memory_reads": 6429,
-    "memory_writes": 257,
-    "peripheral_accesses": 5329,
+    "memory_reads": 6674,
+    "memory_writes": 246,
+    "peripheral_accesses": 5433,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134246698,
+        "pc": 134248554,
         "count": 742,
         "symbol": "firmware_f401cdu6_blackpill_renode_smoke::main"
       },
       {
-        "pc": 134233200,
+        "pc": 134233206,
         "count": 39,
         "symbol": "firmware_f401cdu6_blackpill_renode_smoke::putc"
       }
