@@ -124,6 +124,13 @@
   {
     "buses": [
       "I2C",
+      "UART"
+    ],
+    "name": "esp32-devkitc-32e-gpio-smoke"
+  },
+  {
+    "buses": [
+      "I2C",
       "SPI",
       "UART"
     ],

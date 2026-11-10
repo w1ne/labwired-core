@@ -478,6 +478,9 @@ pub struct Avr {
     ext_watch: u8,
     /// Watchdog timer: `WDTCSR` and `WDR` (`avr/wdt.rs`).
     wdt: wdt::Wdt,
+    /// Data EEPROM and `EECR`/`EEDR`/`EEAR` (`avr/eeprom.rs`). Empty on the
+    /// parts whose EEPROM is not modelled.
+    eeprom: eeprom::Eeprom,
 }
 
 impl std::fmt::Debug for Avr {
@@ -770,6 +773,7 @@ impl Avr {
             ext_watch: 0,
             irq_shadow: false,
             wdt: wdt::Wdt::new(model.has_wdtcsr()),
+            eeprom: eeprom::Eeprom::new(model.eeprom_size()),
         }
     }
 
@@ -1019,7 +1023,9 @@ impl Avr {
             // high window by `data_write`.
             a if self.is_pin_reg(a) => {
                 let ddr = self.io[(addr + 1 - 0x20) as usize];
-                let port = self.io[(addr + 2 - 0x20) as usize];
+                // A pad an output-compare unit owns reads its waveform level,
+                // not the latch (the synchronizer samples the pad).
+                let port = self.port_pad_value(addr + 2, self.io[(addr + 2 - 0x20) as usize]);
                 // Propagated, not discarded: a chip yaml that maps no window
                 // for this port has no input state for this register at all,
                 // and a swallowed error would answer with a fabricated low — a
@@ -1119,6 +1125,7 @@ impl Avr {
                 Ok(self.ext_read(addr).unwrap_or_default())
             }
             a if self.wdt.handles(a) => Ok(self.wdt.read(self.cycles)),
+            a if self.eeprom.handles(a) => Ok(self.eeprom.read(a, self.cycles)),
             0x0020..=0x00FF => Ok(self.io[(addr - 0x20) as usize]),
             // ATmega2560 extended I/O (ports H..L, Timer3/4/5, USART1..3):
             // stored registers.
@@ -1452,6 +1459,10 @@ impl Avr {
             }
             a if self.wdt.handles(a) => {
                 self.wdt_write(value);
+                Ok(())
+            }
+            a if self.eeprom.handles(a) => {
+                self.cycles += self.eeprom.write(a, value, self.cycles);
                 Ok(())
             }
             0x0020..=0x00FF => {
@@ -1974,6 +1985,15 @@ impl Avr {
                 if self.is_avrxt() && addr >= AVR_EEPROM_VMA_BIAS {
                     continue;
                 }
+                // `EEMEM` goes to the data EEPROM, never into SRAM or I/O.
+                if addr >= AVR_EEPROM_VMA_BIAS {
+                    for (i, b) in seg.data.iter().enumerate() {
+                        if let Some(cell) = self.eeprom.data.get_mut(d as usize + i) {
+                            *cell = *b;
+                        }
+                    }
+                    continue;
+                }
                 // Data / EEPROM space (biased VMA from avr-gcc).
                 for (i, b) in seg.data.iter().enumerate() {
                     let a = d as u16 + i as u16;
@@ -2348,7 +2368,8 @@ impl Cpu for Avr {
     /// A core stopped by `SLEEP` may be skipped until the next thing that can
     /// wake it: a Timer0 overflow or a Timer1/Timer2 compare/overflow with its
     /// interrupt enabled (while clk_I/O runs), or a pad change seen at a later
-    /// boundary. Nothing to skip when an interrupt is already takeable, or a
+    /// boundary, or the end of an EEPROM write while `EERIE` waits on it.
+    /// Nothing to skip when an interrupt is already takeable, or a
     /// watched pad moved since the last sample, or the USART receive interrupt
     /// is on.
     fn idle_fast_forward_budget(&self, bus: &dyn Bus) -> Option<u64> {
@@ -2367,6 +2388,7 @@ impl Cpu for Avr {
                 self.timer1_wake_cycles(),
                 self.timer2_wake_cycles(),
                 self.wdt.wake_cycles(self.cycles),
+                self.eeprom.ready_wake_cycles(self.cycles),
             ]
             .into_iter()
             .flatten()
@@ -2450,6 +2472,7 @@ impl Cpu for Avr {
         self.twi_slave = None;
         self.ext_reset();
         self.wdt_after_reset();
+        self.eeprom.reset();
         self.irq_shadow = false;
         // Keep attached SPI/I2C slaves across reset (same wiring as real board).
         Ok(())
@@ -2521,6 +2544,11 @@ impl Cpu for Avr {
             && bus.read_u8(AVR_IO_MIRROR_BASE + 0xC0)? & UCSRA_RXC == 0
         {
             self.pending_irq &= !(1u64 << VEC_USART_RX);
+        }
+
+        // EE_READY: level-sensitive on EERIE with no write in progress.
+        if self.eeprom.irq_watched() || self.pending_irq & (1u64 << eeprom::VEC_EE_READY) != 0 {
+            self.sync_eeprom_irq();
         }
 
         // INT0/INT1 and PCINT: sample the pads at this boundary.
@@ -2724,6 +2752,8 @@ impl Cpu for Avr {
     }
 }
 
+#[path = "avr/eeprom.rs"]
+mod eeprom;
 #[path = "avr/exec/mod.rs"]
 mod exec;
 #[path = "avr/ext_int.rs"]

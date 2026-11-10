@@ -1,0 +1,22 @@
+Lane HEAD 193e168d6 (before this change), same ELF and test script.
+Console output of `labwired test` (timestamps trimmed):
+
+boot=1 cause=0 reset=1
+sleeping
+ERROR labwired_cli::execute: Simulation error at step 678526: Memory access violation at 0x3ff5d054
+FAIL  0/1 checks · test · 678526 steps · 0.37s
+
+0x3FF5_D054 = BBPD_CTRL (DR_REG_BB_BASE + 0x54). ESP-IDF rtc_sleep_init
+clears BB_FFT_FORCE_PU there before every sleep; the window was unmapped.
+
+Intermediate build (windows mapped, deep-sleep reboot in place, ROM
+rtc_get_reset_reason thunk still a constant 1). Wake-up and RTC_DATA_ATTR
+work, but the cause is lost, so the oracle fails as it should:
+
+boot=1 cause=0 reset=1
+sleeping
+boot=2 cause=0 reset=1
+sleeping
+boot=3 cause=0 reset=1
+LW_DS_FAIL
+FAIL  0/1 checks · test · 200000000 steps · 69.48s

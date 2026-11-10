@@ -384,9 +384,8 @@ pub const ARDUINO_ESP32_SYMBOLS: &[&str] = &[
     // arg-clobber. We scan ~64 bytes forward looking for the
     // movi.n + s32i.n a14, a1, 0 pattern.
     "app_main",
-    // RNG — esp_random does an APB-clock-divisor computation that
-    // div0s in the sim. We don't need real entropy; nop_return_zero
-    // is fine (callers use it for jitter, never as a primary key).
+    // RNG. No longer thunked (WDEV_RND_REG is modelled); still resolved so
+    // a profile that lists them finds them.
     "esp_random",
     "esp_fill_random",
     // Newlib stdio output — sketches don't depend on serial output
