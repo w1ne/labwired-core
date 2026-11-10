@@ -159,6 +159,17 @@ fn check_uart_txe_irq() {
         }
     }
 
+    // TXE remains set while the TDR is empty. Clearing NVIC pending without
+    // changing TXEIE must let the USART level re-pend its interrupt.
+    unsafe { write_volatile(NVIC_ICPR1, USART3_IRQ_BIT) };
+    let mut txe_irq_reasserted = false;
+    for _ in 0..10_000 {
+        if unsafe { read_volatile(NVIC_ISPR1) } & USART3_IRQ_BIT != 0 {
+            txe_irq_reasserted = true;
+            break;
+        }
+    }
+
     unsafe {
         write_volatile(USART_CR1, cr1 & !USART_TXEIE);
         write_volatile(NVIC_ICPR1, USART3_IRQ_BIT);
@@ -171,8 +182,8 @@ fn check_uart_txe_irq() {
         }
     }
 
-    if txe_irq_isolated && txe_irq_asserted && txe_irq_released {
-        send(b"usart3 txe_irq=isolated,asserted,released ok\r\n");
+    if txe_irq_isolated && txe_irq_asserted && txe_irq_reasserted && txe_irq_released {
+        send(b"usart3 txe_irq=isolated,asserted,reasserted,released ok\r\n");
     } else {
         send(b"usart3 txe_irq=fail fail\r\n");
     }
