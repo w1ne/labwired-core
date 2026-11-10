@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="8" failures="0" errors="0" time="0.532086">
+<testsuite name="labwired" tests="11" failures="0" errors="0" time="0.618579">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="0bd982ccc675605b0ee00dfe20a00646092c7f0f9ad479a5efbc3a289409521b"/>
+    <property name="firmware_hash" value="21e9415f9d3b0d2c6110fb52537ffcf5a9d30fa341fdb8dae7898fd08e086b2b"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.532086">
+  <testcase classname="labwired" name="run" time="0.618579">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: MIMXRT700 LP_FLEXCOMM0 LPUART SMOKE" time="0.000000">
   </testcase>
@@ -15,10 +15,16 @@
   </testcase>
   <testcase classname="labwired" name="assertion 4: memory_value: @0x20000008=0x143" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 5: memory_value: @0x2000000c=0x7000007f" time="0.000000">
+  <testcase classname="labwired" name="assertion 5: memory_value: @0x2000000c=0x700000ff" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 6: memory_value: @0x20000010=0x7" time="0.000000">
+  <testcase classname="labwired" name="assertion 6: memory_value: @0x20000010=0xf" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 7: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 7: memory_value: @0x20000014=0x12345678" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 8: memory_value: @0x2000001c=0x1000000" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 9: memory_value: @0x20000020=0x200000e0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 10: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>

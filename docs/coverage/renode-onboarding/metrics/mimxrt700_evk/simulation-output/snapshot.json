@@ -3,24 +3,24 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      1879048319,
+      1879048447,
       1074855956,
       102,
-      7,
+      15,
       1507336,
-      1074855956,
-      127,
-      542638064,
-      1,
+      255,
       536870928,
-      7,
+      542638064,
+      1074855956,
       1,
-      1,
+      15,
+      15,
+      82,
       542637976,
-      939534587,
-      939534680
+      939538347,
+      939538470
     ],
-    "pc": 939534680,
+    "pc": 939538470,
     "xpsr": 2701131776,
     "primask": false,
     "pending_exceptions": 0,
@@ -33,23 +33,23 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "steps_executed": 5000000,
-  "cycles": 5000000,
-  "instructions": 5000000,
+  "steps_executed": 7000000,
+  "cycles": 7000000,
+  "instructions": 7000000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 5000000
+      "value": 7000000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 5000000
+      "value": 7000000
     }
   },
   "limits": {
-    "max_steps": 5000000,
+    "max_steps": 7000000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "0bd982ccc675605b0ee00dfe20a00646092c7f0f9ad479a5efbc3a289409521b",
+  "firmware_hash": "21e9415f9d3b0d2c6110fb52537ffcf5a9d30fa341fdb8dae7898fd08e086b2b",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt700-evk-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/mimxrt700_evk.yaml",
