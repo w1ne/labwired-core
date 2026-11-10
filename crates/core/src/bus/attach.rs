@@ -108,6 +108,7 @@ const STM32G0_TIMER_PADS: &[TimerAfPad] = &[
 /// (`variants/STM32G4xx/G473R(B-C)T_G473RETx(Z)_G474R(B-C-E)T_G483RET_G484RET/PeripheralPins.c`):
 /// TIM2 on AF1 (AF10 for PA9/PA10), TIM3 on AF2 (AF10 for PB7).
 const STM32G4_TIMER_PADS: &[TimerAfPad] = &[
+    ("tim1", 'a', 8, 6, 0, "TIM1_CH1"),
     ("tim2", 'a', 0, 1, 0, "TIM2_CH1"),
     ("tim2", 'a', 5, 1, 0, "TIM2_CH1"),
     ("tim2", 'a', 15, 1, 0, "TIM2_CH1"),
