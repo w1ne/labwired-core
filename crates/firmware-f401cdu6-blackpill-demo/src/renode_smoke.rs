@@ -27,7 +27,7 @@
 //!          status, event/error-line isolation, ITERREN-gated ER IRQ assertion
 //!          and release, and recovery
 //!   SPI1   MAX31855 reset frame plus TXEIE/RXNEIE level IRQ assertions
-//!   USART1 TXEIE and RXNEIE assert and release their NVIC line
+//!   USART1 TXEIE, TCIE and RXNEIE assert and release their NVIC line
 //! A summary word goes to RAM at 0x20017F00 (one bit per smoke group passed).
 
 use core::ptr::{read_volatile, write_volatile};
@@ -330,11 +330,13 @@ fn main() -> ! {
 
     let usart1_irq_ok = smoke_usart1_txe_irq();
     passed |= (usart1_irq_ok as u32) << 5;
+    let usart1_tc_irq_ok = smoke_usart1_tcie_irq();
+    passed |= (usart1_tc_irq_ok as u32) << 10;
     let usart1_rx_irq_ok = smoke_usart1_rxne_irq();
     passed |= (usart1_rx_irq_ok as u32) << 6;
 
     wr(RESULT, 0xB1AC_0000 | passed);
-    send(if passed == 0x3FF {
+    send(if passed == 0x7FF {
         b"BLACKPILL PASS\r\n"
     } else {
         b"BLACKPILL FAIL\r\n"
@@ -1228,6 +1230,41 @@ fn smoke_usart1_txe_irq() -> bool {
         b" FAIL\r\n"
     });
     txe_isolated && txe_pended && txe_released
+}
+
+/// USART1's idle TC flag must pend imported NVIC IRQ 37 only while TCIE is set.
+/// TXEIE stays clear so the completion source is tested independently.
+fn smoke_usart1_tcie_irq() -> bool {
+    const TC: u32 = 1 << 6;
+    const TCIE: u32 = 1 << 6;
+
+    wr(RCC_APB2ENR, rd(RCC_APB2ENR) | (1 << 4)); // USART1EN
+    wr(NVIC_ICPR1, USART1_IRQ_BIT);
+    wr(USART1_CR1, (1 << 13) | (1 << 3)); // UE | TE; TCIE and TXEIE clear
+
+    let tc_isolated = rd(USART1_SR) & TC != 0 && rd(NVIC_ISPR1) & USART1_IRQ_BIT == 0;
+    wr(USART1_CR1, (1 << 13) | (1 << 3) | TCIE); // enable TCIE with TC already set
+    let tc_pended = tc_isolated && wait(NVIC_ISPR1, USART1_IRQ_BIT, USART1_IRQ_BIT);
+
+    wr(USART1_CR1, (1 << 13) | (1 << 3)); // UE | TE, TCIE off
+    wr(NVIC_ICPR1, USART1_IRQ_BIT);
+    for _ in 0..64 {
+        let _ = rd(USART1_SR);
+    }
+    let tc_released = rd(NVIC_ISPR1) & USART1_IRQ_BIT == 0;
+
+    send(b"usart1 tc_isolated=");
+    putc(if tc_isolated { b'1' } else { b'0' });
+    send(b" gate_asserted=");
+    putc(if tc_pended { b'1' } else { b'0' });
+    send(b" released=");
+    putc(if tc_released { b'1' } else { b'0' });
+    send(if tc_isolated && tc_pended && tc_released {
+        b" ok\r\n"
+    } else {
+        b" FAIL\r\n"
+    });
+    tc_isolated && tc_pended && tc_released
 }
 
 /// The onboarding stimulus queues `R` on USART1 before reset. RXNE must stay
