@@ -82,9 +82,10 @@ jobs:
             exit 1
           fi
           notes="docs/releases/v$version.md"
-          # The Linux build container uses a different UID from checkout.
-          # Trust only this checked-out workspace for this one metadata read.
-          git -c safe.directory="$GITHUB_WORKSPACE" ls-files --error-unmatch "$notes" >/dev/null
+          # Bullseye's Git 2.30 ignores command-scoped safe.directory.
+          # Trust only this checkout in the ephemeral runner's global config.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git ls-files --error-unmatch "$notes" >/dev/null
           test -s "$notes"
           IFS= read -r title < "$notes"
           title=${title%$'\r'}
