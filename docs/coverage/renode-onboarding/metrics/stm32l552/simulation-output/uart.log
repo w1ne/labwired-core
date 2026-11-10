@@ -1,6 +1,6 @@
 NUCLEO-L552ZE-Q SMOKE
 cpu=cortex-m33 uart=lpuart1
-rx=lpuart1 rxne_before=1 irq_isolated=1 irq_asserted=1 data=00000052 rxne_after=0 irq_released=1 ok
+rx=lpuart1 rxne_before=1 irq_isolated=1 irq_asserted=1 reasserted=1 data=00000052,00000053 rxne_after=0 irq_released=1 ok
 tx_irq lpuart1 txe=1 tc=1 both=1 ok
 led=ld1 odr=00000080
 led=ld1_off odr=00000000

@@ -188,10 +188,28 @@ fn smoke_lpuart_rx() {
     }
     spin(4);
     let irq_asserted = unsafe { read_volatile(NVIC_ISPR2) & NVIC_LPUART1_PENDING != 0 };
-    let data = unsafe { (read_volatile(LPUART_RDR) & 0xFF) as u8 };
+    let first = if rxne_before {
+        unsafe { (read_volatile(LPUART_RDR) & 0xFF) as u8 }
+    } else {
+        0
+    };
+    let second_still_pending =
+        rxne_before && unsafe { read_volatile(LPUART_ISR) & USART_ISR_RXNE != 0 };
+
+    // RXNE is a level while the second byte remains queued. Clearing the NVIC
+    // latch must therefore let the LPUART assert IRQ 66 again.
+    unsafe { write_volatile(NVIC_ICPR2, NVIC_LPUART1_PENDING) };
+    spin(4);
+    let irq_reasserted = unsafe { read_volatile(NVIC_ISPR2) & NVIC_LPUART1_PENDING != 0 };
+
+    let second = if second_still_pending {
+        unsafe { (read_volatile(LPUART_RDR) & 0xFF) as u8 }
+    } else {
+        0
+    };
     let rxne_after = unsafe { read_volatile(LPUART_ISR) & USART_ISR_RXNE != 0 };
-    // NVIC pending is sticky: clear the captured interrupt and make sure an
-    // empty RX buffer does not raise it again while RXNEIE remains enabled.
+    // With the queue drained, clearing the captured interrupt must stay clear
+    // even though RXNEIE remains enabled.
     unsafe { write_volatile(NVIC_ICPR2, NVIC_LPUART1_PENDING) };
     spin(4);
     let irq_released = unsafe { read_volatile(NVIC_ISPR2) & NVIC_LPUART1_PENDING == 0 };
@@ -199,8 +217,15 @@ fn smoke_lpuart_rx() {
         let cr1 = read_volatile(LPUART_CR1);
         write_volatile(LPUART_CR1, cr1 & !USART_CR1_RXNEIE);
     }
-    let ok =
-        rxne_before && irq_isolated && irq_asserted && data == b'R' && !rxne_after && irq_released;
+    let ok = rxne_before
+        && irq_isolated
+        && irq_asserted
+        && first == b'R'
+        && second_still_pending
+        && irq_reasserted
+        && second == b'S'
+        && !rxne_after
+        && irq_released;
 
     puts(b"rx=lpuart1 rxne_before=");
     putc(if rxne_before { b'1' } else { b'0' });
@@ -208,8 +233,12 @@ fn smoke_lpuart_rx() {
     putc(if irq_isolated { b'1' } else { b'0' });
     puts(b" irq_asserted=");
     putc(if irq_asserted { b'1' } else { b'0' });
+    puts(b" reasserted=");
+    putc(if irq_reasserted { b'1' } else { b'0' });
     puts(b" data=");
-    put_hex32(u32::from(data));
+    put_hex32(u32::from(first));
+    putc(b',');
+    put_hex32(u32::from(second));
     puts(b" rxne_after=");
     putc(if rxne_after { b'1' } else { b'0' });
     puts(b" irq_released=");
