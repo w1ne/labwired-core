@@ -1,5 +1,5 @@
 STM32L151 Cortex-M3 smoke
-usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,reasserted,released ok
+usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,reasserted,masked,unmasked,released ok
 usart2 ok
 usart3 ok
 gpio pa=1 pb=1 pc=1 ph=1 fg=1 ok

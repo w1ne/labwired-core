@@ -18,9 +18,9 @@
       70,
       536919952,
       70,
-      134239768
+      134241632
     ],
-    "pc": 134239768,
+    "pc": 134241632,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "90afbd64dd45b795f212c39112e2e17bc1e7d4f720906e2cc62ae9c575a55ef3",
+  "firmware_hash": "7c24833cafbf6978c5ba01035db42dbe1d01da0056ad47bd418c4ecbe06ad40a",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-stm32l151-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32l151.yaml",

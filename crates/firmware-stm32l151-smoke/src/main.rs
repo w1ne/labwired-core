@@ -230,6 +230,25 @@ fn check_usart2_rx_gate() -> bool {
             break;
         }
     }
+
+    // RXNE remains set for the second byte, but RXNEIE must independently
+    // gate the NVIC request. Clear any already-pended request after masking,
+    // allow the UART scheduler to observe the write, then re-enable it.
+    wr(USART2 + U_CR1, UE | RE | TE);
+    unpend(IRQ);
+    let mut irq_masked = true;
+    for _ in 0..16 {
+        irq_masked &= !pending(IRQ);
+    }
+    wr(USART2 + U_CR1, UE | RE | TE | RXNEIE);
+    let mut irq_unmasked = false;
+    for _ in 0..4096 {
+        if pending(IRQ) {
+            irq_unmasked = true;
+            break;
+        }
+    }
+
     let second = if rxne_after_first {
         rd(USART2 + U_DR) & 0xFF
     } else {
@@ -246,6 +265,8 @@ fn check_usart2_rx_gate() -> bool {
         && irq_isolated
         && irq_asserted
         && irq_reasserted
+        && irq_masked
+        && irq_unmasked
         && data == EXPECTED
         && rxne_after_first
         && rxne_cleared
@@ -273,6 +294,12 @@ fn check_usart2_rx_gate() -> bool {
         ",reasserted"
     } else {
         ",not_reasserted"
+    });
+    puts(if irq_masked { ",masked" } else { ",not_masked" });
+    puts(if irq_unmasked {
+        ",unmasked"
+    } else {
+        ",not_unmasked"
     });
     puts(if irq_released {
         ",released"
