@@ -46,6 +46,7 @@ mod outputs;
 mod resource_report;
 mod size_limited_writer;
 mod stimuli;
+mod i2c_trace;
 mod uart_lines;
 mod vcd_trace;
 mod wifi_frames;
@@ -1478,6 +1479,8 @@ fn handle_load_error<C: labwired_core::Cpu>(
         None,
         // Nor any UART line stamps.
         None,
+        // Nor any I²C bus-trace summary: no machine ran.
+        crate::i2c_trace::I2cTraceSummary::default(),
         // Load/reset failed before a machine existed: no motor evidence either.
         Vec::new(),
         None,
@@ -3040,6 +3043,8 @@ mod test_outcome_golden_tests {
             logic_edges: None,
             gpio_pins: None,
             uart_lines: None,
+            i2c_addresses: Vec::new(),
+            i2c_trace_evicted: false,
             motors: Vec::new(),
             analog_series: None,
             stimuli: Vec::new(),

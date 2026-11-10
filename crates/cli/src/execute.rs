@@ -1811,6 +1811,10 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         logic_edges,
         gpio_pins,
         uart_lines.finish(),
+        crate::i2c_trace::i2c_trace_summary(
+            &ctx.machine.bus.bus_trace_snapshot(),
+            ctx.machine.bus.bus_trace_evicted(),
+        ),
         ctx.machine.bus.motor_snapshots(),
         ctx.machine
             .analog_series()
