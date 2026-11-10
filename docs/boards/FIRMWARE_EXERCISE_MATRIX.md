@@ -75,6 +75,7 @@ _Broad model surface (~35); the rubric grid proves ~9, plus TMP102 and BME280 fu
 **Functional device/protocol reads** (real driver, decoded value):
 - TMP102 temperature read over I2C (real driver, decoded value + GPIO threshold) — `esp32s3-i2c-tmp102` · e2e_i2c_tmp102.rs:147-188 (nightly CI)
 - ESP32-S3-DevKitC-1-N16R8 + BME280: chip ID and raw temperature read over I2C0 (GPIO8/GPIO9) — `esp32s3-devkitc-1-n16r8-bme280` · examples/esp32s3-devkitc-1-n16r8-bme280/evidence (committed local onboarding smoke) (nightly CI)
+- Arduino Nano ESP32 (ABX00092) + BME280: chip ID and raw temperature read over I2C0 (A4/A5 = GPIO11/GPIO12) — `arduino-nano-esp32-bme280` · examples/arduino-nano-esp32-bme280/evidence (committed local onboarding smoke) (nightly CI)
 
 **Advanced peripherals — unit-tested only** (no firmware drives them): `aes`, `ds`, `hmac`, `rsa`, `rng`, `sha`, `i2s`, `lcd_cam`, `sdmmc`, `usb_otg`, `gpspi`, `pcnt`, `io_mux`, `extmem`, `spi_mem_flash`, `sens`, `system`, `core1_control`, `crosscore_ipi`
 

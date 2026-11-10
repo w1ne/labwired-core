@@ -24,9 +24,9 @@ There are two chip yamls for ESP32-S3 today:
 | Aspect              | Status                                                                          |
 |---------------------|---------------------------------------------------------------------------------|
 | Chip yamls          | [`esp32s3.yaml`](../../configs/chips/esp32s3.yaml) (minimal) · [`esp32s3-zero.yaml`](../../configs/chips/esp32s3-zero.yaml) (Plan 2/4) |
-| System yaml         | [`configs/systems/esp32s3-zero.yaml`](../../configs/systems/esp32s3-zero.yaml)  |
-| Reference firmware  | [`examples/esp32s3-i2c-tmp102/`](../../examples/esp32s3-i2c-tmp102/) (Plan 4, canonical) · `examples/esp32s3-blinky/` · `examples/esp32s3-hello-world/` |
-| Validation          | Plan 4 end-to-end test: `crates/core/tests/e2e_i2c_tmp102.rs`                   |
+| System yaml         | [`configs/systems/esp32s3-zero.yaml`](../../configs/systems/esp32s3-zero.yaml) · [`Arduino Nano ESP32 + BME280`](../../examples/arduino-nano-esp32-bme280/) |
+| Reference firmware  | [`examples/esp32s3-i2c-tmp102/`](../../examples/esp32s3-i2c-tmp102/) (Plan 4, canonical) · `examples/esp32s3-blinky/` · `examples/esp32s3-hello-world/` · Arduino Nano ESP32 BME280 smoke |
+| Validation          | Plan 4 end-to-end test: `crates/core/tests/e2e_i2c_tmp102.rs`; Nano ESP32 BME280 onboarding smoke |
 | Tier                | structural — declarative + Plan 2/4 peripheral models                           |
 
 ## Peripherals (esp32s3-zero, Plan 2/4 model)

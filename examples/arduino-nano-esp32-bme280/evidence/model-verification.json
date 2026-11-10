@@ -1,0 +1,26 @@
+{
+  "tool": "LabWired firmware verification",
+  "board_target": "arduino-nano-esp32",
+  "mcu_component_type": "esp32-s3-devkitc-1",
+  "sensor_component_type": "bme280",
+  "sensor_wires": {
+    "sda": "GPIO11",
+    "scl": "GPIO12",
+    "i2c_address": "0x77"
+  },
+  "status": "model_verified",
+  "run_status": "pass",
+  "stop_reason": "assertions_passed",
+  "oracle": {
+    "serial_contains": "ARDUINO_NANO_ESP32_BME280_OK ID=0x60 TEMP_RAW=0x082DC0 I2C0=A4(GPIO11)/A5(GPIO12)"
+  },
+  "oracle_result": "passed",
+  "verification": "serial contains \"ARDUINO_NANO_ESP32_BME280_OK ID=0x60 TEMP_RAW=0x082DC0 I2C0=A4(GPIO11)/A5(GPIO12)\". Model-verified deterministically.",
+  "model_gaps": [
+    {
+      "code": "approximation",
+      "scope": "model",
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ]
+}
