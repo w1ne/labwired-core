@@ -1,0 +1,1261 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 200000,
+  "cycles": 200000,
+  "instructions": 200000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 200000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 200000
+    }
+  },
+  "limits": {
+    "max_steps": 200000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpioa:5",
+          "min_edges": 8
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      1107427352,
+      928,
+      537149416,
+      537149420,
+      0,
+      0,
+      0,
+      537149424,
+      0,
+      0,
+      0,
+      0,
+      32,
+      537149416,
+      2097152,
+      134219946
+    ],
+    "pc": 134219946,
+    "xpsr": 2164260864,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "172aa63b0959efaebb5a9a145d7299ff784d8c1c946e8bf5ae0f0eb0a5c39680",
+  "config": {
+    "firmware": "examples/nucleo-h533re/../../target/thumbv8m.main-none-eabi/release/firmware-nucleo-h533re-smoke",
+    "system": "examples/nucleo-h533re/../../configs/systems/nucleo-h533re.yaml",
+    "script": "examples/nucleo-h533re/io-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1140984832,
+        "registers": [
+          {
+            "name": "RCC_CR",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_HSICFGR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_CRRCR",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_CSICFGR",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_CFGR1",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_CFGR2",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_PLL1CFGR",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_PLL2CFGR",
+            "offset": 44,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_PLL3CFGR",
+            "offset": 48,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_PLL1DIVR",
+            "offset": 52,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_PLL1FRACR",
+            "offset": 56,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_PLL2DIVR",
+            "offset": 60,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_PLL2FRACR",
+            "offset": 64,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_PLL3DIVR",
+            "offset": 68,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_PLL3FRACR",
+            "offset": 72,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_CIER",
+            "offset": 80,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_CIFR",
+            "offset": 84,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_CICR",
+            "offset": 88,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_AHB1RSTR",
+            "offset": 96,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_AHB2RSTR",
+            "offset": 100,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_AHB4RSTR",
+            "offset": 108,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_APB1LRSTR",
+            "offset": 116,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_APB1HRSTR",
+            "offset": 120,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_APB2RSTR",
+            "offset": 124,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_APB3RSTR",
+            "offset": 128,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_AHB1ENR",
+            "offset": 136,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_AHB2ENR",
+            "offset": 140,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_AHB4ENR",
+            "offset": 148,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_APB1LENR",
+            "offset": 156,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_APB1HENR",
+            "offset": 160,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_APB2ENR",
+            "offset": 164,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_APB3ENR",
+            "offset": 168,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_AHB1LPENR",
+            "offset": 176,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_AHB2LPENR",
+            "offset": 180,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_AHB4LPENR",
+            "offset": 188,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_APB1LLPENR",
+            "offset": 196,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_APB1HLPENR",
+            "offset": 200,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_APB2LPENR",
+            "offset": 204,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_APB3LPENR",
+            "offset": 208,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_CCIPR1",
+            "offset": 216,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_CCIPR2",
+            "offset": 220,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_CCIPR3",
+            "offset": 224,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_CCIPR4",
+            "offset": 228,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_CCIPR5",
+            "offset": 232,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_BDCR",
+            "offset": 240,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_RSR",
+            "offset": 244,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_SECCFGR",
+            "offset": 272,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_PRIVCFGR",
+            "offset": 276,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "gpioa",
+        "kind": "native",
+        "base": 1107427328,
+        "registers": [
+          {
+            "name": "GPIOA_MODER",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOA_OTYPER",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOA_OSPEEDR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOA_PUPDR",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOA_IDR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOA_ODR",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOA_BSRR",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOA_LCKR",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOA_AFRL",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOA_AFRH",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOA_BRR",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOA_HSLVR",
+            "offset": 44,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOA_SECCFGR",
+            "offset": 48,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "gpioc",
+        "kind": "native",
+        "base": 1107429376,
+        "registers": [
+          {
+            "name": "GPIO_MODER",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO_OTYPER",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO_OSPEEDR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO_PUPDR",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO_IDR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO_ODR",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO_BSRR",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO_LCKR",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO_AFRL",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO_AFRH",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO_BRR",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO_HSLVR",
+            "offset": 44,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIO_SECCFGR",
+            "offset": 48,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "systick",
+        "kind": "native",
+        "base": 3758153744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "button_b1",
+        "device_type": null,
+        "declared": false,
+        "attachment": {
+          "transport": "gpio"
+        },
+        "artifacts": []
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 200000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpioa",
+        "pin": 5,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 36,
+            "value": 1
+          },
+          {
+            "cycle": 4043,
+            "value": 0
+          },
+          {
+            "cycle": 8048,
+            "value": 1
+          },
+          {
+            "cycle": 12053,
+            "value": 0
+          },
+          {
+            "cycle": 16058,
+            "value": 1
+          },
+          {
+            "cycle": 20063,
+            "value": 0
+          },
+          {
+            "cycle": 24068,
+            "value": 1
+          },
+          {
+            "cycle": 28073,
+            "value": 0
+          },
+          {
+            "cycle": 32078,
+            "value": 1
+          },
+          {
+            "cycle": 36083,
+            "value": 0
+          },
+          {
+            "cycle": 40088,
+            "value": 1
+          },
+          {
+            "cycle": 44093,
+            "value": 0
+          },
+          {
+            "cycle": 48098,
+            "value": 1
+          },
+          {
+            "cycle": 52103,
+            "value": 0
+          },
+          {
+            "cycle": 56108,
+            "value": 1
+          },
+          {
+            "cycle": 60113,
+            "value": 0
+          },
+          {
+            "cycle": 64118,
+            "value": 1
+          },
+          {
+            "cycle": 68123,
+            "value": 0
+          },
+          {
+            "cycle": 72128,
+            "value": 1
+          },
+          {
+            "cycle": 76133,
+            "value": 0
+          },
+          {
+            "cycle": 80138,
+            "value": 1
+          },
+          {
+            "cycle": 84143,
+            "value": 0
+          },
+          {
+            "cycle": 88148,
+            "value": 1
+          },
+          {
+            "cycle": 92153,
+            "value": 0
+          },
+          {
+            "cycle": 96158,
+            "value": 1
+          },
+          {
+            "cycle": 100163,
+            "value": 0
+          },
+          {
+            "cycle": 104168,
+            "value": 1
+          },
+          {
+            "cycle": 108173,
+            "value": 0
+          },
+          {
+            "cycle": 112178,
+            "value": 1
+          },
+          {
+            "cycle": 116183,
+            "value": 0
+          },
+          {
+            "cycle": 120188,
+            "value": 1
+          },
+          {
+            "cycle": 124193,
+            "value": 0
+          },
+          {
+            "cycle": 128198,
+            "value": 1
+          },
+          {
+            "cycle": 132203,
+            "value": 0
+          },
+          {
+            "cycle": 136208,
+            "value": 1
+          },
+          {
+            "cycle": 140213,
+            "value": 0
+          },
+          {
+            "cycle": 144218,
+            "value": 1
+          },
+          {
+            "cycle": 148223,
+            "value": 0
+          },
+          {
+            "cycle": 152228,
+            "value": 1
+          },
+          {
+            "cycle": 156233,
+            "value": 0
+          },
+          {
+            "cycle": 160238,
+            "value": 1
+          },
+          {
+            "cycle": 164243,
+            "value": 0
+          },
+          {
+            "cycle": 168248,
+            "value": 1
+          },
+          {
+            "cycle": 172253,
+            "value": 0
+          },
+          {
+            "cycle": 176258,
+            "value": 1
+          },
+          {
+            "cycle": 180263,
+            "value": 0
+          },
+          {
+            "cycle": 184268,
+            "value": 1
+          },
+          {
+            "cycle": 188273,
+            "value": 0
+          },
+          {
+            "cycle": 192278,
+            "value": 1
+          },
+          {
+            "cycle": 196283,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 34,
+            "state": "0"
+          },
+          {
+            "cycle": 36,
+            "state": "1"
+          },
+          {
+            "cycle": 4043,
+            "state": "0"
+          },
+          {
+            "cycle": 8048,
+            "state": "1"
+          },
+          {
+            "cycle": 12053,
+            "state": "0"
+          },
+          {
+            "cycle": 16058,
+            "state": "1"
+          },
+          {
+            "cycle": 20063,
+            "state": "0"
+          },
+          {
+            "cycle": 24068,
+            "state": "1"
+          },
+          {
+            "cycle": 28073,
+            "state": "0"
+          },
+          {
+            "cycle": 32078,
+            "state": "1"
+          },
+          {
+            "cycle": 36083,
+            "state": "0"
+          },
+          {
+            "cycle": 40088,
+            "state": "1"
+          },
+          {
+            "cycle": 44093,
+            "state": "0"
+          },
+          {
+            "cycle": 48098,
+            "state": "1"
+          },
+          {
+            "cycle": 52103,
+            "state": "0"
+          },
+          {
+            "cycle": 56108,
+            "state": "1"
+          },
+          {
+            "cycle": 60113,
+            "state": "0"
+          },
+          {
+            "cycle": 64118,
+            "state": "1"
+          },
+          {
+            "cycle": 68123,
+            "state": "0"
+          },
+          {
+            "cycle": 72128,
+            "state": "1"
+          },
+          {
+            "cycle": 76133,
+            "state": "0"
+          },
+          {
+            "cycle": 80138,
+            "state": "1"
+          },
+          {
+            "cycle": 84143,
+            "state": "0"
+          },
+          {
+            "cycle": 88148,
+            "state": "1"
+          },
+          {
+            "cycle": 92153,
+            "state": "0"
+          },
+          {
+            "cycle": 96158,
+            "state": "1"
+          },
+          {
+            "cycle": 100163,
+            "state": "0"
+          },
+          {
+            "cycle": 104168,
+            "state": "1"
+          },
+          {
+            "cycle": 108173,
+            "state": "0"
+          },
+          {
+            "cycle": 112178,
+            "state": "1"
+          },
+          {
+            "cycle": 116183,
+            "state": "0"
+          },
+          {
+            "cycle": 120188,
+            "state": "1"
+          },
+          {
+            "cycle": 124193,
+            "state": "0"
+          },
+          {
+            "cycle": 128198,
+            "state": "1"
+          },
+          {
+            "cycle": 132203,
+            "state": "0"
+          },
+          {
+            "cycle": 136208,
+            "state": "1"
+          },
+          {
+            "cycle": 140213,
+            "state": "0"
+          },
+          {
+            "cycle": 144218,
+            "state": "1"
+          },
+          {
+            "cycle": 148223,
+            "state": "0"
+          },
+          {
+            "cycle": 152228,
+            "state": "1"
+          },
+          {
+            "cycle": 156233,
+            "state": "0"
+          },
+          {
+            "cycle": 160238,
+            "state": "1"
+          },
+          {
+            "cycle": 164243,
+            "state": "0"
+          },
+          {
+            "cycle": 168248,
+            "state": "1"
+          },
+          {
+            "cycle": 172253,
+            "state": "0"
+          },
+          {
+            "cycle": 176258,
+            "state": "1"
+          },
+          {
+            "cycle": 180263,
+            "state": "0"
+          },
+          {
+            "cycle": 184268,
+            "state": "1"
+          },
+          {
+            "cycle": 188273,
+            "state": "0"
+          },
+          {
+            "cycle": 192278,
+            "state": "1"
+          },
+          {
+            "cycle": 196283,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 50
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpioa",
+      "number": 5,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 2276,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 2276,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 524288,
+    "ram_total_bytes": 278528,
+    "flash_used_pct": 0.43,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 278528,
+    "main_stack_high_water_bytes": 24,
+    "main_stack_free_min_bytes": 278504,
+    "main_stack_base": 536870912,
+    "main_stack_top": 537149440,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 278528,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 278504,
+    "heap_base": 536870912,
+    "heap_top": 537149440
+  },
+  "metrics": {
+    "cycles": 200000,
+    "instructions": 200000,
+    "steps_executed": 200000,
+    "memory_reads": 89,
+    "memory_writes": 49935,
+    "peripheral_accesses": 105,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134219952,
+        "count": 196,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 134219920,
+        "count": 195,
+        "symbol": "core::hint::black_box"
+      },
+      {
+        "pc": 134219924,
+        "count": 195,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 134219946,
+        "count": 195,
+        "symbol": "<u32>::unchecked_add"
+      }
+    ]
+  }
+}

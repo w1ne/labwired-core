@@ -1,0 +1,60 @@
+# LabWired - STM32H533RET6 on the NUCLEO-H533RE (MB1814)
+#
+# This first board profile is intentionally limited to the peripherals used by
+# the NUCLEO-H533RE GPIO smoke: H5 RCC, GPIOA, GPIOC, and SysTick. GPIO IP and
+# RCC layout reuse the H5 models already described by the STM32H563 profile.
+# Unlisted H533 peripherals are not claimed by this descriptor.
+#
+# Source references:
+# - STM32H533RE product page / DS14258: 512 KiB Flash, 272 KiB SRAM, 250 MHz.
+# - RM0481 and CMSIS stm32h533xx.h: RCC/GPIO addresses and H5 register layout.
+# - UM3121: the NUCLEO-H533RE user LED LD2 is PA5 and B1 is PC13.
+
+name: "stm32h533re"
+arch: "arm"
+core: "cortex-m33"
+registers_count: 220
+cpu_hz: 250_000_000
+
+flash:
+  base: 0x08000000
+  size: "512KB"
+ram:
+  base: 0x20000000
+  size: "272KB"
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x44020C00
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32h563/rcc.yaml"
+      profile: "h5"
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x42020000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32h563/gpioa.yaml"
+      profile: "stm32v2"
+      reset_moder: 0xABFFFFFF
+      reset_seccfgr: 0x0000FFFF
+      reset_ospeedr: 0x0C000000
+      reset_pupdr: 0x64000000
+    clock: { reg: "ahb2enr", bit: 0 }
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x42020800
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32h563/gpioc.yaml"
+      profile: "stm32v2"
+      reset_moder: 0xFFFFFFFF
+      reset_seccfgr: 0x0000FFFF
+    clock: { reg: "ahb2enr", bit: 2 }
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    config:
+      calib: 0x001003E8

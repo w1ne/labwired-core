@@ -71,6 +71,11 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/nucleo-g491re/io-smoke.yaml
             system: configs/systems/nucleo-g491re.yaml
+          - id: nucleo-h533re
+            crate: firmware-nucleo-h533re-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/nucleo-h533re/io-smoke.yaml
+            system: configs/systems/nucleo-h533re.yaml
           - id: nucleo-g491re-bme280
             crate: firmware-nucleo-g491re-bme280-smoke
             target: thumbv7em-none-eabi
