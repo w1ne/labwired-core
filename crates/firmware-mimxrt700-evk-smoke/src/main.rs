@@ -15,6 +15,8 @@ const LPUART_BAUD: usize = 0x10;
 const LPUART_STAT: usize = 0x14;
 const LPUART_CTRL: usize = 0x18;
 const LPUART_DATA: usize = 0x1C;
+const LPUART_FIFO: usize = 0x28;
+const LPUART_WATER: usize = 0x2C;
 const LPFC_ISTAT: usize = 0xFF4;
 const LPFC_PSELID: usize = 0xFF8;
 const PSELID_ID_PRESENT: u32 = 0x0010_3070;
@@ -22,7 +24,13 @@ const PSELID_UART: u32 = 1;
 const PSELID_LOCK: u32 = 1 << 3;
 const STAT_TDRE: u32 = 1 << 23;
 const STAT_TC: u32 = 1 << 22;
+const STAT_RDRF: u32 = 1 << 21;
 const CTRL_TIE_TE: u32 = (1 << 23) | (1 << 19);
+const CTRL_RE: u32 = 1 << 18;
+const CTRL_RIE: u32 = 1 << 21;
+const FIFO_RXFE: u32 = 1 << 3;
+const WATER_RXCOUNT_SHIFT: u32 = 24;
+const ISTAT_UARTRX: u32 = 1 << 1;
 
 fn rd(off: usize) -> u32 {
     unsafe { read_volatile((FLEXCOMM0 + off) as *const u32) }
@@ -50,6 +58,73 @@ fn hex(v: u32) {
     }
 }
 
+/// Exercise the imported LPUART RX FIFO and LP_FLEXCOMM receive status.
+/// This checks ISTAT only; the imported profile does not route FLEXCOMM0 to
+/// an NVIC input.
+fn smoke_lpuart_rx() -> bool {
+    let receiver_off = rd(LPUART_STAT) & STAT_RDRF == 0 && rd(LPFC_ISTAT) & ISTAT_UARTRX == 0;
+
+    // Two injected bytes need the modeled four-entry FIFO enabled. Keep RIE
+    // clear while receiving so data-ready and interrupt status are distinct.
+    wr(LPUART_FIFO, rd(LPUART_FIFO) | FIFO_RXFE);
+    wr(LPUART_CTRL, CTRL_TIE_TE | CTRL_RE);
+    let mut queued = false;
+    for _ in 0..1_000_000 {
+        if rd(LPUART_WATER) >> WATER_RXCOUNT_SHIFT >= 2 {
+            queued = true;
+            break;
+        }
+    }
+
+    let rx_masked =
+        queued && rd(LPUART_STAT) & STAT_RDRF != 0 && rd(LPFC_ISTAT) & ISTAT_UARTRX == 0;
+    wr(LPUART_CTRL, CTRL_TIE_TE | CTRL_RE | CTRL_RIE);
+    let rx_asserted = rd(LPFC_ISTAT) & ISTAT_UARTRX != 0;
+
+    let first = rd(LPUART_DATA) & 0xFF;
+    let second_still_queued = rd(LPUART_STAT) & STAT_RDRF != 0;
+    wr(LPUART_CTRL, CTRL_TIE_TE | CTRL_RE);
+    let rx_masked_with_data = second_still_queued
+        && rd(LPUART_STAT) & STAT_RDRF != 0
+        && rd(LPFC_ISTAT) & ISTAT_UARTRX == 0;
+    wr(LPUART_CTRL, CTRL_TIE_TE | CTRL_RE | CTRL_RIE);
+    let rx_unmasked = rd(LPFC_ISTAT) & ISTAT_UARTRX != 0;
+
+    let second = rd(LPUART_DATA) & 0xFF;
+    let released = rd(LPUART_STAT) & STAT_RDRF == 0 && rd(LPFC_ISTAT) & ISTAT_UARTRX == 0;
+    let ok = receiver_off
+        && queued
+        && rx_masked
+        && rx_asserted
+        && first == b'R' as u32
+        && second_still_queued
+        && rx_masked_with_data
+        && rx_unmasked
+        && second == b'S' as u32
+        && released;
+
+    puts("rx lpuart0 re_off=");
+    putc(if receiver_off { b'1' } else { b'0' });
+    puts(" queued=");
+    putc(if queued { b'2' } else { b'0' });
+    puts(" masked=");
+    putc(if rx_masked { b'1' } else { b'0' });
+    puts(" asserted=");
+    putc(if rx_asserted { b'1' } else { b'0' });
+    puts(" masked_data=");
+    putc(if rx_masked_with_data { b'1' } else { b'0' });
+    puts(" unmasked=");
+    putc(if rx_unmasked { b'1' } else { b'0' });
+    puts(" data=");
+    hex(first);
+    putc(b',');
+    hex(second);
+    puts(" released=");
+    putc(if released { b'1' } else { b'0' });
+    puts(if ok { " ok\r\n" } else { " FAIL\r\n" });
+    ok
+}
+
 #[entry]
 fn main() -> ! {
     let product: u32;
@@ -70,7 +145,7 @@ fn main() -> ! {
     wr(LPFC_PSELID, 0);
     let pselid_locked = rd(LPFC_PSELID);
 
-    // 80 MHz functional clock, OSR=16, SBR=26; the smoke checks TX and
+    // 80 MHz functional clock, OSR=16, SBR=26; the smoke checks TX/RX and
     // register behavior, not a board-level baud-rate claim.
     wr(LPUART_BAUD, (15 << 24) | 26);
     wr(LPUART_CTRL, CTRL_TIE_TE);
@@ -96,6 +171,9 @@ fn main() -> ! {
     }
     if product == 17 * 19 {
         pass |= 1 << 3;
+    }
+    if smoke_lpuart_rx() {
+        pass |= 1 << 4;
     }
 
     puts("flexcomm0 pselid=");
