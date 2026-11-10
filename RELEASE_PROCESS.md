@@ -60,8 +60,14 @@ cargo build -p labwired-cli -p labwired-dap --release --locked
 - [ ] Run the integrity and full-suite jobs from `core-ci.yml`, including their
   firmware builds, `LABWIRED_REQUIRE_FIRMWARE` settings, and feature-specific
   checks. The PR shards exclude some firmware-backed and nightly-only targets;
-  their result does not replace the full suite. Review board coverage and
-  performance results. Keep failures, known failures, and skips visible.
+  their result does not replace the full suite. Confirm that all eight C3
+  browser API release tests run: four ROM/OLED tests, three console-route tests
+  and the BLE GATT world test. The job verifies the pinned BLE fixture and sets
+  `LABWIRED_REQUIRE_C3_BLE=1`, so a missing fixture cannot count as a pass.
+  These tests run the browser API natively; the separate `browser-layer` job
+  must also build actual WASM and pass its Node regressions. Review board
+  coverage and performance results. Keep failures, known failures, and skips
+  visible.
 - [ ] Run `mkdocs build` in the documented documentation environment. Compare
   `docs/cli_reference.md` with the candidate CLI help output. Check public
   installation examples against the release they name.

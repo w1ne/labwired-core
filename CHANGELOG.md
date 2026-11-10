@@ -282,6 +282,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a run without any skip. The four-servo trajectory lab (two cores, loopTask
   on APP_CPU) goes from 0.03x to 2.0x real time in WASM (Node, 12 s).
 ### Fixed
+- Preserve full untapped-console messages when UART and USB output share a
+  character prefix. Remove only complete mirrored lines; keep distinct UART0
+  and USB-Serial-JTAG application output intact in browser diagnostics. The
+  full CI lane now runs all eight existing C3 browser API release regressions
+  with the pinned BLE fixture required.
 - Release publication now requires a tag push. Manual artifact dry-runs cannot
   publish even when dispatched against a tag. Release builds validate the
   workspace version and tracked notes, use the lockfile, and publish the
