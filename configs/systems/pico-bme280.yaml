@@ -1,0 +1,20 @@
+# Raspberry Pi Pico (RP2040) with an Adafruit BME280 STEMMA QT breakout.
+# The breakout's default address is 0x77 and it includes I2C pull-ups. Its SDA
+# and SCL connect to Pico GP4/GP5 (I2C0); the board LED is GP25.
+# This digital system attaches the sensor model to I2C0. It does not simulate
+# connector wiring, analog pull-up voltage, or environmental conversion timing.
+name: "pico-bme280"
+chip: "../chips/rp2040.yaml"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x77
+board_io:
+  - id: "led_gp25"
+    kind: "led"
+    peripheral: "sio"
+    pin: 25
+    signal: "output"
+    active_high: true

@@ -1,0 +1,6 @@
+2026-11-11T20:51:06.839682Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/rp2040.yaml
+2026-11-11T20:51:06.918560Z  INFO labwired_loader: ELF Entry Point: 0x10003209
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+labwired-cli test: idle_ff skipped 27861430 of 28061430 device cycles (200000 interpreted)
+PASS  2/2 checks · bme280-smoke · 200000 steps · 0.04s

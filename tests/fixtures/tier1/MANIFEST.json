@@ -118,5 +118,9 @@
   "adafruit-feather-esp32-v2-bme280.elf": {
     "sha256": "439037257d2a58d7378ed02690d3021dc53a5a36fa010a854217c08494179239",
     "source_rev": "b284a170f89b0cafcec118447470b80bd07b387f"
+  },
+  "pico-bme280.elf": {
+    "sha256": "182d3d685846e3368d9d2ed2c3224ebd4cc4cc8cb89bfdf505066cf2b3876919",
+    "source_rev": "c65d24890e75fdee8df5c2a4ec578878e09a279c"
   }
 }
