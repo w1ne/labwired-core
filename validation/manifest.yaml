@@ -465,7 +465,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 358a434cc84e49767bcafd0ae2953840c701e1095f069f5b77263dd96a08c767
+    drift_ack_digest: 86b0c81ce18f79f9d18d02eb182f135700e90d8fdcc7fc6c3a53a49097599aa8
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -683,7 +683,14 @@ boards:
     # decoded as no-op hints instead of loads into PC. Decoder and firmware
     # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
     # CAPTURE, and live re-capture remains pending.
-    drift_ack: 2026-11-07
+    drift_ack: 2026-11-09
+    # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
+    # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
+    # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
+    # magic ('M','u',0x01) is at 0x10; any other chip's BKPT in that
+    # immediate range still Halt, same as before. Shared interpreter
+    # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -1046,7 +1053,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 358a434cc84e49767bcafd0ae2953840c701e1095f069f5b77263dd96a08c767
+    drift_ack_digest: 86b0c81ce18f79f9d18d02eb182f135700e90d8fdcc7fc6c3a53a49097599aa8
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1264,7 +1271,14 @@ boards:
     # decoded as no-op hints instead of loads into PC. Decoder and firmware
     # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
     # CAPTURE, and live re-capture remains pending.
-    drift_ack: 2026-11-07
+    drift_ack: 2026-11-09
+    # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
+    # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
+    # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
+    # magic ('M','u',0x01) is at 0x10; any other chip's BKPT in that
+    # immediate range still Halt, same as before. Shared interpreter
+    # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -2448,8 +2462,15 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
-    drift_ack_digest: 1cf8837b47ec1cbc8750a7d85e04f6a664821a64a6b6595d108933ec7a135f75
+    drift_ack: 2026-11-09
+    # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
+    # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
+    # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
+    # magic ('M','u',0x01) is at 0x10; any other chip's BKPT in that
+    # immediate range still Halt, same as before. Shared interpreter
+    # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
+    drift_ack_digest: cc3fa97b80b4984d9fd68c6e673fc73ea222f80abe4051c6e0aeefcd26d243c9
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -2689,7 +2710,7 @@ boards:
     # the live capture reads the clock-gated window as bus junk (0x0008fe10).
     # This acknowledges model drift, NOT a recapture.
     # Re-stamped 2026-11-08 (round 347) over both changes above after merging main.
-    drift_ack_digest: ed30d3aceb28d77159219fbdba22d2cb1e926aafbd16261cacbb4e46c254777b
+    drift_ack_digest: afcf8ea391f732b54fbedeea7e983b71a7ca9cc41a2c4000073c9ab7b0f93971
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -3554,7 +3575,19 @@ boards:
     # the real FreeRTOS routine runs so IDF5 tx_mux spinlocks are initialised.
     # Firmware-library thunk only: no peripheral register map, reset value
     # or captured reset-state window changes. ACK, NOT A CAPTURE.
-    drift_ack: 2026-11-06
+    # 2026-11-09 (#1757 classic TIMG alarms): watched peripherals/esp32/timg.rs
+    # (the shared TIMG model; the C3 uses it for RTCCALICFG calibration).
+    # Alarms are opt-in via `with_alarms`, enabled only by the classic
+    # esp32_timg factory at 0x3FF5_F000/0x3FF6_0000; the C3 factory in
+    # generic_factory.rs does not opt in. On the merged tree: lib timg 44/44,
+    # esp32c3_rtc_slow_calibration 1/1, esp32c3_reset_conformance 2/2.
+    # ACK, NOT A CAPTURE.
+    # 2026-11-10 (#1784 feat/esp32-deep-sleep): watched shared files moved
+    # (classic ESP32 RTC_CNTL timer-wake sleep + Machine deep-sleep reboot
+    # capture in lib.rs). The C3 factory does not use that classic sleep-reboot
+    # path; no C3 register map or captured reset-state window changes.
+    # ACK, NOT A CAPTURE.
+    drift_ack: 2026-11-10
 
   - id: nucleo-l476rg
     # 2026-11-05: reviewed G0 DMA extension in shared UART/DMA source. Strict
@@ -4663,8 +4696,15 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
-    drift_ack_digest: 522b4fc22955059d1baeb90ac01cce43945353e195371493fee02b9142c894bc
+    drift_ack: 2026-11-09
+    # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
+    # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
+    # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
+    # magic ('M','u',0x01) is at 0x10; any other chip's BKPT in that
+    # immediate range still Halt, same as before. Shared interpreter
+    # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
+    drift_ack_digest: ea61614e87455985b6f507bebc6ffbe3a2de2e18779514665742fac10a9c196d
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -5160,7 +5200,7 @@ boards:
     # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
     # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
     # does not use it. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: ea8cc4cf06aec2383febd72a9949a7ff5af2728d14514370b5e07e91853e7f54
+    drift_ack_digest: f299e2a4b0027fd78905a4ff867c82a8b9894abed6480c7cc12513115b61e6df
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5716,7 +5756,14 @@ boards:
     #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
     #   OOM-killed on the authoring host, so the full --lib result is the PR's
     #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
+    drift_ack: 2026-11-09
+    # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
+    # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
+    # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
+    # magic ('M','u',0x01) is at 0x10; any other chip's BKPT in that
+    # immediate range still Halt, same as before. Shared interpreter
+    # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -6917,8 +6964,15 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
-    drift_ack_digest: 2ff8315cb06b1105dc0c52eb3b6cadc903c288459b32f36eb5fe6d1618f2c834
+    drift_ack: 2026-11-09
+    # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
+    # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
+    # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
+    # magic ('M','u',0x01) is at 0x10; any other chip's BKPT in that
+    # immediate range still Halt, same as before. Shared interpreter
+    # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
+    drift_ack_digest: 11ccb9e80e02ed99d39d7182ceffc87a835d7295705db9bb4e8c7edc21d98250
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -7435,7 +7489,7 @@ boards:
     # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
     # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
     # does not use it. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: c48957351eac4ba820c510649ab09854c1e6e43a277e02f35d9113ae04d4d4a6
+    drift_ack_digest: e3f6c4c992fca162699f23acaa7a2a580b62936718e33e96e46e17a8aca402ae
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7993,7 +8047,14 @@ boards:
     #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
     #   OOM-killed on the authoring host, so the full --lib result is the PR's
     #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
+    drift_ack: 2026-11-09
+    # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
+    # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
+    # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
+    # magic ('M','u',0x01) is at 0x10; any other chip's BKPT in that
+    # immediate range still Halt, same as before. Shared interpreter
+    # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -8905,8 +8966,16 @@ boards:
     # the real FreeRTOS routine runs so IDF5 tx_mux spinlocks are initialised.
     # Firmware-library thunk only: no peripheral register map, reset value
     # or captured reset-state window changes. ACK, NOT A CAPTURE.
-    drift_ack: 2026-11-06
-    drift_ack_digest: 688e14f97c4f031e6adceca987640b45b5f96d450292dd4c8ab7201429f55d38
+    # 2026-11-10 (#1784 feat/esp32-deep-sleep): shared lib.rs / rtc_cntl.rs
+    # moved for classic ESP32 timer-wake deep/light sleep. S3 UART0 remains
+    # outside the nine captured reset-state windows; no S3 register map or
+    # reset-value change. ACK, NOT A CAPTURE.
+    # 2026-11-10 (#1759 feat/esp32-nvs-flash): watched SPI / spi_mem_flash
+    # models gained program/erase + WEL behaviour so stock Preferences/NVS
+    # keeps its writes. This is not an S3 reset-state recapture; the nine
+    # captured S3 windows are unchanged. ACK, NOT A CAPTURE.
+    drift_ack: 2026-11-10
+    drift_ack_digest: c30213b480a08adac0801cc2ebe2947169beaadcd9bd2d11b8cfd601c1286102
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.
@@ -9264,10 +9333,10 @@ boards:
     doc: docs/boards/nrf5340.md
     chip: configs/chips/nrf5340.yaml
     tier: sim-validated
-    note: "Application core (Cortex-M33). Boots UNMODIFIED upstream Zephyr v3.7 hello_world (board nrf5340dk/nrf5340/cpuapp) end to end and prints its banner over the UARTE0 EasyDMA console — asserted by firmware_survival::test_nrf5340_zephyr_survival, with the ELF-independent clock/alias twin in tests/nrf5340_clock_boot.rs. Reuses the shared Nordic CLOCK/UARTE/RTC behavioural models at the 0x5000_0000 non-secure peripheral alias; the whole boot is bus-violation-free (LABWIRED_TRACE_VIOLATIONS=1). Network core, radio, TrustZone/SPU enforcement, and analog trims are not modeled (FICR/UICR/regulator/trim blocks are benign stubs). No nRF5340 silicon diff — no bench board."
+    note: "Application core (Cortex-M33). Boots UNMODIFIED upstream Zephyr v3.7 hello_world (board nrf5340dk/nrf5340/cpuapp) end to end and prints its banner over the UARTE0 EasyDMA console — asserted by firmware_survival::test_nrf5340_zephyr_survival. The ELF-independent nrf5340_clock_boot gate checks the secure cpuapp 0x5000_0000 mapping, HFCLK/LFCLK polls, and a TWIM1 EasyDMA repeated-START read of BMI270 CHIP_ID 0x24 on SDA P1.02 / SCL P1.03. Network core, radio, TrustZone/SPU enforcement, physical I²C edge narration, and analog trims are not modeled. No nRF5340 silicon diff — no bench board."
     offline_tests:
       - "firmware_survival::test_nrf5340_zephyr_survival (real Zephyr ELF boots + banner)"
-      - "nrf5340_clock_boot (HFCLK/LFCLK started-event polls + non-secure alias mapping)"
+      - "nrf5340_clock_boot (secure cpuapp mapping + HFCLK/LFCLK polls + TWIM1/BMI270 EasyDMA read)"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -9292,6 +9361,11 @@ boards:
       # source was not on this watch list. No silicon capture is recorded for
       # this board, so no ack is implied.
       - crates/core/src/peripherals/nrf52/dppic.rs
+      # 2026-11-09, model_paths_drift_gate: nrf5340_clock_boot registers TWIM1
+      # (nrf52/twim.rs) for the BMI270 EasyDMA CHIP_ID read, and that source
+      # was not on this watch list. No silicon capture is recorded for this
+      # board, so no ack is implied.
+      - crates/core/src/peripherals/nrf52/twim.rs
 
   - id: stm32h735
     doc: docs/boards/stm32h735.md
@@ -9699,6 +9773,13 @@ boards:
       # 2026-11-08: the PCNT pulse counter (was a round-trip stub), inputs from
       # the GPIO input matrix. No silicon capture on this board.
       - crates/core/src/peripherals/esp32/pcnt.rs
+      # 2026-11-10: classic RMT TX → GPIO (was a system_stub). This board
+      # records no silicon capture, so there is no silicon-verified claim
+      # for the digest to invalidate — no ack is implied.
+      - crates/core/src/peripherals/esp32/rmt.rs
+      # 2026-11-09: RTC_CNTL light/deep sleep on the RTC timer (deep sleep
+      # reboots the app with RTC memory kept). No silicon capture on this board.
+      - crates/core/src/peripherals/esp32/rtc_cntl.rs
       - crates/core/src/peripherals/esp32/sar_adc.rs
       - crates/core/src/peripherals/esp32/sdio_stub.rs
       - crates/core/src/peripherals/esp32/sha.rs

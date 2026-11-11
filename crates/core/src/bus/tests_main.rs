@@ -159,6 +159,21 @@ fn timer_poll_coalesce_uses_peripheral_access_class_not_chip_names() {
     let gpio_idx = bus.find_peripheral_index_by_name("gpio").unwrap();
 
     bus.reset_mmio_activity_counters();
+    for i in 1..=3 {
+        bus.note_mmio_activity(sys_idx, 0x04);
+        assert!(
+            !bus.take_timer_poll_coalesce_eligible(),
+            "split time_us_64 ({i}/3 TIMERAW loads) must not skip"
+        );
+        bus.reset_mmio_activity_counters();
+    }
+    bus.note_mmio_activity(sys_idx, 0x04);
+    assert!(
+        bus.take_timer_poll_coalesce_eligible(),
+        "a second time_us_64 (4th consecutive timer-only access) should coalesce"
+    );
+
+    bus.reset_mmio_activity_counters();
     bus.note_mmio_activity(sys_idx, 0x04); // poll class (model decides)
     bus.note_mmio_activity(sys_idx, 0x44); // poll class
     assert!(
@@ -3896,6 +3911,7 @@ fn test_flash_boot_alias_read_and_write() {
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
+        timer_poll_carry: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
         batch_stop: Default::default(),
         memory_reads: std::cell::Cell::new(0),
@@ -4033,6 +4049,7 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
+        timer_poll_carry: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
         batch_stop: Default::default(),
         memory_reads: std::cell::Cell::new(0),
@@ -4323,6 +4340,7 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
+        timer_poll_carry: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
         batch_stop: Default::default(),
         memory_reads: std::cell::Cell::new(0),
@@ -4609,6 +4627,7 @@ fn test_peripheral_range_index_lookup() {
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
+        timer_poll_carry: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
         batch_stop: Default::default(),
         memory_reads: std::cell::Cell::new(0),
@@ -4751,6 +4770,7 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
+        timer_poll_carry: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
         batch_stop: Default::default(),
         memory_reads: std::cell::Cell::new(0),
@@ -5771,18 +5791,20 @@ fn uds_tester_expect_nrc_negative_response_completes() {
 ///
 /// `service_gpio_devices` lives inside the phase-1 body that
 /// `per_cycle_tick_is_trivial` skips, so a device needing that pass makes the
-/// tick non-trivial by definition. Before this, a keypad / rotary encoder /
-/// DHT22 on a walk-deleted bus was silently inert: attach succeeded,
-/// `list_inputs` advertised its channel, `set_input` returned Ok, and the pin
-/// never moved.
+/// tick non-trivial by definition. Before this, a rotary encoder / DHT22 on a
+/// walk-deleted bus was silently inert: attach succeeded, `list_inputs`
+/// advertised its channel, `set_input` returned Ok, and the pin never moved.
 ///
-/// A button is the deliberate exception — its level is applied when the contact
-/// is driven, not per cycle — so adding a push button must NOT cost the bus its
-/// fast path. Both halves are asserted here so neither can drift: the exemption
-/// is what makes the fix affordable, and the rule is what makes it correct.
+/// Buttons and pure edge-serviced displays (TM1637) are deliberate exceptions —
+/// their levels are applied at the stimulus point (`sync_button_inputs` /
+/// `flush_gpio_device_inputs`) and on MMIO edges, not per cycle — so adding
+/// one must NOT cost the bus its fast path. An open-drain matrix keypad and a
+/// timer-owning part (HX711) still must. All halves are asserted here so none
+/// can drift.
 #[cfg(feature = "event-scheduler")]
 #[test]
 fn gpio_devices_decide_whether_the_per_cycle_tick_is_trivial() {
+    use crate::bus::resident_device::BusResidentDevice;
     use crate::peripherals::components::button::Button;
     use crate::peripherals::components::declarative_gpio::DeclarativeGpioDevice;
 
@@ -5804,10 +5826,45 @@ fn gpio_devices_decide_whether_the_per_cycle_tick_is_trivial() {
         "a button must not cost the bus its walk-free fast path"
     );
 
-    // A keypad is scanned every tick: the fast path must yield.
+    // A TM1637 is pure edge-serviced (no open-drain sampling): attaching one
+    // must KEEP the fast path.
+    let tm_desc = labwired_config::DeviceDescriptor::embedded("tm1637-7seg")
+        .unwrap()
+        .unwrap();
+    let tm = DeclarativeGpioDevice::new(
+        "tm".into(),
+        &tm_desc,
+        vec![
+            crate::peripherals::components::declarative_gpio::BoundPin {
+                role: "CLK".into(),
+                addr: 0x4800_0014,
+                bit: 8,
+            },
+            crate::peripherals::components::declarative_gpio::BoundPin {
+                role: "DIO".into(),
+                addr: 0x4800_0414,
+                bit: 9,
+            },
+        ],
+        vec![],
+        1_000_000,
+        crate::peripherals::components::declarative_i2c::owned_channels(&tm_desc),
+    )
+    .unwrap();
+    assert!(
+        !BusResidentDevice::needs_per_cycle_service(&tm),
+        "tm1637 stays edge-serviced"
+    );
+    bus.gpio_devices.push(Box::new(tm));
+    assert!(
+        bus.per_cycle_tick_is_trivial(),
+        "a TM1637 must not cost the bus its walk-free fast path"
+    );
+
+    // A keypad samples open-drain row/col nets: it keeps the per-cycle pass.
     let row_odr: [(u64, u8); 4] = std::array::from_fn(|r| (0x4800_0014, r as u8));
     let col_idr: [(u64, u8); 4] = std::array::from_fn(|c| (0x4800_0410, c as u8));
-    let desc = labwired_config::DeviceDescriptor::embedded("keypad")
+    let kp_desc = labwired_config::DeviceDescriptor::embedded("keypad")
         .unwrap()
         .unwrap();
     let bind = |role: &str, pads: [(u64, u8); 4]| {
@@ -5824,14 +5881,53 @@ fn gpio_devices_decide_whether_the_per_cycle_tick_is_trivial() {
     };
     let pad = DeclarativeGpioDevice::new(
         "kp".into(),
-        &desc,
+        &kp_desc,
         bind("rows", row_odr),
         bind("cols", col_idr),
         1_000_000,
-        crate::peripherals::components::declarative_i2c::owned_channels(&desc),
+        crate::peripherals::components::declarative_i2c::owned_channels(&kp_desc),
     )
     .unwrap();
+    assert!(
+        BusResidentDevice::needs_per_cycle_service(&pad),
+        "open-drain matrix sampling needs the tick"
+    );
     bus.gpio_devices.push(Box::new(pad));
+    assert!(
+        !bus.per_cycle_tick_is_trivial(),
+        "a keypad must cost the bus its walk-free fast path"
+    );
+
+    // Clear keypad so the HX711 half is not confounded; re-seed button.
+    bus.gpio_devices.clear();
+    bus.gpio_devices.push(Box::new(Button::new(
+        "btn".into(),
+        (0x4800_0000, 13),
+        false,
+    )));
+
+    // HX711 owns a timer: the fast path must yield.
+    let hx_desc = labwired_config::DeviceDescriptor::embedded("hx711")
+        .unwrap()
+        .unwrap();
+    let hx = DeclarativeGpioDevice::new(
+        "hx".into(),
+        &hx_desc,
+        vec![crate::peripherals::components::declarative_gpio::BoundPin {
+            role: "SCK".into(),
+            addr: 0x4800_0014,
+            bit: 8,
+        }],
+        vec![crate::peripherals::components::declarative_gpio::BoundPin {
+            role: "DOUT".into(),
+            addr: 0x4800_0410,
+            bit: 0,
+        }],
+        1_000_000,
+        crate::peripherals::components::declarative_i2c::owned_channels(&hx_desc),
+    )
+    .unwrap();
+    bus.gpio_devices.push(Box::new(hx));
     assert!(
         !bus.per_cycle_tick_is_trivial(),
         "a device needing the per-tick service pass makes the tick non-trivial"

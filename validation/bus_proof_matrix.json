@@ -186,6 +186,46 @@
         "note": "the arduino-matrix INA219 cell is a second, independent proof on this chip."
       }
     },
+    "esp32-devkitc-32e-gpio-smoke": {
+      "in_boards": false,
+      "uart": {
+        "state": "shallow",
+        "file": "docs/receipts/2026-11-09-esp32-deep-sleep/sketch/deep_sleep_timer.test.yaml",
+        "test": "uart_contains",
+        "gap": "the receipt PASSES locally via `labwired test --script docs/receipts/2026-11-09-esp32-deep-sleep/sketch/deep_sleep_timer.test.yaml` (stock Arduino-ESP32 timer-wake firmware prints LW_DS_OK over UART0 after three boots; the sibling light-sleep script prints LW_LS_OK) but runs in NO CI lane — no workflow invokes it, so nothing gates a regression.",
+        "lane": "none"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "This onboarding slice does not declare or prove a SPI controller.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "The chip yaml declares I2C0, but configs/systems/esp32-devkitc-32e-gpio-smoke.yaml attaches no external device and the committed sleep receipts do not perform an I2C transaction.",
+        "lane": "none"
+      }
+    },
+    "esp32-devkitc-32e-uart1": {
+      "in_boards": false,
+      "uart": {
+        "state": "shallow",
+        "file": "examples/esp32-devkitc-32e-uart1/uart1-smoke.yaml",
+        "test": "uart_contains",
+        "gap": "committed onboarding evidence (examples/esp32-devkitc-32e-uart1/evidence/run) shows the script PASSES: UART0 printed ESP32_DEVKITC32E_UART1_TX_OK and GPIO16 (UART1 TX) recorded >=32 edges. Firmware is PlatformIO-built, not a committed ELF, and no required CI lane invokes this script, so nothing gates a regression.",
+        "lane": "none"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "This onboarding slice does not declare or prove a SPI controller.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "This onboarding slice does not declare an I2C controller or attach an external I2C device.",
+        "lane": "none"
+      }
+    },
     "esp32c3": {
       "in_boards": true,
       "uart": {
@@ -669,6 +709,28 @@
       },
       "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
       "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f103rb-nucleo-bme280-smoke": {
+      "in_boards": false,
+      "uart": {
+        "state": "shallow",
+        "file": "examples/nucleo-f103rb-bme280/onboarding-smoke.yaml",
+        "test": "uart_contains",
+        "gap": "committed onboarding evidence (examples/nucleo-f103rb-bme280/evidence) shows the script PASSES: USART2 printed NUCLEO_F103RB_BME280_OK ID=0x60 I2C1=PB8/PB9 and gpioa:5 (LD2) recorded >=32 edges. Firmware is built from crates/firmware-nucleo-f103rb-bme280-smoke, not a committed ELF, and no required CI lane invokes this script, so nothing gates a regression.",
+        "lane": "none"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "This onboarding slice does not declare or prove a SPI controller.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "shallow",
+        "file": "examples/nucleo-f103rb-bme280/onboarding-smoke.yaml",
+        "test": "uart_contains",
+        "gap": "the smoke firmware reads BME280.CHIP_ID (register 0xD0) over I2C1 at 0x77 (Arduino D15/D14, PB8/PB9) and prints ID=0x60 on USART2. That is a firmware-driven I2C transaction observed via the UART marker, not a dedicated I2C capture assertion, and no required CI lane runs the script.",
+        "lane": "none"
+      }
     },
     "stm32f103r8": {
       "in_boards": false,

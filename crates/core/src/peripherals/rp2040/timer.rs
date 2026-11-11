@@ -49,7 +49,7 @@
 //! clock sync, and alarm matches ride scheduled events with held-level IRQ
 //! re-emission at delay 1.
 
-use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, MmioAccessClass, Peripheral, PeripheralTickResult, SimResult};
 use std::cell::Cell;
 
 // Register offsets (relative to the TIMER base).
@@ -404,6 +404,17 @@ impl Peripheral for Rp2040Timer {
         self.scheduler_mode()
     }
 
+    /// `millis()` / `time_us_64` poll these live counter words. They are
+    /// idempotent in this model (the TIMELR/TIMEHR latch is not implemented),
+    /// so an empty Arduino `loop()` that only reads time is a freerunning
+    /// timer poll — the same class ESP SYSTIMER uses for `millis()`.
+    fn mmio_access_class(&self, offset: u64) -> MmioAccessClass {
+        match self.canonical(offset) {
+            TIMERAWL | TIMERAWH | TIMELR | TIMEHR => MmioAccessClass::FreerunningTimerPoll,
+            _ => MmioAccessClass::SideEffecting,
+        }
+    }
+
     fn needs_legacy_walk(&self) -> bool {
         !self.scheduler_mode()
     }
@@ -480,6 +491,29 @@ impl Peripheral for Rp2040Timer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn live_counter_reads_are_freerunning_timer_polls() {
+        let t = Rp2040Timer::new();
+        assert_eq!(
+            t.mmio_access_class(TIMERAWL),
+            MmioAccessClass::FreerunningTimerPoll
+        );
+        assert_eq!(
+            t.mmio_access_class(TIMERAWH),
+            MmioAccessClass::FreerunningTimerPoll
+        );
+        assert_eq!(
+            t.mmio_access_class(TIMELR),
+            MmioAccessClass::FreerunningTimerPoll
+        );
+        assert_eq!(
+            t.mmio_access_class(TIMEHR),
+            MmioAccessClass::FreerunningTimerPoll
+        );
+        assert_eq!(t.mmio_access_class(ALARM0), MmioAccessClass::SideEffecting);
+        assert_eq!(t.mmio_access_class(INTE), MmioAccessClass::SideEffecting);
+    }
 
     #[test]
     fn configured_clock_counts_microseconds_and_elapsed_batches() {

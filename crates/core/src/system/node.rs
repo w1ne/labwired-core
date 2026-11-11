@@ -302,6 +302,8 @@ fn build_avr_node(
         .with_context(|| format!("node '{id}': build bus"))?;
     let mut cpu = crate::cpu::Avr::for_chip_name(&chip.name);
     cpu.load_program_image(&image);
+    // EEPROM programming time is in microseconds; count it in this clock.
+    cpu.set_cpu_hz(bus.cpu_hz);
     // SPI kits stay on the bus parking controller (SPDR clocks via
     // SystemBus::clock_parking_spi) so inspect can see the panel. I²C
     // slaves still move onto the CPU TWI model.

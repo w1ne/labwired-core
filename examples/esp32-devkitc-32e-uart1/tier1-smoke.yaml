@@ -1,0 +1,18 @@
+# CLI proof for the narrow ESP32-DevKitC-32E UART1 onboarding chip descriptor.
+#
+# The descriptor shares the classic ESP32 (Xtensa LX6) memory map and
+# `build_esp32_system_from_manifest` installs the same peripheral bank the
+# parent `esp32` path uses (the YAML peripheral list only documents the map).
+# The firmware is the committed TIER1 fixture already used by parent `esp32`
+# (docs-runnable expect "TIER1 clock PASS"). No extra toolchain.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/tier1/esp32.elf"
+  system: "../../configs/systems/esp32-devkitc-32e-uart1.yaml"
+limits:
+  max_steps: 8000000
+  stop_when_assertions_pass: true
+  stop_when_assertions_pass_settle_steps: 1000
+assertions:
+  - uart_contains: "TIER1 clock PASS"
+  - uart_contains: "TIER1 done"

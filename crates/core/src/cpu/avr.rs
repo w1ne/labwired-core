@@ -281,6 +281,17 @@ impl AvrModel {
         matches!(self, AvrModel::Atmega328pb)
     }
 
+    /// The watchdog's `WDTCSR` is at data space 0x60 (`avr/wdt.rs`).
+    pub const fn has_wdtcsr(self) -> bool {
+        matches!(
+            self,
+            AvrModel::Atmega328p
+                | AvrModel::Atmega328pb
+                | AvrModel::Atmega1281
+                | AvrModel::Atmega2560
+        )
+    }
+
     /// Whether this part uses the AVRxt data-space map and direct I/O
     /// addresses for IN/OUT, SBI/CBI and SBIS/SBIC.
     #[inline]
@@ -465,6 +476,11 @@ pub struct Avr {
     /// Ports sampled at every boundary (bit 0 = B, 1 = C, 2 = D); zero while
     /// no INT/PCINT is configured, which keeps the step cost unchanged.
     ext_watch: u8,
+    /// Watchdog timer: `WDTCSR` and `WDR` (`avr/wdt.rs`).
+    wdt: wdt::Wdt,
+    /// Data EEPROM and `EECR`/`EEDR`/`EEAR` (`avr/eeprom.rs`). Empty on the
+    /// parts whose EEPROM is not modelled.
+    eeprom: eeprom::Eeprom,
 }
 
 impl std::fmt::Debug for Avr {
@@ -507,6 +523,10 @@ pub const AVR_MEGA_ADC_INPUT_BASE: u64 = 0x0001_0200;
 /// AVcc on the 5 V boards this part is modelled for, and the internal bandgap.
 const AVR_AVCC_MV: u32 = 5000;
 const AVR_BANDGAP_MV: u32 = 1100;
+/// ATmega328P temperature sensor output at +25 °C, typical (table 24-2).
+const AVR_TEMP_SENSOR_25C_MV: u32 = 314;
+/// `adc_convert`'s channel marker for the temperature sensor (mux 0x08).
+const AVR_ADC_TEMP_SENSOR: u8 = 0xFE;
 
 pub const VEC_TIMER0_OVF: u32 = 17; // datasheet 1-based; @0x40 = __vector_16
 /// TWI_vect is `_VECTOR(24)` → PC 0x60; pending bit uses vec=25 (`(vec-1)*4`).
@@ -752,6 +772,8 @@ impl Avr {
             ext_last: [0; 3],
             ext_watch: 0,
             irq_shadow: false,
+            wdt: wdt::Wdt::new(model.has_wdtcsr()),
+            eeprom: eeprom::Eeprom::new(model.eeprom_size()),
         }
     }
 
@@ -829,6 +851,29 @@ impl Avr {
 
     /// `PINx`/`DDRx`/`PORTx` of a port this model has: mirrored to the bus.
     #[inline]
+    /// Every port back to a tri-stated input, `DDRx = PORTx = 0` (ATmega328P
+    /// datasheet §14.4: both reset to 0). A watchdog reset arrives here with
+    /// the bus already running, so the bus-side port windows are cleared as
+    /// well as this I/O map; at power-on both are already 0 and nothing is
+    /// written. All DDRs go first, so an output that was high is released
+    /// rather than driven low for a moment.
+    fn reset_ports(&mut self, bus: &mut dyn Bus) {
+        for offset in [1, 2] {
+            for pin in 0x20..=0x10Bu16 {
+                if !self.is_pin_reg(pin) {
+                    continue;
+                }
+                let addr = pin + offset;
+                let reg = &mut self.io[usize::from(addr - 0x20)];
+                if *reg != 0 {
+                    *reg = 0;
+                    // Best-effort, like every port mirror write.
+                    let _mirror = bus.write_u8(AVR_IO_MIRROR_BASE + u64::from(addr), 0);
+                }
+            }
+        }
+    }
+
     fn is_port_reg(&self, addr: u16) -> bool {
         match self.model {
             AvrModel::Atmega328p | AvrModel::Atmega328pb => {
@@ -978,7 +1023,9 @@ impl Avr {
             // high window by `data_write`.
             a if self.is_pin_reg(a) => {
                 let ddr = self.io[(addr + 1 - 0x20) as usize];
-                let port = self.io[(addr + 2 - 0x20) as usize];
+                // A pad an output-compare unit owns reads its waveform level,
+                // not the latch (the synchronizer samples the pad).
+                let port = self.port_pad_value(addr + 2, self.io[(addr + 2 - 0x20) as usize]);
                 // Propagated, not discarded: a chip yaml that maps no window
                 // for this port has no input state for this register at all,
                 // and a swallowed error would answer with a fabricated low — a
@@ -1077,6 +1124,8 @@ impl Avr {
             {
                 Ok(self.ext_read(addr).unwrap_or_default())
             }
+            a if self.wdt.handles(a) => Ok(self.wdt.read(self.cycles)),
+            a if self.eeprom.handles(a) => Ok(self.eeprom.read(a, self.cycles)),
             0x0020..=0x00FF => Ok(self.io[(addr - 0x20) as usize]),
             // ATmega2560 extended I/O (ports H..L, Timer3/4/5, USART1..3):
             // stored registers.
@@ -1184,6 +1233,12 @@ impl Avr {
             | timer1::ADDR_TCCR1A..=0x0082
             | 0x0084..=timer1::ADDR_OCR1BH => {
                 self.timer1_write(addr, value);
+                // TCCR1A/B and TIMSK1 decide whether ICP1 must be watched.
+                if !self.is_mega()
+                    && matches!(addr, timer1::ADDR_TIMSK1 | timer1::ADDR_TCCR1A | 0x0081)
+                {
+                    self.ext_config_changed(bus);
+                }
                 Ok(())
             }
             0x00C0 => {
@@ -1402,6 +1457,14 @@ impl Avr {
                 let _mirror = bus.write_u8(addr as u64, value);
                 Ok(())
             }
+            a if self.wdt.handles(a) => {
+                self.wdt_write(value);
+                Ok(())
+            }
+            a if self.eeprom.handles(a) => {
+                self.cycles += self.eeprom.write(a, value, self.cycles);
+                Ok(())
+            }
             0x0020..=0x00FF => {
                 self.io[(addr - 0x20) as usize] = value;
                 // PORTB/PORTC/PORTD (0x23..0x2B): mirror to the high bus window
@@ -1502,8 +1565,11 @@ impl Avr {
     /// One 10-bit conversion of the channel ADMUX selects.
     ///
     /// MUX 0..7 are the input pins, whose millivolts come from the bus-side
-    /// `avr_adc` model; 0x0E is the 1.1 V bandgap and 0x0F is GND. The other mux
-    /// codes (the temperature sensor at 0x08) are not modelled and read 0.
+    /// `avr_adc` model; 0x08 is the temperature sensor, 0x0E is the 1.1 V
+    /// bandgap and 0x0F is GND. The reserved mux codes read 0. The temperature
+    /// sensor gives the datasheet's typical 314 mV at +25 °C (ATmega328P
+    /// table 24-2, with the 1.1 V reference: 292). The die is held at +25 °C,
+    /// and the part-to-part offset (about ±10 °C uncalibrated) is not modelled.
     /// REFS selects the reference: 11 is the internal 1.1 V, anything else is
     /// taken as 5 V AVcc (AREF is not a modelled pin).
     ///
@@ -1522,12 +1588,14 @@ impl Avr {
         } else {
             match self.admux & 0x0F {
                 m @ 0..=7 => Some(m),
+                0x08 => Some(AVR_ADC_TEMP_SENSOR),
                 0x0E => None,
                 _ => Some(0xFF),
             }
         };
         let input_mv: u32 = match channel {
             Some(0xFF) => 0,
+            Some(AVR_ADC_TEMP_SENSOR) => AVR_TEMP_SENSOR_25C_MV,
             Some(ch) => {
                 let base = self.model.adc_input_base() + u64::from(ch) * 2;
                 let lo = bus.read_u8(base)?;
@@ -1917,6 +1985,15 @@ impl Avr {
                 if self.is_avrxt() && addr >= AVR_EEPROM_VMA_BIAS {
                     continue;
                 }
+                // `EEMEM` goes to the data EEPROM, never into SRAM or I/O.
+                if addr >= AVR_EEPROM_VMA_BIAS {
+                    for (i, b) in seg.data.iter().enumerate() {
+                        if let Some(cell) = self.eeprom.data.get_mut(d as usize + i) {
+                            *cell = *b;
+                        }
+                    }
+                    continue;
+                }
                 // Data / EEPROM space (biased VMA from avr-gcc).
                 for (i, b) in seg.data.iter().enumerate() {
                     let a = d as u16 + i as u16;
@@ -2052,6 +2129,9 @@ impl Avr {
             self.sync_timer2_irq();
         }
         self.timer1_vector_entered(vec);
+        if vec == wdt::VEC_WDT && self.wdt.handles(wdt::ADDR_WDTCSR) {
+            self.wdt_vector_entered();
+        }
         // ... and the INTn / PCIFn flag of an external or pin-change vector.
         self.ext_vector_entered(vec);
         self.push_pc(bus)?;
@@ -2288,7 +2368,8 @@ impl Cpu for Avr {
     /// A core stopped by `SLEEP` may be skipped until the next thing that can
     /// wake it: a Timer0 overflow or a Timer1/Timer2 compare/overflow with its
     /// interrupt enabled (while clk_I/O runs), or a pad change seen at a later
-    /// boundary. Nothing to skip when an interrupt is already takeable, or a
+    /// boundary, or the end of an EEPROM write while `EERIE` waits on it.
+    /// Nothing to skip when an interrupt is already takeable, or a
     /// watched pad moved since the last sample, or the USART receive interrupt
     /// is on.
     fn idle_fast_forward_budget(&self, bus: &dyn Bus) -> Option<u64> {
@@ -2306,6 +2387,8 @@ impl Cpu for Avr {
                 self.timer0_wake_cycles(),
                 self.timer1_wake_cycles(),
                 self.timer2_wake_cycles(),
+                self.wdt.wake_cycles(self.cycles),
+                self.eeprom.ready_wake_cycles(self.cycles),
             ]
             .into_iter()
             .flatten()
@@ -2346,6 +2429,7 @@ impl Cpu for Avr {
             bus.set_pull_ups_disabled(false);
         }
         *mcucr = 0;
+        self.reset_ports(bus);
         self.r = [0; 32];
         self.pc = 0;
         self.sp = self.ramend;
@@ -2387,6 +2471,8 @@ impl Cpu for Avr {
         self.twi_phase = TwiPhase::Idle;
         self.twi_slave = None;
         self.ext_reset();
+        self.wdt_after_reset();
+        self.eeprom.reset();
         self.irq_shadow = false;
         // Keep attached SPI/I2C slaves across reset (same wiring as real board).
         Ok(())
@@ -2401,6 +2487,8 @@ impl Cpu for Avr {
             crate::power::SupplyResetCause::PowerOn => *flags = 1, // PORF
             crate::power::SupplyResetCause::BrownOut => *flags |= 1 << 2, // BORF
         }
+        // A power-on clears WDRF, which releases the forced WDE.
+        self.wdt_after_reset();
     }
 
     /// One instruction, plus the standardized instruction trace.
@@ -2426,6 +2514,12 @@ impl Cpu for Avr {
     ) -> SimResult<()> {
         let before = self.cycles;
 
+        // A watchdog time-out: the interrupt is raised below like any other,
+        // a system reset restarts the core at this boundary.
+        if self.wdt_poll(bus)? {
+            return Ok(());
+        }
+
         // RX-complete interrupt: level-sensitive on RXC0 while RXCIE0 is set.
         // The queue lives on the bus-side USART model, so look at it every 32nd
         // step instead of every one: a few microseconds of latency at 16 MHz,
@@ -2450,6 +2544,11 @@ impl Cpu for Avr {
             && bus.read_u8(AVR_IO_MIRROR_BASE + 0xC0)? & UCSRA_RXC == 0
         {
             self.pending_irq &= !(1u64 << VEC_USART_RX);
+        }
+
+        // EE_READY: level-sensitive on EERIE with no write in progress.
+        if self.eeprom.irq_watched() || self.pending_irq & (1u64 << eeprom::VEC_EE_READY) != 0 {
+            self.sync_eeprom_irq();
         }
 
         // INT0/INT1 and PCINT: sample the pads at this boundary.
@@ -2542,7 +2641,14 @@ impl Cpu for Avr {
         // The INC/RJMP spin touches no bus, so it can never push a pad edge:
         // it stays available under push capture, as long as the tap clock is
         // carried across the cycles it retires.
-        if config.batch_mode_enabled && observers.is_empty() && timer_stopped && !irq_takeable {
+        // A running watchdog must see every boundary its time-out can land on.
+        let wdt_stopped = self.wdt.wake_cycles(self.cycles).is_none();
+        if config.batch_mode_enabled
+            && observers.is_empty()
+            && timer_stopped
+            && wdt_stopped
+            && !irq_takeable
+        {
             let cycles_before = self.cycles;
             let retired = self.try_run_inc_rjmp_spin(max_count);
             if retired > 0 {
@@ -2646,6 +2752,8 @@ impl Cpu for Avr {
     }
 }
 
+#[path = "avr/eeprom.rs"]
+mod eeprom;
 #[path = "avr/exec/mod.rs"]
 mod exec;
 #[path = "avr/ext_int.rs"]
@@ -2654,6 +2762,8 @@ mod ext_int;
 mod oc_pins;
 #[path = "avr/timer1.rs"]
 mod timer1;
+#[path = "avr/wdt.rs"]
+mod wdt;
 pub use ext_int::{VEC_INT0, VEC_INT1, VEC_PCINT0, VEC_PCINT1, VEC_PCINT2};
 
 #[cfg(test)]
@@ -3060,6 +3170,15 @@ mod tests {
             cpu.step(&mut bus, &[], &cfg).unwrap();
         }
         assert_eq!(u16::from(cpu.adch) << 8 | u16::from(cpu.adcl), 225);
+
+        // REFS=11, MUX=0x08 is the temperature sensor against 1.1 V: the
+        // typical 314 mV at +25 °C, 314 * 1024 / 1100 = 292.
+        cpu.load_words(0, &[0xEC08, 0x9300, 0x007C, 0xEC10, 0x9310, 0x007A, 0xCFFF]);
+        cpu.set_pc(0);
+        for _ in 0..4 {
+            cpu.step(&mut bus, &[], &cfg).unwrap();
+        }
+        assert_eq!(u16::from(cpu.adch) << 8 | u16::from(cpu.adcl), 292);
     }
 
     #[test]

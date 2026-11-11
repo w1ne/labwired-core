@@ -59,7 +59,10 @@ concurrency:
 jobs:
   python-sdk:
     name: python-sdk (wheel + pytest, 0 skipped)
-    runs-on: ubuntu-latest
+    # setup-python no longer publishes Python 3.9 for the Ubuntu 26.04
+    # `ubuntu-latest` image. Pin the OS so this job keeps testing the declared
+    # cp39 abi3 floor instead of silently moving the compatibility baseline.
+    runs-on: ubuntu-22.04
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4

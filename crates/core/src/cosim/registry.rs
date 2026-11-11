@@ -250,6 +250,40 @@ impl CosimRunner {
         kind
     }
 
+    /// An explicit initial value must agree across every reader of the path.
+    /// A reader with no declared initial value is treated as zero/false;
+    /// incompatible fanout is rejected rather than silently driving it.
+    pub fn input_initial_value(&self, path: &str) -> SimResult<Option<CosimSignalValue>> {
+        let mut values = Vec::new();
+        let mut explicit = false;
+        for model in &self.models {
+            for (name, source) in &model.config.inputs {
+                if source != path {
+                    continue;
+                }
+                if let Some(value) = model.adapter.input_initial_value(name) {
+                    explicit = true;
+                    values.push(value);
+                } else {
+                    values.push(match model.adapter.input_kind(name) {
+                        Some(CosimInputKind::Bool) => CosimSignalValue::Bool(false),
+                        _ => CosimSignalValue::F64(0.0),
+                    });
+                }
+            }
+        }
+        if !explicit {
+            return Ok(None);
+        }
+        let first = values.first().expect("explicit default implies a reader");
+        if values.iter().any(|value| value != first) {
+            return Err(SimulationError::Other(format!(
+                "conflicting initial values for routed input `{path}`"
+            )));
+        }
+        Ok(Some(first.clone()))
+    }
+
     /// The shared analog-sample ring, for a machine to publish to instruments.
     pub fn analog_trace_registry(&self) -> AnalogTraceRegistry {
         self.analog_trace.clone()

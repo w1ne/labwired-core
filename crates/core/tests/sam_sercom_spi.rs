@@ -950,14 +950,18 @@ fn scheduler_clock_gate_freezes_inflight_frame_and_resumes_once() {
 #[test]
 fn idle_spi_does_not_arm_events_or_force_the_legacy_walk() {
     let (board_bus, _) = board_with_drive(false);
-    // The full board has a GPIO shift register that drives DATA from the
-    // resident service pass. That independent contract must still pin ticks
-    // to one, even when every controller is scheduler-driven.
-    assert!(board_bus
-        .gpio_devices
-        .iter()
-        .any(|device| device.needs_per_cycle_service()));
-    assert_eq!(board_bus.max_safe_tick_interval(), 1);
+    // PyBadge buttons are a pin/input-clocked gpio_device (empty schedules):
+    // edge_service_addrs + set_input flush cover every change, so they no
+    // longer force per-cycle service or pin max_safe to 1. Controllers on the
+    // full board may still keep the interval at 1 (neopixel / walk); the
+    // chip-only half below is what proves the SERCOM walk deletion.
+    assert!(
+        board_bus
+            .gpio_devices
+            .iter()
+            .all(|device| !device.needs_per_cycle_service()),
+        "pybadge_buttons must stay edge-serviced (no timers, no exact schedules)"
+    );
 
     // Isolate controller walk deletion from the board residents. This is the
     // chip-level perf fleet boundary, not a claim about full-board batching.
