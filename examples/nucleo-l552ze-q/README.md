@@ -34,6 +34,14 @@ data) to ADC1_IN5/IN6, and the integration test converts them through a single
 SQ1, a 3-rank SQR scan and a 4-rank JADSTART on the shared L4-class ADC model.
 Silicon ADC accuracy is not claimed.
 
+[`analog-bjt-recombination-adc-system.yaml`](analog-bjt-recombination-adc-system.yaml)
+adds four generic Gummel–Poon NPN load lines on PA2..PA5, resolved through
+`analog_pins` to ADC1_IN7..IN10: reference, base-emitter recombination,
+base-collector recombination, and both together.
+The integration test compares solved collector voltages with an independent
+load-line calculation and converts them through ADC1 alongside the unrelated
+NTC and diode. This is model behavior coverage, not silicon validation.
+
 ## Build and run
 
 ```bash
