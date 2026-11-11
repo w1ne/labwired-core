@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="62" failures="0" errors="0" time="0.851596">
+<testsuite name="labwired" tests="62" failures="0" errors="0" time="0.782632">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="aa9229eef845270b6b295cc743c8165c2d4c5f45c550d6990886e0c379d45df0"/>
+    <property name="firmware_hash" value="4a9d93f91c182e5ea0018dab769345ceeaaedebdb0ad4044e498cf73362954f6"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.851596">
+  <testcase classname="labwired" name="run" time="0.782632">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: F103 I2C" time="0.000000">
   </testcase>
@@ -13,7 +13,7 @@
   </testcase>
   <testcase classname="labwired" name="assertion 3: uart_contains: SYSTICK M3 HCLK8 REFERENCE=1 WINDOW=1 FROZEN=1 RESUMED=1 ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 4: uart_contains: SYSTICK M3 VECTOR=15 HANDLER=1 IPSR=15 RETURN=1 ok" time="0.000000">
+  <testcase classname="labwired" name="assertion 4: uart_contains: SYSTICK M3 PERIODIC=1 REPEATED=1 VECTOR=15 IPSR=15 RETURN=1 ok" time="0.000000">
   </testcase>
   <testcase classname="labwired" name="assertion 5: uart_contains: USART2 TXEIRQ=1 REARM=0" time="0.000000">
   </testcase>

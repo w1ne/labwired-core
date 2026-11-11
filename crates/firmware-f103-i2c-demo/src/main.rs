@@ -709,36 +709,56 @@ unsafe fn smoke_systick_external_pause_resume() -> bool {
     ok
 }
 
-/// Exercise real exception entry, vector dispatch and exception return on the
-/// exact imported Cortex-M3 system. The linker places SysTick_Handler in vector
-/// slot 15; the handler records IPSR so a mere pending bit cannot pass this
-/// smoke.
+/// Exercise periodic exception entry, vector dispatch and exception return on
+/// the exact imported Cortex-M3 system. The linker places SysTick_Handler in
+/// vector slot 15; require two deliveries so the counter must reload after the
+/// first exception returns.
 unsafe fn smoke_systick_handler_delivery() -> bool {
     write_volatile(SYSTICK_CSR as *mut u32, 0);
     write_volatile(SCB_ICSR as *mut u32, ICSR_PENDSTCLR);
     write_volatile(SCB_VTOR as *mut u32, 0x0800_0000);
     write_volatile(SYSTICK_HANDLER_COUNT, 0);
     write_volatile(SYSTICK_HANDLER_IPSR, 0);
-    write_volatile(SYSTICK_RVR as *mut u32, 31);
+    write_volatile(SYSTICK_RVR as *mut u32, 255);
     write_volatile(SYSTICK_CVR as *mut u32, 0);
     write_volatile(SYSTICK_CSR as *mut u32, 0x7); // ENABLE | TICKINT | CLKSOURCE
 
     for _ in 0..4_096 {
-        if read_volatile(SYSTICK_HANDLER_COUNT) != 0 {
+        if read_volatile(SYSTICK_HANDLER_COUNT) >= 2 {
             break;
         }
         core::arch::asm!("nop", options(nomem, nostack, preserves_flags));
     }
 
+    let prior_primask: u32;
+    core::arch::asm!(
+        "mrs {primask}, PRIMASK",
+        "cpsid i",
+        primask = out(reg) prior_primask,
+        options(nostack, preserves_flags),
+    );
     write_volatile(SYSTICK_CSR as *mut u32, 0);
     write_volatile(SCB_ICSR as *mut u32, ICSR_PENDSTCLR);
-    let delivered = read_volatile(SYSTICK_HANDLER_COUNT) != 0;
+    let deliveries = read_volatile(SYSTICK_HANDLER_COUNT);
+    core::arch::asm!(
+        "msr PRIMASK, {primask}",
+        primask = in(reg) prior_primask,
+        options(nostack, preserves_flags),
+    );
+    for _ in 0..128 {
+        core::arch::asm!("nop", options(nomem, nostack, preserves_flags));
+    }
+    let stable_after_disable = read_volatile(SYSTICK_HANDLER_COUNT) == deliveries;
     let ipsr = read_volatile(SYSTICK_HANDLER_IPSR);
     let vector_installed = read_volatile(SCB_VTOR as *const u32) == 0x0800_0000;
-    let ok = delivered && ipsr == 15 && vector_installed;
+    let ok = prior_primask == 0
+        && deliveries >= 2
+        && stable_after_disable
+        && ipsr == 15
+        && vector_installed;
 
     if ok {
-        putline(b"SYSTICK M3 VECTOR=15 HANDLER=1 IPSR=15 RETURN=1 ok");
+        putline(b"SYSTICK M3 PERIODIC=1 REPEATED=1 VECTOR=15 IPSR=15 RETURN=1 ok");
     } else {
         putline(b"SYSTICK M3 HANDLER CHECK FAILED");
     }
