@@ -1,0 +1,16 @@
+# Read BME280.CHIP_ID over the Feather RP2040 STEMMA QT I2C1 route.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/tier1/feather-rp2040-bme280.elf"
+  system: "../../configs/systems/adafruit-feather-rp2040-bme280.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - gpio_edges:
+      pin: "sio:13"
+      min_edges: 1
+  - peripheral_log:
+      peripheral: "i2c1"
+      log: "bus_trace"
+      contains: "data 0x60 ack"
+  - expected_stop_reason: max_steps

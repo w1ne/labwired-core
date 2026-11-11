@@ -126,5 +126,9 @@
   "esp32c6-devkitc-bme280.elf": {
     "sha256": "2cfc7c80699af37789b724bd2137fd88cc4966911a4660474647519acf9084cf",
     "source_rev": "c22c8886643f64d96703c68f5e62aae91807df70"
+  },
+  "feather-rp2040-bme280.elf": {
+    "sha256": "2ab12340ccb2875c64f03686d58afdfbd83e2743921c9dba43cbb95fd6d239d6",
+    "source_rev": "f396371cc8c647086a636e31d30d441b2a9d8a18"
   }
 }

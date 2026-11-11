@@ -1,0 +1,34 @@
+Processing feather_rp2040 (platform: raspberrypi; board: adafruit_feather; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/raspberrypi/adafruit_feather.html
+PLATFORM: Raspberry Pi RP2040 (1.20.0+sha.5d4561a) > Feather RP2040
+HARDWARE: RP2040 133MHz, 256KB RAM, 8MB Flash
+DEBUG: Current (blackmagic) External (blackmagic, cmsis-dap, jlink, picoprobe, raspberrypi-swd)
+PACKAGES:
+ - framework-arduinopico @ 1.60100.0+sha.fd65f6d4
+ - tool-picotool-rp2040-earlephilhower @ 5.160100.260719 (16.1.0)
+ - tool-pioasm-rp2040-earlephilhower @ 5.160100.260719 (16.1.0)
+ - toolchain-rp2040-earlephilhower @ 5.160100.260719 (16.1.0)
+Flash size: 8.00MB
+Sketch size: 8.00MB
+Filesystem size: 0.00MB
+PSRAM size: 0.00MB
+Maximium Sketch size: 8384512 EEPROM start: 0x107ff000 Filesystem start: 0x107ff000 Filesystem end: 0x107ff000
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 78 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- Wire @ 1.0
+Building in release mode
+Retrieving maximum program size .pio/build/feather_rp2040/firmware.elf
+Checking size .pio/build/feather_rp2040/firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [          ]   3.3% (used 8560 bytes from 262144 bytes)
+Flash: [          ]   0.5% (used 37936 bytes from 8384512 bytes)
+Building .pio/build/feather_rp2040/firmware.bin.signed
+========================= [SUCCESS] Took 1.27 seconds =========================
+Using toolchain-rp2040-earlephilhower@5.160100.260719 package
+built bare-metal RP2040 simulator smoke image: /home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/tests/fixtures/tier1/feather-rp2040-bme280.elf
+updated feather-rp2040-bme280.elf fixture digest in /home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/tests/fixtures/tier1/MANIFEST.json

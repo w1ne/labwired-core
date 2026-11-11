@@ -192,6 +192,16 @@ peripherals:
     irq: 23
     config:
       debug_schema: "../peripherals/rp2040/i2c0.yaml"
+  # I2C1: second Synopsys DW_apb_i2c instance (RP2040 datasheet §4.3).
+  # Feather RP2040's STEMMA QT connector uses this controller on GP2/GP3;
+  # exposing it here lets the same behavioral model serve both I2C instances.
+  - id: "i2c1"
+    type: "rp2040_i2c"
+    base_address: 0x40048000
+    size: "4KB"
+    irq: 24
+    config:
+      debug_schema: "../peripherals/rp2040/i2c1.yaml"
   # Cortex-M0+ SysTick (SCS). Behavioural model: the ARMv7-M SysTick timer
   # (edge-triggered — raises system exception 15 only on the count-down to
   # zero, and only while ENABLE+TICKINT are set). The Arduino Mbed-OS core
