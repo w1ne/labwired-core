@@ -55,6 +55,7 @@ const IRQ_PENDING: u32 = SUMMARY + 16;
 const IRQ_FRAME: u32 = SUMMARY + 20;
 const IRQ_EXCEPTION_MSP: u32 = SUMMARY + 60;
 const NMI_RECORD: u32 = SUMMARY + 64;
+const NMI_COUNT: u32 = NMI_RECORD + 36;
 
 // RCC (RM0091 §6.4).
 const RCC: u32 = 0x4002_1000;
@@ -278,7 +279,9 @@ unsafe extern "C" fn smoke_irq_pend_nmi_handler() {
     );
 }
 
-/// Capture the NMI exception state while a normal IRQ remains active.
+/// Capture NMI state, then pend it again once while NMI is active. It must
+/// wait for exception return instead of nesting, then run again before the
+/// interrupted normal IRQ resumes.
 #[unsafe(naked)]
 unsafe extern "C" fn smoke_nmi_handler() {
     core::arch::naked_asm!(
@@ -295,6 +298,21 @@ unsafe extern "C" fn smoke_nmi_handler() {
         "str r2, [r0, #20]",
         "mrs r2, PRIMASK",
         "str r2, [r0, #24]",
+        "ldr r3, =0x20003064",
+        "ldr r1, [r3]",
+        "adds r1, #1",
+        "str r1, [r3]",
+        "cmp r1, #1",
+        "bne 1f",
+        "ldr r3, =0xe000ed04",
+        "ldr r2, =0x80000000",
+        "str r2, [r3]",
+        "dsb",
+        "isb",
+        "mrs r2, ipsr",
+        "str r2, [r0, #28]",
+        "str r1, [r0, #32]",
+        "1:",
         "bx lr",
     );
 }
@@ -316,7 +334,7 @@ fn check_nmi_preempts_primasked_irq() -> bool {
         asm!("cpsid i", options(nomem, nostack, preserves_flags));
         wr(NVIC_ICER0, irq_bit);
         unpend(EXTI0_1_IRQ);
-        for index in 0..7 {
+        for index in 0..10 {
             write_volatile((NMI_RECORD as *mut u32).add(index), 0);
         }
         for index in 0..VECTOR_TABLE_WORDS {
@@ -355,6 +373,9 @@ fn check_nmi_preempts_primasked_irq() -> bool {
     let icsr_in_nmi = unsafe { read_volatile((NMI_RECORD as *const u32).add(4)) };
     let irq_active_in_nmi = unsafe { read_volatile((NMI_RECORD as *const u32).add(5)) };
     let primask_after_nmi = unsafe { read_volatile((NMI_RECORD as *const u32).add(6)) };
+    let nmi_count = rd(NMI_COUNT);
+    let ipsr_after_repend = unsafe { read_volatile((NMI_RECORD as *const u32).add(7)) };
+    let count_after_repend = unsafe { read_volatile((NMI_RECORD as *const u32).add(8)) };
     let active_after = rd(NVIC_IABR0) & irq_bit;
     let pending_after = rd(NVIC_ISPR0) & irq_bit;
 
@@ -374,6 +395,9 @@ fn check_nmi_preempts_primasked_irq() -> bool {
         && prior_primask == 0
         && irq_ipsr == 16 + EXTI0_1_IRQ
         && nmi_ipsr == 2
+        && nmi_count == 2
+        && ipsr_after_repend == 2
+        && count_after_repend == 1
         && resumed_ipsr == 16 + EXTI0_1_IRQ
         && primask_in_nmi == 1
         && icsr_in_nmi & 0x1FF == 2
@@ -382,9 +406,15 @@ fn check_nmi_preempts_primasked_irq() -> bool {
         && cleanup_ok
         && (nmi_ipsr != 2 || rd(SCB_VTOR) == source_vtor);
 
-    puts("nmi primask ");
+    puts("nmi repend ");
     flag("entered", nmi_ipsr == 2);
-    puts("irq=");
+    puts("entries=");
+    hex(nmi_count);
+    puts(" after_pend_ipsr=");
+    hex(ipsr_after_repend);
+    puts(" after_pend_entries=");
+    hex(count_after_repend);
+    puts(" irq=");
     hex(irq_ipsr);
     puts(" nmi=");
     hex(nmi_ipsr);
