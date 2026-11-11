@@ -88,11 +88,12 @@ assertions:
       - "systick external pause-resume reference=1 window=1 frozen=1 resumed=1"
       - "systick external periodic reference=1 entries=0x00000003 active=1 countflag=1 pending=0 ok"
       - "systick external pending-coalesce reference=1 wraps=0x00000003 pending_each=1 masked=1 pending_after_disable=1 entries=0x00000001 active=1 cleared=1 ok"
-      - "summary 0x07FFFFFF"
+      - "systick calib=0x40001770 tenms=0x00001770 skew=1 noref=0 ok"
+      - "summary 0x0FFFFFFF"
       - "DONE"
   - memory_value:
       address: 0x20003000
-      expected_value: 0x07FFFFFF
+      expected_value: 0x0FFFFFFF
       size: 4
   - gpio_edges:
       pin: "gpiof:0"

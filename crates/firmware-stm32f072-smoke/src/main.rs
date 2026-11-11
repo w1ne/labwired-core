@@ -203,6 +203,7 @@ const NVIC_ICPR0: u32 = 0xE000_E280;
 const SYSTICK_CSR: u32 = 0xE000_E010;
 const SYSTICK_RVR: u32 = 0xE000_E014;
 const SYSTICK_CVR: u32 = 0xE000_E018;
+const SYSTICK_CALIB: u32 = 0xE000_E01C;
 const SCB_ICSR: u32 = 0xE000_ED04;
 const ICSR_PENDSTSET: u32 = 1 << 26;
 const ICSR_PENDSTCLR: u32 = 1 << 25;
@@ -1047,6 +1048,27 @@ fn check_systick_pause_resume() -> bool {
     ok
 }
 
+/// RM0091 §11.1.2 specifies TENMS=6000 for the 6 MHz HCLK/8 SysTick source.
+/// The CALIB bits also identify the reference source and its calibration skew.
+fn check_systick_calibration() -> bool {
+    let calib = rd(SYSTICK_CALIB);
+    let tenms = calib & 0x00FF_FFFF;
+    let skew = calib & (1 << 30) != 0;
+    let noref = calib & (1 << 31) != 0;
+    let ok = calib == 0x4000_1770 && tenms == 6000 && skew && !noref;
+
+    puts("systick calib=");
+    hex(calib);
+    puts(" tenms=");
+    hex(tenms);
+    puts(" skew=");
+    puts(if skew { "1" } else { "0" });
+    puts(" noref=");
+    puts(if noref { "1" } else { "0" });
+    puts(if ok { " ok\r\n" } else { " bad\r\n" });
+    ok
+}
+
 /// The STM32F072 reference source is HCLK/8. ENABLE must freeze that
 /// countdown and re-enabling it must continue the same in-progress period.
 fn check_systick_external_pause_resume() -> bool {
@@ -1351,6 +1373,7 @@ fn main() -> ! {
     let systick_external_periodic = check_systick_external_periodic();
     let systick_external_coalesces = check_systick_external_pending_coalesces();
     mark(23, systick_external_periodic && systick_external_coalesces);
+    mark(27, check_systick_calibration());
     let summary = summary | 0x0700_0000;
     wr(SUMMARY, summary);
     puts("summary ");

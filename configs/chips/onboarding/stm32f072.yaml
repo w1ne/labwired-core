@@ -45,9 +45,8 @@ peripherals:
   base_address: 0xE000E010
   size: 16B
   config:
-    # RM0360: SysTick's external source is HCLK/8 on STM32F072.
-    # CALIB has NOREF=0 (reference source present) and SKEW=1.
-    calib: 0x40000000
+    # RM0091 §11.1.2: TENMS=6000 at 6 MHz (max HCLK/8), NOREF=0, SKEW=1.
+    calib: 0x40001770
     external_clock_divider: 8
 # --- RCC (RM0091 §6.4: CR/CFGR/CIR/APB2RSTR/APB1RSTR/AHBENR/APB2ENR/APB1ENR..)
 - id: rcc
