@@ -30,9 +30,10 @@
 //! priority IRQ, which must remain pending through both NMI entries and the
 //! active IRQ before tail-chaining after that IRQ returns. Every check prints
 //! one line and sets one bit of the summary word at `SUMMARY`. AIRCR.PRIGROUP
-//! is also checked as reserved on this ARMv6-M core. A short SysTick period
-//! verifies core exception 15, COUNTFLAG read-clear behavior, and PRIMASK's
-//! pending-then-deliver behavior.
+//! is also checked as reserved on this ARMv6-M core. SysTick checks cover
+//! exception 15, COUNTFLAG read-clear behavior, PRIMASK's pending-then-deliver
+//! behavior, SCB software pend/set/clear, and re-pending while its handler is
+//! active followed by a second exception entry.
 
 #![no_std]
 #![no_main]
@@ -66,6 +67,7 @@ const NMI_DEFERRED_IRQ: u32 = SUMMARY + 104;
 const SYSTICK_RECORD: u32 = SUMMARY + 176;
 const SYSTICK_MASK_RECORD: u32 = SUMMARY + 192;
 const SYSTICK_ICSR_RECORD: u32 = SUMMARY + 208;
+const SYSTICK_REPEND_RECORD: u32 = SUMMARY + 224;
 const SYSTICK_CSR: u32 = 0xE000_E010;
 const SYSTICK_RVR: u32 = 0xE000_E014;
 const SYSTICK_CVR: u32 = 0xE000_E018;
@@ -436,6 +438,40 @@ unsafe extern "C" fn smoke_systick_icsr_handler() {
         "str r2, [r0, #4]",
         "movs r2, #1",
         "str r2, [r0, #8]",
+        "bx lr",
+    );
+}
+
+/// Re-pend SysTick once while exception 15 is active, then record the
+/// tail-chained entry.
+#[unsafe(naked)]
+unsafe extern "C" fn smoke_systick_repend_handler() {
+    core::arch::naked_asm!(
+        "ldr r0, =0x200030E0",
+        "ldr r2, [r0, #28]",
+        "adds r2, r2, #1",
+        "str r2, [r0, #28]",
+        "cmp r2, #1",
+        "bne 1f",
+        "mrs r2, ipsr",
+        "str r2, [r0, #0]",
+        "ldr r1, =0xE000ED04",
+        "ldr r2, [r1]",
+        "str r2, [r0, #4]",
+        "movs r2, #1",
+        "lsls r2, r2, #26",
+        "str r2, [r1]",
+        "ldr r2, [r1]",
+        "str r2, [r0, #12]",
+        "ldr r2, [r0, #28]",
+        "str r2, [r0, #16]",
+        "bx lr",
+        "1:",
+        "mrs r2, ipsr",
+        "str r2, [r0, #20]",
+        "ldr r1, =0xE000ED04",
+        "ldr r2, [r1]",
+        "str r2, [r0, #24]",
         "bx lr",
     );
 }
@@ -815,6 +851,129 @@ fn check_systick_icsr_software_pend() -> bool {
     puts(if pending_after_return { "0" } else { "1" });
     puts(" thread_ipsr=");
     hex(thread_after_return);
+    puts(" ");
+    flag("vtor_restored", vtor_restored);
+    verdict(ok);
+    ok
+}
+
+/// A software pend written during SysTick must remain pending while exception
+/// 15 is active and enter once more after the active handler returns.
+fn check_systick_icsr_repend() -> bool {
+    let source_vtor = rd(SCB_VTOR);
+    let table = RAM_VECTOR_BASE as *mut u32;
+    let prior_primask: u32;
+    unsafe {
+        asm!(
+            "mrs {primask}, PRIMASK",
+            "cpsid i",
+            primask = out(reg) prior_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+        wr(SYSTICK_CSR, 0);
+        wr(SCB_ICSR, 1 << 25);
+        for index in 0..8 {
+            write_volatile((SYSTICK_REPEND_RECORD as *mut u32).add(index), 0);
+        }
+        for index in 0..VECTOR_TABLE_WORDS {
+            write_volatile(table.add(index), 0);
+        }
+        write_volatile(
+            table.add(SYSTICK_VECTOR_INDEX),
+            (smoke_systick_repend_handler as *const () as usize as u32) | 1,
+        );
+        wr(SCB_VTOR, RAM_VECTOR_BASE);
+        wr(SCB_ICSR, 1 << 26);
+    }
+
+    for _ in 0..1_000 {
+        if rd(SCB_ICSR) & (1 << 26) != 0 {
+            break;
+        }
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+    let pending_before_unmask = rd(SCB_ICSR) & (1 << 26) != 0;
+    let no_handler_before_unmask = rd(SYSTICK_REPEND_RECORD + 28) == 0;
+    unsafe { asm!("cpsie i", "dsb", "isb", options(nostack, preserves_flags)) };
+    for _ in 0..100_000 {
+        if rd(SYSTICK_REPEND_RECORD + 28) >= 2 {
+            break;
+        }
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+
+    let first_ipsr = rd(SYSTICK_REPEND_RECORD);
+    let first_icsr = rd(SYSTICK_REPEND_RECORD + 4);
+    let icsr_after_repend = rd(SYSTICK_REPEND_RECORD + 12);
+    let count_after_repend = rd(SYSTICK_REPEND_RECORD + 16);
+    let second_ipsr = rd(SYSTICK_REPEND_RECORD + 20);
+    let second_icsr = rd(SYSTICK_REPEND_RECORD + 24);
+    let entries = rd(SYSTICK_REPEND_RECORD + 28);
+    let thread_ipsr: u32;
+    unsafe {
+        asm!(
+            "mrs {value}, ipsr",
+            value = out(reg) thread_ipsr,
+            options(nomem, nostack, preserves_flags),
+        );
+    }
+
+    unsafe {
+        asm!("cpsid i", options(nomem, nostack, preserves_flags));
+        wr(SYSTICK_CSR, 0);
+        wr(SCB_ICSR, 1 << 25);
+        wr(SYSTICK_CVR, 0);
+        wr(SCB_VTOR, source_vtor);
+        asm!(
+            "msr PRIMASK, {primask}",
+            "dsb",
+            "isb",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+
+    let vtor_restored = rd(SCB_VTOR) == source_vtor;
+    let first_active = first_icsr & 0x1FF == 15;
+    let first_not_pending = first_icsr & (1 << 26) == 0;
+    let pending_while_active = icsr_after_repend & (1 << 26) != 0;
+    let active_after_repend = icsr_after_repend & 0x1FF == 15;
+    let second_active = second_icsr & 0x1FF == 15;
+    let second_not_pending = second_icsr & (1 << 26) == 0;
+    let ok = prior_primask == 0
+        && pending_before_unmask
+        && no_handler_before_unmask
+        && entries == 2
+        && first_ipsr == 15
+        && first_active
+        && first_not_pending
+        && pending_while_active
+        && active_after_repend
+        && count_after_repend == 1
+        && second_ipsr == 15
+        && second_active
+        && second_not_pending
+        && thread_ipsr == 0
+        && vtor_restored;
+
+    puts("systick icsr repend entries=");
+    hex(entries);
+    puts(" first_ipsr=");
+    hex(first_ipsr);
+    puts(" first_active=");
+    hex(first_icsr & 0x1FF);
+    puts(" pending_after_pend=");
+    puts(if pending_while_active { "1" } else { "0" });
+    puts(" count_after_pend=");
+    hex(count_after_repend);
+    puts(" second_ipsr=");
+    hex(second_ipsr);
+    puts(" second_active=");
+    hex(second_icsr & 0x1FF);
+    puts(" second_pending=");
+    puts(if second_not_pending { "0" } else { "1" });
+    puts(" thread_ipsr=");
+    hex(thread_ipsr);
     puts(" ");
     flag("vtor_restored", vtor_restored);
     verdict(ok);
@@ -1613,7 +1772,11 @@ fn main() -> ! {
     mark(20, check_systick());
     let systick_primask_ok = check_systick_primask();
     let systick_icsr_software_pend_ok = check_systick_icsr_software_pend();
-    mark(21, systick_primask_ok && systick_icsr_software_pend_ok);
+    let systick_icsr_repend_ok = check_systick_icsr_repend();
+    mark(
+        21,
+        systick_primask_ok && systick_icsr_software_pend_ok && systick_icsr_repend_ok,
+    );
     let summary = summary | 0x0DF0_0000;
     wr(SUMMARY, summary);
     puts("summary ");
