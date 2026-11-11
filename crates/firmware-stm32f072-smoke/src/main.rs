@@ -15,6 +15,8 @@
 //! ISPR bit, which proves the block reaches the right NVIC input without a
 //! device vector table. Every check prints one line and sets one bit of the
 //! summary word at `SUMMARY`.
+//! The SCB smoke also verifies PendSV clear, pending visibility, and one
+//! vector dispatch on the imported Cortex-M0.
 
 use core::arch::asm;
 use core::ptr::{read_volatile, write_volatile};
@@ -207,10 +209,14 @@ const SYSTICK_CALIB: u32 = 0xE000_E01C;
 const SCB_ICSR: u32 = 0xE000_ED04;
 const ICSR_PENDSTSET: u32 = 1 << 26;
 const ICSR_PENDSTCLR: u32 = 1 << 25;
+const ICSR_PENDSVSET: u32 = 1 << 28;
+const ICSR_PENDSVCLR: u32 = 1 << 27;
 
 static mut SYSTICK_EXTERNAL_ENTRIES: u32 = 0;
 static mut SYSTICK_EXTERNAL_ACTIVE_MASK: u32 = 0;
 static mut SYSTICK_EXTERNAL_COUNTFLAG_MASK: u32 = 0;
+static mut PENDSV_ENTRIES: u32 = 0;
+static mut PENDSV_IPSR: u32 = 0;
 
 fn rd(addr: u32) -> u32 {
     unsafe { read_volatile(addr as *const u32) }
@@ -1488,6 +1494,119 @@ fn check_systick_cvr_clear_preserves_pending() -> bool {
     ok
 }
 
+/// Cancel a masked PendSV request, then confirm a fresh request is delivered
+/// once through the Cortex-M0's vector table and returns to Thread mode.
+fn check_pendsv_clear_and_repend() -> bool {
+    let prior_primask: u32;
+    unsafe {
+        asm!(
+            "mrs {primask}, PRIMASK",
+            "cpsid i",
+            primask = out(reg) prior_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+    }
+
+    wr(SYSTICK_CSR, 0);
+    wr(SCB_ICSR, ICSR_PENDSTCLR | ICSR_PENDSVCLR);
+    unsafe {
+        write_volatile(core::ptr::addr_of_mut!(PENDSV_ENTRIES), 0);
+        write_volatile(core::ptr::addr_of_mut!(PENDSV_IPSR), 0);
+    }
+
+    wr(SCB_ICSR, ICSR_PENDSVSET);
+    for _ in 0..16 {
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+    let pending_before_clear = rd(SCB_ICSR) & ICSR_PENDSVSET != 0;
+    wr(SCB_ICSR, ICSR_PENDSVCLR);
+    let pending_after_clear = rd(SCB_ICSR) & ICSR_PENDSVSET == 0;
+    unsafe {
+        asm!(
+            "msr PRIMASK, {primask}",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+    for _ in 0..32 {
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+    let clear_cancels_pending = unsafe { read_volatile(core::ptr::addr_of!(PENDSV_ENTRIES)) == 0 };
+
+    unsafe { asm!("cpsid i", options(nomem, nostack, preserves_flags)) };
+    wr(SCB_ICSR, ICSR_PENDSVSET);
+    let fresh_pending_visible = rd(SCB_ICSR) & ICSR_PENDSVSET != 0;
+    unsafe {
+        asm!(
+            "msr PRIMASK, {primask}",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+    for _ in 0..4096 {
+        if unsafe { read_volatile(core::ptr::addr_of!(PENDSV_ENTRIES)) } != 0 {
+            break;
+        }
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+
+    let entries = unsafe { read_volatile(core::ptr::addr_of!(PENDSV_ENTRIES)) };
+    let handler_ipsr = unsafe { read_volatile(core::ptr::addr_of!(PENDSV_IPSR)) };
+    let pending_after_entry = rd(SCB_ICSR) & ICSR_PENDSVSET == 0;
+    let thread_ipsr: u32;
+    unsafe {
+        asm!(
+            "mrs {ipsr}, IPSR",
+            ipsr = out(reg) thread_ipsr,
+            options(nomem, nostack, preserves_flags),
+        );
+        asm!("cpsid i", options(nomem, nostack, preserves_flags));
+    }
+    wr(SCB_ICSR, ICSR_PENDSVCLR);
+    unsafe {
+        asm!(
+            "msr PRIMASK, {primask}",
+            "dsb",
+            "isb",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+
+    let ok = prior_primask == 0
+        && pending_before_clear
+        && pending_after_clear
+        && clear_cancels_pending
+        && fresh_pending_visible
+        && entries == 1
+        && handler_ipsr == 14
+        && pending_after_entry
+        && thread_ipsr == 0;
+    puts("pendsv clear pending=");
+    puts(if pending_before_clear { "1" } else { "0" });
+    puts(" canceled=");
+    puts(if clear_cancels_pending && pending_after_clear {
+        "1"
+    } else {
+        "0"
+    });
+    puts(" fresh repend=");
+    puts(if fresh_pending_visible { "1" } else { "0" });
+    puts(" entries=");
+    hex(entries);
+    puts(" ipsr=");
+    hex(handler_ipsr);
+    puts(" returned=");
+    puts(if pending_after_entry && thread_ipsr == 0 {
+        "1"
+    } else {
+        "0"
+    });
+    puts(" ");
+    verdict(ok);
+    ok
+}
+
 #[exception]
 fn SysTick() {
     let entry = unsafe { read_volatile(core::ptr::addr_of!(SYSTICK_EXTERNAL_ENTRIES)) };
@@ -1514,6 +1633,24 @@ fn SysTick() {
         write_volatile(
             core::ptr::addr_of_mut!(SYSTICK_EXTERNAL_ENTRIES),
             entry.saturating_add(1),
+        );
+    }
+}
+
+#[exception]
+fn PendSV() {
+    let ipsr: u32;
+    unsafe {
+        asm!(
+            "mrs {ipsr}, IPSR",
+            ipsr = out(reg) ipsr,
+            options(nomem, nostack, preserves_flags),
+        );
+        let entries = read_volatile(core::ptr::addr_of!(PENDSV_ENTRIES));
+        write_volatile(core::ptr::addr_of_mut!(PENDSV_IPSR), ipsr);
+        write_volatile(
+            core::ptr::addr_of_mut!(PENDSV_ENTRIES),
+            entries.wrapping_add(1),
         );
     }
 }
@@ -1563,6 +1700,7 @@ fn main() -> ! {
     mark(28, check_systick_reload_update());
     mark(27, check_systick_calibration());
     mark(29, check_systick_cvr_clear_preserves_pending());
+    mark(30, check_pendsv_clear_and_repend());
     let summary = summary | 0x0700_0000;
     wr(SUMMARY, summary);
     puts("summary ");

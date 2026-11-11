@@ -9390,24 +9390,24 @@
       "script": "examples/renode-onboarding/stm32f072-smoke.yaml",
       "system": "configs/systems/onboarding/stm32f072.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-11T11:05:23Z",
-      "finished_at_utc": "2026-11-11T11:05:26Z",
+      "started_at_utc": "2026-11-11T13:40:12Z",
+      "finished_at_utc": "2026-11-11T13:40:15Z",
       "elapsed_seconds": 4,
-      "elapsed_ms": 3089,
+      "elapsed_ms": 3603,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.268,
-        "build_firmware": 2.046,
-        "run_smoke": 0.738
+        "build_cli": 0.278,
+        "build_firmware": 2.456,
+        "run_smoke": 0.828
       },
       "stages_ms": {
-        "build_cli": 268,
-        "build_firmware": 2046,
-        "run_smoke": 738
+        "build_cli": 278,
+        "build_firmware": 2456,
+        "run_smoke": 828
       },
       "_artifact_path": "stm32f072",
       "zero_answering_windows": [],

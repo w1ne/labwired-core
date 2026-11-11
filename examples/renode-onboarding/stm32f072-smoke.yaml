@@ -94,11 +94,12 @@ assertions:
       - "systick reload-update window=1 preserved=1 first_wrap=1 next_reload=1"
       - "systick calib=0x40001770 tenms=0x00001770 skew=1 noref=0 write_ignored=1 ok"
       - "systick cvr-clear reference=1 wrapped=1 pending_before=1 countflag_clear=1 pending_preserved=1 masked=1 entries=0x00000001 handler_countflag_clear=1 active=1 returned=1 ok"
-      - "summary 0x3FFFFFFF"
+      - "pendsv clear pending=1 canceled=1 fresh repend=1 entries=0x00000001 ipsr=0x0000000E returned=1 ok"
+      - "summary 0x7FFFFFFF"
       - "DONE"
   - memory_value:
       address: 0x20003000
-      expected_value: 0x3FFFFFFF
+      expected_value: 0x7FFFFFFF
       size: 4
   - gpio_edges:
       pin: "gpiof:0"
