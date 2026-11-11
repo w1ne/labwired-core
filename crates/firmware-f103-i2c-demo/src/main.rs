@@ -239,6 +239,7 @@ fn main() -> ! {
     unsafe { smoke_systick_handler_delivery() };
     unsafe { smoke_systick_icsr_repend() };
     unsafe { smoke_systick_tickint_gate() };
+    unsafe { smoke_systick_cvr_write_preserves_pending() };
     smoke_usart2_txe_irq();
     smoke_usart2_rx_enable_gate();
     smoke_spi1_irq_and_max31855();
@@ -947,6 +948,75 @@ unsafe fn smoke_systick_tickint_gate() -> bool {
         putline(b"SYSTICK M3 TICKINT=0 COUNTFLAG=1 NO_PEND=1 TICKINT=1 PEND=1 MASKED=1 ok");
     } else {
         putline(b"SYSTICK M3 TICKINT CHECK FAILED");
+    }
+    ok
+}
+
+/// A CVR write clears the SysTick counter and COUNTFLAG, but leaves a wrap's
+/// already-latched SCB pending request intact.
+unsafe fn smoke_systick_cvr_write_preserves_pending() -> bool {
+    let source_vtor = read_volatile(SCB_VTOR as *const u32);
+    let prior_primask: u32;
+    core::arch::asm!(
+        "mrs {primask}, PRIMASK",
+        "cpsid i",
+        primask = out(reg) prior_primask,
+        options(nomem, nostack, preserves_flags),
+    );
+
+    write_volatile(SYSTICK_CSR as *mut u32, 0);
+    write_volatile(SCB_ICSR as *mut u32, ICSR_PENDSTCLR);
+    write_volatile(SCB_VTOR as *mut u32, 0x0800_0000);
+    write_volatile(SYSTICK_HANDLER_COUNT, 0);
+    write_volatile(SYSTICK_RVR as *mut u32, 63);
+    write_volatile(SYSTICK_CVR as *mut u32, 0);
+    write_volatile(SYSTICK_CSR as *mut u32, 0x7); // ENABLE | TICKINT | CLKSOURCE
+
+    let mut wrapped = false;
+    for _ in 0..4_096 {
+        if read_volatile(SCB_ICSR as *const u32) & ICSR_PENDSTSET != 0 {
+            wrapped = true;
+            break;
+        }
+    }
+
+    // Do not read CSR before this write: that would consume COUNTFLAG. The
+    // pending request proves a zero-hit occurred, and must survive the CVR
+    // write while the counter value and unconsumed COUNTFLAG clear.
+    write_volatile(SYSTICK_CSR as *mut u32, 0);
+    let pending_before_cvr = read_volatile(SCB_ICSR as *const u32) & ICSR_PENDSTSET != 0;
+    write_volatile(SYSTICK_CVR as *mut u32, 0);
+    let counter_zero = read_volatile(SYSTICK_CVR as *const u32) == 0;
+    let countflag_cleared = read_volatile(SYSTICK_CSR as *const u32) & SYSTICK_COUNTFLAG == 0;
+    let pending_preserved = read_volatile(SCB_ICSR as *const u32) & ICSR_PENDSTSET != 0;
+    let handler_masked = read_volatile(SYSTICK_HANDLER_COUNT) == 0;
+
+    write_volatile(SCB_ICSR as *mut u32, ICSR_PENDSTCLR);
+    let pending_cleared = read_volatile(SCB_ICSR as *const u32) & ICSR_PENDSTSET == 0;
+    write_volatile(SCB_VTOR as *mut u32, source_vtor);
+    core::arch::asm!(
+        "msr PRIMASK, {primask}",
+        "dsb",
+        "isb",
+        primask = in(reg) prior_primask,
+        options(nostack, preserves_flags),
+    );
+
+    let ok = prior_primask == 0
+        && source_vtor == 0x0800_0000
+        && wrapped
+        && pending_before_cvr
+        && counter_zero
+        && countflag_cleared
+        && pending_preserved
+        && pending_cleared
+        && handler_masked;
+    if ok {
+        putline(
+            b"SYSTICK M3 CVR_WRITE WRAP=1 ZERO=1 COUNTFLAG_CLEAR=1 PENDING_PRESERVED=1 MASKED=1 ok",
+        );
+    } else {
+        putline(b"SYSTICK M3 CVR_WRITE CHECK FAILED");
     }
     ok
 }
