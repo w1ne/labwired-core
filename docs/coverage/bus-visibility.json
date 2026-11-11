@@ -124,6 +124,19 @@
   {
     "buses": [
       "I2C",
+      "UART"
+    ],
+    "name": "esp32-devkitc-32e-gpio-smoke"
+  },
+  {
+    "buses": [
+      "UART"
+    ],
+    "name": "esp32-devkitc-32e-uart1"
+  },
+  {
+    "buses": [
+      "I2C",
       "SPI",
       "UART"
     ],
@@ -371,6 +384,12 @@
       "UART"
     ],
     "name": "stm32f103rb"
+  },
+  {
+    "buses": [
+      "I2C"
+    ],
+    "name": "stm32f103rb-nucleo-bme280-smoke"
   },
   {
     "buses": [

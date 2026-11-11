@@ -432,6 +432,28 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_esp32s3_zero_tier1_survival"),
     },
     ChipConf {
+        name: "esp32-devkitc-32e-gpio-smoke",
+        yaml: "configs/chips/esp32-devkitc-32e-gpio-smoke.yaml",
+        reset_oracle: None,
+        // Narrow DevKitC-32E onboarding profile of the same LX6 SoC as `esp32`.
+        // The committed Tier-1 fixture runs through this descriptor/system so a
+        // regression in the YAML pair's load/parse/dispatch fails here, not
+        // only in the CLI cell. Same documented dma gap as parent `esp32`.
+        behavior_gate: Some("firmware_survival::test_esp32_devkitc_32e_gpio_smoke_tier1_survival"),
+    },
+    ChipConf {
+        name: "esp32-devkitc-32e-uart1",
+        yaml: "configs/chips/esp32-devkitc-32e-uart1.yaml",
+        reset_oracle: None,
+        // Narrow DevKitC-32E UART1 onboarding profile of the same LX6 SoC as
+        // `esp32`. The boards.yml cell runs the committed Tier-1 ELF
+        // (docs-runnable expects TIER1 clock PASS). There is no dedicated
+        // firmware_survival rust test yet — this profile only models
+        // UART0/UART1/GPIO, so claiming the gpio-smoke TIER1-done gate would
+        // be dishonest. Honest L0 until that gate exists. No silicon capture.
+        behavior_gate: None,
+    },
+    ChipConf {
         name: "stm32f401cdu6",
         yaml: "configs/chips/stm32f401cdu6.yaml",
         reset_oracle: None,
@@ -513,6 +535,17 @@ const CHIPS: &[ChipConf] = &[
         name: "stm32f103rb",
         yaml: "configs/chips/stm32f103rb.yaml",
         reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "stm32f103rb-nucleo-bme280-smoke",
+        yaml: "configs/chips/stm32f103rb-nucleo-bme280-smoke.yaml",
+        reset_oracle: None,
+        // Narrow NUCLEO-F103RB + external BME280 onboarding profile of the
+        // same F103 map as `stm32f103rb`. The firmware crate is built and
+        // run by the boards.yml cell; there is no committed ELF and no
+        // dedicated firmware_survival rust test yet, so this stays an honest
+        // L0 until that gate exists. No silicon capture is claimed.
         behavior_gate: None,
     },
     // Exact low-density F103 order codes share the F103 engine. Geometry is

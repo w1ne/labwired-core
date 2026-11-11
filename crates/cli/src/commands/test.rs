@@ -1730,6 +1730,13 @@ pub(crate) fn run_test(
                         }
                     }
                 }
+                // What a deep-sleep wake-up reboots into: the image as set up
+                // above (the bootloader reloads IRAM/DRAM, not RTC memory).
+                machine.capture_esp32_deep_sleep_boot(
+                    program.entry_point as u32,
+                    0x3FFE_0000,
+                    0x3FFD_8000,
+                );
                 machine
             };
             // Same pair as the generic ELF path. `None` keeps the scan; wasm

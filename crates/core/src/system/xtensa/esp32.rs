@@ -328,7 +328,7 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     // ESP32-classic BROM function addresses (per ESP-IDF rom/esp32.rom.ld).
     // Returning 0 means "POWERON_RESET" — adequate for first-boot init.
     // ESP32-classic BROM thunks (addresses per ESP-IDF rom/esp32.rom.ld).
-    rom_bank.register(0x4000_81d4, rom_thunks::rtc_get_reset_reason);
+    rom_bank.register(0x4000_81d4, rom_thunks::esp32_rtc_get_reset_reason);
     rom_bank.register(0x4000_2a40, rom_thunks::nop_return_zero); // Cache_Read_Disable
     rom_bank.register(0x4000_29ac, rom_thunks::nop_return_zero); // Cache_Read_Enable
                                                                  // libc-equivalents the firmware links against ROM copies of:
@@ -705,7 +705,17 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         ("i2s1", 0x3FF6_D000),
         // pwm0 (0x3FF5_E000) is now the real MCPWM0 model registered above.
         ("ledc2", 0x3FF6_8000),
-        ("rmt", 0x3FF5_6000),
+        // rmt (0x3FF5_6000) is the real Esp32Rmt model from ESP32_PERIPHERALS:
+        // a stub at the same base registered here would win (equal starts →
+        // last registered), same defect uart1/pwm0/pcnt already had.
+        // Radio front-end and baseband (FE2, FE, NRX, BB). No radio is
+        // modelled. ESP-IDF's `rtc_sleep_init` clears their FORCE_PU bits
+        // (FE2_TX_INTERP_CTRL, FE_GEN_CTRL, NRXPD_CTRL, BBPD_CTRL) before
+        // every light or deep sleep, so the windows must decode.
+        ("fe2", 0x3FF4_5000),
+        ("fe", 0x3FF4_6000),
+        ("nrx", 0x3FF5_C000),
+        ("bb", 0x3FF5_D000),
         // pcnt (0x3FF5_7000) is the real Esp32Pcnt model from
         // ESP32_PERIPHERALS: a stub at the same base registered here would win.
     ] {
@@ -729,16 +739,28 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     );
 
     // WiFi MAC / PHY / RNG block (0x6000_0000..0x6004_3000 on real silicon).
-    // The only register esp_random() touches at boot is RNG_DATA_REG at
-    // 0x6003_5144 — a read returns 32 random bits. A round-tripping stub
-    // satisfies the access; reads return zero (deterministic, but legal
-    // — RNG semantics permit any value including all-zero).
+    // A round-tripping stub; the one word in it that firmware depends on is
+    // the RNG below.
     bus.add_peripheral(
         "wifi_mac_phy",
         0x6000_0000,
         0x4_3000,
         None,
         Box::new(crate::peripherals::esp_xtensa_common::system_stub::SystemStub::new()),
+    );
+    // Hardware RNG data register (WDEV_RND_REG, 0x6003_5144 in both the IDF 4.4
+    // and IDF 5 `soc/esp32/.../wdev_reg.h`). esp_random() XORs successive reads
+    // of it, and Arduino's random(n) is esp_random() % n. Left on the stub above
+    // it read 0, so every random() call returned 0. The register is a single
+    // read-only word that yields a fresh value per read, the same contract as the
+    // C3's, so the C3 model serves: a deterministic xorshift32 that varies.
+    // Greatest start wins, so this 4-byte window beats wifi_mac_phy.
+    bus.add_peripheral(
+        "wdev_rnd",
+        0x6003_5144,
+        0x4,
+        None,
+        Box::new(crate::peripherals::esp32c3::rng::Esp32c3Rng::new()),
     );
     // Classic ESP32 AHB FIFO aliases (`UART_FIFO_AHB_REG`). Firmware TX writes
     // here (uart_ll_write_txfifo); STATUS/INT live on APB. Registered *after*
@@ -965,6 +987,8 @@ pub(crate) const ESP32_PERIPHERALS: &[(&str, &str, u64, u64, Option<u32>)] = &[
     // as round-trip storage. `sens_sar_adc` (0x3FF4_8800) and `io_mux`
     // (0x3FF4_9000) still win their ranges by the greatest-start rule.
     ("rtcio",    "esp32_rtc_io",   0x3FF4_8400, 0x1000, None),
+    // RMT TX (NeoPixel). ETS_RMT_INTR_SOURCE = 47.
+    ("rmt",      "esp32_rmt",      0x3FF5_6000, 0x1000, Some(47)),
 ];
 
 /// `GPIO_FUNC0_OUT_SEL_CFG_REG` (`DR_REG_GPIO_BASE` 0x3FF4_4000 + 0x530), stride 4.
