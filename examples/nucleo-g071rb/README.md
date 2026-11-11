@@ -64,6 +64,9 @@ adds matched level-1 NJF branches with RD/RS on ADC1 IN6–IN9. These fixtures
 prove ADC routing and firmware-visible conversion in the model; their channel
 indices are explicit co-simulation endpoints, with no PAx alias or silicon
 analog capture claimed.
+[`analog-jfet-gate-charge-adc-system.yaml`](analog-jfet-gate-charge-adc-system.yaml)
+compares a generic NJF with CGS/CGD depletion charge against a matched zero-charge
+control on ADC1 IN6/IN7, alongside the NTC and diode on IN4/IN5.
 [`analog-diode-charge-adc-system.yaml`](analog-diode-charge-adc-system.yaml)
 routes matched diode branches with depletion charge, transit-time charge, both,
 and neither to ADC1 IN10–IN13. Its deliberately large capacitance and transit
