@@ -114,5 +114,9 @@
   "adafruit-feather-esp32-v2-gpio.elf": {
     "sha256": "484593d35d394901918966faa5ca04b214e7448a7a2bd1cba81e81b9faff0e43",
     "source_rev": "b1be150adade5986ee3cc66335cdae6df8d30c79"
+  },
+  "adafruit-feather-esp32-v2-bme280.elf": {
+    "sha256": "439037257d2a58d7378ed02690d3021dc53a5a36fa010a854217c08494179239",
+    "source_rev": "b284a170f89b0cafcec118447470b80bd07b387f"
   }
 }

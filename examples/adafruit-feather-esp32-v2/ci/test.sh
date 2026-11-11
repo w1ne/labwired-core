@@ -8,3 +8,7 @@ cargo run -q -p labwired-cli -- test \
   --script examples/adafruit-feather-esp32-v2/io-smoke.yaml \
   --output-dir out/boards/adafruit-feather-esp32-v2/gpio-smoke \
   --no-uart-stdout
+cargo run -q -p labwired-cli -- test \
+  --script examples/adafruit-feather-esp32-v2/bme280-smoke.yaml \
+  --output-dir out/boards/adafruit-feather-esp32-v2/bme280-smoke \
+  --no-uart-stdout

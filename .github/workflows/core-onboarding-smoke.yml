@@ -83,6 +83,12 @@ jobs:
             script: examples/adafruit-feather-esp32-v2/io-smoke.yaml
             system: configs/systems/adafruit-feather-esp32-v2.yaml
             firmware_build_script: examples/adafruit-feather-esp32-v2/build-firmware.sh
+          # The STEMMA QT BME280 path proves I2C0, its GPIO-matrix pad routing,
+          # and the Feather's GPIO2 sensor-rail enable on the same rank-1 ESP32.
+          - id: adafruit-feather-esp32-v2-bme280
+            script: examples/adafruit-feather-esp32-v2/bme280-smoke.yaml
+            system: configs/systems/adafruit-feather-esp32-v2-bme280.yaml
+            firmware_build_script: examples/adafruit-feather-esp32-v2/build-bme280-firmware.sh
           - id: rp2040-pio
             crate: firmware-rp2040-pio-onboarding
             target: thumbv6m-none-eabi
