@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="75" failures="0" errors="0" time="0.825335">
+<testsuite name="labwired" tests="75" failures="0" errors="0" time="0.782744">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="91c111bf362cd8e0b902ca02a5e5d069959d5e00e3f054287bb1a83037c11612"/>
+    <property name="firmware_hash" value="7f5c7e05f54443428575b109220df735450a0bcfc65c901f50d501f15a70f7f9"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.825335">
+  <testcase classname="labwired" name="run" time="0.782744">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: F103 I2C" time="0.000000">
   </testcase>
@@ -31,7 +31,7 @@
   </testcase>
   <testcase classname="labwired" name="assertion 12: uart_contains: SVC M3 MSP VECTOR=11 IMM=42 EXC_RETURN=FFFFFFF9 STACKED_PC=AFTER_SVC RETURN=1 ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 13: uart_contains: SVC M3 PSP VECTOR=11 IMM=42 EXC_RETURN=FFFFFFFD STACKED_PC=AFTER_SVC PSP=RESTORED MSP=UNCHANGED RETURN=1…" time="0.000000">
+  <testcase classname="labwired" name="assertion 13: uart_contains: SVC M3 PSP NPRIV=1 CONTROL_IGNORED=1 BASEPRI_IGNORED=1 SVC_BASEPRI=40 RESTORED=1 RETURN_NPRIV=1 EXC_RETU…" time="0.000000">
   </testcase>
   <testcase classname="labwired" name="assertion 14: uart_contains: FAULT M3 UNDEFINSTR USAGE=6 ESCALATE=3 CFSR=1 HFSR_FORCED=1 RETURN=1 ok" time="0.000000">
   </testcase>

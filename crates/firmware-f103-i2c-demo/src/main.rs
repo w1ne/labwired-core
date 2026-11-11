@@ -1527,7 +1527,7 @@ unsafe fn smoke_svcall_exception_return() -> bool {
 
     // Repeat SVC from Thread mode using PSP. Handler mode must use MSP while
     // EXC_RETURN selects PSP for unstacking back to Thread mode.
-    for word in 0..10 {
+    for word in 0..19 {
         write_volatile(record.add(word), 0);
     }
     let msp_before_psp: u32;
@@ -1536,10 +1536,9 @@ unsafe fn smoke_svcall_exception_return() -> bool {
         msp = out(reg) msp_before_psp,
         options(nomem, nostack, preserves_flags),
     );
-    let control_psp: u32;
-    let psp_during: u32;
-    let control_during: u32;
-    let msp_after_psp: u32;
+    let unprivileged_control = source_control | 0x3;
+    let attempt_privileged_control = source_control | 0x2;
+    let control_psp = unprivileged_control;
     core::arch::asm!(
         "msr BASEPRI, {zero}",
         "msr FAULTMASK, {zero}",
@@ -1550,24 +1549,49 @@ unsafe fn smoke_svcall_exception_return() -> bool {
     );
     core::arch::asm!(
         "msr PSP, {psp_top}",
-        "orr {control_psp}, {source_control}, #2",
-        "msr CONTROL, {control_psp}",
+        "msr CONTROL, {unprivileged_control}",
         "isb",
+        // Unprivileged Thread mode cannot raise BASEPRI or clear nPRIV.
+        "msr BASEPRI, {attempt_basepri}",
+        "mrs {scratch}, BASEPRI",
+        "str {scratch}, [{record}, #48]",
+        "msr CONTROL, {attempt_privileged_control}",
+        "isb",
+        "mrs {scratch}, CONTROL",
+        "str {scratch}, [{record}, #52]",
+        // The first SVC tests privileged handler access and returns to the
+        // same unprivileged PSP thread. The second SVC returns to privileged
+        // Thread mode so this smoke can safely restore its original stack.
+        "str {first_svc}, [{record}, #40]",
         "svc #0x42",
-        "mrs {psp_after}, PSP",
-        "mrs {control_after}, CONTROL",
-        "mrs {msp_after}, MSP",
+        "str {resume_marker}, [{record}, #32]",
+        "mrs {scratch}, CONTROL",
+        "str {scratch}, [{record}, #56]",
+        "mrs {scratch}, BASEPRI",
+        "str {scratch}, [{record}, #60]",
+        "str {second_svc}, [{record}, #40]",
+        "svc #0x43",
+        "mrs {scratch}, CONTROL",
+        "str {scratch}, [{record}, #64]",
+        "mrs {scratch}, PSP",
+        "str {scratch}, [{record}, #68]",
+        "mrs {scratch}, MSP",
+        "str {scratch}, [{record}, #72]",
         "msr PSP, {source_psp}",
         "msr CONTROL, {source_control}",
         "isb",
         psp_top = in(reg) IRQ_FRAME_PSP_TOP,
+        record = in(reg) record,
+        unprivileged_control = in(reg) unprivileged_control,
+        attempt_privileged_control = in(reg) attempt_privileged_control,
+        attempt_basepri = in(reg) 0x20_u32,
+        first_svc = in(reg) 1_u32,
+        second_svc = in(reg) 2_u32,
+        resume_marker = in(reg) 1_u32,
         source_control = in(reg) source_control,
         source_psp = in(reg) source_psp,
-        control_psp = out(reg) control_psp,
-        psp_after = out(reg) psp_during,
-        control_after = out(reg) control_during,
-        msp_after = out(reg) msp_after_psp,
-        options(nostack, preserves_flags),
+        scratch = out(reg) _,
+        options(nostack),
     );
     core::arch::asm!("cpsid i", options(nomem, nostack, preserves_flags));
     write_volatile(record.add(8), 1);
@@ -1580,6 +1604,15 @@ unsafe fn smoke_svcall_exception_return() -> bool {
     let psp_svc_opcode = read_volatile(record.add(7));
     let psp_resumed = read_volatile(record.add(8)) == 1;
     let psp_handler_msp = read_volatile(record.add(9));
+    let handler_basepri = read_volatile(record.add(11));
+    let unprivileged_basepri = read_volatile(record.add(12));
+    let unprivileged_control_after_attempt = read_volatile(record.add(13));
+    let control_after_unprivileged_svc = read_volatile(record.add(14));
+    let basepri_after_unprivileged_svc = read_volatile(record.add(15));
+    let control_after_privileged_svc = read_volatile(record.add(16));
+    let psp_during = read_volatile(record.add(17));
+    let msp_after_psp = read_volatile(record.add(18));
+    let control_during = control_after_privileged_svc;
     let restored_psp: u32;
     let restored_control: u32;
     core::arch::asm!(
@@ -1622,8 +1655,13 @@ unsafe fn smoke_svcall_exception_return() -> bool {
         && psp_stacked_xpsr & 0x0000_01FF == 0
         && psp_svc_opcode == 0xDF42
         && psp_resumed
+        && handler_basepri == 0x40
+        && unprivileged_basepri == 0
+        && unprivileged_control_after_attempt & 0x3 == 0x3
+        && control_after_unprivileged_svc & 0x3 == 0x3
+        && basepri_after_unprivileged_svc == 0
         && psp_during == IRQ_FRAME_PSP_TOP
-        && control_during & 2 != 0
+        && control_during & 0x3 == 0x2
         && msp_after_psp == msp_before_psp
         && psp_handler_msp == msp_before_psp
         && restored_psp == source_psp
@@ -1633,7 +1671,7 @@ unsafe fn smoke_svcall_exception_return() -> bool {
         putline(
             b"SVC M3 MSP VECTOR=11 IMM=42 EXC_RETURN=FFFFFFF9 STACKED_PC=AFTER_SVC RETURN=1 ok",
         );
-        putline(b"SVC M3 PSP VECTOR=11 IMM=42 EXC_RETURN=FFFFFFFD STACKED_PC=AFTER_SVC PSP=RESTORED MSP=UNCHANGED RETURN=1 ok");
+        putline(b"SVC M3 PSP NPRIV=1 CONTROL_IGNORED=1 BASEPRI_IGNORED=1 SVC_BASEPRI=40 RESTORED=1 RETURN_NPRIV=1 EXC_RETURN=FFFFFFFD PSP=RESTORED MSP=UNCHANGED ok");
     } else {
         putline(b"SVC M3 CHECK FAILED");
         print_reg(b"SVC entries=", entries);
@@ -1649,6 +1687,20 @@ unsafe fn smoke_svcall_exception_return() -> bool {
         print_reg(b"SVC PSP frame SP=", psp_frame_sp);
         print_reg(b"SVC PSP stacked PC=", psp_stacked_pc);
         print_reg(b"SVC PSP handler MSP=", psp_handler_msp);
+        print_reg(b"SVC handler BASEPRI=", handler_basepri);
+        print_reg(b"SVC unprivileged BASEPRI=", unprivileged_basepri);
+        print_reg(
+            b"SVC unprivileged CONTROL=",
+            unprivileged_control_after_attempt,
+        );
+        print_reg(
+            b"SVC CONTROL after unprivileged return=",
+            control_after_unprivileged_svc,
+        );
+        print_reg(
+            b"SVC BASEPRI after unprivileged return=",
+            basepri_after_unprivileged_svc,
+        );
         print_reg(b"SVC MSP before PSP=", msp_before_psp);
         print_reg(b"SVC PSP after return=", psp_during);
         print_reg(b"SVC CONTROL during=", control_during);
@@ -1667,6 +1719,9 @@ unsafe fn smoke_svcall_exception_return() -> bool {
 unsafe extern "C" fn smoke_svcall_handler() {
     core::arch::naked_asm!(
         "ldr r0, =0x20000B00",
+        "ldr r2, [r0, #40]",
+        "cmp r2, #2",
+        "beq 3f",
         "ldr r2, [r0, #0]",
         "adds r2, r2, #1",
         "str r2, [r0, #0]",
@@ -1694,6 +1749,23 @@ unsafe extern "C" fn smoke_svcall_handler() {
         "str r3, [r0, #28]",
         "mrs r2, msp",
         "str r2, [r0, #36]",
+        "ldr r2, [r0, #40]",
+        "cmp r2, #1",
+        "bne 3f",
+        "mrs r3, BASEPRI",
+        "mov r2, r3",
+        "movs r3, #0x40",
+        "msr BASEPRI, r3",
+        "mrs r3, BASEPRI",
+        "str r3, [r0, #44]",
+        "msr BASEPRI, r2",
+        "b 4f",
+        "3:",
+        // SVC #0x43 returns this smoke to privileged Thread mode on PSP.
+        "movs r3, #0",
+        "msr CONTROL, r3",
+        "isb",
+        "4:",
         "bx lr",
     );
 }
