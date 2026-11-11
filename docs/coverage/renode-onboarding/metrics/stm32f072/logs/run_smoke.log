@@ -1,15 +1,15 @@
-2026-11-11T09:05:42.129358Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f072.yaml
-2026-11-11T09:05:42.192101Z  INFO labwired_loader: ELF Entry Point: 0x80000c1
+2026-11-11T09:16:50.917805Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f072.yaml
+2026-11-11T09:16:50.979105Z  INFO labwired_loader: ELF Entry Point: 0x80000c1
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-2026-11-11T09:05:42.195358Z  INFO labwired_cli::execute: stimulus: position = 25 applied
-2026-11-11T09:05:42.195383Z  INFO labwired_cli::execute: stimulus: temperature = 100 applied
-2026-11-11T09:05:42.195388Z  INFO labwired_cli::execute: stimulus: temperature = 50 applied
-2026-11-11T09:05:42.312699Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
-2026-11-11T09:05:42.326127Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
-2026-11-11T09:05:42.353982Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
-2026-11-11T09:05:42.421833Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
-2026-11-11T09:05:42.449303Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
-2026-11-11T09:05:42.516191Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
-labwired-cli test: idle_ff skipped 1019104 of 4000000 device cycles (2980896 interpreted)
-PASS  8/8 checks · stm32f072-smoke · 4000000 steps · 0.36s
+2026-11-11T09:16:50.982341Z  INFO labwired_cli::execute: stimulus: position = 25 applied
+2026-11-11T09:16:50.982362Z  INFO labwired_cli::execute: stimulus: temperature = 100 applied
+2026-11-11T09:16:50.982368Z  INFO labwired_cli::execute: stimulus: temperature = 50 applied
+2026-11-11T09:16:51.102071Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-11T09:16:51.115151Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-11T09:16:51.143174Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-11T09:16:51.216362Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-11T09:16:51.243803Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-11T09:16:51.310016Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+labwired-cli test: idle_ff skipped 953208 of 4000000 device cycles (3046792 interpreted)
+PASS  8/8 checks · stm32f072-smoke · 4000000 steps · 0.39s

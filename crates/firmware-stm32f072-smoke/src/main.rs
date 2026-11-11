@@ -18,7 +18,7 @@
 
 use core::arch::asm;
 use core::ptr::{read_volatile, write_volatile};
-use cortex_m_rt::entry;
+use cortex_m_rt::{entry, exception};
 use panic_halt as _;
 
 const SUMMARY: u32 = 0x2000_3000;
@@ -203,6 +203,13 @@ const NVIC_ICPR0: u32 = 0xE000_E280;
 const SYSTICK_CSR: u32 = 0xE000_E010;
 const SYSTICK_RVR: u32 = 0xE000_E014;
 const SYSTICK_CVR: u32 = 0xE000_E018;
+const SCB_ICSR: u32 = 0xE000_ED04;
+const ICSR_PENDSTSET: u32 = 1 << 26;
+const ICSR_PENDSTCLR: u32 = 1 << 25;
+
+static mut SYSTICK_EXTERNAL_ENTRIES: u32 = 0;
+static mut SYSTICK_EXTERNAL_ACTIVE_MASK: u32 = 0;
+static mut SYSTICK_EXTERNAL_COUNTFLAG_MASK: u32 = 0;
 
 fn rd(addr: u32) -> u32 {
     unsafe { read_volatile(addr as *const u32) }
@@ -1096,6 +1103,90 @@ fn check_systick_external_pause_resume() -> bool {
     ok
 }
 
+/// The STM32F072 HCLK/8 reference source must repeatedly pend SysTick and
+/// enter exception 15 through the scheduler-driven event path.
+fn check_systick_external_periodic() -> bool {
+    const WANT_ENTRIES: u32 = 3;
+
+    wr(SYSTICK_CSR, 0);
+    wr(SCB_ICSR, ICSR_PENDSTCLR);
+    wr(SYSTICK_RVR, 127);
+    wr(SYSTICK_CVR, 0);
+    unsafe {
+        write_volatile(core::ptr::addr_of_mut!(SYSTICK_EXTERNAL_ENTRIES), 0);
+        write_volatile(core::ptr::addr_of_mut!(SYSTICK_EXTERNAL_ACTIVE_MASK), 0);
+        write_volatile(core::ptr::addr_of_mut!(SYSTICK_EXTERNAL_COUNTFLAG_MASK), 0);
+    }
+
+    // ENABLE | TICKINT, with CLKSOURCE clear for the HCLK/8 reference.
+    wr(SYSTICK_CSR, 0x3);
+    let reference_selected = rd(SYSTICK_CSR) & 0x5 == 0x1;
+    let mut remaining = 100_000;
+    while unsafe { read_volatile(core::ptr::addr_of!(SYSTICK_EXTERNAL_ENTRIES)) } < WANT_ENTRIES
+        && remaining > 0
+    {
+        remaining -= 1;
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+
+    // Stop after the third handler has returned so a fourth periodic event
+    // cannot turn this into a threshold-only check.
+    wr(SYSTICK_CSR, 0);
+    let entries = unsafe { read_volatile(core::ptr::addr_of!(SYSTICK_EXTERNAL_ENTRIES)) };
+    let active_mask = unsafe { read_volatile(core::ptr::addr_of!(SYSTICK_EXTERNAL_ACTIVE_MASK)) };
+    let countflag_mask =
+        unsafe { read_volatile(core::ptr::addr_of!(SYSTICK_EXTERNAL_COUNTFLAG_MASK)) };
+    let pending = rd(SCB_ICSR) & ICSR_PENDSTSET != 0;
+    wr(SCB_ICSR, ICSR_PENDSTCLR);
+    wr(SYSTICK_CVR, 0);
+
+    let active_each = active_mask == (1 << WANT_ENTRIES) - 1;
+    let countflag_each = countflag_mask == (1 << WANT_ENTRIES) - 1;
+    let ok =
+        reference_selected && entries == WANT_ENTRIES && active_each && countflag_each && !pending;
+
+    puts("systick external periodic ");
+    flag("reference", reference_selected);
+    puts("entries=");
+    hex(entries);
+    puts(" ");
+    flag("active", active_each);
+    flag("countflag", countflag_each);
+    flag("pending", pending);
+    verdict(ok);
+    ok
+}
+
+#[exception]
+fn SysTick() {
+    let entry = unsafe { read_volatile(core::ptr::addr_of!(SYSTICK_EXTERNAL_ENTRIES)) };
+    if entry < 3 {
+        let active = rd(SCB_ICSR) & 0x1FF == 15;
+        // The word CSR read returns then clears COUNTFLAG, independently of
+        // the exception's pending/active state.
+        let countflag = rd(SYSTICK_CSR) & (1 << 16) != 0;
+        unsafe {
+            let active_mask = read_volatile(core::ptr::addr_of!(SYSTICK_EXTERNAL_ACTIVE_MASK));
+            let countflag_mask =
+                read_volatile(core::ptr::addr_of!(SYSTICK_EXTERNAL_COUNTFLAG_MASK));
+            write_volatile(
+                core::ptr::addr_of_mut!(SYSTICK_EXTERNAL_ACTIVE_MASK),
+                active_mask | (u32::from(active) << entry),
+            );
+            write_volatile(
+                core::ptr::addr_of_mut!(SYSTICK_EXTERNAL_COUNTFLAG_MASK),
+                countflag_mask | (u32::from(countflag) << entry),
+            );
+        }
+    }
+    unsafe {
+        write_volatile(
+            core::ptr::addr_of_mut!(SYSTICK_EXTERNAL_ENTRIES),
+            entry.saturating_add(1),
+        );
+    }
+}
+
 #[entry]
 fn main() -> ! {
     let (rcc_reset, rcc_gate) = rcc_bringup();
@@ -1135,6 +1226,7 @@ fn main() -> ! {
     mark(20, check_adc());
     mark(21, check_systick_pause_resume());
     mark(22, check_systick_external_pause_resume());
+    mark(23, check_systick_external_periodic());
     let summary = summary | 0x0700_0000;
     wr(SUMMARY, summary);
     puts("summary ");

@@ -16,7 +16,8 @@
 # stimuli set the SPI2 and second SPI1 thermocouples.
 # It does not claim ADC triggers, CAN, RTC, I2C2, DAC, USB or the watchdogs.
 # The core SysTick smoke checks ENABLE pause/resume on both the processor
-# clock and the STM32F072 HCLK/8 reference clock.
+# clock and the STM32F072 HCLK/8 reference clock, then checks repeated
+# HCLK/8 timer wraps enter exception 15 and expose COUNTFLAG in the handler.
 schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv6m-none-eabi/release/firmware-stm32f072-smoke"
@@ -84,11 +85,12 @@ assertions:
       - "adc in1=0x000007FF ts=0x00000709 cal=1 ready=1 seq=1 eos=1 pend=1 released=1 dma=1 ovr=1 awd=1 off=1 ok"
       - "systick pause-resume window=1 frozen=1 resumed=1"
       - "systick external pause-resume reference=1 window=1 frozen=1 resumed=1"
-      - "summary 0x077FFFFF"
+      - "systick external periodic reference=1 entries=0x00000003 active=1 countflag=1 pending=0 ok"
+      - "summary 0x07FFFFFF"
       - "DONE"
   - memory_value:
       address: 0x20003000
-      expected_value: 0x077FFFFF
+      expected_value: 0x07FFFFFF
       size: 4
   - gpio_edges:
       pin: "gpiof:0"

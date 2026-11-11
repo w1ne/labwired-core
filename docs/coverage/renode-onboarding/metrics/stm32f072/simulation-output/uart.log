@@ -28,6 +28,7 @@ spi1 shared a=0x01901600 b=0x03201600 after_cut=0x01901600 a=1 b=1 restart=1 ok
 crc word=0xDF8A8A2B seed=1 std=1 init=1 ok
 adc in1=0x000007FF ts=0x00000709 cal=1 ready=1 seq=1 eos=1 pend=1 released=1 dma=1 ovr=1 awd=1 off=1 ok
 systick pause-resume window=1 frozen=1 resumed=1 paused=0x000006EE frozen_at=0x000006EE resumed_at=0x000006AD ok
-systick external pause-resume reference=1 window=1 frozen=1 resumed=1 paused=0x00000BFE frozen_at=0x00000BFE resumed_at=0x00000BEE ok
-summary 0x077FFFFF
+systick external pause-resume reference=1 window=1 frozen=1 resumed=1 paused=0x00000BFF frozen_at=0x00000BFF resumed_at=0x00000BEE ok
+systick external periodic reference=1 entries=0x00000003 active=1 countflag=1 pending=0 ok
+summary 0x07FFFFFF
 DONE
