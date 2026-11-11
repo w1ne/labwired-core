@@ -127,8 +127,9 @@ pub enum UartRegisterLayout {
     Sercom,
     /// NXP i.MX UART — UTXD@0x40, URXD@0x00, USR1@0x94.
     Imx,
-    /// SiFive UART (FE310) — txdata@0x00 / rxdata@0x04, status folded in data
-    /// (TX faithful, RX presence approximate).
+    /// SiFive UART (FE310/FU540) — txdata@0x00 / rxdata@0x04, status folded in
+    /// data; TX/RX watermark IE/IP at 0x10/0x14. FIFO occupancy is bounded to
+    /// immediate TX drain and the live RX byte queue.
     Sifive,
     /// LiteX UART — rxtx@0x00, txfull@0x04 (TX faithful, RX approximate).
     Litex,
@@ -1065,6 +1066,16 @@ pub struct Uart {
     /// slow; stale `false` breaks fidelity.
     #[serde(skip)]
     irq_wired: bool,
+    /// SiFive UART control and interrupt-enable registers. Its FIFOs are not
+    /// buffered in this byte-oriented model: TX is empty after each accepted
+    /// byte, and the RX queue is the receive FIFO. The watermark interrupt
+    /// status is derived from those live occupancies.
+    #[serde(default)]
+    sifive_txctrl: u32,
+    #[serde(default)]
+    sifive_rxctrl: u32,
+    #[serde(default)]
+    sifive_ie: u32,
     /// Test/differential knob: pin this model to the legacy per-cycle walk
     /// (`uses_scheduler() == false`). `false` in every real config. See
     /// [`Uart::force_legacy_walk`].
@@ -1259,6 +1270,9 @@ impl Uart {
             scheduled: false,
             // Conservative until the bus says otherwise (see `attach_irq_line`).
             irq_wired: true,
+            sifive_txctrl: 0,
+            sifive_rxctrl: 0,
+            sifive_ie: 0,
             legacy_walk_forced: false,
             stream_clock: None,
             last_stream_cycle: 0,
@@ -1804,6 +1818,9 @@ impl Uart {
                 .unwrap_or(false);
         let sam_irq_armed =
             matches!(self.layout, UartRegisterLayout::Sam) && self.sam_irq_asserted();
+        let sifive_irq_armed = matches!(self.layout, UartRegisterLayout::Sifive)
+            && self.irq_wired
+            && self.sifive_irq_asserted();
         // RXNEIE is a level enable with no local producer: the byte arrives
         // asynchronously (an injected peer, a cross-chip link). Keep a wakeup
         // armed while it is set so a byte landing in `rx_buf` is observed and
@@ -1816,7 +1833,8 @@ impl Uart {
                 || rxneie_armed
                 || rxftie_armed
                 || dmar_armed
-                || sam_irq_armed);
+                || sam_irq_armed
+                || sifive_irq_armed);
         // A buffered narration is real work: the wire is mid-burst, and the
         // flush that ends it needs a wakeup to happen on. Without this a
         // scheduler-driven bus would leave the last print unpublished.
@@ -2019,6 +2037,8 @@ impl Uart {
                 };
                 rx_len >= threshold
             };
+        let sifive_irq =
+            matches!(self.layout, UartRegisterLayout::Sifive) && self.sifive_irq_asserted();
         // USART_RX DMA request: asserted while a character is available in the
         // receiver and CR3.DMAR is set. The DMA reads RDR, which pops it.
         if self.layout.dmar_mask() != 0
@@ -2028,9 +2048,72 @@ impl Uart {
             dma_signals.push(crate::DMA_SIGNAL_RX);
         }
         (
-            txeie_set || tcie_set || rxneie_set || rxftie_set,
+            txeie_set || tcie_set || rxneie_set || rxftie_set || sifive_irq,
             dma_signals,
         )
+    }
+
+    /// SiFive UART `ip` watermark status. This profile models the transmit
+    /// FIFO as empty between writes and uses the receive queue as its RX FIFO.
+    /// The manual defines TXWM as `txfifo < txcnt` and RXWM as `rxfifo > rxcnt`.
+    fn sifive_ip(&self) -> u32 {
+        if !matches!(self.layout, UartRegisterLayout::Sifive) {
+            return 0;
+        }
+        let tx_threshold = (self.sifive_txctrl >> 16) & 0x7;
+        let tx_fifo_count = 0; // TXDATA is drained immediately by this model.
+        let rx_enabled = self.sifive_rxctrl & 1 != 0;
+        let rx_threshold = (self.sifive_rxctrl >> 16) & 0x7;
+        let rx_count = self.rx_buf.lock().map(|g| g.len() as u32).unwrap_or(0);
+        (u32::from(tx_fifo_count < tx_threshold))
+            | (u32::from(rx_enabled && rx_count > rx_threshold) << 1)
+    }
+
+    fn sifive_irq_asserted(&self) -> bool {
+        self.sifive_ip() & self.sifive_ie != 0
+    }
+
+    /// Byte view of the SiFive-specific control/status words. `None` leaves
+    /// data registers on the shared UART TX/RX paths.
+    fn sifive_control_byte(&self, offset: u64) -> Option<u8> {
+        if !matches!(self.layout, UartRegisterLayout::Sifive) {
+            return None;
+        }
+        let base = offset & !3;
+        let word = match base {
+            0x08 => self.sifive_txctrl,
+            0x0C => self.sifive_rxctrl,
+            0x10 => self.sifive_ie,
+            0x14 => self.sifive_ip(),
+            _ => return None,
+        };
+        let shift = ((offset - base) * 8) as u32;
+        Some((word >> shift) as u8)
+    }
+
+    /// SiFive UART writable control words. TXDATA remains handled by the
+    /// shared transmit path; `ip` is read-only.
+    fn sifive_control_write(&mut self, offset: u64, value: u8) -> bool {
+        if !matches!(self.layout, UartRegisterLayout::Sifive) {
+            return false;
+        }
+        let base = offset & !3;
+        let shift = ((offset - base) * 8) as u32;
+        let byte_mask = 0xFFu32 << shift;
+        let slot = match base {
+            0x08 => &mut self.sifive_txctrl,
+            0x0C => &mut self.sifive_rxctrl,
+            0x10 => &mut self.sifive_ie,
+            0x14 => return true, // IP is read-only.
+            _ => return false,
+        };
+        *slot = (*slot & !byte_mask) | (u32::from(value) << shift);
+        match base {
+            0x08 | 0x0C => *slot &= 0x0007_0003, // EN, NSTOP, watermark
+            0x10 => *slot &= 0x3,                // TXWM and RXWM enables
+            _ => {}
+        }
+        true
     }
 
     // The 7 accessors below all read from the single per-family `regmap()`
@@ -2732,6 +2815,9 @@ impl crate::Peripheral for Uart {
         if let Some(byte) = self.timed_read(offset) {
             return Ok(byte);
         }
+        if let Some(byte) = self.sifive_control_byte(offset) {
+            return Ok(byte);
+        }
         if let Some(byte) = self.sam_imr_byte(offset) {
             return Ok(byte);
         }
@@ -2865,6 +2951,9 @@ impl crate::Peripheral for Uart {
             if self.timed_config_write(offset, value) {
                 self.timed_config_written();
             }
+            return Ok(());
+        }
+        if self.sifive_control_write(offset, value) {
             return Ok(());
         }
         if self.sam_interrupt_write(offset, value) {
@@ -3028,14 +3117,24 @@ impl crate::Peripheral for Uart {
     /// Timed UARTs and SAM USARTs report their interrupt as a level. Other
     /// layouts keep their existing pulse semantics.
     fn irq_line_level(&self) -> Option<bool> {
-        self.timed_level().or_else(|| {
-            matches!(self.layout, UartRegisterLayout::Sam).then(|| self.sam_irq_asserted())
-        })
+        self.timed_level()
+            .or_else(|| {
+                matches!(self.layout, UartRegisterLayout::Sam).then(|| self.sam_irq_asserted())
+            })
+            .or_else(|| {
+                matches!(self.layout, UartRegisterLayout::Sifive)
+                    .then(|| self.sifive_irq_asserted())
+            })
     }
 
     fn on_node_reset(&mut self) {
         if matches!(self.layout, UartRegisterLayout::Sam) {
             self.sam_imr = 0;
+        }
+        if matches!(self.layout, UartRegisterLayout::Sifive) {
+            self.sifive_txctrl = 0;
+            self.sifive_rxctrl = 0;
+            self.sifive_ie = 0;
         }
         if self.timed.is_some() {
             self.timed_reset();
@@ -3228,6 +3327,9 @@ impl crate::Peripheral for Uart {
 
     fn peek(&self, offset: u64) -> Option<u8> {
         if let Some(byte) = self.timed_peek(offset) {
+            return Some(byte);
+        }
+        if let Some(byte) = self.sifive_control_byte(offset) {
             return Some(byte);
         }
         if let Some(byte) = self.sam_imr_byte(offset) {
@@ -3649,6 +3751,27 @@ mod tests {
         assert_eq!(uart.irq_line_level(), Some(true));
         assert_eq!(uart.read_u32(0x18).unwrap() & 0xFF, u32::from(b'R'));
         assert_eq!(uart.irq_line_level(), Some(false));
+    }
+
+    #[test]
+    fn sifive_uart_watermark_status_drives_its_level_irq() {
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Sifive);
+        assert_eq!(uart.read_u32(0x10).unwrap(), 0, "IE resets disabled");
+        assert_eq!(uart.read_u32(0x14).unwrap(), 0, "TX is disabled at reset");
+        assert_eq!(uart.irq_line_level(), Some(false));
+
+        uart.write_u32(0x08, (1 << 16) | 1).unwrap(); // TXEN and TXCNT=1.
+        assert_eq!(uart.read_u32(0x14).unwrap(), 1, "IP.TXWM follows TXCTRL");
+        assert_eq!(uart.irq_line_level(), Some(false), "IE still masks TXWM");
+
+        uart.write_u32(0x10, 1).unwrap(); // IE.TXWM
+        assert_eq!(uart.read_u32(0x10).unwrap(), 1);
+        assert_eq!(uart.irq_line_level(), Some(true));
+        assert!(uart.tick().irq, "wired level is delivered on the next tick");
+
+        uart.write_u32(0x10, 0).unwrap();
+        assert_eq!(uart.irq_line_level(), Some(false));
+        assert!(!uart.tick().irq, "disabling IE drops the UART source");
     }
 
     #[test]

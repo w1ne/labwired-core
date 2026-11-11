@@ -25,6 +25,18 @@ static mut TIMER_TRAP_MEPC: u64 = 0;
 #[no_mangle]
 #[used]
 static mut TIMER_TRAP_MSTATUS: u64 = 0;
+#[no_mangle]
+#[used]
+static mut PLIC_TRAP_COUNT: u64 = 0;
+#[no_mangle]
+#[used]
+static mut PLIC_TRAP_MCAUSE: u64 = 0;
+#[no_mangle]
+#[used]
+static mut PLIC_TRAP_ID: u64 = 0;
+#[no_mangle]
+#[used]
+static mut PLIC_TRAP_IP: u64 = 0;
 
 core::arch::global_asm!(
     ".section .text.fu540_trap_entry, \"ax\"",
@@ -51,10 +63,80 @@ core::arch::global_asm!(
     "sd t0, 0(t1)",
     "mret",
     ".size fu540_trap_entry, .-fu540_trap_entry",
+    ".section .text.fu540_plic_trap_entry, \"ax\"",
+    ".align 2",
+    ".global fu540_plic_trap_entry",
+    ".type fu540_plic_trap_entry, @function",
+    "fu540_plic_trap_entry:",
+    // Preserve the interrupted caller-saved state; an interrupt is not an ABI call.
+    "addi sp, sp, -128",
+    "sd ra, 0(sp)",
+    "sd t0, 8(sp)",
+    "sd t1, 16(sp)",
+    "sd t2, 24(sp)",
+    "sd t3, 32(sp)",
+    "sd t4, 40(sp)",
+    "sd t5, 48(sp)",
+    "sd t6, 56(sp)",
+    "sd a0, 64(sp)",
+    "sd a1, 72(sp)",
+    "sd a2, 80(sp)",
+    "sd a3, 88(sp)",
+    "sd a4, 96(sp)",
+    "sd a5, 104(sp)",
+    "sd a6, 112(sp)",
+    "sd a7, 120(sp)",
+    "csrr t0, mcause",
+    "la t1, PLIC_TRAP_MCAUSE",
+    "sd t0, 0(t1)",
+    // U54_1 M-mode context claim/complete is 0x0C201004.
+    "li t0, 0x0c201004",
+    "lw t4, 0(t0)",
+    "la t1, PLIC_TRAP_ID",
+    "sd t4, 0(t1)",
+    "la t1, PLIC_TRAP_COUNT",
+    "ld t2, 0(t1)",
+    "addi t2, t2, 1",
+    "sd t2, 0(t1)",
+    "li t0, 0x10010014",
+    "lw t2, 0(t0)",
+    "la t1, PLIC_TRAP_IP",
+    "sd t2, 0(t1)",
+    // Disable TXWM to drop the device level, then complete the claimed source.
+    "li t0, 0x10010010",
+    "sw zero, 0(t0)",
+    "li t0, 0x0c201004",
+    "sw t4, 0(t0)",
+    "ld ra, 0(sp)",
+    "ld t0, 8(sp)",
+    "ld t1, 16(sp)",
+    "ld t2, 24(sp)",
+    "ld t3, 32(sp)",
+    "ld t4, 40(sp)",
+    "ld t5, 48(sp)",
+    "ld t6, 56(sp)",
+    "ld a0, 64(sp)",
+    "ld a1, 72(sp)",
+    "ld a2, 80(sp)",
+    "ld a3, 88(sp)",
+    "ld a4, 96(sp)",
+    "ld a5, 104(sp)",
+    "ld a6, 112(sp)",
+    "ld a7, 120(sp)",
+    "addi sp, sp, 128",
+    "mret",
+    ".size fu540_plic_trap_entry, .-fu540_plic_trap_entry",
 );
 
 /// FU540 UART0 at 0x10010000: txdata@+0x00, bit 31 indicates a full FIFO.
 const UART0_TXDATA: *mut u32 = 0x1001_0000 as *mut u32;
+const UART0_TXCTRL: *mut u32 = 0x1001_0008 as *mut u32;
+const UART0_IE: *mut u32 = 0x1001_0010 as *mut u32;
+const UART0_IP: *const u32 = 0x1001_0014 as *const u32;
+const PLIC_PRIORITY4: *mut u32 = 0x0C00_0010 as *mut u32;
+const PLIC_ENABLE_HART1: *mut u32 = 0x0C00_2080 as *mut u32;
+const PLIC_PENDING: *const u32 = 0x0C00_1000 as *const u32;
+const PLIC_THRESHOLD_HART1: *mut u32 = 0x0C20_1000 as *mut u32;
 /// FU540 CLINT `mtime` and hart-1 `mtimecmp` registers.
 const CLINT_MTIMECMP_HART1: *mut u64 = 0x0200_4008 as *mut u64;
 const CLINT_MTIME: *const u64 = 0x0200_BFF8 as *const u64;
@@ -182,6 +264,81 @@ fn timer_interrupt_probe() -> bool {
     pass
 }
 
+/// Raise FU540 PLIC source 4 from UART0 TXWM, then claim and complete it.
+fn plic_uart_interrupt_probe() -> bool {
+    unsafe {
+        core::ptr::write_volatile(core::ptr::addr_of_mut!(PLIC_TRAP_COUNT), 0);
+        core::ptr::write_volatile(core::ptr::addr_of_mut!(PLIC_TRAP_MCAUSE), 0);
+        core::ptr::write_volatile(core::ptr::addr_of_mut!(PLIC_TRAP_ID), 0);
+        core::ptr::write_volatile(core::ptr::addr_of_mut!(PLIC_TRAP_IP), 0);
+        core::ptr::write_volatile(PLIC_PRIORITY4, 3);
+        core::ptr::write_volatile(PLIC_ENABLE_HART1, 1 << 4);
+        core::ptr::write_volatile(PLIC_THRESHOLD_HART1, 0);
+    }
+
+    unsafe {
+        core::arch::asm!(
+            "la t0, fu540_plic_trap_entry",
+            "csrw mtvec, t0",
+            "csrs mie, {meie}",
+            "csrs mstatus, {mie}",
+            meie = in(reg) 1u64 << 11,
+            mie = in(reg) 1u64 << 3,
+            out("t0") _,
+            options(nostack),
+        );
+    }
+    unsafe {
+        core::ptr::write_volatile(UART0_TXCTRL, (1 << 16) | 1); // TXEN, TXCNT=1.
+        core::ptr::write_volatile(UART0_IE, 1); // TXWM interrupt enable.
+    }
+
+    for _ in 0..10_000 {
+        if unsafe { core::ptr::read_volatile(core::ptr::addr_of!(PLIC_TRAP_COUNT)) } != 0 {
+            break;
+        }
+        unsafe { core::arch::asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+    unsafe {
+        core::arch::asm!("csrc mstatus, {mie}", mie = in(reg) 1u64 << 3, options(nomem, nostack));
+    }
+
+    let (count, cause, id, ip, pending) = unsafe {
+        (
+            core::ptr::read_volatile(core::ptr::addr_of!(PLIC_TRAP_COUNT)),
+            core::ptr::read_volatile(core::ptr::addr_of!(PLIC_TRAP_MCAUSE)),
+            core::ptr::read_volatile(core::ptr::addr_of!(PLIC_TRAP_ID)),
+            core::ptr::read_volatile(core::ptr::addr_of!(PLIC_TRAP_IP)),
+            core::ptr::read_volatile(PLIC_PENDING),
+        )
+    };
+    let meip_clear: u64;
+    unsafe {
+        core::arch::asm!("csrr {mip}, mip", "srli {mip}, {mip}, 11", "andi {mip}, {mip}, 1", mip = lateout(reg) meip_clear, options(nomem, nostack));
+    }
+    let pass = count == 1
+        && cause == ((1u64 << 63) | 11)
+        && id == 4
+        && ip == 1
+        && pending & (1 << 4) == 0
+        && meip_clear == 0;
+
+    puts("PLIC UART0 source=");
+    put_hex64(id);
+    puts(" cause=");
+    put_hex64(cause);
+    puts(" count=");
+    put_hex64(count);
+    puts(" ip=");
+    put_hex64(ip);
+    puts(" pending=");
+    put_hex64(u64::from(pending));
+    puts(" meip_clear=");
+    put_hex64(meip_clear);
+    puts(if pass { " ok\n" } else { " FAIL\n" });
+    pass
+}
+
 #[entry]
 fn main() -> ! {
     let product = multiply(0x1_0000_0001, 17);
@@ -196,6 +353,7 @@ fn main() -> ! {
     putc(b'\n');
 
     let _timer_pass = timer_interrupt_probe();
+    let _plic_pass = plic_uart_interrupt_probe();
 
     loop {
         unsafe { core::arch::asm!("nop", options(nomem, nostack, preserves_flags)) };

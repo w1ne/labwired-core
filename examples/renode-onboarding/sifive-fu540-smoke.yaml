@@ -1,4 +1,4 @@
-# One RV64IMAC hart and UART0 on the narrowed imported SiFive FU540 profile.
+# One RV64IMAC hart, UART0, CLINT and PLIC on the narrowed imported FU540 profile.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/riscv64imac-unknown-none-elf/release/firmware-sifive-fu540-smoke"
@@ -8,4 +8,7 @@ limits:
 assertions:
   - uart_contains: "RV64 FU540 UART0 smoke; mul=0000001100000011"
   - uart_contains: "timer IRQ mcause=8000000000000007 count=0000000000000001 mepc_in_wait=1 entry_mie=0 entry_mpie=1 entry_mpp=3 return_mie=1 compare_disarmed=1 mtip_clear=1 ok"
+  - uart_contains: "PLIC UART0 source=0000000000000004 cause=800000000000000b count=0000000000000001 ip=0000000000000001 pending=0000000000000000 meip_clear=0000000000000000 ok"
+  - memory_value: {address: 0x10010010, expected_value: 0}  # Handler disabled UART0 TXWM interrupt
+  - memory_value: {address: 0x10010014, expected_value: 1}  # TX watermark remains asserted, masked by IE
   - expected_stop_reason: max_steps

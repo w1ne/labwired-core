@@ -6,10 +6,11 @@
 # https://starfivetech.com/uploads/fu540-c000-manual-v1p4.pdf. The engine runs
 # one RV64IMAC U54 application hart here, with UART0 and the core-integrated
 # CLINT used by the smoke. The CLINT `mtime` is clocked at 1 MHz; this profile
-# uses the FU540's recommended 1 GHz core clock. The board's other harts, PLIC,
-# GPIO, Ethernet, I2C, and QSPI controller behavior are not claimed. The 128 KiB
-# DDR window keeps stack setup in the address range supported by the current
-# generic RISC-V runner.
+# uses the FU540's recommended 1 GHz core clock. The core models the PLIC for
+# U54 hart 1; this profile wires UART0 source 4 to it for the transmit-watermark
+# smoke. GPIO, Ethernet, I2C, QSPI controller behavior, and other harts remain
+# unclaimed. The 128 KiB DDR window keeps stack setup in the address range
+# supported by the current generic RISC-V runner.
 
 name: "sifive-fu540"
 arch: "riscv"
@@ -25,3 +26,4 @@ peripherals:
     type: "sifive_uart"
     base_address: 0x10010000
     size: "4KB"
+    irq: 4

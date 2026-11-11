@@ -13,8 +13,8 @@
     "pass_depth_unknown": 0,
     "pass_claimed_peripherals_total": 1473,
     "pass_claimed_peripherals_median": 2,
-    "median_elapsed_ms": 1368,
-    "median_elapsed_seconds": 1.368,
+    "median_elapsed_ms": 1338,
+    "median_elapsed_seconds": 1.338,
     "threshold_seconds": 3600,
     "threshold_met": 226,
     "descriptors_present": 245,
@@ -7258,30 +7258,31 @@
       "script": "examples/renode-onboarding/sifive-fu540-smoke.yaml",
       "system": "configs/systems/onboarding/sifive-fu540.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-11T17:36:50Z",
-      "finished_at_utc": "2026-11-11T17:38:07Z",
-      "elapsed_seconds": 77,
-      "elapsed_ms": 76568,
+      "started_at_utc": "2026-11-11T18:49:04Z",
+      "finished_at_utc": "2026-11-11T18:49:05Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1012,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 75.585,
-        "build_firmware": 0.639,
-        "run_smoke": 0.298
+        "build_cli": 0.261,
+        "build_firmware": 0.404,
+        "run_smoke": 0.308
       },
       "stages_ms": {
-        "build_cli": 75585,
-        "build_firmware": 639,
-        "run_smoke": 298
+        "build_cli": 261,
+        "build_firmware": 404,
+        "run_smoke": 308
       },
       "_artifact_path": "sifive-fu540",
       "zero_answering_windows": [],
       "claimed_peripherals": 1,
       "smoke_assertion_kinds": [
         "uart_contains",
+        "memory_value",
         "expected_stop_reason"
       ],
       "smoke_depth": "observable"

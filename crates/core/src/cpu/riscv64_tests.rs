@@ -400,7 +400,12 @@ fn mpfs_chip_selects_the_first_u54_and_the_mss_clint() {
         (plic.base, plic.num_sources, plic.context),
         (0x0C00_0000, 187, 1)
     );
-    assert_eq!(Rv64Params::for_chip_name("sifive-fu540", 1).plic, None);
+    let fu540 = Rv64Params::for_chip_name("sifive-fu540", 1);
+    let plic = fu540.plic.expect("FU540 has a PLIC");
+    assert_eq!(
+        (plic.base, plic.num_sources, plic.num_contexts, plic.context),
+        (0x0C00_0000, 54, 9, 1)
+    );
 }
 
 #[test]

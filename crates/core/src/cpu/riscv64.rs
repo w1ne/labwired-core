@@ -1082,6 +1082,17 @@ const MPFS_PLIC: PlicParams = PlicParams {
     context: 1,
 };
 
+/// SiFive FU540-C000 PLIC: 53 sources, 9 contexts, with hart 1's M-mode
+/// context at 1. Source IDs and context mapping are documented in the
+/// FU540-C000 Manual v1p4 §10 and Renode's `sifive-fu540.repl`.
+const FU540_PLIC: PlicParams = PlicParams {
+    base: 0x0C00_0000,
+    num_sources: 54, // Plic stores the one-past-last ID; ID 0 is reserved.
+    num_contexts: 9,
+    priority_bits: 3,
+    context: 1,
+};
+
 impl Rv64Params {
     pub fn for_chip(chip: &labwired_config::ChipDescriptor) -> Self {
         Self::for_chip_name(&chip.name, chip.cpu_hz)
@@ -1093,12 +1104,13 @@ impl Rv64Params {
             // The imported profile runs the first U54 application hart. Its
             // CLINT is at 0x0200_0000 and its `mtime` reference is the 1 MHz
             // RTCCLK (SiFive FU540-C000 Manual v1p4, Ch. 7 and 9; Renode's
-            // `platforms/cpus/sifive-fu540.repl`).
+            // `platforms/cpus/sifive-fu540.repl`). Its PLIC has 53 sources,
+            // with this hart's M-mode context at 1 (Manual §10; same REPL).
             return Self {
                 hart_id: 1,
                 clint_base: Some(0x0200_0000),
                 mtime_divider: (cpu_hz / 1_000_000).max(1),
-                plic: None,
+                plic: Some(FU540_PLIC),
             };
         }
         if name.starts_with("mpfs") || name == "beaglev-fire" || name == "polarfire-soc" {

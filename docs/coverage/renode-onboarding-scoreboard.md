@@ -14,8 +14,8 @@
 - pass_depth_unknown: `0/226`
 - pass_claimed_peripherals_total: `1473`
 - pass_claimed_peripherals_median: `2`
-- median_elapsed_ms: `1368`
-- median_elapsed_seconds: `1.368`
+- median_elapsed_ms: `1338`
+- median_elapsed_seconds: `1.338`
 - threshold_seconds: `3600`
 - threshold_met: `226/226`
 
@@ -180,7 +180,7 @@
 | `sam4s_xplained` | `pass` | `True` | `yes` | `yes` | `5148` | `5.148` | `True` | `observable` | `13` | `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `sam_e70` | `pass` | `True` | `yes` | `yes` | `123872` | `123.872` | `True` | `observable` | `19` | `uart_ordered`, `uart_contains`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `sifive-fe310` | `pass` | `True` | `yes` | `yes` | `1107` | `1.107` | `True` | `observable` | `2` | `uart_contains`, `uart_ordered`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
-| `sifive-fu540` | `pass` | `True` | `yes` | `yes` | `76568` | `76.568` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
+| `sifive-fu540` | `pass` | `True` | `yes` | `yes` | `1012` | `1.012` | `True` | `observable` | `1` | `uart_contains`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `sifive-fu740` | `pass` | `True` | `yes` | `yes` | `1456` | `1.456` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `simavr-at90usb162` | `pass` | `True` | `yes` | `yes` | `220040` | `220.04` | `True` | `observable` | `1` | `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `simavr-atmega128` | `pass` | `True` | `yes` | `yes` | `247064` | `247.064` | `True` | `observable` | `2` | `uart_contains`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
