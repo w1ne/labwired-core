@@ -40,6 +40,12 @@ rolloff on PA5/PA6. The test checks both load lines against an independent
 reference, asserts ADC1 conversions, and keeps the unrelated NTC and diode on
 PA1/PA4.
 
+[`analog-bjt-early-effect-adc.yaml`](analog-bjt-early-effect-adc.yaml) compares
+matched generic Gummel–Poon NPN branches with finite VAF and no forward Early
+effect on PA2/PA3. The test checks independent load-line roots at four base
+drives, asserts ADC1 conversions, and keeps the unrelated NTC and diode on
+PA1/PA4.
+
 ## Fidelity
 
 **Sim-derived, not silicon-verified.** No F411 part was on a bench for this
@@ -79,4 +85,6 @@ Expected result:
    branches routed to ADC1.
 6. `analog-bjt-high-injection-adc.yaml`: matched generic BJT high-injection and
    control branches routed to ADC1.
-7. `VALIDATION.md`: reproducible validation commands and the honest scope.
+7. `analog-bjt-early-effect-adc.yaml`: matched generic BJT Early-effect and
+   control branches routed to ADC1.
+8. `VALIDATION.md`: reproducible validation commands and the honest scope.

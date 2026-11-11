@@ -223,6 +223,57 @@ fn bjt_high_injection_collector_voltage(base_drive_v: f64, high_injection: bool)
     collector_for_vbe((low + high) / 2.0)
 }
 
+/// Independent Gummel–Poon load line with optional forward Early effect.
+fn bjt_early_collector_voltage(base_drive_v: f64, forward_early_voltage: Option<f64>) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const COLLECTOR_OHMS: f64 = 1_000.0;
+    const BASE_OHMS: f64 = 10_000.0;
+    const IS_A: f64 = 1e-16;
+    const BF: f64 = 80.0;
+    const BR: f64 = 4.0;
+    const VAR: f64 = 75.0;
+    const VT: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+
+    let currents = |vbe: f64, collector_v: f64| {
+        let vbc = vbe - collector_v;
+        let forward = (vbe / VT).exp();
+        let reverse = (vbc / VT).exp();
+        let base_width = 1.0 - forward_early_voltage.map_or(0.0, |vaf| vbc / vaf) - vbe / VAR;
+        let transport = IS_A * (forward - reverse) * base_width;
+        let base_collector = (IS_A / BR) * (reverse - 1.0);
+        let base_emitter = (IS_A / BF) * (forward - 1.0);
+        (transport - base_collector, base_emitter + base_collector)
+    };
+
+    let collector_for_vbe = |vbe: f64| {
+        let (mut low, mut high) = (0.0, SUPPLY_V);
+        for _ in 0..100 {
+            let collector_v = 0.5 * (low + high);
+            let (collector_current, _) = currents(vbe, collector_v);
+            let residual = (SUPPLY_V - collector_v) / COLLECTOR_OHMS - collector_current;
+            if residual > 0.0 {
+                low = collector_v;
+            } else {
+                high = collector_v;
+            }
+        }
+        0.5 * (low + high)
+    };
+
+    let (mut low, mut high) = (0.0, base_drive_v);
+    for _ in 0..100 {
+        let vbe = 0.5 * (low + high);
+        let collector_v = collector_for_vbe(vbe);
+        let (_, base_current) = currents(vbe, collector_v);
+        if (base_drive_v - vbe) / BASE_OHMS > base_current {
+            low = vbe;
+        } else {
+            high = vbe;
+        }
+    }
+    collector_for_vbe(0.5 * (low + high))
+}
+
 /// Independent Gummel–Poon load line with optional base-emitter recombination.
 fn bjt_recombination_collector_voltage(base_drive_v: f64, recombination: bool) -> f64 {
     const SUPPLY_V: f64 = 3.3;
@@ -757,6 +808,127 @@ fn stm32f411ceu6_bjt_high_injection_reaches_adc1_with_ntc_and_diode() {
     assert!(
         rolloff_v - control_v > 0.05,
         "IKF/IKR/NKF rolloff reduces collector current and raises collector voltage: {rolloff_v} V vs {control_v} V"
+    );
+}
+
+#[test]
+fn stm32f411ceu6_bjt_early_effect_reaches_adc1_with_ntc_and_diode() {
+    let system_path = root("configs/systems/stm32f411ceu6-blackpill.yaml");
+    let mut profile =
+        SystemManifest::from_file(&system_path).expect("load STM32F411CEU6 Black Pill profile");
+    let unrelated = SystemManifest::from_file(root(
+        "examples/stm32f411ceu6-blackpill/analog-ntc-diode-system.yaml",
+    ))
+    .expect("load unrelated generic NTC and Shockley diode netlists");
+    let bjt = SystemManifest::from_file(root(
+        "examples/stm32f411ceu6-blackpill/analog-bjt-early-effect-adc.yaml",
+    ))
+    .expect("load matched generic Gummel–Poon Early-effect branches");
+    profile.cosim_models = unrelated.cosim_models;
+    profile.cosim_models.extend(bjt.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F411CEU6 descriptor");
+    for (pad, channel) in [("PA1", 1), ("PA2", 2), ("PA3", 3), ("PA4", 4)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+        assert_eq!(chip.analog_pins[pad].peripheral, "adc1");
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build Black Pill bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries NTC, diode, and matched BJT branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic netlists must resolve PA1/PA2/PA3/PA4 to ADC1 channels 1/2/3/4"
+    );
+    for channel in 0..=5 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            u16::MAX,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.bjt_early.base_v", 0.0)
+        .expect("initialize matched BJT base drives");
+    let expected_diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    let mut early_samples = Vec::new();
+    let mut reference_samples = Vec::new();
+    for base_drive_v in [0.0_f64, 0.7, 0.8, 0.9] {
+        session
+            .set_signal_number("ui.bjt_early.base_v", base_drive_v)
+            .expect("set common BJT base drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and matched BJT branches");
+        assert_eq!(steps.len(), 4, "all four analog branches solve");
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "board.analog.pa1_volts");
+        let early_v = signal_voltage(&session, "board.analog.pa2_volts");
+        let reference_v = signal_voltage(&session, "board.analog.pa3_volts");
+        let diode_v = signal_voltage(&session, "board.analog.pa4_volts");
+        let expected_early_v = bjt_early_collector_voltage(base_drive_v, Some(50.0));
+        let expected_reference_v = bjt_early_collector_voltage(base_drive_v, None);
+        assert!(
+            (ntc_v - 1.65).abs() < 1e-9,
+            "unrelated 25 °C NTC stays isolated"
+        );
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "unrelated Shockley diode remains on its independent load line"
+        );
+        assert!(
+            (early_v - expected_early_v).abs() < 5e-5,
+            "VAF=50 load line should be {expected_early_v} V at {base_drive_v} V drive, got {early_v} V"
+        );
+        assert!(
+            (reference_v - expected_reference_v).abs() < 5e-5,
+            "matched no-forward-Early load line should be {expected_reference_v} V at {base_drive_v} V drive, got {reference_v} V"
+        );
+        if base_drive_v >= 0.7 {
+            assert!(
+                early_v < reference_v - 0.001,
+                "finite VAF increases collector current and lowers collector voltage: {early_v} V vs {reference_v} V"
+            );
+        }
+
+        for (channel, voltage_v) in [(1, ntc_v), (2, early_v), (3, reference_v), (4, diode_v)] {
+            let expected = expected_adc_count(voltage_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "solved voltage seeds ADC1 channel {channel}"
+            );
+            assert_eq!(
+                stm32f4_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "firmware-visible ADC1 conversion follows channel {channel}"
+            );
+        }
+        assert_eq!(
+            [0, 5].map(|channel| adc_channel_count(&mut bus, channel)),
+            [u16::MAX; 2],
+            "neighboring ADC1 channels remain undriven"
+        );
+        early_samples.push(early_v);
+        reference_samples.push(reference_v);
+    }
+    assert!(
+        early_samples[1] > early_samples[2] && early_samples[2] > early_samples[3],
+        "increasing base drive lowers the finite-VAF collector voltage: {early_samples:?}"
+    );
+    assert!(
+        reference_samples[1] > reference_samples[2] && reference_samples[2] > reference_samples[3],
+        "increasing base drive lowers the no-forward-Early collector voltage: {reference_samples:?}"
     );
 }
 
