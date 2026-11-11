@@ -63,6 +63,14 @@ def test_fixture_could_run_requires_a_matching_fixture(monkeypatch):
     assert br.fixture_could_run(DECLARED)
 
 
+def test_real_chip_tree_has_no_waiver_for_a_runnable_perf_fixture():
+    """A coverage-only pass must not conceal a guaranteed RTx startup failure."""
+    chips = br.bp.discover_chips()
+    _, waived = br.bp.plan_coverage(chips)
+    unprovable = sorted(board for board in waived if br.fixture_could_run(chips[board]))
+    assert not unprovable, f"runnable chips must be measured, not waived: {unprovable}"
+
+
 def _run_main(monkeypatch, tmp_path, chips, waived, status, fixture=None):
     cli = tmp_path / "labwired"
     cli.write_text("")
@@ -220,3 +228,56 @@ def test_rtf_baselines_name_known_workloads():
     baselines = json.loads(rtf.BASELINES.read_text())
     assert set(baselines) <= known
     assert all(v["index"] > 0 for v in baselines.values())
+
+
+def _pico_result(frames):
+    return {
+        "status": "pass", "stop_reason": "max_cycles",
+        "inspect": {"devices": [{"id": "oled", "artifacts": [{
+            "kind": "framebuffer", "meta": {"frames_seen": frames},
+        }]}]},
+    }
+
+
+def _counter_frames(count=79, period_us=100_000):
+    return [
+        {"sha256": f"{i:064x}", "t_us": i * period_us + 1_500}
+        for i in range(1, count + 1)
+    ]
+
+
+def test_rtf_display_progress_checks_frame_count_and_late_updates():
+    w = next(w for w in rtf.WORKLOADS if w.id == "pico_oled_pwm")
+    # 100 ms redraw cadence, with two periods for startup/budget boundaries:
+    # at least 78 distinct frames over 8 s and a final update after 7.8 s.
+    run = rtf.parse_result(w, _pico_result(_counter_frames()), 2.0, 0)
+    assert run["progress"]["oled"]["distinct_frames"] == 79
+    assert run["progress"]["oled"]["minimum_frames"] == 78
+    assert run["progress"]["oled"]["minimum_last_update_us"] == 7_800_000
+    assert rtf.parse_result(w, _pico_result(_counter_frames(78)), 2.0, 0)
+
+
+@pytest.mark.parametrize("frames", [
+    [],
+    _counter_frames(1),  # Old ROM: marker, one frame, then a stalled workload.
+    _counter_frames(77),  # Insufficient work, even with a late timestamp.
+    _counter_frames(79, 90_000),  # Enough distinct frames, but stopped too early.
+    [{"sha256": "a" * 64, "t_us": i * 100_000} for i in range(1, 80)],
+])
+def test_rtf_refuses_incomplete_or_frozen_display_work(frames):
+    w = next(w for w in rtf.WORKLOADS if w.id == "pico_oled_pwm")
+    if len(frames) == 77:
+        frames = [*frames[:-1], {**frames[-1], "t_us": 7_900_000}]
+    with pytest.raises(RuntimeError, match="distinct frames"):
+        rtf.parse_result(w, _pico_result(frames), 0.01, 0)
+
+
+def test_rtf_requires_display_evidence_for_display_workloads():
+    w = next(w for w in rtf.WORKLOADS if w.id == "pico_oled_pwm")
+    with pytest.raises(RuntimeError, match="missing framebuffer progress"):
+        rtf.parse_result(w, {"status": "pass", "stop_reason": "max_cycles"}, 0.01, 0)
+    frames = _counter_frames()
+    for invalid in ({"t_us": 100_000}, {"sha256": "bad", "t_us": 100_000},
+                    {"sha256": "a" * 64, "t_us": 8_000_001}):
+        with pytest.raises(RuntimeError, match="invalid framebuffer history"):
+            rtf.parse_result(w, _pico_result([*frames, invalid]), 2.0, 0)

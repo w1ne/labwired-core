@@ -8,6 +8,8 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 
 workflow=.github/workflows/core-release.yml
+python_release_workflow=.github/workflows/core-python-release.yml
+native_archive_smoke=scripts/ci/release-artifact-smoke.py
 core_ci_workflow=.github/workflows/core-ci.yml
 backfill_workflow=.github/workflows/core-backfill-runner-image.yml
 dockerfile=Dockerfile.ci
@@ -81,6 +83,8 @@ job_line() {
 }
 
 require_file "$workflow"
+require_file "$python_release_workflow"
+require_file "$native_archive_smoke"
 require_file "$core_ci_workflow"
 require_file "$backfill_workflow"
 require_file "$dockerfile"
@@ -167,10 +171,11 @@ for target in \
   x86_64-unknown-linux-gnu \
   aarch64-unknown-linux-gnu \
   x86_64-apple-darwin \
-  aarch64-apple-darwin; do
+  aarch64-apple-darwin \
+  x86_64-pc-windows-msvc; do
   require_literal "$workflow" "target: $target" "archive matrix includes $target"
 done
-for platform in linux-x86_64 linux-aarch64 darwin-x86_64 darwin-aarch64; do
+for platform in linux-x86_64 linux-aarch64 darwin-x86_64 darwin-aarch64 windows-x86_64; do
   require_literal "$workflow" "platform: $platform" "archive matrix includes $platform"
 done
 require_literal "$workflow" 'ARCHIVE="labwired-${VERSION}-${PLATFORM}.tar.gz"' 'archive names include the release version and platform'
@@ -179,9 +184,33 @@ require_literal "$workflow" 'cp "target/${{ matrix.target }}/release/labwired${E
 # through v0.19.2, which made editor debugging work only on machines that had
 # built core from source. Pin it so it cannot be dropped again unnoticed.
 require_literal "$workflow" 'cargo build -p labwired-cli -p labwired-dap --release --target ${{ matrix.target }}' 'release builds both the CLI and the debug adapter'
+require_literal "$workflow" 'cargo build -p labwired-cli -p labwired-dap --release --target ${{ matrix.target }} --locked' 'release builds use the committed dependency lockfile'
+build_block=$(job_block build)
+require_block_literal "$build_block" 'name: Check release version and notes' 'release builds validate version and notes before compiling'
+require_block_literal "$build_block" 'if [[ "$GITHUB_REF_TYPE" == tag && "$GITHUB_REF_NAME" != "v$version" ]]; then' 'release builds reject a tag that disagrees with the workspace version'
+require_block_literal "$build_block" 'notes="docs/releases/v$version.md"' 'release builds select notes for the workspace version'
+require_block_literal "$build_block" 'git config --global --add safe.directory "$GITHUB_WORKSPACE"' 'release builds trust only the checkout with Bullseye-compatible global scope'
+require_block_literal "$build_block" 'git ls-files --error-unmatch "$notes"' 'release builds require tracked release notes'
+require_block_literal "$build_block" 'test -s "$notes"' 'release builds reject empty release notes'
+require_block_literal "$build_block" 'if [[ "$title" != "# Release v$version: "?* ]]; then' 'release builds require a versioned release title'
 require_literal "$workflow" 'cp "target/${{ matrix.target }}/release/labwired-dap${EXE}" "dist/labwired-dap${EXE}"' 'archive package copies the labwired-dap binary'
 require_literal "$workflow" 'tar -czf "${ARCHIVE}" -C dist "labwired${EXE}" "labwired-dap${EXE}"' 'archive package contains both the CLI and the debug adapter'
 require_literal "$workflow" 'name: labwired-${{ matrix.platform }}' 'archive artifact names follow the platform matrix'
+
+require_block_literal "$build_block" 'runner: macos-15-intel' 'Intel archives execute on a native Intel runner'
+require_block_literal "$build_block" 'runner: macos-15' 'ARM64 archives execute on a native Apple Silicon runner'
+require_block_literal "$build_block" 'id: metadata' 'release metadata exposes the verified workspace version'
+require_block_literal "$build_block" 'echo "version=$version" >> "$GITHUB_OUTPUT"' 'native archive smoke uses the verified version'
+native_archive_smoke_block=$(awk '
+  $0 == "      - name: Smoke native CLI and DAP archives" { inside = 1; next }
+  inside && /^      - (name:|uses:)/ { exit }
+  inside { print }
+' "$workflow")
+require_block_literal "$native_archive_smoke_block" "if: matrix.container == ''" 'native archive smoke runs on every macOS and Windows build'
+require_block_literal "$native_archive_smoke_block" 'python scripts/ci/release-artifact-smoke.py' 'native archive smoke executes the CLI and DAP protocol check'
+require_block_literal "$native_archive_smoke_block" '--archive "$ARCHIVE"' 'native archive smoke tests the packaged artifact'
+require_block_literal "$native_archive_smoke_block" '--version "${{ steps.metadata.outputs.version }}"' 'native archive smoke checks the released version'
+require_block_literal "$native_archive_smoke_block" '--platform "${{ matrix.platform }}"' 'native archive smoke verifies the host architecture'
 
 # The two guards that would have caught the v0.21.0 Linux archives, which
 # installed fine and then died with `GLIBC_2.39 not found` on Debian 12 and
@@ -193,6 +222,16 @@ require_literal "$workflow" 'name: Assert glibc floor' 'the declared glibc floor
 smoke_block=$(job_block linux-smoke)
 require_block_literal "$smoke_block" "image: 'debian:12-slim'" 'archives are started on Debian 12 before release'
 require_block_literal "$smoke_block" "image: 'ubuntu:22.04'" 'archives are started on Ubuntu 22.04 LTS before release'
+require_block_literal "$smoke_block" "image: 'almalinux:9'" 'archives are started on AlmaLinux 9 before release'
+require_block_literal "$smoke_block" 'uses: actions/checkout@v4' 'Linux smoke reads the exact candidate version and fixtures'
+require_block_literal "$smoke_block" 'uses: actions/setup-python@v5' 'Linux smoke runs the protocol driver on the host'
+require_block_literal "$smoke_block" 'tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"]' 'Linux smoke checks the workspace version'
+require_block_literal "$smoke_block" 'python scripts/ci/release-artifact-smoke.py' 'Linux smoke exercises firmware and the DAP protocol'
+require_block_literal "$smoke_block" '--container "${{ matrix.image }}"' 'Linux smoke executes inside each older distribution'
+require_block_absent_literal "$smoke_block" 'labwired-dap --version' 'Linux smoke does not mistake DAP stdin EOF for a protocol check'
+require_literal "$native_archive_smoke" 'f"type=bind,source={directory},target=/d,readonly"' 'Linux smoke mounts release files read-only'
+require_literal "$native_archive_smoke" '"limits": {"max_steps": 1000}' 'archive firmware smoke is bounded'
+require_literal "$native_archive_smoke" '"assertions": [{"uart_contains": "OK"}]' 'archive firmware smoke asserts the firmware UART result'
 
 release_block=$(job_block release)
 # The release job must wait for the archives AND for the smoke run that proves
@@ -200,6 +239,49 @@ release_block=$(job_block release)
 require_block_literal "$release_block" 'needs: [build, linux-smoke]' 'release waits for all archive builds and the old-distro smoke'
 require_block_literal "$release_block" 'softprops/action-gh-release@v2' 'release creates the GitHub release with action-gh-release'
 require_block_literal "$release_block" 'files: dist/*.tar.gz' 'release uploads every generated archive asset'
+require_block_literal "$release_block" 'notes="docs/releases/$GITHUB_REF_NAME.md"' 'release selects notes for the pushed release tag'
+require_block_literal "$release_block" 'git ls-files --error-unmatch "$notes"' 'release publishes tracked notes'
+require_block_literal "$release_block" 'name: ${{ steps.notes.outputs.title }}' 'release takes its title from the tracked notes'
+require_block_literal "$release_block" 'body_path: ${{ steps.notes.outputs.path }}' 'release publishes the tracked notes body'
+require_block_literal "$release_block" 'draft: false' 'tag publication finalizes a prepared GitHub Release draft'
+require_block_absent_literal "$release_block" 'body: |' 'release does not replace reviewed notes with installation boilerplate'
+
+# A manual dispatch can name a tag. A ref-type-only condition would publish in
+# that case, despite the documented dry-run behavior.
+for publishing_job in release publish release-smoke; do
+  publishing_block=$(job_block "$publishing_job")
+  require_block_literal "$publishing_block" "if: github.event_name == 'push' && github.ref_type == 'tag'" "$publishing_job publishes only for tag pushes, never manual dispatch"
+done
+
+python_publish_block=$(awk '
+  $0 == "  publish:" { inside = 1; next }
+  inside && $0 ~ /^  [[:alnum:]_-]+:$/ { exit }
+  inside { print }
+' "$python_release_workflow")
+require_block_literal "$python_publish_block" "if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')" 'Python SDK publication rejects manual dispatch, including a tag ref'
+require_block_literal "$python_publish_block" 'needs: [wheels, sdist, linux-arm64-smoke]' 'Python publication waits for the native ARM64 wheel smoke'
+python_arm64_smoke_block=$(awk '
+  $0 == "  linux-arm64-smoke:" { inside = 1; next }
+  inside && $0 ~ /^  [[:alnum:]_-]+:$/ { exit }
+  inside { print }
+' "$python_release_workflow")
+require_block_literal "$python_arm64_smoke_block" 'needs: wheels' 'ARM64 wheel smoke waits for the wheel artifact'
+require_block_literal "$python_arm64_smoke_block" 'runs-on: ubuntu-24.04-arm' 'ARM64 wheel smoke uses a native Linux ARM64 runner'
+require_block_literal "$python_arm64_smoke_block" 'uses: actions/download-artifact@v4' 'ARM64 wheel smoke downloads the built artifact'
+require_block_literal "$python_arm64_smoke_block" 'name: wheel-linux-aarch64' 'ARM64 wheel smoke selects the released ARM64 wheel'
+require_block_literal "$python_arm64_smoke_block" '"$py" -m pip install --quiet dist/*.whl' 'ARM64 wheel smoke installs the built wheel'
+require_block_literal "$python_arm64_smoke_block" 'cd "$RUNNER_TEMP"' 'ARM64 wheel smoke runs outside the checkout'
+require_block_literal "$python_arm64_smoke_block" 'assert platform.machine() == "aarch64"' 'ARM64 wheel smoke asserts native execution'
+require_block_literal "$python_arm64_smoke_block" 'with labwired.Sim(sys.argv[1], chip="ci-fixture-cortex-m3-uart1") as sim:' 'ARM64 wheel smoke boots the packaged simulator'
+require_block_literal "$python_arm64_smoke_block" 'assert sim.expect("OK", timeout="1ms").text == "OK"' 'ARM64 wheel smoke requires the firmware UART result'
+
+# macOS 14 GitHub Actions runners retired on 2026-11-02. A queued release
+# matrix leg using that label is rejected before any build step starts.
+require_absent_literal "$python_release_workflow" 'runner: macos-13' 'Python release does not request retired macOS 13 runners'
+require_absent_literal "$python_release_workflow" 'runner: macos-14' 'Python release does not request retired macOS 14 runners'
+require_literal "$python_release_workflow" 'runner: macos-15-intel' 'Python x86_64 wheel has a supported native Intel runner'
+require_literal "$python_release_workflow" 'runner: macos-15' 'Python arm64 wheel has a supported macOS 15 runner'
+require_literal "$python_release_workflow" "if: matrix.name == 'linux-x86_64' || matrix.name == 'macos-arm64' || matrix.name == 'macos-x86_64' || matrix.name == 'windows-x64'" 'Python release smoke-tests both native macOS architectures'
 
 require_literal "$workflow" 'packages: write' 'release workflow grants GHCR package publishing permission'
 require_literal "$workflow" 'docker/setup-buildx-action@v3' 'publish job configures Docker Buildx'
@@ -236,6 +318,10 @@ if [[ -z "$smoke_block" ]]; then
   fail 'release-smoke job is present'
 fi
 require_block_literal "$smoke_block" 'needs: [release, publish]' 'release smoke waits for both archive release and image publish'
+require_block_literal "$smoke_block" 'runs-on: ${{ matrix.runner }}' 'release smoke uses the native platform runner matrix'
+require_block_literal "$smoke_block" '{ arch: amd64, runner: ubuntu-latest }' 'release smoke exercises the amd64 image and archives natively'
+require_block_literal "$smoke_block" '{ arch: arm64, runner: ubuntu-24.04-arm }' 'release smoke exercises the arm64 image and archives natively'
+require_block_literal "$smoke_block" 'fail-fast: false' 'release smoke collects results for both platforms after a failure'
 require_block_literal "$smoke_block" 'actions/checkout@v4' 'release smoke checks out the test script before mounting it'
 require_block_literal "$smoke_block" 'docker logout ghcr.io || true' 'release smoke intentionally clears GHCR credentials before the pull'
 require_block_absent_literal "$smoke_block" 'docker/login-action@v3' 'release smoke remains anonymous for the GHCR pull'
@@ -305,7 +391,7 @@ if [[ -f "$dockerignore" ]]; then
   done
 fi
 
-require_literal "$action" 'default: "v0.25.0"' 'core action defaults to the supported public release'
+require_literal "$action" 'default: "v0.26.0"' 'core action defaults to the supported public release'
 action_inputs=$(awk '
   /^inputs:$/ { inside = 1; next }
   inside && /^[^[:space:]]/ { exit }
@@ -366,7 +452,7 @@ require_literal "$action" 'cat "$LABWIRED_SUMMARY_MD" >> "$GITHUB_STEP_SUMMARY"'
 require_literal "$action" 'if: ${{ always() }}' 'core action always renders and uploads artifacts after a failed test'
 require_literal "$action" 'path: ${{ inputs.output-dir }}' 'core action uploads exactly the configured output directory'
 require_literal "$action" 'if-no-files-found: error' 'core action treats a missing output directory as a workflow error'
-require_literal "$action" 'name: labwired-${{ github.job }}-${{ github.run_id }}-${{ github.action }}' 'core action gives each invocation a unique artifact name'
+require_literal "$action" 'name: labwired-${{ github.job }}-${{ github.run_id }}-${{ github.action }}-${{ runner.arch }}' 'core action gives each invocation and architecture a unique artifact name'
 require_literal "$action" 'LABWIRED_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}' 'core action records the workflow run URL'
 require_literal "$action" 'LABWIRED_SOURCE_REVISION: ${{ github.sha }}' 'core action records the source revision'
 require_literal "$action" 'LABWIRED_RELEASE_VERSION: ${{ steps.install.outputs.release_version }}' 'core action records the resolved release'
@@ -555,9 +641,9 @@ require_literal docs/configuration_reference.md 'including `{}` and `null`' 'con
 require_literal docs/configuration_reference.md 'stop_when_assertions_pass' 'configuration reference documents world assertion completion'
 require_literal examples/egress-demo/README.md 'config` is a closed mapping' 'egress example documents its closed config mapping'
 require_literal examples/egress-demo/README.md 'positive integer' 'egress example documents buffer_max type validation'
-require_literal Cargo.toml 'version = "0.25.0"' 'workspace metadata uses the current release version'
-require_literal CHANGELOG.md '## [0.25.0] - 2026-09-22' 'changelog records the current release version'
-require_literal README.md 'LABWIRED_VERSION=v0.25.0' 'public README pins the current release version'
+require_literal Cargo.toml 'version = "0.26.0"' 'workspace metadata uses the current release version'
+require_literal CHANGELOG.md '## [0.26.0] - 2026-11-11' 'changelog records the current release version'
+require_literal README.md 'LABWIRED_VERSION=v0.26.0' 'public README pins the current release version'
 require_absent_literal README.md 'LABWIRED_VERSION=v0.20.0' 'public README does not retain the superseded release version'
 
 if (( failures > 0 )); then

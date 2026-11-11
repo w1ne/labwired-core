@@ -8,8 +8,8 @@
     "source": "CI board-throughput run 42653202653 (main 02d50a5 + this PR)"
   },
   "pico_oled_pwm": {
-    "index": 0.0776,
-    "source": "CI board-throughput run 42653202653 (main 02d50a5 + this PR)"
+    "index": 0.04132,
+    "source": "work-1 2026-11-10, release bccf2930; clean-room ROM with 79 OLED frames and PWM enabled; receipts/2026-11-10-rp2040-rtf-rom-correction.json"
   },
   "uno_feeder": {
     "index": 0.0003379,

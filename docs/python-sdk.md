@@ -9,8 +9,15 @@ The simulator runs inside your Python process; no board or server is required.
 
 ## Quickstart
 
-These commands build the SDK from source. This SDK is not yet published to PyPI;
-`pip install labwired` is not the installation path for this version.
+Published wheels are available for Linux, macOS, and Windows:
+
+```sh
+python -m pip install 'labwired[test]==0.26.0'
+```
+
+The walkthrough below builds the SDK from source and uses firmware fixtures from
+the repository. If you use the published wheel, clone the repository for those
+fixtures and skip the Maturin build and wheel-install commands.
 
 You need Git, Python 3.9+ with `venv`, and Rust with Cargo and a native linker.
 Use a POSIX shell on Linux, macOS, or WSL2. The first build can take several minutes.

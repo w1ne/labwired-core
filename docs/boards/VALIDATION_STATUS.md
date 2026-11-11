@@ -28,12 +28,12 @@ The models column is a content digest over everything that board's `models` list
 | `rp2350` | 🟡 smoke-manual | — | `4172577d3a320d06` | no silicon capture |
 | `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | `2be683124ba3ead5` | no silicon capture |
 | `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | `7813b948d5639e02` | no silicon capture |
-| `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `7c44a4659b460958` | no silicon capture |
-| `stm32u5a5zj` | 🔵 sim-validated (deep model, no HW diff) | — | `d79acb3a70bdcd6e` | no silicon capture |
-| `nucleo-u545re` | 🔵 sim-validated (deep model, no HW diff) | — | `cb3066ad44541145` | no silicon capture |
+| `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `c8c7554467d340ec` | no silicon capture |
+| `stm32u5a5zj` | 🔵 sim-validated (deep model, no HW diff) | — | `c0b0562434f4364e` | no silicon capture |
+| `nucleo-u545re` | 🔵 sim-validated (deep model, no HW diff) | — | `94ec5267eb1fcf29` | no silicon capture |
 | `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | `924f7d7b36bf7057` | no silicon capture |
 | `brd2709a` | 🟡 smoke-manual | — | `030ab976a130a431` | no silicon capture |
-| `esp32` | ⚪ structural | — | `a588c7f56f350b36` | no silicon capture |
+| `esp32` | ⚪ structural | — | `429aadf55b37ba03` | no silicon capture |
 | `mkw41z4` | 🔵 sim-validated (deep model, no HW diff) | — | `38961228796354d6` | no silicon capture |
 | `stm32f405` | 🔵 sim-validated (deep model, no HW diff) | — | `ca9d1f548bb61af8` | no silicon capture |
 | `stm32f767` | 🔵 sim-validated (deep model, no HW diff) | — | `8287bdd426e5021e` | no silicon capture |
@@ -55,8 +55,8 @@ The models column is a content digest over everything that board's `models` list
 | `stm32l552` | 🟡 smoke-manual | — | `94322f57af5b80c5` | no silicon capture |
 | `cc2538sf53` | 🟡 smoke-manual | — | `1ccc6252b13de8d9` | no silicon capture |
 | `amap42kp` | 🟡 smoke-manual | — | `7cb0fb418699a396` | no silicon capture |
-| `r7fa6m5bh` | 🟡 smoke-manual | — | `de5a495b1a1db0c0` | no silicon capture |
-| `r7fa8m1ah` | 🟡 smoke-manual | — | `7238039b7e62068b` | no silicon capture |
+| `r7fa6m5bh` | 🟡 smoke-manual | — | `1787a85edc2ded19` | no silicon capture |
+| `r7fa8m1ah` | 🟡 smoke-manual | — | `87c3287dba1d2e4f` | no silicon capture |
 | `same70q21b` | 🟡 smoke-manual | — | `6bf26fe9661f9a86` | no silicon capture |
 | `mk64f12` | 🟡 smoke-manual | — | `7116bea4faaddc9a` | no silicon capture |
 | `s32k388` | 🟡 smoke-manual | — | `8ed506ed51187290` | no silicon capture |
@@ -69,6 +69,9 @@ The models column is a content digest over everything that board's `models` list
 | `am6234` | 🟡 smoke-manual | — | `a4121d04d9617675` | no silicon capture |
 | `r5f52618bgfp` | 🟡 smoke-manual | — | `1a614ca5474b69f2` | no silicon capture |
 | `pic32mz2048efm144` | 🟡 smoke-manual | — | `6f3fe972ec1b94a8` | no silicon capture |
+| `esp32-devkitc-32e-gpio-smoke` | ⚪ structural | — | `248b856e2ca53f39` | no silicon capture |
+| `esp32-devkitc-32e-uart1` | ⚪ structural | — | `2694622dc1dd1733` | no silicon capture |
+| `nucleo-f103rb-bme280` | ⚪ structural | — | `95db504f6b27b85b` | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
 
@@ -591,4 +594,29 @@ The models column is a content digest over everything that board's `models` list
   - offline (CI): curiosity_pic32mz_nuttx (nsh: hello, ps, ls /dev typed over UART2)
   - offline (CI): mips_tests (17 tests: overflow trap, delay slots and branch-likely, LWL/LWR/SWL/SWR, mult/div/madd/clz/ext/ins/seb/wsbh/ror, BD in a delay slot, LL/SC and ERET, AdEL/TLB refill, shadow sets, DI/EI, EVIC single and multi vector, core timer, software interrupt edge, idle-loop proof, WAIT, boot ISA)
   - offline (CI): pic32_uart, pic32_timer unit tests (TX drain flag, RX threshold, SET/CLR/INV aliases, Timer1 at PBCLK3/8, SOSC, Type B prescaler)
+- Drift status: **no silicon capture**
+
+## `esp32-devkitc-32e-gpio-smoke` — ⚪ structural
+
+- Doc: [`docs/boards/esp32.md`](esp32.md)  ·  Chip: `configs/chips/esp32-devkitc-32e-gpio-smoke.yaml`
+- Note: Narrow classic ESP32 onboarding profile. The PR-run Tier-1 fixture asserts TIER1 done; the exact-profile execution oracle pins the core timer/vector/RAM witness with a disarmed-timer negative control. GPIO23, UART0 and I2C0 remain the documented profile scope. No silicon timing or full-board coverage is claimed.
+- Silicon: none — not validated against real hardware.
+  - offline (CI): firmware_survival::test_esp32_devkitc_32e_gpio_smoke_tier1_survival
+  - offline (CI): esp32_onboarding_exec_oracle::devkitc_gpio_profile_core_timer_exec_oracle
+- Drift status: **no silicon capture**
+
+## `esp32-devkitc-32e-uart1` — ⚪ structural
+
+- Doc: [`docs/boards/esp32.md`](esp32.md)  ·  Chip: `configs/chips/esp32-devkitc-32e-uart1.yaml`
+- Note: Narrow classic ESP32 UART1 TX profile. The exact-profile execution oracle pins the core timer/vector/RAM witness with a disarmed-timer negative control. The UART1/GPIO16 smoke has recorded simulator evidence but no dedicated required UART1 firmware lane. No silicon or full-board coverage is claimed.
+- Silicon: none — not validated against real hardware.
+  - offline (CI): esp32_onboarding_exec_oracle::devkitc_uart1_profile_core_timer_exec_oracle
+- Drift status: **no silicon capture**
+
+## `nucleo-f103rb-bme280` — ⚪ structural
+
+- Doc: [`docs/boards/nucleo-f103rb.md`](nucleo-f103rb.md)  ·  Chip: `configs/chips/stm32f103rb-nucleo-bme280-smoke.yaml`
+- Note: Narrow STM32F103RB profile with USART2, LD2/PA5 and I2C1 on PB8/PB9. The exact-profile SysTick execution differential compares every instruction boundary with the legacy walk and requires repeated ISR and main-loop progress. The BME280 smoke has recorded simulator evidence but no dedicated required sensor firmware lane. No silicon timing or full-board coverage is claimed.
+- Silicon: none — not validated against real hardware.
+  - offline (CI): systick_walk_differential::nucleo_bme280_profile_systick_irq_is_byte_identical
 - Drift status: **no silicon capture**

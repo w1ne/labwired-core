@@ -23,24 +23,15 @@
 #
 # STALE ACKS ARE AN ERROR. An entry that matches no regression in the current
 # run fails the gate, so the ratchet re-arms the instant a cell recovers and
-# drops cannot be pre-acknowledged before they happen. Delete entries as cells
-# come back.
+# drops cannot be pre-acknowledged before they happen. Delete entries when the
+# matching regression disappears, including when the baseline already records
+# an accepted blocked cell.
 #
 # Mirrors the `drift_ack` convention in validation/manifest.yaml: one explicit
 # key that has to cover the specific drift observed, plus prose saying why.
 
-acks:
-  # Pre-existing trunk regression, NOT introduced by the esp32c6 fixture fix.
-  # stm32g071/spi reads `pass` in the snapshot and the merge base, but a live
-  # release run on unmodified origin/main prints `TIER1 spi FAIL code=spi-rxne`
-  # (reproduced 2026-11-06). Partly diagnosed: the fixture never sets
-  # CR2.FRXTH, but setting it does not recover the cell, so a second,
-  # engine-side cause remains. This ack auto-fails (stale) once the cell
-  # recovers, which is the ratchet re-arming as designed.
-  - cell: stm32g071/spi
-    to: blocked
-    reason: >
-      Pre-existing trunk regression, not from this change: origin/main's own
-      stm32g071.yaml reports TIER1 spi FAIL code=spi-rxne against the committed
-      fixture on a release build. Recovery is tracked as a separate chip-parity
-      card; delete this ack when stm32g071/spi returns to pass.
+# stm32g071/spi remains blocked in the current matrix and in the main baseline.
+# Its historical pass-to-blocked exception is therefore stale. Keep the known
+# gap visible in tier1-matrix.json and the release notes; do not carry a waiver
+# that matches no current regression.
+acks: []

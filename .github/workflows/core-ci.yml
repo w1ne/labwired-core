@@ -603,6 +603,7 @@ jobs:
             scripts/test_labwired_audit.py \
             validation/matrix_lib/test_invoke.py
           python3 -m unittest discover -s scripts/tests -p test_cli_release_tag.py
+          python3 -m unittest discover -s examples/nrf52840-secure-boot-lab -p test_make_packages.py
 
       # Mixed-signal co-sim: the ngspice wrapper (tools/cosim) is pure Python
       # over libngspice and steps a real RC circuit; seconds, no cargo. It is a
@@ -2486,3 +2487,33 @@ jobs:
 
       - name: Tier-1 matrix + ratchet (release)
         run: cargo test --release -p labwired-cli --test tier1_matrix --test tier1_matrix_ratchet -- --nocapture
+
+      # These functional tests boot the C3 ROM and are ignored in the debug
+      # library suite. Run them here so console routing, OLED output and the
+      # browser API's BLE world cannot regress behind an ignored-test count.
+      # This is host execution of the browser API; browser-layer separately
+      # builds wasm32 and runs the Node regressions.
+      - name: C3 browser API firmware regressions (release)
+        timeout-minutes: 15
+        env:
+          LABWIRED_REQUIRE_C3_BLE: "1"
+        run: |
+          set -euo pipefail
+          bash scripts/ci/fetch-c3-ble-flash.sh fixtures/esp32c3-ble \
+            scripts/ci/c3-ble-gatt-notify-flash.sha256
+          cargo test --release --locked -p labwired-wasm --lib -- \
+            --ignored --exact --test-threads=1 \
+            romboot_tests::wasm_romboot_reaches_app_main \
+            romboot_tests::wasm_romboot_oled_paints \
+            romboot_tests::wasm_c3_flash_fast_start_oled_paints_quickly \
+            romboot_tests::wasm_c3_browser_path_runs_few_device_seconds \
+            console_tap_tests::bridge_console_board_still_shows_uart0 \
+            console_tap_tests::native_usb_board_shows_the_usb_console \
+            console_tap_tests::output_on_the_untapped_console_is_reported_not_lost \
+            world::tests::a_wasm_world_runs_a_scripted_phone_against_a_c3_gatt_server \
+            2>&1 | tee "$RUNNER_TEMP/c3-browser-api-release-tests.log"
+          if ! grep -Fq 'test result: ok. 8 passed; 0 failed; 0 ignored;' \
+            "$RUNNER_TEMP/c3-browser-api-release-tests.log"; then
+            echo '::error::Expected all eight C3 browser API release tests to pass; check for a renamed or missing test.'
+            exit 1
+          fi

@@ -91,7 +91,7 @@ is also bundled in the browser playground (nRF52840 Secure Boot).
 ## Files
 
 - `system.yaml` — nRF52840 + SSD1306 OLED + ATECC608A secure element on `i2c0`.
-- `secure-boot-smoke.yaml` — the 45-assertion test script, including the
+- `secure-boot-smoke.yaml` — the 55-assertion test script, including the
   three `uart_injections` OTA packages.
 - `make_packages.py` — regenerates OTA packages + digests (openssl). Use
   `--ephemeral` or `--key`; never hand-edit the byte arrays. Private keys

@@ -3798,25 +3798,13 @@ mod console_tap_tests {
     //! language `arduino`, merged at its flash offsets into
     //! `fixtures/esp32c3-usb-cdc-console-flash.bin`. It boots through the real
     //! mask ROM, so both consoles carry genuine traffic: the C3 BROM prints its
-    //! banner to UART0 AND USB-Serial-JTAG, and the sketch then prints its own
-    //! marker to UART0.
+    //! banner to UART0 AND USB-Serial-JTAG. The shared USB-Serial-JTAG model
+    //! supplies SOF, IN_EMPTY and the matrix IRQ needed by Arduino's HWCDC
+    //! driver, so the sketch then emits a different marker on each console.
     //!
-    //! ## What `LW_USBCDC_TICK` is NOT doing here
-    //!
-    //! It never appears — on either console — and that is a SEPARATE, deeper
-    //! gap these tests deliberately do not paper over. `arduino-esp32`'s HWCDC
-    //! (the driver a CDC-on-boot build binds to `Serial`) is entirely
-    //! interrupt-driven: `HWCDC::write` only enqueues if `isCDC_Connected()`,
-    //! which needs `usb_serial_jtag_is_connected()` (a SOF-frame watchdog on
-    //! `INT_RAW.SOF`), and the ring buffer is only moved into the TX FIFO by the
-    //! `SERIAL_IN_EMPTY` ISR. The twin's USB-Serial-JTAG model has neither —
-    //! it is a polling-only byte sink (EP1_CONF permanently ready, no interrupt
-    //! registers at all), which is why the mask ROM's `usb_uart_tx_one_char`
-    //! busy-poll works through it and HWCDC produces nothing. Fixing the tap is
-    //! necessary and not sufficient; modelling the USB host (SOF + IN_EMPTY +
-    //! matrix IRQ) is the follow-up. Asserting on `LW_USBCDC_TICK` here would
-    //! just fail for a reason this change is not about, so instead these tests
-    //! use the traffic that IS real on both consoles.
+    //! Wait for BOTH firmware markers before checking the browser-facing
+    //! streams. A USB tap must not pass on the ROM banner alone, and a shared
+    //! character prefix must not truncate either distinct application message.
     use super::*;
     use labwired_config::{ChipDescriptor, SystemManifest};
     use std::collections::HashMap;
@@ -3827,6 +3815,8 @@ mod console_tap_tests {
     const ROM_BANNER: &str = "ESP-ROM:esp32c3";
     /// The sketch's UART0 marker — app output, after the ROM is done.
     const UART0_MARKER: &str = "LW_UART0_TICK";
+    /// The sketch's interrupt-driven USB-Serial-JTAG marker.
+    const USB_MARKER: &str = "LW_USBCDC_TICK";
 
     fn root() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -3871,29 +3861,32 @@ mod console_tap_tests {
         blobs
     }
 
-    /// What the Serial pane shows, and what the twin says was said on the
-    /// console this board has no cable on. Boots the two-console fixture through
-    /// the real mask ROM until the sketch's UART0 marker has appeared on one
-    /// stream or the other, so neither assertion below can pass vacuously.
+    /// What the Serial pane shows, and what the twin reports from the untapped
+    /// console. Raw captures determine only when both firmware markers have
+    /// arrived; the assertions use the same diagnostic output the browser sees.
     fn run_two_console_fixture(console: Option<&str>) -> (String, String) {
         let chip = c3_chip();
         let manifest = c3_manifest(console);
         let mut sim = WasmSimulator::new_from_config_riscv_romboot(&chip, &manifest, &c3_blobs())
             .expect("construct C3 rom-boot WasmSimulator");
+        let other_sink = sim.console.unheard_sink();
 
         const BATCH: u32 = 1_000_000;
         const MAX_STEPS: u64 = 400_000_000;
         let mut steps: u64 = 0;
         let shown = loop {
             let shown = String::from_utf8_lossy(&sim.uart_sink.lock().unwrap()).into_owned();
-            let unheard = String::from_utf8_lossy(&sim.unheard_console_output()).into_owned();
-            if shown.contains(UART0_MARKER) || unheard.contains(UART0_MARKER) {
+            let other = String::from_utf8_lossy(&other_sink.lock().unwrap()).into_owned();
+            if [UART0_MARKER, USB_MARKER]
+                .into_iter()
+                .all(|marker| shown.contains(marker) || other.contains(marker))
+            {
                 break shown;
             }
             assert!(
                 steps < MAX_STEPS,
-                "the sketch never reached loop() within {MAX_STEPS} steps.\n\
-                 --- pane ---\n{shown}\n--- unheard ---\n{unheard}"
+                "both sketch consoles did not print within {MAX_STEPS} steps.\n\
+                 --- pane ---\n{shown}\n--- raw untapped ---\n{other}"
             );
             sim.step(BATCH).expect("step");
             steps += BATCH as u64;
@@ -3913,19 +3906,26 @@ mod console_tap_tests {
         let (shown, unheard) = run_two_console_fixture(Some("usb_serial_jtag"));
 
         assert!(
-            shown.contains(ROM_BANNER),
-            "the USB-Serial-JTAG console carried no traffic at all:\n{shown}"
+            shown.contains(USB_MARKER),
+            "the USB-Serial-JTAG application output is missing from the pane:\n{shown}"
         );
-        // Non-vacuous: UART0 demonstrably HAD app output at this point — it is
-        // sitting in the unheard stream — and it stayed out of the USB pane.
+        assert_eq!(
+            shown.matches(ROM_BANNER).count(),
+            1,
+            "ROM banner is not printed exactly once:\n{shown}"
+        );
         assert!(
             unheard.contains(UART0_MARKER),
-            "UART0 never printed, so 'UART0 stays out of the pane' proves nothing:\n{unheard}"
+            "UART0 application output was lost or truncated:\n{unheard}"
         );
         assert!(
             !shown.contains(UART0_MARKER),
             "UART0 app output leaked into a native-USB board's pane — GPIO20/21 \
              have nothing on them on a SuperMini:\n{shown}"
+        );
+        assert!(
+            !unheard.contains(USB_MARKER),
+            "the selected USB console was also reported as unheard:\n{unheard}"
         );
     }
 
@@ -3948,11 +3948,17 @@ mod console_tap_tests {
             1,
             "ROM banner is not printed exactly once — the two taps got merged:\n{shown}"
         );
-        // The USB console said nothing UART0 did not also say, so there is
-        // nothing to report and the pane is the whole story.
         assert!(
-            unheard.is_empty(),
-            "nothing should be unheard on a UART0-console board here:\n{unheard}"
+            !shown.contains(USB_MARKER),
+            "USB application output leaked into the UART0 pane:\n{shown}"
+        );
+        assert!(
+            unheard.contains(USB_MARKER),
+            "USB application output was lost or truncated:\n{unheard}"
+        );
+        assert!(
+            !unheard.contains(UART0_MARKER) && !unheard.contains(ROM_BANNER),
+            "output already delivered to UART0 was reported as unheard:\n{unheard}"
         );
     }
 

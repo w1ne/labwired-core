@@ -163,10 +163,13 @@ impl ConsoleCapture {
     /// anything the shown console also received.
     ///
     /// The subtraction matters on the C3's faithful ROM path: the mask ROM
-    /// prints its banner to both consoles, so both streams start with the same
-    /// bytes. Only what comes AFTER that shared prefix is genuinely unheard —
-    /// i.e. output the developer would not see on this board. Reporting the
-    /// banner as "unheard" would raise the alarm on every single run.
+    /// prints its banner to both consoles. Remove only complete mirrored lines
+    /// when the streams diverge, so different messages that share characters
+    /// (such as LW_UART0_TICK and LW_USBCDC_TICK) remain intact.
+    ///
+    /// If every captured untapped byte is already present on the tapped
+    /// console, there is nothing to report yet. This also covers an identical
+    /// partial line or an untapped console still catching up with its mirror.
     pub fn unheard_output(&self) -> Vec<u8> {
         let heard = self.heard.lock().unwrap();
         let unheard = self.unheard.lock().unwrap();
@@ -175,7 +178,14 @@ impl ConsoleCapture {
             .zip(unheard.iter())
             .take_while(|(a, b)| a == b)
             .count();
-        unheard[shared..].to_vec()
+        if shared == unheard.len() {
+            return Vec::new();
+        }
+        let shared_lines = unheard[..shared]
+            .iter()
+            .rposition(|&byte| byte == b'\n')
+            .map_or(0, |index| index + 1);
+        unheard[shared_lines..].to_vec()
     }
 
     /// One-line explanation of a Serial pane that does not show what the
@@ -222,8 +232,7 @@ const MERGE_SHARED_CAP: usize = 8 * 1024;
 /// mid-word: `ESP-ROM:esp32c3-api1-20210207\r\nESP-ROBuild:...`.
 ///
 /// This keeps the bytes the two channels have in common (the ROM's mirrored
-/// output, the same shared prefix [`ConsoleCapture::unheard_output`]
-/// subtracts) and writes each of them once, whichever channel delivers it
+/// output) and writes each of them once, whichever channel delivers it
 /// first. The first byte on which a channel departs from that prefix ends the
 /// mirror: from then on both channels pass through unchanged.
 pub struct ConsoleMerge {
@@ -396,6 +405,100 @@ mod tests {
             .extend_from_slice(b"lots of output\n");
         assert!(cap.unheard_output().is_empty());
         assert_eq!(cap.mismatch(), None);
+    }
+
+    #[test]
+    fn divergent_console_messages_keep_their_shared_characters() {
+        let cases = [
+            (
+                "uart0",
+                "usb_serial_jtag",
+                "ROM\nLW_UART0_TICK\n",
+                "ROM\nLW_USBCDC_TICK\n",
+                "LW_USBCDC_TICK\n",
+            ),
+            (
+                "usb_serial_jtag",
+                "uart0",
+                "ROM\r\nLW_USBCDC_TICK\r\n",
+                "ROM\r\nLW_UART0_TICK\r\n",
+                "LW_UART0_TICK\r\n",
+            ),
+            (
+                "uart0",
+                "usb_serial_jtag",
+                "LW_UART0_TICK",
+                "LW_USBCDC_TICK",
+                "LW_USBCDC_TICK",
+            ),
+            (
+                "uart0",
+                "usb_serial_jtag",
+                "ROM\nLW_U",
+                "ROM\nLW_USBCDC_TICK\n",
+                "LW_USBCDC_TICK\n",
+            ),
+        ];
+        for (tapped, other, heard, unheard, expected) in cases {
+            let cap = ConsoleCapture::new(
+                HostConsole::from_name(tapped),
+                HostConsole::from_name(other),
+            );
+            cap.heard_sink()
+                .lock()
+                .unwrap()
+                .extend_from_slice(heard.as_bytes());
+            cap.unheard_sink()
+                .lock()
+                .unwrap()
+                .extend_from_slice(unheard.as_bytes());
+            assert_eq!(
+                cap.unheard_output(),
+                expected.as_bytes(),
+                "selected {tapped}, heard {heard:?}, untapped {unheard:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn mirrored_partial_lines_are_not_reported_as_unheard() {
+        for (heard, unheard) in [
+            ("ESP-ROM:esp32c3", "ESP-ROM:esp32c3"),
+            ("ESP-ROM:esp32c3\r\n", "ESP-ROM:esp32"),
+            ("ROM\nLW_UART0_TICK\n", "ROM\nLW_U"),
+        ] {
+            let cap = ConsoleCapture::new(
+                HostConsole::Uart("uart0".into()),
+                HostConsole::UsbSerialJtag,
+            );
+            cap.heard_sink()
+                .lock()
+                .unwrap()
+                .extend_from_slice(heard.as_bytes());
+            cap.unheard_sink()
+                .lock()
+                .unwrap()
+                .extend_from_slice(unheard.as_bytes());
+            assert!(cap.unheard_output().is_empty(), "{heard:?}, {unheard:?}");
+            assert_eq!(cap.mismatch(), None);
+        }
+    }
+
+    #[test]
+    fn a_later_divergent_fragment_restores_the_full_unheard_line() {
+        let cap = ConsoleCapture::new(
+            HostConsole::Uart("uart0".into()),
+            HostConsole::UsbSerialJtag,
+        );
+        cap.heard_sink()
+            .lock()
+            .unwrap()
+            .extend_from_slice(b"ROM\nLW_UART0_TICK\n");
+        let other = cap.unheard_sink();
+        other.lock().unwrap().extend_from_slice(b"ROM\nLW_U");
+        assert!(cap.unheard_output().is_empty());
+        other.lock().unwrap().extend_from_slice(b"SBCDC_TICK\n");
+        assert_eq!(cap.unheard_output(), b"LW_USBCDC_TICK\n");
     }
 
     fn merged(steps: &[(usize, &[u8])]) -> String {
