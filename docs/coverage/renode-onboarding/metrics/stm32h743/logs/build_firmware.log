@@ -77,4 +77,4 @@ warning: constant `TC` is never used
     |       ^^
 
 warning: `firmware-stm32h743-smoke` (bin "firmware-stm32h743-smoke") generated 10 warnings
-    Finished `release` profile [optimized + debuginfo] target(s) in 2.29s
+    Finished `release` profile [optimized + debuginfo] target(s) in 2.41s

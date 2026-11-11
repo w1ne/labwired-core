@@ -471,6 +471,191 @@ unsafe extern "C" fn priority_order_irq_handler() {
     );
 }
 
+/// Check that BASEPRI masks an IRQ at its group-priority threshold while
+/// allowing a higher group-priority IRQ through, then releases the masked IRQ
+/// when the threshold is cleared. The two priorities also differ in
+/// subpriority, which must not affect BASEPRI's group comparison.
+#[cfg(feature = "stm32h743-exception-frame")]
+fn check_cortex_m7_basepri_group_masking() -> bool {
+    let vector_table = unsafe { core::ptr::addr_of_mut!(RAM_VECTOR_TABLE.0).cast::<u32>() };
+    let irq_mask = EXCEPTION_IRQ_BIT | NESTED_IRQ_BIT;
+    let prior_aircr = unsafe { read_volatile(SCB_AIRCR) };
+    let prior_irq5 = unsafe { read_volatile(NVIC_IPR0.add(EXCEPTION_IRQ as usize)) };
+    let prior_irq6 = unsafe { read_volatile(NVIC_IPR0.add(NESTED_IRQ as usize)) };
+    let prior_vector5 = unsafe { read_volatile(vector_table.add(EXCEPTION_VECTOR_INDEX)) };
+    let prior_vector6 = unsafe { read_volatile(vector_table.add(NESTED_VECTOR_INDEX)) };
+    let prior_enabled = unsafe { read_volatile(NVIC_ISER0) };
+    let initial_clean = unsafe { read_volatile(NVIC_IABR0) } & irq_mask == 0
+        && unsafe { read_volatile(NVIC_ISPR0) } & irq_mask == 0;
+    let record = core::ptr::addr_of_mut!(CPACR_PRIORITY_ORDER_RECORD).cast::<u32>();
+    let prior_basepri: u32;
+    let prior_primask: u32;
+
+    unsafe {
+        asm!(
+            "mrs {basepri}, basepri",
+            "mrs {primask}, PRIMASK",
+            basepri = out(reg) prior_basepri,
+            primask = out(reg) prior_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+        asm!("cpsid i", options(nomem, nostack, preserves_flags));
+        write_volatile(NVIC_ICER0, irq_mask);
+        write_volatile(NVIC_ICPR0, irq_mask);
+        write_volatile(
+            vector_table.add(EXCEPTION_VECTOR_INDEX),
+            (priority_order_irq_handler as *const () as usize as u32) | 1,
+        );
+        write_volatile(
+            vector_table.add(NESTED_VECTOR_INDEX),
+            (priority_order_irq_handler as *const () as usize as u32) | 1,
+        );
+        for index in 0..3 {
+            write_volatile(record.add(index), 0);
+        }
+        write_volatile(
+            SCB_AIRCR,
+            0x05FA_0000 | (prior_aircr & 0x0000_F8F8) | (5 << 8),
+        );
+        // PRIGROUP=5 assigns the low six bits to subpriority. IRQ 5 is
+        // exactly at BASEPRI's group threshold; IRQ 6 is in a higher group.
+        write_volatile(NVIC_IPR0.add(EXCEPTION_IRQ as usize), 0x9F);
+        write_volatile(NVIC_IPR0.add(NESTED_IRQ as usize), 0x40);
+        write_volatile(NVIC_ISER0, irq_mask);
+        let threshold = 0x80_u32;
+        asm!(
+            "msr basepri, {threshold}",
+            threshold = in(reg) threshold,
+            options(nomem, nostack, preserves_flags),
+        );
+        write_volatile(NVIC_ISPR0, irq_mask);
+        asm!("dsb", "isb", options(nostack, preserves_flags));
+        asm!(
+            "msr PRIMASK, {primask}",
+            primask = in(reg) prior_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+    }
+
+    for _ in 0..20_000 {
+        if unsafe { read_volatile(record) } != 0 {
+            break;
+        }
+    }
+    let masked_count = unsafe { read_volatile(record) };
+    let first = unsafe { read_volatile(record.add(1)) };
+    let pending_during = unsafe { read_volatile(NVIC_ISPR0) } & irq_mask;
+    let active_during = unsafe { read_volatile(NVIC_IABR0) } & irq_mask;
+    let group_during = unsafe { read_volatile(SCB_AIRCR) } & 0x700;
+    let irq5_priority_during = unsafe { read_volatile(NVIC_IPR0.add(EXCEPTION_IRQ as usize)) };
+    let irq6_priority_during = unsafe { read_volatile(NVIC_IPR0.add(NESTED_IRQ as usize)) };
+    let basepri_during: u32;
+    unsafe {
+        asm!(
+            "mrs {basepri}, basepri",
+            basepri = out(reg) basepri_during,
+            options(nomem, nostack, preserves_flags),
+        );
+        let clear = 0_u32;
+        asm!(
+            "msr basepri, {clear}",
+            clear = in(reg) clear,
+            options(nomem, nostack, preserves_flags),
+        );
+        asm!("dsb", "isb", options(nostack, preserves_flags));
+    }
+    for _ in 0..20_000 {
+        if unsafe { read_volatile(record) } == 2 {
+            break;
+        }
+    }
+
+    let count_after = unsafe { read_volatile(record) };
+    let second = unsafe { read_volatile(record.add(2)) };
+    let basepri_after: u32;
+    unsafe {
+        asm!(
+            "mrs {basepri}, basepri",
+            basepri = out(reg) basepri_after,
+            options(nomem, nostack, preserves_flags),
+        );
+        asm!("cpsid i", options(nomem, nostack, preserves_flags));
+        let restore_basepri = prior_basepri;
+        asm!(
+            "msr basepri, {basepri}",
+            basepri = in(reg) restore_basepri,
+            options(nomem, nostack, preserves_flags),
+        );
+        write_volatile(NVIC_ICER0, irq_mask);
+        write_volatile(NVIC_ICPR0, irq_mask);
+        write_volatile(vector_table.add(EXCEPTION_VECTOR_INDEX), prior_vector5);
+        write_volatile(vector_table.add(NESTED_VECTOR_INDEX), prior_vector6);
+        write_volatile(NVIC_IPR0.add(EXCEPTION_IRQ as usize), prior_irq5);
+        write_volatile(NVIC_IPR0.add(NESTED_IRQ as usize), prior_irq6);
+        write_volatile(
+            SCB_AIRCR,
+            0x05FA_0000 | (prior_aircr & 0x0000_F8F8) | (prior_aircr & 0x700),
+        );
+        write_volatile(NVIC_ISER0, prior_enabled & irq_mask);
+        asm!(
+            "msr PRIMASK, {primask}",
+            primask = in(reg) prior_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+        asm!("dsb", "isb", options(nostack, preserves_flags));
+    }
+
+    let active_after = unsafe { read_volatile(NVIC_IABR0) } & irq_mask;
+    let pending_after = unsafe { read_volatile(NVIC_ISPR0) } & irq_mask;
+    let irq5_priority = unsafe { read_volatile(NVIC_IPR0.add(EXCEPTION_IRQ as usize)) };
+    let irq6_priority = unsafe { read_volatile(NVIC_IPR0.add(NESTED_IRQ as usize)) };
+    let aircr = unsafe { read_volatile(SCB_AIRCR) };
+    let basepri_ok = initial_clean
+        && prior_basepri == 0
+        && prior_primask == 0
+        && masked_count == 1
+        && first == 16 + NESTED_IRQ
+        && pending_during == EXCEPTION_IRQ_BIT
+        && active_during == 0
+        && basepri_during == 0x80
+        && group_during == 5 << 8
+        && irq5_priority_during == 0x9F
+        && irq6_priority_during == 0x40
+        && count_after == 2
+        && second == 16 + EXCEPTION_IRQ
+        && basepri_after == 0
+        && active_after == 0
+        && pending_after == 0
+        && irq5_priority == prior_irq5
+        && irq6_priority == prior_irq6
+        && (aircr & 0x700) == (prior_aircr & 0x700);
+
+    send(b"cortex-m7 basepri group mask=");
+    send(if basepri_ok { b"1" } else { b"0" });
+    send(b" threshold=");
+    send_hex32(basepri_during);
+    send(b" first=");
+    send_hex32(first);
+    send(b" second=");
+    send_hex32(second);
+    send(b" group=");
+    send_hex32(group_during);
+    send(b" irq5=");
+    send_hex32(irq5_priority_during as u32);
+    send(b" irq6=");
+    send_hex32(irq6_priority_during as u32);
+    send(b" pending=");
+    send_hex32(pending_during);
+    send(b" active=");
+    send_hex32(active_during);
+    send(b" after_pending=");
+    send_hex32(pending_after);
+    send(b" basepri_after=");
+    send_hex32(basepri_after);
+    send(b"\r\n");
+    basepri_ok
+}
+
 /// Execute a real VFP round trip from SVC Handler mode. The caller enters
 /// SVC from unprivileged Thread mode while CP10/CP11 are privileged-only.
 #[cfg(feature = "stm32h743-exception-frame")]
@@ -2041,6 +2226,8 @@ fn check_cortex_m7_exception_frame() -> bool {
     send_hex32(order_pending_after);
     send(b"\r\n");
 
+    let basepri_group_ok = check_cortex_m7_basepri_group_masking();
+
     unsafe {
         let record = core::ptr::addr_of_mut!(CPACR_FAULT_RECORD).cast::<u32>();
         for index in 0..5 {
@@ -2122,6 +2309,8 @@ fn check_cortex_m7_exception_frame() -> bool {
         && reserved_denied_ok
         && nocp_escalated_ok
         && priority_escalated_ok
+        && priority_order_ok
+        && basepri_group_ok
         && handler_fp_ok
         && nocp_ok
         && full_access_ok

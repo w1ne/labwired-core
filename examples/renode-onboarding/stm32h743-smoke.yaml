@@ -29,6 +29,7 @@ assertions:
   - uart_contains: "cortex-m7 cpacr priority escalation=1 active_irq=00000015 ipsr=00000003 cfsr=00080000 hfsr=40000000"
   - uart_contains: "cortex-m7 cpacr subpriority escalation=1 irq_prio=0000009F group=00000500 usagefault_prio=00000080 ipsr=00000003 cfsr=00080000 hfsr=40000000"
   - uart_contains: "cortex-m7 priority subpriority order=1 first=00000016 second=00000015 group=00000500 irq5=0000009F irq6=00000080 active=00000000 pending=00000000"
+  - uart_contains: "cortex-m7 basepri group mask=1 threshold=00000080 first=00000016 second=00000015 group=00000500 irq5=0000009F irq6=00000040 pending=00000020 active=00000000 after_pending=00000000 basepri_after=00000000"
   - uart_contains: "cortex-m7 cpacr handler fp=1 ipsr=0000000B thread_unprivileged=00000001 nocp=00000000 result=000000C3"
   - gpio_edges:
       pin: "gpioPortB:0"

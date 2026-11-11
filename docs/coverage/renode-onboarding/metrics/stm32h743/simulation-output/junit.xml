@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="27" failures="0" errors="0" time="1.078820">
+<testsuite name="labwired" tests="28" failures="0" errors="0" time="0.971039">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="c9c17d32465a56f32bae9ca197a570b7026f4a41334cbae2cb6ad3905cd42126"/>
+    <property name="firmware_hash" value="babb6cdf7192c41ea9ec3e963a624f03db5513a58993c94b4dca6cf4c28b12e2"/>
   </properties>
-  <testcase classname="labwired" name="run" time="1.078820">
+  <testcase classname="labwired" name="run" time="0.971039">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: STM32H7 register smoke" time="0.000000">
   </testcase>
@@ -53,10 +53,12 @@
   </testcase>
   <testcase classname="labwired" name="assertion 23: uart_contains: cortex-m7 priority subpriority order=1 first=00000016 second=00000015 group=00000500 irq5=0000009F irq6=…" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 24: uart_contains: cortex-m7 cpacr handler fp=1 ipsr=0000000B thread_unprivileged=00000001 nocp=00000000 result=000000C3" time="0.000000">
+  <testcase classname="labwired" name="assertion 24: uart_contains: cortex-m7 basepri group mask=1 threshold=00000080 first=00000016 second=00000015 group=00000500 irq5=000…" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 25: gpio_edges: gpioPortB:0 &gt;= 1 edges" time="0.000000">
+  <testcase classname="labwired" name="assertion 25: uart_contains: cortex-m7 cpacr handler fp=1 ipsr=0000000B thread_unprivileged=00000001 nocp=00000000 result=000000C3" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 26: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 26: gpio_edges: gpioPortB:0 &gt;= 1 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 27: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>
