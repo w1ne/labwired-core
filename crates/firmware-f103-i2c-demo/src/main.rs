@@ -260,6 +260,7 @@ fn main() -> ! {
     unsafe { smoke_pendsv_clear_and_repend() };
     unsafe { smoke_external_irq_stack_frame() };
     unsafe { smoke_external_irq_psp_stack_frame() };
+    unsafe { smoke_primask_external_irq() };
     unsafe { smoke_basepri_priority_mask() };
     smoke_usart2_txe_irq();
     smoke_usart2_rx_enable_gate();
@@ -1584,6 +1585,156 @@ unsafe fn smoke_basepri_priority_mask() -> bool {
         );
     } else {
         putline(b"BASEPRI M3 CHECK FAILED");
+    }
+    ok
+}
+
+/// Verify PRIMASK keeps a pending external IRQ inactive until it is cleared.
+/// Reuse the BASEPRI low-priority vector handler to inspect the released IRQ.
+unsafe fn smoke_primask_external_irq() -> bool {
+    const NVIC_ISER1: u32 = 0xE000_E104;
+    const NVIC_ICER1: u32 = 0xE000_E184;
+    const NVIC_ISPR1: u32 = 0xE000_E204;
+    const NVIC_ICPR1: u32 = 0xE000_E284;
+    const NVIC_IABR1: u32 = 0xE000_E304;
+    const NVIC_IPR_WORD: u32 = 0xE000_E424;
+    const VECTOR_INDEX: usize = 16 + BASEPRI_IRQ_LOW as usize;
+    const VECTOR_WORDS: usize = VECTOR_INDEX + 1;
+    const RECORD_WORDS: usize = 10;
+
+    let source_vtor = read_volatile(SCB_VTOR as *const u32);
+    let prior_primask: u32;
+    let prior_basepri: u32;
+    core::arch::asm!(
+        "mrs {primask}, PRIMASK",
+        "mrs {basepri}, BASEPRI",
+        "cpsid i",
+        primask = out(reg) prior_primask,
+        basepri = out(reg) prior_basepri,
+        options(nomem, nostack, preserves_flags),
+    );
+
+    let priority_before = read_volatile(NVIC_IPR_WORD as *const u32);
+    let prior_enabled = read_volatile(NVIC_ISER1 as *const u32) & BASEPRI_IRQ_LOW_BIT;
+    write_volatile(NVIC_ICER1 as *mut u32, BASEPRI_IRQ_LOW_BIT);
+    write_volatile(NVIC_ICPR1 as *mut u32, BASEPRI_IRQ_LOW_BIT);
+    write_volatile(
+        NVIC_IPR_WORD as *mut u32,
+        (priority_before & !0x00FF_0000) | 0x0080_0000,
+    );
+
+    let table = IRQ_FRAME_VECTOR_TABLE as *mut u32;
+    for slot in 0..VECTOR_WORDS {
+        write_volatile(table.add(slot), 0);
+    }
+    write_volatile(
+        table.add(VECTOR_INDEX),
+        (BasepriLowHandler as *const () as usize as u32) | 1,
+    );
+    let record = BASEPRI_RECORD as *mut u32;
+    for word in 0..RECORD_WORDS {
+        write_volatile(record.add(word), 0);
+    }
+    // BasepriLowHandler stores the IRQ 38 result in record words 5 through 9.
+    let low_irq_record = record.add(5);
+    write_volatile(SCB_VTOR as *mut u32, IRQ_FRAME_VECTOR_TABLE);
+    core::arch::asm!("dsb", "isb", options(nostack, preserves_flags));
+
+    let vector_installed = read_volatile(SCB_VTOR as *const u32) == IRQ_FRAME_VECTOR_TABLE;
+    let priority_installed =
+        read_volatile(NVIC_IPR_WORD as *const u32) & 0x00FF_0000 == 0x0080_0000;
+    write_volatile(NVIC_ISER1 as *mut u32, BASEPRI_IRQ_LOW_BIT);
+    core::arch::asm!("dsb", "isb", options(nostack, preserves_flags));
+    write_volatile(NVIC_ISPR1 as *mut u32, BASEPRI_IRQ_LOW_BIT);
+    let pending_while_masked = read_volatile(NVIC_ISPR1 as *const u32) & BASEPRI_IRQ_LOW_BIT;
+    let active_while_masked = read_volatile(NVIC_IABR1 as *const u32) & BASEPRI_IRQ_LOW_BIT;
+    let entries_while_masked = read_volatile(low_irq_record);
+    let primask_value: u32;
+    core::arch::asm!(
+        "mrs {primask}, PRIMASK",
+        primask = out(reg) primask_value,
+        options(nomem, nostack, preserves_flags),
+    );
+
+    core::arch::asm!(
+        "msr PRIMASK, {primask}",
+        primask = in(reg) prior_primask,
+        options(nostack, preserves_flags),
+    );
+    for _ in 0..4_096 {
+        if read_volatile(low_irq_record) != 0 {
+            break;
+        }
+        core::arch::asm!("nop", options(nomem, nostack, preserves_flags));
+    }
+    let entries_after_release = read_volatile(low_irq_record);
+    let handler_ipsr = read_volatile(low_irq_record.add(1));
+    let handler_active = read_volatile(low_irq_record.add(2));
+    let handler_pending = read_volatile(low_irq_record.add(3));
+    let handler_basepri = read_volatile(low_irq_record.add(4));
+    let pending_after_release = read_volatile(NVIC_ISPR1 as *const u32) & BASEPRI_IRQ_LOW_BIT;
+
+    core::arch::asm!("cpsid i", options(nomem, nostack, preserves_flags));
+    write_volatile(NVIC_ICER1 as *mut u32, BASEPRI_IRQ_LOW_BIT);
+    write_volatile(NVIC_ICPR1 as *mut u32, BASEPRI_IRQ_LOW_BIT);
+    write_volatile(NVIC_IPR_WORD as *mut u32, priority_before);
+    write_volatile(SCB_VTOR as *mut u32, source_vtor);
+    if prior_enabled != 0 {
+        write_volatile(NVIC_ISER1 as *mut u32, prior_enabled);
+    }
+    core::arch::asm!(
+        "msr BASEPRI, {basepri}",
+        "msr PRIMASK, {primask}",
+        "dsb",
+        "isb",
+        basepri = in(reg) prior_basepri,
+        primask = in(reg) prior_primask,
+        options(nostack, preserves_flags),
+    );
+
+    let masked = primask_value == 1
+        && pending_while_masked == BASEPRI_IRQ_LOW_BIT
+        && active_while_masked == 0
+        && entries_while_masked == 0;
+    let released = entries_after_release == 1
+        && handler_ipsr == 16 + BASEPRI_IRQ_LOW
+        && handler_active == BASEPRI_IRQ_LOW_BIT
+        && handler_pending == 0
+        && handler_basepri == prior_basepri
+        && pending_after_release == 0
+        && read_volatile(NVIC_IABR1 as *const u32) & BASEPRI_IRQ_LOW_BIT == 0;
+    let restored = read_volatile(SCB_VTOR as *const u32) == source_vtor
+        && read_volatile(NVIC_IPR_WORD as *const u32) == priority_before
+        && read_volatile(NVIC_ISER1 as *const u32) & BASEPRI_IRQ_LOW_BIT == prior_enabled
+        && read_volatile(NVIC_ISPR1 as *const u32) & BASEPRI_IRQ_LOW_BIT == 0;
+    let ok = prior_primask == 0
+        && prior_basepri == 0
+        && vector_installed
+        && priority_installed
+        && masked
+        && released
+        && restored;
+
+    if ok {
+        putline(b"PRIMASK M3 MASKED=1 PENDING=1 RELEASED=1 VECTOR=54 ok");
+    } else {
+        putline(b"PRIMASK M3 CHECK FAILED");
+        print_reg(b"prior PRIMASK=", prior_primask);
+        print_reg(b"prior BASEPRI=", prior_basepri);
+        print_reg(b"PRIMASK during=", primask_value);
+        print_reg(b"pending masked=", pending_while_masked);
+        print_reg(b"active masked=", active_while_masked);
+        print_reg(b"entries masked=", entries_while_masked);
+        print_reg(b"entries released=", entries_after_release);
+        print_reg(b"handler IPSR=", handler_ipsr);
+        print_reg(b"handler active=", handler_active);
+        print_reg(b"handler pending=", handler_pending);
+        print_reg(b"handler BASEPRI=", handler_basepri);
+        print_reg(b"pending released=", pending_after_release);
+        print_reg(
+            b"pending after cleanup=",
+            read_volatile(NVIC_ISPR1 as *const u32),
+        );
     }
     ok
 }
