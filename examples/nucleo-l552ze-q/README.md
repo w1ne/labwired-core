@@ -42,6 +42,13 @@ The integration test compares solved collector voltages with an independent
 load-line calculation and converts them through ADC1 alongside the unrelated
 NTC and diode. This is model behavior coverage, not silicon validation.
 
+[`analog-bjt-early-effect-adc-system.yaml`](analog-bjt-early-effect-adc-system.yaml)
+routes a matched finite-VAF NPN and a no-forward-Early control through PA6/PA7
+to ADC1_IN11/IN12. Its integration test checks both solved collector voltages
+against an independent Gummel–Poon load line, confirms the finite-VAF shift as
+base drive changes, and converts both branches alongside the same NTC and
+Shockley diode. This is model behavior coverage, not silicon validation.
+
 ## Build and run
 
 ```bash
