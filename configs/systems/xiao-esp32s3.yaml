@@ -1,0 +1,15 @@
+# Seeed Studio XIAO ESP32-S3 (ESP32-S3R8) board profile.
+# This tested slice exposes the active-low user LED and native USB Serial/JTAG.
+name: "xiao-esp32s3"
+chip: "../chips/esp32s3-xiao.yaml"
+memory_overrides:
+  psram_size: "0"
+debug_uart: "usb_serial_jtag"
+external_devices: []
+board_io:
+  - id: "user_led"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 21
+    signal: "output"
+    active_high: false

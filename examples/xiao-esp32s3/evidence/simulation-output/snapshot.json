@@ -1,0 +1,61 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "xtensa_lx7",
+    "registers": [
+      2181190832,
+      1070197696,
+      0,
+      0,
+      3007315967,
+      1,
+      0,
+      0,
+      2181087474,
+      1070197632,
+      0,
+      0,
+      1070152992,
+      0,
+      262176,
+      1070197663
+    ],
+    "pc": 1077378338,
+    "ps": 262176,
+    "window_base": 14,
+    "window_start": 22008,
+    "vecbase": 1077362688
+  },
+  "steps_executed": 50000000,
+  "cycles": 50000000,
+  "instructions": 50000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 50000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 50000000
+    }
+  },
+  "limits": {
+    "max_steps": 50000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "4315a4c9ef8f2a7d130cf69807ab1fc6884181e051a1ef59f3076a239220b7cc",
+  "config": {
+    "firmware": "examples/xiao-esp32s3/./firmware/.pio/build/xiao_s3/firmware.elf",
+    "system": "examples/xiao-esp32s3/../../configs/systems/xiao-esp32s3.yaml",
+    "script": "examples/xiao-esp32s3/io-smoke.yaml"
+  }
+}

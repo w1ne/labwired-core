@@ -1,0 +1,14 @@
+# Start the XIAO ESP32-S3 application ELF, capture USB serial, and exercise
+# USER_LED.
+schema_version: "1.2"
+inputs:
+  firmware: "./firmware/.pio/build/xiao_s3/firmware.elf"
+  system: "../../configs/systems/xiao-esp32s3.yaml"
+limits:
+  max_steps: 50000000
+assertions:
+  - uart_contains: "XIAO_ESP32S3_LED_OK GPIO21_ACTIVE_LOW"
+  - gpio_edges:
+      pin: "gpio:21"
+      min_edges: 5
+  - expected_stop_reason: max_steps
