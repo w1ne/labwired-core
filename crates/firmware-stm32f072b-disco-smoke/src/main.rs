@@ -26,9 +26,11 @@
 //! final software-pended IRQ 5 takes a real Cortex-M0 exception through a RAM
 //! vector table and checks IPSR, IABR, the basic stacked frame, and exception
 //! return. It also pends NMI from that active IRQ while PRIMASK is set and
-//! checks NMI entry and return to the IRQ. Every check prints one line and sets
-//! one bit of the summary word at `SUMMARY`. AIRCR.PRIGROUP is also checked as
-//! reserved on this ARMv6-M core.
+//! checks NMI entry and return to the IRQ. The NMI handler queues a lower
+//! priority IRQ, which must remain pending through both NMI entries and the
+//! active IRQ before tail-chaining after that IRQ returns. Every check prints
+//! one line and sets one bit of the summary word at `SUMMARY`. AIRCR.PRIGROUP
+//! is also checked as reserved on this ARMv6-M core.
 
 #![no_std]
 #![no_main]
@@ -48,6 +50,7 @@ const RAM_VECTOR_BASE: u32 = 0x2000_1000;
 const VECTOR_TABLE_WORDS: usize = 48;
 const NMI_VECTOR_INDEX: usize = 2;
 const EXTI0_1_VECTOR_INDEX: usize = 16 + EXTI0_1_IRQ as usize;
+const IRQ6_VECTOR_INDEX: usize = 16 + 6;
 const IRQ_HIT: u32 = SUMMARY + 4;
 const IRQ_IPSR: u32 = SUMMARY + 8;
 const IRQ_ACTIVE: u32 = SUMMARY + 12;
@@ -56,6 +59,7 @@ const IRQ_FRAME: u32 = SUMMARY + 20;
 const IRQ_EXCEPTION_MSP: u32 = SUMMARY + 60;
 const NMI_RECORD: u32 = SUMMARY + 64;
 const NMI_COUNT: u32 = NMI_RECORD + 36;
+const NMI_DEFERRED_IRQ: u32 = SUMMARY + 104;
 
 // RCC (RM0091 §6.4).
 const RCC: u32 = 0x4002_1000;
@@ -187,6 +191,7 @@ const NVIC_ISER0: u32 = 0xE000_E100;
 const NVIC_ICER0: u32 = 0xE000_E180;
 const NVIC_ICPR0: u32 = 0xE000_E280;
 const NVIC_IABR0: u32 = 0xE000_E300;
+const NVIC_IPR1: u32 = 0xE000_E404;
 
 fn rd(addr: u32) -> u32 {
     unsafe { read_volatile(addr as *const u32) }
@@ -275,13 +280,26 @@ unsafe extern "C" fn smoke_irq_pend_nmi_handler() {
         "mrs r3, PRIMASK",
         "str r3, [r0, #12]",
         "cpsie i",
+        "mrs r3, ipsr",
+        "ldr r0, =0x20003070",
+        "str r3, [r0, #0]",
+        "ldr r1, =0xe000e300",
+        "ldr r2, [r1]",
+        "movs r3, #0x40",
+        "ands r2, r3",
+        "str r2, [r0, #4]",
+        "ldr r1, =0xe000e200",
+        "ldr r2, [r1]",
+        "movs r3, #0x40",
+        "ands r2, r3",
+        "str r2, [r0, #8]",
         "bx lr",
     );
 }
 
-/// Capture NMI state, then pend it again once while NMI is active. It must
-/// wait for exception return instead of nesting, then run again before the
-/// interrupted normal IRQ resumes.
+/// Capture NMI state, pend lower-priority IRQ 6, then pend NMI again once while
+/// NMI is active. IRQ 6 must remain pending through both NMI entries and the
+/// active IRQ 5, then tail-chain after IRQ 5 returns.
 #[unsafe(naked)]
 unsafe extern "C" fn smoke_nmi_handler() {
     core::arch::naked_asm!(
@@ -304,6 +322,22 @@ unsafe extern "C" fn smoke_nmi_handler() {
         "str r1, [r3]",
         "cmp r1, #1",
         "bne 1f",
+        "ldr r3, =0xe000e200",
+        "movs r2, #0x40",
+        "str r2, [r3]",
+        "dsb",
+        "isb",
+        "ldr r2, [r3]",
+        "movs r3, #0x40",
+        "ands r2, r3",
+        "ldr r3, =0x20003068",
+        "str r2, [r3]",
+        "ldr r3, =0xe000e300",
+        "ldr r2, [r3]",
+        "movs r3, #0x40",
+        "ands r2, r3",
+        "ldr r3, =0x2000306c",
+        "str r2, [r3]",
         "ldr r3, =0xe000ed04",
         "ldr r2, =0x80000000",
         "str r2, [r3]",
@@ -317,13 +351,40 @@ unsafe extern "C" fn smoke_nmi_handler() {
     );
 }
 
+/// Record IRQ 6 after IRQ 5 returns. Its lower priority prevents preemption of
+/// IRQ 5 even after PRIMASK is cleared, but it must run before thread resumes.
+#[unsafe(naked)]
+unsafe extern "C" fn smoke_irq6_deferred_handler() {
+    core::arch::naked_asm!(
+        "mrs r3, ipsr",
+        "ldr r0, =0x2000307c",
+        "str r3, [r0, #4]",
+        "ldr r3, =0xe000e300",
+        "ldr r2, [r3]",
+        "str r2, [r0, #8]",
+        "ldr r3, =0xe000e200",
+        "ldr r2, [r3]",
+        "str r2, [r0, #12]",
+        "ldr r3, =0x20003064",
+        "ldr r2, [r3]",
+        "str r2, [r0, #16]",
+        "movs r2, #1",
+        "str r2, [r0, #0]",
+        "bx lr",
+    );
+}
+
 /// An NMI pended by a running IRQ must enter despite PRIMASK and return to
-/// that IRQ before the thread-mode caller resumes.
-fn check_nmi_preempts_primasked_irq() -> bool {
+/// that IRQ before the deferred, lower-priority IRQ 6 can run.
+fn check_nmi_repend_and_deferred_irq() -> bool {
     let source_vtor = rd(SCB_VTOR);
     let nmi_initially_clear = rd(SCB_ICSR) & ICSR_NMIPENDSET == 0;
+    let source_priorities = rd(NVIC_IPR1);
+    let test_priority_bits = 0x0080_4000;
     let table = RAM_VECTOR_BASE as *mut u32;
     let irq_bit = 1 << EXTI0_1_IRQ;
+    let deferred_irq_bit = 1 << 6;
+    let irq_mask = irq_bit | deferred_irq_bit;
     let prior_primask: u32;
     unsafe {
         asm!(
@@ -332,11 +393,19 @@ fn check_nmi_preempts_primasked_irq() -> bool {
             options(nomem, nostack, preserves_flags),
         );
         asm!("cpsid i", options(nomem, nostack, preserves_flags));
-        wr(NVIC_ICER0, irq_bit);
+        wr(NVIC_ICER0, irq_mask);
         unpend(EXTI0_1_IRQ);
+        unpend(6);
         for index in 0..10 {
             write_volatile((NMI_RECORD as *mut u32).add(index), 0);
         }
+        for index in 0..10 {
+            write_volatile((NMI_DEFERRED_IRQ as *mut u32).add(index), 0);
+        }
+        wr(
+            NVIC_IPR1,
+            (source_priorities & !0x00FF_FF00) | test_priority_bits,
+        );
         for index in 0..VECTOR_TABLE_WORDS {
             write_volatile(table.add(index), 0);
         }
@@ -348,8 +417,12 @@ fn check_nmi_preempts_primasked_irq() -> bool {
             table.add(EXTI0_1_VECTOR_INDEX),
             (smoke_irq_pend_nmi_handler as *const () as usize as u32) | 1,
         );
+        write_volatile(
+            table.add(IRQ6_VECTOR_INDEX),
+            (smoke_irq6_deferred_handler as *const () as usize as u32) | 1,
+        );
         wr(SCB_VTOR, RAM_VECTOR_BASE);
-        wr(NVIC_ISER0, irq_bit);
+        wr(NVIC_ISER0, irq_mask);
         wr(NVIC_ISPR0, irq_bit);
         asm!(
             "msr PRIMASK, {primask}",
@@ -376,13 +449,27 @@ fn check_nmi_preempts_primasked_irq() -> bool {
     let nmi_count = rd(NMI_COUNT);
     let ipsr_after_repend = unsafe { read_volatile((NMI_RECORD as *const u32).add(7)) };
     let count_after_repend = unsafe { read_volatile((NMI_RECORD as *const u32).add(8)) };
-    let active_after = rd(NVIC_IABR0) & irq_bit;
-    let pending_after = rd(NVIC_ISPR0) & irq_bit;
+    let deferred_pending_in_nmi = unsafe { read_volatile(NMI_DEFERRED_IRQ as *const u32) };
+    let deferred_active_in_nmi = unsafe { read_volatile((NMI_DEFERRED_IRQ as *const u32).add(1)) };
+    let ipsr_after_irq_unmask = unsafe { read_volatile((NMI_DEFERRED_IRQ as *const u32).add(2)) };
+    let deferred_active_in_irq = unsafe { read_volatile((NMI_DEFERRED_IRQ as *const u32).add(3)) };
+    let deferred_pending_in_irq = unsafe { read_volatile((NMI_DEFERRED_IRQ as *const u32).add(4)) };
+    let deferred_irq_hit = unsafe { read_volatile((NMI_DEFERRED_IRQ as *const u32).add(5)) };
+    let deferred_irq_ipsr = unsafe { read_volatile((NMI_DEFERRED_IRQ as *const u32).add(6)) };
+    let deferred_irq_active = unsafe { read_volatile((NMI_DEFERRED_IRQ as *const u32).add(7)) };
+    let deferred_irq_pending = unsafe { read_volatile((NMI_DEFERRED_IRQ as *const u32).add(8)) };
+    let nmi_count_in_deferred_irq =
+        unsafe { read_volatile((NMI_DEFERRED_IRQ as *const u32).add(9)) };
+    let priority_readback = rd(NVIC_IPR1) & 0x00FF_FF00;
+    let active_after = rd(NVIC_IABR0) & irq_mask;
+    let pending_after = rd(NVIC_ISPR0) & irq_mask;
 
     unsafe {
         asm!("cpsid i", options(nomem, nostack, preserves_flags));
-        wr(NVIC_ICER0, irq_bit);
+        wr(NVIC_ICER0, irq_mask);
         unpend(EXTI0_1_IRQ);
+        unpend(6);
+        wr(NVIC_IPR1, source_priorities);
         if nmi_ipsr == 2 {
             wr(SCB_VTOR, source_vtor);
         }
@@ -391,6 +478,17 @@ fn check_nmi_preempts_primasked_irq() -> bool {
     }
 
     let cleanup_ok = active_after == 0 && pending_after == 0;
+    let deferred_ok = priority_readback == test_priority_bits
+        && deferred_pending_in_nmi == deferred_irq_bit
+        && deferred_active_in_nmi == 0
+        && ipsr_after_irq_unmask == 16 + EXTI0_1_IRQ
+        && deferred_active_in_irq == 0
+        && deferred_pending_in_irq == deferred_irq_bit
+        && deferred_irq_hit == 1
+        && deferred_irq_ipsr == 16 + 6
+        && deferred_irq_active == deferred_irq_bit
+        && deferred_irq_pending == 0
+        && nmi_count_in_deferred_irq == 2;
     let ok = nmi_initially_clear
         && prior_primask == 0
         && irq_ipsr == 16 + EXTI0_1_IRQ
@@ -403,7 +501,9 @@ fn check_nmi_preempts_primasked_irq() -> bool {
         && icsr_in_nmi & 0x1FF == 2
         && irq_active_in_nmi == irq_bit
         && primask_after_nmi == 1
+        && deferred_ok
         && cleanup_ok
+        && rd(NVIC_IPR1) == source_priorities
         && (nmi_ipsr != 2 || rd(SCB_VTOR) == source_vtor);
 
     puts("nmi repend ");
@@ -434,6 +534,28 @@ fn check_nmi_preempts_primasked_irq() -> bool {
         cleanup_ok && (nmi_ipsr != 2 || rd(SCB_VTOR) == source_vtor),
     );
     verdict(ok);
+    puts("nmi deferred irq pending_in_nmi=");
+    hex(deferred_pending_in_nmi);
+    puts(" active_in_nmi=");
+    hex(deferred_active_in_nmi);
+    puts(" after_unmask_ipsr=");
+    hex(ipsr_after_irq_unmask);
+    puts(" active_irq5=");
+    hex(deferred_active_in_irq);
+    puts(" pending_irq5=");
+    hex(deferred_pending_in_irq);
+    puts(" irq_ipsr=");
+    hex(deferred_irq_ipsr);
+    puts(" irq_active=");
+    hex(deferred_irq_active);
+    puts(" irq_pending=");
+    hex(deferred_irq_pending);
+    puts(" nmi_count=");
+    hex(nmi_count_in_deferred_irq);
+    puts(" priority=");
+    hex(priority_readback);
+    puts(" ");
+    verdict(deferred_ok && rd(NVIC_IPR1) == source_priorities);
     ok
 }
 
@@ -1033,7 +1155,7 @@ fn main() -> ! {
     mark(14, check_crc());
     mark(15, check_adc());
     mark(18, check_exception_entry());
-    mark(19, check_nmi_preempts_primasked_irq());
+    mark(19, check_nmi_repend_and_deferred_irq());
     let summary = summary | 0x0DC0_0000;
     wr(SUMMARY, summary);
     puts("summary ");
