@@ -1287,16 +1287,19 @@ fn arduino_mega_2560_ntc_netlist_reaches_adc8_through_mux5_end_to_end() {
     assert_eq!(samples[1].2, 512, "25 °C puts this divider at half scale");
 }
 
-/// Independent Gummel–Poon load line with forward/reverse high-injection
-/// rolloff and Early effect for an ATmega2560 board route.
-fn mega2560_bjt_collector_voltage(base_drive_v: f64, high_injection: bool) -> f64 {
+/// Independent Gummel–Poon load line with optional forward Early effect and
+/// forward/reverse high-injection rolloff for an ATmega2560 board route.
+fn mega2560_bjt_collector_voltage(
+    base_drive_v: f64,
+    high_injection: bool,
+    forward_early_v: Option<f64>,
+) -> f64 {
     const SUPPLY_V: f64 = 5.0;
     const COLLECTOR_OHMS: f64 = 1_000.0;
     const BASE_OHMS: f64 = 10_000.0;
     const IS_A: f64 = 1e-16;
     const BF: f64 = 80.0;
     const BR: f64 = 4.0;
-    const VAF: f64 = 50.0;
     const VAR: f64 = 75.0;
     const IKF_A: f64 = 50e-6;
     const IKR_A: f64 = 500e-6;
@@ -1307,7 +1310,7 @@ fn mega2560_bjt_collector_voltage(base_drive_v: f64, high_injection: bool) -> f6
         let vbc = vbe - collector_v;
         let forward = (vbe / VT).exp();
         let reverse = (vbc / VT).exp();
-        let base_width = 1.0 - vbc / VAF - vbe / VAR;
+        let base_width = 1.0 - forward_early_v.map_or(0.0, |vaf| vbc / vaf) - vbe / VAR;
         let q2 = if high_injection {
             IS_A * (forward - 1.0) / IKF_A + IS_A * (reverse - 1.0) / IKR_A
         } else {
@@ -1348,6 +1351,35 @@ fn mega2560_bjt_collector_voltage(base_drive_v: f64, high_injection: bool) -> f6
         }
     }
     collector_for_vbe(0.5 * (low + high))
+}
+
+/// Independent Shockley diode load line for the 5 V Mega netlist, including
+/// the DREF model's series resistance.
+fn mega2560_diode_voltage() -> f64 {
+    const SUPPLY_V: f64 = 5.0;
+    const LIMIT_OHMS: f64 = 1_000.0;
+    const IS_A: f64 = 2.52e-9;
+    const N: f64 = 1.752;
+    const RS_OHMS: f64 = 0.568;
+    const VT: f64 = 1.380_649e-23 * 298.15 / 1.602_176_634e-19;
+
+    let current_at_junction_voltage =
+        |junction_v: f64| IS_A * ((junction_v / (N * VT)).exp() - 1.0);
+    let residual = |junction_v: f64| {
+        let current = current_at_junction_voltage(junction_v);
+        (SUPPLY_V - junction_v - current * RS_OHMS) / LIMIT_OHMS - current
+    };
+    let (mut low, mut high) = (0.0, 1.2);
+    for _ in 0..100 {
+        let junction_v = 0.5 * (low + high);
+        if residual(junction_v) > 0.0 {
+            low = junction_v;
+        } else {
+            high = junction_v;
+        }
+    }
+    let junction_v = 0.5 * (low + high);
+    junction_v + current_at_junction_voltage(junction_v) * RS_OHMS
 }
 
 /// Convert one ATmega2560 high ADC input using ADCSRB.MUX5 and the firmware
@@ -1443,8 +1475,8 @@ fn arduino_mega_2560_bjt_high_injection_and_ntc_reach_firmware_adc_through_mux5(
             "25 °C NTC divider remains at half-scale"
         );
 
-        let expected_rolloff = mega2560_bjt_collector_voltage(base_drive_v, true);
-        let expected_control = mega2560_bjt_collector_voltage(base_drive_v, false);
+        let expected_rolloff = mega2560_bjt_collector_voltage(base_drive_v, true, Some(50.0));
+        let expected_control = mega2560_bjt_collector_voltage(base_drive_v, false, Some(50.0));
         assert!(
             (rolloff - expected_rolloff).abs() < 5e-5,
             "IKF/IKR/NKF load line at {base_drive_v} V should be {expected_rolloff} V, got {rolloff} V"
@@ -1472,6 +1504,105 @@ fn arduino_mega_2560_bjt_high_injection_and_ntc_reach_firmware_adc_through_mux5(
     assert!(
         rolloff > control + 0.1,
         "IKF/NKF high-injection rolloff must reduce collector current: {rolloff} V vs {control} V"
+    );
+}
+
+/// Matched generic Gummel–Poon branches route the forward Early effect through
+/// the Mega's MUX5-selected ADC9/10, beside an unrelated Beta NTC and Shockley
+/// diode on ADC8/11. The four routes and their independent load lines are
+/// asserted at the firmware-visible ADC result registers.
+#[test]
+fn arduino_mega_2560_bjt_early_effect_and_unrelated_devices_reach_firmware_adc_through_mux5() {
+    use labwired_core::cpu::avr::Avr;
+    use labwired_core::Machine;
+
+    let (manifest, bus) =
+        bus_and_manifest("examples/arduino-mega-2560-io/analog-bjt-early-effect-system.yaml");
+    let mut session = build_session(&bus, &manifest.cosim_models);
+    let mut machine = Machine::new(Avr::for_chip_name("atmega2560"), bus);
+    let expected_ntc = 2.5;
+    let expected_diode = mega2560_diode_voltage();
+    let mut early_samples = Vec::new();
+    let mut control_samples = Vec::new();
+    let mut cycles = 0;
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold the independent Beta NTC at 25 °C");
+    session
+        .set_signal_number("ui.bjt_early.base_v", 0.0)
+        .expect("initialize the matched BJT base drives");
+
+    for base_drive_v in [0.0_f64, 0.7, 0.8, 0.9, 1.0] {
+        session
+            .set_signal_number("ui.bjt_early.base_v", base_drive_v)
+            .expect("set the common BJT base drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut machine.bus)
+            .expect("solve NTC, diode, and matched Gummel–Poon branches");
+        assert_eq!(steps.len(), 4, "all four generic analog models solve");
+        assert!(
+            errors.is_empty(),
+            "unexpected Mega MUX5 route errors: {errors:?}"
+        );
+
+        let read_voltage = |path| match session.signals().get(path) {
+            Some(CosimSignalValue::F64(volts)) => *volts,
+            other => panic!("expected routed voltage at {path}, got {other:?}"),
+        };
+        let ntc = read_voltage("adc.adc.8_volts");
+        let early = read_voltage("adc.adc.9_volts");
+        let control = read_voltage("adc.adc.10_volts");
+        let diode = read_voltage("adc.adc.11_volts");
+        let expected_early = mega2560_bjt_collector_voltage(base_drive_v, false, Some(50.0));
+        let expected_control = mega2560_bjt_collector_voltage(base_drive_v, false, None);
+
+        assert!(
+            (ntc - expected_ntc).abs() < 1e-9,
+            "the unrelated NTC stays at half scale"
+        );
+        assert!(
+            (diode - expected_diode).abs() < 2e-5,
+            "the unrelated Shockley diode should be {expected_diode} V, got {diode} V"
+        );
+        assert!(
+            (early - expected_early).abs() < 5e-5,
+            "VAF=50 load line at {base_drive_v} V should be {expected_early} V, got {early} V"
+        );
+        assert!(
+            (control - expected_control).abs() < 5e-5,
+            "no-forward-Early load line at {base_drive_v} V should be {expected_control} V, got {control} V"
+        );
+        if base_drive_v >= 0.7 {
+            assert!(
+                early < control - 0.001,
+                "finite VAF increases collector current: {early} V vs {control} V"
+            );
+        }
+
+        for (channel, voltage) in [(8, ntc), (9, early), (10, control), (11, diode)] {
+            let expected_count =
+                ((voltage * 1000.0 + 0.5).floor() as u32 * 1024 / 5000).min(1023) as u16;
+            assert_eq!(
+                mega2560_adc_convert(&mut machine, channel),
+                expected_count,
+                "firmware ADC{channel} must convert its independently solved voltage"
+            );
+        }
+        early_samples.push(early);
+        control_samples.push(control);
+    }
+
+    assert!(
+        early_samples[1..].windows(2).all(|pair| pair[1] < pair[0]),
+        "increasing base drive lowers the finite-VAF collector voltage: {early_samples:?}"
+    );
+    assert!(
+        control_samples[1..]
+            .windows(2)
+            .all(|pair| pair[1] < pair[0]),
+        "increasing base drive lowers the no-forward-Early collector voltage: {control_samples:?}"
     );
 }
 
