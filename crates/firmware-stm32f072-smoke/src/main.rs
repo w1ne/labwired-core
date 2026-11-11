@@ -1040,6 +1040,62 @@ fn check_systick_pause_resume() -> bool {
     ok
 }
 
+/// The STM32F072 reference source is HCLK/8. ENABLE must freeze that
+/// countdown and re-enabling it must continue the same in-progress period.
+fn check_systick_external_pause_resume() -> bool {
+    const RELOAD: u32 = 4095;
+
+    wr(SYSTICK_CSR, 0);
+    wr(SYSTICK_RVR, RELOAD);
+    wr(SYSTICK_CVR, 0);
+    wr(SYSTICK_CSR, 0x1); // ENABLE | reference clock; TICKINT stays clear.
+    let reference_selected = rd(SYSTICK_CSR) & 0x5 == 0x1;
+
+    let mut pause_window = false;
+    for _ in 0..20_000 {
+        let value = rd(SYSTICK_CVR);
+        if (1024..=3072).contains(&value) {
+            pause_window = true;
+            break;
+        }
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+
+    wr(SYSTICK_CSR, 0); // Disable without selecting the processor clock.
+    let paused = rd(SYSTICK_CVR);
+    for _ in 0..128 {
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+    let frozen = rd(SYSTICK_CVR);
+
+    wr(SYSTICK_CSR, 0x1);
+    for _ in 0..128 {
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+    let resumed = rd(SYSTICK_CVR);
+    wr(SYSTICK_CSR, 0);
+    wr(SYSTICK_CVR, 0);
+
+    let frozen_ok = paused == frozen;
+    let resumed_ok = pause_window && paused > 256 && resumed > 0 && resumed < paused;
+    let ok = reference_selected && frozen_ok && resumed_ok;
+
+    puts("systick external pause-resume ");
+    flag("reference", reference_selected);
+    flag("window", pause_window);
+    flag("frozen", frozen_ok);
+    flag("resumed", resumed_ok);
+    puts("paused=");
+    hex(paused);
+    puts(" frozen_at=");
+    hex(frozen);
+    puts(" resumed_at=");
+    hex(resumed);
+    puts(" ");
+    verdict(ok);
+    ok
+}
+
 #[entry]
 fn main() -> ! {
     let (rcc_reset, rcc_gate) = rcc_bringup();
@@ -1078,6 +1134,7 @@ fn main() -> ! {
     mark(19, check_crc());
     mark(20, check_adc());
     mark(21, check_systick_pause_resume());
+    mark(22, check_systick_external_pause_resume());
     let summary = summary | 0x0700_0000;
     wr(SUMMARY, summary);
     puts("summary ");

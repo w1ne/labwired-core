@@ -15,8 +15,8 @@
 # fixture switches (PF1, PC13) are pressed by the stimuli below; the first
 # stimuli set the SPI2 and second SPI1 thermocouples.
 # It does not claim ADC triggers, CAN, RTC, I2C2, DAC, USB or the watchdogs.
-# The core SysTick smoke also checks that ENABLE freezes CVR while disabled
-# and that setting ENABLE again resumes the in-progress countdown.
+# The core SysTick smoke checks ENABLE pause/resume on both the processor
+# clock and the STM32F072 HCLK/8 reference clock.
 schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv6m-none-eabi/release/firmware-stm32f072-smoke"
@@ -83,11 +83,12 @@ assertions:
       - "crc word=0xDF8A8A2B seed=1 std=1 init=1 ok"
       - "adc in1=0x000007FF ts=0x00000709 cal=1 ready=1 seq=1 eos=1 pend=1 released=1 dma=1 ovr=1 awd=1 off=1 ok"
       - "systick pause-resume window=1 frozen=1 resumed=1"
-      - "summary 0x073FFFFF"
+      - "systick external pause-resume reference=1 window=1 frozen=1 resumed=1"
+      - "summary 0x077FFFFF"
       - "DONE"
   - memory_value:
       address: 0x20003000
-      expected_value: 0x073FFFFF
+      expected_value: 0x077FFFFF
       size: 4
   - gpio_edges:
       pin: "gpiof:0"
