@@ -1,0 +1,13 @@
+# Raspberry Pi Pico 2 board system (RP2350A, 4 MiB external QSPI flash).
+# The onboard user LED is GP25, driven directly by RP2350 SIO. UART0's default
+# route is GP0/GP1; this smoke captures UART0 writes, not USB CDC traffic.
+name: "pico2"
+chip: "../chips/rp2350.yaml"
+external_devices: []
+board_io:
+  - id: "led_gp25"
+    kind: "led"
+    peripheral: "sio"
+    pin: 25
+    signal: "output"
+    active_high: true

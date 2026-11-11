@@ -303,11 +303,9 @@ jobs:
           - id: nrf5340dk-zephyr
             script: examples/nrf5340dk/zephyr-smoke.yaml
             system: examples/nrf5340dk/system.yaml
-          # RP2350 — the last chip that no gate ran, and the cell that emptied
-          # configs/ci/chip-coverage.yaml (the file is deleted; all 26 chips are
-          # covered). The model, the reset-path test and this firmware all
-          # existed; there was no system manifest, so no script could name them
-          # together and no workflow executed the chip.
+          # Raspberry Pi Pico 2 — demand group #2 (RP2350 ranks #5, 12%). The
+          # board profile maps its onboard LED to GP25; this smoke asserts real
+          # SIO pad transitions as well as UART0 output on the RP2350 map.
           #
           # `build_dir` is not decoration: the linker script comes from the
           # crate's OWN .cargo/config.toml (`-C link-arg=-Tlink.x`), and cargo
@@ -318,16 +316,15 @@ jobs:
           # instead of leaving it as a silent empty UART.
           #
           # Non-vacuity checked: on the rp2040 descriptor — whose UART0 sits at
-          # 0x4003_4000, not the RP2350's 0x4007_0000 — the same script captures
-          # zero UART bytes and drops to 1/2.
-          - id: rp2350-demo
+          # 0x4003_4000, not the RP2350's 0x4007_0000 — the UART assertion fails.
+          - id: pico2
             target: thumbv8m.main-none-eabi
             crate: firmware-rp2350-demo
             build_dir: crates/firmware-rp2350-demo
             profile: release
             profile_dir: release
-            script: examples/rp2350-demo/io-smoke.yaml
-            system: examples/rp2350-demo/system.yaml
+            script: examples/pico2/io-smoke.yaml
+            system: configs/systems/pico2.yaml
           # atsamd21g18a's only CLI proof — the first Microchip part in the
           # engine. Same shape as the rp2350 cell above, `build_dir` included
           # and for the same reason: this crate's `-Tlink.x` comes from its own

@@ -204,7 +204,7 @@ The models column is a content digest over everything that board's `models` list
 ## `rp2350` — 🟡 smoke-manual
 
 - Doc: [`docs/boards/rp2350.md`](rp2350.md)  ·  Chip: `configs/chips/rp2350.yaml`
-- Note: Pico 2 / RP2350: UART0 smoke (examples/pico2) with firmware-rp2350-demo (M33 bare-metal). Reuses RP2040 behavioural models on the RP2350 APB map via clkrst profile rp2350. No TrustZone/bootrom/PIO v2/dual-core; no silicon bench.
+- Note: Pico 2 / RP2350: board smoke in examples/pico2 exercises UART0 and the onboard GP25 LED through SIO with firmware-rp2350-demo (M33 bare-metal). Reuses RP2040 behavioural models on the RP2350 APB map via clkrst profile rp2350. No TrustZone/real bootrom/PIO v2/dual-core proof or silicon bench.
 - Silicon: none — not validated against real hardware.
 - Drift status: **no silicon capture**
 
