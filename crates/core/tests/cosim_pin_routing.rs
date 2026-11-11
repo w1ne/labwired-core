@@ -999,6 +999,194 @@ fn arduino_mega_2560_ntc_netlist_reaches_adc8_through_mux5_end_to_end() {
     assert_eq!(samples[1].2, 512, "25 °C puts this divider at half scale");
 }
 
+/// Independent Gummel–Poon load line with forward/reverse high-injection
+/// rolloff and Early effect for an ATmega2560 board route.
+fn mega2560_bjt_collector_voltage(base_drive_v: f64, high_injection: bool) -> f64 {
+    const SUPPLY_V: f64 = 5.0;
+    const COLLECTOR_OHMS: f64 = 1_000.0;
+    const BASE_OHMS: f64 = 10_000.0;
+    const IS_A: f64 = 1e-16;
+    const BF: f64 = 80.0;
+    const BR: f64 = 4.0;
+    const VAF: f64 = 50.0;
+    const VAR: f64 = 75.0;
+    const IKF_A: f64 = 50e-6;
+    const IKR_A: f64 = 500e-6;
+    const NKF: f64 = 0.8;
+    const VT: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+
+    let currents = |vbe: f64, collector_v: f64| {
+        let vbc = vbe - collector_v;
+        let forward = (vbe / VT).exp();
+        let reverse = (vbc / VT).exp();
+        let base_width = 1.0 - vbc / VAF - vbe / VAR;
+        let q2 = if high_injection {
+            IS_A * (forward - 1.0) / IKF_A + IS_A * (reverse - 1.0) / IKR_A
+        } else {
+            0.0
+        };
+        let qb = (1.0 + (1.0 + 4.0 * q2).max(0.0).powf(NKF)) / (2.0 * base_width);
+        let transport = IS_A * (forward - reverse) / qb;
+        let base_collector = (IS_A / BR) * (reverse - 1.0);
+        let base_emitter = (IS_A / BF) * (forward - 1.0);
+        (transport - base_collector, base_emitter + base_collector)
+    };
+
+    let collector_for_vbe = |vbe: f64| {
+        let (mut low, mut high) = (0.0, SUPPLY_V);
+        for _ in 0..100 {
+            let collector_v = 0.5 * (low + high);
+            let (collector_current, _) = currents(vbe, collector_v);
+            let residual = (SUPPLY_V - collector_v) / COLLECTOR_OHMS - collector_current;
+            if residual > 0.0 {
+                low = collector_v;
+            } else {
+                high = collector_v;
+            }
+        }
+        0.5 * (low + high)
+    };
+
+    let (mut low, mut high) = (0.0, base_drive_v);
+    for _ in 0..100 {
+        let vbe = 0.5 * (low + high);
+        let collector_v = collector_for_vbe(vbe);
+        let (_, base_current) = currents(vbe, collector_v);
+        let residual = (base_drive_v - vbe) / BASE_OHMS - base_current;
+        if residual > 0.0 {
+            low = vbe;
+        } else {
+            high = vbe;
+        }
+    }
+    collector_for_vbe(0.5 * (low + high))
+}
+
+/// Convert one ATmega2560 high ADC input using ADCSRB.MUX5 and the firmware
+/// ADMUX/ADCSRA register sequence.
+fn mega2560_adc_convert(
+    machine: &mut labwired_core::Machine<labwired_core::cpu::avr::Avr>,
+    channel: u8,
+) -> u16 {
+    use labwired_core::Cpu;
+
+    assert!((8..=15).contains(&channel));
+    let mux = channel - 8;
+    machine.cpu.load_words(
+        0,
+        &[
+            0xE008,
+            0x9300,
+            0x007B, // ADCSRB.MUX5 = 1
+            0xE000 | u16::from(mux),
+            0x9300,
+            0x007C, // ADMUX.MUX4:0
+            0xEC10,
+            0x9310,
+            0x007A, // ADCSRA.ADEN | ADSC
+        ],
+    );
+    machine.cpu.set_pc(0);
+    let config = labwired_core::SimulationConfig::default();
+    for _ in 0..6 {
+        machine
+            .cpu
+            .step(&mut machine.bus, &[], &config)
+            .expect("execute Mega high-channel ADC register sequence");
+    }
+    assert_eq!(
+        machine.cpu.adcsra & (1 << 6),
+        0,
+        "ADSC clears after conversion"
+    );
+    assert_ne!(
+        machine.cpu.adcsra & (1 << 4),
+        0,
+        "ADIF records conversion complete"
+    );
+    u16::from(machine.cpu.adch) << 8 | u16::from(machine.cpu.adcl)
+}
+
+/// High-injection BJT branches route beside an unrelated Beta NTC divider on
+/// ADC8/9/10, all selected through the Mega's MUX5 path.
+#[test]
+fn arduino_mega_2560_bjt_high_injection_and_ntc_reach_firmware_adc_through_mux5() {
+    use labwired_core::cpu::avr::Avr;
+    use labwired_core::Machine;
+
+    let (manifest, bus) =
+        bus_and_manifest("examples/arduino-mega-2560-io/analog-bjt-high-injection-system.yaml");
+    let mut session = build_session(&bus, &manifest.cosim_models);
+    let mut machine = Machine::new(Avr::for_chip_name("atmega2560"), bus);
+    let mut cycles = 0;
+    let ntc_v = 2.5;
+    let mut strongest_rolloff = None;
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.bjt_high_injection.base_v", 0.0)
+        .expect("initialize matched BJT base drives");
+
+    for base_drive_v in [0.8_f64, 1.5, 3.3] {
+        session
+            .set_signal_number("ui.bjt_high_injection.base_v", base_drive_v)
+            .expect("set shared BJT base drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut machine.bus)
+            .expect("solve and route NTC and matched BJT netlists");
+        assert_eq!(steps.len(), 3, "NTC, high-injection BJT, and control solve");
+        assert!(
+            errors.is_empty(),
+            "unexpected Mega ADC route errors: {errors:?}"
+        );
+
+        let read_voltage = |path| match session.signals().get(path) {
+            Some(CosimSignalValue::F64(volts)) => *volts,
+            other => panic!("expected routed voltage at {path}, got {other:?}"),
+        };
+        let ntc = read_voltage("adc.adc.8_volts");
+        let rolloff = read_voltage("adc.adc.9_volts");
+        let control = read_voltage("adc.adc.10_volts");
+        assert!(
+            (ntc - ntc_v).abs() < 1e-9,
+            "25 °C NTC divider remains at half-scale"
+        );
+
+        let expected_rolloff = mega2560_bjt_collector_voltage(base_drive_v, true);
+        let expected_control = mega2560_bjt_collector_voltage(base_drive_v, false);
+        assert!(
+            (rolloff - expected_rolloff).abs() < 5e-5,
+            "IKF/IKR/NKF load line at {base_drive_v} V should be {expected_rolloff} V, got {rolloff} V"
+        );
+        assert!(
+            (control - expected_control).abs() < 5e-5,
+            "matched no-rolloff load line at {base_drive_v} V should be {expected_control} V, got {control} V"
+        );
+
+        for (channel, voltage) in [(8, ntc), (9, rolloff), (10, control)] {
+            let expected_count =
+                ((voltage * 1000.0 + 0.5).floor() as u32 * 1024 / 5000).min(1023) as u16;
+            assert_eq!(
+                mega2560_adc_convert(&mut machine, channel),
+                expected_count,
+                "firmware ADC{channel} conversion must follow its routed analog voltage"
+            );
+        }
+        if base_drive_v == 3.3 {
+            strongest_rolloff = Some((rolloff, control));
+        }
+    }
+
+    let (rolloff, control) = strongest_rolloff.expect("high-drive sample was recorded");
+    assert!(
+        rolloff > control + 0.1,
+        "IKF/NKF high-injection rolloff must reduce collector current: {rolloff} V vs {control} V"
+    );
+}
+
 /// The ATmega1281 standalone profile has its own eight-channel ADC input
 /// peripheral and CPU variant. Route the generic Beta NTC netlist to ADC0,
 /// then run the firmware-visible ADMUX/ADCSRA conversion at three temperatures.
