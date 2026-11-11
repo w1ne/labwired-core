@@ -34,6 +34,13 @@ boards:
     kind: sim-validate
     path: examples/esp32c3-blinky
     gate: true
+  # ESP32-H2-DevKitM-1-N4S: rebuild the RV32IMC UART fixture and verify its
+  # UART0 FIFO/console path through the H2-specific, window-limited model.
+  - id: esp32h2-devkitm-1-n4s
+    kind: sim-validate
+    path: examples/esp32h2-devkitm-1-n4s
+    rust_targets: [riscv32imc-unknown-none-elf]
+    gate: true
   # Narrow ESP32-DevKitC-32E onboarding profile. Committed TIER1 ELF, no
   # cross-toolchain, seconds to run. Proves the new chip descriptor through
   # `labwired test` on every PR (chip-coverage ceiling forbids another waiver).

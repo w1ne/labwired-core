@@ -144,6 +144,16 @@ jobs:
             profile_dir: release
             script: examples/esp32c6-devkitc/uart-smoke.yaml
             system: examples/esp32c6-devkitc/system.yaml
+          # ESP32-H2-DevKitM-1-N4S. The exact active H2 board gets its own
+          # UART0 profile; only the H2/C6-common UART head and PCR prefix are
+          # exposed, and the USB bridge/pad route are explicitly out of scope.
+          - id: esp32h2-devkitm-1-n4s
+            target: riscv32imc-unknown-none-elf
+            crate: firmware-esp32h2-demo
+            profile: release
+            profile_dir: release
+            script: examples/esp32h2-devkitm-1-n4s/uart-smoke.yaml
+            system: configs/systems/esp32h2-devkitm-1-n4s.yaml
           # ESP32-S3-DevKitC-1 v1.1 / N16R8. Its exact board profile exposes
           # the USB-to-UART bridge on UART0; the smoke intentionally does not
           # claim the RGB LED, PSRAM, USB-OTG, radio, or buttons.

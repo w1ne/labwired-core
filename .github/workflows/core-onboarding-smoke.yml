@@ -66,6 +66,12 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/nucleo-u575zi/star-catcher-smoke.yaml
             system: examples/nucleo-u575zi/star-catcher-system.yaml
+          # Demand-rank 1 ESP32 family expansion: active ESP32-H2-DevKitM-1-N4S.
+          - id: esp32h2-devkitm-1-n4s
+            crate: firmware-esp32h2-demo
+            target: riscv32imc-unknown-none-elf
+            script: examples/esp32h2-devkitm-1-n4s/uart-smoke.yaml
+            system: configs/systems/esp32h2-devkitm-1-n4s.yaml
           - id: rp2040-pio
             crate: firmware-rp2040-pio-onboarding
             target: thumbv6m-none-eabi
@@ -84,7 +90,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
         with:
-          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv8m.main-none-eabi
+          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv8m.main-none-eabi,riscv32imc-unknown-none-elf
 
       - name: Install Python for PlatformIO
         if: ${{ matrix.firmware_build_script != '' }}

@@ -145,6 +145,11 @@ pub const MODEL_TYPES: &[&str] = &[
     // bins. Listed for the same reason as every other family type.
     "esp32c6_mwdt",
     "esp32c6_lp_rtc",
+    // ESP32-H2's narrow DevKitM-1 UART profile. It reuses the C6-compatible
+    // UART head and PCR UART0 gate; those register windows are size-limited by
+    // the H2 descriptor because the full H2 PCR map differs from the C6's.
+    "esp32h2_uart",
+    "esp32h2_pcr",
     // C6 USB Serial/JTAG — same shared model as C3/S3, own matrix source.
     // Listed so a fuzzy `contains("usb")` path cannot coerce it elsewhere.
     "esp32c6_usb_serial_jtag",
