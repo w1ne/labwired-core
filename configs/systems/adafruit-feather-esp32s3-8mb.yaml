@@ -1,0 +1,18 @@
+# Adafruit ESP32-S3 Feather, 8 MB flash / no PSRAM (Product 5323).
+# Profile scope: UART0 console and the built-in one-pixel NeoPixel on GPIO33.
+# Battery charger/monitor, STEMMA QT power switch, USB, Wi-Fi and BLE are not
+# claimed by this profile.
+name: "adafruit-feather-esp32s3-8mb"
+chip: "../chips/esp32s3-feather-8mb.yaml"
+memory_overrides:
+  psram_size: "0"
+debug_uart: "uart0"
+external_devices:
+  - id: "status_neopixel"
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO33"
+      num_pixels: 1
+      cpu_hz: 240000000
+board_io: []

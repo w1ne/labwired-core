@@ -157,6 +157,7 @@ fn build_esp32s3_flash(
     };
 
     let mut bus = SystemBus::new();
+    let base = Esp32s3Opts::for_chip_with_memory_overrides(chip, &manifest.memory_overrides)?;
     let opts = Esp32s3Opts {
         real_reset_boot: true,
         rom_images: Some(RomImages {
@@ -170,7 +171,7 @@ fn build_esp32s3_flash(
         flash_size: esp32s3_flash_backing_size(chip.flash.size, flash.len()),
         // Core clock from the same descriptor: the SYSTIMER divides the CPU
         // cycle stream by it.
-        ..Esp32s3Opts::for_chip(chip)
+        ..base
     };
     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
     if wiring.boot_mode != Esp32s3BootMode::Faithful {
@@ -239,11 +240,12 @@ fn build_esp32s3(
     };
 
     let mut bus = SystemBus::new();
+    let base = Esp32s3Opts::for_chip_with_memory_overrides(chip, &manifest.memory_overrides)?;
     // Default XIP model (fast-boot identity) + the injected faithful ROM.
     let opts = Esp32s3Opts {
         rom_images,
         // Core clock from the chip descriptor, the one home for `cpu_hz`.
-        ..Esp32s3Opts::for_chip(chip)
+        ..base
     };
     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
     bus.attach_plugin_peripherals(chip, manifest, plugins)?;

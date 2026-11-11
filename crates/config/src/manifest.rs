@@ -110,6 +110,9 @@ pub struct SystemManifest {
     /// nevertheless being told 80 MHz. Reading the key is the fix.
     #[serde(default, deserialize_with = "deserialize_opt_u64_lax")]
     pub cpu_hz: Option<u64>,
+    /// Board-level memory capacity overrides. ESP32-S3 systems may set
+    /// `psram_size` in bytes or a human size (for example `"0"` for a module
+    /// with no PSRAM); unrecognized keys remain available to other runners.
     #[serde(default)]
     pub memory_overrides: HashMap<String, String>,
     #[serde(default)]

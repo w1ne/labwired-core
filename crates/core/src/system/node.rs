@@ -712,7 +712,7 @@ fn build_esp32s3_node(
     // clocks the SYSTIMER, and on the flash path its flash size is the part's
     // capacity the model reports over RDID — a 16 MiB module booted on a
     // 4 MiB backing fails `esp_flash`'s size check before `app_main`.
-    let base = Esp32s3Opts::for_chip(chip);
+    let base = Esp32s3Opts::for_chip_with_memory_overrides(chip, &system.memory_overrides)?;
     let opts = match &flash_image {
         Some(image) => Esp32s3Opts {
             real_reset_boot: true,

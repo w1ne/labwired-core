@@ -1,0 +1,227 @@
+Processing feather_nopsram (platform: espressif32@8.0.0; board: adafruit_feather_esp32s3_nopsram; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/espressif32/adafruit_feather_esp32s3_nopsram.html
+PLATFORM: Espressif 32 (8.0.0) > Adafruit Feather ESP32-S3 No PSRAM
+HARDWARE: ESP32S3 240MHz, 320KB RAM, 8MB Flash
+DEBUG: Current (cmsis-dap) External (cmsis-dap, esp-bridge, esp-builtin, esp-prog, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa)
+PACKAGES:
+ - framework-arduinoespressif32 @ 4.30312.261024 (3.3.12)
+ - framework-arduinoespressif32-esp32s3-libs @ 3.3.12
+ - tool-esptool @ 2.50400.0 (5.4.0)
+ - tool-riscv32-esp-elf-gdb @ 12.1.0+20221002
+ - tool-xtensa-esp-elf-gdb @ 12.1.0+20221002
+ - toolchain-riscv32-esp @ 14.2.0+20260121
+ - toolchain-xtensa-esp-elf @ 14.2.0+20260121
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 44 compatible libraries
+Scanning dependencies...
+No dependencies
+Building in release mode
+Compiling .pio/build/feather_nopsram/FrameworkArduinoVariant/variant.cpp.o
+Compiling .pio/build/feather_nopsram/src/main.cpp.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Building .pio/build/feather_nopsram/bootloader.bin
+Generating partitions .pio/build/feather_nopsram/partitions.bin
+Compiling .pio/build/feather_nopsram/FrameworkArduino/ColorFormat.c.o
+Compiling .pio/build/feather_nopsram/FrameworkArduino/Esp.cpp.o
+Compiling .pio/build/feather_nopsram/FrameworkArduino/FirmwareMSC.cpp.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/FunctionalInterrupt.cpp.o
+Compiling .pio/build/feather_nopsram/FrameworkArduino/HEXBuilder.cpp.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/HWCDC.cpp.o
+Compiling .pio/build/feather_nopsram/FrameworkArduino/HardwareSerial.cpp.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/HashBuilder.cpp.o
+Compiling .pio/build/feather_nopsram/FrameworkArduino/IPAddress.cpp.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/MD5Builder.cpp.o
+Compiling .pio/build/feather_nopsram/FrameworkArduino/MacAddress.cpp.o
+Compiling .pio/build/feather_nopsram/FrameworkArduino/Print.cpp.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/Stream.cpp.o
+Compiling .pio/build/feather_nopsram/FrameworkArduino/StreamString.cpp.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/StringUtils.cpp.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/Tone.cpp.o
+Compiling .pio/build/feather_nopsram/FrameworkArduino/USB.cpp.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/USBCDC.cpp.o
+Compiling .pio/build/feather_nopsram/FrameworkArduino/USBHost.cpp.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/USBMSC.cpp.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+esptool v5.4.0
+Creating ESP32-S3 image...
+Merged 2 ELF sections.
+Successfully created ESP32-S3 image.
+Compiling .pio/build/feather_nopsram/FrameworkArduino/WMath.cpp.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/WString.cpp.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/base64.cpp.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/cbuf.cpp.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/chip-debug-report.cpp.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/esp32-hal-adc.c.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/esp32-hal-bt.c.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/esp32-hal-cpu.c.o
+Compiling .pio/build/feather_nopsram/FrameworkArduino/esp32-hal-dac.c.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/esp32-hal-gpio.c.o
+Compiling .pio/build/feather_nopsram/FrameworkArduino/esp32-hal-hosted.c.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/esp32-hal-i2c-ng.c.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/esp32-hal-i2c-slave.c.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/esp32-hal-i2c.c.o
+Compiling .pio/build/feather_nopsram/FrameworkArduino/esp32-hal-ldo.c.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/esp32-hal-ledc.c.o
+Compiling .pio/build/feather_nopsram/FrameworkArduino/esp32-hal-log-wrapper.c.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/esp32-hal-matrix.c.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/esp32-hal-misc.c.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/esp32-hal-periman.c.o
+Compiling .pio/build/feather_nopsram/FrameworkArduino/esp32-hal-psram.c.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/esp32-hal-rgb-led.c.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/esp32-hal-rmt.c.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/esp32-hal-sigmadelta.c.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/esp32-hal-spi.c.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/esp32-hal-time.c.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/esp32-hal-timer.c.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/esp32-hal-tinyusb.c.o
+Compiling .pio/build/feather_nopsram/FrameworkArduino/esp32-hal-touch-ng.c.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/esp32-hal-touch.c.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/esp32-hal-uart.c.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/firmware_msc_fat.c.o
+Compiling .pio/build/feather_nopsram/FrameworkArduino/freertos_stats.cpp.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/idf_openthread_mpool_wrapper.c.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/libb64/cdecode.c.o
+Compiling .pio/build/feather_nopsram/FrameworkArduino/libb64/cencode.c.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/main.cpp.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/stdlib_noniso.c.o
+Compiling .pio/build/feather_nopsram/FrameworkArduino/wiring_pulse.c.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Compiling .pio/build/feather_nopsram/FrameworkArduino/wiring_shift.c.o
+<command-line>: warning: "ARDUINO_USB_CDC_ON_BOOT" redefined
+<command-line>: note: this is the location of the previous definition
+Archiving .pio/build/feather_nopsram/libFrameworkArduino.a
+Indexing .pio/build/feather_nopsram/libFrameworkArduino.a
+Linking .pio/build/feather_nopsram/firmware.elf
+Retrieving maximum program size .pio/build/feather_nopsram/firmware.elf
+Checking size .pio/build/feather_nopsram/firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [=         ]   6.8% (used 22128 bytes from 327680 bytes)
+Flash: [=         ]   9.6% (used 320674 bytes from 3342336 bytes)
+Building .pio/build/feather_nopsram/firmware.bin
+esptool v5.4.0
+Creating ESP32-S3 image...
+Merged 3 ELF sections.
+Successfully created ESP32-S3 image.
+========================= [SUCCESS] Took 5.77 seconds =========================

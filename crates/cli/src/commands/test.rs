@@ -299,6 +299,15 @@ fn run_s3_rom_boot_no_elf(
     let metrics = std::sync::Arc::new(labwired_core::metrics::PerformanceMetrics::new());
 
     let mut bus = labwired_core::bus::SystemBus::new();
+    let chip_opts = match system.chip() {
+        Ok(chip) => {
+            match Esp32s3Opts::for_chip_with_memory_overrides(&chip, &manifest.memory_overrides) {
+                Ok(opts) => opts,
+                Err(e) => return fail(format!("ESP32-S3 memory settings: {e:#}")),
+            }
+        }
+        Err(e) => return fail(format!("ESP32-S3 chip resolution failed: {e:#}")),
+    };
     let opts = Esp32s3Opts {
         real_reset_boot: true,
         // The hosted path receives a merged flash image but no ELF. It still
@@ -309,11 +318,7 @@ fn run_s3_rom_boot_no_elf(
         // Core clock from the same resolved descriptor: `cpu_hz:` in the chip
         // YAML is the one home for it, and it is what the SYSTIMER divides the
         // CPU cycle stream by to keep `esp_timer` time.
-        ..system
-            .chip()
-            .as_ref()
-            .map(Esp32s3Opts::for_chip)
-            .unwrap_or_default()
+        ..chip_opts
     };
     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
     // Wire matrix kits (INA219, OLED, …) the same way the ELF arm does.
@@ -1290,9 +1295,49 @@ pub(crate) fn run_test(
                         return ExitCode::from(EXIT_CONFIG_ERROR);
                     }
                     let mut bus = labwired_core::bus::SystemBus::new();
+                    let chip_opts = match resolved_system
+                        .as_ref()
+                        .map(|system| system.chip_with_plugins(&crate::plugin_chip_yaml(plugins)))
+                    {
+                        Some(Ok(chip)) => {
+                            match Esp32s3Opts::for_chip_with_memory_overrides(
+                                &chip,
+                                &manifest.memory_overrides,
+                            ) {
+                                Ok(opts) => opts,
+                                Err(e) => {
+                                    let msg = format!("ESP32-S3 memory settings: {e:#}");
+                                    error!("{}", msg);
+                                    write_config_error_outputs(
+                                        &args,
+                                        Some(&firmware_path),
+                                        system_path.as_ref(),
+                                        Some(&firmware_bytes),
+                                        Some(&resolved_limits),
+                                        msg,
+                                    );
+                                    return ExitCode::from(EXIT_CONFIG_ERROR);
+                                }
+                            }
+                        }
+                        Some(Err(e)) => {
+                            let msg = format!("ESP32-S3 chip resolution failed: {e:#}");
+                            error!("{}", msg);
+                            write_config_error_outputs(
+                                &args,
+                                Some(&firmware_path),
+                                system_path.as_ref(),
+                                Some(&firmware_bytes),
+                                Some(&resolved_limits),
+                                msg,
+                            );
+                            return ExitCode::from(EXIT_CONFIG_ERROR);
+                        }
+                        None => Esp32s3Opts::default(),
+                    };
                     let opts = Esp32s3Opts {
                         real_reset_boot: true,
-                        ..Esp32s3Opts::default()
+                        ..chip_opts
                     };
                     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
                     // Wire matrix kits (INA219, OLED, …) the same way classic ESP32 does.
@@ -1378,15 +1423,46 @@ pub(crate) fn run_test(
                     if factory_layout {
                         std::env::set_var("LABWIRED_ESP32S3_MMU_XIP", "1");
                     }
-                    let opts = resolved_system
-                        .as_ref()
-                        .and_then(|system| {
-                            system
-                                .chip_with_plugins(&crate::plugin_chip_yaml(plugins))
-                                .ok()
-                        })
-                        .map(|chip| Esp32s3Opts::for_chip(&chip))
-                        .unwrap_or_default();
+                    let opts = if let Some(system) = resolved_system.as_ref() {
+                        let chip = match system.chip_with_plugins(&crate::plugin_chip_yaml(plugins))
+                        {
+                            Ok(chip) => chip,
+                            Err(e) => {
+                                let msg = format!("ESP32-S3 chip resolution failed: {e:#}");
+                                error!("{}", msg);
+                                write_config_error_outputs(
+                                    &args,
+                                    Some(&firmware_path),
+                                    system_path.as_ref(),
+                                    Some(&firmware_bytes),
+                                    Some(&resolved_limits),
+                                    msg,
+                                );
+                                return ExitCode::from(EXIT_CONFIG_ERROR);
+                            }
+                        };
+                        match Esp32s3Opts::for_chip_with_memory_overrides(
+                            &chip,
+                            &system.manifest.memory_overrides,
+                        ) {
+                            Ok(opts) => opts,
+                            Err(e) => {
+                                let msg = format!("ESP32-S3 memory settings: {e:#}");
+                                error!("{}", msg);
+                                write_config_error_outputs(
+                                    &args,
+                                    Some(&firmware_path),
+                                    system_path.as_ref(),
+                                    Some(&firmware_bytes),
+                                    Some(&resolved_limits),
+                                    msg,
+                                );
+                                return ExitCode::from(EXIT_CONFIG_ERROR);
+                            }
+                        }
+                    } else {
+                        Esp32s3Opts::default()
+                    };
                     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
                     if _fast.is_none() {
                         std::env::remove_var("LABWIRED_ESP32S3_FASTBOOT");

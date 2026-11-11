@@ -124,6 +124,29 @@ impl Esp32s3Opts {
             ..Self::default()
         }
     }
+
+    /// Apply board-level memory capacity overrides to the chip-derived options.
+    ///
+    /// Most ESP32-S3 modules use the 8 MiB PSRAM default. Boards without PSRAM
+    /// declare `memory_overrides: { psram_size: "0" }`; keeping this on the
+    /// system manifest lets one S3 silicon descriptor describe real module
+    /// variants without pretending every carrier has the same memory.
+    pub fn for_chip_with_memory_overrides(
+        chip: &labwired_config::ChipDescriptor,
+        memory_overrides: &std::collections::HashMap<String, String>,
+    ) -> anyhow::Result<Self> {
+        let mut opts = Self::for_chip(chip);
+        if let Some(size) = memory_overrides.get("psram_size") {
+            let bytes = labwired_config::parse_size(size)
+                .map_err(|e| anyhow::anyhow!("memory_overrides.psram_size: {e:#}"))?;
+            opts.psram_size = u32::try_from(bytes).map_err(|_| {
+                anyhow::anyhow!(
+                    "memory_overrides.psram_size exceeds the S3 model's addressable size"
+                )
+            })?;
+        }
+        Ok(opts)
+    }
 }
 
 /// Which ROM path the ESP32-S3 model booted on.

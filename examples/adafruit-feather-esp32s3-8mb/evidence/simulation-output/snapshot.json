@@ -1,0 +1,61 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "xtensa_lx7",
+    "registers": [
+      2181211940,
+      1070204384,
+      0,
+      0,
+      3007315967,
+      1,
+      0,
+      0,
+      2181092594,
+      1070204320,
+      0,
+      0,
+      1070159376,
+      0,
+      262176,
+      1070204351
+    ],
+    "pc": 1077381554,
+    "ps": 262176,
+    "window_base": 14,
+    "window_start": 22008,
+    "vecbase": 1077362688
+  },
+  "steps_executed": 50000000,
+  "cycles": 50000000,
+  "instructions": 50000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 50000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 50000000
+    }
+  },
+  "limits": {
+    "max_steps": 50000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "b808365038c1f0646ed96e2b8f3e85ee5b0dc1a07578a1ce58e853d0d5a11b19",
+  "config": {
+    "firmware": "examples/adafruit-feather-esp32s3-8mb/./firmware/.pio/build/feather_nopsram/firmware.elf",
+    "system": "examples/adafruit-feather-esp32s3-8mb/../../configs/systems/adafruit-feather-esp32s3-8mb.yaml",
+    "script": "examples/adafruit-feather-esp32s3-8mb/io-smoke.yaml"
+  }
+}

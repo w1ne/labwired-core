@@ -1,0 +1,115 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+# Adafruit ESP32-S3 Feather (8 MB flash, no PSRAM), Product 5323.
+name: "esp32s3-feather-8mb"
+arch: "xtensa-lx7"
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. Self-timed devices
+# scale their datasheet microseconds by it; a slower board overrides it.
+# Matches the engine's S3 constants: esp32s3/gpspi.rs CPU_CLOCK_HZ and
+# esp32s3/usb_serial_jtag.rs ESP32S3_CPU_CLOCK_HZ are both 240 MHz.
+cpu_hz: 240_000_000
+
+flash:
+  base: 0x42000000
+  # 8 MiB module flash, expressed in binary KB for parse_size.
+  size: "8192KB"
+ram:
+  base: 0x3FC88000
+  size: "512KB"
+peripherals:
+  # --- Debugger register schemas. Matched by BASE ADDRESS against
+  # --- tests/fixtures/svd/esp32s3.svd (the vendored Espressif S3 SVD), NEVER by
+  # --- peripheral name and never borrowed from another part: at RTC_CNTL+0xB4
+  # --- the S3 has SWD_CONF where the classic ESP32 has STORE5 and the C3 has
+  # --- SW_CPU_STALL. `debug_schema` names registers only; it changes nothing
+  # --- the bus does, and a peripheral that describes itself still wins.
+  - id: "uart0"
+    type: "uart"
+    base_address: 0x60000000
+    size: "512B"
+    config:
+      debug_schema: "../peripherals/esp32s3/uart0.yaml"
+  - id: "gpio"
+    type: "declarative"
+    base_address: 0x60004000
+    config:
+      path: "../peripherals/esp32s3/gpio.yaml"
+  - id: "timg0"
+    type: "declarative"
+    base_address: 0x6001F000
+    config:
+      path: "../peripherals/esp32s3/timg0.yaml"
+  - id: "interrupt_core0"
+    type: "declarative"
+    base_address: 0x600C2000
+    config:
+      path: "../peripherals/esp32s3/interrupt_core0.yaml"
+  # The entries below are address-map declarations only: on the Xtensa path
+  # the peripherals are registered programmatically by
+  # crates/core/src/system/xtensa.rs (configure_xtensa_esp32s3); base
+  # addresses mirror the model sources in crates/core/src/peripherals/esp32s3/.
+  - id: "systimer"
+    type: "systimer"
+    base_address: 0x60023000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32s3/systimer.yaml"
+  - id: "system"
+    type: "system_stub"
+    base_address: 0x600C0000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32s3/system.yaml"
+  - id: "gdma"
+    type: "gdma"
+    base_address: 0x6003F000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32s3/dma.yaml"
+  - id: "mcpwm0"
+    type: "mcpwm"
+    base_address: 0x6001E000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32s3/mcpwm0.yaml"
+  - id: "i2c0"
+    type: "i2c"
+    base_address: 0x60013000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32s3/i2c0.yaml"
+  - id: "rmt"
+    type: "rmt"
+    base_address: 0x60016000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32s3/rmt.yaml"
+
+  # GP-SPI2 / FSPI — Arduino SPI / IDF spi_master (Esp32s3Spi model).
+  - id: "spi2"
+    type: "esp32s3_spi"
+    base_address: 0x60024000
+    size: "4KB"
+    irq: 21
+  - id: "spi3"
+    type: "esp32s3_spi"
+    base_address: 0x60025000
+    size: "4KB"
+    irq: 22
+
+  # APB SARADC + TWAI — registered programmatically by configure_xtensa_esp32s3
+  # (ESP32S3_PERIPHERALS). Declared here so chip map / matrix docs stay honest.
+  - id: "sar_adc_s3"
+    type: "esp32s3_sar_adc"
+    base_address: 0x60040000
+    size: "4KB"
+    irq: 64
+  - id: "twai"
+    type: "esp32s3_twai"
+    base_address: 0x6002B000
+    size: "4KB"
+    irq: 37

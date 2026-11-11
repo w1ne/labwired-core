@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="3.566739">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="b808365038c1f0646ed96e2b8f3e85ee5b0dc1a07578a1ce58e853d0d5a11b19"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="3.566739">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: FEATHER_S3_GPIO33_WS2812_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: gpio_edges: gpio:33 &gt;= 48 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>
