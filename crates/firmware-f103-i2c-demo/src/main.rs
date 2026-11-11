@@ -90,6 +90,8 @@ const BASEPRI_IRQ_MASK: u32 = BASEPRI_IRQ_LOW_BIT | BASEPRI_IRQ_HIGH_BIT;
 const BASEPRI_RECORD: u32 = 0x2000_0600;
 const NVIC_PRIORITY_VECTOR_TABLE: u32 = 0x2000_0800;
 const NVIC_PRIORITY_RECORD: u32 = 0x2000_0A00;
+const NVIC_NESTED_VECTOR_TABLE: u32 = 0x2000_0C00;
+const NVIC_NESTED_RECORD: u32 = 0x2000_0E00;
 const FAULT_RECORD: u32 = 0x2000_0680;
 const SVC_RECORD: u32 = 0x2000_0B00;
 const SVC_EXCEPTION: usize = 11;
@@ -284,6 +286,7 @@ fn main() -> ! {
     unsafe { smoke_primask_external_irq() };
     unsafe { smoke_basepri_priority_mask() };
     unsafe { smoke_nvic_subpriority_order_and_preemption() };
+    unsafe { smoke_nvic_higher_priority_preemption() };
     smoke_usart2_txe_irq();
     smoke_usart2_rx_enable_gate();
     smoke_spi1_irq_and_max31855();
@@ -2426,6 +2429,143 @@ unsafe fn smoke_nvic_subpriority_order_and_preemption() -> bool {
     ok
 }
 
+/// A strictly higher group-priority IRQ must nest over IRQ 54, then return to
+/// the still-active IRQ 54 handler with its exception state restored.
+unsafe fn smoke_nvic_higher_priority_preemption() -> bool {
+    const NVIC_ISER1: u32 = 0xE000_E104;
+    const NVIC_ICER1: u32 = 0xE000_E184;
+    const NVIC_ISPR1: u32 = 0xE000_E204;
+    const NVIC_ICPR1: u32 = 0xE000_E284;
+    const NVIC_IABR1: u32 = 0xE000_E304;
+    const NVIC_IPR_WORD: u32 = 0xE000_E434;
+    const LOW_IRQ: u32 = 54;
+    const HIGH_IRQ: u32 = 55;
+    const LOW_BIT: u32 = 1 << (LOW_IRQ - 32);
+    const HIGH_BIT: u32 = 1 << (HIGH_IRQ - 32);
+    const IRQ_MASK: u32 = LOW_BIT | HIGH_BIT;
+    const VECTOR_LOW: usize = 16 + LOW_IRQ as usize;
+    const VECTOR_HIGH: usize = 16 + HIGH_IRQ as usize;
+    const VECTOR_WORDS: usize = VECTOR_HIGH + 1;
+    const PRIORITY_MASK: u32 = 0xFFFF_0000;
+    const PRIORITIES: u32 = 0x4080_0000;
+    const AIRCR: u32 = 0xE000_ED0C;
+
+    let source_vtor = read_volatile(SCB_VTOR as *const u32);
+    let prior_aircr = read_volatile(AIRCR as *const u32);
+    let prior_priority = read_volatile(NVIC_IPR_WORD as *const u32);
+    let prior_enabled = read_volatile(NVIC_ISER1 as *const u32) & IRQ_MASK;
+    let prior_pending = read_volatile(NVIC_ISPR1 as *const u32) & IRQ_MASK;
+    let prior_primask: u32;
+    let prior_basepri: u32;
+    core::arch::asm!(
+        "mrs {primask}, PRIMASK",
+        "mrs {basepri}, BASEPRI",
+        "cpsid i",
+        primask = out(reg) prior_primask,
+        basepri = out(reg) prior_basepri,
+        options(nomem, nostack, preserves_flags),
+    );
+
+    let table = NVIC_NESTED_VECTOR_TABLE as *mut u32;
+    let record = NVIC_NESTED_RECORD as *mut u32;
+    write_volatile(NVIC_ICER1 as *mut u32, IRQ_MASK);
+    write_volatile(NVIC_ICPR1 as *mut u32, IRQ_MASK);
+    for slot in 0..VECTOR_WORDS {
+        write_volatile(table.add(slot), 0);
+    }
+    for word in 0..8 {
+        write_volatile(record.add(word), 0);
+    }
+    write_volatile(
+        table.add(VECTOR_LOW),
+        (nvic_nested_parent as *const () as usize as u32) | 1,
+    );
+    write_volatile(
+        table.add(VECTOR_HIGH),
+        (nvic_nested_child as *const () as usize as u32) | 1,
+    );
+    write_volatile(AIRCR as *mut u32, 0x05FA_0000 | (prior_aircr & 0x0000_F8F8));
+    write_volatile(
+        NVIC_IPR_WORD as *mut u32,
+        (prior_priority & !PRIORITY_MASK) | PRIORITIES,
+    );
+    write_volatile(SCB_VTOR as *mut u32, NVIC_NESTED_VECTOR_TABLE);
+    write_volatile(NVIC_ISER1 as *mut u32, IRQ_MASK);
+    core::arch::asm!("dsb", "isb", options(nostack, preserves_flags));
+    write_volatile(NVIC_ISPR1 as *mut u32, LOW_BIT);
+    core::arch::asm!(
+        "msr PRIMASK, {primask}",
+        primask = in(reg) prior_primask,
+        options(nostack, preserves_flags),
+    );
+    for _ in 0..4_096 {
+        if read_volatile(record.add(7)) != 0 {
+            break;
+        }
+        core::arch::asm!("nop", options(nomem, nostack, preserves_flags));
+    }
+
+    let parent_entries = read_volatile(record);
+    let parent_ipsr = read_volatile(record.add(1));
+    let child_entries = read_volatile(record.add(2));
+    let child_ipsr = read_volatile(record.add(3));
+    let child_active = read_volatile(record.add(4));
+    let resumed_parent_ipsr = read_volatile(record.add(5));
+    let resumed_parent_active = read_volatile(record.add(6));
+    let parent_resumed = read_volatile(record.add(7));
+    let pending_after = read_volatile(NVIC_ISPR1 as *const u32) & IRQ_MASK;
+    let active_after = read_volatile(NVIC_IABR1 as *const u32) & IRQ_MASK;
+
+    core::arch::asm!("cpsid i", options(nomem, nostack, preserves_flags));
+    write_volatile(NVIC_ICER1 as *mut u32, IRQ_MASK);
+    write_volatile(NVIC_ICPR1 as *mut u32, IRQ_MASK);
+    write_volatile(NVIC_IPR_WORD as *mut u32, prior_priority);
+    write_volatile(
+        AIRCR as *mut u32,
+        0x05FA_0000 | (prior_aircr & 0x0000_F8F8) | (prior_aircr & 0x700),
+    );
+    write_volatile(SCB_VTOR as *mut u32, source_vtor);
+    write_volatile(NVIC_ISPR1 as *mut u32, prior_pending);
+    write_volatile(NVIC_ISER1 as *mut u32, prior_enabled);
+    core::arch::asm!(
+        "msr BASEPRI, {basepri}",
+        "msr PRIMASK, {primask}",
+        "dsb",
+        "isb",
+        basepri = in(reg) prior_basepri,
+        primask = in(reg) prior_primask,
+        options(nostack, preserves_flags),
+    );
+
+    let nested = parent_entries == 1
+        && parent_ipsr == 16 + LOW_IRQ
+        && child_entries == 1
+        && child_ipsr == 16 + HIGH_IRQ
+        && child_active == IRQ_MASK
+        && resumed_parent_ipsr == 16 + LOW_IRQ
+        && resumed_parent_active == LOW_BIT
+        && parent_resumed == 1
+        && pending_after == 0
+        && active_after == 0;
+    let restored = read_volatile(SCB_VTOR as *const u32) == source_vtor
+        && read_volatile(NVIC_IPR_WORD as *const u32) == prior_priority
+        && read_volatile(AIRCR as *const u32) & 0x700 == prior_aircr & 0x700
+        && read_volatile(NVIC_ISER1 as *const u32) & IRQ_MASK == prior_enabled
+        && read_volatile(NVIC_ISPR1 as *const u32) & IRQ_MASK == prior_pending;
+    let ok = prior_primask == 0 && prior_basepri == 0 && nested && restored;
+
+    if ok {
+        putline(b"NVIC M3 NESTED IRQ54=1 IRQ55=1 ACTIVE=54,55 RESUMED=54 ok");
+    } else {
+        putline(b"NVIC M3 NESTED PREEMPTION CHECK FAILED");
+        print_reg(b"nested parent IPSR=", parent_ipsr);
+        print_reg(b"nested child IPSR=", child_ipsr);
+        print_reg(b"nested child active=", child_active);
+        print_reg(b"nested resumed active=", resumed_parent_active);
+    }
+    ok
+}
+
 /// Verify PRIMASK keeps a pending external IRQ inactive until it is cleared.
 /// Reuse the BASEPRI low-priority vector handler to inspect the released IRQ.
 unsafe fn smoke_primask_external_irq() -> bool {
@@ -2757,6 +2897,49 @@ unsafe extern "C" fn nvic_priority_nonpreempt_child() {
         "ldr r0, =0x20000A00",
         "mrs r1, ipsr",
         "str r1, [r0, #28]",
+        "bx lr",
+    );
+}
+
+/// Pend IRQ 55 from IRQ 54; the child must preempt, then return to this handler.
+#[unsafe(naked)]
+unsafe extern "C" fn nvic_nested_parent() {
+    core::arch::naked_asm!(
+        "ldr r0, =0x20000E00",
+        "movs r1, #1",
+        "str r1, [r0, #0]",
+        "mrs r1, ipsr",
+        "str r1, [r0, #4]",
+        "ldr r2, =0xE000E204",
+        "movs r1, #0x80",
+        "lsls r1, r1, #16",
+        "str r1, [r2]",
+        "dsb",
+        "isb",
+        "ldr r0, =0x20000E00",
+        "mrs r1, ipsr",
+        "str r1, [r0, #20]",
+        "ldr r2, =0xE000E304",
+        "ldr r1, [r2]",
+        "str r1, [r0, #24]",
+        "movs r1, #1",
+        "str r1, [r0, #28]",
+        "bx lr",
+    );
+}
+
+/// Record IRQ 55's IPSR and the active-parent bit while nested inside IRQ 54.
+#[unsafe(naked)]
+unsafe extern "C" fn nvic_nested_child() {
+    core::arch::naked_asm!(
+        "ldr r0, =0x20000E00",
+        "movs r1, #1",
+        "str r1, [r0, #8]",
+        "mrs r1, ipsr",
+        "str r1, [r0, #12]",
+        "ldr r2, =0xE000E304",
+        "ldr r1, [r2]",
+        "str r1, [r0, #16]",
         "bx lr",
     );
 }
