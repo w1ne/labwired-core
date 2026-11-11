@@ -1533,6 +1533,102 @@ fn check_systick_reload_update() -> bool {
     ok
 }
 
+/// The STM32F072 reference source is HCLK/8; CLKSOURCE=1 selects HCLK.
+/// Sample a long countdown across a fixed instruction window in each mode and
+/// compare the observed decrement rates without allowing a wrap.
+fn check_systick_clock_sources() -> bool {
+    const RELOAD: u32 = 10_000;
+    const SAMPLE_INSTRUCTIONS: usize = 128;
+
+    fn sample(control: u32, reload: u32, sample_instructions: usize) -> (u32, u32, u32, bool) {
+        let prior_primask: u32;
+        unsafe {
+            asm!(
+                "mrs {primask}, PRIMASK",
+                "cpsid i",
+                primask = out(reg) prior_primask,
+                options(nomem, nostack, preserves_flags),
+            );
+            wr(SYSTICK_CSR, 0);
+            wr(SCB_ICSR, 1 << 25);
+            wr(SYSTICK_RVR, reload);
+            wr(SYSTICK_CVR, 0);
+            wr(SYSTICK_CSR, control);
+        }
+
+        let mut before = 0;
+        for _ in 0..1_000 {
+            let current = rd(SYSTICK_CVR);
+            if current != 0 {
+                before = current;
+                break;
+            }
+            unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+        }
+        let csr = rd(SYSTICK_CSR) & 0x7;
+        for _ in 0..sample_instructions {
+            unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+        }
+        let after = rd(SYSTICK_CVR);
+
+        unsafe {
+            wr(SYSTICK_CSR, 0);
+            wr(SCB_ICSR, 1 << 25);
+            wr(SYSTICK_CVR, 0);
+            asm!(
+                "msr PRIMASK, {primask}",
+                "dsb",
+                "isb",
+                primask = in(reg) prior_primask,
+                options(nostack, preserves_flags),
+            );
+        }
+        let cleaned = rd(SYSTICK_CSR) & 1 == 0 && rd(SCB_ICSR) & (1 << 26) == 0;
+        (before, after, csr, cleaned)
+    }
+
+    let (external_before, external_after, external_csr, external_cleaned) =
+        sample(0x1, RELOAD, SAMPLE_INSTRUCTIONS);
+    let (processor_before, processor_after, processor_csr, processor_cleaned) =
+        sample(0x5, RELOAD, SAMPLE_INSTRUCTIONS);
+    let external_delta = external_before.saturating_sub(external_after);
+    let processor_delta = processor_before.saturating_sub(processor_after);
+    let external_selected = external_csr & 0x4 == 0;
+    let processor_selected = processor_csr & 0x4 != 0;
+    // Instruction and MMIO boundary cycles vary slightly; HCLK/8 must still
+    // count at well below one quarter of the processor-clock rate.
+    let scaled = external_delta > 0
+        && processor_delta >= SAMPLE_INSTRUCTIONS as u32
+        && external_delta < processor_delta / 4;
+    let ok = external_before > external_after
+        && processor_before > processor_after
+        && external_selected
+        && processor_selected
+        && external_cleaned
+        && processor_cleaned
+        && scaled;
+
+    puts("systick clock-source ext_hclk8_delta=");
+    hex(external_delta);
+    puts(" cpu_hclk_delta=");
+    hex(processor_delta);
+    puts(" ext_clksource=");
+    puts(if external_selected { "0" } else { "1" });
+    puts(" cpu_clksource=");
+    puts(if processor_selected { "1" } else { "0" });
+    puts(" scaled=");
+    puts(if scaled { "yes" } else { "no" });
+    puts(" cleanup=");
+    puts(if external_cleaned && processor_cleaned {
+        "yes"
+    } else {
+        "no"
+    });
+    puts(" ");
+    verdict(ok);
+    ok
+}
+
 /// An NMI pended by a running IRQ must enter despite PRIMASK and return to
 /// that IRQ before the deferred, lower-priority IRQ 6 can run.
 fn check_nmi_repend_and_deferred_irq() -> bool {
@@ -2330,6 +2426,7 @@ fn main() -> ! {
     let systick_countflag_only_ok = check_systick_countflag_without_tickint();
     let systick_cvr_clear_ok = check_systick_cvr_clear_does_not_fire();
     let systick_reload_update_ok = check_systick_reload_update();
+    let systick_clock_sources_ok = check_systick_clock_sources();
     mark(
         21,
         systick_primask_ok && systick_icsr_software_pend_ok && systick_icsr_repend_ok,
@@ -2339,7 +2436,8 @@ fn main() -> ! {
         23,
         systick_countflag_only_ok && systick_cvr_clear_ok && systick_reload_update_ok,
     );
-    let summary = summary | 0x0DF0_0000;
+    mark(24, systick_clock_sources_ok);
+    let summary = summary | 0x0CF0_0000;
     wr(SUMMARY, summary);
     puts("summary ");
     hex(summary);

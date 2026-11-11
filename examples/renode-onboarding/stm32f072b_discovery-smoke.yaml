@@ -30,7 +30,8 @@
 # verifies the next countdown-to-zero still enters exception 15. The COUNTFLAG
 # smoke checks that byte reads and writes to the read-only bit preserve it and
 # that a word CSR read clears it. An RVR update during a live countdown checks
-# that CVR keeps counting and the new value drives the following period.
+# that CVR keeps counting and the new value drives the following period. The
+# STM32F072's external HCLK/8 SysTick source is compared against processor HCLK.
 schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv6m-none-eabi/release/firmware-stm32f072b-disco-smoke"
@@ -95,6 +96,8 @@ assertions:
       - "systick reload-update rvr=0x0000001F preserved=1 first_wrap=1 pending_clear=1 next_reload=1 old="
       - " current="
       - " ok"
+      - "systick clock-source ext_hclk8_delta="
+      - " scaled=yes cleanup=yes ok"
       - "summary 0x0DFFFFFF"
       - "DONE"
   - memory_value:

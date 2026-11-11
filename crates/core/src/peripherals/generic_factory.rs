@@ -767,13 +767,28 @@ pub fn try_build(
         "sifive_gpio" => Box::new(crate::peripherals::sifive_gpio::SifiveGpio::new()),
         "systick" | "arm_generictimer" => {
             // CALIB is implementation-defined per chip; the yaml can
-            // supply the silicon value via `config: { calib: ... }`.
-            match p_cfg.config.get("calib").and_then(|v| v.as_u64()) {
-                Some(calib) => Box::new(crate::peripherals::systick::Systick::with_calib(
-                    calib as u32,
-                )),
-                None => Box::new(crate::peripherals::systick::Systick::new()),
-            }
+            // supply it plus the external-source divider (for example HCLK/8)
+            // via `config: { calib: ..., external_clock_divider: ... }`.
+            let calib = p_cfg
+                .config
+                .get("calib")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0x4000_0000) as u32;
+            let external_clock_divider = match p_cfg.config.get("external_clock_divider") {
+                Some(value) => value
+                    .as_u64()
+                    .filter(|&divider| divider > 0 && divider <= u32::MAX as u64)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("systick `external_clock_divider` must be a positive u32")
+                    })? as u32,
+                None => 1,
+            };
+            Box::new(
+                crate::peripherals::systick::Systick::with_calib_and_external_clock_divider(
+                    calib,
+                    external_clock_divider,
+                ),
+            )
         }
         "arm_sp804_timer" => Box::new(crate::peripherals::arm_sp804::ArmSp804Timer::new()),
         "lpc2294_timer" => Box::new(crate::peripherals::lpc::timer::LpcTimer::new()),

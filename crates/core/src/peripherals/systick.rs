@@ -81,6 +81,15 @@ pub struct Systick {
     /// read-side freshness). In legacy mode only `tick()` mutates it.
     cvr: Cell<u32>,
     calib: u32,
+    /// Number of processor cycles per external-reference tick for this chip.
+    /// STM32F0 feeds SysTick from HCLK/8 when CLKSOURCE is clear; other chips
+    /// can declare their implementation-specific source in the chip yaml.
+    external_clock_divider: u32,
+    /// Partial divider progress for the external source. Updated while the
+    /// timer is disabled or the processor source is selected, because the
+    /// reference clock itself keeps running.
+    #[serde(skip)]
+    external_clock_phase: Cell<u64>,
     /// SYST_CSR.COUNTFLAG. Set when the counter wraps to 0; cleared on a read
     /// of SYST_CSR or a write of SYST_CVR. `Cell` so the `&self` read path can
     /// clear it.
@@ -127,7 +136,9 @@ impl Systick {
             csr: 0,
             rvr: 0,
             cvr: Cell::new(0),
-            calib: 0x4000_0000, // No reference clock, no skew
+            calib: 0x4000_0000, // Reference clock present, calibration is skewed
+            external_clock_divider: 1,
+            external_clock_phase: Cell::new(0),
             countflag: Cell::new(false),
             anchor: Cell::new(0),
             pending_fires: Cell::new(0),
@@ -142,6 +153,16 @@ impl Systick {
     pub fn with_calib(calib: u32) -> Self {
         Self {
             calib,
+            ..Self::new()
+        }
+    }
+
+    /// Configure the chip-specific external SysTick source. A divider of 8
+    /// models the STM32 HCLK/8 source when CSR.CLKSOURCE is clear.
+    pub fn with_calib_and_external_clock_divider(calib: u32, divider: u32) -> Self {
+        Self {
+            calib,
+            external_clock_divider: divider.max(1),
             ..Self::new()
         }
     }
@@ -195,11 +216,15 @@ impl Systick {
         if n == 0 || self.scheduler_mode() {
             return;
         }
+        let ticks = self.source_ticks_for_cycles(n);
         if (self.csr & 0x1) == 0 {
             return;
         }
-        let (val, wraps) =
-            Self::advance_counter(self.cvr.get() as u64, (self.rvr & 0x00FF_FFFF) as u64, n);
+        let (val, wraps) = Self::advance_counter(
+            self.cvr.get() as u64,
+            (self.rvr & 0x00FF_FFFF) as u64,
+            ticks,
+        );
         debug_assert!(
             wraps == 0,
             "JIT block consumed {n} cycles across a SysTick wrap (horizon {:?})",
@@ -227,6 +252,7 @@ impl Systick {
             return;
         }
         self.anchor.set(now);
+        let ticks = self.source_ticks_for_cycles(now - anchor);
         if (self.csr & 0x1) == 0 {
             // ENABLE=0: the counter is frozen; the window elapses unobserved.
             return;
@@ -234,7 +260,7 @@ impl Systick {
         let (val, wraps) = Self::advance_counter(
             self.cvr.get() as u64,
             (self.rvr & 0x00FF_FFFF) as u64,
-            now - anchor,
+            ticks,
         );
         self.cvr.set(val as u32);
         if wraps > 0 {
@@ -262,6 +288,50 @@ impl Systick {
         }
     }
 
+    /// Convert elapsed processor cycles into SysTick source ticks while
+    /// retaining fractional progress through the free-running external source.
+    fn source_ticks_for_cycles(&self, cycles: u64) -> u64 {
+        if self.calib & 0x8000_0000 != 0 {
+            self.external_clock_phase.set(0);
+            return cycles;
+        }
+        let divider = self.external_clock_divider as u64;
+        let total = self.external_clock_phase.get().saturating_add(cycles);
+        self.external_clock_phase.set(total % divider);
+        if self.csr & 0x4 != 0 {
+            cycles
+        } else {
+            total / divider
+        }
+    }
+
+    fn active_clock_divider(&self) -> u32 {
+        // ARMv6-M: when CALIB.NOREF is set, CLKSOURCE is forced to one and
+        // writes to select the external source are ignored.
+        if (self.calib & 0x8000_0000) != 0 || (self.csr & 0x4) != 0 {
+            1
+        } else {
+            self.external_clock_divider
+        }
+    }
+
+    fn consume_external_clock_cycle(&self) -> bool {
+        if self.calib & 0x8000_0000 != 0 {
+            self.external_clock_phase.set(0);
+            return true;
+        }
+        let divider = self.external_clock_divider as u64;
+        let phase = self.external_clock_phase.get() + 1;
+        let external_edge = if phase >= divider {
+            self.external_clock_phase.set(0);
+            true
+        } else {
+            self.external_clock_phase.set(phase);
+            false
+        };
+        self.csr & 0x4 != 0 || external_edge
+    }
+
     /// Walk ticks until the next zero-hit from the CURRENT (just-synced)
     /// state, when one is armed to fire: requires ENABLE and TICKINT, and a
     /// reachable wrap (`v > 0`, or `v == 0` with `r > 0`).
@@ -275,13 +345,20 @@ impl Systick {
         }
         let v = self.cvr.get() as u64;
         let r = (self.rvr & 0x00FF_FFFF) as u64;
-        if v > 0 {
+        let source_ticks = if v > 0 {
             Some(v)
         } else if r > 0 {
             Some(r + 1) // reload tick + r count-down ticks
         } else {
             None
-        }
+        }?;
+        let divider = self.active_clock_divider() as u64;
+        let phase = if divider > 1 {
+            self.external_clock_phase.get()
+        } else {
+            0
+        };
+        Some(source_ticks.saturating_mul(divider).saturating_sub(phase))
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
@@ -289,7 +366,14 @@ impl Systick {
             // COUNTFLAG (bit 16) folded in from `countflag`. Byte reads do not
             // clear it; the word read (`read_u32`) does, matching how the
             // driver accesses CSR.
-            0x00 => self.csr | if self.countflag.get() { 0x1_0000 } else { 0 },
+            0x00 => {
+                let clksource = if self.calib & 0x8000_0000 != 0 {
+                    0x4
+                } else {
+                    0
+                };
+                (self.csr | clksource) | if self.countflag.get() { 0x1_0000 } else { 0 }
+            }
             0x04 => self.rvr,
             0x08 => self.cvr.get(),
             0x0C => self.calib,
@@ -304,6 +388,9 @@ impl Systick {
         match offset {
             0x00 => {
                 self.csr = value & 0x7;
+                if self.calib & 0x8000_0000 != 0 {
+                    self.csr |= 0x4;
+                }
                 if std::env::var("LABWIRED_TRACE_SYSTICK").is_ok() {
                     eprintln!(
                         "SYSTICK CSR <- 0x{:08X} (enable={} tickint={} clksrc={})",
@@ -347,6 +434,7 @@ impl crate::Peripheral for Systick {
         self.rvr = 0;
         self.cvr.set(0);
         self.countflag.set(false);
+        self.external_clock_phase.set(0);
         self.pending_fires.set(0);
         self.arm_seq = self.arm_seq.wrapping_add(1);
         self.live_deadline = None;
@@ -402,6 +490,9 @@ impl crate::Peripheral for Systick {
         // peripherals; the guard keeps a stray direct call from corrupting the
         // lazily-anchored state).
         if self.scheduler_mode() {
+            return crate::PeripheralTickResult::default();
+        }
+        if !self.consume_external_clock_cycle() {
             return crate::PeripheralTickResult::default();
         }
         if (self.csr & 0x1) == 0 {
