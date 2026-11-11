@@ -71,6 +71,12 @@ jobs:
             target: thumbv6m-none-eabi
             script: examples/rp2040-pio/io-smoke.yaml
             system: examples/rp2040-pio/system.yaml
+          # Maintenance-only coverage: Microchip lists ATmega328P as NRND, so
+          # this preserves the existing Nano path without recommending new use.
+          - id: arduino-nano-atmega328p-maintenance
+            script: examples/arduino-nano-blinky/io-smoke.yaml
+            system: configs/systems/arduino-nano.yaml
+            firmware_build_script: examples/arduino-nano-blinky/build-firmware.sh
 
     steps:
       - uses: actions/checkout@v4
@@ -79,6 +85,16 @@ jobs:
         uses: dtolnay/rust-toolchain@1.95.0
         with:
           targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv8m.main-none-eabi
+
+      - name: Install Python for PlatformIO
+        if: ${{ matrix.firmware_build_script != '' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PlatformIO
+        if: ${{ matrix.firmware_build_script != '' }}
+        run: python -m pip install platformio==6.2.0
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
@@ -90,14 +106,19 @@ jobs:
       - name: Run onboarding smoke
         run: |
           chmod +x scripts/onboarding_smoke.sh
-          scripts/onboarding_smoke.sh \
-            --target-id "${{ matrix.id }}" \
-            --crate "${{ matrix.crate }}" \
-            --target "${{ matrix.target }}" \
-            --script "${{ matrix.script }}" \
-            --system "${{ matrix.system }}" \
-            --out-dir "out/onboarding-smoke/${{ matrix.id }}" \
+          args=(
+            --target-id "${{ matrix.id }}"
+            --script "${{ matrix.script }}"
+            --system "${{ matrix.system }}"
+            --out-dir "out/onboarding-smoke/${{ matrix.id }}"
             --threshold-seconds 3600
+          )
+          if [[ -n "${{ matrix.firmware_build_script }}" ]]; then
+            args+=(--firmware-build-script "${{ matrix.firmware_build_script }}")
+          else
+            args+=(--crate "${{ matrix.crate }}" --target "${{ matrix.target }}")
+          fi
+          scripts/onboarding_smoke.sh "${args[@]}"
 
       - name: Publish onboarding summary
         if: always()

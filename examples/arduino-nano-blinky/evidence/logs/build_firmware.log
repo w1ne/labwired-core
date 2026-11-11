@@ -1,0 +1,53 @@
+Processing nano (platform: atmelavr@5.3.0; board: nanoatmega328; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/atmelavr/nanoatmega328.html
+PLATFORM: Atmel AVR (5.3.0) > Arduino Nano ATmega328
+HARDWARE: ATMEGA328P 16MHz, 2KB RAM, 30KB Flash
+DEBUG: Current (avr-stub) External (avr-stub, simavr)
+PACKAGES:
+ - framework-arduino-avr @ 5.4.0
+ - toolchain-atmelavr @ 1.70300.191015 (7.3.0)
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 5 compatible libraries
+Scanning dependencies...
+No dependencies
+Building in release mode
+Compiling .pio/build/nano/src/main.cpp.o
+Archiving .pio/build/nano/libFrameworkArduinoVariant.a
+Indexing .pio/build/nano/libFrameworkArduinoVariant.a
+Compiling .pio/build/nano/FrameworkArduino/CDC.cpp.o
+Compiling .pio/build/nano/FrameworkArduino/HardwareSerial.cpp.o
+Compiling .pio/build/nano/FrameworkArduino/HardwareSerial0.cpp.o
+Compiling .pio/build/nano/FrameworkArduino/HardwareSerial1.cpp.o
+Compiling .pio/build/nano/FrameworkArduino/HardwareSerial2.cpp.o
+Compiling .pio/build/nano/FrameworkArduino/HardwareSerial3.cpp.o
+Compiling .pio/build/nano/FrameworkArduino/IPAddress.cpp.o
+Compiling .pio/build/nano/FrameworkArduino/PluggableUSB.cpp.o
+Compiling .pio/build/nano/FrameworkArduino/Print.cpp.o
+Compiling .pio/build/nano/FrameworkArduino/Stream.cpp.o
+Compiling .pio/build/nano/FrameworkArduino/Tone.cpp.o
+Compiling .pio/build/nano/FrameworkArduino/USBCore.cpp.o
+Compiling .pio/build/nano/FrameworkArduino/WInterrupts.c.o
+Compiling .pio/build/nano/FrameworkArduino/WMath.cpp.o
+Compiling .pio/build/nano/FrameworkArduino/WString.cpp.o
+Compiling .pio/build/nano/FrameworkArduino/abi.cpp.o
+Compiling .pio/build/nano/FrameworkArduino/hooks.c.o
+Compiling .pio/build/nano/FrameworkArduino/main.cpp.o
+Compiling .pio/build/nano/FrameworkArduino/new.cpp.o
+Compiling .pio/build/nano/FrameworkArduino/wiring.c.o
+Compiling .pio/build/nano/FrameworkArduino/wiring_analog.c.o
+Compiling .pio/build/nano/FrameworkArduino/wiring_digital.c.o
+Compiling .pio/build/nano/FrameworkArduino/wiring_pulse.S.o
+Compiling .pio/build/nano/FrameworkArduino/wiring_pulse.c.o
+Compiling .pio/build/nano/FrameworkArduino/wiring_shift.c.o
+Archiving .pio/build/nano/libFrameworkArduino.a
+Indexing .pio/build/nano/libFrameworkArduino.a
+Linking .pio/build/nano/firmware.elf
+Checking size .pio/build/nano/firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [=         ]   9.7% (used 198 bytes from 2048 bytes)
+Flash: [=         ]   6.3% (used 1922 bytes from 30720 bytes)
+Building .pio/build/nano/firmware.hex
+========================= [SUCCESS] Took 0.79 seconds =========================

@@ -1,0 +1,75 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "avr",
+    "registers": [
+      172,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      24,
+      122,
+      2,
+      0,
+      0,
+      0,
+      199,
+      149,
+      0,
+      0,
+      0,
+      253,
+      0,
+      158,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 460,
+    "sp": 2293,
+    "sreg": 131
+  },
+  "steps_executed": 2000000,
+  "cycles": 2602229,
+  "instructions": 1999842,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 2000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 2000000
+    }
+  },
+  "limits": {
+    "max_steps": 2000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "71a755580ec5b062ff9aac95f4cffbf7fa2c1a708d8eb5486917ebeecbd138b6",
+  "config": {
+    "firmware": "examples/arduino-nano-blinky/../../tests/fixtures/avr/arduino-nano-blinky.elf",
+    "system": "examples/arduino-nano-blinky/../../configs/systems/arduino-nano.yaml",
+    "script": "examples/arduino-nano-blinky/io-smoke.yaml"
+  }
+}

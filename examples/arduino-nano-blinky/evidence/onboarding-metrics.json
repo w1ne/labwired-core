@@ -1,0 +1,29 @@
+{
+  "target_id": "arduino-nano-atmega328p-maintenance",
+  "status": "pass",
+  "crate": "",
+  "target_triple": "",
+  "script": "examples/arduino-nano-blinky/io-smoke.yaml",
+  "system": "configs/systems/arduino-nano.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-11T15:46:30Z",
+  "finished_at_utc": "2026-11-11T15:46:32Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1861,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.307,
+    "build_firmware": 0.975,
+    "run_smoke": 0.544
+  },
+  "stages_ms": {
+    "build_cli": 307,
+    "build_firmware": 975,
+    "run_smoke": 544
+  },
+  "firmware_build_script": "examples/arduino-nano-blinky/build-firmware.sh"
+}
