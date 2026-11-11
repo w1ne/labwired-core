@@ -20,6 +20,7 @@ on:
       - "crates/core/**"
       - "crates/firmware-stm32u575-demo/**"
       - "crates/firmware-esp32c5-devkitc-1-bme280-smoke/**"
+      - "crates/firmware-olimex-esp32-p4-devkit-smoke/**"
       - "crates/firmware-esp32c61-smoke/**"
       - "crates/firmware-esp32c61-bme280-smoke/**"
       - "crates/firmware-esp32h2-devkitm-1-smoke/**"
@@ -187,6 +188,14 @@ jobs:
             target: riscv32imac-unknown-none-elf
             script: examples/esp32c5-devkitc-1-bme280-smoke/io-smoke.yaml
             system: configs/systems/esp32c5-devkitc-1-n8r8-bme280.yaml
+          # The ESP32-P4 profile is deliberately limited to SRAM boot and the
+          # Olimex board's GPIO2 USER_LED1 path; this gate keeps that claim
+          # live without implying P4 ROM, flash, PSRAM, or multimedia coverage.
+          - id: olimex-esp32-p4-devkit
+            crate: firmware-olimex-esp32-p4-devkit-smoke
+            target: riscv32imac-unknown-none-elf
+            script: examples/olimex-esp32-p4-devkit/gpio2-led-smoke.yaml
+            system: configs/systems/olimex-esp32-p4-devkit.yaml
           - id: esp32s3-devkitc-1-n16r8-bme280
             firmware_build_script: examples/esp32s3-devkitc-1-n16r8-bme280/build-firmware.sh
             script: examples/esp32s3-devkitc-1-n16r8-bme280/bme280-smoke.yaml
