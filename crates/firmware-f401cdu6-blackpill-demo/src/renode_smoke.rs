@@ -30,6 +30,8 @@
 //!   USART1 TXEIE, TCIE and RXNEIE assert and release their NVIC line;
 //!   USART2 keeps injected bytes hidden until UE and RE are set, then drains
 //!   two bytes in order and gates RXNE IRQ 38
+//!   SysTick wraps with PRIMASK set, latches exception 15, exposes COUNTFLAG
+//!   once on CSR read, and clears its pending request through ICSR
 //! A summary word goes to RAM at 0x20017F00 (one bit per smoke group passed).
 
 use core::ptr::{read_volatile, write_volatile};
@@ -97,6 +99,14 @@ const I2C1_ER_IRQ_BIT: u32 = 1;
 const I2C2_EV_IRQ_BIT: u32 = 1 << 1;
 const I2C2_ER_IRQ_BIT: u32 = 1 << 2;
 
+const SYSTICK_CSR: u32 = 0xE000_E010;
+const SYSTICK_RVR: u32 = 0xE000_E014;
+const SYSTICK_CVR: u32 = 0xE000_E018;
+const SYSTICK_COUNTFLAG: u32 = 1 << 16;
+const SCB_ICSR: u32 = 0xE000_ED04;
+const ICSR_PENDSTSET: u32 = 1 << 26;
+const ICSR_PENDSTCLR: u32 = 1 << 25;
+
 const RESULT: u32 = 0x2001_7F00;
 
 fn rd(addr: u32) -> u32 {
@@ -150,6 +160,14 @@ fn main() -> ! {
     send(b"BLACKPILL F401 SMOKE\r\n");
 
     let mut passed = 0u32;
+
+    let systick_ok = smoke_systick_pending_and_countflag();
+    send(if systick_ok {
+        b"systick wrap=1 pending=1 countflag=read-clear clear=1 ok\r\n"
+    } else {
+        b"systick wrap/pending/countflag CHECK FAILED\r\n"
+    });
+    passed |= (systick_ok as u32) << 12;
 
     let ahb = rd(RCC_AHB1ENR) & 0x5;
     let apb = rd(RCC_APB1ENR) & ((1 << 0) | (1 << 17) | (1 << 21) | (1 << 22));
@@ -341,13 +359,63 @@ fn main() -> ! {
     passed |= (usart2_rx_gate_ok as u32) << 11;
 
     wr(RESULT, 0xB1AC_0000 | passed);
-    send(if passed == 0xFFF {
+    send(if passed == 0x1FFF {
         b"BLACKPILL PASS\r\n"
     } else {
         b"BLACKPILL FAIL\r\n"
     });
 
     loop {}
+}
+
+/// Exercise the imported F401 profile's SysTick and SCB pending state. Keep
+/// the exception masked so the wrap remains visible until ICSR.PENDSTCLR.
+fn smoke_systick_pending_and_countflag() -> bool {
+    let prior_primask: u32;
+    unsafe {
+        core::arch::asm!(
+            "mrs {primask}, PRIMASK",
+            "cpsid i",
+            primask = out(reg) prior_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+    }
+
+    wr(SYSTICK_CSR, 0);
+    wr(SCB_ICSR, ICSR_PENDSTCLR);
+    wr(SYSTICK_RVR, 63);
+    wr(SYSTICK_CVR, 0);
+    wr(SYSTICK_CSR, 0x7); // ENABLE | TICKINT | CLKSOURCE
+
+    let mut wrapped = false;
+    for _ in 0..4_096 {
+        if rd(SCB_ICSR) & ICSR_PENDSTSET != 0 {
+            wrapped = true;
+            break;
+        }
+    }
+
+    wr(SYSTICK_CSR, 0);
+    let countflag_reported = rd(SYSTICK_CSR) & SYSTICK_COUNTFLAG != 0;
+    let countflag_read_clear = rd(SYSTICK_CSR) & SYSTICK_COUNTFLAG == 0;
+    let pending_survives_countflag_read = rd(SCB_ICSR) & ICSR_PENDSTSET != 0;
+    wr(SCB_ICSR, ICSR_PENDSTCLR);
+    let pending_cleared = rd(SCB_ICSR) & ICSR_PENDSTSET == 0;
+
+    unsafe {
+        core::arch::asm!(
+            "msr PRIMASK, {primask}",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+
+    prior_primask == 0
+        && wrapped
+        && countflag_reported
+        && countflag_read_clear
+        && pending_survives_countflag_read
+        && pending_cleared
 }
 
 /// PC13 drives the active-low LED: BSRR reset half lights it.

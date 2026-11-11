@@ -23,9 +23,11 @@
 # Results print on USART2; USART1 checks TXEIE and TCIE gating on IRQ 37, plus
 # RXNEIE assertion/release with an injected RX byte. USART2 keeps its injected
 # `RS` bytes hidden until UE and RE are both set, reads them in order, and gates
-# RXNE IRQ 38. The summary word lands at 0x20017F00 and is 0xB1AC0FFF on
-# success. PC13 resets low, so three on/off toggles give 5 edges, not 6. ADC,
-# EXTI, other timers and other USARTs claimed by the chip are not exercised.
+# RXNE IRQ 38. SysTick wraps with PRIMASK set, keeps its SCB pending request
+# independent of the read-to-clear COUNTFLAG, then clears the pending request.
+# The summary word lands at 0x20017F00 and is 0xB1AC1FFF on success. PC13 resets
+# low, so three on/off toggles give 5 edges, not 6. ADC, EXTI, other timers and
+# other USARTs claimed by the chip are not exercised.
 schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv7em-none-eabi/release/firmware-f401cdu6-blackpill-renode-smoke"
@@ -40,6 +42,7 @@ uart_injections:
 assertions:
   - uart_ordered:
       - "BLACKPILL F401 SMOKE"
+      - "systick wrap=1 pending=1 countflag=read-clear clear=1 ok"
       - "rcc apb1=00620001 ok"
       - "led pc13 odr=00002000 ok"
       - "tim2 arr=00000040 ok"
@@ -63,6 +66,6 @@ assertions:
       min_edges: 5
   - memory_value:
       address: 0x20017F00
-      expected_value: 0xB1AC0FFF
+      expected_value: 0xB1AC1FFF
       size: 4
   - expected_stop_reason: max_steps
