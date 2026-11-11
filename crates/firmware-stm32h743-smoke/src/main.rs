@@ -440,10 +440,12 @@ unsafe fn cpacr_handler_fp_roundtrip() -> u32 {
 }
 
 /// Enter unprivileged Thread mode and issue SVC so the installed handler can
-/// prove that Handler mode retains privileged CPACR access.
+/// prove Handler-mode CPACR access and this function can confirm exception
+/// return restores the interrupted Thread privilege state.
 #[cfg(feature = "stm32h743-exception-frame")]
 #[inline(never)]
-unsafe fn attempt_unprivileged_svc() {
+unsafe fn attempt_unprivileged_svc() -> u32 {
+    let thread_unprivileged: u32;
     asm!(
         "mrs r0, control",
         "bic r0, r0, #2",
@@ -451,9 +453,12 @@ unsafe fn attempt_unprivileged_svc() {
         "msr control, r0",
         "isb",
         "svc #0",
-        out("r0") _,
+        "mrs r0, control",
+        "and r0, r0, #1",
+        out("r0") thread_unprivileged,
         options(nostack)
     );
+    thread_unprivileged
 }
 
 /// Switch Thread mode to unprivileged and execute one four-byte VFP
@@ -1615,16 +1620,21 @@ fn check_cortex_m7_exception_frame() -> bool {
     // The unprivileged Thread issues SVC after demonstrating full access.
     // Its handler changes CPACR back to privileged-only and performs a real
     // VFP round trip, proving Handler mode retains privileged access.
-    unsafe { attempt_unprivileged_svc() };
+    let thread_unprivileged = unsafe { attempt_unprivileged_svc() };
     let handler_record = core::ptr::addr_of!(CPACR_HANDLER_RECORD).cast::<u32>();
     let handler_fp_result = unsafe { read_volatile(handler_record) };
     let handler_ipsr = unsafe { read_volatile(handler_record.add(1)) };
     let handler_nocp = unsafe { read_volatile(SCB_CFSR) } & CFSR_UFSR_NOCP;
-    let handler_fp_ok = handler_fp_result == 0xC3 && handler_ipsr == 11 && handler_nocp == 0;
+    let handler_fp_ok = handler_fp_result == 0xC3
+        && handler_ipsr == 11
+        && handler_nocp == 0
+        && thread_unprivileged == 1;
     send(b"cortex-m7 cpacr handler fp=");
     send(if handler_fp_ok { b"1" } else { b"0" });
     send(b" ipsr=");
     send_hex32(handler_ipsr);
+    send(b" thread_unprivileged=");
+    send_hex32(thread_unprivileged);
     send(b" nocp=");
     send_hex32(handler_nocp);
     send(b" result=");

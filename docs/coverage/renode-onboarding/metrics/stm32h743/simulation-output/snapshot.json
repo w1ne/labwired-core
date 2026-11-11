@@ -15,12 +15,12 @@
       98,
       48,
       61,
-      135936,
+      136128,
       537001968,
       104,
-      134223808
+      134223816
     ],
-    "pc": 134223808,
+    "pc": 134223816,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "b7f331f55f0cffca0c647c7db5ba3f4dc0ff4b9d8a35f93ee2d509ed4e2343dd",
+  "firmware_hash": "2b30a56389a0936ca03610aad02b5d519b03d6fef7b9450faa4f4d50f8f876d1",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabihf/release/firmware-stm32h743-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32h743.yaml",

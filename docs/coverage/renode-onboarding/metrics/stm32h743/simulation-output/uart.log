@@ -14,7 +14,7 @@ cortex-m7 fp lazy nested-touch=1 lspact=00000001->00000000 saved=1 regs=1 active
 cortex-m7 cpacr privileged fp=1 nocp=00000000 result=000000A5
 cortex-m7 cpacr nocp fault=1 ipsr=00000006 cfsr=00080000 extended=1
 cortex-m7 cpacr unprivileged fp=1 nocp=00000000 result=0000005A
-cortex-m7 cpacr handler fp=1 ipsr=0000000B nocp=00000000 result=000000C3
+cortex-m7 cpacr handler fp=1 ipsr=0000000B thread_unprivileged=00000001 nocp=00000000 result=000000C3
 cortex-m7 exception ok
 gpiob0=high
 gpiob0=low
