@@ -5,22 +5,22 @@
     "registers": [
       3221225472,
       3221225472,
-      10,
       3221225472,
-      13,
+      3221225472,
       1073821724,
-      4294867296,
+      13,
+      10,
       536887280,
       0,
       0,
       0,
       0,
       85,
-      536887024,
-      134267253,
-      134267534
+      536887016,
+      134268531,
+      134268816
     ],
-    "pc": 134267534,
+    "pc": 134268816,
     "xpsr": 2164260864,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "61c5317908f3c978e8dfaae3727a38f0fb5f6231505aedb5467c16f7721daa83",
+  "firmware_hash": "3520536f5b140f95bc299b6ca2120c284d24c3850137cba741e89d7e9cb5f90e",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-stm32f072b-disco-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f072b_discovery.yaml",

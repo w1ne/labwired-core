@@ -70,6 +70,7 @@ const SYSTICK_MASK_RECORD: u32 = SUMMARY + 192;
 const SYSTICK_ICSR_RECORD: u32 = SUMMARY + 208;
 const SYSTICK_REPEND_RECORD: u32 = SUMMARY + 224;
 const SYSTICK_PERIODIC_RECORD: u32 = SUMMARY + 768;
+const SYSTICK_FLAG_RECORD: u32 = SUMMARY + 832;
 const SYSTICK_CSR: u32 = 0xE000_E010;
 const SYSTICK_RVR: u32 = 0xE000_E014;
 const SYSTICK_CVR: u32 = 0xE000_E018;
@@ -506,6 +507,20 @@ unsafe extern "C" fn smoke_systick_periodic_handler() {
         "movs r2, #0",
         "str r2, [r1]",
         "1:",
+        "bx lr",
+    );
+}
+
+/// Record an unexpected SysTick exception in the COUNTFLAG-only test.
+#[unsafe(naked)]
+unsafe extern "C" fn smoke_systick_countflag_only_handler() {
+    core::arch::naked_asm!(
+        "ldr r0, =0x20003340",
+        "movs r1, #1",
+        "str r1, [r0]",
+        "ldr r0, =0xE000E010",
+        "movs r1, #0",
+        "str r1, [r0]",
         "bx lr",
     );
 }
@@ -1127,6 +1142,102 @@ fn check_systick_periodic_reload() -> bool {
     puts("pending=");
     puts(if pending_cleared { "0 " } else { "1 " });
     puts("thread_ipsr=");
+    hex(thread_ipsr);
+    puts(" ");
+    flag("vtor_restored", vtor_restored);
+    verdict(ok);
+    ok
+}
+
+/// COUNTFLAG still records a zero-hit when TICKINT is clear, but no
+/// exception-15 request may be raised.
+fn check_systick_countflag_without_tickint() -> bool {
+    let source_vtor = rd(SCB_VTOR);
+    let table = RAM_VECTOR_BASE as *mut u32;
+    let prior_primask: u32;
+    unsafe {
+        asm!(
+            "mrs {primask}, PRIMASK",
+            "cpsid i",
+            primask = out(reg) prior_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+        wr(SYSTICK_CSR, 0);
+        wr(SCB_ICSR, 1 << 25);
+        wr(SYSTICK_RVR, 127);
+        wr(SYSTICK_CVR, 0);
+        write_volatile(SYSTICK_FLAG_RECORD as *mut u32, 0);
+        for index in 0..VECTOR_TABLE_WORDS {
+            write_volatile(table.add(index), 0);
+        }
+        write_volatile(
+            table.add(SYSTICK_VECTOR_INDEX),
+            (smoke_systick_countflag_only_handler as *const () as usize as u32) | 1,
+        );
+        wr(SCB_VTOR, RAM_VECTOR_BASE);
+        wr(SYSTICK_CSR, 0x5); // ENABLE | processor clock; TICKINT stays clear.
+    }
+    let control_readback = rd(SYSTICK_CSR) & 0x7;
+    unsafe {
+        asm!(
+            "msr PRIMASK, {primask}",
+            "dsb",
+            "isb",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+
+    let mut countflag_seen = false;
+    for _ in 0..100_000 {
+        if rd(SYSTICK_CSR) & (1 << 16) != 0 {
+            countflag_seen = true;
+            break;
+        }
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+
+    let icsr_before_cleanup = rd(SCB_ICSR);
+    let handler_hit = rd(SYSTICK_FLAG_RECORD) != 0;
+    let thread_ipsr: u32;
+    unsafe {
+        asm!(
+            "mrs {value}, ipsr",
+            value = out(reg) thread_ipsr,
+            options(nomem, nostack, preserves_flags),
+        );
+        asm!("cpsid i", options(nomem, nostack, preserves_flags));
+        wr(SYSTICK_CSR, 0);
+        wr(SCB_ICSR, 1 << 25);
+        wr(SYSTICK_CVR, 0);
+        wr(SCB_VTOR, source_vtor);
+        asm!(
+            "msr PRIMASK, {primask}",
+            "dsb",
+            "isb",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+    let countflag_read_clear = rd(SYSTICK_CSR) & (1 << 16) == 0;
+    let vtor_restored = rd(SCB_VTOR) == source_vtor;
+    let pending = icsr_before_cleanup & (1 << 26) != 0;
+    let ok = prior_primask == 0
+        && control_readback == 0x5
+        && countflag_seen
+        && countflag_read_clear
+        && !handler_hit
+        && !pending
+        && thread_ipsr == 0
+        && vtor_restored;
+
+    puts("systick countflag-only tickint=0 flag=");
+    puts(if countflag_seen { "1 " } else { "0 " });
+    flag("handler", handler_hit);
+    puts("pending=");
+    puts(if pending { "1 " } else { "0 " });
+    flag("read_clear", countflag_read_clear);
+    puts("ipsr=");
     hex(thread_ipsr);
     puts(" ");
     flag("vtor_restored", vtor_restored);
@@ -1928,11 +2039,13 @@ fn main() -> ! {
     let systick_icsr_software_pend_ok = check_systick_icsr_software_pend();
     let systick_icsr_repend_ok = check_systick_icsr_repend();
     let systick_periodic_ok = check_systick_periodic_reload();
+    let systick_countflag_only_ok = check_systick_countflag_without_tickint();
     mark(
         21,
         systick_primask_ok && systick_icsr_software_pend_ok && systick_icsr_repend_ok,
     );
     mark(22, systick_periodic_ok);
+    mark(23, systick_countflag_only_ok);
     let summary = summary | 0x0DF0_0000;
     wr(SUMMARY, summary);
     puts("summary ");

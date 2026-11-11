@@ -85,6 +85,7 @@ assertions:
       - "systick icsr set_readback=1 clear=1 canceled=1 masked=1 ipsr=0x0000000F active=0x0000000F pending_handler=0 pending_after=0 thread_ipsr=0x00000000 vtor_restored=1 ok"
       - "systick icsr repend entries=0x00000002 first_ipsr=0x0000000F first_active=0x0000000F pending_after_pend=1 count_after_pend=0x00000001 second_ipsr=0x0000000F second_active=0x0000000F second_pending=0 thread_ipsr=0x00000000 vtor_restored=1 ok"
       - "systick periodic entries=0x00000003 reload=0x0000007F ipsr=0x0000000F,0x0000000F,0x0000000F active=1 countflag=1 pending=0 thread_ipsr=0x00000000 vtor_restored=1 ok"
+      - "systick countflag-only tickint=0 flag=1 handler=0 pending=0 read_clear=1 ipsr=0x00000000 vtor_restored=1 ok"
       - "summary 0x0DFFFFFF"
       - "DONE"
   - memory_value:
