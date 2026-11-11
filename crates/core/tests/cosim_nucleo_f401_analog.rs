@@ -1167,3 +1167,206 @@ fn nucleo_f401re_jfet_gate_depletion_charge_reaches_adc1_with_unrelated_diode() 
         );
     }
 }
+
+/// Geometry-derived drain and source junction capacitance must integrate
+/// separately through the generic MOSFET netlist and board ADC routing. The
+/// independent recurrence uses the SPICE reverse-bias depletion-charge law;
+/// matched zero-charge devices and an unrelated diode provide controls.
+#[test]
+fn nucleo_f401re_mosfet_geometry_junction_charge_reaches_adc1_with_diode() {
+    const STEP_S: f64 = 1e-6;
+    const LOAD_OHMS: f64 = 1_000.0;
+    const CURRENT_A: f64 = 1e-3;
+    const PB_V: f64 = 1.0;
+    const MJ: f64 = 0.5;
+    const MJSW: f64 = 0.33;
+    const CJ_F_PER_M2: f64 = 2e-3;
+    const CJSW_F_PER_M: f64 = 500e-9;
+    const DRAIN_AREA_M2: f64 = 2e-6;
+    const DRAIN_PERIMETER_M: f64 = 4e-3;
+    const SOURCE_AREA_M2: f64 = 3e-6;
+    const SOURCE_PERIMETER_M: f64 = 5e-3;
+
+    // Integrate C(v)=C0*(1-v/PB)^(-M) at reverse junction bias v=-Vnode.
+    // This is independent of the simulator's junction_depletion_charge helper.
+    let reverse_charge = |voltage_v: f64, c0_f: f64, grading: f64| {
+        c0_f * PB_V / (1.0 - grading) * ((1.0 + voltage_v / PB_V).powf(1.0 - grading) - 1.0)
+    };
+    let terminal_charge = |voltage_v: f64, area_m2: f64, perimeter_m: f64| {
+        reverse_charge(voltage_v, CJ_F_PER_M2 * area_m2, MJ)
+            + reverse_charge(voltage_v, CJSW_F_PER_M * perimeter_m, MJSW)
+    };
+    let next_voltage = |previous_v: f64, area_m2: f64, perimeter_m: f64| {
+        let previous_q = terminal_charge(previous_v, area_m2, perimeter_m);
+        let residual = |voltage_v: f64| {
+            voltage_v / LOAD_OHMS
+                + (terminal_charge(voltage_v, area_m2, perimeter_m) - previous_q) / STEP_S
+                - CURRENT_A
+        };
+        let (mut low, mut high) = (0.0, CURRENT_A * LOAD_OHMS);
+        for _ in 0..100 {
+            let mid = 0.5 * (low + high);
+            if residual(mid) < 0.0 {
+                low = mid;
+            } else {
+                high = mid;
+            }
+        }
+        0.5 * (low + high)
+    };
+
+    let system_path = root("configs/systems/nucleo-f401re.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F401RE profile");
+    let diode = SystemManifest::from_file(root("examples/nucleo-f401re/analog-diode-system.yaml"))
+        .expect("load unrelated generic Shockley diode netlist");
+    let mosfet = SystemManifest::from_file(root(
+        "examples/nucleo-f401re/analog-mosfet-junction-geometry.yaml",
+    ))
+    .expect("load generic MOSFET junction-geometry netlist");
+    profile.cosim_models = diode.cosim_models;
+    profile.cosim_models.extend(mosfet.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F401 descriptor");
+    for (pad, channel) in [("PA0", 0), ("PA2", 2), ("PA3", 3), ("PA4", 4), ("PA5", 5)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+        assert_eq!(chip.analog_pins[pad].peripheral, "adc1");
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F401RE bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("profile carries a diode and MOSFET geometry branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic device netlists must resolve through PA0 and PA2..PA5 ADC1 routes"
+    );
+    for channel in [0, 1, 2, 3, 4, 5, 6] {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            u16::MAX,
+            "ADC1 channel {channel} begins without an analog source"
+        );
+    }
+
+    for input in [
+        "ui.mosfet_junction.drain_current_a",
+        "ui.mosfet_junction.drain_reference_current_a",
+        "ui.mosfet_junction.source_current_a",
+        "ui.mosfet_junction.source_reference_current_a",
+    ] {
+        session
+            .set_signal_number(input, 0.0)
+            .expect("initialize MOSFET junction-current branches");
+    }
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("settle zero-current junction branches and the diode");
+    assert_eq!(initial_steps.len(), 2, "both generic analog models solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected route errors: {initial_errors:?}"
+    );
+    for path in [
+        "board.analog.pa2_volts",
+        "board.analog.pa3_volts",
+        "board.analog.pa4_volts",
+        "board.analog.pa5_volts",
+    ] {
+        assert!(
+            signal_voltage(&session, path).abs() < 1e-12,
+            "{path} starts at ground"
+        );
+    }
+
+    for input in [
+        "ui.mosfet_junction.drain_current_a",
+        "ui.mosfet_junction.drain_reference_current_a",
+        "ui.mosfet_junction.source_current_a",
+        "ui.mosfet_junction.source_reference_current_a",
+    ] {
+        session
+            .set_signal_number(input, CURRENT_A)
+            .expect("step the matched MOSFET junction branches");
+    }
+
+    let mut previous_drain_v = 0.0;
+    let mut previous_source_v = 0.0;
+    let expected_diode_v = diode_load_line_voltage();
+    for step in 0..12 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route drain/source junction transients and diode");
+        assert_eq!(steps.len(), 2, "both generic analog models solve each step");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let expected_drain_v = next_voltage(previous_drain_v, DRAIN_AREA_M2, DRAIN_PERIMETER_M);
+        let expected_source_v = next_voltage(previous_source_v, SOURCE_AREA_M2, SOURCE_PERIMETER_M);
+        assert!(
+            expected_drain_v > previous_drain_v && expected_drain_v < 1.0,
+            "drain depletion transient must advance toward the 1 V load line"
+        );
+        assert!(
+            expected_source_v > previous_source_v && expected_source_v < 1.0,
+            "source depletion transient must advance toward the 1 V load line"
+        );
+        previous_drain_v = expected_drain_v;
+        previous_source_v = expected_source_v;
+
+        let diode_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let drain_v = signal_voltage(&session, "board.analog.pa2_volts");
+        let drain_reference_v = signal_voltage(&session, "board.analog.pa3_volts");
+        let source_v = signal_voltage(&session, "board.analog.pa4_volts");
+        let source_reference_v = signal_voltage(&session, "board.analog.pa5_volts");
+        assert!(
+            (drain_v - expected_drain_v).abs() < 3e-8,
+            "CJ·AD + CJSW·PD drain charge at step {step}: expected {expected_drain_v} V, got {drain_v} V"
+        );
+        assert!(
+            (source_v - expected_source_v).abs() < 3e-8,
+            "CJ·AS + CJSW·PS source charge at step {step}: expected {expected_source_v} V, got {source_v} V"
+        );
+        assert!(
+            (drain_reference_v - 1.0).abs() < 2e-8 && (source_reference_v - 1.0).abs() < 2e-8,
+            "zero-capacitance controls reach the 1 V DC load line"
+        );
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "the unrelated Shockley diode remains on its independent load line"
+        );
+        assert!(
+            (drain_v - source_v).abs() > 1e-3,
+            "distinct AD/PD and AS/PS values must produce distinct junction transients"
+        );
+
+        for (channel, voltage_v) in [
+            (0, diode_v),
+            (2, drain_v),
+            (3, drain_reference_v),
+            (4, source_v),
+            (5, source_reference_v),
+        ] {
+            let expected = expected_adc_count(voltage_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "the solved voltage must seed descriptor-routed ADC1_IN{channel}"
+            );
+            assert_eq!(
+                f401_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "firmware-visible ADC1_IN{channel} conversion reports {voltage_v} V"
+            );
+        }
+        for channel in [1, 6] {
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                u16::MAX,
+                "unconnected ADC1_IN{channel} remains undriven"
+            );
+        }
+    }
+}
