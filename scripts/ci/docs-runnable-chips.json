@@ -61,6 +61,10 @@
       "expect": "OK",
       "note": "ESP32-C6-DevKitC-1 L1 smoke. Bare-metal RV32IMAC HP-core image ungates UART0 through the C6's own PCR clock/reset block, routes GPIO16/U0TXD via IO_MUX, and prints OK. The LP core, ROM bootloader/flash-image path, interrupt delivery, radios and every non-UART peripheral window are out of scope at L1."
     },
+    "esp32h2": {
+      "how": "needs-build",
+      "why": "ESP32-H2 descriptor and UART0 model are newer than the installed CLI this gate checks. The source-tree firmware and simulator smoke pass in examples/esp32h2-devkitm-1-n4s; switch this row after a release carries H2 support."
+    },
     "nrf52840": {
       "how": "committed",
       "firmware": "tests/fixtures/tier1/nrf52840.elf",
