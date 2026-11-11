@@ -7,6 +7,8 @@ limits:
   max_steps: 800000
 assertions:
   - uart_contains: "STM32F4 shared profile smoke"
+  - uart_contains: "systick pendsv psp tailchain frame=1 r0=1 pending=1 ipsr=0000000E ok"
+  - uart_contains: "STM32F429 PSP tailchain PASS"
   - gpio_edges:
       pin: "gpioPortD:12"
       min_edges: 1

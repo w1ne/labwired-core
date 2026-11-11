@@ -18,6 +18,13 @@ ram:
 # Keep only models exercised by the exact-import smoke. The broader imported
 # peripheral list included untested peripherals and zero-answering stubs.
 peripherals:
+  # The Cortex-M core's architected timer is modeled by the engine and is
+  # directly exercised by the PSP SysTick-to-PendSV smoke.
+  - id: systick
+    type: systick
+    bus: sysbus
+    base_address: 0xE000E010
+    size: 16B
   - id: usart2
     type: stm32_uart
     bus: sysbus
