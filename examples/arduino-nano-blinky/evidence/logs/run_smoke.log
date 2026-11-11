@@ -1,4 +1,4 @@
-2026-11-11T15:46:32.443781Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/atmega328p.yaml
-2026-11-11T15:46:32.444905Z  INFO labwired_loader: ELF Entry Point: 0x0
+2026-11-11T18:01:42.812553Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/atmega328p.yaml
+2026-11-11T18:01:42.813622Z  INFO labwired_loader: ELF Entry Point: 0x0
 labwired-cli test: idle_ff=on (event_scheduler=on)
 PASS  2/2 checks · io-smoke · 2000000 steps · 0.31s

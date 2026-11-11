@@ -2,7 +2,7 @@
   "result_schema_version": "1.0",
   "status": "pass",
   "steps_executed": 2000000,
-  "cycles": 2602229,
+  "cycles": 2602327,
   "instructions": 1999842,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -62,14 +62,14 @@
       0,
       0,
       0,
-      199,
+      200,
       149,
       0,
       0,
+      8,
+      1,
       0,
-      253,
       0,
-      158,
       0,
       0,
       0,
@@ -77,11 +77,11 @@
       0,
       0
     ],
-    "pc": 460,
-    "sp": 2293,
-    "sreg": 131
+    "pc": 516,
+    "sp": 2295,
+    "sreg": 128
   },
-  "firmware_hash": "71a755580ec5b062ff9aac95f4cffbf7fa2c1a708d8eb5486917ebeecbd138b6",
+  "firmware_hash": "fe5adfe9097356d8738723287dc80bb3aeb9577b3038db89ff42c7b119c3a39d",
   "config": {
     "firmware": "examples/arduino-nano-blinky/../../tests/fixtures/avr/arduino-nano-blinky.elf",
     "system": "examples/arduino-nano-blinky/../../configs/systems/arduino-nano.yaml",
@@ -154,29 +154,29 @@
     "lines": [
       {
         "text": "nano-ok",
-        "cycle_lo": 0,
-        "cycle": 13466,
-        "end_cycle": 13466
+        "cycle_lo": 26248,
+        "cycle": 39482,
+        "end_cycle": 39482
       },
       {
-        "text": "................................................................................",
-        "cycle_lo": 26472,
-        "cycle": 39518
+        "text": "...............................................................................",
+        "cycle_lo": 65444,
+        "cycle": 78493
       }
     ],
     "dropped_lines": 0
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 1890,
+    "text_bytes": 1906,
     "data_bytes": 32,
-    "bss_bytes": 166,
-    "flash_used_bytes": 1922,
-    "ram_static_bytes": 198,
+    "bss_bytes": 167,
+    "flash_used_bytes": 1938,
+    "ram_static_bytes": 199,
     "flash_total_bytes": 32768,
     "ram_total_bytes": 2048,
-    "flash_used_pct": 5.87,
-    "ram_static_pct": 9.67,
+    "flash_used_pct": 5.91,
+    "ram_static_pct": 9.72,
     "notes": [
       "section_sum_not_bin_image",
       "totals_from_chip_catalog"
@@ -188,76 +188,76 @@
     "heap_method": "unsupported"
   },
   "metrics": {
-    "cycles": 2602229,
+    "cycles": 2602327,
     "instructions": 1999842,
     "steps_executed": 2000000,
     "memory_reads": 0,
-    "memory_writes": 96363,
-    "peripheral_accesses": 63083,
+    "memory_writes": 96331,
+    "peripheral_accesses": 63078,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 478,
-        "count": 468
-      },
-      {
-        "pc": 480,
-        "count": 431
+        "pc": 474,
+        "count": 430
       },
       {
         "pc": 476,
-        "count": 352
+        "count": 430
       },
       {
-        "pc": 474,
-        "count": 351
+        "pc": 478,
+        "count": 429
+      },
+      {
+        "pc": 480,
+        "count": 352
       },
       {
         "pc": 482,
         "count": 351
       },
       {
-        "pc": 524,
-        "count": 312
-      },
-      {
-        "pc": 450,
+        "pc": 452,
         "count": 274
       },
       {
-        "pc": 418,
+        "pc": 518,
         "count": 273
       },
       {
-        "pc": 464,
-        "count": 273
+        "pc": 524,
+        "count": 236
       },
       {
-        "pc": 522,
-        "count": 273
-      },
-      {
-        "pc": 422,
+        "pc": 466,
         "count": 235
       },
       {
-        "pc": 508,
+        "pc": 484,
         "count": 235
       },
       {
-        "pc": 472,
+        "pc": 436,
         "count": 234
       },
       {
-        "pc": 434,
-        "count": 195
+        "pc": 450,
+        "count": 234
       },
       {
-        "pc": 504,
-        "count": 195
+        "pc": 454,
+        "count": 234
+      },
+      {
+        "pc": 426,
+        "count": 196
       },
       {
         "pc": 510,
+        "count": 196
+      },
+      {
+        "pc": 418,
         "count": 195
       }
     ]

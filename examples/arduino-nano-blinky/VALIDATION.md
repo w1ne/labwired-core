@@ -31,6 +31,15 @@ physical Nano, USB-serial bridge, bootloader, or silicon register capture was
 tested. The model uses the ideal configured supply and does not establish
 brown-out behavior.
 
+## Hosted model verification
+
+The same Arduino sketch was also submitted to the hosted LabWired verifier for
+`arduino-nano`. Its deterministic oracle returned `status: model_verified` for
+both the `nano-ok` serial marker and D13 toggling. The result is saved in
+[`evidence/model-verification.json`](evidence/model-verification.json). The
+verifier reports one non-blocking approximation: no power net is routed, so the
+MCU uses an ideal 5 V rail and power-on/brown-out reset behavior is not covered.
+
 ## Model boundary
 
 The smoke exercises the modeled ATmega328P USART0 transmit path and PB5 GPIO.

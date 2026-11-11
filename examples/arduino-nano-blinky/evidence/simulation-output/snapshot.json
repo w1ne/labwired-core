@@ -21,14 +21,14 @@
       0,
       0,
       0,
-      199,
+      200,
       149,
       0,
       0,
+      8,
+      1,
       0,
-      253,
       0,
-      158,
       0,
       0,
       0,
@@ -36,12 +36,12 @@
       0,
       0
     ],
-    "pc": 460,
-    "sp": 2293,
-    "sreg": 131
+    "pc": 516,
+    "sp": 2295,
+    "sreg": 128
   },
   "steps_executed": 2000000,
-  "cycles": 2602229,
+  "cycles": 2602327,
   "instructions": 1999842,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -66,7 +66,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "71a755580ec5b062ff9aac95f4cffbf7fa2c1a708d8eb5486917ebeecbd138b6",
+  "firmware_hash": "fe5adfe9097356d8738723287dc80bb3aeb9577b3038db89ff42c7b119c3a39d",
   "config": {
     "firmware": "examples/arduino-nano-blinky/../../tests/fixtures/avr/arduino-nano-blinky.elf",
     "system": "examples/arduino-nano-blinky/../../configs/systems/arduino-nano.yaml",
