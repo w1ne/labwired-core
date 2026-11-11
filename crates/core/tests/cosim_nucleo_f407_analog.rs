@@ -1281,6 +1281,145 @@ fn nucleo_f407_bjt_load_line_reaches_pa4_adc1_alongside_unrelated_devices() {
 }
 
 #[test]
+fn nucleo_f407_bjt_terminal_resistances_reach_adc1_with_explicit_network_reference() {
+    let system_path = root("configs/systems/nucleo-f407.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F407 profile");
+    let generic =
+        SystemManifest::from_file(root("examples/nucleo-f407/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and diode netlists");
+    let terminal_resistances = SystemManifest::from_file(root(
+        "examples/nucleo-f407/analog-bjt-terminal-resistance.yaml",
+    ))
+    .expect("load matched generic BJT terminal-resistance netlists");
+    profile.cosim_models = generic.cosim_models;
+    profile
+        .cosim_models
+        .extend(terminal_resistances.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F407 descriptor");
+    for (pad, channel) in [
+        ("PA0", 0),
+        ("PA1", 1),
+        ("PA2", 2),
+        ("PA3", 3),
+        ("PA4", 4),
+        ("PA5", 5),
+        ("PA6", 6),
+        ("PA7", 7),
+    ] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F407 bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries an NTC, diode, and six matched BJT branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must route to ADC1 channels 0 through 7"
+    );
+    for channel in 0..=7 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.bjt_terminal.base_v", 0.0)
+        .expect("initialize matched BJT base-drive sources");
+
+    let mut cycles = 0;
+    let mut final_voltages = None;
+    for base_drive_v in [0.7_f64, 0.8, 0.9] {
+        session
+            .set_signal_number("ui.bjt_terminal.base_v", base_drive_v)
+            .expect("step all matched BJT base drives");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and BJT terminal-resistance branches");
+        assert_eq!(steps.len(), 8, "all eight generic analog branches solve");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+        assert!(
+            (ntc_v - 1.65).abs() < 1e-9,
+            "the unrelated 25 °C NTC stays isolated"
+        );
+        assert!(
+            (diode_v - diode_load_line_voltage()).abs() < 2e-5,
+            "the unrelated Shockley diode stays on its independent load line"
+        );
+
+        let bjt_voltages = (2..=7)
+            .map(|channel| signal_voltage(&session, &format!("board.analog.pa{channel}_volts")))
+            .collect::<Vec<_>>();
+        let control_v = bjt_voltages[0];
+        let expected_control_v = bjt_collector_voltage(base_drive_v);
+        assert!(
+            (control_v - expected_control_v).abs() < 5e-5,
+            "no-resistance Gummel–Poon branch at base drive {base_drive_v} V should match the independent load line {expected_control_v} V, got {control_v} V"
+        );
+        assert!(
+            (bjt_voltages[4] - bjt_voltages[5]).abs() < 1e-7,
+            "model-card RB/RC/RE must match the explicit resistor network: {} V vs {} V",
+            bjt_voltages[4],
+            bjt_voltages[5]
+        );
+
+        for (channel, voltage_v) in std::iter::once((0, ntc_v))
+            .chain(std::iter::once((1, diode_v)))
+            .chain((2..=7).zip(bjt_voltages.iter().copied()))
+        {
+            let expected = expected_adc_count(voltage_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "solved voltage seeds ADC1 channel {channel}"
+            );
+            assert_eq!(
+                stm32f4_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "modeled ADC1 conversion follows the analog voltage on channel {channel}"
+            );
+        }
+
+        if base_drive_v == 0.9 {
+            for (label, voltage_v) in [
+                ("RB", bjt_voltages[1]),
+                ("RC", bjt_voltages[2]),
+                ("RE", bjt_voltages[3]),
+                ("RB+RC+RE", bjt_voltages[4]),
+            ] {
+                assert!(
+                    (voltage_v - control_v).abs() > 1e-3,
+                    "{label} must change the collector load line: no-resistance={control_v} V, actual={voltage_v} V"
+                );
+            }
+        }
+        final_voltages = Some(bjt_voltages);
+    }
+
+    let bjt_voltages = final_voltages.expect("final base-drive sample exists");
+    for (channel, voltage_v) in (2..=7).zip(bjt_voltages) {
+        let expected = expected_adc_count(voltage_v);
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            expected,
+            "final BJT voltage remains routed to ADC1 channel {channel}"
+        );
+    }
+}
+
+#[test]
 fn nucleo_f407_bjt_junction_and_transit_charge_reach_adc1_end_to_end() {
     let system_path = root("configs/systems/nucleo-f407.yaml");
     let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F407 profile");
