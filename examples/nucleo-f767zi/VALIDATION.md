@@ -57,6 +57,20 @@ analog device and channel 6 is asserted undriven. The synthetic 1 µF CJO is del
 oversized to make its effect visible at the fixture's 1 µs step. This is model/routing
 coverage, not silicon validation.
 
+## 5) Run the BJT high-injection routing proof
+
+```bash
+cargo test -p labwired-core --test cosim_nucleo_f767zi_analog \
+  nucleo_f767zi_bjt_high_injection_rolloff_reaches_adc1_alongside_ntc_and_diode -- --nocapture
+```
+
+The test routes a matched generic Gummel–Poon NPN pair with and without
+IKF/IKR/NKF rolloff to ADC1 channels 2/3, beside the independent NTC and
+Shockley diode on channels 0/1. It checks both collector load lines against an
+independent reference across a base-drive sweep and reads all four results
+through the ADC register interface. This extends model coverage on an already
+covered profile; it is not silicon validation.
+
 ## Validation record
 
 - 2026-08-05: UART smoke exit 0 (`OK` received) on the feat/stm32f767 branch;
