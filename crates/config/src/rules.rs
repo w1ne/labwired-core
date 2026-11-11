@@ -354,6 +354,8 @@ pub enum Event {
     Frame,
     /// A [`TimerSpec`] elapsed.
     Timer { name: String },
+    /// A named I²C data-ready conversion completed on the device clock.
+    DataReady { name: String },
     /// An observed pad changed level.
     Pin { name: String, edge: PinEdge },
     /// **One or more of a NAMED SET of pads moved in the same store.**
@@ -418,6 +420,9 @@ impl Serialize for Event {
             Event::Timer { name } => {
                 m.insert(Value::from("timer"), Value::from(name.clone()));
             }
+            Event::DataReady { name } => {
+                m.insert(Value::from("data_ready"), Value::from(name.clone()));
+            }
             Event::Input { key } => {
                 m.insert(Value::from("input"), Value::from(key.clone()));
             }
@@ -454,7 +459,7 @@ impl<'de> Deserialize<'de> for Event {
                     D::Error::custom(format!(
                         "`on: {s}` is not an event. Bare events are start, stop, cs_select, \
                          cs_release, frame; the rest are single-key maps: write:, read:, \
-                         timer:, pin:, pins:, input:"
+                         timer:, data_ready:, pin:, pins:, input:"
                     ))
                 });
         }
@@ -485,6 +490,11 @@ impl<'de> Deserialize<'de> for Event {
         if let Some(val) = get("timer") {
             return Ok(Event::Timer {
                 name: as_name("timer", val)?,
+            });
+        }
+        if let Some(val) = get("data_ready") {
+            return Ok(Event::DataReady {
+                name: as_name("data_ready", val)?,
             });
         }
         if let Some(val) = get("input") {
@@ -529,7 +539,7 @@ impl<'de> Deserialize<'de> for Event {
             return Ok(Event::Pin { name, edge });
         }
         Err(D::Error::custom(
-            "unknown event; expected one of write:, read:, timer:, pin:, pins:, input:, or the \
+            "unknown event; expected one of write:, read:, timer:, data_ready:, pin:, pins:, input:, or the \
              bare start / stop / cs_select / cs_release / frame",
         ))
     }
@@ -1071,6 +1081,7 @@ pub struct RuleNames<'a> {
     pub vars: &'a [String],
     pub fifos: &'a [String],
     pub timers: &'a [String],
+    pub data_ready: &'a [String],
     pub outputs: &'a [String],
     pub inputs: &'a [String],
     pub pins: &'a [String],
@@ -1121,6 +1132,11 @@ pub fn validate_rule_names(rules: &[Rule], names: &RuleNames<'_>) -> anyhow::Res
                 has(names.timers, name),
                 "{}: no timer named '{name}'",
                 at("on.timer")
+            ),
+            Event::DataReady { name } => anyhow::ensure!(
+                has(names.data_ready, name),
+                "{}: no data-ready conversion named '{name}'",
+                at("on.data_ready")
             ),
             Event::Input { key } => anyhow::ensure!(
                 has(names.inputs, key),
@@ -1492,6 +1508,44 @@ mod tests {
     }
 
     #[test]
+    fn data_ready_event_roundtrips_and_requires_a_declared_conversion() {
+        let event: Event = serde_yaml::from_str("{ data_ready: sample }").unwrap();
+        assert_eq!(
+            event,
+            Event::DataReady {
+                name: "sample".into()
+            }
+        );
+        let encoded = serde_yaml::to_string(&event).unwrap();
+        assert_eq!(serde_yaml::from_str::<Event>(&encoded).unwrap(), event);
+        let rules = rules_from("[{ on: { data_ready: sample }, do: [] }]");
+        let names = RuleNames {
+            registers: &[],
+            fields: &[],
+            states: &[],
+            vars: &[],
+            fifos: &[],
+            timers: &[],
+            data_ready: &[],
+            outputs: &[],
+            inputs: &[],
+            pins: &[],
+            frames: None,
+        };
+        let err = validate_rule_names(&rules, &names).unwrap_err();
+        assert!(
+            err.to_string().contains("no data-ready conversion"),
+            "{err}"
+        );
+        let declared = vec!["sample".to_string()];
+        let names = RuleNames {
+            data_ready: &declared,
+            ..names
+        };
+        validate_rule_names(&rules, &names).unwrap();
+    }
+
+    #[test]
     fn undeclared_names_are_a_load_error() {
         let rules = rules_from(r#"[{ on: { timer: nope }, do: [] }]"#);
         let empty: [String; 0] = [];
@@ -1503,6 +1557,7 @@ mod tests {
             vars: &empty,
             fifos: &empty,
             timers: &empty,
+            data_ready: &empty,
             outputs: &empty,
             inputs: &empty,
             pins: &empty,
@@ -1524,6 +1579,7 @@ mod tests {
             vars: &empty,
             fifos: &empty,
             timers: &empty,
+            data_ready: &empty,
             outputs: &empty,
             inputs: &empty,
             pins: &empty,
@@ -1543,6 +1599,7 @@ mod tests {
             vars: &[],
             fifos: &[],
             timers: &[],
+            data_ready: &[],
             outputs: &[],
             inputs: &[],
             pins: &pins,
