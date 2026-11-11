@@ -58,7 +58,7 @@ chips:
 
   - id: esp32c3
     arch: riscv32imc
-    headline: "Leo air-quality remains the deeper multi-sensor proof. The ESP32-C3-DevKitM-1-N4X + BME280 smoke now exercises the C3 mask-ROM boot, UART0 and I2C0 on GPIO4/5 against the real BME280 model. clock/dma stay unrecorded by design — esp32c3 wires system/rtc_cntl/dma as declarative register files with no behavioural engine, so a PASS would overclaim. The non-rubric declarative wall (crypto, USB device, I2S, UHCI, radio) is not yet swept into this entry — tracked for a later ledger pass."
+    headline: "Leo air-quality remains the deeper multi-sensor proof. The ESP32-C3-DevKitM-1-N4X + BME280 smoke exercises the C3 mask-ROM boot, UART0 and I2C0 on GPIO4/5 against the real BME280 model. The LOLIN C3 Mini ADC smoke exercises the C3 SAR one-shot with a centered potentiometer source injected on ADC1_CH0/GPIO0; it does not prove graph-level voltage solving or pin routing. clock/dma stay unrecorded by design — esp32c3 wires system/rtc_cntl/dma as declarative register files with no behavioural engine, so a PASS would overclaim. The non-rubric declarative wall (crypto, USB device, I2S, UHCI, radio) is not yet swept into this entry — tracked for a later ledger pass."
     functional:
       - what: "Leo air-quality — real Sensirion SCD41/SGP41/SPS30 + Melexis MLX90614 + Vishay VEML7700 decode CO2 / humidity / surface condensation to plain-language verdicts"
         fw: leo-airquality
@@ -67,6 +67,14 @@ chips:
       - what: "ESP32-C3-DevKitM-1-N4X + BME280: chip ID and raw temperature read over I2C0 (header GPIO4/GPIO5) after mask-ROM flash boot"
         fw: esp32c3-devkitm-1-n4x-bme280
         ev: "examples/esp32c3-devkitm-1-n4x-bme280/evidence (committed local onboarding smoke)"
+        gate: nightly
+      - what: "WEMOS LOLIN C3 Mini V2.1.0 + BME280: chip ID and raw temperature read over I2C0 (header GPIO4/GPIO5) after mask-ROM flash boot; GPIO6 edges gated on both reads"
+        fw: lolin-c3-mini-bme280
+        ev: "examples/lolin-c3-mini-bme280/evidence (committed local onboarding smoke)"
+        gate: nightly
+      - what: "WEMOS LOLIN C3 Mini V2.1.0 + centered potentiometer: Arduino `analogRead(GPIO0)` reads an injected 1.65 V source through ADC1_CH0 and emits the pass marker after mask-ROM flash boot"
+        fw: lolin-c3-mini-adc
+        ev: "examples/lolin-c3-mini-adc/evidence (committed local onboarding smoke)"
         gate: nightly
     advanced_unit_only:
       - ana_i2c
@@ -1259,6 +1267,38 @@ chips:
     shim: []
   - id: esp32s3-feather-8mb
     arch: xtensa-lx7
+    headline: "Adafruit ESP32-S3 Feather 8 MB/no-PSRAM smoke covers UART0 and the built-in GPIO33 NeoPixel. GPIO21 is driven high as the power enable, but the system model does not enforce that electrical gate. STEMMA QT devices, USB, battery management, and wireless are outside this profile."
+    functional:
+      - what: "Adafruit ESP32-S3 Feather Product 5323: emit and decode a green WS2812 pixel on GPIO33, with UART0 boot marker"
+        fw: adafruit-feather-esp32s3-8mb
+        ev: "examples/adafruit-feather-esp32s3-8mb/evidence (committed local onboarding smoke)"
+        gate: nightly
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+  - id: esp32-devkitm-1-smoke
+    arch: xtensa-lx6
+    headline: "No beyond-rubric firmware exercise is recorded in this ledger; rubric coverage comes from tier1-matrix.json."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+  - id: esp32s3-xiao
+    arch: xtensa-lx7
+    headline: "No beyond-rubric firmware exercise is recorded in this ledger; rubric coverage comes from tier1-matrix.json."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+  - id: stm32c562re
+    arch: arm
+    headline: "No beyond-rubric firmware exercise is recorded in this ledger; rubric coverage comes from tier1-matrix.json."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+  - id: stm32g431kb
+    arch: arm
     headline: "No beyond-rubric firmware exercise is recorded in this ledger; rubric coverage comes from tier1-matrix.json."
     functional: []
     advanced_unit_only: []

@@ -847,6 +847,25 @@ _No beyond-rubric firmware exercise is recorded in this ledger; rubric coverage 
 
 ### `esp32s3-feather-8mb`
 
+_Adafruit ESP32-S3 Feather 8 MB/no-PSRAM smoke covers UART0 and the built-in GPIO33 NeoPixel. GPIO21 is driven high as the power enable, but the system model does not enforce that electrical gate. STEMMA QT devices, USB, battery management, and wireless are outside this profile._
+
+**Functional firmware exercises** (including decoded device/protocol reads):
+- Adafruit ESP32-S3 Feather Product 5323: emit and decode a green WS2812 pixel on GPIO33, with UART0 boot marker — `adafruit-feather-esp32s3-8mb` · examples/adafruit-feather-esp32s3-8mb/evidence (committed local onboarding smoke) (nightly CI)
+
+### `esp32-devkitm-1-smoke`
+
+_No beyond-rubric firmware exercise is recorded in this ledger; rubric coverage comes from tier1-matrix.json._
+
+### `esp32s3-xiao`
+
+_No beyond-rubric firmware exercise is recorded in this ledger; rubric coverage comes from tier1-matrix.json._
+
+### `stm32c562re`
+
+_No beyond-rubric firmware exercise is recorded in this ledger; rubric coverage comes from tier1-matrix.json._
+
+### `stm32g431kb`
+
 _No beyond-rubric firmware exercise is recorded in this ledger; rubric coverage comes from tier1-matrix.json._
 
 ### `stm32f103c8-bluepill`
