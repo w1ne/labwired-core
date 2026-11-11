@@ -57,7 +57,13 @@ impl RiscVCoreProfile {
         if matches!(core.as_str(), "rv32e" | "rv32ec" | "rv32emc" | "rv32em") {
             return Self::Rv32e;
         }
-        if chip.name.to_ascii_lowercase().contains("esp32") {
+        let chip_name = chip.name.to_ascii_lowercase();
+        // P4's focused bare-metal profile uses the standard machine CSR view;
+        // the C3 vendor counter profile is retained by the other ESP32 targets.
+        if chip_name.contains("esp32-p4") || chip_name.contains("esp32p4") {
+            return Self::StandardRv32;
+        }
+        if chip_name.contains("esp32") {
             return Self::Esp32C3;
         }
         if core.starts_with("rv32") {

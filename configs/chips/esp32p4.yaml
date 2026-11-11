@@ -1,0 +1,28 @@
+# Focused ESP32-P4 HP-core profile for the Olimex ESP32-P4-DevKit LED smoke.
+# The modeled image uses one standard RV32IMAC CPU in internal SRAM. The P4's
+# second core, F/D/custom instruction extensions, boot ROM/XIP, PSRAM, LP core,
+# USB, Ethernet, display, camera, SDMMC, and wireless are outside this profile.
+name: "Espressif ESP32-P4"
+arch: "riscv"
+core: "rv32imac"
+registers_count: 31
+cpu_hz: 400_000_000
+
+flash:
+  # P4 maps external flash through the 0x4000_0000 MMU window. The smoke ELF
+  # is linked directly into SRAM and does not exercise this window.
+  base: 0x40000000
+  size: "16384KB"
+ram:
+  # HP IRAM/DRAM share the 768 KiB range at 0x4FF0_0000.
+  base: 0x4FF00000
+  size: "768KB"
+
+peripherals:
+  # P4 GPIO begins at 0x500E_0000. The GPIO model also owns the adjacent
+  # IO_MUX GPIO words at 0x500E_1004..0x500E_10DC so GPIO2's pad selection is
+  # checked before the board LED sees its output. Other accesses fault.
+  - id: "gpio"
+    type: "esp32p4_gpio"
+    base_address: 0x500E0000
+    size: "4352"

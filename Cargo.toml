@@ -31,6 +31,7 @@ members = [
     "crates/firmware-esp32c61-smoke",
     "crates/firmware-esp32c61-bme280-smoke",
     "crates/firmware-esp32h2-devkitm-1-smoke",
+    "crates/firmware-olimex-esp32-p4-devkit-smoke",
     "crates/firmware-f103-i2c-demo",
     "crates/firmware-f401-demo",
     "crates/firmware-f103-conformance",

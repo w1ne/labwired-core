@@ -1790,6 +1790,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-olimex-esp32-p4-devkit-smoke"
+version = "0.1.0"
+
+[[package]]
 name = "firmware-perf-spin"
 version = "0.25.0"
 dependencies = [

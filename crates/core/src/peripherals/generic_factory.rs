@@ -148,6 +148,8 @@ pub const MODEL_TYPES: &[&str] = &[
     // rate, plus the H2 direct-GPIO subset (GPIO output signal 128).
     "esp32h2_uart",
     "esp32h2_gpio",
+    // ESP32-P4 GPIO and IO_MUX are modeled together for the GPIO2 user LED.
+    "esp32p4_gpio",
     // C6-only behavioral blocks: PCR (clock/reset, full SVD register map) and
     // GDMA (3 channels, C6 register layout). The fuzzy `contains("dma")`
     // fallback would otherwise coerce `esp32c6_gdma` onto the STM32 DMA

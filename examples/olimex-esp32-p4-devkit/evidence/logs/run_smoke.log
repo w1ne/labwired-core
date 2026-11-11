@@ -1,0 +1,4 @@
+2026-11-11T06:06:35.544421Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/esp32p4.yaml
+2026-11-11T06:06:35.554190Z  INFO labwired_loader: ELF Entry Point: 0x4ff00000
+labwired-cli test: idle_ff=on (event_scheduler=on)
+PASS  2/2 checks · gpio2-led-smoke · 300000 steps · 0.11s
