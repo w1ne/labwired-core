@@ -50,6 +50,7 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
     let shpr1 = Arc::new(AtomicU32::new(0));
     let shpr2 = Arc::new(AtomicU32::new(0));
     let shpr3 = Arc::new(AtomicU32::new(0));
+    let systick_pending_live = Arc::new(AtomicBool::new(false));
     let priority_group = Arc::new(AtomicU32::new(0));
     let nvic_state = Arc::new(NvicState::default());
     // Shared SYSRESETREQ latch: the SCB sets it on an AIRCR write, the CPU's
@@ -72,6 +73,7 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
     cpu.set_shared_vtor(vtor.clone());
     cpu.set_shared_vectactive(vectactive.clone());
     cpu.set_shared_shpr(shpr1.clone(), shpr2.clone(), shpr3.clone());
+    cpu.set_shared_systick_pending(systick_pending_live.clone());
     cpu.set_shared_priority_group(priority_group.clone());
     cpu.set_shared_nvic_state(nvic_state.clone());
     cpu.set_shared_sysreset_signal(sysreset_signal.clone());
@@ -111,6 +113,7 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
         shpr1,
         shpr2,
         shpr3,
+        systick_pending_live,
         priority_group,
         sysreset_signal,
         faults,

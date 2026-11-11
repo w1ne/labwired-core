@@ -202,6 +202,8 @@ pub struct SharedScbState {
     pub shpr1: Arc<AtomicU32>,
     pub shpr2: Arc<AtomicU32>,
     pub shpr3: Arc<AtomicU32>,
+    /// Live CPU-side SysTick pending state for ICSR.PENDSTSET readback.
+    pub systick_pending_live: Arc<AtomicBool>,
     /// AIRCR.PRIGROUP, shared with Cortex-M exception arbitration.
     pub priority_group: Arc<AtomicU32>,
     /// Mirror of `pending_reset` the CPU can read without reaching the bus.
@@ -250,6 +252,10 @@ pub struct Scb {
     /// other interrupt is active — that's the load-bearing semantics
     /// for `loopTask` to ever get CPU time.
     pub shpr3: Arc<AtomicU32>,
+    #[serde(skip)]
+    /// Live CPU pending state. The local latch below represents an ICSR write
+    /// that has not yet been drained into the CPU bitmap.
+    pub systick_pending_live: Arc<AtomicBool>,
     #[serde(skip)]
     /// AIRCR.PRIGROUP, shared with Cortex-M exception arbitration.
     pub priority_group: Arc<AtomicU32>,
@@ -337,6 +343,7 @@ impl Scb {
             shpr1: Arc::new(AtomicU32::new(0)),
             shpr2: Arc::new(AtomicU32::new(0)),
             shpr3: Arc::new(AtomicU32::new(0)),
+            systick_pending_live: Arc::new(AtomicBool::new(false)),
             priority_group: Arc::new(AtomicU32::new(0)),
             sysreset_signal: Arc::new(AtomicBool::new(false)),
             faults: Arc::new(ScbFaultState::default()),
@@ -351,6 +358,7 @@ impl Scb {
             shpr1: Arc::new(AtomicU32::new(0)),
             shpr2: Arc::new(AtomicU32::new(0)),
             shpr3: Arc::new(AtomicU32::new(0)),
+            systick_pending_live: Arc::new(AtomicBool::new(false)),
             priority_group: Arc::new(AtomicU32::new(0)),
             sysreset_signal: Arc::new(AtomicBool::new(false)),
             faults: Arc::new(ScbFaultState::default()),
@@ -372,6 +380,7 @@ impl Scb {
             shpr1: s.shpr1,
             shpr2: s.shpr2,
             shpr3: s.shpr3,
+            systick_pending_live: s.systick_pending_live,
             priority_group: s.priority_group,
             pendsv_pending: false,
             systick_pending: false,
@@ -493,7 +502,7 @@ impl Scb {
                 if self.pendsv_pending {
                     v |= 1 << 28;
                 }
-                if self.systick_pending {
+                if self.systick_pending || self.systick_pending_live.load(Ordering::Relaxed) {
                     v |= 1 << 26;
                 }
                 if self.nmi_pending {
@@ -562,9 +571,11 @@ impl Scb {
                 }
                 if value & (1 << 26) != 0 {
                     self.systick_pending = true;
+                    self.systick_pending_live.store(true, Ordering::Relaxed);
                 }
                 if value & (1 << 25) != 0 {
                     self.systick_pending = false;
+                    self.systick_pending_live.store(false, Ordering::Relaxed);
                 }
                 // The SET/CLR action bits are write-only / self-clearing: never
                 // persist them. Zephyr's arch_swap re-pends with a read-modify-

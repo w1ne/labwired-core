@@ -31,7 +31,8 @@
 //! active IRQ before tail-chaining after that IRQ returns. Every check prints
 //! one line and sets one bit of the summary word at `SUMMARY`. AIRCR.PRIGROUP
 //! is also checked as reserved on this ARMv6-M core. A short SysTick period
-//! verifies core exception 15, COUNTFLAG, and its read-clear behavior.
+//! verifies core exception 15, COUNTFLAG read-clear behavior, and PRIMASK's
+//! pending-then-deliver behavior.
 
 #![no_std]
 #![no_main]
@@ -63,6 +64,7 @@ const NMI_RECORD: u32 = SUMMARY + 64;
 const NMI_COUNT: u32 = NMI_RECORD + 36;
 const NMI_DEFERRED_IRQ: u32 = SUMMARY + 104;
 const SYSTICK_RECORD: u32 = SUMMARY + 176;
+const SYSTICK_MASK_RECORD: u32 = SUMMARY + 192;
 const SYSTICK_CSR: u32 = 0xE000_E010;
 const SYSTICK_RVR: u32 = 0xE000_E014;
 const SYSTICK_CVR: u32 = 0xE000_E018;
@@ -400,6 +402,27 @@ unsafe extern "C" fn smoke_systick_handler() {
     );
 }
 
+/// Capture a SysTick exception after it pends while PRIMASK is set.
+#[unsafe(naked)]
+unsafe extern "C" fn smoke_systick_masked_handler() {
+    core::arch::naked_asm!(
+        "mrs r2, ipsr",
+        "ldr r0, =0x200030C0",
+        "str r2, [r0, #0]",
+        "ldr r1, =0xE000ED04",
+        "ldr r2, [r1]",
+        "str r2, [r0, #4]",
+        "mrs r2, PRIMASK",
+        "str r2, [r0, #12]",
+        "ldr r1, =0xE000E010",
+        "movs r2, #0",
+        "str r2, [r1]",
+        "movs r2, #1",
+        "str r2, [r0, #8]",
+        "bx lr",
+    );
+}
+
 /// Exercise the imported Cortex-M SysTick model. Its zero-hit must enter
 /// system exception 15, set COUNTFLAG, and clear the flag on a word CSR read.
 fn check_systick() -> bool {
@@ -491,6 +514,154 @@ fn check_systick() -> bool {
     flag("countflag", countflag);
     flag("read_clear", countflag_cleared);
     puts("pending_after=");
+    hex((icsr_after >> 26) & 1);
+    puts(" thread_ipsr=");
+    hex(ipsr_after);
+    puts(" ");
+    flag("vtor_restored", vtor_restored);
+    verdict(ok);
+    ok
+}
+
+/// SysTick must become pending while PRIMASK blocks delivery, then enter once
+/// interrupts are unmasked. This checks the core exception path against the
+/// imported target rather than only checking the timer's COUNTFLAG registers.
+fn check_systick_primask() -> bool {
+    let source_vtor = rd(SCB_VTOR);
+    let table = RAM_VECTOR_BASE as *mut u32;
+    let prior_primask: u32;
+    unsafe {
+        asm!(
+            "mrs {primask}, PRIMASK",
+            "cpsid i",
+            primask = out(reg) prior_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+        wr(SYSTICK_CSR, 0);
+        wr(SCB_ICSR, 1 << 25);
+        wr(SYSTICK_RVR, 64);
+        wr(SYSTICK_CVR, 0);
+        for index in 0..VECTOR_TABLE_WORDS {
+            write_volatile(table.add(index), 0);
+        }
+        for index in 0..4 {
+            write_volatile((SYSTICK_MASK_RECORD as *mut u32).add(index), 0);
+        }
+        write_volatile(
+            table.add(SYSTICK_VECTOR_INDEX),
+            (smoke_systick_masked_handler as *const () as usize as u32) | 1,
+        );
+        wr(SCB_VTOR, RAM_VECTOR_BASE);
+        wr(SYSTICK_CSR, 0x7);
+    }
+
+    for _ in 0..100_000 {
+        if rd(SCB_ICSR) & (1 << 26) != 0 {
+            break;
+        }
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+
+    let first_pending = rd(SCB_ICSR) & (1 << 26) != 0;
+    unsafe {
+        wr(SYSTICK_CSR, 0);
+        wr(SCB_ICSR, 1 << 25);
+    }
+    let icsr_after_clear = rd(SCB_ICSR);
+    unsafe {
+        asm!("cpsie i", "dsb", "isb", options(nostack, preserves_flags));
+    }
+    for _ in 0..64 {
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+    let handler_hit_after_clear = rd(SYSTICK_MASK_RECORD + 8) != 0;
+
+    unsafe {
+        asm!("cpsid i", options(nomem, nostack, preserves_flags));
+        wr(SYSTICK_RVR, 64);
+        wr(SYSTICK_CVR, 0);
+        wr(SYSTICK_CSR, 0x7);
+    }
+    for _ in 0..100_000 {
+        if rd(SCB_ICSR) & (1 << 26) != 0 {
+            break;
+        }
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+
+    let handler_hit_while_masked = rd(SYSTICK_MASK_RECORD + 8) != 0;
+    let icsr_while_masked = rd(SCB_ICSR);
+    unsafe {
+        asm!("cpsie i", "dsb", "isb", options(nostack, preserves_flags));
+    }
+    for _ in 0..100_000 {
+        if rd(SYSTICK_MASK_RECORD + 8) != 0 {
+            break;
+        }
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+
+    let handler_ipsr = rd(SYSTICK_MASK_RECORD);
+    let icsr_in_handler = rd(SYSTICK_MASK_RECORD + 4);
+    let handler_hit = rd(SYSTICK_MASK_RECORD + 8) == 1;
+    let primask_in_handler = rd(SYSTICK_MASK_RECORD + 12);
+    unsafe {
+        asm!("cpsid i", options(nomem, nostack, preserves_flags));
+        wr(SYSTICK_CSR, 0);
+        wr(SCB_ICSR, 1 << 25);
+        wr(SYSTICK_CVR, 0);
+        wr(SCB_VTOR, source_vtor);
+        asm!(
+            "msr PRIMASK, {primask}",
+            "dsb",
+            "isb",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+
+    let icsr_after = rd(SCB_ICSR);
+    let ipsr_after: u32;
+    unsafe {
+        asm!("mrs {value}, ipsr", value = out(reg) ipsr_after, options(nomem, nostack, preserves_flags));
+    }
+    let vtor_restored = rd(SCB_VTOR) == source_vtor;
+    let pending_while_masked = icsr_while_masked & (1 << 26) != 0;
+    let thread_while_masked = icsr_while_masked & 0x1FF == 0;
+    let pending_clear_honored = icsr_after_clear & (1 << 26) == 0 && !handler_hit_after_clear;
+    let active_exception = icsr_in_handler & 0x1FF == 15;
+    let pending_cleared = icsr_after & (1 << 26) == 0;
+    let ok = prior_primask == 0
+        && first_pending
+        && pending_clear_honored
+        && !handler_hit_while_masked
+        && pending_while_masked
+        && thread_while_masked
+        && handler_hit
+        && handler_ipsr == 15
+        && active_exception
+        && primask_in_handler == 0
+        && pending_cleared
+        && ipsr_after == 0
+        && vtor_restored;
+
+    puts("systick primask clear=");
+    flag("honored", pending_clear_honored);
+    puts("masked=");
+    puts(
+        if pending_while_masked && !handler_hit_while_masked && thread_while_masked {
+            "1 "
+        } else {
+            "0 "
+        },
+    );
+    puts("ipsr=");
+    hex(handler_ipsr);
+    puts(" active=");
+    hex(icsr_in_handler & 0x1FF);
+    puts(" primask=");
+    hex(primask_in_handler);
+    puts(" pending_after=");
     hex((icsr_after >> 26) & 1);
     puts(" thread_ipsr=");
     hex(ipsr_after);
@@ -1290,7 +1461,8 @@ fn main() -> ! {
     mark(18, check_exception_entry());
     mark(19, check_nmi_repend_and_deferred_irq());
     mark(20, check_systick());
-    let summary = summary | 0x0DD0_0000;
+    mark(21, check_systick_primask());
+    let summary = summary | 0x0DF0_0000;
     wr(SUMMARY, summary);
     puts("summary ");
     hex(summary);

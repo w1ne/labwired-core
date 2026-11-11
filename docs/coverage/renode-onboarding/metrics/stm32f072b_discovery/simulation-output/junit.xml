@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="6" failures="0" errors="0" time="0.211382">
+<testsuite name="labwired" tests="6" failures="0" errors="0" time="0.240628">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="12b1fe782f048bd6ec2011953b43cdb0bc53c648885189ad4df5a1ede128143f"/>
+    <property name="firmware_hash" value="6cd66bbb114df3c3d2f7a224e33591bc92903ac6fe97556225070e4f8003557e"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.211382">
+  <testcase classname="labwired" name="run" time="0.240628">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: STM32F072B-DISCO SMOKE" time="0.000000">
   </testcase>
   <testcase classname="labwired" name="assertion 2: uart_ordered: [&quot;cpu=cortex-m0 uart=usart1&quot;, &quot;rcc reset=1 gate=1 ok&quot;, &quot;aircr prigroup=0 reserved=writes_ignored=1 ok&quot;, &quot;…" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 3: memory_value: @0x20003000=0xddfffff" time="0.000000">
+  <testcase classname="labwired" name="assertion 3: memory_value: @0x20003000=0xdffffff" time="0.000000">
   </testcase>
   <testcase classname="labwired" name="assertion 4: gpio_edges: gpioc:6 &gt;= 5 edges" time="0.000000">
   </testcase>

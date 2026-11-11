@@ -166,6 +166,9 @@ pub struct CortexM {
     /// PENDSVSET and only have it dispatch on return-to-thread — the
     /// load-bearing semantics for context switching.
     pub shpr3: Arc<AtomicU32>,
+    /// Live ICSR.PENDSTSET mirror shared with the SCB. The timer's exception
+    /// pending state lives in this CPU, while ICSR is served by the SCB.
+    pub systick_pending_live: Arc<AtomicBool>,
     /// Shared AIRCR.PRIGROUP. Priority-group bits gate preemption while
     /// subpriority bits only order simultaneous pending exceptions. Baseline
     /// cores report PRIGROUP as reserved and use all priority bits for groups.
@@ -347,6 +350,7 @@ impl Default for CortexM {
             shpr1: Arc::new(AtomicU32::new(0)),
             shpr2: Arc::new(AtomicU32::new(0)),
             shpr3: Arc::new(AtomicU32::new(0)),
+            systick_pending_live: Arc::new(AtomicBool::new(false)),
             priority_group: Arc::new(AtomicU32::new(0)),
             nvic_state: None,
             sysreset_signal: None,
@@ -1812,6 +1816,11 @@ impl CortexM {
         self.shpr3 = shpr3;
     }
 
+    /// Wire ICSR.PENDSTSET to the CPU's live SysTick pending state.
+    pub fn set_shared_systick_pending(&mut self, pending: Arc<AtomicBool>) {
+        self.systick_pending_live = pending;
+    }
+
     /// Wire AIRCR.PRIGROUP from the shared SCB state.
     pub fn set_shared_priority_group(&mut self, priority_group: Arc<AtomicU32>) {
         self.priority_group = priority_group;
@@ -3060,6 +3069,7 @@ impl Cpu for CortexM {
         self.pc = 0x0000_0000;
         self.sp = 0x2000_0000;
         self.pending_exceptions = [0; 4];
+        self.systick_pending_live.store(false, Ordering::Relaxed);
         // Reset is not exception return: no interrupt mask, IT block or
         // exception-return LR from the previous boot may survive. Cortex-M4
         // DUI0553A table 2-1 defines these reset values. General registers
@@ -3135,6 +3145,9 @@ impl Cpu for CortexM {
             eprintln!("EXC pend num={} pc=0x{:08X}", exception_num, self.pc);
         }
         if exception_num < 256 {
+            if exception_num == 15 {
+                self.systick_pending_live.store(true, Ordering::Relaxed);
+            }
             let word = &mut self.pending_exceptions[(exception_num / 64) as usize];
             let mask = 1u64 << (exception_num % 64);
             // External IRQ transitions are tracked in NVIC ISPR, including
@@ -3228,6 +3241,10 @@ impl Cpu for CortexM {
             for (i, w) in s.pending_exceptions_hi.iter().take(3).enumerate() {
                 self.pending_exceptions[i + 1] = *w;
             }
+            self.systick_pending_live.store(
+                self.pending_exceptions[0] & (1 << 15) != 0,
+                Ordering::Relaxed,
+            );
             self.vtor.store(s.vtor, Ordering::Relaxed);
             self.waiting_for_event = s.waiting_for_event;
             self.event_register = s.event_register;
@@ -4174,6 +4191,12 @@ impl CortexM {
         // behaviour-preserving by construction: with no bit set the old
         // `unwrap_or(0)` produced `exception_num == 0`, and the `&& exception_num
         // != 0` arm below already made the whole block dead.
+        // ICSR.PENDSTCLR clears a pending SysTick in the SCB. Keep the CPU's
+        // arbitration bitmap in step with that live, architecturally visible
+        // state so a cleared exception cannot still be taken from a stale bit.
+        if !self.systick_pending_live.load(Ordering::Relaxed) {
+            self.pending_exceptions[0] &= !(1 << 15);
+        }
         let exception_num = if self.any_exception_pending() {
             self.highest_priority_pending().unwrap_or(0)
         } else {
@@ -4204,6 +4227,9 @@ impl CortexM {
                     self.exclusive_subword = None;
                     self.pending_exceptions[(exception_num / 64) as usize] &=
                         !(1u64 << (exception_num % 64));
+                    if exception_num == 15 {
+                        self.systick_pending_live.store(false, Ordering::Relaxed);
+                    }
 
                     // Clear NVIC ISPR for this exception so it isn't immediately re-pended.
                     // On real ARM hardware this happens automatically when the exception is taken.
