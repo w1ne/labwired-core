@@ -203,6 +203,43 @@ fn expected_adc_count(voltage_v: f64) -> u16 {
     (millivolts * 4095 / 3300).min(4095) as u16
 }
 
+/// Independent level-1 NMOS load line with external drain/source resistance.
+/// It treats model-card RSH × NRD/NRS and explicit resistors as the same series
+/// path around the intrinsic channel, including the source-resistor VGS drop.
+fn mosfet_drain_voltage(gate_v: f64, drain_ohms: f64, source_ohms: f64) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const LOAD_OHMS: f64 = 10_000.0;
+    const VTO: f64 = 1.0;
+    const KP_A_PER_V2: f64 = 20e-6;
+    const W_M: f64 = 100e-6;
+    const L_M: f64 = 10e-6;
+    const LAMBDA_PER_V: f64 = 0.02;
+
+    let beta = KP_A_PER_V2 * W_M / L_M;
+    let channel_current = |current_a: f64| {
+        let vds = SUPPLY_V - current_a * (LOAD_OHMS + drain_ohms + source_ohms);
+        let overdrive = gate_v - current_a * source_ohms - VTO;
+        if overdrive <= 0.0 || vds <= 0.0 {
+            0.0
+        } else if vds < overdrive {
+            beta * (1.0 + LAMBDA_PER_V * vds) * vds * (overdrive - 0.5 * vds)
+        } else {
+            0.5 * beta * (1.0 + LAMBDA_PER_V * vds) * overdrive * overdrive
+        }
+    };
+
+    let (mut low, mut high) = (0.0, SUPPLY_V / (LOAD_OHMS + drain_ohms + source_ohms));
+    for _ in 0..100 {
+        let current_a = (low + high) / 2.0;
+        if channel_current(current_a) > current_a {
+            low = current_a;
+        } else {
+            high = current_a;
+        }
+    }
+    SUPPLY_V - ((low + high) / 2.0) * LOAD_OHMS
+}
+
 /// Extend the basic NUCLEO-F103RB NTC route with a Shockley diode and matched
 /// Gummel–Poon branches to exercise generic netlist routing and ADC conversion.
 #[test]
@@ -704,6 +741,157 @@ fn nucleo_f103rb_epaper_mosfet_temperature_reaches_pa2_pa3_adc1_end_to_end() {
         0xFFFF,
         "the neighboring ADC1 channel remains undriven"
     );
+}
+
+/// The generic level-1 NMOS sheet-resistance path resolves through the e-paper
+/// profile's ADC1 pins. Matched explicit resistor branches independently check
+/// RSH×NRD and RSH×NRS, while the unrelated NTC and diode stay isolated.
+#[test]
+fn nucleo_f103rb_epaper_mosfet_sheet_resistance_reaches_adc1_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/nucleo-f103rb-epaper.yaml");
+    let mut profile =
+        SystemManifest::from_file(&system_path).expect("load NUCLEO-F103RB e-paper profile");
+    assert_eq!(profile.name, "nucleo-f103rb-epaper");
+    assert_eq!(profile.external_devices.len(), 1);
+    assert_eq!(profile.external_devices[0].id, "epaper");
+
+    let generic = SystemManifest::from_file(root(
+        "examples/nucleo-f103rb-epaper/analog-ntc-diode-system.yaml",
+    ))
+    .expect("load generic NTC and Shockley diode netlists");
+    let sheet = SystemManifest::from_file(root(
+        "examples/nucleo-f103rb-epaper/analog-mosfet-sheet-resistance-system.yaml",
+    ))
+    .expect("load generic MOSFET sheet-resistance branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(sheet.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F103 descriptor");
+    for (pad, channel) in [
+        ("PA0", 0),
+        ("PA1", 1),
+        ("PB0", 8),
+        ("PB1", 9),
+        ("PC0", 10),
+        ("PC1", 11),
+        ("PC2", 12),
+    ] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+        assert_eq!(chip.analog_pins[pad].peripheral, "adc1");
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build e-paper board bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal co-simulation")
+        .expect("profile carries NTC, diode, and five MOSFET branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "each generic device output must resolve through PA0/PA1 and PB0..PC2 ADC1 routes"
+    );
+    for channel in 0..=13 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold the unrelated NTC at nominal temperature");
+    let expected_diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    for gate_v in [0.5_f64, 2.5] {
+        session
+            .set_signal_number("ui.mosfet.gate_v", gate_v)
+            .expect("set shared MOSFET gate voltage");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and MOSFET netlists");
+        assert_eq!(steps.len(), 3, "all three unrelated netlists solve");
+        assert!(
+            errors.is_empty(),
+            "unexpected ADC1 routing errors: {errors:?}"
+        );
+
+        let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+        assert!((ntc_v - 1.65).abs() < 1e-9);
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "the unrelated diode load line should be {expected_diode_v} V, got {diode_v} V"
+        );
+
+        let branches = [
+            (8, "board.analog.pb0_volts", 0.0, 0.0),
+            (9, "board.analog.pb1_volts", 1_000.0, 0.0),
+            (10, "board.analog.pc0_volts", 0.0, 2_000.0),
+            (11, "board.analog.pc1_volts", 1_000.0, 0.0),
+            (12, "board.analog.pc2_volts", 0.0, 2_000.0),
+        ];
+        let mut voltages = Vec::new();
+        for (channel, path, drain_ohms, source_ohms) in branches {
+            let volts = signal_voltage(&session, path);
+            let expected = mosfet_drain_voltage(gate_v, drain_ohms, source_ohms);
+            assert!(
+                (volts - expected).abs() < 5e-5,
+                "at VGS={gate_v} V with RD={drain_ohms} Ω and RS={source_ohms} Ω, expected {expected} V on ADC1_IN{channel}, got {volts} V"
+            );
+            let count = expected_adc_count(volts);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                count,
+                "the solved MOSFET voltage must seed ADC1 channel {channel}"
+            );
+            assert_eq!(
+                stm32f103_adc_convert(&mut bus, channel),
+                u32::from(count),
+                "firmware-visible ADC1 channel {channel} must follow the solved load line"
+            );
+            voltages.push(volts);
+        }
+        assert!(
+            (voltages[1] - voltages[3]).abs() < 5e-5,
+            "drain RSH×NRD must match the equivalent external resistor: {voltages:?}"
+        );
+        assert!(
+            (voltages[2] - voltages[4]).abs() < 5e-5,
+            "source RSH×NRS must match the equivalent external resistor: {voltages:?}"
+        );
+        if gate_v < 1.0 {
+            assert!(
+                voltages.iter().all(|volts| (volts - 3.3).abs() < 5e-5),
+                "all matched MOSFETs remain in cutoff below threshold: {voltages:?}"
+            );
+        } else {
+            assert!(
+                (voltages[1] - voltages[0]).abs() > 0.02,
+                "drain sheet resistance changes the solved load line: {voltages:?}"
+            );
+            assert!(
+                (voltages[2] - voltages[0]).abs() > 0.02,
+                "source sheet resistance changes the solved load line: {voltages:?}"
+            );
+        }
+
+        for (channel, volts) in [(0, ntc_v), (1, diode_v)] {
+            let count = expected_adc_count(volts);
+            assert_eq!(adc_channel_count(&mut bus, channel), count);
+            assert_eq!(
+                stm32f103_adc_convert(&mut bus, channel),
+                u32::from(count),
+                "the unrelated device remains isolated on ADC1 channel {channel}"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 13),
+            0xFFFF,
+            "the neighboring ADC1 channel remains undriven"
+        );
+    }
 }
 
 /// The same unrelated analog devices and F1 ADC route must work on the bare

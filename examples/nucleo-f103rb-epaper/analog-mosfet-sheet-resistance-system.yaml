@@ -1,0 +1,46 @@
+# Generic level-1 NMOS diffusion sheet resistance routed through NUCLEO-F103RB
+# ADC1_IN8..12. Matched explicit-resistor branches provide an independent route
+# reference for drain-only and source-only RSH × instance-square resistance.
+name: "nucleo-f103rb-epaper-mosfet-sheet-resistance"
+chip: "../../configs/chips/stm32f103rb.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "mosfet_sheet_resistance"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_voltage: "ui.mosfet.gate_v"
+    outputs:
+      reference: "board.analog.pb0_volts"
+      drain_sheet: "board.analog.pb1_volts"
+      source_sheet: "board.analog.pc0_volts"
+      external_drain: "board.analog.pc1_volts"
+      external_source: "board.analog.pc2_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Vgate gate 0 dc 0.5
+        Rload_ref supply d_ref 10k
+        Rload_drain supply d_drain 10k
+        Rload_source supply d_source 10k
+        Rload_ext_drain supply d_ext_drain 10k
+        Rseries_ext_drain d_ext_drain d_ext_drain_internal 1k
+        Rload_ext_source supply d_ext_source 10k
+        Rseries_ext_source s_ext_source 0 2k
+        Mref d_ref gate 0 0 MREF
+        Mdrain d_drain gate 0 0 MSH NRD=2 NRS=0
+        Msource d_source gate 0 0 MSH NRD=0 NRS=4
+        Mextdrain d_ext_drain_internal gate 0 0 MREF
+        Mextsource d_ext_source gate s_ext_source 0 MREF
+        .model MREF NMOS(VTO=1 KP=20u LAMBDA=0.02 GAMMA=0 IS=1e-30 W=100u L=10u)
+        .model MSH NMOS(VTO=1 KP=20u LAMBDA=0.02 GAMMA=0 IS=1e-30 W=100u L=10u RSH=500)
+      probes:
+        reference: "v(d_ref)"
+        drain_sheet: "v(d_drain)"
+        source_sheet: "v(d_source)"
+        external_drain: "v(d_ext_drain)"
+        external_source: "v(d_ext_source)"
+      sources:
+        gate_voltage: "Vgate"
+      vdd: 3.3
