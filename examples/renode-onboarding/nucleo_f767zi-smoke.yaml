@@ -65,11 +65,12 @@ assertions:
       - "rng off=1 ready=1 draws=1 stopped=1 ok"
       - "pendsv m7 clear=1 repend=1 systick=1 priority=1 ok"
       - "pendsv m7 tailchain deferred=1 frame_reused=1 r0_live=1 pending_clear=1 ok"
-      - "summary 0x7673FFFF"
+      - "pendsv m7 psp tailchain deferred=1 frame_reused=1 r0_live=1 pending_clear=1 ok"
+      - "summary 0x7677FFFF"
       - "DONE"
   - memory_value:
       address: 0x20003000
-      expected_value: 0x7673FFFF
+      expected_value: 0x7677FFFF
       size: 4
   - gpio_edges:
       pin: "gpiob:0"

@@ -82,6 +82,8 @@ const PENDSV_SYSTICK_COUNT_AT_ENTRY: u32 = 0x2000_3028;
 const TAILCHAIN_RECORD: u32 = 0x2000_3040;
 const TAILCHAIN_THREAD_R0: u32 = 0x5448_5244;
 const TAILCHAIN_HANDLER_R0: u32 = 0x5045_4E44;
+const PSP_TAILCHAIN_RECORD: u32 = 0x2000_3100;
+const PSP_TAILCHAIN_STACK_TOP: u32 = 0x2000_3200;
 
 /// Each LED as a push-pull output: three blinks through BSRR, each level
 /// visible in ODR and IDR, and only its own ODR bit set while lit.
@@ -702,6 +704,252 @@ fn check_systick_pendsv_tailchain_m7() -> bool {
     passed
 }
 
+/// Verify Cortex-M7 tail chaining when Thread mode uses the RTOS task stack.
+fn check_systick_pendsv_psp_tailchain_m7() -> bool {
+    const PENDSTSET: u32 = 1 << 26;
+    const PENDSTCLR: u32 = 1 << 25;
+    const PENDSVSET: u32 = 1 << 28;
+    const PENDSVCLR: u32 = 1 << 27;
+
+    let prior_primask: u32;
+    let source_control: u32;
+    let source_psp: u32;
+    unsafe {
+        asm!(
+            "mrs {primask}, PRIMASK",
+            "mrs {control}, CONTROL",
+            "mrs {psp}, PSP",
+            "cpsid i",
+            primask = out(reg) prior_primask,
+            control = out(reg) source_control,
+            psp = out(reg) source_psp,
+            options(nomem, nostack, preserves_flags),
+        );
+    }
+    let source_msp: u32;
+    unsafe { asm!("mrs {}, MSP", out(reg) source_msp, options(nomem, nostack, preserves_flags)) };
+    let prior_vtor = rd(SCB_VTOR);
+    let prior_shpr3 = rd(SCB_SHPR3);
+    let prior_rvr = rd(SYSTICK_RVR);
+    let prior_csr = rd(SYSTICK_CSR) & 0x7;
+
+    wr(SYSTICK_CSR, 0);
+    wr(SCB_ICSR, PENDSTCLR | PENDSVCLR);
+    wr(SCB_SHPR3, (prior_shpr3 & 0x0000_FFFF) | 0x80C0_0000);
+    for slot in 0..16 {
+        wr(TEST_VECTOR_TABLE + slot * 4, 0);
+    }
+    wr(
+        TEST_VECTOR_TABLE + 14 * 4,
+        (m7_psp_tailchain_pendsv_handler as *const () as usize as u32) | 1,
+    );
+    wr(
+        TEST_VECTOR_TABLE + 15 * 4,
+        (m7_psp_tailchain_systick_handler as *const () as usize as u32) | 1,
+    );
+    for word in 0..17 {
+        wr(PSP_TAILCHAIN_RECORD + word * 4, 0);
+    }
+    wr(SCB_VTOR, TEST_VECTOR_TABLE);
+    unsafe { asm!("dsb", "isb", options(nostack, preserves_flags)) };
+    unsafe {
+        asm!(
+            "msr PRIMASK, {primask}",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+
+    if prior_primask == 0 {
+        unsafe { pend_systick_from_psp_m7() };
+    }
+
+    let record = PSP_TAILCHAIN_RECORD;
+    let parent_ipsr = rd(record);
+    let parent_icsr_before = rd(record + 4);
+    let parent_icsr_after = rd(record + 8);
+    let parent_msp = rd(record + 12);
+    let parent_exc_return = rd(record + 16);
+    let thread_r0 = rd(record + 20);
+    let child_ipsr = rd(record + 24);
+    let child_msp = rd(record + 28);
+    let child_exc_return = rd(record + 32);
+    let child_r0 = rd(record + 36);
+    let child_icsr = rd(record + 40);
+    let child_hit = rd(record + 44) == 1;
+    let parent_psp = rd(record + 48);
+    let child_psp = rd(record + 52);
+    let wrapper_msp = rd(record + 56);
+    let wrapper_psp = rd(record + 60);
+    let wrapper_control = rd(record + 64);
+    let thread_ipsr: u32;
+    let msp_after: u32;
+    let psp_after: u32;
+    let control_after: u32;
+    unsafe {
+        asm!(
+            "mrs {ipsr}, IPSR",
+            "mrs {msp}, MSP",
+            "mrs {psp}, PSP",
+            "mrs {control}, CONTROL",
+            ipsr = out(reg) thread_ipsr,
+            msp = out(reg) msp_after,
+            psp = out(reg) psp_after,
+            control = out(reg) control_after,
+            options(nomem, nostack, preserves_flags),
+        );
+    }
+
+    unsafe { asm!("cpsid i", options(nomem, nostack, preserves_flags)) };
+    wr(SYSTICK_CSR, 0);
+    wr(SCB_ICSR, PENDSTCLR | PENDSVCLR);
+    wr(SCB_VTOR, prior_vtor);
+    wr(SCB_SHPR3, prior_shpr3);
+    wr(SYSTICK_RVR, prior_rvr);
+    wr(SYSTICK_CSR, prior_csr);
+    unsafe {
+        asm!(
+            "msr PSP, {psp}",
+            "msr CONTROL, {control}",
+            "msr PRIMASK, {primask}",
+            "dsb",
+            "isb",
+            psp = in(reg) source_psp,
+            control = in(reg) source_control,
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+
+    let deferred = parent_ipsr == 15
+        && parent_icsr_before & 0x1FF == 15
+        && parent_icsr_before & PENDSVSET == 0
+        && parent_icsr_after & 0x1FF == 15
+        && parent_icsr_after & PENDSVSET != 0;
+    let frame_reused = parent_msp == child_msp
+        && parent_exc_return == 0xFFFF_FFFD
+        && child_exc_return == parent_exc_return
+        && parent_psp == child_psp
+        && parent_psp == PSP_TAILCHAIN_STACK_TOP.wrapping_sub(32)
+        && wrapper_msp == source_msp
+        && parent_msp == source_msp.wrapping_sub(16);
+    let child_is_pendsv =
+        child_hit && child_ipsr == 14 && child_icsr & 0x1FF == 14 && child_icsr & PENDSVSET == 0;
+    let r0_live = thread_r0 == TAILCHAIN_THREAD_R0
+        && child_r0 == TAILCHAIN_HANDLER_R0
+        && child_r0 != thread_r0;
+    let cleanup = rd(SCB_VTOR) == prior_vtor
+        && rd(SCB_SHPR3) == prior_shpr3
+        && rd(SCB_ICSR) & (PENDSTSET | PENDSVSET) == 0
+        && msp_after == source_msp
+        && psp_after == source_psp
+        && control_after == source_control
+        && wrapper_psp == source_psp
+        && wrapper_control == source_control
+        && thread_ipsr == 0;
+    let passed = prior_primask == 0
+        && source_control & 2 == 0
+        && deferred
+        && frame_reused
+        && child_is_pendsv
+        && r0_live
+        && cleanup;
+    puts("pendsv m7 psp tailchain ");
+    flag("deferred", deferred);
+    flag("frame_reused", frame_reused);
+    flag("r0_live", r0_live);
+    flag("pending_clear", child_is_pendsv && cleanup);
+    verdict(passed);
+    passed
+}
+
+/// Set Thread mode to use a dedicated PSP, then pend SysTick with a marker.
+#[unsafe(naked)]
+unsafe extern "C" fn pend_systick_from_psp_m7() {
+    core::arch::naked_asm!(
+        "mrs r3, msp",
+        "push {{r4, r5, r6, lr}}",
+        "mrs r4, control",
+        "mrs r5, psp",
+        "ldr r0, =0x20003100",
+        "str r3, [r0, #56]",
+        "str r5, [r0, #60]",
+        "str r4, [r0, #64]",
+        "ldr r1, =0x20003200",
+        "msr psp, r1",
+        "movs r1, #2",
+        "orrs r1, r4",
+        "msr control, r1",
+        "isb",
+        "ldr r0, =0x54485244",
+        "ldr r1, =0xE000ED04",
+        "movs r2, #1",
+        "lsls r2, r2, #26",
+        "str r2, [r1]",
+        "ldr r1, =0x20003100",
+        "1:",
+        "ldr r2, [r1, #44]",
+        "cmp r2, #0",
+        "beq 1b",
+        "msr psp, r5",
+        "msr control, r4",
+        "isb",
+        "pop {{r4, r5, r6, pc}}",
+    );
+}
+
+/// Pend PendSV while SysTick is active; the core should tail-chain on PSP.
+#[unsafe(naked)]
+unsafe extern "C" fn m7_psp_tailchain_systick_handler() {
+    core::arch::naked_asm!(
+        "mov r3, r0",
+        "ldr r0, =0x20003100",
+        "str r3, [r0, #20]",
+        "mrs r3, ipsr",
+        "str r3, [r0, #0]",
+        "mrs r3, msp",
+        "str r3, [r0, #12]",
+        "mrs r3, psp",
+        "str r3, [r0, #48]",
+        "mov r3, lr",
+        "str r3, [r0, #16]",
+        "ldr r1, =0xE000ED04",
+        "ldr r2, [r1]",
+        "str r2, [r0, #4]",
+        "movs r2, #1",
+        "lsls r2, r2, #28",
+        "str r2, [r1]",
+        "ldr r2, [r1]",
+        "str r2, [r0, #8]",
+        "ldr r0, =0x50454E44",
+        "bx lr",
+    );
+}
+
+/// Record PendSV state before the original Thread PSP frame is unstacked.
+#[unsafe(naked)]
+unsafe extern "C" fn m7_psp_tailchain_pendsv_handler() {
+    core::arch::naked_asm!(
+        "mov r2, r0",
+        "mrs r3, ipsr",
+        "ldr r0, =0x20003100",
+        "str r3, [r0, #24]",
+        "mrs r3, msp",
+        "str r3, [r0, #28]",
+        "mov r3, lr",
+        "str r3, [r0, #32]",
+        "str r2, [r0, #36]",
+        "mrs r3, psp",
+        "str r3, [r0, #52]",
+        "ldr r3, =0xE000ED04",
+        "ldr r3, [r3]",
+        "str r3, [r0, #40]",
+        "movs r3, #1",
+        "str r3, [r0, #44]",
+        "bx lr",
+    );
+}
+
 /// Set a distinct Thread-mode R0 marker and software-pend SysTick.
 #[unsafe(naked)]
 unsafe extern "C" fn pend_systick_with_thread_r0_m7() {
@@ -847,6 +1095,7 @@ fn main() -> ! {
     mark(15, check_rng());
     mark(16, check_pendsv_m7());
     mark(17, check_systick_pendsv_tailchain_m7());
+    mark(18, check_systick_pendsv_psp_tailchain_m7());
     let summary = summary | 0x7670_0000;
     wr(SUMMARY, summary);
     puts("summary ");

@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="10" failures="0" errors="0" time="0.297287">
+<testsuite name="labwired" tests="10" failures="0" errors="0" time="0.320818">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="61185854a1bba79ce21e32f1002b839aa2809b6bc1a6335bcbdd93726c8016a1"/>
+    <property name="firmware_hash" value="0430633db5580fe8c8fdd4f554f7eb894ce60f485dc9744422429aa9e9dc2173"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.297287">
+  <testcase classname="labwired" name="run" time="0.320818">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_regex: ^NUCLEO-F767ZI SMOKE" time="0.000000">
   </testcase>
@@ -15,7 +15,7 @@
   </testcase>
   <testcase classname="labwired" name="assertion 4: uart_ordered: [&quot;rcc reset=1 gate=1 mask=1 ok&quot;, &quot;geometry flash_last=0xFFFFFFFF sram2=1 ok&quot;, &quot;usart irq usart1=1 usart2=…" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 5: memory_value: @0x20003000=0x7673ffff" time="0.000000">
+  <testcase classname="labwired" name="assertion 5: memory_value: @0x20003000=0x7677ffff" time="0.000000">
   </testcase>
   <testcase classname="labwired" name="assertion 6: gpio_edges: gpiob:0 &gt;= 7 edges" time="0.000000">
   </testcase>

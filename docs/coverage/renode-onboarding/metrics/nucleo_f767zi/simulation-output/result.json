@@ -72,7 +72,8 @@
           "rng off=1 ready=1 draws=1 stopped=1 ok",
           "pendsv m7 clear=1 repend=1 systick=1 priority=1 ok",
           "pendsv m7 tailchain deferred=1 frame_reused=1 r0_live=1 pending_clear=1 ok",
-          "summary 0x7673FFFF",
+          "pendsv m7 psp tailchain deferred=1 frame_reused=1 r0_live=1 pending_clear=1 ok",
+          "summary 0x7677FFFF",
           "DONE"
         ]
       },
@@ -82,7 +83,7 @@
       "assertion": {
         "memory_value": {
           "address": 536883200,
-          "expected_value": 1987313663,
+          "expected_value": 1987575807,
           "mask": null,
           "size": 4
         }
@@ -131,19 +132,19 @@
       1073811484,
       4294867296,
       1,
-      0,
+      4294867296,
       4294867296,
       537395184,
       1,
-      262143,
-      536883216,
+      1,
+      1,
       1,
       70,
-      537395080,
+      537395072,
       70,
-      134242526
+      134231812
     ],
-    "pc": 134242526,
+    "pc": 134231812,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -156,7 +157,7 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "firmware_hash": "61185854a1bba79ce21e32f1002b839aa2809b6bc1a6335bcbdd93726c8016a1",
+  "firmware_hash": "0430633db5580fe8c8fdd4f554f7eb894ce60f485dc9744422429aa9e9dc2173",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-nucleo-f767zi-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/nucleo_f767zi.yaml",
@@ -1086,7 +1087,13 @@
         "end_cycle": 990000
       },
       {
-        "text": "summary 0x7673FFFF",
+        "text": "pendsv m7 psp tailchain deferred=1 frame_reused=1 r0_live=1 pending_clear=1 ok",
+        "cycle_lo": 980000,
+        "cycle": 990000,
+        "end_cycle": 990000
+      },
+      {
+        "text": "summary 0x7677FFFF",
         "cycle_lo": 980000,
         "cycle": 990000,
         "end_cycle": 990000
@@ -1152,14 +1159,14 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 26224,
+    "text_bytes": 27532,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 26224,
+    "flash_used_bytes": 27532,
     "ram_static_bytes": 0,
     "flash_total_bytes": 2097152,
     "ram_total_bytes": 524288,
-    "flash_used_pct": 1.25,
+    "flash_used_pct": 1.31,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -1169,15 +1176,15 @@
   "memory": {
     "main_stack_method": "paint",
     "main_stack_limit_bytes": 524288,
-    "main_stack_high_water_bytes": 112,
-    "main_stack_free_min_bytes": 523904,
+    "main_stack_high_water_bytes": 120,
+    "main_stack_free_min_bytes": 523800,
     "main_stack_base": 536870912,
     "main_stack_top": 537395200,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
     "heap_limit_bytes": 524288,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 523904,
+    "heap_free_min_bytes": 523800,
     "heap_base": 536870912,
     "heap_top": 537395200
   },
@@ -1185,90 +1192,90 @@
     "cycles": 6000000,
     "instructions": 6000000,
     "steps_executed": 6000000,
-    "memory_reads": 9456,
-    "memory_writes": 1476,
-    "peripheral_accesses": 268054,
+    "memory_reads": 10157,
+    "memory_writes": 1587,
+    "peripheral_accesses": 268236,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134220304,
+        "pc": 134231812,
+        "count": 479,
+        "symbol": "firmware_nucleo_f767zi_smoke::__cortex_m_rt_main"
+      },
+      {
+        "pc": 134233444,
         "count": 157,
-        "symbol": "core::ptr::read_volatile"
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
       },
       {
-        "pc": 134220220,
+        "pc": 134233370,
         "count": 156,
         "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait"
       },
       {
-        "pc": 134220232,
-        "count": 156,
-        "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait"
-      },
-      {
-        "pc": 134220242,
-        "count": 156,
-        "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait"
-      },
-      {
-        "pc": 134220264,
-        "count": 156,
-        "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait"
-      },
-      {
-        "pc": 134220284,
+        "pc": 134233380,
         "count": 156,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134220252,
+        "pc": 134233402,
+        "count": 156,
+        "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait"
+      },
+      {
+        "pc": 134233424,
+        "count": 156,
+        "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait"
+      },
+      {
+        "pc": 134233454,
+        "count": 156,
+        "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait"
+      },
+      {
+        "pc": 134233392,
         "count": 118,
+        "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait"
+      },
+      {
+        "pc": 134233412,
+        "count": 117,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134220274,
+        "pc": 134233434,
         "count": 117,
         "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait"
       },
       {
-        "pc": 134220296,
-        "count": 117,
-        "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait"
-      },
-      {
-        "pc": 134237990,
+        "pc": 134226286,
         "count": 79,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134238002,
+        "pc": 134226298,
         "count": 79,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
-        "pc": 134233778,
+        "pc": 134222074,
         "count": 78,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134235602,
+        "pc": 134223898,
         "count": 78,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
-        "pc": 134235846,
+        "pc": 134224142,
         "count": 78,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
-        "pc": 134237988,
+        "pc": 134226284,
         "count": 78,
         "symbol": "firmware_nucleo_f767zi_smoke::f746_checks::wait_level"
-      },
-      {
-        "pc": 134237992,
-        "count": 78,
-        "symbol": "core::ptr::read_volatile"
       }
     ]
   }
