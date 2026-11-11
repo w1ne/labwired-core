@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="8" failures="0" errors="0" time="0.864597">
+<testsuite name="labwired" tests="9" failures="0" errors="0" time="0.981088">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="a06162c96ee101887345630e620acbf2949d355b446fbfd11196648ffcbe69cd"/>
+    <property name="firmware_hash" value="1881c97c8628cbe10ee456f4019d5bc9b210ace978e833d58f0ea94ad6b52d76"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.864597">
+  <testcase classname="labwired" name="run" time="0.981088">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: F4-DISCO SMOKE" time="0.000000">
   </testcase>
@@ -17,8 +17,10 @@
   </testcase>
   <testcase classname="labwired" name="assertion 5: uart_contains: SysTick PendSV tailchain frame=1 r0=1 pending=1 ipsr=14 ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 6: uart_ordered: [&quot;hb=0 ld4=on odr=00001000&quot;, &quot;hb=1 ld4=off odr=00000000&quot;, &quot;hb=2 ld3=on odr=00002000&quot;, &quot;hb=3 ld3=off odr=0…" time="0.000000">
+  <testcase classname="labwired" name="assertion 6: uart_contains: SysTick PendSV PSP tailchain frame=1 r0=1 pending=1 ipsr=14 ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 7: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 7: uart_ordered: [&quot;hb=0 ld4=on odr=00001000&quot;, &quot;hb=1 ld4=off odr=00000000&quot;, &quot;hb=2 ld3=on odr=00002000&quot;, &quot;hb=3 ld3=off odr=0…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 8: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>

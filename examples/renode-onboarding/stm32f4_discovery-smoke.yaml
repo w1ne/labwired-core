@@ -14,6 +14,7 @@ assertions:
   - uart_contains: "SPI1 MAX31855=01901600 TXEIRQ=1 REARM=0 RXNEIRQ=1 RELEASED=1"
   - uart_contains: "SPI1 CHECKS=1"
   - uart_contains: "SysTick PendSV tailchain frame=1 r0=1 pending=1 ipsr=14 ok"
+  - uart_contains: "SysTick PendSV PSP tailchain frame=1 r0=1 pending=1 ipsr=14 ok"
   - uart_ordered:
       - "hb=0 ld4=on odr=00001000"
       - "hb=1 ld4=off odr=00000000"

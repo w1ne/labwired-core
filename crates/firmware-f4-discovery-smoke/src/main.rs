@@ -71,6 +71,8 @@ const ICSR_PENDSVSET: u32 = 1 << 28;
 const ICSR_PENDSVCLR: u32 = 1 << 27;
 const TEST_VECTOR_TABLE: u32 = 0x2000_1000;
 const TAILCHAIN_RECORD: u32 = 0x2000_3040;
+const PSP_TAILCHAIN_RECORD: u32 = 0x2000_3100;
+const PSP_TAILCHAIN_STACK_TOP: u32 = 0x2000_3200;
 const TAILCHAIN_THREAD_R0: u32 = 0x5448_5244;
 const TAILCHAIN_HANDLER_R0: u32 = 0x5045_4E44;
 
@@ -178,6 +180,7 @@ fn main() -> ! {
     smoke_usart2_rx_enable_gate();
     smoke_spi1_irq_and_max31855();
     smoke_systick_pendsv_tailchain();
+    smoke_systick_pendsv_psp_tailchain();
 
     let mut beat: u32 = 0;
     loop {
@@ -464,6 +467,275 @@ fn smoke_systick_pendsv_tailchain() -> bool {
     put_dec(child_ipsr);
     send(if passed { b" ok\r\n" } else { b" FAIL\r\n" });
     passed
+}
+
+/// Run the SysTick-to-PendSV tail chain with Thread mode on PSP. Check the
+/// exception frame, Handler-mode MSP, live R0 value, and restored context.
+fn smoke_systick_pendsv_psp_tailchain() -> bool {
+    let prior_primask: u32;
+    let prior_msp: u32;
+    let prior_psp: u32;
+    let prior_control: u32;
+    unsafe {
+        core::arch::asm!(
+            "mrs {primask}, PRIMASK",
+            "cpsid i",
+            "mrs {msp}, MSP",
+            "mrs {psp}, PSP",
+            "mrs {control}, CONTROL",
+            primask = out(reg) prior_primask,
+            msp = out(reg) prior_msp,
+            psp = out(reg) prior_psp,
+            control = out(reg) prior_control,
+            options(nomem, nostack, preserves_flags),
+        );
+    }
+
+    let prior_vtor = unsafe { read_volatile(SCB_VTOR as *const u32) };
+    let prior_shpr3 = unsafe { read_volatile(SCB_SHPR3 as *const u32) };
+    let prior_rvr = unsafe { read_volatile(SYSTICK_RVR as *const u32) };
+    let prior_csr = unsafe { read_volatile(SYSTICK_CSR as *const u32) } & 0x7;
+    unsafe {
+        write_volatile(SYSTICK_CSR as *mut u32, 0);
+        write_volatile(SCB_ICSR as *mut u32, ICSR_PENDSTCLR | ICSR_PENDSVCLR);
+        // SysTick has the higher configurable priority; PendSV is lowest.
+        write_volatile(
+            SCB_SHPR3 as *mut u32,
+            (prior_shpr3 & 0x0000_FFFF) | 0x80C0_0000,
+        );
+        for slot in 0..16 {
+            write_volatile((TEST_VECTOR_TABLE + slot * 4) as *mut u32, 0);
+        }
+        write_volatile(
+            (TEST_VECTOR_TABLE + 14 * 4) as *mut u32,
+            (f4_psp_tailchain_pendsv_handler as *const () as usize as u32) | 1,
+        );
+        write_volatile(
+            (TEST_VECTOR_TABLE + 15 * 4) as *mut u32,
+            (f4_psp_tailchain_systick_handler as *const () as usize as u32) | 1,
+        );
+        for word in 0..17 {
+            write_volatile((PSP_TAILCHAIN_RECORD + word * 4) as *mut u32, 0);
+        }
+        write_volatile(SCB_VTOR as *mut u32, TEST_VECTOR_TABLE);
+        core::arch::asm!("dsb", "isb", options(nostack, preserves_flags));
+        core::arch::asm!(
+            "msr PRIMASK, {primask}",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+
+    if prior_primask == 0 {
+        unsafe { f4_pend_systick_from_psp() };
+    }
+
+    let parent_ipsr = unsafe { read_volatile(PSP_TAILCHAIN_RECORD as *const u32) };
+    let parent_icsr_before = unsafe { read_volatile((PSP_TAILCHAIN_RECORD + 4) as *const u32) };
+    let parent_icsr_after = unsafe { read_volatile((PSP_TAILCHAIN_RECORD + 8) as *const u32) };
+    let parent_msp = unsafe { read_volatile((PSP_TAILCHAIN_RECORD + 12) as *const u32) };
+    let parent_exc_return = unsafe { read_volatile((PSP_TAILCHAIN_RECORD + 16) as *const u32) };
+    let thread_r0 = unsafe { read_volatile((PSP_TAILCHAIN_RECORD + 20) as *const u32) };
+    let child_ipsr = unsafe { read_volatile((PSP_TAILCHAIN_RECORD + 24) as *const u32) };
+    let child_msp = unsafe { read_volatile((PSP_TAILCHAIN_RECORD + 28) as *const u32) };
+    let child_exc_return = unsafe { read_volatile((PSP_TAILCHAIN_RECORD + 32) as *const u32) };
+    let child_r0 = unsafe { read_volatile((PSP_TAILCHAIN_RECORD + 36) as *const u32) };
+    let child_icsr = unsafe { read_volatile((PSP_TAILCHAIN_RECORD + 40) as *const u32) };
+    let child_hit = unsafe { read_volatile((PSP_TAILCHAIN_RECORD + 44) as *const u32) } == 1;
+    let parent_psp = unsafe { read_volatile((PSP_TAILCHAIN_RECORD + 48) as *const u32) };
+    let child_psp = unsafe { read_volatile((PSP_TAILCHAIN_RECORD + 52) as *const u32) };
+    let wrapper_msp = unsafe { read_volatile((PSP_TAILCHAIN_RECORD + 56) as *const u32) };
+    let wrapper_psp = unsafe { read_volatile((PSP_TAILCHAIN_RECORD + 60) as *const u32) };
+    let wrapper_control = unsafe { read_volatile((PSP_TAILCHAIN_RECORD + 64) as *const u32) };
+
+    let thread_ipsr: u32;
+    let msp_after: u32;
+    let psp_after: u32;
+    let control_after: u32;
+    unsafe {
+        core::arch::asm!(
+            "mrs {ipsr}, IPSR",
+            "mrs {msp}, MSP",
+            "mrs {psp}, PSP",
+            "mrs {control}, CONTROL",
+            ipsr = out(reg) thread_ipsr,
+            msp = out(reg) msp_after,
+            psp = out(reg) psp_after,
+            control = out(reg) control_after,
+            options(nomem, nostack, preserves_flags),
+        );
+    }
+
+    let masked_primask: u32;
+    unsafe {
+        core::arch::asm!(
+            "mrs {primask}, PRIMASK",
+            "cpsid i",
+            primask = out(reg) masked_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+        write_volatile(SYSTICK_CSR as *mut u32, 0);
+        write_volatile(SCB_ICSR as *mut u32, ICSR_PENDSTCLR | ICSR_PENDSVCLR);
+        write_volatile(SCB_VTOR as *mut u32, prior_vtor);
+        write_volatile(SCB_SHPR3 as *mut u32, prior_shpr3);
+        write_volatile(SYSTICK_RVR as *mut u32, prior_rvr);
+        write_volatile(SYSTICK_CSR as *mut u32, prior_csr);
+        core::arch::asm!(
+            "msr PSP, {psp}",
+            "msr CONTROL, {control}",
+            "msr PRIMASK, {primask}",
+            "dsb",
+            "isb",
+            psp = in(reg) prior_psp,
+            control = in(reg) prior_control,
+            primask = in(reg) masked_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+
+    let deferred = parent_ipsr == 15
+        && parent_icsr_before & 0x1FF == 15
+        && parent_icsr_before & ICSR_PENDSVSET == 0
+        && parent_icsr_after & 0x1FF == 15
+        && parent_icsr_after & ICSR_PENDSVSET != 0;
+    let frame_reused = parent_msp == child_msp
+        && parent_exc_return == 0xFFFF_FFFD
+        && child_exc_return == parent_exc_return
+        && parent_psp == child_psp
+        && parent_psp == PSP_TAILCHAIN_STACK_TOP - 32
+        && wrapper_msp == prior_msp
+        && parent_msp == prior_msp - 16;
+    let child_is_pendsv = child_hit
+        && child_ipsr == 14
+        && child_icsr & 0x1FF == 14
+        && child_icsr & ICSR_PENDSVSET == 0;
+    let r0_live = thread_r0 == TAILCHAIN_THREAD_R0
+        && child_r0 == TAILCHAIN_HANDLER_R0
+        && child_r0 != thread_r0;
+    let cleanup = unsafe { read_volatile(SCB_VTOR as *const u32) == prior_vtor }
+        && unsafe { read_volatile(SCB_SHPR3 as *const u32) == prior_shpr3 }
+        && unsafe {
+            read_volatile(SCB_ICSR as *const u32) & (ICSR_PENDSTSET | ICSR_PENDSVSET) == 0
+        }
+        && msp_after == prior_msp
+        && psp_after == prior_psp
+        && control_after == prior_control
+        && wrapper_psp == prior_psp
+        && wrapper_control == prior_control
+        && thread_ipsr == 0;
+    let passed = prior_primask == 0
+        && prior_control & 2 == 0
+        && deferred
+        && frame_reused
+        && child_is_pendsv
+        && r0_live
+        && cleanup;
+
+    send(b"SysTick PendSV PSP tailchain frame=");
+    put_dec(if frame_reused { 1 } else { 0 });
+    send(b" r0=");
+    put_dec(if r0_live { 1 } else { 0 });
+    send(b" pending=");
+    put_dec(if deferred && child_is_pendsv && cleanup {
+        1
+    } else {
+        0
+    });
+    send(b" ipsr=");
+    put_dec(child_ipsr);
+    send(if passed { b" ok\r\n" } else { b" FAIL\r\n" });
+    passed
+}
+
+/// Switch Thread mode to a dedicated PSP stack, then pend SysTick.
+#[unsafe(naked)]
+unsafe extern "C" fn f4_pend_systick_from_psp() {
+    core::arch::naked_asm!(
+        "mrs r3, msp",
+        "push {{r4, r5, r6, lr}}",
+        "mrs r4, control",
+        "mrs r5, psp",
+        "ldr r0, =0x20003100",
+        "str r3, [r0, #56]",
+        "str r5, [r0, #60]",
+        "str r4, [r0, #64]",
+        "ldr r1, =0x20003200",
+        "msr psp, r1",
+        "movs r1, #2",
+        "orrs r1, r4",
+        "msr control, r1",
+        "isb",
+        "ldr r0, =0x54485244",
+        "ldr r1, =0xE000ED04",
+        "movs r2, #1",
+        "lsls r2, r2, #26",
+        "str r2, [r1]",
+        "ldr r1, =0x20003100",
+        "movw r6, #4096",
+        "1:",
+        "ldr r2, [r1, #44]",
+        "cmp r2, #0",
+        "bne 2f",
+        "subs r6, r6, #1",
+        "bne 1b",
+        "2:",
+        "msr psp, r5",
+        "msr control, r4",
+        "isb",
+        "pop {{r4, r5, r6, pc}}",
+    );
+}
+
+/// Record the PSP frame, pend PendSV, and leave a distinct live R0 marker.
+#[unsafe(naked)]
+unsafe extern "C" fn f4_psp_tailchain_systick_handler() {
+    core::arch::naked_asm!(
+        "mov r2, r0",
+        "ldr r0, =0x20003100",
+        "mrs r3, ipsr",
+        "str r3, [r0, #0]",
+        "ldr r3, =0xE000ED04",
+        "ldr r1, [r3]",
+        "str r1, [r0, #4]",
+        "movs r1, #1",
+        "lsls r1, r1, #28",
+        "str r1, [r3]",
+        "ldr r1, [r3]",
+        "str r1, [r0, #8]",
+        "mrs r1, msp",
+        "str r1, [r0, #12]",
+        "mov r1, lr",
+        "str r1, [r0, #16]",
+        "mrs r1, psp",
+        "str r1, [r0, #48]",
+        "str r2, [r0, #20]",
+        "ldr r0, =0x50454E44",
+        "bx lr",
+    );
+}
+
+/// Capture the tail-chained PendSV state before Thread mode resumes.
+#[unsafe(naked)]
+unsafe extern "C" fn f4_psp_tailchain_pendsv_handler() {
+    core::arch::naked_asm!(
+        "mov r2, r0",
+        "ldr r0, =0x20003100",
+        "mrs r3, ipsr",
+        "str r3, [r0, #24]",
+        "mrs r3, msp",
+        "str r3, [r0, #28]",
+        "mov r3, lr",
+        "str r3, [r0, #32]",
+        "str r2, [r0, #36]",
+        "ldr r3, =0xE000ED04",
+        "ldr r3, [r3]",
+        "str r3, [r0, #40]",
+        "mrs r3, psp",
+        "str r3, [r0, #52]",
+        "movs r3, #1",
+        "str r3, [r0, #44]",
+        "bx lr",
+    );
 }
 
 /// Set a Thread-mode R0 marker and software-pend SysTick.
