@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="23" failures="0" errors="0" time="1.028291">
+<testsuite name="labwired" tests="24" failures="0" errors="0" time="0.994314">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="294c8f439bcec14e368bfc9c0c2230aec780c48f6d72df26587d6459f3f82929"/>
+    <property name="firmware_hash" value="3f1e3dc733d72fb7a97d1e2dacb6210a95e4eee3b3db923159b6a11791f0048f"/>
   </properties>
-  <testcase classname="labwired" name="run" time="1.028291">
+  <testcase classname="labwired" name="run" time="0.994314">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: STM32H7 register smoke" time="0.000000">
   </testcase>
@@ -45,10 +45,12 @@
   </testcase>
   <testcase classname="labwired" name="assertion 19: uart_contains: cortex-m7 cpacr reserved policy-deny=1 readback=00A00000 ipsr=00000006 cfsr=00080000" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 20: uart_contains: cortex-m7 cpacr handler fp=1 ipsr=0000000B thread_unprivileged=00000001 nocp=00000000 result=000000C3" time="0.000000">
+  <testcase classname="labwired" name="assertion 20: uart_contains: cortex-m7 cpacr disabled usagefault hardfault=1 ipsr=00000003 cfsr=00080000 hfsr=40000000" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 21: gpio_edges: gpioPortB:0 &gt;= 1 edges" time="0.000000">
+  <testcase classname="labwired" name="assertion 21: uart_contains: cortex-m7 cpacr handler fp=1 ipsr=0000000B thread_unprivileged=00000001 nocp=00000000 result=000000C3" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 22: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 22: gpio_edges: gpioPortB:0 &gt;= 1 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 23: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>

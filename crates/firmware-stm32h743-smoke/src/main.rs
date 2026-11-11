@@ -17,6 +17,8 @@ const SCB_SHCSR: *mut u32 = 0xE000_ED24 as *mut u32;
 #[cfg(feature = "stm32h743-exception-frame")]
 const SCB_CFSR: *mut u32 = 0xE000_ED28 as *mut u32;
 #[cfg(feature = "stm32h743-exception-frame")]
+const SCB_HFSR: *mut u32 = 0xE000_ED2C as *mut u32;
+#[cfg(feature = "stm32h743-exception-frame")]
 const SCB_CCR_STKALIGN: u32 = 1 << 9;
 #[cfg(feature = "stm32h743-exception-frame")]
 const SCB_CPACR: *mut u32 = 0xE000_ED88 as *mut u32;
@@ -30,6 +32,8 @@ const CPACR_RESERVED_ACCESS: u32 = (0b10 << 20) | (0b10 << 22);
 const SHCSR_USGFAULTENA: u32 = 1 << 18;
 #[cfg(feature = "stm32h743-exception-frame")]
 const CFSR_UFSR_NOCP: u32 = 1 << 19;
+#[cfg(feature = "stm32h743-exception-frame")]
+const HFSR_FORCED: u32 = 1 << 30;
 #[cfg(feature = "stm32h743-exception-frame")]
 const NVIC_ISER0: *mut u32 = 0xE000_E100 as *mut u32;
 #[cfg(feature = "stm32h743-exception-frame")]
@@ -69,7 +73,7 @@ static mut RAM_VECTOR_TABLE: RamVectorTable = RamVectorTable([0; 64]);
 static mut EXCEPTION_RECORD: [u32; 18] = [0; 18];
 
 #[cfg(feature = "stm32h743-exception-frame")]
-static mut CPACR_FAULT_RECORD: [u32; 4] = [0; 4];
+static mut CPACR_FAULT_RECORD: [u32; 5] = [0; 5];
 
 #[cfg(feature = "stm32h743-exception-frame")]
 static mut CPACR_HANDLER_RECORD: [u32; 2] = [0; 2];
@@ -366,12 +370,12 @@ unsafe extern "C" fn smoke_nested_exception_handler() {
     );
 }
 
-/// Record and skip the VFP instruction that raises UsageFault(NOCP) when an
-/// unprivileged Thread mode is limited to privileged CP10/CP11 access. The
-/// core-register frame begins at SP; an extended FP frame follows it.
+/// Record and skip a denied VFP instruction under UsageFault or escalated
+/// HardFault. The core-register frame begins at SP; an extended FP frame
+/// follows it.
 #[cfg(feature = "stm32h743-exception-frame")]
 #[unsafe(naked)]
-unsafe extern "C" fn nocp_usagefault_handler() {
+unsafe extern "C" fn nocp_fault_handler() {
     core::arch::naked_asm!(
         "mov r0, lr",
         "tst r0, #4",
@@ -390,9 +394,13 @@ unsafe extern "C" fn nocp_usagefault_handler() {
         "str r2, [r1, #8]",
         "mov r2, lr",
         "str r2, [r1, #12]",
+        "ldr r2, ={hfsr}",
+        "ldr r2, [r2]",
+        "str r2, [r1, #16]",
         "bx lr",
         record = sym CPACR_FAULT_RECORD,
         cfsr = const 0xE000_ED28usize,
+        hfsr = const 0xE000_ED2Cusize,
     );
 }
 
@@ -1564,19 +1572,20 @@ fn check_cortex_m7_exception_frame() -> bool {
 
     // CPACR=00 denies a real VFP instruction even in privileged Thread mode.
     // Then CPACR privileged-only must fault the same instruction from
-    // unprivileged Thread mode. The UsageFault handler records each stacked
-    // frame and skips the denied instruction so the smoke can continue.
-    let nocp_vector = (nocp_usagefault_handler as *const () as usize as u32) | 1;
+    // unprivileged Thread mode. The fault handler records each stacked frame
+    // and skips the denied instruction so the smoke can continue.
+    let nocp_vector = (nocp_fault_handler as *const () as usize as u32) | 1;
     unsafe {
         let vector_table = core::ptr::addr_of_mut!(RAM_VECTOR_TABLE.0).cast::<u32>();
         let record = core::ptr::addr_of_mut!(CPACR_FAULT_RECORD).cast::<u32>();
+        write_volatile(vector_table.add(3), nocp_vector);
         write_volatile(vector_table.add(6), nocp_vector);
         write_volatile(
             vector_table.add(SVC_VECTOR_INDEX),
             (cpacr_svc_handler as *const () as usize as u32) | 1,
         );
         write_volatile(SCB_VTOR, vector_table as u32);
-        for index in 0..4 {
+        for index in 0..5 {
             write_volatile(record.add(index), 0);
         }
         let handler_record = core::ptr::addr_of_mut!(CPACR_HANDLER_RECORD).cast::<u32>();
@@ -1609,7 +1618,7 @@ fn check_cortex_m7_exception_frame() -> bool {
     // raise NOCP. Keep this assertion scoped to that engine policy.
     unsafe {
         let record = core::ptr::addr_of_mut!(CPACR_FAULT_RECORD).cast::<u32>();
-        for index in 0..4 {
+        for index in 0..5 {
             write_volatile(record.add(index), 0);
         }
         write_volatile(SCB_CFSR, CFSR_UFSR_NOCP);
@@ -1637,9 +1646,48 @@ fn check_cortex_m7_exception_frame() -> bool {
     send_hex32(reserved_cfsr & CFSR_UFSR_NOCP);
     send(b"\r\n");
 
+    // With UsageFault disabled, the denied FP operation must escalate to
+    // HardFault, retain CFSR.NOCP, and set HFSR.FORCED. The same small handler
+    // captures the stacked instruction address before skipping it.
     unsafe {
         let record = core::ptr::addr_of_mut!(CPACR_FAULT_RECORD).cast::<u32>();
-        for index in 0..4 {
+        for index in 0..5 {
+            write_volatile(record.add(index), 0);
+        }
+        write_volatile(SCB_HFSR, HFSR_FORCED);
+        write_volatile(SCB_CFSR, CFSR_UFSR_NOCP);
+        write_volatile(SCB_SHCSR, read_volatile(SCB_SHCSR) & !SHCSR_USGFAULTENA);
+        write_volatile(SCB_CPACR, 0);
+        asm!("dsb", "isb", options(nostack, preserves_flags));
+        attempt_privileged_fp();
+    }
+    let escalated_record = core::ptr::addr_of!(CPACR_FAULT_RECORD).cast::<u32>();
+    let escalated_pc = unsafe { read_volatile(escalated_record) };
+    let escalated_cfsr = unsafe { read_volatile(escalated_record.add(1)) };
+    let escalated_ipsr = unsafe { read_volatile(escalated_record.add(2)) };
+    let escalated_hfsr = unsafe { read_volatile(escalated_record.add(4)) };
+    let nocp_escalated_ok = escalated_pc >= 0x0800_0000
+        && escalated_pc < 0x0810_0000
+        && escalated_cfsr & CFSR_UFSR_NOCP != 0
+        && escalated_ipsr == 3
+        && escalated_hfsr & HFSR_FORCED != 0;
+    send(b"cortex-m7 cpacr disabled usagefault hardfault=");
+    send(if nocp_escalated_ok { b"1" } else { b"0" });
+    send(b" ipsr=");
+    send_hex32(escalated_ipsr);
+    send(b" cfsr=");
+    send_hex32(escalated_cfsr & CFSR_UFSR_NOCP);
+    send(b" hfsr=");
+    send_hex32(escalated_hfsr & HFSR_FORCED);
+    send(b"\r\n");
+
+    unsafe {
+        write_volatile(SCB_SHCSR, read_volatile(SCB_SHCSR) | SHCSR_USGFAULTENA);
+    }
+
+    unsafe {
+        let record = core::ptr::addr_of_mut!(CPACR_FAULT_RECORD).cast::<u32>();
+        for index in 0..5 {
             write_volatile(record.add(index), 0);
         }
         write_volatile(SCB_CFSR, CFSR_UFSR_NOCP);
@@ -1716,6 +1764,7 @@ fn check_cortex_m7_exception_frame() -> bool {
     ok && privileged_fp_ok
         && privileged_denied_ok
         && reserved_denied_ok
+        && nocp_escalated_ok
         && handler_fp_ok
         && nocp_ok
         && full_access_ok
