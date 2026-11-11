@@ -280,6 +280,12 @@ jobs:
             firmware_build_script: examples/esp32-devkitc-32e-bme280/firmware/build-firmware.sh
             script: examples/esp32-devkitc-32e-bme280/bme280-smoke.yaml
             system: configs/systems/esp32-devkitc-32e-bme280.yaml
+          # ESP32-DevKitM-1: UART0 reaches the USB-UART header path and GPIO23
+          # toggles an external LED. Wireless and the USB bridge are not claimed.
+          - id: esp32-devkitm-1
+            firmware_build_script: examples/esp32-devkitm-1/build-firmware.sh
+            script: examples/esp32-devkitm-1/onboarding-smoke.yaml
+            system: configs/systems/esp32-devkitm-1.yaml
 
     steps:
       - uses: actions/checkout@v4
