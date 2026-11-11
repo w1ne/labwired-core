@@ -54,6 +54,15 @@ const NVIC_ICPR: *mut u32 = 0xE000_E280 as *mut u32;
 const USART2_IRQ: u32 = 38;
 const USART2_IRQ_BIT: u32 = 1 << (USART2_IRQ % 32);
 
+const SYSTICK_CSR: u32 = 0xE000_E010;
+const SYSTICK_RVR: u32 = 0xE000_E014;
+const SYSTICK_CVR: u32 = 0xE000_E018;
+const SYSTICK_CALIB: u32 = 0xE000_E01C;
+const SYSTICK_COUNTFLAG: u32 = 1 << 16;
+const SCB_ICSR: u32 = 0xE000_ED04;
+const ICSR_PENDSTSET: u32 = 1 << 26;
+const ICSR_PENDSTCLR: u32 = 1 << 25;
+
 const SPI1_BASE: u32 = 0x4001_3000;
 const SPI1_IRQ: u32 = 35;
 const SPI1_IRQ_BIT: u32 = 1 << (SPI1_IRQ % 32);
@@ -219,6 +228,7 @@ fn main() -> ! {
         usart2_init();
     }
     putline(b"F103 I2C");
+    unsafe { smoke_systick_exception_state() };
     smoke_usart2_txe_irq();
     smoke_usart2_rx_enable_gate();
     smoke_spi1_irq_and_max31855();
@@ -584,6 +594,66 @@ fn main() -> ! {
     putline(b"DONE");
 
     loop {}
+}
+
+/// Exercise the Cortex-M3 SysTick peripheral and SCB pending state on the
+/// exact imported STM32F103 profile. PRIMASK keeps the request pending while
+/// the timer is disabled and COUNTFLAG is read.
+unsafe fn smoke_systick_exception_state() -> bool {
+    let prior_primask: u32;
+    core::arch::asm!(
+        "mrs {primask}, PRIMASK",
+        "cpsid i",
+        primask = out(reg) prior_primask,
+        options(nomem, nostack, preserves_flags),
+    );
+
+    write_volatile(SYSTICK_CSR as *mut u32, 0);
+    write_volatile(SCB_ICSR as *mut u32, ICSR_PENDSTCLR);
+    write_volatile(SYSTICK_RVR as *mut u32, 63);
+    write_volatile(SYSTICK_CVR as *mut u32, 0);
+    write_volatile(SYSTICK_CSR as *mut u32, 0x7); // ENABLE | TICKINT | CLKSOURCE
+    let calibration_is_f103 = read_volatile(SYSTICK_CALIB as *const u32) == 9_000;
+
+    let mut pending_before_disable = false;
+    for _ in 0..4_096 {
+        if read_volatile(SCB_ICSR as *const u32) & ICSR_PENDSTSET != 0 {
+            pending_before_disable = true;
+            break;
+        }
+    }
+
+    // Disabling the counter must leave COUNTFLAG latched. Reading CSR returns
+    // and clears COUNTFLAG, independently of the already pending exception.
+    write_volatile(SYSTICK_CSR as *mut u32, 0);
+    let countflag_after_disable = read_volatile(SYSTICK_CSR as *const u32) & SYSTICK_COUNTFLAG != 0;
+    let pending_after_countflag_read = read_volatile(SCB_ICSR as *const u32) & ICSR_PENDSTSET != 0;
+    let countflag_cleared_by_read =
+        read_volatile(SYSTICK_CSR as *const u32) & SYSTICK_COUNTFLAG == 0;
+
+    write_volatile(SCB_ICSR as *mut u32, ICSR_PENDSTCLR);
+    let pending_cleared = read_volatile(SCB_ICSR as *const u32) & ICSR_PENDSTSET == 0;
+    core::arch::asm!(
+        "msr PRIMASK, {primask}",
+        primask = in(reg) prior_primask,
+        options(nostack, preserves_flags),
+    );
+
+    let ok = prior_primask == 0
+        && calibration_is_f103
+        && pending_before_disable
+        && countflag_after_disable
+        && pending_after_countflag_read
+        && countflag_cleared_by_read
+        && pending_cleared;
+    if ok {
+        putline(
+            b"SYSTICK M3 CALIB=00002328 WRAP=1 COUNTFLAG_WRITE=1 READ_CLEAR=1 PENDING=1 CLEAR=1 ok",
+        );
+    } else {
+        putline(b"SYSTICK M3 CHECK FAILED");
+    }
+    ok
 }
 
 // ── Init helpers ──────────────────────────────────────────────────────────────

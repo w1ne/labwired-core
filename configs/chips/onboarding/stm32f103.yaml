@@ -1,7 +1,7 @@
 # Bounded Cortex-M3 profile for the imported STM32F103 platform. The memory
 # windows match the common F103C8 density; this profile makes no claim about
-# the wider STM32F1 family. Only the RCC, GPIOA/GPIOB, USART2, SPI1 and I2C1
-# surfaces exercised by the exact-import smoke are declared.
+# the wider STM32F1 family. The declared RCC, GPIOA/GPIOB, USART2, SPI1, I2C1
+# and core SysTick models are exercised by the exact-import smoke.
 name: stm32f103
 arch: arm
 core: cortex-m3
@@ -63,3 +63,11 @@ peripherals:
   clock: { reg: apb1enr, bit: 21 }
   config:
     profile: stm32f1
+- id: systick
+  type: systick
+  base_address: 0xE000E010
+  size: 16B
+  config:
+    # RM0008 §10.1.1: TENMS=9000; the external SysTick source is HCLK/8.
+    calib: 0x00002328
+    external_clock_divider: 8
