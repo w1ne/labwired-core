@@ -31,6 +31,17 @@ peripherals:
     clock: { controller: "pcr", reg: "UART0_CONF", bit: 0 }
     config:
       echo_stdout: true
+  # Direct GPIO0..25 output subset for the DevKitC-1 header. C61's GPIO block
+  # has GPIO_OUT at +0x04, W1TS/W1TC at +0x08/+0x0C, ENABLE at +0x34..+0x3C,
+  # and GPIO_IN at +0x64. The model uses C61's GPIO register offsets and
+  # SIG_GPIO_OUT_IDX=256; GPIO26..29, input matrix behavior, IO_MUX pad routing,
+  # and GPIO interrupt behavior are not claimed by this narrow board profile.
+  # GPIO4 is exposed at J1 pin 3 on ESP32-C61-DevKitC-1 v2.0.
+  - id: "gpio"
+    type: "esp32c61_gpio"
+    base_address: 0x60091000
+    # GPIO_EXT begins at +0xE00. Keep the unmapped extension out of this window.
+    size: "3584"
   # C61 PCR UART0_CONF (+0x00) and UART0_SCLK_CONF (+0x04) use the same
   # clock-enable offsets and bits as the C6. The shared model enforces CLK_EN
   # at the bus gate; reset and clock-frequency behavior remain partial.

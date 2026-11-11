@@ -14,11 +14,11 @@
       1082458112,
       0,
       1610612736,
-      10,
-      48,
-      79,
       95,
+      10,
       75,
+      79,
+      48,
       0,
       0,
       0,
@@ -36,7 +36,7 @@
       0,
       0
     ],
-    "pc": 1107297040,
+    "pc": 1107297078,
     "mstatus": 0,
     "mie": 0,
     "mip": 128,
@@ -73,7 +73,7 @@
     }
   },
   "steps_executed": 500000,
-  "cycles": 1000190,
+  "cycles": 1000198,
   "instructions": 500000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "e009f9fc83ffa9bfd2d09803a94de26c6a062b78ac2ea68d55c35e569c2c43d3",
+  "firmware_hash": "04926660d1bb6dda5dd4b6b9870b0603bc45ae8ef5d19cad00130a70423358a3",
   "config": {
     "firmware": "examples/esp32c61-devkitc-1-n8r2/../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c61-smoke",
     "system": "examples/esp32c61-devkitc-1-n8r2/../../configs/systems/esp32c61-devkitc-1-n8r2.yaml",

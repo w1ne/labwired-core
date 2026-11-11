@@ -16,6 +16,7 @@
 //! | `esp32c6_uart`      | [`crate::peripherals::esp_uart::EspUart`] (head map shared with C3/S3) |
 //! | `esp32c6_gpio`      | [`crate::peripherals::esp32c3::gpio::Esp32c3Gpio`] (register head shared) |
 //! | `esp32c5_gpio`      | [`crate::peripherals::esp32c3::gpio::Esp32c3Gpio`] (direct GPIO subset; C5 offsets translated) |
+//! | `esp32c61_gpio`     | [`crate::peripherals::esp32c3::gpio::Esp32c3Gpio`] (C61 direct-output subset; shifted offsets translated) |
 //! | `esp32c6_pcr`       | [`pcr::Esp32c6Pcr`] — full SVD register map + the `clock:` gate controller |
 //! | `esp32c6_gdma`      | [`gdma::Esp32c6Gdma`] — 3-channel C6 GDMA with M2M descriptor walks |
 //! | `esp32c6_mwdt`      | [`crate::peripherals::esp32::timg::Timg`] with `with_mwdt` — the shared TIMG head (one GP timer per group) plus the C3/C6 MWDT path; the name carries the `wdt` marker the tier-1 heuristic reads |

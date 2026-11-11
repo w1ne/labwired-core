@@ -6,4 +6,7 @@ limits:
   max_steps: 500000
 assertions:
   - uart_contains: "ESP32C61_DEVKITC1_UART0_OK"
+  - gpio_edges:
+      pin: "gpio:4"
+      min_edges: 8
   - expected_stop_reason: max_steps

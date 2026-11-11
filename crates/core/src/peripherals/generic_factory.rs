@@ -132,6 +132,9 @@ pub const MODEL_TYPES: &[&str] = &[
     // would resolve them to the STM32 maps.
     "esp32c6_uart",
     "esp32c6_gpio",
+    // C61 GPIO uses the same factory as C6, but a different register head and
+    // direct-output signal ID. This canonical type prevents fallback routing.
+    "esp32c61_gpio",
     // C5's GPIO register head is shared for the modeled direct-output subset.
     "esp32c5_gpio",
     // The C5 I2C0 command-list engine is selected by the bus's I2C attach path.

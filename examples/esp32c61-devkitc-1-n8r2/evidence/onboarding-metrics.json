@@ -1,28 +1,28 @@
 {
-  "target_id": "esp32c61-devkitc-1-n8r2-uart0",
+  "target_id": "esp32c61-devkitc-1-n8r2-uart-gpio",
   "status": "pass",
   "crate": "firmware-esp32c61-smoke",
   "target_triple": "riscv32imc-unknown-none-elf",
   "script": "examples/esp32c61-devkitc-1-n8r2/uart-smoke.yaml",
   "system": "configs/systems/esp32c61-devkitc-1-n8r2.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-10T23:26:00Z",
-  "finished_at_utc": "2026-11-10T23:26:01Z",
-  "elapsed_seconds": 1,
-  "elapsed_ms": 974,
+  "started_at_utc": "2026-11-11T00:18:53Z",
+  "finished_at_utc": "2026-11-11T00:18:55Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1308,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.278,
-    "build_firmware": 0.312,
-    "run_smoke": 0.34
+    "build_cli": 0.371,
+    "build_firmware": 0.452,
+    "run_smoke": 0.439
   },
   "stages_ms": {
-    "build_cli": 278,
-    "build_firmware": 312,
-    "run_smoke": 340
+    "build_cli": 371,
+    "build_firmware": 452,
+    "run_smoke": 439
   }
 }

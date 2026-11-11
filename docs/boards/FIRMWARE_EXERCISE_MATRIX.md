@@ -221,6 +221,15 @@ _ESP32 is demand rank #1 (38% survey use). The ESP32-C5-DevKitC-1-N8R8 profile l
 - `io_mux` (configs/chips/esp32c5.yaml (declarative; configs/peripherals/esp32c6/io_mux.yaml)) — CLOSABLE: function-select writes are stored but pad routing is not electrically enforced; UART0 console output and GPIO model edges do not prove package-pin voltage.
 - `pcr` (ESP32-C5 PCR clock/reset window is outside the focused descriptor) — Smoke does not enforce C5 PCR clock/reset gating; UART bytes and I2C transactions reach modeled controllers independently of PCR state.
 
+### `esp32c61`
+
+_ESP32 is demand rank #1 (38% survey use). The ESP32-C61-DevKitC-1-N8R2 smoke boots an RV32IMC image on the C61 profile, gates UART0 through PCR, emits a UART marker, and observes eight GPIO4 output-latch edges on header J1 pin 3. The C61 GPIO adapter uses its shifted ENABLE/IN/PINn/matrix offsets and `SIG_GPIO_OUT_IDX=256`, but claims only direct GPIO0..25 output behavior. These are simulator edges, not package-pin voltage or silicon evidence._
+
+**Functional firmware exercises**:
+- ESP32-C61-DevKitC-1-N8R2: UART0 marker plus GPIO4 direct-output edges — `firmware-esp32c61-smoke` · `examples/esp32c61-devkitc-1-n8r2/evidence/` (nightly CI)
+
+**Unmodelled on this focused profile**: GPIO input, GPIO interrupts, the rest of the GPIO peripheral matrix, GPIO26..29, IO_MUX electrical routing, radios, native USB, PSRAM, and the RGB LED. No C61 peripheral windows beyond UART0/PCR/GPIO are declared.
+
 ### `esp32s3-zero`
 
 _Board variant of the esp32s3 die: same configure_xtensa_esp32s3 wiring and the same committed tier-1 ELF, which non-ignored CLI/workspace tests boot under this chip's name and assert through `TIER1 ... PASS` (SYSTIMER runs the clock check; USB-Serial/JTAG is the console of the TMP102 e2e, so neither is a gap). The yaml's IRAM/ROM-thunk/XIP windows are memory-map declarations, not per-chip models, and its eFuse/RTC_CNTL stubs are the shared family stubs listed on the esp32s3 entry. `spi_mem_flash`/`extmem` stay unit-only here too: mask-ROM bring-up reads are not firmware exercise._

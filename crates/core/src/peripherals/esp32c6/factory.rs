@@ -40,6 +40,11 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         // is built with the C6 layout; the FSPI and UART TX numbers match.
         // Its GPIO interrupt is matrix source 30 (esp32c6.svd), not the C3's 16.
         "esp32c6_gpio" => Box::new(crate::peripherals::esp32c3::gpio::Esp32c3Gpio::for_esp32c6()),
+        // C61's direct GPIO head is similar but not offset-identical to C6:
+        // ENABLE is at +0x34, IN at +0x64, matrix selectors at +0x2D4/+0xAD4,
+        // PINn starts at +0xD4, and SIG_GPIO_OUT_IDX is 256. The adapter only
+        // exposes the direct GPIO0..25 output subset.
+        "esp32c61_gpio" => Box::new(crate::peripherals::esp32c3::gpio::Esp32c3Gpio::for_esp32c61()),
         // C5 shares the OUT/W1TS/W1TC offsets but moves ENABLE to 0x34..0x3C
         // and IN to 0x64. Reuse the direct-GPIO behavior with that register
         // translation; C5 matrix IDs, GPIO26+, and the remaining tail are not
@@ -139,6 +144,7 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
 pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32c6_uart",
     "esp32c6_gpio",
+    "esp32c61_gpio",
     "esp32c5_gpio",
     "esp32c6_pcr",
     "esp32c6_extmem",

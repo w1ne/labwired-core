@@ -112,7 +112,7 @@ jobs:
             firmware_build_script: examples/esp32c6-devkitc-1-n8-bme280/firmware/build-firmware.sh
             script: examples/esp32c6-devkitc-1-n8-bme280/bme280-smoke.yaml
             system: configs/systems/esp32c6-devkitc-1-n8-bme280.yaml
-          - id: esp32c61-devkitc-1-n8r2-uart0
+          - id: esp32c61-devkitc-1-n8r2-uart-gpio
             crate: firmware-esp32c61-smoke
             target: riscv32imc-unknown-none-elf
             script: examples/esp32c61-devkitc-1-n8r2/uart-smoke.yaml
