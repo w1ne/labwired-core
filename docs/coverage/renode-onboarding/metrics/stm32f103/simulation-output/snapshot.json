@@ -15,12 +15,12 @@
       5500,
       536891364,
       632080,
-      134236224,
-      536891136,
+      134236788,
+      536891144,
       69,
-      134234904
+      134235470
     ],
-    "pc": 134234904,
+    "pc": 134235470,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "f793a00485f2b07271b9eada0766613c2a8bf35fe59a3e7f27fca8edfd4c47f1",
+  "firmware_hash": "df869e439406426b96bd35d3d17ac14922de10f693ce0e6a14d993ba5cedbfa5",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-f103-i2c-demo",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f103.yaml",

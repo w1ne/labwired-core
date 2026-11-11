@@ -1,14 +1,14 @@
-2026-11-11T17:56:14.303307Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f103.yaml
-2026-11-11T17:56:14.360299Z  INFO labwired_loader: ELF Entry Point: 0x80003bf
+2026-11-11T20:07:45.300797Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f103.yaml
+2026-11-11T20:07:45.357506Z  INFO labwired_loader: ELF Entry Point: 0x8000437
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-2026-11-11T17:56:14.361274Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'usart2'
-2026-11-11T17:56:14.368828Z  WARN labwired_core::cpu::cortex_m::exec::misc: Unknown instruction at 0x8000184: Opcode 0xde00
-2026-11-11T17:56:14.368864Z  WARN labwired_core::cpu::cortex_m::exec::misc: Unknown instruction at 0x8000184: Opcode 0xde00
-2026-11-11T17:56:14.656057Z  INFO labwired_cli::execute: stimulus: temperature = 55 applied
-2026-11-11T17:56:14.887178Z  INFO labwired_cli::execute: stimulus: humidity = 35 applied
-2026-11-11T17:56:15.132932Z  INFO labwired_cli::execute: stimulus: pressure = 1012.5 applied
+2026-11-11T20:07:45.358476Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'usart2'
+2026-11-11T20:07:45.366469Z  WARN labwired_core::cpu::cortex_m::exec::misc: Unknown instruction at 0x80001fc: Opcode 0xde00
+2026-11-11T20:07:45.366505Z  WARN labwired_core::cpu::cortex_m::exec::misc: Unknown instruction at 0x80001fc: Opcode 0xde00
+2026-11-11T20:07:45.640748Z  INFO labwired_cli::execute: stimulus: temperature = 55 applied
+2026-11-11T20:07:45.873029Z  INFO labwired_cli::execute: stimulus: humidity = 35 applied
+2026-11-11T20:07:46.118895Z  INFO labwired_cli::execute: stimulus: pressure = 1012.5 applied
 labwired-cli test: idle_ff skipped 125 of 50000125 device cycles (50000000 interpreted)
-PASS  77/77 checks · stm32f103-i2c-smoke · 50000000 steps · 0.80s
-FAULT  UsageFault: undefined instruction, at PC 0x0800_0184 in `_ZN22firmware_f103_i2c_demo35smoke_trigger_undefined_instruction17h47760c0d41e8d816E`, called from `firmware_f103_i2c_demo::smoke_usagefault_and_hardfault_escalation`.
+PASS  78/78 checks · stm32f103-i2c-smoke · 50000000 steps · 0.79s
+FAULT  UsageFault: undefined instruction, at PC 0x0800_01FC in `_ZN22firmware_f103_i2c_demo35smoke_trigger_undefined_instruction17h47760c0d41e8d816E`, called from `firmware_f103_i2c_demo::smoke_usagefault_and_hardfault_escalation`.
        HFSR=0x00000000 CFSR=0x00010000 [UNDEFINSTR]
