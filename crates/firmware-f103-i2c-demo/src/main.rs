@@ -238,6 +238,7 @@ fn main() -> ! {
     unsafe { smoke_systick_external_pause_resume() };
     unsafe { smoke_systick_handler_delivery() };
     unsafe { smoke_systick_icsr_repend() };
+    unsafe { smoke_systick_tickint_gate() };
     smoke_usart2_txe_irq();
     smoke_usart2_rx_enable_gate();
     smoke_spi1_irq_and_max31855();
@@ -879,6 +880,73 @@ unsafe fn smoke_systick_icsr_repend() -> bool {
         putline(b"SYSTICK M3 ICSR SET=1 COALESCE=1 CLEAR=1 REPEND=1 ENTRIES=2 ACTIVE=15 ok");
     } else {
         putline(b"SYSTICK M3 ICSR REPEND CHECK FAILED");
+    }
+    ok
+}
+
+/// TICKINT gates exception requests but not the counter or COUNTFLAG. Keep
+/// PRIMASK set so both the absent and present pending states can be observed
+/// without entering the handler.
+unsafe fn smoke_systick_tickint_gate() -> bool {
+    let source_vtor = read_volatile(SCB_VTOR as *const u32);
+    let prior_primask: u32;
+    core::arch::asm!(
+        "mrs {primask}, PRIMASK",
+        "cpsid i",
+        primask = out(reg) prior_primask,
+        options(nomem, nostack, preserves_flags),
+    );
+
+    write_volatile(SYSTICK_CSR as *mut u32, 0);
+    write_volatile(SCB_ICSR as *mut u32, ICSR_PENDSTCLR);
+    write_volatile(SCB_VTOR as *mut u32, 0x0800_0000);
+    write_volatile(SYSTICK_HANDLER_COUNT, 0);
+    write_volatile(SYSTICK_RVR as *mut u32, 63);
+    write_volatile(SYSTICK_CVR as *mut u32, 0);
+    write_volatile(SYSTICK_CSR as *mut u32, 0x5); // ENABLE | CLKSOURCE; TICKINT clear.
+
+    let mut wrapped_without_tickint = false;
+    for _ in 0..4_096 {
+        if read_volatile(SYSTICK_CSR as *const u32) & SYSTICK_COUNTFLAG != 0 {
+            wrapped_without_tickint = true;
+            break;
+        }
+    }
+    let no_request_without_tickint = read_volatile(SCB_ICSR as *const u32) & ICSR_PENDSTSET == 0
+        && read_volatile(SYSTICK_HANDLER_COUNT) == 0;
+
+    // The counter remains enabled; the next zero hit now asserts SysTick.
+    write_volatile(SYSTICK_CSR as *mut u32, 0x7);
+    let mut request_with_tickint = false;
+    for _ in 0..4_096 {
+        if read_volatile(SCB_ICSR as *const u32) & ICSR_PENDSTSET != 0 {
+            request_with_tickint = true;
+            break;
+        }
+    }
+    let handler_masked = read_volatile(SYSTICK_HANDLER_COUNT) == 0;
+
+    write_volatile(SYSTICK_CSR as *mut u32, 0);
+    write_volatile(SCB_ICSR as *mut u32, ICSR_PENDSTCLR);
+    write_volatile(SCB_VTOR as *mut u32, source_vtor);
+    core::arch::asm!(
+        "msr PRIMASK, {primask}",
+        "dsb",
+        "isb",
+        primask = in(reg) prior_primask,
+        options(nostack, preserves_flags),
+    );
+
+    let ok = prior_primask == 0
+        && source_vtor == 0x0800_0000
+        && wrapped_without_tickint
+        && no_request_without_tickint
+        && request_with_tickint
+        && handler_masked;
+    if ok {
+        putline(b"SYSTICK M3 TICKINT=0 COUNTFLAG=1 NO_PEND=1 TICKINT=1 PEND=1 MASKED=1 ok");
+    } else {
+        putline(b"SYSTICK M3 TICKINT CHECK FAILED");
     }
     ok
 }
