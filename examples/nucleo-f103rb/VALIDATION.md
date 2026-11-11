@@ -38,10 +38,15 @@ cold, nominal, and hot temperatures.
 ```sh
 cargo test -p labwired-core --test cosim_pin_routing \
   nucleo_f103rb_ntc_netlist_reaches_pa0_adc1_end_to_end -- --nocapture
+cargo test -p labwired-core --test cosim_pin_routing \
+  nucleo_f103rb_diode_depletion_and_transit_charge_reach_adc1_end_to_end -- --nocapture
 ```
 
-This is simulator evidence for NUCLEO-F103RB; it does not claim a physical
-board measurement.
+The second test routes matched CJO/TT diode branches onto PA2–PA5/ADC1_IN2–IN5,
+asserts each first transient against its no-charge branch, checks firmware-
+visible ADC conversions, and verifies the branches converge to an independent
+Shockley DC load line. Both tests are simulator evidence for NUCLEO-F103RB;
+they do not claim a physical board measurement.
 
 ## Unsupported-instruction audit
 

@@ -915,6 +915,162 @@ fn nucleo_f103rb_ntc_netlist_reaches_pa0_adc1_end_to_end() {
     );
 }
 
+/// The generic diode charge model must solve and route through the package
+/// pins into the NUCLEO-F103RB's firmware-visible ADC1, alongside an unrelated
+/// NTC divider. Matched charge/no-charge branches separate CJO depletion and
+/// TT diffusion effects, then verify that every branch returns to the same
+/// Shockley DC load line.
+#[test]
+fn nucleo_f103rb_diode_depletion_and_transit_charge_reach_adc1_end_to_end() {
+    let (mut manifest, mut bus) = bus_and_manifest("configs/systems/nucleo-f103rb.yaml");
+    let charge = SystemManifest::from_file(root(
+        "examples/nucleo-f103rb/analog-diode-charge-adc-system.yaml",
+    ))
+    .expect("load unrelated NTC and matched generic diode charge branches");
+    manifest.cosim_models = charge.cosim_models;
+    let mut session = build_session(&bus, &manifest.cosim_models);
+
+    for channel in 0..=6 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set the unrelated NTC temperature");
+    session
+        .set_signal_number("ui.diode_charge.supply_v", 0.0)
+        .expect("initialize the diode branches before the supply step");
+
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("settle NTC and all four diode branches");
+    assert_eq!(initial_steps.len(), 5, "all five analog devices solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected route errors: {initial_errors:?}"
+    );
+
+    session
+        .set_signal_number("ui.diode_charge.supply_v", 3.3)
+        .expect("step the supply on all matched diode branches");
+    let diode_load_line_voltage = || {
+        const SUPPLY_V: f64 = 3.3;
+        const LIMIT_OHMS: f64 = 1_000.0;
+        const IS_A: f64 = 2.52e-9;
+        const N: f64 = 1.752;
+        const RS_OHMS: f64 = 0.568;
+        const VT: f64 = 1.380_649e-23 * 298.15 / 1.602_176_634e-19;
+        let current = |junction_v: f64| IS_A * ((junction_v / (N * VT)).exp() - 1.0);
+        let residual = |junction_v: f64| {
+            (SUPPLY_V - junction_v - current(junction_v) * RS_OHMS) / LIMIT_OHMS
+                - current(junction_v)
+        };
+        let (mut low, mut high) = (0.0, 1.2);
+        for _ in 0..100 {
+            let mid = 0.5 * (low + high);
+            if residual(mid) > 0.0 {
+                low = mid;
+            } else {
+                high = mid;
+            }
+        }
+        let junction_v = 0.5 * (low + high);
+        junction_v + current(junction_v) * RS_OHMS
+    };
+
+    let mut samples = Vec::new();
+    for step in 0..800 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route the NTC plus four diode branches");
+        assert_eq!(
+            steps.len(),
+            5,
+            "all five analog devices solve at step {step}"
+        );
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        let voltage = |path: &str| match session.signals().get(path) {
+            Some(CosimSignalValue::F64(volts)) => *volts,
+            other => panic!("missing routed analog voltage at {path}: {other:?}"),
+        };
+        let ntc_v = voltage("board.analog.pa0_volts");
+        let reference_v = voltage("board.analog.pa2_volts");
+        let depletion_v = voltage("board.analog.pa3_volts");
+        let transit_v = voltage("board.analog.pa4_volts");
+        let combined_v = voltage("board.analog.pa5_volts");
+        assert!(
+            (ntc_v - 1.65).abs() < 1e-9,
+            "the separate 25 °C NTC stays isolated"
+        );
+        assert!(
+            (reference_v - diode_load_line_voltage()).abs() < 2e-5,
+            "the uncharged diode must match the independent Shockley load line: {reference_v} V"
+        );
+
+        for (channel, volts) in [
+            (0, ntc_v),
+            (2, reference_v),
+            (3, depletion_v),
+            (4, transit_v),
+            (5, combined_v),
+        ] {
+            let millivolts = (volts * 1000.0).round() as u32;
+            let expected = (millivolts * 4095 / 3300).min(4095) as u16;
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "the solved PA voltage must seed ADC1_IN{channel}"
+            );
+            assert_eq!(
+                f103_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "firmware-visible ADC1 conversion must return PA input channel {channel}"
+            );
+        }
+        for channel in [1, 6] {
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                0xFFFF,
+                "unrouted ADC1_IN{channel} remains undriven"
+            );
+        }
+        if step == 0 {
+            assert!(
+                (depletion_v - reference_v).abs() > 0.001,
+                "CJO depletion charge must shift the first ADC-routed transient"
+            );
+            assert!(
+                (transit_v - reference_v).abs() > 0.01,
+                "TT diffusion charge must shift the first ADC-routed transient"
+            );
+            assert!(
+                (combined_v - reference_v).abs() > 0.01,
+                "combined CJO and TT charge must shift the first routed transient"
+            );
+        }
+        samples.push((reference_v, depletion_v, transit_v, combined_v));
+    }
+
+    let settled = samples.last().expect("transient samples exist");
+    for (label, volts) in [
+        ("depletion", settled.1),
+        ("transit", settled.2),
+        ("combined", settled.3),
+    ] {
+        assert!(
+            (volts - settled.0).abs() < 2e-4,
+            "{label} charge branch must settle to the same DC load line: {volts} V vs {} V",
+            settled.0
+        );
+    }
+}
+
 /// The same general MNA NTC divider and explicit ADC-channel route also work
 /// on the Mega's CPU-owned AVR ADC. ADC8 is selected through MUX5, so a route
 /// that reaches only the low ADC channels or a conversion that ignores MUX5

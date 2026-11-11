@@ -47,6 +47,12 @@ edges) and `uart-smoke.yaml` (UART output).
 a temperature-driven NTC netlist to PA0 / ADC1_IN0; the executable end-to-end
 assertion is documented in [`VALIDATION.md`](VALIDATION.md#mixed-signal-adc-path).
 
+[`analog-diode-charge-adc-system.yaml`](analog-diode-charge-adc-system.yaml)
+compares generic Shockley diode branches with CJO depletion charge, TT transit
+charge, both effects, and neither. The co-simulation routes PA2–PA5 through
+ADC1 and checks the transient charge response and return to the same DC load
+line alongside the unrelated NTC divider.
+
 ## Source and validation boundary
 
 The board wiring follows ST UM1724 and the chip geometry follows ST DS5319.
