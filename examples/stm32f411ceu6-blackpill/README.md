@@ -40,6 +40,13 @@ co-simulation test checks the transient against an independent backward-Euler
 RC recurrence, asserts ADC1 readback, and keeps the unrelated NTC and diode
 routed on PA1/PA4.
 
+[`analog-mosfet-junction-geometry-adc.yaml`](analog-mosfet-junction-geometry-adc.yaml)
+compares matched level-1 NMOS branches with drain/source bottom and sidewall
+junction geometry against zero-charge controls on PA2/PA3/PA5/PA6. Its
+co-simulation test checks the independently integrated reverse-bias charge
+recurrence, distinct drain/source transients, and ADC1 conversions while the
+unrelated NTC and diode remain routed on PA1/PA4.
+
 [`analog-jfet-gate-charge-adc.yaml`](analog-jfet-gate-charge-adc.yaml) compares
 matched level-1 NJF branches with and without CGS/CGD depletion charge on
 PA2/PA3. The co-simulation test checks the transient against an independent
@@ -112,4 +119,6 @@ Expected result:
    control branches routed to ADC1.
 10. `analog-bjt-terminal-resistance-adc.yaml`: generic BJT terminal-resistance
    branches and explicit equivalent network routed to ADC1.
-11. `VALIDATION.md`: reproducible validation commands and the honest scope.
+11. `analog-mosfet-junction-geometry-adc.yaml`: generic NMOS junction geometry
+    charge and zero-charge controls routed to ADC1.
+12. `VALIDATION.md`: reproducible validation commands and the honest scope.
