@@ -37,9 +37,10 @@
 //! confirms hardware reloads generate three more exception entries. A CVR
 //! clear during a live countdown must not fire immediately, but the next
 //! countdown-to-zero must still pend SysTick. COUNTFLAG's byte-read and
-//! read-only behavior is checked separately from its word-read clear. An RVR
-//! update during a live countdown must preserve CVR and take effect on the
-//! next reload. Writes to RVR bits [31:24] must be ignored.
+//! read-only behavior is checked separately from its word-read clear. TICKINT
+//! enabled after a silent wrap must wait for the next zero-hit before it pends.
+//! An RVR update during a live countdown must preserve CVR and take effect on
+//! the next reload. Writes to RVR bits [31:24] must be ignored.
 //! Clearing CVR after a tick is already pending clears COUNTFLAG but must leave
 //! the pending exception intact until PRIMASK is cleared.
 //! Clearing a hardware-generated pending exception through ICSR must leave
@@ -527,13 +528,19 @@ unsafe extern "C" fn smoke_systick_periodic_handler() {
     );
 }
 
-/// Record an unexpected SysTick exception in the COUNTFLAG-only test.
+/// Record the first SysTick exception after TICKINT is enabled between wraps.
 #[unsafe(naked)]
 unsafe extern "C" fn smoke_systick_countflag_only_handler() {
     core::arch::naked_asm!(
+        "mrs r2, ipsr",
         "ldr r0, =0x20003340",
-        "movs r1, #1",
-        "str r1, [r0]",
+        "str r2, [r0, #0]",
+        "ldr r1, =0xE000ED04",
+        "ldr r2, [r1]",
+        "str r2, [r0, #4]",
+        "ldr r2, [r0, #8]",
+        "adds r2, #1",
+        "str r2, [r0, #8]",
         "ldr r0, =0xE000E010",
         "movs r1, #0",
         "str r1, [r0]",
@@ -1205,9 +1212,11 @@ fn check_systick_periodic_reload() -> bool {
     ok
 }
 
-/// COUNTFLAG records a zero-hit with TICKINT clear. Byte reads and writes to
-/// its read-only CSR bit must preserve it; only a word read clears it.
-fn check_systick_countflag_without_tickint() -> bool {
+/// COUNTFLAG records a zero-hit with TICKINT clear but no exception is pended.
+/// Enabling TICKINT between wraps must wait for the next zero-hit to pend.
+fn check_systick_countflag_and_late_tickint() -> bool {
+    const PENDSTSET: u32 = 1 << 26;
+    const PENDSTCLR: u32 = 1 << 25;
     let source_vtor = rd(SCB_VTOR);
     let table = RAM_VECTOR_BASE as *mut u32;
     let prior_primask: u32;
@@ -1219,10 +1228,12 @@ fn check_systick_countflag_without_tickint() -> bool {
             options(nomem, nostack, preserves_flags),
         );
         wr(SYSTICK_CSR, 0);
-        wr(SCB_ICSR, 1 << 25);
+        wr(SCB_ICSR, PENDSTCLR);
         wr(SYSTICK_RVR, 127);
         wr(SYSTICK_CVR, 0);
-        write_volatile(SYSTICK_FLAG_RECORD as *mut u32, 0);
+        for index in 0..3 {
+            write_volatile((SYSTICK_FLAG_RECORD as *mut u32).add(index), 0);
+        }
         for index in 0..VECTOR_TABLE_WORDS {
             write_volatile(table.add(index), 0);
         }
@@ -1234,15 +1245,6 @@ fn check_systick_countflag_without_tickint() -> bool {
         wr(SYSTICK_CSR, 0x5); // ENABLE | processor clock; TICKINT stays clear.
     }
     let control_before_wait = rd(SYSTICK_CSR) & 0x7;
-    unsafe {
-        asm!(
-            "msr PRIMASK, {primask}",
-            "dsb",
-            "isb",
-            primask = in(reg) prior_primask,
-            options(nostack, preserves_flags),
-        );
-    }
 
     let mut countflag_seen = false;
     for _ in 0..100_000 {
@@ -1254,17 +1256,44 @@ fn check_systick_countflag_without_tickint() -> bool {
     }
 
     let byte_read_preserved = rd8(SYSTICK_CSR + 2) & 1 != 0;
-    // COUNTFLAG is read-only in CSR. Setting it in a word write must neither
-    // clear the latched flag nor change the three control bits; disabling the
-    // timer here makes the following word-read clear check stable.
-    wr(SYSTICK_CSR, (1 << 16) | 0x4);
+    let pending_without_tickint = rd(SCB_ICSR) & PENDSTSET != 0;
+    // COUNTFLAG is read-only. Attempt to write it while retaining ENABLE and
+    // TICKINT=0; the word read returns then clears the latched flag.
+    wr(SYSTICK_CSR, (1 << 16) | 0x5);
     let csr_after_write = rd(SYSTICK_CSR);
     let control_readback = csr_after_write & 0x7;
     let countflag_write_ignored = csr_after_write & (1 << 16) != 0;
     let countflag_read_clear = rd(SYSTICK_CSR) & (1 << 16) == 0;
 
-    let icsr_before_cleanup = rd(SCB_ICSR);
-    let handler_hit = rd(SYSTICK_FLAG_RECORD) != 0;
+    // TICKINT is enabled after the first zero-hit. It must not pend an
+    // exception retroactively; the next countdown-to-zero must pend one.
+    wr(SYSTICK_CSR, 0x7);
+    let pending_after_tickint_enable = rd(SCB_ICSR) & PENDSTSET != 0;
+    let countflag_after_tickint_enable = rd8(SYSTICK_CSR + 2) & 1 != 0;
+    let mut next_wrap_pending = false;
+    for _ in 0..100_000 {
+        if rd(SCB_ICSR) & PENDSTSET != 0 {
+            next_wrap_pending = true;
+            break;
+        }
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+    let countflag_after_next_wrap = rd8(SYSTICK_CSR + 2) & 1 != 0;
+    let handler_before_unmask = rd(SYSTICK_FLAG_RECORD + 8);
+    unsafe {
+        asm!("cpsie i", "dsb", "isb", options(nostack, preserves_flags));
+    }
+    for _ in 0..100_000 {
+        if rd(SYSTICK_FLAG_RECORD + 8) != 0 {
+            break;
+        }
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+
+    let handler_ipsr = rd(SYSTICK_FLAG_RECORD);
+    let handler_icsr = rd(SYSTICK_FLAG_RECORD + 4);
+    let entries = rd(SYSTICK_FLAG_RECORD + 8);
+    let pending_after_handler = rd(SCB_ICSR) & PENDSTSET != 0;
     let thread_ipsr: u32;
     unsafe {
         asm!(
@@ -1274,7 +1303,7 @@ fn check_systick_countflag_without_tickint() -> bool {
         );
         asm!("cpsid i", options(nomem, nostack, preserves_flags));
         wr(SYSTICK_CSR, 0);
-        wr(SCB_ICSR, 1 << 25);
+        wr(SCB_ICSR, PENDSTCLR);
         wr(SYSTICK_CVR, 0);
         wr(SCB_VTOR, source_vtor);
         asm!(
@@ -1286,31 +1315,52 @@ fn check_systick_countflag_without_tickint() -> bool {
         );
     }
     let vtor_restored = rd(SCB_VTOR) == source_vtor;
-    let pending = icsr_before_cleanup & (1 << 26) != 0;
+    let handler_active = handler_icsr & 0x1FF == 15;
     let ok = prior_primask == 0
         && control_before_wait == 0x5
-        && control_readback == 0x4
+        && control_readback == 0x5
         && countflag_seen
         && byte_read_preserved
+        && !pending_without_tickint
         && countflag_write_ignored
         && countflag_read_clear
-        && !handler_hit
-        && !pending
+        && !pending_after_tickint_enable
+        && !countflag_after_tickint_enable
+        && next_wrap_pending
+        && countflag_after_next_wrap
+        && handler_before_unmask == 0
+        && handler_ipsr == 15
+        && handler_active
+        && entries == 1
+        && !pending_after_handler
         && thread_ipsr == 0
         && vtor_restored;
 
-    puts("systick countflag-only tickint=0 flag=");
+    puts("systick late-tickint silent_wrap=");
     puts(if countflag_seen { "1 " } else { "0 " });
     flag("byte_preserved", byte_read_preserved);
     flag("write_ignored", countflag_write_ignored);
     puts("control=");
     hex(control_readback);
-    puts(" ");
-    flag("handler", handler_hit);
-    puts("pending=");
-    puts(if pending { "1 " } else { "0 " });
+    puts(" no_pending=");
+    flag("first", !pending_without_tickint);
     flag("read_clear", countflag_read_clear);
-    puts("ipsr=");
+    flag(
+        "no_immediate",
+        !pending_after_tickint_enable && !countflag_after_tickint_enable,
+    );
+    flag("next_wrap", next_wrap_pending && countflag_after_next_wrap);
+    puts("handler_before_unmask=");
+    hex(handler_before_unmask);
+    puts(" ipsr=");
+    hex(handler_ipsr);
+    puts(" active=");
+    hex(handler_icsr & 0x1FF);
+    puts(" entries=");
+    hex(entries);
+    puts(" pending_after=");
+    puts(if pending_after_handler { "1 " } else { "0 " });
+    puts("thread_ipsr=");
     hex(thread_ipsr);
     puts(" ");
     flag("vtor_restored", vtor_restored);
@@ -2668,7 +2718,7 @@ fn main() -> ! {
     let systick_icsr_software_pend_ok = check_systick_icsr_software_pend();
     let systick_icsr_repend_ok = check_systick_icsr_repend();
     let systick_periodic_ok = check_systick_periodic_reload();
-    let systick_countflag_only_ok = check_systick_countflag_without_tickint();
+    let systick_late_tickint_ok = check_systick_countflag_and_late_tickint();
     let systick_cvr_clear_ok = check_systick_cvr_clear_does_not_fire();
     let systick_hardware_pending_clear_ok = check_systick_hardware_pending_clear();
     let systick_reload_update_ok = check_systick_reload_update();
@@ -2681,7 +2731,7 @@ fn main() -> ! {
     mark(22, systick_periodic_ok);
     mark(
         23,
-        systick_countflag_only_ok
+        systick_late_tickint_ok
             && systick_cvr_clear_ok
             && systick_hardware_pending_clear_ok
             && systick_reload_update_ok

@@ -29,9 +29,10 @@
 # countdown test clears CVR, checks that no immediate exception is pended, then
 # verifies the next countdown-to-zero still enters exception 15. The COUNTFLAG
 # smoke checks that byte reads and writes to the read-only bit preserve it and
-# that a word CSR read clears it. An RVR update during a live countdown checks
-# that CVR keeps counting and the new value drives the following period. The
-# ICSR pending-clear smoke cancels a hardware-generated pending exception,
+# that a word CSR read clears it. TICKINT enabled between wraps must wait until
+# the next zero-hit to assert the exception request. An RVR update during a live
+# countdown checks that CVR keeps counting and the new value drives the following
+# period. The ICSR pending-clear smoke cancels a hardware-generated pending exception,
 # confirms COUNTFLAG and the live timer survive, checks a word CSR read clears
 # COUNTFLAG independently, then checks the following period re-latches it and
 # generates a fresh exception. The
@@ -96,7 +97,7 @@ assertions:
       - "systick icsr set_readback=1 clear=1 canceled=1 masked=1 ipsr=0x0000000F active=0x0000000F pending_handler=0 pending_after=0 thread_ipsr=0x00000000 vtor_restored=1 ok"
       - "systick icsr repend entries=0x00000002 first_ipsr=0x0000000F first_active=0x0000000F pending_after_pend=1 count_after_pend=0x00000001 second_ipsr=0x0000000F second_active=0x0000000F second_pending=0 thread_ipsr=0x00000000 vtor_restored=1 ok"
       - "systick periodic entries=0x00000003 reload=0x0000007F ipsr=0x0000000F,0x0000000F,0x0000000F active=1 countflag=1 pending=0 thread_ipsr=0x00000000 vtor_restored=1 ok"
-      - "systick countflag-only tickint=0 flag=1 byte_preserved=1 write_ignored=1 control=0x00000004 handler=0 pending=0 read_clear=1 ipsr=0x00000000 vtor_restored=1 ok"
+      - "systick late-tickint silent_wrap=1 byte_preserved=1 write_ignored=1 control=0x00000005 no_pending=first=1 read_clear=1 no_immediate=1 next_wrap=1 handler_before_unmask=0x00000000 ipsr=0x0000000F active=0x0000000F entries=0x00000001 pending_after=0 thread_ipsr=0x00000000 vtor_restored=1 ok"
       - "systick cvr-clear countdown=started=1 pending_after_clear=0 pending_after_period=1 flag_before_clear=1 pending_survived=1 flag_cleared=1 handler_before_unmask=0x00000000 handler_ipsr=0x0000000F active=0x0000000F entries=0x00000001 thread_ipsr=0x00000000 vtor_restored=1 ok"
       - "systick pending-clear hardware first_wrap=1 flag_survived=1 cleared=1 timer=1 read_clear=1 pending_stays_clear=1 second_wrap=1 handler_before_unmask=0x00000000 ipsr=0x0000000F active=0x0000000F entries=0x00000001 pending_after=0 thread_ipsr=0x00000000 vtor_restored=1 ok"
       - "systick reload-update rvr=0x0000001F preserved=1 first_wrap=1 pending_clear=1 next_reload=1 old="
