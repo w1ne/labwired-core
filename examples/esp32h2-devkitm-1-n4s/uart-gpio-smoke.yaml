@@ -5,7 +5,8 @@ inputs:
 limits:
   max_steps: 500000
 assertions:
-  - uart_contains: "ESP32H2_DEVKITM1_UART0_OK"
+  - uart_contains: "ESP32H2_BME280_OK"
+  - uart_contains: "ESP32H2_UART0_OK"
   - gpio_edges:
       pin: "gpio:10"
       min_edges: 8

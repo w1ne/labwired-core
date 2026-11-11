@@ -1,6 +1,7 @@
 # Narrow ESP32-H2 HP-core profile for ESP32-H2-DevKitM-1-N4S.
-# Models UART0 console output and direct GPIO output only. Thread/Zigbee,
-# Bluetooth LE, USB Serial/JTAG, flash boot/XIP, and the WS2812 RGB LED are
+# Models UART0 console output, direct GPIO output, and the I2C0 command-list
+# path used by the DevKitM-1 N4S BME280 example. Thread/Zigbee, Bluetooth LE,
+# USB Serial/JTAG, flash boot/XIP, the clock tree, and the WS2812 RGB LED are
 # outside this descriptor.
 name: "esp32h2"
 arch: "riscv"
@@ -34,4 +35,12 @@ peripherals:
   - id: "gpio"
     type: "esp32h2_gpio"
     base_address: 0x60091000
+    size: "4KB"
+
+  # H2 I2C0 command-list block at 0x6000_4000. The H2 GPIO matrix routes
+  # I2CEXT0_SCL/SDA on signals 45/46; only I2C0 is included in this profile.
+  - id: "i2c0"
+    type: "esp32h2_i2c"
+    irq: 39
+    base_address: 0x60004000
     size: "4KB"

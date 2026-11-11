@@ -1,6 +1,6 @@
 # ESP32-H2-DevKitM-1-N4S
 
-ESP32 family demand rank 1 (38% reported MCU use in the target list); the H2 is not separately ranked. This profile covers the low-power Thread/Zigbee board's UART0 console and a GPIO10 header output. It does not claim radio, USB, flash boot, or addressable RGB LED behavior.
+ESP32 family demand rank 1 (38% reported MCU use in the target list); the H2 is not separately ranked. This is a capability expansion of the already onboarded N4S board, not a new board pick. The profile now covers UART0 console output, GPIO10 direct output, and I2C0 reading a BME280 breakout on GPIO4/GPIO5.
 
 ## Copy-paste ESP-IDF example
 
@@ -23,11 +23,18 @@ void app_main(void) {
 }
 ~~~
 
+For the simulator BME280 smoke, connect a BME280 breakout to 3V3/GND and use
+GPIO4 for SDA and GPIO5 for SCL (the board header exposes these pads as J1 pins
+9 and 10). The firmware reads the BME280 chip ID and raw temperature through
+I2C0 before it emits the UART success marker. See the
+[bare-metal smoke source](../../crates/firmware-esp32h2-devkitm-1-smoke/src/main.rs)
+for the register-level example used by the simulator.
+
 ## Build and run the simulator smoke
 
 ~~~sh
 CARGO_BUILD_RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
-  --target-id esp32h2-devkitm-1-n4s-uart-gpio \
+  --target-id esp32h2-devkitm-1-n4s-bme280 \
   --crate firmware-esp32h2-devkitm-1-smoke \
   --target riscv32imac-unknown-none-elf \
   --script examples/esp32h2-devkitm-1-n4s/uart-gpio-smoke.yaml \
@@ -35,6 +42,8 @@ CARGO_BUILD_RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
   --out-dir examples/esp32h2-devkitm-1-n4s/evidence
 ~~~
 
-The smoke asserts the UART0 console marker, at least eight GPIO10 output edges, and the bounded stop condition. GPIO assertions prove the modeled output latch and enable path, not voltage at the physical pin.
+The smoke asserts the BME280 chip ID and temperature read over I2C0, the UART0
+console marker, at least eight GPIO10 output edges, and the bounded stop
+condition. These are repository simulator results, not a silicon run.
 
 See [vendor status](vendor-status.md) and [validation notes](VALIDATION.md).

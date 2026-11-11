@@ -2,7 +2,7 @@
   "result_schema_version": "1.0",
   "status": "pass",
   "steps_executed": 500000,
-  "cycles": 1000192,
+  "cycles": 1049564,
   "instructions": 500000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -30,7 +30,13 @@
   "assertions": [
     {
       "assertion": {
-        "uart_contains": "ESP32H2_DEVKITM1_UART0_OK"
+        "uart_contains": "ESP32H2_BME280_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "ESP32H2_UART0_OK"
       },
       "passed": true
     },
@@ -54,43 +60,43 @@
     "type": "risc_v",
     "registers": [
       0,
-      1107296568,
-      1082458096,
+      1107297806,
+      1082458032,
       1082132480,
       0,
       0,
       1082458112,
       0,
-      1082458112,
-      0,
+      1611206656,
       1610612736,
-      79,
-      10,
       75,
+      65,
+      82,
+      84,
+      56,
+      239,
+      0,
+      0,
+      69,
+      80,
       95,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
+      83,
+      50,
+      51,
+      72,
+      48,
+      10,
+      1024,
       0,
       0,
       0,
       0
     ],
-    "pc": 1107297052,
+    "pc": 1107297886,
     "mstatus": 0,
     "mie": 0,
     "mip": 128,
-    "mtvec": 1107296568,
+    "mtvec": 1107296588,
     "mscratch": 0,
     "mepc": 0,
     "mcause": 0,
@@ -122,7 +128,7 @@
       "tcontrol": 0
     }
   },
-  "firmware_hash": "41f53c32c35156f8a00f9e7cfd410a81eaf90b369074fc2a85f820c72643099f",
+  "firmware_hash": "2f7a616bc076e5884237b790d86e69d10a498d8b3ec7cde150f0d5b2316b03ba",
   "config": {
     "firmware": "examples/esp32h2-devkitm-1-n4s/../../target/riscv32imac-unknown-none-elf/release/firmware-esp32h2-devkitm-1-smoke",
     "system": "examples/esp32h2-devkitm-1-n4s/../../configs/systems/esp32h2-devkitm-1-n4s.yaml",
@@ -143,11 +149,123 @@
         "base": 1611206656,
         "registers": [],
         "artifacts": []
+      },
+      {
+        "name": "i2c0",
+        "kind": "i2c",
+        "base": 1610629120,
+        "registers": [],
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "i2c@0x77",
+            "meta": {
+              "inputs": {
+                "humidity": 50.0,
+                "pressure": 1013.25,
+                "temperature": 25.0
+              },
+              "powered": true,
+              "registers": {
+                "CHIP_ID": 96,
+                "CONFIG": 0,
+                "CTRL_HUM": 0,
+                "CTRL_MEAS": 0,
+                "DIG_H1": 75,
+                "DIG_H2": 350,
+                "DIG_H3": 0,
+                "DIG_H4_H5_LOW": 5,
+                "DIG_H4_HIGH": 19,
+                "DIG_H5_HIGH": 0,
+                "DIG_H6": 30,
+                "DIG_P1": 38221,
+                "DIG_P2": 54959,
+                "DIG_P3": 3024,
+                "DIG_P4": 7421,
+                "DIG_P5": 65351,
+                "DIG_P6": 65529,
+                "DIG_P7": 9900,
+                "DIG_P8": 55306,
+                "DIG_P9": 4285,
+                "DIG_T1": 28528,
+                "DIG_T2": 26435,
+                "DIG_T3": 64536,
+                "HUM": 28995,
+                "PRESS": 4955584,
+                "STATUS": 0,
+                "TEMP": 8576000
+              },
+              "supply_generation": null
+            }
+          }
+        ]
       }
     ],
-    "devices": []
+    "devices": [
+      {
+        "id": "bme280",
+        "device_type": "bme280",
+        "declared": true,
+        "attachment": {
+          "transport": "i2c",
+          "bus": "i2c0",
+          "address": 119
+        },
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "bme280",
+            "meta": {
+              "inputs": {
+                "humidity": 50.0,
+                "pressure": 1013.25,
+                "temperature": 25.0
+              },
+              "powered": true,
+              "registers": {
+                "CHIP_ID": 96,
+                "CONFIG": 0,
+                "CTRL_HUM": 0,
+                "CTRL_MEAS": 0,
+                "DIG_H1": 75,
+                "DIG_H2": 350,
+                "DIG_H3": 0,
+                "DIG_H4_H5_LOW": 5,
+                "DIG_H4_HIGH": 19,
+                "DIG_H5_HIGH": 0,
+                "DIG_H6": 30,
+                "DIG_P1": 38221,
+                "DIG_P2": 54959,
+                "DIG_P3": 3024,
+                "DIG_P4": 7421,
+                "DIG_P5": 65351,
+                "DIG_P6": 65529,
+                "DIG_P7": 9900,
+                "DIG_P8": 55306,
+                "DIG_P9": 4285,
+                "DIG_T1": 28528,
+                "DIG_T2": 26435,
+                "DIG_T3": 64536,
+                "HUM": 28995,
+                "PRESS": 4955584,
+                "STATUS": 0,
+                "TEMP": 8576000
+              },
+              "supply_generation": null
+            }
+          }
+        ]
+      }
+    ]
   },
   "fidelity": [
+    {
+      "kind": "derived_device_time",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "device time derived from cpu_hz (96000000 Hz); PLL reconfiguration is not tracked"
+    },
     {
       "kind": "unpowered_rail_assumed",
       "address": "0x0",
@@ -167,39 +285,39 @@
         "pin": 10,
         "transitions": [
           {
-            "cycle": 92,
+            "cycle": 122,
             "value": 0
           },
           {
-            "cycle": 93,
+            "cycle": 87930,
             "value": 1
           },
           {
-            "cycle": 94,
+            "cycle": 90935,
             "value": 0
           },
           {
-            "cycle": 95,
+            "cycle": 93940,
             "value": 1
           },
           {
-            "cycle": 96,
+            "cycle": 96945,
             "value": 0
           },
           {
-            "cycle": 97,
+            "cycle": 99950,
             "value": 1
           },
           {
-            "cycle": 98,
+            "cycle": 102955,
             "value": 0
           },
           {
-            "cycle": 99,
+            "cycle": 105960,
             "value": 1
           },
           {
-            "cycle": 100,
+            "cycle": 108965,
             "value": 0
           }
         ],
@@ -207,39 +325,39 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 92,
+            "cycle": 122,
             "state": "0"
           },
           {
-            "cycle": 93,
+            "cycle": 87930,
             "state": "1"
           },
           {
-            "cycle": 94,
+            "cycle": 90935,
             "state": "0"
           },
           {
-            "cycle": 95,
+            "cycle": 93940,
             "state": "1"
           },
           {
-            "cycle": 96,
+            "cycle": 96945,
             "state": "0"
           },
           {
-            "cycle": 97,
+            "cycle": 99950,
             "state": "1"
           },
           {
-            "cycle": 98,
+            "cycle": 102955,
             "state": "0"
           },
           {
-            "cycle": 99,
+            "cycle": 105960,
             "state": "1"
           },
           {
-            "cycle": 100,
+            "cycle": 108965,
             "state": "0"
           }
         ],
@@ -264,24 +382,33 @@
   "uart_lines": {
     "lines": [
       {
-        "text": "ESP32H2_DEVKITM1_UART0_OK",
-        "cycle_lo": 8432,
-        "cycle": 8433,
-        "end_cycle": 216632
+        "text": "ESP32H2_BME280_OK",
+        "cycle_lo": 96223,
+        "cycle": 96224,
+        "end_cycle": 237799
+      },
+      {
+        "text": "ESP32H2_UART0_OK",
+        "cycle_lo": 246126,
+        "cycle": 246127,
+        "end_cycle": 379375
       }
     ],
     "dropped_lines": 0
   },
+  "i2c_addresses": [
+    119
+  ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 942,
+    "text_bytes": 2802,
     "data_bytes": 0,
     "bss_bytes": 327680,
-    "flash_used_bytes": 942,
+    "flash_used_bytes": 2802,
     "ram_static_bytes": 327680,
     "flash_total_bytes": 4194304,
     "ram_total_bytes": 327680,
-    "flash_used_pct": 0.02,
+    "flash_used_pct": 0.07,
     "ram_static_pct": 100.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -294,18 +421,83 @@
     "heap_method": "unsupported"
   },
   "metrics": {
-    "cycles": 1000192,
+    "cycles": 1049564,
     "instructions": 500000,
     "steps_executed": 500000,
-    "memory_reads": 1,
-    "memory_writes": 1,
-    "peripheral_accesses": 38,
+    "memory_reads": 7,
+    "memory_writes": 24,
+    "peripheral_accesses": 17627,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 1107297052,
-        "count": 1953,
+        "pc": 1107297886,
+        "count": 1516,
         "symbol": "main"
+      },
+      {
+        "pc": 1107296972,
+        "count": 41,
+        "symbol": "<usize as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 1107296974,
+        "count": 41,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 1107296976,
+        "count": 41,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 1107296978,
+        "count": 41,
+        "symbol": "firmware_esp32h2_devkitm_1_smoke::read_bme280_registers"
+      },
+      {
+        "pc": 1107296982,
+        "count": 41,
+        "symbol": "firmware_esp32h2_devkitm_1_smoke::read_bme280_registers"
+      },
+      {
+        "pc": 1107297240,
+        "count": 32,
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 1107297242,
+        "count": 32,
+        "symbol": "firmware_esp32h2_devkitm_1_smoke::delay"
+      },
+      {
+        "pc": 1107297244,
+        "count": 30,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 1107297490,
+        "count": 28,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 1107297492,
+        "count": 28,
+        "symbol": "firmware_esp32h2_devkitm_1_smoke::read_bme280_registers"
+      },
+      {
+        "pc": 1107297496,
+        "count": 28,
+        "symbol": "firmware_esp32h2_devkitm_1_smoke::read_bme280_registers"
+      },
+      {
+        "pc": 1107297484,
+        "count": 27,
+        "symbol": "<usize as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 1107297486,
+        "count": 27,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       }
     ]
   }

@@ -178,7 +178,7 @@ jobs:
             target: riscv32imc-unknown-none-elf
             script: examples/esp32c61-devkitc-1-n8r2-bme280/bme280-smoke.yaml
             system: configs/systems/esp32c61-devkitc-1-n8r2-bme280.yaml
-          - id: esp32h2-devkitm-1-n4s-uart-gpio
+          - id: esp32h2-devkitm-1-n4s-bme280
             crate: firmware-esp32h2-devkitm-1-smoke
             target: riscv32imac-unknown-none-elf
             script: examples/esp32h2-devkitm-1-n4s/uart-gpio-smoke.yaml

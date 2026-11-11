@@ -71,7 +71,7 @@
     },
     "esp32h2": {
       "how": "needs-build",
-      "why": "ESP32-H2 model and DevKitM-1 N4S smoke are source-tree additions in this branch; the installed LabWired CLI predates the H2 UART/GPIO models."
+      "why": "The repository has an H2 DevKitM-1 N4S UART/GPIO/I2C0 BME280 smoke; the hosted LabWired CLI catalog does not expose an H2 run target."
     },
     "nrf52840": {
       "how": "committed",

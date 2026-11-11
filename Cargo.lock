@@ -1294,8 +1294,6 @@ dependencies = [
 name = "firmware-esp32h2-devkitm-1-smoke"
 version = "0.1.0"
 dependencies = [
- "panic-halt",
- "riscv 0.10.1",
  "riscv-rt",
 ]
 

@@ -368,8 +368,8 @@ const STM32H5_TIMER_PADS: &[TimerAfPad] = &[
 
 impl SystemBus {
     /// Attach an I²C slave without a physical route. This remains suitable for
-    /// fixed-pin controllers and low-level test fixtures; ESP32-C3 rejects it
-    /// because C3's GPIO matrix makes a controller-only binding ambiguous.
+    /// fixed-pin controllers and low-level test fixtures; ESP32-C3/H2 rejects it
+    /// because its GPIO matrix makes a controller-only binding ambiguous.
     pub fn attach_i2c_slave(
         &mut self,
         controller: &str,
@@ -395,7 +395,7 @@ impl SystemBus {
 
     /// The single funnel through which every manifest-backed I²C slave reaches
     /// a controller. `route` is a target-neutral signal map (`sda`/`scl` for
-    /// I²C); ESP32-C3 lowers it to real GPIO-matrix pads and rejects missing,
+    /// I²C); ESP32-C3/H2 lower it to real GPIO-matrix pads and reject missing,
     /// unsupported, or ambiguous routes instead of silently attaching by bus
     /// name alone. Other controller families preserve the generic shape for
     /// forward-compatible physical routing while retaining their fixed-pin
@@ -498,6 +498,54 @@ impl SystemBus {
                 .dev
                 .as_any_mut()
                 .and_then(|a| a.downcast_mut::<Esp32c3Gpio>()),
+        ) {
+            gpio.set_i2c_lines(lines);
+        }
+    }
+
+    /// Wire ESP32-H2 I2C0's shared C3-compatible command-list engine to the
+    /// H2 GPIO matrix. H2 assigns I2CEXT0_SCL/SDA to signals 45/46; the H2
+    /// GPIO model tracks those selectors separately from the C3 layout.
+    pub(crate) fn wire_esp32h2_i2c_pads(&mut self) {
+        use crate::peripherals::esp32c3::i2c::Esp32c3I2c;
+        use crate::peripherals::esp32h2::gpio::Esp32h2Gpio;
+
+        let i2c_idx = self.peripherals.iter().position(|p| {
+            p.dev
+                .as_any()
+                .map(|a| a.is::<Esp32c3I2c>())
+                .unwrap_or(false)
+        });
+        let gpio_idx = self.peripherals.iter().position(|p| {
+            p.dev
+                .as_any()
+                .map(|a| a.is::<Esp32h2Gpio>())
+                .unwrap_or(false)
+        });
+        let (Some(i2c_idx), Some(gpio_idx)) = (i2c_idx, gpio_idx) else {
+            return;
+        };
+        let matrix_route = self.peripherals[gpio_idx]
+            .dev
+            .as_any()
+            .and_then(|a| a.downcast_ref::<Esp32h2Gpio>())
+            .map(|gpio| gpio.i2c_matrix_route_state());
+        let lines = self.peripherals[i2c_idx]
+            .dev
+            .as_any_mut()
+            .and_then(|a| a.downcast_mut::<Esp32c3I2c>())
+            .and_then(|controller| {
+                matrix_route.map(|route| {
+                    controller.set_matrix_route_state(route);
+                    controller.line_levels_arc()
+                })
+            });
+        if let (Some(lines), Some(gpio)) = (
+            lines,
+            self.peripherals[gpio_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<Esp32h2Gpio>()),
         ) {
             gpio.set_i2c_lines(lines);
         }

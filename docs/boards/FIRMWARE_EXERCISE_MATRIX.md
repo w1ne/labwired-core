@@ -231,10 +231,10 @@ _ESP32 is demand rank #1 (38% survey use). The ESP32-C61-DevKitC-1-N8R2 UART/GPI
 
 ### `esp32h2`
 
-_ESP32 family demand rank #1 (38%); H2 itself has no separate survey rank. The ESP32-H2-DevKitM-1-N4S profile loads a bare-metal RV32IMAC image, captures its UART0 marker in the simulator console, and observes GPIO10 direct-output edges. It demonstrates a real boot and two modeled peripheral paths on an otherwise absent Thread/Zigbee-focused board. The physical UART-to-USB bridge route, radio, USB Serial/JTAG, flash boot/XIP, IO_MUX electrical routing, and the GPIO8 addressable RGB LED are outside this focused profile; evidence is simulator-derived, not silicon confirmation._
+_ESP32 family demand rank #1 (38%); H2 itself has no separate survey rank. The ESP32-H2-DevKitM-1-N4S bare-metal RV32IMAC smoke reads BME280 ID and raw temperature over I2C0 on GPIO4/GPIO5, captures a UART0 marker, and observes GPIO10 direct-output edges. The physical UART-to-USB bridge route, IO_MUX electrical behavior, clock tree, I2C1, radio, USB Serial/JTAG, flash boot/XIP, and GPIO8 addressable RGB LED are outside this focused profile; evidence is simulator-derived, not silicon confirmation._
 
 **Functional firmware exercises** (including decoded device/protocol reads):
-- ESP32-H2-DevKitM-1-N4S: UART0 console marker and GPIO10 direct-output edges — `firmware-esp32h2-devkitm-1-smoke` · examples/esp32h2-devkitm-1-n4s/evidence/ (nightly CI)
+- ESP32-H2-DevKitM-1-N4S + BME280: I2C0 ID/temperature read on GPIO4/5 plus UART0 marker and GPIO10 output edges — `firmware-esp32h2-devkitm-1-smoke` · examples/esp32h2-devkitm-1-n4s/evidence/ (nightly CI)
 
 ### `esp32s3-zero`
 
@@ -295,7 +295,7 @@ _Exact STM32F103RBT6 LQFP64 model with 128 KiB flash and 20 KiB SRAM. The NUCLEO
 
 ### `stm32f103rb-nucleo-bme280-smoke`
 
-_Narrow NUCLEO-F103RB + BME280 onboarding profile (USART2/ST-LINK VCP, LD2 on PA5, I2C1 remapped to PB8/PB9). Committed evidence at examples/nucleo-f103rb-bme280/evidence shows examples/nucleo-f103rb-bme280/onboarding-smoke.yaml passed 3/3: USART2 printed NUCLEO_F103RB_BME280_OK ID=0x60 I2C1=PB8/PB9 after a firmware read of BME280.CHIP_ID (0xD0) at 0x77, gpioa:5 (LD2) saw at least 32 edges, and the run stopped at max_steps. Firmware is built from crates/firmware-nucleo-f103rb-bme280-smoke, not a committed ELF; no required CI lane runs this script. No beyond-rubric block is listed for this slice._
+_Narrow NUCLEO-F103RB + BME280 onboarding profile (USART2/ST-LINK VCP, LD2 on PA5, I2C1 remapped to PB8/PB9). Committed evidence at examples/nucleo-f103rb-bme280/evidence shows examples/nucleo-f103rb-bme280/onboarding-smoke.yaml passed 3/3: USART2 printed NUCLEO_F103RB_BME280_OK ID=0x60 I2C1=PB8/PB9 after a firmware read of BME280.CHIP_ID (0xD0) at 0x77, gpioa:5 (LD2) saw at least 32 edges, and the run stopped at max_steps. Firmware is built from crates/firmware-nucleo-f103rb-bme280-smoke, not a committed ELF. It now runs in core-onboarding-smoke.yml on nightly, main-tip push, and manual dispatch (not as a PR check). No beyond-rubric block is listed for this slice._
 
 ### `stm32f103t4`
 
@@ -826,3 +826,35 @@ _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the RV32IMC core (a real
 ### `xck26-rpu`
 
 _L1 + stock RTOS, SIM-DERIVED. First Cortex-R part: the Zynq UltraScale+ XCK26 RPU core 0 (Cortex-R5F, PMSAv7 16-region MPU, VFPv3-D16 on the pinned tlib engine) runs unmodified Zephyr v4.1.0 hello_world, synchronization (TTC0 match IRQs through the RPU GIC, WFI idle) and tests/kernel/common (12 suites, 61 pass / 2 skip / 0 fail of 63, userspace syscalls through the MPU) on the PS UART1 console (examples/kv260-r5, native CLI). Only the GIC, Cadence UART0/1 and TTC0 are installed (native_rpu_peripherals), so no advanced blocks exist to list._
+
+### `esp32c6fh4`
+
+_No beyond-rubric firmware exercise is recorded in this ledger; rubric coverage comes from tier1-matrix.json._
+
+### `esp32p4`
+
+_No beyond-rubric firmware exercise is recorded in this ledger; rubric coverage comes from tier1-matrix.json._
+
+### `esp32s2`
+
+_No beyond-rubric firmware exercise is recorded in this ledger; rubric coverage comes from tier1-matrix.json._
+
+### `esp32s3-feather-8mb`
+
+_No beyond-rubric firmware exercise is recorded in this ledger; rubric coverage comes from tier1-matrix.json._
+
+### `stm32f103c8-bluepill`
+
+_No beyond-rubric firmware exercise is recorded in this ledger; rubric coverage comes from tier1-matrix.json._
+
+### `stm32f446re`
+
+_No beyond-rubric firmware exercise is recorded in this ledger; rubric coverage comes from tier1-matrix.json._
+
+### `stm32h503rb`
+
+_No beyond-rubric firmware exercise is recorded in this ledger; rubric coverage comes from tier1-matrix.json._
+
+### `stm32h753zi`
+
+_No beyond-rubric firmware exercise is recorded in this ledger; rubric coverage comes from tier1-matrix.json._

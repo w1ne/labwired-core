@@ -288,9 +288,9 @@ chips:
 
   - id: esp32h2
     arch: riscv32imac
-    headline: "ESP32 family demand rank #1 (38%); H2 itself has no separate survey rank. The ESP32-H2-DevKitM-1-N4S profile loads a bare-metal RV32IMAC image, captures its UART0 marker in the simulator console, and observes GPIO10 direct-output edges. It demonstrates a real boot and two modeled peripheral paths on an otherwise absent Thread/Zigbee-focused board. The physical UART-to-USB bridge route, radio, USB Serial/JTAG, flash boot/XIP, IO_MUX electrical routing, and the GPIO8 addressable RGB LED are outside this focused profile; evidence is simulator-derived, not silicon confirmation."
+    headline: "ESP32 family demand rank #1 (38%); H2 itself has no separate survey rank. The ESP32-H2-DevKitM-1-N4S bare-metal RV32IMAC smoke reads BME280 ID and raw temperature over I2C0 on GPIO4/GPIO5, captures a UART0 marker, and observes GPIO10 direct-output edges. The physical UART-to-USB bridge route, IO_MUX electrical behavior, clock tree, I2C1, radio, USB Serial/JTAG, flash boot/XIP, and GPIO8 addressable RGB LED are outside this focused profile; evidence is simulator-derived, not silicon confirmation."
     functional:
-      - what: "ESP32-H2-DevKitM-1-N4S: UART0 console marker and GPIO10 direct-output edges"
+      - what: "ESP32-H2-DevKitM-1-N4S + BME280: I2C0 ID/temperature read on GPIO4/5 plus UART0 marker and GPIO10 output edges"
         fw: firmware-esp32h2-devkitm-1-smoke
         ev: "examples/esp32h2-devkitm-1-n4s/evidence/"
         gate: nightly
@@ -1220,6 +1220,66 @@ chips:
   - id: xck26-rpu
     arch: armv7r
     headline: "L1 + stock RTOS, SIM-DERIVED. First Cortex-R part: the Zynq UltraScale+ XCK26 RPU core 0 (Cortex-R5F, PMSAv7 16-region MPU, VFPv3-D16 on the pinned tlib engine) runs unmodified Zephyr v4.1.0 hello_world, synchronization (TTC0 match IRQs through the RPU GIC, WFI idle) and tests/kernel/common (12 suites, 61 pass / 2 skip / 0 fail of 63, userspace syscalls through the MPU) on the PS UART1 console (examples/kv260-r5, native CLI). Only the GIC, Cadence UART0/1 and TTC0 are installed (native_rpu_peripherals), so no advanced blocks exist to list."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  # Existing top-level chip descriptors that had no beyond-rubric row. Their
+  # rubric status remains sourced from tier1-matrix.json; no additional
+  # firmware exercise is recorded in this ledger.
+  - id: esp32c6fh4
+    arch: riscv32imac
+    headline: "No beyond-rubric firmware exercise is recorded in this ledger; rubric coverage comes from tier1-matrix.json."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+  - id: esp32p4
+    arch: riscv32imac
+    headline: "No beyond-rubric firmware exercise is recorded in this ledger; rubric coverage comes from tier1-matrix.json."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+  - id: esp32s2
+    arch: xtensa-lx7
+    headline: "No beyond-rubric firmware exercise is recorded in this ledger; rubric coverage comes from tier1-matrix.json."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+  - id: esp32s3-feather-8mb
+    arch: xtensa-lx7
+    headline: "No beyond-rubric firmware exercise is recorded in this ledger; rubric coverage comes from tier1-matrix.json."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+  - id: stm32f103c8-bluepill
+    arch: cortex-m3
+    headline: "No beyond-rubric firmware exercise is recorded in this ledger; rubric coverage comes from tier1-matrix.json."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+  - id: stm32f446re
+    arch: cortex-m4
+    headline: "No beyond-rubric firmware exercise is recorded in this ledger; rubric coverage comes from tier1-matrix.json."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+  - id: stm32h503rb
+    arch: cortex-m33
+    headline: "No beyond-rubric firmware exercise is recorded in this ledger; rubric coverage comes from tier1-matrix.json."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+  - id: stm32h753zi
+    arch: cortex-m7
+    headline: "No beyond-rubric firmware exercise is recorded in this ledger; rubric coverage comes from tier1-matrix.json."
     functional: []
     advanced_unit_only: []
     advanced_dead: []

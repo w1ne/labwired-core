@@ -3,12 +3,10 @@ name = "firmware-esp32h2-devkitm-1-smoke"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-description = "ESP32-H2-DevKitM-1 UART0 and GPIO10 bring-up smoke."
+description = "ESP32-H2-DevKitM-1 I2C0 BME280, UART0, and GPIO10 smoke."
 
 [dependencies]
-riscv = "0.10"
 riscv-rt = "0.12"
-panic-halt = "0.2"
 
 [[bin]]
 name = "firmware-esp32h2-devkitm-1-smoke"

@@ -729,6 +729,7 @@ impl SystemBus {
                     | "esp32c3_i2c"
                     | "esp32c5_i2c"
                     | "esp32c61_i2c"
+                    | "esp32h2_i2c"
                     | "imxrt_lpi2c"
             ) {
                 let controller: Box<dyn Peripheral> = if canonical_type == "imxrt_lpi2c" {
@@ -760,6 +761,18 @@ impl SystemBus {
                     Box::new(
                         crate::peripherals::esp32c3::i2c::Esp32c3I2c::with_cpu_clock_and_intr(
                             160_000_000,
+                            src,
+                        ),
+                    )
+                } else if canonical_type == "esp32h2_i2c" {
+                    // H2 I2C0 uses the same command-list register head and
+                    // cycle-driven engine as C3/C5/C6. Its TRM/IDF map places
+                    // I2C0 at 0x6000_4000; its CPU clock is 96 MHz and its
+                    // I2C_EXT0 source is 39 (ESP-IDF esp32h2/interrupts.h).
+                    let src = p_cfg.irq.unwrap_or(39);
+                    Box::new(
+                        crate::peripherals::esp32c3::i2c::Esp32c3I2c::with_cpu_clock_and_intr(
+                            96_000_000,
                             src,
                         ),
                     )
@@ -1397,7 +1410,7 @@ impl SystemBus {
         // / `attach_spi_device`), so there is nothing to wire here.
         for ext in &manifest.external_devices {
             // Already attached as an I²C slave by a chip-specific i2c path
-            // (the `i2c` / `esp32c3_i2c` arms above). Don't let it fall through
+            // (the I2C controller arms above). Don't let it fall through
             // to the generic arms — it is handled, so re-processing it here
             // would emit a spurious "Unsupported external device" WARN.
             if attached_i2c_ext_ids.contains(ext.id.as_str()) {
@@ -1448,6 +1461,9 @@ impl SystemBus {
         // The C5 uses this shared engine with its own matrix layout. No-op for
         // every other chip.
         bus.wire_esp32c3_i2c_pads();
+        // ESP32-H2 shares the C3 command-list I2C engine but has GPIO matrix
+        // signal IDs 45/46 and its own 28-pad GPIO block.
+        bus.wire_esp32h2_i2c_pads();
         // And GP-SPI2's SCK/MOSI/CS plus each UART's TX, so those buses are
         // measurable on the C3 too rather than reading as a flat line. MISO/RX
         // are deliberately unbound — nothing drives them.

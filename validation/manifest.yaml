@@ -10390,7 +10390,7 @@ boards:
     doc: docs/boards/esp32h2-devkitm-1.md
     chip: configs/chips/esp32h2.yaml
     tier: smoke-manual
-    note: "ESP32-H2-DevKitM-1-N4S narrow profile. A bare-metal RV32IMAC smoke captures UART0 bytes in the simulator console and toggles GPIO10 through the H2 direct-output subset. ESP32-family demand rank 1 is carried from the survey; H2 has no individual survey rank. The physical UART-to-USB bridge route, Thread/Zigbee, BLE, USB Serial/JTAG, flash boot/XIP, IO_MUX electrical routing, and the addressable RGB LED are not modeled. Simulator evidence only; no silicon capture or physical pin-voltage claim."
+    note: "ESP32-H2-DevKitM-1-N4S narrow profile. A bare-metal RV32IMAC smoke reads a BME280 over H2 I2C0 on GPIO4/GPIO5, captures a UART0 marker, and toggles GPIO10 through the H2 direct-output subset. ESP32-family demand rank 1 is carried from the survey; H2 has no individual survey rank. The physical UART-to-USB bridge route, IO_MUX electrical behavior, clock tree, I2C1, Thread/Zigbee, BLE, USB Serial/JTAG, flash boot/XIP, and the addressable RGB LED are not modeled. Simulator evidence only; no silicon capture or physical pin-voltage claim."
     offline_tests: []
     models:
       - crates/core/src/cpu/riscv.rs
@@ -10399,6 +10399,8 @@ boards:
       - crates/core/src/peripherals/esp32h2/factory.rs
       - crates/core/src/peripherals/esp32h2/gpio.rs
       - crates/core/src/peripherals/esp32h2/uart.rs
+      - crates/core/src/peripherals/esp32c3/i2c.rs
+      - crates/core/src/bus/attach.rs
       - crates/core/src/peripherals/generic_factory.rs
       - crates/core/src/peripherals/mod.rs
       - crates/core/src/bus/from_config.rs

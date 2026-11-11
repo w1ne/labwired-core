@@ -145,9 +145,10 @@ pub const MODEL_TYPES: &[&str] = &[
     // ESP32-C5 HP UART register head and FIFO model.
     "esp32c5_uart",
     // ESP32-H2 has a C6-compatible UART register map at its own 96 MHz core
-    // rate, plus the H2 direct-GPIO subset (GPIO output signal 128).
+    // rate, plus the H2 GPIO direct-output and I2C0 matrix subset.
     "esp32h2_uart",
     "esp32h2_gpio",
+    "esp32h2_i2c",
     // ESP32-P4 GPIO and IO_MUX are modeled together for the GPIO2 user LED.
     "esp32p4_gpio",
     // C6-only behavioral blocks: PCR (clock/reset, full SVD register map) and
