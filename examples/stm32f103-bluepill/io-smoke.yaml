@@ -1,0 +1,13 @@
+# Blue Pill scope: a USART1 banner and transitions on its active-low PC13 LED.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-stm32f103-bluepill-smoke"
+  system: "../../configs/systems/stm32f103-bluepill.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "BLUEPILL_F103C8_OK"
+  - gpio_edges:
+      pin: "gpioc:13"
+      min_edges: 8
+  - expected_stop_reason: max_steps

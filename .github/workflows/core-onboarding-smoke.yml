@@ -56,6 +56,11 @@ jobs:
             target: thumbv7m-none-eabi
             script: examples/nucleo-h563zi/uart-smoke.yaml
             system: examples/nucleo-h563zi/system.yaml
+          - id: stm32f103-bluepill
+            crate: firmware-stm32f103-bluepill-smoke
+            target: thumbv7m-none-eabi
+            script: examples/stm32f103-bluepill/io-smoke.yaml
+            system: configs/systems/stm32f103-bluepill.yaml
           - id: stm32u575-nucleo
             crate: firmware-stm32u575-demo
             target: thumbv8m.main-none-eabi

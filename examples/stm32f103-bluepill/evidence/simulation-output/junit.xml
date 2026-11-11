@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.006298">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="a66eec850ea23f5182a6d6bf4e944b1a0e2f1300300388c54015a602d0e39560"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.006298">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: BLUEPILL_F103C8_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: gpio_edges: gpioc:13 &gt;= 8 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

@@ -87,6 +87,7 @@ members = [
     "crates/firmware-nucleo-g491re-bme280-smoke",
     "crates/firmware-nucleo-f103rb-bme280-smoke",
     "crates/firmware-stm32f103-lowdensity-smoke",
+    "crates/firmware-stm32f103-bluepill-smoke",
     "crates/firmware-f401-lowram-smoke",
     "crates/firmware-arty-litex-smoke",
     "crates/firmware-vegaboard-ri5cy-smoke",
