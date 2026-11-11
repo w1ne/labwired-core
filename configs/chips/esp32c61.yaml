@@ -1,6 +1,7 @@
-# Narrow first ESP32-C61 profile: HP-core flash/SRAM map, UART0, and UART0's
-# PCR clock gate. Other MMIO is intentionally unmapped so unsupported firmware
-# faults instead of reading zeros from descriptors that claim no behavior.
+# Narrow first ESP32-C61 profile: HP-core flash/SRAM, UART0/PCR clock gate, and
+# a direct GPIO output subset. Other MMIO is intentionally unmapped so
+# unsupported firmware faults instead of reading zeros from descriptors that
+# claim no behavior.
 name: "esp32c61"
 arch: "riscv"
 core: "rv32imac"
