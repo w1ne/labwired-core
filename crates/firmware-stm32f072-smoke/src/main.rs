@@ -1157,6 +1157,128 @@ fn check_systick_external_periodic() -> bool {
     ok
 }
 
+/// Several HCLK/8 zero-hits while PRIMASK is set must coalesce into one
+/// pending SysTick exception, delivered once after interrupts are restored.
+fn check_systick_external_pending_coalesces() -> bool {
+    const RELOAD: u32 = 63;
+    const COUNTFLAG: u32 = 1 << 16;
+    const WANT_WRAPS: u32 = 3;
+
+    let prior_primask: u32;
+    unsafe {
+        asm!(
+            "mrs {primask}, PRIMASK",
+            "cpsid i",
+            primask = out(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+        wr(SYSTICK_CSR, 0);
+        wr(SCB_ICSR, ICSR_PENDSTCLR);
+        wr(SYSTICK_RVR, RELOAD);
+        wr(SYSTICK_CVR, 0);
+        write_volatile(core::ptr::addr_of_mut!(SYSTICK_EXTERNAL_ENTRIES), 0);
+        write_volatile(core::ptr::addr_of_mut!(SYSTICK_EXTERNAL_ACTIVE_MASK), 0);
+        write_volatile(core::ptr::addr_of_mut!(SYSTICK_EXTERNAL_COUNTFLAG_MASK), 0);
+        wr(SYSTICK_CSR, 0x3); // ENABLE | TICKINT; HCLK/8 reference source.
+    }
+    let reference_selected = rd(SYSTICK_CSR) & 0x5 == 0x1;
+
+    // COUNTFLAG is read-to-clear. Observe it three separate times while the
+    // exception is masked, proving the timer wrapped repeatedly, not just once.
+    let mut wraps = 0u32;
+    let mut pending_each = true;
+    let mut handler_stayed_masked = true;
+    for _ in 0..WANT_WRAPS {
+        let mut saw_wrap = false;
+        for _ in 0..20_000 {
+            if rd(SYSTICK_CSR) & COUNTFLAG != 0 {
+                saw_wrap = true;
+                break;
+            }
+        }
+        wraps += u32::from(saw_wrap);
+        pending_each &= rd(SCB_ICSR) & ICSR_PENDSTSET != 0;
+        handler_stayed_masked &=
+            unsafe { read_volatile(core::ptr::addr_of!(SYSTICK_EXTERNAL_ENTRIES)) == 0 };
+    }
+
+    let control_before_disable = rd(SYSTICK_CSR) & 0x7;
+    wr(SYSTICK_CSR, 0);
+    let pending_after_disable = rd(SCB_ICSR) & ICSR_PENDSTSET != 0;
+    let handler_before_unmask =
+        unsafe { read_volatile(core::ptr::addr_of!(SYSTICK_EXTERNAL_ENTRIES)) };
+
+    unsafe {
+        asm!(
+            "msr PRIMASK, {primask}",
+            "dsb",
+            "isb",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+    for _ in 0..100_000 {
+        if unsafe { read_volatile(core::ptr::addr_of!(SYSTICK_EXTERNAL_ENTRIES)) } != 0 {
+            break;
+        }
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+
+    let entries = unsafe { read_volatile(core::ptr::addr_of!(SYSTICK_EXTERNAL_ENTRIES)) };
+    let active_mask = unsafe { read_volatile(core::ptr::addr_of!(SYSTICK_EXTERNAL_ACTIVE_MASK)) };
+    let pending_after_return = rd(SCB_ICSR) & ICSR_PENDSTSET != 0;
+    let thread_ipsr: u32;
+    unsafe {
+        asm!(
+            "mrs {ipsr}, IPSR",
+            ipsr = out(reg) thread_ipsr,
+            options(nomem, nostack, preserves_flags),
+        );
+        asm!("cpsid i", options(nostack, preserves_flags));
+        wr(SCB_ICSR, ICSR_PENDSTCLR);
+        wr(SYSTICK_CVR, 0);
+        asm!(
+            "msr PRIMASK, {primask}",
+            "dsb",
+            "isb",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+
+    let one_active_handler = entries == 1 && active_mask & 1 == 1;
+    let ok = prior_primask == 0
+        && reference_selected
+        && wraps == WANT_WRAPS
+        && pending_each
+        && handler_stayed_masked
+        && control_before_disable == 0x3
+        && pending_after_disable
+        && handler_before_unmask == 0
+        && one_active_handler
+        && !pending_after_return
+        && thread_ipsr == 0;
+
+    puts("systick external pending-coalesce ");
+    flag("reference", reference_selected);
+    puts("wraps=");
+    hex(wraps);
+    puts(" ");
+    flag("pending_each", pending_each);
+    flag(
+        "masked",
+        handler_stayed_masked && handler_before_unmask == 0,
+    );
+    flag("pending_after_disable", pending_after_disable);
+    puts("entries=");
+    hex(entries);
+    puts(" ");
+    flag("active", one_active_handler);
+    flag("cleared", !pending_after_return);
+    verdict(ok);
+    ok
+}
+
 #[exception]
 fn SysTick() {
     let entry = unsafe { read_volatile(core::ptr::addr_of!(SYSTICK_EXTERNAL_ENTRIES)) };
@@ -1226,7 +1348,9 @@ fn main() -> ! {
     mark(20, check_adc());
     mark(21, check_systick_pause_resume());
     mark(22, check_systick_external_pause_resume());
-    mark(23, check_systick_external_periodic());
+    let systick_external_periodic = check_systick_external_periodic();
+    let systick_external_coalesces = check_systick_external_pending_coalesces();
+    mark(23, systick_external_periodic && systick_external_coalesces);
     let summary = summary | 0x0700_0000;
     wr(SUMMARY, summary);
     puts("summary ");

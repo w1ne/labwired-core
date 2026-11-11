@@ -1,0 +1,37 @@
+{
+  "target_id": "stm32f072",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 4000000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": "firmware-stm32f072-smoke",
+  "target_triple": "thumbv6m-none-eabi",
+  "script": "examples/renode-onboarding/stm32f072-smoke.yaml",
+  "system": "configs/systems/onboarding/stm32f072.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-11T09:16:49Z",
+  "finished_at_utc": "2026-11-11T09:16:51Z",
+  "elapsed_seconds": 3,
+  "elapsed_ms": 2272,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.282,
+    "build_firmware": 1.24,
+    "run_smoke": 0.715
+  },
+  "stages_ms": {
+    "build_cli": 282,
+    "build_firmware": 1240,
+    "run_smoke": 715
+  }
+}
