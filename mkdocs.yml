@@ -122,6 +122,7 @@ nav:
     - Arduino Uno R3: boards/arduino-uno.md
     - ESP32-C3: boards/esp32c3.md
     - ESP32-C6: boards/esp32c6-devkitc.md
+    - Seeed XIAO ESP32-C6: boards/xiao-esp32c6.md
     - ESP32-C61 DevKitC-1: boards/esp32c61-devkitc.md
     - ESP32-H2 DevKitM-1: boards/esp32h2-devkitm-1.md
     - ESP32-S3: boards/esp32s3.md

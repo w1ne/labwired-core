@@ -1,0 +1,583 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: "esp32c6fh4"
+arch: "riscv"
+# HP core: RV32IMAC (A extension = word atomics). The interpreter decodes the
+# RV32A word ops (crates/core/src/decoder/riscv.rs), but this L1 smoke targets
+# riscv32imc and does not exercise them. The LP core (RV32IMC @20 MHz) is NOT
+# modelled — this descriptor is the HP core only.
+core: "rv32imac"
+registers_count: 31
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. The HP core runs at
+# 160 MHz (ESP32-C6 Datasheet v1.5 §4.1.1.1), which is what the UART baud
+# pacing is scaled against (peripherals/esp32c6/uart.rs CPU_CLOCK_HZ).
+cpu_hz: 160_000_000
+
+flash:
+  # Unified external-memory cache window: C6 maps BOTH instructions and
+  # constant data through 0x4200_0000..0x42FF_FFFF (16 MB window), unlike the
+  # C3 which had separate IROM (0x42000000) and DROM (0x3C000000) windows.
+  # Source: "ESP32-C6 Memory map" (dl.espressif.com/public/esp32c6-mm.pdf),
+  # esp-idf v5.3 components/soc/esp32c6/include/soc/soc.h (SOC_IROM_LOW =
+  # SOC_DROM_LOW = 0x42000000).
+  base: 0x42000000
+  # The XIAO ESP32-C6 schematic identifies the ESP32-C6FH4, which has 4 MiB
+  # of in-package flash (Espressif ESP32-C6 datasheet v1.5). Spelled in KB
+  # because `parse_size` reads MB as 10^6 — "4MB" is short by 194,304 bytes.
+  # Gated by crates/core/src/tests/chip_memory_sizes.rs.
+  size: "4096KB"
+ram:
+  # HP SRAM: 512 kB at 0x4080_0000..0x4087_FFFF (memory map above; soc.h
+  # SOC_IRAM_LOW/HIGH = 0x40800000/0x40880000).
+  base: 0x40800000
+  size: "512KB"
+memory_regions:
+  # Mask ROM: 320 kB at 0x4000_0000..0x4004_FFFF (ESP32-C6 Memory map;
+  # ESP32-C6-MINI-1 datasheet v1.5 §1.1 "ROM: 320 KB"). A bare-ELF smoke does
+  # not need it; stock Arduino-ESP32 3.x calls ROM routines from its first
+  # instructions. LABWIRED_ESP32C6_ROM wins (empty opts out); otherwise the
+  # in-tree flattened esp32c6_rev0_rom.elf loads (crates/core/roms/esp32c6/).
+  - name: "rom"
+    base: 0x40000000
+    size: "320KB"
+    image_env: "LABWIRED_ESP32C6_ROM"
+  # LP SRAM: 16 kB at 0x5000_0000..0x5000_3FFF (memory map). Deep-sleep
+  # retention memory; mapped so RTC/LP code that touches it does not fault.
+  - name: "lp_sram"
+    base: 0x50000000
+    size: "16KB"
+peripherals:
+  # Espressif UART IP. The C6 UART is a newer revision of the same family the
+  # C3/S3 carry: the head register map the console path uses (FIFO@0x00,
+  # INT_RAW@0x04, INT_ST@0x08, INT_ENA@0x0C, INT_CLR@0x10, CLKDIV@0x14,
+  # RX_FILT@0x18, STATUS@0x1C, CONF0@0x20, CONF1@0x24) is offset-identical —
+  # cross-checked in tests/fixtures/real_world/esp32c6.svd against the C3 SVD.
+  # The C6-only tail (SLEEP_CONF0-2 @0x30-0x38, CLK_CONF @0x88, DATE @0x8C,
+  # ID @0x9C) is NOT modelled yet; see docs/boards/esp32c6-devkitc.md.
+  # Base per esp-idf v5.3 reg_base.h (DR_REG_UART_BASE = 0x60000000,
+  # DR_REG_UART1_BASE = 0x60001000); IRQ per espressif/svd esp32c6.svd
+  # (UART0 = 43, UART1 = 44).
+  # The `clock:` gate is resolved by the PCR model below and enforced by the
+  # generic bus gate (bus/device_hooks.rs::is_peripheral_clocked): with
+  # UART0_CONF.CLK_EN clear, UART0 reads return 0 and writes are dropped.
+  # RST_EN is register-recorded but not enforced (see the PCR model docs).
+  - id: "uart0"
+    type: "esp32c6_uart"
+    irq: 43 # ETS_UART0_INTR_SOURCE (esp32c6.svd), interrupt matrix source
+    base_address: 0x60000000
+    size: "4KB"
+    clock: { controller: "pcr", reg: "UART0_CONF", bit: 0 }
+    config:
+      debug_schema: "../peripherals/esp32c6/uart0.yaml"
+  - id: "uart1"
+    type: "esp32c6_uart"
+    irq: 44 # ETS_UART1_INTR_SOURCE
+    base_address: 0x60001000
+    size: "4KB"
+    clock: { controller: "pcr", reg: "UART1_CONF", bit: 0 }
+    config:
+      echo_stdout: false
+      debug_schema: "../peripherals/esp32c6/uart1.yaml"
+  # GPIO matrix. Reuses the shared C3 GPIO model (same register head: OUT@0x04,
+  # OUT_W1TS@0x08, OUT_W1TC@0x0C, ENABLE@0x20, STRAP@0x38, IN@0x3C,
+  # FUNC0_OUT_SEL_CFG@0x554 and FUNC0_IN_SEL_CFG@0x154 — confirmed against
+  # esp-idf v5.3 gpio_reg.h for esp32c6). KNOWN LIMIT: the model is sized for
+  # the C3's 26-pin block, so C6 GPIO26..GPIO30 are not modelled.
+  # Base per reg_base.h (DR_REG_GPIO_BASE = 0x60091000); GPIO IRQ = 30
+  # (esp32c6.svd). No `irq:` here: the RISC-V interrupt matrix is wired through
+  # the chip's interrupt_core0 block, and the smoke path is polled.
+  - id: "gpio"
+    type: "esp32c6_gpio"
+    base_address: 0x60091000
+    # 3840 (0xF00): ends at gpio_sd @ 0x60091F00. Was 4KB → overlapped
+    # gpio_sd (0x60091F00) and mem_monitor (0x60092000).
+    size: "3840"
+    config:
+      debug_schema: "../peripherals/esp32c6/gpio.yaml"
+  # Timer Groups. The C6 TIMG register head (T0CONFIG@0x00/T0LO@0x04/T0HI@0x08/
+  # T0UPDATE@0x0C/... T0LOAD@0x20, RTCCALICFG@0x68) is offset-identical to the
+  # C3's, so both groups reuse the shared `esp32::timg::Timg` model. One
+  # general-purpose timer per group on C6 (SOC_TIMER_GROUP_TIMERS_PER_GROUP =
+  # 1U) plus an MWDT; the model's T1 head is inert phantom storage on both C3
+  # and C6 (same silicon shape). Bases per esp32c6.svd (TIMG0 = 0x6000_8000,
+  # TIMG1 = 0x6000_9000); the vendor register list omits the T1 registers but
+  # the SVD interrupts TG0_T1_LEVEL=52 and TG1_T1_LEVEL=55 exist, and esp-idf's
+  # C6 headers carry both timer register sets — the model's head map is the
+  # compatible one.
+  #
+  # Type `esp32c6_mwdt`, not the generic `esp32_timg`: the C6 builds the model
+  # through the C6 factory, which arms the real C3/C6 MWDT path
+  # (`with_mwdt`: WDTWPROTECT write lock, WDTCONFIG0..5 @0x48..0x5C,
+  # WDTFEED @0x60, the four-stage chain in model ticks — WDTCONFIG2..5 stage
+  # holds, STG0..3 actions, expiry advancing 0→1→2→3→0 — and the
+  # INT_RAW_TIMERS.WDT_INT_RAW latch cleared by INT_CLR_TIMERS). The C3 yaml
+  # deliberately still names `esp32_timg`, which never opts in — that is the
+  # chip gate that keeps C3 behaviour unchanged. The type name also carries
+  # the `wdt` marker the tier-1 class heuristic reads; the `timg0`/`timg1`
+  # ids supply `timer`.
+  #
+  # MWDT claim boundary (documented in the model + board docs): the CPU/system
+  # reset actions advance the chain but perform no reset (no safe bus
+  # reset-request path exists), the 12.5 ns × prescaler clock rate is not
+  # modelled, and interrupt-matrix delivery of the latch is not wired. IRQ ids
+  # here are documentation: the timer blocks do not fire interrupts yet.
+  - id: "timg0"
+    type: "esp32c6_mwdt"
+    irq: 51 # TG0_T0_LEVEL (esp32c6.svd); MWDT source is 53 (unmodelled)
+    base_address: 0x60008000
+    size: "4KB"
+    clock: { controller: "pcr", reg: "TIMERGROUP0_CONF", bit: 0 }
+    config:
+      debug_schema: "../peripherals/esp32c6/timg0.yaml"
+  - id: "timg1"
+    type: "esp32c6_mwdt"
+    irq: 54 # TG1_T0_LEVEL (esp32c6.svd); MWDT source is 56 (unmodelled)
+    base_address: 0x60009000
+    size: "4KB"
+    clock: { controller: "pcr", reg: "TIMERGROUP1_CONF", bit: 0 }
+    config:
+      debug_schema: "../peripherals/esp32c6/timg1.yaml"
+  # GDMA — General DMA (3 channels). Base per esp32c6.svd (DMA block,
+  # 0x6008_0000) and esp-idf reg_base.h (DR_REG_GDMA_BASE). The C6 register
+  # layout differs from the S3's flat 0xC0-stride block (see
+  # peripherals/esp32c6/gdma.rs); the model implements real memory-to-memory
+  # descriptor walks, and channels bound to the GP-SPI2 (PERI_SEL = 0) move its
+  # DMA data (peripherals/esp_gdma.rs). IRQ = 66 (DMA_IN_CH0); IN_CHn = 66+n,
+  # OUT_CHn = 69+n.
+  - id: "gdma"
+    type: "esp32c6_gdma"
+    irq: 66 # DMA_IN_CH0 (esp32c6.svd)
+    base_address: 0x60080000
+    size: "4KB"
+    clock: { controller: "pcr", reg: "GDMA_CONF", bit: 0 }
+    config:
+      # SVD peripheral name is `DMA`; the schema is the generated descriptor.
+      debug_schema: "../peripherals/esp32c6/dma.yaml"
+  # --- Blocks onboarded 2026-09-20: the C3-shared Espressif IP the C6 carries
+  # --- with an offset-identical register head. Each base/IRQ is from
+  # --- esp32c6.svd; each model was diffed against the C3 head and the C6 head
+  # --- before reuse, and each debug schema under configs/peripherals/esp32c6/
+  # --- is generated from the C6 SVD (not the C3's).
+  # I²C0 — the C3 behavioral command-list engine (`esp32c3_i2c`). Head map
+  # verified offset-identical against esp32c6.svd I2C0 (CTR@0x04,
+  # FIFO_CONF@0x18, DATA@0x1C, INT_RAW@0x20, INT_CLR@0x24, COMD@0x58..). The
+  # only C6 delta is the interrupt-matrix source (I2C_EXT0 = 50 vs the C3's
+  # 29), passed through the descriptor's `irq:`.
+  - id: "i2c0"
+    type: "esp32c3_i2c"
+    irq: 50 # ETS_I2C_EXT0_INTR_SOURCE (esp32c6.svd I2C0)
+    base_address: 0x60004000
+    size: "4KB"
+    clock: { controller: "pcr", reg: "I2C0_CONF", bit: 0 }
+    config:
+      debug_schema: "../peripherals/esp32c6/i2c0.yaml"
+  # GP-SPI2 — the C3 GP-SPI transaction engine (`esp32c3_spi`). Head map
+  # verified offset-identical (CMD@0x00, MS_DLEN@0x1C, DMA_INT_CLR@0x38,
+  # DMA_INT_RAW@0x3C, W0@0x98). C6 delta: SPI2 source = 72 (C3 = 19).
+  - id: "spi2"
+    type: "esp32c3_spi"
+    irq: 72 # ETS_SPI2_INTR_SOURCE (esp32c6.svd SPI2)
+    base_address: 0x60081000
+    size: "4KB"
+    clock: { controller: "pcr", reg: "SPI2_CONF", bit: 0 }
+    config:
+      debug_schema: "../peripherals/esp32c6/spi2.yaml"
+  # APB_SARADC — the C3 one-shot conversion engine (`esp32c3_apb_saradc`).
+  # Head map verified offset-identical (ONETIME_SAMPLE@0x20,
+  # SAR1DATA_STATUS@0x2C, INT_RAW@0x44, INT_CLR@0x4C). C6 delta: source = 60.
+  # The model's register reset SEEDS are the C3 silicon capture — the C6 reset
+  # values may differ (documented gap; firmware writes the registers it uses).
+  # Gate = PCR.SARADC_CONF.SARADC_REG_CLK_EN (bit 2), the APB register clock
+  # that adc_ll_enable_bus_clock() sets. Bit 0 (SARADC_CLK_EN) is the digital
+  # controller function clock: IDF startup clears it and oneshot never sets it
+  # (measured SARADC_CONF = 0x4 at analogRead), so gating on it drops the
+  # ONETIME_START write and read_cal_channel spins forever.
+  - id: "apb_saradc"
+    type: "esp32c3_apb_saradc"
+    irq: 60 # ETS_APB_SARADC_INTR_SOURCE (esp32c6.svd APB_SARADC)
+    base_address: 0x6000E000
+    size: "4KB"
+    clock: { controller: "pcr", reg: "SARADC_CONF", bit: 2 }
+    config:
+      debug_schema: "../peripherals/esp32c6/apb_saradc.yaml"
+  # LEDC — the C3 live-timer LED PWM engine on the C6 field geometry
+  # (`esp32c6_ledc`). The registers it drives (CHn CONF0/HPOINT/DUTY/CONF1/
+  # DUTY_R, TIMER0_CONF@0xA0, TIMER0_VALUE@0xA4, INT_RAW@0xC0, INT_CLR@0xCC) are
+  # offset-identical, but not bit-identical: TIMERx_CONF is DUTY_RES [4:0],
+  # CLK_DIV [22:5], PAUSE 23, RST 24 (the C3: [3:0]/[21:4]/22/23). The C6 adds
+  # gamma/event/compare/capture registers at the tail that the model does not
+  # touch. Also: source = 45; the source clock is selected in
+  # PCR.LEDC_SCLK_CONF[21:20] (`ledc_ll_set_slow_clk_sel`), not LEDC_CONF@0xD0,
+  # hence `clock_select`; outputs are matrix signals 0..5 (gpio_sig_map.h).
+  - id: "ledc"
+    type: "esp32c6_ledc"
+    irq: 45 # ETS_LEDC_INTR_SOURCE (esp32c6.svd LEDC)
+    base_address: 0x60007000
+    size: "1KB"
+    clock: { controller: "pcr", reg: "LEDC_CONF", bit: 0 }
+    config:
+      debug_schema: "../peripherals/esp32c6/ledc.yaml"
+      clock_select: { controller: "pcr", reg: "LEDC_SCLK_CONF" }
+  # LP_TIMER — the C6 RTC main timer behind `rtc_time_get()`. C6-only register
+  # shape (UPDATE@0x10 strobes the 48-bit counter into MAIN_BUF0 @0x14/0x18,
+  # shifting the previous BUF0 into BUF1 @0x1C/0x20), so it is a dedicated
+  # model, NOT the C3 `Esp32c3RtcTimer` (RTC_CNTL @0x6000_8000,
+  # TIME_UPDATE@0x0C). No `clock:` gate — the LP clock domain is not part of
+  # the HP PCR model. The `irq:` is documentation: the model's INT_* block is
+  # register-backed storage and no source is ever asserted.
+  # Local-prove stubs: SVD peripherals Arduino C6 boot touches that are not
+  # yet modeled (RAZ/WI register storage, no behaviour). The CPU-subsystem
+  # interrupt controllers (plic_mx/plic_ux/clint_m/clint_u) and the LP
+  # always-on blocks (pmu/lp_clkrst/lp_aon/lp_wdt) are declared further down;
+  # see the comments there for what is actually wired.
+  - id: "spi0"
+    type: "stub"
+    base_address: 0x60002000
+    size: "1KB"
+  - id: "spi1"
+    type: "stub"
+    base_address: 0x60003000
+    size: "1KB"
+  # Behavioral RMT (the C3 model; identical register map). Instant TX_END on
+  # TX_START + TX_START count / LogicTap edges for matrix `led_watch: rmt:0`.
+  # 2KB covers RMTMEM @ 0x60006400: the 1KB stub faulted in rmt_encode_copy.
+  # Matrix source 49 = ETS_RMT_INTR_SOURCE (esp32c6 interrupts.h).
+  - id: "rmt"
+    type: "esp32c6_rmt"
+    irq: 49
+    base_address: 0x60006000
+    size: "2KB"
+    config:
+      debug_schema: "../peripherals/esp32c3/rmt.yaml"
+  # Native esp_systimer (same IP as C3/S3; UNIT_OP bit29 = update-done). Stub
+  # returned 0 forever → systimer_hal_get_counter_value spun at 0x40020876.
+  # Matrix source 57 = ETS_SYSTIMER_TARGET0_INTR_SOURCE (esp32c6 interrupts.h).
+  - id: "systimer"
+    type: "esp32c6_systimer"
+    irq: 57
+    base_address: 0x6000a000
+    config:
+      path: "../peripherals/esp32c3/systimer.yaml"
+      debug_schema: "../peripherals/esp32c3/systimer.yaml"
+  # TWAI0 — the S3/C3 SJA1000-style TWAI behavioural model. C6 twai_reg.h
+  # (DR_REG_TWAI0_BASE 0x6000B000) has the same offsets 0x00..0x7C and the same
+  # MODE/CMD/STATUS/INT/BUS_TIMING bits the model decodes. The C6 additions are
+  # not modelled: INT/INT_ENA bit 8 (IDLE), STATUS bit 8 (MISS) and the
+  # 0x80..0x90 standby/HW_CFG/ECO words (census-logged, write-ignored).
+  # irq 46 = ETS_TWAI0_INTR_SOURCE (esp-idf soc/esp32c6 interrupts.h).
+  # Gate: PCR.TWAI0_CONF CLK_EN (bit 0, reset 1). TWAI1 @0x6000D000 stays a stub.
+  - id: "twai0"
+    type: "esp32s3_twai"
+    base_address: 0x6000B000
+    size: "4KB"
+    irq: 46
+    clock: { controller: "pcr", reg: "TWAI0_CONF", bit: 0 }
+  - id: "i2s0"
+    type: "stub"
+    base_address: 0x6000c000
+    size: "1KB"
+  - id: "twai1"
+    type: "stub"
+    base_address: 0x6000d000
+    size: "1KB"
+  - id: "atomic"
+    type: "stub"
+    base_address: 0x60011000
+    size: "1KB"
+  - id: "pcnt"
+    type: "stub"
+    base_address: 0x60012000
+    size: "1KB"
+  - id: "soc_etm"
+    type: "stub"
+    base_address: 0x60013000
+    size: "1KB"
+  - id: "mcpwm0"
+    type: "stub"
+    base_address: 0x60014000
+    size: "1KB"
+  - id: "parl_io"
+    type: "stub"
+    base_address: 0x60015000
+    size: "1KB"
+  - id: "hinf"
+    type: "stub"
+    base_address: 0x60016000
+    size: "1KB"
+  - id: "slchost"
+    type: "stub"
+    base_address: 0x60017000
+    size: "1KB"
+  - id: "aes"
+    type: "stub"
+    base_address: 0x60088000
+    size: "1KB"
+  - id: "sha"
+    type: "stub"
+    base_address: 0x60089000
+    size: "1KB"
+  - id: "rsa"
+    type: "stub"
+    base_address: 0x6008a000
+    size: "1KB"
+  - id: "ecc"
+    type: "stub"
+    base_address: 0x6008b000
+    size: "1KB"
+  - id: "ds"
+    type: "stub"
+    base_address: 0x6008c000
+    size: "4KB"
+  - id: "hmac"
+    type: "stub"
+    base_address: 0x6008d000
+    size: "1KB"
+  - id: "gpio_sd"
+    type: "stub"
+    base_address: 0x60091f00
+    # 256 (0x100): ends at mem_monitor @ 0x60092000. Was 1KB → overlapped it.
+    size: "256"
+  - id: "mem_monitor"
+    type: "stub"
+    base_address: 0x60092000
+    size: "1KB"
+  - id: "pau"
+    type: "stub"
+    base_address: 0x60093000
+    size: "1KB"
+  - id: "tee"
+    type: "stub"
+    base_address: 0x60098000
+    size: "1KB"
+  - id: "hp_apm"
+    type: "stub"
+    base_address: 0x60099000
+    size: "1KB"
+  - id: "lp_apm0"
+    type: "stub"
+    base_address: 0x60099800
+    size: "1KB"
+  - id: "pwdet"
+    # PWDET_CONF_REG (0x600A0810, reg_base.h), the RF front-end word that
+    # sar_ctrl_ll_set_power_mode_from_pwdet() read-modify-writes before every
+    # oneshot analogRead. Write-ignored zero stub: the SAR power mode is not
+    # modelled, the conversion engine is apb_saradc.
+    type: "stub"
+    base_address: 0x600a0800
+    size: "1KB"
+  - id: "ieee802154"
+    type: "stub"
+    base_address: 0x600a3000
+    size: "1KB"
+  - id: "modem_syscon"
+    type: "stub"
+    base_address: 0x600a9800
+    size: "1KB"
+  - id: "modem_lpcon"
+    # Sticky register bank (not a zero stub): Arduino regi2c_enable_block
+    # asserts clk_i2c_mst_en, which mask ROM leaves on and fast-boot must seed.
+    # 2KB covers coex_hw_clear_reg window at base+0x400 (before I2C_ANA_MST).
+    type: "esp32c6_modem_lpcon"
+    base_address: 0x600af000
+    size: "2KB"
+  - id: "i2c_ana_mst"
+    # DR_REG_I2C_ANA_MST_BASE — regi2c RMW of ANA_CONF* + BUSY/cal polls.
+    type: "esp32c6_i2c_ana_mst"
+    base_address: 0x600af800
+    size: "1KB"
+  - id: "efuse"
+    type: "stub"
+    base_address: 0x600b0800
+    size: "1KB"
+  - id: "lp_uart"
+    type: "stub"
+    base_address: 0x600b1400
+    size: "1KB"
+  - id: "lp_i2c0"
+    type: "stub"
+    base_address: 0x600b1800
+    size: "1KB"
+  - id: "lp_io"
+    type: "stub"
+    base_address: 0x600b2000
+    size: "1KB"
+  - id: "lp_i2c_ana_mst"
+    type: "stub"
+    base_address: 0x600b2400
+    size: "1KB"
+  - id: "lp_peri"
+    type: "stub"
+    base_address: 0x600b2800
+    size: "1KB"
+  - id: "lp_ana"
+    type: "stub"
+    base_address: 0x600b2c00
+    size: "1KB"
+  - id: "lp_tee"
+    type: "stub"
+    base_address: 0x600b3400
+    size: "1KB"
+  - id: "lp_apm"
+    type: "stub"
+    base_address: 0x600b3800
+    size: "1KB"
+  - id: "otp_debug"
+    type: "stub"
+    base_address: 0x600b3c00
+    size: "1KB"
+  # Machine-mode PLIC (DR_REG_PLIC_MX_BASE). IDF/ROM esprv_intc_* writes
+  # enable/type/priority/threshold HERE — not INTPRI. INTPRI keeps only the
+  # CPU_INTR_FROM_CPU_n doorbells; the bus C6 routing arm reads the gates
+  # from this bank, merged with the INTPRI SVD copies (enable OR'd,
+  # priority/threshold = max of the two stored banks, recomputed on every
+  # write so they can be lowered) — crates/core/src/bus/routing.rs.
+  # plic_ux and clint_m/clint_u (bases from reg_base.h, not in esp32c6.svd)
+  # are plain `stub` storage: writes are accepted, nothing is routed.
+  - id: "plic_mx"
+    type: "declarative"
+    base_address: 0x20001000
+    size: "1KB"
+    config:
+      path: "../peripherals/esp32c6/plic_mx.yaml"
+  - id: "plic_ux"
+    type: "stub"
+    base_address: 0x20001400
+    size: "1KB"
+  - id: "clint_m"
+    type: "stub"
+    base_address: 0x20001800
+    size: "1KB"
+  - id: "clint_u"
+    type: "stub"
+    base_address: 0x20001C00
+    size: "1KB"
+  # LP always-on / clock-reset / PMU: plain `stub` storage (RAZ/WI). In
+  # particular LP_CLKRST.RESET_CAUSE (@ +0x10) reads 0, not POWERON — no
+  # reset cause or CORE0_RESET_FLAG is seeded.
+  - id: "pmu"
+    type: "stub"
+    base_address: 0x600B0000
+    size: "1KB"
+  - id: "lp_clkrst"
+    type: "stub"
+    base_address: 0x600B0400
+    size: "1KB"
+  - id: "lp_wdt"
+    type: "stub"
+    base_address: 0x600B1C00
+    size: "1KB"
+  - id: "lp_aon"
+    type: "stub"
+    base_address: 0x600B1000
+    size: "1KB"
+  - id: "lp_timer"
+    type: "esp32c6_lp_rtc"
+    irq: 15 # ETS_LP_RTC_TIMER_INTR_SOURCE (esp32c6.svd LP_TIMER)
+    base_address: 0x600B0C00
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/esp32c6/lp_timer.yaml"
+  # IO_MUX pad registers. Register-backed stub (declarative descriptor derived
+  # from esp32c6.svd): MCU_SEL/function writes are recorded with the SVD reset
+  # values, but pad function is NOT electrically enforced — the console UART
+  # shifts bytes regardless of pad routing. Base per reg_base.h
+  # (DR_REG_IO_MUX_BASE = 0x60090000); U0TXD = GPIO16 pad word at +0x44,
+  # U0RXD = GPIO17 at +0x48, MCU_SEL = FUNC 1 (esp-idf io_mux_reg.h
+  # FUNC_U0TXD_GPIO16 = 1).
+  - id: "io_mux"
+    type: "declarative"
+    base_address: 0x60090000
+    size: "4KB"
+    config:
+      path: "../peripherals/esp32c6/io_mux.yaml"
+  # PCR — Peripheral Clock and Reset. The C6 clock/reset block that replaces
+  # the C3's SYSTEM/RTC_CNTL/APB_CTRL trio: UART0_CONF @+0x00 (CLK_EN b0 reset
+  # 1, RST_EN b1), UART0_SCLK_CONF @+0x04 (function-clock divider + SCLK_EN
+  # b22, reset 0x0070_0000), SYSCLK_CONF @+0x110. Values/bits from
+  # esp32c6.svd (PCR) and the ESP32-C6 TRM's PCR chapter. Register-backed
+  # behavioral model (crates/core/src/peripherals/esp32c6/pcr.rs): full SVD
+  # register map and the clock controller behind the peripherals' `clock:`
+  # gates. CLK_EN gates are ENFORCED by the shared bus gate; RST_EN is
+  # recorded but not enforced. Base per reg_base.h
+  # (DR_REG_PCR_BASE = 0x60096000).
+  - id: "pcr"
+    type: "esp32c6_pcr"
+    base_address: 0x60096000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32c6/pcr.yaml"
+  # HP_SYS — High-Power System control: timeout monitors, SDIO control, ROM
+  # table lock, memory test. Register-backed stub from esp32c6.svd.
+  # Base per reg_base.h (DR_REG_HP_SYSTEM_BASE = 0x60095000).
+  - id: "hp_sys"
+    type: "declarative"
+    base_address: 0x60095000
+    size: "4KB"
+    config:
+      path: "../peripherals/esp32c6/hp_sys.yaml"
+  # Interrupt matrix (INTERRUPT_CORE0). Register-backed stub from esp32c6.svd:
+  # source MAP registers + INTR_STATUS + CLOCK_GATE/DATE. Routing is completed
+  # by the sibling INTPRI block below. Base per reg_base.h
+  # (DR_REG_INTERRUPT_MATRIX_BASE = 0x60010000).
+  - id: "interrupt_core0"
+    type: "declarative"
+    base_address: 0x60010000
+    size: "4KB"
+    config:
+      path: "../peripherals/esp32c6/interrupt_core0.yaml"
+  # INTPRI — the C6's interrupt enable/priority/threshold block. The C3 splits
+  # these controls between INTERRUPT_CORE0 (enable/pri/thresh) and SYSTEM (the
+  # CPU_INTR_FROM_CPU_n doorbells); the C6 gathers them here (esp32c6.svd
+  # INTPRI @ 0x600C5000, esp-idf reg_base.h DR_REG_INTPRI_BASE). Declared so
+  # the C6 routes matrix sources through the same enable/priority/threshold
+  # gates the C3 model already implements; the bus's C6 layout arm keys on this
+  # peripheral's presence (crates/core/src/bus/routing.rs).
+  - id: "intpri"
+    type: "declarative"
+    base_address: 0x600C5000
+    size: "4KB"
+    config:
+      path: "../peripherals/esp32c6/intpri.yaml"
+  # ASSIST_DEBUG — Debug Assist (stack monitor / last-PC). Arduino ESP32
+  # core reads C0RE_0_DEBUG_MODE @ +0x74 early in bring-up; without this
+  # window the first accesses fault. SVD-derived register file only — no
+  # behavioural monitor side effects.
+  # EXTMEM / TRACE — Arduino cache init touches L1_CACHE_* @ EXTMEM+0x134.
+  # Declarative stubs only (plain-memory XIP window already serves flash reads;
+  # no MMU translation). Cache SYNC/LOCK DONE bits are storage — may need
+  # side-effects if firmware polls them.
+  - id: "trace"
+    type: "stub"
+    base_address: 0x600C0000
+    size: "4KB"
+  - id: "extmem"
+    type: "esp32c6_extmem"
+    base_address: 0x600C8000
+    size: "4KB"
+  - id: "assist_debug"
+    type: "stub"
+    base_address: 0x600C2000
+    size: "4KB"
+
+  # USB Serial/JTAG (USB_DEVICE). Same EP1/INT_* IP as C3/S3; behavioural model
+  # is `UsbSerialJtag::new_esp32c6` (matrix source 48, 160 MHz). Base and irq
+  # from vendored esp32c6.svd peripheral USB_DEVICE. The XIAO's primary console
+  # is this native Type-C / CDC-ACM path; UART0 is exposed on GPIO16/17.
+  # id MUST be `usb_serial_jtag` so the shared
+  # console tap (`attach_usb_serial_jtag_sink`) finds it.
+  - id: "usb_serial_jtag"
+    type: "esp32c6_usb_serial_jtag"
+    irq: 48 # USB_DEVICE (esp32c6.svd)
+    base_address: 0x6000F000
+    size: "4KB"
+  # Everything else the C6 exposes (SPI0/1, I2S0, RMT, SYSTIMER, TWAI0/1,
+  # AES/SHA/RSA/ECC/HMAC/DS, eFuse, PMU, LP_WDT, the LP_I2C/
+  # LP_UART blocks, the LP core, WiFi/BT/802.15.4 MACs) is deliberately NOT
+  # declared: unmapped windows fault loudly instead of pretending to work.
+  # `lp_wdt` in particular is NOT the declared wdt: the wdt class is served by
+  # the TIMG MWDT inside `timg0`/`timg1` (type `esp32c6_mwdt`). L1/L3 scope and
+  # the honest limitation list are in docs/boards/esp32c6-devkitc.md.
