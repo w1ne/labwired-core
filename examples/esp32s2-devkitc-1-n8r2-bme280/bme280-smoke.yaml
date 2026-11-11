@@ -1,0 +1,9 @@
+# Reads BME280 ID and raw temperature over S2 I2C0 before printing success.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/esp32s2-devkitc-1-n8r2-bme280.elf"
+  system: "../../configs/systems/esp32s2-devkitc-1-n8r2-bme280.yaml"
+limits:
+  max_steps: 5000000
+assertions:
+  - uart_contains: "ESP32S2_DEVKITC1_N8R2_BME280_OK ID=0x60 TEMP_RAW=0x082DC0 I2C0=GPIO8/9"

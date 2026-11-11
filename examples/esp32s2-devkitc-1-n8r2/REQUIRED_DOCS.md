@@ -2,8 +2,10 @@
 
 The supported surface and simulator limitations are in [README.md](README.md)
 and [VALIDATION.md](VALIDATION.md). The live buyability check is recorded in
-[vendor-status.md](vendor-status.md). The board has a committed UART0 smoke and
-firmware fixture; this profile does not claim ROM boot or full SoC coverage.
+[vendor-status.md](vendor-status.md). This UART profile has a committed UART0
+smoke and fixture. The separate BME280 system is documented in
+[the I2C example](../esp32s2-devkitc-1-n8r2-bme280/README.md). Neither profile
+claims ROM boot or full SoC coverage.
 
 ## Firmware
 

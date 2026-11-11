@@ -1,0 +1,19 @@
+# Exact Espressif ESP32-S2-DevKitC-1-N8R2 with a BME280 breakout.
+# The tested smoke routes I2C0 through GPIO8 (SDA) and GPIO9 (SCL). GPIO matrix
+# behavior and the I2C command-list controller are modeled; IO_MUX electrical
+# behavior, external pull-up voltage and the board's USB bridge are outside this
+# profile.
+name: "esp32s2-devkitc-1-n8r2-bme280"
+chip: "../chips/esp32s2.yaml"
+cpu_hz: 240_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GPIO8"
+      scl: "GPIO9"
+    config:
+      i2c_address: 0x77
+board_io: []

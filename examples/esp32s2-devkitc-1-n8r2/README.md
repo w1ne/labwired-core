@@ -17,11 +17,14 @@ mux and CP2102 bridge are not part of this model slice.
 - ESP32-S2 IROM and DROM address windows for the bare-ELF fast-start profile.
 - UART0 FIFO and serial output.
 - Board UART0 pin assignment: TX GPIO43, RX GPIO44.
+- Shared ESP32 GPIO0..39 model subset and the S2 I2C0 command-list model; the
+  separate [BME280 smoke](../esp32s2-devkitc-1-n8r2-bme280/README.md) uses GPIO8/9.
 
-The S2 mask ROM, SPI-flash controller/MMU boot, 2 MB PSRAM, Wi-Fi, USB OTG,
-GPIO and interrupt matrices, UART interrupt routing, GPIO18 addressable RGB
-LED, and physical USB-to-UART bridge are not modeled. The smoke is a simulator
-fast-start ELF, not a physical flash boot or a hardware validation.
+The smoke in this directory checks UART0 only. The S2 mask ROM, SPI-flash
+controller/MMU, 2 MB PSRAM, Wi-Fi, USB OTG, GPIO40..46, interrupt matrix,
+UART interrupt routing, GPIO18 addressable RGB LED, IO_MUX electrical behavior,
+and physical USB-to-UART bridge are not modeled. This is a simulator fast-start
+ELF, not a physical flash boot or a hardware validation.
 
 ## Build and run
 

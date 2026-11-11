@@ -1,0 +1,29 @@
+{
+  "target_id": "esp32s2-devkitc-1-n8r2-bme280",
+  "status": "pass",
+  "crate": "",
+  "target_triple": "",
+  "script": "examples/esp32s2-devkitc-1-n8r2-bme280/bme280-smoke.yaml",
+  "system": "configs/systems/esp32s2-devkitc-1-n8r2-bme280.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-11T08:48:14Z",
+  "finished_at_utc": "2026-11-11T08:48:17Z",
+  "elapsed_seconds": 3,
+  "elapsed_ms": 2116,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.331,
+    "build_firmware": 0.592,
+    "run_smoke": 1.146
+  },
+  "stages_ms": {
+    "build_cli": 331,
+    "build_firmware": 592,
+    "run_smoke": 1146
+  },
+  "firmware_build_script": "examples/esp32s2-devkitc-1-n8r2-bme280/firmware/build-firmware.sh"
+}

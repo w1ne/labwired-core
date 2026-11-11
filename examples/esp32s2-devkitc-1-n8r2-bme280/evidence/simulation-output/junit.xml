@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="2" failures="0" errors="0" time="0.729969">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="60c5cfbb58c450a2ec2df00178317bdb2c7613aeab48b38c0c05fcc1c01ce464"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.729969">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: ESP32S2_DEVKITC1_N8R2_BME280_OK ID=0x60 TEMP_RAW=0x082DC0 I2C0=GPIO8/9" time="0.000000">
+  </testcase>
+</testsuite>

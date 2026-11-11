@@ -12,11 +12,12 @@ does not exercise the IO_MUX, pad-level UART routing, or CP2102 bridge.
 
 The model is a fast-start subset: it skips mask-ROM execution and the SPI flash
 controller/MMU setup, treats IROM/DROM as directly mapped RAM backing, and does
-not provide physical flash boot. The 2 MB PSRAM, Wi-Fi, USB OTG, GPIO matrix,
-interrupt matrix/UART interrupt routing, and GPIO18 addressable RGB LED are not
-modeled. The smoke polls UART0; it does not exercise UART interrupts. Separate
-IROM/DRAM backing views do not currently alias internal SRAM as they do in
-silicon.
+not provide physical flash boot. The 2 MB PSRAM, Wi-Fi, USB OTG, GPIO40..46,
+interrupt matrix/UART interrupt routing, IO_MUX electrical behavior, and
+GPIO18 addressable RGB LED are not modeled. GPIO0..39 and I2C0 are present for
+the separate BME280 profile, but this UART-only smoke does not exercise them.
+The smoke polls UART0; it does not exercise UART interrupts. Separate IROM/DRAM
+backing views do not currently alias internal SRAM as they do in silicon.
 
 The smoke is local simulator evidence, not a hardware run or silicon
 correlation. Logs and machine-readable output are committed under

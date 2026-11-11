@@ -1,9 +1,9 @@
 # ESP32-S2 silicon profile for ESP32-S2-DevKitC-1-N8R2.
 #
 # This onboarding slice is deliberately small: Xtensa LX7, the architectural
-# SRAM/XIP address windows used by the RAM-loaded ELF smoke, and UART0. The
-# mask ROM, SPI flash controller/MMU, PSRAM, Wi-Fi, USB OTG, and other SoC
-# peripherals are not modelled by this profile.
+# SRAM/XIP address windows used by the RAM-loaded ELF smoke, UART0, GPIO matrix,
+# and I2C0. The mask ROM, SPI flash controller/MMU, PSRAM, Wi-Fi, USB OTG, and
+# other SoC peripherals are not modelled by this profile.
 name: "esp32s2"
 arch: "xtensa-lx7"
 core: "xtensa-lx7"
@@ -28,3 +28,19 @@ peripherals:
     type: "esp32s3_uart"
     base_address: 0x60000000
     size: "256B"
+  # This onboarding slice uses the shared classic command-list I2C register
+  # model. The S2 TRM's I2C0 register offsets/opcodes and 16 command slots
+  # match that model; S2's source ID is 52 (TRM §8.3.1).
+  - id: "gpio"
+    type: "esp32_gpio"
+    base_address: 0x60004000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32/gpio.yaml"
+  - id: "i2c0"
+    type: "esp32_i2c"
+    base_address: 0x60013000
+    size: "4KB"
+    irq: 52
+    config:
+      debug_schema: "../peripherals/esp32/i2c0.yaml"

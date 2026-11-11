@@ -160,6 +160,12 @@ jobs:
             firmware_build_script: examples/esp32s2-devkitc-1-n8r2/firmware/build-firmware.sh
             script: examples/esp32s2-devkitc-1-n8r2/uart-smoke.yaml
             system: configs/systems/esp32s2-devkitc-1-n8r2.yaml
+          # Exact ESP32-S2 N8R2 board with S2 I2C0 and a modelled BME280 on
+          # GPIO8/9; the smoke reads the sensor ID and raw-temperature vector.
+          - id: esp32s2-devkitc-1-n8r2-bme280
+            firmware_build_script: examples/esp32s2-devkitc-1-n8r2-bme280/firmware/build-firmware.sh
+            script: examples/esp32s2-devkitc-1-n8r2-bme280/bme280-smoke.yaml
+            system: configs/systems/esp32s2-devkitc-1-n8r2-bme280.yaml
           - id: esp32c6-devkitc-1-n8-bme280
             firmware_build_script: examples/esp32c6-devkitc-1-n8-bme280/firmware/build-firmware.sh
             script: examples/esp32c6-devkitc-1-n8-bme280/bme280-smoke.yaml
