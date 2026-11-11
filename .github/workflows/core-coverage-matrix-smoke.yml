@@ -113,11 +113,11 @@ jobs:
             system: examples/pybadge/system.yaml
           - id: arduino-uno-r4-minima
             target: thumbv7em-none-eabi
-            crate: firmware-ra4m1-demo
+            crate: firmware-ra4m1-bme280-smoke
             profile: release
             profile_dir: release
-            script: examples/arduino-uno-r4-minima/uart-smoke.yaml
-            system: examples/arduino-uno-r4-minima/system.yaml
+            script: examples/arduino-uno-r4-minima/bme280-smoke.yaml
+            system: configs/systems/arduino-uno-r4-minima.yaml
           - id: teensy-41
             target: thumbv7em-none-eabi
             crate: firmware-imxrt1064-demo

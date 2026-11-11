@@ -4,12 +4,17 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 #
-# Arduino Uno R4 Minima (R7FA4M1AB). SIM-DERIVED — not silicon-verified.
-# USB CDC Serial is not attached; smoke uses SCI2 on the D0/D1 header.
+# Arduino UNO R4 Minima (R7FA4M1AB). SIM-DERIVED — not silicon-verified.
+# USB CDC Serial is not attached; smoke uses SCI2 and modeled IIC1.
 
 name: "arduino-uno-r4-minima-example"
 chip: "../../configs/chips/ra4m1.yaml"
-external_devices: []
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "iic1"
+    config:
+      i2c_address: 0x76
 board_io:
   - id: "led_d13"
     kind: "led"

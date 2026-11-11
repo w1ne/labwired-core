@@ -27,6 +27,7 @@ on:
       - "crates/firmware-nucleo-h503rb-smoke/**"
       - "crates/firmware-nucleo-h753zi-smoke/**"
       - "crates/firmware-rp2040-picow-bme280-smoke/**"
+      - "crates/firmware-ra4m1-bme280-smoke/**"
       - "Cargo.toml"
       - "Cargo.lock"
       - "crates/cli/**"
@@ -124,6 +125,13 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/nucleo-g491re-bme280/bme280-smoke.yaml
             system: configs/systems/nucleo-g491re-bme280.yaml
+          # UNO R4 Minima RA4M1 IIC1: read the BME280 chip ID via A4/A5 and
+          # report it over the modeled SCI2 console. Pad routing is not gated.
+          - id: arduino-uno-r4-minima-bme280
+            crate: firmware-ra4m1-bme280-smoke
+            target: thumbv7em-none-eabi
+            script: examples/arduino-uno-r4-minima/bme280-smoke.yaml
+            system: configs/systems/arduino-uno-r4-minima.yaml
           - id: rp2040-pio
             crate: firmware-rp2040-pio-onboarding
             target: thumbv6m-none-eabi

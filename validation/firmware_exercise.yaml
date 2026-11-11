@@ -1014,12 +1014,16 @@ chips:
 
   - id: ra4m1
     arch: cortex-m4
-    headline: "No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware that runs: the bare-metal Uno R4 Minima smoke, PR-gated as firmware_survival::test_ra4m1_uno_r4_smoke_survival (case firmware_survival.rs:1346-1358) and rebuilt by the nightly coverage-matrix cell examples/arduino-uno-r4-minima/uart-smoke.yaml (core-coverage-matrix-smoke.yml:89-95); it waits on the ra_sysc HOCO/OSCSF handshake, drives P111 through PORT1 PCNTR1/PCNTR3 and prints OK over SCI2 TDR, and board_config_gates.rs builds the descriptor. Beyond the rubric the descriptor declares exactly one block — the out-of-scope USB CDC serial."
-    functional: []
+    headline: "No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). The existing PR-gated firmware_survival::test_ra4m1_uno_r4_smoke_survival remains the UART/LED boot check. A separate UNO R4 Minima onboarding smoke configures RA4M1 IIC1 and reads BME280 CHIP_ID 0x60 over the modeled A4/A5 bus, reporting it on SCI2; the nightly coverage cell and committed local evidence are examples/arduino-uno-r4-minima/bme280-smoke.yaml and examples/arduino-uno-r4-minima/evidence/. The PFS mux values are written by firmware, but the simulator attaches the BME280 directly to IIC1 and does not electrically enforce pad routing."
+    functional:
+      - what: "Arduino UNO R4 Minima IIC1 repeated-start read of BME280 CHIP_ID 0x60 on A4/A5"
+        fw: firmware-ra4m1-bme280-smoke
+        ev: "examples/arduino-uno-r4-minima/bme280-smoke.yaml (committed local evidence at examples/arduino-uno-r4-minima/evidence/)"
+        gate: nightly
     advanced_unit_only: []
     advanced_dead: []
     shim:
-      - {p: usbfs, ev: "configs/chips/ra4m1.yaml:63-66 (type stub; crates/core/src/peripherals/stub.rs)", note: "CLOSABLE: zero window at 0x40090000 — the R7FA4M1AB USB FS device (the board's USB CDC console) is not modelled; the PR-gated smoke drives SCI2 on the D0/D1 header only, and no gated firmware opens the window (docs/boards/arduino-uno-r4-minima.md:25)."}
+      - {p: usbfs, ev: "configs/chips/ra4m1.yaml (type stub; crates/core/src/peripherals/stub.rs)", note: "CLOSABLE: zero window at 0x40090000 — the R7FA4M1AB USB FS device (the board's USB CDC console) is not modelled; UART and IIC1 onboarding smokes use SCI2 and the modeled RA IIC controller instead."}
 
   - id: rp2350
     arch: cortex-m33
