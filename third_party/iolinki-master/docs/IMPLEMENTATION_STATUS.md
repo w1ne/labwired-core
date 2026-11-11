@@ -187,7 +187,10 @@ hardware or conformance coverage exists.
 
 ## Spec Conformance Audit (Interface & System Spec V1.1.5)
 
-Verified against the V1.1.5 spec text on 2026-09-18. The wire is now
+Verified against the V1.1.5 spec text on 2026-09-18; re-verified on 2026-10-17
+with the v1.1.0 exchange serialization (a send is deferred while a reply is
+outstanding and a response timeout flushes late bytes, so the direction-
+dependent reply lengths can never mis-frame). The wire is now
 spec-conformant for the master slice (design contract C1..C6 in
 `docs/superpowers/specs/2026-09-18-spec-conformant-wire-design.md`):
 

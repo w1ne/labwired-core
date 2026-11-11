@@ -857,19 +857,16 @@ impl SystemBus {
     pub fn attach_iolink_master_log_sink(&mut self, sink: Arc<Mutex<Vec<u8>>>) {
         use crate::peripherals::components::IolinkMaster;
         for p in &mut self.peripherals {
-            let Some(any) = p.dev.as_any_mut() else {
+            let Some(uart) = p.dev.as_uart_stream_host() else {
                 continue;
             };
-            let Some(uart) = any.downcast_mut::<Uart>() else {
-                continue;
-            };
-            for stream in &mut uart.attached_streams {
+            uart.visit_stream_devices(&mut |stream| {
                 if let Some(sa) = stream.as_any_mut() {
                     if let Some(master) = sa.downcast_mut::<IolinkMaster>() {
                         master.set_log_sink(sink.clone());
                     }
                 }
-            }
+            });
         }
     }
 

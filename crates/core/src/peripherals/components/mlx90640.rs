@@ -92,6 +92,9 @@ const COLS: usize = 32;
 const ROWS: usize = 24;
 
 const SCALEALPHA: f64 = 0.000_001;
+const CAL_PTAT: u16 = 8000;
+const CAL_PTAT_ART: u16 = 8000;
+const CAL_ALPHA_PTAT: f64 = 8.0;
 
 /// Thermal scene: a first-order RC heating model over a 24×32 °C field with a
 /// rectangular hotspot (electrical-cabinet / motor-housing positioning, where
@@ -364,9 +367,13 @@ impl Mlx90640 {
         ee[51] = ((0xE0u16) << 8) | 0xAA;
 
         // PTAT (Ta): ee[50] low10 = KtPTAT*8 = 40 → KtPTAT = 5.0; KvPTAT = 0.
-        // alphaPTAT = 8.0 (ee[16] nibble4 = 0). vPTAT25 (ee[49]) is set to the
-        // decoded ptatArt in `aux_words()` so GetTa == 25 °C.
+        // alphaPTAT = 8.0 (ee[16] nibble4 = 0). Firmware reads and caches the
+        // EEPROM before the first conversion, so vPTAT25 must be initialized
+        // here, not when auxiliary RAM is first captured.
         ee[50] = 40;
+        let ptat = f64::from(CAL_PTAT);
+        let ptat_art = (ptat / (ptat * CAL_ALPHA_PTAT + f64::from(CAL_PTAT_ART))) * 2f64.powi(18);
+        ee[49] = ptat_art.round() as u16;
 
         // gainEE = ee[48]; aux RAM gain word == gainEE → gain = 1.
         ee[48] = 6000;
@@ -409,7 +416,7 @@ impl Mlx90640 {
     /// `frameData[833]` = subpage. Key aux positions the driver reads:
     ///   * frame[768] = ptat_art aux, frame[776]/[808] = CP pixels (subpage 0/1)
     ///   * frame[778] = gain, frame[800] = ptat, frame[810] = VDD pixel
-    fn aux_words(&mut self) -> [u16; 64] {
+    fn aux_words(&self) -> [u16; 64] {
         // Aux-array local indices = (driver frame index) − 768.
         const AUX_PTAT_ART: usize = 768 - PIXELS; // frame[768]
         const AUX_GAIN: usize = 778 - PIXELS; // frame[778]
@@ -425,14 +432,8 @@ impl Mlx90640 {
         let vdd25: i16 = (((0xAA - 256) << 5) - 8192) as i16;
         aux[AUX_VDD] = vdd25 as u16;
         // PTAT: frame[800] = ptat, frame[768] = ptat_art aux.
-        let ptat = 8000i32;
-        let g = 8000i32;
-        aux[AUX_PTAT] = ptat as u16;
-        aux[AUX_PTAT_ART] = g as u16;
-        // vPTAT25 set so ptatArt == vPTAT25 → Ta = 25.
-        let alpha_ptat = 8.0f64;
-        let ptat_art = (ptat as f64 / (ptat as f64 * alpha_ptat + g as f64)) * 2f64.powi(18);
-        self.eeprom[49] = ptat_art.round() as i16 as u16;
+        aux[AUX_PTAT] = CAL_PTAT;
+        aux[AUX_PTAT_ART] = CAL_PTAT_ART;
         // CP pixels: tgc = 0 so they do not affect To; leave 0.
         aux[AUX_CP0] = 0;
         aux[AUX_CP1] = 0;

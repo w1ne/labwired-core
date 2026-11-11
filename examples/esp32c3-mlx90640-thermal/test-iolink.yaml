@@ -1,4 +1,4 @@
-# ESP32-C3 thermal-fingerprint AS A TRUE IO-LINK DEVICE — NORMAL scenario.
+# ESP32-C3 thermal-fingerprint IO-Link byte-stream integration — NORMAL.
 #
 # The firmware reads the MLX90640 over the real C3 I²C0, runs the thermal
 # fingerprint, AND publishes the 9-byte verdict frame as IO-Link PROCESS DATA on
@@ -10,16 +10,18 @@
 #   - the device reaches OPERATE (device-side gate),
 #   - the master reads cyclic PD (MASTER PD=...),
 #   - the master-decoded verdict is STABLE / full health / fault=NONE,
-#   - and NO temperature event is raised (asserted by the FAULT test's contrast).
+#   - and all 52 subpages complete with zero classified faults.
 #
-# NB: simple_regex supports only `.`, `*`, `^`, `$` — assertions are literal
-# substrings.
+# Completion includes the newline so a partial final message cannot pass.
 schema_version: "1.0"
 inputs:
   system: "./system-iolink.yaml"
   firmware: "./firmware/thermal_fingerprint.elf"
 limits:
-  max_steps: 50000000
+  max_steps: 1000000000
+  max_cycles: 5000000000
+  wall_time_ms: 180000
+  stop_when_assertions_pass: true
 assertions:
   # Device-side: boot + sensor up + IO-Link stack reaches OPERATE (state 0x04).
   - uart_contains: "TFS BOOT"
@@ -29,5 +31,6 @@ assertions:
   # MASTER side: the master received cyclic process data over IO-Link.
   - uart_contains: "MASTER PD="
   # MASTER side: the master DECODED the 9-byte verdict frame — STABLE, healthy,
-  # no fault. This is the money shot: the master reads the verdict over IO-Link.
+  # no fault. The receiving master must report the decoded verdict.
   - uart_contains: "MASTER VERDICT state=STABLE health=100 fault=NONE"
+  - uart_contains: "TFS DONE frames=52 faults=0\r\n"

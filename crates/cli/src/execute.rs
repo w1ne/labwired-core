@@ -666,8 +666,8 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
     //     every step — those keep their old cost, which is the honest price of
     //     asking a question about live machine state.
     //
-    // When every runtime assertion is UART-only (what every `uart_contains` /
-    // `uart_regex` script is, including both BLE gates), an unchanged length
+    // When every runtime assertion is UART-only (`uart_contains`,
+    // `uart_regex`, or `uart_ordered`), an unchanged length
     // means an unchanged verdict and the cached one is reused. The verdict is
     // therefore identical on every step, so `assertions_first_passed_at`
     // latches on the same step and the run stops at the same step count.
@@ -705,7 +705,9 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         .all(|a| {
             matches!(
                 a,
-                TestAssertion::UartContains(_) | TestAssertion::UartRegex(_)
+                TestAssertion::UartContains(_)
+                    | TestAssertion::UartRegex(_)
+                    | TestAssertion::UartOrdered(_)
             )
         });
     // NOTE: `RttContains`, `SemihostingContains`, and `ItmContains` are

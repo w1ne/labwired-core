@@ -1,9 +1,22 @@
 /* ESP32-C3 polled debug UART — see c3_uart.h. */
 #include "c3_uart.h"
+#include "c3_time.h"
 
 #define UART0_TX (*(volatile uint8_t *)0x60000000u)
+#define UART0_STATUS (*(volatile uint32_t *)0x6000001cu)
 
-void uart_putc(char c) { UART0_TX = (uint8_t)c; }
+void uart_putc(char c) {
+    while (((UART0_STATUS >> 16) & 0x3ffu) >= 128u) {
+        c3_sleep_us(100u);
+    }
+    UART0_TX = (uint8_t)c;
+}
+
+void uart_flush(void) {
+    while (((UART0_STATUS >> 16) & 0x3ffu) != 0u) {
+        c3_sleep_us(100u);
+    }
+}
 
 void uart_puts(const char *s) {
     while (*s) {

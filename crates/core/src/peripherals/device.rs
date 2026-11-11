@@ -440,6 +440,10 @@ pub trait UartStreamHost {
     /// seams should use `try_attach_stream_device` instead.
     fn attach_stream_device(&mut self, dev: Box<dyn UartStreamDevice>);
 
+    /// Visit attached peers for device-specific diagnostics without exposing
+    /// a concrete UART model or enabling its raw-byte console capture.
+    fn visit_stream_devices(&mut self, _visitor: &mut dyn FnMut(&mut dyn UartStreamDevice)) {}
+
     /// Stop mirroring TX to the console/capture sink. A cross-linked UART
     /// carries raw protocol octets, not console text, and letting those into
     /// the serial monitor floods it with binary that looks identical on both

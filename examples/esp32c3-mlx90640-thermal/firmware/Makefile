@@ -27,10 +27,14 @@ endif
 MLX_DIR ?= ../../../third_party/mlx90640-library
 IOLINKI_DIR ?= ../../../third_party/iolinki
 
-CFLAGS  := -march=rv32imc -mabi=ilp32 -ffreestanding -O2 -g \
+# GCC 15's C3 soft-float multilib is keyed by the explicit CSR/fence extensions.
+# Plain rv32imc falls back to the default libgcc, which uses FP CSRs that the
+# ESP32-C3 does not implement (for example frrm in __floatsisf).
+ISA_FLAGS := -march=rv32imc_zicsr_zifencei -mabi=ilp32
+CFLAGS  := $(ISA_FLAGS) -ffreestanding -O2 -g \
            -Wall -Wextra -ffunction-sections -fdata-sections \
            -I$(MLX_DIR)/headers -I$(IOLINKI_DIR)/include -I.
-LDFLAGS := -march=rv32imc -mabi=ilp32 -nostartfiles \
+LDFLAGS := $(ISA_FLAGS) -nostartfiles \
            -Wl,--gc-sections -T c3.ld -lm -lgcc
 
 # iolinki IO-Link DEVICE-stack sources compiled ON-TARGET for rv32imc (the CMake
@@ -52,14 +56,14 @@ IOLINKI_SRC := \
   $(IOLINKI_DIR)/src/platform_stubs.c \
   $(IOLINKI_DIR)/src/platform/baremetal/time_utils.c
 
-APP_SRC := startup.S c3_uart.c mlx90640_i2c_c3.c fingerprint.c fast_math.c \
+APP_SRC := startup.S c3_uart.c c3_time.c mlx90640_i2c_c3.c fingerprint.c fast_math.c \
            phy_c3_iolink.c main.c
 DRV_SRC := $(MLX_DIR)/functions/MLX90640_API.c
 ELF     := thermal_fingerprint.elf
 
 all: $(ELF)
 
-$(ELF): $(APP_SRC) $(DRV_SRC) $(IOLINKI_SRC) c3.ld
+$(ELF): $(APP_SRC) $(wildcard *.h) $(DRV_SRC) $(IOLINKI_SRC) c3.ld Makefile
 	@if [ -z "$(strip $(CC))" ]; then \
 	  echo "ERROR: riscv32-esp-elf-gcc not found. Install via PlatformIO or ESP-IDF,"; \
 	  echo "       or pass CC=/path/to/riscv32-esp-elf-gcc."; exit 1; fi

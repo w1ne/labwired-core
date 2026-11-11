@@ -1299,15 +1299,22 @@ impl PeripheralKit for IolinkMasterKit {
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
         let mut master = configured_master(&ctx.ext.config)?;
         master.set_component_id(ctx.ext.id.clone());
-        let uart = ctx.uart()?;
         if master.evaluation.is_some() {
+            // The TIOL112 evaluation path requires the generic USART's
+            // physical-line binding. Ordinary masters only need a byte-stream
+            // host, including native Espressif UARTs used by the thermal lab.
+            let uart = ctx.uart().map_err(|error| {
+                anyhow::anyhow!("tiol112-eval requires a TIOL112-capable UART host: {error}")
+            })?;
             master.wake_phy = Some(uart.tiol112().cloned().ok_or_else(|| {
                 anyhow::anyhow!(
                     "tiol112-eval requires a TIOL112 declared before the master on the same UART"
                 )
             })?);
         }
-        uart.attach_stream(Box::new(master));
+        ctx.uart_stream_host()?
+            .try_attach_stream_device(Box::new(master))
+            .map_err(anyhow::Error::msg)?;
         Ok(())
     }
 }

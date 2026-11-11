@@ -131,7 +131,7 @@ int main(void) {
     memset(&device, 0, sizeof(device));
     memset(&cfg, 0, sizeof(cfg));
     cfg.phy = *iolink_phy_labwired_get();
-    cfg.stack.m_seq_type = IOLINK_M_SEQ_TYPE_1_1; /* PD(fixed)+OD(1); carries PD-out */
+    cfg.stack.m_seq_type = IOLINK_M_SEQ_TYPE_2_2; /* one PD octet each way, one OD */
     cfg.stack.min_cycle_time = 0;
     cfg.stack.pd_in_len = 1;
     cfg.stack.pd_out_len = 1; /* now consumes the master's PD-out byte */

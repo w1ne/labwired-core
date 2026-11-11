@@ -39,6 +39,8 @@ struct Link {
     /// flipped before clean forwarding resumes — the wire-fault injection the
     /// IO-Link station tests use to prove a master recovers from line noise.
     corrupt: [u32; 2],
+    /// Per-direction XOR mask for the next `corrupt` bytes.
+    corrupt_mask: [u8; 2],
 }
 
 #[derive(Default)]
@@ -84,8 +86,18 @@ impl VirtualWireBus {
     /// medium rather than on an endpoint keeps it available to any host, and
     /// means a corrupted byte is indistinguishable from line noise to both peers.
     pub fn corrupt_next(&self, link_id: u32, side: u8, n: u32) {
+        self.corrupt_next_with_mask(link_id, side, n, 0xFF);
+    }
+
+    /// XOR the next `n` bytes from `side` with `mask`. A single-bit mask lets
+    /// protocol tests inject detectable faults even when an all-bits flip has
+    /// zero syndrome under the protocol's checksum.
+    pub fn corrupt_next_with_mask(&self, link_id: u32, side: u8, n: u32, mask: u8) {
         if let Ok(mut w) = self.inner.lock() {
-            w.links.entry(link_id).or_default().corrupt[(side & 1) as usize] = n;
+            let link = w.links.entry(link_id).or_default();
+            let side = (side & 1) as usize;
+            link.corrupt[side] = n;
+            link.corrupt_mask[side] = mask;
         }
     }
 }
@@ -110,7 +122,7 @@ impl UartStreamDevice for VirtualWireEndpoint {
             let link = w.links.entry(self.link_id).or_default();
             let byte = if link.corrupt[self.side] > 0 {
                 link.corrupt[self.side] -= 1;
-                byte ^ 0xFF
+                byte ^ link.corrupt_mask[self.side]
             } else {
                 byte
             };
@@ -167,6 +179,28 @@ mod tests {
             b.poll(0),
             Some(0x66),
             "clean again after the budget runs out"
+        );
+    }
+
+    #[test]
+    fn bit_fault_masks_and_budgets_are_independent_per_direction() {
+        let bus = VirtualWireBus::new();
+        let mut a = bus.endpoint(1, 0);
+        let mut b = bus.endpoint(1, 1);
+
+        bus.corrupt_next_with_mask(1, 0, 2, 0x01);
+        bus.corrupt_next_with_mask(1, 1, 1, 0x80);
+        for _ in 0..3 {
+            a.on_tx_byte(0x55);
+            b.on_tx_byte(0x22);
+        }
+        assert_eq!(
+            [b.poll(0), b.poll(0), b.poll(0)],
+            [Some(0x54), Some(0x54), Some(0x55)]
+        );
+        assert_eq!(
+            [a.poll(0), a.poll(0), a.poll(0)],
+            [Some(0xA2), Some(0x22), Some(0x22)]
         );
     }
 

@@ -62,10 +62,14 @@ to observe progress; they skip with a message if the ELFs are not built.
 
 ## Full service coverage (`svc` pair)
 
-`world_station_services` drives the **whole** `iolinki-master` service surface on
-the wire, not just startup + cyclic PD. A `master-fw-svc` chip runs a phased
-script against a service-rich `device-fw-svc` chip and proves each service after
-OPERATE:
+`world_station_services` exercises ISDU, cyclic PD output, event and data-storage
+exchanges on the modeled wire. A `master-fw-svc` chip runs a phased script
+against a service-rich `device-fw-svc` chip and checks each result after OPERATE:
+
+The service pair uses `TYPE_2_2`: one PD byte in each direction and one OD
+byte. READ requests omit OD and WRITE requests include it. Build both sides
+from the pinned device and vendored master revisions. The device's legacy
+`TYPE_1_1` request layout is incompatible with these direction-aware services.
 
 ```bash
 STM32CUBE_L4_DIR=$HOME/projects/STM32CubeL4 bash ci/build.sh
@@ -76,7 +80,7 @@ cargo test --release -p labwired-core --test world_station_services -- --nocaptu
 - **Cyclic PD output** — the master's PD-out byte is echoed back as the device's
   PD-in (actuator mirror).
 - **Events** — a device WARNING event (`0x8CA0`) is triggered and read back via
-  `read_event_details` (ISDU `0x001C`).
+  `read_event_details` on the DIAGNOSIS channel.
 - **Data Storage** — an Application-Tag record is written and read back
   byte-for-byte (ISDU `0x0003`).
 
@@ -86,6 +90,13 @@ caught nothing here only because the underlying simulator gap it targets — the
 Cortex-M4 `UADD8`/`SEL` SIMD instructions newlib's optimised `strlen` relies on —
 was fixed first; before that fix, string ISDU reads silently returned garbage.
 Set `LABWIRED_STRICT_FIDELITY=1` to make the first such gap a hard failure.
+
+The three fault tests require the service script to finish before injecting a
+corrupted reply or muting the device. They verify a single checksum error is
+survived, sustained corruption re-initiates communication, and a muted device
+causes response timeouts. Core's IO-Link workflow builds the fixture ELFs and
+runs these assertions with `LABWIRED_REQUIRE_IOLINK_ELFS=1`; missing firmware is
+a failure in that gate.
 
 ## Manifests
 
@@ -97,5 +108,5 @@ Set `LABWIRED_STRICT_FIDELITY=1` to make the first such gap a hard failure.
 
 This is **functional** simulation evidence: real master and device firmware
 exchanging real IO-Link process data over a modeled C/Q wire. It is **not**
-IO-Link electrical/PHY-timing conformance. Line speed is irrelevant in the
-cycle-stepped model.
+IO-Link electrical/PHY-timing conformance. UART transmission uses the configured
+clock and baud divisor; these tests do not measure electrical C/Q levels.
