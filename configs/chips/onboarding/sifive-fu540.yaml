@@ -4,15 +4,17 @@
 # 0x20000000, DDR at 0x80000000, and UART0 at 0x10010000 (FU540-C000 Manual
 # v1p4, memory map and UART chapter:
 # https://starfivetech.com/uploads/fu540-c000-manual-v1p4.pdf. The engine runs
-# one RV64IMAC hart here; this profile exposes only the UART0 and bounded
-# memory used by the smoke.
-# The board's other harts, interrupt controllers, GPIO, Ethernet, I2C, and QSPI
-# controller behavior are not claimed. The 128 KiB DDR window keeps stack setup
-# in the address range supported by the current generic RISC-V runner.
+# one RV64IMAC U54 application hart here, with UART0 and the core-integrated
+# CLINT used by the smoke. The CLINT `mtime` is clocked at 1 MHz; this profile
+# uses the FU540's recommended 1 GHz core clock. The board's other harts, PLIC,
+# GPIO, Ethernet, I2C, and QSPI controller behavior are not claimed. The 128 KiB
+# DDR window keeps stack setup in the address range supported by the current
+# generic RISC-V runner.
 
 name: "sifive-fu540"
 arch: "riscv"
 core: "rv64imac"
+cpu_hz: 1_000_000_000
 
 flash: { base: 0x20000000, size: "32MiB" }
 ram: { base: 0x80000000, size: "128KiB" }

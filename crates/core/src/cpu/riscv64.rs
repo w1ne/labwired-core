@@ -1089,6 +1089,18 @@ impl Rv64Params {
 
     pub fn for_chip_name(name: &str, cpu_hz: u64) -> Self {
         let name = name.to_ascii_lowercase();
+        if name == "sifive-fu540" {
+            // The imported profile runs the first U54 application hart. Its
+            // CLINT is at 0x0200_0000 and its `mtime` reference is the 1 MHz
+            // RTCCLK (SiFive FU540-C000 Manual v1p4, Ch. 7 and 9; Renode's
+            // `platforms/cpus/sifive-fu540.repl`).
+            return Self {
+                hart_id: 1,
+                clint_base: Some(0x0200_0000),
+                mtime_divider: (cpu_hz / 1_000_000).max(1),
+                plic: None,
+            };
+        }
         if name.starts_with("mpfs") || name == "beaglev-fire" || name == "polarfire-soc" {
             return Self {
                 hart_id: MPFS_U54_HART,

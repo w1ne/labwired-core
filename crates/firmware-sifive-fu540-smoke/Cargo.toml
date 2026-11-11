@@ -11,7 +11,7 @@ license = "MIT"
 build = "build.rs"
 
 [dependencies]
-riscv-rt = "0.12"
+riscv-rt = { version = "0.12", features = ["single-hart"] }
 panic-halt = "0.2"
 
 [[bin]]

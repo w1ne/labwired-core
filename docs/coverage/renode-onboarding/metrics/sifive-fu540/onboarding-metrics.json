@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/sifive-fu540-smoke.yaml",
   "system": "configs/systems/onboarding/sifive-fu540.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T14:49:47Z",
-  "finished_at_utc": "2026-11-05T14:49:49Z",
-  "elapsed_seconds": 2,
-  "elapsed_ms": 1354,
+  "started_at_utc": "2026-11-11T17:36:50Z",
+  "finished_at_utc": "2026-11-11T17:38:07Z",
+  "elapsed_seconds": 77,
+  "elapsed_ms": 76568,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.287,
-    "build_firmware": 0.611,
-    "run_smoke": 0.444
+    "build_cli": 75.585,
+    "build_firmware": 0.639,
+    "run_smoke": 0.298
   },
   "stages_ms": {
-    "build_cli": 287,
-    "build_firmware": 611,
-    "run_smoke": 444
+    "build_cli": 75585,
+    "build_firmware": 639,
+    "run_smoke": 298
   }
 }
