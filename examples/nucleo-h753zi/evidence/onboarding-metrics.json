@@ -1,0 +1,28 @@
+{
+  "target_id": "nucleo-h753zi",
+  "status": "pass",
+  "crate": "firmware-nucleo-h753zi-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/nucleo-h753zi/io-smoke.yaml",
+  "system": "configs/systems/nucleo-h753zi.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-11T03:48:02Z",
+  "finished_at_utc": "2026-11-11T03:48:03Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1151,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.338,
+    "build_firmware": 0.409,
+    "run_smoke": 0.359
+  },
+  "stages_ms": {
+    "build_cli": 338,
+    "build_firmware": 409,
+    "run_smoke": 359
+  }
+}

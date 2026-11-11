@@ -1,0 +1,102 @@
+# LabWired - STM32H753ZIT6 as fitted to ST NUCLEO-H753ZI.
+#
+# This profile uses the existing STM32H7 RCC, GPIO v2, and USART v2 models.
+# It only declares the blocks needed by the NUCLEO-H753ZI smoke: GPIOB/C/D,
+# USART3, RCC, and SysTick. Other H753 peripherals are not part of this
+# profile, even when the chip contains them.
+#
+# Source references:
+# - STM32H753xI datasheet DS12117: Cortex-M7 at up to 480 MHz, 2 MiB flash,
+#   128 KiB DTCM, 64 KiB ITCM, 512 KiB AXI SRAM, 288 KiB SRAM1/2/3, and
+#   64 KiB SRAM4.
+# - STM32H742/H743/H753/H750 reference manual RM0433: H7 RCC, GPIO, and USART.
+# - NUCLEO-H7 Nucleo-144 user manual UM2407: LD1 PB0, B1 PC13, default VCP
+#   USART3 TX/RX on PD8/PD9.
+#
+# The peripheral behavior is simulator-derived. No NUCLEO-H753ZI silicon
+# capture is claimed.
+
+name: "stm32h753zi"
+arch: "arm"
+core: "cortex-m7"
+cpu_hz: 480_000_000
+
+package: "LQFP144"
+pin_count: 144
+
+flash:
+  base: 0x08000000
+  size: "2048KB"
+ram:
+  # The smoke image links to DTCM, matching common STM32H7 linker scripts.
+  base: 0x20000000
+  size: "128KB"
+memory_regions:
+  - name: "itcm"
+    base: 0x00000000
+    size: "64KB"
+  - name: "axi_sram"
+    base: 0x24000000
+    size: "512KB"
+  - name: "sram_d2"
+    base: 0x30000000
+    size: "288KB"
+  - name: "sram_d3"
+    base: 0x38000000
+    size: "64KB"
+
+pins:
+  PB0: { gpio: "gpiob", bit: 0 }
+  PC13: { gpio: "gpioc", bit: 13 }
+  PD8: { gpio: "gpiod", bit: 8 }
+  PD9: { gpio: "gpiod", bit: 9 }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x58024400
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32h735/rcc.yaml"
+      profile: "h7"
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x58020400
+    size: "1KB"
+    clock: { reg: "ahb4enr", bit: 1 }
+    config:
+      debug_schema: "../peripherals/stm32h735/gpiob.yaml"
+      profile: "stm32v2"
+      reset_moder: 0xFFFFFEBF
+      reset_ospeedr: 0x000000C0
+      reset_pupdr: 0x00000100
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x58020800
+    size: "1KB"
+    clock: { reg: "ahb4enr", bit: 2 }
+    config:
+      debug_schema: "../peripherals/stm32h735/gpioc.yaml"
+      profile: "stm32v2"
+      reset_moder: 0xFFFFFFFF
+  - id: "gpiod"
+    type: "gpio"
+    base_address: 0x58020C00
+    size: "1KB"
+    clock: { reg: "ahb4enr", bit: 3 }
+    config:
+      debug_schema: "../peripherals/stm32h735/gpiod.yaml"
+      profile: "stm32v2"
+      reset_moder: 0xFFFFFFFF
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+  - id: "usart3"
+    type: "uart"
+    base_address: 0x40004800
+    size: "1KB"
+    irq: 39
+    clock: { reg: "apb1lenr", bit: 18 }
+    config:
+      debug_schema: "../peripherals/stm32h735/usart3.yaml"
+      profile: "stm32v2"
