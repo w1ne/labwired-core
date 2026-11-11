@@ -1,0 +1,13 @@
+# NUCLEO-G0B1RE MB1360: USART2 marker and the active-high LD4 on PA5.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-nucleo-g0b1re-smoke"
+  system: "../../configs/systems/nucleo-g0b1re.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "G0B1_USART2_OK LD4=PA5"
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 8
+  - expected_stop_reason: max_steps

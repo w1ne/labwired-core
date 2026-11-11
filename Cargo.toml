@@ -84,6 +84,7 @@ members = [
     "crates/firmware-nucleo-f446re-smoke",
     "crates/firmware-nucleo-h753zi-smoke",
     "crates/firmware-nucleo-g491re-smoke",
+    "crates/firmware-nucleo-g0b1re-smoke",
     "crates/firmware-nucleo-g431kb-bme280-smoke",
     "crates/firmware-nucleo-h533re-smoke",
     "crates/firmware-nucleo-h503rb-smoke",

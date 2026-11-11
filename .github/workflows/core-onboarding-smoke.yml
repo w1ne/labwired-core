@@ -26,6 +26,7 @@ on:
       - "crates/firmware-esp32h2-devkitm-1-smoke/**"
       - "crates/firmware-nucleo-f446re-smoke/**"
       - "crates/firmware-nucleo-h503rb-smoke/**"
+      - "crates/firmware-nucleo-g0b1re-smoke/**"
       - "crates/firmware-nucleo-c562re-smoke/**"
       - "crates/firmware-nucleo-g431kb-bme280-smoke/**"
       - "crates/firmware-nucleo-h753zi-smoke/**"
@@ -113,6 +114,13 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/nucleo-h503rb/io-smoke.yaml
             system: configs/systems/nucleo-h503rb.yaml
+          # Exact NUCLEO-G0B1RE: print over the PA2/PA3 ST-LINK VCP route and
+          # verify the onboard LD4 transition on PA5 at the 16 MHz reset clock.
+          - id: nucleo-g0b1re
+            crate: firmware-nucleo-g0b1re-smoke
+            target: thumbv6m-none-eabi
+            script: examples/nucleo-g0b1re/io-smoke.yaml
+            system: configs/systems/nucleo-g0b1re.yaml
           - id: nucleo-c562re
             crate: firmware-nucleo-c562re-smoke
             target: thumbv8m.main-none-eabi

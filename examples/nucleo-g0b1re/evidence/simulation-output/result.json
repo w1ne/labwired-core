@@ -1,0 +1,1512 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 200000,
+  "cycles": 200000,
+  "instructions": 200000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 200000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 200000
+    }
+  },
+  "limits": {
+    "max_steps": 200000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "G0B1_USART2_OK LD4=PA5"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpioa:5",
+          "min_edges": 8
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      1342177304,
+      2097152,
+      2048,
+      1152,
+      3221225472,
+      3221225472,
+      95,
+      537018352,
+      0,
+      0,
+      0,
+      0,
+      0,
+      537018344,
+      134220249,
+      134220082
+    ],
+    "pc": 134220082,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "1bfba08ef15402611e3a28343fec5f89add21faf4ac41ae24197d807e1e6da2c",
+  "config": {
+    "firmware": "examples/nucleo-g0b1re/../../target/thumbv6m-none-eabi/release/firmware-nucleo-g0b1re-smoke",
+    "system": "examples/nucleo-g0b1re/../../configs/systems/nucleo-g0b1re.yaml",
+    "script": "examples/nucleo-g0b1re/io-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073876992,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "systick",
+        "kind": "native",
+        "base": 3758153744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pwr",
+        "kind": "native",
+        "base": 1073770496,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "flash",
+        "kind": "native",
+        "base": 1073881088,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioa",
+        "kind": "native",
+        "base": 1342177280,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiob",
+        "kind": "native",
+        "base": 1342178304,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioc",
+        "kind": "native",
+        "base": 1342179328,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart1",
+        "kind": "native",
+        "base": 1073821696,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart2",
+        "kind": "native",
+        "base": 1073759232,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tim2",
+        "kind": "native",
+        "base": 1073741824,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dma1",
+        "kind": "native",
+        "base": 1073872896,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dmamux",
+        "kind": "native",
+        "base": 1073874944,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "exti",
+        "kind": "native",
+        "base": 1073879040,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "syscfg",
+        "kind": "native",
+        "base": 1073807360,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "lpuart1",
+        "kind": "native",
+        "base": 1073774592,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c1",
+        "kind": "i2c",
+        "base": 1073763328,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "spi1",
+        "kind": "native",
+        "base": 1073819648,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "adc1",
+        "kind": "native",
+        "base": 1073816576,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "fdcan1",
+        "kind": "native",
+        "base": 1073767424,
+        "registers": [
+          {
+            "name": "FDCAN_CREL",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_ENDN",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_DBTP",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_TEST",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_RWD",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_CCCR",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_NBTP",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_TSCC",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_TSCV",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_TOCC",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_TOCV",
+            "offset": 44,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_ECR",
+            "offset": 64,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_PSR",
+            "offset": 68,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_TDCR",
+            "offset": 72,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_IR",
+            "offset": 80,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_IE",
+            "offset": 84,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_ILS",
+            "offset": 88,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_ILE",
+            "offset": 92,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_RXGFC",
+            "offset": 128,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_XIDAM",
+            "offset": 132,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_HPMS",
+            "offset": 136,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_RXF0S",
+            "offset": 144,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_RXF0A",
+            "offset": 148,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_RXF1S",
+            "offset": 152,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_RXF1A",
+            "offset": 156,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_TXBC",
+            "offset": 192,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_TXFQS",
+            "offset": 196,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_TXBRP",
+            "offset": 200,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_TXBAR",
+            "offset": 204,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_TXBCR",
+            "offset": 208,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_TXBTO",
+            "offset": 212,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_TXBCF",
+            "offset": 216,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_TXBTIE",
+            "offset": 220,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_TXBCIE",
+            "offset": 224,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_TXEFS",
+            "offset": 228,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_TXEFA",
+            "offset": 232,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "FDCAN_CKDIV",
+            "offset": 256,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "crc",
+        "kind": "native",
+        "base": 1073885184,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "button_b1",
+        "device_type": null,
+        "declared": false,
+        "attachment": {
+          "transport": "gpio"
+        },
+        "artifacts": []
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 200000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpioa",
+        "pin": 5,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 209,
+            "value": 1
+          },
+          {
+            "cycle": 2323,
+            "value": 0
+          },
+          {
+            "cycle": 4439,
+            "value": 1
+          },
+          {
+            "cycle": 6553,
+            "value": 0
+          },
+          {
+            "cycle": 8669,
+            "value": 1
+          },
+          {
+            "cycle": 10783,
+            "value": 0
+          },
+          {
+            "cycle": 12899,
+            "value": 1
+          },
+          {
+            "cycle": 15013,
+            "value": 0
+          },
+          {
+            "cycle": 17129,
+            "value": 1
+          },
+          {
+            "cycle": 19243,
+            "value": 0
+          },
+          {
+            "cycle": 21359,
+            "value": 1
+          },
+          {
+            "cycle": 23473,
+            "value": 0
+          },
+          {
+            "cycle": 25589,
+            "value": 1
+          },
+          {
+            "cycle": 27703,
+            "value": 0
+          },
+          {
+            "cycle": 29819,
+            "value": 1
+          },
+          {
+            "cycle": 31933,
+            "value": 0
+          },
+          {
+            "cycle": 34049,
+            "value": 1
+          },
+          {
+            "cycle": 36163,
+            "value": 0
+          },
+          {
+            "cycle": 38279,
+            "value": 1
+          },
+          {
+            "cycle": 40393,
+            "value": 0
+          },
+          {
+            "cycle": 42509,
+            "value": 1
+          },
+          {
+            "cycle": 44623,
+            "value": 0
+          },
+          {
+            "cycle": 46739,
+            "value": 1
+          },
+          {
+            "cycle": 48853,
+            "value": 0
+          },
+          {
+            "cycle": 50969,
+            "value": 1
+          },
+          {
+            "cycle": 53083,
+            "value": 0
+          },
+          {
+            "cycle": 55199,
+            "value": 1
+          },
+          {
+            "cycle": 57313,
+            "value": 0
+          },
+          {
+            "cycle": 59429,
+            "value": 1
+          },
+          {
+            "cycle": 61543,
+            "value": 0
+          },
+          {
+            "cycle": 63659,
+            "value": 1
+          },
+          {
+            "cycle": 65773,
+            "value": 0
+          },
+          {
+            "cycle": 67889,
+            "value": 1
+          },
+          {
+            "cycle": 70003,
+            "value": 0
+          },
+          {
+            "cycle": 72119,
+            "value": 1
+          },
+          {
+            "cycle": 74233,
+            "value": 0
+          },
+          {
+            "cycle": 76349,
+            "value": 1
+          },
+          {
+            "cycle": 78463,
+            "value": 0
+          },
+          {
+            "cycle": 80579,
+            "value": 1
+          },
+          {
+            "cycle": 82693,
+            "value": 0
+          },
+          {
+            "cycle": 84809,
+            "value": 1
+          },
+          {
+            "cycle": 86923,
+            "value": 0
+          },
+          {
+            "cycle": 89039,
+            "value": 1
+          },
+          {
+            "cycle": 91153,
+            "value": 0
+          },
+          {
+            "cycle": 93269,
+            "value": 1
+          },
+          {
+            "cycle": 95383,
+            "value": 0
+          },
+          {
+            "cycle": 97499,
+            "value": 1
+          },
+          {
+            "cycle": 99613,
+            "value": 0
+          },
+          {
+            "cycle": 101729,
+            "value": 1
+          },
+          {
+            "cycle": 103843,
+            "value": 0
+          },
+          {
+            "cycle": 105959,
+            "value": 1
+          },
+          {
+            "cycle": 108073,
+            "value": 0
+          },
+          {
+            "cycle": 110189,
+            "value": 1
+          },
+          {
+            "cycle": 112303,
+            "value": 0
+          },
+          {
+            "cycle": 114419,
+            "value": 1
+          },
+          {
+            "cycle": 116533,
+            "value": 0
+          },
+          {
+            "cycle": 118649,
+            "value": 1
+          },
+          {
+            "cycle": 120763,
+            "value": 0
+          },
+          {
+            "cycle": 122879,
+            "value": 1
+          },
+          {
+            "cycle": 124993,
+            "value": 0
+          },
+          {
+            "cycle": 127109,
+            "value": 1
+          },
+          {
+            "cycle": 129223,
+            "value": 0
+          },
+          {
+            "cycle": 131339,
+            "value": 1
+          },
+          {
+            "cycle": 133453,
+            "value": 0
+          },
+          {
+            "cycle": 135569,
+            "value": 1
+          },
+          {
+            "cycle": 137683,
+            "value": 0
+          },
+          {
+            "cycle": 139799,
+            "value": 1
+          },
+          {
+            "cycle": 141913,
+            "value": 0
+          },
+          {
+            "cycle": 144029,
+            "value": 1
+          },
+          {
+            "cycle": 146143,
+            "value": 0
+          },
+          {
+            "cycle": 148259,
+            "value": 1
+          },
+          {
+            "cycle": 150373,
+            "value": 0
+          },
+          {
+            "cycle": 152489,
+            "value": 1
+          },
+          {
+            "cycle": 154603,
+            "value": 0
+          },
+          {
+            "cycle": 156719,
+            "value": 1
+          },
+          {
+            "cycle": 158833,
+            "value": 0
+          },
+          {
+            "cycle": 160949,
+            "value": 1
+          },
+          {
+            "cycle": 163063,
+            "value": 0
+          },
+          {
+            "cycle": 165179,
+            "value": 1
+          },
+          {
+            "cycle": 167293,
+            "value": 0
+          },
+          {
+            "cycle": 169409,
+            "value": 1
+          },
+          {
+            "cycle": 171523,
+            "value": 0
+          },
+          {
+            "cycle": 173639,
+            "value": 1
+          },
+          {
+            "cycle": 175753,
+            "value": 0
+          },
+          {
+            "cycle": 177869,
+            "value": 1
+          },
+          {
+            "cycle": 179983,
+            "value": 0
+          },
+          {
+            "cycle": 182099,
+            "value": 1
+          },
+          {
+            "cycle": 184213,
+            "value": 0
+          },
+          {
+            "cycle": 186329,
+            "value": 1
+          },
+          {
+            "cycle": 188443,
+            "value": 0
+          },
+          {
+            "cycle": 190559,
+            "value": 1
+          },
+          {
+            "cycle": 192673,
+            "value": 0
+          },
+          {
+            "cycle": 194789,
+            "value": 1
+          },
+          {
+            "cycle": 196903,
+            "value": 0
+          },
+          {
+            "cycle": 199019,
+            "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 41,
+            "state": "0"
+          },
+          {
+            "cycle": 209,
+            "state": "1"
+          },
+          {
+            "cycle": 2323,
+            "state": "0"
+          },
+          {
+            "cycle": 4439,
+            "state": "1"
+          },
+          {
+            "cycle": 6553,
+            "state": "0"
+          },
+          {
+            "cycle": 8669,
+            "state": "1"
+          },
+          {
+            "cycle": 10783,
+            "state": "0"
+          },
+          {
+            "cycle": 12899,
+            "state": "1"
+          },
+          {
+            "cycle": 15013,
+            "state": "0"
+          },
+          {
+            "cycle": 17129,
+            "state": "1"
+          },
+          {
+            "cycle": 19243,
+            "state": "0"
+          },
+          {
+            "cycle": 21359,
+            "state": "1"
+          },
+          {
+            "cycle": 23473,
+            "state": "0"
+          },
+          {
+            "cycle": 25589,
+            "state": "1"
+          },
+          {
+            "cycle": 27703,
+            "state": "0"
+          },
+          {
+            "cycle": 29819,
+            "state": "1"
+          },
+          {
+            "cycle": 31933,
+            "state": "0"
+          },
+          {
+            "cycle": 34049,
+            "state": "1"
+          },
+          {
+            "cycle": 36163,
+            "state": "0"
+          },
+          {
+            "cycle": 38279,
+            "state": "1"
+          },
+          {
+            "cycle": 40393,
+            "state": "0"
+          },
+          {
+            "cycle": 42509,
+            "state": "1"
+          },
+          {
+            "cycle": 44623,
+            "state": "0"
+          },
+          {
+            "cycle": 46739,
+            "state": "1"
+          },
+          {
+            "cycle": 48853,
+            "state": "0"
+          },
+          {
+            "cycle": 50969,
+            "state": "1"
+          },
+          {
+            "cycle": 53083,
+            "state": "0"
+          },
+          {
+            "cycle": 55199,
+            "state": "1"
+          },
+          {
+            "cycle": 57313,
+            "state": "0"
+          },
+          {
+            "cycle": 59429,
+            "state": "1"
+          },
+          {
+            "cycle": 61543,
+            "state": "0"
+          },
+          {
+            "cycle": 63659,
+            "state": "1"
+          },
+          {
+            "cycle": 65773,
+            "state": "0"
+          },
+          {
+            "cycle": 67889,
+            "state": "1"
+          },
+          {
+            "cycle": 70003,
+            "state": "0"
+          },
+          {
+            "cycle": 72119,
+            "state": "1"
+          },
+          {
+            "cycle": 74233,
+            "state": "0"
+          },
+          {
+            "cycle": 76349,
+            "state": "1"
+          },
+          {
+            "cycle": 78463,
+            "state": "0"
+          },
+          {
+            "cycle": 80579,
+            "state": "1"
+          },
+          {
+            "cycle": 82693,
+            "state": "0"
+          },
+          {
+            "cycle": 84809,
+            "state": "1"
+          },
+          {
+            "cycle": 86923,
+            "state": "0"
+          },
+          {
+            "cycle": 89039,
+            "state": "1"
+          },
+          {
+            "cycle": 91153,
+            "state": "0"
+          },
+          {
+            "cycle": 93269,
+            "state": "1"
+          },
+          {
+            "cycle": 95383,
+            "state": "0"
+          },
+          {
+            "cycle": 97499,
+            "state": "1"
+          },
+          {
+            "cycle": 99613,
+            "state": "0"
+          },
+          {
+            "cycle": 101729,
+            "state": "1"
+          },
+          {
+            "cycle": 103843,
+            "state": "0"
+          },
+          {
+            "cycle": 105959,
+            "state": "1"
+          },
+          {
+            "cycle": 108073,
+            "state": "0"
+          },
+          {
+            "cycle": 110189,
+            "state": "1"
+          },
+          {
+            "cycle": 112303,
+            "state": "0"
+          },
+          {
+            "cycle": 114419,
+            "state": "1"
+          },
+          {
+            "cycle": 116533,
+            "state": "0"
+          },
+          {
+            "cycle": 118649,
+            "state": "1"
+          },
+          {
+            "cycle": 120763,
+            "state": "0"
+          },
+          {
+            "cycle": 122879,
+            "state": "1"
+          },
+          {
+            "cycle": 124993,
+            "state": "0"
+          },
+          {
+            "cycle": 127109,
+            "state": "1"
+          },
+          {
+            "cycle": 129223,
+            "state": "0"
+          },
+          {
+            "cycle": 131339,
+            "state": "1"
+          },
+          {
+            "cycle": 133453,
+            "state": "0"
+          },
+          {
+            "cycle": 135569,
+            "state": "1"
+          },
+          {
+            "cycle": 137683,
+            "state": "0"
+          },
+          {
+            "cycle": 139799,
+            "state": "1"
+          },
+          {
+            "cycle": 141913,
+            "state": "0"
+          },
+          {
+            "cycle": 144029,
+            "state": "1"
+          },
+          {
+            "cycle": 146143,
+            "state": "0"
+          },
+          {
+            "cycle": 148259,
+            "state": "1"
+          },
+          {
+            "cycle": 150373,
+            "state": "0"
+          },
+          {
+            "cycle": 152489,
+            "state": "1"
+          },
+          {
+            "cycle": 154603,
+            "state": "0"
+          },
+          {
+            "cycle": 156719,
+            "state": "1"
+          },
+          {
+            "cycle": 158833,
+            "state": "0"
+          },
+          {
+            "cycle": 160949,
+            "state": "1"
+          },
+          {
+            "cycle": 163063,
+            "state": "0"
+          },
+          {
+            "cycle": 165179,
+            "state": "1"
+          },
+          {
+            "cycle": 167293,
+            "state": "0"
+          },
+          {
+            "cycle": 169409,
+            "state": "1"
+          },
+          {
+            "cycle": 171523,
+            "state": "0"
+          },
+          {
+            "cycle": 173639,
+            "state": "1"
+          },
+          {
+            "cycle": 175753,
+            "state": "0"
+          },
+          {
+            "cycle": 177869,
+            "state": "1"
+          },
+          {
+            "cycle": 179983,
+            "state": "0"
+          },
+          {
+            "cycle": 182099,
+            "state": "1"
+          },
+          {
+            "cycle": 184213,
+            "state": "0"
+          },
+          {
+            "cycle": 186329,
+            "state": "1"
+          },
+          {
+            "cycle": 188443,
+            "state": "0"
+          },
+          {
+            "cycle": 190559,
+            "state": "1"
+          },
+          {
+            "cycle": 192673,
+            "state": "0"
+          },
+          {
+            "cycle": 194789,
+            "state": "1"
+          },
+          {
+            "cycle": 196903,
+            "state": "0"
+          },
+          {
+            "cycle": 199019,
+            "state": "1"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 95
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpioa",
+      "number": 5,
+      "mode": "output",
+      "func": null,
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "G0B1_USART2_OK LD4=PA5",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 2528,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 2528,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 524288,
+    "ram_total_bytes": 147456,
+    "flash_used_pct": 0.48,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 147456,
+    "main_stack_high_water_bytes": 24,
+    "main_stack_free_min_bytes": 147432,
+    "main_stack_base": 536870912,
+    "main_stack_top": 537018368,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 147456,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 147432,
+    "heap_base": 536870912,
+    "heap_top": 537018368
+  },
+  "metrics": {
+    "cycles": 200000,
+    "instructions": 200000,
+    "steps_executed": 200000,
+    "memory_reads": 361,
+    "memory_writes": 8,
+    "peripheral_accesses": 154,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134220194,
+        "count": 40,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219974,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219978,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134219990,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134220018,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134220030,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134220042,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134220054,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134220066,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134220082,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134220094,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134220098,
+        "count": 39,
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 134220130,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134220138,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134220142,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134220154,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      }
+    ]
+  }
+}
