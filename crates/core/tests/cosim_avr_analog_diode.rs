@@ -340,9 +340,24 @@ fn arduino_uno_mosfet_body_effect_pair_reaches_a1_a2_and_firmware_adc() {
 
 #[test]
 fn arduino_uno_bjt_early_effect_reaches_pc2_pc3_and_firmware_adc_alongside_ntc_and_diode() {
-    let system_path = root("configs/systems/arduino-uno.yaml");
-    let mut profile = SystemManifest::from_file(&system_path).expect("load Arduino Uno profile");
-    assert_eq!(profile.name, "arduino-uno");
+    atmega328p_bjt_early_effect_reaches_pc2_pc3_and_firmware_adc_alongside_ntc_and_diode(
+        "arduino-uno",
+    );
+}
+
+#[test]
+fn arduino_nano_bjt_early_effect_reaches_pc2_pc3_and_firmware_adc_alongside_ntc_and_diode() {
+    atmega328p_bjt_early_effect_reaches_pc2_pc3_and_firmware_adc_alongside_ntc_and_diode(
+        "arduino-nano",
+    );
+}
+
+fn atmega328p_bjt_early_effect_reaches_pc2_pc3_and_firmware_adc_alongside_ntc_and_diode(
+    system_name: &str,
+) {
+    let system_path = root(&format!("configs/systems/{system_name}.yaml"));
+    let mut profile = SystemManifest::from_file(&system_path).expect("load ATmega328P profile");
+    assert_eq!(profile.name, system_name);
 
     // Reuse the generic NTC, diode, and Gummel–Poon assets. Only their
     // descriptor endpoints change from the STM32 example's PA pins to the
@@ -394,7 +409,7 @@ fn arduino_uno_bjt_early_effect_reaches_pc2_pc3_and_firmware_adc_alongside_ntc_a
         assert_eq!(chip.analog_pins[pad].peripheral, "adc");
     }
 
-    let bus = SystemBus::from_config(&chip, &profile).expect("build Arduino Uno bus");
+    let bus = SystemBus::from_config(&chip, &profile).expect("build ATmega328P board bus");
     let mut machine = Machine::new(Avr::new(), bus);
     let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &machine.bus)
         .expect("build analog co-simulation")
