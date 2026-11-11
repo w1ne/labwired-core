@@ -71,6 +71,21 @@ independent reference across a base-drive sweep and reads all four results
 through the ADC register interface. This extends model coverage on an already
 covered profile; it is not silicon validation.
 
+## 6) Run the BJT terminal-resistance routing proof
+
+```bash
+cargo test -p labwired-core --test cosim_nucleo_f767zi_analog \
+  nucleo_f767zi_bjt_terminal_resistances_reach_adc1_with_explicit_network_references -- --nocapture
+```
+
+The test routes matched generic Gummel–Poon branches with RB, RC, and RE to
+ADC1 channels 2–7, each paired with the equivalent explicit resistor network.
+It checks each model-card result against that independent circuit, verifies each
+resistance changes the no-resistance collector load line, and converts all six
+branches through the firmware-visible ADC interface beside the unrelated NTC
+and Shockley diode on channels 0/1. This is model coverage on an already covered
+profile, not silicon validation.
+
 ## Validation record
 
 - 2026-08-05: UART smoke exit 0 (`OK` received) on the feat/stm32f767 branch;

@@ -867,6 +867,136 @@ fn nucleo_f767zi_bjt_high_injection_rolloff_reaches_adc1_alongside_ntc_and_diode
 }
 
 #[test]
+fn nucleo_f767zi_bjt_terminal_resistances_reach_adc1_with_explicit_network_references() {
+    let system_path = root("configs/systems/nucleo-f767zi.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F767ZI profile");
+    assert_eq!(profile.name, "nucleo-f767zi");
+
+    let generic =
+        SystemManifest::from_file(root("examples/nucleo-f767zi/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and Shockley diode netlists");
+    let terminal_resistances = SystemManifest::from_file(root(
+        "examples/nucleo-f767zi/analog-bjt-terminal-resistance-adc.yaml",
+    ))
+    .expect("load matched generic BJT model-card and resistor-network branches");
+    profile.cosim_models = generic.cosim_models;
+    profile
+        .cosim_models
+        .extend(terminal_resistances.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F767 descriptor");
+    for (pad, channel) in [
+        ("PA0", 0),
+        ("PA1", 1),
+        ("PA2", 2),
+        ("PA3", 3),
+        ("PA4", 4),
+        ("PA5", 5),
+        ("PA6", 6),
+        ("PA7", 7),
+    ] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F767ZI bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal co-simulation")
+        .expect("profile carries an NTC, diode, and six matched BJT branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must resolve to ADC1 channels zero through seven"
+    );
+    for channel in 0..=8 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.bjt_terminal.base_v", 0.0)
+        .expect("initialize matched BJT base drives");
+
+    let mut cycles = 0;
+    for base_drive_v in [0.7_f64, 0.8, 0.9] {
+        session
+            .set_signal_number("ui.bjt_terminal.base_v", base_drive_v)
+            .expect("step all matched BJT base drives");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and BJT resistance branches");
+        assert_eq!(steps.len(), 8, "all eight generic analog branches solve");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+        assert!(
+            (ntc_v - 1.65).abs() < 1e-9,
+            "unrelated NTC remains isolated"
+        );
+        assert!(
+            (diode_v - diode_load_line_voltage()).abs() < 2e-5,
+            "unrelated Shockley diode remains on its independent load line"
+        );
+
+        let bjt_voltages = [
+            signal_voltage(&session, "board.analog.pa2_volts"),
+            signal_voltage(&session, "board.analog.pa3_volts"),
+            signal_voltage(&session, "board.analog.pa4_volts"),
+            signal_voltage(&session, "board.analog.pa5_volts"),
+            signal_voltage(&session, "board.analog.pa6_volts"),
+            signal_voltage(&session, "board.analog.pa7_volts"),
+        ];
+        let zero_resistance_v = bjt_collector_voltage(base_drive_v);
+        for (label, model_card_v, explicit_network_v) in [
+            ("RB", bjt_voltages[0], bjt_voltages[1]),
+            ("RC", bjt_voltages[2], bjt_voltages[3]),
+            ("RE", bjt_voltages[4], bjt_voltages[5]),
+        ] {
+            assert!(
+                (model_card_v - explicit_network_v).abs() < 1e-7,
+                "{label} model-card resistance must match its explicit resistor network: {model_card_v} V vs {explicit_network_v} V"
+            );
+            if base_drive_v == 0.9 {
+                assert!(
+                    (model_card_v - zero_resistance_v).abs() > 1e-3,
+                    "{label} must change the collector load line: zero-R={zero_resistance_v} V, actual={model_card_v} V"
+                );
+            }
+        }
+
+        for (channel, voltage_v) in [(0, ntc_v), (1, diode_v)]
+            .into_iter()
+            .chain((2..=7).zip(bjt_voltages))
+        {
+            let expected_count = expected_adc_count(voltage_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected_count,
+                "solved voltage seeds descriptor-routed ADC1 channel {channel}"
+            );
+            assert_eq!(
+                stm32f4_adc_convert(&mut bus, channel),
+                u32::from(expected_count),
+                "firmware-visible ADC1 conversion follows the analog device on channel {channel}"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 8),
+            0xFFFF,
+            "neighboring ADC1 channel 8 remains undriven"
+        );
+    }
+}
+
+#[test]
 fn nucleo_f767zi_bjt_junction_and_transit_charge_reach_adc1_end_to_end() {
     let system_path = root("configs/systems/nucleo-f767zi.yaml");
     let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F767ZI profile");
