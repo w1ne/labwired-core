@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="9" failures="0" errors="0" time="0.391675">
+<testsuite name="labwired" tests="9" failures="0" errors="0" time="0.422746">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
     <property name="firmware_hash" value="c8412b75b46c09ec8d98f6397a69118a5d164e79ed35fa3e518e5438af36c678"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.391675">
+  <testcase classname="labwired" name="run" time="0.422746">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: STM32F072 Cortex-M0 smoke" time="0.000000">
   </testcase>

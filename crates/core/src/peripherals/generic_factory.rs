@@ -769,6 +769,9 @@ pub fn try_build(
             // CALIB is implementation-defined per chip; the yaml can
             // supply it plus the external-source divider (for example HCLK/8)
             // via `config: { calib: ..., external_clock_divider: ... }`.
+            // Cortex-M0's SYST_CSR reset is 0x2 when CALIB.NOREF is set; set
+            // `no_reference_tickint_reset: true` for that core profile. M3/M4
+            // reset only CLKSOURCE in that case.
             let calib = p_cfg
                 .config
                 .get("calib")
@@ -783,12 +786,22 @@ pub fn try_build(
                     })? as u32,
                 None => 1,
             };
-            Box::new(
+            let no_reference_tickint_reset = match p_cfg.config.get("no_reference_tickint_reset") {
+                None => false,
+                Some(value) => value.as_bool().ok_or_else(|| {
+                    anyhow::anyhow!("systick `no_reference_tickint_reset` must be a boolean")
+                })?,
+            };
+            let systick =
                 crate::peripherals::systick::Systick::with_calib_and_external_clock_divider(
                     calib,
                     external_clock_divider,
-                ),
-            )
+                );
+            Box::new(if no_reference_tickint_reset {
+                systick.with_no_reference_tickint_reset()
+            } else {
+                systick
+            })
         }
         "arm_sp804_timer" => Box::new(crate::peripherals::arm_sp804::ArmSp804Timer::new()),
         "lpc2294_timer" => Box::new(crate::peripherals::lpc::timer::LpcTimer::new()),

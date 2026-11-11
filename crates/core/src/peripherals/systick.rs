@@ -85,6 +85,9 @@ pub struct Systick {
     /// STM32F0 feeds SysTick from HCLK/8 when CLKSOURCE is clear; other chips
     /// can declare their implementation-specific source in the chip yaml.
     external_clock_divider: u32,
+    /// Cortex-M0 resets TICKINT when CALIB.NOREF is set; Cortex-M3 resets only
+    /// CLKSOURCE in that case. The chip's core profile selects the M0 rule.
+    no_reference_tickint_reset: bool,
     /// Partial divider progress for the external source. Updated while the
     /// timer is disabled or the processor source is selected, because the
     /// reference clock itself keeps running.
@@ -138,6 +141,7 @@ impl Systick {
             cvr: Cell::new(0),
             calib: 0x4000_0000, // Reference clock present, calibration is skewed
             external_clock_divider: 1,
+            no_reference_tickint_reset: false,
             external_clock_phase: Cell::new(0),
             countflag: Cell::new(false),
             anchor: Cell::new(0),
@@ -153,7 +157,7 @@ impl Systick {
     pub fn with_calib(calib: u32) -> Self {
         let mut systick = Self::new();
         systick.calib = calib;
-        systick.csr = Self::reset_csr_for_calibration(calib);
+        systick.csr = systick.reset_csr_for_calibration();
         systick
     }
 
@@ -165,10 +169,16 @@ impl Systick {
         systick
     }
 
-    /// Cortex-M0 resets SYST_CSR to TICKINT=1 when the chip has no reference
-    /// clock. CLKSOURCE itself reads as one and ignores writes in that case.
-    fn reset_csr_for_calibration(calib: u32) -> u32 {
-        if calib & 0x8000_0000 != 0 {
+    /// Select the Cortex-M0 reset rule: TICKINT resets to one when CALIB.NOREF
+    /// is set. Other Cortex-M profiles leave TICKINT clear on reset.
+    pub fn with_no_reference_tickint_reset(mut self) -> Self {
+        self.no_reference_tickint_reset = true;
+        self.csr = self.reset_csr_for_calibration();
+        self
+    }
+
+    fn reset_csr_for_calibration(&self) -> u32 {
+        if self.calib & 0x8000_0000 != 0 && self.no_reference_tickint_reset {
             0x2
         } else {
             0
@@ -437,12 +447,13 @@ impl Systick {
 }
 
 impl crate::Peripheral for Systick {
-    /// ARMv7-M B3.3.3: SYST_CSR resets to 0. Cortex-M0 §4.4.1 sets TICKINT
-    /// when CALIB.NOREF is set; CLKSOURCE reads as one in that case. RVR and
-    /// CVR are UNKNOWN, taken as 0. Bumping `arm_seq` retires any event chain
-    /// armed under the old configuration.
+    /// SYST_CSR resets to 0, with the Cortex-M0 TICKINT exception when the
+    /// configured core profile selects it and CALIB.NOREF is set. CLKSOURCE
+    /// reads as one whenever NOREF is set. RVR and CVR are UNKNOWN, taken as
+    /// 0. Bumping `arm_seq` retires any event chain armed under the old
+    /// configuration.
     fn on_node_reset(&mut self) {
-        self.csr = Self::reset_csr_for_calibration(self.calib);
+        self.csr = self.reset_csr_for_calibration();
         self.rvr = 0;
         self.cvr.set(0);
         self.countflag.set(false);
@@ -688,8 +699,20 @@ mod tests {
     }
 
     #[test]
-    fn no_reference_clock_resets_tickint_and_forces_processor_clock() {
+    fn no_reference_clock_defaults_to_processor_clock_without_tickint() {
         let mut st = Systick::with_calib(0x8000_0000);
+        assert_eq!(st.read_u32(0x00).unwrap() & 0x7, 0x4);
+
+        st.write_u32(0x00, 0).unwrap();
+        assert_eq!(st.read_u32(0x00).unwrap() & 0x7, 0x4);
+
+        st.on_node_reset();
+        assert_eq!(st.read_u32(0x00).unwrap() & 0x7, 0x4);
+    }
+
+    #[test]
+    fn cortex_m0_no_reference_clock_resets_tickint() {
+        let mut st = Systick::with_calib(0x8000_0000).with_no_reference_tickint_reset();
         assert_eq!(st.read_u32(0x00).unwrap() & 0x7, 0x6);
 
         st.write_u32(0x00, 0).unwrap();
@@ -701,7 +724,8 @@ mod tests {
 
     #[test]
     fn no_reference_clock_uses_processor_cycles_even_with_external_divider() {
-        let mut st = Systick::with_calib_and_external_clock_divider(0x8000_0000, 8);
+        let mut st = Systick::with_calib_and_external_clock_divider(0x8000_0000, 8)
+            .with_no_reference_tickint_reset();
         st.write_u32(0x04, 2).unwrap(); // RVR
         st.write_u32(0x08, 0).unwrap(); // CVR
         st.write_u32(0x00, 0x3).unwrap(); // ENABLE | TICKINT; CLKSOURCE forced

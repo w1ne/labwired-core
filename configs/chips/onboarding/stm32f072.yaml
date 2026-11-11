@@ -48,6 +48,8 @@ peripherals:
     # RM0091 §11.1.2: TENMS=6000 at 6 MHz (max HCLK/8), NOREF=0, SKEW=1.
     calib: 0x40001770
     external_clock_divider: 8
+    # Cortex-M0 §4.4.1: if a part profile sets NOREF, SYST_CSR resets with TICKINT=1.
+    no_reference_tickint_reset: true
 # --- RCC (RM0091 §6.4: CR/CFGR/CIR/APB2RSTR/APB1RSTR/AHBENR/APB2ENR/APB1ENR..)
 - id: rcc
   type: rcc
