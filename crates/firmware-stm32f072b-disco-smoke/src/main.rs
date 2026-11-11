@@ -380,6 +380,9 @@ fn check_nmi_repend_and_deferred_irq() -> bool {
     let source_vtor = rd(SCB_VTOR);
     let nmi_initially_clear = rd(SCB_ICSR) & ICSR_NMIPENDSET == 0;
     let source_priorities = rd(NVIC_IPR1);
+    // IPR1 stores IRQ 4 in bits 7:0, IRQ 5 in 15:8, and IRQ 6 in 23:16.
+    // Cortex-M priorities use the most-significant implemented bits, with a
+    // lower numeric value taking precedence. IRQ 5 = 0x40, IRQ 6 = 0x80.
     let test_priority_bits = 0x0080_4000;
     let table = RAM_VECTOR_BASE as *mut u32;
     let irq_bit = 1 << EXTI0_1_IRQ;
@@ -461,6 +464,8 @@ fn check_nmi_repend_and_deferred_irq() -> bool {
     let nmi_count_in_deferred_irq =
         unsafe { read_volatile((NMI_DEFERRED_IRQ as *const u32).add(9)) };
     let priority_readback = rd(NVIC_IPR1) & 0x00FF_FF00;
+    let irq5_priority = (priority_readback >> 8) & 0xFF;
+    let irq6_priority = (priority_readback >> 16) & 0xFF;
     let active_after = rd(NVIC_IABR0) & irq_mask;
     let pending_after = rd(NVIC_ISPR0) & irq_mask;
 
@@ -540,9 +545,9 @@ fn check_nmi_repend_and_deferred_irq() -> bool {
     hex(deferred_active_in_nmi);
     puts(" after_unmask_ipsr=");
     hex(ipsr_after_irq_unmask);
-    puts(" active_irq5=");
+    puts(" irq6_active_while_irq5=");
     hex(deferred_active_in_irq);
-    puts(" pending_irq5=");
+    puts(" irq6_pending_in_irq5=");
     hex(deferred_pending_in_irq);
     puts(" irq_ipsr=");
     hex(deferred_irq_ipsr);
@@ -552,8 +557,10 @@ fn check_nmi_repend_and_deferred_irq() -> bool {
     hex(deferred_irq_pending);
     puts(" nmi_count=");
     hex(nmi_count_in_deferred_irq);
-    puts(" priority=");
-    hex(priority_readback);
+    puts(" irq5_priority=");
+    hex(irq5_priority);
+    puts(" irq6_priority=");
+    hex(irq6_priority);
     puts(" ");
     verdict(deferred_ok && rd(NVIC_IPR1) == source_priorities);
     ok

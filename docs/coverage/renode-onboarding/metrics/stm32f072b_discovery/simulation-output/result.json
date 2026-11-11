@@ -65,7 +65,7 @@
           " exc_return=0xFFFFFFF9 sp=",
           " returned=1 ok",
           "nmi repend entered=1 entries=0x00000002 after_pend_ipsr=0x00000002 after_pend_entries=0x00000001 irq=0x00000015 nmi=0x00000002 resumed=0x00000015 icsr=0x00000002 irq_active=0x00000020 primask=0x00000001 restored=0x00000001 cleanup=ok=1 ok",
-          "nmi deferred irq pending_in_nmi=0x00000040 active_in_nmi=0x00000000 after_unmask_ipsr=0x00000015 active_irq5=0x00000000 pending_irq5=0x00000040 irq_ipsr=0x00000016 irq_active=0x00000040 irq_pending=0x00000000 nmi_count=0x00000002 priority=0x00804000 ok",
+          "nmi deferred irq pending_in_nmi=0x00000040 active_in_nmi=0x00000000 after_unmask_ipsr=0x00000015 irq6_active_while_irq5=0x00000000 irq6_pending_in_irq5=0x00000040 irq_ipsr=0x00000016 irq_active=0x00000040 irq_pending=0x00000000 nmi_count=0x00000002 irq5_priority=0x00000040 irq6_priority=0x00000080 ok",
           "summary 0x0DCFFFFF",
           "DONE"
         ]
@@ -106,20 +106,20 @@
       3221225472,
       3221225472,
       3221225472,
-      121,
+      115,
       1073821724,
-      105,
+      121,
       536887280,
       0,
       0,
       0,
       0,
       85,
-      536887040,
-      134247773,
-      134248064
+      536887048,
+      134248255,
+      134248548
     ],
-    "pc": 134248064,
+    "pc": 134248548,
     "xpsr": 2164260864,
     "primask": false,
     "pending_exceptions": 0,
@@ -132,7 +132,7 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "firmware_hash": "bc36e98b58dbe16838ae5f64d9b702b6ef1663a8f565eba9bb6372f08511a0f3",
+  "firmware_hash": "1267b139e53aede06276dcc37d619a3dab80b75e54069b6760298db2cf91c027",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-stm32f072b-disco-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f072b_discovery.yaml",
@@ -619,7 +619,7 @@
         "end_cycle": 1220000
       },
       {
-        "text": "irq exception hit=1 ipsr=0x00000015 active=0x00000020 pending=0x00000000 frame=1 regs=0x00000011,0x00000022,0x00000033,0x00000044,0x00000055 lr=0x08002C51 pc=0x080002FA xpsr=0x21000000 exc_return=0xFFFFFFF9 sp=0x20003ED8 expected_sp=0x20003ED8 restored_msp=0x20003F00 returned=1 ok",
+        "text": "irq exception hit=1 ipsr=0x00000015 active=0x00000020 pending=0x00000000 frame=1 regs=0x00000011,0x00000022,0x00000033,0x00000044,0x00000055 lr=0x08002C33 pc=0x080002FA xpsr=0x21000000 exc_return=0xFFFFFFF9 sp=0x20003EE0 expected_sp=0x20003EE0 restored_msp=0x20003F08 returned=1 ok",
         "cycle_lo": 1220000,
         "cycle": 1230000,
         "end_cycle": 1230000
@@ -631,7 +631,7 @@
         "end_cycle": 1230000
       },
       {
-        "text": "nmi deferred irq pending_in_nmi=0x00000040 active_in_nmi=0x00000000 after_unmask_ipsr=0x00000015 active_irq5=0x00000000 pending_irq5=0x00000040 irq_ipsr=0x00000016 irq_active=0x00000040 irq_pending=0x00000000 nmi_count=0x00000002 priority=0x00804000 ok",
+        "text": "nmi deferred irq pending_in_nmi=0x00000040 active_in_nmi=0x00000000 after_unmask_ipsr=0x00000015 irq6_active_while_irq5=0x00000000 irq6_pending_in_irq5=0x00000040 irq_ipsr=0x00000016 irq_active=0x00000040 irq_pending=0x00000000 nmi_count=0x00000002 irq5_priority=0x00000040 irq6_priority=0x00000080 ok",
         "cycle_lo": 1220000,
         "cycle": 1230000,
         "end_cycle": 1230000
@@ -703,14 +703,14 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 32180,
+    "text_bytes": 32692,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 32180,
+    "flash_used_bytes": 32692,
     "ram_static_bytes": 0,
     "flash_total_bytes": 131072,
     "ram_total_bytes": 16384,
-    "flash_used_pct": 24.55,
+    "flash_used_pct": 24.94,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -720,15 +720,15 @@
   "memory": {
     "main_stack_method": "paint",
     "main_stack_limit_bytes": 16384,
-    "main_stack_high_water_bytes": 252,
-    "main_stack_free_min_bytes": 15700,
+    "main_stack_high_water_bytes": 312,
+    "main_stack_free_min_bytes": 15704,
     "main_stack_base": 536870912,
     "main_stack_top": 536887296,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
     "heap_limit_bytes": 16384,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 15700,
+    "heap_free_min_bytes": 15704,
     "heap_base": 536870912,
     "heap_top": 536887296
   },
@@ -736,14 +736,14 @@
     "cycles": 4000000,
     "instructions": 4000000,
     "steps_executed": 4000000,
-    "memory_reads": 25358,
-    "memory_writes": 1620,
-    "peripheral_accesses": 296253,
+    "memory_reads": 25534,
+    "memory_writes": 1628,
+    "peripheral_accesses": 296351,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134248064,
-        "count": 437,
+        "pc": 134248548,
+        "count": 569,
         "symbol": "firmware_stm32f072b_disco_smoke::__cortex_m_rt_main"
       },
       {

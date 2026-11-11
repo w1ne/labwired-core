@@ -17,7 +17,9 @@
 # EXC_RETURN, and return cleanup. Another IRQ pends NMI with PRIMASK set and
 # verifies that NMI preempts and returns to the masked IRQ. The NMI handler
 # pends NMI once while active; it must not nest, but must run again on exception
-# return before the external IRQ resumes.
+# return before the external IRQ resumes. It also pends lower-priority IRQ 6;
+# IRQ 6 must remain pending and inactive until active IRQ 5 returns, then
+# tail-chain before Thread mode resumes.
 schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv6m-none-eabi/release/firmware-stm32f072b-disco-smoke"
@@ -71,7 +73,7 @@ assertions:
       - " exc_return=0xFFFFFFF9 sp="
       - " returned=1 ok"
       - "nmi repend entered=1 entries=0x00000002 after_pend_ipsr=0x00000002 after_pend_entries=0x00000001 irq=0x00000015 nmi=0x00000002 resumed=0x00000015 icsr=0x00000002 irq_active=0x00000020 primask=0x00000001 restored=0x00000001 cleanup=ok=1 ok"
-      - "nmi deferred irq pending_in_nmi=0x00000040 active_in_nmi=0x00000000 after_unmask_ipsr=0x00000015 active_irq5=0x00000000 pending_irq5=0x00000040 irq_ipsr=0x00000016 irq_active=0x00000040 irq_pending=0x00000000 nmi_count=0x00000002 priority=0x00804000 ok"
+      - "nmi deferred irq pending_in_nmi=0x00000040 active_in_nmi=0x00000000 after_unmask_ipsr=0x00000015 irq6_active_while_irq5=0x00000000 irq6_pending_in_irq5=0x00000040 irq_ipsr=0x00000016 irq_active=0x00000040 irq_pending=0x00000000 nmi_count=0x00000002 irq5_priority=0x00000040 irq6_priority=0x00000080 ok"
       - "summary 0x0DCFFFFF"
       - "DONE"
   - memory_value:
