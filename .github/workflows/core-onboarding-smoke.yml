@@ -26,6 +26,7 @@ on:
       - "crates/firmware-nucleo-f446re-smoke/**"
       - "crates/firmware-nucleo-h503rb-smoke/**"
       - "crates/firmware-nucleo-h753zi-smoke/**"
+      - "crates/firmware-rp2040-picow-bme280-smoke/**"
       - "Cargo.toml"
       - "Cargo.lock"
       - "crates/cli/**"
@@ -133,6 +134,13 @@ jobs:
             target: thumbv6m-none-eabi
             script: examples/rp2040-pico-bme280/bme280-smoke.yaml
             system: configs/systems/rp2040-pico-bme280.yaml
+          # Pico W has the same RP2040 header/I2C pins, but its LED is behind
+          # CYW43439. Keep this smoke to the modeled UART and external BME280.
+          - id: rp2040-picow-bme280
+            crate: firmware-rp2040-picow-bme280-smoke
+            target: thumbv6m-none-eabi
+            script: examples/rp2040-picow-bme280/bme280-smoke.yaml
+            system: configs/systems/rp2040-picow-bme280.yaml
           # Exact non-wireless Pico 2 profile: boot RP2350 Cortex-M33, read
           # BME280 over I2C0, then exercise the onboard GP25 LED.
           - id: rp2350-pico2-bme280

@@ -1,0 +1,16 @@
+# Raspberry Pi Pico W (RP2040) with an external BME280 breakout.
+# This model profile covers RP2040 UART0 and I2C0 only. Pico W's CYW43439
+# radio and its WL_GPIO0-driven onboard LED are outside the model.
+name: "rp2040-picow-bme280"
+chip: "../chips/rp2040.yaml"
+cpu_hz: 125_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GP4"
+      scl: "GP5"
+    config:
+      i2c_address: 0x77

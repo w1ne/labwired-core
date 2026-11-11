@@ -114,6 +114,7 @@ members = [
     "crates/firmware-perf-spin-riscv",
     "crates/firmware-rp2040-demo",
     "crates/firmware-rp2040-pico-bme280-smoke",
+    "crates/firmware-rp2040-picow-bme280-smoke",
     "crates/firmware-rp2350-pico2-bme280-smoke",
     "crates/firmware-rp2350-pico2w-bme280-smoke",
     "crates/firmware-esp32c5-devkitc-1-bme280-smoke",
@@ -411,6 +412,10 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-rp2040-pio-onboarding]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-rp2040-picow-bme280-smoke]
 codegen-units = 1
 opt-level = "s"
 

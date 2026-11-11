@@ -143,10 +143,11 @@ _Shares the nRF52 model with nrf52840/nrf52832; tier-1 drives 12 rubric classes 
 
 ### `rp2040`
 
-_The tier1 fixture drives clock/timer/gpio/spi/i2c (PL022/DW_apb) and boots unmodified Zephyr. The required nightly PIO lane reaches PIO_OK (crates/core/tests/rp2040_pio_onboarding.rs:82-135). The Raspberry Pi Pico BME280 smoke adds a board-level I2C0 sensor read and GP25 LED transitions; the BME280 is attached directly to the I2C model, so this does not prove electrical pad routing or physical hardware._
+_The tier1 fixture drives clock/timer/gpio/spi/i2c (PL022/DW_apb) and boots unmodified Zephyr. The required nightly PIO lane reaches PIO_OK (crates/core/tests/rp2040_pio_onboarding.rs:82-135). The Pico BME280 smoke reads I2C0 and toggles GP25; the Pico W BME280 smoke reads the same sensor path and reports over UART0 without claiming its CYW43439 radio or WL_GPIO0 LED. Both attach the BME280 directly to the I2C model, so neither proves electrical pad routing or physical hardware._
 
 **Functional firmware exercises** (including decoded device/protocol reads):
 - Raspberry Pi Pico I2C0 reads BME280 CHIP_ID 0x60 and raw temperature 0x082DC0 over GP4/GP5, then toggles the onboard GP25 LED four times — `firmware-rp2040-pico-bme280-smoke` · examples/rp2040-pico-bme280/bme280-smoke.yaml (nightly CI)
+- Raspberry Pi Pico W I2C0 reads BME280 CHIP_ID 0x60 and raw temperature 0x082DC0 over GP4/GP5, then reports the result over UART0; radio and WL_GPIO0 LED are outside this profile — `firmware-rp2040-picow-bme280-smoke` · examples/rp2040-picow-bme280/bme280-smoke.yaml (nightly CI)
 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `TBMAN` (configs/chips/rp2040.yaml:283 (type stub; crates/core/src/peripherals/stub.rs:12)) — STRUCTURAL: zero-answering TBMAN window. The Pico BME280 smoke and the RP2040 PIO lane do not access it.
