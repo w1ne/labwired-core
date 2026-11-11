@@ -19,6 +19,8 @@ const SCB_CFSR: *mut u32 = 0xE000_ED28 as *mut u32;
 #[cfg(feature = "stm32h743-exception-frame")]
 const SCB_HFSR: *mut u32 = 0xE000_ED2C as *mut u32;
 #[cfg(feature = "stm32h743-exception-frame")]
+const SCB_SHPR1: *mut u32 = 0xE000_ED18 as *mut u32;
+#[cfg(feature = "stm32h743-exception-frame")]
 const SCB_CCR_STKALIGN: u32 = 1 << 9;
 #[cfg(feature = "stm32h743-exception-frame")]
 const SCB_CPACR: *mut u32 = 0xE000_ED88 as *mut u32;
@@ -39,7 +41,7 @@ const NVIC_ISER0: *mut u32 = 0xE000_E100 as *mut u32;
 #[cfg(feature = "stm32h743-exception-frame")]
 const NVIC_ICER0: *mut u32 = 0xE000_E180 as *mut u32;
 #[cfg(feature = "stm32h743-exception-frame")]
-const NVIC_ISPR0: *const u32 = 0xE000_E200 as *const u32;
+const NVIC_ISPR0: *mut u32 = 0xE000_E200 as *mut u32;
 #[cfg(feature = "stm32h743-exception-frame")]
 const NVIC_ICPR0: *mut u32 = 0xE000_E280 as *mut u32;
 #[cfg(feature = "stm32h743-exception-frame")]
@@ -77,6 +79,9 @@ static mut CPACR_FAULT_RECORD: [u32; 5] = [0; 5];
 
 #[cfg(feature = "stm32h743-exception-frame")]
 static mut CPACR_HANDLER_RECORD: [u32; 2] = [0; 2];
+
+#[cfg(feature = "stm32h743-exception-frame")]
+static mut CPACR_PRIORITY_IRQ_RECORD: [u32; 2] = [0; 2];
 
 #[cfg(feature = "stm32h743-exception-frame")]
 static FP_SENTINELS: [u32; 16] = [
@@ -401,6 +406,27 @@ unsafe extern "C" fn nocp_fault_handler() {
         record = sym CPACR_FAULT_RECORD,
         cfsr = const 0xE000_ED28usize,
         hfsr = const 0xE000_ED2Cusize,
+    );
+}
+
+/// Exercise CPACR denial from IRQ 5 while UsageFault is enabled at a
+/// priority that cannot preempt the active IRQ. The denied instruction must
+/// therefore escalate to HardFault, which can preempt IRQ 5.
+#[cfg(feature = "stm32h743-exception-frame")]
+#[unsafe(naked)]
+unsafe extern "C" fn cpacr_priority_irq_handler() {
+    core::arch::naked_asm!(
+        "push {{r4, lr}}",
+        "mrs r0, ipsr",
+        "ldr r1, ={record}",
+        "str r0, [r1]",
+        "movs r0, #1",
+        "str r0, [r1, #4]",
+        "bl {attempt}",
+        "pop {{r4, lr}}",
+        "bx lr",
+        record = sym CPACR_PRIORITY_IRQ_RECORD,
+        attempt = sym attempt_privileged_fp,
     );
 }
 
@@ -1685,6 +1711,82 @@ fn check_cortex_m7_exception_frame() -> bool {
         write_volatile(SCB_SHCSR, read_volatile(SCB_SHCSR) | SHCSR_USGFAULTENA);
     }
 
+    // UsageFault is enabled here, but its priority is lower than IRQ 5's.
+    // A denied VFP operation inside IRQ 5 must still escalate to HardFault.
+    let priority_vector = (cpacr_priority_irq_handler as *const () as usize as u32) | 1;
+    let prior_irq_vector = unsafe { read_volatile(vector_table.add(EXCEPTION_VECTOR_INDEX)) };
+    let prior_shpr1 = unsafe { read_volatile(SCB_SHPR1) };
+    let prior_shcsr = unsafe { read_volatile(SCB_SHCSR) };
+    let priority_irq_record = core::ptr::addr_of_mut!(CPACR_PRIORITY_IRQ_RECORD).cast::<u32>();
+    let cpacr_fault_record = core::ptr::addr_of_mut!(CPACR_FAULT_RECORD).cast::<u32>();
+    unsafe {
+        write_volatile(NVIC_ICER0, EXCEPTION_IRQ_BIT);
+        write_volatile(NVIC_ICPR0, EXCEPTION_IRQ_BIT);
+        write_volatile(vector_table.add(EXCEPTION_VECTOR_INDEX), priority_vector);
+        for index in 0..2 {
+            write_volatile(priority_irq_record.add(index), 0);
+        }
+        for index in 0..5 {
+            write_volatile(cpacr_fault_record.add(index), 0);
+        }
+        // SHPR1's UsageFault priority byte is bits 16..23. 0xF0 cannot
+        // preempt IRQ 5 at priority 0x80.
+        write_volatile(SCB_SHPR1, (prior_shpr1 & !0x00FF_0000) | 0x00F0_0000);
+        write_volatile(SCB_CFSR, CFSR_UFSR_NOCP);
+        write_volatile(SCB_HFSR, HFSR_FORCED);
+        write_volatile(SCB_CPACR, 0);
+        asm!("dsb", "isb", options(nostack, preserves_flags));
+        write_volatile(NVIC_ISER0, EXCEPTION_IRQ_BIT);
+        write_volatile(NVIC_ISPR0, EXCEPTION_IRQ_BIT);
+    }
+    let priority_irq_ipsr = unsafe { read_volatile(priority_irq_record) };
+    let priority_irq_started = unsafe { read_volatile(priority_irq_record.add(1)) } == 1;
+    let priority_fault_pc = unsafe { read_volatile(cpacr_fault_record) };
+    let priority_fault_cfsr = unsafe { read_volatile(cpacr_fault_record.add(1)) };
+    let priority_fault_ipsr = unsafe { read_volatile(cpacr_fault_record.add(2)) };
+    let priority_fault_hfsr = unsafe { read_volatile(cpacr_fault_record.add(4)) };
+    let priority_fault_shcsr = unsafe { read_volatile(SCB_SHCSR) };
+    let priority_irq_active_after = unsafe { read_volatile(NVIC_IABR0) } & EXCEPTION_IRQ_BIT;
+    let priority_irq_pending_after = unsafe { read_volatile(NVIC_ISPR0) } & EXCEPTION_IRQ_BIT;
+    let priority_escalated_ok = priority_irq_started
+        && priority_irq_ipsr == 16 + EXCEPTION_IRQ
+        && priority_fault_pc >= 0x0800_0000
+        && priority_fault_pc < 0x0810_0000
+        && priority_fault_cfsr & CFSR_UFSR_NOCP != 0
+        && priority_fault_ipsr == 3
+        && priority_fault_hfsr & HFSR_FORCED != 0
+        && priority_fault_shcsr & SHCSR_USGFAULTENA != 0
+        && priority_irq_active_after == 0
+        && priority_irq_pending_after == 0;
+    unsafe {
+        write_volatile(vector_table.add(EXCEPTION_VECTOR_INDEX), prior_irq_vector);
+        write_volatile(SCB_SHPR1, prior_shpr1);
+        write_volatile(NVIC_ICPR0, EXCEPTION_IRQ_BIT);
+        write_volatile(SCB_CFSR, CFSR_UFSR_NOCP);
+        write_volatile(SCB_HFSR, HFSR_FORCED);
+        write_volatile(SCB_CPACR, CPACR_PRIVILEGED_ONLY);
+        let shcsr = read_volatile(SCB_SHCSR);
+        write_volatile(
+            SCB_SHCSR,
+            if prior_shcsr & SHCSR_USGFAULTENA != 0 {
+                shcsr | SHCSR_USGFAULTENA
+            } else {
+                shcsr & !SHCSR_USGFAULTENA
+            },
+        );
+    }
+    send(b"cortex-m7 cpacr priority escalation=");
+    send(if priority_escalated_ok { b"1" } else { b"0" });
+    send(b" active_irq=");
+    send_hex32(priority_irq_ipsr);
+    send(b" ipsr=");
+    send_hex32(priority_fault_ipsr);
+    send(b" cfsr=");
+    send_hex32(priority_fault_cfsr & CFSR_UFSR_NOCP);
+    send(b" hfsr=");
+    send_hex32(priority_fault_hfsr & HFSR_FORCED);
+    send(b"\r\n");
+
     unsafe {
         let record = core::ptr::addr_of_mut!(CPACR_FAULT_RECORD).cast::<u32>();
         for index in 0..5 {
@@ -1765,6 +1867,7 @@ fn check_cortex_m7_exception_frame() -> bool {
         && privileged_denied_ok
         && reserved_denied_ok
         && nocp_escalated_ok
+        && priority_escalated_ok
         && handler_fp_ok
         && nocp_ok
         && full_access_ok
