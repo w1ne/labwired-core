@@ -6,11 +6,12 @@ cortex-m7 return=1 stack=1 vtor=1
 cortex-m7 psp exception=1 stack=1 msp=1 return=1 exc_return=FFFFFFFD
 cortex-m7 psp align exception=1 frame=1 stack=1 msp=1 return=1 xpsr=01000200 sp=2001EFE0
 cortex-m7 psp noalign exception=1 frame=1 stack=1 msp=1 return=1 ccr=1 xpsr=01000000 sp=2001EFE4
-cortex-m7 fp exception=1 frame=1 stack=1 return=1 regs=1 fpscr=1 fpcar=1 exc_return=FFFFFFE9 sp=2001FE00
+cortex-m7 fp exception=1 frame=1 stack=1 return=1 regs=1 fpscr=1 fpcar=1 exc_return=FFFFFFE9 sp=2001FDF8
 cortex-m7 fp lazy unused=1 lspact=00000001,00000001->00000000 untouched=1 regs=1
 cortex-m7 fp lazy used=1 lspact=00000001,00000000->00000000 saved=1 regs=1
 cortex-m7 fp lazy nested=1 lspact=00000001->00000001,00000000 saved=1 regs=1 irq=00000016 active=00000060 exc_return=FFFFFFF1
 cortex-m7 fp lazy nested-touch=1 lspact=00000001->00000000 saved=1 regs=1 active=00000060
+cortex-m7 cpacr privileged fp=1 nocp=00000000 result=000000A5
 cortex-m7 cpacr nocp fault=1 ipsr=00000006 cfsr=00080000 extended=1
 cortex-m7 cpacr unprivileged fp=1 nocp=00000000 result=0000005A
 cortex-m7 exception ok

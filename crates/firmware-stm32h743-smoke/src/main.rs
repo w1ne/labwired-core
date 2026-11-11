@@ -407,6 +407,25 @@ unsafe fn attempt_unprivileged_fp() {
     );
 }
 
+/// Verify that privileged-only CP10/CP11 access permits an actual FP
+/// round-trip while Thread mode remains privileged. The integer result
+/// proves both VFP instructions retired.
+#[cfg(feature = "stm32h743-exception-frame")]
+#[inline(never)]
+unsafe fn privileged_only_fp_roundtrip() -> u32 {
+    let result: u32;
+    asm!(
+        "movs r0, #0xa5",
+        "vmov s31, r0",
+        "movs r0, #0",
+        "vmov r0, s31",
+        out("r0") result,
+        out("s31") _,
+        options(nostack)
+    );
+    result
+}
+
 /// Switch Thread mode to unprivileged and verify that full CP10/CP11 access
 /// permits a VFP register round trip. The integer result proves both VFP
 /// instructions retired instead of being skipped by the UsageFault handler.
@@ -1438,6 +1457,25 @@ fn check_cortex_m7_exception_frame() -> bool {
     send_hex32(nested_touch_active);
     send(b"\r\n");
 
+    // Privileged-only CP10/CP11 access must still permit FP in privileged
+    // Thread mode. Verify a real register round-trip before testing the same
+    // CPACR setting from unprivileged Thread mode below.
+    unsafe {
+        write_volatile(SCB_CPACR, CPACR_PRIVILEGED_ONLY);
+        write_volatile(SCB_CFSR, CFSR_UFSR_NOCP);
+        asm!("dsb", "isb", options(nostack, preserves_flags));
+    }
+    let privileged_fp_roundtrip = unsafe { privileged_only_fp_roundtrip() };
+    let privileged_nocp = unsafe { read_volatile(SCB_CFSR) } & CFSR_UFSR_NOCP;
+    let privileged_fp_ok = privileged_fp_roundtrip == 0xA5 && privileged_nocp == 0;
+    send(b"cortex-m7 cpacr privileged fp=");
+    send(if privileged_fp_ok { b"1" } else { b"0" });
+    send(b" nocp=");
+    send_hex32(privileged_nocp);
+    send(b" result=");
+    send_hex32(privileged_fp_roundtrip);
+    send(b"\r\n");
+
     // CPACR privileged-only must fault a real VFP instruction from
     // unprivileged Thread mode, set CFSR.NOCP, and enter UsageFault. The
     // handler records the stacked frame and skips the denied instruction so
@@ -1499,7 +1537,7 @@ fn check_cortex_m7_exception_frame() -> bool {
     send(b" result=");
     send_hex32(fp_roundtrip);
     send(b"\r\n");
-    ok && nocp_ok && full_access_ok
+    ok && privileged_fp_ok && nocp_ok && full_access_ok
 }
 
 #[cfg(feature = "nucleo-h753zi-rx")]
