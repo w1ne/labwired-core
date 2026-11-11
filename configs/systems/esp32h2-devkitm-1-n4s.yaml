@@ -1,0 +1,8 @@
+# Espressif ESP32-H2-DevKitM-1-N4S.
+# Focused profile: captured UART0 console stream and GPIO10 direct output.
+# GPIO10 is one of the available pins broken out to the board headers.
+# UART-to-bridge pin routing remains outside this profile.
+name: "esp32h2-devkitm-1-n4s"
+chip: "../chips/esp32h2.yaml"
+cpu_hz: 96_000_000
+debug_uart: "uart0"

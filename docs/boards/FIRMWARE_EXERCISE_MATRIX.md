@@ -223,13 +223,18 @@ _ESP32 is demand rank #1 (38% survey use). The ESP32-C5-DevKitC-1-N8R8 profile l
 
 ### `esp32c61`
 
-_ESP32 is demand rank #1 (38% survey use). The ESP32-C61-DevKitC-1-N8R2 UART/GPIO smoke boots an RV32IMC image on the C61 profile, gates UART0 through PCR, emits a UART marker, and observes eight GPIO4 output-latch edges on header J1 pin 3. The BME280 smoke exercises I2C0 through the C61 PCR clock gate and GPIO6/GPIO22 matrix route, reads sensor registers, and emits a UART marker. The C61 GPIO adapter claims direct GPIO0..25 output plus I2C0 routing. These are simulator results, not package-pin voltage or silicon evidence._
+_ESP32 is demand rank #1 (38% survey use). The ESP32-C61-DevKitC-1-N8R2 UART/GPIO smoke boots an RV32IMC image on the C61 profile, gates UART0 through PCR, emits a UART marker, and observes eight GPIO4 output-latch edges on header J1 pin 3. The BME280 smoke exercises I2C0 through the C61 PCR clock gate and GPIO6/GPIO22 matrix route, reads sensor registers, and emits a UART marker. These are simulator results, not package-pin voltage or silicon evidence._
 
-**Functional firmware exercises**:
-- ESP32-C61-DevKitC-1-N8R2: UART0 marker plus GPIO4 direct-output edges — `firmware-esp32c61-smoke` · `examples/esp32c61-devkitc-1-n8r2/evidence/` (nightly CI)
-- ESP32-C61-DevKitC-1-N8R2 + BME280: I2C0 ID/raw-temperature register reads on GPIO6/22 plus UART0 marker — `firmware-esp32c61-bme280-smoke` · `examples/esp32c61-devkitc-1-n8r2-bme280/evidence/` (nightly CI)
+**Functional firmware exercises** (including decoded device/protocol reads):
+- ESP32-C61-DevKitC-1-N8R2: UART0 marker plus GPIO4 direct-output edges — `firmware-esp32c61-smoke` · examples/esp32c61-devkitc-1-n8r2/evidence/ (nightly CI)
+- ESP32-C61-DevKitC-1-N8R2 + BME280: I2C0 ID/raw-temperature register reads on GPIO6/22 plus UART0 marker — `firmware-esp32c61-bme280-smoke` · examples/esp32c61-devkitc-1-n8r2-bme280/evidence/ (nightly CI)
 
-**Unmodelled on this focused profile**: GPIO input, GPIO interrupts, the rest of the GPIO peripheral matrix, GPIO26..29, IO_MUX electrical routing, electrical I2C timing/pull-ups, real BME280 sampling and compensation, radios, native USB, PSRAM, and the RGB LED. No C61 peripheral windows beyond UART0/PCR/GPIO/I2C0/IO_MUX storage are declared.
+### `esp32h2`
+
+_ESP32 family demand rank #1 (38%); H2 itself has no separate survey rank. The ESP32-H2-DevKitM-1-N4S profile loads a bare-metal RV32IMAC image, captures its UART0 marker in the simulator console, and observes GPIO10 direct-output edges. It demonstrates a real boot and two modeled peripheral paths on an otherwise absent Thread/Zigbee-focused board. The physical UART-to-USB bridge route, radio, USB Serial/JTAG, flash boot/XIP, IO_MUX electrical routing, and the GPIO8 addressable RGB LED are outside this focused profile; evidence is simulator-derived, not silicon confirmation._
+
+**Functional firmware exercises** (including decoded device/protocol reads):
+- ESP32-H2-DevKitM-1-N4S: UART0 console marker and GPIO10 direct-output edges — `firmware-esp32h2-devkitm-1-smoke` · examples/esp32h2-devkitm-1-n4s/evidence/ (nightly CI)
 
 ### `esp32s3-zero`
 
@@ -482,6 +487,10 @@ _No tier-1 fixture. The local NUCLEO-G491RE + BME280 onboarding smoke boots bare
 
 **Functional firmware exercises** (including decoded device/protocol reads):
 - NUCLEO-G491RE I2C1 reads BME280 ID 0x60 and raw temperature 0x082DC0 over PB8/PB9; LD2 toggles only after both values pass — `firmware-nucleo-g491re-bme280-smoke` · examples/nucleo-g491re-bme280/VALIDATION.md (bme280-smoke) (nightly CI)
+
+### `stm32h533re`
+
+_No beyond-rubric firmware exercise or board smoke is recorded for this part._
 
 ### `stm32h735`
 

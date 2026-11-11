@@ -144,6 +144,10 @@ pub const MODEL_TYPES: &[&str] = &[
     "esp32c5_i2c",
     // ESP32-C5 HP UART register head and FIFO model.
     "esp32c5_uart",
+    // ESP32-H2 has a C6-compatible UART register map at its own 96 MHz core
+    // rate, plus the H2 direct-GPIO subset (GPIO output signal 128).
+    "esp32h2_uart",
+    "esp32h2_gpio",
     // C6-only behavioral blocks: PCR (clock/reset, full SVD register map) and
     // GDMA (3 channels, C6 register layout). The fuzzy `contains("dma")`
     // fallback would otherwise coerce `esp32c6_gdma` onto the STM32 DMA

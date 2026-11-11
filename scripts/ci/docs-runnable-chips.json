@@ -69,6 +69,10 @@
       "how": "needs-build",
       "why": "ESP32-C61 model and DevKitC-1 N8R2 smoke are source-tree additions in this branch; the installed LabWired CLI v0.25.0 predates this chip model."
     },
+    "esp32h2": {
+      "how": "needs-build",
+      "why": "ESP32-H2 model and DevKitM-1 N4S smoke are source-tree additions in this branch; the installed LabWired CLI predates the H2 UART/GPIO models."
+    },
     "nrf52840": {
       "how": "committed",
       "firmware": "tests/fixtures/tier1/nrf52840.elf",

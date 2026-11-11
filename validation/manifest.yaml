@@ -10386,6 +10386,24 @@ boards:
       # 2026-11-07: RMT is the shared C3 model at C6 source 49 (`esp32c6_rmt`).
       # SIM-DERIVED — no silicon ack implied.
       - crates/core/src/peripherals/esp32c3/rmt.rs
+  - id: esp32h2-devkitm-1
+    doc: docs/boards/esp32h2-devkitm-1.md
+    chip: configs/chips/esp32h2.yaml
+    tier: smoke-manual
+    note: "ESP32-H2-DevKitM-1-N4S narrow profile. A bare-metal RV32IMAC smoke captures UART0 bytes in the simulator console and toggles GPIO10 through the H2 direct-output subset. ESP32-family demand rank 1 is carried from the survey; H2 has no individual survey rank. The physical UART-to-USB bridge route, Thread/Zigbee, BLE, USB Serial/JTAG, flash boot/XIP, IO_MUX electrical routing, and the addressable RGB LED are not modeled. Simulator evidence only; no silicon capture or physical pin-voltage claim."
+    offline_tests: []
+    models:
+      - crates/core/src/cpu/riscv.rs
+      - crates/core/src/decoder/riscv.rs
+      - crates/core/src/peripherals/esp_uart.rs
+      - crates/core/src/peripherals/esp32h2/factory.rs
+      - crates/core/src/peripherals/esp32h2/gpio.rs
+      - crates/core/src/peripherals/esp32h2/uart.rs
+      - crates/core/src/peripherals/generic_factory.rs
+      - crates/core/src/peripherals/mod.rs
+      - crates/core/src/bus/from_config.rs
+      - configs/chips/esp32h2.yaml
+      - configs/systems/esp32h2-devkitm-1-n4s.yaml
   - id: litex-vexriscv
     # 2026-10-19: first RISC-V soft-core SoC in the engine (LiteX VexRiscv,
     # RV32IM). SIM-DERIVED — no silicon capture and no executing-fidelity

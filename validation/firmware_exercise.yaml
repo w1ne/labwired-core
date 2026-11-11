@@ -270,6 +270,34 @@ chips:
       - {p: io_mux, ev: "configs/chips/esp32c5.yaml (declarative; configs/peripherals/esp32c6/io_mux.yaml)", note: "CLOSABLE: function-select writes are stored but pad routing is not electrically enforced; UART0 console output and GPIO model edges do not prove package-pin voltage."}
       - {p: pcr, ev: "ESP32-C5 PCR clock/reset window is outside the focused descriptor", note: "Smoke does not enforce C5 PCR clock/reset gating; UART bytes and I2C transactions reach modeled controllers independently of PCR state."}
 
+  - id: esp32c61
+    arch: riscv32imc
+    headline: "ESP32 is demand rank #1 (38% survey use). The ESP32-C61-DevKitC-1-N8R2 UART/GPIO smoke boots an RV32IMC image on the C61 profile, gates UART0 through PCR, emits a UART marker, and observes eight GPIO4 output-latch edges on header J1 pin 3. The BME280 smoke exercises I2C0 through the C61 PCR clock gate and GPIO6/GPIO22 matrix route, reads sensor registers, and emits a UART marker. These are simulator results, not package-pin voltage or silicon evidence."
+    functional:
+      - what: "ESP32-C61-DevKitC-1-N8R2: UART0 marker plus GPIO4 direct-output edges"
+        fw: firmware-esp32c61-smoke
+        ev: "examples/esp32c61-devkitc-1-n8r2/evidence/"
+        gate: nightly
+      - what: "ESP32-C61-DevKitC-1-N8R2 + BME280: I2C0 ID/raw-temperature register reads on GPIO6/22 plus UART0 marker"
+        fw: firmware-esp32c61-bme280-smoke
+        ev: "examples/esp32c61-devkitc-1-n8r2-bme280/evidence/"
+        gate: nightly
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: esp32h2
+    arch: riscv32imac
+    headline: "ESP32 family demand rank #1 (38%); H2 itself has no separate survey rank. The ESP32-H2-DevKitM-1-N4S profile loads a bare-metal RV32IMAC image, captures its UART0 marker in the simulator console, and observes GPIO10 direct-output edges. It demonstrates a real boot and two modeled peripheral paths on an otherwise absent Thread/Zigbee-focused board. The physical UART-to-USB bridge route, radio, USB Serial/JTAG, flash boot/XIP, IO_MUX electrical routing, and the GPIO8 addressable RGB LED are outside this focused profile; evidence is simulator-derived, not silicon confirmation."
+    functional:
+      - what: "ESP32-H2-DevKitM-1-N4S: UART0 console marker and GPIO10 direct-output edges"
+        fw: firmware-esp32h2-devkitm-1-smoke
+        ev: "examples/esp32h2-devkitm-1-n4s/evidence/"
+        gate: nightly
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
   - id: esp32s3-zero
     arch: xtensa-lx7
     headline: "Board variant of the esp32s3 die: same configure_xtensa_esp32s3 wiring and the same committed tier-1 ELF, which non-ignored CLI/workspace tests boot under this chip's name and assert through `TIER1 ... PASS` (SYSTIMER runs the clock check; USB-Serial/JTAG is the console of the TMP102 e2e, so neither is a gap). The yaml's IRAM/ROM-thunk/XIP windows are memory-map declarations, not per-chip models, and its eFuse/RTC_CNTL stubs are the shared family stubs listed on the esp32s3 entry. `spi_mem_flash`/`extmem` stay unit-only here too: mask-ROM bring-up reads are not firmware exercise."
@@ -673,6 +701,14 @@ chips:
         fw: firmware-nucleo-g491re-bme280-smoke
         ev: "examples/nucleo-g491re-bme280/VALIDATION.md (bme280-smoke)"
         gate: nightly
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: stm32h533re
+    arch: cortex-m33
+    headline: "No beyond-rubric firmware exercise or board smoke is recorded for this part."
+    functional: []
     advanced_unit_only: []
     advanced_dead: []
     shim: []
