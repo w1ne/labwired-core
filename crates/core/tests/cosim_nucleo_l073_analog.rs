@@ -183,6 +183,45 @@ fn code12(volts: f64) -> u32 {
     millivolts * 4095 / 3300
 }
 
+/// Independent level-1 NMOS body-effect load-line reference. With the source
+/// grounded, `bulk_v` is VBS; reverse bias raises threshold through GAMMA/PHI.
+fn mosfet_body_effect_drain_voltage(gate_v: f64, bulk_v: f64) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const LOAD_OHMS: f64 = 1_000.0;
+    const VTO: f64 = 1.0;
+    const KP_A_PER_V2: f64 = 20e-6;
+    const W_M: f64 = 100e-6;
+    const L_M: f64 = 10e-6;
+    const LAMBDA_PER_V: f64 = 0.02;
+    const GAMMA: f64 = 0.4;
+    const PHI: f64 = 0.7;
+
+    let threshold = VTO + GAMMA * ((PHI - bulk_v).sqrt() - PHI.sqrt());
+    let overdrive = gate_v - threshold;
+    if overdrive <= 0.0 {
+        return SUPPLY_V;
+    }
+    let beta = KP_A_PER_V2 * W_M / L_M;
+    let drain_current = |vds: f64| {
+        if vds < overdrive {
+            beta * (1.0 + LAMBDA_PER_V * vds) * vds * (overdrive - 0.5 * vds)
+        } else {
+            0.5 * beta * (1.0 + LAMBDA_PER_V * vds) * overdrive * overdrive
+        }
+    };
+    let residual = |vds: f64| SUPPLY_V - vds - LOAD_OHMS * drain_current(vds);
+    let (mut low, mut high) = (0.0, SUPPLY_V);
+    for _ in 0..100 {
+        let mid = 0.5 * (low + high);
+        if residual(mid) > 0.0 {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    0.5 * (low + high)
+}
+
 /// L0 HAL bring-up: clock ADC1, calibrate, enable and wait for ADRDY.
 fn adc_power_up(bus: &mut SystemBus) {
     let apb2enr = bus.read_u32(RCC_APB2ENR).expect("read APB2ENR");
@@ -402,6 +441,116 @@ fn nucleo_l073rz_ntc_and_diode_netlists_convert_through_chselr_adc() {
         bus.read_u32(ADC_ISR).unwrap() & ISR_EOC,
         0,
         "no conversion after ADDIS"
+    );
+}
+
+#[test]
+fn nucleo_l073rz_mosfet_body_effect_reaches_pa2_pa3_adc1_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/nucleo-l073rz.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-L073RZ profile");
+    assert_eq!(profile.name, "nucleo-l073rz");
+
+    let analog = SystemManifest::from_file(root("examples/nucleo-l073rz/analog-adc-system.yaml"))
+        .expect("load the generic NTC and Shockley diode netlists");
+    let mosfet = SystemManifest::from_file(root(
+        "examples/nucleo-l073rz/analog-mosfet-body-effect-adc-system.yaml",
+    ))
+    .expect("load the matched generic NMOS body-bias netlists");
+    profile.cosim_models = analog.cosim_models;
+    profile.cosim_models.extend(mosfet.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32L073 descriptor");
+    for (pad, channel) in [("PA0", 0), ("PA2", 2), ("PA3", 3), ("PC5", 15)] {
+        assert_eq!(
+            chip.analog_pins[pad].channel, channel,
+            "{pad} must resolve to ADC1_IN{channel}"
+        );
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-L073RZ bus");
+    adc_power_up(&mut bus);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries NTC, diode, and matched NMOS branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "all four devices must bind through their distinct board ADC routes"
+    );
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set the unrelated Beta NTC temperature");
+    let expected_ntc_v = 1.65;
+    let expected_diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    let mut body_samples = Vec::new();
+    for bulk_v in [0.0_f64, -0.5, -1.0, -1.5] {
+        session
+            .set_signal_number("ui.mosfet_body.bulk_v", bulk_v)
+            .expect("set generic NMOS reverse body bias");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and matched NMOS netlists");
+        assert_eq!(
+            steps.len(),
+            3,
+            "all three analog models solve at each boundary"
+        );
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let reference_v = signal_voltage(&session, "board.analog.pa2_volts");
+        let body_v = signal_voltage(&session, "board.analog.pa3_volts");
+        let expected_reference_v = mosfet_body_effect_drain_voltage(2.5, 0.0);
+        let expected_body_v = mosfet_body_effect_drain_voltage(2.5, bulk_v);
+        assert!(
+            (reference_v - expected_reference_v).abs() < 5e-5,
+            "zero-body-bias NMOS should settle at {expected_reference_v} V, got {reference_v} V"
+        );
+        assert!(
+            (body_v - expected_body_v).abs() < 5e-5,
+            "NMOS at VBS={bulk_v} V should settle at {expected_body_v} V, got {body_v} V"
+        );
+        if bulk_v == 0.0 {
+            assert!(
+                (body_v - reference_v).abs() < 1e-9,
+                "matched devices agree at zero body bias"
+            );
+        }
+
+        for (channel, volts) in [
+            (0, expected_ntc_v),
+            (2, reference_v),
+            (3, body_v),
+            (15, expected_diode_v),
+        ] {
+            assert_eq!(
+                adc_convert(&mut bus, 1 << channel, 0),
+                code12(volts),
+                "firmware-visible ADC1_IN{channel} conversion follows the solved voltage"
+            );
+        }
+        assert_eq!(
+            adc_convert(&mut bus, 1 << 4, 0),
+            UNDRIVEN_CODE,
+            "the neighboring ADC1_IN4 channel remains undriven"
+        );
+        assert!(
+            (signal_voltage(&session, "board.analog.pa0_volts") - expected_ntc_v).abs() < 1e-9,
+            "the unrelated NTC stays isolated on PA0/ADC1_IN0"
+        );
+        assert!(
+            (signal_voltage(&session, "board.analog.pc5_volts") - expected_diode_v).abs() < 2e-5,
+            "the unrelated Shockley diode stays isolated on PC5/ADC1_IN15"
+        );
+        body_samples.push((bulk_v, body_v));
+    }
+
+    assert!(
+        body_samples.windows(2).all(|pair| pair[1].1 > pair[0].1),
+        "reverse body bias raises Vth and the loaded drain voltage: {body_samples:?}"
     );
 }
 
