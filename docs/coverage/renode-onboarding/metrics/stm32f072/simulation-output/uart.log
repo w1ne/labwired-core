@@ -27,11 +27,12 @@ i2c1 tmp102=0x00001900 oar=1 data=1 rx_pend=1 nack=1 nack_pend=1 stop=1 released
 spi1 shared a=0x01901600 b=0x03201600 after_cut=0x01901600 a=1 b=1 restart=1 ok
 crc word=0xDF8A8A2B seed=1 std=1 init=1 ok
 adc in1=0x000007FF ts=0x00000709 cal=1 ready=1 seq=1 eos=1 pend=1 released=1 dma=1 ovr=1 awd=1 off=1 ok
-systick pause-resume window=1 frozen=1 resumed=1 paused=0x000006EE frozen_at=0x000006EE resumed_at=0x000006AD ok
-systick external pause-resume reference=1 window=1 frozen=1 resumed=1 paused=0x00000BFF frozen_at=0x00000BFF resumed_at=0x00000BEF ok
+systick pause-resume window=1 frozen=1 resumed=1 paused=0x000006ED frozen_at=0x000006ED resumed_at=0x000006AC ok
+systick external pause-resume reference=1 window=1 frozen=1 resumed=1 paused=0x00000BFF frozen_at=0x00000BFF resumed_at=0x00000BEE ok
 systick external periodic reference=1 entries=0x00000003 active=1 countflag=1 pending=0 ok
 systick external pending-coalesce reference=1 wraps=0x00000003 pending_each=1 masked=1 pending_after_disable=1 entries=0x00000001 active=1 cleared=1 ok
 systick reload-update window=1 preserved=1 first_wrap=1 next_reload=1 old=0x00000013 current=0x0000000B next=0x00000003 ok
 systick calib=0x40001770 tenms=0x00001770 skew=1 noref=0 write_ignored=1 ok
-summary 0x1FFFFFFF
+systick cvr-clear reference=1 wrapped=1 pending_before=1 countflag_clear=1 pending_preserved=1 masked=1 entries=0x00000001 handler_countflag_clear=1 active=1 returned=1 ok
+summary 0x3FFFFFFF
 DONE

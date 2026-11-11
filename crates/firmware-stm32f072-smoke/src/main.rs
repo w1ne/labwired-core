@@ -1367,6 +1367,127 @@ fn check_systick_external_pending_coalesces() -> bool {
     ok
 }
 
+/// Clearing SYST_CVR clears COUNTFLAG but leaves an already-pending SysTick
+/// exception latched until exception entry or an explicit ICSR clear.
+fn check_systick_cvr_clear_preserves_pending() -> bool {
+    const COUNTFLAG: u32 = 1 << 16;
+    const RELOAD: u32 = 63;
+
+    let prior_primask: u32;
+    unsafe {
+        asm!(
+            "mrs {primask}, PRIMASK",
+            "cpsid i",
+            primask = out(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+        wr(SYSTICK_CSR, 0);
+        wr(SCB_ICSR, ICSR_PENDSTCLR);
+        wr(SYSTICK_RVR, RELOAD);
+        wr(SYSTICK_CVR, 0);
+        write_volatile(core::ptr::addr_of_mut!(SYSTICK_EXTERNAL_ENTRIES), 0);
+        write_volatile(core::ptr::addr_of_mut!(SYSTICK_EXTERNAL_ACTIVE_MASK), 0);
+        write_volatile(core::ptr::addr_of_mut!(SYSTICK_EXTERNAL_COUNTFLAG_MASK), 0);
+        wr(SYSTICK_CSR, 0x3); // ENABLE | TICKINT; HCLK/8 reference source.
+    }
+    let reference_selected = rd(SYSTICK_CSR) & 0x5 == 0x1;
+
+    let mut saw_wrap = false;
+    for _ in 0..20_000 {
+        // Observe the pending bit, leaving COUNTFLAG untouched for the CVR
+        // write below to clear.
+        if rd(SCB_ICSR) & ICSR_PENDSTSET != 0 {
+            saw_wrap = true;
+            break;
+        }
+    }
+    let pending_before_clear = rd(SCB_ICSR) & ICSR_PENDSTSET != 0;
+
+    // Park at zero so the free-running reference cannot generate another
+    // COUNTFLAG between this clear and the observations below.
+    wr(SYSTICK_RVR, 0);
+    wr(SYSTICK_CVR, 0xA55A_3CC3);
+    let countflag_after_clear = rd(SYSTICK_CSR) & COUNTFLAG != 0;
+    let pending_after_clear = rd(SCB_ICSR) & ICSR_PENDSTSET != 0;
+    let current_cleared = rd(SYSTICK_CVR) == 0;
+    wr(SYSTICK_CSR, 0);
+    let pending_after_disable = rd(SCB_ICSR) & ICSR_PENDSTSET != 0;
+    let handler_stayed_masked =
+        unsafe { read_volatile(core::ptr::addr_of!(SYSTICK_EXTERNAL_ENTRIES)) == 0 };
+
+    unsafe {
+        asm!(
+            "msr PRIMASK, {primask}",
+            "dsb",
+            "isb",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+    for _ in 0..100_000 {
+        if unsafe { read_volatile(core::ptr::addr_of!(SYSTICK_EXTERNAL_ENTRIES)) } != 0 {
+            break;
+        }
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+
+    let entries = unsafe { read_volatile(core::ptr::addr_of!(SYSTICK_EXTERNAL_ENTRIES)) };
+    let active_mask = unsafe { read_volatile(core::ptr::addr_of!(SYSTICK_EXTERNAL_ACTIVE_MASK)) };
+    let countflag_mask =
+        unsafe { read_volatile(core::ptr::addr_of!(SYSTICK_EXTERNAL_COUNTFLAG_MASK)) };
+    let pending_after_return = rd(SCB_ICSR) & ICSR_PENDSTSET != 0;
+    let thread_ipsr: u32;
+    unsafe {
+        asm!(
+            "mrs {ipsr}, IPSR",
+            ipsr = out(reg) thread_ipsr,
+            options(nomem, nostack, preserves_flags),
+        );
+        asm!("cpsid i", options(nostack, preserves_flags));
+        wr(SCB_ICSR, ICSR_PENDSTCLR);
+        asm!(
+            "msr PRIMASK, {primask}",
+            "dsb",
+            "isb",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+
+    let one_handler_without_countflag = entries == 1 && active_mask == 1 && countflag_mask == 0;
+    let ok = prior_primask == 0
+        && reference_selected
+        && saw_wrap
+        && pending_before_clear
+        && !countflag_after_clear
+        && pending_after_clear
+        && current_cleared
+        && pending_after_disable
+        && handler_stayed_masked
+        && one_handler_without_countflag
+        && !pending_after_return
+        && thread_ipsr == 0;
+
+    puts("systick cvr-clear ");
+    flag("reference", reference_selected);
+    flag("wrapped", saw_wrap);
+    flag("pending_before", pending_before_clear);
+    flag("countflag_clear", !countflag_after_clear);
+    flag(
+        "pending_preserved",
+        pending_after_clear && pending_after_disable,
+    );
+    flag("masked", handler_stayed_masked);
+    puts("entries=");
+    hex(entries);
+    puts(" ");
+    flag("handler_countflag_clear", countflag_mask == 0);
+    flag("active", active_mask == 1);
+    flag("returned", !pending_after_return && thread_ipsr == 0);
+    verdict(ok);
+    ok
+}
+
 #[exception]
 fn SysTick() {
     let entry = unsafe { read_volatile(core::ptr::addr_of!(SYSTICK_EXTERNAL_ENTRIES)) };
@@ -1441,6 +1562,7 @@ fn main() -> ! {
     mark(23, systick_external_periodic && systick_external_coalesces);
     mark(28, check_systick_reload_update());
     mark(27, check_systick_calibration());
+    mark(29, check_systick_cvr_clear_preserves_pending());
     let summary = summary | 0x0700_0000;
     wr(SUMMARY, summary);
     puts("summary ");
