@@ -92,6 +92,58 @@ fn mosfet_thermometer_voltage(bias_v: f64, temperature_c: f64) -> f64 {
     0.5 * (low + high)
 }
 
+/// Independent forward-active Gummel–Poon collector load line, including the
+/// base resistor and optional forward Early effect.
+fn bjt_collector_voltage(base_drive_v: f64, forward_early_voltage: Option<f64>) -> f64 {
+    const SUPPLY_V: f64 = 5.0;
+    const COLLECTOR_OHMS: f64 = 1_000.0;
+    const BASE_OHMS: f64 = 10_000.0;
+    const IS_A: f64 = 1e-16;
+    const BF: f64 = 80.0;
+    const BR: f64 = 4.0;
+    const VAR: f64 = 75.0;
+    const VT: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+
+    let currents = |vbe: f64, collector_v: f64| {
+        let vbc = vbe - collector_v;
+        let forward = (vbe / VT).exp();
+        let reverse = (vbc / VT).exp();
+        let base_width = 1.0 - forward_early_voltage.map_or(0.0, |vaf| vbc / vaf) - vbe / VAR;
+        let transport = IS_A * (forward - reverse) * base_width;
+        let base_collector = (IS_A / BR) * (reverse - 1.0);
+        let base_emitter = (IS_A / BF) * (forward - 1.0);
+        (transport - base_collector, base_emitter + base_collector)
+    };
+
+    let collector_for_vbe = |vbe: f64| {
+        let (mut low, mut high) = (0.0, SUPPLY_V);
+        for _ in 0..100 {
+            let collector_v = 0.5 * (low + high);
+            let (collector_current, _) = currents(vbe, collector_v);
+            let residual = (SUPPLY_V - collector_v) / COLLECTOR_OHMS - collector_current;
+            if residual > 0.0 {
+                low = collector_v;
+            } else {
+                high = collector_v;
+            }
+        }
+        0.5 * (low + high)
+    };
+
+    let (mut low, mut high) = (0.0, base_drive_v);
+    for _ in 0..100 {
+        let vbe = 0.5 * (low + high);
+        let collector_v = collector_for_vbe(vbe);
+        let (_, base_current) = currents(vbe, collector_v);
+        if (base_drive_v - vbe) / BASE_OHMS > base_current {
+            low = vbe;
+        } else {
+            high = vbe;
+        }
+    }
+    collector_for_vbe(0.5 * (low + high))
+}
+
 fn signal_number(session: &CosimSession, path: &str) -> f64 {
     match session.signals().get(path) {
         Some(CosimSignalValue::F64(value)) => *value,
@@ -383,4 +435,157 @@ fn uno_r4_minima_heated_mosfet_thermometer_reaches_a2_a3_adc14_alongside_ntc_and
             );
         }
     }
+}
+
+#[test]
+fn uno_r4_minima_bjt_early_effect_reaches_a2_a3_adc14_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/arduino-uno-r4-minima.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load Uno R4 profile");
+    let analog = SystemManifest::from_file(root(
+        "examples/arduino-uno-r4-minima/analog-ntc-diode-system.yaml",
+    ))
+    .expect("load generic NTC and diode netlists");
+    let bjt = SystemManifest::from_file(root(
+        "examples/arduino-uno-r4-minima/analog-bjt-early-effect.yaml",
+    ))
+    .expect("load matched generic Gummel–Poon branches");
+    profile.cosim_models = analog.cosim_models;
+    profile.cosim_models.extend(bjt.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load RA4M1 descriptor");
+    for (pad, channel) in [("P014", 9), ("P000", 0), ("P001", 1), ("P002", 2)] {
+        assert_eq!(chip.analog_pins[pad].peripheral, "adc0");
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build Uno R4 bus");
+    let (cpu, _) = configure_cortex_m(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    const IDLE: u32 = 0x2000_2000;
+    machine
+        .bus
+        .write_u16(u64::from(IDLE), 0xE7FE)
+        .expect("place a branch-to-self instruction in RAM");
+    machine.cpu.set_pc(IDLE);
+    machine.cpu.set_sp(0x2000_7F00);
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &machine.bus)
+        .expect("build analog co-simulation")
+        .expect("profile contains analog netlists");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "A0..A3 must resolve through descriptor-backed ADC14 analog pins"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold the unrelated NTC at nominal temperature");
+
+    let expected_ntc_v = 2.5;
+    let expected_diode_v = diode_load_line_voltage();
+    let mut early_samples = Vec::new();
+    let mut control_samples = Vec::new();
+    for base_drive_v in [0.0_f64, 0.7, 0.8, 0.9] {
+        session
+            .set_signal_number("ui.bjt_early.base_v", base_drive_v)
+            .expect("set common BJT base drive");
+
+        let mut reached_boundary = false;
+        for _ in 0..256 {
+            let advance = session
+                .advance(&mut machine, AdvanceRequest::single())
+                .expect("advance the board and analog models in lockstep");
+            assert!(
+                advance.new_routing_errors.is_empty(),
+                "unexpected route errors: {:?}",
+                advance.new_routing_errors
+            );
+            if advance.routed.len() == 4 {
+                reached_boundary = true;
+                break;
+            }
+        }
+        assert!(
+            reached_boundary,
+            "all four analog models reach their boundary"
+        );
+
+        let ntc_v = signal_number(&session, "board.analog.p014_volts");
+        let diode_v = signal_number(&session, "board.analog.p000_volts");
+        let early_v = signal_number(&session, "board.analog.p001_volts");
+        let control_v = signal_number(&session, "board.analog.p002_volts");
+        let expected_early_v = bjt_collector_voltage(base_drive_v, Some(50.0));
+        let expected_control_v = bjt_collector_voltage(base_drive_v, None);
+        assert!(
+            (ntc_v - expected_ntc_v).abs() < 1e-9,
+            "the unrelated nominal NTC remains at {expected_ntc_v} V, got {ntc_v} V"
+        );
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "the unrelated Shockley load line should be {expected_diode_v} V, got {diode_v} V"
+        );
+        assert!(
+            (early_v - expected_early_v).abs() < 5e-5,
+            "VAF=50 Gummel–Poon branch at {base_drive_v} V should be {expected_early_v} V, got {early_v} V"
+        );
+        assert!(
+            (control_v - expected_control_v).abs() < 5e-5,
+            "no-forward-Early branch at {base_drive_v} V should be {expected_control_v} V, got {control_v} V"
+        );
+        if base_drive_v >= 0.7 {
+            assert!(
+                early_v < control_v - 0.001,
+                "finite VAF increases collector current: {early_v} V vs {control_v} V"
+            );
+        }
+
+        for (adcer, full_scale) in [(0, 4095_u32), (3 << 1, 16383)] {
+            run_adc14_scan(
+                &mut machine,
+                &mut session,
+                adcer,
+                (1 << 0) | (1 << 1) | (1 << 2) | (1 << 9),
+            );
+            let code =
+                |volts: f64| (((volts * 1000.0 + 0.5).floor() as u32) * full_scale / 5000) as u16;
+            for (channel, volts) in [
+                ("AN000", diode_v),
+                ("AN001", early_v),
+                ("AN002", control_v),
+                ("AN009", ntc_v),
+            ] {
+                let offset = match channel {
+                    "AN000" => 0,
+                    "AN001" => 2,
+                    "AN002" => 4,
+                    "AN009" => 18,
+                    _ => unreachable!(),
+                };
+                assert_eq!(
+                    machine
+                        .bus
+                        .read_u16(ADDR0 + offset)
+                        .expect("read ADC14 result"),
+                    code(volts),
+                    "firmware-visible {channel} result must report its solved voltage"
+                );
+            }
+            if full_scale == 16383 && base_drive_v >= 0.7 {
+                assert!(
+                    code(early_v) < code(control_v),
+                    "14-bit ADC14 must resolve the finite-VAF collector shift at {base_drive_v} V base drive"
+                );
+            }
+        }
+        early_samples.push(early_v);
+        control_samples.push(control_v);
+    }
+    assert!(
+        early_samples[1] > early_samples[2] && early_samples[2] > early_samples[3],
+        "increasing base drive lowers the finite-VAF collector voltage: {early_samples:?}"
+    );
+    assert!(
+        control_samples[1] > control_samples[2] && control_samples[2] > control_samples[3],
+        "increasing base drive lowers the no-Early control voltage: {control_samples:?}"
+    );
 }
