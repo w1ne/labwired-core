@@ -65,6 +65,9 @@ const ICSR_PENDSTSET: u32 = 1 << 26;
 const ICSR_PENDSTCLR: u32 = 1 << 25;
 const SYSTICK_HANDLER_COUNT: *mut u32 = 0x2000_0100 as *mut u32;
 const SYSTICK_HANDLER_IPSR: *mut u32 = 0x2000_0104 as *mut u32;
+const SYSTICK_HANDLER_REPEND: *mut u32 = 0x2000_0108 as *mut u32;
+const SYSTICK_HANDLER_ICSR_FIRST: *mut u32 = 0x2000_010C as *mut u32;
+const SYSTICK_HANDLER_ICSR_SECOND: *mut u32 = 0x2000_0110 as *mut u32;
 
 const SPI1_BASE: u32 = 0x4001_3000;
 const SPI1_IRQ: u32 = 35;
@@ -234,6 +237,7 @@ fn main() -> ! {
     unsafe { smoke_systick_exception_state() };
     unsafe { smoke_systick_external_pause_resume() };
     unsafe { smoke_systick_handler_delivery() };
+    unsafe { smoke_systick_icsr_repend() };
     smoke_usart2_txe_irq();
     smoke_usart2_rx_enable_gate();
     smoke_spi1_irq_and_max31855();
@@ -719,6 +723,7 @@ unsafe fn smoke_systick_handler_delivery() -> bool {
     write_volatile(SCB_VTOR as *mut u32, 0x0800_0000);
     write_volatile(SYSTICK_HANDLER_COUNT, 0);
     write_volatile(SYSTICK_HANDLER_IPSR, 0);
+    write_volatile(SYSTICK_HANDLER_REPEND, 0);
     write_volatile(SYSTICK_RVR as *mut u32, 255);
     write_volatile(SYSTICK_CVR as *mut u32, 0);
     write_volatile(SYSTICK_CSR as *mut u32, 0x7); // ENABLE | TICKINT | CLKSOURCE
@@ -765,11 +770,133 @@ unsafe fn smoke_systick_handler_delivery() -> bool {
     ok
 }
 
+/// Verify ICSR.PENDSTSET/PENDSTCLR and that a software pend written from an
+/// active SysTick handler is delivered once the first handler returns.
+unsafe fn smoke_systick_icsr_repend() -> bool {
+    let source_vtor = read_volatile(SCB_VTOR as *const u32);
+    let prior_primask: u32;
+    core::arch::asm!(
+        "mrs {primask}, PRIMASK",
+        "cpsid i",
+        primask = out(reg) prior_primask,
+        options(nomem, nostack, preserves_flags),
+    );
+
+    write_volatile(SYSTICK_CSR as *mut u32, 0);
+    write_volatile(SCB_ICSR as *mut u32, ICSR_PENDSTCLR);
+    write_volatile(SCB_VTOR as *mut u32, 0x0800_0000);
+    write_volatile(SYSTICK_HANDLER_COUNT, 0);
+    write_volatile(SYSTICK_HANDLER_IPSR, 0);
+    write_volatile(SYSTICK_HANDLER_REPEND, 1);
+    write_volatile(SYSTICK_HANDLER_ICSR_FIRST, 0);
+    write_volatile(SYSTICK_HANDLER_ICSR_SECOND, 0);
+
+    // A pending SysTick is a single latched request. Repeated set writes
+    // coalesce, and PENDSTCLR cancels it before exception entry.
+    write_volatile(SCB_ICSR as *mut u32, ICSR_PENDSTSET);
+    let first_set_readback = read_volatile(SCB_ICSR as *const u32) & ICSR_PENDSTSET != 0;
+    write_volatile(SCB_ICSR as *mut u32, ICSR_PENDSTSET);
+    let coalesced_readback = read_volatile(SCB_ICSR as *const u32) & ICSR_PENDSTSET != 0;
+    let no_handler_while_masked = read_volatile(SYSTICK_HANDLER_COUNT) == 0;
+    write_volatile(SCB_ICSR as *mut u32, ICSR_PENDSTCLR);
+    let clear_readback = read_volatile(SCB_ICSR as *const u32) & ICSR_PENDSTSET == 0;
+    for _ in 0..64 {
+        core::arch::asm!("nop", options(nomem, nostack, preserves_flags));
+    }
+    let canceled_before_delivery = read_volatile(SYSTICK_HANDLER_COUNT) == 0;
+
+    write_volatile(SCB_ICSR as *mut u32, ICSR_PENDSTSET);
+    let pending_before_unmask = read_volatile(SCB_ICSR as *const u32) & ICSR_PENDSTSET != 0;
+    core::arch::asm!(
+        "msr PRIMASK, {primask}",
+        "dsb",
+        "isb",
+        primask = in(reg) prior_primask,
+        options(nostack, preserves_flags),
+    );
+
+    for _ in 0..100_000 {
+        if read_volatile(SYSTICK_HANDLER_COUNT) >= 2 {
+            break;
+        }
+        core::arch::asm!("nop", options(nomem, nostack, preserves_flags));
+    }
+
+    let mask_again: u32;
+    core::arch::asm!(
+        "mrs {primask}, PRIMASK",
+        "cpsid i",
+        primask = out(reg) mask_again,
+        options(nomem, nostack, preserves_flags),
+    );
+    write_volatile(SYSTICK_CSR as *mut u32, 0);
+    write_volatile(SYSTICK_HANDLER_REPEND, 0);
+    write_volatile(SCB_VTOR as *mut u32, source_vtor);
+    let deliveries = read_volatile(SYSTICK_HANDLER_COUNT);
+    let pending_after_return = read_volatile(SCB_ICSR as *const u32) & ICSR_PENDSTSET == 0;
+    write_volatile(SCB_ICSR as *mut u32, ICSR_PENDSTCLR);
+    core::arch::asm!(
+        "msr PRIMASK, {primask}",
+        "dsb",
+        "isb",
+        primask = in(reg) mask_again,
+        options(nostack, preserves_flags),
+    );
+    for _ in 0..128 {
+        core::arch::asm!("nop", options(nomem, nostack, preserves_flags));
+    }
+
+    let stable_after_repend = read_volatile(SYSTICK_HANDLER_COUNT) == deliveries;
+    let first_icsr = read_volatile(SYSTICK_HANDLER_ICSR_FIRST);
+    let second_icsr = read_volatile(SYSTICK_HANDLER_ICSR_SECOND);
+    let thread_ipsr: u32;
+    core::arch::asm!(
+        "mrs {ipsr}, IPSR",
+        ipsr = out(reg) thread_ipsr,
+        options(nomem, nostack, preserves_flags),
+    );
+    let vector_restored = read_volatile(SCB_VTOR as *const u32) == source_vtor;
+    let ok = prior_primask == 0
+        && first_set_readback
+        && coalesced_readback
+        && no_handler_while_masked
+        && clear_readback
+        && canceled_before_delivery
+        && pending_before_unmask
+        && deliveries == 2
+        && read_volatile(SYSTICK_HANDLER_IPSR) == 15
+        && first_icsr & 0x1FF == 15
+        && second_icsr & 0x1FF == 15
+        && first_icsr & ICSR_PENDSTSET == 0
+        && second_icsr & ICSR_PENDSTSET == 0
+        && pending_after_return
+        && stable_after_repend
+        && thread_ipsr == 0
+        && source_vtor == 0x0800_0000
+        && vector_restored;
+
+    if ok {
+        putline(b"SYSTICK M3 ICSR SET=1 COALESCE=1 CLEAR=1 REPEND=1 ENTRIES=2 ACTIVE=15 ok");
+    } else {
+        putline(b"SYSTICK M3 ICSR REPEND CHECK FAILED");
+    }
+    ok
+}
+
 /// Cortex-M exception handler installed at vector-table slot 15 by minimal.ld.
 #[no_mangle]
 pub extern "C" fn SysTick_Handler() {
     unsafe {
         let count = read_volatile(SYSTICK_HANDLER_COUNT);
+        let icsr = read_volatile(SCB_ICSR as *const u32);
+        if count == 0 {
+            write_volatile(SYSTICK_HANDLER_ICSR_FIRST, icsr);
+            if read_volatile(SYSTICK_HANDLER_REPEND) != 0 {
+                write_volatile(SCB_ICSR as *mut u32, ICSR_PENDSTSET);
+            }
+        } else if count == 1 {
+            write_volatile(SYSTICK_HANDLER_ICSR_SECOND, icsr);
+        }
         let ipsr: u32;
         core::arch::asm!(
             "mrs {ipsr}, IPSR",
