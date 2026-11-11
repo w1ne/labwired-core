@@ -144,6 +144,12 @@ jobs:
             profile_dir: release
             script: examples/esp32c6-devkitc/uart-smoke.yaml
             system: examples/esp32c6-devkitc/system.yaml
+          # ESP32-S3-DevKitC-1 v1.1 / N16R8. Its exact board profile exposes
+          # the USB-to-UART bridge on UART0; the smoke intentionally does not
+          # claim the RGB LED, PSRAM, USB-OTG, radio, or buttons.
+          - id: esp32s3-devkitc-1-v11
+            script: examples/esp32s3-devkitc-1/io-smoke.yaml
+            system: configs/systems/esp32s3-devkitc-1-v11.yaml
           # nRF52833 / micro:bit v2 — nRF52-family UART smoke on its own board.
           # Same firmware as tests/fixtures/microbit-v2-smoke.elf, rebuilt here.
           - id: microbit-v2
