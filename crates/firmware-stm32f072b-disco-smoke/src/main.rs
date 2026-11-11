@@ -28,8 +28,11 @@
 //! return. It also pends NMI from that active IRQ while PRIMASK is set and
 //! checks NMI entry and return to the IRQ. The NMI handler queues a lower
 //! priority IRQ, which must remain pending through both NMI entries and the
-//! active IRQ before tail-chaining after that IRQ returns. Every check prints
-//! one line and sets one bit of the summary word at `SUMMARY`. AIRCR.PRIGROUP
+//! active IRQ before tail-chaining after that IRQ returns. The child checks
+//! that the handler frame is reused and the parent's live R0 marker survives,
+//! distinguishing direct chaining from a fresh exception after Thread mode
+//! resumes. Every check prints one line and sets one bit of the summary word
+//! at `SUMMARY`. AIRCR.PRIGROUP
 //! is also checked as reserved on this ARMv6-M core. SysTick checks cover
 //! exception 15, COUNTFLAG read-clear behavior, PRIMASK's pending-then-deliver
 //! behavior, SCB software pend/set/clear, and re-pending while its handler is
@@ -297,12 +300,18 @@ unsafe extern "C" fn smoke_exti0_1_handler() {
 
 /// Pend NMI from an active external interrupt with PRIMASK set. NMI must
 /// preempt; after its exception return the IRQ handler must resume masked.
+/// It then leaves a live R0 marker for the deferred IRQ 6 tail-chain check.
 #[unsafe(naked)]
 unsafe extern "C" fn smoke_irq_pend_nmi_handler() {
     core::arch::naked_asm!(
+        "mov r2, r0",
         "mrs r3, ipsr",
         "ldr r0, =0x20003040",
         "str r3, [r0, #0]",
+        "mrs r3, msp",
+        "ldr r0, =0x20003068",
+        "str r3, [r0, #40]",
+        "str r2, [r0, #56]",
         "cpsid i",
         "ldr r0, =0xe000ed04",
         "ldr r1, =0x80000000",
@@ -328,6 +337,7 @@ unsafe extern "C" fn smoke_irq_pend_nmi_handler() {
         "movs r3, #0x40",
         "ands r2, r3",
         "str r2, [r0, #8]",
+        "ldr r0, =0x54414C4D",
         "bx lr",
     );
 }
@@ -387,13 +397,20 @@ unsafe extern "C" fn smoke_nmi_handler() {
 }
 
 /// Record IRQ 6 after IRQ 5 returns. Its lower priority prevents preemption of
-/// IRQ 5 even after PRIMASK is cleared, but it must run before thread resumes.
+/// IRQ 5 even after PRIMASK is cleared, but it must tail-chain before Thread
+/// resumes and observe IRQ 5's live R0 marker and reused exception frame.
 #[unsafe(naked)]
 unsafe extern "C" fn smoke_irq6_deferred_handler() {
     core::arch::naked_asm!(
+        "mov r2, r0",
         "mrs r3, ipsr",
         "ldr r0, =0x2000307c",
         "str r3, [r0, #4]",
+        "mrs r3, msp",
+        "str r3, [r0, #24]",
+        "mov r3, lr",
+        "str r3, [r0, #28]",
+        "str r2, [r0, #32]",
         "ldr r3, =0xe000e300",
         "ldr r2, [r3]",
         "str r2, [r0, #8]",
@@ -1999,7 +2016,7 @@ fn check_nmi_repend_and_deferred_irq() -> bool {
         for index in 0..10 {
             write_volatile((NMI_RECORD as *mut u32).add(index), 0);
         }
-        for index in 0..10 {
+        for index in 0..15 {
             write_volatile((NMI_DEFERRED_IRQ as *mut u32).add(index), 0);
         }
         wr(
@@ -2060,6 +2077,11 @@ fn check_nmi_repend_and_deferred_irq() -> bool {
     let deferred_irq_pending = unsafe { read_volatile((NMI_DEFERRED_IRQ as *const u32).add(8)) };
     let nmi_count_in_deferred_irq =
         unsafe { read_volatile((NMI_DEFERRED_IRQ as *const u32).add(9)) };
+    let deferred_parent_msp = unsafe { read_volatile((NMI_DEFERRED_IRQ as *const u32).add(10)) };
+    let deferred_child_msp = unsafe { read_volatile((NMI_DEFERRED_IRQ as *const u32).add(11)) };
+    let deferred_child_lr = unsafe { read_volatile((NMI_DEFERRED_IRQ as *const u32).add(12)) };
+    let deferred_child_r0 = unsafe { read_volatile((NMI_DEFERRED_IRQ as *const u32).add(13)) };
+    let thread_r0 = unsafe { read_volatile((NMI_DEFERRED_IRQ as *const u32).add(14)) };
     let priority_readback = rd(NVIC_IPR1) & 0x00FF_FF00;
     let irq5_priority = (priority_readback >> 8) & 0xFF;
     let irq6_priority = (priority_readback >> 16) & 0xFF;
@@ -2090,7 +2112,11 @@ fn check_nmi_repend_and_deferred_irq() -> bool {
         && deferred_irq_ipsr == 16 + 6
         && deferred_irq_active == deferred_irq_bit
         && deferred_irq_pending == 0
-        && nmi_count_in_deferred_irq == 2;
+        && nmi_count_in_deferred_irq == 2
+        && deferred_child_msp == deferred_parent_msp
+        && deferred_child_lr == 0xFFFF_FFF9
+        && deferred_child_r0 == 0x5441_4C4D
+        && deferred_child_r0 != thread_r0;
     let ok = nmi_initially_clear
         && prior_primask == 0
         && irq_ipsr == 16 + EXTI0_1_IRQ
@@ -2154,7 +2180,16 @@ fn check_nmi_repend_and_deferred_irq() -> bool {
     hex(deferred_irq_pending);
     puts(" nmi_count=");
     hex(nmi_count_in_deferred_irq);
-    puts(" irq5_priority=");
+    puts(" ");
+    flag(
+        "frame_reused",
+        deferred_child_msp == deferred_parent_msp && deferred_child_lr == 0xFFFF_FFF9,
+    );
+    flag(
+        "r0_live",
+        deferred_child_r0 == 0x5441_4C4D && deferred_child_r0 != thread_r0,
+    );
+    puts("irq5_priority=");
     hex(irq5_priority);
     puts(" irq6_priority=");
     hex(irq6_priority);
