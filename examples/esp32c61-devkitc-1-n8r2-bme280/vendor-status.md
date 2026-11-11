@@ -7,7 +7,7 @@ Checked 2026-11-11 UTC.
   pin 5 and GPIO22 to J3 pin 6. Espressif's [DevKits catalog](https://esp-wrover-kit.espressif.com/en/products/devKits)
   lists the board as a current development kit.
 - DigiKey's [exact N8R2 SKU](https://www.digikey.com/en/products/detail/espressif-systems/ESP32-C61-DEVKITC-1-N8R2/26763163)
-  showed **Active**, **296 in stock**, **Add to Cart**, and a **$9.00** unit
+  showed **Active**, **210 in stock**, **Add to Cart**, and a **$9.00** unit
   price when checked.
 - Adafruit's [BME280 STEMMA QT breakout, product 2652](https://www.adafruit.com/product/2652)
   showed **In stock** at **$14.95** when checked.
