@@ -82,10 +82,13 @@ static mut FP_LAZY_TOUCH: u32 = 0;
 static mut FP_LAZY_NEST: u32 = 0;
 
 #[cfg(feature = "stm32h743-exception-frame")]
+static mut FP_LAZY_NEST_TOUCH: u32 = 0;
+
+#[cfg(feature = "stm32h743-exception-frame")]
 static mut FP_LAZY_FPCCR: [u32; 2] = [0; 2];
 
 #[cfg(feature = "stm32h743-exception-frame")]
-static mut FP_NEST_RECORD: [u32; 5] = [0; 5];
+static mut FP_NEST_RECORD: [u32; 6] = [0; 6];
 
 #[cfg(feature = "stm32h743-exception-frame")]
 static FP_LAZY_CLOBBER: [u32; 16] = [
@@ -323,8 +326,21 @@ unsafe extern "C" fn smoke_nested_exception_handler() {
         "str r1, [r0, #12]",
         "mov r1, lr",
         "str r1, [r0, #16]",
+        "ldr r0, ={touch}",
+        "ldr r0, [r0]",
+        "cbz r0, 1f",
+        "bl {fp_lazy_touch_fn}",
+        "1:",
+        "ldr r0, =0xE000EF34",
+        "ldr r1, [r0]",
+        "ldr r0, ={record}",
+        "str r1, [r0, #20]",
+        "ldr r1, [r0, #16]",
+        "mov lr, r1",
         "bx lr",
         record = sym FP_NEST_RECORD,
+        touch = sym FP_LAZY_NEST_TOUCH,
+        fp_lazy_touch_fn = sym touch_fp_in_handler,
     );
 }
 
@@ -442,7 +458,7 @@ fn check_cortex_m7_exception_frame() -> bool {
         for index in 0..18 {
             write_volatile(record.add(index), 0);
         }
-        for index in 0..5 {
+        for index in 0..6 {
             write_volatile(
                 core::ptr::addr_of_mut!(FP_NEST_RECORD)
                     .cast::<u32>()
@@ -913,12 +929,14 @@ fn check_cortex_m7_exception_frame() -> bool {
     // IRQ 5's first FP instruction then performs the deferred context store.
     unsafe {
         write_volatile(core::ptr::addr_of_mut!(FP_LAZY_NEST), 1);
+        write_volatile(core::ptr::addr_of_mut!(FP_LAZY_NEST_TOUCH), 0);
+        write_volatile(core::ptr::addr_of_mut!(FP_LAZY_TOUCH), 1);
         write_volatile(core::ptr::addr_of_mut!(FP_LAZY_FPCCR).cast::<u32>(), 0);
         write_volatile(
             core::ptr::addr_of_mut!(FP_LAZY_FPCCR).cast::<u32>().add(1),
             0,
         );
-        for index in 0..5 {
+        for index in 0..6 {
             write_volatile(
                 core::ptr::addr_of_mut!(FP_NEST_RECORD)
                     .cast::<u32>()
@@ -990,6 +1008,7 @@ fn check_cortex_m7_exception_frame() -> bool {
         && nested_active & (EXCEPTION_IRQ_BIT | NESTED_IRQ_BIT)
             == EXCEPTION_IRQ_BIT | NESTED_IRQ_BIT
         && nested_exc_return == 0xFFFF_FFF1
+        && unsafe { read_volatile(nested_record.add(5)) } & 1 != 0
         && nested_lazy_pre_fpccr & 1 != 0
         && nested_lazy_post_fpccr & 1 == 0
         && nested_lazy_fpccr_after_return & 1 == 0
@@ -998,6 +1017,110 @@ fn check_cortex_m7_exception_frame() -> bool {
         && unsafe { read_volatile(NVIC_IABR0) } & (EXCEPTION_IRQ_BIT | NESTED_IRQ_BIT) == 0
         && unsafe { read_volatile(NVIC_ISPR0) } & (EXCEPTION_IRQ_BIT | NESTED_IRQ_BIT) == 0
         && msp_after_nested_lazy == msp_before_nested_lazy;
+
+    // This time the nested IRQ's first FP instruction completes the outer
+    // Thread-mode lazy save. IRQ 5 itself does not touch the FPU; returning
+    // from both handlers must still restore the interrupted Thread context.
+    unsafe {
+        write_volatile(core::ptr::addr_of_mut!(FP_LAZY_NEST), 1);
+        write_volatile(core::ptr::addr_of_mut!(FP_LAZY_NEST_TOUCH), 1);
+        write_volatile(core::ptr::addr_of_mut!(FP_LAZY_TOUCH), 0);
+        write_volatile(core::ptr::addr_of_mut!(FP_LAZY_FPCCR).cast::<u32>(), 0);
+        write_volatile(
+            core::ptr::addr_of_mut!(FP_LAZY_FPCCR).cast::<u32>().add(1),
+            0,
+        );
+        for index in 0..6 {
+            write_volatile(
+                core::ptr::addr_of_mut!(FP_NEST_RECORD)
+                    .cast::<u32>()
+                    .add(index),
+                0,
+            );
+        }
+        load_fp_sentinels();
+    }
+    let msp_before_nested_touch: u32;
+    unsafe {
+        asm!(
+            "mrs {}, msp",
+            out(reg) msp_before_nested_touch,
+            options(nomem, nostack, preserves_flags)
+        )
+    };
+    let nested_touch_before_irq = msp_before_nested_touch.wrapping_sub(8);
+    let nested_touch_frame_sp = nested_touch_before_irq.wrapping_sub(0x68);
+    unsafe {
+        for index in 0..17u32 {
+            write_volatile(
+                (nested_touch_frame_sp + 0x20 + 4 * index) as *mut u32,
+                0xFACE_0000 + index,
+            );
+        }
+        for index in 0..18 {
+            write_volatile(record.add(index), 0);
+        }
+        pend_exception_irq_with_sentinels();
+        write_volatile(core::ptr::addr_of_mut!(FP_LAZY_NEST), 0);
+        write_volatile(core::ptr::addr_of_mut!(FP_LAZY_NEST_TOUCH), 0);
+    }
+    let msp_after_nested_touch: u32;
+    unsafe {
+        asm!(
+            "mrs {}, msp",
+            out(reg) msp_after_nested_touch,
+            options(nomem, nostack, preserves_flags)
+        )
+    };
+    let nested_touch_fpccr = unsafe { read_volatile(nested_record.add(0)) };
+    let nested_touch_fpcar = unsafe { read_volatile(nested_record.add(1)) };
+    let nested_touch_ipsr = unsafe { read_volatile(nested_record.add(2)) };
+    let nested_touch_active = unsafe { read_volatile(nested_record.add(3)) };
+    let nested_touch_exc_return = unsafe { read_volatile(nested_record.add(4)) };
+    let nested_touch_post_fpccr = unsafe { read_volatile(nested_record.add(5)) };
+    let nested_touch_outer_pre_fpccr =
+        unsafe { read_volatile(core::ptr::addr_of!(FP_LAZY_FPCCR).cast::<u32>()) };
+    let nested_touch_outer_post_fpccr =
+        unsafe { read_volatile(core::ptr::addr_of!(FP_LAZY_FPCCR).cast::<u32>().add(1)) };
+    let nested_touch_fpccr_after_return = unsafe { read_volatile(FPU_FPCCR) };
+    let nested_touch_saved =
+        (0..16u32).all(|index| unsafe {
+            read_volatile((nested_touch_frame_sp + 0x20 + 4 * index) as *const u32)
+                == FP_SENTINELS[index as usize]
+        }) && unsafe { read_volatile((nested_touch_frame_sp + 0x60) as *const u32) == 0xA000_0000 };
+    unsafe { capture_fp_sentinels() };
+    let nested_touch_capture = core::ptr::addr_of_mut!(FP_CAPTURE).cast::<u32>();
+    let nested_touch_regs_ok = (0..16).all(|index| unsafe {
+        read_volatile(nested_touch_capture.add(index)) == FP_SENTINELS[index]
+    }) && unsafe { read_volatile(nested_touch_capture.add(16)) }
+        == 0xA000_0000;
+    let control_after_nested_touch: u32;
+    unsafe {
+        asm!(
+            "mrs {}, control",
+            out(reg) control_after_nested_touch,
+            options(nomem, nostack, preserves_flags)
+        )
+    };
+    let nested_touch_ok = read_record(8) == 0xFFFF_FFE9
+        && read_record(9) == nested_touch_frame_sp
+        && read_record(13) == nested_touch_before_irq
+        && nested_touch_fpccr & 1 != 0
+        && nested_touch_fpcar == nested_touch_frame_sp.wrapping_add(0x20)
+        && nested_touch_ipsr == 16 + NESTED_IRQ
+        && nested_touch_active & (EXCEPTION_IRQ_BIT | NESTED_IRQ_BIT)
+            == EXCEPTION_IRQ_BIT | NESTED_IRQ_BIT
+        && nested_touch_exc_return == 0xFFFF_FFF1
+        && nested_touch_post_fpccr & 1 == 0
+        && nested_touch_outer_pre_fpccr & 1 != 0
+        && nested_touch_outer_post_fpccr & 1 == 0
+        && nested_touch_fpccr_after_return & 1 == 0
+        && control_after_nested_touch & 0x4 != 0
+        && nested_touch_saved
+        && nested_touch_regs_ok
+        && unsafe { read_volatile(NVIC_IABR0) } & (EXCEPTION_IRQ_BIT | NESTED_IRQ_BIT) == 0
+        && unsafe { read_volatile(NVIC_ISPR0) } & (EXCEPTION_IRQ_BIT | NESTED_IRQ_BIT) == 0
+        && msp_after_nested_touch == msp_before_nested_touch;
 
     unsafe {
         write_volatile(NVIC_ICER0, EXCEPTION_IRQ_BIT | NESTED_IRQ_BIT);
@@ -1018,6 +1141,7 @@ fn check_cortex_m7_exception_frame() -> bool {
         && lazy_unused_ok
         && lazy_used_ok
         && nested_lazy_ok
+        && nested_touch_ok
         && ccr_restored;
 
     send(b"cortex-m7 irq ipsr=");
@@ -1212,6 +1336,19 @@ fn check_cortex_m7_exception_frame() -> bool {
     send_hex32(nested_active);
     send(b" exc_return=");
     send_hex32(nested_exc_return);
+    send(b"\r\n");
+    send(b"cortex-m7 fp lazy nested-touch=");
+    send(if nested_touch_ok { b"1" } else { b"0" });
+    send(b" lspact=");
+    send_hex32(nested_touch_fpccr & 1);
+    send(b"->");
+    send_hex32(nested_touch_post_fpccr & 1);
+    send(b" saved=");
+    send(if nested_touch_saved { b"1" } else { b"0" });
+    send(b" regs=");
+    send(if nested_touch_regs_ok { b"1" } else { b"0" });
+    send(b" active=");
+    send_hex32(nested_touch_active);
     send(b"\r\n");
     ok
 }

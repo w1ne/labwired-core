@@ -1,0 +1,37 @@
+{
+  "target_id": "stm32h743",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 4000000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": "firmware-stm32h743-smoke",
+  "target_triple": "thumbv7em-none-eabihf",
+  "script": "examples/renode-onboarding/stm32h743-smoke.yaml",
+  "system": "configs/systems/onboarding/stm32h743.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-10T23:56:44Z",
+  "finished_at_utc": "2026-11-10T23:56:47Z",
+  "elapsed_seconds": 3,
+  "elapsed_ms": 2881,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.452,
+    "build_firmware": 1.192,
+    "run_smoke": 1.197
+  },
+  "stages_ms": {
+    "build_cli": 452,
+    "build_firmware": 1192,
+    "run_smoke": 1197
+  }
+}
