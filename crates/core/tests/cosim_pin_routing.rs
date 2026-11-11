@@ -1071,6 +1071,138 @@ fn nucleo_f103rb_diode_depletion_and_transit_charge_reach_adc1_end_to_end() {
     }
 }
 
+/// Generic NMOS gate-drain overlap charge resolves through the NUCLEO-F103RB
+/// ADC1 alongside unrelated NTC and Shockley diode devices. A matched zero-
+/// overlap branch and the independent backward-Euler RC recurrence make the
+/// CGDO contribution observable at the board endpoint.
+#[test]
+fn nucleo_f103rb_mosfet_gate_drain_overlap_charge_reaches_adc1_end_to_end() {
+    let (mut profile, mut bus) = bus_and_manifest("configs/systems/nucleo-f103rb.yaml");
+    let analog = SystemManifest::from_file(root(
+        "examples/nucleo-f103rb/analog-mosfet-cgdo-overlap-adc-system.yaml",
+    ))
+    .expect("load NTC, diode, and matched generic MOSFET overlap branches");
+    profile.cosim_models = analog.cosim_models;
+    let mut session = build_session(&bus, &profile.cosim_models);
+
+    for channel in 0..=4 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold the unrelated NTC at nominal temperature");
+    session
+        .set_signal_number("ui.mosfet_drain_overlap.gate_v", 0.0)
+        .expect("initialize matched NMOS gate drives");
+
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("settle NTC, diode, and both MOSFET branches");
+    assert_eq!(initial_steps.len(), 4, "all four analog devices solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected route errors: {initial_errors:?}"
+    );
+
+    let voltage = |session: &CosimSession, path: &str| match session.signals().get(path) {
+        Some(CosimSignalValue::F64(volts)) => *volts,
+        other => panic!("missing routed analog voltage at {path}: {other:?}"),
+    };
+    let ntc_v = voltage(&session, "board.analog.pa0_volts");
+    let diode_v = voltage(&session, "board.analog.pa1_volts");
+    let initial_diode_v = diode_v;
+    assert!(
+        (ntc_v - 1.65).abs() < 1e-9,
+        "the unrelated NTC remains at half scale"
+    );
+    assert!(
+        diode_v > 0.4 && diode_v < 1.2,
+        "the unrelated diode has a forward load line: {diode_v} V"
+    );
+    assert!(voltage(&session, "board.analog.pa2_volts").abs() < 1e-12);
+    assert!(voltage(&session, "board.analog.pa3_volts").abs() < 1e-12);
+
+    session
+        .set_signal_number("ui.mosfet_drain_overlap.gate_v", 3.3)
+        .expect("step the generic NMOS gate");
+
+    // CGDO=10 uF/m times W=100 um gives 1 nF. The drain's 1 kOhm
+    // pull-down and 1 us backward-Euler step produce a half-step excursion,
+    // then halve the stored drain voltage on each held-input step.
+    let mut expected_drain_v = 1.65;
+    for step in 0..12 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route MOSFET gate-drain overlap charge");
+        assert_eq!(
+            steps.len(),
+            4,
+            "all four analog devices solve at step {step}"
+        );
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let ntc_v = voltage(&session, "board.analog.pa0_volts");
+        let diode_v = voltage(&session, "board.analog.pa1_volts");
+        let reference_v = voltage(&session, "board.analog.pa2_volts");
+        let charged_v = voltage(&session, "board.analog.pa3_volts");
+        assert!(
+            (ntc_v - 1.65).abs() < 1e-9,
+            "unrelated NTC remains isolated"
+        );
+        assert!(
+            (diode_v - initial_diode_v).abs() < 1e-12,
+            "unrelated diode remains isolated: {diode_v} V vs {initial_diode_v} V"
+        );
+        assert!(
+            reference_v.abs() < 1e-12,
+            "zero-overlap NMOS is the control branch"
+        );
+        assert!(
+            (charged_v - expected_drain_v).abs() < 2e-8,
+            "CGDO RC recurrence at step {step}: expected {expected_drain_v} V, got {charged_v} V"
+        );
+
+        for (channel, volts) in [(0, ntc_v), (1, diode_v), (2, reference_v), (3, charged_v)] {
+            let millivolts = (volts * 1000.0).round() as u32;
+            let expected = (millivolts * 4095 / 3300).min(4095) as u16;
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "the solved voltage must seed ADC1 channel {channel}"
+            );
+            assert_eq!(
+                f103_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "firmware-visible ADC1 conversion must report channel {channel}"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 4),
+            0xFFFF,
+            "neighboring ADC1 channel 4 remains undriven"
+        );
+        if step == 0 {
+            assert_eq!(
+                adc_channel_count(&mut bus, 3),
+                2047,
+                "the first gate-drain overlap transient reaches half scale on PA3/ADC1_IN3"
+            );
+        }
+        expected_drain_v *= 0.5;
+    }
+
+    assert!(
+        voltage(&session, "board.analog.pa3_volts") < 1e-3,
+        "gate-drain overlap charge changes the transient, not the settled DC operating point"
+    );
+}
+
 /// The same general MNA NTC divider and explicit ADC-channel route also work
 /// on the Mega's CPU-owned AVR ADC. ADC8 is selected through MUX5, so a route
 /// that reaches only the low ADC channels or a conversion that ignores MUX5
