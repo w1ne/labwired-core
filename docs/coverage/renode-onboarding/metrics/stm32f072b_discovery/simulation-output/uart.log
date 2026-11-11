@@ -22,7 +22,7 @@ tim17 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
 dma1 m2m tc=1 data=1 pend=1 alone=1 released=1 ok
 crc word=0xDF8A8A2B seed=1 std=1 ok
 adc ts=0x00000709 vref=0x000005F6 cal=1 ready=1 seq=1 eos=1 pend=1 released=1 gated=1 off=1 ok
-irq exception hit=1 ipsr=0x00000015 active=0x00000020 pending=0x00000000 frame=1 regs=0x00000011,0x00000022,0x00000033,0x00000044,0x00000055 lr=0x08002D81 pc=0x080003E6 xpsr=0x21000000 exc_return=0xFFFFFFF9 sp=0x20003EC0 expected_sp=0x20003EC0 restored_msp=0x20003EE8 returned=1 ok
+irq exception hit=1 ipsr=0x00000015 active=0x00000020 pending=0x00000000 frame=1 regs=0x00000011,0x00000022,0x00000033,0x00000044,0x00000055 lr=0x08002DB1 pc=0x080003E6 xpsr=0x21000000 exc_return=0xFFFFFFF9 sp=0x20003EC8 expected_sp=0x20003EC8 restored_msp=0x20003EF0 returned=1 ok
 nmi repend entered=1 entries=0x00000002 after_pend_ipsr=0x00000002 after_pend_entries=0x00000001 irq=0x00000015 nmi=0x00000002 resumed=0x00000015 icsr=0x00000002 irq_active=0x00000020 primask=0x00000001 restored=0x00000001 cleanup=ok=1 ok
 nmi deferred irq pending_in_nmi=0x00000040 active_in_nmi=0x00000000 after_unmask_ipsr=0x00000015 irq6_active_while_irq5=0x00000000 irq6_pending_in_irq5=0x00000040 irq_ipsr=0x00000016 irq_active=0x00000040 irq_pending=0x00000000 nmi_count=0x00000002 irq5_priority=0x00000040 irq6_priority=0x00000080 ok
 systick ipsr=0x0000000F active=0x0000000F countflag=1 read_clear=1 pending_after=0x00000000 thread_ipsr=0x00000000 vtor_restored=1 ok
@@ -31,5 +31,6 @@ systick icsr set_readback=1 clear=1 canceled=1 masked=1 ipsr=0x0000000F active=0
 systick icsr repend entries=0x00000002 first_ipsr=0x0000000F first_active=0x0000000F pending_after_pend=1 count_after_pend=0x00000001 second_ipsr=0x0000000F second_active=0x0000000F second_pending=0 thread_ipsr=0x00000000 vtor_restored=1 ok
 systick periodic entries=0x00000003 reload=0x0000007F ipsr=0x0000000F,0x0000000F,0x0000000F active=1 countflag=1 pending=0 thread_ipsr=0x00000000 vtor_restored=1 ok
 systick countflag-only tickint=0 flag=1 handler=0 pending=0 read_clear=1 ipsr=0x00000000 vtor_restored=1 ok
+systick cvr-clear countdown=started=1 pending_after_clear=0 pending_after_period=1 handler_before_unmask=0x00000000 handler_ipsr=0x0000000F active=0x0000000F entries=0x00000001 thread_ipsr=0x00000000 vtor_restored=1 ok
 summary 0x0DFFFFFF
 DONE

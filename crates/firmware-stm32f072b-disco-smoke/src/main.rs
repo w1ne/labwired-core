@@ -34,7 +34,9 @@
 //! exception 15, COUNTFLAG read-clear behavior, PRIMASK's pending-then-deliver
 //! behavior, SCB software pend/set/clear, and re-pending while its handler is
 //! active followed by a second exception entry. A separate periodic check
-//! confirms hardware reloads generate three more exception entries.
+//! confirms hardware reloads generate three more exception entries. A CVR
+//! clear during a live countdown must not fire immediately, but the next
+//! countdown-to-zero must still pend SysTick.
 
 #![no_std]
 #![no_main]
@@ -71,6 +73,7 @@ const SYSTICK_ICSR_RECORD: u32 = SUMMARY + 208;
 const SYSTICK_REPEND_RECORD: u32 = SUMMARY + 224;
 const SYSTICK_PERIODIC_RECORD: u32 = SUMMARY + 768;
 const SYSTICK_FLAG_RECORD: u32 = SUMMARY + 832;
+const SYSTICK_CVR_CLEAR_RECORD: u32 = SUMMARY + 864;
 const SYSTICK_CSR: u32 = 0xE000_E010;
 const SYSTICK_RVR: u32 = 0xE000_E014;
 const SYSTICK_CVR: u32 = 0xE000_E018;
@@ -521,6 +524,26 @@ unsafe extern "C" fn smoke_systick_countflag_only_handler() {
         "ldr r0, =0xE000E010",
         "movs r1, #0",
         "str r1, [r0]",
+        "bx lr",
+    );
+}
+
+/// Record a timer-generated SysTick after a software CVR clear, then stop it.
+#[unsafe(naked)]
+unsafe extern "C" fn smoke_systick_cvr_clear_handler() {
+    core::arch::naked_asm!(
+        "mrs r2, ipsr",
+        "ldr r0, =0x20003360",
+        "str r2, [r0, #0]",
+        "ldr r1, =0xE000ED04",
+        "ldr r2, [r1]",
+        "str r2, [r0, #4]",
+        "ldr r2, [r0, #8]",
+        "adds r2, #1",
+        "str r2, [r0, #8]",
+        "ldr r1, =0xE000E010",
+        "movs r2, #0",
+        "str r2, [r1]",
         "bx lr",
     );
 }
@@ -1238,6 +1261,141 @@ fn check_systick_countflag_without_tickint() -> bool {
     puts(if pending { "1 " } else { "0 " });
     flag("read_clear", countflag_read_clear);
     puts("ipsr=");
+    hex(thread_ipsr);
+    puts(" ");
+    flag("vtor_restored", vtor_restored);
+    verdict(ok);
+    ok
+}
+
+/// Clearing CVR during an active countdown must reload silently, then allow
+/// the next countdown-to-zero to pend and enter SysTick normally.
+fn check_systick_cvr_clear_does_not_fire() -> bool {
+    let source_vtor = rd(SCB_VTOR);
+    let table = RAM_VECTOR_BASE as *mut u32;
+    let prior_primask: u32;
+    unsafe {
+        asm!(
+            "mrs {primask}, PRIMASK",
+            "cpsid i",
+            primask = out(reg) prior_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+        wr(SYSTICK_CSR, 0);
+        wr(SCB_ICSR, 1 << 25);
+        wr(SYSTICK_RVR, 127);
+        wr(SYSTICK_CVR, 0);
+        for index in 0..VECTOR_TABLE_WORDS {
+            write_volatile(table.add(index), 0);
+        }
+        for index in 0..3 {
+            write_volatile((SYSTICK_CVR_CLEAR_RECORD as *mut u32).add(index), 0);
+        }
+        write_volatile(
+            table.add(SYSTICK_VECTOR_INDEX),
+            (smoke_systick_cvr_clear_handler as *const () as usize as u32) | 1,
+        );
+        wr(SCB_VTOR, RAM_VECTOR_BASE);
+        wr(SYSTICK_CSR, 0x7); // ENABLE | TICKINT | processor clock
+    }
+
+    let mut countdown_started = false;
+    for _ in 0..1_000 {
+        let count = rd(SYSTICK_CVR);
+        if (1..110).contains(&count) {
+            countdown_started = true;
+            break;
+        }
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+    let pending_before_clear = rd(SCB_ICSR) & (1 << 26) != 0;
+    unsafe {
+        wr(SYSTICK_CVR, 0);
+        for _ in 0..16 {
+            asm!("nop", options(nomem, nostack, preserves_flags));
+        }
+    }
+    let pending_after_clear = rd(SCB_ICSR) & (1 << 26) != 0;
+    let mut pending_after_period = false;
+    for _ in 0..100_000 {
+        if rd(SCB_ICSR) & (1 << 26) != 0 {
+            pending_after_period = true;
+            break;
+        }
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+    let handler_before_unmask = rd(SYSTICK_CVR_CLEAR_RECORD + 8);
+    unsafe {
+        asm!(
+            "msr PRIMASK, {primask}",
+            "dsb",
+            "isb",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+    for _ in 0..100_000 {
+        if rd(SYSTICK_CVR_CLEAR_RECORD + 8) != 0 {
+            break;
+        }
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+
+    let handler_ipsr = rd(SYSTICK_CVR_CLEAR_RECORD);
+    let handler_icsr = rd(SYSTICK_CVR_CLEAR_RECORD + 4);
+    let entries = rd(SYSTICK_CVR_CLEAR_RECORD + 8);
+    let thread_ipsr: u32;
+    unsafe {
+        asm!(
+            "mrs {value}, ipsr",
+            value = out(reg) thread_ipsr,
+            options(nomem, nostack, preserves_flags),
+        );
+        asm!("cpsid i", options(nomem, nostack, preserves_flags));
+        wr(SYSTICK_CSR, 0);
+        wr(SCB_ICSR, 1 << 25);
+        wr(SYSTICK_CVR, 0);
+        wr(SCB_VTOR, source_vtor);
+        asm!(
+            "msr PRIMASK, {primask}",
+            "dsb",
+            "isb",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+
+    let active = handler_icsr & 0x1FF == 15;
+    let pending_cleared = handler_icsr & (1 << 26) == 0;
+    let vtor_restored = rd(SCB_VTOR) == source_vtor;
+    let ok = prior_primask == 0
+        && countdown_started
+        && !pending_before_clear
+        && !pending_after_clear
+        && pending_after_period
+        && handler_before_unmask == 0
+        && handler_ipsr == 15
+        && active
+        && pending_cleared
+        && entries == 1
+        && thread_ipsr == 0
+        && vtor_restored;
+
+    puts("systick cvr-clear countdown=");
+    flag("started", countdown_started);
+    puts("pending_after_clear=");
+    puts(if pending_after_clear { "1" } else { "0" });
+    puts(" pending_after_period=");
+    puts(if pending_after_period { "1" } else { "0" });
+    puts(" handler_before_unmask=");
+    hex(handler_before_unmask);
+    puts(" handler_ipsr=");
+    hex(handler_ipsr);
+    puts(" active=");
+    hex(handler_icsr & 0x1FF);
+    puts(" entries=");
+    hex(entries);
+    puts(" thread_ipsr=");
     hex(thread_ipsr);
     puts(" ");
     flag("vtor_restored", vtor_restored);
@@ -2040,12 +2198,13 @@ fn main() -> ! {
     let systick_icsr_repend_ok = check_systick_icsr_repend();
     let systick_periodic_ok = check_systick_periodic_reload();
     let systick_countflag_only_ok = check_systick_countflag_without_tickint();
+    let systick_cvr_clear_ok = check_systick_cvr_clear_does_not_fire();
     mark(
         21,
         systick_primask_ok && systick_icsr_software_pend_ok && systick_icsr_repend_ok,
     );
     mark(22, systick_periodic_ok);
-    mark(23, systick_countflag_only_ok);
+    mark(23, systick_countflag_only_ok && systick_cvr_clear_ok);
     let summary = summary | 0x0DF0_0000;
     wr(SUMMARY, summary);
     puts("summary ");
