@@ -1,0 +1,15 @@
+# CH32V003F4P6-EVT: read the BME280 chip ID over hardware I2C1.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/ch32v003f4p6-bme280.elf"
+  system: "../../configs/systems/ch32v003evt-bme280.yaml"
+limits:
+  max_steps: 500000
+assertions:
+  - uart_contains: "CH32V003_BME280_OK ID=0x60 I2C1=PC1/PC2"
+  - gpio_edges:
+      pin: "gpioc:1"
+      min_edges: 4
+  - gpio_edges:
+      pin: "gpioc:2"
+      min_edges: 16

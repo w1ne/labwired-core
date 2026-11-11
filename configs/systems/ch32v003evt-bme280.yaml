@@ -1,0 +1,21 @@
+# WCH CH32V003F4P6-EVT-R0-1v1 with a 3.3 V BME280 breakout on I2C1.
+# Default WCH pin route: PC1=SDA, PC2=SCL. The sensor is attached at 0x77.
+name: "ch32v003evt-bme280"
+chip: "../chips/ch32v003f4p6.yaml"
+cpu_hz: 24_000_000
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c1"
+    route:
+      sda: "PC1"
+      scl: "PC2"
+    config:
+      i2c_address: 0x77
+board_io:
+  - id: "led1"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 0
+    signal: "output"
+    active_high: false

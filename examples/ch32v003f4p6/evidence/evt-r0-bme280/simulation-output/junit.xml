@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.070358">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="84c8f5c30a5aac5d5fc5c273cfa6cb6fa02fb80810096c1e07fe7aaf4d00ee4a"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.070358">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: CH32V003_BME280_OK ID=0x60 I2C1=PC1/PC2" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: gpio_edges: gpioc:1 &gt;= 4 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: gpio_edges: gpioc:2 &gt;= 16 edges" time="0.000000">
+  </testcase>
+</testsuite>

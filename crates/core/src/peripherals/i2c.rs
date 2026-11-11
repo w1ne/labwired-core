@@ -133,6 +133,11 @@ pub struct F1I2c {
     /// interrupt-mode driver (STM32duino 3.x uses HAL_I2C_Master_Transmit_IT)
     /// never learns the address was NACKed and spins until its 100 ms timeout.
     irq_error: Option<u32>,
+    /// The CH32V003 keeps the F1 register block but routes I2C1 to PC1/PC2
+    /// after reset, rather than the STM32F103's PB6/PB7. This is only a pad
+    /// map selector; it does not change the register or transaction model.
+    #[serde(default)]
+    pad_map_ch32v003: bool,
     ccr: u32,
     trise: u32,
 
@@ -233,6 +238,7 @@ impl Default for F1I2c {
             sr1: 0,
             sr2: 0,
             irq_error: None,
+            pad_map_ch32v003: false,
             ccr: 0,
             // TRISE reset value is 0x0002 (RM0008 §26.6.9) — silicon-confirmed
             // on STM32F103 over SWD (reads 0x00000002 after RCC clock enable,
@@ -2390,9 +2396,13 @@ impl I2c {
                 i.pad_map_g0 = true;
                 Ok(())
             }
+            (Self::Stm32F1(i), "ch32v003" | "wch") => {
+                i.pad_map_ch32v003 = true;
+                Ok(())
+            }
             (_, "none") => Ok(()),
             (_, other) => Err(anyhow::anyhow!(
-                "unsupported I2C pad_map '{other}' for this controller; supported: stm32g0 (stm32l4 profile), none"
+                "unsupported I2C pad_map '{other}' for this controller; supported: stm32g0 (stm32l4 profile), ch32v003 (stm32f1 profile), none"
             )),
         }
     }
@@ -2400,6 +2410,12 @@ impl I2c {
     /// `true` when this controller routes the STM32G0 AF6 pinout.
     pub(crate) fn is_g0_pad_map(&self) -> bool {
         matches!(self, Self::Stm32L4(i) if i.pad_map_g0)
+    }
+
+    /// `true` when this legacy register block uses the CH32V003 default
+    /// I2C1 pinout (PC2=SCL, PC1=SDA).
+    pub(crate) fn is_ch32v003_pad_map(&self) -> bool {
+        matches!(self, Self::Stm32F1(i) if i.pad_map_ch32v003)
     }
 
     /// Forward an ERROR-line NVIC vector to the variant that models one.

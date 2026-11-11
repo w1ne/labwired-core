@@ -87,6 +87,19 @@ peripherals:
     config:
       profile: "wch"
 
+  # WCH CH32V003 I2C1 uses the legacy 8-bit-address / SR1-SR2 register block
+  # at the same base and register offsets as STM32F1. Its default pin route is
+  # PC2=SCL, PC1=SDA (selected explicitly by pad_map below); APB1PCENR bit 21
+  # gates the controller. Interrupt/DMA and AFIO-remapped routes are not claimed.
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    clock: { reg: "apb1pcenr", bit: 21 }
+    config:
+      profile: "stm32f1"
+      pad_map: "ch32v003"
+
   # USART1 (ch32v00x.h): USART1_BASE = APB2PERIPH_BASE + 0x3800, RCC_USART1EN =
   # APB2PCENR bit 14. USART_TypeDef is STATR, DATAR, BRR, CTLR1, CTLR2, CTLR3,
   # GPR at 4-byte strides, the same layout as the STM32F1 USART, so the default

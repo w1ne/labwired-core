@@ -1,0 +1,4 @@
+riscv-wch-elf-gcc (xPack GNU RISC-V Embedded GCC x86_64) 12.2.0
+Built /home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/tests/fixtures/ch32v003f4p6-blink.elf
+Built /home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/tests/fixtures/ch32v003f4p6-uart-hello.elf
+Built /home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/tests/fixtures/ch32v003f4p6-bme280.elf

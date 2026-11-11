@@ -100,9 +100,32 @@ The committed `tests/fixtures/ch32v003f4p6-uart-hello.elf` was built by
 sha256 is
 `f77a83f95286c1f08ffc4e545645bdba435d84e8543f3988679e2452fa4570fd`.
 
-Both board smoke receipts are summarized in
+The board smoke receipts are summarized in
 [`evidence/onboarding-scoreboard.md`](evidence/onboarding-scoreboard.md).
 
-These fixtures exercise the local simulator's RV32E/RV32EC, reset/flash
-loading, RCC, GPIO and USART1 paths. CH32V003 is not yet a hosted LabWired
-verifier target, so this is not a hosted `model_verified` result or hardware confirmation.
+The committed fixtures exercise the local simulator's RV32E/RV32EC,
+reset/flash loading, RCC, GPIO, USART1, and the polled I2C1 master path.
+CH32V003 is not yet a hosted LabWired verifier target, so this is not a hosted
+`model_verified` result or hardware confirmation.
+
+## BME280 over hardware I2C1
+
+The `bme280-smoke.yaml` system connects an Adafruit BME280 STEMMA QT breakout
+(product 2652) to the CH32V003EVT's exposed default I2C1 pins, PC1/SDA and
+PC2/SCL. It enables the legacy-layout I2C1 master, reads the BME280 chip ID
+register (`0xD0`), and prints a pass marker only for the expected ID `0x60` on
+USART1/PD5. The board configuration selects the CH32V003 pin map explicitly;
+the STM32F103 PB6/PB7 mapping is not reused for this WCH part. The smoke also
+asserts SDA and SCL transitions on PC1 and PC2, so a missing pad route fails.
+
+On hardware, power the sensor at 3.3 V and connect common ground, PC1 to SDA,
+and PC2 to SCL. The Adafruit STEMMA QT breakout supplies the I2C pull-ups; for
+other breakouts, check whether pull-ups are fitted or add 4.7 kΩ pull-ups to
+3.3 V. Connect PD5 to a 3.3 V USB-serial adapter RX at 115200 8N1 to observe
+the result. The smoke covers a polled single-byte I2C register read; it does
+not claim I2C interrupts, DMA, AFIO remapping, or other WCH peripherals.
+
+The committed smoke evidence lives under
+[`evidence/evt-r0-bme280`](evidence/evt-r0-bme280/). The hosted LabWired
+catalog does not yet list CH32V003, so this receipt is for the local engine run,
+not hosted `labwired_verify` model-verification status.

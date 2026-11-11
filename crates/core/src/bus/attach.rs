@@ -2588,6 +2588,15 @@ impl SystemBus {
         // first — so binding both would hand PB6 to whichever wiring function
         // `from_config` happens to call first, silently.
         type I2cPadF1 = (&'static str, char, u8, usize, &'static str);
+        // The CH32V003 shares the legacy I2C register block with STM32F1, but
+        // its default I2C1 pins are PC2=SCL and PC1=SDA (WCH CH32V003 RM
+        // §13.11 and the default AFIO remap setting). Keep this opt-in map
+        // separate so it cannot accidentally publish a waveform on STM32F103
+        // GPIOs with the same register layout.
+        const CH32V003: &[I2cPadF1] = &[
+            ("i2c1", 'c', 2, LINE_SCL, "I2C1_SCL"),
+            ("i2c1", 'c', 1, LINE_SDA, "I2C1_SDA"),
+        ];
         const F1: &[I2cPadF1] = &[
             ("i2c1", 'b', 6, LINE_SCL, "I2C1_SCL"),
             ("i2c1", 'b', 7, LINE_SDA, "I2C1_SDA"),
@@ -2615,11 +2624,17 @@ impl SystemBus {
             let Some(i2c_idx) = self.find_peripheral_index_by_name(i2c_name) else {
                 continue;
             };
-            let Some((layout, g0)) = self.peripherals[i2c_idx]
+            let Some((layout, g0, ch32v003)) = self.peripherals[i2c_idx]
                 .dev
                 .as_any()
                 .and_then(|a| a.downcast_ref::<I2c>())
-                .map(|i2c| (i2c.register_layout(), i2c.is_g0_pad_map()))
+                .map(|i2c| {
+                    (
+                        i2c.register_layout(),
+                        i2c.is_g0_pad_map(),
+                        i2c.is_ch32v003_pad_map(),
+                    )
+                })
             else {
                 continue;
             };
@@ -2654,6 +2669,14 @@ impl SystemBus {
                     (I2cRegisterLayout::Stm32L4, GpioRegisterLayout::Stm32V2) if g0 => G0,
                     (I2cRegisterLayout::Stm32L4, GpioRegisterLayout::Stm32V2) => L4,
                     (I2cRegisterLayout::Stm32F1, GpioRegisterLayout::Stm32V2) => F4,
+                    (I2cRegisterLayout::Stm32F1, GpioRegisterLayout::Wch) if ch32v003 => {
+                        for &(i2c, p, pin, line, func) in CH32V003 {
+                            if i2c == i2c_name && p == port {
+                                plan.push((port, pin, None, line, func));
+                            }
+                        }
+                        continue;
+                    }
                     (I2cRegisterLayout::Stm32F1, GpioRegisterLayout::Stm32F1) => {
                         for &(i2c, p, pin, line, func) in F1 {
                             if i2c == i2c_name && p == port {
