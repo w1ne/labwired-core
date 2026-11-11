@@ -25,8 +25,10 @@
 //! Peripheral IRQ checks read each line's ISPR bit without enabling it. The
 //! final software-pended IRQ 5 takes a real Cortex-M0 exception through a RAM
 //! vector table and checks IPSR, IABR, the basic stacked frame, and exception
-//! return. Every check prints one line and sets one bit of the summary word at
-//! `SUMMARY`. AIRCR.PRIGROUP is also checked as reserved on this ARMv6-M core.
+//! return. It also pends NMI from that active IRQ while PRIMASK is set and
+//! checks NMI entry and return to the IRQ. Every check prints one line and sets
+//! one bit of the summary word at `SUMMARY`. AIRCR.PRIGROUP is also checked as
+//! reserved on this ARMv6-M core.
 
 #![no_std]
 #![no_main]
@@ -38,10 +40,13 @@ use panic_halt as _;
 
 const SUMMARY: u32 = 0x2000_3000;
 const SCB_AIRCR: u32 = 0xE000_ED0C;
+const SCB_ICSR: u32 = 0xE000_ED04;
 const SCB_VTOR: u32 = 0xE000_ED08;
 const AIRCR_VECTKEY: u32 = 0x05FA << 16;
+const ICSR_NMIPENDSET: u32 = 1 << 31;
 const RAM_VECTOR_BASE: u32 = 0x2000_1000;
 const VECTOR_TABLE_WORDS: usize = 48;
+const NMI_VECTOR_INDEX: usize = 2;
 const EXTI0_1_VECTOR_INDEX: usize = 16 + EXTI0_1_IRQ as usize;
 const IRQ_HIT: u32 = SUMMARY + 4;
 const IRQ_IPSR: u32 = SUMMARY + 8;
@@ -49,6 +54,7 @@ const IRQ_ACTIVE: u32 = SUMMARY + 12;
 const IRQ_PENDING: u32 = SUMMARY + 16;
 const IRQ_FRAME: u32 = SUMMARY + 20;
 const IRQ_EXCEPTION_MSP: u32 = SUMMARY + 60;
+const NMI_RECORD: u32 = SUMMARY + 64;
 
 // RCC (RM0091 §6.4).
 const RCC: u32 = 0x4002_1000;
@@ -246,6 +252,159 @@ unsafe extern "C" fn smoke_exti0_1_handler() {
         "str r2, [r0]",
         "bx lr",
     );
+}
+
+/// Pend NMI from an active external interrupt with PRIMASK set. NMI must
+/// preempt; after its exception return the IRQ handler must resume masked.
+#[unsafe(naked)]
+unsafe extern "C" fn smoke_irq_pend_nmi_handler() {
+    core::arch::naked_asm!(
+        "mrs r3, ipsr",
+        "ldr r0, =0x20003040",
+        "str r3, [r0, #0]",
+        "cpsid i",
+        "ldr r0, =0xe000ed04",
+        "ldr r1, =0x80000000",
+        "str r1, [r0]",
+        "dsb",
+        "isb",
+        "mrs r3, ipsr",
+        "ldr r0, =0x20003040",
+        "str r3, [r0, #8]",
+        "mrs r3, PRIMASK",
+        "str r3, [r0, #12]",
+        "cpsie i",
+        "bx lr",
+    );
+}
+
+/// Capture the NMI exception state while a normal IRQ remains active.
+#[unsafe(naked)]
+unsafe extern "C" fn smoke_nmi_handler() {
+    core::arch::naked_asm!(
+        "mrs r3, ipsr",
+        "ldr r0, =0x20003040",
+        "str r3, [r0, #4]",
+        "ldr r1, =0xe000ed04",
+        "ldr r2, [r1]",
+        "str r2, [r0, #16]",
+        "ldr r1, =0xe000e300",
+        "ldr r2, [r1]",
+        "movs r3, #0x20",
+        "ands r2, r3",
+        "str r2, [r0, #20]",
+        "mrs r2, PRIMASK",
+        "str r2, [r0, #24]",
+        "bx lr",
+    );
+}
+
+/// An NMI pended by a running IRQ must enter despite PRIMASK and return to
+/// that IRQ before the thread-mode caller resumes.
+fn check_nmi_preempts_primasked_irq() -> bool {
+    let source_vtor = rd(SCB_VTOR);
+    let nmi_initially_clear = rd(SCB_ICSR) & ICSR_NMIPENDSET == 0;
+    let table = RAM_VECTOR_BASE as *mut u32;
+    let irq_bit = 1 << EXTI0_1_IRQ;
+    let prior_primask: u32;
+    unsafe {
+        asm!(
+            "mrs {primask}, PRIMASK",
+            primask = out(reg) prior_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+        asm!("cpsid i", options(nomem, nostack, preserves_flags));
+        wr(NVIC_ICER0, irq_bit);
+        unpend(EXTI0_1_IRQ);
+        for index in 0..7 {
+            write_volatile((NMI_RECORD as *mut u32).add(index), 0);
+        }
+        for index in 0..VECTOR_TABLE_WORDS {
+            write_volatile(table.add(index), 0);
+        }
+        write_volatile(
+            table.add(NMI_VECTOR_INDEX),
+            (smoke_nmi_handler as *const () as usize as u32) | 1,
+        );
+        write_volatile(
+            table.add(EXTI0_1_VECTOR_INDEX),
+            (smoke_irq_pend_nmi_handler as *const () as usize as u32) | 1,
+        );
+        wr(SCB_VTOR, RAM_VECTOR_BASE);
+        wr(NVIC_ISER0, irq_bit);
+        wr(NVIC_ISPR0, irq_bit);
+        asm!(
+            "msr PRIMASK, {primask}",
+            primask = in(reg) prior_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+        asm!("dsb", "isb", options(nostack, preserves_flags));
+    }
+
+    for _ in 0..100_000 {
+        if unsafe { read_volatile((NMI_RECORD as *const u32).add(2)) } != 0 {
+            break;
+        }
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+
+    let irq_ipsr = unsafe { read_volatile(NMI_RECORD as *const u32) };
+    let nmi_ipsr = unsafe { read_volatile((NMI_RECORD as *const u32).add(1)) };
+    let resumed_ipsr = unsafe { read_volatile((NMI_RECORD as *const u32).add(2)) };
+    let primask_in_nmi = unsafe { read_volatile((NMI_RECORD as *const u32).add(3)) };
+    let icsr_in_nmi = unsafe { read_volatile((NMI_RECORD as *const u32).add(4)) };
+    let irq_active_in_nmi = unsafe { read_volatile((NMI_RECORD as *const u32).add(5)) };
+    let primask_after_nmi = unsafe { read_volatile((NMI_RECORD as *const u32).add(6)) };
+    let active_after = rd(NVIC_IABR0) & irq_bit;
+    let pending_after = rd(NVIC_ISPR0) & irq_bit;
+
+    unsafe {
+        asm!("cpsid i", options(nomem, nostack, preserves_flags));
+        wr(NVIC_ICER0, irq_bit);
+        unpend(EXTI0_1_IRQ);
+        if nmi_ipsr == 2 {
+            wr(SCB_VTOR, source_vtor);
+        }
+        asm!("cpsie i", options(nomem, nostack, preserves_flags));
+        asm!("dsb", "isb", options(nostack, preserves_flags));
+    }
+
+    let cleanup_ok = active_after == 0 && pending_after == 0;
+    let ok = nmi_initially_clear
+        && prior_primask == 0
+        && irq_ipsr == 16 + EXTI0_1_IRQ
+        && nmi_ipsr == 2
+        && resumed_ipsr == 16 + EXTI0_1_IRQ
+        && primask_in_nmi == 1
+        && icsr_in_nmi & 0x1FF == 2
+        && irq_active_in_nmi == irq_bit
+        && primask_after_nmi == 1
+        && cleanup_ok
+        && (nmi_ipsr != 2 || rd(SCB_VTOR) == source_vtor);
+
+    puts("nmi primask ");
+    flag("entered", nmi_ipsr == 2);
+    puts("irq=");
+    hex(irq_ipsr);
+    puts(" nmi=");
+    hex(nmi_ipsr);
+    puts(" resumed=");
+    hex(resumed_ipsr);
+    puts(" icsr=");
+    hex(icsr_in_nmi & 0x1FF);
+    puts(" irq_active=");
+    hex(irq_active_in_nmi);
+    puts(" primask=");
+    hex(primask_in_nmi);
+    puts(" restored=");
+    hex(primask_after_nmi);
+    puts(" cleanup=");
+    flag(
+        "ok",
+        cleanup_ok && (nmi_ipsr != 2 || rd(SCB_VTOR) == source_vtor),
+    );
+    verdict(ok);
+    ok
 }
 
 /// Set known caller-saved register values immediately before pends IRQ 5.
@@ -844,6 +1003,7 @@ fn main() -> ! {
     mark(14, check_crc());
     mark(15, check_adc());
     mark(18, check_exception_entry());
+    mark(19, check_nmi_preempts_primasked_irq());
     let summary = summary | 0x0DC0_0000;
     wr(SUMMARY, summary);
     puts("summary ");

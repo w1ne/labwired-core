@@ -14,7 +14,8 @@
 # watchdogs. AIRCR.PRIGROUP writes are checked to read zero on ARMv6-M. A
 # software-pended EXTI0_1 NVIC line then takes a real exception through a RAM
 # vector and verifies handler IPSR/IABR, the eight-word Cortex-M0 stack frame,
-# EXC_RETURN, and return cleanup.
+# EXC_RETURN, and return cleanup. Another IRQ pends NMI with PRIMASK set and
+# verifies that NMI preempts and returns to the masked IRQ.
 schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv6m-none-eabi/release/firmware-stm32f072b-disco-smoke"
@@ -67,11 +68,12 @@ assertions:
       - " pc="
       - " exc_return=0xFFFFFFF9 sp="
       - " returned=1 ok"
-      - "summary 0x0DC7FFFF"
+      - "nmi primask entered=1 irq=0x00000015 nmi=0x00000002 resumed=0x00000015 icsr=0x00000002 irq_active=0x00000020 primask=0x00000001 restored=0x00000001 cleanup=ok=1 ok"
+      - "summary 0x0DCFFFFF"
       - "DONE"
   - memory_value:
       address: 0x20003000
-      expected_value: 0x0DC7FFFF
+      expected_value: 0x0DCFFFFF
       size: 4
   - gpio_edges:
       pin: "gpioc:6"
