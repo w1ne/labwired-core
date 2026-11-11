@@ -85,6 +85,8 @@ const BASEPRI_IRQ_LOW_BIT: u32 = 1 << (BASEPRI_IRQ_LOW % 32);
 const BASEPRI_IRQ_HIGH_BIT: u32 = 1 << (BASEPRI_IRQ_HIGH % 32);
 const BASEPRI_IRQ_MASK: u32 = BASEPRI_IRQ_LOW_BIT | BASEPRI_IRQ_HIGH_BIT;
 const BASEPRI_RECORD: u32 = 0x2000_0600;
+const NVIC_PRIORITY_VECTOR_TABLE: u32 = 0x2000_0800;
+const NVIC_PRIORITY_RECORD: u32 = 0x2000_0A00;
 const FAULT_RECORD: u32 = 0x2000_0680;
 const SCB_SHCSR: u32 = 0xE000_ED24;
 const SCB_CFSR: u32 = 0xE000_ED28;
@@ -270,6 +272,7 @@ fn main() -> ! {
     unsafe { smoke_usagefault_and_hardfault_escalation() };
     unsafe { smoke_primask_external_irq() };
     unsafe { smoke_basepri_priority_mask() };
+    unsafe { smoke_nvic_subpriority_order_and_preemption() };
     smoke_usart2_txe_irq();
     smoke_usart2_rx_enable_gate();
     smoke_spi1_irq_and_max31855();
@@ -1791,6 +1794,177 @@ unsafe fn smoke_basepri_priority_mask() -> bool {
     ok
 }
 
+/// Check Cortex-M3 priority grouping on the imported system. With PRIGROUP=5,
+/// equal group priority IRQs are ordered by subpriority, but a better
+/// subpriority cannot preempt an active IRQ in that same group.
+unsafe fn smoke_nvic_subpriority_order_and_preemption() -> bool {
+    const NVIC_ISER1: u32 = 0xE000_E104;
+    const NVIC_ICER1: u32 = 0xE000_E184;
+    const NVIC_ISPR1: u32 = 0xE000_E204;
+    const NVIC_ICPR1: u32 = 0xE000_E284;
+    const NVIC_IABR1: u32 = 0xE000_E304;
+    const NVIC_IPR_WORD: u32 = 0xE000_E424;
+    const VECTOR_LOW: usize = 16 + BASEPRI_IRQ_LOW as usize;
+    const VECTOR_HIGH: usize = 16 + BASEPRI_IRQ_HIGH as usize;
+    const VECTOR_WORDS: usize = VECTOR_HIGH + 1;
+    const IPR_MASK: u32 = 0xFFFF_0000;
+    const PRIORITIES: u32 = 0x8090_0000;
+
+    let source_vtor = read_volatile(SCB_VTOR as *const u32);
+    let prior_aircr = read_volatile(0xE000_ED0C as *const u32);
+    let prior_priority = read_volatile(NVIC_IPR_WORD as *const u32);
+    let prior_enabled = read_volatile(NVIC_ISER1 as *const u32) & BASEPRI_IRQ_MASK;
+    let prior_primask: u32;
+    let prior_basepri: u32;
+    core::arch::asm!(
+        "mrs {primask}, PRIMASK",
+        "mrs {basepri}, BASEPRI",
+        "cpsid i",
+        primask = out(reg) prior_primask,
+        basepri = out(reg) prior_basepri,
+        options(nomem, nostack, preserves_flags),
+    );
+
+    let table = NVIC_PRIORITY_VECTOR_TABLE as *mut u32;
+    let record = NVIC_PRIORITY_RECORD as *mut u32;
+    write_volatile(NVIC_ICER1 as *mut u32, BASEPRI_IRQ_MASK);
+    write_volatile(NVIC_ICPR1 as *mut u32, BASEPRI_IRQ_MASK);
+    for slot in 0..VECTOR_WORDS {
+        write_volatile(table.add(slot), 0);
+    }
+    for word in 0..8 {
+        write_volatile(record.add(word), 0);
+    }
+    write_volatile(
+        table.add(VECTOR_LOW),
+        (nvic_priority_order_handler as *const () as usize as u32) | 1,
+    );
+    write_volatile(
+        table.add(VECTOR_HIGH),
+        (nvic_priority_order_handler as *const () as usize as u32) | 1,
+    );
+    write_volatile(
+        0xE000_ED0C as *mut u32,
+        0x05FA_0000 | (prior_aircr & 0x0000_F8F8) | (5 << 8),
+    );
+    write_volatile(
+        NVIC_IPR_WORD as *mut u32,
+        (prior_priority & !IPR_MASK) | PRIORITIES,
+    );
+    write_volatile(SCB_VTOR as *mut u32, NVIC_PRIORITY_VECTOR_TABLE);
+    core::arch::asm!("dsb", "isb", options(nostack, preserves_flags));
+    let ordering_setup = read_volatile(SCB_VTOR as *const u32) == NVIC_PRIORITY_VECTOR_TABLE
+        && read_volatile(0xE000_ED0C as *const u32) & 0x700 == 5 << 8
+        && read_volatile(NVIC_IPR_WORD as *const u32) & IPR_MASK == PRIORITIES;
+    write_volatile(NVIC_ISER1 as *mut u32, BASEPRI_IRQ_MASK);
+    write_volatile(NVIC_ISPR1 as *mut u32, BASEPRI_IRQ_MASK);
+    core::arch::asm!(
+        "msr PRIMASK, {primask}",
+        primask = in(reg) prior_primask,
+        options(nostack, preserves_flags),
+    );
+    for _ in 0..4_096 {
+        if read_volatile(record) == 2 {
+            break;
+        }
+        core::arch::asm!("nop", options(nomem, nostack, preserves_flags));
+    }
+    let order_count = read_volatile(record);
+    let first = read_volatile(record.add(1));
+    let second = read_volatile(record.add(2));
+    let order_pending = read_volatile(NVIC_ISPR1 as *const u32) & BASEPRI_IRQ_MASK;
+    let order_active = read_volatile(NVIC_IABR1 as *const u32) & BASEPRI_IRQ_MASK;
+
+    core::arch::asm!("cpsid i", options(nomem, nostack, preserves_flags));
+    write_volatile(NVIC_ICER1 as *mut u32, BASEPRI_IRQ_MASK);
+    write_volatile(NVIC_ICPR1 as *mut u32, BASEPRI_IRQ_MASK);
+    for word in 0..8 {
+        write_volatile(record.add(word), 0);
+    }
+    write_volatile(
+        table.add(VECTOR_LOW),
+        (nvic_priority_nonpreempt_parent as *const () as usize as u32) | 1,
+    );
+    write_volatile(
+        table.add(VECTOR_HIGH),
+        (nvic_priority_nonpreempt_child as *const () as usize as u32) | 1,
+    );
+    write_volatile(NVIC_ISER1 as *mut u32, BASEPRI_IRQ_MASK);
+    write_volatile(NVIC_ISPR1 as *mut u32, BASEPRI_IRQ_LOW_BIT);
+    core::arch::asm!(
+        "msr PRIMASK, {primask}",
+        primask = in(reg) prior_primask,
+        options(nostack, preserves_flags),
+    );
+    for _ in 0..4_096 {
+        if read_volatile(record.add(7)) != 0 {
+            break;
+        }
+        core::arch::asm!("nop", options(nomem, nostack, preserves_flags));
+    }
+    let parent_ipsr = read_volatile(record.add(3));
+    let active_during = read_volatile(record.add(4));
+    let pending_during = read_volatile(record.add(5));
+    let ipsr_after_pend = read_volatile(record.add(6));
+    let child_ipsr = read_volatile(record.add(7));
+    let nonpreempt_pending = read_volatile(NVIC_ISPR1 as *const u32) & BASEPRI_IRQ_MASK;
+    let nonpreempt_active = read_volatile(NVIC_IABR1 as *const u32) & BASEPRI_IRQ_MASK;
+
+    core::arch::asm!("cpsid i", options(nomem, nostack, preserves_flags));
+    write_volatile(NVIC_ICER1 as *mut u32, BASEPRI_IRQ_MASK);
+    write_volatile(NVIC_ICPR1 as *mut u32, BASEPRI_IRQ_MASK);
+    write_volatile(NVIC_IPR_WORD as *mut u32, prior_priority);
+    write_volatile(
+        0xE000_ED0C as *mut u32,
+        0x05FA_0000 | (prior_aircr & 0x0000_F8F8) | (prior_aircr & 0x700),
+    );
+    write_volatile(SCB_VTOR as *mut u32, source_vtor);
+    write_volatile(NVIC_ISER1 as *mut u32, prior_enabled);
+    core::arch::asm!(
+        "msr BASEPRI, {basepri}",
+        "msr PRIMASK, {primask}",
+        "dsb",
+        "isb",
+        basepri = in(reg) prior_basepri,
+        primask = in(reg) prior_primask,
+        options(nostack, preserves_flags),
+    );
+
+    let ordering_ok = ordering_setup
+        && order_count == 2
+        && first == 16 + BASEPRI_IRQ_HIGH
+        && second == 16 + BASEPRI_IRQ_LOW
+        && order_pending == 0
+        && order_active == 0;
+    let nonpreempt_ok = parent_ipsr == 16 + BASEPRI_IRQ_LOW
+        && active_during == BASEPRI_IRQ_LOW_BIT
+        && pending_during == BASEPRI_IRQ_HIGH_BIT
+        && ipsr_after_pend == 16 + BASEPRI_IRQ_LOW
+        && child_ipsr == 16 + BASEPRI_IRQ_HIGH
+        && nonpreempt_pending == 0
+        && nonpreempt_active == 0;
+    let restored = read_volatile(SCB_VTOR as *const u32) == source_vtor
+        && read_volatile(NVIC_IPR_WORD as *const u32) == prior_priority
+        && read_volatile(0xE000_ED0C as *const u32) & 0x700 == prior_aircr & 0x700
+        && read_volatile(NVIC_ISER1 as *const u32) & BASEPRI_IRQ_MASK == prior_enabled
+        && read_volatile(NVIC_ISPR1 as *const u32) & BASEPRI_IRQ_MASK == 0
+        && read_volatile(NVIC_IABR1 as *const u32) & BASEPRI_IRQ_MASK == 0;
+    let ok = prior_primask == 0 && prior_basepri == 0 && ordering_ok && nonpreempt_ok && restored;
+
+    if ok {
+        putline(b"NVIC M3 SUBPRIORITY ORDER=55,54 SAME_GROUP_PREEMPT=0 PENDING=1 ok");
+    } else {
+        putline(b"NVIC M3 SUBPRIORITY CHECK FAILED");
+        print_reg(b"first exception=", first);
+        print_reg(b"second exception=", second);
+        print_reg(b"same-group active=", active_during);
+        print_reg(b"same-group pending=", pending_during);
+        print_reg(b"same-group IPSR=", ipsr_after_pend);
+        print_reg(b"same-group child=", child_ipsr);
+    }
+    ok
+}
+
 /// Verify PRIMASK keeps a pending external IRQ inactive until it is cleared.
 /// Reuse the BASEPRI low-priority vector handler to inspect the released IRQ.
 unsafe fn smoke_primask_external_irq() -> bool {
@@ -2068,6 +2242,60 @@ unsafe extern "C" fn smoke_external_irq_frame_handler() {
         "str r3, [r0, #68]",
         "movs r2, #1",
         "str r2, [r0, #56]",
+        "bx lr",
+    );
+}
+
+/// Record the active exception number for the PRIGROUP=5 arbitration probe.
+#[unsafe(naked)]
+unsafe extern "C" fn nvic_priority_order_handler() {
+    core::arch::naked_asm!(
+        "ldr r0, =0x20000A00",
+        "ldr r1, [r0]",
+        "cmp r1, #2",
+        "bhs 1f",
+        "mrs r2, ipsr",
+        "adds r1, r1, #1",
+        "str r1, [r0]",
+        "lsls r3, r1, #2",
+        "str r2, [r0, r3]",
+        "1:",
+        "bx lr",
+    );
+}
+
+/// Pend the better-subpriority IRQ from IRQ 54, then record that IRQ 54 stays
+/// active while IRQ 55 is pending and has not preempted it.
+#[unsafe(naked)]
+unsafe extern "C" fn nvic_priority_nonpreempt_parent() {
+    core::arch::naked_asm!(
+        "ldr r0, =0x20000A00",
+        "mrs r2, ipsr",
+        "str r2, [r0, #12]",
+        "ldr r3, =0xE000E204",
+        "movs r2, #0x80",
+        "str r2, [r3]",
+        "dsb",
+        "isb",
+        "ldr r3, =0xE000E304",
+        "ldr r2, [r3]",
+        "str r2, [r0, #16]",
+        "ldr r3, =0xE000E204",
+        "ldr r2, [r3]",
+        "str r2, [r0, #20]",
+        "mrs r2, ipsr",
+        "str r2, [r0, #24]",
+        "bx lr",
+    );
+}
+
+/// Capture IRQ 55's exception number after IRQ 54 returns.
+#[unsafe(naked)]
+unsafe extern "C" fn nvic_priority_nonpreempt_child() {
+    core::arch::naked_asm!(
+        "ldr r0, =0x20000A00",
+        "mrs r1, ipsr",
+        "str r1, [r0, #28]",
         "bx lr",
     );
 }
