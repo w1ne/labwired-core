@@ -35,7 +35,7 @@
 | `arty_litex_vexriscv` | `pass` | `True` | `yes` | `yes` | `3557` | `3.557` | `True` | `observable` | `3` | `uart_contains`, `uart_ordered` | 0 | `n/a` | n/a | n/a |
 | `arvsom` | `pass` | `True` | `yes` | `yes` | `8775` | `8.775` | `True` | `observable` | `1` | `memory_value`, `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `at91rm9200` | `pass` | `True` | `yes` | `yes` | `368699` | `368.699` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
-| `atsamd21j17d-aft` | `pass` | `True` | `yes` | `yes` | `93747` | `93.747` | `True` | `observable` | `14` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
+| `atsamd21j17d-aft` | `pass` | `True` | `yes` | `yes` | `3508` | `3.508` | `True` | `observable` | `14` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `atsamd51g19a` | `pass` | `True` | `yes` | `yes` | `1028` | `1.028` | `True` | `observable` | `4` | `uart_contains`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `beaglev-fire` | `pass` | `True` | `yes` | `yes` | `657` | `0.657` | `True` | `observable` | `8` | `uart_contains`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `beaglev_starlight` | `pass` | `True` | `yes` | `yes` | `7993` | `7.993` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |

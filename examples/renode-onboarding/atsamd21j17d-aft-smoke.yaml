@@ -28,12 +28,13 @@ assertions:
       - "rtc mode2 alarm=1 nvic3=1 released=1 day=1d hm=0000"
       - "rtc mode0 flags=81 wrapped=1"
       - "rtc mode1 per=04 flags=83 wrapped=1"
+      - "systick pendsv m0+ tailchain frame=1 r0=1 pending=1 ipsr=0000000e ok"
       - "SAMD21 PASS"
   - gpio_edges:
       pin: "gpio_a:17"
       min_edges: 4
   - memory_value:
       address: 0x20002000
-      expected_value: 0x5D21003F
+      expected_value: 0x5D21007F
       size: 4
   - expected_stop_reason: max_steps

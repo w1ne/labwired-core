@@ -30,6 +30,7 @@
 #![no_std]
 #![no_main]
 
+use core::arch::asm;
 use core::ptr::{read_volatile, write_volatile};
 use cortex_m_rt::entry;
 use panic_halt as _;
@@ -209,7 +210,8 @@ fn main() -> ! {
 
     // 8. The rest of the surface the Renode platform models: PORT group B,
     //    TC4 (16-bit MFRQ) and TC6 (8-bit one-shot down-counter), and the
-    //    SERCOM1/SERCOM3 USARTs. Every check feeds one bit of the summary word.
+    //    SERCOM1/SERCOM3 USARTs, RTC and Cortex-M0+ SysTick-to-PendSV tail
+    //    chaining. Every check feeds one bit of the summary word.
     let mut pass = 0u32;
     pass |= u32::from(check_portb()) << 0;
     pass |= u32::from(check_tc4()) << 1;
@@ -217,8 +219,9 @@ fn main() -> ! {
     pass |= u32::from(check_usart("sercom1", SERCOM1_BASE, PM_APBCMASK_SERCOM1)) << 3;
     pass |= u32::from(check_usart("sercom3", SERCOM3_BASE, PM_APBCMASK_SERCOM3)) << 4;
     pass |= u32::from(check_rtc()) << 5;
+    pass |= u32::from(check_systick_pendsv_tailchain()) << 6;
     unsafe { write_volatile(SUMMARY, SUMMARY_TAG | pass) };
-    if pass == 0x3f {
+    if pass == 0x7f {
         puts("SAMD21 PASS\n");
     } else {
         puts("SAMD21 FAIL ");
@@ -236,9 +239,22 @@ fn main() -> ! {
 
 // ── Extended checks ─────────────────────────────────────────────────────────
 
-/// Summary word: `0x5D21_0000 | pass bits`, all six checks = `0x5D21_003F`.
+/// Summary word: `0x5D21_0000 | pass bits`, all seven checks = `0x5D21_007F`.
 const SUMMARY: *mut u32 = 0x2000_2000 as *mut u32;
 const SUMMARY_TAG: u32 = 0x5D21_0000;
+
+const SCB_ICSR: *mut u32 = 0xE000_ED04 as *mut u32;
+const SCB_VTOR: *mut u32 = 0xE000_ED08 as *mut u32;
+const SCB_SHPR3: *mut u32 = 0xE000_ED20 as *mut u32;
+const SYSTICK_CSR: *mut u32 = 0xE000_E010 as *mut u32;
+const SYSTICK_CVR: *mut u32 = 0xE000_E018 as *mut u32;
+const RAM_VECTOR_BASE: u32 = 0x2000_0000;
+const VECTOR_TABLE_WORDS: usize = 48;
+const PENDSV_VECTOR_INDEX: usize = 14;
+const SYSTICK_VECTOR_INDEX: usize = 15;
+const TAILCHAIN_RECORD: u32 = 0x2000_2020;
+const THREAD_MARKER: u32 = 0x5448_5244;
+const SYSTICK_MARKER: u32 = 0x5359_5354;
 
 const PORTB_BASE: u32 = 0x4100_4480;
 const PORTB_DIR: *const u32 = PORTB_BASE as *const u32;
@@ -299,6 +315,186 @@ fn put_hex8(v: u8) {
 
 fn put_bit(b: bool) {
     putc(if b { b'1' } else { b'0' });
+}
+
+/// Check that lower-priority PendSV stays pending inside SysTick and
+/// tail-chains on Cortex-M0+, reusing the exception frame and live R0 value.
+fn check_systick_pendsv_tailchain() -> bool {
+    const PENDSTCLR: u32 = 1 << 25;
+    const PENDSVSET: u32 = 1 << 28;
+    const PENDSVCLR: u32 = 1 << 27;
+
+    let prior_vtor = unsafe { read_volatile(SCB_VTOR) };
+    let prior_shpr3 = unsafe { read_volatile(SCB_SHPR3) };
+    let test_shpr3 = (prior_shpr3 & !0xFFFF_0000) | (0x80 << 24) | (0xC0 << 16);
+    let table = RAM_VECTOR_BASE as *mut u32;
+    let record = TAILCHAIN_RECORD as *mut u32;
+    let prior_primask: u32;
+    unsafe {
+        asm!(
+            "mrs {primask}, PRIMASK",
+            "cpsid i",
+            primask = out(reg) prior_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+        write_volatile(SYSTICK_CSR, 0);
+        write_volatile(SCB_ICSR, PENDSTCLR | PENDSVCLR);
+        write_volatile(SCB_SHPR3, test_shpr3);
+        for index in 0..12 {
+            write_volatile(record.add(index), 0);
+        }
+        for index in 0..VECTOR_TABLE_WORDS {
+            write_volatile(table.add(index), 0);
+        }
+        write_volatile(
+            table.add(SYSTICK_VECTOR_INDEX),
+            (systick_pends_pendsv_handler as *const () as usize as u32) | 1,
+        );
+        write_volatile(
+            table.add(PENDSV_VECTOR_INDEX),
+            (pendsv_tailchain_handler as *const () as usize as u32) | 1,
+        );
+        write_volatile(SCB_VTOR, RAM_VECTOR_BASE);
+        asm!(
+            "msr PRIMASK, {primask}",
+            "dsb",
+            "isb",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+    if prior_primask == 0 {
+        unsafe { pend_systick_with_thread_marker() };
+    }
+
+    for _ in 0..100_000 {
+        if unsafe { read_volatile(record.add(11)) } != 0 {
+            break;
+        }
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+
+    let parent_ipsr = unsafe { read_volatile(record.add(0)) };
+    let parent_icsr_before = unsafe { read_volatile(record.add(1)) };
+    let parent_icsr_after = unsafe { read_volatile(record.add(2)) };
+    let parent_msp = unsafe { read_volatile(record.add(3)) };
+    let parent_exc_return = unsafe { read_volatile(record.add(4)) };
+    let thread_r0 = unsafe { read_volatile(record.add(5)) };
+    let child_ipsr = unsafe { read_volatile(record.add(6)) };
+    let child_msp = unsafe { read_volatile(record.add(7)) };
+    let child_exc_return = unsafe { read_volatile(record.add(8)) };
+    let child_r0 = unsafe { read_volatile(record.add(9)) };
+    let child_icsr = unsafe { read_volatile(record.add(10)) };
+    let child_hit = unsafe { read_volatile(record.add(11)) } == 1;
+    let thread_ipsr: u32;
+    unsafe {
+        asm!(
+            "mrs {value}, IPSR",
+            value = out(reg) thread_ipsr,
+            options(nomem, nostack, preserves_flags),
+        );
+        asm!("cpsid i", options(nomem, nostack, preserves_flags));
+        write_volatile(SYSTICK_CSR, 0);
+        write_volatile(SYSTICK_CVR, 0);
+        write_volatile(SCB_ICSR, PENDSTCLR | PENDSVCLR);
+        write_volatile(SCB_VTOR, prior_vtor);
+        write_volatile(SCB_SHPR3, prior_shpr3);
+        asm!(
+            "msr PRIMASK, {primask}",
+            "dsb",
+            "isb",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+
+    let deferred = parent_ipsr == 15
+        && parent_icsr_before & 0x1FF == 15
+        && parent_icsr_after & 0x1FF == 15
+        && parent_icsr_after & PENDSVSET != 0;
+    let frame_reused = parent_msp == child_msp
+        && parent_exc_return == 0xFFFF_FFF9
+        && child_exc_return == parent_exc_return;
+    let child_is_pendsv =
+        child_hit && child_ipsr == 14 && child_icsr & 0x1FF == 14 && child_icsr & PENDSVSET == 0;
+    let passed = prior_primask == 0
+        && thread_ipsr == 0
+        && deferred
+        && frame_reused
+        && child_is_pendsv
+        && thread_r0 == THREAD_MARKER
+        && child_r0 == SYSTICK_MARKER
+        && (test_shpr3 >> 24) & 0xFF == 0x80
+        && (test_shpr3 >> 16) & 0xFF == 0xC0
+        && unsafe { read_volatile(SCB_SHPR3) } == prior_shpr3;
+    puts("systick pendsv m0+ tailchain frame=");
+    put_bit(frame_reused);
+    puts(" r0=");
+    put_bit(thread_r0 == THREAD_MARKER && child_r0 == SYSTICK_MARKER);
+    puts(" pending=");
+    put_bit(deferred);
+    puts(" ipsr=");
+    put_hex(child_ipsr);
+    puts(if passed { " ok\n" } else { " FAIL\n" });
+    passed
+}
+
+#[unsafe(naked)]
+unsafe extern "C" fn systick_pends_pendsv_handler() {
+    core::arch::naked_asm!(
+        "mov r3, r0",
+        "ldr r0, =0x20002020",
+        "str r3, [r0, #20]",
+        "mrs r3, ipsr",
+        "str r3, [r0, #0]",
+        "mrs r3, msp",
+        "str r3, [r0, #12]",
+        "mov r3, lr",
+        "str r3, [r0, #16]",
+        "ldr r1, =0xE000ED04",
+        "ldr r2, [r1]",
+        "str r2, [r0, #4]",
+        "movs r2, #1",
+        "lsls r2, r2, #28",
+        "str r2, [r1]",
+        "ldr r2, [r1]",
+        "str r2, [r0, #8]",
+        "ldr r0, =0x53595354",
+        "bx lr",
+    );
+}
+
+#[unsafe(naked)]
+unsafe extern "C" fn pendsv_tailchain_handler() {
+    core::arch::naked_asm!(
+        "mov r2, r0",
+        "mrs r3, ipsr",
+        "ldr r0, =0x20002020",
+        "str r3, [r0, #24]",
+        "mrs r3, msp",
+        "str r3, [r0, #28]",
+        "mov r3, lr",
+        "str r3, [r0, #32]",
+        "str r2, [r0, #36]",
+        "ldr r3, =0xE000ED04",
+        "ldr r3, [r3]",
+        "str r3, [r0, #40]",
+        "movs r3, #1",
+        "str r3, [r0, #44]",
+        "bx lr",
+    );
+}
+
+#[unsafe(naked)]
+unsafe extern "C" fn pend_systick_with_thread_marker() {
+    core::arch::naked_asm!(
+        "ldr r0, =0x54485244",
+        "ldr r1, =0xE000ED04",
+        "movs r2, #1",
+        "lsls r2, r2, #26",
+        "str r2, [r1]",
+        "bx lr",
+    );
 }
 
 fn apb_enable(bit: u32) {
