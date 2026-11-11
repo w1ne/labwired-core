@@ -150,6 +150,12 @@ jobs:
           - id: esp32s3-devkitc-1-v11
             script: examples/esp32s3-devkitc-1/io-smoke.yaml
             system: configs/systems/esp32s3-devkitc-1-v11.yaml
+          # The v1.1 N16R8 board's addressable RGB LED is WS2812 on GPIO38.
+          # This fixture sends one red GRB pixel through RMT0 and checks both
+          # TX completion and the decoded device artifact.
+          - id: esp32s3-devkitc-1-v11-rgb
+            script: examples/esp32s3-devkitc-1/rgb-smoke.yaml
+            system: configs/systems/esp32s3-devkitc-1-v11-rgb.yaml
           # nRF52833 / micro:bit v2 — nRF52-family UART smoke on its own board.
           # Same firmware as tests/fixtures/microbit-v2-smoke.elf, rebuilt here.
           - id: microbit-v2
@@ -580,6 +586,10 @@ jobs:
           fi
           printf 'entry point 0x00000000 (declared)\n'
 
+      - name: Verify DevKitC-1 v1.1 RGB fixture
+        if: matrix.id == 'esp32s3-devkitc-1-v11-rgb'
+        run: examples/esp32s3-devkitc-1/rgb-smoke/verify-fixture.sh
+
       - name: Run matrix smoke
         if: matrix.id != 'stm32-exact-catalog'
         run: |
@@ -598,6 +608,14 @@ jobs:
             --script "${{ matrix.script }}" \
             --output-dir "out/coverage-matrix/${{ matrix.id }}" \
             --no-uart-stdout
+
+      - name: Check decoded DevKitC-1 v1.1 RGB evidence
+        if: matrix.id == 'esp32s3-devkitc-1-v11-rgb'
+        run: |
+          python3 examples/esp32s3-devkitc-1/rgb-smoke/verify-rgb-evidence.py \
+            "out/coverage-matrix/${{ matrix.id }}/result.json"
+          python3 examples/esp32s3-devkitc-1/rgb-smoke/verify-rgb-evidence.py \
+            examples/esp32s3-devkitc-1/evidence/rgb/hosted-verify.json
 
       - name: Run exact STM32 catalog variants
         if: matrix.id == 'stm32-exact-catalog'

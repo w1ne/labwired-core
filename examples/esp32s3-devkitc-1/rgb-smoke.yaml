@@ -1,0 +1,10 @@
+# The v1.1 onboard WS2812 receives one red pixel from RMT0 on GPIO38.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/tier1/esp32s3-devkitc1-rgb.elf"
+  system: "../../configs/systems/esp32s3-devkitc-1-v11-rgb.yaml"
+limits:
+  max_steps: 8000000
+  stop_when_assertions_pass: true
+assertions:
+  - uart_contains: "DEVKITC1_V11_RGB38_TX_DONE"

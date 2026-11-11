@@ -1,7 +1,7 @@
 # Espressif ESP32-S3-DevKitC-1 v1.1, using an ESP32-S3-WROOM-1-N16R8.
-# The supported board profile is limited to the onboard USB-to-UART bridge:
-# J3 TX/RX map to GPIO43/U0TXD and GPIO44/U0RXD. The RGB LED, PSRAM, USB-OTG,
-# Wi-Fi/Bluetooth and buttons are not represented by this smoke profile.
+# This base board profile is limited to UART0: J3 TX/RX map to GPIO43/U0TXD
+# and GPIO44/U0RXD. The v1.1 RGB LED is modeled in the separate RGB profile;
+# PSRAM, USB-OTG, Wi-Fi/Bluetooth and buttons remain outside both profiles.
 name: "esp32s3-devkitc-1-v1.1"
 chip: "../chips/esp32s3.yaml"
 external_devices: []

@@ -98,5 +98,13 @@
   "stm32wba52.elf": {
     "sha256": "c10bbe2e2ffeed0dc45c8e970bc18a5ca59835cbff1aa7731f26f1be2aea71ec",
     "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
+  },
+  "esp32s3-devkitc1-rgb.elf": {
+    "sha256": "88c0a38b75aaf742d49b2aaa0f58ffcc577df5d38e6b72a283878164dd152063",
+    "source_rev": "0f9591020c91fcb83845fca5f5b31c628f9bc5dc"
+  },
+  "esp32s3-devkitc1-rgb-flash.bin": {
+    "sha256": "3979e8cc2577328530dbbe7f3e0c8e0f8bddddcd4aee0c16f339e7b87d9f571b",
+    "source_rev": "0f9591020c91fcb83845fca5f5b31c628f9bc5dc"
   }
 }

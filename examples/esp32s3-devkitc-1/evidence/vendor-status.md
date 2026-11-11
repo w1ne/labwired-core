@@ -15,8 +15,8 @@ Checked 2026-11-11 UTC against Espressif's live product documentation:
   GPIO38; the v1.0 guide maps it to GPIO48.
 
 The model target is specifically the live N16R8 v1.1 variant. The current
-smoke profile only claims boot plus UART0; it does not claim PSRAM or RGB LED
-behavior.
+UART profile claims boot plus UART0. The additional RGB profile exercises the
+v1.1 WS2812 LED on GPIO38; it does not claim PSRAM behavior.
 
 Demand position: **ESP32 family rank 1**, used by 38% of respondents in the
 measured embedded MCU survey; ESP32 kits were used in 42% of respondents' main
