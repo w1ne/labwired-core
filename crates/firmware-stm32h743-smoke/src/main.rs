@@ -17,6 +17,10 @@ const SCB_CCR_STKALIGN: u32 = 1 << 9;
 #[cfg(feature = "stm32h743-exception-frame")]
 const SCB_CPACR: *mut u32 = 0xE000_ED88 as *mut u32;
 #[cfg(feature = "stm32h743-exception-frame")]
+const CPACR_CP10_CP11: u32 = 0x00F0_0000;
+#[cfg(feature = "stm32h743-exception-frame")]
+const CPACR_PRIVILEGED_ONLY: u32 = 0x0050_0000;
+#[cfg(feature = "stm32h743-exception-frame")]
 const NVIC_ISER0: *mut u32 = 0xE000_E100 as *mut u32;
 #[cfg(feature = "stm32h743-exception-frame")]
 const NVIC_ICER0: *mut u32 = 0xE000_E180 as *mut u32;
@@ -413,7 +417,7 @@ unsafe extern "C" fn pend_exception_irq_with_psp_sentinels(psp_top: u32) {
 #[cfg(feature = "stm32h743-exception-frame")]
 unsafe fn load_fp_sentinels() {
     // Enable CP10/CP11 before the first VFP instruction, as H743 firmware
-    // does on hardware. The current SCB model does not enforce CPACR gating.
+    // does on hardware.
     write_volatile(SCB_CPACR, read_volatile(SCB_CPACR) | (0xF << 20));
     asm!("dsb", "isb", options(nostack, preserves_flags));
     let values = core::ptr::addr_of!(FP_SENTINELS).cast::<u32>();
@@ -1601,6 +1605,19 @@ fn main() -> ! {
     send(b"STM32H7 register smoke\r\n");
     #[cfg(feature = "stm32h743-exception-frame")]
     {
+        unsafe {
+            write_volatile(SCB_CPACR, CPACR_PRIVILEGED_ONLY);
+        }
+        let cpacr_privileged = unsafe { read_volatile(SCB_CPACR) } & CPACR_CP10_CP11;
+        unsafe {
+            write_volatile(SCB_CPACR, CPACR_CP10_CP11);
+        }
+        let cpacr_full = unsafe { read_volatile(SCB_CPACR) } & CPACR_CP10_CP11;
+        send(b"cortex-m7 cpacr priv=");
+        send_hex32(cpacr_privileged);
+        send(b" full=");
+        send_hex32(cpacr_full);
+        send(b"\r\n");
         let exception_ok = check_cortex_m7_exception_frame();
         send(if exception_ok {
             b"cortex-m7 exception ok\r\n"

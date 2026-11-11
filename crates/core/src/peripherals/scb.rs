@@ -108,6 +108,12 @@ pub const CCR_DIV_0_TRP: u32 = 1 << 4;
 /// `CCR.STKALIGN`, bit 9: align exception stack frames to a double-word
 /// boundary and record the optional padding word in stacked xPSR[9].
 pub const CCR_STKALIGN: u32 = 1 << 9;
+/// CPACR.CP10/CP11 fields. These grant access to the optional FP extension.
+pub const CPACR_CP10_CP11_MASK: u32 = 0x00F0_0000;
+/// CPACR offset in the System Control Space.
+pub const CPACR_OFFSET: u64 = 0x88;
+/// `CFSR.UFSR.NOCP` — UFSR bit 3, i.e. CFSR bit 19 (B3.2.15).
+pub const CFSR_UFSR_NOCP: u32 = 1 << 19;
 /// `HFSR.FORCED`, bit 30 (B3.2.16): set when a configurable-priority fault
 /// escalates to HardFault.
 pub const HFSR_FORCED: u32 = 1 << 30;
@@ -204,6 +210,8 @@ pub struct SharedScbState {
     /// The ARMv7-M fault register file, shared with the CPU. See
     /// [`ScbFaultState`].
     pub faults: Arc<ScbFaultState>,
+    /// CPACR shared with the core when the chip has an FP extension.
+    pub cpacr: Option<Arc<AtomicU32>>,
 }
 
 /// System Control Block (SCB)
@@ -224,6 +232,9 @@ pub struct Scb {
     #[serde(skip)]
     pub event_state: Option<Arc<super::nvic::NvicState>>,
     pub ccr: u32,
+    /// CPACR.CP10/CP11, present only when an FP extension is declared.
+    #[serde(skip)]
+    pub cpacr: Option<Arc<AtomicU32>>,
     #[serde(skip)]
     /// SHPR1 (offset 0x18) holds priorities for MemManage(4), BusFault(5),
     /// UsageFault(6). Shared with CortexM so its exception-dispatch path
@@ -329,6 +340,7 @@ impl Scb {
             priority_group: Arc::new(AtomicU32::new(0)),
             sysreset_signal: Arc::new(AtomicBool::new(false)),
             faults: Arc::new(ScbFaultState::default()),
+            cpacr: None,
         })
     }
 
@@ -342,6 +354,7 @@ impl Scb {
             priority_group: Arc::new(AtomicU32::new(0)),
             sysreset_signal: Arc::new(AtomicBool::new(false)),
             faults: Arc::new(ScbFaultState::default()),
+            cpacr: None,
         })
     }
 
@@ -355,6 +368,7 @@ impl Scb {
             scr: 0,
             event_state: None,
             ccr: CCR_STKALIGN,
+            cpacr: s.cpacr,
             shpr1: s.shpr1,
             shpr2: s.shpr2,
             shpr3: s.shpr3,
@@ -440,6 +454,11 @@ impl Scb {
         Arc::clone(&self.faults)
     }
 
+    /// The CPACR storage shared with the core, when this chip declares an FPU.
+    pub fn cpacr_state(&self) -> Option<Arc<AtomicU32>> {
+        self.cpacr.as_ref().map(Arc::clone)
+    }
+
     /// Write a 32-bit value to an SCB register at the given word-aligned offset.
     /// Only compiled in test builds; production MMIO goes through `Peripheral::write`.
     #[cfg(test)]
@@ -489,6 +508,10 @@ impl Scb {
             0x18 => self.shpr1.load(Ordering::Relaxed),
             0x1C => self.shpr2.load(Ordering::Relaxed),
             0x20 => self.shpr3.load(Ordering::Relaxed),
+            CPACR_OFFSET if self.cpacr.is_some() => self
+                .cpacr
+                .as_ref()
+                .map_or(0, |v| v.load(Ordering::Relaxed) & CPACR_CP10_CP11_MASK),
             // MPU (ARMv7-M, 0xE000ED90..0xE000EDA0). TYPE is read-only:
             // SEPARATE=0 (unified), DREGION=[15:8], IREGION=0.
             0x90 => (self.mpu_dregion & 0xFF) << 8,
@@ -605,6 +628,11 @@ impl Scb {
             0x18 => self.shpr1.store(value, Ordering::Relaxed),
             0x1C => self.shpr2.store(value, Ordering::Relaxed),
             0x20 => self.shpr3.store(value, Ordering::Relaxed),
+            CPACR_OFFSET => {
+                if let Some(cpacr) = &self.cpacr {
+                    cpacr.store(value & CPACR_CP10_CP11_MASK, Ordering::Relaxed);
+                }
+            }
             // MPU region programming. Stored so reads round-trip and
             // z_arm_mpu_init completes; access enforcement is not modeled yet.
             // 0x90 (TYPE) is read-only — writes are ignored.
@@ -796,6 +824,19 @@ mod tests {
         scb.write_register(0x84, 1); // I-cache
         assert_eq!(scb.read_register(0x84), 1);
         assert_eq!(scb.read_register(0x80), 0xF01F_E009);
+    }
+
+    #[test]
+    fn cpacr_round_trips_only_when_an_fpu_is_present() {
+        let mut scb = Scb::new(Arc::new(AtomicU32::new(0)));
+        let cpacr = Arc::new(AtomicU32::new(0));
+        scb.cpacr = Some(cpacr.clone());
+        assert_eq!(scb.read_register(CPACR_OFFSET), 0);
+        scb.write_register(CPACR_OFFSET, 0xFFFF_FFFF);
+        assert_eq!(scb.read_register(CPACR_OFFSET), CPACR_CP10_CP11_MASK);
+
+        let without_fpu = Scb::new(Arc::new(AtomicU32::new(0)));
+        assert_eq!(without_fpu.read_register(CPACR_OFFSET), 0);
     }
 
     #[test]

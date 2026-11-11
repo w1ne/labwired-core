@@ -79,12 +79,16 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
     // A core with the FP extension (`cortex_m_fpu` at 0xE000_EF30) tracks
     // CONTROL.FPCA and stacks extended frames; every other core keeps the
     // basic frame.
-    if let Some(fp) = bus
+    let fp_context = bus
         .peripherals
         .iter()
-        .find_map(|p| p.dev.fp_context_state())
-    {
+        .find_map(|p| p.dev.fp_context_state());
+    let cpacr = fp_context.as_ref().map(|_| Arc::new(AtomicU32::new(0)));
+    if let Some(fp) = fp_context {
         cpu.set_shared_fp_context(fp);
+    }
+    if let Some(cpacr) = &cpacr {
+        cpu.set_shared_cpacr(cpacr.clone());
     }
     // An Armv8-M chip that declares the PMSAv8 MPU (`armv8m_mpu` at
     // 0xE000_ED90) serves the MPU offsets from it; the SCB window then ends
@@ -110,6 +114,7 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
         priority_group,
         sysreset_signal,
         faults,
+        cpacr,
     });
     scb.event_state = Some(nvic_state.clone());
     // A Cortex-M7 chip that declares its L1 caches (`cortex_m7_cache` at

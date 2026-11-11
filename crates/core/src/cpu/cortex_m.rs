@@ -10,8 +10,8 @@ use crate::fault_verdict::{FaultCapture, FaultEntry, FaultRegs, LockupEntry, Sta
 use crate::peripherals::armv8m_mpu::{CTRL_HFNMIENA, PERM_EXEC, PERM_READ, PERM_WRITE};
 use crate::peripherals::scb::{
     ScbFaultState, CFSR_BFSR_BFARVALID, CFSR_BFSR_PRECISERR, CFSR_MMFSR_DACCVIOL,
-    CFSR_MMFSR_IACCVIOL, CFSR_MMFSR_MMARVALID, CFSR_UFSR_DIVBYZERO, CFSR_UFSR_UNDEFINSTR,
-    HFSR_FORCED, SHCSR_BUSFAULTENA, SHCSR_MEMFAULTENA, SHCSR_USGFAULTENA,
+    CFSR_MMFSR_IACCVIOL, CFSR_MMFSR_MMARVALID, CFSR_UFSR_DIVBYZERO, CFSR_UFSR_NOCP,
+    CFSR_UFSR_UNDEFINSTR, HFSR_FORCED, SHCSR_BUSFAULTENA, SHCSR_MEMFAULTENA, SHCSR_USGFAULTENA,
 };
 use crate::{Bus, Cpu, SimResult, SimulationConfig, SimulationError, SimulationObserver};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -194,6 +194,8 @@ pub struct CortexM {
     /// basic 8-word frame and a CONTROL with only nPRIV/SPSEL.
     /// See [`crate::peripherals::cortex_m_fpu`].
     pub fp_ctx: Option<Arc<crate::peripherals::cortex_m_fpu::FpContextState>>,
+    /// Shared SCB.CPACR state when the chip declares an FP extension.
+    pub cpacr: Option<Arc<AtomicU32>>,
     /// Shared with an `armv8m_mpu` block: the PMSAv8 region file TT reports
     /// from. `None`: TT reports no MPU region.
     pub mpu_v8: Option<Arc<crate::peripherals::armv8m_mpu::MpuV8State>>,
@@ -228,6 +230,8 @@ pub struct CortexM {
     /// so `step_internal` raises UsageFault(DIVBYZERO). Only ever written on
     /// the error path.
     pending_div0: bool,
+    /// Set when an FP instruction is denied by CPACR (or the core has no FPU).
+    pending_nocp: bool,
     /// The first fault-handler entry (HardFault/MemManage/BusFault/UsageFault)
     /// since reset: the stacked frame and EXC_RETURN, for the fault verdict.
     /// Written once, on the exception-entry path, only for exceptions 3..=6.
@@ -349,6 +353,7 @@ impl Default for CortexM {
             debug_halt: None,
             faults: None,
             fp_ctx: None,
+            cpacr: None,
             mpu_v8: None,
             pending_data_fault: None,
             pending_mem_manage: None,
@@ -356,6 +361,7 @@ impl Default for CortexM {
             mpu_fetch_span: MpuSpanCache::default(),
             pending_undef_instruction: false,
             pending_div0: false,
+            pending_nocp: false,
             fault_entry: None,
             fault_entry_regs: FaultRegs {
                 hfsr: 0,
@@ -1933,6 +1939,34 @@ impl CortexM {
         self.fp_ctx = Some(fp);
     }
 
+    /// Share the SCB.CPACR register when this chip declares an FP extension.
+    pub fn set_shared_cpacr(&mut self, cpacr: Arc<AtomicU32>) {
+        self.cpacr = Some(cpacr);
+    }
+
+    /// CP10 and CP11 must both permit the current privilege level. Reserved
+    /// access value `0b10` is treated as denied; it is not a usable grant.
+    #[inline]
+    fn fp_access_allowed(&self) -> bool {
+        if self.fp_ctx.is_none() {
+            return false;
+        }
+        let Some(cpacr) = self.cpacr.as_ref() else {
+            return false;
+        };
+        let value = cpacr.load(Ordering::Relaxed);
+        let cp10 = (value >> 20) & 0x3;
+        let cp11 = (value >> 22) & 0x3;
+        let privileged = self.active_exception != 0 || self.control & 1 == 0;
+        [cp10, cp11].into_iter().all(|access| {
+            if privileged {
+                access == 0b01 || access == 0b11
+            } else {
+                access == 0b11
+            }
+        })
+    }
+
     /// Give the core the Armv8-M MPU region file (see [`CortexM::mpu_v8`]).
     pub fn set_shared_mpu_v8(&mut self, mpu: Arc<crate::peripherals::armv8m_mpu::MpuV8State>) {
         self.mpu_v8 = Some(mpu);
@@ -1984,9 +2018,9 @@ impl CortexM {
     #[cfg(feature = "jit")]
     #[inline]
     fn fp_context_pending(&self) -> bool {
-        self.fp_ctx
-            .as_ref()
-            .is_some_and(|fp| fp.lspact() || (self.control & 0x4 == 0 && fp.aspen()))
+        self.fp_ctx.as_ref().is_some_and(|fp| {
+            !self.fp_access_allowed() || fp.lspact() || (self.control & 0x4 == 0 && fp.aspen())
+        })
     }
 
     /// Turn ARMv7-M fault escalation (and the SCB fault register surface) on or
@@ -2018,6 +2052,17 @@ impl CortexM {
     #[cold]
     pub(in crate::cpu::cortex_m) fn raise_div_by_zero(&mut self) -> SimResult<PcAdvance> {
         self.pending_div0 = true;
+        Err(SimulationError::ExceptionRaised {
+            cause: 6,
+            pc: self.pc,
+        })
+    }
+
+    /// Latch a NOCP UsageFault for a denied or unavailable FP instruction.
+    /// The PC stays on the coprocessor instruction so stacking identifies it.
+    #[cold]
+    fn raise_nocp(&mut self) -> SimResult<()> {
+        self.pending_nocp = true;
         Err(SimulationError::ExceptionRaised {
             cause: 6,
             pc: self.pc,
@@ -3041,11 +3086,15 @@ impl Cpu for CortexM {
         self.fault_entry = None;
         self.fault_entry_regs = FaultRegs::default();
         self.lockup = None;
+        self.pending_nocp = false;
 
         // Out of reset the core is in Thread mode using MSP (CONTROL=0); PSP
         // is architecturally UNKNOWN — start it at 0.
         self.control = 0;
         self.psp = 0;
+        if let Some(cpacr) = &self.cpacr {
+            cpacr.store(0, Ordering::Relaxed);
+        }
 
         let vtor = self.vtor.load(Ordering::SeqCst) as u64;
         // NOT wrapped in `census_bus!`, deliberately. These two are the only
@@ -4008,6 +4057,8 @@ impl CortexM {
             crate::peripherals::scs_debug::DEMCR_VC_STATERR
         } else if ufsr_bit == CFSR_UFSR_DIVBYZERO {
             crate::peripherals::scs_debug::DEMCR_VC_CHKERR
+        } else if ufsr_bit == CFSR_UFSR_NOCP {
+            crate::peripherals::scs_debug::DEMCR_VC_NOCPERR
         } else {
             0
         };
@@ -4044,22 +4095,24 @@ impl CortexM {
                 // next step even when escalation is off.
                 let undef = std::mem::take(&mut self.pending_undef_instruction);
                 let div0 = std::mem::take(&mut self.pending_div0);
+                let nocp = std::mem::take(&mut self.pending_nocp);
                 let data = self.pending_data_fault.take();
                 let mpu = self.pending_mem_manage.take();
                 if !self.faults_enabled() {
                     return Err(e);
                 }
-                let escalated = match (data, undef, div0) {
+                let escalated = match (data, undef, div0, nocp) {
                     _ if mpu.is_some() => mpu.map(|cause| self.escalate_mem_manage(cause)),
-                    (Some(addr), _, _) => Some(self.escalate_precise_data_fault(addr)),
+                    (Some(addr), _, _, _) => Some(self.escalate_precise_data_fault(addr)),
                     // An undefined instruction escalates to UsageFault, or to
                     // HardFault when UsageFault is not enabled. Escalation
                     // failing means LOCKUP on silicon, so the `Err` stands and
                     // stops the run — which is still incomparably better than
                     // the old behaviour of advancing the PC and continuing.
-                    (None, true, _) => Some(self.escalate_usage_fault(CFSR_UFSR_UNDEFINSTR)),
-                    (None, false, true) => Some(self.escalate_usage_fault(CFSR_UFSR_DIVBYZERO)),
-                    (None, false, false) => None,
+                    (None, true, _, _) => Some(self.escalate_usage_fault(CFSR_UFSR_UNDEFINSTR)),
+                    (None, false, true, _) => Some(self.escalate_usage_fault(CFSR_UFSR_DIVBYZERO)),
+                    (None, false, false, true) => Some(self.escalate_usage_fault(CFSR_UFSR_NOCP)),
+                    (None, false, false, false) => None,
                 };
                 match escalated {
                     Some(true) => Ok(()),
@@ -4424,7 +4477,10 @@ impl CortexM {
                 instruction
             );
 
-            if self.fp_ctx.is_some() && instruction.is_vfp() {
+            if instruction.is_vfp() {
+                if !self.fp_access_allowed() {
+                    return self.raise_nocp();
+                }
                 self.fp_execute_check(bus)?;
             }
 

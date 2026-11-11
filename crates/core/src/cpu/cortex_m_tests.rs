@@ -407,8 +407,7 @@ fn armv7m_strexh_fails_without_matching_unchanged_reservation() {
 ///   vcmpe.f32 s15, s14 ; vmrs APSR_nzcv, fpscr ; bmi ...
 /// ```
 ///
-/// Neither instruction was decoded: VCMPE raised UNDEFINSTR and the image
-/// hard-faulted. Each case checks the APSR flags the branch will read.
+/// Each case checks the FPSCR result and the APSR flags the branch reads.
 #[test]
 fn vcmpe_f32_then_vmrs_apsr_nzcv_sets_branch_flags() {
     let nan = 0x7FC0_0000u32;
@@ -420,8 +419,7 @@ fn vcmpe_f32_then_vmrs_apsr_nzcv_sets_branch_flags() {
         ("unordered", nan, 1.0f32.to_bits(), 0b0011),
     ];
     for (name, s15, s14, want) in cases {
-        let mut cpu = CortexM::new();
-        let mut bus = MockBus::new();
+        let (mut cpu, mut bus, _fp) = fp_core();
         cpu.pc = 0x2000;
         cpu.fpu_s[15] = s15;
         cpu.fpu_s[14] = s14;
@@ -442,8 +440,7 @@ fn vcmpe_f32_then_vmrs_apsr_nzcv_sets_branch_flags() {
 
 #[test]
 fn vcmp_f32_with_zero_and_fz_flushes_denormals() {
-    let mut cpu = CortexM::new();
-    let mut bus = MockBus::new();
+    let (mut cpu, mut bus, _fp) = fp_core();
     cpu.pc = 0x2000;
     cpu.fpu_s[15] = 0x0000_0001; // smallest positive denormal
     run_test_instr(&mut cpu, &mut bus, 0xEEF57A40, true); // vcmp.f32 s15, #0.0
@@ -456,8 +453,7 @@ fn vcmp_f32_with_zero_and_fz_flushes_denormals() {
 
 #[test]
 fn vmsr_vmrs_round_trip_fpscr() {
-    let mut cpu = CortexM::new();
-    let mut bus = MockBus::new();
+    let (mut cpu, mut bus, _fp) = fp_core();
     cpu.pc = 0x2000;
     cpu.r0 = 0xFFFF_FFFF;
     run_test_instr(&mut cpu, &mut bus, 0xEEE10A10, true); // vmsr fpscr, r0
@@ -476,8 +472,7 @@ fn vmsr_vmrs_round_trip_fpscr() {
 #[test]
 fn vfp_unary_ops_and_vnmul_f32() {
     let nan = 0x7F80_0001u32; // signalling NaN, payload 1
-    let mut cpu = CortexM::new();
-    let mut bus = MockBus::new();
+    let (mut cpu, mut bus, _fp) = fp_core();
     cpu.pc = 0x2000;
     cpu.fpu_s[0] = (-2.5f32).to_bits();
     run_test_instr(&mut cpu, &mut bus, 0xEEB00AC0, true); // vabs.f32 s0, s0
@@ -1506,8 +1501,7 @@ fn test_thumb2_vfp_smoke_3_14_times_2() {
     //   vstr s15, [sp, #20]
     //   ldr r4, [sp, #20]          ; r4 = IEEE bits of 6.28
     // Hardware-verified result: 3.14f * 2.0f = 6.28f = 0x40C8F5C3.
-    let mut cpu = CortexM::new();
-    let mut bus = MockBus::new();
+    let (mut cpu, mut bus, _fp) = fp_core();
     // Set up memory so the VLDR/VSTR have somewhere to land.
     cpu.sp = 0x2000_0100;
     bus.write_u32(0x2000_010C, 0x4048_F5C3).unwrap(); // 3.14f
@@ -1555,8 +1549,7 @@ fn vfp_arith_encoding(h1_op: u16, sd: u8, sn: u8, sm: u8, op_b: u32) -> u32 {
 
 #[test]
 fn test_thumb2_vfp_add_sub_div() {
-    let mut cpu = CortexM::new();
-    let mut bus = MockBus::new();
+    let (mut cpu, mut bus, _fp) = fp_core();
     cpu.fpu_s[0] = (6.0_f32).to_bits();
     cpu.fpu_s[1] = (2.0_f32).to_bits();
 
@@ -1622,8 +1615,7 @@ fn test_thumb2_vfma_decodes_the_real_h563_opcode() {
     // M=0 (h2 bit5), Vm=6 (h2[3:0]) this decodes to
     // VFMA.F32 S15, S14, S12 (not S7,S7,S6 — Vd/Vn/Vm are only half of
     // each register number).
-    let mut cpu = CortexM::new();
-    let mut bus = MockBus::new();
+    let (mut cpu, mut bus, _fp) = fp_core();
     cpu.fpu_s[14] = (2.0_f32).to_bits();
     cpu.fpu_s[12] = (3.0_f32).to_bits();
     cpu.fpu_s[15] = (2.0_f32).to_bits();
@@ -1648,8 +1640,7 @@ fn test_thumb2_vfma_is_truly_fused_not_double_rounded() {
         "test operands must actually exercise the fused/unfused difference"
     );
 
-    let mut cpu = CortexM::new();
-    let mut bus = MockBus::new();
+    let (mut cpu, mut bus, _fp) = fp_core();
     cpu.fpu_s[0] = a.to_bits();
     cpu.fpu_s[1] = b.to_bits();
     cpu.fpu_s[2] = c.to_bits();
@@ -1669,8 +1660,7 @@ fn test_thumb2_vfma_is_truly_fused_not_double_rounded() {
 
 #[test]
 fn test_thumb2_vfms_vfnma_vfnms_sign_handling() {
-    let mut cpu = CortexM::new();
-    let mut bus = MockBus::new();
+    let (mut cpu, mut bus, _fp) = fp_core();
     cpu.fpu_s[0] = (6.0_f32).to_bits(); // Sn
     cpu.fpu_s[1] = (2.0_f32).to_bits(); // Sm
     cpu.fpu_s[2] = (5.0_f32).to_bits(); // Sd (accumulator)
@@ -3166,8 +3156,7 @@ fn test_vfp_fma_honors_fz_and_dn() {
 fn test_thumb2_vfp_fpscr_modes_apply_to_instructions() {
     // VADD.F32 S2, S0, S1 with FPSCR.FZ/DN written straight into the
     // core state. Pins the interpreter wiring, not just the helper.
-    let mut cpu = CortexM::new();
-    let mut bus = MockBus::new();
+    let (mut cpu, mut bus, _fp) = fp_core();
     cpu.fpu_s[0] = 0x0000_0001; // 2^-149 (denormal)
     cpu.fpu_s[1] = 0x0000_0002; // 2^-148 (denormal)
     run_test_instr(
@@ -4209,12 +4198,81 @@ fn fp_core() -> (
     let mut cpu = CortexM::new();
     let fp = Arc::new(crate::peripherals::cortex_m_fpu::FpContextState::default());
     cpu.set_shared_fp_context(fp.clone());
+    cpu.set_shared_cpacr(Arc::new(std::sync::atomic::AtomicU32::new(
+        crate::peripherals::scb::CPACR_CP10_CP11_MASK,
+    )));
     (cpu, MockBus::new(), fp)
 }
 
+#[test]
+fn fp_access_requires_cp10_and_cp11_and_respects_privilege() {
+    let (mut cpu, _bus, _fp) = fp_core();
+    let cpacr = cpu.cpacr.as_ref().unwrap().clone();
+
+    cpacr.store(
+        (0b01 << 20) | (0b01 << 22),
+        std::sync::atomic::Ordering::Relaxed,
+    );
+    assert!(
+        cpu.fp_access_allowed(),
+        "privileged code may use privileged access"
+    );
+    cpu.control = 1;
+    assert!(!cpu.fp_access_allowed(), "unprivileged code is denied");
+
+    cpacr.store(
+        crate::peripherals::scb::CPACR_CP10_CP11_MASK,
+        std::sync::atomic::Ordering::Relaxed,
+    );
+    assert!(
+        cpu.fp_access_allowed(),
+        "full access permits unprivileged code"
+    );
+    cpacr.store(0b11 << 20, std::sync::atomic::Ordering::Relaxed);
+    assert!(!cpu.fp_access_allowed(), "both CP10 and CP11 are required");
+
+    let plain = CortexM::new();
+    assert!(
+        !plain.fp_access_allowed(),
+        "a core without an FPU must deny VFP"
+    );
+}
+
+#[test]
+fn cpacr_denied_fp_instruction_raises_nocp_usagefault() {
+    use std::sync::atomic::Ordering;
+
+    let (mut cpu, mut bus, _fp) = fp_core();
+    let cpacr = Arc::new(std::sync::atomic::AtomicU32::new(0));
+    cpu.set_shared_cpacr(cpacr);
+    let faults = Arc::new(crate::peripherals::scb::ScbFaultState::new(true));
+    faults.shcsr.store(
+        crate::peripherals::scb::SHCSR_USGFAULTENA,
+        Ordering::Relaxed,
+    );
+    cpu.set_shared_faults(faults.clone());
+
+    cpu.pc = 0x1000;
+    cpu.sp = 0x4000;
+    bus.write_u32(6 * 4, 0x5001).unwrap(); // UsageFault vector
+    bus.write_u16(0x1000, 0xEEB0).unwrap(); // VMOV.F32 s0, s1
+    bus.write_u16(0x1002, 0x0A60).unwrap();
+
+    let config = bus.config.clone();
+    cpu.step_internal(&mut bus, &[], &config).unwrap();
+    assert_ne!(
+        faults.cfsr.load(Ordering::Relaxed) & crate::peripherals::scb::CFSR_UFSR_NOCP,
+        0,
+        "CFSR must record NOCP when CP10/CP11 access is denied"
+    );
+    cpu.step_internal(&mut bus, &[], &config).unwrap();
+    assert_eq!(cpu.active_exception, 6);
+    assert_eq!(cpu.pc, 0x5000);
+}
+
 /// `ExecuteFPCheck`: with FPCCR.ASPEN (reset value) the first FP instruction
-/// sets CONTROL.FPCA and starts FPSCR's mode bits from FPDSCR; a core without
-/// the FP extension block never sets FPCA.
+/// sets CONTROL.FPCA and starts FPSCR's mode bits from FPDSCR. A core without
+/// the FP extension denies the instruction and never sets FPCA.
 #[test]
 fn fp_instruction_sets_control_fpca_with_aspen() {
     let (mut cpu, mut bus, _fp) = fp_core();
@@ -4240,11 +4298,13 @@ fn fp_instruction_sets_control_fpca_with_aspen() {
     let mut plain = CortexM::new();
     let mut bus2 = MockBus::new();
     plain.pc = 0x1000;
-    run_test_instr(&mut plain, &mut bus2, 0xEEB0_0A60, true);
+    bus2.write_u16(0x1000, 0xEEB0).unwrap();
+    bus2.write_u16(0x1002, 0x0A60).unwrap();
+    let config = bus2.config.clone();
+    assert!(plain.step_internal(&mut bus2, &[], &config).is_err());
     assert_eq!(plain.control & 0x4, 0);
-    plain.r0 = 0x4;
-    run_test_instr(&mut plain, &mut bus2, 0xF380_8814, true);
     assert_eq!(plain.control & 0x4, 0, "no FP extension: FPCA not writable");
+    assert_eq!(plain.control_mask(), 0x3, "no FP extension exposes no FPCA");
 }
 
 /// ASPEN clear: FP instructions leave FPCA alone (software manages it).
