@@ -29,7 +29,8 @@
 # countdown test clears CVR, checks that no immediate exception is pended, then
 # verifies the next countdown-to-zero still enters exception 15. The COUNTFLAG
 # smoke checks that byte reads and writes to the read-only bit preserve it and
-# that a word CSR read clears it.
+# that a word CSR read clears it. An RVR update during a live countdown checks
+# that CVR keeps counting and the new value drives the following period.
 schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv6m-none-eabi/release/firmware-stm32f072b-disco-smoke"
@@ -91,6 +92,9 @@ assertions:
       - "systick periodic entries=0x00000003 reload=0x0000007F ipsr=0x0000000F,0x0000000F,0x0000000F active=1 countflag=1 pending=0 thread_ipsr=0x00000000 vtor_restored=1 ok"
       - "systick countflag-only tickint=0 flag=1 byte_preserved=1 write_ignored=1 control=0x00000004 handler=0 pending=0 read_clear=1 ipsr=0x00000000 vtor_restored=1 ok"
       - "systick cvr-clear countdown=started=1 pending_after_clear=0 pending_after_period=1 handler_before_unmask=0x00000000 handler_ipsr=0x0000000F active=0x0000000F entries=0x00000001 thread_ipsr=0x00000000 vtor_restored=1 ok"
+      - "systick reload-update rvr=0x0000001F preserved=1 first_wrap=1 pending_clear=1 next_reload=1 old="
+      - " current="
+      - " ok"
       - "summary 0x0DFFFFFF"
       - "DONE"
   - memory_value:

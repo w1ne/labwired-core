@@ -37,7 +37,9 @@
 //! confirms hardware reloads generate three more exception entries. A CVR
 //! clear during a live countdown must not fire immediately, but the next
 //! countdown-to-zero must still pend SysTick. COUNTFLAG's byte-read and
-//! read-only behavior is checked separately from its word-read clear.
+//! read-only behavior is checked separately from its word-read clear. An RVR
+//! update during a live countdown must preserve CVR and take effect on the
+//! next reload.
 
 #![no_std]
 #![no_main]
@@ -1425,6 +1427,112 @@ fn check_systick_cvr_clear_does_not_fire() -> bool {
     ok
 }
 
+/// Updating RVR must leave the running CVR alone and take effect on the next
+/// reload, rather than restarting the current countdown.
+fn check_systick_reload_update() -> bool {
+    const OLD_RELOAD: u32 = 255;
+    const NEW_RELOAD: u32 = 31;
+    const PENDSTSET: u32 = 1 << 26;
+    const PENDSTCLR: u32 = 1 << 25;
+
+    let prior_primask: u32;
+    unsafe {
+        asm!(
+            "mrs {primask}, PRIMASK",
+            "cpsid i",
+            primask = out(reg) prior_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+        wr(SYSTICK_CSR, 0);
+        wr(SCB_ICSR, PENDSTCLR);
+        wr(SYSTICK_RVR, OLD_RELOAD);
+        wr(SYSTICK_CVR, 0);
+        wr(SYSTICK_CSR, 0x7); // ENABLE | TICKINT | processor clock
+    }
+
+    let mut current_before_update = 0;
+    for _ in 0..10_000 {
+        let current = rd(SYSTICK_CVR);
+        if (128..=220).contains(&current) {
+            current_before_update = current;
+            break;
+        }
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+
+    unsafe { wr(SYSTICK_RVR, NEW_RELOAD) };
+    let current_after_update = rd(SYSTICK_CVR);
+    let reload_readback = rd(SYSTICK_RVR);
+    // MMIO access cycles can decrement CVR between the reads, but changing
+    // RVR must not reset the in-progress count to the new, smaller value.
+    let current_preserved = current_before_update > NEW_RELOAD
+        && current_after_update > NEW_RELOAD
+        && current_after_update <= current_before_update;
+
+    let mut first_wrap_pending = false;
+    for _ in 0..100_000 {
+        if rd(SCB_ICSR) & PENDSTSET != 0 {
+            first_wrap_pending = true;
+            break;
+        }
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+    let first_countflag = rd(SYSTICK_CSR) & (1 << 16) != 0;
+    unsafe { wr(SCB_ICSR, PENDSTCLR) };
+    let pending_cleared = rd(SCB_ICSR) & PENDSTSET == 0;
+
+    // With NEW_RELOAD=31, the next timer-generated pending edge arrives within
+    // 32 clocks. Sixteen bounded polls allow for MMIO and branch cycles; the old
+    // value is 255, so a stale reload does not wrap within this window.
+    let mut next_reload_used = false;
+    for _ in 0..16 {
+        if rd(SCB_ICSR) & PENDSTSET != 0 {
+            next_reload_used = true;
+            break;
+        }
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+    let second_countflag = rd(SYSTICK_CSR) & (1 << 16) != 0;
+    let ok = prior_primask == 0
+        && current_before_update != 0
+        && reload_readback == NEW_RELOAD
+        && current_preserved
+        && first_wrap_pending
+        && first_countflag
+        && pending_cleared
+        && next_reload_used
+        && second_countflag;
+
+    unsafe {
+        asm!("cpsid i", options(nomem, nostack, preserves_flags));
+        wr(SYSTICK_CSR, 0);
+        wr(SCB_ICSR, PENDSTCLR);
+        wr(SYSTICK_CVR, 0);
+        asm!(
+            "msr PRIMASK, {primask}",
+            "dsb",
+            "isb",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+
+    puts("systick reload-update rvr=");
+    hex(reload_readback);
+    puts(" ");
+    flag("preserved", current_preserved);
+    flag("first_wrap", first_wrap_pending && first_countflag);
+    flag("pending_clear", pending_cleared);
+    flag("next_reload", next_reload_used && second_countflag);
+    puts("old=");
+    hex(current_before_update);
+    puts(" current=");
+    hex(current_after_update);
+    puts(" ");
+    verdict(ok);
+    ok
+}
+
 /// An NMI pended by a running IRQ must enter despite PRIMASK and return to
 /// that IRQ before the deferred, lower-priority IRQ 6 can run.
 fn check_nmi_repend_and_deferred_irq() -> bool {
@@ -2221,12 +2329,16 @@ fn main() -> ! {
     let systick_periodic_ok = check_systick_periodic_reload();
     let systick_countflag_only_ok = check_systick_countflag_without_tickint();
     let systick_cvr_clear_ok = check_systick_cvr_clear_does_not_fire();
+    let systick_reload_update_ok = check_systick_reload_update();
     mark(
         21,
         systick_primask_ok && systick_icsr_software_pend_ok && systick_icsr_repend_ok,
     );
     mark(22, systick_periodic_ok);
-    mark(23, systick_countflag_only_ok && systick_cvr_clear_ok);
+    mark(
+        23,
+        systick_countflag_only_ok && systick_cvr_clear_ok && systick_reload_update_ok,
+    );
     let summary = summary | 0x0DF0_0000;
     wr(SUMMARY, summary);
     puts("summary ");
