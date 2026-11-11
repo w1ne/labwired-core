@@ -81,7 +81,9 @@ hb=0 red=0 green=1 blue=1
 - **Ethernet MAC + KSZ8081 PHY** and FTFE are declared stubs (reads
   return 0, writes are dropped). The RNGA (`kinetis_rnga`) refills instantly
   from a deterministic generator and raises no error interrupt.
-- **eDMA, PIT/FTM, I2C/SPI, ADC/DAC, USB, CAN and SDHC are not mapped.**
-  Firmware that touches them faults with a memory violation.
+- **ADC16 register-level conversions are modeled and exercised by analog
+  co-simulation regressions**; the smoke firmware does not enable or claim
+  broader ADC use. eDMA, PIT/FTM, I2C/SPI, DAC, USB, CAN and SDHC are not
+  mapped. Firmware that touches those blocks faults with a memory violation.
 
 See `VALIDATION.md` for the tier table.

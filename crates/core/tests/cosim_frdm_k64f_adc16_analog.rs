@@ -11,6 +11,8 @@
 //!   NTC as its temperature moves, with no further `SC1A` write;
 //! - the differential pair DAD2 (PTE2 = ADC0_DP2, PTE3 = ADC0_DM2) converts
 //!   the signed difference of the two netlists, sign-extended in `R[0]`.
+//! - a generic level-1 JFET's gate-junction depletion charge follows a
+//!   transient through ADC0_SE13/14 beside the unrelated NTC and diode.
 
 mod common;
 use common::root;
@@ -49,6 +51,62 @@ fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
 fn ntc_volts(temperature_c: f64) -> f64 {
     let r = ntc_resistance_ohms(temperature_c);
     3.3 * r / (10_000.0 + r)
+}
+
+/// Independent JFET gate-junction depletion charge below `FC * PB`.
+fn jfet_gate_junction_charge(voltage_v: f64) -> f64 {
+    const C0_F: f64 = 1e-9;
+    const PB_V: f64 = 1.0;
+    const M: f64 = 0.5;
+    C0_F * PB_V / (1.0 - M) * (1.0 - (1.0 - voltage_v / PB_V).powf(1.0 - M))
+}
+
+/// Independent backward-Euler update for two equal gate junctions tied to
+/// fixed 3.3 V drain/source nodes through their depletion charges.
+fn expected_jfet_gate_voltage(previous_v: f64, drive_v: f64, step_s: f64) -> f64 {
+    const DRIVE_OHMS: f64 = 1_000.0;
+    const JUNCTION_REFERENCE_V: f64 = 3.3;
+    let total_charge = |gate_v: f64| 2.0 * jfet_gate_junction_charge(gate_v - JUNCTION_REFERENCE_V);
+    let previous_charge = total_charge(previous_v);
+    let residual = |gate_v: f64| {
+        (gate_v - drive_v) / DRIVE_OHMS + (total_charge(gate_v) - previous_charge) / step_s
+    };
+    let (mut low, mut high) = (drive_v.min(previous_v), drive_v.max(previous_v));
+    for _ in 0..100 {
+        let mid = 0.5 * (low + high);
+        if residual(mid) > 0.0 {
+            high = mid;
+        } else {
+            low = mid;
+        }
+    }
+    0.5 * (low + high)
+}
+
+fn diode_load_line_voltage() -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const LIMIT_OHMS: f64 = 1_000.0;
+    const DIODE_IS_A: f64 = 2.52e-9;
+    const DIODE_N: f64 = 1.752;
+    const DIODE_RS_OHMS: f64 = 0.568;
+    const THERMAL_V: f64 = 1.380_649e-23 * 298.15 / 1.602_176_634e-19;
+    let current_at_junction_voltage =
+        |junction_v: f64| DIODE_IS_A * ((junction_v / (DIODE_N * THERMAL_V)).exp() - 1.0);
+    let residual = |junction_v: f64| {
+        let current = current_at_junction_voltage(junction_v);
+        (SUPPLY_V - junction_v - current * DIODE_RS_OHMS) / LIMIT_OHMS - current
+    };
+    let (mut low, mut high) = (0.0, 1.2);
+    for _ in 0..100 {
+        let mid = 0.5 * (low + high);
+        if residual(mid) > 0.0 {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    let junction_v = 0.5 * (low + high);
+    junction_v + current_at_junction_voltage(junction_v) * DIODE_RS_OHMS
 }
 
 fn signal_voltage(session: &CosimSession, path: &str) -> f64 {
@@ -244,4 +302,144 @@ fn frdm_k64f_dad2_converts_the_signed_difference_of_two_netlists() {
     // The NTC divider (2.79 V, 1.65 V, 0.37 V) crosses the ~0.7 V diode
     // between 25 and 80 °C, so the difference changes sign.
     assert_eq!(signs, [1, 1, -1]);
+}
+
+#[test]
+fn frdm_k64f_jfet_gate_depletion_charge_reaches_adc16_alongside_ntc_and_diode() {
+    const STEP_S: f64 = 1e-6;
+    const SUBSTEPS: usize = 10;
+    let system_path = root("configs/systems/frdm-k64f.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load FRDM-K64F profile");
+    let analog = SystemManifest::from_file(root("examples/frdm-k64f/analog-ntc-diode-system.yaml"))
+        .expect("load unrelated generic NTC and Shockley diode routes");
+    let jfet = SystemManifest::from_file(root(
+        "examples/frdm-k64f/analog-jfet-gate-charge-adc-system.yaml",
+    ))
+    .expect("load matched generic JFET gate-charge branches");
+    profile.cosim_models = analog.cosim_models;
+    for model in &mut profile.cosim_models {
+        let (key, pad) = match model.id.as_str() {
+            "ntc_divider" => ("v_sense", "ptb2"),
+            "diode_load_line" => ("v_diode", "ptb10"),
+            other => panic!("unexpected base model {other}"),
+        };
+        model
+            .outputs
+            .insert(key.to_string(), format!("board.analog.{pad}_volts"));
+    }
+    profile.cosim_models.extend(jfet.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load MK64F12 descriptor");
+    for (pad, peripheral, channel) in [
+        ("PTB2", "adc0", 12),
+        ("PTB3", "adc0", 13),
+        ("PTC0", "adc0", 14),
+        ("PTB10", "adc1", 14),
+    ] {
+        let route = &chip.analog_pins[pad];
+        assert_eq!(route.peripheral, peripheral, "{pad} ADC instance");
+        assert_eq!(route.channel, channel, "{pad} channel");
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build FRDM-K64F bus");
+    init_and_calibrate(&mut bus, ADC0, MODE_12);
+    init_and_calibrate(&mut bus, ADC1, MODE_12);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries NTC, diode, and matched generic JFET charge branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "the generic devices must resolve through PTB2/PTB3/PTC0/PTB10 to ADC16"
+    );
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated NTC temperature");
+    session
+        .set_signal_number("ui.jfet_gate.drive_v", 3.3)
+        .expect("precharge both JFET gates at their drain/source reference");
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("settle NTC, diode, and both JFET branches");
+    assert_eq!(initial_steps.len(), 4, "all four analog netlists solve");
+    assert!(
+        initial_errors.is_empty(),
+        "route errors: {initial_errors:?}"
+    );
+    assert!(
+        (signal_voltage(&session, "board.analog.ptb3_volts") - 3.3).abs() < 1e-9,
+        "the precharged JFET gate starts at the drain/source reference"
+    );
+
+    session
+        .set_signal_number("ui.jfet_gate.drive_v", 0.0)
+        .expect("step both matched JFET gate drives low");
+    let mut expected_gate_v = 3.3;
+    let mut final_gate_v = 3.3;
+    for step in 0..8 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route JFET charge alongside NTC and diode");
+        assert_eq!(
+            steps.len(),
+            4,
+            "all analog netlists solve on each transient step"
+        );
+        assert!(
+            errors.is_empty(),
+            "unexpected ADC16 route errors: {errors:?}"
+        );
+
+        for _ in 0..SUBSTEPS {
+            expected_gate_v =
+                expected_jfet_gate_voltage(expected_gate_v, 0.0, STEP_S / SUBSTEPS as f64);
+        }
+        let gate_v = signal_voltage(&session, "board.analog.ptb3_volts");
+        let control_v = signal_voltage(&session, "board.analog.ptc0_volts");
+        assert!(
+            (gate_v - expected_gate_v).abs() < 2e-8,
+            "JFET CGS/CGD charge at step {step}: expected {expected_gate_v} V, got {gate_v} V"
+        );
+        assert!(
+            control_v.abs() < 1e-8,
+            "zero-charge control follows the low drive within the leakage floor, got {control_v} V"
+        );
+        assert!(
+            gate_v > control_v,
+            "depletion charge must delay the gate edge relative to its zero-charge control"
+        );
+
+        let ntc_v = signal_voltage(&session, "board.analog.ptb2_volts");
+        assert!(
+            (ntc_v - ntc_volts(25.0)).abs() < 1e-9,
+            "the NTC remains independent"
+        );
+        let diode_v = signal_voltage(&session, "board.analog.ptb10_volts");
+        assert!(
+            (diode_v - diode_load_line_voltage()).abs() < 2e-5,
+            "the unrelated Shockley diode remains at its independent load line"
+        );
+
+        for (adc, channel, voltage_v) in [
+            (ADC0, AD12, ntc_v),
+            (ADC0, 13, gate_v),
+            (ADC0, AD14, control_v),
+            (ADC1, AD14, diode_v),
+        ] {
+            assert_eq!(
+                convert(&mut bus, adc, channel),
+                se_code(voltage_v, 12),
+                "ADC16 {adc:#x} channel {channel} follows its routed analog device"
+            );
+        }
+        final_gate_v = gate_v;
+    }
+    assert!(
+        final_gate_v < 3e-3,
+        "the charged gate converges within the MNA leakage/convergence floor of its zero-volt control: {final_gate_v} V"
+    );
 }
