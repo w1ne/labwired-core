@@ -418,6 +418,9 @@ impl Systick {
                 self.cvr.set(0);
                 self.countflag.set(false);
             }
+            // SYST_CALIB is read-only. A write is architecturally ignored,
+            // not an unknown register access.
+            0x0C => {}
             _ => {
                 crate::census_reg!("systick:Systick", offset, "write");
             }
@@ -666,6 +669,13 @@ mod tests {
         st.write(0x08, 0x00).unwrap(); // CVR write → clears counter to 0
         st.write(0x00, 0x07).unwrap(); // CSR: ENABLE | TICKINT | CLKSOURCE
         st
+    }
+
+    #[test]
+    fn calibration_register_is_read_only() {
+        let mut st = Systick::with_calib(0x4000_1770);
+        st.write_u32(0x0C, 0xA55A_3CC3).unwrap();
+        assert_eq!(st.read_u32(0x0C).unwrap(), 0x4000_1770);
     }
 
     /// Regression: a counter sitting at zero (freshly reloaded, or just cleared

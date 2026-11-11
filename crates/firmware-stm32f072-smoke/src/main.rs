@@ -1049,13 +1049,16 @@ fn check_systick_pause_resume() -> bool {
 }
 
 /// RM0091 §11.1.2 specifies TENMS=6000 for the 6 MHz HCLK/8 SysTick source.
-/// The CALIB bits also identify the reference source and its calibration skew.
+/// CALIB is read-only; verify that an attempted write cannot change its value.
 fn check_systick_calibration() -> bool {
     let calib = rd(SYSTICK_CALIB);
     let tenms = calib & 0x00FF_FFFF;
     let skew = calib & (1 << 30) != 0;
     let noref = calib & (1 << 31) != 0;
-    let ok = calib == 0x4000_1770 && tenms == 6000 && skew && !noref;
+    wr(SYSTICK_CALIB, 0xA55A_3CC3);
+    let after_write = rd(SYSTICK_CALIB);
+    let write_ignored = after_write == calib;
+    let ok = calib == 0x4000_1770 && tenms == 6000 && skew && !noref && write_ignored;
 
     puts("systick calib=");
     hex(calib);
@@ -1065,6 +1068,8 @@ fn check_systick_calibration() -> bool {
     puts(if skew { "1" } else { "0" });
     puts(" noref=");
     puts(if noref { "1" } else { "0" });
+    puts(" write_ignored=");
+    puts(if write_ignored { "1" } else { "0" });
     puts(if ok { " ok\r\n" } else { " bad\r\n" });
     ok
 }
