@@ -914,6 +914,10 @@ pub struct L4I2c {
     /// The chip yaml declared `pad_map: stm32g0` (the G0 AF6 pinout).
     #[serde(skip)]
     pad_map_g0: bool,
+    /// The chip yaml declared `pad_map: stm32g4`; this selects the G4 AF4
+    /// table, including the G431KB's I2C1_SCL alternate on PA15.
+    #[serde(skip)]
+    pad_map_g4: bool,
     /// The bit-level engine used on a world `gpio_net` (see `i2c_net`).
     #[serde(skip)]
     net: net::I2cNet,
@@ -947,6 +951,7 @@ impl Default for L4I2c {
             lines: None,
             wire_frames: Vec::new(),
             pad_map_g0: false,
+            pad_map_g4: false,
             net: net::I2cNet::default(),
         }
     }
@@ -2388,12 +2393,15 @@ impl I2c {
     }
 
     /// Select the declared alternate-function pad map (chip yaml
-    /// `config: { pad_map: stm32g0 }`). Only the modern (L4-generation)
-    /// controller on a G0 has one to declare today.
+    /// `config: { pad_map: stm32g0|stm32g4 }`).
     pub fn set_pad_map(&mut self, pad_map: &str) -> anyhow::Result<()> {
         match (self, pad_map.to_ascii_lowercase().as_str()) {
             (Self::Stm32L4(i), "stm32g0" | "g0") => {
                 i.pad_map_g0 = true;
+                Ok(())
+            }
+            (Self::Stm32L4(i), "stm32g4" | "g4") => {
+                i.pad_map_g4 = true;
                 Ok(())
             }
             (Self::Stm32F1(i), "ch32v003" | "wch") => {
@@ -2402,7 +2410,7 @@ impl I2c {
             }
             (_, "none") => Ok(()),
             (_, other) => Err(anyhow::anyhow!(
-                "unsupported I2C pad_map '{other}' for this controller; supported: stm32g0 (stm32l4 profile), ch32v003 (stm32f1 profile), none"
+                "unsupported I2C pad_map '{other}' for this controller; supported: stm32g0/stm32g4 (stm32l4 profile), ch32v003 (stm32f1 profile), none"
             )),
         }
     }
@@ -2410,6 +2418,11 @@ impl I2c {
     /// `true` when this controller routes the STM32G0 AF6 pinout.
     pub(crate) fn is_g0_pad_map(&self) -> bool {
         matches!(self, Self::Stm32L4(i) if i.pad_map_g0)
+    }
+
+    /// `true` when this controller routes the STM32G4 AF4 pinout.
+    pub(crate) fn is_g4_pad_map(&self) -> bool {
+        matches!(self, Self::Stm32L4(i) if i.pad_map_g4)
     }
 
     /// `true` when this legacy register block uses the CH32V003 default

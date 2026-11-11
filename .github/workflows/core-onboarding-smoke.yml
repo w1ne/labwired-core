@@ -26,6 +26,7 @@ on:
       - "crates/firmware-nucleo-f446re-smoke/**"
       - "crates/firmware-nucleo-h503rb-smoke/**"
       - "crates/firmware-nucleo-c562re-smoke/**"
+      - "crates/firmware-nucleo-g431kb-bme280-smoke/**"
       - "crates/firmware-nucleo-h753zi-smoke/**"
       - "crates/firmware-rp2040-picow-bme280-smoke/**"
       - "crates/firmware-ra4m1-bme280-smoke/**"
@@ -131,6 +132,13 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/nucleo-g491re-bme280/bme280-smoke.yaml
             system: configs/systems/nucleo-g491re-bme280.yaml
+          # Exact NUCLEO-G431KB board: read the modeled BME280 on I2C1 and
+          # exercise the board's LD2 on PB8. PA15/PB7 are the Nano A5/A4 I2C pins.
+          - id: nucleo-g431kb-bme280
+            crate: firmware-nucleo-g431kb-bme280-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-g431kb-bme280/bme280-smoke.yaml
+            system: configs/systems/nucleo-g431kb-bme280.yaml
           # UNO R4 Minima RA4M1 IIC1: read the BME280 chip ID via A4/A5 and
           # report it over the modeled SCI2 console. Pad routing is not gated.
           - id: arduino-uno-r4-minima-bme280

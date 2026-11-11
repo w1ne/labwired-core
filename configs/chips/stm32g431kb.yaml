@@ -1,0 +1,99 @@
+# LabWired — exact STM32G431KB package profile for NUCLEO-G431KB (MB1430).
+# Demand: “other STM32” rank #4 (13%); Nucleo/Discovery kits rank #4 (23%).
+# This adds the buyable 32-pin K-package board mapping; the G431 core and G4
+# register models are reused from the already-supported G431/G474 family.
+#
+# Geometry: ST DS12589 Rev 6 lists the STM32G431xB parts at 128 KiB flash and
+# 32 KiB SRAM: 22 KiB main SRAM at 0x20000000 plus 10 KiB CCM at 0x10000000.
+# The CCM is intentionally outside this narrow board profile. Only GPIOA/B,
+# I2C1, USART2 and the common support blocks used by this board system are
+# declared; this K package does not expose the G431RB descriptor's GPIOC/D.
+name: "stm32g431kb"
+arch: "arm"
+core: "cortex-m4"
+cpu_hz: 170_000_000
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.35
+  vih: 0.65
+
+flash:
+  base: 0x08000000
+  size: "128KB"
+ram:
+  base: 0x20000000
+  size: "22KB"
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    config:
+      debug_schema: "../peripherals/stm32g474re/rcc.yaml"
+      profile: "stm32g4"
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x48000000
+    size: "1KB"
+    clock: { reg: "ahb2enr", bit: 0 }
+    config:
+      debug_schema: "../peripherals/stm32g474re/gpioa.yaml"
+      profile: "stm32v2"
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x48000400
+    size: "1KB"
+    clock: { reg: "ahb2enr", bit: 1 }
+    config:
+      debug_schema: "../peripherals/stm32g474re/gpiob.yaml"
+      profile: "stm32v2"
+  - id: "usart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 38
+    clock: { reg: "apb1enr", bit: 17 }
+    config:
+      debug_schema: "../peripherals/stm32g474re/usart2.yaml"
+      profile: "stm32v2"
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 31
+    clock: { reg: "apb1enr", bit: 21 }
+    config:
+      debug_schema: "../peripherals/stm32g474re/i2c1.yaml"
+      profile: "stm32l4"
+      pad_map: "stm32g4"
+  - id: "flash"
+    type: "flash"
+    base_address: 0x40022000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32g474re/flash.yaml"
+      profile: "l4"
+  - id: "pwr"
+    type: "pwr"
+    base_address: 0x40007000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32g474re/pwr.yaml"
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    config:
+      debug_schema: "../peripherals/stm32g474re/stk.yaml"
+  - id: "nvic"
+    type: "nvic"
+    base_address: 0xE000E100
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32g474re/nvic.yaml"
+  - id: "dbgmcu"
+    type: "dbgmcu"
+    base_address: 0xE0042000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32g474re/dbgmcu.yaml"
+      idcode: 0x00000468

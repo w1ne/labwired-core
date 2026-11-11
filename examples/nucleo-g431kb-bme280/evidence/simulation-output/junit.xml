@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="14" failures="0" errors="0" time="0.050498">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="8c7fff7a2eef4a1c0acb2cb6c05790b32e377d6703561a5637a03995e9d0c744"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.050498">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: G431KB_BME280_OK id=0x60 temp=0x082DC0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: peripheral_log: i2c1.bus_trace contains &quot;addr 0x77 W ack&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: peripheral_log: i2c1.bus_trace contains &quot;data 0xd0 ack&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: peripheral_log: i2c1.bus_trace contains &quot;addr 0x77 R ack&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: peripheral_log: i2c1.bus_trace contains &quot;data 0x60 ack&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: peripheral_log: i2c1.bus_trace contains &quot;data 0xfa ack&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: peripheral_log: i2c1.bus_trace contains &quot;data 0x82 ack&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 8: peripheral_log: i2c1.bus_trace contains &quot;data 0xdc ack&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 9: peripheral_log: i2c1.bus_trace contains &quot;data 0x00 ack&quot;" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 10: gpio_edges: gpioa:15 &gt;= 8 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 11: gpio_edges: gpiob:7 &gt;= 2 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 12: gpio_edges: gpiob:8 &gt;= 8 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 13: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

@@ -2674,12 +2674,24 @@ impl SystemBus {
             ("i2c2", 'b', 13, 6, LINE_SCL, "I2C2_SCL"),
             ("i2c2", 'b', 14, 6, LINE_SDA, "I2C2_SDA"),
         ];
+        // STM32G4 AF4 routes, selected only when a G4 chip declares
+        // `pad_map: stm32g4`. DS12589 (STM32G431x6/x8/xB) plus ST UM2397
+        // document the NUCLEO-G431KB I2C1 pair PA15=SCL and PB7=SDA. Keep
+        // the established PB6/PB7 and PB8/PB9 choices as additional I2C1
+        // alternates used by other G4 board profiles.
+        const G4: &[I2cPad] = &[
+            ("i2c1", 'a', 15, 4, LINE_SCL, "I2C1_SCL"),
+            ("i2c1", 'b', 6, 4, LINE_SCL, "I2C1_SCL"),
+            ("i2c1", 'b', 7, 4, LINE_SDA, "I2C1_SDA"),
+            ("i2c1", 'b', 8, 4, LINE_SCL, "I2C1_SCL"),
+            ("i2c1", 'b', 9, 4, LINE_SDA, "I2C1_SDA"),
+        ];
 
         for i2c_name in ["i2c1", "i2c2", "i2c3"] {
             let Some(i2c_idx) = self.find_peripheral_index_by_name(i2c_name) else {
                 continue;
             };
-            let Some((layout, g0, ch32v003)) = self.peripherals[i2c_idx]
+            let Some((layout, g0, g4, ch32v003)) = self.peripherals[i2c_idx]
                 .dev
                 .as_any()
                 .and_then(|a| a.downcast_ref::<I2c>())
@@ -2687,6 +2699,7 @@ impl SystemBus {
                     (
                         i2c.register_layout(),
                         i2c.is_g0_pad_map(),
+                        i2c.is_g4_pad_map(),
                         i2c.is_ch32v003_pad_map(),
                     )
                 })
@@ -2722,6 +2735,7 @@ impl SystemBus {
                 };
                 let v2_table = match (layout, gpio_layout) {
                     (I2cRegisterLayout::Stm32L4, GpioRegisterLayout::Stm32V2) if g0 => G0,
+                    (I2cRegisterLayout::Stm32L4, GpioRegisterLayout::Stm32V2) if g4 => G4,
                     (I2cRegisterLayout::Stm32L4, GpioRegisterLayout::Stm32V2) => L4,
                     (I2cRegisterLayout::Stm32F1, GpioRegisterLayout::Stm32V2) => F4,
                     (I2cRegisterLayout::Stm32F1, GpioRegisterLayout::Wch) if ch32v003 => {
