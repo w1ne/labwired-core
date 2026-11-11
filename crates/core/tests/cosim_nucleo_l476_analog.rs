@@ -2,21 +2,37 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Generic MNA devices drive PA0/PA1 GPIO inputs on the NUCLEO-L476RG and its
-//! read-only CI fixture. The tests assert both the solved voltages and the
-//! firmware-visible GPIO input levels through the chip's datasheet thresholds.
+//! Generic MNA devices drive GPIO inputs and explicit ADC1 channels on the
+//! NUCLEO-L476RG. The GPIO tests assert the solved voltages and firmware-visible
+//! input levels through the chip's datasheet thresholds. The ADC test routes
+//! the same unrelated Beta NTC and Shockley diode to channels 5/6 and asserts
+//! firmware-visible conversions; the descriptor has no pad-to-ADC map, so it
+//! makes no PAx alias claim.
 
 mod common;
 use common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::cosim::{CosimSession, CosimSignalValue, RoutingError};
+use labwired_core::peripherals::adc::Adc;
 use labwired_core::Bus;
 use std::path::Path;
 
 const RCC_AHB2ENR: u64 = 0x4002_104C;
 const GPIOA_MODER: u64 = 0x4800_0000;
 const GPIOA_IDR: u64 = 0x4800_0010;
+const ADC1_BASE: u64 = 0x5004_0000;
+const ADC_ISR: u64 = ADC1_BASE;
+const ADC_CR: u64 = ADC1_BASE + 0x08;
+const ADC_CFGR: u64 = ADC1_BASE + 0x0C;
+const ADC_SQR1: u64 = ADC1_BASE + 0x30;
+const ADC_DR: u64 = ADC1_BASE + 0x40;
+const ADC_ADVREGEN: u32 = 1 << 28;
+const ADC_ADEN: u32 = 1;
+const ADC_ADSTART: u32 = 1 << 2;
+const ADC_ADRDY: u32 = 1;
+const ADC_EOC: u32 = 1 << 2;
+const ADC_EOS: u32 = 1 << 3;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
@@ -104,6 +120,40 @@ fn signal_voltage(session: &CosimSession, path: &str) -> f64 {
         Some(CosimSignalValue::F64(volts)) => *volts,
         other => panic!("expected solved voltage at {path}, got {other:?}"),
     }
+}
+
+fn adc1_channel_input_count(bus: &mut SystemBus, channel: u8) -> u16 {
+    let index = bus
+        .find_peripheral_index_by_name("adc1")
+        .expect("STM32L476 declares ADC1");
+    bus.peripherals[index]
+        .dev
+        .as_any_mut()
+        .expect("ADC1 downcasts")
+        .downcast_mut::<Adc>()
+        .expect("ADC1 uses the shared STM32 ADC model")
+        .channel_input_count(channel)
+}
+
+fn l476_adc_convert(bus: &mut SystemBus, channel: u8) -> u32 {
+    // The L476 profile captures ADCAL remaining set when no ADC kernel clock
+    // is configured. Power up the modeled converter and run the regular
+    // software-triggered sequence without claiming calibration behavior.
+    bus.write_u32(ADC_SQR1, u32::from(channel) << 6)
+        .expect("select the ADC1 regular channel");
+    bus.write_u32(ADC_ISR, ADC_EOC | ADC_EOS)
+        .expect("clear prior conversion flags");
+    bus.write_u32(ADC_CR, ADC_ADVREGEN | ADC_ADEN | ADC_ADSTART)
+        .expect("start the ADC1 conversion");
+    let isr = bus.read_u32(ADC_ISR).expect("read ADC1 status");
+    assert_ne!(isr & ADC_EOC, 0, "ADC1 conversion completes with EOC");
+    assert_ne!(isr & ADC_EOS, 0, "ADC1 conversion completes with EOS");
+    bus.read_u32(ADC_DR).expect("read firmware-visible ADC1 DR")
+}
+
+fn expected_adc_count(voltage_v: f64) -> u16 {
+    let millivolts = (voltage_v * 1000.0).round() as u32;
+    (millivolts * 4095 / 3300).min(4095) as u16
 }
 
 fn assert_profile_routes_generic_analog_inputs(
@@ -200,6 +250,117 @@ fn nucleo_l476rg_profiles_route_ntc_and_diode_to_gpio_thresholds() {
         "configs/systems/ci-fixture-l476-readonly.yaml",
         "ci-fixture-l476-readonly",
         &[],
+    );
+}
+
+#[test]
+fn nucleo_l476rg_ntc_and_diode_netlists_convert_on_adc1_channels_5_6() {
+    let system_path = root("configs/systems/nucleo-l476rg.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-L476RG");
+    assert_eq!(profile.name, "nucleo-l476rg");
+    let analog =
+        SystemManifest::from_file(root("examples/nucleo-l476rg/analog-ntc-diode-adc.yaml"))
+            .expect("load generic NTC and diode with explicit ADC routes");
+    profile.cosim_models = analog.cosim_models;
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32L476 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-L476RG bus");
+    let rcc_ahb2enr = bus.read_u32(RCC_AHB2ENR).expect("read RCC AHB2ENR");
+    bus.write_u32(RCC_AHB2ENR, rcc_ahb2enr | (1 << 13))
+        .expect("enable ADC1 clock");
+
+    assert_eq!(bus.read_u32(ADC_CR).unwrap(), 1 << 29, "DEEPPWD reset");
+    bus.write_u32(ADC_CR, 0).expect("clear ADC deep power-down");
+    bus.write_u32(ADC_CR, ADC_ADVREGEN)
+        .expect("enable ADC voltage regulator");
+    bus.write_u32(ADC_CR, ADC_ADVREGEN | ADC_ADEN)
+        .expect("enable ADC1");
+    assert_ne!(
+        bus.read_u32(ADC_ISR).unwrap() & ADC_ADRDY,
+        0,
+        "ADC1 reports ready"
+    );
+    bus.write_u32(ADC_CFGR, 0)
+        .expect("select 12-bit right-aligned conversion");
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("profile carries both generic analog devices");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic netlists bind to explicit ADC1 channels 5 and 6"
+    );
+    for channel in [5, 6] {
+        assert_eq!(
+            adc1_channel_input_count(&mut bus, channel),
+            u16::MAX,
+            "ADC1 channel {channel} starts undriven"
+        );
+    }
+    assert_eq!(
+        adc1_channel_input_count(&mut bus, 7),
+        u16::MAX,
+        "neighboring ADC1 channel 7 starts undriven"
+    );
+
+    let expected_diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    let mut ntc_codes = Vec::new();
+    for temperature_c in [-10.0_f64, 25.0, 80.0] {
+        session
+            .set_signal_number("ui.ntc.temperature_c", temperature_c)
+            .expect("set generic NTC temperature");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route the NTC and diode netlists");
+        assert_eq!(steps.len(), 2, "both unrelated netlists solve");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "adc.adc1.5_volts");
+        let ntc_resistance = ntc_resistance_ohms(temperature_c);
+        let expected_ntc_v = 3.3 * ntc_resistance / (10_000.0 + ntc_resistance);
+        assert!(
+            (ntc_v - expected_ntc_v).abs() < 1e-9,
+            "at {temperature_c} °C the NTC divider should solve to {expected_ntc_v} V, got {ntc_v} V"
+        );
+        let diode_v = signal_voltage(&session, "adc.adc1.6_volts");
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "the independent Shockley load line should solve to {expected_diode_v} V, got {diode_v} V"
+        );
+        assert_eq!(
+            adc1_channel_input_count(&mut bus, 5),
+            expected_adc_count(ntc_v),
+            "the solved NTC level reaches ADC1_IN5"
+        );
+        assert_eq!(
+            adc1_channel_input_count(&mut bus, 6),
+            expected_adc_count(diode_v),
+            "the solved diode level reaches ADC1_IN6"
+        );
+        assert_eq!(
+            adc1_channel_input_count(&mut bus, 7),
+            u16::MAX,
+            "the independent routes leave ADC1_IN7 undriven"
+        );
+
+        let ntc_code = l476_adc_convert(&mut bus, 5);
+        assert_eq!(ntc_code, u32::from(expected_adc_count(ntc_v)));
+        let diode_code = l476_adc_convert(&mut bus, 6);
+        assert_eq!(diode_code, u32::from(expected_adc_count(diode_v)));
+        assert_eq!(
+            l476_adc_convert(&mut bus, 7),
+            3723,
+            "undriven IN7 retains the modeled fixed 3.0 V internal input"
+        );
+        ntc_codes.push(ntc_code);
+    }
+    assert!(
+        ntc_codes[0] > ntc_codes[1] && ntc_codes[1] > ntc_codes[2],
+        "NTC ADC counts fall as it warms: {ntc_codes:?}"
     );
 }
 
