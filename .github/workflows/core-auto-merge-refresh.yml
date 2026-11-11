@@ -29,6 +29,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 1
+          sparse-checkout: scripts/ci/core_merge_queue.py
+          sparse-checkout-cone-mode: false
           persist-credentials: false
       - name: Refresh one tested auto-merge PR
         env:
