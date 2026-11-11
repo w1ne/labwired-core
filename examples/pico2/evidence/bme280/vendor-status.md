@@ -1,18 +1,14 @@
 # Raspberry Pi Pico 2 + Adafruit BME280 availability
 
-Checked live on 2026-11-11 at 02:07 UTC.
+Checked live on 2026-11-11.
 
-- Raspberry Pi's current Pico 2 product page says the RP2350 board is available
-  now from $5 and states that the Pico 2 series will remain in production until
-  at least January 2040.
-- DigiKey's exact Raspberry Pi product `SC1631` page identifies it as the
-  Raspberry Pi Pico 2 / RP2350 board, lists **Part Status: Active**, **19,421
-  in stock**, a **$6.12** single-unit price, and an Add to Cart option.
-- Adafruit's BME280 STEMMA QT breakout (product 2652) page showed **In stock**
+- Raspberry Pi's current Pico 2 product page identifies it as an RP2350 board,
+  says **Available now from $5**, and states the Pico 2 series remains in
+  production until at least January 2040.
+- Adafruit's BME280 STEMMA QT breakout (product 2652) page lists **In stock**
   at **$14.95** with an Add to Cart option.
 
 Sources: [Raspberry Pi Pico 2 product page](https://www.raspberrypi.com/products/raspberry-pi-pico-2/),
-[DigiKey SC1631 product listing](https://www.digikey.com/en/products/detail/raspberry-pi/SC1631/24627136),
 and [Adafruit BME280 product 2652](https://www.adafruit.com/product/2652).
 
 ## Verification scope

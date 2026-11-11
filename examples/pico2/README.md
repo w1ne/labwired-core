@@ -49,11 +49,13 @@ CARGO_BUILD_RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
 The committed local evidence is in
 [`evidence/bme280/`](evidence/bme280/); the CLI reported 4/4 assertions,
 including the exact BME280 ID and raw sample, plus four GP25 LED transitions
-after the reads. This is simulator evidence, not a physical-board test. The
-UART text is diagnostic output from the simulator capture; the bare-metal smoke
-does not configure a physical UART. The profile attaches the BME280 model
-directly to I2C0; the RP2350 model does not electrically enforce the GP4/GP5 pad
-route or simulate pull-ups and voltage levels.
+after the reads. The same exact Pico 2 profile is included in the Core Onboarding
+Smoke workflow (nightly, main push, or manual dispatch). This is simulator
+evidence, not a physical-board test. The UART text is diagnostic output from the
+simulator capture; the bare-metal smoke does not configure a physical UART. The
+profile attaches the BME280 model directly to I2C0; the RP2350 model does not
+electrically enforce the GP4/GP5 pad route or simulate pull-ups and voltage
+levels.
 
 ## Wiring and copy-paste Arduino sketch
 

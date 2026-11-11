@@ -132,6 +132,13 @@ jobs:
             target: thumbv6m-none-eabi
             script: examples/rp2040-pico-bme280/bme280-smoke.yaml
             system: configs/systems/rp2040-pico-bme280.yaml
+          # Exact non-wireless Pico 2 profile: boot RP2350 Cortex-M33, read
+          # BME280 over I2C0, then exercise the onboard GP25 LED.
+          - id: rp2350-pico2-bme280
+            crate: firmware-rp2350-pico2-bme280-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/pico2/bme280-smoke.yaml
+            system: configs/systems/rp2350-pico2-bme280.yaml
           - id: rp2350-pico2w-bme280
             crate: firmware-rp2350-pico2w-bme280-smoke
             target: thumbv8m.main-none-eabi
