@@ -1,0 +1,37 @@
+{
+  "target_id": "stm32f103",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 50000000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-f103-i2c-demo",
+  "target_triple": "thumbv7m-none-eabi",
+  "script": "examples/renode-onboarding/stm32f103-i2c-smoke.yaml",
+  "system": "configs/systems/onboarding/stm32f103.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-11T17:54:34Z",
+  "finished_at_utc": "2026-11-11T17:54:36Z",
+  "elapsed_seconds": 3,
+  "elapsed_ms": 2073,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "2026-11-11T17:54:36.401429Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: \"NVIC M3 NESTED IRQ54=1 IRQ55=1 ACTIVE=54,55 RESUMED=54 ok\" }) (captured len=3821)",
+  "failure_hint": "Smoke assertion mismatch. Compare expected stop/assertions with current deterministic output.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.273,
+    "build_firmware": 0.649,
+    "run_smoke": 1.114
+  },
+  "stages_ms": {
+    "build_cli": 273,
+    "build_firmware": 649,
+    "run_smoke": 1114
+  }
+}

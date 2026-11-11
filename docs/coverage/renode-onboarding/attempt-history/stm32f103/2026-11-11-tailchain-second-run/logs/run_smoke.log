@@ -1,0 +1,16 @@
+2026-11-11T17:54:35.548148Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f103.yaml
+2026-11-11T17:54:35.604919Z  INFO labwired_loader: ELF Entry Point: 0x80003bf
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-11T17:54:35.605882Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'usart2'
+2026-11-11T17:54:35.613457Z  WARN labwired_core::cpu::cortex_m::exec::misc: Unknown instruction at 0x8000184: Opcode 0xde00
+2026-11-11T17:54:35.613487Z  WARN labwired_core::cpu::cortex_m::exec::misc: Unknown instruction at 0x8000184: Opcode 0xde00
+2026-11-11T17:54:35.898305Z  INFO labwired_cli::execute: stimulus: temperature = 55 applied
+2026-11-11T17:54:36.129479Z  INFO labwired_cli::execute: stimulus: humidity = 35 applied
+2026-11-11T17:54:36.375411Z  INFO labwired_cli::execute: stimulus: pressure = 1012.5 applied
+labwired-cli test: idle_ff skipped 125 of 50000125 device cycles (50000000 interpreted)
+2026-11-11T17:54:36.401429Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "NVIC M3 NESTED IRQ54=1 IRQ55=1 ACTIVE=54,55 RESUMED=54 ok" }) (captured len=3821)
+2026-11-11T17:54:36.401445Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "NVIC M3 TAILCHAIN IRQ54=1 IRQ55=1 FRAME=REUSED R0=LIVE ok" }) (captured len=3821)
+FAIL  75/77 checks · stm32f103-i2c-smoke · 50000000 steps · 0.80s
+FAULT  UsageFault: undefined instruction, at PC 0x0800_0184 in `_ZN22firmware_f103_i2c_demo35smoke_trigger_undefined_instruction17h47760c0d41e8d816E`, called from `firmware_f103_i2c_demo::smoke_usagefault_and_hardfault_escalation`.
+       HFSR=0x00000000 CFSR=0x00010000 [UNDEFINSTR]

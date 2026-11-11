@@ -7,6 +7,8 @@
 # and subpriority arbitration, including PendSV deferral until the
 # higher-priority SysTick handler returns, and strictly higher group priority
 # IRQ 55 nests over IRQ 54 before returning to its parent handler.
+# A lower-priority IRQ 55 then tail-chains after IRQ 54 returns to Thread,
+# preserving the original exception frame and live caller-saved registers.
 schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv7m-none-eabi/release/firmware-f103-i2c-demo"
@@ -36,6 +38,7 @@ assertions:
   - uart_contains: "BASEPRI M3 MAX_KEEP=1 MAX_RAISE=1 HIGH=55 LOW=54 MASKED=1 PENDING=1 RELEASED=1 ok"
   - uart_contains: "NVIC M3 SUBPRIORITY ORDER=55,54 SAME_GROUP_PREEMPT=0 PENDING=1 ok"
   - uart_contains: "NVIC M3 NESTED IRQ54=1 IRQ55=1 ACTIVE=54,55 RESUMED=54 ok"
+  - uart_contains: "NVIC M3 TAILCHAIN IRQ54=1 IRQ55=1 FRAME=REUSED R0=LIVE ok"
   - uart_contains: "USART2 TXEIRQ=1 REARM=0"
   - uart_contains: "USART2 RX GATE re_off=1 ue_off=1 data=00005253 released=1 ok"
   - uart_contains: "SPI1 MAX31855=01901600"

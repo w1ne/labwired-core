@@ -92,6 +92,8 @@ const NVIC_PRIORITY_VECTOR_TABLE: u32 = 0x2000_0800;
 const NVIC_PRIORITY_RECORD: u32 = 0x2000_0A00;
 const NVIC_NESTED_VECTOR_TABLE: u32 = 0x2000_0C00;
 const NVIC_NESTED_RECORD: u32 = 0x2000_0E00;
+const NVIC_TAILCHAIN_VECTOR_TABLE: u32 = 0x2000_1000;
+const NVIC_TAILCHAIN_RECORD: u32 = 0x2000_1200;
 const FAULT_RECORD: u32 = 0x2000_0680;
 const SVC_RECORD: u32 = 0x2000_0B00;
 const SVC_EXCEPTION: usize = 11;
@@ -287,6 +289,7 @@ fn main() -> ! {
     unsafe { smoke_basepri_priority_mask() };
     unsafe { smoke_nvic_subpriority_order_and_preemption() };
     unsafe { smoke_nvic_higher_priority_preemption() };
+    unsafe { smoke_nvic_tail_chaining() };
     smoke_usart2_txe_irq();
     smoke_usart2_rx_enable_gate();
     smoke_spi1_irq_and_max31855();
@@ -2566,6 +2569,170 @@ unsafe fn smoke_nvic_higher_priority_preemption() -> bool {
     ok
 }
 
+/// A pending lower-priority IRQ must tail-chain after IRQ 54 returns to Thread.
+/// IRQ 55 observes IRQ 54's live R0 marker and the original exception frame.
+unsafe fn smoke_nvic_tail_chaining() -> bool {
+    const NVIC_ISER1: u32 = 0xE000_E104;
+    const NVIC_ICER1: u32 = 0xE000_E184;
+    const NVIC_ISPR1: u32 = 0xE000_E204;
+    const NVIC_ICPR1: u32 = 0xE000_E284;
+    const NVIC_IABR1: u32 = 0xE000_E304;
+    const NVIC_IPR_WORD: u32 = 0xE000_E434;
+    const LOW_IRQ: u32 = 54;
+    const HIGH_IRQ: u32 = 55;
+    const LOW_BIT: u32 = 1 << (LOW_IRQ - 32);
+    const HIGH_BIT: u32 = 1 << (HIGH_IRQ - 32);
+    const IRQ_MASK: u32 = LOW_BIT | HIGH_BIT;
+    const VECTOR_LOW: usize = 16 + LOW_IRQ as usize;
+    const VECTOR_HIGH: usize = 16 + HIGH_IRQ as usize;
+    const VECTOR_WORDS: usize = VECTOR_HIGH + 1;
+    const PRIORITY_MASK: u32 = 0xFFFF_0000;
+    const PRIORITIES: u32 = 0x8040_0000;
+    const AIRCR: u32 = 0xE000_ED0C;
+    const TAILCHAIN_R0: u32 = 0x5441_494C;
+
+    let source_vtor = read_volatile(SCB_VTOR as *const u32);
+    let prior_msp: u32;
+    core::arch::asm!(
+        "mrs {msp}, MSP",
+        msp = out(reg) prior_msp,
+        options(nomem, nostack, preserves_flags),
+    );
+    let prior_aircr = read_volatile(AIRCR as *const u32);
+    let prior_priority = read_volatile(NVIC_IPR_WORD as *const u32);
+    let prior_enabled = read_volatile(NVIC_ISER1 as *const u32) & IRQ_MASK;
+    let prior_pending = read_volatile(NVIC_ISPR1 as *const u32) & IRQ_MASK;
+    let prior_primask: u32;
+    let prior_basepri: u32;
+    core::arch::asm!(
+        "mrs {primask}, PRIMASK",
+        "mrs {basepri}, BASEPRI",
+        "cpsid i",
+        primask = out(reg) prior_primask,
+        basepri = out(reg) prior_basepri,
+        options(nomem, nostack, preserves_flags),
+    );
+
+    let table = NVIC_TAILCHAIN_VECTOR_TABLE as *mut u32;
+    let record = NVIC_TAILCHAIN_RECORD as *mut u32;
+    write_volatile(NVIC_ICER1 as *mut u32, IRQ_MASK);
+    write_volatile(NVIC_ICPR1 as *mut u32, IRQ_MASK);
+    for slot in 0..VECTOR_WORDS {
+        write_volatile(table.add(slot), 0);
+    }
+    for word in 0..15 {
+        write_volatile(record.add(word), 0);
+    }
+    write_volatile(
+        table.add(VECTOR_LOW),
+        (nvic_tailchain_parent as *const () as usize as u32) | 1,
+    );
+    write_volatile(
+        table.add(VECTOR_HIGH),
+        (nvic_tailchain_child as *const () as usize as u32) | 1,
+    );
+    write_volatile(AIRCR as *mut u32, 0x05FA_0000 | (prior_aircr & 0x0000_F8F8));
+    write_volatile(
+        NVIC_IPR_WORD as *mut u32,
+        (prior_priority & !PRIORITY_MASK) | PRIORITIES,
+    );
+    write_volatile(SCB_VTOR as *mut u32, NVIC_TAILCHAIN_VECTOR_TABLE);
+    write_volatile(NVIC_ISER1 as *mut u32, IRQ_MASK);
+    core::arch::asm!("dsb", "isb", options(nostack, preserves_flags));
+    write_volatile(NVIC_ISPR1 as *mut u32, LOW_BIT);
+    core::arch::asm!(
+        "msr PRIMASK, {primask}",
+        primask = in(reg) prior_primask,
+        options(nostack, preserves_flags),
+    );
+    for _ in 0..4_096 {
+        if read_volatile(record.add(8)) != 0 {
+            break;
+        }
+        core::arch::asm!("nop", options(nomem, nostack, preserves_flags));
+    }
+
+    let parent_entries = read_volatile(record);
+    let parent_ipsr = read_volatile(record.add(1));
+    let parent_msp = read_volatile(record.add(2));
+    let parent_pending = read_volatile(record.add(3)) & IRQ_MASK;
+    let parent_active = read_volatile(record.add(4)) & IRQ_MASK;
+    let child_entries = read_volatile(record.add(8));
+    let child_ipsr = read_volatile(record.add(9));
+    let child_msp = read_volatile(record.add(10));
+    let child_lr = read_volatile(record.add(11));
+    let child_active = read_volatile(record.add(12)) & IRQ_MASK;
+    let child_pending = read_volatile(record.add(13)) & IRQ_MASK;
+    let child_r0 = read_volatile(record.add(14));
+    let pending_after = read_volatile(NVIC_ISPR1 as *const u32) & IRQ_MASK;
+    let active_after = read_volatile(NVIC_IABR1 as *const u32) & IRQ_MASK;
+
+    core::arch::asm!("cpsid i", options(nomem, nostack, preserves_flags));
+    write_volatile(NVIC_ICER1 as *mut u32, IRQ_MASK);
+    write_volatile(NVIC_ICPR1 as *mut u32, IRQ_MASK);
+    write_volatile(NVIC_IPR_WORD as *mut u32, prior_priority);
+    write_volatile(
+        AIRCR as *mut u32,
+        0x05FA_0000 | (prior_aircr & 0x0000_F8F8) | (prior_aircr & 0x700),
+    );
+    write_volatile(SCB_VTOR as *mut u32, source_vtor);
+    write_volatile(NVIC_ISPR1 as *mut u32, prior_pending);
+    write_volatile(NVIC_ISER1 as *mut u32, prior_enabled);
+    core::arch::asm!(
+        "msr BASEPRI, {basepri}",
+        "msr PRIMASK, {primask}",
+        "dsb",
+        "isb",
+        basepri = in(reg) prior_basepri,
+        primask = in(reg) prior_primask,
+        options(nostack, preserves_flags),
+    );
+
+    let tail_chained = parent_entries == 1
+        && parent_ipsr == 16 + LOW_IRQ
+        && parent_pending == HIGH_BIT
+        && parent_active == LOW_BIT
+        && child_entries == 1
+        && child_ipsr == 16 + HIGH_IRQ
+        && child_msp == parent_msp
+        && child_lr == 0xFFFF_FFF9
+        && child_active == HIGH_BIT
+        && child_pending == 0
+        && child_r0 == TAILCHAIN_R0
+        && pending_after == 0
+        && active_after == 0;
+    let restored = read_volatile(SCB_VTOR as *const u32) == source_vtor
+        && read_volatile(NVIC_IPR_WORD as *const u32) == prior_priority
+        && read_volatile(AIRCR as *const u32) & 0x700 == prior_aircr & 0x700
+        && read_volatile(NVIC_ISER1 as *const u32) & IRQ_MASK == prior_enabled
+        && read_volatile(NVIC_ISPR1 as *const u32) & IRQ_MASK == prior_pending;
+    let msp_restored: u32;
+    core::arch::asm!(
+        "mrs {msp}, MSP",
+        msp = out(reg) msp_restored,
+        options(nomem, nostack, preserves_flags),
+    );
+    let ok = prior_primask == 0
+        && prior_basepri == 0
+        && tail_chained
+        && restored
+        && msp_restored == prior_msp;
+
+    if ok {
+        putline(b"NVIC M3 TAILCHAIN IRQ54=1 IRQ55=1 FRAME=REUSED R0=LIVE ok");
+    } else {
+        putline(b"NVIC M3 TAILCHAIN CHECK FAILED");
+        print_reg(b"tail parent pending=", parent_pending);
+        print_reg(b"tail parent active=", parent_active);
+        print_reg(b"tail child IPSR=", child_ipsr);
+        print_reg(b"tail child MSP=", child_msp);
+        print_reg(b"tail child LR=", child_lr);
+        print_reg(b"tail child active=", child_active);
+        print_reg(b"tail child R0=", child_r0);
+    }
+    ok
+}
+
 /// Verify PRIMASK keeps a pending external IRQ inactive until it is cleared.
 /// Reuse the BASEPRI low-priority vector handler to inspect the released IRQ.
 unsafe fn smoke_primask_external_irq() -> bool {
@@ -2940,6 +3107,62 @@ unsafe extern "C" fn nvic_nested_child() {
         "ldr r2, =0xE000E304",
         "ldr r1, [r2]",
         "str r1, [r0, #16]",
+        "bx lr",
+    );
+}
+
+/// Pend lower-priority IRQ 55 from IRQ 54, leave a caller-saved marker, and
+/// return. Tail chaining must carry the marker into the next handler.
+#[unsafe(naked)]
+unsafe extern "C" fn nvic_tailchain_parent() {
+    core::arch::naked_asm!(
+        "ldr r0, =0x20001200",
+        "movs r1, #1",
+        "str r1, [r0, #0]",
+        "mrs r1, ipsr",
+        "str r1, [r0, #4]",
+        "mrs r1, msp",
+        "str r1, [r0, #8]",
+        "ldr r2, =0xE000E204",
+        "movs r1, #0x80",
+        "lsls r1, r1, #16",
+        "str r1, [r2]",
+        "dsb",
+        "isb",
+        "ldr r0, =0x20001200",
+        "ldr r2, =0xE000E204",
+        "ldr r1, [r2]",
+        "str r1, [r0, #12]",
+        "ldr r2, =0xE000E304",
+        "ldr r1, [r2]",
+        "str r1, [r0, #16]",
+        "ldr r0, =0x5441494C",
+        "bx lr",
+    );
+}
+
+/// Record the live handler state after IRQ 54 returns. The preserved R0 marker
+/// distinguishes tail chaining from unstack-to-Thread followed by a new entry.
+#[unsafe(naked)]
+unsafe extern "C" fn nvic_tailchain_child() {
+    core::arch::naked_asm!(
+        "mov r2, r0",
+        "ldr r0, =0x20001200",
+        "movs r1, #1",
+        "str r1, [r0, #32]",
+        "mrs r1, ipsr",
+        "str r1, [r0, #36]",
+        "mrs r1, msp",
+        "str r1, [r0, #40]",
+        "mov r1, lr",
+        "str r1, [r0, #44]",
+        "ldr r3, =0xE000E304",
+        "ldr r1, [r3]",
+        "str r1, [r0, #48]",
+        "ldr r3, =0xE000E204",
+        "ldr r1, [r3]",
+        "str r1, [r0, #52]",
+        "str r2, [r0, #56]",
         "bx lr",
     );
 }

@@ -2564,6 +2564,101 @@ impl CortexM {
         self.exception_return(lr, bus)
     }
 
+    /// Service an already-pending IRQ on exception return without unstacking
+    /// and restacking the interrupted context. Cortex-M calls this tail
+    /// chaining. The saved frame remains in place until the final handler
+    /// returns to Thread mode (or to the previously active Handler).
+    fn tail_chain_pending_irq<B: Bus + ?Sized>(
+        &mut self,
+        return_to_exception: u32,
+        exc_return: u32,
+        bus: &mut B,
+    ) -> SimResult<bool> {
+        // This path intentionally handles configurable external IRQs and the
+        // two architected deferred exceptions. Fault escalation and NMI keep
+        // using the ordinary entry path so their fault-frame bookkeeping is
+        // unchanged.
+        if !self.systick_pending_live.load(Ordering::Relaxed) {
+            self.pending_exceptions[0] &= !(1 << 15);
+        }
+        if !self.pendsv_pending_live.load(Ordering::Relaxed) {
+            self.pending_exceptions[0] &= !(1 << 14);
+        }
+
+        let return_priority = self.exception_group_priority(return_to_exception);
+        let mut best: Option<(i32, u32)> = None;
+        let pending = self.pending_exceptions;
+        for (word_idx, &word) in pending.iter().enumerate() {
+            let mut mask = word;
+            while mask != 0 {
+                let exception = word_idx as u32 * 64 + mask.trailing_zeros();
+                mask &= mask - 1;
+
+                if exception != 14 && exception != 15 && exception < 16 {
+                    continue;
+                }
+                if exception >= 16 && !bus.is_nvic_irq_pending(exception) {
+                    self.pending_exceptions[(exception / 64) as usize] &=
+                        !(1u64 << (exception % 64));
+                    continue;
+                }
+
+                let priority = self.exception_priority(exception);
+                let group_priority = self.group_priority(priority);
+                if group_priority >= return_priority
+                    || self.masked_by_primask(exception)
+                    || self.masked_by_basepri(group_priority)
+                    || self.faultmask_blocks(exception)
+                    || self.debug_masks_irq(exception)
+                {
+                    continue;
+                }
+
+                best = Some(match best {
+                    Some((best_priority, best_exception))
+                        if best_priority < priority
+                            || (best_priority == priority && best_exception < exception) =>
+                    {
+                        (best_priority, best_exception)
+                    }
+                    _ => (priority, exception),
+                });
+            }
+        }
+
+        let Some((_, exception)) = best else {
+            return Ok(false);
+        };
+        let vector_addr = self
+            .vtor
+            .load(Ordering::SeqCst)
+            .wrapping_add(exception.wrapping_mul(4));
+        let handler = Self::bus_load(bus, vector_addr, AccessWidth::Word)?;
+
+        self.pending_exceptions[(exception / 64) as usize] &= !(1u64 << (exception % 64));
+        if exception == 14 {
+            self.pendsv_pending_live.store(false, Ordering::Relaxed);
+        } else if exception == 15 {
+            self.systick_pending_live.store(false, Ordering::Relaxed);
+        }
+        bus.clear_nvic_pending(exception);
+
+        self.clear_active_exception();
+        self.set_active_exception(exception);
+        self.xpsr = (self.xpsr & !0x1FF) | (exception & 0x1FF);
+        self.it_state = 0;
+        self.it_state_restored = true;
+        self.lr = exc_return;
+        self.pc = handler & !1;
+        if self.fp_ctx.is_some() {
+            self.control &= !0x4;
+        }
+        // Exception return sets the architectural event register even when it
+        // chains directly into another handler.
+        self.event_register = true;
+        Ok(true)
+    }
+
     fn exception_return<B: Bus + ?Sized>(&mut self, exc_return: u32, bus: &mut B) -> SimResult<()> {
         // FAULTMASK is cleared automatically on exception return, except when
         // returning from NMI (exception 2).
@@ -2579,6 +2674,12 @@ impl CortexM {
         let frame_on_psp = (exc_return & 0x4) != 0;
         let frame_ptr = if frame_on_psp { self.psp } else { self.msp };
 
+        let stacked_xpsr = bus.read_u32(frame_ptr.wrapping_add(28) as u64)?;
+        let return_to_exception = stacked_xpsr & 0x1FF;
+        if self.tail_chain_pending_irq(return_to_exception, exc_return, bus)? {
+            return Ok(());
+        }
+
         self.r0 = bus.read_u32(frame_ptr as u64)?;
         self.r1 = bus.read_u32(frame_ptr.wrapping_add(4) as u64)?;
         self.r2 = bus.read_u32(frame_ptr.wrapping_add(8) as u64)?;
@@ -2586,7 +2687,6 @@ impl CortexM {
         self.r12 = bus.read_u32(frame_ptr.wrapping_add(16) as u64)?;
         self.lr = bus.read_u32(frame_ptr.wrapping_add(20) as u64)?;
         self.pc = bus.read_u32(frame_ptr.wrapping_add(24) as u64)? & !1;
-        let stacked_xpsr = bus.read_u32(frame_ptr.wrapping_add(28) as u64)?;
         let stack_alignment_padding = if stacked_xpsr & XPSR_STACK_ALIGN != 0 {
             4
         } else {
