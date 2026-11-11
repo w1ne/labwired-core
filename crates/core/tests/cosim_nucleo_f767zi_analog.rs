@@ -145,6 +145,12 @@ fn bjt_collector_voltage(base_drive_v: f64) -> f64 {
 
 /// Independent level-1 NMOS load-line reference for the board-routed test.
 fn mosfet_drain_voltage(gate_v: f64) -> f64 {
+    mosfet_body_effect_drain_voltage(gate_v, 0.0)
+}
+
+/// Independent level-1 NMOS body-effect load-line reference. With the source
+/// grounded, `bulk_v` is VBS; reverse bias raises threshold through GAMMA/PHI.
+fn mosfet_body_effect_drain_voltage(gate_v: f64, bulk_v: f64) -> f64 {
     const SUPPLY_V: f64 = 3.3;
     const LOAD_OHMS: f64 = 1_000.0;
     const VTO: f64 = 1.0;
@@ -152,8 +158,11 @@ fn mosfet_drain_voltage(gate_v: f64) -> f64 {
     const W_M: f64 = 100e-6;
     const L_M: f64 = 10e-6;
     const LAMBDA_PER_V: f64 = 0.02;
+    const GAMMA: f64 = 0.4;
+    const PHI: f64 = 0.7;
 
-    let overdrive = gate_v - VTO;
+    let threshold = VTO + GAMMA * ((PHI - bulk_v).sqrt() - PHI.sqrt());
+    let overdrive = gate_v - threshold;
     if overdrive <= 0.0 {
         return SUPPLY_V;
     }
@@ -942,6 +951,122 @@ fn nucleo_f767zi_mosfet_load_line_reaches_pa3_adc1_alongside_unrelated_devices()
     assert!(
         drain_samples[4].1 < drain_samples[3].1 && drain_samples[3].1 < drain_samples[2].1,
         "drain voltage falls as the NMOS conducts more strongly: {drain_samples:?}"
+    );
+}
+
+#[test]
+fn nucleo_f767zi_mosfet_body_effect_reaches_adc1_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/nucleo-f767zi.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F767ZI profile");
+    assert_eq!(profile.name, "nucleo-f767zi");
+
+    let analog =
+        SystemManifest::from_file(root("examples/nucleo-f767zi/analog-ntc-diode-system.yaml"))
+            .expect("load the independent generic NTC and diode netlists");
+    let body_effect = SystemManifest::from_file(root(
+        "examples/nucleo-f767zi/analog-mosfet-body-effect.yaml",
+    ))
+    .expect("load matched generic NMOS body-bias netlists");
+    profile.cosim_models = analog.cosim_models;
+    profile.cosim_models.extend(body_effect.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F767 descriptor");
+    for (pad, channel) in [("PA0", 0), ("PA1", 1), ("PA2", 2), ("PA3", 3)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F767ZI bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries NTC, diode, and matched NMOS branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "all four generic netlists must resolve to distinct ADC1 inputs"
+    );
+    for channel in 0..=4 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    const NTC_V: f64 = 1.65;
+    let diode_v = diode_load_line_voltage();
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set the independent Beta NTC temperature");
+
+    let mut cycles = 0;
+    let mut body_samples = Vec::new();
+    for bulk_v in [0.0_f64, -0.5, -1.0, -1.5] {
+        session
+            .set_signal_number("ui.mosfet_body.bulk_v", bulk_v)
+            .expect("set generic NMOS reverse body bias");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and matched NMOS netlists");
+        assert_eq!(
+            steps.len(),
+            3,
+            "all three analog models solve at each boundary"
+        );
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let reference_v = signal_voltage(&session, "board.analog.pa2_volts");
+        let body_v = signal_voltage(&session, "board.analog.pa3_volts");
+        let expected_reference_v = mosfet_body_effect_drain_voltage(2.5, 0.0);
+        let expected_body_v = mosfet_body_effect_drain_voltage(2.5, bulk_v);
+        assert!(
+            (reference_v - expected_reference_v).abs() < 5e-5,
+            "zero-body-bias NMOS should settle at {expected_reference_v} V, got {reference_v} V"
+        );
+        assert!(
+            (body_v - expected_body_v).abs() < 5e-5,
+            "NMOS at VBS={bulk_v} V should settle at {expected_body_v} V, got {body_v} V"
+        );
+        if bulk_v == 0.0 {
+            assert!(
+                (body_v - reference_v).abs() < 1e-9,
+                "matched devices agree at zero body bias"
+            );
+        }
+
+        for (channel, volts) in [(0, NTC_V), (1, diode_v), (2, reference_v), (3, body_v)] {
+            let expected = expected_adc_count(volts);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "solved voltage must seed ADC1 channel {channel}"
+            );
+            assert_eq!(
+                stm32f4_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "ADC1 channel {channel} conversion must follow its analog device"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 4),
+            0xFFFF,
+            "neighboring ADC1 channel 4 remains undriven"
+        );
+        assert!(
+            (signal_voltage(&session, "board.analog.pa0_volts") - NTC_V).abs() < 1e-9,
+            "the unrelated Beta NTC remains isolated on PA0/ADC1 channel 0"
+        );
+        assert!(
+            (signal_voltage(&session, "board.analog.pa1_volts") - diode_v).abs() < 2e-5,
+            "the unrelated Shockley diode remains isolated on PA1/ADC1 channel 1"
+        );
+        body_samples.push((bulk_v, body_v));
+    }
+
+    assert!(
+        body_samples.windows(2).all(|pair| pair[1].1 > pair[0].1),
+        "reverse body bias raises Vth and the loaded drain voltage: {body_samples:?}"
     );
 }
 
