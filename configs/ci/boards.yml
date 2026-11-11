@@ -41,6 +41,12 @@ boards:
     path: examples/esp32h2-devkitm-1-n4s
     rust_targets: [riscv32imc-unknown-none-elf]
     gate: true
+  # Demand-rank 1 ESP32 family: current Arduino Nano ESP32 with a committed
+  # S3 GPIO48/D13 smoke fixture. The onboarding workflow rebuilds it with PIO.
+  - id: arduino-nano-esp32-gpio
+    kind: sim-validate
+    path: examples/arduino-nano-esp32
+    gate: true
   # Narrow ESP32-DevKitC-32E onboarding profile. Committed TIER1 ELF, no
   # cross-toolchain, seconds to run. Proves the new chip descriptor through
   # `labwired test` on every PR (chip-coverage ceiling forbids another waiver).

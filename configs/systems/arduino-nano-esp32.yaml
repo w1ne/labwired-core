@@ -1,0 +1,16 @@
+# Arduino Nano ESP32 (ABX00083/ABX00092), NORA-W106 module / ESP32-S3.
+# Narrow profile: S3 GPIO, GPIO48 status LED, and native USB-Serial-JTAG console.
+# Wi-Fi/Bluetooth, USB-OTG, PSRAM, power behavior, RGB channels and pin remapping
+# are not claimed by this board profile.
+name: "arduino-nano-esp32"
+chip: "../chips/esp32s3.yaml"
+cpu_hz: 240_000_000
+debug_uart: "usb_serial_jtag"
+external_devices: []
+board_io:
+  - id: "status_led"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 48 # D13 / LED_BUILTIN per Arduino's official Nano ESP32 pinout.
+    signal: "output"
+    active_high: true

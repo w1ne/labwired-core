@@ -166,6 +166,11 @@ jobs:
           - id: esp32s3-devkitc-1-v11-rgb
             script: examples/esp32s3-devkitc-1/rgb-smoke.yaml
             system: configs/systems/esp32s3-devkitc-1-v11-rgb.yaml
+          # Demand-rank 1 Arduino Nano ESP32. Its committed fast-boot fixture
+          # observes two transitions on the ESP32-S3 D13/GPIO48 LED pad.
+          - id: arduino-nano-esp32-gpio
+            script: examples/arduino-nano-esp32/io-smoke.yaml
+            system: configs/systems/arduino-nano-esp32.yaml
           # nRF52833 / micro:bit v2 — nRF52-family UART smoke on its own board.
           # Same firmware as tests/fixtures/microbit-v2-smoke.elf, rebuilt here.
           - id: microbit-v2
@@ -599,6 +604,10 @@ jobs:
       - name: Verify DevKitC-1 v1.1 RGB fixture
         if: matrix.id == 'esp32s3-devkitc-1-v11-rgb'
         run: examples/esp32s3-devkitc-1/rgb-smoke/verify-fixture.sh
+
+      - name: Verify Arduino Nano ESP32 GPIO fixture
+        if: matrix.id == 'arduino-nano-esp32-gpio'
+        run: examples/arduino-nano-esp32/verify-fixture.sh
 
       - name: Run matrix smoke
         if: matrix.id != 'stm32-exact-catalog'
