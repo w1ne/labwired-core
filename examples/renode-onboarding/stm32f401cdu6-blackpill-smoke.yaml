@@ -14,7 +14,9 @@
 # the read-to-clear COUNTFLAG, then dispatches timer-generated exception 15
 # entries. PENDSVCLR cancels a masked request, a fresh request still dispatches,
 # and a lower-priority PendSV requested inside SysTick waits until exception 15
-# returns before entering vector 14.
+# returns before entering vector 14. A separate tail-chain probe checks that
+# the MSP and EXC_RETURN frame are reused and the live SysTick R0 marker reaches
+# PendSV.
 # A second TMP102 on I2C2 checks SB and ADDR isolation until ITEVTEN is enabled,
 # its event vector, and an independent repeated-start 25 °C read, including TXE
 # isolation under ITEVTEN, BTF isolation until ITEVTEN, and RXNE isolation until
@@ -50,6 +52,7 @@ assertions:
       - "systick irq entries>=2 vector=15 ipsr=15 return=1 ok"
       - "systick priority flags=000007FF ok"
       - "pendsv clear pending=1 fresh repend=1 ok"
+      - "systick pendsv tailchain frame=1 r0=1 pending=1 ipsr=0000000E ok"
       - "rcc apb1=00620001 ok"
       - "led pc13 odr=00002000 ok"
       - "tim2 arr=00000040 ok"
