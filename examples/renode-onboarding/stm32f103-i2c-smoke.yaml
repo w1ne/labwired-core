@@ -1,8 +1,9 @@
 # Cortex-M3 USART2 and I2C1 NACK plus TMP102 transactions and BME280 behavior
 # against the imported STM32F103 system. Core checks include exception frames
-# from Thread mode using both MSP and PSP, SysTick wake from WFI, UsageFault and
-# HardFault escalation, PRIMASK and BASEPRI/BASEPRI_MAX masking and release,
-# plus NVIC pending and return state, priority grouping and subpriority arbitration.
+# from Thread mode using both MSP and PSP, SVC return state, SysTick wake from
+# WFI, UsageFault and HardFault escalation, PRIMASK and BASEPRI/BASEPRI_MAX
+# masking and release, plus NVIC pending and return state, priority grouping
+# and subpriority arbitration.
 schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv7m-none-eabi/release/firmware-f103-i2c-demo"
@@ -24,6 +25,7 @@ assertions:
   - uart_contains: "PENDSV M3 CLEAR=1 REPEND=1 VECTOR=14 IPSR=14 ok"
   - uart_contains: "IRQ M3 FRAME IPSR=54 ACTIVE=1 PENDING=0 SENTINELS=1 EXC_RETURN=FFFFFFF9 STACK=ALIGNED RETURN=1 ok"
   - uart_contains: "IRQ M3 PSP FRAME IPSR=54 ACTIVE=1 PENDING=0 SENTINELS=1 EXC_RETURN=FFFFFFFD PSP=RESTORED MSP=UNCHANGED ok"
+  - uart_contains: "SVC M3 VECTOR=11 IMM=42 EXC_RETURN=FFFFFFF9 STACKED_PC=RESUME RETURN=1 ok"
   - uart_contains: "FAULT M3 UNDEFINSTR USAGE=6 ESCALATE=3 CFSR=1 HFSR_FORCED=1 RETURN=1 ok"
   - uart_contains: "PRIMASK M3 MASKED=1 PENDING=1 RELEASED=1 VECTOR=54 ok"
   - uart_contains: "BASEPRI M3 MAX_KEEP=1 MAX_RAISE=1 HIGH=55 LOW=54 MASKED=1 PENDING=1 RELEASED=1 ok"

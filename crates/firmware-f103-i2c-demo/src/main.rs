@@ -88,6 +88,8 @@ const BASEPRI_RECORD: u32 = 0x2000_0600;
 const NVIC_PRIORITY_VECTOR_TABLE: u32 = 0x2000_0800;
 const NVIC_PRIORITY_RECORD: u32 = 0x2000_0A00;
 const FAULT_RECORD: u32 = 0x2000_0680;
+const SVC_RECORD: u32 = 0x2000_0B00;
+const SVC_EXCEPTION: usize = 11;
 const SCB_SHCSR: u32 = 0xE000_ED24;
 const SCB_CFSR: u32 = 0xE000_ED28;
 const SCB_HFSR: u32 = 0xE000_ED2C;
@@ -270,6 +272,7 @@ fn main() -> ! {
     unsafe { smoke_pendsv_clear_and_repend() };
     unsafe { smoke_external_irq_stack_frame() };
     unsafe { smoke_external_irq_psp_stack_frame() };
+    unsafe { smoke_svcall_exception_return() };
     unsafe { smoke_usagefault_and_hardfault_escalation() };
     unsafe { smoke_primask_external_irq() };
     unsafe { smoke_basepri_priority_mask() };
@@ -1462,6 +1465,140 @@ unsafe fn smoke_external_irq_psp_stack_frame() -> bool {
         putline(b"IRQ M3 PSP FRAME CHECK FAILED");
     }
     ok
+}
+
+/// Exercise SVC exception entry and return on the imported Cortex-M3 profile.
+/// The handler checks exception 11, EXC_RETURN, the stacked PC and SVC opcode.
+unsafe fn smoke_svcall_exception_return() -> bool {
+    let source_vtor = read_volatile(SCB_VTOR as *const u32);
+    let vector_table = IRQ_FRAME_VECTOR_TABLE as *mut u32;
+    let prior_vector = read_volatile(vector_table.add(SVC_EXCEPTION));
+    let prior_primask: u32;
+    let prior_basepri: u32;
+    let prior_faultmask: u32;
+    core::arch::asm!(
+        "mrs {primask}, PRIMASK",
+        "mrs {basepri}, BASEPRI",
+        "mrs {faultmask}, FAULTMASK",
+        "cpsid i",
+        primask = out(reg) prior_primask,
+        basepri = out(reg) prior_basepri,
+        faultmask = out(reg) prior_faultmask,
+        options(nomem, nostack, preserves_flags),
+    );
+
+    let record = SVC_RECORD as *mut u32;
+    for word in 0..9 {
+        write_volatile(record.add(word), 0);
+    }
+    write_volatile(
+        vector_table.add(SVC_EXCEPTION),
+        (smoke_svcall_handler as *const () as usize as u32) | 1,
+    );
+    write_volatile(SCB_VTOR as *mut u32, IRQ_FRAME_VECTOR_TABLE);
+    core::arch::asm!("dsb", "isb", options(nostack, preserves_flags));
+    core::arch::asm!(
+        "msr BASEPRI, {zero}",
+        "msr FAULTMASK, {zero}",
+        "msr PRIMASK, {zero}",
+        zero = in(reg) 0_u32,
+        options(nostack, preserves_flags),
+    );
+
+    let resume_pc: u32;
+    core::arch::asm!(
+        "svc #0x42",
+        "subw {resume_pc}, pc, #4",
+        resume_pc = out(reg) resume_pc,
+        options(nostack, preserves_flags),
+    );
+    write_volatile(record.add(8), 1);
+    core::arch::asm!("cpsid i", options(nomem, nostack, preserves_flags));
+
+    let entries = read_volatile(record.add(0));
+    let ipsr = read_volatile(record.add(1));
+    let exc_return = read_volatile(record.add(2));
+    let frame_sp = read_volatile(record.add(3));
+    let stacked_lr = read_volatile(record.add(4));
+    let stacked_pc = read_volatile(record.add(5));
+    let stacked_xpsr = read_volatile(record.add(6));
+    let svc_opcode = read_volatile(record.add(7));
+    let resumed = read_volatile(record.add(8)) == 1;
+
+    write_volatile(vector_table.add(SVC_EXCEPTION), prior_vector);
+    write_volatile(SCB_VTOR as *mut u32, source_vtor);
+    core::arch::asm!(
+        "msr BASEPRI, {basepri}",
+        "msr FAULTMASK, {faultmask}",
+        "msr PRIMASK, {primask}",
+        "dsb",
+        "isb",
+        basepri = in(reg) prior_basepri,
+        faultmask = in(reg) prior_faultmask,
+        primask = in(reg) prior_primask,
+        options(nostack, preserves_flags),
+    );
+
+    let ok = entries == 1
+        && ipsr == SVC_EXCEPTION as u32
+        && exc_return == 0xFFFF_FFF9
+        && frame_sp & 7 == 0
+        && stacked_pc == resume_pc
+        && stacked_xpsr & 0x0100_0000 != 0
+        && stacked_xpsr & 0x0000_01FF == 0
+        && svc_opcode == 0xDF42
+        && resumed
+        && read_volatile(SCB_VTOR as *const u32) == source_vtor;
+    if ok {
+        putline(b"SVC M3 VECTOR=11 IMM=42 EXC_RETURN=FFFFFFF9 STACKED_PC=RESUME RETURN=1 ok");
+    } else {
+        putline(b"SVC M3 CHECK FAILED");
+        print_reg(b"SVC entries=", entries);
+        print_reg(b"SVC IPSR=", ipsr);
+        print_reg(b"SVC EXC_RETURN=", exc_return);
+        print_reg(b"SVC frame SP=", frame_sp);
+        print_reg(b"SVC stacked LR=", stacked_lr);
+        print_reg(b"SVC stacked PC=", stacked_pc);
+        print_reg(b"SVC resume PC=", resume_pc);
+        print_reg(b"SVC stacked xPSR=", stacked_xpsr);
+        print_reg(b"SVC opcode=", svc_opcode);
+    }
+    ok
+}
+
+/// Record the SVCall frame before returning through the architectural token.
+#[unsafe(naked)]
+#[no_mangle]
+unsafe extern "C" fn smoke_svcall_handler() {
+    core::arch::naked_asm!(
+        "ldr r0, =0x20000B00",
+        "ldr r2, [r0, #0]",
+        "adds r2, r2, #1",
+        "str r2, [r0, #0]",
+        "mrs r2, ipsr",
+        "str r2, [r0, #4]",
+        "mov r2, lr",
+        "str r2, [r0, #8]",
+        "tst lr, #4",
+        "beq 1f",
+        "mrs r1, psp",
+        "b 2f",
+        "1:",
+        "mrs r1, msp",
+        "2:",
+        "str r1, [r0, #12]",
+        "ldr r2, [r1, #20]",
+        "str r2, [r0, #16]",
+        "ldr r2, [r1, #24]",
+        "str r2, [r0, #20]",
+        "ldr r2, [r1, #28]",
+        "str r2, [r0, #24]",
+        "ldr r3, [r1, #24]",
+        "subs r3, r3, #2",
+        "ldrh r3, [r3]",
+        "str r3, [r0, #28]",
+        "bx lr",
+    );
 }
 
 /// Exercise ARMv7-M undefined-instruction routing on the imported Cortex-M3:
