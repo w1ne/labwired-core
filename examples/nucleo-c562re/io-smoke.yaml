@@ -1,0 +1,13 @@
+# NUCLEO-C562RE: exercise the USART2 VCP register model and blink LD1 on PA5.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-nucleo-c562re-smoke"
+  system: "../../configs/systems/nucleo-c562re.yaml"
+limits:
+  max_steps: 500000
+assertions:
+  - uart_contains: "C562_USART2_OK"
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 8
+  - expected_stop_reason: max_steps

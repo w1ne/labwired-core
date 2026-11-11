@@ -25,6 +25,7 @@ on:
       - "crates/firmware-esp32h2-devkitm-1-smoke/**"
       - "crates/firmware-nucleo-f446re-smoke/**"
       - "crates/firmware-nucleo-h503rb-smoke/**"
+      - "crates/firmware-nucleo-c562re-smoke/**"
       - "crates/firmware-nucleo-h753zi-smoke/**"
       - "crates/firmware-rp2040-picow-bme280-smoke/**"
       - "crates/firmware-ra4m1-bme280-smoke/**"
@@ -110,6 +111,11 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/nucleo-h503rb/io-smoke.yaml
             system: configs/systems/nucleo-h503rb.yaml
+          - id: nucleo-c562re
+            crate: firmware-nucleo-c562re-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/nucleo-c562re/io-smoke.yaml
+            system: configs/systems/nucleo-c562re.yaml
           - id: nucleo-h753zi
             crate: firmware-nucleo-h753zi-smoke
             target: thumbv7em-none-eabi

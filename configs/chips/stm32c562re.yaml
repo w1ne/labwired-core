@@ -1,0 +1,69 @@
+# Narrow model for ST STM32C562RET6 on the NUCLEO-C562RE.
+#
+# Demand position: other STM32 is rank #4 (13%); Nucleo/Discovery boards are
+# used in 23% of projects. ST's live board listing is in
+# examples/nucleo-c562re/vendor-status.md.
+#
+# This first profile covers only the board smoke path: RCC GPIOA/USART2 clock
+# gates, GPIOA for LD1, USART2 for the ST-LINK VCP, and SysTick. The C5 GPIO
+# and USART instances use the shared STM32v2 register models. USB, CAN FD,
+# ADC, I3C, timers and other MCU/board features are intentionally absent.
+# The C5 RCC model uses RM0522 reset values for the registers exercised here;
+# its remaining clock-tree registers are not claimed by this profile.
+#
+# Board facts: ST UM3615 Rev 1, NUCLEO-C562RE / MB2213, STM32C562RET6,
+# 512 KiB flash, 128 KiB SRAM, LD1=PA5, USART2 VCP=PA2/PA3.
+name: "stm32c562re"
+arch: "arm"
+core: "cortex-m33"
+cpu_hz: 144_000_000
+io_voltage_v: 3.3
+
+flash:
+  base: 0x08000000
+  size: "512KiB"
+ram:
+  base: 0x20000000
+  size: "128KiB"
+
+pins:
+  PA2: { gpio: gpioa, bit: 2, functions: [{ type: uart, peripheral: uart2, role: tx }] }
+  PA3: { gpio: gpioa, bit: 3, functions: [{ type: uart, peripheral: uart2, role: rx }] }
+  PA5: { gpio: gpioa, bit: 5, functions: [{ type: gpio, peripheral: gpioa }] }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x44020C00
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32c5/rcc.yaml"
+      profile: "stm32c5"
+
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x42020000
+    size: "1KB"
+    clock: { reg: "ahb2enr", bit: 0 }
+    config:
+      debug_schema: "../peripherals/stm32h563/gpioa.yaml"
+      profile: "stm32v2"
+      reset_moder: 0xABFFFFFF
+      reset_seccfgr: 0x0000FFFF
+      reset_ospeedr: 0x0C000000
+      reset_pupdr: 0x64000000
+
+  - id: "uart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    clock: { reg: "apb1lenr", bit: 17 }
+    config:
+      debug_schema: "../peripherals/stm32h563/usart2.yaml"
+      profile: "stm32v2"
+
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    config:
+      calib: 0x001003E8

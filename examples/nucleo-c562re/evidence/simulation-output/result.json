@@ -1,0 +1,2910 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 500000,
+  "cycles": 500000,
+  "instructions": 500000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 500000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 500000
+    }
+  },
+  "limits": {
+    "max_steps": 500000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "C562_USART2_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpioa:5",
+          "min_edges": 8
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      537001960,
+      891,
+      537001964,
+      2097152,
+      0,
+      0,
+      0,
+      537001968,
+      0,
+      0,
+      0,
+      0,
+      1107427352,
+      537001960,
+      32,
+      134220418
+    ],
+    "pc": 134220418,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "bac2e7df9197d660c64eeb2a04ac8017541a5d6760dbbc8e6753458b52a818c9",
+  "config": {
+    "firmware": "examples/nucleo-c562re/../../target/thumbv8m.main-none-eabi/release/firmware-nucleo-c562re-smoke",
+    "system": "examples/nucleo-c562re/../../configs/systems/nucleo-c562re.yaml",
+    "script": "examples/nucleo-c562re/io-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1140984832,
+        "registers": [
+          {
+            "name": "RCC_AHB2ENR",
+            "offset": 140,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_APB1LENR",
+            "offset": 156,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "gpioa",
+        "kind": "native",
+        "base": 1107427328,
+        "registers": [
+          {
+            "name": "GPIOA_MODER",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOA_OTYPER",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOA_OSPEEDR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOA_PUPDR",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOA_IDR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOA_ODR",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOA_BSRR",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOA_LCKR",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOA_AFRL",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOA_AFRH",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOA_BRR",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOA_HSLVR",
+            "offset": 44,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "GPIOA_SECCFGR",
+            "offset": 48,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "uart2",
+        "kind": "native",
+        "base": 1073759232,
+        "registers": [
+          {
+            "name": "USART_CR1_enabled",
+            "offset": 0,
+            "size": 32,
+            "value": 9,
+            "fields": [
+              {
+                "name": "UE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 1
+              },
+              {
+                "name": "UESM",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "RE",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TE",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 1
+              },
+              {
+                "name": "IDLEIE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFNEIE",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "TCIE",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFNFIE",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "PEIE",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "PS",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "PCE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKE",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "M0",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "MME",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "CMIE",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "OVER8",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEDT",
+                "bits": [
+                  20,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEAT",
+                "bits": [
+                  25,
+                  21
+                ],
+                "value": 0
+              },
+              {
+                "name": "RTOIE",
+                "bits": [
+                  26,
+                  26
+                ],
+                "value": 0
+              },
+              {
+                "name": "EOBIE",
+                "bits": [
+                  27,
+                  27
+                ],
+                "value": 0
+              },
+              {
+                "name": "M1",
+                "bits": [
+                  28,
+                  28
+                ],
+                "value": 0
+              },
+              {
+                "name": "FIFOEN",
+                "bits": [
+                  29,
+                  29
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFEIE",
+                "bits": [
+                  30,
+                  30
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFFIE",
+                "bits": [
+                  31,
+                  31
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "USART_CR1_disabled",
+            "offset": 0,
+            "size": 32,
+            "value": 9,
+            "fields": [
+              {
+                "name": "UE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 1
+              },
+              {
+                "name": "UESM",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "RE",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TE",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 1
+              },
+              {
+                "name": "IDLEIE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXNEIE",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "TCIE",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXEIE",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "PEIE",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "PS",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "PCE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKE",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "M0",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "MME",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "CMIE",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "OVER8",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEDT",
+                "bits": [
+                  20,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEAT",
+                "bits": [
+                  25,
+                  21
+                ],
+                "value": 0
+              },
+              {
+                "name": "RTOIE",
+                "bits": [
+                  26,
+                  26
+                ],
+                "value": 0
+              },
+              {
+                "name": "EOBIE",
+                "bits": [
+                  27,
+                  27
+                ],
+                "value": 0
+              },
+              {
+                "name": "M1",
+                "bits": [
+                  28,
+                  28
+                ],
+                "value": 0
+              },
+              {
+                "name": "FIFOEN",
+                "bits": [
+                  29,
+                  29
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "USART_CR2",
+            "offset": 4,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SLVEN",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "DIS_NSS",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADDM7",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "LBDL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "LBDIE",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "LBCL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "CPHA",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "CPOL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CLKEN",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "STOP",
+                "bits": [
+                  13,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "LINEN",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "SWAP",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXINV",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXINV",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "DATAINV",
+                "bits": [
+                  18,
+                  18
+                ],
+                "value": 0
+              },
+              {
+                "name": "MSBFIRST",
+                "bits": [
+                  19,
+                  19
+                ],
+                "value": 0
+              },
+              {
+                "name": "ABREN",
+                "bits": [
+                  20,
+                  20
+                ],
+                "value": 0
+              },
+              {
+                "name": "ABRMOD",
+                "bits": [
+                  22,
+                  21
+                ],
+                "value": 0
+              },
+              {
+                "name": "RTOEN",
+                "bits": [
+                  23,
+                  23
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADD",
+                "bits": [
+                  31,
+                  24
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "USART_CR3",
+            "offset": 8,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "EIE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IREN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "IRLP",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "HDSEL",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "NACK",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "SCEN",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "DMAR",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "DMAT",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "RTSE",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTSE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTSIE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "ONEBIT",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "OVRDIS",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "DDRE",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEM",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEP",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "SCARCNT",
+                "bits": [
+                  19,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "WUS0",
+                "bits": [
+                  20,
+                  20
+                ],
+                "value": 0
+              },
+              {
+                "name": "WUS1",
+                "bits": [
+                  21,
+                  21
+                ],
+                "value": 0
+              },
+              {
+                "name": "WUFIE",
+                "bits": [
+                  22,
+                  22
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFTIE",
+                "bits": [
+                  23,
+                  23
+                ],
+                "value": 0
+              },
+              {
+                "name": "TCBGTIE",
+                "bits": [
+                  24,
+                  24
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFTCFG",
+                "bits": [
+                  27,
+                  25
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFTIE",
+                "bits": [
+                  28,
+                  28
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFTCFG",
+                "bits": [
+                  31,
+                  29
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "USART_BRR",
+            "offset": 12,
+            "size": 32,
+            "value": 417,
+            "fields": [
+              {
+                "name": "BRR",
+                "bits": [
+                  15,
+                  0
+                ],
+                "value": 417
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "USART_GTPR",
+            "offset": 16,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PSC",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "GT",
+                "bits": [
+                  15,
+                  8
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "USART_RTOR",
+            "offset": 20,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RTO",
+                "bits": [
+                  23,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "BLEN",
+                "bits": [
+                  31,
+                  24
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "USART_RQR",
+            "offset": 24,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "ABRRQ",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SBKRQ",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "MMRQ",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFRQ",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFRQ",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "USART_ISR_enabled",
+            "offset": 28,
+            "size": 32,
+            "value": 2097344,
+            "fields": [
+              {
+                "name": "PE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "FE",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "NE",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "ORE",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "IDLE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFNE",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "TC",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 1
+              },
+              {
+                "name": "TXFNF",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 1
+              },
+              {
+                "name": "LBDF",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTSIF",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTS",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "RTOF",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "EOBF",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "UDR",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "ABRE",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "ABRF",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "BUSY",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "CMF",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "SBKF",
+                "bits": [
+                  18,
+                  18
+                ],
+                "value": 0
+              },
+              {
+                "name": "RWU",
+                "bits": [
+                  19,
+                  19
+                ],
+                "value": 0
+              },
+              {
+                "name": "WUF",
+                "bits": [
+                  20,
+                  20
+                ],
+                "value": 0
+              },
+              {
+                "name": "TEACK",
+                "bits": [
+                  21,
+                  21
+                ],
+                "value": 1
+              },
+              {
+                "name": "REACK",
+                "bits": [
+                  22,
+                  22
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFE",
+                "bits": [
+                  23,
+                  23
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFF",
+                "bits": [
+                  24,
+                  24
+                ],
+                "value": 0
+              },
+              {
+                "name": "TCBGT",
+                "bits": [
+                  25,
+                  25
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFT",
+                "bits": [
+                  26,
+                  26
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFT",
+                "bits": [
+                  27,
+                  27
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "USART_ISR_disabled",
+            "offset": 28,
+            "size": 32,
+            "value": 2097344,
+            "fields": [
+              {
+                "name": "PE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "FE",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "NE",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "ORE",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "IDLE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXNE",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "TC",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 1
+              },
+              {
+                "name": "TXE",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 1
+              },
+              {
+                "name": "LBDF",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTSIF",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTS",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "RTOF",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "EOBF",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "UDR",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "ABRE",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "ABRF",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "BUSY",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "CMF",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "SBKF",
+                "bits": [
+                  18,
+                  18
+                ],
+                "value": 0
+              },
+              {
+                "name": "RWU",
+                "bits": [
+                  19,
+                  19
+                ],
+                "value": 0
+              },
+              {
+                "name": "WUF",
+                "bits": [
+                  20,
+                  20
+                ],
+                "value": 0
+              },
+              {
+                "name": "TEACK",
+                "bits": [
+                  21,
+                  21
+                ],
+                "value": 1
+              },
+              {
+                "name": "REACK",
+                "bits": [
+                  22,
+                  22
+                ],
+                "value": 0
+              },
+              {
+                "name": "TCBGT",
+                "bits": [
+                  25,
+                  25
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "USART_ICR",
+            "offset": 32,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PECF",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "FECF",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "NECF",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "ORECF",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "IDLECF",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFECF",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "TCCF",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "TCBGTCF",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "LBDCF",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTSCF",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "RTOCF",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "EOBCF",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "UDRCF",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "CMCF",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "WUCF",
+                "bits": [
+                  20,
+                  20
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "USART_RDR",
+            "offset": 36,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RDR",
+                "bits": [
+                  8,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "USART_TDR",
+            "offset": 40,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TDR",
+                "bits": [
+                  8,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "USART_PRESC",
+            "offset": 44,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PRESCALER",
+                "bits": [
+                  3,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "systick",
+        "kind": "native",
+        "base": 3758153744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal 3.3 V rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 500000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpioa",
+        "pin": 5,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 128,
+            "value": 1
+          },
+          {
+            "cycle": 4130,
+            "value": 0
+          },
+          {
+            "cycle": 8133,
+            "value": 1
+          },
+          {
+            "cycle": 12135,
+            "value": 0
+          },
+          {
+            "cycle": 16138,
+            "value": 1
+          },
+          {
+            "cycle": 20140,
+            "value": 0
+          },
+          {
+            "cycle": 24143,
+            "value": 1
+          },
+          {
+            "cycle": 28145,
+            "value": 0
+          },
+          {
+            "cycle": 32148,
+            "value": 1
+          },
+          {
+            "cycle": 36150,
+            "value": 0
+          },
+          {
+            "cycle": 40153,
+            "value": 1
+          },
+          {
+            "cycle": 44155,
+            "value": 0
+          },
+          {
+            "cycle": 48158,
+            "value": 1
+          },
+          {
+            "cycle": 52160,
+            "value": 0
+          },
+          {
+            "cycle": 56163,
+            "value": 1
+          },
+          {
+            "cycle": 60165,
+            "value": 0
+          },
+          {
+            "cycle": 64168,
+            "value": 1
+          },
+          {
+            "cycle": 68170,
+            "value": 0
+          },
+          {
+            "cycle": 72173,
+            "value": 1
+          },
+          {
+            "cycle": 76175,
+            "value": 0
+          },
+          {
+            "cycle": 80178,
+            "value": 1
+          },
+          {
+            "cycle": 84180,
+            "value": 0
+          },
+          {
+            "cycle": 88183,
+            "value": 1
+          },
+          {
+            "cycle": 92185,
+            "value": 0
+          },
+          {
+            "cycle": 96188,
+            "value": 1
+          },
+          {
+            "cycle": 100190,
+            "value": 0
+          },
+          {
+            "cycle": 104193,
+            "value": 1
+          },
+          {
+            "cycle": 108195,
+            "value": 0
+          },
+          {
+            "cycle": 112198,
+            "value": 1
+          },
+          {
+            "cycle": 116200,
+            "value": 0
+          },
+          {
+            "cycle": 120203,
+            "value": 1
+          },
+          {
+            "cycle": 124205,
+            "value": 0
+          },
+          {
+            "cycle": 128208,
+            "value": 1
+          },
+          {
+            "cycle": 132210,
+            "value": 0
+          },
+          {
+            "cycle": 136213,
+            "value": 1
+          },
+          {
+            "cycle": 140215,
+            "value": 0
+          },
+          {
+            "cycle": 144218,
+            "value": 1
+          },
+          {
+            "cycle": 148220,
+            "value": 0
+          },
+          {
+            "cycle": 152223,
+            "value": 1
+          },
+          {
+            "cycle": 156225,
+            "value": 0
+          },
+          {
+            "cycle": 160228,
+            "value": 1
+          },
+          {
+            "cycle": 164230,
+            "value": 0
+          },
+          {
+            "cycle": 168233,
+            "value": 1
+          },
+          {
+            "cycle": 172235,
+            "value": 0
+          },
+          {
+            "cycle": 176238,
+            "value": 1
+          },
+          {
+            "cycle": 180240,
+            "value": 0
+          },
+          {
+            "cycle": 184243,
+            "value": 1
+          },
+          {
+            "cycle": 188245,
+            "value": 0
+          },
+          {
+            "cycle": 192248,
+            "value": 1
+          },
+          {
+            "cycle": 196250,
+            "value": 0
+          },
+          {
+            "cycle": 200253,
+            "value": 1
+          },
+          {
+            "cycle": 204255,
+            "value": 0
+          },
+          {
+            "cycle": 208258,
+            "value": 1
+          },
+          {
+            "cycle": 212260,
+            "value": 0
+          },
+          {
+            "cycle": 216263,
+            "value": 1
+          },
+          {
+            "cycle": 220265,
+            "value": 0
+          },
+          {
+            "cycle": 224268,
+            "value": 1
+          },
+          {
+            "cycle": 228270,
+            "value": 0
+          },
+          {
+            "cycle": 232273,
+            "value": 1
+          },
+          {
+            "cycle": 236275,
+            "value": 0
+          },
+          {
+            "cycle": 240278,
+            "value": 1
+          },
+          {
+            "cycle": 244280,
+            "value": 0
+          },
+          {
+            "cycle": 248283,
+            "value": 1
+          },
+          {
+            "cycle": 252285,
+            "value": 0
+          },
+          {
+            "cycle": 256288,
+            "value": 1
+          },
+          {
+            "cycle": 260290,
+            "value": 0
+          },
+          {
+            "cycle": 264293,
+            "value": 1
+          },
+          {
+            "cycle": 268295,
+            "value": 0
+          },
+          {
+            "cycle": 272298,
+            "value": 1
+          },
+          {
+            "cycle": 276300,
+            "value": 0
+          },
+          {
+            "cycle": 280303,
+            "value": 1
+          },
+          {
+            "cycle": 284305,
+            "value": 0
+          },
+          {
+            "cycle": 288308,
+            "value": 1
+          },
+          {
+            "cycle": 292310,
+            "value": 0
+          },
+          {
+            "cycle": 296313,
+            "value": 1
+          },
+          {
+            "cycle": 300315,
+            "value": 0
+          },
+          {
+            "cycle": 304318,
+            "value": 1
+          },
+          {
+            "cycle": 308320,
+            "value": 0
+          },
+          {
+            "cycle": 312323,
+            "value": 1
+          },
+          {
+            "cycle": 316325,
+            "value": 0
+          },
+          {
+            "cycle": 320328,
+            "value": 1
+          },
+          {
+            "cycle": 324330,
+            "value": 0
+          },
+          {
+            "cycle": 328333,
+            "value": 1
+          },
+          {
+            "cycle": 332335,
+            "value": 0
+          },
+          {
+            "cycle": 336338,
+            "value": 1
+          },
+          {
+            "cycle": 340340,
+            "value": 0
+          },
+          {
+            "cycle": 344343,
+            "value": 1
+          },
+          {
+            "cycle": 348345,
+            "value": 0
+          },
+          {
+            "cycle": 352348,
+            "value": 1
+          },
+          {
+            "cycle": 356350,
+            "value": 0
+          },
+          {
+            "cycle": 360353,
+            "value": 1
+          },
+          {
+            "cycle": 364355,
+            "value": 0
+          },
+          {
+            "cycle": 368358,
+            "value": 1
+          },
+          {
+            "cycle": 372360,
+            "value": 0
+          },
+          {
+            "cycle": 376363,
+            "value": 1
+          },
+          {
+            "cycle": 380365,
+            "value": 0
+          },
+          {
+            "cycle": 384368,
+            "value": 1
+          },
+          {
+            "cycle": 388370,
+            "value": 0
+          },
+          {
+            "cycle": 392373,
+            "value": 1
+          },
+          {
+            "cycle": 396375,
+            "value": 0
+          },
+          {
+            "cycle": 400378,
+            "value": 1
+          },
+          {
+            "cycle": 404380,
+            "value": 0
+          },
+          {
+            "cycle": 408383,
+            "value": 1
+          },
+          {
+            "cycle": 412385,
+            "value": 0
+          },
+          {
+            "cycle": 416388,
+            "value": 1
+          },
+          {
+            "cycle": 420390,
+            "value": 0
+          },
+          {
+            "cycle": 424393,
+            "value": 1
+          },
+          {
+            "cycle": 428395,
+            "value": 0
+          },
+          {
+            "cycle": 432398,
+            "value": 1
+          },
+          {
+            "cycle": 436400,
+            "value": 0
+          },
+          {
+            "cycle": 440403,
+            "value": 1
+          },
+          {
+            "cycle": 444405,
+            "value": 0
+          },
+          {
+            "cycle": 448408,
+            "value": 1
+          },
+          {
+            "cycle": 452410,
+            "value": 0
+          },
+          {
+            "cycle": 456413,
+            "value": 1
+          },
+          {
+            "cycle": 460415,
+            "value": 0
+          },
+          {
+            "cycle": 464418,
+            "value": 1
+          },
+          {
+            "cycle": 468420,
+            "value": 0
+          },
+          {
+            "cycle": 472423,
+            "value": 1
+          },
+          {
+            "cycle": 476425,
+            "value": 0
+          },
+          {
+            "cycle": 480428,
+            "value": 1
+          },
+          {
+            "cycle": 484430,
+            "value": 0
+          },
+          {
+            "cycle": 488433,
+            "value": 1
+          },
+          {
+            "cycle": 492435,
+            "value": 0
+          },
+          {
+            "cycle": 496438,
+            "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 36,
+            "state": "0"
+          },
+          {
+            "cycle": 128,
+            "state": "1"
+          },
+          {
+            "cycle": 4130,
+            "state": "0"
+          },
+          {
+            "cycle": 8133,
+            "state": "1"
+          },
+          {
+            "cycle": 12135,
+            "state": "0"
+          },
+          {
+            "cycle": 16138,
+            "state": "1"
+          },
+          {
+            "cycle": 20140,
+            "state": "0"
+          },
+          {
+            "cycle": 24143,
+            "state": "1"
+          },
+          {
+            "cycle": 28145,
+            "state": "0"
+          },
+          {
+            "cycle": 32148,
+            "state": "1"
+          },
+          {
+            "cycle": 36150,
+            "state": "0"
+          },
+          {
+            "cycle": 40153,
+            "state": "1"
+          },
+          {
+            "cycle": 44155,
+            "state": "0"
+          },
+          {
+            "cycle": 48158,
+            "state": "1"
+          },
+          {
+            "cycle": 52160,
+            "state": "0"
+          },
+          {
+            "cycle": 56163,
+            "state": "1"
+          },
+          {
+            "cycle": 60165,
+            "state": "0"
+          },
+          {
+            "cycle": 64168,
+            "state": "1"
+          },
+          {
+            "cycle": 68170,
+            "state": "0"
+          },
+          {
+            "cycle": 72173,
+            "state": "1"
+          },
+          {
+            "cycle": 76175,
+            "state": "0"
+          },
+          {
+            "cycle": 80178,
+            "state": "1"
+          },
+          {
+            "cycle": 84180,
+            "state": "0"
+          },
+          {
+            "cycle": 88183,
+            "state": "1"
+          },
+          {
+            "cycle": 92185,
+            "state": "0"
+          },
+          {
+            "cycle": 96188,
+            "state": "1"
+          },
+          {
+            "cycle": 100190,
+            "state": "0"
+          },
+          {
+            "cycle": 104193,
+            "state": "1"
+          },
+          {
+            "cycle": 108195,
+            "state": "0"
+          },
+          {
+            "cycle": 112198,
+            "state": "1"
+          },
+          {
+            "cycle": 116200,
+            "state": "0"
+          },
+          {
+            "cycle": 120203,
+            "state": "1"
+          },
+          {
+            "cycle": 124205,
+            "state": "0"
+          },
+          {
+            "cycle": 128208,
+            "state": "1"
+          },
+          {
+            "cycle": 132210,
+            "state": "0"
+          },
+          {
+            "cycle": 136213,
+            "state": "1"
+          },
+          {
+            "cycle": 140215,
+            "state": "0"
+          },
+          {
+            "cycle": 144218,
+            "state": "1"
+          },
+          {
+            "cycle": 148220,
+            "state": "0"
+          },
+          {
+            "cycle": 152223,
+            "state": "1"
+          },
+          {
+            "cycle": 156225,
+            "state": "0"
+          },
+          {
+            "cycle": 160228,
+            "state": "1"
+          },
+          {
+            "cycle": 164230,
+            "state": "0"
+          },
+          {
+            "cycle": 168233,
+            "state": "1"
+          },
+          {
+            "cycle": 172235,
+            "state": "0"
+          },
+          {
+            "cycle": 176238,
+            "state": "1"
+          },
+          {
+            "cycle": 180240,
+            "state": "0"
+          },
+          {
+            "cycle": 184243,
+            "state": "1"
+          },
+          {
+            "cycle": 188245,
+            "state": "0"
+          },
+          {
+            "cycle": 192248,
+            "state": "1"
+          },
+          {
+            "cycle": 196250,
+            "state": "0"
+          },
+          {
+            "cycle": 200253,
+            "state": "1"
+          },
+          {
+            "cycle": 204255,
+            "state": "0"
+          },
+          {
+            "cycle": 208258,
+            "state": "1"
+          },
+          {
+            "cycle": 212260,
+            "state": "0"
+          },
+          {
+            "cycle": 216263,
+            "state": "1"
+          },
+          {
+            "cycle": 220265,
+            "state": "0"
+          },
+          {
+            "cycle": 224268,
+            "state": "1"
+          },
+          {
+            "cycle": 228270,
+            "state": "0"
+          },
+          {
+            "cycle": 232273,
+            "state": "1"
+          },
+          {
+            "cycle": 236275,
+            "state": "0"
+          },
+          {
+            "cycle": 240278,
+            "state": "1"
+          },
+          {
+            "cycle": 244280,
+            "state": "0"
+          },
+          {
+            "cycle": 248283,
+            "state": "1"
+          },
+          {
+            "cycle": 252285,
+            "state": "0"
+          },
+          {
+            "cycle": 256288,
+            "state": "1"
+          },
+          {
+            "cycle": 260290,
+            "state": "0"
+          },
+          {
+            "cycle": 264293,
+            "state": "1"
+          },
+          {
+            "cycle": 268295,
+            "state": "0"
+          },
+          {
+            "cycle": 272298,
+            "state": "1"
+          },
+          {
+            "cycle": 276300,
+            "state": "0"
+          },
+          {
+            "cycle": 280303,
+            "state": "1"
+          },
+          {
+            "cycle": 284305,
+            "state": "0"
+          },
+          {
+            "cycle": 288308,
+            "state": "1"
+          },
+          {
+            "cycle": 292310,
+            "state": "0"
+          },
+          {
+            "cycle": 296313,
+            "state": "1"
+          },
+          {
+            "cycle": 300315,
+            "state": "0"
+          },
+          {
+            "cycle": 304318,
+            "state": "1"
+          },
+          {
+            "cycle": 308320,
+            "state": "0"
+          },
+          {
+            "cycle": 312323,
+            "state": "1"
+          },
+          {
+            "cycle": 316325,
+            "state": "0"
+          },
+          {
+            "cycle": 320328,
+            "state": "1"
+          },
+          {
+            "cycle": 324330,
+            "state": "0"
+          },
+          {
+            "cycle": 328333,
+            "state": "1"
+          },
+          {
+            "cycle": 332335,
+            "state": "0"
+          },
+          {
+            "cycle": 336338,
+            "state": "1"
+          },
+          {
+            "cycle": 340340,
+            "state": "0"
+          },
+          {
+            "cycle": 344343,
+            "state": "1"
+          },
+          {
+            "cycle": 348345,
+            "state": "0"
+          },
+          {
+            "cycle": 352348,
+            "state": "1"
+          },
+          {
+            "cycle": 356350,
+            "state": "0"
+          },
+          {
+            "cycle": 360353,
+            "state": "1"
+          },
+          {
+            "cycle": 364355,
+            "state": "0"
+          },
+          {
+            "cycle": 368358,
+            "state": "1"
+          },
+          {
+            "cycle": 372360,
+            "state": "0"
+          },
+          {
+            "cycle": 376363,
+            "state": "1"
+          },
+          {
+            "cycle": 380365,
+            "state": "0"
+          },
+          {
+            "cycle": 384368,
+            "state": "1"
+          },
+          {
+            "cycle": 388370,
+            "state": "0"
+          },
+          {
+            "cycle": 392373,
+            "state": "1"
+          },
+          {
+            "cycle": 396375,
+            "state": "0"
+          },
+          {
+            "cycle": 400378,
+            "state": "1"
+          },
+          {
+            "cycle": 404380,
+            "state": "0"
+          },
+          {
+            "cycle": 408383,
+            "state": "1"
+          },
+          {
+            "cycle": 412385,
+            "state": "0"
+          },
+          {
+            "cycle": 416388,
+            "state": "1"
+          },
+          {
+            "cycle": 420390,
+            "state": "0"
+          },
+          {
+            "cycle": 424393,
+            "state": "1"
+          },
+          {
+            "cycle": 428395,
+            "state": "0"
+          },
+          {
+            "cycle": 432398,
+            "state": "1"
+          },
+          {
+            "cycle": 436400,
+            "state": "0"
+          },
+          {
+            "cycle": 440403,
+            "state": "1"
+          },
+          {
+            "cycle": 444405,
+            "state": "0"
+          },
+          {
+            "cycle": 448408,
+            "state": "1"
+          },
+          {
+            "cycle": 452410,
+            "state": "0"
+          },
+          {
+            "cycle": 456413,
+            "state": "1"
+          },
+          {
+            "cycle": 460415,
+            "state": "0"
+          },
+          {
+            "cycle": 464418,
+            "state": "1"
+          },
+          {
+            "cycle": 468420,
+            "state": "0"
+          },
+          {
+            "cycle": 472423,
+            "state": "1"
+          },
+          {
+            "cycle": 476425,
+            "state": "0"
+          },
+          {
+            "cycle": 480428,
+            "state": "1"
+          },
+          {
+            "cycle": 484430,
+            "state": "0"
+          },
+          {
+            "cycle": 488433,
+            "state": "1"
+          },
+          {
+            "cycle": 492435,
+            "state": "0"
+          },
+          {
+            "cycle": 496438,
+            "state": "1"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 125
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpioa",
+      "number": 5,
+      "mode": "output",
+      "func": null,
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "C562_USART2_OK",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 2728,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 2728,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 524288,
+    "ram_total_bytes": 131072,
+    "flash_used_pct": 0.52,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 131072,
+    "main_stack_high_water_bytes": 24,
+    "main_stack_free_min_bytes": 131048,
+    "main_stack_base": 536870912,
+    "main_stack_top": 537001984,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 131072,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 131048,
+    "heap_base": 536870912,
+    "heap_top": 537001984
+  },
+  "metrics": {
+    "cycles": 500000,
+    "instructions": 500000,
+    "steps_executed": 500000,
+    "memory_reads": 175,
+    "memory_writes": 124897,
+    "peripheral_accesses": 166,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134220418,
+        "count": 273,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 134220422,
+        "count": 273,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 134220438,
+        "count": 237,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 134220414,
+        "count": 234,
+        "symbol": "core::hint::black_box"
+      },
+      {
+        "pc": 134220416,
+        "count": 234,
+        "symbol": "<u32>::unchecked_add"
+      },
+      {
+        "pc": 134220430,
+        "count": 234,
+        "symbol": "core::hint::black_box"
+      },
+      {
+        "pc": 134220432,
+        "count": 234,
+        "symbol": "<u32>::unchecked_add"
+      },
+      {
+        "pc": 134220434,
+        "count": 234,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      }
+    ]
+  }
+}

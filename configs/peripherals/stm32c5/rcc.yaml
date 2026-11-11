@@ -1,0 +1,21 @@
+peripheral: RCC
+version: 0.1.0
+registers:
+- id: RCC_AHB2ENR
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIOAEN
+    bit_range: [0, 0]
+    description: GPIOA clock enable (RM0522 RCC_AHB2ENR).
+- id: RCC_APB1LENR
+  address_offset: 156
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: USART2EN
+    bit_range: [17, 17]
+    description: USART2 clock enable (RM0522 RCC_APB1LENR).
