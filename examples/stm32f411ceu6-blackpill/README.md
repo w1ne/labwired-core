@@ -28,6 +28,12 @@ NMOS load line on PA0/ADC1_IN0. Its co-simulation test checks the independently
 calculated drain voltage across gate bias points, the firmware-visible ADC1
 conversion, and isolation from the NTC and diode channels.
 
+[`analog-mosfet-sheet-resistance-adc.yaml`](analog-mosfet-sheet-resistance-adc.yaml)
+compares a generic level-1 NMOS reference, drain-only RSH×NRD and source-only
+RSH×NRS branches, and equivalent external resistor networks on PA2/PA3/PA5/PA6/PB0.
+The test checks independent load-line roots, cutoff and conduction behavior,
+firmware-visible ADC1 conversions, and isolation from the unrelated NTC and diode.
+
 [`analog-jfet-gate-charge-adc.yaml`](analog-jfet-gate-charge-adc.yaml) compares
 matched level-1 NJF branches with and without CGS/CGD depletion charge on
 PA2/PA3. The co-simulation test checks the transient against an independent
@@ -88,12 +94,14 @@ Expected result:
 3. `analog-ntc-diode-system.yaml`: reusable generic NTC and diode analog models
    routed to the F411's modeled ADC1 inputs.
 4. `analog-mosfet-switch.yaml`: generic NMOS load-line model routed to ADC1.
-5. `analog-jfet-gate-charge-adc.yaml`: matched generic JFET charge and control
+5. `analog-mosfet-sheet-resistance-adc.yaml`: matched NMOS sheet-resistance and
+   explicit resistor-reference branches routed to ADC1.
+6. `analog-jfet-gate-charge-adc.yaml`: matched generic JFET charge and control
    branches routed to ADC1.
-6. `analog-bjt-high-injection-adc.yaml`: matched generic BJT high-injection and
+7. `analog-bjt-high-injection-adc.yaml`: matched generic BJT high-injection and
    control branches routed to ADC1.
-7. `analog-bjt-early-effect-adc.yaml`: matched generic BJT Early-effect and
+8. `analog-bjt-early-effect-adc.yaml`: matched generic BJT Early-effect and
    control branches routed to ADC1.
-8. `analog-bjt-terminal-resistance-adc.yaml`: generic BJT terminal-resistance
+9. `analog-bjt-terminal-resistance-adc.yaml`: generic BJT terminal-resistance
    branches and explicit equivalent network routed to ADC1.
-9. `VALIDATION.md`: reproducible validation commands and the honest scope.
+10. `VALIDATION.md`: reproducible validation commands and the honest scope.

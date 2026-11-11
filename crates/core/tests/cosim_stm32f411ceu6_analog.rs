@@ -160,6 +160,46 @@ fn mosfet_drain_voltage(gate_v: f64) -> f64 {
     (low + high) / 2.0
 }
 
+/// Independent level-1 NMOS load line with external drain/source resistance.
+/// RSH×NRD/NRS and an ordinary series resistor both enter the same terminals.
+fn mosfet_drain_voltage_with_terminal_resistances(
+    gate_v: f64,
+    drain_ohms: f64,
+    source_ohms: f64,
+) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const LOAD_OHMS: f64 = 10_000.0;
+    const VTO: f64 = 1.0;
+    const KP_A_PER_V2: f64 = 20e-6;
+    const W_M: f64 = 100e-6;
+    const L_M: f64 = 10e-6;
+    const LAMBDA_PER_V: f64 = 0.02;
+
+    let beta = KP_A_PER_V2 * W_M / L_M;
+    let channel_current = |current_a: f64| {
+        let vds = SUPPLY_V - current_a * (LOAD_OHMS + drain_ohms + source_ohms);
+        let overdrive = gate_v - current_a * source_ohms - VTO;
+        if overdrive <= 0.0 || vds <= 0.0 {
+            0.0
+        } else if vds < overdrive {
+            beta * (1.0 + LAMBDA_PER_V * vds) * vds * (overdrive - 0.5 * vds)
+        } else {
+            0.5 * beta * (1.0 + LAMBDA_PER_V * vds) * overdrive * overdrive
+        }
+    };
+
+    let (mut low, mut high) = (0.0, SUPPLY_V / (LOAD_OHMS + drain_ohms + source_ohms));
+    for _ in 0..100 {
+        let current_a = (low + high) / 2.0;
+        if channel_current(current_a) > current_a {
+            low = current_a;
+        } else {
+            high = current_a;
+        }
+    }
+    SUPPLY_V - ((low + high) / 2.0) * LOAD_OHMS
+}
+
 /// Independent Gummel–Poon load line with forward/reverse high-injection
 /// rolloff and matched Early voltages in the device and control branches.
 fn bjt_high_injection_collector_voltage(base_drive_v: f64, high_injection: bool) -> f64 {
@@ -547,6 +587,150 @@ fn stm32f411ceu6_blackpill_mosfet_load_line_reaches_pa0_adc1_end_to_end() {
         drain_samples[4].1 < drain_samples[3].1 && drain_samples[3].1 < drain_samples[2].1,
         "drain voltage falls as the NMOS conducts more strongly: {drain_samples:?}"
     );
+}
+
+#[test]
+fn stm32f411ceu6_mosfet_sheet_resistance_reaches_adc1_with_explicit_network_reference() {
+    let system_path = root("configs/systems/stm32f411ceu6-blackpill.yaml");
+    let mut profile =
+        SystemManifest::from_file(&system_path).expect("load STM32F411CEU6 Black Pill profile");
+    let generic = SystemManifest::from_file(root(
+        "examples/stm32f411ceu6-blackpill/analog-ntc-diode-system.yaml",
+    ))
+    .expect("load unrelated generic NTC and diode routes");
+    let sheet = SystemManifest::from_file(root(
+        "examples/stm32f411ceu6-blackpill/analog-mosfet-sheet-resistance-adc.yaml",
+    ))
+    .expect("load matched generic NMOS sheet-resistance branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(sheet.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F411CEU6 descriptor");
+    for (pad, channel) in [
+        ("PA1", 1),
+        ("PA2", 2),
+        ("PA3", 3),
+        ("PA4", 4),
+        ("PA5", 5),
+        ("PA6", 6),
+        ("PB0", 8),
+    ] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build Black Pill bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries NTC, diode, and five matched NMOS branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must resolve to ADC1 channels 1–6 and 8"
+    );
+    for channel in 0..=9 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            u16::MAX,
+            "ADC1 channel {channel} begins without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    let mut cycles = 0;
+    for gate_v in [0.5_f64, 3.3] {
+        session
+            .set_signal_number("ui.mosfet_sheet.gate_v", gate_v)
+            .expect("set shared NMOS gate drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and MOSFET sheet-resistance branches");
+        assert_eq!(steps.len(), 3, "all three generic analog adapters solve");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "board.analog.pa1_volts");
+        let diode_v = signal_voltage(&session, "board.analog.pa4_volts");
+        assert!(
+            (ntc_v - 1.65).abs() < 1e-9,
+            "the unrelated NTC remains isolated"
+        );
+        assert!(
+            (diode_v - diode_load_line_voltage()).abs() < 2e-5,
+            "the unrelated Shockley diode remains on its independent load line"
+        );
+
+        let branches = [
+            (2, "board.analog.pa2_volts", 0.0, 0.0),
+            (3, "board.analog.pa3_volts", 1_000.0, 0.0),
+            (5, "board.analog.pa5_volts", 0.0, 2_000.0),
+            (6, "board.analog.pa6_volts", 1_000.0, 0.0),
+            (8, "board.analog.pb0_volts", 0.0, 2_000.0),
+        ];
+        let mut voltages = Vec::with_capacity(branches.len());
+        for (channel, path, drain_ohms, source_ohms) in branches {
+            let voltage_v = signal_voltage(&session, path);
+            let expected_v =
+                mosfet_drain_voltage_with_terminal_resistances(gate_v, drain_ohms, source_ohms);
+            assert!(
+                (voltage_v - expected_v).abs() < 5e-5,
+                "at VGS={gate_v} V with RD={drain_ohms} Ω and RS={source_ohms} Ω, expected {expected_v} V on ADC1_IN{channel}, got {voltage_v} V"
+            );
+            let expected_count = expected_adc_count(voltage_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected_count,
+                "solved NMOS voltage seeds ADC1 channel {channel}"
+            );
+            assert_eq!(
+                stm32f4_adc_convert(&mut bus, channel),
+                u32::from(expected_count),
+                "firmware-visible ADC1 conversion follows NMOS channel {channel}"
+            );
+            voltages.push(voltage_v);
+        }
+
+        assert!(
+            (voltages[1] - voltages[3]).abs() < 5e-5,
+            "drain RSH×NRD matches the explicit external resistor: {voltages:?}"
+        );
+        assert!(
+            (voltages[2] - voltages[4]).abs() < 5e-5,
+            "source RSH×NRS matches the explicit external resistor: {voltages:?}"
+        );
+        if gate_v < 1.0 {
+            assert!(
+                voltages.iter().all(|voltage| (voltage - 3.3).abs() < 5e-5),
+                "all matched NMOS branches remain in cutoff: {voltages:?}"
+            );
+        } else {
+            assert!(
+                (voltages[1] - voltages[0]).abs() > 0.02,
+                "drain sheet resistance changes the load line: {voltages:?}"
+            );
+            assert!(
+                (voltages[2] - voltages[0]).abs() > 0.02,
+                "source sheet resistance changes the load line: {voltages:?}"
+            );
+        }
+
+        for (channel, voltage_v) in [(1, ntc_v), (4, diode_v)] {
+            let expected_count = expected_adc_count(voltage_v);
+            assert_eq!(adc_channel_count(&mut bus, channel), expected_count);
+            assert_eq!(
+                stm32f4_adc_convert(&mut bus, channel),
+                u32::from(expected_count),
+                "the unrelated analog device remains isolated on ADC1 channel {channel}"
+            );
+        }
+        assert_eq!(
+            [0, 7, 9].map(|channel| adc_channel_count(&mut bus, channel)),
+            [u16::MAX; 3],
+            "unrouted ADC1 neighbors remain undriven"
+        );
+    }
 }
 
 #[test]

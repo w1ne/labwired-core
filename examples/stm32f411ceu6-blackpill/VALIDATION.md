@@ -144,14 +144,16 @@ Pass criteria: JSON reports `status: "finished"` and the VCD exists.
 cargo test -p labwired-core --test cosim_stm32f411ceu6_analog -- --nocapture
 ```
 
-Pass criteria: the generic level-1 NMOS, NJF gate-depletion charge branches,
+Pass criteria: the generic level-1 NMOS and RSH×NRD/NRS sheet-resistance branches,
+NJF gate-depletion charge branches,
 Gummel–Poon NPN Early-effect, high-injection, base-recombination, terminal
 resistance, and charge branches, Beta NTC divider, and unrelated Shockley diode
 solve to independently calculated or equivalent-network voltages and route
 through PA0–PA6 and PB0/PB1 to ADC1 channels 0–9 with matching firmware-visible
 12-bit one-shot results. The JFET test checks CGS/CGD transient charge against
 an independent recurrence and compares it with a zero-charge control. The BJT
-tests check IKF/IKR/NKF rolloff against a matched no-rolloff branch and verify
-RB/RC/RE against an explicit resistor network. Neighboring unrouted channels
-remain undriven. These tests do not validate physical board connectors or
-silicon behavior.
+tests check IKF/IKR/NKF rolloff against a matched no-rolloff branch, verify
+RB/RC/RE and NMOS sheet resistance against explicit resistor networks, and
+assert cutoff and conducting load lines. Neighboring unrouted channels remain
+undriven. These tests do not validate physical board connectors or silicon
+behavior.
