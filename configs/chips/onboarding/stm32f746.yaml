@@ -34,6 +34,12 @@ ram:
   base: 0x20000000
   size: 320KB
 peripherals:
+# Cortex-M architectural SysTick (system exception 15). This shared model is
+# part of the imported F746/F777 core even though Renode's STM32 platform file
+# does not attach it as a separate peripheral.
+- id: systick
+  type: systick
+  base_address: 0xE000E010
 # RCC (RM0385 §5): the F4 register layout. ENR masks are every *EN bit
 # `stm32f746xx.h` defines; AHB1ENR resets to DTCMRAMEN (RM0385 §5.3.10).
 - id: rcc

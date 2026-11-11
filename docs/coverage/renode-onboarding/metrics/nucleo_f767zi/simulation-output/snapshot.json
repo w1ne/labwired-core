@@ -7,20 +7,20 @@
       3221225472,
       1073811484,
       4294867296,
-      65535,
-      1,
       4294867296,
+      1,
+      1,
       537395184,
+      0,
+      131071,
+      536883216,
       1,
-      32,
-      1,
-      1073764352,
       70,
-      537395136,
+      537395088,
       70,
-      134232064
+      134241126
     ],
-    "pc": 134232064,
+    "pc": 134241126,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -31,7 +31,7 @@
     ],
     "vtor": 0,
     "waiting_for_event": false,
-    "event_register": false
+    "event_register": true
   },
   "steps_executed": 6000000,
   "cycles": 6000000,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "3381f391b16bb2935b0e78e4ada295ac39214cc5175dc18d90f0193b02d24773",
+  "firmware_hash": "deba27228f87f7e47fb6042296fe19045e23802742ecd9eef5f7fa0835583161",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-nucleo-f767zi-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/nucleo_f767zi.yaml",

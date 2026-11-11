@@ -33,5 +33,6 @@ i2c3 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok
 i2c4 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok
 crc word=0xDF8A8A2B crc16=0x000029B1 seed=1 std=1 init=1 idr=1 poly16=1 ok
 rng off=1 ready=1 draws=1 stopped=1 ok
-summary 0x7670FFFF
+pendsv m7 clear=1 repend=1 systick=1 priority=1 ok
+summary 0x7671FFFF
 DONE
