@@ -14,4 +14,4 @@ warning: profiles for the non root package will be ignored, specify profiles at 
 package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/rp2040/Cargo.toml
 workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
    Compiling firmware-f103-i2c-demo v0.25.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/renode/crates/firmware-f103-i2c-demo)
-    Finished `release` profile [optimized + debuginfo] target(s) in 2.90s
+    Finished `release` profile [optimized + debuginfo] target(s) in 3.12s

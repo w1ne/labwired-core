@@ -85,6 +85,13 @@ const BASEPRI_IRQ_LOW_BIT: u32 = 1 << (BASEPRI_IRQ_LOW % 32);
 const BASEPRI_IRQ_HIGH_BIT: u32 = 1 << (BASEPRI_IRQ_HIGH % 32);
 const BASEPRI_IRQ_MASK: u32 = BASEPRI_IRQ_LOW_BIT | BASEPRI_IRQ_HIGH_BIT;
 const BASEPRI_RECORD: u32 = 0x2000_0600;
+const FAULT_RECORD: u32 = 0x2000_0680;
+const SCB_SHCSR: u32 = 0xE000_ED24;
+const SCB_CFSR: u32 = 0xE000_ED28;
+const SCB_HFSR: u32 = 0xE000_ED2C;
+const SHCSR_USGFAULTENA: u32 = 1 << 18;
+const CFSR_UNDEFINSTR: u32 = 1 << 16;
+const HFSR_FORCED: u32 = 1 << 30;
 
 const SPI1_BASE: u32 = 0x4001_3000;
 const SPI1_IRQ: u32 = 35;
@@ -260,6 +267,7 @@ fn main() -> ! {
     unsafe { smoke_pendsv_clear_and_repend() };
     unsafe { smoke_external_irq_stack_frame() };
     unsafe { smoke_external_irq_psp_stack_frame() };
+    unsafe { smoke_usagefault_and_hardfault_escalation() };
     unsafe { smoke_primask_external_irq() };
     unsafe { smoke_basepri_priority_mask() };
     smoke_usart2_txe_irq();
@@ -1399,6 +1407,200 @@ unsafe fn smoke_external_irq_psp_stack_frame() -> bool {
         putline(b"IRQ M3 PSP FRAME CHECK FAILED");
     }
     ok
+}
+
+/// Exercise ARMv7-M undefined-instruction routing on the imported Cortex-M3:
+/// first take UsageFault with USGFAULTENA set, then require the same fault to
+/// escalate to HardFault with HFSR.FORCED after UsageFault is disabled.
+unsafe fn smoke_usagefault_and_hardfault_escalation() -> bool {
+    const USAGEFAULT_VECTOR: usize = 6;
+    const HARDFAULT_VECTOR: usize = 3;
+    const VECTOR_WORDS: usize = USAGEFAULT_VECTOR + 1;
+    const RECORD_WORDS: usize = 7;
+
+    let source_vtor = read_volatile(SCB_VTOR as *const u32);
+    let source_shcsr = read_volatile(SCB_SHCSR as *const u32);
+    let source_cfsr = read_volatile(SCB_CFSR as *const u32);
+    let source_hfsr = read_volatile(SCB_HFSR as *const u32);
+    let prior_primask: u32;
+    let prior_basepri: u32;
+    let prior_faultmask: u32;
+    core::arch::asm!(
+        "mrs {primask}, PRIMASK",
+        "mrs {basepri}, BASEPRI",
+        "mrs {faultmask}, FAULTMASK",
+        "cpsid i",
+        primask = out(reg) prior_primask,
+        basepri = out(reg) prior_basepri,
+        faultmask = out(reg) prior_faultmask,
+        options(nomem, nostack, preserves_flags),
+    );
+
+    let vector_table = IRQ_FRAME_VECTOR_TABLE as *mut u32;
+    for slot in 0..VECTOR_WORDS {
+        write_volatile(vector_table.add(slot), 0);
+    }
+    write_volatile(
+        vector_table.add(HARDFAULT_VECTOR),
+        (smoke_fault_handler as *const () as usize as u32) | 1,
+    );
+    write_volatile(
+        vector_table.add(USAGEFAULT_VECTOR),
+        (smoke_fault_handler as *const () as usize as u32) | 1,
+    );
+    let record = FAULT_RECORD as *mut u32;
+    for word in 0..RECORD_WORDS {
+        write_volatile(record.add(word), 0);
+    }
+
+    // The startup profile should leave these status bits clear. Record that
+    // precondition so the smoke does not accidentally bless stale fault state.
+    write_volatile(SCB_CFSR as *mut u32, CFSR_UNDEFINSTR);
+    write_volatile(SCB_HFSR as *mut u32, HFSR_FORCED);
+    write_volatile(SCB_SHCSR as *mut u32, source_shcsr | SHCSR_USGFAULTENA);
+    write_volatile(SCB_VTOR as *mut u32, IRQ_FRAME_VECTOR_TABLE);
+    core::arch::asm!(
+        "dsb",
+        "isb",
+        "msr BASEPRI, {zero}",
+        "msr FAULTMASK, {zero}",
+        "msr PRIMASK, {zero}",
+        zero = in(reg) 0_u32,
+        options(nostack, preserves_flags),
+    );
+
+    smoke_trigger_undefined_instruction();
+    core::arch::asm!("cpsid i", options(nomem, nostack, preserves_flags));
+    let usage_entries = read_volatile(record.add(0));
+    let usage_ipsr = read_volatile(record.add(1));
+    let usage_cfsr = read_volatile(record.add(2));
+    let usage_hfsr = read_volatile(record.add(3));
+    let usage_shcsr = read_volatile(record.add(4));
+    let usage_exc_return = read_volatile(record.add(5));
+    let usage_stacked_pc = read_volatile(record.add(6));
+    let usage_status_after_return = read_volatile(SCB_CFSR as *const u32);
+
+    // Clear the first fault before repeating it with UsageFault disabled.
+    write_volatile(SCB_CFSR as *mut u32, CFSR_UNDEFINSTR);
+    write_volatile(SCB_HFSR as *mut u32, HFSR_FORCED);
+    write_volatile(SCB_SHCSR as *mut u32, source_shcsr & !SHCSR_USGFAULTENA);
+    core::arch::asm!(
+        "dsb",
+        "isb",
+        "msr PRIMASK, {zero}",
+        zero = in(reg) 0_u32,
+        options(nostack, preserves_flags),
+    );
+    smoke_trigger_undefined_instruction();
+    core::arch::asm!("cpsid i", options(nomem, nostack, preserves_flags));
+    let hardfault_entries = read_volatile(record.add(0));
+    let hardfault_ipsr = read_volatile(record.add(1));
+    let hardfault_cfsr = read_volatile(record.add(2));
+    let hardfault_hfsr = read_volatile(record.add(3));
+    let hardfault_shcsr = read_volatile(record.add(4));
+    let hardfault_exc_return = read_volatile(record.add(5));
+    let hardfault_stacked_pc = read_volatile(record.add(6));
+    let hardfault_status_after_return = read_volatile(SCB_HFSR as *const u32);
+
+    write_volatile(SCB_CFSR as *mut u32, CFSR_UNDEFINSTR);
+    write_volatile(SCB_HFSR as *mut u32, HFSR_FORCED);
+    write_volatile(SCB_SHCSR as *mut u32, source_shcsr);
+    write_volatile(SCB_VTOR as *mut u32, source_vtor);
+    core::arch::asm!(
+        "msr BASEPRI, {basepri}",
+        "msr FAULTMASK, {faultmask}",
+        "msr PRIMASK, {primask}",
+        "dsb",
+        "isb",
+        basepri = in(reg) prior_basepri,
+        faultmask = in(reg) prior_faultmask,
+        primask = in(reg) prior_primask,
+        options(nostack, preserves_flags),
+    );
+
+    let trigger_pc = smoke_trigger_undefined_instruction as *const () as usize as u32 & !1;
+    let usage_ok = usage_entries == 1
+        && usage_ipsr == USAGEFAULT_VECTOR as u32
+        && usage_cfsr & CFSR_UNDEFINSTR != 0
+        && usage_hfsr & HFSR_FORCED == 0
+        && usage_shcsr & SHCSR_USGFAULTENA != 0
+        && usage_exc_return == 0xFFFF_FFF9
+        && usage_stacked_pc == trigger_pc
+        && usage_status_after_return & CFSR_UNDEFINSTR != 0;
+    let hardfault_ok = hardfault_entries == 2
+        && hardfault_ipsr == HARDFAULT_VECTOR as u32
+        && hardfault_cfsr & CFSR_UNDEFINSTR != 0
+        && hardfault_hfsr & HFSR_FORCED != 0
+        && hardfault_shcsr & SHCSR_USGFAULTENA == 0
+        && hardfault_exc_return == 0xFFFF_FFF9
+        && hardfault_stacked_pc == trigger_pc
+        && hardfault_status_after_return & HFSR_FORCED != 0;
+    let clean_start = source_shcsr & SHCSR_USGFAULTENA == 0
+        && source_cfsr & CFSR_UNDEFINSTR == 0
+        && source_hfsr & HFSR_FORCED == 0;
+    let restored = read_volatile(SCB_VTOR as *const u32) == source_vtor
+        && read_volatile(SCB_SHCSR as *const u32) == source_shcsr
+        && read_volatile(SCB_CFSR as *const u32) & CFSR_UNDEFINSTR == 0
+        && read_volatile(SCB_HFSR as *const u32) & HFSR_FORCED == 0;
+    let ok = clean_start
+        && prior_primask == 0
+        && prior_basepri == 0
+        && prior_faultmask == 0
+        && usage_ok
+        && hardfault_ok
+        && restored;
+
+    if ok {
+        putline(b"FAULT M3 UNDEFINSTR USAGE=6 ESCALATE=3 CFSR=1 HFSR_FORCED=1 RETURN=1 ok");
+    } else {
+        putline(b"FAULT M3 UNDEFINSTR CHECK FAILED");
+    }
+    ok
+}
+
+/// Capture a fault's SCB state and skip the two-byte UDF in the stacked frame
+/// so exception return resumes at the trampoline's `bx lr`.
+#[unsafe(naked)]
+#[no_mangle]
+unsafe extern "C" fn smoke_fault_handler() {
+    core::arch::naked_asm!(
+        "ldr r0, =0x20000680",
+        "ldr r2, [r0, #0]",
+        "adds r2, r2, #1",
+        "str r2, [r0, #0]",
+        "mrs r2, ipsr",
+        "str r2, [r0, #4]",
+        "ldr r3, =0xE000ED28",
+        "ldr r2, [r3]",
+        "str r2, [r0, #8]",
+        "ldr r3, =0xE000ED2C",
+        "ldr r2, [r3]",
+        "str r2, [r0, #12]",
+        "ldr r3, =0xE000ED24",
+        "ldr r2, [r3]",
+        "str r2, [r0, #16]",
+        "mov r2, lr",
+        "str r2, [r0, #20]",
+        "tst lr, #4",
+        "beq 2f",
+        "mrs r1, psp",
+        "b 3f",
+        "2:",
+        "mrs r1, msp",
+        "3:",
+        "ldr r2, [r1, #24]",
+        "str r2, [r0, #24]",
+        "adds r2, r2, #2",
+        "str r2, [r1, #24]",
+        "bx lr",
+    );
+}
+
+/// A two-instruction target makes the stacked UDF PC and exception return
+/// observable without relying on compiler-generated code after the fault.
+#[unsafe(naked)]
+unsafe extern "C" fn smoke_trigger_undefined_instruction() {
+    core::arch::naked_asm!("udf #0", "bx lr");
 }
 
 /// Verify BASEPRI blocks a lower-priority external interrupt while allowing a
