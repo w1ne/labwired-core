@@ -34,6 +34,12 @@ PA2/PA3. The co-simulation test checks the transient against an independent
 backward-Euler charge recurrence, converts both gate voltages through ADC1, and
 keeps the unrelated NTC and diode routed on PA1/PA4.
 
+[`analog-bjt-high-injection-adc.yaml`](analog-bjt-high-injection-adc.yaml)
+compares matched generic Gummel–Poon NPN branches with and without IKF/IKR/NKF
+rolloff on PA5/PA6. The test checks both load lines against an independent
+reference, asserts ADC1 conversions, and keeps the unrelated NTC and diode on
+PA1/PA4.
+
 ## Fidelity
 
 **Sim-derived, not silicon-verified.** No F411 part was on a bench for this
@@ -71,4 +77,6 @@ Expected result:
 4. `analog-mosfet-switch.yaml`: generic NMOS load-line model routed to ADC1.
 5. `analog-jfet-gate-charge-adc.yaml`: matched generic JFET charge and control
    branches routed to ADC1.
-6. `VALIDATION.md`: reproducible validation commands and the honest scope.
+6. `analog-bjt-high-injection-adc.yaml`: matched generic BJT high-injection and
+   control branches routed to ADC1.
+7. `VALIDATION.md`: reproducible validation commands and the honest scope.
