@@ -1,0 +1,59 @@
+# LabWired - STM32U3C5ZI chip configuration for NUCLEO-U3C5ZI-Q.
+#
+# Demand rank: measured-demand rank #4, "other STM32" (13%); Nucleo/Discovery
+# boards are 23% of reported kits (JetBrains State of Embedded survey).
+#
+# Sources:
+# - ST DS15096, STM32U3C5xx: 2 MiB Flash, 640 KiB SRAM, 96 MHz maximum.
+#   https://www.st.com/resource/en/datasheet/stm32u3c5zi.pdf
+# - ST RM0487: reset system clock is MSIS at 12 MHz; RCC and USART register map.
+#   https://www.st.com/resource/en/reference_manual/rm0487-stm32u3-series-armbased-32bit-mcus-stmicroelectronics.pdf
+# - ST CMSIS device header, stm32u3c5xx.h, revision
+#   278ba3bd8b79e82e706cc48556c156253709312f: peripheral bases and IRQ 61.
+#   https://github.com/STMicroelectronics/cmsis-device-u3/tree/278ba3bd8b79e82e706cc48556c156253709312f
+#
+# Narrow first-pass scope: core, Flash/RAM, RCC clock gates, GPIOA and USART1
+# are present because the board boot smoke uses only LD1 (PA5) and the VCP on
+# USART1. Other MCU peripherals, TrustZone policy, clock-source switching,
+# power-on behavior, and the physical ST-LINK bridge are outside this profile.
+name: "stm32u3c5zi"
+arch: "arm"
+core: "cortex-m33"
+# Maximum core frequency from DS15096. The reset clock itself is 12 MHz MSIS.
+cpu_hz: 96_000_000
+
+flash:
+  base: 0x08000000
+  size: "2MiB"
+ram:
+  base: 0x20000000
+  # SRAM blocks form the 640 KiB CPU address range used by the vendor DTS.
+  size: "640KiB"
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x46020C00
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32u575/rcc.yaml"
+      # U3 uses the H5/U5-style RCC enable offsets (AHB2ENR1 @ 0x8C,
+      # APB2ENR @ 0xA4) used by the engine's stm32v2 profile.
+      profile: "stm32v2"
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x42020000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32u575/gpioa.yaml"
+      profile: "stm32v2"
+    clock: { reg: "ahb2enr", bit: 0 }
+  - id: "usart1"
+    type: "uart"
+    base_address: 0x40013800
+    size: "1KB"
+    irq: 61
+    config:
+      debug_schema: "../peripherals/stm32u575/usart1.yaml"
+      profile: "stm32v2"
+    clock: { reg: "apb2enr", bit: 14 }

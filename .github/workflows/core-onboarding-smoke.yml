@@ -27,6 +27,7 @@ on:
       - "crates/firmware-nucleo-f446re-smoke/**"
       - "crates/firmware-nucleo-l432kc-smoke/**"
       - "crates/firmware-nucleo-h503rb-smoke/**"
+      - "crates/firmware-nucleo-u3c5zi-q-smoke/**"
       - "crates/firmware-nucleo-g0b1re-smoke/**"
       - "crates/firmware-nucleo-c562re-smoke/**"
       - "crates/firmware-nucleo-g431kb-bme280-smoke/**"
@@ -112,6 +113,12 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/nucleo-h533re/io-smoke.yaml
             system: configs/systems/nucleo-h533re.yaml
+          # New STM32U3 Nucleo-144: USART1 VCP marker + LD1 on PA5.
+          - id: nucleo-u3c5zi-q
+            crate: firmware-nucleo-u3c5zi-q-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/nucleo-u3c5zi-q/io-smoke.yaml
+            system: configs/systems/nucleo-u3c5zi-q.yaml
           - id: nucleo-h503rb
             crate: firmware-nucleo-h503rb-smoke
             target: thumbv8m.main-none-eabi

@@ -1,0 +1,28 @@
+{
+  "target_id": "nucleo-u3c5zi-q",
+  "status": "pass",
+  "crate": "firmware-nucleo-u3c5zi-q-smoke",
+  "target_triple": "thumbv8m.main-none-eabi",
+  "script": "examples/nucleo-u3c5zi-q/io-smoke.yaml",
+  "system": "configs/systems/nucleo-u3c5zi-q.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-11T15:14:54Z",
+  "finished_at_utc": "2026-11-11T15:15:30Z",
+  "elapsed_seconds": 36,
+  "elapsed_ms": 35266,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 34.182,
+    "build_firmware": 0.713,
+    "run_smoke": 0.325
+  },
+  "stages_ms": {
+    "build_cli": 34182,
+    "build_firmware": 713,
+    "run_smoke": 325
+  }
+}
