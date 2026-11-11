@@ -70,3 +70,13 @@ firmware-visible ADC data register for both branches and the diode:
 ```sh
 cargo test -p labwired-core --test cosim_nucleo_f401_analog nucleo_f401re_jfet_gate_depletion_charge_reaches_adc1_with_unrelated_diode
 ```
+
+[`analog-mosfet-tox-charge.yaml`](analog-mosfet-tox-charge.yaml) routes a matched generic
+level-1 NMOS pair with and without TOX gate-bulk capacitance through PA6/PA7
+(ADC1_IN6/IN7), beside the unrelated Shockley diode on PA0/ADC1_IN0. The test checks the
+Meyer gate-bulk transient against an independent RC recurrence and reads each route through
+the firmware-visible ADC data register:
+
+```sh
+cargo test -p labwired-core --test cosim_nucleo_f401_analog nucleo_f401re_mosfet_tox_gate_charge_reaches_adc1_with_unrelated_diode
+```

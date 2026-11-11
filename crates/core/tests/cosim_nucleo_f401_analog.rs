@@ -516,6 +516,123 @@ fn nucleo_f401re_mosfet_body_effect_reaches_adc1_with_unrelated_diode() {
 }
 
 #[test]
+fn nucleo_f401re_mosfet_tox_gate_charge_reaches_adc1_with_unrelated_diode() {
+    let system_path = root("configs/systems/nucleo-f401re.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F401RE profile");
+    let diode = SystemManifest::from_file(root("examples/nucleo-f401re/analog-diode-system.yaml"))
+        .expect("load unrelated generic Shockley diode netlist");
+    let tox_charge =
+        SystemManifest::from_file(root("examples/nucleo-f401re/analog-mosfet-tox-charge.yaml"))
+            .expect("load matched generic NMOS TOX charge branches");
+    profile.cosim_models = diode.cosim_models;
+    profile.cosim_models.extend(tox_charge.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F401 descriptor");
+    for (pad, channel) in [("PA0", 0), ("PA6", 6), ("PA7", 7)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F401RE bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries a diode and a matched NMOS TOX pair");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must resolve through PA0 and PA6/PA7 to ADC1"
+    );
+    for channel in [0, 5, 6, 7] {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            u16::MAX,
+            "ADC1 channel {channel} begins without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.mosfet_tox.gate_v", 0.0)
+        .expect("initialize matched NMOS gate drives");
+    let expected_diode_v = diode_load_line_voltage();
+    let tox_f = 3.453_133e-11 * 100e-6 * 10e-6 / 10e-9;
+    // At VGS - VTO <= -PHI, Meyer gate-bulk capacitance is the full COX.
+    let resistance_ohms = 1e6;
+    let step_s = 1e-6;
+    let drive_v = 0.2;
+    let mut expected_tox_gate_v = 0.0;
+    let mut cycles = 0;
+
+    cycles += session.cycles_until_boundary(cycles);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("settle the diode and NMOS gate branches before the step");
+    assert_eq!(initial_steps.len(), 2, "both analog netlists solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected route errors: {initial_errors:?}"
+    );
+    assert_eq!(signal_voltage(&session, "board.analog.pa6_volts"), 0.0);
+    assert_eq!(signal_voltage(&session, "board.analog.pa7_volts"), 0.0);
+
+    session
+        .set_signal_number("ui.mosfet_tox.gate_v", drive_v)
+        .expect("step both generic NMOS gate drives");
+    for step in 0..24 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route the MOSFET TOX charge transient");
+        assert_eq!(steps.len(), 2, "both analog netlists solve at each step");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        expected_tox_gate_v = (resistance_ohms * tox_f * expected_tox_gate_v + step_s * drive_v)
+            / (resistance_ohms * tox_f + step_s);
+        let diode_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let reference_v = signal_voltage(&session, "board.analog.pa6_volts");
+        let tox_v = signal_voltage(&session, "board.analog.pa7_volts");
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "the unrelated Shockley diode stays at its DC load line"
+        );
+        assert!(
+            (reference_v - drive_v).abs() < 1e-9,
+            "without TOX the isolated gate follows its drive immediately"
+        );
+        assert!(
+            (tox_v - expected_tox_gate_v).abs() < 2e-7,
+            "Meyer TOX gate-bulk RC recurrence at step {step}: expected {expected_tox_gate_v} V, got {tox_v} V"
+        );
+        assert!(
+            reference_v > tox_v,
+            "TOX charge must slow the gate response relative to the zero-charge control"
+        );
+
+        for (channel, volts) in [(0, diode_v), (6, reference_v), (7, tox_v)] {
+            let expected = expected_adc_count(volts);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "the solved voltage must seed descriptor-routed ADC1_IN{channel}"
+            );
+            assert_eq!(
+                f401_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "firmware-visible ADC1_IN{channel} conversion reports the analog node"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 5),
+            u16::MAX,
+            "neighboring ADC1_IN5 remains undriven"
+        );
+    }
+    assert!(
+        (drive_v - expected_tox_gate_v).abs() < 1e-3,
+        "the TOX gate should approach its DC drive after repeated steps"
+    );
+}
+
+#[test]
 fn nucleo_f401re_bjt_terminal_resistances_reach_adc1_with_explicit_network_reference() {
     let system_path = root("configs/systems/nucleo-f401re.yaml");
     let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F401RE profile");
