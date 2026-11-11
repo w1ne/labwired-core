@@ -50,3 +50,13 @@ load-line roots and reads each route through the firmware-visible ADC1 data regi
 ```sh
 cargo test -p labwired-core --test cosim_nucleo_f401_analog nucleo_f401re_jfet_terminal_resistances_reach_adc1_with_unrelated_diode
 ```
+
+[`analog-mosfet-body-effect.yaml`](analog-mosfet-body-effect.yaml) routes a matched
+generic level-1 NMOS pair through PA2/PA3 (ADC1_IN2/IN3), beside the same independent
+Shockley diode on PA0/ADC1_IN0. The board test compares the solved load lines against an
+independent GAMMA/PHI threshold calculation while sweeping reverse bulk bias, then checks
+the firmware-visible ADC data register on all three channels:
+
+```sh
+cargo test -p labwired-core --test cosim_nucleo_f401_analog nucleo_f401re_mosfet_body_effect_reaches_adc1_with_unrelated_diode
+```

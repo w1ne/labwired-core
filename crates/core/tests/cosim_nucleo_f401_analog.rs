@@ -155,6 +155,45 @@ fn jfet_drain_voltage(gate_v: f64, drain_ohms: f64, source_ohms: f64) -> f64 {
     SUPPLY_V - 0.5 * (low + high) * LOAD_OHMS
 }
 
+/// Independent level-1 NMOS body-effect load line. With its source grounded,
+/// the bulk bias changes threshold through the GAMMA/PHI relation.
+fn mosfet_body_effect_drain_voltage(gate_v: f64, bulk_v: f64) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const LOAD_OHMS: f64 = 1_000.0;
+    const VTO: f64 = 1.0;
+    const KP_A_PER_V2: f64 = 20e-6;
+    const W_M: f64 = 100e-6;
+    const L_M: f64 = 10e-6;
+    const LAMBDA_PER_V: f64 = 0.02;
+    const GAMMA: f64 = 0.4;
+    const PHI: f64 = 0.7;
+
+    let threshold = VTO + GAMMA * ((PHI - bulk_v).sqrt() - PHI.sqrt());
+    let overdrive = gate_v - threshold;
+    if overdrive <= 0.0 {
+        return SUPPLY_V;
+    }
+    let beta = KP_A_PER_V2 * W_M / L_M;
+    let drain_current = |vds: f64| {
+        if vds < overdrive {
+            beta * (1.0 + LAMBDA_PER_V * vds) * vds * (overdrive - 0.5 * vds)
+        } else {
+            0.5 * beta * (1.0 + LAMBDA_PER_V * vds) * overdrive * overdrive
+        }
+    };
+    let residual = |vds: f64| SUPPLY_V - vds - LOAD_OHMS * drain_current(vds);
+    let (mut low, mut high) = (0.0, SUPPLY_V);
+    for _ in 0..100 {
+        let mid = (low + high) / 2.0;
+        if residual(mid) > 0.0 {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    (low + high) / 2.0
+}
+
 fn signal_voltage(session: &CosimSession, path: &str) -> f64 {
     match session.signals().get(path) {
         Some(CosimSignalValue::F64(volts)) => *volts,
@@ -330,6 +369,119 @@ fn nucleo_f401re_jfet_terminal_resistances_reach_adc1_with_unrelated_diode() {
     assert!(
         both > drain && both > source,
         "combined RD and RS exceed either terminal alone: {both} V, {drain} V, {source} V"
+    );
+}
+
+#[test]
+fn nucleo_f401re_mosfet_body_effect_reaches_adc1_with_unrelated_diode() {
+    let system_path = root("configs/systems/nucleo-f401re.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F401RE profile");
+    let diode = SystemManifest::from_file(root("examples/nucleo-f401re/analog-diode-system.yaml"))
+        .expect("load unrelated generic Shockley diode netlist");
+    let body_effect = SystemManifest::from_file(root(
+        "examples/nucleo-f401re/analog-mosfet-body-effect.yaml",
+    ))
+    .expect("load matched generic NMOS body-bias netlist");
+    profile.cosim_models = diode.cosim_models;
+    profile.cosim_models.extend(body_effect.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F401 descriptor");
+    for (pad, channel) in [("PA0", 0), ("PA2", 2), ("PA3", 3)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F401RE bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries a diode and a matched generic NMOS pair");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must resolve through PA0 and PA2/PA3 to ADC1"
+    );
+    for channel in 0..=4 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} begins without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.mosfet_body.bulk_v", 0.0)
+        .expect("initialize the matched NMOS bulk bias");
+    let expected_diode_v = diode_load_line_voltage();
+    let expected_reference_v = mosfet_body_effect_drain_voltage(2.5, 0.0);
+    let mut cycles = 0;
+    let mut body_samples = Vec::new();
+    for bulk_v in [0.0_f64, -0.5, -1.0, -1.5] {
+        session
+            .set_signal_number("ui.mosfet_body.bulk_v", bulk_v)
+            .expect("set generic NMOS reverse body bias");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route the diode and matched NMOS branches");
+        assert_eq!(
+            steps.len(),
+            2,
+            "both analog netlists solve at the 1 us boundary"
+        );
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let diode_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let reference_v = signal_voltage(&session, "board.analog.pa2_volts");
+        let body_v = signal_voltage(&session, "board.analog.pa3_volts");
+        let expected_body_v = mosfet_body_effect_drain_voltage(2.5, bulk_v);
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "the unrelated Shockley diode stays on its independent load line"
+        );
+        assert!(
+            (reference_v - expected_reference_v).abs() < 5e-5,
+            "zero-body-bias NMOS should settle at {expected_reference_v} V, got {reference_v} V"
+        );
+        assert!(
+            (body_v - expected_body_v).abs() < 5e-5,
+            "level-1 NMOS at VBS={bulk_v} V should settle at {expected_body_v} V, got {body_v} V"
+        );
+        if bulk_v == 0.0 {
+            assert!(
+                (body_v - reference_v).abs() < 1e-9,
+                "matched devices agree with zero body bias"
+            );
+        } else {
+            assert!(
+                body_v > reference_v,
+                "reverse body bias raises threshold, lowers current, and raises the drain voltage"
+            );
+        }
+
+        for (channel, volts) in [(0, diode_v), (2, reference_v), (3, body_v)] {
+            let expected = expected_adc_count(volts);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "solved voltage seeds descriptor-routed ADC1_IN{channel}"
+            );
+            assert_eq!(
+                f401_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "firmware-visible ADC1_IN{channel} conversion reports the routed voltage"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 1),
+            0xFFFF,
+            "the neighboring ADC1 channel remains undriven"
+        );
+        body_samples.push((bulk_v, body_v));
+    }
+
+    assert!(
+        body_samples.windows(2).all(|pair| pair[1].1 > pair[0].1),
+        "increasing reverse body bias raises the NMOS drain monotonically: {body_samples:?}"
     );
 }
 
