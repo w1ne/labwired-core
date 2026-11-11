@@ -232,6 +232,13 @@ jobs:
             script: examples/esp32c3-devkitm-1-n4x-bme280/bme280-smoke.yaml
             system: configs/systems/esp32c3-devkitm-1-n4x-bme280.yaml
             rom_boot: true
+            rom_flash_bin: examples/esp32c3-devkitm-1-n4x-bme280/firmware/.pio/build/devkitm1_n4x/merged.bin
+          - id: lolin-c3-mini-bme280
+            firmware_build_script: examples/lolin-c3-mini-bme280/firmware/build-firmware.sh
+            script: examples/lolin-c3-mini-bme280/bme280-smoke.yaml
+            system: configs/systems/lolin-c3-mini-bme280.yaml
+            rom_boot: true
+            rom_flash_bin: examples/lolin-c3-mini-bme280/firmware/.pio/build/lolin_c3_mini/merged.bin
           - id: arduino-nano-esp32-bme280
             firmware_build_script: examples/arduino-nano-esp32-bme280/firmware/build-firmware.sh
             script: examples/arduino-nano-esp32-bme280/bme280-smoke.yaml
@@ -285,7 +292,7 @@ jobs:
           chmod +x scripts/onboarding_smoke.sh
           rom_boot_args=()
           if [[ "${{ matrix.rom_boot }}" == "true" ]]; then
-            export LABWIRED_ESP32C3_FLASH="${GITHUB_WORKSPACE}/examples/esp32c3-devkitm-1-n4x-bme280/firmware/.pio/build/devkitm1_n4x/merged.bin"
+            export LABWIRED_ESP32C3_FLASH="${GITHUB_WORKSPACE}/${{ matrix.rom_flash_bin }}"
             rom_boot_args+=(--rom-boot)
           fi
           scripts/onboarding_smoke.sh \

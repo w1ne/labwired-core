@@ -1,0 +1,29 @@
+{
+  "target_id": "lolin-c3-mini-bme280",
+  "status": "pass",
+  "crate": "",
+  "target_triple": "",
+  "script": "examples/lolin-c3-mini-bme280/bme280-smoke.yaml",
+  "system": "configs/systems/lolin-c3-mini-bme280.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-11T10:44:02Z",
+  "finished_at_utc": "2026-11-11T10:45:10Z",
+  "elapsed_seconds": 68,
+  "elapsed_ms": 67841,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.305,
+    "build_firmware": 42.327,
+    "run_smoke": 25.147
+  },
+  "stages_ms": {
+    "build_cli": 305,
+    "build_firmware": 42327,
+    "run_smoke": 25147
+  },
+  "firmware_build_script": "examples/lolin-c3-mini-bme280/firmware/build-firmware.sh"
+}

@@ -1,0 +1,12 @@
+# Read BME280 identity and temperature through LOLIN C3 Mini I2C0 on GPIO4/5.
+schema_version: "1.0"
+inputs:
+  firmware: "./firmware/.pio/build/lolin_c3_mini/firmware.elf"
+  system: "../../configs/systems/lolin-c3-mini-bme280.yaml"
+limits:
+  max_steps: 50000000
+assertions:
+  - gpio_edges:
+      pin: "gpio:6"
+      min_edges: 8
+  - expected_stop_reason: max_steps

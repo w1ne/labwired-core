@@ -1,0 +1,16 @@
+# WEMOS LOLIN C3 Mini V2.1.0 with an external BME280 on GPIO4/GPIO5.
+# The onboard WS2812B is on GPIO7 and is not modeled by this system.
+name: "lolin-c3-mini-bme280"
+chip: "../chips/esp32c3.yaml"
+cpu_hz: 160_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GPIO4"
+      scl: "GPIO5"
+    config:
+      i2c_address: 0x77
+board_io: []
