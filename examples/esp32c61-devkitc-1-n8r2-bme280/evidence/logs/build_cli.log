@@ -16,8 +16,8 @@ workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/Ca
    Compiling labwired-config v0.25.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/crates/config)
    Compiling labwired-core v0.25.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/crates/core)
    Compiling labwired-loader v0.25.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/crates/loader)
-   Compiling svd-ingestor v0.25.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/crates/svd-ingestor)
    Compiling labwired-gdbstub v0.25.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/crates/gdbstub)
+   Compiling svd-ingestor v0.25.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/crates/svd-ingestor)
    Compiling labwired-fuzz v0.25.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/crates/labwired-fuzz)
    Compiling labwired-cli v0.25.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/crates/cli)
-    Finished `dev` profile [optimized + debuginfo] target(s) in 3m 32s
+    Finished `dev` profile [optimized + debuginfo] target(s) in 1m 12s
