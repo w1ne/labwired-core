@@ -9,7 +9,8 @@
 # USART's TX, so the one 'U' each of SERCOM1/SERCOM3 sends prefixes its line.
 # The RTC (Renode's SAMD21_RTC) runs MODE2 (leap-day calendar rollover into
 # ALARM0 with the IRQ 3 pend and release), MODE0 (COMP0 + MATCHCLR: CMP0 and
-# OVF together) and MODE1 (PER wrap after COMP0/COMP1).
+# OVF together) and MODE1 (PER wrap after COMP0/COMP1). SysTick-to-PendSV
+# tail chaining is checked with Thread mode using both MSP and PSP.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv6m-none-eabi/release/firmware-samd21-j17d-smoke"
@@ -29,12 +30,13 @@ assertions:
       - "rtc mode0 flags=81 wrapped=1"
       - "rtc mode1 per=04 flags=83 wrapped=1"
       - "systick pendsv m0+ tailchain frame=1 r0=1 pending=1 ipsr=0000000e ok"
+      - "systick pendsv m0+ psp tailchain frame=1 r0=1 pending=1 exc_return=fffffffd restored=1 ok"
       - "SAMD21 PASS"
   - gpio_edges:
       pin: "gpio_a:17"
       min_edges: 4
   - memory_value:
       address: 0x20002000
-      expected_value: 0x5D21007F
+      expected_value: 0x5D2100FF
       size: 4
   - expected_stop_reason: max_steps

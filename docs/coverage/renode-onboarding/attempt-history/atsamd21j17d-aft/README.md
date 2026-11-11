@@ -14,3 +14,7 @@
   alarm, MODE0 clear-on-match, MODE1 period) against a copy of the chip with
   the new `rtc` window removed (copy included): 2/5 assertions, a precise
   BusFault at `0x40001400` (RTC CTRL). The RTC checks depend on the model.
+- `2026-11-11-psp-trampoline-build-failure/` — first PSP-tail-chain attempt.
+  The M0+ assembler rejected `adds sp, #8`; the fixture uses the valid
+  `add sp, #8` spelling in the passing revision. The build logs and failed
+  metrics are retained here.

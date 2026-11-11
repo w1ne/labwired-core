@@ -7,8 +7,8 @@
       2147483648,
       2147483648,
       2147483648,
-      973,
-      14,
+      285,
+      1024,
       1090536456,
       536887280,
       0,
@@ -16,11 +16,11 @@
       0,
       0,
       0,
-      536887096,
-      19689,
-      20148
+      536887064,
+      22069,
+      22070
     ],
-    "pc": 20148,
+    "pc": 22070,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "a414f59165151016ca163c432bd1be52dcd4de4be1e7146190ac90cf762a8ad2",
+  "firmware_hash": "cf2049fa1e393f760811e7d709d61030828fe556a49e22dc7a691a0a537fe48f",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-samd21-j17d-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/atsamd21j17d-aft.yaml",

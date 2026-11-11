@@ -10,4 +10,5 @@ rtc mode2 alarm=1 nvic3=1 released=1 day=1d hm=0000
 rtc mode0 flags=81 wrapped=1
 rtc mode1 per=04 flags=83 wrapped=1
 systick pendsv m0+ tailchain frame=1 r0=1 pending=1 ipsr=0000000e ok
+systick pendsv m0+ psp tailchain frame=1 r0=1 pending=1 exc_return=fffffffd restored=1 ok
 SAMD21 PASS

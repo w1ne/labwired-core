@@ -209,19 +209,20 @@ fn main() -> ! {
     puts("led on\n");
 
     // 8. The rest of the surface the Renode platform models: PORT group B,
-    //    TC4 (16-bit MFRQ) and TC6 (8-bit one-shot down-counter), and the
+    //    TC4 (16-bit MFRQ) and TC6 (8-bit one-shot down-counter), the
     //    SERCOM1/SERCOM3 USARTs, RTC and Cortex-M0+ SysTick-to-PendSV tail
-    //    chaining. Every check feeds one bit of the summary word.
+    //    chaining from both MSP and PSP. Every check feeds one summary bit.
     let mut pass = 0u32;
-    pass |= u32::from(check_portb()) << 0;
+    pass |= u32::from(check_portb());
     pass |= u32::from(check_tc4()) << 1;
     pass |= u32::from(check_tc6()) << 2;
     pass |= u32::from(check_usart("sercom1", SERCOM1_BASE, PM_APBCMASK_SERCOM1)) << 3;
     pass |= u32::from(check_usart("sercom3", SERCOM3_BASE, PM_APBCMASK_SERCOM3)) << 4;
     pass |= u32::from(check_rtc()) << 5;
     pass |= u32::from(check_systick_pendsv_tailchain()) << 6;
+    pass |= u32::from(check_systick_pendsv_psp_tailchain()) << 7;
     unsafe { write_volatile(SUMMARY, SUMMARY_TAG | pass) };
-    if pass == 0x7f {
+    if pass == 0xff {
         puts("SAMD21 PASS\n");
     } else {
         puts("SAMD21 FAIL ");
@@ -239,7 +240,7 @@ fn main() -> ! {
 
 // ── Extended checks ─────────────────────────────────────────────────────────
 
-/// Summary word: `0x5D21_0000 | pass bits`, all seven checks = `0x5D21_007F`.
+/// Summary word: `0x5D21_0000 | pass bits`, all eight checks = `0x5D21_00FF`.
 const SUMMARY: *mut u32 = 0x2000_2000 as *mut u32;
 const SUMMARY_TAG: u32 = 0x5D21_0000;
 
@@ -253,6 +254,8 @@ const VECTOR_TABLE_WORDS: usize = 48;
 const PENDSV_VECTOR_INDEX: usize = 14;
 const SYSTICK_VECTOR_INDEX: usize = 15;
 const TAILCHAIN_RECORD: u32 = 0x2000_2020;
+const PSP_TAILCHAIN_RECORD: u32 = TAILCHAIN_RECORD + 12 * 4;
+const PSP_TAILCHAIN_STACK_TOP: u32 = 0x2000_3000;
 const THREAD_MARKER: u32 = 0x5448_5244;
 const SYSTICK_MARKER: u32 = 0x5359_5354;
 
@@ -437,6 +440,260 @@ fn check_systick_pendsv_tailchain() -> bool {
     put_hex(child_ipsr);
     puts(if passed { " ok\n" } else { " FAIL\n" });
     passed
+}
+
+/// Repeat the SysTick-to-PendSV handoff with Thread mode on PSP. Verify that
+/// both exceptions reuse the PSP frame, Handler mode keeps using the MSP, and
+/// the naked trampoline restores its original stack selection and pointers.
+fn check_systick_pendsv_psp_tailchain() -> bool {
+    const PENDSTCLR: u32 = 1 << 25;
+    const PENDSVSET: u32 = 1 << 28;
+    const PENDSVCLR: u32 = 1 << 27;
+
+    let prior_vtor = unsafe { read_volatile(SCB_VTOR) };
+    let prior_shpr3 = unsafe { read_volatile(SCB_SHPR3) };
+    let test_shpr3 = (prior_shpr3 & !0xFFFF_0000) | (0x80 << 24) | (0xC0 << 16);
+    let table = RAM_VECTOR_BASE as *mut u32;
+    let record = PSP_TAILCHAIN_RECORD as *mut u32;
+    let prior_primask: u32;
+    unsafe {
+        asm!(
+            "mrs {primask}, PRIMASK",
+            "cpsid i",
+            primask = out(reg) prior_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+        write_volatile(SYSTICK_CSR, 0);
+        write_volatile(SCB_ICSR, PENDSTCLR | PENDSVCLR);
+        write_volatile(SCB_SHPR3, test_shpr3);
+        for index in 0..24 {
+            write_volatile(record.add(index), 0);
+        }
+        for index in 0..VECTOR_TABLE_WORDS {
+            write_volatile(table.add(index), 0);
+        }
+        write_volatile(
+            table.add(SYSTICK_VECTOR_INDEX),
+            (psp_systick_pends_pendsv_handler as *const () as usize as u32) | 1,
+        );
+        write_volatile(
+            table.add(PENDSV_VECTOR_INDEX),
+            (psp_pendsv_tailchain_handler as *const () as usize as u32) | 1,
+        );
+        write_volatile(SCB_VTOR, RAM_VECTOR_BASE);
+        asm!(
+            "msr PRIMASK, {primask}",
+            "dsb",
+            "isb",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+    if prior_primask == 0 {
+        unsafe { psp_systick_thread_trampoline(PSP_TAILCHAIN_STACK_TOP) };
+    }
+
+    for _ in 0..100_000 {
+        if unsafe { read_volatile(record.add(13)) } != 0 {
+            break;
+        }
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+
+    let parent_ipsr = unsafe { read_volatile(record.add(0)) };
+    let parent_psp = unsafe { read_volatile(record.add(1)) };
+    let parent_msp = unsafe { read_volatile(record.add(2)) };
+    let parent_exc_return = unsafe { read_volatile(record.add(3)) };
+    let thread_r0 = unsafe { read_volatile(record.add(4)) };
+    let parent_icsr_before = unsafe { read_volatile(record.add(5)) };
+    let parent_icsr_after = unsafe { read_volatile(record.add(6)) };
+    let child_ipsr = unsafe { read_volatile(record.add(7)) };
+    let child_psp = unsafe { read_volatile(record.add(8)) };
+    let child_msp = unsafe { read_volatile(record.add(9)) };
+    let child_exc_return = unsafe { read_volatile(record.add(10)) };
+    let child_r0 = unsafe { read_volatile(record.add(11)) };
+    let child_icsr = unsafe { read_volatile(record.add(12)) };
+    let child_hit = unsafe { read_volatile(record.add(13)) } == 1;
+    let wrapper_psp = unsafe { read_volatile(record.add(14)) };
+    let wrapper_control = unsafe { read_volatile(record.add(15)) };
+    let wrapper_msp = unsafe { read_volatile(record.add(16)) };
+    let entry_psp = unsafe { read_volatile(record.add(17)) };
+    let entry_control = unsafe { read_volatile(record.add(18)) };
+    let entry_msp = unsafe { read_volatile(record.add(19)) };
+    let thread_ipsr: u32;
+    let restored_psp: u32;
+    let restored_control: u32;
+    let restored_msp: u32;
+    unsafe {
+        asm!(
+            "mrs {ipsr}, IPSR",
+            "mrs {psp}, PSP",
+            "mrs {control}, CONTROL",
+            "mrs {msp}, MSP",
+            ipsr = out(reg) thread_ipsr,
+            psp = out(reg) restored_psp,
+            control = out(reg) restored_control,
+            msp = out(reg) restored_msp,
+            options(nomem, nostack, preserves_flags),
+        );
+        asm!("cpsid i", options(nomem, nostack, preserves_flags));
+        write_volatile(SYSTICK_CSR, 0);
+        write_volatile(SYSTICK_CVR, 0);
+        write_volatile(SCB_ICSR, PENDSTCLR | PENDSVCLR);
+        write_volatile(SCB_VTOR, prior_vtor);
+        write_volatile(SCB_SHPR3, prior_shpr3);
+        asm!(
+            "msr PRIMASK, {primask}",
+            "dsb",
+            "isb",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+
+    let deferred = parent_ipsr == 15
+        && parent_icsr_before & 0x1FF == 15
+        && parent_icsr_after & 0x1FF == 15
+        && parent_icsr_after & PENDSVSET != 0;
+    let frame_reused = parent_psp == child_psp
+        && parent_psp == PSP_TAILCHAIN_STACK_TOP - 32
+        && parent_msp == child_msp
+        && parent_exc_return == 0xFFFF_FFFD
+        && child_exc_return == parent_exc_return;
+    let child_is_pendsv =
+        child_hit && child_ipsr == 14 && child_icsr & 0x1FF == 14 && child_icsr & PENDSVSET == 0;
+    let wrapper_context = wrapper_psp == PSP_TAILCHAIN_STACK_TOP
+        && wrapper_control == (entry_control | 2)
+        && wrapper_msp == entry_msp.wrapping_sub(8)
+        && parent_msp == wrapper_msp;
+    let restored_context =
+        restored_psp == entry_psp && restored_control == entry_control && restored_msp == entry_msp;
+    let passed = prior_primask == 0
+        && thread_ipsr == 0
+        && deferred
+        && frame_reused
+        && child_is_pendsv
+        && thread_r0 == THREAD_MARKER
+        && child_r0 == SYSTICK_MARKER
+        && wrapper_context
+        && restored_context
+        && (test_shpr3 >> 24) & 0xFF == 0x80
+        && (test_shpr3 >> 16) & 0xFF == 0xC0
+        && unsafe { read_volatile(SCB_SHPR3) } == prior_shpr3;
+    puts("systick pendsv m0+ psp tailchain frame=");
+    put_bit(frame_reused);
+    puts(" r0=");
+    put_bit(thread_r0 == THREAD_MARKER && child_r0 == SYSTICK_MARKER);
+    puts(" pending=");
+    put_bit(deferred && child_is_pendsv);
+    puts(" exc_return=");
+    put_hex(parent_exc_return);
+    puts(" restored=");
+    put_bit(wrapper_context && restored_context);
+    puts(if passed { " ok\n" } else { " FAIL\n" });
+    passed
+}
+
+/// Run on a dedicated PSP without creating a Rust stack frame there. The
+/// exception handlers preserve the MSP trampoline frame until this routine
+/// switches Thread mode back to the caller's original MSP.
+#[unsafe(naked)]
+unsafe extern "C" fn psp_systick_thread_trampoline(psp_top: u32) {
+    core::arch::naked_asm!(
+        "push {{r4, lr}}",
+        "mov r4, lr",
+        "ldr r1, =0x20002050",
+        "mrs r2, psp",
+        "str r2, [r1, #68]",
+        "mrs r2, control",
+        "str r2, [r1, #72]",
+        "mrs r2, msp",
+        "adds r2, #8",
+        "str r2, [r1, #76]",
+        "msr psp, r0",
+        "mrs r0, control",
+        "movs r2, #2",
+        "orrs r0, r2",
+        "msr control, r0",
+        "isb",
+        "ldr r0, =0x54485244",
+        "ldr r1, =0xE000ED04",
+        "movs r2, #1",
+        "lsls r2, r2, #26",
+        "str r2, [r1]",
+        "ldr r1, =0x20002050",
+        "1:",
+        "ldr r0, [r1, #52]",
+        "cmp r0, #0",
+        "beq 1b",
+        "mrs r0, psp",
+        "str r0, [r1, #56]",
+        "mrs r0, control",
+        "str r0, [r1, #60]",
+        "mrs r0, msp",
+        "str r0, [r1, #64]",
+        "ldr r0, [r1, #68]",
+        "msr psp, r0",
+        "ldr r0, [r1, #72]",
+        "msr control, r0",
+        "isb",
+        "ldr r0, [sp, #0]",
+        "ldr r1, [sp, #4]",
+        "add sp, #8",
+        "mov lr, r1",
+        "mov r4, r0",
+        "bx lr",
+    );
+}
+
+#[unsafe(naked)]
+unsafe extern "C" fn psp_systick_pends_pendsv_handler() {
+    core::arch::naked_asm!(
+        "mov r3, r0",
+        "ldr r0, =0x20002050",
+        "str r3, [r0, #16]",
+        "mrs r3, ipsr",
+        "str r3, [r0, #0]",
+        "mrs r3, psp",
+        "str r3, [r0, #4]",
+        "mrs r3, msp",
+        "str r3, [r0, #8]",
+        "mov r3, lr",
+        "str r3, [r0, #12]",
+        "ldr r1, =0xE000ED04",
+        "ldr r2, [r1]",
+        "str r2, [r0, #20]",
+        "movs r2, #1",
+        "lsls r2, r2, #28",
+        "str r2, [r1]",
+        "ldr r2, [r1]",
+        "str r2, [r0, #24]",
+        "ldr r0, =0x53595354",
+        "bx lr",
+    );
+}
+
+#[unsafe(naked)]
+unsafe extern "C" fn psp_pendsv_tailchain_handler() {
+    core::arch::naked_asm!(
+        "mov r2, r0",
+        "mrs r3, ipsr",
+        "ldr r0, =0x20002050",
+        "str r3, [r0, #28]",
+        "mrs r3, psp",
+        "str r3, [r0, #32]",
+        "mrs r3, msp",
+        "str r3, [r0, #36]",
+        "mov r3, lr",
+        "str r3, [r0, #40]",
+        "str r2, [r0, #44]",
+        "ldr r3, =0xE000ED04",
+        "ldr r3, [r3]",
+        "str r3, [r0, #48]",
+        "movs r3, #1",
+        "str r3, [r0, #52]",
+        "bx lr",
+    );
 }
 
 #[unsafe(naked)]
