@@ -13,4 +13,17 @@ workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/Ca
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
 package:   /home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/examples/tier1-fixture/rp2040/Cargo.toml
 workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/Cargo.toml
-    Finished `release` profile [optimized + debuginfo] target(s) in 0.20s
+ Downloading crates ...
+  Downloaded bit_field v0.10.3
+  Downloaded nb v1.1.0
+  Downloaded nb v0.1.3
+  Downloaded void v1.0.2
+  Downloaded riscv v0.11.1
+  Downloaded riscv v0.10.1
+  Downloaded panic-halt v0.2.0
+  Downloaded critical-section v1.2.0
+  Downloaded riscv-rt-macros v0.2.2
+  Downloaded riscv-rt v0.12.2
+  Downloaded embedded-hal v1.0.0
+  Downloaded embedded-hal v0.2.7
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.22s

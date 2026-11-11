@@ -6,23 +6,23 @@
   "script": "examples/esp32c61-devkitc-1-n8r2-bme280/bme280-smoke.yaml",
   "system": "configs/systems/esp32c61-devkitc-1-n8r2-bme280.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-11T01:06:01Z",
-  "finished_at_utc": "2026-11-11T01:07:15Z",
-  "elapsed_seconds": 75,
-  "elapsed_ms": 74586,
+  "started_at_utc": "2026-11-11T01:51:24Z",
+  "finished_at_utc": "2026-11-11T01:51:27Z",
+  "elapsed_seconds": 4,
+  "elapsed_ms": 3250,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 72.954,
-    "build_firmware": 0.227,
-    "run_smoke": 1.367
+    "build_cli": 1.591,
+    "build_firmware": 0.251,
+    "run_smoke": 1.369
   },
   "stages_ms": {
-    "build_cli": 72954,
-    "build_firmware": 227,
-    "run_smoke": 1367
+    "build_cli": 1591,
+    "build_firmware": 251,
+    "run_smoke": 1369
   }
 }
