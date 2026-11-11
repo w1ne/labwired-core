@@ -931,3 +931,140 @@ fn stm32f103_integrated_test_ntc_and_diode_netlists_reach_adc1_end_to_end() {
         &["dma1", "uart1"],
     );
 }
+
+/// The F103 e-paper profile routes generic MOSFET drain-bulk depletion charge
+/// through PA2/PA3 to ADC1. A matched zero-capacitance branch checks the
+/// transient independently while the unrelated NTC and diode remain isolated.
+#[test]
+fn nucleo_f103rb_epaper_mosfet_drain_bulk_charge_reaches_adc1_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/nucleo-f103rb-epaper.yaml");
+    let mut profile =
+        SystemManifest::from_file(&system_path).expect("load NUCLEO-F103RB e-paper profile");
+    assert_eq!(profile.external_devices.len(), 1);
+    assert_eq!(profile.external_devices[0].id, "epaper");
+
+    let generic = SystemManifest::from_file(root(
+        "examples/nucleo-f103rb-epaper/analog-ntc-diode-system.yaml",
+    ))
+    .expect("load unrelated generic NTC and Shockley diode netlists");
+    let mosfet = SystemManifest::from_file(root(
+        "examples/nucleo-f103rb-epaper/analog-mosfet-junction-charge-system.yaml",
+    ))
+    .expect("load generic MOSFET bulk-junction charge branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(mosfet.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F103 descriptor");
+    for (pad, channel) in [("PA0", 0), ("PA1", 1), ("PA2", 2), ("PA3", 3)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+        assert_eq!(chip.analog_pins[pad].peripheral, "adc1");
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build e-paper board bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal co-simulation")
+        .expect("profile carries NTC, diode, and MOSFET junction-charge netlists");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "the generic netlists must resolve through PA0..PA3 ADC1 routes"
+    );
+    for channel in 0..=4 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold the unrelated NTC at nominal temperature");
+    session
+        .set_signal_number("ui.mosfet_bulk.drain_current_a", 0.0)
+        .expect("initialize the charged MOSFET branch");
+    session
+        .set_signal_number("ui.mosfet_bulk.reference_current_a", 0.0)
+        .expect("initialize the zero-capacitance reference branch");
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("settle the zero-current MOSFET branches and unrelated devices");
+    assert_eq!(initial_steps.len(), 3, "all three analog netlists solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected route errors: {initial_errors:?}"
+    );
+    assert!(
+        signal_voltage(&session, "board.analog.pa2_volts").abs() < 1e-12
+            && signal_voltage(&session, "board.analog.pa3_volts").abs() < 1e-12,
+        "both drain nodes start at ground"
+    );
+
+    session
+        .set_signal_number("ui.mosfet_bulk.drain_current_a", 1e-3)
+        .expect("step 1 mA through the drain-bulk junction");
+    session
+        .set_signal_number("ui.mosfet_bulk.reference_current_a", 1e-3)
+        .expect("apply the same current step to the zero-charge reference");
+    let expected_diode_v = diode_load_line_voltage();
+    let mut expected_charge_v = 0.0;
+    for step in 0..12 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route both MOSFET transients, NTC, and diode");
+        assert_eq!(
+            steps.len(),
+            3,
+            "all three analog netlists solve at each step"
+        );
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        // CBD=1 nF and Rload=1 kΩ give a 1/2 backward-Euler recurrence at
+        // dt=1 us toward the 1 V DC load line. The matched reference has no
+        // depletion capacitance and therefore reaches that load line at once.
+        expected_charge_v = 0.5 * expected_charge_v + 0.5;
+        let charged_v = signal_voltage(&session, "board.analog.pa2_volts");
+        let reference_v = signal_voltage(&session, "board.analog.pa3_volts");
+        assert!(
+            (charged_v - expected_charge_v).abs() < 2e-8,
+            "CBD drain transient at step {step}: expected {expected_charge_v} V, got {charged_v} V"
+        );
+        assert!(
+            (reference_v - 1.0).abs() < 2e-8,
+            "the zero-charge reference reaches its 1 V DC load line, got {reference_v} V"
+        );
+        let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+        assert!((ntc_v - 1.65).abs() < 1e-9);
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "the unrelated diode remains at its DC load line"
+        );
+
+        for (channel, voltage_v) in [(0, ntc_v), (1, diode_v), (2, charged_v), (3, reference_v)] {
+            let expected = expected_adc_count(voltage_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "the solved voltage must seed ADC1 channel {channel}"
+            );
+            assert_eq!(
+                stm32f103_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "firmware-visible ADC1 channel {channel} must report {voltage_v} V"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 4),
+            0xFFFF,
+            "the neighboring ADC1 channel stays undriven"
+        );
+    }
+    assert!(
+        (signal_voltage(&session, "board.analog.pa2_volts") - 1.0).abs() < 3e-4,
+        "drain-bulk depletion charge changes the transient, not the DC load line"
+    );
+}
