@@ -10,6 +10,9 @@
 # RXNE with ITBUFEN alone and release after DR is read; a second read holds its
 # first byte in DR to check receive BTF with ITEVTEN alone, RXNE source
 # isolation, and the IRQ release when DR is read.
+# SysTick wraps with PRIMASK set, keeps its SCB pending request independent of
+# the read-to-clear COUNTFLAG, then dispatches at least two timer-generated
+# exception 15 entries through vector 15 and returns to thread mode.
 # A second TMP102 on I2C2 checks SB and ADDR isolation until ITEVTEN is enabled,
 # its event vector, and an independent repeated-start 25 °C read, including TXE
 # isolation under ITEVTEN, BTF isolation until ITEVTEN, and RXNE isolation until
@@ -43,6 +46,7 @@ assertions:
   - uart_ordered:
       - "BLACKPILL F401 SMOKE"
       - "systick wrap=1 pending=1 countflag=read-clear clear=1 ok"
+      - "systick irq entries>=2 vector=15 ipsr=15 return=1 ok"
       - "rcc apb1=00620001 ok"
       - "led pc13 odr=00002000 ok"
       - "tim2 arr=00000040 ok"

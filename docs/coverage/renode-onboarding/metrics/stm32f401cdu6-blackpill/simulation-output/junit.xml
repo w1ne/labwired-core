@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="5" failures="0" errors="0" time="0.098172">
+<testsuite name="labwired" tests="5" failures="0" errors="0" time="0.099940">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="ff398123b0bcfac79a2a13ac4b88775b5ca216d3f2a6fe3cd121c2378c9c5f32"/>
+    <property name="firmware_hash" value="f238a79527b5f8186934acd67ee5da383c722679cad6eb81f2762b6ed9348483"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.098172">
+  <testcase classname="labwired" name="run" time="0.099940">
   </testcase>
-  <testcase classname="labwired" name="assertion 1: uart_ordered: [&quot;BLACKPILL F401 SMOKE&quot;, &quot;systick wrap=1 pending=1 countflag=read-clear clear=1 ok&quot;, &quot;rcc apb1=00620001 o…" time="0.000000">
+  <testcase classname="labwired" name="assertion 1: uart_ordered: [&quot;BLACKPILL F401 SMOKE&quot;, &quot;systick wrap=1 pending=1 countflag=read-clear clear=1 ok&quot;, &quot;systick irq entries…" time="0.000000">
   </testcase>
   <testcase classname="labwired" name="assertion 2: gpio_edges: gpioc:13 &gt;= 5 edges" time="0.000000">
   </testcase>

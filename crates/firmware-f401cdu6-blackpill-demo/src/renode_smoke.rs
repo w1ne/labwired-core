@@ -31,7 +31,8 @@
 //!   USART2 keeps injected bytes hidden until UE and RE are set, then drains
 //!   two bytes in order and gates RXNE IRQ 38
 //!   SysTick wraps with PRIMASK set, latches exception 15, exposes COUNTFLAG
-//!   once on CSR read, and clears its pending request through ICSR
+//!   once on CSR read, clears its pending request through ICSR, then dispatches
+//!   repeated timer exceptions through vector 15 and returns to thread mode
 //! A summary word goes to RAM at 0x20017F00 (one bit per smoke group passed).
 
 use core::ptr::{read_volatile, write_volatile};
@@ -104,10 +105,14 @@ const SYSTICK_RVR: u32 = 0xE000_E014;
 const SYSTICK_CVR: u32 = 0xE000_E018;
 const SYSTICK_COUNTFLAG: u32 = 1 << 16;
 const SCB_ICSR: u32 = 0xE000_ED04;
+const SCB_VTOR: u32 = 0xE000_ED08;
 const ICSR_PENDSTSET: u32 = 1 << 26;
 const ICSR_PENDSTCLR: u32 = 1 << 25;
 
 const RESULT: u32 = 0x2001_7F00;
+const SYSTICK_HANDLER_COUNT: u32 = 0x2001_7F04;
+const SYSTICK_HANDLER_IPSR: u32 = 0x2001_7F08;
+const TEST_VECTOR_TABLE: u32 = 0x2000_0080;
 
 fn rd(addr: u32) -> u32 {
     unsafe { read_volatile(addr as *const u32) }
@@ -161,13 +166,19 @@ fn main() -> ! {
 
     let mut passed = 0u32;
 
-    let systick_ok = smoke_systick_pending_and_countflag();
-    send(if systick_ok {
+    let systick_pending_ok = smoke_systick_pending_and_countflag();
+    send(if systick_pending_ok {
         b"systick wrap=1 pending=1 countflag=read-clear clear=1 ok\r\n"
     } else {
         b"systick wrap/pending/countflag CHECK FAILED\r\n"
     });
-    passed |= (systick_ok as u32) << 12;
+    let systick_dispatch_ok = smoke_systick_periodic_exception();
+    send(if systick_dispatch_ok {
+        b"systick irq entries>=2 vector=15 ipsr=15 return=1 ok\r\n"
+    } else {
+        b"systick irq dispatch CHECK FAILED\r\n"
+    });
+    passed |= ((systick_pending_ok && systick_dispatch_ok) as u32) << 12;
 
     let ahb = rd(RCC_AHB1ENR) & 0x5;
     let apb = rd(RCC_APB1ENR) & ((1 << 0) | (1 << 17) | (1 << 21) | (1 << 22));
@@ -416,6 +427,117 @@ fn smoke_systick_pending_and_countflag() -> bool {
         && countflag_read_clear
         && pending_survives_countflag_read
         && pending_cleared
+}
+
+/// Require timer-generated SysTick exceptions to enter vector 15 repeatedly
+/// and return to the polling code on the imported Cortex-M4 profile.
+fn smoke_systick_periodic_exception() -> bool {
+    const RELOAD: u32 = 255;
+
+    let prior_primask: u32;
+    unsafe {
+        core::arch::asm!(
+            "mrs {primask}, PRIMASK",
+            "cpsid i",
+            primask = out(reg) prior_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+    }
+
+    let prior_vtor = rd(SCB_VTOR);
+    wr(SYSTICK_CSR, 0);
+    wr(SCB_ICSR, ICSR_PENDSTCLR);
+    for slot in 0..16 {
+        wr(TEST_VECTOR_TABLE + slot * 4, 0);
+    }
+    wr(
+        TEST_VECTOR_TABLE + 15 * 4,
+        SysTick_Handler as *const () as usize as u32,
+    );
+    wr(SCB_VTOR, TEST_VECTOR_TABLE);
+    wr(SYSTICK_HANDLER_COUNT, 0);
+    wr(SYSTICK_HANDLER_IPSR, 0);
+    wr(SYSTICK_RVR, RELOAD);
+    wr(SYSTICK_CVR, 0);
+    wr(SYSTICK_CSR, 0x7); // ENABLE | TICKINT | processor clock.
+
+    unsafe {
+        core::arch::asm!(
+            "msr PRIMASK, {primask}",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+
+    for _ in 0..4_096 {
+        if rd(SYSTICK_HANDLER_COUNT) >= 2 {
+            break;
+        }
+        unsafe { core::arch::asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+
+    let masked_primask: u32;
+    unsafe {
+        core::arch::asm!(
+            "mrs {primask}, PRIMASK",
+            "cpsid i",
+            primask = out(reg) masked_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+    }
+    wr(SYSTICK_CSR, 0);
+    wr(SCB_ICSR, ICSR_PENDSTCLR);
+    let entries = rd(SYSTICK_HANDLER_COUNT);
+    let ipsr = rd(SYSTICK_HANDLER_IPSR);
+    let vector_installed = rd(SCB_VTOR) == TEST_VECTOR_TABLE;
+
+    unsafe {
+        core::arch::asm!(
+            "msr PRIMASK, {primask}",
+            primask = in(reg) masked_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+    for _ in 0..128 {
+        unsafe { core::arch::asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+    let stable_after_disable = rd(SYSTICK_HANDLER_COUNT) == entries;
+
+    unsafe {
+        core::arch::asm!("cpsid i", options(nomem, nostack, preserves_flags));
+    }
+    wr(SYSTICK_CSR, 0);
+    wr(SCB_ICSR, ICSR_PENDSTCLR);
+    wr(SCB_VTOR, prior_vtor);
+    unsafe {
+        core::arch::asm!(
+            "msr PRIMASK, {primask}",
+            "dsb",
+            "isb",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+
+    prior_primask == 0 && entries >= 2 && ipsr == 15 && vector_installed && stable_after_disable
+}
+
+/// Cortex-M SysTick exception handler installed at vector-table slot 15.
+#[no_mangle]
+pub extern "C" fn SysTick_Handler() {
+    unsafe {
+        let ipsr: u32;
+        core::arch::asm!(
+            "mrs {ipsr}, IPSR",
+            ipsr = out(reg) ipsr,
+            options(nomem, nostack, preserves_flags),
+        );
+        wr(SYSTICK_HANDLER_IPSR, ipsr);
+        wr(
+            SYSTICK_HANDLER_COUNT,
+            rd(SYSTICK_HANDLER_COUNT).wrapping_add(1),
+        );
+    }
 }
 
 /// PC13 drives the active-low LED: BSRR reset half lights it.

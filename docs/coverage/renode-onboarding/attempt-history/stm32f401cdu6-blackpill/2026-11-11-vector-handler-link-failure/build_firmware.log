@@ -1,0 +1,24 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+   Compiling firmware-f401cdu6-blackpill-demo v0.25.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/renode/crates/firmware-f401cdu6-blackpill-demo)
+error: linking with `rust-lld` failed: exit status: 1
+  |
+  = note:  "rust-lld" "-flavor" "gnu" "<2 object files omitted>" "--as-needed" "-Bstatic" "<sysroot>/lib/rustlib/thumbv7em-none-eabi/lib/libcompiler_builtins-*.rlib" "-L" "/home/andrii/worktrees-legacy-20261109/labwired-core/renode/target/thumbv7em-none-eabi/release/deps/rustc7aAaod/raw-dylibs" "-Bdynamic" "--eh-frame-hdr" "-z" "noexecstack" "-L" "/home/andrii/worktrees-legacy-20261109/labwired-core/renode/target/thumbv7em-none-eabi/release/build/firmware-f401cdu6-blackpill-demo-513b3d29811aacc4/out" "-o" "/home/andrii/worktrees-legacy-20261109/labwired-core/renode/target/thumbv7em-none-eabi/release/deps/firmware_f401cdu6_blackpill_demo-cef270ef702fc685" "--gc-sections" "-O1" "-Tminimal.ld"
+  = note: some arguments are omitted. use `--verbose` to show all linker arguments
+  = note: rust-lld: error: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/target/thumbv7em-none-eabi/release/build/firmware-f401cdu6-blackpill-demo-513b3d29811aacc4/out/minimal.ld:32: symbol not found: SysTick_Handler
+
+
+error: could not compile `firmware-f401cdu6-blackpill-demo` (bin "firmware-f401cdu6-blackpill-demo") due to 1 previous error
