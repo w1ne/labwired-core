@@ -874,3 +874,176 @@ fn stm32f411ceu6_bjt_base_recombination_reaches_adc1_with_ntc_and_diode() {
         "ISE/NE base-emitter recombination must measurably change the collector load line: {recombination_deltas:?}"
     );
 }
+
+#[test]
+fn stm32f411ceu6_bjt_junction_and_transit_charge_reach_adc1_with_ntc_and_diode() {
+    let system_path = root("configs/systems/stm32f411ceu6-blackpill.yaml");
+    let mut profile =
+        SystemManifest::from_file(&system_path).expect("load STM32F411CEU6 Black Pill profile");
+    let unrelated = SystemManifest::from_file(root(
+        "examples/stm32f411ceu6-blackpill/analog-ntc-diode-system.yaml",
+    ))
+    .expect("load unrelated generic NTC and Shockley diode netlists");
+    let charge = SystemManifest::from_file(root(
+        "examples/stm32f411ceu6-blackpill/analog-bjt-charge-adc.yaml",
+    ))
+    .expect("load matched generic Gummel–Poon charge branches");
+    profile.cosim_models = unrelated.cosim_models;
+    profile.cosim_models.extend(charge.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F411CEU6 descriptor");
+    for (pad, channel) in [
+        ("PA1", 1),
+        ("PA2", 2),
+        ("PA3", 3),
+        ("PA4", 4),
+        ("PA5", 5),
+        ("PA6", 6),
+        ("PB0", 8),
+    ] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build Black Pill bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries NTC, diode, and five BJT charge branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic netlists must resolve NTC, diode, and BJT branches to ADC1 channels"
+    );
+    for channel in 0..=9 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            u16::MAX,
+            "ADC1 channel {channel} begins without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.bjt_charge.base_v", 0.0)
+        .expect("initialize matched BJT base-drive sources");
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("initialize NTC, diode, and matched BJT branches");
+    assert_eq!(initial_steps.len(), 7, "all seven analog branches solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected route errors: {initial_errors:?}"
+    );
+
+    session
+        .set_signal_number("ui.bjt_charge.base_v", 0.8)
+        .expect("step the matched BJT base-drive sources");
+    let mut first_bjt = None;
+    let mut settled_bjt = None;
+    for step in 0..8_000 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and BJT charge branches");
+        assert_eq!(
+            steps.len(),
+            7,
+            "all seven analog branches solve at every step"
+        );
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "board.analog.pa1_volts");
+        let diode_v = signal_voltage(&session, "board.analog.pa4_volts");
+        assert!((ntc_v - 1.65).abs() < 1e-9, "unrelated NTC stays isolated");
+        assert!(
+            (diode_v - diode_load_line_voltage()).abs() < 2e-5,
+            "unrelated Shockley diode stays on its independent load line"
+        );
+        let bjt_voltages = [
+            signal_voltage(&session, "board.analog.pa2_volts"),
+            signal_voltage(&session, "board.analog.pa3_volts"),
+            signal_voltage(&session, "board.analog.pa5_volts"),
+            signal_voltage(&session, "board.analog.pa6_volts"),
+            signal_voltage(&session, "board.analog.pb0_volts"),
+        ];
+
+        if step == 0 {
+            let expected_dc = bjt_recombination_collector_voltage(0.8, false);
+            assert!(
+                (bjt_voltages[0] - expected_dc).abs() < 5e-5,
+                "uncharged generic BJT must match the independent Gummel–Poon load line"
+            );
+            for (label, voltage_v) in [
+                ("CJE depletion", bjt_voltages[1]),
+                ("CJC depletion", bjt_voltages[2]),
+                ("TF transit", bjt_voltages[3]),
+                ("combined junction and transit", bjt_voltages[4]),
+            ] {
+                assert!(
+                    (voltage_v - bjt_voltages[0]).abs() > 0.01,
+                    "{label} must change the first transient: reference={} V, charged={voltage_v} V",
+                    bjt_voltages[0]
+                );
+            }
+            first_bjt = Some(bjt_voltages);
+        }
+        if step == 7_999 {
+            settled_bjt = Some(bjt_voltages);
+        }
+    }
+
+    let first = first_bjt.expect("first transient sample exists");
+    let settled = settled_bjt.expect("settled transient sample exists");
+    let expected_dc = bjt_recombination_collector_voltage(0.8, false);
+    for (label, voltage_v) in [
+        ("control", settled[0]),
+        ("CJE depletion", settled[1]),
+        ("CJC depletion", settled[2]),
+        ("TF transit", settled[3]),
+        ("combined junction and transit", settled[4]),
+    ] {
+        assert!(
+            (voltage_v - expected_dc).abs() < 2e-4,
+            "{label} must settle to the independent DC load line {expected_dc} V, got {voltage_v} V"
+        );
+    }
+    assert!(
+        first[1..]
+            .iter()
+            .zip(settled[1..].iter())
+            .all(|(early, late)| (early - late).abs() > 0.01),
+        "junction and transit charge contributions must decay between early and settled samples"
+    );
+
+    let ntc_v = signal_voltage(&session, "board.analog.pa1_volts");
+    let diode_v = signal_voltage(&session, "board.analog.pa4_volts");
+    for (channel, voltage_v) in std::iter::once((1, ntc_v))
+        .chain(std::iter::once((4, diode_v)))
+        .chain(
+            settled
+                .iter()
+                .enumerate()
+                .map(|(idx, voltage_v)| ([2, 3, 5, 6, 8][idx], *voltage_v)),
+        )
+    {
+        let expected = expected_adc_count(voltage_v);
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            expected,
+            "solved voltage seeds descriptor-routed ADC1 channel {channel}"
+        );
+        assert_eq!(
+            stm32f4_adc_convert(&mut bus, channel),
+            u32::from(expected),
+            "firmware-visible ADC1 conversion follows channel {channel}"
+        );
+    }
+    assert_eq!(
+        [0, 7, 9].map(|channel| adc_channel_count(&mut bus, channel)),
+        [u16::MAX; 3],
+        "neighboring ADC1 channels remain undriven"
+    );
+}
