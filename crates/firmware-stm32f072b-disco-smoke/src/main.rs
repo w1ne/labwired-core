@@ -33,7 +33,8 @@
 //! is also checked as reserved on this ARMv6-M core. SysTick checks cover
 //! exception 15, COUNTFLAG read-clear behavior, PRIMASK's pending-then-deliver
 //! behavior, SCB software pend/set/clear, and re-pending while its handler is
-//! active followed by a second exception entry.
+//! active followed by a second exception entry. A separate periodic check
+//! confirms hardware reloads generate three more exception entries.
 
 #![no_std]
 #![no_main]
@@ -68,6 +69,7 @@ const SYSTICK_RECORD: u32 = SUMMARY + 176;
 const SYSTICK_MASK_RECORD: u32 = SUMMARY + 192;
 const SYSTICK_ICSR_RECORD: u32 = SUMMARY + 208;
 const SYSTICK_REPEND_RECORD: u32 = SUMMARY + 224;
+const SYSTICK_PERIODIC_RECORD: u32 = SUMMARY + 768;
 const SYSTICK_CSR: u32 = 0xE000_E010;
 const SYSTICK_RVR: u32 = 0xE000_E014;
 const SYSTICK_CVR: u32 = 0xE000_E018;
@@ -472,6 +474,38 @@ unsafe extern "C" fn smoke_systick_repend_handler() {
         "ldr r1, =0xE000ED04",
         "ldr r2, [r1]",
         "str r2, [r0, #24]",
+        "bx lr",
+    );
+}
+
+/// Record three timer-generated SysTick entries while the counter reloads.
+/// Stop the timer in the third handler so the smoke has a bounded result.
+#[unsafe(naked)]
+unsafe extern "C" fn smoke_systick_periodic_handler() {
+    core::arch::naked_asm!(
+        "ldr r0, =0x20003300",
+        "ldr r2, [r0, #0]",
+        "adds r2, r2, #1",
+        "str r2, [r0, #0]",
+        "subs r3, r2, #1",
+        "lsls r3, r3, #2",
+        "adds r3, r3, #4",
+        "mrs r1, ipsr",
+        "str r1, [r0, r3]",
+        "ldr r1, =0xE000ED04",
+        "ldr r1, [r1]",
+        "adds r3, r3, #12",
+        "str r1, [r0, r3]",
+        "ldr r1, =0xE000E010",
+        "ldr r1, [r1]",
+        "adds r3, r3, #12",
+        "str r1, [r0, r3]",
+        "cmp r2, #3",
+        "bne 1f",
+        "ldr r1, =0xE000E010",
+        "movs r2, #0",
+        "str r2, [r1]",
+        "1:",
         "bx lr",
     );
 }
@@ -973,6 +1007,126 @@ fn check_systick_icsr_repend() -> bool {
     puts(" second_pending=");
     puts(if second_not_pending { "0" } else { "1" });
     puts(" thread_ipsr=");
+    hex(thread_ipsr);
+    puts(" ");
+    flag("vtor_restored", vtor_restored);
+    verdict(ok);
+    ok
+}
+
+/// Verify hardware SysTick reloads and generates repeated exception 15 entries.
+fn check_systick_periodic_reload() -> bool {
+    let source_vtor = rd(SCB_VTOR);
+    let table = RAM_VECTOR_BASE as *mut u32;
+    let prior_primask: u32;
+    unsafe {
+        asm!(
+            "mrs {primask}, PRIMASK",
+            "cpsid i",
+            primask = out(reg) prior_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+        wr(SYSTICK_CSR, 0);
+        wr(SCB_ICSR, 1 << 25);
+        wr(SYSTICK_RVR, 127);
+        wr(SYSTICK_CVR, 0);
+        for index in 0..VECTOR_TABLE_WORDS {
+            write_volatile(table.add(index), 0);
+        }
+        for index in 0..10 {
+            write_volatile((SYSTICK_PERIODIC_RECORD as *mut u32).add(index), 0);
+        }
+        write_volatile(
+            table.add(SYSTICK_VECTOR_INDEX),
+            (smoke_systick_periodic_handler as *const () as usize as u32) | 1,
+        );
+        wr(SCB_VTOR, RAM_VECTOR_BASE);
+        wr(SYSTICK_CSR, 0x7); // ENABLE | TICKINT | processor clock
+        asm!(
+            "msr PRIMASK, {primask}",
+            "dsb",
+            "isb",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+
+    for _ in 0..100_000 {
+        if rd(SYSTICK_PERIODIC_RECORD) >= 3 {
+            break;
+        }
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+
+    let entries = rd(SYSTICK_PERIODIC_RECORD);
+    let ipsr = [
+        rd(SYSTICK_PERIODIC_RECORD + 4),
+        rd(SYSTICK_PERIODIC_RECORD + 8),
+        rd(SYSTICK_PERIODIC_RECORD + 12),
+    ];
+    let icsr = [
+        rd(SYSTICK_PERIODIC_RECORD + 16),
+        rd(SYSTICK_PERIODIC_RECORD + 20),
+        rd(SYSTICK_PERIODIC_RECORD + 24),
+    ];
+    let csr = [
+        rd(SYSTICK_PERIODIC_RECORD + 28),
+        rd(SYSTICK_PERIODIC_RECORD + 32),
+        rd(SYSTICK_PERIODIC_RECORD + 36),
+    ];
+    let pending_cleared = rd(SCB_ICSR) & (1 << 26) == 0;
+    let thread_ipsr: u32;
+    unsafe {
+        asm!(
+            "mrs {value}, ipsr",
+            value = out(reg) thread_ipsr,
+            options(nomem, nostack, preserves_flags),
+        );
+    }
+
+    let active_each = icsr.iter().all(|value| value & 0x1FF == 15);
+    let countflag_each = csr.iter().all(|value| value & (1 << 16) != 0);
+    unsafe {
+        asm!("cpsid i", options(nomem, nostack, preserves_flags));
+        wr(SYSTICK_CSR, 0);
+        wr(SCB_ICSR, 1 << 25);
+        wr(SYSTICK_CVR, 0);
+        wr(SCB_VTOR, source_vtor);
+        asm!(
+            "msr PRIMASK, {primask}",
+            "dsb",
+            "isb",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+    let vtor_restored = rd(SCB_VTOR) == source_vtor;
+    let ok = prior_primask == 0
+        && entries == 3
+        && ipsr == [15; 3]
+        && active_each
+        && countflag_each
+        && rd(SYSTICK_RVR) == 127
+        && pending_cleared
+        && thread_ipsr == 0
+        && vtor_restored;
+
+    puts("systick periodic entries=");
+    hex(entries);
+    puts(" reload=");
+    hex(rd(SYSTICK_RVR));
+    puts(" ipsr=");
+    hex(ipsr[0]);
+    puts(",");
+    hex(ipsr[1]);
+    puts(",");
+    hex(ipsr[2]);
+    puts(" ");
+    flag("active", active_each);
+    flag("countflag", countflag_each);
+    puts("pending=");
+    puts(if pending_cleared { "0 " } else { "1 " });
+    puts("thread_ipsr=");
     hex(thread_ipsr);
     puts(" ");
     flag("vtor_restored", vtor_restored);
@@ -1773,10 +1927,12 @@ fn main() -> ! {
     let systick_primask_ok = check_systick_primask();
     let systick_icsr_software_pend_ok = check_systick_icsr_software_pend();
     let systick_icsr_repend_ok = check_systick_icsr_repend();
+    let systick_periodic_ok = check_systick_periodic_reload();
     mark(
         21,
         systick_primask_ok && systick_icsr_software_pend_ok && systick_icsr_repend_ok,
     );
+    mark(22, systick_periodic_ok);
     let summary = summary | 0x0DF0_0000;
     wr(SUMMARY, summary);
     puts("summary ");

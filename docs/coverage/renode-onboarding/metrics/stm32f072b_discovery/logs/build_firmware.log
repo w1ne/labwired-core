@@ -15,18 +15,18 @@ package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/
 workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
    Compiling firmware-stm32f072b-disco-smoke v0.1.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/renode/crates/firmware-stm32f072b-disco-smoke)
 warning: unnecessary `unsafe` block
-   --> crates/firmware-stm32f072b-disco-smoke/src/main.rs:619:5
+   --> crates/firmware-stm32f072b-disco-smoke/src/main.rs:653:5
     |
-619 |     unsafe {
+653 |     unsafe {
     |     ^^^^^^ unnecessary `unsafe` block
     |
     = note: `#[warn(unused_unsafe)]` (part of `#[warn(unused)]`) on by default
 
 warning: unnecessary `unsafe` block
-   --> crates/firmware-stm32f072b-disco-smoke/src/main.rs:763:5
+   --> crates/firmware-stm32f072b-disco-smoke/src/main.rs:797:5
     |
-763 |     unsafe { wr(SCB_ICSR, 1 << 25) };
+797 |     unsafe { wr(SCB_ICSR, 1 << 25) };
     |     ^^^^^^ unnecessary `unsafe` block
 
 warning: `firmware-stm32f072b-disco-smoke` (bin "firmware-stm32f072b-disco-smoke") generated 2 warnings
-    Finished `release` profile [optimized + debuginfo] target(s) in 5.29s
+    Finished `release` profile [optimized + debuginfo] target(s) in 5.88s

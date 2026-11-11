@@ -23,7 +23,9 @@
 # The imported STM32F072 profile also includes the core SysTick peripheral;
 # its smoke verifies exception 15, COUNTFLAG read-clear behavior, pending
 # delivery after PRIMASK is cleared, the SCB's software pend/set/clear path,
-# and a software re-pend while SysTick is active followed by a second entry.
+# and software re-pending while SysTick is active followed by a second entry.
+# A separate periodic test checks three hardware-generated entries from RVR
+# reloads, including COUNTFLAG and active-exception readback each time.
 schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv6m-none-eabi/release/firmware-stm32f072b-disco-smoke"
@@ -82,6 +84,7 @@ assertions:
       - "systick primask clear=honored=1 masked=1 ipsr=0x0000000F active=0x0000000F primask=0x00000000 pending_after=0x00000000 thread_ipsr=0x00000000 vtor_restored=1 ok"
       - "systick icsr set_readback=1 clear=1 canceled=1 masked=1 ipsr=0x0000000F active=0x0000000F pending_handler=0 pending_after=0 thread_ipsr=0x00000000 vtor_restored=1 ok"
       - "systick icsr repend entries=0x00000002 first_ipsr=0x0000000F first_active=0x0000000F pending_after_pend=1 count_after_pend=0x00000001 second_ipsr=0x0000000F second_active=0x0000000F second_pending=0 thread_ipsr=0x00000000 vtor_restored=1 ok"
+      - "systick periodic entries=0x00000003 reload=0x0000007F ipsr=0x0000000F,0x0000000F,0x0000000F active=1 countflag=1 pending=0 thread_ipsr=0x00000000 vtor_restored=1 ok"
       - "summary 0x0DFFFFFF"
       - "DONE"
   - memory_value:
