@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.056917">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="7cfaafa1db10a1c3a9e426e6db5f1bf8f1a615a00bf82ea4e8e10cfcd286126d"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.056917">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: NUCLEO_G431RB_LPUART1_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: gpio_edges: gpioa:5 &gt;= 3 edges" time="0.000000">
+  </testcase>
+</testsuite>

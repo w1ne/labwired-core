@@ -1,0 +1,19 @@
+[workspace]
+members = []
+
+[package]
+name = "firmware-nucleo-g431rb-smoke"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+panic-halt = "0.2"
+
+[[bin]]
+name = "firmware-nucleo-g431rb-smoke"
+path = "src/main.rs"
+test = false
+bench = false
+
+[profile.release]
+debug = true

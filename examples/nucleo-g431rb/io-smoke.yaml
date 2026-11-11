@@ -1,0 +1,13 @@
+# Boots board-specific firmware on the NUCLEO-G431RB profile. It drives
+# PA5/LD2 high, low, then high and sends its marker through LPUART1.
+schema_version: "1.0"
+inputs:
+  firmware: "./board_firmware/target/thumbv7em-none-eabihf/release/firmware-nucleo-g431rb-smoke"
+  system: "./system.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "NUCLEO_G431RB_LPUART1_OK"
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 3
