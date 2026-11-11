@@ -1,0 +1,2261 @@
+diff --git a/configs/systems/esp32-4848s040.yaml b/configs/systems/esp32-4848s040.yaml
+new file mode 100644
+index 0000000000000000000000000000000000000000..81077ea27beb8b0b96f9e9f877007aaa260d5ad9
+--- /dev/null
++++ b/configs/systems/esp32-4848s040.yaml
+@@ -0,0 +1,23 @@
++# Functional GUITION ESP32-4848S040 C_I display/touch profile (N16R8).
++# Internal display wiring is not an exposed GPIO header. See the board guide.
++name: "esp32-4848s040"
++chip: "../chips/esp32s3.yaml"
++cpu_hz: 240000000
++external_devices:
++  - id: "display"
++    type: "st7701-rgb"
++    connection: "gpio"
++    config:
++      cs_pin: "GPIO39"
++      sck_pin: "GPIO48"
++      mosi_pin: "GPIO47"
++      backlight_pin: "GPIO38"
++  - id: "touch"
++    type: "gt911"
++    connection: "i2c0"
++    route:
++      sda: "GPIO19"
++      scl: "GPIO45"
++    config:
++      i2c_address: 0x5d
++board_io: []
+diff --git a/crates/core/src/peripheral.rs b/crates/core/src/peripheral.rs
+index 4bb103e05766f2e20c3a9297d446c4c946800c32..2f174f06faf06fddcfa6bc3f78f787bee72737ac 100644
+--- a/crates/core/src/peripheral.rs
++++ b/crates/core/src/peripheral.rs
+@@ -1182,0 +1183,10 @@ pub trait Peripheral: std::fmt::Debug + Send {
++    /// Attach a receiver to a functional RGB master, when this peripheral
++    /// implements one. The part kit names a bus capability, never a concrete
++    /// MCU controller. Existing peripherals decline without changing state.
++    fn attach_rgb_panel(
++        &mut self,
++        _panel: std::sync::Arc<dyn crate::peripherals::components::RgbPanel>,
++    ) -> bool {
++        false
++    }
++
+diff --git a/crates/core/src/peripherals/components/gt911.rs b/crates/core/src/peripherals/components/gt911.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..78cf83edc86c341fbb796cb3d79828e067747c5e
+--- /dev/null
++++ b/crates/core/src/peripherals/components/gt911.rs
+@@ -0,0 +1,330 @@
++// LabWired - Firmware Simulation Platform
++// SPDX-License-Identifier: MIT
++
++//! GT911 polling touch controller, functional single-contact model.
++//!
++//! Register protocol follows Espressif's `esp_lcd_touch_gt911` driver: a
++//! big-endian 16-bit register pointer, little-endian coordinates, ready/count
++//! at 0x814e, eight bytes per contact, and a firmware write of zero to acknowledge.
++//! Once read by the guest, a report is immutable through acknowledgement;
++//! newer host movement coalesces into the next report. There is no
++//! interrupt/reset pin on the S040 C_I polling profile.
++//! This is not a capacitive sensing, gesture, multi-contact or flash model.
++
++use std::borrow::Cow;
++
++use crate::peripherals::device::I2cDevice;
++use crate::peripherals::kit::{
++    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, PeripheralKit, Transport,
++};
++use crate::sim_input::{InputChannel, SimInput, SimInputError};
++
++const CONFIG_START: u16 = 0x8047;
++const CONFIG_END: u16 = 0x8100;
++const STATUS: u16 = 0x814e;
++const PRODUCT_ID: u16 = 0x8140;
++const COMMAND: u16 = 0x8040;
++const REPORT_US: u64 = 10_000;
++
++pub const GT911_INPUTS: &[InputChannel] = &[
++    InputChannel {
++        key: Cow::Borrowed("x"),
++        label: Cow::Borrowed("Touch X"),
++        unit: Cow::Borrowed("px"),
++        min: 0.0,
++        max: 479.0,
++        default: Some(0.0),
++    },
++    InputChannel {
++        key: Cow::Borrowed("y"),
++        label: Cow::Borrowed("Touch Y"),
++        unit: Cow::Borrowed("px"),
++        min: 0.0,
++        max: 479.0,
++        default: Some(0.0),
++    },
++    InputChannel {
++        key: Cow::Borrowed("pressed"),
++        label: Cow::Borrowed("Touch pressed"),
++        unit: Cow::Borrowed(""),
++        min: 0.0,
++        max: 1.0,
++        default: Some(0.0),
++    },
++];
++
++#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
++struct Contact {
++    x: u16,
++    y: u16,
++    pressed: bool,
++}
++
++#[derive(Debug)]
++pub struct Gt911 {
++    address: u8,
++    id: Option<String>,
++    pointer: u16,
++    pointer_bytes: u8,
++    config: [u8; (CONFIG_END - CONFIG_START + 1) as usize],
++    contact: Contact,
++    report: Option<Contact>,
++    report_read: bool,
++    queued: Option<Contact>,
++    sleeping: bool,
++    elapsed_us: u64,
++}
++
++impl Gt911 {
++    pub fn new(address: u8) -> Self {
++        let mut config = [0; (CONFIG_END - CONFIG_START + 1) as usize];
++        // Model configuration, not a claim of a specific module's factory
++        // firmware: 480x480, up to one reported contact, a 10ms sample period.
++        config[0] = 0x41;
++        config[1..3].copy_from_slice(&480u16.to_le_bytes());
++        config[3..5].copy_from_slice(&480u16.to_le_bytes());
++        config[5] = 1;
++        Self {
++            address,
++            id: None,
++            pointer: 0,
++            pointer_bytes: 0,
++            config,
++            contact: Contact::default(),
++            report: None,
++            report_read: false,
++            queued: None,
++            sleeping: false,
++            elapsed_us: 0,
++        }
++    }
++
++    fn publish(&mut self) {
++        if self.sleeping {
++            return;
++        }
++        if self.report.is_none() || !self.report_read {
++            self.report = Some(self.contact);
++        } else {
++            self.queued = Some(self.contact);
++        }
++    }
++
++    fn register(&self, reg: u16) -> u8 {
++        match reg {
++            PRODUCT_ID..=0x8143 => b"911\0"[(reg - PRODUCT_ID) as usize],
++            // Resolution readback, as used by common Arduino GT911 drivers.
++            0x8146 | 0x8148 => 0xe0,
++            0x8147 | 0x8149 => 0x01,
++            STATUS => self.report.map_or(0, |c| 0x80 | u8::from(c.pressed)),
++            0x814f..=0x8156 => {
++                let Some(c) = self.report.filter(|c| c.pressed) else {
++                    return 0;
++                };
++                let x = c.x.to_le_bytes();
++                let y = c.y.to_le_bytes();
++                [0, x[0], x[1], y[0], y[1], 1, 0, 0][(reg - 0x814f) as usize]
++            }
++            CONFIG_START..=CONFIG_END => self.config[(reg - CONFIG_START) as usize],
++            _ => 0,
++        }
++    }
++
++    fn write_register(&mut self, reg: u16, value: u8) {
++        match reg {
++            STATUS if value == 0 => {
++                self.report = self.queued.take();
++                self.report_read = false;
++            }
++            COMMAND if value == 5 => {
++                self.sleeping = true;
++                self.report = None;
++                self.queued = None;
++                self.report_read = false;
++            }
++            COMMAND if value == 0 => {
++                self.sleeping = false;
++            }
++            CONFIG_START..=CONFIG_END => self.config[(reg - CONFIG_START) as usize] = value,
++            _ => {} // Identification and contact data are read-only.
++        }
++    }
++}
++
++impl I2cDevice for Gt911 {
++    fn address(&self) -> u8 {
++        self.address
++    }
++    fn start(&mut self) {
++        self.pointer_bytes = 0;
++    }
++    fn stop(&mut self) {
++        self.pointer_bytes = 0;
++    }
++    fn read(&mut self) -> u8 {
++        // Freeze at the first guest observation, after an atomic host x/y/
++        // pressed update has finished. Later host changes cannot tear a report
++        // between the driver's status read and coordinate burst.
++        if (STATUS..=0x8156).contains(&self.pointer) && self.report.is_some() {
++            self.report_read = true;
++        }
++        let value = self.register(self.pointer);
++        self.pointer = self.pointer.wrapping_add(1);
++        value
++    }
++    fn write(&mut self, data: u8) {
++        match self.pointer_bytes {
++            0 => {
++                self.pointer = u16::from(data) << 8;
++                self.pointer_bytes = 1;
++            }
++            1 => {
++                self.pointer |= u16::from(data);
++                self.pointer_bytes = 2;
++            }
++            _ => {
++                self.write_register(self.pointer, data);
++                self.pointer = self.pointer.wrapping_add(1);
++            }
++        }
++    }
++    fn advance_time_us(&mut self, us: u64) {
++        self.elapsed_us = self.elapsed_us.saturating_add(us);
++        if self.elapsed_us >= REPORT_US {
++            self.elapsed_us %= REPORT_US;
++            // Repeated held-contact samples are driven by simulation time,
++            // never manufactured by reading the status register.
++            if self.contact.pressed {
++                self.publish();
++            }
++        }
++    }
++    fn as_sim_input_mut(&mut self) -> Option<&mut dyn SimInput> {
++        Some(self)
++    }
++    fn as_any(&self) -> Option<&dyn std::any::Any> {
++        Some(self)
++    }
++    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
++        Some(self)
++    }
++}
++
++impl SimInput for Gt911 {
++    fn input_channels(&self) -> &[InputChannel] {
++        GT911_INPUTS
++    }
++    fn component_id(&self) -> Option<&str> {
++        self.id.as_deref()
++    }
++    fn set_component_id(&mut self, id: String) {
++        self.id = Some(id);
++    }
++    fn set_input(&mut self, key: &str, value: f64) -> Result<(), SimInputError> {
++        self.require_channel(key, value)?;
++        let old = self.contact;
++        match key {
++            "x" => self.contact.x = value.round() as u16,
++            "y" => self.contact.y = value.round() as u16,
++            "pressed" => self.contact.pressed = value >= 0.5,
++            _ => unreachable!("require_channel checked the key"),
++        }
++        if self.contact != old && (self.contact.pressed || old.pressed) {
++            self.publish();
++        }
++        Ok(())
++    }
++}
++
++pub struct Gt911Kit;
++pub static GT911_KIT: Gt911Kit = Gt911Kit;
++static METADATA: KitMetadata = KitMetadata {
++    inputs: Cow::Borrowed(GT911_INPUTS), device_type: Cow::Borrowed("gt911"),
++    label: Cow::Borrowed("GT911 touch (polling)"),
++    summary: Cow::Borrowed("480x480 single-contact GT911 register and ready/ack model."),
++    detail: Cow::Borrowed("16-bit I2C pointer, product ID, configuration storage and one contact. Set x/y then pressed. No reset-address strap, IRQ, gestures or capacitive physics."),
++    transport: Transport::I2c, category: Category::I2c,
++    config_keys: Cow::Borrowed(&[ConfigKey { name: Cow::Borrowed("i2c_address"), ty: ConfigType::Int, doc: Cow::Borrowed("7-bit address: 0x5d (default) or 0x14.") }]),
++    labs: Cow::Borrowed(&[]),
++};
++impl PeripheralKit for Gt911Kit {
++    fn metadata(&self) -> &'static KitMetadata {
++        &METADATA
++    }
++    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
++        let address = ctx.i2c_address_or(0x5d)?;
++        anyhow::ensure!(
++            matches!(address, 0x5d | 0x14),
++            "GT911 supports address 0x5d or 0x14"
++        );
++        ctx.attach_i2c_device(Box::new(Gt911::new(address)))
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    fn read(d: &mut Gt911, reg: u16, n: usize) -> Vec<u8> {
++        d.start();
++        for b in reg.to_be_bytes() {
++            d.write(b);
++        }
++        d.start();
++        let data = (0..n).map(|_| d.read()).collect();
++        d.stop();
++        data
++    }
++    fn write(d: &mut Gt911, reg: u16, bytes: &[u8]) {
++        d.start();
++        for b in reg.to_be_bytes().into_iter().chain(bytes.iter().copied()) {
++            d.write(b);
++        }
++        d.stop();
++    }
++    #[test]
++    fn identity_pointer_config_and_read_only_registers() {
++        let mut d = Gt911::new(0x5d);
++        assert_eq!(read(&mut d, PRODUCT_ID, 4), b"911\0");
++        write(&mut d, PRODUCT_ID, b"bad!");
++        assert_eq!(read(&mut d, PRODUCT_ID, 4), b"911\0");
++        assert_eq!(read(&mut d, CONFIG_START + 1, 4), [0xe0, 1, 0xe0, 1]);
++        write(&mut d, CONFIG_START + 8, &[7, 9]);
++        assert_eq!(read(&mut d, CONFIG_START + 8, 2), [7, 9]);
++        assert_eq!(read(&mut d, STATUS, 1), [0]);
++    }
++    #[test]
++    fn down_move_up_are_coherent_until_acknowledged() {
++        let mut d = Gt911::new(0x5d);
++        d.set_input("x", 123.0).unwrap();
++        d.set_input("y", 456.0).unwrap();
++        assert_eq!(read(&mut d, STATUS, 1), [0]);
++        d.set_input("pressed", 1.0).unwrap();
++        assert_eq!(read(&mut d, STATUS, 9), [0x81, 0, 123, 0, 200, 1, 1, 0, 0]);
++        d.set_input("x", 321.0).unwrap();
++        d.set_input("y", 47.0).unwrap();
++        assert_eq!(read(&mut d, STATUS, 9), [0x81, 0, 123, 0, 200, 1, 1, 0, 0]);
++        write(&mut d, STATUS, &[0]);
++        assert_eq!(read(&mut d, STATUS, 9), [0x81, 0, 65, 1, 47, 0, 1, 0, 0]);
++        d.set_input("pressed", 0.0).unwrap();
++        write(&mut d, STATUS, &[0]);
++        assert_eq!(read(&mut d, STATUS, 1), [0x80]);
++        write(&mut d, STATUS, &[0]);
++        assert_eq!(read(&mut d, STATUS, 1), [0]);
++    }
++    #[test]
++    fn held_contact_is_time_driven_and_input_ranges_are_enforced() {
++        let mut d = Gt911::new(0x14);
++        d.set_input("pressed", 1.0).unwrap();
++        write(&mut d, STATUS, &[0]);
++        assert_eq!(read(&mut d, STATUS, 1), [0]);
++        d.advance_time_us(REPORT_US - 1);
++        assert_eq!(read(&mut d, STATUS, 1), [0]);
++        d.advance_time_us(1);
++        assert_eq!(read(&mut d, STATUS, 1), [0x81]);
++        assert!(d.set_input("x", 480.0).is_err());
++        assert!(d.set_input("y", f64::NAN).is_err());
++        write(&mut d, COMMAND, &[5]);
++        d.advance_time_us(REPORT_US);
++        assert_eq!(read(&mut d, STATUS, 1), [0]);
++    }
++}
+diff --git a/crates/core/src/peripherals/components/mod.rs b/crates/core/src/peripherals/components/mod.rs
+index 7b891878372764f49366cae13b5fa14159a2c3ea..5b9b6d277bda9d76c3dfce3f7d60504c19841013 100644
+--- a/crates/core/src/peripherals/components/mod.rs
++++ b/crates/core/src/peripherals/components/mod.rs
+@@ -38,0 +39 @@ pub mod gpio_schedule;
++pub mod gt911;
+@@ -73,0 +75 @@ pub mod rc522;
++pub mod rgb_panel;
+@@ -79,0 +82 @@ pub mod sps30;
++pub mod st7701;
+@@ -130,0 +134 @@ pub use pca9685::Pca9685;
++pub use rgb_panel::RgbPanel;
+diff --git a/crates/core/src/peripherals/components/rgb_panel.rs b/crates/core/src/peripherals/components/rgb_panel.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..da90d7ac8966c0cbddb034f1410d9b29b0d755be
+--- /dev/null
++++ b/crates/core/src/peripherals/components/rgb_panel.rs
+@@ -0,0 +1,13 @@
++// LabWired - Firmware Simulation Platform
++// SPDX-License-Identifier: MIT
++
++//! Functional RGB bus boundary. The master supplies an active-area frame in
++//! scan order; the receiver owns its control state and presentation. This is
++//! deliberately not a pixel-clock or GPIO-matrix timing interface. No concrete
++//! panel type, framebuffer getter, or engine object crosses this boundary.
++
++pub trait RgbPanel: std::fmt::Debug + Send + Sync {
++    /// Complete active-area frame. Each word is the RGB565 value present on
++    /// the sixteen data wires after the master's byte/bit ordering controls.
++    fn rgb_frame(&self, width: u16, height: u16, pixels: &[u16]);
++}
+diff --git a/crates/core/src/peripherals/components/st7701.rs b/crates/core/src/peripherals/components/st7701.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..12273658a7ab2a91cf6b0068574c9be0c1a1f9b8
+--- /dev/null
++++ b/crates/core/src/peripherals/components/st7701.rs
+@@ -0,0 +1,335 @@
++// LabWired - Firmware Simulation Platform
++// SPDX-License-Identifier: MIT
++
++//! ST7701 RGB panel for the GUITION ESP32-4848S040 C_I assembly.
++//!
++//! A GPIO observer receives the real 3-wire, MSB-first 9-bit control stream
++//! (first bit D/C, then eight payload bits, rising SCK with CS low). LCD_CAM
++//! supplies complete RGB565 active-area frames through the independent RGB
++//! panel port. DCS sleep/display commands and the physical backlight gate the
++//! visible image. Extended command-bank parameters are accepted and retained,
++//! but analog gamma/voltage, porch edges, RGB pin mux and scan-clock timing are
++//! not simulated. Rotation is performed by guest framebuffer software, as in
++//! Arduino_GFX's Arduino_RGB_Display, not invented from ILI9341 commands.
++
++use std::borrow::Cow;
++use std::sync::{Arc, Mutex};
++
++use crate::peripherals::components::RgbPanel;
++use crate::peripherals::device::GpioObserver;
++use crate::peripherals::kit::{
++    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, PeripheralKit, Transport,
++};
++
++pub const WIDTH: usize = 480;
++pub const HEIGHT: usize = 480;
++
++#[derive(Debug, Clone, Copy)]
++pub struct ControlPins {
++    pub cs: u8,
++    pub sck: u8,
++    pub mosi: u8,
++    pub backlight: u8,
++    pub reset: Option<u8>,
++}
++
++impl Default for ControlPins {
++    fn default() -> Self {
++        Self {
++            cs: 39,
++            sck: 48,
++            mosi: 47,
++            backlight: 38,
++            reset: None,
++        }
++    }
++}
++
++#[derive(Debug)]
++struct State {
++    cs: bool,
++    sck: bool,
++    mosi: bool,
++    reset: bool,
++    backlight: bool,
++    serial: u16,
++    bits: u8,
++    command: u8,
++    params: Vec<u8>,
++    bank: u8,
++    sleeping: bool,
++    display_on: bool,
++    colmod: u8,
++    framebuffer: Vec<u8>,
++    frames_received: u64,
++}
++
++impl State {
++    fn new() -> Self {
++        Self {
++            cs: true,
++            sck: false,
++            mosi: false,
++            reset: true,
++            backlight: false,
++            serial: 0,
++            bits: 0,
++            command: 0,
++            params: Vec::new(),
++            bank: 0,
++            sleeping: true,
++            display_on: false,
++            colmod: 0x60,
++            framebuffer: vec![0; WIDTH * HEIGHT * 2],
++            frames_received: 0,
++        }
++    }
++
++    fn reset_controller(&mut self) {
++        self.serial = 0;
++        self.bits = 0;
++        self.command = 0;
++        self.params.clear();
++        self.bank = 0;
++        self.sleeping = true;
++        self.display_on = false;
++        self.colmod = 0x60;
++        self.framebuffer.fill(0);
++        self.frames_received = 0;
++    }
++
++    fn serial_word(&mut self, word: u16) {
++        if word & 0x100 == 0 {
++            self.command = word as u8;
++            self.params.clear();
++            if self.bank == 0 {
++                match self.command {
++                    0x01 => self.reset_controller(),
++                    0x10 => self.sleeping = true,
++                    0x11 => self.sleeping = false,
++                    0x28 => self.display_on = false,
++                    0x29 => self.display_on = true,
++                    _ => {}
++                }
++            }
++        } else {
++            // Bound malformed streams: the largest type9 parameter block is
++            // 16 bytes; retain up to 32 rather than grow on an endless CS.
++            if self.params.len() < 32 {
++                self.params.push(word as u8);
++            }
++            if self.command == 0xff && self.params.len() == 5 && self.params[..4] == [0x77, 1, 0, 0]
++            {
++                self.bank = self.params[4];
++            } else if self.bank == 0 && self.command == 0x3a && self.params.len() == 1 {
++                self.colmod = word as u8;
++            }
++        }
++    }
++}
++
++#[derive(Debug)]
++pub struct St7701 {
++    id: String,
++    pins: ControlPins,
++    powered: bool,
++    state: Mutex<State>,
++}
++
++impl St7701 {
++    pub fn new(id: impl Into<String>, pins: ControlPins, powered: bool) -> Self {
++        Self {
++            id: id.into(),
++            pins,
++            powered,
++            state: Mutex::new(State::new()),
++        }
++    }
++}
++
++impl GpioObserver for St7701 {
++    fn on_pin_change(&self, pin: u8, _from: bool, to: bool, _sim_cycle: u64) {
++        if !self.powered {
++            return;
++        }
++        if pin != self.pins.cs
++            && pin != self.pins.sck
++            && pin != self.pins.mosi
++            && pin != self.pins.backlight
++            && Some(pin) != self.pins.reset
++        {
++            return;
++        }
++        let mut s = self.state.lock().unwrap();
++        if pin == self.pins.backlight {
++            s.backlight = to;
++        }
++        if Some(pin) == self.pins.reset {
++            s.reset = to;
++            if !to {
++                s.reset_controller();
++            }
++            return;
++        }
++        if pin == self.pins.cs {
++            s.cs = to;
++            s.bits = 0;
++            s.serial = 0;
++        }
++        if pin == self.pins.mosi {
++            s.mosi = to;
++        }
++        if pin == self.pins.sck {
++            let rising = !s.sck && to;
++            s.sck = to;
++            if rising && !s.cs && s.reset {
++                s.serial = (s.serial << 1) | u16::from(s.mosi);
++                s.bits += 1;
++                if s.bits == 9 {
++                    let word = s.serial;
++                    s.bits = 0;
++                    s.serial = 0;
++                    s.serial_word(word);
++                }
++            }
++        }
++    }
++}
++
++impl RgbPanel for St7701 {
++    fn rgb_frame(&self, width: u16, height: u16, pixels: &[u16]) {
++        if !self.powered
++            || usize::from(width) != WIDTH
++            || usize::from(height) != HEIGHT
++            || pixels.len() != WIDTH * HEIGHT
++        {
++            return;
++        }
++        let mut s = self.state.lock().unwrap();
++        if !s.reset {
++            return;
++        }
++        // The S040's physical RGB565 wiring is used with type9 COLMOD=0x60
++        // (RGB666). Missing R/B low bits are not imaginary extra DMA bytes.
++        // Both documented 565 and that board's 666 init yield a 565 artifact.
++        if !matches!(s.colmod & 0x70, 0x50 | 0x60) {
++            return;
++        }
++        for (bytes, pixel) in s.framebuffer.chunks_exact_mut(2).zip(pixels) {
++            bytes.copy_from_slice(&pixel.to_be_bytes());
++        }
++        s.frames_received = s.frames_received.wrapping_add(1);
++    }
++}
++
++impl crate::inspect::DeviceEvidence for St7701 {
++    fn artifacts(
++        &self,
++        id: &str,
++        opts: &crate::inspect::InspectOpts,
++    ) -> Vec<crate::inspect::Artifact> {
++        let s = self.state.lock().unwrap();
++        let visible = self.powered && s.reset && !s.sleeping && s.display_on && s.backlight;
++        let dark;
++        let bytes = if visible {
++            &s.framebuffer
++        } else {
++            dark = vec![0; s.framebuffer.len()];
++            &dark
++        };
++        vec![crate::inspect::Artifact {
++            kind: "framebuffer".into(),
++            id: id.into(),
++            meta: serde_json::json!({
++                "w": WIDTH, "h": HEIGHT, "format": crate::inspect::artifact_format::RGB565_BE,
++                "generation": crate::inspect::artifact_generation(bytes),
++                "display_on": s.display_on, "sleeping": s.sleeping,
++                "backlight_on": s.backlight, "powered": self.powered,
++                "frames_received": s.frames_received, "colmod": s.colmod,
++                "painted_bytes": bytes.iter().filter(|&&b| b != 0).count(),
++                "total_bytes": bytes.len(), "bus": "rgb-16bit-functional"
++            }),
++            bytes: crate::inspect::artifact_bytes(bytes, opts),
++        }]
++    }
++}
++
++impl crate::bus::ObservedDevice for St7701 {
++    fn manifest_id(&self) -> &str {
++        &self.id
++    }
++    fn evidence(&self) -> Option<&dyn crate::inspect::DeviceEvidence> {
++        Some(self)
++    }
++    fn as_any(&self) -> &dyn std::any::Any {
++        self
++    }
++    fn as_arc_any(self: Arc<Self>) -> Arc<dyn std::any::Any + Send + Sync> {
++        self
++    }
++}
++
++pub struct St7701Kit;
++pub static ST7701_KIT: St7701Kit = St7701Kit;
++static METADATA: KitMetadata = KitMetadata {
++    inputs: Cow::Borrowed(&[]), device_type: Cow::Borrowed("st7701-rgb"),
++    label: Cow::Borrowed("ST7701 480x480 RGB panel"),
++    summary: Cow::Borrowed("S040 16-bit RGB frame receiver and 9-bit GPIO control."),
++    detail: Cow::Borrowed("Functional LCD_CAM RGB565 frames, sleep/display commands, type9 bank selection and backlight. RGB pad timing/mux and analog panel behavior are not modeled."),
++    transport: Transport::GpioGroup, category: Category::Gpio,
++    config_keys: Cow::Borrowed(&[
++        ConfigKey { name: Cow::Borrowed("cs_pin"), ty: ConfigType::Str, doc: Cow::Borrowed("Active-low control CS, default GPIO39.") },
++        ConfigKey { name: Cow::Borrowed("sck_pin"), ty: ConfigType::Str, doc: Cow::Borrowed("Rising-edge 9-bit control clock, default GPIO48.") },
++        ConfigKey { name: Cow::Borrowed("mosi_pin"), ty: ConfigType::Str, doc: Cow::Borrowed("Control data, default GPIO47.") },
++        ConfigKey { name: Cow::Borrowed("backlight_pin"), ty: ConfigType::Str, doc: Cow::Borrowed("Active-high backlight, default GPIO38.") },
++        ConfigKey { name: Cow::Borrowed("reset_pin"), ty: ConfigType::Str, doc: Cow::Borrowed("Optional active-low reset. S040 C_I has no MCU reset connection.") },
++        crate::peripherals::components::supply::POWERED_CONFIG_KEY,
++    ]), labs: Cow::Borrowed(&[]),
++};
++
++impl PeripheralKit for St7701Kit {
++    fn metadata(&self) -> &'static KitMetadata {
++        &METADATA
++    }
++    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
++        let reset = ctx
++            .config_str("reset_pin")
++            .map(|pin| {
++                ctx.parse_gpio_pin(pin)
++                    .ok_or_else(|| anyhow::anyhow!("invalid ST7701 reset pin {pin}"))
++            })
++            .transpose()?;
++        let pins = ControlPins {
++            cs: ctx.config_gpio_pin("cs_pin", "CS", "GPIO39")?,
++            sck: ctx.config_gpio_pin("sck_pin", "SCK", "GPIO48")?,
++            mosi: ctx.config_gpio_pin("mosi_pin", "MOSI", "GPIO47")?,
++            backlight: ctx.config_gpio_pin("backlight_pin", "BL", "GPIO38")?,
++            reset,
++        };
++        let mut distinct = vec![pins.cs, pins.sck, pins.mosi, pins.backlight];
++        distinct.extend(reset);
++        let n = distinct.len();
++        distinct.sort();
++        distinct.dedup();
++        anyhow::ensure!(distinct.len() == n, "ST7701 control pins must be distinct");
++        let panel = Arc::new(St7701::new(
++            ctx.device_id(),
++            pins,
++            crate::peripherals::components::supply::powered_from_config(ctx),
++        ));
++        let idx = ctx
++            .bus
++            .find_peripheral_index_by_name("lcd_cam")
++            .ok_or_else(|| anyhow::anyhow!("st7701-rgb needs an ESP32-S3 LCD_CAM RGB master"))?;
++        anyhow::ensure!(
++            ctx.bus.peripherals[idx].dev.attach_rgb_panel(panel.clone()),
++            "st7701-rgb requires an RGB-capable LCD master"
++        );
++        anyhow::ensure!(
++            ctx.install_gpio_observer(panel.clone()),
++            "st7701-rgb needs GPIO control-edge observation"
++        );
++        ctx.bus.observe_device(panel);
++        Ok(())
++    }
++}
+diff --git a/crates/core/src/peripherals/esp32s3/gdma.rs b/crates/core/src/peripherals/esp32s3/gdma.rs
+index 42d2c42420e8b034d97629005113344b813e7824..662723507bef700f6837954b07c15f2191463c67 100644
+--- a/crates/core/src/peripherals/esp32s3/gdma.rs
++++ b/crates/core/src/peripherals/esp32s3/gdma.rs
+@@ -772 +772,10 @@ impl Esp32s3Gdma {
+-                let _ = OUT_LINK_STOP_BIT;
++                // LCD scanout can be explicitly aborted between frames or
++                // mid-frame. Preserve other coupled engines' existing stop
++                // policy; they have independent transaction/FIFO semantics.
++                if value & OUT_LINK_STOP_BIT != 0
++                    && DmaPeripheral::from_sel(c.tx.peri_sel) == DmaPeripheral::LcdCam
++                {
++                    c.tx.pending_coupled = false;
++                    c.tx.coupled_desc_ptr = 0;
++                    c.tx.coupled_buf_offset = 0;
++                }
+@@ -1491,0 +1501 @@ impl Esp32s3Gdma {
++        let mut rgb_wake = false;
+@@ -1498 +1508 @@ impl Esp32s3Gdma {
+-                    self.lcd_tx_step(lcd, t, &mut *sys_bus);
++                    rgb_wake = self.lcd_tx_step(lcd, t, &mut *sys_bus);
+@@ -1507,0 +1518,7 @@ impl Esp32s3Gdma {
++        // Unlike i80, RGB does not poll a completion event while it waits for
++        // data. Harvest the frame event from its actual owner after restoring
++        // the borrowed LCD. This is the existing scheduler seam, not a new
++        // bus-wide walk.
++        if rgb_wake {
++            sys_bus.collect_scheduled_events(lcd_idx);
++        }
+@@ -1554 +1571 @@ impl Esp32s3Gdma {
+-    ) {
++    ) -> bool {
+@@ -1563 +1580 @@ impl Esp32s3Gdma {
+-            return;
++            return false;
+@@ -1566,2 +1583,17 @@ impl Esp32s3Gdma {
+-        let bytes =
+-            Self::coupled_out_collect(&mut self.channels[tx_idx].tx, bus, LCD_BYTES_PER_TICK, true);
++        let budget = lcd.dma_budget(LCD_BYTES_PER_TICK);
++        let bytes = if lcd.rgb_mode() {
++            match Self::coupled_rgb_out_collect(&mut self.channels[tx_idx].tx, bus, budget) {
++                Ok(bytes) => bytes,
++                Err(()) => {
++                    let tx = &mut self.channels[tx_idx].tx;
++                    tx.int_raw |= OUT_DSCR_ERR_BIT;
++                    tx.pending_coupled = false;
++                    tx.coupled_desc_ptr = 0;
++                    tx.coupled_buf_offset = 0;
++                    lcd.dma_finish();
++                    return false;
++                }
++            }
++        } else {
++            Self::coupled_out_collect(&mut self.channels[tx_idx].tx, bus, budget, true)
++        };
+@@ -1569,0 +1602,4 @@ impl Esp32s3Gdma {
++        // RGB may use a circular descriptor ring: suc_eof marks a DMA EOF, not
++        // termination. A complete frame wakes LCD VSYNC; the channel stays
++        // armed when LCD auto-next is enabled.
++        let rgb_wake = lcd.rgb_frame_pending();
+@@ -1571 +1607 @@ impl Esp32s3Gdma {
+-        if tx.coupled_desc_ptr == 0 {
++        if tx.coupled_desc_ptr == 0 || (lcd.rgb_frame_pending() && !lcd.rgb_auto_next_frame()) {
+@@ -1578,0 +1615,52 @@ impl Esp32s3Gdma {
++        rgb_wake
++    }
++
++    /// RGB's cyclic descriptor walk. Unlike the historical compatibility
++    /// pumps it must not turn a failed memory read into a fabricated pixel.
++    /// Stop with OUT_DSCR_ERR on inaccessible/malformed/CPU-owned descriptors.
++    /// EOF is reported at the descriptor that carries it, but is not a stop.
++    fn coupled_rgb_out_collect(
++        dir: &mut DmaDir,
++        bus: &mut dyn Bus,
++        budget: usize,
++    ) -> Result<Vec<u8>, ()> {
++        let mut bytes = Vec::with_capacity(budget);
++        for _ in 0..MAX_DESC_CHAIN {
++            if bytes.len() == budget || dir.coupled_desc_ptr == 0 {
++                break;
++            }
++            let addr = dir.coupled_desc_ptr;
++            if addr & 3 != 0 {
++                return Err(());
++            }
++            let dw0 = bus.read_u32(addr).map_err(|_| ())?;
++            let d = Desc {
++                dw0,
++                len: (dw0 >> 12) & 0xfff,
++                size: dw0 & 0xfff,
++                buf: u64::from(bus.read_u32(addr + 4).map_err(|_| ())?),
++                next: u64::from(bus.read_u32(addr + 8).map_err(|_| ())?),
++            };
++            if !d.dma_owned() || d.len == 0 || d.len > d.size || dir.coupled_buf_offset > d.len {
++                return Err(());
++            }
++            let count = (d.len - dir.coupled_buf_offset).min((budget - bytes.len()) as u32);
++            for offset in 0..count {
++                bytes.push(
++                    bus.read_u8(d.buf + u64::from(dir.coupled_buf_offset + offset))
++                        .map_err(|_| ())?,
++                );
++            }
++            dir.coupled_buf_offset += count;
++            if dir.coupled_buf_offset == d.len {
++                if dir.conf0 & OUT_AUTO_WRBACK_BIT != 0 {
++                    bus.write_u32(addr, dw0 & !DESC_OWNER_BIT).map_err(|_| ())?;
++                }
++                if d.suc_eof() {
++                    dir.int_raw |= OUT_EOF_BIT;
++                }
++                dir.coupled_buf_offset = 0;
++                dir.coupled_desc_ptr = d.next;
++            }
++        }
++        Ok(bytes)
+diff --git a/crates/core/src/peripherals/esp32s3/lcd_cam.rs b/crates/core/src/peripherals/esp32s3/lcd_cam.rs
+index f5a6c24fc3d6bceade74499b0d682ad475645367..0fb93d6b92f8494585f1e50e1a7e8b912519308c 100644
+--- a/crates/core/src/peripherals/esp32s3/lcd_cam.rs
++++ b/crates/core/src/peripherals/esp32s3/lcd_cam.rs
+@@ -64,3 +64,6 @@
+-//! Line/frame timing is still not modelled: there is no pixel clock, no
+-//! per-cycle DOUT length and no RGB-mode sync generator. A transaction moves
+-//! the whole descriptor chain and then completes.
++//! * **Functional RGB565 scanout**: RGB_MODE_EN selects a separate frame
++//!   receiver. Active width/height determine the exact DMA frame boundary;
++//!   a complete frame raises VSYNC, and NEXT_FRAME_EN keeps a cyclic stream
++//!   running. A short/absent DMA chain never manufactures a completed frame.
++//!   Pixel-clock, blanking time, RGB pin mux and analog timing are not modeled:
++//!   VSYNC is a functional DMA frame boundary, not a calibrated clock edge.
+@@ -165,0 +169,2 @@ const LCD_8BITS_ORDER_BIT: u32 = 1 << 19;
++const LCD_RGB_MODE_BIT: u32 = 1 << 31;
++const MISC_NEXT_FRAME_BIT: u32 = 1 << 25;
+@@ -318,0 +324,5 @@ pub struct Esp32s3LcdCam {
++    rgb_panels: Vec<std::sync::Arc<dyn crate::peripherals::components::RgbPanel>>,
++    /// Latched active-area geometry and words for the current RGB frame.
++    rgb_size: Option<(u16, u16)>,
++    rgb_pixels: Vec<u16>,
++    rgb_frame_pending: bool,
+@@ -410,0 +421,4 @@ impl Esp32s3LcdCam {
++            rgb_panels: Vec::new(),
++            rgb_size: None,
++            rgb_pixels: Vec::new(),
++            rgb_frame_pending: false,
+@@ -457,0 +472,26 @@ impl Esp32s3LcdCam {
++
++    pub fn rgb_mode(&self) -> bool {
++        self.lcd_ctrl & LCD_RGB_MODE_BIT != 0
++    }
++
++    pub fn rgb_auto_next_frame(&self) -> bool {
++        self.lcd_misc & MISC_NEXT_FRAME_BIT != 0
++    }
++
++    /// Do not let a DMA burst cross an RGB frame boundary, including an odd
++    /// descriptor split within a 16-bit pixel. i80 keeps its existing budget.
++    pub fn dma_budget(&self, maximum: usize) -> usize {
++        if !self.rgb_mode() {
++            return maximum;
++        }
++        self.rgb_size
++            .map_or(0, |(w, h)| {
++                (usize::from(w) * usize::from(h) - self.rgb_pixels.len()) * 2
++                    - usize::from(self.dma_half_word.is_some())
++            })
++            .min(maximum)
++    }
++
++    pub fn rgb_frame_pending(&self) -> bool {
++        self.rgb_frame_pending
++    }
+@@ -488,0 +529,32 @@ impl Esp32s3LcdCam {
++        // Reset belongs to the LCD controller, regardless of the selected
++        // output mode. Firmware may select i80 before resetting an old RGB
++        // transfer; its partial data and queued completion must be discarded.
++        if value & LCD_RESET_BIT != 0 || (self.rgb_mode() && value & LCD_START_BIT == 0) {
++            self.lcd_busy = false;
++            self.lcd_pending_done = false;
++            self.dout_pending = false;
++            self.rgb_frame_pending = false;
++            self.rgb_pixels.clear();
++            self.rgb_size = None;
++            self.dma_half_word = None;
++            return;
++        }
++
++        if self.rgb_mode() {
++            // RGB START is a run bit. A read/modify/write while running must
++            // not rewind the in-flight framebuffer. Explicit stop/reset does.
++            if !self.lcd_busy {
++                self.lcd_busy = true;
++                self.lcd_pending_done = false;
++                self.dout_pending = value & LCD_DOUT_BIT != 0 && self.bus_is_16bit();
++                self.rgb_size = Some((
++                    (((self.lcd_ctrl1 >> 8) & 0xfff) + 1) as u16,
++                    (((self.lcd_ctrl >> 11) & 0x3ff) + 1) as u16,
++                ));
++                self.rgb_pixels.clear();
++                self.rgb_frame_pending = false;
++                self.dma_half_word = None;
++            }
++            return;
++        }
++
+@@ -489,0 +562,5 @@ impl Esp32s3LcdCam {
++            // A fresh i80 transaction owns its completion; an earlier RGB
++            // frame must not publish VSYNC or retire this new DOUT phase.
++            self.rgb_frame_pending = false;
++            self.rgb_pixels.clear();
++            self.rgb_size = None;
+@@ -574 +651 @@ impl Esp32s3LcdCam {
+-        self.lcd_busy && self.dout_pending
++        self.lcd_busy && self.dout_pending && !self.rgb_frame_pending
+@@ -587,0 +665,24 @@ impl Esp32s3LcdCam {
++        if self.rgb_mode() {
++            if !self.dma_wants_data() {
++                return;
++            }
++            for &byte in bytes {
++                if let Some(lo) = self.dma_half_word.take() {
++                    let mut word = u16::from_le_bytes([lo, byte]);
++                    if self.lcd_user & LCD_BYTE_ORDER_BIT != 0 {
++                        word = word.swap_bytes();
++                    }
++                    if self.lcd_user & LCD_BIT_ORDER_BIT != 0 {
++                        word = word.reverse_bits();
++                    }
++                    self.rgb_pixels.push(word);
++                } else {
++                    self.dma_half_word = Some(byte);
++                }
++            }
++            if let Some((w, h)) = self.rgb_size {
++                self.rgb_frame_pending = self.rgb_pixels.len() == usize::from(w) * usize::from(h)
++                    && self.dma_half_word.is_none();
++            }
++            return;
++        }
+@@ -828,0 +930,8 @@ impl Peripheral for Esp32s3LcdCam {
++    fn attach_rgb_panel(
++        &mut self,
++        panel: std::sync::Arc<dyn crate::peripherals::components::RgbPanel>,
++    ) -> bool {
++        self.rgb_panels.push(panel);
++        true
++    }
++
+@@ -896,0 +1006,15 @@ impl Peripheral for Esp32s3LcdCam {
++        if self.rgb_frame_pending {
++            if let Some((w, h)) = self.rgb_size {
++                for panel in &self.rgb_panels {
++                    panel.rgb_frame(w, h, &self.rgb_pixels);
++                }
++            }
++            self.rgb_frame_pending = false;
++            self.rgb_pixels.clear();
++            self.int_raw |= INT_LCD_VSYNC;
++            if !self.rgb_auto_next_frame() {
++                self.lcd_busy = false;
++                self.dout_pending = false;
++                self.int_raw |= INT_LCD_TRANS_DONE;
++            }
++        }
+@@ -976 +1100,3 @@ impl Peripheral for Esp32s3LcdCam {
+-        if (self.lcd_pending_done || self.cam_pending_vsync) && !self.scheduled {
++        if (self.lcd_pending_done || self.cam_pending_vsync || self.rgb_frame_pending)
++            && !self.scheduled
++        {
+@@ -1012,6 +1138,7 @@ impl Peripheral for Esp32s3LcdCam {
+-        let reschedule = if self.lcd_pending_done || self.cam_pending_vsync {
+-            self.scheduled = true;
+-            Some(1)
+-        } else {
+-            None
+-        };
++        let reschedule =
++            if self.lcd_pending_done || self.cam_pending_vsync || self.rgb_frame_pending {
++                self.scheduled = true;
++                Some(1)
++            } else {
++                None
++            };
+diff --git a/crates/core/src/peripherals/kit/registry.rs b/crates/core/src/peripherals/kit/registry.rs
+index e5d990729eeb2c3d0705d2c6dcc5703eb0c0592e..207e04083e93e88e201f0bd7446adaa9e0f9be88 100644
+--- a/crates/core/src/peripherals/kit/registry.rs
++++ b/crates/core/src/peripherals/kit/registry.rs
+@@ -59,0 +60,2 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
++    &components::st7701::ST7701_KIT,
++    &components::gt911::GT911_KIT,
+diff --git a/crates/core/tests/esp32s3_rgb_s040.rs b/crates/core/tests/esp32s3_rgb_s040.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..d637369e9b740e6dbff8cec770769d84bf4db4bf
+--- /dev/null
++++ b/crates/core/tests/esp32s3_rgb_s040.rs
+@@ -0,0 +1,529 @@
++//! S040 functional qualification. Positive and negative controls use actual
++//! MMIO/GDMA and public artifacts; the final test executes the owned Xtensa
++//! ELF, including GT911-driven guest redraw. No panel setters paint the image.
++use labwired_config::SystemManifest;
++use labwired_core::bus::SystemBus;
++use labwired_core::cpu::XtensaLx7;
++use labwired_core::inspect::{Artifact, InspectOpts};
++use labwired_core::system::xtensa::{
++    attach_esp32_external_devices, configure_xtensa_esp32s3, Esp32s3Opts,
++};
++use labwired_core::{Bus, Cpu, Machine};
++
++const GPIO: u64 = 0x60004000;
++const LCD: u64 = 0x60041000;
++const DMA: u64 = 0x6003f000;
++const DESC: u64 = 0x3fc88000;
++const FRAME: u64 = 0x3fc8a000;
++const UNMAPPED: u64 = 0x1000_0000;
++// The owned guest uses smaller repeated-row buffers; RESULT is its mailbox.
++const RESULT: u64 = 0x3fc91800;
++const USER: u32 = (1 << 23) | (1 << 24) | (1 << 27) | (1 << 13);
++
++fn rig() -> Machine<XtensaLx7> {
++    rig_with_opts(Esp32s3Opts::default())
++}
++
++fn rig_with_opts(opts: Esp32s3Opts) -> Machine<XtensaLx7> {
++    let mut bus = SystemBus::new();
++    let mut wiring = configure_xtensa_esp32s3(&mut bus, &opts);
++    let system: SystemManifest =
++        serde_yaml::from_str(include_str!("../../../configs/systems/esp32-4848s040.yaml")).unwrap();
++    attach_esp32_external_devices(&mut bus, &system).unwrap();
++    wiring.cpu.halted = true;
++    Machine::new(wiring.cpu, bus)
++}
++
++fn artifact(m: &Machine<XtensaLx7>) -> Artifact {
++    let mut artifacts = m.bus.display_artifacts_of_format(
++        &[labwired_core::inspect::artifact_format::RGB565_BE],
++        &InspectOpts {
++            include_bytes: true,
++            peripheral: None,
++        },
++    );
++    assert_eq!(artifacts.len(), 1);
++    assert_eq!(artifacts[0].id, "display");
++    assert_eq!(artifacts[0].meta["w"], 480);
++    assert_eq!(artifacts[0].meta["h"], 480);
++    artifacts.remove(0)
++}
++
++fn pin(m: &mut Machine<XtensaLx7>, number: u8, high: bool) {
++    m.bus
++        .write_u32(GPIO + if high { 0x14 } else { 0x18 }, 1 << (number - 32))
++        .unwrap();
++}
++
++fn serial(m: &mut Machine<XtensaLx7>, word: u16) {
++    pin(m, 39, false);
++    for bit in (0..9).rev() {
++        pin(m, 48, false);
++        pin(m, 47, word & (1 << bit) != 0);
++        pin(m, 48, true);
++    }
++    pin(m, 48, false);
++    pin(m, 39, true);
++}
++
++fn init_panel(m: &mut Machine<XtensaLx7>) {
++    m.bus
++        .write_u32(GPIO + 0x30, (1 << 6) | (1 << 7) | (1 << 15) | (1 << 16))
++        .unwrap();
++    pin(m, 39, true);
++    pin(m, 38, true);
++    for word in [0x3a, 0x160, 0x11, 0x29] {
++        serial(m, word);
++    }
++}
++
++fn mount(m: &mut Machine<XtensaLx7>, word: u16, chunk: usize, circular: bool) {
++    // Entire active region, including independently checked asymmetric
++    // corners and row-boundary sentinels, reaches DMA through real RAM.
++    for i in 0..480 * 480 {
++        m.bus.write_u16(FRAME + i * 2, word).unwrap();
++    }
++    for (i, value) in [
++        (0, 0xf800),
++        (479, 0x07e0),
++        (480, 0x1234),
++        (480 * 479, 0x001f),
++        (480 * 480 - 1, 0xffff),
++    ] {
++        m.bus.write_u16(FRAME + i * 2, value).unwrap();
++    }
++    for (i, start) in (0..480 * 480 * 2).step_by(chunk).enumerate() {
++        let len = chunk.min(480 * 480 * 2 - start);
++        let last = start + len == 480 * 480 * 2;
++        let next = if last {
++            if circular {
++                DESC
++            } else {
++                0
++            }
++        } else {
++            DESC + (i as u64 + 1) * 12
++        };
++        m.bus
++            .write_u32(
++                DESC + i as u64 * 12,
++                (1 << 31) | (u32::from(last) << 30) | ((len as u32) << 12) | len as u32,
++            )
++            .unwrap();
++        m.bus
++            .write_u32(DESC + i as u64 * 12 + 4, FRAME as u32 + start as u32)
++            .unwrap();
++        m.bus
++            .write_u32(DESC + i as u64 * 12 + 8, next as u32)
++            .unwrap();
++    }
++    m.bus
++        .write_u32(LCD + 0x1c, (1 << 31) | (479 << 11) | (517 << 21) | 57)
++        .unwrap();
++    m.bus
++        .write_u32(LCD + 0x20, (547 << 20) | (479 << 8) | 27)
++        .unwrap();
++    m.bus.write_u32(LCD + 0x64, 1).unwrap();
++    m.bus
++        .write_u32(LCD + 0x18, if circular { 1 << 25 } else { 0 })
++        .unwrap();
++    m.bus.write_u32(DMA + 0xa8, 5).unwrap();
++    m.bus
++        .write_u32(DMA + 0x80, (DESC as u32 & 0xfffff) | (1 << 21))
++        .unwrap();
++}
++
++fn await_vsync(m: &mut Machine<XtensaLx7>) {
++    for _ in 0..600 {
++        m.step().unwrap();
++        if m.bus.read_u32(LCD + 0x6c).unwrap() & 1 != 0 {
++            return;
++        }
++    }
++    panic!("complete RGB frame never raised enabled VSYNC");
++}
++
++fn pixel(a: &Artifact, index: usize) -> u16 {
++    let b = a.bytes.as_ref().unwrap();
++    u16::from_be_bytes([b[index * 2], b[index * 2 + 1]])
++}
++
++#[test]
++fn rgb565_geometry_stride_odd_descriptor_and_vsync_ack() {
++    let mut m = rig();
++    init_panel(&mut m);
++    mount(&mut m, 0x2104, 4093, false);
++    // DMA armed before LCD_START must stall without producing an event/frame.
++    for _ in 0..5 {
++        m.step().unwrap();
++    }
++    assert_eq!(artifact(&m).meta["frames_received"], 0);
++    m.bus.write_u32(LCD + 0x14, USER).unwrap();
++    await_vsync(&mut m);
++    let a = artifact(&m);
++    for (i, expected) in [
++        (0, 0xf800),
++        (479, 0x07e0),
++        (480, 0x1234),
++        (481, 0x2104),
++        (480 * 479, 0x001f),
++        (480 * 480 - 1, 0xffff),
++    ] {
++        assert_eq!(pixel(&a, i), expected, "pixel {i}");
++    }
++    assert_eq!(a.meta["frames_received"], 1);
++    assert_eq!(m.bus.read_u32(LCD + 0x14).unwrap() & (1 << 27), 0);
++    m.bus.write_u32(LCD + 0x70, 1).unwrap();
++    assert_eq!(m.bus.read_u32(LCD + 0x6c).unwrap() & 1, 0);
++    for _ in 0..5 {
++        m.step().unwrap();
++    }
++    assert_eq!(artifact(&m).meta["frames_received"], 1);
++}
++
++#[test]
++fn cyclic_frames_resample_memory_and_byte_bit_order_is_applied_once() {
++    let mut m = rig();
++    init_panel(&mut m);
++    mount(&mut m, 0x2104, 4092, true);
++    m.bus.write_u32(LCD + 0x14, USER | (1 << 22)).unwrap();
++    await_vsync(&mut m);
++    assert_eq!(pixel(&artifact(&m), 480), 0x3412);
++    assert_ne!(m.bus.read_u32(LCD + 0x14).unwrap() & (1 << 27), 0);
++    m.bus.write_u16(FRAME, 0x5aa5).unwrap();
++    m.bus.write_u32(LCD + 0x70, 1).unwrap();
++    await_vsync(&mut m);
++    let a = artifact(&m);
++    assert_eq!(a.meta["frames_received"], 2);
++    assert_eq!(pixel(&a, 0), 0xa55a);
++    // Change only the LCD bit-order setting while the cyclic engine runs.
++    m.bus.write_u16(FRAME, 0x1234).unwrap();
++    m.bus.write_u32(LCD + 0x14, USER | (1 << 21)).unwrap();
++    m.bus.write_u32(LCD + 0x70, 1).unwrap();
++    await_vsync(&mut m);
++    assert_eq!(pixel(&artifact(&m), 0), 0x1234u16.reverse_bits());
++    // Explicit stop prevents later ring data from making another frame.
++    m.bus.write_u32(LCD + 0x14, USER & !(1 << 27)).unwrap();
++    for _ in 0..150 {
++        m.step().unwrap();
++    }
++    assert_eq!(artifact(&m).meta["frames_received"], 3);
++}
++
++#[test]
++fn rgb_owner_writeback_keeps_eof_and_rejects_cpu_owned_ring_reuse() {
++    let mut m = rig();
++    init_panel(&mut m);
++    mount(&mut m, 0x2104, 4092, true);
++    // EOF can occur before the active frame ends; it is an interrupt marker,
++    // not permission to fabricate a short frame or stop a circular chain.
++    let first = m.bus.read_u32(DESC).unwrap();
++    m.bus.write_u32(DESC, first | (1 << 30)).unwrap();
++    m.bus.write_u32(DMA + 0x60, 1 << 2).unwrap();
++    m.bus.write_u32(LCD + 0x14, USER).unwrap();
++    m.step().unwrap();
++    assert_ne!(m.bus.read_u32(DMA + 0x68).unwrap() & (1 << 1), 0);
++    assert_eq!(artifact(&m).meta["frames_received"], 0);
++    await_vsync(&mut m);
++    assert_eq!(artifact(&m).meta["frames_received"], 1);
++    assert_eq!(m.bus.read_u32(DESC).unwrap() & (1 << 31), 0);
++    m.bus.write_u32(LCD + 0x70, 1).unwrap();
++    for _ in 0..150 {
++        m.step().unwrap();
++    }
++    assert_ne!(m.bus.read_u32(DMA + 0x68).unwrap() & (1 << 2), 0);
++    assert_eq!(artifact(&m).meta["frames_received"], 1);
++    assert_eq!(m.bus.read_u32(LCD + 0x68).unwrap() & 1, 0);
++}
++
++#[test]
++fn missing_short_cpu_owned_and_wrong_format_never_complete_a_frame() {
++    for bad in [
++        "short",
++        "owner",
++        "length",
++        "8bit",
++        "no_dma",
++        "unaligned",
++        "unmapped_descriptor",
++        "unmapped_data",
++    ] {
++        let mut m = rig();
++        // The standalone S3 rig retains the default bus slab at 0x20000000.
++        // Prove these negative controls use a genuinely unmapped address.
++        assert!(m.bus.read_u8(UNMAPPED).is_err());
++        assert!(m.bus.read_u32(UNMAPPED).is_err());
++        init_panel(&mut m);
++        mount(&mut m, 0x07e0, 4092, false);
++        match bad {
++            "short" => m.bus.write_u32(DESC + 8, 0).unwrap(),
++            "owner" => {
++                let v = m.bus.read_u32(DESC).unwrap();
++                m.bus.write_u32(DESC, v & !(1 << 31)).unwrap();
++            }
++            "length" => m.bus.write_u32(DESC, (1 << 31) | (4092 << 12) | 4).unwrap(),
++            "no_dma" => m.bus.write_u32(DMA + 0x80, 1 << 20).unwrap(),
++            "unaligned" => m.bus.write_u32(DESC + 8, (DESC + 13) as u32).unwrap(),
++            "unmapped_descriptor" => m.bus.write_u32(DESC + 8, UNMAPPED as u32).unwrap(),
++            "unmapped_data" => m.bus.write_u32(DESC + 4, UNMAPPED as u32).unwrap(),
++            _ => {}
++        }
++        let user = if bad == "8bit" {
++            USER & !(1 << 23)
++        } else {
++            USER
++        };
++        m.bus.write_u32(LCD + 0x14, user).unwrap();
++        for _ in 0..160 {
++            m.step().unwrap();
++        }
++        assert_eq!(artifact(&m).meta["frames_received"], 0, "{bad}");
++        assert_eq!(m.bus.read_u32(LCD + 0x68).unwrap() & 1, 0, "{bad}");
++        if matches!(
++            bad,
++            "owner" | "length" | "unaligned" | "unmapped_descriptor" | "unmapped_data"
++        ) {
++            assert_ne!(m.bus.read_u32(DMA + 0x68).unwrap() & 4, 0);
++        }
++    }
++}
++
++#[test]
++fn control_sleep_backlight_and_software_reset_gate_the_visible_frame() {
++    let mut m = rig();
++    init_panel(&mut m);
++    mount(&mut m, 0x07e0, 4092, false);
++    m.bus.write_u32(LCD + 0x14, USER).unwrap();
++    await_vsync(&mut m);
++    assert_eq!(pixel(&artifact(&m), 0), 0xf800);
++    pin(&mut m, 38, false);
++    assert_eq!(pixel(&artifact(&m), 0), 0);
++    pin(&mut m, 38, true);
++    assert_eq!(pixel(&artifact(&m), 0), 0xf800);
++    serial(&mut m, 0x10);
++    assert_eq!(pixel(&artifact(&m), 0), 0);
++    serial(&mut m, 0x11);
++    assert_eq!(pixel(&artifact(&m), 0), 0xf800);
++    serial(&mut m, 0x28);
++    assert_eq!(pixel(&artifact(&m), 0), 0);
++    serial(&mut m, 0x29);
++    assert_eq!(pixel(&artifact(&m), 0), 0xf800);
++    serial(&mut m, 0x01);
++    let a = artifact(&m);
++    assert_eq!(pixel(&a, 0), 0);
++    assert_eq!(a.meta["display_on"], false);
++    assert_eq!(a.meta["frames_received"], 0);
++}
++
++#[test]
++fn rgb_dma_reads_the_existing_mmu_mapped_octal_psram() {
++    let mut m = rig_with_opts(Esp32s3Opts {
++        real_reset_boot: true,
++        ..Esp32s3Opts::default()
++    });
++    init_panel(&mut m);
++    mount(&mut m, 0x2a55, 4092, false);
++    // Eight real MMU pages map the frame to the existing 8MiB PSRAM array.
++    for page in 0..8 {
++        m.bus
++            .write_u32(0x600c5000 + page * 4, (1 << 15) | page as u32)
++            .unwrap();
++    }
++    for offset in (0..480 * 480 * 2).step_by(4) {
++        let value = m.bus.read_u32(FRAME + offset).unwrap();
++        m.bus.write_u32(0x3c000000 + offset, value).unwrap();
++    }
++    for (i, start) in (0..480 * 480 * 2).step_by(4092).enumerate() {
++        m.bus
++            .write_u32(DESC + i as u64 * 12 + 4, 0x3c000000 + start as u32)
++            .unwrap();
++    }
++    m.bus.write_u32(LCD + 0x14, USER).unwrap();
++    await_vsync(&mut m);
++    let a = artifact(&m);
++    assert_eq!(pixel(&a, 0), 0xf800);
++    assert_eq!(pixel(&a, 480), 0x1234);
++    assert_eq!(pixel(&a, 481), 0x2a55);
++    assert_eq!(pixel(&a, 480 * 480 - 1), 0xffff);
++}
++
++#[test]
++fn reset_discards_partial_frame_and_software_rotated_corners_keep_scan_order() {
++    let mut m = rig();
++    init_panel(&mut m);
++    mount(&mut m, 0, 4092, false);
++    m.bus.write_u32(LCD + 0x14, USER).unwrap();
++    m.step().unwrap();
++    m.bus.write_u32(LCD + 0x14, 1 << 28).unwrap();
++    for _ in 0..150 {
++        m.step().unwrap();
++    }
++    assert_eq!(artifact(&m).meta["frames_received"], 0);
++    // A guest software rotation places corners in raster memory itself.
++    // The RGB receiver must not invent MADCTL rotation or reverse row stride.
++    for corners in [
++        [0xf800, 0x07e0, 0x001f, 0xffff],
++        [0x001f, 0xf800, 0xffff, 0x07e0],
++        [0xffff, 0x001f, 0x07e0, 0xf800],
++        [0x07e0, 0xffff, 0xf800, 0x001f],
++    ] {
++        for (i, value) in [0, 479, 480 * 479, 480 * 480 - 1].into_iter().zip(corners) {
++            m.bus.write_u16(FRAME + i * 2, value).unwrap();
++        }
++        m.bus
++            .write_u32(DMA + 0x80, (DESC as u32 & 0xfffff) | (1 << 21))
++            .unwrap();
++        m.bus.write_u32(LCD + 0x70, 3).unwrap();
++        m.bus.write_u32(LCD + 0x14, USER).unwrap();
++        await_vsync(&mut m);
++        let a = artifact(&m);
++        for (i, value) in [0, 479, 480 * 479, 480 * 480 - 1].into_iter().zip(corners) {
++            assert_eq!(pixel(&a, i), value);
++        }
++    }
++}
++
++fn guest_until(m: &mut Machine<XtensaLx7>, count: u32) {
++    for _ in 0..100_000 {
++        m.step()
++            .unwrap_or_else(|e| panic!("guest at {:#x}: {e}", m.cpu.get_pc()));
++        if m.bus.read_u32(RESULT).unwrap() >= count {
++            return;
++        }
++    }
++    panic!(
++        "guest did not produce report {count}; PC={:#x}, result={}, i2c raw={:#x}",
++        m.cpu.get_pc(),
++        m.bus.read_u32(RESULT).unwrap(),
++        m.bus.read_u32(0x60013020).unwrap()
++    );
++}
++
++#[test]
++fn owned_xtensa_guest_reads_gt911_and_redraws_on_down_move_up() {
++    let mut m = rig();
++    let image = labwired_loader::load_elf_bytes(include_bytes!(
++        "../../../tests/fixtures/esp32-4848s040/probe.elf"
++    ))
++    .unwrap();
++    m.load_firmware(&image).unwrap();
++    // This is an independently authored bare ELF entry, not a ROM-reset boot.
++    m.cpu.set_pc(image.entry_point as u32);
++    m.cpu.halted = false;
++    guest_until(&mut m, 1);
++    let a = artifact(&m);
++    for (i, color) in [
++        (0, 0xf800),
++        (479, 0x07e0),
++        (480 * 479, 0x001f),
++        (480 * 480 - 1, 0xffff),
++    ] {
++        assert_eq!(pixel(&a, i), color);
++    }
++    let inputs = m.list_inputs();
++    for key in ["x", "y", "pressed"] {
++        assert!(inputs.iter().any(|(id, c)| id == "touch" && c.key == key));
++    }
++    m.set_inputs(&[
++        (Some("touch"), "x", 123.0),
++        (Some("touch"), "y", 456.0),
++        (Some("touch"), "pressed", 1.0),
++    ])
++    .unwrap();
++    guest_until(&mut m, 2);
++    assert_eq!(pixel(&artifact(&m), 0), 123);
++    assert_eq!(m.bus.read_u16(RESULT + 10).unwrap(), 123);
++    assert_eq!(m.bus.read_u16(RESULT + 12).unwrap(), 456);
++    m.set_inputs(&[(Some("touch"), "x", 321.0), (Some("touch"), "y", 47.0)])
++        .unwrap();
++    guest_until(&mut m, 3);
++    assert_eq!(pixel(&artifact(&m), 0), 321);
++    m.set_input_on("touch", "pressed", 0.0).unwrap();
++    guest_until(&mut m, 4);
++    assert_eq!(pixel(&artifact(&m), 0), 0xf800);
++    assert_eq!(m.bus.read_u8(RESULT + 8).unwrap(), 0x80);
++}
++
++#[test]
++fn rgb_reset_and_mode_switch_cannot_retire_a_new_i80_transaction() {
++    use labwired_core::peripherals::components::{I80Panel, RgbPanel};
++    use labwired_core::peripherals::esp32s3::lcd_cam::Esp32s3LcdCam;
++    use labwired_core::Peripheral;
++    use std::sync::{Arc, Mutex};
++
++    #[derive(Debug, Default)]
++    struct WireSink {
++        rgb: Mutex<Vec<Vec<u16>>>,
++        i80: Mutex<Vec<(bool, u16)>>,
++    }
++    impl RgbPanel for WireSink {
++        fn rgb_frame(&self, width: u16, height: u16, pixels: &[u16]) {
++            assert_eq!((width, height), (1, 1));
++            self.rgb.lock().unwrap().push(pixels.to_vec());
++        }
++    }
++    impl I80Panel for WireSink {
++        fn i80_write_word(&self, dc_high: bool, word: u16) {
++            self.i80.lock().unwrap().push((dc_high, word));
++        }
++    }
++
++    for (prefix, reset) in [
++        (&[0x34][..], true),
++        (&[0x34, 0x12][..], true),
++        (&[0x34, 0x12][..], false),
++    ] {
++        let mut lcd = Esp32s3LcdCam::new(24);
++        let sink = Arc::new(WireSink::default());
++        assert!(lcd.attach_rgb_panel(sink.clone()));
++        lcd.attach_panel(sink.clone());
++        // A partial pixel and a completed frame both belong to the old RGB
++        // transfer. Hold its completion tick until after selecting i80.
++        lcd.write_u32(0x1c, 1 << 31).unwrap();
++        lcd.write_u32(0x14, USER).unwrap();
++        lcd.dma_arm();
++        lcd.dma_push_tx(prefix);
++        lcd.write_u32(0x1c, 0).unwrap();
++        if reset {
++            lcd.write_u32(0x14, 1 << 28).unwrap();
++            assert_eq!(
++                lcd.read_u32(0x14).unwrap() & (1 << 27),
++                0,
++                "LCD_RESET must retire the previous mode"
++            );
++            lcd.tick();
++            assert_eq!(lcd.read_u32(0x68).unwrap(), 0);
++        }
++
++        // An i80 DOUT transaction must still wait for its own payload. A
++        // stale RGB completion must not publish VSYNC or retire this start.
++        lcd.write_u32(0x18, 1 << 28).unwrap();
++        lcd.write_u32(0x14, USER).unwrap();
++        lcd.dma_arm();
++        lcd.tick();
++        assert!(
++            lcd.dma_wants_data(),
++            "new i80 DOUT must wait for its own DMA"
++        );
++        assert_eq!(lcd.read_u32(0x68).unwrap(), 0);
++        lcd.dma_push_tx(&[0xcd, 0xab]);
++        lcd.dma_finish();
++        lcd.tick();
++        assert_eq!(*sink.i80.lock().unwrap(), vec![(true, 0xabcd)]);
++        assert!(sink.rgb.lock().unwrap().is_empty());
++        assert_eq!(lcd.read_u32(0x68).unwrap(), 1 << 1);
++
++        // Switching back through reset starts a clean RGB frame, without the
++        // partial word or completion from either preceding transaction.
++        lcd.write_u32(0x1c, 1 << 31).unwrap();
++        lcd.write_u32(0x14, 1 << 28).unwrap();
++        lcd.write_u32(0x70, 0xf).unwrap();
++        lcd.write_u32(0x14, USER).unwrap();
++        lcd.dma_arm();
++        lcd.dma_push_tx(&[0x21, 0x43]);
++        lcd.dma_finish();
++        lcd.tick();
++        assert_eq!(*sink.rgb.lock().unwrap(), vec![vec![0x4321]]);
++        assert_ne!(lcd.read_u32(0x68).unwrap() & 1, 0);
++    }
++}
+diff --git a/crates/core/tests/fixtures/peripherals/manifest.json b/crates/core/tests/fixtures/peripherals/manifest.json
+index d724594ec31f142ee9cbb658135d9f14467fd252..b97073e57a1e010512bf5dce8f74e7ed0977b174 100644
+--- a/crates/core/tests/fixtures/peripherals/manifest.json
++++ b/crates/core/tests/fixtures/peripherals/manifest.json
+@@ -1351,0 +1352,84 @@
++    {
++      "device_type": "st7701-rgb",
++      "label": "ST7701 480x480 RGB panel",
++      "summary": "S040 16-bit RGB frame receiver and 9-bit GPIO control.",
++      "detail": "Functional LCD_CAM RGB565 frames, sleep/display commands, type9 bank selection and backlight. RGB pad timing/mux and analog panel behavior are not modeled.",
++      "transport": "gpio_group",
++      "category": "gpio",
++      "config_keys": [
++        {
++          "name": "cs_pin",
++          "ty": "str",
++          "doc": "Active-low control CS, default GPIO39."
++        },
++        {
++          "name": "sck_pin",
++          "ty": "str",
++          "doc": "Rising-edge 9-bit control clock, default GPIO48."
++        },
++        {
++          "name": "mosi_pin",
++          "ty": "str",
++          "doc": "Control data, default GPIO47."
++        },
++        {
++          "name": "backlight_pin",
++          "ty": "str",
++          "doc": "Active-high backlight, default GPIO38."
++        },
++        {
++          "name": "reset_pin",
++          "ty": "str",
++          "doc": "Optional active-low reset. S040 C_I has no MCU reset connection."
++        },
++        {
++          "name": "powered",
++          "ty": "bool",
++          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the part then ignores its bus entirely and reports the dark/idle state it has on a bench."
++        }
++      ],
++      "labs": [],
++      "inputs": []
++    },
++    {
++      "device_type": "gt911",
++      "label": "GT911 touch (polling)",
++      "summary": "480x480 single-contact GT911 register and ready/ack model.",
++      "detail": "16-bit I2C pointer, product ID, configuration storage and one contact. Set x/y then pressed. No reset-address strap, IRQ, gestures or capacitive physics.",
++      "transport": "i2c",
++      "category": "i2c",
++      "config_keys": [
++        {
++          "name": "i2c_address",
++          "ty": "int",
++          "doc": "7-bit address: 0x5d (default) or 0x14."
++        }
++      ],
++      "labs": [],
++      "inputs": [
++        {
++          "key": "x",
++          "label": "Touch X",
++          "unit": "px",
++          "min": 0.0,
++          "max": 479.0,
++          "default": 0.0
++        },
++        {
++          "key": "y",
++          "label": "Touch Y",
++          "unit": "px",
++          "min": 0.0,
++          "max": 479.0,
++          "default": 0.0
++        },
++        {
++          "key": "pressed",
++          "label": "Touch pressed",
++          "unit": "",
++          "min": 0.0,
++          "max": 1.0,
++          "default": 0.0
++        }
++      ]
++    },
+diff --git a/docs/boards/VALIDATION_STATUS.md b/docs/boards/VALIDATION_STATUS.md
+index 653cc8c06e997a9f0e7ce78cf28eaacc290cb49f..d357cf405de862e570106975e0958fca9ae68a41 100644
+--- a/docs/boards/VALIDATION_STATUS.md
++++ b/docs/boards/VALIDATION_STATUS.md
+@@ -20,2 +20,2 @@ The models column is a content digest over everything that board's `models` list
+-| `esp32s3` | 🟢 silicon-verified | 2026-08-09 | `c30213b480a08ada` | ⚠ drift acked 2026-11-10, expires 2026-12-10 (re-capture pending) |
+-| `esp32s3-zero` | 🔵 sim-validated (deep model, no HW diff) | — | `9f24a95586f18dcd` | no silicon capture |
++| `esp32s3` | 🟢 silicon-verified | 2026-08-09 | `a57ba52b2df8e004` | ✖ DRIFT — model 2026-11-10 > capture; RE-CAPTURE |
++| `esp32s3-zero` | 🔵 sim-validated (deep model, no HW diff) | — | `256b0b1bbdb8a6f3` | no silicon capture |
+@@ -31,3 +31,3 @@ The models column is a content digest over everything that board's `models` list
+-| `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `5a3b2e1fb7f72f71` | no silicon capture |
+-| `stm32u5a5zj` | 🔵 sim-validated (deep model, no HW diff) | — | `c5c27385a66787ec` | no silicon capture |
+-| `nucleo-u545re` | 🔵 sim-validated (deep model, no HW diff) | — | `1adce8f05f6296dd` | no silicon capture |
++| `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `dc1964eda4dd3233` | no silicon capture |
++| `stm32u5a5zj` | 🔵 sim-validated (deep model, no HW diff) | — | `c2d4a9ee5f58f59d` | no silicon capture |
++| `nucleo-u545re` | 🔵 sim-validated (deep model, no HW diff) | — | `22576f4ca133ed29` | no silicon capture |
+@@ -152 +152 @@ The models column is a content digest over everything that board's `models` list
+-- Drift status: **⚠ drift acked 2026-11-10, expires 2026-12-10 (re-capture pending)**
++- Drift status: **✖ DRIFT — model 2026-11-10 > capture; RE-CAPTURE**
+diff --git a/docs/boards/esp32-4848s040.md b/docs/boards/esp32-4848s040.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..2e4a5b7e6329864fa78a4a21181aeeab11960499
+--- /dev/null
++++ b/docs/boards/esp32-4848s040.md
+@@ -0,0 +1,102 @@
++# ESP32-4848S040 functional RGB display and touch
++
++The `esp32-4848s040` system profile connects the existing ESP32-S3 CPU, GPIO,
++LCD_CAM, GDMA and I2C models to an ST7701 480 × 480 RGB panel and a GT911
++single-contact touch controller. Firmware drives the devices through their
++registers. The host receives display artifacts and supplies touch inputs
++through the existing generic simulation interfaces.
++
++This is a functional model. It does not establish physical board equivalence,
++calibrated display timing, Arduino/LVGL compatibility, or a production release.
++
++## Modeled behavior
++
++- LCD_CAM RGB565 output consumes guest-memory GDMA descriptors and pixel bytes.
++  The active width and height set the frame boundary. A complete frame raises
++  VSYNC; automatic next-frame mode supports circular descriptor chains.
++- DMA handles odd byte splits, byte/bit order, descriptor ownership and optional
++  owner writeback. Invalid, inaccessible, CPU-owned or malformed descriptors
++  report a descriptor error. Short or absent chains do not complete a frame.
++- ST7701 receives the 9-bit GPIO control stream. DCS reset, sleep, display state
++  and backlight determine the visible framebuffer. Extended command-bank
++  parameters are retained, without analog voltage or gamma simulation.
++- GT911 provides a 16-bit I2C register pointer, identification, configuration
++  storage, ready/count state and one contact. A report remains stable after the
++  guest observes it until the guest writes zero to acknowledge it. Later motion
++  coalesces into the next report. Held-contact refresh uses a fixed 10 ms interval.
++- Existing LCD_CAM i80 behavior uses its original transfer path.
++
++Pixel clock, porches, RGB pin multiplexing and analog panel behavior are outside
++this model. VSYNC represents completed DMA active-area data. GT911 reset/address
++strapping, IRQ delivery, gestures, multiple contacts and EEPROM persistence are
++not modeled. The configured I2C route records the board wiring; it does not
++qualify wrong-pin NACK behavior. Samples and test results do not qualify an
++arbitrary vendor firmware image.
++
++## Wiring and generic interfaces
++
++| Connection | Profile value |
++| --- | --- |
++| ST7701 control CS / SCK / MOSI | GPIO39 / GPIO48 / GPIO47 |
++| Backlight | GPIO38, active high |
++| Touch SDA / SCL | GPIO19 / GPIO45 |
++| GT911 address | `0x5d` |
++| Touch reset and IRQ | Not connected in this polling profile |
++
++The display artifact has ID `display`, kind `framebuffer`, format `rgb565_be`,
++and width/height 480. Metadata exposes `display_on`, `sleeping`, `backlight_on`,
++`powered` and `frames_received`. A dark screen can therefore be distinguished
++from firmware that has not submitted a complete frame.
++
++Touch has component ID `touch`. The existing generic input channels are `x`
++and `y` (0–479 pixels) and `pressed` (0 or 1). Set coordinates before pressing,
++preferably together through `set_inputs`. Change coordinates while pressed for
++motion; set `pressed` to zero for release. This port adds no device-specific
++MCP tool or external GPIO-drive API.
++
++## Reproducible software checks
++
++The complete original Xtensa guest source is
++`tests/fixtures/esp32-4848s040/build_probe.py`. It uses Python's standard library
++to emit real instructions and an ELF. The result is 18,032 bytes, with SHA-256
++`fc5563c16da88dc609c5ada36b17c72a611cc4998675d502572318c1657c419f`.
++
++The guest configures GPIO control, starts RGB DMA, polls VSYNC, reads and
++acknowledges GT911 reports over I2C, and submits a new frame for down/move/up.
++Its first frame has four distinct corner colors. Touch changes pixel zero to
++the X coordinate read by firmware; release restores red. No host framebuffer
++setter paints this image. UART emits `S040 READY` and `S040 TOUCH`.
++
++```sh
++python3 tests/fixtures/esp32-4848s040/build_probe.py
++cargo test -p labwired-core --test esp32s3_rgb_s040 --test esp32s3_lcd_i80_pixels
++cargo test -p labwired-core --features event-scheduler --test esp32s3_rgb_s040 --test esp32s3_lcd_i80_pixels
++cargo test -p labwired-core --lib peripherals::components::gt911
++node tests/fixtures/esp32-4848s040/check_wasm.cjs /path/to/nodejs-engine
++```
++
++The fixture README documents the physical SRAM1 layout and independent source
++references. A separate integration test checks MMU-mapped octal PSRAM reads.
++The Node check records the exact WASM and JavaScript hashes. These checks are
++software qualification; the existing release process and hardware validation
++requirements remain separate.
++
++## Provenance
++
++This is a selective MIT-licensed port from
++[CrispStrobe commit 1843597](https://github.com/CrispStrobe/labwired-core/commit/184359726288d048ef315d4fa4e99f1f737208a0),
++with the generic RGB attachment seam from
++[b627fafc](https://github.com/CrispStrobe/labwired-core/commit/b627fafc4e7bd9d853708b1a62495d7a32fe963b)
++and model registrations from
++[0efad509](https://github.com/CrispStrobe/labwired-core/commit/0efad50949f8ab6c8e008d07b913ad363fd5658c).
++The reviewed source snapshot is `d543a46bba894f9e7e3aa31cdba6feb561b2d08e`.
++Unrelated fork model changes, performance baselines and hardware drift
++acknowledgements are excluded.
++
++Primary implementation references:
++
++- [Arduino_GFX board definition](https://github.com/moononournation/Arduino_GFX/blob/6da54cb7f7ce6fde1ef8435186eb60406ea4caa0/examples/PDQgraphicstest/Arduino_GFX_dev_device.h)
++  and [ST7701 type9 initialization](https://github.com/moononournation/Arduino_GFX/blob/6da54cb7f7ce6fde1ef8435186eb60406ea4caa0/src/display/Arduino_RGB_Display.h).
++- [ESP-IDF 4.4.7 LCD registers](https://github.com/espressif/esp-idf/blob/v4.4.7/components/soc/esp32s3/include/soc/lcd_cam_reg.h)
++  and [RGB driver](https://github.com/espressif/esp-idf/blob/v4.4.7/components/esp_lcd/src/esp_lcd_rgb_panel.c).
++- [Espressif GT911 driver](https://github.com/espressif/esp-bsp/blob/67f41a169401d1f23e827188dd08fb351cb0febe/components/lcd_touch/esp_lcd_touch_gt911/esp_lcd_touch_gt911.c).
+diff --git a/docs/configuration_reference.md b/docs/configuration_reference.md
+index 2f8a7136d2cc77d61f3043978e10afef315f8ff6..d2c1a7200a6fd260d70cbedc5adab3279c98c975 100644
+--- a/docs/configuration_reference.md
++++ b/docs/configuration_reference.md
+@@ -430,0 +431 @@ canonical `type:`; the table below is rendered from that file by
++| `gt911` | I²C | 480x480 single-contact GT911 register and ready/ack model |
+@@ -533,0 +535 @@ canonical `type:`; the table below is rendered from that file by
++| `st7701-rgb` | GPIO | S040 16-bit RGB frame receiver and 9-bit GPIO control |
+diff --git a/tests/fixtures/esp32-4848s040/README.md b/tests/fixtures/esp32-4848s040/README.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..bddfa1515283ff773a6f85f899ff09e579ba64cc
+--- /dev/null
++++ b/tests/fixtures/esp32-4848s040/README.md
+@@ -0,0 +1,43 @@
++# Original S040 Xtensa register probe
++
++`build_probe.py` is the complete MIT-licensed source and minimal instruction/ELF
++encoder for `probe.elf`. Run it with Python 3; it requires no SDK or third-party
++package. Rebuilding must reproduce SHA-256
++`fc5563c16da88dc609c5ada36b17c72a611cc4998675d502572318c1657c419f`
++(18,032 bytes).
++
++The ELF is little-endian EM_XTENSA (94), with entry `0x40379000` and an IRAM
++literal/code segment at `0x40378000`. The 480 row descriptors start at
++`0x3fc90000`; three 960-byte RGB565 row buffers start at `0x3fc92000`. The first
++row is mutable, rows 1…239 repeat the second buffer, and rows 240…479 repeat
++the third. These real descriptors produce the complete 480×480 frame without
++a cache-dependent full-frame SRAM allocation. It has no operating system,
++stack use, ROM calls, library hooks or external binary dependency. Load it as
++an S3 **bare ELF entry**, not a bootable merged flash image.
++
++The generator checks non-overlap using the physical SRAM1 DRAM↔IRAM alias
++delta `0x006f0000`. Its code, descriptors, mailbox and row buffers stay in
++SRAM1 and avoid cache-owned SRAM0/SRAM2 and the ROM stack. The source is
++[Espressif's S3 memory definitions](https://github.com/espressif/esp-idf/blob/fcae32885b0296b32044cb99ecbdc50d98dddb83/components/soc/esp32s3/include/soc/soc.h)
++and the same revision's `components/heap/port/esp32s3/memory_layout.c`.
++
++Firmware bit-bangs ST7701 control on CS39/SCK48/MOSI47, enables BL38, programs
++RGB mode and one-shot GDMA, and polls LCD VSYNC. It then polls the GT911 on I2C0
++at `0x5d`, acknowledges each report, modifies pixel zero using its X coordinate
++(release = red), and submits a new frame. Touch reports are copied at
++`0x3fc91808`; a completed-frame/report counter is at `0x3fc91800`. UART0 emits
++`S040 READY` for the initial frame and `S040 TOUCH` for each redraw.
++
++This probe establishes the finite functional register path and guest redraw.
++It is not Arduino/LVGL, a physical-board capture, a PSRAM allocator, a timing
++benchmark, or evidence for arbitrary vendor firmware compatibility. The
++separate integration test covers MMU-mapped PSRAM frame reads. See
++`docs/boards/esp32-4848s040.md` for the model boundaries and primary references.
++
++`node tests/fixtures/esp32-4848s040/check_wasm.cjs /path/to/nodejs-engine`
++executes the guest through `WasmSimulator.new_from_config`, checks the actual
++RGB display and down/move/up touch path, then checks the UART drain and a fresh
++simulator reset. It uses the existing `set_inputs` API. The optional external
++GPIO-drive API from the fork is outside this port. The engine directory must
++contain matching `labwired_wasm.js` and `labwired_wasm_bg.wasm`; the JSON result
++records both hashes. This functional check does not qualify a release.
+diff --git a/tests/fixtures/esp32-4848s040/build_probe.py b/tests/fixtures/esp32-4848s040/build_probe.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..68eaa0ff9677c50a4cef44d50046b62608f65452
+--- /dev/null
++++ b/tests/fixtures/esp32-4848s040/build_probe.py
+@@ -0,0 +1,197 @@
++#!/usr/bin/env python3
++# SPDX-License-Identifier: MIT
++"""Build an original, independently authored Xtensa MMIO guest (stdlib only).
++
++No Arduino/ROM calls or emulator hooks: real instructions bit-bang ST7701,
++program LCD_CAM/GDMA, poll VSYNC, read GT911 over I2C, acknowledge each report
++and redraw. This is a focused register probe, not a vendor/LVGL boot image.
++"""
++from pathlib import Path
++import hashlib
++import struct
++
++BASE = 0x40378000
++ENTRY = BASE + 0x1000
++DESC = 0x3FC90000
++RESULT = 0x3FC91800
++FRAME = 0x3FC92000
++GPIO = 0x60004000
++LCD = 0x60041000
++DMA = 0x6003F000
++I2C = 0x60013000
++code = bytearray()
++literals = []
++labels = {}
++fixups = []
++
++
++def insn(word):
++    code.extend(word.to_bytes(3, "little"))
++
++
++def imm(reg, value):
++    value &= 0xffffffff
++    if value not in literals:
++        literals.append(value)
++    literal = BASE + literals.index(value) * 4
++    pc = ENTRY + len(code)
++    relative = (literal - ((pc + 3) & ~3)) // 4
++    assert -65536 <= relative < 0
++    insn(1 | reg << 4 | (relative & 0xffff) << 8)
++
++
++def store(reg, base, offset=0, size=4):
++    insn(2 | reg << 4 | base << 8 | {1: 4, 2: 5, 4: 6}[size] << 12 | (offset // size) << 16)
++
++
++def load(reg, base, offset=0, size=4):
++    insn(2 | reg << 4 | base << 8 | {1: 0, 2: 1, 4: 2}[size] << 12 | (offset // size) << 16)
++
++
++def write(address, value):
++    imm(2, address); imm(3, value); store(3, 2)
++
++
++def label(name):
++    labels[name] = len(code)
++
++
++def jump(name, register=None, nonzero=False):
++    fixups.append((len(code), name, register, nonzero))
++    insn(0)
++
++
++def and_reg(dst, left, right):
++    insn(0x100000 | dst << 12 | left << 8 | right << 4)
++
++
++def pin(number, high):
++    assert number >= 32
++    write(GPIO + (0x14 if high else 0x18), 1 << (number - 32))
++
++
++def serial(word):
++    pin(39, False)
++    for bit in range(8, -1, -1):
++        pin(48, False); pin(47, bool(word & (1 << bit))); pin(48, True)
++    pin(48, False); pin(39, True)
++
++
++def uart(message):
++    for byte in message.encode():
++        write(0x60000000, byte)
++
++
++def start_frame():
++    write(LCD + 0x70, 3)
++    write(DMA + 0x80, (DESC & 0xfffff) | (1 << 21))
++    write(LCD + 0x14, (1 << 23) | (1 << 24) | (1 << 27) | (1 << 13))
++
++
++def await_frame(tag):
++    label(tag)
++    imm(2, LCD + 0x68); load(4, 2); imm(5, 1); and_reg(4, 4, 5)
++    jump(tag, 4)
++
++
++def i2c_command(tx, commands):
++    write(I2C + 0x18, (1 << 12) | (1 << 13))
++    for byte in tx:
++        write(I2C + 0x1c, byte)
++    for i in range(8):
++        write(I2C + 0x58 + 4 * i, commands[i] if i < len(commands) else (4 << 11))
++    write(I2C + 4, 0x20b | (1 << 5))
++
++
++# FUNC1 is GPIO, including CS39 whose reset FUNC0 is MTCK. Configure the
++# physical pads before enabling the actual control bank and releasing CS.
++for pin_number in (38, 39, 47, 48):
++    write(0x60009004 + pin_number * 4, 0x1b00)
++write(GPIO + 0x30, sum(1 << (p - 32) for p in (38, 39, 47, 48)))
++pin(39, True); pin(38, True)
++# Exercise the type9 extended-bank select, return to DCS, then sleep-out/on.
++for word in (0xff, 0x177, 0x101, 0x100, 0x100, 0x110,
++             0xff, 0x177, 0x101, 0x100, 0x100, 0x100,
++             0x3a, 0x160, 0x11, 0x29):
++    serial(word)
++# Known S040 totals and active area. Clock is stored, not timing-qualified.
++write(LCD + 0x00, (1 << 31) | (3 << 29) | (20 << 9) | (1 << 6))
++write(LCD + 0x1c, (1 << 31) | (479 << 11) | (517 << 21) | 57)
++write(LCD + 0x20, (547 << 20) | (479 << 8) | 27)
++write(LCD + 0x24, 7 | (1 << 7) | (7 << 16) | (1 << 23))
++write(LCD + 0x64, 1)
++write(DMA + 0xa8, 5)
++# Matrix route for touch: I2C0 SDA=19, SCL=45, both input and output.
++for pin_number, signal in ((19, 90), (45, 89)):
++    write(0x60009004 + pin_number * 4, 0x1b00)
++    write(GPIO + 0x554 + pin_number * 4, signal)
++    write(GPIO + 0x154 + signal * 4, (1 << 7) | pin_number)
++start_frame(); await_frame("first_frame")
++write(RESULT, 1); uart("S040 READY\n")
++
++label("poll")
++i2c_command([0xba, 0x81, 0x4e, 0xbb],
++            [6 << 11, (1 << 11) | 3, 6 << 11, (1 << 11) | 1,
++             (3 << 11) | 9, 2 << 11])
++imm(2, I2C + 0x1c); imm(6, RESULT + 8)
++for offset in range(9):
++    load(4, 2); store(4, 6, offset, 1)
++load(4, 6, 0, 1); imm(5, 0x80); and_reg(4, 4, 5)
++jump("poll", 4)
++# A held contact paints pixel 0 with its actual X coordinate; release is red.
++load(4, 6, 0, 1); imm(5, 1); and_reg(4, 4, 5)
++jump("released", 4)
++load(7, 6, 2, 2); jump("paint")
++label("released"); imm(7, 0xf800)
++label("paint"); imm(2, FRAME); store(7, 2, 0, 2)
++i2c_command([0xba, 0x81, 0x4e, 0], [6 << 11, (1 << 11) | 4, 2 << 11])
++start_frame(); await_frame("redraw")
++imm(2, RESULT); load(4, 2); insn(2 | 4 << 4 | 4 << 8 | 0xc << 12 | 1 << 16); store(4, 2)
++uart("S040 TOUCH\n"); jump("poll")
++
++for offset, name, register, nonzero in fixups:
++    delta = labels[name] - offset - 4
++    if register is None:
++        word = 6 | (delta & 0x3ffff) << 6
++    else:
++        assert -2048 <= delta < 2048
++        word = 0x16 | int(nonzero) << 6 | register << 8 | (delta & 0xfff) << 12
++    code[offset:offset + 3] = word.to_bytes(3, "little")
++pool = b"".join(struct.pack("<I", n) for n in literals)
++assert len(pool) <= 0x1000
++text = pool.ljust(0x1000, b"\0") + code
++# Three actual row buffers produce independent expected color quadrants. The
++# first row is separate so touch changes only pixel zero. The remaining top
++# and bottom rows reuse their respective buffers through real descriptors.
++# This keeps code/data in SRAM1, away from cache-owned SRAM0/SRAM2 and the
++# ROM stack. S3 DRAM->IRAM alias delta is +0x6f0000 (ESP-IDF soc.h).
++row_bytes = 480 * 2
++top = b"".join(struct.pack("<H", 0xf800 if x < 240 else 0x07e0) for x in range(480))
++bottom = b"".join(struct.pack("<H", 0x001f if x < 240 else 0xffff) for x in range(480))
++pixels = top + top + bottom
++descriptors = bytearray()
++for i in range(480):
++    length = row_bytes
++    last = i == 479
++    row = 0 if i == 0 else 1 if i < 240 else 2
++    descriptors += struct.pack("<III", (1 << 31) | (int(last) << 30) | length << 12 | length,
++                               FRAME + row * row_bytes, 0 if last else DESC + (i + 1) * 12)
++# SRAM1 [3fc88000,3fcf0000) aliases IRAM [40378000,403e0000).
++# Guard the physical layout independently of the emulator's RAM allowance.
++assert 0x40378000 <= BASE < ENTRY < 0x403e0000
++assert BASE - 0x6f0000 + len(text) <= DESC
++assert DESC + len(descriptors) <= RESULT
++assert RESULT + 32 <= FRAME
++assert FRAME + len(pixels) <= 0x3fcf0000
++segments = [(BASE, text, 5), (DESC, descriptors, 6), (FRAME, pixels, 6)]
++header_size = 52 + len(segments) * 32
++header = bytearray(b"\x7fELF\x01\x01\x01" + bytes(9))
++header += struct.pack("<HHIIIIIHHHHHH", 2, 94, 1, ENTRY, 52, 0, 0, 52, 32, len(segments), 0, 0, 0)
++body = bytearray()
++for address, data, flags in segments:
++    header += struct.pack("<IIIIIIII", 1, header_size + len(body), address, address, len(data), len(data), flags, 4)
++    body += data
++elf = bytes(header + body)
++destination = Path(__file__).with_name("probe.elf")
++destination.write_bytes(elf)
++print(f"{hashlib.sha256(elf).hexdigest()}  {destination.name} ({len(elf)} bytes)")
+diff --git a/tests/fixtures/esp32-4848s040/probe.elf b/tests/fixtures/esp32-4848s040/probe.elf
+new file mode 100644
+index 0000000000000000000000000000000000000000..7a140247433c920b9b66b5cfdd74342748078a07
+GIT binary patch
+literal 18032
+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
+E0ZuW0)&Kwi
+
+literal 0
+HcmV?d00001
+
+diff --git a/tests/fixtures/esp32-4848s040/check_wasm.cjs b/tests/fixtures/esp32-4848s040/check_wasm.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..e47cd972d2bd5aad6309c801e3fb22eb02568647
+--- /dev/null
++++ b/tests/fixtures/esp32-4848s040/check_wasm.cjs
+@@ -0,0 +1,121 @@
++// SPDX-License-Identifier: MIT
++// Functional software qualification; no release or physical-board claim.
++// The source-owned guest, not this host, initializes and paints the panel.
++const assert = require('node:assert/strict');
++const fs = require('node:fs');
++const path = require('node:path');
++const crypto = require('node:crypto');
++const repo = path.resolve(__dirname, '../../..');
++assert.ok(process.argv[2], 'usage: node check_wasm.cjs /path/to/nodejs-engine');
++const engine = path.resolve(process.argv[2]);
++const sha256 = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
++const read = name => fs.readFileSync(path.join(repo, name));
++const plain = value => value instanceof Map
++  ? Object.fromEntries([...value].map(([key, value]) => [key, plain(value)]))
++  : Array.isArray(value) ? value.map(plain) : value;
++const wasm = require(path.join(engine, 'labwired_wasm.js'));
++const firmware = read('tests/fixtures/esp32-4848s040/probe.elf');
++assert.equal(sha256(firmware), 'fc5563c16da88dc609c5ada36b17c72a611cc4998675d502572318c1657c419f');
++const system = read('configs/systems/esp32-4848s040.yaml');
++const chip = read('configs/chips/esp32s3.yaml');
++const blobs = {
++  esp32s3_irom: new Uint8Array(read('crates/core/roms/esp32s3/esp32s3_rom.bin')),
++  esp32s3_drom: new Uint8Array(read('crates/core/roms/esp32s3/esp32s3_drom.bin')),
++};
++const report = {
++  qualification: 'functional software test only; no release qualification, hardware capture, physical timing, or arbitrary vendor firmware claim',
++  engine: Object.fromEntries(['labwired_wasm.js', 'labwired_wasm_bg.wasm'].map(name => {
++    const bytes = fs.readFileSync(path.join(engine, name));
++    return [name, {bytes: bytes.length, sha256: sha256(bytes)}];
++  })),
++  fixture: {bytes: firmware.length, sha256: sha256(firmware)},
++  systemSha256: sha256(system), chipSha256: sha256(chip),
++  roms: Object.fromEntries(Object.entries(blobs).map(([name, bytes]) => [name, {bytes: bytes.length, sha256: sha256(bytes)}])),
++  steps: [],
++};
++let sim;
++let uart = '';
++let reportedCycles = 0;
++const start = performance.now();
++const word = at => Buffer.from(sim.read_memory(at, 4)).readUInt32LE();
++const display = () => {
++  const d = plain(sim.get_display('display', true));
++  assert.equal(d.id, 'display');
++  assert.equal(d.kind, 'framebuffer');
++  assert.equal(d.format, 'rgb565_be');
++  assert.equal(d.width, 480);
++  assert.equal(d.height, 480);
++  d.meta = plain(d.meta);
++  d.bytes = Buffer.from(d.bytes);
++  assert.equal(d.bytes.length, 480 * 480 * 2);
++  return d;
++};
++const until = count => {
++  const limit = reportedCycles + 20_000_000;
++  while (word(0x3fc91800) < count) {
++    assert.ok(reportedCycles < limit, 'guest frame counter bound');
++    assert.ok(performance.now() - start < 120_000, 'wall-time bound');
++    const cycles = sim.step_batch(1000);
++    assert.ok(cycles > 0, 'guest must make progress');
++    reportedCycles += cycles;
++    uart += Buffer.from(sim.drain_uart_output()).toString();
++  }
++  const d = display();
++  report.steps.push({counter: word(0x3fc91800), reportedCycles, pc: `0x${sim.get_pc().toString(16)}`,
++    frameSha256: sha256(d.bytes), pixel0: d.bytes.readUInt16BE(0), meta: d.meta});
++  return d;
++};
++try {
++  sim = wasm.WasmSimulator.new_from_config(system.toString(), chip.toString(), new Uint8Array(firmware), blobs);
++  report.inputs = plain(sim.list_inputs());
++  for (const key of ['x', 'y', 'pressed']) {
++    assert.ok(report.inputs.some(i => i.peripheral === 'touch' && i.key === key));
++  }
++  const initial = until(1);
++  for (const [i, color] of [[0,0xf800],[479,0x07e0],[479*480,0x001f],[480*480-1,0xffff]]) {
++    assert.equal(initial.bytes.readUInt16BE(i*2), color, `corner ${i}`);
++  }
++  assert.equal(initial.meta.frames_received, 1);
++  assert.equal(initial.meta.backlight_on, true);
++  assert.equal(initial.meta.sleeping, false);
++  sim.set_inputs([
++    {component:'touch', channel:'x', value:123},
++    {component:'touch', channel:'y', value:456},
++    {component:'touch', channel:'pressed', value:1},
++  ]);
++  assert.equal(until(2).bytes.readUInt16BE(0), 123);
++  sim.set_inputs([
++    {component:'touch', channel:'x', value:321},
++    {component:'touch', channel:'y', value:47},
++  ]);
++  assert.equal(until(3).bytes.readUInt16BE(0), 321);
++  sim.set_inputs([{component:'touch', channel:'pressed', value:0}]);
++  assert.equal(until(4).bytes.readUInt16BE(0), 0xf800);
++  // Functional RGB completes before the first 115200-baud character shifts.
++  // Let the actual UART FIFO drain; do not treat a FIFO write as sent output.
++  const uartLimit = reportedCycles + 2_000_000;
++  while (!(uart.includes('S040 READY') && uart.includes('S040 TOUCH')) && reportedCycles < uartLimit) {
++    reportedCycles += sim.step_batch(10_000);
++    uart += Buffer.from(sim.drain_uart_output()).toString();
++  }
++  assert.ok(uart.includes('S040 READY'));
++  assert.ok(uart.includes('S040 TOUCH'));
++
++  sim.free();
++  sim = null;
++  sim = wasm.WasmSimulator.new_from_config(system.toString(), chip.toString(), new Uint8Array(firmware), blobs);
++  assert.equal(display().meta.frames_received, 0);
++  assert.equal(display().meta.backlight_on, false);
++  assert.equal(until(1).bytes.readUInt16BE(0), 0xf800);
++  report.freshConstructorReset = true;
++  report.passed = true;
++} catch (error) {
++  report.passed = false;
++  report.error = error.stack || String(error);
++  process.exitCode = 1;
++} finally {
++  report.uart = uart;
++  report.elapsedWallMs = performance.now() - start;
++  if (sim) sim.free();
++  console.log(JSON.stringify(report, null, 2));
++}

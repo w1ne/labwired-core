@@ -1,0 +1,703 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-11",
+  "qualification": "Functional software model; inactive review artifact pending explicit ESP32-S3 source-content drift acknowledgement. No fresh hardware capture or release qualification.",
+  "integration_base": "b82bc13b3737447fd32e6ade1725d8dd34624623",
+  "candidate_git_tree": "8eeba279b0bc36aef421a5ac93f24a11ea64df77",
+  "patch": {
+    "path": "esp32s3-rgb-touch.patch",
+    "sha256": "8edd9c3314cf1de517e2546f8b8594034d8af6893aabcee6ea29fe353154394f",
+    "bytes": 92395,
+    "format": "complete binary Git diff, zero context; apply with --unidiff-zero",
+    "replayed_tree": "8eeba279b0bc36aef421a5ac93f24a11ea64df77",
+    "exact_replay": true
+  },
+  "provenance": {
+    "primary_commit": "184359726288d048ef315d4fa4e99f1f737208a0",
+    "reviewed_snapshot": "d543a46bba894f9e7e3aa31cdba6feb561b2d08e",
+    "generic_rgb_attach_commit": "b627fafc4e7bd9d853708b1a62495d7a32fe963b",
+    "selected_kit_registration_commit": "0efad50949f8ab6c8e008d07b913ad363fd5658c",
+    "license": "MIT",
+    "co_author": "CrispStrobe <154636388+CrispStrobe@users.noreply.github.com>"
+  },
+  "qualified_source_sha256": {
+    "configs/systems/esp32-4848s040.yaml": "671902a0ddbcb24c39a30246290eca93bf88a5496b513f83b92f662ce65a43fc",
+    "crates/core/src/peripheral.rs": "4c8911b3572489eb1b52477112d36443a145bc2c8a8f0a9e1d32dcc12799005d",
+    "crates/core/src/peripherals/components/gt911.rs": "e9086ada8c177fd2ee92ce5e8fb7fa4bdf95e315aa462f925ea73a14e919a70d",
+    "crates/core/src/peripherals/components/mod.rs": "1ccbf753aa79911e24206924057edd76912fed36fee0df4a78ab2a3ebc2d3973",
+    "crates/core/src/peripherals/components/rgb_panel.rs": "b2d57e3c133b569ffc2411af36ee779f8a7e802d12b96f30b2982dc25e875704",
+    "crates/core/src/peripherals/components/st7701.rs": "1294dfd621944bbf2e35eb7678ace49aa53983d2864cd0f3e076e4afe4827b97",
+    "crates/core/src/peripherals/esp32s3/gdma.rs": "0f752a1f51cbdd49eeabef6aee16f317bf0a2bbf364af3d4bdc513138e039bd6",
+    "crates/core/src/peripherals/esp32s3/lcd_cam.rs": "eacc47aad919a3b3ee3dd3544767a5a5793433bb5cd9f4d4bf3705a146d4eed8",
+    "crates/core/src/peripherals/kit/registry.rs": "3ec287be74ad10fa3092b7b92ac11d52af7f4cc6f04d7e60b4d490e2e0b776db",
+    "crates/core/tests/esp32s3_rgb_s040.rs": "58cb16cefc21a236872f7e02478236016319ef1f074c32043a1166a5349ef617",
+    "crates/core/tests/fixtures/peripherals/manifest.json": "ca5ced5512ad0420042efd87b471c68a60dc6c4a399ee6c7b058c74585503b66",
+    "docs/boards/VALIDATION_STATUS.md": "b00b842268acd87c540bdc042dacab911b277bbd876fa6bedceeb2c3f709146b",
+    "docs/boards/esp32-4848s040.md": "2a9e83cc38fa8c7c2eb20b7f4ede33df5a520ed417f9e3e95c461bcdda97ec0d",
+    "docs/configuration_reference.md": "3b27c12e4f146d61e68a12a73715621e7d7ebeef630f47d503a0c3f3a4b6e496",
+    "tests/fixtures/esp32-4848s040/README.md": "f4b8ed0f5116b9e9fc5969a5cf5c282ac9657707c084f840246d793a09854d86",
+    "tests/fixtures/esp32-4848s040/build_probe.py": "9188ebe1a280ee95ae490a6534a7255c28ea5ba6bd9700bea7cdcdfcf7228508",
+    "tests/fixtures/esp32-4848s040/check_wasm.cjs": "f280622f0efae94255b90ad6331bf00db26d9f3deebc200c5edff2cd59076103",
+    "tests/fixtures/esp32-4848s040/probe.elf": "fc5563c16da88dc609c5ada36b17c72a611cc4998675d502572318c1657c419f"
+  },
+  "toolchain": {
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+    "node": "v22.23.4",
+    "profile": "Repository dev/test profile, debug info disabled; two build jobs, incremental disabled. WASM uses --dev --no-opt."
+  },
+  "source_built_firmware": {
+    "command": [
+      "python3",
+      "tests/fixtures/esp32-4848s040/build_probe.py"
+    ],
+    "exit_code": 0,
+    "byte_identical": true,
+    "bytes": 18032,
+    "sha256": "fc5563c16da88dc609c5ada36b17c72a611cc4998675d502572318c1657c419f",
+    "source_sha256": "9188ebe1a280ee95ae490a6534a7255c28ea5ba6bd9700bea7cdcdfcf7228508",
+    "stdout": "fc5563c16da88dc609c5ada36b17c72a611cc4998675d502572318c1657c419f  probe.elf (18032 bytes)\n",
+    "python": "3.12.3"
+  },
+  "runs": [
+    {
+      "name": "fmt-regression",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all"
+      ],
+      "exit_code": 0,
+      "expected_exit": 0,
+      "seconds": 14.39,
+      "expectation_met": true,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "result": "passed",
+      "test_results": []
+    },
+    {
+      "name": "transition-regression-before-fix",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "labwired-core",
+        "--test",
+        "esp32s3_rgb_s040",
+        "rgb_reset_and_mode_switch_cannot_retire_a_new_i80_transaction",
+        "--",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "expected_exit": 101,
+      "seconds": 92.71,
+      "required_output": "LCD_RESET must retire the previous mode",
+      "expectation_met": true,
+      "log_sha256": "ac2e0275eb945c12eda667b9eebb1c58d2eca8bcc1cc442c47454f4b6c86e30b",
+      "result": "expected_failure_observed",
+      "test_results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s"
+      ],
+      "observed_failure": [
+        "assertion `left == right` failed: LCD_RESET must retire the previous mode"
+      ]
+    },
+    {
+      "name": "fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all"
+      ],
+      "exit_code": 0,
+      "expected_exit": 0,
+      "seconds": 9.31,
+      "expectation_met": true,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "result": "passed",
+      "test_results": []
+    },
+    {
+      "name": "default-rgb-i80",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "labwired-core",
+        "--test",
+        "esp32s3_rgb_s040",
+        "--test",
+        "esp32s3_lcd_i80_pixels",
+        "--",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "expected_exit": 0,
+      "seconds": 73.83,
+      "expectation_met": true,
+      "log_sha256": "7e89a7775dc3e50bc3433c97e48f832ebc6ac1dc930ba67bbe3f20d3bd30ed1b",
+      "result": "passed",
+      "test_results": [
+        "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s",
+        "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.65s"
+      ]
+    },
+    {
+      "name": "scheduler-rgb-i80",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "labwired-core",
+        "--features",
+        "event-scheduler",
+        "--test",
+        "esp32s3_rgb_s040",
+        "--test",
+        "esp32s3_lcd_i80_pixels",
+        "--",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "expected_exit": 0,
+      "seconds": 84.47,
+      "expectation_met": true,
+      "log_sha256": "dc66a2a0392f2b4860d814517bb2005838d41db16e68016f40b2d920889c5827",
+      "result": "passed",
+      "test_results": [
+        "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s",
+        "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.13s"
+      ]
+    },
+    {
+      "name": "default-gt911",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "labwired-core",
+        "--lib",
+        "gt911",
+        "--",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "expected_exit": 0,
+      "seconds": 335.05,
+      "expectation_met": true,
+      "log_sha256": "dfcb462e5d67b7030d46c0e452a0075db45a3eaafb1914142d7d56ad83025441",
+      "result": "passed",
+      "test_results": [
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 5596 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "name": "rgb-disabled",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "labwired-core",
+        "--test",
+        "esp32s3_rgb_s040",
+        "owned_xtensa_guest_reads_gt911_and_redraws_on_down_move_up",
+        "--",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "expected_exit": 101,
+      "seconds": 73.07,
+      "required_output": "guest did not produce report 1",
+      "path": "crates/core/src/peripherals/esp32s3/lcd_cam.rs",
+      "original_sha256": "eacc47aad919a3b3ee3dd3544767a5a5793433bb5cd9f4d4bf3705a146d4eed8",
+      "mutation_from": "if self.rgb_frame_pending {",
+      "mutation_to": "if false && self.rgb_frame_pending {",
+      "restored": true,
+      "expectation_met": true,
+      "log_sha256": "7f7addc0bbc36c7bf357059e891d0aa1f1a7859dd4c26258bd3fe4209eab0781",
+      "result": "expected_failure_observed",
+      "test_results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 8 filtered out; finished in 1.15s"
+      ],
+      "observed_failure": [
+        "guest did not produce report 1; PC=0x4037a1b2, result=0, i2c raw=0x2"
+      ]
+    },
+    {
+      "name": "touch-disabled",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "labwired-core",
+        "--test",
+        "esp32s3_rgb_s040",
+        "owned_xtensa_guest_reads_gt911_and_redraws_on_down_move_up",
+        "--",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "expected_exit": 101,
+      "seconds": 71.62,
+      "required_output": "guest did not produce report 2",
+      "path": "crates/core/src/peripherals/components/gt911.rs",
+      "original_sha256": "e9086ada8c177fd2ee92ce5e8fb7fa4bdf95e315aa462f925ea73a14e919a70d",
+      "mutation_from": "\"pressed\" => self.contact.pressed = value >= 0.5,",
+      "mutation_to": "\"pressed\" => self.contact.pressed = false,",
+      "restored": true,
+      "expectation_met": true,
+      "log_sha256": "4fce867c7d6c15cf5200afa28064c9d01226d31d97ad0b63d8160d3116ab2dcb",
+      "result": "expected_failure_observed",
+      "test_results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 8 filtered out; finished in 1.21s"
+      ],
+      "observed_failure": [
+        "guest did not produce report 2; PC=0x4037a2a2, result=1, i2c raw=0x82"
+      ]
+    },
+    {
+      "name": "restored-guest",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "labwired-core",
+        "--test",
+        "esp32s3_rgb_s040",
+        "owned_xtensa_guest_reads_gt911_and_redraws_on_down_move_up",
+        "--",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "expected_exit": 0,
+      "seconds": 5.79,
+      "expectation_met": true,
+      "log_sha256": "45fad6039a12958a909bffc89d00eb5d286ab56aae67d9f6d2cced40ff829aa9",
+      "result": "passed",
+      "test_results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.92s"
+      ]
+    },
+    {
+      "name": "wasm-node-build",
+      "command": [
+        "wasm-pack",
+        "build",
+        "crates/wasm",
+        "--dev",
+        "--target",
+        "nodejs",
+        "--out-dir",
+        "/data/labwired-rgb-touch-20261111/wasm-node-final",
+        "--no-opt"
+      ],
+      "exit_code": 0,
+      "expected_exit": 0,
+      "seconds": 107.27,
+      "expectation_met": true,
+      "log_sha256": "6c980cb012910bbafa2e544ea86b36fce10919b3906336d42f593d0e80d49a30",
+      "result": "passed",
+      "test_results": []
+    },
+    {
+      "name": "wasm-node-guest",
+      "command": [
+        "node",
+        "tests/fixtures/esp32-4848s040/check_wasm.cjs",
+        "/data/labwired-rgb-touch-20261111/wasm-node-final"
+      ],
+      "exit_code": 0,
+      "expected_exit": 0,
+      "seconds": 3.43,
+      "expectation_met": true,
+      "log_sha256": "e6f2b4d9529fa45af26cbe58e9f0d48e5df83b9d79d886c18ec86e897d0c4672",
+      "result": "passed",
+      "test_results": []
+    },
+    {
+      "name": "kit-manifest-generate",
+      "command": [
+        "cargo",
+        "run",
+        "-p",
+        "labwired-cli",
+        "--bin",
+        "gen-peripherals-manifest",
+        "--",
+        "--out",
+        "crates/core/tests/fixtures/peripherals/manifest.json"
+      ],
+      "exit_code": 0,
+      "expected_exit": 0,
+      "seconds": 100.23,
+      "expectation_met": true,
+      "log_sha256": "7096b2b2de06bf2e26f0cef52120b7a21a0cdac69731e24976bc91f09680d6a8",
+      "result": "passed",
+      "test_results": []
+    },
+    {
+      "name": "kit-catalog-generate",
+      "command": [
+        "python3",
+        "scripts/ci/device_catalog_doc.py",
+        "--write"
+      ],
+      "exit_code": 0,
+      "expected_exit": 0,
+      "seconds": 0.06,
+      "expectation_met": true,
+      "log_sha256": "d2f14d9dfdbb5f62a07d363a2f65a17a0c0644f0170d7e43178a32de6f3f0557",
+      "result": "passed",
+      "test_results": []
+    },
+    {
+      "name": "kit-gate",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "labwired-core",
+        "--test",
+        "peripheral_kit_gate",
+        "--",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "expected_exit": 0,
+      "seconds": 1.42,
+      "expectation_met": true,
+      "log_sha256": "37658ebc6d8b70b7481a3c5fcd3ea1b8f25f6774b0d0e91623f3a525a55e9fbd",
+      "result": "passed",
+      "test_results": [
+        "test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s"
+      ]
+    },
+    {
+      "name": "kit-catalog-check",
+      "command": [
+        "python3",
+        "scripts/ci/device_catalog_doc.py",
+        "--check"
+      ],
+      "exit_code": 0,
+      "expected_exit": 0,
+      "seconds": 0.05,
+      "expectation_met": true,
+      "log_sha256": "482dac293a4e5c587947e878fc91e7303b3c6608f712cc6bf9c89151f5c11178",
+      "result": "passed",
+      "test_results": []
+    },
+    {
+      "name": "model-ratings-check",
+      "command": [
+        "python3",
+        "scripts/generate_model_ratings.py",
+        "--check"
+      ],
+      "exit_code": 0,
+      "expected_exit": 0,
+      "seconds": 0.22,
+      "expectation_met": true,
+      "log_sha256": "ea0608bc26bccb3b8251d4ffe56815946be2322544f87d13b6c102ebc4fc69c1",
+      "result": "passed",
+      "test_results": []
+    },
+    {
+      "name": "exercise-matrix-check",
+      "command": [
+        "python3",
+        "scripts/generate_firmware_exercise_matrix.py",
+        "--check"
+      ],
+      "exit_code": 0,
+      "expected_exit": 0,
+      "seconds": 0.21,
+      "expectation_met": true,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "result": "passed",
+      "test_results": []
+    },
+    {
+      "name": "s3-reset-capture-replay",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "labwired-hw-oracle",
+        "--test",
+        "esp32s3_reset_conformance",
+        "--",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "expected_exit": 0,
+      "seconds": 126.59,
+      "expectation_met": true,
+      "log_sha256": "b81ebabdb42378359d78a0d7a4ac190b74066bc72eae351cd4650ed737d0eb2e",
+      "result": "passed",
+      "test_results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "name": "normal-precommit",
+      "command": [
+        "bash",
+        "scripts/pre-commit.sh"
+      ],
+      "exit_code": 1,
+      "expected_exit": 1,
+      "seconds": 326.29,
+      "required_output": "no covering drift_ack):\n  esp32s3\n",
+      "expectation_met": true,
+      "log_sha256": "036f21990de28aac3a6e9475181631f0249ac00cf0a883e9d1210ab8f023f081",
+      "result": "blocked_on_human_acknowledgement",
+      "test_results": []
+    }
+  ],
+  "wasm": {
+    "qualification": "functional software test only; no release qualification, hardware capture, physical timing, or arbitrary vendor firmware claim",
+    "engine": {
+      "labwired_wasm.js": {
+        "bytes": 184177,
+        "sha256": "2c84352644aa7ed51809c2ebdc7921a22a59c56dc58e0187cae93e245029b090"
+      },
+      "labwired_wasm_bg.wasm": {
+        "bytes": 29932182,
+        "sha256": "36538be314235ad77b8e66d1c549a67245520ebd2b9f08ac6116dc21c26c80f8"
+      }
+    },
+    "fixture": {
+      "bytes": 18032,
+      "sha256": "fc5563c16da88dc609c5ada36b17c72a611cc4998675d502572318c1657c419f"
+    },
+    "systemSha256": "671902a0ddbcb24c39a30246290eca93bf88a5496b513f83b92f662ce65a43fc",
+    "chipSha256": "64e513983592375093e9bf28327a09a4ab404aebecbe1d44a89d23be4081e0f6",
+    "roms": {
+      "esp32s3_irom": {
+        "bytes": 393216,
+        "sha256": "9f2ba6ac2b66ced6e3b31a333d7a299aca1fa4b88bbe56f71d4856bd16e8bc51"
+      },
+      "esp32s3_drom": {
+        "bytes": 131072,
+        "sha256": "cc7abaafec6589b801d9f5df098197f264dda9d979e5885900015e332eae616d"
+      }
+    },
+    "steps": [
+      {
+        "counter": 1,
+        "reportedCycles": 2000,
+        "pc": "0x4037a239",
+        "frameSha256": "651ec4795035153a3d8219a53acee12493708c5ed5a4fd05f5798aacbea31dad",
+        "pixel0": 63488,
+        "meta": {
+          "backlight_on": true,
+          "bus": "rgb-16bit-functional",
+          "colmod": 96,
+          "display_on": true,
+          "format": "rgb565_be",
+          "frames_received": 1,
+          "generation": "10830184674447682853",
+          "h": 480,
+          "painted_bytes": 345600,
+          "powered": true,
+          "sleeping": false,
+          "total_bytes": 460800,
+          "w": 480
+        }
+      },
+      {
+        "counter": 2,
+        "reportedCycles": 3000,
+        "pc": "0x4037a2e4",
+        "frameSha256": "404106a621420fcb12aa267fa57678aa910f018066241a7075693f624f8c6626",
+        "pixel0": 123,
+        "meta": {
+          "backlight_on": true,
+          "bus": "rgb-16bit-functional",
+          "colmod": 96,
+          "display_on": true,
+          "format": "rgb565_be",
+          "frames_received": 2,
+          "generation": "8864619860887625012",
+          "h": 480,
+          "painted_bytes": 345600,
+          "powered": true,
+          "sleeping": false,
+          "total_bytes": 460800,
+          "w": 480
+        }
+      },
+      {
+        "counter": 3,
+        "reportedCycles": 4000,
+        "pc": "0x4037a2c9",
+        "frameSha256": "43afe838077d8131fd961ab0ba91f373278237f7b50730633938ad9a665a46fa",
+        "pixel0": 321,
+        "meta": {
+          "backlight_on": true,
+          "bus": "rgb-16bit-functional",
+          "colmod": 96,
+          "display_on": true,
+          "format": "rgb565_be",
+          "frames_received": 3,
+          "generation": "15577878468128510375",
+          "h": 480,
+          "painted_bytes": 345601,
+          "powered": true,
+          "sleeping": false,
+          "total_bytes": 460800,
+          "w": 480
+        }
+      },
+      {
+        "counter": 4,
+        "reportedCycles": 5000,
+        "pc": "0x4037a2b1",
+        "frameSha256": "651ec4795035153a3d8219a53acee12493708c5ed5a4fd05f5798aacbea31dad",
+        "pixel0": 63488,
+        "meta": {
+          "backlight_on": true,
+          "bus": "rgb-16bit-functional",
+          "colmod": 96,
+          "display_on": true,
+          "format": "rgb565_be",
+          "frames_received": 4,
+          "generation": "10830184674447682853",
+          "h": 480,
+          "painted_bytes": 345600,
+          "powered": true,
+          "sleeping": false,
+          "total_bytes": 460800,
+          "w": 480
+        }
+      },
+      {
+        "counter": 1,
+        "reportedCycles": 447000,
+        "pc": "0x4037a239",
+        "frameSha256": "651ec4795035153a3d8219a53acee12493708c5ed5a4fd05f5798aacbea31dad",
+        "pixel0": 63488,
+        "meta": {
+          "backlight_on": true,
+          "bus": "rgb-16bit-functional",
+          "colmod": 96,
+          "display_on": true,
+          "format": "rgb565_be",
+          "frames_received": 1,
+          "generation": "10830184674447682853",
+          "h": 480,
+          "painted_bytes": 345600,
+          "powered": true,
+          "sleeping": false,
+          "total_bytes": 460800,
+          "w": 480
+        }
+      }
+    ],
+    "inputs": [
+      {
+        "key": "x",
+        "label": "Touch X",
+        "max": 479,
+        "min": 0,
+        "peripheral": "touch",
+        "unit": "px"
+      },
+      {
+        "key": "y",
+        "label": "Touch Y",
+        "max": 479,
+        "min": 0,
+        "peripheral": "touch",
+        "unit": "px"
+      },
+      {
+        "key": "pressed",
+        "label": "Touch pressed",
+        "max": 1,
+        "min": 0,
+        "peripheral": "touch",
+        "unit": ""
+      }
+    ],
+    "freshConstructorReset": true,
+    "passed": true,
+    "uart": "S040 READY\nS040 TOUCH",
+    "elapsedWallMs": 3213.844082
+  },
+  "silicon_gate": {
+    "board": "esp32s3",
+    "new_model_digest": "a57ba52b2df8e004eb49b78bf7973e0e58782b9601b2b9417bdc452857d1f283",
+    "recorded_ack_digest": "c30213b480a08adac0801cc2ebe2947169beaadcd9bd2d11b8cfd601c1286102",
+    "recorded_ack_date": "2026-11-10",
+    "last_capture": "2026-08-09",
+    "capture_scope": "Existing nine-register reset-state anchor only; offline replay passed. No RGB/touch behavioral hardware capture.",
+    "normal_hook_result": "fmt, all-target clippy, derived host cargo check pass; only esp32s3 drift gate fails.",
+    "hardware_access": "None. HIL inventory marks S3 planned; work-1 had no connected S3 USB device or serial path and no OpenOCD/esptool. No live capture command was run.",
+    "acknowledgement_changed": false,
+    "hardware_capture_changed": false
+  },
+  "acknowledgement_rule": {
+    "locations": [
+      {
+        "path": "validation/manifest.yaml",
+        "section": "DRIFT and AN ACK LAPSES header; boards[id=esp32s3].drift_ack and drift_ack_digest"
+      },
+      {
+        "path": "scripts/generate_validation_status.py",
+        "symbol": "evaluate, ACK_TTL_DAYS, write_ack_digests"
+      },
+      {
+        "path": "scripts/pre-commit.sh",
+        "section": "Regenerating board validation status + drift gate"
+      }
+    ],
+    "requirement": "A human must explicitly accept the exact changed source-content digest and tracked recapture gap, or a real live capture must refresh the silicon evidence. Software tests do not provide that acknowledgement. An acknowledgement normally expires after 30 days; the owner must choose any recapture commitment.",
+    "decision": "Pending; no new owner acknowledgement, expiry extension, or recapture commitment has been recorded."
+  },
+  "proposed_recapture_followup": {
+    "status": "Proposal only; no owner or date assigned and no commitment made on the user behalf.",
+    "prerequisites": [
+      "Connect and identify an ESP32-S3 USB-JTAG board; inspect its current use before a reset/halt.",
+      "Use Espressif OpenOCD with its esp32s3-builtin target and the observed board serial."
+    ],
+    "existing_anchor": [
+      "Run scripts/hw-oracle/esp32s3_capture_estate.sh with OOCD_HOME and ESP32S3_SERIAL set to the observed tool/board, writing a new capture directory.",
+      "Retain timestamp, board identity, OpenOCD version and capture logs; compare the same nine curated reset registers and document discrepancies.",
+      "Only after a real capture, update the esp32s3 silicon capture date/result/model digest and regenerate status."
+    ],
+    "new_behavior": "The existing reset sweep cannot qualify RGB or touch. A separate S040 hardware workload/capture must exercise LCD_CAM/GDMA frame completion and descriptor ownership plus GT911 status/coordinates/acknowledgement before claiming behavioral hardware parity."
+  },
+  "inventory": {
+    "system_profile": "configs/systems/esp32-4848s040.yaml",
+    "existing_chip": "configs/chips/esp32s3.yaml",
+    "new_chip_alias": false,
+    "performance_baseline_or_waiver_added": false,
+    "generated_kit_types": [
+      "st7701-rgb",
+      "gt911"
+    ],
+    "new_device_specific_mcp_api": false,
+    "optional_external_gpio_api_ported": false
+  },
+  "review": {
+    "independent_review": "RGB, GT911, ST7701, strict DMA walk and existing I2C-clock path reviewed. RGB/i80 reset defect reproduced, corrected and reviewed; no further code changes requested.",
+    "upstream_adjustments": [
+      "Additional owner/writeback, early-EOF, byte/bit-order and malformed/unmapped/unaligned DMA checks.",
+      "LCD_RESET clears transfer state independently of selected RGB/i80 mode; fresh i80 start discards stale RGB completion.",
+      "Optional external GPIO-drive API and unrelated unbonded-pad tests excluded."
+    ]
+  },
+  "limitations": [
+    "VSYNC is functional active-area DMA completion; no calibrated pixel clock, porch timing or RGB pin-mux waveform.",
+    "GT911 models one contact and a fixed 10 ms held-contact refresh; no IRQ/reset strap, gestures, multiple contacts or EEPROM persistence.",
+    "I2C pin route metadata does not qualify wrong-pin NACK behavior.",
+    "Owned bare ELF does not qualify arbitrary Arduino/LVGL firmware.",
+    "Node/WASM engine is a fresh dev test build, not a browser UI or release bundle.",
+    "Active source remains uncommitted because the normal hook requires a human acknowledgement of the exact new S3 digest."
+  ]
+}
