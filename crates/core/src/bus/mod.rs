@@ -59,7 +59,9 @@ pub(crate) use tick::reconcile_nvic_level;
 
 pub use can_devices::*;
 pub use observed_device::ObservedDevice;
-pub use resident_device::{BusResidentDevice, DevicePinPad, DevicePins};
+pub use resident_device::{
+    BusResidentDevice, DeviceOutputObserverBinding, DevicePinPad, DevicePins,
+};
 
 pub use bus_trace::{new_log, BusPayload, BusTraceEvent, BusTraceLog, I2cSym};
 pub(crate) use ina219_circuit::CircuitIna219Lookup;
@@ -761,6 +763,11 @@ pub struct SystemBus {
     ///
     /// [`service_device_pin_drives`]: Self::service_device_pin_drives
     pub(crate) device_pin_pads: Vec<DevicePinPad>,
+    /// Direct external-device output links. These are used when one off-chip
+    /// part drives another without traversing an MCU pad (for example PCF8574
+    /// P0 -> TB6612 AIN1). Empty by default; serviced by the same queued-output
+    /// pass as [`device_pin_pads`](Self::device_pin_pads).
+    pub(crate) device_output_observers: Vec<DeviceOutputObserverBinding>,
     /// Off-chip models the bus holds ONLY so something can read them back — the
     /// WS2812 strip, the hobby servo, the STEP/DIR and unipolar steppers, the
     /// H-bridge channel, the parallel ILI9341 panel. Each is driven by a GPIO

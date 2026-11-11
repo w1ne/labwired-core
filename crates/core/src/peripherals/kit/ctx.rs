@@ -369,6 +369,32 @@ impl<'a> AttachCtx<'a> {
         SystemBus::install_gpio_observer(self.bus, observer)
     }
 
+    /// Bind one named output role of another external device directly to an
+    /// observer input. The source label is emitted by the compiler as
+    /// `device-output://<device-id>/<role>`; no MCU GPIO is allocated or
+    /// touched. This is the proper path for an I/O expander driving an H-bridge,
+    /// latch, or other off-chip control input.
+    pub fn bind_device_output_observer<T>(
+        &mut self,
+        source_device_id: impl Into<String>,
+        source_role: impl Into<String>,
+        observer: std::sync::Arc<T>,
+        observer_pin: u8,
+    ) where
+        T: crate::peripherals::device::GpioObserver + 'static,
+    {
+        let observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver> = observer;
+        self.bus
+            .device_output_observers
+            .push(crate::bus::DeviceOutputObserverBinding {
+                source_device_id: source_device_id.into(),
+                source_role: source_role.into(),
+                observer,
+                observer_pin,
+                previous_level: false,
+            });
+    }
+
     /// Hold an MCU input pin at `level` — for device status lines the host
     /// polls but nothing else drives (an e-paper BUSY, a sensor DRDY).
     ///

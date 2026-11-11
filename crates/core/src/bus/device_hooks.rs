@@ -65,7 +65,7 @@ impl SystemBus {
     ///
     /// Early-outs on a bus with no such device, which is almost every bus.
     pub(crate) fn service_device_pin_drives(&mut self) {
-        if self.device_pin_pads.is_empty() {
+        if self.device_pin_pads.is_empty() && self.device_output_observers.is_empty() {
             return;
         }
         let mut drives: Vec<(String, String, bool)> = Vec::new();
@@ -76,23 +76,39 @@ impl SystemBus {
             return;
         }
         for (device_id, role, level) in drives {
-            let Some(pad) = self
+            // Device-to-device wires are first-class: notify every sink that
+            // names this source role without inventing an MCU pad. One expander
+            // output may fan out to several loads, exactly as one copper net can.
+            let now = self.current_cycle;
+            for binding in self.device_output_observers.iter_mut().filter(|binding| {
+                binding.source_device_id == device_id && binding.source_role == role
+            }) {
+                let from = binding.previous_level;
+                binding.previous_level = level;
+                if from != level {
+                    binding
+                        .observer
+                        .on_pin_change(binding.observer_pin, from, level, now);
+                }
+            }
+
+            // The same source role may also be connected to one or more MCU
+            // input pads (interrupt/status fanout). Drive every matching pad,
+            // not only the first one.
+            let pads: Vec<_> = self
                 .device_pin_pads
                 .iter()
-                .find(|p| p.device_id == device_id && p.role == role)
+                .filter(|p| p.device_id == device_id && p.role == role)
                 .cloned()
-            else {
-                // A role with no pad is a part wired for an interrupt line the
-                // placement did not connect. That is a real board, not a bug:
-                // the rule still ran, the line simply goes nowhere.
-                continue;
-            };
-            // ⚠️ BOTH SEAMS — see `rotary_encoder.rs`. `drive_idr_bit` lands
-            // only where a store to the input register lands (STM32);
-            // `drive_input_bit` is the external-world seam the read-only-IN
-            // models (EFR32, SAM, ESP32-C3) actually sample.
-            let _ = crate::bus::DevicePins::drive_input_bit(self, pad.addr, pad.bit, level);
-            crate::bus::DevicePins::drive_idr_bit(self, pad.addr, pad.bit, level);
+                .collect();
+            for pad in pads {
+                // ⚠️ BOTH SEAMS — see `rotary_encoder.rs`. `drive_idr_bit`
+                // lands only where a store to the input register lands (STM32);
+                // `drive_input_bit` is the external-world seam the read-only-IN
+                // models (EFR32, SAM, ESP32-C3) actually sample.
+                let _ = crate::bus::DevicePins::drive_input_bit(self, pad.addr, pad.bit, level);
+                crate::bus::DevicePins::drive_idr_bit(self, pad.addr, pad.bit, level);
+            }
         }
     }
 

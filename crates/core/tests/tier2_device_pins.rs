@@ -32,6 +32,7 @@
 
 use labwired_config::{ChipDescriptor, ExternalDevice, SystemManifest};
 use labwired_core::peripherals::components::declarative_i2c::GenericI2cDevice;
+use labwired_core::peripherals::components::h_bridge_motor::HBridgeMotor;
 use labwired_core::peripherals::i2c::I2cDevice;
 use labwired_core::snapshot::{ArmCpuSnapshot, CpuSnapshot};
 use labwired_core::{
@@ -154,6 +155,13 @@ fn machine(
     ext: ExternalDevice,
     pack: Option<labwired_config::DeviceDescriptor>,
 ) -> Machine<IdleCpu> {
+    machine_with_devices(vec![ext], pack)
+}
+
+fn machine_with_devices(
+    external_devices: Vec<ExternalDevice>,
+    pack: Option<labwired_config::DeviceDescriptor>,
+) -> Machine<IdleCpu> {
     let system_path = repo_root().join("configs/systems/nucleo-l476rg.yaml");
     let mut manifest = SystemManifest::from_file(&system_path).expect("load nucleo-l476rg.yaml");
     let chip_path = system_path.parent().unwrap().join(&manifest.chip);
@@ -162,7 +170,7 @@ fn machine(
             .parts
             .push(labwired_config::PartPack::Inline(Box::new(pack)));
     }
-    manifest.external_devices.push(ext);
+    manifest.external_devices.extend(external_devices);
     let chip = ChipDescriptor::from_file(&chip_path).expect("load stm32l476");
     let mut bus = labwired_core::bus::SystemBus::from_config(&chip, &manifest).expect("build bus");
     // What firmware does first, and what this test must do because it runs no
@@ -309,6 +317,58 @@ fn a_pcf8574_write_moves_the_pads_the_cpu_reads() {
     assert!(
         pad(&mut m, "PC0") && pad(&mut m, "PC1"),
         "all released high"
+    );
+}
+
+/// An expander output may drive another off-chip device directly. No MCU pad
+/// is allocated: the source role is named explicitly and the H-bridge receives
+/// the transition on the same service tick that drains the I²C device queue.
+#[test]
+fn a_pcf8574_directly_drives_a_tb6612_channel() {
+    let expander = placed("expander", "pcf8574", &[]);
+    let bridge = ExternalDevice {
+        id: "drive".to_string(),
+        r#type: "tb6612".to_string(),
+        connection: "gpio".to_string(),
+        channel: None,
+        route: Default::default(),
+        config: [
+            (
+                "in1_pin".to_string(),
+                serde_yaml::Value::from("device-output://expander/P0"),
+            ),
+            (
+                "in2_pin".to_string(),
+                serde_yaml::Value::from("device-output://expander/P1"),
+            ),
+        ]
+        .into_iter()
+        .collect(),
+    };
+    let mut m = machine_with_devices(vec![expander, bridge], None);
+
+    write_bytes(&mut m, &[0b0000_0001]); // P0 high, P1 low
+    run(&mut m, 10);
+    assert_eq!(
+        m.bus.observed_of::<HBridgeMotor>().next().unwrap().effort(),
+        1.0,
+        "PCF8574 P0/P1 = 10 must command TB6612 channel A forward",
+    );
+
+    write_bytes(&mut m, &[0b0000_0010]); // P0 low, P1 high
+    run(&mut m, 10);
+    assert_eq!(
+        m.bus.observed_of::<HBridgeMotor>().next().unwrap().effort(),
+        -1.0,
+        "PCF8574 P0/P1 = 01 must command TB6612 channel A reverse",
+    );
+
+    write_bytes(&mut m, &[0]);
+    run(&mut m, 10);
+    assert_eq!(
+        m.bus.observed_of::<HBridgeMotor>().next().unwrap().effort(),
+        0.0,
+        "PCF8574 P0/P1 = 00 must release the channel",
     );
 }
 
