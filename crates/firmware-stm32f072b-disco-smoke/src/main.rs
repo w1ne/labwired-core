@@ -31,8 +31,9 @@
 //! active IRQ before tail-chaining after that IRQ returns. The child checks
 //! that the handler frame is reused and the parent's live R0 marker survives,
 //! distinguishing direct chaining from a fresh exception after Thread mode
-//! resumes. Every check prints one line and sets one bit of the summary word
-//! at `SUMMARY`. AIRCR.PRIGROUP
+//! resumes. A separate SysTick-to-PendSV case checks the system-handler path
+//! used by an RTOS context switch. Every check prints one line and sets one
+//! bit of the summary word at `SUMMARY`. AIRCR.PRIGROUP
 //! is also checked as reserved on this ARMv6-M core. SysTick checks cover
 //! exception 15, COUNTFLAG read-clear behavior, PRIMASK's pending-then-deliver
 //! behavior, SCB software pend/set/clear, and re-pending while its handler is
@@ -66,6 +67,7 @@ const SUMMARY: u32 = 0x2000_3000;
 const SCB_AIRCR: u32 = 0xE000_ED0C;
 const SCB_ICSR: u32 = 0xE000_ED04;
 const SCB_VTOR: u32 = 0xE000_ED08;
+const SCB_SHPR3: u32 = 0xE000_ED20;
 const AIRCR_VECTKEY: u32 = 0x05FA << 16;
 const ICSR_NMIPENDSET: u32 = 1 << 31;
 const RAM_VECTOR_BASE: u32 = 0x2000_1000;
@@ -74,6 +76,7 @@ const NMI_VECTOR_INDEX: usize = 2;
 const EXTI0_1_VECTOR_INDEX: usize = 16 + EXTI0_1_IRQ as usize;
 const IRQ6_VECTOR_INDEX: usize = 16 + 6;
 const SYSTICK_VECTOR_INDEX: usize = 15;
+const PENDSV_VECTOR_INDEX: usize = 14;
 const IRQ_HIT: u32 = SUMMARY + 4;
 const IRQ_IPSR: u32 = SUMMARY + 8;
 const IRQ_ACTIVE: u32 = SUMMARY + 12;
@@ -87,6 +90,7 @@ const SYSTICK_RECORD: u32 = SUMMARY + 176;
 const SYSTICK_MASK_RECORD: u32 = SUMMARY + 192;
 const SYSTICK_ICSR_RECORD: u32 = SUMMARY + 208;
 const SYSTICK_REPEND_RECORD: u32 = SUMMARY + 224;
+const SYSTICK_PENDSV_RECORD: u32 = SUMMARY + 256;
 const SYSTICK_PERIODIC_RECORD: u32 = SUMMARY + 768;
 const SYSTICK_FLAG_RECORD: u32 = SUMMARY + 832;
 const SYSTICK_CVR_CLEAR_RECORD: u32 = SUMMARY + 864;
@@ -513,6 +517,70 @@ unsafe extern "C" fn smoke_systick_repend_handler() {
         "ldr r1, =0xE000ED04",
         "ldr r2, [r1]",
         "str r2, [r0, #24]",
+        "bx lr",
+    );
+}
+
+/// Pend lower-priority PendSV from SysTick and leave a marker in R0. The
+/// pending exception must tail-chain after SysTick returns, preserving this
+/// handler's live R0 instead of unstacking to Thread mode first.
+#[unsafe(naked)]
+unsafe extern "C" fn smoke_systick_pend_pendsv_handler() {
+    core::arch::naked_asm!(
+        "mov r3, r0",
+        "ldr r0, =0x20003100",
+        "str r3, [r0, #20]",
+        "mrs r3, ipsr",
+        "str r3, [r0, #0]",
+        "mrs r3, msp",
+        "str r3, [r0, #12]",
+        "mov r3, lr",
+        "str r3, [r0, #16]",
+        "ldr r1, =0xE000ED04",
+        "ldr r2, [r1]",
+        "str r2, [r0, #4]",
+        "movs r2, #1",
+        "lsls r2, r2, #28",
+        "str r2, [r1]",
+        "ldr r2, [r1]",
+        "str r2, [r0, #8]",
+        "ldr r0, =0x50454E44",
+        "bx lr",
+    );
+}
+
+/// Capture the deferred PendSV handler's exception state before using R0.
+#[unsafe(naked)]
+unsafe extern "C" fn smoke_pendsv_tailchain_handler() {
+    core::arch::naked_asm!(
+        "mov r2, r0",
+        "mrs r3, ipsr",
+        "ldr r0, =0x20003100",
+        "str r3, [r0, #24]",
+        "mrs r3, msp",
+        "str r3, [r0, #28]",
+        "mov r3, lr",
+        "str r3, [r0, #32]",
+        "str r2, [r0, #36]",
+        "ldr r3, =0xE000ED04",
+        "ldr r3, [r3]",
+        "str r3, [r0, #40]",
+        "movs r3, #1",
+        "str r3, [r0, #44]",
+        "bx lr",
+    );
+}
+
+/// Pend SysTick with a known Thread-mode R0 so the handler marker proves
+/// PendSV ran by tail chaining, not by a fresh exception entry.
+#[unsafe(naked)]
+unsafe extern "C" fn pend_systick_with_thread_r0() {
+    core::arch::naked_asm!(
+        "ldr r0, =0x54485244",
+        "ldr r1, =0xE000ED04",
+        "movs r2, #1",
+        "lsls r2, r2, #26",
+        "str r2, [r1]",
         "bx lr",
     );
 }
@@ -986,6 +1054,142 @@ fn check_systick_icsr_software_pend() -> bool {
     hex(thread_after_return);
     puts(" ");
     flag("vtor_restored", vtor_restored);
+    verdict(ok);
+    ok
+}
+
+/// SysTick must not be preempted by lower-priority PendSV, but PendSV must
+/// tail-chain when SysTick returns to Thread mode. The child checks the
+/// original frame and handler R0 marker to rule out a fresh entry.
+fn check_systick_pendsv_tailchain() -> bool {
+    const PENDSTSET: u32 = 1 << 26;
+    const PENDSTCLR: u32 = 1 << 25;
+    const PENDSVSET: u32 = 1 << 28;
+    const PENDSVCLR: u32 = 1 << 27;
+    const THREAD_R0: u32 = 0x5448_5244;
+    const HANDLER_R0: u32 = 0x5045_4E44;
+
+    let source_vtor = rd(SCB_VTOR);
+    let source_shpr3 = rd(SCB_SHPR3);
+    let test_shpr3 = (source_shpr3 & !0xFFFF_0000) | (0x80 << 24) | (0xC0 << 16);
+    let table = RAM_VECTOR_BASE as *mut u32;
+    let prior_primask: u32;
+    unsafe {
+        asm!(
+            "mrs {primask}, PRIMASK",
+            "cpsid i",
+            primask = out(reg) prior_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+        wr(SYSTICK_CSR, 0);
+        wr(SCB_ICSR, PENDSTCLR | PENDSVCLR);
+        wr(SCB_SHPR3, test_shpr3);
+        for index in 0..12 {
+            write_volatile((SYSTICK_PENDSV_RECORD as *mut u32).add(index), 0);
+        }
+        for index in 0..VECTOR_TABLE_WORDS {
+            write_volatile(table.add(index), 0);
+        }
+        write_volatile(
+            table.add(SYSTICK_VECTOR_INDEX),
+            (smoke_systick_pend_pendsv_handler as *const () as usize as u32) | 1,
+        );
+        write_volatile(
+            table.add(PENDSV_VECTOR_INDEX),
+            (smoke_pendsv_tailchain_handler as *const () as usize as u32) | 1,
+        );
+        wr(SCB_VTOR, RAM_VECTOR_BASE);
+        asm!(
+            "msr PRIMASK, {primask}",
+            "dsb",
+            "isb",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+    if prior_primask == 0 {
+        unsafe { pend_systick_with_thread_r0() };
+    }
+
+    for _ in 0..100_000 {
+        if rd(SYSTICK_PENDSV_RECORD + 44) != 0 {
+            break;
+        }
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+
+    let parent_ipsr = rd(SYSTICK_PENDSV_RECORD);
+    let parent_icsr_before = rd(SYSTICK_PENDSV_RECORD + 4);
+    let parent_icsr_after = rd(SYSTICK_PENDSV_RECORD + 8);
+    let parent_msp = rd(SYSTICK_PENDSV_RECORD + 12);
+    let parent_exc_return = rd(SYSTICK_PENDSV_RECORD + 16);
+    let thread_r0 = rd(SYSTICK_PENDSV_RECORD + 20);
+    let child_ipsr = rd(SYSTICK_PENDSV_RECORD + 24);
+    let child_msp = rd(SYSTICK_PENDSV_RECORD + 28);
+    let child_exc_return = rd(SYSTICK_PENDSV_RECORD + 32);
+    let child_r0 = rd(SYSTICK_PENDSV_RECORD + 36);
+    let child_icsr = rd(SYSTICK_PENDSV_RECORD + 40);
+    let child_hit = rd(SYSTICK_PENDSV_RECORD + 44) == 1;
+    let thread_ipsr: u32;
+    unsafe {
+        asm!(
+            "mrs {value}, IPSR",
+            value = out(reg) thread_ipsr,
+            options(nomem, nostack, preserves_flags),
+        );
+        asm!("cpsid i", options(nomem, nostack, preserves_flags));
+        wr(SYSTICK_CSR, 0);
+        wr(SCB_ICSR, PENDSTCLR | PENDSVCLR);
+        wr(SCB_VTOR, source_vtor);
+        wr(SCB_SHPR3, source_shpr3);
+        asm!(
+            "msr PRIMASK, {primask}",
+            "dsb",
+            "isb",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+
+    let priorities_ok = (test_shpr3 >> 24) & 0xFF == 0x80
+        && (test_shpr3 >> 16) & 0xFF == 0xC0
+        && rd(SCB_SHPR3) == source_shpr3;
+    let deferred = parent_ipsr == 15
+        && parent_icsr_before & 0x1FF == 15
+        && parent_icsr_after & 0x1FF == 15
+        && parent_icsr_after & PENDSVSET != 0;
+    let frame_reused = parent_msp == child_msp
+        && parent_exc_return == 0xFFFF_FFF9
+        && child_exc_return == parent_exc_return;
+    let child_is_pendsv =
+        child_hit && child_ipsr == 14 && child_icsr & 0x1FF == 14 && (child_icsr & PENDSVSET) == 0;
+    let r0_live = thread_r0 == THREAD_R0 && child_r0 == HANDLER_R0 && child_r0 != thread_r0;
+    let cleanup = rd(SCB_VTOR) == source_vtor
+        && rd(SCB_SHPR3) == source_shpr3
+        && rd(SCB_ICSR) & (PENDSTSET | PENDSVSET) == 0;
+    let ok = prior_primask == 0
+        && priorities_ok
+        && deferred
+        && frame_reused
+        && child_is_pendsv
+        && r0_live
+        && thread_ipsr == 0
+        && cleanup;
+
+    puts("systick pendsv tailchain ");
+    flag("deferred", deferred);
+    puts("parent=");
+    hex(parent_ipsr);
+    puts(" child=");
+    hex(child_ipsr);
+    puts(" ");
+    flag("frame_reused", frame_reused);
+    flag("r0_live", r0_live);
+    flag(
+        "pending_clear",
+        child_is_pendsv && (rd(SCB_ICSR) & (PENDSTSET | PENDSVSET)) == 0,
+    );
+    flag("cleanup", cleanup);
     verdict(ok);
     ok
 }
@@ -2798,6 +3002,7 @@ fn main() -> ! {
     mark(20, check_systick());
     let systick_primask_ok = check_systick_primask();
     let systick_icsr_software_pend_ok = check_systick_icsr_software_pend();
+    mark(25, check_systick_pendsv_tailchain());
     let systick_icsr_repend_ok = check_systick_icsr_repend();
     let systick_periodic_ok = check_systick_periodic_reload();
     let systick_late_tickint_ok = check_systick_countflag_and_late_tickint();

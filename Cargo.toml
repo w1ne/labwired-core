@@ -360,6 +360,10 @@ opt-level = "s"
 codegen-units = 1
 opt-level = "s"
 
+[profile.release.package.firmware-stm32f072b-disco-smoke]
+codegen-units = 1
+opt-level = "s"
+
 [profile.release.package.firmware-f103-conformance]
 codegen-units = 1
 opt-level = "s"

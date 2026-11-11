@@ -25,6 +25,8 @@
 # its smoke verifies exception 15, COUNTFLAG read-clear behavior, pending
 # delivery after PRIMASK is cleared, the SCB's software pend/set/clear path,
 # and software re-pending while SysTick is active followed by a second entry.
+# A SysTick handler also defers lower-priority PendSV, which must tail-chain
+# with the same exception frame and the handler's live R0 marker.
 # A separate periodic test checks three hardware-generated entries from RVR
 # reloads, including COUNTFLAG and active-exception readback each time. A live
 # countdown test clears CVR, checks that no immediate exception is pended, then
@@ -98,6 +100,7 @@ assertions:
       - "systick ipsr=0x0000000F active=0x0000000F countflag=1 read_clear=1 pending_after=0x00000000 thread_ipsr=0x00000000 vtor_restored=1 ok"
       - "systick primask clear=honored=1 masked=1 ipsr=0x0000000F active=0x0000000F primask=0x00000000 pending_after=0x00000000 thread_ipsr=0x00000000 vtor_restored=1 ok"
       - "systick icsr set_readback=1 clear=1 canceled=1 masked=1 ipsr=0x0000000F active=0x0000000F pending_handler=0 pending_after=0 thread_ipsr=0x00000000 vtor_restored=1 ok"
+      - "systick pendsv tailchain deferred=1 parent=0x0000000F child=0x0000000E frame_reused=1 r0_live=1 pending_clear=1 cleanup=1 ok"
       - "systick icsr repend entries=0x00000002 first_ipsr=0x0000000F first_active=0x0000000F pending_after_pend=1 count_after_pend=0x00000001 second_ipsr=0x0000000F second_active=0x0000000F second_pending=0 thread_ipsr=0x00000000 vtor_restored=1 ok"
       - "systick periodic entries=0x00000003 reload=0x0000007F ipsr=0x0000000F,0x0000000F,0x0000000F active=1 countflag=1 pending=0 thread_ipsr=0x00000000 vtor_restored=1 ok"
       - "systick late-tickint silent_wrap=1 byte_preserved=1 write_ignored=1 control=0x00000005 no_pending=first=1 read_clear=1 no_immediate=1 tickint_clear_pending=1 control=1 flag=1 next_wrap=1 handler_before_unmask=0x00000000 ipsr=0x0000000F active=0x0000000F entries=0x00000001 pending_after=0 thread_ipsr=0x00000000 vtor_restored=1 ok"
@@ -109,11 +112,11 @@ assertions:
       - "systick reload-width reload=0x00ABCDEF reserved_zero=1 ok"
       - "systick clock-source ext_hclk8_delta="
       - " ratio_8_to_1=yes cleanup=yes ok"
-      - "summary 0x0DFFFFFF"
+      - "summary 0x0FFFFFFF"
       - "DONE"
   - memory_value:
       address: 0x20003000
-      expected_value: 0x0DFFFFFF
+      expected_value: 0x0FFFFFFF
       size: 4
   - gpio_edges:
       pin: "gpioc:6"

@@ -13,56 +13,55 @@ workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.tom
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
 package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/rp2040/Cargo.toml
 workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
-   Compiling firmware-stm32f072b-disco-smoke v0.1.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/renode/crates/firmware-stm32f072b-disco-smoke)
 warning: unnecessary `unsafe` block
-   --> crates/firmware-stm32f072b-disco-smoke/src/main.rs:752:5
+   --> crates/firmware-stm32f072b-disco-smoke/src/main.rs:820:5
     |
-752 |     unsafe {
+820 |     unsafe {
     |     ^^^^^^ unnecessary `unsafe` block
     |
     = note: `#[warn(unused_unsafe)]` (part of `#[warn(unused)]`) on by default
 
 warning: unnecessary `unsafe` block
-   --> crates/firmware-stm32f072b-disco-smoke/src/main.rs:896:5
+   --> crates/firmware-stm32f072b-disco-smoke/src/main.rs:964:5
     |
-896 |     unsafe { wr(SCB_ICSR, 1 << 25) };
+964 |     unsafe { wr(SCB_ICSR, 1 << 25) };
     |     ^^^^^^ unnecessary `unsafe` block
 
 warning: unnecessary `unsafe` block
-    --> crates/firmware-stm32f072b-disco-smoke/src/main.rs:1307:5
+    --> crates/firmware-stm32f072b-disco-smoke/src/main.rs:1511:5
      |
-1307 |     unsafe { wr(SYSTICK_CSR, 0x5) }; // Keep ENABLE, clear TICKINT.
+1511 |     unsafe { wr(SYSTICK_CSR, 0x5) }; // Keep ENABLE, clear TICKINT.
      |     ^^^^^^ unnecessary `unsafe` block
 
 warning: unnecessary `unsafe` block
-    --> crates/firmware-stm32f072b-disco-smoke/src/main.rs:1471:5
+    --> crates/firmware-stm32f072b-disco-smoke/src/main.rs:1675:5
      |
-1471 |     unsafe { wr(SYSTICK_CVR, 0) };
+1675 |     unsafe { wr(SYSTICK_CVR, 0) };
      |     ^^^^^^ unnecessary `unsafe` block
 
 warning: unnecessary `unsafe` block
-    --> crates/firmware-stm32f072b-disco-smoke/src/main.rs:1605:5
+    --> crates/firmware-stm32f072b-disco-smoke/src/main.rs:1809:5
      |
-1605 |     unsafe { wr(SCB_ICSR, PENDSTCLR) };
+1809 |     unsafe { wr(SCB_ICSR, PENDSTCLR) };
      |     ^^^^^^ unnecessary `unsafe` block
 
 warning: unnecessary `unsafe` block
-    --> crates/firmware-stm32f072b-disco-smoke/src/main.rs:1625:5
+    --> crates/firmware-stm32f072b-disco-smoke/src/main.rs:1829:5
      |
-1625 |     unsafe { wr(SYSTICK_CSR, 0x6) }; // Keep TICKINT and CLKSOURCE; clear ENABLE.
+1829 |     unsafe { wr(SYSTICK_CSR, 0x6) }; // Keep TICKINT and CLKSOURCE; clear ENABLE.
      |     ^^^^^^ unnecessary `unsafe` block
 
 warning: unnecessary `unsafe` block
-    --> crates/firmware-stm32f072b-disco-smoke/src/main.rs:1776:5
+    --> crates/firmware-stm32f072b-disco-smoke/src/main.rs:1980:5
      |
-1776 |     unsafe { wr(SYSTICK_RVR, NEW_RELOAD) };
+1980 |     unsafe { wr(SYSTICK_RVR, NEW_RELOAD) };
      |     ^^^^^^ unnecessary `unsafe` block
 
 warning: unnecessary `unsafe` block
-    --> crates/firmware-stm32f072b-disco-smoke/src/main.rs:1794:5
+    --> crates/firmware-stm32f072b-disco-smoke/src/main.rs:1998:5
      |
-1794 |     unsafe { wr(SCB_ICSR, PENDSTCLR) };
+1998 |     unsafe { wr(SCB_ICSR, PENDSTCLR) };
      |     ^^^^^^ unnecessary `unsafe` block
 
 warning: `firmware-stm32f072b-disco-smoke` (bin "firmware-stm32f072b-disco-smoke") generated 8 warnings
-    Finished `release` profile [optimized + debuginfo] target(s) in 12.88s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.15s
