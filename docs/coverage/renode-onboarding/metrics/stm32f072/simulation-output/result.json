@@ -89,6 +89,7 @@
           "systick cvr-clear reference=1 wrapped=1 pending_before=1 countflag_clear=1 pending_preserved=1 masked=1 entries=0x00000001 handler_countflag_clear=1 active=1 returned=1 ok",
           "pendsv clear pending=1 canceled=1 fresh repend=1 entries=0x00000001 ipsr=0x0000000E returned=1 ok",
           "systick pendsv M0 tailchain deferred=1 frame_reused=1 r0_live=1 pending_clear=1 ipsr=0x0000000E ok",
+          "systick pendsv M0 PSP tailchain frame=1 r0=1 pending=1 exc_return=0xFFFFFFFD restored=1 ok",
           "summary 0xFFFFFFFF",
           "DONE"
         ]
@@ -128,10 +129,10 @@
       10,
       3221225472,
       4294867296,
-      3221225472,
-      1073821724,
-      1,
       13,
+      1073821724,
+      78,
+      1,
       536887280,
       0,
       0,
@@ -139,10 +140,10 @@
       0,
       0,
       536886960,
-      134254119,
-      134254404
+      134257371,
+      134257654
     ],
-    "pc": 134254404,
+    "pc": 134257654,
     "xpsr": 2164260864,
     "primask": false,
     "pending_exceptions": 0,
@@ -155,7 +156,7 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "firmware_hash": "0df573e27a56d88afc01fcbd4206177914e85e30b82abf61a031542f207c672e",
+  "firmware_hash": "c07540be4ff47753eceb797ea0da1cff6f9956c66a8182c2b67053a3cd6bece8",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-stm32f072-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f072.yaml",
@@ -542,19 +543,19 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 1277,
+            "cycle": 1289,
             "value": 1
           },
           {
-            "cycle": 1287,
+            "cycle": 1299,
             "value": 0
           },
           {
-            "cycle": 1290,
+            "cycle": 1302,
             "value": 1
           },
           {
-            "cycle": 1298,
+            "cycle": 1310,
             "value": 0
           }
         ],
@@ -562,23 +563,23 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 1275,
-            "state": "0"
-          },
-          {
-            "cycle": 1277,
-            "state": "1"
-          },
-          {
             "cycle": 1287,
             "state": "0"
           },
           {
-            "cycle": 1290,
+            "cycle": 1289,
             "state": "1"
           },
           {
-            "cycle": 1298,
+            "cycle": 1299,
+            "state": "0"
+          },
+          {
+            "cycle": 1302,
+            "state": "1"
+          },
+          {
+            "cycle": 1310,
             "state": "0"
           }
         ],
@@ -831,6 +832,12 @@
         "end_cycle": 2980000
       },
       {
+        "text": "systick pendsv M0 PSP tailchain frame=1 r0=1 pending=1 exc_return=0xFFFFFFFD restored=1 ok",
+        "cycle_lo": 2970000,
+        "cycle": 2980000,
+        "end_cycle": 2980000
+      },
+      {
         "text": "summary 0xFFFFFFFF",
         "cycle_lo": 2970000,
         "cycle": 2980000,
@@ -960,14 +967,14 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 39196,
+    "text_bytes": 42492,
     "data_bytes": 0,
     "bss_bytes": 20,
-    "flash_used_bytes": 39196,
+    "flash_used_bytes": 42492,
     "ram_static_bytes": 20,
     "flash_total_bytes": 131072,
     "ram_total_bytes": 16384,
-    "flash_used_pct": 29.9,
+    "flash_used_pct": 32.42,
     "ram_static_pct": 0.12,
     "notes": [
       "section_sum_not_bin_image",
@@ -978,14 +985,14 @@
     "main_stack_method": "paint",
     "main_stack_limit_bytes": 16364,
     "main_stack_high_water_bytes": 332,
-    "main_stack_free_min_bytes": 15720,
+    "main_stack_free_min_bytes": 15608,
     "main_stack_base": 536870932,
     "main_stack_top": 536887296,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
     "heap_limit_bytes": 16364,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 15720,
+    "heap_free_min_bytes": 15608,
     "heap_base": 536870932,
     "heap_top": 536887296
   },
@@ -993,90 +1000,90 @@
     "cycles": 4000000,
     "instructions": 4000000,
     "steps_executed": 4000000,
-    "memory_reads": 288355,
-    "memory_writes": 2087,
-    "peripheral_accesses": 713042,
+    "memory_reads": 289438,
+    "memory_writes": 2232,
+    "peripheral_accesses": 713244,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134224128,
+        "pc": 134224436,
         "count": 1989,
-        "symbol": "core::ptr::read_volatile"
+        "symbol": "firmware_stm32f072_smoke::wait_level"
       },
       {
-        "pc": 134224136,
+        "pc": 134224420,
         "count": 1914,
         "symbol": "firmware_stm32f072_smoke::wait_level"
       },
       {
-        "pc": 134224144,
+        "pc": 134224428,
         "count": 1914,
-        "symbol": "firmware_stm32f072_smoke::wait_level"
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
       },
       {
-        "pc": 134224322,
+        "pc": 134224630,
         "count": 547,
-        "symbol": "core::ptr::read_volatile"
+        "symbol": "firmware_stm32f072_smoke::wait_level"
       },
       {
-        "pc": 134224448,
+        "pc": 134224732,
         "count": 547,
-        "symbol": "core::ptr::read_volatile"
+        "symbol": "firmware_stm32f072_smoke::wait_level"
       },
       {
-        "pc": 134224330,
+        "pc": 134224614,
         "count": 508,
         "symbol": "firmware_stm32f072_smoke::wait_level"
       },
       {
-        "pc": 134224338,
+        "pc": 134224622,
+        "count": 508,
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 134224740,
         "count": 508,
         "symbol": "firmware_stm32f072_smoke::wait_level"
       },
       {
-        "pc": 134224456,
-        "count": 508,
-        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
-      },
-      {
-        "pc": 134224464,
+        "pc": 134224748,
         "count": 507,
-        "symbol": "firmware_stm32f072_smoke::wait_level"
+        "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134224166,
-        "count": 274,
-        "symbol": "firmware_stm32f072_smoke::wait_level"
+        "pc": 134257654,
+        "count": 472,
+        "symbol": "firmware_stm32f072_smoke::__cortex_m_rt_main"
       },
       {
-        "pc": 134224350,
+        "pc": 134224450,
         "count": 274,
         "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134224664,
+        "count": 274,
+        "symbol": "firmware_stm32f072_smoke::wait_level"
+      },
+      {
+        "pc": 134224784,
+        "count": 274,
+        "symbol": "firmware_stm32f072_smoke::wait_level"
       },
       {
         "pc": 134224470,
-        "count": 274,
-        "symbol": "core::ptr::read_volatile"
+        "count": 273,
+        "symbol": "firmware_stm32f072_smoke::wait_level"
       },
       {
-        "pc": 134224156,
+        "pc": 134224644,
         "count": 273,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134224360,
+        "pc": 134224764,
         "count": 273,
-        "symbol": "firmware_stm32f072_smoke::wait_level"
-      },
-      {
-        "pc": 134224480,
-        "count": 273,
-        "symbol": "firmware_stm32f072_smoke::wait_level"
-      },
-      {
-        "pc": 134224490,
-        "count": 235,
-        "symbol": "firmware_stm32f072_smoke::wait_level"
+        "symbol": "core::ptr::read_volatile"
       }
     ]
   }
