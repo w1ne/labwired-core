@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="6" failures="1" errors="0" time="0.232623">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="8a3ce73baeac9330a4bc277e6fc031d363feea1a7194a75459cf70147aa6d841"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.232623">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: STM32F072B-DISCO SMOKE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_ordered: [&quot;cpu=cortex-m0 uart=usart1&quot;, &quot;rcc reset=1 gate=1 ok&quot;, &quot;aircr prigroup=0 reserved=writes_ignored=1 ok&quot;, &quot;…" time="0.000000">
+    <failure message="assertion failed">assertion 2: uart_ordered: [&quot;cpu=cortex-m0 uart=usart1&quot;, &quot;rcc reset=1 gate=1 ok&quot;, &quot;aircr prigroup=0 reserved=writes_ignored=1 ok&quot;, &quot;…
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=4000000
+stop_reason_details.observed.steps_executed=4000000
+steps_executed=4000000
+cycles=4000000
+instructions=4000000
+limits:
+  - max_steps=4000000
+firmware_hash=8a3ce73baeac9330a4bc277e6fc031d363feea1a7194a75459cf70147aa6d841
+firmware=examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-stm32f072b-disco-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/stm32f072b_discovery.yaml
+script=examples/renode-onboarding/stm32f072b_discovery-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;STM32F072B-DISCO SMOKE&quot; }): true
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;cpu=cortex-m0 uart=usart1&quot;, &quot;rcc reset=1 gate=1 ok&quot;, &quot;aircr prigroup=0 reserved=writes_ignored=1 ok&quot;, &quot;usart irq u2=1 u3=1 u4=1 ok&quot;, &quot;usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 released=1 ok&quot;, &quot;led=ld3 odr=0x00000040&quot;, &quot;led=ld4 odr=0x00000140&quot;, &quot;led=ld5 odr=0x00000340&quot;, &quot;led=ld6 odr=0x000003C0&quot;, &quot;leds walk=1 blink=1 off=1 ok&quot;, &quot;b1 idle=1 presses=1 pc_quiet=1 pa0=1 cleared=1 ok&quot;, &quot;tim1 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim2 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim3 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim6 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim7 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim14 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim15 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim16 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim17 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;dma1 m2m tc=1 data=1 pend=1 alone=1 released=1 ok&quot;, &quot;crc word=0xDF8A8A2B seed=1 std=1 ok&quot;, &quot;adc ts=0x00000709 vref=0x000005F6 cal=1 ready=1 seq=1 eos=1 pend=1 released=1 gated=1 off=1 ok&quot;, &quot;irq exception hit=1 ipsr=0x00000015 active=0x00000020 pending=0x00000000 frame=1 regs=0x00000011,0x00000022,0x00000033,0x00000044,0x00000055 lr=&quot;, &quot; pc=&quot;, &quot; exc_return=0xFFFFFFF9 sp=&quot;, &quot; returned=1 ok&quot;, &quot;nmi repend entered=1 entries=0x00000002 after_pend_ipsr=0x00000002 after_pend_entries=0x00000001 irq=0x00000015 nmi=0x00000002 resumed=0x00000015 icsr=0x00000002 irq_active=0x00000020 primask=0x00000001 restored=0x00000001 cleanup=ok=1 ok&quot;, &quot;nmi deferred irq pending_in_nmi=0x00000040 active_in_nmi=0x00000000 after_unmask_ipsr=0x00000015 irq6_active_while_irq5=0x00000000 irq6_pending_in_irq5=0x00000040 irq_ipsr=0x00000016 irq_active=0x00000040 irq_pending=0x00000000 nmi_count=0x00000002 irq5_priority=0x00000040 irq6_priority=0x00000080 ok&quot;, &quot;systick ipsr=0x0000000F active=0x0000000F countflag=1 read_clear=1 pending_after=0x00000000 thread_ipsr=0x00000000 vtor_restored=1 ok&quot;, &quot;systick primask clear=honored=1 masked=1 ipsr=0x0000000F active=0x0000000F primask=0x00000000 pending_after=0x00000000 thread_ipsr=0x00000000 vtor_restored=1 ok&quot;, &quot;systick icsr set_readback=1 clear=1 canceled=1 masked=1 ipsr=0x0000000F active=0x0000000F pending_handler=0 pending_after=0 thread_ipsr=0x00000000 vtor_restored=1 ok&quot;, &quot;systick icsr repend entries=0x00000002 first_ipsr=0x0000000F first_active=0x0000000F pending_after_pend=1 count_after_pend=0x00000001 second_ipsr=0x0000000F second_active=0x0000000F second_pending=0 thread_ipsr=0x00000000 vtor_restored=1 ok&quot;, &quot;systick periodic entries=0x00000003 reload=0x0000007F ipsr=0x0000000F,0x0000000F,0x0000000F active=1 countflag=1 pending=0 thread_ipsr=0x00000000 vtor_restored=1 ok&quot;, &quot;systick countflag-only tickint=0 flag=1 byte_preserved=1 write_ignored=1 control=0x00000004 handler=0 pending=0 read_clear=1 ipsr=0x00000000 vtor_restored=1 ok&quot;, &quot;systick cvr-clear countdown=started=1 pending_after_clear=0 pending_after_period=1 handler_before_unmask=0x00000000 handler_ipsr=0x0000000F active=0x0000000F entries=0x00000001 thread_ipsr=0x00000000 vtor_restored=1 ok&quot;, &quot;summary 0x0DFFFFFF&quot;, &quot;DONE&quot;] }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536883200, expected_value: 234881023, mask: None, size: Some(4), node: None } }): true
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpioc:6&quot;, min_edges: 5 } }): true
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: memory_value: @0x20003000=0xdffffff" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: gpio_edges: gpioc:6 &gt;= 5 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

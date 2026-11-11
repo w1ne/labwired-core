@@ -36,7 +36,8 @@
 //! active followed by a second exception entry. A separate periodic check
 //! confirms hardware reloads generate three more exception entries. A CVR
 //! clear during a live countdown must not fire immediately, but the next
-//! countdown-to-zero must still pend SysTick.
+//! countdown-to-zero must still pend SysTick. COUNTFLAG's byte-read and
+//! read-only behavior is checked separately from its word-read clear.
 
 #![no_std]
 #![no_main]
@@ -212,6 +213,10 @@ const NVIC_IPR1: u32 = 0xE000_E404;
 
 fn rd(addr: u32) -> u32 {
     unsafe { read_volatile(addr as *const u32) }
+}
+
+fn rd8(addr: u32) -> u8 {
+    unsafe { read_volatile(addr as *const u8) }
 }
 
 fn wr(addr: u32, value: u32) {
@@ -1172,8 +1177,8 @@ fn check_systick_periodic_reload() -> bool {
     ok
 }
 
-/// COUNTFLAG still records a zero-hit when TICKINT is clear, but no
-/// exception-15 request may be raised.
+/// COUNTFLAG records a zero-hit with TICKINT clear. Byte reads and writes to
+/// its read-only CSR bit must preserve it; only a word read clears it.
 fn check_systick_countflag_without_tickint() -> bool {
     let source_vtor = rd(SCB_VTOR);
     let table = RAM_VECTOR_BASE as *mut u32;
@@ -1200,7 +1205,7 @@ fn check_systick_countflag_without_tickint() -> bool {
         wr(SCB_VTOR, RAM_VECTOR_BASE);
         wr(SYSTICK_CSR, 0x5); // ENABLE | processor clock; TICKINT stays clear.
     }
-    let control_readback = rd(SYSTICK_CSR) & 0x7;
+    let control_before_wait = rd(SYSTICK_CSR) & 0x7;
     unsafe {
         asm!(
             "msr PRIMASK, {primask}",
@@ -1213,12 +1218,22 @@ fn check_systick_countflag_without_tickint() -> bool {
 
     let mut countflag_seen = false;
     for _ in 0..100_000 {
-        if rd(SYSTICK_CSR) & (1 << 16) != 0 {
+        if rd8(SYSTICK_CSR + 2) & 1 != 0 {
             countflag_seen = true;
             break;
         }
         unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
     }
+
+    let byte_read_preserved = rd8(SYSTICK_CSR + 2) & 1 != 0;
+    // COUNTFLAG is read-only in CSR. Setting it in a word write must neither
+    // clear the latched flag nor change the three control bits; disabling the
+    // timer here makes the following word-read clear check stable.
+    wr(SYSTICK_CSR, (1 << 16) | 0x4);
+    let csr_after_write = rd(SYSTICK_CSR);
+    let control_readback = csr_after_write & 0x7;
+    let countflag_write_ignored = csr_after_write & (1 << 16) != 0;
+    let countflag_read_clear = rd(SYSTICK_CSR) & (1 << 16) == 0;
 
     let icsr_before_cleanup = rd(SCB_ICSR);
     let handler_hit = rd(SYSTICK_FLAG_RECORD) != 0;
@@ -1242,12 +1257,14 @@ fn check_systick_countflag_without_tickint() -> bool {
             options(nostack, preserves_flags),
         );
     }
-    let countflag_read_clear = rd(SYSTICK_CSR) & (1 << 16) == 0;
     let vtor_restored = rd(SCB_VTOR) == source_vtor;
     let pending = icsr_before_cleanup & (1 << 26) != 0;
     let ok = prior_primask == 0
-        && control_readback == 0x5
+        && control_before_wait == 0x5
+        && control_readback == 0x4
         && countflag_seen
+        && byte_read_preserved
+        && countflag_write_ignored
         && countflag_read_clear
         && !handler_hit
         && !pending
@@ -1256,6 +1273,11 @@ fn check_systick_countflag_without_tickint() -> bool {
 
     puts("systick countflag-only tickint=0 flag=");
     puts(if countflag_seen { "1 " } else { "0 " });
+    flag("byte_preserved", byte_read_preserved);
+    flag("write_ignored", countflag_write_ignored);
+    puts("control=");
+    hex(control_readback);
+    puts(" ");
     flag("handler", handler_hit);
     puts("pending=");
     puts(if pending { "1 " } else { "0 " });

@@ -71,7 +71,7 @@
           "systick icsr set_readback=1 clear=1 canceled=1 masked=1 ipsr=0x0000000F active=0x0000000F pending_handler=0 pending_after=0 thread_ipsr=0x00000000 vtor_restored=1 ok",
           "systick icsr repend entries=0x00000002 first_ipsr=0x0000000F first_active=0x0000000F pending_after_pend=1 count_after_pend=0x00000001 second_ipsr=0x0000000F second_active=0x0000000F second_pending=0 thread_ipsr=0x00000000 vtor_restored=1 ok",
           "systick periodic entries=0x00000003 reload=0x0000007F ipsr=0x0000000F,0x0000000F,0x0000000F active=1 countflag=1 pending=0 thread_ipsr=0x00000000 vtor_restored=1 ok",
-          "systick countflag-only tickint=0 flag=1 handler=0 pending=0 read_clear=1 ipsr=0x00000000 vtor_restored=1 ok",
+          "systick countflag-only tickint=0 flag=1 byte_preserved=1 write_ignored=1 control=0x00000004 handler=0 pending=0 read_clear=1 ipsr=0x00000000 vtor_restored=1 ok",
           "systick cvr-clear countdown=started=1 pending_after_clear=0 pending_after_period=1 handler_before_unmask=0x00000000 handler_ipsr=0x0000000F active=0x0000000F entries=0x00000001 thread_ipsr=0x00000000 vtor_restored=1 ok",
           "summary 0x0DFFFFFF",
           "DONE"
@@ -122,11 +122,11 @@
       0,
       0,
       85,
-      536887024,
-      134275267,
-      134275548
+      536887016,
+      134275695,
+      134275976
     ],
-    "pc": 134275548,
+    "pc": 134275976,
     "xpsr": 2164260864,
     "primask": false,
     "pending_exceptions": 0,
@@ -139,7 +139,7 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "firmware_hash": "7787fa21a52c94c5c6428a1789ca0dcf92165b3cc511037fa864b25f5cbb681c",
+  "firmware_hash": "1a1ec595acf45790b784fed6e39c880e171733c7a2bf2bbda7e99ff4537da634",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-stm32f072b-disco-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f072b_discovery.yaml",
@@ -633,7 +633,7 @@
         "end_cycle": 1220000
       },
       {
-        "text": "irq exception hit=1 ipsr=0x00000015 active=0x00000020 pending=0x00000000 frame=1 regs=0x00000011,0x00000022,0x00000033,0x00000044,0x00000055 lr=0x08002DB1 pc=0x080003E6 xpsr=0x21000000 exc_return=0xFFFFFFF9 sp=0x20003EC8 expected_sp=0x20003EC8 restored_msp=0x20003EF0 returned=1 ok",
+        "text": "irq exception hit=1 ipsr=0x00000015 active=0x00000020 pending=0x00000000 frame=1 regs=0x00000011,0x00000022,0x00000033,0x00000044,0x00000055 lr=0x08002DB3 pc=0x080003E6 xpsr=0x21000000 exc_return=0xFFFFFFF9 sp=0x20003EC0 expected_sp=0x20003EC0 restored_msp=0x20003EE8 returned=1 ok",
         "cycle_lo": 1220000,
         "cycle": 1230000,
         "end_cycle": 1230000
@@ -681,7 +681,7 @@
         "end_cycle": 1240000
       },
       {
-        "text": "systick countflag-only tickint=0 flag=1 handler=0 pending=0 read_clear=1 ipsr=0x00000000 vtor_restored=1 ok",
+        "text": "systick countflag-only tickint=0 flag=1 byte_preserved=1 write_ignored=1 control=0x00000004 handler=0 pending=0 read_clear=1 ipsr=0x00000000 vtor_restored=1 ok",
         "cycle_lo": 1230000,
         "cycle": 1240000,
         "end_cycle": 1240000
@@ -702,7 +702,7 @@
         "text": "DONE",
         "cycle_lo": 1230000,
         "cycle": 1240000,
-        "end_cycle": 1240000
+        "end_cycle": 1250000
       }
     ],
     "dropped_lines": 0
@@ -759,14 +759,14 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 62896,
+    "text_bytes": 63352,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 62896,
+    "flash_used_bytes": 63352,
     "ram_static_bytes": 0,
     "flash_total_bytes": 131072,
     "ram_total_bytes": 16384,
-    "flash_used_pct": 47.99,
+    "flash_used_pct": 48.33,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -776,15 +776,15 @@
   "memory": {
     "main_stack_method": "paint",
     "main_stack_limit_bytes": 16384,
-    "main_stack_high_water_bytes": 336,
-    "main_stack_free_min_bytes": 15552,
+    "main_stack_high_water_bytes": 276,
+    "main_stack_free_min_bytes": 15548,
     "main_stack_base": 536870912,
     "main_stack_top": 536887296,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
     "heap_limit_bytes": 16384,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 15552,
+    "heap_free_min_bytes": 15548,
     "heap_base": 536870912,
     "heap_top": 536887296
   },
@@ -792,14 +792,14 @@
     "cycles": 4000000,
     "instructions": 4000000,
     "steps_executed": 4000000,
-    "memory_reads": 18923,
-    "memory_writes": 2610,
-    "peripheral_accesses": 302074,
+    "memory_reads": 19043,
+    "memory_writes": 2637,
+    "peripheral_accesses": 302184,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134275548,
-        "count": 367,
+        "pc": 134275976,
+        "count": 468,
         "symbol": "firmware_stm32f072b_disco_smoke::__cortex_m_rt_main"
       },
       {
