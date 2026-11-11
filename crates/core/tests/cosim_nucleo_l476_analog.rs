@@ -753,6 +753,160 @@ fn nucleo_l476rg_mosfet_body_effect_reaches_adc1_alongside_ntc_and_diode() {
 }
 
 #[test]
+fn nucleo_l476rg_mosfet_tox_gate_charge_reaches_adc1_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/nucleo-l476rg.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-L476RG profile");
+    assert_eq!(profile.name, "nucleo-l476rg");
+    let base = SystemManifest::from_file(root("examples/nucleo-l476rg/analog-ntc-diode-adc.yaml"))
+        .expect("load unrelated generic NTC and diode ADC routes");
+    let tox_charge = SystemManifest::from_file(root(
+        "examples/nucleo-l476rg/analog-mosfet-tox-charge-adc.yaml",
+    ))
+    .expect("load matched generic NMOS TOX charge branches");
+    profile.cosim_models = base.cosim_models;
+    profile.cosim_models.extend(tox_charge.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32L476 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-L476RG bus");
+    let rcc_ahb2enr = bus.read_u32(RCC_AHB2ENR).expect("read RCC AHB2ENR");
+    bus.write_u32(RCC_AHB2ENR, rcc_ahb2enr | (1 << 13))
+        .expect("enable ADC1 clock");
+    bus.write_u32(ADC_CR, 0).expect("clear ADC deep power-down");
+    bus.write_u32(ADC_CR, ADC_ADVREGEN)
+        .expect("enable ADC voltage regulator");
+    bus.write_u32(ADC_CR, ADC_ADVREGEN | ADC_ADEN)
+        .expect("enable ADC1");
+    assert_ne!(
+        bus.read_u32(ADC_ISR).unwrap() & ADC_ADRDY,
+        0,
+        "ADC1 reports ready"
+    );
+    bus.write_u32(ADC_CFGR, 0)
+        .expect("select 12-bit right-aligned conversion");
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries NTC, diode, and a matched NMOS TOX pair");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic analog netlists bind to explicit ADC1 channels 5, 6, 11, and 12"
+    );
+    for channel in [5, 6, 11, 12, 13] {
+        assert_eq!(
+            adc1_channel_input_count(&mut bus, channel),
+            u16::MAX,
+            "ADC1 channel {channel} starts undriven"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.mosfet_tox.gate_v", 0.0)
+        .expect("initialize matched NMOS gate drives");
+
+    let expected_ntc_v = 1.65;
+    let expected_diode_v = diode_load_line_voltage();
+    let cox_f = 3.453_133e-11 * 100e-6 * 10e-6 / 10e-9;
+    // In the selected accumulation region (VGS - VTO <= -PHI), the two
+    // level-1 Meyer half-capacitances combine to the full oxide capacitance
+    // between gate and bulk.
+    let gate_bulk_capacitance_f = cox_f;
+    let resistance_ohms = 1e6;
+    let step_s = 1e-6;
+    let drive_v = 0.2; // remains below threshold and in the same Meyer region
+    let mut expected_tox_gate_v = 0.0;
+    let mut cycles = 0;
+
+    cycles += session.cycles_until_boundary(cycles);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("settle the NTC, diode, and NMOS gate branches before the step");
+    assert_eq!(initial_steps.len(), 3, "all three analog branches solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected route errors: {initial_errors:?}"
+    );
+    assert!((signal_voltage(&session, "adc.adc1.11_volts")).abs() < 1e-12);
+    assert!((signal_voltage(&session, "adc.adc1.12_volts")).abs() < 1e-12);
+
+    session
+        .set_signal_number("ui.mosfet_tox.gate_v", drive_v)
+        .expect("step both generic NMOS gate drives");
+    for step in 0..24 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route the MOSFET TOX charge transient");
+        assert_eq!(
+            steps.len(),
+            3,
+            "all three analog branches solve at each step"
+        );
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        expected_tox_gate_v = (resistance_ohms * gate_bulk_capacitance_f * expected_tox_gate_v
+            + step_s * drive_v)
+            / (resistance_ohms * gate_bulk_capacitance_f + step_s);
+        let ntc_v = signal_voltage(&session, "adc.adc1.5_volts");
+        let diode_v = signal_voltage(&session, "adc.adc1.6_volts");
+        let no_tox_gate_v = signal_voltage(&session, "adc.adc1.11_volts");
+        let tox_gate_v = signal_voltage(&session, "adc.adc1.12_volts");
+        assert!(
+            (ntc_v - expected_ntc_v).abs() < 1e-9,
+            "unrelated NTC stays isolated"
+        );
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "unrelated Shockley diode stays at its DC load line"
+        );
+        assert!(
+            (no_tox_gate_v - drive_v).abs() < 1e-9,
+            "without TOX the isolated gate follows its drive immediately"
+        );
+        assert!(
+            (tox_gate_v - expected_tox_gate_v).abs() < 2e-7,
+            "Meyer TOX gate-bulk RC recurrence at step {step}: expected {expected_tox_gate_v} V, got {tox_gate_v} V"
+        );
+        assert!(
+            no_tox_gate_v > tox_gate_v,
+            "TOX charge must slow the gate response relative to the no-charge control"
+        );
+
+        for (channel, volts) in [
+            (5, ntc_v),
+            (6, diode_v),
+            (11, no_tox_gate_v),
+            (12, tox_gate_v),
+        ] {
+            let expected_count = expected_adc_count(volts);
+            assert_eq!(
+                adc1_channel_input_count(&mut bus, channel),
+                expected_count,
+                "the solved voltage must seed ADC1 channel {channel}"
+            );
+            assert_eq!(
+                l476_adc_convert(&mut bus, channel),
+                u32::from(expected_count),
+                "firmware-visible ADC1 conversion must report channel {channel}"
+            );
+        }
+        assert_eq!(
+            adc1_channel_input_count(&mut bus, 13),
+            u16::MAX,
+            "neighboring ADC1_IN13 remains undriven"
+        );
+    }
+    assert!(
+        (drive_v - expected_tox_gate_v).abs() < 1e-3,
+        "the TOX branch should approach its DC gate drive after repeated steps"
+    );
+}
+
+#[test]
 fn iolink_multiport_demo_routes_generic_ntc_and_diode_to_gpio_thresholds() {
     assert_profile_routes_generic_analog_inputs(
         "configs/systems/iolink-multiport-demo.yaml",

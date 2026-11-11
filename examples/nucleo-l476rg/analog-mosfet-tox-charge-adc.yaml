@@ -1,0 +1,31 @@
+# A generic level-1 NMOS TOX gate-bulk capacitance transient routed to
+# explicit STM32L476 ADC1 channels. The reference branch omits TOX.
+name: nucleo-l476rg-analog-mosfet-tox-charge-adc
+chip: ../../configs/chips/stm32l476.yaml
+external_devices: []
+board_io: []
+cosim_models:
+  - id: mosfet_tox_charge_adc
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      gate_voltage: ui.mosfet_tox.gate_v
+    outputs:
+      no_tox_gate: adc.adc1.11_volts
+      tox_gate: adc.adc1.12_volts
+    config:
+      substeps: 1
+      netlist_text: |
+        Vdrive drive 0 dc 0
+        Rgate_ref drive gate_ref 1Meg
+        Mref 0 gate_ref 0 0 NMOS_REF w=100u l=10u
+        .model NMOS_REF NMOS(VTO=1 KP=20u LAMBDA=0 PHI=0.7)
+        Rgate_tox drive gate_tox 1Meg
+        Mtox 0 gate_tox 0 0 NMOS_TOX w=100u l=10u
+        .model NMOS_TOX NMOS(VTO=1 KP=20u LAMBDA=0 PHI=0.7 TOX=10n)
+      probes:
+        no_tox_gate: v(gate_ref)
+        tox_gate: v(gate_tox)
+      sources:
+        gate_voltage: Vdrive
+      vdd: 3.3
