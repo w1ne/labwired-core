@@ -78,6 +78,7 @@ const IRQ_FRAME_VECTOR_TABLE: u32 = 0x2000_0400;
 const IRQ_FRAME_RECORD: u32 = 0x2000_0500;
 const IRQ_FRAME_EXTERNAL: u32 = 38;
 const IRQ_FRAME_BIT: u32 = 1 << (IRQ_FRAME_EXTERNAL % 32);
+const IRQ_FRAME_PSP_TOP: u32 = 0x2000_4000;
 
 const SPI1_BASE: u32 = 0x4001_3000;
 const SPI1_IRQ: u32 = 35;
@@ -252,6 +253,7 @@ fn main() -> ! {
     unsafe { smoke_systick_cvr_write_preserves_pending() };
     unsafe { smoke_pendsv_clear_and_repend() };
     unsafe { smoke_external_irq_stack_frame() };
+    unsafe { smoke_external_irq_psp_stack_frame() };
     smoke_usart2_txe_irq();
     smoke_usart2_rx_enable_gate();
     smoke_spi1_irq_and_max31855();
@@ -1160,7 +1162,7 @@ unsafe fn smoke_external_irq_stack_frame() -> bool {
         table.add(IRQ_FRAME_VECTOR_INDEX),
         (smoke_external_irq_frame_handler as *const () as usize as u32) | 1,
     );
-    for word in 0..16 {
+    for word in 0..18 {
         write_volatile((IRQ_FRAME_RECORD + word * 4) as *mut u32, 0);
     }
     write_volatile(SCB_VTOR as *mut u32, IRQ_FRAME_VECTOR_TABLE);
@@ -1241,6 +1243,156 @@ unsafe fn smoke_external_irq_stack_frame() -> bool {
     ok
 }
 
+/// Repeat the external IRQ frame probe with Thread mode using PSP. The handler
+/// must stack the interrupted state on PSP, keep MSP for Handler mode, and
+/// return to the same PSP address before the trampoline switches back to MSP.
+unsafe fn smoke_external_irq_psp_stack_frame() -> bool {
+    const IRQ_FRAME_VECTOR_INDEX: usize = 16 + IRQ_FRAME_EXTERNAL as usize;
+    const IRQ_FRAME_VECTOR_WORDS: usize = IRQ_FRAME_VECTOR_INDEX + 1;
+    const NVIC_ISER1: u32 = 0xE000_E104;
+    const NVIC_ICER1: u32 = 0xE000_E184;
+    const NVIC_ISPR1: u32 = 0xE000_E204;
+    const NVIC_ICPR1: u32 = 0xE000_E284;
+
+    let source_vtor = read_volatile(SCB_VTOR as *const u32);
+    let source_control: u32;
+    let source_psp: u32;
+    let prior_primask: u32;
+    core::arch::asm!(
+        "mrs {control}, CONTROL",
+        "mrs {psp}, PSP",
+        "mrs {primask}, PRIMASK",
+        "cpsid i",
+        control = out(reg) source_control,
+        psp = out(reg) source_psp,
+        primask = out(reg) prior_primask,
+        options(nomem, nostack, preserves_flags),
+    );
+
+    write_volatile(NVIC_ICER1 as *mut u32, IRQ_FRAME_BIT);
+    write_volatile(NVIC_ICPR1 as *mut u32, IRQ_FRAME_BIT);
+    let table = IRQ_FRAME_VECTOR_TABLE as *mut u32;
+    for slot in 0..IRQ_FRAME_VECTOR_WORDS {
+        write_volatile(table.add(slot), 0);
+    }
+    write_volatile(
+        table.add(IRQ_FRAME_VECTOR_INDEX),
+        (smoke_external_irq_frame_handler as *const () as usize as u32) | 1,
+    );
+    for word in 0..18 {
+        write_volatile((IRQ_FRAME_RECORD + word * 4) as *mut u32, 0);
+    }
+    write_volatile(SCB_VTOR as *mut u32, IRQ_FRAME_VECTOR_TABLE);
+    core::arch::asm!("dsb", "isb", options(nostack, preserves_flags));
+
+    let vector_installed = read_volatile(SCB_VTOR as *const u32) == IRQ_FRAME_VECTOR_TABLE;
+    write_volatile(NVIC_ISER1 as *mut u32, IRQ_FRAME_BIT);
+    core::arch::asm!(
+        "msr PRIMASK, {primask}",
+        primask = in(reg) prior_primask,
+        options(nostack, preserves_flags),
+    );
+    let msp_before: u32;
+    core::arch::asm!("mrs {}, MSP", out(reg) msp_before, options(nomem, nostack, preserves_flags));
+    smoke_pend_usart2_irq_with_psp_sentinels();
+    let msp_after: u32;
+    let psp_after: u32;
+    let control_after: u32;
+    core::arch::asm!(
+        "mrs {msp}, MSP",
+        "mrs {psp}, PSP",
+        "mrs {control}, CONTROL",
+        msp = out(reg) msp_after,
+        psp = out(reg) psp_after,
+        control = out(reg) control_after,
+        options(nomem, nostack, preserves_flags),
+    );
+    core::arch::asm!("cpsid i", options(nomem, nostack, preserves_flags));
+
+    let frame_sp = read_volatile(IRQ_FRAME_RECORD as *const u32);
+    let frame_r0 = read_volatile((IRQ_FRAME_RECORD + 4) as *const u32);
+    let frame_r1 = read_volatile((IRQ_FRAME_RECORD + 8) as *const u32);
+    let frame_r2 = read_volatile((IRQ_FRAME_RECORD + 12) as *const u32);
+    let frame_r3 = read_volatile((IRQ_FRAME_RECORD + 16) as *const u32);
+    let frame_r12 = read_volatile((IRQ_FRAME_RECORD + 20) as *const u32);
+    let frame_lr = read_volatile((IRQ_FRAME_RECORD + 24) as *const u32);
+    let frame_pc = read_volatile((IRQ_FRAME_RECORD + 28) as *const u32);
+    let frame_xpsr = read_volatile((IRQ_FRAME_RECORD + 32) as *const u32);
+    let exc_return = read_volatile((IRQ_FRAME_RECORD + 36) as *const u32);
+    let ipsr = read_volatile((IRQ_FRAME_RECORD + 40) as *const u32);
+    let active = read_volatile((IRQ_FRAME_RECORD + 44) as *const u32);
+    let pending = read_volatile((IRQ_FRAME_RECORD + 48) as *const u32);
+    let handler_msp = read_volatile((IRQ_FRAME_RECORD + 52) as *const u32);
+    let returned = read_volatile((IRQ_FRAME_RECORD + 56) as *const u32) == 1;
+    let exception_msp = read_volatile((IRQ_FRAME_RECORD + 68) as *const u32);
+    let return_marker = read_volatile((IRQ_FRAME_RECORD + 64) as *const u32) == 1;
+
+    write_volatile(NVIC_ICER1 as *mut u32, IRQ_FRAME_BIT);
+    write_volatile(NVIC_ICPR1 as *mut u32, IRQ_FRAME_BIT);
+    write_volatile(SCB_VTOR as *mut u32, source_vtor);
+    core::arch::asm!(
+        "msr PSP, {psp}",
+        "msr CONTROL, {control}",
+        "msr PRIMASK, {primask}",
+        "dsb",
+        "isb",
+        psp = in(reg) source_psp,
+        control = in(reg) source_control,
+        primask = in(reg) prior_primask,
+        options(nostack, preserves_flags),
+    );
+    let restored_psp: u32;
+    let restored_control: u32;
+    core::arch::asm!(
+        "mrs {psp}, PSP",
+        "mrs {control}, CONTROL",
+        psp = out(reg) restored_psp,
+        control = out(reg) restored_control,
+        options(nomem, nostack, preserves_flags),
+    );
+
+    let frame_ok = frame_r0 == 0x11
+        && frame_r1 == 0x22
+        && frame_r2 == 0x33
+        && frame_r3 == 0x44
+        && frame_r12 == 0x55
+        && frame_lr & 1 != 0
+        && (0x0800_0000..0x0802_0000).contains(&frame_pc)
+        && frame_xpsr & 0x0100_0000 != 0
+        && frame_xpsr & 0x0000_03ff == 0
+        && exc_return == 0xffff_fffd
+        && frame_sp == IRQ_FRAME_PSP_TOP.wrapping_sub(32)
+        && frame_sp & 7 == 0
+        && handler_msp == exception_msp
+        && handler_msp & 7 == 0
+        && msp_after == msp_before
+        && psp_after == IRQ_FRAME_PSP_TOP
+        && control_after & 2 == 0;
+    let irq_state_ok = ipsr == 16 + IRQ_FRAME_EXTERNAL
+        && active == IRQ_FRAME_BIT
+        && pending == 0
+        && read_volatile(NVIC_ISPR1 as *const u32) & IRQ_FRAME_BIT == 0;
+    let restored = read_volatile(SCB_VTOR as *const u32) == source_vtor
+        && read_volatile(NVIC_ICPR1 as *const u32) & IRQ_FRAME_BIT == 0
+        && restored_psp == source_psp
+        && restored_control == source_control;
+    let ok = prior_primask == 0
+        && source_control & 2 == 0
+        && vector_installed
+        && returned
+        && return_marker
+        && frame_ok
+        && irq_state_ok
+        && restored;
+
+    if ok {
+        putline(b"IRQ M3 PSP FRAME IPSR=54 ACTIVE=1 PENDING=0 SENTINELS=1 EXC_RETURN=FFFFFFFD PSP=RESTORED MSP=UNCHANGED ok");
+    } else {
+        putline(b"IRQ M3 PSP FRAME CHECK FAILED");
+    }
+    ok
+}
+
 /// Push r4/r7 to preserve the ABI and keep MSP aligned, then pend USART2's
 /// NVIC vector with fixed values in the architectural exception-frame regs.
 #[unsafe(naked)]
@@ -1270,7 +1422,13 @@ unsafe extern "C" fn smoke_pend_usart2_irq_with_sentinels() {
 unsafe extern "C" fn smoke_external_irq_frame_handler() {
     core::arch::naked_asm!(
         "ldr r0, =0x20000500",
+        "tst lr, #4",
+        "beq 2f",
+        "mrs r1, psp",
+        "b 3f",
+        "2:",
         "mrs r1, msp",
+        "3:",
         "str r1, [r0, #0]",
         "ldr r2, [r1, #0]",
         "str r2, [r0, #4]",
@@ -1298,9 +1456,44 @@ unsafe extern "C" fn smoke_external_irq_frame_handler() {
         "ldr r2, =0xE000E204",
         "ldr r3, [r2]",
         "str r3, [r0, #48]",
+        "mrs r3, msp",
+        "str r3, [r0, #68]",
         "movs r2, #1",
         "str r2, [r0, #56]",
         "bx lr",
+    );
+}
+
+/// Run with a dedicated PSP and pend USART2 after loading frame sentinels.
+/// MSP remains reserved for Handler mode and the saved caller return address.
+#[unsafe(naked)]
+unsafe extern "C" fn smoke_pend_usart2_irq_with_psp_sentinels() {
+    core::arch::naked_asm!(
+        "push {{r4, r5, r6, lr}}",
+        "mrs r5, msp",
+        "ldr r6, =0x20000534",
+        "str r5, [r6]",
+        "ldr r5, =0x20004000",
+        "msr psp, r5",
+        "movs r4, #2",
+        "msr control, r4",
+        "isb",
+        "movs r0, #0x11",
+        "movs r1, #0x22",
+        "movs r2, #0x33",
+        "movs r3, #0x44",
+        "movs r5, #0x55",
+        "mov r12, r5",
+        "movs r4, #0x40",
+        "ldr r6, =0xE000E204",
+        "str r4, [r6]",
+        "ldr r6, =0x20000540",
+        "movs r4, #1",
+        "str r4, [r6]",
+        "movs r4, #0",
+        "msr control, r4",
+        "isb",
+        "pop {{r4, r5, r6, pc}}",
     );
 }
 

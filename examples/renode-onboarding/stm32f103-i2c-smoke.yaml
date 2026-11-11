@@ -1,4 +1,6 @@
-# Cortex-M3 USART2 and I2C1 NACK plus TMP102 transactions and BME280 oversampling, input, compensation, and control-register behavior against the imported STM32F103 system.
+# Cortex-M3 USART2 and I2C1 NACK plus TMP102 transactions and BME280 behavior
+# against the imported STM32F103 system. Core checks include exception frames
+# from Thread mode using both MSP and PSP, plus NVIC pending and return state.
 schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv7m-none-eabi/release/firmware-f103-i2c-demo"
@@ -18,6 +20,7 @@ assertions:
   - uart_contains: "SYSTICK M3 CVR_WRITE WRAP=1 ZERO=1 COUNTFLAG_CLEAR=1 PENDING_PRESERVED=1 MASKED=1 ok"
   - uart_contains: "PENDSV M3 CLEAR=1 REPEND=1 VECTOR=14 IPSR=14 ok"
   - uart_contains: "IRQ M3 FRAME IPSR=54 ACTIVE=1 PENDING=0 SENTINELS=1 EXC_RETURN=FFFFFFF9 STACK=ALIGNED RETURN=1 ok"
+  - uart_contains: "IRQ M3 PSP FRAME IPSR=54 ACTIVE=1 PENDING=0 SENTINELS=1 EXC_RETURN=FFFFFFFD PSP=RESTORED MSP=UNCHANGED ok"
   - uart_contains: "USART2 TXEIRQ=1 REARM=0"
   - uart_contains: "USART2 RX GATE re_off=1 ue_off=1 data=00005253 released=1 ok"
   - uart_contains: "SPI1 MAX31855=01901600"

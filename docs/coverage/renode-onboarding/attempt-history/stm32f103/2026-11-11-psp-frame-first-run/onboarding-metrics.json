@@ -1,0 +1,37 @@
+{
+  "target_id": "stm32f103",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 50000000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-f103-i2c-demo",
+  "target_triple": "thumbv7m-none-eabi",
+  "script": "examples/renode-onboarding/stm32f103-i2c-smoke.yaml",
+  "system": "configs/systems/onboarding/stm32f103.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-11T14:40:53Z",
+  "finished_at_utc": "2026-11-11T14:40:57Z",
+  "elapsed_seconds": 5,
+  "elapsed_ms": 4443,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "2026-11-11T14:40:57.844693Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: \"IRQ M3 FRAME IPSR=54 ACTIVE=1 PENDING=0 SENTINELS=1 EXC_RETURN=FFFFFFF9 STACK=ALIGNED RETURN=1 ok\" }) (captured ",
+  "failure_hint": "Smoke assertion mismatch. Compare expected stop/assertions with current deterministic output.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.359,
+    "build_firmware": 2.891,
+    "run_smoke": 1.147
+  },
+  "stages_ms": {
+    "build_cli": 359,
+    "build_firmware": 2891,
+    "run_smoke": 1147
+  }
+}
