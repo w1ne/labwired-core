@@ -1,0 +1,892 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 4000000,
+  "cycles": 4000000,
+  "instructions": 4000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 4000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 4000000
+    }
+  },
+  "limits": {
+    "max_steps": 4000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "STM32H7 register smoke"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "cortex-m7 cpacr priv=00500000 full=00F00000"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "cortex-m7 cpacr nocp fault=1 ipsr=00000006 cfsr=00080000 extended=1"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "cortex-m7 cpacr unprivileged fp=1 nocp=00000000 result=0000005A"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "cortex-m7 irq ipsr=00000015 active=00000020 pending=00000000"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "cortex-m7 frame=1 regs=00000011,00000022,00000033,00000044,00000055"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "cortex-m7 return=1 stack=1 vtor=1"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "cortex-m7 psp exception=1 stack=1 msp=1 return=1 exc_return=FFFFFFFD"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "cortex-m7 psp align exception=1 frame=1 stack=1 msp=1 return=1"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "cortex-m7 psp noalign exception=1 frame=1 stack=1 msp=1 return=1 ccr=1"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "cortex-m7 fp exception=1 frame=1 stack=1 return=1 regs=1 fpscr=1 fpcar=1 exc_return=FFFFFFE9"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "cortex-m7 fp lazy unused=1 lspact=00000001,00000001->00000000 untouched=1 regs=1"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "cortex-m7 fp lazy used=1 lspact=00000001,00000000->00000000 saved=1 regs=1"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "cortex-m7 fp lazy nested=1 lspact=00000001->00000001,00000000 saved=1 regs=1 irq=00000016 active=00000060 exc_return=FFFFFFF1"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "cortex-m7 fp lazy nested-touch=1 lspact=00000001->00000000 saved=1 regs=1 active=00000060"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "cortex-m7 exception ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "cortex-m7 cpacr privileged fp=1 nocp=00000000 result=000000A5"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "cortex-m7 cpacr privileged denied=1 ipsr=00000006 cfsr=00080000"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "cortex-m7 cpacr handler fp=1 ipsr=0000000B thread_unprivileged=00000001 nocp=00000000 result=000000C3"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpioPortB:0",
+          "min_edges": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      111,
+      105,
+      103,
+      0,
+      1476527124,
+      1073760284,
+      13,
+      537001968,
+      10,
+      98,
+      48,
+      61,
+      136704,
+      537001968,
+      104,
+      134223854
+    ],
+    "pc": 134223854,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 536871936,
+    "waiting_for_event": false,
+    "event_register": true
+  },
+  "firmware_hash": "910eaa0514d027b9c64702582e4a2e93b8dcb9c6b5b7c4852d49860295958d97",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabihf/release/firmware-stm32h743-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32h743.yaml",
+    "script": "examples/renode-onboarding/stm32h743-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1476543488,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortB",
+        "kind": "native",
+        "base": 1476527104,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortD",
+        "kind": "native",
+        "base": 1476529152,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart3",
+        "kind": "native",
+        "base": 1073760256,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "fpu",
+        "kind": "native",
+        "base": 3758157616,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "fault_verdict": {
+    "summary": "UsageFault: coprocessor (FPU) instruction while the coprocessor is disabled, at PC 0x0800_183E in `firmware_stm32h743_smoke::attempt_privileged_fp` (main.rs:486), called from `firmware_stm32h743_smoke::check_cortex_m7_exception_frame`.",
+    "kind": "usage_fault",
+    "escalated": false,
+    "origin": "usage_fault",
+    "causes": [
+      {
+        "register": "UFSR",
+        "flag": "NOCP",
+        "meaning": "coprocessor (FPU) instruction while the coprocessor is disabled"
+      }
+    ],
+    "pc": "0x0800183E",
+    "lr": "0x0800B77D",
+    "exc_return": {
+      "value": "0xFFFFFFE9",
+      "return_to": "thread",
+      "stack": "msp",
+      "fp_frame": true
+    },
+    "frame": {
+      "sp": "0x2001FE00",
+      "r0": "0x00000000",
+      "r1": "0x00040000",
+      "r2": "0xE000ED88",
+      "r3": "0x00000006",
+      "r12": "0x2001FE20",
+      "lr": "0x0800B77D",
+      "pc": "0x0800183E",
+      "xpsr": "0x41000000"
+    },
+    "location": {
+      "function": "firmware_stm32h743_smoke::attempt_privileged_fp",
+      "file": "/home/andrii/worktrees-legacy-20261109/labwired-core/renode/crates/firmware-stm32h743-smoke/src/main.rs",
+      "line": 486
+    },
+    "caller": {
+      "function": "firmware_stm32h743_smoke::check_cortex_m7_exception_frame",
+      "file": "/home/andrii/worktrees-legacy-20261109/labwired-core/renode/crates/firmware-stm32h743-smoke/src/main.rs",
+      "line": 1587
+    },
+    "registers": {
+      "hfsr": "0x00000000",
+      "cfsr": "0x00080000",
+      "mmfsr": "0x00",
+      "bfsr": "0x00",
+      "ufsr": "0x0008",
+      "mmfar": "0x00000000",
+      "bfar": "0x00000000"
+    }
+  },
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 4000000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpioPortB",
+        "pin": 0,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 14810,
+            "value": 1
+          },
+          {
+            "cycle": 221121,
+            "value": 0
+          },
+          {
+            "cycle": 427430,
+            "value": 1
+          },
+          {
+            "cycle": 633741,
+            "value": 0
+          },
+          {
+            "cycle": 840050,
+            "value": 1
+          },
+          {
+            "cycle": 1046361,
+            "value": 0
+          },
+          {
+            "cycle": 1252670,
+            "value": 1
+          },
+          {
+            "cycle": 1458981,
+            "value": 0
+          },
+          {
+            "cycle": 1665290,
+            "value": 1
+          },
+          {
+            "cycle": 1871601,
+            "value": 0
+          },
+          {
+            "cycle": 2077910,
+            "value": 1
+          },
+          {
+            "cycle": 2284221,
+            "value": 0
+          },
+          {
+            "cycle": 2490530,
+            "value": 1
+          },
+          {
+            "cycle": 2696841,
+            "value": 0
+          },
+          {
+            "cycle": 2903150,
+            "value": 1
+          },
+          {
+            "cycle": 3109461,
+            "value": 0
+          },
+          {
+            "cycle": 3315770,
+            "value": 1
+          },
+          {
+            "cycle": 3522081,
+            "value": 0
+          },
+          {
+            "cycle": 3728390,
+            "value": 1
+          },
+          {
+            "cycle": 3934701,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 2129,
+            "state": "0"
+          },
+          {
+            "cycle": 14810,
+            "state": "1"
+          },
+          {
+            "cycle": 221121,
+            "state": "0"
+          },
+          {
+            "cycle": 427430,
+            "state": "1"
+          },
+          {
+            "cycle": 633741,
+            "state": "0"
+          },
+          {
+            "cycle": 840050,
+            "state": "1"
+          },
+          {
+            "cycle": 1046361,
+            "state": "0"
+          },
+          {
+            "cycle": 1252670,
+            "state": "1"
+          },
+          {
+            "cycle": 1458981,
+            "state": "0"
+          },
+          {
+            "cycle": 1665290,
+            "state": "1"
+          },
+          {
+            "cycle": 1871601,
+            "state": "0"
+          },
+          {
+            "cycle": 2077910,
+            "state": "1"
+          },
+          {
+            "cycle": 2284221,
+            "state": "0"
+          },
+          {
+            "cycle": 2490530,
+            "state": "1"
+          },
+          {
+            "cycle": 2696841,
+            "state": "0"
+          },
+          {
+            "cycle": 2903150,
+            "state": "1"
+          },
+          {
+            "cycle": 3109461,
+            "state": "0"
+          },
+          {
+            "cycle": 3315770,
+            "state": "1"
+          },
+          {
+            "cycle": 3522081,
+            "state": "0"
+          },
+          {
+            "cycle": 3728390,
+            "state": "1"
+          },
+          {
+            "cycle": 3934701,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 20
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpioPortB",
+      "number": 0,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "STM32H7 register smoke",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "cortex-m7 cpacr priv=00500000 full=00F00000",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "cortex-m7 irq ipsr=00000015 active=00000020 pending=00000000",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "cortex-m7 frame=1 regs=00000011,00000022,00000033,00000044,00000055",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "cortex-m7 return=1 stack=1 vtor=1",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "cortex-m7 psp exception=1 stack=1 msp=1 return=1 exc_return=FFFFFFFD",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "cortex-m7 psp align exception=1 frame=1 stack=1 msp=1 return=1 xpsr=01000200 sp=2001EFE0",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "cortex-m7 psp noalign exception=1 frame=1 stack=1 msp=1 return=1 ccr=1 xpsr=01000000 sp=2001EFE4",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "cortex-m7 fp exception=1 frame=1 stack=1 return=1 regs=1 fpscr=1 fpcar=1 exc_return=FFFFFFE9 sp=2001FE00",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "cortex-m7 fp lazy unused=1 lspact=00000001,00000001->00000000 untouched=1 regs=1",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "cortex-m7 fp lazy used=1 lspact=00000001,00000000->00000000 saved=1 regs=1",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "cortex-m7 fp lazy nested=1 lspact=00000001->00000001,00000000 saved=1 regs=1 irq=00000016 active=00000060 exc_return=FFFFFFF1",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "cortex-m7 fp lazy nested-touch=1 lspact=00000001->00000000 saved=1 regs=1 active=00000060",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "cortex-m7 cpacr privileged fp=1 nocp=00000000 result=000000A5",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "cortex-m7 cpacr privileged denied=1 ipsr=00000006 cfsr=00080000",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "cortex-m7 cpacr nocp fault=1 ipsr=00000006 cfsr=00080000 extended=1",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "cortex-m7 cpacr unprivileged fp=1 nocp=00000000 result=0000005A",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "cortex-m7 cpacr handler fp=1 ipsr=0000000B thread_unprivileged=00000001 nocp=00000000 result=000000C3",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "cortex-m7 exception ok",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "gpiob0=high",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "gpiob0=low",
+        "cycle_lo": 220000,
+        "cycle": 230000,
+        "end_cycle": 230000
+      },
+      {
+        "text": "gpiob0=high",
+        "cycle_lo": 420000,
+        "cycle": 430000,
+        "end_cycle": 430000
+      },
+      {
+        "text": "gpiob0=low",
+        "cycle_lo": 630000,
+        "cycle": 640000,
+        "end_cycle": 640000
+      },
+      {
+        "text": "gpiob0=high",
+        "cycle_lo": 840000,
+        "cycle": 850000,
+        "end_cycle": 850000
+      },
+      {
+        "text": "gpiob0=low",
+        "cycle_lo": 1040000,
+        "cycle": 1050000,
+        "end_cycle": 1050000
+      },
+      {
+        "text": "gpiob0=high",
+        "cycle_lo": 1250000,
+        "cycle": 1260000,
+        "end_cycle": 1260000
+      },
+      {
+        "text": "gpiob0=low",
+        "cycle_lo": 1450000,
+        "cycle": 1460000,
+        "end_cycle": 1460000
+      },
+      {
+        "text": "gpiob0=high",
+        "cycle_lo": 1660000,
+        "cycle": 1670000,
+        "end_cycle": 1670000
+      },
+      {
+        "text": "gpiob0=low",
+        "cycle_lo": 1870000,
+        "cycle": 1880000,
+        "end_cycle": 1880000
+      },
+      {
+        "text": "gpiob0=high",
+        "cycle_lo": 2070000,
+        "cycle": 2080000,
+        "end_cycle": 2080000
+      },
+      {
+        "text": "gpiob0=low",
+        "cycle_lo": 2280000,
+        "cycle": 2290000,
+        "end_cycle": 2290000
+      },
+      {
+        "text": "gpiob0=high",
+        "cycle_lo": 2490000,
+        "cycle": 2500000,
+        "end_cycle": 2500000
+      },
+      {
+        "text": "gpiob0=low",
+        "cycle_lo": 2690000,
+        "cycle": 2700000,
+        "end_cycle": 2700000
+      },
+      {
+        "text": "gpiob0=high",
+        "cycle_lo": 2900000,
+        "cycle": 2910000,
+        "end_cycle": 2910000
+      },
+      {
+        "text": "gpiob0=low",
+        "cycle_lo": 3100000,
+        "cycle": 3110000,
+        "end_cycle": 3110000
+      },
+      {
+        "text": "gpiob0=high",
+        "cycle_lo": 3310000,
+        "cycle": 3320000,
+        "end_cycle": 3320000
+      },
+      {
+        "text": "gpiob0=low",
+        "cycle_lo": 3520000,
+        "cycle": 3530000,
+        "end_cycle": 3530000
+      },
+      {
+        "text": "gpiob0=high",
+        "cycle_lo": 3720000,
+        "cycle": 3730000,
+        "end_cycle": 3730000
+      },
+      {
+        "text": "gpiob0=low",
+        "cycle_lo": 3930000,
+        "cycle": 3940000,
+        "end_cycle": 3940000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 60248,
+    "data_bytes": 0,
+    "bss_bytes": 2076,
+    "flash_used_bytes": 60248,
+    "ram_static_bytes": 2076,
+    "flash_total_bytes": 1048576,
+    "ram_total_bytes": 131072,
+    "flash_used_pct": 5.75,
+    "ram_static_pct": 1.58,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 128996,
+    "main_stack_high_water_bytes": 560,
+    "main_stack_free_min_bytes": 128400,
+    "main_stack_base": 536872988,
+    "main_stack_top": 537001984,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 128996,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 128400,
+    "heap_base": 536872988,
+    "heap_top": 537001984
+  },
+  "metrics": {
+    "cycles": 4000000,
+    "instructions": 4000000,
+    "steps_executed": 4000000,
+    "memory_reads": 13500,
+    "memory_writes": 1639,
+    "peripheral_accesses": 3866678,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134223888,
+        "count": 313,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134223820,
+        "count": 274,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134223822,
+        "count": 274,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134223826,
+        "count": 274,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134223852,
+        "count": 274,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134223786,
+        "count": 273,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134223792,
+        "count": 273,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134223824,
+        "count": 273,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134223884,
+        "count": 273,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134223892,
+        "count": 273,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134223776,
+        "count": 235,
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 134223780,
+        "count": 235,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134223782,
+        "count": 235,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134223788,
+        "count": 235,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134223800,
+        "count": 235,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134223808,
+        "count": 235,
+        "symbol": "core::ptr::read_volatile"
+      }
+    ],
+    "stalled_poll": {
+      "peripheral": "gpioPortB",
+      "offset": 20,
+      "accesses": 63269
+    }
+  }
+}

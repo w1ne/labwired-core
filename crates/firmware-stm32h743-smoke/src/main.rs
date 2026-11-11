@@ -25,6 +25,8 @@ const CPACR_CP10_CP11: u32 = 0x00F0_0000;
 #[cfg(feature = "stm32h743-exception-frame")]
 const CPACR_PRIVILEGED_ONLY: u32 = 0x0050_0000;
 #[cfg(feature = "stm32h743-exception-frame")]
+const CPACR_RESERVED_ACCESS: u32 = (0b10 << 20) | (0b10 << 22);
+#[cfg(feature = "stm32h743-exception-frame")]
 const SHCSR_USGFAULTENA: u32 = 1 << 18;
 #[cfg(feature = "stm32h743-exception-frame")]
 const CFSR_UFSR_NOCP: u32 = 1 << 19;
@@ -1602,6 +1604,39 @@ fn check_cortex_m7_exception_frame() -> bool {
     send_hex32(denied_cfsr & CFSR_UFSR_NOCP);
     send(b"\r\n");
 
+    // The architectural 0b10 access encoding is reserved and unpredictable.
+    // This engine chooses a deterministic safe policy: deny the access and
+    // raise NOCP. Keep this assertion scoped to that engine policy.
+    unsafe {
+        let record = core::ptr::addr_of_mut!(CPACR_FAULT_RECORD).cast::<u32>();
+        for index in 0..4 {
+            write_volatile(record.add(index), 0);
+        }
+        write_volatile(SCB_CFSR, CFSR_UFSR_NOCP);
+        write_volatile(SCB_CPACR, CPACR_RESERVED_ACCESS);
+        asm!("dsb", "isb", options(nostack, preserves_flags));
+        attempt_privileged_fp();
+    }
+    let reserved_record = core::ptr::addr_of!(CPACR_FAULT_RECORD).cast::<u32>();
+    let reserved_pc = unsafe { read_volatile(reserved_record) };
+    let reserved_cfsr = unsafe { read_volatile(reserved_record.add(1)) };
+    let reserved_ipsr = unsafe { read_volatile(reserved_record.add(2)) };
+    let reserved_readback = unsafe { read_volatile(SCB_CPACR) } & CPACR_CP10_CP11;
+    let reserved_denied_ok = reserved_pc >= 0x0800_0000
+        && reserved_pc < 0x0810_0000
+        && reserved_cfsr & CFSR_UFSR_NOCP != 0
+        && reserved_ipsr == 6
+        && reserved_readback == CPACR_RESERVED_ACCESS;
+    send(b"cortex-m7 cpacr reserved policy-deny=");
+    send(if reserved_denied_ok { b"1" } else { b"0" });
+    send(b" readback=");
+    send_hex32(reserved_readback);
+    send(b" ipsr=");
+    send_hex32(reserved_ipsr);
+    send(b" cfsr=");
+    send_hex32(reserved_cfsr & CFSR_UFSR_NOCP);
+    send(b"\r\n");
+
     unsafe {
         let record = core::ptr::addr_of_mut!(CPACR_FAULT_RECORD).cast::<u32>();
         for index in 0..4 {
@@ -1678,7 +1713,12 @@ fn check_cortex_m7_exception_frame() -> bool {
     send(b" result=");
     send_hex32(handler_fp_result);
     send(b"\r\n");
-    ok && privileged_fp_ok && privileged_denied_ok && handler_fp_ok && nocp_ok && full_access_ok
+    ok && privileged_fp_ok
+        && privileged_denied_ok
+        && reserved_denied_ok
+        && handler_fp_ok
+        && nocp_ok
+        && full_access_ok
 }
 
 #[cfg(feature = "nucleo-h753zi-rx")]
