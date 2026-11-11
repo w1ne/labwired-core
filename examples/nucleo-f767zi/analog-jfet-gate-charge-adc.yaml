@@ -1,0 +1,48 @@
+# Generic level-1 NJF gate-junction depletion charge on PA2/PA3, routed
+# through STM32F767 ADC1_IN2/IN3. The charged branch is paired with an
+# otherwise matched zero-charge control.
+name: "nucleo-f767zi-jfet-gate-charge-adc"
+chip: "../../configs/chips/stm32f767.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "jfet_gate_charge"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      drive_voltage: "ui.jfet_gate.drive_v"
+    outputs:
+      gate_voltage: "board.analog.pa2_volts"
+    config:
+      netlist_text: |
+        Vdrive drive 0 dc 3.3
+        Vdrain drain 0 dc 3.3
+        Vsource source 0 dc 3.3
+        Rgate drive gate 1k
+        J1 drain gate source NJF_CAP
+        .model NJF_CAP NJF(VTO=-2 BETA=500u IS=1e-30 CGS=1n CGD=1n PB=1 FC=0.5)
+      probes:
+        gate_voltage: "v(gate)"
+      sources:
+        drive_voltage: "Vdrive"
+      vdd: 3.3
+  - id: "jfet_gate_no_charge_control"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      drive_voltage: "ui.jfet_gate.drive_v"
+    outputs:
+      gate_voltage: "board.analog.pa3_volts"
+    config:
+      netlist_text: |
+        Vdrive drive 0 dc 3.3
+        Vdrain drain 0 dc 3.3
+        Vsource source 0 dc 3.3
+        Rgate drive gate 1k
+        J1 drain gate source NJF_REF
+        .model NJF_REF NJF(VTO=-2 BETA=500u IS=1e-30 PB=1 FC=0.5)
+      probes:
+        gate_voltage: "v(gate)"
+      sources:
+        drive_voltage: "Vdrive"
+      vdd: 3.3
