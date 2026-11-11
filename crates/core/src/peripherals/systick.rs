@@ -151,19 +151,27 @@ impl Systick {
     /// CALIB is implementation-defined per chip (TENMS/SKEW/NOREF). The chip
     /// yaml can supply the silicon value via `config: { calib: ... }`.
     pub fn with_calib(calib: u32) -> Self {
-        Self {
-            calib,
-            ..Self::new()
-        }
+        let mut systick = Self::new();
+        systick.calib = calib;
+        systick.csr = Self::reset_csr_for_calibration(calib);
+        systick
     }
 
     /// Configure the chip-specific external SysTick source. A divider of 8
     /// models the STM32 HCLK/8 source when CSR.CLKSOURCE is clear.
     pub fn with_calib_and_external_clock_divider(calib: u32, divider: u32) -> Self {
-        Self {
-            calib,
-            external_clock_divider: divider.max(1),
-            ..Self::new()
+        let mut systick = Self::with_calib(calib);
+        systick.external_clock_divider = divider.max(1);
+        systick
+    }
+
+    /// Cortex-M0 resets SYST_CSR to TICKINT=1 when the chip has no reference
+    /// clock. CLKSOURCE itself reads as one and ignores writes in that case.
+    fn reset_csr_for_calibration(calib: u32) -> u32 {
+        if calib & 0x8000_0000 != 0 {
+            0x2
+        } else {
+            0
         }
     }
 
@@ -429,11 +437,12 @@ impl Systick {
 }
 
 impl crate::Peripheral for Systick {
-    /// ARMv7-M B3.3.3: SYST_CSR resets to 0 (counter off, no interrupt); RVR
-    /// and CVR are UNKNOWN, taken as 0. Bumping `arm_seq` retires any event
-    /// chain armed under the old configuration.
+    /// ARMv7-M B3.3.3: SYST_CSR resets to 0. Cortex-M0 §4.4.1 sets TICKINT
+    /// when CALIB.NOREF is set; CLKSOURCE reads as one in that case. RVR and
+    /// CVR are UNKNOWN, taken as 0. Bumping `arm_seq` retires any event chain
+    /// armed under the old configuration.
     fn on_node_reset(&mut self) {
-        self.csr = 0;
+        self.csr = Self::reset_csr_for_calibration(self.calib);
         self.rvr = 0;
         self.cvr.set(0);
         self.countflag.set(false);
@@ -676,6 +685,31 @@ mod tests {
         let mut st = Systick::with_calib(0x4000_1770);
         st.write_u32(0x0C, 0xA55A_3CC3).unwrap();
         assert_eq!(st.read_u32(0x0C).unwrap(), 0x4000_1770);
+    }
+
+    #[test]
+    fn no_reference_clock_resets_tickint_and_forces_processor_clock() {
+        let mut st = Systick::with_calib(0x8000_0000);
+        assert_eq!(st.read_u32(0x00).unwrap() & 0x7, 0x6);
+
+        st.write_u32(0x00, 0).unwrap();
+        assert_eq!(st.read_u32(0x00).unwrap() & 0x7, 0x4);
+
+        st.on_node_reset();
+        assert_eq!(st.read_u32(0x00).unwrap() & 0x7, 0x6);
+    }
+
+    #[test]
+    fn no_reference_clock_uses_processor_cycles_even_with_external_divider() {
+        let mut st = Systick::with_calib_and_external_clock_divider(0x8000_0000, 8);
+        st.write_u32(0x04, 2).unwrap(); // RVR
+        st.write_u32(0x08, 0).unwrap(); // CVR
+        st.write_u32(0x00, 0x3).unwrap(); // ENABLE | TICKINT; CLKSOURCE forced
+
+        assert_eq!(st.read_u32(0x00).unwrap() & 0x7, 0x7);
+        assert_eq!(st.tick().system_exception, None); // reload
+        assert_eq!(st.tick().system_exception, None); // 2 -> 1
+        assert_eq!(st.tick().system_exception, Some(15)); // 1 -> 0
     }
 
     /// Regression: a counter sitting at zero (freshly reloaded, or just cleared
