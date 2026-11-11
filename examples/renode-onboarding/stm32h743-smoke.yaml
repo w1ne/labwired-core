@@ -9,6 +9,7 @@ assertions:
   - uart_contains: "STM32H7 register smoke"
   - uart_contains: "cortex-m7 cpacr priv=00500000 full=00F00000"
   - uart_contains: "cortex-m7 cpacr nocp fault=1 ipsr=00000006 cfsr=00080000 extended=1"
+  - uart_contains: "cortex-m7 cpacr unprivileged fp=1 nocp=00000000 result=0000005A"
   - uart_contains: "cortex-m7 irq ipsr=00000015 active=00000020 pending=00000000"
   - uart_contains: "cortex-m7 frame=1 regs=00000011,00000022,00000033,00000044,00000055"
   - uart_contains: "cortex-m7 return=1 stack=1 vtor=1"

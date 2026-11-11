@@ -407,6 +407,30 @@ unsafe fn attempt_unprivileged_fp() {
     );
 }
 
+/// Switch Thread mode to unprivileged and verify that full CP10/CP11 access
+/// permits a VFP register round trip. The integer result proves both VFP
+/// instructions retired instead of being skipped by the UsageFault handler.
+#[cfg(feature = "stm32h743-exception-frame")]
+#[inline(never)]
+unsafe fn unprivileged_full_access_fp_roundtrip() -> u32 {
+    let result: u32;
+    asm!(
+        "mrs r0, control",
+        "bic r0, r0, #2",
+        "orr r0, r0, #1",
+        "msr control, r0",
+        "isb",
+        "movs r0, #0x5a",
+        "vmov s31, r0",
+        "movs r0, #0",
+        "vmov r0, s31",
+        out("r0") result,
+        out("s31") _,
+        options(nostack)
+    );
+    result
+}
+
 /// Pend IRQ 5 after setting sentinels in every caller-saved register which
 /// Cortex-M stacks automatically. The recorded pre-exception stack includes
 /// the r4/r7 save on MSP, or is the unchanged PSP when Thread mode uses PSP.
@@ -1455,7 +1479,27 @@ fn check_cortex_m7_exception_frame() -> bool {
     } else {
         b"0\r\n"
     });
-    ok && nocp_ok
+
+    // Full CP10/CP11 access must also permit an actual FP operation in
+    // unprivileged Thread mode. Clear the previous NOCP latch first, then
+    // round-trip a known integer through S31 so a skipped instruction cannot
+    // masquerade as a successful access.
+    unsafe {
+        write_volatile(SCB_CPACR, CPACR_CP10_CP11);
+        write_volatile(SCB_CFSR, CFSR_UFSR_NOCP);
+        asm!("dsb", "isb", options(nostack, preserves_flags));
+    }
+    let fp_roundtrip = unsafe { unprivileged_full_access_fp_roundtrip() };
+    let full_access_nocp = unsafe { read_volatile(SCB_CFSR) } & CFSR_UFSR_NOCP;
+    let full_access_ok = fp_roundtrip == 0x5A && full_access_nocp == 0;
+    send(b"cortex-m7 cpacr unprivileged fp=");
+    send(if full_access_ok { b"1" } else { b"0" });
+    send(b" nocp=");
+    send_hex32(full_access_nocp);
+    send(b" result=");
+    send_hex32(fp_roundtrip);
+    send(b"\r\n");
+    ok && nocp_ok && full_access_ok
 }
 
 #[cfg(feature = "nucleo-h753zi-rx")]

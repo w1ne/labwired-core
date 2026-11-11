@@ -48,6 +48,12 @@
     },
     {
       "assertion": {
+        "uart_contains": "cortex-m7 cpacr unprivileged fp=1 nocp=00000000 result=0000005A"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "uart_contains": "cortex-m7 irq ipsr=00000015 active=00000020 pending=00000000"
       },
       "passed": true
@@ -149,12 +155,12 @@
       98,
       48,
       61,
-      134720,
+      135104,
       537001968,
       104,
-      134223748
+      134223858
     ],
-    "pc": 134223748,
+    "pc": 134223858,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -167,7 +173,7 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "firmware_hash": "4d948b0c471bfecad8f2c8a1186edad0143c9d470529eb86d8369e1d07802e7f",
+  "firmware_hash": "97578604f703b578626d0dadadadb232e37471d269a12e91040d4e1d1f3e3c9b",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabihf/release/firmware-stm32h743-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32h743.yaml",
@@ -263,7 +269,7 @@
       }
     ],
     "pc": "0x08001822",
-    "lr": "0x08008B23",
+    "lr": "0x08008A6B",
     "exc_return": {
       "value": "0xFFFFFFE9",
       "return_to": "thread",
@@ -271,13 +277,13 @@
       "fp_frame": true
     },
     "frame": {
-      "sp": "0x2001FDF0",
+      "sp": "0x2001FE00",
       "r0": "0x00000005",
       "r1": "0x20000400",
       "r2": "0xE000ED88",
       "r3": "0x00000006",
-      "r12": "0x01000200",
-      "lr": "0x08008B23",
+      "r12": "0x2001FE20",
+      "lr": "0x08008A6B",
       "pc": "0x08001822",
       "xpsr": "0x41000000"
     },
@@ -289,7 +295,7 @@
     "caller": {
       "function": "firmware_stm32h743_smoke::check_cortex_m7_exception_frame",
       "file": "/home/andrii/worktrees-legacy-20261109/labwired-core/renode/crates/firmware-stm32h743-smoke/src/main.rs",
-      "line": 1434
+      "line": 1458
     },
     "registers": {
       "hfsr": "0x00000000",
@@ -313,83 +319,83 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 12793,
+            "cycle": 13134,
             "value": 1
           },
           {
-            "cycle": 219104,
+            "cycle": 219445,
             "value": 0
           },
           {
-            "cycle": 425413,
+            "cycle": 425754,
             "value": 1
           },
           {
-            "cycle": 631724,
+            "cycle": 632065,
             "value": 0
           },
           {
-            "cycle": 838033,
+            "cycle": 838374,
             "value": 1
           },
           {
-            "cycle": 1044344,
+            "cycle": 1044685,
             "value": 0
           },
           {
-            "cycle": 1250653,
+            "cycle": 1250994,
             "value": 1
           },
           {
-            "cycle": 1456964,
+            "cycle": 1457305,
             "value": 0
           },
           {
-            "cycle": 1663273,
+            "cycle": 1663614,
             "value": 1
           },
           {
-            "cycle": 1869584,
+            "cycle": 1869925,
             "value": 0
           },
           {
-            "cycle": 2075893,
+            "cycle": 2076234,
             "value": 1
           },
           {
-            "cycle": 2282204,
+            "cycle": 2282545,
             "value": 0
           },
           {
-            "cycle": 2488513,
+            "cycle": 2488854,
             "value": 1
           },
           {
-            "cycle": 2694824,
+            "cycle": 2695165,
             "value": 0
           },
           {
-            "cycle": 2901133,
+            "cycle": 2901474,
             "value": 1
           },
           {
-            "cycle": 3107444,
+            "cycle": 3107785,
             "value": 0
           },
           {
-            "cycle": 3313753,
+            "cycle": 3314094,
             "value": 1
           },
           {
-            "cycle": 3520064,
+            "cycle": 3520405,
             "value": 0
           },
           {
-            "cycle": 3726373,
+            "cycle": 3726714,
             "value": 1
           },
           {
-            "cycle": 3932684,
+            "cycle": 3933025,
             "value": 0
           }
         ],
@@ -401,83 +407,83 @@
             "state": "0"
           },
           {
-            "cycle": 12793,
+            "cycle": 13134,
             "state": "1"
           },
           {
-            "cycle": 219104,
+            "cycle": 219445,
             "state": "0"
           },
           {
-            "cycle": 425413,
+            "cycle": 425754,
             "state": "1"
           },
           {
-            "cycle": 631724,
+            "cycle": 632065,
             "state": "0"
           },
           {
-            "cycle": 838033,
+            "cycle": 838374,
             "state": "1"
           },
           {
-            "cycle": 1044344,
+            "cycle": 1044685,
             "state": "0"
           },
           {
-            "cycle": 1250653,
+            "cycle": 1250994,
             "state": "1"
           },
           {
-            "cycle": 1456964,
+            "cycle": 1457305,
             "state": "0"
           },
           {
-            "cycle": 1663273,
+            "cycle": 1663614,
             "state": "1"
           },
           {
-            "cycle": 1869584,
+            "cycle": 1869925,
             "state": "0"
           },
           {
-            "cycle": 2075893,
+            "cycle": 2076234,
             "state": "1"
           },
           {
-            "cycle": 2282204,
+            "cycle": 2282545,
             "state": "0"
           },
           {
-            "cycle": 2488513,
+            "cycle": 2488854,
             "state": "1"
           },
           {
-            "cycle": 2694824,
+            "cycle": 2695165,
             "state": "0"
           },
           {
-            "cycle": 2901133,
+            "cycle": 2901474,
             "state": "1"
           },
           {
-            "cycle": 3107444,
+            "cycle": 3107785,
             "state": "0"
           },
           {
-            "cycle": 3313753,
+            "cycle": 3314094,
             "state": "1"
           },
           {
-            "cycle": 3520064,
+            "cycle": 3520405,
             "state": "0"
           },
           {
-            "cycle": 3726373,
+            "cycle": 3726714,
             "state": "1"
           },
           {
-            "cycle": 3932684,
+            "cycle": 3933025,
             "state": "0"
           }
         ],
@@ -550,7 +556,7 @@
         "end_cycle": 10000
       },
       {
-        "text": "cortex-m7 fp exception=1 frame=1 stack=1 return=1 regs=1 fpscr=1 fpcar=1 exc_return=FFFFFFE9 sp=2001FDF0",
+        "text": "cortex-m7 fp exception=1 frame=1 stack=1 return=1 regs=1 fpscr=1 fpcar=1 exc_return=FFFFFFE9 sp=2001FE00",
         "cycle_lo": 0,
         "cycle": 10000,
         "end_cycle": 10000
@@ -581,6 +587,12 @@
       },
       {
         "text": "cortex-m7 cpacr nocp fault=1 ipsr=00000006 cfsr=00080000 extended=1",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "cortex-m7 cpacr unprivileged fp=1 nocp=00000000 result=0000005A",
         "cycle_lo": 10000,
         "cycle": 20000,
         "end_cycle": 20000
@@ -716,14 +728,14 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 38824,
+    "text_bytes": 42164,
     "data_bytes": 0,
     "bss_bytes": 2068,
-    "flash_used_bytes": 38824,
+    "flash_used_bytes": 42164,
     "ram_static_bytes": 2068,
     "flash_total_bytes": 1048576,
     "ram_total_bytes": 131072,
-    "flash_used_pct": 3.7,
+    "flash_used_pct": 4.02,
     "ram_static_pct": 1.58,
     "notes": [
       "section_sum_not_bin_image",
@@ -733,15 +745,15 @@
   "memory": {
     "main_stack_method": "paint",
     "main_stack_limit_bytes": 129004,
-    "main_stack_high_water_bytes": 412,
-    "main_stack_free_min_bytes": 128396,
+    "main_stack_high_water_bytes": 560,
+    "main_stack_free_min_bytes": 128408,
     "main_stack_base": 536872980,
     "main_stack_top": 537001984,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
     "heap_limit_bytes": 129004,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 128396,
+    "heap_free_min_bytes": 128408,
     "heap_base": 536872980,
     "heap_top": 537001984
   },
@@ -749,63 +761,63 @@
     "cycles": 4000000,
     "instructions": 4000000,
     "steps_executed": 4000000,
-    "memory_reads": 10013,
-    "memory_writes": 1530,
-    "peripheral_accesses": 3868028,
+    "memory_reads": 10340,
+    "memory_writes": 1531,
+    "peripheral_accesses": 3867832,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134223746,
+        "pc": 134223760,
         "count": 274,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134223782,
+        "pc": 134223774,
         "count": 274,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134223796,
+        "pc": 134223824,
         "count": 274,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134223846,
+        "pc": 134223830,
         "count": 274,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134223852,
+        "pc": 134223856,
         "count": 274,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134223778,
+        "pc": 134223756,
         "count": 273,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134223786,
+        "pc": 134223764,
         "count": 273,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134223822,
+        "pc": 134223800,
         "count": 273,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134223850,
+        "pc": 134223828,
         "count": 273,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134223858,
+        "pc": 134223836,
         "count": 273,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134223738,
+        "pc": 134223736,
         "count": 235,
         "symbol": "core::ptr::read_volatile"
       },
@@ -820,17 +832,17 @@
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134223750,
-        "count": 235,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134223758,
-        "count": 235,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
         "pc": 134223762,
+        "count": 235,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134223770,
+        "count": 235,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134223782,
         "count": 235,
         "symbol": "core::ptr::read_volatile"
       }
@@ -838,7 +850,7 @@
     "stalled_poll": {
       "peripheral": "gpioPortB",
       "offset": 20,
-      "accesses": 65224
+      "accesses": 64895
     }
   }
 }
