@@ -25,8 +25,8 @@ There are two chip yamls for ESP32-S3 today:
 |---------------------|---------------------------------------------------------------------------------|
 | Chip yamls          | [`esp32s3.yaml`](../../configs/chips/esp32s3.yaml) (minimal) · [`esp32s3-zero.yaml`](../../configs/chips/esp32s3-zero.yaml) (Plan 2/4) |
 | System yaml         | [`configs/systems/esp32s3-zero.yaml`](../../configs/systems/esp32s3-zero.yaml) · [`Arduino Nano ESP32 + BME280`](../../examples/arduino-nano-esp32-bme280/) |
-| Reference firmware  | [`examples/esp32s3-i2c-tmp102/`](../../examples/esp32s3-i2c-tmp102/) (Plan 4, canonical) · `examples/esp32s3-blinky/` · `examples/esp32s3-hello-world/` · Arduino Nano ESP32 BME280 smoke |
-| Validation          | Plan 4 end-to-end test: `crates/core/tests/e2e_i2c_tmp102.rs`; Nano ESP32 BME280 onboarding smoke |
+| Reference firmware  | [`examples/esp32s3-i2c-tmp102/`](../../examples/esp32s3-i2c-tmp102/) (Plan 4, canonical) · `examples/esp32s3-blinky/` · `examples/esp32s3-hello-world/` · [S3-Zero WS2812 smoke](../../examples/esp32s3-zero/README.md) · Arduino Nano ESP32 BME280 smoke |
+| Validation          | Plan 4 end-to-end test: `crates/core/tests/e2e_i2c_tmp102.rs`; S3-Zero GPIO21/WS2812 onboarding smoke; Nano ESP32 BME280 onboarding smoke |
 | Tier                | structural — declarative + Plan 2/4 peripheral models                           |
 
 ## Peripherals (esp32s3-zero, Plan 2/4 model)
@@ -54,6 +54,11 @@ The authoritative wiring (`configure_xtensa_esp32s3`) additionally registers
 LEDC, RMT, PCNT, TIMG0/1, SAR-ADC, TWAI, AES, SHA, RSA, HMAC, DS, MCPWM0/1,
 SD/MMC, LCD_CAM and USB-OTG models — see
 `crates/core/src/system/xtensa.rs` for the full list and fidelity notes.
+
+The Waveshare ESP32-S3-Zero profile attaches its onboard WS2812 to GPIO21,
+matching the vendor's pin documentation. Its board smoke bit-bangs a green
+frame through the real GPIO output path and checks that the WS2812 component
+decodes one lit pixel. It does not claim the Arduino RMT/NeoPixel-library path.
 
 The plain `esp32s3.yaml` (used by older examples) is a strict subset:
 UART0 @ 0x60000000 + the declarative GPIO/TIMG0/INTERRUPT_CORE0 peripherals

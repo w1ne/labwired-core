@@ -227,6 +227,12 @@ jobs:
             firmware_build_script: examples/xiao-esp32s3/firmware/build-firmware.sh
             script: examples/xiao-esp32s3/io-smoke.yaml
             system: configs/systems/xiao-esp32s3.yaml
+          # Waveshare ESP32-S3-Zero FH4R2: its onboard WS2812 DIN is GPIO21.
+          # The local smoke checks GPIO edges and decodes the modeled pixel frame.
+          - id: esp32s3-zero-ws2812
+            firmware_build_script: examples/esp32s3-zero/build-firmware.sh
+            script: examples/esp32s3-zero/ws2812-smoke.yaml
+            system: configs/systems/esp32s3-zero.yaml
           # Exact ESP32-S2-DevKitC-1-N8R2 UART0 fast-start profile. This ELF
           # smoke exercises the LX7 memory windows and UART0 model; it does not
           # claim mask-ROM/flash boot or the board's other SoC features.
@@ -361,6 +367,15 @@ jobs:
             --out-dir "out/onboarding-smoke/${{ matrix.id }}" \
             --threshold-seconds 3600 \
             "${rom_boot_args[@]}"
+
+      - name: Verify ESP32-S3-Zero WS2812 artifact
+        if: ${{ matrix.id == 'esp32s3-zero-ws2812' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 examples/esp32s3-zero/verify_ws2812_artifact.py \
+            "out/onboarding-smoke/${{ matrix.id }}/simulation-output/result.json" \
+            | tee "out/onboarding-smoke/${{ matrix.id }}/logs/ws2812_artifact_check.log"
 
       - name: Publish onboarding summary
         if: always()

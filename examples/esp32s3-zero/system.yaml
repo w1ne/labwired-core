@@ -1,8 +1,15 @@
-# LabWired — Waveshare ESP32-S3-Zero, bare MCU.
-#
-# No external devices: this system exists so a CLI gate can boot an ESP32-S3
-# image. Every other S3 board manifest in the tree carries a display or a
-# sensor, which makes it a lab for that part rather than a check on the chip.
+# LabWired — Waveshare ESP32-S3-Zero, FH4R2 option.
+# The onboard WS2812 DIN is GPIO21. The USB-C connector, Wi-Fi, BLE, and PSRAM
+# are outside this profile.
 name: "esp32s3-zero"
 chip: "../../configs/chips/esp32s3-zero.yaml"
-external_devices: []
+debug_uart: "uart0"
+external_devices:
+  - id: "status_neopixel"
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO21"
+      num_pixels: 1
+      cpu_hz: 240000000
+board_io: []

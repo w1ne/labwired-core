@@ -1,16 +1,16 @@
-# LabWired - ESP32-S3-Zero System Configuration
-# Waveshare ESP32-S3-Zero: compact board with USB-C, RGB LED on GPIO48
+# Waveshare ESP32-S3-Zero, FH4R2 option (4 MiB flash / 2 MiB PSRAM).
+# The onboard WS2812 DIN is GPIO21; Waveshare's wiki and schematic both
+# identify GPIO21 (not GPIO48). PSRAM, USB, Wi-Fi and BLE are outside this
+# smoke profile.
 name: "esp32s3-zero"
-# Intentional: the ROM-boot flash path (a 16 MiB image) needs the S3 flash map
-# from configs/chips/esp32s3.yaml, so this system keeps the S3 descriptor; the
-# 4 MiB zero descriptor (configs/chips/esp32s3-zero.yaml) is exercised by
-# firmware_survival::test_esp32s3_zero_tier1_survival via the `esp32s3-zero` chip field.
-chip: "../chips/esp32s3.yaml"
-external_devices: []
-board_io:
-  - id: "status_led"
-    kind: "led"
-    peripheral: "gpio"
-    pin: 48
-    signal: "output"
-    active_high: true
+chip: "../chips/esp32s3-zero.yaml"
+debug_uart: "uart0"
+external_devices:
+  - id: "status_neopixel"
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO21"
+      num_pixels: 1
+      cpu_hz: 240000000
+board_io: []
