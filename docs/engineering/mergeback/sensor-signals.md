@@ -1,25 +1,30 @@
 # Sensor mergeback: retained outputs and autonomous data-ready
 
-Date: 2026-11-11 (UTC). **Generic port with a separately gated board review artifact. Software acceptance passed.**
+Date: 2026-11-11 (Europe/Budapest). **Generic and board layers active on the review branch. Software acceptance passed; live recapture is tracked in [#1827](https://github.com/w1ne/labwired-core/issues/1827).**
 
 ## Decision
 
-Prepare the generic resolver, autonomous I2C data-ready engine and bounded
-LSM303AGR descriptors as one reviewable slice. Keep the GPIOTE correction,
-micro:bit sensor IRQ placement and source-built board guests in a separate patch
-until the two affected silicon-record acknowledgements are resolved by a human.
-Successful simulation tests do not resolve that gate.
+The generic resolver, autonomous I2C data-ready engine and bounded LSM303AGR
+descriptors were published in PR #1825 at `2dbbcc4ed9c2aadcfb37411d9c437287f6a9e965`.
+The owner acknowledged the exact candidate digest for both affected Nordic
+records on 2026-11-11. This branch now activates the GPIOTE correction, micro:bit
+sensor IRQ placement and source-built board guests as a separate commit.
 
-Integration base: `75700134a3b31124bb46eae118acc67d65b4b546`.
-The board-layer artifact is [microbit-sensor-board.patch](microbit-sensor-board.patch).
-It is inactive in this branch. Its SHA256 is:
+Original integration base: `75700134a3b31124bb46eae118acc67d65b4b546`.
+Board activation base: `2dbbcc4ed9c2aadcfb37411d9c437287f6a9e965`.
+The [board-layer patch](microbit-sensor-board.patch) remains an exact reproduction
+artifact for that generic base. It is already applied on this branch. SHA256:
 
 ```text
 68b6b82e3cf882be9e8474fc9852e20c7821816d9408599eb7c826405ea5054d
 ```
 
-The [validation receipt](sensor-signals.validation.json) records exact commands,
-counts, source hashes, firmware hashes and model-gate evaluations.
+The original [pre-activation validation receipt](sensor-signals.validation.json)
+records commands, counts, source hashes, firmware hashes and the original gate
+snapshot. Its pending-path labels describe the original generic-only branch; its
+failing gate values evaluate the qualified board candidate before owner acknowledgement. The [activation receipt](microbit-sensor-activation.validation.json)
+records the exact source match and current owner-approved gate evaluations.
+No functional source changed from the qualified candidate during activation.
 
 ## Provenance and scope
 
@@ -52,28 +57,33 @@ contains the [commit-to-file extraction map](https://github.com/w1ne/labwired-co
   every net each tick adds work without supplying missing state. The feature-off and scheduler-on
   clock-gating regressions pass without replay.
 
-## Silicon-record gate
+## Silicon-record acknowledgement
 
-The validation receipt reports content drift for both records below.
-Their recorded acknowledgement digest is unchanged:
+The owner explicitly accepted the exact GPIOTE content for `nrf52840` and
+`seeed-xiao-nrf52840-sense` on 2026-11-11. Both watched digests were recomputed
+from the applied source and match that authorization:
 
 ```text
-recorded_ack_digest = 86b0c81ce18f79f9d18d02eb182f135700e90d8fdcc7fc6c3a53a49097599aa8
-candidate_digest    = 219f135fe825720f1a2d73e667837512f1fb1f5cbbc2f46eacf747d7dcfc1106
+previous_ack_digest = 86b0c81ce18f79f9d18d02eb182f135700e90d8fdcc7fc6c3a53a49097599aa8
+accepted_digest     = 219f135fe825720f1a2d73e667837512f1fb1f5cbbc2f46eacf747d7dcfc1106
 ```
 
-| Record | Candidate gate | Required action |
+| Record | Current gate | Live recapture |
 | --- | --- | --- |
-| `nrf52840` | DRIFT; failing | Human acknowledgement decision or required recapture |
-| `seeed-xiao-nrf52840-sense` | DRIFT; failing | Human acknowledgement decision or required recapture |
+| `nrf52840` | Exact drift acknowledged; non-failing | [#1827](https://github.com/w1ne/labwired-core/issues/1827), due 2026-12-11 |
+| `seeed-xiao-nrf52840-sense` | Exact drift acknowledged; non-failing | Same capture and tracking issue |
 
-The GPIOTE source lies inside the watched nRF52 scope. The XIAO entry refers to
-the same silicon/bench evidence; it is a second manifest record, not an
-independent physical validation. [validation/manifest.yaml](../../../validation/manifest.yaml) and
+The existing 30-day policy gives an expiry of 2026-12-11. Expiry alone fails the
+gate from 2026-12-12. No explicit expiry override was added. The last live capture
+remains 2026-08-09, with its probe and result unchanged. The XIAO record refers
+to the same physical silicon evidence; it is not an independent second capture.
+No fresh hardware capture was performed during this activation.
+
+[validation/manifest.yaml](../../../validation/manifest.yaml) and
 [the validation generator](../../../scripts/generate_validation_status.py)
-require an explicit human assertion for the exact changed source digest.
-Keep both existing acknowledgements intact until that decision is recorded. Do not import fork acknowledgements,
-change watch coverage, or rebaseline performance to accept this port.
+define this acknowledgement and recapture policy. Only the two existing ack dates
+and digests were renewed, with dated comments and the recapture issue. Other
+board records, watch coverage and performance baselines remain unchanged.
 
 ## Acceptance status
 
@@ -158,14 +168,17 @@ an existing source's membership when an observer binds. Preserve observer-only
 bus servicing, define raw-source versus resolved-pad observations, and rerun the
 PCF8574-to-TB6612 regression. This is an explicit integration dependency.
 
-## Reproduce the reviewed board layer
+## Reproduce the original board qualification
 
-The published branch contains the generic implementation. The patch adds the
-GPIOTE correction, micro:bit collector placement, source-built guests and the
-feature-off CI selection. Its zero-context form avoids trailing-whitespace
-artifacts inside this review file. From a clean checkout of this branch:
+The board layer is already active on this branch. To reproduce its original
+software acceptance, use a separate worktree at the generic activation base.
+The zero-context patch then adds the same GPIOTE correction, micro:bit collector
+placement, source-built guests and feature-off CI selection.
 
 ```sh
+git worktree add --detach ../labwired-sensor-qualification 2dbbcc4ed9c2aadcfb37411d9c437287f6a9e965
+cd ../labwired-sensor-qualification
+
 git apply --check --unidiff-zero docs/engineering/mergeback/microbit-sensor-board.patch
 git apply --unidiff-zero docs/engineering/mergeback/microbit-sensor-board.patch
 
@@ -178,5 +191,6 @@ LABWIRED_REQUIRE_SENSOR_FEATURE_OFF=0 cargo test --locked -p labwired-core \
   --test microbit_v2_mag_drdy_guest --test microbit_v2_sensor_drdy_guest -- --nocapture
 ```
 
-Local application for review does not record a silicon acknowledgement. The
-active model change must satisfy the two manifest gates before publication.
+These commands replay the original software qualification from its generic base.
+The active branch records the current acknowledgement in the activation receipt;
+replaying the old base does not create a fresh silicon capture.

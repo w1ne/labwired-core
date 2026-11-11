@@ -465,7 +465,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 86b0c81ce18f79f9d18d02eb182f135700e90d8fdcc7fc6c3a53a49097599aa8
+    drift_ack_digest: 219f135fe825720f1a2d73e667837512f1fb1f5cbbc2f46eacf747d7dcfc1106
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -683,7 +683,12 @@ boards:
     # decoded as no-op hints instead of loads into PC. Decoder and firmware
     # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
     # CAPTURE, and live re-capture remains pending.
-    drift_ack: 2026-11-09
+    # 2026-11-11: Owner acknowledged the exact GPIOTE first-edge correction
+    # in PR #1825: consume actual GPIO transitions after channel enable.
+    # Simulator qualification covers this digest; no new silicon capture ran.
+    # Live recapture: https://github.com/w1ne/labwired-core/issues/1827
+    # Default 30-day acknowledgement expires 2026-12-11.
+    drift_ack: 2026-11-11
     # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
     # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
     # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
@@ -1053,7 +1058,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 86b0c81ce18f79f9d18d02eb182f135700e90d8fdcc7fc6c3a53a49097599aa8
+    drift_ack_digest: 219f135fe825720f1a2d73e667837512f1fb1f5cbbc2f46eacf747d7dcfc1106
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1271,7 +1276,12 @@ boards:
     # decoded as no-op hints instead of loads into PC. Decoder and firmware
     # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
     # CAPTURE, and live re-capture remains pending.
-    drift_ack: 2026-11-09
+    # 2026-11-11: Owner acknowledged the exact GPIOTE first-edge correction
+    # in PR #1825: consume actual GPIO transitions after channel enable.
+    # Simulator qualification covers this digest; no new silicon capture ran.
+    # Live recapture: https://github.com/w1ne/labwired-core/issues/1827
+    # Default 30-day acknowledgement expires 2026-12-11.
+    drift_ack: 2026-11-11
     # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
     # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
     # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
