@@ -8,8 +8,10 @@
 //! the same unrelated Beta NTC and Shockley diode to channels 5/6 and asserts
 //! firmware-visible conversions. A generic level-1 JFET terminal-resistance
 //! test checks model-card RD/RS against explicit resistor networks on the same
-//! ADC while preserving the NTC and diode routes. The descriptor has no
-//! pad-to-ADC map, so these tests make no PAx alias claim.
+//! ADC while preserving the NTC and diode routes. A separate JFET gate-charge
+//! test compares CGS/CGD depletion charge against a zero-charge control through
+//! the ADC alongside those unrelated devices. The descriptor has no pad-to-ADC
+//! map, so these tests make no PAx alias claim.
 
 mod common;
 use common::root;
@@ -151,6 +153,36 @@ fn jfet_drain_voltage(gate_v: f64, drain_ohms: f64, source_ohms: f64) -> f64 {
         }
     }
     SUPPLY_V - ((low + high) / 2.0) * LOAD_OHMS
+}
+
+/// Independent SPICE level-1 JFET gate-junction depletion charge below FC·PB.
+fn jfet_gate_junction_charge(voltage_v: f64) -> f64 {
+    const C0_F: f64 = 1e-9;
+    const PB_V: f64 = 1.0;
+    const M: f64 = 0.5;
+    C0_F * PB_V / (1.0 - M) * (1.0 - (1.0 - voltage_v / PB_V).powf(1.0 - M))
+}
+
+/// Independent backward-Euler update for a gate tied through two charged
+/// junctions to the fixed 3.3 V drain and source nodes.
+fn expected_jfet_gate_voltage(previous_v: f64, drive_v: f64, step_s: f64) -> f64 {
+    const DRIVE_OHMS: f64 = 1_000.0;
+    const JUNCTION_REFERENCE_V: f64 = 3.3;
+    let total_charge = |gate_v: f64| 2.0 * jfet_gate_junction_charge(gate_v - JUNCTION_REFERENCE_V);
+    let previous_charge = total_charge(previous_v);
+    let residual = |gate_v: f64| {
+        (gate_v - drive_v) / DRIVE_OHMS + (total_charge(gate_v) - previous_charge) / step_s
+    };
+    let (mut low, mut high) = (drive_v.min(previous_v), drive_v.max(previous_v));
+    for _ in 0..100 {
+        let mid = 0.5 * (low + high);
+        if residual(mid) > 0.0 {
+            high = mid;
+        } else {
+            low = mid;
+        }
+    }
+    0.5 * (low + high)
 }
 
 /// Independent level-1 NMOS body-effect load line for the matched-pair
@@ -624,6 +656,155 @@ fn nucleo_l476rg_jfet_terminal_resistances_reach_adc1_alongside_ntc_and_diode() 
             "model-card terminal resistance must match its explicit resistor network"
         );
     }
+}
+
+#[test]
+fn nucleo_l476rg_jfet_gate_depletion_charge_reaches_adc1_alongside_ntc_and_diode() {
+    const STEP_S: f64 = 1e-6;
+    const SUBSTEPS: usize = 10;
+
+    let system_path = root("configs/systems/nucleo-l476rg.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-L476RG profile");
+    assert_eq!(profile.name, "nucleo-l476rg");
+    let base = SystemManifest::from_file(root("examples/nucleo-l476rg/analog-ntc-diode-adc.yaml"))
+        .expect("load unrelated generic NTC and diode ADC routes");
+    let jfet = SystemManifest::from_file(root(
+        "examples/nucleo-l476rg/analog-jfet-gate-charge-adc.yaml",
+    ))
+    .expect("load charged and zero-charge generic JFET branches");
+    profile.cosim_models = base.cosim_models;
+    profile.cosim_models.extend(jfet.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32L476 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-L476RG bus");
+    let rcc_ahb2enr = bus.read_u32(RCC_AHB2ENR).expect("read RCC AHB2ENR");
+    bus.write_u32(RCC_AHB2ENR, rcc_ahb2enr | (1 << 13))
+        .expect("enable ADC1 clock");
+    bus.write_u32(ADC_CR, 0).expect("clear ADC deep power-down");
+    bus.write_u32(ADC_CR, ADC_ADVREGEN)
+        .expect("enable ADC voltage regulator");
+    bus.write_u32(ADC_CR, ADC_ADVREGEN | ADC_ADEN)
+        .expect("enable ADC1");
+    assert_ne!(
+        bus.read_u32(ADC_ISR).unwrap() & ADC_ADRDY,
+        0,
+        "ADC1 reports ready"
+    );
+    bus.write_u32(ADC_CFGR, 0)
+        .expect("select 12-bit right-aligned conversion");
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries JFET charge, NTC, and diode netlists");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic analog devices bind to distinct explicit ADC1 channels"
+    );
+    for channel in 0..=7 {
+        assert_eq!(
+            adc1_channel_input_count(&mut bus, channel),
+            u16::MAX,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    let expected_diode_v = diode_load_line_voltage();
+    session
+        .set_signal_number("ui.jfet_gate.drive_v", 3.3)
+        .expect("precharge both JFET gates to the drain/source reference");
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set the unrelated NTC temperature");
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("settle NTC, diode, and both JFET branches");
+    assert_eq!(
+        initial_steps.len(),
+        4,
+        "all four generic analog netlists solve"
+    );
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected route errors: {initial_errors:?}"
+    );
+    assert!(
+        (signal_voltage(&session, "adc.adc1.0_volts") - 3.3).abs() < 1e-9,
+        "charged JFET gate starts at its drain/source reference"
+    );
+
+    session
+        .set_signal_number("ui.jfet_gate.drive_v", 0.0)
+        .expect("step both JFET gate drives low");
+    session
+        .set_signal_number("ui.ntc.temperature_c", 80.0)
+        .expect("heat the unrelated NTC during the JFET transient");
+    let ntc_resistance = ntc_resistance_ohms(80.0);
+    let expected_ntc_v = 3.3 * ntc_resistance / (10_000.0 + ntc_resistance);
+    let mut expected_gate_v = 3.3;
+    for step in 0..8 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route JFET charge alongside NTC and diode");
+        assert_eq!(steps.len(), 4, "all four netlists solve at every step");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        for _ in 0..SUBSTEPS {
+            expected_gate_v =
+                expected_jfet_gate_voltage(expected_gate_v, 0.0, STEP_S / SUBSTEPS as f64);
+        }
+        let gate_v = signal_voltage(&session, "adc.adc1.0_volts");
+        let control_v = signal_voltage(&session, "adc.adc1.1_volts");
+        assert!(
+            (gate_v - expected_gate_v).abs() < 2e-8,
+            "JFET CGS/CGD depletion charge at step {step}: expected {expected_gate_v} V, got {gate_v} V"
+        );
+        assert!(
+            control_v.abs() < 1e-8,
+            "zero-charge control follows the low drive, got {control_v} V"
+        );
+        assert!(
+            gate_v > control_v,
+            "depletion charge must delay the gate edge relative to its zero-charge control"
+        );
+
+        let ntc_v = signal_voltage(&session, "adc.adc1.5_volts");
+        assert!(
+            (ntc_v - expected_ntc_v).abs() < 1e-9,
+            "unrelated NTC stays at 80 °C divider voltage: expected {expected_ntc_v} V, got {ntc_v} V"
+        );
+        let diode_v = signal_voltage(&session, "adc.adc1.6_volts");
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "unrelated Shockley diode stays at its DC load line"
+        );
+
+        for (channel, voltage_v) in [(0, gate_v), (1, control_v), (5, ntc_v), (6, diode_v)] {
+            let expected = expected_adc_count(voltage_v);
+            assert_eq!(
+                adc1_channel_input_count(&mut bus, channel),
+                expected,
+                "solved voltage seeds ADC1 channel {channel}"
+            );
+            assert_eq!(
+                l476_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "ADC1 data register reports the routed voltage on channel {channel}"
+            );
+        }
+    }
+    assert!(
+        signal_voltage(&session, "adc.adc1.0_volts") < 1.0,
+        "gate depletion capacitance delays the edge but eventually follows the low drive"
+    );
+    assert_eq!(
+        adc1_channel_input_count(&mut bus, 7),
+        u16::MAX,
+        "neighboring ADC1_IN7 remains undriven"
+    );
 }
 
 #[test]
