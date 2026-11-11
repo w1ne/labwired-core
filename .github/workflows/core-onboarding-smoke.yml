@@ -19,6 +19,7 @@ on:
       - "examples/**"
       - "crates/core/**"
       - "crates/firmware-stm32u575-demo/**"
+      - "crates/firmware-esp32c5-devkitc-1-bme280-smoke/**"
       - "crates/firmware-esp32c61-smoke/**"
       - "crates/firmware-esp32c61-bme280-smoke/**"
       - "crates/firmware-esp32h2-devkitm-1-smoke/**"
@@ -149,6 +150,13 @@ jobs:
             target: riscv32imac-unknown-none-elf
             script: examples/esp32c5-devkitc-1-gpio-smoke/io-smoke.yaml
             system: configs/systems/esp32c5-devkitc-1-n8r8-gpio.yaml
+          # Keep the C5 HP-core I2C path gated: read the modeled BME280 over
+          # GPIO8/9, report its ID and raw temperature on UART0, and pulse GPIO5.
+          - id: esp32c5-devkitc-1-n8r8-bme280
+            crate: firmware-esp32c5-devkitc-1-bme280-smoke
+            target: riscv32imac-unknown-none-elf
+            script: examples/esp32c5-devkitc-1-bme280-smoke/io-smoke.yaml
+            system: configs/systems/esp32c5-devkitc-1-n8r8-bme280.yaml
           - id: esp32s3-devkitc-1-n16r8-bme280
             firmware_build_script: examples/esp32s3-devkitc-1-n16r8-bme280/build-firmware.sh
             script: examples/esp32s3-devkitc-1-n16r8-bme280/bme280-smoke.yaml

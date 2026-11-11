@@ -1,13 +1,14 @@
 # Live vendor and buyability check
 
-Checked live on 2026-11-10 at 21:25 UTC.
+Checked live on 2026-11-11.
 
-- Espressif's current [ESP32-C5-DevKitC-1 v1.2 user guide](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c5/esp32-c5-devkitc-1/user_guide.html)
-  lists the exact `ESP32-C5-DevKitC-1-N8R8` order code, its ESP32-C5-WROOM-1
-  module, 8 MB flash, and 8 MB PSRAM. It gives retail and wholesale order paths.
-- Espressif's current [DevKits product page](https://www.espressif.com/products/devkits)
-  lists that exact N8R8 board with a $15 sample-price reference and links to
-  AliExpress, DigiKey, Mouser, and Amazon US.
+- Espressif's live [ESP32-C5-DevKitC-1 v1.2 user guide](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c5/esp32-c5-devkitc-1/user_guide.html)
+  lists `ESP32-C5-DevKitC-1-N8R8` as an available variant with the
+  ESP32-C5-WROOM-1 module, 8 MB flash, and 8 MB PSRAM. It links retail sample
+  orders through Espressif and wholesale inquiries through Sales.
+- Espressif's live [DevKits product page](https://www.espressif.com/products/devkits)
+  lists the exact N8R8 board with a $15 sample-price reference and purchase
+  links for AliExpress, DigiKey, Mouser, and Amazon US.
 - Mouser's live [Espressif listing](https://www.mouser.com/en/c/semiconductors/?m=Espressif)
   identifies Espressif Systems as the manufacturer and showed the exact
   `ESP32-C5-DevKitC-1-N8R8` at **$15**, with **882 in stock** and a buy option.

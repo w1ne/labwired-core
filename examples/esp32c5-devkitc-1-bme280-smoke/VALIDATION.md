@@ -8,6 +8,13 @@ does not rank the C5 separately. This is an ESP32 family-depth pick for the
 newly listed ESP32-C5-DevKitC-1-N8R8 board, not a claim that the model represents
 the C5's full feature set.
 
+## This round: CI maintenance
+
+This 2026-11-11 follow-up adds the already-implemented C5/BME280 smoke to the
+recurring onboarding CI matrix and makes its firmware crate a workflow path
+trigger. This is maintenance of an existing rank-#1-family example, not a new
+hardware onboarding or a separate demand pick.
+
 ## Smoke scope
 
 The firmware is built for `riscv32imac-unknown-none-elf`, loaded directly into
