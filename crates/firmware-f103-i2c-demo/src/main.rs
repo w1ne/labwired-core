@@ -61,13 +61,19 @@ const SYSTICK_CALIB: u32 = 0xE000_E01C;
 const SYSTICK_COUNTFLAG: u32 = 1 << 16;
 const SCB_ICSR: u32 = 0xE000_ED04;
 const SCB_VTOR: u32 = 0xE000_ED08;
+const SCB_SHPR3: u32 = 0xE000_ED20;
 const ICSR_PENDSTSET: u32 = 1 << 26;
 const ICSR_PENDSTCLR: u32 = 1 << 25;
+const ICSR_PENDSVSET: u32 = 1 << 28;
+const ICSR_PENDSVCLR: u32 = 1 << 27;
+const PENDSV_VECTOR_TABLE: u32 = 0x2000_0200;
 const SYSTICK_HANDLER_COUNT: *mut u32 = 0x2000_0100 as *mut u32;
 const SYSTICK_HANDLER_IPSR: *mut u32 = 0x2000_0104 as *mut u32;
 const SYSTICK_HANDLER_REPEND: *mut u32 = 0x2000_0108 as *mut u32;
 const SYSTICK_HANDLER_ICSR_FIRST: *mut u32 = 0x2000_010C as *mut u32;
 const SYSTICK_HANDLER_ICSR_SECOND: *mut u32 = 0x2000_0110 as *mut u32;
+const PENDSV_HANDLER_COUNT: *mut u32 = 0x2000_0114 as *mut u32;
+const PENDSV_HANDLER_IPSR: *mut u32 = 0x2000_0118 as *mut u32;
 
 const SPI1_BASE: u32 = 0x4001_3000;
 const SPI1_IRQ: u32 = 35;
@@ -240,6 +246,7 @@ fn main() -> ! {
     unsafe { smoke_systick_icsr_repend() };
     unsafe { smoke_systick_tickint_gate() };
     unsafe { smoke_systick_cvr_write_preserves_pending() };
+    unsafe { smoke_pendsv_clear_and_repend() };
     smoke_usart2_txe_irq();
     smoke_usart2_rx_enable_gate();
     smoke_spi1_irq_and_max31855();
@@ -1019,6 +1026,120 @@ unsafe fn smoke_systick_cvr_write_preserves_pending() -> bool {
         putline(b"SYSTICK M3 CVR_WRITE CHECK FAILED");
     }
     ok
+}
+
+/// Confirm that Cortex-M3 ICSR continues to expose a PendSV request after the
+/// SCB hands it to the CPU pending bitmap, and that clear followed by a fresh
+/// set still dispatches vector 14 exactly once.
+unsafe fn smoke_pendsv_clear_and_repend() -> bool {
+    let source_vtor = read_volatile(SCB_VTOR as *const u32);
+    let prior_shpr3 = read_volatile(SCB_SHPR3 as *const u32);
+    let prior_primask: u32;
+    core::arch::asm!(
+        "mrs {primask}, PRIMASK",
+        "cpsid i",
+        primask = out(reg) prior_primask,
+        options(nomem, nostack, preserves_flags),
+    );
+
+    write_volatile(SYSTICK_CSR as *mut u32, 0);
+    write_volatile(SCB_ICSR as *mut u32, ICSR_PENDSTCLR | ICSR_PENDSVCLR);
+    for slot in 0..16 {
+        write_volatile((PENDSV_VECTOR_TABLE + slot * 4) as *mut u32, 0);
+    }
+    write_volatile(
+        (PENDSV_VECTOR_TABLE + 14 * 4) as *mut u32,
+        PendSV_Handler as *const () as usize as u32,
+    );
+    write_volatile(SCB_VTOR as *mut u32, PENDSV_VECTOR_TABLE);
+    write_volatile(PENDSV_HANDLER_COUNT, 0);
+    write_volatile(PENDSV_HANDLER_IPSR, 0);
+
+    // A masked request must remain visible until explicitly cancelled.
+    write_volatile(SCB_ICSR as *mut u32, ICSR_PENDSVSET);
+    for _ in 0..16 {
+        core::arch::asm!("nop", options(nomem, nostack, preserves_flags));
+    }
+    let pending_before_clear = read_volatile(SCB_ICSR as *const u32) & ICSR_PENDSVSET != 0;
+    write_volatile(SCB_ICSR as *mut u32, ICSR_PENDSVCLR);
+    let pending_after_clear = read_volatile(SCB_ICSR as *const u32) & ICSR_PENDSVSET == 0;
+    core::arch::asm!(
+        "msr PRIMASK, {primask}",
+        primask = in(reg) prior_primask,
+        options(nostack, preserves_flags),
+    );
+    for _ in 0..32 {
+        core::arch::asm!("nop", options(nomem, nostack, preserves_flags));
+    }
+    let clear_cancels_pending = read_volatile(PENDSV_HANDLER_COUNT) == 0;
+
+    // Re-pending after the clear must be visible and enter the installed
+    // handler once after interrupts are restored.
+    core::arch::asm!("cpsid i", options(nomem, nostack, preserves_flags));
+    write_volatile(SCB_ICSR as *mut u32, ICSR_PENDSVSET);
+    let fresh_pending_visible = read_volatile(SCB_ICSR as *const u32) & ICSR_PENDSVSET != 0;
+    core::arch::asm!(
+        "msr PRIMASK, {primask}",
+        primask = in(reg) prior_primask,
+        options(nostack, preserves_flags),
+    );
+    for _ in 0..4_096 {
+        if read_volatile(PENDSV_HANDLER_COUNT) != 0 {
+            break;
+        }
+        core::arch::asm!("nop", options(nomem, nostack, preserves_flags));
+    }
+    for _ in 0..32 {
+        core::arch::asm!("nop", options(nomem, nostack, preserves_flags));
+    }
+
+    let entries = read_volatile(PENDSV_HANDLER_COUNT);
+    let ipsr = read_volatile(PENDSV_HANDLER_IPSR);
+    let vector_installed = read_volatile(SCB_VTOR as *const u32) == PENDSV_VECTOR_TABLE;
+    let passed = prior_primask == 0
+        && source_vtor == 0x0800_0000
+        && pending_before_clear
+        && pending_after_clear
+        && clear_cancels_pending
+        && fresh_pending_visible
+        && entries == 1
+        && ipsr == 14
+        && vector_installed;
+
+    core::arch::asm!("cpsid i", options(nomem, nostack, preserves_flags));
+    write_volatile(SCB_ICSR as *mut u32, ICSR_PENDSVCLR | ICSR_PENDSTCLR);
+    write_volatile(SCB_SHPR3 as *mut u32, prior_shpr3);
+    write_volatile(SCB_VTOR as *mut u32, source_vtor);
+    core::arch::asm!(
+        "msr PRIMASK, {primask}",
+        "dsb",
+        "isb",
+        primask = in(reg) prior_primask,
+        options(nostack, preserves_flags),
+    );
+
+    if passed {
+        putline(b"PENDSV M3 CLEAR=1 REPEND=1 VECTOR=14 IPSR=14 ok");
+    } else {
+        putline(b"PENDSV M3 CHECK FAILED");
+    }
+    passed
+}
+
+/// Cortex-M exception handler installed at vector-table slot 14 by the smoke.
+#[no_mangle]
+pub extern "C" fn PendSV_Handler() {
+    unsafe {
+        let ipsr: u32;
+        core::arch::asm!(
+            "mrs {ipsr}, IPSR",
+            ipsr = out(reg) ipsr,
+            options(nomem, nostack, preserves_flags),
+        );
+        let entries = read_volatile(PENDSV_HANDLER_COUNT);
+        write_volatile(PENDSV_HANDLER_IPSR, ipsr);
+        write_volatile(PENDSV_HANDLER_COUNT, entries.wrapping_add(1));
+    }
 }
 
 /// Cortex-M exception handler installed at vector-table slot 15 by minimal.ld.
