@@ -1,7 +1,7 @@
-2026-11-11T03:08:12.330586Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32h743.yaml
-2026-11-11T03:08:12.334434Z  INFO labwired_loader: ELF Entry Point: 0x8000401
+2026-11-11T03:19:51.257087Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32h743.yaml
+2026-11-11T03:19:51.265346Z  INFO labwired_loader: ELF Entry Point: 0x8000401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-PASS  24/24 checks · stm32h743-smoke · 4000000 steps · 0.96s
-FAULT  UsageFault: coprocessor (FPU) instruction while the coprocessor is disabled, at PC 0x0800_1862 in `firmware_stm32h743_smoke::attempt_privileged_fp` (main.rs:522), called from `firmware_stm32h743_smoke::check_cortex_m7_exception_frame`.
+PASS  25/25 checks · stm32h743-smoke · 4000000 steps · 0.83s
+FAULT  UsageFault: coprocessor (FPU) instruction while the coprocessor is disabled, at PC 0x0800_1862 in `firmware_stm32h743_smoke::attempt_privileged_fp` (main.rs:524), called from `firmware_stm32h743_smoke::check_cortex_m7_exception_frame`.
        HFSR=0x00000000 CFSR=0x00080000 [NOCP]
