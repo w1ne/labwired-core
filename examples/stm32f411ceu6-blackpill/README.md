@@ -34,6 +34,12 @@ RSH×NRS branches, and equivalent external resistor networks on PA2/PA3/PA5/PA6/
 The test checks independent load-line roots, cutoff and conduction behavior,
 firmware-visible ADC1 conversions, and isolation from the unrelated NTC and diode.
 
+[`analog-mosfet-overlap-charge-adc.yaml`](analog-mosfet-overlap-charge-adc.yaml)
+compares matched level-1 NMOS branches with and without CGSO on PA2/PA3. Its
+co-simulation test checks the transient against an independent backward-Euler
+RC recurrence, asserts ADC1 readback, and keeps the unrelated NTC and diode
+routed on PA1/PA4.
+
 [`analog-jfet-gate-charge-adc.yaml`](analog-jfet-gate-charge-adc.yaml) compares
 matched level-1 NJF branches with and without CGS/CGD depletion charge on
 PA2/PA3. The co-simulation test checks the transient against an independent
@@ -96,12 +102,14 @@ Expected result:
 4. `analog-mosfet-switch.yaml`: generic NMOS load-line model routed to ADC1.
 5. `analog-mosfet-sheet-resistance-adc.yaml`: matched NMOS sheet-resistance and
    explicit resistor-reference branches routed to ADC1.
-6. `analog-jfet-gate-charge-adc.yaml`: matched generic JFET charge and control
+6. `analog-mosfet-overlap-charge-adc.yaml`: matched NMOS CGSO and control
    branches routed to ADC1.
-7. `analog-bjt-high-injection-adc.yaml`: matched generic BJT high-injection and
+7. `analog-jfet-gate-charge-adc.yaml`: matched generic JFET charge and control
+   branches routed to ADC1.
+8. `analog-bjt-high-injection-adc.yaml`: matched generic BJT high-injection and
    control branches routed to ADC1.
-8. `analog-bjt-early-effect-adc.yaml`: matched generic BJT Early-effect and
+9. `analog-bjt-early-effect-adc.yaml`: matched generic BJT Early-effect and
    control branches routed to ADC1.
-9. `analog-bjt-terminal-resistance-adc.yaml`: generic BJT terminal-resistance
+10. `analog-bjt-terminal-resistance-adc.yaml`: generic BJT terminal-resistance
    branches and explicit equivalent network routed to ADC1.
-10. `VALIDATION.md`: reproducible validation commands and the honest scope.
+11. `VALIDATION.md`: reproducible validation commands and the honest scope.

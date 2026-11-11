@@ -893,6 +893,150 @@ fn stm32f411ceu6_mosfet_sheet_resistance_reaches_adc1_with_explicit_network_refe
 }
 
 #[test]
+fn stm32f411ceu6_mosfet_gate_source_overlap_charge_reaches_adc1_with_ntc_and_diode() {
+    let system_path = root("configs/systems/stm32f411ceu6-blackpill.yaml");
+    let mut profile =
+        SystemManifest::from_file(&system_path).expect("load STM32F411CEU6 Black Pill profile");
+    let generic = SystemManifest::from_file(root(
+        "examples/stm32f411ceu6-blackpill/analog-ntc-diode-system.yaml",
+    ))
+    .expect("load unrelated generic NTC and Shockley diode netlists");
+    let overlap = SystemManifest::from_file(root(
+        "examples/stm32f411ceu6-blackpill/analog-mosfet-overlap-charge-adc.yaml",
+    ))
+    .expect("load matched generic MOSFET overlap-charge branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(overlap.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F411CEU6 descriptor");
+    for (pad, channel) in [("PA1", 1), ("PA2", 2), ("PA3", 3), ("PA4", 4)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build Black Pill bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries NTC, diode, and matched MOSFET overlap branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must resolve through PA1–PA4 to ADC1"
+    );
+    for channel in 0..=5 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            u16::MAX,
+            "ADC1 channel {channel} begins without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.mosfet_overlap.gate_v", 0.0)
+        .expect("initialize the matched MOSFET gate drive");
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("settle NTC, diode, and zero-charge MOSFET branches");
+    assert_eq!(initial_steps.len(), 4, "all four analog branches solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected ADC1 route errors: {initial_errors:?}"
+    );
+    assert!(signal_voltage(&session, "board.analog.pa2_volts").abs() < 1e-12);
+    assert!(signal_voltage(&session, "board.analog.pa3_volts").abs() < 1e-12);
+
+    session
+        .set_signal_number("ui.mosfet_overlap.gate_v", 3.3)
+        .expect("step the generic NMOS gate");
+
+    // CGSO=10 uF/m times W=100 um gives 1 nF. With the 1 kOhm source
+    // resistor and a 1 us backward-Euler step, the source first reaches half
+    // the gate step, then decays by half each held-input step.
+    const NTC_V: f64 = 1.65;
+    let diode_v = diode_load_line_voltage();
+    let mut expected_source_v = 1.65;
+    let mut final_source_v = f64::INFINITY;
+    for step in 0..12 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route MOSFET overlap-charge transient");
+        assert_eq!(
+            steps.len(),
+            4,
+            "all four analog branches solve at each step"
+        );
+        assert!(
+            errors.is_empty(),
+            "unexpected ADC1 route errors: {errors:?}"
+        );
+
+        let ntc_v = signal_voltage(&session, "board.analog.pa1_volts");
+        let reference_v = signal_voltage(&session, "board.analog.pa2_volts");
+        let charged_v = signal_voltage(&session, "board.analog.pa3_volts");
+        let measured_diode_v = signal_voltage(&session, "board.analog.pa4_volts");
+        assert!(
+            (ntc_v - NTC_V).abs() < 1e-9,
+            "unrelated NTC remains isolated"
+        );
+        assert!(
+            (measured_diode_v - diode_v).abs() < 2e-5,
+            "unrelated Shockley diode remains at its DC load line"
+        );
+        assert!(
+            reference_v.abs() < 1e-12,
+            "zero-overlap branch is the control"
+        );
+        assert!(
+            (charged_v - expected_source_v).abs() < 2e-8,
+            "CGSO RC recurrence at step {step}: expected {expected_source_v} V, got {charged_v} V"
+        );
+
+        for (channel, volts) in [
+            (1, ntc_v),
+            (2, reference_v),
+            (3, charged_v),
+            (4, measured_diode_v),
+        ] {
+            let expected = expected_adc_count(volts);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "solved voltage seeds ADC1 channel {channel}"
+            );
+            assert_eq!(
+                stm32f4_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "firmware-visible ADC1 conversion follows channel {channel}"
+            );
+        }
+        assert_eq!(
+            [0, 5].map(|channel| adc_channel_count(&mut bus, channel)),
+            [u16::MAX; 2],
+            "neighboring ADC1 channels remain undriven"
+        );
+        if step == 0 {
+            assert_eq!(
+                adc_channel_count(&mut bus, 3),
+                2047,
+                "the first overlap transient reaches half scale on PA3/ADC1_IN3"
+            );
+        }
+        final_source_v = charged_v;
+        expected_source_v *= 0.5;
+    }
+
+    assert!(
+        final_source_v < 1e-3,
+        "overlap charge changes the transient, then discharges to the same DC operating point"
+    );
+}
+
+#[test]
 fn stm32f411ceu6_jfet_gate_depletion_charge_reaches_adc1_with_ntc_and_diode() {
     const STEP_S: f64 = 1e-6;
     const SUBSTEPS: usize = 10;
