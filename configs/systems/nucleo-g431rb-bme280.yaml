@@ -1,0 +1,32 @@
+# ST NUCLEO-G431RB (MB1367) with an external BME280 on Arduino D14/D15.
+# UM2505 defaults: I2C1 SDA=PB9 (D14), SCL=PB8 (D15), LD2=PA5, and
+# ST-LINK VCP=LPUART1 on PA2/PA3.
+name: "nucleo-g431rb-bme280"
+chip: "../chips/stm32g431rb.yaml"
+cpu_hz: 170_000_000
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c1"
+    route:
+      sda: "PB9"
+      scl: "PB8"
+    config:
+      i2c_address: 0x77
+board_io:
+  - id: "led_ld2"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true
+  - id: "button_user_pc13"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: true
+connectors:
+  - type: "uart"
+    peripheral: "lpuart1"
+    endpoint: "host_console"

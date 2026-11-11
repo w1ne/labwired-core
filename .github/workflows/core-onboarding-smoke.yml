@@ -30,6 +30,7 @@ on:
       - "crates/firmware-nucleo-g0b1re-smoke/**"
       - "crates/firmware-nucleo-c562re-smoke/**"
       - "crates/firmware-nucleo-g431kb-bme280-smoke/**"
+      - "crates/firmware-nucleo-g431rb-bme280-smoke/**"
       - "crates/firmware-nucleo-h753zi-smoke/**"
       - "crates/firmware-rp2040-picow-bme280-smoke/**"
       - "crates/firmware-qtpy-rp2040-bme280-smoke/**"
@@ -156,6 +157,11 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/nucleo-g431kb-bme280/bme280-smoke.yaml
             system: configs/systems/nucleo-g431kb-bme280.yaml
+          - id: nucleo-g431rb-bme280
+            crate: firmware-nucleo-g431rb-bme280-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-g431rb-bme280/bme280-smoke.yaml
+            system: configs/systems/nucleo-g431rb-bme280.yaml
           # UNO R4 Minima RA4M1 IIC1: read the BME280 chip ID via A4/A5 and
           # report it over the modeled SCI2 console. Pad routing is not gated.
           - id: arduino-uno-r4-minima-bme280

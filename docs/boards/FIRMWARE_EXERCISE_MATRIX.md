@@ -478,7 +478,7 @@ _No tier-1 target. This is the narrow IO-Link customer firmware descriptor: the 
 
 ### `stm32g431rb`
 
-_All 12 declared rubric classes are driven by its committed tier-1 fixture (tests/fixtures/tier1/stm32g431rb.elf, sha256 in tests/fixtures/tier1/MANIFEST.json; fast_boot target, USART2 console), asserted by the `stm32g431rb` cell in core-coverage-matrix-smoke.yml and nightly-ratcheted by the full-CI `tier1_matrix_ratchet` step. Same RM0440 G4 peripheral map as stm32g474re, so the beyond-rubric blocks (PWR/CRC/DBGMCU, driven there by vendor firmware) are shared with the G474 row; no G4-specific firmware drives them for the G431 die and no G431 bench capture exists, so REV_ID stays a visible placeholder rather than a claimed value._
+_All 12 declared rubric classes are driven by its committed tier-1 fixture (tests/fixtures/tier1/stm32g431rb.elf, sha256 in tests/fixtures/tier1/MANIFEST.json; fast_boot target, USART2 console), asserted by the `stm32g431rb` cell in core-coverage-matrix-smoke.yml and nightly-ratcheted by the full-CI `tier1_matrix_ratchet` step. The separate NUCLEO-G431RB profile at examples/nucleo-g431rb-bme280/ exercises I2C1/PB8-PB9 with a BME280, the board's default LPUART1 VCP, and LD2 on PA5 in the local onboarding CLI smoke. The sensor is attached directly to the I2C model, so pad routing and electrical behavior are not proved. Same RM0440 G4 peripheral map as stm32g474re, so the beyond-rubric blocks (PWR/CRC/DBGMCU, driven there by vendor firmware) are shared with the G474 row; no G4-specific firmware drives them for the G431 die and no G431 bench capture exists, so REV_ID stays a visible placeholder rather than a claimed value._
 
 ### `stm32g474re`
 

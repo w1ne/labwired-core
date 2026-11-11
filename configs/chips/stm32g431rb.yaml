@@ -111,6 +111,7 @@ peripherals:
     type: "uart"
     base_address: 0x40008000
     irq: 91
+    clock: { reg: "apb1enr2", bit: 0 }
     config:
       debug_schema: "../peripherals/stm32g474re/lpuart1.yaml"
       profile: "stm32v2"
@@ -176,6 +177,7 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32g474re/i2c1.yaml"
       profile: "stm32l4"
+      pad_map: "stm32g4"
     clock: { reg: "apb1enr", bit: 21 }
   # SPI1 (APB2). RCC_APB2ENR.SPI1EN (bit 12).
   - id: "spi1"

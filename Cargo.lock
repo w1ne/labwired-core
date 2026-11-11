@@ -1755,6 +1755,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-nucleo-g431rb-bme280-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-nucleo-g491re-bme280-smoke"
 version = "0.1.0"
 dependencies = [
