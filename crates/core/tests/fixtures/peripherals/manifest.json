@@ -2367,7 +2367,7 @@
       "device_type": "lsm303agr_accel",
       "label": "LSM303AGR accelerometer",
       "summary": "ST LSM303AGR accelerometer half over I2C (address 0x19).",
-      "detail": "micro:bit V2 motion sensor. Stimulus channels x/y/z in g, reported as left-justified 16-bit two's complement at the full scale CTRL_REG4_A selects. Sub-address bit 7 (auto-increment) is accepted. Data-ready paces at 100 Hz while ODR is non-zero (the ODR value is not decoded); BDU, FIFO, interrupts and temperature are not modelled.",
+      "detail": "micro:bit V2 motion sensor. Stimulus channels x/y/z in g, reported as left-justified 16-bit two's complement at the full scale CTRL_REG4_A selects. Sub-address bit 7 (auto-increment) is accepted. Data-ready paces at 100 Hz while ODR is non-zero (the ODR value is not decoded); Optional INT1 models DRDY1 routing, polarity and all-enabled-high-byte acknowledgement. BDU, FIFO, threshold interrupts and temperature are not modelled.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
@@ -2375,6 +2375,11 @@
           "name": "i2c_address",
           "ty": "int",
           "doc": "7-bit slave address. Defaults to 0x19."
+        },
+        {
+          "name": "int1_pin",
+          "ty": "str",
+          "doc": "Optional native INT1 output; board collector inversion is separate."
         }
       ],
       "labs": [],
@@ -2409,7 +2414,7 @@
       "device_type": "lsm303agr_mag",
       "label": "LSM303AGR magnetometer",
       "summary": "ST LSM303AGR magnetometer half over I2C (address 0x1E).",
-      "detail": "micro:bit V2 compass. Stimulus channels x/y/z in µT, reported as 16-bit two's complement at 0.15 µT/LSB. Data-ready paces at 100 Hz while MD selects continuous or single mode (ODR is not decoded); BDU, offset cancellation and interrupts are not modelled.",
+      "detail": "micro:bit V2 compass. Stimulus channels x/y/z in µT, reported as 16-bit two's complement at 0.15 µT/LSB. Data-ready paces at 100 Hz while MD selects continuous or single mode (ODR is not decoded); Optional active-high DRDY output follows conversion completion, routing enable and output-high-byte reads; candidate boundary is continuous 100 Hz with threshold routing off. BDU, offset cancellation, software reset and threshold interrupts are not modelled.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
@@ -2417,6 +2422,11 @@
           "name": "i2c_address",
           "ty": "int",
           "doc": "7-bit slave address. Defaults to 0x1E."
+        },
+        {
+          "name": "drdy_pin",
+          "ty": "str",
+          "doc": "Optional native active-high INT_MAG/DRDY output pad; board inversion is separate."
         }
       ],
       "labs": [],
