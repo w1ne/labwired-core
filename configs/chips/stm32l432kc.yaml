@@ -1,0 +1,77 @@
+# STM32L432KCU6 profile for ST's NUCLEO-L432KC (MB1180).
+#
+# This is a deliberately narrow model for the board's user LED and ST-LINK
+# virtual COM path. It reuses the STM32L4 RCC, V2 GPIO, and USART2 models; no
+# other L432 peripherals are declared by this profile.
+#
+# Sources: ST DS11451 (STM32L432xx), RM0394 (STM32L4x2/4x3), and UM1956
+# (NUCLEO-32 / MB1180). The board manual documents LD3 on PB3 and VCP TX/RX
+# through PA2/PA15 by default solder bridges SB2/SB3.
+name: "stm32l432kc"
+arch: "arm"
+core: "cortex-m4"
+registers_count: 64
+cpu_hz: 80_000_000
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7
+
+flash:
+  base: 0x08000000
+  size: "256KB"
+ram:
+  base: 0x20000000
+  size: "64KB"
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/rcc.yaml"
+      profile: "stm32l4"
+
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x48000000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/gpioa.yaml"
+      profile: "stm32v2"
+    clock: { reg: "ahb2enr", bit: 0 }
+
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x48000400
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l476/gpiob.yaml"
+      profile: "stm32v2"
+    clock: { reg: "ahb2enr", bit: 1 }
+
+  - id: "uart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 38
+    config:
+      debug_schema: "../peripherals/stm32l476/usart2.yaml"
+      profile: "stm32v2"
+    clock: { reg: "apb1enr1", bit: 17 }
+
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+
+  - id: "nvic"
+    type: "nvic"
+    base_address: 0xE000E100
+    size: "1KB"
+
+# Board-facing subset from UM1956: PA2/PA15 feed ST-LINK VCP and PB3 is LD3.
+pins:
+  PA2: { gpio: "gpioa", bit: 2 }
+  PA15: { gpio: "gpioa", bit: 15 }
+  PB3: { gpio: "gpiob", bit: 3 }

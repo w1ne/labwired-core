@@ -1,0 +1,12 @@
+# Boots a bare RV32IMAC image in HP SRAM and observes GPIO2 LED transitions.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32imac-unknown-none-elf/release/firmware-olimex-esp32-p4-devkit-smoke"
+  system: "../../configs/systems/olimex-esp32-p4-devkit.yaml"
+limits:
+  max_steps: 300000
+assertions:
+  - gpio_edges:
+      pin: "gpio:2"
+      min_edges: 8
+  - expected_stop_reason: max_steps

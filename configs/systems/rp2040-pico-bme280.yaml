@@ -1,0 +1,22 @@
+# Raspberry Pi Pico (RP2040) with an Adafruit BME280 STEMMA QT breakout.
+# GP4/GP5 are I2C0 SDA/SCL; the Pico's user LED is on GP25.
+name: "rp2040-pico-bme280"
+chip: "../chips/rp2040.yaml"
+cpu_hz: 125_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GP4"
+      scl: "GP5"
+    config:
+      i2c_address: 0x77
+board_io:
+  - id: "led_gp25"
+    kind: "led"
+    peripheral: "sio"
+    pin: 25
+    signal: "output"
+    active_high: true

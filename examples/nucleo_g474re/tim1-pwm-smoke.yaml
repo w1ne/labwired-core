@@ -1,0 +1,12 @@
+# NUCLEO-G474RE TIM1_CH1 waveform smoke. PA8 is AF6 and is exposed at CN10 / D7.
+schema_version: "1.0"
+inputs:
+  firmware: "./board_firmware/target/thumbv7em-none-eabi/release/firmware-nucleo_g474re-demo"
+  system: "./system.yaml"
+limits:
+  max_steps: 4000
+assertions:
+  - uart_contains: "OK"
+  - gpio_edges:
+      pin: "gpioa:8"
+      min_edges: 4

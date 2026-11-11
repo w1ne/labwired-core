@@ -1,0 +1,15 @@
+# Arduino UNO R4 Minima: boot firmware, read BME280 ID over RA IIC1, report on
+# SCI2. The simulator does not validate P100/P101 electrical pad routing.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-ra4m1-bme280-smoke"
+  system: "../../configs/systems/arduino-uno-r4-minima.yaml"
+limits:
+  max_steps: 1000000
+assertions:
+  - uart_contains: "UNO_R4_BME280_OK id=0x60"
+  - peripheral_log: { peripheral: iic1, log: bus_trace, contains: "addr 0x76 W ack" }
+  - peripheral_log: { peripheral: iic1, log: bus_trace, contains: "data 0xd0 ack" }
+  - peripheral_log: { peripheral: iic1, log: bus_trace, contains: "addr 0x76 R ack" }
+  - peripheral_log: { peripheral: iic1, log: bus_trace, contains: "data 0x60 ack" }
+  - expected_stop_reason: max_steps

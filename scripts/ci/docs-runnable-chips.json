@@ -55,11 +55,23 @@
       "firmware": "tests/fixtures/tier1/esp32c3.elf",
       "expect": "TIER1 gpio PASS"
     },
+    "esp32c5": {
+      "how": "needs-build",
+      "why": "ESP32-C5 model and DevKitC-1 smoke are source-tree additions in this branch; the installed LabWired CLI v0.25.0 predates this chip model."
+    },
     "esp32c6": {
       "how": "committed",
       "firmware": "tests/fixtures/esp32c6-demo.elf",
       "expect": "OK",
       "note": "ESP32-C6-DevKitC-1 L1 smoke. Bare-metal RV32IMAC HP-core image ungates UART0 through the C6's own PCR clock/reset block, routes GPIO16/U0TXD via IO_MUX, and prints OK. The LP core, ROM bootloader/flash-image path, interrupt delivery, radios and every non-UART peripheral window are out of scope at L1."
+    },
+    "esp32c61": {
+      "how": "needs-build",
+      "why": "ESP32-C61 model and DevKitC-1 N8R2 smoke are source-tree additions in this branch; the installed LabWired CLI v0.25.0 predates this chip model."
+    },
+    "esp32h2": {
+      "how": "needs-build",
+      "why": "The repository has an H2 DevKitM-1 N4S UART/GPIO/I2C0 BME280 smoke; the hosted LabWired CLI catalog does not expose an H2 run target."
     },
     "nrf52840": {
       "how": "committed",
@@ -199,6 +211,10 @@
       "firmware": "tests/fixtures/tier1/stm32h563.elf",
       "expect": "TIER1 clock PASS"
     },
+    "stm32h533re": {
+      "how": "needs-build",
+      "why": "NUCLEO-H533RE profile and smoke are source-tree additions in this branch; the installed LabWired CLI v0.25.0 predates this chip model."
+    },
     "stm32h735": {
       "how": "committed",
       "firmware": "tests/fixtures/tier1/stm32h735.elf",
@@ -316,6 +332,10 @@
     "stm32g431rb": {
       "how": "needs-build",
       "why": "Exact STM32G431RBT6 descriptor added after the current released CLI. Its tier-1 fixture smoke (examples/stm32g431rb) is validated from this Core source tree; clean-install release-runner support starts with a release containing this chip model."
+    },
+    "stm32g491re": {
+      "how": "needs-build",
+      "why": "NUCLEO-G491RE profiles and BME280 smoke are source-tree additions in this branch; the installed LabWired CLI v0.25.0 predates this chip model."
     },
     "stm32l073": {
       "how": "committed",

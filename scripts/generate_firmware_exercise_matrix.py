@@ -63,6 +63,7 @@ GATE_BADGES = {
     "release": " (release CI)",
     "nightly": " (nightly CI)",
     "ignored": " (on-demand)",
+    "manual": " (manual local smoke)",
     "none": " (ungated)",
 }
 
@@ -151,11 +152,12 @@ def render(tier1: dict, ydoc: dict) -> str:
         L.append("")
 
     # ── Part 2: beyond the rubric ──────────────────────────────────────────
-    L.append("## Beyond the rubric — functional reads, advanced peripherals, shims")
+    L.append("## Beyond the rubric — functional firmware exercises, advanced peripherals, shims")
     L.append("")
     L.append(
-        "What the rubric grid does not cover: real drivers decoding a sensor/protocol "
-        "over a bus (the gold standard), chip-specific advanced peripherals, and shims "
+        "What the rubric grid does not cover: board-level firmware smokes, functional "
+        "peripheral use, real drivers decoding a sensor/protocol over a bus (the gold "
+        "standard), chip-specific advanced peripherals, and shims "
         "(hardcoded stubs or declarative register files with no engine behind them). "
         "From `validation/firmware_exercise.yaml`."
     )
@@ -169,7 +171,7 @@ def render(tier1: dict, ydoc: dict) -> str:
             L.append("")
         func = list_field(cid, c, "functional")
         if func:
-            L.append("**Functional device/protocol reads** (real driver, decoded value):")
+            L.append("**Functional firmware exercises** (including decoded device/protocol reads):")
             for f in func:
                 gate = f.get("gate") or "none"
                 if gate not in GATE_BADGES:
@@ -220,6 +222,9 @@ def main() -> int:
         for p in (CORE_ROOT / "configs" / "chips").glob("*.yaml")
         if not p.stem.startswith("ci-fixture")
     }
+    system_profiles_on_disk = {
+        p.stem for p in (CORE_ROOT / "configs" / "systems").glob("*.yaml")
+    }
     documented_list = [c["id"] for c in ydoc.get("chips", [])]
     duplicates = sorted({cid for cid in documented_list if documented_list.count(cid) > 1})
     if duplicates:
@@ -240,7 +245,10 @@ def main() -> int:
             return 1
     documented = set(documented_list)
     missing = sorted(chips_on_disk - documented)
-    extra = sorted(documented - chips_on_disk)
+    # Board-level systems can carry their own functional smoke entry even when
+    # they reuse a chip descriptor. Chip rows remain mandatory above; system
+    # rows are additional, never a substitute for the underlying chip row.
+    extra = sorted(documented - chips_on_disk - system_profiles_on_disk)
     if missing:
         print(
             "ERROR: chip(s) with no beyond-rubric entry in "
@@ -252,8 +260,8 @@ def main() -> int:
         return 1
     if extra:
         print(
-            "ERROR: firmware_exercise.yaml names chip(s) with no top-level "
-            "`configs/chips/<id>.yaml`:\n  " + "\n  ".join(extra),
+            "ERROR: firmware_exercise.yaml names chip/system target(s) with no "
+            "top-level config:\n  " + "\n  ".join(extra),
             file=sys.stderr,
         )
         if any(cid.startswith("ci-fixture") for cid in extra):

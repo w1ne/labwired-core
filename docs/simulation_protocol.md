@@ -97,16 +97,18 @@ final allowed world round is reported as `stop_reason: assertions_passed`.
 
 ### 2.2 System Manifest (`system.yaml`)
 
-Defines the board topology, Memory Management overrides, and IO mappings. This
+Defines the board topology, optional board memory settings, and IO mappings. This
 same per-node `system.yaml` is shared with the Playground; CI environment
 manifests reference it rather than duplicating board configuration.
+
+ESP32-S3 system manifests may set `memory_overrides.psram_size` in bytes or a
+human-readable size. Set it to `"0"` for a module without PSRAM; this key does
+not configure the STM32 example below.
 
 ```yaml
 schema_version: "1.0"
 name: "nucleo-f401re"
 chip: "stm32f401.yaml"
-memory_overrides:
-  flash: "512KB"
 board_io:
   - id: "USER_LED"
     kind: "led"

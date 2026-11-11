@@ -1,0 +1,1364 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 5000000,
+  "cycles": 5000000,
+  "instructions": 5000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 5000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 5000000
+    }
+  },
+  "limits": {
+    "max_steps": 5000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "ESP32S2_DEVKITC1_N8R2_BME280_OK ID=0x60 TEMP_RAW=0x082DC0 I2C0=GPIO8/9"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "xtensa_lx7",
+    "registers": [
+      0,
+      1073741760,
+      0,
+      0,
+      0,
+      0,
+      768,
+      0,
+      2148008631,
+      1073741728,
+      1056964781,
+      1073741760,
+      3,
+      29,
+      30,
+      30
+    ],
+    "pc": 1074266807,
+    "ps": 262144,
+    "window_base": 0,
+    "window_start": 1,
+    "vecbase": 1073741824
+  },
+  "firmware_hash": "60c5cfbb58c450a2ec2df00178317bdb2c7613aeab48b38c0c05fcc1c01ce464",
+  "config": {
+    "firmware": "examples/esp32s2-devkitc-1-n8r2-bme280/../../tests/fixtures/esp32s2-devkitc-1-n8r2-bme280.elf",
+    "system": "examples/esp32s2-devkitc-1-n8r2-bme280/../../configs/systems/esp32s2-devkitc-1-n8r2-bme280.yaml",
+    "script": "examples/esp32s2-devkitc-1-n8r2-bme280/bme280-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "dram",
+        "kind": "native",
+        "base": 1073414144,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "iram",
+        "kind": "native",
+        "base": 1073872896,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rtc_fast",
+        "kind": "native",
+        "base": 1074200576,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rtc_slow",
+        "kind": "native",
+        "base": 1342177280,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart0",
+        "kind": "native",
+        "base": 1610612736,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpio",
+        "kind": "declarative",
+        "base": 1610629120,
+        "registers": [
+          {
+            "name": "OUT",
+            "offset": 4,
+            "size": 32,
+            "value": 0,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OUT_W1TS",
+            "offset": 8,
+            "size": 32,
+            "value": 0,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OUT_W1TC",
+            "offset": 12,
+            "size": 32,
+            "value": 0,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OUT1",
+            "offset": 16,
+            "size": 32,
+            "value": 0,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OUT1_W1TS",
+            "offset": 20,
+            "size": 32,
+            "value": 0,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OUT1_W1TC",
+            "offset": 24,
+            "size": 32,
+            "value": 0,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ENABLE",
+            "offset": 32,
+            "size": 32,
+            "value": 768,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ENABLE1",
+            "offset": 44,
+            "size": 32,
+            "value": 0,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IN",
+            "offset": 60,
+            "size": 32,
+            "value": 0,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "i2c0",
+        "kind": "native",
+        "base": 1610690560,
+        "registers": [
+          {
+            "name": "SCL_LOW_PERIOD",
+            "offset": 0,
+            "size": 32,
+            "value": 199,
+            "fields": [
+              {
+                "name": "SCL_LOW_PERIOD",
+                "bits": [
+                  13,
+                  0
+                ],
+                "value": 199
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CTR",
+            "offset": 4,
+            "size": 32,
+            "value": 275,
+            "fields": [
+              {
+                "name": "SDA_FORCE_OUT",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 1
+              },
+              {
+                "name": "SCL_FORCE_OUT",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 1
+              },
+              {
+                "name": "SAMPLE_SCL_LEVEL",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "MS_MODE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 1
+              },
+              {
+                "name": "TRANS_START",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "TX_LSB_FIRST",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "RX_LSB_FIRST",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "CLK_EN",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "SR",
+            "offset": 8,
+            "size": 32,
+            "value": 1,
+            "fields": [
+              {
+                "name": "ACK_REC",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 1
+              },
+              {
+                "name": "SLAVE_RW",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "TIME_OUT",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "ARB_LOST",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "BUS_BUSY",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "SLAVE_ADDRESSED",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "BYTE_TRANS",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFIFO_CNT",
+                "bits": [
+                  13,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFIFO_CNT",
+                "bits": [
+                  23,
+                  18
+                ],
+                "value": 0
+              },
+              {
+                "name": "SCL_MAIN_STATE_LAST",
+                "bits": [
+                  26,
+                  24
+                ],
+                "value": 0
+              },
+              {
+                "name": "SCL_STATE_LAST",
+                "bits": [
+                  30,
+                  28
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "TO",
+            "offset": 12,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TIME_OUT",
+                "bits": [
+                  19,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "SLAVE_ADDR",
+            "offset": 16,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SLAVE_ADDR",
+                "bits": [
+                  14,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADDR_10BIT_EN",
+                "bits": [
+                  31,
+                  31
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "RXFIFO_ST",
+            "offset": 20,
+            "size": 32,
+            "value": 3072,
+            "fields": [
+              {
+                "name": "RXFIFO_START_ADDR",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFIFO_END_ADDR",
+                "bits": [
+                  9,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFIFO_START_ADDR",
+                "bits": [
+                  14,
+                  10
+                ],
+                "value": 3
+              },
+              {
+                "name": "TXFIFO_END_ADDR",
+                "bits": [
+                  19,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FIFO_CONF",
+            "offset": 24,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RXFIFO_FULL_THRHD",
+                "bits": [
+                  4,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFIFO_EMPTY_THRHD",
+                "bits": [
+                  9,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "NONFIFO_EN",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "FIFO_ADDR_CFG_EN",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "RX_FIFO_RST",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "TX_FIFO_RST",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "NONFIFO_RX_THRES",
+                "bits": [
+                  19,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "NONFIFO_TX_THRES",
+                "bits": [
+                  25,
+                  20
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "DATA",
+            "offset": 28,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "FIFO_RDATA",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INT_RAW",
+            "offset": 32,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RXFIFO_FULL_INT_RAW",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFIFO_EMPTY_INT_RAW",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFIFO_OVF_INT_RAW",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "END_DETECT_INT_RAW",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "SLAVE_TRAN_COMP_INT_RAW",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "ARBITRATION_LOST_INT_RAW",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "MASTER_TRAN_COMP_INT_RAW",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRANS_COMPLETE_INT_RAW",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "TIME_OUT_INT_RAW",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRANS_START_INT_RAW",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "ACK_ERR_INT_RAW",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "RX_REC_FULL_INT_RAW",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "TX_SEND_EMPTY_INT_RAW",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INT_CLR",
+            "offset": 36,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RXFIFO_FULL_INT_CLR",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFIFO_EMPTY_INT_CLR",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFIFO_OVF_INT_CLR",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "END_DETECT_INT_CLR",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "SLAVE_TRAN_COMP_INT_CLR",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "ARBITRATION_LOST_INT_CLR",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "MASTER_TRAN_COMP_INT_CLR",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRANS_COMPLETE_INT_CLR",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "TIME_OUT_INT_CLR",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRANS_START_INT_CLR",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "ACK_ERR_INT_CLR",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "RX_REC_FULL_INT_CLR",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "TX_SEND_EMPTY_INT_CLR",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INT_ENA",
+            "offset": 40,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RXFIFO_FULL_INT_ENA",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFIFO_EMPTY_INT_ENA",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFIFO_OVF_INT_ENA",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "END_DETECT_INT_ENA",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "SLAVE_TRAN_COMP_INT_ENA",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "ARBITRATION_LOST_INT_ENA",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "MASTER_TRAN_COMP_INT_ENA",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRANS_COMPLETE_INT_ENA",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "TIME_OUT_INT_ENA",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRANS_START_INT_ENA",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "ACK_ERR_INT_ENA",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "RX_REC_FULL_INT_ENA",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "TX_SEND_EMPTY_INT_ENA",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INT_STATUS",
+            "offset": 44,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RXFIFO_FULL_INT_ST",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFIFO_EMPTY_INT_ST",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFIFO_OVF_INT_ST",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "END_DETECT_INT_ST",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "SLAVE_TRAN_COMP_INT_ST",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "ARBITRATION_LOST_INT_ST",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "MASTER_TRAN_COMP_INT_ST",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRANS_COMPLETE_INT_ST",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "TIME_OUT_INT_ST",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "TRANS_START_INT_ST",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "ACK_ERR_INT_ST",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "RX_REC_FULL_INT_ST",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "TX_SEND_EMPTY_INT_ST",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "SDA_HOLD",
+            "offset": 48,
+            "size": 32,
+            "value": 2,
+            "fields": [
+              {
+                "name": "TIME",
+                "bits": [
+                  9,
+                  0
+                ],
+                "value": 2
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "SDA_SAMPLE",
+            "offset": 52,
+            "size": 32,
+            "value": 2,
+            "fields": [
+              {
+                "name": "TIME",
+                "bits": [
+                  9,
+                  0
+                ],
+                "value": 2
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_HIGH_PERIOD",
+            "offset": 56,
+            "size": 32,
+            "value": 199,
+            "fields": [
+              {
+                "name": "SCL_HIGH_PERIOD",
+                "bits": [
+                  13,
+                  0
+                ],
+                "value": 199
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_START_HOLD",
+            "offset": 64,
+            "size": 32,
+            "value": 10,
+            "fields": [
+              {
+                "name": "TIME",
+                "bits": [
+                  9,
+                  0
+                ],
+                "value": 10
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_RSTART_SETUP",
+            "offset": 68,
+            "size": 32,
+            "value": 10,
+            "fields": [
+              {
+                "name": "TIME",
+                "bits": [
+                  9,
+                  0
+                ],
+                "value": 10
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_STOP_HOLD",
+            "offset": 72,
+            "size": 32,
+            "value": 10,
+            "fields": [
+              {
+                "name": "TIME",
+                "bits": [
+                  13,
+                  0
+                ],
+                "value": 10
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_STOP_SETUP",
+            "offset": 76,
+            "size": 32,
+            "value": 10,
+            "fields": [
+              {
+                "name": "TIME",
+                "bits": [
+                  9,
+                  0
+                ],
+                "value": 10
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "SCL_FILTER_CFG",
+            "offset": 80,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SCL_FILTER_THRES",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SCL_FILTER_EN",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "SDA_FILTER_CFG",
+            "offset": 84,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SDA_FILTER_THRES",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SDA_FILTER_EN",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "COMD0-15",
+            "offset": 88,
+            "size": 32,
+            "value": 2147483648,
+            "fields": [
+              {
+                "name": "COMMAND",
+                "bits": [
+                  13,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "COMMAND_DONE",
+                "bits": [
+                  31,
+                  31
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "DATE",
+            "offset": 248,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "DATE",
+                "bits": [
+                  31,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "FIFO_START_ADDR",
+            "offset": 256,
+            "size": 32,
+            "value": 0,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "bme280",
+        "device_type": "bme280",
+        "declared": true,
+        "attachment": {
+          "transport": "i2c",
+          "bus": "i2c0",
+          "address": 119
+        },
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "bme280",
+            "meta": {
+              "inputs": {
+                "humidity": 50.0,
+                "pressure": 1013.25,
+                "temperature": 25.0
+              },
+              "powered": true,
+              "registers": {
+                "CHIP_ID": 96,
+                "CONFIG": 0,
+                "CTRL_HUM": 0,
+                "CTRL_MEAS": 0,
+                "DIG_H1": 75,
+                "DIG_H2": 350,
+                "DIG_H3": 0,
+                "DIG_H4_H5_LOW": 5,
+                "DIG_H4_HIGH": 19,
+                "DIG_H5_HIGH": 0,
+                "DIG_H6": 30,
+                "DIG_P1": 38221,
+                "DIG_P2": 54959,
+                "DIG_P3": 3024,
+                "DIG_P4": 7421,
+                "DIG_P5": 65351,
+                "DIG_P6": 65529,
+                "DIG_P7": 9900,
+                "DIG_P8": 55306,
+                "DIG_P9": 4285,
+                "DIG_T1": 28528,
+                "DIG_T2": 26435,
+                "DIG_T3": 64536,
+                "HUM": 28995,
+                "PRESS": 4955584,
+                "STATUS": 0,
+                "TEMP": 8576000
+              },
+              "supply_generation": null
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "read"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "read"
+    },
+    {
+      "kind": "derived_device_time",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "device time derived from cpu_hz (240000000 Hz); PLL reconfiguration is not tracked"
+    },
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "ESP32S2_DEVKITC1_N8R2_BME280_OK ID=0x60 TEMP_RAW=0x082DC0 I2C0=GPIO8/9",
+        "cycle_lo": 20000,
+        "cycle": 30000,
+        "end_cycle": 1480000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "i2c_addresses": [
+    119
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 901,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 901,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 8388608,
+    "ram_total_bytes": 327680,
+    "flash_used_pct": 0.01,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 5000000,
+    "instructions": 5000000,
+    "steps_executed": 5000000,
+    "memory_reads": 5001354,
+    "memory_writes": 0,
+    "peripheral_accesses": 139,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 1074266807,
+        "count": 19531
+      }
+    ]
+  }
+}

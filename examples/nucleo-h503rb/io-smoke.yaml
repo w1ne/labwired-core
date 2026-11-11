@@ -1,0 +1,13 @@
+# NUCLEO-H503RB: USART3 VCP marker plus PA5/LD2 output transitions.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-nucleo-h503rb-smoke"
+  system: "../../configs/systems/nucleo-h503rb.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "H503_USART3_OK"
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 8
+  - expected_stop_reason: max_steps

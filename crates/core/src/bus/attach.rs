@@ -108,6 +108,13 @@ const STM32G0_TIMER_PADS: &[TimerAfPad] = &[
 /// (`variants/STM32G4xx/G473R(B-C)T_G473RETx(Z)_G474R(B-C-E)T_G483RET_G484RET/PeripheralPins.c`):
 /// TIM2 on AF1 (AF10 for PA9/PA10), TIM3 on AF2 (AF10 for PB7).
 const STM32G4_TIMER_PADS: &[TimerAfPad] = &[
+    // NUCLEO-G474RE's PA8 TIM1_CH1 path is exercised by the committed
+    // `examples/nucleo_g474re/tim1-pwm-smoke.yaml` firmware. The other main
+    // TIM1 channels use the AF selections from the STM32G474 datasheet.
+    ("tim1", 'a', 8, 6, 0, "TIM1_CH1"),
+    ("tim1", 'a', 9, 6, 1, "TIM1_CH2"),
+    ("tim1", 'a', 10, 6, 2, "TIM1_CH3"),
+    ("tim1", 'a', 11, 11, 3, "TIM1_CH4"),
     ("tim2", 'a', 0, 1, 0, "TIM2_CH1"),
     ("tim2", 'a', 5, 1, 0, "TIM2_CH1"),
     ("tim2", 'a', 15, 1, 0, "TIM2_CH1"),
@@ -361,8 +368,8 @@ const STM32H5_TIMER_PADS: &[TimerAfPad] = &[
 
 impl SystemBus {
     /// Attach an I²C slave without a physical route. This remains suitable for
-    /// fixed-pin controllers and low-level test fixtures; ESP32-C3 rejects it
-    /// because C3's GPIO matrix makes a controller-only binding ambiguous.
+    /// fixed-pin controllers and low-level test fixtures; ESP32-C3/H2 rejects it
+    /// because its GPIO matrix makes a controller-only binding ambiguous.
     pub fn attach_i2c_slave(
         &mut self,
         controller: &str,
@@ -388,7 +395,7 @@ impl SystemBus {
 
     /// The single funnel through which every manifest-backed I²C slave reaches
     /// a controller. `route` is a target-neutral signal map (`sda`/`scl` for
-    /// I²C); ESP32-C3 lowers it to real GPIO-matrix pads and rejects missing,
+    /// I²C); ESP32-C3/H2 lower it to real GPIO-matrix pads and reject missing,
     /// unsupported, or ambiguous routes instead of silently attaching by bus
     /// name alone. Other controller families preserve the generic shape for
     /// forward-compatible physical routing while retaining their fixed-pin
@@ -448,10 +455,10 @@ impl SystemBus {
         Ok(())
     }
 
-    /// Wire the ESP32-C3 I²C0 bit engine to C3 GPIO in both directions: GPIO
-    /// reads the live SDA/SCL waveform, while I²C reads GPIO's live input/output
+    /// Wire the ESP32 C3/C5/C61 I²C0 bit engine to the shared GPIO model in both
+    /// directions: GPIO reads the live SDA/SCL waveform, while I²C reads GPIO's live input/output
     /// matrix state before allowing a physically routed slave to acknowledge.
-    /// No-op unless both C3 models are on the bus.
+    /// No-op unless both compatible controller and GPIO models are on the bus.
     pub(crate) fn wire_esp32c3_i2c_pads(&mut self) {
         use crate::peripherals::esp32c3::gpio::Esp32c3Gpio;
         use crate::peripherals::esp32c3::i2c::Esp32c3I2c;
@@ -491,6 +498,54 @@ impl SystemBus {
                 .dev
                 .as_any_mut()
                 .and_then(|a| a.downcast_mut::<Esp32c3Gpio>()),
+        ) {
+            gpio.set_i2c_lines(lines);
+        }
+    }
+
+    /// Wire ESP32-H2 I2C0's shared C3-compatible command-list engine to the
+    /// H2 GPIO matrix. H2 assigns I2CEXT0_SCL/SDA to signals 45/46; the H2
+    /// GPIO model tracks those selectors separately from the C3 layout.
+    pub(crate) fn wire_esp32h2_i2c_pads(&mut self) {
+        use crate::peripherals::esp32c3::i2c::Esp32c3I2c;
+        use crate::peripherals::esp32h2::gpio::Esp32h2Gpio;
+
+        let i2c_idx = self.peripherals.iter().position(|p| {
+            p.dev
+                .as_any()
+                .map(|a| a.is::<Esp32c3I2c>())
+                .unwrap_or(false)
+        });
+        let gpio_idx = self.peripherals.iter().position(|p| {
+            p.dev
+                .as_any()
+                .map(|a| a.is::<Esp32h2Gpio>())
+                .unwrap_or(false)
+        });
+        let (Some(i2c_idx), Some(gpio_idx)) = (i2c_idx, gpio_idx) else {
+            return;
+        };
+        let matrix_route = self.peripherals[gpio_idx]
+            .dev
+            .as_any()
+            .and_then(|a| a.downcast_ref::<Esp32h2Gpio>())
+            .map(|gpio| gpio.i2c_matrix_route_state());
+        let lines = self.peripherals[i2c_idx]
+            .dev
+            .as_any_mut()
+            .and_then(|a| a.downcast_mut::<Esp32c3I2c>())
+            .and_then(|controller| {
+                matrix_route.map(|route| {
+                    controller.set_matrix_route_state(route);
+                    controller.line_levels_arc()
+                })
+            });
+        if let (Some(lines), Some(gpio)) = (
+            lines,
+            self.peripherals[gpio_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<Esp32h2Gpio>()),
         ) {
             gpio.set_i2c_lines(lines);
         }
@@ -2588,6 +2643,15 @@ impl SystemBus {
         // first — so binding both would hand PB6 to whichever wiring function
         // `from_config` happens to call first, silently.
         type I2cPadF1 = (&'static str, char, u8, usize, &'static str);
+        // The CH32V003 shares the legacy I2C register block with STM32F1, but
+        // its default I2C1 pins are PC2=SCL and PC1=SDA (WCH CH32V003 RM
+        // §13.11 and the default AFIO remap setting). Keep this opt-in map
+        // separate so it cannot accidentally publish a waveform on STM32F103
+        // GPIOs with the same register layout.
+        const CH32V003: &[I2cPadF1] = &[
+            ("i2c1", 'c', 2, LINE_SCL, "I2C1_SCL"),
+            ("i2c1", 'c', 1, LINE_SDA, "I2C1_SDA"),
+        ];
         const F1: &[I2cPadF1] = &[
             ("i2c1", 'b', 6, LINE_SCL, "I2C1_SCL"),
             ("i2c1", 'b', 7, LINE_SDA, "I2C1_SDA"),
@@ -2610,16 +2674,35 @@ impl SystemBus {
             ("i2c2", 'b', 13, 6, LINE_SCL, "I2C2_SCL"),
             ("i2c2", 'b', 14, 6, LINE_SDA, "I2C2_SDA"),
         ];
+        // STM32G4 AF4 routes, selected only when a G4 chip declares
+        // `pad_map: stm32g4`. DS12589 (STM32G431x6/x8/xB) plus ST UM2397
+        // document the NUCLEO-G431KB I2C1 pair PA15=SCL and PB7=SDA. Keep
+        // the established PB6/PB7 and PB8/PB9 choices as additional I2C1
+        // alternates used by other G4 board profiles.
+        const G4: &[I2cPad] = &[
+            ("i2c1", 'a', 15, 4, LINE_SCL, "I2C1_SCL"),
+            ("i2c1", 'b', 6, 4, LINE_SCL, "I2C1_SCL"),
+            ("i2c1", 'b', 7, 4, LINE_SDA, "I2C1_SDA"),
+            ("i2c1", 'b', 8, 4, LINE_SCL, "I2C1_SCL"),
+            ("i2c1", 'b', 9, 4, LINE_SDA, "I2C1_SDA"),
+        ];
 
         for i2c_name in ["i2c1", "i2c2", "i2c3"] {
             let Some(i2c_idx) = self.find_peripheral_index_by_name(i2c_name) else {
                 continue;
             };
-            let Some((layout, g0)) = self.peripherals[i2c_idx]
+            let Some((layout, g0, g4, ch32v003)) = self.peripherals[i2c_idx]
                 .dev
                 .as_any()
                 .and_then(|a| a.downcast_ref::<I2c>())
-                .map(|i2c| (i2c.register_layout(), i2c.is_g0_pad_map()))
+                .map(|i2c| {
+                    (
+                        i2c.register_layout(),
+                        i2c.is_g0_pad_map(),
+                        i2c.is_g4_pad_map(),
+                        i2c.is_ch32v003_pad_map(),
+                    )
+                })
             else {
                 continue;
             };
@@ -2652,8 +2735,17 @@ impl SystemBus {
                 };
                 let v2_table = match (layout, gpio_layout) {
                     (I2cRegisterLayout::Stm32L4, GpioRegisterLayout::Stm32V2) if g0 => G0,
+                    (I2cRegisterLayout::Stm32L4, GpioRegisterLayout::Stm32V2) if g4 => G4,
                     (I2cRegisterLayout::Stm32L4, GpioRegisterLayout::Stm32V2) => L4,
                     (I2cRegisterLayout::Stm32F1, GpioRegisterLayout::Stm32V2) => F4,
+                    (I2cRegisterLayout::Stm32F1, GpioRegisterLayout::Wch) if ch32v003 => {
+                        for &(i2c, p, pin, line, func) in CH32V003 {
+                            if i2c == i2c_name && p == port {
+                                plan.push((port, pin, None, line, func));
+                            }
+                        }
+                        continue;
+                    }
                     (I2cRegisterLayout::Stm32F1, GpioRegisterLayout::Stm32F1) => {
                         for &(i2c, p, pin, line, func) in F1 {
                             if i2c == i2c_name && p == port {

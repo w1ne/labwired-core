@@ -1,0 +1,24 @@
+# Standalone mirror of configs/systems/nucleo-g431kb-bme280.yaml.
+name: "nucleo-g431kb-bme280"
+chip: "../../configs/chips/stm32g431kb.yaml"
+cpu_hz: 170_000_000
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c1"
+    route:
+      scl: "PA15"
+      sda: "PB7"
+    config:
+      i2c_address: 0x77
+board_io:
+  - id: "led_ld2"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 8
+    signal: "output"
+    active_high: true
+connectors:
+  - type: "uart"
+    peripheral: "usart2"
+    endpoint: "host_console"

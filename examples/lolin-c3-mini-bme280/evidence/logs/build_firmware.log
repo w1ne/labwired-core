@@ -1,0 +1,111 @@
+Processing lolin_c3_mini (platform: espressif32@8.0.0; board: lolin_c3_mini; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/espressif32/lolin_c3_mini.html
+PLATFORM: Espressif 32 (8.0.0) > WEMOS LOLIN C3 Mini
+HARDWARE: ESP32C3 160MHz, 320KB RAM, 4MB Flash
+DEBUG: Current (cmsis-dap) External (cmsis-dap, esp-bridge, esp-builtin, esp-prog, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa)
+PACKAGES:
+ - framework-arduinoespressif32 @ 4.30312.261024 (3.3.12)
+ - framework-arduinoespressif32-esp32c3-libs @ 3.3.12
+ - tool-esptool @ 2.50400.0 (5.4.0)
+ - tool-riscv32-esp-elf-gdb @ 12.1.0+20221002
+ - tool-xtensa-esp-elf-gdb @ 12.1.0+20221002
+ - toolchain-riscv32-esp @ 14.2.0+20260121
+ - toolchain-xtensa-esp-elf @ 14.2.0+20260121
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 44 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- Wire @ 3.3.12
+Building in release mode
+Compiling .pio/build/lolin_c3_mini/src/main.cpp.o
+Building .pio/build/lolin_c3_mini/bootloader.bin
+Generating partitions .pio/build/lolin_c3_mini/partitions.bin
+Compiling .pio/build/lolin_c3_mini/lib482/Wire/Wire.cpp.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/ColorFormat.c.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/Esp.cpp.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/FirmwareMSC.cpp.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/FunctionalInterrupt.cpp.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/HEXBuilder.cpp.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/HWCDC.cpp.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/HardwareSerial.cpp.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/HashBuilder.cpp.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/IPAddress.cpp.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/MD5Builder.cpp.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/MacAddress.cpp.o
+esptool v5.4.0
+Creating ESP32-C3 image...
+Merged 2 ELF sections.
+Successfully created ESP32-C3 image.
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/Print.cpp.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/Stream.cpp.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/StreamString.cpp.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/StringUtils.cpp.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/Tone.cpp.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/USB.cpp.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/USBCDC.cpp.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/USBHost.cpp.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/USBMSC.cpp.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/WMath.cpp.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/WString.cpp.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/base64.cpp.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/cbuf.cpp.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/chip-debug-report.cpp.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/esp32-hal-adc.c.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/esp32-hal-bt.c.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/esp32-hal-cpu.c.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/esp32-hal-dac.c.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/esp32-hal-gpio.c.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/esp32-hal-hosted.c.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/esp32-hal-i2c-ng.c.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/esp32-hal-i2c-slave.c.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/esp32-hal-i2c.c.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/esp32-hal-ldo.c.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/esp32-hal-ledc.c.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/esp32-hal-log-wrapper.c.o
+Archiving .pio/build/lolin_c3_mini/lib482/libWire.a
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/esp32-hal-matrix.c.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/esp32-hal-misc.c.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/esp32-hal-periman.c.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/esp32-hal-psram.c.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/esp32-hal-rgb-led.c.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/esp32-hal-rmt.c.o
+Indexing .pio/build/lolin_c3_mini/lib482/libWire.a
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/esp32-hal-sigmadelta.c.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/esp32-hal-spi.c.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/esp32-hal-time.c.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/esp32-hal-timer.c.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/esp32-hal-tinyusb.c.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/esp32-hal-touch-ng.c.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/esp32-hal-touch.c.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/esp32-hal-uart.c.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/firmware_msc_fat.c.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/freertos_stats.cpp.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/idf_openthread_mpool_wrapper.c.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/libb64/cdecode.c.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/libb64/cencode.c.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/main.cpp.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/stdlib_noniso.c.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/wiring_pulse.c.o
+Compiling .pio/build/lolin_c3_mini/FrameworkArduino/wiring_shift.c.o
+Archiving .pio/build/lolin_c3_mini/libFrameworkArduino.a
+Indexing .pio/build/lolin_c3_mini/libFrameworkArduino.a
+Linking .pio/build/lolin_c3_mini/firmware.elf
+Retrieving maximum program size .pio/build/lolin_c3_mini/firmware.elf
+Checking size .pio/build/lolin_c3_mini/firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [          ]   4.6% (used 15172 bytes from 327680 bytes)
+Flash: [===       ]  25.7% (used 336536 bytes from 1310720 bytes)
+Building .pio/build/lolin_c3_mini/firmware.bin
+esptool v5.4.0
+Creating ESP32-C3 image...
+Merged 3 ELF sections.
+Successfully created ESP32-C3 image.
+========================= [SUCCESS] Took 41.40 seconds =========================
+Using tool-esptool@2.50400.0 package
+esptool v5.4.0
+HINT: Consider using --format hex to avoid flashing unused 0xFF padding between input regions.
+SHA digest in image updated.
+Wrote 0x66460 bytes to file '/home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/examples/lolin-c3-mini-bme280/firmware/.pio/build/lolin_c3_mini/merged.bin', ready to flash to offset 0x0.

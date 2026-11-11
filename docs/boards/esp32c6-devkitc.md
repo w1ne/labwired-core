@@ -22,6 +22,7 @@ This is an **L3 (production-ready)** target by the [target support rubric](../ta
 | Reference firmware | [`crates/firmware-esp32c6-demo/`](../../crates/firmware-esp32c6-demo/) |
 | TIER1 fixture | [`examples/tier1-fixture/esp32c6/`](../../examples/tier1-fixture/esp32c6/) → `tests/fixtures/tier1/esp32c6.elf` |
 | Example | [`examples/esp32c6-devkitc/`](../../examples/esp32c6-devkitc/) |
+| BME280 board smoke | [`examples/esp32c6-devkitc-1-n8-bme280/`](../../examples/esp32c6-devkitc-1-n8-bme280/) — modeled GPIO6/7 I²C0 route, UART0 result |
 | Committed artifact | `tests/fixtures/esp32c6-demo.elf` (`OK\n`) |
 | Register/interrupt source | Vendored `tests/fixtures/real_world/esp32c6.svd` (espressif/svd) |
 | Tier (snapshot) | **L3** — SIM-DERIVED, no silicon diff. Tier-1 row: all 12 classes pass (`clock` `gpio` `uart` `timer` `dma` `irq` `i2c` `spi` `adc` `pwm` `wdt` `rtc`) |
@@ -96,7 +97,7 @@ The GPIO matrix reuses the engine's C3-sized register block (pins 0–25), so
 | GPIO matrix | ⚠️ | Shared C3-sized model (26 pins); `board_io` LED/button declared but the RGB LED needs RMT |
 | IO_MUX | ⚠️ | Register-backed stub: pad function writes are recorded, not electrically enforced — the console shifts bytes regardless of routing |
 | USB Serial/JTAG | ⚠️ | `UsbSerialJtag` @ `0x6000_F000` (irq 48); system `debug_uart` still `uart0` |
-| I²C0 | ✅ / ⚠️ | Behavioral command-list engine shared with the C3 (`esp32c3_i2c`), C6 base `0x6000_4000` + source 50 (I2C_EXT0). The C6-only differences (SDA/SCL filter tail) are unmodelled; the C3 matrix-signal pad wiring is applied by the shared wiring pass even though C6 signal ids differ |
+| I²C0 | ✅ / ⚠️ | Behavioral command-list engine shared with the C3 (`esp32c3_i2c`), C6 base `0x6000_4000` + source 50 (I2C_EXT0). The C6-only differences (SDA/SCL filter tail) are unmodelled. The C3 matrix-signal pad wiring is applied by the shared wiring pass even though C6 signal ids differ; the board smoke reads a BME280 at `0x77` over the model's GPIO6/7 route, which has no silicon comparison |
 | GP-SPI2 | ✅ / ⚠️ | Behavioral GP-SPI transaction engine shared with the C3 (`esp32c3_spi`), C6 base `0x6008_1000` + source 72. No external-device/CS-gating or DMA-coupled path |
 | APB_SARADC | ✅ / ⚠️ | Behavioral one-shot engine shared with the C3 (`esp32c3_apb_saradc`), C6 base `0x6000_E000` + source 60. Gated on `PCR.SARADC_CONF.SARADC_REG_CLK_EN` (bit 2, the APB register clock `adc_ll_enable_bus_clock` sets), not `SARADC_CLK_EN` (bit 0, the digital-controller clock IDF startup clears). `PWDET_CONF` (`0x600A_0810`) is a write-ignored stub, so the SAR power mode is not modelled. Arduino `analogRead(A0)` = 256 and `analogRead(A1)` = 529 (the fixed per-channel source). Register reset seeds are the C3 silicon capture; no DMA mode, thresholds or TSENS |
 | LEDC | ✅ / ⚠️ | The C3 timer/counter/wrap engine on the C6 field geometry (`esp32c6_ledc`), base `0x6000_7000` + source 45. Channel outputs reach the pad through matrix signals 0..5, clocked from `PCR.LEDC_SCLK_CONF`: Arduino `analogWrite(2, 128)` is 1 kHz / 50 % on GPIO2. The C6-only gamma/event/compare/capture tail is not modelled |

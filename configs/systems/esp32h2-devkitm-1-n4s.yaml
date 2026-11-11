@@ -1,0 +1,18 @@
+# Espressif ESP32-H2-DevKitM-1-N4S.
+# Focused profile: captured UART0 console stream, GPIO10 direct output, and a
+# BME280 breakout on I2C0 using the exposed GPIO4/GPIO5 header pins.
+# UART-to-bridge pin routing, IO_MUX electrical behavior, and radio operation
+# remain outside this profile.
+name: "esp32h2-devkitm-1-n4s"
+chip: "../chips/esp32h2.yaml"
+cpu_hz: 96_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GPIO4"
+      scl: "GPIO5"
+    config:
+      i2c_address: 0x77

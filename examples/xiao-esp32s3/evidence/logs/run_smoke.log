@@ -1,0 +1,17 @@
+2026-11-11T12:48:23.190563Z  INFO labwired_loader: ELF Entry Point: 0x40375ad8
+configure_xtensa_esp32s3: ESP32-S3 ROM harness (thunk code + 131072 B DROM)
+labwired-cli test: seeded S3 dcache partitions (3072 bytes) from examples/xiao-esp32s3/./firmware/.pio/build/xiao_s3/partitions.bin
+2026-11-11T12:48:23.218384Z  INFO labwired_core::boot::esp32s3: esp32s3: seeded factory MMU (12 entries, app0 @ flash 0x10000) for cache2phys
+labwired-cli test: seeded S3 factory MMU for cache2phys (app0 @ 0x10000)
+2026-11-11T12:48:23.218411Z  INFO labwired_core::boot::esp32s3: esp32s3: seeded rom_spiflash_legacy_data -> chip@0x3fceff00 (chip_size=0x800000)
+labwired-cli test: S3 APP handshake flags @ [
+    0x3fc972eb,
+    0x3fc972ec,
+    0x3fc972e9,
+    0x3fc972ea,
+]
+labwired-cli test: pxCurrentTCBs @0x3fc9783c (hybrid preserve key)
+labwired-cli test: pxCurrentTCBs @0x3fc9783c (hybrid preserve key)
+labwired-cli test: installed xthal_window_spill_nw CPU spill workaround @0x40382f60
+labwired-cli test: ESP32-S3 fast-boot entry=0x40375ad8 (dual-core APP_CPU)
+PASS  3/3 checks · io-smoke · 50000000 steps · 3.16s

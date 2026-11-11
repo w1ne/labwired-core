@@ -1,0 +1,29 @@
+{
+  "target_id": "ch32v003evt-bme280-i2c1",
+  "status": "pass",
+  "crate": "",
+  "target_triple": "",
+  "script": "examples/ch32v003f4p6/bme280-smoke.yaml",
+  "system": "configs/systems/ch32v003evt-bme280.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-11T05:24:44Z",
+  "finished_at_utc": "2026-11-11T05:25:12Z",
+  "elapsed_seconds": 28,
+  "elapsed_ms": 27878,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 27.386,
+    "build_firmware": 0.092,
+    "run_smoke": 0.366
+  },
+  "stages_ms": {
+    "build_cli": 27386,
+    "build_firmware": 92,
+    "run_smoke": 366
+  },
+  "firmware_build_script": "examples/ch32v003f4p6/build.sh"
+}

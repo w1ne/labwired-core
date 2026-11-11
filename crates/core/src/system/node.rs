@@ -248,7 +248,7 @@ fn check_profile(
 ) -> anyhow::Result<()> {
     match profile {
         NodeProfile::ArduinoEsp32 => {
-            if family != MachineFamily::Xtensa || is_esp32s3(chip) {
+            if family != MachineFamily::Xtensa || is_esp32s3(chip) || chip.is_esp32s2() {
                 anyhow::bail!(
                     "node '{id}': profile '{}' is the classic-ESP32 (Xtensa LX6) Arduino fast \
                      boot, and chip '{}' is not a classic ESP32",
@@ -594,6 +594,28 @@ fn build_xtensa_node(
         return build_esp32s3_node(id, chip, system, firmware, blobs);
     }
 
+    if chip.is_esp32s2() {
+        let NodeFirmware::Elf(bytes) = firmware else {
+            anyhow::bail!("node '{id}': ESP32-S2 profile accepts a bare ELF fast-start only");
+        };
+        let image = parse_elf_image(&bytes)
+            .with_context(|| format!("node '{id}': parse ESP32-S2 firmware ELF"))?;
+        let (bus, cpu) = crate::system::builder::build_esp32s2_system_from_chip(chip, system, &[])
+            .with_context(|| format!("node '{id}': build ESP32-S2 system"))?;
+        let mut machine = Machine::new(cpu, bus);
+        machine
+            .load_firmware(&image)
+            .map_err(|e| anyhow::anyhow!("node '{id}': load ESP32-S2 firmware: {e:?}"))?;
+        machine
+            .reset()
+            .map_err(|e| anyhow::anyhow!("node '{id}': ESP32-S2 reset: {e:?}"))?;
+        use crate::Cpu as _;
+        machine.cpu.set_pc(image.entry_point as u32);
+        machine.cpu.set_sp(0x3FFF_FFF0);
+        machine.cpu.ps = crate::cpu::xtensa_regs::Ps::from_raw(1 << 18);
+        return Ok(Box::new(machine));
+    }
+
     let NodeFirmware::Elf(bytes) = firmware else {
         anyhow::bail!(
             "node '{id}': chip '{}' boots from an ELF, but the firmware is not an ELF file",
@@ -712,7 +734,7 @@ fn build_esp32s3_node(
     // clocks the SYSTIMER, and on the flash path its flash size is the part's
     // capacity the model reports over RDID — a 16 MiB module booted on a
     // 4 MiB backing fails `esp_flash`'s size check before `app_main`.
-    let base = Esp32s3Opts::for_chip(chip);
+    let base = Esp32s3Opts::for_chip_with_memory_overrides(chip, &system.memory_overrides)?;
     let opts = match &flash_image {
         Some(image) => Esp32s3Opts {
             real_reset_boot: true,

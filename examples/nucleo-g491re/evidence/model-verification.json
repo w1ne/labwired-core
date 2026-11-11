@@ -1,0 +1,14 @@
+{
+  "status": "inconclusive",
+  "verifier": "hosted labwired_verify",
+  "reason": "The hosted catalog has no G491 board entry. labwired_list(kind=board, filter=g491) returned an empty board list, and the verifier connector rejected board=nucleo-g491re during schema validation before execution.",
+  "local_cli_smoke": {
+    "status": "pass",
+    "script": "examples/nucleo-g491re/io-smoke.yaml",
+    "assertions": [
+      "gpioa:5 observed at least 8 transitions",
+      "run reached max_steps"
+    ],
+    "evidence": "evidence/simulation-output/result.json"
+  }
+}

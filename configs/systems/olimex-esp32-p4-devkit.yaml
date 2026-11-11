@@ -1,0 +1,12 @@
+# Olimex ESP32-P4-DevKit with the built-in active-low USER_LED1 on GPIO2.
+# Only the internal-SRAM firmware path and GPIO2 output/IO_MUX path are modeled.
+name: "olimex-esp32-p4-devkit"
+chip: "../chips/esp32p4.yaml"
+cpu_hz: 400_000_000
+board_io:
+  - id: "user_led"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 2
+    signal: "output"
+    active_high: false

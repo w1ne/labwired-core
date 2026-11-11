@@ -1,0 +1,30 @@
+# Seeed Studio XIAO ESP32-C6 (ESP32-C6FH4) with an Adafruit BME280 STEMMA QT.
+# D4/D5 are GPIO22/23 I2C0; USB-C carries native USB Serial/JTAG.
+# Wi-Fi, BLE, 802.15.4, the LP core and battery charging are outside this
+# profile's tested scope.
+name: "xiao-esp32c6-bme280"
+chip: "../chips/esp32c6fh4.yaml"
+cpu_hz: 160_000_000
+debug_uart: "usb_serial_jtag"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GPIO22"
+      scl: "GPIO23"
+    config:
+      i2c_address: 0x77
+board_io:
+  - id: "status_led"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 15
+    signal: "output"
+    active_high: false
+  - id: "button_boot"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 9
+    signal: "input"
+    active_high: false

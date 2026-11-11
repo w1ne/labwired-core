@@ -1,0 +1,28 @@
+{
+  "target_id": "rp2040-pico-bme280",
+  "status": "pass",
+  "crate": "firmware-rp2040-pico-bme280-smoke",
+  "target_triple": "thumbv6m-none-eabi",
+  "script": "examples/rp2040-pico-bme280/bme280-smoke.yaml",
+  "system": "configs/systems/rp2040-pico-bme280.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-10T19:20:12Z",
+  "finished_at_utc": "2026-11-10T19:20:14Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1559,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.369,
+    "build_firmware": 0.549,
+    "run_smoke": 0.592
+  },
+  "stages_ms": {
+    "build_cli": 369,
+    "build_firmware": 549,
+    "run_smoke": 592
+  }
+}

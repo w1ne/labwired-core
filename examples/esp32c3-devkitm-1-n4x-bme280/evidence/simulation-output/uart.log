@@ -1,0 +1,10 @@
+ESP-ROM:esp32c3-api1-20210207
+Build:Feb  7 2021
+rst:0x1 (POWERON),boot:0x8 (SPI_FAST_FLASH_BOOT)
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fcd5820,len:0x110c
+load:0x403cbf10,len:0xb54
+load:0x403ce710,len:0x2f9c
+entry 0x403cbf10
+ESP32C3_DEVKITM1_N4X_BME280_OK ID=0x60 TEMP_RAW=0x082DC0 I2C0=GPIO4/5

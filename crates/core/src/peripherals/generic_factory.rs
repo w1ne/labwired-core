@@ -132,6 +132,25 @@ pub const MODEL_TYPES: &[&str] = &[
     // would resolve them to the STM32 maps.
     "esp32c6_uart",
     "esp32c6_gpio",
+    // C61 GPIO uses the shared model with a shifted register head, a distinct
+    // direct-output signal ID, and its narrow I2C0 matrix subset.
+    "esp32c61_gpio",
+    "esp32c61_pcr",
+    // C61 I2C0 uses the C3/C5 command-list model with C61 clock and IRQ rates.
+    "esp32c61_i2c",
+    // C5's GPIO register head is shared for the modeled direct-output subset.
+    "esp32c5_gpio",
+    // The C5 I2C0 command-list engine is selected by the bus's I2C attach path.
+    "esp32c5_i2c",
+    // ESP32-C5 HP UART register head and FIFO model.
+    "esp32c5_uart",
+    // ESP32-H2 has a C6-compatible UART register map at its own 96 MHz core
+    // rate, plus the H2 GPIO direct-output and I2C0 matrix subset.
+    "esp32h2_uart",
+    "esp32h2_gpio",
+    "esp32h2_i2c",
+    // ESP32-P4 GPIO and IO_MUX are modeled together for the GPIO2 user LED.
+    "esp32p4_gpio",
     // C6-only behavioral blocks: PCR (clock/reset, full SVD register map) and
     // GDMA (3 channels, C6 register layout). The fuzzy `contains("dma")`
     // fallback would otherwise coerce `esp32c6_gdma` onto the STM32 DMA

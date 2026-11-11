@@ -1,0 +1,10 @@
+# Read the BME280 chip ID and raw temperature over the Nano ESP32 I2C0 route.
+schema_version: "1.0"
+inputs:
+  firmware: "./firmware/.pio/build/nano_esp32/firmware.elf"
+  system: "../../configs/systems/arduino-nano-esp32-bme280.yaml"
+limits:
+  max_steps: 50000000
+assertions:
+  - uart_contains: "ARDUINO_NANO_ESP32_BME280_OK ID=0x60 TEMP_RAW=0x082DC0 I2C0=A4(GPIO11)/A5(GPIO12)"
+  - expected_stop_reason: max_steps

@@ -1,0 +1,15 @@
+[package]
+name = "firmware-esp32h2-devkitm-1-smoke"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "ESP32-H2-DevKitM-1 I2C0 BME280, UART0, and GPIO10 smoke."
+
+[dependencies]
+riscv-rt = "0.12"
+
+[[bin]]
+name = "firmware-esp32h2-devkitm-1-smoke"
+path = "src/main.rs"
+test = false
+bench = false

@@ -1,0 +1,14 @@
+# Waveshare ESP32-S3-Zero: boot firmware, send a WS2812 green frame on the
+# board's GPIO21 data line, and verify UART, GPIO edges, and normal smoke stop.
+schema_version: "1.2"
+inputs:
+  firmware: "firmware/.pio/build/zero/firmware.elf"
+  system: "../../configs/systems/esp32s3-zero.yaml"
+limits:
+  max_steps: 50000000
+assertions:
+  - uart_contains: "ESP32_S3_ZERO_GPIO21_WS2812_OK"
+  - gpio_edges:
+      pin: "gpio:21"
+      min_edges: 48
+  - expected_stop_reason: max_steps

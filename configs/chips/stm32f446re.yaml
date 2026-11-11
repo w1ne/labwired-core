@@ -1,0 +1,72 @@
+# LabWired - STM32F446RE focused chip descriptor
+#
+# Exact MCU: STM32F446RET6, used by ST NUCLEO-F446RE. This descriptor models
+# the blocks required by the board smoke and current profile: F4 RCC, GPIOA,
+# GPIOC, USART2, and Cortex-M system control. Other F446 peripherals are not
+# declared here and are outside this model's scope.
+#
+# Sources: ST DS10693 (STM32F446xC/E), RM0390 (STM32F446xx), and the STM32F4
+# peripheral models shared with the F401/F407 descriptors.
+name: "stm32f446re"
+arch: "arm"
+core: "cortex-m4"
+registers_count: 150
+# Maximum part clock. The NUCLEO-F446RE smoke leaves the chip on reset HSI at
+# 16 MHz and does not claim PLL/HSE clock setup.
+cpu_hz: 180_000_000
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7
+
+flash:
+  base: 0x08000000
+  size: "512KB"
+ram:
+  base: 0x20000000
+  size: "128KB"
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40023800
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f401/rcc.yaml"
+      profile: "stm32f4"
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x40020000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f401/gpioa.yaml"
+      profile: "stm32v2"
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x40020800
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f401/gpioc.yaml"
+      profile: "stm32v2"
+  - id: "usart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 38
+    config:
+      debug_schema: "../peripherals/stm32f401/usart2.yaml"
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+  - id: "nvic"
+    type: "nvic"
+    base_address: 0xE000E100
+    size: "1KB"
+
+# Pin aliases used by the NUCLEO-F446RE profile and smoke. The board manual
+# maps D0/D1 to PA3/PA2, D13/LD2 to PA5, and B1 to PC13.
+pins:
+  PA2: { gpio: "gpioa", bit: 2 }
+  PA3: { gpio: "gpioa", bit: 3 }
+  PA5: { gpio: "gpioa", bit: 5 }
+  PC13: { gpio: "gpioc", bit: 13 }

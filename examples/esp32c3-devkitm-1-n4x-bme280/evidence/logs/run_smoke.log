@@ -1,0 +1,10 @@
+2026-11-10T19:00:20.847212Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/esp32c3.yaml
+2026-11-10T19:00:20.848512Z  INFO labwired_core::bus::from_config: loaded 393216 bytes into 'rom' region @ 0x40000000 from /home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/crates/core/roms/esp32c3/esp32c3_rom.bin
+2026-11-10T19:00:20.848721Z  INFO labwired_core::bus::from_config: loaded 131072 bytes into 'rom_data' region @ 0x3ff00000 from /home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/crates/core/roms/esp32c3/esp32c3_drom.bin
+2026-11-10T19:00:20.948542Z  INFO labwired_loader: ELF Entry Point: 0x403807ca
+2026-11-10T19:00:20.951049Z  INFO labwired_cli: provisioned 393216 bytes of C3 boot ROM @ 0x40000000
+2026-11-10T19:00:20.951066Z  INFO labwired_cli: provisioned 131072 bytes of C3 boot ROM @ 0x3ff00000
+labwired-riscv: rom-boot from reset vector 0x40000000 (flash image 400256 bytes from examples/esp32c3-devkitm-1-n4x-bme280/firmware/.pio/build/devkitm1_n4x/merged.bin)
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: idle_ff skipped 19040512153 of 19090512153 device cycles (50000000 interpreted)
+PASS  2/2 checks · bme280-smoke · 50000000 steps · 22.69s

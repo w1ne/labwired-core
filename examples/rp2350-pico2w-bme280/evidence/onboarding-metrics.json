@@ -1,0 +1,28 @@
+{
+  "target_id": "rp2350-pico2w-bme280",
+  "status": "pass",
+  "crate": "firmware-rp2350-pico2w-bme280-smoke",
+  "target_triple": "thumbv8m.main-none-eabi",
+  "script": "examples/rp2350-pico2w-bme280/bme280-smoke.yaml",
+  "system": "configs/systems/rp2350-pico2w-bme280.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-10T23:53:19Z",
+  "finished_at_utc": "2026-11-10T23:53:20Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1159,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.476,
+    "build_firmware": 0.21,
+    "run_smoke": 0.437
+  },
+  "stages_ms": {
+    "build_cli": 476,
+    "build_firmware": 210,
+    "run_smoke": 437
+  }
+}

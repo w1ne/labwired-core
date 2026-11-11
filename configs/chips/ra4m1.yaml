@@ -6,9 +6,11 @@
 #
 # SIM-DERIVED R7FA4M1AB descriptor for Arduino Uno R4 Minima bring-up.
 # Not silicon-verified. USB CDC Serial is intentionally out of scope —
-# only the MCU core, PORT (ra_port), SYSTEM (HOCO/OSCSF), SCI2 UART
-# (header Serial on P301/P302), SysTick, and a USBFS stub window are modelled.
-# Pin labels follow ArduinoCore-renesas variants/MINIMA.
+# the MCU core, PORT (ra_port), SYSTEM (HOCO/OSCSF), SCI2 UART (header Serial
+# on P301/P302), IIC1 master, SysTick, and a USBFS stub window are modelled.
+# IIC1 can transact with attached devices, but PFS mux settings are stored only
+# and do not route or electrically validate P100/P101. Pin labels follow
+# ArduinoCore-renesas variants/MINIMA.
 
 name: "r7fa4m1ab"
 arch: "arm"
@@ -27,6 +29,9 @@ pins:
   P302: { gpio: port3, bit: 2, functions: [{ type: uart, peripheral: sci2, role: tx }] }
   # D13 / LED — MINIMA: P111.
   P111: { gpio: port1, bit: 11, functions: [{ type: gpio, peripheral: port1 }] }
+  # A4 / SDA (P101) and A5 / SCL (P100): ArduinoCore-renesas MINIMA pin map.
+  P101: { gpio: port1, bit: 1, functions: [{ type: i2c, peripheral: iic1, role: sda }] }
+  P100: { gpio: port1, bit: 0, functions: [{ type: i2c, peripheral: iic1, role: scl }] }
 peripherals:
   # R_SYSTEM @ 0x4001E000 — HOCOCR/OSCSF (R01UH0887 / R7FA4M1AB.h).
   - id: "ra_sysc"
@@ -77,6 +82,17 @@ peripherals:
     irq: 4
     config:
       profile: "sci"
+  # Header I2C — RIIC IIC1 @ 0x40053100. RXI is ELC event 0x3A, followed by
+  # TXI/TEI/ERI. The board system attaches external devices directly to this
+  # controller; pad-level IIC routing is not enforced by the current model.
+  - id: "iic1"
+    type: "ra_iic"
+    base_address: 0x40053100
+    size: "256B"
+    config:
+      elc_event: 0x3A
+      clock_hz: 48_000_000
+      pclkb_hz: 48_000_000
   # USBFS stub — USB CDC Serial out of scope for this bring-up.
   - id: "usbfs"
     type: "stub"

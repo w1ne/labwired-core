@@ -83,7 +83,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "873d36e964b9fe0954188dd7069abbd7d22e25e2dd2f57e4166963cf38461ddf",
+  "firmware_hash": "8b030fffb934818ac24354ad3e6092316fcaea3872dbc185c9d647f506e0d6f0",
   "config": {
     "firmware": "examples/nucleo-f103rb-bme280/../../target/thumbv7m-none-eabi/release/firmware-nucleo-f103rb-bme280-smoke",
     "system": "examples/nucleo-f103rb-bme280/../../configs/systems/nucleo-f103rb-bme280.yaml",
@@ -1797,6 +1797,9 @@
     ],
     "dropped_lines": 0
   },
+  "i2c_addresses": [
+    119
+  ],
   "footprint": {
     "method": "elf_section_totals_v1",
     "text_bytes": 6108,

@@ -11,6 +11,7 @@ FIRMWARE_BUILD_DIR=""
 FIRMWARE_BUILD_SCRIPT=""
 PROFILE="release"
 THRESHOLD_SECONDS="${ONBOARDING_SOFT_THRESHOLD_SECONDS:-3600}"
+ROM_BOOT="false"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -53,6 +54,10 @@ while [[ $# -gt 0 ]]; do
     --threshold-seconds)
       THRESHOLD_SECONDS="$2"
       shift 2
+      ;;
+    --rom-boot)
+      ROM_BOOT="true"
+      shift
       ;;
     *)
       echo "Unknown argument: $1" >&2
@@ -214,12 +219,20 @@ run_firmware_build() {
   fi
 }
 
+run_cli_smoke() {
+  local args=(run -q -p labwired-cli -- test --script "${SCRIPT}" --output-dir "${run_smoke_output_dir}" --no-uart-stdout)
+  if [[ "${ROM_BOOT}" == "true" ]]; then
+    args+=(--rom-boot)
+  fi
+  cargo "${args[@]}"
+}
+
 if ! run_stage build_cli cargo build -p labwired-cli; then
   :
 else
   if ! run_stage build_firmware run_firmware_build; then
     :
-  elif ! run_stage run_smoke cargo run -q -p labwired-cli -- test --script "${SCRIPT}" --output-dir "${run_smoke_output_dir}" --no-uart-stdout; then
+  elif ! run_stage run_smoke run_cli_smoke; then
     :
   fi
 fi

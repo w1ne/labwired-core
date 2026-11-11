@@ -1,0 +1,9 @@
+# Espressif ESP32-S2-DevKitC-1-N8R2.
+# UART0 is wired through the board's USB-to-UART bridge; the twin captures the
+# MCU UART0 peripheral directly and does not model the bridge or pad mux.
+name: "esp32s2-devkitc-1-n8r2"
+chip: "../chips/esp32s2.yaml"
+cpu_hz: 240_000_000
+debug_uart: "uart0"
+external_devices: []
+board_io: []

@@ -19,6 +19,25 @@ on:
       - "examples/**"
       - "crates/core/**"
       - "crates/firmware-stm32u575-demo/**"
+      - "crates/firmware-esp32c5-devkitc-1-bme280-smoke/**"
+      - "crates/firmware-olimex-esp32-p4-devkit-smoke/**"
+      - "crates/firmware-esp32c61-smoke/**"
+      - "crates/firmware-esp32c61-bme280-smoke/**"
+      - "crates/firmware-esp32h2-devkitm-1-smoke/**"
+      - "crates/firmware-nucleo-f446re-smoke/**"
+      - "crates/firmware-nucleo-l432kc-smoke/**"
+      - "crates/firmware-nucleo-h503rb-smoke/**"
+      - "crates/firmware-nucleo-u3c5zi-q-smoke/**"
+      - "crates/firmware-nucleo-g0b1re-smoke/**"
+      - "crates/firmware-nucleo-c562re-smoke/**"
+      - "crates/firmware-nucleo-g431kb-bme280-smoke/**"
+      - "crates/firmware-nucleo-g431rb-bme280-smoke/**"
+      - "crates/firmware-nucleo-h753zi-smoke/**"
+      - "crates/firmware-rp2040-picow-bme280-smoke/**"
+      - "crates/firmware-qtpy-rp2040-bme280-smoke/**"
+      - "crates/firmware-ra4m1-bme280-smoke/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
       - "crates/cli/**"
       - "crates/labwired-models-**"
       - ".github/workflows/core-onboarding-smoke.yml"
@@ -48,6 +67,18 @@ jobs:
             target: thumbv7m-none-eabi
             script: examples/nucleo-h563zi/uart-smoke.yaml
             system: examples/nucleo-h563zi/system.yaml
+          - id: stm32f103-bluepill
+            crate: firmware-stm32f103-bluepill-smoke
+            target: thumbv7m-none-eabi
+            script: examples/stm32f103-bluepill/io-smoke.yaml
+            system: configs/systems/stm32f103-bluepill.yaml
+          # Exact NUCLEO-F103RB + BME280 profile: exercise remapped I2C1,
+          # read the sensor ID, report it on the ST-LINK VCP, and pulse LD2.
+          - id: nucleo-f103rb-bme280
+            crate: firmware-nucleo-f103rb-bme280-smoke
+            target: thumbv7m-none-eabi
+            script: examples/nucleo-f103rb-bme280/onboarding-smoke.yaml
+            system: configs/systems/nucleo-f103rb-bme280.yaml
           - id: stm32u575-nucleo
             crate: firmware-stm32u575-demo
             target: thumbv8m.main-none-eabi
@@ -66,11 +97,251 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/nucleo-u575zi/star-catcher-smoke.yaml
             system: examples/nucleo-u575zi/star-catcher-system.yaml
+          - id: nucleo-g491re
+            crate: firmware-nucleo-g491re-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-g491re/io-smoke.yaml
+            system: configs/systems/nucleo-g491re.yaml
+          # NUCLEO-G474RE: ensure the model routes advanced TIM1_CH1 PWM to
+          # PA8 / AF6 and the output waveform reaches a board pad.
+          - id: nucleo-g474re-tim1-pwm
+            firmware_build_script: examples/nucleo_g474re/build-firmware.sh
+            script: examples/nucleo_g474re/tim1-pwm-smoke.yaml
+            system: examples/nucleo_g474re/system.yaml
+          - id: nucleo-h533re
+            crate: firmware-nucleo-h533re-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/nucleo-h533re/io-smoke.yaml
+            system: configs/systems/nucleo-h533re.yaml
+          # New STM32U3 Nucleo-144: USART1 VCP marker + LD1 on PA5.
+          - id: nucleo-u3c5zi-q
+            crate: firmware-nucleo-u3c5zi-q-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/nucleo-u3c5zi-q/io-smoke.yaml
+            system: configs/systems/nucleo-u3c5zi-q.yaml
+          - id: nucleo-h503rb
+            crate: firmware-nucleo-h503rb-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/nucleo-h503rb/io-smoke.yaml
+            system: configs/systems/nucleo-h503rb.yaml
+          # Exact NUCLEO-G0B1RE: print over the PA2/PA3 ST-LINK VCP route and
+          # verify the onboard LD4 transition on PA5 at the 16 MHz reset clock.
+          - id: nucleo-g0b1re
+            crate: firmware-nucleo-g0b1re-smoke
+            target: thumbv6m-none-eabi
+            script: examples/nucleo-g0b1re/io-smoke.yaml
+            system: configs/systems/nucleo-g0b1re.yaml
+          - id: nucleo-c562re
+            crate: firmware-nucleo-c562re-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/nucleo-c562re/io-smoke.yaml
+            system: configs/systems/nucleo-c562re.yaml
+          - id: nucleo-h753zi
+            crate: firmware-nucleo-h753zi-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-h753zi/io-smoke.yaml
+            system: configs/systems/nucleo-h753zi.yaml
+          - id: nucleo-f446re
+            crate: firmware-nucleo-f446re-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-f446re/io-smoke.yaml
+            system: configs/systems/nucleo-f446re.yaml
+          # NUCLEO-L432KC: the default ST-LINK VCP uses USART2 and LD3 is PB3.
+          - id: nucleo-l432kc
+            crate: firmware-nucleo-l432kc-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-l432kc/io-smoke.yaml
+            system: configs/systems/nucleo-l432kc.yaml
+          - id: nucleo-g491re-bme280
+            crate: firmware-nucleo-g491re-bme280-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-g491re-bme280/bme280-smoke.yaml
+            system: configs/systems/nucleo-g491re-bme280.yaml
+          # Exact NUCLEO-G431KB board: read the modeled BME280 on I2C1 and
+          # exercise the board's LD2 on PB8. PA15/PB7 are the Nano A5/A4 I2C pins.
+          - id: nucleo-g431kb-bme280
+            crate: firmware-nucleo-g431kb-bme280-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-g431kb-bme280/bme280-smoke.yaml
+            system: configs/systems/nucleo-g431kb-bme280.yaml
+          - id: nucleo-g431rb-bme280
+            crate: firmware-nucleo-g431rb-bme280-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-g431rb-bme280/bme280-smoke.yaml
+            system: configs/systems/nucleo-g431rb-bme280.yaml
+          # UNO R4 Minima RA4M1 IIC1: read the BME280 chip ID via A4/A5 and
+          # report it over the modeled SCI2 console. Pad routing is not gated.
+          - id: arduino-uno-r4-minima-bme280
+            crate: firmware-ra4m1-bme280-smoke
+            target: thumbv7em-none-eabi
+            script: examples/arduino-uno-r4-minima/bme280-smoke.yaml
+            system: configs/systems/arduino-uno-r4-minima.yaml
           - id: rp2040-pio
             crate: firmware-rp2040-pio-onboarding
             target: thumbv6m-none-eabi
             script: examples/rp2040-pio/io-smoke.yaml
             system: examples/rp2040-pio/system.yaml
+          - id: rp2040-pico-bme280
+            crate: firmware-rp2040-pico-bme280-smoke
+            target: thumbv6m-none-eabi
+            script: examples/rp2040-pico-bme280/bme280-smoke.yaml
+            system: configs/systems/rp2040-pico-bme280.yaml
+          # QT Py RP2040 STEMMA QT connector: modeled I2C1 (GP22/23) and
+          # physical UART1 TX on GP20. USB and NeoPixel stay out of this scope.
+          - id: qtpy-rp2040-bme280
+            crate: firmware-qtpy-rp2040-bme280-smoke
+            target: thumbv6m-none-eabi
+            script: examples/qtpy-rp2040-bme280/bme280-smoke.yaml
+            system: configs/systems/qtpy-rp2040-bme280.yaml
+          # Pico W has the same RP2040 header/I2C pins, but its LED is behind
+          # CYW43439. Keep this smoke to the modeled UART and external BME280.
+          - id: rp2040-picow-bme280
+            crate: firmware-rp2040-picow-bme280-smoke
+            target: thumbv6m-none-eabi
+            script: examples/rp2040-picow-bme280/bme280-smoke.yaml
+            system: configs/systems/rp2040-picow-bme280.yaml
+          # Exact non-wireless Pico 2 profile: boot RP2350 Cortex-M33, read
+          # BME280 over I2C0, then exercise the onboard GP25 LED.
+          - id: rp2350-pico2-bme280
+            crate: firmware-rp2350-pico2-bme280-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/pico2/bme280-smoke.yaml
+            system: configs/systems/rp2350-pico2-bme280.yaml
+          - id: rp2350-pico2w-bme280
+            crate: firmware-rp2350-pico2w-bme280-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/rp2350-pico2w-bme280/bme280-smoke.yaml
+            system: configs/systems/rp2350-pico2w-bme280.yaml
+          - id: esp32c5-devkitc-1-n8r8-gpio
+            crate: firmware-esp32c5-devkitc-1-gpio-smoke
+            target: riscv32imac-unknown-none-elf
+            script: examples/esp32c5-devkitc-1-gpio-smoke/io-smoke.yaml
+            system: configs/systems/esp32c5-devkitc-1-n8r8-gpio.yaml
+          # Keep the C5 HP-core I2C path gated: read the modeled BME280 over
+          # GPIO8/9, report its ID and raw temperature on UART0, and pulse GPIO5.
+          - id: esp32c5-devkitc-1-n8r8-bme280
+            crate: firmware-esp32c5-devkitc-1-bme280-smoke
+            target: riscv32imac-unknown-none-elf
+            script: examples/esp32c5-devkitc-1-bme280-smoke/io-smoke.yaml
+            system: configs/systems/esp32c5-devkitc-1-n8r8-bme280.yaml
+          # The ESP32-P4 profile is deliberately limited to SRAM boot and the
+          # Olimex board's GPIO2 USER_LED1 path; this gate keeps that claim
+          # live without implying P4 ROM, flash, PSRAM, or multimedia coverage.
+          - id: olimex-esp32-p4-devkit
+            crate: firmware-olimex-esp32-p4-devkit-smoke
+            target: riscv32imac-unknown-none-elf
+            script: examples/olimex-esp32-p4-devkit/gpio2-led-smoke.yaml
+            system: configs/systems/olimex-esp32-p4-devkit.yaml
+          - id: esp32s3-devkitc-1-n16r8-bme280
+            firmware_build_script: examples/esp32s3-devkitc-1-n16r8-bme280/build-firmware.sh
+            script: examples/esp32s3-devkitc-1-n16r8-bme280/bme280-smoke.yaml
+            system: configs/systems/esp32s3-devkitc-1-n16r8-bme280.yaml
+          # Keep the existing 8 MB/no-PSRAM Adafruit Feather UART and onboard
+          # GPIO33 NeoPixel smoke gated against the exact Feather system.
+          - id: adafruit-feather-esp32s3-8mb
+            firmware_build_script: examples/adafruit-feather-esp32s3-8mb/build-firmware.sh
+            script: examples/adafruit-feather-esp32s3-8mb/io-smoke.yaml
+            system: configs/systems/adafruit-feather-esp32s3-8mb.yaml
+          # Seeed XIAO ESP32-S3: USB-serial marker and active-low USER_LED on GPIO21.
+          - id: xiao-esp32s3-led
+            firmware_build_script: examples/xiao-esp32s3/firmware/build-firmware.sh
+            script: examples/xiao-esp32s3/io-smoke.yaml
+            system: configs/systems/xiao-esp32s3.yaml
+          # XIAO ESP32-S3: read BME280 over D4/D5 and exercise USER_LED on GPIO21.
+          - id: xiao-esp32s3-bme280
+            firmware_build_script: examples/xiao-esp32s3-bme280/firmware/build-firmware.sh
+            script: examples/xiao-esp32s3-bme280/bme280-smoke.yaml
+            system: configs/systems/xiao-esp32s3-bme280.yaml
+          # Waveshare ESP32-S3-Zero FH4R2: its onboard WS2812 DIN is GPIO21.
+          # The local smoke checks GPIO edges and decodes the modeled pixel frame.
+          - id: esp32s3-zero-ws2812
+            firmware_build_script: examples/esp32s3-zero/build-firmware.sh
+            script: examples/esp32s3-zero/ws2812-smoke.yaml
+            system: configs/systems/esp32s3-zero.yaml
+          # Exact ESP32-S2-DevKitC-1-N8R2 UART0 fast-start profile. This ELF
+          # smoke exercises the LX7 memory windows and UART0 model; it does not
+          # claim mask-ROM/flash boot or the board's other SoC features.
+          - id: esp32s2-devkitc-1-n8r2-uart
+            firmware_build_script: examples/esp32s2-devkitc-1-n8r2/firmware/build-firmware.sh
+            script: examples/esp32s2-devkitc-1-n8r2/uart-smoke.yaml
+            system: configs/systems/esp32s2-devkitc-1-n8r2.yaml
+          # Exact ESP32-S2 N8R2 board with S2 I2C0 and a modelled BME280 on
+          # GPIO8/9; the smoke reads the sensor ID and raw-temperature vector.
+          - id: esp32s2-devkitc-1-n8r2-bme280
+            firmware_build_script: examples/esp32s2-devkitc-1-n8r2-bme280/firmware/build-firmware.sh
+            script: examples/esp32s2-devkitc-1-n8r2-bme280/bme280-smoke.yaml
+            system: configs/systems/esp32s2-devkitc-1-n8r2-bme280.yaml
+          - id: esp32c6-devkitc-1-n8-bme280
+            firmware_build_script: examples/esp32c6-devkitc-1-n8-bme280/firmware/build-firmware.sh
+            script: examples/esp32c6-devkitc-1-n8-bme280/bme280-smoke.yaml
+            system: configs/systems/esp32c6-devkitc-1-n8-bme280.yaml
+          - id: xiao-esp32c6-bme280
+            firmware_build_script: examples/xiao-esp32c6-bme280/firmware/build-firmware.sh
+            script: examples/xiao-esp32c6-bme280/bme280-smoke.yaml
+            system: configs/systems/xiao-esp32c6-bme280.yaml
+          # Adafruit ESP32-C6 Feather (PID 5933), GPIO19/18 STEMMA QT BME280
+          # smoke plus red GPIO15 LED and GPIO20 connector-power activity.
+          - id: adafruit-esp32-c6-feather-bme280
+            firmware_build_script: examples/adafruit-esp32-c6-feather-bme280/firmware/build-firmware.sh
+            script: examples/adafruit-esp32-c6-feather-bme280/bme280-smoke.yaml
+            system: configs/systems/adafruit-esp32-c6-feather-bme280.yaml
+          - id: esp32c61-devkitc-1-n8r2-uart-gpio
+            crate: firmware-esp32c61-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/esp32c61-devkitc-1-n8r2/uart-smoke.yaml
+            system: configs/systems/esp32c61-devkitc-1-n8r2.yaml
+          - id: esp32c61-devkitc-1-n8r2-bme280
+            crate: firmware-esp32c61-bme280-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/esp32c61-devkitc-1-n8r2-bme280/bme280-smoke.yaml
+            system: configs/systems/esp32c61-devkitc-1-n8r2-bme280.yaml
+          - id: esp32h2-devkitm-1-n4s-bme280
+            crate: firmware-esp32h2-devkitm-1-smoke
+            target: riscv32imac-unknown-none-elf
+            script: examples/esp32h2-devkitm-1-n4s/uart-gpio-smoke.yaml
+            system: configs/systems/esp32h2-devkitm-1-n4s.yaml
+          - id: esp32c3-devkitm-1-n4x-bme280
+            firmware_build_script: examples/esp32c3-devkitm-1-n4x-bme280/firmware/build-firmware.sh
+            script: examples/esp32c3-devkitm-1-n4x-bme280/bme280-smoke.yaml
+            system: configs/systems/esp32c3-devkitm-1-n4x-bme280.yaml
+            rom_boot: true
+            rom_flash_bin: examples/esp32c3-devkitm-1-n4x-bme280/firmware/.pio/build/devkitm1_n4x/merged.bin
+          - id: lolin-c3-mini-bme280
+            firmware_build_script: examples/lolin-c3-mini-bme280/firmware/build-firmware.sh
+            script: examples/lolin-c3-mini-bme280/bme280-smoke.yaml
+            system: configs/systems/lolin-c3-mini-bme280.yaml
+            rom_boot: true
+            rom_flash_bin: examples/lolin-c3-mini-bme280/firmware/.pio/build/lolin_c3_mini/merged.bin
+          # Same high-demand C3 Mini board, but exercise its 12-bit ADC with
+          # a potentiometer on GPIO0 / ADC1_CH0 instead of another SKU-only profile.
+          - id: lolin-c3-mini-adc
+            firmware_build_script: examples/lolin-c3-mini-adc/firmware/build-firmware.sh
+            script: examples/lolin-c3-mini-adc/adc-smoke.yaml
+            system: configs/systems/lolin-c3-mini-adc.yaml
+            rom_boot: true
+            rom_flash_bin: examples/lolin-c3-mini-adc/firmware/.pio/build/lolin_c3_mini/merged.bin
+          # Seeed XIAO ESP32-C3: external BME280 identity/temperature read on
+          # D4/D5 and D10 proof output. USB Serial/JTAG is outside this profile.
+          - id: xiao-esp32c3-bme280
+            firmware_build_script: examples/xiao-esp32c3-bme280/firmware/build-firmware.sh
+            script: examples/xiao-esp32c3-bme280/bme280-smoke.yaml
+            system: configs/systems/xiao-esp32c3-bme280.yaml
+            rom_boot: true
+            rom_flash_bin: examples/xiao-esp32c3-bme280/firmware/.pio/build/xiao_c3/merged.bin
+          - id: arduino-nano-esp32-bme280
+            firmware_build_script: examples/arduino-nano-esp32-bme280/firmware/build-firmware.sh
+            script: examples/arduino-nano-esp32-bme280/bme280-smoke.yaml
+            system: configs/systems/arduino-nano-esp32-bme280.yaml
+          - id: esp32-devkitc-32e-bme280
+            firmware_build_script: examples/esp32-devkitc-32e-bme280/firmware/build-firmware.sh
+            script: examples/esp32-devkitc-32e-bme280/bme280-smoke.yaml
+            system: configs/systems/esp32-devkitc-32e-bme280.yaml
+          # ESP32-DevKitM-1: UART0 reaches the USB-UART header path and GPIO23
+          # toggles an external LED. Wireless and the USB bridge are not claimed.
+          - id: esp32-devkitm-1
+            firmware_build_script: examples/esp32-devkitm-1/build-firmware.sh
+            script: examples/esp32-devkitm-1/onboarding-smoke.yaml
+            system: configs/systems/esp32-devkitm-1.yaml
 
     steps:
       - uses: actions/checkout@v4
@@ -78,7 +349,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
         with:
-          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv8m.main-none-eabi
+          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv8m.main-none-eabi,riscv32imac-unknown-none-elf,riscv32imc-unknown-none-elf
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
@@ -87,7 +358,18 @@ jobs:
           workspaces: |
             . -> target
 
+      - name: Install PlatformIO
+        if: ${{ matrix.firmware_build_script != '' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install PlatformIO package
+        if: ${{ matrix.firmware_build_script != '' }}
+        run: python -m pip install platformio==6.1.19
+
       - name: Run onboarding smoke
+        if: ${{ matrix.firmware_build_script == '' }}
         run: |
           chmod +x scripts/onboarding_smoke.sh
           scripts/onboarding_smoke.sh \
@@ -98,6 +380,33 @@ jobs:
             --system "${{ matrix.system }}" \
             --out-dir "out/onboarding-smoke/${{ matrix.id }}" \
             --threshold-seconds 3600
+
+      - name: Run PlatformIO onboarding smoke
+        if: ${{ matrix.firmware_build_script != '' }}
+        run: |
+          chmod +x scripts/onboarding_smoke.sh
+          rom_boot_args=()
+          if [[ "${{ matrix.rom_boot }}" == "true" ]]; then
+            export LABWIRED_ESP32C3_FLASH="${GITHUB_WORKSPACE}/${{ matrix.rom_flash_bin }}"
+            rom_boot_args+=(--rom-boot)
+          fi
+          scripts/onboarding_smoke.sh \
+            --target-id "${{ matrix.id }}" \
+            --firmware-build-script "${{ matrix.firmware_build_script }}" \
+            --script "${{ matrix.script }}" \
+            --system "${{ matrix.system }}" \
+            --out-dir "out/onboarding-smoke/${{ matrix.id }}" \
+            --threshold-seconds 3600 \
+            "${rom_boot_args[@]}"
+
+      - name: Verify ESP32-S3-Zero WS2812 artifact
+        if: ${{ matrix.id == 'esp32s3-zero-ws2812' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 examples/esp32s3-zero/verify_ws2812_artifact.py \
+            "out/onboarding-smoke/${{ matrix.id }}/simulation-output/result.json" \
+            | tee "out/onboarding-smoke/${{ matrix.id }}/logs/ws2812_artifact_check.log"
 
       - name: Publish onboarding summary
         if: always()

@@ -41,7 +41,7 @@
 //!   wire.
 //!
 //! The driven line levels are published into a shared [`I2cLineLevels`] cell;
-//! the C3 GPIO model reads it for pads whose output matrix routes
+//! the C3 or H2 GPIO model reads it for pads whose output matrix routes
 //! `I2CEXT0_SCL` / `I2CEXT0_SDA`, so `read_gpio_pad` (and the in-engine logic
 //! analyzer sampling it) observes the real waveform.
 //!
@@ -104,8 +104,11 @@ pub const I2C0_SIZE: u64 = 0x1000;
 /// `i2c0.yaml` likewise declares `interrupts: { I2C_EXT0: 29 }`.
 pub const I2C0_INTR_SOURCE_ID: u32 = 29;
 
-/// One physical C3 GPIO-matrix route for an I²C device. The system manifest
-/// deliberately names signals rather than target registers; this is the C3
+/// ESP32-C5 I2C_EXT0 interrupt source from ESP-IDF's C5 `interrupts.h`.
+pub const C5_I2C0_INTR_SOURCE_ID: u32 = 55;
+
+/// One physical ESP32-C3/H2 GPIO-matrix route for an I²C device. The system
+/// manifest deliberately names pads rather than target registers; this is the
 /// lowering of the target-neutral `route: { sda: GPIOx, scl: GPIOy }` shape.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct C3I2cPadRoute {
@@ -120,7 +123,7 @@ impl C3I2cPadRoute {
         for signal in route.keys() {
             if signal != "sda" && signal != "scl" {
                 anyhow::bail!(
-                    "ESP32-C3 I2C route supports only route.sda and route.scl; found route.{signal}"
+                    "ESP32-C3/C5/C6/H2 I2C route supports only route.sda and route.scl; found route.{signal}"
                 );
             }
         }
@@ -131,17 +134,17 @@ impl C3I2cPadRoute {
         ) -> anyhow::Result<u8> {
             let label = route.get(signal).ok_or_else(|| {
                 anyhow::anyhow!(
-                    "ESP32-C3 I2C external device requires both route.sda and route.scl"
+                    "ESP32-C3/C5/C6/H2 I2C external device requires both route.sda and route.scl"
                 )
             })?;
             let pin = label.strip_prefix("GPIO").ok_or_else(|| {
                 anyhow::anyhow!(
-                    "ESP32-C3 I2C route.{signal} must name a C3 GPIO pad such as GPIO4, got '{label}'"
+                    "ESP32-C3/C5/C6/H2 I2C route.{signal} must name a supported GPIO pad such as GPIO4, got '{label}'"
                 )
             })?;
             let pin: u8 = pin.parse().map_err(|_| {
                 anyhow::anyhow!(
-                    "ESP32-C3 I2C route.{signal} must name a C3 GPIO pad such as GPIO4, got '{label}'"
+                    "ESP32-C3/C5/C6/H2 I2C route.{signal} must name a supported GPIO pad such as GPIO4, got '{label}'"
                 )
             })?;
             if pin >= 26 {
@@ -163,7 +166,7 @@ impl C3I2cPadRoute {
     }
 }
 
-/// Live C3 GPIO-matrix wiring observed by the I²C controller. GPIO owns the
+/// Live ESP32 GPIO-matrix wiring observed by the I²C controller. GPIO owns the
 /// registers and refreshes this cell on every relevant write; the controller
 /// consults it at address resolution, so a slave responds only when firmware
 /// has configured the same physical SDA/SCL pair declared in the manifest.
@@ -276,12 +279,12 @@ const OP_RSTART: u32 = 6;
 /// (READ) byte. esp-hal sets it high (NACK) on the final read command.
 const CMD_ACK_VALUE_BIT: u32 = 1 << 10;
 
-/// ESP32-C3 CPU clock the engine cycle counter models. `Machine::total_cycles`
+/// Default ESP32-C3 CPU clock the engine cycle counter models. `Machine::total_cycles`
 /// advances at CPU-instruction rate; the C3 wiring elsewhere (SYSTIMER: "10 CPU
 /// cycles per 16 MHz tick", `Systimer::new_with_source(160_000_000, …)`) uses
 /// the same 160 MHz convention, so I²C wire time shares one clock base with
 /// the timers firmware uses to measure it.
-const CPU_CLK_HZ: u64 = 160_000_000;
+const DEFAULT_CPU_CLK_HZ: u64 = 160_000_000;
 /// I²C module source clocks selectable via `CLK_CONF.SCLK_SEL` (C3 TRM):
 /// 0 = XTAL_CLK (40 MHz), 1 = RC_FAST_CLK (17.5 MHz).
 const XTAL_CLK_HZ: u64 = 40_000_000;
@@ -292,7 +295,7 @@ const RC_FAST_CLK_HZ: u64 = 17_500_000;
 ///
 /// A thin, named face over [`PadLines`], the ONE pad-publication mechanism
 /// (see `crate::peripherals::pad_lines`). The controller bit engine is the only
-/// writer; the C3 GPIO model reads it for pads whose GPIO output matrix
+/// writer; the C3/H2 GPIO model reads it for pads whose GPIO output matrix
 /// (`FUNCn_OUT_SEL_CFG`) routes `I2CEXT0_SCL` / `I2CEXT0_SDA`, so
 /// `read_gpio_pad` — and the in-engine logic analyzer sampling through it —
 /// observes the real waveform on the routed pads. With push-mode capture armed
@@ -425,14 +428,14 @@ struct BitEngine {
 }
 
 impl BitEngine {
-    fn new() -> Self {
+    fn new(cpu_clk_hz: u64) -> Self {
         Self {
             state: EngineState::Idle,
             ticks_left: 0,
             acc: 0,
             // Placeholder; recomputed from the registers at every TRANS_START.
             timing: EngineTiming {
-                num: CPU_CLK_HZ,
+                num: cpu_clk_hz,
                 den: XTAL_CLK_HZ,
                 low: 1,
                 high: 1,
@@ -472,21 +475,24 @@ pub struct Esp32c3I2c {
     /// controller that is the same part on every Espressif I²C.
     core: EspI2cCore,
     /// Physical pad route for each slave, parallel to the core's slave list.
-    /// `None` is an
-    /// intentional low-level/direct-test attachment; manifest-backed C3
+    /// `None` is an intentional low-level/direct-test attachment;
+    /// manifest-backed C3/H2
     /// external devices always carry `Some` and are gated by the GPIO matrix.
     slave_routes: Vec<Option<C3I2cPadRoute>>,
-    /// Shared live GPIO-matrix state, installed by `SystemBus` once both C3
+    /// Shared live GPIO-matrix state, installed by `SystemBus` once the C3/H2
     /// GPIO and I²C peripherals exist. A declared route cannot answer until
     /// firmware programs matching input *and* output matrix entries.
     matrix_route: Option<C3I2cMatrixRoute>,
     /// Interrupt-matrix source this instance asserts (29 for I2C0).
     intr_source_id: u32,
+    /// Core cycles per second used to convert I²C module-clock ticks into
+    /// simulation cycles (96 MHz on H2, 160 MHz on C3/C6, 240 MHz on C5).
+    cpu_clk_hz: u64,
     active_slave: Option<usize>,
     expects_addr: bool,
     /// Cycle-driven bit engine executing the command list on the wire.
     engine: BitEngine,
-    /// Shared SDA/SCL line levels, read by the C3 GPIO model for matrix-routed
+    /// Shared SDA/SCL line levels, read by the C3/H2 GPIO model for matrix-routed
     /// pads. Created lazily by [`Self::line_levels_arc`] at bus wiring time.
     lines: Option<Arc<I2cLineLevels>>,
 
@@ -554,6 +560,14 @@ pub struct Esp32c3I2c {
 
 impl Esp32c3I2c {
     pub fn new() -> Self {
+        Self::with_cpu_clock_and_intr(DEFAULT_CPU_CLK_HZ, I2C0_INTR_SOURCE_ID)
+    }
+
+    /// Construct an instance with the chip's CPU pacing and I²C interrupt
+    /// source. The register and command-list behavior is shared by the
+    /// C3/C5/C6/H2 high-performance I²C0 blocks; chip-specific GPIO matrix routing is
+    /// supplied by the corresponding GPIO model.
+    pub fn with_cpu_clock_and_intr(cpu_clk_hz: u64, intr_source_id: u32) -> Self {
         Self {
             // CTR reset 0x020B (== C3 i2c0.yaml reset_value 523):
             // SCL_FORCE_OUT|SDA_FORCE_OUT|SAMPLE_SCL_LEVEL|RX_FULL_ACK_LEVEL.
@@ -573,10 +587,11 @@ impl Esp32c3I2c {
             core: EspI2cCore::new(),
             slave_routes: Vec::new(),
             matrix_route: None,
-            intr_source_id: I2C0_INTR_SOURCE_ID,
+            intr_source_id,
+            cpu_clk_hz,
             active_slave: None,
             expects_addr: true,
-            engine: BitEngine::new(),
+            engine: BitEngine::new(cpu_clk_hz),
             lines: None,
             clock: None,
             last_synced: 0,
@@ -607,10 +622,7 @@ impl Esp32c3I2c {
 
     /// Construct an instance asserting a different interrupt-matrix source.
     pub fn with_intr_source(intr_source_id: u32) -> Self {
-        Self {
-            intr_source_id,
-            ..Self::new()
-        }
+        Self::with_cpu_clock_and_intr(DEFAULT_CPU_CLK_HZ, intr_source_id)
     }
 
     /// Interrupt-matrix source this instance asserts (debug/test introspection;
@@ -620,7 +632,7 @@ impl Esp32c3I2c {
     }
 
     /// Raw, un-routed slave attachment for direct unit fixtures. Manifest-backed
-    /// C3 devices must use [`Self::push_slave_with_route`] so the GPIO matrix is
+    /// C3/H2 devices must use [`Self::push_slave_with_route`] so the GPIO matrix is
     /// part of their electrical contract.
     #[cfg(test)]
     pub(crate) fn push_slave(&mut self, slave: Box<dyn I2cDevice>) {
@@ -628,7 +640,7 @@ impl Esp32c3I2c {
         self.slave_routes.push(None);
     }
 
-    /// Attach a manifest-backed slave with the physical C3 pads it is wired
+    /// Attach a manifest-backed slave with the physical C3/H2 pads it is wired
     /// to. Unlike [`Self::push_slave`], this device will acknowledge only
     /// while GPIO's live matrix state matches this exact route.
     pub(crate) fn push_slave_with_route(
@@ -659,8 +671,8 @@ impl Esp32c3I2c {
         self.core.slaves_mut()
     }
 
-    /// Share GPIO's live matrix state with this controller after both C3
-    /// peripherals have been constructed on a system bus.
+    /// Share GPIO's live matrix state with this controller after the matching
+    /// C3/H2 GPIO and I2C peripherals have been constructed on a system bus.
     pub(crate) fn set_matrix_route_state(&mut self, route: C3I2cMatrixRoute) {
         self.matrix_route = Some(route);
     }
@@ -1333,7 +1345,7 @@ impl Esp32c3I2c {
     }
 
     /// Get-or-create the shared line-level cell (bus wiring hands the same
-    /// `Arc` to the C3 GPIO model).
+    /// `Arc` to the corresponding C3/H2 GPIO model).
     pub(crate) fn line_levels_arc(&mut self) -> Arc<I2cLineLevels> {
         if self.lines.is_none() {
             let lines = Arc::new(I2cLineLevels::new());
@@ -1377,7 +1389,7 @@ impl Esp32c3I2c {
         // div_a == 0 disables the fractional part.
         let (a, b) = if div_a == 0 { (1, 0) } else { (div_a, div_b) };
         EngineTiming {
-            num: CPU_CLK_HZ * (div_num * a + b),
+            num: self.cpu_clk_hz * (div_num * a + b),
             den: src_hz * a,
             low: (self.reg_scl_low_period & 0x1FF) + 1,
             high: (self.reg_scl_high_period & 0x1FF) + ((self.reg_scl_high_period >> 9) & 0x7F) + 1,

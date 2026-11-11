@@ -1,0 +1,107 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      1077418974,
+      1070134528,
+      1070125568,
+      1070158672,
+      31,
+      3145728,
+      2,
+      1070137344,
+      1070131572,
+      2,
+      3892314111,
+      1200,
+      4194304,
+      3095363584,
+      1610743808,
+      4194304000,
+      62,
+      67108863,
+      1070137344,
+      1611456512,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1077445844,
+    "mstatus": 6280,
+    "mie": 0,
+    "mip": 0,
+    "mtvec": 1077411841,
+    "mscratch": 0,
+    "mepc": 1077419926,
+    "mcause": 2147483653,
+    "mtval": 0,
+    "mtime": 18493704109,
+    "mtimecmp": 18446744073709551615,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 50000000,
+  "cycles": 141141238,
+  "instructions": 50000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 50000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 50000000
+    }
+  },
+  "limits": {
+    "max_steps": 50000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "aa3ba6f2d40c4162842a6ca2706ffff9834a1ceb8635f966ed17b36ea87440fa",
+  "config": {
+    "firmware": "examples/lolin-c3-mini-adc/./firmware/.pio/build/lolin_c3_mini/firmware.elf",
+    "system": "examples/lolin-c3-mini-adc/../../configs/systems/lolin-c3-mini-adc.yaml",
+    "script": "examples/lolin-c3-mini-adc/adc-smoke.yaml"
+  }
+}

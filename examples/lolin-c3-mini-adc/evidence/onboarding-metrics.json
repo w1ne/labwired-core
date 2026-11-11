@@ -1,0 +1,29 @@
+{
+  "target_id": "lolin-c3-mini-adc",
+  "status": "pass",
+  "crate": "",
+  "target_triple": "",
+  "script": "examples/lolin-c3-mini-adc/adc-smoke.yaml",
+  "system": "configs/systems/lolin-c3-mini-adc.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-11T11:02:31Z",
+  "finished_at_utc": "2026-11-11T11:03:01Z",
+  "elapsed_seconds": 31,
+  "elapsed_ms": 30501,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.304,
+    "build_firmware": 5.546,
+    "run_smoke": 24.593
+  },
+  "stages_ms": {
+    "build_cli": 304,
+    "build_firmware": 5546,
+    "run_smoke": 24593
+  },
+  "firmware_build_script": "examples/lolin-c3-mini-adc/firmware/build-firmware.sh"
+}

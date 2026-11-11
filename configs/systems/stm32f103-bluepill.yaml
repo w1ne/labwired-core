@@ -1,0 +1,16 @@
+# Blue Pill-compatible STM32F103C8T6 reference layout.
+# Board wiring is based on the VccGND original schematic archived by STM32-base:
+# PC13 sinks current through the on-board user LED; USART1 is on header PA9/PA10.
+name: "stm32f103-bluepill"
+chip: "../chips/stm32f103c8-bluepill.yaml"
+# The smoke leaves the MCU on its reset HSI clock; the part's maximum is 72 MHz.
+cpu_hz: 8_000_000
+debug_uart: "uart1"
+external_devices: []
+board_io:
+  - id: "user_led_pc13"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "output"
+    active_high: false

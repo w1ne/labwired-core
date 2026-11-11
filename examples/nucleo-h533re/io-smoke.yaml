@@ -1,0 +1,13 @@
+# NUCLEO-H533RE GPIO smoke: LD2 must visibly toggle on PA5.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-nucleo-h533re-smoke"
+  system: "../../configs/systems/nucleo-h533re.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "H533_USART2_OK"
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 8
+  - expected_stop_reason: max_steps

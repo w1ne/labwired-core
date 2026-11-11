@@ -1,0 +1,17 @@
+# ESP32-C5-DevKitC-1-N8R8 (v1.2) UART0 + GPIO + I2C0/BME280 smoke system.
+# GPIO5 is J3 pin 9; UART0 TX is J3 pin 2. I2C0 connects to GPIO8 (SDA) and
+# GPIO9 (SCL), exposed on the board headers. GPIO7 is avoided because it is a
+# strapping pin. UART pin routing is not enforced.
+name: "esp32c5-devkitc-1-n8r8-bme280"
+chip: "../chips/esp32c5.yaml"
+cpu_hz: 240_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GPIO8"
+      scl: "GPIO9"
+    config:
+      i2c_address: 0x77

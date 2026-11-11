@@ -1,0 +1,12 @@
+# Read BME280 identity/temperature over XIAO D4/D5 and capture D10 proof edges.
+schema_version: "1.2"
+inputs:
+  firmware: "./firmware/.pio/build/xiao_c3/firmware.elf"
+  system: "../../configs/systems/xiao-esp32c3-bme280.yaml"
+limits:
+  max_steps: 50000000
+assertions:
+  - gpio_edges:
+      pin: "gpio:10"
+      min_edges: 4
+  - expected_stop_reason: max_steps

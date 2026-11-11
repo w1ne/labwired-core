@@ -1,16 +1,17 @@
 # Onboarding candidates
 
 Which chips are worth adding next, and what each actually costs given the models
-already in the tree. Ordered by cost, not by preference — a Tier A part is often
+already in the tree. This is a cost estimate, not the selection order; use the
+demand-ordered targets handoff to choose what to onboard. A Tier A part is often
 a weekend's work reusing shipped models, while a Tier C part means a new vendor
 family from scratch.
 
 Companion to [`board_onboarding_playbook.md`](board_onboarding_playbook.md),
 which describes *how* to onboard. This file is *what* to onboard.
 
-*Last updated: 2026-09-19 — nRF52833 (micro:bit v2), STM32G071 (NUCLEO-G071RB)
-and ESP32-C6 (ESP32-C6-DevKitC-1) landed at L1 smoke. `configs/chips/` now
-carries 41 descriptors.*
+*Last updated: 2026-11-11 — ESP32-S2-DevKitC-1-N8R2 now has a UART-only
+fast-start model and smoke. nRF52833 (micro:bit v2), STM32G071 (NUCLEO-G071RB)
+and ESP32-C6 (ESP32-C6-DevKitC-1) previously landed at L1 smoke.*
 
 ## What the engine already supports
 
@@ -48,7 +49,7 @@ New register sets to model, but no new CPU and no new vendor conventions.
 | Candidate | Board it unlocks | Reuses | New work |
 |-----------|------------------|--------|----------|
 | **ESP32-H2** | ESP32-H2-DevKitM | RISC-V + the C6 peripheral map that just landed | Thread/Zigbee focus; near-sibling of C6. |
-| ESP32-S2 | ESP32-S2 Saola | Xtensa LX7 (S3 shipped) | Single-core S3 sibling. |
+| ESP32-S2 | ESP32-S2-DevKitC-1-N8R2 | Xtensa LX7 | UART-only fast-start profile landed; mask-ROM/flash boot, PSRAM, Wi-Fi, USB OTG, pad routing and Saola are not covered. |
 | STM32C0 | NUCLEO-C031C6 | M0+; the G0 RCC is the closest shipped layout | ST's cheapest new line; small peripheral set. |
 | STM32L552 / L562 | NUCLEO-L552ZE-Q | M33 (U5/WBA lineage) | TrustZone part; verify the L5 RCC against RM0438 before reusing U5 offsets. |
 

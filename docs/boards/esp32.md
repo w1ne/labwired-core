@@ -40,3 +40,6 @@ models the memory map probed against a real ESP32-WROOM-32 module (chip type
 
 - ESP32 Technical Reference Manual v4.6 §1.3 (Memory Map), Table 1-2, as cited
   in `configs/chips/esp32.yaml`.
+- The ESP32-DevKitC-32E I2C0 + BME280 smoke is documented with its live
+  availability check and copy-paste Arduino sketch in
+  [`examples/esp32-devkitc-32e-bme280/`](../../examples/esp32-devkitc-32e-bme280/).

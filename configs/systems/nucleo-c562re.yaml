@@ -1,0 +1,16 @@
+# ST NUCLEO-C562RE (MB2213), with a deliberately narrow board smoke profile.
+# UM3615 Rev 1: LD1 is active-high PA5; default STLINK-V3EC VCP is USART2
+# PA2/PA3 (SB12/SB26 ON, SB46 OFF). USB, CAN-FD, button and other board
+# peripherals are outside this system manifest.
+name: "nucleo-c562re"
+chip: "../chips/stm32c562re.yaml"
+cpu_hz: 48_000_000
+debug_uart: "uart2"
+external_devices: []
+board_io:
+  - id: "led_ld1"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true

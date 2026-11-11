@@ -299,6 +299,15 @@ fn run_s3_rom_boot_no_elf(
     let metrics = std::sync::Arc::new(labwired_core::metrics::PerformanceMetrics::new());
 
     let mut bus = labwired_core::bus::SystemBus::new();
+    let chip_opts = match system.chip() {
+        Ok(chip) => {
+            match Esp32s3Opts::for_chip_with_memory_overrides(&chip, &manifest.memory_overrides) {
+                Ok(opts) => opts,
+                Err(e) => return fail(format!("ESP32-S3 memory settings: {e:#}")),
+            }
+        }
+        Err(e) => return fail(format!("ESP32-S3 chip resolution failed: {e:#}")),
+    };
     let opts = Esp32s3Opts {
         real_reset_boot: true,
         // The hosted path receives a merged flash image but no ELF. It still
@@ -309,11 +318,7 @@ fn run_s3_rom_boot_no_elf(
         // Core clock from the same resolved descriptor: `cpu_hz:` in the chip
         // YAML is the one home for it, and it is what the SYSTIMER divides the
         // CPU cycle stream by to keep `esp_timer` time.
-        ..system
-            .chip()
-            .as_ref()
-            .map(Esp32s3Opts::for_chip)
-            .unwrap_or_default()
+        ..chip_opts
     };
     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
     // Wire matrix kits (INA219, OLED, …) the same way the ELF arm does.
@@ -1263,7 +1268,103 @@ pub(crate) fn run_test(
                 .unwrap_or(false)
             };
 
-            let mut machine = if is_esp32s3 {
+            let is_esp32s2 = {
+                let chip_dir = sys_path
+                    .parent()
+                    .unwrap_or_else(|| std::path::Path::new("."));
+                labwired_config::ChipDescriptor::resolve_with(
+                    &manifest.chip,
+                    chip_dir,
+                    &crate::plugin_chip_yaml(plugins),
+                )
+                .map(|c| c.is_esp32s2())
+                .unwrap_or(false)
+            };
+
+            if is_esp32s2 && args.rom_boot {
+                let msg = "ESP32-S2 profile supports a bare ELF fast-start only; mask-ROM/flash boot is not modelled".to_string();
+                error!("{}", msg);
+                write_config_error_outputs(
+                    &args,
+                    Some(&firmware_path),
+                    system_path.as_ref(),
+                    Some(&firmware_bytes),
+                    Some(&resolved_limits),
+                    msg,
+                );
+                return ExitCode::from(EXIT_CONFIG_ERROR);
+            }
+
+            let mut machine = if is_esp32s2 {
+                let chip_dir = sys_path
+                    .parent()
+                    .unwrap_or_else(|| std::path::Path::new("."));
+                let chip = match labwired_config::ChipDescriptor::resolve_with(
+                    &manifest.chip,
+                    chip_dir,
+                    &crate::plugin_chip_yaml(plugins),
+                ) {
+                    Ok(chip) => chip,
+                    Err(e) => {
+                        let msg = format!("ESP32-S2 chip resolution failed: {e:#}");
+                        error!("{}", msg);
+                        write_config_error_outputs(
+                            &args,
+                            Some(&firmware_path),
+                            system_path.as_ref(),
+                            Some(&firmware_bytes),
+                            Some(&resolved_limits),
+                            msg,
+                        );
+                        return ExitCode::from(EXIT_CONFIG_ERROR);
+                    }
+                };
+                let (bus, cpu) =
+                    match labwired_core::system::builder::build_esp32s2_system_from_chip(
+                        &chip, manifest, plugins,
+                    ) {
+                        Ok(machine) => machine,
+                        Err(e) => {
+                            let msg = format!("ESP32-S2 machine setup failed: {e:#}");
+                            error!("{}", msg);
+                            write_config_error_outputs(
+                                &args,
+                                Some(&firmware_path),
+                                system_path.as_ref(),
+                                Some(&firmware_bytes),
+                                Some(&resolved_limits),
+                                msg,
+                            );
+                            return ExitCode::from(EXIT_CONFIG_ERROR);
+                        }
+                    };
+                let mut machine = labwired_core::Machine::new(cpu, bus);
+                crate::log_ts::set_hz(machine.bus.cpu_hz);
+                apply_run_speed_opts(&mut machine);
+                if let Err(e) = machine.load_firmware(&program) {
+                    return handle_load_error(
+                        &args,
+                        &metrics,
+                        &resolved_limits,
+                        &firmware_bytes,
+                        &uart_tx,
+                        &rtt_tx,
+                        &itm_tx,
+                        &machine.cpu,
+                        &firmware_path,
+                        system_path.as_ref(),
+                        e,
+                    );
+                }
+                machine.cpu.set_pc(program.entry_point as u32);
+                machine.cpu.set_sp(0x3FFF_FFF0);
+                machine.cpu.ps = labwired_core::cpu::xtensa_regs::Ps::from_raw(1 << 18);
+                machine
+                    .bus
+                    .attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
+                machine.add_observer(metrics.clone());
+                machine
+            } else if is_esp32s3 {
                 // ── ESP32-S3 (LX7): S3 memmap + XIP, NOT classic ESP32 map ──
                 // Classic `build_esp32_system_from_manifest` uses LX6 IRAM/DROM
                 // bases — Arduino-S3 ELF segments (0x3C00_xxxx DROM, 0x3FC8_xxxx
@@ -1290,9 +1391,49 @@ pub(crate) fn run_test(
                         return ExitCode::from(EXIT_CONFIG_ERROR);
                     }
                     let mut bus = labwired_core::bus::SystemBus::new();
+                    let chip_opts = match resolved_system
+                        .as_ref()
+                        .map(|system| system.chip_with_plugins(&crate::plugin_chip_yaml(plugins)))
+                    {
+                        Some(Ok(chip)) => {
+                            match Esp32s3Opts::for_chip_with_memory_overrides(
+                                &chip,
+                                &manifest.memory_overrides,
+                            ) {
+                                Ok(opts) => opts,
+                                Err(e) => {
+                                    let msg = format!("ESP32-S3 memory settings: {e:#}");
+                                    error!("{}", msg);
+                                    write_config_error_outputs(
+                                        &args,
+                                        Some(&firmware_path),
+                                        system_path.as_ref(),
+                                        Some(&firmware_bytes),
+                                        Some(&resolved_limits),
+                                        msg,
+                                    );
+                                    return ExitCode::from(EXIT_CONFIG_ERROR);
+                                }
+                            }
+                        }
+                        Some(Err(e)) => {
+                            let msg = format!("ESP32-S3 chip resolution failed: {e:#}");
+                            error!("{}", msg);
+                            write_config_error_outputs(
+                                &args,
+                                Some(&firmware_path),
+                                system_path.as_ref(),
+                                Some(&firmware_bytes),
+                                Some(&resolved_limits),
+                                msg,
+                            );
+                            return ExitCode::from(EXIT_CONFIG_ERROR);
+                        }
+                        None => Esp32s3Opts::default(),
+                    };
                     let opts = Esp32s3Opts {
                         real_reset_boot: true,
-                        ..Esp32s3Opts::default()
+                        ..chip_opts
                     };
                     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
                     // Wire matrix kits (INA219, OLED, …) the same way classic ESP32 does.
@@ -1378,7 +1519,46 @@ pub(crate) fn run_test(
                     if factory_layout {
                         std::env::set_var("LABWIRED_ESP32S3_MMU_XIP", "1");
                     }
-                    let opts = Esp32s3Opts::default();
+                    let opts = if let Some(system) = resolved_system.as_ref() {
+                        let chip = match system.chip_with_plugins(&crate::plugin_chip_yaml(plugins))
+                        {
+                            Ok(chip) => chip,
+                            Err(e) => {
+                                let msg = format!("ESP32-S3 chip resolution failed: {e:#}");
+                                error!("{}", msg);
+                                write_config_error_outputs(
+                                    &args,
+                                    Some(&firmware_path),
+                                    system_path.as_ref(),
+                                    Some(&firmware_bytes),
+                                    Some(&resolved_limits),
+                                    msg,
+                                );
+                                return ExitCode::from(EXIT_CONFIG_ERROR);
+                            }
+                        };
+                        match Esp32s3Opts::for_chip_with_memory_overrides(
+                            &chip,
+                            &system.manifest.memory_overrides,
+                        ) {
+                            Ok(opts) => opts,
+                            Err(e) => {
+                                let msg = format!("ESP32-S3 memory settings: {e:#}");
+                                error!("{}", msg);
+                                write_config_error_outputs(
+                                    &args,
+                                    Some(&firmware_path),
+                                    system_path.as_ref(),
+                                    Some(&firmware_bytes),
+                                    Some(&resolved_limits),
+                                    msg,
+                                );
+                                return ExitCode::from(EXIT_CONFIG_ERROR);
+                            }
+                        }
+                    } else {
+                        Esp32s3Opts::default()
+                    };
                     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
                     if _fast.is_none() {
                         std::env::remove_var("LABWIRED_ESP32S3_FASTBOOT");
@@ -1522,7 +1702,7 @@ pub(crate) fn run_test(
                     // aborts. Seed the descriptor with the configured flash size.
                     labwired_core::boot::esp32s3::seed_esp32s3_rom_flashchip(
                         &mut bus,
-                        4 * 1024 * 1024,
+                        opts.flash_size,
                     );
                     // Arduino dual-core: `system_early_init` calls
                     // `ets_set_appcpu_boot_addr(call_start_cpu1)` then spins on
@@ -2250,7 +2430,7 @@ pub(crate) fn run_test(
                                 // C6: stay below ROM-reserved HP SRAM so the
                                 // boot stack cannot smash heap_tlsf_table_ptr
                                 // @ 0x4087_ffd8 (and friends).
-                                if chip.name.to_ascii_lowercase().contains("esp32c6") {
+                                if labwired_core::boot::esp32c6_rom::is_esp32c6(&chip) {
                                     sp_top = labwired_core::boot::esp32c6_rom::app_stack_top();
                                 }
                                 machine.cpu.set_sp(sp_top & !0xF);

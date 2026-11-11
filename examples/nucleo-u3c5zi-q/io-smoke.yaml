@@ -1,0 +1,13 @@
+# NUCLEO-U3C5ZI-Q GPIO smoke: USART1 must send the marker and LD1 must toggle.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-nucleo-u3c5zi-q-smoke"
+  system: "../../configs/systems/nucleo-u3c5zi-q.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "U3C5_USART1_OK"
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 8
+  - expected_stop_reason: max_steps

@@ -1,0 +1,16 @@
+# Arduino Nano ESP32 (ABX00092) with an Adafruit BME280 STEMMA QT sensor.
+# I2C0 uses the board's default A4/A5 headers (GPIO11/GPIO12).
+name: "arduino-nano-esp32-bme280"
+chip: "../chips/esp32s3.yaml"
+cpu_hz: 240_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GPIO11"
+      scl: "GPIO12"
+    config:
+      i2c_address: 0x77
+board_io: []

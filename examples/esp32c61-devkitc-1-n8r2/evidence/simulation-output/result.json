@@ -1,0 +1,316 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 500000,
+  "cycles": 1000198,
+  "instructions": 500000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 500000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 500000
+    }
+  },
+  "limits": {
+    "max_steps": 500000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "ESP32C61_DEVKITC1_UART0_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpio:4",
+          "min_edges": 8
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      1107296568,
+      1082458096,
+      1082132480,
+      0,
+      0,
+      1082458112,
+      0,
+      1082458112,
+      0,
+      1610612736,
+      95,
+      10,
+      75,
+      79,
+      48,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1107297078,
+    "mstatus": 0,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 1107296568,
+    "mscratch": 0,
+    "mepc": 0,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 500000,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "firmware_hash": "04926660d1bb6dda5dd4b6b9870b0603bc45ae8ef5d19cad00130a70423358a3",
+  "config": {
+    "firmware": "examples/esp32c61-devkitc-1-n8r2/../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c61-smoke",
+    "system": "examples/esp32c61-devkitc-1-n8r2/../../configs/systems/esp32c61-devkitc-1-n8r2.yaml",
+    "script": "examples/esp32c61-devkitc-1-n8r2/uart-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "uart0",
+        "kind": "native",
+        "base": 1610612736,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpio",
+        "kind": "native",
+        "base": 1611206656,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pcr",
+        "kind": "native",
+        "base": 1611227136,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 500000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpio",
+        "pin": 4,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 103,
+            "value": 1
+          },
+          {
+            "cycle": 104,
+            "value": 0
+          },
+          {
+            "cycle": 105,
+            "value": 1
+          },
+          {
+            "cycle": 106,
+            "value": 0
+          },
+          {
+            "cycle": 107,
+            "value": 1
+          },
+          {
+            "cycle": 108,
+            "value": 0
+          },
+          {
+            "cycle": 109,
+            "value": 1
+          },
+          {
+            "cycle": 110,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 102,
+            "state": "0"
+          },
+          {
+            "cycle": 103,
+            "state": "1"
+          },
+          {
+            "cycle": 104,
+            "state": "0"
+          },
+          {
+            "cycle": 105,
+            "state": "1"
+          },
+          {
+            "cycle": 106,
+            "state": "0"
+          },
+          {
+            "cycle": 107,
+            "state": "1"
+          },
+          {
+            "cycle": 108,
+            "state": "0"
+          },
+          {
+            "cycle": 109,
+            "state": "1"
+          },
+          {
+            "cycle": 110,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 8
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpio",
+      "number": 4,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "ESP32C61_DEVKITC1_UART0_OK",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 380000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 968,
+    "data_bytes": 0,
+    "bss_bytes": 327680,
+    "flash_used_bytes": 968,
+    "ram_static_bytes": 327680,
+    "flash_total_bytes": 8388608,
+    "ram_total_bytes": 327680,
+    "flash_used_pct": 0.01,
+    "ram_static_pct": 100.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 1000198,
+    "instructions": 500000,
+    "steps_executed": 500000,
+    "memory_reads": 1,
+    "memory_writes": 1,
+    "peripheral_accesses": 43,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 1107297078,
+        "count": 1953,
+        "symbol": "main"
+      }
+    ]
+  }
+}

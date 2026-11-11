@@ -152,6 +152,32 @@ pub fn build_esp32_system_from_manifest_with_plugins(
     Ok((bus, pro_cpu, app_cpu))
 }
 
+/// Build the narrow ESP32-S2 fast-start bus and LX7 CPU from an already
+/// resolved chip descriptor and board manifest. Shared by the single-machine,
+/// CLI and world/node paths so each frontend uses the same S2 memory map and
+/// peripheral subset.
+pub fn build_esp32s2_system_from_chip(
+    chip: &labwired_config::ChipDescriptor,
+    manifest: &labwired_config::SystemManifest,
+    plugins: &[&dyn crate::plugin::ChipPlugin],
+) -> anyhow::Result<(SystemBus, XtensaLx7)> {
+    let cpu_clock_hz = u32::try_from(manifest.cpu_hz.unwrap_or(chip.cpu_hz))
+        .ok()
+        .filter(|hz| *hz > 0)
+        .unwrap_or(crate::system::xtensa::ESP32S2_CPU_CLOCK_HZ);
+    let mut bus = SystemBus::empty();
+    bus.cpu_hz = u64::from(cpu_clock_hz);
+    let cpu = crate::system::xtensa::configure_xtensa_esp32s2(&mut bus, cpu_clock_hz);
+    bus.attach_chip_io_levels(chip);
+    bus.attach_plugin_peripherals(chip, manifest, plugins)?;
+    crate::system::xtensa::attach_esp32_external_devices(&mut bus, manifest)
+        .map_err(|e| anyhow::anyhow!("ESP32-S2 external_devices: {e:#}"))?;
+    bus.attach_debug_schemas(chip, manifest);
+    bus.refresh_peripheral_index();
+    bus.recompute_walk_deletable();
+    Ok((bus, cpu))
+}
+
 /// A copy of `manifest` whose `chip:` is anchored to `chip_dir`, mirroring what
 /// [`build_system_bus`] does before `from_config`.
 ///

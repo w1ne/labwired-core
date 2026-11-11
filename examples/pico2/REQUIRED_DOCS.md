@@ -14,3 +14,13 @@
 
 1. Raspberry Pi Pico 2 product brief / pinout (GP25 user LED):
    https://www.raspberrypi.com/products/raspberry-pi-pico-2/
+2. Official Pico-series pinout diagram (GP4 = I2C0 SDA, GP5 = I2C0 SCL):
+   https://pip-assets.raspberrypi.com/categories/1005-raspberry-pi-pico-2/documents/RP-008301-DS-1-Pico-2-Pinout.pdf
+
+## Sensor
+
+1. Bosch BME280 datasheet, register map (`CHIP_ID` at `0xD0` and raw
+   temperature at `0xFA..0xFC`):
+   https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bme280-ds002.pdf
+2. Adafruit BME280 STEMMA QT breakout product page and tutorial:
+   https://www.adafruit.com/product/2652

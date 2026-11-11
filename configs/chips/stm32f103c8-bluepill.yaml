@@ -1,0 +1,55 @@
+# Narrow STM32F103C8 Blue Pill reference-board profile.
+#
+# This profile exposes only the paths used by examples/stm32f103-bluepill:
+# RCC, GPIOA/GPIOC, and USART1. It intentionally omits peripherals outside
+# this smoke, including the on-board USB connector's USB device controller.
+# It declares no `type: stub` windows. The full STM32F103C8 descriptor remains
+# configs/chips/stm32f103.yaml.
+name: "stm32f103c8-bluepill"
+arch: "arm"
+core: "cortex-m3"
+registers_count: 125
+cpu_hz: 72_000_000
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.35
+  vih: 0.65
+
+flash:
+  base: 0x08000000
+  size: "64KB"
+ram:
+  base: 0x20000000
+  size: "20KB"
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f103/rcc.yaml"
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x40010800
+    size: "1KB"
+    clock: { reg: "apb2enr", bit: 2 }
+    config:
+      debug_schema: "../peripherals/stm32f103/gpioa.yaml"
+      profile: "stm32f1"
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x40011000
+    size: "1KB"
+    clock: { reg: "apb2enr", bit: 4 }
+    config:
+      debug_schema: "../peripherals/stm32f103/gpioc.yaml"
+      profile: "stm32f1"
+  - id: "uart1"
+    type: "uart"
+    base_address: 0x40013800
+    size: "1KB"
+    irq: 37
+    clock: { reg: "apb2enr", bit: 14 }
+    config:
+      debug_schema: "../peripherals/stm32f103/usart1.yaml"

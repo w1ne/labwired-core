@@ -1,0 +1,16 @@
+[package]
+name = "firmware-nucleo-g0b1re-smoke"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[dependencies]
+cortex-m-rt = "0.7"
+panic-halt = "0.2"
+
+[[bin]]
+name = "firmware-nucleo-g0b1re-smoke"
+path = "src/main.rs"
+test = false
+bench = false

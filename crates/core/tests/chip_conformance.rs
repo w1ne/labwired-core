@@ -89,6 +89,15 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_esp32c6_demo_survival"),
     },
     ChipConf {
+        // ESP32-C5 HP-core subset for the DevKitC-1 UART/GPIO smoke. The smoke
+        // is recorded under onboarding evidence, not a firmware_survival gate;
+        // there is no reset capture or hosted catalog entry for this target.
+        name: "esp32c5",
+        yaml: "configs/chips/esp32c5.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
         // LiteX VexRiscv SoC (RV32IM — the descriptor declares `core: rv32im`,
         // so runs select the standard RV32 profile). SIM-DERIVED: nothing here
         // has been diffed against a silicon capture, so no reset_oracle. The
@@ -419,6 +428,16 @@ const CHIPS: &[ChipConf] = &[
         // `test_esp32s3_tier1_survival` (clock/gpio/timer/irq/dma/mcpwm/rmt/i2c
         // PASS, then `TIER1 done`).
         behavior_gate: Some("firmware_survival::test_esp32s3_tier1_survival"),
+    },
+    ChipConf {
+        // ESP32-S2-DevKitC-1-N8R2 UART-only fast-start profile. The committed
+        // Session smoke asserts UART0 output, but does not cover ROM/flash boot,
+        // PSRAM, wireless, interrupt routing, or pad-level UART routing; there
+        // is no silicon capture or hosted verifier catalog entry.
+        name: "esp32s2",
+        yaml: "configs/chips/esp32s2.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_esp32s2_uart_smoke"),
     },
     ChipConf {
         name: "esp32s3-zero",
@@ -783,6 +802,15 @@ const CHIPS: &[ChipConf] = &[
         // firmware, which boots and reports PASS for every wired class.
         name: "stm32g431rb",
         yaml: "configs/chips/stm32g431rb.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        // G491RE: same RM0440 family and shared G4 RCC/GPIO engines. The
+        // committed board smoke exercises LD2 on PA5, but it is not a
+        // firmware_survival behavior gate and no silicon reset capture exists.
+        name: "stm32g491re",
+        yaml: "configs/chips/stm32g491re.yaml",
         reset_oracle: None,
         behavior_gate: None,
     },

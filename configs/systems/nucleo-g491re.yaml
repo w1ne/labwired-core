@@ -1,0 +1,22 @@
+# ST NUCLEO-G491RE (MB1367) board wiring, based on ST UM2505.
+# LD2 user LED: PA5, active high. B1 user button: PC13, active low by default.
+# This base board profile exercises GPIO board I/O. The STM32G491RE descriptor
+# also exposes I2C1 for the separate BME280 add-on system. USB, ST-LINK,
+# external oscillators, and analog measurement remain outside the model.
+name: "nucleo-g491re"
+chip: "../chips/stm32g491re.yaml"
+cpu_hz: 170_000_000
+external_devices: []
+board_io:
+  - id: "led_ld2"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true
+  - id: "button_b1"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: false

@@ -1,0 +1,13 @@
+# NUCLEO-H753ZI default USART3 VCP marker plus LD1 on PB0.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nucleo-h753zi-smoke"
+  system: "../../configs/systems/nucleo-h753zi.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "H753_USART3_OK"
+  - gpio_edges:
+      pin: "gpiob:0"
+      min_edges: 8
+  - expected_stop_reason: max_steps

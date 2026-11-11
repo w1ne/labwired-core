@@ -202,7 +202,7 @@
       },
       "i2c": {
         "state": "none",
-        "gap": "The chip yaml declares I2C0, but configs/systems/esp32-devkitc-32e-gpio-smoke.yaml attaches no external device and the committed sleep receipts do not perform an I2C transaction.",
+        "gap": "This GPIO/sleep profile attaches no external I2C device; see the separate esp32-devkitc-32e-bme280 profile for an I2C transaction.",
         "lane": "none"
       }
     },
@@ -224,6 +224,27 @@
         "state": "none",
         "gap": "This onboarding slice does not declare an I2C controller or attach an external I2C device.",
         "lane": "none"
+      }
+    },
+    "esp32-devkitc-32e-bme280": {
+      "in_boards": false,
+      "uart": {
+        "state": "none",
+        "gap": "This smoke does not assert serial output.",
+        "lane": "none"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "This smoke does not declare or exercise SPI.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "proven",
+        "file": "examples/esp32-devkitc-32e-bme280/bme280-smoke.yaml",
+        "test": "gpio_edges",
+        "signal": "The PlatformIO Arduino firmware performs an I2C0 write-pointer/repeated-start read of BME280 register 0xD0 (requires ID 0x60), then reads 0xFA..0xFC (requires raw 0x082DC0). It toggles GPIO23 only after both checks; the CLI smoke requires at least eight GPIO23 edges.",
+        "lane": "core-onboarding-smoke / onboarding-esp32-devkitc-32e-bme280 (nightly + main push; local committed evidence)",
+        "note": "The system explicitly attaches BME280 at 0x77 via GPIO21/22. The classic ESP32 builder also retains a legacy BMP280 fixture at 0x76; this smoke does not address or depend on it."
       }
     },
     "esp32c3": {
@@ -505,8 +526,12 @@
         "gap": "no fixture loads configs/chips/rp2350.yaml and moves SPI bytes; the descriptor reuses the RP2040 spi model on RP2350 bases but evidence does not transfer automatically - a pico2 SPI fixture is follow-up work"
       },
       "i2c": {
-        "state": "none",
-        "gap": "no fixture loads configs/chips/rp2350.yaml and completes an I2C transaction; the descriptor reuses the RP2040 i2c model on RP2350 bases but per-chip evidence does not transfer - a pico2 I2C fixture is follow-up work"
+        "state": "proven",
+        "file": "examples/pico2/bme280-smoke.yaml",
+        "test": "BME280_ID=0x60",
+        "signal": "source-built Cortex-M33 firmware on configs/chips/rp2350.yaml writes a BME280 register pointer to I2C0 at 0x40090000, repeated-start reads CHIP_ID 0x60 at address 0x77, then reads raw temperature 0x082DC0 from 0xFA..0xFC; after both reads, it toggles the Pico 2 LED on GP25 four times and the GPIO edge oracle requires those transitions",
+        "lane": "manual local onboarding smoke: scripts/onboarding_smoke.sh; committed evidence at examples/pico2/evidence/bme280/",
+        "note": "This proves the RP2350 I2C0 controller and attached BME280 model exchange register data, then drive GPIO25 through SIO. The manifest records GP4 SDA / GP5 SCL and firmware selects I2C0 on both pads, but this model attaches the sensor directly to the controller and does not electrically enforce pad routing, pull-ups, or voltage levels. UART text is simulator-only diagnostic output; physical UART initialization is not part of this smoke."
       }
     },
     "xck26-rpu": {
@@ -716,8 +741,8 @@
         "state": "shallow",
         "file": "examples/nucleo-f103rb-bme280/onboarding-smoke.yaml",
         "test": "uart_contains",
-        "gap": "committed onboarding evidence (examples/nucleo-f103rb-bme280/evidence) shows the script PASSES: USART2 printed NUCLEO_F103RB_BME280_OK ID=0x60 I2C1=PB8/PB9 and gpioa:5 (LD2) recorded >=32 edges. Firmware is built from crates/firmware-nucleo-f103rb-bme280-smoke, not a committed ELF, and no required CI lane invokes this script, so nothing gates a regression.",
-        "lane": "none"
+        "gap": "The nightly/main-tip onboarding lane rebuilds and runs this smoke. UART is the oracle for the BME280 CHIP_ID read and output marker; there is no separate I2C capture assertion.",
+        "lane": "core-onboarding-smoke.yml (nightly, main-tip push, manual dispatch; not a PR check)"
       },
       "spi": {
         "state": "none",
@@ -728,8 +753,8 @@
         "state": "shallow",
         "file": "examples/nucleo-f103rb-bme280/onboarding-smoke.yaml",
         "test": "uart_contains",
-        "gap": "the smoke firmware reads BME280.CHIP_ID (register 0xD0) over I2C1 at 0x77 (Arduino D15/D14, PB8/PB9) and prints ID=0x60 on USART2. That is a firmware-driven I2C transaction observed via the UART marker, not a dedicated I2C capture assertion, and no required CI lane runs the script.",
-        "lane": "none"
+        "gap": "the smoke firmware reads BME280.CHIP_ID (register 0xD0) over I2C1 at 0x77 (Arduino D15/D14, PB8/PB9) and prints ID=0x60 on USART2. This is a firmware-driven I2C transaction observed through the UART marker, not a dedicated I2C capture assertion.",
+        "lane": "core-onboarding-smoke.yml (nightly, main-tip push, manual dispatch; not a PR check)"
       }
     },
     "stm32f103r8": {
@@ -963,6 +988,24 @@
         "test": "check_i2c",
         "gap": "firmware-driven register walk only: the fixture enables I2C1, sets START/STOP and checks ISR.BUSY/TXE. No device is attached, so no address ACK or payload is proven on this exact part (the G474 sibling's Arduino INA219 ACK proof does not cover the G431 descriptor).",
         "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
+      }
+    },
+    "stm32g491re": {
+      "in_boards": false,
+      "uart": {
+        "state": "none",
+        "gap": "The narrow STM32G491RE descriptor does not declare a UART instance; the ST-LINK virtual COM path is outside this board model."
+      },
+      "spi": {
+        "state": "none",
+        "gap": "The narrow STM32G491RE descriptor does not declare an SPI controller; no SPI path is claimed by the NUCLEO-G491RE profiles."
+      },
+      "i2c": {
+        "state": "proven",
+        "file": "examples/nucleo-g491re-bme280/VALIDATION.md",
+        "test": "bme280-smoke",
+        "signal": "Committed bare-metal firmware reads BME280 ID 0x60 and the three raw-temperature bytes encoding 0x082DC0 through the I2C1 bus model at 0x77; PB8/PB9 activity and LD2 edges are asserted, and LD2 is entered only after both value comparisons pass.",
+        "lane": "Core Onboarding Smoke: nightly mainline run, main push, or workflow_dispatch; matrix target nucleo-g491re-bme280."
       }
     },
     "stm32h563": {

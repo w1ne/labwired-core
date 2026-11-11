@@ -961,6 +961,34 @@ pub(crate) fn run_firmware(
     let mut bus = SystemBus::new();
     // One read of the descriptor for every property this path takes from it.
     let chip_desc = labwired_config::ChipDescriptor::from_file(args.chip_path()).ok();
+    let manifest = if let Some(sys_path) = &args.system {
+        match labwired_config::SystemManifest::from_file(sys_path) {
+            Ok(m) => Some(m),
+            Err(e) => {
+                eprintln!("error: cannot read system manifest {sys_path:?}: {e}");
+                return ExitCode::from(EXIT_CONFIG_ERROR);
+            }
+        }
+    } else {
+        None
+    };
+    let empty_memory_overrides = std::collections::HashMap::new();
+    let base = match chip_desc.as_ref() {
+        Some(chip) => match Esp32s3Opts::for_chip_with_memory_overrides(
+            chip,
+            manifest
+                .as_ref()
+                .map(|m| &m.memory_overrides)
+                .unwrap_or(&empty_memory_overrides),
+        ) {
+            Ok(opts) => opts,
+            Err(e) => {
+                eprintln!("error: invalid ESP32-S3 memory settings: {e:#}");
+                return ExitCode::from(EXIT_CONFIG_ERROR);
+            }
+        },
+        None => Esp32s3Opts::default(),
+    };
     // `--rom-boot` runs the real ROM from reset, which programs the flash MMU;
     // select the MMU XIP model for it. Fast-boot uses identity per-window XIP.
     let opts = Esp32s3Opts {
@@ -977,10 +1005,7 @@ pub(crate) fn run_firmware(
         // Same rule for the core clock: the YAML's `cpu_hz` is the one home,
         // so the SYSTIMER divides the cycle stream by what this part actually
         // runs at (`Esp32s3Opts::for_chip`).
-        ..chip_desc
-            .as_ref()
-            .map(Esp32s3Opts::for_chip)
-            .unwrap_or_default()
+        ..base
     };
     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
     let boot_mode = wiring.boot_mode; // Copy before cpu is moved out of wiring
@@ -1009,14 +1034,7 @@ pub(crate) fn run_firmware(
     // builds the peripheral bank in Rust and never runs `from_config`'s
     // peripheral loop, so the external devices are attached here through the
     // same canonical resolver every other family uses.
-    if let Some(sys_path) = &args.system {
-        let manifest = match labwired_config::SystemManifest::from_file(sys_path) {
-            Ok(m) => m,
-            Err(e) => {
-                eprintln!("error: cannot read system manifest {sys_path:?}: {e}");
-                return ExitCode::from(EXIT_CONFIG_ERROR);
-            }
-        };
+    if let (Some(sys_path), Some(manifest)) = (&args.system, manifest.as_ref()) {
         if let Err(e) =
             labwired_core::system::xtensa::attach_esp32_external_devices(&mut bus, &manifest)
         {

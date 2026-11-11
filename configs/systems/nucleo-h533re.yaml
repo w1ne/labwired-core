@@ -1,0 +1,22 @@
+# ST NUCLEO-H533RE (MB1814) GPIO + VCP profile, based on UM3121.
+# LD2 is active high on PA5; B1 is active high on PC13. The default H533RE
+# solder-bridge setup routes USART2 TX/RX on PA2/PA3 to the STLINK-V3EC VCP.
+# Other board features are intentionally outside this profile.
+name: "nucleo-h533re"
+chip: "../chips/stm32h533re.yaml"
+cpu_hz: 250_000_000
+debug_uart: "usart2"
+external_devices: []
+board_io:
+  - id: "led_ld2"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true
+  - id: "button_b1"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: true

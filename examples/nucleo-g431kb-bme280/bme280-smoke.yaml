@@ -1,0 +1,28 @@
+# Read BME280 identity and raw temperature over I2C1, report on USART2, then
+# pulse the board's user LED LD2 after both sensor values match.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nucleo-g431kb-bme280-smoke"
+  system: "./system.yaml"
+limits:
+  max_steps: 400000
+assertions:
+  - uart_contains: "G431KB_BME280_OK id=0x60 temp=0x082DC0"
+  - peripheral_log: { peripheral: i2c1, log: bus_trace, contains: "addr 0x77 W ack" }
+  - peripheral_log: { peripheral: i2c1, log: bus_trace, contains: "data 0xd0 ack" }
+  - peripheral_log: { peripheral: i2c1, log: bus_trace, contains: "addr 0x77 R ack" }
+  - peripheral_log: { peripheral: i2c1, log: bus_trace, contains: "data 0x60 ack" }
+  - peripheral_log: { peripheral: i2c1, log: bus_trace, contains: "data 0xfa ack" }
+  - peripheral_log: { peripheral: i2c1, log: bus_trace, contains: "data 0x82 ack" }
+  - peripheral_log: { peripheral: i2c1, log: bus_trace, contains: "data 0xdc ack" }
+  - peripheral_log: { peripheral: i2c1, log: bus_trace, contains: "data 0x00 ack" }
+  - gpio_edges:
+      pin: "gpioa:15"
+      min_edges: 8
+  - gpio_edges:
+      pin: "gpiob:7"
+      min_edges: 2
+  - gpio_edges:
+      pin: "gpiob:8"
+      min_edges: 8
+  - expected_stop_reason: max_steps

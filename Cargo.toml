@@ -20,6 +20,7 @@ members = [
     "crates/firmware-atsamd51-demo",
     "crates/firmware-atsamd51-pybadge-demo",
     "crates/firmware-ra4m1-demo",
+    "crates/firmware-ra4m1-bme280-smoke",
     "crates/firmware-imxrt1064-demo",
     "crates/firmware-itm-smoke",
     "crates/firmware-stm32f746-demo",
@@ -28,6 +29,10 @@ members = [
     "crates/firmware-comparative-benchmark",
     "crates/firmware-esp32c3-demo",
     "crates/firmware-esp32c6-demo",
+    "crates/firmware-esp32c61-smoke",
+    "crates/firmware-esp32c61-bme280-smoke",
+    "crates/firmware-esp32h2-devkitm-1-smoke",
+    "crates/firmware-olimex-esp32-p4-devkit-smoke",
     "crates/firmware-f103-i2c-demo",
     "crates/firmware-f401-demo",
     "crates/firmware-f103-conformance",
@@ -76,8 +81,21 @@ members = [
     "crates/firmware-nucleo-f407-demo",
     "crates/firmware-f4-discovery-smoke",
     "crates/firmware-nucleo-f103rb-smoke",
+    "crates/firmware-nucleo-f446re-smoke",
+    "crates/firmware-nucleo-l432kc-smoke",
+    "crates/firmware-nucleo-h753zi-smoke",
+    "crates/firmware-nucleo-g491re-smoke",
+    "crates/firmware-nucleo-g0b1re-smoke",
+    "crates/firmware-nucleo-g431kb-bme280-smoke",
+    "crates/firmware-nucleo-g431rb-bme280-smoke",
+    "crates/firmware-nucleo-h533re-smoke",
+    "crates/firmware-nucleo-u3c5zi-q-smoke",
+    "crates/firmware-nucleo-h503rb-smoke",
+    "crates/firmware-nucleo-c562re-smoke",
+    "crates/firmware-nucleo-g491re-bme280-smoke",
     "crates/firmware-nucleo-f103rb-bme280-smoke",
     "crates/firmware-stm32f103-lowdensity-smoke",
+    "crates/firmware-stm32f103-bluepill-smoke",
     "crates/firmware-f401-lowram-smoke",
     "crates/firmware-arty-litex-smoke",
     "crates/firmware-vegaboard-ri5cy-smoke",
@@ -102,6 +120,12 @@ members = [
     "crates/firmware-perf-spin",
     "crates/firmware-perf-spin-riscv",
     "crates/firmware-rp2040-demo",
+    "crates/firmware-rp2040-pico-bme280-smoke",
+    "crates/firmware-qtpy-rp2040-bme280-smoke",
+    "crates/firmware-rp2040-picow-bme280-smoke",
+    "crates/firmware-rp2350-pico2-bme280-smoke",
+    "crates/firmware-rp2350-pico2w-bme280-smoke",
+    "crates/firmware-esp32c5-devkitc-1-bme280-smoke",
     "crates/firmware-samd21-demo",
     "crates/firmware-samd21-lowram-smoke",
     "crates/firmware-arduino-zero-demo",
@@ -379,6 +403,10 @@ opt-level = "s"
 codegen-units = 1
 opt-level = "s"
 
+[profile.release.package.firmware-rp2350-pico2-bme280-smoke]
+codegen-units = 1
+opt-level = "s"
+
 [profile.release.package.firmware-rp2040-demo]
 codegen-units = 1
 opt-level = "s"
@@ -392,6 +420,14 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-rp2040-pio-onboarding]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-qtpy-rp2040-bme280-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-rp2040-picow-bme280-smoke]
 codegen-units = 1
 opt-level = "s"
 

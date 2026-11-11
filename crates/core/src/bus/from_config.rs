@@ -550,7 +550,7 @@ impl SystemBus {
         let merged_peripherals = merged_peripheral_configs(chip, manifest);
 
         // External-device ids already attached by a chip-specific I²C path
-        // (the `i2c` / `esp32c3_i2c` arms below). The generic external-device
+        // (the `i2c` / Espressif I²C arms below). The generic external-device
         // loop must NOT re-process these — otherwise a device that the bus
         // loader correctly attached as an I²C slave would also fall through to
         // the generic `_ =>` arm and emit a spurious "Unsupported external
@@ -619,6 +619,9 @@ impl SystemBus {
                 .or_else(|| crate::peripherals::esp32s3::factory::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32c3::factory::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32c6::factory::try_build(&canonical_type, p_cfg))
+                .or_else(|| crate::peripherals::esp32c5::factory::try_build(&canonical_type, p_cfg))
+                .or_else(|| crate::peripherals::esp32h2::factory::try_build(&canonical_type, p_cfg))
+                .or_else(|| crate::peripherals::esp32p4::factory::try_build(&canonical_type, p_cfg))
                 // ESP32-classic was missing from this chain. Its factory has
                 // always existed with all 14 `esp32_*` types, but only the
                 // Xtensa builder called it, so a plain `from_config` bus --
@@ -724,6 +727,9 @@ impl SystemBus {
                     | "stm32f7_i2c"
                     | "efm32ggi2ccontroller"
                     | "esp32c3_i2c"
+                    | "esp32c5_i2c"
+                    | "esp32c61_i2c"
+                    | "esp32h2_i2c"
                     | "imxrt_lpi2c"
             ) {
                 let controller: Box<dyn Peripheral> = if canonical_type == "imxrt_lpi2c" {
@@ -734,6 +740,42 @@ impl SystemBus {
                         .and_then(|v| v.as_u64())
                         .unwrap_or(crate::peripherals::imxrt::lpi2c::DEFAULT_LPI2C_CLK_HZ);
                     Box::new(crate::peripherals::imxrt::lpi2c::ImxrtLpi2c::new(clk))
+                } else if canonical_type == "esp32c5_i2c" {
+                    // The C5 uses the same command-list register block and
+                    // cycle-driven wire engine as the C3, with C5's 240 MHz
+                    // cycle rate and I2C_EXT0 interrupt source (55).
+                    let src = p_cfg
+                        .irq
+                        .unwrap_or(crate::peripherals::esp32c3::i2c::C5_I2C0_INTR_SOURCE_ID);
+                    Box::new(
+                        crate::peripherals::esp32c3::i2c::Esp32c3I2c::with_cpu_clock_and_intr(
+                            240_000_000,
+                            src,
+                        ),
+                    )
+                } else if canonical_type == "esp32c61_i2c" {
+                    // C61's TRM register head matches the C3/C5 command-list
+                    // engine; its I2C_EXT0 source is 45 and CPU clock is
+                    // 160 MHz. PCR clock gating comes from the descriptor.
+                    let src = p_cfg.irq.unwrap_or(45);
+                    Box::new(
+                        crate::peripherals::esp32c3::i2c::Esp32c3I2c::with_cpu_clock_and_intr(
+                            160_000_000,
+                            src,
+                        ),
+                    )
+                } else if canonical_type == "esp32h2_i2c" {
+                    // H2 I2C0 uses the same command-list register head and
+                    // cycle-driven engine as C3/C5/C6. Its TRM/IDF map places
+                    // I2C0 at 0x6000_4000; its CPU clock is 96 MHz and its
+                    // I2C_EXT0 source is 39 (ESP-IDF esp32h2/interrupts.h).
+                    let src = p_cfg.irq.unwrap_or(39);
+                    Box::new(
+                        crate::peripherals::esp32c3::i2c::Esp32c3I2c::with_cpu_clock_and_intr(
+                            96_000_000,
+                            src,
+                        ),
+                    )
                 } else if canonical_type == "esp32c3_i2c" {
                     // ESP32-C3/C6 behavioral I²C0 controller (command-list
                     // engine); both RISC-V chips reach it through this config
@@ -1368,7 +1410,7 @@ impl SystemBus {
         // / `attach_spi_device`), so there is nothing to wire here.
         for ext in &manifest.external_devices {
             // Already attached as an I²C slave by a chip-specific i2c path
-            // (the `i2c` / `esp32c3_i2c` arms above). Don't let it fall through
+            // (the I2C controller arms above). Don't let it fall through
             // to the generic arms — it is handled, so re-processing it here
             // would emit a spurious "Unsupported external device" WARN.
             if attached_i2c_ext_ids.contains(ext.id.as_str()) {
@@ -1414,10 +1456,14 @@ impl SystemBus {
         // wires it there too; this keeps the declarative path honest if the
         // peripheral is ever declared.)
         bus.wire_esp32s3_pad_controls();
-        // ESP32-C3: share the I²C0 bit engine's live SDA/SCL line levels with
-        // the C3 GPIO model so matrix-routed pads carry the real waveform.
-        // No-op for every other chip.
+        // ESP32-C3/C5: share the I²C0 bit engine's live SDA/SCL line levels
+        // with their GPIO model so matrix-routed pads carry the real waveform.
+        // The C5 uses this shared engine with its own matrix layout. No-op for
+        // every other chip.
         bus.wire_esp32c3_i2c_pads();
+        // ESP32-H2 shares the C3 command-list I2C engine but has GPIO matrix
+        // signal IDs 45/46 and its own 28-pad GPIO block.
+        bus.wire_esp32h2_i2c_pads();
         // And GP-SPI2's SCK/MOSI/CS plus each UART's TX, so those buses are
         // measurable on the C3 too rather than reading as a flat line. MISO/RX
         // are deliberately unbound — nothing drives them.

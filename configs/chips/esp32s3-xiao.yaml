@@ -1,0 +1,98 @@
+# LabWired - Seeed Studio XIAO ESP32-S3 (ESP32-S3R8, 8 MiB flash).
+#
+# The physical S3R8 module has 8 MiB of OPI PSRAM. This board slice excludes it;
+# the smoke firmware is built in QSPI-only mode and does not access PSRAM.
+name: "esp32s3-xiao"
+arch: "xtensa-lx7"
+cpu_hz: 240_000_000
+
+flash:
+  base: 0x42000000
+  size: "8192KB"
+ram:
+  base: 0x3FC88000
+  size: "512KB"
+peripherals:
+  - id: "uart0"
+    type: "uart"
+    base_address: 0x60000000
+    size: "512B"
+    config:
+      debug_schema: "../peripherals/esp32s3/uart0.yaml"
+  - id: "usb_serial_jtag"
+    type: "usb_serial_jtag"
+    base_address: 0x60038000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32s3/usb_device.yaml"
+  - id: "gpio"
+    type: "declarative"
+    base_address: 0x60004000
+    config:
+      path: "../peripherals/esp32s3/gpio.yaml"
+  - id: "timg0"
+    type: "declarative"
+    base_address: 0x6001F000
+    config:
+      path: "../peripherals/esp32s3/timg0.yaml"
+  - id: "interrupt_core0"
+    type: "declarative"
+    base_address: 0x600C2000
+    config:
+      path: "../peripherals/esp32s3/interrupt_core0.yaml"
+  - id: "systimer"
+    type: "systimer"
+    base_address: 0x60023000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32s3/systimer.yaml"
+  - id: "system"
+    type: "system_stub"
+    base_address: 0x600C0000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32s3/system.yaml"
+  - id: "gdma"
+    type: "gdma"
+    base_address: 0x6003F000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32s3/dma.yaml"
+  - id: "mcpwm0"
+    type: "mcpwm"
+    base_address: 0x6001E000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32s3/mcpwm0.yaml"
+  - id: "i2c0"
+    type: "i2c"
+    base_address: 0x60013000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32s3/i2c0.yaml"
+  - id: "rmt"
+    type: "rmt"
+    base_address: 0x60016000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32s3/rmt.yaml"
+  - id: "spi2"
+    type: "esp32s3_spi"
+    base_address: 0x60024000
+    size: "4KB"
+    irq: 21
+  - id: "spi3"
+    type: "esp32s3_spi"
+    base_address: 0x60025000
+    size: "4KB"
+    irq: 22
+  - id: "sar_adc_s3"
+    type: "esp32s3_sar_adc"
+    base_address: 0x60040000
+    size: "4KB"
+    irq: 64
+  - id: "twai"
+    type: "esp32s3_twai"
+    base_address: 0x6002B000
+    size: "4KB"
+    irq: 37

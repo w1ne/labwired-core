@@ -1,0 +1,17 @@
+# ST NUCLEO-U3C5ZI-Q: USART1 virtual COM port + green LD1 smoke path.
+# Board pin mappings: ST UM3599, USART1 VCP PA9/PA10 and LD1 PA5.
+name: "nucleo-u3c5zi-q"
+chip: "../chips/stm32u3c5zi.yaml"
+debug_uart: "usart1"
+external_devices: []
+board_io:
+  - id: "led_green_ld1"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true
+connectors:
+  - type: "uart"
+    peripheral: "usart1"
+    endpoint: "host_console"

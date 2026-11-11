@@ -1,0 +1,107 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      0,
+      1341915136,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1343094784,
+      4,
+      88,
+      1280,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1341128760,
+    "mstatus": 0,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 0,
+    "mscratch": 0,
+    "mepc": 0,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 300000,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 300000,
+  "cycles": 600208,
+  "instructions": 300000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 300000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 300000
+    }
+  },
+  "limits": {
+    "max_steps": 300000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "e9977e692732bc84df542dec734b415a9aa255be6012ca4fe20cd40ed41aed01",
+  "config": {
+    "firmware": "examples/olimex-esp32-p4-devkit/../../target/riscv32imac-unknown-none-elf/release/firmware-olimex-esp32-p4-devkit-smoke",
+    "system": "examples/olimex-esp32-p4-devkit/../../configs/systems/olimex-esp32-p4-devkit.yaml",
+    "script": "examples/olimex-esp32-p4-devkit/gpio2-led-smoke.yaml"
+  }
+}

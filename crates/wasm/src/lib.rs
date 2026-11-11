@@ -1342,6 +1342,8 @@ impl WasmSimulator {
         };
 
         let mut bus = SystemBus::new();
+        let base = Esp32s3Opts::for_chip_with_memory_overrides(chip, &manifest.memory_overrides)
+            .map_err(|e| JsValue::from_str(&format!("{e:#}")))?;
         let opts = Esp32s3Opts {
             real_reset_boot: true,
             rom_images: Some(RomImages {
@@ -1369,7 +1371,7 @@ impl WasmSimulator {
             // Core clock from the same descriptor, for the same reason: the
             // chip YAML is the one home for `cpu_hz` and the SYSTIMER divides
             // the CPU cycle stream by it.
-            ..Esp32s3Opts::for_chip(chip)
+            ..base
         };
         let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
         if wiring.boot_mode != Esp32s3BootMode::Faithful {
@@ -1499,6 +1501,8 @@ impl WasmSimulator {
         };
 
         let mut bus = SystemBus::new();
+        let base = Esp32s3Opts::for_chip_with_memory_overrides(chip, &manifest.memory_overrides)
+            .map_err(|e| JsValue::from_str(&format!("{e:#}")))?;
         // Default XIP model (fast-boot identity; --rom-boot's MMU model is
         // native-CLI only) + the injected faithful ROM.
         let opts = Esp32s3Opts {
@@ -1506,7 +1510,7 @@ impl WasmSimulator {
             // Core clock from the chip descriptor, same as the flash-boot
             // sibling above: `cpu_hz:` in the chip YAML is the one home, and it
             // is what the SYSTIMER divides the CPU cycle stream by.
-            ..Esp32s3Opts::for_chip(chip)
+            ..base
         };
         let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
         let mut cpu = wiring.cpu;

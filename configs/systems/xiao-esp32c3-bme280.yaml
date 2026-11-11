@@ -1,0 +1,17 @@
+# Seeed Studio XIAO ESP32-C3 (ESP32-C3FH4) + external BME280 on D4/D5.
+# D4=SDA/GPIO6, D5=SCL/GPIO7; D10/GPIO10 is the optional proof LED output.
+# USB Serial/JTAG, wireless, battery charging, and the red power-only charge
+# LED are outside this tested profile.
+name: "xiao-esp32c3-bme280"
+chip: "../chips/esp32c3.yaml"
+cpu_hz: 160_000_000
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GPIO6"
+      scl: "GPIO7"
+    config:
+      i2c_address: 0x77
+board_io: []

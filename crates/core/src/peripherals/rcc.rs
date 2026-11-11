@@ -49,6 +49,10 @@ pub enum RccRegisterLayout {
     /// STM32H5 family (RM0481). Register offsets and reset values verified on
     /// NUCLEO-H563ZI silicon over SWD (`scripts/hw-capture-stm32h563.sh`).
     Stm32H5,
+    /// STM32C5 family (RM0522). This narrow profile uses C5 reset values and
+    /// the shared H5-style enable-register offsets exercised by the C562RE
+    /// board smoke; other C5 clock-tree behavior is not yet exercised.
+    Stm32C5,
     /// STM32H7 family (RM0468 / RM0433 — H723/733/725/735/730, H74x/75x).
     /// Reference-manual-derived; not silicon-verified (no H7 bench part).
     Stm32H7,
@@ -135,6 +139,7 @@ impl FromStr for RccRegisterLayout {
             "stm32f4" | "f4" => Ok(Self::Stm32F4),
             "stm32v2" | "v2" | "modern" | "stm32-modern" => Ok(Self::Stm32V2),
             "h5" | "stm32h5" => Ok(Self::Stm32H5),
+            "c5" | "stm32c5" => Ok(Self::Stm32C5),
             "h7" | "stm32h7" => Ok(Self::Stm32H7),
             "stm32l4" | "l4" => Ok(Self::Stm32L4),
             "stm32l5" | "l5" => Ok(Self::Stm32L5),
@@ -147,7 +152,7 @@ impl FromStr for RccRegisterLayout {
             "stm32g0b1" | "g0b1" => Ok(Self::Stm32G0b1),
             "stm32f0" | "f0" => Ok(Self::Stm32F0),
             _ => Err(format!(
-                "unsupported RCC register layout '{}'; supported: stm32f1, stm32f4, stm32v2, stm32h5, stm32h7, stm32l4, stm32l5, stm32l0, stm32g4, stm32wb, stm32wba, wch, stm32g0, stm32g0b1, stm32f0",
+                "unsupported RCC register layout '{}'; supported: stm32f1, stm32f4, stm32v2, stm32h5, stm32c5, stm32h7, stm32l4, stm32l5, stm32l0, stm32g4, stm32wb, stm32wba, wch, stm32g0, stm32g0b1, stm32f0",
                 value
             )),
         }
@@ -1375,6 +1380,21 @@ impl H5Rcc {
             apb3enr: 0,
             bdcr: 0,
             rsr: 0x0C00_0000,
+        }
+    }
+
+    /// C5 shares the H5 RCC enable-register offsets used by the board smoke,
+    /// but its reset image differs. Seed the C5 values documented by RM0522:
+    /// CR1=0x22, AHB1ENR=0xC0000100, AHB2ENR=0, APB1LENR=0. The remaining
+    /// modeled clock-tree registers retain the shared H5 implementation and
+    /// are outside this narrow profile's current firmware coverage.
+    fn new_c5() -> Self {
+        Self {
+            cr: 0x0000_0022,
+            ahb1enr: 0xC000_0100,
+            ahb2enr: 0,
+            apb1lenr: 0,
+            ..Self::new()
         }
     }
 }
@@ -2834,6 +2854,7 @@ pub enum Rcc {
     Stm32F4(F4Rcc),
     Stm32V2(V2Rcc),
     Stm32H5(H5Rcc),
+    Stm32C5(H5Rcc),
     Stm32H7(H7Rcc),
     Stm32L4(L4Rcc),
     Stm32L5(L5Rcc),
@@ -2861,6 +2882,7 @@ impl Rcc {
             RccRegisterLayout::Stm32F4 => Self::Stm32F4(F4Rcc::new()),
             RccRegisterLayout::Stm32V2 => Self::Stm32V2(V2Rcc::new_u5()),
             RccRegisterLayout::Stm32H5 => Self::Stm32H5(H5Rcc::new()),
+            RccRegisterLayout::Stm32C5 => Self::Stm32C5(H5Rcc::new_c5()),
             RccRegisterLayout::Stm32H7 => Self::Stm32H7(H7Rcc::new()),
             RccRegisterLayout::Stm32L4 => Self::Stm32L4(L4Rcc::new()),
             RccRegisterLayout::Stm32L5 => Self::Stm32L5(L5Rcc::new()),
@@ -3076,7 +3098,7 @@ impl Rcc {
             },
             // H5: AHB1ENR@0x88, AHB2ENR@0x8C, APB1LENR@0x9C, APB1HENR@0xA0,
             // APB2ENR@0xA4, APB3ENR@0xA8 (RM0481 §11.8).
-            Self::Stm32H5(_) => match r.as_str() {
+            Self::Stm32H5(_) | Self::Stm32C5(_) => match r.as_str() {
                 "ahb1enr" | "ahbenr" => Some(0x88),
                 "ahb2enr" => Some(0x8C),
                 "apb1enr" | "apb1lenr" => Some(0x9C),
@@ -3134,6 +3156,7 @@ impl Rcc {
             Self::Stm32F4(r) => r,
             Self::Stm32V2(r) => r,
             Self::Stm32H5(r) => r,
+            Self::Stm32C5(r) => r,
             Self::Stm32H7(r) => r,
             Self::Stm32L4(r) => r,
             Self::Stm32L5(r) => r,
@@ -3151,6 +3174,7 @@ impl Rcc {
             Self::Stm32F4(r) => r,
             Self::Stm32V2(r) => r,
             Self::Stm32H5(r) => r,
+            Self::Stm32C5(r) => r,
             Self::Stm32H7(r) => r,
             Self::Stm32L4(r) => r,
             Self::Stm32L5(r) => r,

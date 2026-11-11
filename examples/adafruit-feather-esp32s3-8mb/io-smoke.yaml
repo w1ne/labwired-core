@@ -1,0 +1,14 @@
+# Boots the 8 MB/no-PSRAM Feather profile, emits a UART0 marker, and clocks
+# the built-in NeoPixel with a timed WS2812 frame on GPIO33.
+schema_version: "1.2"
+inputs:
+  firmware: "./firmware/.pio/build/feather_nopsram/firmware.elf"
+  system: "../../configs/systems/adafruit-feather-esp32s3-8mb.yaml"
+limits:
+  max_steps: 50000000
+assertions:
+  - uart_contains: "FEATHER_S3_GPIO33_WS2812_OK"
+  - gpio_edges:
+      pin: "gpio:33"
+      min_edges: 48
+  - expected_stop_reason: max_steps

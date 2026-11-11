@@ -1,0 +1,19 @@
+# ST NUCLEO-H753ZI (MB1364) with its default LD1 and ST-LINK VCP wiring.
+# UM2407: LD1 is PB0 by default; B1 is PC13; default VCP is USART3 on PD8/PD9.
+name: "nucleo-h753zi"
+chip: "../chips/stm32h753zi.yaml"
+debug_uart: "usart3"
+external_devices: []
+board_io:
+  - id: "led_ld1_green"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 0
+    signal: "output"
+    active_high: true
+  - id: "button_b1"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: true

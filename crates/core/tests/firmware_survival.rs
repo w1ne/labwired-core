@@ -2017,6 +2017,20 @@ DONE\r\n",
         valid_pc_ranges: &[],
         expected_uart_output: b"TIER1 done",
     },
+    // ESP32-S2 DevKitC N8R2: fast-start the linked ELF into the S2 IROM/DROM
+    // windows and assert the UART0 marker. This does not imply mask-ROM or
+    // physical SPI-flash boot; those remain outside this board profile.
+    SurvivalCase {
+        name: "esp32s2_devkitc_n8r2_uart",
+        core: "xtensa-lx7",
+        family: CpuFamily::Session,
+        hal: Hal::Bare,
+        chip: "esp32s2",
+        system: "esp32s2-devkitc-1-n8r2",
+        fixture: "esp32s2-devkitc-1-n8r2-uart.elf",
+        valid_pc_ranges: &[],
+        expected_uart_output: b"S2_UART_OK",
+    },
     SurvivalCase {
         name: "esp32s3_zero_tier1",
         core: "xtensa-lx7",
@@ -3351,6 +3365,8 @@ survival_gate!(
 );
 
 survival_gate!(test_esp32s3_tier1_survival, "esp32s3_tier1");
+
+survival_gate!(test_esp32s2_uart_smoke, "esp32s2_devkitc_n8r2_uart");
 
 survival_gate!(test_esp32s3_zero_tier1_survival, "esp32s3_zero_tier1");
 

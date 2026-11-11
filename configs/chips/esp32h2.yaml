@@ -1,0 +1,46 @@
+# Narrow ESP32-H2 HP-core profile for ESP32-H2-DevKitM-1-N4S.
+# Models UART0 console output, direct GPIO output, and the I2C0 command-list
+# path used by the DevKitM-1 N4S BME280 example. Thread/Zigbee, Bluetooth LE,
+# USB Serial/JTAG, flash boot/XIP, the clock tree, and the WS2812 RGB LED are
+# outside this descriptor.
+name: "esp32h2"
+arch: "riscv"
+core: "rv32imac"
+registers_count: 31
+cpu_hz: 96_000_000
+
+flash:
+  # ESP32-H2-DevKitM-1-N4S carries the 4 MB flash ESP32-H2-MINI-1 module.
+  base: 0x42000000
+  size: "4096KB"
+ram:
+  # H2 HP SRAM, per ESP32-H2 TRM v1.1 memory map.
+  base: 0x40800000
+  size: "320KB"
+
+peripherals:
+  # H2 UART0 is at 0x6000_0000; its FIFO/CLKDIV head and newer UART tail
+  # match the shared Espressif model. Firmware bytes reach the simulator's
+  # UART console; GPIO24/23 IO_MUX routing to the board bridge is not modeled.
+  - id: "uart0"
+    type: "esp32h2_uart"
+    irq: 33
+    base_address: 0x60000000
+    size: "4KB"
+    config:
+      echo_stdout: true
+
+  # H2 GPIO register head and SIG_GPIO_OUT_IDX=128 match the direct-output
+  # subset used by the smoke. GPIO10 is exposed on the board headers.
+  - id: "gpio"
+    type: "esp32h2_gpio"
+    base_address: 0x60091000
+    size: "4KB"
+
+  # H2 I2C0 command-list block at 0x6000_4000. The H2 GPIO matrix routes
+  # I2CEXT0_SCL/SDA on signals 45/46; only I2C0 is included in this profile.
+  - id: "i2c0"
+    type: "esp32h2_i2c"
+    irq: 39
+    base_address: 0x60004000
+    size: "4KB"

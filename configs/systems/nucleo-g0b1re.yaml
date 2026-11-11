@@ -10,6 +10,7 @@
 
 name: "nucleo-g0b1re"
 chip: "../chips/stm32g0b1re.yaml"
+debug_uart: "usart2"
 external_devices: []
 board_io:
   - id: "led_ld4"

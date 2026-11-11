@@ -1,0 +1,7173 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 400000,
+  "cycles": 400000,
+  "instructions": 400000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 400000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 400000
+    }
+  },
+  "limits": {
+    "max_steps": 400000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "G431KB_BME280_OK id=0x60 temp=0x082DC0"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "i2c1",
+          "log": "bus_trace",
+          "contains": "addr 0x77 W ack",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "i2c1",
+          "log": "bus_trace",
+          "contains": "data 0xd0 ack",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "i2c1",
+          "log": "bus_trace",
+          "contains": "addr 0x77 R ack",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "i2c1",
+          "log": "bus_trace",
+          "contains": "data 0x60 ack",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "i2c1",
+          "log": "bus_trace",
+          "contains": "data 0xfa ack",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "i2c1",
+          "log": "bus_trace",
+          "contains": "data 0x82 ack",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "i2c1",
+          "log": "bus_trace",
+          "contains": "data 0xdc ack",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "peripheral_log": {
+          "peripheral": "i2c1",
+          "log": "bus_trace",
+          "contains": "data 0x00 ack",
+          "min_count": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpioa:15",
+          "min_edges": 8
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpiob:7",
+          "min_edges": 2
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpiob:8",
+          "min_edges": 8
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      256,
+      536893420,
+      16777216,
+      536893416,
+      3221225472,
+      99990,
+      494,
+      536893424,
+      220,
+      33629422,
+      130,
+      1,
+      1207960600,
+      536893416,
+      73966,
+      134221348
+    ],
+    "pc": 134221348,
+    "xpsr": 2164260864,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "8c7fff7a2eef4a1c0acb2cb6c05790b32e377d6703561a5637a03995e9d0c744",
+  "config": {
+    "firmware": "examples/nucleo-g431kb-bme280/../../target/thumbv7em-none-eabi/release/firmware-nucleo-g431kb-bme280-smoke",
+    "system": "examples/nucleo-g431kb-bme280/./system.yaml",
+    "script": "examples/nucleo-g431kb-bme280/bme280-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073876992,
+        "registers": [
+          {
+            "name": "RCC_CR",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_ICSCR",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_CFGR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_PLLCFGR",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_CIER",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_CIFR",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_CICR",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_AHB1RSTR",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_AHB2RSTR",
+            "offset": 44,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_AHB3RSTR",
+            "offset": 48,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_APB1RSTR1",
+            "offset": 56,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_APB1RSTR2",
+            "offset": 60,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_APB2RSTR",
+            "offset": 64,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_AHB1ENR",
+            "offset": 72,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_AHB2ENR",
+            "offset": 76,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_AHB3ENR",
+            "offset": 80,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_APB1ENR1",
+            "offset": 88,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_APB1ENR2",
+            "offset": 92,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_APB2ENR",
+            "offset": 96,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_AHB1SMENR",
+            "offset": 104,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_AHB2SMENR",
+            "offset": 108,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_AHB3SMENR",
+            "offset": 112,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_APB1SMENR1",
+            "offset": 120,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_APB1SMENR2",
+            "offset": 124,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_APB2SMENR",
+            "offset": 128,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_CCIPR",
+            "offset": 136,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_BDCR",
+            "offset": 144,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_CSR",
+            "offset": 148,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_CRRCR",
+            "offset": 152,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "RCC_CCIPR2",
+            "offset": 156,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "gpioa",
+        "kind": "native",
+        "base": 1207959552,
+        "registers": [
+          {
+            "name": "MODER",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OTYPER",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OSPEEDR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PUPDR",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IDR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "ODR",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BSRR",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "LCKR",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AFRL",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AFRH",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BRR",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "gpiob",
+        "kind": "native",
+        "base": 1207960576,
+        "registers": [
+          {
+            "name": "MODER",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OTYPER",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OSPEEDR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PUPDR",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IDR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "ODR",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BSRR",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "LCKR",
+            "offset": 28,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AFRL",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "AFRH",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "BRR",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "usart2",
+        "kind": "native",
+        "base": 1073759232,
+        "registers": [
+          {
+            "name": "CR1",
+            "offset": 0,
+            "size": 32,
+            "value": 9,
+            "fields": [
+              {
+                "name": "UE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 1
+              },
+              {
+                "name": "UESM",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "RE",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "TE",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 1
+              },
+              {
+                "name": "IDLEIE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXNEIE",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "TCIE",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXEIE",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "PEIE",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "PS",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "PCE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "WAKE",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "M0",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "MME",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "CMIE",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "OVER8",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEDT0",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEDT1",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEDT2",
+                "bits": [
+                  18,
+                  18
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEDT3",
+                "bits": [
+                  19,
+                  19
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEDT4",
+                "bits": [
+                  20,
+                  20
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEAT0",
+                "bits": [
+                  21,
+                  21
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEAT1",
+                "bits": [
+                  22,
+                  22
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEAT2",
+                "bits": [
+                  23,
+                  23
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEAT3",
+                "bits": [
+                  24,
+                  24
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEAT4",
+                "bits": [
+                  25,
+                  25
+                ],
+                "value": 0
+              },
+              {
+                "name": "RTOIE",
+                "bits": [
+                  26,
+                  26
+                ],
+                "value": 0
+              },
+              {
+                "name": "EOBIE",
+                "bits": [
+                  27,
+                  27
+                ],
+                "value": 0
+              },
+              {
+                "name": "M1",
+                "bits": [
+                  28,
+                  28
+                ],
+                "value": 0
+              },
+              {
+                "name": "FIFOEN",
+                "bits": [
+                  29,
+                  29
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFEIE",
+                "bits": [
+                  30,
+                  30
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFFIE",
+                "bits": [
+                  31,
+                  31
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CR2",
+            "offset": 4,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SLVEN",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "DIS_NSS",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADDM7",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "LBDL",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "LBDIE",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "LBCL",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "CPHA",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "CPOL",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CLKEN",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "STOP",
+                "bits": [
+                  13,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "LINEN",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "SWAP",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXINV",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXINV",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "TAINV",
+                "bits": [
+                  18,
+                  18
+                ],
+                "value": 0
+              },
+              {
+                "name": "MSBFIRST",
+                "bits": [
+                  19,
+                  19
+                ],
+                "value": 0
+              },
+              {
+                "name": "ABREN",
+                "bits": [
+                  20,
+                  20
+                ],
+                "value": 0
+              },
+              {
+                "name": "ABRMOD0",
+                "bits": [
+                  21,
+                  21
+                ],
+                "value": 0
+              },
+              {
+                "name": "ABRMOD1",
+                "bits": [
+                  22,
+                  22
+                ],
+                "value": 0
+              },
+              {
+                "name": "RTOEN",
+                "bits": [
+                  23,
+                  23
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADD0_3",
+                "bits": [
+                  27,
+                  24
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADD4_7",
+                "bits": [
+                  31,
+                  28
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CR3",
+            "offset": 8,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "EIE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "IREN",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "IRLP",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "HDSEL",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "NACK",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "SCEN",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "DMAR",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "DMAT",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "RTSE",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTSE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTSIE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "ONEBIT",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "OVRDIS",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "DDRE",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEM",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "DEP",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "SCARCNT",
+                "bits": [
+                  19,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "WUS",
+                "bits": [
+                  21,
+                  20
+                ],
+                "value": 0
+              },
+              {
+                "name": "WUFIE",
+                "bits": [
+                  22,
+                  22
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFTIE",
+                "bits": [
+                  23,
+                  23
+                ],
+                "value": 0
+              },
+              {
+                "name": "TCBGTIE",
+                "bits": [
+                  24,
+                  24
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFTCFG",
+                "bits": [
+                  27,
+                  25
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFTIE",
+                "bits": [
+                  28,
+                  28
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFTCFG",
+                "bits": [
+                  31,
+                  29
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "BRR",
+            "offset": 12,
+            "size": 32,
+            "value": 139,
+            "fields": [
+              {
+                "name": "DIV_Fraction",
+                "bits": [
+                  3,
+                  0
+                ],
+                "value": 11
+              },
+              {
+                "name": "DIV_Mantissa",
+                "bits": [
+                  15,
+                  4
+                ],
+                "value": 8
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "GTPR",
+            "offset": 16,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PSC",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "GT",
+                "bits": [
+                  15,
+                  8
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "RTOR",
+            "offset": 20,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RTO",
+                "bits": [
+                  23,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "BLEN",
+                "bits": [
+                  31,
+                  24
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "RQR",
+            "offset": 24,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "ABRRQ",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "SBKRQ",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "MMRQ",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFRQ",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFRQ",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              }
+            ],
+            "access": "wo"
+          },
+          {
+            "name": "ISR",
+            "offset": 28,
+            "size": 32,
+            "value": 2097344,
+            "fields": [
+              {
+                "name": "PE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "FE",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "NF",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "ORE",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "IDLE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXNE",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "TC",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 1
+              },
+              {
+                "name": "TXE",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 1
+              },
+              {
+                "name": "LBDF",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTSIF",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTS",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "RTOF",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "EOBF",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "UDR",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "ABRE",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "ABRF",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "BUSY",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "CMF",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "SBKF",
+                "bits": [
+                  18,
+                  18
+                ],
+                "value": 0
+              },
+              {
+                "name": "RWU",
+                "bits": [
+                  19,
+                  19
+                ],
+                "value": 0
+              },
+              {
+                "name": "WUF",
+                "bits": [
+                  20,
+                  20
+                ],
+                "value": 0
+              },
+              {
+                "name": "TEACK",
+                "bits": [
+                  21,
+                  21
+                ],
+                "value": 1
+              },
+              {
+                "name": "REACK",
+                "bits": [
+                  22,
+                  22
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFE",
+                "bits": [
+                  23,
+                  23
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFF",
+                "bits": [
+                  24,
+                  24
+                ],
+                "value": 0
+              },
+              {
+                "name": "TCBGT",
+                "bits": [
+                  25,
+                  25
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXFT",
+                "bits": [
+                  26,
+                  26
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFT",
+                "bits": [
+                  27,
+                  27
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "ICR",
+            "offset": 32,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PECF",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "FECF",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "NCF",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "ORECF",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "IDLECF",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXFECF",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "TCCF",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "TCBGTCF",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "LBDCF",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTSCF",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "RTOCF",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "EOBCF",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "UDRCF",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "CMCF",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "WUCF",
+                "bits": [
+                  20,
+                  20
+                ],
+                "value": 0
+              }
+            ],
+            "access": "wo"
+          },
+          {
+            "name": "RDR",
+            "offset": 36,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RDR",
+                "bits": [
+                  8,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "TDR",
+            "offset": 40,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TDR",
+                "bits": [
+                  8,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PRESC",
+            "offset": 44,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PRESCALER",
+                "bits": [
+                  3,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "i2c1",
+        "kind": "native",
+        "base": 1073763328,
+        "registers": [
+          {
+            "name": "CR1",
+            "offset": 0,
+            "size": 32,
+            "value": 1,
+            "fields": [
+              {
+                "name": "PE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 1
+              },
+              {
+                "name": "TXIE",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXIE",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADDRIE",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "NACKIE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STOPIE",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "TCIE",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "ERRIE",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "DNF",
+                "bits": [
+                  11,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "ANFOFF",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "TXDMAEN",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXDMAEN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "SBC",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "NOSTRETCH",
+                "bits": [
+                  17,
+                  17
+                ],
+                "value": 0
+              },
+              {
+                "name": "WUPEN",
+                "bits": [
+                  18,
+                  18
+                ],
+                "value": 0
+              },
+              {
+                "name": "GCEN",
+                "bits": [
+                  19,
+                  19
+                ],
+                "value": 0
+              },
+              {
+                "name": "SMBHEN",
+                "bits": [
+                  20,
+                  20
+                ],
+                "value": 0
+              },
+              {
+                "name": "SMBDEN",
+                "bits": [
+                  21,
+                  21
+                ],
+                "value": 0
+              },
+              {
+                "name": "ALERTEN",
+                "bits": [
+                  22,
+                  22
+                ],
+                "value": 0
+              },
+              {
+                "name": "PECEN",
+                "bits": [
+                  23,
+                  23
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "CR2",
+            "offset": 4,
+            "size": 32,
+            "value": 1262,
+            "fields": [
+              {
+                "name": "SADD",
+                "bits": [
+                  9,
+                  0
+                ],
+                "value": 238
+              },
+              {
+                "name": "RD_WRN",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 1
+              },
+              {
+                "name": "ADD10",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "HEAD10R",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "START",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "STOP",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "NACK",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "NBYTES",
+                "bits": [
+                  23,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "RELOAD",
+                "bits": [
+                  24,
+                  24
+                ],
+                "value": 0
+              },
+              {
+                "name": "AUTOEND",
+                "bits": [
+                  25,
+                  25
+                ],
+                "value": 0
+              },
+              {
+                "name": "PECBYTE",
+                "bits": [
+                  26,
+                  26
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "OAR1",
+            "offset": 8,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "OA1",
+                "bits": [
+                  9,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "OA1MODE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "OA1EN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "OAR2",
+            "offset": 12,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "OA2",
+                "bits": [
+                  7,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "OA2MSK",
+                "bits": [
+                  10,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "OA2EN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "TIMINGR",
+            "offset": 16,
+            "size": 32,
+            "value": 15707,
+            "fields": [
+              {
+                "name": "SCLL",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 91
+              },
+              {
+                "name": "SCLH",
+                "bits": [
+                  15,
+                  8
+                ],
+                "value": 61
+              },
+              {
+                "name": "SDADEL",
+                "bits": [
+                  19,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "SCLDEL",
+                "bits": [
+                  23,
+                  20
+                ],
+                "value": 0
+              },
+              {
+                "name": "PRESC",
+                "bits": [
+                  31,
+                  28
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "TIMEOUTR",
+            "offset": 20,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "TIMEOUTA",
+                "bits": [
+                  11,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "TIDLE",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "TIMOUTEN",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "TIMEOUTB",
+                "bits": [
+                  27,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "TEXTEN",
+                "bits": [
+                  31,
+                  31
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "ISR",
+            "offset": 24,
+            "size": 32,
+            "value": 65,
+            "fields": [
+              {
+                "name": "TXE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 1
+              },
+              {
+                "name": "TXIS",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "RXNE",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADDR",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "NACKF",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STOPF",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "TC",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 1
+              },
+              {
+                "name": "TCR",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "BERR",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "ARLO",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OVR",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "PECERR",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "TIMEOUT",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "ALERT",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "BUSY",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "DIR",
+                "bits": [
+                  16,
+                  16
+                ],
+                "value": 0
+              },
+              {
+                "name": "ADDCODE",
+                "bits": [
+                  23,
+                  17
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "ICR",
+            "offset": 28,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "ADDRCF",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "NACKCF",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "STOPCF",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "BERRCF",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "ARLOCF",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "OVRCF",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "PECCF",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "TIMOUTCF",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "ALERTCF",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              }
+            ],
+            "access": "wo"
+          },
+          {
+            "name": "PECR",
+            "offset": 32,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PEC",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "RXDR",
+            "offset": 36,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RXDATA",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "TXDR",
+            "offset": 40,
+            "size": 32,
+            "value": 252,
+            "fields": [
+              {
+                "name": "TXDATA",
+                "bits": [
+                  7,
+                  0
+                ],
+                "value": 252
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "i2c@0x77",
+            "meta": {
+              "inputs": {
+                "humidity": 50.0,
+                "pressure": 1013.25,
+                "temperature": 25.0
+              },
+              "powered": true,
+              "registers": {
+                "CHIP_ID": 96,
+                "CONFIG": 0,
+                "CTRL_HUM": 0,
+                "CTRL_MEAS": 0,
+                "DIG_H1": 75,
+                "DIG_H2": 350,
+                "DIG_H3": 0,
+                "DIG_H4_H5_LOW": 5,
+                "DIG_H4_HIGH": 19,
+                "DIG_H5_HIGH": 0,
+                "DIG_H6": 30,
+                "DIG_P1": 38221,
+                "DIG_P2": 54959,
+                "DIG_P3": 3024,
+                "DIG_P4": 7421,
+                "DIG_P5": 65351,
+                "DIG_P6": 65529,
+                "DIG_P7": 9900,
+                "DIG_P8": 55306,
+                "DIG_P9": 4285,
+                "DIG_T1": 28528,
+                "DIG_T2": 26435,
+                "DIG_T3": 64536,
+                "HUM": 28995,
+                "PRESS": 4955584,
+                "STATUS": 0,
+                "TEMP": 8576000
+              },
+              "supply_generation": null
+            }
+          }
+        ]
+      },
+      {
+        "name": "flash",
+        "kind": "native",
+        "base": 1073881088,
+        "registers": [
+          {
+            "name": "ACR",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PDKEYR",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "KEYR",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "OPTKEYR",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "wo"
+          },
+          {
+            "name": "SR",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CR",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ECCR",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "OPTR",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PCROP1SR",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PCROP1ER",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "WRP1AR",
+            "offset": 44,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "WRP1BR",
+            "offset": 48,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "SEC1R",
+            "offset": 112,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "pwr",
+        "kind": "native",
+        "base": 1073770496,
+        "registers": [
+          {
+            "name": "PWR_CR1",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PWR_CR2",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PWR_CR3",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PWR_CR4",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PWR_SR1",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PWR_SR2",
+            "offset": 20,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PWR_SCR",
+            "offset": 24,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PWR_PUCRA",
+            "offset": 32,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PWR_PDCRA",
+            "offset": 36,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PWR_PUCRB",
+            "offset": 40,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PWR_PDCRB",
+            "offset": 44,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PWR_PUCRC",
+            "offset": 48,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PWR_PDCRC",
+            "offset": 52,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PWR_PUCRD",
+            "offset": 56,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PWR_PDCRD",
+            "offset": 60,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PWR_PUCRE",
+            "offset": 64,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PWR_PDCRE",
+            "offset": 68,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PWR_PUCRF",
+            "offset": 72,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PWR_PDCRF",
+            "offset": 76,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PWR_PUCRG",
+            "offset": 80,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PWR_PDCRG",
+            "offset": 84,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "PWR_CR5",
+            "offset": 128,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "systick",
+        "kind": "native",
+        "base": 3758153744,
+        "registers": [
+          {
+            "name": "CTRL",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "LOAD",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "VAL",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "CALIB",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [
+          {
+            "name": "ISER0",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ISER1",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ISER2",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ISER3",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICER0",
+            "offset": 128,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICER1",
+            "offset": 132,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICER2",
+            "offset": 136,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICER3",
+            "offset": 140,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ISPR0",
+            "offset": 256,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ISPR1",
+            "offset": 260,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ISPR2",
+            "offset": 264,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ISPR3",
+            "offset": 268,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICPR0",
+            "offset": 384,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICPR1",
+            "offset": 388,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICPR2",
+            "offset": 392,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICPR3",
+            "offset": 396,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IABR0",
+            "offset": 512,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "IABR1",
+            "offset": 516,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "IABR2",
+            "offset": 520,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "IABR3",
+            "offset": 524,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "IPR0",
+            "offset": 768,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IPR1",
+            "offset": 772,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IPR2",
+            "offset": 776,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IPR3",
+            "offset": 780,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IPR4",
+            "offset": 784,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IPR5",
+            "offset": 788,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IPR6",
+            "offset": 792,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IPR7",
+            "offset": 796,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IPR8",
+            "offset": 800,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IPR9",
+            "offset": 804,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IPR10",
+            "offset": 808,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IPR11",
+            "offset": 812,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IPR12",
+            "offset": 816,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IPR13",
+            "offset": 820,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IPR14",
+            "offset": 824,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IPR15",
+            "offset": 828,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IPR16",
+            "offset": 832,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IPR17",
+            "offset": 836,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IPR18",
+            "offset": 840,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IPR19",
+            "offset": 844,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IPR20",
+            "offset": 848,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IPR21",
+            "offset": 852,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IPR22",
+            "offset": 856,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IPR23",
+            "offset": 860,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IPR24",
+            "offset": 864,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "IPR25",
+            "offset": 868,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "dbgmcu",
+        "kind": "native",
+        "base": 3758366720,
+        "registers": [
+          {
+            "name": "IDCODE",
+            "offset": 0,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "ro"
+          },
+          {
+            "name": "CR",
+            "offset": 4,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB1L_FZ",
+            "offset": 8,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB1H_FZ",
+            "offset": 12,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "APB2_FZ",
+            "offset": 16,
+            "size": 32,
+            "value": null,
+            "fields": [],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "bme280",
+        "device_type": "bme280",
+        "declared": true,
+        "attachment": {
+          "transport": "i2c",
+          "bus": "i2c1",
+          "address": 119
+        },
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "bme280",
+            "meta": {
+              "inputs": {
+                "humidity": 50.0,
+                "pressure": 1013.25,
+                "temperature": 25.0
+              },
+              "powered": true,
+              "registers": {
+                "CHIP_ID": 96,
+                "CONFIG": 0,
+                "CTRL_HUM": 0,
+                "CTRL_MEAS": 0,
+                "DIG_H1": 75,
+                "DIG_H2": 350,
+                "DIG_H3": 0,
+                "DIG_H4_H5_LOW": 5,
+                "DIG_H4_HIGH": 19,
+                "DIG_H5_HIGH": 0,
+                "DIG_H6": 30,
+                "DIG_P1": 38221,
+                "DIG_P2": 54959,
+                "DIG_P3": 3024,
+                "DIG_P4": 7421,
+                "DIG_P5": 65351,
+                "DIG_P6": 65529,
+                "DIG_P7": 9900,
+                "DIG_P8": 55306,
+                "DIG_P9": 4285,
+                "DIG_T1": 28528,
+                "DIG_T2": 26435,
+                "DIG_T3": 64536,
+                "HUM": 28995,
+                "PRESS": 4955584,
+                "STATUS": 0,
+                "TEMP": 8576000
+              },
+              "supply_generation": null
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "derived_device_time",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "device time derived from cpu_hz (170000000 Hz); PLL reconfiguration is not tracked"
+    },
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal 3.3 V rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 400000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpioa",
+        "pin": 15,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 77,
+            "value": 1
+          },
+          {
+            "cycle": 33323,
+            "value": 0
+          },
+          {
+            "cycle": 33325,
+            "value": 1
+          },
+          {
+            "cycle": 33326,
+            "value": 0
+          },
+          {
+            "cycle": 33327,
+            "value": 1
+          },
+          {
+            "cycle": 33328,
+            "value": 0
+          },
+          {
+            "cycle": 33329,
+            "value": 1
+          },
+          {
+            "cycle": 33330,
+            "value": 0
+          },
+          {
+            "cycle": 33331,
+            "value": 1
+          },
+          {
+            "cycle": 33332,
+            "value": 0
+          },
+          {
+            "cycle": 33333,
+            "value": 1
+          },
+          {
+            "cycle": 33334,
+            "value": 0
+          },
+          {
+            "cycle": 33335,
+            "value": 1
+          },
+          {
+            "cycle": 33336,
+            "value": 0
+          },
+          {
+            "cycle": 33337,
+            "value": 1
+          },
+          {
+            "cycle": 33338,
+            "value": 0
+          },
+          {
+            "cycle": 33339,
+            "value": 1
+          },
+          {
+            "cycle": 33340,
+            "value": 0
+          },
+          {
+            "cycle": 33341,
+            "value": 1
+          },
+          {
+            "cycle": 33342,
+            "value": 0
+          },
+          {
+            "cycle": 33343,
+            "value": 1
+          },
+          {
+            "cycle": 33344,
+            "value": 0
+          },
+          {
+            "cycle": 33345,
+            "value": 1
+          },
+          {
+            "cycle": 33346,
+            "value": 0
+          },
+          {
+            "cycle": 33347,
+            "value": 1
+          },
+          {
+            "cycle": 33348,
+            "value": 0
+          },
+          {
+            "cycle": 33349,
+            "value": 1
+          },
+          {
+            "cycle": 33350,
+            "value": 0
+          },
+          {
+            "cycle": 33351,
+            "value": 1
+          },
+          {
+            "cycle": 33352,
+            "value": 0
+          },
+          {
+            "cycle": 33353,
+            "value": 1
+          },
+          {
+            "cycle": 33354,
+            "value": 0
+          },
+          {
+            "cycle": 33355,
+            "value": 1
+          },
+          {
+            "cycle": 33356,
+            "value": 0
+          },
+          {
+            "cycle": 33357,
+            "value": 1
+          },
+          {
+            "cycle": 33358,
+            "value": 0
+          },
+          {
+            "cycle": 33359,
+            "value": 1
+          },
+          {
+            "cycle": 33360,
+            "value": 0
+          },
+          {
+            "cycle": 33361,
+            "value": 1
+          },
+          {
+            "cycle": 33362,
+            "value": 0
+          },
+          {
+            "cycle": 33363,
+            "value": 1
+          },
+          {
+            "cycle": 33364,
+            "value": 0
+          },
+          {
+            "cycle": 33365,
+            "value": 1
+          },
+          {
+            "cycle": 33366,
+            "value": 0
+          },
+          {
+            "cycle": 33367,
+            "value": 1
+          },
+          {
+            "cycle": 33368,
+            "value": 0
+          },
+          {
+            "cycle": 33369,
+            "value": 1
+          },
+          {
+            "cycle": 33370,
+            "value": 0
+          },
+          {
+            "cycle": 33371,
+            "value": 1
+          },
+          {
+            "cycle": 33372,
+            "value": 0
+          },
+          {
+            "cycle": 33373,
+            "value": 1
+          },
+          {
+            "cycle": 33374,
+            "value": 0
+          },
+          {
+            "cycle": 33375,
+            "value": 1
+          },
+          {
+            "cycle": 33376,
+            "value": 0
+          },
+          {
+            "cycle": 33377,
+            "value": 1
+          },
+          {
+            "cycle": 33378,
+            "value": 0
+          },
+          {
+            "cycle": 33379,
+            "value": 1
+          },
+          {
+            "cycle": 33380,
+            "value": 0
+          },
+          {
+            "cycle": 33381,
+            "value": 1
+          },
+          {
+            "cycle": 33382,
+            "value": 0
+          },
+          {
+            "cycle": 33383,
+            "value": 1
+          },
+          {
+            "cycle": 33384,
+            "value": 0
+          },
+          {
+            "cycle": 33385,
+            "value": 1
+          },
+          {
+            "cycle": 33386,
+            "value": 0
+          },
+          {
+            "cycle": 33387,
+            "value": 1
+          },
+          {
+            "cycle": 33388,
+            "value": 0
+          },
+          {
+            "cycle": 33389,
+            "value": 1
+          },
+          {
+            "cycle": 33390,
+            "value": 0
+          },
+          {
+            "cycle": 33391,
+            "value": 1
+          },
+          {
+            "cycle": 33392,
+            "value": 0
+          },
+          {
+            "cycle": 33393,
+            "value": 1
+          },
+          {
+            "cycle": 33394,
+            "value": 0
+          },
+          {
+            "cycle": 33395,
+            "value": 1
+          },
+          {
+            "cycle": 33396,
+            "value": 0
+          },
+          {
+            "cycle": 33397,
+            "value": 1
+          },
+          {
+            "cycle": 20508,
+            "value": 0
+          },
+          {
+            "cycle": 21740,
+            "value": 1
+          },
+          {
+            "cycle": 22356,
+            "value": 0
+          },
+          {
+            "cycle": 22972,
+            "value": 1
+          },
+          {
+            "cycle": 23588,
+            "value": 0
+          },
+          {
+            "cycle": 24204,
+            "value": 1
+          },
+          {
+            "cycle": 24820,
+            "value": 0
+          },
+          {
+            "cycle": 25436,
+            "value": 1
+          },
+          {
+            "cycle": 26052,
+            "value": 0
+          },
+          {
+            "cycle": 26668,
+            "value": 1
+          },
+          {
+            "cycle": 27284,
+            "value": 0
+          },
+          {
+            "cycle": 27900,
+            "value": 1
+          },
+          {
+            "cycle": 28516,
+            "value": 0
+          },
+          {
+            "cycle": 29132,
+            "value": 1
+          },
+          {
+            "cycle": 29748,
+            "value": 0
+          },
+          {
+            "cycle": 30364,
+            "value": 1
+          },
+          {
+            "cycle": 30980,
+            "value": 0
+          },
+          {
+            "cycle": 31596,
+            "value": 1
+          },
+          {
+            "cycle": 32212,
+            "value": 0
+          },
+          {
+            "cycle": 32828,
+            "value": 1
+          },
+          {
+            "cycle": 33444,
+            "value": 0
+          },
+          {
+            "cycle": 34060,
+            "value": 1
+          },
+          {
+            "cycle": 34676,
+            "value": 0
+          },
+          {
+            "cycle": 35292,
+            "value": 1
+          },
+          {
+            "cycle": 35908,
+            "value": 0
+          },
+          {
+            "cycle": 36524,
+            "value": 1
+          },
+          {
+            "cycle": 37140,
+            "value": 0
+          },
+          {
+            "cycle": 37756,
+            "value": 1
+          },
+          {
+            "cycle": 38372,
+            "value": 0
+          },
+          {
+            "cycle": 38988,
+            "value": 1
+          },
+          {
+            "cycle": 39604,
+            "value": 0
+          },
+          {
+            "cycle": 40220,
+            "value": 1
+          },
+          {
+            "cycle": 40836,
+            "value": 0
+          },
+          {
+            "cycle": 41452,
+            "value": 1
+          },
+          {
+            "cycle": 42068,
+            "value": 0
+          },
+          {
+            "cycle": 42684,
+            "value": 1
+          },
+          {
+            "cycle": 43300,
+            "value": 0
+          },
+          {
+            "cycle": 43916,
+            "value": 1
+          },
+          {
+            "cycle": 44532,
+            "value": 0
+          },
+          {
+            "cycle": 45148,
+            "value": 1
+          },
+          {
+            "cycle": 45764,
+            "value": 0
+          },
+          {
+            "cycle": 46380,
+            "value": 1
+          },
+          {
+            "cycle": 46996,
+            "value": 0
+          },
+          {
+            "cycle": 47612,
+            "value": 1
+          },
+          {
+            "cycle": 48228,
+            "value": 0
+          },
+          {
+            "cycle": 48844,
+            "value": 1
+          },
+          {
+            "cycle": 49460,
+            "value": 0
+          },
+          {
+            "cycle": 50076,
+            "value": 1
+          },
+          {
+            "cycle": 50692,
+            "value": 0
+          },
+          {
+            "cycle": 51308,
+            "value": 1
+          },
+          {
+            "cycle": 51924,
+            "value": 0
+          },
+          {
+            "cycle": 52540,
+            "value": 1
+          },
+          {
+            "cycle": 53156,
+            "value": 0
+          },
+          {
+            "cycle": 53772,
+            "value": 1
+          },
+          {
+            "cycle": 54388,
+            "value": 0
+          },
+          {
+            "cycle": 55004,
+            "value": 1
+          },
+          {
+            "cycle": 55620,
+            "value": 0
+          },
+          {
+            "cycle": 56236,
+            "value": 1
+          },
+          {
+            "cycle": 56852,
+            "value": 0
+          },
+          {
+            "cycle": 57468,
+            "value": 1
+          },
+          {
+            "cycle": 58084,
+            "value": 0
+          },
+          {
+            "cycle": 58700,
+            "value": 1
+          },
+          {
+            "cycle": 59316,
+            "value": 0
+          },
+          {
+            "cycle": 59932,
+            "value": 1
+          },
+          {
+            "cycle": 60548,
+            "value": 0
+          },
+          {
+            "cycle": 61164,
+            "value": 1
+          },
+          {
+            "cycle": 61780,
+            "value": 0
+          },
+          {
+            "cycle": 62396,
+            "value": 1
+          },
+          {
+            "cycle": 63012,
+            "value": 0
+          },
+          {
+            "cycle": 63628,
+            "value": 1
+          },
+          {
+            "cycle": 64244,
+            "value": 0
+          },
+          {
+            "cycle": 64860,
+            "value": 1
+          },
+          {
+            "cycle": 65476,
+            "value": 0
+          },
+          {
+            "cycle": 66092,
+            "value": 1
+          },
+          {
+            "cycle": 53811,
+            "value": 0
+          },
+          {
+            "cycle": 55043,
+            "value": 1
+          },
+          {
+            "cycle": 55659,
+            "value": 0
+          },
+          {
+            "cycle": 56275,
+            "value": 1
+          },
+          {
+            "cycle": 56891,
+            "value": 0
+          },
+          {
+            "cycle": 57507,
+            "value": 1
+          },
+          {
+            "cycle": 58123,
+            "value": 0
+          },
+          {
+            "cycle": 58739,
+            "value": 1
+          },
+          {
+            "cycle": 59355,
+            "value": 0
+          },
+          {
+            "cycle": 59971,
+            "value": 1
+          },
+          {
+            "cycle": 60587,
+            "value": 0
+          },
+          {
+            "cycle": 61203,
+            "value": 1
+          },
+          {
+            "cycle": 61819,
+            "value": 0
+          },
+          {
+            "cycle": 62435,
+            "value": 1
+          },
+          {
+            "cycle": 63051,
+            "value": 0
+          },
+          {
+            "cycle": 63667,
+            "value": 1
+          },
+          {
+            "cycle": 64283,
+            "value": 0
+          },
+          {
+            "cycle": 64899,
+            "value": 1
+          },
+          {
+            "cycle": 65515,
+            "value": 0
+          },
+          {
+            "cycle": 66131,
+            "value": 1
+          },
+          {
+            "cycle": 66747,
+            "value": 0
+          },
+          {
+            "cycle": 67363,
+            "value": 1
+          },
+          {
+            "cycle": 67979,
+            "value": 0
+          },
+          {
+            "cycle": 68595,
+            "value": 1
+          },
+          {
+            "cycle": 69211,
+            "value": 0
+          },
+          {
+            "cycle": 69827,
+            "value": 1
+          },
+          {
+            "cycle": 70443,
+            "value": 0
+          },
+          {
+            "cycle": 71059,
+            "value": 1
+          },
+          {
+            "cycle": 71675,
+            "value": 0
+          },
+          {
+            "cycle": 72291,
+            "value": 1
+          },
+          {
+            "cycle": 72907,
+            "value": 0
+          },
+          {
+            "cycle": 73523,
+            "value": 1
+          },
+          {
+            "cycle": 74139,
+            "value": 0
+          },
+          {
+            "cycle": 74755,
+            "value": 1
+          },
+          {
+            "cycle": 75371,
+            "value": 0
+          },
+          {
+            "cycle": 75987,
+            "value": 1
+          },
+          {
+            "cycle": 76603,
+            "value": 0
+          },
+          {
+            "cycle": 77219,
+            "value": 1
+          },
+          {
+            "cycle": 77835,
+            "value": 0
+          },
+          {
+            "cycle": 78451,
+            "value": 1
+          },
+          {
+            "cycle": 79067,
+            "value": 0
+          },
+          {
+            "cycle": 79683,
+            "value": 1
+          },
+          {
+            "cycle": 80299,
+            "value": 0
+          },
+          {
+            "cycle": 80915,
+            "value": 1
+          },
+          {
+            "cycle": 81531,
+            "value": 0
+          },
+          {
+            "cycle": 82147,
+            "value": 1
+          },
+          {
+            "cycle": 82763,
+            "value": 0
+          },
+          {
+            "cycle": 83379,
+            "value": 1
+          },
+          {
+            "cycle": 83995,
+            "value": 0
+          },
+          {
+            "cycle": 84611,
+            "value": 1
+          },
+          {
+            "cycle": 85227,
+            "value": 0
+          },
+          {
+            "cycle": 85843,
+            "value": 1
+          },
+          {
+            "cycle": 86459,
+            "value": 0
+          },
+          {
+            "cycle": 87075,
+            "value": 1
+          },
+          {
+            "cycle": 87691,
+            "value": 0
+          },
+          {
+            "cycle": 88307,
+            "value": 1
+          },
+          {
+            "cycle": 88923,
+            "value": 0
+          },
+          {
+            "cycle": 89539,
+            "value": 1
+          },
+          {
+            "cycle": 90155,
+            "value": 0
+          },
+          {
+            "cycle": 90771,
+            "value": 1
+          },
+          {
+            "cycle": 91387,
+            "value": 0
+          },
+          {
+            "cycle": 92003,
+            "value": 1
+          },
+          {
+            "cycle": 92619,
+            "value": 0
+          },
+          {
+            "cycle": 93235,
+            "value": 1
+          },
+          {
+            "cycle": 93851,
+            "value": 0
+          },
+          {
+            "cycle": 94467,
+            "value": 1
+          },
+          {
+            "cycle": 95083,
+            "value": 0
+          },
+          {
+            "cycle": 95699,
+            "value": 1
+          },
+          {
+            "cycle": 96315,
+            "value": 0
+          },
+          {
+            "cycle": 96931,
+            "value": 1
+          },
+          {
+            "cycle": 97547,
+            "value": 0
+          },
+          {
+            "cycle": 98163,
+            "value": 1
+          },
+          {
+            "cycle": 98779,
+            "value": 0
+          },
+          {
+            "cycle": 99395,
+            "value": 1
+          },
+          {
+            "cycle": 87114,
+            "value": 0
+          },
+          {
+            "cycle": 88346,
+            "value": 1
+          },
+          {
+            "cycle": 88962,
+            "value": 0
+          },
+          {
+            "cycle": 89578,
+            "value": 1
+          },
+          {
+            "cycle": 90194,
+            "value": 0
+          },
+          {
+            "cycle": 90810,
+            "value": 1
+          },
+          {
+            "cycle": 91426,
+            "value": 0
+          },
+          {
+            "cycle": 92042,
+            "value": 1
+          },
+          {
+            "cycle": 92658,
+            "value": 0
+          },
+          {
+            "cycle": 93274,
+            "value": 1
+          },
+          {
+            "cycle": 93890,
+            "value": 0
+          },
+          {
+            "cycle": 94506,
+            "value": 1
+          },
+          {
+            "cycle": 95122,
+            "value": 0
+          },
+          {
+            "cycle": 95738,
+            "value": 1
+          },
+          {
+            "cycle": 96354,
+            "value": 0
+          },
+          {
+            "cycle": 96970,
+            "value": 1
+          },
+          {
+            "cycle": 97586,
+            "value": 0
+          },
+          {
+            "cycle": 98202,
+            "value": 1
+          },
+          {
+            "cycle": 98818,
+            "value": 0
+          },
+          {
+            "cycle": 99434,
+            "value": 1
+          },
+          {
+            "cycle": 100050,
+            "value": 0
+          },
+          {
+            "cycle": 100666,
+            "value": 1
+          },
+          {
+            "cycle": 101282,
+            "value": 0
+          },
+          {
+            "cycle": 101898,
+            "value": 1
+          },
+          {
+            "cycle": 102514,
+            "value": 0
+          },
+          {
+            "cycle": 103130,
+            "value": 1
+          },
+          {
+            "cycle": 103746,
+            "value": 0
+          },
+          {
+            "cycle": 104362,
+            "value": 1
+          },
+          {
+            "cycle": 104978,
+            "value": 0
+          },
+          {
+            "cycle": 105594,
+            "value": 1
+          },
+          {
+            "cycle": 106210,
+            "value": 0
+          },
+          {
+            "cycle": 106826,
+            "value": 1
+          },
+          {
+            "cycle": 107442,
+            "value": 0
+          },
+          {
+            "cycle": 108058,
+            "value": 1
+          },
+          {
+            "cycle": 108674,
+            "value": 0
+          },
+          {
+            "cycle": 109290,
+            "value": 1
+          },
+          {
+            "cycle": 109906,
+            "value": 0
+          },
+          {
+            "cycle": 110522,
+            "value": 1
+          },
+          {
+            "cycle": 111138,
+            "value": 0
+          },
+          {
+            "cycle": 111754,
+            "value": 1
+          },
+          {
+            "cycle": 112370,
+            "value": 0
+          },
+          {
+            "cycle": 112986,
+            "value": 1
+          },
+          {
+            "cycle": 113602,
+            "value": 0
+          },
+          {
+            "cycle": 114218,
+            "value": 1
+          },
+          {
+            "cycle": 114834,
+            "value": 0
+          },
+          {
+            "cycle": 115450,
+            "value": 1
+          },
+          {
+            "cycle": 116066,
+            "value": 0
+          },
+          {
+            "cycle": 116682,
+            "value": 1
+          },
+          {
+            "cycle": 117298,
+            "value": 0
+          },
+          {
+            "cycle": 117914,
+            "value": 1
+          },
+          {
+            "cycle": 118530,
+            "value": 0
+          },
+          {
+            "cycle": 119146,
+            "value": 1
+          },
+          {
+            "cycle": 119762,
+            "value": 0
+          },
+          {
+            "cycle": 120378,
+            "value": 1
+          },
+          {
+            "cycle": 120994,
+            "value": 0
+          },
+          {
+            "cycle": 121610,
+            "value": 1
+          },
+          {
+            "cycle": 122226,
+            "value": 0
+          },
+          {
+            "cycle": 122842,
+            "value": 1
+          },
+          {
+            "cycle": 123458,
+            "value": 0
+          },
+          {
+            "cycle": 124074,
+            "value": 1
+          },
+          {
+            "cycle": 124690,
+            "value": 0
+          },
+          {
+            "cycle": 125306,
+            "value": 1
+          },
+          {
+            "cycle": 125922,
+            "value": 0
+          },
+          {
+            "cycle": 126538,
+            "value": 1
+          },
+          {
+            "cycle": 127154,
+            "value": 0
+          },
+          {
+            "cycle": 127770,
+            "value": 1
+          },
+          {
+            "cycle": 128386,
+            "value": 0
+          },
+          {
+            "cycle": 129002,
+            "value": 1
+          },
+          {
+            "cycle": 129618,
+            "value": 0
+          },
+          {
+            "cycle": 130234,
+            "value": 1
+          },
+          {
+            "cycle": 130850,
+            "value": 0
+          },
+          {
+            "cycle": 131466,
+            "value": 1
+          },
+          {
+            "cycle": 132082,
+            "value": 0
+          },
+          {
+            "cycle": 132698,
+            "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 77,
+            "state": "1"
+          },
+          {
+            "cycle": 33323,
+            "state": "0"
+          },
+          {
+            "cycle": 33325,
+            "state": "1"
+          },
+          {
+            "cycle": 33326,
+            "state": "0"
+          },
+          {
+            "cycle": 33327,
+            "state": "1"
+          },
+          {
+            "cycle": 33328,
+            "state": "0"
+          },
+          {
+            "cycle": 33329,
+            "state": "1"
+          },
+          {
+            "cycle": 33330,
+            "state": "0"
+          },
+          {
+            "cycle": 33331,
+            "state": "1"
+          },
+          {
+            "cycle": 33332,
+            "state": "0"
+          },
+          {
+            "cycle": 33333,
+            "state": "1"
+          },
+          {
+            "cycle": 33334,
+            "state": "0"
+          },
+          {
+            "cycle": 33335,
+            "state": "1"
+          },
+          {
+            "cycle": 33336,
+            "state": "0"
+          },
+          {
+            "cycle": 33337,
+            "state": "1"
+          },
+          {
+            "cycle": 33338,
+            "state": "0"
+          },
+          {
+            "cycle": 33339,
+            "state": "1"
+          },
+          {
+            "cycle": 33340,
+            "state": "0"
+          },
+          {
+            "cycle": 33341,
+            "state": "1"
+          },
+          {
+            "cycle": 33342,
+            "state": "0"
+          },
+          {
+            "cycle": 33343,
+            "state": "1"
+          },
+          {
+            "cycle": 33344,
+            "state": "0"
+          },
+          {
+            "cycle": 33345,
+            "state": "1"
+          },
+          {
+            "cycle": 33346,
+            "state": "0"
+          },
+          {
+            "cycle": 33347,
+            "state": "1"
+          },
+          {
+            "cycle": 33348,
+            "state": "0"
+          },
+          {
+            "cycle": 33349,
+            "state": "1"
+          },
+          {
+            "cycle": 33350,
+            "state": "0"
+          },
+          {
+            "cycle": 33351,
+            "state": "1"
+          },
+          {
+            "cycle": 33352,
+            "state": "0"
+          },
+          {
+            "cycle": 33353,
+            "state": "1"
+          },
+          {
+            "cycle": 33354,
+            "state": "0"
+          },
+          {
+            "cycle": 33355,
+            "state": "1"
+          },
+          {
+            "cycle": 33356,
+            "state": "0"
+          },
+          {
+            "cycle": 33357,
+            "state": "1"
+          },
+          {
+            "cycle": 33358,
+            "state": "0"
+          },
+          {
+            "cycle": 33359,
+            "state": "1"
+          },
+          {
+            "cycle": 33360,
+            "state": "0"
+          },
+          {
+            "cycle": 33361,
+            "state": "1"
+          },
+          {
+            "cycle": 33362,
+            "state": "0"
+          },
+          {
+            "cycle": 33363,
+            "state": "1"
+          },
+          {
+            "cycle": 33364,
+            "state": "0"
+          },
+          {
+            "cycle": 33365,
+            "state": "1"
+          },
+          {
+            "cycle": 33366,
+            "state": "0"
+          },
+          {
+            "cycle": 33367,
+            "state": "1"
+          },
+          {
+            "cycle": 33368,
+            "state": "0"
+          },
+          {
+            "cycle": 33369,
+            "state": "1"
+          },
+          {
+            "cycle": 33370,
+            "state": "0"
+          },
+          {
+            "cycle": 33371,
+            "state": "1"
+          },
+          {
+            "cycle": 33372,
+            "state": "0"
+          },
+          {
+            "cycle": 33373,
+            "state": "1"
+          },
+          {
+            "cycle": 33374,
+            "state": "0"
+          },
+          {
+            "cycle": 33375,
+            "state": "1"
+          },
+          {
+            "cycle": 33376,
+            "state": "0"
+          },
+          {
+            "cycle": 33377,
+            "state": "1"
+          },
+          {
+            "cycle": 33378,
+            "state": "0"
+          },
+          {
+            "cycle": 33379,
+            "state": "1"
+          },
+          {
+            "cycle": 33380,
+            "state": "0"
+          },
+          {
+            "cycle": 33381,
+            "state": "1"
+          },
+          {
+            "cycle": 33382,
+            "state": "0"
+          },
+          {
+            "cycle": 33383,
+            "state": "1"
+          },
+          {
+            "cycle": 33384,
+            "state": "0"
+          },
+          {
+            "cycle": 33385,
+            "state": "1"
+          },
+          {
+            "cycle": 33386,
+            "state": "0"
+          },
+          {
+            "cycle": 33387,
+            "state": "1"
+          },
+          {
+            "cycle": 33388,
+            "state": "0"
+          },
+          {
+            "cycle": 33389,
+            "state": "1"
+          },
+          {
+            "cycle": 33390,
+            "state": "0"
+          },
+          {
+            "cycle": 33391,
+            "state": "1"
+          },
+          {
+            "cycle": 33392,
+            "state": "0"
+          },
+          {
+            "cycle": 33393,
+            "state": "1"
+          },
+          {
+            "cycle": 33394,
+            "state": "0"
+          },
+          {
+            "cycle": 33395,
+            "state": "1"
+          },
+          {
+            "cycle": 33396,
+            "state": "0"
+          },
+          {
+            "cycle": 33397,
+            "state": "1"
+          },
+          {
+            "cycle": 20508,
+            "state": "0"
+          },
+          {
+            "cycle": 21740,
+            "state": "1"
+          },
+          {
+            "cycle": 22356,
+            "state": "0"
+          },
+          {
+            "cycle": 22972,
+            "state": "1"
+          },
+          {
+            "cycle": 23588,
+            "state": "0"
+          },
+          {
+            "cycle": 24204,
+            "state": "1"
+          },
+          {
+            "cycle": 24820,
+            "state": "0"
+          },
+          {
+            "cycle": 25436,
+            "state": "1"
+          },
+          {
+            "cycle": 26052,
+            "state": "0"
+          },
+          {
+            "cycle": 26668,
+            "state": "1"
+          },
+          {
+            "cycle": 27284,
+            "state": "0"
+          },
+          {
+            "cycle": 27900,
+            "state": "1"
+          },
+          {
+            "cycle": 28516,
+            "state": "0"
+          },
+          {
+            "cycle": 29132,
+            "state": "1"
+          },
+          {
+            "cycle": 29748,
+            "state": "0"
+          },
+          {
+            "cycle": 30364,
+            "state": "1"
+          },
+          {
+            "cycle": 30980,
+            "state": "0"
+          },
+          {
+            "cycle": 31596,
+            "state": "1"
+          },
+          {
+            "cycle": 32212,
+            "state": "0"
+          },
+          {
+            "cycle": 32828,
+            "state": "1"
+          },
+          {
+            "cycle": 33444,
+            "state": "0"
+          },
+          {
+            "cycle": 34060,
+            "state": "1"
+          },
+          {
+            "cycle": 34676,
+            "state": "0"
+          },
+          {
+            "cycle": 35292,
+            "state": "1"
+          },
+          {
+            "cycle": 35908,
+            "state": "0"
+          },
+          {
+            "cycle": 36524,
+            "state": "1"
+          },
+          {
+            "cycle": 37140,
+            "state": "0"
+          },
+          {
+            "cycle": 37756,
+            "state": "1"
+          },
+          {
+            "cycle": 38372,
+            "state": "0"
+          },
+          {
+            "cycle": 38988,
+            "state": "1"
+          },
+          {
+            "cycle": 39604,
+            "state": "0"
+          },
+          {
+            "cycle": 40220,
+            "state": "1"
+          },
+          {
+            "cycle": 40836,
+            "state": "0"
+          },
+          {
+            "cycle": 41452,
+            "state": "1"
+          },
+          {
+            "cycle": 42068,
+            "state": "0"
+          },
+          {
+            "cycle": 42684,
+            "state": "1"
+          },
+          {
+            "cycle": 43300,
+            "state": "0"
+          },
+          {
+            "cycle": 43916,
+            "state": "1"
+          },
+          {
+            "cycle": 44532,
+            "state": "0"
+          },
+          {
+            "cycle": 45148,
+            "state": "1"
+          },
+          {
+            "cycle": 45764,
+            "state": "0"
+          },
+          {
+            "cycle": 46380,
+            "state": "1"
+          },
+          {
+            "cycle": 46996,
+            "state": "0"
+          },
+          {
+            "cycle": 47612,
+            "state": "1"
+          },
+          {
+            "cycle": 48228,
+            "state": "0"
+          },
+          {
+            "cycle": 48844,
+            "state": "1"
+          },
+          {
+            "cycle": 49460,
+            "state": "0"
+          },
+          {
+            "cycle": 50076,
+            "state": "1"
+          },
+          {
+            "cycle": 50692,
+            "state": "0"
+          },
+          {
+            "cycle": 51308,
+            "state": "1"
+          },
+          {
+            "cycle": 51924,
+            "state": "0"
+          },
+          {
+            "cycle": 52540,
+            "state": "1"
+          },
+          {
+            "cycle": 53156,
+            "state": "0"
+          },
+          {
+            "cycle": 53772,
+            "state": "1"
+          },
+          {
+            "cycle": 54388,
+            "state": "0"
+          },
+          {
+            "cycle": 55004,
+            "state": "1"
+          },
+          {
+            "cycle": 55620,
+            "state": "0"
+          },
+          {
+            "cycle": 56236,
+            "state": "1"
+          },
+          {
+            "cycle": 56852,
+            "state": "0"
+          },
+          {
+            "cycle": 57468,
+            "state": "1"
+          },
+          {
+            "cycle": 58084,
+            "state": "0"
+          },
+          {
+            "cycle": 58700,
+            "state": "1"
+          },
+          {
+            "cycle": 59316,
+            "state": "0"
+          },
+          {
+            "cycle": 59932,
+            "state": "1"
+          },
+          {
+            "cycle": 60548,
+            "state": "0"
+          },
+          {
+            "cycle": 61164,
+            "state": "1"
+          },
+          {
+            "cycle": 61780,
+            "state": "0"
+          },
+          {
+            "cycle": 62396,
+            "state": "1"
+          },
+          {
+            "cycle": 63012,
+            "state": "0"
+          },
+          {
+            "cycle": 63628,
+            "state": "1"
+          },
+          {
+            "cycle": 64244,
+            "state": "0"
+          },
+          {
+            "cycle": 64860,
+            "state": "1"
+          },
+          {
+            "cycle": 65476,
+            "state": "0"
+          },
+          {
+            "cycle": 66092,
+            "state": "1"
+          },
+          {
+            "cycle": 53811,
+            "state": "0"
+          },
+          {
+            "cycle": 55043,
+            "state": "1"
+          },
+          {
+            "cycle": 55659,
+            "state": "0"
+          },
+          {
+            "cycle": 56275,
+            "state": "1"
+          },
+          {
+            "cycle": 56891,
+            "state": "0"
+          },
+          {
+            "cycle": 57507,
+            "state": "1"
+          },
+          {
+            "cycle": 58123,
+            "state": "0"
+          },
+          {
+            "cycle": 58739,
+            "state": "1"
+          },
+          {
+            "cycle": 59355,
+            "state": "0"
+          },
+          {
+            "cycle": 59971,
+            "state": "1"
+          },
+          {
+            "cycle": 60587,
+            "state": "0"
+          },
+          {
+            "cycle": 61203,
+            "state": "1"
+          },
+          {
+            "cycle": 61819,
+            "state": "0"
+          },
+          {
+            "cycle": 62435,
+            "state": "1"
+          },
+          {
+            "cycle": 63051,
+            "state": "0"
+          },
+          {
+            "cycle": 63667,
+            "state": "1"
+          },
+          {
+            "cycle": 64283,
+            "state": "0"
+          },
+          {
+            "cycle": 64899,
+            "state": "1"
+          },
+          {
+            "cycle": 65515,
+            "state": "0"
+          },
+          {
+            "cycle": 66131,
+            "state": "1"
+          },
+          {
+            "cycle": 66747,
+            "state": "0"
+          },
+          {
+            "cycle": 67363,
+            "state": "1"
+          },
+          {
+            "cycle": 67979,
+            "state": "0"
+          },
+          {
+            "cycle": 68595,
+            "state": "1"
+          },
+          {
+            "cycle": 69211,
+            "state": "0"
+          },
+          {
+            "cycle": 69827,
+            "state": "1"
+          },
+          {
+            "cycle": 70443,
+            "state": "0"
+          },
+          {
+            "cycle": 71059,
+            "state": "1"
+          },
+          {
+            "cycle": 71675,
+            "state": "0"
+          },
+          {
+            "cycle": 72291,
+            "state": "1"
+          },
+          {
+            "cycle": 72907,
+            "state": "0"
+          },
+          {
+            "cycle": 73523,
+            "state": "1"
+          },
+          {
+            "cycle": 74139,
+            "state": "0"
+          },
+          {
+            "cycle": 74755,
+            "state": "1"
+          },
+          {
+            "cycle": 75371,
+            "state": "0"
+          },
+          {
+            "cycle": 75987,
+            "state": "1"
+          },
+          {
+            "cycle": 76603,
+            "state": "0"
+          },
+          {
+            "cycle": 77219,
+            "state": "1"
+          },
+          {
+            "cycle": 77835,
+            "state": "0"
+          },
+          {
+            "cycle": 78451,
+            "state": "1"
+          },
+          {
+            "cycle": 79067,
+            "state": "0"
+          },
+          {
+            "cycle": 79683,
+            "state": "1"
+          },
+          {
+            "cycle": 80299,
+            "state": "0"
+          },
+          {
+            "cycle": 80915,
+            "state": "1"
+          },
+          {
+            "cycle": 81531,
+            "state": "0"
+          },
+          {
+            "cycle": 82147,
+            "state": "1"
+          },
+          {
+            "cycle": 82763,
+            "state": "0"
+          },
+          {
+            "cycle": 83379,
+            "state": "1"
+          },
+          {
+            "cycle": 83995,
+            "state": "0"
+          },
+          {
+            "cycle": 84611,
+            "state": "1"
+          },
+          {
+            "cycle": 85227,
+            "state": "0"
+          },
+          {
+            "cycle": 85843,
+            "state": "1"
+          },
+          {
+            "cycle": 86459,
+            "state": "0"
+          },
+          {
+            "cycle": 87075,
+            "state": "1"
+          },
+          {
+            "cycle": 87691,
+            "state": "0"
+          },
+          {
+            "cycle": 88307,
+            "state": "1"
+          },
+          {
+            "cycle": 88923,
+            "state": "0"
+          },
+          {
+            "cycle": 89539,
+            "state": "1"
+          },
+          {
+            "cycle": 90155,
+            "state": "0"
+          },
+          {
+            "cycle": 90771,
+            "state": "1"
+          },
+          {
+            "cycle": 91387,
+            "state": "0"
+          },
+          {
+            "cycle": 92003,
+            "state": "1"
+          },
+          {
+            "cycle": 92619,
+            "state": "0"
+          },
+          {
+            "cycle": 93235,
+            "state": "1"
+          },
+          {
+            "cycle": 93851,
+            "state": "0"
+          },
+          {
+            "cycle": 94467,
+            "state": "1"
+          },
+          {
+            "cycle": 95083,
+            "state": "0"
+          },
+          {
+            "cycle": 95699,
+            "state": "1"
+          },
+          {
+            "cycle": 96315,
+            "state": "0"
+          },
+          {
+            "cycle": 96931,
+            "state": "1"
+          },
+          {
+            "cycle": 97547,
+            "state": "0"
+          },
+          {
+            "cycle": 98163,
+            "state": "1"
+          },
+          {
+            "cycle": 98779,
+            "state": "0"
+          },
+          {
+            "cycle": 99395,
+            "state": "1"
+          },
+          {
+            "cycle": 87114,
+            "state": "0"
+          },
+          {
+            "cycle": 88346,
+            "state": "1"
+          },
+          {
+            "cycle": 88962,
+            "state": "0"
+          },
+          {
+            "cycle": 89578,
+            "state": "1"
+          },
+          {
+            "cycle": 90194,
+            "state": "0"
+          },
+          {
+            "cycle": 90810,
+            "state": "1"
+          },
+          {
+            "cycle": 91426,
+            "state": "0"
+          },
+          {
+            "cycle": 92042,
+            "state": "1"
+          },
+          {
+            "cycle": 92658,
+            "state": "0"
+          },
+          {
+            "cycle": 93274,
+            "state": "1"
+          },
+          {
+            "cycle": 93890,
+            "state": "0"
+          },
+          {
+            "cycle": 94506,
+            "state": "1"
+          },
+          {
+            "cycle": 95122,
+            "state": "0"
+          },
+          {
+            "cycle": 95738,
+            "state": "1"
+          },
+          {
+            "cycle": 96354,
+            "state": "0"
+          },
+          {
+            "cycle": 96970,
+            "state": "1"
+          },
+          {
+            "cycle": 97586,
+            "state": "0"
+          },
+          {
+            "cycle": 98202,
+            "state": "1"
+          },
+          {
+            "cycle": 98818,
+            "state": "0"
+          },
+          {
+            "cycle": 99434,
+            "state": "1"
+          },
+          {
+            "cycle": 100050,
+            "state": "0"
+          },
+          {
+            "cycle": 100666,
+            "state": "1"
+          },
+          {
+            "cycle": 101282,
+            "state": "0"
+          },
+          {
+            "cycle": 101898,
+            "state": "1"
+          },
+          {
+            "cycle": 102514,
+            "state": "0"
+          },
+          {
+            "cycle": 103130,
+            "state": "1"
+          },
+          {
+            "cycle": 103746,
+            "state": "0"
+          },
+          {
+            "cycle": 104362,
+            "state": "1"
+          },
+          {
+            "cycle": 104978,
+            "state": "0"
+          },
+          {
+            "cycle": 105594,
+            "state": "1"
+          },
+          {
+            "cycle": 106210,
+            "state": "0"
+          },
+          {
+            "cycle": 106826,
+            "state": "1"
+          },
+          {
+            "cycle": 107442,
+            "state": "0"
+          },
+          {
+            "cycle": 108058,
+            "state": "1"
+          },
+          {
+            "cycle": 108674,
+            "state": "0"
+          },
+          {
+            "cycle": 109290,
+            "state": "1"
+          },
+          {
+            "cycle": 109906,
+            "state": "0"
+          },
+          {
+            "cycle": 110522,
+            "state": "1"
+          },
+          {
+            "cycle": 111138,
+            "state": "0"
+          },
+          {
+            "cycle": 111754,
+            "state": "1"
+          },
+          {
+            "cycle": 112370,
+            "state": "0"
+          },
+          {
+            "cycle": 112986,
+            "state": "1"
+          },
+          {
+            "cycle": 113602,
+            "state": "0"
+          },
+          {
+            "cycle": 114218,
+            "state": "1"
+          },
+          {
+            "cycle": 114834,
+            "state": "0"
+          },
+          {
+            "cycle": 115450,
+            "state": "1"
+          },
+          {
+            "cycle": 116066,
+            "state": "0"
+          },
+          {
+            "cycle": 116682,
+            "state": "1"
+          },
+          {
+            "cycle": 117298,
+            "state": "0"
+          },
+          {
+            "cycle": 117914,
+            "state": "1"
+          },
+          {
+            "cycle": 118530,
+            "state": "0"
+          },
+          {
+            "cycle": 119146,
+            "state": "1"
+          },
+          {
+            "cycle": 119762,
+            "state": "0"
+          },
+          {
+            "cycle": 120378,
+            "state": "1"
+          },
+          {
+            "cycle": 120994,
+            "state": "0"
+          },
+          {
+            "cycle": 121610,
+            "state": "1"
+          },
+          {
+            "cycle": 122226,
+            "state": "0"
+          },
+          {
+            "cycle": 122842,
+            "state": "1"
+          },
+          {
+            "cycle": 123458,
+            "state": "0"
+          },
+          {
+            "cycle": 124074,
+            "state": "1"
+          },
+          {
+            "cycle": 124690,
+            "state": "0"
+          },
+          {
+            "cycle": 125306,
+            "state": "1"
+          },
+          {
+            "cycle": 125922,
+            "state": "0"
+          },
+          {
+            "cycle": 126538,
+            "state": "1"
+          },
+          {
+            "cycle": 127154,
+            "state": "0"
+          },
+          {
+            "cycle": 127770,
+            "state": "1"
+          },
+          {
+            "cycle": 128386,
+            "state": "0"
+          },
+          {
+            "cycle": 129002,
+            "state": "1"
+          },
+          {
+            "cycle": 129618,
+            "state": "0"
+          },
+          {
+            "cycle": 130234,
+            "state": "1"
+          },
+          {
+            "cycle": 130850,
+            "state": "0"
+          },
+          {
+            "cycle": 131466,
+            "state": "1"
+          },
+          {
+            "cycle": 132082,
+            "state": "0"
+          },
+          {
+            "cycle": 132698,
+            "state": "1"
+          }
+        ],
+        "mode": "af",
+        "func": "I2C1_SCL",
+        "edge_count": 297
+      },
+      {
+        "ch": 1,
+        "channel": "CH1",
+        "peripheral": "gpiob",
+        "pin": 7,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 96,
+            "value": 1
+          },
+          {
+            "cycle": 33322,
+            "value": 0
+          },
+          {
+            "cycle": 33324,
+            "value": 1
+          },
+          {
+            "cycle": 33330,
+            "value": 0
+          },
+          {
+            "cycle": 33332,
+            "value": 1
+          },
+          {
+            "cycle": 33338,
+            "value": 0
+          },
+          {
+            "cycle": 33342,
+            "value": 1
+          },
+          {
+            "cycle": 33346,
+            "value": 0
+          },
+          {
+            "cycle": 33348,
+            "value": 1
+          },
+          {
+            "cycle": 33350,
+            "value": 0
+          },
+          {
+            "cycle": 33360,
+            "value": 1
+          },
+          {
+            "cycle": 33366,
+            "value": 0
+          },
+          {
+            "cycle": 33368,
+            "value": 1
+          },
+          {
+            "cycle": 33376,
+            "value": 0
+          },
+          {
+            "cycle": 33380,
+            "value": 1
+          },
+          {
+            "cycle": 33384,
+            "value": 0
+          },
+          {
+            "cycle": 33394,
+            "value": 1
+          },
+          {
+            "cycle": 33396,
+            "value": 0
+          },
+          {
+            "cycle": 33398,
+            "value": 1
+          },
+          {
+            "cycle": 19892,
+            "value": 0
+          },
+          {
+            "cycle": 21124,
+            "value": 1
+          },
+          {
+            "cycle": 24820,
+            "value": 0
+          },
+          {
+            "cycle": 26052,
+            "value": 1
+          },
+          {
+            "cycle": 29748,
+            "value": 0
+          },
+          {
+            "cycle": 32212,
+            "value": 1
+          },
+          {
+            "cycle": 38372,
+            "value": 0
+          },
+          {
+            "cycle": 39604,
+            "value": 1
+          },
+          {
+            "cycle": 40836,
+            "value": 0
+          },
+          {
+            "cycle": 43300,
+            "value": 1
+          },
+          {
+            "cycle": 46996,
+            "value": 0
+          },
+          {
+            "cycle": 48228,
+            "value": 1
+          },
+          {
+            "cycle": 53156,
+            "value": 0
+          },
+          {
+            "cycle": 54388,
+            "value": 1
+          },
+          {
+            "cycle": 55620,
+            "value": 0
+          },
+          {
+            "cycle": 61780,
+            "value": 1
+          },
+          {
+            "cycle": 63012,
+            "value": 0
+          },
+          {
+            "cycle": 64244,
+            "value": 1
+          },
+          {
+            "cycle": 65476,
+            "value": 0
+          },
+          {
+            "cycle": 66708,
+            "value": 1
+          },
+          {
+            "cycle": 53195,
+            "value": 0
+          },
+          {
+            "cycle": 54427,
+            "value": 1
+          },
+          {
+            "cycle": 58123,
+            "value": 0
+          },
+          {
+            "cycle": 59355,
+            "value": 1
+          },
+          {
+            "cycle": 63051,
+            "value": 0
+          },
+          {
+            "cycle": 65515,
+            "value": 1
+          },
+          {
+            "cycle": 71675,
+            "value": 0
+          },
+          {
+            "cycle": 72907,
+            "value": 1
+          },
+          {
+            "cycle": 75371,
+            "value": 0
+          },
+          {
+            "cycle": 76603,
+            "value": 1
+          },
+          {
+            "cycle": 80299,
+            "value": 0
+          },
+          {
+            "cycle": 81531,
+            "value": 1
+          },
+          {
+            "cycle": 86459,
+            "value": 0
+          },
+          {
+            "cycle": 87691,
+            "value": 1
+          },
+          {
+            "cycle": 90155,
+            "value": 0
+          },
+          {
+            "cycle": 91387,
+            "value": 1
+          },
+          {
+            "cycle": 95083,
+            "value": 0
+          },
+          {
+            "cycle": 97547,
+            "value": 1
+          },
+          {
+            "cycle": 98779,
+            "value": 0
+          },
+          {
+            "cycle": 100011,
+            "value": 1
+          },
+          {
+            "cycle": 86498,
+            "value": 0
+          },
+          {
+            "cycle": 87730,
+            "value": 1
+          },
+          {
+            "cycle": 91426,
+            "value": 0
+          },
+          {
+            "cycle": 92658,
+            "value": 1
+          },
+          {
+            "cycle": 96354,
+            "value": 0
+          },
+          {
+            "cycle": 98818,
+            "value": 1
+          },
+          {
+            "cycle": 106210,
+            "value": 0
+          },
+          {
+            "cycle": 109906,
+            "value": 1
+          },
+          {
+            "cycle": 113602,
+            "value": 0
+          },
+          {
+            "cycle": 114834,
+            "value": 1
+          },
+          {
+            "cycle": 119762,
+            "value": 0
+          },
+          {
+            "cycle": 130850,
+            "value": 1
+          },
+          {
+            "cycle": 132082,
+            "value": 0
+          },
+          {
+            "cycle": 133314,
+            "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 96,
+            "state": "1"
+          },
+          {
+            "cycle": 33322,
+            "state": "0"
+          },
+          {
+            "cycle": 33324,
+            "state": "1"
+          },
+          {
+            "cycle": 33330,
+            "state": "0"
+          },
+          {
+            "cycle": 33332,
+            "state": "1"
+          },
+          {
+            "cycle": 33338,
+            "state": "0"
+          },
+          {
+            "cycle": 33342,
+            "state": "1"
+          },
+          {
+            "cycle": 33346,
+            "state": "0"
+          },
+          {
+            "cycle": 33348,
+            "state": "1"
+          },
+          {
+            "cycle": 33350,
+            "state": "0"
+          },
+          {
+            "cycle": 33360,
+            "state": "1"
+          },
+          {
+            "cycle": 33366,
+            "state": "0"
+          },
+          {
+            "cycle": 33368,
+            "state": "1"
+          },
+          {
+            "cycle": 33376,
+            "state": "0"
+          },
+          {
+            "cycle": 33380,
+            "state": "1"
+          },
+          {
+            "cycle": 33384,
+            "state": "0"
+          },
+          {
+            "cycle": 33394,
+            "state": "1"
+          },
+          {
+            "cycle": 33396,
+            "state": "0"
+          },
+          {
+            "cycle": 33398,
+            "state": "1"
+          },
+          {
+            "cycle": 19892,
+            "state": "0"
+          },
+          {
+            "cycle": 21124,
+            "state": "1"
+          },
+          {
+            "cycle": 24820,
+            "state": "0"
+          },
+          {
+            "cycle": 26052,
+            "state": "1"
+          },
+          {
+            "cycle": 29748,
+            "state": "0"
+          },
+          {
+            "cycle": 32212,
+            "state": "1"
+          },
+          {
+            "cycle": 38372,
+            "state": "0"
+          },
+          {
+            "cycle": 39604,
+            "state": "1"
+          },
+          {
+            "cycle": 40836,
+            "state": "0"
+          },
+          {
+            "cycle": 43300,
+            "state": "1"
+          },
+          {
+            "cycle": 46996,
+            "state": "0"
+          },
+          {
+            "cycle": 48228,
+            "state": "1"
+          },
+          {
+            "cycle": 53156,
+            "state": "0"
+          },
+          {
+            "cycle": 54388,
+            "state": "1"
+          },
+          {
+            "cycle": 55620,
+            "state": "0"
+          },
+          {
+            "cycle": 61780,
+            "state": "1"
+          },
+          {
+            "cycle": 63012,
+            "state": "0"
+          },
+          {
+            "cycle": 64244,
+            "state": "1"
+          },
+          {
+            "cycle": 65476,
+            "state": "0"
+          },
+          {
+            "cycle": 66708,
+            "state": "1"
+          },
+          {
+            "cycle": 53195,
+            "state": "0"
+          },
+          {
+            "cycle": 54427,
+            "state": "1"
+          },
+          {
+            "cycle": 58123,
+            "state": "0"
+          },
+          {
+            "cycle": 59355,
+            "state": "1"
+          },
+          {
+            "cycle": 63051,
+            "state": "0"
+          },
+          {
+            "cycle": 65515,
+            "state": "1"
+          },
+          {
+            "cycle": 71675,
+            "state": "0"
+          },
+          {
+            "cycle": 72907,
+            "state": "1"
+          },
+          {
+            "cycle": 75371,
+            "state": "0"
+          },
+          {
+            "cycle": 76603,
+            "state": "1"
+          },
+          {
+            "cycle": 80299,
+            "state": "0"
+          },
+          {
+            "cycle": 81531,
+            "state": "1"
+          },
+          {
+            "cycle": 86459,
+            "state": "0"
+          },
+          {
+            "cycle": 87691,
+            "state": "1"
+          },
+          {
+            "cycle": 90155,
+            "state": "0"
+          },
+          {
+            "cycle": 91387,
+            "state": "1"
+          },
+          {
+            "cycle": 95083,
+            "state": "0"
+          },
+          {
+            "cycle": 97547,
+            "state": "1"
+          },
+          {
+            "cycle": 98779,
+            "state": "0"
+          },
+          {
+            "cycle": 100011,
+            "state": "1"
+          },
+          {
+            "cycle": 86498,
+            "state": "0"
+          },
+          {
+            "cycle": 87730,
+            "state": "1"
+          },
+          {
+            "cycle": 91426,
+            "state": "0"
+          },
+          {
+            "cycle": 92658,
+            "state": "1"
+          },
+          {
+            "cycle": 96354,
+            "state": "0"
+          },
+          {
+            "cycle": 98818,
+            "state": "1"
+          },
+          {
+            "cycle": 106210,
+            "state": "0"
+          },
+          {
+            "cycle": 109906,
+            "state": "1"
+          },
+          {
+            "cycle": 113602,
+            "state": "0"
+          },
+          {
+            "cycle": 114834,
+            "state": "1"
+          },
+          {
+            "cycle": 119762,
+            "state": "0"
+          },
+          {
+            "cycle": 130850,
+            "state": "1"
+          },
+          {
+            "cycle": 132082,
+            "state": "0"
+          },
+          {
+            "cycle": 133314,
+            "state": "1"
+          }
+        ],
+        "mode": "af",
+        "func": "I2C1_SDA",
+        "edge_count": 73
+      },
+      {
+        "ch": 2,
+        "channel": "CH2",
+        "peripheral": "gpiob",
+        "pin": 8,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 133860,
+            "value": 1
+          },
+          {
+            "cycle": 137862,
+            "value": 0
+          },
+          {
+            "cycle": 141865,
+            "value": 1
+          },
+          {
+            "cycle": 145867,
+            "value": 0
+          },
+          {
+            "cycle": 149870,
+            "value": 1
+          },
+          {
+            "cycle": 153872,
+            "value": 0
+          },
+          {
+            "cycle": 157875,
+            "value": 1
+          },
+          {
+            "cycle": 161877,
+            "value": 0
+          },
+          {
+            "cycle": 165880,
+            "value": 1
+          },
+          {
+            "cycle": 169882,
+            "value": 0
+          },
+          {
+            "cycle": 173885,
+            "value": 1
+          },
+          {
+            "cycle": 177887,
+            "value": 0
+          },
+          {
+            "cycle": 181890,
+            "value": 1
+          },
+          {
+            "cycle": 185892,
+            "value": 0
+          },
+          {
+            "cycle": 189895,
+            "value": 1
+          },
+          {
+            "cycle": 193897,
+            "value": 0
+          },
+          {
+            "cycle": 197900,
+            "value": 1
+          },
+          {
+            "cycle": 201902,
+            "value": 0
+          },
+          {
+            "cycle": 205905,
+            "value": 1
+          },
+          {
+            "cycle": 209907,
+            "value": 0
+          },
+          {
+            "cycle": 213910,
+            "value": 1
+          },
+          {
+            "cycle": 217912,
+            "value": 0
+          },
+          {
+            "cycle": 221915,
+            "value": 1
+          },
+          {
+            "cycle": 225917,
+            "value": 0
+          },
+          {
+            "cycle": 229920,
+            "value": 1
+          },
+          {
+            "cycle": 233922,
+            "value": 0
+          },
+          {
+            "cycle": 237925,
+            "value": 1
+          },
+          {
+            "cycle": 241927,
+            "value": 0
+          },
+          {
+            "cycle": 245930,
+            "value": 1
+          },
+          {
+            "cycle": 249932,
+            "value": 0
+          },
+          {
+            "cycle": 253935,
+            "value": 1
+          },
+          {
+            "cycle": 257937,
+            "value": 0
+          },
+          {
+            "cycle": 261940,
+            "value": 1
+          },
+          {
+            "cycle": 265942,
+            "value": 0
+          },
+          {
+            "cycle": 269945,
+            "value": 1
+          },
+          {
+            "cycle": 273947,
+            "value": 0
+          },
+          {
+            "cycle": 277950,
+            "value": 1
+          },
+          {
+            "cycle": 281952,
+            "value": 0
+          },
+          {
+            "cycle": 285955,
+            "value": 1
+          },
+          {
+            "cycle": 289957,
+            "value": 0
+          },
+          {
+            "cycle": 293960,
+            "value": 1
+          },
+          {
+            "cycle": 297962,
+            "value": 0
+          },
+          {
+            "cycle": 301965,
+            "value": 1
+          },
+          {
+            "cycle": 305967,
+            "value": 0
+          },
+          {
+            "cycle": 309970,
+            "value": 1
+          },
+          {
+            "cycle": 313972,
+            "value": 0
+          },
+          {
+            "cycle": 317975,
+            "value": 1
+          },
+          {
+            "cycle": 321977,
+            "value": 0
+          },
+          {
+            "cycle": 325980,
+            "value": 1
+          },
+          {
+            "cycle": 329982,
+            "value": 0
+          },
+          {
+            "cycle": 333985,
+            "value": 1
+          },
+          {
+            "cycle": 337987,
+            "value": 0
+          },
+          {
+            "cycle": 341990,
+            "value": 1
+          },
+          {
+            "cycle": 345992,
+            "value": 0
+          },
+          {
+            "cycle": 349995,
+            "value": 1
+          },
+          {
+            "cycle": 353997,
+            "value": 0
+          },
+          {
+            "cycle": 358000,
+            "value": 1
+          },
+          {
+            "cycle": 362002,
+            "value": 0
+          },
+          {
+            "cycle": 366005,
+            "value": 1
+          },
+          {
+            "cycle": 370007,
+            "value": 0
+          },
+          {
+            "cycle": 374010,
+            "value": 1
+          },
+          {
+            "cycle": 378012,
+            "value": 0
+          },
+          {
+            "cycle": 382015,
+            "value": 1
+          },
+          {
+            "cycle": 386017,
+            "value": 0
+          },
+          {
+            "cycle": 390020,
+            "value": 1
+          },
+          {
+            "cycle": 394022,
+            "value": 0
+          },
+          {
+            "cycle": 398025,
+            "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 41,
+            "state": "0"
+          },
+          {
+            "cycle": 133860,
+            "state": "1"
+          },
+          {
+            "cycle": 137862,
+            "state": "0"
+          },
+          {
+            "cycle": 141865,
+            "state": "1"
+          },
+          {
+            "cycle": 145867,
+            "state": "0"
+          },
+          {
+            "cycle": 149870,
+            "state": "1"
+          },
+          {
+            "cycle": 153872,
+            "state": "0"
+          },
+          {
+            "cycle": 157875,
+            "state": "1"
+          },
+          {
+            "cycle": 161877,
+            "state": "0"
+          },
+          {
+            "cycle": 165880,
+            "state": "1"
+          },
+          {
+            "cycle": 169882,
+            "state": "0"
+          },
+          {
+            "cycle": 173885,
+            "state": "1"
+          },
+          {
+            "cycle": 177887,
+            "state": "0"
+          },
+          {
+            "cycle": 181890,
+            "state": "1"
+          },
+          {
+            "cycle": 185892,
+            "state": "0"
+          },
+          {
+            "cycle": 189895,
+            "state": "1"
+          },
+          {
+            "cycle": 193897,
+            "state": "0"
+          },
+          {
+            "cycle": 197900,
+            "state": "1"
+          },
+          {
+            "cycle": 201902,
+            "state": "0"
+          },
+          {
+            "cycle": 205905,
+            "state": "1"
+          },
+          {
+            "cycle": 209907,
+            "state": "0"
+          },
+          {
+            "cycle": 213910,
+            "state": "1"
+          },
+          {
+            "cycle": 217912,
+            "state": "0"
+          },
+          {
+            "cycle": 221915,
+            "state": "1"
+          },
+          {
+            "cycle": 225917,
+            "state": "0"
+          },
+          {
+            "cycle": 229920,
+            "state": "1"
+          },
+          {
+            "cycle": 233922,
+            "state": "0"
+          },
+          {
+            "cycle": 237925,
+            "state": "1"
+          },
+          {
+            "cycle": 241927,
+            "state": "0"
+          },
+          {
+            "cycle": 245930,
+            "state": "1"
+          },
+          {
+            "cycle": 249932,
+            "state": "0"
+          },
+          {
+            "cycle": 253935,
+            "state": "1"
+          },
+          {
+            "cycle": 257937,
+            "state": "0"
+          },
+          {
+            "cycle": 261940,
+            "state": "1"
+          },
+          {
+            "cycle": 265942,
+            "state": "0"
+          },
+          {
+            "cycle": 269945,
+            "state": "1"
+          },
+          {
+            "cycle": 273947,
+            "state": "0"
+          },
+          {
+            "cycle": 277950,
+            "state": "1"
+          },
+          {
+            "cycle": 281952,
+            "state": "0"
+          },
+          {
+            "cycle": 285955,
+            "state": "1"
+          },
+          {
+            "cycle": 289957,
+            "state": "0"
+          },
+          {
+            "cycle": 293960,
+            "state": "1"
+          },
+          {
+            "cycle": 297962,
+            "state": "0"
+          },
+          {
+            "cycle": 301965,
+            "state": "1"
+          },
+          {
+            "cycle": 305967,
+            "state": "0"
+          },
+          {
+            "cycle": 309970,
+            "state": "1"
+          },
+          {
+            "cycle": 313972,
+            "state": "0"
+          },
+          {
+            "cycle": 317975,
+            "state": "1"
+          },
+          {
+            "cycle": 321977,
+            "state": "0"
+          },
+          {
+            "cycle": 325980,
+            "state": "1"
+          },
+          {
+            "cycle": 329982,
+            "state": "0"
+          },
+          {
+            "cycle": 333985,
+            "state": "1"
+          },
+          {
+            "cycle": 337987,
+            "state": "0"
+          },
+          {
+            "cycle": 341990,
+            "state": "1"
+          },
+          {
+            "cycle": 345992,
+            "state": "0"
+          },
+          {
+            "cycle": 349995,
+            "state": "1"
+          },
+          {
+            "cycle": 353997,
+            "state": "0"
+          },
+          {
+            "cycle": 358000,
+            "state": "1"
+          },
+          {
+            "cycle": 362002,
+            "state": "0"
+          },
+          {
+            "cycle": 366005,
+            "state": "1"
+          },
+          {
+            "cycle": 370007,
+            "state": "0"
+          },
+          {
+            "cycle": 374010,
+            "state": "1"
+          },
+          {
+            "cycle": 378012,
+            "state": "0"
+          },
+          {
+            "cycle": 382015,
+            "state": "1"
+          },
+          {
+            "cycle": 386017,
+            "state": "0"
+          },
+          {
+            "cycle": 390020,
+            "state": "1"
+          },
+          {
+            "cycle": 394022,
+            "state": "0"
+          },
+          {
+            "cycle": 398025,
+            "state": "1"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 67
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpioa",
+      "number": 15,
+      "mode": "af",
+      "func": "I2C1_SCL",
+      "output": false,
+      "input": false,
+      "pad": true,
+      "drive": "1"
+    },
+    {
+      "pin": "CH1",
+      "peripheral": "gpiob",
+      "number": 7,
+      "mode": "af",
+      "func": "I2C1_SDA",
+      "output": false,
+      "input": false,
+      "pad": true,
+      "drive": "1"
+    },
+    {
+      "pin": "CH2",
+      "peripheral": "gpiob",
+      "number": 8,
+      "mode": "output",
+      "func": null,
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "G431KB_BME280_OK id=0x60 temp=0x082DC0",
+        "cycle_lo": 130000,
+        "cycle": 140000,
+        "end_cycle": 140000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "i2c_addresses": [
+    119
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 3696,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 3696,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 131072,
+    "ram_total_bytes": 22528,
+    "flash_used_pct": 2.82,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 22528,
+    "main_stack_high_water_bytes": 24,
+    "main_stack_free_min_bytes": 22504,
+    "main_stack_base": 536870912,
+    "main_stack_top": 536893440,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 22528,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 22504,
+    "heap_base": 536870912,
+    "heap_top": 536893440
+  },
+  "metrics": {
+    "cycles": 400000,
+    "instructions": 400000,
+    "steps_executed": 400000,
+    "memory_reads": 467,
+    "memory_writes": 66500,
+    "peripheral_accesses": 19227,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134221342,
+        "count": 158,
+        "symbol": "<u32>::unchecked_add"
+      },
+      {
+        "pc": 134221348,
+        "count": 156,
+        "symbol": "core::hint::black_box"
+      },
+      {
+        "pc": 134221360,
+        "count": 156,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 134221340,
+        "count": 117,
+        "symbol": "core::hint::black_box"
+      },
+      {
+        "pc": 134221344,
+        "count": 117,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 134221356,
+        "count": 117,
+        "symbol": "core::hint::black_box"
+      },
+      {
+        "pc": 134221358,
+        "count": 117,
+        "symbol": "<u32>::unchecked_add"
+      },
+      {
+        "pc": 134221364,
+        "count": 117,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 134219136,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134219158,
+        "count": 39,
+        "symbol": "firmware_nucleo_g431kb_bme280_smoke::wait_for"
+      },
+      {
+        "pc": 134219186,
+        "count": 39,
+        "symbol": "firmware_nucleo_g431kb_bme280_smoke::wait_for"
+      },
+      {
+        "pc": 134219266,
+        "count": 39,
+        "symbol": "firmware_nucleo_g431kb_bme280_smoke::wait_for"
+      },
+      {
+        "pc": 134219292,
+        "count": 39,
+        "symbol": "firmware_nucleo_g431kb_bme280_smoke::wait_for"
+      },
+      {
+        "pc": 134219322,
+        "count": 39,
+        "symbol": "firmware_nucleo_g431kb_bme280_smoke::wait_for"
+      },
+      {
+        "pc": 134219362,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134219384,
+        "count": 39,
+        "symbol": "firmware_nucleo_g431kb_bme280_smoke::wait_for"
+      }
+    ]
+  }
+}

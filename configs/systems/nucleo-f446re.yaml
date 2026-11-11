@@ -1,0 +1,16 @@
+# ST NUCLEO-F446RE (MB1136) focused GPIO + VCP profile, based on UM1724.
+# LD2 is active-high on PA5. The default solder-bridge setup routes USART2
+# PA2/PA3 to the ST-LINK virtual COM port. ST-LINK USB/debug, external clock
+# sources, and unlisted F446 peripherals are not modeled by this profile.
+name: "nucleo-f446re"
+chip: "../chips/stm32f446re.yaml"
+cpu_hz: 16_000_000
+debug_uart: "usart2"
+external_devices: []
+board_io:
+  - id: "led_ld2"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true

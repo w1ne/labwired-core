@@ -23,8 +23,8 @@ const IRQ_PIN_MASK: u32 = (1 << 22) - 1;
 const GPIO_INTR_SOURCE: u32 = 16;
 
 /// `GPIO_FUNCn_OUT_SEL_CFG_REG` base (C3 TRM §5.12): per-PAD output routing.
-/// Bits [8:0] select which peripheral output signal drives pad `n`; the sentinel
-/// `SIG_GPIO_OUT` (128) means the pad is a plain GPIO output (GPIO_OUT latch).
+/// Bits [8:0] select which peripheral output signal drives pad `n`; C3/C6 use
+/// sentinel 128 and C5/C61 use 256 for plain GPIO output (GPIO_OUT latch).
 const FUNC_OUT_SEL: u64 = 0x554;
 /// `GPIO_FUNCn_IN_SEL_CFG_REG` base. The C3 input matrix is indexed by
 /// peripheral signal rather than GPIO pad; I²C0 uses signal indices 53/54.
@@ -32,6 +32,8 @@ const FUNC_IN_SEL: u64 = 0x154;
 const INPUT_SIGNAL_COUNT: usize = 128;
 const MATRIX_INPUT_SELECT: u32 = 1 << 6;
 const SIG_GPIO_OUT: u32 = 128;
+/// ESP32-C5/C61 select the GPIO_OUT latch with signal 256.
+const SIG_GPIO_OUT_C5_C61: u32 = 256;
 /// GPIO-matrix output signal indices of the I²C0 controller (esp-idf
 /// `soc/esp32c3/include/soc/gpio_sig_map.h`).
 const SIG_I2CEXT0_SCL: u32 = 53;
@@ -101,6 +103,8 @@ pub(crate) struct MatrixLayout {
     pub(crate) fspiq: u32,
     pub(crate) fspid: u32,
     pub(crate) fspics0: u32,
+    /// Signal index that selects the GPIO_OUT latch for a plain output pad.
+    pub(crate) gpio_out_select: u32,
     /// `LEDC_LS_SIG_OUT0_IDX` (45 on the C3, 0 on the C6), or `None` where
     /// this model does not bind the LEDC outputs.
     pub(crate) ledc_ls_out0: Option<u32>,
@@ -115,6 +119,7 @@ pub(crate) const C3_MATRIX: MatrixLayout = MatrixLayout {
     fspiq: 64,
     fspid: SIG_FSPID,
     fspics0: SIG_FSPICS0,
+    gpio_out_select: SIG_GPIO_OUT,
     ledc_ls_out0: Some(SIG_LEDC_LS_OUT0),
     in_sel: crate::peripherals::esp_gpio_net::InSelLayout {
         pad_mask: 0x1F,
@@ -130,11 +135,31 @@ pub(crate) const C6_MATRIX: MatrixLayout = MatrixLayout {
     fspiq: 64,
     fspid: 65,
     fspics0: 68,
+    gpio_out_select: SIG_GPIO_OUT,
     // `soc/esp32c6/include/soc/gpio_sig_map.h`: LEDC_LS_SIG_OUT0..5_IDX = 0..5.
     ledc_ls_out0: Some(0),
     in_sel: crate::peripherals::esp_gpio_net::InSelLayout {
         pad_mask: 0x3F,
         sel_bit: 1 << 7,
+    },
+};
+
+/// The ESP32-C5/C61 I²C0 matrix subset. Both parts use I2CEXT0 signal IDs
+/// 46/47, selector windows at the C5/C61 GPIO offsets, and SIG_GPIO_OUT_IDX
+/// 256. Other matrix functions are deliberately not claimed by this adapter.
+pub(crate) const C5_C61_MATRIX: MatrixLayout = MatrixLayout {
+    i2c_scl: 46,
+    i2c_sda: 47,
+    // Keep unmodelled C5 signal blocks out of the recognized-route subset.
+    fspiclk: u32::MAX,
+    fspiq: u32::MAX,
+    fspid: u32::MAX,
+    fspics0: u32::MAX,
+    gpio_out_select: SIG_GPIO_OUT_C5_C61,
+    ledc_ls_out0: None,
+    in_sel: crate::peripherals::esp_gpio_net::InSelLayout {
+        pad_mask: 0x7F,
+        sel_bit: 1 << 8,
     },
 };
 
@@ -230,8 +255,14 @@ pub struct Esp32c3Gpio {
     /// `ETS_GPIO_INTR_SOURCE` of the chip this block sits on: 16 on the C3,
     /// 30 on the C6 (which reuses this model).
     intr_source: u32,
-    /// Matrix numbering of the chip this block sits on (C3 or C6).
+    /// Matrix numbering of the chip this block sits on (C3, C5, C6 or C61).
     layout: MatrixLayout,
+    /// C5/C61 keep the OUT register head but move GPIO_ENABLE, GPIO_IN, and
+    /// both GPIO-matrix selector windows. C61 also moves the PINn registers.
+    /// Normalize the supported register subset to this model's C3-offset map.
+    c5_register_map: bool,
+    /// C61 also shifts the GPIO enable/input/matrix windows and the PINn base.
+    c61_register_map: bool,
     /// Peripheral input signals bound to wire lines (`FUNCn_IN_SEL_CFG`).
     in_routes: crate::peripherals::esp_gpio_net::MatrixInputs,
     /// Pads on a world `gpio_net` ([`PinPort::join_wire`]).
@@ -270,6 +301,8 @@ impl Esp32c3Gpio {
             irq_watch: Default::default(),
             intr_source: GPIO_INTR_SOURCE,
             layout: C3_MATRIX,
+            c5_register_map: false,
+            c61_register_map: false,
             in_routes: Default::default(),
             net_pads: 0,
             wire_edges: Vec::new(),
@@ -297,8 +330,62 @@ impl Esp32c3Gpio {
         }
     }
 
-    /// Wire the shared I²C0 line-level cell (the same `Arc` the C3 I²C bit
-    /// engine drives) so matrix-routed pads carry the real waveform.
+    /// ESP32-C5 GPIO subset: direct GPIO0..25 plus the I²C0 matrix selectors.
+    /// OUT/W1TS/W1TC share the C3 offsets, ENABLE is at 0x34..0x3C, IN is at
+    /// 0x64, and matrix selectors start at 0x2D4/0xAD4 (ESP-IDF C5
+    /// `gpio_reg.h`). Other matrix signals and GPIO26..28 are outside this
+    /// adapter.
+    pub fn for_esp32c5() -> Self {
+        Self {
+            layout: C5_C61_MATRIX,
+            c5_register_map: true,
+            out_sel: [SIG_GPIO_OUT_C5_C61; PIN_COUNT as usize],
+            ..Self::new()
+        }
+    }
+
+    /// ESP32-C61 direct GPIO0..25 output and I²C0 matrix subset. Register
+    /// offsets, I2CEXT0 signal IDs, selector fields, and
+    /// `SIG_GPIO_OUT_IDX=256` come from Espressif's C61 TRM / ESP-IDF headers.
+    /// Other peripheral matrix routes and GPIO26..29 are not claimed.
+    pub fn for_esp32c61() -> Self {
+        Self {
+            layout: C5_C61_MATRIX,
+            c61_register_map: true,
+            out_sel: [SIG_GPIO_OUT_C5_C61; PIN_COUNT as usize],
+            ..Self::with_intr_source(27)
+        }
+    }
+
+    fn normalize_register_offset(&self, offset: u64) -> u64 {
+        if !self.c5_register_map && !self.c61_register_map {
+            return offset;
+        }
+        let word = offset & !3;
+        let byte = offset & 3;
+        if (self.c5_register_map || self.c61_register_map)
+            && (0x2D4..0x2D4 + (INPUT_SIGNAL_COUNT as u64) * 4).contains(&word)
+        {
+            return FUNC_IN_SEL + (word - 0x2D4) + byte;
+        }
+        if (0xAD4..0xAD4 + (PIN_COUNT as u64) * 4).contains(&word) {
+            return FUNC_OUT_SEL + (word - 0xAD4) + byte;
+        }
+        if self.c61_register_map && (0xD4..0xD4 + (PIN_COUNT as u64) * 4).contains(&word) {
+            return PIN0 + (word - 0xD4) + byte;
+        }
+        let canonical = match word {
+            0x34 => ENABLE,
+            0x38 => ENABLE_W1TS,
+            0x3C => ENABLE_W1TC,
+            0x64 => IN,
+            _ => return offset,
+        };
+        canonical | byte
+    }
+
+    /// Wire the shared I²C0 line-level cell (the same `Arc` the C3/C5/C61 I²C
+    /// bit engine drives) so matrix-routed pads carry the real waveform.
     pub(crate) fn set_i2c_lines(&mut self, lines: std::sync::Arc<super::i2c::I2cLineLevels>) {
         // Bind every pad to both I²C signals through the shared routing seam;
         // which one is live at any moment is decided by the output matrix.
@@ -578,7 +665,7 @@ impl Esp32c3Gpio {
             Pull::None
         };
         if let Some(sig) = self.matrix_signal(pin) {
-            if sig != SIG_GPIO_OUT {
+            if sig != self.layout.gpio_out_select {
                 // The peripheral says what its output stage does: a line it
                 // drives drives the pad; a released or input line does not.
                 return self
@@ -655,6 +742,13 @@ impl Esp32c3Gpio {
     /// controller outputs are enabled and routed there *and* both controller
     /// inputs select the same pads.
     fn refresh_i2c_matrix_route(&mut self) {
+        // Layouts without modeled I²C signal IDs use u32::MAX sentinels. The
+        // C61 exposes only its I2CEXT0 pair in this matrix subset.
+        if self.layout.i2c_sda >= INPUT_SIGNAL_COUNT as u32
+            || self.layout.i2c_scl >= INPUT_SIGNAL_COUNT as u32
+        {
+            return;
+        }
         let mut sda_output_mask = 0u32;
         let mut scl_output_mask = 0u32;
         for pin in 0..PIN_COUNT as usize {
@@ -1027,6 +1121,7 @@ impl Peripheral for Esp32c3Gpio {
     /// every status/interrupt register stays [`SideEffecting`](MmioAccessClass::SideEffecting)
     /// so a display bit-bang or an INT_ST poll still disqualifies the skip.
     fn mmio_access_class(&self, offset: u64) -> MmioAccessClass {
+        let offset = self.normalize_register_offset(offset);
         match offset & !3 {
             IN | STRAP => MmioAccessClass::SideEffectFree,
             _ => MmioAccessClass::SideEffecting,
@@ -1038,6 +1133,7 @@ impl Peripheral for Esp32c3Gpio {
     }
 
     fn read(&self, offset: u64) -> SimResult<u8> {
+        let offset = self.normalize_register_offset(offset);
         let word_off = offset & !3;
         let byte_off = (offset & 3) * 8;
         let word = self.read_word(word_off);
@@ -1045,12 +1141,14 @@ impl Peripheral for Esp32c3Gpio {
     }
 
     fn peek(&self, offset: u64) -> Option<u8> {
+        let offset = self.normalize_register_offset(offset);
         let word_off = offset & !3;
         let byte_off = (offset & 3) * 8;
         Some(((self.read_word(word_off) >> byte_off) & 0xFF) as u8)
     }
 
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        let offset = self.normalize_register_offset(offset);
         let word_off = offset & !3;
         let byte_off = offset & 3;
         self.mutate_pads(|g| {
@@ -1072,6 +1170,7 @@ impl Peripheral for Esp32c3Gpio {
     }
 
     fn write_u16(&mut self, offset: u64, value: u16) -> SimResult<()> {
+        let offset = self.normalize_register_offset(offset);
         if offset & 1 == 0 {
             let word_off = offset & !3;
             let shift = (offset & 3) * 8;
@@ -1092,6 +1191,7 @@ impl Peripheral for Esp32c3Gpio {
     }
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        let offset = self.normalize_register_offset(offset);
         if offset & 3 == 0 {
             self.mutate_pads(|g| g.with_own_drive_edges(offset, |g| g.write_word(offset, value)));
             Ok(())
@@ -1105,7 +1205,13 @@ impl Peripheral for Esp32c3Gpio {
 
     fn snapshot(&self) -> serde_json::Value {
         serde_json::json!({
-            "layout": "esp32c3",
+            "layout": if self.c61_register_map {
+                "esp32c61_direct_gpio_i2c_matrix"
+            } else if self.c5_register_map {
+                "esp32c5_direct_gpio_i2c_matrix"
+            } else {
+                "esp32c3"
+            },
             "odr": self.out,
             "idr": self.effective_input(),
             "enable": self.enable,
@@ -1153,7 +1259,7 @@ impl Peripheral for Esp32c3Gpio {
         }
         // Output driver enabled: consult the per-pad output-matrix selector.
         let sig = self.out_sel[pin as usize] & 0x1FF;
-        if sig == SIG_GPIO_OUT {
+        if sig == self.layout.gpio_out_select {
             // Pad driven directly by the GPIO_OUT latch — a plain GPIO output.
             Some(GpioRouting {
                 mode: GpioMode::Output,

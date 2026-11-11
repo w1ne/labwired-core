@@ -10,6 +10,7 @@ This page covers the public models. For every chip we model — public and priva
 |------|-------|--------|-------------|------------------------|----------|---------------|
 | esp32c3 | **L2** | ✓ | 40 | 380/402 (94%) | 190 | firmware_survival::test_esp32c3_demo_survival |
 | esp32c6 | **L1** | ✓ | 69 | — | — | firmware_survival::test_esp32c6_demo_survival |
+| esp32c5 | **L0** | ✓ | 3 | — | — | — |
 | litex-vexriscv | **L1** | ✓ | 5 | — | — | firmware_survival::test_litex_vexriscv_smoke_survival |
 | arty-litex-vexriscv | **L1** | ✓ | 6 | — | — | firmware_survival::test_arty_litex_smoke_survival |
 | vegaboard-ri5cy | **L1** | ✓ | 9 | — | — | firmware_survival::test_vegaboard_ri5cy_smoke_survival |
@@ -44,6 +45,7 @@ This page covers the public models. For every chip we model — public and priva
 | nrf54lm20a | **L1** | ✓ | 31 | — | — | nrf54lm20a_peripheral_estate::the_estate_answers_at_its_own_addresses |
 | esp32 | **L1** | ✓ | 32 | — | — | firmware_survival::test_esp32_tier1_survival |
 | esp32s3 | **L1** | ✓ | 14 | — | — | firmware_survival::test_esp32s3_tier1_survival |
+| esp32s2 | **L1** | ✓ | 1 | — | — | firmware_survival::test_esp32s2_uart_smoke |
 | esp32s3-zero | **L1** | ✓ | 17 | — | — | firmware_survival::test_esp32s3_zero_tier1_survival |
 | esp32-devkitc-32e-gpio-smoke | **L1** | ✓ | 3 | — | — | firmware_survival::test_esp32_devkitc_32e_gpio_smoke_tier1_survival |
 | esp32-devkitc-32e-uart1 | **L0** | ✓ | 3 | — | — | — |
@@ -93,6 +95,7 @@ This page covers the public models. For every chip we model — public and priva
 | stm32g0b1re | **L0** | ✓ | 21 | — | — | — |
 | stm32g474re | **L1** | ✓ | 22 | — | — | firmware_survival::test_stm32g474_zephyr_survival |
 | stm32g431rb | **L0** | ✓ | 22 | — | — | — |
+| stm32g491re | **L0** | ✓ | 3 | — | — | — |
 | stm32h563 | **L1** | ✓ | 37 | — | — | firmware_survival::test_stm32h563_demo_survival |
 | stm32u575 | **L1** | ✓ | 43 | — | — | firmware_survival::test_stm32u575_zephyr_survival |
 | stm32u545 | **L1** | ✓ | 39 | — | — | firmware_survival::test_stm32u545_blinky_survival |

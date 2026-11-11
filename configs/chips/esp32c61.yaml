@@ -1,0 +1,71 @@
+# Narrow ESP32-C61 profile: HP-core flash/SRAM, UART0/PCR clock gate, GPIO, and
+# an I2C0 sensor route. Other MMIO is intentionally unmapped so
+# unsupported firmware faults instead of reading zeros from descriptors that
+# claim no behavior.
+name: "esp32c61"
+arch: "riscv"
+core: "rv32imac"
+registers_count: 31
+cpu_hz: 160_000_000
+
+flash:
+  # The external flash window starts at 0x4200_0000. The N8R2 module has 8 MiB;
+  # use KB because this config parser treats MB as decimal.
+  base: 0x42000000
+  size: "8192KB"
+ram:
+  # ESP32-C61 HP SRAM: 320 KiB at 0x4080_0000.
+  base: 0x40800000
+  size: "320KB"
+
+peripherals:
+  # C61 UART0 head matches the existing Espressif UART model at FIFO@0x00,
+  # INT_RAW@0x04, INT_ENA@0x0C, INT_CLR@0x10, CLKDIV@0x14, STATUS@0x1C,
+  # CONF0@0x20 and CONF1@0x24 (ESP-IDF C61 uart_reg.h). Interrupt source 40
+  # is UART0_INTR in the C61 TRM. The pin mux and USB bridge are not modeled;
+  # the UART FIFO stream is captured by debug_uart.
+  - id: "uart0"
+    type: "esp32c6_uart"
+    irq: 40
+    base_address: 0x60000000
+    size: "4KB"
+    clock: { controller: "pcr", reg: "UART0_CONF", bit: 0 }
+    config:
+      echo_stdout: true
+  # Direct GPIO0..25 output and I2C0 routing subset for the DevKitC-1 header.
+  # C61's GPIO block
+  # has GPIO_OUT at +0x04, W1TS/W1TC at +0x08/+0x0C, ENABLE at +0x34..+0x3C,
+  # and GPIO_IN at +0x64. The model uses C61's GPIO register offsets and
+  # SIG_GPIO_OUT_IDX=256; GPIO26..29, matrix functions other than I2C0,
+  # IO_MUX electrical behavior, and GPIO interrupt behavior remain outside
+  # this profile.
+  # GPIO4 is exposed at J1 pin 3 on ESP32-C61-DevKitC-1 v2.0.
+  - id: "gpio"
+    type: "esp32c61_gpio"
+    base_address: 0x60091000
+    # GPIO_EXT begins at +0xE00. Keep the unmapped extension out of this window.
+    size: "3584"
+  # C61 PCR UART0_CONF (+0x00) and UART0_SCLK_CONF (+0x04) use the same
+  # clock-enable offsets and bits as the C6. The shared model enforces CLK_EN
+  # at the bus gate; reset and clock-frequency behavior remain partial.
+  - id: "pcr"
+    type: "esp32c61_pcr"
+    base_address: 0x60096000
+    size: "4KB"
+  # C61 has one I2C controller at 0x60004000. Its command-list head and
+  # I2CEXT0 signal map match the C3/C5 engine; source 45 and the 160 MHz
+  # simulation clock are C61-specific. PCR gates are enforced at I2C_CONF.
+  - id: "i2c0"
+    type: "esp32c61_i2c"
+    irq: 45
+    base_address: 0x60004000
+    size: "4KB"
+    clock: { controller: "pcr", reg: "I2C_CONF", bit: 0 }
+  # C61 IO_MUX words provide storage for GPIO function selection and input
+  # enable. Electrical pull-ups and reset behavior are not modeled here.
+  - id: "io_mux"
+    type: "declarative"
+    base_address: 0x60090000
+    size: "4KB"
+    config:
+      path: "../peripherals/esp32c6/io_mux.yaml"

@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      1073811472,
+      536870912,
+      8192,
+      7850,
+      0,
+      0,
+      0,
+      536891376,
+      0,
+      0,
+      0,
+      0,
+      0,
+      536891376,
+      134219833,
+      134219780
+    ],
+    "pc": 134219780,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 200000,
+  "cycles": 200000,
+  "instructions": 200000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 200000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 200000
+    }
+  },
+  "limits": {
+    "max_steps": 200000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "a66eec850ea23f5182a6d6bf4e944b1a0e2f1300300388c54015a602d0e39560",
+  "config": {
+    "firmware": "examples/stm32f103-bluepill/../../target/thumbv7m-none-eabi/release/firmware-stm32f103-bluepill-smoke",
+    "system": "examples/stm32f103-bluepill/../../configs/systems/stm32f103-bluepill.yaml",
+    "script": "examples/stm32f103-bluepill/io-smoke.yaml"
+  }
+}

@@ -1,0 +1,10 @@
+# Reads the BME280 ID and raw-temperature registers over the DevKitC I2C0 pins.
+schema_version: "1.0"
+inputs:
+  firmware: "./firmware/.pio/build/devkitc_n16r8/firmware.elf"
+  system: "../../configs/systems/esp32s3-devkitc-1-n16r8-bme280.yaml"
+limits:
+  max_steps: 50000000
+assertions:
+  - uart_contains: "ESP32S3_DEVKITC1_N16R8_BME280_OK ID=0x60 TEMP_RAW=0x082DC0 I2C0=GPIO8/GPIO9"
+  - expected_stop_reason: max_steps

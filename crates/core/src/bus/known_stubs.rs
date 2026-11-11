@@ -1009,7 +1009,7 @@ pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
     (
         "usb_serial_jtag",
         "ESP32-S3 USB-Serial-JTAG window. The S3 console path is wired by the Xtensa builder; \
-         this YAML entry carries only a debug_schema. Used by: esp32s3-zero.",
+         this YAML entry carries only a debug_schema. Used by: esp32s3-zero, esp32s3-xiao.",
     ),
     (
         "usbhub",

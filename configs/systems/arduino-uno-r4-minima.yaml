@@ -5,11 +5,17 @@
 # See the LICENSE file in the project root for full license information.
 #
 # Arduino Uno R4 Minima (R7FA4M1AB). SIM-DERIVED — not silicon-verified.
-# USB CDC Serial is not attached; smoke uses SCI2 on the D0/D1 header.
+# USB CDC Serial is not attached; smoke uses SCI2 on D0/D1 and IIC1 with an
+# external BME280 on the A4/A5 header bus (P101/P100).
 
 name: "arduino-uno-r4-minima"
 chip: "../chips/ra4m1.yaml"
-external_devices: []
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "iic1"
+    config:
+      i2c_address: 0x76
 board_io:
   - id: "led_d13"
     kind: "led"

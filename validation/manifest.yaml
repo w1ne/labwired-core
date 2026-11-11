@@ -2710,7 +2710,12 @@ boards:
     # the live capture reads the clock-gated window as bus junk (0x0008fe10).
     # This acknowledges model drift, NOT a recapture.
     # Re-stamped 2026-11-08 (round 347) over both changes above after merging main.
-    drift_ack_digest: afcf8ea391f732b54fbedeea7e983b71a7ca9cc41a2c4000073c9ab7b0f93971
+    # 2026-11-11: the shared esp32c3/gpio.rs now carries C5/C61 register layouts
+    # and direct-output signal IDs. C3 still uses C3_MATRIX (signal 128), the
+    # original register offsets, and the same I2C matrix signals; the new C61
+    # normalization and C5 initialization branches do not run for C3. This is
+    # a model-file drift acknowledgement, NOT a new silicon capture.
+    drift_ack_digest: 653a54c96030e9e904c03ebfa0b546983f01afb4935f13b0d13b0af4521cb91a
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -3587,7 +3592,7 @@ boards:
     # capture in lib.rs). The C3 factory does not use that classic sleep-reboot
     # path; no C3 register map or captured reset-state window changes.
     # ACK, NOT A CAPTURE.
-    drift_ack: 2026-11-10
+    drift_ack: 2026-11-11
 
   - id: nucleo-l476rg
     # 2026-11-05: reviewed G0 DMA extension in shared UART/DMA source. Strict
@@ -8974,8 +8979,11 @@ boards:
     # models gained program/erase + WEL behaviour so stock Preferences/NVS
     # keeps its writes. This is not an S3 reset-state recapture; the nine
     # captured S3 windows are unchanged. ACK, NOT A CAPTURE.
-    drift_ack: 2026-11-10
-    drift_ack_digest: c30213b480a08adac0801cc2ebe2947169beaadcd9bd2d11b8cfd601c1286102
+    # Re-stamped 2026-11-11 after reviewing the #1759 source drift. The C61
+    # additions are in C5/C61-specific paths and do not change S3's GPIO model.
+    # ACK, NOT A CAPTURE.
+    drift_ack: 2026-11-11
+    drift_ack_digest: 9ff4a1a368ce45c036cd5360749032b37ff0b288c3a8d2a12689daa2d75dfaa3
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.
@@ -10378,6 +10386,26 @@ boards:
       # 2026-11-07: RMT is the shared C3 model at C6 source 49 (`esp32c6_rmt`).
       # SIM-DERIVED — no silicon ack implied.
       - crates/core/src/peripherals/esp32c3/rmt.rs
+  - id: esp32h2-devkitm-1
+    doc: docs/boards/esp32h2-devkitm-1.md
+    chip: configs/chips/esp32h2.yaml
+    tier: smoke-manual
+    note: "ESP32-H2-DevKitM-1-N4S narrow profile. A bare-metal RV32IMAC smoke reads a BME280 over H2 I2C0 on GPIO4/GPIO5, captures a UART0 marker, and toggles GPIO10 through the H2 direct-output subset. ESP32-family demand rank 1 is carried from the survey; H2 has no individual survey rank. The physical UART-to-USB bridge route, IO_MUX electrical behavior, clock tree, I2C1, Thread/Zigbee, BLE, USB Serial/JTAG, flash boot/XIP, and the addressable RGB LED are not modeled. Simulator evidence only; no silicon capture or physical pin-voltage claim."
+    offline_tests: []
+    models:
+      - crates/core/src/cpu/riscv.rs
+      - crates/core/src/decoder/riscv.rs
+      - crates/core/src/peripherals/esp_uart.rs
+      - crates/core/src/peripherals/esp32h2/factory.rs
+      - crates/core/src/peripherals/esp32h2/gpio.rs
+      - crates/core/src/peripherals/esp32h2/uart.rs
+      - crates/core/src/peripherals/esp32c3/i2c.rs
+      - crates/core/src/bus/attach.rs
+      - crates/core/src/peripherals/generic_factory.rs
+      - crates/core/src/peripherals/mod.rs
+      - crates/core/src/bus/from_config.rs
+      - configs/chips/esp32h2.yaml
+      - configs/systems/esp32h2-devkitm-1-n4s.yaml
   - id: litex-vexriscv
     # 2026-10-19: first RISC-V soft-core SoC in the engine (LiteX VexRiscv,
     # RV32IM). SIM-DERIVED — no silicon capture and no executing-fidelity

@@ -1,0 +1,10 @@
+# WCH CH32V003F4P6-EVT-R0-1v1 polled USART1 smoke.
+# PD5/USART1_TX is exposed at the MCU I/O header for a 3.3 V USB-serial adapter.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/ch32v003f4p6-uart-hello.elf"
+  system: "../../configs/systems/ch32v003evt.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "Hello from CH32V003"

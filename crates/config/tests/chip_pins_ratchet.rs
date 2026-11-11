@@ -117,6 +117,8 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     "stm32g071",
     // G431RB is the G474RE's smaller sibling: same PA/PB/PC label form.
     "stm32g431rb",
+    // G491RE shares the standard STM32 PA/PB/PC label form as well.
+    "stm32g491re",
     "stm32g474re",
     "stm32h563",
     "stm32h735",

@@ -1,0 +1,12 @@
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c61-smoke"
+  system: "../../configs/systems/esp32c61-devkitc-1-n8r2.yaml"
+limits:
+  max_steps: 500000
+assertions:
+  - uart_contains: "ESP32C61_DEVKITC1_UART0_OK"
+  - gpio_edges:
+      pin: "gpio:4"
+      min_edges: 8
+  - expected_stop_reason: max_steps

@@ -1,0 +1,26 @@
+# ST NUCLEO-G431KB (MB1430), plus an external BME280 at I2C address 0x77.
+# UM2397 default solder bridges map Nano A5/SCL to PA15, A4/SDA to PB7,
+# LD2 to PB8, and ST-LINK VCP to USART2 on PA2/PA3.
+name: "nucleo-g431kb-bme280"
+chip: "../chips/stm32g431kb.yaml"
+cpu_hz: 170_000_000
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c1"
+    route:
+      scl: "PA15"
+      sda: "PB7"
+    config:
+      i2c_address: 0x77
+board_io:
+  - id: "led_ld2"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 8
+    signal: "output"
+    active_high: true
+connectors:
+  - type: "uart"
+    peripheral: "usart2"
+    endpoint: "host_console"

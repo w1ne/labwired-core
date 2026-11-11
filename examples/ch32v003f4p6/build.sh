@@ -5,9 +5,12 @@ example_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH='' cd -- "$example_dir/../.." && pwd)
 output="$repo_root/tests/fixtures/ch32v003f4p6-blink.elf"
 hello_output="$repo_root/tests/fixtures/ch32v003f4p6-uart-hello.elf"
+bme280_output="$repo_root/tests/fixtures/ch32v003f4p6-bme280.elf"
 
 if [ -n "${RISCV_CC:-}" ]; then
     cc=$RISCV_CC
+elif command -v riscv-wch-elf-gcc >/dev/null 2>&1; then
+    cc=riscv-wch-elf-gcc
 elif command -v riscv-none-elf-gcc >/dev/null 2>&1; then
     cc=riscv-none-elf-gcc
 elif command -v riscv64-unknown-elf-gcc >/dev/null 2>&1; then
@@ -19,14 +22,27 @@ else
     exit 127
 fi
 
+"$cc" --version | sed -n '1p'
+
 mkdir -p "$(dirname -- "$output")"
+build_dir=$(mktemp -d)
+trap 'rm -rf "$build_dir"' EXIT HUP INT TERM
+
+# Compile to named object files before linking. Linking sources in one GCC
+# invocation gives the temporary cc*.o file a random name in the ELF symbol
+# table; named intermediate objects keep the checked-in fixture reproducible.
 "$cc" \
     -march=rv32e -mabi=ilp32e -Os \
     -ffreestanding -fno-builtin -fno-pic -fno-pie \
-    -nostdlib -nostartfiles \
-    -Wl,-T,"$example_dir/link.x" -Wl,--no-relax \
-    -o "$output" \
-    "$example_dir/start.S" "$example_dir/main.c"
+    -c -o "$build_dir/blink-start.o" "$example_dir/start.S"
+"$cc" \
+    -march=rv32e -mabi=ilp32e -Os \
+    -ffreestanding -fno-builtin -fno-pic -fno-pie \
+    -c -o "$build_dir/blink-main.o" "$example_dir/main.c"
+"$cc" \
+    -march=rv32e -mabi=ilp32e -nostdlib -nostartfiles \
+    -Wl,-T,"$example_dir/link.x" -Wl,--no-relax -Wl,--build-id=none \
+    -o "$output" "$build_dir/blink-start.o" "$build_dir/blink-main.o"
 
 printf 'Built %s\n' "$output"
 
@@ -35,9 +51,27 @@ printf 'Built %s\n' "$output"
 "$cc" \
     -march=rv32ec -mabi=ilp32e -Os \
     -ffreestanding -fno-builtin -fno-pic -fno-pie \
-    -nostdlib -nostartfiles \
-    -Wl,-T,"$example_dir/link.x" -Wl,--no-relax \
-    -o "$hello_output" \
-    "$example_dir/start.S" "$example_dir/uart_hello.c"
+    -c -o "$build_dir/uart-start.o" "$example_dir/start.S"
+"$cc" \
+    -march=rv32ec -mabi=ilp32e -Os \
+    -ffreestanding -fno-builtin -fno-pic -fno-pie \
+    -c -o "$build_dir/uart-hello.o" "$example_dir/uart_hello.c"
+"$cc" \
+    -march=rv32ec -mabi=ilp32e -nostdlib -nostartfiles \
+    -Wl,-T,"$example_dir/link.x" -Wl,--no-relax -Wl,--build-id=none \
+    -o "$hello_output" "$build_dir/uart-start.o" "$build_dir/uart-hello.o"
 
 printf 'Built %s\n' "$hello_output"
+
+# The BME280 smoke also uses RV32EC. Reuse the stable startup object and build
+# the firmware that reads BME280.CHIP_ID over the CH32V003's hardware I2C1.
+"$cc" \
+    -march=rv32ec -mabi=ilp32e -Os \
+    -ffreestanding -fno-builtin -fno-pic -fno-pie \
+    -c -o "$build_dir/bme280-smoke.o" "$example_dir/bme280_smoke.c"
+"$cc" \
+    -march=rv32ec -mabi=ilp32e -nostdlib -nostartfiles \
+    -Wl,-T,"$example_dir/link.x" -Wl,--no-relax -Wl,--build-id=none \
+    -o "$bme280_output" "$build_dir/uart-start.o" "$build_dir/bme280-smoke.o"
+
+printf 'Built %s\n' "$bme280_output"

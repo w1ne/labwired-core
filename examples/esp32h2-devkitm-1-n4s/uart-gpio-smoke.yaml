@@ -1,0 +1,13 @@
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/riscv32imac-unknown-none-elf/release/firmware-esp32h2-devkitm-1-smoke"
+  system: "../../configs/systems/esp32h2-devkitm-1-n4s.yaml"
+limits:
+  max_steps: 500000
+assertions:
+  - uart_contains: "ESP32H2_BME280_OK"
+  - uart_contains: "ESP32H2_UART0_OK"
+  - gpio_edges:
+      pin: "gpio:10"
+      min_edges: 8
+  - expected_stop_reason: max_steps

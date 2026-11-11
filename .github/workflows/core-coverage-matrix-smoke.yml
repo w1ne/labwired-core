@@ -113,11 +113,11 @@ jobs:
             system: examples/pybadge/system.yaml
           - id: arduino-uno-r4-minima
             target: thumbv7em-none-eabi
-            crate: firmware-ra4m1-demo
+            crate: firmware-ra4m1-bme280-smoke
             profile: release
             profile_dir: release
-            script: examples/arduino-uno-r4-minima/uart-smoke.yaml
-            system: examples/arduino-uno-r4-minima/system.yaml
+            script: examples/arduino-uno-r4-minima/bme280-smoke.yaml
+            system: configs/systems/arduino-uno-r4-minima.yaml
           - id: teensy-41
             target: thumbv7em-none-eabi
             crate: firmware-imxrt1064-demo
@@ -487,10 +487,9 @@ jobs:
               - configs/systems/stm32-catalog/stm32f407vg.yaml
               - configs/systems/stm32-catalog/stm32f407ze.yaml
               - configs/systems/stm32-catalog/stm32f407zg.yaml
-          # WCH CH32V003F4P6 — the first WCH cell, and the only one here that
-          # executes RV32E code. The firmware is a committed ELF built from
-          # examples/ch32v003f4p6 (start.S/main.c, -march=rv32e -mabi=ilp32e),
-          # so the cell needs no cross toolchain on the runner.
+          # WCH CH32V003F4P6 — the first WCH coverage entries, and the only
+          # cells here that execute RV32E/EC firmware. They use committed ELFs
+          # built from examples/ch32v003f4p6, so they need no cross toolchain.
           #
           # Its assertion is `gpio_edges: gpioc:0, min_edges: 2` — the compiled
           # blink must actually toggle a pad. That is the point of the cell:
@@ -500,9 +499,17 @@ jobs:
           # profiles is the RV32E guard in riscv.rs, pinned separately by
           # crates/core/src/cpu/riscv_ch32v003_tests.rs. This cell proves the
           # chip boots real firmware end to end and drives a real peripheral.
+          # The USART1 cell checks polled TX, and the BME280 cell checks the
+          # WCH-default PC1/PC2 I2C1 route and legacy I2C master model.
           - id: ch32v003f4p6-blink
-            script: examples/ch32v003f4p6/io-smoke.yaml
-            system: examples/ch32v003f4p6/system.yaml
+            script: examples/ch32v003f4p6/evt-smoke.yaml
+            system: configs/systems/ch32v003evt.yaml
+          - id: ch32v003evt-usart1
+            script: examples/ch32v003f4p6/evt-uart-smoke.yaml
+            system: configs/systems/ch32v003evt.yaml
+          - id: ch32v003evt-bme280-i2c1
+            script: examples/ch32v003f4p6/bme280-smoke.yaml
+            system: configs/systems/ch32v003evt-bme280.yaml
 
     steps:
       - uses: actions/checkout@v4

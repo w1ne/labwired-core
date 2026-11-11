@@ -25,10 +25,12 @@ The DevKitC-1 carrier includes:
    `usb_serial_jtag`. The DevKitC-1's primary console remains the USB-UART
    bridge on UART0; this is the second Type-C / CDC-ACM path.
 
-## Adding an external device (I²C / SPI sensor, etc.)
+## I²C sensor example
 
-There is nothing to attach yet on this target: the C6's I2C0 (0x6000_4000),
-SPI0/1/2 and GDMA windows are deliberately not declared, so an
-`external_devices` entry would have no bus to sit on. Add the controller model
-first (see [`docs/peripherals.md`](../../docs/peripherals.md)), then follow the
-`external_devices` attach pattern in `examples/demo-blinky/`.
+The C6 chip descriptor now declares a behavioral I2C0 controller
+(`esp32c3_i2c` model at `0x6000_4000`) and the board pin matrix routes it to
+GPIO pads. The runnable
+[`ESP32-C6-DevKitC-1-N8 + BME280 example`](../esp32c6-devkitc-1-n8-bme280/)
+attaches an Adafruit BME280 model at `0x77` on GPIO6/GPIO7 and verifies its
+chip ID and raw temperature. This proves simulated I²C traffic and the sensor
+response; it does not prove electrical behavior on a physical bus.

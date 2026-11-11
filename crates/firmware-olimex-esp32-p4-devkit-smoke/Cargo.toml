@@ -1,0 +1,13 @@
+[package]
+name = "firmware-olimex-esp32-p4-devkit-smoke"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "GPIO2 onboard LED smoke firmware for Olimex ESP32-P4-DevKit."
+build = "build.rs"
+
+[[bin]]
+name = "firmware-olimex-esp32-p4-devkit-smoke"
+path = "src/main.rs"
+test = false
+bench = false

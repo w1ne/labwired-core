@@ -61,6 +61,10 @@ CARGO_BUILD_RUSTC_WRAPPER= scripts/onboarding_smoke.sh \
 
 The committed evidence includes the CLI and firmware build logs, smoke output, structured verdict, and onboarding metrics.
 
+The same firmware and script run in the `nucleo-f103rb-bme280` entry of
+`.github/workflows/core-onboarding-smoke.yml` on nightly runs, main-tip pushes,
+and manual dispatch. This slow onboarding workflow is not a pull request check.
+
 Recorded result: **PASS, 3/3 assertions**, 400,000 simulation steps. The UART
 captured `NUCLEO_F103RB_BME280_OK ID=0x60 I2C1=PB8/PB9`; LD2 exceeded the
 32-edge minimum after the read succeeded.

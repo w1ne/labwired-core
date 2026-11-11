@@ -1,0 +1,24 @@
+{
+  "tool": "labwired_verify",
+  "date": "2026-11-11",
+  "board": "nucleo-g474re",
+  "status": "failed",
+  "run_status": "fail",
+  "stop_reason": "max_steps",
+  "oracle": {
+    "gpio_edges": [
+      {
+        "pin": "PA8",
+        "min_edges": 4
+      }
+    ]
+  },
+  "oracle_result": "PA8 transitioned 0 times; expected at least 4",
+  "gaps": [
+    {
+      "code": "approximation",
+      "detail": "No power net drives the MCU; VDD was assumed ideal."
+    }
+  ],
+  "claim": "not model-verified"
+}

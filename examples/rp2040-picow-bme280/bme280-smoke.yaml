@@ -1,0 +1,11 @@
+# RP2040 I2C0 transaction to an external BME280 attached to the Pico W profile.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-rp2040-picow-bme280-smoke"
+  system: "../../configs/systems/rp2040-picow-bme280.yaml"
+limits:
+  max_steps: 400000
+assertions:
+  - uart_contains: "BME280_ID=0x60"
+  - uart_contains: "PICOW_BME280_OK ID=0x60 TEMP_RAW=0x082DC0 I2C0=GP4/GP5"
+  - expected_stop_reason: max_steps

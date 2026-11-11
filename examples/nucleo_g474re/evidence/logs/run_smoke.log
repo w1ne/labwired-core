@@ -1,0 +1,5 @@
+2026-11-11T05:43:01.883268Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../configs/chips/stm32g474re.yaml
+2026-11-11T05:43:01.900194Z  INFO labwired_loader: ELF Entry Point: 0x8000009
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+PASS  2/2 checks · tim1-pwm-smoke · 4000 steps · 0.00s
