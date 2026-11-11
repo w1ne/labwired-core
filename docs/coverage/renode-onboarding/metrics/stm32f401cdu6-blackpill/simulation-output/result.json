@@ -34,7 +34,8 @@
           "BLACKPILL F401 SMOKE",
           "systick wrap=1 pending=1 countflag=read-clear clear=1 ok",
           "systick irq entries>=2 vector=15 ipsr=15 return=1 ok",
-          "systick priority flags=000001FF ok",
+          "systick priority flags=000007FF ok",
+          "pendsv clear pending=1 fresh repend=1 ok",
           "rcc apb1=00620001 ok",
           "led pc13 odr=00002000 ok",
           "tim2 arr=00000040 ok",
@@ -89,22 +90,22 @@
     "registers": [
       10,
       16383,
-      3221225472,
+      536871040,
       53,
       1073759232,
       0,
-      536871040,
+      192,
       536969208,
       0,
       0,
       0,
       192,
-      134271225,
+      134271775,
       536969024,
-      134265955,
-      134270434
+      134266421,
+      134270908
     ],
-    "pc": 134270434,
+    "pc": 134270908,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -117,7 +118,7 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "firmware_hash": "02e088f5236e3008cfec68df03a0efacdf5a97dc859d291e73c41128042459f6",
+  "firmware_hash": "2e7d44e13b2e2b05f30dd9ed5393898a457e2c7643a1ebb02285945313a70764",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-f401cdu6-blackpill-renode-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f401cdu6-blackpill.yaml",
@@ -480,23 +481,23 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 2643,
+            "cycle": 3107,
             "value": 1
           },
           {
-            "cycle": 2645,
+            "cycle": 3110,
             "value": 0
           },
           {
-            "cycle": 2647,
+            "cycle": 3112,
             "value": 1
           },
           {
-            "cycle": 2649,
+            "cycle": 3114,
             "value": 0
           },
           {
-            "cycle": 2654,
+            "cycle": 3117,
             "value": 1
           }
         ],
@@ -504,27 +505,27 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 2637,
+            "cycle": 3101,
             "state": "0"
           },
           {
-            "cycle": 2643,
+            "cycle": 3107,
             "state": "1"
           },
           {
-            "cycle": 2645,
+            "cycle": 3110,
             "state": "0"
           },
           {
-            "cycle": 2647,
+            "cycle": 3112,
             "state": "1"
           },
           {
-            "cycle": 2649,
+            "cycle": 3114,
             "state": "0"
           },
           {
-            "cycle": 2654,
+            "cycle": 3117,
             "state": "1"
           }
         ],
@@ -567,7 +568,13 @@
         "end_cycle": 10000
       },
       {
-        "text": "systick priority flags=000001FF ok",
+        "text": "systick priority flags=000007FF ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "pendsv clear pending=1 fresh repend=1 ok",
         "cycle_lo": 0,
         "cycle": 10000,
         "end_cycle": 10000
@@ -689,14 +696,14 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 53526,
+    "text_bytes": 54076,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 53526,
+    "flash_used_bytes": 54076,
     "ram_static_bytes": 0,
     "flash_total_bytes": 393216,
     "ram_total_bytes": 98304,
-    "flash_used_pct": 13.61,
+    "flash_used_pct": 13.75,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -722,25 +729,25 @@
     "cycles": 200000,
     "instructions": 200000,
     "steps_executed": 200000,
-    "memory_reads": 11925,
-    "memory_writes": 522,
-    "peripheral_accesses": 6980,
+    "memory_reads": 12159,
+    "memory_writes": 539,
+    "peripheral_accesses": 7070,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134270434,
+        "pc": 134270908,
         "count": 703,
         "symbol": "firmware_f401cdu6_blackpill_renode_smoke::main"
       },
       {
-        "pc": 134218134,
+        "pc": 134218098,
         "count": 39,
-        "symbol": "core::ptr::read_volatile"
+        "symbol": "firmware_f401cdu6_blackpill_renode_smoke::wait"
       },
       {
-        "pc": 134248500,
+        "pc": 134246050,
         "count": 39,
-        "symbol": "core::ptr::write_volatile"
+        "symbol": "firmware_f401cdu6_blackpill_renode_smoke::putc"
       }
     ]
   }

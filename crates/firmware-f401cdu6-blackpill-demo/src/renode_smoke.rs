@@ -188,12 +188,17 @@ fn main() -> ! {
         b"systick irq dispatch CHECK FAILED\r\n"
     });
     let systick_priority_flags = smoke_systick_pendsv_priority();
-    let systick_priority_ok = systick_priority_flags == 0x1FF;
+    let systick_priority_ok = systick_priority_flags == 0x7FF;
     line(
         b"systick priority flags=",
         systick_priority_flags,
         systick_priority_ok,
     );
+    send(if systick_priority_flags & 0x600 == 0x600 {
+        b"pendsv clear pending=1 fresh repend=1 ok\r\n"
+    } else {
+        b"pendsv clear/repend CHECK FAILED\r\n"
+    });
     passed |= ((systick_pending_ok && systick_dispatch_ok) as u32) << 12;
     passed |= (systick_priority_ok as u32) << 13;
 
@@ -540,8 +545,9 @@ fn smoke_systick_periodic_exception() -> bool {
     prior_primask == 0 && entries >= 2 && ipsr == 15 && vector_installed && stable_after_disable
 }
 
-/// A lower-priority PendSV requested by SysTick must wait until exception 15
-/// returns, then enter its own vector with the completed SysTick visible.
+/// PENDSVCLR must cancel a masked request, a fresh request must still dispatch,
+/// and a lower-priority PendSV requested by SysTick must wait until exception 15
+/// returns before entering its own vector.
 fn smoke_systick_pendsv_priority() -> u32 {
     const RELOAD: u32 = 63;
     const PENDSV_EXCEPTION: u32 = 14;
@@ -580,6 +586,66 @@ fn smoke_systick_pendsv_priority() -> u32 {
     wr(PENDSV_HANDLER_IPSR, 0);
     wr(SYSTICK_PENDSV_FLAGS, 0);
     wr(PENDSV_SYSTICK_COUNT_AT_ENTRY, 0);
+
+    // A software-pended PendSV can be cancelled before exception entry, even
+    // after the SCB has exposed it as pending. PRIMASK keeps the probe in thread
+    // mode until PENDSVCLR has taken effect; unmasking must not enter the stale
+    // request.
+    wr(SCB_ICSR, ICSR_PENDSVSET);
+    let pending_before_clear = rd(SCB_ICSR) & ICSR_PENDSVSET != 0;
+    wr(SCB_ICSR, ICSR_PENDSVCLR);
+    let pending_after_clear = rd(SCB_ICSR) & ICSR_PENDSVSET == 0;
+    unsafe {
+        core::arch::asm!(
+            "msr PRIMASK, {primask}",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+    for _ in 0..32 {
+        unsafe { core::arch::asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+    let clear_cancels_pending = prior_primask == 0
+        && pending_before_clear
+        && pending_after_clear
+        && rd(PENDSV_HANDLER_COUNT) == 0;
+
+    // The clear must not poison a later set. Re-pend while masked, then require
+    // one vector-14 entry after interrupts are restored.
+    unsafe {
+        core::arch::asm!("cpsid i", options(nomem, nostack, preserves_flags));
+    }
+    wr(SCB_ICSR, ICSR_PENDSVCLR);
+    wr(SCB_ICSR, ICSR_PENDSVSET);
+    let fresh_pending_visible = rd(SCB_ICSR) & ICSR_PENDSVSET != 0;
+    unsafe {
+        core::arch::asm!(
+            "msr PRIMASK, {primask}",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+    for _ in 0..4_096 {
+        if rd(PENDSV_HANDLER_COUNT) != 0 {
+            break;
+        }
+        unsafe { core::arch::asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+    for _ in 0..32 {
+        unsafe { core::arch::asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+    let fresh_repend_dispatches_once = fresh_pending_visible
+        && rd(PENDSV_HANDLER_COUNT) == 1
+        && rd(PENDSV_HANDLER_IPSR) == PENDSV_EXCEPTION;
+
+    unsafe {
+        core::arch::asm!("cpsid i", options(nomem, nostack, preserves_flags));
+    }
+    wr(SCB_ICSR, ICSR_PENDSVCLR | ICSR_PENDSTCLR);
+    wr(PENDSV_HANDLER_COUNT, 0);
+    wr(PENDSV_HANDLER_IPSR, 0);
+    wr(PENDSV_SYSTICK_COUNT_AT_ENTRY, 0);
+
     wr(SYSTICK_PENDSV_ARMED, 1);
     wr(SYSTICK_RVR, RELOAD);
     wr(SYSTICK_CVR, 0);
@@ -659,6 +725,8 @@ fn smoke_systick_pendsv_priority() -> u32 {
         | (u32::from(priority_configured) << 6)
         | (u32::from(vector_installed) << 7)
         | (u32::from(stable_after_disable) << 8)
+        | (u32::from(clear_cancels_pending) << 9)
+        | (u32::from(fresh_repend_dispatches_once) << 10)
 }
 
 /// Cortex-M SysTick exception handler installed at vector-table slot 15.
