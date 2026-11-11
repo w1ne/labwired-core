@@ -574,6 +574,21 @@ pub fn spi_xfer(base: u32, out: u8) -> Option<u8> {
     Some(rd8(base + S_DR))
 }
 
+/// Transfer one byte and sample the NVIC line while RXNE is still asserted.
+/// STM32 SPI's RXNE interrupt is level-sensitive: after the data-register
+/// read drains the FIFO, the source line drops and the pending bit may clear.
+pub fn spi_xfer_observe_irq(base: u32, out: u8, irq: u32) -> Option<(u8, bool)> {
+    if !wait(base + S_SR, SPI_SR_TXE, SPI_SR_TXE) {
+        return None;
+    }
+    wr8(base + S_DR, out);
+    if !wait(base + S_SR, SPI_SR_RXNE, SPI_SR_RXNE) {
+        return None;
+    }
+    let irq_pending_while_rxne = pending(irq);
+    Some((rd8(base + S_DR), irq_pending_while_rxne))
+}
+
 /// One 32-bit MAX31855 frame under CS, by polling.
 pub fn max31855_frame(base: u32, port: u32, pin: u32) -> Option<u32> {
     cs(port, pin, true);
@@ -592,9 +607,33 @@ pub fn max31855_frame(base: u32, port: u32, pin: u32) -> Option<u32> {
     idle.then_some(word)
 }
 
+/// One MAX31855 frame while observing the RXNE interrupt before each read
+/// drains the level-sensitive source.
+pub fn max31855_frame_observe_irq(base: u32, port: u32, pin: u32, irq: u32) -> Option<(u32, bool)> {
+    cs(port, pin, true);
+    let mut word = 0u32;
+    let mut irq_seen = false;
+    for _ in 0..4 {
+        match spi_xfer_observe_irq(base, 0, irq) {
+            Some((byte, pending)) => {
+                word = (word << 8) | u32::from(byte);
+                irq_seen |= pending;
+            }
+            None => {
+                cs(port, pin, false);
+                return None;
+            }
+        }
+    }
+    let idle = wait(base + S_SR, SPI_SR_BSY, 0);
+    cs(port, pin, false);
+    idle.then_some((word, irq_seen))
+}
+
 /// Each SPI resets CR2 to DS = 8 bits, then reads its own device's frame
-/// twice — polled, then with RXNEIE, which must pend the SPI's own NVIC line
-/// and no other SPI's. Afterwards the RX FIFO is empty (FRLVL = 0).
+/// twice — polled, then with RXNEIE. The second transfer samples the SPI's
+/// NVIC line while RXNE is asserted; after the FIFO drains the level source
+/// releases. No other SPI line may pend, and the FIFO must be empty (FRLVL=0).
 pub fn check_spi(name: &str, base: u32, irq: u32, port: u32, pin: u32, want: u32) -> bool {
     let cr2_reset = rd(base + S_CR2) == SPI_CR2_RESET;
     cs_output(port, pin);
@@ -605,9 +644,9 @@ pub fn check_spi(name: &str, base: u32, irq: u32, port: u32, pin: u32, want: u32
 
     unpend(irq);
     wr(base + S_CR2, SPI_CR2_8BIT | (1 << 6)); // RXNEIE
-    let again = max31855_frame(base, port, pin);
-    let data = frame == want && again == Some(want);
-    let pend = quiet && pending(irq);
+    let again = max31855_frame_observe_irq(base, port, pin, irq);
+    let data = frame == want && again.map(|(word, _)| word) == Some(want);
+    let pend = quiet && again.is_some_and(|(_, seen)| seen);
     let alone = SPIS
         .iter()
         .all(|&(_, _, other, _, _, _)| other == irq || !pending(other));

@@ -5,22 +5,22 @@
     "registers": [
       10,
       3221225472,
+      3221225472,
       4294867296,
       4294867296,
-      1,
-      0,
-      1,
+      2097151,
+      536887552,
       537198576,
-      1541880983,
       1,
-      851826445,
+      1,
+      1,
       1073811484,
       70,
-      537198504,
+      537198488,
       70,
-      134240732
+      134243034
     ],
-    "pc": 134240732,
+    "pc": 134243034,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -31,7 +31,7 @@
     ],
     "vtor": 0,
     "waiting_for_event": false,
-    "event_register": false
+    "event_register": true
   },
   "steps_executed": 8000000,
   "cycles": 8000000,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "632e0130baeb8b99fb8d1bf68c99943441ee86cacb8e70854a45032b9726f241",
+  "firmware_hash": "2cfd1f6d394d121992e4727667214682a6fc7b4bf83e5f016e556c418b48bbc6",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-stm32f746-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f746.yaml",
