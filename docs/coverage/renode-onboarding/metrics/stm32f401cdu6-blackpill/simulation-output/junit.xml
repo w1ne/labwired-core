@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="5" failures="0" errors="0" time="0.108654">
+<testsuite name="labwired" tests="5" failures="0" errors="0" time="0.105084">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="43354fad510e1555761def6a90f2279d00118589b9897848ef7b128917b477b1"/>
+    <property name="firmware_hash" value="e26ec2e400b9c0470442d63ccba7c2ce3ca657ea9449f69d3e466d5cb2aaf739"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.108654">
+  <testcase classname="labwired" name="run" time="0.105084">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_ordered: [&quot;BLACKPILL F401 SMOKE&quot;, &quot;systick wrap=1 pending=1 countflag=read-clear clear=1 ok&quot;, &quot;systick irq entries…" time="0.000000">
   </testcase>
