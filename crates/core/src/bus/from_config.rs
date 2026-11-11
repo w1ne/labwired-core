@@ -741,9 +741,9 @@ impl SystemBus {
                     // The C5 uses the same command-list register block and
                     // cycle-driven wire engine as the C3, with C5's 240 MHz
                     // cycle rate and I2C_EXT0 interrupt source (55).
-                    let src = p_cfg.irq.unwrap_or(
-                        crate::peripherals::esp32c3::i2c::C5_I2C0_INTR_SOURCE_ID,
-                    );
+                    let src = p_cfg
+                        .irq
+                        .unwrap_or(crate::peripherals::esp32c3::i2c::C5_I2C0_INTR_SOURCE_ID);
                     Box::new(
                         crate::peripherals::esp32c3::i2c::Esp32c3I2c::with_cpu_clock_and_intr(
                             240_000_000,

@@ -39,7 +39,10 @@ fn main() -> ! {
             | (0b01 << 10);
         write_volatile(GPIOA_MODER, moder);
         let afrl = read_volatile(GPIOA_AFRL);
-        write_volatile(GPIOA_AFRL, (afrl & !((0xF << 8) | (0xF << 12))) | (7 << 8) | (7 << 12));
+        write_volatile(
+            GPIOA_AFRL,
+            (afrl & !((0xF << 8) | (0xF << 12))) | (7 << 8) | (7 << 12),
+        );
         // H533 reset HSI is 64 MHz; BRR=556 gives 115200 baud (RM0481).
         write_volatile(USART2_BRR, 556);
         write_volatile(USART2_CR1, (1 << 0) | (1 << 3)); // UE | TE
