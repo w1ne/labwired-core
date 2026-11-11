@@ -203,6 +203,65 @@ fn expected_adc_count(voltage_v: f64) -> u16 {
     (millivolts * 4095 / 3300).min(4095) as u16
 }
 
+/// Independent Ward–Dutton drain terminal charge from the level-1 charge
+/// sheet. Simpson integration avoids using the solver's analytic expression
+/// as its own oracle.
+fn ward_dutton_drain_charge(gate_v: f64, drain_v: f64) -> f64 {
+    const WIDTH_M: f64 = 100e-6;
+    const LENGTH_M: f64 = 10e-6;
+    const TOX_M: f64 = 10e-9;
+    const VTO_V: f64 = 1.0;
+    const EPSILON_OX_F_PER_M: f64 = 3.453_133e-11;
+    const INTERVALS: usize = 4000;
+
+    let overdrive = (gate_v - VTO_V).max(0.0);
+    if overdrive == 0.0 {
+        return 0.0;
+    }
+    let channel_drop = drain_v.clamp(0.0, overdrive);
+    let denominator = overdrive * channel_drop - 0.5 * channel_drop * channel_drop;
+    let mut integral = 0.0;
+    for point in 0..=INTERVALS {
+        let position = point as f64 / INTERVALS as f64;
+        let local_charge = (overdrive * overdrive - 2.0 * position * denominator).sqrt();
+        let weight = if point == 0 || point == INTERVALS {
+            1.0
+        } else if point % 2 == 0 {
+            2.0
+        } else {
+            4.0
+        };
+        integral += weight * position * local_charge;
+    }
+    let cox = EPSILON_OX_F_PER_M * WIDTH_M * LENGTH_M / TOX_M;
+    -cox * integral / (3.0 * INTERVALS as f64)
+}
+
+fn ward_dutton_drain_voltage(
+    gate_v: f64,
+    previous_gate_v: f64,
+    previous_drain_v: f64,
+    resistance_ohms: f64,
+    step_s: f64,
+) -> f64 {
+    let previous_charge = ward_dutton_drain_charge(previous_gate_v, previous_drain_v);
+    let residual = |drain_v: f64| {
+        drain_v / resistance_ohms
+            + (ward_dutton_drain_charge(gate_v, drain_v) - previous_charge) / step_s
+    };
+    let (mut low, mut high) = (0.0, 3.3);
+    assert!(residual(low) <= 0.0 && residual(high) >= 0.0);
+    for _ in 0..80 {
+        let middle = 0.5 * (low + high);
+        if residual(middle) < 0.0 {
+            low = middle;
+        } else {
+            high = middle;
+        }
+    }
+    0.5 * (low + high)
+}
+
 /// Independent level-1 NMOS load line with external drain/source resistance.
 /// It treats model-card RSH × NRD/NRS and explicit resistors as the same series
 /// path around the intrinsic channel, including the source-resistor VGS drop.
@@ -1066,5 +1125,154 @@ fn nucleo_f103rb_epaper_mosfet_drain_bulk_charge_reaches_adc1_alongside_ntc_and_
     assert!(
         (signal_voltage(&session, "board.analog.pa2_volts") - 1.0).abs() < 3e-4,
         "drain-bulk depletion charge changes the transient, not the DC load line"
+    );
+}
+
+/// The board ADC proves the generic Ward–Dutton channel-charge formulation
+/// through the same netlist, MNA, and route path used by unrelated devices.
+#[test]
+fn nucleo_f103rb_epaper_mosfet_ward_dutton_charge_reaches_adc1_alongside_ntc_and_diode() {
+    const GATE_DRIVE_V: f64 = 1.5;
+    const LOAD_OHMS: f64 = 5e6;
+    const STEP_S: f64 = 1e-6;
+
+    let system_path = root("configs/systems/nucleo-f103rb-epaper.yaml");
+    let mut profile =
+        SystemManifest::from_file(&system_path).expect("load NUCLEO-F103RB e-paper profile");
+    let generic = SystemManifest::from_file(root(
+        "examples/nucleo-f103rb-epaper/analog-ntc-diode-system.yaml",
+    ))
+    .expect("load unrelated generic NTC and Shockley diode netlists");
+    let mosfet = SystemManifest::from_file(root(
+        "examples/nucleo-f103rb-epaper/analog-mosfet-ward-dutton-adc-system.yaml",
+    ))
+    .expect("load matched generic MOSFET channel-charge netlists");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(mosfet.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F103 descriptor");
+    for (pad, channel) in [("PA0", 0), ("PA1", 1), ("PA2", 2), ("PA3", 3)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+        assert_eq!(chip.analog_pins[pad].peripheral, "adc1");
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build e-paper board bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal co-simulation")
+        .expect("profile carries NTC, diode, and both MOSFET channel-charge branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "the generic netlists must resolve through PA0..PA3 ADC1 routes"
+    );
+    for channel in 0..=4 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold unrelated NTC at nominal temperature");
+    session
+        .set_signal_number("ui.mosfet_ward_dutton.gate_v", 0.0)
+        .expect("initialize matched MOSFET gate drive");
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("settle NTC, diode, and zero-charge MOSFET branches");
+    assert_eq!(initial_steps.len(), 3, "all three analog netlists solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected route errors: {initial_errors:?}"
+    );
+    assert!(signal_voltage(&session, "board.analog.pa2_volts").abs() < 1e-12);
+    assert!(signal_voltage(&session, "board.analog.pa3_volts").abs() < 1e-12);
+
+    session
+        .set_signal_number("ui.mosfet_ward_dutton.gate_v", GATE_DRIVE_V)
+        .expect("step the common MOSFET gate drive into inversion");
+    let expected_ntc_v = 1.65;
+    let expected_diode_v = diode_load_line_voltage();
+    let mut previous_gate_v = 0.0;
+    let mut previous_charged_v = 0.0;
+    for step in 0..8 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route the Ward–Dutton MOSFET transient");
+        assert_eq!(
+            steps.len(),
+            3,
+            "all three analog netlists solve at each step"
+        );
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+        let charged_v = signal_voltage(&session, "board.analog.pa2_volts");
+        let reference_v = signal_voltage(&session, "board.analog.pa3_volts");
+        let expected_charged_v = ward_dutton_drain_voltage(
+            GATE_DRIVE_V,
+            previous_gate_v,
+            previous_charged_v,
+            LOAD_OHMS,
+            STEP_S,
+        );
+
+        assert!(
+            (ntc_v - expected_ntc_v).abs() < 1e-9,
+            "unrelated NTC stays isolated"
+        );
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "unrelated Shockley diode stays at its DC load line"
+        );
+        assert!(
+            (charged_v - expected_charged_v).abs() < 5e-5,
+            "independent Ward–Dutton charge-sheet recurrence at step {step}: expected {expected_charged_v} V, got {charged_v} V"
+        );
+        assert!(
+            reference_v.abs() < 1e-9,
+            "matched no-channel-charge MOSFET stays at the zero-current load line"
+        );
+
+        for (channel, volts) in [(0, ntc_v), (1, diode_v), (2, charged_v), (3, reference_v)] {
+            let expected = expected_adc_count(volts);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "the solved voltage must seed ADC1 channel {channel}"
+            );
+            assert_eq!(
+                stm32f103_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "firmware-visible ADC1 channel {channel} must report its solved voltage"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 4),
+            0xFFFF,
+            "neighboring ADC1 channel 4 remains undriven"
+        );
+        if step == 0 {
+            assert!(
+                charged_v > 0.5,
+                "Ward–Dutton drain partition must produce a measurable transient: {charged_v} V"
+            );
+            assert!(
+                (charged_v - reference_v).abs() > 0.5,
+                "the no-charge branch must distinguish the channel-charge physics"
+            );
+        }
+        previous_gate_v = GATE_DRIVE_V;
+        previous_charged_v = charged_v;
+    }
+    assert!(
+        previous_charged_v < 0.2,
+        "Ward–Dutton terminal charge discharges toward the zero-current DC solution"
     );
 }
