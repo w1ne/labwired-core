@@ -153,6 +153,13 @@ jobs:
             firmware_build_script: examples/esp32s3-devkitc-1-n16r8-bme280/build-firmware.sh
             script: examples/esp32s3-devkitc-1-n16r8-bme280/bme280-smoke.yaml
             system: configs/systems/esp32s3-devkitc-1-n16r8-bme280.yaml
+          # Exact ESP32-S2-DevKitC-1-N8R2 UART0 fast-start profile. This ELF
+          # smoke exercises the LX7 memory windows and UART0 model; it does not
+          # claim mask-ROM/flash boot or the board's other SoC features.
+          - id: esp32s2-devkitc-1-n8r2-uart
+            firmware_build_script: examples/esp32s2-devkitc-1-n8r2/firmware/build-firmware.sh
+            script: examples/esp32s2-devkitc-1-n8r2/uart-smoke.yaml
+            system: configs/systems/esp32s2-devkitc-1-n8r2.yaml
           - id: esp32c6-devkitc-1-n8-bme280
             firmware_build_script: examples/esp32c6-devkitc-1-n8-bme280/firmware/build-firmware.sh
             script: examples/esp32c6-devkitc-1-n8-bme280/bme280-smoke.yaml

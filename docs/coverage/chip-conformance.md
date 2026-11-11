@@ -45,6 +45,7 @@ This page covers the public models. For every chip we model — public and priva
 | nrf54lm20a | **L1** | ✓ | 31 | — | — | nrf54lm20a_peripheral_estate::the_estate_answers_at_its_own_addresses |
 | esp32 | **L1** | ✓ | 32 | — | — | firmware_survival::test_esp32_tier1_survival |
 | esp32s3 | **L1** | ✓ | 14 | — | — | firmware_survival::test_esp32s3_tier1_survival |
+| esp32s2 | **L1** | ✓ | 1 | — | — | firmware_survival::test_esp32s2_uart_smoke |
 | esp32s3-zero | **L1** | ✓ | 17 | — | — | firmware_survival::test_esp32s3_zero_tier1_survival |
 | esp32-devkitc-32e-gpio-smoke | **L1** | ✓ | 3 | — | — | firmware_survival::test_esp32_devkitc_32e_gpio_smoke_tier1_survival |
 | esp32-devkitc-32e-uart1 | **L0** | ✓ | 3 | — | — | — |

@@ -514,6 +514,10 @@ fn every_shipped_descriptor_is_ratcheted() {
         // ESP32-C5 has a local DevKitC-1 UART/GPIO smoke, but no hosted catalog
         // entry or executing-fidelity differential yet.
         "esp32c5",
+        // ESP32-S2 DevKitC-1 N8R2 has a local UART-only Session smoke and
+        // descriptor gate, but no bundled catalog board, silicon differential
+        // or hosted model-verification entry yet.
+        "esp32s2",
         // ATmega328PB has a CPU-level USART1/PB5 smoke but no catalog board,
         // package-pad map, or executing-fidelity differential yet.
         "atmega328pb",

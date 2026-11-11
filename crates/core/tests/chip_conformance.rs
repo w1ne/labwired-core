@@ -430,6 +430,16 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_esp32s3_tier1_survival"),
     },
     ChipConf {
+        // ESP32-S2-DevKitC-1-N8R2 UART-only fast-start profile. The committed
+        // Session smoke asserts UART0 output, but does not cover ROM/flash boot,
+        // PSRAM, wireless, interrupt routing, or pad-level UART routing; there
+        // is no silicon capture or hosted verifier catalog entry.
+        name: "esp32s2",
+        yaml: "configs/chips/esp32s2.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_esp32s2_uart_smoke"),
+    },
+    ChipConf {
         name: "esp32s3-zero",
         yaml: "configs/chips/esp32s3-zero.yaml",
         reset_oracle: None,

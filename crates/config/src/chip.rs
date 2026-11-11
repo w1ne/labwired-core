@@ -1298,6 +1298,15 @@ impl ChipDescriptor {
         self.arch == Arch::Xtensa && self.name.starts_with("esp32s3")
     }
 
+    /// Is this an ESP32-S2 (Xtensa LX7) part?
+    ///
+    /// The S2 is single-core like the S3's PRO_CPU but has its own internal
+    /// SRAM and flash-XIP address map. Keep it out of both the dual-core S3
+    /// builder and the classic LX6 builder.
+    pub fn is_esp32s2(&self) -> bool {
+        self.arch == Arch::Xtensa && self.name.starts_with("esp32s2")
+    }
+
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref();
         let content = std::fs::read_to_string(path)?;

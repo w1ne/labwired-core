@@ -262,6 +262,13 @@
     "behavior": true,
     "excluded": 0,
     "level": 1,
+    "name": "esp32s2",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
     "name": "esp32s3-zero",
     "reg_match": 0
   },

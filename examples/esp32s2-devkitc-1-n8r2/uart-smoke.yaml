@@ -1,0 +1,9 @@
+# Bare-metal ESP32-S2 UART0 marker through the DevKitC-1 N8R2 host console.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/esp32s2-devkitc-1-n8r2-uart.elf"
+  system: "../../configs/systems/esp32s2-devkitc-1-n8r2.yaml"
+limits:
+  max_steps: 2000000
+assertions:
+  - uart_contains: "S2_UART_OK"

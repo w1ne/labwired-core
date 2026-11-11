@@ -1268,7 +1268,103 @@ pub(crate) fn run_test(
                 .unwrap_or(false)
             };
 
-            let mut machine = if is_esp32s3 {
+            let is_esp32s2 = {
+                let chip_dir = sys_path
+                    .parent()
+                    .unwrap_or_else(|| std::path::Path::new("."));
+                labwired_config::ChipDescriptor::resolve_with(
+                    &manifest.chip,
+                    chip_dir,
+                    &crate::plugin_chip_yaml(plugins),
+                )
+                .map(|c| c.is_esp32s2())
+                .unwrap_or(false)
+            };
+
+            if is_esp32s2 && args.rom_boot {
+                let msg = "ESP32-S2 profile supports a bare ELF fast-start only; mask-ROM/flash boot is not modelled".to_string();
+                error!("{}", msg);
+                write_config_error_outputs(
+                    &args,
+                    Some(&firmware_path),
+                    system_path.as_ref(),
+                    Some(&firmware_bytes),
+                    Some(&resolved_limits),
+                    msg,
+                );
+                return ExitCode::from(EXIT_CONFIG_ERROR);
+            }
+
+            let mut machine = if is_esp32s2 {
+                let chip_dir = sys_path
+                    .parent()
+                    .unwrap_or_else(|| std::path::Path::new("."));
+                let chip = match labwired_config::ChipDescriptor::resolve_with(
+                    &manifest.chip,
+                    chip_dir,
+                    &crate::plugin_chip_yaml(plugins),
+                ) {
+                    Ok(chip) => chip,
+                    Err(e) => {
+                        let msg = format!("ESP32-S2 chip resolution failed: {e:#}");
+                        error!("{}", msg);
+                        write_config_error_outputs(
+                            &args,
+                            Some(&firmware_path),
+                            system_path.as_ref(),
+                            Some(&firmware_bytes),
+                            Some(&resolved_limits),
+                            msg,
+                        );
+                        return ExitCode::from(EXIT_CONFIG_ERROR);
+                    }
+                };
+                let (bus, cpu) =
+                    match labwired_core::system::builder::build_esp32s2_system_from_chip(
+                        &chip, manifest, plugins,
+                    ) {
+                        Ok(machine) => machine,
+                        Err(e) => {
+                            let msg = format!("ESP32-S2 machine setup failed: {e:#}");
+                            error!("{}", msg);
+                            write_config_error_outputs(
+                                &args,
+                                Some(&firmware_path),
+                                system_path.as_ref(),
+                                Some(&firmware_bytes),
+                                Some(&resolved_limits),
+                                msg,
+                            );
+                            return ExitCode::from(EXIT_CONFIG_ERROR);
+                        }
+                    };
+                let mut machine = labwired_core::Machine::new(cpu, bus);
+                crate::log_ts::set_hz(machine.bus.cpu_hz);
+                apply_run_speed_opts(&mut machine);
+                if let Err(e) = machine.load_firmware(&program) {
+                    return handle_load_error(
+                        &args,
+                        &metrics,
+                        &resolved_limits,
+                        &firmware_bytes,
+                        &uart_tx,
+                        &rtt_tx,
+                        &itm_tx,
+                        &machine.cpu,
+                        &firmware_path,
+                        system_path.as_ref(),
+                        e,
+                    );
+                }
+                machine.cpu.set_pc(program.entry_point as u32);
+                machine.cpu.set_sp(0x3FFF_FFF0);
+                machine.cpu.ps = labwired_core::cpu::xtensa_regs::Ps::from_raw(1 << 18);
+                machine
+                    .bus
+                    .attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
+                machine.add_observer(metrics.clone());
+                machine
+            } else if is_esp32s3 {
                 // ── ESP32-S3 (LX7): S3 memmap + XIP, NOT classic ESP32 map ──
                 // Classic `build_esp32_system_from_manifest` uses LX6 IRAM/DROM
                 // bases — Arduino-S3 ELF segments (0x3C00_xxxx DROM, 0x3FC8_xxxx

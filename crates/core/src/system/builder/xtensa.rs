@@ -40,7 +40,19 @@ pub(super) fn build(
     req: BuildRequest<'_>,
     plugins: &[&dyn crate::plugin::ChipPlugin],
 ) -> anyhow::Result<BuiltMachine> {
-    if req.chip.is_esp32s3() {
+    if req.chip.is_esp32s2() {
+        match (&req.firmware, req.boot) {
+            (FirmwareSource::Elf(elf), BootMode::FastBoot) => {
+                build_esp32s2(&req, elf, plugins)
+            }
+            (FirmwareSource::FlashImage { .. }, _) => Err(anyhow!(
+                "not supported: ESP32-S2 flash-image boot; this profile accepts a bare ELF fast-start"
+            )),
+            (FirmwareSource::Elf(_), BootMode::RomBoot) => Err(anyhow!(
+                "not supported: ESP32-S2 mask-ROM boot is not modelled by this profile"
+            )),
+        }
+    } else if req.chip.is_esp32s3() {
         match (&req.firmware, req.boot) {
             (FirmwareSource::Elf(elf), BootMode::FastBoot) => build_esp32s3(&req, elf, plugins),
             (FirmwareSource::FlashImage { image, symbols }, BootMode::RomBoot) => {
@@ -65,6 +77,54 @@ pub(super) fn build(
             )),
         }
     }
+}
+
+/// ESP32-S2 bare-ELF fast-start path for the DevKitC-1 UART smoke profile.
+///
+/// The firmware's XIP segments are placed into the S2 IROM/DROM windows, then
+/// the single LX7 core enters the ELF entry point. No S2 reset ROM, flash MMU,
+/// PSRAM probe, second core, or radio setup is implied by this path.
+fn build_esp32s2(
+    req: &BuildRequest<'_>,
+    firmware: &[u8],
+    plugins: &[&dyn crate::plugin::ChipPlugin],
+) -> anyhow::Result<BuiltMachine> {
+    let (chip, manifest) = (req.chip, req.system);
+    let (mut bus, cpu) = super::build_esp32s2_system_from_chip(chip, manifest, plugins)?;
+
+    let console = ConsoleCapture::for_manifest(manifest);
+    bus.attach_host_console_echo(
+        console.tapped(),
+        console.heard_sink(),
+        req.options.echo_uart_stdout,
+    )
+    .map_err(|e| anyhow!(e))?;
+    let uart_rx_bufs = super::wire_host_streams(&mut bus, &req.options)?;
+    bus.refresh_peripheral_index();
+    bus.recompute_walk_deletable();
+
+    let program_image = parse_elf_image(firmware).map_err(|e| anyhow!("Loader Error: {e:#}"))?;
+    let boxed_cpu: Box<dyn Cpu> = Box::new(cpu);
+    let mut machine = Machine::new(boxed_cpu, bus);
+    machine
+        .load_firmware(&program_image)
+        .map_err(|e| anyhow!("Simulation Error: {e}"))?;
+    machine.cpu.set_pc(program_image.entry_point as u32);
+    machine.cpu.set_sp(0x3FFF_FFF0);
+    machine
+        .cpu
+        .as_any_mut()
+        .and_then(|cpu| cpu.downcast_mut::<crate::cpu::xtensa_lx7::XtensaLx7>())
+        .expect("ESP32-S2 builder owns an Xtensa LX7")
+        .ps = crate::cpu::xtensa_regs::Ps::from_raw(1 << 18);
+
+    Ok(built(
+        machine,
+        console,
+        uart_rx_bufs,
+        manifest,
+        firmware.to_vec(),
+    ))
 }
 
 /// `new_from_config_xtensa_esp32`: ESP32-classic (Xtensa LX6).

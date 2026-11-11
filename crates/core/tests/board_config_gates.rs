@@ -171,6 +171,19 @@ fn stm32f746_from_config_builds() {
 }
 
 #[test]
+fn esp32s2_devkitc_n8r2_from_config_builds() {
+    let (chip, bus) = from_config(
+        "configs/systems/esp32s2-devkitc-1-n8r2.yaml",
+        "esp32s2 / esp32s2-devkitc-1-n8r2 must build",
+    );
+    assert_eq!(chip.name, "esp32s2");
+    assert!(
+        bus.find_peripheral_index_by_name("uart0").is_some(),
+        "bus must expose UART0 for the board console"
+    );
+}
+
+#[test]
 fn stm32g071_from_config_builds() {
     let (chip, bus) = from_config(
         "configs/systems/nucleo-g071rb.yaml",
