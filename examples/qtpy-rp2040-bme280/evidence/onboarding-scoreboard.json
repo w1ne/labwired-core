@@ -1,0 +1,42 @@
+{
+  "summary": {
+    "targets_total": 1,
+    "pass": 1,
+    "fail": 0,
+    "median_elapsed_ms": 34029,
+    "threshold_seconds": 3600,
+    "threshold_met": 1,
+    "median_elapsed_seconds": 34.029
+  },
+  "targets": [
+    {
+      "target_id": "qtpy-rp2040-bme280",
+      "status": "pass",
+      "crate": "firmware-qtpy-rp2040-bme280-smoke",
+      "target_triple": "thumbv6m-none-eabi",
+      "script": "examples/qtpy-rp2040-bme280/bme280-smoke.yaml",
+      "system": "configs/systems/qtpy-rp2040-bme280.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-11T12:18:59Z",
+      "finished_at_utc": "2026-11-11T12:19:33Z",
+      "elapsed_seconds": 35,
+      "elapsed_ms": 34029,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 32.788,
+        "build_firmware": 0.614,
+        "run_smoke": 0.591
+      },
+      "stages_ms": {
+        "build_cli": 32788,
+        "build_firmware": 614,
+        "run_smoke": 591
+      },
+      "_artifact_path": "examples/qtpy-rp2040-bme280/evidence"
+    }
+  ]
+}

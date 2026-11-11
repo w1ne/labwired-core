@@ -1832,6 +1832,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-qtpy-rp2040-bme280-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-ra4m1-bme280-smoke"
 version = "0.1.0"
 dependencies = [

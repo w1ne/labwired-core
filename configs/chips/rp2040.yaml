@@ -87,6 +87,15 @@ peripherals:
     config:
       debug_schema: "../peripherals/rp2040/uart0.yaml"
       profile: "pl011"
+  # UART1: second PL011 instance (RP2040 datasheet §4.2). The QT Py routes
+  # its TX signal to the board's TX pad on GP20.
+  - id: "uart1"
+    type: "uart"
+    base_address: 0x40038000
+    irq: 21
+    config:
+      debug_schema: "../peripherals/rp2040/uart1.yaml"
+      profile: "pl011"
   # ROSC (ring oscillator): same model, separate window above UART0. Models
   # ROSC.STATUS.STABLE so the ROSC start-up poll terminates.
   - id: "rosc"
@@ -192,6 +201,16 @@ peripherals:
     irq: 23
     config:
       debug_schema: "../peripherals/rp2040/i2c0.yaml"
+  # I2C1: second Synopsys DW_apb_i2c instance (RP2040 datasheet §4.3).
+  # The Adafruit QT Py RP2040 routes this controller to its STEMMA QT port on
+  # GP22 (SDA) / GP23 (SCL); see configs/systems/qtpy-rp2040-bme280.yaml.
+  - id: "i2c1"
+    type: "rp2040_i2c"
+    base_address: 0x40048000
+    size: "4KB"
+    irq: 24
+    config:
+      debug_schema: "../peripherals/rp2040/i2c1.yaml"
   # Cortex-M0+ SysTick (SCS). Behavioural model: the ARMv7-M SysTick timer
   # (edge-triggered — raises system exception 15 only on the count-down to
   # zero, and only while ENABLE+TICKINT are set). The Arduino Mbed-OS core

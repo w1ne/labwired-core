@@ -31,6 +31,7 @@ on:
       - "crates/firmware-nucleo-g431kb-bme280-smoke/**"
       - "crates/firmware-nucleo-h753zi-smoke/**"
       - "crates/firmware-rp2040-picow-bme280-smoke/**"
+      - "crates/firmware-qtpy-rp2040-bme280-smoke/**"
       - "crates/firmware-ra4m1-bme280-smoke/**"
       - "Cargo.toml"
       - "Cargo.lock"
@@ -165,6 +166,13 @@ jobs:
             target: thumbv6m-none-eabi
             script: examples/rp2040-pico-bme280/bme280-smoke.yaml
             system: configs/systems/rp2040-pico-bme280.yaml
+          # QT Py RP2040 STEMMA QT connector: modeled I2C1 (GP22/23) and
+          # physical UART1 TX on GP20. USB and NeoPixel stay out of this scope.
+          - id: qtpy-rp2040-bme280
+            crate: firmware-qtpy-rp2040-bme280-smoke
+            target: thumbv6m-none-eabi
+            script: examples/qtpy-rp2040-bme280/bme280-smoke.yaml
+            system: configs/systems/qtpy-rp2040-bme280.yaml
           # Pico W has the same RP2040 header/I2C pins, but its LED is behind
           # CYW43439. Keep this smoke to the modeled UART and external BME280.
           - id: rp2040-picow-bme280
