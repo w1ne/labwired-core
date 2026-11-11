@@ -1276,3 +1276,142 @@ fn nucleo_f103rb_epaper_mosfet_ward_dutton_charge_reaches_adc1_alongside_ntc_and
         "Ward–Dutton terminal charge discharges toward the zero-current DC solution"
     );
 }
+
+/// Generic level-1 NMOS CGSO charge resolves through the e-paper profile's
+/// ADC1 pins; matched zero-overlap, NTC, and diode branches remain isolated.
+#[test]
+fn nucleo_f103rb_epaper_mosfet_overlap_charge_reaches_adc1_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/nucleo-f103rb-epaper.yaml");
+    let mut profile =
+        SystemManifest::from_file(&system_path).expect("load NUCLEO-F103RB e-paper profile");
+    assert_eq!(profile.name, "nucleo-f103rb-epaper");
+    assert_eq!(profile.external_devices.len(), 1);
+    assert_eq!(profile.external_devices[0].id, "epaper");
+
+    let generic = SystemManifest::from_file(root(
+        "examples/nucleo-f103rb-epaper/analog-ntc-diode-system.yaml",
+    ))
+    .expect("load unrelated generic NTC and Shockley diode netlists");
+    let overlap = SystemManifest::from_file(root(
+        "examples/nucleo-f103rb-epaper/analog-mosfet-overlap-charge-system.yaml",
+    ))
+    .expect("load generic MOSFET overlap-charge comparison netlists");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(overlap.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F103 descriptor");
+    for (pad, channel) in [("PA0", 0), ("PA1", 1), ("PA2", 2), ("PA3", 3)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+        assert_eq!(chip.analog_pins[pad].peripheral, "adc1");
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build e-paper board bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal co-simulation")
+        .expect("profile carries NTC, diode, and both MOSFET overlap branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must resolve through PA0..PA3 ADC1 routes"
+    );
+    for channel in 0..=4 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold unrelated NTC at nominal temperature");
+    session
+        .set_signal_number("ui.mosfet_overlap.gate_v", 0.0)
+        .expect("initialize matched MOSFET gate drive");
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("settle NTC, diode, and zero-charge MOSFET branches");
+    assert_eq!(initial_steps.len(), 4, "all four analog branches solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected ADC1 route errors: {initial_errors:?}"
+    );
+    assert!((signal_voltage(&session, "board.analog.pa2_volts")).abs() < 1e-12);
+    assert!((signal_voltage(&session, "board.analog.pa3_volts")).abs() < 1e-12);
+
+    session
+        .set_signal_number("ui.mosfet_overlap.gate_v", 3.3)
+        .expect("step the generic NMOS gate");
+
+    // CGSO=10 uF/m times W=100 um gives 1 nF. With the 1 kOhm
+    // source resistor and a 1 us backward-Euler step, the source node first
+    // reaches half the gate step, then decays by half each held-input step.
+    let expected_diode_v = diode_load_line_voltage();
+    let mut expected_source_v = 1.65;
+    for step in 0..12 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route MOSFET overlap-charge transient");
+        assert_eq!(steps.len(), 4, "all four branches solve at every step");
+        assert!(
+            errors.is_empty(),
+            "unexpected ADC1 route errors: {errors:?}"
+        );
+
+        let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+        let reference_v = signal_voltage(&session, "board.analog.pa2_volts");
+        let charged_v = signal_voltage(&session, "board.analog.pa3_volts");
+        assert!(
+            (ntc_v - 1.65).abs() < 1e-9,
+            "unrelated NTC remains isolated"
+        );
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "unrelated diode stays at its DC load line"
+        );
+        assert!(
+            reference_v.abs() < 1e-12,
+            "zero-overlap MOSFET is the transient control branch"
+        );
+        assert!(
+            (charged_v - expected_source_v).abs() < 2e-8,
+            "CGSO RC recurrence at step {step}: expected {expected_source_v} V, got {charged_v} V"
+        );
+
+        for (channel, volts) in [(0, ntc_v), (1, diode_v), (2, reference_v), (3, charged_v)] {
+            let expected = expected_adc_count(volts);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "the solved voltage must seed ADC1 channel {channel}"
+            );
+            assert_eq!(
+                stm32f103_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "firmware-visible ADC1 conversion must report channel {channel}"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 4),
+            0xFFFF,
+            "neighboring ADC1 channel 4 remains undriven"
+        );
+        if step == 0 {
+            assert_eq!(
+                adc_channel_count(&mut bus, 3),
+                2047,
+                "the first overlap transient reaches half scale on PA3/ADC1_IN3"
+            );
+        }
+        expected_source_v *= 0.5;
+    }
+
+    assert!(
+        signal_voltage(&session, "board.analog.pa3_volts") < 1e-3,
+        "overlap charge changes the transient, not the settled DC operating point"
+    );
+}
