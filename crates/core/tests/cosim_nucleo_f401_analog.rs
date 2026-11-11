@@ -66,6 +66,32 @@ fn bjt_collector_voltage(base_drive_v: f64) -> f64 {
     collector_for_vbe((low + high) / 2.0)
 }
 
+/// Independent Gummel–Poon base-voltage reference with a fixed collector bias.
+fn bjt_fixed_collector_base_voltage(base_drive_v: f64, collector_v: f64) -> f64 {
+    const BASE_OHMS: f64 = 10_000.0;
+    const IS_A: f64 = 1e-15;
+    const BF: f64 = 100.0;
+    const BR: f64 = 4.0;
+    const VT: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+
+    let base_current = |vbe: f64| {
+        let vbc = vbe - collector_v;
+        IS_A / BF * ((vbe / VT).exp() - 1.0) + IS_A / BR * ((vbc / VT).exp() - 1.0)
+    };
+    let mut low = 0.0;
+    let mut high = base_drive_v;
+    for _ in 0..100 {
+        let vbe = (low + high) / 2.0;
+        let residual = (base_drive_v - vbe) / BASE_OHMS - base_current(vbe);
+        if residual > 0.0 {
+            low = vbe;
+        } else {
+            high = vbe;
+        }
+    }
+    (low + high) / 2.0
+}
+
 /// Independent Shockley diode load line with series resistance.
 fn diode_load_line_voltage() -> f64 {
     const SUPPLY_V: f64 = 3.3;
@@ -283,6 +309,134 @@ fn nucleo_f401re_bjt_terminal_resistances_reach_adc1_with_explicit_network_refer
         0xFFFF,
         "the neighboring ADC1 channel remains undriven"
     );
+}
+
+#[test]
+fn nucleo_f401re_bjt_bias_dependent_transit_charge_reaches_adc1_with_diode() {
+    let system_path = root("configs/systems/nucleo-f401re.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F401RE profile");
+    let diode = SystemManifest::from_file(root("examples/nucleo-f401re/analog-diode-system.yaml"))
+        .expect("load unrelated generic Shockley diode netlist");
+    let transit = SystemManifest::from_file(root(
+        "examples/nucleo-f401re/analog-bjt-bias-transit-charge.yaml",
+    ))
+    .expect("load matched generic BJT transit-charge branches");
+    profile.cosim_models = diode.cosim_models;
+    profile.cosim_models.extend(transit.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F401 descriptor");
+    for (pad, channel) in [("PA0", 0), ("PA1", 1), ("PA2", 2), ("PA3", 3), ("PA4", 4)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F401RE bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries an unrelated diode and four matched BJT branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must resolve to ADC1 channels zero through four"
+    );
+    for channel in 0..=5 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} begins without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.bjt_transit.base_v", 0.0)
+        .expect("initialize all matched BJT branches");
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("initialize the diode and matched BJT branches");
+    assert_eq!(initial_steps.len(), 5, "all five analog branches solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected route errors: {initial_errors:?}"
+    );
+
+    session
+        .set_signal_number("ui.bjt_transit.base_v", 0.8)
+        .expect("step the matched BJT base drives");
+    let mut samples = Vec::new();
+    for step in 0..10_000 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route diode and BJT transit-charge branches");
+        assert_eq!(steps.len(), 5, "all five branches solve at each 1 us step");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let diode_v = signal_voltage(&session, "board.analog.pa0_volts");
+        assert!(
+            (diode_v - diode_load_line_voltage()).abs() < 2e-5,
+            "the unrelated Shockley diode stays on its independent load line"
+        );
+        let base_voltages = [
+            signal_voltage(&session, "board.analog.pa1_volts"),
+            signal_voltage(&session, "board.analog.pa2_volts"),
+            signal_voltage(&session, "board.analog.pa3_volts"),
+            signal_voltage(&session, "board.analog.pa4_volts"),
+        ];
+        for (channel, voltage) in (1..=4).zip(base_voltages) {
+            let expected = expected_adc_count(voltage);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "the solved BJT base voltage must seed ADC1 channel {channel}"
+            );
+            assert_eq!(
+                f401_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "ADC1 channel {channel} must convert its routed BJT base voltage"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 5),
+            0xFFFF,
+            "the neighboring ADC1 channel remains undriven"
+        );
+
+        if step == 0 {
+            let [tf_only, bias_dependent, no_vtf, no_itf] = base_voltages;
+            assert!(
+                tf_only > 0.1 && bias_dependent > 0.1,
+                "the fixed 0.1 V collector leaves both transit branches with positive VBC"
+            );
+            assert!(
+                bias_dependent < tf_only - 1e-3,
+                "positive VBC with XTF/VTF/ITF must increase stored charge and lower the first-step base voltage: TF={tf_only} V, bias-dependent={bias_dependent} V"
+            );
+            assert!(
+                bias_dependent < no_vtf - 1e-3 && no_vtf < tf_only - 1e-3,
+                "VTF's positive-VBC exponential must increase transit charge beyond VTF=0: active={bias_dependent} V, VTF=0={no_vtf} V, control={tf_only} V"
+            );
+            assert!(
+                no_itf < bias_dependent - 1e-3,
+                "ITF=0 must remove current suppression and increase stored charge: ITF=20u={bias_dependent} V, ITF=0={no_itf} V"
+            );
+        }
+        samples.push(base_voltages);
+    }
+
+    let settled = samples.last().expect("transient samples exist");
+    for (label, voltage) in [
+        ("TF control", settled[0]),
+        ("XTF/VTF/ITF", settled[1]),
+        ("VTF=0", settled[2]),
+        ("ITF=0", settled[3]),
+    ] {
+        assert!(
+            (voltage - bjt_fixed_collector_base_voltage(0.8, 0.1)).abs() < 5e-3,
+            "{label} must converge to the independent DC base voltage, expected {} V, got {voltage} V",
+            bjt_fixed_collector_base_voltage(0.8, 0.1)
+        );
+    }
 }
 
 #[test]
