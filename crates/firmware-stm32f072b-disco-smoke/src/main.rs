@@ -1535,7 +1535,7 @@ fn check_systick_reload_update() -> bool {
 
 /// The STM32F072 reference source is HCLK/8; CLKSOURCE=1 selects HCLK.
 /// Sample a long countdown across a fixed instruction window in each mode and
-/// compare the observed decrement rates without allowing a wrap.
+/// check that the external source runs at HCLK/8 without allowing a wrap.
 fn check_systick_clock_sources() -> bool {
     const RELOAD: u32 = 10_000;
     const SAMPLE_INSTRUCTIONS: usize = 128;
@@ -1595,18 +1595,19 @@ fn check_systick_clock_sources() -> bool {
     let processor_delta = processor_before.saturating_sub(processor_after);
     let external_selected = external_csr & 0x4 == 0;
     let processor_selected = processor_csr & 0x4 != 0;
-    // Instruction and MMIO boundary cycles vary slightly; HCLK/8 must still
-    // count at well below one quarter of the processor-clock rate.
-    let scaled = external_delta > 0
+    // Short samples and MMIO boundaries add count rounding; tolerate that
+    // while rejecting a materially different divider from the expected 8:1.
+    let ratio_8_to_1 = external_delta > 0
         && processor_delta >= SAMPLE_INSTRUCTIONS as u32
-        && external_delta < processor_delta / 4;
+        && processor_delta >= external_delta.saturating_mul(7)
+        && processor_delta <= external_delta.saturating_mul(9);
     let ok = external_before > external_after
         && processor_before > processor_after
         && external_selected
         && processor_selected
         && external_cleaned
         && processor_cleaned
-        && scaled;
+        && ratio_8_to_1;
 
     puts("systick clock-source ext_hclk8_delta=");
     hex(external_delta);
@@ -1616,8 +1617,8 @@ fn check_systick_clock_sources() -> bool {
     puts(if external_selected { "0" } else { "1" });
     puts(" cpu_clksource=");
     puts(if processor_selected { "1" } else { "0" });
-    puts(" scaled=");
-    puts(if scaled { "yes" } else { "no" });
+    puts(" ratio_8_to_1=");
+    puts(if ratio_8_to_1 { "yes" } else { "no" });
     puts(" cleanup=");
     puts(if external_cleaned && processor_cleaned {
         "yes"

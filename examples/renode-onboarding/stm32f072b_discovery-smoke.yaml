@@ -31,7 +31,8 @@
 # smoke checks that byte reads and writes to the read-only bit preserve it and
 # that a word CSR read clears it. An RVR update during a live countdown checks
 # that CVR keeps counting and the new value drives the following period. The
-# STM32F072's external HCLK/8 SysTick source is compared against processor HCLK.
+# STM32F072's external HCLK/8 SysTick source is checked against processor HCLK
+# with a measured ratio bounded to 7:1..9:1 to allow endpoint tick rounding.
 schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv6m-none-eabi/release/firmware-stm32f072b-disco-smoke"
@@ -97,7 +98,7 @@ assertions:
       - " current="
       - " ok"
       - "systick clock-source ext_hclk8_delta="
-      - " scaled=yes cleanup=yes ok"
+      - " ratio_8_to_1=yes cleanup=yes ok"
       - "summary 0x0DFFFFFF"
       - "DONE"
   - memory_value:
