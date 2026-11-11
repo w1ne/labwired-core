@@ -1,0 +1,34 @@
+# Read BME280.CHIP_ID over ESP32-C6 I2C0 on GPIO6/GPIO7.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/tier1/esp32c6-devkitc-bme280.elf"
+  system: "../../configs/systems/esp32c6-devkitc-bme280.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - memory_value:
+      address: 0x40800000
+      expected_value: 0x60
+      size: 4
+  - memory_value:
+      address: 0x60004020
+      expected_value: 0x80
+      mask: 0x480
+      size: 4
+  - memory_value:
+      address: 0x6009120C
+      expected_value: 0x86
+      size: 4
+  - memory_value:
+      address: 0x60091208
+      expected_value: 0x87
+      size: 4
+  - memory_value:
+      address: 0x6009156C
+      expected_value: 46
+      size: 4
+  - memory_value:
+      address: 0x60091570
+      expected_value: 45
+      size: 4
+  - expected_stop_reason: max_steps
