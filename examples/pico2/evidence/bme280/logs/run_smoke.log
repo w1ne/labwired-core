@@ -1,5 +1,5 @@
-2026-11-10T17:22:34.593492Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/rp2350.yaml
-2026-11-10T17:22:34.669553Z  INFO labwired_loader: ELF Entry Point: 0x10000801
+2026-11-11T02:07:54.029891Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/rp2350.yaml
+2026-11-11T02:07:54.114548Z  INFO labwired_loader: ELF Entry Point: 0x10000801
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 labwired-cli test: idle_ff skipped 375390 of 400000 device cycles (24610 interpreted)

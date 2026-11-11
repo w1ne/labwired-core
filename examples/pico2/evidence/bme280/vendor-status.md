@@ -1,6 +1,6 @@
 # Raspberry Pi Pico 2 + Adafruit BME280 availability
 
-Checked live on 2026-11-10 at 17:13 UTC.
+Checked live on 2026-11-11 at 02:07 UTC.
 
 - Raspberry Pi's current Pico 2 product page says the RP2350 board is available
   now from $5 and states that the Pico 2 series will remain in production until
