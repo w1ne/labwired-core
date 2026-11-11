@@ -86,6 +86,9 @@ static mut CPACR_HANDLER_RECORD: [u32; 2] = [0; 2];
 static mut CPACR_PRIORITY_IRQ_RECORD: [u32; 2] = [0; 2];
 
 #[cfg(feature = "stm32h743-exception-frame")]
+static mut CPACR_PRIORITY_ORDER_RECORD: [u32; 3] = [0; 3];
+
+#[cfg(feature = "stm32h743-exception-frame")]
 static FP_SENTINELS: [u32; 16] = [
     0x1111_0000,
     0x2222_0001,
@@ -429,6 +432,42 @@ unsafe extern "C" fn cpacr_priority_irq_handler() {
         "bx lr",
         record = sym CPACR_PRIORITY_IRQ_RECORD,
         attempt = sym attempt_privileged_fp,
+    );
+}
+
+/// Record the active exception number so two simultaneously pending IRQs can
+/// prove which subpriority the NVIC dispatches first.
+#[cfg(feature = "stm32h743-exception-frame")]
+#[inline(never)]
+unsafe extern "C" fn record_priority_order_irq() {
+    let exception: u32;
+    unsafe {
+        asm!(
+            "mrs {exception}, ipsr",
+            exception = out(reg) exception,
+            options(nomem, nostack, preserves_flags),
+        );
+    }
+    unsafe {
+        let record = core::ptr::addr_of_mut!(CPACR_PRIORITY_ORDER_RECORD).cast::<u32>();
+        let count = read_volatile(record);
+        if count < 2 {
+            write_volatile(record.add(count as usize + 1), exception);
+            write_volatile(record, count + 1);
+        }
+    }
+}
+
+/// Share the same recorder between the two test IRQ vectors.
+#[cfg(feature = "stm32h743-exception-frame")]
+#[unsafe(naked)]
+unsafe extern "C" fn priority_order_irq_handler() {
+    core::arch::naked_asm!(
+        "push {{r4, lr}}",
+        "bl {record}",
+        "pop {{r4, lr}}",
+        "bx lr",
+        record = sym record_priority_order_irq,
     );
 }
 
@@ -1891,6 +1930,115 @@ fn check_cortex_m7_exception_frame() -> bool {
     send_hex32(subpriority_fault_cfsr & CFSR_UFSR_NOCP);
     send(b" hfsr=");
     send_hex32(subpriority_fault_hfsr & HFSR_FORCED);
+    send(b"\r\n");
+
+    // With both external IRQs pending together in the same preemption group,
+    // the lower subpriority value must run first. IRQ 6 (0x80) has subpriority
+    // zero; IRQ 5 (0x9F) has a weaker subpriority in the same group at PRIGROUP=5.
+    let order_prior_aircr = unsafe { read_volatile(SCB_AIRCR) };
+    let order_prior_irq5 = unsafe { read_volatile(NVIC_IPR0.add(EXCEPTION_IRQ as usize)) };
+    let order_prior_irq6 = unsafe { read_volatile(NVIC_IPR0.add(NESTED_IRQ as usize)) };
+    let order_prior_vector5 = unsafe { read_volatile(vector_table.add(EXCEPTION_VECTOR_INDEX)) };
+    let order_prior_vector6 = unsafe { read_volatile(vector_table.add(NESTED_VECTOR_INDEX)) };
+    let order_prior_enabled = unsafe { read_volatile(NVIC_ISER0) };
+    let order_irq_mask = EXCEPTION_IRQ_BIT | NESTED_IRQ_BIT;
+    let order_initial_clean = unsafe { read_volatile(NVIC_IABR0) } & order_irq_mask == 0
+        && unsafe { read_volatile(NVIC_ISPR0) } & order_irq_mask == 0;
+    let order_prior_primask: u32;
+    unsafe {
+        asm!(
+            "mrs {primask}, PRIMASK",
+            primask = out(reg) order_prior_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+        asm!("cpsid i", options(nomem, nostack, preserves_flags));
+        write_volatile(NVIC_ICER0, order_irq_mask);
+        write_volatile(NVIC_ICPR0, order_irq_mask);
+        write_volatile(
+            vector_table.add(EXCEPTION_VECTOR_INDEX),
+            (priority_order_irq_handler as *const () as usize as u32) | 1,
+        );
+        write_volatile(
+            vector_table.add(NESTED_VECTOR_INDEX),
+            (priority_order_irq_handler as *const () as usize as u32) | 1,
+        );
+        let record = core::ptr::addr_of_mut!(CPACR_PRIORITY_ORDER_RECORD).cast::<u32>();
+        for index in 0..3 {
+            write_volatile(record.add(index), 0);
+        }
+        write_volatile(
+            SCB_AIRCR,
+            0x05FA_0000 | (order_prior_aircr & 0x0000_F8F8) | (5 << 8),
+        );
+        write_volatile(NVIC_IPR0.add(EXCEPTION_IRQ as usize), 0x9F);
+        write_volatile(NVIC_IPR0.add(NESTED_IRQ as usize), 0x80);
+        write_volatile(NVIC_ISER0, order_irq_mask);
+        write_volatile(NVIC_ISPR0, order_irq_mask);
+        asm!("dsb", "isb", options(nostack, preserves_flags));
+        asm!(
+            "msr PRIMASK, {primask}",
+            primask = in(reg) order_prior_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+    }
+    let order_record = core::ptr::addr_of!(CPACR_PRIORITY_ORDER_RECORD).cast::<u32>();
+    let order_count = unsafe { read_volatile(order_record) };
+    let order_first = unsafe { read_volatile(order_record.add(1)) };
+    let order_second = unsafe { read_volatile(order_record.add(2)) };
+    let order_aircr = unsafe { read_volatile(SCB_AIRCR) };
+    let order_irq5_priority = unsafe { read_volatile(NVIC_IPR0.add(EXCEPTION_IRQ as usize)) };
+    let order_irq6_priority = unsafe { read_volatile(NVIC_IPR0.add(NESTED_IRQ as usize)) };
+    let order_active_after = unsafe { read_volatile(NVIC_IABR0) } & order_irq_mask;
+    let order_pending_after = unsafe { read_volatile(NVIC_ISPR0) } & order_irq_mask;
+    let priority_order_ok = order_initial_clean
+        && order_prior_primask == 0
+        && order_count == 2
+        && order_first == 16 + NESTED_IRQ
+        && order_second == 16 + EXCEPTION_IRQ
+        && order_aircr & 0x700 == 5 << 8
+        && order_irq5_priority == 0x9F
+        && order_irq6_priority == 0x80
+        && order_active_after == 0
+        && order_pending_after == 0;
+    unsafe {
+        asm!("cpsid i", options(nomem, nostack, preserves_flags));
+        write_volatile(NVIC_ICER0, order_irq_mask);
+        write_volatile(NVIC_ICPR0, order_irq_mask);
+        write_volatile(
+            vector_table.add(EXCEPTION_VECTOR_INDEX),
+            order_prior_vector5,
+        );
+        write_volatile(vector_table.add(NESTED_VECTOR_INDEX), order_prior_vector6);
+        write_volatile(NVIC_IPR0.add(EXCEPTION_IRQ as usize), order_prior_irq5);
+        write_volatile(NVIC_IPR0.add(NESTED_IRQ as usize), order_prior_irq6);
+        write_volatile(
+            SCB_AIRCR,
+            0x05FA_0000 | (order_prior_aircr & 0x0000_F8F8) | (order_prior_aircr & 0x700),
+        );
+        write_volatile(NVIC_ISER0, order_prior_enabled & order_irq_mask);
+        asm!(
+            "msr PRIMASK, {primask}",
+            primask = in(reg) order_prior_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+        asm!("dsb", "isb", options(nostack, preserves_flags));
+    }
+    send(b"cortex-m7 priority subpriority order=");
+    send(if priority_order_ok { b"1" } else { b"0" });
+    send(b" first=");
+    send_hex32(order_first);
+    send(b" second=");
+    send_hex32(order_second);
+    send(b" group=");
+    send_hex32(order_aircr & 0x700);
+    send(b" irq5=");
+    send_hex32(order_irq5_priority as u32);
+    send(b" irq6=");
+    send_hex32(order_irq6_priority as u32);
+    send(b" active=");
+    send_hex32(order_active_after);
+    send(b" pending=");
+    send_hex32(order_pending_after);
     send(b"\r\n");
 
     unsafe {
