@@ -79,6 +79,12 @@ const IRQ_FRAME_RECORD: u32 = 0x2000_0500;
 const IRQ_FRAME_EXTERNAL: u32 = 38;
 const IRQ_FRAME_BIT: u32 = 1 << (IRQ_FRAME_EXTERNAL % 32);
 const IRQ_FRAME_PSP_TOP: u32 = 0x2000_4000;
+const BASEPRI_IRQ_LOW: u32 = 38;
+const BASEPRI_IRQ_HIGH: u32 = 39;
+const BASEPRI_IRQ_LOW_BIT: u32 = 1 << (BASEPRI_IRQ_LOW % 32);
+const BASEPRI_IRQ_HIGH_BIT: u32 = 1 << (BASEPRI_IRQ_HIGH % 32);
+const BASEPRI_IRQ_MASK: u32 = BASEPRI_IRQ_LOW_BIT | BASEPRI_IRQ_HIGH_BIT;
+const BASEPRI_RECORD: u32 = 0x2000_0600;
 
 const SPI1_BASE: u32 = 0x4001_3000;
 const SPI1_IRQ: u32 = 35;
@@ -254,6 +260,7 @@ fn main() -> ! {
     unsafe { smoke_pendsv_clear_and_repend() };
     unsafe { smoke_external_irq_stack_frame() };
     unsafe { smoke_external_irq_psp_stack_frame() };
+    unsafe { smoke_basepri_priority_mask() };
     smoke_usart2_txe_irq();
     smoke_usart2_rx_enable_gate();
     smoke_spi1_irq_and_max31855();
@@ -1391,6 +1398,231 @@ unsafe fn smoke_external_irq_psp_stack_frame() -> bool {
         putline(b"IRQ M3 PSP FRAME CHECK FAILED");
     }
     ok
+}
+
+/// Verify BASEPRI blocks a lower-priority external interrupt while allowing a
+/// higher-priority interrupt through, then releases the still-pending request.
+unsafe fn smoke_basepri_priority_mask() -> bool {
+    const NVIC_ISER1: u32 = 0xE000_E104;
+    const NVIC_ICER1: u32 = 0xE000_E184;
+    const NVIC_ISPR1: u32 = 0xE000_E204;
+    const NVIC_ICPR1: u32 = 0xE000_E284;
+    const NVIC_IABR1: u32 = 0xE000_E304;
+    const NVIC_IPR_WORD: u32 = 0xE000_E424;
+    const VECTOR_LOW: usize = 16 + BASEPRI_IRQ_LOW as usize;
+    const VECTOR_HIGH: usize = 16 + BASEPRI_IRQ_HIGH as usize;
+    const VECTOR_WORDS: usize = VECTOR_HIGH + 1;
+    const RECORD_WORDS: usize = 10;
+
+    let source_vtor = read_volatile(SCB_VTOR as *const u32);
+    let prior_primask: u32;
+    let prior_basepri: u32;
+    core::arch::asm!(
+        "mrs {primask}, PRIMASK",
+        "mrs {basepri}, BASEPRI",
+        "cpsid i",
+        primask = out(reg) prior_primask,
+        basepri = out(reg) prior_basepri,
+        options(nomem, nostack, preserves_flags),
+    );
+
+    let priority_before = read_volatile(NVIC_IPR_WORD as *const u32);
+    let prior_enabled = read_volatile(NVIC_ISER1 as *const u32) & BASEPRI_IRQ_MASK;
+    write_volatile(NVIC_ICER1 as *mut u32, BASEPRI_IRQ_MASK);
+    write_volatile(NVIC_ICPR1 as *mut u32, BASEPRI_IRQ_MASK);
+    write_volatile(
+        NVIC_IPR_WORD as *mut u32,
+        (priority_before & 0x0000_FFFF) | 0x4080_0000,
+    );
+
+    let table = IRQ_FRAME_VECTOR_TABLE as *mut u32;
+    for slot in 0..VECTOR_WORDS {
+        write_volatile(table.add(slot), 0);
+    }
+    write_volatile(
+        table.add(VECTOR_LOW),
+        (BasepriLowHandler as *const () as usize as u32) | 1,
+    );
+    write_volatile(
+        table.add(VECTOR_HIGH),
+        (BasepriHighHandler as *const () as usize as u32) | 1,
+    );
+    let record = BASEPRI_RECORD as *mut u32;
+    for word in 0..RECORD_WORDS {
+        write_volatile(record.add(word), 0);
+    }
+    write_volatile(SCB_VTOR as *mut u32, IRQ_FRAME_VECTOR_TABLE);
+    core::arch::asm!("dsb", "isb", options(nostack, preserves_flags));
+
+    let vector_installed = read_volatile(SCB_VTOR as *const u32) == IRQ_FRAME_VECTOR_TABLE;
+    let priorities = read_volatile(NVIC_IPR_WORD as *const u32) & 0xFFFF_0000;
+    write_volatile(NVIC_ISER1 as *mut u32, BASEPRI_IRQ_MASK);
+    core::arch::asm!(
+        "msr BASEPRI, {mask}",
+        "dsb",
+        "isb",
+        mask = in(reg) 0x80_u32,
+        options(nostack, preserves_flags),
+    );
+    write_volatile(NVIC_ISPR1 as *mut u32, BASEPRI_IRQ_MASK);
+    core::arch::asm!(
+        "msr PRIMASK, {primask}",
+        primask = in(reg) prior_primask,
+        options(nostack, preserves_flags),
+    );
+
+    for _ in 0..4_096 {
+        if read_volatile(record.add(0)) != 0 {
+            break;
+        }
+        core::arch::asm!("nop", options(nomem, nostack, preserves_flags));
+    }
+    let high_entries = read_volatile(record.add(0));
+    let high_ipsr = read_volatile(record.add(1));
+    let high_active = read_volatile(record.add(2));
+    let high_pending = read_volatile(record.add(3));
+    let high_basepri = read_volatile(record.add(4));
+    let low_entries_before_release = read_volatile(record.add(5));
+    let low_pending_before_release = read_volatile(NVIC_ISPR1 as *const u32) & BASEPRI_IRQ_MASK;
+    let low_active_before_release = read_volatile(NVIC_IABR1 as *const u32) & BASEPRI_IRQ_MASK;
+    let basepri_before_release: u32;
+    core::arch::asm!(
+        "mrs {basepri}, BASEPRI",
+        basepri = out(reg) basepri_before_release,
+        options(nomem, nostack, preserves_flags),
+    );
+
+    core::arch::asm!(
+        "msr BASEPRI, {basepri}",
+        "dsb",
+        "isb",
+        basepri = in(reg) prior_basepri,
+        options(nostack, preserves_flags),
+    );
+    for _ in 0..4_096 {
+        if read_volatile(record.add(5)) != 0 {
+            break;
+        }
+        core::arch::asm!("nop", options(nomem, nostack, preserves_flags));
+    }
+
+    let low_entries = read_volatile(record.add(5));
+    let low_ipsr = read_volatile(record.add(6));
+    let low_active = read_volatile(record.add(7));
+    let low_pending = read_volatile(record.add(8));
+    let high_pending_after = read_volatile(NVIC_ISPR1 as *const u32) & BASEPRI_IRQ_MASK;
+
+    core::arch::asm!("cpsid i", options(nomem, nostack, preserves_flags));
+    write_volatile(NVIC_ICER1 as *mut u32, BASEPRI_IRQ_MASK);
+    write_volatile(NVIC_ICPR1 as *mut u32, BASEPRI_IRQ_MASK);
+    write_volatile(NVIC_IPR_WORD as *mut u32, priority_before);
+    write_volatile(SCB_VTOR as *mut u32, source_vtor);
+    if prior_enabled != 0 {
+        write_volatile(NVIC_ISER1 as *mut u32, prior_enabled);
+    }
+    core::arch::asm!(
+        "msr BASEPRI, {basepri}",
+        "msr PRIMASK, {primask}",
+        "dsb",
+        "isb",
+        basepri = in(reg) prior_basepri,
+        primask = in(reg) prior_primask,
+        options(nostack, preserves_flags),
+    );
+
+    let masked = high_entries == 1
+        && high_ipsr == 16 + BASEPRI_IRQ_HIGH
+        && high_active == BASEPRI_IRQ_HIGH_BIT
+        && high_pending == BASEPRI_IRQ_LOW_BIT
+        && high_basepri == 0x80
+        && low_entries_before_release == 0
+        && low_pending_before_release == BASEPRI_IRQ_LOW_BIT
+        && low_active_before_release == 0
+        && basepri_before_release == 0x80;
+    let released = low_entries == 1
+        && low_ipsr == 16 + BASEPRI_IRQ_LOW
+        && low_active == BASEPRI_IRQ_LOW_BIT
+        && low_pending == 0
+        && high_pending_after == 0
+        && read_volatile(NVIC_IABR1 as *const u32) & BASEPRI_IRQ_MASK == 0
+        && read_volatile(NVIC_ISPR1 as *const u32) & BASEPRI_IRQ_MASK == 0;
+    let restored = read_volatile(SCB_VTOR as *const u32) == source_vtor
+        && read_volatile(NVIC_IPR_WORD as *const u32) == priority_before
+        && read_volatile(NVIC_ICPR1 as *const u32) & BASEPRI_IRQ_MASK == 0;
+    let ok = prior_primask == 0
+        && prior_basepri == 0
+        && vector_installed
+        && priorities == 0x4080_0000
+        && masked
+        && released
+        && restored;
+
+    if ok {
+        putline(b"BASEPRI M3 HIGH=55 LOW=54 MASKED=1 PENDING=1 RELEASED=1 ok");
+    } else {
+        putline(b"BASEPRI M3 CHECK FAILED");
+    }
+    ok
+}
+
+#[no_mangle]
+pub extern "C" fn BasepriHighHandler() {
+    let ipsr: u32;
+    let basepri: u32;
+    unsafe {
+        core::arch::asm!(
+            "mrs {ipsr}, IPSR",
+            "mrs {basepri}, BASEPRI",
+            ipsr = out(reg) ipsr,
+            basepri = out(reg) basepri,
+            options(nomem, nostack, preserves_flags),
+        );
+    }
+    unsafe {
+        let record = BASEPRI_RECORD as *mut u32;
+        let entries = read_volatile(record.add(0));
+        write_volatile(record.add(0), entries.wrapping_add(1));
+        write_volatile(record.add(1), ipsr);
+        write_volatile(
+            record.add(2),
+            read_volatile(0xE000_E304 as *const u32) & BASEPRI_IRQ_MASK,
+        );
+        write_volatile(
+            record.add(3),
+            read_volatile(0xE000_E204 as *const u32) & BASEPRI_IRQ_MASK,
+        );
+        write_volatile(record.add(4), basepri);
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn BasepriLowHandler() {
+    let ipsr: u32;
+    let basepri: u32;
+    unsafe {
+        core::arch::asm!(
+            "mrs {ipsr}, IPSR",
+            "mrs {basepri}, BASEPRI",
+            ipsr = out(reg) ipsr,
+            basepri = out(reg) basepri,
+            options(nomem, nostack, preserves_flags),
+        );
+    }
+    unsafe {
+        let record = BASEPRI_RECORD as *mut u32;
+        let entries = read_volatile(record.add(5));
+        write_volatile(record.add(5), entries.wrapping_add(1));
+        write_volatile(record.add(6), ipsr);
+        write_volatile(
+            record.add(7),
+            read_volatile(0xE000_E304 as *const u32) & BASEPRI_IRQ_MASK,
+        );
+        write_volatile(
+            record.add(8),
+            read_volatile(0xE000_E204 as *const u32) & BASEPRI_IRQ_MASK,
+        );
+        write_volatile(record.add(9), basepri);
+    }
 }
 
 /// Push r4/r7 to preserve the ABI and keep MSP aligned, then pend USART2's
