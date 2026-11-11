@@ -28,6 +28,12 @@ NMOS load line on PA0/ADC1_IN0. Its co-simulation test checks the independently
 calculated drain voltage across gate bias points, the firmware-visible ADC1
 conversion, and isolation from the NTC and diode channels.
 
+[`analog-jfet-gate-charge-adc.yaml`](analog-jfet-gate-charge-adc.yaml) compares
+matched level-1 NJF branches with and without CGS/CGD depletion charge on
+PA2/PA3. The co-simulation test checks the transient against an independent
+backward-Euler charge recurrence, converts both gate voltages through ADC1, and
+keeps the unrelated NTC and diode routed on PA1/PA4.
+
 ## Fidelity
 
 **Sim-derived, not silicon-verified.** No F411 part was on a bench for this
@@ -62,4 +68,7 @@ Expected result:
    blob and asserts its TIER1 self-test transcript.
 3. `analog-ntc-diode-system.yaml`: reusable generic NTC and diode analog models
    routed to the F411's modeled ADC1 inputs.
-4. `VALIDATION.md`: reproducible validation commands and the honest scope.
+4. `analog-mosfet-switch.yaml`: generic NMOS load-line model routed to ADC1.
+5. `analog-jfet-gate-charge-adc.yaml`: matched generic JFET charge and control
+   branches routed to ADC1.
+6. `VALIDATION.md`: reproducible validation commands and the honest scope.
