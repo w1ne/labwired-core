@@ -27,9 +27,11 @@ Expected result:
 
 The mixed-signal fixtures route a generic Beta NTC divider, a Shockley diode load line,
 and a Gummel–Poon NPN common-emitter load to PA0/ADC1_IN0, PA1/ADC1_IN1, and
-PA2/ADC1_IN2. The board-specific integration test asserts the independent load-line
+PA2/ADC1_IN2. The board-specific integration tests assert independent load-line
 references and firmware-visible ADC1 results while checking that the three channels stay
-isolated. This is simulation-model coverage, not a silicon-validation claim.
+isolated. The BJT charge test compares the uncharged load line with CJE, CJC, TF, and
+combined charge cases over the same PA2 route. This is simulation-model coverage, not a
+silicon-validation claim.
 
 ## Files
 

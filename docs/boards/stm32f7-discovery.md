@@ -20,8 +20,10 @@ USART1 (the shared STM32 v2 peripheral IP), and toggles PI1 through BSRR. The
 F7 descriptor builds through `SystemBus::from_config` with the shared F7/F4
 peripheral set; the F7-specific RCC register layout is modelled. ADC1 uses the
 shared F4-profile 12-bit SAR model at `0x40012000`, with PA0/ADC123_IN0 and
-PA1/ADC123_IN1 exposed through `analog_pins`. The mixed-signal integration test
-routes an NTC divider and an unrelated Shockley diode through those two channels.
+PA1/ADC123_IN1 exposed through `analog_pins`; PA2/ADC123_IN2 is the Gummel–Poon
+collector input. The mixed-signal integration tests route an NTC divider and an
+unrelated Shockley diode through PA0/PA1, then assert the BJT load line and its
+CJE, CJC, and TF transient effects through firmware-visible ADC1 conversions.
 
 ## What is not proven
 

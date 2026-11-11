@@ -276,3 +276,162 @@ fn stm32f746_discovery_ntc_diode_and_bjt_netlists_reach_adc1_end_to_end() {
         "the 25 °C NTC divider remains half scale throughout the BJT sweep"
     );
 }
+
+#[test]
+fn stm32f746_discovery_bjt_junction_and_transit_charge_reach_adc1_end_to_end() {
+    let system_path = root("configs/systems/stm32f7-discovery.yaml");
+    let mut profile =
+        SystemManifest::from_file(&system_path).expect("load STM32F7 Discovery profile");
+    let generic = SystemManifest::from_file(root(
+        "examples/stm32f7-discovery/analog-ntc-diode-system.yaml",
+    ))
+    .expect("load independent generic NTC and diode netlists");
+    let charge =
+        SystemManifest::from_file(root("examples/stm32f7-discovery/analog-bjt-charge.yaml"))
+            .expect("load generic Gummel–Poon charge netlist");
+    let charge_model = charge
+        .cosim_models
+        .into_iter()
+        .next()
+        .expect("fixture has one parameterized BJT branch");
+    let base_netlist = charge_model.config["netlist_text"]
+        .as_str()
+        .expect("BJT fixture has inline netlist text")
+        .to_owned();
+
+    let system_chip = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&system_chip).expect("load STM32F746 descriptor");
+    for (pad, channel) in [("PA0", 0), ("PA1", 1), ("PA2", 2)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build STM32F7 Discovery bus");
+    for channel in 0..=3 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    let expected_diode_v = diode_load_line_voltage();
+    let mut results = Vec::new();
+    for (case, parameters) in [
+        ("uncharged", ""),
+        ("base_emitter", "CJE=10n VJE=0.7 MJE=0.33 FC=0.5"),
+        ("base_collector", "CJC=10n VJC=0.7 MJC=0.33 FC=0.5"),
+        ("transit", "TF=100n"),
+        (
+            "combined",
+            "CJE=10n VJE=0.7 MJE=0.33 CJC=10n VJC=0.7 MJC=0.33 FC=0.5 TF=100n",
+        ),
+    ] {
+        let mut model = charge_model.clone();
+        model.id = format!("bjt_charge_{case}");
+        let netlist = if parameters.is_empty() {
+            base_netlist.clone()
+        } else {
+            base_netlist.replace("VAF=50)", &format!("VAF=50 {parameters})"))
+        };
+        model.config.insert(
+            "netlist_text".to_string(),
+            serde_yaml::Value::String(netlist),
+        );
+        profile.cosim_models = generic.cosim_models.clone();
+        profile.cosim_models.push(model);
+
+        let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+            .expect("build analog co-simulation")
+            .expect("fixture carries NTC, diode, and one BJT charge case");
+        assert_eq!(
+            session.binding_errors(),
+            &[] as &[RoutingError],
+            "{case}: NTC, diode, and BJT resolve to PA0/PA1/PA2"
+        );
+        session
+            .set_signal_number("ui.ntc.temperature_c", 25.0)
+            .expect("hold unrelated NTC at nominal temperature");
+        session
+            .set_signal_number("ui.bjt_charge.base_v", 0.0)
+            .expect("initialize BJT base drive");
+        let mut cycles = session.cycles_until_boundary(0);
+        let (initial_steps, initial_errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("initialize NTC, diode, and BJT before the base-drive step");
+        assert_eq!(initial_steps.len(), 3, "all three generic branches solve");
+        assert!(
+            initial_errors.is_empty(),
+            "unexpected route errors: {initial_errors:?}"
+        );
+
+        session
+            .set_signal_number("ui.bjt_charge.base_v", 0.8)
+            .expect("step the generic BJT base drive");
+        let mut first_collector_v = None;
+        let mut settled_collector_v = None;
+        for step in 0..8_000 {
+            cycles += session.cycles_until_boundary(cycles);
+            let (steps, errors) = session
+                .advance_to(cycles, &mut bus)
+                .expect("solve and route NTC, diode, and BJT charge branch");
+            assert_eq!(steps.len(), 3, "all three branches solve at each 1 us step");
+            assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+            let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+            let diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+            let collector_v = signal_voltage(&session, "board.analog.pa2_volts");
+            assert!(
+                (ntc_v - 1.65).abs() < 1e-9,
+                "the unrelated NTC stays isolated"
+            );
+            assert!(
+                (diode_v - expected_diode_v).abs() < 2e-5,
+                "the unrelated Shockley diode stays at its independent load line"
+            );
+
+            let expected_count = expected_adc_count(collector_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, 2),
+                expected_count,
+                "{case}: solved collector voltage seeds ADC1_IN2"
+            );
+            assert_eq!(
+                stm32f4_adc_convert(&mut bus, 2),
+                u32::from(expected_count),
+                "{case}: firmware-visible ADC1_IN2 follows the BJT charge response"
+            );
+            assert_eq!(adc_channel_count(&mut bus, 0), expected_adc_count(ntc_v));
+            assert_eq!(adc_channel_count(&mut bus, 1), expected_adc_count(diode_v));
+            assert_eq!(
+                adc_channel_count(&mut bus, 3),
+                0xFFFF,
+                "neighboring ADC1_IN3 remains undriven"
+            );
+            if step == 0 {
+                first_collector_v = Some(collector_v);
+            }
+            if step == 7_999 {
+                settled_collector_v = Some(collector_v);
+            }
+        }
+        results.push((
+            case,
+            first_collector_v.expect("first transient sample was recorded"),
+            settled_collector_v.expect("settled sample was recorded"),
+        ));
+    }
+
+    let dc_reference = bjt_collector_voltage(0.8);
+    for (case, _, settled) in &results {
+        assert!(
+            (settled - dc_reference).abs() < 2e-4,
+            "{case}: charge must settle to the independent Gummel–Poon DC load line {dc_reference} V, got {settled} V"
+        );
+    }
+    let control_first = results[0].1;
+    for (case, first, _) in results.iter().skip(1) {
+        assert!(
+            (first - control_first).abs() > 0.01,
+            "{case}: junction/transit charge must change the first routed transient, control={control_first} V, charged={first} V"
+        );
+    }
+}
