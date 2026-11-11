@@ -165,6 +165,57 @@ fn bjt_collector_voltage_with_recombination(base_drive_v: f64, recombination: bo
     collector_for_vbe(0.5 * (low + high))
 }
 
+/// Independent Gummel–Poon collector load line with optional forward Early effect.
+fn bjt_collector_voltage_with_early_effect(base_drive_v: f64, vaf_v: Option<f64>) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const COLLECTOR_OHMS: f64 = 1_000.0;
+    const BASE_OHMS: f64 = 10_000.0;
+    const IS_A: f64 = 1e-16;
+    const BF: f64 = 80.0;
+    const BR: f64 = 4.0;
+    const VAR: f64 = 75.0;
+    const VT: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+
+    let currents = |vbe: f64, collector_v: f64| {
+        let vbc = vbe - collector_v;
+        let forward = (vbe / VT).exp();
+        let reverse = (vbc / VT).exp();
+        let base_width = 1.0 - vaf_v.map_or(0.0, |vaf| vbc / vaf) - vbe / VAR;
+        let transport = IS_A * (forward - reverse) * base_width;
+        let base_collector = (IS_A / BR) * (reverse - 1.0);
+        let base_emitter = (IS_A / BF) * (forward - 1.0);
+        (transport - base_collector, base_emitter + base_collector)
+    };
+
+    let collector_for_vbe = |vbe: f64| {
+        let (mut low, mut high) = (0.0, SUPPLY_V);
+        for _ in 0..100 {
+            let collector_v = 0.5 * (low + high);
+            let (collector_current, _) = currents(vbe, collector_v);
+            let residual = (SUPPLY_V - collector_v) / COLLECTOR_OHMS - collector_current;
+            if residual > 0.0 {
+                low = collector_v;
+            } else {
+                high = collector_v;
+            }
+        }
+        0.5 * (low + high)
+    };
+
+    let (mut low, mut high) = (0.0, base_drive_v);
+    for _ in 0..100 {
+        let vbe = 0.5 * (low + high);
+        let collector_v = collector_for_vbe(vbe);
+        let (_, base_current) = currents(vbe, collector_v);
+        if (base_drive_v - vbe) / BASE_OHMS > base_current {
+            low = vbe;
+        } else {
+            high = vbe;
+        }
+    }
+    collector_for_vbe(0.5 * (low + high))
+}
+
 fn signal_number(session: &CosimSession, path: &str) -> f64 {
     match session.signals().get(path) {
         Some(CosimSignalValue::F64(value)) => *value,
@@ -711,5 +762,139 @@ fn arduino_zero_bjt_base_recombination_reaches_samd21_adc_alongside_ntc_and_diod
     assert!(
         recombination_deltas.iter().any(|delta| *delta > 0.02),
         "ISE/NE base recombination must measurably change the collector load line: {recombination_deltas:?}"
+    );
+}
+
+#[test]
+fn arduino_zero_bjt_early_effect_reaches_samd21_adc_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/arduino-zero.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load Arduino Zero profile");
+    let generic =
+        SystemManifest::from_file(root("examples/arduino-zero/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and diode netlists");
+    let bjt = SystemManifest::from_file(root(
+        "examples/arduino-zero/analog-bjt-early-effect-system.yaml",
+    ))
+    .expect("load matched generic Gummel–Poon Early-effect branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(bjt.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load ATSAMD21G18A descriptor");
+    for (pad, channel) in [("PA02", 0), ("PA03", 1), ("PB08", 2), ("PB09", 3)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build Arduino Zero bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal session")
+        .expect("profile contains NTC, diode, and matched BJT branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must resolve to SAMD21 ADC channels 0 through 3"
+    );
+
+    bus.write_u8(REFCTRL, 1).expect("select INTVCC0 reference");
+    bus.write_u8(CTRLA, 1 << 1).expect("enable ADC");
+    for (port, pin) in [(PORT_A, 2), (PORT_A, 3), (PORT_B, 8), (PORT_B, 9)] {
+        enable_adc_pad_b(&mut bus, port, pin);
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold unrelated NTC at nominal temperature");
+    session
+        .set_signal_number("ui.bjt_early.base_v", 0.0)
+        .expect("initialize both BJT base-drive sources");
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("initialize the independent analog branches");
+    assert_eq!(
+        initial_steps.len(),
+        4,
+        "NTC, diode, and both BJT branches solve"
+    );
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected route errors: {initial_errors:?}"
+    );
+
+    let expected_ntc_v = 3.3 * 2_200.0 / (ntc_resistance_ohms(25.0) + 2_200.0);
+    let expected_diode_v = diode_load_line_voltage();
+    let adc_index = bus
+        .find_peripheral_index_by_name("adc")
+        .expect("SAMD21 ADC is present");
+    let mut early_effect_deltas = Vec::new();
+    for base_drive_v in [0.70_f64, 0.78, 0.86] {
+        session
+            .set_signal_number("ui.bjt_early.base_v", base_drive_v)
+            .expect("set common BJT base drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and BJT Early-effect branches");
+        assert_eq!(steps.len(), 4, "all four branches solve at each drive");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let voltages = [
+            signal_number(&session, "board.analog.pa02_volts"),
+            signal_number(&session, "board.analog.pa03_volts"),
+            signal_number(&session, "board.analog.pb08_volts"),
+            signal_number(&session, "board.analog.pb09_volts"),
+        ];
+        assert!((voltages[0] - expected_ntc_v).abs() < 1e-9);
+        assert!((voltages[2] - expected_diode_v).abs() < 2e-5);
+
+        let expected_early_v = bjt_collector_voltage_with_early_effect(base_drive_v, Some(50.0));
+        let expected_control_v = bjt_collector_voltage_with_early_effect(base_drive_v, None);
+        assert!(
+            (voltages[1] - expected_early_v).abs() < 5e-5,
+            "VAF=50 branch must match independent load line {expected_early_v} V, got {} V",
+            voltages[1]
+        );
+        assert!(
+            (voltages[3] - expected_control_v).abs() < 5e-5,
+            "no-forward-Early control must match independent load line {expected_control_v} V, got {} V",
+            voltages[3]
+        );
+        assert!(
+            voltages[1] < voltages[3] - 0.001,
+            "finite VAF increases collector current: {} V vs {} V",
+            voltages[1],
+            voltages[3]
+        );
+        early_effect_deltas.push(voltages[3] - voltages[1]);
+
+        for (channel, voltage) in voltages.iter().copied().enumerate() {
+            let channel = channel as u8;
+            let expected_input = (voltage * 1000.0 + 0.5).floor() as u16;
+            let adc = bus.peripherals[adc_index]
+                .dev
+                .as_any()
+                .expect("ADC downcasts")
+                .downcast_ref::<Samd21Adc>()
+                .expect("the board ADC uses Samd21Adc");
+            assert_eq!(
+                adc.channel_input_mv(channel),
+                Some(expected_input),
+                "solved voltage must seed SAMD21 AIN{channel}"
+            );
+            assert_eq!(
+                convert_on_next_tick(&mut bus, channel),
+                expected_code(voltage, 12, 3300 * 100 / 148),
+                "firmware-visible 12-bit AIN{channel} conversion must report {voltage} V"
+            );
+        }
+        assert_eq!(
+            convert_on_next_tick(&mut bus, 4),
+            0,
+            "unrouted AIN4 remains zero"
+        );
+    }
+    assert!(
+        early_effect_deltas.iter().any(|delta| *delta > 0.02),
+        "finite VAF must measurably shift the collector load line: {early_effect_deltas:?}"
     );
 }
