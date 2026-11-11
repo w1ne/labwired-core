@@ -3,24 +3,24 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      13,
-      537001958,
+      126720,
+      32,
       0,
       3221225472,
-      126208,
+      61,
       1073759232,
       1073875988,
       537001968,
       13,
-      429496730,
-      134229460,
-      57,
-      429496730,
-      537001944,
+      6554,
+      111,
       19,
-      134228928
+      134232771,
+      537001904,
+      134232828,
+      134232358
     ],
-    "pc": 134228928,
+    "pc": 134232358,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -31,7 +31,7 @@
     ],
     "vtor": 0,
     "waiting_for_event": false,
-    "event_register": false
+    "event_register": true
   },
   "steps_executed": 4000000,
   "cycles": 4000000,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "e183256f83c48c0f6f9e44f6f56d5ab7cba27eaed486bc0cf44d993bddbdaa22",
+  "firmware_hash": "a06162c96ee101887345630e620acbf2949d355b446fbfd11196648ffcbe69cd",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-f4-discovery-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f4_discovery.yaml",
