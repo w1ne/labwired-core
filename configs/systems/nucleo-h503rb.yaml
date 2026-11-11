@@ -1,0 +1,22 @@
+# ST NUCLEO-H503RB (MB1814) focused GPIO + default VCP profile.
+# UM3121 maps LD2 to active-high PA5, the default B1 route to PC13, and the
+# default STLINK-V3EC VCP to USART3 on PA3/PA4. Other board features are out of
+# scope for this profile.
+name: "nucleo-h503rb"
+chip: "../chips/stm32h503rb.yaml"
+cpu_hz: 250_000_000
+debug_uart: "uart3"
+external_devices: []
+board_io:
+  - id: "led_ld2"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true
+  - id: "button_b1"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: true

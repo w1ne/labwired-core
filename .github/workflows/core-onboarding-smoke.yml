@@ -23,6 +23,7 @@ on:
       - "crates/firmware-esp32c61-bme280-smoke/**"
       - "crates/firmware-esp32h2-devkitm-1-smoke/**"
       - "crates/firmware-nucleo-f446re-smoke/**"
+      - "crates/firmware-nucleo-h503rb-smoke/**"
       - "Cargo.toml"
       - "Cargo.lock"
       - "crates/cli/**"
@@ -82,6 +83,11 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/nucleo-h533re/io-smoke.yaml
             system: configs/systems/nucleo-h533re.yaml
+          - id: nucleo-h503rb
+            crate: firmware-nucleo-h503rb-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/nucleo-h503rb/io-smoke.yaml
+            system: configs/systems/nucleo-h503rb.yaml
           - id: nucleo-f446re
             crate: firmware-nucleo-f446re-smoke
             target: thumbv7em-none-eabi

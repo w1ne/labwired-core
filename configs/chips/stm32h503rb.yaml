@@ -1,0 +1,77 @@
+# STM32H503RBT6 on the NUCLEO-H503RB (MB1814).
+#
+# This is intentionally a narrow model for the board smoke: H5 RCC, GPIOA/C,
+# USART3, and SysTick. UM3121 maps the default VCP route to USART3 PA3/PA4,
+# LD2 to PA5, and B1 to PC13. Other H503 peripherals and board connectors are
+# not claimed here.
+#
+# Sources: ST DS14053 / RM0492, the ST cmsis-device-h5 STM32H503 header, and
+# UM3121. The H5 GPIO and USART register profiles are reused from the H533/H563
+# models; reset values below are family-derived, not captured from H503 silicon.
+
+name: "stm32h503rb"
+arch: "arm"
+core: "cortex-m33"
+cpu_hz: 250_000_000
+
+flash:
+  base: 0x08000000
+  size: "128KB"
+ram:
+  base: 0x20000000
+  size: "32KB"
+
+pins:
+  PA3: { gpio: gpioa, bit: 3, functions: [{ type: uart, peripheral: uart3, role: rx }] }
+  PA4: { gpio: gpioa, bit: 4, functions: [{ type: uart, peripheral: uart3, role: tx }] }
+  PA5: { gpio: gpioa, bit: 5, functions: [{ type: gpio, peripheral: gpioa }] }
+  PC13: { gpio: gpioc, bit: 13, functions: [{ type: gpio, peripheral: gpioc }] }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x44020C00
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32h563/rcc.yaml"
+      profile: "h5"
+
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x42020000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32h563/gpioa.yaml"
+      profile: "stm32v2"
+      reset_moder: 0xABFFFFFF
+      reset_seccfgr: 0x0000FFFF
+      reset_ospeedr: 0x0C000000
+      reset_pupdr: 0x64000000
+    clock: { reg: "ahb2enr", bit: 0 }
+
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x42020800
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32h563/gpioc.yaml"
+      profile: "stm32v2"
+      reset_moder: 0xFFFFFFFF
+      reset_seccfgr: 0x0000FFFF
+    clock: { reg: "ahb2enr", bit: 2 }
+
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    config:
+      calib: 0x001003E8
+
+  - id: "uart3"
+    type: "uart"
+    base_address: 0x40004800
+    size: "1KB"
+    irq: 60
+    config:
+      debug_schema: "../peripherals/stm32h563/usart3.yaml"
+      profile: "stm32v2"
+    clock: { reg: "apb1lenr", bit: 18 }
