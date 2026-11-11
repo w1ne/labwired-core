@@ -13,6 +13,10 @@ const SCB_VTOR: *mut u32 = 0xE000_ED08 as *mut u32;
 #[cfg(feature = "stm32h743-exception-frame")]
 const SCB_CCR: *mut u32 = 0xE000_ED14 as *mut u32;
 #[cfg(feature = "stm32h743-exception-frame")]
+const SCB_SHCSR: *mut u32 = 0xE000_ED24 as *mut u32;
+#[cfg(feature = "stm32h743-exception-frame")]
+const SCB_CFSR: *mut u32 = 0xE000_ED28 as *mut u32;
+#[cfg(feature = "stm32h743-exception-frame")]
 const SCB_CCR_STKALIGN: u32 = 1 << 9;
 #[cfg(feature = "stm32h743-exception-frame")]
 const SCB_CPACR: *mut u32 = 0xE000_ED88 as *mut u32;
@@ -20,6 +24,10 @@ const SCB_CPACR: *mut u32 = 0xE000_ED88 as *mut u32;
 const CPACR_CP10_CP11: u32 = 0x00F0_0000;
 #[cfg(feature = "stm32h743-exception-frame")]
 const CPACR_PRIVILEGED_ONLY: u32 = 0x0050_0000;
+#[cfg(feature = "stm32h743-exception-frame")]
+const SHCSR_USGFAULTENA: u32 = 1 << 18;
+#[cfg(feature = "stm32h743-exception-frame")]
+const CFSR_UFSR_NOCP: u32 = 1 << 19;
 #[cfg(feature = "stm32h743-exception-frame")]
 const NVIC_ISER0: *mut u32 = 0xE000_E100 as *mut u32;
 #[cfg(feature = "stm32h743-exception-frame")]
@@ -55,6 +63,9 @@ static mut RAM_VECTOR_TABLE: RamVectorTable = RamVectorTable([0; 64]);
 // Handler scratch and the stacked frame captured before exception return.
 #[cfg(feature = "stm32h743-exception-frame")]
 static mut EXCEPTION_RECORD: [u32; 18] = [0; 18];
+
+#[cfg(feature = "stm32h743-exception-frame")]
+static mut CPACR_FAULT_RECORD: [u32; 4] = [0; 4];
 
 #[cfg(feature = "stm32h743-exception-frame")]
 static FP_SENTINELS: [u32; 16] = [
@@ -345,6 +356,54 @@ unsafe extern "C" fn smoke_nested_exception_handler() {
         record = sym FP_NEST_RECORD,
         touch = sym FP_LAZY_NEST_TOUCH,
         fp_lazy_touch_fn = sym touch_fp_in_handler,
+    );
+}
+
+/// Record and skip the VFP instruction that raises UsageFault(NOCP) when an
+/// unprivileged Thread mode is limited to privileged CP10/CP11 access. The
+/// core-register frame begins at SP; an extended FP frame follows it.
+#[cfg(feature = "stm32h743-exception-frame")]
+#[unsafe(naked)]
+unsafe extern "C" fn nocp_usagefault_handler() {
+    core::arch::naked_asm!(
+        "mov r0, lr",
+        "tst r0, #4",
+        "ite eq",
+        "mrseq r0, msp",
+        "mrsne r0, psp",
+        "ldr r1, ={record}",
+        "ldr r2, [r0, #24]",
+        "str r2, [r1]",
+        "add r2, r2, #4",
+        "str r2, [r0, #24]",
+        "ldr r2, ={cfsr}",
+        "ldr r2, [r2]",
+        "str r2, [r1, #4]",
+        "mrs r2, ipsr",
+        "str r2, [r1, #8]",
+        "mov r2, lr",
+        "str r2, [r1, #12]",
+        "bx lr",
+        record = sym CPACR_FAULT_RECORD,
+        cfsr = const 0xE000_ED28usize,
+    );
+}
+
+/// Switch Thread mode to unprivileged and execute one four-byte VFP
+/// instruction. A correct CPACR implementation returns here via the installed
+/// UsageFault handler, which advances the stacked PC past the denied access.
+#[cfg(feature = "stm32h743-exception-frame")]
+#[inline(never)]
+unsafe fn attempt_unprivileged_fp() {
+    asm!(
+        "mrs r0, control",
+        "bic r0, r0, #2",
+        "orr r0, r0, #1",
+        "msr control, r0",
+        "isb",
+        "vmov.f32 s31, s31",
+        out("r0") _,
+        options(nostack)
     );
 }
 
@@ -1354,7 +1413,49 @@ fn check_cortex_m7_exception_frame() -> bool {
     send(b" active=");
     send_hex32(nested_touch_active);
     send(b"\r\n");
-    ok
+
+    // CPACR privileged-only must fault a real VFP instruction from
+    // unprivileged Thread mode, set CFSR.NOCP, and enter UsageFault. The
+    // handler records the stacked frame and skips the denied instruction so
+    // the smoke can report the result and continue in unprivileged mode.
+    let nocp_vector = (nocp_usagefault_handler as *const () as usize as u32) | 1;
+    unsafe {
+        let vector_table = core::ptr::addr_of_mut!(RAM_VECTOR_TABLE.0).cast::<u32>();
+        let record = core::ptr::addr_of_mut!(CPACR_FAULT_RECORD).cast::<u32>();
+        write_volatile(vector_table.add(6), nocp_vector);
+        write_volatile(SCB_VTOR, vector_table as u32);
+        for index in 0..4 {
+            write_volatile(record.add(index), 0);
+        }
+        write_volatile(SCB_CFSR, CFSR_UFSR_NOCP); // clear a stale NOCP latch
+        write_volatile(SCB_SHCSR, read_volatile(SCB_SHCSR) | SHCSR_USGFAULTENA);
+        write_volatile(SCB_CPACR, CPACR_PRIVILEGED_ONLY);
+        asm!("dsb", "isb", options(nostack, preserves_flags));
+        attempt_unprivileged_fp();
+    }
+    let nocp_record = core::ptr::addr_of!(CPACR_FAULT_RECORD).cast::<u32>();
+    let nocp_pc = unsafe { read_volatile(nocp_record) };
+    let nocp_cfsr = unsafe { read_volatile(nocp_record.add(1)) };
+    let nocp_ipsr = unsafe { read_volatile(nocp_record.add(2)) };
+    let nocp_exc_return = unsafe { read_volatile(nocp_record.add(3)) };
+    let nocp_ok = nocp_pc >= 0x0800_0000
+        && nocp_pc < 0x0810_0000
+        && nocp_cfsr & CFSR_UFSR_NOCP != 0
+        && nocp_ipsr == 6
+        && nocp_exc_return & 0x10 == 0;
+    send(b"cortex-m7 cpacr nocp fault=");
+    send(if nocp_ok { b"1" } else { b"0" });
+    send(b" ipsr=");
+    send_hex32(nocp_ipsr);
+    send(b" cfsr=");
+    send_hex32(nocp_cfsr & CFSR_UFSR_NOCP);
+    send(b" extended=");
+    send(if nocp_exc_return & 0x10 == 0 {
+        b"1\r\n"
+    } else {
+        b"0\r\n"
+    });
+    ok && nocp_ok
 }
 
 #[cfg(feature = "nucleo-h753zi-rx")]
