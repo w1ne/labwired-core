@@ -74,6 +74,10 @@ const SYSTICK_HANDLER_ICSR_FIRST: *mut u32 = 0x2000_010C as *mut u32;
 const SYSTICK_HANDLER_ICSR_SECOND: *mut u32 = 0x2000_0110 as *mut u32;
 const PENDSV_HANDLER_COUNT: *mut u32 = 0x2000_0114 as *mut u32;
 const PENDSV_HANDLER_IPSR: *mut u32 = 0x2000_0118 as *mut u32;
+const IRQ_FRAME_VECTOR_TABLE: u32 = 0x2000_0400;
+const IRQ_FRAME_RECORD: u32 = 0x2000_0500;
+const IRQ_FRAME_EXTERNAL: u32 = 38;
+const IRQ_FRAME_BIT: u32 = 1 << (IRQ_FRAME_EXTERNAL % 32);
 
 const SPI1_BASE: u32 = 0x4001_3000;
 const SPI1_IRQ: u32 = 35;
@@ -247,6 +251,7 @@ fn main() -> ! {
     unsafe { smoke_systick_tickint_gate() };
     unsafe { smoke_systick_cvr_write_preserves_pending() };
     unsafe { smoke_pendsv_clear_and_repend() };
+    unsafe { smoke_external_irq_stack_frame() };
     smoke_usart2_txe_irq();
     smoke_usart2_rx_enable_gate();
     smoke_spi1_irq_and_max31855();
@@ -1124,6 +1129,179 @@ unsafe fn smoke_pendsv_clear_and_repend() -> bool {
         putline(b"PENDSV M3 CHECK FAILED");
     }
     passed
+}
+
+/// Take USART2's external vector with known caller-saved registers and inspect
+/// the architectural Cortex-M3 frame before a Rust prologue can move MSP.
+unsafe fn smoke_external_irq_stack_frame() -> bool {
+    const IRQ_FRAME_VECTOR_INDEX: usize = 16 + IRQ_FRAME_EXTERNAL as usize;
+    const IRQ_FRAME_VECTOR_WORDS: usize = IRQ_FRAME_VECTOR_INDEX + 1;
+    const NVIC_ISER1: u32 = 0xE000_E104;
+    const NVIC_ICER1: u32 = 0xE000_E184;
+    const NVIC_ISPR1: u32 = 0xE000_E204;
+    const NVIC_ICPR1: u32 = 0xE000_E284;
+
+    let source_vtor = read_volatile(SCB_VTOR as *const u32);
+    let prior_primask: u32;
+    core::arch::asm!(
+        "mrs {primask}, PRIMASK",
+        "cpsid i",
+        primask = out(reg) prior_primask,
+        options(nomem, nostack, preserves_flags),
+    );
+
+    write_volatile(NVIC_ICER1 as *mut u32, IRQ_FRAME_BIT);
+    write_volatile(NVIC_ICPR1 as *mut u32, IRQ_FRAME_BIT);
+    let table = IRQ_FRAME_VECTOR_TABLE as *mut u32;
+    for slot in 0..IRQ_FRAME_VECTOR_WORDS {
+        write_volatile(table.add(slot), 0);
+    }
+    write_volatile(
+        table.add(IRQ_FRAME_VECTOR_INDEX),
+        (smoke_external_irq_frame_handler as *const () as usize as u32) | 1,
+    );
+    for word in 0..16 {
+        write_volatile((IRQ_FRAME_RECORD + word * 4) as *mut u32, 0);
+    }
+    write_volatile(SCB_VTOR as *mut u32, IRQ_FRAME_VECTOR_TABLE);
+    core::arch::asm!("dsb", "isb", options(nostack, preserves_flags));
+
+    let msp_before: u32;
+    core::arch::asm!("mrs {}, msp", out(reg) msp_before, options(nomem, nostack, preserves_flags));
+    write_volatile((IRQ_FRAME_RECORD + 52) as *mut u32, msp_before);
+    let vector_installed = read_volatile(SCB_VTOR as *const u32) == IRQ_FRAME_VECTOR_TABLE;
+    write_volatile(NVIC_ISER1 as *mut u32, IRQ_FRAME_BIT);
+    core::arch::asm!(
+        "msr PRIMASK, {primask}",
+        primask = in(reg) prior_primask,
+        options(nostack, preserves_flags),
+    );
+    smoke_pend_usart2_irq_with_sentinels();
+    let msp_after: u32;
+    core::arch::asm!("mrs {}, msp", out(reg) msp_after, options(nomem, nostack, preserves_flags));
+    core::arch::asm!("cpsid i", options(nomem, nostack, preserves_flags));
+
+    let frame_sp = read_volatile(IRQ_FRAME_RECORD as *const u32);
+    let frame_r0 = read_volatile((IRQ_FRAME_RECORD + 4) as *const u32);
+    let frame_r1 = read_volatile((IRQ_FRAME_RECORD + 8) as *const u32);
+    let frame_r2 = read_volatile((IRQ_FRAME_RECORD + 12) as *const u32);
+    let frame_r3 = read_volatile((IRQ_FRAME_RECORD + 16) as *const u32);
+    let frame_r12 = read_volatile((IRQ_FRAME_RECORD + 20) as *const u32);
+    let frame_lr = read_volatile((IRQ_FRAME_RECORD + 24) as *const u32);
+    let frame_pc = read_volatile((IRQ_FRAME_RECORD + 28) as *const u32);
+    let frame_xpsr = read_volatile((IRQ_FRAME_RECORD + 32) as *const u32);
+    let exc_return = read_volatile((IRQ_FRAME_RECORD + 36) as *const u32);
+    let ipsr = read_volatile((IRQ_FRAME_RECORD + 40) as *const u32);
+    let active = read_volatile((IRQ_FRAME_RECORD + 44) as *const u32);
+    let pending = read_volatile((IRQ_FRAME_RECORD + 48) as *const u32);
+    let msp_before_helper = read_volatile((IRQ_FRAME_RECORD + 52) as *const u32);
+    let exception_msp = read_volatile((IRQ_FRAME_RECORD + 60) as *const u32);
+    let handled = read_volatile((IRQ_FRAME_RECORD + 56) as *const u32) == 1;
+
+    write_volatile(NVIC_ICER1 as *mut u32, IRQ_FRAME_BIT);
+    write_volatile(NVIC_ICPR1 as *mut u32, IRQ_FRAME_BIT);
+    write_volatile(SCB_VTOR as *mut u32, source_vtor);
+    core::arch::asm!(
+        "msr PRIMASK, {primask}",
+        "dsb",
+        "isb",
+        primask = in(reg) prior_primask,
+        options(nostack, preserves_flags),
+    );
+
+    let frame_ok = frame_r0 == 0x11
+        && frame_r1 == 0x22
+        && frame_r2 == 0x33
+        && frame_r3 == 0x44
+        && frame_r12 == 0x55
+        && frame_lr & 1 != 0
+        && (0x0800_0000..0x0802_0000).contains(&frame_pc)
+        && frame_xpsr & 0x0100_0000 != 0
+        && frame_xpsr & 0x0000_03ff == 0
+        && exc_return == 0xffff_fff9
+        && msp_before_helper == msp_before
+        && exception_msp == msp_before_helper.wrapping_sub(8)
+        && frame_sp == exception_msp.wrapping_sub(32)
+        && frame_sp & 7 == 0
+        && msp_after == msp_before;
+    let irq_state_ok = ipsr == 16 + IRQ_FRAME_EXTERNAL
+        && active == IRQ_FRAME_BIT
+        && pending == 0
+        && read_volatile(NVIC_ISPR1 as *const u32) & IRQ_FRAME_BIT == 0;
+    let restored = read_volatile(SCB_VTOR as *const u32) == source_vtor
+        && read_volatile(NVIC_ICPR1 as *const u32) & IRQ_FRAME_BIT == 0;
+    let ok =
+        prior_primask == 0 && vector_installed && handled && frame_ok && irq_state_ok && restored;
+
+    if ok {
+        putline(b"IRQ M3 FRAME IPSR=54 ACTIVE=1 PENDING=0 SENTINELS=1 EXC_RETURN=FFFFFFF9 STACK=ALIGNED RETURN=1 ok");
+    } else {
+        putline(b"IRQ M3 FRAME CHECK FAILED");
+    }
+    ok
+}
+
+/// Push r4/r7 to preserve the ABI and keep MSP aligned, then pend USART2's
+/// NVIC vector with fixed values in the architectural exception-frame regs.
+#[unsafe(naked)]
+unsafe extern "C" fn smoke_pend_usart2_irq_with_sentinels() {
+    core::arch::naked_asm!(
+        "push {{r4, r7}}",
+        "mrs r4, msp",
+        "ldr r7, =0x2000053C",
+        "str r4, [r7]",
+        "ldr r7, =0xE000E204",
+        "movs r0, #0x11",
+        "movs r1, #0x22",
+        "movs r2, #0x33",
+        "movs r3, #0x44",
+        "movs r4, #0x55",
+        "mov r12, r4",
+        "movs r4, #0x40",
+        "str r4, [r7]",
+        "pop {{r4, r7}}",
+        "bx lr",
+    );
+}
+
+/// Capture the hardware frame directly from MSP before Rust adds a prologue.
+#[unsafe(naked)]
+#[no_mangle]
+unsafe extern "C" fn smoke_external_irq_frame_handler() {
+    core::arch::naked_asm!(
+        "ldr r0, =0x20000500",
+        "mrs r1, msp",
+        "str r1, [r0, #0]",
+        "ldr r2, [r1, #0]",
+        "str r2, [r0, #4]",
+        "ldr r2, [r1, #4]",
+        "str r2, [r0, #8]",
+        "ldr r2, [r1, #8]",
+        "str r2, [r0, #12]",
+        "ldr r2, [r1, #12]",
+        "str r2, [r0, #16]",
+        "ldr r2, [r1, #16]",
+        "str r2, [r0, #20]",
+        "ldr r2, [r1, #20]",
+        "str r2, [r0, #24]",
+        "ldr r2, [r1, #24]",
+        "str r2, [r0, #28]",
+        "ldr r2, [r1, #28]",
+        "str r2, [r0, #32]",
+        "mov r2, lr",
+        "str r2, [r0, #36]",
+        "mrs r2, ipsr",
+        "str r2, [r0, #40]",
+        "ldr r2, =0xE000E304",
+        "ldr r3, [r2]",
+        "str r3, [r0, #44]",
+        "ldr r2, =0xE000E204",
+        "ldr r3, [r2]",
+        "str r3, [r0, #48]",
+        "movs r2, #1",
+        "str r2, [r0, #56]",
+        "bx lr",
+    );
 }
 
 /// Cortex-M exception handler installed at vector-table slot 14 by the smoke.
