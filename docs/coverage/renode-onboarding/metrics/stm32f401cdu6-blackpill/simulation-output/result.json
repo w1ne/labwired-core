@@ -34,6 +34,7 @@
           "BLACKPILL F401 SMOKE",
           "systick wrap=1 pending=1 countflag=read-clear clear=1 ok",
           "systick irq entries>=2 vector=15 ipsr=15 return=1 ok",
+          "systick priority flags=000001FF ok",
           "rcc apb1=00620001 ok",
           "led pc13 odr=00002000 ok",
           "tim2 arr=00000040 ok",
@@ -68,8 +69,8 @@
     {
       "assertion": {
         "memory_value": {
-          "address": 536968960,
-          "expected_value": 2980847615,
+          "address": 536875008,
+          "expected_value": 2980855807,
           "mask": null,
           "size": 4
         }
@@ -87,23 +88,23 @@
     "type": "arm",
     "registers": [
       10,
-      8191,
+      16383,
       3221225472,
       53,
-      0,
-      536968964,
       1073759232,
+      0,
+      536871040,
       536969208,
       0,
       0,
       0,
       192,
-      134271002,
+      134271225,
       536969024,
-      134265743,
-      134270222
+      134265955,
+      134270434
     ],
-    "pc": 134270222,
+    "pc": 134270434,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -116,7 +117,7 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "firmware_hash": "f238a79527b5f8186934acd67ee5da383c722679cad6eb81f2762b6ed9348483",
+  "firmware_hash": "02e088f5236e3008cfec68df03a0efacdf5a97dc859d291e73c41128042459f6",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-f401cdu6-blackpill-renode-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f401cdu6-blackpill.yaml",
@@ -479,23 +480,23 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 2083,
+            "cycle": 2643,
             "value": 1
           },
           {
-            "cycle": 2086,
+            "cycle": 2645,
             "value": 0
           },
           {
-            "cycle": 2088,
+            "cycle": 2647,
             "value": 1
           },
           {
-            "cycle": 2090,
+            "cycle": 2649,
             "value": 0
           },
           {
-            "cycle": 2096,
+            "cycle": 2654,
             "value": 1
           }
         ],
@@ -503,27 +504,27 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 2077,
+            "cycle": 2637,
             "state": "0"
           },
           {
-            "cycle": 2083,
+            "cycle": 2643,
             "state": "1"
           },
           {
-            "cycle": 2086,
+            "cycle": 2645,
             "state": "0"
           },
           {
-            "cycle": 2088,
+            "cycle": 2647,
             "state": "1"
           },
           {
-            "cycle": 2090,
+            "cycle": 2649,
             "state": "0"
           },
           {
-            "cycle": 2096,
+            "cycle": 2654,
             "state": "1"
           }
         ],
@@ -561,6 +562,12 @@
       },
       {
         "text": "systick irq entries>=2 vector=15 ipsr=15 return=1 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "systick priority flags=000001FF ok",
         "cycle_lo": 0,
         "cycle": 10000,
         "end_cycle": 10000
@@ -629,12 +636,12 @@
         "text": "pos=1 i2c2 btf_rx_irq=1 rxne_isolated=1 stop_before_dr=1 rxne_after_first=1 release=1 rxne_cleared=1 data=00001980 ok",
         "cycle_lo": 10000,
         "cycle": 20000,
-        "end_cycle": 20000
+        "end_cycle": 30000
       },
       {
         "text": "i2c2 nack=00000400 no_addr=1 ev_isolated=1 er_isolated=1 er_irq=1 er_masked_release=1 af_cleared=1 idle=1 er_released=1 ok",
-        "cycle_lo": 10000,
-        "cycle": 20000,
+        "cycle_lo": 20000,
+        "cycle": 30000,
         "end_cycle": 30000
       },
       {
@@ -682,14 +689,14 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 53303,
+    "text_bytes": 53526,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 53303,
+    "flash_used_bytes": 53526,
     "ram_static_bytes": 0,
     "flash_total_bytes": 393216,
     "ram_total_bytes": 98304,
-    "flash_used_pct": 13.56,
+    "flash_used_pct": 13.61,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -700,14 +707,14 @@
     "main_stack_method": "paint",
     "main_stack_limit_bytes": 98304,
     "main_stack_high_water_bytes": 336,
-    "main_stack_free_min_bytes": 97904,
+    "main_stack_free_min_bytes": 97872,
     "main_stack_base": 536870912,
     "main_stack_top": 536969216,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
     "heap_limit_bytes": 98304,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 97904,
+    "heap_free_min_bytes": 97872,
     "heap_base": 536870912,
     "heap_top": 536969216
   },
@@ -715,25 +722,25 @@
     "cycles": 200000,
     "instructions": 200000,
     "steps_executed": 200000,
-    "memory_reads": 11630,
-    "memory_writes": 451,
-    "peripheral_accesses": 6615,
+    "memory_reads": 11925,
+    "memory_writes": 522,
+    "peripheral_accesses": 6980,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134270222,
+        "pc": 134270434,
         "count": 703,
         "symbol": "firmware_f401cdu6_blackpill_renode_smoke::main"
       },
       {
-        "pc": 134218062,
+        "pc": 134218134,
         "count": 39,
-        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+        "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134249774,
+        "pc": 134248500,
         "count": 39,
-        "symbol": "firmware_f401cdu6_blackpill_renode_smoke::putc"
+        "symbol": "core::ptr::write_volatile"
       }
     ]
   }

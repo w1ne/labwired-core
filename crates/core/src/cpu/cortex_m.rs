@@ -169,6 +169,10 @@ pub struct CortexM {
     /// Live ICSR.PENDSTSET mirror shared with the SCB. The timer's exception
     /// pending state lives in this CPU, while ICSR is served by the SCB.
     pub systick_pending_live: Arc<AtomicBool>,
+    /// Live ICSR.PENDSVSET mirror shared with the SCB. Once the SCB hands
+    /// PendSV to the CPU's arbitration bitmap, ICSR must continue to report it
+    /// pending until exception entry or an explicit clear.
+    pub pendsv_pending_live: Arc<AtomicBool>,
     /// Shared AIRCR.PRIGROUP. Priority-group bits gate preemption while
     /// subpriority bits only order simultaneous pending exceptions. Baseline
     /// cores report PRIGROUP as reserved and use all priority bits for groups.
@@ -351,6 +355,7 @@ impl Default for CortexM {
             shpr2: Arc::new(AtomicU32::new(0)),
             shpr3: Arc::new(AtomicU32::new(0)),
             systick_pending_live: Arc::new(AtomicBool::new(false)),
+            pendsv_pending_live: Arc::new(AtomicBool::new(false)),
             priority_group: Arc::new(AtomicU32::new(0)),
             nvic_state: None,
             sysreset_signal: None,
@@ -1821,6 +1826,11 @@ impl CortexM {
         self.systick_pending_live = pending;
     }
 
+    /// Wire ICSR.PENDSVSET to the CPU's live PendSV pending state.
+    pub fn set_shared_pendsv_pending(&mut self, pending: Arc<AtomicBool>) {
+        self.pendsv_pending_live = pending;
+    }
+
     /// Wire AIRCR.PRIGROUP from the shared SCB state.
     pub fn set_shared_priority_group(&mut self, priority_group: Arc<AtomicU32>) {
         self.priority_group = priority_group;
@@ -3070,6 +3080,7 @@ impl Cpu for CortexM {
         self.sp = 0x2000_0000;
         self.pending_exceptions = [0; 4];
         self.systick_pending_live.store(false, Ordering::Relaxed);
+        self.pendsv_pending_live.store(false, Ordering::Relaxed);
         // Reset is not exception return: no interrupt mask, IT block or
         // exception-return LR from the previous boot may survive. Cortex-M4
         // DUI0553A table 2-1 defines these reset values. General registers
@@ -3147,6 +3158,8 @@ impl Cpu for CortexM {
         if exception_num < 256 {
             if exception_num == 15 {
                 self.systick_pending_live.store(true, Ordering::Relaxed);
+            } else if exception_num == 14 {
+                self.pendsv_pending_live.store(true, Ordering::Relaxed);
             }
             let word = &mut self.pending_exceptions[(exception_num / 64) as usize];
             let mask = 1u64 << (exception_num % 64);
@@ -3243,6 +3256,10 @@ impl Cpu for CortexM {
             }
             self.systick_pending_live.store(
                 self.pending_exceptions[0] & (1 << 15) != 0,
+                Ordering::Relaxed,
+            );
+            self.pendsv_pending_live.store(
+                self.pending_exceptions[0] & (1 << 14) != 0,
                 Ordering::Relaxed,
             );
             self.vtor.store(s.vtor, Ordering::Relaxed);
@@ -4197,6 +4214,9 @@ impl CortexM {
         if !self.systick_pending_live.load(Ordering::Relaxed) {
             self.pending_exceptions[0] &= !(1 << 15);
         }
+        if !self.pendsv_pending_live.load(Ordering::Relaxed) {
+            self.pending_exceptions[0] &= !(1 << 14);
+        }
         let exception_num = if self.any_exception_pending() {
             self.highest_priority_pending().unwrap_or(0)
         } else {
@@ -4229,6 +4249,8 @@ impl CortexM {
                         !(1u64 << (exception_num % 64));
                     if exception_num == 15 {
                         self.systick_pending_live.store(false, Ordering::Relaxed);
+                    } else if exception_num == 14 {
+                        self.pendsv_pending_live.store(false, Ordering::Relaxed);
                     }
 
                     // Clear NVIC ISPR for this exception so it isn't immediately re-pended.

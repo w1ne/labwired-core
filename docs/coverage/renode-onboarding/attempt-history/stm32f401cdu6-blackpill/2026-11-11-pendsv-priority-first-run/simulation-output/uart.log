@@ -1,0 +1,3 @@
+BLACKPILL F401 SMOKE
+systick wrap=1 pending=1 countflag=read-clear clear=1 ok
+systick irq entries>=2 vector=15 ipsr=15 return=1 ok

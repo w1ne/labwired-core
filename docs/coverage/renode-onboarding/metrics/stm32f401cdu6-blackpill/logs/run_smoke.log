@@ -1,7 +1,7 @@
-2026-11-11T12:44:56.784292Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f401cdu6-blackpill.yaml
-2026-11-11T12:44:56.855424Z  INFO labwired_loader: ELF Entry Point: 0x8000009
+2026-11-11T13:01:53.620148Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f401cdu6-blackpill.yaml
+2026-11-11T13:01:53.680772Z  INFO labwired_loader: ELF Entry Point: 0x8000029
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-2026-11-11T12:44:56.859709Z  INFO labwired_cli::execute: uart_injection: 1 byte(s) delivered to 'usart1'
-2026-11-11T12:44:56.859729Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'usart2'
-PASS  4/4 checks · stm32f401cdu6-blackpill-smoke · 200000 steps · 0.10s
+2026-11-11T13:01:53.682585Z  INFO labwired_cli::execute: uart_injection: 1 byte(s) delivered to 'usart1'
+2026-11-11T13:01:53.682597Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'usart2'
+PASS  4/4 checks · stm32f401cdu6-blackpill-smoke · 200000 steps · 0.09s

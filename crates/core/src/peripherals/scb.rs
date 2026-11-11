@@ -204,6 +204,8 @@ pub struct SharedScbState {
     pub shpr3: Arc<AtomicU32>,
     /// Live CPU-side SysTick pending state for ICSR.PENDSTSET readback.
     pub systick_pending_live: Arc<AtomicBool>,
+    /// Live CPU-side PendSV pending state for ICSR.PENDSVSET readback.
+    pub pendsv_pending_live: Arc<AtomicBool>,
     /// AIRCR.PRIGROUP, shared with Cortex-M exception arbitration.
     pub priority_group: Arc<AtomicU32>,
     /// Mirror of `pending_reset` the CPU can read without reaching the bus.
@@ -256,6 +258,10 @@ pub struct Scb {
     /// Live CPU pending state. The local latch below represents an ICSR write
     /// that has not yet been drained into the CPU bitmap.
     pub systick_pending_live: Arc<AtomicBool>,
+    /// Shared with CortexM so ICSR.PENDSVSET stays visible after the local SCB
+    /// latch is drained into the CPU's exception arbitration bitmap.
+    #[serde(skip)]
+    pub pendsv_pending_live: Arc<AtomicBool>,
     #[serde(skip)]
     /// AIRCR.PRIGROUP, shared with Cortex-M exception arbitration.
     pub priority_group: Arc<AtomicU32>,
@@ -344,6 +350,7 @@ impl Scb {
             shpr2: Arc::new(AtomicU32::new(0)),
             shpr3: Arc::new(AtomicU32::new(0)),
             systick_pending_live: Arc::new(AtomicBool::new(false)),
+            pendsv_pending_live: Arc::new(AtomicBool::new(false)),
             priority_group: Arc::new(AtomicU32::new(0)),
             sysreset_signal: Arc::new(AtomicBool::new(false)),
             faults: Arc::new(ScbFaultState::default()),
@@ -359,6 +366,7 @@ impl Scb {
             shpr2: Arc::new(AtomicU32::new(0)),
             shpr3: Arc::new(AtomicU32::new(0)),
             systick_pending_live: Arc::new(AtomicBool::new(false)),
+            pendsv_pending_live: Arc::new(AtomicBool::new(false)),
             priority_group: Arc::new(AtomicU32::new(0)),
             sysreset_signal: Arc::new(AtomicBool::new(false)),
             faults: Arc::new(ScbFaultState::default()),
@@ -381,6 +389,7 @@ impl Scb {
             shpr2: s.shpr2,
             shpr3: s.shpr3,
             systick_pending_live: s.systick_pending_live,
+            pendsv_pending_live: s.pendsv_pending_live,
             priority_group: s.priority_group,
             pendsv_pending: false,
             systick_pending: false,
@@ -502,6 +511,9 @@ impl Scb {
                 if self.pendsv_pending {
                     v |= 1 << 28;
                 }
+                if self.pendsv_pending_live.load(Ordering::Relaxed) {
+                    v |= 1 << 28;
+                }
                 if self.systick_pending || self.systick_pending_live.load(Ordering::Relaxed) {
                     v |= 1 << 26;
                 }
@@ -565,9 +577,11 @@ impl Scb {
                 }
                 if value & (1 << 28) != 0 {
                     self.pendsv_pending = true;
+                    self.pendsv_pending_live.store(true, Ordering::Relaxed);
                 }
                 if value & (1 << 27) != 0 {
                     self.pendsv_pending = false;
+                    self.pendsv_pending_live.store(false, Ordering::Relaxed);
                 }
                 if value & (1 << 26) != 0 {
                     self.systick_pending = true;
@@ -951,12 +965,16 @@ mod tests {
     #[test]
     fn icsr_pendsvset_reads_live_pending() {
         // PENDSV [28] reads back the live pending state: set after PENDSVSET,
-        // cleared once the exception is serviced — not the written action bit.
+        // remains set when the SCB hands it to the CPU, then clears when the
+        // CPU enters the exception — not the written action bit.
         let mut scb = Scb::new(Arc::new(AtomicU32::new(0)));
+        let cpu_pending = scb.pendsv_pending_live.clone();
         scb.write_register(0x04, 1 << 28); // PENDSVSET
         assert_eq!(scb.read_register(0x04) & (1 << 28), 1 << 28, "pending");
         let _ = scb.tick(); // service PendSV
-        assert_eq!(scb.read_register(0x04) & (1 << 28), 0, "drained reads 0");
+        assert_eq!(scb.read_register(0x04) & (1 << 28), 1 << 28, "CPU pending");
+        cpu_pending.store(false, Ordering::Relaxed); // exception entry
+        assert_eq!(scb.read_register(0x04) & (1 << 28), 0, "entered reads 0");
     }
 
     #[test]

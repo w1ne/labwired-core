@@ -31,9 +31,10 @@
 //!   USART2 keeps injected bytes hidden until UE and RE are set, then drains
 //!   two bytes in order and gates RXNE IRQ 38
 //!   SysTick wraps with PRIMASK set, latches exception 15, exposes COUNTFLAG
-//!   once on CSR read, clears its pending request through ICSR, then dispatches
-//!   repeated timer exceptions through vector 15 and returns to thread mode
-//! A summary word goes to RAM at 0x20017F00 (one bit per smoke group passed).
+//!   once on CSR read, clears its pending request through ICSR, dispatches
+//!   repeated timer exceptions through vector 15, and defers a lower-priority
+//!   PendSV requested inside the SysTick handler until that handler returns
+//! A summary word goes to RAM at 0x20001000 (one bit per smoke group passed).
 
 use core::ptr::{read_volatile, write_volatile};
 
@@ -106,12 +107,20 @@ const SYSTICK_CVR: u32 = 0xE000_E018;
 const SYSTICK_COUNTFLAG: u32 = 1 << 16;
 const SCB_ICSR: u32 = 0xE000_ED04;
 const SCB_VTOR: u32 = 0xE000_ED08;
+const SCB_SHPR3: u32 = 0xE000_ED20;
 const ICSR_PENDSTSET: u32 = 1 << 26;
 const ICSR_PENDSTCLR: u32 = 1 << 25;
+const ICSR_PENDSVSET: u32 = 1 << 28;
+const ICSR_PENDSVCLR: u32 = 1 << 27;
 
-const RESULT: u32 = 0x2001_7F00;
-const SYSTICK_HANDLER_COUNT: u32 = 0x2001_7F04;
-const SYSTICK_HANDLER_IPSR: u32 = 0x2001_7F08;
+const RESULT: u32 = 0x2000_1000;
+const SYSTICK_HANDLER_COUNT: u32 = 0x2000_1004;
+const SYSTICK_HANDLER_IPSR: u32 = 0x2000_1008;
+const PENDSV_HANDLER_COUNT: u32 = 0x2000_100C;
+const PENDSV_HANDLER_IPSR: u32 = 0x2000_1010;
+const SYSTICK_PENDSV_ARMED: u32 = 0x2000_1014;
+const SYSTICK_PENDSV_FLAGS: u32 = 0x2000_1018;
+const PENDSV_SYSTICK_COUNT_AT_ENTRY: u32 = 0x2000_101C;
 const TEST_VECTOR_TABLE: u32 = 0x2000_0080;
 
 fn rd(addr: u32) -> u32 {
@@ -178,7 +187,15 @@ fn main() -> ! {
     } else {
         b"systick irq dispatch CHECK FAILED\r\n"
     });
+    let systick_priority_flags = smoke_systick_pendsv_priority();
+    let systick_priority_ok = systick_priority_flags == 0x1FF;
+    line(
+        b"systick priority flags=",
+        systick_priority_flags,
+        systick_priority_ok,
+    );
     passed |= ((systick_pending_ok && systick_dispatch_ok) as u32) << 12;
+    passed |= (systick_priority_ok as u32) << 13;
 
     let ahb = rd(RCC_AHB1ENR) & 0x5;
     let apb = rd(RCC_APB1ENR) & ((1 << 0) | (1 << 17) | (1 << 21) | (1 << 22));
@@ -370,7 +387,7 @@ fn main() -> ! {
     passed |= (usart2_rx_gate_ok as u32) << 11;
 
     wr(RESULT, 0xB1AC_0000 | passed);
-    send(if passed == 0x1FFF {
+    send(if passed == 0x3FFF {
         b"BLACKPILL PASS\r\n"
     } else {
         b"BLACKPILL FAIL\r\n"
@@ -447,6 +464,7 @@ fn smoke_systick_periodic_exception() -> bool {
     let prior_vtor = rd(SCB_VTOR);
     wr(SYSTICK_CSR, 0);
     wr(SCB_ICSR, ICSR_PENDSTCLR);
+    wr(SYSTICK_PENDSV_ARMED, 0);
     for slot in 0..16 {
         wr(TEST_VECTOR_TABLE + slot * 4, 0);
     }
@@ -522,6 +540,127 @@ fn smoke_systick_periodic_exception() -> bool {
     prior_primask == 0 && entries >= 2 && ipsr == 15 && vector_installed && stable_after_disable
 }
 
+/// A lower-priority PendSV requested by SysTick must wait until exception 15
+/// returns, then enter its own vector with the completed SysTick visible.
+fn smoke_systick_pendsv_priority() -> u32 {
+    const RELOAD: u32 = 63;
+    const PENDSV_EXCEPTION: u32 = 14;
+
+    let prior_primask: u32;
+    unsafe {
+        core::arch::asm!(
+            "mrs {primask}, PRIMASK",
+            "cpsid i",
+            primask = out(reg) prior_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+    }
+
+    let prior_vtor = rd(SCB_VTOR);
+    let prior_shpr3 = rd(SCB_SHPR3);
+    wr(SYSTICK_CSR, 0);
+    wr(SCB_ICSR, ICSR_PENDSTCLR | ICSR_PENDSVCLR);
+    for slot in 0..16 {
+        wr(TEST_VECTOR_TABLE + slot * 4, 0);
+    }
+    wr(
+        TEST_VECTOR_TABLE + 14 * 4,
+        PendSV_Handler as *const () as usize as u32,
+    );
+    wr(
+        TEST_VECTOR_TABLE + 15 * 4,
+        SysTick_Handler as *const () as usize as u32,
+    );
+    wr(SCB_VTOR, TEST_VECTOR_TABLE);
+    // PendSV is lowest priority; SysTick is highest configurable priority.
+    wr(SCB_SHPR3, (prior_shpr3 & 0x0000_FFFF) | 0x00FF_0000);
+    wr(SYSTICK_HANDLER_COUNT, 0);
+    wr(SYSTICK_HANDLER_IPSR, 0);
+    wr(PENDSV_HANDLER_COUNT, 0);
+    wr(PENDSV_HANDLER_IPSR, 0);
+    wr(SYSTICK_PENDSV_FLAGS, 0);
+    wr(PENDSV_SYSTICK_COUNT_AT_ENTRY, 0);
+    wr(SYSTICK_PENDSV_ARMED, 1);
+    wr(SYSTICK_RVR, RELOAD);
+    wr(SYSTICK_CVR, 0);
+    wr(SYSTICK_CSR, 0x7); // ENABLE | TICKINT | processor clock.
+
+    unsafe {
+        core::arch::asm!(
+            "msr PRIMASK, {primask}",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+
+    for _ in 0..4_096 {
+        if rd(PENDSV_HANDLER_COUNT) != 0 {
+            break;
+        }
+        unsafe { core::arch::asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+
+    let masked_primask: u32;
+    unsafe {
+        core::arch::asm!(
+            "mrs {primask}, PRIMASK",
+            "cpsid i",
+            primask = out(reg) masked_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+    }
+    wr(SYSTICK_CSR, 0);
+    wr(SYSTICK_PENDSV_ARMED, 0);
+    wr(SCB_ICSR, ICSR_PENDSTCLR | ICSR_PENDSVCLR);
+    let systick_entries = rd(SYSTICK_HANDLER_COUNT);
+    let pendsv_entries = rd(PENDSV_HANDLER_COUNT);
+    let pendsv_ipsr = rd(PENDSV_HANDLER_IPSR);
+    let active_probe = rd(SYSTICK_PENDSV_FLAGS);
+    let systick_entries_at_pendsv = rd(PENDSV_SYSTICK_COUNT_AT_ENTRY);
+    let priority_configured = rd(SCB_SHPR3) & 0xFFFF_0000 == 0x00FF_0000;
+    let vector_installed = rd(SCB_VTOR) == TEST_VECTOR_TABLE;
+
+    unsafe {
+        core::arch::asm!(
+            "msr PRIMASK, {primask}",
+            primask = in(reg) masked_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+    for _ in 0..32 {
+        unsafe { core::arch::asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+    let stable_after_disable = rd(PENDSV_HANDLER_COUNT) == pendsv_entries;
+
+    unsafe {
+        core::arch::asm!("cpsid i", options(nomem, nostack, preserves_flags));
+    }
+    wr(SYSTICK_CSR, 0);
+    wr(SYSTICK_PENDSV_ARMED, 0);
+    wr(SCB_ICSR, ICSR_PENDSTCLR | ICSR_PENDSVCLR);
+    wr(SCB_SHPR3, prior_shpr3);
+    wr(SCB_VTOR, prior_vtor);
+    unsafe {
+        core::arch::asm!(
+            "msr PRIMASK, {primask}",
+            "dsb",
+            "isb",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+
+    (u32::from(prior_primask == 0))
+        | (u32::from(systick_entries == 1) << 1)
+        | (u32::from(pendsv_entries == 1) << 2)
+        | (u32::from(pendsv_ipsr == PENDSV_EXCEPTION) << 3)
+        | (u32::from(active_probe == 0b11) << 4)
+        | (u32::from(systick_entries_at_pendsv == 1) << 5)
+        | (u32::from(priority_configured) << 6)
+        | (u32::from(vector_installed) << 7)
+        | (u32::from(stable_after_disable) << 8)
+}
+
 /// Cortex-M SysTick exception handler installed at vector-table slot 15.
 #[no_mangle]
 pub extern "C" fn SysTick_Handler() {
@@ -536,6 +675,34 @@ pub extern "C" fn SysTick_Handler() {
         wr(
             SYSTICK_HANDLER_COUNT,
             rd(SYSTICK_HANDLER_COUNT).wrapping_add(1),
+        );
+        if rd(SYSTICK_PENDSV_ARMED) != 0 && rd(SYSTICK_HANDLER_COUNT) == 1 {
+            // Stop further timer wraps, request the lower-priority PendSV, and
+            // record that it stayed pending without preempting this handler.
+            wr(SYSTICK_CSR, 0);
+            wr(SCB_ICSR, ICSR_PENDSVSET);
+            let pending = (rd(SCB_ICSR) & ICSR_PENDSVSET != 0) as u32;
+            let not_preempted = (rd(PENDSV_HANDLER_COUNT) == 0) as u32;
+            wr(SYSTICK_PENDSV_FLAGS, pending | (not_preempted << 1));
+        }
+    }
+}
+
+/// PendSV exception handler installed at vector-table slot 14.
+#[no_mangle]
+pub extern "C" fn PendSV_Handler() {
+    unsafe {
+        let ipsr: u32;
+        core::arch::asm!(
+            "mrs {ipsr}, IPSR",
+            ipsr = out(reg) ipsr,
+            options(nomem, nostack, preserves_flags),
+        );
+        wr(PENDSV_HANDLER_IPSR, ipsr);
+        wr(PENDSV_SYSTICK_COUNT_AT_ENTRY, rd(SYSTICK_HANDLER_COUNT));
+        wr(
+            PENDSV_HANDLER_COUNT,
+            rd(PENDSV_HANDLER_COUNT).wrapping_add(1),
         );
     }
 }
