@@ -7,4 +7,5 @@ timer0 cmp=1 cap>=50 1 clear=00000000 ok
 rtc0 cmp=1 counter>=4 1 ok
 rng valrdy=11 bytes<=ff ok
 ppi egu0->egu1 off=0 on=1 ok
+systick-pendsv frame=1 r0=1 pending=1 priority=1 ok
 NRF52840 PASS
