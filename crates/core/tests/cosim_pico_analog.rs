@@ -108,6 +108,69 @@ fn mosfet_drain_voltage(gate_v: f64) -> f64 {
     (low + high) / 2.0
 }
 
+/// Independent Gummel–Poon load line with forward/reverse high-injection
+/// rolloff and Early effect, used by the board-routed matched-pair test.
+fn bjt_high_injection_collector_voltage(base_drive_v: f64, high_injection: bool) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const COLLECTOR_OHMS: f64 = 1_000.0;
+    const BASE_OHMS: f64 = 10_000.0;
+    const IS_A: f64 = 1e-16;
+    const BF: f64 = 80.0;
+    const BR: f64 = 4.0;
+    const VAF: f64 = 50.0;
+    const VAR: f64 = 75.0;
+    const IKF_A: f64 = 50e-6;
+    const IKR_A: f64 = 500e-6;
+    const NKF: f64 = 0.8;
+    const VT: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+
+    let currents = |vbe: f64, collector_v: f64| {
+        let vbc = vbe - collector_v;
+        let forward = (vbe / VT).exp();
+        let reverse = (vbc / VT).exp();
+        let base_width = 1.0 - vbc / VAF - vbe / VAR;
+        let q2 = if high_injection {
+            IS_A * (forward - 1.0) / IKF_A + IS_A * (reverse - 1.0) / IKR_A
+        } else {
+            0.0
+        };
+        let qb = (1.0 + (1.0 + 4.0 * q2).max(0.0).powf(NKF)) / (2.0 * base_width);
+        let transport = IS_A * (forward - reverse) / qb;
+        let base_collector = (IS_A / BR) * (reverse - 1.0);
+        let base_emitter = (IS_A / BF) * (forward - 1.0);
+        (transport - base_collector, base_emitter + base_collector)
+    };
+
+    let collector_for_vbe = |vbe: f64| {
+        let (mut low, mut high) = (0.0, SUPPLY_V);
+        for _ in 0..100 {
+            let collector_v = 0.5 * (low + high);
+            let (collector_current, _) = currents(vbe, collector_v);
+            let residual = (SUPPLY_V - collector_v) / COLLECTOR_OHMS - collector_current;
+            if residual > 0.0 {
+                low = collector_v;
+            } else {
+                high = collector_v;
+            }
+        }
+        0.5 * (low + high)
+    };
+
+    let (mut low, mut high) = (0.0, base_drive_v);
+    for _ in 0..100 {
+        let vbe = 0.5 * (low + high);
+        let collector_v = collector_for_vbe(vbe);
+        let (_, base_current) = currents(vbe, collector_v);
+        let residual = (base_drive_v - vbe) / BASE_OHMS - base_current;
+        if residual > 0.0 {
+            low = vbe;
+        } else {
+            high = vbe;
+        }
+    }
+    collector_for_vbe(0.5 * (low + high))
+}
+
 fn generic_analog_devices_reach_adc_profile(
     system_name: &str,
     adc_base: u64,
@@ -337,5 +400,91 @@ fn pico_mosfet_load_line_reaches_adc0_alongside_ntc_and_diode() {
     assert!(
         drain_samples[4].1 < drain_samples[3].1 && drain_samples[3].1 < drain_samples[2].1,
         "drain voltage falls as the NMOS conducts more strongly: {drain_samples:?}"
+    );
+}
+
+#[test]
+fn pico_bjt_high_injection_reaches_adc0_adc1_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/pico.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load Pico system profile");
+    let mut generic = SystemManifest::from_file(root("examples/pico/analog-ntc-diode-system.yaml"))
+        .expect("load unrelated generic NTC and Shockley diode netlists");
+    generic.cosim_models[0]
+        .outputs
+        .insert("v_sense".to_string(), "adc.adc.2_volts".to_string());
+    generic.cosim_models[1]
+        .outputs
+        .insert("v_diode".to_string(), "adc.adc.3_volts".to_string());
+    let bjt = SystemManifest::from_file(root("examples/pico/analog-bjt-high-injection.yaml"))
+        .expect("load matched generic Gummel–Poon high-injection branches");
+    profile.cosim_models = bjt.cosim_models;
+    profile.cosim_models.extend(generic.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load RP2040 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build Pico system bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal co-simulation")
+        .expect("profile carries matched BJT, NTC, and diode netlists");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "all four devices must resolve to distinct RP2040 ADC inputs"
+    );
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    let expected_ntc_v = 1.65;
+    let expected_diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    let mut high_drive_samples = None;
+    for base_drive_v in [0.8_f64, 1.5, 3.3] {
+        session
+            .set_signal_number("ui.bjt_high_injection.base_v", base_drive_v)
+            .expect("set common BJT base drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and matched BJT branches");
+        assert_eq!(steps.len(), 4, "all four generic analog branches solve");
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        let rolloff_v = signal_voltage(&session, "adc.adc.0_volts");
+        let control_v = signal_voltage(&session, "adc.adc.1_volts");
+        let ntc_v = signal_voltage(&session, "adc.adc.2_volts");
+        let diode_v = signal_voltage(&session, "adc.adc.3_volts");
+        let expected_rolloff_v = bjt_high_injection_collector_voltage(base_drive_v, true);
+        let expected_control_v = bjt_high_injection_collector_voltage(base_drive_v, false);
+        assert!(
+            (rolloff_v - expected_rolloff_v).abs() < 5e-5,
+            "IKF/IKR/NKF load line at base drive {base_drive_v} V should be {expected_rolloff_v} V, got {rolloff_v} V"
+        );
+        assert!(
+            (control_v - expected_control_v).abs() < 5e-5,
+            "matched no-rolloff load line at base drive {base_drive_v} V should be {expected_control_v} V, got {control_v} V"
+        );
+        assert!((ntc_v - expected_ntc_v).abs() < 1e-9);
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "unrelated Shockley diode remains at its independent load line"
+        );
+
+        for (channel, voltage_v) in [(0, rolloff_v), (1, control_v), (2, ntc_v), (3, diode_v)] {
+            assert_eq!(
+                convert_channel(&mut bus, RP2040_ADC_BASE, channel),
+                expected_adc_code(voltage_v),
+                "RP2040 ADC{channel} conversion follows its independently solved netlist voltage"
+            );
+        }
+        if base_drive_v == 3.3 {
+            high_drive_samples = Some((rolloff_v, control_v));
+        }
+    }
+
+    let (rolloff_v, control_v) = high_drive_samples.expect("high-drive sample was recorded");
+    assert!(
+        rolloff_v - control_v > 0.05,
+        "IKF/IKR/NKF rolloff reduces collector current and raises collector voltage: {rolloff_v} V vs {control_v} V"
     );
 }
