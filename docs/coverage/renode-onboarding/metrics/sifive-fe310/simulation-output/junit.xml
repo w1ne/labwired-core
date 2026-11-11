@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="5" failures="0" errors="0" time="0.038535">
+<testsuite name="labwired" tests="5" failures="0" errors="0" time="0.034775">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="bbac13db73574afe3651b0ee7573959b04186cfeb529c1de5e4a1769298e0cdd"/>
+    <property name="firmware_hash" value="2039c349f5890bba5d33029ce5f3aa3777eb0542c4962b7695cab3bad5cc0632"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.038535">
+  <testcase classname="labwired" name="run" time="0.034775">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: SIFIVE FE310 SMOKE" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 2: uart_ordered: [&quot;cpu=rv32im uart=sifive&quot;, &quot;mul=00000143&quot;, &quot;gpio=PASS input_en=00080000 output_en=00080000 output_val=000…" time="0.000000">
+  <testcase classname="labwired" name="assertion 2: uart_ordered: [&quot;cpu=rv32im uart=sifive&quot;, &quot;mul=00000143&quot;, &quot;ecall trap mcause=0000000b mepc_match=1 count=00000001 entry_…" time="0.000000">
   </testcase>
   <testcase classname="labwired" name="assertion 3: gpio_edges: gpio:19 &gt;= 3 edges" time="0.000000">
   </testcase>

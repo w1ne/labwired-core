@@ -2,7 +2,7 @@
   "result_schema_version": "1.0",
   "status": "pass",
   "steps_executed": 100000,
-  "cycles": 400000,
+  "cycles": 399992,
   "instructions": 100000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -39,6 +39,7 @@
         "uart_ordered": [
           "cpu=rv32im uart=sifive",
           "mul=00000143",
+          "ecall trap mcause=0000000b mepc_match=1 count=00000001 entry_mie=0 entry_mpie=1 entry_mpp=00000003 return_mie=1 ok",
           "gpio=PASS input_en=00080000 output_en=00080000 output_val=00080000 input_val=00080000"
         ]
       },
@@ -64,7 +65,7 @@
     "type": "risc_v",
     "registers": [
       0,
-      536874368,
+      536876596,
       2147499984,
       2147485696,
       0,
@@ -83,9 +84,9 @@
       1,
       268513280,
       268513280,
-      0,
-      0,
-      0,
+      268513280,
+      536873168,
+      268513280,
       0,
       0,
       0,
@@ -96,16 +97,16 @@
       0,
       0
     ],
-    "pc": 536874392,
-    "mstatus": 0,
+    "pc": 536876616,
+    "mstatus": 6272,
     "mie": 0,
     "mip": 128,
-    "mtvec": 536871288,
+    "mtvec": 536871668,
     "mscratch": 0,
-    "mepc": 0,
-    "mcause": 0,
+    "mepc": 536873172,
+    "mcause": 11,
     "mtval": 0,
-    "mtime": 100000,
+    "mtime": 99998,
     "mtimecmp": 0,
     "triggers": {
       "tselect": 0,
@@ -132,7 +133,7 @@
       "tcontrol": 0
     }
   },
-  "firmware_hash": "bbac13db73574afe3651b0ee7573959b04186cfeb529c1de5e4a1769298e0cdd",
+  "firmware_hash": "2039c349f5890bba5d33029ce5f3aa3777eb0542c4962b7695cab3bad5cc0632",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-sifive-fe310-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/sifive-fe310.yaml",
@@ -177,19 +178,19 @@
         "pin": 19,
         "transitions": [
           {
-            "cycle": 419,
+            "cycle": 1180,
             "value": 0
           },
           {
-            "cycle": 428,
+            "cycle": 1189,
             "value": 1
           },
           {
-            "cycle": 431,
+            "cycle": 1192,
             "value": 0
           },
           {
-            "cycle": 434,
+            "cycle": 1195,
             "value": 1
           }
         ],
@@ -197,19 +198,19 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 421,
+            "cycle": 1182,
             "state": "0"
           },
           {
-            "cycle": 428,
+            "cycle": 1189,
             "state": "1"
           },
           {
-            "cycle": 431,
+            "cycle": 1192,
             "state": "0"
           },
           {
-            "cycle": 434,
+            "cycle": 1195,
             "state": "1"
           }
         ],
@@ -235,41 +236,47 @@
     "lines": [
       {
         "text": "SIFIVE FE310 SMOKE",
-        "cycle_lo": 104,
-        "cycle": 105,
-        "end_cycle": 195
+        "cycle_lo": 119,
+        "cycle": 120,
+        "end_cycle": 210
       },
       {
         "text": "cpu=rv32im uart=sifive",
-        "cycle_lo": 199,
-        "cycle": 200,
-        "end_cycle": 310
+        "cycle_lo": 214,
+        "cycle": 215,
+        "end_cycle": 325
       },
       {
         "text": "mul=00000143",
-        "cycle_lo": 314,
-        "cycle": 315,
-        "end_cycle": 418
+        "cycle_lo": 329,
+        "cycle": 330,
+        "end_cycle": 435
+      },
+      {
+        "text": "ecall trap mcause=0000000b mepc_match=1 count=00000001 entry_mie=0 entry_mpie=1 entry_mpp=00000003 return_mie=1 ok",
+        "cycle_lo": 488,
+        "cycle": 489,
+        "end_cycle": 1179
       },
       {
         "text": "gpio=PASS input_en=00080000 output_en=00080000 output_val=00080000 input_val=00080000",
-        "cycle_lo": 444,
-        "cycle": 445,
-        "end_cycle": 1029
+        "cycle_lo": 1205,
+        "cycle": 1206,
+        "end_cycle": 1790
       }
     ],
     "dropped_lines": 0
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 3644,
+    "text_bytes": 5872,
     "data_bytes": 0,
     "bss_bytes": 16384,
-    "flash_used_bytes": 3644,
+    "flash_used_bytes": 5872,
     "ram_static_bytes": 16384,
     "flash_total_bytes": 4194304,
     "ram_total_bytes": 16384,
-    "flash_used_pct": 0.09,
+    "flash_used_pct": 0.14,
     "ram_static_pct": 100.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -282,38 +289,48 @@
     "heap_method": "unsupported"
   },
   "metrics": {
-    "cycles": 400000,
+    "cycles": 399992,
     "instructions": 100000,
     "steps_executed": 100000,
-    "memory_reads": 0,
-    "memory_writes": 9,
-    "peripheral_accesses": 300,
+    "memory_reads": 5,
+    "memory_writes": 20,
+    "peripheral_accesses": 530,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 536874392,
-        "count": 386,
+        "pc": 536876616,
+        "count": 384,
         "symbol": "main"
       },
       {
-        "pc": 536872700,
+        "pc": 536871812,
+        "count": 1,
+        "symbol": "core::ptr::write_volatile"
+      },
+      {
+        "pc": 536871832,
+        "count": 1,
+        "symbol": "firmware_sifive_fe310_smoke::put_hex32"
+      },
+      {
+        "pc": 536872736,
         "count": 1,
         "symbol": "firmware_sifive_fe310_smoke::putc"
       },
       {
-        "pc": 536873488,
+        "pc": 536873368,
         "count": 1,
         "symbol": "firmware_sifive_fe310_smoke::putc"
       },
       {
-        "pc": 536873928,
+        "pc": 536875744,
         "count": 1,
         "symbol": "firmware_sifive_fe310_smoke::putc"
       },
       {
-        "pc": 536874368,
+        "pc": 536876184,
         "count": 1,
-        "symbol": "core::ptr::read_volatile"
+        "symbol": "firmware_sifive_fe310_smoke::putc"
       }
     ]
   }
