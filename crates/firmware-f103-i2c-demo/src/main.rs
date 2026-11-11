@@ -74,6 +74,9 @@ const SYSTICK_HANDLER_ICSR_FIRST: *mut u32 = 0x2000_010C as *mut u32;
 const SYSTICK_HANDLER_ICSR_SECOND: *mut u32 = 0x2000_0110 as *mut u32;
 const PENDSV_HANDLER_COUNT: *mut u32 = 0x2000_0114 as *mut u32;
 const PENDSV_HANDLER_IPSR: *mut u32 = 0x2000_0118 as *mut u32;
+const SYSTICK_HANDLER_PENDSV_REQUEST: *mut u32 = 0x2000_0124 as *mut u32;
+const SYSTICK_HANDLER_PENDSV_DEFERRED: *mut u32 = 0x2000_0128 as *mut u32;
+const PENDSV_HANDLER_SYSTICK_COUNT: *mut u32 = 0x2000_012C as *mut u32;
 const IRQ_FRAME_VECTOR_TABLE: u32 = 0x2000_0400;
 const IRQ_FRAME_RECORD: u32 = 0x2000_0500;
 const IRQ_FRAME_EXTERNAL: u32 = 38;
@@ -257,6 +260,9 @@ pub extern "C" fn Reset() -> ! {
 }
 
 fn main() -> ! {
+    // The SysTick handler reads this gate in several earlier checks, before
+    // the PendSV scheduling check itself initializes the rest of its record.
+    unsafe { write_volatile(SYSTICK_HANDLER_PENDSV_REQUEST, 0) };
     unsafe {
         rcc_init();
         usart2_init();
@@ -270,6 +276,7 @@ fn main() -> ! {
     unsafe { smoke_systick_tickint_gate() };
     unsafe { smoke_systick_cvr_write_preserves_pending() };
     unsafe { smoke_pendsv_clear_and_repend() };
+    unsafe { smoke_pendsv_waits_for_systick_return() };
     unsafe { smoke_external_irq_stack_frame() };
     unsafe { smoke_external_irq_psp_stack_frame() };
     unsafe { smoke_svcall_exception_return() };
@@ -1203,6 +1210,102 @@ unsafe fn smoke_pendsv_clear_and_repend() -> bool {
         putline(b"PENDSV M3 CLEAR=1 REPEND=1 VECTOR=14 IPSR=14 ok");
     } else {
         putline(b"PENDSV M3 CHECK FAILED");
+    }
+    passed
+}
+
+/// Verify the Cortex-M RTOS scheduling pattern: a higher-priority SysTick
+/// handler pends low-priority PendSV, which must wait until SysTick returns.
+unsafe fn smoke_pendsv_waits_for_systick_return() -> bool {
+    let source_vtor = read_volatile(SCB_VTOR as *const u32);
+    let prior_shpr3 = read_volatile(SCB_SHPR3 as *const u32);
+    let prior_rvr = read_volatile(SYSTICK_RVR as *const u32);
+    let prior_primask: u32;
+    core::arch::asm!(
+        "mrs {primask}, PRIMASK",
+        "cpsid i",
+        primask = out(reg) prior_primask,
+        options(nomem, nostack, preserves_flags),
+    );
+
+    write_volatile(SYSTICK_CSR as *mut u32, 0);
+    write_volatile(SCB_ICSR as *mut u32, ICSR_PENDSTCLR | ICSR_PENDSVCLR);
+    for slot in 0..16 {
+        write_volatile((PENDSV_VECTOR_TABLE + slot * 4) as *mut u32, 0);
+    }
+    write_volatile(
+        (PENDSV_VECTOR_TABLE + 14 * 4) as *mut u32,
+        PendSV_Handler as *const () as usize as u32,
+    );
+    write_volatile(
+        (PENDSV_VECTOR_TABLE + 15 * 4) as *mut u32,
+        SysTick_Handler as *const () as usize as u32,
+    );
+    write_volatile(SCB_VTOR as *mut u32, PENDSV_VECTOR_TABLE);
+    write_volatile(
+        SCB_SHPR3 as *mut u32,
+        (prior_shpr3 & 0x0000_FFFF) | 0x00FF_0000,
+    );
+    write_volatile(SYSTICK_HANDLER_COUNT, 0);
+    write_volatile(SYSTICK_HANDLER_IPSR, 0);
+    write_volatile(PENDSV_HANDLER_COUNT, 0);
+    write_volatile(PENDSV_HANDLER_IPSR, 0);
+    write_volatile(SYSTICK_HANDLER_PENDSV_REQUEST, 1);
+    write_volatile(SYSTICK_HANDLER_PENDSV_DEFERRED, 0);
+    write_volatile(PENDSV_HANDLER_SYSTICK_COUNT, 0);
+    write_volatile(SYSTICK_RVR as *mut u32, 31);
+    write_volatile(SYSTICK_CVR as *mut u32, 0);
+    write_volatile(SYSTICK_CSR as *mut u32, 0x7); // ENABLE | TICKINT | CLKSOURCE
+
+    core::arch::asm!(
+        "msr PRIMASK, {primask}",
+        "dsb",
+        "isb",
+        primask = in(reg) prior_primask,
+        options(nostack, preserves_flags),
+    );
+    for _ in 0..4_096 {
+        if read_volatile(PENDSV_HANDLER_COUNT) != 0 {
+            break;
+        }
+        core::arch::asm!("nop", options(nomem, nostack, preserves_flags));
+    }
+
+    core::arch::asm!("cpsid i", options(nomem, nostack, preserves_flags));
+    write_volatile(SYSTICK_CSR as *mut u32, 0);
+    write_volatile(SCB_ICSR as *mut u32, ICSR_PENDSTCLR | ICSR_PENDSVCLR);
+    let systick_entries = read_volatile(SYSTICK_HANDLER_COUNT);
+    let systick_ipsr = read_volatile(SYSTICK_HANDLER_IPSR);
+    let deferred_while_active = read_volatile(SYSTICK_HANDLER_PENDSV_DEFERRED);
+    let pendsv_entries = read_volatile(PENDSV_HANDLER_COUNT);
+    let pendsv_ipsr = read_volatile(PENDSV_HANDLER_IPSR);
+    let systick_count_at_pendsv = read_volatile(PENDSV_HANDLER_SYSTICK_COUNT);
+    let vector_installed = read_volatile(SCB_VTOR as *const u32) == PENDSV_VECTOR_TABLE;
+
+    write_volatile(SCB_SHPR3 as *mut u32, prior_shpr3);
+    write_volatile(SCB_VTOR as *mut u32, source_vtor);
+    write_volatile(SYSTICK_RVR as *mut u32, prior_rvr);
+    write_volatile(SYSTICK_HANDLER_PENDSV_REQUEST, 0);
+    core::arch::asm!(
+        "msr PRIMASK, {primask}",
+        "dsb",
+        "isb",
+        primask = in(reg) prior_primask,
+        options(nostack, preserves_flags),
+    );
+
+    let passed = prior_primask == 0
+        && systick_entries == 1
+        && systick_ipsr == 15
+        && deferred_while_active == 1
+        && pendsv_entries == 1
+        && pendsv_ipsr == 14
+        && systick_count_at_pendsv == 1
+        && vector_installed;
+    if passed {
+        putline(b"PENDSV M3 DEFERRED=1 AFTER_SYSTICK=1 VECTOR=14 IPSR=14 ok");
+    } else {
+        putline(b"PENDSV M3 SYSTICK ORDER CHECK FAILED");
     }
     passed
 }
@@ -2703,6 +2806,12 @@ pub extern "C" fn PendSV_Handler() {
         );
         let entries = read_volatile(PENDSV_HANDLER_COUNT);
         write_volatile(PENDSV_HANDLER_IPSR, ipsr);
+        if read_volatile(SYSTICK_HANDLER_PENDSV_REQUEST) != 0 {
+            write_volatile(
+                PENDSV_HANDLER_SYSTICK_COUNT,
+                read_volatile(SYSTICK_HANDLER_COUNT),
+            );
+        }
         write_volatile(PENDSV_HANDLER_COUNT, entries.wrapping_add(1));
     }
 }
@@ -2713,6 +2822,16 @@ pub extern "C" fn SysTick_Handler() {
     unsafe {
         let count = read_volatile(SYSTICK_HANDLER_COUNT);
         let icsr = read_volatile(SCB_ICSR as *const u32);
+        if count == 0 && read_volatile(SYSTICK_HANDLER_PENDSV_REQUEST) != 0 {
+            write_volatile(SYSTICK_CSR as *mut u32, 0);
+            write_volatile(SCB_ICSR as *mut u32, ICSR_PENDSVSET);
+            let pending = read_volatile(SCB_ICSR as *const u32) & ICSR_PENDSVSET != 0;
+            let pendsv_inactive = read_volatile(PENDSV_HANDLER_COUNT) == 0;
+            write_volatile(
+                SYSTICK_HANDLER_PENDSV_DEFERRED,
+                u32::from(pending && pendsv_inactive),
+            );
+        }
         if count == 0 {
             write_volatile(SYSTICK_HANDLER_ICSR_FIRST, icsr);
             if read_volatile(SYSTICK_HANDLER_REPEND) != 0 {

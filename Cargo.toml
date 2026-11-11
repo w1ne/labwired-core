@@ -368,6 +368,10 @@ opt-level = "s"
 codegen-units = 1
 opt-level = "s"
 
+[profile.release.package.firmware-f103-i2c-demo]
+codegen-units = 1
+opt-level = "s"
+
 [profile.release.package.firmware-h563-demo]
 codegen-units = 1
 opt-level = "s"
