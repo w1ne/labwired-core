@@ -40,6 +40,8 @@
 //! read-only behavior is checked separately from its word-read clear. An RVR
 //! update during a live countdown must preserve CVR and take effect on the
 //! next reload. Writes to RVR bits [31:24] must be ignored.
+//! Clearing CVR after a tick is already pending clears COUNTFLAG but must leave
+//! the pending exception intact until PRIMASK is cleared.
 
 #![no_std]
 #![no_main]
@@ -1292,8 +1294,9 @@ fn check_systick_countflag_without_tickint() -> bool {
     ok
 }
 
-/// Clearing CVR during an active countdown must reload silently, then allow
-/// the next countdown-to-zero to pend and enter SysTick normally.
+/// Clearing CVR during an active countdown must reload silently. Clearing it
+/// again after a later wrap must clear COUNTFLAG without canceling the already
+/// pending exception, which must enter after PRIMASK is cleared.
 fn check_systick_cvr_clear_does_not_fire() -> bool {
     let source_vtor = rd(SCB_VTOR);
     let table = RAM_VECTOR_BASE as *mut u32;
@@ -1348,6 +1351,13 @@ fn check_systick_cvr_clear_does_not_fire() -> bool {
         }
         unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
     }
+    // A byte read observes COUNTFLAG without consuming it. CVR writes clear
+    // both CVR and COUNTFLAG, but SCB ICSR's already pending SysTick remains
+    // independent and must still dispatch once after PRIMASK is restored.
+    let countflag_before_pending_clear = rd8(SYSTICK_CSR + 2) & 1 != 0;
+    unsafe { wr(SYSTICK_CVR, 0) };
+    let pending_survived_cvr_clear = rd(SCB_ICSR) & (1 << 26) != 0;
+    let countflag_cleared_by_cvr = rd(SYSTICK_CSR) & (1 << 16) == 0;
     let handler_before_unmask = rd(SYSTICK_CVR_CLEAR_RECORD + 8);
     unsafe {
         asm!(
@@ -1397,6 +1407,9 @@ fn check_systick_cvr_clear_does_not_fire() -> bool {
         && !pending_before_clear
         && !pending_after_clear
         && pending_after_period
+        && countflag_before_pending_clear
+        && pending_survived_cvr_clear
+        && countflag_cleared_by_cvr
         && handler_before_unmask == 0
         && handler_ipsr == 15
         && active
@@ -1411,7 +1424,11 @@ fn check_systick_cvr_clear_does_not_fire() -> bool {
     puts(if pending_after_clear { "1" } else { "0" });
     puts(" pending_after_period=");
     puts(if pending_after_period { "1" } else { "0" });
-    puts(" handler_before_unmask=");
+    puts(" ");
+    flag("flag_before_clear", countflag_before_pending_clear);
+    flag("pending_survived", pending_survived_cvr_clear);
+    flag("flag_cleared", countflag_cleared_by_cvr);
+    puts("handler_before_unmask=");
     hex(handler_before_unmask);
     puts(" handler_ipsr=");
     hex(handler_ipsr);
