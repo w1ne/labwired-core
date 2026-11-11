@@ -14,8 +14,8 @@
 - pass_depth_unknown: `0/226`
 - pass_claimed_peripherals_total: `1478`
 - pass_claimed_peripherals_median: `2`
-- median_elapsed_ms: `1338`
-- median_elapsed_seconds: `1.338`
+- median_elapsed_ms: `1321`
+- median_elapsed_seconds: `1.321`
 - threshold_seconds: `3600`
 - threshold_met: `226/226`
 
@@ -225,7 +225,7 @@
 | `stk3700` | `pass` | `True` | `yes` | `yes` | `1172` | `1.172` | `True` | `observable` | `15` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `stk3800` | `pass` | `True` | `yes` | `yes` | `1057` | `1.057` | `True` | `observable` | `15` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `stm32f042` | `pass` | `True` | `yes` | `yes` | `2964` | `2.964` | `True` | `observable` | `21` | `uart_contains`, `uart_ordered`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
-| `stm32f072` | `pass` | `True` | `yes` | `yes` | `3603` | `3.603` | `True` | `observable` | `29` | `uart_contains`, `uart_ordered`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
+| `stm32f072` | `pass` | `True` | `yes` | `yes` | `1271` | `1.271` | `True` | `observable` | `29` | `uart_contains`, `uart_ordered`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `stm32f072b_discovery` | `pass` | `True` | `yes` | `yes` | `995` | `0.995` | `True` | `observable` | `29` | `uart_contains`, `uart_ordered`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `stm32f103` | `pass` | `True` | `yes` | `yes` | `2092` | `2.092` | `True` | `observable` | `7` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `stm32f4` | `pass` | `True` | `yes` | `yes` | `188900` | `188.9` | `True` | `observable` | `4` | `uart_contains`, `uart_ordered` | 0 | `n/a` | n/a | n/a |
