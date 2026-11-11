@@ -200,6 +200,9 @@ const DMA_LINES: [u32; 3] = [9, 10, 11];
 
 const NVIC_ISPR0: u32 = 0xE000_E200;
 const NVIC_ICPR0: u32 = 0xE000_E280;
+const SYSTICK_CSR: u32 = 0xE000_E010;
+const SYSTICK_RVR: u32 = 0xE000_E014;
+const SYSTICK_CVR: u32 = 0xE000_E018;
 
 fn rd(addr: u32) -> u32 {
     unsafe { read_volatile(addr as *const u32) }
@@ -981,6 +984,62 @@ fn check_adc() -> bool {
     ok
 }
 
+/// Disabling SysTick freezes its in-progress count; re-enabling resumes from
+/// that count instead of starting a fresh RELOAD period.
+fn check_systick_pause_resume() -> bool {
+    const RELOAD: u32 = 2047;
+
+    wr(SYSTICK_CSR, 0);
+    wr(SYSTICK_RVR, RELOAD);
+    wr(SYSTICK_CVR, 0);
+    wr(SYSTICK_CSR, 0x5); // ENABLE | processor clock; TICKINT stays clear.
+
+    // Catch the counter partway through its period, with ample distance from
+    // both zero and RELOAD so a restart is distinguishable from a resume.
+    let mut pause_window = false;
+    for _ in 0..10_000 {
+        let value = rd(SYSTICK_CVR);
+        if (1024..=1792).contains(&value) {
+            pause_window = true;
+            break;
+        }
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+
+    wr(SYSTICK_CSR, 0x4); // Disable while preserving CLKSOURCE.
+    let paused = rd(SYSTICK_CVR);
+    for _ in 0..64 {
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+    let frozen = rd(SYSTICK_CVR);
+
+    wr(SYSTICK_CSR, 0x5);
+    for _ in 0..64 {
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+    let resumed = rd(SYSTICK_CVR);
+    wr(SYSTICK_CSR, 0);
+    wr(SYSTICK_CVR, 0);
+
+    let frozen_ok = paused == frozen;
+    let resumed_ok = pause_window && paused > 256 && resumed > 0 && resumed < paused;
+    let ok = frozen_ok && resumed_ok;
+
+    puts("systick pause-resume ");
+    flag("window", pause_window);
+    flag("frozen", frozen_ok);
+    flag("resumed", resumed_ok);
+    puts("paused=");
+    hex(paused);
+    puts(" frozen_at=");
+    hex(frozen);
+    puts(" resumed_at=");
+    hex(resumed);
+    puts(" ");
+    verdict(ok);
+    ok
+}
+
 #[entry]
 fn main() -> ! {
     let (rcc_reset, rcc_gate) = rcc_bringup();
@@ -1018,7 +1077,8 @@ fn main() -> ! {
     mark(18, check_spi1_shared_cs());
     mark(19, check_crc());
     mark(20, check_adc());
-    let summary = summary | 0x0720_0000;
+    mark(21, check_systick_pause_resume());
+    let summary = summary | 0x0700_0000;
     wr(SUMMARY, summary);
     puts("summary ");
     hex(summary);
