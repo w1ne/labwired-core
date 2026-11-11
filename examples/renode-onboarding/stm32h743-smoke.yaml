@@ -23,6 +23,7 @@ assertions:
   - uart_contains: "cortex-m7 fp lazy nested-touch=1 lspact=00000001->00000000 saved=1 regs=1 active=00000060"
   - uart_contains: "cortex-m7 exception ok"
   - uart_contains: "cortex-m7 cpacr privileged fp=1 nocp=00000000 result=000000A5"
+  - uart_contains: "cortex-m7 cpacr handler fp=1 ipsr=0000000B nocp=00000000 result=000000C3"
   - gpio_edges:
       pin: "gpioPortB:0"
       min_edges: 1

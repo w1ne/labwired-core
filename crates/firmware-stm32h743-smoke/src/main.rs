@@ -47,6 +47,8 @@ const EXCEPTION_IRQ_BIT: u32 = 1 << EXCEPTION_IRQ;
 #[cfg(feature = "stm32h743-exception-frame")]
 const EXCEPTION_VECTOR_INDEX: usize = 16 + EXCEPTION_IRQ as usize;
 #[cfg(feature = "stm32h743-exception-frame")]
+const SVC_VECTOR_INDEX: usize = 11;
+#[cfg(feature = "stm32h743-exception-frame")]
 const NESTED_IRQ: u32 = 6;
 #[cfg(feature = "stm32h743-exception-frame")]
 const NESTED_IRQ_BIT: u32 = 1 << NESTED_IRQ;
@@ -66,6 +68,9 @@ static mut EXCEPTION_RECORD: [u32; 18] = [0; 18];
 
 #[cfg(feature = "stm32h743-exception-frame")]
 static mut CPACR_FAULT_RECORD: [u32; 4] = [0; 4];
+
+#[cfg(feature = "stm32h743-exception-frame")]
+static mut CPACR_HANDLER_RECORD: [u32; 2] = [0; 2];
 
 #[cfg(feature = "stm32h743-exception-frame")]
 static FP_SENTINELS: [u32; 16] = [
@@ -386,6 +391,68 @@ unsafe extern "C" fn nocp_usagefault_handler() {
         "bx lr",
         record = sym CPACR_FAULT_RECORD,
         cfsr = const 0xE000_ED28usize,
+    );
+}
+
+/// Execute a real VFP round trip from SVC Handler mode. The caller enters
+/// SVC from unprivileged Thread mode while CP10/CP11 are privileged-only.
+#[cfg(feature = "stm32h743-exception-frame")]
+#[unsafe(naked)]
+unsafe extern "C" fn cpacr_svc_handler() {
+    core::arch::naked_asm!(
+        // Restrict FP access from privileged Handler mode before the VFP
+        // round trip, even though the interrupted Thread mode is unprivileged.
+        "ldr r1, =0xE000ED88",
+        "ldr r2, =0x00500000",
+        "str r2, [r1]",
+        "dsb",
+        "isb",
+        "push {{r4-r5}}",
+        "mov r4, lr",
+        "bl {roundtrip}",
+        "ldr r1, ={record}",
+        "str r0, [r1]",
+        "mrs r0, ipsr",
+        "str r0, [r1, #4]",
+        "mov lr, r4",
+        "pop {{r4-r5}}",
+        "bx lr",
+        roundtrip = sym cpacr_handler_fp_roundtrip,
+        record = sym CPACR_HANDLER_RECORD,
+    );
+}
+
+/// Keep VFP instructions in a normal function so target FP features apply.
+#[cfg(feature = "stm32h743-exception-frame")]
+#[inline(never)]
+unsafe fn cpacr_handler_fp_roundtrip() -> u32 {
+    let result: u32;
+    asm!(
+        "movs r0, #0xc3",
+        "vmov s31, r0",
+        "movs r0, #0",
+        "vmov r0, s31",
+        out("r0") result,
+        out("s31") _,
+        options(nostack)
+    );
+    result
+}
+
+/// Enter unprivileged Thread mode and issue SVC so the installed handler can
+/// prove that Handler mode retains privileged CPACR access.
+#[cfg(feature = "stm32h743-exception-frame")]
+#[inline(never)]
+unsafe fn attempt_unprivileged_svc() {
+    asm!(
+        "mrs r0, control",
+        "bic r0, r0, #2",
+        "orr r0, r0, #1",
+        "msr control, r0",
+        "isb",
+        "svc #0",
+        out("r0") _,
+        options(nostack)
     );
 }
 
@@ -1485,10 +1552,17 @@ fn check_cortex_m7_exception_frame() -> bool {
         let vector_table = core::ptr::addr_of_mut!(RAM_VECTOR_TABLE.0).cast::<u32>();
         let record = core::ptr::addr_of_mut!(CPACR_FAULT_RECORD).cast::<u32>();
         write_volatile(vector_table.add(6), nocp_vector);
+        write_volatile(
+            vector_table.add(SVC_VECTOR_INDEX),
+            (cpacr_svc_handler as *const () as usize as u32) | 1,
+        );
         write_volatile(SCB_VTOR, vector_table as u32);
         for index in 0..4 {
             write_volatile(record.add(index), 0);
         }
+        let handler_record = core::ptr::addr_of_mut!(CPACR_HANDLER_RECORD).cast::<u32>();
+        write_volatile(handler_record, 0);
+        write_volatile(handler_record.add(1), 0);
         write_volatile(SCB_CFSR, CFSR_UFSR_NOCP); // clear a stale NOCP latch
         write_volatile(SCB_SHCSR, read_volatile(SCB_SHCSR) | SHCSR_USGFAULTENA);
         write_volatile(SCB_CPACR, CPACR_PRIVILEGED_ONLY);
@@ -1537,7 +1611,26 @@ fn check_cortex_m7_exception_frame() -> bool {
     send(b" result=");
     send_hex32(fp_roundtrip);
     send(b"\r\n");
-    ok && privileged_fp_ok && nocp_ok && full_access_ok
+
+    // The unprivileged Thread issues SVC after demonstrating full access.
+    // Its handler changes CPACR back to privileged-only and performs a real
+    // VFP round trip, proving Handler mode retains privileged access.
+    unsafe { attempt_unprivileged_svc() };
+    let handler_record = core::ptr::addr_of!(CPACR_HANDLER_RECORD).cast::<u32>();
+    let handler_fp_result = unsafe { read_volatile(handler_record) };
+    let handler_ipsr = unsafe { read_volatile(handler_record.add(1)) };
+    let handler_nocp = unsafe { read_volatile(SCB_CFSR) } & CFSR_UFSR_NOCP;
+    let handler_fp_ok = handler_fp_result == 0xC3 && handler_ipsr == 11 && handler_nocp == 0;
+    send(b"cortex-m7 cpacr handler fp=");
+    send(if handler_fp_ok { b"1" } else { b"0" });
+    send(b" ipsr=");
+    send_hex32(handler_ipsr);
+    send(b" nocp=");
+    send_hex32(handler_nocp);
+    send(b" result=");
+    send_hex32(handler_fp_result);
+    send(b"\r\n");
+    ok && privileged_fp_ok && handler_fp_ok && nocp_ok && full_access_ok
 }
 
 #[cfg(feature = "nucleo-h753zi-rx")]
