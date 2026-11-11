@@ -479,6 +479,18 @@ unsafe fn attempt_unprivileged_fp() {
     );
 }
 
+/// Execute one VFP instruction in privileged Thread mode so CPACR=00 can be
+/// distinguished from the privileged-only CP10/CP11 grant.
+#[cfg(feature = "stm32h743-exception-frame")]
+#[inline(never)]
+unsafe fn attempt_privileged_fp() {
+    asm!(
+        "vmov.f32 s31, s31",
+        out("s31") _,
+        options(nostack)
+    );
+}
+
 /// Verify that privileged-only CP10/CP11 access permits an actual FP
 /// round-trip while Thread mode remains privileged. The integer result
 /// proves both VFP instructions retired.
@@ -1548,10 +1560,10 @@ fn check_cortex_m7_exception_frame() -> bool {
     send_hex32(privileged_fp_roundtrip);
     send(b"\r\n");
 
-    // CPACR privileged-only must fault a real VFP instruction from
-    // unprivileged Thread mode, set CFSR.NOCP, and enter UsageFault. The
-    // handler records the stacked frame and skips the denied instruction so
-    // the smoke can report the result and continue in unprivileged mode.
+    // CPACR=00 denies a real VFP instruction even in privileged Thread mode.
+    // Then CPACR privileged-only must fault the same instruction from
+    // unprivileged Thread mode. The UsageFault handler records each stacked
+    // frame and skips the denied instruction so the smoke can continue.
     let nocp_vector = (nocp_usagefault_handler as *const () as usize as u32) | 1;
     unsafe {
         let vector_table = core::ptr::addr_of_mut!(RAM_VECTOR_TABLE.0).cast::<u32>();
@@ -1570,6 +1582,32 @@ fn check_cortex_m7_exception_frame() -> bool {
         write_volatile(handler_record.add(1), 0);
         write_volatile(SCB_CFSR, CFSR_UFSR_NOCP); // clear a stale NOCP latch
         write_volatile(SCB_SHCSR, read_volatile(SCB_SHCSR) | SHCSR_USGFAULTENA);
+        write_volatile(SCB_CPACR, 0);
+        asm!("dsb", "isb", options(nostack, preserves_flags));
+        attempt_privileged_fp();
+    }
+    let denied_record = core::ptr::addr_of!(CPACR_FAULT_RECORD).cast::<u32>();
+    let denied_pc = unsafe { read_volatile(denied_record) };
+    let denied_cfsr = unsafe { read_volatile(denied_record.add(1)) };
+    let denied_ipsr = unsafe { read_volatile(denied_record.add(2)) };
+    let privileged_denied_ok = denied_pc >= 0x0800_0000
+        && denied_pc < 0x0810_0000
+        && denied_cfsr & CFSR_UFSR_NOCP != 0
+        && denied_ipsr == 6;
+    send(b"cortex-m7 cpacr privileged denied=");
+    send(if privileged_denied_ok { b"1" } else { b"0" });
+    send(b" ipsr=");
+    send_hex32(denied_ipsr);
+    send(b" cfsr=");
+    send_hex32(denied_cfsr & CFSR_UFSR_NOCP);
+    send(b"\r\n");
+
+    unsafe {
+        let record = core::ptr::addr_of_mut!(CPACR_FAULT_RECORD).cast::<u32>();
+        for index in 0..4 {
+            write_volatile(record.add(index), 0);
+        }
+        write_volatile(SCB_CFSR, CFSR_UFSR_NOCP);
         write_volatile(SCB_CPACR, CPACR_PRIVILEGED_ONLY);
         asm!("dsb", "isb", options(nostack, preserves_flags));
         attempt_unprivileged_fp();
@@ -1640,7 +1678,7 @@ fn check_cortex_m7_exception_frame() -> bool {
     send(b" result=");
     send_hex32(handler_fp_result);
     send(b"\r\n");
-    ok && privileged_fp_ok && handler_fp_ok && nocp_ok && full_access_ok
+    ok && privileged_fp_ok && privileged_denied_ok && handler_fp_ok && nocp_ok && full_access_ok
 }
 
 #[cfg(feature = "nucleo-h753zi-rx")]
