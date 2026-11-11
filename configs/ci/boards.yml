@@ -47,6 +47,12 @@ boards:
     kind: sim-validate
     path: examples/arduino-nano-esp32
     gate: true
+  # Demand-rank 1 ESP32 family: the Feather V2's on-board red GPIO13 LED.
+  # The committed fast-boot fixture keeps this board smoke quick on every PR.
+  - id: adafruit-feather-esp32-v2-gpio
+    kind: sim-validate
+    path: examples/adafruit-feather-esp32-v2
+    gate: true
   # Narrow ESP32-DevKitC-32E onboarding profile. Committed TIER1 ELF, no
   # cross-toolchain, seconds to run. Proves the new chip descriptor through
   # `labwired test` on every PR (chip-coverage ceiling forbids another waiver).

@@ -78,6 +78,11 @@ jobs:
             script: examples/arduino-nano-esp32/io-smoke.yaml
             system: configs/systems/arduino-nano-esp32.yaml
             firmware_build_script: examples/arduino-nano-esp32/build-firmware.sh
+          # Demand-rank 1 ESP32 family expansion: Adafruit's in-stock Feather V2.
+          - id: adafruit-feather-esp32-v2-gpio
+            script: examples/adafruit-feather-esp32-v2/io-smoke.yaml
+            system: configs/systems/adafruit-feather-esp32-v2.yaml
+            firmware_build_script: examples/adafruit-feather-esp32-v2/build-firmware.sh
           - id: rp2040-pio
             crate: firmware-rp2040-pio-onboarding
             target: thumbv6m-none-eabi

@@ -110,5 +110,9 @@
   "arduino-nano-esp32-gpio.elf": {
     "sha256": "79802dcdfe3c16811a38e8d7c94173bb0ced3d88a9926c68cf7e40b78c28bb54",
     "source_rev": "43b62fef67018fb5b03dd81fa59e0829ff30d9b4"
+  },
+  "adafruit-feather-esp32-v2-gpio.elf": {
+    "sha256": "484593d35d394901918966faa5ca04b214e7448a7a2bd1cba81e81b9faff0e43",
+    "source_rev": "b1be150adade5986ee3cc66335cdae6df8d30c79"
   }
 }
