@@ -595,3 +595,142 @@ fn stm32f746_discovery_mosfet_body_effect_reaches_adc1_alongside_ntc_and_diode()
         "reverse body bias raises Vth and the loaded drain voltage: {body_samples:?}"
     );
 }
+
+#[test]
+fn stm32f746_discovery_mosfet_overlap_charge_reaches_adc1_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/stm32f7-discovery.yaml");
+    let mut profile =
+        SystemManifest::from_file(&system_path).expect("load STM32F7 Discovery profile");
+    let generic = SystemManifest::from_file(root(
+        "examples/stm32f7-discovery/analog-ntc-diode-system.yaml",
+    ))
+    .expect("load unrelated generic NTC and diode netlists");
+    let mosfet =
+        SystemManifest::from_file(root("examples/stm32f7-discovery/analog-mosfet-charge.yaml"))
+            .expect("load matched generic NMOS gate-overlap branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(mosfet.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F746 descriptor");
+    for (pad, channel) in [("PA0", 0), ("PA1", 1), ("PA3", 3), ("PA4", 4)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build STM32F7 Discovery bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries an NTC, diode, and matched MOSFET charge pair");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "the generic NTC, diode, and NMOS branches resolve to ADC1 channels 0, 1, 3, and 4"
+    );
+    for channel in 0..=5 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold the unrelated Beta NTC at nominal temperature");
+    session
+        .set_signal_number("ui.mosfet_charge.gate_v", 0.0)
+        .expect("initialize both MOSFET gates at zero volts");
+
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("settle the NTC, diode, and MOSFET branches before the gate step");
+    assert_eq!(initial_steps.len(), 3, "all three generic netlists solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected route errors: {initial_errors:?}"
+    );
+    assert!(signal_voltage(&session, "board.analog.pa3_volts").abs() < 1e-12);
+    assert!(signal_voltage(&session, "board.analog.pa4_volts").abs() < 1e-12);
+
+    session
+        .set_signal_number("ui.mosfet_charge.gate_v", 3.3)
+        .expect("step the matched generic NMOS gates");
+
+    // CGSO=10 uF/m times W=100 um gives 1 nF. With a 1 kOhm source
+    // resistor and a 1 us backward-Euler step, the source node receives half
+    // of the 3.3 V gate step, then discharges by half on each held-input step.
+    let ntc_v = 1.65;
+    let diode_v = diode_load_line_voltage();
+    let mut expected_source_v = 1.65;
+    let mut samples = Vec::new();
+    for step in 0..12 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route the MOSFET overlap-charge transient");
+        assert_eq!(steps.len(), 3, "all three generic netlists solve each step");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let actual_ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let actual_diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+        let reference_v = signal_voltage(&session, "board.analog.pa3_volts");
+        let charged_v = signal_voltage(&session, "board.analog.pa4_volts");
+        assert!(
+            (actual_ntc_v - ntc_v).abs() < 1e-9,
+            "the unrelated NTC remains isolated"
+        );
+        assert!(
+            (actual_diode_v - diode_v).abs() < 2e-5,
+            "the unrelated Shockley diode remains at its independent load line"
+        );
+        assert!(
+            reference_v.abs() < 1e-12,
+            "the zero-overlap NMOS remains the control branch"
+        );
+        assert!(
+            (charged_v - expected_source_v).abs() < 2e-8,
+            "CGSO RC recurrence at step {step}: expected {expected_source_v} V, got {charged_v} V"
+        );
+
+        for (channel, volts) in [
+            (0, actual_ntc_v),
+            (1, actual_diode_v),
+            (3, reference_v),
+            (4, charged_v),
+        ] {
+            let expected = expected_adc_count(volts);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "solved voltage seeds ADC1 channel {channel}"
+            );
+            assert_eq!(
+                stm32f4_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "firmware-visible ADC1 conversion follows channel {channel}"
+            );
+        }
+        for channel in [2, 5] {
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                0xFFFF,
+                "neighboring ADC1 channel {channel} remains undriven"
+            );
+        }
+        if step == 0 {
+            assert_eq!(
+                adc_channel_count(&mut bus, 4),
+                2047,
+                "the first overlap-charge transient reaches ADC1_IN4 at half scale"
+            );
+        }
+        samples.push(charged_v);
+        expected_source_v *= 0.5;
+    }
+
+    assert!(
+        samples[0] > 1.6 && *samples.last().unwrap() < 1e-3,
+        "gate overlap capacitance changes the transient and decays to its DC operating point: {samples:?}"
+    );
+}
