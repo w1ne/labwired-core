@@ -39,6 +39,8 @@
 //! countdown-to-zero must still pend SysTick. COUNTFLAG's byte-read and
 //! read-only behavior is checked separately from its word-read clear. TICKINT
 //! enabled after a silent wrap must wait for the next zero-hit before it pends.
+//! Clearing TICKINT after a hardware request is pending must preserve that
+//! pending exception; ICSR.PENDSTCLR is checked separately as the clear path.
 //! An RVR update during a live countdown must preserve CVR and take effect on
 //! the next reload. Writes to RVR bits [31:24] must be ignored.
 //! Clearing CVR after a tick is already pending clears COUNTFLAG but must leave
@@ -1213,7 +1215,8 @@ fn check_systick_periodic_reload() -> bool {
 }
 
 /// COUNTFLAG records a zero-hit with TICKINT clear but no exception is pended.
-/// Enabling TICKINT between wraps must wait for the next zero-hit to pend.
+/// Enabling TICKINT between wraps must wait for the next zero-hit to pend;
+/// clearing it after that request is pending must not withdraw the request.
 fn check_systick_countflag_and_late_tickint() -> bool {
     const PENDSTSET: u32 = 1 << 26;
     const PENDSTCLR: u32 = 1 << 25;
@@ -1279,6 +1282,13 @@ fn check_systick_countflag_and_late_tickint() -> bool {
         unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
     }
     let countflag_after_next_wrap = rd8(SYSTICK_CSR + 2) & 1 != 0;
+    let pending_before_tickint_clear = rd(SCB_ICSR) & PENDSTSET != 0;
+    // TICKINT gates new zero-hit requests. ICSR.PENDSTCLR is the operation
+    // that removes an already-pending SysTick exception.
+    unsafe { wr(SYSTICK_CSR, 0x5) }; // Keep ENABLE, clear TICKINT.
+    let pending_after_tickint_clear = rd(SCB_ICSR) & PENDSTSET != 0;
+    let tickint_clear_control = rd8(SYSTICK_CSR) & 0x7 == 0x5;
+    let countflag_after_tickint_clear = rd8(SYSTICK_CSR + 2) & 1 != 0;
     let handler_before_unmask = rd(SYSTICK_FLAG_RECORD + 8);
     unsafe {
         asm!("cpsie i", "dsb", "isb", options(nostack, preserves_flags));
@@ -1328,6 +1338,10 @@ fn check_systick_countflag_and_late_tickint() -> bool {
         && !countflag_after_tickint_enable
         && next_wrap_pending
         && countflag_after_next_wrap
+        && pending_before_tickint_clear
+        && pending_after_tickint_clear
+        && tickint_clear_control
+        && countflag_after_tickint_clear
         && handler_before_unmask == 0
         && handler_ipsr == 15
         && handler_active
@@ -1349,6 +1363,12 @@ fn check_systick_countflag_and_late_tickint() -> bool {
         "no_immediate",
         !pending_after_tickint_enable && !countflag_after_tickint_enable,
     );
+    flag(
+        "tickint_clear_pending",
+        pending_before_tickint_clear && pending_after_tickint_clear,
+    );
+    flag("control", tickint_clear_control);
+    flag("flag", countflag_after_tickint_clear);
     flag("next_wrap", next_wrap_pending && countflag_after_next_wrap);
     puts("handler_before_unmask=");
     hex(handler_before_unmask);
