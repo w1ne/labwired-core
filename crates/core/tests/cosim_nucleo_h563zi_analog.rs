@@ -1173,3 +1173,147 @@ fn nucleo_h563zi_bjt_junction_and_transit_charge_reach_adc1_end_to_end() {
         );
     }
 }
+
+#[test]
+fn nucleo_h563zi_bjt_terminal_resistances_reach_adc1_with_explicit_network_reference() {
+    let system_path = root("configs/systems/nucleo-h563zi-demo.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-H563ZI profile");
+    let generic = SystemManifest::from_file(root(
+        "examples/nucleo-h563zi/analog-ntc-diode-adc-system.yaml",
+    ))
+    .expect("load unrelated generic NTC and Shockley diode ADC routes");
+    let terminal_resistances = SystemManifest::from_file(root(
+        "examples/nucleo-h563zi/analog-bjt-terminal-resistance-adc-system.yaml",
+    ))
+    .expect("load matched generic BJT terminal-resistance netlists");
+    profile.cosim_models = generic.cosim_models;
+    profile
+        .cosim_models
+        .extend(terminal_resistances.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32H563 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-H563ZI bus");
+    adc_power_up(&mut bus);
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries NTC, diode, and nine matched BJT resistance branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must bind to separate ADC1 channels"
+    );
+    for channel in 2..=10 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            u16::MAX,
+            "ADC1 channel {channel} starts without an injected BJT source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.bjt_terminal.base_v", 0.0)
+        .expect("initialize matched BJT base-drive sources");
+
+    let diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    let mut high_drive_voltages = None;
+    for base_drive_v in [0.7_f64, 0.8, 0.9] {
+        session
+            .set_signal_number("ui.bjt_terminal.base_v", base_drive_v)
+            .expect("step all matched BJT base drives");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and BJT terminal-resistance branches");
+        assert_eq!(steps.len(), 11, "all eleven generic analog branches solve");
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "adc.adc1.0_volts");
+        assert!(
+            (ntc_v - 1.65).abs() < 1e-9,
+            "unrelated Beta NTC remains isolated on ADC1 channel 0"
+        );
+        assert!(
+            (signal_voltage(&session, "adc.adc1.1_volts") - diode_v).abs() < 2e-5,
+            "unrelated Shockley diode remains isolated on ADC1 channel 1"
+        );
+
+        let bjt_voltages: Vec<f64> = (2..=10)
+            .map(|channel| signal_voltage(&session, &format!("adc.adc1.{channel}_volts")))
+            .collect();
+        let expected_control_v = bjt_collector_voltage(base_drive_v, Some(50.0));
+        assert!(
+            (bjt_voltages[0] - expected_control_v).abs() < 5e-5,
+            "zero-resistance branch must match the independent Gummel-Poon load line {expected_control_v} V, got {} V",
+            bjt_voltages[0]
+        );
+
+        for (label, model_card_voltage, explicit_network_voltage) in [
+            ("RB", bjt_voltages[1], bjt_voltages[6]),
+            ("RC", bjt_voltages[2], bjt_voltages[7]),
+            ("RE", bjt_voltages[3], bjt_voltages[8]),
+            ("RB+RC+RE", bjt_voltages[4], bjt_voltages[5]),
+        ] {
+            assert!(
+                (model_card_voltage - explicit_network_voltage).abs() < 1e-7,
+                "{label} model-card resistance must match its explicit resistor network: {model_card_voltage} V vs {explicit_network_voltage} V"
+            );
+        }
+
+        if base_drive_v == 0.9 {
+            for (label, voltage) in [
+                ("RB", bjt_voltages[1]),
+                ("RC", bjt_voltages[2]),
+                ("RE", bjt_voltages[3]),
+                ("RB+RC+RE", bjt_voltages[4]),
+            ] {
+                assert!(
+                    (voltage - bjt_voltages[0]).abs() > 1e-3,
+                    "{label} must change the collector load line: no-resistance={} V, actual={voltage} V",
+                    bjt_voltages[0]
+                );
+            }
+            high_drive_voltages = Some((ntc_v, bjt_voltages.clone()));
+        }
+
+        for (channel, voltage_v) in [(0, ntc_v), (1, diode_v)]
+            .into_iter()
+            .chain((2..=10).zip(bjt_voltages.iter().copied()))
+        {
+            let expected_count = expected_adc12_count(voltage_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected_count as u16,
+                "solved voltage seeds ADC1 channel {channel}"
+            );
+            assert_eq!(
+                adc_convert(&mut bus, channel),
+                expected_count,
+                "firmware-visible ADC1 data register follows the generic device on channel {channel}"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 11),
+            u16::MAX,
+            "neighboring ADC1 channel 11 remains undriven"
+        );
+    }
+
+    let (ntc_v, bjt_voltages) = high_drive_voltages.expect("high-drive sample was recorded");
+    assert!(
+        (ntc_v - 1.65).abs() < 1e-9,
+        "NTC remains independent at high drive"
+    );
+    for (channel, voltage_v) in (2..=10).zip(bjt_voltages) {
+        assert_eq!(
+            adc_convert(&mut bus, channel),
+            expected_adc12_count(voltage_v),
+            "final firmware-visible ADC1 conversion follows BJT channel {channel}"
+        );
+    }
+}
