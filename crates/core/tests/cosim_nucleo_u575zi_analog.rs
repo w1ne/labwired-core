@@ -214,6 +214,75 @@ fn bjt_recombination_collector_voltage(
     collector_for_vbe(0.5 * (low + high))
 }
 
+/// Independent ngspice level-1 base spreading resistance interpolation.
+fn bjt_base_resistance_ohms(base_current_a: f64, rb_ohms: f64, rbm_ohms: f64, irb_a: f64) -> f64 {
+    let ratio = (base_current_a / irb_a).max(1e-9);
+    let z = ((1.0 + 14.59025 * ratio).sqrt() - 1.0) / (2.4317 * ratio.sqrt());
+    let tan_z = z.tan();
+    rbm_ohms + 3.0 * (rb_ohms - rbm_ohms) * (tan_z - z) / (z * tan_z * tan_z)
+}
+
+/// Independent NPN Gummel–Poon load line with optional RBM/IRB rolloff.
+fn bjt_base_resistance_collector_voltage(base_drive_v: f64, rolloff: bool) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const COLLECTOR_OHMS: f64 = 1_000.0;
+    const DRIVE_OHMS: f64 = 2_000.0;
+    const RB_OHMS: f64 = 2_000.0;
+    const RBM_OHMS: f64 = 20.0;
+    const IRB_A: f64 = 50e-6;
+    const IS_A: f64 = 1e-16;
+    const BF: f64 = 20.0;
+    const BR: f64 = 4.0;
+    const VAF: f64 = 50.0;
+    const VAR: f64 = 75.0;
+    const VT: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+
+    let currents = |vbe: f64, collector_v: f64| {
+        let vbc = vbe - collector_v;
+        let forward = (vbe / VT).exp();
+        let reverse = (vbc / VT).exp();
+        let base_width = 1.0 - vbc / VAF - vbe / VAR;
+        let transport = IS_A * (forward - reverse) * base_width;
+        let base_collector = (IS_A / BR) * (reverse - 1.0);
+        let base_emitter = (IS_A / BF) * (forward - 1.0);
+        (transport - base_collector, base_emitter + base_collector)
+    };
+
+    let collector_for_vbe = |vbe: f64| {
+        let (mut low, mut high) = (0.0, SUPPLY_V);
+        for _ in 0..100 {
+            let collector_v = 0.5 * (low + high);
+            let (collector_current, _) = currents(vbe, collector_v);
+            let residual = (SUPPLY_V - collector_v) / COLLECTOR_OHMS - collector_current;
+            if residual > 0.0 {
+                low = collector_v;
+            } else {
+                high = collector_v;
+            }
+        }
+        0.5 * (low + high)
+    };
+
+    let (mut low, mut high) = (0.0, base_drive_v);
+    for _ in 0..100 {
+        let vbe = 0.5 * (low + high);
+        let collector_v = collector_for_vbe(vbe);
+        let (_, base_current) = currents(vbe, collector_v);
+        let base_resistance = if rolloff {
+            bjt_base_resistance_ohms(base_current, RB_OHMS, RBM_OHMS, IRB_A)
+        } else {
+            RB_OHMS
+        };
+        let residual = (base_drive_v - vbe) / (DRIVE_OHMS + base_resistance) - base_current;
+        if residual > 0.0 {
+            low = vbe;
+        } else {
+            high = vbe;
+        }
+    }
+    collector_for_vbe(0.5 * (low + high))
+}
+
 fn u5_adc_convert(bus: &mut SystemBus, channel: u8) -> u32 {
     const ADC_ADVREGEN: u32 = 1 << 28;
     const ADC_ADEN: u32 = 1;
@@ -654,5 +723,153 @@ fn nucleo_u575zi_bjt_base_recombination_reaches_pa4_pa7_adc1_alongside_ntc_and_d
     assert!(
         saw_base_collector_effect,
         "forward-biased ISC/NC recombination changes the collector load line"
+    );
+}
+
+#[test]
+fn nucleo_u575zi_bjt_base_resistance_rolloff_reaches_pa2_pa3_adc1_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/nucleo-u575zi.yaml");
+    let mut profile =
+        SystemManifest::from_file(&system_path).expect("load NUCLEO-U575ZI-Q profile");
+    let generic =
+        SystemManifest::from_file(root("examples/nucleo-u575zi/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and Shockley diode routes");
+    let base_resistance = SystemManifest::from_file(root(
+        "examples/nucleo-u575zi/analog-bjt-base-resistance-system.yaml",
+    ))
+    .expect("load matched generic BJT base-resistance branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(base_resistance.cosim_models);
+
+    let chip = labwired_config::ChipDescriptor::from_file(
+        system_path.parent().unwrap().join(&profile.chip),
+    )
+    .expect("load STM32U575 descriptor");
+    for (pin, channel) in [("PA2", 7), ("PA3", 8)] {
+        assert_eq!(
+            chip.analog_pins
+                .get(pin)
+                .map(|route| (route.peripheral.as_str(), route.channel)),
+            Some(("adc1", channel)),
+            "{pin} must resolve to its documented ADC1 input channel {channel}"
+        );
+    }
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-U575ZI-Q bus");
+
+    let ahb2enr1 = bus.read_u32(RCC_AHB2ENR1).expect("read RCC AHB2ENR1");
+    bus.write_u32(RCC_AHB2ENR1, ahb2enr1 | (1 << 10))
+        .expect("enable ADC1 clock");
+    bus.write_u32(ADC_CR, 0).expect("leave ADC deep power-down");
+    bus.write_u32(ADC_CR, 1 << 28)
+        .expect("enable ADC voltage regulator");
+    bus.write_u32(ADC_CR, (1 << 28) | (1 << 31))
+        .expect("calibrate ADC1");
+    bus.write_u32(ADC_CR, (1 << 28) | 1).expect("enable ADC1");
+    assert_ne!(
+        bus.read_u32(ADC_ISR).expect("read ADC1 ready status") & 1,
+        0,
+        "ADC1 must report ADRDY before conversion"
+    );
+    bus.write_u32(ADC_CFGR1, 0x8000_0000 | (1 << 2))
+        .expect("select 12-bit conversion resolution");
+    bus.write_u32(ADC_PCSEL, (1 << 5) | (1 << 6) | (1 << 7) | (1 << 8))
+        .expect("select NTC, diode, and both BJT ADC channels");
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries NTC, diode, and matched BJT base-resistance branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must resolve PA0–PA3 to ADC1 channels 5–8"
+    );
+    assert_eq!(
+        adc_channel_count(&mut bus, 9),
+        u16::MAX,
+        "ADC1 channel 9 starts undriven"
+    );
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.bjt_base_resistance.base_v", 0.0)
+        .expect("initialize matched BJT base drives");
+
+    let ntc_v = 1.65;
+    let diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    let mut rolloff_at_high_drive = None;
+    let mut control_at_high_drive = None;
+    for base_drive_v in [0.8_f64, 1.0, 1.2] {
+        session
+            .set_signal_number("ui.bjt_base_resistance.base_v", base_drive_v)
+            .expect("set common BJT base drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and matched BJT branches");
+        assert_eq!(steps.len(), 4, "all four generic analog branches solve");
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        let routed_ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let routed_diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+        assert!(
+            (routed_ntc_v - ntc_v).abs() < 1e-9,
+            "the unrelated NTC remains isolated on ADC1 channel 5"
+        );
+        assert!(
+            (routed_diode_v - diode_v).abs() < 2e-5,
+            "the unrelated Shockley diode remains isolated on ADC1 channel 6"
+        );
+
+        let rolloff_v = signal_voltage(&session, "board.analog.pa2_volts");
+        let control_v = signal_voltage(&session, "board.analog.pa3_volts");
+        let expected_rolloff_v = bjt_base_resistance_collector_voltage(base_drive_v, true);
+        let expected_control_v = bjt_base_resistance_collector_voltage(base_drive_v, false);
+        assert!(
+            (rolloff_v - expected_rolloff_v).abs() < 5e-5,
+            "RBM/IRB load line at base drive {base_drive_v} V should be {expected_rolloff_v} V, got {rolloff_v} V"
+        );
+        assert!(
+            (control_v - expected_control_v).abs() < 5e-5,
+            "matched fixed-RB load line at base drive {base_drive_v} V should be {expected_control_v} V, got {control_v} V"
+        );
+
+        for (channel, voltage_v) in [
+            (5, routed_ntc_v),
+            (6, routed_diode_v),
+            (7, rolloff_v),
+            (8, control_v),
+        ] {
+            let expected_count = expected_adc12_count(voltage_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected_count as u16,
+                "solved voltage seeds ADC1 channel {channel}"
+            );
+            assert_eq!(
+                u5_adc_convert(&mut bus, channel),
+                expected_count,
+                "firmware-visible ADC1 conversion follows channel {channel}"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 9),
+            u16::MAX,
+            "adjacent ADC1 channel 9 stays isolated"
+        );
+
+        if base_drive_v == 1.2 {
+            rolloff_at_high_drive = Some(rolloff_v);
+            control_at_high_drive = Some(control_v);
+        }
+    }
+
+    let rolloff_v = rolloff_at_high_drive.expect("high-drive rolloff sample was recorded");
+    let control_v = control_at_high_drive.expect("high-drive control sample was recorded");
+    assert!(
+        control_v - rolloff_v > 0.5,
+        "the falling RBM/IRB resistance increases base drive and lowers collector voltage: {rolloff_v} V vs {control_v} V"
     );
 }

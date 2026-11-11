@@ -70,9 +70,7 @@
 //! be declared after the elements that use it. Parameters this engine does not
 //! model (except diode forward/reverse knee currents `IK`/`IKF`/`IKR`, diode
 //! depletion capacitance `CJO`/`VJ`/`M`/`FC`, diffusion charge `TT` and
-//! soft-recovery parameter `VP`, BJT base-resistance rolloff `RBM`/`IRB`,
-//! terminal resistances `RB`/`RC`/`RE` and their `TRB*`/`TRBM*`/`TIRB*`/
-//! `TRC*`/`TRE*` temperature coefficients, diode transit-time temperature
+//! soft-recovery parameter `VP`, diode transit-time temperature
 //! coefficients `TTT1`/`TTT2`, diode grading-coefficient temperature
 //! coefficients `TM1`/`TM2`, forward/reverse BJT transit-time temperature
 //! coefficients `TTF1`/`TTF2`/`TTR1`/`TTR2`, JFET terminal
@@ -128,7 +126,10 @@
 //! exponent 0.5), base recombination from `ISE`/`NE`/`ISC`/`NC`, and transit-time
 //! charge from `TF`/`TR`,
 //! including the forward `XTF`/`VTF`/`ITF` adjustment, plus ohmic terminal
-//! resistances `RB`/`RC`/`RE` are modelled. JFET
+//! resistances `RB`/`RC`/`RE` are modelled. `RBM`/`IRB` make the base
+//! spreading resistance fall with conduction base current using the
+//! ngspice level-1 interpolation; `TRB*`/`TRBM*`/`TIRB*` apply its temperature
+//! coefficients. JFET
 //! channel current uses the Parker–Skellern fit `B` (default 1), with explicit
 //! instance `TEMP` laws for level-1 `VTO` and `BETA`; terminal
 //! resistances `RD`/`RS` create series resistors to its intrinsic
