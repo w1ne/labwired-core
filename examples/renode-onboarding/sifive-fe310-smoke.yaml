@@ -11,6 +11,7 @@ assertions:
       - "cpu=rv32im uart=sifive"
       - "mul=00000143"
       - "ecall trap mcause=0000000b mepc_match=1 count=00000001 entry_mie=0 entry_mpie=1 entry_mpp=00000003 return_mie=1 ok"
+      - "ebreak trap mcause=00000003 mepc_match=1 count=00000001 resumed=1 entry_mie=0 entry_mpie=1 return_mie=1 ok"
       - "gpio=PASS input_en=00080000 output_en=00080000 output_val=00080000 input_val=00080000"
   - gpio_edges:
       pin: "gpio:19"

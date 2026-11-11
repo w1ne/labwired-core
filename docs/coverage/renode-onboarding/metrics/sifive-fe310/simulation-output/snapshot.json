@@ -4,8 +4,8 @@
     "type": "risc_v",
     "registers": [
       0,
-      536876596,
-      2147499984,
+      536878732,
+      2147499968,
       2147485696,
       0,
       268513280,
@@ -23,10 +23,10 @@
       1,
       268513280,
       268513280,
-      268513280,
-      536873168,
-      268513280,
+      6272,
       0,
+      536875308,
+      536875308,
       0,
       0,
       0,
@@ -36,16 +36,16 @@
       0,
       0
     ],
-    "pc": 536876616,
+    "pc": 536878752,
     "mstatus": 6272,
     "mie": 0,
     "mip": 128,
     "mtvec": 536871668,
     "mscratch": 0,
-    "mepc": 536873172,
-    "mcause": 11,
+    "mepc": 536875312,
+    "mcause": 3,
     "mtval": 0,
-    "mtime": 99998,
+    "mtime": 99996,
     "mtimecmp": 0,
     "triggers": {
       "tselect": 0,
@@ -73,7 +73,7 @@
     }
   },
   "steps_executed": 100000,
-  "cycles": 399992,
+  "cycles": 399984,
   "instructions": 100000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "2039c349f5890bba5d33029ce5f3aa3777eb0542c4962b7695cab3bad5cc0632",
+  "firmware_hash": "097e5c5568811fcaef5393238788d930b436e11af1f0e1caa9a7d794013ae332",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-sifive-fe310-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/sifive-fe310.yaml",

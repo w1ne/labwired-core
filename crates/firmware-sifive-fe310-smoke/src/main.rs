@@ -2,13 +2,13 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! SiFive FE310 smoke: RV32IM execution, an M-mode ecall trap, UART0 TX, and
-//! HiFive1 Rev B GPIO.
+//! SiFive FE310 smoke: RV32IM execution, M-mode ecall/ebreak traps, UART0 TX,
+//! and HiFive1 Rev B GPIO.
 //!
 //! The ELF is loaded into the FE310's QSPI XIP window and entered directly.
 //! It checks the imported system's RISC-V core, uart0, and GPIO software path
 //! used by the board's active-low green LED. The trap probe checks the
-//! architectural synchronous-trap/mret path without claiming PLIC or CLINT
+//! architectural synchronous-trap/mret paths without claiming PLIC or CLINT
 //! support. It does not exercise the mask-ROM boot flow, GPIO interrupts/IO
 //! functions, PLIC, CLINT or uart1.
 
@@ -157,6 +157,79 @@ fn ecall_trap_probe() -> bool {
     pass
 }
 
+/// Trigger a breakpoint exception and verify that MRET resumes at the next
+/// instruction exactly once. The handler records the faulting PC before
+/// advancing mepc by the four-byte EBREAK instruction.
+fn ebreak_trap_probe() -> bool {
+    let ebreak_pc: u32;
+    let resumed: u32;
+    let returned_mstatus: u32;
+    unsafe {
+        core::ptr::write_volatile(core::ptr::addr_of_mut!(TRAP_COUNT), 0);
+        core::arch::asm!(
+            "la t0, trap_entry",
+            "csrw mtvec, t0",
+            "csrs mstatus, {mie}",
+            "la {ebreak_pc}, 1f",
+            "1: ebreak",
+            "li {resumed}, 1",
+            "csrr {returned_mstatus}, mstatus",
+            "csrc mstatus, {mie}",
+            mie = in(reg) 1u32 << 3,
+            ebreak_pc = lateout(reg) ebreak_pc,
+            resumed = lateout(reg) resumed,
+            returned_mstatus = lateout(reg) returned_mstatus,
+            out("t0") _,
+            out("t1") _,
+            options(nostack),
+        );
+    }
+
+    let (count, cause, mepc, trap_mstatus) = unsafe {
+        (
+            core::ptr::read_volatile(core::ptr::addr_of!(TRAP_COUNT)),
+            core::ptr::read_volatile(core::ptr::addr_of!(TRAP_MCAUSE)),
+            core::ptr::read_volatile(core::ptr::addr_of!(TRAP_MEPC)),
+            core::ptr::read_volatile(core::ptr::addr_of!(TRAP_MSTATUS)),
+        )
+    };
+    let pass = count == 1
+        && cause == 3
+        && mepc == ebreak_pc
+        && resumed == 1
+        && trap_mstatus & 0x1888 == 0x1880
+        && returned_mstatus & (1 << 3) != 0;
+
+    puts("ebreak trap mcause=");
+    put_hex32(cause);
+    puts(" mepc_match=");
+    putc(if mepc == ebreak_pc { b'1' } else { b'0' });
+    puts(" count=");
+    put_hex32(count);
+    puts(" resumed=");
+    putc(if resumed == 1 { b'1' } else { b'0' });
+    puts(" entry_mie=");
+    putc(if trap_mstatus & (1 << 3) == 0 {
+        b'0'
+    } else {
+        b'1'
+    });
+    puts(" entry_mpie=");
+    putc(if trap_mstatus & (1 << 7) != 0 {
+        b'1'
+    } else {
+        b'0'
+    });
+    puts(" return_mie=");
+    putc(if returned_mstatus & (1 << 3) != 0 {
+        b'1'
+    } else {
+        b'0'
+    });
+    puts(if pass { " ok\n" } else { " FAIL\n" });
+    pass
+}
+
 #[inline(never)]
 fn multiply(left: u32, right: u32) -> u32 {
     let result: u32;
@@ -181,6 +254,7 @@ fn main() -> ! {
     putc(b'\n');
 
     let _trap_pass = ecall_trap_probe();
+    let _ebreak_pass = ebreak_trap_probe();
 
     let gpio_pass = unsafe {
         core::ptr::write_volatile(GPIO_INPUT_EN, GREEN_LED);
