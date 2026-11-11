@@ -256,6 +256,14 @@ jobs:
             system: configs/systems/lolin-c3-mini-adc.yaml
             rom_boot: true
             rom_flash_bin: examples/lolin-c3-mini-adc/firmware/.pio/build/lolin_c3_mini/merged.bin
+          # Seeed XIAO ESP32-C3: external BME280 identity/temperature read on
+          # D4/D5 and D10 proof output. USB Serial/JTAG is outside this profile.
+          - id: xiao-esp32c3-bme280
+            firmware_build_script: examples/xiao-esp32c3-bme280/firmware/build-firmware.sh
+            script: examples/xiao-esp32c3-bme280/bme280-smoke.yaml
+            system: configs/systems/xiao-esp32c3-bme280.yaml
+            rom_boot: true
+            rom_flash_bin: examples/xiao-esp32c3-bme280/firmware/.pio/build/xiao_c3/merged.bin
           - id: arduino-nano-esp32-bme280
             firmware_build_script: examples/arduino-nano-esp32-bme280/firmware/build-firmware.sh
             script: examples/arduino-nano-esp32-bme280/bme280-smoke.yaml

@@ -1,0 +1,10 @@
+2026-11-11T11:34:01.464580Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/esp32c3.yaml
+2026-11-11T11:34:01.465730Z  INFO labwired_core::bus::from_config: loaded 393216 bytes into 'rom' region @ 0x40000000 from /home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/crates/core/roms/esp32c3/esp32c3_rom.bin
+2026-11-11T11:34:01.465970Z  INFO labwired_core::bus::from_config: loaded 131072 bytes into 'rom_data' region @ 0x3ff00000 from /home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/crates/core/roms/esp32c3/esp32c3_drom.bin
+2026-11-11T11:34:01.561258Z  INFO labwired_loader: ELF Entry Point: 0x403807ca
+2026-11-11T11:34:01.563645Z  INFO labwired_cli: provisioned 393216 bytes of C3 boot ROM @ 0x40000000
+2026-11-11T11:34:01.563665Z  INFO labwired_cli: provisioned 131072 bytes of C3 boot ROM @ 0x3ff00000
+labwired-riscv: rom-boot from reset vector 0x40000000 (flash image 396032 bytes from /home/andrii/worktrees/labwired-core/hw-onboarding/examples/xiao-esp32c3-bme280/firmware/.pio/build/xiao_c3/merged.bin)
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: idle_ff skipped 13007690592 of 13057690592 device cycles (50000000 interpreted)
+PASS  2/2 checks · bme280-smoke · 50000000 steps · 20.60s
