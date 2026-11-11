@@ -46,6 +46,13 @@ effect on PA2/PA3. The test checks independent load-line roots at four base
 drives, asserts ADC1 conversions, and keeps the unrelated NTC and diode on
 PA1/PA4.
 
+[`analog-bjt-terminal-resistance-adc.yaml`](analog-bjt-terminal-resistance-adc.yaml)
+routes matched NPN branches with RB, RC, and RE separately and together through
+PA2/PA3/PA5/PA6/PB0 ADC1 inputs, with an explicit external-resistor equivalent
+on PB1. The test checks each resistance changes the collector load line, the
+model-card resistances match the external network, and all results survive
+firmware-visible ADC conversion beside the unrelated NTC and diode.
+
 ## Fidelity
 
 **Sim-derived, not silicon-verified.** No F411 part was on a bench for this
@@ -87,4 +94,6 @@ Expected result:
    control branches routed to ADC1.
 7. `analog-bjt-early-effect-adc.yaml`: matched generic BJT Early-effect and
    control branches routed to ADC1.
-8. `VALIDATION.md`: reproducible validation commands and the honest scope.
+8. `analog-bjt-terminal-resistance-adc.yaml`: generic BJT terminal-resistance
+   branches and explicit equivalent network routed to ADC1.
+9. `VALIDATION.md`: reproducible validation commands and the honest scope.
