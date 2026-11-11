@@ -108,6 +108,42 @@ fn mosfet_drain_voltage(gate_v: f64) -> f64 {
     (low + high) / 2.0
 }
 
+/// Independent level-1 NJF load-line reference including model-card
+/// drain/source resistances. The current root is solved outside the MNA engine.
+fn jfet_drain_voltage(gate_v: f64, drain_ohms: f64, source_ohms: f64) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const LOAD_OHMS: f64 = 1_000.0;
+    const VTO: f64 = -2.0;
+    const BETA_A_PER_V2: f64 = 500e-6;
+    const LAMBDA_PER_V: f64 = 0.025;
+
+    let channel_current = |current_a: f64| {
+        let external_drain_v = SUPPLY_V - current_a * LOAD_OHMS;
+        let internal_drain_v = external_drain_v - current_a * drain_ohms;
+        let internal_source_v = current_a * source_ohms;
+        let vds = internal_drain_v - internal_source_v;
+        let vgst = gate_v - internal_source_v - VTO;
+        if vgst <= 0.0 {
+            0.0
+        } else if vds < vgst {
+            BETA_A_PER_V2 * (1.0 + LAMBDA_PER_V * vds) * vds * (2.0 * vgst - vds)
+        } else {
+            BETA_A_PER_V2 * (1.0 + LAMBDA_PER_V * vds) * vgst * vgst
+        }
+    };
+
+    let (mut low, mut high) = (0.0, SUPPLY_V / LOAD_OHMS);
+    for _ in 0..100 {
+        let current_a = 0.5 * (low + high);
+        if channel_current(current_a) > current_a {
+            low = current_a;
+        } else {
+            high = current_a;
+        }
+    }
+    SUPPLY_V - 0.5 * (low + high) * LOAD_OHMS
+}
+
 /// Independent Gummel–Poon load line with forward/reverse high-injection
 /// rolloff and Early effect, used by the board-routed matched-pair test.
 fn bjt_high_injection_collector_voltage(base_drive_v: f64, high_injection: bool) -> f64 {
@@ -400,6 +436,104 @@ fn pico_mosfet_load_line_reaches_adc0_alongside_ntc_and_diode() {
     assert!(
         drain_samples[4].1 < drain_samples[3].1 && drain_samples[3].1 < drain_samples[2].1,
         "drain voltage falls as the NMOS conducts more strongly: {drain_samples:?}"
+    );
+}
+
+#[test]
+fn pico_jfet_terminal_resistances_reach_adc0_adc1_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/pico.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load Pico system profile");
+    let mut generic = SystemManifest::from_file(root("examples/pico/analog-ntc-diode-system.yaml"))
+        .expect("load unrelated generic NTC and Shockley diode netlists");
+    generic.cosim_models[0]
+        .outputs
+        .insert("v_sense".to_string(), "adc.adc.2_volts".to_string());
+    generic.cosim_models[1]
+        .outputs
+        .insert("v_diode".to_string(), "adc.adc.3_volts".to_string());
+    let jfet =
+        SystemManifest::from_file(root("examples/pico/analog-jfet-terminal-resistance.yaml"))
+            .expect("load matched generic level-1 JFET branches");
+    profile.cosim_models = jfet.cosim_models;
+    profile.cosim_models.extend(generic.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load RP2040 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build Pico system bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal co-simulation")
+        .expect("profile carries matched JFETs, NTC, and diode");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "all four generic devices must resolve to distinct RP2040 ADC inputs"
+    );
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    let expected_ntc_v = 1.65;
+    let expected_diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    let mut final_jfet_voltages = None;
+    for gate_v in [-3.0_f64, -1.0, 0.0] {
+        session
+            .set_signal_number("ui.jfet.gate_v", gate_v)
+            .expect("set both matched JFET gate drives");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route the JFET, NTC, and diode netlists");
+        assert_eq!(steps.len(), 3, "all three unrelated netlists solve");
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        let control_v = signal_voltage(&session, "adc.adc.0_volts");
+        let terminal_resistance_v = signal_voltage(&session, "adc.adc.1_volts");
+        if gate_v == -3.0 {
+            assert!(
+                (control_v - 3.3).abs() < 5e-5
+                    && (terminal_resistance_v - 3.3).abs() < 5e-5,
+                "both matched JFETs remain cut off below threshold: {control_v} V, {terminal_resistance_v} V"
+            );
+        }
+        for (name, actual_v, drain_ohms, source_ohms, channel) in [
+            ("control", control_v, 0.0, 0.0, 0),
+            ("RD+RS", terminal_resistance_v, 200.0, 200.0, 1),
+        ] {
+            let expected_v = jfet_drain_voltage(gate_v, drain_ohms, source_ohms);
+            assert!(
+                (actual_v - expected_v).abs() < 5e-5,
+                "level-1 NJF {name} load line at gate={gate_v} V should be {expected_v} V, got {actual_v} V"
+            );
+            assert_eq!(
+                convert_channel(&mut bus, RP2040_ADC_BASE, channel),
+                expected_adc_code(actual_v),
+                "firmware-visible ADC{channel} result follows the solved {name} JFET voltage"
+            );
+        }
+
+        let ntc_v = signal_voltage(&session, "adc.adc.2_volts");
+        let diode_v = signal_voltage(&session, "adc.adc.3_volts");
+        assert!((ntc_v - expected_ntc_v).abs() < 1e-9);
+        assert!((diode_v - expected_diode_v).abs() < 2e-5);
+        assert_eq!(
+            convert_channel(&mut bus, RP2040_ADC_BASE, 2),
+            expected_adc_code(ntc_v),
+            "ADC2 continues to follow the unrelated NTC"
+        );
+        assert_eq!(
+            convert_channel(&mut bus, RP2040_ADC_BASE, 3),
+            expected_adc_code(diode_v),
+            "ADC3 continues to follow the unrelated Shockley diode"
+        );
+        final_jfet_voltages = Some((control_v, terminal_resistance_v));
+    }
+
+    let (control_v, terminal_resistance_v) =
+        final_jfet_voltages.expect("final JFET sample was recorded");
+    assert!(
+        terminal_resistance_v > control_v + 0.1,
+        "RD and RS reduce channel current and raise the external drain voltage: {terminal_resistance_v} V vs {control_v} V"
     );
 }
 
