@@ -6,8 +6,10 @@
 //! NUCLEO-L476RG. The GPIO tests assert the solved voltages and firmware-visible
 //! input levels through the chip's datasheet thresholds. The ADC test routes
 //! the same unrelated Beta NTC and Shockley diode to channels 5/6 and asserts
-//! firmware-visible conversions; the descriptor has no pad-to-ADC map, so it
-//! makes no PAx alias claim.
+//! firmware-visible conversions. A generic level-1 JFET terminal-resistance
+//! test checks model-card RD/RS against explicit resistor networks on the same
+//! ADC while preserving the NTC and diode routes. The descriptor has no
+//! pad-to-ADC map, so these tests make no PAx alias claim.
 
 mod common;
 use common::root;
@@ -113,6 +115,42 @@ fn bjt_collector_voltage(base_drive_v: f64, early_voltage_v: Option<f64>) -> f64
         }
     }
     collector_for_vbe((low + high) / 2.0)
+}
+
+/// Independent level-1 NJF load line, including model-card drain/source
+/// resistances. Gate-junction leakage is negligible at the fixture's IS=1e-30 A.
+fn jfet_drain_voltage(gate_v: f64, drain_ohms: f64, source_ohms: f64) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const LOAD_OHMS: f64 = 1_000.0;
+    const VTO: f64 = -2.0;
+    const BETA_A_PER_V2: f64 = 500e-6;
+    const LAMBDA_PER_V: f64 = 0.025;
+
+    let channel_current = |current_a: f64| {
+        let external_drain_v = SUPPLY_V - current_a * LOAD_OHMS;
+        let internal_drain_v = external_drain_v - current_a * drain_ohms;
+        let internal_source_v = current_a * source_ohms;
+        let vds = internal_drain_v - internal_source_v;
+        let vgst = gate_v - internal_source_v - VTO;
+        if vgst <= 0.0 {
+            0.0
+        } else if vds < vgst {
+            BETA_A_PER_V2 * (1.0 + LAMBDA_PER_V * vds) * vds * (2.0 * vgst - vds)
+        } else {
+            BETA_A_PER_V2 * (1.0 + LAMBDA_PER_V * vds) * vgst * vgst
+        }
+    };
+
+    let (mut low, mut high) = (0.0, SUPPLY_V / LOAD_OHMS);
+    for _ in 0..100 {
+        let current_a = (low + high) / 2.0;
+        if channel_current(current_a) > current_a {
+            low = current_a;
+        } else {
+            high = current_a;
+        }
+    }
+    SUPPLY_V - ((low + high) / 2.0) * LOAD_OHMS
 }
 
 fn signal_voltage(session: &CosimSession, path: &str) -> f64 {
@@ -362,6 +400,190 @@ fn nucleo_l476rg_ntc_and_diode_netlists_convert_on_adc1_channels_5_6() {
         ntc_codes[0] > ntc_codes[1] && ntc_codes[1] > ntc_codes[2],
         "NTC ADC counts fall as it warms: {ntc_codes:?}"
     );
+}
+
+#[test]
+fn nucleo_l476rg_jfet_terminal_resistances_reach_adc1_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/nucleo-l476rg.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-L476RG profile");
+    assert_eq!(profile.name, "nucleo-l476rg");
+    let base = SystemManifest::from_file(root("examples/nucleo-l476rg/analog-ntc-diode-adc.yaml"))
+        .expect("load unrelated generic NTC and diode ADC routes");
+    let jfet = SystemManifest::from_file(root(
+        "examples/nucleo-l476rg/analog-jfet-terminal-resistance-adc.yaml",
+    ))
+    .expect("load matched generic level-1 JFET branches");
+    profile.cosim_models = base.cosim_models;
+    profile.cosim_models.extend(jfet.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32L476 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-L476RG bus");
+    let rcc_ahb2enr = bus.read_u32(RCC_AHB2ENR).expect("read RCC AHB2ENR");
+    bus.write_u32(RCC_AHB2ENR, rcc_ahb2enr | (1 << 13))
+        .expect("enable ADC1 clock");
+    bus.write_u32(ADC_CR, 0).expect("clear ADC deep power-down");
+    bus.write_u32(ADC_CR, ADC_ADVREGEN)
+        .expect("enable ADC voltage regulator");
+    bus.write_u32(ADC_CR, ADC_ADVREGEN | ADC_ADEN)
+        .expect("enable ADC1");
+    assert_ne!(
+        bus.read_u32(ADC_ISR).unwrap() & ADC_ADRDY,
+        0,
+        "ADC1 reports ready"
+    );
+    bus.write_u32(ADC_CFGR, 0)
+        .expect("select 12-bit right-aligned conversion");
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries NTC, diode, and matched JFET branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic analog devices bind to distinct explicit ADC1 channels"
+    );
+    for channel in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] {
+        assert_eq!(
+            adc1_channel_input_count(&mut bus, channel),
+            u16::MAX,
+            "ADC1 channel {channel} starts undriven"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set independent Beta NTC temperature");
+    session
+        .set_signal_number("ui.jfet.gate_v", -1.0)
+        .expect("initialize matched JFET gate drive");
+
+    let branch_channels = [
+        ("control", 0, 0.0, 0.0),
+        ("drain resistance", 1, 200.0, 0.0),
+        ("source resistance", 2, 0.0, 200.0),
+        ("both terminal resistances", 3, 200.0, 200.0),
+    ];
+    let explicit_channels = [
+        ("explicit drain resistance", 8, 200.0, 0.0),
+        ("explicit source resistance", 9, 0.0, 200.0),
+        ("explicit drain and source resistances", 10, 200.0, 200.0),
+    ];
+    let expected_diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    let mut settled_jfet_voltages = None;
+    let mut settled_explicit_voltages = None;
+    for gate_v in [-1.0_f64, 0.0] {
+        session
+            .set_signal_number("ui.jfet.gate_v", gate_v)
+            .expect("set matched JFET gate drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route the NTC, diode, and JFET netlists");
+        assert_eq!(steps.len(), 3, "all three unrelated analog models solve");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "adc.adc1.5_volts");
+        assert!((ntc_v - 1.65).abs() < 1e-9, "the 25 °C NTC stays isolated");
+        let diode_v = signal_voltage(&session, "adc.adc1.6_volts");
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "the independent Shockley diode stays on its load line"
+        );
+
+        let mut jfet_voltages = Vec::new();
+        for (name, channel, drain_ohms, source_ohms) in branch_channels {
+            let path = format!("adc.adc1.{channel}_volts");
+            let solved_v = signal_voltage(&session, &path);
+            let expected_v = jfet_drain_voltage(gate_v, drain_ohms, source_ohms);
+            assert!(
+                (solved_v - expected_v).abs() < 5e-5,
+                "{name} at gate={gate_v} V should solve to {expected_v} V, got {solved_v} V"
+            );
+            let count = expected_adc_count(solved_v);
+            assert_eq!(
+                adc1_channel_input_count(&mut bus, channel),
+                count,
+                "solved {name} voltage reaches ADC1_IN{channel}"
+            );
+            assert_eq!(
+                l476_adc_convert(&mut bus, channel),
+                u32::from(count),
+                "firmware-visible ADC1_IN{channel} conversion follows {name}"
+            );
+            jfet_voltages.push(solved_v);
+        }
+
+        let mut explicit_voltages = Vec::new();
+        for (name, channel, drain_ohms, source_ohms) in explicit_channels {
+            let path = format!("adc.adc1.{channel}_volts");
+            let solved_v = signal_voltage(&session, &path);
+            let expected_v = jfet_drain_voltage(gate_v, drain_ohms, source_ohms);
+            assert!(
+                (solved_v - expected_v).abs() < 5e-5,
+                "{name} reference at gate={gate_v} V should solve to {expected_v} V, got {solved_v} V"
+            );
+            let count = expected_adc_count(solved_v);
+            assert_eq!(adc1_channel_input_count(&mut bus, channel), count);
+            assert_eq!(
+                l476_adc_convert(&mut bus, channel),
+                u32::from(count),
+                "firmware-visible ADC1_IN{channel} conversion follows {name}"
+            );
+            explicit_voltages.push(solved_v);
+        }
+
+        for (channel, voltage_v) in [(5, ntc_v), (6, diode_v)] {
+            let count = expected_adc_count(voltage_v);
+            assert_eq!(adc1_channel_input_count(&mut bus, channel), count);
+            assert_eq!(
+                l476_adc_convert(&mut bus, channel),
+                u32::from(count),
+                "the unrelated device remains isolated on ADC1_IN{channel}"
+            );
+        }
+        for channel in [4, 7, 11] {
+            assert_eq!(
+                adc1_channel_input_count(&mut bus, channel),
+                u16::MAX,
+                "neighboring ADC1_IN{channel} remains undriven"
+            );
+        }
+        settled_jfet_voltages = Some(jfet_voltages);
+        settled_explicit_voltages = Some(explicit_voltages);
+    }
+
+    let [control, drain, source, both] = settled_jfet_voltages
+        .expect("the final JFET gate-drive sample was recorded")
+        .try_into()
+        .expect("all four model-card JFET branches were routed");
+    let [explicit_drain, explicit_source, explicit_both] = settled_explicit_voltages
+        .expect("the final explicit-resistor sample was recorded")
+        .try_into()
+        .expect("all three explicit-resistor JFET references were routed");
+    assert!(
+        drain > control + 0.05,
+        "model-card RD lowers channel current and raises external drain voltage: {drain} V vs {control} V"
+    );
+    assert!(
+        source > control + 0.1,
+        "model-card RS raises the intrinsic source and reduces channel current: {source} V vs {control} V"
+    );
+    assert!(
+        both > drain && both > source,
+        "model-card RD and RS combine to increase the external drain voltage: {both} V, {drain} V, {source} V"
+    );
+    for (model_card, explicit) in [
+        (drain, explicit_drain),
+        (source, explicit_source),
+        (both, explicit_both),
+    ] {
+        assert!(
+            (model_card - explicit).abs() < 5e-5,
+            "model-card terminal resistance must match its explicit resistor network"
+        );
+    }
 }
 
 #[test]
