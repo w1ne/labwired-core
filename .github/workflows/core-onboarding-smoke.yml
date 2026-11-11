@@ -61,6 +61,13 @@ jobs:
             target: thumbv7m-none-eabi
             script: examples/stm32f103-bluepill/io-smoke.yaml
             system: configs/systems/stm32f103-bluepill.yaml
+          # Exact NUCLEO-F103RB + BME280 profile: exercise remapped I2C1,
+          # read the sensor ID, report it on the ST-LINK VCP, and pulse LD2.
+          - id: nucleo-f103rb-bme280
+            crate: firmware-nucleo-f103rb-bme280-smoke
+            target: thumbv7m-none-eabi
+            script: examples/nucleo-f103rb-bme280/onboarding-smoke.yaml
+            system: configs/systems/nucleo-f103rb-bme280.yaml
           - id: stm32u575-nucleo
             crate: firmware-stm32u575-demo
             target: thumbv8m.main-none-eabi

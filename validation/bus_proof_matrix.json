@@ -741,8 +741,8 @@
         "state": "shallow",
         "file": "examples/nucleo-f103rb-bme280/onboarding-smoke.yaml",
         "test": "uart_contains",
-        "gap": "committed onboarding evidence (examples/nucleo-f103rb-bme280/evidence) shows the script PASSES: USART2 printed NUCLEO_F103RB_BME280_OK ID=0x60 I2C1=PB8/PB9 and gpioa:5 (LD2) recorded >=32 edges. Firmware is built from crates/firmware-nucleo-f103rb-bme280-smoke, not a committed ELF, and no required CI lane invokes this script, so nothing gates a regression.",
-        "lane": "none"
+        "gap": "The nightly/main-tip onboarding lane rebuilds and runs this smoke. UART is the oracle for the BME280 CHIP_ID read and output marker; there is no separate I2C capture assertion.",
+        "lane": "core-onboarding-smoke.yml (nightly, main-tip push, manual dispatch; not a PR check)"
       },
       "spi": {
         "state": "none",
@@ -753,8 +753,8 @@
         "state": "shallow",
         "file": "examples/nucleo-f103rb-bme280/onboarding-smoke.yaml",
         "test": "uart_contains",
-        "gap": "the smoke firmware reads BME280.CHIP_ID (register 0xD0) over I2C1 at 0x77 (Arduino D15/D14, PB8/PB9) and prints ID=0x60 on USART2. That is a firmware-driven I2C transaction observed via the UART marker, not a dedicated I2C capture assertion, and no required CI lane runs the script.",
-        "lane": "none"
+        "gap": "the smoke firmware reads BME280.CHIP_ID (register 0xD0) over I2C1 at 0x77 (Arduino D15/D14, PB8/PB9) and prints ID=0x60 on USART2. This is a firmware-driven I2C transaction observed through the UART marker, not a dedicated I2C capture assertion.",
+        "lane": "core-onboarding-smoke.yml (nightly, main-tip push, manual dispatch; not a PR check)"
       }
     },
     "stm32f103r8": {
