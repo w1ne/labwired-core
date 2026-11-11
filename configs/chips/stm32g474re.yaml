@@ -130,6 +130,7 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32g474re/tim1.yaml"
       advanced: true
+      pad_map: "stm32g4"
     clock: { reg: "apb2enr", bit: 11 }
   # I2C1 (APB1) — modern v2 controller. RCC_APB1ENR1.I2C1EN (bit 21).
   - id: "i2c1"

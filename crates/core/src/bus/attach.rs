@@ -108,6 +108,13 @@ const STM32G0_TIMER_PADS: &[TimerAfPad] = &[
 /// (`variants/STM32G4xx/G473R(B-C)T_G473RETx(Z)_G474R(B-C-E)T_G483RET_G484RET/PeripheralPins.c`):
 /// TIM2 on AF1 (AF10 for PA9/PA10), TIM3 on AF2 (AF10 for PB7).
 const STM32G4_TIMER_PADS: &[TimerAfPad] = &[
+    // NUCLEO-G474RE's PA8 TIM1_CH1 path is exercised by the committed
+    // `examples/nucleo_g474re/tim1-pwm-smoke.yaml` firmware. The other main
+    // TIM1 channels use the AF selections from the STM32G474 datasheet.
+    ("tim1", 'a', 8, 6, 0, "TIM1_CH1"),
+    ("tim1", 'a', 9, 6, 1, "TIM1_CH2"),
+    ("tim1", 'a', 10, 6, 2, "TIM1_CH3"),
+    ("tim1", 'a', 11, 11, 3, "TIM1_CH4"),
     ("tim2", 'a', 0, 1, 0, "TIM2_CH1"),
     ("tim2", 'a', 5, 1, 0, "TIM2_CH1"),
     ("tim2", 'a', 15, 1, 0, "TIM2_CH1"),

@@ -13,5 +13,5 @@ board_io:
     peripheral: "gpioc"
     pin: 13
     signal: "input"
-    active_high: true
+    active_high: false
 

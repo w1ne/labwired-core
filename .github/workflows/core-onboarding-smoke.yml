@@ -84,6 +84,12 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/nucleo-g491re/io-smoke.yaml
             system: configs/systems/nucleo-g491re.yaml
+          # NUCLEO-G474RE: ensure the model routes advanced TIM1_CH1 PWM to
+          # PA8 / AF6 and the output waveform reaches a board pad.
+          - id: nucleo-g474re-tim1-pwm
+            firmware_build_script: examples/nucleo_g474re/build-firmware.sh
+            script: examples/nucleo_g474re/tim1-pwm-smoke.yaml
+            system: examples/nucleo_g474re/system.yaml
           - id: nucleo-h533re
             crate: firmware-nucleo-h533re-smoke
             target: thumbv8m.main-none-eabi

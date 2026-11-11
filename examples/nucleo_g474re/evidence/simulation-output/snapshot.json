@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      1073759272,
+      10,
+      1,
+      32768,
+      0,
+      0,
+      0,
+      537001976,
+      0,
+      0,
+      0,
+      0,
+      0,
+      537001976,
+      134217745,
+      134217862
+    ],
+    "pc": 134217862,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 4000,
+  "cycles": 4000,
+  "instructions": 4000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 4000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 4000
+    }
+  },
+  "limits": {
+    "max_steps": 4000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "8798991c8e277676c810c9031b4c854fa4c75eab9baf718c14c03f38d72c0a09",
+  "config": {
+    "firmware": "examples/nucleo_g474re/./board_firmware/target/thumbv7em-none-eabi/release/firmware-nucleo_g474re-demo",
+    "system": "examples/nucleo_g474re/./system.yaml",
+    "script": "examples/nucleo_g474re/tim1-pwm-smoke.yaml"
+  }
+}
