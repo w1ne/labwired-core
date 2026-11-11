@@ -284,6 +284,7 @@ fn main() -> ! {
     unsafe { smoke_pendsv_clear_and_repend() };
     unsafe { smoke_pendsv_waits_for_systick_return() };
     unsafe { smoke_systick_pendsv_tailchain() };
+    unsafe { smoke_systick_pendsv_psp_tailchain() };
     unsafe { smoke_external_irq_stack_frame() };
     unsafe { smoke_external_irq_psp_stack_frame() };
     unsafe { smoke_svcall_exception_return() };
@@ -1434,6 +1435,157 @@ unsafe fn smoke_systick_pendsv_tailchain() -> bool {
         putline(b"SYSTICK PENDSV M3 TAILCHAIN DEFERRED=1 FRAME=REUSED R0=LIVE PENDING_CLEAR=1 ok");
     } else {
         putline(b"SYSTICK PENDSV M3 TAILCHAIN CHECK FAILED");
+    }
+    passed
+}
+
+/// Repeat SysTick-to-PendSV tail chaining from Thread mode using PSP, the
+/// stack used by RTOS tasks. Both handlers must retain the original PSP frame
+/// while Handler mode continues to use the unchanged MSP.
+unsafe fn smoke_systick_pendsv_psp_tailchain() -> bool {
+    let source_vtor = read_volatile(SCB_VTOR as *const u32);
+    let source_shpr3 = read_volatile(SCB_SHPR3 as *const u32);
+    let source_rvr = read_volatile(SYSTICK_RVR as *const u32);
+    let source_csr = read_volatile(SYSTICK_CSR as *const u32);
+    let source_control: u32;
+    let source_psp: u32;
+    let prior_primask: u32;
+    core::arch::asm!(
+        "mrs {control}, CONTROL",
+        "mrs {psp}, PSP",
+        "mrs {primask}, PRIMASK",
+        "cpsid i",
+        control = out(reg) source_control,
+        psp = out(reg) source_psp,
+        primask = out(reg) prior_primask,
+        options(nomem, nostack, preserves_flags),
+    );
+    let source_msp: u32;
+    core::arch::asm!("mrs {}, MSP", out(reg) source_msp, options(nomem, nostack, preserves_flags));
+
+    write_volatile(SYSTICK_CSR as *mut u32, 0);
+    write_volatile(SCB_ICSR as *mut u32, ICSR_PENDSTCLR | ICSR_PENDSVCLR);
+    write_volatile(
+        SCB_SHPR3 as *mut u32,
+        (source_shpr3 & !0xFFFF_0000) | (0x80 << 24) | (0xC0 << 16),
+    );
+    let record = SYSTICK_TAILCHAIN_RECORD as *mut u32;
+    for index in 0..17 {
+        write_volatile(record.add(index), 0);
+    }
+    let table = SYSTICK_TAILCHAIN_VECTOR_TABLE as *mut u32;
+    for index in 0..16 {
+        write_volatile(table.add(index), 0);
+    }
+    write_volatile(
+        table.add(14),
+        smoke_pendsv_tailchain_handler as *const () as usize as u32 | 1,
+    );
+    write_volatile(
+        table.add(15),
+        smoke_systick_tailchain_handler as *const () as usize as u32 | 1,
+    );
+    write_volatile(SCB_VTOR as *mut u32, SYSTICK_TAILCHAIN_VECTOR_TABLE);
+    core::arch::asm!("dsb", "isb", options(nostack, preserves_flags));
+
+    core::arch::asm!(
+        "msr PRIMASK, {primask}",
+        "dsb",
+        "isb",
+        primask = in(reg) prior_primask,
+        options(nostack, preserves_flags),
+    );
+    if prior_primask == 0 {
+        smoke_systick_pendsv_psp_thread();
+    }
+
+    let parent_ipsr = read_volatile(record.add(0));
+    let parent_icsr_before = read_volatile(record.add(1));
+    let parent_icsr_after = read_volatile(record.add(2));
+    let parent_msp = read_volatile(record.add(3));
+    let parent_exc_return = read_volatile(record.add(4));
+    let parent_psp = read_volatile(record.add(12));
+    let child_ipsr = read_volatile(record.add(6));
+    let child_msp = read_volatile(record.add(7));
+    let child_exc_return = read_volatile(record.add(8));
+    let child_psp = read_volatile(record.add(13));
+    let child_icsr = read_volatile(record.add(10));
+    let child_hit = read_volatile(record.add(11)) == 1;
+    let wrapper_msp = read_volatile(record.add(14));
+    let wrapper_psp = read_volatile(record.add(15));
+    let wrapper_control = read_volatile(record.add(16));
+    let msp_after: u32;
+    let psp_after: u32;
+    let control_after: u32;
+    let thread_ipsr: u32;
+    core::arch::asm!(
+        "mrs {msp}, MSP",
+        "mrs {psp}, PSP",
+        "mrs {control}, CONTROL",
+        "mrs {ipsr}, IPSR",
+        msp = out(reg) msp_after,
+        psp = out(reg) psp_after,
+        control = out(reg) control_after,
+        ipsr = out(reg) thread_ipsr,
+        options(nomem, nostack, preserves_flags),
+    );
+
+    core::arch::asm!("cpsid i", options(nomem, nostack, preserves_flags));
+    write_volatile(SYSTICK_CSR as *mut u32, 0);
+    write_volatile(SCB_ICSR as *mut u32, ICSR_PENDSTCLR | ICSR_PENDSVCLR);
+    write_volatile(SCB_VTOR as *mut u32, source_vtor);
+    write_volatile(SCB_SHPR3 as *mut u32, source_shpr3);
+    write_volatile(SYSTICK_RVR as *mut u32, source_rvr);
+    write_volatile(SYSTICK_CSR as *mut u32, source_csr);
+    core::arch::asm!(
+        "msr PSP, {psp}",
+        "msr CONTROL, {control}",
+        "msr PRIMASK, {primask}",
+        "dsb",
+        "isb",
+        psp = in(reg) source_psp,
+        control = in(reg) source_control,
+        primask = in(reg) prior_primask,
+        options(nostack, preserves_flags),
+    );
+
+    let deferred = parent_ipsr == 15
+        && parent_icsr_before & 0x1FF == 15
+        && parent_icsr_after & 0x1FF == 15
+        && parent_icsr_after & ICSR_PENDSVSET != 0;
+    let frame_reused = parent_msp == child_msp
+        && parent_exc_return == 0xFFFF_FFFD
+        && child_exc_return == parent_exc_return
+        && parent_psp == child_psp
+        && parent_psp == IRQ_FRAME_PSP_TOP.wrapping_sub(32)
+        && wrapper_msp == source_msp
+        && parent_msp == source_msp.wrapping_sub(16);
+    let child_is_pendsv = child_hit
+        && child_ipsr == 14
+        && child_icsr & 0x1FF == 14
+        && child_icsr & ICSR_PENDSVSET == 0;
+    let r0_live =
+        read_volatile(record.add(5)) == 0x5448_5244 && read_volatile(record.add(9)) == 0x5045_4E44;
+    let cleanup = read_volatile(SCB_VTOR as *const u32) == source_vtor
+        && read_volatile(SCB_SHPR3 as *const u32) == source_shpr3
+        && read_volatile(SCB_ICSR as *const u32) & (ICSR_PENDSTSET | ICSR_PENDSVSET) == 0
+        && msp_after == source_msp
+        && psp_after == source_psp
+        && control_after == source_control
+        && thread_ipsr == 0;
+    let passed = prior_primask == 0
+        && source_control & 2 == 0
+        && wrapper_control & 2 == 0
+        && wrapper_psp == source_psp
+        && deferred
+        && frame_reused
+        && child_is_pendsv
+        && r0_live
+        && cleanup;
+    if passed {
+        putline(b"SYSTICK PENDSV M3 PSP TAILCHAIN FRAME=REUSED EXC_RETURN=FFFFFFFD MSP=UNCHANGED R0=LIVE ok");
+    } else {
+        putline(b"SYSTICK PENDSV M3 PSP TAILCHAIN CHECK FAILED");
     }
     passed
 }
@@ -3335,6 +3487,8 @@ unsafe extern "C" fn smoke_pendsv_tailchain_handler() {
         "mov r3, lr",
         "str r3, [r0, #32]",
         "str r2, [r0, #36]",
+        "mrs r3, psp",
+        "str r3, [r0, #52]",
         "ldr r3, =0xE000ED04",
         "ldr r3, [r3]",
         "str r3, [r0, #40]",
@@ -3370,6 +3524,8 @@ unsafe extern "C" fn smoke_systick_tailchain_handler() {
         "str r3, [r0, #0]",
         "mrs r3, msp",
         "str r3, [r0, #12]",
+        "mrs r3, psp",
+        "str r3, [r0, #48]",
         "mov r3, lr",
         "str r3, [r0, #16]",
         "ldr r1, =0xE000ED04",
@@ -3382,6 +3538,43 @@ unsafe extern "C" fn smoke_systick_tailchain_handler() {
         "str r2, [r0, #8]",
         "ldr r0, =0x50454E44",
         "bx lr",
+    );
+}
+
+/// Run the tail-chain probe from Thread mode using a dedicated PSP. The
+/// wrapper keeps its return address on MSP, restores the caller's stack
+/// selection after PendSV returns, and waits without making a Rust call on PSP.
+#[unsafe(naked)]
+unsafe extern "C" fn smoke_systick_pendsv_psp_thread() {
+    core::arch::naked_asm!(
+        "mrs r3, msp",
+        "push {{r4, r5, r6, lr}}",
+        "mrs r4, control",
+        "mrs r5, psp",
+        "ldr r0, =0x20001500",
+        "str r3, [r0, #56]",
+        "str r5, [r0, #60]",
+        "str r4, [r0, #64]",
+        "ldr r1, =0x20004000",
+        "msr psp, r1",
+        "movs r1, #2",
+        "orrs r1, r4",
+        "msr control, r1",
+        "isb",
+        "ldr r0, =0x54485244",
+        "ldr r1, =0xE000ED04",
+        "movs r2, #1",
+        "lsls r2, r2, #26",
+        "str r2, [r1]",
+        "ldr r1, =0x20001500",
+        "1:",
+        "ldr r2, [r1, #44]",
+        "cmp r2, #0",
+        "beq 1b",
+        "msr psp, r5",
+        "msr control, r4",
+        "isb",
+        "pop {{r4, r5, r6, pc}}",
     );
 }
 

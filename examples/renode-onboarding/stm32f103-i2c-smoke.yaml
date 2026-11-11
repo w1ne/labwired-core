@@ -7,6 +7,7 @@
 # and subpriority arbitration, including PendSV deferral until the
 # higher-priority SysTick handler returns, including SysTick-to-PendSV tail
 # chaining with the same exception frame and the handler's live R0 preserved.
+# Repeats that RTOS scheduling path from Thread mode using PSP.
 # Also checks strictly higher group priority
 # IRQ 55 nests over IRQ 54 before returning to its parent handler.
 # A lower-priority IRQ 55 then tail-chains after IRQ 54 returns to Thread,
@@ -32,6 +33,7 @@ assertions:
   - uart_contains: "PENDSV M3 CLEAR=1 REPEND=1 VECTOR=14 IPSR=14 ok"
   - uart_contains: "PENDSV M3 DEFERRED=1 AFTER_SYSTICK=1 VECTOR=14 IPSR=14 ok"
   - uart_contains: "SYSTICK PENDSV M3 TAILCHAIN DEFERRED=1 FRAME=REUSED R0=LIVE PENDING_CLEAR=1 ok"
+  - uart_contains: "SYSTICK PENDSV M3 PSP TAILCHAIN FRAME=REUSED EXC_RETURN=FFFFFFFD MSP=UNCHANGED R0=LIVE ok"
   - uart_contains: "IRQ M3 FRAME IPSR=54 ACTIVE=1 PENDING=0 SENTINELS=1 EXC_RETURN=FFFFFFF9 STACK=ALIGNED RETURN=1 ok"
   - uart_contains: "IRQ M3 PSP FRAME IPSR=54 ACTIVE=1 PENDING=0 SENTINELS=1 EXC_RETURN=FFFFFFFD PSP=RESTORED MSP=UNCHANGED ok"
   - uart_contains: "SVC M3 MSP VECTOR=11 IMM=42 EXC_RETURN=FFFFFFF9 STACKED_PC=AFTER_SVC RETURN=1 ok"
