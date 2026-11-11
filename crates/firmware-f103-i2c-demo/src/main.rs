@@ -263,6 +263,7 @@ fn main() -> ! {
     unsafe { smoke_systick_exception_state() };
     unsafe { smoke_systick_external_pause_resume() };
     unsafe { smoke_systick_handler_delivery() };
+    unsafe { smoke_systick_wfi_wake() };
     unsafe { smoke_systick_icsr_repend() };
     unsafe { smoke_systick_tickint_gate() };
     unsafe { smoke_systick_cvr_write_preserves_pending() };
@@ -801,6 +802,57 @@ unsafe fn smoke_systick_handler_delivery() -> bool {
         putline(b"SYSTICK M3 PERIODIC=1 REPEATED=1 VECTOR=15 IPSR=15 RETURN=1 ok");
     } else {
         putline(b"SYSTICK M3 HANDLER CHECK FAILED");
+    }
+    ok
+}
+
+/// Verify that a SysTick exception wakes the Cortex-M3 from WFI and that the
+/// first instruction after WFI runs after the handler returns.
+unsafe fn smoke_systick_wfi_wake() -> bool {
+    const WFI_RESUMED: *mut u32 = 0x2000_0120 as *mut u32;
+
+    let prior_primask: u32;
+    core::arch::asm!(
+        "mrs {primask}, PRIMASK",
+        primask = out(reg) prior_primask,
+        options(nomem, nostack, preserves_flags),
+    );
+
+    write_volatile(SYSTICK_CSR as *mut u32, 0);
+    write_volatile(SCB_ICSR as *mut u32, ICSR_PENDSTCLR);
+    write_volatile(SCB_VTOR as *mut u32, 0x0800_0000);
+    write_volatile(SYSTICK_HANDLER_COUNT, 0);
+    write_volatile(SYSTICK_HANDLER_IPSR, 0);
+    write_volatile(SYSTICK_HANDLER_REPEND, 0);
+    write_volatile(WFI_RESUMED, 0);
+    write_volatile(SYSTICK_RVR as *mut u32, 127);
+    write_volatile(SYSTICK_CVR as *mut u32, 0);
+    write_volatile(SYSTICK_CSR as *mut u32, 0x7); // ENABLE | TICKINT | CLKSOURCE
+
+    core::arch::asm!("wfi", options(nomem, nostack, preserves_flags));
+
+    // Keep the first fall-through work short. If WFI were a NOP, the timer
+    // would not reach its reload before firmware disables it here.
+    write_volatile(WFI_RESUMED, 1);
+    write_volatile(SYSTICK_CSR as *mut u32, 0);
+    let resumed = read_volatile(WFI_RESUMED) == 1;
+    let deliveries = read_volatile(SYSTICK_HANDLER_COUNT);
+    let ipsr = read_volatile(SYSTICK_HANDLER_IPSR);
+    let pending_after_return = read_volatile(SCB_ICSR as *const u32) & ICSR_PENDSTSET;
+    let countflag = read_volatile(SYSTICK_CSR as *const u32) & SYSTICK_COUNTFLAG != 0;
+    write_volatile(SCB_ICSR as *mut u32, ICSR_PENDSTCLR);
+    write_volatile(SYSTICK_CVR as *mut u32, 0);
+
+    let ok = prior_primask == 0
+        && resumed
+        && deliveries == 1
+        && ipsr == 15
+        && pending_after_return == 0
+        && countflag;
+    if ok {
+        putline(b"SYSTICK M3 WFI_WAKE=1 VECTOR=15 ENTRIES=1 RESUMED=1 ok");
+    } else {
+        putline(b"SYSTICK M3 WFI WAKE CHECK FAILED");
     }
     ok
 }

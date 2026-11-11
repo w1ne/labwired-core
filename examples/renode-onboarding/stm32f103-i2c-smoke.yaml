@@ -1,8 +1,8 @@
 # Cortex-M3 USART2 and I2C1 NACK plus TMP102 transactions and BME280 behavior
 # against the imported STM32F103 system. Core checks include exception frames
-# from Thread mode using both MSP and PSP, UsageFault and HardFault escalation,
-# PRIMASK and BASEPRI/BASEPRI_MAX masking and release, plus NVIC pending and
-# return state, priority grouping and subpriority arbitration.
+# from Thread mode using both MSP and PSP, SysTick wake from WFI, UsageFault and
+# HardFault escalation, PRIMASK and BASEPRI/BASEPRI_MAX masking and release,
+# plus NVIC pending and return state, priority grouping and subpriority arbitration.
 schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv7m-none-eabi/release/firmware-f103-i2c-demo"
@@ -17,6 +17,7 @@ assertions:
   - uart_contains: "SYSTICK M3 CALIB=00002328 WRAP=1 COUNTFLAG_WRITE=1 READ_CLEAR=1 PENDING=1 CLEAR=1 ok"
   - uart_contains: "SYSTICK M3 HCLK8 REFERENCE=1 WINDOW=1 FROZEN=1 RESUMED=1 ok"
   - uart_contains: "SYSTICK M3 PERIODIC=1 REPEATED=1 VECTOR=15 IPSR=15 RETURN=1 ok"
+  - uart_contains: "SYSTICK M3 WFI_WAKE=1 VECTOR=15 ENTRIES=1 RESUMED=1 ok"
   - uart_contains: "SYSTICK M3 ICSR SET=1 COALESCE=1 CLEAR=1 REPEND=1 ENTRIES=2 ACTIVE=15 ok"
   - uart_contains: "SYSTICK M3 TICKINT=0 COUNTFLAG=1 NO_PEND=1 TICKINT=1 PEND=1 MASKED=1 ok"
   - uart_contains: "SYSTICK M3 CVR_WRITE WRAP=1 ZERO=1 COUNTFLAG_CLEAR=1 PENDING_PRESERVED=1 MASKED=1 ok"
