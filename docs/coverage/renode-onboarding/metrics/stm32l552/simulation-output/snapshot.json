@@ -3,7 +3,7 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      172355,
+      172603,
       24,
       8,
       6554,
@@ -11,16 +11,16 @@
       1073774620,
       87,
       537067400,
-      3,
+      429496730,
       537067492,
       98,
+      3,
       429496730,
-      134233581,
       537067400,
-      134231051,
-      134232478
+      134232849,
+      134234276
     ],
-    "pc": 134232478,
+    "pc": 134234276,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -31,7 +31,7 @@
     ],
     "vtor": 0,
     "waiting_for_event": false,
-    "event_register": false
+    "event_register": true
   },
   "steps_executed": 2000000,
   "cycles": 2000000,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "95c455f01ef286963d218ecb1a56185706669d2421f248bbc1c697567a5824d7",
+  "firmware_hash": "6a60da6978eccb41898151d33f7531a4a99ebfaf7d85d019c1fe5200b2387f91",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-l552ze-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32l552.yaml",

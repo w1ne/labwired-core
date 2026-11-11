@@ -3,9 +3,9 @@
 # SPDX-License-Identifier: MIT
 
 # Narrow NUCLEO-L552ZE-Q profile for the exact-import onboarding smoke. This
-# profile claims only the memory, clock/power, GPIO and LPUART blocks exercised
-# by firmware-l552ze-smoke; the other imported STM32L552 peripherals are not
-# represented here.
+# profile claims only the memory, clock/power, GPIO, LPUART and architected
+# SysTick blocks exercised by firmware-l552ze-smoke; the other imported
+# STM32L552 peripherals are not represented here.
 name: stm32l552
 arch: arm
 core: cortex-m33
@@ -27,6 +27,10 @@ pins:
   PG7: { gpio: gpiog, bit: 7 }
   PG8: { gpio: gpiog, bit: 8 }
 peripherals:
+  - id: systick
+    type: systick
+    base_address: 0xE000E010
+    size: 16B
   - id: rcc
     type: rcc
     base_address: 0x40021000
