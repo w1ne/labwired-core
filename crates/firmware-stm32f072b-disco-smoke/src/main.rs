@@ -43,7 +43,8 @@
 //! Clearing CVR after a tick is already pending clears COUNTFLAG but must leave
 //! the pending exception intact until PRIMASK is cleared.
 //! Clearing a hardware-generated pending exception through ICSR must leave
-//! COUNTFLAG latched and allow the next timer wrap to pend a fresh exception.
+//! COUNTFLAG latched. A word CSR read clears COUNTFLAG independently, and the
+//! next timer wrap must latch it again and pend a fresh exception.
 
 #![no_std]
 #![no_main]
@@ -1470,7 +1471,7 @@ fn check_systick_cvr_clear_does_not_fire() -> bool {
 /// Clearing a hardware-generated pending exception must not clear COUNTFLAG
 /// or stop SysTick. The following timer period must pend and enter normally.
 fn check_systick_hardware_pending_clear() -> bool {
-    const RELOAD: u32 = 63;
+    const RELOAD: u32 = 255;
     const PENDSTSET: u32 = 1 << 26;
     const PENDSTCLR: u32 = 1 << 25;
 
@@ -1517,6 +1518,9 @@ fn check_systick_hardware_pending_clear() -> bool {
     let countflag_survived_clear = rd8(SYSTICK_CSR + 2) & 1 != 0;
     let timer_enabled_after_clear = rd8(SYSTICK_CSR) & 0x3 == 0x3;
     let handler_after_clear = rd(SYSTICK_PENDING_CLEAR_RECORD + 8);
+    let countflag_read_value = rd(SYSTICK_CSR) & (1 << 16) != 0;
+    let countflag_read_cleared = rd8(SYSTICK_CSR + 2) & 1 == 0;
+    let pending_stays_clear_after_countflag_read = rd(SCB_ICSR) & PENDSTSET == 0;
 
     let mut second_wrap_pending = false;
     for _ in 0..100_000 {
@@ -1573,6 +1577,9 @@ fn check_systick_hardware_pending_clear() -> bool {
         && countflag_survived_clear
         && timer_enabled_after_clear
         && handler_after_clear == 0
+        && countflag_read_value
+        && countflag_read_cleared
+        && pending_stays_clear_after_countflag_read
         && second_wrap_pending
         && countflag_after_second_wrap
         && handler_before_unmask == 0
@@ -1592,6 +1599,11 @@ fn check_systick_hardware_pending_clear() -> bool {
     );
     flag("cleared", pending_cleared);
     flag("timer", timer_enabled_after_clear);
+    flag("read_clear", countflag_read_value && countflag_read_cleared);
+    flag(
+        "pending_stays_clear",
+        pending_stays_clear_after_countflag_read,
+    );
     flag(
         "second_wrap",
         second_wrap_pending && countflag_after_second_wrap,

@@ -73,7 +73,7 @@
           "systick periodic entries=0x00000003 reload=0x0000007F ipsr=0x0000000F,0x0000000F,0x0000000F active=1 countflag=1 pending=0 thread_ipsr=0x00000000 vtor_restored=1 ok",
           "systick countflag-only tickint=0 flag=1 byte_preserved=1 write_ignored=1 control=0x00000004 handler=0 pending=0 read_clear=1 ipsr=0x00000000 vtor_restored=1 ok",
           "systick cvr-clear countdown=started=1 pending_after_clear=0 pending_after_period=1 flag_before_clear=1 pending_survived=1 flag_cleared=1 handler_before_unmask=0x00000000 handler_ipsr=0x0000000F active=0x0000000F entries=0x00000001 thread_ipsr=0x00000000 vtor_restored=1 ok",
-          "systick pending-clear hardware first_wrap=1 flag_survived=1 cleared=1 timer=1 second_wrap=1 handler_before_unmask=0x00000000 ipsr=0x0000000F active=0x0000000F entries=0x00000001 pending_after=0 thread_ipsr=0x00000000 vtor_restored=1 ok",
+          "systick pending-clear hardware first_wrap=1 flag_survived=1 cleared=1 timer=1 read_clear=1 pending_stays_clear=1 second_wrap=1 handler_before_unmask=0x00000000 ipsr=0x0000000F active=0x0000000F entries=0x00000001 pending_after=0 thread_ipsr=0x00000000 vtor_restored=1 ok",
           "systick reload-update rvr=0x0000001F preserved=1 first_wrap=1 pending_clear=1 next_reload=1 old=",
           " current=",
           " ok",
@@ -130,10 +130,10 @@
       0,
       85,
       536886984,
-      134300125,
-      134300406
+      134300213,
+      134300496
     ],
-    "pc": 134300406,
+    "pc": 134300496,
     "xpsr": 2164260864,
     "primask": false,
     "pending_exceptions": 0,
@@ -146,7 +146,7 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "firmware_hash": "413c2542b9859d754d4ae05c78539ea576725b42a7aea74c9b914f8831c29a92",
+  "firmware_hash": "b58279a1c868c36502107cd4e61333f999fb63a18a2e9b77133f2b9d2f3e0468",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-stm32f072b-disco-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f072b_discovery.yaml",
@@ -700,7 +700,7 @@
         "end_cycle": 1250000
       },
       {
-        "text": "systick pending-clear hardware first_wrap=1 flag_survived=1 cleared=1 timer=1 second_wrap=1 handler_before_unmask=0x00000000 ipsr=0x0000000F active=0x0000000F entries=0x00000001 pending_after=0 thread_ipsr=0x00000000 vtor_restored=1 ok",
+        "text": "systick pending-clear hardware first_wrap=1 flag_survived=1 cleared=1 timer=1 read_clear=1 pending_stays_clear=1 second_wrap=1 handler_before_unmask=0x00000000 ipsr=0x0000000F active=0x0000000F entries=0x00000001 pending_after=0 thread_ipsr=0x00000000 vtor_restored=1 ok",
         "cycle_lo": 1240000,
         "cycle": 1250000,
         "end_cycle": 1250000
@@ -790,14 +790,14 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 85556,
+    "text_bytes": 85664,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 85556,
+    "flash_used_bytes": 85664,
     "ram_static_bytes": 0,
     "flash_total_bytes": 131072,
     "ram_total_bytes": 16384,
-    "flash_used_pct": 65.27,
+    "flash_used_pct": 65.36,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -823,11 +823,16 @@
     "cycles": 4000000,
     "instructions": 4000000,
     "steps_executed": 4000000,
-    "memory_reads": 24766,
-    "memory_writes": 2972,
-    "peripheral_accesses": 303497,
+    "memory_reads": 24919,
+    "memory_writes": 2989,
+    "peripheral_accesses": 303624,
     "exceptions": 0,
     "pc_samples": [
+      {
+        "pc": 134300496,
+        "count": 196,
+        "symbol": "firmware_stm32f072b_disco_smoke::__cortex_m_rt_main"
+      },
       {
         "pc": 134226038,
         "count": 157,
@@ -900,11 +905,6 @@
       },
       {
         "pc": 134226046,
-        "count": 117,
-        "symbol": "firmware_stm32f072b_disco_smoke::wait_level"
-      },
-      {
-        "pc": 134226134,
         "count": 117,
         "symbol": "firmware_stm32f072b_disco_smoke::wait_level"
       }
