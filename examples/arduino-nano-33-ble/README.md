@@ -49,13 +49,18 @@ cd core
   --output-dir out/arduino-nano-33-ble-smoke --no-uart-stdout
 ```
 
-## Mixed-signal NTC example
+## Mixed-signal examples
 
 The separate [analog-ntc-system.yaml](analog-ntc-system.yaml) manifest solves a
 Beta-model thermistor divider and routes it to SAADC AIN0. The example keeps the
 ADC channel explicit because the nRF52840 descriptor does not yet declare
 package-pad aliases for its analog inputs. Its board-specific integration test
 asserts the cold, nominal and hot voltages and the two-channel EasyDMA results.
+
+[analog-bjt-early-effect-system.yaml](analog-bjt-early-effect-system.yaml) adds a
+matched generic Gummel–Poon NPN pair beside independent NTC and Shockley diode
+netlists. The test sweeps base drive, checks each collector against an independent
+load-line reference, and reads all four routed voltages through SAADC EasyDMA.
 
 ## What the board models
 

@@ -12,6 +12,7 @@ Claims, evidence, and what is explicitly **not** claimed yet.
 | UARTE0 EasyDMA console (PSEL/BADRATE/TXD.PTR/MAXCNT) | smoke-tested | `ARDUINO NANO 33 BLE SMOKE` + heartbeat |
 | Active-low RGB LED mapping (P0.24/P0.16/P0.06) | smoke-tested | `rgb=red out=00012040`, `rgb=green out=01002040`, `rgb=blue out=01012000` (GPIO0 OUT readback) |
 | Built-in D13 LED (P0.13, active high) | smoke-tested | bit 13 set in every `out=` readback |
+| Generic NTC, Shockley diode, and BJT Early-effect netlists through SAADC | co-simulation tested | `cosim_arduino_nano_33_ble_analog::arduino_nano_33_ble_bjt_early_effect_reaches_saadc_with_unrelated_devices`; independent load lines, five-channel EasyDMA results, and undriven AIN4 are asserted |
 | Determinism (same inputs → same output) | smoke-tested | two runs, identical UART streams (`diff` clean) |
 | Instruction support for this firmware | audited | `unsupported_instruction_audit.sh`: 200,000 instructions, 0 unsupported |
 | LSM9DS1 IMU | **not modelled** | the TWI0 controller is modelled; no sensor model is declared |
@@ -59,3 +60,6 @@ cargo test -p labwired-core --test firmware_survival test_arduino_nano_33_ble_sm
 - UARTE0 is the board's `Serial1` on D0/D1; the USB CDC `Serial` is not
   modelled and is not used by this firmware.
 - The board's LSM9DS1 IMU is not modelled; the smoke never touches TWI0.
+- The mixed-signal co-simulation uses explicit SAADC channel endpoints because
+  package-pad aliases are not declared. It is model coverage, not silicon
+  validation.
