@@ -97,6 +97,7 @@ assertions:
       - "systick reload-update rvr=0x0000001F preserved=1 first_wrap=1 pending_clear=1 next_reload=1 old="
       - " current="
       - " ok"
+      - "systick reload-width reload=0x00ABCDEF reserved_zero=1 ok"
       - "systick clock-source ext_hclk8_delta="
       - " ratio_8_to_1=yes cleanup=yes ok"
       - "summary 0x0DFFFFFF"

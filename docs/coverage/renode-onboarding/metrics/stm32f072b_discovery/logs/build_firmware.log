@@ -41,4 +41,4 @@ warning: unnecessary `unsafe` block
      |     ^^^^^^ unnecessary `unsafe` block
 
 warning: `firmware-stm32f072b-disco-smoke` (bin "firmware-stm32f072b-disco-smoke") generated 4 warnings
-    Finished `release` profile [optimized + debuginfo] target(s) in 9.45s
+    Finished `release` profile [optimized + debuginfo] target(s) in 9.64s

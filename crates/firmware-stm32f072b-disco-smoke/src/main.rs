@@ -39,7 +39,7 @@
 //! countdown-to-zero must still pend SysTick. COUNTFLAG's byte-read and
 //! read-only behavior is checked separately from its word-read clear. An RVR
 //! update during a live countdown must preserve CVR and take effect on the
-//! next reload.
+//! next reload. Writes to RVR bits [31:24] must be ignored.
 
 #![no_std]
 #![no_main]
@@ -1533,6 +1533,51 @@ fn check_systick_reload_update() -> bool {
     ok
 }
 
+/// SYST_RVR implements only RELOAD[23:0]; writes to bits [31:24] are ignored.
+fn check_systick_reload_width() -> bool {
+    const RELOAD: u32 = 0x00AB_CDEF;
+    const RESERVED: u32 = 0xFF00_0000;
+
+    let prior_primask: u32;
+    unsafe {
+        asm!(
+            "mrs {primask}, PRIMASK",
+            "cpsid i",
+            primask = out(reg) prior_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+        wr(SYSTICK_CSR, 0);
+        wr(SCB_ICSR, 1 << 25);
+        wr(SYSTICK_RVR, RESERVED | RELOAD);
+    }
+
+    let reload = rd(SYSTICK_RVR);
+    let low_24_preserved = reload == RELOAD;
+    let reserved_zero = reload & RESERVED == 0;
+
+    unsafe {
+        wr(SYSTICK_RVR, 0);
+        wr(SYSTICK_CVR, 0);
+        wr(SCB_ICSR, 1 << 25);
+        asm!(
+            "msr PRIMASK, {primask}",
+            "dsb",
+            "isb",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+
+    let ok = low_24_preserved && reserved_zero;
+    puts("systick reload-width reload=");
+    hex(reload);
+    puts(" reserved_zero=");
+    puts(if reserved_zero { "1" } else { "0" });
+    puts(" ");
+    verdict(ok);
+    ok
+}
+
 /// The STM32F072 reference source is HCLK/8; CLKSOURCE=1 selects HCLK.
 /// Sample a long countdown across a fixed instruction window in each mode and
 /// check that the external source runs at HCLK/8 without allowing a wrap.
@@ -2427,6 +2472,7 @@ fn main() -> ! {
     let systick_countflag_only_ok = check_systick_countflag_without_tickint();
     let systick_cvr_clear_ok = check_systick_cvr_clear_does_not_fire();
     let systick_reload_update_ok = check_systick_reload_update();
+    let systick_reload_width_ok = check_systick_reload_width();
     let systick_clock_sources_ok = check_systick_clock_sources();
     mark(
         21,
@@ -2435,7 +2481,10 @@ fn main() -> ! {
     mark(22, systick_periodic_ok);
     mark(
         23,
-        systick_countflag_only_ok && systick_cvr_clear_ok && systick_reload_update_ok,
+        systick_countflag_only_ok
+            && systick_cvr_clear_ok
+            && systick_reload_update_ok
+            && systick_reload_width_ok,
     );
     mark(24, systick_clock_sources_ok);
     let summary = summary | 0x0CF0_0000;

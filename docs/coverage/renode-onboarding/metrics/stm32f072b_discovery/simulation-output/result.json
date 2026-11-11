@@ -76,6 +76,7 @@
           "systick reload-update rvr=0x0000001F preserved=1 first_wrap=1 pending_clear=1 next_reload=1 old=",
           " current=",
           " ok",
+          "systick reload-width reload=0x00ABCDEF reserved_zero=1 ok",
           "systick clock-source ext_hclk8_delta=",
           " ratio_8_to_1=yes cleanup=yes ok",
           "summary 0x0DFFFFFF",
@@ -128,10 +129,10 @@
       0,
       85,
       536887000,
-      134295711,
-      134295998
+      134296747,
+      134297036
     ],
-    "pc": 134295998,
+    "pc": 134297036,
     "xpsr": 2164260864,
     "primask": false,
     "pending_exceptions": 0,
@@ -144,7 +145,7 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "firmware_hash": "27e37831d86ac9b894e1bf29b1b8bcc1cfe46f95aa9251f73b1af48538b147ff",
+  "firmware_hash": "a62e9380ab7349519085c506a4297fba5b5670ece833d2fd04b106cbeea734fd",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-stm32f072b-disco-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f072b_discovery.yaml",
@@ -704,7 +705,13 @@
         "end_cycle": 1250000
       },
       {
-        "text": "systick clock-source ext_hclk8_delta=0x00000010 cpu_hclk_delta=0x00000085 ext_clksource=0 cpu_clksource=1 ratio_8_to_1=yes cleanup=yes ok",
+        "text": "systick reload-width reload=0x00ABCDEF reserved_zero=1 ok",
+        "cycle_lo": 1240000,
+        "cycle": 1250000,
+        "end_cycle": 1250000
+      },
+      {
+        "text": "systick clock-source ext_hclk8_delta=0x00000011 cpu_hclk_delta=0x00000085 ext_clksource=0 cpu_clksource=1 ratio_8_to_1=yes cleanup=yes ok",
         "cycle_lo": 1240000,
         "cycle": 1250000,
         "end_cycle": 1250000
@@ -776,14 +783,14 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 81040,
+    "text_bytes": 82104,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 81040,
+    "flash_used_bytes": 82104,
     "ram_static_bytes": 0,
     "flash_total_bytes": 131072,
     "ram_total_bytes": 16384,
-    "flash_used_pct": 61.83,
+    "flash_used_pct": 62.64,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -809,14 +816,14 @@
     "cycles": 4000000,
     "instructions": 4000000,
     "steps_executed": 4000000,
-    "memory_reads": 23620,
-    "memory_writes": 2761,
-    "peripheral_accesses": 302754,
+    "memory_reads": 23857,
+    "memory_writes": 2773,
+    "peripheral_accesses": 302880,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134295998,
-        "count": 517,
+        "pc": 134297036,
+        "count": 676,
         "symbol": "firmware_stm32f072b_disco_smoke::__cortex_m_rt_main"
       },
       {
