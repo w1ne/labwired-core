@@ -42,6 +42,8 @@
 //! next reload. Writes to RVR bits [31:24] must be ignored.
 //! Clearing CVR after a tick is already pending clears COUNTFLAG but must leave
 //! the pending exception intact until PRIMASK is cleared.
+//! Clearing a hardware-generated pending exception through ICSR must leave
+//! COUNTFLAG latched and allow the next timer wrap to pend a fresh exception.
 
 #![no_std]
 #![no_main]
@@ -79,6 +81,7 @@ const SYSTICK_REPEND_RECORD: u32 = SUMMARY + 224;
 const SYSTICK_PERIODIC_RECORD: u32 = SUMMARY + 768;
 const SYSTICK_FLAG_RECORD: u32 = SUMMARY + 832;
 const SYSTICK_CVR_CLEAR_RECORD: u32 = SUMMARY + 864;
+const SYSTICK_PENDING_CLEAR_RECORD: u32 = SUMMARY + 896;
 const SYSTICK_CSR: u32 = 0xE000_E010;
 const SYSTICK_RVR: u32 = 0xE000_E014;
 const SYSTICK_CVR: u32 = 0xE000_E018;
@@ -553,6 +556,26 @@ unsafe extern "C" fn smoke_systick_cvr_clear_handler() {
         "ldr r1, =0xE000E010",
         "movs r2, #0",
         "str r2, [r1]",
+        "bx lr",
+    );
+}
+
+/// Capture the hardware-generated SysTick after software clears the first
+/// pending request. Stop the timer once the following period enters.
+#[unsafe(naked)]
+unsafe extern "C" fn smoke_systick_pending_clear_handler() {
+    core::arch::naked_asm!(
+        "mrs r2, ipsr",
+        "ldr r0, =0x20003380",
+        "str r2, [r0, #0]",
+        "ldr r1, =0xE000ED04",
+        "ldr r2, [r1]",
+        "str r2, [r0, #4]",
+        "ldr r1, =0xE000E010",
+        "movs r2, #0",
+        "str r2, [r1]",
+        "movs r2, #1",
+        "str r2, [r0, #8]",
         "bx lr",
     );
 }
@@ -1436,6 +1459,153 @@ fn check_systick_cvr_clear_does_not_fire() -> bool {
     hex(handler_icsr & 0x1FF);
     puts(" entries=");
     hex(entries);
+    puts(" thread_ipsr=");
+    hex(thread_ipsr);
+    puts(" ");
+    flag("vtor_restored", vtor_restored);
+    verdict(ok);
+    ok
+}
+
+/// Clearing a hardware-generated pending exception must not clear COUNTFLAG
+/// or stop SysTick. The following timer period must pend and enter normally.
+fn check_systick_hardware_pending_clear() -> bool {
+    const RELOAD: u32 = 63;
+    const PENDSTSET: u32 = 1 << 26;
+    const PENDSTCLR: u32 = 1 << 25;
+
+    let source_vtor = rd(SCB_VTOR);
+    let table = RAM_VECTOR_BASE as *mut u32;
+    let prior_primask: u32;
+    unsafe {
+        asm!(
+            "mrs {primask}, PRIMASK",
+            "cpsid i",
+            primask = out(reg) prior_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+        wr(SYSTICK_CSR, 0);
+        wr(SCB_ICSR, PENDSTCLR);
+        wr(SYSTICK_RVR, RELOAD);
+        wr(SYSTICK_CVR, 0);
+        for index in 0..3 {
+            write_volatile((SYSTICK_PENDING_CLEAR_RECORD as *mut u32).add(index), 0);
+        }
+        for index in 0..VECTOR_TABLE_WORDS {
+            write_volatile(table.add(index), 0);
+        }
+        write_volatile(
+            table.add(SYSTICK_VECTOR_INDEX),
+            (smoke_systick_pending_clear_handler as *const () as usize as u32) | 1,
+        );
+        wr(SCB_VTOR, RAM_VECTOR_BASE);
+        wr(SYSTICK_CSR, 0x7); // ENABLE | TICKINT | processor clock
+    }
+
+    let mut first_wrap_pending = false;
+    for _ in 0..100_000 {
+        if rd(SCB_ICSR) & PENDSTSET != 0 {
+            first_wrap_pending = true;
+            break;
+        }
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+    let countflag_before_clear = rd8(SYSTICK_CSR + 2) & 1 != 0;
+    let handler_before_clear = rd(SYSTICK_PENDING_CLEAR_RECORD + 8);
+    unsafe { wr(SCB_ICSR, PENDSTCLR) };
+    let pending_cleared = rd(SCB_ICSR) & PENDSTSET == 0;
+    let countflag_survived_clear = rd8(SYSTICK_CSR + 2) & 1 != 0;
+    let timer_enabled_after_clear = rd8(SYSTICK_CSR) & 0x3 == 0x3;
+    let handler_after_clear = rd(SYSTICK_PENDING_CLEAR_RECORD + 8);
+
+    let mut second_wrap_pending = false;
+    for _ in 0..100_000 {
+        if rd(SCB_ICSR) & PENDSTSET != 0 {
+            second_wrap_pending = true;
+            break;
+        }
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+    let countflag_after_second_wrap = rd8(SYSTICK_CSR + 2) & 1 != 0;
+    let handler_before_unmask = rd(SYSTICK_PENDING_CLEAR_RECORD + 8);
+    unsafe {
+        asm!("cpsie i", "dsb", "isb", options(nostack, preserves_flags));
+    }
+    for _ in 0..100_000 {
+        if rd(SYSTICK_PENDING_CLEAR_RECORD + 8) != 0 {
+            break;
+        }
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+
+    let handler_ipsr = rd(SYSTICK_PENDING_CLEAR_RECORD);
+    let handler_icsr = rd(SYSTICK_PENDING_CLEAR_RECORD + 4);
+    let entries = rd(SYSTICK_PENDING_CLEAR_RECORD + 8);
+    let pending_after_return = rd(SCB_ICSR) & PENDSTSET != 0;
+    let thread_ipsr: u32;
+    unsafe {
+        asm!(
+            "mrs {value}, ipsr",
+            value = out(reg) thread_ipsr,
+            options(nomem, nostack, preserves_flags),
+        );
+        asm!("cpsid i", options(nomem, nostack, preserves_flags));
+        wr(SYSTICK_CSR, 0);
+        wr(SCB_ICSR, PENDSTCLR);
+        wr(SYSTICK_CVR, 0);
+        wr(SCB_VTOR, source_vtor);
+        asm!(
+            "msr PRIMASK, {primask}",
+            "dsb",
+            "isb",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+    let vtor_restored = rd(SCB_VTOR) == source_vtor;
+    let active = handler_icsr & 0x1FF == 15;
+    let not_pending_in_handler = handler_icsr & PENDSTSET == 0;
+    let ok = prior_primask == 0
+        && first_wrap_pending
+        && countflag_before_clear
+        && handler_before_clear == 0
+        && pending_cleared
+        && countflag_survived_clear
+        && timer_enabled_after_clear
+        && handler_after_clear == 0
+        && second_wrap_pending
+        && countflag_after_second_wrap
+        && handler_before_unmask == 0
+        && handler_ipsr == 15
+        && active
+        && not_pending_in_handler
+        && entries == 1
+        && !pending_after_return
+        && thread_ipsr == 0
+        && vtor_restored;
+
+    puts("systick pending-clear hardware ");
+    flag("first_wrap", first_wrap_pending);
+    flag(
+        "flag_survived",
+        countflag_before_clear && countflag_survived_clear,
+    );
+    flag("cleared", pending_cleared);
+    flag("timer", timer_enabled_after_clear);
+    flag(
+        "second_wrap",
+        second_wrap_pending && countflag_after_second_wrap,
+    );
+    puts("handler_before_unmask=");
+    hex(handler_before_unmask);
+    puts(" ipsr=");
+    hex(handler_ipsr);
+    puts(" active=");
+    hex(handler_icsr & 0x1FF);
+    puts(" entries=");
+    hex(entries);
+    puts(" pending_after=");
+    puts(if pending_after_return { "1" } else { "0" });
     puts(" thread_ipsr=");
     hex(thread_ipsr);
     puts(" ");
@@ -2488,6 +2658,7 @@ fn main() -> ! {
     let systick_periodic_ok = check_systick_periodic_reload();
     let systick_countflag_only_ok = check_systick_countflag_without_tickint();
     let systick_cvr_clear_ok = check_systick_cvr_clear_does_not_fire();
+    let systick_hardware_pending_clear_ok = check_systick_hardware_pending_clear();
     let systick_reload_update_ok = check_systick_reload_update();
     let systick_reload_width_ok = check_systick_reload_width();
     let systick_clock_sources_ok = check_systick_clock_sources();
@@ -2500,6 +2671,7 @@ fn main() -> ! {
         23,
         systick_countflag_only_ok
             && systick_cvr_clear_ok
+            && systick_hardware_pending_clear_ok
             && systick_reload_update_ok
             && systick_reload_width_ok,
     );
