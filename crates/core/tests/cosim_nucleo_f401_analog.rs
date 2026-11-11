@@ -118,6 +118,43 @@ fn diode_load_line_voltage() -> f64 {
     junction_v + current(junction_v) * RS_OHMS
 }
 
+/// Independent level-1 NJF load line including model-card drain/source
+/// resistances. The scalar root solves channel current against the external
+/// load and intrinsic terminal drops, independently of MNA.
+fn jfet_drain_voltage(gate_v: f64, drain_ohms: f64, source_ohms: f64) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const LOAD_OHMS: f64 = 1_000.0;
+    const VTO: f64 = -2.0;
+    const BETA_A_PER_V2: f64 = 500e-6;
+    const LAMBDA_PER_V: f64 = 0.025;
+
+    let channel_current = |current_a: f64| {
+        let external_drain_v = SUPPLY_V - current_a * LOAD_OHMS;
+        let internal_drain_v = external_drain_v - current_a * drain_ohms;
+        let internal_source_v = current_a * source_ohms;
+        let vds = internal_drain_v - internal_source_v;
+        let vgst = gate_v - internal_source_v - VTO;
+        if vgst <= 0.0 {
+            0.0
+        } else if vds < vgst {
+            BETA_A_PER_V2 * (1.0 + LAMBDA_PER_V * vds) * vds * (2.0 * vgst - vds)
+        } else {
+            BETA_A_PER_V2 * (1.0 + LAMBDA_PER_V * vds) * vgst * vgst
+        }
+    };
+
+    let (mut low, mut high) = (0.0, SUPPLY_V / LOAD_OHMS);
+    for _ in 0..100 {
+        let current_a = 0.5 * (low + high);
+        if channel_current(current_a) > current_a {
+            low = current_a;
+        } else {
+            high = current_a;
+        }
+    }
+    SUPPLY_V - 0.5 * (low + high) * LOAD_OHMS
+}
+
 fn signal_voltage(session: &CosimSession, path: &str) -> f64 {
     match session.signals().get(path) {
         Some(CosimSignalValue::F64(volts)) => *volts,
@@ -166,6 +203,134 @@ fn f401_adc_convert(bus: &mut SystemBus, channel: u8) -> u32 {
     assert_ne!(status & EOC, 0, "ADC1 conversion completes with EOC set");
     bus.read_u32(ADC1_BASE + 0x4c)
         .expect("read firmware-visible ADC1 DR")
+}
+
+#[test]
+fn nucleo_f401re_jfet_terminal_resistances_reach_adc1_with_unrelated_diode() {
+    let system_path = root("configs/systems/nucleo-f401re.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F401RE profile");
+    let diode = SystemManifest::from_file(root("examples/nucleo-f401re/analog-diode-system.yaml"))
+        .expect("load unrelated generic Shockley diode netlist");
+    let jfet = SystemManifest::from_file(root(
+        "examples/nucleo-f401re/analog-jfet-terminal-resistance.yaml",
+    ))
+    .expect("load matched generic level-1 JFET branches");
+    profile.cosim_models = diode.cosim_models;
+    profile.cosim_models.extend(jfet.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F401 descriptor");
+    for (pad, channel) in [("PA0", 0), ("PA2", 2), ("PA3", 3), ("PA4", 4), ("PA5", 5)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F401RE bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries an unrelated diode and four matched JFET branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must resolve through PA0 and PA2–PA5 to ADC1"
+    );
+    for channel in 0..=6 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} begins without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.jfet.gate_v", -1.0)
+        .expect("initialize the matched JFET gate drives");
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("initialize the diode and matched JFET branches");
+    assert_eq!(initial_steps.len(), 2, "the diode and JFET netlists solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected route errors: {initial_errors:?}"
+    );
+
+    let branches = [
+        ("control", "pa2", 2, 0.0, 0.0),
+        ("drain resistance", "pa3", 3, 200.0, 0.0),
+        ("source resistance", "pa4", 4, 0.0, 200.0),
+        ("both terminal resistances", "pa5", 5, 200.0, 200.0),
+    ];
+    let mut final_voltages = None;
+    for gate_v in [-1.0_f64, 0.0] {
+        session
+            .set_signal_number("ui.jfet.gate_v", gate_v)
+            .expect("step all matched JFET gate drives");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route the unrelated diode and JFET branches");
+        assert_eq!(
+            steps.len(),
+            2,
+            "both analog netlists solve at each gate bias"
+        );
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let diode_v = signal_voltage(&session, "board.analog.pa0_volts");
+        assert!(
+            (diode_v - diode_load_line_voltage()).abs() < 2e-5,
+            "the unrelated Shockley diode stays on its independent load line"
+        );
+        let mut voltages = Vec::new();
+        for (name, pad, channel, drain_ohms, source_ohms) in branches {
+            let solved_v = signal_voltage(&session, &format!("board.analog.{pad}_volts"));
+            let expected_v = jfet_drain_voltage(gate_v, drain_ohms, source_ohms);
+            assert!(
+                (solved_v - expected_v).abs() < 5e-5,
+                "{name} NJF load line at gate={gate_v} V should be {expected_v} V, got {solved_v} V"
+            );
+            let expected = expected_adc_count(solved_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "solved {name} voltage seeds descriptor-routed ADC1_IN{channel}"
+            );
+            assert_eq!(
+                f401_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "firmware-visible ADC1_IN{channel} conversion follows the {name} JFET"
+            );
+            voltages.push(solved_v);
+        }
+        assert_eq!(
+            f401_adc_convert(&mut bus, 0),
+            u32::from(expected_adc_count(diode_v)),
+            "ADC1_IN0 continues to convert the unrelated diode"
+        );
+        assert_eq!(
+            adc_channel_count(&mut bus, 1),
+            0xFFFF,
+            "the neighboring ADC1 channel remains undriven"
+        );
+        final_voltages = Some(voltages);
+    }
+
+    let [control, drain, source, both] = final_voltages
+        .expect("the final JFET gate-drive sample was recorded")
+        .try_into()
+        .expect("all four JFET branches were routed");
+    assert!(
+        drain > control + 0.05,
+        "drain resistance reduces channel current and raises external drain voltage: {drain} V vs {control} V"
+    );
+    assert!(
+        source > control + 0.1,
+        "source resistance raises intrinsic source voltage and reduces channel current: {source} V vs {control} V"
+    );
+    assert!(
+        both > drain && both > source,
+        "combined RD and RS exceed either terminal alone: {both} V, {drain} V, {source} V"
+    );
 }
 
 #[test]

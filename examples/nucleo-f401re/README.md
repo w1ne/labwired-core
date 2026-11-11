@@ -41,3 +41,12 @@ ADC1 conversion result read from its data register:
 ```sh
 cargo test -p labwired-core --test cosim_pin_routing nucleo_f401re_diode_netlist_reaches_pa0_adc1_end_to_end
 ```
+
+[`analog-jfet-terminal-resistance.yaml`](analog-jfet-terminal-resistance.yaml) adds a
+generic level-1 NJF load line on PA2–PA5/ADC1_IN2–IN5 beside the unrelated diode on
+PA0/ADC1_IN0. The co-simulation test checks RD and RS independently against scalar
+load-line roots and reads each route through the firmware-visible ADC1 data register:
+
+```sh
+cargo test -p labwired-core --test cosim_nucleo_f401_analog nucleo_f401re_jfet_terminal_resistances_reach_adc1_with_unrelated_diode
+```
