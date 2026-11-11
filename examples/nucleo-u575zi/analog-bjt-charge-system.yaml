@@ -1,0 +1,108 @@
+# Matched generic Gummel–Poon NPN branches route base-emitter depletion,
+# base-collector depletion, and forward transit charge through STM32U575 ADC1.
+# 10 nF junction capacitances make the transient response measurable at 1 us.
+name: nucleo-u575zi-analog-bjt-charge
+chip: ../../configs/chips/stm32u575.yaml
+external_devices: []
+board_io: []
+cosim_models:
+  - id: bjt_charge_reference
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drive: ui.bjt_charge.base_v
+    outputs:
+      collector_voltage: board.analog.pa2_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 10k
+        Q1 collector base 0 NPN_TEST
+        .model NPN_TEST NPN(IS=1e-15 BF=100 BR=4 VAF=50)
+      probes:
+        collector_voltage: v(collector)
+      sources:
+        base_drive: Vbase
+      vdd: 3.3
+  - id: bjt_base_emitter_charge
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drive: ui.bjt_charge.base_v
+    outputs:
+      collector_voltage: board.analog.pa3_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 10k
+        Q1 collector base 0 NPN_TEST
+        .model NPN_TEST NPN(IS=1e-15 BF=100 BR=4 VAF=50 CJE=10n VJE=0.7 MJE=0.33 FC=0.5)
+      probes:
+        collector_voltage: v(collector)
+      sources:
+        base_drive: Vbase
+      vdd: 3.3
+  - id: bjt_base_collector_charge
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drive: ui.bjt_charge.base_v
+    outputs:
+      collector_voltage: board.analog.pa4_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 10k
+        Q1 collector base 0 NPN_TEST
+        .model NPN_TEST NPN(IS=1e-15 BF=100 BR=4 VAF=50 CJC=10n VJC=0.7 MJC=0.33 FC=0.5)
+      probes:
+        collector_voltage: v(collector)
+      sources:
+        base_drive: Vbase
+      vdd: 3.3
+  - id: bjt_forward_transit_charge
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drive: ui.bjt_charge.base_v
+    outputs:
+      collector_voltage: board.analog.pa5_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 10k
+        Q1 collector base 0 NPN_TEST
+        .model NPN_TEST NPN(IS=1e-15 BF=100 BR=4 VAF=50 TF=100n)
+      probes:
+        collector_voltage: v(collector)
+      sources:
+        base_drive: Vbase
+      vdd: 3.3
+  - id: bjt_combined_charge
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drive: ui.bjt_charge.base_v
+    outputs:
+      collector_voltage: board.analog.pa6_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 10k
+        Q1 collector base 0 NPN_TEST
+        .model NPN_TEST NPN(IS=1e-15 BF=100 BR=4 VAF=50 CJE=10n VJE=0.7 MJE=0.33 CJC=10n VJC=0.7 MJC=0.33 FC=0.5 TF=100n)
+      probes:
+        collector_voltage: v(collector)
+      sources:
+        base_drive: Vbase
+      vdd: 3.3
