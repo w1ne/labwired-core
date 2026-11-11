@@ -1,0 +1,16 @@
+2026-11-11T16:38:27.898209Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f103.yaml
+2026-11-11T16:38:27.955303Z  INFO labwired_loader: ELF Entry Point: 0x80002b7
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-11T16:38:27.956287Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'usart2'
+2026-11-11T16:38:27.964970Z  WARN labwired_core::cpu::cortex_m::exec::misc: Unknown instruction at 0x80000b4: Opcode 0xde00
+2026-11-11T16:38:27.965002Z  WARN labwired_core::cpu::cortex_m::exec::misc: Unknown instruction at 0x80000b4: Opcode 0xde00
+2026-11-11T16:38:28.254908Z  INFO labwired_cli::execute: stimulus: temperature = 55 applied
+2026-11-11T16:38:28.486612Z  INFO labwired_cli::execute: stimulus: humidity = 35 applied
+2026-11-11T16:38:28.732848Z  INFO labwired_cli::execute: stimulus: pressure = 1012.5 applied
+labwired-cli test: idle_ff skipped 125 of 50000125 device cycles (50000000 interpreted)
+2026-11-11T16:38:28.767183Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "SVC M3 MSP VECTOR=11 IMM=42 EXC_RETURN=FFFFFFF9 STACKED_PC=RESUME RETURN=1 ok" }) (captured len=3785)
+2026-11-11T16:38:28.767200Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "SVC M3 PSP VECTOR=11 IMM=42 EXC_RETURN=FFFFFFFD STACKED_PC=RESUME PSP=RESTORED MSP=UNCHANGED RETURN=1 ok" }) (captured len=3785)
+FAIL  72/74 checks · stm32f103-i2c-smoke · 50000000 steps · 0.81s
+FAULT  UsageFault: undefined instruction, at PC 0x0800_00B4 in `_ZN22firmware_f103_i2c_demo35smoke_trigger_undefined_instruction17he5a710f6d7f2267cE`, called from `firmware_f103_i2c_demo::smoke_usagefault_and_hardfault_escalation`.
+       HFSR=0x00000000 CFSR=0x00010000 [UNDEFINSTR]

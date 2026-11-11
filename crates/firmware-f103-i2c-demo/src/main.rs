@@ -1473,14 +1473,20 @@ unsafe fn smoke_svcall_exception_return() -> bool {
     let source_vtor = read_volatile(SCB_VTOR as *const u32);
     let vector_table = IRQ_FRAME_VECTOR_TABLE as *mut u32;
     let prior_vector = read_volatile(vector_table.add(SVC_EXCEPTION));
+    let source_control: u32;
+    let source_psp: u32;
     let prior_primask: u32;
     let prior_basepri: u32;
     let prior_faultmask: u32;
     core::arch::asm!(
+        "mrs {control}, CONTROL",
+        "mrs {psp}, PSP",
         "mrs {primask}, PRIMASK",
         "mrs {basepri}, BASEPRI",
         "mrs {faultmask}, FAULTMASK",
         "cpsid i",
+        control = out(reg) source_control,
+        psp = out(reg) source_psp,
         primask = out(reg) prior_primask,
         basepri = out(reg) prior_basepri,
         faultmask = out(reg) prior_faultmask,
@@ -1488,7 +1494,7 @@ unsafe fn smoke_svcall_exception_return() -> bool {
     );
 
     let record = SVC_RECORD as *mut u32;
-    for word in 0..9 {
+    for word in 0..10 {
         write_volatile(record.add(word), 0);
     }
     write_volatile(
@@ -1505,13 +1511,7 @@ unsafe fn smoke_svcall_exception_return() -> bool {
         options(nostack, preserves_flags),
     );
 
-    let resume_pc: u32;
-    core::arch::asm!(
-        "svc #0x42",
-        "subw {resume_pc}, pc, #4",
-        resume_pc = out(reg) resume_pc,
-        options(nostack, preserves_flags),
-    );
+    core::arch::asm!("svc #0x42", options(nostack, preserves_flags),);
     write_volatile(record.add(8), 1);
     core::arch::asm!("cpsid i", options(nomem, nostack, preserves_flags));
 
@@ -1524,6 +1524,71 @@ unsafe fn smoke_svcall_exception_return() -> bool {
     let stacked_xpsr = read_volatile(record.add(6));
     let svc_opcode = read_volatile(record.add(7));
     let resumed = read_volatile(record.add(8)) == 1;
+
+    // Repeat SVC from Thread mode using PSP. Handler mode must use MSP while
+    // EXC_RETURN selects PSP for unstacking back to Thread mode.
+    for word in 0..10 {
+        write_volatile(record.add(word), 0);
+    }
+    let msp_before_psp: u32;
+    core::arch::asm!(
+        "mrs {msp}, MSP",
+        msp = out(reg) msp_before_psp,
+        options(nomem, nostack, preserves_flags),
+    );
+    let control_psp: u32;
+    let psp_during: u32;
+    let control_during: u32;
+    let msp_after_psp: u32;
+    core::arch::asm!(
+        "msr BASEPRI, {zero}",
+        "msr FAULTMASK, {zero}",
+        "msr PRIMASK, {zero}",
+        "isb",
+        zero = in(reg) 0_u32,
+        options(nostack, preserves_flags),
+    );
+    core::arch::asm!(
+        "msr PSP, {psp_top}",
+        "orr {control_psp}, {source_control}, #2",
+        "msr CONTROL, {control_psp}",
+        "isb",
+        "svc #0x42",
+        "mrs {psp_after}, PSP",
+        "mrs {control_after}, CONTROL",
+        "mrs {msp_after}, MSP",
+        "msr PSP, {source_psp}",
+        "msr CONTROL, {source_control}",
+        "isb",
+        psp_top = in(reg) IRQ_FRAME_PSP_TOP,
+        source_control = in(reg) source_control,
+        source_psp = in(reg) source_psp,
+        control_psp = out(reg) control_psp,
+        psp_after = out(reg) psp_during,
+        control_after = out(reg) control_during,
+        msp_after = out(reg) msp_after_psp,
+        options(nostack, preserves_flags),
+    );
+    core::arch::asm!("cpsid i", options(nomem, nostack, preserves_flags));
+    write_volatile(record.add(8), 1);
+    let psp_entries = read_volatile(record.add(0));
+    let psp_ipsr = read_volatile(record.add(1));
+    let psp_exc_return = read_volatile(record.add(2));
+    let psp_frame_sp = read_volatile(record.add(3));
+    let psp_stacked_pc = read_volatile(record.add(5));
+    let psp_stacked_xpsr = read_volatile(record.add(6));
+    let psp_svc_opcode = read_volatile(record.add(7));
+    let psp_resumed = read_volatile(record.add(8)) == 1;
+    let psp_handler_msp = read_volatile(record.add(9));
+    let restored_psp: u32;
+    let restored_control: u32;
+    core::arch::asm!(
+        "mrs {psp}, PSP",
+        "mrs {control}, CONTROL",
+        psp = out(reg) restored_psp,
+        control = out(reg) restored_control,
+        options(nomem, nostack, preserves_flags),
+    );
 
     write_volatile(vector_table.add(SVC_EXCEPTION), prior_vector);
     write_volatile(SCB_VTOR as *mut u32, source_vtor);
@@ -1543,14 +1608,32 @@ unsafe fn smoke_svcall_exception_return() -> bool {
         && ipsr == SVC_EXCEPTION as u32
         && exc_return == 0xFFFF_FFF9
         && frame_sp & 7 == 0
-        && stacked_pc == resume_pc
         && stacked_xpsr & 0x0100_0000 != 0
         && stacked_xpsr & 0x0000_01FF == 0
         && svc_opcode == 0xDF42
         && resumed
         && read_volatile(SCB_VTOR as *const u32) == source_vtor;
-    if ok {
-        putline(b"SVC M3 VECTOR=11 IMM=42 EXC_RETURN=FFFFFFF9 STACKED_PC=RESUME RETURN=1 ok");
+    let psp_ok = psp_entries == 1
+        && psp_ipsr == SVC_EXCEPTION as u32
+        && psp_exc_return == 0xFFFF_FFFD
+        && psp_frame_sp == IRQ_FRAME_PSP_TOP.wrapping_sub(32)
+        && psp_frame_sp & 7 == 0
+        && psp_stacked_xpsr & 0x0100_0000 != 0
+        && psp_stacked_xpsr & 0x0000_01FF == 0
+        && psp_svc_opcode == 0xDF42
+        && psp_resumed
+        && psp_during == IRQ_FRAME_PSP_TOP
+        && control_during & 2 != 0
+        && msp_after_psp == msp_before_psp
+        && psp_handler_msp == msp_before_psp
+        && restored_psp == source_psp
+        && restored_control == source_control
+        && source_control & 2 == 0;
+    if ok && psp_ok {
+        putline(
+            b"SVC M3 MSP VECTOR=11 IMM=42 EXC_RETURN=FFFFFFF9 STACKED_PC=AFTER_SVC RETURN=1 ok",
+        );
+        putline(b"SVC M3 PSP VECTOR=11 IMM=42 EXC_RETURN=FFFFFFFD STACKED_PC=AFTER_SVC PSP=RESTORED MSP=UNCHANGED RETURN=1 ok");
     } else {
         putline(b"SVC M3 CHECK FAILED");
         print_reg(b"SVC entries=", entries);
@@ -1559,11 +1642,23 @@ unsafe fn smoke_svcall_exception_return() -> bool {
         print_reg(b"SVC frame SP=", frame_sp);
         print_reg(b"SVC stacked LR=", stacked_lr);
         print_reg(b"SVC stacked PC=", stacked_pc);
-        print_reg(b"SVC resume PC=", resume_pc);
         print_reg(b"SVC stacked xPSR=", stacked_xpsr);
         print_reg(b"SVC opcode=", svc_opcode);
+        print_reg(b"SVC PSP entries=", psp_entries);
+        print_reg(b"SVC PSP EXC_RETURN=", psp_exc_return);
+        print_reg(b"SVC PSP frame SP=", psp_frame_sp);
+        print_reg(b"SVC PSP stacked PC=", psp_stacked_pc);
+        print_reg(b"SVC PSP handler MSP=", psp_handler_msp);
+        print_reg(b"SVC MSP before PSP=", msp_before_psp);
+        print_reg(b"SVC PSP after return=", psp_during);
+        print_reg(b"SVC CONTROL during=", control_during);
+        print_reg(b"SVC MSP after PSP=", msp_after_psp);
+        print_reg(b"SVC PSP restored=", restored_psp);
+        print_reg(b"SVC CONTROL restored=", restored_control);
+        print_reg(b"SVC source CONTROL=", source_control);
+        print_reg(b"SVC temporary CONTROL=", control_psp);
     }
-    ok
+    ok && psp_ok
 }
 
 /// Record the SVCall frame before returning through the architectural token.
@@ -1597,6 +1692,8 @@ unsafe extern "C" fn smoke_svcall_handler() {
         "subs r3, r3, #2",
         "ldrh r3, [r3]",
         "str r3, [r0, #28]",
+        "mrs r2, msp",
+        "str r2, [r0, #36]",
         "bx lr",
     );
 }
