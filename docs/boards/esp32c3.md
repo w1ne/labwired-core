@@ -61,6 +61,16 @@ Canonical playground MCU: **ESP32-C3 Super Mini** (`esp32-c3-supermini`). Silksc
 | D10 | GPIO10 | SPI MOSI | |
 | 3V3 / 5V / GND | — | Power | Digital levels in sim — not SPICE |
 
+### LOLIN C3 Mini V2.1.0
+
+This distinct board has GPIO0 available as **ADC1_CH0**, GPIO4/5 used by the
+BME280 example as I2C0 SDA/SCL, GPIO6 as the smoke proof output, and its onboard
+WS2812B on GPIO7. The [board page](https://docs.wemos.cc/en/latest/c3/c3_mini.html)
+and [V2.1.0 schematic](https://docs.wemos.cc/en/latest/_static/files/sch_c3_mini_v2.1.0.pdf)
+identify the current revision and wiring. The ADC quickstart drives channel 0
+with a centered potentiometer source; the model does not solve analog wires or
+enforce the wiper-to-GPIO0 connection.
+
 ---
 
 ## Support matrix
@@ -110,7 +120,7 @@ Canonical playground MCU: **ESP32-C3 Super Mini** (`esp32-c3-supermini`). Silksc
 
 | Block | Status | Notes |
 |-------|--------|--------|
-| SAR ADC | ⚠️ | No full analog conversion from graph voltage |
+| SAR ADC | ⚠️ | 12-bit one-shot conversion accepts analog-kit channel inputs; no full analog conversion from graph voltage |
 | Crypto blocks / eFuse | ⚠️ | Present in map; verify scoreboard before CI reliance |
 
 ---
@@ -166,9 +176,11 @@ Details: [First agent run](../agent/first-run.md) · [Tools](../agent/tools.md).
 | `configs/systems/esp32c3-oled-demo.yaml` | Display lab |
 | [`configs/systems/esp32c3-devkitm-1-n4x-bme280.yaml`](../../configs/systems/esp32c3-devkitm-1-n4x-bme280.yaml) | Official ESP32-C3-DevKitM-1-N4X + BME280 system |
 | [`configs/systems/lolin-c3-mini-bme280.yaml`](../../configs/systems/lolin-c3-mini-bme280.yaml) | WEMOS LOLIN C3 Mini V2.1.0 + BME280 system |
+| [`configs/systems/lolin-c3-mini-adc.yaml`](../../configs/systems/lolin-c3-mini-adc.yaml) | WEMOS LOLIN C3 Mini V2.1.0 + potentiometer on ADC1_CH0 |
 | `examples/esp32c3-blinky` | Minimal bring-up |
 | [`examples/esp32c3-devkitm-1-n4x-bme280`](../../examples/esp32c3-devkitm-1-n4x-bme280/) | Copy-paste mask-ROM boot + BME280 I²C smoke and committed evidence |
 | [`examples/lolin-c3-mini-bme280`](../../examples/lolin-c3-mini-bme280/) | Copy-paste C3 Mini BME280 I²C smoke and committed evidence |
+| [`examples/lolin-c3-mini-adc`](../../examples/lolin-c3-mini-adc/) | Copy-paste C3 Mini analogRead quickstart and committed evidence |
 | `docs/esp32c3_wifi_mac_bridge.md` | Wi-Fi fidelity |
 | [Parts index](../parts/index.md) | External components |
 

@@ -59,12 +59,13 @@ _Richest ARM coverage: drives 11 rubric classes via real firmware, plus the gate
 
 ### `esp32c3`
 
-_Leo air-quality remains the deeper multi-sensor proof. The ESP32-C3-DevKitM-1-N4X + BME280 smoke now exercises the C3 mask-ROM boot, UART0 and I2C0 on GPIO4/5 against the real BME280 model. clock/dma stay unrecorded by design — esp32c3 wires system/rtc_cntl/dma as declarative register files with no behavioural engine, so a PASS would overclaim. The non-rubric declarative wall (crypto, USB device, I2S, UHCI, radio) is not yet swept into this entry — tracked for a later ledger pass._
+_Leo air-quality remains the deeper multi-sensor proof. The ESP32-C3-DevKitM-1-N4X + BME280 smoke exercises the C3 mask-ROM boot, UART0 and I2C0 on GPIO4/5 against the real BME280 model. The LOLIN C3 Mini ADC smoke exercises the C3 SAR one-shot with a centered potentiometer source injected on ADC1_CH0/GPIO0; it does not prove graph-level voltage solving or pin routing. clock/dma stay unrecorded by design — esp32c3 wires system/rtc_cntl/dma as declarative register files with no behavioural engine, so a PASS would overclaim. The non-rubric declarative wall (crypto, USB device, I2S, UHCI, radio) is not yet swept into this entry — tracked for a later ledger pass._
 
 **Functional firmware exercises** (including decoded device/protocol reads):
 - Leo air-quality — real Sensirion SCD41/SGP41/SPS30 + Melexis MLX90614 + Vishay VEML7700 decode CO2 / humidity / surface condensation to plain-language verdicts — `leo-airquality` · e2e_leo_airquality.rs:121-143 (nightly CI)
 - ESP32-C3-DevKitM-1-N4X + BME280: chip ID and raw temperature read over I2C0 (header GPIO4/GPIO5) after mask-ROM flash boot — `esp32c3-devkitm-1-n4x-bme280` · examples/esp32c3-devkitm-1-n4x-bme280/evidence (committed local onboarding smoke) (nightly CI)
 - WEMOS LOLIN C3 Mini V2.1.0 + BME280: chip ID and raw temperature read over I2C0 (header GPIO4/GPIO5) after mask-ROM flash boot; GPIO6 edges gated on both reads — `lolin-c3-mini-bme280` · examples/lolin-c3-mini-bme280/evidence (committed local onboarding smoke) (nightly CI)
+- WEMOS LOLIN C3 Mini V2.1.0 + centered potentiometer: Arduino `analogRead(GPIO0)` reads an injected 1.65 V source through ADC1_CH0 and emits the pass marker after mask-ROM flash boot — `lolin-c3-mini-adc` · examples/lolin-c3-mini-adc/evidence (committed local onboarding smoke) (nightly CI)
 
 **Advanced peripherals — unit-tested only** (no firmware drives them): `ana_i2c`, `sha`, `virtual_wifi (real shared-802.11 medium model two C3 firmwares associate over, 2 tests)`, `wifi_mac (RE'd MAC<->SimNet bridge, RX descriptor ring, 5 tests)`
 

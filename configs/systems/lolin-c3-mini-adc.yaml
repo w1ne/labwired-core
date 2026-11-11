@@ -1,0 +1,13 @@
+# WEMOS LOLIN C3 Mini V2.1.0 with a 10 kΩ potentiometer on GPIO0/ADC1_CH0.
+# The analog kit supplies a centered 1.65 V input to ADC channel 0.
+name: "lolin-c3-mini-adc"
+chip: "../chips/esp32c3.yaml"
+cpu_hz: 160_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "knob"
+    type: "potentiometer"
+    connection: "adc"
+    config:
+      channel: 0
+board_io: []

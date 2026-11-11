@@ -239,6 +239,14 @@ jobs:
             system: configs/systems/lolin-c3-mini-bme280.yaml
             rom_boot: true
             rom_flash_bin: examples/lolin-c3-mini-bme280/firmware/.pio/build/lolin_c3_mini/merged.bin
+          # Same high-demand C3 Mini board, but exercise its 12-bit ADC with
+          # a potentiometer on GPIO0 / ADC1_CH0 instead of another SKU-only profile.
+          - id: lolin-c3-mini-adc
+            firmware_build_script: examples/lolin-c3-mini-adc/firmware/build-firmware.sh
+            script: examples/lolin-c3-mini-adc/adc-smoke.yaml
+            system: configs/systems/lolin-c3-mini-adc.yaml
+            rom_boot: true
+            rom_flash_bin: examples/lolin-c3-mini-adc/firmware/.pio/build/lolin_c3_mini/merged.bin
           - id: arduino-nano-esp32-bme280
             firmware_build_script: examples/arduino-nano-esp32-bme280/firmware/build-firmware.sh
             script: examples/arduino-nano-esp32-bme280/bme280-smoke.yaml

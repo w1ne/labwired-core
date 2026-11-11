@@ -1,0 +1,10 @@
+2026-11-11T11:02:37.169137Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/esp32c3.yaml
+2026-11-11T11:02:37.170361Z  INFO labwired_core::bus::from_config: loaded 393216 bytes into 'rom' region @ 0x40000000 from /home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/crates/core/roms/esp32c3/esp32c3_rom.bin
+2026-11-11T11:02:37.170574Z  INFO labwired_core::bus::from_config: loaded 131072 bytes into 'rom_data' region @ 0x3ff00000 from /home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/crates/core/roms/esp32c3/esp32c3_drom.bin
+2026-11-11T11:02:37.266010Z  INFO labwired_loader: ELF Entry Point: 0x403807ca
+2026-11-11T11:02:37.269020Z  INFO labwired_cli: provisioned 393216 bytes of C3 boot ROM @ 0x40000000
+2026-11-11T11:02:37.269044Z  INFO labwired_cli: provisioned 131072 bytes of C3 boot ROM @ 0x3ff00000
+labwired-riscv: rom-boot from reset vector 0x40000000 (flash image 377008 bytes from examples/lolin-c3-mini-adc/firmware/.pio/build/lolin_c3_mini/merged.bin)
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: idle_ff skipped 18443723346 of 18493723346 device cycles (50000000 interpreted)
+PASS  2/2 checks · adc-smoke · 50000000 steps · 23.59s
