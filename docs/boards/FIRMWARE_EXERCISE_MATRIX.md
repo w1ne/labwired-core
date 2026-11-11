@@ -223,12 +223,13 @@ _ESP32 is demand rank #1 (38% survey use). The ESP32-C5-DevKitC-1-N8R8 profile l
 
 ### `esp32c61`
 
-_ESP32 is demand rank #1 (38% survey use). The ESP32-C61-DevKitC-1-N8R2 smoke boots an RV32IMC image on the C61 profile, gates UART0 through PCR, emits a UART marker, and observes eight GPIO4 output-latch edges on header J1 pin 3. The C61 GPIO adapter uses its shifted ENABLE/IN/PINn/matrix offsets and `SIG_GPIO_OUT_IDX=256`, but claims only direct GPIO0..25 output behavior. These are simulator edges, not package-pin voltage or silicon evidence._
+_ESP32 is demand rank #1 (38% survey use). The ESP32-C61-DevKitC-1-N8R2 UART/GPIO smoke boots an RV32IMC image on the C61 profile, gates UART0 through PCR, emits a UART marker, and observes eight GPIO4 output-latch edges on header J1 pin 3. The BME280 smoke exercises I2C0 through the C61 PCR clock gate and GPIO6/GPIO22 matrix route, reads sensor registers, and emits a UART marker. The C61 GPIO adapter claims direct GPIO0..25 output plus I2C0 routing. These are simulator results, not package-pin voltage or silicon evidence._
 
 **Functional firmware exercises**:
 - ESP32-C61-DevKitC-1-N8R2: UART0 marker plus GPIO4 direct-output edges — `firmware-esp32c61-smoke` · `examples/esp32c61-devkitc-1-n8r2/evidence/` (nightly CI)
+- ESP32-C61-DevKitC-1-N8R2 + BME280: I2C0 ID/raw-temperature register reads on GPIO6/22 plus UART0 marker — `firmware-esp32c61-bme280-smoke` · `examples/esp32c61-devkitc-1-n8r2-bme280/evidence/` (nightly CI)
 
-**Unmodelled on this focused profile**: GPIO input, GPIO interrupts, the rest of the GPIO peripheral matrix, GPIO26..29, IO_MUX electrical routing, radios, native USB, PSRAM, and the RGB LED. No C61 peripheral windows beyond UART0/PCR/GPIO are declared.
+**Unmodelled on this focused profile**: GPIO input, GPIO interrupts, the rest of the GPIO peripheral matrix, GPIO26..29, IO_MUX electrical routing, electrical I2C timing/pull-ups, real BME280 sampling and compensation, radios, native USB, PSRAM, and the RGB LED. No C61 peripheral windows beyond UART0/PCR/GPIO/I2C0/IO_MUX storage are declared.
 
 ### `esp32s3-zero`
 

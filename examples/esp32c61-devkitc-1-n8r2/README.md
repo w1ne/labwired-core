@@ -52,3 +52,7 @@ IO_MUX pad routing, Wi-Fi, Bluetooth, native USB, PSRAM, or the RGB LED.
 
 See [`vendor-status.md`](vendor-status.md) for the live availability check and
 [`VALIDATION.md`](VALIDATION.md) for the committed evidence and boundaries.
+
+The profile also has a separate [BME280 I2C0 example](../esp32c61-devkitc-1-n8r2-bme280/)
+that reads sensor registers over GPIO6/GPIO22. Its scope and evidence are
+documented independently.

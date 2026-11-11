@@ -2,13 +2,13 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Data-driven factory for ESP32-C6 peripheral models.
+//! Data-driven factory for ESP32-C6 models and the narrow ESP32-C61 profile.
 //!
-//! Every arm here either parameterizes a shared model with the C6's values or
-//! aliases the C3 model whose register map the C6 genuinely shares. The C6 has
-//! no C3-only `system` / `rtc_cntl` / `apb_ctrl` blocks and no C6-specific
-//! behavioral model yet; the clock/reset (PCR) and IO_MUX windows are
-//! SVD-derived `declarative` descriptors wired directly in `esp32c6.yaml`.
+//! C6 arms parameterize shared models with C6 values or reuse the C3 model
+//! where the register map matches. C61 arms select the separately mapped
+//! UART/GPIO/PCR subset used by its DevKitC board profile. C6's IO_MUX window
+//! remains a declarative register descriptor; the C61 profile reuses it only
+//! for storage, without electrical pad-routing behavior.
 
 use crate::Peripheral;
 use labwired_config::PeripheralConfig;
@@ -42,8 +42,9 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         "esp32c6_gpio" => Box::new(crate::peripherals::esp32c3::gpio::Esp32c3Gpio::for_esp32c6()),
         // C61's direct GPIO head is similar but not offset-identical to C6:
         // ENABLE is at +0x34, IN at +0x64, matrix selectors at +0x2D4/+0xAD4,
-        // PINn starts at +0xD4, and SIG_GPIO_OUT_IDX is 256. The adapter only
-        // exposes the direct GPIO0..25 output subset.
+        // PINn starts at +0xD4, and SIG_GPIO_OUT_IDX is 256. The adapter
+        // exposes direct GPIO0..25 and I2C0 routing; other matrix functions
+        // remain unmodelled.
         "esp32c61_gpio" => Box::new(crate::peripherals::esp32c3::gpio::Esp32c3Gpio::for_esp32c61()),
         // C5 shares the OUT/W1TS/W1TC offsets but moves ENABLE to 0x34..0x3C
         // and IN to 0x64. Reuse the direct-GPIO behavior with that register
@@ -55,6 +56,7 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         // (`Peripheral::clock_gate_reg_offset`); see super::pcr for exactly
         // what is and is not enforced.
         "esp32c6_pcr" => Box::new(super::pcr::Esp32c6Pcr::new()),
+        "esp32c61_pcr" => Box::new(super::pcr::Esp32c6Pcr::new_esp32c61()),
         // EXTMEM / L1 cache — launch/done handshakes for Arduino cache_hal.
         "esp32c6_extmem" => Box::new(super::extmem::Esp32c6Extmem::new()),
         // SYSTIMER — same IP as C3/S3. TARGET0 matrix source 57 on C6.
@@ -145,6 +147,7 @@ pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32c6_uart",
     "esp32c6_gpio",
     "esp32c61_gpio",
+    "esp32c61_pcr",
     "esp32c5_gpio",
     "esp32c6_pcr",
     "esp32c6_extmem",

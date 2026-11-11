@@ -14,7 +14,8 @@ GPIO behavior.
 Evidence is committed in [`evidence/`](evidence/). This is local simulator
 evidence, not a hardware run or silicon-correlation result. The output edge
 assertion proves the modeled GPIO latch and enable path; IO_MUX pad selection
-and voltage at J1 pin 3 are not modeled. The descriptor does not claim GPIO
-input, GPIO interrupts, the remaining matrix signals, GPIO26..29, Wi-Fi,
-Bluetooth, native USB, PSRAM, or the RGB LED. Other GPIO registers not in this
-direct-output subset have no behavioral model.
+and voltage at J1 pin 3 are not modeled. A separate [BME280 smoke](../esp32c61-devkitc-1-n8r2-bme280/VALIDATION.md)
+exercises only the C61 I2C0 matrix route. The descriptor does not claim GPIO
+input, GPIO interrupts, other matrix signals, GPIO26..29, Wi-Fi, Bluetooth,
+native USB, PSRAM, or the RGB LED. Other GPIO registers outside the direct
+output and I2C0 matrix subsets have no behavioral model.

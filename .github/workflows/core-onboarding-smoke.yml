@@ -20,6 +20,7 @@ on:
       - "crates/core/**"
       - "crates/firmware-stm32u575-demo/**"
       - "crates/firmware-esp32c61-smoke/**"
+      - "crates/firmware-esp32c61-bme280-smoke/**"
       - "Cargo.toml"
       - "Cargo.lock"
       - "crates/cli/**"
@@ -117,6 +118,11 @@ jobs:
             target: riscv32imc-unknown-none-elf
             script: examples/esp32c61-devkitc-1-n8r2/uart-smoke.yaml
             system: configs/systems/esp32c61-devkitc-1-n8r2.yaml
+          - id: esp32c61-devkitc-1-n8r2-bme280
+            crate: firmware-esp32c61-bme280-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/esp32c61-devkitc-1-n8r2-bme280/bme280-smoke.yaml
+            system: configs/systems/esp32c61-devkitc-1-n8r2-bme280.yaml
           - id: esp32c3-devkitm-1-n4x-bme280
             firmware_build_script: examples/esp32c3-devkitm-1-n4x-bme280/firmware/build-firmware.sh
             script: examples/esp32c3-devkitm-1-n4x-bme280/bme280-smoke.yaml
@@ -137,7 +143,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
         with:
-          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv8m.main-none-eabi,riscv32imac-unknown-none-elf
+          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv8m.main-none-eabi,riscv32imac-unknown-none-elf,riscv32imc-unknown-none-elf
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2

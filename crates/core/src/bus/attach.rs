@@ -448,10 +448,10 @@ impl SystemBus {
         Ok(())
     }
 
-    /// Wire the ESP32-C3 I²C0 bit engine to C3 GPIO in both directions: GPIO
-    /// reads the live SDA/SCL waveform, while I²C reads GPIO's live input/output
+    /// Wire the ESP32 C3/C5/C61 I²C0 bit engine to the shared GPIO model in both
+    /// directions: GPIO reads the live SDA/SCL waveform, while I²C reads GPIO's live input/output
     /// matrix state before allowing a physically routed slave to acknowledge.
-    /// No-op unless both C3 models are on the bus.
+    /// No-op unless both compatible controller and GPIO models are on the bus.
     pub(crate) fn wire_esp32c3_i2c_pads(&mut self) {
         use crate::peripherals::esp32c3::gpio::Esp32c3Gpio;
         use crate::peripherals::esp32c3::i2c::Esp32c3I2c;

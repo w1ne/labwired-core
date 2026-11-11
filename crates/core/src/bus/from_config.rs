@@ -726,6 +726,7 @@ impl SystemBus {
                     | "efm32ggi2ccontroller"
                     | "esp32c3_i2c"
                     | "esp32c5_i2c"
+                    | "esp32c61_i2c"
                     | "imxrt_lpi2c"
             ) {
                 let controller: Box<dyn Peripheral> = if canonical_type == "imxrt_lpi2c" {
@@ -746,6 +747,17 @@ impl SystemBus {
                     Box::new(
                         crate::peripherals::esp32c3::i2c::Esp32c3I2c::with_cpu_clock_and_intr(
                             240_000_000,
+                            src,
+                        ),
+                    )
+                } else if canonical_type == "esp32c61_i2c" {
+                    // C61's TRM register head matches the C3/C5 command-list
+                    // engine; its I2C_EXT0 source is 45 and CPU clock is
+                    // 160 MHz. PCR clock gating comes from the descriptor.
+                    let src = p_cfg.irq.unwrap_or(45);
+                    Box::new(
+                        crate::peripherals::esp32c3::i2c::Esp32c3I2c::with_cpu_clock_and_intr(
+                            160_000_000,
                             src,
                         ),
                     )

@@ -1,0 +1,10 @@
+# Read the BME280 chip ID and raw temperature over C61 I2C0 on GPIO6/22.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c61-bme280-smoke"
+  system: "../../configs/systems/esp32c61-devkitc-1-n8r2-bme280.yaml"
+limits:
+  max_steps: 5000000
+assertions:
+  - uart_contains: "C61_BME280_OK ID=0x60 TEMP_RAW=0x082DC0 I2C0=GPIO6/22"
+  - expected_stop_reason: max_steps

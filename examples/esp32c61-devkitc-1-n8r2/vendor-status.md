@@ -8,7 +8,7 @@ Checked 2026-11-11 UTC.
   identifies the N8R2 module configuration and documents the board's GPIO4
   header connection.
 - DigiKey's live [ESP32-C61-DEVKITC-1-N8R2 listing](https://www.digikey.com/en/products/detail/espressif-systems/ESP32-C61-DEVKITC-1-N8R2/26763163)
-  was listed as **Active**, with **210 in stock** and a **$9.00** single-unit
+  was listed as **Active**, with **296 in stock** and a **$9.00** single-unit
   price in the catalog result checked today.
 
 The inventory observation is a dated snapshot; use the linked supplier listing
