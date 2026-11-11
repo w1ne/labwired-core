@@ -2,8 +2,8 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! SiFive FE310 smoke: RV32IM execution, M-mode ecall/ebreak traps, UART0 TX,
-//! and HiFive1 Rev B GPIO.
+//! SiFive FE310 smoke: RV32IM execution, M-mode ecall/ebreak and MRET status
+//! paths, UART0 TX, and HiFive1 Rev B GPIO.
 //!
 //! The ELF is loaded into the FE310's QSPI XIP window and entered directly.
 //! It checks the imported system's RISC-V core, uart0, and GPIO software path
@@ -230,6 +230,62 @@ fn ebreak_trap_probe() -> bool {
     pass
 }
 
+/// Enter an M-mode ecall with MIE clear and check that MRET keeps interrupts
+/// disabled while setting MPIE back to one.
+fn ecall_masked_mret_probe() -> bool {
+    let ecall_pc: u32;
+    let returned_mstatus: u32;
+    unsafe {
+        core::ptr::write_volatile(core::ptr::addr_of_mut!(TRAP_COUNT), 0);
+        core::arch::asm!(
+            "la t0, trap_entry",
+            "csrw mtvec, t0",
+            "csrc mstatus, {mie}",
+            "la {ecall_pc}, 1f",
+            "1: ecall",
+            "csrr {returned_mstatus}, mstatus",
+            "csrc mstatus, {mie}",
+            mie = in(reg) 1u32 << 3,
+            ecall_pc = lateout(reg) ecall_pc,
+            returned_mstatus = lateout(reg) returned_mstatus,
+            out("t0") _,
+            out("t1") _,
+            options(nostack),
+        );
+    }
+
+    let (count, cause, mepc, trap_mstatus) = unsafe {
+        (
+            core::ptr::read_volatile(core::ptr::addr_of!(TRAP_COUNT)),
+            core::ptr::read_volatile(core::ptr::addr_of!(TRAP_MCAUSE)),
+            core::ptr::read_volatile(core::ptr::addr_of!(TRAP_MEPC)),
+            core::ptr::read_volatile(core::ptr::addr_of!(TRAP_MSTATUS)),
+        )
+    };
+    let entry_mie_clear = trap_mstatus & (1 << 3) == 0;
+    let entry_mpie_clear = trap_mstatus & (1 << 7) == 0;
+    let return_mie_clear = returned_mstatus & (1 << 3) == 0;
+    let return_mpie_set = returned_mstatus & (1 << 7) != 0;
+    let pass = count == 1
+        && cause == 0x0000_000B
+        && mepc == ecall_pc
+        && entry_mie_clear
+        && entry_mpie_clear
+        && return_mie_clear
+        && return_mpie_set;
+
+    puts("ecall masked mret entry_mie=");
+    putc(if entry_mie_clear { b'0' } else { b'1' });
+    puts(" entry_mpie=");
+    putc(if entry_mpie_clear { b'0' } else { b'1' });
+    puts(" return_mie=");
+    putc(if return_mie_clear { b'0' } else { b'1' });
+    puts(" return_mpie=");
+    putc(if return_mpie_set { b'1' } else { b'0' });
+    puts(if pass { " ok\n" } else { " FAIL\n" });
+    pass
+}
+
 #[inline(never)]
 fn multiply(left: u32, right: u32) -> u32 {
     let result: u32;
@@ -255,6 +311,7 @@ fn main() -> ! {
 
     let _trap_pass = ecall_trap_probe();
     let _ebreak_pass = ebreak_trap_probe();
+    let _masked_mret_pass = ecall_masked_mret_probe();
 
     let gpio_pass = unsafe {
         core::ptr::write_volatile(GPIO_INPUT_EN, GREEN_LED);

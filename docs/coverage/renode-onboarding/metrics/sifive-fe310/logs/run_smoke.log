@@ -1,6 +1,7 @@
-2026-11-11T15:15:58.080929Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/sifive-fe310.yaml
-2026-11-11T15:15:58.089971Z  INFO labwired_loader: ELF Entry Point: 0x20000000
+2026-11-11T15:26:51.450739Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/sifive-fe310.yaml
+2026-11-11T15:26:51.453876Z  INFO labwired_loader: ELF Entry Point: 0x20000000
 labwired-cli test: idle_ff=on (event_scheduler=on)
-2026-11-11T15:15:58.097280Z  WARN labwired_core::cpu::riscv: ECALL/EBREAK encountered at 0x200008d8
-2026-11-11T15:15:58.097616Z  WARN labwired_core::cpu::riscv: ECALL/EBREAK encountered at 0x2000112c
+2026-11-11T15:26:51.454732Z  WARN labwired_core::cpu::riscv: ECALL/EBREAK encountered at 0x200008d8
+2026-11-11T15:26:51.455065Z  WARN labwired_core::cpu::riscv: ECALL/EBREAK encountered at 0x2000112c
+2026-11-11T15:26:51.455352Z  WARN labwired_core::cpu::riscv: ECALL/EBREAK encountered at 0x20001984
 PASS  4/4 checks · sifive-fe310-smoke · 100000 steps · 0.04s
