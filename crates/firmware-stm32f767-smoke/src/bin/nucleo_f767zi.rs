@@ -79,6 +79,9 @@ const SYSTICK_HANDLER_IPSR: u32 = 0x2000_301C;
 const SYSTICK_PENDSV_ARMED: u32 = 0x2000_3020;
 const SYSTICK_PENDSV_FLAGS: u32 = 0x2000_3024;
 const PENDSV_SYSTICK_COUNT_AT_ENTRY: u32 = 0x2000_3028;
+const TAILCHAIN_RECORD: u32 = 0x2000_3040;
+const TAILCHAIN_THREAD_R0: u32 = 0x5448_5244;
+const TAILCHAIN_HANDLER_R0: u32 = 0x5045_4E44;
 
 /// Each LED as a push-pull output: three blinks through BSRR, each level
 /// visible in ODR and IDR, and only its own ODR bit set while lit.
@@ -563,6 +566,205 @@ fn check_pendsv_m7() -> bool {
     ok
 }
 
+/// Verify a lower-priority PendSV takes SysTick's live context through the
+/// M7 tail-chain path instead of unstacking to Thread mode first.
+fn check_systick_pendsv_tailchain_m7() -> bool {
+    const PENDSTSET: u32 = 1 << 26;
+    const PENDSTCLR: u32 = 1 << 25;
+    const PENDSVSET: u32 = 1 << 28;
+    const PENDSVCLR: u32 = 1 << 27;
+
+    let prior_primask: u32;
+    unsafe {
+        asm!(
+            "mrs {primask}, PRIMASK",
+            "cpsid i",
+            primask = out(reg) prior_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+    }
+    let prior_vtor = rd(SCB_VTOR);
+    let prior_shpr3 = rd(SCB_SHPR3);
+    let prior_rvr = rd(SYSTICK_RVR);
+    let prior_csr = rd(SYSTICK_CSR) & 0x7;
+    wr(SYSTICK_CSR, 0);
+    wr(SCB_ICSR, PENDSTCLR | PENDSVCLR);
+    wr(SCB_SHPR3, (prior_shpr3 & 0x0000_FFFF) | 0x00FF_0000);
+    for slot in 0..16 {
+        wr(TEST_VECTOR_TABLE + slot * 4, 0);
+    }
+    wr(
+        TEST_VECTOR_TABLE + 14 * 4,
+        (m7_tailchain_pendsv_handler as *const () as usize as u32) | 1,
+    );
+    wr(
+        TEST_VECTOR_TABLE + 15 * 4,
+        (m7_tailchain_systick_handler as *const () as usize as u32) | 1,
+    );
+    for word in 0..12 {
+        wr(TAILCHAIN_RECORD + word * 4, 0);
+    }
+    wr(SCB_VTOR, TEST_VECTOR_TABLE);
+    unsafe {
+        asm!("dsb", "isb", options(nostack, preserves_flags));
+        asm!(
+            "msr PRIMASK, {primask}",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+
+    if prior_primask == 0 {
+        unsafe { pend_systick_with_thread_r0_m7() };
+    }
+    for _ in 0..4_096 {
+        if rd(TAILCHAIN_RECORD + 11 * 4) != 0 {
+            break;
+        }
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+
+    let parent_ipsr = rd(TAILCHAIN_RECORD);
+    let parent_msp = rd(TAILCHAIN_RECORD + 4);
+    let parent_exc_return = rd(TAILCHAIN_RECORD + 8);
+    let parent_r0 = rd(TAILCHAIN_RECORD + 12);
+    let parent_icsr_before = rd(TAILCHAIN_RECORD + 16);
+    let parent_icsr_after = rd(TAILCHAIN_RECORD + 20);
+    let child_ipsr = rd(TAILCHAIN_RECORD + 24);
+    let child_msp = rd(TAILCHAIN_RECORD + 28);
+    let child_exc_return = rd(TAILCHAIN_RECORD + 32);
+    let child_r0 = rd(TAILCHAIN_RECORD + 36);
+    let child_icsr = rd(TAILCHAIN_RECORD + 40);
+    let child_hit = rd(TAILCHAIN_RECORD + 44) == 1;
+    let thread_ipsr: u32;
+    unsafe {
+        asm!(
+            "mrs {ipsr}, IPSR",
+            ipsr = out(reg) thread_ipsr,
+            options(nomem, nostack, preserves_flags),
+        );
+    }
+
+    let masked_primask: u32;
+    unsafe {
+        asm!(
+            "mrs {primask}, PRIMASK",
+            "cpsid i",
+            primask = out(reg) masked_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+    }
+    wr(SYSTICK_CSR, 0);
+    wr(SCB_ICSR, PENDSTCLR | PENDSVCLR);
+    wr(SCB_VTOR, prior_vtor);
+    wr(SCB_SHPR3, prior_shpr3);
+    wr(SYSTICK_RVR, prior_rvr);
+    wr(SYSTICK_CSR, prior_csr);
+    unsafe {
+        asm!(
+            "msr PRIMASK, {primask}",
+            "dsb",
+            "isb",
+            primask = in(reg) masked_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+
+    let deferred = parent_ipsr == 15
+        && parent_icsr_before & 0x1FF == 15
+        && parent_icsr_before & PENDSVSET == 0
+        && parent_icsr_after & 0x1FF == 15
+        && parent_icsr_after & PENDSVSET != 0;
+    let frame_reused = parent_msp == child_msp
+        && parent_exc_return == 0xFFFF_FFF9
+        && child_exc_return == parent_exc_return;
+    let child_is_pendsv =
+        child_hit && child_ipsr == 14 && child_icsr & 0x1FF == 14 && child_icsr & PENDSVSET == 0;
+    let r0_live = parent_r0 == TAILCHAIN_THREAD_R0
+        && child_r0 == TAILCHAIN_HANDLER_R0
+        && child_r0 != parent_r0;
+    let cleanup = rd(SCB_VTOR) == prior_vtor
+        && rd(SCB_SHPR3) == prior_shpr3
+        && rd(SCB_ICSR) & (PENDSTSET | PENDSVSET) == 0;
+    let passed = prior_primask == 0
+        && deferred
+        && frame_reused
+        && child_is_pendsv
+        && r0_live
+        && thread_ipsr == 0
+        && cleanup;
+    puts("pendsv m7 tailchain ");
+    flag("deferred", deferred);
+    flag("frame_reused", frame_reused);
+    flag("r0_live", r0_live);
+    flag("pending_clear", child_is_pendsv && cleanup);
+    verdict(passed);
+    passed
+}
+
+/// Set a distinct Thread-mode R0 marker and software-pend SysTick.
+#[unsafe(naked)]
+unsafe extern "C" fn pend_systick_with_thread_r0_m7() {
+    core::arch::naked_asm!(
+        "ldr r0, =0x54485244",
+        "ldr r1, =0xE000ED04",
+        "movs r2, #1",
+        "lsls r2, r2, #26",
+        "str r2, [r1]",
+        "bx lr",
+    );
+}
+
+/// Record SysTick's exception frame, pend lower-priority PendSV, and return
+/// with a distinct live R0 value for the tail-chained handler to observe.
+#[unsafe(naked)]
+unsafe extern "C" fn m7_tailchain_systick_handler() {
+    core::arch::naked_asm!(
+        "mov r2, r0",
+        "ldr r0, =0x20003040",
+        "str r2, [r0, #12]",
+        "mrs r2, ipsr",
+        "str r2, [r0, #0]",
+        "mrs r2, msp",
+        "str r2, [r0, #4]",
+        "mov r2, lr",
+        "str r2, [r0, #8]",
+        "ldr r1, =0xE000ED04",
+        "ldr r2, [r1]",
+        "str r2, [r0, #16]",
+        "movs r2, #1",
+        "lsls r2, r2, #28",
+        "str r2, [r1]",
+        "ldr r2, [r1]",
+        "str r2, [r0, #20]",
+        "ldr r0, =0x50454E44",
+        "bx lr",
+    );
+}
+
+/// Capture vector, stack, EXC_RETURN, live R0, and pending state before the
+/// original Thread frame is unstacked.
+#[unsafe(naked)]
+unsafe extern "C" fn m7_tailchain_pendsv_handler() {
+    core::arch::naked_asm!(
+        "mov r2, r0",
+        "ldr r0, =0x20003040",
+        "mrs r3, ipsr",
+        "str r3, [r0, #24]",
+        "mrs r3, msp",
+        "str r3, [r0, #28]",
+        "mov r3, lr",
+        "str r3, [r0, #32]",
+        "str r2, [r0, #36]",
+        "ldr r3, =0xE000ED04",
+        "ldr r3, [r3]",
+        "str r3, [r0, #40]",
+        "movs r3, #1",
+        "str r3, [r0, #44]",
+        "bx lr",
+    );
+}
+
 /// SysTick exception handler installed at vector-table slot 15.
 #[no_mangle]
 pub extern "C" fn SysTick_Handler() {
@@ -644,6 +846,7 @@ fn main() -> ! {
     mark(14, check_crc());
     mark(15, check_rng());
     mark(16, check_pendsv_m7());
+    mark(17, check_systick_pendsv_tailchain_m7());
     let summary = summary | 0x7670_0000;
     wr(SUMMARY, summary);
     puts("summary ");
