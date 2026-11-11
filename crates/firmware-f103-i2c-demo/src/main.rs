@@ -60,8 +60,11 @@ const SYSTICK_CVR: u32 = 0xE000_E018;
 const SYSTICK_CALIB: u32 = 0xE000_E01C;
 const SYSTICK_COUNTFLAG: u32 = 1 << 16;
 const SCB_ICSR: u32 = 0xE000_ED04;
+const SCB_VTOR: u32 = 0xE000_ED08;
 const ICSR_PENDSTSET: u32 = 1 << 26;
 const ICSR_PENDSTCLR: u32 = 1 << 25;
+const SYSTICK_HANDLER_COUNT: *mut u32 = 0x2000_0100 as *mut u32;
+const SYSTICK_HANDLER_IPSR: *mut u32 = 0x2000_0104 as *mut u32;
 
 const SPI1_BASE: u32 = 0x4001_3000;
 const SPI1_IRQ: u32 = 35;
@@ -230,6 +233,7 @@ fn main() -> ! {
     putline(b"F103 I2C");
     unsafe { smoke_systick_exception_state() };
     unsafe { smoke_systick_external_pause_resume() };
+    unsafe { smoke_systick_handler_delivery() };
     smoke_usart2_txe_irq();
     smoke_usart2_rx_enable_gate();
     smoke_spi1_irq_and_max31855();
@@ -703,6 +707,58 @@ unsafe fn smoke_systick_external_pause_resume() -> bool {
         putline(b"SYSTICK M3 HCLK8 CHECK FAILED");
     }
     ok
+}
+
+/// Exercise real exception entry, vector dispatch and exception return on the
+/// exact imported Cortex-M3 system. The linker places SysTick_Handler in vector
+/// slot 15; the handler records IPSR so a mere pending bit cannot pass this
+/// smoke.
+unsafe fn smoke_systick_handler_delivery() -> bool {
+    write_volatile(SYSTICK_CSR as *mut u32, 0);
+    write_volatile(SCB_ICSR as *mut u32, ICSR_PENDSTCLR);
+    write_volatile(SCB_VTOR as *mut u32, 0x0800_0000);
+    write_volatile(SYSTICK_HANDLER_COUNT, 0);
+    write_volatile(SYSTICK_HANDLER_IPSR, 0);
+    write_volatile(SYSTICK_RVR as *mut u32, 31);
+    write_volatile(SYSTICK_CVR as *mut u32, 0);
+    write_volatile(SYSTICK_CSR as *mut u32, 0x7); // ENABLE | TICKINT | CLKSOURCE
+
+    for _ in 0..4_096 {
+        if read_volatile(SYSTICK_HANDLER_COUNT) != 0 {
+            break;
+        }
+        core::arch::asm!("nop", options(nomem, nostack, preserves_flags));
+    }
+
+    write_volatile(SYSTICK_CSR as *mut u32, 0);
+    write_volatile(SCB_ICSR as *mut u32, ICSR_PENDSTCLR);
+    let delivered = read_volatile(SYSTICK_HANDLER_COUNT) != 0;
+    let ipsr = read_volatile(SYSTICK_HANDLER_IPSR);
+    let vector_installed = read_volatile(SCB_VTOR as *const u32) == 0x0800_0000;
+    let ok = delivered && ipsr == 15 && vector_installed;
+
+    if ok {
+        putline(b"SYSTICK M3 VECTOR=15 HANDLER=1 IPSR=15 RETURN=1 ok");
+    } else {
+        putline(b"SYSTICK M3 HANDLER CHECK FAILED");
+    }
+    ok
+}
+
+/// Cortex-M exception handler installed at vector-table slot 15 by minimal.ld.
+#[no_mangle]
+pub extern "C" fn SysTick_Handler() {
+    unsafe {
+        let count = read_volatile(SYSTICK_HANDLER_COUNT);
+        let ipsr: u32;
+        core::arch::asm!(
+            "mrs {ipsr}, IPSR",
+            ipsr = out(reg) ipsr,
+            options(nomem, nostack, preserves_flags),
+        );
+        write_volatile(SYSTICK_HANDLER_IPSR, ipsr);
+        write_volatile(SYSTICK_HANDLER_COUNT, count.wrapping_add(1));
+    }
 }
 
 // ── Init helpers ──────────────────────────────────────────────────────────────
