@@ -97,6 +97,7 @@ fn bjt_collector_voltage(
     base_drive_v: f64,
     base_emitter_recombination: bool,
     base_collector_recombination: bool,
+    forward_early_voltage: Option<f64>,
 ) -> f64 {
     const SUPPLY_V: f64 = 3.3;
     const COLLECTOR_OHMS: f64 = 1_000.0;
@@ -104,7 +105,6 @@ fn bjt_collector_voltage(
     const IS_A: f64 = 1e-16;
     const BF: f64 = 80.0;
     const BR: f64 = 4.0;
-    const VAF: f64 = 50.0;
     const VAR: f64 = 75.0;
     const ISE_A: f64 = 2e-12;
     const NE: f64 = 1.5;
@@ -116,7 +116,7 @@ fn bjt_collector_voltage(
         let vbc = vbe - collector_v;
         let forward = (vbe / VT).exp();
         let reverse = (vbc / VT).exp();
-        let base_width = 1.0 - vbc / VAF - vbe / VAR;
+        let base_width = 1.0 - forward_early_voltage.map_or(0.0, |vaf| vbc / vaf) - vbe / VAR;
         let transport = IS_A * (forward - reverse) * base_width;
         let base_collector = (IS_A / BR) * (reverse - 1.0)
             + if base_collector_recombination {
@@ -565,8 +565,8 @@ fn assert_catalog_profile_routes_generic_analog(system_path: &Path) {
         );
         let bjt_reference_v = signal_voltage(&session, "board.analog.pa1_volts");
         let bjt_recombination_v = signal_voltage(&session, "board.analog.pa2_volts");
-        let expected_bjt_reference_v = bjt_collector_voltage(0.8, false, false);
-        let expected_bjt_recombination_v = bjt_collector_voltage(0.8, true, false);
+        let expected_bjt_reference_v = bjt_collector_voltage(0.8, false, false, Some(50.0));
+        let expected_bjt_recombination_v = bjt_collector_voltage(0.8, true, false, Some(50.0));
         assert!(
             (bjt_reference_v - expected_bjt_reference_v).abs() < 5e-5,
             "{part}: BJT without recombination should be {expected_bjt_reference_v} V, got {bjt_reference_v} V"
@@ -580,7 +580,8 @@ fn assert_catalog_profile_routes_generic_analog(system_path: &Path) {
             "{part}: recombination current loads the base drive and lowers collector current"
         );
         let bjt_base_collector_recombination_v = signal_voltage(&session, "board.analog.pa3_volts");
-        let expected_bjt_base_collector_recombination_v = bjt_collector_voltage(0.8, false, true);
+        let expected_bjt_base_collector_recombination_v =
+            bjt_collector_voltage(0.8, false, true, Some(50.0));
         assert!(
             (bjt_base_collector_recombination_v
                 - expected_bjt_base_collector_recombination_v)
@@ -737,18 +738,21 @@ fn assert_catalog_profile_routes_generic_analog(system_path: &Path) {
             "{part}: unrelated diode remains isolated"
         );
         assert!(
-            (reference_v - bjt_collector_voltage(base_drive_v, false, false)).abs() < 5e-5,
+            (reference_v - bjt_collector_voltage(base_drive_v, false, false, Some(50.0))).abs()
+                < 5e-5,
             "{part}: reference BJT follows its independent load line at {base_drive_v} V"
         );
         assert!(
-            (recombination_v - bjt_collector_voltage(base_drive_v, true, false)).abs() < 5e-5,
+            (recombination_v - bjt_collector_voltage(base_drive_v, true, false, Some(50.0))).abs()
+                < 5e-5,
             "{part}: recombination BJT follows its independent load line at {base_drive_v} V"
         );
         assert!(
             recombination_v > reference_v + 0.005,
             "{part}: recombination changes the BJT collector load line at {base_drive_v} V"
         );
-        let expected_base_collector_v = bjt_collector_voltage(base_drive_v, false, true);
+        let expected_base_collector_v =
+            bjt_collector_voltage(base_drive_v, false, true, Some(50.0));
         assert!(
             (base_collector_recombination_v - expected_base_collector_v).abs() < 5e-5,
             "{part}: ISC/NC recombination predicts {expected_base_collector_v} V at {base_drive_v} V, got {base_collector_recombination_v} V"
@@ -941,5 +945,159 @@ fn every_stm32_catalog_profile_routes_mosfet_sheet_resistance_into_adc1() {
                 );
             }
         }
+    }
+}
+
+#[test]
+fn every_stm32_catalog_profile_routes_bjt_early_effect_into_adc1_alongside_ntc_and_diode() {
+    let profiles = catalog_profiles();
+    assert_eq!(
+        profiles.len(),
+        26,
+        "catalog profile count changed; update the coverage doc"
+    );
+
+    for system_path in profiles {
+        let mut profile = SystemManifest::from_file(&system_path)
+            .unwrap_or_else(|e| panic!("load {}: {e}", system_path.display()));
+        let chip_path = system_path.parent().unwrap().join(&profile.chip);
+        let chip = ChipDescriptor::from_file(&chip_path).expect("load catalog part descriptor");
+        let part = chip.name.clone();
+        let adc1 = Adc1::from_chip(&chip);
+        for (pad, channel) in [("PA4", 4), ("PA5", 5)] {
+            assert_eq!(
+                chip.analog_pins[pad].channel, channel,
+                "{part}: {pad} is ADC1_IN{channel}"
+            );
+            assert_eq!(
+                chip.analog_pins[pad].peripheral, "adc1",
+                "{part}: {pad} routes to ADC1"
+            );
+        }
+        let (top_pad, top_channel) = top_adc1_pad(&chip);
+        let diode_path = format!("board.analog.{}_volts", top_pad.to_ascii_lowercase());
+
+        let mut analog = SystemManifest::from_file(root(
+            "examples/nucleo-f103rb-epaper/analog-ntc-diode-system.yaml",
+        ))
+        .expect("load generic Beta NTC divider and Shockley diode");
+        let diode = analog
+            .cosim_models
+            .iter_mut()
+            .find(|model| model.id == "diode_load_line")
+            .expect("fixture carries the diode load line");
+        diode.outputs.insert("v_diode".into(), diode_path.clone());
+        let bjt =
+            SystemManifest::from_file(root("examples/stm32-catalog/analog-bjt-early-effect.yaml"))
+                .expect("load generic matched Gummel–Poon Early-effect branches");
+        analog.cosim_models.extend(bjt.cosim_models);
+        profile.cosim_models = analog.cosim_models;
+
+        let mut bus = SystemBus::from_config(&chip, &profile).expect("build catalog part bus");
+        let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+            .expect("build analog co-simulation")
+            .expect("profile carries an NTC, diode, and matched BJT branches");
+        assert_eq!(
+            session.binding_errors(),
+            &[] as &[RoutingError],
+            "{part}: generic BJT branches resolve through PA4/PA5 ADC1"
+        );
+        for channel in [0, 1, 4, 5, top_channel] {
+            assert_eq!(
+                adc1.channel_count(&mut bus, channel),
+                0xFFFF,
+                "{part}: ADC1 channel {channel} starts without an analog source"
+            );
+        }
+
+        session
+            .set_signal_number("ui.ntc.temperature_c", 25.0)
+            .expect("hold unrelated NTC at nominal temperature");
+        session
+            .set_signal_number("ui.bjt_early.base_v", 0.0)
+            .expect("initialize matched BJT base drives");
+        let expected_diode_v = diode_load_line_voltage();
+        let mut cycles = 0;
+        let mut early_samples = Vec::new();
+        let mut control_samples = Vec::new();
+        for base_drive_v in [0.0_f64, 0.7, 0.8, 0.9] {
+            session
+                .set_signal_number("ui.bjt_early.base_v", base_drive_v)
+                .expect("set common BJT base drive");
+            cycles += session.cycles_until_boundary(cycles);
+            let (steps, errors) = session
+                .advance_to(cycles, &mut bus)
+                .expect("solve and route NTC, diode, and matched BJT branches");
+            assert_eq!(steps.len(), 4, "{part}: all four analog branches solve");
+            assert!(
+                errors.is_empty(),
+                "{part}: unexpected analog route errors: {errors:?}"
+            );
+
+            let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+            let early_v = signal_voltage(&session, "board.analog.pa4_volts");
+            let control_v = signal_voltage(&session, "board.analog.pa5_volts");
+            let diode_v = signal_voltage(&session, &diode_path);
+            assert!(
+                (ntc_v - 1.65).abs() < 1e-9,
+                "{part}: unrelated nominal NTC remains isolated at {ntc_v} V"
+            );
+            assert!(
+                (diode_v - expected_diode_v).abs() < 2e-5,
+                "{part}: unrelated Shockley diode should be {expected_diode_v} V, got {diode_v} V"
+            );
+
+            let expected_early_v = bjt_collector_voltage(base_drive_v, false, false, Some(50.0));
+            let expected_control_v = bjt_collector_voltage(base_drive_v, false, false, None);
+            assert!(
+                (early_v - expected_early_v).abs() < 5e-5,
+                "{part}: VAF=50 load line at {base_drive_v} V should be {expected_early_v} V, got {early_v} V"
+            );
+            assert!(
+                (control_v - expected_control_v).abs() < 5e-5,
+                "{part}: no-forward-Early load line at {base_drive_v} V should be {expected_control_v} V, got {control_v} V"
+            );
+            if base_drive_v >= 0.7 {
+                assert!(
+                    early_v < control_v - 0.001,
+                    "{part}: finite VAF increases collector current: {early_v} V vs {control_v} V"
+                );
+            }
+
+            for (channel, volts) in [
+                (0, ntc_v),
+                (4, early_v),
+                (5, control_v),
+                (top_channel, diode_v),
+            ] {
+                let expected_count = expected_adc_count(volts);
+                assert_eq!(
+                    adc1.channel_count(&mut bus, channel),
+                    expected_count,
+                    "{part}: solved voltage seeds ADC1 channel {channel}"
+                );
+                assert_eq!(
+                    adc1.convert(&mut bus, channel),
+                    u32::from(expected_count),
+                    "{part}: firmware-visible ADC1 conversion on channel {channel}"
+                );
+            }
+            assert_eq!(
+                adc1.channel_count(&mut bus, 1),
+                0xFFFF,
+                "{part}: unrouted ADC1 channel 1 stays isolated"
+            );
+            early_samples.push(early_v);
+            control_samples.push(control_v);
+        }
+
+        assert!(
+            early_samples[1] > early_samples[2] && early_samples[2] > early_samples[3],
+            "{part}: increasing base drive lowers the VAF=50 collector voltage: {early_samples:?}"
+        );
+        assert!(
+            control_samples[1] > control_samples[2] && control_samples[2] > control_samples[3],
+            "{part}: increasing base drive lowers the control collector voltage: {control_samples:?}"
+        );
     }
 }
