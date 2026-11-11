@@ -12,7 +12,8 @@
 # - Renode gives GPIOF the PA reset values; RM0091 §8.4.1 resets only port A
 #   to 0x28000000 / 0x24000000.
 #
-# Claimed and exercised by examples/renode-onboarding/stm32f072-smoke.yaml:
+# Claimed and exercised by examples/renode-onboarding/stm32f072-smoke.yaml and
+# stm32f072b_discovery-smoke.yaml:
 # RCC (the F0 map, clock gates enforced), USART1..4 ("v2" ISR/RDR/TDR
 # layout), GPIOA..F, SYSCFG EXTICR + EXTI lines 0..15 on the grouped
 # vectors, TIM1/2/3/6/7/14/15/16/17 (update line; TIM2 is 32-bit), SPI1/SPI2
@@ -21,6 +22,8 @@
 # (the CHSELR block, `profile: stm32f0`: calibration, single sequence in
 # both scan directions, 12/8-bit, EOC/EOS/OVR/AWD on ADC1_COMP_IRQn = 12,
 # DMA1 channel 1, the internal TS on IN16 and V_REFINT on IN17).
+# SysTick is a Cortex-M core peripheral at 0xE000E010 and raises system
+# exception 15 directly; it is not an external NVIC line.
 #
 # Not claimed: ADC hardware triggers (EXTSEL), auto-off/wait modes, CAN, RTC, I2C2 data path, SPI I2S mode, DAC, USB, TSC, CEC, COMP,
 # CRS, IWDG/WWDG, FLASH interface, PWR and the EXTI lines 16..31.
@@ -37,6 +40,10 @@ ram:
   base: 0x20000000
   size: 16KB
 peripherals:
+- id: systick
+  type: systick
+  base_address: 0xE000E010
+  size: 16B
 # --- RCC (RM0091 §6.4: CR/CFGR/CIR/APB2RSTR/APB1RSTR/AHBENR/APB2ENR/APB1ENR..)
 - id: rcc
   type: rcc

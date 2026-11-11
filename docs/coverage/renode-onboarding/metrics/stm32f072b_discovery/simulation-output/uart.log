@@ -22,8 +22,9 @@ tim17 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
 dma1 m2m tc=1 data=1 pend=1 alone=1 released=1 ok
 crc word=0xDF8A8A2B seed=1 std=1 ok
 adc ts=0x00000709 vref=0x000005F6 cal=1 ready=1 seq=1 eos=1 pend=1 released=1 gated=1 off=1 ok
-irq exception hit=1 ipsr=0x00000015 active=0x00000020 pending=0x00000000 frame=1 regs=0x00000011,0x00000022,0x00000033,0x00000044,0x00000055 lr=0x08002C33 pc=0x080002FA xpsr=0x21000000 exc_return=0xFFFFFFF9 sp=0x20003EE0 expected_sp=0x20003EE0 restored_msp=0x20003F08 returned=1 ok
+irq exception hit=1 ipsr=0x00000015 active=0x00000020 pending=0x00000000 frame=1 regs=0x00000011,0x00000022,0x00000033,0x00000044,0x00000055 lr=0x08002C97 pc=0x08000322 xpsr=0x21000000 exc_return=0xFFFFFFF9 sp=0x20003ED8 expected_sp=0x20003ED8 restored_msp=0x20003F00 returned=1 ok
 nmi repend entered=1 entries=0x00000002 after_pend_ipsr=0x00000002 after_pend_entries=0x00000001 irq=0x00000015 nmi=0x00000002 resumed=0x00000015 icsr=0x00000002 irq_active=0x00000020 primask=0x00000001 restored=0x00000001 cleanup=ok=1 ok
 nmi deferred irq pending_in_nmi=0x00000040 active_in_nmi=0x00000000 after_unmask_ipsr=0x00000015 irq6_active_while_irq5=0x00000000 irq6_pending_in_irq5=0x00000040 irq_ipsr=0x00000016 irq_active=0x00000040 irq_pending=0x00000000 nmi_count=0x00000002 irq5_priority=0x00000040 irq6_priority=0x00000080 ok
-summary 0x0DCFFFFF
+systick ipsr=0x0000000F active=0x0000000F countflag=1 read_clear=1 pending_after=0x00000000 thread_ipsr=0x00000000 vtor_restored=1 ok
+summary 0x0DDFFFFF
 DONE
