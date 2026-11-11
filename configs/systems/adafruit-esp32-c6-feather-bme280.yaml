@@ -1,0 +1,24 @@
+# Adafruit ESP32-C6 Feather (PID 5933) with an external BME280 on STEMMA QT.
+# The board uses an ESP32-C6-MINI module with 4 MiB flash (C6FH4 profile).
+# STEMMA QT is SDA=GPIO19/SCL=GPIO18; GPIO20 must be HIGH to power the port.
+# The local smoke exercises the I2C controller, BME280 and red LED only.
+name: "adafruit-esp32-c6-feather-bme280"
+chip: "../chips/esp32c6fh4.yaml"
+cpu_hz: 160_000_000
+debug_uart: "usb_serial_jtag"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GPIO19"
+      scl: "GPIO18"
+    config:
+      i2c_address: 0x77
+board_io:
+  - id: "status_led"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 15
+    signal: "output"
+    active_high: true

@@ -1,0 +1,16 @@
+# Check BME280 identity and raw temperature over Feather STEMMA QT I2C.
+schema_version: "1.2"
+inputs:
+  firmware: "./firmware/.pio/build/feather_c6/firmware.elf"
+  system: "../../configs/systems/adafruit-esp32-c6-feather-bme280.yaml"
+limits:
+  max_steps: 50000000
+assertions:
+  - uart_contains: "ADAFRUIT_ESP32C6_FEATHER_BME280_OK ID=0x60 TEMP_RAW=0x082DC0 I2C0=GPIO19/18 LED=GPIO15 STEMMA_POWER=GPIO20"
+  - gpio_edges:
+      pin: "gpio:15"
+      min_edges: 4
+  - gpio_edges:
+      pin: "gpio:20"
+      min_edges: 1
+  - expected_stop_reason: max_steps

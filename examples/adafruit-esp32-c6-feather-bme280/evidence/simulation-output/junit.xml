@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="5" failures="0" errors="0" time="23.469540">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="664dfd6bc3cd613c445e10e36778bc14e51dc77c52afb838e589449643a385a7"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="23.469540">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: ADAFRUIT_ESP32C6_FEATHER_BME280_OK ID=0x60 TEMP_RAW=0x082DC0 I2C0=GPIO19/18 LED=GPIO15 STEMMA_POWER=GPIO…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: gpio_edges: gpio:15 &gt;= 4 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: gpio_edges: gpio:20 &gt;= 1 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>
