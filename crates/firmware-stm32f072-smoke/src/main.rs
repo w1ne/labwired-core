@@ -1048,6 +1048,67 @@ fn check_systick_pause_resume() -> bool {
     ok
 }
 
+/// Updating RELOAD during a period leaves the active countdown alone and
+/// supplies the value loaded after the next zero-hit.
+fn check_systick_reload_update() -> bool {
+    const COUNTFLAG: u32 = 1 << 16;
+    const OLD_RELOAD: u32 = 31;
+    const NEW_RELOAD: u32 = 3;
+
+    wr(SYSTICK_CSR, 0);
+    wr(SYSTICK_RVR, OLD_RELOAD);
+    wr(SYSTICK_CVR, 0);
+    wr(SYSTICK_CSR, 0x5); // ENABLE | processor clock; no exception request.
+
+    let mut before = 0;
+    for _ in 0..10_000 {
+        let value = rd(SYSTICK_CVR);
+        if (16..=28).contains(&value) {
+            before = value;
+            break;
+        }
+    }
+
+    wr(SYSTICK_RVR, NEW_RELOAD);
+    let after_write = rd(SYSTICK_CVR);
+    let current_preserved = after_write > NEW_RELOAD && after_write < before;
+
+    let mut first_wrap = false;
+    for _ in 0..10_000 {
+        if rd(SYSTICK_CSR) & COUNTFLAG != 0 {
+            first_wrap = true;
+            break;
+        }
+    }
+    let mut next_count = 0;
+    for _ in 0..32 {
+        next_count = rd(SYSTICK_CVR);
+        if next_count != 0 {
+            break;
+        }
+    }
+    wr(SYSTICK_CSR, 0);
+    wr(SYSTICK_CVR, 0);
+
+    let next_reload_applied = next_count > 0 && next_count <= NEW_RELOAD;
+    let ok = before != 0 && current_preserved && first_wrap && next_reload_applied;
+
+    puts("systick reload-update ");
+    flag("window", before != 0);
+    flag("preserved", current_preserved);
+    flag("first_wrap", first_wrap);
+    flag("next_reload", next_reload_applied);
+    puts("old=");
+    hex(before);
+    puts(" current=");
+    hex(after_write);
+    puts(" next=");
+    hex(next_count);
+    puts(" ");
+    verdict(ok);
+    ok
+}
+
 /// RM0091 §11.1.2 specifies TENMS=6000 for the 6 MHz HCLK/8 SysTick source.
 /// CALIB is read-only; verify that an attempted write cannot change its value.
 fn check_systick_calibration() -> bool {
@@ -1378,6 +1439,7 @@ fn main() -> ! {
     let systick_external_periodic = check_systick_external_periodic();
     let systick_external_coalesces = check_systick_external_pending_coalesces();
     mark(23, systick_external_periodic && systick_external_coalesces);
+    mark(28, check_systick_reload_update());
     mark(27, check_systick_calibration());
     let summary = summary | 0x0700_0000;
     wr(SUMMARY, summary);

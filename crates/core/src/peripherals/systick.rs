@@ -785,6 +785,25 @@ mod tests {
         assert_eq!(st.tick().system_exception, None);
     }
 
+    #[test]
+    fn reload_write_preserves_current_count_and_applies_after_wrap() {
+        let mut st = armed(5);
+        st.tick(); // Reload 5.
+        st.tick(); // 5→4.
+
+        st.write_u32(0x04, 2).unwrap(); // New value applies on the next reload.
+        assert_eq!(st.read_u32(0x08).unwrap(), 4);
+        assert_eq!(st.tick().system_exception, None); // 4→3
+        assert_eq!(st.tick().system_exception, None); // 3→2
+        assert_eq!(st.tick().system_exception, None); // 2→1
+        assert_eq!(st.tick().system_exception, Some(15)); // 1→0
+        assert_eq!(st.read_u32(0x08).unwrap(), 0);
+        assert_ne!(st.read_u32(0x00).unwrap() & 0x1_0000, 0);
+
+        assert_eq!(st.tick().system_exception, None); // Reload the new value 2.
+        assert_eq!(st.read_u32(0x08).unwrap(), 2);
+    }
+
     /// COUNTFLAG (SYST_CSR bit 16) reads as set after a wrap and is cleared by
     /// the word read, per ARMv7-M. `cortex_m_systick`'s elapsed() relies on this.
     #[test]
