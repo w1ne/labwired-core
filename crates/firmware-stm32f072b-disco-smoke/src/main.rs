@@ -48,6 +48,8 @@
 //! Clearing a hardware-generated pending exception through ICSR must leave
 //! COUNTFLAG latched. A word CSR read clears COUNTFLAG independently, and the
 //! next timer wrap must latch it again and pend a fresh exception.
+//! Disabling the counter after a zero-hit must stop CVR while leaving the
+//! already-pending exception deliverable after PRIMASK is cleared.
 
 #![no_std]
 #![no_main]
@@ -570,8 +572,8 @@ unsafe extern "C" fn smoke_systick_cvr_clear_handler() {
     );
 }
 
-/// Capture the hardware-generated SysTick after software clears the first
-/// pending request. Stop the timer once the following period enters.
+/// Capture a SysTick entry after a hardware-generated request. Stop the timer
+/// once the exception has been accepted.
 #[unsafe(naked)]
 unsafe extern "C" fn smoke_systick_pending_clear_handler() {
     core::arch::naked_asm!(
@@ -1601,6 +1603,17 @@ fn check_systick_hardware_pending_clear() -> bool {
         unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
     }
     let countflag_after_second_wrap = rd8(SYSTICK_CSR + 2) & 1 != 0;
+    // Stop the counter only after a hardware request is pending. ENABLE must
+    // freeze CVR without canceling the SCB request already in flight.
+    unsafe { wr(SYSTICK_CSR, 0x6) }; // Keep TICKINT and CLKSOURCE; clear ENABLE.
+    let control_after_disable = rd8(SYSTICK_CSR) & 0x7;
+    let countflag_after_disable = rd8(SYSTICK_CSR + 2) & 1 != 0;
+    let cvr_after_disable = rd(SYSTICK_CVR);
+    for _ in 0..128 {
+        unsafe { asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+    let cvr_after_wait = rd(SYSTICK_CVR);
+    let pending_after_disable = rd(SCB_ICSR) & PENDSTSET != 0;
     let handler_before_unmask = rd(SYSTICK_PENDING_CLEAR_RECORD + 8);
     unsafe {
         asm!("cpsie i", "dsb", "isb", options(nostack, preserves_flags));
@@ -1652,6 +1665,10 @@ fn check_systick_hardware_pending_clear() -> bool {
         && pending_stays_clear_after_countflag_read
         && second_wrap_pending
         && countflag_after_second_wrap
+        && control_after_disable == 0x6
+        && countflag_after_disable
+        && cvr_after_disable == cvr_after_wait
+        && pending_after_disable
         && handler_before_unmask == 0
         && handler_ipsr == 15
         && active
@@ -1678,6 +1695,16 @@ fn check_systick_hardware_pending_clear() -> bool {
         "second_wrap",
         second_wrap_pending && countflag_after_second_wrap,
     );
+    flag("pending_after_disable", pending_after_disable);
+    flag("countflag_after_disable", countflag_after_disable);
+    puts("control_after_disable=");
+    hex(u32::from(control_after_disable));
+    puts(" cvr_stable=");
+    puts(if cvr_after_disable == cvr_after_wait {
+        "1 "
+    } else {
+        "0 "
+    });
     puts("handler_before_unmask=");
     hex(handler_before_unmask);
     puts(" ipsr=");

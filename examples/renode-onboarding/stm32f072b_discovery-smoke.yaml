@@ -36,8 +36,9 @@
 # period. The ICSR pending-clear smoke cancels a hardware-generated pending exception,
 # confirms COUNTFLAG and the live timer survive, checks a word CSR read clears
 # COUNTFLAG independently, then checks the following period re-latches it and
-# generates a fresh exception. The
-# STM32F072's external HCLK/8 SysTick source is checked against processor HCLK
+# generates a fresh exception. Disabling the counter after a hardware zero-hit
+# must stop CVR while preserving the pending exception until PRIMASK is cleared.
+# The STM32F072's external HCLK/8 SysTick source is checked against processor HCLK
 # with a measured ratio bounded to 7:1..9:1 to allow endpoint tick rounding.
 schema_version: "1.2"
 inputs:
@@ -100,7 +101,7 @@ assertions:
       - "systick periodic entries=0x00000003 reload=0x0000007F ipsr=0x0000000F,0x0000000F,0x0000000F active=1 countflag=1 pending=0 thread_ipsr=0x00000000 vtor_restored=1 ok"
       - "systick late-tickint silent_wrap=1 byte_preserved=1 write_ignored=1 control=0x00000005 no_pending=first=1 read_clear=1 no_immediate=1 tickint_clear_pending=1 control=1 flag=1 next_wrap=1 handler_before_unmask=0x00000000 ipsr=0x0000000F active=0x0000000F entries=0x00000001 pending_after=0 thread_ipsr=0x00000000 vtor_restored=1 ok"
       - "systick cvr-clear countdown=started=1 pending_after_clear=0 pending_after_period=1 flag_before_clear=1 pending_survived=1 flag_cleared=1 handler_before_unmask=0x00000000 handler_ipsr=0x0000000F active=0x0000000F entries=0x00000001 thread_ipsr=0x00000000 vtor_restored=1 ok"
-      - "systick pending-clear hardware first_wrap=1 flag_survived=1 cleared=1 timer=1 read_clear=1 pending_stays_clear=1 second_wrap=1 handler_before_unmask=0x00000000 ipsr=0x0000000F active=0x0000000F entries=0x00000001 pending_after=0 thread_ipsr=0x00000000 vtor_restored=1 ok"
+      - "systick pending-clear hardware first_wrap=1 flag_survived=1 cleared=1 timer=1 read_clear=1 pending_stays_clear=1 second_wrap=1 pending_after_disable=1 countflag_after_disable=1 control_after_disable=0x00000006 cvr_stable=1 handler_before_unmask=0x00000000 ipsr=0x0000000F active=0x0000000F entries=0x00000001 pending_after=0 thread_ipsr=0x00000000 vtor_restored=1 ok"
       - "systick reload-update rvr=0x0000001F preserved=1 first_wrap=1 pending_clear=1 next_reload=1 old="
       - " current="
       - " ok"
