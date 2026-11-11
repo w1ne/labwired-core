@@ -1464,6 +1464,24 @@ unsafe fn smoke_basepri_priority_mask() -> bool {
         mask = in(reg) 0x80_u32,
         options(nostack, preserves_flags),
     );
+    let basepri_after_max_weaker: u32;
+    let basepri_after_max_stronger: u32;
+    let basepri_after_restore: u32;
+    core::arch::asm!(
+        "msr BASEPRI_MAX, {weaker}",
+        "mrs {after_weaker}, BASEPRI",
+        "msr BASEPRI_MAX, {stronger}",
+        "mrs {after_stronger}, BASEPRI",
+        "msr BASEPRI, {restore}",
+        "mrs {after_restore}, BASEPRI",
+        weaker = in(reg) 0xC0_u32,
+        stronger = in(reg) 0x40_u32,
+        restore = in(reg) 0x80_u32,
+        after_weaker = out(reg) basepri_after_max_weaker,
+        after_stronger = out(reg) basepri_after_max_stronger,
+        after_restore = out(reg) basepri_after_restore,
+        options(nostack, preserves_flags),
+    );
     write_volatile(NVIC_ISPR1 as *mut u32, BASEPRI_IRQ_MASK);
     core::arch::asm!(
         "msr PRIMASK, {primask}",
@@ -1535,6 +1553,9 @@ unsafe fn smoke_basepri_priority_mask() -> bool {
         && high_active == BASEPRI_IRQ_HIGH_BIT
         && high_pending == BASEPRI_IRQ_LOW_BIT
         && high_basepri == 0x80
+        && basepri_after_max_weaker == 0x80
+        && basepri_after_max_stronger == 0x40
+        && basepri_after_restore == 0x80
         && low_entries_before_release == 0
         && low_pending_before_release == BASEPRI_IRQ_LOW_BIT
         && low_active_before_release == 0
@@ -1558,7 +1579,9 @@ unsafe fn smoke_basepri_priority_mask() -> bool {
         && restored;
 
     if ok {
-        putline(b"BASEPRI M3 HIGH=55 LOW=54 MASKED=1 PENDING=1 RELEASED=1 ok");
+        putline(
+            b"BASEPRI M3 MAX_KEEP=1 MAX_RAISE=1 HIGH=55 LOW=54 MASKED=1 PENDING=1 RELEASED=1 ok",
+        );
     } else {
         putline(b"BASEPRI M3 CHECK FAILED");
     }
