@@ -1,0 +1,13 @@
+# Read BME280 identification/temperature registers on XIAO D4/D5 and exercise USER_LED.
+schema_version: "1.0"
+inputs:
+  firmware: "./firmware/.pio/build/xiao_s3/firmware.elf"
+  system: "../../configs/systems/xiao-esp32s3-bme280.yaml"
+limits:
+  max_steps: 50000000
+assertions:
+  - uart_contains: "XIAO_ESP32S3_BME280_OK ID=0x60 TEMP_RAW=0x082DC0 I2C0=GPIO5/GPIO6 LED=GPIO21"
+  - gpio_edges:
+      pin: "gpio:21"
+      min_edges: 6
+  - expected_stop_reason: max_steps

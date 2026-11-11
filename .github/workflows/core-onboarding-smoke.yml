@@ -247,6 +247,11 @@ jobs:
             firmware_build_script: examples/xiao-esp32s3/firmware/build-firmware.sh
             script: examples/xiao-esp32s3/io-smoke.yaml
             system: configs/systems/xiao-esp32s3.yaml
+          # XIAO ESP32-S3: read BME280 over D4/D5 and exercise USER_LED on GPIO21.
+          - id: xiao-esp32s3-bme280
+            firmware_build_script: examples/xiao-esp32s3-bme280/firmware/build-firmware.sh
+            script: examples/xiao-esp32s3-bme280/bme280-smoke.yaml
+            system: configs/systems/xiao-esp32s3-bme280.yaml
           # Waveshare ESP32-S3-Zero FH4R2: its onboard WS2812 DIN is GPIO21.
           # The local smoke checks GPIO edges and decodes the modeled pixel frame.
           - id: esp32s3-zero-ws2812

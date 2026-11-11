@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="3.172145">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="c7054d03985519e01b9a8de25f4aea16e2be4819612a500a96efe67fba728d19"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="3.172145">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: XIAO_ESP32S3_BME280_OK ID=0x60 TEMP_RAW=0x082DC0 I2C0=GPIO5/GPIO6 LED=GPIO21" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: gpio_edges: gpio:21 &gt;= 6 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

@@ -1,0 +1,23 @@
+# Seeed Studio XIAO ESP32-S3 (SKU 113991114) with an external BME280 on D4/D5.
+# D4/GPIO5 is SDA and D5/GPIO6 is SCL. The on-board USER_LED is active-low GPIO21.
+name: "xiao-esp32s3-bme280"
+chip: "../chips/esp32s3-xiao.yaml"
+memory_overrides:
+  psram_size: "0"
+debug_uart: "usb_serial_jtag"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GPIO5"
+      scl: "GPIO6"
+    config:
+      i2c_address: 0x77
+board_io:
+  - id: "user_led"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 21
+    signal: "output"
+    active_high: false
