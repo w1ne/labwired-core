@@ -229,6 +229,7 @@ fn main() -> ! {
     }
     putline(b"F103 I2C");
     unsafe { smoke_systick_exception_state() };
+    unsafe { smoke_systick_external_pause_resume() };
     smoke_usart2_txe_irq();
     smoke_usart2_rx_enable_gate();
     smoke_spi1_irq_and_max31855();
@@ -652,6 +653,54 @@ unsafe fn smoke_systick_exception_state() -> bool {
         );
     } else {
         putline(b"SYSTICK M3 CHECK FAILED");
+    }
+    ok
+}
+
+/// RM0008 configures the STM32F103 SysTick reference source as HCLK/8.
+/// Disabling ENABLE must freeze the active countdown and re-enabling it must
+/// continue the same period.
+unsafe fn smoke_systick_external_pause_resume() -> bool {
+    const RELOAD: u32 = 4095;
+
+    write_volatile(SYSTICK_CSR as *mut u32, 0);
+    write_volatile(SYSTICK_RVR as *mut u32, RELOAD);
+    write_volatile(SYSTICK_CVR as *mut u32, 0);
+    write_volatile(SYSTICK_CSR as *mut u32, 0x1); // ENABLE; HCLK/8 reference.
+    let reference_selected = read_volatile(SYSTICK_CSR as *const u32) & 0x5 == 0x1;
+
+    let mut pause_window = false;
+    for _ in 0..20_000 {
+        let value = read_volatile(SYSTICK_CVR as *const u32);
+        if (1024..=3072).contains(&value) {
+            pause_window = true;
+            break;
+        }
+        core::arch::asm!("nop", options(nomem, nostack, preserves_flags));
+    }
+
+    write_volatile(SYSTICK_CSR as *mut u32, 0);
+    let paused = read_volatile(SYSTICK_CVR as *const u32);
+    for _ in 0..128 {
+        core::arch::asm!("nop", options(nomem, nostack, preserves_flags));
+    }
+    let frozen = read_volatile(SYSTICK_CVR as *const u32);
+
+    write_volatile(SYSTICK_CSR as *mut u32, 0x1);
+    for _ in 0..128 {
+        core::arch::asm!("nop", options(nomem, nostack, preserves_flags));
+    }
+    let resumed = read_volatile(SYSTICK_CVR as *const u32);
+    write_volatile(SYSTICK_CSR as *mut u32, 0);
+    write_volatile(SYSTICK_CVR as *mut u32, 0);
+
+    let frozen_ok = paused == frozen;
+    let resumed_ok = pause_window && paused > 256 && resumed > 0 && resumed < paused;
+    let ok = reference_selected && frozen_ok && resumed_ok;
+    if ok {
+        putline(b"SYSTICK M3 HCLK8 REFERENCE=1 WINDOW=1 FROZEN=1 RESUMED=1 ok");
+    } else {
+        putline(b"SYSTICK M3 HCLK8 CHECK FAILED");
     }
     ok
 }
