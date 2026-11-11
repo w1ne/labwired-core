@@ -25,6 +25,7 @@ on:
       - "crates/firmware-esp32c61-bme280-smoke/**"
       - "crates/firmware-esp32h2-devkitm-1-smoke/**"
       - "crates/firmware-nucleo-f446re-smoke/**"
+      - "crates/firmware-nucleo-l432kc-smoke/**"
       - "crates/firmware-nucleo-h503rb-smoke/**"
       - "crates/firmware-nucleo-g0b1re-smoke/**"
       - "crates/firmware-nucleo-c562re-smoke/**"
@@ -137,6 +138,12 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/nucleo-f446re/io-smoke.yaml
             system: configs/systems/nucleo-f446re.yaml
+          # NUCLEO-L432KC: the default ST-LINK VCP uses USART2 and LD3 is PB3.
+          - id: nucleo-l432kc
+            crate: firmware-nucleo-l432kc-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-l432kc/io-smoke.yaml
+            system: configs/systems/nucleo-l432kc.yaml
           - id: nucleo-g491re-bme280
             crate: firmware-nucleo-g491re-bme280-smoke
             target: thumbv7em-none-eabi

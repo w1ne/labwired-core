@@ -876,6 +876,13 @@ _No beyond-rubric firmware exercise is recorded in this ledger; rubric coverage 
 
 _No beyond-rubric firmware exercise is recorded in this ledger; rubric coverage comes from tier1-matrix.json._
 
+### `stm32l432kc`
+
+_SIM-DERIVED NUCLEO-L432KC / STM32L432KCU6 profile. Its committed firmware prints over the default USART2 ST-LINK VCP route, verifies USART2_TX edges on PA2, and pulses active-high LD3 on PB3. Scope is limited to the STM32L4 RCC, GPIOA/GPIOB, USART2 and Cortex-M system control; it is not a silicon capture and declares no other L432 peripherals._
+
+**Functional firmware exercises** (including decoded device/protocol reads):
+- NUCLEO-L432KC boot, USART2 VCP marker and PA2 TX edges, plus PB3 user LED edges — `nucleo-l432kc` · examples/nucleo-l432kc/evidence (nightly CI)
+
 ### `stm32h503rb`
 
 _No beyond-rubric firmware exercise is recorded in this ledger; rubric coverage comes from tier1-matrix.json._

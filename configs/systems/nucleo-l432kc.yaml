@@ -1,0 +1,18 @@
+# ST NUCLEO-L432KC (MB1180) default user LED and ST-LINK VCP wiring.
+# UM1956: LD3 is active-high on PB3; default SB2/SB3 connect PA2/PA15 to VCP.
+# ST-LINK USB/debug and all other on-chip peripherals are outside this profile.
+name: "nucleo-l432kc"
+chip: "../chips/stm32l432kc.yaml"
+cpu_hz: 4_000_000
+external_devices: []
+connectors:
+  - type: "uart"
+    peripheral: "uart2"
+    endpoint: "host_console"
+board_io:
+  - id: "led_ld3"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 3
+    signal: "output"
+    active_high: true

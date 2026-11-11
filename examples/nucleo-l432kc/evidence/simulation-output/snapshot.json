@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      524288,
+      10,
+      3221225472,
+      0,
+      0,
+      0,
+      0,
+      536936432,
+      0,
+      0,
+      0,
+      0,
+      0,
+      536936432,
+      134219855,
+      134219854
+    ],
+    "pc": 134219854,
+    "xpsr": 1627389952,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 200000,
+  "cycles": 200000,
+  "instructions": 200000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 200000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 200000
+    }
+  },
+  "limits": {
+    "max_steps": 200000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "84dafe89827ba1220238cf8fe38ddba523664394b52aea21c2d0a78e5e8cb6e6",
+  "config": {
+    "firmware": "examples/nucleo-l432kc/../../target/thumbv7em-none-eabi/release/firmware-nucleo-l432kc-smoke",
+    "system": "examples/nucleo-l432kc/../../configs/systems/nucleo-l432kc.yaml",
+    "script": "examples/nucleo-l432kc/io-smoke.yaml"
+  }
+}

@@ -1,0 +1,16 @@
+# Boot STM32L432KC, print on the board's USART2 VCP route and pulse user LD3.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nucleo-l432kc-smoke"
+  system: "../../configs/systems/nucleo-l432kc.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "L432KC_USART2_OK"
+  - gpio_edges:
+      pin: "gpioa:2"
+      min_edges: 8
+  - gpio_edges:
+      pin: "gpiob:3"
+      min_edges: 8
+  - expected_stop_reason: max_steps
