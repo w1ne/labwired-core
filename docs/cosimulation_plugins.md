@@ -591,14 +591,15 @@ nodes count against the configured unknown limit and can be probed.
   breakpoint, so an edge does not leave trapezoidal a half-step behind.
 - Fixed internal step `h = step_ns / substeps`. Dense LU, own implementation.
   `N` nodes + `M` branch currents defaults to a limit of 128. Set the analog
-  model's `config.max_unknowns` to an integer from 1 through 512 to select an
+  model's `config.max_unknowns` to an integer from 1 through 1024 to select an
   explicit bound. The default remains 128 for old manifests and standalone
   solver callers. Values outside the range, nonintegers, nulls and nonfinite
   values are errors; a circuit above its selected limit is refused before any
   dense matrix allocation. The same config and constructor serve CLI, WASM,
   standalone and shared-world sessions. Extracted PCB copper resistance keeps
   its terminal nodes under this bound. Two matrix buffers use at most 256 KiB
-  at 128 unknowns or 4 MiB at 512; factorization remains `O(n³)`. Opting in changes
+  at 128 unknowns, 4 MiB at 512, or 16 MiB at 1024; factorization remains
+  `O(n³)`. Opting in changes
   circuit admission, not equations, integration or floating-point order.
   Larger circuits still require the ngspice adapter.
 - The solver caches elimination pivots and multipliers until a switch, step

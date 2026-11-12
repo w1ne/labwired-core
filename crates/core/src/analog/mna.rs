@@ -65,9 +65,9 @@ use super::netlist::{
 pub const MAX_UNKNOWNS: usize = 128;
 
 /// Absolute limit for an explicitly configured MNA system. Two dense matrix
-/// buffers use at most 4 MiB; LU factorization remains `O(n³)`. Larger circuits
+/// buffers use at most 16 MiB; LU factorization remains `O(n³)`. Larger circuits
 /// belong on the ngspice adapter. Checked before any dense allocation.
-pub const HARD_MAX_UNKNOWNS: usize = 512;
+pub const HARD_MAX_UNKNOWNS: usize = 1024;
 
 /// Integration rule for the reactive companion models.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -1649,7 +1649,7 @@ impl Solver {
     }
 
     /// Dense LU with partial pivoting, in place over the scratch matrix. Own
-    /// implementation on purpose: the systems are at most 512×512, and a linear
+    /// implementation on purpose: the systems are at most 1024×1024, and a linear
     /// algebra dependency would have to compile to WASM and stay deterministic
     /// across hosts to buy nothing at this size.
     fn factorize(&mut self) -> Result<(), AnalogError> {

@@ -1,0 +1,93 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/labwired-core-bounded-analog-20261112/examples/h735-telematics-lab/Cargo.toml
+workspace: /data/worktrees/labwired-core-bounded-analog-20261112/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/labwired-core-bounded-analog-20261112/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /data/worktrees/labwired-core-bounded-analog-20261112/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/labwired-core-bounded-analog-20261112/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /data/worktrees/labwired-core-bounded-analog-20261112/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/labwired-core-bounded-analog-20261112/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /data/worktrees/labwired-core-bounded-analog-20261112/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/labwired-core-bounded-analog-20261112/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /data/worktrees/labwired-core-bounded-analog-20261112/Cargo.toml
+   Compiling labwired-core v0.25.0 (/data/worktrees/labwired-core-bounded-analog-20261112/crates/core)
+   Compiling labwired-loader v0.25.0 (/data/worktrees/labwired-core-bounded-analog-20261112/crates/loader)
+    Finished `test` profile [optimized] target(s) in 2m 05s
+     Running tests/analog_adapter.rs (/data/worktrees/labwired-core-signed-switch-20261112/target/debug/deps/analog_adapter-5e8800be62911e7f)
+
+running 21 tests
+test analog::a_boundary_already_passed_re_reads_rather_than_integrating_backwards ... ok
+test analog::a_probe_on_a_node_that_does_not_exist_is_refused ... ok
+test analog::a_number_input_is_taken_as_volts ... ok
+test analog::a_manifest_without_probes_is_refused ... ok
+test analog::a_switch_control_needs_no_sources_entry ... ok
+test analog::an_input_that_is_not_a_circuit_source_is_ignored ... ok
+test analog::a_routed_temperature_updates_an_ntc_inside_the_analog_netlist ... ok
+test analog::an_unrouted_probe_is_traced_under_the_model_id ... ok
+test analog::an_unsupported_element_is_a_manifest_validation_error ... ok
+test analog::booleans_map_to_vdd_and_zero ... ok
+test analog::a_machine_with_a_runner_sees_the_runner_samples ... ok
+test analog::a_relative_netlist_path_resolves_against_the_manifest_directory ... ok
+test analog::a_machine_without_a_runner_answers_an_empty_batch ... ok
+test analog::config_keys_are_read_from_the_manifest ... ok
+test analog::the_operating_point_comes_before_any_input ... ok
+test analog::the_registry_builds_an_analog_adapter_from_a_manifest_entry ... ok
+test analog::the_runner_publishes_one_trace_for_the_machine ... ok
+test analog::time_ns_is_the_end_of_the_step_like_the_ngspice_wrapper ... ok
+test analog::two_analog_models_share_one_ring_with_prefixed_channels ... ok
+test analog::the_trace_ring_is_bounded_and_keeps_the_newest_samples ... ok
+test analog::the_trace_records_the_operating_point_as_its_first_row ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/analog_capacity.rs (/data/worktrees/labwired-core-signed-switch-20261112/target/debug/deps/analog_capacity-86f4a194865470df)
+
+running 7 tests
+test analog::analog_capacity_explicit_limit_preserves_old_transient_bits ... ok
+test analog::analog_capacity_default_still_refuses_129_unknowns ... ok
+test analog::analog_capacity_yaml_is_a_strict_bounded_integer ... ok
+test analog::analog_capacity_rejects_above_selected_and_absolute_bounds ... ok
+test analog::analog_capacity_explicit_379_512_667_and_1024_solve_complete_ladders ... ok
+test analog::analog_capacity_manifest_validation_and_construction_agree ... ok
+test analog::analog_capacity_shared_world_uses_the_same_bound ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/analog_copper_capacity.rs (/data/worktrees/labwired-core-signed-switch-20261112/target/debug/deps/analog_copper_capacity-4e34fbf4e321f80f)
+
+running 2 tests
+test analog::a_large_rc_network_tracks_the_analytic_step_response ... ok
+test analog::routed_dac_keeps_all_copper_resistors_and_its_transfer ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+     Running tests/analog_linear_golden.rs (/data/worktrees/labwired-core-signed-switch-20261112/target/debug/deps/analog_linear_golden-b79e8562b8358864)
+
+running 2 tests
+test analog::backward_euler_is_bit_identical_to_the_pre_newton_engine ... ok
+test analog::trapezoidal_is_bit_identical_to_the_pre_newton_engine ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/analog_solver.rs (/data/worktrees/labwired-core-signed-switch-20261112/target/debug/deps/analog_solver-15b3ea7aec29facd)
+
+running 13 tests
+test analog::a_floating_node_is_reported_not_silently_zeroed ... ok
+test analog::dot_ic_seeds_a_node ... ok
+test analog::initial_conditions_override_the_operating_point ... ok
+test analog::mutually_coupled_inductors_match_the_be_and_trapezoidal_companions ... ok
+test analog::a_circuit_over_the_unknown_limit_is_refused ... ok
+test analog::rc_step_response_is_an_order_of_magnitude_better_with_trapezoidal ... ok
+test analog::operating_point_uses_netlist_dc_values ... ok
+test analog::rc_step_response_matches_closed_form_with_backward_euler ... ok
+test analog::switch_conducts_at_ron_and_blocks_at_roff ... ok
+test analog::rl_current_matches_closed_form ... ok
+test analog::a_circuit_at_the_unknown_limit_is_accepted ... ok
+test analog::the_same_netlist_and_inputs_give_bit_identical_results ... ok
+test analog::underdamped_rlc_matches_closed_form ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

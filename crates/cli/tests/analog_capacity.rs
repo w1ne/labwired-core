@@ -27,6 +27,10 @@ fn analog_capacity_cli_uses_default_and_explicit_bounds() {
         (129, None, false, "128"),
         (379, Some("512"), true, ""),
         (513, Some("512"), false, "513"),
+        (667, Some("667"), true, ""),
+        (667, Some("512"), false, "667"),
+        (1025, Some("1024"), false, "1025"),
+        (3, Some("1025"), false, "max_unknowns"),
         (3, Some("1.5"), false, "max_unknowns"),
         (3, Some(".nan"), false, "max_unknowns"),
     ] {

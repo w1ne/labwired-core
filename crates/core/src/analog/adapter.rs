@@ -16,7 +16,7 @@
 //!       netlist: ./rc.cir          # or inline: netlist_text: |
 //!       vdd: 3.3
 //!       substeps: 10
-//!       max_unknowns: 128          # optional integer 1..512; default 128
+//!       max_unknowns: 128          # optional integer 1..1024; default 128
 //!       integration: be            # be | trap
 //!       probes:  { v_out: "v(out)" }
 //!       sources: { gpio: Vgpio, temperature_c: Rntc }

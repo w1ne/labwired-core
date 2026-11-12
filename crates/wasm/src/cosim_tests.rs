@@ -1381,7 +1381,17 @@ fn analog_capacity_browser_constructor_uses_the_same_explicit_bound() {
         .attach_cosim_with_ngspice(&capacity_model(379, Some("512")), None)
         .unwrap();
     assert!(explicit.cosim.is_some());
-    for raw in ["513", "1.5", ".nan", ".inf", "null", "'512'"] {
+    let mut measured_size = build(PLAIN_SYSTEM);
+    measured_size
+        .attach_cosim_with_ngspice(&capacity_model(667, Some("667")), None)
+        .unwrap();
+    assert!(measured_size.cosim.is_some());
+    let mut oversized = build(PLAIN_SYSTEM);
+    let error = oversized
+        .attach_cosim_with_ngspice(&capacity_model(1025, Some("1024")), None)
+        .unwrap_err();
+    assert!(error.contains("1025") && error.contains("1024"), "{error}");
+    for raw in ["1025", "1.5", ".nan", ".inf", "null", "'512'"] {
         let mut invalid = build(PLAIN_SYSTEM);
         let error = invalid
             .attach_cosim_with_ngspice(&capacity_model(3, Some(raw)), None)

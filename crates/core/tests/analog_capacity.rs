@@ -69,9 +69,9 @@ mod analog {
     }
 
     #[test]
-    fn analog_capacity_explicit_379_and_512_solve_complete_ladders() {
-        assert_eq!(HARD_MAX_UNKNOWNS, 512);
-        for unknowns in [379, 512] {
+    fn analog_capacity_explicit_379_512_667_and_1024_solve_complete_ladders() {
+        assert_eq!(HARD_MAX_UNKNOWNS, 1024);
+        for unknowns in [379, 512, 667, 1024] {
             let circuit = parse_netlist(&ladder(unknowns)).unwrap();
             assert_eq!(circuit.unknowns(), unknowns);
             let mut solver =
@@ -100,7 +100,16 @@ mod analog {
                 max: 512
             })
         ));
-        for max in [0, 513, usize::MAX] {
+        let oversized = parse_netlist(&ladder(1025)).unwrap();
+        assert_eq!(oversized.unknowns(), 1025);
+        assert!(matches!(
+            Solver::new_with_max_unknowns(oversized, Integration::BackwardEuler, 1024),
+            Err(AnalogError::TooLarge {
+                unknowns: 1025,
+                max: 1024
+            })
+        ));
+        for max in [0, 1025, usize::MAX] {
             // Invalid configured bounds fail before any solve/allocation path.
             assert!(matches!(
                 Solver::new_with_max_unknowns(circuit.clone(), Integration::BackwardEuler, max),
@@ -127,7 +136,7 @@ mod analog {
 
     #[test]
     fn analog_capacity_yaml_is_a_strict_bounded_integer() {
-        for valid in [1, 128, 379, 512] {
+        for valid in [1, 128, 379, 512, 513, 667, 1024] {
             let map = HashMap::from([("max_unknowns".into(), serde_yaml::Value::from(valid))]);
             assert_eq!(
                 AnalogConfig::from_yaml(&map).unwrap().max_unknowns,
@@ -137,7 +146,7 @@ mod analog {
         for raw in [
             "0",
             "-1",
-            "513",
+            "1025",
             "1.5",
             "512.0",
             ".nan",
@@ -164,13 +173,18 @@ mod analog {
             let circuit = parse_netlist(deck).unwrap();
             let node = circuit.node("out").unwrap();
             let mut original = Solver::new(circuit.clone(), integration).unwrap();
-            let mut opt_in = Solver::new_with_max_unknowns(circuit, integration, 512).unwrap();
+            let mut opt_in =
+                Solver::new_with_max_unknowns(circuit.clone(), integration, 512).unwrap();
+            let mut large_opt_in =
+                Solver::new_with_max_unknowns(circuit, integration, 1024).unwrap();
             for i in 0..100 {
                 let volts = if i < 50 { 3.3 } else { 0.0 };
                 original.set_voltage_source(0, volts);
                 opt_in.set_voltage_source(0, volts);
+                large_opt_in.set_voltage_source(0, volts);
                 original.advance(1e-5).unwrap();
                 opt_in.advance(1e-5).unwrap();
+                large_opt_in.advance(1e-5).unwrap();
                 assert_eq!(
                     original.node_voltage(node).to_bits(),
                     opt_in.node_voltage(node).to_bits()
@@ -178,6 +192,14 @@ mod analog {
                 assert_eq!(
                     original.branch_current(0).to_bits(),
                     opt_in.branch_current(0).to_bits()
+                );
+                assert_eq!(
+                    original.node_voltage(node).to_bits(),
+                    large_opt_in.node_voltage(node).to_bits()
+                );
+                assert_eq!(
+                    original.branch_current(0).to_bits(),
+                    large_opt_in.branch_current(0).to_bits()
                 );
             }
         }
@@ -190,6 +212,9 @@ mod analog {
             (379, Some(512), true),
             (512, Some(512), true),
             (513, Some(512), false),
+            (667, Some(667), true),
+            (667, Some(512), false),
+            (1025, Some(1024), false),
         ] {
             let model = model(unknowns, max.map(serde_yaml::Value::from));
             assert_eq!(
@@ -201,7 +226,7 @@ mod analog {
                 accept
             );
         }
-        for raw in ["0", "513", "1.5", ".nan", ".inf", "null", "'512'"] {
+        for raw in ["0", "1025", "1.5", ".nan", ".inf", "null", "'512'"] {
             let model = model(3, Some(serde_yaml::from_str(raw).unwrap()));
             assert!(
                 !validate_analog_models(std::slice::from_ref(&model), Path::new(".")).is_empty(),
@@ -239,9 +264,12 @@ mod analog {
     fn analog_capacity_shared_world_uses_the_same_bound() {
         // Only construction is tested; no new MCU behavior is assumed here.
         assert!(world(model(129, None)).is_err());
-        let accepted = world(model(379, Some(serde_yaml::Value::from(512)))).unwrap();
-        assert!(accepted.cosim_status().is_some());
-        for raw in ["513", "1.5", ".nan", "null"] {
+        for (unknowns, limit) in [(379, 512), (667, 667)] {
+            let accepted = world(model(unknowns, Some(serde_yaml::Value::from(limit)))).unwrap();
+            assert!(accepted.cosim_status().is_some());
+        }
+        assert!(world(model(1025, Some(serde_yaml::Value::from(1024)))).is_err());
+        for raw in ["1025", "1.5", ".nan", "null"] {
             assert!(
                 world(model(3, Some(serde_yaml::from_str(raw).unwrap()))).is_err(),
                 "{raw}"

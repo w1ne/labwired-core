@@ -1,12 +1,14 @@
 # Explicit bounded analog capacity
 
 The analog model accepts optional `config.max_unknowns`, an integer from 1
-through 512. The default remains 128. `Solver::new` retains the old default;
+through 1024 after the [explicit follow-up](analog-capacity-1024-20261112.md).
+The default remains 128. `Solver::new` retains the old default;
 `Solver::new_with_max_unknowns` is the explicit standalone entry point.
 Both constructors guard the limit and circuit size before allocating dense
 matrices. No solver equations, integration order or device model changed.
 
-Two matrix buffers consume 256 KiB at 128 unknowns or 4 MiB at 512. Dense LU
+Two matrix buffers consume 256 KiB at 128 unknowns, 4 MiB at 512, or
+16 MiB at the new explicit maximum of 1024. Dense LU
 remains cubic in matrix size. This option is bounded admission, not an
 unbounded allocation policy or a performance guarantee for long firmware
 runs. A circuit above its selected limit remains an error.
