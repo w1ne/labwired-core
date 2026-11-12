@@ -152,6 +152,40 @@ pub fn build_esp32_system_from_manifest_with_plugins(
     Ok((bus, pro_cpu, app_cpu))
 }
 
+/// Build the narrow, single-core ESP32-S2 system profile from its chip
+/// descriptor. Unlike classic ESP32 and S3, the S2 board profile uses the
+/// descriptor's memory and peripheral map directly and does not install a
+/// programmatic ESP peripheral bank.
+pub fn build_esp32s2_system_from_manifest_with_plugins(
+    manifest: &labwired_config::SystemManifest,
+    system_path: &Path,
+    plugin_chips: &dyn Fn(&str) -> Option<&'static str>,
+    plugins: &[&dyn crate::plugin::ChipPlugin],
+) -> anyhow::Result<(SystemBus, XtensaLx7, u32)> {
+    let chip_dir = system_path.parent().unwrap_or_else(|| Path::new("."));
+    let chip =
+        labwired_config::ChipDescriptor::resolve_with(&manifest.chip, chip_dir, plugin_chips)?;
+    if !chip.is_esp32s2() {
+        anyhow::bail!("ESP32-S2 builder received chip descriptor '{}'", chip.name);
+    }
+
+    let anchored = anchor_chip_path(manifest, chip_dir);
+    let mut bus = SystemBus::from_config_with_plugins(&chip, &anchored, plugins)?;
+    bus.bit_band_enabled = false;
+    bus.attach_debug_schemas(&chip, &anchored);
+    bus.refresh_peripheral_index();
+
+    let stack_top = chip
+        .ram
+        .base
+        .checked_add(chip.ram.size)
+        .and_then(|top| top.checked_sub(16))
+        .and_then(|top| u32::try_from(top).ok())
+        .ok_or_else(|| anyhow::anyhow!("ESP32-S2 RAM range cannot provide a 32-bit stack"))?;
+
+    Ok((bus, XtensaLx7::new(), stack_top))
+}
+
 /// A copy of `manifest` whose `chip:` is anchored to `chip_dir`, mirroring what
 /// [`build_system_bus`] does before `from_config`.
 ///

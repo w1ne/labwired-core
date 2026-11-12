@@ -1,0 +1,138 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 100000,
+  "cycles": 100000,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "ESP32S2_DEVKITC_N8R2_UART_OK"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "xtensa_lx7",
+    "registers": [
+      0,
+      1073741808,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1074266176,
+      0,
+      1061158912,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1074266141,
+    "ps": 31,
+    "window_base": 0,
+    "window_start": 1,
+    "vecbase": 1073741824
+  },
+  "firmware_hash": "05b77062e21f80d9809f71b10a979bfe6e24f0fc47c9ba677f709b042d420969",
+  "config": {
+    "firmware": "examples/esp32s2-devkitc-1-n8r2/../../tests/fixtures/esp32s2-devkitc-1-n8r2-uart.elf",
+    "system": "examples/esp32s2-devkitc-1-n8r2/../../configs/systems/esp32s2-devkitc-1-n8r2.yaml",
+    "script": "examples/esp32s2-devkitc-1-n8r2/io-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "uart0",
+        "kind": "native",
+        "base": 1061158912,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "ESP32S2_DEVKITC_N8R2_UART_OK",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 68,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 68,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 8388608,
+    "ram_total_bytes": 327680,
+    "flash_used_pct": 0.0,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 100000,
+    "instructions": 100000,
+    "steps_executed": 100000,
+    "memory_reads": 100054,
+    "memory_writes": 0,
+    "peripheral_accesses": 30,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 1074266141,
+        "count": 390
+      }
+    ]
+  }
+}

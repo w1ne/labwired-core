@@ -1180,16 +1180,14 @@ pub(crate) fn run_test(
 
     // For Xtensa, short-circuit: build bus + CPU together via build_esp32_system_from_manifest.
     if is_xtensa {
-        // --resume-snapshot is wired for the C3 (RISC-V) rom-boot path only.
-        // The S3 faithful machine has no load_firmware step and populates some
-        // app regions via bootloader copies during the cold boot, so resuming
-        // it needs cache re-derivation work that is deferred; fail loudly rather
-        // than silently restore a partial state. (--capture-app-entry still
-        // works on S3 — it flows through the generic execute_test_loop.)
+        // --resume-snapshot is not wired for Xtensa systems: the S3 faithful
+        // machine populates app regions via bootloader copies, while the S2
+        // and classic paths fast-boot ELF images. Fail loudly rather than
+        // silently restore a partial state.
         if args.resume_snapshot.is_some() {
-            let msg = "--resume-snapshot is not yet supported for ESP32-S3 (Xtensa); \
-                       cold-boot with --rom-boot instead"
-                .to_string();
+            let msg =
+                "--resume-snapshot is not yet supported for Xtensa systems; cold-boot instead"
+                    .to_string();
             error!("{}", msg);
             write_config_error_outputs(
                 &args,
@@ -1250,7 +1248,7 @@ pub(crate) fn run_test(
             // machine. `--rom-boot` on an S3 chip takes the real-ROM path;
             // classic ESP32 stays on the legacy fast-boot (its rom-boot is a
             // separate task).
-            let is_esp32s3 = {
+            let (is_esp32s2, is_esp32s3) = {
                 let chip_dir = sys_path
                     .parent()
                     .unwrap_or_else(|| std::path::Path::new("."));
@@ -1259,11 +1257,73 @@ pub(crate) fn run_test(
                     chip_dir,
                     &crate::plugin_chip_yaml(plugins),
                 )
-                .map(|c| c.is_esp32s3())
-                .unwrap_or(false)
+                .map(|c| (c.is_esp32s2(), c.is_esp32s3()))
+                .unwrap_or((false, false))
             };
 
-            let mut machine = if is_esp32s3 {
+            let mut machine = if is_esp32s2 {
+                // The S2 is a single-core LX7 with a descriptor-defined memory
+                // map. It must not fall through to the classic dual-core LX6
+                // peripheral bank below.
+                if args.rom_boot {
+                    let msg = "ESP32-S2 ROM boot is not modelled; this profile supports direct ELF fast boot only".to_string();
+                    error!("{}", msg);
+                    write_config_error_outputs(
+                        &args,
+                        Some(&firmware_path),
+                        system_path.as_ref(),
+                        Some(&firmware_bytes),
+                        Some(&resolved_limits),
+                        msg,
+                    );
+                    return ExitCode::from(EXIT_CONFIG_ERROR);
+                }
+                let (mut s2_bus, s2_cpu, stack_top) =
+                    match labwired_core::system::builder::build_esp32s2_system_from_manifest_with_plugins(
+                        manifest,
+                        sys_path,
+                        &crate::plugin_chip_yaml(plugins),
+                        plugins,
+                    ) {
+                        Ok(system) => system,
+                        Err(e) => {
+                            let msg = format!("{:#}", e);
+                            error!("{}", msg);
+                            write_config_error_outputs(
+                                &args,
+                                Some(&firmware_path),
+                                system_path.as_ref(),
+                                Some(&firmware_bytes),
+                                Some(&resolved_limits),
+                                msg,
+                            );
+                            return ExitCode::from(EXIT_CONFIG_ERROR);
+                        }
+                    };
+                s2_bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
+                let mut machine = labwired_core::Machine::new(s2_cpu, s2_bus);
+                crate::log_ts::set_hz(machine.bus.cpu_hz);
+                apply_run_speed_opts(&mut machine);
+                if let Err(e) = machine.load_firmware(&program) {
+                    return handle_load_error(
+                        &args,
+                        &metrics,
+                        &resolved_limits,
+                        &firmware_bytes,
+                        &uart_tx,
+                        &rtt_tx,
+                        &itm_tx,
+                        &machine.cpu,
+                        &firmware_path,
+                        system_path.as_ref(),
+                        e,
+                    );
+                }
+                machine.cpu.set_pc(program.entry_point as u32);
+                machine.cpu.set_sp(stack_top);
+                machine.add_observer(metrics.clone());
+                machine
+            } else if is_esp32s3 {
                 // ── ESP32-S3 (LX7): S3 memmap + XIP, NOT classic ESP32 map ──
                 // Classic `build_esp32_system_from_manifest` uses LX6 IRAM/DROM
                 // bases — Arduino-S3 ELF segments (0x3C00_xxxx DROM, 0x3FC8_xxxx

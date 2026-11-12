@@ -34,6 +34,12 @@ boards:
     kind: sim-validate
     path: examples/esp32c3-blinky
     gate: true
+  # Demand-rank 1 ESP32-family addition: the current ESP32-S2-DevKitC-1-N8R2.
+  # The committed LX7 ELF exercises UART0 through its host-console bridge.
+  - id: esp32s2-devkitc-1-n8r2
+    kind: sim-validate
+    path: examples/esp32s2-devkitc-1-n8r2
+    gate: true
   # ESP32-H2-DevKitM-1-N4S: rebuild the RV32IMC UART fixture and verify its
   # UART0 FIFO/console path through the H2-specific, window-limited model.
   - id: esp32h2-devkitm-1-n4s
