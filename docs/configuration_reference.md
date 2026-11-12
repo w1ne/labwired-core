@@ -661,6 +661,9 @@ for the full BLDC form. A motor can equivalently be declared as an
 converts it to the same typed plant (`MotorModelConfig::from_external_device`),
 so the two spellings cannot drift.
 
+For a physical three-lead winding driven by a solved inverter circuit, use
+`armature: circuit` and the [circuit BLDC contract](circuit-bldc.md).
+
 ```yaml
 # examples/f401-hbridge-dc-motor/system.yaml (excerpt)
 external_devices:
