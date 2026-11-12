@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="17" failures="0" errors="0" time="1.360548">
+<testsuite name="labwired" tests="17" failures="0" errors="0" time="1.266145">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
     <property name="firmware_hash" value="cdd8e12f5960bb4eff7cd8e903429882f550af1ab612851a57531953bf10dd42"/>
   </properties>
-  <testcase classname="labwired" name="run" time="1.360548">
+  <testcase classname="labwired" name="run" time="1.266145">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_regex: ^STM32H7 register smoke" time="0.000000">
   </testcase>
