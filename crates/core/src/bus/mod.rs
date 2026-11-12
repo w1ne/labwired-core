@@ -925,6 +925,7 @@ pub struct SystemBus {
     /// ideal rail assumed, until a circuit is routed to `board.power.vdd_volts`.
     pub(crate) supply: crate::power::SupplySupervisor,
     pub mcu_power: crate::power_domains::McuPowerDomains,
+    pub regulators: crate::regulator::RegulatorRegistry,
     pub(crate) reset_input: crate::reset_input::ResetInputState,
     /// What the system manifest DECLARED under `external_devices:`, verbatim.
     ///

@@ -159,6 +159,10 @@ impl<C: Cpu> Machine<C> {
     /// Callers must arrange an honored breakpoint, CPU progress termination,
     /// or external termination when issuing such a request.
     pub fn advance(&mut self, request: AdvanceRequest) -> SimResult<AdvanceReport> {
+        self.bus
+            .regulators
+            .require_sampled_source()
+            .map_err(crate::SimulationError::Other)?;
         if let Some(report) = self.supply_gate(&request)? {
             return Ok(report);
         }
@@ -211,6 +215,10 @@ impl<C: Cpu> Machine<C> {
             u32,
         ) -> SimResult<u32>,
     {
+        self.bus
+            .regulators
+            .require_sampled_source()
+            .map_err(crate::SimulationError::Other)?;
         if let Some(report) = self.supply_gate(&request)? {
             return Ok(report);
         }

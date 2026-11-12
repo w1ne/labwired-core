@@ -1882,6 +1882,7 @@ mod tests {
             reset_input: None,
             supply_monitor: None,
             power_domains: None,
+            internal_regulators: Vec::new(),
             include: None,
         }
     }

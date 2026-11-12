@@ -160,6 +160,8 @@ pub struct AnalogConfig {
     pub sources: BTreeMap<String, String>,
     /// Input name → explicitly bounded beta-curve thermistor.
     pub thermistors: BTreeMap<String, ThermistorConfig>,
+    /// Explicit sampled control of existing adjustable BUCK instances.
+    pub regulators: BTreeMap<String, super::controlled_buck::BuckStageConfig>,
     /// Extra trace-only expressions, beyond the routed outputs.
     pub trace: Vec<String>,
     /// Ring depth for the oscilloscope trace.
@@ -175,6 +177,7 @@ impl Default for AnalogConfig {
             probes: BTreeMap::new(),
             sources: BTreeMap::new(),
             thermistors: BTreeMap::new(),
+            regulators: BTreeMap::new(),
             trace: Vec::new(),
             trace_samples: super::trace::DEFAULT_TRACE_SAMPLES,
         }
@@ -252,6 +255,18 @@ impl AnalogConfig {
             parsed.trace_samples = samples as usize;
         }
 
+        if let Some(value) = config.get("regulators") {
+            parsed.regulators = serde_yaml::from_value(value.clone())
+                .map_err(|error| AnalogError::Config(format!("config.regulators: {error}")))?;
+            if !(1..=16).contains(&parsed.regulators.len()) {
+                return Err(AnalogError::Config(
+                    "config.regulators requires 1..16 stages when present".into(),
+                ));
+            }
+            for stage in parsed.regulators.values() {
+                stage.validate()?;
+            }
+        }
         Ok(parsed)
     }
 }
@@ -297,6 +312,7 @@ pub struct AnalogCosimAdapter {
     /// Trace-only expressions, in declaration order.
     trace_extra: Vec<(String, Probe)>,
     inputs: BTreeMap<String, InputTarget>,
+    regulators: Vec<String>,
     trace: AnalogTraceHandle,
     channel_base: usize,
     channel_prefix: String,
@@ -310,7 +326,23 @@ impl AnalogCosimAdapter {
     /// Parse `netlist`, build the solver, resolve probes and sources, solve the
     /// operating point and seed the trace with it.
     pub fn from_netlist(netlist: &str, cfg: &AnalogConfig) -> Result<Self, AnalogError> {
-        let circuit = parse_netlist(netlist)?;
+        let mut circuit = parse_netlist(netlist)?;
+        super::controlled_buck::bind_stages(&mut circuit, &cfg.regulators)?;
+        for prefix in cfg.regulators.keys() {
+            for port in super::controlled_buck::port_names(prefix)
+                .chain(std::iter::once(format!("{prefix}.load_within_rating")))
+            {
+                if cfg.sources.contains_key(&port)
+                    || cfg.probes.contains_key(&port)
+                    || cfg.thermistors.contains_key(&port)
+                    || cfg.trace.contains(&port)
+                {
+                    return Err(AnalogError::Config(format!(
+                        "reserved regulator port '{port}' has another owner"
+                    )));
+                }
+            }
+        }
         let solver = Solver::new(circuit, cfg.integration)?;
 
         let mut probes = Vec::with_capacity(cfg.probes.len());
@@ -324,6 +356,11 @@ impl AnalogCosimAdapter {
 
         let mut inputs = BTreeMap::new();
         for (input, element) in &cfg.sources {
+            if super::controlled_buck::owns_generated_primitive(solver.circuit(), element) {
+                return Err(AnalogError::Config(
+                    "every generated primitive of a controlled BUCK has one stage owner".into(),
+                ));
+            }
             let target = if let Some(index) = solver.voltage_source_index(element) {
                 // A source that carries SIN()/PULSE() is driven by the clock.
                 // Letting a routed input write to it too would give one element
@@ -362,6 +399,17 @@ impl AnalogCosimAdapter {
                      as a V, I, S, or resistor element (an NTC resistor accepts temperature inputs)"
                 )));
             };
+            for binding in &solver.circuit().controlled_bucks {
+                let stage = &solver.circuit().buck_macros[binding.macro_index];
+                let conflict = matches!(&target, InputTarget::VoltageSource(i) if *i == stage.limit_source)
+                    || matches!(&target, InputTarget::CurrentSource(i) if *i == stage.reference_source)
+                    || matches!(&target, InputTarget::Resistance(i) if *i == stage.output_resistor);
+                if conflict {
+                    return Err(AnalogError::Config(
+                        "a controlled BUCK primitive cannot have a second routed owner".into(),
+                    ));
+                }
+            }
             inputs.insert(input.clone(), target);
         }
         // A switch's `<ctrl>` is itself a routed input name, so it needs no
@@ -379,6 +427,11 @@ impl AnalogCosimAdapter {
         }
 
         for (input, model) in &cfg.thermistors {
+            if super::controlled_buck::owns_generated_primitive(solver.circuit(), &model.resistor) {
+                return Err(AnalogError::Config(
+                    "a thermistor cannot own a controlled BUCK primitive".into(),
+                ));
+            }
             model.validate()?;
             if inputs.contains_key(input) {
                 return Err(AnalogError::Config(format!(
@@ -404,7 +457,7 @@ impl AnalogCosimAdapter {
             inputs.insert(input.clone(), InputTarget::Thermistor(index, model.clone()));
         }
 
-        let sample_width = probes.len() + trace_extra.len();
+        let sample_width = probes.len() + trace_extra.len() + cfg.regulators.len() * 9;
         let mut adapter = Self {
             solver,
             vdd: cfg.vdd,
@@ -412,6 +465,7 @@ impl AnalogCosimAdapter {
             probes,
             trace_extra,
             inputs,
+            regulators: cfg.regulators.keys().cloned().collect(),
             trace: Arc::new(Mutex::new(AnalogTrace::new(cfg.trace_samples))),
             channel_base: 0,
             channel_prefix: String::new(),
@@ -433,7 +487,7 @@ impl AnalogCosimAdapter {
     ) -> Result<Self, AnalogError> {
         let netlist = netlist_source(&config.config, base_dir)?;
         let cfg = AnalogConfig::from_yaml(&config.config)?;
-        if cfg.probes.is_empty() {
+        if cfg.probes.is_empty() && cfg.regulators.is_empty() {
             return Err(AnalogError::Config(
                 "config.probes is required: an analog model with no probe produces no outputs"
                     .to_string(),
@@ -444,14 +498,27 @@ impl AnalogCosimAdapter {
 
     /// The channel table this adapter contributes, prefix included.
     pub fn channels(&self) -> Vec<AnalogChannel> {
-        self.probes
+        let mut channels: Vec<_> = self
+            .probes
             .iter()
             .chain(self.trace_extra.iter())
             .map(|(name, probe)| AnalogChannel {
                 name: format!("{}{name}", self.channel_prefix),
                 unit: probe.unit().to_string(),
             })
-            .collect()
+            .collect();
+        for prefix in &self.regulators {
+            for (index, field) in super::controlled_buck::REGULATOR_TRACE_FIELDS
+                .iter()
+                .enumerate()
+            {
+                channels.push(AnalogChannel {
+                    name: format!("{}{}.{field}", self.channel_prefix, prefix),
+                    unit: super::controlled_buck::output_unit(index).to_string(),
+                });
+            }
+        }
+        channels
     }
 
     /// Handle to the ring this adapter appends to.
@@ -492,6 +559,20 @@ impl AnalogCosimAdapter {
             .enumerate()
         {
             scratch[slot] = self.read_probe(probe);
+        }
+        let base = self.probes.len() + self.trace_extra.len();
+        for index in 0..self.regulators.len() {
+            let values = super::controlled_buck::trace_outputs(
+                self.solver.buck_observation(index, self.time_ns),
+                self.solver.buck_command(index),
+            );
+            for (offset, value) in values.into_iter().enumerate() {
+                scratch[base + 9 * index + offset] = match value {
+                    CosimSignalValue::Bool(v) => f64::from(u8::from(v)),
+                    CosimSignalValue::F64(v) => v,
+                    _ => unreachable!("typed regulator observation"),
+                };
+            }
         }
         {
             let mut trace = lock(&self.trace);
@@ -593,6 +674,25 @@ impl AnalogCosimAdapter {
 
 impl CosimAdapter for AnalogCosimAdapter {
     fn step(&mut self, step: CosimStep) -> SimResult<CosimStepResult> {
+        let mut commands = Vec::new();
+        for (index, prefix) in self.regulators.iter().enumerate() {
+            if let Some(command) = super::controlled_buck::parse_command(prefix, &step.inputs)
+                .map_err(SimulationError::Other)?
+            {
+                self.solver
+                    .validate_buck_command(index, command)
+                    .map_err(|error| SimulationError::Other(error.to_string()))?;
+                if step.time_ns <= self.time_ns && command != self.solver.buck_command(index) {
+                    return Err(SimulationError::Other("regulator command cannot change a completed or initial operating-point boundary".into()));
+                }
+                commands.push((index, command));
+            }
+        }
+        for (index, command) in commands {
+            self.solver
+                .set_buck_command(index, command)
+                .map_err(|error| SimulationError::Other(error.to_string()))?;
+        }
         for (name, value) in &step.inputs {
             self.apply_input(name, value)?;
         }
@@ -623,10 +723,26 @@ impl CosimAdapter for AnalogCosimAdapter {
         for (name, probe) in &self.probes {
             outputs.insert(name.clone(), CosimSignalValue::F64(self.read_probe(probe)));
         }
+        for (index, prefix) in self.regulators.iter().enumerate() {
+            let values = super::controlled_buck::observation_outputs(
+                self.solver.buck_observation(index, self.time_ns),
+            );
+            for (field, value) in crate::regulator::REGULATOR_OUTPUT_FIELDS.iter().zip(values) {
+                outputs.insert(super::controlled_buck::input_port(prefix, field), value);
+            }
+        }
         Ok(CosimStepResult { outputs })
     }
 
     fn input_initial_value(&self, name: &str) -> Option<CosimSignalValue> {
+        for (index, prefix) in self.regulators.iter().enumerate() {
+            let values = super::controlled_buck::command_inputs(self.solver.buck_command(index));
+            for (field, value) in crate::regulator::REGULATOR_INPUT_FIELDS.iter().zip(values) {
+                if name == super::controlled_buck::input_port(prefix, field) {
+                    return Some(value);
+                }
+            }
+        }
         match self.inputs.get(name)? {
             InputTarget::Thermistor(_, model) => Some(CosimSignalValue::F64(model.reference_c)),
             InputTarget::NetlistThermistor(index) => self.solver.circuit().resistors[*index]
@@ -642,6 +758,17 @@ impl CosimAdapter for AnalogCosimAdapter {
     /// A switch is boolean; sources and resistors are numeric. NTC numbers are
     /// degrees Celsius. An input the circuit does not use has no kind.
     fn input_kind(&self, name: &str) -> Option<CosimInputKind> {
+        for prefix in &self.regulators {
+            for field in crate::regulator::REGULATOR_INPUT_FIELDS {
+                if name == super::controlled_buck::input_port(prefix, field) {
+                    return Some(if field == "enabled" {
+                        CosimInputKind::Bool
+                    } else {
+                        CosimInputKind::Number
+                    });
+                }
+            }
+        }
         Some(match self.inputs.get(name)? {
             InputTarget::Switches(_) => CosimInputKind::Bool,
             InputTarget::VoltageSource(_)

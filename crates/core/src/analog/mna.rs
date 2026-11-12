@@ -275,6 +275,12 @@ pub struct Solver {
     voltage_source_values: Vec<f64>,
     current_source_values: Vec<f64>,
     switch_closed: Vec<bool>,
+    buck_commands: Vec<crate::regulator::RegulatorCommand>,
+    buck_enabled: Vec<bool>,
+    saved_buck_enabled: Vec<bool>,
+    buck_resistor_owner: Vec<Option<usize>>,
+    buck_vccs_owner: Vec<Option<usize>>,
+    buck_sink_owner: Vec<Option<usize>>,
 
     node_v: Vec<f64>,
     branch_i: Vec<f64>,
@@ -437,6 +443,30 @@ impl Solver {
         let sinks = circuit.power_sinks.len();
         let output_limits = circuit.output_current_limits.len();
         let slew_limits = circuit.slew_limited_vccs.len();
+        let buck_commands: Vec<_> = circuit
+            .controlled_bucks
+            .iter()
+            .map(|stage| stage.config.initial.command())
+            .collect();
+        let buck_count = buck_commands.len();
+        let (mut buck_resistor_owner, mut buck_vccs_owner, mut buck_sink_owner) = if buck_count == 0
+        {
+            (Vec::new(), Vec::new(), Vec::new())
+        } else {
+            (
+                vec![None; circuit.resistors.len()],
+                vec![None; circuit.vccs.len()],
+                vec![None; sinks],
+            )
+        };
+        for (index, binding) in circuit.controlled_bucks.iter().enumerate() {
+            let stage = &circuit.buck_macros[binding.macro_index];
+            buck_resistor_owner[stage.output_resistor] = Some(index);
+            buck_sink_owner[stage.power_sink] = Some(index);
+            if let Some(source) = stage.quiescent_vccs {
+                buck_vccs_owner[source] = Some(index);
+            }
+        }
 
         let mut solver = Self {
             circuit,
@@ -446,6 +476,12 @@ impl Solver {
             voltage_source_values,
             current_source_values,
             switch_closed,
+            buck_commands,
+            buck_enabled: vec![false; buck_count],
+            saved_buck_enabled: vec![false; buck_count],
+            buck_resistor_owner,
+            buck_vccs_owner,
+            buck_sink_owner,
             node_v: vec![0.0; nodes],
             branch_i: vec![0.0; branches],
             cap_v: vec![0.0; capacitors],
@@ -554,6 +590,162 @@ impl Solver {
             .resistors
             .iter()
             .position(|r| r.name.to_ascii_lowercase() == key)
+    }
+
+    /// Update only declared control parameters of an existing adjustable BUCK.
+    /// The command is held until the next solve and never rewrites reactive state.
+    pub fn set_buck_command(
+        &mut self,
+        index: usize,
+        command: crate::regulator::RegulatorCommand,
+    ) -> Result<(), AnalogError> {
+        self.validate_buck_command(index, command)?;
+        if self.buck_commands[index] == command {
+            return Ok(());
+        }
+        let binding = &self.circuit.controlled_bucks[index];
+        let stage = &self.circuit.buck_macros[binding.macro_index];
+        let reference_source = stage.reference_source;
+        let limit_source = stage.limit_source;
+        let reference = stage.model.aol / super::netlist::MACRO_GAIN_RESISTANCE
+            * command.configuration.target_voltage_v;
+        let limit = super::netlist::REGULATOR_LIMIT_GAIN * command.configuration.current_limit_a;
+        if let Some(q) = stage.quiescent_vccs {
+            self.circuit.vccs[q].gm = stage.model.iq / command.configuration.target_voltage_v;
+        }
+        self.buck_commands[index] = command;
+        self.set_current_source(reference_source, reference);
+        self.set_voltage_source(limit_source, limit);
+        self.cached_stamp = None;
+        self.restart = true;
+        self.settled = false;
+        Ok(())
+    }
+    pub fn validate_buck_command(
+        &self,
+        index: usize,
+        command: crate::regulator::RegulatorCommand,
+    ) -> Result<(), AnalogError> {
+        let binding = self
+            .circuit
+            .controlled_bucks
+            .get(index)
+            .ok_or_else(|| AnalogError::Config("unknown controlled BUCK".into()))?;
+        let stage = &self.circuit.buck_macros[binding.macro_index];
+        super::controlled_buck::validate_command(stage, command)?;
+        let previous = self.buck_commands[index];
+        if command.command_revision < previous.command_revision
+            || (command.command_revision == previous.command_revision && command != previous)
+        {
+            return Err(AnalogError::Config(
+                "BUCK command reverses a revision or changes an existing revision".into(),
+            ));
+        }
+        Ok(())
+    }
+    /// The legacy averaged law has no qualified reverse-current or reverse-power behavior.
+    /// The 1 pA / 1 pW allowances cover numerical residuals, not physical capability.
+    pub fn validate_controlled_buck_direction(&self) -> Result<(), AnalogError> {
+        for (index, binding) in self.circuit.controlled_bucks.iter().enumerate() {
+            let observed = self.buck_observation(index, 0);
+            if !observed.output_enabled {
+                continue;
+            }
+            let stage = &self.circuit.buck_macros[binding.macro_index];
+            observed.validate().map_err(AnalogError::Config)?;
+            if observed.output_current_a < -REGULATOR_REVERSE_CURRENT_TOLERANCE_A {
+                return Err(AnalogError::Config(format!(
+                    "controlled BUCK '{}' reverse current {:.12e} A is unsupported (numerical tolerance {:.1e} A); no regulator observation accepted",
+                    stage.name, observed.output_current_a, REGULATOR_REVERSE_CURRENT_TOLERANCE_A
+                )));
+            }
+            // A positive current can still absorb output energy at a negative SW voltage.
+            // Check the same signed port quantities as the stamp, not the current alone.
+            let output_voltage = node_diff(&self.node_v, stage.output, stage.reference);
+            let output_power = output_voltage * observed.output_current_a;
+            let input_power = observed.input_voltage_v * observed.input_current_a;
+            let quiescent_current = stage.model.iq
+                / self.buck_commands[index].configuration.target_voltage_v
+                * observed.feedback_voltage_v;
+            let quiescent_power = observed.input_voltage_v * quiescent_current;
+            if [
+                output_power,
+                input_power,
+                quiescent_current,
+                quiescent_power,
+            ]
+            .iter()
+            .any(|value| !value.is_finite())
+            {
+                return Err(AnalogError::Config(format!(
+                    "controlled BUCK '{}' has a nonfinite solved port quantity; no regulator observation accepted",
+                    stage.name
+                )));
+            }
+            if output_power < -REGULATOR_REVERSE_POWER_TOLERANCE_W
+                || input_power < -REGULATOR_REVERSE_POWER_TOLERANCE_W
+                || observed.input_current_a < -REGULATOR_REVERSE_CURRENT_TOLERANCE_A
+                || quiescent_current < -REGULATOR_REVERSE_CURRENT_TOLERANCE_A
+                || quiescent_power < -REGULATOR_REVERSE_POWER_TOLERANCE_W
+            {
+                return Err(AnalogError::Config(format!(
+                    "controlled BUCK '{}' reverse power is unsupported: SW={:.12e} V, Iout={:.12e} A, Pout={:.12e} W, Pin={:.12e} W, Iin={:.12e} A, Iq={:.12e} A (numerical tolerances {:.1e} W / {:.1e} A); no regulator observation accepted",
+                    stage.name, output_voltage, observed.output_current_a, output_power,
+                    input_power, observed.input_current_a, quiescent_current,
+                    REGULATOR_REVERSE_POWER_TOLERANCE_W, REGULATOR_REVERSE_CURRENT_TOLERANCE_A
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    pub fn buck_command(&self, index: usize) -> crate::regulator::RegulatorCommand {
+        self.buck_commands[index]
+    }
+    pub fn buck_observation(
+        &self,
+        index: usize,
+        time_ns: u64,
+    ) -> crate::regulator::RegulatorObservation {
+        let binding = &self.circuit.controlled_bucks[index];
+        let stage = &self.circuit.buck_macros[binding.macro_index];
+        let vin = node_diff(&self.node_v, stage.input, stage.reference);
+        let fb = node_diff(&self.node_v, stage.feedback, stage.reference);
+        let enable = node_diff(&self.node_v, binding.enable_node, stage.reference);
+        let qualified = binding.config.supplies_qualified(vin, enable);
+        let enabled = self.buck_enabled[index];
+        let sink = &self.circuit.power_sinks[stage.power_sink];
+        let out = node_diff(&self.node_v, stage.output, stage.reference);
+        let current = if enabled {
+            -self.branch_i[sink.control_branch]
+        } else {
+            0.0
+        };
+        let input_current = if enabled {
+            out * current / (stage.model.eff * vin.max(POWER_SINK_VMIN))
+                + stage.model.iq / self.buck_commands[index].configuration.target_voltage_v * fb
+        } else {
+            0.0
+        };
+        crate::regulator::RegulatorObservation {
+            time_ns,
+            input_voltage_v: vin,
+            feedback_voltage_v: fb,
+            input_current_a: input_current,
+            output_current_a: current,
+            output_enabled: enabled,
+            qualified,
+            applied_revision: self.buck_commands[index].command_revision,
+        }
+    }
+    fn desired_buck_enabled(&self, index: usize, nodes: &[f64]) -> bool {
+        let binding = &self.circuit.controlled_bucks[index];
+        let stage = &self.circuit.buck_macros[binding.macro_index];
+        self.buck_commands[index].configuration.enabled
+            && binding.config.supplies_qualified(
+                node_diff(nodes, stage.input, stage.reference),
+                node_diff(nodes, binding.enable_node, stage.reference),
+            )
     }
 
     /// Set a positive, finite resistance in ohms for the next solver step.
@@ -793,7 +985,7 @@ impl Solver {
         }
         self.apply_initial_conditions();
         self.restart = true;
-        Ok(())
+        self.validate_controlled_buck_direction()
     }
 
     /// `.ic V(node)=v` and element `ic=` override the operating point.
@@ -986,6 +1178,7 @@ impl Solver {
         self.saved_jfet_vgd.copy_from_slice(&self.jfet_vgd);
         self.saved_jfet_vds.copy_from_slice(&self.jfet_vds);
         self.saved_sink_point.copy_from_slice(&self.sink_point);
+        self.saved_buck_enabled.copy_from_slice(&self.buck_enabled);
         self.saved_output_limit_point
             .copy_from_slice(&self.output_limit_point);
         self.saved_slew_limit_point
@@ -1004,6 +1197,7 @@ impl Solver {
         self.jfet_vgd.copy_from_slice(&self.saved_jfet_vgd);
         self.jfet_vds.copy_from_slice(&self.saved_jfet_vds);
         self.sink_point.copy_from_slice(&self.saved_sink_point);
+        self.buck_enabled.copy_from_slice(&self.saved_buck_enabled);
         self.output_limit_point
             .copy_from_slice(&self.saved_output_limit_point);
         self.slew_limit_point
@@ -1287,6 +1481,9 @@ impl Solver {
 
         self.node_v.copy_from_slice(&self.solution[..self.nodes]);
         self.branch_i.copy_from_slice(&self.solution[self.nodes..]);
+        // Keep this at the solver acceptance seam: direct callers and every
+        // convergence step cut must obey the same forward-only model scope.
+        self.validate_controlled_buck_direction()?;
         self.time = time;
         self.step_index += 1;
         Ok(())
@@ -1339,7 +1536,15 @@ impl Solver {
         self.matrix.iter_mut().for_each(|cell| *cell = 0.0);
         self.rhs.iter_mut().for_each(|cell| *cell = 0.0);
 
-        for resistor in &self.circuit.resistors {
+        for (index, resistor) in self.circuit.resistors.iter().enumerate() {
+            if self
+                .buck_resistor_owner
+                .get(index)
+                .and_then(|owner| *owner)
+                .is_some_and(|owner| !self.buck_enabled[owner])
+            {
+                continue;
+            }
             conductance(
                 &mut self.matrix,
                 dim,
@@ -1560,7 +1765,15 @@ impl Solver {
             add(matrix, dim, source.n, row, -1.0);
         }
         // G: gm·(v(nc+) − v(nc−)) leaves n+ and enters n−.
-        for source in &circuit.vccs {
+        for (index, source) in circuit.vccs.iter().enumerate() {
+            if self
+                .buck_vccs_owner
+                .get(index)
+                .and_then(|owner| *owner)
+                .is_some_and(|owner| !self.buck_enabled[owner])
+            {
+                continue;
+            }
             add(matrix, dim, source.p, source.cp, source.gm);
             add(matrix, dim, source.p, source.cn, -source.gm);
             add(matrix, dim, source.n, source.cp, -source.gm);
@@ -1726,6 +1939,10 @@ pub const NEWTON_VNTOL: f64 = 1e-12;
 
 /// Absolute floor for a branch current, amps. SPICE's `ABSTOL` is 1e-12.
 pub const NEWTON_ABSTOL: f64 = 1e-15;
+/// Numerical residual allowance only, not supported reverse-current capacity.
+pub const REGULATOR_REVERSE_CURRENT_TOLERANCE_A: f64 = 1e-12;
+/// Numerical residual allowance only, not supported reverse-power capacity.
+pub const REGULATOR_REVERSE_POWER_TOLERANCE_W: f64 = 1e-12;
 
 /// Share the exact device law between Newton stamping and current observation.
 fn diode_operating_point(diode: &Diode, vj: f64) -> device::DiodeOp {
@@ -1791,6 +2008,16 @@ impl Solver {
     }
 
     fn newton_converged(&self) -> bool {
+        if self
+            .buck_enabled
+            .iter()
+            .enumerate()
+            .any(|(index, enabled)| {
+                *enabled != self.desired_buck_enabled(index, &self.solution[..self.nodes])
+            })
+        {
+            return false;
+        }
         if self.limiter_clamped {
             return false;
         }
@@ -1838,6 +2065,13 @@ impl Solver {
     /// damped by the SPICE limiters.
     fn relinearise(&mut self) {
         self.limiter_clamped = false;
+        for index in 0..self.buck_enabled.len() {
+            let enabled = self.desired_buck_enabled(index, &self.solution[..self.nodes]);
+            if self.buck_enabled[index] != enabled {
+                self.buck_enabled[index] = enabled;
+                self.limiter_clamped = true;
+            }
+        }
 
         for index in 0..self.circuit.diodes.len() {
             let diode = &self.circuit.diodes[index];
@@ -2558,6 +2792,14 @@ impl Solver {
         // the branch current is an unknown like a node voltage, so its term
         // goes into the branch column directly.
         for (index, sink) in self.circuit.power_sinks.iter().enumerate() {
+            if self
+                .buck_sink_owner
+                .get(index)
+                .and_then(|owner| *owner)
+                .is_some_and(|owner| !self.buck_enabled[owner])
+            {
+                continue;
+            }
             let [vin, vo, ib] = self.sink_point[index];
             let floored = vin < POWER_SINK_VMIN;
             let d = if floored { POWER_SINK_VMIN } else { vin };

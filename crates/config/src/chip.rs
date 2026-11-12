@@ -916,6 +916,13 @@ pub struct ChipDescriptor {
     /// Distinct physical supply rails and explicit sampled supervision.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub power_domains: Option<crate::PowerDomainsConfig>,
+    /// Explicit physical internal regulator stages; no implicit supply source.
+    #[serde(
+        default,
+        skip_serializing_if = "Vec::is_empty",
+        deserialize_with = "crate::deserialize_internal_regulators"
+    )]
+    pub internal_regulators: Vec<crate::InternalRegulatorConfig>,
     /// Path-loaded YAML only (`include: common.yaml` or a list). Built-in
     /// `from_str` does not expand includes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1579,6 +1586,7 @@ impl From<labwired_ir::IrDevice> for ChipDescriptor {
             reset_input: None,
             supply_monitor: None,
             power_domains: None,
+            internal_regulators: Vec::new(),
             include: None,
         }
     }

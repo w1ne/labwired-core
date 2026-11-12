@@ -36,6 +36,7 @@
 //! * [`trace`] — the bounded sample ring the oscilloscope reads.
 
 pub mod adapter;
+pub mod controlled_buck;
 pub mod device;
 pub mod mna;
 pub mod netlist;

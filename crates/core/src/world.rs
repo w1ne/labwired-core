@@ -279,6 +279,9 @@ pub trait MachineTrait: Send {
     fn power_domain_status(&self) -> Option<crate::power_domains::PowerDomainStatus> {
         None
     }
+    fn validate_internal_regulator_admission(&self) -> Result<(), String> {
+        Ok(())
+    }
     fn bind_world_cosim(
         &mut self,
         _node: &str,
@@ -605,6 +608,9 @@ impl<C: Cpu + 'static> MachineTrait for Machine<C> {
     }
     fn power_domain_status(&self) -> Option<crate::power_domains::PowerDomainStatus> {
         Machine::power_domain_status(self)
+    }
+    fn validate_internal_regulator_admission(&self) -> Result<(), String> {
+        self.bus.regulators.require_sampled_source()
     }
     fn bind_world_cosim(
         &mut self,
@@ -2144,6 +2150,13 @@ impl World {
         if expected != actual || nodes.len() != manifest.nodes.len() {
             anyhow::bail!("resolved node ids must match environment manifest nodes exactly");
         }
+        for node in &nodes {
+            crate::regulator::require_model_presence(
+                node.chip.internal_regulators.len(),
+                !manifest.cosim_models.is_empty(),
+            )
+            .map_err(|reason| anyhow::anyhow!("node '{}': {reason}", node.id))?;
+        }
         // Shared analog belongs to the environment. Per-node `cosim_models`
         // would duplicate a circuit or leave it unstepped, so they remain
         // refused even when the environment declares one shared model.
@@ -2375,6 +2388,11 @@ impl World {
             )?;
             circuit.check_gpio_ownership(&world.machines, &world.pending_nets)?;
             world.cosim = Some(circuit);
+        }
+        for (id, machine) in &world.machines {
+            machine
+                .validate_internal_regulator_admission()
+                .map_err(|reason| anyhow::anyhow!("node '{id}': {reason}"))?;
         }
         world.finish_pad_watches().context("gpio_net")?;
 
@@ -2727,3 +2745,7 @@ external_devices: []
         assert_eq!(world.machines["n1"].read_u8(0x4000_1000).unwrap(), 0);
     }
 }
+
+#[cfg(test)]
+#[path = "world/controlled_buck_tests.rs"]
+mod controlled_buck_tests;

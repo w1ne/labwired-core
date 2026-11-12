@@ -1391,6 +1391,17 @@ pub trait Peripheral: std::fmt::Debug + Send {
         Err("peripheral has no sampled brown-out control capability".into())
     }
     /// Called after all physical rail observations are published atomically.
+    /// Opt in to an explicitly declared, sampled internal regulator stage.
+    fn attach_regulator_control(
+        &mut self,
+        _control: crate::regulator::RegulatorControl,
+    ) -> Result<(), String> {
+        Err("peripheral does not support internal regulator control".into())
+    }
+
+    /// Consume every newly solved regulator observation, before CPU transactions.
+    fn sync_regulator_control(&mut self) {}
+
     fn sync_power_domains(&mut self) {}
     /// One actual reset transition, after the peripheral reset callbacks.
     /// CPU vector reload on release does not call this a second time.

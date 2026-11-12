@@ -4,6 +4,37 @@ use labwired_config::{ChipDescriptor, GpioInputThresholds};
 use std::collections::BTreeMap;
 
 impl SystemBus {
+    pub fn attach_internal_regulators(&mut self, chip: &ChipDescriptor) -> anyhow::Result<()> {
+        labwired_config::validate_internal_regulators(
+            &chip.internal_regulators,
+            chip.power_domains.as_ref(),
+        )
+        .map_err(anyhow::Error::msg)?;
+        self.regulators = crate::regulator::RegulatorRegistry::new(&chip.internal_regulators);
+        for config in &chip.internal_regulators {
+            let index = self
+                .find_peripheral_index_by_name(&config.control_peripheral)
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "regulator control peripheral '{}' is absent",
+                        config.control_peripheral
+                    )
+                })?;
+            let control = self
+                .regulators
+                .get(&config.id)
+                .expect("declared regulator")
+                .control
+                .clone();
+            self.peripherals[index]
+                .dev
+                .attach_regulator_control(control)
+                .map_err(|reason| {
+                    anyhow::anyhow!("internal regulator '{}': {reason}", config.id)
+                })?;
+        }
+        Ok(())
+    }
     pub fn attach_mcu_power_domains(&mut self, chip: &ChipDescriptor) -> anyhow::Result<()> {
         if chip.power_domains.is_some() && chip.supply_monitor.is_some() {
             anyhow::bail!("power_domains and legacy supply_monitor are mutually exclusive");

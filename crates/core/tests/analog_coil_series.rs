@@ -35,6 +35,7 @@ mod analog {
             trace: vec!["v(d)".to_string()],
             trace_samples: ring,
             thermistors: BTreeMap::new(),
+            regulators: BTreeMap::new(),
         }
     }
 

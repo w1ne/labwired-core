@@ -39,6 +39,7 @@ pub mod plugin;
 pub mod power;
 pub mod power_domains;
 pub mod profile;
+pub mod regulator;
 pub mod reset_input;
 pub mod runtime_snapshot;
 pub mod sched;

@@ -1335,3 +1335,29 @@ cosim_models:
         "{second}"
     );
 }
+
+#[test]
+fn declared_internal_regulator_cannot_use_the_empty_wasm_attachment_path() {
+    let mut sim = build(PLAIN_SYSTEM);
+    assert!(
+        sim.attach_cosim(&manifest(PLAIN_SYSTEM)).is_ok(),
+        "legacy empty chip remains valid"
+    );
+    let stage:labwired_config::InternalRegulatorConfig=serde_yaml::from_str("id: converter\nkind: buck\ncontrol_peripheral: witness\ninput_domain: input\nenable_domain: enable\npins: {switch_output: [LX], feedback: [FB], ground: [PGND]}\ninitial: {enabled: true, target_voltage_v: 1.1, current_limit_a: 0.24, rated_load_a: 0.2}\nmodel: {max_duty: 1, quiescent_current_a: 0, output_resistance_ohms: 0.01, efficiency: 1, open_loop_gain: 100000}\n").unwrap();
+    sim.machine.as_mut().unwrap().bus.regulators =
+        labwired_core::regulator::RegulatorRegistry::new(&[stage]);
+    let error = sim.attach_cosim(&manifest(PLAIN_SYSTEM)).unwrap_err();
+    assert!(error.contains("no co-simulation model"), "{error}");
+    let machine = sim.machine.as_mut().unwrap();
+    let before = machine.total_cycles;
+    let error = machine
+        .advance(AdvanceRequest::single())
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("CPU execution refused"), "{error}");
+    assert_eq!(machine.total_cycles, before);
+    assert!(sim
+        .runtime_snapshot_refusal()
+        .unwrap()
+        .contains("regulator command history"));
+}

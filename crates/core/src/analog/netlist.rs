@@ -1991,6 +1991,9 @@ pub struct Circuit {
     pub ccvs: Vec<Ccvs>,
     /// Power-balance sinks, one per lowered `BUCK`.
     pub power_sinks: Vec<PowerSink>,
+    /// Metadata for opt-in control of existing adjustable BUCK macros.
+    pub buck_macros: Vec<super::controlled_buck::BuckMacro>,
+    pub controlled_bucks: Vec<super::controlled_buck::BuckStageBinding>,
     /// Op-amp output stages with an explicit `IOLIM`.
     pub output_current_limits: Vec<OutputCurrentLimit>,
     /// Op-amp compensation stages with an explicit `SR`.
@@ -4432,6 +4435,7 @@ fn lower_regulator(
     // should be.
     let a = lower.node("a");
     lower.resistor("ra", a, None, ra);
+    let reference_source = lower.circuit.current_sources.len();
     match feedback {
         Some(fb) => {
             // Error amplifier: AOL/Ra · (VREF − (v(fb) − v(ref))) into a.
@@ -4468,6 +4472,7 @@ fn lower_regulator(
     // Output: v(oi) = v(ref) + v(a), behind ROUT.
     let oi = lower.node("oi");
     lower.vcvs("eo", oi, reference, a, None, 1.0);
+    let output_resistor = lower.circuit.resistors.len();
     lower.resistor("ro", oi, out, model.rout);
     let eo = lower.name("eo");
 
@@ -4487,6 +4492,7 @@ fn lower_regulator(
     let l0 = lower.node("l0");
     lower.vcvs("el", l0, m, a, None, 1.0);
     let l1 = lower.node("l1");
+    let limit_source = lower.circuit.voltage_sources.len();
     lower.voltage("vl", l1, l0, REGULATOR_LIMIT_GAIN * model.ilim);
     let name = lower.name("dl");
     lower.circuit.diodes.push(Diode {
@@ -4501,6 +4507,7 @@ fn lower_regulator(
 
     // Input current. The output E draws I(out) from ref; a linear part takes
     // exactly that from in (F cancels it at ref), a buck takes the power.
+    let power_sink = lower.circuit.power_sinks.len();
     if model.kind == RegulatorKind::Buck {
         let name = lower.name("pin");
         lower.circuit.power_sinks.push(PowerSink {
@@ -4527,11 +4534,30 @@ fn lower_regulator(
 
     // Quiescent (or adjust-pin) current, from in into ref, in proportion to
     // how far the part is into regulation.
+    let quiescent_vccs = (model.iq > 0.0).then_some(lower.circuit.vccs.len());
     if model.iq > 0.0 {
         match feedback {
             Some(fb) => lower.vccs("gq", input, reference, fb, reference, model.iq / model.vref),
             None => lower.vccs("gq", input, reference, a, None, model.iq / setpoint),
         }
+    }
+    if adjustable_buck {
+        lower
+            .circuit
+            .buck_macros
+            .push(super::controlled_buck::BuckMacro {
+                name: device.name.clone(),
+                input,
+                output: out,
+                reference,
+                feedback: feedback.expect("adjustable BUCK feedback"),
+                model,
+                reference_source,
+                limit_source,
+                output_resistor,
+                power_sink,
+                quiescent_vccs,
+            });
     }
     Ok(())
 }
