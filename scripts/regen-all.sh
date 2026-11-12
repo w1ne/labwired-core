@@ -59,6 +59,9 @@ run python3 scripts/gen_esp_systimer_regs.py
 echo "==> UPDATE_CONFORMANCE_BASELINE=1 cargo test -p labwired-core --test chip_conformance"
 UPDATE_CONFORMANCE_BASELINE=1 cargo test -q -p labwired-core --test chip_conformance >/dev/null
 
+# Model ratings consume the conformance board, so refresh them after it.
+run python3 scripts/generate_model_ratings.py
+
 # Same arrangement for the bus-visibility board (which chips' I2C/SPI/UART the
 # logic analyzer can actually see).
 #

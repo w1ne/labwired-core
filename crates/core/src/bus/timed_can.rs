@@ -8,6 +8,7 @@
 //! put an on-chip controller in timed mode, read it for the bus with its
 //! clock, and apply what the bus decided.
 
+use super::timer_kernel_clock::Apb;
 use super::SystemBus;
 use crate::network::timed_can::{CanNodePoll, CanNodeUpdate};
 
@@ -65,25 +66,9 @@ impl SystemBus {
     }
 
     /// PCLK1, the bxCAN clock: HCLK (the core clock) divided by the APB1
-    /// prescaler in RCC_CFGR.PPRE1. The RCC family is told apart by where
-    /// its APB1 enable register sits ([`crate::Peripheral::clock_gate_reg_offset`]):
-    /// 0x1C on the F1 (CFGR 0x04, PPRE1 bits 10:8, RM0008 §7.3.2), 0x40 on the
-    /// F4 (CFGR 0x08, bits 12:10, RM0090 §7.3.3), 0x58 on the L4 and G4 (CFGR
-    /// 0x08, bits 10:8, RM0351 §6.4.3, RM0440 §7.4.3). 0xx divides by 1, 100 by
-    /// 2, 101 by 4, 110 by 8, 111 by 16. Any other clock controller, or none,
-    /// gives the core clock.
+    /// prescaler ([`SystemBus::stm32_apb_div`]). Any other clock controller,
+    /// or none, gives the core clock.
     fn apb1_hz(&self) -> u64 {
-        let Some(rcc) = self.rcc_idx.and_then(|idx| self.peripherals.get(idx)) else {
-            return self.cpu_hz;
-        };
-        let (cfgr, shift) = match rcc.dev.clock_gate_reg_offset("apb1enr") {
-            Some(0x1C) => (0x04, 8),
-            Some(0x40) => (0x08, 10),
-            Some(0x58) => (0x08, 8),
-            _ => return self.cpu_hz,
-        };
-        let ppre = (rcc.dev.read_u32(cfgr).unwrap_or(0) >> shift) & 0x7;
-        let div = if ppre < 4 { 1 } else { 1u64 << (ppre - 3) };
-        self.cpu_hz / div
+        self.cpu_hz / self.stm32_apb_div(Apb::One).unwrap_or(1)
     }
 }

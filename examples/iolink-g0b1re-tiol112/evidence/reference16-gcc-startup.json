@@ -1,0 +1,93 @@
+{
+  "schema": "labwired-g0-tiol112-evidence-v1",
+  "test_status": "passed",
+  "profile": "reference_startup",
+  "firmware": {
+    "repository": "https://github.com/w1ne/iolinki",
+    "source_commit": "17809614de2c40fd29c0e8b24e9897807311596e",
+    "elf_name": "reference-device.elf",
+    "elf_sha256": "8efafa112fe8371ca58ceb429f8d9e8a236c104d5818b91b5df3141ce96aedfb",
+    "compiler": "Arm GCC13.2.1 20231009 (15:13.2.rel1-2), newlib",
+    "artifact_url": "https://github.com/w1ne/iolinki/actions/runs/42014224193",
+    "build_manifest": null,
+    "published_source_match": null
+  },
+  "runtime_model_commit": "7dc46a5803711a3fd63016b2d2c8e5d40a08e965",
+  "core_workspace_base_commit": "42b4a44c42814c2c36515c8f8f0b376467f3a700",
+  "model_source_sha256": {
+    "configs/chips/stm32g0b1re.yaml": "af092f3abf70e9408f8a2eaf9c782b2f3470f0f4af99482beed95a60436e6905",
+    "crates/core/src/network/timed_uart.rs": "8e8357cde18b8166a4021b49fc0b1a7bca568a8464a8e8f3fac2d229e902fe10",
+    "crates/core/src/peripherals/components/tiol112.rs": "0bdc230677d2c8c91dfdbac5680b08381565d5214ed3a6f4d991cac0f9a88ad7",
+    "crates/core/src/peripherals/stm32g0_clock.rs": "c028256d121918d9053aa14200f86d66f79bbfe94a7f64797dadec49c5cd7491",
+    "crates/core/src/peripherals/rcc.rs": "5a76955e9670071fb1db07d44ef990e29b79491bdf9d0dd6c9395ce028125303",
+    "crates/core/src/peripherals/uart.rs": "d40df6ad57aa7755840535b3d4232e7027f85ae55aca24dcd2f2a8d9f2caf96a",
+    "crates/core/src/peripherals/uart/timed.rs": "b5e4903caa24865c50b49816f5b5a316b37b297c8de097b7cc8ec8b8c3c19b52",
+    "crates/core/tests/g0_customer_timing.rs": "a8c4b44e52aa7dd2ae3fd2fe09a4f0c1e14866f3487ba10c3962ce6a72ddc8f8"
+  },
+  "raw_report_sha256": "82873c79888f253d9b977f60fc9c7988408dbcdeb4c895b11503a63658bb4109",
+  "cpu_hz": 16000000,
+  "baud": 38400,
+  "firmware_dll_timing_enforcement": {
+    "enabled": false,
+    "evidence": "source-pinned build declaration; legacy ELF has no exported timing flag",
+    "external_cq_ta_and_gap_assertions": "always enabled, independent of DLL enforcement"
+  },
+  "benchmark_read_count": 0,
+  "benchmark_write_count": 0,
+  "phase_results": {
+    "STARTUP": {
+      "count": 1,
+      "ta_min_us": 124.116674,
+      "ta_max_us": 124.116674,
+      "reply_byte_counts": [
+        2
+      ],
+      "maximum_reply_byte_gap_tbit": 0,
+      "maximum_en_to_first_uart_start_us": 34.1875
+    },
+    "PREOPERATE": {
+      "count": 1,
+      "ta_min_us": 115.991674,
+      "ta_max_us": 115.991674,
+      "reply_byte_counts": [
+        2
+      ],
+      "maximum_reply_byte_gap_tbit": 0,
+      "maximum_en_to_first_uart_start_us": 34.1875
+    },
+    "PREOPERATE_DEVICE_OPERATE": {
+      "count": 1,
+      "ta_min_us": 141.304174,
+      "ta_max_us": 141.304174,
+      "reply_byte_counts": [
+        1
+      ],
+      "maximum_reply_byte_gap_tbit": 0,
+      "maximum_en_to_first_uart_start_us": 33.125
+    }
+  },
+  "actual_application_request_intervals_us": [],
+  "negative_controls": [],
+  "limits_checked": {
+    "device_byte_gap_max_tbit": 3,
+    "ta_max_tbit": 10,
+    "ta_min_tbit": 1
+  },
+  "fidelity_gaps": [
+    {
+      "address": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated",
+      "first_pc": "0x0",
+      "kind": "unpowered_rail_assumed"
+    }
+  ],
+  "limits": [
+    "Cortex-M instruction-cycle model is not calibrated silicon WCET",
+    "64MHz uses a fixed post-PLL operating timebase; clock transitions not timed",
+    "TI propagation uses configured datasheet maxima; enable/disable4us are configurable typical scenarios, not maximum guarantees",
+    "WAKE is a GPIO stimulus, not physical current-pulse detection",
+    "No IAR/Beckhoff/electrical conformance claim"
+  ],
+  "timing_reference": "IO-Link Interface and System Specification v1.1.4, June2024, A.3.4/A.3.5"
+}

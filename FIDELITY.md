@@ -262,7 +262,9 @@ RAM/flash regions correctly modeled as backing store. Real register models
 - **THUNK-LIB (real cheat — skips compiled firmware):**
   `esp_idf_heap_caps_init/malloc/calloc/free/realloc` (bump allocator that
   returns REAL DRAM — memory backing, not a behaviour fake),
-  `x_queue_create_mutex_static_echo` (idle-task static mutex),
+  `x_queue_create_mutex_static_echo` (idle-task static mutex; retired from the
+  Arduino-ESP32 profile and the wasm install, because it left IDF 5.x
+  `xSemaphoreCreateMutexWithCaps` queues uninitialised and the UART tx_mux deadlocked),
   `x_task_get_current_task_handle`, `getreent_dram_fake_ptr`,
   `esp_chip_info_stub`, `xthal_window_spill_thunk`.
   - **RETIRED in the canonical proof harness** (`tests/e2e_labwired_ereader.rs`):
@@ -402,7 +404,8 @@ IPC, the SPI bus-lock, loopTask-on-APP_CPU, and the log mutex.
   Un-thunk `esp_perip_clk_init` (already nop-equivalent — clock gating not enforced). Drop
   the redundant RTC_APB_FREQ write in main.rs (rtc_cntl seeds it).
 - misc: un-thunk `esp_cpu_unstall` (real DPORT write, harmless), `core_intr_matrix_clear`
-  (route_intr already real), model classic RNG → `esp_random`/`esp_fill_random` real;
+  (route_intr already real), model classic RNG → `esp_random`/`esp_fill_random` real (done: `wdev_rnd` at
+  0x6003_5144, both thunks removed);
   reclassify `_esp_error_check_failed` nop→`abort_halt`.
 - FreeRTOS: `xQueueCreateMutexStatic` real (caller buffer, no heap), `xTaskGetCurrentTaskHandle`
   real (already reads real pxCurrentTCB under live SMP).

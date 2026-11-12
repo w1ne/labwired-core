@@ -44,6 +44,7 @@ mod mmio_words;
 mod motors;
 pub(crate) use motors::classify_logic_rail;
 mod observed_device;
+pub mod open_drain;
 pub(crate) mod part_pack;
 mod pms;
 mod policy;
@@ -54,6 +55,7 @@ mod samd51_storage;
 pub mod sim_inputs;
 mod tick;
 mod timed_can;
+mod timer_kernel_clock;
 pub(crate) use tick::reconcile_nvic_level;
 
 pub use can_devices::*;
@@ -474,6 +476,9 @@ pub struct SystemBus {
     /// path; the core reaches it through `Bus::rp2350_dcp_mut` only from the
     /// cold coprocessor-instruction path.
     pub rp2350_dcp: Option<Box<crate::cpu::cortex_m::rp2350_dcp::Rp2350Dcp>>,
+    /// The chip lists `coprocessors: [rp2350_gpioc]`: p0 instructions run as
+    /// SIO GPIO accesses (see `cpu::cortex_m::rp2350_gpioc`).
+    pub rp2350_gpioc: bool,
     /// Which family's atomic register aliases this chip implements (see
     /// `ChipDescriptor::atomic_register_aliases`). When enabled, word accesses
     /// in the peripheral window whose address has bits [13:12] set decode as a
@@ -682,6 +687,11 @@ pub struct SystemBus {
     /// Classification is **peripheral-owned** (CPU-agnostic bus); see
     /// [`Peripheral::mmio_access_class`].
     freerunning_timer_poll_mmio: std::cell::Cell<u32>,
+    /// Consecutive timer-only MMIO count across hosted Cortex-M windows.
+    /// A same-batch pair still coalesces immediately; split reads wait until
+    /// four timer-only accesses (more than one `time_us_64`) so a one-shot
+    /// timestamp cannot skip. See [`Self::take_timer_poll_coalesce_eligible`].
+    timer_poll_carry: std::cell::Cell<u32>,
     /// Batch-local count of [`MmioAccessClass::SideEffecting`] accesses.
     /// Any non-zero value disqualifies timer-poll coalesce for that batch.
     side_effecting_mmio: std::cell::Cell<u32>,
@@ -752,6 +762,8 @@ pub struct SystemBus {
     ///
     /// [`service_device_pin_drives`]: Self::service_device_pin_drives
     pub(crate) device_pin_pads: Vec<DevicePinPad>,
+    /// Explicitly opted-in pulled-up device-output nets.
+    pub(crate) device_open_drain_nets: open_drain::OpenDrainNets,
     /// Off-chip models the bus holds ONLY so something can read them back — the
     /// WS2812 strip, the hobby servo, the STEP/DIR and unipolar steppers, the
     /// H-bridge channel, the parallel ILI9341 panel. Each is driven by a GPIO
@@ -911,6 +923,7 @@ pub struct SystemBus {
     /// The chip's supply supervisor (see [`crate::power`]): idle, with the
     /// ideal rail assumed, until a circuit is routed to `board.power.vdd_volts`.
     pub(crate) supply: crate::power::SupplySupervisor,
+    pub(crate) reset_input: crate::reset_input::ResetInputState,
     /// What the system manifest DECLARED under `external_devices:`, verbatim.
     ///
     /// Purely identity metadata for [`crate::Machine::inspect`], which joins it

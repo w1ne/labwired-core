@@ -1,0 +1,16 @@
+# STM32F407ZG boots the family smoke image (firmware-nucleo-f407-demo) on its own
+# exact descriptor. Assertions are the family smoke's, unchanged.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nucleo-f407-demo"
+  system: "./system.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "NUCLEO-F407 ready"
+  - uart_ordered:
+      - "hb=0 ld2=on"
+      - "hb=1 ld2=off"
+      - "hb=2 ld2=on"
+      - "hb=3 ld2=off"
+  - expected_stop_reason: max_steps

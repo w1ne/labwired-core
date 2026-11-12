@@ -40,6 +40,9 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     // (PB7 = portb bit 7, PK0 = portk bit 0); its config declares no `pins:`.
     "atmega2560",
     "atmega328p",
+    // ATmega328PB currently has no package-pad map; its smoke is CPU/MMIO
+    // level and makes no physical pad-routing claim.
+    "atmega328pb",
     // PIC24 M0 declares no `pins:` yet — the 44-pin map transcription is an
     // M1 item (docs/pic24-m0-reference.md). The M0 fixture drives no GPIO, so
     // no pad is read as a fact and there is nothing to mis-parse.
@@ -99,7 +102,6 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     // this part specifically because it is the first nRF with FOUR ports: P3.04
     // resolves to gpio3 bit 4, and the chip declares gpio3.
     "nrf54lm20a",
-    "rp2040",
     "rp2350",
     "stm32f103",
     "stm32f401",
@@ -112,6 +114,8 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     // directly onto gpio<port>/bit; no alternate package-label scheme exists
     // to transcribe a `pins:` override from (same reasoning as the peers above).
     "stm32g071",
+    // G431RB is the G474RE's smaller sibling: same PA/PB/PC label form.
+    "stm32g431rb",
     "stm32g474re",
     "stm32h563",
     "stm32h735",

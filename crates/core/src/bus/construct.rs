@@ -95,6 +95,7 @@ impl SystemBus {
             cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
             freerunning_timer_poll_mmio: std::cell::Cell::new(0),
+            timer_poll_carry: std::cell::Cell::new(0),
             side_effecting_mmio: std::cell::Cell::new(0),
             batch_stop: Default::default(),
             memory_reads: std::cell::Cell::new(0),
@@ -109,11 +110,13 @@ impl SystemBus {
             flash_boot_alias: true,
             atomic_register_aliases: AtomicAliasFlavour::None,
             rp2350_dcp: None,
+            rp2350_gpioc: false,
             ns_alias_offset: None,
             mem_aliases: Vec::new(),
             resident_tick_interval_override: None,
             gpio_devices: Vec::new(),
             device_pin_pads: Vec::new(),
+            device_open_drain_nets: Default::default(),
             observed: Vec::new(),
             motors: Vec::new(),
             ina219_senses: Vec::new(),
@@ -146,6 +149,7 @@ impl SystemBus {
             analog_pin_map: std::collections::HashMap::new(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: crate::reset_input::ResetInputState::default(),
             supply: crate::power::SupplySupervisor::default(),
             supply_domains: Default::default(),
             external_device_decls: Vec::new(),
@@ -208,6 +212,7 @@ impl SystemBus {
             cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
             freerunning_timer_poll_mmio: std::cell::Cell::new(0),
+            timer_poll_carry: std::cell::Cell::new(0),
             side_effecting_mmio: std::cell::Cell::new(0),
             batch_stop: Default::default(),
             memory_reads: std::cell::Cell::new(0),
@@ -222,11 +227,13 @@ impl SystemBus {
             flash_boot_alias: true,
             atomic_register_aliases: AtomicAliasFlavour::None,
             rp2350_dcp: None,
+            rp2350_gpioc: false,
             ns_alias_offset: None,
             mem_aliases: Vec::new(),
             resident_tick_interval_override: None,
             gpio_devices: Vec::new(),
             device_pin_pads: Vec::new(),
+            device_open_drain_nets: Default::default(),
             observed: Vec::new(),
             motors: Vec::new(),
             ina219_senses: Vec::new(),
@@ -259,6 +266,7 @@ impl SystemBus {
             analog_pin_map: std::collections::HashMap::new(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: crate::reset_input::ResetInputState::default(),
             supply: crate::power::SupplySupervisor::default(),
             supply_domains: Default::default(),
             external_device_decls: Vec::new(),
@@ -523,11 +531,24 @@ impl SystemBus {
             .collect();
     }
 
+    /// Set or clear the TX capture sink on a classic ESP32 UART (`Esp32Uart`).
+    /// Shared by the named and unnamed console paths so they do not each add a
+    /// `downcast_mut` token — the downcast ratchet's ceiling must not rise.
+    fn try_set_esp32_uart_sink(
+        any: &mut dyn std::any::Any,
+        sink: Option<Arc<Mutex<Vec<u8>>>>,
+    ) -> bool {
+        if let Some(uart) = any.downcast_mut::<crate::peripherals::esp32::uart::Esp32Uart>() {
+            uart.set_sink(sink);
+            return true;
+        }
+        false
+    }
+
     /// Attach a UART TX capture sink to any UART peripherals on this bus.
     ///
     /// When `echo_stdout` is false, UART writes will no longer be printed to stdout.
     pub fn attach_uart_tx_sink(&mut self, sink: Arc<Mutex<Vec<u8>>>, echo_stdout: bool) {
-        use crate::peripherals::esp32::uart::Esp32Uart;
         use crate::peripherals::esp_uart::EspUart;
         use crate::peripherals::nrf52::uarte::Nrf52Uarte;
         use crate::peripherals::nrf54l::uarte::Nrf54lUarte;
@@ -568,8 +589,7 @@ impl SystemBus {
                 continue;
             }
             // Real ESP32-classic UART (echo is fixed at construction time).
-            if let Some(uart) = any.downcast_mut::<Esp32Uart>() {
-                uart.set_sink(Some(sink.clone()));
+            if Self::try_set_esp32_uart_sink(any, Some(sink.clone())) {
                 continue;
             }
             // nRF52 UARTE console (EasyDMA): captured/echoed the same way.
@@ -996,6 +1016,8 @@ impl SystemBus {
                 any.downcast_mut::<crate::peripherals::imxrt::lpuart::ImxrtLpuart>()
             {
                 uart.set_sink(None, false);
+            } else if Self::try_set_esp32_uart_sink(any, None) {
+                // YAML `type: esp32_uart` installs this model (classic ESP32).
             } else if let Some(uart) = any.downcast_mut::<crate::peripherals::esp_uart::EspUart>() {
                 uart.set_sink(None);
             } else if let Some(sercom) =
@@ -1036,6 +1058,15 @@ impl SystemBus {
             // The Espressif twin (S3 UART0/1/2, C3 UART0/1) decides at
             // construction whether it is a console, so `echo_stdout` can only
             // silence it here — same as the by-type `attach_uart_tx_sink` path.
+            // Real ESP32-classic UART (`type: esp32_uart`). The unnamed
+            // `attach_uart_tx_sink` path already knew this model; the named
+            // console path (Session `debug_uart: uart0`) did not, so a board
+            // whose YAML overlay replaced programmatic UART0 with Esp32Uart
+            // was reported as "no such UART". Shared helper so this arm does
+            // not add a second `downcast_mut` token.
+            if Self::try_set_esp32_uart_sink(any, Some(sink.clone())) {
+                return true;
+            }
             if let Some(uart) = any.downcast_mut::<crate::peripherals::esp_uart::EspUart>() {
                 uart.set_sink(Some(sink));
                 uart.silence_stdout_echo_if(echo_stdout);
@@ -1254,11 +1285,19 @@ impl SystemBus {
     /// `0x4C00_0000` and MVP at `0x4D00_0000` (EFR32xG26 RM rev 1.0 §4.2.4.1).
     /// A range that stopped at `0x5040_0000` still covers all of them, and the
     /// non-secure aliases at `0x5xxx_xxxx` are a separate mapping this chip
-    /// does not declare.
+    /// does not declare. The window runs to `0x5050_0000` so the RP2350's
+    /// third PIO block (`PIO2_BASE = 0x5040_0000`, rp2350 addressmap.h) gets
+    /// its aliases too: pico-sdk's `pio_sm_init` clears EXECCTRL bits through
+    /// the `+0x3000` alias, which used to BusFault on PIO2.
     #[inline]
+    ///
+    /// The RP2040's XIP_SSI (`0x1800_0000`, AHB-Lite) has the aliases too:
+    /// stock MicroPython's RAM-resident flash code clears SSIENR through
+    /// `0x1800_3008`, which used to BusFault. Nothing else maps there.
     pub fn atomic_alias_redirect(&self, addr: u64) -> Option<(u64, AtomicAliasOp)> {
-        const PERIPHERAL_WINDOW: std::ops::Range<u64> = 0x4000_0000..0x5040_0000;
-        if !PERIPHERAL_WINDOW.contains(&addr) {
+        const PERIPHERAL_WINDOW: std::ops::Range<u64> = 0x4000_0000..0x5050_0000;
+        const XIP_SSI_WINDOW: std::ops::Range<u64> = 0x1800_0000..0x1800_4000;
+        if !PERIPHERAL_WINDOW.contains(&addr) && !XIP_SSI_WINDOW.contains(&addr) {
             return None;
         }
         let op = self
@@ -1440,6 +1479,56 @@ impl SystemBus {
                 gclk_id,
                 gclk_idx,
             });
+        }
+        Ok(())
+    }
+
+    /// Resolve every peripheral's optional `config.clock_select: { controller,
+    /// reg }`: hand the model a live mirror of the controller register that
+    /// selects its SOURCE clock (the ESP32-C6 LEDC reads
+    /// `PCR.LEDC_SCLK_CONF`). Through [`Peripheral::clock_select_cell`] and
+    /// [`Peripheral::attach_clock_select_cell`], not a downcast. A missing
+    /// controller, an unknown register, or a model that takes no mirror is a
+    /// hard config error: a silently unwired select reads as a 0 Hz source.
+    pub(crate) fn resolve_clock_selects(
+        &mut self,
+        peripherals: &[labwired_config::PeripheralConfig],
+    ) -> anyhow::Result<()> {
+        for p_cfg in peripherals {
+            let Some(sel) = p_cfg.config.get("clock_select") else {
+                continue;
+            };
+            let field = |k: &str| sel.get(k).and_then(|v| v.as_str());
+            let (Some(controller), Some(reg)) = (field("controller"), field("reg")) else {
+                return Err(anyhow::anyhow!(
+                    "peripheral '{}' config.clock_select needs string `controller` and `reg`",
+                    p_cfg.id
+                ));
+            };
+            let Some(idx) = self.find_peripheral_index_by_name(&p_cfg.id) else {
+                continue;
+            };
+            let Some(ctl_idx) = self.find_peripheral_index_by_name(controller) else {
+                return Err(anyhow::anyhow!(
+                    "peripheral '{}' config.clock_select controller '{}' is not on the bus",
+                    p_cfg.id,
+                    controller
+                ));
+            };
+            let Some(cell) = self.peripherals[ctl_idx].dev.clock_select_cell(reg) else {
+                return Err(anyhow::anyhow!(
+                    "peripheral '{}' config.clock_select: controller '{}' has no register '{}'",
+                    p_cfg.id,
+                    controller,
+                    reg
+                ));
+            };
+            if !self.peripherals[idx].dev.attach_clock_select_cell(cell) {
+                return Err(anyhow::anyhow!(
+                    "peripheral '{}' declares config.clock_select but its model takes none",
+                    p_cfg.id
+                ));
+            }
         }
         Ok(())
     }

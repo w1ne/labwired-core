@@ -9,22 +9,35 @@ name: Core workflows lint
 # with shellcheck wired in it also lints every `run:` block — the shell that CI
 # actually executes and that nothing else in this repo looked at.
 #
-# Deliberately NOT path-filtered: a path-filtered workflow emits no check at
-# all on PRs that miss the filter, which makes it useless as a required check
-# and easy to forget. Both jobs finish in seconds on a hosted runner.
+# Path-filtered to the files actually linted: workflow definitions and shell
+# scripts. As of 2026-11-10 this workflow is NOT a required branch-protection
+# context; the required contexts are pr-gate, release-runner-contract,
+# browser-layer, and pr-core-feature-off. If lint becomes a required context,
+# retain an always-emitted lightweight status job rather than filtering that
+# required context. The lint jobs no longer consume runners on unrelated PRs.
 
 on:
   pull_request:
+    paths:
+      - '.github/**'
+      - 'scripts/**'
+      - '**/*.sh'
+      - '*.sh'
   push:
     branches: [main]
+    paths:
+      - '.github/**'
+      - 'scripts/**'
+      - '**/*.sh'
+      - '*.sh'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: core-workflows-lint-${{ github.ref }}
-  cancel-in-progress: true
+  group: core-workflows-lint-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   actionlint:

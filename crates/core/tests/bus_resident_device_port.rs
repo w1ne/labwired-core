@@ -477,14 +477,13 @@ fn a_seven_segment_digit_reads_nine_pads_with_no_bus_in_sight() {
 /// must say it needs NO per-cycle pass — the two facts that together replace
 /// its deleted private hook and keep its board on the walk-free fast path.
 ///
-/// The keypad is the positive control: a scanned device DOES need the tick, and
-/// names no edge address. Without it this test would pass on a build where
-/// every device answered the same way. The HX711 is the SECOND positive
-/// control, and a sharper one: it is a `gpio_device` from the same primitive as
-/// the two displays, and it must answer `true` because it owns a timer and
-/// drives a pad.
+/// The membrane keypad is NOT that class: open-drain row/col sampling means
+/// net levels can move without an MMIO edge the write hook sees, so it keeps
+/// the per-cycle pass (see `keypad_keeps_per_cycle_service_for_open_drain_nets`).
+/// The HX711 remains the positive timer+driven control — see
+/// `a_gpio_device_with_a_timer_still_needs_the_tick`.
 #[test]
-fn displays_and_keypad_are_edge_serviced_but_keypad_also_needs_ticks() {
+fn displays_are_edge_or_stimulus_serviced_without_per_cycle_ticks() {
     let tm = from_descriptor(
         "tm1637-7seg",
         &[("CLK", 0x4800_0014, 8), ("DIO", 0x4800_0414, 9)],
@@ -520,12 +519,19 @@ fn displays_and_keypad_are_edge_serviced_but_keypad_also_needs_ticks() {
         "nine pads across two ports dedupe to two addresses"
     );
     assert!(!BusResidentDevice::needs_per_cycle_service(&seg));
+}
 
+/// A membrane keypad samples open-drain row/col nets, so a level can change
+/// without an MMIO store the edge hook sees. It must keep the per-cycle pass —
+/// the trait default, and what `keypad_migration_parity` asserts against the
+/// oracle keypad.
+#[test]
+fn keypad_keeps_per_cycle_service_for_open_drain_nets() {
     let pad = wired_keypad();
     assert_eq!(BusResidentDevice::edge_service_addrs(&pad), &[ROW_ADDR]);
     assert!(
         BusResidentDevice::needs_per_cycle_service(&pad),
-        "the declarative keypad retains tick service for host stimulus changes"
+        "open-drain matrix sampling needs the tick; do not fold keypad into the display skip"
     );
 }
 

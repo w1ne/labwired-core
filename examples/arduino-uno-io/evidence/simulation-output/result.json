@@ -1,0 +1,707 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 2000000,
+  "cycles": 2601358,
+  "instructions": 1999842,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 2000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 2000000
+    }
+  },
+  "limits": {
+    "max_steps": 2000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "D2=1 A0=337"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "avr",
+    "registers": [
+      217,
+      0,
+      1,
+      64,
+      120,
+      121,
+      2,
+      0,
+      176,
+      0,
+      0,
+      0,
+      2,
+      0,
+      0,
+      0,
+      1,
+      0,
+      184,
+      149,
+      0,
+      0,
+      224,
+      122,
+      2,
+      0,
+      0,
+      0,
+      81,
+      2,
+      192,
+      0
+    ],
+    "pc": 622,
+    "sp": 2299,
+    "sreg": 130
+  },
+  "firmware_hash": "f1bb329f022754730d8d765473d774f351bbc77b4a073d0ab79bb4ef5d980169",
+  "config": {
+    "firmware": "examples/arduino-uno-io/../../tests/fixtures/avr/arduino-uno-io.elf",
+    "system": "examples/arduino-uno-io/./system.yaml",
+    "script": "examples/arduino-uno-io/io-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "spi",
+        "kind": "native",
+        "base": 65536,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c",
+        "kind": "i2c",
+        "base": 65552,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portb",
+        "kind": "native",
+        "base": 65571,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portc",
+        "kind": "native",
+        "base": 65574,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portd",
+        "kind": "native",
+        "base": 65577,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart0",
+        "kind": "native",
+        "base": 65728,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "adc",
+        "kind": "native",
+        "base": 65584,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "btn_d2",
+        "device_type": null,
+        "declared": false,
+        "attachment": {
+          "transport": "gpio"
+        },
+        "artifacts": []
+      },
+      {
+        "id": "knob",
+        "device_type": "potentiometer",
+        "declared": true,
+        "attachment": {
+          "transport": "analog",
+          "bus": "adc",
+          "channel": 0
+        },
+        "artifacts": []
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal 5 V rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "uno-io",
+        "cycle_lo": 0,
+        "cycle": 13565,
+        "end_cycle": 13565
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 0,
+        "cycle": 13565,
+        "end_cycle": 13565
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 26544,
+        "cycle": 39600,
+        "end_cycle": 52595
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 65545,
+        "cycle": 78575,
+        "end_cycle": 91601
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 104581,
+        "cycle": 117651,
+        "end_cycle": 117651
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 143586,
+        "cycle": 156658,
+        "end_cycle": 156658
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 182624,
+        "cycle": 195662,
+        "end_cycle": 195662
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 221640,
+        "cycle": 234694,
+        "end_cycle": 234694
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 247674,
+        "cycle": 260701,
+        "end_cycle": 273696
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 286679,
+        "cycle": 299751,
+        "end_cycle": 299751
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 325686,
+        "cycle": 338756,
+        "end_cycle": 338756
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 364719,
+        "cycle": 377760,
+        "end_cycle": 377760
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 403722,
+        "cycle": 416792,
+        "end_cycle": 416792
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 429772,
+        "cycle": 442814,
+        "end_cycle": 455796
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 468779,
+        "cycle": 481849,
+        "end_cycle": 481849
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 507783,
+        "cycle": 520851,
+        "end_cycle": 520851
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 546815,
+        "cycle": 559882,
+        "end_cycle": 559882
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 585817,
+        "cycle": 598889,
+        "end_cycle": 598889
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 611872,
+        "cycle": 624978,
+        "end_cycle": 637893
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 650877,
+        "cycle": 663946,
+        "end_cycle": 663946
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 689910,
+        "cycle": 702947,
+        "end_cycle": 702947
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 728912,
+        "cycle": 741983,
+        "end_cycle": 741983
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 767918,
+        "cycle": 780988,
+        "end_cycle": 780988
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 793970,
+        "cycle": 807107,
+        "end_cycle": 819995
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 832971,
+        "cycle": 846040,
+        "end_cycle": 846040
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 872005,
+        "cycle": 885044,
+        "end_cycle": 885044
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 911011,
+        "cycle": 924081,
+        "end_cycle": 924081
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 950016,
+        "cycle": 963088,
+        "end_cycle": 963088
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 976067,
+        "cycle": 989233,
+        "end_cycle": 1002121
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 1015068,
+        "cycle": 1028138,
+        "end_cycle": 1028138
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 1054104,
+        "cycle": 1067174,
+        "end_cycle": 1067174
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 1093109,
+        "cycle": 1106181,
+        "end_cycle": 1106181
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 1132148,
+        "cycle": 1145186,
+        "end_cycle": 1145186
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 1158161,
+        "cycle": 1171294,
+        "end_cycle": 1184217
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 1197165,
+        "cycle": 1210192,
+        "end_cycle": 1223219
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 1236202,
+        "cycle": 1249274,
+        "end_cycle": 1249274
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 1275209,
+        "cycle": 1288278,
+        "end_cycle": 1288278
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 1314242,
+        "cycle": 1327281,
+        "end_cycle": 1327281
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 1340261,
+        "cycle": 1353308,
+        "end_cycle": 1366312
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 1379297,
+        "cycle": 1392207,
+        "end_cycle": 1405320
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 1418304,
+        "cycle": 1431373,
+        "end_cycle": 1431373
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 1457305,
+        "cycle": 1470372,
+        "end_cycle": 1470372
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 1496337,
+        "cycle": 1509407,
+        "end_cycle": 1509407
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 1522357,
+        "cycle": 1535384,
+        "end_cycle": 1548413
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 1561397,
+        "cycle": 1574294,
+        "end_cycle": 1587418
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 1600400,
+        "cycle": 1613466,
+        "end_cycle": 1613466
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 1639401,
+        "cycle": 1652470,
+        "end_cycle": 1652470
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 1678435,
+        "cycle": 1691506,
+        "end_cycle": 1691506
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 1704457,
+        "cycle": 1717510,
+        "end_cycle": 1730511
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 1743494,
+        "cycle": 1756461,
+        "end_cycle": 1769518
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 1782497,
+        "cycle": 1795563,
+        "end_cycle": 1795563
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 1821528,
+        "cycle": 1834567,
+        "end_cycle": 1834567
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 1860534,
+        "cycle": 1873604,
+        "end_cycle": 1873604
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 1886586,
+        "cycle": 1899630,
+        "end_cycle": 1912611
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 1925586,
+        "cycle": 1938579,
+        "end_cycle": 1951640
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 1964591,
+        "cycle": 1977660,
+        "end_cycle": 1977660
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 2003627,
+        "cycle": 2016664,
+        "end_cycle": 2016664
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 2042632,
+        "cycle": 2055705,
+        "end_cycle": 2055705
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 2068681,
+        "cycle": 2081745,
+        "end_cycle": 2094706
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 2107683,
+        "cycle": 2120708,
+        "end_cycle": 2133739
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 2146690,
+        "cycle": 2159759,
+        "end_cycle": 2159759
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 2185727,
+        "cycle": 2198798,
+        "end_cycle": 2198798
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 2224733,
+        "cycle": 2237800,
+        "end_cycle": 2237800
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 2263787,
+        "cycle": 2276802,
+        "end_cycle": 2276802
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 2289783,
+        "cycle": 2302834,
+        "end_cycle": 2315837
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 2328820,
+        "cycle": 2341859,
+        "end_cycle": 2341859
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 2367827,
+        "cycle": 2380895,
+        "end_cycle": 2380895
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 2406830,
+        "cycle": 2419896,
+        "end_cycle": 2419896
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 2445860,
+        "cycle": 2458900,
+        "end_cycle": 2458900
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 2471880,
+        "cycle": 2484968,
+        "end_cycle": 2497936
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 2510919,
+        "cycle": 2523957,
+        "end_cycle": 2523957
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 2549921,
+        "cycle": 2562988,
+        "end_cycle": 2562988
+      },
+      {
+        "text": "D2=1 A0=337",
+        "cycle_lo": 2588923,
+        "cycle": 2601990,
+        "end_cycle": 2601990
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 2468,
+    "data_bytes": 38,
+    "bss_bytes": 167,
+    "flash_used_bytes": 2506,
+    "ram_static_bytes": 205,
+    "flash_total_bytes": 32768,
+    "ram_total_bytes": 2048,
+    "flash_used_pct": 7.65,
+    "ram_static_pct": 10.01,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 2601358,
+    "instructions": 1999842,
+    "steps_executed": 2000000,
+    "memory_reads": 0,
+    "memory_writes": 100004,
+    "peripheral_accesses": 67556,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 622,
+        "count": 469
+      },
+      {
+        "pc": 614,
+        "count": 429
+      },
+      {
+        "pc": 2182,
+        "count": 313
+      },
+      {
+        "pc": 618,
+        "count": 312
+      },
+      {
+        "pc": 2186,
+        "count": 274
+      },
+      {
+        "pc": 576,
+        "count": 273
+      },
+      {
+        "pc": 612,
+        "count": 273
+      },
+      {
+        "pc": 620,
+        "count": 273
+      },
+      {
+        "pc": 624,
+        "count": 273
+      },
+      {
+        "pc": 616,
+        "count": 235
+      },
+      {
+        "pc": 568,
+        "count": 234
+      },
+      {
+        "pc": 600,
+        "count": 234
+      },
+      {
+        "pc": 608,
+        "count": 234
+      },
+      {
+        "pc": 560,
+        "count": 196
+      },
+      {
+        "pc": 596,
+        "count": 196
+      },
+      {
+        "pc": 2170,
+        "count": 196
+      }
+    ]
+  }
+}

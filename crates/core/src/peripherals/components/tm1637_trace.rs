@@ -34,6 +34,7 @@ pub struct Tm1637Trace {
     last_expect_ack: i64,
     seeded: bool,
     txn_bytes: Vec<u8>,
+    current_grids: [u8; 4],
     last_grids: [u8; 4],
     last_display_on: i64,
     last_bright: i64,
@@ -61,6 +62,7 @@ impl Tm1637Trace {
         ];
         let display_on = machine.var("display_on");
         let bright = machine.var("bright");
+        self.current_grids = grids;
 
         if !self.seeded {
             self.last_in_txn = in_txn;
@@ -116,11 +118,10 @@ impl Tm1637Trace {
                     || display_on != self.last_display_on
                     || bright != self.last_bright
                 {
-                    let text: String =
-                        grids.iter().map(|b| seven_seg_font::decode(*b)).collect();
+                    let text: String = grids.iter().map(|b| seven_seg_font::decode(*b)).collect();
                     self.push_frame(json!({
                         "t_us": t_us,
-                        "grids": grids.iter().copied().collect::<Vec<_>>(),
+                        "grids": grids.to_vec(),
                         "text": text,
                         "display_on": display_on != 0,
                         "brightness": bright,
@@ -140,7 +141,8 @@ impl Tm1637Trace {
         if self.bus_frames.len() >= CAP {
             self.bus_frames.pop_front();
         }
-        self.bus_frames.push_back(json!({ "t_us": t_us, "bytes": bytes }));
+        self.bus_frames
+            .push_back(json!({ "t_us": t_us, "bytes": bytes }));
     }
 
     fn push_frame(&mut self, frame: Value) {
@@ -155,10 +157,10 @@ impl Tm1637Trace {
         meta.insert(
             "grids".into(),
             json!([
-                self.last_grids[0],
-                self.last_grids[1],
-                self.last_grids[2],
-                self.last_grids[3]
+                self.current_grids[0],
+                self.current_grids[1],
+                self.current_grids[2],
+                self.current_grids[3]
             ]),
         );
         meta.insert(

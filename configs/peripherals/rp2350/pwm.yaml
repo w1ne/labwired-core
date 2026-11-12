@@ -7,41 +7,40 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: EN
+  - name: PH_ADV
     bit_range:
-    - 0
-    - 0
-    description: Enable the PWM channel.
-  - name: PH_CORRECT
+    - 7
+    - 7
+    description: Advance the phase of the counter by 1 count, while it is running. Self-clearing. Write a 1, and poll until low. Counter must be running at less than full speed (div_int + div_frac / 16 > 1)
+  - name: PH_RET
     bit_range:
-    - 1
-    - 1
-    description: '1: Enable phase-correct modulation. 0: Trailing-edge'
-  - name: A_INV
+    - 6
+    - 6
+    description: Retard the phase of the counter by 1 count, while it is running. Self-clearing. Write a 1, and poll until low. Counter must be running.
+  - name: DIVMODE
     bit_range:
-    - 2
-    - 2
-    description: Invert output A
+    - 5
+    - 4
   - name: B_INV
     bit_range:
     - 3
     - 3
     description: Invert output B
-  - name: DIVMODE
+  - name: A_INV
     bit_range:
-    - 5
-    - 4
-    description: null
-  - name: PH_RET
+    - 2
+    - 2
+    description: Invert output A
+  - name: PH_CORRECT
     bit_range:
-    - 6
-    - 6
-    description: "Retard the phase of the counter by 1 count, while it is running. \n                            Self-clearing. Write a 1, and poll until low. Counter must be running."
-  - name: PH_ADV
+    - 1
+    - 1
+    description: '1: Enable phase-correct modulation. 0: Trailing-edge'
+  - name: EN
     bit_range:
-    - 7
-    - 7
-    description: "Advance the phase of the counter by 1 count, while it is running. \n                            Self-clearing. Write a 1, and poll until low. Counter must be running \n                            at less than full speed (div_int + div_frac / 16 > 1)"
+    - 0
+    - 0
+    description: Enable the PWM channel.
   side_effects: null
 - id: CH0_DIV
   address_offset: 4
@@ -49,16 +48,14 @@ registers:
   access: READ_WRITE
   reset_value: 16
   fields:
-  - name: FRAC
-    bit_range:
-    - 3
-    - 0
-    description: null
   - name: INT
     bit_range:
     - 11
     - 4
-    description: null
+  - name: FRAC
+    bit_range:
+    - 3
+    - 0
   side_effects: null
 - id: CH0_CTR
   address_offset: 8
@@ -70,7 +67,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: CH0_CC
   address_offset: 12
@@ -78,16 +74,14 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: A
-    bit_range:
-    - 15
-    - 0
-    description: null
   - name: B
     bit_range:
     - 31
     - 16
-    description: null
+  - name: A
+    bit_range:
+    - 15
+    - 0
   side_effects: null
 - id: CH0_TOP
   address_offset: 16
@@ -99,7 +93,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: CH1_CSR
   address_offset: 20
@@ -107,41 +100,40 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: EN
+  - name: PH_ADV
     bit_range:
-    - 0
-    - 0
-    description: Enable the PWM channel.
-  - name: PH_CORRECT
+    - 7
+    - 7
+    description: Advance the phase of the counter by 1 count, while it is running. Self-clearing. Write a 1, and poll until low. Counter must be running at less than full speed (div_int + div_frac / 16 > 1)
+  - name: PH_RET
     bit_range:
-    - 1
-    - 1
-    description: '1: Enable phase-correct modulation. 0: Trailing-edge'
-  - name: A_INV
+    - 6
+    - 6
+    description: Retard the phase of the counter by 1 count, while it is running. Self-clearing. Write a 1, and poll until low. Counter must be running.
+  - name: DIVMODE
     bit_range:
-    - 2
-    - 2
-    description: Invert output A
+    - 5
+    - 4
   - name: B_INV
     bit_range:
     - 3
     - 3
     description: Invert output B
-  - name: DIVMODE
+  - name: A_INV
     bit_range:
-    - 5
-    - 4
-    description: null
-  - name: PH_RET
+    - 2
+    - 2
+    description: Invert output A
+  - name: PH_CORRECT
     bit_range:
-    - 6
-    - 6
-    description: "Retard the phase of the counter by 1 count, while it is running. \n                            Self-clearing. Write a 1, and poll until low. Counter must be running."
-  - name: PH_ADV
+    - 1
+    - 1
+    description: '1: Enable phase-correct modulation. 0: Trailing-edge'
+  - name: EN
     bit_range:
-    - 7
-    - 7
-    description: "Advance the phase of the counter by 1 count, while it is running. \n                            Self-clearing. Write a 1, and poll until low. Counter must be running \n                            at less than full speed (div_int + div_frac / 16 > 1)"
+    - 0
+    - 0
+    description: Enable the PWM channel.
   side_effects: null
 - id: CH1_DIV
   address_offset: 24
@@ -149,16 +141,14 @@ registers:
   access: READ_WRITE
   reset_value: 16
   fields:
-  - name: FRAC
-    bit_range:
-    - 3
-    - 0
-    description: null
   - name: INT
     bit_range:
     - 11
     - 4
-    description: null
+  - name: FRAC
+    bit_range:
+    - 3
+    - 0
   side_effects: null
 - id: CH1_CTR
   address_offset: 28
@@ -170,7 +160,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: CH1_CC
   address_offset: 32
@@ -178,16 +167,14 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: A
-    bit_range:
-    - 15
-    - 0
-    description: null
   - name: B
     bit_range:
     - 31
     - 16
-    description: null
+  - name: A
+    bit_range:
+    - 15
+    - 0
   side_effects: null
 - id: CH1_TOP
   address_offset: 36
@@ -199,7 +186,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: CH2_CSR
   address_offset: 40
@@ -207,41 +193,40 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: EN
+  - name: PH_ADV
     bit_range:
-    - 0
-    - 0
-    description: Enable the PWM channel.
-  - name: PH_CORRECT
+    - 7
+    - 7
+    description: Advance the phase of the counter by 1 count, while it is running. Self-clearing. Write a 1, and poll until low. Counter must be running at less than full speed (div_int + div_frac / 16 > 1)
+  - name: PH_RET
     bit_range:
-    - 1
-    - 1
-    description: '1: Enable phase-correct modulation. 0: Trailing-edge'
-  - name: A_INV
+    - 6
+    - 6
+    description: Retard the phase of the counter by 1 count, while it is running. Self-clearing. Write a 1, and poll until low. Counter must be running.
+  - name: DIVMODE
     bit_range:
-    - 2
-    - 2
-    description: Invert output A
+    - 5
+    - 4
   - name: B_INV
     bit_range:
     - 3
     - 3
     description: Invert output B
-  - name: DIVMODE
+  - name: A_INV
     bit_range:
-    - 5
-    - 4
-    description: null
-  - name: PH_RET
+    - 2
+    - 2
+    description: Invert output A
+  - name: PH_CORRECT
     bit_range:
-    - 6
-    - 6
-    description: "Retard the phase of the counter by 1 count, while it is running. \n                            Self-clearing. Write a 1, and poll until low. Counter must be running."
-  - name: PH_ADV
+    - 1
+    - 1
+    description: '1: Enable phase-correct modulation. 0: Trailing-edge'
+  - name: EN
     bit_range:
-    - 7
-    - 7
-    description: "Advance the phase of the counter by 1 count, while it is running. \n                            Self-clearing. Write a 1, and poll until low. Counter must be running \n                            at less than full speed (div_int + div_frac / 16 > 1)"
+    - 0
+    - 0
+    description: Enable the PWM channel.
   side_effects: null
 - id: CH2_DIV
   address_offset: 44
@@ -249,16 +234,14 @@ registers:
   access: READ_WRITE
   reset_value: 16
   fields:
-  - name: FRAC
-    bit_range:
-    - 3
-    - 0
-    description: null
   - name: INT
     bit_range:
     - 11
     - 4
-    description: null
+  - name: FRAC
+    bit_range:
+    - 3
+    - 0
   side_effects: null
 - id: CH2_CTR
   address_offset: 48
@@ -270,7 +253,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: CH2_CC
   address_offset: 52
@@ -278,16 +260,14 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: A
-    bit_range:
-    - 15
-    - 0
-    description: null
   - name: B
     bit_range:
     - 31
     - 16
-    description: null
+  - name: A
+    bit_range:
+    - 15
+    - 0
   side_effects: null
 - id: CH2_TOP
   address_offset: 56
@@ -299,7 +279,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: CH3_CSR
   address_offset: 60
@@ -307,41 +286,40 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: EN
+  - name: PH_ADV
     bit_range:
-    - 0
-    - 0
-    description: Enable the PWM channel.
-  - name: PH_CORRECT
+    - 7
+    - 7
+    description: Advance the phase of the counter by 1 count, while it is running. Self-clearing. Write a 1, and poll until low. Counter must be running at less than full speed (div_int + div_frac / 16 > 1)
+  - name: PH_RET
     bit_range:
-    - 1
-    - 1
-    description: '1: Enable phase-correct modulation. 0: Trailing-edge'
-  - name: A_INV
+    - 6
+    - 6
+    description: Retard the phase of the counter by 1 count, while it is running. Self-clearing. Write a 1, and poll until low. Counter must be running.
+  - name: DIVMODE
     bit_range:
-    - 2
-    - 2
-    description: Invert output A
+    - 5
+    - 4
   - name: B_INV
     bit_range:
     - 3
     - 3
     description: Invert output B
-  - name: DIVMODE
+  - name: A_INV
     bit_range:
-    - 5
-    - 4
-    description: null
-  - name: PH_RET
+    - 2
+    - 2
+    description: Invert output A
+  - name: PH_CORRECT
     bit_range:
-    - 6
-    - 6
-    description: "Retard the phase of the counter by 1 count, while it is running. \n                            Self-clearing. Write a 1, and poll until low. Counter must be running."
-  - name: PH_ADV
+    - 1
+    - 1
+    description: '1: Enable phase-correct modulation. 0: Trailing-edge'
+  - name: EN
     bit_range:
-    - 7
-    - 7
-    description: "Advance the phase of the counter by 1 count, while it is running. \n                            Self-clearing. Write a 1, and poll until low. Counter must be running \n                            at less than full speed (div_int + div_frac / 16 > 1)"
+    - 0
+    - 0
+    description: Enable the PWM channel.
   side_effects: null
 - id: CH3_DIV
   address_offset: 64
@@ -349,16 +327,14 @@ registers:
   access: READ_WRITE
   reset_value: 16
   fields:
-  - name: FRAC
-    bit_range:
-    - 3
-    - 0
-    description: null
   - name: INT
     bit_range:
     - 11
     - 4
-    description: null
+  - name: FRAC
+    bit_range:
+    - 3
+    - 0
   side_effects: null
 - id: CH3_CTR
   address_offset: 68
@@ -370,7 +346,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: CH3_CC
   address_offset: 72
@@ -378,16 +353,14 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: A
-    bit_range:
-    - 15
-    - 0
-    description: null
   - name: B
     bit_range:
     - 31
     - 16
-    description: null
+  - name: A
+    bit_range:
+    - 15
+    - 0
   side_effects: null
 - id: CH3_TOP
   address_offset: 76
@@ -399,7 +372,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: CH4_CSR
   address_offset: 80
@@ -407,41 +379,40 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: EN
+  - name: PH_ADV
     bit_range:
-    - 0
-    - 0
-    description: Enable the PWM channel.
-  - name: PH_CORRECT
+    - 7
+    - 7
+    description: Advance the phase of the counter by 1 count, while it is running. Self-clearing. Write a 1, and poll until low. Counter must be running at less than full speed (div_int + div_frac / 16 > 1)
+  - name: PH_RET
     bit_range:
-    - 1
-    - 1
-    description: '1: Enable phase-correct modulation. 0: Trailing-edge'
-  - name: A_INV
+    - 6
+    - 6
+    description: Retard the phase of the counter by 1 count, while it is running. Self-clearing. Write a 1, and poll until low. Counter must be running.
+  - name: DIVMODE
     bit_range:
-    - 2
-    - 2
-    description: Invert output A
+    - 5
+    - 4
   - name: B_INV
     bit_range:
     - 3
     - 3
     description: Invert output B
-  - name: DIVMODE
+  - name: A_INV
     bit_range:
-    - 5
-    - 4
-    description: null
-  - name: PH_RET
+    - 2
+    - 2
+    description: Invert output A
+  - name: PH_CORRECT
     bit_range:
-    - 6
-    - 6
-    description: "Retard the phase of the counter by 1 count, while it is running. \n                            Self-clearing. Write a 1, and poll until low. Counter must be running."
-  - name: PH_ADV
+    - 1
+    - 1
+    description: '1: Enable phase-correct modulation. 0: Trailing-edge'
+  - name: EN
     bit_range:
-    - 7
-    - 7
-    description: "Advance the phase of the counter by 1 count, while it is running. \n                            Self-clearing. Write a 1, and poll until low. Counter must be running \n                            at less than full speed (div_int + div_frac / 16 > 1)"
+    - 0
+    - 0
+    description: Enable the PWM channel.
   side_effects: null
 - id: CH4_DIV
   address_offset: 84
@@ -449,16 +420,14 @@ registers:
   access: READ_WRITE
   reset_value: 16
   fields:
-  - name: FRAC
-    bit_range:
-    - 3
-    - 0
-    description: null
   - name: INT
     bit_range:
     - 11
     - 4
-    description: null
+  - name: FRAC
+    bit_range:
+    - 3
+    - 0
   side_effects: null
 - id: CH4_CTR
   address_offset: 88
@@ -470,7 +439,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: CH4_CC
   address_offset: 92
@@ -478,16 +446,14 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: A
-    bit_range:
-    - 15
-    - 0
-    description: null
   - name: B
     bit_range:
     - 31
     - 16
-    description: null
+  - name: A
+    bit_range:
+    - 15
+    - 0
   side_effects: null
 - id: CH4_TOP
   address_offset: 96
@@ -499,7 +465,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: CH5_CSR
   address_offset: 100
@@ -507,41 +472,40 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: EN
+  - name: PH_ADV
     bit_range:
-    - 0
-    - 0
-    description: Enable the PWM channel.
-  - name: PH_CORRECT
+    - 7
+    - 7
+    description: Advance the phase of the counter by 1 count, while it is running. Self-clearing. Write a 1, and poll until low. Counter must be running at less than full speed (div_int + div_frac / 16 > 1)
+  - name: PH_RET
     bit_range:
-    - 1
-    - 1
-    description: '1: Enable phase-correct modulation. 0: Trailing-edge'
-  - name: A_INV
+    - 6
+    - 6
+    description: Retard the phase of the counter by 1 count, while it is running. Self-clearing. Write a 1, and poll until low. Counter must be running.
+  - name: DIVMODE
     bit_range:
-    - 2
-    - 2
-    description: Invert output A
+    - 5
+    - 4
   - name: B_INV
     bit_range:
     - 3
     - 3
     description: Invert output B
-  - name: DIVMODE
+  - name: A_INV
     bit_range:
-    - 5
-    - 4
-    description: null
-  - name: PH_RET
+    - 2
+    - 2
+    description: Invert output A
+  - name: PH_CORRECT
     bit_range:
-    - 6
-    - 6
-    description: "Retard the phase of the counter by 1 count, while it is running. \n                            Self-clearing. Write a 1, and poll until low. Counter must be running."
-  - name: PH_ADV
+    - 1
+    - 1
+    description: '1: Enable phase-correct modulation. 0: Trailing-edge'
+  - name: EN
     bit_range:
-    - 7
-    - 7
-    description: "Advance the phase of the counter by 1 count, while it is running. \n                            Self-clearing. Write a 1, and poll until low. Counter must be running \n                            at less than full speed (div_int + div_frac / 16 > 1)"
+    - 0
+    - 0
+    description: Enable the PWM channel.
   side_effects: null
 - id: CH5_DIV
   address_offset: 104
@@ -549,16 +513,14 @@ registers:
   access: READ_WRITE
   reset_value: 16
   fields:
-  - name: FRAC
-    bit_range:
-    - 3
-    - 0
-    description: null
   - name: INT
     bit_range:
     - 11
     - 4
-    description: null
+  - name: FRAC
+    bit_range:
+    - 3
+    - 0
   side_effects: null
 - id: CH5_CTR
   address_offset: 108
@@ -570,7 +532,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: CH5_CC
   address_offset: 112
@@ -578,16 +539,14 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: A
-    bit_range:
-    - 15
-    - 0
-    description: null
   - name: B
     bit_range:
     - 31
     - 16
-    description: null
+  - name: A
+    bit_range:
+    - 15
+    - 0
   side_effects: null
 - id: CH5_TOP
   address_offset: 116
@@ -599,7 +558,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: CH6_CSR
   address_offset: 120
@@ -607,41 +565,40 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: EN
+  - name: PH_ADV
     bit_range:
-    - 0
-    - 0
-    description: Enable the PWM channel.
-  - name: PH_CORRECT
+    - 7
+    - 7
+    description: Advance the phase of the counter by 1 count, while it is running. Self-clearing. Write a 1, and poll until low. Counter must be running at less than full speed (div_int + div_frac / 16 > 1)
+  - name: PH_RET
     bit_range:
-    - 1
-    - 1
-    description: '1: Enable phase-correct modulation. 0: Trailing-edge'
-  - name: A_INV
+    - 6
+    - 6
+    description: Retard the phase of the counter by 1 count, while it is running. Self-clearing. Write a 1, and poll until low. Counter must be running.
+  - name: DIVMODE
     bit_range:
-    - 2
-    - 2
-    description: Invert output A
+    - 5
+    - 4
   - name: B_INV
     bit_range:
     - 3
     - 3
     description: Invert output B
-  - name: DIVMODE
+  - name: A_INV
     bit_range:
-    - 5
-    - 4
-    description: null
-  - name: PH_RET
+    - 2
+    - 2
+    description: Invert output A
+  - name: PH_CORRECT
     bit_range:
-    - 6
-    - 6
-    description: "Retard the phase of the counter by 1 count, while it is running. \n                            Self-clearing. Write a 1, and poll until low. Counter must be running."
-  - name: PH_ADV
+    - 1
+    - 1
+    description: '1: Enable phase-correct modulation. 0: Trailing-edge'
+  - name: EN
     bit_range:
-    - 7
-    - 7
-    description: "Advance the phase of the counter by 1 count, while it is running. \n                            Self-clearing. Write a 1, and poll until low. Counter must be running \n                            at less than full speed (div_int + div_frac / 16 > 1)"
+    - 0
+    - 0
+    description: Enable the PWM channel.
   side_effects: null
 - id: CH6_DIV
   address_offset: 124
@@ -649,16 +606,14 @@ registers:
   access: READ_WRITE
   reset_value: 16
   fields:
-  - name: FRAC
-    bit_range:
-    - 3
-    - 0
-    description: null
   - name: INT
     bit_range:
     - 11
     - 4
-    description: null
+  - name: FRAC
+    bit_range:
+    - 3
+    - 0
   side_effects: null
 - id: CH6_CTR
   address_offset: 128
@@ -670,7 +625,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: CH6_CC
   address_offset: 132
@@ -678,16 +632,14 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: A
-    bit_range:
-    - 15
-    - 0
-    description: null
   - name: B
     bit_range:
     - 31
     - 16
-    description: null
+  - name: A
+    bit_range:
+    - 15
+    - 0
   side_effects: null
 - id: CH6_TOP
   address_offset: 136
@@ -699,7 +651,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: CH7_CSR
   address_offset: 140
@@ -707,41 +658,40 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: EN
+  - name: PH_ADV
     bit_range:
-    - 0
-    - 0
-    description: Enable the PWM channel.
-  - name: PH_CORRECT
+    - 7
+    - 7
+    description: Advance the phase of the counter by 1 count, while it is running. Self-clearing. Write a 1, and poll until low. Counter must be running at less than full speed (div_int + div_frac / 16 > 1)
+  - name: PH_RET
     bit_range:
-    - 1
-    - 1
-    description: '1: Enable phase-correct modulation. 0: Trailing-edge'
-  - name: A_INV
+    - 6
+    - 6
+    description: Retard the phase of the counter by 1 count, while it is running. Self-clearing. Write a 1, and poll until low. Counter must be running.
+  - name: DIVMODE
     bit_range:
-    - 2
-    - 2
-    description: Invert output A
+    - 5
+    - 4
   - name: B_INV
     bit_range:
     - 3
     - 3
     description: Invert output B
-  - name: DIVMODE
+  - name: A_INV
     bit_range:
-    - 5
-    - 4
-    description: null
-  - name: PH_RET
+    - 2
+    - 2
+    description: Invert output A
+  - name: PH_CORRECT
     bit_range:
-    - 6
-    - 6
-    description: "Retard the phase of the counter by 1 count, while it is running. \n                            Self-clearing. Write a 1, and poll until low. Counter must be running."
-  - name: PH_ADV
+    - 1
+    - 1
+    description: '1: Enable phase-correct modulation. 0: Trailing-edge'
+  - name: EN
     bit_range:
-    - 7
-    - 7
-    description: "Advance the phase of the counter by 1 count, while it is running. \n                            Self-clearing. Write a 1, and poll until low. Counter must be running \n                            at less than full speed (div_int + div_frac / 16 > 1)"
+    - 0
+    - 0
+    description: Enable the PWM channel.
   side_effects: null
 - id: CH7_DIV
   address_offset: 144
@@ -749,16 +699,14 @@ registers:
   access: READ_WRITE
   reset_value: 16
   fields:
-  - name: FRAC
-    bit_range:
-    - 3
-    - 0
-    description: null
   - name: INT
     bit_range:
     - 11
     - 4
-    description: null
+  - name: FRAC
+    bit_range:
+    - 3
+    - 0
   side_effects: null
 - id: CH7_CTR
   address_offset: 148
@@ -770,7 +718,6 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
 - id: CH7_CC
   address_offset: 152
@@ -778,16 +725,14 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: A
-    bit_range:
-    - 15
-    - 0
-    description: null
   - name: B
     bit_range:
     - 31
     - 16
-    description: null
+  - name: A
+    bit_range:
+    - 15
+    - 0
   side_effects: null
 - id: CH7_TOP
   address_offset: 156
@@ -799,243 +744,820 @@ registers:
     bit_range:
     - 15
     - 0
-    description: null
   side_effects: null
-- id: EN
+- id: CH8_CSR
   address_offset: 160
   size: 32
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: CH0
-    bit_range:
-    - 0
-    - 0
-    description: null
-  - name: CH1
-    bit_range:
-    - 1
-    - 1
-    description: null
-  - name: CH2
-    bit_range:
-    - 2
-    - 2
-    description: null
-  - name: CH3
-    bit_range:
-    - 3
-    - 3
-    description: null
-  - name: CH4
-    bit_range:
-    - 4
-    - 4
-    description: null
-  - name: CH5
-    bit_range:
-    - 5
-    - 5
-    description: null
-  - name: CH6
-    bit_range:
-    - 6
-    - 6
-    description: null
-  - name: CH7
+  - name: PH_ADV
     bit_range:
     - 7
     - 7
-    description: null
+    description: Advance the phase of the counter by 1 count, while it is running. Self-clearing. Write a 1, and poll until low. Counter must be running at less than full speed (div_int + div_frac / 16 > 1)
+  - name: PH_RET
+    bit_range:
+    - 6
+    - 6
+    description: Retard the phase of the counter by 1 count, while it is running. Self-clearing. Write a 1, and poll until low. Counter must be running.
+  - name: DIVMODE
+    bit_range:
+    - 5
+    - 4
+  - name: B_INV
+    bit_range:
+    - 3
+    - 3
+    description: Invert output B
+  - name: A_INV
+    bit_range:
+    - 2
+    - 2
+    description: Invert output A
+  - name: PH_CORRECT
+    bit_range:
+    - 1
+    - 1
+    description: '1: Enable phase-correct modulation. 0: Trailing-edge'
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: Enable the PWM channel.
   side_effects: null
-- id: INTR
+- id: CH8_DIV
   address_offset: 164
   size: 32
   access: READ_WRITE
-  reset_value: 0
+  reset_value: 16
   fields:
-  - name: CH0
+  - name: INT
     bit_range:
-    - 0
-    - 0
-    description: null
-  - name: CH1
-    bit_range:
-    - 1
-    - 1
-    description: null
-  - name: CH2
-    bit_range:
-    - 2
-    - 2
-    description: null
-  - name: CH3
+    - 11
+    - 4
+  - name: FRAC
     bit_range:
     - 3
-    - 3
-    description: null
-  - name: CH4
-    bit_range:
-    - 4
-    - 4
-    description: null
-  - name: CH5
-    bit_range:
-    - 5
-    - 5
-    description: null
-  - name: CH6
-    bit_range:
-    - 6
-    - 6
-    description: null
-  - name: CH7
-    bit_range:
-    - 7
-    - 7
-    description: null
+    - 0
   side_effects: null
-- id: INTE
+- id: CH8_CTR
   address_offset: 168
   size: 32
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: CH0
+  - name: CH8_CTR
     bit_range:
+    - 15
     - 0
-    - 0
-    description: null
-  - name: CH1
-    bit_range:
-    - 1
-    - 1
-    description: null
-  - name: CH2
-    bit_range:
-    - 2
-    - 2
-    description: null
-  - name: CH3
-    bit_range:
-    - 3
-    - 3
-    description: null
-  - name: CH4
-    bit_range:
-    - 4
-    - 4
-    description: null
-  - name: CH5
-    bit_range:
-    - 5
-    - 5
-    description: null
-  - name: CH6
-    bit_range:
-    - 6
-    - 6
-    description: null
-  - name: CH7
-    bit_range:
-    - 7
-    - 7
-    description: null
   side_effects: null
-- id: INTF
+- id: CH8_CC
   address_offset: 172
   size: 32
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: CH0
+  - name: B
     bit_range:
+    - 31
+    - 16
+  - name: A
+    bit_range:
+    - 15
     - 0
-    - 0
-    description: null
-  - name: CH1
-    bit_range:
-    - 1
-    - 1
-    description: null
-  - name: CH2
-    bit_range:
-    - 2
-    - 2
-    description: null
-  - name: CH3
-    bit_range:
-    - 3
-    - 3
-    description: null
-  - name: CH4
-    bit_range:
-    - 4
-    - 4
-    description: null
-  - name: CH5
-    bit_range:
-    - 5
-    - 5
-    description: null
-  - name: CH6
-    bit_range:
-    - 6
-    - 6
-    description: null
-  - name: CH7
-    bit_range:
-    - 7
-    - 7
-    description: null
   side_effects: null
-- id: INTS
+- id: CH8_TOP
   address_offset: 176
+  size: 32
+  access: READ_WRITE
+  reset_value: 65535
+  fields:
+  - name: CH8_TOP
+    bit_range:
+    - 15
+    - 0
+  side_effects: null
+- id: CH9_CSR
+  address_offset: 180
   size: 32
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: CH0
+  - name: PH_ADV
     bit_range:
-    - 0
-    - 0
-    description: null
-  - name: CH1
-    bit_range:
-    - 1
-    - 1
-    description: null
-  - name: CH2
-    bit_range:
-    - 2
-    - 2
-    description: null
-  - name: CH3
-    bit_range:
-    - 3
-    - 3
-    description: null
-  - name: CH4
-    bit_range:
-    - 4
-    - 4
-    description: null
-  - name: CH5
-    bit_range:
-    - 5
-    - 5
-    description: null
-  - name: CH6
+    - 7
+    - 7
+    description: Advance the phase of the counter by 1 count, while it is running. Self-clearing. Write a 1, and poll until low. Counter must be running at less than full speed (div_int + div_frac / 16 > 1)
+  - name: PH_RET
     bit_range:
     - 6
     - 6
-    description: null
+    description: Retard the phase of the counter by 1 count, while it is running. Self-clearing. Write a 1, and poll until low. Counter must be running.
+  - name: DIVMODE
+    bit_range:
+    - 5
+    - 4
+  - name: B_INV
+    bit_range:
+    - 3
+    - 3
+    description: Invert output B
+  - name: A_INV
+    bit_range:
+    - 2
+    - 2
+    description: Invert output A
+  - name: PH_CORRECT
+    bit_range:
+    - 1
+    - 1
+    description: '1: Enable phase-correct modulation. 0: Trailing-edge'
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: Enable the PWM channel.
+  side_effects: null
+- id: CH9_DIV
+  address_offset: 184
+  size: 32
+  access: READ_WRITE
+  reset_value: 16
+  fields:
+  - name: INT
+    bit_range:
+    - 11
+    - 4
+  - name: FRAC
+    bit_range:
+    - 3
+    - 0
+  side_effects: null
+- id: CH9_CTR
+  address_offset: 188
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH9_CTR
+    bit_range:
+    - 15
+    - 0
+  side_effects: null
+- id: CH9_CC
+  address_offset: 192
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: B
+    bit_range:
+    - 31
+    - 16
+  - name: A
+    bit_range:
+    - 15
+    - 0
+  side_effects: null
+- id: CH9_TOP
+  address_offset: 196
+  size: 32
+  access: READ_WRITE
+  reset_value: 65535
+  fields:
+  - name: CH9_TOP
+    bit_range:
+    - 15
+    - 0
+  side_effects: null
+- id: CH10_CSR
+  address_offset: 200
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PH_ADV
+    bit_range:
+    - 7
+    - 7
+    description: Advance the phase of the counter by 1 count, while it is running. Self-clearing. Write a 1, and poll until low. Counter must be running at less than full speed (div_int + div_frac / 16 > 1)
+  - name: PH_RET
+    bit_range:
+    - 6
+    - 6
+    description: Retard the phase of the counter by 1 count, while it is running. Self-clearing. Write a 1, and poll until low. Counter must be running.
+  - name: DIVMODE
+    bit_range:
+    - 5
+    - 4
+  - name: B_INV
+    bit_range:
+    - 3
+    - 3
+    description: Invert output B
+  - name: A_INV
+    bit_range:
+    - 2
+    - 2
+    description: Invert output A
+  - name: PH_CORRECT
+    bit_range:
+    - 1
+    - 1
+    description: '1: Enable phase-correct modulation. 0: Trailing-edge'
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: Enable the PWM channel.
+  side_effects: null
+- id: CH10_DIV
+  address_offset: 204
+  size: 32
+  access: READ_WRITE
+  reset_value: 16
+  fields:
+  - name: INT
+    bit_range:
+    - 11
+    - 4
+  - name: FRAC
+    bit_range:
+    - 3
+    - 0
+  side_effects: null
+- id: CH10_CTR
+  address_offset: 208
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH10_CTR
+    bit_range:
+    - 15
+    - 0
+  side_effects: null
+- id: CH10_CC
+  address_offset: 212
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: B
+    bit_range:
+    - 31
+    - 16
+  - name: A
+    bit_range:
+    - 15
+    - 0
+  side_effects: null
+- id: CH10_TOP
+  address_offset: 216
+  size: 32
+  access: READ_WRITE
+  reset_value: 65535
+  fields:
+  - name: CH10_TOP
+    bit_range:
+    - 15
+    - 0
+  side_effects: null
+- id: CH11_CSR
+  address_offset: 220
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PH_ADV
+    bit_range:
+    - 7
+    - 7
+    description: Advance the phase of the counter by 1 count, while it is running. Self-clearing. Write a 1, and poll until low. Counter must be running at less than full speed (div_int + div_frac / 16 > 1)
+  - name: PH_RET
+    bit_range:
+    - 6
+    - 6
+    description: Retard the phase of the counter by 1 count, while it is running. Self-clearing. Write a 1, and poll until low. Counter must be running.
+  - name: DIVMODE
+    bit_range:
+    - 5
+    - 4
+  - name: B_INV
+    bit_range:
+    - 3
+    - 3
+    description: Invert output B
+  - name: A_INV
+    bit_range:
+    - 2
+    - 2
+    description: Invert output A
+  - name: PH_CORRECT
+    bit_range:
+    - 1
+    - 1
+    description: '1: Enable phase-correct modulation. 0: Trailing-edge'
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: Enable the PWM channel.
+  side_effects: null
+- id: CH11_DIV
+  address_offset: 224
+  size: 32
+  access: READ_WRITE
+  reset_value: 16
+  fields:
+  - name: INT
+    bit_range:
+    - 11
+    - 4
+  - name: FRAC
+    bit_range:
+    - 3
+    - 0
+  side_effects: null
+- id: CH11_CTR
+  address_offset: 228
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH11_CTR
+    bit_range:
+    - 15
+    - 0
+  side_effects: null
+- id: CH11_CC
+  address_offset: 232
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: B
+    bit_range:
+    - 31
+    - 16
+  - name: A
+    bit_range:
+    - 15
+    - 0
+  side_effects: null
+- id: CH11_TOP
+  address_offset: 236
+  size: 32
+  access: READ_WRITE
+  reset_value: 65535
+  fields:
+  - name: CH11_TOP
+    bit_range:
+    - 15
+    - 0
+  side_effects: null
+- id: EN
+  address_offset: 240
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH11
+    bit_range:
+    - 11
+    - 11
+  - name: CH10
+    bit_range:
+    - 10
+    - 10
+  - name: CH9
+    bit_range:
+    - 9
+    - 9
+  - name: CH8
+    bit_range:
+    - 8
+    - 8
   - name: CH7
     bit_range:
     - 7
     - 7
-    description: null
+  - name: CH6
+    bit_range:
+    - 6
+    - 6
+  - name: CH5
+    bit_range:
+    - 5
+    - 5
+  - name: CH4
+    bit_range:
+    - 4
+    - 4
+  - name: CH3
+    bit_range:
+    - 3
+    - 3
+  - name: CH2
+    bit_range:
+    - 2
+    - 2
+  - name: CH1
+    bit_range:
+    - 1
+    - 1
+  - name: CH0
+    bit_range:
+    - 0
+    - 0
+  side_effects: null
+- id: INTR
+  address_offset: 244
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH11
+    bit_range:
+    - 11
+    - 11
+  - name: CH10
+    bit_range:
+    - 10
+    - 10
+  - name: CH9
+    bit_range:
+    - 9
+    - 9
+  - name: CH8
+    bit_range:
+    - 8
+    - 8
+  - name: CH7
+    bit_range:
+    - 7
+    - 7
+  - name: CH6
+    bit_range:
+    - 6
+    - 6
+  - name: CH5
+    bit_range:
+    - 5
+    - 5
+  - name: CH4
+    bit_range:
+    - 4
+    - 4
+  - name: CH3
+    bit_range:
+    - 3
+    - 3
+  - name: CH2
+    bit_range:
+    - 2
+    - 2
+  - name: CH1
+    bit_range:
+    - 1
+    - 1
+  - name: CH0
+    bit_range:
+    - 0
+    - 0
+  side_effects: null
+- id: IRQ0_INTE
+  address_offset: 248
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH11
+    bit_range:
+    - 11
+    - 11
+  - name: CH10
+    bit_range:
+    - 10
+    - 10
+  - name: CH9
+    bit_range:
+    - 9
+    - 9
+  - name: CH8
+    bit_range:
+    - 8
+    - 8
+  - name: CH7
+    bit_range:
+    - 7
+    - 7
+  - name: CH6
+    bit_range:
+    - 6
+    - 6
+  - name: CH5
+    bit_range:
+    - 5
+    - 5
+  - name: CH4
+    bit_range:
+    - 4
+    - 4
+  - name: CH3
+    bit_range:
+    - 3
+    - 3
+  - name: CH2
+    bit_range:
+    - 2
+    - 2
+  - name: CH1
+    bit_range:
+    - 1
+    - 1
+  - name: CH0
+    bit_range:
+    - 0
+    - 0
+  side_effects: null
+- id: IRQ0_INTF
+  address_offset: 252
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH11
+    bit_range:
+    - 11
+    - 11
+  - name: CH10
+    bit_range:
+    - 10
+    - 10
+  - name: CH9
+    bit_range:
+    - 9
+    - 9
+  - name: CH8
+    bit_range:
+    - 8
+    - 8
+  - name: CH7
+    bit_range:
+    - 7
+    - 7
+  - name: CH6
+    bit_range:
+    - 6
+    - 6
+  - name: CH5
+    bit_range:
+    - 5
+    - 5
+  - name: CH4
+    bit_range:
+    - 4
+    - 4
+  - name: CH3
+    bit_range:
+    - 3
+    - 3
+  - name: CH2
+    bit_range:
+    - 2
+    - 2
+  - name: CH1
+    bit_range:
+    - 1
+    - 1
+  - name: CH0
+    bit_range:
+    - 0
+    - 0
+  side_effects: null
+- id: IRQ0_INTS
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH11
+    bit_range:
+    - 11
+    - 11
+  - name: CH10
+    bit_range:
+    - 10
+    - 10
+  - name: CH9
+    bit_range:
+    - 9
+    - 9
+  - name: CH8
+    bit_range:
+    - 8
+    - 8
+  - name: CH7
+    bit_range:
+    - 7
+    - 7
+  - name: CH6
+    bit_range:
+    - 6
+    - 6
+  - name: CH5
+    bit_range:
+    - 5
+    - 5
+  - name: CH4
+    bit_range:
+    - 4
+    - 4
+  - name: CH3
+    bit_range:
+    - 3
+    - 3
+  - name: CH2
+    bit_range:
+    - 2
+    - 2
+  - name: CH1
+    bit_range:
+    - 1
+    - 1
+  - name: CH0
+    bit_range:
+    - 0
+    - 0
+  side_effects: null
+- id: IRQ1_INTE
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH11
+    bit_range:
+    - 11
+    - 11
+  - name: CH10
+    bit_range:
+    - 10
+    - 10
+  - name: CH9
+    bit_range:
+    - 9
+    - 9
+  - name: CH8
+    bit_range:
+    - 8
+    - 8
+  - name: CH7
+    bit_range:
+    - 7
+    - 7
+  - name: CH6
+    bit_range:
+    - 6
+    - 6
+  - name: CH5
+    bit_range:
+    - 5
+    - 5
+  - name: CH4
+    bit_range:
+    - 4
+    - 4
+  - name: CH3
+    bit_range:
+    - 3
+    - 3
+  - name: CH2
+    bit_range:
+    - 2
+    - 2
+  - name: CH1
+    bit_range:
+    - 1
+    - 1
+  - name: CH0
+    bit_range:
+    - 0
+    - 0
+  side_effects: null
+- id: IRQ1_INTF
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH11
+    bit_range:
+    - 11
+    - 11
+  - name: CH10
+    bit_range:
+    - 10
+    - 10
+  - name: CH9
+    bit_range:
+    - 9
+    - 9
+  - name: CH8
+    bit_range:
+    - 8
+    - 8
+  - name: CH7
+    bit_range:
+    - 7
+    - 7
+  - name: CH6
+    bit_range:
+    - 6
+    - 6
+  - name: CH5
+    bit_range:
+    - 5
+    - 5
+  - name: CH4
+    bit_range:
+    - 4
+    - 4
+  - name: CH3
+    bit_range:
+    - 3
+    - 3
+  - name: CH2
+    bit_range:
+    - 2
+    - 2
+  - name: CH1
+    bit_range:
+    - 1
+    - 1
+  - name: CH0
+    bit_range:
+    - 0
+    - 0
+  side_effects: null
+- id: IRQ1_INTS
+  address_offset: 268
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH11
+    bit_range:
+    - 11
+    - 11
+  - name: CH10
+    bit_range:
+    - 10
+    - 10
+  - name: CH9
+    bit_range:
+    - 9
+    - 9
+  - name: CH8
+    bit_range:
+    - 8
+    - 8
+  - name: CH7
+    bit_range:
+    - 7
+    - 7
+  - name: CH6
+    bit_range:
+    - 6
+    - 6
+  - name: CH5
+    bit_range:
+    - 5
+    - 5
+  - name: CH4
+    bit_range:
+    - 4
+    - 4
+  - name: CH3
+    bit_range:
+    - 3
+    - 3
+  - name: CH2
+    bit_range:
+    - 2
+    - 2
+  - name: CH1
+    bit_range:
+    - 1
+    - 1
+  - name: CH0
+    bit_range:
+    - 0
+    - 0
   side_effects: null
 interrupts:
-  PWM_IRQ_WRAP: 4
+  PWM_IRQ_WRAP_0: 8
+  PWM_IRQ_WRAP_1: 9
 timing: null
