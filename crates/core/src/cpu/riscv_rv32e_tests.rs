@@ -73,11 +73,16 @@ fn rv32e_core_strings_select_the_e_profile_without_falling_through() {
         serde_yaml::from_str(&yaml).expect("fixture chip must parse")
     }
 
-    for core in ["rv32e", "RV32EC", " rv32emc ", "Rv32Em"] {
+    for core in ["rv32e", " rv32emc ", "Rv32Em"] {
         assert_eq!(
             RiscVCoreProfile::for_chip(&chip(core)),
             RiscVCoreProfile::Rv32e,
             "core string {core:?} must select RV32E"
         );
     }
+    assert_eq!(
+        RiscVCoreProfile::for_chip(&chip(" RV32EC ")),
+        RiscVCoreProfile::Rv32ec,
+        "the exact E+C profile must not acquire M/A from the shared decoder"
+    );
 }

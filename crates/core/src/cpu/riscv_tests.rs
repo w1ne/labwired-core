@@ -1865,6 +1865,16 @@ fn riscv_profile_is_selected_from_the_chip_descriptor() {
         "a generic rv32 core runs the standard profile"
     );
     assert_eq!(
+        RiscVCoreProfile::for_chip(&chip("ch32v003", Some("rv32ec"))),
+        RiscVCoreProfile::Rv32ec,
+        "RV32EC selects the 16-register E profile"
+    );
+    assert_eq!(
+        RiscVCoreProfile::for_chip(&chip("some-rv32e", Some("rv32emc"))),
+        RiscVCoreProfile::Rv32e,
+        "RV32EC-specific restrictions do not leak to other E-family strings"
+    );
+    assert_eq!(
         RiscVCoreProfile::for_chip(&chip("mystery-riscv", None)),
         RiscVCoreProfile::Esp32C3,
         "an undeclared core keeps the historical default"

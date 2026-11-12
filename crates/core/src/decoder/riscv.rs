@@ -99,6 +99,99 @@ pub enum Instruction {
     Unknown(u32),
 }
 
+impl Instruction {
+    /// Whether the decoded operation belongs to the modeled E+C instruction
+    /// set. Register operands are checked by the shared RV32E validator.
+    pub(crate) const fn is_rv32ec_instruction(self) -> bool {
+        use Instruction::*;
+        match self {
+            Lui { .. }
+            | Auipc { .. }
+            | Jal { .. }
+            | Jalr { .. }
+            | Beq { .. }
+            | Bne { .. }
+            | Blt { .. }
+            | Bge { .. }
+            | Bltu { .. }
+            | Bgeu { .. }
+            | Lb { .. }
+            | Lh { .. }
+            | Lw { .. }
+            | Lbu { .. }
+            | Lhu { .. }
+            | Sb { .. }
+            | Sh { .. }
+            | Sw { .. }
+            | Addi { .. }
+            | Slti { .. }
+            | Sltiu { .. }
+            | Xori { .. }
+            | Ori { .. }
+            | Andi { .. }
+            | Slli { .. }
+            | Srli { .. }
+            | Srai { .. }
+            | Add { .. }
+            | Sub { .. }
+            | Sll { .. }
+            | Slt { .. }
+            | Sltu { .. }
+            | Xor { .. }
+            | Srl { .. }
+            | Sra { .. }
+            | Or { .. }
+            | And { .. }
+            | Csrrw { .. }
+            | Csrrs { .. }
+            | Csrrc { .. }
+            | Csrrwi { .. }
+            | Csrrsi { .. }
+            | Csrrci { .. }
+            | CAddi { .. }
+            | CLi { .. }
+            | CSli { .. }
+            | CLwsp { .. }
+            | CLw { .. }
+            | CSw { .. }
+            | CMv { .. }
+            | CAddi4spn { .. }
+            | CJr { .. }
+            | CJalr { .. }
+            | CBeqz { .. }
+            | CBnez { .. }
+            | CSwsp { .. }
+            | CAddi16sp { .. }
+            | CJ { .. }
+            | Fence
+            | Ecall
+            | Ebreak
+            | Mret
+            | Wfi => true,
+            Mul { .. }
+            | Mulh { .. }
+            | Mulhsu { .. }
+            | Mulhu { .. }
+            | Div { .. }
+            | Divu { .. }
+            | Rem { .. }
+            | Remu { .. }
+            | LrW { .. }
+            | ScW { .. }
+            | AmoSwapW { .. }
+            | AmoAddW { .. }
+            | AmoXorW { .. }
+            | AmoOrW { .. }
+            | AmoAndW { .. }
+            | AmoMinW { .. }
+            | AmoMaxW { .. }
+            | AmoMinuW { .. }
+            | AmoMaxuW { .. }
+            | Unknown(_) => false,
+        }
+    }
+}
+
 pub fn decode_rv32(inst: u32) -> Instruction {
     if (inst & 0x3) != 0x3 {
         return decode_rv32c((inst & 0xFFFF) as u16);
@@ -468,6 +561,12 @@ pub fn decode_rv32c(inst: u16) -> Instruction {
                 }
                 3 => {
                     let rd = ((inst >> 7) & 0x1F) as u8;
+                    // C.LUI and C.ADDI16SP both reserve an all-zero immediate.
+                    // RISC-V C v2.0, integer constant/register-immediate ops:
+                    // https://docs.riscv.org/reference/isa/v20260120/unpriv/c-st-ext.html
+                    if inst & 0x107C == 0 {
+                        return Instruction::Unknown(inst as u32);
+                    }
                     if rd == 2 {
                         // C.ADDI16SP — nzimm[9:4], scaled by 16. The previous
                         // extraction mis-sourced imm[4/5/7/8] (decoded
@@ -510,6 +609,9 @@ pub fn decode_rv32c(inst: u16) -> Instruction {
                     match funct2 {
                         0 => {
                             // C.SRLI: rd = rd >> shamt
+                            if inst & 0x1000 != 0 {
+                                return Instruction::Unknown(inst as u32);
+                            }
                             let shamt = (((inst >> 12) & 0x1) << 5) | ((inst >> 2) & 0x1F);
                             Instruction::Srli {
                                 rd,
@@ -519,6 +621,9 @@ pub fn decode_rv32c(inst: u16) -> Instruction {
                         }
                         1 => {
                             // C.SRAI: rd = rd >>> shamt (arithmetic)
+                            if inst & 0x1000 != 0 {
+                                return Instruction::Unknown(inst as u32);
+                            }
                             let shamt = (((inst >> 12) & 0x1) << 5) | ((inst >> 2) & 0x1F);
                             Instruction::Srai {
                                 rd,
@@ -631,13 +736,20 @@ pub fn decode_rv32c(inst: u16) -> Instruction {
             match funct3 {
                 0 => {
                     // C.SLLI
+                    // shamt[5]=1 names a custom RV32C extension, not a shift.
+                    if inst & 0x1000 != 0 {
+                        return Instruction::Unknown(inst as u32);
+                    }
                     let rd = ((inst >> 7) & 0x1F) as u8;
-                    let shamt = ((inst >> 12) & 0x1) as u8 | ((inst >> 2) & 0x1F) as u8;
+                    let shamt = ((inst >> 2) & 0x1F) as u8;
                     Instruction::CSli { rd, shamt }
                 }
                 2 => {
                     // C.LWSP
                     let rd = ((inst >> 7) & 0x1F) as u8;
+                    if rd == 0 {
+                        return Instruction::Unknown(inst as u32);
+                    }
                     // inst[12] -> imm[5]
                     // inst[6:4] -> imm[4:2]
                     // inst[3:2] -> imm[7:6]
@@ -656,14 +768,22 @@ pub fn decode_rv32c(inst: u16) -> Instruction {
                     if bit12 == 0 {
                         if rs2 == 0 {
                             // C.JR
-                            Instruction::CJr { rs1 }
+                            if rs1 == 0 {
+                                Instruction::Unknown(inst as u32)
+                            } else {
+                                Instruction::CJr { rs1 }
+                            }
                         } else {
                             // C.MV
                             Instruction::CMv { rd: rs1, rs2 }
                         }
-                    } else if rs1 != 0 && rs2 == 0 {
-                        // C.JALR
-                        Instruction::CJalr { rs1 }
+                    } else if rs2 == 0 {
+                        if rs1 == 0 {
+                            Instruction::Ebreak
+                        } else {
+                            // C.JALR
+                            Instruction::CJalr { rs1 }
+                        }
                     } else {
                         // C.ADD
                         Instruction::Add { rd: rs1, rs1, rs2 }

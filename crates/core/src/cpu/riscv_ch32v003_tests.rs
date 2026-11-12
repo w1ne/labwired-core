@@ -8,7 +8,7 @@ fn ch32v003_descriptor_runs_rv32e_gpio_firmware_through_reset_alias() {
     let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let chip_path = root.join("configs/chips/ch32v003f4p6.yaml");
     let chip = ChipDescriptor::from_file(&chip_path).expect("CH32V003 descriptor");
-    assert_eq!(RiscVCoreProfile::for_chip(&chip), RiscVCoreProfile::Rv32e);
+    assert_eq!(RiscVCoreProfile::for_chip(&chip), RiscVCoreProfile::Rv32ec);
 
     let mut bus = SystemBus::from_config(&chip, &SystemManifest::default())
         .expect("CH32V003 peripherals and clock gates");
