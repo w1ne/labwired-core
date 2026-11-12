@@ -154,6 +154,15 @@ jobs:
             profile_dir: release
             script: examples/esp32h2-devkitm-1-n4s/uart-smoke.yaml
             system: configs/systems/esp32h2-devkitm-1-n4s.yaml
+          # Demand rank 1 ESP32-family coverage: C5-specific survey demand is
+          # unmeasured, but the current C5-DevKitC-1 adds a new family SKU.
+          - id: esp32c5-devkitc-1-n8r8
+            target: riscv32imc-unknown-none-elf
+            crate: firmware-esp32c5-demo
+            profile: release
+            profile_dir: release
+            script: examples/esp32c5-devkitc-1-n8r8/uart-smoke.yaml
+            system: configs/systems/esp32c5-devkitc-1-n8r8.yaml
           # ESP32-S3-DevKitC-1 v1.1 / N16R8. Its exact board profile exposes
           # the USB-to-UART bridge on UART0; the smoke intentionally does not
           # claim the RGB LED, PSRAM, USB-OTG, radio, or buttons.

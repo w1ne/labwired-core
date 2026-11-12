@@ -72,6 +72,13 @@ jobs:
             target: riscv32imc-unknown-none-elf
             script: examples/esp32h2-devkitm-1-n4s/uart-smoke.yaml
             system: configs/systems/esp32h2-devkitm-1-n4s.yaml
+          # Demand rank 1 ESP32-family addition. The survey does not rank C5
+          # separately; this smoke covers the C5 DevKitC-1 UART0 path.
+          - id: esp32c5-devkitc-1-n8r8
+            crate: firmware-esp32c5-demo
+            target: riscv32imc-unknown-none-elf
+            script: examples/esp32c5-devkitc-1-n8r8/uart-smoke.yaml
+            system: configs/systems/esp32c5-devkitc-1-n8r8.yaml
           # Demand-rank 1 Arduino Nano ESP32; rebuild its actual Arduino sketch
           # with PlatformIO before running the GPIO48/D13 model smoke.
           - id: arduino-nano-esp32-gpio

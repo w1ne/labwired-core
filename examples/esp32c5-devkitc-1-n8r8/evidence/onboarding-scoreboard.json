@@ -1,0 +1,42 @@
+{
+  "summary": {
+    "targets_total": 1,
+    "pass": 1,
+    "fail": 0,
+    "median_elapsed_ms": 103958,
+    "threshold_seconds": 3600,
+    "threshold_met": 1,
+    "median_elapsed_seconds": 103.958
+  },
+  "targets": [
+    {
+      "target_id": "esp32c5-devkitc-1-n8r8",
+      "status": "pass",
+      "crate": "firmware-esp32c5-demo",
+      "target_triple": "riscv32imc-unknown-none-elf",
+      "script": "examples/esp32c5-devkitc-1-n8r8/uart-smoke.yaml",
+      "system": "configs/systems/esp32c5-devkitc-1-n8r8.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-12T00:44:57Z",
+      "finished_at_utc": "2026-11-12T00:46:41Z",
+      "elapsed_seconds": 104,
+      "elapsed_ms": 103958,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 100.162,
+        "build_firmware": 3.467,
+        "run_smoke": 0.288
+      },
+      "stages_ms": {
+        "build_cli": 100162,
+        "build_firmware": 3467,
+        "run_smoke": 288
+      },
+      "_artifact_path": "examples/esp32c5-devkitc-1-n8r8/evidence"
+    }
+  ]
+}

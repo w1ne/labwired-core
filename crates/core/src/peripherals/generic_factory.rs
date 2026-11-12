@@ -164,6 +164,10 @@ pub const MODEL_TYPES: &[&str] = &[
     // C6 RMT — the shared C3 model at C6 matrix source 49.
     "esp32c6_rmt",
     "esp32c6_ledc",
+    // C5 UART0 uses the shared Espressif UART head at its own 240 MHz pacing
+    // rate and interrupt source 47. It is intentionally window-limited by the
+    // C5 chip descriptor; do not route it through the fuzzy STM32 UART arm.
+    "esp32c5_uart",
     // nRF52 behavioral models (nrf52 factory).
     "nrf52840_twim",
     "nrf52_saadc",
