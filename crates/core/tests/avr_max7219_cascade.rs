@@ -356,7 +356,14 @@ fn avr_guest_direction_loss_discards_partial_bits_and_reacquires_clock_level() {
 fn avr_guest_mixed_bus_keeps_real_slave_commands_intact_and_ignores_cs_high() {
     // Each read requires one uninterrupted command across several SPDR writes.
     // The deselected command would change the subsequent read if it leaked.
-    let cases: &[(&str, &[u8], &[u8], &[u8], u8)] = &[
+    type CommandCase = (
+        &'static str,
+        &'static [u8],
+        &'static [u8],
+        &'static [u8],
+        u8,
+    );
+    let cases: &[CommandCase] = &[
         (
             "mcp2515",
             &[0x02, 0x2A, 0x55],
