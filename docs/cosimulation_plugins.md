@@ -455,7 +455,11 @@ quiescent current, rail clamps, and the output Norton/ROUT or IOLIM stage.
 Passive input resistances and capacitances remain; the compensation Cg/Rg
 network retains and dissipates its stored state. The ordinary macro operates
 at and between the two limits. A converged reverse or excessive supply span
-is refused. Omitting the pair preserves the existing macro unchanged.
+is refused. The sole numerical exception is an already inactive negative
+span with magnitude at most `f64::EPSILON * VMAX`. Its raw voltage remains in
+readback and traces; it does not activate the macro or relax VMIN/VMAX. This
+machine-precision zero allowance is not physical reverse-supply support.
+Omitting the pair preserves the existing macro unchanged.
 
 This off state is an explicit functional assumption. It does not establish a
 part's unpowered impedance, leakage, input protection, UVLO hysteresis or

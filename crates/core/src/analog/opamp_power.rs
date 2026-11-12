@@ -146,11 +146,19 @@ impl OpAmpPowerState {
         changed
     }
     pub fn validate(&self, circuit: &Circuit, nodes: &[f64]) -> Result<(), AnalogError> {
-        for binding in &circuit.opamp_power {
+        for (index, binding) in circuit.opamp_power.iter().enumerate() {
             let span = Self::span(binding, nodes);
-            if !span.is_finite() || span < 0.0 || span > binding.max_v {
+            // MNA can leave roundoff at a nominally zero supply. Admit only
+            // one binary epsilon of the declared voltage scale while the
+            // active paths are off. Preserve raw voltages and desired(), and
+            // keep the upper supply bound strict. This is not reverse-power
+            // operation or a change to the Newton convergence tolerances.
+            let zero_roundoff_v = f64::EPSILON * binding.max_v;
+            let inactive_numerical_zero = !self.enabled[index] && span >= -zero_roundoff_v;
+            if !span.is_finite() || (span < 0.0 && !inactive_numerical_zero) || span > binding.max_v
+            {
                 return Err(AnalogError::Config(format!(
-                    "OPAMP '{}' solved supply span {span} V is outside 0..={} V; reverse or excessive supply is unsupported",
+                    "OPAMP '{}' solved supply span {span} V is outside 0..={} V (inactive numerical-zero allowance {zero_roundoff_v} V); reverse or excessive supply is unsupported",
                     binding.name, binding.max_v,
                 )));
             }

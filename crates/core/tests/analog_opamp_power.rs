@@ -260,3 +260,57 @@ fn terminal_power_refusal_keeps_last_accepted_clamp_readback() {
         assert!(s.diode_current(diode) > 1e-3);
     }
 }
+
+fn shifted_off_supply(plus: f64, minus: f64, extra: &str) -> String {
+    format!(
+        ".model amp OPAMP(ROUT=20.2 IQ=.005 IBIAS=1u VMIN=2.5 VMAX=4 {extra})\nVplus plus 0 {plus}\nVminus minus 0 {minus}\nVin input 0 1\nXamp input out plus minus out amp\nRload out 0 1k\n"
+    )
+}
+
+#[test]
+fn numerical_zero_keeps_raw_rails_and_active_paths_off() {
+    let margin = f64::EPSILON * 4.0;
+    for common in [0.0, 1.0] {
+        for span in [-margin / 4.0, -margin] {
+            for extra in ["", "IOLIM=.02 SR=150meg"] {
+                let plus = common + span;
+                let mut s = solve(&shifted_off_supply(plus, common, extra)).unwrap();
+                for step in 0..2 {
+                    assert_eq!(voltage(&s, "plus").to_bits(), plus.to_bits());
+                    assert_eq!(voltage(&s, "minus").to_bits(), common.to_bits());
+                    assert_eq!(voltage(&s, "plus") - voltage(&s, "minus"), span);
+                    assert!(current(&s, "Vplus").abs() < 1e-15);
+                    assert_eq!(voltage(&s, "out"), 0.0);
+                    for index in 0..s.circuit().diodes.len() {
+                        assert_eq!(s.diode_current(index), 0.0, "{extra}, step{step}");
+                    }
+                    s.advance(1e-7).unwrap();
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn numerical_zero_does_not_admit_next_representable_reverse_or_overvoltage() {
+    let margin = f64::EPSILON * 4.0;
+    for common in [0.0, 1.0] {
+        let edge = common - margin;
+        let below = if edge.is_sign_negative() {
+            f64::from_bits(edge.to_bits() + 1)
+        } else {
+            f64::from_bits(edge.to_bits() - 1)
+        };
+        assert!(below - common < -margin);
+        let upper = common + 4.0;
+        let above = f64::from_bits(upper.to_bits() + 1);
+        assert!(above - common > 4.0);
+        for plus in [below, above, common - 0.001, common + 4.001] {
+            let error = match solve(&shifted_off_supply(plus, common, "")) {
+                Ok(_) => panic!("accepted invalid span {}", plus - common),
+                Err(error) => error.to_string(),
+            };
+            assert!(error.contains("solved supply span"), "{error}");
+        }
+    }
+}

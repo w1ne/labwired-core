@@ -696,7 +696,10 @@ pub enum ComparatorOutput {
 /// signed `v(v+) - v(v-)`: `0 <= span < VMIN` disables gm/CMRR/VOS, bias/IQ,
 /// rail clamps and the active output stage (including ROUT/IOLIM). Passive
 /// RIN/RINCM/CIN and Cg/Rg remain, with compensation charge preserved. At or
-/// between the bounds the ordinary macro is active. A converged negative or
+/// between the bounds the ordinary macro is active. An already inactive
+/// negative span within `f64::EPSILON * VMAX` is numerical zero for validation
+/// only; raw voltages, activation and the upper bound remain unchanged.
+/// A converged materially negative or
 /// excessive span is refused. Omission preserves the historical behavior.
 /// This opt-in off state is a functional assumption, not evidence for a
 /// device's unpowered impedance, leakage, UVLO or startup timing. It adds no

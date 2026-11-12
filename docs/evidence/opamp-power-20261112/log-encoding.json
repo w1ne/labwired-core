@@ -28,5 +28,11 @@
     "decoded_sha256": "8e35e73d33ffa4f0b53839026675bad3c5172abc8e1e889212aa53550022a638",
     "decoded_bytes": 8380,
     "encoding": "gzip; exact original log bytes"
+  },
+  "r8.log.gz": {
+    "sha256": "b7a523907d1585ed6523057fa7e8dce018f5791a1cdeb207b99a373816f9992a",
+    "decoded_sha256": "3e2234054390f73312312f6dfda0846e7430b24e52987d1342b46efd6c51df80",
+    "decoded_bytes": 8528,
+    "encoding": "gzip; exact original log bytes"
   }
 }
