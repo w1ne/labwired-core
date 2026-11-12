@@ -1,0 +1,4 @@
+2026-11-12T01:42:39.410100Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/esp32p4.yaml
+2026-11-12T01:42:39.422321Z  INFO labwired_loader: ELF Entry Point: 0x40000020
+labwired-cli test: idle_ff=on (event_scheduler=on)
+PASS  2/2 checks · uart-smoke · 1000000 steps · 0.15s

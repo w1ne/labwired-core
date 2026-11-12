@@ -163,6 +163,15 @@ jobs:
             profile_dir: release
             script: examples/esp32c5-devkitc-1-n8r8/uart-smoke.yaml
             system: configs/systems/esp32c5-devkitc-1-n8r8.yaml
+          # Current P4X-C5 Function EV board: UART0 FIFO only; the second HP core,
+          # C5 module, and multimedia/connectivity peripherals remain out of scope.
+          - id: esp32p4x-c5-function-ev-board
+            target: riscv32imc-unknown-none-elf
+            crate: firmware-esp32p4-demo
+            profile: release
+            profile_dir: release
+            script: examples/esp32p4x-c5-function-ev-board/uart-smoke.yaml
+            system: configs/systems/esp32p4x-c5-function-ev-board.yaml
           # ESP32-S3-DevKitC-1 v1.1 / N16R8. Its exact board profile exposes
           # the USB-to-UART bridge on UART0; the smoke intentionally does not
           # claim the RGB LED, PSRAM, USB-OTG, radio, or buttons.

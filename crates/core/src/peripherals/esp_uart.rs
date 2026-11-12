@@ -5,14 +5,10 @@
 //! Espressif UART controller — full digital twin, shared by the SoC families
 //! that carry this IP.
 //!
-//! Chip-neutral on purpose: the ESP32-S3 (UART0/1/2) and the ESP32-C3
-//! (UART0/1) expose the identical register map, the identical `uart_ll.h`
-//! interrupt bits and the same 128-entry FIFOs, so both wire this one model
-//! rather than a per-chip copy — see `peripherals::esp32s3::uart` and
-//! `peripherals::esp32c3::uart` for each family's source ids and core clock.
-//! Anything genuinely per-family (interrupt-matrix source, CPU clock, whether
-//! the instance is the stdout console) is a constructor argument, never a
-//! branch in here.
+//! Chip-neutral on purpose: ESP32-S3, C3, C5, C6, H2, and P4 families expose
+//! compatible UART FIFO/register heads. Family differences such as interrupt
+//! source, CPU clock, UART source clock, and console routing are constructor
+//! arguments, never a branch in the register model.
 //!
 //! Models the real controller's TX/RX FIFOs (occupancy + baud-rate shifting),
 //! FIFO-reset pulses, and the full interrupt set (latched edge bits + live
@@ -350,6 +346,9 @@ pub struct EspUart {
     /// Core clock this instance is paced against (S3 = 240 MHz, C3 = 160 MHz).
     /// 0 only via `Default`, which no bus path uses; `cycles_per_byte` clamps.
     cpu_clock_hz: u64,
+    /// UART source clock. Most existing constructors use 80 MHz; ESP32-P4
+    /// uses a 90 MHz APB clock.
+    uart_sclk_hz: u64,
     /// ESP32-C6 UART register tail: `UART_FSM_STATUS` lives at 0x70 (C3 had
     /// `POSPULSE` there). ROM `uart_tx_wait_idle` polls `ST_UTX_OUT` in bits
     /// [7:4] and spins forever if the C3 POSPULSE reset (0xFFF) is returned.
@@ -432,6 +431,7 @@ impl EspUart {
             clock: None,
             scheduled: false,
             cpu_clock_hz,
+            uart_sclk_hz: UART_SCLK_HZ,
             c6_reg_map: false,
             rx_source: Arc::new(Mutex::new(VecDeque::new())),
             rx_source_exposed: Cell::new(false),
@@ -717,7 +717,7 @@ impl EspUart {
         } else {
             clkdiv
         };
-        (10 * clkdiv * self.cpu_clock_hz / UART_SCLK_HZ).max(1)
+        (10 * clkdiv * self.cpu_clock_hz / self.uart_sclk_hz.max(1)).max(1)
     }
 
     /// INT_RAW = latched edge bits OR the live level conditions.
@@ -748,6 +748,13 @@ impl EspUart {
     /// ESP32-C6: remap offset 0x70 to idle `UART_FSM_STATUS` (see field docs).
     pub fn with_c6_reg_map(mut self) -> Self {
         self.c6_reg_map = true;
+        self
+    }
+
+    /// Override the UART source clock for SoCs whose APB clock differs from
+    /// the shared model's 80 MHz default.
+    pub fn with_uart_sclk_hz(mut self, uart_sclk_hz: u64) -> Self {
+        self.uart_sclk_hz = uart_sclk_hz.max(1);
         self
     }
 

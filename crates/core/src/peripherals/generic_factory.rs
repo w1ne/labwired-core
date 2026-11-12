@@ -168,6 +168,9 @@ pub const MODEL_TYPES: &[&str] = &[
     // rate and interrupt source 47. It is intentionally window-limited by the
     // C5 chip descriptor; do not route it through the fuzzy STM32 UART arm.
     "esp32c5_uart",
+    // P4 UART0 uses the shared FIFO/status head with P4's 400 MHz core and
+    // 90 MHz APB clock. Its chip descriptor exposes only FIFO and STATUS.
+    "esp32p4_uart",
     // nRF52 behavioral models (nrf52 factory).
     "nrf52840_twim",
     "nrf52_saadc",
