@@ -74,6 +74,14 @@ test compares both solved collector voltages with independent load-line
 calculations while the NTC and diode remain routed to PA0 and PA1. This is a
 model test; it does not claim an ADC conversion or silicon analog capture.
 
+[`analog-bjt-high-injection-adc.yaml`](analog-bjt-high-injection-adc.yaml)
+routes a matched Gummel–Poon NPN pair to explicit ADC1_IN11/IN12 endpoints.
+The branches differ by IKF/IKR/NKF high-injection rolloff; the test compares
+their collector voltages against independent load-line calculations across a
+base-drive sweep and checks firmware-visible conversions. The unrelated NTC
+and diode remain on ADC1_IN5/IN6. These ADC endpoints are explicit and do not
+assert PA pad aliases or silicon analog capture.
+
 ## What's modelled
 
 | Peripheral | Status      | Hardware-validated against           |
