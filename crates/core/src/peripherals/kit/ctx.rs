@@ -136,6 +136,16 @@ impl<'a> AttachCtx<'a> {
     /// work over the bus. An unresolvable pad label IS an error — that is a
     /// wiring mistake, not a choice.
     pub fn bind_output_pins(&mut self, desc: &labwired_config::DeviceDescriptor) -> Result<()> {
+        self.bind_output_roles(&desc.behavior.outputs, &desc.behavior.output_pins)
+    }
+
+    /// Bind output roles from a hand-written kit through the same pad port
+    /// as declarative devices. Models queue role names, never MCU pad labels.
+    pub fn bind_output_roles(
+        &mut self,
+        outputs: &[String],
+        output_pins: &std::collections::BTreeMap<String, String>,
+    ) -> Result<()> {
         // The placement must name each output role explicitly; the name also
         // declares a pull-up. No implicit electrical mode is inferred.
         let open_drain_roles = match self.ext.config.get("open_drain_pullups") {
@@ -155,9 +165,7 @@ impl<'a> AttachCtx<'a> {
                             self.ext.id
                         )
                     })?;
-                    if !desc.behavior.outputs.iter().any(|known| known == role)
-                        || result.contains(&role)
-                    {
+                    if !outputs.iter().any(|known| known == role) || result.contains(&role) {
                         return Err(anyhow!(
                             "device '{}' has an unknown or duplicate open-drain role '{}'",
                             self.ext.id,
@@ -198,10 +206,8 @@ impl<'a> AttachCtx<'a> {
                 result
             }
         };
-        for role in &desc.behavior.outputs {
-            let key = desc
-                .behavior
-                .output_pins
+        for role in outputs {
+            let key = output_pins
                 .get(role)
                 .cloned()
                 .unwrap_or_else(|| role.clone());
