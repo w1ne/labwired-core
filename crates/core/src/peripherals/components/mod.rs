@@ -135,3 +135,5 @@ pub use sps30::{Sps30, SPS30_ADDR};
 pub use tca9548a::Tca9548a;
 #[cfg(test)]
 pub use veml7700::{Veml7700, VEML7700_ADDR};
+
+pub mod bmi270_spi;
