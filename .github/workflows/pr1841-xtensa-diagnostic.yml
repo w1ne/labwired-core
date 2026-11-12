@@ -1,0 +1,62 @@
+name: Temporary PR 1841 Xtensa profile
+
+on:
+  push:
+    branches: [diagnostics/pr1841-xtensa-20261112]
+    paths:
+      - .github/workflows/pr1841-xtensa-diagnostic.yml
+      - scripts/diagnostics/pr1841_xtensa.py
+
+permissions:
+  contents: read
+
+jobs:
+  profile:
+    if: github.repository == 'w1ne/labwired-core'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      CARGO_TARGET_DIR: ${{ runner.temp }}/core-pr1841-target
+      CARGO_INCREMENTAL: "0"
+      CARGO_BUILD_JOBS: "2"
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - name: Install diagnostic profiler
+        run: sudo apt-get update && sudo apt-get install -y valgrind
+      - name: Check out exact base
+        uses: actions/checkout@v5
+        with:
+          ref: 5136a4ddf78132f5b411972911042c91d5a67121
+          path: source
+          persist-credentials: false
+      - name: Build exact base CLI
+        working-directory: source
+        timeout-minutes: 17
+        run: cargo build --locked --release -p labwired-cli --bin labwired --features event-scheduler --jobs 2
+      - name: Profile base Xtensa step loop
+        run: python3 scripts/diagnostics/pr1841_xtensa.py base source 5136a4ddf78132f5b411972911042c91d5a67121 results
+      - name: Check out exact integration
+        uses: actions/checkout@v5
+        with:
+          ref: 6ec1cfbb24c4230df347d3790fcae6b59172356d
+          path: source
+          persist-credentials: false
+      - name: Build exact integration CLI
+        working-directory: source
+        timeout-minutes: 17
+        run: cargo build --locked --release -p labwired-cli --bin labwired --features event-scheduler --jobs 2
+      - name: Profile integration Xtensa step loop
+        run: python3 scripts/diagnostics/pr1841_xtensa.py head source 6ec1cfbb24c4230df347d3790fcae6b59172356d results
+      - name: Compare diagnostics
+        run: python3 scripts/diagnostics/pr1841_xtensa.py compare results
+      - name: Retain profiles and exact source identities
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: pr1841-xtensa-diagnostic
+          path: results
+          if-no-files-found: error
+          retention-days: 7
