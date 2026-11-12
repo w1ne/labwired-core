@@ -42,7 +42,7 @@
     },
     {
       "assertion": {
-        "uart_contains": "PLIC UART0 source=0000000000000004 cause=800000000000000b count=0000000000000001 ip=0000000000000001 pending=0000000000000000 meip_clear=0000000000000000 ok"
+        "uart_contains": "PLIC UART0 source=0000000000000004 cause=800000000000000b count=0000000000000001 ip=0000000000000001 masked_pending=1 masked_meip=0 threshold_release=1 pending=0000000000000000 meip_clear=0000000000000000 ok"
       },
       "passed": true
     },
@@ -79,7 +79,7 @@
     "type": "risc_v64",
     "x": [
       0,
-      536876874,
+      536877816,
       2147614592,
       2147485696,
       0,
@@ -87,23 +87,23 @@
       33570824,
       0,
       268500992,
-      1,
+      268500992,
       268500992,
       10,
       268500992,
       5,
-      8,
+      0,
       201330688,
-      201334784,
-      268500992,
+      2147484376,
+      128,
       0,
       0,
       1,
-      4,
-      9223372036854775819,
-      6272,
-      536873486,
-      536873472,
+      1,
+      0,
+      0,
+      16,
+      1,
       0,
       0,
       0,
@@ -111,12 +111,12 @@
       0,
       0
     ],
-    "pc": 536877066,
+    "pc": 536877972,
     "mstatus": 6272,
     "mie": 2176,
     "mtvec": 536871596,
     "mscratch": 0,
-    "mepc": 536875840,
+    "mepc": 536875882,
     "mcause": 9223372036854775819,
     "mtval": 0,
     "mcycle": 100000,
@@ -274,7 +274,7 @@
       ],
       "threshold": [
         0,
-        0,
+        2,
         0,
         0,
         0,
@@ -286,7 +286,7 @@
     },
     "reservation": null
   },
-  "firmware_hash": "bf7bf324816e3913b98a1c227a6e5225ff1b9099589a443695d05efdbd794b40",
+  "firmware_hash": "7003b72245ed7c04e79144fec7eb84a9061476a48d3e4f6cc02a483fc941050e",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv64imac-unknown-none-elf/release/firmware-sifive-fu540-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/sifive-fu540.yaml",
@@ -328,7 +328,7 @@
         "end_cycle": 50000
       },
       {
-        "text": "PLIC UART0 source=0000000000000004 cause=800000000000000b count=0000000000000001 ip=0000000000000001 pending=0000000000000000 meip_clear=0000000000000000 ok",
+        "text": "PLIC UART0 source=0000000000000004 cause=800000000000000b count=0000000000000001 ip=0000000000000001 masked_pending=1 masked_meip=0 threshold_release=1 pending=0000000000000000 meip_clear=0000000000000000 ok",
         "cycle_lo": 40000,
         "cycle": 50000,
         "end_cycle": 50000
@@ -338,10 +338,10 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 6402,
+    "text_bytes": 7306,
     "data_bytes": 0,
     "bss_bytes": 131072,
-    "flash_used_bytes": 6402,
+    "flash_used_bytes": 7306,
     "ram_static_bytes": 131072,
     "flash_total_bytes": 33554432,
     "ram_total_bytes": 131072,
@@ -361,13 +361,13 @@
     "cycles": 100000,
     "instructions": 100000,
     "steps_executed": 100000,
-    "memory_reads": 121651,
+    "memory_reads": 121818,
     "memory_writes": 52,
-    "peripheral_accesses": 722,
+    "peripheral_accesses": 824,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 536877066,
+        "pc": 536877972,
         "count": 234,
         "symbol": "main"
       },

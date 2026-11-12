@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="7" failures="0" errors="0" time="0.005192">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="bf7bf324816e3913b98a1c227a6e5225ff1b9099589a443695d05efdbd794b40"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.005192">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: RV64 FU540 UART0 smoke; mul=0000001100000011" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: timer IRQ mcause=8000000000000007 count=0000000000000001 mepc_in_wait=1 entry_mie=0 entry_mpie=1 entry_m…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_contains: PLIC UART0 source=0000000000000004 cause=800000000000000b count=0000000000000001 ip=0000000000000001 pen…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x10010010=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: memory_value: @0x10010014=0x1" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

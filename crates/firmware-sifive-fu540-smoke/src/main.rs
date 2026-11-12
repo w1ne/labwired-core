@@ -264,7 +264,7 @@ fn timer_interrupt_probe() -> bool {
     pass
 }
 
-/// Raise FU540 PLIC source 4 from UART0 TXWM, then claim and complete it.
+/// Exercise FU540 PLIC thresholding, then claim and complete UART0 TXWM.
 fn plic_uart_interrupt_probe() -> bool {
     unsafe {
         core::ptr::write_volatile(core::ptr::addr_of_mut!(PLIC_TRAP_COUNT), 0);
@@ -273,7 +273,10 @@ fn plic_uart_interrupt_probe() -> bool {
         core::ptr::write_volatile(core::ptr::addr_of_mut!(PLIC_TRAP_IP), 0);
         core::ptr::write_volatile(PLIC_PRIORITY4, 3);
         core::ptr::write_volatile(PLIC_ENABLE_HART1, 1 << 4);
-        core::ptr::write_volatile(PLIC_THRESHOLD_HART1, 0);
+        // PLIC only notifies a context when source priority is strictly above
+        // its threshold. Start at the same priority to prove the pending source
+        // remains masked until firmware lowers the threshold.
+        core::ptr::write_volatile(PLIC_THRESHOLD_HART1, 3);
     }
 
     unsafe {
@@ -294,6 +297,26 @@ fn plic_uart_interrupt_probe() -> bool {
     }
 
     for _ in 0..10_000 {
+        if unsafe { core::ptr::read_volatile(PLIC_PENDING) } & (1 << 4) != 0 {
+            break;
+        }
+        unsafe { core::arch::asm!("nop", options(nomem, nostack, preserves_flags)) };
+    }
+    let masked_pending = unsafe { core::ptr::read_volatile(PLIC_PENDING) } & (1 << 4) != 0;
+    let masked_count = unsafe { core::ptr::read_volatile(core::ptr::addr_of!(PLIC_TRAP_COUNT)) };
+    let masked_meip: u64;
+    unsafe {
+        core::arch::asm!(
+            "csrr {mip}, mip",
+            "srli {mip}, {mip}, 11",
+            "andi {mip}, {mip}, 1",
+            mip = lateout(reg) masked_meip,
+            options(nomem, nostack),
+        );
+        core::ptr::write_volatile(PLIC_THRESHOLD_HART1, 2);
+    }
+
+    for _ in 0..10_000 {
         if unsafe { core::ptr::read_volatile(core::ptr::addr_of!(PLIC_TRAP_COUNT)) } != 0 {
             break;
         }
@@ -303,13 +326,14 @@ fn plic_uart_interrupt_probe() -> bool {
         core::arch::asm!("csrc mstatus, {mie}", mie = in(reg) 1u64 << 3, options(nomem, nostack));
     }
 
-    let (count, cause, id, ip, pending) = unsafe {
+    let (count, cause, id, ip, pending, released_threshold) = unsafe {
         (
             core::ptr::read_volatile(core::ptr::addr_of!(PLIC_TRAP_COUNT)),
             core::ptr::read_volatile(core::ptr::addr_of!(PLIC_TRAP_MCAUSE)),
             core::ptr::read_volatile(core::ptr::addr_of!(PLIC_TRAP_ID)),
             core::ptr::read_volatile(core::ptr::addr_of!(PLIC_TRAP_IP)),
             core::ptr::read_volatile(PLIC_PENDING),
+            core::ptr::read_volatile(PLIC_THRESHOLD_HART1) == 2,
         )
     };
     let meip_clear: u64;
@@ -317,6 +341,10 @@ fn plic_uart_interrupt_probe() -> bool {
         core::arch::asm!("csrr {mip}, mip", "srli {mip}, {mip}, 11", "andi {mip}, {mip}, 1", mip = lateout(reg) meip_clear, options(nomem, nostack));
     }
     let pass = count == 1
+        && masked_pending
+        && masked_count == 0
+        && masked_meip == 0
+        && released_threshold
         && cause == ((1u64 << 63) | 11)
         && id == 4
         && ip == 1
@@ -331,6 +359,12 @@ fn plic_uart_interrupt_probe() -> bool {
     put_hex64(count);
     puts(" ip=");
     put_hex64(ip);
+    puts(" masked_pending=");
+    putc(if masked_pending { b'1' } else { b'0' });
+    puts(" masked_meip=");
+    putc(if masked_meip == 0 { b'0' } else { b'1' });
+    puts(" threshold_release=");
+    putc(if released_threshold { b'1' } else { b'0' });
     puts(" pending=");
     put_hex64(u64::from(pending));
     puts(" meip_clear=");
