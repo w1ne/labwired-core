@@ -46,6 +46,8 @@ same fields but never their source, chip YAML, binary or build paths.
 | esp32 | open | L1 | 32 | 955.5 | 1.4 | ≥1× (CI) | [doc](docs/boards/esp32.md) |
 | esp32s3 | open | L1 | 14 | 991.9 | 2.4 | ≥1× (CI) | [doc](docs/boards/esp32s3.md) |
 | esp32s3-zero | open | L1 | 17 | 991.9 | 2.4 | ≥1× (CI) | — |
+| esp32-devkitc-32e-gpio-smoke | open | L1 | 3 | 977.8 | 1.4 | ≥1× (CI) | — |
+| esp32-devkitc-32e-uart1 | open | L0 | 3 | 977.8 | 1.4 | ≥1× (CI) | — |
 | stm32f401cdu6 | open | L1 | 45 | 937.7 | 1.6 | ≥1× (CI) | — |
 | stm32f411ceu6 | open | L1 | 46 | 937.6 | 1.6 | ≥1× (CI) | — |
 | nrf51822 | open | L1 | 22 | 1335.6 | 2.0 | ≥1× (CI) | — |
@@ -56,6 +58,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | rp2040 | open | L1 | 23 | 905.9 | 1.6 | ≥1× (CI) | [doc](docs/boards/rp2040.md) |
 | stm32f103 | open | L1 | 31 | 937.3 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32f103.md) |
 | stm32f103rb | open | L0 | 32 | 935.4 | 1.6 | ≥1× (CI) | — |
+| stm32f103rb-nucleo-bme280-smoke | open | L0 | 7 | 921.9 | 1.5 | ≥1× (CI) | — |
 | stm32f103c4 | open | L0 | 31 | 936.4 | 1.6 | ≥1× (CI) | — |
 | stm32f103c6 | open | L0 | 31 | 936.4 | 1.6 | ≥1× (CI) | — |
 | stm32f103r4 | open | L0 | 31 | 936.4 | 1.6 | ≥1× (CI) | — |

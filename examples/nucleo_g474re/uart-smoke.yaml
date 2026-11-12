@@ -1,10 +1,13 @@
-# LabWired - NUCLEO_G474RE UART smoke test
+# NUCLEO-G474RE smoke: USART2 marker and TIM1_CH1 PWM on PA8.
 schema_version: "1.0"
 inputs:
   firmware: "./board_firmware/target/thumbv7em-none-eabi/release/firmware-nucleo_g474re-demo"
-  system: "./system.yaml"
+  system: "../../configs/systems/nucleo_g474re.yaml"
 limits:
-  max_steps: 64
+  max_steps: 1000000
 assertions:
   - uart_contains: "OK"
+  - gpio_edges:
+      pin: "gpioa:8"
+      min_edges: 8
   - expected_stop_reason: max_steps

@@ -91,6 +91,14 @@ _tier1 fixture drives 8 rubric classes incl. a BMP280 chip-id read over the I2C 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `sdio_stub` (esp32/sdio_stub.rs:5) — STRUCTURAL: hardcoded FSM_DONE so the boot ROM's SDIO bring-up poll terminates. Removing it breaks boot; the ROM blob is the only 'firmware' that touches it.
 
+### `esp32-devkitc-32e-gpio-smoke`
+
+_Narrow ESP32-DevKitC-32E onboarding profile (GPIO23, UART0, I2C0). docs/receipts/2026-11-09-esp32-deep-sleep records stock Arduino-ESP32 timer-wake deep sleep printing LW_DS_OK (bootCount 1→2→3 across DEEPSLEEP_RESET, RTC slow memory kept) and light sleep printing LW_LS_OK. Firmware is PlatformIO-built, not a committed ELF; those receipts are not a required CI lane. The committed system attaches no external I2C device. No beyond-rubric block is listed for this slice._
+
+### `esp32-devkitc-32e-uart1`
+
+_Narrow ESP32-DevKitC-32E onboarding profile that routes UART1 TX to J3 pin 12 / GPIO16. Committed evidence at examples/esp32-devkitc-32e-uart1/evidence/run shows examples/esp32-devkitc-32e-uart1/uart1-smoke.yaml passed 3/3: UART0 printed ESP32_DEVKITC32E_UART1_TX_OK, GPIO16 (UART1 TX) saw at least 32 edges from Serial1 printing UUUUUUUU, and the run stopped at max_steps. Firmware is PlatformIO-built via scripts/build-esp32-devkitc-32e-uart1-smoke.sh, not a committed ELF; no required CI lane runs this script. No beyond-rubric block is listed for this slice._
+
 ### `nrf52840`
 
 _TWIM/PWM are firmware-proven via the rubric fixture; the PR-gated OBD2 scanner e2e drives the RADIO TXEN/READY/START/END handshake (asserts ble_tx > 0), and the #[ignore]d proximity e2e adds an on-demand radio path. The Zephyr BME280 temperature read runs in an external west build._
@@ -239,6 +247,10 @@ _Exact STM32F103R8 LQFP64 model (medium-density x8: 64 KiB flash, 20 KiB SRAM, 5
 ### `stm32f103rb`
 
 _Exact STM32F103RBT6 LQFP64 model with 128 KiB flash and 20 KiB SRAM. The NUCLEO-F103RB source smoke exercises PA5 GPIO output and USART2; firmware-exercise rubric claims remain on the STM32F103 family row until exact-part rubric coverage is added._
+
+### `stm32f103rb-nucleo-bme280-smoke`
+
+_Narrow NUCLEO-F103RB + BME280 onboarding profile (USART2/ST-LINK VCP, LD2 on PA5, I2C1 remapped to PB8/PB9). Committed evidence at examples/nucleo-f103rb-bme280/evidence shows examples/nucleo-f103rb-bme280/onboarding-smoke.yaml passed 3/3: USART2 printed NUCLEO_F103RB_BME280_OK ID=0x60 I2C1=PB8/PB9 after a firmware read of BME280.CHIP_ID (0xD0) at 0x77, gpioa:5 (LD2) saw at least 32 edges, and the run stopped at max_steps. Firmware is built from crates/firmware-nucleo-f103rb-bme280-smoke, not a committed ELF; no required CI lane runs this script. No beyond-rubric block is listed for this slice._
 
 ### `stm32f103t4`
 

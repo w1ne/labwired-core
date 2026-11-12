@@ -302,6 +302,8 @@ fn build_avr_node(
         .with_context(|| format!("node '{id}': build bus"))?;
     let mut cpu = crate::cpu::Avr::for_chip_name(&chip.name);
     cpu.load_program_image(&image);
+    // EEPROM programming time is in microseconds; count it in this clock.
+    cpu.set_cpu_hz(bus.cpu_hz);
     // SPI kits stay on the bus parking controller (SPDR clocks via
     // SystemBus::clock_parking_spi) so inspect can see the panel. I²C
     // slaves still move onto the CPU TWI model.
@@ -310,7 +312,18 @@ fn build_avr_node(
             cpu.push_i2c_slave(dev);
         }
     }
-    let machine = Machine::new(cpu, bus);
+    let mut machine = Machine::new(cpu, bus);
+    // Same run setting the C3 rom-boot / CLI hosted-fast paths apply: widen
+    // to the bus's max-safe interval once residents are walk-free (e.g.
+    // edge-serviced displays). A keypad keeps per-cycle service (#1787), so
+    // boards carrying one stay at interval 1. Exact batch boundaries keep
+    // peripheral event cadence identical to interval-1.
+    let interval = machine.max_safe_tick_interval();
+    machine.config.peripheral_tick_interval = interval;
+    machine.bus.config.peripheral_tick_interval = interval;
+    if interval > 1 {
+        machine.exact_batch_boundaries = true;
+    }
     Ok(Box::new(machine))
 }
 

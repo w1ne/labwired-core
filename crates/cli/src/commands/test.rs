@@ -1611,7 +1611,25 @@ pub(crate) fn run_test(
                             return ExitCode::from(EXIT_CONFIG_ERROR);
                         }
                     };
-                esp_bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
+                // This branch returns before the generic ELF console setup.
+                // Select the board's declared UART here too; tapping every
+                // UART lets a wrong-channel assertion pass on UART0 output.
+                if let Err(msg) = esp_bus.attach_host_console_echo(
+                    &labwired_core::console::HostConsole::from_manifest(manifest),
+                    uart_tx.clone(),
+                    !args.no_uart_stdout,
+                ) {
+                    error!("{}", msg);
+                    write_config_error_outputs(
+                        &args,
+                        Some(&firmware_path),
+                        system_path.as_ref(),
+                        Some(&firmware_bytes),
+                        Some(&resolved_limits),
+                        msg,
+                    );
+                    return ExitCode::from(EXIT_CONFIG_ERROR);
+                }
                 // Real partition table at flash 0x8000 when the PIO matrix
                 // build left partitions.bin beside the firmware (or under
                 // the usual _pio_work path). Enables esp_ota_get_running_partition
@@ -1730,6 +1748,13 @@ pub(crate) fn run_test(
                         }
                     }
                 }
+                // What a deep-sleep wake-up reboots into: the image as set up
+                // above (the bootloader reloads IRAM/DRAM, not RTC memory).
+                machine.capture_esp32_deep_sleep_boot(
+                    program.entry_point as u32,
+                    0x3FFE_0000,
+                    0x3FFD_8000,
+                );
                 machine
             };
             // Same pair as the generic ELF path. `None` keeps the scan; wasm
@@ -2066,13 +2091,16 @@ pub(crate) fn run_test(
             // instead of a per-step observer (which costs every instruction
             // and disables the core's fast batch paths), and CPU windows
             // planned at the bus's max-safe interval with exact boundaries
-            // (`Machine::exact_batch_boundaries`). The bus keeps interval 1,
-            // so peripherals pace their events exactly as before. Outputs are
-            // the same as the per-instruction run; only `cycles` in
-            // result.json changes, to the machine clock. Opt out with
+            // (`Machine::exact_batch_boundaries`). Machine and bus intervals
+            // stay in sync; exact boundaries keep peripheral event cadence
+            // identical to interval-1. Outputs match the per-instruction run;
+            // only `cycles` in result.json changes, to the machine clock. AVR
+            // joins under the same widen gate as Arm (walk-free bus, no
+            // gpio_device needing per-cycle service). Opt out with
             // LABWIRED_HOSTED_FAST=0.
             let hosted_fast = !jit_eligible
                 && (program.arch == labwired_core::Arch::Arm
+                    || program.arch == labwired_core::Arch::Avr
                     || program.arch == labwired_core::Arch::Rx
                     || program.arch == labwired_core::Arch::Mips
                     || program.arch == labwired_core::Arch::Aarch64
@@ -2088,6 +2116,7 @@ pub(crate) fn run_test(
                 let wide = machine.max_safe_tick_interval();
                 if wide > 1 && machine.bus.per_cycle_tick_is_trivial() {
                     machine.config.peripheral_tick_interval = wide;
+                    machine.bus.config.peripheral_tick_interval = wide;
                     machine.exact_batch_boundaries = true;
                     crate::log_ts::eventln!(
                         "labwired-cli test: hosted fast path (exact windows up to {wide} cycles)"

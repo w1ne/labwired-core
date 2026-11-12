@@ -2,7 +2,7 @@
 # indicator LED. The USB-UART bridge is not modeled; UART output is captured
 # from the ESP32 UART0 model. GPIO23 is a header pin, not a built-in LED.
 name: "esp32-devkitm-1"
-chip: "../chips/esp32-devkitm-1-smoke.yaml"
+chip: "../chips/esp32.yaml"
 cpu_hz: 240_000_000
 debug_uart: "uart0"
 external_devices: []

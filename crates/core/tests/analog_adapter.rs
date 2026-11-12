@@ -28,6 +28,7 @@ mod analog {
             sources: BTreeMap::from([("gpio".to_string(), "Vgpio".to_string())]),
             trace: vec!["v(in)".to_string(), "i(Vgpio)".to_string()],
             trace_samples: 20_000,
+            thermistors: BTreeMap::new(),
         }
     }
 
@@ -75,6 +76,41 @@ mod analog {
             error < 0.005,
             "after one tau: {volts} V vs {expected} V ({:.3} %)",
             error * 100.0
+        );
+    }
+
+    /// Electrical negative control for the source-backed RC example. If a
+    /// model ignores its capacitor value (or returns a hard-coded response),
+    /// both traces become the same and this check fails. This is a model
+    /// test, not physical-board verification.
+    #[test]
+    fn rc_capacitance_perturbation_changes_the_measured_response() {
+        let sample_at_one_ms = |netlist: &str| {
+            let mut adapter =
+                AnalogCosimAdapter::from_netlist(netlist, &rc_config()).expect("adapter builds");
+            let mut volts = 0.0;
+            for step in 1..=10 {
+                volts = step_high(&mut adapter, step * 100_000);
+            }
+            volts
+        };
+
+        // Same 10 kΩ resistance, source and GPIO stimulus. Only C changes.
+        let baseline = sample_at_one_ms(RC);
+        let negative_control = sample_at_one_ms(&RC.replace("100n", "1u"));
+        let expected_baseline = 3.3 * (1.0 - (-1.0_f64).exp());
+        let expected_slow = 3.3 * (1.0 - (-0.1_f64).exp());
+        assert!(
+            (baseline - expected_baseline).abs() < 0.02,
+            "10 kΩ × 100 nF must charge to {expected_baseline:.3} V after 1 ms, got {baseline:.3} V"
+        );
+        assert!(
+            (negative_control - expected_slow).abs() < 0.02,
+            "10 kΩ × 1 µF must charge to {expected_slow:.3} V after 1 ms, got {negative_control:.3} V"
+        );
+        assert!(
+            baseline > 4.0 * negative_control,
+            "capacitor change must affect the actual electrical result; baseline {baseline:.3} V vs negative control {negative_control:.3} V"
         );
     }
 

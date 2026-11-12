@@ -328,7 +328,7 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     // ESP32-classic BROM function addresses (per ESP-IDF rom/esp32.rom.ld).
     // Returning 0 means "POWERON_RESET" — adequate for first-boot init.
     // ESP32-classic BROM thunks (addresses per ESP-IDF rom/esp32.rom.ld).
-    rom_bank.register(0x4000_81d4, rom_thunks::rtc_get_reset_reason);
+    rom_bank.register(0x4000_81d4, rom_thunks::esp32_rtc_get_reset_reason);
     rom_bank.register(0x4000_2a40, rom_thunks::nop_return_zero); // Cache_Read_Disable
     rom_bank.register(0x4000_29ac, rom_thunks::nop_return_zero); // Cache_Read_Enable
                                                                  // libc-equivalents the firmware links against ROM copies of:
@@ -705,7 +705,17 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         ("i2s1", 0x3FF6_D000),
         // pwm0 (0x3FF5_E000) is now the real MCPWM0 model registered above.
         ("ledc2", 0x3FF6_8000),
-        ("rmt", 0x3FF5_6000),
+        // rmt (0x3FF5_6000) is the real Esp32Rmt model from ESP32_PERIPHERALS:
+        // a stub at the same base registered here would win (equal starts →
+        // last registered), same defect uart1/pwm0/pcnt already had.
+        // Radio front-end and baseband (FE2, FE, NRX, BB). No radio is
+        // modelled. ESP-IDF's `rtc_sleep_init` clears their FORCE_PU bits
+        // (FE2_TX_INTERP_CTRL, FE_GEN_CTRL, NRXPD_CTRL, BBPD_CTRL) before
+        // every light or deep sleep, so the windows must decode.
+        ("fe2", 0x3FF4_5000),
+        ("fe", 0x3FF4_6000),
+        ("nrx", 0x3FF5_C000),
+        ("bb", 0x3FF5_D000),
         // pcnt (0x3FF5_7000) is the real Esp32Pcnt model from
         // ESP32_PERIPHERALS: a stub at the same base registered here would win.
     ] {
@@ -977,6 +987,8 @@ pub(crate) const ESP32_PERIPHERALS: &[(&str, &str, u64, u64, Option<u32>)] = &[
     // as round-trip storage. `sens_sar_adc` (0x3FF4_8800) and `io_mux`
     // (0x3FF4_9000) still win their ranges by the greatest-start rule.
     ("rtcio",    "esp32_rtc_io",   0x3FF4_8400, 0x1000, None),
+    // RMT TX (NeoPixel). ETS_RMT_INTR_SOURCE = 47.
+    ("rmt",      "esp32_rmt",      0x3FF5_6000, 0x1000, Some(47)),
 ];
 
 /// `GPIO_FUNC0_OUT_SEL_CFG_REG` (`DR_REG_GPIO_BASE` 0x3FF4_4000 + 0x530), stride 4.

@@ -1708,6 +1708,24 @@ impl crate::Bus for SystemBus {
         Self::clock_parking_spi(self, mosi)
     }
 
+    fn sync_parking_spi_cs(&mut self) -> bool {
+        Self::sync_parking_spi_cs(self)
+    }
+
+    fn parking_spi_accepts_clock(&self) -> bool {
+        for entry in &self.peripherals {
+            if let Some(devs) = entry.dev.spi_attached_devices() {
+                if devs
+                    .iter()
+                    .any(|d| d.is_selected() || d.clocks_when_deselected())
+                {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     fn device_write_bypass(&self) -> bool {
         Self::device_write_bypass(self)
     }

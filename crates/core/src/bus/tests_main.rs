@@ -159,6 +159,21 @@ fn timer_poll_coalesce_uses_peripheral_access_class_not_chip_names() {
     let gpio_idx = bus.find_peripheral_index_by_name("gpio").unwrap();
 
     bus.reset_mmio_activity_counters();
+    for i in 1..=3 {
+        bus.note_mmio_activity(sys_idx, 0x04);
+        assert!(
+            !bus.take_timer_poll_coalesce_eligible(),
+            "split time_us_64 ({i}/3 TIMERAW loads) must not skip"
+        );
+        bus.reset_mmio_activity_counters();
+    }
+    bus.note_mmio_activity(sys_idx, 0x04);
+    assert!(
+        bus.take_timer_poll_coalesce_eligible(),
+        "a second time_us_64 (4th consecutive timer-only access) should coalesce"
+    );
+
+    bus.reset_mmio_activity_counters();
     bus.note_mmio_activity(sys_idx, 0x04); // poll class (model decides)
     bus.note_mmio_activity(sys_idx, 0x44); // poll class
     assert!(
@@ -1054,6 +1069,7 @@ fn test_from_config_attaches_adxl345_external_device_to_i2c() {
         analog_pins: Default::default(),
         io_voltage_v: None,
         gpio_input_thresholds: None,
+        reset_input: None,
         supply_monitor: None,
         include: None,
     };
@@ -1894,6 +1910,7 @@ fn esp32c3_i2c0_chip(name: &str) -> ChipDescriptor {
         analog_pins: Default::default(),
         io_voltage_v: None,
         gpio_input_thresholds: None,
+        reset_input: None,
         supply_monitor: None,
         include: None,
     }
@@ -3612,6 +3629,7 @@ fn chip_with_i2c_and_uart() -> labwired_config::ChipDescriptor {
         analog_pins: Default::default(),
         io_voltage_v: None,
         gpio_input_thresholds: None,
+        reset_input: None,
         supply_monitor: None,
         include: None,
     }
@@ -3896,6 +3914,7 @@ fn test_flash_boot_alias_read_and_write() {
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
+        timer_poll_carry: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
         batch_stop: Default::default(),
         memory_reads: std::cell::Cell::new(0),
@@ -3916,6 +3935,7 @@ fn test_flash_boot_alias_read_and_write() {
         resident_tick_interval_override: None,
         gpio_devices: Vec::new(),
         device_pin_pads: Vec::new(),
+        device_open_drain_nets: Default::default(),
         observed: Vec::new(),
         motors: Vec::new(),
         ina219_senses: Vec::new(),
@@ -3947,6 +3967,7 @@ fn test_flash_boot_alias_read_and_write() {
         analog_pin_map: std::collections::HashMap::new(),
         io_voltage_v: None,
         gpio_input_thresholds: None,
+        reset_input: crate::reset_input::ResetInputState::default(),
         supply: crate::power::SupplySupervisor::default(),
         supply_domains: Default::default(),
     };
@@ -4033,6 +4054,7 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
+        timer_poll_carry: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
         batch_stop: Default::default(),
         memory_reads: std::cell::Cell::new(0),
@@ -4053,6 +4075,7 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         resident_tick_interval_override: None,
         gpio_devices: Vec::new(),
         device_pin_pads: Vec::new(),
+        device_open_drain_nets: Default::default(),
         observed: Vec::new(),
         motors: Vec::new(),
         ina219_senses: Vec::new(),
@@ -4084,6 +4107,7 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         analog_pin_map: std::collections::HashMap::new(),
         io_voltage_v: None,
         gpio_input_thresholds: None,
+        reset_input: crate::reset_input::ResetInputState::default(),
         supply: crate::power::SupplySupervisor::default(),
         supply_domains: Default::default(),
     };
@@ -4323,6 +4347,7 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
+        timer_poll_carry: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
         batch_stop: Default::default(),
         memory_reads: std::cell::Cell::new(0),
@@ -4343,6 +4368,7 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         resident_tick_interval_override: None,
         gpio_devices: Vec::new(),
         device_pin_pads: Vec::new(),
+        device_open_drain_nets: Default::default(),
         observed: Vec::new(),
         motors: Vec::new(),
         ina219_senses: Vec::new(),
@@ -4374,6 +4400,7 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         analog_pin_map: std::collections::HashMap::new(),
         io_voltage_v: None,
         gpio_input_thresholds: None,
+        reset_input: crate::reset_input::ResetInputState::default(),
         supply: crate::power::SupplySupervisor::default(),
         supply_domains: Default::default(),
     };
@@ -4609,6 +4636,7 @@ fn test_peripheral_range_index_lookup() {
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
+        timer_poll_carry: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
         batch_stop: Default::default(),
         memory_reads: std::cell::Cell::new(0),
@@ -4629,6 +4657,7 @@ fn test_peripheral_range_index_lookup() {
         resident_tick_interval_override: None,
         gpio_devices: Vec::new(),
         device_pin_pads: Vec::new(),
+        device_open_drain_nets: Default::default(),
         observed: Vec::new(),
         motors: Vec::new(),
         ina219_senses: Vec::new(),
@@ -4660,6 +4689,7 @@ fn test_peripheral_range_index_lookup() {
         analog_pin_map: std::collections::HashMap::new(),
         io_voltage_v: None,
         gpio_input_thresholds: None,
+        reset_input: crate::reset_input::ResetInputState::default(),
         supply: crate::power::SupplySupervisor::default(),
         supply_domains: Default::default(),
     };
@@ -4751,6 +4781,7 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
+        timer_poll_carry: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
         batch_stop: Default::default(),
         memory_reads: std::cell::Cell::new(0),
@@ -4771,6 +4802,7 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         resident_tick_interval_override: None,
         gpio_devices: Vec::new(),
         device_pin_pads: Vec::new(),
+        device_open_drain_nets: Default::default(),
         observed: Vec::new(),
         motors: Vec::new(),
         ina219_senses: Vec::new(),
@@ -4802,6 +4834,7 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         analog_pin_map: std::collections::HashMap::new(),
         io_voltage_v: None,
         gpio_input_thresholds: None,
+        reset_input: crate::reset_input::ResetInputState::default(),
         supply: crate::power::SupplySupervisor::default(),
         supply_domains: Default::default(),
     };

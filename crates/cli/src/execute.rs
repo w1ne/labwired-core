@@ -1241,12 +1241,14 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         }
     }
 
-    // Final counter mirror for the JIT-eligible path: the loop-top sync runs
-    // before the LAST batch, so capture that batch's retired cycles/instructions
-    // here — `result.json` (`cycles`/`instructions`) and `stop_reason_details`
-    // read `metrics` below and must report the true totals.
+    // Every result uses the clock that enforced max_cycles and drove stimuli,
+    // peripheral time and stop_reason_details. The per-step observer counts
+    // instruction costs (for example two for Thumb32), which can differ from
+    // machine time and would make an otherwise bounded run appear over budget.
+    // Mirror after the LAST batch, before resource assertions and artifacts.
+    ctx.metrics.set_cycles(ctx.machine.total_cycles);
+    // Observer-free paths also need their retired-instruction total mirrored.
     if ctx.jit_eligible || ctx.counter_metrics || ctx.machine_metrics {
-        ctx.metrics.set_cycles(ctx.machine.total_cycles);
         ctx.metrics.set_instructions(steps_executed);
     }
 
@@ -1811,6 +1813,10 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         logic_edges,
         gpio_pins,
         uart_lines.finish(),
+        crate::i2c_trace::i2c_trace_summary(
+            &ctx.machine.bus.bus_trace_snapshot(),
+            ctx.machine.bus.bus_trace_evicted(),
+        ),
         ctx.machine.bus.motor_snapshots(),
         ctx.machine
             .analog_series()

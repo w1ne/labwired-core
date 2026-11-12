@@ -108,6 +108,7 @@ const STM32G0_TIMER_PADS: &[TimerAfPad] = &[
 /// (`variants/STM32G4xx/G473R(B-C)T_G473RETx(Z)_G474R(B-C-E)T_G483RET_G484RET/PeripheralPins.c`):
 /// TIM2 on AF1 (AF10 for PA9/PA10), TIM3 on AF2 (AF10 for PB7).
 const STM32G4_TIMER_PADS: &[TimerAfPad] = &[
+    ("tim1", 'a', 8, 6, 0, "TIM1_CH1"),
     ("tim2", 'a', 0, 1, 0, "TIM2_CH1"),
     ("tim2", 'a', 5, 1, 0, "TIM2_CH1"),
     ("tim2", 'a', 15, 1, 0, "TIM2_CH1"),
@@ -4170,19 +4171,111 @@ impl SystemBus {
             })
             .map(|(i, _)| i)
             .collect();
+        // Ordinary selected slaves each receive the controller's MOSI.
+        // Continuous shift registers (MAX7219) also clock while LOAD is high,
+        // and their explicitly ordered shared-LOAD chain feeds DOUT→DIN.
+        let mut chains: Vec<(usize, usize, u32, String, bool)> = Vec::new();
         let mut miso = 0u8;
-        for idx in indices {
-            self.maybe_latch_dc(idx);
-            if let Some(devs) = self.peripherals[idx].dev.spi_attached_devices_mut() {
-                for device in devs {
-                    let resp = device.transfer(mosi);
-                    if resp != 0 {
-                        miso = resp;
+        for idx in &indices {
+            self.maybe_latch_dc(*idx);
+            if let Some(devs) = self.peripherals[*idx].dev.spi_attached_devices_mut() {
+                for (di, device) in devs.iter_mut().enumerate() {
+                    if device.clocks_when_deselected() {
+                        chains.push((
+                            *idx,
+                            di,
+                            device.chain_index(),
+                            device.cs_pin().to_string(),
+                            device.is_selected(),
+                        ));
+                    } else if device.is_selected() {
+                        let resp = device.transfer(mosi);
+                        if resp != 0 {
+                            miso = resp;
+                        }
                     }
                 }
             }
         }
+        // Group shift registers by LOAD; sort each chain by chain_index ascending
+        // (closest to MOSI first) and fold DOUT into the next DIN.
+        chains.sort_by(|a, b| a.3.cmp(&b.3).then(a.2.cmp(&b.2)));
+        let mut i = 0;
+        while i < chains.len() {
+            let cs = chains[i].3.clone();
+            let mut j = i + 1;
+            while j < chains.len() && chains[j].3 == cs {
+                j += 1;
+            }
+            let drives_miso = chains[i..j].iter().any(|entry| entry.4);
+            let mut byte = mosi;
+            for &(pidx, di, _, _, _) in &chains[i..j] {
+                if let Some(devs) = self.peripherals[pidx].dev.spi_attached_devices_mut() {
+                    byte = devs[di].transfer(byte);
+                }
+            }
+            // LOAD-high shift registers still propagate DOUT down their
+            // chain, but cannot overwrite the selected slave's MISO response.
+            if drives_miso && byte != 0 {
+                miso = byte;
+            }
+            i = j;
+        }
         miso
+    }
+
+    /// Sync parking-SPI chip-selects from live GPIO levels (active-low).
+    ///
+    /// Soft-SPI and bit-banged CS on AVR never touch a controller's NSS, so the
+    /// parking kits only see CS through this walk, after every PORT mirror
+    /// write even with hardware SPI enabled. Returns whether any pin rose.
+    pub fn sync_parking_spi_cs(&mut self) -> bool {
+        let mut released = false;
+        let indices: Vec<usize> = self
+            .peripherals
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| {
+                entry
+                    .dev
+                    .spi_attached_devices()
+                    .is_some_and(|devs| !devs.is_empty())
+            })
+            .map(|(i, _)| i)
+            .collect();
+        for idx in indices {
+            // Levels first (immutable borrow of bus), then mutate devices.
+            let levels: Vec<Option<bool>> = {
+                let Some(devs) = self.peripherals[idx].dev.spi_attached_devices() else {
+                    continue;
+                };
+                devs.iter()
+                    .map(|d| {
+                        let pin = d.cs_pin();
+                        if pin.is_empty() {
+                            None
+                        } else {
+                            self.read_gpio_output_by_label(pin)
+                        }
+                    })
+                    .collect()
+            };
+            if let Some(devs) = self.peripherals[idx].dev.spi_attached_devices_mut() {
+                for (device, level) in devs.iter_mut().zip(levels) {
+                    let Some(high) = level else { continue };
+                    let selected = !high; // active-low CS
+                    match (device.is_selected(), selected) {
+                        (false, true) => device.cs_select(),
+                        (true, false) => {
+                            device.cs_release();
+                            released = true;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        released
     }
 
     /// Take every slave off a SPI controller (by peripheral id).

@@ -1,0 +1,14 @@
+# Elecrow CrowPanel Advance 2.8-inch HMI, DIS01728A, hardware V1.2.
+# Source: Elecrow official LovyanGFX_Driver.h for V1.1/V1.2 lesson-03.
+# ST7789: SCLK GPIO42, MOSI GPIO39, CS GPIO40, D/C GPIO41.
+# Backlight GPIO38. Touch I2C excluded from first pilot.
+name: "elecrow-crowpanel-advance-28"
+chip: "../../configs/chips/esp32s3.yaml"
+external_devices:
+  - id: "lcd"
+    type: "st7789-170x320"
+    connection: "spi2_s3"
+    config:
+      cs_pin: "GPIO40"
+      dc_pin: "GPIO41"
+board_io: []
