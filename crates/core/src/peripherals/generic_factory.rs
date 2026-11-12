@@ -156,6 +156,9 @@ pub const MODEL_TYPES: &[&str] = &[
     // C6 EXTMEM / MSPI cache controller (DONE/freeze handshakes).
     "esp32c6_extmem",
     "esp32c6_systimer",
+    // C6 RMT — the shared C3 model at C6 matrix source 49.
+    "esp32c6_rmt",
+    "esp32c6_ledc",
     // nRF52 behavioral models (nrf52 factory).
     "nrf52840_twim",
     "nrf52_saadc",
@@ -214,6 +217,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "esp32_i2c",
     "esp32_ledc",
     "esp32_mcpwm",
+    "esp32_pcnt",
+    "esp32_rmt",
     "esp32_rtc_cntl",
     "esp32_rtc_io",
     "esp32_sar_adc",
@@ -806,10 +811,32 @@ pub fn try_build(
                         ))
                     }
                 };
+                // `pad_map: stm32g0 | stm32g4 | stm32l0 | ...` — the V2
+                // alternate-function table the bus routes this timer's
+                // channel outputs through (the F4 one rides on
+                // `input_capture: stm32f4`).
+                let pad_map = match p_cfg.config.get("pad_map").and_then(|v| v.as_str()) {
+                    None => None,
+                    Some("stm32g0") => Some("stm32g0"),
+                    Some("stm32g4") => Some("stm32g4"),
+                    Some("stm32l0") => Some("stm32l0"),
+                    Some("stm32l4") => Some("stm32l4"),
+                    Some("stm32wb") => Some("stm32wb"),
+                    Some("stm32wba") => Some("stm32wba"),
+                    Some("stm32u5") => Some("stm32u5"),
+                    Some("stm32h5") => Some("stm32h5"),
+                    Some(other) => {
+                        return Err(anyhow::anyhow!(
+                            "timer '{}': unknown pad_map '{other}' (supported: stm32g0, stm32g4, stm32l0, stm32l4, stm32wb, stm32wba, stm32u5, stm32h5)",
+                            p_cfg.id
+                        ))
+                    }
+                };
                 Box::new(
                     crate::peripherals::timer::Timer::new_with_layout(width, advanced)
                         .basic(basic)
-                        .ccer_np(ccer_np),
+                        .ccer_np(ccer_np)
+                        .pad_map(pad_map),
                 )
             }
         }
@@ -1140,13 +1167,41 @@ pub fn try_build(
                 ),
             )
         }
-        "rp2040_timer" => Box::new(crate::peripherals::rp2040::timer::Rp2040Timer::new()),
+        "rp2040_timer" => {
+            let layout = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+                Some("rp2350") => crate::peripherals::rp2040::timer::TimerLayout::Rp2350,
+                // Absent/anything else: the RP2040 map.
+                _ => crate::peripherals::rp2040::timer::TimerLayout::Rp2040,
+            };
+            Box::new(crate::peripherals::rp2040::timer::Rp2040Timer::new().with_layout(layout))
+        }
         "rp2040_dma" => Box::new(crate::peripherals::rp2040::dma::Rp2040Dma::new()),
-        "rp2040_io_bank0" => Box::new(crate::peripherals::rp2040::io_bank0::Rp2040IoBank0::new()),
-        "rp2040_sio" => Box::new(crate::peripherals::rp2040::sio::Rp2040Sio::new()),
+        "rp2040_io_bank0" => {
+            let layout = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+                Some("rp2350") => crate::peripherals::rp2040::io_bank0::IoBankLayout::Rp2350,
+                // Absent/anything else: the RP2040 map.
+                _ => crate::peripherals::rp2040::io_bank0::IoBankLayout::Rp2040,
+            };
+            Box::new(crate::peripherals::rp2040::io_bank0::Rp2040IoBank0::new().with_layout(layout))
+        }
+        "rp2040_sio" => {
+            let layout = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+                Some("rp2350") => crate::peripherals::rp2040::sio::SioLayout::Rp2350,
+                // Absent/anything else: the RP2040 map.
+                _ => crate::peripherals::rp2040::sio::SioLayout::Rp2040,
+            };
+            Box::new(crate::peripherals::rp2040::sio::Rp2040Sio::new().with_layout(layout))
+        }
         "rp2040_spi" => Box::new(crate::peripherals::rp2040::spi::Rp2040Spi::new()),
         "rp2040_i2c" => Box::new(crate::peripherals::rp2040::i2c::Rp2040I2c::new()),
-        "rp2040_pwm" => Box::new(crate::peripherals::rp2040::pwm::Rp2040Pwm::new()),
+        "rp2040_pwm" => {
+            let layout = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+                Some("rp2350") => crate::peripherals::rp2040::pwm::PwmLayout::Rp2350,
+                // Absent/anything else: the RP2040 map.
+                _ => crate::peripherals::rp2040::pwm::PwmLayout::Rp2040,
+            };
+            Box::new(crate::peripherals::rp2040::pwm::Rp2040Pwm::new().with_layout(layout))
+        }
         "rp2040_adc" => Box::new(crate::peripherals::rp2040::adc::Rp2040Adc::new()),
         "rp2040_rtc" => Box::new(crate::peripherals::rp2040::rtc::Rp2040Rtc::new()),
         "rp2040_watchdog" => Box::new(crate::peripherals::rp2040::watchdog::Rp2040Watchdog::new()),
@@ -1209,7 +1264,13 @@ pub fn try_build(
         // (F1), or — `[channel, selector]` — to a channel while its L4
         // `CSELR` nibble holds the selector.
         "dma" | "stm32dma" => {
-            let mut dma = crate::peripherals::dma::Dma1::new();
+            let mut dma = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+                None | Some("legacy") => crate::peripherals::dma::Dma1::new(),
+                Some("stm32g0") => crate::peripherals::dma::Dma1::new_stm32g0(),
+                Some(profile) => {
+                    anyhow::bail!("dma `{}`: unsupported profile `{profile}`", p_cfg.id)
+                }
+            };
             for (request, v) in dma_request_table(p_cfg) {
                 let pair = v.as_sequence().map(|s| {
                     s.iter()
@@ -1245,6 +1306,17 @@ pub fn try_build(
                 .and_then(|v| v.as_str())
                 .unwrap_or("dma1");
             let mut mux = crate::peripherals::dmamux::Dmamux::new(channels, dma);
+            if let Some(total) = p_cfg
+                .config
+                .get("physical_channels")
+                .and_then(|v| v.as_u64())
+            {
+                anyhow::ensure!(
+                    total as usize >= channels && total <= 32,
+                    "dmamux physical_channels must cover modeled channels and be <=32"
+                );
+                mux = mux.with_physical_channels(total as usize);
+            }
             for (request, v) in dma_request_table(p_cfg) {
                 let Some(id) = v.as_u64() else {
                     anyhow::bail!(

@@ -1,0 +1,43 @@
+# Narrow ESP32-DevKitC-32E profile for UART1 TX on J3 pin 12 / GPIO16.
+name: "esp32-devkitc-32e-uart1"
+arch: "xtensa-lx6"
+cpu_hz: 240000000
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.25
+  vih: 0.75
+
+flash:
+  base: 0x400D0000
+  size: "4MiB"
+ram:
+  base: 0x3FFB0000
+  size: "192KiB"
+
+pins:
+  GPIO16:
+    gpio: "gpio"
+    bit: 16
+    functions: [{ type: uart, peripheral: "uart1", role: tx }]
+
+peripherals:
+  - id: "uart0"
+    type: "esp32_uart"
+    base_address: 0x3FF40000
+    size: "256B"
+    config:
+      debug_schema: "../peripherals/esp32/uart0.yaml"
+  - id: "uart1"
+    type: "esp32_uart"
+    base_address: 0x3FF50000
+    size: "256B"
+    irq: 35
+    config:
+      echo_stdout: false
+      debug_schema: "../peripherals/esp32/uart1.yaml"
+  - id: "gpio"
+    type: "esp32_gpio"
+    base_address: 0x3FF44000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32/gpio.yaml"

@@ -48,16 +48,26 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         // ESP32-classic is the only chip in this model that HAS a LACT timer
         // (the C3 path in generic_factory.rs deliberately does not opt in —
         // it put INT_ST/INT_CLR/RTCCALICFG2 at those offsets).
-        "esp32_timg" => Box::new(timg::Timg::new(base).with_lact()),
+        "esp32_timg" => {
+            let model = timg::Timg::new(base).with_lact();
+            match base {
+                0x3FF5_F000 => Box::new(model.with_alarms(14)),
+                0x3FF6_0000 => Box::new(model.with_alarms(18)),
+                _ => Box::new(model),
+            }
+        }
         "esp32_efuse" => Box::new(efuse::Efuse::new()),
         "esp32_syscon" => Box::new(syscon::Syscon::new()),
         "esp32_ledc" => Box::new(ledc::Ledc::new(base)),
         "esp32_twai" => Box::new(twai::Esp32Twai::new()),
         "esp32_mcpwm" => Box::new(mcpwm::Mcpwm::new(base)),
+        "esp32_pcnt" => Box::new(pcnt::Esp32Pcnt::new()),
         "esp32_sdio" => Box::new(sdio_stub::HostSlc::new()),
         // RTC IO MUX + RTC GPIO (`DR_REG_RTCIO_BASE` 0x3FF4_8400), shared with
         // the GPIO model through the bus (`rebuild_rtc_io_link`).
         "esp32_rtc_io" => Box::new(crate::peripherals::esp_rtc_io::EspRtcIo::new_esp32()),
+        // ETS_RMT_INTR_SOURCE = 47 on classic ESP32.
+        "esp32_rmt" => Box::new(rmt::Esp32Rmt::new(p_cfg.irq.unwrap_or(47))),
         _ => return None,
     };
     Some(dev)
@@ -79,6 +89,8 @@ pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32_ledc",
     "esp32_twai",
     "esp32_mcpwm",
+    "esp32_pcnt",
     "esp32_sdio",
     "esp32_rtc_io",
+    "esp32_rmt",
 ];

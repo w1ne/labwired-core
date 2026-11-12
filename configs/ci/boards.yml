@@ -34,6 +34,28 @@ boards:
     kind: sim-validate
     path: examples/esp32c3-blinky
     gate: true
+  # Narrow ESP32-DevKitC-32E onboarding profile. Committed TIER1 ELF, no
+  # cross-toolchain, seconds to run. Proves the new chip descriptor through
+  # `labwired test` on every PR (chip-coverage ceiling forbids another waiver).
+  - id: esp32-devkitc-32e-gpio-smoke
+    kind: sim-validate
+    path: examples/esp32-devkitc-32e-gpio-smoke
+    gate: true
+  # Narrow UART1-TX onboarding profile of the same DevKitC-32E SoC. Committed
+  # TIER1 ELF, no cross-toolchain. Proves the new chip descriptor through
+  # `labwired test` on every PR (chip-coverage ceiling forbids another waiver).
+  - id: esp32-devkitc-32e-uart1
+    kind: sim-validate
+    path: examples/esp32-devkitc-32e-uart1
+    gate: true
+  # Narrow NUCLEO-F103RB + BME280 onboarding profile. Builds the in-repo
+  # firmware crate and runs onboarding-smoke.yaml on every PR (chip-coverage
+  # ceiling forbids another waiver).
+  - id: nucleo-f103rb-bme280
+    kind: sim-validate
+    path: examples/nucleo-f103rb-bme280
+    rust_targets: [thumbv7m-none-eabi]
+    gate: true
   # atmega2560's only CLI proof. Committed ELF, no toolchain, seconds to run.
   - id: arduino-mega-2560-io
     kind: sim-validate
@@ -43,6 +65,12 @@ boards:
   - id: atmega2561-io
     kind: sim-validate
     path: examples/atmega2561-io
+    gate: true
+  # ATmega328PB: builds the exact AVR-GCC target and verifies USART1 + PB5.
+  - id: atmega328pb-usart1
+    kind: sim-validate
+    path: examples/atmega328pb-usart1
+    apt: [gcc-avr, binutils-avr, avr-libc]
     gate: true
   # PIC18F4520: the first PIC18 part. Committed SDCC 4.4.0 ELF (rebuilding
   # needs the upstream SDCC pic16 port, so CI checks the HEX->ELF wrap is

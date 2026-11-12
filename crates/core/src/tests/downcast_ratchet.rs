@@ -165,13 +165,19 @@ use std::path::{Path, PathBuf};
 /// (`jit_gate_allows`), not a per-instruction path. A `Bus` capability method
 /// would retire both JIT-gate reaches at once; until then this ceiling records
 /// the second one rather than leaving it uncounted.
-const MAX_AS_ANY: usize = 195;
+/// 195 → 197 / 196 → 198: `g0_tiol112` and `g0_customer_timing` each
+/// read the attached UART's TIOL112 waveform/driver state once through a
+/// concrete accessor. These are independent integration-test witnesses for
+/// the actual configured attachment, not production per-cycle reaches. Adding
+/// a generic Peripheral method solely for these two tests would move the
+/// test instrumentation into the runtime interface without reducing coupling.
+const MAX_AS_ANY: usize = 197;
 // GPIO schedule migration removes four concrete sensor downcasts.
 // 195 → 196: `tests/sim_input_reachability.rs` reads the ADXL345 back out of
 // `Rp2040I2c` by downcast, the same independent-witness reach every other
 // controller row in that table already pays (the walk under test cannot be
 // its own witness). Test-only; no production path gained a reach.
-const MAX_DOWNCAST_REF: usize = 196;
+const MAX_DOWNCAST_REF: usize = 198;
 
 /// The MUTABLE half of the same reach, counted from the day it started being
 /// counted. Until then the scan matched only `as_any()` and `downcast_ref`,
@@ -247,8 +253,16 @@ const MAX_DOWNCAST_REF: usize = 196;
 // 272 → 273 / 338 → 339: the RP2040 row of `tests/sim_input_reachability.rs`
 // reads its ADXL345 back by `as_any_mut()` + `downcast_mut`, like every other
 // row's readback (see MAX_DOWNCAST_REF). Test-only.
-const MAX_AS_ANY_MUT: usize = 273;
-const MAX_DOWNCAST_MUT: usize = 339;
+// 273 → 276 / 339 → 342: two test-only reaches in
+// `tests/iolink_master_config.rs` inspect the UART and its attached master,
+// proving manifest configuration reaches the real peer. One production reach
+// in `components::tiol112::attach` obtains the STM32G0 RCC's live clock-register
+// snapshot at attachment time. The frame path reads shared atomics and never
+// downcasts. This is an explicit chip-family clock contract; a general clock
+// snapshot capability should replace the reach if another clock family needs
+// it, rather than adding an unused general trait for one binding today.
+const MAX_AS_ANY_MUT: usize = 275;
+const MAX_DOWNCAST_MUT: usize = 341;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

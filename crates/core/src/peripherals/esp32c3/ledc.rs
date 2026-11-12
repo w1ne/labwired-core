@@ -100,6 +100,7 @@
 //! [`WAVE_TOKEN_BIT`] so they never collide with the overflow chain's tokens.
 
 use std::cell::Cell;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
 use crate::peripherals::esp_ledc_wave::{channel_drive, LedcPads, LedcTimerState, WAVE_TOKEN_BIT};
@@ -154,12 +155,6 @@ const CH_CONF1_RESET: u32 = 0x4000_0000;
 /// `CHn_CONF0.TIMER_SEL` [1:0]: which timer clocks the channel.
 const CONF0_TIMER_SEL_MASK: u32 = 0b11;
 
-/// Silicon reset value of each `LEDC_TIMERx_CONF` register (offset `0xA0 + x*8`):
-/// the `RST` bit (bit 23) is set at power-on, i.e. every timer is held in reset
-/// until firmware configures and releases it. The behavioral counter already
-/// honors `RST` (held at 0 while set), so this is the correct cold-reset seed.
-const TIMER_CONF_RESET: u32 = 1 << 23;
-
 /// First timer-config register offset (`TIMER0_CONF`); the four configs are
 /// 8 bytes apart (`TIMERx_VALUE` sits between them).
 const TIMER0_CONF: u64 = 0xA0;
@@ -185,11 +180,61 @@ const PARA_UP_BIT: u32 = 1 << 25;
 /// The `CNT` field in `TIMERx_VALUE` is 14 bits wide.
 const CNT_MASK: u32 = 0x3FFF;
 
+/// The field geometry that differs between the C3 and the C6. The C6 keeps
+/// every register OFFSET but widens the fields: `DUTY_RES` is [4:0], so
+/// `CLK_DIV` moves to [22:5], `PAUSE`/`RST`/`PARA_UP` to bits 23/24/26, and
+/// the counter, `HPOINT` and `DUTY` grow to 20/20/25 bits
+/// (`soc/esp32c6/register/soc/ledc_reg.h`). Decoding a C6 `TIMERx_CONF` with
+/// the C3 shifts doubles the divider and reads `PAUSE` as `RST`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct LedcLayout {
+    duty_res_mask: u32,
+    clk_div_shift: u32,
+    pause_bit: u32,
+    rst_bit: u32,
+    para_up_bit: u32,
+    cnt_mask: u32,
+    hpoint_mask: u32,
+    duty_mask: u32,
+}
+
+/// ESP32-C3 (`soc/esp32c3/include/soc/ledc_reg.h`).
+pub(crate) const C3_LAYOUT: LedcLayout = LedcLayout {
+    duty_res_mask: DUTY_RES_MASK,
+    clk_div_shift: CLK_DIV_SHIFT,
+    pause_bit: PAUSE_BIT,
+    rst_bit: RST_BIT,
+    para_up_bit: PARA_UP_BIT,
+    cnt_mask: CNT_MASK,
+    hpoint_mask: HPOINT_MASK,
+    duty_mask: DUTY_MASK,
+};
+
+/// ESP32-C6 (`soc/esp32c6/register/soc/ledc_reg.h`).
+pub(crate) const C6_LAYOUT: LedcLayout = LedcLayout {
+    duty_res_mask: 0x1F,
+    clk_div_shift: 5,
+    pause_bit: 1 << 23,
+    rst_bit: 1 << 24,
+    para_up_bit: 1 << 26,
+    cnt_mask: 0xF_FFFF,
+    hpoint_mask: 0xF_FFFF,
+    duty_mask: 0x1FF_FFFF,
+};
+
+impl Default for LedcLayout {
+    fn default() -> Self {
+        C3_LAYOUT
+    }
+}
+
 /// All four `LSTIMERx_OVF` interrupt bits.
 const OVF_INT_MASK: u32 = 0xF;
 
 #[derive(Debug, Default, Clone)]
 struct Timer {
+    /// Which chip's field geometry `conf` is decoded with.
+    layout: LedcLayout,
     /// `TIMERx_CONF` raw value (config readback).
     conf: u32,
     /// Live up-counter (the value `TIMERx_VALUE.CNT` returns). `Cell` so the
@@ -204,27 +249,27 @@ struct Timer {
 
 impl Timer {
     fn duty_res(&self) -> u32 {
-        self.conf & DUTY_RES_MASK
+        self.conf & self.layout.duty_res_mask
     }
 
     /// Period in counts (`1 << DUTY_RES`). A `DUTY_RES` of 0 yields a period of
     /// 1 (overflow every count); the result is clamped to the 14-bit counter.
     fn period(&self) -> u32 {
-        (1u32 << self.duty_res()).min(CNT_MASK + 1)
+        (1u32 << self.duty_res()).min(self.layout.cnt_mask + 1)
     }
 
     /// Integer part of the fixed-point `CLK_DIV` divider; at least 1.
     fn divider(&self) -> u64 {
-        let field = (self.conf >> CLK_DIV_SHIFT) & CLK_DIV_FIELD_MASK;
+        let field = (self.conf >> self.layout.clk_div_shift) & CLK_DIV_FIELD_MASK;
         ((field >> 8) as u64).max(1)
     }
 
     fn paused(&self) -> bool {
-        self.conf & PAUSE_BIT != 0
+        self.conf & self.layout.pause_bit != 0
     }
 
     fn in_reset(&self) -> bool {
-        self.conf & RST_BIT != 0
+        self.conf & self.layout.rst_bit != 0
     }
 
     /// True while this timer is clocking (neither held in reset nor paused) —
@@ -325,7 +370,18 @@ pub struct Esp32c3Ledc {
     /// Notified on each committed channel duty (`ledcWrite`), the same hook
     /// the classic ESP32 LEDC offers, so PWM-driven parts (a servo) follow it.
     duty_observers: Vec<Arc<dyn LedcDutyObserver>>,
+    /// ESP32-C6 only: the live `PCR.LEDC_SCLK_CONF` mirror. The C6 selects
+    /// the LEDC source clock there (`LEDC_SCLK_SEL` [21:20], gated by
+    /// `LEDC_SCLK_EN` bit 22), not in `LEDC_CONF` (which it moved to 0x1F0
+    /// and IDF 5 never writes). `None` on the C3: `LEDC_CONF@0xD0` selects.
+    clock_select: Option<Arc<AtomicU32>>,
+    /// Field geometry (C3 or C6), shared with every [`Timer`].
+    layout: LedcLayout,
 }
+
+/// `PCR.LEDC_SCLK_CONF` fields (`soc/esp32c6/register/soc/pcr_reg.h`).
+const PCR_LEDC_SCLK_SEL_SHIFT: u32 = 20;
+const PCR_LEDC_SCLK_EN: u32 = 1 << 22;
 
 impl Default for Esp32c3Ledc {
     fn default() -> Self {
@@ -350,6 +406,17 @@ impl std::fmt::Debug for Esp32c3Ledc {
 
 impl Esp32c3Ledc {
     pub fn new(source_id: u32) -> Self {
+        Self::with_layout(source_id, C3_LAYOUT)
+    }
+
+    /// The ESP32-C6 LEDC: the C3 engine on the C6's wider fields
+    /// ([`C6_LAYOUT`]). Its source clock comes from `PCR.LEDC_SCLK_CONF`
+    /// once the bus attaches the `clock_select` mirror.
+    pub fn new_esp32c6(source_id: u32) -> Self {
+        Self::with_layout(source_id, C6_LAYOUT)
+    }
+
+    fn with_layout(source_id: u32, layout: LedcLayout) -> Self {
         // Seed the register-backed window with the silicon reset state so the
         // cold-reset readback matches the captured oracle. Channel CONF1
         // registers carry a non-zero reset value; the rest power up at 0.
@@ -358,9 +425,12 @@ impl Esp32c3Ledc {
             let off = 0x0C + n * 0x14;
             regs[off / 4] = CH_CONF1_RESET;
         }
-        // Every timer's CONF reset value holds RST (bit 23) set, matching silicon.
+        // Silicon reset value of each `TIMERx_CONF` (0xA0 + x*8): only `RST` is
+        // set (bit 23 on the C3, 24 on the C6), so every timer is held in reset
+        // until firmware configures and releases it.
         let timers = core::array::from_fn(|_| Timer {
-            conf: TIMER_CONF_RESET,
+            layout,
+            conf: layout.rst_bit,
             ..Default::default()
         });
         Self {
@@ -377,6 +447,8 @@ impl Esp32c3Ledc {
             timer_origin: [0; NUM_TIMERS],
             cpu_hz: DEFAULT_CPU_HZ,
             duty_observers: Vec::new(),
+            clock_select: None,
+            layout,
         }
     }
 
@@ -414,7 +486,20 @@ impl Esp32c3Ledc {
     /// Re-derive every channel's output from the registers at `now`.
     fn redrive(&mut self, now: u64) {
         self.pads.advance_to(now);
-        let src_hz = match self.reg(LEDC_CONF) & 0b11 {
+        // Both chips number the sources alike: 1 = APB / PLL_F80M, 2 = RC_FAST,
+        // 3 = XTAL (C6 `ledc_ll_set_slow_clk_sel`).
+        let sel = match &self.clock_select {
+            Some(cell) => {
+                let v = cell.load(Ordering::Relaxed);
+                if v & PCR_LEDC_SCLK_EN == 0 {
+                    0
+                } else {
+                    (v >> PCR_LEDC_SCLK_SEL_SHIFT) & 0b11
+                }
+            }
+            None => self.reg(LEDC_CONF) & 0b11,
+        };
+        let src_hz = match sel {
             1 => 80_000_000,
             2 => 17_500_000,
             3 => 40_000_000,
@@ -426,17 +511,17 @@ impl Esp32c3Ledc {
             let t = (conf0 & 0b11) as usize;
             let conf = self.timers[t].conf;
             let timer = LedcTimerState {
-                duty_res: conf & DUTY_RES_MASK,
-                div_q8: u64::from((conf >> CLK_DIV_SHIFT) & CLK_DIV_FIELD_MASK),
-                paused: conf & PAUSE_BIT != 0,
-                reset: conf & RST_BIT != 0,
+                duty_res: conf & self.layout.duty_res_mask,
+                div_q8: u64::from((conf >> self.layout.clk_div_shift) & CLK_DIV_FIELD_MASK),
+                paused: conf & self.layout.pause_bit != 0,
+                reset: conf & self.layout.rst_bit != 0,
                 src_hz,
                 origin: self.timer_origin[t],
             };
             let d = channel_drive(
                 conf0,
-                u64::from(self.reg(base + CH_HPOINT) & HPOINT_MASK),
-                u64::from((self.reg(base + CH_DUTY_R) & DUTY_MASK) >> 4),
+                u64::from(self.reg(base + CH_HPOINT) & self.layout.hpoint_mask),
+                u64::from((self.reg(base + CH_DUTY_R) & self.layout.duty_mask) >> 4),
                 &timer,
                 self.cpu_hz,
                 self.pads.level(ch),
@@ -522,8 +607,8 @@ impl Esp32c3Ledc {
             } else {
                 // Store the config (PARA_UP is a self-clearing commit strobe);
                 // applying DUTY_RES/CLK_DIV immediately is sufficient here.
-                self.timers[idx].conf = value & !PARA_UP_BIT;
-                if value & RST_BIT != 0 {
+                self.timers[idx].conf = value & !self.layout.para_up_bit;
+                if value & self.layout.rst_bit != 0 {
                     self.timers[idx].counter.set(0);
                     self.timers[idx].accum.set(0);
                 }
@@ -581,7 +666,7 @@ impl Peripheral for Esp32c3Ledc {
         let off = offset & !3;
         if let Some((idx, is_value)) = Self::timer_at(off) {
             return Ok(if is_value {
-                self.timers[idx].counter.get() & CNT_MASK
+                self.timers[idx].counter.get() & self.layout.cnt_mask
             } else {
                 self.timers[idx].conf
             });
@@ -607,9 +692,10 @@ impl Peripheral for Esp32c3Ledc {
         let now = self.wave_now();
         self.pads.advance_to(now);
         if let Some((idx, false)) = Self::timer_at(off) {
-            const COUNTING: u32 =
-                DUTY_RES_MASK | (CLK_DIV_FIELD_MASK << CLK_DIV_SHIFT) | PAUSE_BIT | RST_BIT;
-            if (self.timers[idx].conf ^ value) & COUNTING != 0 {
+            let l = self.layout;
+            let counting =
+                l.duty_res_mask | (CLK_DIV_FIELD_MASK << l.clk_div_shift) | l.pause_bit | l.rst_bit;
+            if (self.timers[idx].conf ^ value) & counting != 0 {
                 self.timer_origin[idx] = now;
             }
         }
@@ -621,7 +707,7 @@ impl Peripheral for Esp32c3Ledc {
             {
                 // DUTY_START commits the staged DUTY into DUTY_R — the duty
                 // the output generates and `ledc_get_duty()` reads back.
-                let duty = self.reg(off - CH_CONF1 + CH_DUTY) & DUTY_MASK;
+                let duty = self.reg(off - CH_CONF1 + CH_DUTY) & self.layout.duty_mask;
                 if let Some(slot) = self
                     .regs
                     .get_mut(((off - CH_CONF1 + CH_DUTY_R) / 4) as usize)
@@ -722,6 +808,13 @@ impl Peripheral for Esp32c3Ledc {
         if hz != 0 {
             self.cpu_hz = hz;
         }
+    }
+
+    /// The C6 wiring (`config.clock_select: { controller: pcr, reg:
+    /// LEDC_SCLK_CONF }`): read the source select from the PCR from now on.
+    fn attach_clock_select_cell(&mut self, cell: Arc<AtomicU32>) -> bool {
+        self.clock_select = Some(cell);
+        true
     }
 
     fn line_names(&self) -> &'static [&'static str] {

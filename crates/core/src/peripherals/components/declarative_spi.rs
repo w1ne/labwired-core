@@ -211,6 +211,14 @@ pub(crate) fn validate_descriptor(descriptor: &DeviceDescriptor) -> Result<()> {
             );
         }
     }
+    if descriptor
+        .behavior
+        .frames
+        .as_ref()
+        .is_some_and(|f| f.shift_register && f.length.unwrap_or(0) == 0)
+    {
+        bail!("behavior.frames.shift_register requires a nonzero length");
+    }
     if let Some(file) = &spec.register_file {
         if file.size == 0 {
             bail!("behavior.spi register_file size is 0 — it backs no address");
@@ -902,6 +910,10 @@ impl SpiDevice for GenericSpiDevice {
         self.sampling
     }
 
+    fn component_id(&self) -> Option<&str> {
+        self.component_id.as_deref()
+    }
+
     /// The declared artifact, rendered from the part's own RAM. A descriptor
     /// with no `artifact:` block answers the empty list — the same answer the
     /// trait's default gave before this existed, so no shipped descriptor's
@@ -994,6 +1006,10 @@ impl SpiDevice for GenericSpiDevice {
         self.cs_held
     }
 
+    fn clocks_when_deselected(&self) -> bool {
+        self.frames.as_ref().is_some_and(|f| f.shift_register)
+    }
+
     fn cs_select(&mut self) {
         // THE SUPPLY GATE, first of four. A part with no rail has no internal
         // state to reframe and no rules to run: refusing here is what leaves it
@@ -1003,10 +1019,14 @@ impl SpiDevice for GenericSpiDevice {
         if !self.powered {
             return;
         }
-        // A fixed-width shift register starts a FRESH frame on CS↓: whatever
-        // was half-clocked is gone, so a re-assertion cannot pair an orphan
-        // byte with this transaction's first. See `FrameSpec::discard_partial`.
-        if self.frames.as_ref().is_some_and(|f| f.discard_partial) {
+        // Transaction-framed devices start fresh on CS↓. A continuous shift
+        // register retains its contents across LOAD edges (MAX7219 data sheet,
+        // Serial-Addressing Modes); LOAD is not a shift-register reset.
+        if self
+            .frames
+            .as_ref()
+            .is_some_and(|f| f.discard_partial && !f.shift_register)
+        {
             self.frame_bytes = 0;
             self.frame_buf.clear();
             self.frame_closed = false;
@@ -1032,6 +1052,11 @@ impl SpiDevice for GenericSpiDevice {
         if !self.powered {
             return;
         }
+        // A shift register latches on a real LOAD rising edge only. Repeated
+        // synchronization of an already-high pin must not publish new data.
+        if self.clocks_when_deselected() && !self.cs_held {
+            return;
+        }
         self.cs_held = false;
         self.write_acc.clear();
         self.raise_and_settle(Event::CsRelease, 0);
@@ -1040,18 +1065,13 @@ impl SpiDevice for GenericSpiDevice {
         if self.frames.is_some() {
             self.frame_bytes = 0;
             let shift_register = self.frames.as_ref().is_some_and(|f| f.shift_register);
-            // Hardware shift-register cascade (MAX7219): the FIFO only latches
-            // on CS↑. Mid-CS length never closed a frame, so `frame_closed` is
-            // false here and the buffer holds the last `length` bytes that
-            // remained in the shifter after DOUT pushed earlier bytes downstream.
+            // LOAD latches the last complete register without clearing it.
+            // Once filled, a later short byte transfer replaces the oldest
+            // byte, as on silicon. Before the first full register is known,
+            // the byte-level model leaves the power-on register state alone.
             if shift_register {
                 let length = self.frames.as_ref().and_then(|f| f.length).unwrap_or(0) as usize;
-                if self.frames.as_ref().is_some_and(|f| f.discard_partial)
-                    && length > 0
-                    && self.frame_buf.len() < length
-                {
-                    self.frame_buf.clear();
-                } else if !self.frame_buf.is_empty() {
+                if length > 0 && self.frame_buf.len() == length {
                     self.close_frame(0);
                 }
                 return;
@@ -1084,14 +1104,10 @@ impl SpiDevice for GenericSpiDevice {
         }
         let shift_register = self.frames.as_ref().is_some_and(|f| f.shift_register);
         // Hardware shift-register cascade (MAX7219 DOUT): each transfer pushes
-        // one byte into a fixed-width FIFO and returns the oldest byte that
-        // shifted out. Frames do NOT close at `length` here — only CS↑ latches
-        // (see `cs_release`). The FIFO depth is `frames.length`.
+        // one byte into a fixed-width FIFO regardless of LOAD, and returns
+        // the oldest byte. Neither LOAD edge clears it. Only LOAD↑ latches
+        // the register. The FIFO depth is `frames.length`.
         if shift_register {
-            if self.frame_closed {
-                self.frame_buf.clear();
-                self.frame_closed = false;
-            }
             let length = self.frames.as_ref().and_then(|f| f.length).unwrap_or(0) as usize;
             let dout = if length > 0 && self.frame_buf.len() >= length {
                 self.frame_buf.remove(0)
@@ -1417,7 +1433,9 @@ impl PeripheralKit for DeclarativeSpiKit {
         let mut device =
             GenericSpiDevice::from_descriptor(&self.descriptor, cs_pin, self.channels.clone())?;
         if let Some(idx) = ctx.config_i64("chain_index") {
-            device.set_chain_index(u32::try_from(idx).unwrap_or(0));
+            device.set_chain_index(
+                u32::try_from(idx).context("chain_index must be between 0 and 4294967295")?,
+            );
         }
         // Opt-in, per lab: `config: { spi_mode: N }` straps this part for
         // edge-accurate sampling in ITS mode, so a controller programmed for a
@@ -1432,7 +1450,7 @@ impl PeripheralKit for DeclarativeSpiKit {
         }
         // Supply state. `Some(false)` is the only value that changes anything;
         // an absent key means powered. See `components::supply`.
-        let device = device.with_powered(
+        let mut device = device.with_powered(
             crate::peripherals::components::supply::powered_from_config(ctx),
         );
         // Tier 2: bind `outputs:` roles to pads. The DRDY/IRQ twin of the I²C
@@ -1440,6 +1458,9 @@ impl PeripheralKit for DeclarativeSpiKit {
         // themselves: `QA..QH` are `outputs:` roles like any other, and the
         // rules drive them through the same narrowed `DevicePins` port.
         ctx.bind_output_pins(&self.descriptor)?;
+        if let Some(rules) = &mut device.rules {
+            rules.restrict_pin_delivery(ctx.bound_output_roles());
+        }
         ctx.attach_spi_device(Box::new(device))
     }
 }

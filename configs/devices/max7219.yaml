@@ -1,6 +1,6 @@
 # MAX7219 8×8 LED matrix driver — declarative `spi_device`; replaces the
-# hand-written `components/max7219.rs`, whose behaviour is pinned verbatim in
-# `crates/core/tests/spi_frame_migration_parity.rs`.
+# hand-written `components/max7219.rs`. Register/artifact parity is retained;
+# continuous DOUT and LOAD-edge latching correct its old framing shortcuts.
 #
 # ── The protocol, from the datasheet ───────────────────────────────────────
 #
@@ -50,9 +50,15 @@
 #
 # ⚠️ Cascading IS modelled via `frames.shift_register`: each transfer pushes one
 # byte into a 16-bit FIFO and returns the oldest byte on DOUT; the frame latches
-# only on CS↑. A single module still answers 0x00 on an open MISO when nothing
-# has been shifted in yet — same idle as before. Chain topology (DOUT→DIN) sets
-# `config.chain_index` at compile time (0 = closest to MOSI).
+# only on LOAD↑. CLK shifts data even with LOAD high, and neither LOAD edge
+# clears the register (MAX7219/MAX7221 datasheet, Serial-Addressing Modes p6:
+# https://www.analog.com/media/en/technical-documentation/data-sheets/MAX7219-MAX7221.pdf).
+# Configure `chain_index` explicitly (0 = closest to MOSI); topology is not
+# inferred. Before a complete register is known, DOUT is modeled as 0x00.
+# The AVR software bridge supports Uno DIN=D11/PB3 and CLK=D13/PB5, with any
+# configured LOAD pin: e.g. LedControl(11, 13, 10, count). It does not support
+# arbitrary software-SPI pins, including the common LedControl(12, 11, 10, ...).
+# Sub-byte transfers and the electrical half-cycle DOUT delay are not modeled.
 #
 # ⚠️ NOT MODELLED, named rather than faked:
 #   * **Intensity as luminance.** `intensity` is reported as the 0..15 register
@@ -78,12 +84,8 @@ behavior:
     length: 2
     # Byte 0 is the address byte, recorded in `var(opcode)`.
     opcode_byte: true
-    # A 16-bit write is latched or it never happened. An odd byte left in the
-    # shifter when CS moves is discarded rather than delivered as a one-byte
-    # frame whose low nibble would decode as a register address.
-    discard_partial: true
-    # Hardware shift-register cascade: DOUT = oldest FIFO byte; latch on CS↑
-    # only (not at length mid-CS). Required for daisy-chained modules.
+    # Continuous shift-register cascade: DOUT = oldest FIFO byte, even with
+    # LOAD high. LOAD↑ latches the last 16 bits without clearing the register.
     shift_register: true
 
   vars:
@@ -189,10 +191,10 @@ behavior:
 metadata:
   label: "MAX7219 8×8 LED Matrix"
   summary: "8×8 LED matrix driven by a MAX7219 serial display driver over SPI."
-  detail: "The common 8×8 dot-matrix module built around a MAX7219 common-cathode display driver. Firmware clocks 16 bits per transaction — an address byte then a data byte — and pulses CS/LOAD to latch. Digit registers 0x01–0x08 are the eight matrix rows, so digit RAM is the framebuffer; the model also tracks decode mode, intensity, scan limit, shutdown and display test, blanking or flooding the readback the way the real part drives the panel. A 16-bit write is latched or it never happened: an odd byte left in the shifter when CS moves is discarded rather than decoded. Cascading is modelled as a 16-bit shift-register FIFO on DOUT (latch on CS↑); chain_index orders daisy-chained modules. NOT modelled: intensity as luminance, and scan limit as multiplexing — all eight rows are published whatever it says."
+  detail: "The common 8×8 dot-matrix module built around a MAX7219 common-cathode display driver. Firmware clocks 16 bits per transaction — an address byte then a data byte — and pulses CS/LOAD to latch. Digit registers 0x01–0x08 are the eight matrix rows, so digit RAM is the framebuffer; the model also tracks decode mode, intensity, scan limit, shutdown and display test, blanking or flooding the readback the way the real part drives the panel. CLK shifts the 16-bit DOUT register regardless of LOAD; LOAD rising latches its last 16 bits without clearing it. Set chain_index explicitly for each module (0 nearest MOSI); topology is not inferred. The Uno software-SPI bridge requires DIN D11/PB3 and CLK D13/PB5; LOAD uses cs_pin. Sub-byte transfers and the half-cycle DOUT delay are not modeled. NOT modelled: intensity as luminance, and scan limit as multiplexing — all eight rows are published whatever it says."
   category: spi
   config_keys:
     - { name: cs_pin, ty: str, doc: "CS/LOAD GPIO pin, wired as SPI chip-select (e.g. \"PA4\"). Defaults to PA4." }
-    - { name: chain_index, ty: int, doc: "Daisy-chain position along a shared CS (0 = closest to MOSI / first in the DOUT→DIN chain). The diagram compiler sets this from DOUT→DIN topology. Defaults to 0." }
+    - { name: chain_index, ty: int, doc: "Daisy-chain position along a shared CS (0 = closest to MOSI / first in the DOUT→DIN chain). Set explicitly for each module; DOUT→DIN topology is not inferred. Defaults to 0." }
     - { name: powered, ty: bool, doc: "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the part then ignores its bus entirely and reports the dark/idle state it has on a bench." }
   inputs: []

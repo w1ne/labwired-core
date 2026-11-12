@@ -40,6 +40,12 @@ pub trait Bus {
     fn rp2350_dcp_mut(&mut self) -> Option<&mut crate::cpu::cortex_m::rp2350_dcp::Rp2350Dcp> {
         None
     }
+    /// Whether the core has the RP2350 GPIO coprocessor (`coprocessors:
+    /// [rp2350_gpioc]`). Asked only when a p0 coprocessor instruction
+    /// executes; `false` keeps it UNDEFINED.
+    fn rp2350_gpioc(&self) -> bool {
+        false
+    }
     /// ARM application-core interrupt levels, including deassertion.
     fn arm_irq_fiq_levels(&self) -> Option<(bool, bool)> {
         None
@@ -174,12 +180,15 @@ pub trait Bus {
         0
     }
 
-    /// Sync parking-SPI chip-selects from live GPIO (active-low). Default: no-op.
-    /// AVR soft-SPI / GPIO-CS calls this after every PORT mirror write.
-    fn sync_parking_spi_cs(&mut self) {}
+    /// Sync parking-SPI chip-selects from live GPIO (active-low).
+    /// Return true if a CS/LOAD rising edge was observed.
+    /// AVR calls this after every PORT mirror write, including hardware SPI.
+    fn sync_parking_spi_cs(&mut self) -> bool {
+        false
+    }
 
-    /// True when any parking SPI device currently reports [`SpiDevice::is_selected`].
-    fn parking_spi_any_selected(&self) -> bool {
+    /// True if a parking device accepts CLK, including LOAD-only shift registers.
+    fn parking_spi_accepts_clock(&self) -> bool {
         false
     }
 

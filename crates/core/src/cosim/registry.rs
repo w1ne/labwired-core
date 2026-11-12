@@ -250,6 +250,40 @@ impl CosimRunner {
         kind
     }
 
+    /// An explicit initial value must agree across every reader of the path.
+    /// A reader with no declared initial value is treated as zero/false;
+    /// incompatible fanout is rejected rather than silently driving it.
+    pub fn input_initial_value(&self, path: &str) -> SimResult<Option<CosimSignalValue>> {
+        let mut values = Vec::new();
+        let mut explicit = false;
+        for model in &self.models {
+            for (name, source) in &model.config.inputs {
+                if source != path {
+                    continue;
+                }
+                if let Some(value) = model.adapter.input_initial_value(name) {
+                    explicit = true;
+                    values.push(value);
+                } else {
+                    values.push(match model.adapter.input_kind(name) {
+                        Some(CosimInputKind::Bool) => CosimSignalValue::Bool(false),
+                        _ => CosimSignalValue::F64(0.0),
+                    });
+                }
+            }
+        }
+        if !explicit {
+            return Ok(None);
+        }
+        let first = values.first().expect("explicit default implies a reader");
+        if values.iter().any(|value| value != first) {
+            return Err(SimulationError::Other(format!(
+                "conflicting initial values for routed input `{path}`"
+            )));
+        }
+        Ok(Some(first.clone()))
+    }
+
     /// The shared analog-sample ring, for a machine to publish to instruments.
     pub fn analog_trace_registry(&self) -> AnalogTraceRegistry {
         self.analog_trace.clone()
@@ -264,6 +298,30 @@ impl CosimRunner {
     /// Analog samples newer than `cursor`, by sample sequence number.
     pub fn analog_trace_snapshot(&self, cursor: u64) -> AnalogTraceBatch {
         self.analog_trace.snapshot(cursor)
+    }
+
+    /// Read the declared initial operating point before any world CPU runs.
+    /// This does not advance model time or consume the first scheduled step.
+    pub(crate) fn prime_with_signals(&mut self, signals: &mut CosimSignals) -> SimResult<()> {
+        let snapshot = signals.clone();
+        let mut pending = Vec::new();
+        for (index, model) in self.models.iter_mut().enumerate() {
+            if model.next_step_ns != model.config.step_ns {
+                return Err(SimulationError::Other(
+                    "co-sim initialization after time advanced".to_string(),
+                ));
+            }
+            let result = model.adapter.step(CosimStep {
+                time_ns: 0,
+                dt_ns: 0,
+                inputs: routed_inputs(&model.config, &snapshot),
+            })?;
+            pending.push((index, result.outputs));
+        }
+        for (index, outputs) in pending {
+            route_outputs(&self.models[index].config, outputs, signals);
+        }
+        Ok(())
     }
 
     pub fn step_until(

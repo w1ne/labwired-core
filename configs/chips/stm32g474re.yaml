@@ -116,6 +116,9 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32g474re/tim2.yaml"
       width: 32
+      # Channel outputs reach the pads through the G4 AF table (TIM2 AF1;
+      # bus/attach.rs STM32G4_TIMER_PADS).
+      pad_map: "stm32g4"
     clock: { reg: "apb1enr", bit: 0 }
   # TIM1 — advanced-control PWM timer (APB2). The `_pwm` id suffix declares the
   # pwm class alongside timer. RCC_APB2ENR.TIM1EN (bit 11).

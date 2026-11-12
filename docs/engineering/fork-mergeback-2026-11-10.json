@@ -1,0 +1,2746 @@
+{
+  "time": "2026-11-10T21:57:54.610212+00:00",
+  "upstream_sha": "3e227a9b3b8332b38d33a721d2662b237a185ebb",
+  "fork_count": 41,
+  "forks": [
+    {
+      "repo": "Aquahoodjd/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "841be9961e8e718f5c0f11ded698e1ccf7f81a0e",
+          "ahead": 0,
+          "behind": 1
+        }
+      ]
+    },
+    {
+      "repo": "balamurali13-bot/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "fcd2f239be30ac59a6c6121bf80475a9a71c1990",
+          "ahead": 0,
+          "behind": 470
+        }
+      ]
+    },
+    {
+      "repo": "godofecht/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "e5666ead39007f02ca9c806865d02d529eee4bc4",
+          "ahead": 0,
+          "behind": 549
+        }
+      ]
+    },
+    {
+      "repo": "rifont/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "6de763141e0c8ab074011dd4601c1eb5e4ca4a36",
+          "ahead": 0,
+          "behind": 611
+        }
+      ]
+    },
+    {
+      "repo": "forrepid/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "3a27b3f843c29fe7c5a802e45178884671812b85",
+          "ahead": 0,
+          "behind": 1015
+        }
+      ]
+    },
+    {
+      "repo": "MJP-Sys/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "bbcde6748a49af741355673361dacd5522c84f59",
+          "ahead": 0,
+          "behind": 1422
+        }
+      ]
+    },
+    {
+      "repo": "CrispStrobe/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "archive/fork-main-pre-upstream-forward",
+          "sha": "de1b60a7bd5400063f8cad1f13119afb30b772de",
+          "ahead": 19,
+          "behind": 2298
+        },
+        {
+          "name": "backup/pre-upstream-sync-20261107",
+          "sha": "9c4206499a39a04f56cd11c0b8c9b4cb94a06e62",
+          "ahead": 922,
+          "behind": 1011
+        },
+        {
+          "name": "bw/cortex-m-codal-decode",
+          "sha": "3068833667950018d42f6f4c5d161311ac071aec",
+          "ahead": 215,
+          "behind": 1527
+        },
+        {
+          "name": "bw/level-pend-adc",
+          "sha": "7ed9cb1547b85d79ae5d7e23ac4995a4274d70b5",
+          "ahead": 4,
+          "behind": 2099
+        },
+        {
+          "name": "bw/microbit-v2-codal-boot",
+          "sha": "d8f3a4cf4b40b2e7df97f58136f73525bc142ff8",
+          "ahead": 199,
+          "behind": 1559
+        },
+        {
+          "name": "bw/mmio-write-observers",
+          "sha": "311cb6dba43a90513f18a2000c749b5051852759",
+          "ahead": 3,
+          "behind": 2306
+        },
+        {
+          "name": "bw/nrf52-timer-irq",
+          "sha": "20cb91edde8a92292b622e367981bb5d080727bd",
+          "ahead": 216,
+          "behind": 1531
+        },
+        {
+          "name": "bw/nrf52833-codal-boot",
+          "sha": "777b1195a468be2f0cfea1e4d99243c286e4e1d6",
+          "ahead": 201,
+          "behind": 1531
+        },
+        {
+          "name": "bw/nrf-softdevice-hle",
+          "sha": "6c7a829954c0649f42ea81607186e78ce80d3ce7",
+          "ahead": 285,
+          "behind": 1427
+        },
+        {
+          "name": "ci/core-full-installs-the-riscv-target",
+          "sha": "0d0df7d84dd0a64125c8092b6e3bd82d78293523",
+          "ahead": 77,
+          "behind": 1683
+        },
+        {
+          "name": "ci/core-perf-on-sync-prs-20261013",
+          "sha": "86be3cf3162197119f53a7baebdbe3264ff75b30",
+          "ahead": 630,
+          "behind": 1015
+        },
+        {
+          "name": "ci/drift-digest-gate-and-featureless-lane",
+          "sha": "79d2d62ffd028e75273b73edff39fc6315262f5c",
+          "ahead": 55,
+          "behind": 1725
+        },
+        {
+          "name": "ci/identity-normalize-stderr",
+          "sha": "32b3f7b48aa2f11af37e4d9321b937efff149693",
+          "ahead": 153,
+          "behind": 1573
+        },
+        {
+          "name": "ci/pr-hotpath-perf-20261019",
+          "sha": "8b5ab19e51b193c5df1754cf4bc9b4e01b268c94",
+          "ahead": 783,
+          "behind": 1011
+        },
+        {
+          "name": "ci/profile-lane",
+          "sha": "98b3e12e16e931a9a788681737ec07995cbc7297",
+          "ahead": 124,
+          "behind": 1574
+        },
+        {
+          "name": "claude/button-addition-performance-ncwmub",
+          "sha": "f1d2705d1664060eb27f5c4f67a88e9763582d31",
+          "ahead": 1,
+          "behind": 2420
+        },
+        {
+          "name": "diag/s3-wifi-rom-spin",
+          "sha": "0d151c0c6d6cd7a7c5fcfd80d0e2b2f127322dd4",
+          "ahead": 3,
+          "behind": 2408
+        },
+        {
+          "name": "diag/sam-spi-perf-pair-20261007",
+          "sha": "f3736f6ee61097e6b182f3e97acdca5ddacb778c",
+          "ahead": 402,
+          "behind": 1119
+        },
+        {
+          "name": "diag/samd-step-cost-17e341-20261027",
+          "sha": "6d29e761f121775e580e3560a3b9b04ebb3c0610",
+          "ahead": 850,
+          "behind": 1011
+        },
+        {
+          "name": "diag/samd-step-cost-attribution-20261027",
+          "sha": "1b91355916c29ff28f0313973905ca673e54985a",
+          "ahead": 853,
+          "behind": 1011
+        },
+        {
+          "name": "diag/samd-step-cost-candidate-a-20261027",
+          "sha": "1b91355916c29ff28f0313973905ca673e54985a",
+          "ahead": 853,
+          "behind": 1011
+        },
+        {
+          "name": "diag/samd-usb-instruction-profile-20261024",
+          "sha": "8b9029c6295873565c9ce6a025a45371c3a89f08",
+          "ahead": 790,
+          "behind": 1011
+        },
+        {
+          "name": "diag/wasm-discovery-census-20261004",
+          "sha": "1b044ea97d2a72c43f1b15a147d64a479620f0ee",
+          "ahead": 354,
+          "behind": 1301
+        },
+        {
+          "name": "diag/wasm-discovery-census-capture-20261004",
+          "sha": "82e5661fffbfcc8c12ecc8845475d4214c1f10e4",
+          "ahead": 356,
+          "behind": 1301
+        },
+        {
+          "name": "diagnose/tier1-blocked-20261009",
+          "sha": "2ebdec9e77b580b678814ad061758a0fd1dc378c",
+          "ahead": 517,
+          "behind": 1119
+        },
+        {
+          "name": "diagnostic/samd-irq-preprocessor-20261011",
+          "sha": "eb5395e0abcb4054c2b50057edbf29cfdf2e22e1",
+          "ahead": 538,
+          "behind": 1119
+        },
+        {
+          "name": "docs/composed-isolated-ab",
+          "sha": "8f6195cb5fa843472ca3c084a8754e59f2d1d584",
+          "ahead": 342,
+          "behind": 1301
+        },
+        {
+          "name": "docs/composed-proof-landed",
+          "sha": "50e0d0bebf5f56314d31eb1807c9c57960d18f3a",
+          "ahead": 341,
+          "behind": 1301
+        },
+        {
+          "name": "docs/countdown-combined-evidence",
+          "sha": "3407f31bcf106d71ef25a9c18926a675b7c543fb",
+          "ahead": 340,
+          "behind": 1301
+        },
+        {
+          "name": "docs/cp13-motion-landed",
+          "sha": "1a4eaa221314abe13eb9ff17189e10bc791892cb",
+          "ahead": 329,
+          "behind": 1301
+        },
+        {
+          "name": "docs/cp13-rebased-native-proof",
+          "sha": "bf09665448505ce686318b916c8a77d32c008a04",
+          "ahead": 344,
+          "behind": 1301
+        },
+        {
+          "name": "docs/final-coreperf-landed",
+          "sha": "c390ea92dfdaa0853976d7e5e6438d5c9b710cee",
+          "ahead": 339,
+          "behind": 1301
+        },
+        {
+          "name": "docs/plan-results-steps-1-2",
+          "sha": "68820298b2d2d07f932bb217f9e7dea677fb7a26",
+          "ahead": 170,
+          "behind": 1573
+        },
+        {
+          "name": "docs/post137-composed-proof",
+          "sha": "05c14e78ed28b14fdc864ed0ca97af5b6893669b",
+          "ahead": 347,
+          "behind": 1301
+        },
+        {
+          "name": "docs/pr137-72f8-qualification-receipts",
+          "sha": "293f61983dc576be593da5965ac2ef703803a549",
+          "ahead": 337,
+          "behind": 1301
+        },
+        {
+          "name": "docs/pybadge-dependency-results-20261008",
+          "sha": "1e3e9f64e69b33b723e5d5796d21703660cef47b",
+          "ahead": 488,
+          "behind": 1119
+        },
+        {
+          "name": "docs/pybadge-map-results-20261008",
+          "sha": "ef60d7d396ff84bba856b80b178f5a27e3f9b80c",
+          "ahead": 483,
+          "behind": 1119
+        },
+        {
+          "name": "docs/remove-llms-from-nav",
+          "sha": "e1ff45b0f696b834f1df73d4cb435b0044c34a21",
+          "ahead": 1,
+          "behind": 2521
+        },
+        {
+          "name": "docs/sam-spi-merged-main-receipt-20261007",
+          "sha": "8d368f1d5ab241f938fbe0e29ac0952f20af713c",
+          "ahead": 412,
+          "behind": 1119
+        },
+        {
+          "name": "docs/sam-spi-p0-results-20261007",
+          "sha": "65f448325d6672c0bbdf1347f83d13be14ea6991",
+          "ahead": 410,
+          "behind": 1119
+        },
+        {
+          "name": "docs/samd51-zflash-qualified-wrapup-20261017",
+          "sha": "5ec4d565362fa743e512a7c3371ab0cc4ee4cabe",
+          "ahead": 776,
+          "behind": 1011
+        },
+        {
+          "name": "docs/samd-critical-section-interface-20261010",
+          "sha": "548fc9b1c83486fe35885598aaee17d5ecec1675",
+          "ahead": 536,
+          "behind": 1119
+        },
+        {
+          "name": "docs/samd-dmac-byte-checkpoint-20261012",
+          "sha": "51a415aa8d0a312271a32cdddff47b72968f9919",
+          "ahead": 604,
+          "behind": 1015
+        },
+        {
+          "name": "docs/samd-foundations-checkpoint-20261009",
+          "sha": "50f4318100108a4ff065e1f7d9c49e753acefdea",
+          "ahead": 531,
+          "behind": 1119
+        },
+        {
+          "name": "docs/samd-irq-preprocessing-result-20261011",
+          "sha": "5ac389fafe56f33eb3a118a1ec66c3783a7df4d7",
+          "ahead": 541,
+          "behind": 1119
+        },
+        {
+          "name": "docs/samd-paired-irq-original-20261011",
+          "sha": "6ce30fabffff8020a0126790d37c7fd78d7b8bc4",
+          "ahead": 555,
+          "behind": 1119
+        },
+        {
+          "name": "docs/samd-replacement-boundary-20261008",
+          "sha": "6eb33f120ac62533a6d9dbc093df30060eda5a73",
+          "ahead": 506,
+          "behind": 1119
+        },
+        {
+          "name": "docs/samd-reset-landed-results-20261015",
+          "sha": "adc7d2578f626bbc64778bf7caac0b2ab6b8edc8",
+          "ahead": 723,
+          "behind": 1011
+        },
+        {
+          "name": "docs/samd-roadmap-closeout-20261023",
+          "sha": "7f222ed30cae8e6f71411de7511aacacaa48b2fe",
+          "ahead": 788,
+          "behind": 1011
+        },
+        {
+          "name": "docs/samd-runtime-admission-20261008",
+          "sha": "b1db08062a1601a3795c7d50968ecd89b57ff2c9",
+          "ahead": 471,
+          "behind": 1119
+        },
+        {
+          "name": "docs/samd-runtime-closeout-20261024",
+          "sha": "21c06b602c63e2cf96aca3ce8e5fb73e22d1d70b",
+          "ahead": 799,
+          "behind": 1011
+        },
+        {
+          "name": "docs/samd-sercom-final-checkpoint-20261012",
+          "sha": "6a26e7d95c44c9c40b52f380c85bbd4d473d4970",
+          "ahead": 589,
+          "behind": 1015
+        },
+        {
+          "name": "docs/samd-spi-blocking-lease-results-20261015",
+          "sha": "f758083313beda8aa795f14e6ecb835f25d7daba",
+          "ahead": 704,
+          "behind": 1011
+        },
+        {
+          "name": "docs/samd-spi-cancel-results-20261014",
+          "sha": "85768e9ee21f28d1f1af1c16ed45ac089c0d98fc",
+          "ahead": 679,
+          "behind": 1011
+        },
+        {
+          "name": "docs/samd-spi-endpoint-checkpoint-20261013",
+          "sha": "2cedcc6cb27bac9617a17e345f760b6d1ccf79c4",
+          "ahead": 609,
+          "behind": 1015
+        },
+        {
+          "name": "docs/samd-spi-error-results-20261014",
+          "sha": "7637361f3723e295b687d2012bf5a3cf7cec338b",
+          "ahead": 693,
+          "behind": 1011
+        },
+        {
+          "name": "docs/samd-spi-lifetime-results-20261015",
+          "sha": "866a13d210a371f37f3d1fe89a7e6c7e72d71e40",
+          "ahead": 711,
+          "behind": 1011
+        },
+        {
+          "name": "docs/samd-spi-stale-results-20261014",
+          "sha": "5aa3ec32d4f4e3a36284925719ea89987e493d31",
+          "ahead": 697,
+          "behind": 1011
+        },
+        {
+          "name": "docs/samd-timeout-results-20261014",
+          "sha": "b66cabf60697c75d282af24bda7725a4d1467830",
+          "ahead": 684,
+          "behind": 1011
+        },
+        {
+          "name": "docs/samd-tx-landed-qualification-20261013",
+          "sha": "95bb3e86c859a4f30e33948eada4d6267157e368",
+          "ahead": 630,
+          "behind": 1015
+        },
+        {
+          "name": "docs/st7735-caller-results-20261008",
+          "sha": "c0edadb164aeead4d9538da8a4ba7a8167f74116",
+          "ahead": 469,
+          "behind": 1119
+        },
+        {
+          "name": "docs/st7735-main-d102-native-20261007",
+          "sha": "6b5d90f1bb71d78cc237e6a268fbcff8a92b2d9d",
+          "ahead": 439,
+          "behind": 1119
+        },
+        {
+          "name": "docs/st7735-main-results-20261007",
+          "sha": "3247e16db0f1d926c76e26480e40dafc2bfaf714",
+          "ahead": 432,
+          "behind": 1119
+        },
+        {
+          "name": "docs/st7735-qualified-foundation-20261007",
+          "sha": "d44891fc30860c033daebc98b34599f1a0cff3a1",
+          "ahead": 428,
+          "behind": 1119
+        },
+        {
+          "name": "docs/target-lanes-20261005",
+          "sha": "a8464a332beca3b7268b547ccf3dc4e5ff32e7dc",
+          "ahead": 360,
+          "behind": 1301
+        },
+        {
+          "name": "docs/tier1-diagnostic-closeout-20261019",
+          "sha": "3d55a198581d9628da0164048a23bf7f37a9874a",
+          "ahead": 787,
+          "behind": 1011
+        },
+        {
+          "name": "docs/timer-final-qualification-20261012",
+          "sha": "74518221a2816ce99d59cda70a1d86892b9e3003",
+          "ahead": 578,
+          "behind": 1015
+        },
+        {
+          "name": "docs/timer-original-20261011",
+          "sha": "428b254f31f7a4a60aad94ffe3b9a40ab24bd80c",
+          "ahead": 558,
+          "behind": 1119
+        },
+        {
+          "name": "feat/avr-atmega328p-p0",
+          "sha": "e4f49e01e9a85254e87dae9ef7884ab24d4bc154",
+          "ahead": 7,
+          "behind": 2530
+        },
+        {
+          "name": "feat/avr-nano-golden-survival",
+          "sha": "8e31788c820cdfb1d8e40d092c7860058e99c336",
+          "ahead": 2,
+          "behind": 2517
+        },
+        {
+          "name": "feat/bare-board-io-pico-nrf52840",
+          "sha": "f305f6c4c24ec33725fa934d36551c270418514a",
+          "ahead": 2,
+          "behind": 2986
+        },
+        {
+          "name": "feat/brd2709a-arduino-matrix-lane",
+          "sha": "ec4a545c3968fc9f5d84cff08a3c65764680eede",
+          "ahead": 4,
+          "behind": 2389
+        },
+        {
+          "name": "feat/calliope-mini-v1-system-20261013",
+          "sha": "436e88777e2b481c1e277a9aee1169ed55c92d20",
+          "ahead": 630,
+          "behind": 1015
+        },
+        {
+          "name": "feat/cp13-lsm303agr",
+          "sha": "d05043ddd9c9b702eb9bd27e5870e1a8516a204d",
+          "ahead": 333,
+          "behind": 1301
+        },
+        {
+          "name": "feat/cp13-saadc-live-analog",
+          "sha": "4f8872a6aee2be6b647122fdb18db957a4c29440",
+          "ahead": 329,
+          "behind": 1301
+        },
+        {
+          "name": "feat/esp32-ledc-pad-edges",
+          "sha": "3f6ca3b0ef1734ed622e9be7f7c3354d776199d4",
+          "ahead": 582,
+          "behind": 1015
+        },
+        {
+          "name": "feat/mg26-silicon-capture",
+          "sha": "ff6a70a309b4d6605a1b466c0b5e0222c19f428d",
+          "ahead": 17,
+          "behind": 2393
+        },
+        {
+          "name": "feat/microbit-v2-board-io-cp13",
+          "sha": "24719d902f2b8a6c126bef00afb505b74412233d",
+          "ahead": 334,
+          "behind": 1301
+        },
+        {
+          "name": "feat/nrf-gpio-observation",
+          "sha": "189d5911b36acf12cedcfbf157b5380c63f8893d",
+          "ahead": 319,
+          "behind": 1333
+        },
+        {
+          "name": "feat/nrf-pwm-pad-edges",
+          "sha": "93fa2f653be795b3cc757ea458b2218d326f8772",
+          "ahead": 373,
+          "behind": 1301
+        },
+        {
+          "name": "feat/one-arduino-boot-path",
+          "sha": "259a100e9331b5b90f5ad2f55ff890d0d649707c",
+          "ahead": 1,
+          "behind": 3181
+        },
+        {
+          "name": "feat/pybadge-gpio-buttons-20261004",
+          "sha": "5ab04bcd9f8d14b3d96bc60513a38aca339830e4",
+          "ahead": 358,
+          "behind": 1301
+        },
+        {
+          "name": "feat/region-images-from-blobs",
+          "sha": "850fbf2a7fc37b6d85d1f81b4943b9d439a68fc6",
+          "ahead": 3,
+          "behind": 1427
+        },
+        {
+          "name": "feat/rf-medium-nrf-path-loss",
+          "sha": "0081e41a8832c83c2592719efc9c956271b7b10c",
+          "ahead": 2,
+          "behind": 3016
+        },
+        {
+          "name": "feat/samd-dmac-byte-foundation-20261012",
+          "sha": "637f6cea54342ccf1eba88e5087aa82605d416f5",
+          "ahead": 602,
+          "behind": 1015
+        },
+        {
+          "name": "feat/samd-long-gap-guest-20261013",
+          "sha": "400da46a7987b15203256b2719d87692582c0714",
+          "ahead": 656,
+          "behind": 1015
+        },
+        {
+          "name": "feat/samd-real-services-20261013",
+          "sha": "b8818b54ae1560584adc458f4b3f7d4428ca1bf2",
+          "ahead": 654,
+          "behind": 1015
+        },
+        {
+          "name": "feat/samd-sercom4-tx-dma-20261013",
+          "sha": "6b66c69d5548b54cfb6dca26f2eb50490d5cd454",
+          "ahead": 624,
+          "behind": 1015
+        },
+        {
+          "name": "feat/samd-sercom-split-irq-20261012",
+          "sha": "8fbe5138bc24c9985f1c4c163c1fbb17e1023a1a",
+          "ahead": 587,
+          "behind": 1015
+        },
+        {
+          "name": "feat/samd-spi-dma-bus-20261013",
+          "sha": "d67c6354add425c49b1f9e7f36a460f28c38c1a1",
+          "ahead": 614,
+          "behind": 1015
+        },
+        {
+          "name": "feat/samd-spi-dma-endpoint-20261013",
+          "sha": "970ad59d2db8bca9924e9a4041b9610b8ae897d1",
+          "ahead": 607,
+          "behind": 1015
+        },
+        {
+          "name": "feat/samd-spi-pybadge-20261005",
+          "sha": "6b6b174a9aa69acca03cec086419cc4c21358bc5",
+          "ahead": 398,
+          "behind": 1119
+        },
+        {
+          "name": "feat/samd-tx-completion-20261013",
+          "sha": "d673f49db07eee616b2d779f5e5c020ac66877ce",
+          "ahead": 641,
+          "behind": 1015
+        },
+        {
+          "name": "feat/spi-edge-sampling",
+          "sha": "4bac812299a75334e0cce70b17becf999afe755d",
+          "ahead": 11,
+          "behind": 2536
+        },
+        {
+          "name": "feat/st7735-stream-20261007",
+          "sha": "90943b8d72957f497d6794913ef43a066b302711",
+          "ahead": 424,
+          "behind": 1119
+        },
+        {
+          "name": "feat/universal-module-kits",
+          "sha": "4899b134831735052b3e25ff075a754c0b68e463",
+          "ahead": 17,
+          "behind": 3021
+        },
+        {
+          "name": "feat/usb-serial-jtag-interrupts",
+          "sha": "aad0d8ffd4eea6f091db6c20a0e32ffae2a7a1a5",
+          "ahead": 1,
+          "behind": 2883
+        },
+        {
+          "name": "feat/wasm-debug-writes",
+          "sha": "440fd4844eab2b223e539ba35d760d21ab6cf8b1",
+          "ahead": 311,
+          "behind": 1427
+        },
+        {
+          "name": "feat/windows-simulator-release",
+          "sha": "a9e24cc8d3a652558e18f728945157b67975284f",
+          "ahead": 5,
+          "behind": 3259
+        },
+        {
+          "name": "fix/batch-cut-on-earlier-wake",
+          "sha": "f0dbc467c2faf0f881bf1539b9329f7da66172a3",
+          "ahead": 384,
+          "behind": 1143
+        },
+        {
+          "name": "fix/c3-rom-boot-stimulus-adc-integration",
+          "sha": "22e3704c8d9739323b1d6e1bdff1993650f971bf",
+          "ahead": 2,
+          "behind": 2572
+        },
+        {
+          "name": "fix/cached-indices-are-total",
+          "sha": "07049cb40b5eb3c3907efa1b763b5683513df3cf",
+          "ahead": 92,
+          "behind": 1592
+        },
+        {
+          "name": "fix/ci-workspace-arm-toolchain",
+          "sha": "a3a0a2b63687b9bed2fbf5ad4a521860513ad289",
+          "ahead": 336,
+          "behind": 1301
+        },
+        {
+          "name": "fix/cp13-saadc-format",
+          "sha": "a49530b286d20cff34a3b81ad559007307efa2f6",
+          "ahead": 331,
+          "behind": 1301
+        },
+        {
+          "name": "fix/drift-docs-restore-20261110",
+          "sha": "7364e9141de23f2799bcdd50b368a12d617b4391",
+          "ahead": 183,
+          "behind": 16
+        },
+        {
+          "name": "fix/drop-the-clocked-guard",
+          "sha": "eca350265707312b9e673139ff033001a37b52bd",
+          "ahead": 126,
+          "behind": 1574
+        },
+        {
+          "name": "fix/esp32-external-device-errors",
+          "sha": "1824fa367a89ffe1b43f3d9cb14b0dbeed641cb5",
+          "ahead": 1,
+          "behind": 3259
+        },
+        {
+          "name": "fix/f0-rcc-profile-20261015",
+          "sha": "b44e38d3dccd9dec99e980151b2685baac80dabc",
+          "ahead": 741,
+          "behind": 1011
+        },
+        {
+          "name": "fix/f103-fidelity-20261015",
+          "sha": "ebd35b711206220b1a1ec0f5aef3c74d3d44d75c",
+          "ahead": 737,
+          "behind": 1011
+        },
+        {
+          "name": "fix/generic-usb-serial-jtag-console",
+          "sha": "e52a3add824bd1e21279a36f3fee47ebc03fd7c1",
+          "ahead": 4,
+          "behind": 2407
+        },
+        {
+          "name": "fix/issue251-storage-boundary-20261019",
+          "sha": "945e80351b34780d78ddba061fd5b7c22cf9a679",
+          "ahead": 779,
+          "behind": 1011
+        },
+        {
+          "name": "fix/main-after-117",
+          "sha": "6059fe03ef53e1f7a4c52bb1ad4a90a753209f86",
+          "ahead": 294,
+          "behind": 1427
+        },
+        {
+          "name": "fix/matrix-classifier-and-s3-guard",
+          "sha": "8957a9b2dc58fb0d88935af2f956b78b0a9acaba",
+          "ahead": 22,
+          "behind": 1725
+        },
+        {
+          "name": "fix/nrf52-saadc-scan",
+          "sha": "1627ff842353b88185c8d7f5dd0c34c4cb674f32",
+          "ahead": 340,
+          "behind": 1301
+        },
+        {
+          "name": "fix/nrf-timer-live-wakes",
+          "sha": "8050bcc698c25f91757dd7a1d1c644fda182f11e",
+          "ahead": 321,
+          "behind": 1333
+        },
+        {
+          "name": "fix/pc-literal-base",
+          "sha": "c730ac117d285f04aa4c046cfbfe226eab4270a5",
+          "ahead": 365,
+          "behind": 1301
+        },
+        {
+          "name": "fix/perf-main-issue-tracking",
+          "sha": "37c6c46503e38aee7907242845fde5d26e560c4a",
+          "ahead": 334,
+          "behind": 1301
+        },
+        {
+          "name": "fix/radio-end-board-io",
+          "sha": "17796c1a10c30aaf208c3d61180eea7d6a374e3f",
+          "ahead": 3,
+          "behind": 2885
+        },
+        {
+          "name": "fix/reset-held-batch-ticks",
+          "sha": "c51bbef5719b60cad32a915ca29876776d4da040",
+          "ahead": 157,
+          "behind": 1573
+        },
+        {
+          "name": "fix/rtf-pico-hung-baseline-20261110",
+          "sha": "ee012bd863db2ca6662199c5ddc6c1e0ae3be842",
+          "ahead": 189,
+          "behind": 16
+        },
+        {
+          "name": "fix/rtx-declared-only-waiver-20261013",
+          "sha": "f62c5b871eeac06b8470a101f80f38419bfb7357",
+          "ahead": 623,
+          "behind": 1015
+        },
+        {
+          "name": "fix/sam-dmac-noact-test-revert-20261110",
+          "sha": "89d9305c15967b63d79d197083d19cac499b3930",
+          "ahead": 179,
+          "behind": 16
+        },
+        {
+          "name": "fix/sam-spi-scheduler-20261007",
+          "sha": "547da6da814afd0375199b192db7e3e2416042a0",
+          "ahead": 408,
+          "behind": 1119
+        },
+        {
+          "name": "fix/secure-boot-merge-c3-pin",
+          "sha": "2081bf661ac43db20336ef38417d1f03de30f613",
+          "ahead": 2,
+          "behind": 2602
+        },
+        {
+          "name": "fix/st7735-address-range-20261007",
+          "sha": "53187fb82082b93c54c22081ecf087e460920890",
+          "ahead": 460,
+          "behind": 1119
+        },
+        {
+          "name": "fix/tier1-stm32f103-adc-f1-swstart",
+          "sha": "80596f632193a5d33dcea43a016639a68ce1054d",
+          "ahead": 156,
+          "behind": 1573
+        },
+        {
+          "name": "fix/tier1-uart-initialization-20261009",
+          "sha": "0963d47aca295bc89bc184c7bb31b7b9aef16e5f",
+          "ahead": 519,
+          "behind": 1119
+        },
+        {
+          "name": "fix/twim-maxcnt-16bit",
+          "sha": "85980079e30750602ea25b68de5ef6a14bd56593",
+          "ahead": 3,
+          "behind": 3084
+        },
+        {
+          "name": "fix/wasm-avr-arch-match",
+          "sha": "d30e5a43cdf95577d9108182f3aca8f48e71fc93",
+          "ahead": 5,
+          "behind": 2536
+        },
+        {
+          "name": "fix/xtensa-arduino-boot",
+          "sha": "590ce0e3852335b2a71a6fb762ca18ccbc7635eb",
+          "ahead": 27,
+          "behind": 2298
+        },
+        {
+          "name": "forward/upstream-2026-09-20",
+          "sha": "7a24a2669dee99b6d1666fb89c8fdecc412c004c",
+          "ahead": 20,
+          "behind": 1725
+        },
+        {
+          "name": "gh-pages",
+          "sha": "ef8068a1c7b139cb81088c0732b3ac3fb89a0871",
+          "ahead": 1,
+          "behind": 7329
+        },
+        {
+          "name": "lane/a10-nrf52-serial-20261015",
+          "sha": "8693b025096791961ee550f9abccd84090bd023f",
+          "ahead": 726,
+          "behind": 1011
+        },
+        {
+          "name": "lane/a10-uarte-completion-irq-20261015",
+          "sha": "de14721e4ae1d34a428f91d232e4520d50f1ceba",
+          "ahead": 754,
+          "behind": 1011
+        },
+        {
+          "name": "lane/approved-drift-renewal-20261028",
+          "sha": "0100dfbc4fb4d01088ca4312bd624f31f31f4f38",
+          "ahead": 869,
+          "behind": 1011
+        },
+        {
+          "name": "lane/c9-avr-layout-20261017",
+          "sha": "2201716dbb8461629c73beaa2e2db0e0386b45fe",
+          "ahead": 760,
+          "behind": 1011
+        },
+        {
+          "name": "lane/microbit-autonomous-ready-20261029",
+          "sha": "30f34d362f685094cb4d25c1d8e2607a93055e8a",
+          "ahead": 898,
+          "behind": 1011
+        },
+        {
+          "name": "lane/microbit-folded-status-20261029",
+          "sha": "6e4a9740a592f85729650ebe958afdef3ac99643",
+          "ahead": 906,
+          "behind": 1011
+        },
+        {
+          "name": "lane/microbit-gpiote-first-edge-20261029",
+          "sha": "6e7f6031f6b5cb67f3803063ed42cfe1d3f9a50a",
+          "ahead": 891,
+          "behind": 1011
+        },
+        {
+          "name": "lane/microbit-guest-twim-20261029",
+          "sha": "79990c0763e28902026d44f7e4c1b8efdfb0feb2",
+          "ahead": 880,
+          "behind": 1011
+        },
+        {
+          "name": "lane/microbit-irq-inverter-20261029",
+          "sha": "d09258f6273ef99dd080894c724c036023ecd33e",
+          "ahead": 887,
+          "behind": 1011
+        },
+        {
+          "name": "lane/microbit-lsm303agr-accel-irq-20261029",
+          "sha": "e21a94312428f4dfe082a936e07492b11af99ef8",
+          "ahead": 897,
+          "behind": 1011
+        },
+        {
+          "name": "lane/microbit-lsm303agr-irq-20261029",
+          "sha": "3164f090fe402a58d0a3c9a7cb52661cac1b542e",
+          "ahead": 905,
+          "behind": 1011
+        },
+        {
+          "name": "lane/microbit-open-drain-foundation-20261029",
+          "sha": "2220357dd34254c918adc71e9799dcb7543d8c30",
+          "ahead": 916,
+          "behind": 1011
+        },
+        {
+          "name": "lane/microbit-open-drain-perf-hypothesis-20261029",
+          "sha": "eb658d6744537e846825708c7cf1b88425c024e7",
+          "ahead": 880,
+          "behind": 1011
+        },
+        {
+          "name": "lane/microbit-open-drain-validation-docs-20261029",
+          "sha": "92bfb117ffcbdbee2941de49333ad4a99772dc41",
+          "ahead": 882,
+          "behind": 1011
+        },
+        {
+          "name": "lane/microbit-ready-combined-controls-20261029",
+          "sha": "ec98a77e4fabff8e1324d18ae3e703450f736e64",
+          "ahead": 893,
+          "behind": 1011
+        },
+        {
+          "name": "lane/microbit-ready-parent-integration-20261029",
+          "sha": "30f34d362f685094cb4d25c1d8e2607a93055e8a",
+          "ahead": 898,
+          "behind": 1011
+        },
+        {
+          "name": "lane/microbit-ready-rule-guard-20261029",
+          "sha": "630f958b1ecca89a301560c439928b44b410a664",
+          "ahead": 892,
+          "behind": 1011
+        },
+        {
+          "name": "lane/microbit-ready-sample-bound-20261029",
+          "sha": "181ee363a13344368768f6223c1fe1554e56ac1f",
+          "ahead": 894,
+          "behind": 1011
+        },
+        {
+          "name": "lane/microbit-ready-twim-tests-20261029",
+          "sha": "523d8c16f8c4dc71f5c05703764a6cb4ac7a9c18",
+          "ahead": 892,
+          "behind": 1011
+        },
+        {
+          "name": "lane/microbit-sensor-feature-off-20261029",
+          "sha": "d1b01cdbeea456b81a48534b8e06e157c360a852",
+          "ahead": 907,
+          "behind": 1011
+        },
+        {
+          "name": "lane/microbit-sensor-group-consistency-20261029",
+          "sha": "8b675be3eea99c72b7a53762c82bbf40fb64295d",
+          "ahead": 899,
+          "behind": 1011
+        },
+        {
+          "name": "lane/microbit-sensor-parent-integration-20261029",
+          "sha": "3164f090fe402a58d0a3c9a7cb52661cac1b542e",
+          "ahead": 905,
+          "behind": 1011
+        },
+        {
+          "name": "lane/real-timer-guest-20261011",
+          "sha": "126ce5394e8be26d078fa333f7d6965a78e8a2bb",
+          "ahead": 576,
+          "behind": 1015
+        },
+        {
+          "name": "lane/samd51-nvmctrl-cmcc-20261017",
+          "sha": "2213923fb9bd1eb5f84aa16a71e7a12fa5a018e4",
+          "ahead": 765,
+          "behind": 1011
+        },
+        {
+          "name": "lane/samd51-usb-device-banks-20261024",
+          "sha": "7f92081ff3607e13b2cf844e202cca8373522078",
+          "ahead": 795,
+          "behind": 1011
+        },
+        {
+          "name": "lane/samd51-usb-host-arrival-20261024",
+          "sha": "8631d4cbb31d06d9e73306d58b66bc998817ecc5",
+          "ahead": 797,
+          "behind": 1011
+        },
+        {
+          "name": "lane/samd-core-reset-20261015",
+          "sha": "7da58a8d43347e490209710267f95aca3bdda087",
+          "ahead": 717,
+          "behind": 1011
+        },
+        {
+          "name": "lane/samd-native-quiescent-qualification-20261026",
+          "sha": "1f1beefcdf5e3720e98db8be75b0d64d6efe0bec",
+          "ahead": 858,
+          "behind": 1011
+        },
+        {
+          "name": "lane/samd-native-simulation-bundle-20261026",
+          "sha": "1f1beefcdf5e3720e98db8be75b0d64d6efe0bec",
+          "ahead": 858,
+          "behind": 1011
+        },
+        {
+          "name": "lane/samd-native-simulation-final-20261026",
+          "sha": "c122b91f2c9f67cea6b9ddde14a6c40fc4026ce8",
+          "ahead": 817,
+          "behind": 1011
+        },
+        {
+          "name": "lane/samd-paired-irq-guest-20261011",
+          "sha": "b4c986f361079f9a6ffb5eb9446f67ee97252733",
+          "ahead": 551,
+          "behind": 1119
+        },
+        {
+          "name": "lane/samd-spi-lifetime-20261015",
+          "sha": "e3d8c8b0149763f0bfed4d6cfde0a54b221257ed",
+          "ahead": 709,
+          "behind": 1011
+        },
+        {
+          "name": "lane/timer-adversary-builder-20261011",
+          "sha": "c8f1865a625bd6471197c5e02a59c994c976e48f",
+          "ahead": 557,
+          "behind": 1119
+        },
+        {
+          "name": "lane/timer-adversary-guest-20261011",
+          "sha": "6947637378841a3fe0e249620b8ec8316efe93a3",
+          "ahead": 560,
+          "behind": 1119
+        },
+        {
+          "name": "main",
+          "sha": "d543a46bba894f9e7e3aa31cdba6feb561b2d08e",
+          "ahead": 190,
+          "behind": 16
+        },
+        {
+          "name": "merge/region-images-into-main",
+          "sha": "0c429d9eab35d138b143161e3563c7a8986b6dff",
+          "ahead": 303,
+          "behind": 1427
+        },
+        {
+          "name": "merge/upstream-1220",
+          "sha": "04da6a8b39f51ab44d4ce75f2aa323bc1dca50a4",
+          "ahead": 88,
+          "behind": 1592
+        },
+        {
+          "name": "merge/upstream-1229",
+          "sha": "c1f9aecea82f142426871e80c4ec5900d9473bfe",
+          "ahead": 122,
+          "behind": 1574
+        },
+        {
+          "name": "merge/upstream-1230-1231",
+          "sha": "337a7548714a6e988af898494af0846d239b1a5e",
+          "ahead": 191,
+          "behind": 1559
+        },
+        {
+          "name": "merge/upstream-1232",
+          "sha": "2217348d52b32369ba9c24a2dc5be76fa27396a9",
+          "ahead": 140,
+          "behind": 1573
+        },
+        {
+          "name": "merge/upstream-1237",
+          "sha": "40fb5a82a7fc6d6ff684e9035b803c8bb375660f",
+          "ahead": 195,
+          "behind": 1531
+        },
+        {
+          "name": "merge/upstream-1240",
+          "sha": "9e61a9e912a67f270db2420d63112463448cf110",
+          "ahead": 197,
+          "behind": 1529
+        },
+        {
+          "name": "merge/upstream-1243",
+          "sha": "f945c892aef46d7a72b28e5b41726bd5cc330f12",
+          "ahead": 199,
+          "behind": 1527
+        },
+        {
+          "name": "merge/upstream-2026-09-22b",
+          "sha": "5019943519bb63a351a6e84e19cf3af4769d0f00",
+          "ahead": 78,
+          "behind": 1610
+        },
+        {
+          "name": "merge/upstream-2026-09-22",
+          "sha": "48039de9a7afdbf2b33e0a9a08a53629cfbbd050",
+          "ahead": 71,
+          "behind": 1683
+        },
+        {
+          "name": "merge/upstream-2026-09-29b",
+          "sha": "57c889a896358f0cb19bc69abc5b5e1e3b8adb57",
+          "ahead": 324,
+          "behind": 1301
+        },
+        {
+          "name": "merge/upstream-2026-09-29",
+          "sha": "d73dcee5e5d3ffad9c0acc09b786ffd439640fb8",
+          "ahead": 315,
+          "behind": 1333
+        },
+        {
+          "name": "merge/upstream-2026-10-05",
+          "sha": "9a53480a381562a5017d7e9f33a7d74f2d237366",
+          "ahead": 379,
+          "behind": 1143
+        },
+        {
+          "name": "merge/upstream-2026-10-06",
+          "sha": "db8f85c1f7b6355bcbb52ea5ce2a9cb9f9dfeb19",
+          "ahead": 387,
+          "behind": 1119
+        },
+        {
+          "name": "merge/upstream-2026-10-12",
+          "sha": "5a48f19ed18778c58b32d4460425ab95bc307080",
+          "ahead": 560,
+          "behind": 1015
+        },
+        {
+          "name": "merge/upstream-2026-10-13",
+          "sha": "e6427976d599313a7d3deb10be4b3fb0bf89f3d2",
+          "ahead": 661,
+          "behind": 1011
+        },
+        {
+          "name": "merge/upstream-dc-motor",
+          "sha": "da047de0f130af6cf34237ba3a58349b66a30d58",
+          "ahead": 82,
+          "behind": 1608
+        },
+        {
+          "name": "merge/upstream-sync-0923",
+          "sha": "405e54285058a722c6074e0a032877985184f72f",
+          "ahead": 105,
+          "behind": 1575
+        },
+        {
+          "name": "model-catalog",
+          "sha": "284fd15ed28a58b2eef2c2e47d19c03fc545aa69",
+          "ahead": 1,
+          "behind": 7329
+        },
+        {
+          "name": "perf/advance-cycle-one-call",
+          "sha": "23b2e6a9e32459386c3b8c369c30dd17678f99da",
+          "ahead": 143,
+          "behind": 1573
+        },
+        {
+          "name": "perf/avr-batch-fills-its-tick-window",
+          "sha": "95a18e5c6870fa6eb72b5a5761167406009a20b5",
+          "ahead": 87,
+          "behind": 1608
+        },
+        {
+          "name": "perf/cortex-m-admission-dispatch-20261001",
+          "sha": "0813b140a29bb1f232f723059d9b4dd0ee949514",
+          "ahead": 341,
+          "behind": 1301
+        },
+        {
+          "name": "perf/cortex-m-batching-on-upstream",
+          "sha": "db6ef4332c7f2cbc84f28fdc340d3b2d155e608a",
+          "ahead": 41,
+          "behind": 1725
+        },
+        {
+          "name": "perf/cortex-m-block-payload-20261001",
+          "sha": "62126d482a9e3377b005960d49471395ee2577fd",
+          "ahead": 619,
+          "behind": 1015
+        },
+        {
+          "name": "perf/cortex-m-countdown",
+          "sha": "8f96601cefe1ae64e34c5723e5d6bf39dbf0a870",
+          "ahead": 339,
+          "behind": 1301
+        },
+        {
+          "name": "perf/cortex-m-discovery-misses",
+          "sha": "ee2d6db5e93eb6f7b17998d6bdbd5df919906644",
+          "ahead": 353,
+          "behind": 1301
+        },
+        {
+          "name": "perf/cortex-m-lazy-payload",
+          "sha": "12fdcf7d160f939b614a1c142edf57253ed7ba6c",
+          "ahead": 333,
+          "behind": 1301
+        },
+        {
+          "name": "perf/dport-cross-core-without-downcast",
+          "sha": "9a874b6306d58f21bea9ae15dab844a45cebb42a",
+          "ahead": 90,
+          "behind": 1608
+        },
+        {
+          "name": "perf/dport-ipi-fast-path",
+          "sha": "d72baa997eaf323e5dac3f2d6b5eec192149b170",
+          "ahead": 105,
+          "behind": 1592
+        },
+        {
+          "name": "perf/esp32-classic-walk-deletion",
+          "sha": "e4e098af6952f3fcc4913df65d4da635f70dd64b",
+          "ahead": 55,
+          "behind": 1725
+        },
+        {
+          "name": "perf/esp32-uart-i2c-scheduler",
+          "sha": "f977df96e2dea08aea6411dda64b22244b0e6dfb",
+          "ahead": 65,
+          "behind": 1725
+        },
+        {
+          "name": "perf/fastpath-census-20261002",
+          "sha": "16c501c0506d4bde312a04fc4f9d4ae5f8e4b2ec",
+          "ahead": 354,
+          "behind": 1301
+        },
+        {
+          "name": "perf/gate-the-pad-brackets",
+          "sha": "8e9dc8eeb97f1341f0edccc2655575544212c917",
+          "ahead": 130,
+          "behind": 1574
+        },
+        {
+          "name": "perf/gate-three-more-write-hooks",
+          "sha": "16cf35042e473e2891372ec57d834935b51bfbf6",
+          "ahead": 132,
+          "behind": 1574
+        },
+        {
+          "name": "perf/gate-two-more-hooks",
+          "sha": "8332a6721dabace99eeb0dfda1a68fac4ef8249c",
+          "ahead": 136,
+          "behind": 1574
+        },
+        {
+          "name": "perf/gpio-edge-bool-20261002",
+          "sha": "bbe915252f8264a1de11bdb0d82bc08c9f3bba95",
+          "ahead": 353,
+          "behind": 1301
+        },
+        {
+          "name": "perf/gpio-edge-metadata-20261002",
+          "sha": "b85ab59ef0fa29a78c8269c4d84cd9130d1ffaa8",
+          "ahead": 357,
+          "behind": 1301
+        },
+        {
+          "name": "perf/nrf54l-walk-deletion",
+          "sha": "60cb09f7b115da15b63e8be815fca5c4d1fdecad",
+          "ahead": 52,
+          "behind": 1725
+        },
+        {
+          "name": "perf/nrf-gpio-pull-masks",
+          "sha": "26657f301bb5816e04ef2e425315df9ff41b6109",
+          "ahead": 334,
+          "behind": 1301
+        },
+        {
+          "name": "perf/nrf-gpio-snapshot",
+          "sha": "bd05656f9af2f4fa536db8834bccb9aa08b7b400",
+          "ahead": 344,
+          "behind": 1301
+        },
+        {
+          "name": "perf/pad-bracket-index-cache",
+          "sha": "32bffb74c3c0f02276bd090115b1345514ea54cc",
+          "ahead": 108,
+          "behind": 1592
+        },
+        {
+          "name": "perf/plan-step0-results",
+          "sha": "fb448adf2abadcf08b37cfde2e23176fc527ee5f",
+          "ahead": 149,
+          "behind": 1573
+        },
+        {
+          "name": "perf/profile-depth",
+          "sha": "9e78e0f81072837b4bea9ea3e46ff4e6e4adda71",
+          "ahead": 126,
+          "behind": 1574
+        },
+        {
+          "name": "perf/profile-keep-raw",
+          "sha": "fdb4ccc1bd62b1f723ffc580f9dc4e90eff286a6",
+          "ahead": 148,
+          "behind": 1573
+        },
+        {
+          "name": "perf/ram-store-skips-mmio-hooks",
+          "sha": "728b241b2be1c7c7b0926473d331903fb0e67122",
+          "ahead": 145,
+          "behind": 1573
+        },
+        {
+          "name": "perf/rebaseline-after-57",
+          "sha": "96d5544270b75cec15a7ca535c04e3b55036d388",
+          "ahead": 138,
+          "behind": 1574
+        },
+        {
+          "name": "perf/rebaseline-after-61",
+          "sha": "5db2083790422a1ce37707a52b01ccc2bd1f66c3",
+          "ahead": 157,
+          "behind": 1573
+        },
+        {
+          "name": "perf/rebaseline-after-66",
+          "sha": "c0c59bca7bcf66693401d79662c7bdd11d70d209",
+          "ahead": 179,
+          "behind": 1573
+        },
+        {
+          "name": "perf/rebaseline-after-76",
+          "sha": "5e41b0f5e52f9f3b6b8456a11be662d055f98d60",
+          "ahead": 186,
+          "behind": 1573
+        },
+        {
+          "name": "perf/rebaseline-after-79",
+          "sha": "76bd583e5ae52d2caa55234ca9333fc94a1e2865",
+          "ahead": 191,
+          "behind": 1573
+        },
+        {
+          "name": "perf/rebaseline-after-the-call-gates",
+          "sha": "c8bf308ce241114dfcefbd0589193a06de51168a",
+          "ahead": 134,
+          "behind": 1574
+        },
+        {
+          "name": "perf/rebaseline-after-the-downcast-programme",
+          "sha": "98f9773919b702a6e46309a590d346a76effae25",
+          "ahead": 116,
+          "behind": 1575
+        },
+        {
+          "name": "perf/reprofile-after-downcasts",
+          "sha": "54a280ccd6b8c3aa7ad051ebe3040d04aad65b11",
+          "ahead": 91,
+          "behind": 1608
+        },
+        {
+          "name": "perf/s3-doom-park-probe",
+          "sha": "4968bb198753576fbab50852c89f5b946629f1bc",
+          "ahead": 1,
+          "behind": 2405
+        },
+        {
+          "name": "perf/s3-irq-cache",
+          "sha": "104ac1f8670ac48dd1fc23d839a09ada532afcc8",
+          "ahead": 7,
+          "behind": 2387
+        },
+        {
+          "name": "perf/spi-devices-without-downcast",
+          "sha": "ba7a58e7c64316223ee4ac600edb6c734da1e396",
+          "ahead": 100,
+          "behind": 1592
+        },
+        {
+          "name": "perf/wasm-c3-word-hook-gate-20261003",
+          "sha": "324a3e1a0b48a1520c00bed12bc6560742ee5b46",
+          "ahead": 354,
+          "behind": 1301
+        },
+        {
+          "name": "perf/wasm-c3-word-hook-thunk-20261003",
+          "sha": "a40c1dfccddc77ff6e8adf04930176997e04040e",
+          "ahead": 354,
+          "behind": 1301
+        },
+        {
+          "name": "perf/wasm-cached-register-frame-20261004",
+          "sha": "098c99cf6b6a176a44c83b37ce77a1881909c767",
+          "ahead": 353,
+          "behind": 1301
+        },
+        {
+          "name": "perf/wasm-cached-run64-20261003",
+          "sha": "f16a4f3da13a6267a0618824a0c172bd643b3081",
+          "ahead": 353,
+          "behind": 1301
+        },
+        {
+          "name": "perf/wasm-cached-run-inline-20261003",
+          "sha": "68747bf0b2cc50989af9ee28907719709a053aa8",
+          "ahead": 353,
+          "behind": 1301
+        },
+        {
+          "name": "perf/wasm-cached-runs-20261001",
+          "sha": "d10aa88255fd1e093cc1f424c26260341c9322fa",
+          "ahead": 351,
+          "behind": 1301
+        },
+        {
+          "name": "perf/wasm-cached-scalar-20261001",
+          "sha": "faa39978923f96abe65706407f04d4af63e33857",
+          "ahead": 344,
+          "behind": 1301
+        },
+        {
+          "name": "perf/wasm-discovery-memo1024-20261004",
+          "sha": "30131a9068e7c4aff6540092bce0a019f3b5c021",
+          "ahead": 353,
+          "behind": 1301
+        },
+        {
+          "name": "perf/wasm-edge-eligibility-bool-20261003",
+          "sha": "14a275f63daaf3cd4af4b1845e52678032553522",
+          "ahead": 353,
+          "behind": 1301
+        },
+        {
+          "name": "perf/wasm-edge-eligibility-bool-tail-20261003",
+          "sha": "226fe97835bb5bed06cbb377b3d218c661937a49",
+          "ahead": 353,
+          "behind": 1301
+        },
+        {
+          "name": "perf/wasm-interpreter-outline-20261001",
+          "sha": "614cc64b6e5b12f66ce026bad289a590aa42dbf2",
+          "ahead": 343,
+          "behind": 1301
+        },
+        {
+          "name": "perf/wasm-literal-barrier-20261002",
+          "sha": "45463b863decbe085ffb890edb8d11041594b7f2",
+          "ahead": 353,
+          "behind": 1301
+        },
+        {
+          "name": "perf/wasm-literal-loads-20261001",
+          "sha": "7e1c2553c0ceace31cb390d31b629fc37b54990a",
+          "ahead": 353,
+          "behind": 1301
+        },
+        {
+          "name": "perf/wasm-literal-specialization-20261001",
+          "sha": "e3656b23017c81071c176ffbdce415c222de2a63",
+          "ahead": 354,
+          "behind": 1301
+        },
+        {
+          "name": "perf/wasm-live-gpio-edge-gate-20261003",
+          "sha": "ccd283065d29e7ecca5a9a00a75f16005a746d63",
+          "ahead": 354,
+          "behind": 1301
+        },
+        {
+          "name": "perf/wasm-live-word-admission-20261002",
+          "sha": "03302546de866ae00e805b0a4c791c684c2903c0",
+          "ahead": 353,
+          "behind": 1301
+        },
+        {
+          "name": "perf/wasm-live-word-admission-post-ram-20261002",
+          "sha": "ea0919b1923433f46c7d3a0399727b37ec152937",
+          "ahead": 355,
+          "behind": 1301
+        },
+        {
+          "name": "perf/wasm-live-word-admission-selective-20261002",
+          "sha": "90ff69aa8b78e91667d1d5067a39dc0b37bc8115",
+          "ahead": 354,
+          "behind": 1301
+        },
+        {
+          "name": "perf/wasm-register-helper-sharing-20261003",
+          "sha": "0d32815a28b1cf7e27a87ba760ec7acd34cb4086",
+          "ahead": 353,
+          "behind": 1301
+        },
+        {
+          "name": "perf/wasm-register-inline-20261002",
+          "sha": "53b2be10799570c607b444fa174e2eb37ea74095",
+          "ahead": 353,
+          "behind": 1301
+        },
+        {
+          "name": "perf/wasm-register-low-high-split-20261004",
+          "sha": "5fed1f735dd48c899395a74f0565451c38a03716",
+          "ahead": 353,
+          "behind": 1301
+        },
+        {
+          "name": "perf/wasm-scalar-word-dispatch-20261003",
+          "sha": "ce3021331b8cd0ee623e0d50ed43562227f3bdcd",
+          "ahead": 354,
+          "behind": 1301
+        },
+        {
+          "name": "perf/wasm-scalar-word-dispatch-proof-20261003",
+          "sha": "c932c9921b25587e13f8ddd096847d24d4d9404b",
+          "ahead": 355,
+          "behind": 1301
+        },
+        {
+          "name": "perf/wasm-short-cached-budget-20261003",
+          "sha": "565dce2b35c67c4661055443ce9bb5d47039249e",
+          "ahead": 353,
+          "behind": 1301
+        },
+        {
+          "name": "perf/wasm-t16-register-inline-20261002",
+          "sha": "59232bb1f54aca4decc5312da895d533980788dc",
+          "ahead": 353,
+          "behind": 1301
+        },
+        {
+          "name": "perf/xtensa-batch-irq-memo",
+          "sha": "6a5221889e9e9885f4ed4ffc0fbb35a00e98c2db",
+          "ahead": 175,
+          "behind": 1573
+        },
+        {
+          "name": "perf/xtensa-decode-cache-one-array",
+          "sha": "dd26f5f5a6fa0cd978f5012a2f302f1aa1b57967",
+          "ahead": 187,
+          "behind": 1573
+        },
+        {
+          "name": "perf/xtensa-execute-hot-cold",
+          "sha": "cc6fd5cb1517529402d2292ea3526fde121df090",
+          "ahead": 1,
+          "behind": 1441
+        },
+        {
+          "name": "perf/xtensa-fuse-step-into-batch",
+          "sha": "918f1310bb32ab46b1e5afc100942680189e9999",
+          "ahead": 184,
+          "behind": 1573
+        },
+        {
+          "name": "perf/xtensa-profile-rerun",
+          "sha": "bda250ffe18c1d2e0b8f60a2b00595eb35aaa25d",
+          "ahead": 89,
+          "behind": 1608
+        },
+        {
+          "name": "perf/xtensa-profile-run",
+          "sha": "92f5e625ef76e3309f340ef8d0c122bf9caba193",
+          "ahead": 86,
+          "behind": 1608
+        },
+        {
+          "name": "perf/xtensa-zol-lcount-first",
+          "sha": "8ea85bac65843c3c64d3afeac9f390928e6f3938",
+          "ahead": 1,
+          "behind": 1421
+        },
+        {
+          "name": "qual/sam-spi-repeat-20261007",
+          "sha": "547da6da814afd0375199b192db7e3e2416042a0",
+          "ahead": 408,
+          "behind": 1119
+        },
+        {
+          "name": "sync/merge-20261107",
+          "sha": "2fff0d8ad1f116a69e030dfb8615e66407d4e911",
+          "ahead": 925,
+          "behind": 109
+        },
+        {
+          "name": "sync/upstream-2026-09-28",
+          "sha": "2086fdba76eb8c36fd5bd6a387cd085a6136f8fc",
+          "ahead": 252,
+          "behind": 1427
+        },
+        {
+          "name": "test/converge-jit-source-reader",
+          "sha": "f8daa2f33dad5137aa619368374f47341980fbf9",
+          "ahead": 118,
+          "behind": 1575
+        },
+        {
+          "name": "test/pybadge-build-evidence-20261008",
+          "sha": "8d08ee88031ea812e78a4b194322c395ac94e36f",
+          "ahead": 468,
+          "behind": 1119
+        },
+        {
+          "name": "test/pybadge-dependency-origins-20261008",
+          "sha": "6ba388076c83ffe0238be5cc6c15b768b069ec43",
+          "ahead": 487,
+          "behind": 1119
+        },
+        {
+          "name": "test/pybadge-diagnostic-dependencies-20261008",
+          "sha": "27d9400e7e6ac1ad053f2cdca1e9452b32a22aef",
+          "ahead": 486,
+          "behind": 1119
+        },
+        {
+          "name": "test/pybadge-effective-macros-20261008",
+          "sha": "c21f17aa40fce3a9056aeed71ecc8491e9ec50f2",
+          "ahead": 471,
+          "behind": 1119
+        },
+        {
+          "name": "test/pybadge-gcc-source-notices-20261008",
+          "sha": "3e613f66e05a94584d31d0242982baeb5c5a1b5a",
+          "ahead": 504,
+          "behind": 1119
+        },
+        {
+          "name": "test/pybadge-header-dependencies-20261008",
+          "sha": "cda15ec40c4c1d451b3519ef36d2daf38594c4f2",
+          "ahead": 485,
+          "behind": 1119
+        },
+        {
+          "name": "test/pybadge-link-map-20261008",
+          "sha": "ce9de6d264366f9f5f9b7144a6186f31cb8c774c",
+          "ahead": 474,
+          "behind": 1119
+        },
+        {
+          "name": "test/pybadge-notice-evidence-20261008",
+          "sha": "b7dd3182259741b7f19bba60f9883c45fb51060a",
+          "ahead": 488,
+          "behind": 1119
+        },
+        {
+          "name": "test/pybadge-notice-references-20261008",
+          "sha": "486a54e42721c0cabd21642d789a071aeee2d8eb",
+          "ahead": 495,
+          "behind": 1119
+        },
+        {
+          "name": "test/pybadge-toolchain-packaging-notices-20261008",
+          "sha": "f091d60beeaf1b5c9fc9fc07e269a3ba35d22c3b",
+          "ahead": 502,
+          "behind": 1119
+        },
+        {
+          "name": "test/pybadge-toolchain-source-evidence-20261008",
+          "sha": "0d7645361f89be082a510e06337b330e9a946a7d",
+          "ahead": 495,
+          "behind": 1119
+        },
+        {
+          "name": "test/samd-aligned-heap-20261014",
+          "sha": "f832f4709072ab97c5d8f49598dc1d3f94eae4c0",
+          "ahead": 659,
+          "behind": 1015
+        },
+        {
+          "name": "test/samd-heap-alignment-20261013",
+          "sha": "dd83ffda58e51a175de89cbed4dee2d66a0b2c66",
+          "ahead": 658,
+          "behind": 1015
+        },
+        {
+          "name": "test/samd-interrupt-mask-guest-20261009",
+          "sha": "e8bdb90e2a7fa9f894099528cf74b3d4d2252ced",
+          "ahead": 523,
+          "behind": 1119
+        },
+        {
+          "name": "test/samd-irq-mask-guest-20261009",
+          "sha": "ba979e89889f3e53ffd7068f0ea0a055d01f1fe9",
+          "ahead": 527,
+          "behind": 1119
+        },
+        {
+          "name": "test/samd-long-gap-fixed-20261013",
+          "sha": "55e75967b5a55d0748e90169a634008ba84c1cd1",
+          "ahead": 657,
+          "behind": 1015
+        },
+        {
+          "name": "test/samd-real-spi-blocking-lease-20261015",
+          "sha": "a6352784c056eb4b6f37caa795263357054acdba",
+          "ahead": 702,
+          "behind": 1011
+        },
+        {
+          "name": "test/samd-real-spi-cancel-20261014",
+          "sha": "00525a5ad3a0ece03018004489c3bf5f063bb28e",
+          "ahead": 676,
+          "behind": 1011
+        },
+        {
+          "name": "test/samd-real-spi-error-20261014",
+          "sha": "e5726080426b58b916f6c2f24294db767fefc3f7",
+          "ahead": 691,
+          "behind": 1011
+        },
+        {
+          "name": "test/samd-real-spi-services-20261014",
+          "sha": "d7ea4ef393347e3d732372462f02d3250a044d53",
+          "ahead": 674,
+          "behind": 1011
+        },
+        {
+          "name": "test/samd-real-spi-stale-irq-20261014",
+          "sha": "28b93fea8307ded245baedffa6f318134997df26",
+          "ahead": 695,
+          "behind": 1011
+        },
+        {
+          "name": "test/samd-real-spi-timeout-20261014",
+          "sha": "33036f775cff6a65085b104bbd9113de7a756d73",
+          "ahead": 682,
+          "behind": 1011
+        },
+        {
+          "name": "test/samd-transfer-state-guest-20261009",
+          "sha": "dc90edf61ba288aa2fe9f380d20ae03330dc1df2",
+          "ahead": 513,
+          "behind": 1119
+        },
+        {
+          "name": "test/st7735-codal-driver-trace-20261007",
+          "sha": "f426a724fd6924d8ae74585a44e0722e8503e437",
+          "ahead": 432,
+          "behind": 1119
+        },
+        {
+          "name": "test/st7735-codal-sam-bind-20261007",
+          "sha": "0199e45c720468b340c2f3f84601d3776222e21a",
+          "ahead": 434,
+          "behind": 1119
+        },
+        {
+          "name": "test/st7735-gm00-orientations-20261007",
+          "sha": "3c52bd9a4d271041de71610292940c1fff58bae3",
+          "ahead": 444,
+          "behind": 1119
+        },
+        {
+          "name": "test/st7735-pxt-caller-20261007",
+          "sha": "0c63615f38782fd96008cd337aab97c5f5255963",
+          "ahead": 466,
+          "behind": 1119
+        },
+        {
+          "name": "test/st7735-pxt-direct-trace-20261007",
+          "sha": "c1d03878589b173c51c8d72fb1e7e33719dd6774",
+          "ahead": 451,
+          "behind": 1119
+        },
+        {
+          "name": "test/st7735-rectangular-stream-20261007",
+          "sha": "c5a2e4922dbff773bac4ae89798f0dc320b1080a",
+          "ahead": 428,
+          "behind": 1119
+        },
+        {
+          "name": "test/st7735-retention-guest-20261007",
+          "sha": "3916fcd453ba04a97b38c4300fab8cdd71bed262",
+          "ahead": 456,
+          "behind": 1119
+        },
+        {
+          "name": "up/expiry-gate-matches-the-drift-gate",
+          "sha": "30472db16fe91d2a5da5df12cf00d57a4d1caade",
+          "ahead": 1,
+          "behind": 1608
+        },
+        {
+          "name": "up/ldrd-literal-base",
+          "sha": "91c33adc1849d81c89d10750fb9a2b0b0f06b6ab",
+          "ahead": 2,
+          "behind": 1143
+        },
+        {
+          "name": "up/nrf-timer-live-wakes",
+          "sha": "7b61d31972f490f75fcd1ddaf1c9a3d746b68a6a",
+          "ahead": 2,
+          "behind": 1301
+        },
+        {
+          "name": "up/perf-step-mode-measures-the-step-loop",
+          "sha": "b0dfb3dcf7d097bb5d572e5d7d22222b169cee24",
+          "ahead": 1,
+          "behind": 1608
+        },
+        {
+          "name": "up/xtensa-perf-gate-both-modes",
+          "sha": "82272db5b4d259ca04855c8f324cb03de664d4e2",
+          "ahead": 3,
+          "behind": 1529
+        }
+      ]
+    },
+    {
+      "repo": "jdefrancesco/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "5bf645d731f409a60dc53e33099654254dd45e08",
+          "ahead": 0,
+          "behind": 3090
+        }
+      ]
+    },
+    {
+      "repo": "anikaku12/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "66296c63318644bc3ab8cbb54d79692c38b8e102",
+          "ahead": 0,
+          "behind": 3224
+        }
+      ]
+    },
+    {
+      "repo": "biankafritsch/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "66296c63318644bc3ab8cbb54d79692c38b8e102",
+          "ahead": 0,
+          "behind": 3224
+        }
+      ]
+    },
+    {
+      "repo": "elnamuller1/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "66296c63318644bc3ab8cbb54d79692c38b8e102",
+          "ahead": 0,
+          "behind": 3224
+        }
+      ]
+    },
+    {
+      "repo": "smitham24/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "66296c63318644bc3ab8cbb54d79692c38b8e102",
+          "ahead": 0,
+          "behind": 3224
+        }
+      ]
+    },
+    {
+      "repo": "Madelynn54jhkhf/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "66296c63318644bc3ab8cbb54d79692c38b8e102",
+          "ahead": 0,
+          "behind": 3224
+        }
+      ]
+    },
+    {
+      "repo": "Mona5153Skiles/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "66296c63318644bc3ab8cbb54d79692c38b8e102",
+          "ahead": 0,
+          "behind": 3224
+        }
+      ]
+    },
+    {
+      "repo": "LawsonStoltenberg/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "66296c63318644bc3ab8cbb54d79692c38b8e102",
+          "ahead": 0,
+          "behind": 3224
+        }
+      ]
+    },
+    {
+      "repo": "PercivalKlocko/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "66296c63318644bc3ab8cbb54d79692c38b8e102",
+          "ahead": 0,
+          "behind": 3224
+        }
+      ]
+    },
+    {
+      "repo": "Anarkali2026/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "66296c63318644bc3ab8cbb54d79692c38b8e102",
+          "ahead": 0,
+          "behind": 3224
+        }
+      ]
+    },
+    {
+      "repo": "Jody5Krajcik/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "66296c63318644bc3ab8cbb54d79692c38b8e102",
+          "ahead": 0,
+          "behind": 3224
+        }
+      ]
+    },
+    {
+      "repo": "Tianna4Steube/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "66296c63318644bc3ab8cbb54d79692c38b8e102",
+          "ahead": 0,
+          "behind": 3224
+        }
+      ]
+    },
+    {
+      "repo": "Aaron41Larkin/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "66296c63318644bc3ab8cbb54d79692c38b8e102",
+          "ahead": 0,
+          "behind": 3224
+        }
+      ]
+    },
+    {
+      "repo": "Greta968Weissnat/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "66296c63318644bc3ab8cbb54d79692c38b8e102",
+          "ahead": 0,
+          "behind": 3224
+        }
+      ]
+    },
+    {
+      "repo": "Odell6565King/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "66296c63318644bc3ab8cbb54d79692c38b8e102",
+          "ahead": 0,
+          "behind": 3224
+        }
+      ]
+    },
+    {
+      "repo": "Rosemarie1f/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "66296c63318644bc3ab8cbb54d79692c38b8e102",
+          "ahead": 0,
+          "behind": 3224
+        }
+      ]
+    },
+    {
+      "repo": "Minerva1Stamm/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "66296c63318644bc3ab8cbb54d79692c38b8e102",
+          "ahead": 0,
+          "behind": 3224
+        }
+      ]
+    },
+    {
+      "repo": "Ryan5224Bode/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "66296c63318644bc3ab8cbb54d79692c38b8e102",
+          "ahead": 0,
+          "behind": 3224
+        }
+      ]
+    },
+    {
+      "repo": "Deron521W/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "66296c63318644bc3ab8cbb54d79692c38b8e102",
+          "ahead": 0,
+          "behind": 3224
+        }
+      ]
+    },
+    {
+      "repo": "Celestino87547/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "81c3e2c0f423fd238bea322ef7fc8ce3e983a277",
+          "ahead": 0,
+          "behind": 3251
+        }
+      ]
+    },
+    {
+      "repo": "lokijhy25/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "7570e7c2ee0946ab2dd36b24d445ec0cb38a9d6c",
+          "ahead": 0,
+          "behind": 3305
+        }
+      ]
+    },
+    {
+      "repo": "Albert368892Leffler/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "7570e7c2ee0946ab2dd36b24d445ec0cb38a9d6c",
+          "ahead": 0,
+          "behind": 3305
+        }
+      ]
+    },
+    {
+      "repo": "Vada2025Bailey/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "7570e7c2ee0946ab2dd36b24d445ec0cb38a9d6c",
+          "ahead": 0,
+          "behind": 3305
+        }
+      ]
+    },
+    {
+      "repo": "Reinhold24Waelchi/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "7570e7c2ee0946ab2dd36b24d445ec0cb38a9d6c",
+          "ahead": 0,
+          "behind": 3305
+        }
+      ]
+    },
+    {
+      "repo": "Cleta3217Jacobs/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "7570e7c2ee0946ab2dd36b24d445ec0cb38a9d6c",
+          "ahead": 0,
+          "behind": 3305
+        }
+      ]
+    },
+    {
+      "repo": "lotikid36it/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "7570e7c2ee0946ab2dd36b24d445ec0cb38a9d6c",
+          "ahead": 0,
+          "behind": 3305
+        }
+      ]
+    },
+    {
+      "repo": "Monira20/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "7570e7c2ee0946ab2dd36b24d445ec0cb38a9d6c",
+          "ahead": 0,
+          "behind": 3305
+        }
+      ]
+    },
+    {
+      "repo": "Nikolas689jk/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "7570e7c2ee0946ab2dd36b24d445ec0cb38a9d6c",
+          "ahead": 0,
+          "behind": 3305
+        }
+      ]
+    },
+    {
+      "repo": "ayrinajahan/labwired-core",
+      "error": "gh: Not Found (HTTP 404)"
+    },
+    {
+      "repo": "rosaliakoch/labwired-core",
+      "error": "gh: Not Found (HTTP 404)"
+    },
+    {
+      "repo": "layer1labs/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "867d03cef48ea78c3d9d23d1e3a9e4ea680dc813",
+          "ahead": 0,
+          "behind": 3394
+        }
+      ]
+    },
+    {
+      "repo": "Nectrion/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "sha": "8d127608b3fa9d049a5884b9bf14f4facc624a49",
+          "ahead": 0,
+          "behind": 3400
+        }
+      ]
+    },
+    {
+      "repo": "MbedLabs/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "bench/jit-dispatch-overhead",
+          "sha": "d30eeb5c9564c1eac7b62e23ca83f111f025f87d",
+          "ahead": 2,
+          "behind": 7038
+        },
+        {
+          "name": "chore/core-root-cleanup",
+          "sha": "7771f35fab04fc9b9f74c626afb06b637002d33d",
+          "ahead": 15,
+          "behind": 7329
+        },
+        {
+          "name": "chore/docs-update",
+          "sha": "05d4b8b468cc1539c66cb6d1d851267a68d2abc8",
+          "ahead": 1,
+          "behind": 7285
+        },
+        {
+          "name": "chore/drop-stale-index-snapshots",
+          "sha": "1054a90abf02272cdf63efbabf150dc66300dd06",
+          "ahead": 1,
+          "behind": 7055
+        },
+        {
+          "name": "chore/speed-up-blinky",
+          "sha": "355d5913d46c21fba0047a4bd4ed49eafb5757d2",
+          "ahead": 1,
+          "behind": 7158
+        },
+        {
+          "name": "cleanup/repo-garbage",
+          "sha": "c9cde7c7df3e5b650a9fd32e46cf8c3bd8461625",
+          "ahead": 0,
+          "behind": 7277
+        },
+        {
+          "name": "codex/refactor-opt-hardening",
+          "sha": "246f036c270fafdff86af112d807b1e0647d8e4a",
+          "ahead": 36,
+          "behind": 7325
+        },
+        {
+          "name": "codex/release-catalog-metadata-fix-2",
+          "sha": "2462ec7ce7c0f78ab8938b9f9be8e5eb9c33bda5",
+          "ahead": 0,
+          "behind": 7233
+        },
+        {
+          "name": "docs/sync-broken-links",
+          "sha": "5a3580a27c45cbaf9804a5553facaaaec72016f2",
+          "ahead": 0,
+          "behind": 7318
+        },
+        {
+          "name": "docs/sync-docs-final",
+          "sha": "9d1989bb7c0fa1e50d519231d32f6c42b7ef75c4",
+          "ahead": 1,
+          "behind": 7317
+        },
+        {
+          "name": "feat/adc-stimulus-ntc",
+          "sha": "83303bc38901a20f5fce0a75fa413cf5a4619a99",
+          "ahead": 0,
+          "behind": 7197
+        },
+        {
+          "name": "feat/api-key-backend-cli",
+          "sha": "a2786b93ff6e6aeb8757149f30cd3fb1026f86bd",
+          "ahead": 0,
+          "behind": 7195
+        },
+        {
+          "name": "feat/bme280-weather-lab",
+          "sha": "3b4e02a5ec72c65173bd65f836474619cc7148d1",
+          "ahead": 0,
+          "behind": 7201
+        },
+        {
+          "name": "feat/esp32-classic-onboard",
+          "sha": "ca0353368ec8ac8111c93f62419c8a82016498c0",
+          "ahead": 0,
+          "behind": 7128
+        },
+        {
+          "name": "feat/esp32c3-hw-oracle",
+          "sha": "cf7cddab857b1d26cdbb6e6d5988b6841f2400a6",
+          "ahead": 0,
+          "behind": 7136
+        },
+        {
+          "name": "feat/f103-hw-zero-init",
+          "sha": "474c474cb3bc2925f2acff2b616ba899d5133543",
+          "ahead": 0,
+          "behind": 7130
+        },
+        {
+          "name": "feat/f103-i2c-silicon",
+          "sha": "2ca38bf5b778ae1b68ee64ae63c64c8e3624c0ee",
+          "ahead": 0,
+          "behind": 7129
+        },
+        {
+          "name": "feat/ili9341-tft-lab",
+          "sha": "bd959a6e4415e7616b17d6f2735b7d0b064a3c42",
+          "ahead": 0,
+          "behind": 7196
+        },
+        {
+          "name": "feat/mpu6050-sensor-lab",
+          "sha": "bd633f3fdeb10bd7a5099f0c7f733af3fbd80801",
+          "ahead": 0,
+          "behind": 7202
+        },
+        {
+          "name": "feat/onboarding-fix-blackpill",
+          "sha": "5a89cc3ef2a7c80cb3ed4ec8f52458680a2792a3",
+          "ahead": 8,
+          "behind": 7283
+        },
+        {
+          "name": "feat/spi-plumbing-max31855",
+          "sha": "6ec49e760af4b8dd1e49c3471a419aae8a541f6a",
+          "ahead": 0,
+          "behind": 7199
+        },
+        {
+          "name": "feat/ssd1306-oled-lab",
+          "sha": "dec8c4579ccba99d8413dae54afc6900780e68c4",
+          "ahead": 0,
+          "behind": 7200
+        },
+        {
+          "name": "feat/stm32f1-hw-oracle",
+          "sha": "b6741552ce9b967ea11a3b27a7ab0b29bd334f0d",
+          "ahead": 1,
+          "behind": 7133
+        },
+        {
+          "name": "feat/stm32f4-hw-oracle",
+          "sha": "dc415ace527847b8d02bd7d43f1791d903a405a8",
+          "ahead": 0,
+          "behind": 7134
+        },
+        {
+          "name": "feat/stm32f4-hw-runner",
+          "sha": "4c66dfb6de386b4bce1a101efd5d5cea30456e4e",
+          "ahead": 0,
+          "behind": 7133
+        },
+        {
+          "name": "feat/studio-rework",
+          "sha": "83303bc38901a20f5fce0a75fa413cf5a4619a99",
+          "ahead": 0,
+          "behind": 7197
+        },
+        {
+          "name": "feat/uart-rx-neo6m-gps",
+          "sha": "74140fcdf8bb959b5c81fd5aba6533b85c49c5db",
+          "ahead": 0,
+          "behind": 7198
+        },
+        {
+          "name": "feat/vision-completion-gaps",
+          "sha": "56109f47c8ed59da455f36933939ce6fba27f82c",
+          "ahead": 6,
+          "behind": 7229
+        },
+        {
+          "name": "feat/wasm-browser-jit-prototype",
+          "sha": "62a7a044ff37aaedf1fea1dc395f4ad0b281eba0",
+          "ahead": 15,
+          "behind": 7033
+        },
+        {
+          "name": "feat/wireless-stack-support",
+          "sha": "5bc74f57b5cafee521d616341f0e3e4026876a77",
+          "ahead": 7,
+          "behind": 7272
+        },
+        {
+          "name": "feature/esp32s3-plan1-foundation",
+          "sha": "a0c74db21431f66d4daae0d0006c668ef4c04232",
+          "ahead": 65,
+          "behind": 7325
+        },
+        {
+          "name": "feature/esp32s3-plan2-boot-uart",
+          "sha": "983087e6d077d13597386b89bfae8c4fa6cb3c15",
+          "ahead": 91,
+          "behind": 7325
+        },
+        {
+          "name": "feature/esp32s3-plan3-gpio-blinky",
+          "sha": "fd2d2affd5babd0c508320f35b35d23d507c6078",
+          "ahead": 108,
+          "behind": 7325
+        },
+        {
+          "name": "fix/community-readiness",
+          "sha": "1b8c0f24da4280057d43c63581dbb2fb3e08ce72",
+          "ahead": 29,
+          "behind": 7325
+        },
+        {
+          "name": "fix/documentation-wiring",
+          "sha": "7fa44d948fb2597f647376578e893f4b2ace7fe2",
+          "ahead": 1,
+          "behind": 7323
+        },
+        {
+          "name": "fix/esp32-appcpu-bringup",
+          "sha": "ee32fcbcd170bbaf1fbfd3d5c36d7b753864dc0b",
+          "ahead": 4,
+          "behind": 6976
+        },
+        {
+          "name": "fix/integrity-check",
+          "sha": "68645de1aca13b141f8dc9fd122f62853c54d0b5",
+          "ahead": 0,
+          "behind": 7281
+        },
+        {
+          "name": "fix/main-ci-pre-existing",
+          "sha": "d3ad5b634a6fcc724fd111b9030ada9837550afc",
+          "ahead": 3,
+          "behind": 7172
+        },
+        {
+          "name": "fix/resolve-todos",
+          "sha": "382e6b403f03955c4dfa9a33057b77b5b47f35d1",
+          "ahead": 0,
+          "behind": 7301
+        },
+        {
+          "name": "fix/xtensa-sext-decoder-and-window-investigation",
+          "sha": "ea4b0c14a7a1114b7abd30ae3a5d797b1b1f00da",
+          "ahead": 1,
+          "behind": 7170
+        },
+        {
+          "name": "gh-pages",
+          "sha": "f4b789429e705fd43aa1ebd787a4de375bde075a",
+          "ahead": 1,
+          "behind": 7329
+        },
+        {
+          "name": "gh-sync/agent-docs-to-main",
+          "sha": "feb40f84cbab26b4f7a3b5f5df00df36bd3c68ca",
+          "ahead": 2,
+          "behind": 7281
+        },
+        {
+          "name": "hil-l476-parity",
+          "sha": "58cc9b080204597c482ba8e2427ce3132fb65e49",
+          "ahead": 10,
+          "behind": 7020
+        },
+        {
+          "name": "main",
+          "sha": "fecb89651c0819807c52f9889b3c5be75141bfdc",
+          "ahead": 0,
+          "behind": 136
+        },
+        {
+          "name": "merge/sensor-labs-and-oracle",
+          "sha": "f6377713c39ca43188e16b408a7337a62d4bb867",
+          "ahead": 0,
+          "behind": 7137
+        },
+        {
+          "name": "merge-hardening",
+          "sha": "ae54856e825ad9b4a21d6336f04d2bf736e869dc",
+          "ahead": 16,
+          "behind": 7287
+        },
+        {
+          "name": "model-catalog",
+          "sha": "4dd4c36d66b9b0f0986c5781490b52343fb1f9e7",
+          "ahead": 1,
+          "behind": 7329
+        },
+        {
+          "name": "plan-4-i2c-tmp102",
+          "sha": "c521f382e76fe9a7cfd0f9482f3623c1b0040d48",
+          "ahead": 11,
+          "behind": 7172
+        },
+        {
+          "name": "plan-5-dual-core-esp32s3",
+          "sha": "c6028fcf60b9116a3cae78f9347154b6d5931ac0",
+          "ahead": 8,
+          "behind": 7168
+        },
+        {
+          "name": "release/v0.12.0",
+          "sha": "50f6cf1b74bfc94fa5d0a7657a8f7772841126b3",
+          "ahead": 43,
+          "behind": 7324
+        },
+        {
+          "name": "release-v0.12.2-final",
+          "sha": "427dea6731502deb9ad34e352a09e2d5d3dff0a3",
+          "ahead": 5,
+          "behind": 7321
+        },
+        {
+          "name": "sync-v0.12.1-to-develop",
+          "sha": "1c194530402ae70fd2b7bf60abfb65f36c9cbaf6",
+          "ahead": 1,
+          "behind": 7322
+        }
+      ]
+    },
+    {
+      "repo": "blue-az/labwired-core",
+      "default_branch": "main",
+      "branches": [
+        {
+          "name": "archive/main-before-upstream-sync",
+          "sha": "dfb899a7d7e8ee2ea2e7d72cce7409fb18b31a3b",
+          "ahead": 20,
+          "behind": 6531
+        },
+        {
+          "name": "chore/core-root-cleanup",
+          "sha": "7771f35fab04fc9b9f74c626afb06b637002d33d",
+          "ahead": 15,
+          "behind": 7329
+        },
+        {
+          "name": "chore/docs-update",
+          "sha": "05d4b8b468cc1539c66cb6d1d851267a68d2abc8",
+          "ahead": 1,
+          "behind": 7285
+        },
+        {
+          "name": "chore/speed-up-blinky",
+          "sha": "355d5913d46c21fba0047a4bd4ed49eafb5757d2",
+          "ahead": 1,
+          "behind": 7158
+        },
+        {
+          "name": "cleanup/repo-garbage",
+          "sha": "c9cde7c7df3e5b650a9fd32e46cf8c3bd8461625",
+          "ahead": 0,
+          "behind": 7277
+        },
+        {
+          "name": "codex/refactor-opt-hardening",
+          "sha": "246f036c270fafdff86af112d807b1e0647d8e4a",
+          "ahead": 36,
+          "behind": 7325
+        },
+        {
+          "name": "codex/release-catalog-metadata-fix-2",
+          "sha": "2462ec7ce7c0f78ab8938b9f9be8e5eb9c33bda5",
+          "ahead": 0,
+          "behind": 7233
+        },
+        {
+          "name": "docs/sync-broken-links",
+          "sha": "5a3580a27c45cbaf9804a5553facaaaec72016f2",
+          "ahead": 0,
+          "behind": 7318
+        },
+        {
+          "name": "docs/sync-docs-final",
+          "sha": "9d1989bb7c0fa1e50d519231d32f6c42b7ef75c4",
+          "ahead": 1,
+          "behind": 7317
+        },
+        {
+          "name": "feat/onboarding-fix-blackpill",
+          "sha": "1c7f128106db068d08c15d886aea48df1a26739e",
+          "ahead": 7,
+          "behind": 7283
+        },
+        {
+          "name": "feat/vision-completion-gaps",
+          "sha": "56109f47c8ed59da455f36933939ce6fba27f82c",
+          "ahead": 6,
+          "behind": 7229
+        },
+        {
+          "name": "feat/wireless-stack-support",
+          "sha": "5bc74f57b5cafee521d616341f0e3e4026876a77",
+          "ahead": 7,
+          "behind": 7272
+        },
+        {
+          "name": "feature/esp32s3-plan1-foundation",
+          "sha": "a0c74db21431f66d4daae0d0006c668ef4c04232",
+          "ahead": 65,
+          "behind": 7325
+        },
+        {
+          "name": "feature/esp32s3-plan2-boot-uart",
+          "sha": "983087e6d077d13597386b89bfae8c4fa6cb3c15",
+          "ahead": 91,
+          "behind": 7325
+        },
+        {
+          "name": "feature/esp32s3-plan3-gpio-blinky",
+          "sha": "fd2d2affd5babd0c508320f35b35d23d507c6078",
+          "ahead": 108,
+          "behind": 7325
+        },
+        {
+          "name": "feature/vl53l1x-tof-device",
+          "sha": "e41f2cd9674ffc56f1adb8597f9188edea335bc3",
+          "ahead": 0,
+          "behind": 6546
+        },
+        {
+          "name": "fix/audit-trace-completeness",
+          "sha": "63ecf85298b4ae9fa073861c58ef8531bb835747",
+          "ahead": 0,
+          "behind": 2235
+        },
+        {
+          "name": "fix/community-readiness",
+          "sha": "1b8c0f24da4280057d43c63581dbb2fb3e08ce72",
+          "ahead": 29,
+          "behind": 7325
+        },
+        {
+          "name": "fix/documentation-wiring",
+          "sha": "7fa44d948fb2597f647376578e893f4b2ace7fe2",
+          "ahead": 1,
+          "behind": 7323
+        },
+        {
+          "name": "fix/integrity-check",
+          "sha": "68645de1aca13b141f8dc9fd122f62853c54d0b5",
+          "ahead": 0,
+          "behind": 7281
+        },
+        {
+          "name": "fix/main-ci-pre-existing",
+          "sha": "d3ad5b634a6fcc724fd111b9030ada9837550afc",
+          "ahead": 3,
+          "behind": 7172
+        },
+        {
+          "name": "fix/resolve-todos",
+          "sha": "382e6b403f03955c4dfa9a33057b77b5b47f35d1",
+          "ahead": 0,
+          "behind": 7301
+        },
+        {
+          "name": "fix/trace-drift-narrow-upstream",
+          "sha": "34d4e3be9cfb0432eba2d7d82b398b62b48ff0ca",
+          "ahead": 0,
+          "behind": 5917
+        },
+        {
+          "name": "fix/xtensa-sext-decoder-and-window-investigation",
+          "sha": "ea4b0c14a7a1114b7abd30ae3a5d797b1b1f00da",
+          "ahead": 1,
+          "behind": 7170
+        },
+        {
+          "name": "gh-pages",
+          "sha": "db52d771c82b1eb0dfa511de4a5b6ff32ac4a893",
+          "ahead": 1,
+          "behind": 7329
+        },
+        {
+          "name": "gh-sync/agent-docs-to-main",
+          "sha": "feb40f84cbab26b4f7a3b5f5df00df36bd3c68ca",
+          "ahead": 2,
+          "behind": 7281
+        },
+        {
+          "name": "main",
+          "sha": "66296c63318644bc3ab8cbb54d79692c38b8e102",
+          "ahead": 0,
+          "behind": 3224
+        },
+        {
+          "name": "merge-hardening",
+          "sha": "ae54856e825ad9b4a21d6336f04d2bf736e869dc",
+          "ahead": 16,
+          "behind": 7287
+        },
+        {
+          "name": "plan-4-i2c-tmp102",
+          "sha": "c521f382e76fe9a7cfd0f9482f3623c1b0040d48",
+          "ahead": 11,
+          "behind": 7172
+        },
+        {
+          "name": "plan-5-dual-core-esp32s3",
+          "sha": "c6028fcf60b9116a3cae78f9347154b6d5931ac0",
+          "ahead": 8,
+          "behind": 7168
+        },
+        {
+          "name": "release/v0.12.0",
+          "sha": "50f6cf1b74bfc94fa5d0a7657a8f7772841126b3",
+          "ahead": 43,
+          "behind": 7324
+        },
+        {
+          "name": "release-v0.12.2-final",
+          "sha": "427dea6731502deb9ad34e352a09e2d5d3dff0a3",
+          "ahead": 5,
+          "behind": 7321
+        },
+        {
+          "name": "sync-v0.12.1-to-develop",
+          "sha": "1c194530402ae70fd2b7bf60abfb65f36c9cbaf6",
+          "ahead": 1,
+          "behind": 7322
+        },
+        {
+          "name": "wip/vl53l1x-distance-setter",
+          "sha": "29cf9854f1edf049efcf198b4ca66214ffd98341",
+          "ahead": 1,
+          "behind": 3800
+        }
+      ]
+    }
+  ],
+  "method": "git rev-list --left-right --count upstream_sha...branch_sha; ahead excludes commits reachable from upstream, without patch-equivalence assumptions"
+}

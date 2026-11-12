@@ -120,6 +120,7 @@ impl SystemBus {
         self.refresh_legacy_tick_index(idx);
         self.refresh_legacy_tick_peer_write_observers(idx);
         self.refresh_bus_tick_index(idx);
+        self.sync_timer_kernel_clocks(idx);
         self.reconcile_irq_levels_after_write(idx);
     }
 
@@ -470,6 +471,9 @@ impl SystemBus {
 impl crate::Bus for SystemBus {
     fn rp2350_dcp_mut(&mut self) -> Option<&mut crate::cpu::cortex_m::rp2350_dcp::Rp2350Dcp> {
         self.rp2350_dcp.as_deref_mut()
+    }
+    fn rp2350_gpioc(&self) -> bool {
+        self.rp2350_gpioc
     }
     fn read_u64(&self, addr: u64) -> SimResult<u64> {
         // Watched like every other width: a 64-bit load is a CPU access on
@@ -1337,6 +1341,7 @@ impl crate::Bus for SystemBus {
                 self.refresh_legacy_tick_index(idx);
                 self.refresh_legacy_tick_peer_write_observers(idx);
                 self.refresh_bus_tick_index(idx);
+                self.sync_timer_kernel_clocks(idx);
                 // Level reconcile at the write choke (single- and multi-line
                 // level sources): see `reconcile_irq_levels_after_write`.
                 self.reconcile_irq_levels_after_write(idx);
@@ -1537,6 +1542,7 @@ impl crate::Bus for SystemBus {
                 self.refresh_legacy_tick_index(idx);
                 self.refresh_legacy_tick_peer_write_observers(idx);
                 self.refresh_bus_tick_index(idx);
+                self.sync_timer_kernel_clocks(idx);
                 // Level reconcile at the write choke (single- and multi-line
                 // level sources): see `reconcile_irq_levels_after_write`.
                 self.reconcile_irq_levels_after_write(idx);
@@ -1702,14 +1708,17 @@ impl crate::Bus for SystemBus {
         Self::clock_parking_spi(self, mosi)
     }
 
-    fn sync_parking_spi_cs(&mut self) {
+    fn sync_parking_spi_cs(&mut self) -> bool {
         Self::sync_parking_spi_cs(self)
     }
 
-    fn parking_spi_any_selected(&self) -> bool {
+    fn parking_spi_accepts_clock(&self) -> bool {
         for entry in &self.peripherals {
             if let Some(devs) = entry.dev.spi_attached_devices() {
-                if devs.iter().any(|d| d.is_selected()) {
+                if devs
+                    .iter()
+                    .any(|d| d.is_selected() || d.clocks_when_deselected())
+                {
                     return true;
                 }
             }
@@ -1910,8 +1919,19 @@ impl crate::Bus for SystemBus {
         // no peripheral poll at all. (The C3's per-tick aggregation does re-poll
         // each time; it can, because it only runs on buses that still tick.)
         #[cfg(feature = "event-scheduler")]
-        if self.legacy_walk_disabled && self.irq_fabric.esp32s3.routing {
-            self.recompute_esp32s3_irq_lines();
+        if self.legacy_walk_disabled {
+            if self.irq_fabric.esp32s3.routing {
+                self.recompute_esp32s3_irq_lines();
+            }
+            // Classic ESP32 (DPORT matrix), walk-free the same way. A
+            // scheduler-driven source (I2C0) lives only in `sched_sources`,
+            // and with no per-cycle aggregation nothing else re-routes it
+            // after dispatch. The ISR then read `RSR.INTERRUPT` as zero,
+            // `_xt_lowint1` called no handler, and Arduino `Wire` on ESP32
+            // timed out on every transfer (core#1712). The recompute folds the
+            // stored sources and polls no peripheral; it returns early when no
+            // DPORT owns the routing.
+            self.recompute_esp32_classic_irq_lines();
         }
     }
 }

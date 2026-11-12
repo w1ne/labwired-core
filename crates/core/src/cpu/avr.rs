@@ -58,6 +58,8 @@ pub const SRAM_START: u16 = 0x0100;
 pub enum AvrModel {
     #[default]
     Atmega328p,
+    /// ATmega328PB shares the 328P core geometry and adds a second USART.
+    Atmega328pb,
     Atmega1281,
     Atmega2560,
     Attiny202,
@@ -96,7 +98,8 @@ impl AvrModel {
     /// two-byte-PC mega core; atmega2560/atmega2561/mega2560 select the
     /// 256 KB three-byte-PC mega core; the listed tinyAVR 0-series parts
     /// select the AVRxt data map and their exact flash/SRAM geometry. Other
-    /// names default to the ATmega328P.
+    /// names default to the ATmega328P. ATmega328PB is matched explicitly so
+    /// its second USART is not silently treated as the 328P's unused I/O.
     pub fn from_chip_name(name: &str) -> Self {
         let n = name.to_ascii_lowercase();
         if n.contains("attiny202") || n.contains("attiny 202") {
@@ -155,13 +158,15 @@ impl AvrModel {
             AvrModel::Atmega1281
         } else if n.contains("2560") || n.contains("2561") {
             AvrModel::Atmega2560
+        } else if n.contains("328pb") {
+            AvrModel::Atmega328pb
         } else {
             AvrModel::Atmega328p
         }
     }
     pub fn flash_size(self) -> usize {
         match self {
-            AvrModel::Atmega328p => FLASH_SIZE,
+            AvrModel::Atmega328p | AvrModel::Atmega328pb => FLASH_SIZE,
             AvrModel::Atmega1281 => 128 * 1024,
             AvrModel::Atmega2560 => 256 * 1024,
             AvrModel::Attiny202 | AvrModel::Attiny204 => 2 * 1024,
@@ -181,7 +186,7 @@ impl AvrModel {
     }
     pub fn sram_start(self) -> u16 {
         match self {
-            AvrModel::Atmega328p => SRAM_START,
+            AvrModel::Atmega328p | AvrModel::Atmega328pb => SRAM_START,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x0200,
             AvrModel::Attiny202 | AvrModel::Attiny204 => 0x3F80,
             AvrModel::Attiny402 | AvrModel::Attiny404 | AvrModel::Attiny406 => 0x3F00,
@@ -205,7 +210,7 @@ impl AvrModel {
     }
     pub fn ramend(self) -> u16 {
         match self {
-            AvrModel::Atmega328p => RAMEND,
+            AvrModel::Atmega328p | AvrModel::Atmega328pb => RAMEND,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x21FF,
             AvrModel::Attiny202
             | AvrModel::Attiny204
@@ -232,7 +237,7 @@ impl AvrModel {
     /// at 0x1_002F..0x1_0034, where the 328P keeps its 8-channel window).
     pub fn adc_input_base(self) -> u64 {
         match self {
-            AvrModel::Atmega328p => AVR_ADC_INPUT_BASE,
+            AvrModel::Atmega328p | AvrModel::Atmega328pb => AVR_ADC_INPUT_BASE,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => AVR_MEGA_ADC_INPUT_BASE,
             AvrModel::Attiny202
             | AvrModel::Attiny204
@@ -268,6 +273,23 @@ impl AvrModel {
     /// Whether this model implements EIND, EIJMP and EICALL.
     pub fn supports_eind(self) -> bool {
         self == AvrModel::Atmega2560
+    }
+
+    /// The ATmega328PB has a second polling USART at data-space 0xC8..0xCE.
+    /// Its USART interrupts are not yet modelled.
+    pub const fn has_usart1(self) -> bool {
+        matches!(self, AvrModel::Atmega328pb)
+    }
+
+    /// The watchdog's `WDTCSR` is at data space 0x60 (`avr/wdt.rs`).
+    pub const fn has_wdtcsr(self) -> bool {
+        matches!(
+            self,
+            AvrModel::Atmega328p
+                | AvrModel::Atmega328pb
+                | AvrModel::Atmega1281
+                | AvrModel::Atmega2560
+        )
     }
 
     /// Whether this part uses the AVRxt data-space map and direct I/O
@@ -376,8 +398,9 @@ pub struct Avr {
     pub t0_prescale_acc: u32,
     /// Timer2, the counter Arduino `tone()` runs in CTC mode.
     ///
-    /// Normal and CTC count as on silicon. The PWM modes count 0..255; their
-    /// OC2A/OC2B pad levels come from `avr/oc_pins.rs`.
+    /// Normal, CTC and phase-correct (WGM 1, TOP = 0xFF, up and down) count
+    /// as on silicon. Fast PWM and WGM 5 count 0..255. The OC2A/OC2B pad
+    /// levels come from `avr/oc_pins.rs`.
     pub tcnt2: u8,
     pub tccr2a: u8,
     pub tccr2b: u8,
@@ -390,6 +413,8 @@ pub struct Avr {
     /// so the counter stops instead of pretending the CPU clock still drives it.
     pub assr: u8,
     pub t2_prescale_acc: u32,
+    /// Timer2 is counting down (phase-correct mode only).
+    pub t2_down: bool,
     /// Timer1, the 16-bit counter (`avr/timer1.rs`).
     t1: timer1::Timer1,
     /// Port B / port D pads an output-compare unit owns, and the level it
@@ -416,9 +441,10 @@ pub struct Avr {
     /// [`crate::bus::SystemBus::clock_parking_spi`] so inspect can see them.
     pub spi_devices: Vec<Box<dyn SpiDevice>>,
     /// Soft-SPI bit-bang state (SPE=0): last sampled SCK level, the byte
-    /// accumulating on rising edges, and how many bits are in it. Arduino
-    /// `shiftOut` / LedControl drive PB3 (MOSI) + PB5 (SCK) as GPIO; each
-    /// rising SCK samples MOSI MSB-first into this shifter, and every eighth
+    /// accumulating on rising edges, and how many bits are in it. The supported
+    /// Uno mapping is DIN=D11/PB3 and CLK=D13/PB5, for example
+    /// `LedControl(11, 13, 10, count)`. Arbitrary DIN/CLK pins are not routed.
+    /// Each rising SCK samples MOSI MSB-first, and every eighth
     /// bit clocks the parking SPI chain.
     soft_spi_sck: bool,
     soft_spi_shift: u8,
@@ -459,6 +485,11 @@ pub struct Avr {
     /// Ports sampled at every boundary (bit 0 = B, 1 = C, 2 = D); zero while
     /// no INT/PCINT is configured, which keeps the step cost unchanged.
     ext_watch: u8,
+    /// Watchdog timer: `WDTCSR` and `WDR` (`avr/wdt.rs`).
+    wdt: wdt::Wdt,
+    /// Data EEPROM and `EECR`/`EEDR`/`EEAR` (`avr/eeprom.rs`). Empty on the
+    /// parts whose EEPROM is not modelled.
+    eeprom: eeprom::Eeprom,
 }
 
 impl std::fmt::Debug for Avr {
@@ -501,6 +532,10 @@ pub const AVR_MEGA_ADC_INPUT_BASE: u64 = 0x0001_0200;
 /// AVcc on the 5 V boards this part is modelled for, and the internal bandgap.
 const AVR_AVCC_MV: u32 = 5000;
 const AVR_BANDGAP_MV: u32 = 1100;
+/// ATmega328P temperature sensor output at +25 °C, typical (table 24-2).
+const AVR_TEMP_SENSOR_25C_MV: u32 = 314;
+/// `adc_convert`'s channel marker for the temperature sensor (mux 0x08).
+const AVR_ADC_TEMP_SENSOR: u8 = 0xFE;
 
 pub const VEC_TIMER0_OVF: u32 = 17; // datasheet 1-based; @0x40 = __vector_16
 /// TWI_vect is `_VECTOR(24)` → PC 0x60; pending bit uses vec=25 (`(vec-1)*4`).
@@ -595,6 +630,53 @@ fn t2_hits(phase: u64, ticks: u64, period: u64, target: u64) -> bool {
     ticks >= dist
 }
 
+/// Phase-correct (dual-slope) counting: BOTTOM up to TOP and back down, so
+/// one cycle is `2 * TOP` timer clocks (ATmega328P datasheet 15.7.4, 16.9.4,
+/// 18.7.4). The counter is tracked as `(tcnt, down)`; `dual_phase` maps that
+/// onto a position in `0..2 * TOP`, where `TOP` is reached once going up and
+/// `BOTTOM` once going down.
+fn dual_phase(tcnt: u64, down: bool, top: u64) -> u64 {
+    if down {
+        (2 * top - tcnt) % (2 * top)
+    } else {
+        tcnt
+    }
+}
+
+/// Inverse of [`dual_phase`]: the counter value and direction at `phase`.
+fn dual_from_phase(phase: u64, top: u64) -> (u64, bool) {
+    if phase <= top {
+        (phase, false)
+    } else {
+        (2 * top - phase, true)
+    }
+}
+
+/// `true` when `ticks` clocks from `phase` pass the counter over `target`,
+/// on either slope. A target above TOP never matches.
+fn dual_hits(phase: u64, ticks: u64, top: u64, target: u64) -> bool {
+    let period = 2 * top;
+    target <= top
+        && (t2_hits(phase, ticks, period, target)
+            || t2_hits(phase, ticks, period, (period - target) % period))
+}
+
+/// Timer clocks from `phase` until the counter next equals `target` (a full
+/// period if it equals it now), or `None` above TOP.
+fn dual_dist(phase: u64, top: u64, target: u64) -> Option<u64> {
+    let period = 2 * top;
+    (target <= top).then(|| {
+        [target, (period - target) % period]
+            .into_iter()
+            .map(|t| match (t + period - phase) % period {
+                0 => period,
+                d => d,
+            })
+            .min()
+            .unwrap_or(period)
+    })
+}
+
 /// CTC closed form. `tcnt` must already be in `0..=ocr_a`.
 fn t2_ctc_closed(tcnt: u8, ticks: u64, ocr_a: u8, ocr_b: u8) -> T2Step {
     let phase = u64::from(tcnt);
@@ -661,6 +743,7 @@ impl Avr {
             tifr2: 0,
             assr: 0,
             t2_prescale_acc: 0,
+            t2_down: false,
             t1: timer1::Timer1::default(),
             oc_mask: [0; 2],
             oc_level: [0; 2],
@@ -701,6 +784,8 @@ impl Avr {
             ext_last: [0; 3],
             ext_watch: 0,
             irq_shadow: false,
+            wdt: wdt::Wdt::new(model.has_wdtcsr()),
+            eeprom: eeprom::Eeprom::new(model.eeprom_size()),
         }
     }
 
@@ -747,7 +832,9 @@ impl Avr {
     #[inline]
     fn is_pin_reg(&self, addr: u16) -> bool {
         match self.model {
-            AvrModel::Atmega328p => matches!(addr, AVR_PINB | AVR_PINC | AVR_PIND),
+            AvrModel::Atmega328p | AvrModel::Atmega328pb => {
+                matches!(addr, AVR_PINB | AVR_PINC | AVR_PIND)
+            }
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => MEGA2560_PIN_ADDRS.contains(&addr),
             AvrModel::Attiny202 | AvrModel::Attiny204 => false,
             AvrModel::Attiny402
@@ -776,9 +863,34 @@ impl Avr {
 
     /// `PINx`/`DDRx`/`PORTx` of a port this model has: mirrored to the bus.
     #[inline]
+    /// Every port back to a tri-stated input, `DDRx = PORTx = 0` (ATmega328P
+    /// datasheet §14.4: both reset to 0). A watchdog reset arrives here with
+    /// the bus already running, so the bus-side port windows are cleared as
+    /// well as this I/O map; at power-on both are already 0 and nothing is
+    /// written. All DDRs go first, so an output that was high is released
+    /// rather than driven low for a moment.
+    fn reset_ports(&mut self, bus: &mut dyn Bus) {
+        for offset in [1, 2] {
+            for pin in 0x20..=0x10Bu16 {
+                if !self.is_pin_reg(pin) {
+                    continue;
+                }
+                let addr = pin + offset;
+                let reg = &mut self.io[usize::from(addr - 0x20)];
+                if *reg != 0 {
+                    *reg = 0;
+                    // Best-effort, like every port mirror write.
+                    let _mirror = bus.write_u8(AVR_IO_MIRROR_BASE + u64::from(addr), 0);
+                }
+            }
+        }
+    }
+
     fn is_port_reg(&self, addr: u16) -> bool {
         match self.model {
-            AvrModel::Atmega328p => (AVR_PINB..=AVR_PIND + 2).contains(&addr),
+            AvrModel::Atmega328p | AvrModel::Atmega328pb => {
+                (AVR_PINB..=AVR_PIND + 2).contains(&addr)
+            }
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => {
                 (0x20..=0x34).contains(&addr) || (0x100..=0x10B).contains(&addr)
             }
@@ -807,53 +919,41 @@ impl Avr {
         }
     }
 
-    /// Soft-SPI + GPIO-CS bridge for parking kits when hardware SPE is clear.
+    /// GPIO-CS and byte-aligned software SPI for Uno-compatible PORTB.
     ///
-    /// LedControl (and Arduino `shiftOut`) drive CS / MOSI / SCK as GPIO.
-    /// After every PORT mirror write we (1) sync parking-SPI chip-selects from
-    /// the live GPIO level and (2) on a rising PB5 (SCK) sample PB3 (MOSI)
-    /// MSB-first into an 8-bit shifter; every eighth bit clocks the daisy
-    /// chain via [`Bus::clock_parking_spi`]. Hardware SPI (SPE=1) owns the
-    /// pins — this path stays quiet then.
+    /// Supported wiring is DIN=D11/PB3, CLK=D13/PB5, and any configured LOAD
+    /// pin. This is not the common LedControl(12, 11, 10, ...) wiring; use
+    /// LedControl(11, 13, 10, ...) for this bridge. LOAD updates also apply
+    /// with SPE=1, so a hardware-SPDR transaction latches on its final GPIO
+    /// write. Sub-byte transfers are outside this bridge's byte-level scope.
     fn soft_spi_after_port(&mut self, bus: &mut dyn Bus, addr: u16, port_value: u8) {
-        const SPE: u8 = 1 << 6;
-        if self.spcr & SPE != 0 {
-            return;
+        // Reset the partial byte at the LOAD edge before any port/SPE return.
+        // Complete bytes still shift while LOAD is high on parts like MAX7219.
+        let released = bus.sync_parking_spi_cs();
+        let accepts_clock = bus.parking_spi_accepts_clock();
+        if released || !accepts_clock {
+            self.soft_spi_shift = 0;
+            self.soft_spi_bits = 0;
         }
-        // CS may live on any port (D10=PB2 on Uno, but not assumed exclusively).
-        bus.sync_parking_spi_cs();
-        // Bit-bang clock/data only observe PORTB (Uno hardware-SPI pins).
-        // PINB=0x23, DDRB=0x24, PORTB=0x25 on ATmega328P.
-        // Soft-SPI bit-bang observes classic mega PORTB only (Uno pinout).
-        // tinyAVR / other models use different port maps — skip.
-        let portb_addr = match self.model {
-            AvrModel::Atmega328p | AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x25u16,
-            _ => return,
-        };
-        if addr != portb_addr {
+        if !matches!(self.model, AvrModel::Atmega328p | AvrModel::Atmega328pb) || addr != 0x25 {
             return;
         }
         let sck = (port_value & (1 << 5)) != 0;
-        let mosi = (port_value & (1 << 3)) != 0;
-        if sck && !self.soft_spi_sck {
+        let rising = sck && !self.soft_spi_sck;
+        self.soft_spi_sck = sck;
+        const SPE: u8 = 1 << 6;
+        if self.spcr & SPE != 0 || !accepts_clock {
+            return;
+        }
+        if rising {
+            let mosi = (port_value & (1 << 3)) != 0;
             self.soft_spi_shift = (self.soft_spi_shift << 1) | u8::from(mosi);
-            self.soft_spi_bits = self.soft_spi_bits.saturating_add(1);
-            if self.soft_spi_bits >= 8 {
+            self.soft_spi_bits += 1;
+            if self.soft_spi_bits == 8 {
                 let _ = bus.clock_parking_spi(self.soft_spi_shift);
                 self.soft_spi_shift = 0;
                 self.soft_spi_bits = 0;
             }
-        }
-        // A CS↑ (handled in sync above) should drop a partial byte so the next
-        // transaction cannot inherit orphan bits from a short pulse.
-        if !sck && self.soft_spi_sck {
-            // falling edge only — no action; CS release resets below via poll
-        }
-        self.soft_spi_sck = sck;
-        // If every parking device released CS, clear the bit accumulator.
-        if !bus.parking_spi_any_selected() {
-            self.soft_spi_shift = 0;
-            self.soft_spi_bits = 0;
         }
     }
 
@@ -973,7 +1073,9 @@ impl Avr {
             // high window by `data_write`.
             a if self.is_pin_reg(a) => {
                 let ddr = self.io[(addr + 1 - 0x20) as usize];
-                let port = self.io[(addr + 2 - 0x20) as usize];
+                // A pad an output-compare unit owns reads its waveform level,
+                // not the latch (the synchronizer samples the pad).
+                let port = self.port_pad_value(addr + 2, self.io[(addr + 2 - 0x20) as usize]);
                 // Propagated, not discarded: a chip yaml that maps no window
                 // for this port has no input state for this register at all,
                 // and a swallowed error would answer with a fabricated low — a
@@ -1025,6 +1127,29 @@ impl Avr {
                     Ok(0)
                 }
             }
+            // ATmega328PB USART1 mirrors the 328P USART0 register layout at
+            // data-space 0xC8..0xCE. Its local control registers use the I/O
+            // file; the bus-side UART owns RX buffering and peer connections.
+            0x00C8 if self.model.has_usart1() => {
+                let rxc = if Self::usart1_on_bus(bus) {
+                    bus.read_u8(AVR_IO_MIRROR_BASE + 0xC8)? & UCSRA_RXC
+                } else {
+                    0
+                };
+                let flags = self.io[(0xC8 - 0x20) as usize] & !UCSRA_RXC;
+                Ok(flags | UCSRA_UDRE | rxc)
+            }
+            0x00C9 | 0x00CA | 0x00CC | 0x00CD if self.model.has_usart1() => {
+                Ok(self.io[(addr - 0x20) as usize])
+            }
+            // UDR1 read pops one received byte from the bus-side USART.
+            0x00CE if self.model.has_usart1() => {
+                if Self::usart1_on_bus(bus) {
+                    bus.read_u8(AVR_IO_MIRROR_BASE + 0xCE)
+                } else {
+                    Ok(0)
+                }
+            }
             // SPI: SPCR/SPSR/SPDR (ATmega328P data space)
             0x004C => Ok(self.spcr),
             0x004D => Ok(self.spsr),
@@ -1049,6 +1174,8 @@ impl Avr {
             {
                 Ok(self.ext_read(addr).unwrap_or_default())
             }
+            a if self.wdt.handles(a) => Ok(self.wdt.read(self.cycles)),
+            a if self.eeprom.handles(a) => Ok(self.eeprom.read(a, self.cycles)),
             0x0020..=0x00FF => Ok(self.io[(addr - 0x20) as usize]),
             // ATmega2560 extended I/O (ports H..L, Timer3/4/5, USART1..3):
             // stored registers.
@@ -1156,6 +1283,12 @@ impl Avr {
             | timer1::ADDR_TCCR1A..=0x0082
             | 0x0084..=timer1::ADDR_OCR1BH => {
                 self.timer1_write(addr, value);
+                // TCCR1A/B and TIMSK1 decide whether ICP1 must be watched.
+                if !self.is_mega()
+                    && matches!(addr, timer1::ADDR_TIMSK1 | timer1::ADDR_TCCR1A | 0x0081)
+                {
+                    self.ext_config_changed(bus);
+                }
                 Ok(())
             }
             0x00C0 => {
@@ -1208,6 +1341,42 @@ impl Avr {
                 }
                 Ok(())
             }
+            0x00C8 if self.model.has_usart1() => {
+                // U2X1/MPCM1 are writable. TXC1 is write-one-to-clear and
+                // returns once the instantaneous transmitter becomes empty;
+                // RXC1 is supplied by the bus-side USART queue.
+                let i = (0xC8 - 0x20) as usize;
+                let txc = if value & UCSRA_TXC != 0 {
+                    0
+                } else {
+                    self.io[i] & UCSRA_TXC
+                };
+                self.io[i] = txc | (value & 0x03);
+                Self::usart1_mirror_write(bus, 0xC8, value)?;
+                Ok(())
+            }
+            0x00C9 | 0x00CA | 0x00CC | 0x00CD if self.model.has_usart1() => {
+                self.io[(addr - 0x20) as usize] = value;
+                Self::usart1_mirror_write(bus, u64::from(addr), value)?;
+                Ok(())
+            }
+            0x00CE if self.model.has_usart1() => {
+                self.serial_tx.push(value);
+                let status = &mut self.io[(0xC8 - 0x20) as usize];
+                *status |= UCSRA_UDRE | UCSRA_TXC;
+                bus.write_u8(u64::from(addr), value)?;
+                Self::usart1_mirror_write(bus, 0xCE, value)?;
+                let on_bus =
+                    Self::usart1_on_bus(bus) && bus.read_u8(AVR_IO_MIRROR_BASE + 0xCF)? & 1 != 0;
+                if !on_bus {
+                    if let Some(sink) = &self.serial_sink {
+                        if let Ok(mut g) = sink.lock() {
+                            g.push(value);
+                        }
+                    }
+                }
+                Ok(())
+            }
             0x004C => {
                 self.spcr = value;
                 Ok(())
@@ -1245,7 +1414,7 @@ impl Avr {
                 // kits keep working.
                 let any_selected = self.spi_devices.iter().any(|d| d.is_selected());
                 for dev in &mut self.spi_devices {
-                    if any_selected && !dev.is_selected() {
+                    if any_selected && !dev.is_selected() && !dev.clocks_when_deselected() {
                         continue;
                     }
                     let resp = dev.transfer(mosi);
@@ -1348,6 +1517,14 @@ impl Avr {
                 let _mirror = bus.write_u8(addr as u64, value);
                 Ok(())
             }
+            a if self.wdt.handles(a) => {
+                self.wdt_write(value);
+                Ok(())
+            }
+            a if self.eeprom.handles(a) => {
+                self.cycles += self.eeprom.write(a, value, self.cycles);
+                Ok(())
+            }
             0x0020..=0x00FF => {
                 self.io[(addr - 0x20) as usize] = value;
                 // PORTB/PORTC/PORTD (0x23..0x2B): mirror to the high bus window
@@ -1360,9 +1537,8 @@ impl Avr {
                     // A pad an output-compare unit owns keeps its waveform level.
                     let pad = self.port_pad_value(addr, value);
                     let _mirror = bus.write_u8(AVR_IO_MIRROR_BASE + addr as u64, pad);
-                    // Soft-SPI / GPIO-CS bridge: LedControl and friends bit-bang
-                    // CS/MOSI/SCK with SPE clear. Sync parking CS from the live
-                    // GPIO level, then on a rising PB5 (SCK) sample PB3 (MOSI).
+                    // Sync GPIO LOAD for both hardware and software SPI;
+                    // the Uno software bridge samples PB3 on PB5 rising edges.
                     self.soft_spi_after_port(bus, addr, pad);
                 } else {
                     let _mirror = bus.write_u8(addr as u64, value);
@@ -1453,8 +1629,11 @@ impl Avr {
     /// One 10-bit conversion of the channel ADMUX selects.
     ///
     /// MUX 0..7 are the input pins, whose millivolts come from the bus-side
-    /// `avr_adc` model; 0x0E is the 1.1 V bandgap and 0x0F is GND. The other mux
-    /// codes (the temperature sensor at 0x08) are not modelled and read 0.
+    /// `avr_adc` model; 0x08 is the temperature sensor, 0x0E is the 1.1 V
+    /// bandgap and 0x0F is GND. The reserved mux codes read 0. The temperature
+    /// sensor gives the datasheet's typical 314 mV at +25 °C (ATmega328P
+    /// table 24-2, with the 1.1 V reference: 292). The die is held at +25 °C,
+    /// and the part-to-part offset (about ±10 °C uncalibrated) is not modelled.
     /// REFS selects the reference: 11 is the internal 1.1 V, anything else is
     /// taken as 5 V AVcc (AREF is not a modelled pin).
     ///
@@ -1473,12 +1652,14 @@ impl Avr {
         } else {
             match self.admux & 0x0F {
                 m @ 0..=7 => Some(m),
+                0x08 => Some(AVR_ADC_TEMP_SENSOR),
                 0x0E => None,
                 _ => Some(0xFF),
             }
         };
         let input_mv: u32 = match channel {
             Some(0xFF) => 0,
+            Some(AVR_ADC_TEMP_SENSOR) => AVR_TEMP_SENSOR_25C_MV,
             Some(ch) => {
                 let base = self.model.adc_input_base() + u64::from(ch) * 2;
                 let lo = bus.read_u8(base)?;
@@ -1556,6 +1737,13 @@ impl Avr {
         wgm == 0b010
     }
 
+    /// WGM22:0 == 1: phase-correct PWM with TOP = 0xFF, Arduino's
+    /// `analogWrite` mode for D3/D11. WGM 5 (TOP = OCR2A) still counts up.
+    fn t2_is_phase_correct(&self) -> bool {
+        let wgm = (self.tccr2a & 0x03) | ((self.tccr2b & 0x08) >> 1);
+        wgm == 0b001
+    }
+
     /// Compare-match interrupts stay pending while the flag and its enable
     /// are both set, including when firmware sets the enable after the flag.
     fn sync_timer2_irq(&mut self) {
@@ -1600,8 +1788,23 @@ impl Avr {
             if ticks > 0 {
                 self.t2_absorb(t2_ctc_closed(self.tcnt2, ticks, self.ocr2a, self.ocr2b));
             }
+        } else if self.t2_is_phase_correct() {
+            // OCF2x on the match on either slope, TOV2 at BOTTOM.
+            let phase = dual_phase(u64::from(self.tcnt2), self.t2_down, 0xFF);
+            let (tcnt, down) = dual_from_phase((phase + ticks) % 0x1FE, 0xFF);
+            let step = T2Step {
+                tcnt: tcnt as u8,
+                ocfa: dual_hits(phase, ticks, 0xFF, u64::from(self.ocr2a)),
+                ocfb: dual_hits(phase, ticks, 0xFF, u64::from(self.ocr2b)),
+                tov: dual_hits(phase, ticks, 0xFF, 0),
+            };
+            self.t2_absorb(step);
+            self.t2_down = down;
         } else {
             self.t2_absorb(t2_normal_closed(self.tcnt2, ticks, self.ocr2a, self.ocr2b));
+        }
+        if !self.t2_is_phase_correct() {
+            self.t2_down = false;
         }
         self.sync_timer2_irq();
     }
@@ -1646,6 +1849,20 @@ impl Avr {
         let mask = self.timsk2 & (TIMSK2_OCIE2A | TIMSK2_OCIE2B | TIMSK2_TOIE2);
         if mask == 0 {
             return None;
+        }
+        if self.t2_is_phase_correct() {
+            let phase = dual_phase(u64::from(self.tcnt2), self.t2_down, 0xFF);
+            let n = [
+                (TIMSK2_OCIE2A, u64::from(self.ocr2a)),
+                (TIMSK2_OCIE2B, u64::from(self.ocr2b)),
+                (TIMSK2_TOIE2, 0),
+            ]
+            .into_iter()
+            .filter(|(bit, _)| mask & bit != 0)
+            .filter_map(|(_, target)| dual_dist(phase, 0xFF, target))
+            .min()?;
+            let cycles = n * div - u64::from(self.t2_prescale_acc).min(div - 1);
+            return Some(cycles.max(1));
         }
         let ctc = self.t2_is_ctc();
         let mut tcnt = self.tcnt2;
@@ -1832,6 +2049,15 @@ impl Avr {
                 if self.is_avrxt() && addr >= AVR_EEPROM_VMA_BIAS {
                     continue;
                 }
+                // `EEMEM` goes to the data EEPROM, never into SRAM or I/O.
+                if addr >= AVR_EEPROM_VMA_BIAS {
+                    for (i, b) in seg.data.iter().enumerate() {
+                        if let Some(cell) = self.eeprom.data.get_mut(d as usize + i) {
+                            *cell = *b;
+                        }
+                    }
+                    continue;
+                }
                 // Data / EEPROM space (biased VMA from avr-gcc).
                 for (i, b) in seg.data.iter().enumerate() {
                     let a = d as u16 + i as u16;
@@ -1861,6 +2087,20 @@ impl Avr {
     /// is one. A refused write on a bus that does have the window is an error.
     fn usart_mirror_write(bus: &mut dyn Bus, reg: u64, value: u8) -> SimResult<()> {
         if Self::usart_on_bus(bus) {
+            bus.write_u8(AVR_IO_MIRROR_BASE + reg, value)?;
+        }
+        Ok(())
+    }
+
+    /// Whether the bus maps the ATmega328PB USART1 host window.
+    fn usart1_on_bus(bus: &dyn Bus) -> bool {
+        bus.has_mmio_window(AVR_IO_MIRROR_BASE + 0xC8)
+    }
+
+    /// Forward a USART1 register write when the chip descriptor has a host
+    /// UART window. A refused write on a mapped window is an error.
+    fn usart1_mirror_write(bus: &mut dyn Bus, reg: u64, value: u8) -> SimResult<()> {
+        if Self::usart1_on_bus(bus) {
             bus.write_u8(AVR_IO_MIRROR_BASE + reg, value)?;
         }
         Ok(())
@@ -1953,6 +2193,9 @@ impl Avr {
             self.sync_timer2_irq();
         }
         self.timer1_vector_entered(vec);
+        if vec == wdt::VEC_WDT && self.wdt.handles(wdt::ADDR_WDTCSR) {
+            self.wdt_vector_entered();
+        }
         // ... and the INTn / PCIFn flag of an external or pin-change vector.
         self.ext_vector_entered(vec);
         self.push_pc(bus)?;
@@ -2189,7 +2432,8 @@ impl Cpu for Avr {
     /// A core stopped by `SLEEP` may be skipped until the next thing that can
     /// wake it: a Timer0 overflow or a Timer1/Timer2 compare/overflow with its
     /// interrupt enabled (while clk_I/O runs), or a pad change seen at a later
-    /// boundary. Nothing to skip when an interrupt is already takeable, or a
+    /// boundary, or the end of an EEPROM write while `EERIE` waits on it.
+    /// Nothing to skip when an interrupt is already takeable, or a
     /// watched pad moved since the last sample, or the USART receive interrupt
     /// is on.
     fn idle_fast_forward_budget(&self, bus: &dyn Bus) -> Option<u64> {
@@ -2207,6 +2451,8 @@ impl Cpu for Avr {
                 self.timer0_wake_cycles(),
                 self.timer1_wake_cycles(),
                 self.timer2_wake_cycles(),
+                self.wdt.wake_cycles(self.cycles),
+                self.eeprom.ready_wake_cycles(self.cycles),
             ]
             .into_iter()
             .flatten()
@@ -2247,6 +2493,7 @@ impl Cpu for Avr {
             bus.set_pull_ups_disabled(false);
         }
         *mcucr = 0;
+        self.reset_ports(bus);
         self.r = [0; 32];
         self.pc = 0;
         self.sp = self.ramend;
@@ -2268,6 +2515,7 @@ impl Cpu for Avr {
         self.tifr2 = 0;
         self.assr = 0;
         self.t2_prescale_acc = 0;
+        self.t2_down = false;
         self.t1 = timer1::Timer1::default();
         self.oc_mask = [0; 2];
         self.oc_level = [0; 2];
@@ -2287,6 +2535,8 @@ impl Cpu for Avr {
         self.twi_phase = TwiPhase::Idle;
         self.twi_slave = None;
         self.ext_reset();
+        self.wdt_after_reset();
+        self.eeprom.reset();
         self.irq_shadow = false;
         // Keep attached SPI/I2C slaves across reset (same wiring as real board).
         Ok(())
@@ -2301,6 +2551,8 @@ impl Cpu for Avr {
             crate::power::SupplyResetCause::PowerOn => *flags = 1, // PORF
             crate::power::SupplyResetCause::BrownOut => *flags |= 1 << 2, // BORF
         }
+        // A power-on clears WDRF, which releases the forced WDE.
+        self.wdt_after_reset();
     }
 
     /// One instruction, plus the standardized instruction trace.
@@ -2326,6 +2578,12 @@ impl Cpu for Avr {
     ) -> SimResult<()> {
         let before = self.cycles;
 
+        // A watchdog time-out: the interrupt is raised below like any other,
+        // a system reset restarts the core at this boundary.
+        if self.wdt_poll(bus)? {
+            return Ok(());
+        }
+
         // RX-complete interrupt: level-sensitive on RXC0 while RXCIE0 is set.
         // The queue lives on the bus-side USART model, so look at it every 32nd
         // step instead of every one: a few microseconds of latency at 16 MHz,
@@ -2350,6 +2608,11 @@ impl Cpu for Avr {
             && bus.read_u8(AVR_IO_MIRROR_BASE + 0xC0)? & UCSRA_RXC == 0
         {
             self.pending_irq &= !(1u64 << VEC_USART_RX);
+        }
+
+        // EE_READY: level-sensitive on EERIE with no write in progress.
+        if self.eeprom.irq_watched() || self.pending_irq & (1u64 << eeprom::VEC_EE_READY) != 0 {
+            self.sync_eeprom_irq();
         }
 
         // INT0/INT1 and PCINT: sample the pads at this boundary.
@@ -2442,7 +2705,14 @@ impl Cpu for Avr {
         // The INC/RJMP spin touches no bus, so it can never push a pad edge:
         // it stays available under push capture, as long as the tap clock is
         // carried across the cycles it retires.
-        if config.batch_mode_enabled && observers.is_empty() && timer_stopped && !irq_takeable {
+        // A running watchdog must see every boundary its time-out can land on.
+        let wdt_stopped = self.wdt.wake_cycles(self.cycles).is_none();
+        if config.batch_mode_enabled
+            && observers.is_empty()
+            && timer_stopped
+            && wdt_stopped
+            && !irq_takeable
+        {
             let cycles_before = self.cycles;
             let retired = self.try_run_inc_rjmp_spin(max_count);
             if retired > 0 {
@@ -2546,6 +2816,8 @@ impl Cpu for Avr {
     }
 }
 
+#[path = "avr/eeprom.rs"]
+mod eeprom;
 #[path = "avr/exec/mod.rs"]
 mod exec;
 #[path = "avr/ext_int.rs"]
@@ -2554,6 +2826,8 @@ mod ext_int;
 mod oc_pins;
 #[path = "avr/timer1.rs"]
 mod timer1;
+#[path = "avr/wdt.rs"]
+mod wdt;
 pub use ext_int::{VEC_INT0, VEC_INT1, VEC_PCINT0, VEC_PCINT1, VEC_PCINT2};
 
 #[cfg(test)]
@@ -2565,6 +2839,7 @@ mod tests {
 
     struct MockBus {
         mem: HashMap<u64, u8>,
+        mmio_bases: Vec<u64>,
         config: SimulationConfig,
     }
 
@@ -2572,6 +2847,7 @@ mod tests {
         fn new() -> Self {
             Self {
                 mem: HashMap::new(),
+                mmio_bases: Vec::new(),
                 config: SimulationConfig::default(),
             }
         }
@@ -2593,6 +2869,9 @@ mod tests {
         }
         fn config(&self) -> &SimulationConfig {
             &self.config
+        }
+        fn has_mmio_window(&self, addr: u64) -> bool {
+            self.mmio_bases.contains(&addr)
         }
     }
 
@@ -2955,6 +3234,15 @@ mod tests {
             cpu.step(&mut bus, &[], &cfg).unwrap();
         }
         assert_eq!(u16::from(cpu.adch) << 8 | u16::from(cpu.adcl), 225);
+
+        // REFS=11, MUX=0x08 is the temperature sensor against 1.1 V: the
+        // typical 314 mV at +25 °C, 314 * 1024 / 1100 = 292.
+        cpu.load_words(0, &[0xEC08, 0x9300, 0x007C, 0xEC10, 0x9310, 0x007A, 0xCFFF]);
+        cpu.set_pc(0);
+        for _ in 0..4 {
+            cpu.step(&mut bus, &[], &cfg).unwrap();
+        }
+        assert_eq!(u16::from(cpu.adch) << 8 | u16::from(cpu.adcl), 292);
     }
 
     #[test]
@@ -3217,6 +3505,82 @@ mod tests {
         }
     }
 
+    /// Phase-correct (WGM 1) against a one-clock-at-a-time dual-slope
+    /// reference: 0..=255 up, 254..=1 down, OCF2x on the match on either
+    /// slope, TOV2 at BOTTOM.
+    #[test]
+    fn timer2_phase_correct_counts_up_and_back_down() {
+        let reference = |mut tcnt: u8, mut down: bool, ocr_a: u8, ocr_b: u8, ticks: u64| {
+            let (mut ocfa, mut ocfb, mut tov) = (false, false, false);
+            for _ in 0..ticks {
+                if tcnt == 0xFF {
+                    down = true;
+                }
+                if tcnt == 0 {
+                    down = false;
+                }
+                tcnt = if down { tcnt - 1 } else { tcnt + 1 };
+                ocfa |= tcnt == ocr_a;
+                ocfb |= tcnt == ocr_b;
+                tov |= tcnt == 0;
+            }
+            let down = down && tcnt != 0 && tcnt != 0xFF;
+            (tcnt, down, ocfa, ocfb, tov)
+        };
+        let cases = [
+            (0u8, false, 128u8, 0u8, 255u64),
+            (0, false, 128, 0, 256),
+            (0, false, 128, 0, 509),
+            (0, false, 128, 0, 510),
+            (200, true, 199, 201, 1),
+            (200, true, 10, 255, 150),
+            (255, false, 254, 1, 3),
+            (7, false, 255, 0, 510 * 4 + 300),
+            (1, true, 1, 2, 1),
+        ];
+        for (start, down, ocr_a, ocr_b, ticks) in cases {
+            let want = reference(start, down, ocr_a, ocr_b, ticks);
+            let mut cpu = Avr::new();
+            cpu.tccr2a = 0x01;
+            cpu.tccr2b = 1;
+            cpu.ocr2a = ocr_a;
+            cpu.ocr2b = ocr_b;
+            cpu.tcnt2 = start;
+            cpu.t2_down = down;
+            cpu.tick_timer2(ticks as u32);
+            let got = (
+                cpu.tcnt2,
+                cpu.t2_down,
+                cpu.tifr2 & TIFR2_OCF2A != 0,
+                cpu.tifr2 & TIFR2_OCF2B != 0,
+                cpu.tifr2 & TIFR2_TOV2 != 0,
+            );
+            assert_eq!(
+                got, want,
+                "start={start} down={down} ocr={ocr_a}/{ocr_b} ticks={ticks}"
+            );
+        }
+    }
+
+    /// Arduino `init()` puts Timer2 in phase-correct clk/64: TOV2 every
+    /// 64 * 510 = 32,640 CPU cycles (490 Hz on D3/D11), not 64 * 256.
+    #[test]
+    fn timer2_phase_correct_overflow_period_is_510_clocks() {
+        let mut cpu = Avr::new();
+        cpu.tccr2a = 0x01;
+        cpu.tccr2b = 0x04; // clk/64
+        cpu.timsk2 = TIMSK2_TOIE2;
+        cpu.sreg |= 0x80;
+        assert_eq!(cpu.timer2_wake_cycles(), Some(32_640));
+        cpu.tick_timer2(32_640 - 64);
+        assert_eq!(
+            (cpu.tcnt2, cpu.t2_down, cpu.tifr2 & TIFR2_TOV2),
+            (1, true, 0)
+        );
+        cpu.tick_timer2(64);
+        assert_eq!((cpu.tcnt2, cpu.tifr2 & TIFR2_TOV2), (0, TIFR2_TOV2));
+    }
+
     /// Arduino `tone(6, 700, _)` at 16 MHz lands on OCR2A = 177, clk/64.
     /// Matches are (OCR+1) * prescaler CPU cycles apart.
     #[test]
@@ -3400,6 +3764,86 @@ mod tests {
             assert_ne!(cpu.data_read(0xC0, &bus).unwrap() & UCSRA_UDRE, 0);
         }
         assert_eq!(cpu.serial_tx, b"Hi");
+    }
+
+    #[test]
+    fn atmega328pb_selects_shared_geometry_and_routes_usart1() {
+        use crate::bus::SystemBus;
+        use labwired_config::{ChipDescriptor, SystemManifest};
+
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let chip_path = root.join("configs/chips/atmega328pb.yaml");
+        let chip = ChipDescriptor::from_file(&chip_path).expect("atmega328pb config");
+        let manifest = SystemManifest {
+            cosim_models: Vec::new(),
+            motor_models: Vec::new(),
+            walk_deleted: Some(false),
+            schema_version: "1.0".to_string(),
+            name: "atmega328pb-usart1-smoke".to_string(),
+            chip: chip_path.to_string_lossy().to_string(),
+            cpu_hz: Some(16_000_000),
+            external_devices: Vec::new(),
+            board_io: Vec::new(),
+            debug_uart: None,
+            wifi_ap: None,
+            peripherals: Vec::new(),
+            parts: Default::default(),
+            memory_overrides: Default::default(),
+        };
+        let mut bus = SystemBus::from_config(&chip, &manifest).expect("PB bus");
+        let usart1 = AVR_IO_MIRROR_BASE + 0xC8;
+        assert!(
+            bus.has_mmio_window(usart1),
+            "USART1 host window must be mapped"
+        );
+        assert!(
+            bus.has_mmio_window(AVR_IO_MIRROR_BASE + 0xC0),
+            "USART0 remains a separate window"
+        );
+
+        let mut cpu = Avr::for_chip_name("ATmega328PB-AU");
+        assert_eq!(cpu.model, AvrModel::Atmega328pb);
+        assert_eq!(cpu.flash.len(), 32 * 1024);
+        assert_eq!(cpu.sram.len(), 2 * 1024);
+        assert_eq!(cpu.sp, 0x08FF);
+        let console = Arc::new(Mutex::new(Vec::new()));
+        cpu.set_serial_sink(Arc::clone(&console));
+
+        // Execute a small AVR firmware image: configure U2X1, USART1 TX/RX,
+        // and UBRR1, then write 'P' through UDR1. STS is the 328PB data-space
+        // access used by avr-gcc for this extended I/O window.
+        cpu.load_words(
+            0,
+            &[
+                0xE002, 0x9300, 0x00C8, // LDI r16,2; STS UCSR1A,r16
+                0xE108, 0x9300, 0x00C9, // LDI r16,0x18; STS UCSR1B,r16
+                0xE007, 0x9300, 0x00CC, // LDI r16,7; STS UBRR1L,r16
+                0xE000, 0x9300, 0x00CD, // LDI r16,0; STS UBRR1H,r16
+                0xE500, 0x9300, 0x00CE, // LDI r16,'P'; STS UDR1,r16
+            ],
+        );
+        for _ in 0..10 {
+            cpu.step(&mut bus, &[], &SimulationConfig::default())
+                .unwrap();
+        }
+
+        assert_eq!(cpu.serial_tx, b"P");
+        assert_eq!(*console.lock().unwrap(), b"P");
+        assert_ne!(cpu.data_read(0xC8, &bus).unwrap() & UCSRA_UDRE, 0);
+        assert_ne!(cpu.data_read(0xC8, &bus).unwrap() & UCSRA_TXC, 0);
+
+        // RXC1 and UDR1 come from the second bus-side USART, not USART0.
+        let mut rx_bus = MockBus::new();
+        rx_bus.mmio_bases.push(usart1);
+        rx_bus.mem.insert(usart1, UCSRA_RXC);
+        rx_bus.mem.insert(usart1 + 6, b'R');
+        assert_ne!(cpu.data_read(0xC8, &rx_bus).unwrap() & UCSRA_RXC, 0);
+        assert_eq!(cpu.data_read(0xCE, &rx_bus).unwrap(), b'R');
+
+        // The 328P does not acquire the PB-only USART1 window by fallback.
+        let mut p = Avr::for_chip_name("atmega328p");
+        p.data_write(0xCE, b'X', &mut rx_bus).unwrap();
+        assert!(p.serial_tx.is_empty());
     }
 
     #[test]
@@ -3997,7 +4441,7 @@ mod tests {
         );
     }
 
-    /// LedControl never touches SPDR — it bit-bangs CS/MOSI/SCK with SPE=0.
+    /// The supported LedControl(11, 13, 10, 1) mapping bit-bangs with SPE=0.
     /// Soft-SPI after PORTB must latch a MAX7219 digit into the parking kit.
     #[test]
     fn soft_spi_portb_bitbang_paints_parking_max7219() {

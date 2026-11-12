@@ -1,0 +1,10 @@
+# Realtime-factor workload system: Pico + SSD1306 on I2C0 (GP4/GP5, 0x3C).
+name: "rtf-pico-oled-pwm"
+chip: "../../../../configs/chips/rp2040.yaml"
+external_devices:
+  - id: "oled"
+    type: "oled-ssd1306"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x3C
+board_io: []

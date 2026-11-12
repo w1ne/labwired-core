@@ -7,7 +7,7 @@ Legend: ✅ pass · 🔧 compile/build fail · 📦 toolchain missing · 🔴 bo
 | chip | L0_serial_boot | L1_serial_loop | L2_blink_serial | L3_i2c_sensor | L4_spi_sensor | L5_adc | L6_pwm | L7_timer | L8_can | notes |
 |------|------|------|------|------|------|------|------|------|------|-------|
 | `esp32` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |  |
-| `esp32c3` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⏭️ | L8_can:skipped |
+| `esp32c3` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |  |
 | `esp32s3` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |  |
 | `nrf52832` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⏭️ | L8_can:skipped |
 | `nrf52840` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⏭️ | L8_can:skipped |
@@ -26,19 +26,16 @@ Legend: ✅ pass · 🔧 compile/build fail · 📦 toolchain missing · 🔴 bo
 ## Summary
 
 - Cells: **144**
-- **pass: 133** · **skip: 11** · **fail: 0**
+- **pass: 134** · **skip: 10** · **fail: 0**
 
 ### Status breakdown
 
-- `pass`: 133
-- `skipped`: 11
+- `pass`: 134
+- `skipped`: 10
 
 _Skips are explicit `boards.yaml` gaps (honest non-runs). Do not report pass+skip as a single “green” total._
 
 ## Non-pass detail (fails + skips)
-
-### `esp32c3` × `L8_can` → **skipped**
-TWAI0 declarative-only (no self-RX model for matrix L8)
 
 ### `nrf52832` × `L8_can` → **skipped**
 No on-chip CAN model

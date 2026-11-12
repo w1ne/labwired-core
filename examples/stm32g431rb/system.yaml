@@ -1,0 +1,5 @@
+# LabWired — STM32G431RB system manifest (NUCLEO-G431RB geometry).
+name: "stm32g431rb"
+chip: "../../configs/chips/stm32g431rb.yaml"
+external_devices: []
+board_io: []

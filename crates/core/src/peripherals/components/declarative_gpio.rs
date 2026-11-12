@@ -213,12 +213,16 @@ impl DeclarativeGpioDevice {
             listens_for_pin_sets,
             moved: Vec::new(),
             seed_input_clamp: descriptor.behavior.seed_input_clamp,
+            // Pin/Pins *and* Input count as host/firmware-clocked: no
+            // autonomous timer of the part's own. Open-drain matrix parts
+            // (keypad) still need the tick — see `needs_per_cycle_service`.
             grid_eligible: descriptor.behavior.timers.is_empty()
-                && descriptor
-                    .behavior
-                    .rules
-                    .iter()
-                    .all(|r| matches!(r.on, Event::Pin { .. } | Event::Pins { .. })),
+                && descriptor.behavior.rules.iter().all(|r| {
+                    matches!(
+                        r.on,
+                        Event::Pin { .. } | Event::Pins { .. } | Event::Input { .. }
+                    )
+                }),
             schedules: descriptor.behavior.schedules.clone(),
             schedule_bank: ScheduleBank::default(),
             schedule_fault: None,
@@ -374,6 +378,12 @@ impl DeclarativeGpioDevice {
         let pin = &self.driven[i];
         let _ = pins.drive_input_bit(pin.addr, pin.bit, level);
         pins.drive_idr_bit(pin.addr, pin.bit, level);
+    }
+
+    fn samples_open_drain(&self) -> bool {
+        self.pin_sampling
+            .values()
+            .any(|s| *s == labwired_config::PinSampling::OpenDrainRelease)
     }
 
     /// Read-only view of the rule machine, for tests and diagnostics.
@@ -658,30 +668,42 @@ impl BusResidentDevice for DeclarativeGpioDevice {
     /// ⚠️ STATED, not inherited, and the two halves of the condition are each a
     /// fact a default would get wrong.
     ///
-    /// A part that owns NO TIMER and DRIVES NO PAD can only change when
-    /// firmware stores to an output register, and `edge_service_addrs` already
-    /// services it synchronously inside that store. A tick pass would resample
-    /// pads that cannot have moved. The TM1637 and the bare 7-segment digit are
-    /// both this, and their hand-written predecessors each said so by hand —
-    /// left at the trait's `true`, a board carrying either would force
-    /// `requires_cycle_accurate()` and pin `max_safe_tick_interval()` to 1: a
-    /// performance regression against the models they replace, invisible to
-    /// every behavioural test.
+    /// A part that owns NO TIMER and is only pin/input-clocked (`grid_eligible`)
+    /// can only change when firmware stores to an output register or the host
+    /// writes a stimulus channel — *unless* it samples open-drain nets. The
+    /// TM1637 and bare 7-segment digit are the pure edge/stimulus class:
+    /// `edge_service_addrs` covers the store path and `set_input` flush covers
+    /// stimulus. A tick pass would resample pads that cannot have moved. Left
+    /// at the trait's `true`, a board carrying either would force
+    /// `requires_cycle_accurate()` and pin `max_safe_tick_interval()` to 1.
+    ///
+    /// A membrane keypad is *not* that class: its rows/cols use
+    /// `open_drain_release` sampling, so the net level can move without an MMIO
+    /// edge the write hook sees. It must keep the per-cycle pass (trait default
+    /// `true`), matching the oracle keypad and `keypad_migration_parity`.
     ///
     /// ⚠️ A `gpio_device` with `timers:` MUST NOT say false — its clock only
-    /// advances on the tick — and one that DRIVES a pad must not either, since
-    /// the level it answers with is put on the pad by this same pass. The HX711
-    /// is both, and answers `true` through this expression rather than through
-    /// an override somebody has to remember.
+    /// advances on the tick. Exact-timing schedules (DHT) also stay true:
+    /// `has_grid_schedules()` is false for them. The HX711 answers `true`
+    /// through timers rather than an override somebody has to remember.
     // Grid-only finite schedules are serviced by resident deadlines when every
     // other action is synchronous with a host pad write. The bus separately
     // gates batching on its scheduler, timer, and live-cycle capabilities.
     fn needs_per_cycle_service(&self) -> bool {
+        // Exact-timing schedules (DHT22 `timing: exact`) still need the tick —
+        // their bitbang clock is not a PeripheralTickGrid resident deadline.
+        // Empty schedules or all-grid schedules may opt out when the part is
+        // otherwise pin/input-clocked *and* does not sample open-drain nets:
+        // edge_service_addrs + set_input flush cover every change. Open-drain
+        // matrix parts (keypad) stay on the tick.
         !self.timers.is_empty()
-            || !(self.driven.is_empty() || self.has_grid_schedules() && self.grid_eligible)
+            || !(self.driven.is_empty()
+                || self.grid_eligible
+                    && !self.samples_open_drain()
+                    && (self.schedules.is_empty() || self.has_grid_schedules()))
     }
 
-    /// No timers and only pad-edge rules (`grid_eligible`) means every change
+    /// No timers and only pad/input rules (`grid_eligible`) means every change
     /// this part makes on its own is a schedule edge, and every pad edge is
     /// serviced from the write hook. So it is idle exactly when no schedule
     /// edge is pending: a DHT22 between reads, not during one.
@@ -945,6 +967,16 @@ pub(crate) fn validate_rule_names(desc: &DeviceDescriptor) -> Result<()> {
     let vars: Vec<String> = b.vars.keys().cloned().collect();
     let fifos: Vec<String> = b.fifos.iter().map(|f| f.name.clone()).collect();
     let timers: Vec<String> = b.timers.iter().map(|t| t.name.clone()).collect();
+    // Only the I2C engine emits conversion events. An unused i2c block on
+    // another primitive must not make a dead subscription appear valid.
+    let data_ready: Vec<String> = if b.primitive == "i2c_device" {
+        b.i2c
+            .iter()
+            .flat_map(|spec| spec.data_ready.iter().map(|rule| rule.name.clone()))
+            .collect()
+    } else {
+        Vec::new()
+    };
     let pins: Vec<String> = b.pin_names();
     let inputs: Vec<String> = desc
         .metadata
@@ -973,6 +1005,7 @@ pub(crate) fn validate_rule_names(desc: &DeviceDescriptor) -> Result<()> {
             vars: &vars,
             fifos: &fifos,
             timers: &timers,
+            data_ready: &data_ready,
             outputs: &b.outputs,
             inputs: &inputs,
             pins: &pins,
@@ -1090,6 +1123,54 @@ metadata:
   inputs:
     - { key: weight, label: W, unit: g, min: 0, max: 10, default: 1 }
 "#;
+
+    #[test]
+    fn non_i2c_primitives_reject_data_ready_even_with_an_unused_i2c_block() {
+        let i2c: labwired_config::I2cSpec = serde_yaml::from_str(
+            r#"
+default_address: 0x29
+registers:
+  - { name: START, addr: 0, width: 1, endian: be, access: rw, reset: 0 }
+  - { name: READY, addr: 1, width: 1, endian: be, access: r, reset: 0 }
+data_ready:
+  - name: sample
+    start_register: START
+    start_mask: 1
+    ready_register: READY
+    ready_mask: 1
+    conversion_us: 10
+"#,
+        )
+        .unwrap();
+        let subscription: labwired_config::Rule =
+            serde_yaml::from_str("{ on: { data_ready: sample }, do: [] }").unwrap();
+
+        for fixture in [FIXTURE, include_str!("declarative_spi_fixture.yaml")] {
+            for with_i2c_block in [false, true] {
+                let mut desc = DeviceDescriptor::from_yaml(fixture).unwrap();
+                if with_i2c_block {
+                    desc.behavior.i2c = Some(i2c.clone());
+                }
+                let validate = |desc: &DeviceDescriptor| match desc.behavior.primitive.as_str() {
+                    "gpio_device" => validate_descriptor(desc),
+                    "spi_device" => super::super::declarative_spi::validate_descriptor(desc),
+                    _ => unreachable!("test uses only GPIO and SPI fixtures"),
+                };
+                validate(&desc).expect("legacy descriptor without a subscription remains valid");
+                desc.behavior.rules.push(subscription.clone());
+                let error = format!(
+                    "{:#}",
+                    validate(&desc).expect_err("non-I2C conversion subscription must fail")
+                );
+                assert!(
+                    error.contains("on.data_ready")
+                        && error.contains("no data-ready conversion named 'sample'"),
+                    "{}, with_i2c_block {with_i2c_block}: {error}",
+                    desc.behavior.primitive
+                );
+            }
+        }
+    }
 
     /// A [`DevicePins`] over a flat word map, so a test can drive an "MCU
     /// output" and read back what the device drove without a whole bus.
@@ -1542,5 +1623,79 @@ behavior:
         let err = validate_descriptor(&desc).unwrap_err();
         let text = format!("{err:#}");
         assert!(text.contains("rules[0].when"), "{text}");
+    }
+
+    #[test]
+    fn lm393_moisture_dout_tracks_moisture_vs_threshold() {
+        let desc = DeviceDescriptor::embedded("lm393-moisture")
+            .unwrap()
+            .expect("lm393-moisture is embedded");
+        validate_descriptor(&desc).expect("descriptor validates");
+        let mut dev = DeclarativeGpioDevice::new(
+            "moist".into(),
+            &desc,
+            Vec::new(),
+            vec![BoundPin {
+                role: "DOUT".into(),
+                addr: 0x2000,
+                bit: 0,
+            }],
+            16_000_000,
+            super::super::declarative_i2c::owned_channels(&desc),
+        )
+        .expect("constructs");
+        let mut pads = FakePads::default();
+
+        // Default moisture 0 (dry) → pin_defaults DOUT HIGH; service flushes.
+        dev.service(&mut pads, 0);
+        assert_eq!(
+            pads.output_bit(0x2000, 0),
+            Some(true),
+            "dry default → DOUT HIGH"
+        );
+
+        // Acc "moisture DOUT HIGH" → moisture 0 stays HIGH.
+        SimInput::set_input(&mut dev, "moisture", 0.0).unwrap();
+        dev.service(&mut pads, 1);
+        assert_eq!(
+            pads.output_bit(0x2000, 0),
+            Some(true),
+            "moisture 0 → DOUT HIGH"
+        );
+
+        // Just under the fixed 50 % threshold stays dry.
+        SimInput::set_input(&mut dev, "moisture", 49.0).unwrap();
+        dev.service(&mut pads, 2);
+        assert_eq!(
+            pads.output_bit(0x2000, 0),
+            Some(true),
+            "moisture 49 → DOUT HIGH"
+        );
+
+        // At/above threshold → wet → DOUT LOW (Acc "moisture DOUT LOW" → 100).
+        SimInput::set_input(&mut dev, "moisture", 50.0).unwrap();
+        dev.service(&mut pads, 3);
+        assert_eq!(
+            pads.output_bit(0x2000, 0),
+            Some(false),
+            "moisture 50 → DOUT LOW"
+        );
+
+        SimInput::set_input(&mut dev, "moisture", 100.0).unwrap();
+        dev.service(&mut pads, 4);
+        assert_eq!(
+            pads.output_bit(0x2000, 0),
+            Some(false),
+            "moisture 100 → DOUT LOW"
+        );
+
+        // Back to dry.
+        SimInput::set_input(&mut dev, "moisture", 0.0).unwrap();
+        dev.service(&mut pads, 5);
+        assert_eq!(
+            pads.output_bit(0x2000, 0),
+            Some(true),
+            "moisture 0 again → DOUT HIGH"
+        );
     }
 }

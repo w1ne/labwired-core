@@ -1627,29 +1627,49 @@
       "device_type": "iolink-master",
       "label": "IO-Link Master",
       "summary": "IO-Link master state machine over UART.",
-      "detail": "Drives wake-up / startup / operate cycles, m-sequence types, process-data exchange. The IO-Link DI/DO device demo uses this to host two digital-input channels.",
+      "detail": "Tick-paced IO-Link test peer with bounded process-data framing. Supports TYPE_2_1/2/variable and the legacy LabWired receive-only demo envelope. The opt-in tiol112-eval profile waits for explicit Start, schedules logical WAKE, validates DPP, and alternates TYPE_2_V PD reads/writes at the advertised minimum cycle. This peer does not prove physical baud timing, tA, master conformance, ISDU service execution, or Beckhoff compatibility.",
       "transport": "uart",
       "category": "uart",
       "config_keys": [
         {
+          "name": "startup_profile",
+          "ty": "str",
+          "doc": "legacy (default) or tiol112-eval. Evaluation requires a TIOL112 attached earlier to the same UART, PDin32/PDout1/TYPE_2_V/OD1 and COM2/3. Explicit start input schedules a logical 1ms WAKE, validated DPP reads and DeviceOperate; cyclic ISDU-IDLE read/write PD follows. It does not execute ISDU services."
+        },
+        {
           "name": "pd_in_len",
           "ty": "int",
-          "doc": "Process-data input length in bytes. Defaults to 1 (single-byte DI device)."
+          "doc": "Process-data input length, 0..32 bytes. Default 1. Must match the selected M-sequence."
+        },
+        {
+          "name": "pd_out_len",
+          "ty": "int",
+          "doc": "Process-data output length, 0..32 bytes. Default 0; initialized to zero and changeable through set_process_data_output."
         },
         {
           "name": "m_seq_type",
           "ty": "int",
-          "doc": "M-sequence type (1..6). Used to derive od_len: one OD octet, or two for TYPE_2_V (Table A.10)."
+          "doc": "Engine enum: 1=legacy receive-only demo (default), 4=TYPE_2_1, 5=TYPE_2_2, 6=TYPE_2_V. This is NOT the DPP capability code. Other values are rejected."
+        },
+        {
+          "name": "pd_out_pattern",
+          "ty": "str",
+          "doc": "Optional demo stimulus: constant (default) or counter. Counter increments the first PD output octet once per queued OPERATE frame; requires pd_out_len >= 1."
+        },
+        {
+          "name": "od_len",
+          "ty": "int",
+          "doc": "On-request octets: TYPE_2_V permits 1, 2, 8, 32; other supported modes require 1. Default 2 for TYPE_2_V, otherwise 1. Long-PD TYPE_2_V OD1 corresponds to DPP capability code 4."
         },
         {
           "name": "com",
           "ty": "str",
-          "doc": "Communication speed: \"COM1\" (4.8 kbaud), \"COM2\" (38.4 kbaud, default), or \"COM3\" (230.4 kbaud)."
+          "doc": "Communication speed: COM1, COM2 (default), or COM3. Legacy mode treats it as metadata; tiol112-eval paces bytes in simulated time and reports the baud to the UART guard. No physical timing claim."
         },
         {
           "name": "frame_gap_ticks",
           "ty": "int",
-          "doc": "Inter-frame gap in UART ticks (default 6000). A faster -O2 device can use a small gap so many cyclic reads fit the step budget."
+          "doc": "Legacy inter-frame gap in UART polls, 1..4294967295 (default 6000). Not a cycle time in microseconds. Cannot be specified for tiol112-eval, which honors device MinCycleTime."
         }
       ],
       "labs": [
@@ -1660,7 +1680,80 @@
           "demo_elf": "demo-iolink-dido.elf"
         }
       ],
-      "inputs": []
+      "inputs": [
+        {
+          "key": "start",
+          "label": "Start TIOL112 evaluation (logical WAKE then DPP)",
+          "unit": "bool",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.0
+        }
+      ]
+    },
+    {
+      "device_type": "tiol112",
+      "label": "TIOL112",
+      "summary": "TI IO-Link digital transceiver: EN, inverted CQ, WAKE and NFAULT.",
+      "detail": "Digital behavior from TI SLLSFJ1D. Timed UART models TX/RX propagation; ordinary streams are byte-functional. Analog electrical behavior, wake-current detection and enable-time bounds are not modeled.",
+      "transport": "uart",
+      "category": "uart",
+      "config_keys": [
+        {
+          "name": "en",
+          "ty": "str",
+          "doc": "Required driver-enable pad, or high/low rail. Low releases CQ."
+        },
+        {
+          "name": "wake",
+          "ty": "str",
+          "doc": "Optional WAKE active-low output pad, ideal pull-up."
+        },
+        {
+          "name": "nfault",
+          "ty": "str",
+          "doc": "Optional NFAULT active-low output pad, ideal pull-up."
+        },
+        {
+          "name": "driver_delay_ns",
+          "ty": "int",
+          "doc": "Timed-mode TX-to-CQ propagation, 0..1200 ns; default datasheet maximum1200."
+        },
+        {
+          "name": "receiver_delay_ns",
+          "ty": "int",
+          "doc": "Timed-mode CQ-to-RX propagation, 0..300 ns; default datasheet maximum300."
+        },
+        {
+          "name": "enable_delay_ns",
+          "ty": "int",
+          "doc": "Timed EN settling scenario, default4000ns TYPICAL, not a guaranteed maximum. Premature frames are rejected."
+        },
+        {
+          "name": "disable_delay_ns",
+          "ty": "int",
+          "doc": "Timed EN release scenario, default4000ns TYPICAL, not a guaranteed maximum."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "wake",
+          "label": "WAKE asserted",
+          "unit": "bool",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.0
+        },
+        {
+          "key": "fault",
+          "label": "NFAULT asserted",
+          "unit": "bool",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.0
+        }
+      ]
     },
     {
       "device_type": "ntc-thermistor",
@@ -2274,7 +2367,7 @@
       "device_type": "lsm303agr_accel",
       "label": "LSM303AGR accelerometer",
       "summary": "ST LSM303AGR accelerometer half over I2C (address 0x19).",
-      "detail": "micro:bit V2 motion sensor. Stimulus channels x/y/z in g, reported as left-justified 16-bit two's complement at the full scale CTRL_REG4_A selects. Sub-address bit 7 (auto-increment) is accepted. Data-ready paces at 100 Hz while ODR is non-zero (the ODR value is not decoded); BDU, FIFO, interrupts and temperature are not modelled.",
+      "detail": "micro:bit V2 motion sensor. Stimulus channels x/y/z in g, reported as left-justified 16-bit two's complement at the full scale CTRL_REG4_A selects. Sub-address bit 7 (auto-increment) is accepted. Data-ready paces at 100 Hz while ODR is non-zero (the ODR value is not decoded); Optional INT1 models DRDY1 routing, polarity and all-enabled-high-byte acknowledgement. BDU, FIFO, threshold interrupts and temperature are not modelled.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
@@ -2282,6 +2375,11 @@
           "name": "i2c_address",
           "ty": "int",
           "doc": "7-bit slave address. Defaults to 0x19."
+        },
+        {
+          "name": "int1_pin",
+          "ty": "str",
+          "doc": "Optional native INT1 output; board collector inversion is separate."
         }
       ],
       "labs": [],
@@ -2316,7 +2414,7 @@
       "device_type": "lsm303agr_mag",
       "label": "LSM303AGR magnetometer",
       "summary": "ST LSM303AGR magnetometer half over I2C (address 0x1E).",
-      "detail": "micro:bit V2 compass. Stimulus channels x/y/z in µT, reported as 16-bit two's complement at 0.15 µT/LSB. Data-ready paces at 100 Hz while MD selects continuous or single mode (ODR is not decoded); BDU, offset cancellation and interrupts are not modelled.",
+      "detail": "micro:bit V2 compass. Stimulus channels x/y/z in µT, reported as 16-bit two's complement at 0.15 µT/LSB. Data-ready paces at 100 Hz while MD selects continuous or single mode (ODR is not decoded); Optional active-high DRDY output follows conversion completion, routing enable and output-high-byte reads; candidate boundary is continuous 100 Hz with threshold routing off. BDU, offset cancellation, software reset and threshold interrupts are not modelled.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
@@ -2324,6 +2422,11 @@
           "name": "i2c_address",
           "ty": "int",
           "doc": "7-bit slave address. Defaults to 0x1E."
+        },
+        {
+          "name": "drdy_pin",
+          "ty": "str",
+          "doc": "Optional native active-high INT_MAG/DRDY output pad; board inversion is separate."
         }
       ],
       "labs": [],
@@ -2358,7 +2461,7 @@
       "device_type": "led-matrix",
       "label": "MAX7219 8×8 LED Matrix",
       "summary": "8×8 LED matrix driven by a MAX7219 serial display driver over SPI.",
-      "detail": "The common 8×8 dot-matrix module built around a MAX7219 common-cathode display driver. Firmware clocks 16 bits per transaction — an address byte then a data byte — and pulses CS/LOAD to latch. Digit registers 0x01–0x08 are the eight matrix rows, so digit RAM is the framebuffer; the model also tracks decode mode, intensity, scan limit, shutdown and display test, blanking or flooding the readback the way the real part drives the panel. A 16-bit write is latched or it never happened: an odd byte left in the shifter when CS moves is discarded rather than decoded. Cascading is modelled as a 16-bit shift-register FIFO on DOUT (latch on CS↑); chain_index orders daisy-chained modules. NOT modelled: intensity as luminance, and scan limit as multiplexing — all eight rows are published whatever it says.",
+      "detail": "The common 8×8 dot-matrix module built around a MAX7219 common-cathode display driver. Firmware clocks 16 bits per transaction — an address byte then a data byte — and pulses CS/LOAD to latch. Digit registers 0x01–0x08 are the eight matrix rows, so digit RAM is the framebuffer; the model also tracks decode mode, intensity, scan limit, shutdown and display test, blanking or flooding the readback the way the real part drives the panel. CLK shifts the 16-bit DOUT register regardless of LOAD; LOAD rising latches its last 16 bits without clearing it. Set chain_index explicitly for each module (0 nearest MOSI); topology is not inferred. The Uno software-SPI bridge requires DIN D11/PB3 and CLK D13/PB5; LOAD uses cs_pin. Sub-byte transfers and the half-cycle DOUT delay are not modeled. NOT modelled: intensity as luminance, and scan limit as multiplexing — all eight rows are published whatever it says.",
       "transport": "spi",
       "category": "spi",
       "config_keys": [
@@ -2370,7 +2473,7 @@
         {
           "name": "chain_index",
           "ty": "int",
-          "doc": "Daisy-chain position along a shared CS (0 = closest to MOSI / first in the DOUT→DIN chain). The diagram compiler sets this from DOUT→DIN topology. Defaults to 0."
+          "doc": "Daisy-chain position along a shared CS (0 = closest to MOSI / first in the DOUT→DIN chain). Set explicitly for each module; DOUT→DIN topology is not inferred. Defaults to 0."
         },
         {
           "name": "powered",
@@ -3223,7 +3326,7 @@
       "device_type": "servo",
       "label": "Hobby PWM Servo",
       "summary": "RC hobby servo driven by a single PWM control pin (GPIO edges and/or LEDC duty).",
-      "detail": "Attaches as a GPIO observer on signal_pin; optional ledc_channel binds ESP32 LEDC duty for ledcWrite paths. Type aliases sg90 / mg996r select calibration via config.model or the top-level type string.",
+      "detail": "Attaches as a GPIO observer on signal_pin; optional ledc_channel binds ESP32 LEDC duty for ledcWrite paths. Type aliases sg90 / mg996r / mg995 / mg90s select calibration via config.model or the top-level type string.",
       "transport": "gpio_group",
       "category": "gpio",
       "config_keys": [
@@ -3235,7 +3338,7 @@
         {
           "name": "model",
           "ty": "str",
-          "doc": "Calibration: sg90 | mg996r | standard. Defaults from type alias when omitted."
+          "doc": "Calibration: sg90 | mg996r | mg995 | mg90s | standard. Defaults from type alias when omitted."
         },
         {
           "name": "ledc_channel",
@@ -4050,6 +4153,63 @@
         {
           "key": "sound",
           "label": "Sound level",
+          "unit": "%",
+          "min": 0.0,
+          "max": 100.0,
+          "default": 0.0
+        }
+      ]
+    },
+    {
+      "device_type": "rain-sensor",
+      "label": "Rain Drop Sensor",
+      "summary": "Rain drop plate + LM393 module (AO on ADC; wetter → lower voltage).",
+      "detail": "Module-level model of the common rain-drop breakout (sensing plate + LM393 board): AO is a 0..Vsupply voltage that falls as the plate gets wetter. Drive the `rain` channel (0..100 %) at runtime; starts at 0 % (dry → high AO). D0 comparator output is not modelled — leave it unwired, or compare AO in firmware.",
+      "transport": "analog",
+      "category": "analog",
+      "config_keys": [
+        {
+          "name": "channel",
+          "ty": "int",
+          "doc": "ADC channel index (0..N). Defaults to 0."
+        },
+        {
+          "name": "supply_mv",
+          "ty": "float",
+          "doc": "Module supply in millivolts (default 5000)."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "rain",
+          "label": "Rain level",
+          "unit": "%",
+          "min": 0.0,
+          "max": 100.0,
+          "default": 0.0
+        }
+      ]
+    },
+    {
+      "device_type": "lm393-moisture",
+      "label": "LM393 Moisture Module",
+      "summary": "Resistive soil/moisture module with LM393 comparator DOUT (LOW=wet, HIGH=dry).",
+      "detail": "Module-level model of the common resistive soil-moisture breakout with an onboard LM393: DOUT is HIGH when the soil is drier than the (fixed 50 %) threshold and LOW when wetter. Drive the `moisture` channel (0..100 %) at runtime; starts at 0 % (dry → DOUT HIGH). AOUT is not modelled — compare DOUT in firmware, or use the capacitive `soil-moisture` part for AOUT.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "dout_pin",
+          "ty": "str",
+          "doc": "DOUT GPIO pin (e.g. \"PA0\" / \"8\"). Defaults to PA0."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "moisture",
+          "label": "Moisture",
           "unit": "%",
           "min": 0.0,
           "max": 100.0,

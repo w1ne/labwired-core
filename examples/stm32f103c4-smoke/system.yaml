@@ -1,0 +1,6 @@
+# STM32F103C4 bare-chip smoke manifest (low-density F103, demand rank #3:
+# STM32F103 is 17% of measured MCU use, JetBrains State of Embedded 2025).
+# No board: USART2 on PA2/PA3 carries the banner, PA5 toggles.
+name: "stm32f103c4-smoke"
+chip: "../../configs/chips/stm32f103c4.yaml"
+external_devices: []

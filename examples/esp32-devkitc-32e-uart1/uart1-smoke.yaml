@@ -1,0 +1,13 @@
+# ESP32-DevKitC-32E: route UART1 TX to J3 pin 12 / GPIO16.
+schema_version: "1.2"
+inputs:
+  firmware: "firmware/.pio/build/devkitc32e_uart1/firmware.elf"
+  system: "../../configs/systems/esp32-devkitc-32e-uart1.yaml"
+limits:
+  max_steps: 9000000
+assertions:
+  - uart_contains: "ESP32_DEVKITC32E_UART1_TX_OK"
+  - gpio_edges:
+      pin: "gpio:16"
+      min_edges: 32
+  - expected_stop_reason: max_steps

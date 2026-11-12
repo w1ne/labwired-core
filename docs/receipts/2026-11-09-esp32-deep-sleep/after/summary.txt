@@ -1,0 +1,2 @@
+deep_sleep_timer {"status":"pass","stop_reason":"assertions_passed","steps_executed":2027761,"system":"configs/systems/esp32-devkitc-32e-gpio-smoke.yaml","firmware_hash":"af2fe455a05bfc18df7352883e9b9a06798302fe79b980b27bc52e91f8f40c0e"}
+light_sleep_timer {"status":"pass","stop_reason":"assertions_passed","steps_executed":702155,"system":"configs/systems/esp32-devkitc-32e-gpio-smoke.yaml","firmware_hash":"bad4facd01063fad94afca6c20f23f47d1e58737d9a68b3baa5268af78e2c7d7"}

@@ -302,15 +302,20 @@ pub trait SpiDevice: Send {
         0
     }
 
-    /// Record the topology-derived [`chain_index`](Self::chain_index). No-op by
+    /// Record the configured [`chain_index`](Self::chain_index). No-op by
     /// default so hand-written stubs and test doubles stay untouched.
     fn set_chain_index(&mut self, _index: u32) {}
 
     /// True while CS is held (after [`cs_select`](Self::cs_select), before
-    /// [`cs_release`](Self::cs_release)). Parking-SPI soft bit-bang and the
-    /// daisy-chain clock path skip devices that are not selected so a CS-high
-    /// cascade cannot corrupt a neighbour's shift register.
+    /// [`cs_release`](Self::cs_release)). Parts whose latch does not gate CLK
+    /// also declare [`clocks_when_deselected`](Self::clocks_when_deselected).
     fn is_selected(&self) -> bool {
+        false
+    }
+
+    /// Whether the shift register accepts clocks while the latch pin is high.
+    /// MAX7219 LOAD only latches data; unlike MAX7221 CS, it does not gate CLK.
+    fn clocks_when_deselected(&self) -> bool {
         false
     }
 

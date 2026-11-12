@@ -249,19 +249,12 @@ pub struct FrameSpec {
     /// rejected, which is what the boundary frame exists for, and every
     /// descriptor written before this key relies on it.
     ///
-    /// A part that latches a fixed-width shift register is the opposite case. A
-    /// MAX7219 transaction is 16 bits latched on CS↑; eight clocked bits are
-    /// not half a write, they are a frame that never happened, and the
-    /// hand-written models discarded exactly this (`cs_select` resetting
-    /// `shift_len`). Delivered as a frame, a stray odd byte would decode its
-    /// low nibble as a register address and write a zero data byte into a digit
-    /// register — a row of the panel going dark because of a byte the part
-    /// never latched.
-    ///
-    /// With this set, a transaction boundary that finds fewer than
-    /// [`length`](Self::length) bytes buffered clears them and raises NOTHING;
-    /// CS↓ clears them too, so a re-assertion cannot pair an orphan byte with
-    /// the next transaction's first. Meaningless without `length`.
+    /// Transaction-framed models can discard a short message instead of
+    /// decoding a missing data byte as zero. With this set, a boundary that
+    /// finds fewer than [`length`](Self::length) bytes clears them and raises
+    /// nothing; CS↓ clears them too. Meaningless without `length`.
+    /// Continuous [`shift_register`](Self::shift_register) models retain
+    /// their register across latch edges and do not use this reset behavior.
     #[serde(default)]
     pub discard_partial: bool,
     /// **Hardware shift-register cascade (DOUT).**
@@ -270,9 +263,9 @@ pub struct FrameSpec {
     /// into a fixed-width FIFO and returns the oldest byte that shifted out —
     /// the chip's DOUT for the next device in a daisy chain. Frames are NOT
     /// closed at `length` during the transfer: the register only latches on
-    /// CS↑ (see `cs_release`), matching MAX7219 silicon. Meaningless without
-    /// `length`. Default false keeps the prior length-closes-during-transfer
-    /// contract for every existing descriptor.
+    /// LOAD↑ (see `cs_release`). Clocks continue with LOAD high and neither
+    /// LOAD edge clears the register, as on MAX7219 (not MAX7221). A nonzero
+    /// `length` is required. Default false preserves transaction framing.
     #[serde(default)]
     pub shift_register: bool,
 }
@@ -365,6 +358,8 @@ pub enum Event {
     Frame,
     /// A [`TimerSpec`] elapsed.
     Timer { name: String },
+    /// A named I²C data-ready conversion completed on the device clock.
+    DataReady { name: String },
     /// An observed pad changed level.
     Pin { name: String, edge: PinEdge },
     /// **One or more of a NAMED SET of pads moved in the same store.**
@@ -429,6 +424,9 @@ impl Serialize for Event {
             Event::Timer { name } => {
                 m.insert(Value::from("timer"), Value::from(name.clone()));
             }
+            Event::DataReady { name } => {
+                m.insert(Value::from("data_ready"), Value::from(name.clone()));
+            }
             Event::Input { key } => {
                 m.insert(Value::from("input"), Value::from(key.clone()));
             }
@@ -465,7 +463,7 @@ impl<'de> Deserialize<'de> for Event {
                     D::Error::custom(format!(
                         "`on: {s}` is not an event. Bare events are start, stop, cs_select, \
                          cs_release, frame; the rest are single-key maps: write:, read:, \
-                         timer:, pin:, pins:, input:"
+                         timer:, data_ready:, pin:, pins:, input:"
                     ))
                 });
         }
@@ -496,6 +494,11 @@ impl<'de> Deserialize<'de> for Event {
         if let Some(val) = get("timer") {
             return Ok(Event::Timer {
                 name: as_name("timer", val)?,
+            });
+        }
+        if let Some(val) = get("data_ready") {
+            return Ok(Event::DataReady {
+                name: as_name("data_ready", val)?,
             });
         }
         if let Some(val) = get("input") {
@@ -540,7 +543,7 @@ impl<'de> Deserialize<'de> for Event {
             return Ok(Event::Pin { name, edge });
         }
         Err(D::Error::custom(
-            "unknown event; expected one of write:, read:, timer:, pin:, pins:, input:, or the \
+            "unknown event; expected one of write:, read:, timer:, data_ready:, pin:, pins:, input:, or the \
              bare start / stop / cs_select / cs_release / frame",
         ))
     }
@@ -1082,6 +1085,7 @@ pub struct RuleNames<'a> {
     pub vars: &'a [String],
     pub fifos: &'a [String],
     pub timers: &'a [String],
+    pub data_ready: &'a [String],
     pub outputs: &'a [String],
     pub inputs: &'a [String],
     pub pins: &'a [String],
@@ -1132,6 +1136,11 @@ pub fn validate_rule_names(rules: &[Rule], names: &RuleNames<'_>) -> anyhow::Res
                 has(names.timers, name),
                 "{}: no timer named '{name}'",
                 at("on.timer")
+            ),
+            Event::DataReady { name } => anyhow::ensure!(
+                has(names.data_ready, name),
+                "{}: no data-ready conversion named '{name}'",
+                at("on.data_ready")
             ),
             Event::Input { key } => anyhow::ensure!(
                 has(names.inputs, key),
@@ -1503,6 +1512,44 @@ mod tests {
     }
 
     #[test]
+    fn data_ready_event_roundtrips_and_requires_a_declared_conversion() {
+        let event: Event = serde_yaml::from_str("{ data_ready: sample }").unwrap();
+        assert_eq!(
+            event,
+            Event::DataReady {
+                name: "sample".into()
+            }
+        );
+        let encoded = serde_yaml::to_string(&event).unwrap();
+        assert_eq!(serde_yaml::from_str::<Event>(&encoded).unwrap(), event);
+        let rules = rules_from("[{ on: { data_ready: sample }, do: [] }]");
+        let names = RuleNames {
+            registers: &[],
+            fields: &[],
+            states: &[],
+            vars: &[],
+            fifos: &[],
+            timers: &[],
+            data_ready: &[],
+            outputs: &[],
+            inputs: &[],
+            pins: &[],
+            frames: None,
+        };
+        let err = validate_rule_names(&rules, &names).unwrap_err();
+        assert!(
+            err.to_string().contains("no data-ready conversion"),
+            "{err}"
+        );
+        let declared = vec!["sample".to_string()];
+        let names = RuleNames {
+            data_ready: &declared,
+            ..names
+        };
+        validate_rule_names(&rules, &names).unwrap();
+    }
+
+    #[test]
     fn undeclared_names_are_a_load_error() {
         let rules = rules_from(r#"[{ on: { timer: nope }, do: [] }]"#);
         let empty: [String; 0] = [];
@@ -1514,6 +1561,7 @@ mod tests {
             vars: &empty,
             fifos: &empty,
             timers: &empty,
+            data_ready: &empty,
             outputs: &empty,
             inputs: &empty,
             pins: &empty,
@@ -1535,6 +1583,7 @@ mod tests {
             vars: &empty,
             fifos: &empty,
             timers: &empty,
+            data_ready: &empty,
             outputs: &empty,
             inputs: &empty,
             pins: &empty,
@@ -1554,6 +1603,7 @@ mod tests {
             vars: &[],
             fifos: &[],
             timers: &[],
+            data_ready: &[],
             outputs: &[],
             inputs: &[],
             pins: &pins,

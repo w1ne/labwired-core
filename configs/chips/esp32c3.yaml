@@ -238,12 +238,21 @@ peripherals:
     base_address: 0x6001D000
     config:
       path: "../peripherals/esp32c3/bb.yaml"
-  # TWAI / CAN controller
+  # TWAI / CAN controller — the S3 SJA1000-style TWAI behavioural model.
+  # esp-idf release/v4.4 soc/esp32c3/twai_struct.h is byte-identical to the
+  # S3's apart from comments (same 0x00..0x7C word map, MODE/CMD/STATUS/INT/
+  # BUS_TIMING bits), so this is a true reuse, not "offset-identical".
+  # irq 25 = ETS_TWAI_INTR_SOURCE (soc/esp32c3 periph_defs.h). Not modelled:
+  # the SYSTEM_PERIP_CLK_EN0/RST_EN0 bit 19 gate (ungated, like the S3 row);
+  # the silicon reset oracle asserts no TWAI register (the post-ROM capture
+  # reads the gated-off window as bus junk 0x0008fe10).
   - id: "twai0"
-    type: "declarative"
+    type: "esp32s3_twai"
     base_address: 0x6002B000
+    size: "4KB"
+    irq: 25 # ETS_TWAI_INTR_SOURCE
     config:
-      path: "../peripherals/esp32c3/twai0.yaml"
+      debug_schema: "../peripherals/esp32c3/twai0.yaml"
   # I2S
   - id: "i2s0"
     type: "declarative"

@@ -118,13 +118,15 @@ fn two_real_master_device_pairs_keep_independent_process_data() {
 }
 
 #[test]
-fn public_iolink_master_uses_native_backend_when_feature_enabled() {
+fn uart_fixture_reports_the_engine_that_actually_drives_its_bytes() {
     let master = labwired_core::peripherals::components::IolinkMaster::new(
         1,
         1,
         labwired_core::peripherals::components::IolinkComSpeed::Com3,
     );
-    assert_eq!(master.backend_name_for_test(), "iolinki-master");
+    // Enabling the C bridge does not route this separate UART fixture through
+    // it. A held-but-unused native handle must not imply native coverage.
+    assert_eq!(master.backend_name_for_test(), "hand-rolled");
 }
 
 #[test]
