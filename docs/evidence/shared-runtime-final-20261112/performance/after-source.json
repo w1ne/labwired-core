@@ -1,0 +1,24 @@
+{
+  "files": {
+    "crates/core/src/regulator.rs": "e4cd25f4879188b76045ede60b1ddedf1c31893a03b7ff38c203de945468ead4",
+    "crates/core/tests/controlled_buck_session.rs": "dc3365b2d4e5a5ce72c5538825b89fc279ed1bba310a14270d2d1a86a1cd9d47"
+  },
+  "before_source_sha256": "f88ce7e88d4e968554c2712cc8d65e452570205c4d5dfce6c0ea52ed6ef38488",
+  "profile": "shared-runtime-integration-20261112",
+  "scope": "paired local opt1 diagnostic; final unchanged release CI remains authoritative",
+  "semantics": "same per-call empty registry short circuit and Acquire load for nonempty registry; identical error allocation moved into cold helper",
+  "new_regression": "single and bounded batch CPU advance refuse before state progress, then same machine admits a complete sampled owner",
+  "binary": {
+    "path": "/data/work-evidence/shared-runtime-integration-20261112/perf-empty-registry-r1/labwired-after-d8551fc365ab",
+    "sha256": "d8551fc365ab30c63aaf5a2f9b9c6712525a2a63c060e898ee81af38fe0ac9e4",
+    "size_bytes": 51270056
+  },
+  "measured": {
+    "r7fa6m5bh": {
+      "step": 1235.5
+    },
+    "r7fa8m1ah": {
+      "step": 1233.6
+    }
+  }
+}

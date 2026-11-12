@@ -1,0 +1,174 @@
+{
+  "free_before_bytes": 6814851072,
+  "active_target_users": [],
+  "roots": [
+    {
+      "root": "/data/build-targets/controlled-buck-20261112/controlled-buck-20261112",
+      "du_kib": 1720108,
+      "preserved": [
+        {
+          "original": "/data/build-targets/controlled-buck-20261112/controlled-buck-20261112/deps/analog_coil_series-1bc7793184b07a75",
+          "retained": "/data/work-evidence/obsolete-runtime-profiles-20261112/controlled-buck-binaries/deps/analog_coil_series-1bc7793184b07a75",
+          "sha256": "fa2503e89376ff2c645a90d2a8edb477fcfa0f4d6b791956a1ef518d42708d4e",
+          "size_bytes": 3645912
+        },
+        {
+          "original": "/data/build-targets/controlled-buck-20261112/controlled-buck-20261112/deps/controlled_buck-513eda8c4494d4fc",
+          "retained": "/data/work-evidence/obsolete-runtime-profiles-20261112/controlled-buck-binaries/deps/controlled_buck-513eda8c4494d4fc",
+          "sha256": "b287b21421ddcea5e327fc67d9cc4ac458eaa4515c0eaafe418fefc5cedeada9",
+          "size_bytes": 4345152
+        },
+        {
+          "original": "/data/build-targets/controlled-buck-20261112/controlled-buck-20261112/deps/analog_adapter-e614898a40d21a4c",
+          "retained": "/data/work-evidence/obsolete-runtime-profiles-20261112/controlled-buck-binaries/deps/analog_adapter-e614898a40d21a4c",
+          "sha256": "322cd0689c862f6f1c8b665e704d204715953d79c77115f5a547c1687bb64248",
+          "size_bytes": 5716496
+        },
+        {
+          "original": "/data/build-targets/controlled-buck-20261112/controlled-buck-20261112/deps/labwired_core-b6a7dcd0d3304052",
+          "retained": "/data/work-evidence/obsolete-runtime-profiles-20261112/controlled-buck-binaries/deps/labwired_core-b6a7dcd0d3304052",
+          "sha256": "8edb45cd90e21687c743036a0b49291bfdca2d3768e2794f9db7dbeae86028cd",
+          "size_bytes": 70856408
+        },
+        {
+          "original": "/data/build-targets/controlled-buck-20261112/controlled-buck-20261112/deps/controlled_buck_session-a3b20a3304e09a03",
+          "retained": "/data/work-evidence/obsolete-runtime-profiles-20261112/controlled-buck-binaries/deps/controlled_buck_session-a3b20a3304e09a03",
+          "sha256": "6e31a3e01685c90e533bac424f5db52bbe13edb94346a7ebe149e283556c75f7",
+          "size_bytes": 37134168
+        },
+        {
+          "original": "/data/build-targets/controlled-buck-20261112/controlled-buck-20261112/deps/regulator_control-78d200df4ba09d11",
+          "retained": "/data/work-evidence/obsolete-runtime-profiles-20261112/controlled-buck-binaries/deps/regulator_control-78d200df4ba09d11",
+          "sha256": "ab13ecb99ff7b9a63278918e384f9e541da2999ba85ae6449d10b3f1d934171d",
+          "size_bytes": 3507984
+        },
+        {
+          "original": "/data/build-targets/controlled-buck-20261112/controlled-buck-20261112/deps/labwired_wasm-77af64590ef0ad58",
+          "retained": "/data/work-evidence/obsolete-runtime-profiles-20261112/controlled-buck-binaries/deps/labwired_wasm-77af64590ef0ad58",
+          "sha256": "51350d8d346225cd4a1487dbde5c629366a2ecc41d625998c6abf43aeb597a5d",
+          "size_bytes": 50246152
+        },
+        {
+          "original": "/data/build-targets/controlled-buck-20261112/controlled-buck-20261112/deps/analog_macros-397b96986895b433",
+          "retained": "/data/work-evidence/obsolete-runtime-profiles-20261112/controlled-buck-binaries/deps/analog_macros-397b96986895b433",
+          "sha256": "eb732f0af3880343468033f668c2e68a6848ad57b7b11a334855c3b8476b6e28",
+          "size_bytes": 3638688
+        },
+        {
+          "original": "/data/build-targets/controlled-buck-20261112/controlled-buck-20261112/deps/analog_solver-05f84dbe76c5346c",
+          "retained": "/data/work-evidence/obsolete-runtime-profiles-20261112/controlled-buck-binaries/deps/analog_solver-05f84dbe76c5346c",
+          "sha256": "0e03ad1936005807ccddc096fa617b2be35b89f399328c11a6fa2fdac0e7d7b1",
+          "size_bytes": 3595480
+        },
+        {
+          "original": "/data/build-targets/controlled-buck-20261112/controlled-buck-20261112/deps/analog_netlist-50b86bbca83b8817",
+          "retained": "/data/work-evidence/obsolete-runtime-profiles-20261112/controlled-buck-binaries/deps/analog_netlist-50b86bbca83b8817",
+          "sha256": "8da658fdb7782511230789b2075dee73d5305493744a77b4fcd6a2633df1dd4c",
+          "size_bytes": 3648552
+        },
+        {
+          "original": "/data/build-targets/controlled-buck-20261112/controlled-buck-20261112/deps/internal_regulators-b428332473589275",
+          "retained": "/data/work-evidence/obsolete-runtime-profiles-20261112/controlled-buck-binaries/deps/internal_regulators-b428332473589275",
+          "sha256": "3bdc92efc8d89691376d30951c110f5b9965b04f6346a08d126699d4c6c2950f",
+          "size_bytes": 3499032
+        }
+      ]
+    },
+    {
+      "root": "/data/build-targets/mcu-power-domains-20261112",
+      "du_kib": 1849628,
+      "preserved": [
+        {
+          "original": "/data/build-targets/mcu-power-domains-20261112/mcu-power-domains-20261112/deps/labwired_core-b6a7dcd0d3304052",
+          "retained": "/data/work-evidence/obsolete-runtime-profiles-20261112/mcu-domain-binaries/mcu-power-domains-20261112/deps/labwired_core-b6a7dcd0d3304052",
+          "sha256": "0de56e5e7eb7fc87e04b0b2ca7c71b8d543346d191930b6cf8d700847c6af1bc",
+          "size_bytes": 70100088
+        },
+        {
+          "original": "/data/build-targets/mcu-power-domains-20261112/mcu-power-domains-20261112/deps/chip_io_levels-f8a7c303d531e65a",
+          "retained": "/data/work-evidence/obsolete-runtime-profiles-20261112/mcu-domain-binaries/mcu-power-domains-20261112/deps/chip_io_levels-f8a7c303d531e65a",
+          "sha256": "2fb96f4ebfd0a830d58088bf5f8817c042b6a4ec1bd9c13182a7c40314ae2c9e",
+          "size_bytes": 3306544
+        },
+        {
+          "original": "/data/build-targets/mcu-power-domains-20261112/mcu-power-domains-20261112/deps/reset_input-171bce1a3824ff38",
+          "retained": "/data/work-evidence/obsolete-runtime-profiles-20261112/mcu-domain-binaries/mcu-power-domains-20261112/deps/reset_input-171bce1a3824ff38",
+          "sha256": "6621830fa0170a904848bc338a8b538b1a4f2fba3c2f527123642c753ecb96c2",
+          "size_bytes": 3294936
+        },
+        {
+          "original": "/data/build-targets/mcu-power-domains-20261112/mcu-power-domains-20261112/deps/machine_mcu_power-6eae062a421819a3",
+          "retained": "/data/work-evidence/obsolete-runtime-profiles-20261112/mcu-domain-binaries/mcu-power-domains-20261112/deps/machine_mcu_power-6eae062a421819a3",
+          "sha256": "04b6aa8676443ad783aecbc1e31d13d3121983925e61611c076a2261653aee99",
+          "size_bytes": 35809672
+        },
+        {
+          "original": "/data/build-targets/mcu-power-domains-20261112/mcu-power-domains-20261112/deps/power_domains-92006cdd8e1fcf44",
+          "retained": "/data/work-evidence/obsolete-runtime-profiles-20261112/mcu-domain-binaries/mcu-power-domains-20261112/deps/power_domains-92006cdd8e1fcf44",
+          "sha256": "ae94f0244f8c91d4f5834828b8308c4196569fc6981e41fb3331ce39ce0b6c35",
+          "size_bytes": 2287656
+        },
+        {
+          "original": "/data/build-targets/mcu-power-domains-20261112/mcu-power-domains-20261112/deps/world_mcu_power-ce47c4189c537733",
+          "retained": "/data/work-evidence/obsolete-runtime-profiles-20261112/mcu-domain-binaries/mcu-power-domains-20261112/deps/world_mcu_power-ce47c4189c537733",
+          "sha256": "100d6bdd82c086749f61ce2544894f2497924b0f22cf117af639a867de330800",
+          "size_bytes": 42120376
+        },
+        {
+          "original": "/data/build-targets/mcu-power-domains-20261112/mcu-power-domains-20261112/deps/mcu_power_routing_timing-9088270b8eb00ee5",
+          "retained": "/data/work-evidence/obsolete-runtime-profiles-20261112/mcu-domain-binaries/mcu-power-domains-20261112/deps/mcu_power_routing_timing-9088270b8eb00ee5",
+          "sha256": "c90a7aab3fa08cb3ae0e39a7522fd3855dc7d8730691471a696b9dd30ebe7692",
+          "size_bytes": 35085936
+        },
+        {
+          "original": "/data/build-targets/mcu-power-domains-20261112/mcu-power-domains-20261112/deps/world_analog-b70d1508fd8fc1d5",
+          "retained": "/data/work-evidence/obsolete-runtime-profiles-20261112/mcu-domain-binaries/mcu-power-domains-20261112/deps/world_analog-b70d1508fd8fc1d5",
+          "sha256": "5c78714701934a13a7ae85918d9ab54e8a0dc34ac14fcbc900d4fc5be6f8ce35",
+          "size_bytes": 42180792
+        },
+        {
+          "original": "/data/build-targets/mcu-power-domains-20261112/mcu-power-domains-20261112/deps/unknown_peripheral_type-1ae3af9041697a69",
+          "retained": "/data/work-evidence/obsolete-runtime-profiles-20261112/mcu-domain-binaries/mcu-power-domains-20261112/deps/unknown_peripheral_type-1ae3af9041697a69",
+          "sha256": "a12e6a73615ddf49f0b71f786bc479d2965eb78844ae632de7882fd7730c2619",
+          "size_bytes": 34377408
+        },
+        {
+          "original": "/data/build-targets/mcu-power-domains-20261112/mcu-power-domains-20261112/deps/labwired_core-9af35ae1de1065c2",
+          "retained": "/data/work-evidence/obsolete-runtime-profiles-20261112/mcu-domain-binaries/mcu-power-domains-20261112/deps/labwired_core-9af35ae1de1065c2",
+          "sha256": "1c2731566e7679dd7acdbcf08edac30bba1c0f5045a3bc12c226a6f1b9d2234b",
+          "size_bytes": 68923744
+        },
+        {
+          "original": "/data/build-targets/mcu-power-domains-20261112/mcu-power-domains-20261112/deps/mcu_power_domains-ae5021c2cb858418",
+          "retained": "/data/work-evidence/obsolete-runtime-profiles-20261112/mcu-domain-binaries/mcu-power-domains-20261112/deps/mcu_power_domains-ae5021c2cb858418",
+          "sha256": "21eff952d574ade6506005adb12aea76ec5bed42fb90fdbf4f73a75062978eac",
+          "size_bytes": 3582408
+        },
+        {
+          "original": "/data/build-targets/mcu-power-domains-20261112/mcu-power-domains-20261112/deps/device_supply_routing-c87610e9614aba58",
+          "retained": "/data/work-evidence/obsolete-runtime-profiles-20261112/mcu-domain-binaries/mcu-power-domains-20261112/deps/device_supply_routing-c87610e9614aba58",
+          "sha256": "068a694f48df16ca7d8788e5bc89f5e76e29db30a74d08d379a85d49cffa01c8",
+          "size_bytes": 42220936
+        },
+        {
+          "original": "/data/build-targets/mcu-power-domains-20261112/mcu-power-domains-20261112/deps/cosim_pin_routing-49c290dc29f8576c",
+          "retained": "/data/work-evidence/obsolete-runtime-profiles-20261112/mcu-domain-binaries/mcu-power-domains-20261112/deps/cosim_pin_routing-49c290dc29f8576c",
+          "sha256": "a10c01ec2d17cd90f58dce65826b15c20cd97bf0f0517c774bdd568d4650eca7",
+          "size_bytes": 36660248
+        },
+        {
+          "original": "/data/build-targets/mcu-power-domains-20261112/mcu-power-domains-20261112/deps/world_circuit_bldc-0c646a81fe78a08a",
+          "retained": "/data/work-evidence/obsolete-runtime-profiles-20261112/mcu-domain-binaries/mcu-power-domains-20261112/deps/world_circuit_bldc-0c646a81fe78a08a",
+          "sha256": "c25552ccd7f09fb34f1004825ac732d11e9ee7e811ab44308692e799f89ad571",
+          "size_bytes": 42235600
+        }
+      ]
+    }
+  ],
+  "free_after_bytes": 10902884352,
+  "current_integration_preserved": true,
+  "source_target_preserved": true,
+  "observed_global_free_delta_bytes": 4088033280,
+  "space_measurement_scope": "global free-space delta includes concurrent unrelated writes or cleanup; it is not an isolated byte count for these two profiles",
+  "original_receipt_sha256": "ce5d157125e834af59a854b638911a86e8cdbcb8c78012e7ad3e5c2c69dcca9f"
+}

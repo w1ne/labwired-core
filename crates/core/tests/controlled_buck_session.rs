@@ -346,3 +346,41 @@ fn machine_advance_preserves_the_same_interval_start_revision_contract() {
         .iter()
         .any(|o| o.time_ns == second.time_ns && o.applied_revision == expected_revision));
 }
+
+#[test]
+fn machine_advance_requires_sampled_regulator_ownership() {
+    let (mut machine, control, observed) = machine();
+    let initial_cycles = machine.total_cycles;
+    let initial_configuration = control.configuration();
+    for request in [
+        AdvanceRequest::single(),
+        AdvanceRequest::run(None).with_cycle_limit(4),
+    ] {
+        match machine.advance(request) {
+            Err(labwired_core::SimulationError::Other(message)) => assert_eq!(
+                message,
+                "declared internal regulators have no complete attached sampled circuit; CPU execution refused"
+            ),
+            Err(other) => panic!("unexpected admission error: {other}"),
+            Ok(_) => panic!("an unsampled regulator admitted CPU advance"),
+        }
+        assert_eq!(machine.total_cycles, initial_cycles);
+        assert_eq!(control.configuration(), initial_configuration);
+        assert!(control.observation().is_none());
+        assert!(observed.lock().unwrap().is_empty());
+    }
+
+    // Admission is read again after a complete owner is attached to this same
+    // machine; a prior refusal must not cache an unsampled state.
+    let configs = [model(&[("a", 3.3)], false)];
+    let mut session = CosimSession::new(&configs, Path::new("."), &machine.bus)
+        .unwrap()
+        .unwrap();
+    session.set_signal_number("ui.a.enable", 3.3).unwrap();
+    session
+        .advance_budget(&mut machine, AdvanceRequest::run(None).with_cycle_limit(80))
+        .unwrap();
+    assert!(machine.total_cycles > initial_cycles);
+    assert!(control.observation().is_some());
+    assert!(!observed.lock().unwrap().is_empty());
+}

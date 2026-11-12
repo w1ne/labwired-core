@@ -1,0 +1,20 @@
+{
+  "negative_control": "Unrefined frozen R2 solver with the same reduced buck circuit and explicit zero capacitor/inductor state",
+  "command": [
+    "/workspace/scratch/594a9931118f/core-audit/bin/native-r2-labwired",
+    "cosim-step",
+    "/workspace/scratch/594a9931118f/core-audit/newton-buck-regression.yaml",
+    "--steps",
+    "0",
+    "--json",
+    "--analog-trace",
+    "/workspace/scratch/594a9931118f/core-audit/newton-buck-negative-control.csv"
+  ],
+  "cli_sha256": "aac720c168bda1ef9602d7af24048154dee9f16e44731aef32edc1b6a84a3a63",
+  "manifest_sha256": "2e1a90bfebd5ee6d5eb18be5be55ccec752972e9041979238af007ef7362fa5e",
+  "observed_initial_feedback_v": 5.602528e-12,
+  "expected_feedback_v": 0.0,
+  "unchanged_constructor_tolerance_v": 1e-12,
+  "constructor_accuracy_assertion_failed_as_expected": true,
+  "measurement_note": "Analog CSV serializes samples with its existing precision; the error is more than five times the assertion bound."
+}

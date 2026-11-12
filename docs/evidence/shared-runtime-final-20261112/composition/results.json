@@ -1,0 +1,67 @@
+{
+  "config-test": [
+    {
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "routing-unit": [
+    {
+      "passed": 41,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "atomic-unit": [
+    {
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "downcast-unit": [
+    {
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "interaction": [
+    {
+      "passed": 14,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "passed": 12,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "passed": 13,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "passed": 18,
+      "failed": 0,
+      "ignored": 0
+    }
+  ]
+}

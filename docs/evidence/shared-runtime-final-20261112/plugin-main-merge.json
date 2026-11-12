@@ -1,0 +1,33 @@
+{
+  "base_head": "c423c5a209c14018e7e9a6110981aa95b590674b",
+  "main_commit": "974db2e113408ebd914e513845385b76dcb925d9",
+  "pending_tree": "0f7361c09b3451e1d8667c449ba4c4c9a56916a8",
+  "rust_config_trees_before": {
+    "crates": "5c54bb2f333ca6fc07654933d440ca04a388f2dd",
+    "configs": "21df279940bdd1562444dc992197f7329b7ce770",
+    "Cargo.toml": "d2df63547fb2c733d332ee0b05eaa653c8439887",
+    "Cargo.lock": "e63ea0d46bcd9e4e882ce48622e6b9e55dd9a571",
+    "rust-toolchain.toml": "4a3446099a314a59fe33737cdb141761d87fbeb6"
+  },
+  "rust_config_trees_after": {
+    "crates": "5c54bb2f333ca6fc07654933d440ca04a388f2dd",
+    "configs": "21df279940bdd1562444dc992197f7329b7ce770",
+    "Cargo.toml": "d2df63547fb2c733d332ee0b05eaa653c8439887",
+    "Cargo.lock": "e63ea0d46bcd9e4e882ce48622e6b9e55dd9a571",
+    "rust-toolchain.toml": "4a3446099a314a59fe33737cdb141761d87fbeb6"
+  },
+  "command": [
+    "python3",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests",
+    "-p",
+    "test_plugin_contract.py",
+    "-v"
+  ],
+  "passed": 9,
+  "failed": 0,
+  "log_sha256": "cb41c6a4a0c167f6e66e8ed85c8b6abc0b3b2a976f314f028a791b9a18a57b35"
+}

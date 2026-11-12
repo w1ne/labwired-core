@@ -1,0 +1,21 @@
+{
+  "created_utc": "2026-11-12T13:53:34.239750+00:00",
+  "base_manifest": "native-composed-r2-manifest.json",
+  "base_manifest_sha256": "4b54a3ee751accacc0d965d765409d6cdad31b96d7d0a46462b5d14342860b5b",
+  "all_base_manifest_paths_match": true,
+  "additional_change": {
+    "path": "crates/core/src/analog/mna.rs",
+    "base_sha256": "9ce83d32db053200de00ddfd89bba8206d5a741c3dc575a35a56c8f82dffc4e6",
+    "sha256": "0e316393e06551af9d3bc2b79d273dbf42d6eee0cc931cad512975990b4c6f92"
+  },
+  "added_test": {
+    "path": "crates/core/tests/analog_newton_accuracy.rs",
+    "sha256": "810c24ab141a004af0bdbb6ee76a5217fb92fd2be269817f3dcc8dab89c1be53"
+  },
+  "acceptance": "Experimental source; runtime and integration validation pending. No human acknowledgment written.",
+  "parent_source_receipt_sha256": "6ed8caca128bbeec2fdd2d5b6fc53e39e9ad0b7bfdb866c46239c44a74fd2209",
+  "delta_patch_sha256": "3606ca505dde825937a01abecdb3735430435c258892ff0ebd713b9c71af633b",
+  "scope": "Refine only when the linear correction exceeds an existing per-unknown Newton tolerance; retain already accurate values. No model, acceptance tolerance or runtime budget changes.",
+  "test_correction": "The new charging-divider assertion now propagates the existing absolute+relative node accuracy; exact zero-state1e-12V negative control, KCL, DCR, charge and current bounds are unchanged. Prior failure at160ns: error1.144248e-12V was inside the declared feedback tolerance1.171961e-12V.",
+  "prior_source_receipt_sha256": "e5b24d2f8c1c01f2957c33d444c0dd386785c067a906933b32aa3d1e0b4abb44"
+}

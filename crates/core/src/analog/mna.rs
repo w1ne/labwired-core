@@ -2129,6 +2129,12 @@ impl Solver {
     /// the equations do not satisfy.
     fn newton(&mut self, stamp: Stamp, step: Option<u64>, time: f64) -> Result<(), AnalogError> {
         let dim = self.dim();
+        // Keep the unfactored equations for residual correction. A sparse copy
+        // retains every nonzero coefficient without another dense allocation.
+        let mut equation_rows = Vec::with_capacity(dim + 1);
+        let mut equation_terms = Vec::new();
+        let mut equation_rhs = vec![0.0; dim];
+        let mut trial = vec![0.0; dim];
         self.cached_stamp = None;
         self.settled = false;
         // NaN so the first pass can never compare as converged, whatever the
@@ -2140,8 +2146,65 @@ impl Solver {
         for iteration in 1..=MAX_NEWTON_ITERATIONS {
             self.build(stamp);
             self.stamp_initial_inductive_kcl()?;
+            equation_rows.clear();
+            equation_terms.clear();
+            equation_rows.push(0);
+            for row in self.matrix[..dim * dim].chunks_exact(dim) {
+                equation_terms.extend(
+                    row.iter()
+                        .copied()
+                        .enumerate()
+                        .filter(|(_, coefficient)| *coefficient != 0.0),
+                );
+                equation_rows.push(equation_terms.len());
+            }
+            equation_rhs.copy_from_slice(&self.rhs[..dim]);
             self.factorize()?;
             self.solve();
+            // Refine the same linear system with its existing LU factors.
+            // Large C/h and L/h coefficients can hide a small node-voltage
+            // residual in ordinary f64 elimination. Error-free products and
+            // compensated sums retain that residual instead of loosening the
+            // Newton acceptance tolerance or cutting the physical time step.
+            for refinement in 0..4 {
+                trial.copy_from_slice(&self.solution[..dim]);
+                for row in 0..dim {
+                    let mut sum = equation_rhs[row];
+                    let mut correction = 0.0;
+                    for &(column, coefficient) in
+                        &equation_terms[equation_rows[row]..equation_rows[row + 1]]
+                    {
+                        let product = -coefficient * trial[column];
+                        let product_error = (-coefficient).mul_add(trial[column], -product);
+                        let next = sum + product;
+                        let added = next - sum;
+                        let sum_error = (sum - (next - added)) + (product - added);
+                        correction += sum_error + product_error;
+                        sum = next;
+                    }
+                    self.rhs[row] = sum + correction;
+                }
+                self.solve();
+                // Keep an already accurate solve and avoid unnecessary passes.
+                // This uses the existing per-unknown Newton accuracy contract;
+                // it does not change the convergence test below.
+                if refinement == 0
+                    && self.solution[..dim].iter().zip(&trial).enumerate().all(
+                        |(index, (correction, original))| {
+                            correction.is_finite()
+                                && original.is_finite()
+                                && correction.abs()
+                                    <= self.newton_tolerance(index, *original, *original)
+                        },
+                    )
+                {
+                    self.solution[..dim].copy_from_slice(&trial);
+                    break;
+                }
+                for (value, original) in self.solution[..dim].iter_mut().zip(&trial) {
+                    *value += original;
+                }
+            }
             if self.newton_converged() {
                 self.opamp_power
                     .validate(&self.circuit, &self.solution[..self.nodes])?;
