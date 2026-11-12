@@ -1,0 +1,29 @@
+{
+  "target_id": "arduino-uno-io-existing",
+  "status": "pass",
+  "crate": "",
+  "target_triple": "",
+  "script": "examples/arduino-uno-io/io-smoke.yaml",
+  "system": "examples/arduino-uno-io/system.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-05T22:08:20Z",
+  "finished_at_utc": "2026-11-05T22:08:21Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1903,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.296,
+    "build_firmware": 0.649,
+    "run_smoke": 0.948
+  },
+  "stages_ms": {
+    "build_cli": 296,
+    "build_firmware": 649,
+    "run_smoke": 948
+  },
+  "firmware_build_script": "examples/arduino-uno-io/build-firmware.sh"
+}

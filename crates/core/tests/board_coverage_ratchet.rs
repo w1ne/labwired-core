@@ -127,6 +127,27 @@ struct Board {
 /// A chip added to the shipped catalog MUST be added here, or the cross-check at
 /// the bottom of this file fails — a shipped board can never bypass the ratchet.
 const SHIPPED: &[Board] = &[
+    // Public onboarding profiles carry the same reset + executing-fidelity
+    // requirements as catalog boards. Use exact aliases: a parent-family
+    // differential or a survival-only boot must not satisfy these rows.
+    Board {
+        chip: "esp32-devkitc-32e-gpio-smoke",
+        aliases: &["esp32-devkitc-32e-gpio-smoke"],
+        yaml_stem: "esp32-devkitc-32e-gpio-smoke",
+        display_lab: false,
+    },
+    Board {
+        chip: "esp32-devkitc-32e-uart1",
+        aliases: &["esp32-devkitc-32e-uart1"],
+        yaml_stem: "esp32-devkitc-32e-uart1",
+        display_lab: false,
+    },
+    Board {
+        chip: "stm32f103rb-nucleo-bme280-smoke",
+        aliases: &["stm32f103rb-nucleo-bme280-smoke"],
+        yaml_stem: "stm32f103rb-nucleo-bme280-smoke",
+        display_lab: false,
+    },
     Board {
         chip: "stm32f103",
         aliases: &["stm32f103", "f103", "stm32f1"],
@@ -323,6 +344,34 @@ fn generic_cpu_tests_do_not_supply_rv1103_board_coverage() {
     assert!(!is_allowlisted(board.chip, Class::Exec));
 }
 
+#[test]
+fn onboarding_profiles_require_their_own_executing_fidelity() {
+    let corpus = Corpus {
+        files: vec![
+            ("stm32f1_exec_oracle.rs".into(), "chips/stm32f103.yaml".into()),
+            ("esp32_classic_walk_differential.rs".into(), "chips/esp32.yaml".into()),
+            ("firmware_survival.rs".into(),
+                "chips/esp32-devkitc-32e-gpio-smoke.yaml chips/esp32-devkitc-32e-uart1.yaml chips/stm32f103rb-nucleo-bme280-smoke.yaml".into()),
+        ],
+    };
+    for stem in [
+        "esp32-devkitc-32e-gpio-smoke",
+        "esp32-devkitc-32e-uart1",
+        "stm32f103rb-nucleo-bme280-smoke",
+    ] {
+        let board = SHIPPED
+            .iter()
+            .find(|board| board.yaml_stem == stem)
+            .unwrap();
+        assert_eq!(required_classes(board), vec![Class::Reset, Class::Exec]);
+        assert!(
+            !corpus.covers(board, Class::Exec),
+            "{stem}: parent/survival coverage is insufficient"
+        );
+        assert!(!is_allowlisted(board.chip, Class::Exec));
+    }
+}
+
 fn core_crate_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
@@ -511,6 +560,9 @@ fn every_shipped_descriptor_is_ratcheted() {
     // Chip descriptors that exist in configs/chips but are NOT in the canonical
     // shipped catalog (bundled-configs.ts). They are intentionally not ratcheted.
     const NOT_SHIPPED: &[&str] = &[
+        // ATmega328PB has a CPU-level USART1/PB5 smoke but no catalog board,
+        // package-pad map, or executing-fidelity differential yet.
+        "atmega328pb",
         // ATmega2560 (Arduino Mega 2560) on the 328P AVR model. Has a chip
         // descriptor, a system manifest, a gated sim-validate example with an
         // io-smoke and the avr_mega2560_io integration tests. It is not a
@@ -565,9 +617,18 @@ fn every_shipped_descriptor_is_ratcheted() {
         "stm32f103r4h",
         "stm32f103r6",
         "stm32f103r6h",
+        "stm32f103r8",
         "stm32f103rb",
         "stm32f103t4",
         "stm32f103t6",
+        // STM32G431RB (demand-ordered onboarding; JetBrains State of Embedded
+        // 2025 "other STM32" 13%, the industrial/motor-control pick). A core
+        // chip descriptor, not a Playground board in bundled-configs.ts; its
+        // G4 behaviour is shared with stm32g474re. It has a TIER1 raw-register
+        // self-test but no bundled catalog board and no silicon differential.
+        // Promote when a NUCLEO-G431RB catalog board and a bench differential
+        // exist.
+        "stm32g431rb",
         "stm32f401cb",
         "stm32f401cc",
         "stm32f401cd",
@@ -811,6 +872,16 @@ fn every_shipped_descriptor_is_ratcheted() {
         // bundled-configs.ts catalog board. Same bar as the maker-five above:
         // promote when the catalog lands AND a differential exists.
         "esp32c6",
+        // First WCH part (CH32V003F4P6, QingKe RV32EC). L1: chip descriptor +
+        // system manifest + example with an io-smoke executed by the coverage
+        // matrix, a committed compiled-RV32E fixture and a chip-conformance
+        // behaviour gate that asserts PC0 edges. It carries no bundled-configs.ts
+        // catalog board, no silicon oracle (no CH32V003 has been diffed over
+        // SDI) and no executing-fidelity differential of its own. The slice
+        // models RCC and GPIO A/C/D only (no PFIC) — USART/I2C/SPI/ADC are not
+        // modelled, so there is no bus to diff yet. Promote when the catalog
+        // board, a bus model and a differential all exist.
+        "ch32v003f4p6",
     ];
     // configs/chips id -> ratchet chip id (kw41z ships as mkw41z4.yaml).
     fn to_ratchet_id(stem: &str) -> &str {

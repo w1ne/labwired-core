@@ -22,6 +22,11 @@
 
 static void logBegin() {
   Serial.begin(115200);
+#if defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)
+  // arduino-pico (Pico 2): Serial is native USB CDC and drops writes until
+  // the host opens the port (DTR), on silicon and on the twin alike.
+  while (!Serial) delay(1);
+#endif
 #if defined(ARDUINO_USB_CDC_ON_BOOT) && (ARDUINO_USB_CDC_ON_BOOT)
   Serial.setTxTimeoutMs(0);
   Serial0.begin(115200);
@@ -41,6 +46,9 @@ static void wireBegin() {
   Wire.begin(4, 5);
 #elif defined(CONFIG_IDF_TARGET_ESP32S3) || defined(ARDUINO_ESP32S3_DEV)
   Wire.begin(8, 9);
+#elif defined(CONFIG_IDF_TARGET_ESP32C6)
+  // esp32c6 variant SDA/SCL. GPIO21 (the classic SDA below) is not the kit.
+  Wire.begin(23, 22);
 #elif defined(ARDUINO_ARCH_ESP32)
   Wire.begin(21, 22);
 #elif defined(ARDUINO_ARCH_RP2040)

@@ -94,6 +94,18 @@ const PAYLOAD: [u8; 3] = [0x53, 0x1C, 0xE1];
 /// drive to decodable edges, with the reason. Adding a silent `continue` instead
 /// of a row here is the same failure as the binding-only gate this replaced.
 const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
+    // CH32V003: USART1 TX is pad-routed to PD5 behind the F1-style console AF
+    // gate. Even with PD5 set to AF push-pull (CFGLR 0x44B44444) and the F1
+    // drive, no TX edges reached the analyzer in this harness. The F1 rows here
+    // never exercised a pad-gated USART either: stm32f103 passes on USART3,
+    // which has no pad route. Bytes are proven by
+    // ch32v003_compiled_firmware::ch32v003_compiled_rv32ec_firmware_prints_on_usart1.
+    (
+        "ch32v003f4p6",
+        BusKind::Uart,
+        "pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this \
+         harness yet; bytes are proven by ch32v003_compiled_firmware",
+    ),
     // nRF51822: the bring-up drives the nRF52 EasyDMA personalities (UARTE
     // ENABLE=8, TWIM), which the nRF51 does not have; its UART0 is the legacy
     // UART (ENABLE=4, TXD + EVENTS_TXDRDY) and its TWI is the legacy TWI. No
@@ -438,6 +450,21 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "AVR from_config SPI is generic type:spi without PadLines cell",
     ),
     (
+        "atmega328pb",
+        BusKind::I2c,
+        "AVR from_config I2C is generic type:i2c without PadLines cell",
+    ),
+    (
+        "atmega328pb",
+        BusKind::Spi,
+        "AVR from_config SPI is generic type:spi without PadLines cell",
+    ),
+    (
+        "atmega328pb",
+        BusKind::Uart,
+        "USART1 emits bytes in the CPU smoke, but this edge gate has no AVR UART waveform bring-up",
+    ),
+    (
         "atmega2560",
         BusKind::I2c,
         "AVR from_config I2C is generic type:i2c without PadLines cell",
@@ -496,6 +523,11 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         BusKind::Uart,
         "no edge bring-up path for i.MX LPUART in this gate yet",
     ),
+    (
+        "stm32f103rb-nucleo-bme280-smoke",
+        BusKind::Uart,
+        "this profile exposes only USART2 (the NUCLEO VCP); the F1 harness          produces no analyzer edges on pad-gated USART2 (parent stm32f103          passes on USART3, which this YAML does not include). Bytes are          proven by the boards.yml nucleo-f103rb-bme280 cell          (NUCLEO_F103RB_BME280_OK over USART2)",
+    ),
 ];
 
 fn is_excluded(chip: &str, kind: BusKind) -> Option<&'static str> {
@@ -548,7 +580,11 @@ fn ram_base(chip: &str) -> u64 {
     match chip {
         "esp32c3" => 0x3FC8_0000,
         "esp32c6" => 0x4080_0000,
-        "esp32" | "esp32s3" | "esp32s3-zero" => 0x3FFC_0000,
+        "esp32"
+        | "esp32s3"
+        | "esp32s3-zero"
+        | "esp32-devkitc-32e-gpio-smoke"
+        | "esp32-devkitc-32e-uart1" => 0x3FFC_0000,
         _ => 0x2000_0000,
     }
 }
@@ -877,7 +913,10 @@ fn family_of(chip: &str) -> Family {
         Family::Esp32c3
     } else if chip == "esp32c6" {
         Family::Esp32c6
-    } else if chip == "esp32" {
+    } else if chip == "esp32"
+        || chip == "esp32-devkitc-32e-gpio-smoke"
+        || chip == "esp32-devkitc-32e-uart1"
+    {
         Family::Esp32
     } else if chip.starts_with("efr32") {
         Family::Efr32s2

@@ -429,15 +429,75 @@ fn the_address_is_0x38() {
     assert_eq!(device().address(), oracle::Aht20::new().address());
 }
 
+/// After soft reset (§5.5, 20 ms) or init (0xBE / Adafruit's 0xE1), a bare
+/// status poll returns 0x08 (CAL, not busy). A read BEFORE any command is
+/// still open bus (see `a_read_before_any_command_is_open_bus`). The extra
+/// bytes are the CRC-covered measurement frame the engine requires of every
+/// answering command; Adafruit_AHTX0::begin() reads only the status byte.
 #[test]
-fn soft_reset_and_init_are_accepted_and_queue_no_response() {
-    for code in [0xBAu8, 0xBE] {
+fn soft_reset_and_init_answer_idle_calibrated_status() {
+    for code in [0xBAu8, 0xBE, 0xE1] {
         let got = run_descriptor(&Script {
-            stimulus: vec![],
+            stimulus: vec![("temperature", 25.0), ("humidity", 50.0)],
             command: vec![code, 0x08, 0x00],
-            elapsed_us: 80_000,
-            reads: 2,
+            elapsed_us: 20_000,
+            reads: 1,
         });
-        assert_eq!(got, vec![0xFF, 0xFF], "opcode 0x{code:02X} answers nothing");
+        assert_eq!(
+            got,
+            vec![0x08],
+            "opcode 0x{code:02X} must report CAL, not busy"
+        );
     }
+}
+
+/// Soft reset is not instant: §5.5 allows 20 ms. A poll before that deadline
+/// must still see BUSY, matching the measurement-time rule for 0xAC.
+#[test]
+fn soft_reset_is_busy_until_20ms() {
+    let got = run_descriptor(&Script {
+        stimulus: vec![],
+        command: vec![0xBA],
+        elapsed_us: 19_999,
+        reads: 1,
+    });
+    assert_eq!(got, vec![0x88], "BUSY | CAL while soft reset runs");
+
+    let ready = run_descriptor(&Script {
+        stimulus: vec![],
+        command: vec![0xBA],
+        elapsed_us: 20_000,
+        reads: 1,
+    });
+    assert_eq!(ready, vec![0x08], "CAL, not busy, at 20 ms");
+}
+
+/// Adafruit_AHTX0::begin() (v2.0.6): 0xBA, wait 20 ms, poll BUSY, write
+/// 0xE1 0x08 0x00, poll BUSY, require CAL. This is the path the Fyto twin
+/// (and every hosted Adafruit AHT20 sketch) takes.
+#[test]
+fn adafruit_ahtx0_begin_sees_calibrated_idle_status() {
+    let mut d = device();
+    d.start();
+    d.write(0xBA);
+    d.stop();
+    d.advance_time_us(20_000);
+    d.start();
+    let after_reset = d.read();
+    assert_eq!(after_reset & 0x80, 0, "BUSY must be clear after 20 ms");
+    d.stop();
+
+    d.start();
+    for b in [0xE1u8, 0x08, 0x00] {
+        d.write(b);
+    }
+    d.stop();
+    d.start();
+    let status = d.read();
+    assert_eq!(status & 0x80, 0, "BUSY must be clear after 0xE1");
+    assert_eq!(
+        status & 0x08,
+        0x08,
+        "CAL must be set so begin() returns true"
+    );
 }

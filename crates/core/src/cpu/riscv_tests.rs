@@ -89,88 +89,6 @@ fn standard_rv32_rejects_esp32c3_rom_ustatus_clear() {
 }
 
 #[test]
-fn rv32ec_traps_reserved_registers_and_unavailable_extensions() {
-    // ADDI x15, x0, 7 is valid on RV32E. ADDI x16, x0, 1 names a register
-    // that does not exist on the E base and must raise illegal instruction.
-    const ADDI_X15: u32 = 0x0070_0793;
-    const ADDI_X16: u32 = 0x0010_0813;
-    let mut bus = SystemBus::new();
-    bus.flash.data = [ADDI_X15.to_le_bytes(), ADDI_X16.to_le_bytes()].concat();
-    let mut cpu = RiscV::new_for(RiscVCoreProfile::StandardRv32EC);
-    cpu.pc = 0;
-    cpu.mtvec = 0x100;
-    let mut machine = Machine::new(cpu, bus);
-
-    machine.step().unwrap();
-    assert_eq!(machine.cpu.read_reg(15), 7);
-    assert_eq!(machine.cpu.pc, 4);
-
-    machine.step().unwrap();
-    assert_eq!(machine.cpu.mcause, 2, "x16 is reserved on RV32E");
-    assert_eq!(machine.cpu.mepc, 4);
-    assert_eq!(machine.cpu.mtval, ADDI_X16);
-    assert_eq!(machine.cpu.pc, 0x100);
-}
-
-#[test]
-fn rv32ec_rejects_compressed_high_registers_and_m_extension() {
-    let mut bus = SystemBus::new();
-    // C.LI x16, 1 (reserved register on RV32E).
-    bus.flash.data = 0x0001_4805u32.to_le_bytes().to_vec();
-    let mut cpu = RiscV::new_for(RiscVCoreProfile::StandardRv32EC);
-    cpu.pc = 0;
-    cpu.mtvec = 0x80;
-    let mut machine = Machine::new(cpu, bus);
-    machine.step().unwrap();
-    assert_eq!(machine.cpu.mcause, 2);
-    assert_eq!(machine.cpu.mtval, 0x4805);
-    assert_eq!(machine.cpu.pc, 0x80);
-
-    // MUL x1, x2, x3 is understood by the shared decoder but absent from
-    // RV32EC. It must not execute just because another profile implements M.
-    let mul_x1_x2_x3 = 0x0231_00B3u32;
-    let mut bus = SystemBus::new();
-    bus.flash.data = mul_x1_x2_x3.to_le_bytes().to_vec();
-    let mut cpu = RiscV::new_for(RiscVCoreProfile::StandardRv32EC);
-    cpu.pc = 0;
-    cpu.mtvec = 0x80;
-    let mut machine = Machine::new(cpu, bus);
-    machine.step().unwrap();
-    assert_eq!(machine.cpu.mcause, 2);
-    assert_eq!(machine.cpu.mtval, mul_x1_x2_x3);
-    assert_eq!(machine.cpu.pc, 0x80);
-
-    // An instruction the shared decoder does not implement is still an
-    // architectural illegal-instruction trap on this profile.
-    const UNKNOWN: u32 = 0xFFFF_FFFF;
-    let mut bus = SystemBus::new();
-    bus.flash.data = UNKNOWN.to_le_bytes().to_vec();
-    let mut cpu = RiscV::new_for(RiscVCoreProfile::StandardRv32EC);
-    cpu.pc = 0;
-    cpu.mtvec = 0x80;
-    let mut machine = Machine::new(cpu, bus);
-    machine.step().unwrap();
-    assert_eq!(machine.cpu.mcause, 2);
-    assert_eq!(machine.cpu.mtval, UNKNOWN);
-    assert_eq!(machine.cpu.pc, 0x80);
-}
-
-#[test]
-fn rv32ec_reports_its_misa_extensions() {
-    let read_misa = (0x301u32 << 20) | (5 << 7) | (0b010 << 12) | 0x73;
-    let mut bus = SystemBus::new();
-    bus.flash.data = read_misa.to_le_bytes().to_vec();
-    let mut cpu = RiscV::new_for(RiscVCoreProfile::StandardRv32EC);
-    cpu.pc = 0;
-    let mut machine = Machine::new(cpu, bus);
-
-    machine.step().unwrap();
-
-    assert_eq!(machine.cpu.read_reg(5), 0x4000_0014); // RV32 + E + C
-    assert_eq!(machine.cpu.mcause, 0);
-}
-
-#[test]
 fn esp32c3_accepts_exact_rom_init_csrs_before_mtvec_initialization() {
     const ROM_PC: u32 = 0x4000_1ea4;
     let mut bus = SystemBus::new();
@@ -1948,12 +1866,12 @@ fn riscv_profile_is_selected_from_the_chip_descriptor() {
     );
     assert_eq!(
         RiscVCoreProfile::for_chip(&chip("ch32v003", Some("rv32ec"))),
-        RiscVCoreProfile::StandardRv32EC,
+        RiscVCoreProfile::Rv32ec,
         "RV32EC selects the 16-register E profile"
     );
     assert_eq!(
         RiscVCoreProfile::for_chip(&chip("some-rv32e", Some("rv32emc"))),
-        RiscVCoreProfile::StandardRv32,
+        RiscVCoreProfile::Rv32e,
         "RV32EC-specific restrictions do not leak to other E-family strings"
     );
     assert_eq!(

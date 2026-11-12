@@ -52,6 +52,7 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::declarative_display::SSD1306_128X32_KIT,
     &components::declarative_display::SH1107_KIT,
     &components::declarative_display::ILI9341_KIT,
+    &components::declarative_display::ILI9488_KIT,
     &components::declarative_display::RM67162_KIT,
     &components::declarative_display::ST7789_KIT,
     &components::inmp441::INMP441_KIT,
@@ -64,6 +65,7 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::declarative_spi::HC595_7SEG_KIT,
     &components::declarative_display::PCD8544_KIT,
     &components::iolink_master::IOLINK_MASTER_KIT,
+    &components::tiol112::TIOL112_KIT,
     // The analog plants. Every one of these was a hand-written Rust model until
     // the `analog_source` primitive grew a `formula:` (the two that ARE
     // equations — a CdS power law and an NTC beta equation) and more than one
@@ -74,6 +76,8 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::declarative_analog::NTC_THERMISTOR_KIT,
     &components::declarative_analog::TMP36_KIT,
     &components::declarative_analog::POTENTIOMETER_KIT,
+    &components::joystick::JOYSTICK_KIT,
+    &components::limit_switch::LIMIT_SWITCH_KIT,
     &components::declarative_analog::LIPO_CHARGER_KIT,
     &components::declarative_analog::LDR_KIT,
     &components::declarative_analog::MQ6_KIT,
@@ -234,6 +238,8 @@ const TYPE_ALIASES: &[(&str, &str)] = &[
     // Hobby servo calibrations as top-level type strings.
     ("sg90", "servo"),
     ("mg996r", "servo"),
+    ("mg995", "servo"),
+    ("mg90s", "servo"),
     // WS2812 synonym for neopixel kit.
     ("ws2812", "neopixel"),
     // STEP/DIR driver family.

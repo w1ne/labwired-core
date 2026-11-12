@@ -21,6 +21,11 @@
 
 static void logBegin() {
   Serial.begin(115200);
+#if defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)
+  // arduino-pico (Pico 2): Serial is native USB CDC and drops writes until
+  // the host opens the port (DTR), on silicon and on the twin alike.
+  while (!Serial) delay(1);
+#endif
 #if defined(ARDUINO_USB_CDC_ON_BOOT) && (ARDUINO_USB_CDC_ON_BOOT)
   Serial.setTxTimeoutMs(0);
   Serial0.begin(115200);
@@ -57,6 +62,12 @@ void setup() {
   pinMode(LW_SPI_CS, OUTPUT);
   digitalWrite(LW_SPI_CS, HIGH);
   SPI.begin();
+#if defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)
+  // arduino-pico: SPI.begin() applies a 0 Hz default without spi_init(), so
+  // SSPCR1.SSE stays 0 and a bare SPI.transfer() blocks forever in
+  // spi_write_read_blocking (silicon too). beginTransaction() inits the PL022.
+  SPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE0));
+#endif
   delay(1);
 
   // One clean CS-framed read (classic STM32 RXNE is clear-on-DR-read in the

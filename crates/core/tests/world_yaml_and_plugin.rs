@@ -155,6 +155,7 @@ fn filesystem_yaml_chip_and_plugin_cpu_coexist_in_one_world() {
             },
         ],
         interconnects: vec![],
+        cosim_models: Vec::new(),
         rf: None,
     };
 

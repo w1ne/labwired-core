@@ -312,6 +312,281 @@ fn a_pcf8574_write_moves_the_pads_the_cpu_reads() {
     );
 }
 
+/// Two roles on one opted-in pad must retain their individual drive states.
+/// The legacy third output is an independent control on another pad.
+#[test]
+fn pulled_up_open_drain_roles_share_the_real_gpio_pad() {
+    let roles: serde_yaml::Value = serde_yaml::from_str("[P0, P1]").unwrap();
+    let mut m = machine(
+        placed(
+            "expander",
+            "pcf8574",
+            &[
+                ("p0_pin", serde_yaml::Value::from("PC0")),
+                ("p1_pin", serde_yaml::Value::from("PC0")),
+                ("p2_pin", serde_yaml::Value::from("PC1")),
+                ("open_drain_pullups", roles),
+            ],
+        ),
+        None,
+    );
+    run(&mut m, 10);
+    assert!(
+        pad(&mut m, "PC0"),
+        "the declared pull-up is visible before a device write"
+    );
+    for (value, shared, independent) in [
+        (0b1111_1111, true, true),
+        (0b1111_1110, false, true),
+        (0b1111_1101, false, true),
+        (0b1111_1100, false, true),
+        (0b1111_1110, false, true),
+        (0b1111_1111, true, true),
+        (0b1111_1011, true, false),
+    ] {
+        write_bytes(&mut m, &[value]);
+        run(&mut m, 10);
+        assert_eq!(pad(&mut m, "PC0"), shared, "shared pad after {value:#04x}");
+        assert_eq!(
+            pad(&mut m, "PC1"),
+            independent,
+            "legacy control after {value:#04x}"
+        );
+    }
+}
+
+#[test]
+fn inverting_collector_and_direct_output_share_a_gpio_pad() {
+    let mut m = machine(
+        placed(
+            "expander",
+            "pcf8574",
+            &[
+                ("p0_pin", serde_yaml::Value::from("PC0")),
+                ("p1_pin", serde_yaml::Value::from("PC0")),
+                (
+                    "open_drain_pullups",
+                    serde_yaml::from_str("[P0, P1]").unwrap(),
+                ),
+                (
+                    "inverting_collectors",
+                    serde_yaml::from_str("[P0]").unwrap(),
+                ),
+            ],
+        ),
+        None,
+    );
+    run(&mut m, 10);
+    assert!(pad(&mut m, "PC0"));
+    // P0 high asserts through the inverter; P1 low asserts directly.
+    for (value, expected) in [
+        (0xfe, true),
+        (0xff, false),
+        (0xfd, false),
+        (0xfc, false),
+        (0xfe, true),
+        (0xfc, false),
+        (0xff, false),
+        (0xfd, false),
+        (0xfe, true),
+    ] {
+        write_bytes(&mut m, &[value]);
+        run(&mut m, 10);
+        assert_eq!(pad(&mut m, "PC0"), expected, "source bits {value:#04x}");
+    }
+}
+
+/// The same raw source reaches each destination, even when the first pad
+/// inverts it or another driver keeps that pad low.
+#[test]
+fn one_output_fans_out_without_reusing_resolved_pad_levels() {
+    let mut m = machine(
+        placed(
+            "expander",
+            "pcf8574",
+            &[
+                ("p0_pin", serde_yaml::Value::from("PC0")),
+                ("p1_pin", serde_yaml::Value::from("PC0")),
+                (
+                    "open_drain_pullups",
+                    serde_yaml::from_str("[P0, P1]").unwrap(),
+                ),
+                (
+                    "inverting_collectors",
+                    serde_yaml::from_str("[P0]").unwrap(),
+                ),
+            ],
+        ),
+        None,
+    );
+    // Bind more destinations for the existing source; do not attach a second
+    // device. This uses the same generic output-binding entry point as kits.
+    let descriptor = labwired_config::DeviceDescriptor::from_yaml(
+        "type: output_probe\nbehavior:\n  primitive: i2c_device\n  outputs: [P0]\n  output_pins: { P0: p0_pin }\n",
+    )
+    .unwrap();
+    for (label, open_drain) in [("PC1", true), ("PC2", false)] {
+        let mut ext = placed(
+            "expander",
+            "pcf8574",
+            &[("p0_pin", serde_yaml::Value::from(label))],
+        );
+        if open_drain {
+            ext.config.insert(
+                "open_drain_pullups".into(),
+                serde_yaml::from_str("[P0]").unwrap(),
+            );
+        }
+        labwired_core::peripherals::kit::AttachCtx::new(&mut m.bus, &ext)
+            .bind_output_pins(&descriptor)
+            .expect("one source may bind another pad");
+        let error = labwired_core::peripherals::kit::AttachCtx::new(&mut m.bus, &ext)
+            .bind_output_pins(&descriptor)
+            .unwrap_err();
+        assert!(
+            error.to_string().contains("already bound to this pad"),
+            "{error}"
+        );
+    }
+    run(&mut m, 10);
+    assert!(pad(&mut m, "PC0"));
+    assert!(pad(&mut m, "PC1"));
+
+    for (value, shared, source) in [
+        (0xff, false, true),
+        (0xfc, false, false),
+        (0xfe, true, false),
+        (0xff, false, true),
+        (0xfe, true, false),
+    ] {
+        write_bytes(&mut m, &[value]);
+        run(&mut m, 10);
+        assert_eq!(pad(&mut m, "PC0"), shared, "shared pad after {value:#04x}");
+        assert_eq!(pad(&mut m, "PC1"), source, "direct net after {value:#04x}");
+        assert_eq!(pad(&mut m, "PC2"), source, "legacy pad after {value:#04x}");
+    }
+}
+
+/// Drivers continue to change while the MCU GPIO clock is off. When it opens,
+/// retained levels must reach the input register without another device write.
+#[test]
+fn open_drain_restores_assertion_and_release_after_gpio_clock_gating() {
+    let mut m = machine(
+        placed(
+            "expander",
+            "pcf8574",
+            &[
+                ("p0_pin", serde_yaml::Value::from("PC0")),
+                ("p1_pin", serde_yaml::Value::from("PC0")),
+                (
+                    "open_drain_pullups",
+                    serde_yaml::from_str("[P0, P1]").unwrap(),
+                ),
+            ],
+        ),
+        None,
+    );
+    run(&mut m, 10);
+    assert!(
+        pad(&mut m, "PC0"),
+        "restore the initial pull-up after attachment with the clock off"
+    );
+    write_bytes(&mut m, &[0xff]);
+    run(&mut m, 10);
+
+    for (value, expected) in [(0xfe, false), (0xfc, false), (0xfd, false), (0xff, true)] {
+        m.bus.write_u32(RCC_AHB2ENR, 0).unwrap();
+        write_bytes(&mut m, &[value]);
+        run(&mut m, 10); // Drain the transition while GPIO access is gated.
+        assert!(!pad(&mut m, "PC0"), "the gated input register reads zero");
+        m.bus.write_u32(RCC_AHB2ENR, 0xff).unwrap();
+        run(&mut m, 10); // No new device write is available to repair the pad.
+        assert_eq!(pad(&mut m, "PC0"), expected, "retained {value:#04x}");
+    }
+}
+
+#[test]
+fn collector_roles_must_be_unique_and_explicitly_open_drain() {
+    let system = repo_root().join("configs/systems/nucleo-l476rg.yaml");
+    for collector in ["[P1]", "[P0, P0]", "[42]", "true"] {
+        let mut manifest = SystemManifest::from_file(&system).unwrap();
+        let chip =
+            ChipDescriptor::from_file(system.parent().unwrap().join(&manifest.chip)).unwrap();
+        manifest.external_devices.push(placed(
+            "bad-collector",
+            "pcf8574",
+            &[
+                ("p0_pin", serde_yaml::Value::from("PC0")),
+                ("open_drain_pullups", serde_yaml::from_str("[P0]").unwrap()),
+                (
+                    "inverting_collectors",
+                    serde_yaml::from_str(collector).unwrap(),
+                ),
+            ],
+        ));
+        let error = match labwired_core::bus::SystemBus::from_config(&chip, &manifest) {
+            Ok(_) => panic!("invalid collector setting {collector} was accepted"),
+            Err(error) => format!("{error:#}"),
+        };
+        assert!(error.contains("collector"), "unexpected error: {error}");
+    }
+}
+
+#[test]
+fn open_drain_configuration_rejects_mixed_modes_in_both_role_orders() {
+    let system = repo_root().join("configs/systems/nucleo-l476rg.yaml");
+    for selected in ["[P0]", "[P1]"] {
+        let mut manifest = SystemManifest::from_file(&system).unwrap();
+        let chip =
+            ChipDescriptor::from_file(system.parent().unwrap().join(&manifest.chip)).unwrap();
+        let roles = serde_yaml::from_str(selected).unwrap();
+        manifest.external_devices.push(placed(
+            "mixed",
+            "pcf8574",
+            &[
+                ("p0_pin", serde_yaml::Value::from("PC0")),
+                ("p1_pin", serde_yaml::Value::from("PC0")),
+                ("open_drain_pullups", roles),
+            ],
+        ));
+        let error = match labwired_core::bus::SystemBus::from_config(&chip, &manifest) {
+            Ok(_) => panic!("mixed-mode binding {selected} was accepted"),
+            Err(error) => format!("{error:#}"),
+        };
+        assert!(error.contains("legacy driver"), "unexpected error: {error}");
+    }
+}
+
+#[test]
+fn open_drain_configuration_rejects_bad_roles_and_accepts_an_unwired_role() {
+    let system = repo_root().join("configs/systems/nucleo-l476rg.yaml");
+    for (value, expected) in [
+        ("[P0, P0]", false),
+        ("[NO_SUCH_ROLE]", false),
+        ("[42]", false),
+        ("true", false),
+        ("[P0]", true),
+    ] {
+        let mut manifest = SystemManifest::from_file(&system).unwrap();
+        let chip =
+            ChipDescriptor::from_file(system.parent().unwrap().join(&manifest.chip)).unwrap();
+        manifest.external_devices.push(placed(
+            "probe",
+            "pcf8574",
+            &[("open_drain_pullups", serde_yaml::from_str(value).unwrap())],
+        ));
+        let result = labwired_core::bus::SystemBus::from_config(&chip, &manifest);
+        assert_eq!(result.is_ok(), expected, "placement {value}");
+        if let Err(error) = result {
+            assert!(
+                format!("{error:#}").contains("open_drain")
+                    || format!("{error:#}").contains("open-drain"),
+                "unexpected error: {error:#}"
+            );
+        }
+    }
+}
+
 /// An `outputs:` role whose `config:` key the placement does not set is not an
 /// error — an expander wired for two LEDs is an ordinary board. The part must
 /// still work over the wire, and the unbound pads must simply go nowhere.

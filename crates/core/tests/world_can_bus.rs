@@ -90,6 +90,7 @@ fn environment(interconnect: InterconnectConfig) -> EnvironmentManifest {
         name: "two-h5-nodes".to_string(),
         nodes: vec![node("tester"), node("ecu")],
         interconnects: vec![interconnect],
+        cosim_models: Vec::new(),
         rf: None,
     }
 }
@@ -107,6 +108,7 @@ fn quiet_can_environment_with_nodes(
         name: "quiet-h5-can-nodes".to_string(),
         nodes: ids.iter().map(|id| quiet_can_node(id)).collect(),
         interconnects: vec![interconnect],
+        cosim_models: Vec::new(),
         rf: None,
     }
 }
@@ -250,6 +252,7 @@ external_devices:
             &["scanner", "ecu"],
             &[("scanner", "mcp2515"), ("ecu", "bxcan1")],
         )],
+        cosim_models: Vec::new(),
         rf: None,
     };
 

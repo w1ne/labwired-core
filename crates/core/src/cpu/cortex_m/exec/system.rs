@@ -70,6 +70,13 @@ impl CortexM {
         // this `#[inline(always)]` arm remains a branch and `step_execute`
         // does not grow. Any other immediate is still a halt.
         if imm8 != 0xAB {
+            // 0xC0..0xFF: the RP2040 ROM's soft-float/double table entries
+            // (crate::cpu::cortex_m::rp2040_rom_hle). Only armed for that ROM.
+            if crate::cpu::cortex_m::rp2040_rom_hle::is_hle_imm(imm8) {
+                if let Some(r) = crate::cpu::cortex_m::rp2040_rom_hle::handle(self, bus, imm8) {
+                    return r;
+                }
+            }
             return Err(crate::SimulationError::Halt);
         }
         crate::cpu::cortex_m::semihost::handle(self, bus)

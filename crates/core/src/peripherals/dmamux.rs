@@ -138,6 +138,10 @@ pub struct Dmamux {
     /// Scheduler mode only: the output event is live in the heap.
     #[serde(skip)]
     output_live: bool,
+    /// A larger physical block can be declared without silently aliasing its
+    /// unsupported controller outputs to the modeled controller.
+    #[serde(skip)]
+    physical_channels: usize,
 }
 
 impl Dmamux {
@@ -150,8 +154,24 @@ impl Dmamux {
             held: vec![0; channels],
             event_count: vec![0; channels],
             dma: dma.to_string(),
+            physical_channels: channels,
             ..Default::default()
         }
+    }
+
+    pub fn with_physical_channels(mut self, channels: usize) -> Self {
+        self.physical_channels = channels;
+        self
+    }
+
+    fn check_channel_offset(&self, offset: u64) -> SimResult<()> {
+        let channel = (offset / 4) as usize;
+        if channel >= self.cxcr.len() && channel < self.physical_channels {
+            return Err(crate::SimulationError::NotImplemented(format!(
+                "DMAMUX output {channel} belongs to an unmodelled DMA controller"
+            )));
+        }
+        Ok(())
     }
 
     /// Name the DMAREQ_ID of a peripheral request (`spi1_tx` → 17 on G0).
@@ -336,12 +356,28 @@ impl Dmamux {
 }
 
 impl Peripheral for Dmamux {
+    fn on_node_reset(&mut self) {
+        self.cxcr.fill(0);
+        self.rgxcr.fill(0);
+        self.csr = 0;
+        self.rgsr = 0;
+        self.sync_window.fill(0);
+        self.held.fill(0);
+        self.event_count.fill(0);
+        self.gen_left.fill(0);
+        self.out.clear();
+        self.irq_pending = false;
+        self.output_live = false;
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
+        self.check_channel_offset(offset)?;
         let v = self.read_reg(offset & !3);
         Ok((v >> ((offset & 3) * 8)) as u8)
     }
 
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        self.check_channel_offset(offset)?;
         let reg = offset & !3;
         let shift = (offset & 3) * 8;
         let v = if reg == CFR || reg == RGCFR {
@@ -354,6 +390,7 @@ impl Peripheral for Dmamux {
     }
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        self.check_channel_offset(offset)?;
         self.write_reg(offset & !3, value);
         Ok(())
     }

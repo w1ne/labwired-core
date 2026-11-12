@@ -3,6 +3,26 @@
   "chip_set_derived_from": "configs/chips/*.yaml minus ci-fixture-* (same rule as crates/core/src/tests/builtin_chip_self_contained.rs). This is a SUPERSET of the `chip:` values in the superproject's packages/board-config/src/boards.ts BOARDS array, which is why a new BOARDS chip cannot dodge this gate: it cannot ship without its chip yaml. `in_boards` records BOARDS membership as of 2026-08-03 and is informational only.",
   "surveyed": "2026-08-03",
   "chips": {
+    "ch32v003f4p6": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/ch32v003_compiled_firmware.rs",
+        "test": "ch32v003_compiled_rv32ec_firmware_prints_on_usart1",
+        "signal": "the committed RV32EC fixture ELF (examples/ch32v003f4p6/uart_hello.c) clocks USART1 from APB2PCENR bit 14, polls STATR.TXE and writes 'Hello from CH32V003\\r\\n' through DATAR (0x40013804); the test asserts the console sink receives exactly that string, and a negative control with the clock gate moved to an unset bit asserts the sink stays empty. Polled TX only: no PFIC, so USART1_IRQn is not wired",
+        "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test ch32v003_compiled_firmware"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "SPI1 (0x40013000) is not modelled; it is not in the ch32v003f4p6 descriptor's peripherals list.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "I2C1 (0x40005400) is not modelled; it is not in the ch32v003f4p6 descriptor's peripherals list.",
+        "lane": "none"
+      }
+    },
     "dspic33fj32mc204": {
       "in_boards": false,
       "uart": {
@@ -101,6 +121,26 @@
         "lane": "none"
       }
     },
+    "atmega328pb": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/avr_atmega328pb_usart1.rs",
+        "test": "atmega328pb_firmware_uses_usart1_and_drives_pb5",
+        "signal": "the committed AVR-GCC ELF compiled with -mmcu=atmega328pb prints `PB_USART1_OK` through USART1 UDR1; the integration test asserts captured serial and PB5 high, and examples/atmega328pb-usart1/io-smoke.yaml asserts the serial marker under `labwired test`. The host AVR-LibC lacks a PB header/startup object, so the example supplies data-space register definitions and a reset vector; USART1 interrupts remain unmodelled.",
+        "lane": "cargo test -p labwired-core --test avr_atmega328pb_usart1; cargo run -q -p labwired-cli -- test --script examples/atmega328pb-usart1/io-smoke.yaml --output-dir out/boards/atmega328pb-usart1/io-smoke --no-uart-stdout"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No ATmega328PB SPI evidence is included in this slice.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No ATmega328PB I2C evidence is included in this slice.",
+        "lane": "none"
+      }
+    },
     "atmega1281": {
       "in_boards": true,
       "uart": {
@@ -144,6 +184,46 @@
         "signal": "phase 2 of the fixture does a full write-pointer / repeated-start / read against the board-level BMP280 model that configure_xtensa_esp32 attaches at 0x76 (crates/core/src/system/xtensa/esp32.rs:565), and requires the byte back to be the real CHIP_ID 0x58; phase 1 requires an absent 0x20 to NACK. Reported as TIER1 i2c PASS over the real UART.",
         "lane": "core-ci / core-full (nightly 02:30 UTC) via tier1_matrix; also core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
         "note": "the arduino-matrix INA219 cell is a second, independent proof on this chip."
+      }
+    },
+    "esp32-devkitc-32e-gpio-smoke": {
+      "in_boards": false,
+      "uart": {
+        "state": "shallow",
+        "file": "docs/receipts/2026-11-09-esp32-deep-sleep/sketch/deep_sleep_timer.test.yaml",
+        "test": "uart_contains",
+        "gap": "the receipt PASSES locally via `labwired test --script docs/receipts/2026-11-09-esp32-deep-sleep/sketch/deep_sleep_timer.test.yaml` (stock Arduino-ESP32 timer-wake firmware prints LW_DS_OK over UART0 after three boots; the sibling light-sleep script prints LW_LS_OK) but runs in NO CI lane — no workflow invokes it, so nothing gates a regression.",
+        "lane": "none"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "This onboarding slice does not declare or prove a SPI controller.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "The chip yaml declares I2C0, but configs/systems/esp32-devkitc-32e-gpio-smoke.yaml attaches no external device and the committed sleep receipts do not perform an I2C transaction.",
+        "lane": "none"
+      }
+    },
+    "esp32-devkitc-32e-uart1": {
+      "in_boards": false,
+      "uart": {
+        "state": "shallow",
+        "file": "examples/esp32-devkitc-32e-uart1/uart1-smoke.yaml",
+        "test": "uart_contains",
+        "gap": "committed onboarding evidence (examples/esp32-devkitc-32e-uart1/evidence/run) shows the script PASSES: UART0 printed ESP32_DEVKITC32E_UART1_TX_OK and GPIO16 (UART1 TX) recorded >=32 edges. Firmware is PlatformIO-built, not a committed ELF, and no required CI lane invokes this script, so nothing gates a regression.",
+        "lane": "none"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "This onboarding slice does not declare or prove a SPI controller.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "This onboarding slice does not declare an I2C controller or attach an external I2C device.",
+        "lane": "none"
       }
     },
     "esp32c3": {
@@ -630,6 +710,48 @@
       "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
       "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
     },
+    "stm32f103rb-nucleo-bme280-smoke": {
+      "in_boards": false,
+      "uart": {
+        "state": "shallow",
+        "file": "examples/nucleo-f103rb-bme280/onboarding-smoke.yaml",
+        "test": "uart_contains",
+        "gap": "committed onboarding evidence (examples/nucleo-f103rb-bme280/evidence) shows the script PASSES: USART2 printed NUCLEO_F103RB_BME280_OK ID=0x60 I2C1=PB8/PB9 and gpioa:5 (LD2) recorded >=32 edges. Firmware is built from crates/firmware-nucleo-f103rb-bme280-smoke, not a committed ELF, and no required CI lane invokes this script, so nothing gates a regression.",
+        "lane": "none"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "This onboarding slice does not declare or prove a SPI controller.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "shallow",
+        "file": "examples/nucleo-f103rb-bme280/onboarding-smoke.yaml",
+        "test": "uart_contains",
+        "gap": "the smoke firmware reads BME280.CHIP_ID (register 0xD0) over I2C1 at 0x77 (Arduino D15/D14, PB8/PB9) and prints ID=0x60 on USART2. That is a firmware-driven I2C transaction observed via the UART marker, not a dedicated I2C capture assertion, and no required CI lane runs the script.",
+        "lane": "none"
+      }
+    },
+    "stm32f103r8": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "examples/stm32f103r8-smoke/io-smoke.yaml",
+        "test": "uart_contains: \"OK\"",
+        "signal": "the NUCLEO-F103RB smoke firmware boots on the exact STM32F103R8 descriptor (64 KiB flash / 20 KiB SRAM) and its 'OK' bytes reach the modelled USART sink, matched by uart_contains; PA5 also toggles >=4 times (gpio_edges)",
+        "lane": "core-ci: cargo test -p labwired-core --test strict_onboarding (the gate EXECUTES examples/stm32f103r8-smoke/io-smoke.yaml through the CLI and fails the board if any assertion fails)"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No exact-part firmware SPI transfer is proven for this descriptor.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No exact-part firmware I2C transaction is proven for this descriptor.",
+        "lane": "none"
+      }
+    },
     "stm32f103t4": {
       "in_boards": false,
       "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
@@ -817,6 +939,30 @@
         "signal": "real Arduino firmware writes a register-pointer byte to the INA219 model attached at 0x40 in validation/arduino-matrix/systems/<chip>.yaml and Wire.endTransmission() returns 0 (the device ACKed); the verdict LW_L3_OK then comes back as real bytes on the modelled UART, matched by a uart_contains oracle",
         "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
         "note": "the ACK is meaningful because the same chips' tier-1 fixtures show an UNMATCHED address NACKs (esp32 check_i2c addr 0x20, stm32 NACKF, rp2040 ABRT_7B_ADDR_NOACK) - the bus does not blanket-ACK. LIMIT: this proves address+data out and the device's ACK back, not a payload readback. Evidence: run 30842505709, 'cells=45 expected>=45 fails=0', 2026-08-03."
+      }
+    },
+    "stm32g431rb": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "examples/stm32g431rb/io-smoke.yaml",
+        "test": "TIER1 clock PASS",
+        "signal": "the committed tier-1 fixture (tests/fixtures/tier1/stm32g431rb.elf) boots on the G431 descriptor and its banner bytes reach the modelled USART sink; uart_contains asserts 'TIER1 clock PASS', 'TIER1 gpio PASS' and 'TIER1 done'",
+        "lane": "core-ci: cargo test -p labwired-core --test strict_onboarding (the gate EXECUTES examples/stm32g431rb/io-smoke.yaml through the CLI and fails the board if any assertion fails)"
+      },
+      "spi": {
+        "state": "shallow",
+        "file": "examples/tier1-fixture/stm32g431rb/src/main.rs",
+        "test": "check_spi",
+        "gap": "firmware-driven, but nothing is on the far end of the bus: the fixture writes the data register and then asserts BSY/TXE/EOT flags. No device receives a byte, so this cannot distinguish a working shift engine from one that only moves status bits.",
+        "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
+      },
+      "i2c": {
+        "state": "shallow",
+        "file": "examples/tier1-fixture/stm32g431rb/src/main.rs",
+        "test": "check_i2c",
+        "gap": "firmware-driven register walk only: the fixture enables I2C1, sets START/STOP and checks ISR.BUSY/TXE. No device is attached, so no address ACK or payload is proven on this exact part (the G474 sibling's Arduino INA219 ACK proof does not cover the G431 descriptor).",
+        "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
       }
     },
     "stm32h563": {

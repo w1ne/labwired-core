@@ -29,6 +29,10 @@
   },
   {
     "buses": [],
+    "name": "atmega328pb"
+  },
+  {
+    "buses": [],
     "name": "atsamd21"
   },
   {
@@ -93,6 +97,10 @@
   },
   {
     "buses": [],
+    "name": "ch32v003f4p6"
+  },
+  {
+    "buses": [],
     "name": "dspic33fj32mc202"
   },
   {
@@ -112,6 +120,19 @@
       "UART"
     ],
     "name": "esp32"
+  },
+  {
+    "buses": [
+      "I2C",
+      "UART"
+    ],
+    "name": "esp32-devkitc-32e-gpio-smoke"
+  },
+  {
+    "buses": [
+      "UART"
+    ],
+    "name": "esp32-devkitc-32e-uart1"
   },
   {
     "buses": [
@@ -354,7 +375,21 @@
       "SPI",
       "UART"
     ],
+    "name": "stm32f103r8"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
     "name": "stm32f103rb"
+  },
+  {
+    "buses": [
+      "I2C"
+    ],
+    "name": "stm32f103rb-nucleo-bme280-smoke"
   },
   {
     "buses": [
@@ -580,9 +615,19 @@
   },
   {
     "buses": [
+      "I2C",
+      "SPI",
       "UART"
     ],
     "name": "stm32g0b1re"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32g431rb"
   },
   {
     "buses": [

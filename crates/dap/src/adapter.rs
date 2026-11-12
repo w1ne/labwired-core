@@ -1751,6 +1751,13 @@ fn gpio_offsets_for_peripheral(
             odr_offset: 0x000,
             ra_output_packed: false,
         }),
+        // WCH CH32V003: the data registers keep the STM32F1 offsets — INDR
+        // @0x08, OUTDR @0x0C (ch32v00x.h GPIO_TypeDef). Only the config
+        // register differs (one 8-pin CFGLR @0x00, no CFGHR), and that is a
+        // `GpioPort` concern, not a DAP board-IO one. These are the same two
+        // numbers `GpioPort::odr_offset()` / `idr_offset()` return for this
+        // layout; keep the three in step.
+        labwired_core::peripherals::gpio::GpioRegisterLayout::Wch => Some(default_offsets),
     }
 }
 
@@ -1872,6 +1879,7 @@ mod tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: None,
             supply_monitor: None,
             include: None,
         }

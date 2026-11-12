@@ -230,6 +230,17 @@ const SIG_U2TXD: u32 = 198;
 /// `ledcAttachPin` routes a pad with `gpio_matrix_out(pin, LEDC_HS_SIG_OUT0_IDX +
 /// channel, ...)`.
 const SIG_LEDC_HS0: u32 = 71;
+/// GPIO-matrix output signal indices for RMT TX channels 0..7 (TRM Table 4-2 /
+/// `RMT_SIG_OUT0`..`RMT_SIG_OUT7`). ESP-IDF `rmt_ll` / `gpio_matrix_out` route a
+/// channel's waveform to a pad by writing one of these into `FUNCn_OUT_SEL`.
+pub const RMT_SIG_OUT0: u32 = 87;
+pub const RMT_SIG_OUT1: u32 = 88;
+pub const RMT_SIG_OUT2: u32 = 89;
+pub const RMT_SIG_OUT3: u32 = 90;
+pub const RMT_SIG_OUT4: u32 = 91;
+pub const RMT_SIG_OUT5: u32 = 92;
+pub const RMT_SIG_OUT6: u32 = 93;
+pub const RMT_SIG_OUT7: u32 = 94;
 
 /// Names of the 16 LEDC output signals, as `gpio_sig_map.h` spells them.
 const LEDC_SIGNAL_NAMES: [&str; 16] = [
@@ -315,6 +326,22 @@ fn esp32_out_signal_name(idx: u32) -> Option<&'static str> {
 /// family could satisfy without a third copy of all of it.
 pub use crate::peripherals::device::{GpioObserver, PadSource};
 
+/// One input signal of the GPIO matrix fed to a peripheral's timer input.
+#[derive(Debug, Clone, Copy)]
+struct MatrixInputTap {
+    signal: u32,
+    sink: usize,
+    ti: u8,
+    /// The level last reported for it.
+    level: bool,
+}
+
+/// `IN_SEL` values that select a constant instead of a pad
+/// (`GPIO_MATRIX_CONST_ZERO_INPUT` 0x30 / `GPIO_MATRIX_CONST_ONE_INPUT` 0x38,
+/// esp-idf `soc/esp32/include/soc/gpio_pins.h`).
+const IN_SEL_CONST_LOW: u32 = 0x30;
+const IN_SEL_CONST_HIGH: u32 = 0x38;
+
 /// ESP32-classic GPIO peripheral.
 pub struct Esp32Gpio {
     enable: u32,
@@ -365,6 +392,13 @@ pub struct Esp32Gpio {
     /// Outside levels that reached a pad an input signal reads, for the bus
     /// to hand to the line's peripheral (`Peripheral::take_wire_input_edges`).
     wire_edges: Vec<crate::peripherals::pad_lines::WireInputEdge>,
+    /// Input signals fed to another peripheral's timer inputs
+    /// ([`Peripheral::bind_matrix_input_taps`]): the PCNT's 32. Wiring, not
+    /// state; empty — and free — on a bus with no pulse counter.
+    matrix_taps: Vec<MatrixInputTap>,
+    /// Level changes of `matrix_taps` since the bus last drained them
+    /// (`Peripheral::take_timer_input_edges`).
+    tap_edges: Vec<crate::peripherals::gpio::TimerInputEdge>,
     /// Pads bound to peripheral wires, resolved against this port's live output
     /// matrix through the ONE shared seam (`peripherals::pad_routing`). Empty —
     /// and free — on a bus with no classic-ESP32 I²C controller.
@@ -417,6 +451,8 @@ impl Esp32Gpio {
             in_routes: Default::default(),
             net_pads: 0,
             wire_edges: Vec::new(),
+            matrix_taps: Vec::new(),
+            tap_edges: Vec::new(),
             pad_routes: PadRoutes::new(),
             watch: None,
             cycle: 0,
@@ -854,6 +890,45 @@ impl Esp32Gpio {
         }
     }
 
+    /// The level input signal `sig` sees through the input matrix: the pad
+    /// `IN_SEL` names as `GPIO_IN` reads it (a driven output reads back), or
+    /// a constant, then `IN_INV_SEL`. With `SIG_IN_SEL` clear the signal takes
+    /// its IO_MUX pad instead; the signals tapped here (PCNT) have none, so
+    /// that reads low.
+    fn matrix_input_level(&self, sig: u32) -> bool {
+        let word = self.in_sel_word(sig);
+        if word & IN_SEL_LAYOUT.sel_bit == 0 {
+            return false;
+        }
+        let level = match word & IN_SEL_LAYOUT.pad_mask {
+            IN_SEL_CONST_LOW => false,
+            IN_SEL_CONST_HIGH => true,
+            pad if pad < u32::from(PAD_COUNT) => PinPort::input(self, pad as u8).unwrap_or(false),
+            _ => false,
+        };
+        level ^ (word & (1 << 6) != 0)
+    }
+
+    /// Report every tapped input signal whose level moved since last time.
+    fn sync_matrix_taps(&mut self) {
+        if self.matrix_taps.is_empty() {
+            return;
+        }
+        for i in 0..self.matrix_taps.len() {
+            let tap = self.matrix_taps[i];
+            let level = self.matrix_input_level(tap.signal);
+            if level != tap.level {
+                self.matrix_taps[i].level = level;
+                self.tap_edges
+                    .push(crate::peripherals::gpio::TimerInputEdge {
+                        timer: tap.sink,
+                        ti: tap.ti,
+                        level,
+                    });
+            }
+        }
+    }
+
     /// `FUNCn_IN_SEL_CFG` of input signal `sig`.
     fn in_sel_word(&self, sig: u32) -> u32 {
         self.in_sel.get(sig as usize).copied().unwrap_or(0)
@@ -1127,6 +1202,57 @@ impl Esp32Gpio {
         }
     }
 
+    /// Drive pad `pin` (0..39) to `level` by writing the GPIO_OUT / GPIO_OUT1
+    /// latch and notifying observers — the classic twin of S3
+    /// [`crate::peripherals::esp32s3::gpio::Esp32s3Gpio::drive_pad_output`].
+    /// Used by the RMT TX engine to put bit-level edges on a matrix-routed pad
+    /// so a WS2812 observer (or logic capture) sees the waveform. Returns
+    /// false for an out-of-range pad.
+    pub fn drive_pad_output(&mut self, pin: u8, level: bool) -> bool {
+        if pin >= PAD_COUNT {
+            return false;
+        }
+        if pin < 32 {
+            let mask = 1u32 << pin;
+            let new_out = if level {
+                self.out | mask
+            } else {
+                self.out & !mask
+            };
+            self.apply_out(new_out);
+        } else {
+            let mask = 1u32 << (pin - 32);
+            let new_out1 = if level {
+                self.out1 | mask
+            } else {
+                self.out1 & !mask
+            };
+            self.apply_out1(new_out1);
+        }
+        true
+    }
+
+    /// Pads whose `FUNCn_OUT_SEL` routes peripheral output `signal_idx` — what
+    /// an RMT channel uses to find the GPIO its waveform reaches (`RMT_SIG_OUT0`
+    /// .. `RMT_SIG_OUT7`). Ascending pad order; a signal may fan out.
+    pub fn pads_for_output_signal(&self, signal_idx: u32) -> Vec<u8> {
+        // Match S3: resolve from FUNCn_OUT_SEL alone. `matrix_signal` also
+        // gates on ENABLE (classic approximation for LEDC/UART pad_routes);
+        // RMT TX must still find a matrix-routed pad the way silicon does when
+        // OEN comes from the peripheral (`OEN_SEL=0`) even if GPIO_ENABLE is
+        // clear — NeoPixel `rmtInit` programs the matrix before/with pinMode.
+        let want = signal_idx & OUT_SEL_MASK;
+        (0..PAD_COUNT)
+            .filter(|&pin| (self.out_sel[pin as usize] & OUT_SEL_MASK) == want)
+            .collect()
+    }
+
+    /// Advance the observer timestamp to `now` before an RMT edge so WS2812
+    /// HIGH/LOW durations are measured in real sim cycles (scheduler path).
+    pub fn sync_observer_cycle(&mut self, now: u64) {
+        self.sync_to(now);
+    }
+
     fn read_word(&self, word_off: u64) -> u32 {
         match word_off {
             // OUT bank (GPIO0..31): TRM Table 4-3.
@@ -1203,6 +1329,7 @@ impl Esp32Gpio {
             self.notify_pad_sources();
         }
         self.sync_rtc_inputs();
+        self.sync_matrix_taps();
     }
 
     fn write_word_inner(&mut self, word_off: u64, value: u32) {
@@ -1335,6 +1462,7 @@ impl PinPort for Esp32Gpio {
             s.sync_rtc_inputs();
         });
         self.deliver_wire_input(pin);
+        self.sync_matrix_taps();
         Some(InputChange {
             before: before & pad != 0,
             after: self.pad_levels() & pad != 0,
@@ -1543,6 +1671,18 @@ impl Peripheral for Esp32Gpio {
         Some(self)
     }
 
+    fn pads_for_output_signal(&self, signal_idx: u32) -> Vec<u8> {
+        Esp32Gpio::pads_for_output_signal(self, signal_idx)
+    }
+
+    fn drive_pad_output(&mut self, pin: u8, level: bool) -> bool {
+        Esp32Gpio::drive_pad_output(self, pin, level)
+    }
+
+    fn sync_observer_cycle(&mut self, now: u64) {
+        Esp32Gpio::sync_observer_cycle(self, now)
+    }
+
     fn gpio_routing(&self, pin: u8) -> Option<crate::peripherals::gpio::GpioRouting> {
         use crate::peripherals::gpio::{GpioMode, GpioRouting};
         if pin >= PAD_COUNT {
@@ -1636,6 +1776,26 @@ impl Peripheral for Esp32Gpio {
 
     fn take_wire_input_edges(&mut self) -> Vec<crate::peripherals::pad_lines::WireInputEdge> {
         std::mem::take(&mut self.wire_edges)
+    }
+
+    fn take_timer_input_edges(&mut self) -> Vec<crate::peripherals::gpio::TimerInputEdge> {
+        std::mem::take(&mut self.tap_edges)
+    }
+
+    fn bind_matrix_input_taps(&mut self, taps: &[(u32, u8)], sink: usize) -> bool {
+        for &(signal, ti) in taps {
+            if signal as usize >= self.in_sel.len() {
+                continue;
+            }
+            let level = self.matrix_input_level(signal);
+            self.matrix_taps.push(MatrixInputTap {
+                signal,
+                sink,
+                ti,
+                level,
+            });
+        }
+        !self.matrix_taps.is_empty()
     }
 
     /// The classic RTC IO MUX (RTC_GPIO0..17 on GPIO36..39, 34, 35, 25, 26,
