@@ -54,6 +54,40 @@ fn legacy_bus_without_regulators_keeps_no_cosim_fast_path() {
 }
 
 #[test]
+fn both_cpu_advance_paths_reject_unattached_regulators_after_legacy_warmup() {
+    let (mut machine, control, observed) = machine();
+    let regulators = std::mem::take(&mut machine.bus.regulators);
+    machine.bus.mcu_power = Default::default();
+    machine.advance(AdvanceRequest::single()).unwrap();
+    let before_cycles = machine.total_cycles;
+    let before_control = control.configuration();
+    machine.bus.regulators = regulators;
+
+    for with_window_runner in [false, true] {
+        let mut entered_runner = false;
+        let request = AdvanceRequest::run(None).with_cycle_limit(16);
+        let result = if with_window_runner {
+            machine.advance_with_window_runner(request, |_, _, _, _, _| {
+                entered_runner = true;
+                Ok(1)
+            })
+        } else {
+            machine.advance(request)
+        };
+        let error = result.unwrap_err().to_string();
+        assert!(
+            error.contains("complete attached sampled circuit"),
+            "{error}"
+        );
+        assert!(!entered_runner);
+        assert_eq!(machine.total_cycles, before_cycles);
+        assert_eq!(control.configuration(), before_control);
+        assert!(control.observation().is_none());
+        assert!(observed.lock().unwrap().is_empty());
+    }
+}
+
+#[test]
 fn unrelated_nonempty_model_does_not_satisfy_declared_stage() {
     let message = rejection(&[unrelated_model()]);
     assert!(message.contains("complete analog model owner"), "{message}");

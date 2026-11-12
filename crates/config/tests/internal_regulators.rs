@@ -28,7 +28,7 @@ fn explicit_model_round_trips_and_keeps_independent_current_and_voltage_limits()
     value.initial.rated_load_a = 2.0;
     value.initial.current_limit_a = 0.1;
     value.initial.target_voltage_v = 6.0;
-    validate_internal_regulators(&[value.clone()], Some(&domains())).unwrap();
+    validate_internal_regulators(std::slice::from_ref(&value), Some(&domains())).unwrap();
     let round: InternalRegulatorConfig =
         serde_yaml::from_str(&serde_yaml::to_string(&value).unwrap()).unwrap();
     assert_eq!(round, value);
@@ -67,7 +67,7 @@ fn closed_fields_and_typed_labels_reject_null_numeric_or_unknown_keys() {
 fn role_aliases_missing_domains_duplicate_owners_and_bounds_fail() {
     let base: InternalRegulatorConfig = serde_yaml::from_str(REGULATOR).unwrap();
     let power = domains();
-    assert!(validate_internal_regulators(&[base.clone()], None).is_err());
+    assert!(validate_internal_regulators(std::slice::from_ref(&base), None).is_err());
     let mut item = base.clone();
     item.input_domain = "missing".into();
     assert!(validate_internal_regulators(&[item], Some(&power)).is_err());

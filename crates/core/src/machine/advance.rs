@@ -71,8 +71,9 @@ impl<C: Cpu> Machine<C> {
     /// is always between two advances.
     ///
     /// The CLI's single-step loop calls `advance` once per instruction, so the
-    /// usual case (no routed supply, note already filed) must cost one test;
-    /// the work is in a cold function. It sits here and not in
+    /// usual case (no routed power/reset, no declared regulator, note already
+    /// filed) uses only cheap presence tests; fallible work stays in a cold
+    /// function. It sits here and not in
     /// `advance_inner` because code added to that loop's function changes how
     /// the whole loop is compiled, and the loop pays for it on every call. A
     /// pending release or a held core needs a routed supply (see
@@ -82,6 +83,7 @@ impl<C: Cpu> Machine<C> {
         if self.bus.mcu_power.is_configured()
             || self.bus.supply.is_routed()
             || self.bus.reset_input.is_routed()
+            || !self.bus.regulators.is_empty()
             || !self.unpowered_rail_noted
         {
             return self.supply_boundary(request);
@@ -96,6 +98,13 @@ impl<C: Cpu> Machine<C> {
     #[cold]
     #[inline(never)]
     fn supply_boundary(&mut self, request: &AdvanceRequest) -> SimResult<Option<AdvanceReport>> {
+        // A declared regulator must have a complete sampled source before
+        // reset events or CPU time can advance. Keep the fallible admission in
+        // this cold boundary so legacy single-step calls only test emptiness.
+        self.bus
+            .regulators
+            .require_sampled_source()
+            .map_err(crate::SimulationError::Other)?;
         if self.bus.reset_input.take_assertion() {
             self.reset_from_external_pin()?;
         }
@@ -159,10 +168,6 @@ impl<C: Cpu> Machine<C> {
     /// Callers must arrange an honored breakpoint, CPU progress termination,
     /// or external termination when issuing such a request.
     pub fn advance(&mut self, request: AdvanceRequest) -> SimResult<AdvanceReport> {
-        self.bus
-            .regulators
-            .require_sampled_source()
-            .map_err(crate::SimulationError::Other)?;
         if let Some(report) = self.supply_gate(&request)? {
             return Ok(report);
         }
@@ -215,10 +220,6 @@ impl<C: Cpu> Machine<C> {
             u32,
         ) -> SimResult<u32>,
     {
-        self.bus
-            .regulators
-            .require_sampled_source()
-            .map_err(crate::SimulationError::Other)?;
         if let Some(report) = self.supply_gate(&request)? {
             return Ok(report);
         }
