@@ -317,7 +317,7 @@ fn registry_factory_attaches_native_spi_with_explicit_cs_and_power_state() {
     };
     let mut bus = SystemBus::from_config(
         &chip,
-        &make_manifest("{cs_pin: GPIO14, int1_pin: GPIO13, powered: false}", "spi0"),
+        &make_manifest("{cs_pin: GPIO14, powered: false}", "spi0"),
     )
     .unwrap();
     let index = bus.find_peripheral_index_by_name("spi0").unwrap();
@@ -350,5 +350,119 @@ fn registry_factory_attaches_native_spi_with_explicit_cs_and_power_state() {
             .err()
             .expect("invalid attachment must fail");
         assert!(format!("{err:#}").contains(error), "{err:#}");
+    }
+}
+
+fn interrupt_bus(config: &str) -> labwired_core::bus::SystemBus {
+    use labwired_config::{ChipDescriptor, SystemManifest};
+    use labwired_core::Bus;
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let chip = ChipDescriptor::from_file(root.join("configs/chips/stm32l476.yaml")).unwrap();
+    let manifest: SystemManifest = serde_yaml::from_str(&format!(
+        "name: bmi270-interrupt-pad\nchip: stm32l476rg\nexternal_devices:\n  - id: U9\n    type: bmi270_spi\n    connection: spi1\n    config: {config}\n"
+    )).unwrap();
+    let mut bus = labwired_core::bus::SystemBus::from_config(&chip, &manifest).unwrap();
+    bus.write_u32(0x4002_104c, 1).unwrap(); // GPIOA clock, as firmware must enable it
+    bus
+}
+
+fn interrupt_device(bus: &mut labwired_core::bus::SystemBus) -> &mut Bmi270Spi {
+    let index = bus.find_peripheral_index_by_name("spi1").unwrap();
+    let spi = bus.peripherals[index]
+        .dev
+        .as_any_mut()
+        .unwrap()
+        .downcast_mut::<labwired_core::peripherals::spi::Spi>()
+        .unwrap();
+    spi.attached_devices[0]
+        .as_any_mut()
+        .unwrap()
+        .downcast_mut::<Bmi270Spi>()
+        .unwrap()
+}
+
+fn input_pad(bus: &mut labwired_core::bus::SystemBus, label: &str) -> bool {
+    use labwired_core::Bus;
+    let (addr, bit) = labwired_core::bus::SystemBus::resolve_pin_idr_pub(bus, label).unwrap();
+    bus.read_u32(addr).unwrap() & (1 << bit) != 0
+}
+
+/// This checks the factory role binding, controller drain and actual bus GPIO
+/// input word. The direct SPI frames deliberately isolate that path from the
+/// MCU controller's register transport, which has separate RP tests.
+#[test]
+fn native_spi_interrupt_roles_reach_distinct_mcu_inputs_and_clear_on_reset() {
+    use labwired_core::Bus;
+    let mut bus = interrupt_bus("{cs_pin: PA4, int1_pin: PA0, int2_pin: PA1}");
+    let d = interrupt_device(&mut bus);
+    d.cs_select();
+    d.cs_release();
+    d.advance_time_us(450);
+    upload(d, MAX_FIFO);
+    d.advance_time_us(20_000);
+    write(d, 0x53, &[0x0a, 0x0a, 1]); // both push-pull, active-high, latched
+    write(d, 0x58, &[0x04]); // DRDY to INT1 only
+    write(d, 0x7d, &[4]); // accelerometer, default 100 Hz
+    d.advance_time_us(10_000);
+    bus.tick_peripherals();
+    assert!(
+        input_pad(&mut bus, "PA0"),
+        "INT1 must reach the CPU input word"
+    );
+    assert!(!input_pad(&mut bus, "PA1"), "INT2 is not mapped yet");
+
+    assert_eq!(read(interrupt_device(&mut bus), 0x1d, 1), [0x80]);
+    bus.tick_peripherals();
+    assert!(
+        !input_pad(&mut bus, "PA0"),
+        "status read clears the latched line"
+    );
+    let d = interrupt_device(&mut bus);
+    write(d, 0x58, &[0x40]); // the same event now reaches INT2
+    d.advance_time_us(10_000);
+    bus.tick_peripherals();
+    assert!(!input_pad(&mut bus, "PA0"));
+    assert!(input_pad(&mut bus, "PA1"));
+    write(interrupt_device(&mut bus), 0x7e, &[0xb6]);
+    bus.tick_peripherals();
+    assert!(
+        !input_pad(&mut bus, "PA1"),
+        "reset parks the previously driven line"
+    );
+}
+
+#[test]
+fn unconnected_interrupts_stay_optional_but_invalid_pad_declarations_fail() {
+    use labwired_config::{ChipDescriptor, SystemManifest};
+    let mut bus = interrupt_bus("{cs_pin: PA4}");
+    let d = interrupt_device(&mut bus);
+    d.cs_select();
+    d.cs_release();
+    d.advance_time_us(450);
+    assert_eq!(read(d, 0, 1), [0x24]);
+    write(d, 0x53, &[0x0a, 0x0a]);
+    assert!(
+        d.take_pin_drives().is_empty(),
+        "no output destination was declared"
+    );
+
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let chip = ChipDescriptor::from_file(root.join("configs/chips/stm32l476.yaml")).unwrap();
+    for (pin, expected) in [
+        ("null", "nonempty GPIO"),
+        ("false", "nonempty GPIO"),
+        ("13", "nonempty GPIO"),
+        ("[]", "nonempty GPIO"),
+        ("''", "nonempty GPIO"),
+        ("' '", "nonempty GPIO"),
+        ("PA99", "could not be resolved"),
+    ] {
+        let manifest: SystemManifest = serde_yaml::from_str(&format!(
+            "name: invalid-interrupt\nchip: stm32l476rg\nexternal_devices:\n  - id: U9\n    type: bmi270_spi\n    connection: spi1\n    config: {{cs_pin: PA4, int1_pin: {pin}}}\n"
+        )).unwrap();
+        let error = labwired_core::bus::SystemBus::from_config(&chip, &manifest)
+            .err()
+            .expect("an invalid declared interrupt must not attach silently");
+        assert!(format!("{error:#}").contains(expected), "{pin}: {error:#}");
     }
 }

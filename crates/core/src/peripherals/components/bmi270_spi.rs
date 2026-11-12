@@ -616,9 +616,26 @@ impl PeripheralKit for LazyLock<Bmi270SpiKit> {
             .context("BMI270 SPI requires an explicit cs_pin")?;
         let mut device = Bmi270Spi::new(cs)?;
         device.set_powered(powered_from_config(ctx));
+        // The bus binds device output roles to the placed MCU pads. Passing
+        // GPIO labels to take_pin_drives would leave every edge undelivered.
+        let outputs = ["INT1".to_owned(), "INT2".to_owned()];
+        let output_pins = std::collections::BTreeMap::from([
+            ("INT1".to_owned(), "int1_pin".to_owned()),
+            ("INT2".to_owned(), "int2_pin".to_owned()),
+        ]);
+        for key in output_pins.values() {
+            if let Some(value) = ctx.ext.config.get(key) {
+                anyhow::ensure!(
+                    value.as_str().is_some_and(|s| !s.trim().is_empty()),
+                    "BMI270 {key} must be a nonempty GPIO pad label"
+                );
+            }
+        }
+        ctx.bind_output_roles(&outputs, &output_pins)?;
+        let bound: BTreeSet<_> = ctx.bound_output_roles().collect();
         device.set_interrupt_pins(
-            ctx.config_str("int1_pin").map(str::to_owned),
-            ctx.config_str("int2_pin").map(str::to_owned),
+            bound.contains("INT1").then(|| "INT1".to_owned()),
+            bound.contains("INT2").then(|| "INT2".to_owned()),
         );
         let mode = ctx
             .ext
