@@ -21,6 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
+          path: diagnostic-tools
           persist-credentials: false
       - name: Set hosted-only build path
         run: echo "CARGO_TARGET_DIR=$RUNNER_TEMP/core-pr1841-target" >> "$GITHUB_ENV"
@@ -40,7 +41,7 @@ jobs:
           path: source
           persist-credentials: false
       - name: Build only the canonical ESP32 guest once
-        run: python3 scripts/diagnostics/pr1841_xtensa.py fixture source results
+        run: python3 diagnostic-tools/scripts/diagnostics/pr1841_xtensa.py fixture source results
       - name: Build exact base CLI
         working-directory: source
         timeout-minutes: 17
@@ -48,7 +49,7 @@ jobs:
       - name: Retain exact base CLI for subsequent read-only diagnostics
         run: gzip -1 -c "$CARGO_TARGET_DIR/release/labwired" > results/base-labwired.gz
       - name: Profile base Xtensa step loop
-        run: python3 scripts/diagnostics/pr1841_xtensa.py base source 5136a4ddf78132f5b411972911042c91d5a67121 results results/perf-spin-esp32.elf
+        run: python3 diagnostic-tools/scripts/diagnostics/pr1841_xtensa.py base source 5136a4ddf78132f5b411972911042c91d5a67121 results results/perf-spin-esp32.elf
       - name: Check out exact integration
         uses: actions/checkout@v5
         with:
@@ -62,9 +63,9 @@ jobs:
       - name: Retain exact integration CLI for subsequent read-only diagnostics
         run: gzip -1 -c "$CARGO_TARGET_DIR/release/labwired" > results/head-labwired.gz
       - name: Profile integration Xtensa step loop
-        run: python3 scripts/diagnostics/pr1841_xtensa.py head source 6ec1cfbb24c4230df347d3790fcae6b59172356d results results/perf-spin-esp32.elf
+        run: python3 diagnostic-tools/scripts/diagnostics/pr1841_xtensa.py head source 6ec1cfbb24c4230df347d3790fcae6b59172356d results results/perf-spin-esp32.elf
       - name: Compare diagnostics
-        run: python3 scripts/diagnostics/pr1841_xtensa.py compare results
+        run: python3 diagnostic-tools/scripts/diagnostics/pr1841_xtensa.py compare results
       - name: Retain profiles and exact source identities
         if: always()
         uses: actions/upload-artifact@v5
