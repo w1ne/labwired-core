@@ -323,25 +323,36 @@ fn a_frame_in_progress_is_not_restarted_by_a_clock() {
 /// the master would hand a driver half of one reading and half of another.
 #[test]
 fn a_stimulus_mid_frame_does_not_corrupt_the_word() {
-    let mut m = machine();
-    run(&mut m, 200_000);
-    set_input(&mut m, "raw", f64::from(0x007F_0000));
-
-    let mut word = 0u32;
-    for _ in 0..8 {
-        word = (word << 1) | u32::from(pulse(&mut m));
+    // Use different trailing bits. 0x7F0000 -> 0 has the SAME unread low
+    // 16 bits, so it cannot distinguish an atomic frame from a torn sample.
+    for channel in ["raw", "weight"] {
+        for split in 1..24 {
+            let mut m = machine();
+            run(&mut m, 200_000);
+            let old = 0x0035_AA55u32;
+            let new = 0x002A_55AAu32;
+            let scale = if channel == "weight" { 100.0 } else { 1.0 };
+            set_input(&mut m, channel, f64::from(old) / scale);
+            let mut word = 0u32;
+            for _ in 0..split {
+                word = (word << 1) | u32::from(pulse(&mut m));
+            }
+            set_input(&mut m, channel, f64::from(new) / scale);
+            for _ in split..24 {
+                word = (word << 1) | u32::from(pulse(&mut m));
+            }
+            assert_eq!(
+                word, old,
+                "{channel} at bit {split}: one frame must contain one sample"
+            );
+            pulse(&mut m);
+            assert_eq!(
+                read_frame(&mut m),
+                new,
+                "{channel} at bit {split}: next frame sees update"
+            );
+        }
     }
-    // Change the sample half way through — the remaining bits still come from
-    // the word the frame opened with.
-    set_input(&mut m, "raw", 0.0);
-    for _ in 0..16 {
-        word = (word << 1) | u32::from(pulse(&mut m));
-    }
-    assert_eq!(word, 0x007F_0000, "the frame carried one sample end to end");
-
-    // …and the NEXT frame carries the new one.
-    pulse(&mut m);
-    assert_eq!(read_frame(&mut m), 0x0000_0000);
 }
 
 // ─── the attach path ───────────────────────────────────────────────────────
