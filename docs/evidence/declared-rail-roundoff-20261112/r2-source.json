@@ -1,0 +1,16 @@
+{
+  "base": "ccbda884c9aaa99ecaae749291d9f0f0580cabb2",
+  "profile": "rail-roundoff-20261112",
+  "files": {
+    "crates/core/src/bus/mcu_power.rs": "6bd7df49f9d7dfbe047b598105f11aff6e12bfc8f05b69a0924b56d5e09ead6b",
+    "crates/core/src/cosim/routing.rs": "afc429d199b71d051305eaa081211ab31be3290da9cf83825a4bf7747ab43563",
+    "crates/core/src/peripherals/components/supply_domain.rs": "acec5867036c846089dd948c0b1196d28c0074f0eb7e2a17eac70378132d32e0",
+    "crates/core/src/peripherals/components/supply_domain/rail_batch_tests.rs": "78978b65c40bf4650a31c2b719f8d78850994efed37ab48a7f6036c3c6f4fab3",
+    "crates/core/src/power.rs": "2567931a17ecca2031721ed169e432bab68304107f4a21f2719841f35b880b7a",
+    "crates/core/src/power_domains.rs": "1364f576651f1be2bac29aefbee8b6c525f56efaeac3e0d29fccb7eecda21ece",
+    "crates/core/tests/device_supply_rails.rs": "b909be49cdd30a40d2e0587f8671774ddbac720d7e47c316458121642e845a45",
+    "crates/core/tests/device_supply_routing.rs": "1dae82666b2db9d8a67cf2a85f6e5c626d11b0aea821bc05ca7a1961a066116b",
+    "crates/core/tests/mcu_power_domains.rs": "10ad62b08e7b10c8d49ae7fbdafad812b1a2760d350082312ce417d32a31f2d0",
+    "docs/rail-observations.md": "c51858bc65030a9d8168145f4e944ffd60cf8707bbfe1d3dca5bbb441622e55a"
+  }
+}

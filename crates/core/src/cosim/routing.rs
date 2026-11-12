@@ -1701,12 +1701,19 @@ impl SignalRouter {
         if domain_sample.is_some() {
             for (path, binding) in &self.writes {
                 if let WriteBinding::PowerDomain { domain } = binding {
-                    match signals.get(path.as_str()).and_then(signal_as_f64)
-                        .filter(|volts| volts.is_finite() && *volts >= 0.0) {
-                        Some(volts) => domain_rails.push((domain.clone(), volts)),
+                    match signals.get(path.as_str()).and_then(signal_as_f64) {
+                        Some(volts) => {
+                            match bus.mcu_power.validate_voltage_observation(domain, volts) {
+                                Ok(()) => domain_rails.push((domain.clone(), volts)),
+                                Err(reason) => errors.push(RoutingError::PowerDomainRejected {
+                                    path: path.clone(),
+                                    reason,
+                                }),
+                            }
+                        }
                         None => errors.push(RoutingError::PowerDomainRejected {
                             path: path.clone(),
-                            reason: "each owning model boundary requires a fresh finite nonnegative voltage for every bound MCU rail".into(),
+                            reason: "each owning model boundary requires a fresh numeric voltage for every bound MCU rail".into(),
                         }),
                     }
                 }
@@ -1720,30 +1727,39 @@ impl SignalRouter {
             let Some(value) = signals.get(path.as_str()) else {
                 continue;
             };
-            match signal_as_f64(value).filter(|volts| volts.is_finite() && *volts >= 0.0) {
-                Some(volts) => device_rails.push((device.clone(), rail.clone(), volts)),
+            match signal_as_f64(value) {
+                Some(volts) => match bus.validate_device_supply_voltage(device, rail, volts) {
+                    Ok(()) => device_rails.push((device.clone(), rail.clone(), volts)),
+                    Err(error) => errors.push(RoutingError::DeviceSupplyRejected {
+                        path: path.clone(),
+                        reason: error.to_string(),
+                    }),
+                },
                 None => errors.push(RoutingError::DeviceSupplyRejected {
                     path: path.clone(),
-                    reason: format!("device supply needs finite nonnegative volts, got {value}"),
+                    reason: format!("device supply needs numeric volts, got {value}"),
                 }),
             }
         }
         if !errors.is_empty() {
             return errors;
         }
-        if let Err(error) = bus.apply_device_supply_voltages(&device_rails) {
-            return vec![RoutingError::DeviceSupplyRejected {
-                path: "board.device".into(),
-                reason: error.to_string(),
+        let sample = domain_sample.map(|time| (domain_rails.as_slice(), time));
+        if let Err(error) = bus.apply_power_rail_observations(&device_rails, sample) {
+            return vec![match error {
+                crate::power::RailBatchError::Device(reason) => {
+                    RoutingError::DeviceSupplyRejected {
+                        path: "board.device".into(),
+                        reason,
+                    }
+                }
+                crate::power::RailBatchError::Mcu(reason) => RoutingError::PowerDomainRejected {
+                    path: "board.power".into(),
+                    reason,
+                },
             }];
         }
         if let Some(sample_ns) = domain_sample {
-            if let Err(reason) = bus.apply_mcu_power_voltages(&domain_rails, sample_ns) {
-                return vec![RoutingError::PowerDomainRejected {
-                    path: "board.power".into(),
-                    reason,
-                }];
-            }
             self.domain_last_sample_ns = Some(sample_ns);
         }
         if let Err(error) =

@@ -1,0 +1,53 @@
+{
+  "base": "ccbda884c9aaa99ecaae749291d9f0f0580cabb2",
+  "profile": "rail-roundoff-20261112",
+  "focused_passed": 55,
+  "focused_failed": 0,
+  "focused_ignored": 0,
+  "source_manifest_sha256": "19646159fcf32f88b0060843230b9f7ae78517208df2b6feb7be5d7a7a5e5c7f",
+  "normal_commit_gates": "recorded separately after the normal hook completes",
+  "review_scope": "independent code review; no exact-MCU hardware/capture acknowledgment",
+  "reviews": {
+    "source": {
+      "scope": "Independent source review; no hardware capture acknowledgment",
+      "result": "no blocker found",
+      "reviewed_files": {
+        "crates/core/src/power_domains.rs": "1364f576651f1be2bac29aefbee8b6c525f56efaeac3e0d29fccb7eecda21ece",
+        "crates/core/tests/mcu_power_domains.rs": "10ad62b08e7b10c8d49ae7fbdafad812b1a2760d350082312ce417d32a31f2d0"
+      },
+      "findings": "Registry and control are the only mutable shared runtime owners; both are deeply detached. Live guards protect pending writes. Publication preserves original Arc identities. Late failure regressions retain full status, pending BOD requests, reset events, old-handle observations and retry time."
+    },
+    "peer_publication": {
+      "scope": "Independent source review; no hardware capture acknowledgment",
+      "result": "no blocker found",
+      "findings": "Device domains are uniquely allocated per id. Deterministic lock order retains all touched device guards through MCU publication. Publication is infallible. All guards drop before callbacks. Rejection preserves peer state and pending controls. Five callback/lock tests include a BOD command added by a callback and generation, poisoned-lock and deadline refusals.",
+      "reviewed_files": {
+        "crates/core/src/peripherals/components/supply_domain.rs": "acec5867036c846089dd948c0b1196d28c0074f0eb7e2a17eac70378132d32e0",
+        "crates/core/src/bus/mcu_power.rs": "6bd7df49f9d7dfbe047b598105f11aff6e12bfc8f05b69a0924b56d5e09ead6b",
+        "crates/core/src/cosim/routing.rs": "afc429d199b71d051305eaa081211ab31be3290da9cf83825a4bf7747ab43563",
+        "crates/core/src/peripherals/components/supply_domain/rail_batch_tests.rs": "78978b65c40bf4650a31c2b719f8d78850994efed37ab48a7f6036c3c6f4fab3"
+      }
+    }
+  },
+  "behavior": [
+    "raw finite observations retained; numerical-zero floor uses each declared maximum",
+    "operating qualification unchanged; admitted negative observations remain unavailable",
+    "legacy rails without a declared maximum remain finite and nonnegative",
+    "both rail receiver families prepare fully before publication",
+    "pending control and reset-event state roll back with rejected samples",
+    "existing receiver/control handles retain identity",
+    "device and MCU callbacks run only after both states publish and locks drop"
+  ],
+  "native_scope": "Native49 refusal preserved; native50 has not yet run on the combined follow-ups.",
+  "prior_test_correction": "R1 expected effective_voltage_v to hide an admitted raw observation. R2 checks its exact raw bits and separately requires unavailable operating state.",
+  "files": {
+    "focused.log.gz": "c9c5011ede672b2b207e818ee65162938206caa58a29202653acea1f9d7f9aa9",
+    "r1-source.json": "70c07445e0a1892a22300ecc6d5c9a4129d26d76cda0f97c95eaa0fcaa949927",
+    "r2-atomic-unit.log.gz": "3fb85ce178849e1d51bff0a0f288ff9ba1b07543eeb6dff2dbeb9e61371d1fa7",
+    "r2-focused-command.json": "ba319183e17e11d10893995de524605149ca490ab24d76948576081ae3a93adc",
+    "r2-focused.log.gz": "6a79d2f579eba21189c878d328ad8aa456b4aea10b9fe74742489cdb1c8e9f3a",
+    "r2-results.json": "828609b1951bc60dec642a024131ff841c1ff0b4bf7d296a0569b7357e85ddb1",
+    "r2-source.json": "19646159fcf32f88b0060843230b9f7ae78517208df2b6feb7be5d7a7a5e5c7f",
+    "r2-spi-capability.txt": "d63429eebe9404b1800e61625b83868804416dcc89b1244cd5e4b22094d13b21"
+  }
+}

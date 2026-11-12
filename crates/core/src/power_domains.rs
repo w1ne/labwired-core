@@ -36,7 +36,7 @@ struct RailState {
     voltage_v: Option<f64>,
     observed_time_ns: Option<u64>,
 }
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 struct Registry {
     measured_mode: bool,
     rails: BTreeMap<String, RailState>,
@@ -90,7 +90,7 @@ pub struct BrownOutConfiguration {
     pub falling_v: f64,
     pub rising_v: f64,
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct ControlState {
     sampled_source: bool,
     accepted: BrownOutConfiguration,
@@ -192,7 +192,7 @@ pub struct PowerDomainStatus {
 pub struct McuPowerDomains {
     runtime: Option<Box<DomainRuntime>>,
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct DomainRuntime {
     config: PowerDomainsConfig,
     registry: Arc<Mutex<Registry>>,
@@ -353,9 +353,128 @@ impl McuPowerDomains {
         }
         Ok(())
     }
+    /// Check a raw sample against this receiver's declared maximum without
+    /// changing observations or advancing supervisor time.
+    pub(crate) fn validate_voltage_observation(
+        &self,
+        domain: &str,
+        volts: f64,
+    ) -> Result<(), String> {
+        let runtime = self
+            .runtime
+            .as_ref()
+            .ok_or_else(|| "MCU power domains are not configured".to_string())?;
+        let registry = runtime
+            .registry
+            .lock()
+            .map_err(|_| "power domain registry poisoned")?;
+        let rail = registry
+            .rails
+            .get(domain)
+            .ok_or_else(|| format!("MCU has no declared power domain '{domain}'"))?;
+        if !rail.routed
+            || !crate::power::rail_observation_is_admissible(volts, Some(rail.config.max_v))
+        {
+            return Err(format!(
+                "power domain '{domain}' requires a routed finite voltage >= {} V \
+                 (numerical zero from declared max_v {} V), got {volts} V",
+                -f64::EPSILON * rail.config.max_v,
+                rail.config.max_v
+            ));
+        }
+        Ok(())
+    }
+
     /// Validate the entire rail batch before changing any observation.
     /// Every configured timer is then sampled once at the supplied time.
+    /// Validate and prepare every rail, supervisor timer, control request and
+    /// reset event before publishing a sample. Failed samples preserve all live
+    /// receiver state, including commands queued through existing handles.
     pub fn apply_voltages(
+        &mut self,
+        updates: &[(String, f64)],
+        time_ns: u64,
+    ) -> Result<(), String> {
+        self.apply_voltages_with_publication(updates, time_ns, || {})
+    }
+
+    /// The peer publisher may only install already prepared state. Its locks
+    /// must remain held until this method returns, and it must not notify any
+    /// peripheral. All fallible work precedes this callback.
+    pub(crate) fn apply_voltages_with_publication(
+        &mut self,
+        updates: &[(String, f64)],
+        time_ns: u64,
+        publish_peer: impl FnOnce(),
+    ) -> Result<(), String> {
+        let Some(current) = self.runtime.as_ref() else {
+            self.apply_voltages_in_place(updates, time_ns)?;
+            publish_peer();
+            return Ok(());
+        };
+        let registry = Arc::clone(&current.registry);
+        let control = current.control.clone();
+        let mut registry_guard = registry
+            .lock()
+            .map_err(|_| "power domain registry poisoned")?;
+        let mut control_guard = control
+            .as_ref()
+            .map(|control| {
+                control
+                    .inner
+                    .lock()
+                    .map_err(|_| "power supervisor control poisoned")
+            })
+            .transpose()?;
+
+        // Cloning the Arc-backed runtime alone would advance live queues and
+        // observations during preparation. Give every mutable shared object
+        // its own storage; the live guards also prevent concurrent commands
+        // from being lost between the snapshot and publication.
+        let mut next = (**current).clone();
+        next.registry = Arc::new(Mutex::new(registry_guard.clone()));
+        next.control = control_guard.as_ref().map(|state| PowerSupervisorControl {
+            inner: Arc::new(Mutex::new((**state).clone())),
+        });
+        let mut prepared = Self {
+            runtime: Some(Box::new(next)),
+        };
+        prepared.apply_voltages_in_place(updates, time_ns)?;
+        let mut next = prepared
+            .runtime
+            .take()
+            .expect("prepared runtime is present");
+        let next_registry = next
+            .registry
+            .lock()
+            .map_err(|_| "prepared power domain registry poisoned")?
+            .clone();
+        let next_control = next
+            .control
+            .as_ref()
+            .map(|control| {
+                control
+                    .inner
+                    .lock()
+                    .map(|state| state.clone())
+                    .map_err(|_| "prepared power supervisor control poisoned")
+            })
+            .transpose()?;
+        debug_assert_eq!(control_guard.is_some(), next_control.is_some());
+
+        // Preserve the identity of all handles retained by peripherals.
+        next.registry = Arc::clone(&registry);
+        next.control = control.clone();
+        publish_peer();
+        *registry_guard = next_registry;
+        if let (Some(state), Some(next_state)) = (control_guard.as_mut(), next_control) {
+            **state = next_state;
+        }
+        self.runtime = Some(next);
+        Ok(())
+    }
+
+    fn apply_voltages_in_place(
         &mut self,
         updates: &[(String, f64)],
         time_ns: u64,
@@ -391,8 +510,19 @@ impl McuPowerDomains {
                     .rails
                     .get(domain)
                     .ok_or_else(|| format!("MCU has no declared power domain '{domain}'"))?;
-                if !rail.routed || !seen.insert(domain) || !volts.is_finite() || *volts < 0.0 {
-                    return Err(format!("power domain '{domain}' requires one routed finite nonnegative voltage per boundary"));
+                if !rail.routed
+                    || !seen.insert(domain)
+                    || !crate::power::rail_observation_is_admissible(
+                        *volts,
+                        Some(rail.config.max_v),
+                    )
+                {
+                    return Err(format!(
+                        "power domain '{domain}' requires one routed finite voltage >= {} V \
+                 per boundary (declared max_v {} V), got {volts} V",
+                        -f64::EPSILON * rail.config.max_v,
+                        rail.config.max_v
+                    ));
                 }
             }
             for (domain, volts) in updates {
