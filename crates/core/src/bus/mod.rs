@@ -923,6 +923,7 @@ pub struct SystemBus {
     /// The chip's supply supervisor (see [`crate::power`]): idle, with the
     /// ideal rail assumed, until a circuit is routed to `board.power.vdd_volts`.
     pub(crate) supply: crate::power::SupplySupervisor,
+    pub(crate) reset_input: crate::reset_input::ResetInputState,
     /// What the system manifest DECLARED under `external_devices:`, verbatim.
     ///
     /// Purely identity metadata for [`crate::Machine::inspect`], which joins it
