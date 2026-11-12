@@ -15,7 +15,11 @@ pub(crate) struct TestExecutionContext<'a, C: labwired_core::Cpu> {
     pub machine: &'a mut labwired_core::Machine<C>,
     pub resolved_limits: &'a TestLimits,
     pub assertions: &'a [TestAssertion],
+    /// ELF bytes used for symbolization/resource analysis. May be empty on ROM-boot paths.
     pub firmware_bytes: &'a [u8],
+    /// Exact executable image bytes whose identity is recorded in result.json.
+    /// Normally identical to `firmware_bytes`; ELF-less ROM boot supplies the flash image here.
+    pub provenance_firmware_bytes: &'a [u8],
     pub uart_tx: &'a Arc<Mutex<Vec<u8>>>,
     pub rtt_tx: &'a Arc<Mutex<Vec<u8>>>,
     pub itm_tx: &'a Arc<Mutex<Vec<u8>>>,
@@ -1787,7 +1791,7 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         firmware_exit_code,
         ctx.resolved_limits.clone(),
         assertion_results,
-        ctx.firmware_bytes,
+        ctx.provenance_firmware_bytes,
         ctx.uart_tx,
         ctx.rtt_tx,
         // `None` when no RTT model was attached (the paths that never enable
