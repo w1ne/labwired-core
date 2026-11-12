@@ -2139,7 +2139,36 @@ impl GpioPort {
         if self.wch_single_config_register && offset == 0x04 {
             return 0;
         }
-        self.family.read_reg(offset)
+        let value = self.family.read_reg(offset);
+        if self.wch_single_config_register
+            || self.pad_routes.is_empty()
+            || !matches!(
+                (&self.family, offset),
+                (GpioFamily::Stm32F1(_), 0x08) | (GpioFamily::Stm32V2(_), 0x10)
+            )
+        {
+            return value;
+        }
+        self.stm32_af_input_word(value)
+    }
+
+    /// STM32 IDR samples the pad even while its mux selects a peripheral.
+    /// Only an active output replaces the family's input/pull resolution;
+    /// released open-drain and input lines retain that existing resolution.
+    /// Do not call `pad_level` here: its input fallback reads IDR itself.
+    fn stm32_af_input_word(&self, mut value: u32) -> u32 {
+        for pin in 0..16u8 {
+            let Some((cell, line)) = self.pad_routes.active_line(pin, |p| {
+                Self::selected_function(&self.family, self.pad_claims.as_ref(), p)
+            }) else {
+                continue;
+            };
+            if cell.drives(line) {
+                let bit = 1u32 << pin;
+                value = (value & !bit) | (u32::from(cell.level(line)) << pin);
+            }
+        }
+        value
     }
 
     fn write_reg(&mut self, offset: u64, value: u32) {
@@ -3507,6 +3536,105 @@ mod tests {
         // BRR @ 0x28 (reset pin 0)
         gpio.write(0x28, 0x01).unwrap();
         assert_eq!(rd32(&gpio, 0x14) & 0x0001, 0x0000);
+    }
+}
+
+#[cfg(test)]
+mod stm32_af_idr_tests {
+    use super::{GpioPort, GpioRegisterLayout};
+    use crate::logic_capture::PadDrive;
+    use crate::peripherals::pad_lines::{LineDrive, PadLines};
+    use crate::Peripheral;
+    use std::sync::Arc;
+
+    fn v2_routed() -> (GpioPort, Arc<PadLines>) {
+        let mut gpio = GpioPort::new_with_layout(GpioRegisterLayout::Stm32V2);
+        let lines = Arc::new(PadLines::new(&["CH1N"], &[false]));
+        gpio.add_pad_route(&lines, 13, Some(1), 0, "TIM1_CH1N");
+        gpio.write_u32(0x00, 2 << 26).unwrap();
+        gpio.write_u32(0x24, 1 << 20).unwrap();
+        (gpio, lines)
+    }
+
+    #[test]
+    fn v2_af_idr_matches_driven_pad_for_every_read_width() {
+        let (gpio, lines) = v2_routed();
+        for level in [true, false, true] {
+            lines.drive_line(0, LineDrive::PushPull, level);
+            assert_eq!(gpio.read_gpio_pad(13), Some(level));
+            assert_eq!((gpio.read(0x11).unwrap() & (1 << 5)) != 0, level);
+            assert_eq!((gpio.read_u16(0x10).unwrap() & (1 << 13)) != 0, level);
+            assert_eq!((gpio.read_u32(0x10).unwrap() & (1 << 13)) != 0, level);
+            assert_eq!(gpio.read_gpio_input(13), Some(level));
+            assert_eq!((gpio.read_gpio_input_word() & (1 << 13)) != 0, level);
+            assert_eq!(gpio.read_u32(0x14).unwrap(), 0, "ODR is not rewritten");
+        }
+    }
+
+    #[test]
+    fn v2_af_idr_preserves_mux_and_high_z_input_resolution() {
+        let (mut gpio, lines) = v2_routed();
+        let high = |g: &GpioPort| g.read_u32(0x10).unwrap() & (1 << 13) != 0;
+        gpio.write_u32(0x0c, 2 << 26).unwrap(); // Pull down an undriven pad.
+        lines.drive_line(0, LineDrive::PushPull, true);
+        assert!(high(&gpio));
+        lines.set_mode(0, LineDrive::Input);
+        assert_eq!(gpio.read_gpio_pad_drive(13), Some(PadDrive::HighZ));
+        assert!(!high(&gpio), "a released line does not retain its old high");
+        gpio.write_u32(0x0c, 1 << 26).unwrap();
+        assert!(high(&gpio), "the existing weak pull still resolves HighZ");
+        gpio.set_gpio_input(13, false);
+        assert!(
+            !high(&gpio),
+            "external input takes precedence over the pull"
+        );
+        gpio.set_gpio_input(13, true);
+        assert!(high(&gpio));
+        lines.drive_line(0, LineDrive::OpenDrain, false);
+        assert!(!high(&gpio), "an active AF low is the native pad level");
+        lines.drive_line(0, LineDrive::OpenDrain, true);
+        assert!(
+            high(&gpio),
+            "released open drain retains external resolution"
+        );
+        lines.drive_line(0, LineDrive::PushPull, false);
+        gpio.write_u32(0x24, 2 << 20).unwrap(); // Wrong AF: route is inactive.
+        assert!(high(&gpio));
+        gpio.write_u32(0x00, 0).unwrap(); // Plain input.
+        assert!(high(&gpio));
+        gpio.write_u32(0x00, 1 << 26).unwrap(); // Plain output, ODR remains 0.
+        assert!(!high(&gpio));
+        gpio.write_u32(0x00, 3 << 26).unwrap(); // Analog disables input buffer.
+        assert!(!high(&gpio));
+    }
+
+    #[test]
+    fn f1_af_idr_follows_fixed_route_and_translated_window() {
+        let mut gpio = GpioPort::new_with_layout(GpioRegisterLayout::Stm32F1);
+        let lines = Arc::new(PadLines::new(&["CH1N"], &[true]));
+        gpio.add_pad_route(&lines, 13, None, 0, "TIM1_CH1N");
+        gpio.write_u32(0x04, 0xb << 20).unwrap(); // AF push-pull output.
+        assert_eq!(gpio.read_u32(0x08).unwrap() & (1 << 13), 1 << 13);
+        // Input offset is relative to the declared MMIO window.
+        let mut gpio = gpio.with_window_offset(4);
+        assert_eq!(gpio.read_u32(0x04).unwrap() & (1 << 13), 1 << 13);
+        lines.drive_line(0, LineDrive::PushPull, false);
+        assert_eq!(gpio.read_u32(0x04).unwrap() & (1 << 13), 0);
+        gpio.write_u32(0x00, 0x4 << 20).unwrap(); // Floating input, route disabled.
+        gpio.set_gpio_input(13, true);
+        assert_eq!(gpio.read_u32(0x04).unwrap() & (1 << 13), 1 << 13);
+    }
+
+    #[test]
+    fn non_stm32_input_register_keeps_its_existing_semantics() {
+        let mut gpio = GpioPort::new_with_layout(GpioRegisterLayout::SamPort);
+        let lines = Arc::new(PadLines::new(&["TX"], &[true]));
+        gpio.add_pad_route(&lines, 0, Some(2), 0, "SERCOM_TX");
+        gpio.write(0x30, 2).unwrap(); // PMUX peripheral C.
+        gpio.write(0x40, 3).unwrap(); // PINCFG PMUXEN and INEN.
+        assert_eq!(gpio.read_gpio_pad(0), Some(true));
+        assert_eq!(gpio.read_u32(0x20).unwrap() & 1, 0);
+        assert_eq!(gpio.read_gpio_input(0), Some(false));
     }
 }
 

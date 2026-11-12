@@ -359,6 +359,46 @@ impl WasmSimulator {
             .map_err(|err| JsValue::from_str(&format!("analog_series: {err}")))
     }
 
+    /// Bounded live numeric observations on their own per-machine epoch and
+    /// cursor. Plain JS numbers, not BigInt. max_points trims only this read;
+    /// historical analog_series and the co-simulation cursor are unchanged.
+    #[wasm_bindgen]
+    pub fn live_numeric_capture(&self, cursor: f64, max_points: f64) -> Result<JsValue, JsValue> {
+        const MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
+        if !cursor.is_finite() || cursor < 0.0 || cursor.fract() != 0.0 || cursor > MAX_SAFE_INTEGER
+        {
+            return Err(JsValue::from_str(
+                "live_numeric_capture: cursor must be an exact non-negative safe integer",
+            ));
+        }
+        if !max_points.is_finite()
+            || max_points < 1.0
+            || max_points.fract() != 0.0
+            || max_points > MAX_SAFE_INTEGER
+        {
+            return Err(JsValue::from_str(
+                "live_numeric_capture: maxPoints must be an exact positive safe integer",
+            ));
+        }
+        // The ring cannot return more than its fixed native capacity. Clamp
+        // before conversion so wasm32 usize cannot saturate a large JS limit.
+        let max_points = max_points
+            .min(labwired_core::live_numeric::DEFAULT_LIVE_NUMERIC_POINTS as f64)
+            as usize;
+        let batch = self
+            .machine
+            .as_ref()
+            .and_then(|machine| machine.live_numeric_capture(cursor as u64, max_points));
+        // Null is part of the additive API contract for absent producers and
+        // unknown horizons. Do not let the serializer turn Option::None into
+        // an omitted/undefined field that a transport cannot distinguish.
+        serde::Serialize::serialize(
+            &batch,
+            &serde_wasm_bindgen::Serializer::new().serialize_missing_as_null(true),
+        )
+        .map_err(|err| JsValue::from_str(&format!("live_numeric_capture: {err}")))
+    }
+
     /// UDS evidence for this run: each `uds-tester`'s executed steps (request,
     /// expected, response, cycles, pass/fail), the CAN frames on the tester
     /// ids decoded as ISO-TP and UDS, and the firmware console lines. `null`
