@@ -249,21 +249,25 @@ pub struct FrameSpec {
     /// rejected, which is what the boundary frame exists for, and every
     /// descriptor written before this key relies on it.
     ///
-    /// A part that latches a fixed-width shift register is the opposite case. A
-    /// MAX7219 transaction is 16 bits latched on CS↑; eight clocked bits are
-    /// not half a write, they are a frame that never happened, and the
-    /// hand-written models discarded exactly this (`cs_select` resetting
-    /// `shift_len`). Delivered as a frame, a stray odd byte would decode its
-    /// low nibble as a register address and write a zero data byte into a digit
-    /// register — a row of the panel going dark because of a byte the part
-    /// never latched.
-    ///
-    /// With this set, a transaction boundary that finds fewer than
-    /// [`length`](Self::length) bytes buffered clears them and raises NOTHING;
-    /// CS↓ clears them too, so a re-assertion cannot pair an orphan byte with
-    /// the next transaction's first. Meaningless without `length`.
+    /// Transaction-framed models can discard a short message instead of
+    /// decoding a missing data byte as zero. With this set, a boundary that
+    /// finds fewer than [`length`](Self::length) bytes clears them and raises
+    /// nothing; CS↓ clears them too. Meaningless without `length`.
+    /// Continuous [`shift_register`](Self::shift_register) models retain
+    /// their register across latch edges and do not use this reset behavior.
     #[serde(default)]
     pub discard_partial: bool,
+    /// **Hardware shift-register cascade (DOUT).**
+    ///
+    /// When set with [`length`](Self::length), each `transfer` pushes one byte
+    /// into a fixed-width FIFO and returns the oldest byte that shifted out —
+    /// the chip's DOUT for the next device in a daisy chain. Frames are NOT
+    /// closed at `length` during the transfer: the register only latches on
+    /// LOAD↑ (see `cs_release`). Clocks continue with LOAD high and neither
+    /// LOAD edge clears the register, as on MAX7219 (not MAX7221). A nonzero
+    /// `length` is required. Default false preserves transaction framing.
+    #[serde(default)]
+    pub shift_register: bool,
 }
 
 // ─── named bit-fields ──────────────────────────────────────────────────────

@@ -104,6 +104,7 @@ fn temporary_arm_world(
                 profile: None,
             }],
             interconnects: Vec::new(),
+            cosim_models: Vec::new(),
             rf: None,
         },
     )
@@ -116,6 +117,7 @@ fn world_rejects_a_direct_manifest_that_bypasses_file_validation() {
         name: "invalid-world".to_string(),
         nodes: Vec::new(),
         interconnects: Vec::new(),
+        cosim_models: Vec::new(),
         rf: None,
     };
 
@@ -183,6 +185,7 @@ fn world_runs_riscv_nodes() {
             },
         ],
         interconnects: Vec::new(),
+        cosim_models: Vec::new(),
         rf: None,
     };
 
@@ -221,6 +224,7 @@ fn world_rejects_nodes_whose_chip_declares_no_known_architecture() {
             profile: None,
         }],
         interconnects: Vec::new(),
+        cosim_models: Vec::new(),
         rf: None,
     };
 
@@ -286,6 +290,7 @@ fn world_rejects_riscv_firmware_for_a_cortex_m_node_before_execution() {
             profile: None,
         }],
         interconnects: Vec::new(),
+        cosim_models: Vec::new(),
         rf: None,
     };
 
@@ -352,7 +357,7 @@ cosim_models:
     };
     assert!(
         error.contains(
-            "co-simulation models are not supported in multi-node worlds yet; node 'node' declares 2"
+            "node-level co-simulation models are not supported in worlds; node 'node' declares 2"
         ),
         "{error}"
     );

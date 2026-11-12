@@ -381,7 +381,10 @@ pub struct MemAlias {
 }
 
 pub struct SystemBus {
-    pub(crate) supply_domains: crate::peripherals::components::supply_domain::SupplyDomains,
+    /// External supply routing is used at wiring and co-simulation boundaries,
+    /// not by the CPU step path. Keep its growable maps outside the hot bus
+    /// object so adding another cold routing map does not enlarge that object.
+    pub(crate) supply_domains: Box<crate::peripherals::components::supply_domain::SupplyDomains>,
     pub flash: LinearMemory,
     /// Violation record + counts + mirrored PC/cycle for the policy gate.
     pub(crate) memory_policy: crate::bus::memory_policy::MemoryPolicyState,
@@ -938,6 +941,7 @@ pub struct SystemBus {
     /// The chip's supply supervisor (see [`crate::power`]): idle, with the
     /// ideal rail assumed, until a circuit is routed to `board.power.vdd_volts`.
     pub(crate) supply: crate::power::SupplySupervisor,
+    pub(crate) reset_input: crate::reset_input::ResetInputState,
     /// What the system manifest DECLARED under `external_devices:`, verbatim.
     ///
     /// Purely identity metadata for [`crate::Machine::inspect`], which joins it

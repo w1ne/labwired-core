@@ -38,6 +38,7 @@ pub mod pins;
 pub mod plugin;
 pub mod power;
 pub mod profile;
+pub mod reset_input;
 pub mod runtime_snapshot;
 pub mod sched;
 pub mod sd_hle;
