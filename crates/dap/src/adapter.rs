@@ -1881,6 +1881,7 @@ mod tests {
             gpio_input_thresholds: None,
             reset_input: None,
             supply_monitor: None,
+            power_domains: None,
             include: None,
         }
     }

@@ -1769,6 +1769,15 @@ impl WasmSimulator {
             .map_err(|error| JsValue::from_str(&format!("supply status: {error}")))
     }
 
+    /// Explicit multi-domain observations and sampled reset supervision.
+    /// None is legitimate when this chip uses no named-domain model.
+    #[wasm_bindgen]
+    pub fn power_domain_status(&self) -> Result<JsValue, JsValue> {
+        let status = self.machine_or_err()?.power_domain_status();
+        serde_wasm_bindgen::to_value(&status)
+            .map_err(|error| JsValue::from_str(&format!("power domain status: {error}")))
+    }
+
     // A `fidelity_total_hits() -> u64` companion was written and then removed:
     // it is a bare return type, so `error_boundary_ratchet` counted it as a new
     // failure-blind boundary and went red (77 against a ceiling of 76). That

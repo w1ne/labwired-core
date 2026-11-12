@@ -366,87 +366,136 @@ pub struct AdcPinFn {
     pub channel: u8,
 }
 
-/// A chip's guaranteed digital input limits, as slopes of its I/O supply plus
-/// optional voltage offsets: VIL = `vil * VDD + vil_offset_v` and
-/// VIH = `vih * VDD + vih_offset_v`. Zero offsets preserve ratio-only chips.
-/// A pad reads low at or below VIL and high at or above VIH; the Schmitt band
-/// between them keeps its previous level. A routed VDD is used at each model
-/// boundary, otherwise [`ChipDescriptor::io_voltage_v`] supplies the reference.
-///
-/// Transcribed from the datasheet's DC characteristics (the guaranteed VIL
-/// maximum and VIH minimum), never guessed: co-simulation turns a model's node
-/// voltage into the level the firmware reads through these two numbers, so a
-/// wrong ratio moves every edge a circuit produces.
+/// Descriptor-owned digital input limits. Affine limits use the observed I/O
+/// supply: VIL = `vil * VDD + vil_offset_v`, and VIH likewise. Zero offsets
+/// preserve ratio-only descriptors. Absolute limits identify their nominal
+/// calibration mode; they do not claim a guarantee throughout a domain's
+/// operating range. The Schmitt band retains the previous qualified level.
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
 #[serde(try_from = "GpioInputThresholdsYaml", into = "GpioInputThresholdsYaml")]
-pub struct GpioInputThresholds {
-    /// Supply coefficient for the highest input guaranteed to read low.
-    pub vil: f64,
-    /// Supply coefficient for the lowest input guaranteed to read high.
-    pub vih: f64,
-    /// Fixed addition to VIL, in volts. Zero for ratio-only descriptors.
-    pub vil_offset_v: f64,
-    /// Fixed addition to VIH, in volts. Zero for ratio-only descriptors.
-    pub vih_offset_v: f64,
+pub enum GpioInputThresholds {
+    Affine {
+        vil: f64,
+        vih: f64,
+        vil_offset_v: f64,
+        vih_offset_v: f64,
+    },
+    Absolute {
+        vil_max_v: f64,
+        vih_min_v: f64,
+        nominal_io_voltage_v: f64,
+        minimum_io_voltage_v: Option<f64>,
+    },
 }
-
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct GpioInputThresholdsYaml {
-    vil: f64,
-    vih: f64,
-    #[serde(default, skip_serializing_if = "gpio_offset_is_zero")]
-    vil_offset_v: f64,
-    #[serde(default, skip_serializing_if = "gpio_offset_is_zero")]
-    vih_offset_v: f64,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present_gpio_number",
+        skip_serializing_if = "Option::is_none"
+    )]
+    vil: Option<f64>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present_gpio_number",
+        skip_serializing_if = "Option::is_none"
+    )]
+    vih: Option<f64>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present_gpio_number",
+        skip_serializing_if = "Option::is_none"
+    )]
+    vil_offset_v: Option<f64>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present_gpio_number",
+        skip_serializing_if = "Option::is_none"
+    )]
+    vih_offset_v: Option<f64>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present_gpio_number",
+        skip_serializing_if = "Option::is_none"
+    )]
+    vil_max_v: Option<f64>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present_gpio_number",
+        skip_serializing_if = "Option::is_none"
+    )]
+    vih_min_v: Option<f64>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present_gpio_number",
+        skip_serializing_if = "Option::is_none"
+    )]
+    nominal_io_voltage_v: Option<f64>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present_gpio_number",
+        skip_serializing_if = "Option::is_none"
+    )]
+    minimum_io_voltage_v: Option<f64>,
 }
-
-fn gpio_offset_is_zero(value: &f64) -> bool {
-    *value == 0.0
+fn deserialize_present_gpio_number<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<f64>, D::Error> {
+    f64::deserialize(deserializer).map(Some)
 }
-
 impl TryFrom<GpioInputThresholdsYaml> for GpioInputThresholds {
     type Error = String;
-
     fn try_from(raw: GpioInputThresholdsYaml) -> Result<Self, Self::Error> {
-        let GpioInputThresholdsYaml {
-            vil,
-            vih,
-            vil_offset_v,
-            vih_offset_v,
-        } = raw;
-        if !(vil.is_finite() && vih.is_finite() && 0.0 < vil && vil < vih && vih < 1.0) {
-            return Err(format!(
-                "gpio_input_thresholds must satisfy 0 < vil < vih < 1 (ratios of io_voltage_v); \
-                 got vil {vil}, vih {vih}"
-            ));
+        match (raw.vil, raw.vih, raw.vil_max_v, raw.vih_min_v, raw.nominal_io_voltage_v) {
+            (Some(vil), Some(vih), None, None, None) if raw.minimum_io_voltage_v.is_none() => {
+                let low = raw.vil_offset_v.unwrap_or(0.0);
+                let high = raw.vih_offset_v.unwrap_or(0.0);
+                if !(vil.is_finite() && vih.is_finite() && 0.0 < vil && vil < vih && vih < 1.0) {
+                    return Err("gpio_input_thresholds must satisfy 0 < vil < vih < 1".into());
+                }
+                if !(low.is_finite() && high.is_finite() && 0.0 <= low && low <= high) {
+                    return Err("gpio_input_thresholds offsets must be finite and satisfy 0 <= vil_offset_v <= vih_offset_v".into());
+                }
+                Ok(Self::Affine { vil, vih, vil_offset_v: low, vih_offset_v: high })
+            }
+            (None, None, Some(low), Some(high), Some(nominal))
+                if raw.vil_offset_v.is_none() && raw.vih_offset_v.is_none()
+                && low.is_finite() && high.is_finite() && nominal.is_finite()
+                && 0.0 <= low && low < high && high <= nominal
+                && raw.minimum_io_voltage_v.is_none_or(|minimum| minimum.is_finite() && 0.0 < minimum && minimum <= nominal) =>
+                Ok(Self::Absolute { vil_max_v: low, vih_min_v: high, nominal_io_voltage_v: nominal, minimum_io_voltage_v: raw.minimum_io_voltage_v }),
+            _ => Err("gpio_input_thresholds requires an affine vil/vih pair or an absolute vil_max_v/vih_min_v pair with nominal_io_voltage_v; forms cannot be mixed".into()),
         }
-        if !(vil_offset_v.is_finite()
-            && vih_offset_v.is_finite()
-            && 0.0 <= vil_offset_v
-            && vil_offset_v <= vih_offset_v)
-        {
-            return Err(format!(
-                "gpio_input_thresholds offsets must be finite and satisfy 0 <= vil_offset_v <= vih_offset_v; got {vil_offset_v}, {vih_offset_v}"
-            ));
-        }
-        // Ordered slopes and offsets preserve VIL < VIH at every positive VDD.
-        Ok(Self {
-            vil,
-            vih,
-            vil_offset_v,
-            vih_offset_v,
-        })
     }
 }
-
 impl From<GpioInputThresholds> for GpioInputThresholdsYaml {
-    fn from(thresholds: GpioInputThresholds) -> Self {
-        Self {
-            vil: thresholds.vil,
-            vih: thresholds.vih,
-            vil_offset_v: thresholds.vil_offset_v,
-            vih_offset_v: thresholds.vih_offset_v,
+    fn from(value: GpioInputThresholds) -> Self {
+        match value {
+            GpioInputThresholds::Affine {
+                vil,
+                vih,
+                vil_offset_v,
+                vih_offset_v,
+            } => Self {
+                vil: Some(vil),
+                vih: Some(vih),
+                vil_offset_v: (vil_offset_v != 0.0).then_some(vil_offset_v),
+                vih_offset_v: (vih_offset_v != 0.0).then_some(vih_offset_v),
+                ..Self::default()
+            },
+            GpioInputThresholds::Absolute {
+                vil_max_v,
+                vih_min_v,
+                nominal_io_voltage_v,
+                minimum_io_voltage_v,
+            } => Self {
+                vil_max_v: Some(vil_max_v),
+                vih_min_v: Some(vih_min_v),
+                nominal_io_voltage_v: Some(nominal_io_voltage_v),
+                minimum_io_voltage_v,
+                ..Self::default()
+            },
         }
     }
 }
@@ -864,6 +913,9 @@ pub struct ChipDescriptor {
     /// reset by its supply, and such a route is refused rather than guessed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub supply_monitor: Option<SupplyMonitor>,
+    /// Distinct physical supply rails and explicit sampled supervision.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power_domains: Option<crate::PowerDomainsConfig>,
     /// Path-loaded YAML only (`include: common.yaml` or a list). Built-in
     /// `from_str` does not expand includes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1526,6 +1578,7 @@ impl From<labwired_ir::IrDevice> for ChipDescriptor {
             gpio_input_thresholds: None,
             reset_input: None,
             supply_monitor: None,
+            power_domains: None,
             include: None,
         }
     }

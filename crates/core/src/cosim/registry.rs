@@ -349,6 +349,12 @@ impl CosimRunner {
         Ok(results)
     }
 
+    /// The earliest next owner interval, including periods that are not
+    /// integer multiples of the session's finest period.
+    pub(crate) fn next_boundary_ns(&self) -> Option<u64> {
+        self.models.iter().map(|model| model.next_step_ns).min()
+    }
+
     pub fn step_until_with_signals(
         &mut self,
         time_ns: u64,

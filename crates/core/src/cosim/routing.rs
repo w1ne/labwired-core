@@ -102,10 +102,25 @@ pub struct InputThresholds {
 impl InputThresholds {
     /// Thresholds for a pad at the given supply, including declared offsets.
     /// The method name is retained for callers using ratio-only descriptors.
-    pub fn from_ratios(io_voltage_v: f64, ratios: GpioInputThresholds) -> Self {
-        Self {
-            vil_volts: ratios.vil * io_voltage_v + ratios.vil_offset_v,
-            vih_volts: ratios.vih * io_voltage_v + ratios.vih_offset_v,
+    pub fn from_ratios(io_voltage_v: f64, limits: GpioInputThresholds) -> Self {
+        match limits {
+            GpioInputThresholds::Affine {
+                vil,
+                vih,
+                vil_offset_v,
+                vih_offset_v,
+            } => Self {
+                vil_volts: vil * io_voltage_v + vil_offset_v,
+                vih_volts: vih * io_voltage_v + vih_offset_v,
+            },
+            GpioInputThresholds::Absolute {
+                vil_max_v,
+                vih_min_v,
+                ..
+            } => Self {
+                vil_volts: vil_max_v,
+                vih_volts: vih_min_v,
+            },
         }
     }
 
@@ -114,6 +129,15 @@ impl InputThresholds {
     pub fn for_bus(bus: &SystemBus) -> Result<Self, &'static str> {
         let ratios = bus.gpio_input_thresholds.ok_or("gpio_input_thresholds")?;
         let io_voltage_v = bus.io_voltage_v.ok_or("io_voltage_v")?;
+        if let GpioInputThresholds::Absolute {
+            nominal_io_voltage_v,
+            ..
+        } = ratios
+        {
+            if io_voltage_v != nominal_io_voltage_v {
+                return Err("nominal_io_voltage_v");
+            }
+        }
         Ok(Self::from_ratios(io_voltage_v, ratios))
     }
 
@@ -127,7 +151,12 @@ impl InputThresholds {
     ) -> Result<bool, &'static str> {
         let coefficients = bus.gpio_input_thresholds.ok_or("gpio_input_thresholds")?;
         let nominal = bus.io_voltage_v.ok_or("io_voltage_v")?;
-        let vdd = if bus.supply.is_routed() {
+        let vdd = if let Some(io) = bus.mcu_power.io_handle() {
+            if !io.is_available() {
+                return Ok(false);
+            }
+            io.effective_voltage_v().ok_or("observed I/O domain")?
+        } else if bus.supply.is_routed() {
             match bus.supply.vdd_volts() {
                 Some(value) if value.is_finite() && value > 0.0 => value,
                 _ => return Ok(false),
@@ -526,6 +555,10 @@ pub enum RoutingError {
     NoSupplyMonitor {
         path: String,
     },
+    PowerDomainRejected {
+        path: String,
+        reason: String,
+    },
     DeviceSupplyRejected {
         path: String,
         reason: String,
@@ -672,6 +705,7 @@ impl std::fmt::Display for RoutingError {
                 f,
                 "co-sim path '{path}': one or more reference-capable ADC models refused ADC reference {volts} V"
             ),
+            Self::PowerDomainRejected { path, reason } => write!(f, "co-sim path '{path}': {reason}"),
             Self::DeviceSupplyRejected { path, reason } => write!(f, "co-sim path '{path}': {reason}"),
             Self::NoResetInput { path, pin } => write!(
                 f,
@@ -777,6 +811,10 @@ enum WriteBinding {
     },
     /// The chip's VDD, fed to its supply supervisor.
     SupplyVdd,
+    /// One named physical MCU rail, separate from the legacy VDD/VDDA routes.
+    PowerDomain {
+        domain: String,
+    },
     /// Collected and published once as an atomic device-rail batch.
     DeviceSupply {
         device: String,
@@ -815,6 +853,8 @@ pub struct SignalRouter {
     writes: Vec<(String, WriteBinding)>,
     /// One physical shaft per model, with the exact declared boundary step.
     circuit_bldc: Vec<(usize, String, u64)>,
+    domain_step_ns: Option<u64>,
+    domain_last_sample_ns: Option<u64>,
 }
 
 impl SignalRouter {
@@ -848,6 +888,12 @@ impl SignalRouter {
 
         for path in &sources {
             let Some(parsed) = SignalPath::parse(path) else {
+                if bus.mcu_power.is_configured() && path.starts_with("board.power.") {
+                    errors.push(RoutingError::PowerDomainRejected {
+                        path: (*path).to_string(),
+                        reason: "expected board.power.<declared-domain>_volts".into(),
+                    });
+                }
                 if path.starts_with("board.device.") {
                     errors.push(RoutingError::DeviceSupplyRejected {
                         path: (*path).to_string(),
@@ -876,6 +922,12 @@ impl SignalRouter {
                 continue;
             }
             let Some(parsed) = SignalPath::parse(path) else {
+                if bus.mcu_power.is_configured() && path.starts_with("board.power.") {
+                    errors.push(RoutingError::PowerDomainRejected {
+                        path: (*path).to_string(),
+                        reason: "expected board.power.<declared-domain>_volts".into(),
+                    });
+                }
                 if path.starts_with("board.device.") {
                     errors.push(RoutingError::DeviceSupplyRejected {
                         path: (*path).to_string(),
@@ -926,6 +978,39 @@ impl SignalRouter {
                     path: format!("board.device.{device}.power.{rail}_volts"),
                     reason: format!("device supply rail has {writers} model output writers; exactly one is required"),
                 });
+            }
+        }
+        if bus.mcu_power.is_configured() {
+            let mut writers = BTreeMap::<String, usize>::new();
+            for config in configs {
+                for route in config.outputs.values() {
+                    if let Some(SignalPath::SupplyRail { rail }) = SignalPath::parse(route) {
+                        *writers.entry(rail).or_default() += 1;
+                        if config.step_ns == 0
+                            || router
+                                .domain_step_ns
+                                .is_some_and(|step| step != config.step_ns)
+                        {
+                            errors.push(RoutingError::PowerDomainRejected {
+                                path: route.clone(),
+                                reason:
+                                    "one MCU power registry requires one positive sampled interval"
+                                        .into(),
+                            });
+                        }
+                        router.domain_step_ns = Some(config.step_ns);
+                    }
+                }
+            }
+            for (domain, count) in writers {
+                if count > 1 {
+                    errors.push(RoutingError::PowerDomainRejected {
+                        path: format!("board.power.{domain}_volts"),
+                        reason: format!(
+                            "physical MCU rail has {count} output writers; exactly one is required"
+                        ),
+                    });
+                }
             }
         }
         router.bind_circuit_bldc(configs, bus, &mut errors);
@@ -1149,6 +1234,17 @@ impl SignalRouter {
                 }
                 Ok(WriteBinding::ResetInput)
             }
+            SignalPath::SupplyRail { rail } if bus.mcu_power.is_configured() => {
+                bus.mcu_power.validate_route(rail).map_err(|reason| {
+                    RoutingError::PowerDomainRejected {
+                        path: path.into(),
+                        reason,
+                    }
+                })?;
+                Ok(WriteBinding::PowerDomain {
+                    domain: rail.clone(),
+                })
+            }
             SignalPath::SupplyRail { rail } => match rail.as_str() {
                 "vdd" => {
                     if !bus.supply.has_monitor() {
@@ -1225,6 +1321,72 @@ impl SignalRouter {
         self.writes
             .iter()
             .any(|(_, binding)| *binding == WriteBinding::SupplyVdd)
+    }
+
+    pub fn attach_mcu_power_domains(&self, bus: &mut SystemBus) -> Result<(), String> {
+        let domains: Vec<_> = self
+            .writes
+            .iter()
+            .filter_map(|(_, binding)| match binding {
+                WriteBinding::PowerDomain { domain } => Some(domain.clone()),
+                _ => None,
+            })
+            .collect();
+        if domains.is_empty() {
+            return Ok(());
+        }
+        bus.mcu_power.attach_sampled_routes(
+            &domains,
+            self.domain_step_ns
+                .ok_or("missing MCU power sample interval")?,
+        )?;
+        for peripheral in &mut bus.peripherals {
+            peripheral.dev.sync_power_domains();
+        }
+        Ok(())
+    }
+
+    /// Remove held rail values before merging the outputs actually produced
+    /// at this runner call. Missing source output must not look like a fresh
+    /// observation just because a previous value remains in the signal store.
+    pub(crate) fn clear_mcu_power_outputs(&self, signals: &mut CosimSignals) {
+        for (path, binding) in &self.writes {
+            if matches!(binding, WriteBinding::PowerDomain { .. }) {
+                signals.remove(path);
+            }
+        }
+    }
+
+    fn mcu_power_sample_due(&self, time_ns: u64) -> Result<Option<u64>, RoutingError> {
+        let Some(step) = self.domain_step_ns else {
+            return Ok(None);
+        };
+        if step == 0 {
+            return Err(RoutingError::PowerDomainRejected {
+                path: "board.power".into(),
+                reason: "MCU power sample interval must be positive".into(),
+            });
+        }
+        let sample = time_ns / step * step;
+        // A standalone session has not primed its rail models before their
+        // first scheduled step. World explicitly calls apply at t=0.
+        if time_ns != 0 && sample == 0 {
+            return Ok(None);
+        }
+        if self.domain_last_sample_ns == Some(sample) {
+            return Ok(None);
+        }
+        let expected = self
+            .domain_last_sample_ns
+            .map(|previous| previous.checked_add(step))
+            .unwrap_or(Some(if sample == 0 { 0 } else { step }));
+        if expected != Some(sample) {
+            return Err(RoutingError::PowerDomainRejected {
+                path: "board.power".into(),
+                reason: "MCU power routing skipped or reversed an owning model interval; each complete rail sample must be applied once".into(),
+            });
+        }
+        Ok(Some(sample))
     }
 
     /// No board path is routed in either direction.
@@ -1306,12 +1468,21 @@ impl SignalRouter {
                     .and_then(|p| p.dev.read_gpio_pad(pad))
                 {
                     let supply = bus.supply.status();
-                    let high = if supply.routed {
+                    let io = bus.mcu_power.io_handle();
+                    let io_available = io.as_ref().is_none_or(|rail| rail.is_available());
+                    let high = if let Some(io) = io {
+                        io.effective_voltage_v().unwrap_or(0.0)
+                    } else if supply.routed {
                         supply.vdd_volts.unwrap_or(0.0)
                     } else {
                         bus.io_voltage_v.unwrap_or(0.0)
                     };
-                    let volts = if level && !supply.held_in_reset && !bus.reset_input.is_held() {
+                    let volts = if level
+                        && io_available
+                        && !bus.mcu_power.blocks_execution()
+                        && !supply.held_in_reset
+                        && !bus.reset_input.is_held()
+                    {
                         high.max(0.0)
                     } else {
                         0.0
@@ -1350,7 +1521,15 @@ impl SignalRouter {
                     .peripherals
                     .get(peripheral)
                     .and_then(|p| p.dev.read_gpio_pad(pad)),
-                ReadBinding::Driven { .. } if bus.supply.is_held() || bus.reset_input.is_held() => {
+                ReadBinding::Driven { .. }
+                    if bus.supply.is_held()
+                        || bus.reset_input.is_held()
+                        || bus.mcu_power.blocks_execution()
+                        || bus
+                            .mcu_power
+                            .io_handle()
+                            .is_some_and(|io| !io.is_available()) =>
+                {
                     Some(false)
                 }
                 ReadBinding::Driven { peripheral, pad } => bus
@@ -1383,6 +1562,25 @@ impl SignalRouter {
         let mut errors = Vec::new();
         // Validate and collect every supplied device rail before any power
         // transition. A malformed peer rail must not half-apply the boundary.
+        let domain_sample = match self.mcu_power_sample_due(time_ns) {
+            Ok(sample) => sample,
+            Err(error) => return vec![error],
+        };
+        let mut domain_rails = Vec::new();
+        if domain_sample.is_some() {
+            for (path, binding) in &self.writes {
+                if let WriteBinding::PowerDomain { domain } = binding {
+                    match signals.get(path.as_str()).and_then(signal_as_f64)
+                        .filter(|volts| volts.is_finite() && *volts >= 0.0) {
+                        Some(volts) => domain_rails.push((domain.clone(), volts)),
+                        None => errors.push(RoutingError::PowerDomainRejected {
+                            path: path.clone(),
+                            reason: "each owning model boundary requires a fresh finite nonnegative voltage for every bound MCU rail".into(),
+                        }),
+                    }
+                }
+            }
+        }
         let mut device_rails = Vec::new();
         for (path, binding) in &self.writes {
             let WriteBinding::DeviceSupply { device, rail } = binding else {
@@ -1408,6 +1606,15 @@ impl SignalRouter {
                 reason: error.to_string(),
             }];
         }
+        if let Some(sample_ns) = domain_sample {
+            if let Err(reason) = bus.apply_mcu_power_voltages(&domain_rails, sample_ns) {
+                return vec![RoutingError::PowerDomainRejected {
+                    path: "board.power".into(),
+                    reason,
+                }];
+            }
+            self.domain_last_sample_ns = Some(sample_ns);
+        }
         for (motor, _, _) in &self.circuit_bldc {
             bus.begin_circuit_bldc_boundary(*motor);
         }
@@ -1416,8 +1623,11 @@ impl SignalRouter {
                 continue; // No model produced this output on this step.
             };
             match binding {
-                WriteBinding::DeviceSupply { .. } => {} // Published in the atomic batch above.
+                WriteBinding::DeviceSupply { .. } | WriteBinding::PowerDomain { .. } => {} // Atomic batches above.
                 WriteBinding::PadInput { addr, bit, level } => {
+                    if !bus.gpio_threshold_mode_qualified() {
+                        continue;
+                    }
                     let next = match value {
                         CosimSignalValue::F64(volts) => {
                             match InputThresholds::next_level_for_bus(bus, *level, *volts) {
@@ -1474,8 +1684,25 @@ impl SignalRouter {
                         });
                         continue;
                     };
+                    let io_domain = bus
+                        .reset_input
+                        .config
+                        .as_ref()
+                        .and_then(|reset| reset.io_domain.as_deref());
+                    let io = io_domain.and_then(|domain| bus.mcu_power.handle(domain));
+                    if io.as_ref().is_some_and(|rail| !rail.is_available()) {
+                        if let Err(reason) = bus.reset_input.hold_unqualified(volts, time_ns) {
+                            errors.push(RoutingError::ResetInputRejected {
+                                path: path.clone(),
+                                reason,
+                            });
+                        }
+                        continue;
+                    }
                     let status = bus.supply.status();
-                    let vdd = if status.routed {
+                    let vdd = if let Some(io) = io {
+                        io.effective_voltage_v()
+                    } else if status.routed {
                         status.vdd_volts
                     } else {
                         bus.io_voltage_v
@@ -1957,12 +2184,16 @@ impl CosimSession {
                     .into(),
             ));
         }
-        let (router, errors) = SignalRouter::bind(&self.configs, bus);
+        let (mut router, errors) = SignalRouter::bind(&self.configs, bus);
         if !errors.is_empty() {
             return Err(SimulationError::Other(
                 "co-sim fresh fixture has unbound destinations".into(),
             ));
         }
+        // The model timeline continues even though the replacement machine
+        // starts with unknown rails. Preserve only the sampling cursor, not
+        // the old machine's observations or reset state.
+        router.domain_last_sample_ns = self.router.domain_last_sample_ns;
         self.router = router;
         self.epoch_cycles = epoch_cycles;
         self.binding_errors = errors;
@@ -2021,6 +2252,16 @@ impl CosimSession {
         }
         let runner = CosimRunner::new(models);
         let (router, binding_errors) = SignalRouter::bind(configs, bus);
+        if bus.mcu_power.is_configured() && !binding_errors.is_empty() {
+            return Err(SimulationError::Other(format!(
+                "MCU power-domain co-simulation bindings: {}",
+                binding_errors
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            )));
+        }
         let fallback_clock = bus.cpu_hz == 0;
         let cpu_hz = if fallback_clock {
             FALLBACK_CPU_HZ
@@ -2207,6 +2448,9 @@ impl CosimSession {
     ) -> SimResult<(Vec<CosimRoutedModelStep>, Vec<RoutingError>)> {
         let total_cycles = self.global_cycles(total_cycles)?;
         self.last_global_cycles = total_cycles;
+        self.router
+            .attach_mcu_power_domains(bus)
+            .map_err(SimulationError::Other)?;
         if self.router.routes_supply() {
             bus.supply.attach();
         }
@@ -2221,10 +2465,23 @@ impl CosimSession {
         let routed = self
             .runner
             .step_until_with_signals(time_ns, &mut self.signals)?;
-        let errors = self.router.apply(bus, &self.signals, time_ns);
-        // Land on the first boundary strictly after the time just reached, so
-        // a long advance that crossed several periods does not replay them.
-        self.next_boundary_ns = (time_ns / self.step_ns + 1).saturating_mul(self.step_ns);
+        let errors = if self.router.domain_step_ns.is_some() {
+            // Every same-rate rail writer contributes to one atomic sample.
+            // A faster unrelated model must not refresh a held rail value.
+            let mut fresh = self.signals.clone();
+            self.router.clear_mcu_power_outputs(&mut fresh);
+            for step in &routed {
+                fresh.extend(step.outputs.clone());
+            }
+            self.router.apply(bus, &fresh, time_ns)
+        } else {
+            self.router.apply(bus, &self.signals, time_ns)
+        };
+        // Use the actual earliest owner boundary: periods such as 700 ns
+        // and 1000 ns cannot be scheduled as multiples of the finer period.
+        self.next_boundary_ns = self.runner.next_boundary_ns().ok_or_else(|| {
+            SimulationError::Other("co-simulation has no next model boundary".into())
+        })?;
         Ok((routed, errors))
     }
 
@@ -2255,6 +2512,9 @@ impl CosimSession {
             .map_err(CosimAdvanceError::Machine)?;
         // A routed VDD holds the core in reset from its very first cycle, not
         // from the first model boundary: the circuit has not delivered yet.
+        self.router
+            .attach_mcu_power_domains(&mut machine.bus)
+            .map_err(|error| CosimAdvanceError::Machine(SimulationError::Other(error)))?;
         if self.router.routes_supply() {
             machine.attach_supply();
         }
@@ -2285,10 +2545,11 @@ impl CosimSession {
         // A failed ngspice output must stop at this boundary. Continuing to
         // spend the batch would let firmware run against a disconnected circuit.
         if !errors.is_empty()
-            && self
-                .configs
-                .iter()
-                .any(|config| config.adapter == ManifestCosimAdapter::Ngspice)
+            && (machine.bus.mcu_power.is_configured()
+                || self
+                    .configs
+                    .iter()
+                    .any(|config| config.adapter == ManifestCosimAdapter::Ngspice))
         {
             let message = errors
                 .iter()
@@ -2799,7 +3060,7 @@ mod tests {
     fn atmega_thresholds() -> InputThresholds {
         InputThresholds::from_ratios(
             5.0,
-            GpioInputThresholds {
+            GpioInputThresholds::Affine {
                 vil: 0.3,
                 vih: 0.6,
                 vil_offset_v: 0.0,
@@ -2937,7 +3198,7 @@ mod tests {
     #[test]
     fn an_analog_pin_route_names_whichever_key_is_missing() {
         let mut bus = crate::bus::SystemBus::new();
-        bus.gpio_input_thresholds = Some(GpioInputThresholds {
+        bus.gpio_input_thresholds = Some(GpioInputThresholds::Affine {
             vil: 0.3,
             vih: 0.6,
             vil_offset_v: 0.0,
