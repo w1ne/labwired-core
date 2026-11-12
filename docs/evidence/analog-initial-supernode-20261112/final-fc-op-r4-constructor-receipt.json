@@ -1,0 +1,9 @@
+{
+  "input": "/data/work-scratch/native-fc-opamp-direct-r4-20261112/model.json",
+  "input_sha256": "70b7cd75f2ebd4fbc7f4439e2682822882614e27a1e5f180a9b57293d3039b39",
+  "seconds": 0.0320218310225755,
+  "exit": 0,
+  "timeout": false,
+  "stdout": "/data/work-evidence/analog-initial-supernode-20261112/final-fc-op-r4-constructor.json",
+  "stderr": "/data/work-evidence/analog-initial-supernode-20261112/final-fc-op-r4-constructor.log"
+}

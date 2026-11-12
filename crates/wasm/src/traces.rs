@@ -322,6 +322,19 @@ impl WasmSimulator {
             .map_err(|err| JsValue::from_str(&format!("analog_channels: {err}")))
     }
 
+    /// Accepted initialization contract for each attached in-core analog model.
+    /// Empty when no such model exists; serialization errors remain explicit.
+    #[wasm_bindgen]
+    pub fn analog_initialization_status(&self) -> Result<JsValue, JsValue> {
+        let status = self
+            .cosim
+            .as_ref()
+            .map(|session| session.analog_initialization_status())
+            .unwrap_or_default();
+        serde_wasm_bindgen::to_value(&status)
+            .map_err(|err| JsValue::from_str(&format!("analog_initialization_status: {err}")))
+    }
+
     /// Analog samples newer than `cursor`, plus the cursor to pass next time.
     ///
     /// Cursors are sample sequence numbers, the same contract as

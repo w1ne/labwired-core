@@ -1,0 +1,79 @@
+{
+  "recorded_utc": "2026-11-12T14:07:06.913311+00:00",
+  "generic_base_head": "b0c989c6f18183ebac33de2bebb9996bf9e83750",
+  "merged_upstream_head": "30e5d13abfcd78de11cd713aed394e09243395f6",
+  "mna_sha256": "0e316393e06551af9d3bc2b79d273dbf42d6eee0cc931cad512975990b4c6f92",
+  "analytic_test_sha256": "810c24ab141a004af0bdbb6ee76a5217fb92fd2be269817f3dcc8dab89c1be53",
+  "native_source_receipt_sha256": "b0a2cfcba077901fe54ec0cf4af9e6e07fdd84edb221b1b16ea4c9ccad6701e3",
+  "native_binary_sha256": "86611db885679afe872a0b4eb62575f80dd9e976265c2bd1d8033d32f1361976",
+  "native_prefix": {
+    "status": "pass",
+    "rounds": 100,
+    "completed_time_ns": 10000,
+    "wall_seconds": 20.02807916002348,
+    "user_seconds": 19.266236,
+    "system_seconds": 0.12062099999999999,
+    "max_rss_kib": 44284,
+    "source_world_sha256": "be9920aa9129e0e01df858a18491097a4fd72a556c8f675da72363e92e283d73",
+    "source_script_sha256": "b8636e7b5eb7f4951a758256da2b8be26d11ec0f309477df76abecfc50989108",
+    "reported_environment_instructions": 500,
+    "instruction_field_semantics": "successful node advance calls, not retired CPU instructions",
+    "actual_retired_instructions": null,
+    "cpu_observations": [
+      {
+        "id": "esc_U2",
+        "pc": "0x8004908",
+        "cycles": 1200,
+        "reset_held": true
+      },
+      {
+        "id": "esc_U5",
+        "pc": "0x8004908",
+        "cycles": 1200,
+        "reset_held": true
+      },
+      {
+        "id": "esc_U7",
+        "pc": "0x8004908",
+        "cycles": 1200,
+        "reset_held": true
+      },
+      {
+        "id": "esc_U9",
+        "pc": "0x8004908",
+        "cycles": 1200,
+        "reset_held": true
+      },
+      {
+        "id": "fc_U2",
+        "pc": "0x1000015c",
+        "cycles": 1500,
+        "reset_held": true
+      }
+    ]
+  },
+  "native_validation": {
+    "analog_devices": 80,
+    "analog_linear_golden": 2,
+    "analog_macros": 47,
+    "analog_newton_accuracy": 1,
+    "analog_transient_regressions": 10,
+    "all_existing_trajectory_hashes_unchanged": true,
+    "fmt_all": "pass",
+    "clippy_core_cli_all_targets_warnings_denied": "pass"
+  },
+  "generic_composition_validation": {
+    "focused_tests_passed": 184,
+    "test_failures": 0,
+    "source_mna_sha256": "0e316393e06551af9d3bc2b79d273dbf42d6eee0cc931cad512975990b4c6f92",
+    "source_test_sha256": "810c24ab141a004af0bdbb6ee76a5217fb92fd2be269817f3dcc8dab89c1be53",
+    "upstream_admission_and_followup_guard_tests_retained": true,
+    "normal_commit_push_hooks": "Run after this receipt; exact command log and remote head are retained in the external execution receipt and pull-request status."
+  },
+  "scope": "Generic compensated residual correction only. The native source remains a separate unacknowledged candidate. A 10 microsecond prefix with all MCUs held does not establish startup, firmware execution, PWM, motor operation, hardware equivalence, or interactive runtime performance.",
+  "negative_controls_archive_sha256": "b3e55d73cddc79b2687f4ddba9e4043a71b9a36e358b8777549af8a0212a62b5",
+  "rejected_experiments": [
+    "Unconditional correction changed an existing macro trajectory hash; that implementation was not promoted and the hash was not re-pinned.",
+    "An initial new charging-divider assertion used only the absolute floor. At 160 ns its 1.144248e-12 V error was within the existing feedback tolerance 1.171961e-12 V. The final new assertion propagates both existing node tolerances; the exact-zero assertion and physical witnesses stay unchanged."
+  ]
+}

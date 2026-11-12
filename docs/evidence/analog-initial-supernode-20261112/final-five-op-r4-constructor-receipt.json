@@ -1,0 +1,9 @@
+{
+  "input": "/data/work-scratch/native-five-mcu-opamp-direct-r4-20261112/model.json",
+  "input_sha256": "221bb36e5198aa19c6424c0f4bb5011fabeac782c3846c3a341677c048777f6a",
+  "seconds": 0.4152142549864948,
+  "exit": 0,
+  "timeout": false,
+  "stdout": "/data/work-evidence/analog-initial-supernode-20261112/final-five-op-r4-constructor.json",
+  "stderr": "/data/work-evidence/analog-initial-supernode-20261112/final-five-op-r4-constructor.log"
+}

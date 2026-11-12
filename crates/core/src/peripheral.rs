@@ -1376,6 +1376,37 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// register has nothing to record.
     fn on_supply_reset(&mut self, _cause: crate::power::SupplyResetCause) {}
 
+    /// Explicit physical rail roles. Unsupported models refuse binding.
+    fn attach_power_domains(
+        &mut self,
+        _domains: std::collections::BTreeMap<String, crate::power_domains::PowerDomainHandle>,
+    ) -> Result<(), String> {
+        Err("peripheral has no declared power-domain capability".into())
+    }
+    /// Register-specific code supplies threshold voltages, not register codes.
+    fn attach_power_supervisor(
+        &mut self,
+        _control: crate::power_domains::PowerSupervisorControl,
+    ) -> Result<(), String> {
+        Err("peripheral has no sampled brown-out control capability".into())
+    }
+    /// Called after all physical rail observations are published atomically.
+    /// Opt in to an explicitly declared, sampled internal regulator stage.
+    fn attach_regulator_control(
+        &mut self,
+        _control: crate::regulator::RegulatorControl,
+    ) -> Result<(), String> {
+        Err("peripheral does not support internal regulator control".into())
+    }
+
+    /// Consume every newly solved regulator observation, before CPU transactions.
+    fn sync_regulator_control(&mut self) {}
+
+    fn sync_power_domains(&mut self) {}
+    /// One actual reset transition, after the peripheral reset callbacks.
+    /// CPU vector reload on release does not call this a second time.
+    fn on_power_reset(&mut self, _cause: crate::power_domains::PowerResetCause) {}
+
     /// The node this peripheral belongs to was reset through its reset pin
     /// or `SYSRESETREQ` (a world's scripted node reset). A peripheral that
     /// must return to its reset state for the restarted firmware to behave
@@ -1834,6 +1865,14 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// Whether this peripheral accepts a routed `VREF+`/`VDDA` voltage.
     fn supports_adc_reference_voltage(&self) -> bool {
         false
+    }
+
+    /// Explicit receiver maximum used only to bound signed roundoff at zero.
+    /// An opting-in model must retain such samples as unpowered references;
+    /// this is not an operating-range qualification or a clamp. `None` keeps
+    /// the legacy nonnegative observation contract.
+    fn adc_reference_observation_max_v(&self) -> Option<f64> {
+        None
     }
 
     /// Set the ADC's positive full-scale reference voltage, in volts. Returns

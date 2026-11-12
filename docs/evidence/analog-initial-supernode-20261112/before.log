@@ -1,0 +1,41 @@
+
+running 7 tests
+test a_voltage_source_cannot_hide_inconsistent_series_inductor_currents ... FAILED
+test ambiguous_parallel_voltage_source_current_sharing_is_not_fabricated ... ok
+test cold_star_with_stationary_back_emf_sources_has_no_artificial_reference ... FAILED
+test inconsistent_star_sum_is_refused_before_any_state_is_published ... FAILED
+test mutual_inductance_uses_the_full_matrix_for_voltage_group_derivatives ... FAILED
+test nonzero_star_currents_preserve_each_original_source_current_and_offset ... FAILED
+test stationary_voltage_offset_between_series_inductors_retains_member_kcl ... FAILED
+
+failures:
+
+failures:
+    a_voltage_source_cannot_hide_inconsistent_series_inductor_currents
+    cold_star_with_stationary_back_emf_sources_has_no_artificial_reference
+    inconsistent_star_sum_is_refused_before_any_state_is_published
+    mutual_inductance_uses_the_full_matrix_for_voltage_group_derivatives
+    nonzero_star_currents_preserve_each_original_source_current_and_offset
+    stationary_voltage_offset_between_series_inductors_retains_member_kcl
+
+test result: FAILED. 1 passed; 6 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+thread 'a_voltage_source_cannot_hide_inconsistent_series_inductor_currents' (2366221) panicked at /data/work-evidence/transient-state-independent-tests-20261112/analog_transient_voltage_group.rs:159:5:
+circuit matrix is singular at unknown 2: check for a floating node, a zero-ohm resistor or two voltage sources in parallel
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'cold_star_with_stationary_back_emf_sources_has_no_artificial_reference' (2366223) panicked at /data/work-evidence/transient-state-independent-tests-20261112/analog_transient_voltage_group.rs:67:84:
+called `Result::unwrap()` on an `Err` value: Singular { row: 6 }
+
+thread 'inconsistent_star_sum_is_refused_before_any_state_is_published' (2366224) panicked at /data/work-evidence/transient-state-independent-tests-20261112/analog_transient_voltage_group.rs:124:9:
+circuit matrix is singular at unknown 6: check for a floating node, a zero-ohm resistor or two voltage sources in parallel
+
+thread 'mutual_inductance_uses_the_full_matrix_for_voltage_group_derivatives' (2366225) panicked at /data/work-evidence/transient-state-independent-tests-20261112/analog_transient_voltage_group.rs:168:70:
+called `Result::unwrap()` on an `Err` value: Singular { row: 2 }
+
+thread 'nonzero_star_currents_preserve_each_original_source_current_and_offset' (2366226) panicked at /data/work-evidence/transient-state-independent-tests-20261112/analog_transient_voltage_group.rs:91:86:
+called `Result::unwrap()` on an `Err` value: Singular { row: 6 }
+
+thread 'stationary_voltage_offset_between_series_inductors_retains_member_kcl' (2366227) panicked at /data/work-evidence/transient-state-independent-tests-20261112/analog_transient_voltage_group.rs:135:80:
+called `Result::unwrap()` on an `Err` value: Singular { row: 2 }

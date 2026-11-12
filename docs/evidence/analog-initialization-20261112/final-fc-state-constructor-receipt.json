@@ -1,0 +1,9 @@
+{
+  "input": "/data/work-scratch/native-fc-transient-state-r1-20261112/model.json",
+  "input_sha256": "85b337f49a413b597fab8d1a40d02a4e96fad3db11e07932ceba56fcb42c8609",
+  "seconds": 0.06679259502561763,
+  "exit": 0,
+  "timeout": false,
+  "stdout": "/data/work-evidence/analog-transient-state-20261112/final-fc-state-constructor.json",
+  "stderr": "/data/work-evidence/analog-transient-state-20261112/final-fc-state-constructor.log"
+}

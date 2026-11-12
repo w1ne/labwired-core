@@ -37,7 +37,9 @@ pub mod physics;
 pub mod pins;
 pub mod plugin;
 pub mod power;
+pub mod power_domains;
 pub mod profile;
+pub mod regulator;
 pub mod reset_input;
 pub mod runtime_snapshot;
 pub mod sched;
@@ -2157,6 +2159,8 @@ impl<C: Cpu> Machine<C> {
         // architecture resets to zero: SCR, SHPR1, SHPR2, SHPR3.
         for addr in [
             0xE000_E010u64,
+            0xE000_E014, // SysTick RELOAD
+            0xE000_E018, // SysTick CURRENT
             0xE000_ED10,
             0xE000_ED18,
             0xE000_ED1C,
@@ -2275,6 +2279,56 @@ impl<C: Cpu> Machine<C> {
         }
         tracing::debug!("supply supervisor released the core: {}", cause.as_str());
         Ok(())
+    }
+
+    /// Apply each chip reset once, then reload CPU vectors only when the
+    /// physical execution rails and the actual vector mapping are available.
+    /// A later reload must not clear the already recorded reset cause.
+    fn apply_mcu_power_events(&mut self) -> SimResult<()> {
+        while let Some(cause) = self.bus.mcu_power.take_reset_event() {
+            self.reset_core_system_state();
+            self.reset_node_peripherals();
+            for peripheral in &mut self.bus.peripherals {
+                peripheral.dev.on_power_reset(cause);
+            }
+        }
+        if self.bus.mcu_power.needs_restart() && !self.bus.reset_input.is_held() {
+            let vector = self.boot_vtor.ok_or_else(|| {
+                SimulationError::Other(
+                    "power-domain CPU reset requires an explicitly recorded reset-vector table"
+                        .into(),
+                )
+            })?;
+            if !self
+                .bus
+                .reset_vector_mapping_ready(u64::from(vector))
+                .map_err(SimulationError::Other)?
+            {
+                return Ok(());
+            }
+            self.reset()?;
+            self.bus.mcu_power.finish_restart();
+        }
+        Ok(())
+    }
+
+    pub fn power_domain_status(&self) -> Option<crate::power_domains::PowerDomainStatus> {
+        let mut status = self.bus.mcu_power.status()?;
+        if let Some(labwired_config::GpioInputThresholds::Absolute {
+            vil_max_v,
+            vih_min_v,
+            nominal_io_voltage_v,
+            minimum_io_voltage_v,
+        }) = self.bus.gpio_input_thresholds
+        {
+            status.input_threshold_calibration = Some(crate::power_domains::NominalInputThresholdCalibration {
+                nominal_io_voltage_v, minimum_io_voltage_v,
+                currently_qualified: self.bus.gpio_threshold_mode_qualified(),
+                vil_max_v, vih_min_v,
+                scope: "nominal operating-point model; full-range input thresholds are not qualified",
+            });
+        }
+        Some(status)
     }
 
     /// Advances one primary-CPU boundary through the authoritative lifecycle.

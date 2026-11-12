@@ -107,6 +107,11 @@ impl SupplySupervisor {
         self.routed
     }
 
+    /// The latest circuit-observed supply, absent before its first observation.
+    pub fn vdd_volts(&self) -> Option<f64> {
+        self.vdd
+    }
+
     /// A circuit now drives VDD. The core starts unpowered and held in reset;
     /// the first VDD the circuit delivers decides when it comes out. Calling
     /// it again does nothing.
@@ -186,6 +191,29 @@ impl SupplySupervisor {
             bor_level: self.monitor.as_ref().and_then(|m| m.bor_level.clone()),
         }
     }
+}
+
+#[derive(Debug)]
+pub(crate) enum RailBatchError {
+    Device(String),
+    Mcu(String),
+}
+
+/// Admit a raw rail observation without changing its value. A declared maximum
+/// permits only signed roundoff within one relative f64 epsilon of zero.
+/// Receivers without that explicit maximum retain the nonnegative contract.
+/// Operating-range qualification is separate, so admitted negative values
+/// remain unavailable to the device.
+pub(crate) fn rail_observation_is_admissible(
+    voltage_v: f64,
+    declared_maximum_v: Option<f64>,
+) -> bool {
+    let minimum = match declared_maximum_v {
+        Some(maximum) if maximum.is_finite() && maximum >= 0.0 => -f64::EPSILON * maximum,
+        None => 0.0,
+        Some(_) => return false,
+    };
+    voltage_v.is_finite() && voltage_v >= minimum
 }
 
 #[cfg(test)]

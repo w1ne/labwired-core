@@ -1,0 +1,5 @@
+# Explicit-state group and contact follow-up
+
+The receipt binds the tested source, normal focused logs, independent expected-red witnesses and actual native constructor inputs/results. The seven stationary-source group tests retain original source currents and analytical mutual-inductance values. The zero-hysteresis tests cover NO/NC complements, signed/absolute sensing, adjacent floating-point values, repeated OP/t=0/step reads, positive-hysteresis boundaries and scoped signed zero-threshold admission. The existing true-oscillator eight-pass refusal remains unchanged.
+
+The copied-source contact diagnostic adds only logging. It shows four FC contacts at exactly 1 V / VT=1 / VH=0 alternating on every pass under the old state-dependent predicate. The same four contacts appear in the combined deck. Production constructor receipts then accept both explicit states, while retaining default-OP refusal. The recorded first-step failure is a separate OPAMP numerical-zero boundary. No firmware, MCU startup, motor motion or physical equivalence is established by this packet.

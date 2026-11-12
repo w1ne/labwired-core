@@ -477,6 +477,7 @@ canonical `type:`; the table below is rendered from that file by
 | `adxl345_spi` | SPI | 3-axis ±16 g accelerometer over SPI (full-resolution, 256 LSB/g) |
 | `amoled-rm67162` | SPI | 240x536 RGB565 AMOLED, 4-wire SPI (DBI Type-C) |
 | `apa102` | SPI | SPI-clocked addressable RGB LED strip (write-only sink) |
+| `bmi270_spi` | SPI | Native four-wire BMI270 with real CS/dummy-byte framing, verified configuration upload and nominal motion sampling |
 | `gc9a01` | SPI | 1.28in round 240x240 RGB565 IPS TFT on a GalaxyCore GC9A01A, 4-wire SPI |
 | `hc595-7seg` | SPI | 4-digit 7-segment LED display driven by two chained 74HC595 shift registers over SPI |
 | `ili9341` | SPI | 240×320 RGB565 SPI TFT display |
@@ -660,6 +661,9 @@ for the full BLDC form. A motor can equivalently be declared as an
 `external_devices` entry with `type: dc-motor` or `bldc-motor`: the loader
 converts it to the same typed plant (`MotorModelConfig::from_external_device`),
 so the two spellings cannot drift.
+
+For a physical three-lead winding driven by a solved inverter circuit, use
+`armature: circuit` and the [circuit BLDC contract](circuit-bldc.md).
 
 ```yaml
 # examples/f401-hbridge-dc-motor/system.yaml (excerpt)

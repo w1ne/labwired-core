@@ -136,6 +136,16 @@ impl<'a> AttachCtx<'a> {
     /// work over the bus. An unresolvable pad label IS an error — that is a
     /// wiring mistake, not a choice.
     pub fn bind_output_pins(&mut self, desc: &labwired_config::DeviceDescriptor) -> Result<()> {
+        self.bind_output_roles(&desc.behavior.outputs, &desc.behavior.output_pins)
+    }
+
+    /// Bind output roles from a hand-written kit through the same pad port
+    /// as declarative devices. Models queue role names, never MCU pad labels.
+    pub fn bind_output_roles(
+        &mut self,
+        outputs: &[String],
+        output_pins: &std::collections::BTreeMap<String, String>,
+    ) -> Result<()> {
         // The placement must name each output role explicitly; the name also
         // declares a pull-up. No implicit electrical mode is inferred.
         let open_drain_roles = match self.ext.config.get("open_drain_pullups") {
@@ -155,9 +165,7 @@ impl<'a> AttachCtx<'a> {
                             self.ext.id
                         )
                     })?;
-                    if !desc.behavior.outputs.iter().any(|known| known == role)
-                        || result.contains(&role)
-                    {
+                    if !outputs.iter().any(|known| known == role) || result.contains(&role) {
                         return Err(anyhow!(
                             "device '{}' has an unknown or duplicate open-drain role '{}'",
                             self.ext.id,
@@ -198,10 +206,8 @@ impl<'a> AttachCtx<'a> {
                 result
             }
         };
-        for role in &desc.behavior.outputs {
-            let key = desc
-                .behavior
-                .output_pins
+        for role in outputs {
+            let key = output_pins
                 .get(role)
                 .cloned()
                 .unwrap_or_else(|| role.clone());
@@ -355,6 +361,33 @@ impl<'a> AttachCtx<'a> {
         // Same identity stamp as `attach_i2c_device`.
         if let Some(si) = device.as_sim_input_mut() {
             si.set_component_id(self.ext.id.clone());
+        }
+        let routed = self.ext.config.contains_key("supply_rails")
+            || self.ext.config.contains_key("supply_domain");
+        anyhow::ensure!(
+            !routed || device.supports_power_control(),
+            "device '{}' does not support routed SPI power transitions",
+            self.ext.id
+        );
+        if routed {
+            let index = self
+                .bus
+                .find_peripheral_index_by_name(&self.ext.connection)
+                .ok_or_else(|| missing_connection_err(self.ext))?;
+            anyhow::ensure!(
+                self.bus.peripherals[index]
+                    .dev
+                    .spi_attached_devices_mut()
+                    .is_some(),
+                "connection '{}' cannot publish routed SPI power transitions",
+                self.ext.connection
+            );
+        }
+        let gate = crate::peripherals::components::supply_domain::SupplyGate::from_config(self)?;
+        if gate.is_routed() {
+            device = Box::new(
+                crate::peripherals::components::supply_domain::GatedSpiDevice::new(device, gate)?,
+            );
         }
         // Funnel through the single bus choke point (see `attach_i2c_device`).
         let connection = self.ext.connection.clone();

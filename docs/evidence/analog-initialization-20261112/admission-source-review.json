@@ -1,0 +1,33 @@
+{
+  "recorded_at": "2026-11-12T08:50:05.775308+00:00",
+  "review_scope": "Read-only independent source review and separately authored tests; no build or mutation of implementation tree",
+  "source_sha256": {
+    "crates/core/src/analog/initialization.rs": "d2e6a483d7d8bb75153f2082b8813e35d92c2968c8095f9db5ddab8c8d15e051",
+    "crates/core/src/analog/initialization_charge.rs": "9d33e24807f5b0f2fe6198abdece3a0ac9ef264ec3350a82a1fd373ba8e7cd5f",
+    "crates/core/src/analog/mna_initialization.rs": "6b9c3e6e9fe017956c2b4ed6f6a47dfd11e3fb982236583c915156a25f765704",
+    "crates/core/src/analog/mna.rs": "f177d8da20c2c6b3202b5410dfed2416ce769375c6b1fc9f5caa4e9f0456237a"
+  },
+  "findings_closed_in_reviewed_source": [
+    "Raw operating_point decoder is an empty strict struct variant, so extra keys are rejected.",
+    "Transient-state charge history uses the same semiconductor seeding helper as operating-point initialization.",
+    "Intrinsic charge topology uses parsed internal junction terminals, preserving actual series resistances.",
+    "Diode, BJT transit/depletion, MOS bulk/overlap/channel and JFET charge paths participate in admission.",
+    "Mixed source/charge cycles fail explicitly before solve, instead of exposing basis-dependent source currents.",
+    "VCVS/CCVS outputs enter the combined topology only; the direct-clamp exception remains restricted to stationary independent voltage sources.",
+    "Temporary voltage constraints are removed before the first backward-Euler step; native capacitor/inductor values remain unchanged."
+  ],
+  "new_findings": [],
+  "independent_test_drafts": {
+    "analog_transient_dependent_source_refusal.rs": "9bfdb3f46d04ad5eed85a1851363a3cd9c334ac6d61f269af62409cca7c0305f",
+    "analog_transient_nonlinear_source_current_contract.rs": "49b3db115164f941f501af991e9e3ed75c6765ad404ca1025e4ded4b3c1c1d3a",
+    "analog_transient_source_current_contract.rs": "002ef35769842cc0a6f14db14ec9c71da794abd414dc7bcd726ac052625a5f56",
+    "analog_transient_source_cycle_refusal.rs": "ac9d1e432d37855d9f1c58a6d6f6ee22f4dcd768f1450596ee8e5540dba2c3ad",
+    "analog_transient_state_contract.rs": "eb1a2cbbafc59dc7d5026472d47534430062fc705fa76dae872d3323432351e8"
+  },
+  "native_audits": {
+    "capacitor-voltage-cycle-audit.json": "c4a7458a838d94ef25dd4331140eb636b7d63cbfc0517ce714343b151ad4801b",
+    "intrinsic-charge-cycle-audit.json": "9129b972613778d9ff30522b480fb79f88e8044349fac90004f66cd1b73002cb",
+    "dependent-charge-cycle-audit.json": "27f350bc1addcf000a9d2e02d467badbdd676fc1175bed7d4ca001b2bd2c6a44"
+  },
+  "verification_limit": "All native graph audits are source-derived. Production parser admission, all new test results, nonlinear convergence and actual native execution remain separate required gates. No runtime readiness is claimed by this review."
+}

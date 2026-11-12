@@ -1,0 +1,49 @@
+{
+  "contract_failures": [],
+  "matched": {
+    "r7fa6m5bh": {
+      "fixture": "nrf",
+      "modes": [
+        "step",
+        "batch"
+      ]
+    },
+    "r7fa8m1ah": {
+      "fixture": "ra8m1",
+      "modes": [
+        "step",
+        "batch"
+      ]
+    }
+  },
+  "measured": {
+    "r7fa6m5bh": {
+      "step": 1244.5
+    },
+    "r7fa8m1ah": {
+      "step": 1242.6
+    }
+  },
+  "never_measured": [],
+  "ok": false,
+  "regressions": [
+    {
+      "baseline": 892.0,
+      "board": "r7fa6m5bh",
+      "delta": 0.3952,
+      "measured": 1244.5,
+      "mode": "step"
+    },
+    {
+      "baseline": 892.0,
+      "board": "r7fa8m1ah",
+      "delta": 0.3931,
+      "measured": 1242.6,
+      "mode": "step"
+    }
+  ],
+  "skipped": {},
+  "stale": [],
+  "unmeasurable": [],
+  "waived": {}
+}

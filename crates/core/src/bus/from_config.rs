@@ -531,6 +531,8 @@ impl SystemBus {
             gpio_input_thresholds: None,
             reset_input: crate::reset_input::ResetInputState::default(),
             supply: crate::power::SupplySupervisor::default(),
+            mcu_power: crate::power_domains::McuPowerDomains::default(),
+            regulators: crate::regulator::RegulatorRegistry::default(),
             supply_domains: Default::default(),
         };
         bus.record_external_devices(manifest);
@@ -1550,6 +1552,8 @@ impl SystemBus {
                 .bind_backup_domain_write_enable(flag);
         }
 
+        bus.attach_mcu_power_domains(chip)?;
+        bus.attach_internal_regulators(chip)?;
         Ok(bus)
     }
 

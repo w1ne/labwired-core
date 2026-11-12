@@ -1,0 +1,17 @@
+{
+  "base_unknowns": 4,
+  "bound_initial_commands_before_constructor": [],
+  "capacitors": 0,
+  "construction": "refused",
+  "construction_seconds": 0.000083439,
+  "error": "Newton iteration did not converge at the DC operating point after 100 iterations; `v(gate)` was still moving by 0e0 per iteration. Try a smaller `substeps` interval, or use `adapter: external_process` with `tools/cosim/labwired_ngspice.py`",
+  "inductors": 0,
+  "input": "/data/work-evidence/analog-transient-state-20261112/reversed-mos-roundoff.model.json",
+  "max_unknowns": 128,
+  "model_id": "circuit",
+  "requested_initialization": {
+    "mode": "operating_point"
+  },
+  "scope": "production analog constructor only; no MCU or firmware execution",
+  "step_ns": 100
+}

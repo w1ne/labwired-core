@@ -1,0 +1,31 @@
+{
+  "head": "7ea92647c6d69e840e57f5646c74eeb057835c4a",
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "labwired-core",
+    "--test",
+    "analog_opamp_power",
+    "--test",
+    "analog_macros",
+    "--test",
+    "analog_adapter",
+    "--",
+    "--nocapture"
+  ],
+  "source_files": {
+    "crates/core/src/analog/netlist.rs": "643079c5d3272782b9bfbf1e09ee01e18e5d56c1d80d7a13349eca60bd8ad97e",
+    "crates/core/src/analog/opamp_power.rs": "be76934a9b025d38ff81a217d09c5580707355cb804f3dc884d7f63a3fd08301",
+    "crates/core/tests/analog_opamp_power.rs": "6e0ba1c861346b98c314071933a1b17ba926c2840294830d88caf312c16d7aa0",
+    "docs/cosimulation_plugins.md": "1854e62ad9c1c69a347744b3d9050c0174b7b3ae3db49a54d19dad6539aa77f7"
+  },
+  "patch_sha256": "690370718965c9f02e99451b279ee383e88b8af8540f85e3ddfc97a783de36b6",
+  "profile": "dev/test opt1 debug0 incremental0 jobs2, reused task-owned target",
+  "started_utc": "2026-11-12T09:58:16Z",
+  "exit": 0,
+  "external_stop": null,
+  "wall_seconds": 78.02831129904371,
+  "source_unchanged": true,
+  "log_sha256": "3e2234054390f73312312f6dfda0846e7430b24e52987d1342b46efd6c51df80"
+}

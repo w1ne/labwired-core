@@ -1,0 +1,9 @@
+{
+  "input": "/data/work-scratch/native-fc-opamp-direct-cold-state-r4-20261112/model.json",
+  "input_sha256": "5ce5a6b85dec7326f4cb5f010b61162edfcaafe854f40033b24dc332275e58dc",
+  "seconds": 0.03199489100370556,
+  "exit": 0,
+  "timeout": false,
+  "stdout": "/data/work-evidence/analog-initial-final-guard-20261112/stimulus-fc-state-r4-constructor.json",
+  "stderr": "/data/work-evidence/analog-initial-final-guard-20261112/stimulus-fc-state-r4-constructor.log"
+}

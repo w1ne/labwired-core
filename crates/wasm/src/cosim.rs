@@ -137,6 +137,13 @@ impl WasmSimulator {
         }
     }
     pub(crate) fn runtime_snapshot_refusal(&self) -> Option<&'static str> {
+        if self
+            .machine
+            .as_ref()
+            .is_some_and(|machine| !machine.bus.regulators.is_empty())
+        {
+            return Some("runtime snapshots cannot restore internal regulator command history and its coupled analog state");
+        }
         self.cosim
             .as_ref()
             .filter(|session| session.has_ngspice())
@@ -191,6 +198,12 @@ impl WasmSimulator {
         manifest: &SystemManifest,
         callback: Option<&js_sys::Function>,
     ) -> Result<(), String> {
+        if let Some(machine) = self.machine.as_ref() {
+            machine
+                .bus
+                .regulators
+                .require_models(!manifest.cosim_models.is_empty())?;
+        }
         if manifest.cosim_models.is_empty() {
             return Ok(());
         }

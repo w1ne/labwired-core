@@ -1,0 +1,11 @@
+{
+  "scope": "independent expected-red witness linked to pre-supernode public production library; no native execution",
+  "source_sha256": "60c5cb6f540a75140f0259cd09a172676cbe61c8c3dade0e5a96b4f9c5417dd9",
+  "library_sha256": {
+    "labwired_core": "a0cef37de895fe042382e8619f44281a8e2eae96a4b651e0de574de7e078747a",
+    "serde_json": "b3b89e1b056c189839f4346bcb770fe2440c8e821bc09a655878e293b595a123"
+  },
+  "build_exit": 0,
+  "test_exit": 101,
+  "seconds": 0.022012653993442655
+}

@@ -1,0 +1,14 @@
+{
+  "base_head": "8dbf55ec9daf48d93933794f5b03399c174ea27b",
+  "scope": "signed zero-width vt0 parser extension, tests pending; OPAMP numerical-zero follow-up not yet integrated",
+  "files_sha256": {
+    "crates/core/src/analog/initialization.rs": "2ca7dfa0e41282c92f4ebc3e54740c1ce0d0f458365daf8e2636529b4cf586b6",
+    "crates/core/src/analog/mna_initialization.rs": "eb254d690b75bef10ded956255c9bbe851cf01453e93f437a0e2ea405861e1dc",
+    "crates/core/src/analog/mna.rs": "9ce83d32db053200de00ddfd89bba8206d5a741c3dc575a35a56c8f82dffc4e6",
+    "crates/core/src/analog/netlist.rs": "c33779d8d8e1754a72da1fcfbc2f68a9af97b0fe9add0180b0bda052509dcc4c",
+    "crates/core/src/analog/opamp_power.rs": "4590059e4919a79c965032958ff33c8d8113a353f4d561649829a33a030b3817",
+    "crates/core/tests/analog_voltage_switch_boundaries.rs": "a39628a72b0ac3b019fffb7650de88e172b86c87d770e181f560bdb504156b4b",
+    "crates/core/tests/analog_transient_opamp.rs": "9af7e085ffa340c8a88be66ba4950d15c2483fdc95c2364f1c71b83d44682804",
+    "crates/core/tests/analog_transient_voltage_group.rs": "60c5cb6f540a75140f0259cd09a172676cbe61c8c3dade0e5a96b4f9c5417dd9"
+  }
+}

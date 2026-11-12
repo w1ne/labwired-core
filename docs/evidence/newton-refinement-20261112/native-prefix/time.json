@@ -1,0 +1,23 @@
+{
+  "source_receipt_sha256": "b0a2cfcba077901fe54ec0cf4af9e6e07fdd84edb221b1b16ea4c9ccad6701e3",
+  "cli_sha256": "86611db885679afe872a0b4eb62575f80dd9e976265c2bd1d8033d32f1361976",
+  "world_sha256": "be9920aa9129e0e01df858a18491097a4fd72a556c8f675da72363e92e283d73",
+  "script_sha256": "b8636e7b5eb7f4951a758256da2b8be26d11ec0f309477df76abecfc50989108",
+  "exit_code": 0,
+  "wall_seconds": 20.02807916002348,
+  "user_seconds": 19.266236,
+  "system_seconds": 0.12062099999999999,
+  "max_rss_kib": 44284,
+  "command": [
+    "/data/labwired-core-review-ready-20261112/bin/native-refinement2a-labwired",
+    "test",
+    "--script",
+    "/data/labwired-core-review-ready-20261112/native-input-r6/probe-100.yaml",
+    "--output-dir",
+    "/data/labwired-core-review-ready-20261112/native-refinement2a-probe-100",
+    "--analog-trace",
+    "/data/labwired-core-review-ready-20261112/native-refinement2a-probe-100/analog.csv",
+    "--no-uart-stdout"
+  ],
+  "scope": "Exact original100-round/60-second native input; same devopt1 debug0 profile; conditional compensated linear refinement."
+}

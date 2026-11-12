@@ -111,6 +111,9 @@ impl<C: Cpu> Machine<C> {
         router
             .validate_unique_writers()
             .map_err(anyhow::Error::msg)?;
+        router
+            .attach_mcu_power_domains(&mut self.bus)
+            .map_err(anyhow::Error::msg)?;
         if router.routes_supply() {
             self.attach_supply();
         }
@@ -138,9 +141,10 @@ impl<C: Cpu> Machine<C> {
         let errors = router.apply(&mut self.bus, signals, time_ns);
         if errors.is_empty() {
             if self.bus.reset_input.take_assertion() {
-                self.reset_node()?;
+                self.reset_from_external_pin()?;
             }
             self.apply_supply_release()?;
+            self.apply_mcu_power_events()?;
             Ok(())
         } else {
             Err(crate::SimulationError::Other(
@@ -300,6 +304,10 @@ impl<C: Cpu> Machine<C> {
     /// every peripheral gets [`crate::Peripheral::on_node_reset`]. SRAM keeps
     /// its contents, as on silicon.
     pub fn reset_node(&mut self) -> SimResult<()> {
+        self.reset_from_external_pin()
+    }
+
+    pub(crate) fn reset_node_peripherals(&mut self) {
         if let Some(nvic) = &self.bus.nvic {
             use std::sync::atomic::Ordering;
             nvic.any_enabled.store(false, Ordering::SeqCst);
@@ -316,7 +324,19 @@ impl<C: Cpu> Machine<C> {
         for p in self.bus.peripherals.iter_mut() {
             p.dev.on_node_reset();
         }
-        self.reset()
+    }
+
+    pub(crate) fn reset_from_external_pin(&mut self) -> SimResult<()> {
+        if self.bus.mcu_power.is_configured() {
+            self.bus
+                .mcu_power
+                .record_reset(crate::power_domains::PowerResetCause::ExternalPin)
+                .map_err(crate::SimulationError::Other)?;
+            self.apply_mcu_power_events()
+        } else {
+            self.reset_node_peripherals();
+            self.reset()
+        }
     }
 
     /// Watch GPIO pads for marker edges: `(gpio peripheral id, pin)` each.

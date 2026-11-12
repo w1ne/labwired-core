@@ -86,6 +86,11 @@ pub struct CosimStepResult {
 pub trait CosimAdapter: Send {
     fn step(&mut self, step: CosimStep) -> SimResult<CosimStepResult>;
 
+    /// How an analog model obtained its first solved state; other adapters have none.
+    fn analog_initialization_status(&self) -> Option<crate::analog::AnalogInitializationStatus> {
+        None
+    }
+
     /// Adopt the runner's shared analog-sample ring, naming this model's
     /// channels `<channel_prefix><name>`.
     ///

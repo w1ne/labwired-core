@@ -1,0 +1,19 @@
+refused Newton iteration did not converge at the DC operating point after 100 iterations; `v(v_net_c1_1)` was still moving by 0e0 per iteration. Try a smaller `substeps` interval, or use `adapter: external_process` with `tools/cosim/labwired_ngspice.py`
+DIAGNOSTIC iteration=98 residual=("initial_constraint(XU11#cg)", 2.050633187680383e-5) limiter=false buck=[false]
+DIAGNOSTIC opamp diode XU11#dhi raw=2.5e-2 id=9.978741497442302e8 gd=1.9299747756222163e12
+DIAGNOSTIC opamp diode XU11#dlo raw=2.5e-2 id=9.978741497442302e8 gd=1.9299747756222163e12
+DIAGNOSTIC iteration=99 residual=("initial_constraint(XU11#cg)", 1.6321366187660278e-5) limiter=false buck=[false]
+DIAGNOSTIC opamp diode XU11#dhi raw=2.5e-2 id=9.978741497442302e8 gd=1.9299747756222163e12
+DIAGNOSTIC opamp diode XU11#dlo raw=2.4999999999999998e-2 id=9.97874149744223e8 gd=1.9299747756222026e12
+DIAGNOSTIC iteration=100 residual=("initial_constraint(XU11#cg)", 3.682769806446411e-5) limiter=false buck=[false]
+DIAGNOSTIC opamp diode XU11#dhi raw=2.4999999999999998e-2 id=9.97874149744223e8 gd=1.9299747756222026e12
+DIAGNOSTIC opamp diode XU11#dlo raw=2.5000000000000005e-2 id=9.978741497442372e8 gd=1.92997477562223e12
+DIAGNOSTIC iteration=98 residual=("initial_constraint(XU11#cg)", 207780.35986886531) limiter=false buck=[false]
+DIAGNOSTIC opamp diode XU11#dhi raw=2.499999692770244e-2 id=9.978682203050469e8 gd=1.9299633075748076e12
+DIAGNOSTIC opamp diode XU11#dlo raw=2.499999846954614e-2 id=9.978711960112507e8 gd=1.9299690628475688e12
+DIAGNOSTIC iteration=99 residual=("initial_constraint(XU11#cg)", 5993.77214256056) limiter=false buck=[false]
+DIAGNOSTIC opamp diode XU11#dhi raw=2.5000003472741825e-2 id=9.97880852070858e8 gd=1.9299877385006846e12
+DIAGNOSTIC opamp diode XU11#dlo raw=2.5000001930957465e-2 id=9.978778764503827e8 gd=1.92998198339373e12
+DIAGNOSTIC iteration=100 residual=("initial_constraint(XU11#cg)", 100972.82937291007) limiter=false buck=[false]
+DIAGNOSTIC opamp diode XU11#dhi raw=2.500008002986405e-2 id=9.980286173174362e8 gd=1.9302735292476267e12
+DIAGNOSTIC opamp diode XU11#dlo raw=2.5000026170321252e-2 id=9.979246590823796e8 gd=1.93007246504386e12
