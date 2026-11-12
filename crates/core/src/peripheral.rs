@@ -624,6 +624,14 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// GPIO capability: explicit bank-to-pad mapping for a block whose input
+    /// and output words split absolute pad numbers across several registers.
+    /// Empty for models without bank metadata. Single-word ports continue to
+    /// publish `gpio_port_offsets`; callers must not guess a bank layout.
+    fn gpio_register_banks(&self) -> &[crate::peripherals::gpio::GpioRegisterBank] {
+        &[]
+    }
+
     /// Pin capability: this peripheral's pads, through the one pad interface
     /// ([`pins::PinPort`]). `None` (the default) for a peripheral that owns
     /// no pads. Every GPIO model answers `Some(self)`; the GPIO methods

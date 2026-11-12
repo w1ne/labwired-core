@@ -85,7 +85,10 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 2
+          # A refreshed synthetic merge may use a newer base than the event.
+          # Full ancestry lets admission prove that it is a descendant; absent
+          # history is not permission to skip the required performance run.
+          fetch-depth: 0
           persist-credentials: false
       - name: Test path and source-history admission
         run: python3 scripts/perf/test_pr_hotpath_gate.py

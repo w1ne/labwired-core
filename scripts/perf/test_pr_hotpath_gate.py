@@ -100,6 +100,56 @@ class HistoryControls(unittest.TestCase):
             with self.subTest(args=args), self.assertRaises(ValueError):
                 gate.changed_paths(*args)
 
+    def make_refreshed_merge(self, runtime_change=False):
+        self.run_git("checkout", "-b", "feature")
+        name = "crates/core/src/new_route.rs" if runtime_change else "README.md"
+        self.write(name, "feature change\n")
+        self.run_git("add", ".")
+        self.run_git("commit", "-m", "feature")
+        head = self.sha()
+        self.run_git("checkout", "main")
+        self.write("crates/core/src/lib.rs", "new main runtime\n")
+        self.run_git("commit", "-am", "main advanced after event")
+        actual_base = self.sha()
+        self.run_git("merge", "--no-ff", "feature", "-m", "refreshed tested merge")
+        return self.sha(), actual_base, head, name
+
+    def test_refreshed_base_uses_actual_first_parent_not_stale_event_base(self):
+        tested, _, head, name = self.make_refreshed_merge()
+        paths = gate.changed_paths(tested, self.initial, head)
+        self.assertEqual(paths, [name])
+        self.assertFalse(any(map(gate.hotpath, paths)))
+
+    def test_refreshed_base_still_requires_runtime_performance(self):
+        tested, _, head, name = self.make_refreshed_merge(runtime_change=True)
+        paths = gate.changed_paths(tested, self.initial, head)
+        self.assertEqual(paths, [name])
+        self.assertTrue(gate.select("pull_request", gate.OWNED_REPOSITORY, "fix/x", paths)[0])
+
+    def test_refreshed_base_rejects_wrong_head_and_unrelated_base(self):
+        tested, actual_base, head, _ = self.make_refreshed_merge()
+        with self.assertRaises(ValueError):
+            gate.changed_paths(tested, self.initial, actual_base)
+        self.run_git("checkout", "-b", "unrelated", self.initial)
+        self.write("other.txt", "unrelated history\n")
+        self.run_git("add", ".")
+        self.run_git("commit", "-m", "different branch, not an ancestor")
+        unrelated = self.sha()
+        self.run_git("checkout", tested)
+        with self.assertRaises(subprocess.CalledProcessError):
+            gate.changed_paths(tested, unrelated, head)
+
+    def test_refreshed_base_requires_complete_ancestry_proof(self):
+        tested, _, head, _ = self.make_refreshed_merge()
+        real_git = gate.git
+        def missing_ancestry(*args):
+            if args[:2] == ("merge-base", "--is-ancestor"):
+                raise subprocess.CalledProcessError(128, "git", stderr=b"missing history")
+            return real_git(*args)
+        with patch.object(gate, "git", side_effect=missing_ancestry):
+            with self.assertRaises(subprocess.CalledProcessError):
+                gate.changed_paths(tested, self.initial, head)
+
     def test_git_failure_is_not_a_false_skip(self):
         with patch.object(gate, "git", side_effect=subprocess.CalledProcessError(1, "git")):
             with self.assertRaises(subprocess.CalledProcessError):

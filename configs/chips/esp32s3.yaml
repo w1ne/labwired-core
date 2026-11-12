@@ -11,6 +11,11 @@ arch: "xtensa-lx7"
 # Matches the engine's S3 constants: esp32s3/gpspi.rs CPU_CLOCK_HZ and
 # esp32s3/usb_serial_jtag.rs ESP32S3_CPU_CLOCK_HZ are both 240 MHz.
 cpu_hz: 240_000_000
+# ESP32-S3 Series Datasheet v2.2, Table 5-4 (3.3 V, 25 C):
+# VIL(max) = 0.25 * VDD; VIH(min) = 0.75 * VDD.
+# https://www.espressif.com/sites/default/files/documentation/esp32-s3_datasheet_en.pdf
+io_voltage_v: 3.3
+gpio_input_thresholds: { vil: 0.25, vih: 0.75 }
 
 flash:
   base: 0x42000000

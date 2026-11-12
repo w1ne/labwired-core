@@ -260,3 +260,78 @@ fn unmodelled_xtensa_boot_paths_are_not_supported() {
         );
     }
 }
+
+#[test]
+fn esp32s3_builders_preserve_the_resolved_chip_io_levels() {
+    let voltage_route: labwired_config::CosimModelConfig = serde_yaml::from_str(
+        r#"
+id: io_voltage_probe
+adapter: analog
+step_ns: 100000
+inputs: {}
+outputs: { v_pin: board.gpio_in.gpio8 }
+config:
+  vdd: 3.3
+  netlist_text: "Vtest in 0 dc 3.3\nRpull in pad 4.7k\nRload pad 0 1e12\n"
+  probes: { v_pin: "v(pad)" }
+  sources: {}
+"#,
+    )
+    .unwrap();
+    let blobs = s3_rom_blobs();
+    let elf = common::committed("tests/fixtures/tier1/esp32s3.elf");
+    let flash = common::committed("tests/fixtures/tier1/esp32s3-flash.bin");
+    for name in ["esp32s3", "esp32s3-zero"] {
+        let resolved = labwired_config::ResolvedSystem::from_builtin_chip(name).unwrap();
+        let mut chip = resolved.chip().unwrap();
+        assert_eq!(chip.io_voltage_v, Some(3.3));
+        let levels = chip.gpio_input_thresholds.expect("transcribed S3 limits");
+        assert_eq!(levels.vil, 0.25);
+        assert_eq!(levels.vih, 0.75);
+        for present in [true, false] {
+            if !present {
+                chip.io_voltage_v = None;
+                chip.gpio_input_thresholds = None;
+            }
+            for boot in [BootMode::FastBoot, BootMode::RomBoot] {
+                let firmware = match boot {
+                    BootMode::FastBoot => FirmwareSource::Elf(&elf),
+                    BootMode::RomBoot => FirmwareSource::FlashImage {
+                        image: &flash,
+                        symbols: None,
+                    },
+                };
+                let built = build_machine(BuildRequest {
+                    chip: &chip,
+                    system: &resolved.manifest,
+                    firmware,
+                    boot,
+                    blobs: &blobs,
+                    options: BuildOptions::default(),
+                })
+                .expect("construct an S3 without executing it");
+                let bound = built.machine.bind_cosim(
+                    std::slice::from_ref(&voltage_route),
+                    std::path::Path::new("."),
+                );
+                let session = bound.expect("analog model constructs").expect("one model");
+                if present {
+                    assert!(
+                        session.binding_errors().is_empty(),
+                        "{:?}",
+                        session.binding_errors()
+                    );
+                } else {
+                    assert!(
+                        session.binding_errors().iter().any(|e| matches!(
+                            e,
+                            labwired_core::cosim::RoutingError::NoInputThresholds { .. }
+                        )),
+                        "missing metadata must stay a binding error: {:?}",
+                        session.binding_errors()
+                    );
+                }
+            }
+        }
+    }
+}

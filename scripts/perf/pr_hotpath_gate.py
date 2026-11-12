@@ -59,13 +59,21 @@ def changed_paths(tested, base, head):
     # cat-file retains real parents even at shallow depth; git-show %P does not.
     headers = git("cat-file", "commit", tested).split(b"\n\n", 1)[0].splitlines()
     parents = [line[7:].decode() for line in headers if line.startswith(b"parent ")]
-    if parents != [base, head]:
-        raise ValueError("tested merge must have the exact ordered base/head parents")
-    for sha in (base, head):
+    if len(parents) != 2 or parents[1] != head:
+        raise ValueError("tested merge must have two parents and the exact event head second")
+    tested_base = parents[0]
+    for sha in (base, head, tested_base):
         git("cat-file", "-e", sha + "^{commit}")
-    # The first-parent diff excludes unrelated main changes on an older branch.
+    # GitHub can refresh its synthetic merge after the event was enqueued.
+    # Admit a newer first parent ONLY when the event base is its proven
+    # ancestor. A rewritten/unrelated base or missing history fails closed.
+    # Never relax exact checkout/head identity and never substitute live main.
+    if tested_base != base:
+        git("merge-base", "--is-ancestor", base, tested_base)
+    # The ACTUAL first-parent diff excludes unrelated main changes, including
+    # runtime changes made between event creation and synthetic-merge refresh.
     # No rename detection: removing a runtime path must still select the gate.
-    raw = git("diff", "--name-only", "--no-renames", "-z", base, tested)
+    raw = git("diff", "--name-only", "--no-renames", "-z", tested_base, tested)
     if raw and not raw.endswith(b"\0"):
         raise ValueError("incomplete changed-path stream")
     return [p.decode("utf-8", "surrogateescape") for p in raw.split(b"\0") if p]

@@ -394,3 +394,24 @@ fn the_part_is_embedded_and_still_in_the_kit_registry() {
     let channels: Vec<&str> = meta.inputs.iter().map(|c| c.key.as_ref()).collect();
     assert_eq!(channels, vec!["weight", "raw"]);
 }
+
+#[test]
+fn emit_pin_bindings_match_the_scalar_gpio_device_config_contract() {
+    let doc: serde_yaml::Value =
+        serde_yaml::from_str(include_str!("../../../configs/devices/hx711.yaml")).unwrap();
+    let fields = doc["emit"]["config"].as_sequence().unwrap();
+    for key in ["sck_pin", "dt_pin"] {
+        let field = fields
+            .iter()
+            .find(|v| v["key"].as_str() == Some(key))
+            .unwrap();
+        assert!(
+            field["from_part_pin"].is_sequence(),
+            "{key} must emit one scalar pad label"
+        );
+        assert!(
+            field["from_part_pins"].is_null(),
+            "{key} must not emit an array rejected by gpio_device"
+        );
+    }
+}

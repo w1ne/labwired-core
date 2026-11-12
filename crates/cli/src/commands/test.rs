@@ -316,6 +316,9 @@ fn run_s3_rom_boot_no_elf(
             .unwrap_or_default()
     };
     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
+    if let Ok(chip) = system.chip() {
+        bus.attach_chip_io_levels(&chip);
+    }
     // Wire matrix kits (INA219, OLED, …) the same way the ELF arm does.
     if let Err(e) =
         labwired_core::system::xtensa::attach_esp32_external_devices(&mut bus, &manifest)
@@ -365,8 +368,30 @@ fn run_s3_rom_boot_no_elf(
     if itm_enabled {
         machine.bus.attach_itm_output(Some(itm_tx.clone()), false);
     }
-    // No ELF: empty firmware bytes degrade symbol/hash diagnostics gracefully; a
-    // placeholder path is recorded as config.firmware in result.json.
+    // No ELF: keep symbolization bytes empty, but bind result provenance to the exact
+    // flash image the S3 machine consumes. Read it before execution and fail closed if
+    // the configured image cannot be read.
+    let flash_path = match std::env::var("LABWIRED_ESP32S3_FLASH") {
+        Ok(path) => std::path::PathBuf::from(path),
+        Err(_) => {
+            return fail("ELF-less ESP32-S3 rom-boot needs LABWIRED_ESP32S3_FLASH".to_string())
+        }
+    };
+    let flash_bytes = match std::fs::read(&flash_path) {
+        Ok(bytes) if !bytes.is_empty() => bytes,
+        Ok(_) => {
+            return fail(format!(
+                "ESP32-S3 flash image is empty: {}",
+                flash_path.display()
+            ))
+        }
+        Err(e) => {
+            return fail(format!(
+                "cannot read ESP32-S3 flash image {}: {e}",
+                flash_path.display()
+            ))
+        }
+    };
     let placeholder = std::path::PathBuf::from("<flash-image>");
     let exit_code = execute_test_loop(&mut TestExecutionContext {
         args,
@@ -374,6 +399,7 @@ fn run_s3_rom_boot_no_elf(
         resolved_limits,
         assertions,
         firmware_bytes: &[],
+        provenance_firmware_bytes: &flash_bytes,
         uart_tx: &uart_tx,
         rtt_tx: &rtt_tx,
         itm_tx: &itm_tx,
@@ -680,8 +706,36 @@ fn run_c3_rom_boot_no_elf(
     if itm_enabled {
         machine.bus.attach_itm_output(Some(itm_tx.clone()), false);
     }
-    // No ELF: empty firmware bytes degrade symbol/hash diagnostics gracefully; a
-    // placeholder path is recorded as config.firmware in result.json.
+    // No ELF: keep symbolization bytes empty, but bind result provenance to the exact
+    // flash image the C3 machine consumes. Read the C3 pin specifically so an S3 image
+    // present in the same environment can never become the recorded identity.
+    let flash_path = match std::env::var("LABWIRED_ESP32C3_FLASH") {
+        Ok(path) => std::path::PathBuf::from(path),
+        Err(_) => {
+            let msg = "ELF-less ESP32-C3 rom-boot needs LABWIRED_ESP32C3_FLASH".to_string();
+            error!("{}", msg);
+            write_config_error_outputs(args, None, system_path, None, Some(resolved_limits), msg);
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+    let flash_bytes = match std::fs::read(&flash_path) {
+        Ok(bytes) if !bytes.is_empty() => bytes,
+        Ok(_) => {
+            let msg = format!("ESP32-C3 flash image is empty: {}", flash_path.display());
+            error!("{}", msg);
+            write_config_error_outputs(args, None, system_path, None, Some(resolved_limits), msg);
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+        Err(e) => {
+            let msg = format!(
+                "cannot read ESP32-C3 flash image {}: {e}",
+                flash_path.display()
+            );
+            error!("{}", msg);
+            write_config_error_outputs(args, None, system_path, None, Some(resolved_limits), msg);
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
     let placeholder = std::path::PathBuf::from("<flash-image>");
     execute_test_loop(&mut TestExecutionContext {
         args,
@@ -689,6 +743,7 @@ fn run_c3_rom_boot_no_elf(
         resolved_limits,
         assertions,
         firmware_bytes: &[],
+        provenance_firmware_bytes: &flash_bytes,
         uart_tx: &uart_tx,
         rtt_tx: &rtt_tx,
         itm_tx: &itm_tx,
@@ -1250,7 +1305,7 @@ pub(crate) fn run_test(
             // machine. `--rom-boot` on an S3 chip takes the real-ROM path;
             // classic ESP32 stays on the legacy fast-boot (its rom-boot is a
             // separate task).
-            let is_esp32s3 = {
+            let resolved_xtensa_chip = {
                 let chip_dir = sys_path
                     .parent()
                     .unwrap_or_else(|| std::path::Path::new("."));
@@ -1259,9 +1314,11 @@ pub(crate) fn run_test(
                     chip_dir,
                     &crate::plugin_chip_yaml(plugins),
                 )
-                .map(|c| c.is_esp32s3())
-                .unwrap_or(false)
+                .ok()
             };
+            let is_esp32s3 = resolved_xtensa_chip
+                .as_ref()
+                .is_some_and(|c| c.is_esp32s3());
 
             let mut machine = if is_esp32s3 {
                 // ── ESP32-S3 (LX7): S3 memmap + XIP, NOT classic ESP32 map ──
@@ -1295,6 +1352,9 @@ pub(crate) fn run_test(
                         ..Esp32s3Opts::default()
                     };
                     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
+                    if let Some(chip) = resolved_xtensa_chip.as_ref() {
+                        bus.attach_chip_io_levels(chip);
+                    }
                     // Wire matrix kits (INA219, OLED, …) the same way classic ESP32 does.
                     if let Err(e) = labwired_core::system::xtensa::attach_esp32_external_devices(
                         &mut bus, manifest,
@@ -1380,6 +1440,9 @@ pub(crate) fn run_test(
                     }
                     let opts = Esp32s3Opts::default();
                     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
+                    if let Some(chip) = resolved_xtensa_chip.as_ref() {
+                        bus.attach_chip_io_levels(chip);
+                    }
                     if _fast.is_none() {
                         std::env::remove_var("LABWIRED_ESP32S3_FASTBOOT");
                     }
@@ -1779,6 +1842,7 @@ pub(crate) fn run_test(
                 resolved_limits: &resolved_limits,
                 assertions: &assertions,
                 firmware_bytes: &firmware_bytes,
+                provenance_firmware_bytes: &firmware_bytes,
                 uart_tx: &uart_tx,
                 rtt_tx: &rtt_tx,
                 itm_tx: &itm_tx,
@@ -2133,6 +2197,7 @@ pub(crate) fn run_test(
                 resolved_limits: &resolved_limits,
                 assertions: &assertions,
                 firmware_bytes: &firmware_bytes,
+                provenance_firmware_bytes: &firmware_bytes,
                 uart_tx: &uart_tx,
                 rtt_tx: &rtt_tx,
                 itm_tx: &itm_tx,
