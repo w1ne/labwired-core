@@ -291,15 +291,20 @@ impl XtensaLx7 {
         self.regs.set_windowstart_bit(wb_cur, false);
         self.regs.set_windowbase(wb_dest);
         self.pc = target_pc;
-        // The callee just placed its return value in its a2 =
-        // AR[wb_cur*4 + 2] = caller's a{n*4 + 2} after rotation.
-        // Save it before the pops below — displace pop would restore
-        // stale data into that physical and clobber the return value.
-        let return_value = if n > 0 {
-            Some(self.regs.read_logical(n * 4 + 2))
-        } else {
-            None
-        };
+        // The callee returns in its a2..a5 = caller's a{n*4 + 2}.. after
+        // rotation (a 64-bit result is a2:a3). Save every one the caller can
+        // see before the pops below — a displace pop restores stale pre-CALL
+        // data into those physicals. Saving only a2 lost the high word of
+        // `esp_timer_get_time()` whenever the call chain had wrapped.
+        let mut return_regs = [0u32; 4];
+        let return_count = if n > 0 { (16 - (n * 4 + 2)).min(4) } else { 0 };
+        for (i, v) in return_regs
+            .iter_mut()
+            .take(return_count as usize)
+            .enumerate()
+        {
+            *v = self.regs.read_logical(n * 4 + 2 + i as u8);
+        }
         // Hybrid restore:
         //  1. Classic LIFO for displace (callee window) + WS re-set —
         //     same as early-boot path; LIFO holds ONLY displaces now.
@@ -312,8 +317,8 @@ impl XtensaLx7 {
             }
         }
         self.restore_call_preserve();
-        if let Some(rv) = return_value {
-            self.regs.write_logical(n * 4 + 2, rv);
+        for (i, v) in return_regs.iter().take(return_count as usize).enumerate() {
+            self.regs.write_logical(n * 4 + 2 + i as u8, *v);
         }
         // Close the windowed-thunk IRQ deferral window (if any).
         self.defer_irq_until_retw = false;

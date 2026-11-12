@@ -8976,6 +8976,12 @@ boards:
     # the real FreeRTOS routine runs so IDF5 tx_mux spinlocks are initialised.
     # Firmware-library thunk only: no peripheral register map, reset value
     # or captured reset-state window changes. ACK, NOT A CAPTURE.
+    # 2026-11-09 (fix/xtensa-retw-64bit-return): watched exec/call_window.rs.
+    # Shadow-window RETW now keeps all of the callee's a2..a5 the caller can
+    # see (was a2 only), so a 64-bit return survives a wrapped call chain.
+    # CPU window bookkeeping only (S3 ROM boot runs faithful_windows and never
+    # reaches it; fast boot shares it). No register map, reset value or
+    # captured reset-state window changes. ACK, NOT A CAPTURE.
     # 2026-11-10 (#1784 feat/esp32-deep-sleep): shared lib.rs / rtc_cntl.rs
     # moved for classic ESP32 timer-wake deep/light sleep. S3 UART0 remains
     # outside the nine captured reset-state windows; no S3 register map or
@@ -8985,7 +8991,7 @@ boards:
     # keeps its writes. This is not an S3 reset-state recapture; the nine
     # captured S3 windows are unchanged. ACK, NOT A CAPTURE.
     drift_ack: 2026-11-10
-    drift_ack_digest: c30213b480a08adac0801cc2ebe2947169beaadcd9bd2d11b8cfd601c1286102
+    drift_ack_digest: 12be36686ea998c1109f22d88926b4054344bfc99c0d7c1356d494d5e678481f
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.
