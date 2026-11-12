@@ -95,10 +95,30 @@ impl SystemBus {
         false
     }
 
+    /// Check numerical admission for every consumer of the shared ADC rail.
+    /// This does not qualify conversion or change any receiver's observation.
+    pub(crate) fn adc_reference_voltage_is_admissible(&self, volts: f64) -> bool {
+        let mut found = false;
+        for peripheral in &self.peripherals {
+            if peripheral.dev.supports_adc_reference_voltage() {
+                found = true;
+                if !crate::power::rail_observation_is_admissible(
+                    volts,
+                    peripheral.dev.adc_reference_maximum_voltage_v(),
+                ) {
+                    return false;
+                }
+            }
+        }
+        found
+    }
+
     /// Drive the board's shared VDDA / ADC reference in volts. Every ADC
-    /// peripheral that declares reference support takes the same rail value.
+    /// peripheral that declares reference support takes the same raw value.
     pub(crate) fn seed_adc_reference_voltage(&mut self, volts: f64) -> bool {
-        if !volts.is_finite() || volts < 0.0 {
+        // Validate all numerical boundaries before invoking any mutating setter.
+        // Each model still owns zero-reference support and operating limits.
+        if !self.adc_reference_voltage_is_admissible(volts) {
             return false;
         }
         let mut found = false;

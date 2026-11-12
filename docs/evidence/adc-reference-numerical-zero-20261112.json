@@ -1,0 +1,88 @@
+{
+  "scope": "Generic ADC reference receiver admission; no exact MCU model or native execution acceptance.",
+  "base_commit": "30e5d13abfcd78de11cd713aed394e09243395f6",
+  "source": {
+    "crates/core/src/peripheral.rs": "0ee46a620fa47f81bd8334369ec50d2fb72a157aff2d096d3f10dc91fd7cb4e4",
+    "crates/core/src/bus/sim_inputs.rs": "4150409812c2533a98de153e1a37565c2a13d223054a6a0bc1b59418af193b69",
+    "crates/core/src/cosim/routing.rs": "7e537f49195324857529e3c9fcf7973f59a06faaa1cf0ee647679f15109f5f06",
+    "crates/core/src/cosim/adc_reference_tests.rs": "9d0311a6390b278b058b455e12b5343f466cb82e0cc7ea3f7a4a86c7bb78e791"
+  },
+  "focused_tests": {
+    "passed": 104,
+    "failed": 0,
+    "ignored": 0,
+    "new_adc_reference_cases": 13,
+    "suites": [
+      {
+        "name": "routing",
+        "suites": [
+          {
+            "passed": 54,
+            "failed": 0,
+            "ignored": 0
+          }
+        ]
+      },
+      {
+        "name": "adjacent",
+        "suites": [
+          {
+            "passed": 29,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "passed": 3,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "passed": 18,
+            "failed": 0,
+            "ignored": 0
+          }
+        ]
+      }
+    ]
+  },
+  "contract": [
+    "Default None preserves the finite nonnegative legacy reference contract.",
+    "A declared finite nonnegative maximum scales only the existing negative numerical-zero admission bound: -f64::EPSILON * maximum.",
+    "Every current ADC reference consumer is checked before any setter. The raw f64 sample is passed unchanged.",
+    "Receiver operating qualification, positive upper bounds, conversion availability and setter refusal remain authoritative.",
+    "No voltage clamp, source change, numerical allowance increase or cross-node transaction change is included."
+  ],
+  "limits": [
+    "Preflight covers numerical admission. Arbitrary receiver setter failures are not transactional.",
+    "The existing World batch can partially publish other nodes or routes before a later receiver refuses; this change makes no cross-node atomicity claim.",
+    "The separate FC off-state accumulating-voltage drift remains uncorrected by this change.",
+    "Focused tests do not establish exact AT32 model adoption or successful five-MCU execution."
+  ],
+  "reviews": [
+    {
+      "reviewer": "root",
+      "kind": "independent source review",
+      "result": "no blocker",
+      "files": [
+        "crates/core/src/peripheral.rs",
+        "crates/core/src/bus/sim_inputs.rs",
+        "crates/core/src/cosim/routing.rs"
+      ]
+    },
+    {
+      "reviewer": "drone_source_status",
+      "kind": "independent source review",
+      "result": "no blocker",
+      "scope": "bounded raw reference admission and model-owned qualification"
+    }
+  ],
+  "evidence_files": {
+    "docs/evidence/adc-reference-numerical-zero-20261112/source.json": "39251ffab75dd22476642e5a94fe6d7d417e3ad0266ae524755b23d35fcef548",
+    "docs/evidence/adc-reference-numerical-zero-20261112/focused-result.json": "f5619136145bc20cd7f9f5de2d0c46b255a321d6060a0c111455b2ddb42f8d7a",
+    "docs/evidence/adc-reference-numerical-zero-20261112/production.patch": "f11f9022419794cff53d7c7d8b3d01eba1805bcf3bb033f6e95892f13ec4b3e4",
+    "docs/evidence/adc-reference-numerical-zero-20261112/routing.log": "bf07da0483f55fe11f254c5bef2fe9367323c2c4329eb904971a9380a2e5a1b8",
+    "docs/evidence/adc-reference-numerical-zero-20261112/adjacent.log": "53ff09c0407726e4d96050fe05034e621021bfc09ea22906e3784bec5b2155a7",
+    "docs/evidence/adc-reference-numerical-zero-20261112/results.json": "ab602f3d644d2c61943574956b957cbd29b9dbabea6f598ec50d2e4604d89487",
+    "docs/evidence/adc-reference-numerical-zero-20261112/profile.json": "36d58f166d81cf8897ad59ce10b4f661cface8306bcb7f3a4f029463c38cc0c6"
+  }
+}

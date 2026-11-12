@@ -1867,6 +1867,19 @@ pub trait Peripheral: std::fmt::Debug + Send {
         false
     }
 
+    /// Optional declared maximum for this receiver's reference-voltage domain.
+    ///
+    /// This value only sets the numerical-zero admission scale for raw routed
+    /// samples: at most `f64::EPSILON * maximum` below zero. It is not an
+    /// operating-range permission. `None` preserves the finite, nonnegative
+    /// routing contract. The receiver must retain the raw sample and own its
+    /// unpowered/conversion qualification in `set_adc_reference_voltage_v`.
+    /// An invalid maximum refuses the observation rather than supplying a
+    /// guessed scale.
+    fn adc_reference_maximum_voltage_v(&self) -> Option<f64> {
+        None
+    }
+
     /// Set the ADC's positive full-scale reference voltage, in volts. Returns
     /// false for a peripheral without a configurable analog reference.
     fn set_adc_reference_voltage_v(&mut self, _volts: f64) -> bool {
