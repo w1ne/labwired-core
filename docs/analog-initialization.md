@@ -136,10 +136,21 @@ bounds 512 and 737. Default operating-point construction still refuses. These
 are circuit-only probes with declared defaults and recorded zero/disabled
 controller stimuli; they execute no MCU or firmware.
 
-The recorded first 100 ns steps then refuse at a separate strict OPAMP supply
+The first 100 ns attempts originally refused at a separate strict OPAMP supply
 boundary: raw solved near-zero negative spans of approximately -2.83e-19 V and
--6.42e-19 V. That numerical-zero admission correction is a separate reviewed
-follow-up. This packet does not claim a transient startup, motor operation or
-flight result. The earlier forced powered compensation-state failure is also
-retained; supplying a finite state does not guarantee every nonlinear circuit
-has a well-conditioned accepted solution.
+-6.42e-19 V. Those refusals remain recorded. The separately reviewed inactive
+numerical-zero guard now admits negative spans only within `f64::EPSILON * VMAX`,
+retains the raw solved voltages, and leaves activation and overvoltage checks
+unchanged.
+
+At the combined generic source, those same unmodified r4 circuit models accept
+one 100 ns step. FC construction took 4.53 ms and its first step 13.89 ms; the
+five-MCU circuit took 88.96 ms and 4.326 s. These are circuit-only measurements
+with explicit zero/disabled controller stimuli. They do not establish native
+firmware startup, motor operation, interactive performance, or flight behavior.
+The complete receipt is in
+`docs/evidence/analog-initial-final-guard-20261112/summary.json`.
+
+The earlier forced powered compensation-state failure is also retained;
+supplying a finite state does not guarantee every nonlinear circuit has a
+well-conditioned accepted solution.

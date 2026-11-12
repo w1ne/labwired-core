@@ -1,0 +1,19 @@
+{
+  "scope": "public production API constructor and one-step probe with declared defaults and explicit all-zero/disabled controller stimuli, no MCU execution",
+  "source_sha256": "0bcfa5b3202ea10d0142ac8bf07f8685d005853356977ef2346bfb9944fe4a3d",
+  "binary_sha256": "a48001994b4b56e1618367681be92f2c9c3d73df7fb74bd5c7d535cccb31e596",
+  "libraries": {
+    "labwired_core": {
+      "path": "/data/build-targets/controlled-buck-20261112/shared-runtime-integration-20261112/deps/liblabwired_core-1e12c06a019b1626.rlib",
+      "sha256": "177b9e7a7a1a9f4fcef01f13190242d179b97a0b5d74e2d2a5fbc2e752a2f6ee"
+    },
+    "labwired_config": {
+      "path": "/data/build-targets/controlled-buck-20261112/shared-runtime-integration-20261112/deps/liblabwired_config-b11f1e1b5c5a7cec.rlib",
+      "sha256": "9f61af70c8b8b3bbf98e5242205c6b37b5d3671b012ebe25cb157dca34dd43b8"
+    },
+    "serde_json": {
+      "path": "/data/build-targets/controlled-buck-20261112/shared-runtime-integration-20261112/deps/libserde_json-86add3b10d7fd404.rlib",
+      "sha256": "b3b89e1b056c189839f4346bcb770fe2440c8e821bc09a655878e293b595a123"
+    }
+  }
+}

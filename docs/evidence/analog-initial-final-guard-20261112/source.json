@@ -1,0 +1,15 @@
+{
+  "head": "30e28feb8f43bb65ed8e1d643fdcc42852a9a217",
+  "parent": "a6faa23fd37c1be3a44110850138d5ba0233383a",
+  "cherry_pick": "f2d017c70941c28c8fe818aed510ed43851cd630",
+  "tests": [
+    "analog_opamp_power",
+    "analog_transient_opamp",
+    "analog_transient_voltage_group",
+    "analog_voltage_switch_boundaries"
+  ],
+  "profile": "shared-runtime-integration-20261112",
+  "jobs": 2,
+  "incremental": false,
+  "started_at": "2026-11-12T10:15:45.225668+00:00"
+}

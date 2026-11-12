@@ -1,0 +1,7 @@
+{
+  "original_sha256": "df714994e47993bf298789705234a7e34be6b8b6a980dbbb95862b341305d87e",
+  "copied_sha256": "548ea4d79e7b293f74c3b97bb46dac67ac1614f9c6c00337d6ed3e11dfc4872a",
+  "change": "only evidence-root path replacement",
+  "original_root": "/data/work-evidence/analog-initial-supernode-20261112",
+  "new_root": "/data/work-evidence/analog-initial-final-guard-20261112"
+}
