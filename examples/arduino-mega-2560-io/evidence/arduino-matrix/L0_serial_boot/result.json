@@ -1,0 +1,355 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 14473,
+  "cycles": 20155,
+  "instructions": 14472,
+  "stop_reason": "assertions_passed",
+  "stop_reason_details": {
+    "triggered_stop_condition": "assertions_passed",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 500000,
+    "max_cycles": null,
+    "max_uart_bytes": 65536,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": true,
+    "stop_when_assertions_pass_settle_steps": 1000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "LW_L0_OK"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "avr",
+    "registers": [
+      113,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      8,
+      0,
+      0,
+      0,
+      0,
+      0,
+      252,
+      149,
+      2,
+      0,
+      10,
+      2,
+      0,
+      0,
+      31,
+      2,
+      130,
+      0,
+      192,
+      0
+    ],
+    "pc": 1052,
+    "sp": 8697,
+    "sreg": 130
+  },
+  "firmware_hash": "db3826c774ab74e54d8ce91c78a84d7e38225d8a99529bf46db9abebae6059c6",
+  "config": {
+    "firmware": "validation/arduino-matrix/out/atmega2560/L0_serial_boot/firmware.elf",
+    "system": "validation/arduino-matrix/systems/atmega2560.yaml",
+    "script": "validation/arduino-matrix/out/atmega2560/L0_serial_boot/test.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "spi",
+        "kind": "native",
+        "base": 65536,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c",
+        "kind": "i2c",
+        "base": 65552,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "porta",
+        "kind": "native",
+        "base": 65568,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portb",
+        "kind": "native",
+        "base": 65571,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portc",
+        "kind": "native",
+        "base": 65574,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portd",
+        "kind": "native",
+        "base": 65577,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "porte",
+        "kind": "native",
+        "base": 65580,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portf",
+        "kind": "native",
+        "base": 65583,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portg",
+        "kind": "native",
+        "base": 65586,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart0",
+        "kind": "native",
+        "base": 65728,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "porth",
+        "kind": "native",
+        "base": 65792,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portj",
+        "kind": "native",
+        "base": 65795,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portk",
+        "kind": "native",
+        "base": 65798,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portl",
+        "kind": "native",
+        "base": 65801,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "adc",
+        "kind": "native",
+        "base": 66048,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "max31855",
+        "device_type": "max31855",
+        "declared": true,
+        "attachment": {
+          "transport": "spi",
+          "bus": "spi",
+          "cs_pin": "D53"
+        },
+        "artifacts": []
+      },
+      {
+        "id": "ina219",
+        "device_type": "ina219",
+        "declared": true,
+        "attachment": {
+          "transport": "i2c",
+          "bus": "i2c",
+          "address": 64
+        },
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "ina219",
+            "meta": {
+              "inputs": {
+                "bus_voltage": 3.3,
+                "current": 0.0
+              },
+              "powered": true,
+              "registers": {
+                "BUS_VOLTAGE": 6602,
+                "CALIBRATION": 4096,
+                "CONFIGURATION": 14751,
+                "CURRENT": 0,
+                "POWER": 0,
+                "SHUNT_VOLTAGE": 0
+              },
+              "supply_generation": null
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "derived_device_time",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "device time derived from cpu_hz (16000000 Hz); PLL reconfiguration is not tracked"
+    },
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal 5 V rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "LW_L0_OK",
+        "cycle_lo": 17725,
+        "cycle": 17727,
+        "end_cycle": 18725
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 1902,
+    "data_bytes": 30,
+    "bss_bytes": 166,
+    "flash_used_bytes": 1932,
+    "ram_static_bytes": 196,
+    "flash_total_bytes": 262144,
+    "ram_total_bytes": 8192,
+    "flash_used_pct": 0.74,
+    "ram_static_pct": 2.39,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 20155,
+    "instructions": 14472,
+    "steps_executed": 14473,
+    "memory_reads": 0,
+    "memory_writes": 1338,
+    "peripheral_accesses": 478,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 1732,
+        "count": 5
+      },
+      {
+        "pc": 1738,
+        "count": 5
+      },
+      {
+        "pc": 372,
+        "count": 4
+      },
+      {
+        "pc": 386,
+        "count": 4
+      },
+      {
+        "pc": 404,
+        "count": 4
+      },
+      {
+        "pc": 412,
+        "count": 4
+      },
+      {
+        "pc": 420,
+        "count": 4
+      },
+      {
+        "pc": 424,
+        "count": 4
+      },
+      {
+        "pc": 428,
+        "count": 4
+      },
+      {
+        "pc": 432,
+        "count": 4
+      },
+      {
+        "pc": 1746,
+        "count": 4
+      },
+      {
+        "pc": 318,
+        "count": 3
+      },
+      {
+        "pc": 364,
+        "count": 1
+      },
+      {
+        "pc": 784,
+        "count": 1
+      },
+      {
+        "pc": 786,
+        "count": 1
+      },
+      {
+        "pc": 810,
+        "count": 1
+      }
+    ]
+  }
+}
