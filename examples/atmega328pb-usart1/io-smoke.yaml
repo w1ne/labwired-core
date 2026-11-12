@@ -1,0 +1,9 @@
+# ATmega328PB firmware sends PB_USART1_OK through USART1.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/avr/atmega328pb-usart1.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "PB_USART1_OK"

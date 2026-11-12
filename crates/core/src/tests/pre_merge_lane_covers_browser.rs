@@ -5,7 +5,7 @@
 //! A workspace member that no pre-merge lane compiles is a member where bugs
 //! ship behind a green board.
 //!
-//! `cargo clippy --all-targets` and `cargo test --lib` in `pr-gate` resolve to
+//! Bare `cargo clippy --all-targets` and `cargo test --lib` resolve to
 //! the workspace's `default-members`. Anything outside that set is compiled by
 //! NOTHING before a merge — and `crates/wasm`, the browser layer, sat outside it.
 //! The browser is the only consumer that reaches the engine through the wasm
@@ -17,7 +17,8 @@
 //! The contract asserted here
 //! ==========================
 //! Every workspace member that is (a) not a `default-member` and (b) buildable
-//! on the host must be named explicitly in `pr-gate`, or carry a reason in
+//! on the host must be named explicitly in a required job (or a worker whose
+//! success that job enforces), or carry a reason in
 //! `HOST_UNBUILDABLE_PREFIXES` saying why it cannot be.
 //!
 //! Firmware crates are the honest exception: they are cross-compiled to
@@ -142,6 +143,124 @@ fn package_name(path: &Path) -> Option<String> {
 /// core-ci.yml.
 const MERGE_BLOCKING_JOBS: &[&str] = &["pr-gate", "browser-layer", "pr-core-feature-off"];
 
+const LIBRARY_AGGREGATE: &str = "pr-core-feature-off";
+const LIBRARY_WORKERS: &[(&str, &str)] = &[
+    ("pr-default-members-lib", "DEFAULT_MEMBERS_RESULT"),
+    ("pr-core-feature-off-tests", "FEATURE_OFF_RESULT"),
+];
+
+/// Admit only the two existing library workers, and only after proving that
+/// their required aggregate fails for every unsuccessful prerequisite result.
+/// Naming a worker in `needs` alone is not proof: a skipped/advisory aggregate
+/// or a guard that checks the wrong result would otherwise hide a coverage gap.
+fn required_library_worker_bodies(ci: &str) -> Result<Vec<String>, String> {
+    let workflow: serde_yaml::Value = serde_yaml::from_str(ci).map_err(|e| e.to_string())?;
+    let jobs = &workflow["jobs"];
+    let aggregate = &jobs[LIBRARY_AGGREGATE];
+    if !MERGE_BLOCKING_JOBS.contains(&LIBRARY_AGGREGATE) {
+        return Err("library aggregate is not a required job".into());
+    }
+    let needs: Vec<_> = aggregate["needs"]
+        .as_sequence()
+        .ok_or("library aggregate must declare both worker dependencies")?
+        .iter()
+        .map(|v| v.as_str())
+        .collect();
+    if needs
+        != LIBRARY_WORKERS
+            .iter()
+            .map(|(job, _)| Some(*job))
+            .collect::<Vec<_>>()
+    {
+        return Err("library aggregate dependencies differ from the proven workers".into());
+    }
+    let normalize = |text: &str| text.split_whitespace().collect::<String>();
+    let condition = normalize(aggregate["if"].as_str().unwrap_or_default());
+    if condition
+        != "always()&&(github.event_name=='pull_request'||github.event_name=='workflow_dispatch')"
+    {
+        return Err("library aggregate must always check both results on pull requests".into());
+    }
+    let advisory = |node: &serde_yaml::Value| {
+        !node["continue-on-error"].is_null() && node["continue-on-error"].as_bool() != Some(false)
+    };
+    if advisory(aggregate) {
+        return Err("library aggregate cannot be advisory".into());
+    }
+    let steps = aggregate["steps"]
+        .as_sequence()
+        .ok_or("library aggregate must run its result guard")?;
+    if steps.len() != 1 {
+        return Err("library aggregate must contain the single proven result guard".into());
+    }
+    let guard = &steps[0];
+    if advisory(guard) || !guard["if"].is_null() || !guard["uses"].is_null() {
+        return Err("library result guard cannot be conditional, advisory or delegated".into());
+    }
+    if !guard["shell"].is_null() && guard["shell"].as_str() != Some("bash") {
+        return Err("library result guard must use the tested bash shell".into());
+    }
+    let script = guard["run"]
+        .as_str()
+        .ok_or("library result guard has no script")?;
+    let mut bodies = Vec::new();
+    for (job, variable) in LIBRARY_WORKERS {
+        if guard["env"][*variable].as_str()
+            != Some(format!("${{{{ needs.{job}.result }}}}").as_str())
+        {
+            return Err(format!(
+                "library result guard does not bind {job}'s actual result"
+            ));
+        }
+        let worker = &jobs[*job];
+        if advisory(worker)
+            || normalize(worker["if"].as_str().unwrap_or_default())
+                != "github.event_name=='pull_request'||github.event_name=='workflow_dispatch'"
+        {
+            return Err(format!(
+                "{job} must run on every pull request without allowing failure"
+            ));
+        }
+        // Only unconditional, non-advisory run steps count as coverage.
+        // YAML comments and conditionally skipped commands add no coverage.
+        let commands: Vec<_> = worker["steps"]
+            .as_sequence()
+            .ok_or_else(|| format!("{job} has no steps"))?
+            .iter()
+            .filter(|step| step["if"].is_null() && !advisory(step))
+            .filter_map(|step| step["run"].as_str())
+            .collect();
+        bodies.push(commands.join("\n"));
+    }
+    // Exercise the actual workflow script, not a Rust reimplementation. Missing,
+    // failed, cancelled and skipped workers must all keep the merge gate red.
+    for first in ["success", "failure", "cancelled", "skipped", ""] {
+        for second in ["success", "failure", "cancelled", "skipped", ""] {
+            let result = std::process::Command::new("bash")
+                .args([
+                    "--noprofile",
+                    "--norc",
+                    "-e",
+                    "-o",
+                    "pipefail",
+                    "-c",
+                    script,
+                ])
+                .env_clear()
+                .env(LIBRARY_WORKERS[0].1, first)
+                .env(LIBRARY_WORKERS[1].1, second)
+                .output()
+                .map_err(|e| format!("execute actual library result guard: {e}"))?;
+            if result.status.success() != (first == "success" && second == "success") {
+                return Err(format!(
+                    "library guard admits the wrong result for {first:?}/{second:?}"
+                ));
+            }
+        }
+    }
+    Ok(bodies)
+}
+
 /// The body of one job in core-ci.yml.
 fn job_body(job: &str) -> String {
     let ci = std::fs::read_to_string(workspace_root().join(".github/workflows/core-ci.yml"))
@@ -173,7 +292,7 @@ fn job_body(job: &str) -> String {
 /// them is compiled before a merge; one compiled only by a nightly or
 /// push-to-main lane is not, and must not read as covered here.
 fn pre_merge_body() -> String {
-    let bodies: Vec<String> = MERGE_BLOCKING_JOBS.iter().map(|j| job_body(j)).collect();
+    let mut bodies: Vec<String> = MERGE_BLOCKING_JOBS.iter().map(|j| job_body(j)).collect();
     // Each job must actually run on pull_request. A job that lost that trigger
     // would still contribute its `-p` lines and silently keep this file green.
     for (job, body) in MERGE_BLOCKING_JOBS.iter().zip(&bodies) {
@@ -183,7 +302,47 @@ fn pre_merge_body() -> String {
              nothing it names is covered before a merge"
         );
     }
+    let ci = std::fs::read_to_string(workspace_root().join(".github/workflows/core-ci.yml"))
+        .expect("read core-ci.yml");
+    bodies.extend(
+        required_library_worker_bodies(&ci).expect("prove required library worker coverage"),
+    );
     bodies.join("\n")
+}
+
+#[test]
+fn library_worker_coverage_rejects_broken_dependency_proofs() {
+    let ci = std::fs::read_to_string(workspace_root().join(".github/workflows/core-ci.yml"))
+        .expect("read core-ci.yml");
+    let original: serde_yaml::Value = serde_yaml::from_str(&ci).unwrap();
+    let bodies =
+        required_library_worker_bodies(&ci).expect("actual aggregate enforces both workers");
+    assert!(bodies[0].contains("cargo test --lib"));
+    assert!(bodies[1].contains("cargo test -p nrf-softdevice-hle --features capi"));
+
+    for mutation in 0..7 {
+        let mut changed = original.clone();
+        let aggregate = &mut changed["jobs"][LIBRARY_AGGREGATE];
+        match mutation {
+            0 => {
+                aggregate["needs"].as_sequence_mut().unwrap().pop().unwrap();
+            }
+            1 => {
+                aggregate["steps"][0]["env"]["FEATURE_OFF_RESULT"] =
+                    "${{ needs.pr-gate.result }}".into()
+            }
+            2 => aggregate["continue-on-error"] = true.into(),
+            3 => aggregate["steps"][0]["run"] = "exit 0\n".into(),
+            4 => aggregate["if"] = "github.event_name == 'pull_request'".into(),
+            5 => changed["jobs"][LIBRARY_WORKERS[1].0]["continue-on-error"] = true.into(),
+            6 => aggregate["steps"][0]["continue-on-error"] = true.into(),
+            _ => unreachable!(),
+        }
+        assert!(
+            required_library_worker_bodies(&serde_yaml::to_string(&changed).unwrap()).is_err(),
+            "broken dependency proof mutation {mutation} was admitted"
+        );
+    }
 }
 
 #[test]
@@ -246,8 +405,8 @@ fn every_host_buildable_member_is_compiled_before_merge() {
     assert!(
         unexpected.is_empty(),
         "these workspace members are outside `default-members` and are named by NO \
-         step in pr-gate, so nothing compiles them before a merge:\n  {}\n\n\
-         Either add a `-p <pkg>` step to pr-gate in .github/workflows/core-ci.yml, \
+         required job or proven worker, so nothing compiles them before a merge:\n  {}\n\n\
+         Either add a `-p <pkg>` step to a required job or proven worker in .github/workflows/core-ci.yml, \
          or — if the crate genuinely cannot build on a CI host — add its path prefix \
          to HOST_UNBUILDABLE_PREFIXES with the reason. Do not leave it in neither \
          list: that is how crates/wasm ended up compiled by nothing and a dark-panel \

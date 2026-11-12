@@ -334,6 +334,12 @@ FIXTURES = {
 # their own chip config and get their own baseline. A generic CPU-only smoke
 # fixture must not stand in for an unimplemented board platform.
 WAIVED: dict[str, str] = {
+    "ch32v003f4p6": (
+        "The CH32V003 model uses RV32EC, but CI has no RV32E-specific perf-spin "
+        "fixture or compiler. Reusing the RV32IMC fixture could execute "
+        "registers x16–x31 that this core does not implement. No throughput "
+        "claim is made for this part yet."
+    ),
     "atmega1281": (
         "The committed -mmcu=atmega1281 firmware validates boot, USART0 and GPIO, "
         "but no representative AVR6 throughput fixture is built. The available "
@@ -867,9 +873,24 @@ def build_fixtures(fixtures: set[str]) -> tuple[dict[str, Path], dict[str, str]]
             print(f"SKIPPING fixture '{name}': build failed\n{proc.stderr[-2000:]}", file=sys.stderr)
             continue
 
-        elf = cwd / f"target/{spec.target}/release/{spec.crate}"
-        if not elf.exists():
-            elf = REPO_ROOT / f"target/{spec.target}/release/{spec.crate}"
+        target_override = env.get("CARGO_TARGET_DIR")
+        if target_override is not None:
+            # Cargo resolves an environment override relative to its build
+            # cwd. Never substitute a stale default-target ELF for this build.
+            target_dir = Path(target_override)
+            if not target_dir.is_absolute():
+                target_dir = cwd / target_dir
+            elf = target_dir / spec.target / "release" / spec.crate
+        else:
+            elf = cwd / f"target/{spec.target}/release/{spec.crate}"
+            if not elf.exists():
+                elf = REPO_ROOT / f"target/{spec.target}/release/{spec.crate}"
+        if not elf.is_file():
+            selected = f" (CARGO_TARGET_DIR={target_override!r})" if target_override is not None else ""
+            raise RuntimeError(
+                f"fixture '{name}': Cargo succeeded but the expected ELF{selected} "
+                f"is missing or not a file: {elf}"
+            )
         shutil.copy2(elf, out)
         built[name] = out
     return built, skipped

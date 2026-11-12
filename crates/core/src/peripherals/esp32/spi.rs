@@ -24,6 +24,8 @@
 //!   * SPI_MOSI_DLEN_REG (0x28) — bit length minus 1; sizes MOSI stream.
 //!   * SPI_MISO_DLEN_REG (0x2C) — bit length minus 1; sizes MISO fill.
 //!   * SPI_W0..W15 (0x80..0xBC) — 64-byte FIFO; little-endian byte order.
+//!   * USR flash writes (WREN/WRDI, page program 0x02, erase 0x20/0x52/0xD8/0xC7)
+//!     land in the shared flash backing — the path ESP-IDF 5 NVS uses on SPI1.
 //!   * Other offsets — round-tripped (firmware RMW / polls).
 //!
 //! On `CMD_REG` write with bit 18 (USR) set, the peripheral synchronously:
@@ -185,7 +187,6 @@ const FLASH_READ: u32 = 1 << 31;
 
 pub const USER_USR_MOSI_BIT: u32 = 1 << 27;
 const USER_USR_MISO_BIT: u32 = 1 << 28;
-#[allow(dead_code)] // used in unit tests
 const USER_USR_COMMAND_BIT: u32 = 1 << 31;
 
 // SPI NOR opcodes used by esp_flash / bootloader flash paths.
@@ -206,15 +207,10 @@ const CMD_WRDI: u8 = 0x04;
 const CMD_SFDP: u8 = 0x5A;
 const CMD_RDUID: u8 = 0x4B;
 const CMD_RDID: u8 = 0x9F;
-#[allow(dead_code)]
 const CMD_PAGE_PROGRAM: u8 = 0x02;
-#[allow(dead_code)]
 const CMD_SECTOR_ERASE: u8 = 0x20; // 4 KiB
-#[allow(dead_code)]
 const CMD_BLOCK_ERASE_32K: u8 = 0x52;
-#[allow(dead_code)]
 const CMD_BLOCK_ERASE_64K: u8 = 0xD8;
-#[allow(dead_code)]
 const CMD_CHIP_ERASE: u8 = 0xC7;
 
 // Flash status-register bits (SPI NOR standard).
@@ -469,19 +465,29 @@ impl Esp32Spi {
         if cmd & FLASH_WRDI != 0 {
             self.flash_status &= !STATUS_WEL;
         }
-        let addr = (self.addr >> 8) as usize;
+        // Dedicated commands take a right-justified 24-bit byte address in
+        // ADDR[23:0]; PP and READ carry their byte count in ADDR[31:24]. That
+        // is how ESP-IDF's `spi_flash_hal_program_page` and the ROM pack it
+        // (`(addr & 0xFFFFFF) | (len << 24)`, then `CMD.FLASH_PP`), unlike the
+        // left-justified USR address phase.
+        let addr = (self.addr & 0x00FF_FFFF) as usize;
+        let addr_len = (self.addr >> 24) as usize;
         if cmd & FLASH_PP != 0 {
-            // Page program: W0.. holds payload; mosi_dlen is bit length.
-            let nbytes = ((((self.mosi_dlen & 0x7FF) + 1) / 8) as usize).max(1);
+            // Page program: W0.. holds the payload.
+            let nbytes = if addr_len != 0 {
+                addr_len
+            } else {
+                ((((self.mosi_dlen & 0x7FF) + 1) / 8) as usize).max(1)
+            };
             self.program_flash(addr, nbytes);
             self.flash_status &= !(STATUS_WEL | STATUS_WIP);
         }
         if cmd & FLASH_SE != 0 {
-            self.erase_flash(addr, 4 * 1024);
+            self.erase_flash(addr & !0xFFF, 4 * 1024);
             self.flash_status &= !(STATUS_WEL | STATUS_WIP);
         }
         if cmd & FLASH_BE != 0 {
-            self.erase_flash(addr, 64 * 1024);
+            self.erase_flash(addr & !0xFFFF, 64 * 1024);
             self.flash_status &= !(STATUS_WEL | STATUS_WIP);
         }
         if cmd & FLASH_WRSR != 0 {
@@ -496,7 +502,11 @@ impl Esp32Spi {
         }
         if cmd & FLASH_READ != 0 {
             // Dedicated FLASH_READ deposits data in W0..; address in ADDR.
-            let nbytes = (((self.miso_dlen & 0x7FF) + 1) / 8) as usize;
+            let nbytes = if addr_len != 0 {
+                addr_len
+            } else {
+                (((self.miso_dlen & 0x7FF) + 1) / 8) as usize
+            };
             self.fill_fifo_from_flash(addr, nbytes.max(1));
         }
         if cmd & FLASH_RES != 0 {
@@ -586,6 +596,8 @@ impl Esp32Spi {
             }
             if miso_en {
                 self.execute_flash_user_miso();
+            } else if self.user & USER_USR_COMMAND_BIT != 0 {
+                self.execute_flash_user_write();
             }
         }
 
@@ -648,6 +660,55 @@ impl Esp32Spi {
             _ => {
                 // Unknown opcode with MISO: leave FIFO unchanged (usually 0).
             }
+        }
+    }
+
+    /// Run a USR flash command that has a command phase and no read-back:
+    /// the write-enable latch, page program (payload in W0.., length from
+    /// `MOSI_DLEN`) and the erase family. ESP-IDF 5's `esp_flash` issues
+    /// every NVS / `Preferences` write and erase this way on SPI1; without it
+    /// the driver reads `WIP` clear, reports success, and the data never
+    /// reaches the array. Like a real SPI NOR part, program and erase need
+    /// `WEL` (set by WREN) and clear it when they finish.
+    fn execute_flash_user_write(&mut self) {
+        let opcode = (self.user2 & 0xFFFF) as u8;
+        let addr = (self.addr >> 8) as usize;
+        let wel = self.flash_status & STATUS_WEL != 0;
+        if spi_debug_enabled() {
+            eprintln!(
+                "esp32_spi: USR write op=0x{opcode:02x} addr=0x{addr:06x} wel={wel} mosi_bits={}",
+                (self.mosi_dlen & 0x7FF) + 1
+            );
+        }
+        match opcode {
+            CMD_WREN => self.flash_status |= STATUS_WEL,
+            CMD_WRDI => self.flash_status &= !STATUS_WEL,
+            CMD_PAGE_PROGRAM if wel => {
+                let nbytes = if self.user & USER_USR_MOSI_BIT != 0 {
+                    ((self.mosi_dlen & 0x7FF) + 1).div_ceil(8) as usize
+                } else {
+                    0
+                };
+                self.program_flash(addr, nbytes);
+                self.flash_status &= !(STATUS_WEL | STATUS_WIP);
+            }
+            CMD_SECTOR_ERASE if wel => {
+                self.erase_flash(addr & !0xFFF, 4 * 1024);
+                self.flash_status &= !(STATUS_WEL | STATUS_WIP);
+            }
+            CMD_BLOCK_ERASE_32K if wel => {
+                self.erase_flash(addr & !0x7FFF, 32 * 1024);
+                self.flash_status &= !(STATUS_WEL | STATUS_WIP);
+            }
+            CMD_BLOCK_ERASE_64K if wel => {
+                self.erase_flash(addr & !0xFFFF, 64 * 1024);
+                self.flash_status &= !(STATUS_WEL | STATUS_WIP);
+            }
+            CMD_CHIP_ERASE if wel => {
+                self.erase_flash(0, usize::MAX);
+                self.flash_status &= !(STATUS_WEL | STATUS_WIP);
+            }
+            _ => {}
         }
     }
 
@@ -1312,5 +1373,92 @@ mod tests {
         write32(&mut spi, REG_CMD, CMD_USR_BIT);
         assert_eq!(read32(&spi, FIFO_START) & 1, 0); // WIP clear
         assert_eq!(read32(&spi, REG_CMD), 0);
+    }
+
+    /// SPI1 with a 64 KiB erased backing, the way `flash_mmu` attaches it.
+    fn flash_spi() -> (Esp32Spi, Arc<Mutex<Vec<u8>>>) {
+        let flash = Arc::new(Mutex::new(vec![0xFFu8; 0x1_0000]));
+        let mut spi = Esp32Spi::new();
+        spi.set_flash_backing(flash.clone());
+        (spi, flash)
+    }
+
+    /// ESP-IDF 5's `spi_flash_hal_common_command` on SPI1: command phase,
+    /// 24-bit left-justified address padded with ones
+    /// (`spi_flash_ll_set_usr_address`), MOSI data, then `CMD.USR`.
+    fn usr_write(spi: &mut Esp32Spi, op: u8, addr: u32, data: &[u8]) {
+        let mosi = if data.is_empty() {
+            0
+        } else {
+            USER_USR_MOSI_BIT
+        };
+        write32(spi, REG_USER, USER_USR_COMMAND_BIT | (1 << 30) | mosi);
+        write32(spi, REG_USER2, 0x7000_0000 | op as u32);
+        write32(spi, REG_ADDR, (addr << 8) | 0xFF);
+        if !data.is_empty() {
+            write32(spi, REG_MOSI_DLEN, (data.len() as u32) * 8 - 1);
+            for (i, chunk) in data.chunks(4).enumerate() {
+                let mut w = [0u8; 4];
+                w[..chunk.len()].copy_from_slice(chunk);
+                write32(spi, FIFO_START + 4 * i as u64, u32::from_le_bytes(w));
+            }
+        }
+        write32(spi, REG_CMD, CMD_USR_BIT);
+        assert_eq!(read32(spi, REG_CMD), 0, "USR auto-clears");
+    }
+
+    /// Stock `Preferences.putUInt` on a classic ESP32 programs NVS with a USR
+    /// page program (op 0x02) and reclaims pages with a USR sector erase
+    /// (op 0x20). Both used to drive only the wire, so the driver saw `WIP`
+    /// clear, reported success, and `getUInt` read the old value back.
+    #[test]
+    fn usr_page_program_and_sector_erase_reach_the_flash() {
+        let (mut spi, flash) = flash_spi();
+        usr_write(&mut spi, CMD_WREN, 0, &[]);
+        usr_write(
+            &mut spi,
+            CMD_PAGE_PROGRAM,
+            0x9020,
+            &[0xAA, 0x55, 0x12, 0x34],
+        );
+        assert_eq!(
+            &flash.lock().unwrap()[0x9020..0x9024],
+            &[0xAA, 0x55, 0x12, 0x34]
+        );
+        assert_eq!(spi.flash_status & STATUS_WEL, 0, "program consumes WEL");
+
+        // NOR program only clears bits.
+        usr_write(&mut spi, CMD_WREN, 0, &[]);
+        usr_write(&mut spi, CMD_PAGE_PROGRAM, 0x9020, &[0x0F]);
+        assert_eq!(flash.lock().unwrap()[0x9020], 0x0A);
+
+        usr_write(&mut spi, CMD_WREN, 0, &[]);
+        usr_write(&mut spi, CMD_SECTOR_ERASE, 0x9000, &[]);
+        assert!(flash.lock().unwrap()[0x9000..0xA000]
+            .iter()
+            .all(|&b| b == 0xFF));
+    }
+
+    #[test]
+    fn usr_program_without_write_enable_is_ignored() {
+        let (mut spi, flash) = flash_spi();
+        usr_write(&mut spi, CMD_PAGE_PROGRAM, 0x9000, &[0x00]);
+        assert_eq!(flash.lock().unwrap()[0x9000], 0xFF, "no WREN, no program");
+    }
+
+    /// `spi_flash_hal_program_page` (and the ROM) pack the dedicated
+    /// `FLASH_PP` address as `(addr & 0xFFFFFF) | (len << 24)` and leave
+    /// `MOSI_DLEN` alone.
+    #[test]
+    fn dedicated_page_program_decodes_the_packed_address() {
+        let (mut spi, flash) = flash_spi();
+        write32(&mut spi, FIFO_START, 0xDDCC_BBAA);
+        write32(&mut spi, FIFO_START + 4, 0x0000_00EE);
+        write32(&mut spi, REG_ADDR, 0x9040 | (5 << 24));
+        write32(&mut spi, REG_CMD, FLASH_WREN);
+        write32(&mut spi, REG_CMD, FLASH_PP);
+        assert_eq!(read32(&spi, REG_CMD), 0);
+        let f = flash.lock().unwrap();
+        assert_eq!(&f[0x9040..0x9046], &[0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF]);
     }
 }

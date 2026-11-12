@@ -7,6 +7,11 @@
 
 static void logBegin() {
   Serial.begin(115200);
+#if defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)
+  // arduino-pico (Pico 2): Serial is native USB CDC and drops writes until
+  // the host opens the port (DTR), on silicon and on the twin alike.
+  while (!Serial) delay(1);
+#endif
 #if defined(ARDUINO_USB_CDC_ON_BOOT) && (ARDUINO_USB_CDC_ON_BOOT)
   Serial.setTxTimeoutMs(0);
   Serial0.begin(115200);
@@ -187,6 +192,70 @@ static bool lw_can_probe() {
 }
 #define LW_HAS_CAN 1
 
+#elif defined(ARDUINO_NUCLEO_G0B1RE) || defined(STM32G0B1xx)
+// G0B1 FDCAN1 — the H5 enter_loopback sequence again. Registers at
+// 0x40006400, SRAMCAN a separate block at 0x4000B400 (stm32g0b1xx.h
+// FDCAN1_BASE / SRAMCAN_BASE). RCC APBENR1 @ 0x40021000 + 0x3C, FDCANEN bit 12
+// (RCC_APBENR1_FDCANEN_Pos).
+static bool lw_can_probe() {
+  const uint32_t fd = 0x40006400u;
+  const uint32_t ram = 0x4000B400u;
+  const uint32_t rcc = 0x40021000u;
+  mmio_w(rcc + 0x3C, mmio_r(rcc + 0x3C) | (1u << 12));
+
+  mmio_w(fd + 0x18, 0x3u);   // CCCR INIT|CCE
+  mmio_w(fd + 0x18, 0xA3u);  // + TEST | MON
+  mmio_w(fd + 0x10, 1u << 4); // TEST.LBCK
+  // TX element 0 @ SRAMCAN+0x278: std ID 0x123, DLC 1
+  mmio_w(ram + 0x278, 0x123u << 18);
+  mmio_w(ram + 0x27C, 1u << 16);
+  mmio_w(ram + 0x280, 0xA5u);
+  mmio_w(fd + 0x18, 0xA2u); // leave INIT, keep TEST|MON (CCE clears)
+  mmio_w(fd + 0x0CC, 1u);   // TXBAR buffer 0
+
+  // TX completes on a later peripheral tick — spin.
+  for (int i = 0; i < 100000; i++) {
+    if ((mmio_r(fd + 0x90) & 0x7Fu) != 0) {
+      uint32_t w0 = mmio_r(ram + 0xB0);
+      uint32_t w2 = mmio_r(ram + 0xB0 + 8);
+      return ((w0 >> 18) & 0x7FFu) == 0x123u && (w2 & 0xFFu) == 0xA5u;
+    }
+  }
+  return false;
+}
+#define LW_HAS_CAN 1
+
+#elif defined(ARDUINO_ESP32C3_DEV) || defined(CONFIG_IDF_TARGET_ESP32C3)
+// ESP32-C3 TWAI @ 0x6002B000 — the S3 register map (twai_struct.h identical).
+// Ungate the APB clock and release reset first, as on silicon
+// (SYSTEM_PERIP_CLK_EN0 @0x600C0010 / PERIP_RST_EN0 @0x600C0018, TWAI bit 19),
+// then self-RX + decode std ID 0x123 / data 0xA5.
+static bool lw_can_probe() {
+  const uint32_t sys = 0x600C0000u;
+  mmio_w(sys + 0x10, mmio_r(sys + 0x10) | (1u << 19));
+  mmio_w(sys + 0x18, mmio_r(sys + 0x18) & ~(1u << 19));
+  const uint32_t twai = 0x6002B000u;
+  mmio_w(twai + 0x00, 0x0); // leave reset mode
+  mmio_w(twai + 0x40, 0x01u); // DLC=1
+  mmio_w(twai + 0x44, 0x24u); // ID[10:3] of 0x123
+  mmio_w(twai + 0x48, 0x60u); // ID[2:0]<<5
+  mmio_w(twai + 0x4C, 0xA5u);
+  mmio_w(twai + 0x04, 1u << 4); // CMD.self_rx_req
+  if ((mmio_r(twai + 0x08) & 1u) == 0) {
+    return false;
+  }
+  if ((mmio_r(twai + 0x74) & 0x7Fu) != 1u) {
+    return false;
+  }
+  uint8_t fi = (uint8_t)(mmio_r(twai + 0x40) & 0xFFu);
+  uint8_t id_hi = (uint8_t)(mmio_r(twai + 0x44) & 0xFFu);
+  uint8_t id_lo = (uint8_t)(mmio_r(twai + 0x48) & 0xFFu);
+  uint8_t data0 = (uint8_t)(mmio_r(twai + 0x4C) & 0xFFu);
+  uint16_t sid = ((uint16_t)id_hi << 3) | ((uint16_t)id_lo >> 5);
+  return fi == 0x01u && sid == 0x123u && data0 == 0xA5u;
+}
+#define LW_HAS_CAN 1
+
 #elif defined(ARDUINO_ESP32S3_DEV) || defined(CONFIG_IDF_TARGET_ESP32S3)
 // ESP32-S3 TWAI @ 0x6002B000 — self-RX + decode std ID 0x123 / data 0xA5.
 // Model stores one payload byte per 32-bit word slot (0x40,0x44,0x48,0x4C…).
@@ -194,6 +263,35 @@ static bool lw_can_probe() {
   const uint32_t twai = 0x6002B000u;
   mmio_w(twai + 0x00, 0x0); // leave reset mode
   // SJA1000 SFF layout across word slots: FI, ID[10:3], ID[2:0]<<5, data0
+  mmio_w(twai + 0x40, 0x01u); // DLC=1
+  mmio_w(twai + 0x44, 0x24u); // ID[10:3] of 0x123
+  mmio_w(twai + 0x48, 0x60u); // ID[2:0]<<5
+  mmio_w(twai + 0x4C, 0xA5u);
+  mmio_w(twai + 0x04, 1u << 4); // CMD.self_rx_req
+  if ((mmio_r(twai + 0x08) & 1u) == 0) {
+    return false;
+  }
+  if ((mmio_r(twai + 0x74) & 0x7Fu) != 1u) {
+    return false;
+  }
+  uint8_t fi = (uint8_t)(mmio_r(twai + 0x40) & 0xFFu);
+  uint8_t id_hi = (uint8_t)(mmio_r(twai + 0x44) & 0xFFu);
+  uint8_t id_lo = (uint8_t)(mmio_r(twai + 0x48) & 0xFFu);
+  uint8_t data0 = (uint8_t)(mmio_r(twai + 0x4C) & 0xFFu);
+  uint16_t sid = ((uint16_t)id_hi << 3) | ((uint16_t)id_lo >> 5);
+  return fi == 0x01u && sid == 0x123u && data0 == 0xA5u;
+}
+#define LW_HAS_CAN 1
+
+#elif defined(ARDUINO_ESP32C6_DEV) || defined(CONFIG_IDF_TARGET_ESP32C6)
+// ESP32-C6 TWAI0 @ 0x6000B000 — the S3/C3 TWAI map. Ungate the APB clock and
+// release reset first (PCR.TWAI0_CONF @0x60096000+0x5C: CLK_EN b0, RST_EN b1),
+// then self-RX + decode std ID 0x123 / data 0xA5.
+static bool lw_can_probe() {
+  const uint32_t pcr = 0x60096000u;
+  mmio_w(pcr + 0x5C, (mmio_r(pcr + 0x5C) | 1u) & ~(1u << 1));
+  const uint32_t twai = 0x6000B000u;
+  mmio_w(twai + 0x00, 0x0); // leave reset mode
   mmio_w(twai + 0x40, 0x01u); // DLC=1
   mmio_w(twai + 0x44, 0x24u); // ID[10:3] of 0x123
   mmio_w(twai + 0x48, 0x60u); // ID[2:0]<<5

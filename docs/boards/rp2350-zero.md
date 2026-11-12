@@ -135,7 +135,7 @@ Always confirm with `labwired_describe` once the playground id exists.
 | Block | Status | Notes |
 |-------|--------|--------|
 | UART0 | ✅ | Twin console. Header GP0/GP1 — not the USB cable. |
-| USB CDC / USB device | ❌ | Bench only |
+| USB CDC / USB device | ✅ | Same `rp2040_usb` model as RP2040 (TinyUSB / earlephilhower `Serial`) |
 | SIO GPIO | ⚠️ | Enough for the GP16 LED stand-in |
 | WS2812 on GP16 | ⚠️ | Stand-in LED. PIO/WS2812 timing not claimed |
 | ADC GP26–29 | ⚠️ | Partial analog |
@@ -158,8 +158,8 @@ forever — that is intentional.
 **Twin is strong for:** UART0 bring-up of an RP2350 Thumb ELF; GP16 as a
 digital LED stand-in; deterministic CLI oracles that match UART0.
 
-**Needs the bench:** anything on USB CDC, UF2 boot, WS2812 color, SWD
-register parity, PIO v2, dual-core.
+**Needs the bench:** UF2 boot, WS2812 color, SWD register parity, PIO v2,
+dual-core. USB CDC `Serial` is modelled (see chip page / core gate test).
 
 ---
 
@@ -181,12 +181,12 @@ Details: [`examples/rp2350-zero/VALIDATION.md`](../../examples/rp2350-zero/VALID
 ### Playground
 
 Board id `rp2350-zero` on [app.labwired.com](https://app.labwired.com). USB CDC
-on the cable is still unmodeled — serial in the twin is UART0.
+`Serial` is modelled; UART0 on GP0/GP1 remains available as a header console.
 
 ### Agent
 
 [MCP](../agent/mcp.md) → describe the **chip** `rp2350` and run against
-`examples/rp2350-zero/system.yaml`. Do not claim USB or WS2812 success.
+`examples/rp2350-zero/system.yaml`. Do not claim WS2812 success.
 
 ---
 

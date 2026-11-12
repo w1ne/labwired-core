@@ -432,6 +432,28 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_esp32s3_zero_tier1_survival"),
     },
     ChipConf {
+        name: "esp32-devkitc-32e-gpio-smoke",
+        yaml: "configs/chips/esp32-devkitc-32e-gpio-smoke.yaml",
+        reset_oracle: None,
+        // Narrow DevKitC-32E onboarding profile of the same LX6 SoC as `esp32`.
+        // The committed Tier-1 fixture runs through this descriptor/system so a
+        // regression in the YAML pair's load/parse/dispatch fails here, not
+        // only in the CLI cell. Same documented dma gap as parent `esp32`.
+        behavior_gate: Some("firmware_survival::test_esp32_devkitc_32e_gpio_smoke_tier1_survival"),
+    },
+    ChipConf {
+        name: "esp32-devkitc-32e-uart1",
+        yaml: "configs/chips/esp32-devkitc-32e-uart1.yaml",
+        reset_oracle: None,
+        // Narrow DevKitC-32E UART1 onboarding profile of the same LX6 SoC as
+        // `esp32`. The boards.yml cell runs the committed Tier-1 ELF
+        // (docs-runnable expects TIER1 clock PASS). There is no dedicated
+        // firmware_survival rust test yet — this profile only models
+        // UART0/UART1/GPIO, so claiming the gpio-smoke TIER1-done gate would
+        // be dishonest. Honest L0 until that gate exists. No silicon capture.
+        behavior_gate: None,
+    },
+    ChipConf {
         name: "stm32f401cdu6",
         yaml: "configs/chips/stm32f401cdu6.yaml",
         reset_oracle: None,
@@ -515,6 +537,17 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: None,
     },
+    ChipConf {
+        name: "stm32f103rb-nucleo-bme280-smoke",
+        yaml: "configs/chips/stm32f103rb-nucleo-bme280-smoke.yaml",
+        reset_oracle: None,
+        // Narrow NUCLEO-F103RB + external BME280 onboarding profile of the
+        // same F103 map as `stm32f103rb`. The firmware crate is built and
+        // run by the boards.yml cell; there is no committed ELF and no
+        // dedicated firmware_survival rust test yet, so this stays an honest
+        // L0 until that gate exists. No silicon capture is claimed.
+        behavior_gate: None,
+    },
     // Exact low-density F103 order codes share the F103 engine. Geometry is
     // checked per part, but there is no per-order-code silicon capture or
     // executing-fidelity differential, so these remain honest L0 entries.
@@ -551,6 +584,15 @@ const CHIPS: &[ChipConf] = &[
     ChipConf {
         name: "stm32f103r6h",
         yaml: "configs/chips/stm32f103r6h.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        // Medium-density x8 in LQFP64: same public engine as the C8 reference,
+        // different orderable geometry. No per-order-code silicon capture, so an
+        // honest L0 entry like the other exact F103 order codes.
+        name: "stm32f103r8",
+        yaml: "configs/chips/stm32f103r8.yaml",
         reset_oracle: None,
         behavior_gate: None,
     },
@@ -735,6 +777,16 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_stm32g474_zephyr_survival"),
     },
     ChipConf {
+        // G431RB: same RM0440 G4 silicon family as g474re (same peripheral map,
+        // same `stm32g4` RCC profile), different memory/orderable. No silicon
+        // reset capture. Behavior gate = the TIER1 raw-register self-test
+        // firmware, which boots and reports PASS for every wired class.
+        name: "stm32g431rb",
+        yaml: "configs/chips/stm32g431rb.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
         name: "stm32h563",
         yaml: "configs/chips/stm32h563.yaml",
         reset_oracle: None,
@@ -872,6 +924,17 @@ const CHIPS: &[ChipConf] = &[
         yaml: "configs/chips/atmega328p.yaml",
         reset_oracle: None,
         behavior_gate: Some("avr_nano_golden_survival::arduino_nano_golden_prints_and_blinks"),
+    },
+    // Exact ATmega328PB-AU CPU model with PB-only USART1 register routing.
+    // The firmware gate asserts USART1 output and PB5 high; no silicon capture
+    // or package-pad map exists yet, so this is L1 behavior evidence only.
+    ChipConf {
+        name: "atmega328pb",
+        yaml: "configs/chips/atmega328pb.yaml",
+        reset_oracle: None,
+        behavior_gate: Some(
+            "avr_atmega328pb_usart1::atmega328pb_firmware_uses_usart1_and_drives_pb5",
+        ),
     },
     // Behavior: Arduino-core Mega 2560 sketch (LED pins on ports E/G/F/B/H,
     // A8/A9 via MUX5, millis, Serial). No silicon capture → below L2.
@@ -1043,6 +1106,22 @@ const CHIPS: &[ChipConf] = &[
         yaml: "configs/chips/pic24f16ka102.yaml",
         reset_oracle: None,
         behavior_gate: Some("pic24_ka_smoke::pic24f16ka102_uart_smoke"),
+    },
+    ChipConf {
+        // WCH CH32V003F4P6 (QingKe RV32EC). SIM-DERIVED: nothing here has been
+        // diffed against a real CH32V003 over SDI, so no reset_oracle. This
+        // slice models the RV32E register window, the WCH clock tree and
+        // GPIO A/C/D and polled USART1 TX (ch32v003_compiled_firmware.rs);
+        // I2C/SPI/ADC are not modelled yet (their bases are in the memory map
+        // but no peripheral descriptor consumes them). The
+        // gate is the compiled RV32E blink below, which boots a real ELF and
+        // asserts PC0 toggles — not a register-state assertion.
+        name: "ch32v003f4p6",
+        yaml: "configs/chips/ch32v003f4p6.yaml",
+        reset_oracle: None,
+        behavior_gate: Some(
+            "ch32v003_compiled_firmware::ch32v003_compiled_rv32e_firmware_toggles_pc0",
+        ),
     },
 ];
 

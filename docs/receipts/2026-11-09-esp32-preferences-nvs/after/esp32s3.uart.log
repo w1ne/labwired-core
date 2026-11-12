@@ -1,0 +1,6 @@
+LW_NVS_BOOT
+begin=1 boots=0 put=4 readback=1
+name=labwired
+ctr=799 boots=1 name=labwired free=625
+removed=1
+LW_NVS_OK

@@ -9,15 +9,24 @@
 //! It exists because the browser cannot spawn a process, so the ngspice
 //! `external_process` adapter has no browser counterpart. This engine compiles
 //! into the same WASM the playground ships, runs natively too, and adds one
-//! dependency (`libm`, for bit-identical transcendentals) to either. What it
-//! does not do — subcircuits, model libraries, AC/DC sweeps, and every device
-//! capacitance — it refuses by name and points at
-//! `tools/cosim/labwired_ngspice.py`, which does them all.
+//! dependency (`libm`, for bit-identical transcendentals) to either. It refuses
+//! subcircuits, model libraries and AC/DC sweeps by name and points at
+//! `tools/cosim/labwired_ngspice.py`, which supports those features. The solver
+//! integrates diode forward/reverse high-injection knees (`IK`/`IKF`/`IKR`),
+//! diode `TT`, BJT
+//! `TF`/`TR` with forward `XTF`/`VTF`/`ITF`, and `RB`/`RC`/`RE`, MOSFET
+//! terminal resistances (`RD`/`RS` or
+//! `RSH` times instance `NRD`/`NRS`), level-1 gate overlap charge
+//! (`CGSO`/`CGDO`/`CGBO`), and either Meyer or opt-in Ward–Dutton MOSFET
+//! channel charge in-core.
 //!
-//! Nonlinear devices — the Shockley diode, the Ebers–Moll BJT and the level-1
-//! MOSFET — are solved by Newton–Raphson iteration inside each time step. A
-//! circuit with none of them takes exactly the code path it took before they
-//! existed, down to the floating-point operation order.
+//! Nonlinear devices — the Shockley diode and Gummel–Poon BJT (both with
+//! optional depletion and transit-time charge), the level-1 JFET (including
+//! optional gate-junction depletion charge), and the MOSFET (including
+//! optional bulk-junction depletion and linear gate-overlap charge) — are
+//! solved by Newton–Raphson iteration inside each time step. A circuit with
+//! none of them takes exactly the code path it took before they existed, down
+//! to the floating-point operation order.
 //!
 //! * [`netlist`] — the accepted SPICE subset and its errors.
 //! * [`device`] — the device equations, their limiters and their constants.
@@ -32,15 +41,15 @@ pub mod mna;
 pub mod netlist;
 pub mod trace;
 
-pub use adapter::{AnalogConfig, AnalogCosimAdapter, Probe};
+pub use adapter::{AnalogConfig, AnalogCosimAdapter, Probe, ThermistorConfig};
 pub use mna::{Integration, Solver, MAX_STEP_CUTS, MAX_UNKNOWNS};
 pub use netlist::{
     parse_netlist, parse_spice_value, AnalogError, Bjt, BjtModel, Capacitor, Cccs, Ccvs, Circuit,
     ComparatorModel, ComparatorOutput, CurrentSource, Diode, DiodeModel, Inductor, ModelCard,
-    MosModel, Mosfet, NodeRef, OpAmpModel, Polarity, PowerSink, RegulatorKind, RegulatorModel,
-    Resistor, Switch, Vccs, Vcvs, VoltageSource, VoltageSwitchControl, Waveform,
-    COMPARATOR_PP_GAIN, MACRO_CLAMP_DIODE, MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN,
-    REGULATOR_LIMIT_DIODE, REGULATOR_LIMIT_GAIN,
+    MosChannelChargeModel, MosModel, Mosfet, MutualInductor, NodeRef, NtcModel, OpAmpModel,
+    Polarity, PowerSink, RegulatorKind, RegulatorModel, Resistor, Switch, Vccs, Vcvs,
+    VoltageSource, VoltageSwitchControl, Waveform, COMPARATOR_PP_GAIN, MACRO_CLAMP_DIODE,
+    MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN, REGULATOR_LIMIT_DIODE, REGULATOR_LIMIT_GAIN,
 };
 pub use trace::{
     AnalogChannel, AnalogSample, AnalogSeries, AnalogSeriesChannel, AnalogTrace, AnalogTraceBatch,

@@ -24,7 +24,8 @@ Each chip's Tier-1 fixture is **real firmware** that drives these peripheral cla
 | `stm32f401` | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 |  |  | **12** |
 | `stm32f407` | 🟢 | 🟢 | 🟢 | 🟢 | 🟠 | 🟠 | 🟢 | 🟢 | 🟢 | 🟠 | 🟢 | 🟢 |  |  | **9** |
 | `stm32f411` | 🟢 | 🟢 | 🟢 | 🟢 | 🟠 | · | 🟢 | 🟢 | 🟢 | · | 🟢 | 🟢 |  |  | **9** |
-| `stm32g071` | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 |  |  | **12** |
+| `stm32g071` | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🔴 | 🟢 | 🟢 | 🟢 | 🟢 |  |  | **11** |
+| `stm32g431rb` | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 |  |  | **12** |
 | `stm32g474re` | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 |  |  | **12** |
 | `stm32h563` | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 |  | **13** |
 | `stm32h735` | 🟢 | 🟢 | 🟢 | 🟢 | · | 🟢 | 🟢 | 🟢 | 🟠 | 🟢 | 🟢 | · |  |  | **9** |
@@ -33,7 +34,7 @@ Each chip's Tier-1 fixture is **real firmware** that drives these peripheral cla
 | `stm32wb55` | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 |  |  | **12** |
 | `stm32wba52` | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | 🟢 | · | 🟢 | 🟢 | 🟢 |  |  | **11** |
 
-> **212 rubric cells are driven by real firmware** across 20 chips; 11 are modeled-but-unrecorded (see below). Most chips drive 9–13 of the common peripheral classes — the STM32 family included.
+> **223 rubric cells are driven by real firmware** across 21 chips; 11 are modeled-but-unrecorded (see below). Most chips drive 9–13 of the common peripheral classes — the STM32 family included.
 
 **Unrecorded rubric cells (modeled, fixture does not drive them):** `esp32`/rtc, `esp32c3`/clock, `esp32c3`/dma, `esp32s3`/spi, `esp32s3`/adc, `rp2040`/dma, `stm32f407`/dma, `stm32f407`/irq, `stm32f407`/pwm, `stm32f411`/dma, `stm32h735`/adc.
 
@@ -90,6 +91,14 @@ _tier1 fixture drives 8 rubric classes incl. a BMP280 chip-id read over the I2C 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `sdio_stub` (esp32/sdio_stub.rs:5) — STRUCTURAL: hardcoded FSM_DONE so the boot ROM's SDIO bring-up poll terminates. Removing it breaks boot; the ROM blob is the only 'firmware' that touches it.
 
+### `esp32-devkitc-32e-gpio-smoke`
+
+_Narrow ESP32-DevKitC-32E onboarding profile (GPIO23, UART0, I2C0). docs/receipts/2026-11-09-esp32-deep-sleep records stock Arduino-ESP32 timer-wake deep sleep printing LW_DS_OK (bootCount 1→2→3 across DEEPSLEEP_RESET, RTC slow memory kept) and light sleep printing LW_LS_OK. Firmware is PlatformIO-built, not a committed ELF; those receipts are not a required CI lane. The committed system attaches no external I2C device. No beyond-rubric block is listed for this slice._
+
+### `esp32-devkitc-32e-uart1`
+
+_Narrow ESP32-DevKitC-32E onboarding profile that routes UART1 TX to J3 pin 12 / GPIO16. Committed evidence at examples/esp32-devkitc-32e-uart1/evidence/run shows examples/esp32-devkitc-32e-uart1/uart1-smoke.yaml passed 3/3: UART0 printed ESP32_DEVKITC32E_UART1_TX_OK, GPIO16 (UART1 TX) saw at least 32 edges from Serial1 printing UUUUUUUU, and the run stopped at max_steps. Firmware is PlatformIO-built via scripts/build-esp32-devkitc-32e-uart1-smoke.sh, not a committed ELF; no required CI lane runs this script. No beyond-rubric block is listed for this slice._
+
 ### `nrf52840`
 
 _TWIM/PWM are firmware-proven via the rubric fixture; the PR-gated OBD2 scanner e2e drives the RADIO TXEN/READY/START/END handshake (asserts ble_tx > 0), and the #[ignore]d proximity e2e adds an on-demand radio path. The Zephyr BME280 temperature read runs in an external west build._
@@ -132,14 +141,18 @@ _Drives all 13 rubric classes (incl. FDCAN→can) via real firmware — the broa
 
 **Advanced peripherals — unit-tested only** (no firmware drives them): `UDS bootloader/ECU (0x10/0x27/0x34/0x36/0x37/0x85/0x28 — example firmware, not gated)`
 
+### `ch32v003f4p6`
+
+_No tier-1 fixture or hosted model-verification gate. A compiled RV32E/ILP32E bare-metal C fixture executes from flash, configures WCH RCC/GPIOC, and toggles PC0 in the local simulator; the matching CLI smoke and core integration test require two GPIO edges. A second, RV32EC (compressed) fixture clocks USART1 and prints a line through polled TX; its CLI smoke and integration test assert the exact string, and a negative control asserts silence when the USART1 clock gate is not set. This is local simulator evidence, not hosted model_verified or hardware confirmation._
+
 ### `nrf5340`
 
-_No tier1 fixture. Boots unmodified Zephyr hello_world end-to-end: CLOCK/UARTE0/RTC1 drive the boot (firmware_survival + nrf5340_clock_boot). Nine peripheral blocks are benign boot stubs._
+_No tier1 fixture. Unmodified Zephyr v3.7 hello_world boots end-to-end through CLOCK/UARTE0/RTC1. TWIM1 is a behavioural EasyDMA model; the PR-gated nrf5340_clock_boot test attaches the declarative BMI270 model and reads CHIP_ID 0x24 with a repeated-START transaction. Nine peripheral blocks remain benign boot stubs._
 
 **Functional device/protocol reads** (real driver, decoded value):
 - Unmodified Zephyr v3.7 hello_world boots + prints over UARTE0 EasyDMA — `nrf5340-zephyr` · firmware_survival::test_nrf5340_zephyr_survival (PR gate)
 
-**Advanced peripherals — unit-tested only** (no firmware drives them): `GPIO`, `TIMER0-2`, `RTC0`
+**Advanced peripherals — unit-tested only** (no firmware drives them): `GPIO`, `TIMER0-2`, `RTC0`, `TWIM1 + BMI270 CHIP_ID EasyDMA transaction`
 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `DCNF/FPU/CACHE/SPU/OSC_REG/CTRLAP/GPIOTE0/DPPIC/FICR` (nrf5340_*_stub) — STRUCTURAL: SystemInit pokes them once at boot and never polls them again, so a register stub is byte-faithful for the hello_world boot path.
@@ -175,8 +188,8 @@ _No tier1 fixture. The strict-onboarding snake lab is the only firmware: SPIM22 
 _Richest Espressif rubric coverage: the tier-1 fixture drives all 12 of its declared classes. clock and irq are real engines, not register stand-ins — the native PCR enforces CLK_EN (gated UART0 reads back 0, then recovers) and interrupt_core0+intpri route both the software doorbell and UART0's peripheral source into real mcause traps. Beyond the rubric only io_mux and hp_sys remain — SVD-derived declarative register files with no behavioural engine._
 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
-- `io_mux` (configs/chips/esp32c6.yaml:231 (declarative; configs/peripherals/esp32c6/io_mux.yaml)) — CLOSABLE: reset-value register storage; pad function writes are recorded but never read back or electrically enforced — the DevKitC demo writes U0TXD's MCU_SEL and the tier-1 console both pass regardless of routing. The S3's real io_mux model is the port path.
-- `hp_sys` (configs/chips/esp32c6.yaml:256 (declarative; configs/peripherals/esp32c6/hp_sys.yaml)) — CLOSABLE: declarative register file with no engine; nothing drives it today, so the false-success path is latent — timeout monitor, SDIO control, ROM-table lock and memory test are not modelled.
+- `io_mux` (configs/chips/esp32c6.yaml:491 (declarative; configs/peripherals/esp32c6/io_mux.yaml)) — CLOSABLE: reset-value register storage; pad function writes are recorded but never read back or electrically enforced — the DevKitC demo writes U0TXD's MCU_SEL and the tier-1 console both pass regardless of routing. The S3's real io_mux model is the port path.
+- `hp_sys` (configs/chips/esp32c6.yaml:516 (declarative; configs/peripherals/esp32c6/hp_sys.yaml)) — CLOSABLE: declarative register file with no engine; nothing drives it today, so the false-success path is latent — timeout monitor, SDIO control, ROM-table lock and memory test are not modelled.
 
 ### `esp32s3-zero`
 
@@ -227,9 +240,17 @@ _Exact low-density x4/x6 geometry slice for stm32f103r6; it reuses the shared me
 
 _Exact low-density x4/x6 geometry slice for stm32f103r6h; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
 
+### `stm32f103r8`
+
+_Exact STM32F103R8 LQFP64 model (medium-density x8: 64 KiB flash, 20 KiB SRAM, 51 GPIOs, 16 ADC channels). Same die and peripheral map as the public stm32f103 (C8) engine, so firmware-exercise rubric claims stay on the STM32F103 family row. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`, and the exact part is executed by the `stm32-exact-catalog` arm-spin cell in core-coverage-matrix-smoke.yml._
+
 ### `stm32f103rb`
 
 _Exact STM32F103RBT6 LQFP64 model with 128 KiB flash and 20 KiB SRAM. The NUCLEO-F103RB source smoke exercises PA5 GPIO output and USART2; firmware-exercise rubric claims remain on the STM32F103 family row until exact-part rubric coverage is added._
+
+### `stm32f103rb-nucleo-bme280-smoke`
+
+_Narrow NUCLEO-F103RB + BME280 onboarding profile (USART2/ST-LINK VCP, LD2 on PA5, I2C1 remapped to PB8/PB9). Committed evidence at examples/nucleo-f103rb-bme280/evidence shows examples/nucleo-f103rb-bme280/onboarding-smoke.yaml passed 3/3: USART2 printed NUCLEO_F103RB_BME280_OK ID=0x60 I2C1=PB8/PB9 after a firmware read of BME280.CHIP_ID (0xD0) at 0x77, gpioa:5 (LD2) saw at least 32 edges, and the run stopped at max_steps. Firmware is built from crates/firmware-nucleo-f103rb-bme280-smoke, not a committed ELF; no required CI lane runs this script. No beyond-rubric block is listed for this slice._
 
 ### `stm32f103t4`
 
@@ -407,6 +428,10 @@ _No tier-1 target. This is the narrow IO-Link customer firmware descriptor: the 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `SYSCFG` (configs/chips/stm32g0b1re.yaml (type: syscfg); crates/core/src/peripherals/generic_factory.rs (syscfg arm)) — CLOSABLE: StubPeripheral returns zero except a canned H7-style CCCSR readiness bit at 0x20, and drops writes. This is not a G0 SYSCFG behavioral model. GPIO source selection is modeled in the separate G0 EXTI-owned EXTICR registers, not through this stub.
 
+### `stm32g431rb`
+
+_All 12 declared rubric classes are driven by its committed tier-1 fixture (tests/fixtures/tier1/stm32g431rb.elf, sha256 in tests/fixtures/tier1/MANIFEST.json; fast_boot target, USART2 console), asserted by the `stm32g431rb` cell in core-coverage-matrix-smoke.yml and nightly-ratcheted by the full-CI `tier1_matrix_ratchet` step. Same RM0440 G4 peripheral map as stm32g474re, so the beyond-rubric blocks (PWR/CRC/DBGMCU, driven there by vendor firmware) are shared with the G474 row; no G4-specific firmware drives them for the G431 die and no G431 bench capture exists, so REV_ID stays a visible placeholder rather than a claimed value._
+
 ### `stm32g474re`
 
 _All 12 declared rubric classes are driven by its committed tier-1 fixture (nightly-ratcheted by the full-CI `tier1_matrix_ratchet` step (core-ci.yml:2087), fast_boot target, USART2 console), and the two PR-gated vendor firmwares cover the non-rubric blocks: the Zephyr hello's SoC init read-modify-writes DBGMCU_CR (the reason the descriptor declares DBGMCU) and the Arduino serial startup calls HAL_PWREx_ControlVoltageScaling (PWR_CR VOS + SR2.VOSF poll) plus HAL_CRC_Init (CRC_POL/INIT/CR — the reason that survival case exists), so PWR/CRC/DBGMCU are all firmware-driven and no non-rubric block is left unexercised. The CRC polynomial engine itself is still driven by no firmware: its always-run coverage is the H563 bench oracle (h563_conformance.rs:144) plus the F103 sim-only thumb oracle (stm32f1_exec_oracle.rs:300) and IDR-width masking (crc.rs:204), and no G4-specific test asserts a computed value._
@@ -466,9 +491,13 @@ _First WBA (Cortex-M33). Its committed tier-1 fixture (nightly-ratcheted by the 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `ICACHE` (configs/chips/stm32wba52.yaml:95 (type: icache; crates/core/src/peripherals/generic_factory.rs:734)) — CLOSABLE: hardcoded StubPeripheral::new(0x00) — read 0, writes dropped. The PR-gated Arduino startup's HAL_ICACHE_Enable and the Zephyr boot write it and neither polls a status bit, so the enable never latches and the boot cannot tell.
 
+### `atmega328pb`
+
+_No tier-1 target. The PR-gated exact-part AVR-GCC smoke prints PB_USART1_OK through the PB-only USART1 and drives PB5 high (avr_atmega328pb_usart1::atmega328pb_firmware_uses_usart1_and_drives_pb5; examples/atmega328pb-usart1/io-smoke.yaml). No silicon capture or package-pad map exists yet. Nothing beyond the rubric is firmware-exercised in this slice._
+
 ### `atmega328p`
 
-_No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware that runs: the PR-gated AVR golden `avr_nano_golden_survival::arduino_nano_golden_prints_and_blinks` (core-ci.yml:688) boots the committed PlatformIO blink ELF and asserts `nano-ok` on USART0 plus a PB5 toggle (avr_nano_golden_survival.rs:100-102); strict_onboarding boots the same ELF through examples/arduino-nano-blinky/io-smoke.yaml in the nightly core-full job (cross-build-excluded from the PR shards, workspace-test-shards.json:44-48; discovery documented at strict_onboarding.rs:369), and the nightly Arduino matrix drives L0–L7 on the part — L8 CAN is skipped, the chip has no CAN controller (validation/arduino-matrix/boards.yaml:218-231); its L3/L4 cells are raw register/frame oracles (INA219 config 0x399F + bus 0x19CA, validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino:20-21,92; MAX31855 frame 0x01901600, validation/arduino-matrix/sketches/L4_spi_sensor/src/main.ino:66-67), not decoded physical values, so `functional` stays empty. Every peripheral the descriptor declares is a rubric class or kit-attach plumbing: the `spi`/`i2c` instances are parking controllers that exist only to drain attached slaves into the AVR CPU, which owns the real SPCR/SPSR/SPDR and TWI (configs/chips/atmega328p.yaml:28-39; crates/core/src/cpu/avr.rs:91-106), PORTB/C/D are `avr_gpio` and the ADC input side is `avr_adc` — so nothing beyond the rubric is declared and the lists below are empty._
+_No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware that runs: the PR-gated AVR golden `avr_nano_golden_survival::arduino_nano_golden_prints_and_blinks` (core-ci.yml:688) boots the committed PlatformIO blink ELF and asserts `nano-ok` on USART0 plus a PB5 toggle (avr_nano_golden_survival.rs:100-102); strict_onboarding boots the same ELF through examples/arduino-nano-blinky/io-smoke.yaml in the nightly core-full job (cross-build-excluded from the PR shards, workspace-test-shards.json:44-48; discovery documented at strict_onboarding.rs:369), and the nightly Arduino matrix drives L0–L7 on the part — L8 CAN is skipped, the chip has no CAN controller (validation/arduino-matrix/boards.yaml:306-322); its L3/L4 cells are raw register/frame oracles (INA219 config 0x399F + bus 0x19CA, validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino:20-21,92; MAX31855 frame 0x01901600, validation/arduino-matrix/sketches/L4_spi_sensor/src/main.ino:66-67), not decoded physical values, so `functional` stays empty. Every peripheral the descriptor declares is a rubric class or kit-attach plumbing: the `spi`/`i2c` instances are parking controllers that exist only to drain attached slaves into the AVR CPU, which owns the real SPCR/SPSR/SPDR and TWI (configs/chips/atmega328p.yaml:28-39; crates/core/src/cpu/avr.rs:91-106), PORTB/C/D are `avr_gpio` and the ADC input side is `avr_adc` — so nothing beyond the rubric is declared and the lists below are empty._
 
 ### `atmega2560`
 

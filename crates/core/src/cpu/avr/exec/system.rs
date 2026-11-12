@@ -77,6 +77,13 @@ impl Avr {
         if op == 0x9598 {
             return Err(SimulationError::Halt);
         }
+        // WDR: restart the watchdog count (`avr/wdt.rs`).
+        if op == 0x95A8 {
+            self.wdt_kick();
+            self.pc = next;
+            self.cycles += 1;
+            return Ok(Some(()));
+        }
         Ok(None)
     }
 

@@ -17,9 +17,12 @@
 //! instruction boundary however the counter got there:
 //! - fast PWM: set at BOTTOM, cleared after the compare match, so high for
 //!   `TCNT <= OCR` (duty `(OCR + 1) / (TOP + 1)`; `OCR = TOP` holds it high);
-//! - phase-correct PWM: high while `TCNT < OCR` (duty `OCR / TOP`). The
-//!   counters here count up to TOP and wrap rather than back down, so the
-//!   duty is right and the period is half the silicon's.
+//! - phase-correct PWM: cleared on the match going up, set on the match
+//!   going down, so high while `TCNT < OCR`, and at `TCNT == OCR` on the
+//!   down slope (duty `OCR / TOP`, period `2 * TOP`). Timer1 and Timer2 (in
+//!   WGM 1) count down as on silicon. Timer0 still counts up and wraps in
+//!   phase-correct mode, so its period there is half the silicon's (Arduino
+//!   runs Timer0 in fast PWM).
 //!
 //! Not modelled: `COMnx = 1` (toggle on match), which is stateful, and the
 //! non-PWM modes, where the pad keeps following `PORTx`.
@@ -38,11 +41,18 @@ pub(super) enum Waveform {
 
 /// The pad level an output-compare unit drives, or `None` when the unit
 /// does not own the pad.
-pub(super) fn oc_level(wave: Waveform, com: u8, tcnt: u16, ocr: u16, top: u16) -> Option<bool> {
+pub(super) fn oc_level(
+    wave: Waveform,
+    com: u8,
+    tcnt: u16,
+    down: bool,
+    ocr: u16,
+    top: u16,
+) -> Option<bool> {
     let high = match (wave, com & 0x03) {
         (Waveform::NonPwm, _) | (_, 0) | (_, 1) => return None,
         (Waveform::Fast, _) => tcnt <= ocr,
-        (Waveform::PhaseCorrect, _) => ocr >= top || tcnt < ocr,
+        (Waveform::PhaseCorrect, _) => ocr >= top || tcnt < ocr || (down && tcnt == ocr),
     };
     Some(if com & 0x03 == 3 { !high } else { high })
 }
@@ -81,35 +91,49 @@ impl Avr {
         put(
             PORT_D,
             6,
-            oc_level(w0, self.tccr0a >> 6, t0, u16::from(self.ocr0a), 0xFF),
+            oc_level(w0, self.tccr0a >> 6, t0, false, u16::from(self.ocr0a), 0xFF),
         );
         put(
             PORT_D,
             5,
-            oc_level(w0, self.tccr0a >> 4, t0, u16::from(self.ocr0b), 0xFF),
+            oc_level(w0, self.tccr0a >> 4, t0, false, u16::from(self.ocr0b), 0xFF),
         );
         let (w1, top1, t1) = (self.t1.waveform(), self.t1.top(), self.t1.tcnt);
         put(
             PORT_B,
             1,
-            oc_level(w1, self.t1.tccra >> 6, t1, self.t1.ocra, top1),
+            oc_level(w1, self.t1.tccra >> 6, t1, self.t1.down, self.t1.ocra, top1),
         );
         put(
             PORT_B,
             2,
-            oc_level(w1, self.t1.tccra >> 4, t1, self.t1.ocrb, top1),
+            oc_level(w1, self.t1.tccra >> 4, t1, self.t1.down, self.t1.ocrb, top1),
         );
         let w2 = wave_8bit(self.tccr2a, self.tccr2b);
         let t2 = u16::from(self.tcnt2);
         put(
             PORT_B,
             3,
-            oc_level(w2, self.tccr2a >> 6, t2, u16::from(self.ocr2a), 0xFF),
+            oc_level(
+                w2,
+                self.tccr2a >> 6,
+                t2,
+                self.t2_down,
+                u16::from(self.ocr2a),
+                0xFF,
+            ),
         );
         put(
             PORT_D,
             3,
-            oc_level(w2, self.tccr2a >> 4, t2, u16::from(self.ocr2b), 0xFF),
+            oc_level(
+                w2,
+                self.tccr2a >> 4,
+                t2,
+                self.t2_down,
+                u16::from(self.ocr2b),
+                0xFF,
+            ),
         );
         (mask, level)
     }
@@ -159,29 +183,46 @@ mod tests {
     #[test]
     fn fast_pwm_duty_is_ocr_plus_one_over_256() {
         let high = (0..=255u16)
-            .filter(|t| oc_level(Waveform::Fast, 2, *t, 200, 0xFF) == Some(true))
+            .filter(|t| oc_level(Waveform::Fast, 2, *t, false, 200, 0xFF) == Some(true))
             .count();
         assert_eq!(high, 201);
         // OCR = TOP holds the pad high; inverting mode is the complement.
-        assert!((0..=255u16).all(|t| oc_level(Waveform::Fast, 2, t, 0xFF, 0xFF) == Some(true)));
-        assert_eq!(oc_level(Waveform::Fast, 3, 10, 200, 0xFF), Some(false));
-    }
-
-    #[test]
-    fn phase_correct_duty_is_ocr_over_top() {
-        let high = (0..=255u16)
-            .filter(|t| oc_level(Waveform::PhaseCorrect, 2, *t, 200, 0xFF) == Some(true))
-            .count();
-        assert_eq!(high, 200);
         assert!(
-            (0..=255u16).all(|t| oc_level(Waveform::PhaseCorrect, 2, t, 0, 0xFF) == Some(false))
+            (0..=255u16).all(|t| oc_level(Waveform::Fast, 2, t, false, 0xFF, 0xFF) == Some(true))
+        );
+        assert_eq!(
+            oc_level(Waveform::Fast, 3, 10, false, 200, 0xFF),
+            Some(false)
         );
     }
 
     #[test]
+    fn phase_correct_duty_is_ocr_over_top() {
+        // One dual-slope cycle: 0..=255 up, then 254..=1 down (510 clocks).
+        let cycle = || {
+            (0..=255u16)
+                .map(|t| (t, false))
+                .chain((1..=254u16).rev().map(|t| (t, true)))
+        };
+        let high = cycle()
+            .filter(|(t, d)| oc_level(Waveform::PhaseCorrect, 2, *t, *d, 200, 0xFF) == Some(true))
+            .count();
+        assert_eq!(high, 400, "2 * OCR of 2 * TOP clocks");
+        let mid = cycle()
+            .filter(|(t, d)| oc_level(Waveform::PhaseCorrect, 2, *t, *d, 128, 0xFF) == Some(true))
+            .count();
+        assert_eq!(mid, 256, "analogWrite(128): 256 of 510");
+        assert!(
+            cycle().all(|(t, d)| oc_level(Waveform::PhaseCorrect, 2, t, d, 0, 0xFF) == Some(false))
+        );
+        assert!(cycle()
+            .all(|(t, d)| oc_level(Waveform::PhaseCorrect, 2, t, d, 0xFF, 0xFF) == Some(true)));
+    }
+
+    #[test]
     fn disconnected_toggle_and_non_pwm_leave_the_pad_to_port() {
-        assert_eq!(oc_level(Waveform::Fast, 0, 0, 10, 0xFF), None);
-        assert_eq!(oc_level(Waveform::Fast, 1, 0, 10, 0xFF), None);
-        assert_eq!(oc_level(Waveform::NonPwm, 2, 0, 10, 0xFF), None);
+        assert_eq!(oc_level(Waveform::Fast, 0, 0, false, 10, 0xFF), None);
+        assert_eq!(oc_level(Waveform::Fast, 1, 0, false, 10, 0xFF), None);
+        assert_eq!(oc_level(Waveform::NonPwm, 2, 0, false, 10, 0xFF), None);
     }
 }

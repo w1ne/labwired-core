@@ -262,6 +262,20 @@
     "behavior": true,
     "excluded": 0,
     "level": 1,
+    "name": "esp32-devkitc-32e-gpio-smoke",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "esp32-devkitc-32e-uart1",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
     "name": "stm32f401cdu6",
     "reg_match": 0
   },
@@ -332,6 +346,13 @@
     "behavior": false,
     "excluded": 0,
     "level": 0,
+    "name": "stm32f103rb-nucleo-bme280-smoke",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
     "name": "stm32f103c4",
     "reg_match": 0
   },
@@ -368,6 +389,13 @@
     "excluded": 0,
     "level": 0,
     "name": "stm32f103r6h",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "stm32f103r8",
     "reg_match": 0
   },
   {
@@ -560,6 +588,13 @@
     "reg_match": 0
   },
   {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "stm32g431rb",
+    "reg_match": 0
+  },
+  {
     "behavior": true,
     "excluded": 0,
     "level": 1,
@@ -641,6 +676,13 @@
     "excluded": 0,
     "level": 1,
     "name": "atmega328p",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "atmega328pb",
     "reg_match": 0
   },
   {
@@ -788,6 +830,13 @@
     "excluded": 0,
     "level": 1,
     "name": "pic24f16ka102",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "ch32v003f4p6",
     "reg_match": 0
   }
 ]
