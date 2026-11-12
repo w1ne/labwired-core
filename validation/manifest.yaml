@@ -2720,7 +2720,7 @@ boards:
     # the live capture reads the clock-gated window as bus junk (0x0008fe10).
     # This acknowledges model drift, NOT a recapture.
     # Re-stamped 2026-11-08 (round 347) over both changes above after merging main.
-    drift_ack_digest: afcf8ea391f732b54fbedeea7e983b71a7ca9cc41a2c4000073c9ab7b0f93971
+    drift_ack_digest: 1944a9049b46b8e2228ef7e039be2307191447fefa78294768ee88f18a0e1766
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -3597,7 +3597,16 @@ boards:
     # capture in lib.rs). The C3 factory does not use that classic sleep-reboot
     # path; no C3 register map or captured reset-state window changes.
     # ACK, NOT A CAPTURE.
-    drift_ack: 2026-11-10
+    # 2026-11-12 (#1828 feat(esp32p4) P4X-C5 UART smoke): watched shared
+    # esp_uart.rs gained a `uart_sclk_hz` field (default UART_SCLK_HZ = 80 MHz)
+    # and a `with_uart_sclk_hz` builder. Only the ESP32-P4 factory
+    # (peripherals/esp32p4.rs) calls the builder; every other constructor keeps
+    # 80 MHz, so `cycles_per_byte` is arithmetically identical for this board.
+    # The other change is a module doc comment. No register map, reset value
+    # or captured reset-state window changes. On the merged tree:
+    # esp32c3_reset_conformance 2/2, esp32s3_reset_conformance 1/1, lib
+    # esp_uart 21/21. ACK, NOT A CAPTURE.
+    drift_ack: 2026-11-12
 
   - id: nucleo-l476rg
     # 2026-11-05: reviewed G0 DMA extension in shared UART/DMA source. Strict
@@ -8996,8 +9005,17 @@ boards:
     # models gained program/erase + WEL behaviour so stock Preferences/NVS
     # keeps its writes. This is not an S3 reset-state recapture; the nine
     # captured S3 windows are unchanged. ACK, NOT A CAPTURE.
-    drift_ack: 2026-11-10
-    drift_ack_digest: 8e49d6b37a9866225e56f0d77d4119d43db516eb2aa5383290383fbb0915aa50
+    # 2026-11-12 (#1828 feat(esp32p4) P4X-C5 UART smoke): watched shared
+    # esp_uart.rs gained a `uart_sclk_hz` field (default UART_SCLK_HZ = 80 MHz)
+    # and a `with_uart_sclk_hz` builder. Only the ESP32-P4 factory
+    # (peripherals/esp32p4.rs) calls the builder; every other constructor keeps
+    # 80 MHz, so `cycles_per_byte` is arithmetically identical for this board.
+    # The other change is a module doc comment. No register map, reset value
+    # or captured reset-state window changes. On the merged tree:
+    # esp32c3_reset_conformance 2/2, esp32s3_reset_conformance 1/1, lib
+    # esp_uart 21/21. ACK, NOT A CAPTURE.
+    drift_ack: 2026-11-12
+    drift_ack_digest: 124655146696d66a9c0d4204e91cb80075d681b8d4346d8f1a062348e417acc4
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.
