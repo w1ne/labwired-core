@@ -33,6 +33,39 @@ memory_regions:
     image_env: "LABWIRED_RP2040_BOOTROM"
 # The RP2040 HAL drives register setup through atomic SET/CLR/XOR aliases.
 atomic_register_aliases: true
+# Bank-0 pads (datasheet §1.4). Label form matches the Pico pinout / playground emit (GP0..GP29).
+pins:
+  GP0: { gpio: sio, bit: 0 }
+  GP1: { gpio: sio, bit: 1 }
+  GP2: { gpio: sio, bit: 2 }
+  GP3: { gpio: sio, bit: 3 }
+  GP4: { gpio: sio, bit: 4 }
+  GP5: { gpio: sio, bit: 5 }
+  GP6: { gpio: sio, bit: 6 }
+  GP7: { gpio: sio, bit: 7 }
+  GP8: { gpio: sio, bit: 8 }
+  GP9: { gpio: sio, bit: 9 }
+  GP10: { gpio: sio, bit: 10 }
+  GP11: { gpio: sio, bit: 11 }
+  GP12: { gpio: sio, bit: 12 }
+  GP13: { gpio: sio, bit: 13 }
+  GP14: { gpio: sio, bit: 14 }
+  GP15: { gpio: sio, bit: 15 }
+  GP16: { gpio: sio, bit: 16 }
+  GP17: { gpio: sio, bit: 17 }
+  GP18: { gpio: sio, bit: 18 }
+  GP19: { gpio: sio, bit: 19 }
+  GP20: { gpio: sio, bit: 20 }
+  GP21: { gpio: sio, bit: 21 }
+  GP22: { gpio: sio, bit: 22 }
+  GP23: { gpio: sio, bit: 23 }
+  GP24: { gpio: sio, bit: 24 }
+  GP25: { gpio: sio, bit: 25 }
+  GP26: { gpio: sio, bit: 26 }
+  GP27: { gpio: sio, bit: 27 }
+  GP28: { gpio: sio, bit: 28 }
+  GP29: { gpio: sio, bit: 29 }
+
 peripherals:
   # SYSINFO (datasheet §2.21). Read-only identity block; the only load-bearing
   # register is CHIP_ID, which the pico-sdk USB errata-E5 workaround reads (from

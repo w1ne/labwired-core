@@ -126,6 +126,7 @@ fn world(with_can: bool) -> World {
             })
             .collect(),
         interconnects,
+        cosim_models: Vec::new(),
         rf: None,
     };
     let system_path = repo_root().join("crates/core/tests/fixtures/f103-can-world-system.yaml");

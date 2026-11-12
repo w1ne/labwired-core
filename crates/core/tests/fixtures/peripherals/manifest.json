@@ -2461,7 +2461,7 @@
       "device_type": "led-matrix",
       "label": "MAX7219 8×8 LED Matrix",
       "summary": "8×8 LED matrix driven by a MAX7219 serial display driver over SPI.",
-      "detail": "The common 8×8 dot-matrix module built around a MAX7219 common-cathode display driver. Firmware clocks 16 bits per transaction — an address byte then a data byte — and pulses CS/LOAD to latch. Digit registers 0x01–0x08 are the eight matrix rows, so digit RAM is the framebuffer; the model also tracks decode mode, intensity, scan limit, shutdown and display test, blanking or flooding the readback the way the real part drives the panel. A 16-bit write is latched or it never happened: an odd byte left in the shifter when CS moves is discarded rather than decoded. NOT modelled: cascading (DOUT), intensity as luminance, and scan limit as multiplexing — all eight rows are published whatever it says.",
+      "detail": "The common 8×8 dot-matrix module built around a MAX7219 common-cathode display driver. Firmware clocks 16 bits per transaction — an address byte then a data byte — and pulses CS/LOAD to latch. Digit registers 0x01–0x08 are the eight matrix rows, so digit RAM is the framebuffer; the model also tracks decode mode, intensity, scan limit, shutdown and display test, blanking or flooding the readback the way the real part drives the panel. CLK shifts the 16-bit DOUT register regardless of LOAD; LOAD rising latches its last 16 bits without clearing it. Set chain_index explicitly for each module (0 nearest MOSI); topology is not inferred. The Uno software-SPI bridge requires DIN D11/PB3 and CLK D13/PB5; LOAD uses cs_pin. Sub-byte transfers and the half-cycle DOUT delay are not modeled. NOT modelled: intensity as luminance, and scan limit as multiplexing — all eight rows are published whatever it says.",
       "transport": "spi",
       "category": "spi",
       "config_keys": [
@@ -2469,6 +2469,11 @@
           "name": "cs_pin",
           "ty": "str",
           "doc": "CS/LOAD GPIO pin, wired as SPI chip-select (e.g. \"PA4\"). Defaults to PA4."
+        },
+        {
+          "name": "chain_index",
+          "ty": "int",
+          "doc": "Daisy-chain position along a shared CS (0 = closest to MOSI / first in the DOUT→DIN chain). Set explicitly for each module; DOUT→DIN topology is not inferred. Defaults to 0."
         },
         {
           "name": "powered",
@@ -3129,6 +3134,105 @@
           "min": 0.0,
           "max": 4294967295.0,
           "default": 0.0
+        }
+      ]
+    },
+    {
+      "device_type": "bmi270_spi",
+      "label": "BMI270 native SPI IMU",
+      "summary": "Native four-wire BMI270 with real CS/dummy-byte framing, verified configuration upload and nominal motion sampling.",
+      "detail": "Exact initialization images, register readback, nominal ODR and push-pull DRDY. FIFO, auxiliary bus, feature microcode execution, self-test, analog noise/filter response, open-drain/tri-state INT and runtime snapshots are not modeled.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "Required active-low chip-select GPIO."
+        },
+        {
+          "name": "int1_pin",
+          "ty": "str",
+          "doc": "Optional INT1 GPIO; nominal push-pull DRDY routing."
+        },
+        {
+          "name": "int2_pin",
+          "ty": "str",
+          "doc": "Optional INT2 GPIO; nominal push-pull DRDY routing."
+        },
+        {
+          "name": "spi_mode",
+          "ty": "int",
+          "doc": "Optional edge sampling: modes 0 and 3 only. Omit for byte-transaction controllers."
+        },
+        {
+          "name": "powered",
+          "ty": "bool",
+          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the part then ignores its bus entirely and reports the dark/idle state it has on a bench."
+        },
+        {
+          "name": "supply_rails",
+          "ty": "object",
+          "doc": "Optional 1..8 named rails, each {min_v,max_v}; all finite inclusive ranges must be observed before operation. Routed supplies reset volatile state on cutoff/restore; no damage model."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "ax",
+          "label": "Accel X",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 0.0
+        },
+        {
+          "key": "ay",
+          "label": "Accel Y",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 0.0
+        },
+        {
+          "key": "az",
+          "label": "Accel Z",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 0.0
+        },
+        {
+          "key": "gx",
+          "label": "Gyro X",
+          "unit": "°/s",
+          "min": -2000.0,
+          "max": 2000.0,
+          "default": 0.0
+        },
+        {
+          "key": "gy",
+          "label": "Gyro Y",
+          "unit": "°/s",
+          "min": -2000.0,
+          "max": 2000.0,
+          "default": 0.0
+        },
+        {
+          "key": "gz",
+          "label": "Gyro Z",
+          "unit": "°/s",
+          "min": -2000.0,
+          "max": 2000.0,
+          "default": 0.0
+        },
+        {
+          "key": "temp",
+          "label": "Temperature",
+          "unit": "°C",
+          "min": -41.0,
+          "max": 87.0,
+          "default": 23.0
         }
       ]
     },

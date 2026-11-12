@@ -39,9 +39,9 @@
 //! They differ in exactly one respect, and the record shape carries it
 //! explicitly rather than hiding it:
 //!
-//! * A controller-hosted device is identified by WHERE it answers. It states
-//!   its address (or chip-select) and the controller states the bus; the
-//!   manifest name is joined on afterwards by matching that placement.
+//! * A controller-hosted device can state its stamped manifest id; this keeps
+//!   SPI cascade modules distinct when they share a chip-select. Without a
+//!   stamp, its address (or chip-select) and controller identify its placement.
 //! * A bus-resident device has no address to be identified by, so it carries
 //!   the `external_devices:` id it was stamped with when it was attached, and
 //!   the join matches on that. This is not a fallback or a guess: the id is the
@@ -395,9 +395,8 @@ impl SystemBus {
             if filter.is_some_and(|f| bus != Some(f)) {
                 return;
             }
-            // A device that states its own `external_devices:` id is joined by
-            // that id — it has no address to be identified by, and the id is
-            // the author's own text stamped onto the model at attach.
+            // Prefer the author's own id stamped onto the model at attach.
+            // Some devices have no address; SPI cascade modules share one CS.
             let matched = match d.declared_id {
                 // A declaration that fans out to several models (`instance_id`)
                 // is claimed by all of them: `used` exists to stop two DIFFERENT
