@@ -16,6 +16,7 @@
 //!       netlist: ./rc.cir          # or inline: netlist_text: |
 //!       vdd: 3.3
 //!       substeps: 10
+//!       max_unknowns: 128          # optional integer 1..512; default 128
 //!       integration: be            # be | trap
 //!       probes:  { v_out: "v(out)" }
 //!       sources: { gpio: Vgpio, temperature_c: Rntc }
@@ -64,7 +65,7 @@ use serde_yaml::Value;
 use crate::cosim::{CosimAdapter, CosimInputKind, CosimSignalValue, CosimStep, CosimStepResult};
 use crate::{SimResult, SimulationError};
 
-use super::mna::Solver;
+use super::mna::{Solver, HARD_MAX_UNKNOWNS, MAX_UNKNOWNS};
 use super::netlist::{parse_netlist, AnalogError, NodeRef};
 use super::trace::{AnalogChannel, AnalogTrace, AnalogTraceHandle};
 
@@ -152,6 +153,8 @@ pub struct AnalogConfig {
     pub vdd: f64,
     /// Internal solver steps per co-simulation step.
     pub substeps: u32,
+    /// Explicit resource bound for nodes plus branch-current unknowns.
+    pub max_unknowns: usize,
     /// Integration rule.
     pub integration: Integration,
     /// LabWired output name → node voltage or supported element-current expression.
@@ -171,6 +174,7 @@ impl Default for AnalogConfig {
         Self {
             vdd: 3.3,
             substeps: 10,
+            max_unknowns: MAX_UNKNOWNS,
             integration: Integration::BackwardEuler,
             probes: BTreeMap::new(),
             sources: BTreeMap::new(),
@@ -202,6 +206,17 @@ impl AnalogConfig {
                 ));
             }
             parsed.substeps = substeps as u32;
+        }
+        if let Some(value) = config.get("max_unknowns") {
+            let max = value
+                .as_u64()
+                .filter(|v| (1..=HARD_MAX_UNKNOWNS as u64).contains(v))
+                .ok_or_else(|| {
+                    AnalogError::Config(format!(
+                        "config.max_unknowns must be an integer in 1..={HARD_MAX_UNKNOWNS}"
+                    ))
+                })?;
+            parsed.max_unknowns = max as usize;
         }
         if let Some(value) = config.get("integration") {
             let text = value.as_str().ok_or_else(|| {
@@ -311,7 +326,7 @@ impl AnalogCosimAdapter {
     /// operating point and seed the trace with it.
     pub fn from_netlist(netlist: &str, cfg: &AnalogConfig) -> Result<Self, AnalogError> {
         let circuit = parse_netlist(netlist)?;
-        let solver = Solver::new(circuit, cfg.integration)?;
+        let solver = Solver::new_with_max_unknowns(circuit, cfg.integration, cfg.max_unknowns)?;
 
         let mut probes = Vec::with_capacity(cfg.probes.len());
         for (name, expression) in &cfg.probes {

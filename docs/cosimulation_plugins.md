@@ -579,7 +579,7 @@ as SPICE does. Nonzero BJT `RB`, `RC`, and `RE` add `<element>#base`,
 `<element>#collector`, and `<element>#emitter` nodes, respectively. Nonzero
 JFET and MOSFET drain/source terminal resistances add `<element>#drain` and
 `<element>#source`. These
-nodes count against the 128-unknown ceiling and can be probed.
+nodes count against the configured unknown limit and can be probed.
 
 ### Solver
 
@@ -590,10 +590,17 @@ nodes count against the 128-unknown ceiling and can be probed.
   source or switch change is taken with backward Euler, as SPICE does at a
   breakpoint, so an edge does not leave trapezoidal a half-step behind.
 - Fixed internal step `h = step_ns / substeps`. Dense LU, own implementation.
-  `N` nodes + `M` branch currents is capped at 128; a bigger circuit is an
-  error naming the ngspice adapter. Extracted PCB copper resistance retains
-  its terminal nodes under this same bound. The matrix and elimination-factor
-  buffers together use at most 256 KiB; factorization remains `O(n³)`.
+  `N` nodes + `M` branch currents defaults to a limit of 128. Set the analog
+  model's `config.max_unknowns` to an integer from 1 through 512 to select an
+  explicit bound. The default remains 128 for old manifests and standalone
+  solver callers. Values outside the range, nonintegers, nulls and nonfinite
+  values are errors; a circuit above its selected limit is refused before any
+  dense matrix allocation. The same config and constructor serve CLI, WASM,
+  standalone and shared-world sessions. Extracted PCB copper resistance keeps
+  its terminal nodes under this bound. Two matrix buffers use at most 256 KiB
+  at 128 unknowns or 4 MiB at 512; factorization remains `O(n³)`. Opting in changes
+  circuit admission, not equations, integration or floating-point order.
+  Larger circuits still require the ngspice adapter.
 - The solver caches elimination pivots and multipliers until a switch, step
   length, or integration rule changes. Source and reactive-history changes
   refresh only the right-hand side. Multipliers replay in the original order,

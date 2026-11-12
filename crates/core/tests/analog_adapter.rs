@@ -29,6 +29,7 @@ mod analog {
             trace: vec!["v(in)".to_string(), "i(Vgpio)".to_string()],
             trace_samples: 20_000,
             thermistors: BTreeMap::new(),
+            max_unknowns: labwired_core::analog::MAX_UNKNOWNS,
         }
     }
 
