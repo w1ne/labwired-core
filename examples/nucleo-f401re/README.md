@@ -80,3 +80,12 @@ the firmware-visible ADC data register:
 ```sh
 cargo test -p labwired-core --test cosim_nucleo_f401_analog nucleo_f401re_mosfet_tox_gate_charge_reaches_adc1_with_unrelated_diode
 ```
+
+[`analog-bjt-high-injection.yaml`](analog-bjt-high-injection.yaml) routes a generic
+Gummel–Poon NPN with IKF/IKR/NKF rolloff and a matched no-rolloff control through PA2/PA3
+(ADC1_IN2/IN3), beside the unrelated Shockley diode on PA0. The test checks independent
+collector load lines at three base drives and reads all three routes through ADC1:
+
+```sh
+cargo test -p labwired-core --test cosim_nucleo_f401_analog nucleo_f401re_bjt_high_injection_reaches_adc1_with_unrelated_diode
+```
