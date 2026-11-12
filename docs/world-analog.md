@@ -111,10 +111,45 @@ switch when the MCU output is high impedance. It is also false while reset is
 held. Different controllers can therefore have the same pad name and different
 rails without sharing a driver or forcing a released pin to zero volts.
 The netlist still owns output resistance, leakage, protection, and other pad
-physics; this route does not invent them. GPIO input Schmitt thresholds still
-use nominal descriptor VDD in this patch. The existing VDDA router also refuses
-a zero-volt ADC reference. A separate power-routing follow-up must address both
-before validating a variable-rail or fully powered-off native circuit.
+physics; this route does not invent them.
+
+Numeric GPIO inputs use the same boundary's routed VDD. The router applies
+supply observations before pad observations, separately for each MCU. A board
+with no routed VDD keeps its declared `io_voltage_v` reference. An absent,
+non-finite or non-positive routed rail has no valid logic high; it does not
+silently fall back to the nominal supply. Boolean input routes retain their
+existing digital meaning.
+
+Input limits support the datasheet's affine form:
+
+```yaml
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.28
+  vih: 0.31
+  vil_offset_v: 0.1
+  vih_offset_v: 0.8
+```
+
+These example coefficients come from the [AT32F421 datasheet, Ver 2.03,
+Table 32](https://www.arterychip.com/download/DS/DS_AT32F421_V2.03_EN.pdf), printed
+page 44: VIL is `0.28 * VDD + 0.1 V`; VIH is `0.31 * VDD + 0.8 V`.
+At VDD 2.1 V the guaranteed limits are 0.688 / 1.451 V, and at 3.3 V they are
+1.024 / 1.823 V. The band between them preserves the previous modeled level;
+these are guaranteed DC limits, not measured switching points. The fixture
+using these coefficients on an F401 bus tests generic routing only.
+
+Offsets default to zero and are omitted when serializing ratio-only descriptors.
+Slopes must be finite with `0 < vil < vih < 1`; offsets must be finite with
+`0 <= vil_offset_v <= vih_offset_v`. These conditions keep the limits ordered
+for every positive supply. The absolute NRST limits remain independent of VDD.
+
+`board.power.vdda_volts` accepts a finite non-negative rail. Every peripheral
+that declares configurable ADC reference support must accept the observation.
+A model may accept zero as an unpowered state; one accepting ADC cannot hide
+another retaining a stale reference. A refusal stops the co-simulation step
+with an explicit ADC-reference error. This route does not invent conversion
+behavior for an unpowered model.
 
 ## Descriptor-owned external reset
 

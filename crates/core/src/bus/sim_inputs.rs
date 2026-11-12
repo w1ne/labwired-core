@@ -98,16 +98,20 @@ impl SystemBus {
     /// Drive the board's shared VDDA / ADC reference in volts. Every ADC
     /// peripheral that declares reference support takes the same rail value.
     pub(crate) fn seed_adc_reference_voltage(&mut self, volts: f64) -> bool {
-        if !volts.is_finite() || volts <= 0.0 {
+        if !volts.is_finite() || volts < 0.0 {
             return false;
         }
-        let mut accepted = false;
+        let mut found = false;
+        let mut accepted = true;
         for peripheral in &mut self.peripherals {
             if peripheral.dev.supports_adc_reference_voltage() {
-                accepted |= peripheral.dev.set_adc_reference_voltage_v(volts);
+                found = true;
+                // Every declared consumer must accept the rail. In particular,
+                // zero may pass only when each model supports being unpowered.
+                accepted &= peripheral.dev.set_adc_reference_voltage_v(volts);
             }
         }
-        accepted
+        found && accepted
     }
 
     fn seed_adc_at(&mut self, idx: usize, channel: u8, millivolts: u16) -> bool {

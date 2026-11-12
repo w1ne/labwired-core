@@ -69,7 +69,12 @@ fn datasheet_transcriptions() {
         assert_eq!(desc.io_voltage_v, Some(volts), "{chip}");
         assert_eq!(
             desc.gpio_input_thresholds,
-            Some(GpioInputThresholds { vil, vih }),
+            Some(GpioInputThresholds {
+                vil,
+                vih,
+                vil_offset_v: 0.0,
+                vih_offset_v: 0.0
+            }),
             "{chip}"
         );
     }
@@ -127,4 +132,60 @@ fn malformed_levels_are_refused_when_the_descriptor_loads() {
     let text = serde_yaml::to_string(&ok).unwrap();
     assert!(text.contains("io_voltage_v: 3.3"), "{text}");
     assert!(text.contains("vih: 0.7"), "{text}");
+}
+
+#[test]
+fn affine_gpio_offsets_are_explicit_and_ratio_only_serialization_is_unchanged() {
+    let ratio: GpioInputThresholds = serde_yaml::from_str("vil: 0.3\nvih: 0.7\n").unwrap();
+    let ratio_value = serde_json::to_value(ratio).unwrap();
+    assert_eq!(ratio_value, serde_json::json!({"vil": 0.3, "vih": 0.7}));
+    let affine: GpioInputThresholds =
+        serde_yaml::from_str("vil: 0.28\nvih: 0.31\nvil_offset_v: 0.1\nvih_offset_v: 0.8\n")
+            .unwrap();
+    let affine_value = serde_json::to_value(affine).unwrap();
+    assert_eq!(
+        affine_value,
+        serde_json::json!({"vil": 0.28, "vih": 0.31, "vil_offset_v": 0.1, "vih_offset_v": 0.8})
+    );
+    let restored: GpioInputThresholds =
+        serde_yaml::from_str(&serde_yaml::to_string(&affine).unwrap()).unwrap();
+    assert_eq!(restored, affine);
+    let upper_only: GpioInputThresholds =
+        serde_yaml::from_str("vil: 0.28\nvih: 0.31\nvih_offset_v: 0.8\n").unwrap();
+    assert_eq!(
+        serde_json::to_value(upper_only).unwrap(),
+        serde_json::json!({"vil": 0.28, "vih": 0.31, "vih_offset_v": 0.8})
+    );
+}
+
+#[test]
+fn malformed_affine_gpio_offsets_are_refused() {
+    for suffix in [
+        "vil_offset_v: -0.1\nvih_offset_v: 0.8\n",
+        "vil_offset_v: 0.8\nvih_offset_v: 0.1\n",
+        "vil_offset_v: 0.1\n",
+        "vil_offset_v: .nan\nvih_offset_v: 0.8\n",
+        "vil_offset_v: 0.1\nvih_offset_v: .inf\n",
+        "vil_offset_v: 0.1\nvih_offset_v: -.inf\n",
+        "vil_offset_v: null\nvih_offset_v: 0.8\n",
+        "vil_offset_v: '0.1'\nvih_offset_v: 0.8\n",
+        "vil_offset_v: 0.1\nvih_offset: 0.8\n",
+    ] {
+        let yaml = format!("vil: 0.28\nvih: 0.31\n{suffix}");
+        assert!(
+            serde_yaml::from_str::<GpioInputThresholds>(&yaml).is_err(),
+            "accepted malformed thresholds: {yaml}"
+        );
+    }
+    for yaml in [
+        "vil: .nan\nvih: 0.31\nvil_offset_v: 0.1\nvih_offset_v: 0.8\n",
+        "vil: 0.28\nvih: .inf\nvil_offset_v: 0.1\nvih_offset_v: 0.8\n",
+        "vil: 0.31\nvih: 0.28\nvil_offset_v: 0.1\nvih_offset_v: 0.8\n",
+        "vil: 0.28\nvih: 0.28\nvil_offset_v: 0.1\nvih_offset_v: 0.8\n",
+    ] {
+        assert!(
+            serde_yaml::from_str::<GpioInputThresholds>(yaml).is_err(),
+            "accepted malformed slopes: {yaml}"
+        );
+    }
 }
