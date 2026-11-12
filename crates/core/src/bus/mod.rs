@@ -380,7 +380,9 @@ pub struct MemAlias {
 }
 
 pub struct SystemBus {
-    pub(crate) supply_domains: crate::peripherals::components::supply_domain::SupplyDomains,
+    /// Keep cold supply-routing state behind one pointer so new routing metadata
+    /// does not enlarge SystemBus and perturb CPU store code generation.
+    pub(crate) supply_domains: Box<crate::peripherals::components::supply_domain::SupplyDomains>,
     pub flash: LinearMemory,
     /// Violation record + counts + mirrored PC/cycle for the policy gate.
     pub(crate) memory_policy: crate::bus::memory_policy::MemoryPolicyState,
