@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 from pathlib import Path
 import re
 import struct
@@ -34,7 +35,30 @@ def guest(path: Path) -> None:
     path.write_bytes((header + segment).ljust(offset, b"\0") + code)
 
 
-def profile(label: str, source: Path, expected: str, out: Path) -> None:
+def build_fixture(source: Path, out: Path) -> None:
+    source, out = source.resolve(), out.resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    actual = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=source, text=True).strip()
+    if actual != BASE:
+        raise RuntimeError(f"Fixture source is not exact base: {actual}")
+    sys.path.insert(0, str(source / "scripts/perf"))
+    import board_perf
+    built, skipped = board_perf.build_fixtures({"esp32"})
+    if skipped or set(built) != {"esp32"}:
+        raise RuntimeError(f"Canonical ESP32 fixture did not build: {skipped}")
+    fixture = out / "perf-spin-esp32.elf"
+    shutil.copy2(built["esp32"], fixture)
+    dirty = subprocess.check_output(["git", "status", "--porcelain"], cwd=source, text=True).strip()
+    if dirty:
+        raise RuntimeError(f"Canonical fixture changed tracked source: {dirty}")
+    record = {"source_sha": actual, "fixture_sha256": digest(fixture),
+              "xtensa_rustc": subprocess.check_output(["rustc", "+esp", "-Vv"], cwd=source, text=True),
+              "fixture_lock_sha256": digest(source / "crates/firmware-perf-spin-xtensa/Cargo.lock")}
+    (out / "fixture.json").write_text(json.dumps(record, indent=2) + "\n")
+    print(json.dumps(record, indent=2), flush=True)
+
+
+def profile(label: str, source: Path, expected: str, out: Path, supplied_fixture: Path | None = None) -> None:
     source, out = source.resolve(), out.resolve()
     out.mkdir(parents=True, exist_ok=True)
     actual = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=source, text=True).strip()
@@ -44,14 +68,15 @@ def profile(label: str, source: Path, expected: str, out: Path) -> None:
     if dirty:
         raise RuntimeError(f"Source is dirty: {dirty}")
     binary = Path(os.environ["CARGO_TARGET_DIR"]) / "release/labwired"
-    fixture = out / "diagnostic-loop.elf"
-    guest(fixture)
+    fixture = supplied_fixture.resolve() if supplied_fixture else out / "diagnostic-loop.elf"
+    if supplied_fixture is None:
+        guest(fixture)
     record = {
         "label": label,
         "source_sha": actual,
         "binary_sha256": digest(binary),
         "fixture_sha256": digest(fixture),
-        "fixture_kind": "custom diagnostic loop, not the canonical throughput acceptance fixture",
+        "fixture_kind": "canonical firmware-perf-spin-xtensa ESP32 guest" if supplied_fixture else "custom diagnostic loop, not the canonical throughput acceptance fixture",
         "rustc": subprocess.check_output(["rustc", "-Vv"], cwd=source, text=True),
         "feature_set": "event-scheduler",
         "profile": "unchanged workspace release profile",
@@ -73,7 +98,7 @@ def profile(label: str, source: Path, expected: str, out: Path) -> None:
         if run.returncode or not match:
             raise RuntimeError(f"{label} {steps}: exit {run.returncode}; no valid completed profile")
         text = run.stdout + run.stderr
-        completion = f"reached --max-steps {steps}; pc=0x400d0006"
+        completion = f"reached --max-steps {steps}; pc=" if supplied_fixture else f"reached --max-steps {steps}; pc=0x400d0006"
         if completion not in text or "[batched]" in text:
             raise RuntimeError(f"{label} {steps}: did not prove the requested step count and loop PC")
         record["samples"].append({"steps": steps, "ir": int(match.group(1).replace(",", "")), "command": cmd})
@@ -109,7 +134,9 @@ def compare(out: Path) -> None:
 
 
 if __name__ == "__main__":
-    if sys.argv[1] == "compare":
+    if sys.argv[1] == "fixture":
+        build_fixture(Path(sys.argv[2]), Path(sys.argv[3]))
+    elif sys.argv[1] == "compare":
         compare(Path(sys.argv[2]).resolve())
     else:
-        profile(sys.argv[1], Path(sys.argv[2]), sys.argv[3], Path(sys.argv[4]))
+        profile(sys.argv[1], Path(sys.argv[2]), sys.argv[3], Path(sys.argv[4]), Path(sys.argv[5]) if len(sys.argv) > 5 else None)
