@@ -922,7 +922,8 @@ impl Avr {
     /// GPIO-CS and byte-aligned software SPI for Uno-compatible PORTB.
     ///
     /// Supported wiring is DIN=D11/PB3, CLK=D13/PB5, and any configured LOAD
-    /// pin. This is not the common LedControl(12, 11, 10, ...) wiring; use
+    /// pin. DIN and CLK must both be configured as outputs in DDRB.
+    /// This is not the common LedControl(12, 11, 10, ...) wiring; use
     /// LedControl(11, 13, 10, ...) for this bridge. LOAD updates also apply
     /// with SPE=1, so a hardware-SPDR transaction latches on its final GPIO
     /// write. Sub-byte transfers are outside this bridge's byte-level scope.
@@ -935,7 +936,27 @@ impl Avr {
             self.soft_spi_shift = 0;
             self.soft_spi_bits = 0;
         }
-        if !matches!(self.model, AvrModel::Atmega328p | AvrModel::Atmega328pb) || addr != 0x25 {
+        if !matches!(self.model, AvrModel::Atmega328p | AvrModel::Atmega328pb) {
+            return;
+        }
+        const DDRB: u16 = AVR_PINB + 1;
+        const PORTB: u16 = AVR_PINB + 2;
+        const OUTPUTS: u8 = (1 << 3) | (1 << 5);
+        // PORT writes on inputs control pull-ups, not this output-only bridge.
+        // Read the CPU-owned DDR already mirrored above; no extra bus walk.
+        if self.io[usize::from(DDRB - 0x20)] & OUTPUTS != OUTPUTS {
+            self.soft_spi_shift = 0;
+            self.soft_spi_bits = 0;
+            self.soft_spi_sck = false;
+            return;
+        }
+        if addr == DDRB {
+            // Establish the level when GPIO ownership is acquired. A later
+            // PORT write repeating that high level must not invent a CLK edge.
+            self.soft_spi_sck = self.io[usize::from(PORTB - 0x20)] & (1 << 5) != 0;
+            return;
+        }
+        if addr != PORTB {
             return;
         }
         let sck = (port_value & (1 << 5)) != 0;

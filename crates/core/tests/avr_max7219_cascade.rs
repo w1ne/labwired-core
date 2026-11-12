@@ -25,6 +25,7 @@ const DDRD: u16 = 0x2A;
 const PORTD: u16 = 0x2B;
 const SPCR: u16 = 0x4C;
 const SPDR: u16 = 0x4E;
+const MCUCR: u16 = 0x55;
 const LOAD: u8 = 1 << 2;
 const DIN: u8 = 1 << 3;
 const CLK: u8 = 1 << 5;
@@ -233,4 +234,59 @@ fn avr_guest_wrong_din_clock_wiring_does_not_report_a_working_display() {
     guest.write(PORTB, LOAD);
     guest.run(&mut cpu, &mut bus);
     assert_eq!(artifact(&bus, "near").meta["shutdown"], true);
+}
+
+#[test]
+fn avr_guest_input_only_din_or_clock_cannot_write_a_frame() {
+    for ddr in [LOAD, LOAD | DIN, LOAD | CLK] {
+        let (mut cpu, mut bus) = rig("PB2", false);
+        let mut guest = Guest::default();
+        guest.write(MCUCR, 1 << 4); // PUD: PORT writes cannot enable pull-ups.
+        guest.write(DDRB, ddr); // LOAD is driven; DIN or CLK is still an input.
+        guest.write(PORTB, LOAD);
+        guest.write(PORTB, 0);
+        guest.bits(&[0x0C, 1], false);
+        guest.write(PORTB, LOAD);
+        guest.run(&mut cpu, &mut bus);
+        assert_eq!(
+            artifact(&bus, "near").meta["shutdown"],
+            true,
+            "DDRB={ddr:#04x}: input latch writes must not clock a command"
+        );
+    }
+}
+
+#[test]
+fn avr_guest_direction_loss_discards_partial_bits_and_reacquires_clock_level() {
+    for reacquire_high in [false, true] {
+        let (mut cpu, mut bus) = rig("PB2", false);
+        let mut guest = Guest::default();
+        guest.write(MCUCR, 1 << 4); // PUD
+        guest.write(DDRB, LOAD | DIN | CLK);
+        guest.write(PORTB, LOAD);
+        guest.write(PORTB, 0);
+        guest.bits(&[0x0C, 1], false);
+        guest.write(PORTB, LOAD);
+
+        guest.write(PORTB, 0);
+        for _ in 0..3 {
+            guest.write(PORTB, DIN);
+            guest.write(PORTB, DIN | CLK);
+            guest.write(PORTB, DIN);
+        }
+        // No LOAD edge can reset this partial byte. Losing DDR ownership must.
+        guest.write(DDRB, LOAD);
+        if reacquire_high {
+            guest.write(PORTB, DIN | CLK);
+        }
+        guest.write(DDRB, LOAD | DIN | CLK);
+        if reacquire_high {
+            // Repeating the acquired high level must not count as a new edge.
+            guest.write(PORTB, DIN | CLK);
+        }
+        guest.bits(&[0x01, 0xA5], false);
+        guest.write(PORTB, LOAD);
+        guest.run(&mut cpu, &mut bus);
+        assert_row(&bus, "near", 0, 0xA5);
+    }
 }
