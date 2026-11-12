@@ -16,13 +16,14 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     env:
-      CARGO_TARGET_DIR: ${{ runner.temp }}/core-pr1841-target
       CARGO_INCREMENTAL: "0"
       CARGO_BUILD_JOBS: "2"
     steps:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
+      - name: Set hosted-only build path
+        run: echo "CARGO_TARGET_DIR=$RUNNER_TEMP/core-pr1841-target" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@1.95.0
       - name: Install diagnostic profiler
         run: sudo apt-get update && sudo apt-get install -y valgrind
