@@ -321,12 +321,15 @@ impl WasmWorld {
 
     /// Shared analog trace and its declared sampling interval. The same core
     /// session advances in native and browser worlds.
-    pub fn cosim_status(&self) -> JsValue {
-        serde_wasm_bindgen::to_value(&self.world.cosim_status()).unwrap_or(JsValue::NULL)
+    /// No model is a successful optional value; serialization failure is an error.
+    pub fn cosim_status(&self) -> Result<JsValue, JsValue> {
+        serde_wasm_bindgen::to_value(&self.world.cosim_status())
+            .map_err(|error| JsValue::from_str(&format!("cosim_status: {error}")))
     }
 
-    pub fn analog_channels(&self) -> JsValue {
-        serde_wasm_bindgen::to_value(&self.world.analog_channels()).unwrap_or(JsValue::NULL)
+    pub fn analog_channels(&self) -> Result<JsValue, JsValue> {
+        serde_wasm_bindgen::to_value(&self.world.analog_channels())
+            .map_err(|error| JsValue::from_str(&format!("analog_channels: {error}")))
     }
 
     pub fn analog_trace_snapshot(&self, cursor: f64) -> Result<JsValue, JsValue> {
