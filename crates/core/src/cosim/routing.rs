@@ -1512,7 +1512,8 @@ fn resolve_pad_owner_odr(
             path: path.to_string(),
             pad: pad.to_string(),
         })?;
-    Ok((idx, bit))
+    let owner = &bus.peripherals[idx];
+    Ok((idx, pad_number(owner.dev.as_ref(), addr - owner.base, bit)))
 }
 
 /// Register offset of the ESP32 family's second output bank (`GPIO_OUT1`),
@@ -1520,17 +1521,22 @@ fn resolve_pad_owner_odr(
 /// bits.
 const ESP32_GPIO_OUT1_OFFSET: u64 = 0x10;
 
-/// The pad NUMBER an `(ODR address, bit)` resolution names.
+/// The pad NUMBER an `(ODR or IDR address, bit)` resolution names.
 ///
 /// A GPIO port's bit is its pad (`Peripheral::gpio_port_offsets` says so). The
 /// ESP32 family's single `gpio` block is the exception: its resolver splits
 /// pads 32.. into `GPIO_OUT1` as bank-relative bits, while
 /// `read_gpio_is_output` numbers pads absolutely. Handing it the bank bit
-/// would report GPIO1's direction for GPIO33.
+/// would report GPIO1's direction for GPIO33. S3 IN1 at +0x40 uses
+/// the same bank-relative encoding and must be expanded for input probes too.
 fn pad_number(owner: &dyn Peripheral, register_offset: u64, bit: u8) -> u8 {
     let is_port = owner.gpio_port_offsets().is_some();
-    if !is_port && register_offset == ESP32_GPIO_OUT1_OFFSET {
-        bit.saturating_add(32)
+    let s3_input_bank1 = register_offset == 0x40
+        && owner
+            .as_any()
+            .is_some_and(|a| a.is::<crate::peripherals::esp32s3::gpio::Esp32s3Gpio>());
+    if !is_port && bit < 32 && (register_offset == ESP32_GPIO_OUT1_OFFSET || s3_input_bank1) {
+        bit + 32
     } else {
         bit
     }
@@ -1579,7 +1585,8 @@ fn resolve_pad_owner_idr(
             path: path.to_string(),
             pad: pad.to_string(),
         })?;
-    Ok((idx, bit))
+    let owner = &bus.peripherals[idx];
+    Ok((idx, pad_number(owner.dev.as_ref(), addr - owner.base, bit)))
 }
 
 /// A co-simulation bound to one machine: the runner, the pin routing, the
