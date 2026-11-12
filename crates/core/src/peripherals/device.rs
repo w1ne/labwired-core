@@ -258,6 +258,14 @@ impl SpiSampling {
     }
 }
 
+/// One required supply and the model's supported operating envelope.
+#[derive(Debug, Clone, Copy)]
+pub struct DeviceSupplyRail {
+    pub name: &'static str,
+    pub min_v: f64,
+    pub max_v: f64,
+}
+
 /// Trait implemented by simulated SPI devices (peripherals attached to an SPI bus).
 ///
 /// For v1, CS-pin-aware routing is not implemented: all transfers are broadcast
@@ -265,6 +273,21 @@ impl SpiSampling {
 /// correct for single-device labs (MAX31855 alone).  CS-aware routing is noted
 /// as a Phase 2 follow-up.
 pub trait SpiDevice: Send {
+    /// Explicit capability for a generic routed supply gate. The model must
+    /// reset its volatile state on cutoff/restore and expose its actual power
+    /// state. Unimplemented devices refuse routed power at attachment.
+    fn supports_power_control(&self) -> bool {
+        false
+    }
+    /// Every required rail and its supported operating envelope. A routed
+    /// configuration must name all rails and cannot widen these limits.
+    fn required_supply_rails(&self) -> &[DeviceSupplyRail] {
+        &[]
+    }
+    fn power_state_changed(&mut self, _powered: bool) {}
+    /// Publish a routed domain transition at the boundary without advancing
+    /// device time or synthesizing a bus transaction.
+    fn sync_supply_state(&mut self) {}
     /// How this device latches the wire. Default [`SpiSampling::Byte`].
     fn sampling(&self) -> SpiSampling {
         SpiSampling::Byte
