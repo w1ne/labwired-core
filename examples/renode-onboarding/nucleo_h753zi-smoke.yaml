@@ -3,7 +3,7 @@
 # GPIOB.0 edge assertion does not assert a rendered LED state.
 schema_version: "1.2"
 inputs:
-  firmware: "../../target/thumbv7em-none-eabi/release/firmware-stm32h743-smoke"
+  firmware: "../../target/thumbv7em-none-eabihf/release/firmware-stm32h743-smoke"
   system: "../../configs/systems/onboarding/nucleo_h753zi.yaml"
 limits:
   max_steps: 4000000
@@ -17,6 +17,13 @@ assertions:
   - uart_contains: "usart3 rx=00000052,00000053 rxne_irq=isolated,asserted,reasserted,released ok"
   - uart_contains: "usart3 txe_irq=isolated,asserted,reasserted,released ok"
   - uart_contains: "usart3 tc_irq=isolated,asserted,reasserted,released ok"
+  - uart_contains: "cortex-m7 fp exception=1 frame=1 stack=1 return=1 regs=1 fpscr=1 fpcar=1 exc_return=FFFFFFE9"
+  - uart_contains: "cortex-m7 fp lazy unused=1 lspact=00000001,00000001->00000000 untouched=1 regs=1"
+  - uart_contains: "cortex-m7 fp lazy used=1 lspact=00000001,00000000->00000000 saved=1 regs=1"
+  - uart_contains: "cortex-m7 fp lazy nested=1 lspact=00000001->00000001,00000000 saved=1 regs=1 irq=00000016 active=00000060 exc_return=FFFFFFF1"
+  - uart_contains: "cortex-m7 fp lazy nested-touch=1 lspact=00000001->00000000 saved=1 regs=1 active=00000060"
+  - uart_contains: "cortex-m7 exception ok"
+  - uart_contains: "cortex-m7 cpacr privileged fp=1 nocp=00000000 result=000000A5"
   - uart_ordered:
       - "STM32H7 register smoke"
       - "usart3 rx_gate re_off=1 ue_off=1 ok"

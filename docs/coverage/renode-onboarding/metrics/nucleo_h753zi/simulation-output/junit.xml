@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="10" failures="0" errors="0" time="1.367092">
+<testsuite name="labwired" tests="17" failures="0" errors="0" time="1.360548">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="42f01b3931a1dab79208427110e5aee0db4fe999c0f143fc84a6209f9930eda1"/>
+    <property name="firmware_hash" value="cdd8e12f5960bb4eff7cd8e903429882f550af1ab612851a57531953bf10dd42"/>
   </properties>
-  <testcase classname="labwired" name="run" time="1.367092">
+  <testcase classname="labwired" name="run" time="1.360548">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_regex: ^STM32H7 register smoke" time="0.000000">
   </testcase>
@@ -19,10 +19,24 @@
   </testcase>
   <testcase classname="labwired" name="assertion 6: uart_contains: usart3 tc_irq=isolated,asserted,reasserted,released ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 7: uart_ordered: [&quot;STM32H7 register smoke&quot;, &quot;usart3 rx_gate re_off=1 ue_off=1 ok&quot;, &quot;usart3 rx=00000052,00000053 rxne_irq=i…" time="0.000000">
+  <testcase classname="labwired" name="assertion 7: uart_contains: cortex-m7 fp exception=1 frame=1 stack=1 return=1 regs=1 fpscr=1 fpcar=1 exc_return=FFFFFFE9" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 8: gpio_edges: gpioPortB:0 &gt;= 1 edges" time="0.000000">
+  <testcase classname="labwired" name="assertion 8: uart_contains: cortex-m7 fp lazy unused=1 lspact=00000001,00000001-&gt;00000000 untouched=1 regs=1" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 9: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 9: uart_contains: cortex-m7 fp lazy used=1 lspact=00000001,00000000-&gt;00000000 saved=1 regs=1" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 10: uart_contains: cortex-m7 fp lazy nested=1 lspact=00000001-&gt;00000001,00000000 saved=1 regs=1 irq=00000016 active=0000006…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 11: uart_contains: cortex-m7 fp lazy nested-touch=1 lspact=00000001-&gt;00000000 saved=1 regs=1 active=00000060" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 12: uart_contains: cortex-m7 exception ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 13: uart_contains: cortex-m7 cpacr privileged fp=1 nocp=00000000 result=000000A5" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 14: uart_ordered: [&quot;STM32H7 register smoke&quot;, &quot;usart3 rx_gate re_off=1 ue_off=1 ok&quot;, &quot;usart3 rx=00000052,00000053 rxne_irq=i…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 15: gpio_edges: gpioPortB:0 &gt;= 1 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 16: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>

@@ -3,24 +3,24 @@
   "cpu": {
     "type": "arm",
     "registers": [
+      1,
+      103,
+      10,
+      105,
       1476527124,
       1073760284,
-      105,
-      103,
       111,
-      1,
-      10,
       537001968,
       98,
       48,
       61,
       104,
-      101440,
+      123648,
       537001960,
       13,
-      134224264
+      134227676
     ],
-    "pc": 134224264,
+    "pc": 134227676,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -29,9 +29,9 @@
       0,
       0
     ],
-    "vtor": 0,
+    "vtor": 536871936,
     "waiting_for_event": false,
-    "event_register": false
+    "event_register": true
   },
   "steps_executed": 4000000,
   "cycles": 4000000,
@@ -59,9 +59,9 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "42f01b3931a1dab79208427110e5aee0db4fe999c0f143fc84a6209f9930eda1",
+  "firmware_hash": "cdd8e12f5960bb4eff7cd8e903429882f550af1ab612851a57531953bf10dd42",
   "config": {
-    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-stm32h743-smoke",
+    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabihf/release/firmware-stm32h743-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/nucleo_h753zi.yaml",
     "script": "examples/renode-onboarding/nucleo_h753zi-smoke.yaml"
   }

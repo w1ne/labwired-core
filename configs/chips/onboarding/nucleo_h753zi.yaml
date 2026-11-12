@@ -49,3 +49,13 @@ peripherals:
   irq: 39
   config:
     profile: stm32v2
+- id: fpu
+  type: cortex_m_fpu
+  bus: sysbus
+  base_address: 0xE000EF30
+  size: 28B
+  # STM32H753 has a Cortex-M7 double-precision FPU (ST DS12117); these are
+  # the Cortex-M7 FPv5-DP MVFR values from Arm DDI 0489, Table 8-2.
+  config:
+    mvfr0: 0x10110221
+    mvfr1: 0x12000011
