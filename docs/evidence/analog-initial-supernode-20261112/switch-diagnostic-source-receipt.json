@@ -1,0 +1,55 @@
+{
+  "scope": "copied numerical source, only contact/pass logging added; diagnostic only, no native runtime acceptance",
+  "production_files": {
+    "mna_limit_tests.rs": "2a7b8387ac1db79d6bb3aa85fc98a7f34a7f60e583fca115e2c3a04e54290f2b",
+    "opamp_power.rs": "4590059e4919a79c965032958ff33c8d8113a353f4d561649829a33a030b3817",
+    "controlled_buck.rs": "89f0ff3950bb9403bad00b3dedfa3717a699e3cd8069d0a3f62433ed1611d508",
+    "mna.rs": "be0d363695def804d5f1dfef31ba2c110bc817cecf46c74c27b1735a7e3c1ce8",
+    "initialization_charge.rs": "9d33e24807f5b0f2fe6198abdece3a0ac9ef264ec3350a82a1fd373ba8e7cd5f",
+    "trace.rs": "98479c60a9b273ced940bec9f5dccee48a92405cc0e3605de8c2798a4e1e3546",
+    "mod.rs": "b4d2579ddfdd8e3cfe7ab6bcb79d193ad9b61f20527f10ba14c6b1f1d0381867",
+    "adapter.rs": "7b8c64d47c93e93bd92165ba59678187ebefbc79c9453c8e719400e7c16b7725",
+    "initialization.rs": "2ca7dfa0e41282c92f4ebc3e54740c1ce0d0f458365daf8e2636529b4cf586b6",
+    "netlist.rs": "8d9cde6b2c6547b700a747a15b43a58923a1912454bd1c55cc6b13dade7e6581",
+    "device.rs": "3880ad84b80ed4a14e143fb3f85ba9435cbd16d1fc6fe5a1ddf852286c3cda27",
+    "mna_initialization.rs": "eb254d690b75bef10ded956255c9bbe851cf01453e93f437a0e2ea405861e1dc"
+  },
+  "diagnostic_files": {
+    "main.rs": "ab3aa499dab3c0e9fe1e35259723ac90646da0567c7614f1963aca86310d1a8d",
+    "analog/mna_limit_tests.rs": "2a7b8387ac1db79d6bb3aa85fc98a7f34a7f60e583fca115e2c3a04e54290f2b",
+    "analog/opamp_power.rs": "4590059e4919a79c965032958ff33c8d8113a353f4d561649829a33a030b3817",
+    "analog/controlled_buck.rs": "89f0ff3950bb9403bad00b3dedfa3717a699e3cd8069d0a3f62433ed1611d508",
+    "analog/mna.rs": "00e60e1541fa707d489cae131c7af0a652d68839160e25c72885c4c7ec2f07cf",
+    "analog/initialization_charge.rs": "9d33e24807f5b0f2fe6198abdece3a0ac9ef264ec3350a82a1fd373ba8e7cd5f",
+    "analog/trace.rs": "98479c60a9b273ced940bec9f5dccee48a92405cc0e3605de8c2798a4e1e3546",
+    "analog/mod.rs": "b4d2579ddfdd8e3cfe7ab6bcb79d193ad9b61f20527f10ba14c6b1f1d0381867",
+    "analog/adapter.rs": "7b8c64d47c93e93bd92165ba59678187ebefbc79c9453c8e719400e7c16b7725",
+    "analog/initialization.rs": "2ca7dfa0e41282c92f4ebc3e54740c1ce0d0f458365daf8e2636529b4cf586b6",
+    "analog/netlist.rs": "8d9cde6b2c6547b700a747a15b43a58923a1912454bd1c55cc6b13dade7e6581",
+    "analog/device.rs": "3880ad84b80ed4a14e143fb3f85ba9435cbd16d1fc6fe5a1ddf852286c3cda27",
+    "analog/mna_initialization.rs": "eb254d690b75bef10ded956255c9bbe851cf01453e93f437a0e2ea405861e1dc"
+  },
+  "binary_sha256": "a7b04b7d9597e34610945646dcbc23d111727d675b4c1a1b5c82b16bda513894",
+  "libraries": {
+    "labwired_core": {
+      "path": "/data/build-targets/controlled-buck-20261112/shared-runtime-integration-20261112/deps/liblabwired_core-1e12c06a019b1626.rlib",
+      "sha256": "a48b908fee3f43f86f18f395a2d1c1332bcb48ed18973e5ff67067c575ae9133"
+    },
+    "labwired_config": {
+      "path": "/data/build-targets/controlled-buck-20261112/shared-runtime-integration-20261112/deps/liblabwired_config-b11f1e1b5c5a7cec.rlib",
+      "sha256": "9f61af70c8b8b3bbf98e5242205c6b37b5d3671b012ebe25cb157dca34dd43b8"
+    },
+    "serde_json": {
+      "path": "/data/build-targets/controlled-buck-20261112/shared-runtime-integration-20261112/deps/libserde_json-86add3b10d7fd404.rlib",
+      "sha256": "b3b89e1b056c189839f4346bcb770fe2440c8e821bc09a655878e293b595a123"
+    },
+    "serde": {
+      "path": "/data/build-targets/controlled-buck-20261112/shared-runtime-integration-20261112/deps/libserde-3b15f3a1a99dd6c8.rlib",
+      "sha256": "f57dbb1f90ff095ed84df474f324473b1d588b3660e3eb18efd050f40a6a8a94"
+    },
+    "libm": {
+      "path": "/data/build-targets/controlled-buck-20261112/shared-runtime-integration-20261112/deps/liblibm-6698c8dd698d04c0.rlib",
+      "sha256": "150d2d4281719eb3005d65401bbb895c395b1f1473d2c34b40265de733dfd628"
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "scope": "production public-API constructor probe after supernode correction, before optional OPAMP power feature; no MCU execution",
+  "source_sha256": "5f9efb9175a0ee078950cf2827d5dd64e3d8c650368deeb5eeef3c2903a6e3a0",
+  "binary_sha256": "4e2916c2952f66dc1521a42f6dbf0972cd2b4af8286144597ef69761e4c3faa7",
+  "libraries": {
+    "labwired_core": {
+      "path": "/data/build-targets/controlled-buck-20261112/shared-runtime-integration-20261112/deps/liblabwired_core-1e12c06a019b1626.rlib",
+      "sha256": "44035444c6137f2ba8acd3ef36cd36df6d188793938f0ecaeba5ef27bc234335"
+    },
+    "labwired_config": {
+      "path": "/data/build-targets/controlled-buck-20261112/shared-runtime-integration-20261112/deps/liblabwired_config-b11f1e1b5c5a7cec.rlib",
+      "sha256": "9f61af70c8b8b3bbf98e5242205c6b37b5d3671b012ebe25cb157dca34dd43b8"
+    },
+    "serde_json": {
+      "path": "/data/build-targets/controlled-buck-20261112/shared-runtime-integration-20261112/deps/libserde_json-86add3b10d7fd404.rlib",
+      "sha256": "b3b89e1b056c189839f4346bcb770fe2440c8e821bc09a655878e293b595a123"
+    }
+  },
+  "source_files": {
+    "crates/core/src/analog/initialization.rs": "2ca7dfa0e41282c92f4ebc3e54740c1ce0d0f458365daf8e2636529b4cf586b6",
+    "crates/core/src/analog/mna_initialization.rs": "3dcd89c7486d8966e15d6e58cbe65165b9dfd9d697b9ca847c0ba3b54cd33348"
+  }
+}

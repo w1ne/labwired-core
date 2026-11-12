@@ -1,0 +1,11 @@
+# Stationary voltage-source groups during explicit initialization
+
+The requested capacitor voltages and inductor currents are states at time zero. A tree of stationary independent ideal voltage sources constrains voltage differences inside a group. Its original branch currents cancel when its member Kirchhoff current laws are summed.
+
+Let B_n be the original node-to-inductor incidence matrix and B_g the corresponding group incidence rows. The prescribed currents must first satisfy B_g I_0 + J_g = 0. With stationary independent current sources, differentiating that equation gives B_g L^-1 B_n^T v = 0. This uses the original node voltages; it does not identify them or remove nonzero source voltage offsets. The full finite positive-definite physical inductance matrix includes the declared mutual inductances.
+
+Only one redundant member KCL row is replaced. All other member KCL rows and all original independent source equations remain, so every original source current is determined by the accepted state and retained member equations. Ground-connected source groups have a current return and do not receive this reduction. A dependent source does not enter the group. A source cycle has indeterminate current sharing and is refused. Groups with another active external current path keep their ordinary equations. An entirely floating L/V component retains its undefined gauge and remains singular.
+
+The unchanged independent suite checks a three-phase floating star, a nonzero-voltage/current star, source card-order independence, two inconsistent prescribed-current cases, series inductors with a voltage offset, and a series-aiding mutual-inductance case. In the star, the neutral is 51/11 V and winding derivatives are [37000, -31000, -6000]/11 A/s. For the mutual case L1=1 mH, L2=4 mH and M=1 mH, the series total is 7 mH; the current derivative is 9000/7 A/s, with the original offset-source current preserved.
+
+The initial expected-red run against the pre-extension production library passed only the existing ambiguous-parallel-source refusal. All six extension witnesses failed at the missing group treatment. No native startup or runtime acceptance follows from this diagnostic. The actual earlier 737-unknown constructor failure at the first rotor phase winding is retained separately.

@@ -962,7 +962,13 @@ impl Solver {
             let on = control.vt;
             let off = (control.vt - control.vh).max(0.0);
             let closed_now = self.switch_closed[index];
-            let desired = if control.invert {
+            let desired = if control.vh == 0.0 {
+                // A zero-width band has no memory. Use one predicate for both
+                // prior states; NC is its complement, including exact equality.
+                // State-dependent >= / > comparisons would alternate forever
+                // at v == vt and could close NO and NC contacts together.
+                (v >= on) != control.invert
+            } else if control.invert {
                 // NC: stays closed while |V| < vt; re-closes from open only at
                 // |V| <= vt − vh.
                 if closed_now {

@@ -38,13 +38,16 @@ parallel states and consistent capacitor-only cycles are allowed; contradictory
 states fail before the solve. A capacitor directly clamped by stationary
 independent voltage sources adds no redundant current unknown.
 
-Inductor branch equations prescribe the requested currents. At a node connected
-only to inductors and stationary current sources, the solver first verifies
-initial KCL. It then differentiates that KCL with the actual inductance matrix:
-`B L^-1 B^T v = 0`. This determines the initial voltage of an open zero-current
-inductor and weighted series/mutually coupled inductor cutsets without an
-arbitrary voltage assignment. An inconsistent initial current, a non-positive-
-definite inductance matrix, or an otherwise undefined algebraic node fails.
+Inductor branch equations prescribe the requested currents. For a node group
+connected by a tree of stationary independent voltage sources, the solver first
+checks the summed prescribed-current KCL. It replaces only one redundant member
+row with `B_group L^-1 B_node^T v = 0`, using the actual positive-definite
+inductance matrix. All other member KCL rows, original voltage differences and
+source-current unknowns remain. This resolves open inductors, floating winding
+stars with series EMF sources, and tested mutually coupled series groups without
+an artificial reference or arbitrary current sharing. Ground-connected groups
+keep their ordinary equations. Dependent sources do not form groups, and ideal
+independent-source cycles with ambiguous current sharing are refused.
 
 Temporary capacitor constraints never become parsed circuit elements. Original
 voltage-source and inductor branch indices keep their meaning. The solver seeds
@@ -76,6 +79,15 @@ A storage edge fixed directly by independent stationary sources remains
 admitted. Capacitor-only parallel/cyclic redundancy remains admitted. Other
 unsupported algebraic cutsets retain the normal singular-system refusal; no
 hidden conductance is added to produce a result.
+
+## Voltage-controlled contact boundaries
+
+A zero-hysteresis voltage contact has no previous-state dependence. NO is closed
+when the selected signed or absolute control is at least VT; NC is its exact
+complement. This includes exact equality and repeated t=0 samples. Positive-VH
+pickup, hold and dropout semantics are unchanged. VT=0 is admitted only with
+`signed=1` and `vh=0`; other zero/negative threshold modes remain refused. The
+eight-pass guard still rejects a truly oscillating contact set.
 
 ## Resource and result contract
 
@@ -112,15 +124,22 @@ firmware startup, protection behavior, motor operation, or hardware equivalence.
 
 ## Recorded native boundary
 
-The source-bound five-controller circuit has 667 physical MNA unknowns. Its
-complete explicit state requires 737 initial unknowns. The requested 667 bound
-refuses before dense allocation. At a separately selected 737 bound, the current
-individual-node inductive-cutset treatment refuses a floating motor-star path
-with series ideal EMF sources. A group-level derivative treatment is a separate
-follow-up; this implementation does not manufacture an initial neutral voltage.
+The original source-bound five-controller circuit had 667 physical MNA unknowns
+and required 737 initial unknowns. Its original capacity and motor-star refusal
+receipts remain unchanged. The group-level treatment resolves that star without
+removing any winding or EMF branch.
 
-The cold flight-controller circuit passes inventory and topology admission, then
-refuses at the unpowered U11 macro's overlapping fixed headroom clamps. Its
-explicit-state error identifies the initial constraint and last movement. The
-op-amp power-envelope correction is separate. Neither constructor failure is a
-firmware execution, a native startup pass, or a flight result.
+The separately versioned direct-output OPAMP models produce an FC circuit with
+214 physical / 232 initial unknowns and a five-MCU circuit with 666 physical /
+736 initial unknowns. Their explicit-state constructors now accept, with selected
+bounds 512 and 737. Default operating-point construction still refuses. These
+are circuit-only probes with declared defaults and recorded zero/disabled
+controller stimuli; they execute no MCU or firmware.
+
+The recorded first 100 ns steps then refuse at a separate strict OPAMP supply
+boundary: raw solved near-zero negative spans of approximately -2.83e-19 V and
+-6.42e-19 V. That numerical-zero admission correction is a separate reviewed
+follow-up. This packet does not claim a transient startup, motor operation or
+flight result. The earlier forced powered compensation-state failure is also
+retained; supplying a finite state does not guarantee every nonlinear circuit
+has a well-conditioned accepted solution.

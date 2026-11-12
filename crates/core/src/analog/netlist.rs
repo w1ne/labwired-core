@@ -2801,8 +2801,9 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     if ron <= 0.0 || roff <= 0.0 {
                         return Err(ctx.parse_err("ron and roff must be positive"));
                     }
-                    if vt <= 0.0 {
-                        return Err(ctx.parse_err("vt must be positive"));
+                    if vt < 0.0 || (vt == 0.0 && !(signed && vh == 0.0)) {
+                        return Err(ctx
+                            .parse_err("vt must be positive, except vt=0 with signed=1 and vh=0"));
                     }
                     if vh < 0.0 || vh > vt {
                         return Err(ctx.parse_err("vh must be in [0, vt]"));

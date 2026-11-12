@@ -121,6 +121,8 @@ pub(super) struct InitialStatePlan {
     pub inductor_currents: Vec<f64>,
     pub constraints: Vec<InitialVoltageConstraint>,
     pub inverse_inductance: Vec<f64>,
+    /// Stationary independent-source connectivity, captured before C constraints.
+    pub voltage_groups: Vec<usize>,
 }
 
 impl InitialStatePlan {
@@ -202,13 +204,19 @@ impl InitialStatePlan {
             if !stationary_at_origin(source.wave) {
                 return Err(AnalogError::Config(format!("transient_state requires voltage source '{}' to have a stationary initial plateau; a nonzero t=0 slope has no supported initial source-current observation", source.name)));
             }
-            basis.constrain(
+            if !basis.constrain(
                 source.p.unwrap_or(ground),
                 source.n.unwrap_or(ground),
                 source.dc,
                 &source.name,
-            )?;
+            )? {
+                return Err(AnalogError::Config(format!(
+                    "transient_state cannot resolve current sharing in an independent voltage-source cycle at '{}'",
+                    source.name
+                )));
+            }
         }
+        let voltage_groups = (0..=ground).map(|node| basis.find(node).0).collect();
         let mut constraints = Vec::new();
         for (c, volts) in circuit.capacitors.iter().zip(&capacitor_voltages) {
             if basis.constrain(
@@ -230,6 +238,7 @@ impl InitialStatePlan {
             inductor_currents,
             constraints,
             inverse_inductance,
+            voltage_groups,
         }))
     }
 }
