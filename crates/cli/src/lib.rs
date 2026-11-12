@@ -1484,6 +1484,7 @@ fn handle_load_error<C: labwired_core::Cpu>(
         // Load/reset failed before a machine existed: no motor evidence either.
         Vec::new(),
         None,
+        Default::default(),
         // Load/reset failed before the run loop, so no stimulus was attempted.
         Vec::new(),
         // Load failed: no successful machine run for footprint/paint/metrics.
@@ -3047,6 +3048,7 @@ mod test_outcome_golden_tests {
             i2c_trace_evicted: false,
             motors: Vec::new(),
             analog_series: None,
+            analog_initialization: Default::default(),
             stimuli: Vec::new(),
             footprint: None,
             memory: None,

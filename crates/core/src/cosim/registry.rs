@@ -6,6 +6,7 @@ use crate::cosim::{
 use crate::{SimResult, SimulationError};
 use labwired_config::{CosimAdapter as ManifestCosimAdapter, CosimModelConfig};
 use serde_yaml::Value;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 pub fn build_cosim_adapter(config: &CosimModelConfig) -> SimResult<Box<dyn CosimAdapter>> {
@@ -171,6 +172,20 @@ pub struct CosimRunner {
 }
 
 impl CosimRunner {
+    pub fn analog_initialization_status(
+        &self,
+    ) -> BTreeMap<String, crate::analog::AnalogInitializationStatus> {
+        self.models
+            .iter()
+            .filter_map(|model| {
+                model
+                    .adapter
+                    .analog_initialization_status()
+                    .map(|status| (model.config.id.clone(), status))
+            })
+            .collect()
+    }
+
     pub fn new(mut models: Vec<CosimRunnerModel>) -> Self {
         let analog_trace = AnalogTraceRegistry::new();
         let handle = analog_trace.handle();

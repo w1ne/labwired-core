@@ -21,6 +21,7 @@ pub struct WorldCosimStatus {
     pub next_boundary_ns: u64,
     pub model_steps: u64,
     pub coupling: &'static str,
+    pub initialization: crate::analog::AnalogInitializationStatus,
     pub failure: Option<String>,
     pub reset_inputs: BTreeMap<String, crate::reset_input::ResetInputStatus>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
@@ -78,6 +79,12 @@ impl WorldCosim {
                 );
             }
         }
+        let initialization = runner
+            .analog_initialization_status()
+            .remove(&config.id)
+            .ok_or_else(|| {
+                anyhow::anyhow!("world analog model did not report its initialization contract")
+            })?;
         let mut circuit = Self {
             runner,
             routers,
@@ -89,6 +96,7 @@ impl WorldCosim {
                 next_boundary_ns: config.step_ns,
                 model_steps: 0,
                 coupling: "interval-start-zero-order-hold",
+                initialization,
                 failure: None,
                 reset_inputs: BTreeMap::new(),
                 power_domains: BTreeMap::new(),

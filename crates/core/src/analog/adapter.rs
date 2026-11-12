@@ -155,6 +155,8 @@ pub struct AnalogConfig {
     pub substeps: u32,
     /// Explicit resource bound for nodes plus branch-current unknowns.
     pub max_unknowns: usize,
+    /// Explicit initial-state contract; absence retains DC operating-point behavior.
+    pub initialization: super::AnalogInitialization,
     /// Integration rule.
     pub integration: Integration,
     /// LabWired output name → node voltage or supported element-current expression.
@@ -178,6 +180,7 @@ impl Default for AnalogConfig {
             substeps: 10,
             max_unknowns: MAX_UNKNOWNS,
             integration: Integration::BackwardEuler,
+            initialization: super::AnalogInitialization::default(),
             probes: BTreeMap::new(),
             sources: BTreeMap::new(),
             thermistors: BTreeMap::new(),
@@ -192,6 +195,11 @@ impl AnalogConfig {
     /// Read the config keys out of a manifest `config:` mapping.
     pub fn from_yaml(config: &HashMap<String, Value>) -> Result<Self, AnalogError> {
         let mut parsed = Self::default();
+        if let Some(value) = config.get("initialization") {
+            parsed.initialization = serde_yaml::from_value(value.clone())
+                .map_err(|error| AnalogError::Config(format!("config.initialization: {error}")))?;
+            parsed.initialization.validate()?;
+        }
 
         if let Some(value) = config.get("vdd") {
             parsed.vdd = value
@@ -338,6 +346,10 @@ pub struct AnalogCosimAdapter {
 }
 
 impl AnalogCosimAdapter {
+    pub fn initialization_status(&self) -> &super::AnalogInitializationStatus {
+        self.solver.initialization_status()
+    }
+
     /// Parse `netlist`, build the solver, resolve probes and sources, solve the
     /// operating point and seed the trace with it.
     pub fn from_netlist(netlist: &str, cfg: &AnalogConfig) -> Result<Self, AnalogError> {
@@ -358,7 +370,12 @@ impl AnalogCosimAdapter {
                 }
             }
         }
-        let solver = Solver::new_with_max_unknowns(circuit, cfg.integration, cfg.max_unknowns)?;
+        let solver = Solver::new_with_initialization(
+            circuit,
+            cfg.integration,
+            cfg.max_unknowns,
+            &cfg.initialization,
+        )?;
 
         let mut probes = Vec::with_capacity(cfg.probes.len());
         for (name, expression) in &cfg.probes {
@@ -688,6 +705,10 @@ impl AnalogCosimAdapter {
 }
 
 impl CosimAdapter for AnalogCosimAdapter {
+    fn analog_initialization_status(&self) -> Option<super::AnalogInitializationStatus> {
+        Some(self.initialization_status().clone())
+    }
+
     fn step(&mut self, step: CosimStep) -> SimResult<CosimStepResult> {
         let mut commands = Vec::new();
         for (index, prefix) in self.regulators.iter().enumerate() {

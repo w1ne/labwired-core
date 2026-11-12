@@ -1425,3 +1425,31 @@ fn analog_capacity_browser_constructor_uses_the_same_explicit_bound() {
         assert!(error.contains("max_unknowns"), "{raw}: {error}");
     }
 }
+
+#[test]
+fn explicit_analog_initial_state_survives_browser_construction_and_real_stepping() {
+    let system = RC_SYSTEM.replace("      netlist_text:", "      initialization:\n        mode: transient_state\n        capacitor_voltages_v: { C1: 1 }\n        inductor_currents_a: {}\n      netlist_text:");
+    let system = system
+        .replace("    inputs: { gpio: board.gpio.pa5 }\n", "")
+        .replace("      sources: { gpio: Vgpio }\n", "");
+    let mut sim = build(&system);
+    let statuses = sim.cosim.as_ref().unwrap().analog_initialization_status();
+    let status = serde_json::to_value(&statuses["rc"]).unwrap();
+    assert_eq!(
+        status,
+        serde_json::json!({"mode":"transient_state","base_unknowns":3,"initialization_unknowns":4})
+    );
+    let first = sim.analog_trace_batch(0);
+    assert_eq!(first.samples[0].time_ns, 0);
+    assert!((f64::from(first.samples[0].values[0]) - 1.0).abs() < 1e-7);
+    // This fixture disconnects the GPIO source route. The physical source stays
+    // at 0 V while the real CPU runs, so the prescribed charge decays through R1.
+    step_until(&mut sim, CYCLES_PER_MS / 10, 100);
+    let after = sim.analog_trace_batch(0);
+    let decay = f64::from(after.samples.last().unwrap().values[0]);
+    assert!((decay - 1.01_f64.powi(-10)).abs() < 1e-6, "{decay}");
+    let statuses_after = sim.cosim.as_ref().unwrap().analog_initialization_status();
+    assert_eq!(statuses, statuses_after);
+    let plain = build(PLAIN_SYSTEM);
+    assert!(plain.cosim.is_none());
+}

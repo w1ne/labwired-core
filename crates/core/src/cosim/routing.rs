@@ -2504,6 +2504,13 @@ impl CosimSession {
         self.runner.analog_trace_registry()
     }
 
+    /// Actual initialization contracts of the attached in-core analog models.
+    pub fn analog_initialization_status(
+        &self,
+    ) -> BTreeMap<String, crate::analog::AnalogInitializationStatus> {
+        self.runner.analog_initialization_status()
+    }
+
     /// The effective core clock, in Hz.
     pub fn cpu_hz(&self) -> u64 {
         self.cpu_hz

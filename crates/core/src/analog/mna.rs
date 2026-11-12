@@ -54,6 +54,15 @@
 //! lookup at build time, no threads and no wall clock. The same netlist and the
 //! same input sequence produce bit-identical voltages on every host.
 
+#[path = "mna_initialization.rs"]
+mod initial_state;
+#[cfg(test)]
+#[path = "mna_limit_tests.rs"]
+mod limit_tests;
+use super::initialization::{
+    AnalogInitialization, AnalogInitializationMode, AnalogInitializationStatus, InitialStatePlan,
+};
+
 use super::device;
 use super::netlist::{
     AnalogError, BjtModel, Circuit, Diode, DiodeModel, MosChannelChargeModel, Mosfet, NodeRef,
@@ -275,6 +284,8 @@ pub struct Solver {
     integration: Integration,
     nodes: usize,
     branches: usize,
+    initial_state: Option<InitialStatePlan>,
+    initialization_status: AnalogInitializationStatus,
 
     voltage_source_values: Vec<f64>,
     current_source_values: Vec<f64>,
@@ -428,6 +439,21 @@ impl Solver {
         integration: Integration,
         max_unknowns: usize,
     ) -> Result<Self, AnalogError> {
+        Self::new_with_initialization(
+            circuit,
+            integration,
+            max_unknowns,
+            &AnalogInitialization::OperatingPoint,
+        )
+    }
+
+    /// Construct from an explicitly selected DC or reactive-state initialization.
+    pub fn new_with_initialization(
+        circuit: Circuit,
+        integration: Integration,
+        max_unknowns: usize,
+        initialization: &AnalogInitialization,
+    ) -> Result<Self, AnalogError> {
         if !(1..=HARD_MAX_UNKNOWNS).contains(&max_unknowns) {
             return Err(AnalogError::Config(format!(
                 "max_unknowns must be an integer in 1..={HARD_MAX_UNKNOWNS}"
@@ -448,6 +474,29 @@ impl Solver {
 
         let nodes = circuit.node_count();
         let branches = circuit.branch_count();
+        let mut initial_state = InitialStatePlan::build(&circuit, initialization)?;
+        let initialization_unknowns = unknowns
+            + initial_state
+                .as_ref()
+                .map_or(0, |state| state.constraints.len());
+        if initialization_unknowns > max_unknowns {
+            return Err(AnalogError::TooLarge {
+                unknowns: initialization_unknowns,
+                max: max_unknowns,
+            });
+        }
+        if let Some(state) = &mut initial_state {
+            state.prepare_inductance(&circuit)?;
+        }
+        let initialization_status = AnalogInitializationStatus {
+            mode: if initial_state.is_some() {
+                AnalogInitializationMode::TransientState
+            } else {
+                AnalogInitializationMode::OperatingPoint
+            },
+            base_unknowns: unknowns,
+            initialization_unknowns,
+        };
         let voltage_source_values = circuit.voltage_sources.iter().map(|s| s.dc).collect();
         let current_source_values = circuit.current_sources.iter().map(|s| s.dc).collect();
         let switch_closed = vec![false; circuit.switches.len()];
@@ -492,6 +541,8 @@ impl Solver {
             integration,
             nodes,
             branches,
+            initial_state,
+            initialization_status,
             voltage_source_values,
             current_source_values,
             switch_closed,
@@ -560,17 +611,21 @@ impl Solver {
             has_waveforms,
             time: 0.0,
             step_index: 0,
-            matrix: vec![0.0; unknowns * unknowns],
-            rhs: vec![0.0; unknowns],
-            solution: vec![0.0; unknowns],
-            previous: vec![0.0; unknowns],
-            factors: vec![0.0; unknowns * unknowns],
-            pivots: vec![0; unknowns],
+            matrix: vec![0.0; initialization_unknowns * initialization_unknowns],
+            rhs: vec![0.0; initialization_unknowns],
+            solution: vec![0.0; initialization_unknowns],
+            previous: vec![0.0; initialization_unknowns],
+            factors: vec![0.0; initialization_unknowns * initialization_unknowns],
+            pivots: vec![0; initialization_unknowns],
             cached_stamp: None,
             settled: false,
             restart: true,
         };
-        solver.solve_operating_point()?;
+        if solver.initial_state.is_some() {
+            solver.solve_initial_state()?;
+        } else {
+            solver.solve_operating_point()?;
+        }
         Ok(solver)
     }
 
@@ -967,33 +1022,22 @@ impl Solver {
     }
 
     fn dim(&self) -> usize {
-        self.nodes + self.branches
+        self.nodes
+            + self.branches
+            + self
+                .initial_state
+                .as_ref()
+                .map_or(0, |state| state.constraints.len())
     }
 
     /// Solve the DC operating point and reset the reactive state to it.
     pub fn solve_operating_point(&mut self) -> Result<(), AnalogError> {
-        // Voltage-controlled contacts depend on the solved node voltages, so
-        // the OP may need a few passes until the contacts stop flipping.
-        for _ in 0..8 {
-            self.cached_stamp = None;
-            self.settled = false;
-            if self.nonlinear {
-                self.save_linearisation();
-                if let Err(error) = self.newton(Stamp::OperatingPoint, None, self.time) {
-                    self.restore_linearisation();
-                    self.gmin_stepping().map_err(|_| error)?;
-                }
-            } else {
-                self.build(Stamp::OperatingPoint);
-                self.factorize()?;
-                self.solve();
-            }
-            self.node_v.copy_from_slice(&self.solution[..self.nodes]);
-            self.branch_i.copy_from_slice(&self.solution[self.nodes..]);
-            if !self.update_voltage_switches() {
-                break;
-            }
-        }
+        self.solve_static_state()?;
+        self.initialization_status = AnalogInitializationStatus {
+            mode: AnalogInitializationMode::OperatingPoint,
+            base_unknowns: self.nodes + self.branches,
+            initialization_unknowns: self.nodes + self.branches,
+        };
         for index in 0..self.circuit.capacitors.len() {
             let capacitor = &self.circuit.capacitors[index];
             self.cap_v[index] = node_diff(&self.node_v, capacitor.a, capacitor.b);
@@ -1006,6 +1050,49 @@ impl Solver {
         self.apply_initial_conditions();
         self.restart = true;
         self.validate_controlled_buck_direction()
+    }
+
+    fn solve_static_state(&mut self) -> Result<(), AnalogError> {
+        // Voltage-controlled contacts depend on the solved node voltages, so
+        // the OP may need a few passes until the contacts stop flipping.
+        let mut switch_settled = false;
+        for _ in 0..8 {
+            self.cached_stamp = None;
+            self.settled = false;
+            if self.nonlinear {
+                self.save_linearisation();
+                if let Err(error) = self.newton(Stamp::OperatingPoint, None, self.time) {
+                    self.restore_linearisation();
+                    self.gmin_stepping().map_err(|_| error)?;
+                }
+            } else {
+                self.build(Stamp::OperatingPoint);
+                self.stamp_initial_inductive_kcl()?;
+                self.factorize()?;
+                self.solve();
+            }
+            self.node_v.copy_from_slice(&self.solution[..self.nodes]);
+            self.branch_i
+                .copy_from_slice(&self.solution[self.nodes..self.nodes + self.branches]);
+            if !self.update_voltage_switches() {
+                switch_settled = true;
+                break;
+            }
+        }
+        if !switch_settled {
+            let context = if self.initial_state.is_some() {
+                "explicit transient_state initialization"
+            } else {
+                "DC operating-point initialization"
+            };
+            return Err(AnalogError::Config(format!("voltage-controlled switch active set did not settle during {context} after 8 passes; no initial solution was accepted")));
+        }
+        if self.solution.iter().any(|value| !value.is_finite()) {
+            return Err(AnalogError::Config(
+                "nonfinite initial circuit solution".into(),
+            ));
+        }
+        Ok(())
     }
 
     /// `.ic V(node)=v` and element `ic=` override the operating point.
@@ -1036,6 +1123,12 @@ impl Solver {
                 self.branch_i[self.circuit.voltage_sources.len() + index] = ic;
             }
         }
+        self.initialize_device_charge_history();
+    }
+
+    /// Seed intrinsic semiconductor charge from the accepted initial voltages.
+    /// Both DC and explicit reactive-state initialization use this same path.
+    fn initialize_device_charge_history(&mut self) {
         for index in 0..self.circuit.diodes.len() {
             let diode = &self.circuit.diodes[index];
             if diode_charge_active(diode.model) {
@@ -1252,6 +1345,7 @@ impl Solver {
         } else {
             self.cached_stamp = None;
             self.build(stamp);
+            self.stamp_initial_inductive_kcl()?;
             self.factorize()?;
             self.cached_stamp = Some(stamp);
             self.solve();
@@ -1500,7 +1594,8 @@ impl Solver {
         }
 
         self.node_v.copy_from_slice(&self.solution[..self.nodes]);
-        self.branch_i.copy_from_slice(&self.solution[self.nodes..]);
+        self.branch_i
+            .copy_from_slice(&self.solution[self.nodes..self.nodes + self.branches]);
         // Keep this at the solver acceptance seam: direct callers and every
         // convergence step cut must obey the same forward-only model scope.
         self.validate_controlled_buck_direction()?;
@@ -1667,14 +1762,21 @@ impl Solver {
         }
         for (index, inductor) in self.circuit.inductors.iter().enumerate() {
             let row = self.nodes + self.circuit.voltage_sources.len() + index;
-            add(&mut self.matrix, dim, Some(row), inductor.a, 1.0);
-            add(&mut self.matrix, dim, Some(row), inductor.b, -1.0);
+            if self.initial_state.is_none() {
+                add(&mut self.matrix, dim, Some(row), inductor.a, 1.0);
+                add(&mut self.matrix, dim, Some(row), inductor.b, -1.0);
+            }
             add(&mut self.matrix, dim, inductor.a, Some(row), 1.0);
             add(&mut self.matrix, dim, inductor.b, Some(row), -1.0);
             match stamp {
                 Stamp::OperatingPoint => {
-                    // A shorted inductor: v_a - v_b = 0.
-                    self.rhs[row] = 0.0;
+                    if let Some(state) = &self.initial_state {
+                        self.matrix[row * dim + row] = 1.0;
+                        self.rhs[row] = state.inductor_currents[index];
+                    } else {
+                        // A shorted inductor: v_a - v_b = 0.
+                        self.rhs[row] = 0.0;
+                    }
                 }
                 Stamp::Transient(h, rule) => match rule {
                     Integration::BackwardEuler => {
@@ -1725,6 +1827,7 @@ impl Solver {
         }
         self.stamp_dependent_sources();
         self.stamp_devices(stamp);
+        self.stamp_initial_capacitor_constraints();
         if self.node_shunt != 0.0 {
             for node in 0..self.nodes {
                 self.matrix[node * dim + node] += self.node_shunt;
@@ -1996,18 +2099,25 @@ impl Solver {
         self.previous[..dim].fill(f64::NAN);
         self.limiter_clamped = true;
 
-        for _ in 1..=MAX_NEWTON_ITERATIONS {
+        let mut last_residual = (String::new(), f64::NAN);
+        for iteration in 1..=MAX_NEWTON_ITERATIONS {
             self.build(stamp);
+            self.stamp_initial_inductive_kcl()?;
             self.factorize()?;
             self.solve();
             if self.newton_converged() {
                 return Ok(());
             }
+            if iteration == MAX_NEWTON_ITERATIONS {
+                // Capture before replacing the previous iterate; otherwise an
+                // exhausted solve always reports a misleading zero movement.
+                last_residual = self.worst_residual();
+            }
             self.previous[..dim].copy_from_slice(&self.solution[..dim]);
             self.relinearise();
         }
 
-        let (unknown, delta) = self.worst_residual();
+        let (unknown, delta) = last_residual;
         Err(AnalogError::NoConvergence {
             step,
             time,
@@ -2075,8 +2185,17 @@ impl Solver {
         }
         let name = if worst < self.nodes {
             format!("v({})", self.circuit.node_name(worst))
-        } else {
+        } else if worst < self.nodes + self.branches {
             format!("i({})", self.circuit.branch_name(worst - self.nodes))
+        } else {
+            format!(
+                "initial_constraint({})",
+                self.initial_state
+                    .as_ref()
+                    .expect("initial constraint row")
+                    .constraints[worst - self.nodes - self.branches]
+                    .name
+            )
         };
         (name, (self.solution[worst] - self.previous[worst]).abs())
     }
@@ -2169,12 +2288,18 @@ impl Solver {
 
             let eff_ds = device::vds_limit(eff_ds_new, eff_ds_old);
             let eff_gs = device::fet_limit(eff_gs_new, eff_gs_old, sign * mosfet.model.vto);
-            let (gs, ds) = if reversed_now {
+            let channel_limited = eff_gs != eff_gs_new || eff_ds != eff_ds_new;
+            let (gs, ds) = if !channel_limited {
+                // Reversing coordinates and back can round (0.1 + 0.2) -
+                // 0.2 away from 0.1. That arithmetic is not voltage limiting.
+                // Preserve the actual Newton point when neither limiter acted.
+                (raw_gs, raw_ds)
+            } else if reversed_now {
                 (eff_gs - eff_ds, -eff_ds)
             } else {
                 (eff_gs, eff_ds)
             };
-            self.limiter_clamped |= gs != raw_gs || ds != raw_ds;
+            self.limiter_clamped |= channel_limited;
             self.mos_vgs[index] = gs;
             self.mos_vds[index] = ds;
 

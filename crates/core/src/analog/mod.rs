@@ -38,11 +38,16 @@
 pub mod adapter;
 pub mod controlled_buck;
 pub mod device;
+pub mod initialization;
+mod initialization_charge;
 pub mod mna;
 pub mod netlist;
 pub mod trace;
 
 pub use adapter::{AnalogConfig, AnalogCosimAdapter, Probe, ThermistorConfig};
+pub use initialization::{
+    AnalogInitialization, AnalogInitializationMode, AnalogInitializationStatus,
+};
 pub use mna::{Integration, Solver, HARD_MAX_UNKNOWNS, MAX_STEP_CUTS, MAX_UNKNOWNS};
 pub use netlist::{
     parse_netlist, parse_spice_value, AnalogError, Bjt, BjtModel, Capacitor, Cccs, Ccvs, Circuit,

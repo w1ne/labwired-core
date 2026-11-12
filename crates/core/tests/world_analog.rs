@@ -742,3 +742,26 @@ cosim_models:
     assert!(!high(&w, "b"), "an unpowered node has no valid high level");
     assert!(high(&w, "a"));
 }
+
+#[test]
+fn world_status_preserves_the_actual_initialization_contract() {
+    let original = world(&["a", "b"], MODEL).unwrap();
+    let op = &original.cosim_status().unwrap().initialization;
+    assert_eq!(serde_json::to_value(op).unwrap()["mode"], "operating_point");
+    assert_eq!(op.base_unknowns, op.initialization_unknowns);
+    let explicit = MODEL.replace("      substeps: 1", "      substeps: 1\n      initialization:\n        mode: transient_state\n        capacitor_voltages_v: { Ca: 0 }\n        inductor_currents_a: {}")
+        .replace("        Ra a 0 10", "        Ra a 0 10\n        Ca a 0 1u");
+    let mut w = world(&["a", "b"], &explicit).unwrap();
+    let initial = serde_json::to_value(&w.cosim_status().unwrap().initialization).unwrap();
+    assert_eq!(initial["mode"], "transient_state");
+    assert_eq!(
+        initial["initialization_unknowns"].as_u64().unwrap(),
+        initial["base_unknowns"].as_u64().unwrap() + 1
+    );
+    assert_eq!(w.cosim_status().unwrap().completed_time_ns, 0);
+    step(&mut w);
+    assert_eq!(
+        serde_json::to_value(&w.cosim_status().unwrap().initialization).unwrap(),
+        initial
+    );
+}

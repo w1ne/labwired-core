@@ -37,6 +37,7 @@ mod analog {
             thermistors: BTreeMap::new(),
             regulators: BTreeMap::new(),
             max_unknowns: labwired_core::analog::MAX_UNKNOWNS,
+            initialization: Default::default(),
         }
     }
 

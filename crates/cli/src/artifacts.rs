@@ -220,6 +220,15 @@ pub(crate) struct TestResult {
     /// run keeps a byte-identical `result.json`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) analog_series: Option<labwired_core::analog::AnalogSeries>,
+    /// Accepted initialization contract for each in-core analog model. Absent
+    /// for runs without analog models and failures before model construction.
+    #[serde(
+        default,
+        skip_deserializing,
+        skip_serializing_if = "std::collections::BTreeMap::is_empty"
+    )]
+    pub(crate) analog_initialization:
+        std::collections::BTreeMap<String, labwired_core::analog::AnalogInitializationStatus>,
     /// What became of every declarative input stimulus the script declared —
     /// applied, rejected by the engine, or never reached. Absent (and omitted)
     /// when the script declared none, so runs that never used the feature keep

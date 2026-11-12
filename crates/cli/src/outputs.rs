@@ -44,6 +44,10 @@ pub(crate) fn write_outputs<C: labwired_core::Cpu>(
     i2c_trace: crate::i2c_trace::I2cTraceSummary,
     motors: Vec<labwired_core::bus::MotorSnapshot>,
     analog_series: Option<labwired_core::analog::AnalogSeries>,
+    analog_initialization: std::collections::BTreeMap<
+        String,
+        labwired_core::analog::AnalogInitializationStatus,
+    >,
     stimuli: Vec<StimulusOutcome>,
     footprint: Option<artifacts::FootprintReport>,
     memory: Option<labwired_core::stack_paint::MainStackReport>,
@@ -130,6 +134,7 @@ pub(crate) fn write_outputs<C: labwired_core::Cpu>(
         i2c_trace_evicted: i2c_trace.evicted,
         motors,
         analog_series,
+        analog_initialization,
         stimuli,
         footprint,
         memory,
@@ -515,6 +520,7 @@ pub(crate) fn write_config_error_outputs(
         // Nor any motor evidence: the run was rejected before a machine existed.
         motors: Vec::new(),
         analog_series: None,
+        analog_initialization: Default::default(),
         // Nor any stimulus outcomes: the run was rejected before a machine
         // existed, so no stimulus was ever attempted.
         stimuli: Vec::new(),

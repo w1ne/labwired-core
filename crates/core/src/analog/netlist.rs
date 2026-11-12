@@ -215,6 +215,14 @@ pub enum AnalogError {
         /// How much that unknown still moved on the last iteration.
         delta: f64,
     },
+    /// The explicit t=0 state solve exhausted its nonlinear iteration budget.
+    /// No transient integration step has run or been accepted.
+    InitialStateNoConvergence {
+        time: f64,
+        iterations: u32,
+        unknown: String,
+        delta: f64,
+    },
     /// The manifest `config` block is not a usable analog configuration.
     Config(String),
 }
@@ -282,6 +290,10 @@ impl fmt::Display for AnalogError {
                      with `tools/cosim/labwired_ngspice.py`"
                 )
             }
+            Self::InitialStateNoConvergence { time, iterations, unknown, delta } => write!(
+                f,
+                "Newton iteration did not converge while solving explicit transient_state initialization (t = {time:e} s) after {iterations} iterations; `{unknown}` was still moving by {delta:e} per iteration. No initial solution was accepted; transient integration has not started"
+            ),
             Self::Config(message) => write!(f, "{message}"),
         }
     }

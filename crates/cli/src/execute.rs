@@ -1819,6 +1819,10 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         ctx.machine
             .analog_series()
             .filter(|series| !series.channels.is_empty()),
+        cosim
+            .as_ref()
+            .map(|session| session.analog_initialization_status())
+            .unwrap_or_default(),
         stimulus_outcomes,
         footprint,
         Some(memory),

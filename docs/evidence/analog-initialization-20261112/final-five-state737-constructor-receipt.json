@@ -1,0 +1,9 @@
+{
+  "input": "/data/work-scratch/native-five-mcu-transient-state-737-r2-20261112/model.json",
+  "input_sha256": "25b850c3bb4c6a631a435593fe5b3c8269de1597cf6933eff98c2cca38068d6e",
+  "seconds": 0.6165788169601001,
+  "exit": 0,
+  "timeout": false,
+  "stdout": "/data/work-evidence/analog-transient-state-20261112/final-five-state737-constructor.json",
+  "stderr": "/data/work-evidence/analog-transient-state-20261112/final-five-state737-constructor.log"
+}
