@@ -1,0 +1,39 @@
+{
+  "command": [
+    "rustc",
+    "--edition=2021",
+    "-C",
+    "opt-level=1",
+    "-C",
+    "debuginfo=0",
+    "/data/work-evidence/opamp-power-20261112/analog-netlist-probe-source-r7.rs",
+    "-L",
+    "dependency=/data/build-targets/at32-20261112/debug/deps",
+    "--extern",
+    "labwired_core=/data/build-targets/at32-20261112/debug/deps/liblabwired_core-1e12c06a019b1626.rlib",
+    "-o",
+    "/data/work-evidence/opamp-power-20261112/analog-netlist-probe-opamp-r7"
+  ],
+  "exit": 0,
+  "seconds": 0.428487187018618,
+  "source_path": "/data/worktrees/labwired-quad-native-pcb-onboard-20261112/scripts/analog-netlist-probe.rs",
+  "source_sha256": "add9e5dde4bda6c9f2208111e7bb4d4db83f991d9b9a3de0270fa7d327c9f166",
+  "binary_path": "/data/work-evidence/opamp-power-20261112/analog-netlist-probe-opamp-r7",
+  "binary_sha256": "dce8e940327d496d3a76e81e1988536ef45708fe01a218bf827790b6e7c4d346",
+  "core_rlib_path": "/data/build-targets/at32-20261112/debug/deps/liblabwired_core-1e12c06a019b1626.rlib",
+  "core_rlib_sha256": "ca81e98ea9391135a55521977982e8c8841b32b6166a0e55391f1f3d240d9553",
+  "core_dependency_file": "/data/build-targets/at32-20261112/debug/deps/labwired_core-1e12c06a019b1626.d",
+  "core_base": "dd8b68a651ee8d91f9d653db05efa318cfd51a5e",
+  "core_source_files": {
+    "crates/core/src/analog/adapter.rs": "e64afdeb58cb267ead1cc3b845e577cc8ba6f8d8ee5fa70c07894455312b593f",
+    "crates/core/src/analog/mna.rs": "fb1b407899d25e153228873d35b0982b94cd5016f3c588821a904972cf2faa46",
+    "crates/core/src/analog/mod.rs": "f180ae8f3729efe611f136fd41968075b3eeca2ca5387155e35c61c6cd686897",
+    "crates/core/src/analog/netlist.rs": "b5abd8672859ba213a3e082cf8afdb6d82e2432d1a30f86d3cab2d5e9a1e278e",
+    "crates/core/src/analog/opamp_power.rs": "4590059e4919a79c965032958ff33c8d8113a353f4d561649829a33a030b3817",
+    "crates/core/tests/analog_opamp_power.rs": "0782d742e5d6931528e42d9c6d103e479d3cdb56e84ce606b75100ee4868817f",
+    "docs/cosimulation_plugins.md": "59d7e28745e3889494e45ee159cc420e1db0d5d30af15f94080da3be064d049e"
+  },
+  "gate_receipt_sha256": "88dbfde12f0a843121be4ffb2488b009a6ae1b4b98a1412646226655c3fb6a00",
+  "tests_passed": 83,
+  "scope": "Production core linked through the final formatted generic harness; this link is not native initialization or execution evidence."
+}

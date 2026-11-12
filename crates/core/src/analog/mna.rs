@@ -68,6 +68,7 @@ use super::netlist::{
     AnalogError, BjtModel, Circuit, Diode, DiodeModel, MosChannelChargeModel, Mosfet, NodeRef,
     MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN,
 };
+use super::opamp_power::{OpAmpPowerState, Primitive as OpAmpPrimitive};
 
 /// Default limit for `N` nodes + `M` branch currents. Existing callers retain
 /// this bound unless they explicitly select a larger bounded limit.
@@ -295,6 +296,7 @@ pub struct Solver {
     saved_buck_enabled: Vec<bool>,
     buck_resistor_owner: Vec<Option<usize>>,
     buck_vccs_owner: Vec<Option<usize>>,
+    opamp_power: OpAmpPowerState,
     buck_sink_owner: Vec<Option<usize>>,
 
     node_v: Vec<f64>,
@@ -498,6 +500,7 @@ impl Solver {
             initialization_unknowns,
         };
         let voltage_source_values = circuit.voltage_sources.iter().map(|s| s.dc).collect();
+        let opamp_power = OpAmpPowerState::new(&circuit);
         let current_source_values = circuit.current_sources.iter().map(|s| s.dc).collect();
         let switch_closed = vec![false; circuit.switches.len()];
         let capacitors = circuit.capacitors.len();
@@ -551,6 +554,7 @@ impl Solver {
             saved_buck_enabled: vec![false; buck_count],
             buck_resistor_owner,
             buck_vccs_owner,
+            opamp_power,
             buck_sink_owner,
             node_v: vec![0.0; nodes],
             branch_i: vec![0.0; branches],
@@ -1006,6 +1010,12 @@ impl Solver {
     /// voltage-limited linearisation state. This includes reverse breakdown
     /// when configured and the same `GMIN` current used in the solve.
     pub fn diode_current(&self, index: usize) -> f64 {
+        if !self
+            .opamp_power
+            .active_at(OpAmpPrimitive::Diode, index, &self.circuit, &self.node_v)
+        {
+            return 0.0;
+        }
         let diode = &self.circuit.diodes[index];
         let vj = self.node_voltage(diode.junction_anode) - self.node_voltage(diode.cathode);
         diode_operating_point(diode, vj).id
@@ -1235,7 +1245,7 @@ impl Solver {
         }
         let outer_index = self.step_index;
         self.save_linearisation();
-        match self.step(h) {
+        let result = match self.step(h) {
             Err(AnalogError::NoConvergence { .. }) => {
                 self.restore_linearisation();
                 let result = self.step_cut(h, 1);
@@ -1257,7 +1267,14 @@ impl Solver {
                 })
             }
             other => other,
+        };
+        if result.is_err() {
+            // A terminal failure leaves public voltages at their last accepted
+            // point (which may be an accepted substep). Do not let a rejected
+            // off trial leave the next solve with an artificially open output.
+            self.opamp_power.update(&self.circuit, &self.node_v);
         }
+        result
     }
 
     /// Two half steps of `h`, each cut again on failure, `depth` cuts deep.
@@ -1280,6 +1297,7 @@ impl Solver {
     /// converge can be retried from where it started rather than from wherever
     /// the failed iteration left it.
     fn save_linearisation(&mut self) {
+        self.opamp_power.save();
         self.saved_diode_vj.copy_from_slice(&self.diode_vj);
         self.saved_bjt_vbe.copy_from_slice(&self.bjt_vbe);
         self.saved_bjt_vbc.copy_from_slice(&self.bjt_vbc);
@@ -1299,6 +1317,7 @@ impl Solver {
     }
 
     fn restore_linearisation(&mut self) {
+        self.opamp_power.restore();
         self.diode_vj.copy_from_slice(&self.saved_diode_vj);
         self.bjt_vbe.copy_from_slice(&self.saved_bjt_vbe);
         self.bjt_vbc.copy_from_slice(&self.saved_bjt_vbc);
@@ -1652,6 +1671,9 @@ impl Solver {
         self.rhs.iter_mut().for_each(|cell| *cell = 0.0);
 
         for (index, resistor) in self.circuit.resistors.iter().enumerate() {
+            if !self.opamp_power.active(OpAmpPrimitive::Resistor, index) {
+                continue;
+            }
             if self
                 .buck_resistor_owner
                 .get(index)
@@ -1746,6 +1768,9 @@ impl Solver {
             conductance(&mut self.matrix, dim, switch.a, switch.b, 1.0 / ohms);
         }
         for (index, source) in self.circuit.current_sources.iter().enumerate() {
+            if !self.opamp_power.active(OpAmpPrimitive::Current, index) {
+                continue;
+            }
             // SPICE: positive current flows from n+ through the source to n-,
             // so n+ is a sink and n- a supply.
             let amps = self.current_source_values[index];
@@ -1889,6 +1914,9 @@ impl Solver {
         }
         // G: gm·(v(nc+) − v(nc−)) leaves n+ and enters n−.
         for (index, source) in circuit.vccs.iter().enumerate() {
+            if !self.opamp_power.active(OpAmpPrimitive::Vccs, index) {
+                continue;
+            }
             if self
                 .buck_vccs_owner
                 .get(index)
@@ -1924,6 +1952,9 @@ impl Solver {
     fn build_rhs(&mut self, stamp: Stamp) {
         self.rhs.fill(0.0);
         for (index, source) in self.circuit.current_sources.iter().enumerate() {
+            if !self.opamp_power.active(OpAmpPrimitive::Current, index) {
+                continue;
+            }
             let amps = self.current_source_values[index];
             inject(&mut self.rhs, source.p, -amps);
             inject(&mut self.rhs, source.n, amps);
@@ -2106,6 +2137,8 @@ impl Solver {
             self.factorize()?;
             self.solve();
             if self.newton_converged() {
+                self.opamp_power
+                    .validate(&self.circuit, &self.solution[..self.nodes])?;
                 return Ok(());
             }
             if iteration == MAX_NEWTON_ITERATIONS {
@@ -2138,6 +2171,12 @@ impl Solver {
     }
 
     fn newton_converged(&self) -> bool {
+        if !self
+            .opamp_power
+            .consistent(&self.circuit, &self.solution[..self.nodes])
+        {
+            return false;
+        }
         if self
             .buck_enabled
             .iter()
@@ -2203,7 +2242,9 @@ impl Solver {
     /// Move every device's linearisation point to the solution just found,
     /// damped by the SPICE limiters.
     fn relinearise(&mut self) {
-        self.limiter_clamped = false;
+        self.limiter_clamped = self
+            .opamp_power
+            .update(&self.circuit, &self.solution[..self.nodes]);
         for index in 0..self.buck_enabled.len() {
             let enabled = self.desired_buck_enabled(index, &self.solution[..self.nodes]);
             if self.buck_enabled[index] != enabled {
@@ -2213,6 +2254,9 @@ impl Solver {
         }
 
         for index in 0..self.circuit.diodes.len() {
+            if !self.opamp_power.active(OpAmpPrimitive::Diode, index) {
+                continue;
+            }
             let diode = &self.circuit.diodes[index];
             let raw = node_diff(
                 &self.solution[..self.nodes],
@@ -2404,6 +2448,9 @@ impl Solver {
         let rhs = &mut self.rhs;
 
         for (index, diode) in self.circuit.diodes.iter().enumerate() {
+            if !self.opamp_power.active(OpAmpPrimitive::Diode, index) {
+                continue;
+            }
             if diode.model.rs > 0.0 {
                 conductance(
                     matrix,
@@ -2971,6 +3018,9 @@ impl Solver {
         // derivative is zero, so the output settles to the load's voltage at
         // the limited current instead of asking the gain node to supply more.
         for (index, limit) in self.circuit.output_current_limits.iter().enumerate() {
+            if !self.opamp_power.active(OpAmpPrimitive::OutputLimit, index) {
+                continue;
+            }
             let delta = self.output_limit_point[index];
             let unconstrained = delta / limit.rout;
             let current = unconstrained.clamp(-limit.ilim, limit.ilim);
@@ -2987,6 +3037,9 @@ impl Solver {
         // current is excluded so the settled open-loop gain remains AOL. The
         // same input error carries offset and CMRR through the limiter.
         for (index, source) in self.circuit.slew_limited_vccs.iter().enumerate() {
+            if !self.opamp_power.active(OpAmpPrimitive::SlewLimit, index) {
+                continue;
+            }
             let error = self.slew_limit_point[index];
             let nodes = &self.solution[..self.nodes];
             let gain_voltage = node_diff(nodes, source.n, source.p);

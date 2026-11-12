@@ -388,6 +388,12 @@ impl AnalogCosimAdapter {
 
         let mut inputs = BTreeMap::new();
         for (input, element) in &cfg.sources {
+            if super::opamp_power::owns_generated_primitive(solver.circuit(), element) {
+                return Err(AnalogError::Config(
+                    "every generated primitive of a supply-qualified OPAMP has one macro owner"
+                        .into(),
+                ));
+            }
             if super::controlled_buck::owns_generated_primitive(solver.circuit(), element) {
                 return Err(AnalogError::Config(
                     "every generated primitive of a controlled BUCK has one stage owner".into(),

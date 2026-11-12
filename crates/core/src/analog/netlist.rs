@@ -691,6 +691,17 @@ pub enum ComparatorOutput {
 /// capacitances with no voltage or temperature dependence. `IQ` is a fixed
 /// quiescent current from `v+` to `v−`, independent of signal and output load.
 ///
+/// Optional `VMIN`/`VMAX` declare a finite qualified supply span with
+/// `0 < VMIN <= VMAX` and `VMIN >= DROP_HI + DROP_LO`. The Newton solve uses
+/// signed `v(v+) - v(v-)`: `0 <= span < VMIN` disables gm/CMRR/VOS, bias/IQ,
+/// rail clamps and the active output stage (including ROUT/IOLIM). Passive
+/// RIN/RINCM/CIN and Cg/Rg remain, with compensation charge preserved. At or
+/// between the bounds the ordinary macro is active. A converged negative or
+/// excessive span is refused. Omission preserves the historical behavior.
+/// This opt-in off state is a functional assumption, not evidence for a
+/// device's unpowered impedance, leakage, UVLO or startup timing. It adds no
+/// output shunt: a truly floating off-state output remains singular.
+///
 /// What it does not model: signal- or load-dependent supply current. The
 /// output stage's current returns through ground, not through the supply pins.
 /// Clamp current reaches `v+`/`v−`; input bias current reaches `v−`.
@@ -731,6 +742,10 @@ pub struct OpAmpModel {
     pub drop_hi: f64,
     /// `DROP_LO`: how far above `v−` the output saturates, volts.
     pub drop_lo: f64,
+    /// Optional qualified supply envelope. Both bounds must be specified.
+    /// Omission preserves the historical always-active macro.
+    pub vmin: Option<f64>,
+    pub vmax: Option<f64>,
 }
 
 impl Default for OpAmpModel {
@@ -752,6 +767,8 @@ impl Default for OpAmpModel {
             sr: None,
             drop_hi: 0.0,
             drop_lo: 0.0,
+            vmin: None,
+            vmax: None,
         }
     }
 }
@@ -1483,6 +1500,8 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             sr: None,
             drop_hi: 1.5,
             drop_lo: 0.0,
+            vmin: None,
+            vmax: None,
         })),
         // LM393-like (TI LM393 datasheet, typical): AOL 200 V/mV, open
         // collector sinking 4 mA at VOL = 150 mV (so ROUT = 37.5 Ω), and a
@@ -2014,6 +2033,8 @@ pub struct Circuit {
     pub output_current_limits: Vec<OutputCurrentLimit>,
     /// Op-amp compensation stages with an explicit `SR`.
     pub slew_limited_vccs: Vec<SlewLimitedVccs>,
+    /// Explicit OPAMP supply envelopes and ownership of their active primitives.
+    pub opamp_power: Vec<super::opamp_power::OpAmpPowerBinding>,
     /// `.ic V(node)=value` entries, in netlist order.
     pub node_ic: Vec<(usize, f64)>,
 }
@@ -3674,6 +3695,8 @@ fn parse_model(
             (ModelCard::OpAmp(model), "SR") => model.sr = Some(value),
             (ModelCard::OpAmp(model), "DROP_HI") => model.drop_hi = value,
             (ModelCard::OpAmp(model), "DROP_LO") => model.drop_lo = value,
+            (ModelCard::OpAmp(model), "VMIN") => model.vmin = Some(value),
+            (ModelCard::OpAmp(model), "VMAX") => model.vmax = Some(value),
             (ModelCard::Comparator(model), "AOL") => model.aol = value,
             (ModelCard::Comparator(model), "GBW") => model.gbw = value,
             (ModelCard::Comparator(model), "ROUT") => model.rout = value,
@@ -3693,7 +3716,7 @@ fn parse_model(
             (ModelCard::OpAmp(_), other) => {
                 return Err(ctx.parse_err(format!(
                     "`{other}` is not an OPAMP parameter; expected AOL, GBW, ROUT, VOS, \
-                     IBIAS, IOS, CINCM, CIND, RIN, RINCM, IQ, CMRR, IOLIM, SR, DROP_HI, DROP_LO"
+                     IBIAS, IOS, CINCM, CIND, RIN, RINCM, IQ, CMRR, IOLIM, SR, DROP_HI, DROP_LO, VMIN, VMAX"
                 )))
             }
             (ModelCard::Regulator(model), param) => {
@@ -4153,6 +4176,16 @@ fn lower_opamp(
     model: OpAmpModel,
 ) -> Result<(), AnalogError> {
     let [inp, inn, vcc, vee, out] = macro_pins(ctx, device, "op-amp")?;
+    let supply = match (model.vmin, model.vmax) {
+        (None, None) => None,
+        (Some(min), Some(max))
+            if min.is_finite() && max.is_finite() && min > 0.0 && max >= min
+                && min >= model.drop_hi + model.drop_lo => Some((min, max)),
+        _ => return Err(ctx.parse_err(
+            "OPAMP VMIN/VMAX require a finite pair with 0 < VMIN <= VMAX and VMIN >= DROP_HI + DROP_LO",
+        )),
+    };
+    let power_begin = super::opamp_power::PrimitiveCounts::of(circuit);
     check_macro(ctx, model.aol, model.gbw, model.rout)?;
     if model.drop_hi < 0.0 || model.drop_lo < 0.0 {
         return Err(ctx.parse_err("DROP_HI and DROP_LO must not be negative"));
@@ -4242,6 +4275,29 @@ fn lower_opamp(
         // Thevenin v(p) behind ROUT, as a Norton pair: no extra unknown.
         lower.vccs("go", None, out, p, None, 1.0 / model.rout);
         lower.resistor("ro", out, None, model.rout);
+    }
+    if let Some((min_v, max_v)) = supply {
+        let output_resistor = model
+            .ilim
+            .is_none()
+            .then(|| lower.circuit.resistors.len() - 1);
+        let end = super::opamp_power::PrimitiveCounts::of(lower.circuit);
+        lower
+            .circuit
+            .opamp_power
+            .push(super::opamp_power::OpAmpPowerBinding {
+                name: device.name.clone(),
+                vcc,
+                vee,
+                min_v,
+                max_v,
+                current_sources: power_begin.currents..end.currents,
+                vccs: power_begin.vccs..end.vccs,
+                diodes: power_begin.diodes..end.diodes,
+                output_limits: power_begin.output_limits..end.output_limits,
+                slew_limits: power_begin.slew_limits..end.slew_limits,
+                output_resistor,
+            });
     }
     Ok(())
 }

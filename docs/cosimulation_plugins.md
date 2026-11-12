@@ -446,6 +446,26 @@ parameters have no temperature dependence. Signal- or load-dependent supply
 current is not modeled. The hand-calculated macro tests are in
 `crates/core/tests/analog_macros.rs`.
 
+An OPAMP card can additionally declare both `VMIN` and `VMAX`, for example
+`VMIN=2.5 VMAX=5.5`. The pair must be finite and satisfy
+`0 < VMIN <= VMAX` and `VMIN >= DROP_HI + DROP_LO`. The solver qualifies the
+signed difference `VCC - VEE` from the solved circuit. A span from zero up to
+(but excluding) `VMIN` disables active gain/CMRR/offset drive, input bias,
+quiescent current, rail clamps, and the output Norton/ROUT or IOLIM stage.
+Passive input resistances and capacitances remain; the compensation Cg/Rg
+network retains and dissipates its stored state. The ordinary macro operates
+at and between the two limits. A converged reverse or excessive supply span
+is refused. Omitting the pair preserves the existing macro unchanged.
+
+This off state is an explicit functional assumption. It does not establish a
+part's unpowered impedance, leakage, input protection, UVLO hysteresis or
+startup timing. A floating off output stays singular; the engine does not
+add a shunt. Every generated primitive of a qualified macro has one owner,
+so `config.sources` cannot rewrite its headroom, bias, gain or compensation.
+External supply sources and physical loads remain independently routable.
+The signed bounds, active-set convergence, passive-state retention and
+legacy parity cases are in `crates/core/tests/analog_opamp_power.rs`.
+
 `.options`, `.tran`, `.op`, `.print`, `.plot`, `.save`, `.probe`, `.width`,
 `.temp`, `.nodeset`, `.title` and a whole `.control` … `.endc` block are
 accepted and ignored, so one deck can be handed to this engine and to ngspice
