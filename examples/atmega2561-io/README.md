@@ -32,6 +32,17 @@ cargo test -p labwired-core --test cosim_pin_routing \
   atmega2561_diode_netlist_reaches_adc0_end_to_end -- --nocapture
 ```
 
+[`analog-bjt-high-injection-system.yaml`](analog-bjt-high-injection-system.yaml)
+routes matched generic Gummel–Poon NPN branches to ADC2/3 beside an unrelated
+Beta NTC on ADC0 and Shockley diode on ADC1. The test compares each collector
+voltage with an independent 5 V load-line calculation and converts all four
+inputs through the ATmega2561 ADC registers:
+
+```bash
+cargo test -p labwired-core --test cosim_pin_routing \
+  atmega2561_bjt_high_injection_reaches_firmware_adc_alongside_ntc_and_diode -- --nocapture
+```
+
 ## What this proves
 
 | Surface | State |

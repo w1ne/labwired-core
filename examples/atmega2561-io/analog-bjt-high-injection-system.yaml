@@ -1,0 +1,79 @@
+# Generic Beta NTC, Shockley diode, and matched Gummel–Poon NPN branches route
+# through the ATmega2561's firmware-visible ADC0..ADC3 inputs.
+name: "atmega2561-bjt-high-injection"
+chip: "../../configs/chips/atmega2561.yaml"
+cpu_hz: 16000000
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "ntc_divider"
+    adapter: "analog"
+    step_ns: 100000
+    inputs:
+      temperature: "ui.ntc.temperature_c"
+    outputs:
+      v_sense: "adc.adc.0_volts"
+    config:
+      vdd: 5.0
+      netlist_text: |
+        Vcc vcc 0 dc 5
+        Rntc vcc sense 10k beta=3950 tnom=25 temp=25
+        Rpull sense 0 10k
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        temperature: "Rntc"
+  - id: "bjt_high_injection_rolloff"
+    adapter: "analog"
+    step_ns: 100000
+    inputs:
+      base_drive: "ui.bjt_high_injection.base_v"
+    outputs:
+      collector_voltage: "adc.adc.2_volts"
+    config:
+      vdd: 5.0
+      netlist_text: |
+        Vcc supply 0 dc 5
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 10k
+        Q1 collector base 0 NPN_HIGH_INJECTION
+        .model NPN_HIGH_INJECTION NPN(IS=1e-16 BF=80 BR=4 VAF=50 VAR=75 IKF=50u IKR=500u NKF=0.8)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+  - id: "bjt_high_injection_control"
+    adapter: "analog"
+    step_ns: 100000
+    inputs:
+      base_drive: "ui.bjt_high_injection.base_v"
+    outputs:
+      collector_voltage: "adc.adc.3_volts"
+    config:
+      vdd: 5.0
+      netlist_text: |
+        Vcc supply 0 dc 5
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 10k
+        Q1 collector base 0 NPN_CONTROL
+        .model NPN_CONTROL NPN(IS=1e-16 BF=80 BR=4 VAF=50 VAR=75)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+  - id: "shockley_diode"
+    adapter: "analog"
+    step_ns: 100000
+    outputs:
+      v_anode: "adc.adc.1_volts"
+    config:
+      vdd: 5.0
+      netlist_text: |
+        Vcc supply 0 dc 5
+        Rlimit supply anode 1k
+        D1 anode 0 DSHOCKLEY
+        .model DSHOCKLEY D(IS=2.52n N=1.752 RS=0.568)
+      probes:
+        v_anode: "v(anode)"

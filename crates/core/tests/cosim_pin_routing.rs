@@ -1426,15 +1426,15 @@ fn mega2560_adc_convert(
     u16::from(machine.cpu.adch) << 8 | u16::from(machine.cpu.adcl)
 }
 
-/// Convert one low ATmega Mega-family ADC input using the firmware-visible
-/// ADMUX/ADCSRA sequence. ATmega1281 bonds ADC0..ADC7 without the MUX5 path.
-fn atmega1281_adc_convert(
+/// Convert one low AVR Mega-family ADC input using the firmware-visible
+/// ADMUX/ADCSRA sequence. These profiles bond ADC0..ADC7 without MUX5.
+fn avr_mega_adc_convert(
     machine: &mut labwired_core::Machine<labwired_core::cpu::avr::Avr>,
     channel: u8,
 ) -> u16 {
     use labwired_core::Cpu;
 
-    assert!(channel < 8, "the ATmega1281 bonds ADC0 through ADC7");
+    assert!(channel < 8, "the AVR Mega profile bonds ADC0 through ADC7");
     machine.cpu.load_words(
         0,
         &[
@@ -1452,7 +1452,7 @@ fn atmega1281_adc_convert(
         machine
             .cpu
             .step(&mut machine.bus, &[], &config)
-            .expect("execute ATmega1281 ADC register sequence");
+            .expect("execute AVR Mega ADC register sequence");
     }
     assert_eq!(
         machine.cpu.admux & 0x0f,
@@ -1812,7 +1812,7 @@ fn atmega1281_bjt_high_injection_reaches_firmware_adc_alongside_ntc_and_diode() 
             let routed_mv = (voltage * 1000.0 + 0.5).floor() as u32;
             let expected_count = (routed_mv * 1024 / 5000).min(1023) as u16;
             assert_eq!(
-                atmega1281_adc_convert(&mut machine, channel as u8),
+                avr_mega_adc_convert(&mut machine, channel as u8),
                 expected_count,
                 "firmware ADC{channel} must convert its solved analog voltage"
             );
@@ -1934,6 +1934,95 @@ fn atmega2561_diode_netlist_reaches_adc0_end_to_end() {
     assert_eq!(
         undriven_adc1, 2500,
         "the adjacent undriven ADC1 channel keeps its 2.5 V fallback"
+    );
+}
+
+/// The ATmega2561 routes the generic Gummel–Poon NPN pair through ADC2/3
+/// beside a Beta NTC and unrelated Shockley diode on ADC0/1. Independent
+/// load-line checks and the firmware-visible ADC results expose high-injection
+/// collector-current rolloff on this second Mega-family profile.
+#[test]
+fn atmega2561_bjt_high_injection_reaches_firmware_adc_alongside_ntc_and_diode() {
+    use labwired_core::cpu::avr::Avr;
+    use labwired_core::Machine;
+
+    let (manifest, bus) =
+        bus_and_manifest("examples/atmega2561-io/analog-bjt-high-injection-system.yaml");
+    assert_eq!(manifest.name, "atmega2561-bjt-high-injection");
+    let mut session = build_session(&bus, &manifest.cosim_models);
+    let mut machine = Machine::new(Avr::for_chip_name("atmega2561"), bus);
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold the unrelated Beta NTC at nominal temperature");
+    session
+        .set_signal_number("ui.bjt_high_injection.base_v", 0.0)
+        .expect("initialize the matched Gummel–Poon branches");
+
+    let mut cycles = 0;
+    let mut high_drive_delta = None;
+    for base_drive_v in [0.8_f64, 1.5, 3.3] {
+        session
+            .set_signal_number("ui.bjt_high_injection.base_v", base_drive_v)
+            .expect("set common BJT base drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut machine.bus)
+            .expect("solve and route NTC, diode, and matched BJT netlists");
+        assert_eq!(steps.len(), 4, "NTC, diode, and both BJT branches solve");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let read_voltage = |path| match session.signals().get(path) {
+            Some(CosimSignalValue::F64(volts)) => *volts,
+            other => panic!("expected routed voltage at {path}, got {other:?}"),
+        };
+        let voltages = [
+            read_voltage("adc.adc.0_volts"),
+            read_voltage("adc.adc.1_volts"),
+            read_voltage("adc.adc.2_volts"),
+            read_voltage("adc.adc.3_volts"),
+        ];
+        assert!(
+            (voltages[0] - 2.5).abs() < 1e-9,
+            "unrelated NTC stays at half scale"
+        );
+        let expected_diode = shockley_diode_voltage_5v(300.0);
+        assert!(
+            (voltages[1] - expected_diode).abs() < 2e-5,
+            "unrelated diode remains on its independent load line: expected {expected_diode} V, got {} V",
+            voltages[1]
+        );
+
+        let expected_rolloff = gummel_poon_collector_voltage_5v(base_drive_v, true, Some(50.0));
+        let expected_control = gummel_poon_collector_voltage_5v(base_drive_v, false, Some(50.0));
+        assert!(
+            (voltages[2] - expected_rolloff).abs() < 5e-5,
+            "IKF/IKR/NKF load line at {base_drive_v} V should be {expected_rolloff} V, got {} V",
+            voltages[2]
+        );
+        assert!(
+            (voltages[3] - expected_control).abs() < 5e-5,
+            "matched no-rolloff load line at {base_drive_v} V should be {expected_control} V, got {} V",
+            voltages[3]
+        );
+
+        for (channel, voltage) in voltages.iter().copied().enumerate() {
+            let routed_mv = (voltage * 1000.0 + 0.5).floor() as u32;
+            let expected_count = (routed_mv * 1024 / 5000).min(1023) as u16;
+            assert_eq!(
+                avr_mega_adc_convert(&mut machine, channel as u8),
+                expected_count,
+                "firmware ADC{channel} must convert its solved analog voltage"
+            );
+        }
+        if base_drive_v == 3.3 {
+            high_drive_delta = Some(voltages[2] - voltages[3]);
+        }
+    }
+
+    let high_drive_delta = high_drive_delta.expect("high-drive sample was recorded");
+    assert!(
+        high_drive_delta > 0.1,
+        "IKF/NKF high-injection rolloff reduces collector current: voltage delta {high_drive_delta} V"
     );
 }
 
