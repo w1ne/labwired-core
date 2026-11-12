@@ -1531,11 +1531,12 @@ const ESP32_GPIO_OUT1_OFFSET: u64 = 0x10;
 /// the same bank-relative encoding and must be expanded for input probes too.
 fn pad_number(owner: &dyn Peripheral, register_offset: u64, bit: u8) -> u8 {
     let is_port = owner.gpio_port_offsets().is_some();
-    let s3_input_bank1 = register_offset == 0x40
-        && owner
-            .as_any()
-            .is_some_and(|a| a.is::<crate::peripherals::esp32s3::gpio::Esp32s3Gpio>());
-    if !is_port && bit < 32 && (register_offset == ESP32_GPIO_OUT1_OFFSET || s3_input_bank1) {
+    if let Some(bank) = owner.gpio_register_banks().iter().find(|bank| {
+        (register_offset == bank.input || register_offset == bank.output) && bit < bank.pad_count
+    }) {
+        return bank.first_pad + bit;
+    }
+    if !is_port && bit < 32 && register_offset == ESP32_GPIO_OUT1_OFFSET {
         bit + 32
     } else {
         bit

@@ -983,6 +983,9 @@ pub(crate) fn run_firmware(
             .unwrap_or_default()
     };
     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
+    if let Some(chip) = chip_desc.as_ref() {
+        bus.attach_chip_io_levels(chip);
+    }
     let boot_mode = wiring.boot_mode; // Copy before cpu is moved out of wiring
 
     // Install default tracing GPIO observer.

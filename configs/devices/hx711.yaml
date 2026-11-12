@@ -35,8 +35,9 @@
 #
 # ── The state machine ──────────────────────────────────────────────────────
 #
-# Four integer vars, no registers (there is no register map on this part):
-#   raw          the live 24-bit two's-complement sample, in counts
+# Five integer vars, no registers (there is no register map on this part):
+#   raw          the latest 24-bit two's-complement sample, in counts
+#   frame_raw    the sample latched on the first rising edge of a frame
 #   shifting     1 while a frame is being clocked out
 #   bit_index    0..24, the next bit of the frame
 #   dout_level   the level DOUT currently holds — kept as a var because the
@@ -91,6 +92,8 @@ behavior:
     # negative integer and the bit extraction below reads their low 24 bits,
     # which IS the two's-complement pattern the part shifts.
     raw: 0
+    # Keep the word atomic when a SimInput update arrives during readout.
+    frame_raw: 0
     shifting: 0
     bit_index: 0
     # DOUT starts LOW = data ready, matching the model this replaces. (On
@@ -115,6 +118,7 @@ behavior:
     - on: { pin: SCK, edge: rising }
       when: "!var(shifting) && !var(dout_level)"
       do:
+        - { var: { name: frame_raw, value: "var(raw)" } }
         - { var: { name: shifting, value: 1 } }
         - { var: { name: bit_index, value: 0 } }
 
@@ -145,12 +149,13 @@ behavior:
     - on: { pin: SCK, edge: rising }
       when: "var(shifting) && var(bit_index) < 24"
       do:
-        - { var: { name: dout_level, value: "(var(raw) >> (23 - var(bit_index))) & 1" } }
+        - { var: { name: dout_level, value: "(var(frame_raw) >> (23 - var(bit_index))) & 1" } }
         - { var: { name: bit_index, value: "var(bit_index) + 1" } }
         - { pin: DOUT, level: "var(dout_level)" }
 
     # ── stimulus ─────────────────────────────────────────────────────────
-    # Either channel poses the live sample. `weight` carries `expr_scale: 100`,
+    # Either channel updates the NEXT sample, never the latched frame.
+    # `weight` carries `expr_scale: 100`,
     # so `input(weight)` is already counts; `raw` is counts by definition.
     - on: { input: weight }
       do: [{ var: { name: raw, value: "input(weight)" } }]
@@ -187,5 +192,5 @@ metadata:
 emit:
   connection: gpio
   config:
-    - { key: sck_pin, from_part_pins: [SCK] }
-    - { key: dt_pin, from_part_pins: [DT] }
+    - { key: sck_pin, from_part_pin: [SCK] }
+    - { key: dt_pin, from_part_pin: [DT] }

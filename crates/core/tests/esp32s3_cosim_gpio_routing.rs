@@ -38,6 +38,9 @@ fn routes(pad: u8) -> CosimModelConfig {
 fn s3_input_resolver_uses_the_correct_bank_and_register_bit() {
     let mut bus = bus();
     for (pin, addr, bit) in [
+        ("GPIO0", GPIO + 0x3c, 0),
+        ("GPIO31", GPIO + 0x3c, 31),
+        ("GPIO32", GPIO + 0x40, 0),
         ("GPIO8", GPIO + 0x3c, 8),
         ("gpio9", GPIO + 0x3c, 9),
         ("IO40", GPIO + 0x40, 8),
@@ -61,7 +64,7 @@ fn s3_input_resolver_uses_the_correct_bank_and_register_bit() {
 
 #[test]
 fn s3_low_and_high_bank_cosim_routes_do_not_alias() {
-    for pad in [8u8, 9, 40, 48] {
+    for pad in [0u8, 8, 9, 31, 32, 40, 48] {
         let mut bus = bus();
         let (mut router, errors) = SignalRouter::bind(&[routes(pad)], &bus);
         assert!(errors.is_empty(), "GPIO{pad} failed to bind: {errors:?}");

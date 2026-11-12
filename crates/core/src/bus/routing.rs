@@ -248,13 +248,12 @@ impl SystemBus {
         // absolute pad number. Without this, IN1 bit 8 would drive GPIO8
         // instead of GPIO40. Leave absolute-pad callers unchanged.
         let owner = &self.peripherals[idx];
-        let is_s3_bank1 = addr == owner.base + 0x40
-            && bit < 32
-            && owner
-                .dev
-                .as_any()
-                .is_some_and(|a| a.is::<crate::peripherals::esp32s3::gpio::Esp32s3Gpio>());
-        let pad = if is_s3_bank1 { bit + 32 } else { bit };
+        let pad = owner
+            .dev
+            .gpio_register_banks()
+            .iter()
+            .find(|bank| addr == owner.base + bank.input && bit < bank.pad_count)
+            .map_or(bit, |bank| bank.first_pad + bit);
         self.set_peripheral_gpio_input(idx, pad, level)
     }
 
@@ -305,18 +304,13 @@ impl SystemBus {
         // bit for MMIO clients; pin-port clients recover the absolute pad.
         if let Some(idx) = bus.find_peripheral_index_by_name("gpio") {
             let owner = &bus.peripherals[idx];
-            if owner
-                .dev
-                .as_any()
-                .is_some_and(|a| a.is::<crate::peripherals::esp32s3::gpio::Esp32s3Gpio>())
-            {
+            let banks = owner.dev.gpio_register_banks();
+            if !banks.is_empty() {
                 let pad = Self::parse_esp32s3_gpio_pin(pin)?;
-                let (offset, bit) = if pad >= 32 {
-                    (0x40, pad - 32)
-                } else {
-                    (0x3C, pad)
-                };
-                return Some((owner.base + offset, bit));
+                let bank = banks
+                    .iter()
+                    .find(|bank| pad >= bank.first_pad && pad - bank.first_pad < bank.pad_count)?;
+                return Some((owner.base + bank.input, pad - bank.first_pad));
             }
         }
         // ESP32 / ESP32-C3: "GPIO5", "gpio5", "IO5", or bare "5" → gpio peripheral IN reg.

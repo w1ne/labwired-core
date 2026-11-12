@@ -752,6 +752,7 @@ fn build_esp32s3_node(
 
     let mut bus = crate::bus::SystemBus::new();
     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
+    bus.attach_chip_io_levels(chip);
     // Devices the board manifest wires (an OLED on i2c0, a panel on SPI) — the
     // same factory the single-chip S3 paths call; a node without it silently
     // dropped every `external_devices` entry.

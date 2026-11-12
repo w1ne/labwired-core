@@ -323,25 +323,52 @@ fn a_frame_in_progress_is_not_restarted_by_a_clock() {
 /// the master would hand a driver half of one reading and half of another.
 #[test]
 fn a_stimulus_mid_frame_does_not_corrupt_the_word() {
-    let mut m = machine();
-    run(&mut m, 200_000);
-    set_input(&mut m, "raw", f64::from(0x007F_0000));
-
-    let mut word = 0u32;
-    for _ in 0..8 {
-        word = (word << 1) | u32::from(pulse(&mut m));
+    // Both samples MUST have different unread bits. The old 0x7F0000 -> 0
+    // vector had an all-zero unread suffix and passed even without a latch.
+    for split in 1..24 {
+        let mut m = machine();
+        run(&mut m, 200_000);
+        set_input(&mut m, "raw", f64::from(0x0055_AA55));
+        let mut word = 0u32;
+        for _ in 0..split {
+            word = (word << 1) | u32::from(pulse(&mut m));
+        }
+        let held_dout = dout(&mut m);
+        set_input(&mut m, "raw", f64::from(0x002A_55AA));
+        assert_eq!(dout(&mut m), held_dout, "input must not change held DOUT");
+        for _ in split..24 {
+            word = (word << 1) | u32::from(pulse(&mut m));
+        }
+        assert_eq!(word, 0x0055_AA55, "torn frame at bit boundary {split}");
+        pulse(&mut m);
+        assert_eq!(
+            read_frame(&mut m),
+            0x002A_55AA,
+            "next frame must use new sample"
+        );
     }
-    // Change the sample half way through — the remaining bits still come from
-    // the word the frame opened with.
-    set_input(&mut m, "raw", 0.0);
-    for _ in 0..16 {
-        word = (word << 1) | u32::from(pulse(&mut m));
-    }
-    assert_eq!(word, 0x007F_0000, "the frame carried one sample end to end");
+}
 
-    // …and the NEXT frame carries the new one.
-    pulse(&mut m);
-    assert_eq!(read_frame(&mut m), 0x0000_0000);
+/// Physical weight changes use the same atomic frame path as raw injection.
+/// Include a sign change and a fractional-gram value (100 counts per gram).
+#[test]
+fn a_weight_change_mid_frame_latches_until_the_next_sample() {
+    for split in 1..24 {
+        let mut m = machine();
+        run(&mut m, 200_000);
+        set_input(&mut m, "weight", 400.25);
+        let mut word = 0u32;
+        for _ in 0..split {
+            word = (word << 1) | u32::from(pulse(&mut m));
+        }
+        set_input(&mut m, "weight", -25.5);
+        for _ in split..24 {
+            word = (word << 1) | u32::from(pulse(&mut m));
+        }
+        assert_eq!(word, 40_025, "weight tore frame at bit boundary {split}");
+        pulse(&mut m);
+        assert_eq!(read_frame(&mut m), (-2550i32 as u32) & 0x00FF_FFFF);
+    }
 }
 
 // ─── the attach path ───────────────────────────────────────────────────────
@@ -366,4 +393,25 @@ fn the_part_is_embedded_and_still_in_the_kit_registry() {
     assert_eq!(keys, vec!["sck_pin", "dt_pin"]);
     let channels: Vec<&str> = meta.inputs.iter().map(|c| c.key.as_ref()).collect();
     assert_eq!(channels, vec!["weight", "raw"]);
+}
+
+#[test]
+fn emit_pin_bindings_match_the_scalar_gpio_device_config_contract() {
+    let doc: serde_yaml::Value =
+        serde_yaml::from_str(include_str!("../../../configs/devices/hx711.yaml")).unwrap();
+    let fields = doc["emit"]["config"].as_sequence().unwrap();
+    for key in ["sck_pin", "dt_pin"] {
+        let field = fields
+            .iter()
+            .find(|v| v["key"].as_str() == Some(key))
+            .unwrap();
+        assert!(
+            field["from_part_pin"].is_sequence(),
+            "{key} must emit one scalar pad label"
+        );
+        assert!(
+            field["from_part_pins"].is_null(),
+            "{key} must not emit an array rejected by gpio_device"
+        );
+    }
 }

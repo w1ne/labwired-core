@@ -316,6 +316,9 @@ fn run_s3_rom_boot_no_elf(
             .unwrap_or_default()
     };
     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
+    if let Ok(chip) = system.chip() {
+        bus.attach_chip_io_levels(&chip);
+    }
     // Wire matrix kits (INA219, OLED, …) the same way the ELF arm does.
     if let Err(e) =
         labwired_core::system::xtensa::attach_esp32_external_devices(&mut bus, &manifest)
@@ -1250,7 +1253,7 @@ pub(crate) fn run_test(
             // machine. `--rom-boot` on an S3 chip takes the real-ROM path;
             // classic ESP32 stays on the legacy fast-boot (its rom-boot is a
             // separate task).
-            let is_esp32s3 = {
+            let resolved_xtensa_chip = {
                 let chip_dir = sys_path
                     .parent()
                     .unwrap_or_else(|| std::path::Path::new("."));
@@ -1259,9 +1262,11 @@ pub(crate) fn run_test(
                     chip_dir,
                     &crate::plugin_chip_yaml(plugins),
                 )
-                .map(|c| c.is_esp32s3())
-                .unwrap_or(false)
+                .ok()
             };
+            let is_esp32s3 = resolved_xtensa_chip
+                .as_ref()
+                .is_some_and(|c| c.is_esp32s3());
 
             let mut machine = if is_esp32s3 {
                 // ── ESP32-S3 (LX7): S3 memmap + XIP, NOT classic ESP32 map ──
@@ -1295,6 +1300,9 @@ pub(crate) fn run_test(
                         ..Esp32s3Opts::default()
                     };
                     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
+                    if let Some(chip) = resolved_xtensa_chip.as_ref() {
+                        bus.attach_chip_io_levels(chip);
+                    }
                     // Wire matrix kits (INA219, OLED, …) the same way classic ESP32 does.
                     if let Err(e) = labwired_core::system::xtensa::attach_esp32_external_devices(
                         &mut bus, manifest,
@@ -1380,6 +1388,9 @@ pub(crate) fn run_test(
                     }
                     let opts = Esp32s3Opts::default();
                     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
+                    if let Some(chip) = resolved_xtensa_chip.as_ref() {
+                        bus.attach_chip_io_levels(chip);
+                    }
                     if _fast.is_none() {
                         std::env::remove_var("LABWIRED_ESP32S3_FASTBOOT");
                     }
