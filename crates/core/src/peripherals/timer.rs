@@ -1755,6 +1755,11 @@ impl crate::Peripheral for Timer {
         self.scheduler_mode()
     }
 
+    fn force_legacy_walk(&mut self) -> bool {
+        Timer::force_legacy_walk(self);
+        true
+    }
+
     fn needs_legacy_walk(&self) -> bool {
         // Everything this model's `tick()` can ever do (prescaled up-count,
         // UIF/CCxIF latching, held-level NVIC pend) is event-expressible —

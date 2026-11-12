@@ -669,13 +669,9 @@ fn bldc_control_test_bus(legacy_walk: bool) -> SystemBus {
             unreachable!();
         };
         let timer = *timer;
-        bus.peripherals[timer]
-            .dev
-            .as_any_mut()
-            .unwrap()
-            .downcast_mut::<crate::peripherals::timer::Timer>()
-            .unwrap()
-            .force_legacy_walk();
+        assert!(bus.peripherals[timer].dev.force_legacy_walk());
+        bus.recompute_walk_deletable();
+        bus.refresh_peripheral_index();
     }
     bus
 }
