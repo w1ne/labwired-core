@@ -58,6 +58,12 @@ routes a generic level-1 NMOS with CGDO gate-drain overlap charge and a matched
 zero-overlap control to PA2/PA3. It checks the transient recurrence through
 ADC1 while retaining the unrelated NTC and diode routes.
 
+[`analog-bjt-high-injection-adc-system.yaml`](analog-bjt-high-injection-adc-system.yaml)
+routes matched generic Gummel–Poon NPN branches with and without IKF/IKR/NKF
+rolloff to PA2/PA3. The co-simulation checks independent collector load lines
+and firmware-visible ADC1 conversions beside the unrelated NTC and Shockley
+diode routes.
+
 ## Source and validation boundary
 
 The board wiring follows ST UM1724 and the chip geometry follows ST DS5319.
