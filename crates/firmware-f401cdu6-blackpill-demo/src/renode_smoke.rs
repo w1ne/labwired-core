@@ -94,8 +94,12 @@ const SPI_SR: u32 = SPI1 + 0x08;
 const SPI_DR: u32 = SPI1 + 0x0C;
 const NVIC_ISPR1: u32 = 0xE000_E204;
 const NVIC_ISPR0: u32 = 0xE000_E200;
+const NVIC_ISER1: u32 = 0xE000_E104;
+const NVIC_ICER1: u32 = 0xE000_E184;
 const NVIC_ICPR0: u32 = 0xE000_E280;
 const NVIC_ICPR1: u32 = 0xE000_E284;
+const NVIC_IPR: u32 = 0xE000_E400;
+const NVIC_IABR0: u32 = 0xE000_E300;
 const SPI1_IRQ_BIT: u32 = 1 << (35 - 32);
 const USART2_IRQ_BIT: u32 = 1 << (38 - 32);
 const USART1_IRQ_BIT: u32 = 1 << (37 - 32);
@@ -103,6 +107,13 @@ const I2C1_EV_IRQ_BIT: u32 = 1 << 31;
 const I2C1_ER_IRQ_BIT: u32 = 1;
 const I2C2_EV_IRQ_BIT: u32 = 1 << 1;
 const I2C2_ER_IRQ_BIT: u32 = 1 << 2;
+const FPU_IRQ: u32 = 54;
+const FPU_IRQ_BIT: u32 = 1 << (FPU_IRQ - 32);
+const FPU_VECTOR: u32 = 16 + FPU_IRQ;
+const SCB_CPACR: u32 = 0xE000_ED88;
+const FPU_FPCCR: u32 = 0xE000_EF34;
+const FPU_FPCAR: u32 = 0xE000_EF38;
+const FPU_RECORD: u32 = 0x2000_1300;
 
 const SYSTICK_CSR: u32 = 0xE000_E010;
 const SYSTICK_RVR: u32 = 0xE000_E014;
@@ -209,9 +220,11 @@ fn main() -> ! {
     });
     let systick_tailchain_ok = smoke_systick_pendsv_tailchain();
     let systick_psp_tailchain_ok = smoke_systick_pendsv_psp_tailchain();
+    let fpu_lazy_exception_ok = unsafe { smoke_fpu_lazy_exception() };
     passed |= ((systick_pending_ok && systick_dispatch_ok) as u32) << 12;
     passed |=
         ((systick_priority_ok && systick_tailchain_ok && systick_psp_tailchain_ok) as u32) << 13;
+    passed |= (fpu_lazy_exception_ok as u32) << 14;
 
     let ahb = rd(RCC_AHB1ENR) & 0x5;
     let apb = rd(RCC_APB1ENR) & ((1 << 0) | (1 << 17) | (1 << 21) | (1 << 22));
@@ -403,13 +416,220 @@ fn main() -> ! {
     passed |= (usart2_rx_gate_ok as u32) << 11;
 
     wr(RESULT, 0xB1AC_0000 | passed);
-    send(if passed == 0x3FFF {
+    send(if passed == 0x7FFF {
         b"BLACKPILL PASS\r\n"
     } else {
         b"BLACKPILL FAIL\r\n"
     });
 
     loop {}
+}
+
+/// Exercise the F401's Cortex-M4F floating-point context integration. Thread
+/// mode sets S0, then a software-pended IRQ takes an extended lazy frame. The
+/// handler's first FP instruction forces the save and deliberately clobbers
+/// S0; exception return must restore the interrupted value.
+unsafe fn smoke_fpu_lazy_exception() -> bool {
+    const CPACR_FULL_ACCESS: u32 = 0x00F0_0000;
+    const FPCCR_ASPEN_LSPEN: u32 = 0xC000_0000;
+    const FPCCR_LSPACT: u32 = 1;
+    const FPCA: u32 = 1 << 2;
+    const THREAD_S0: u32 = 0x3F80_0000;
+
+    let prior_primask: u32;
+    unsafe {
+        core::arch::asm!(
+            "mrs {primask}, PRIMASK",
+            "cpsid i",
+            primask = out(reg) prior_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+    }
+
+    let prior_cpacr = rd(SCB_CPACR);
+    let prior_fpccr = rd(FPU_FPCCR);
+    let prior_fpcar = rd(FPU_FPCAR);
+    let prior_vtor = rd(SCB_VTOR);
+    let vector_addr = TEST_VECTOR_TABLE + FPU_VECTOR * 4;
+    let prior_vector = rd(vector_addr);
+    let prior_irq_priority = unsafe { core::ptr::read_volatile((NVIC_IPR + FPU_IRQ) as *const u8) };
+    let prior_irq_enabled = rd(NVIC_ISER1) & FPU_IRQ_BIT != 0;
+    let prior_irq_pending = rd(NVIC_ISPR1) & FPU_IRQ_BIT != 0;
+    let clean_irq_state = rd(NVIC_IABR0 + 4) & FPU_IRQ_BIT == 0 && !prior_irq_pending;
+
+    wr(NVIC_ICER1, FPU_IRQ_BIT);
+    wr(NVIC_ICPR1, FPU_IRQ_BIT);
+    wr(SCB_CPACR, prior_cpacr | CPACR_FULL_ACCESS);
+    wr(FPU_FPCCR, FPCCR_ASPEN_LSPEN);
+    wr(FPU_FPCAR, 0);
+    unsafe {
+        core::ptr::write_volatile((NVIC_IPR + FPU_IRQ) as *mut u8, 0x80);
+    }
+    wr(
+        vector_addr,
+        (fpu_irq_handler as *const () as usize as u32) | 1,
+    );
+    wr(SCB_VTOR, TEST_VECTOR_TABLE);
+    wr(NVIC_ISER1, FPU_IRQ_BIT);
+    for word in 0..6 {
+        wr(FPU_RECORD + word * 4, 0);
+    }
+    unsafe {
+        core::arch::asm!("dsb", "isb", options(nostack, preserves_flags),);
+        core::arch::asm!(
+            "vmov s0, {thread_s0}",
+            thread_s0 = in(reg) THREAD_S0,
+            out("s0") _,
+            options(nostack),
+        );
+        core::arch::asm!(
+            "msr PRIMASK, {primask}",
+            primask = in(reg) prior_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+        core::ptr::write_volatile(NVIC_ISPR1 as *mut u32, FPU_IRQ_BIT);
+        core::arch::asm!("dsb", "isb", options(nostack, preserves_flags));
+    }
+
+    let frame_sp = rd(FPU_RECORD);
+    let exc_return = rd(FPU_RECORD + 4);
+    let fpccr_entry = rd(FPU_RECORD + 8);
+    let fpcar_entry = rd(FPU_RECORD + 12);
+    let fpccr_after_touch = rd(FPU_RECORD + 16);
+    let saved_s0 = rd(FPU_RECORD + 20);
+    let fpcar_after = rd(FPU_FPCAR);
+    let pending_after = rd(NVIC_ISPR1) & FPU_IRQ_BIT;
+    let active_after = rd(NVIC_IABR0 + 4) & FPU_IRQ_BIT;
+    let restored_s0: u32;
+    let restored_control: u32;
+    unsafe {
+        core::arch::asm!(
+            "vmov {value}, s0",
+            value = out(reg) restored_s0,
+            options(nomem, nostack),
+        );
+        core::arch::asm!(
+            "mrs {control}, CONTROL",
+            control = out(reg) restored_control,
+            options(nomem, nostack, preserves_flags),
+        );
+        core::arch::asm!("cpsid i", options(nomem, nostack, preserves_flags));
+    }
+
+    let lazy_frame = fpccr_entry & FPCCR_LSPACT != 0
+        && fpcar_entry == frame_sp.wrapping_add(0x20)
+        && fpccr_after_touch & FPCCR_LSPACT == 0
+        && fpcar_after == fpcar_entry
+        && saved_s0 == THREAD_S0;
+    let context_restored = restored_s0 == THREAD_S0 && restored_control & FPCA != 0;
+    let passed = prior_primask == 0
+        && clean_irq_state
+        && exc_return == 0xFFFF_FFE9
+        && lazy_frame
+        && context_restored
+        && pending_after == 0
+        && active_after == 0;
+
+    wr(NVIC_ICER1, FPU_IRQ_BIT);
+    wr(NVIC_ICPR1, FPU_IRQ_BIT);
+    wr(vector_addr, prior_vector);
+    unsafe {
+        core::ptr::write_volatile((NVIC_IPR + FPU_IRQ) as *mut u8, prior_irq_priority);
+    }
+    wr(SCB_VTOR, prior_vtor);
+    if prior_irq_enabled {
+        wr(NVIC_ISER1, FPU_IRQ_BIT);
+    }
+    if prior_irq_pending {
+        wr(NVIC_ISPR1, FPU_IRQ_BIT);
+    }
+    wr(FPU_FPCAR, prior_fpcar);
+    wr(FPU_FPCCR, prior_fpccr);
+    wr(SCB_CPACR, prior_cpacr);
+    unsafe {
+        core::arch::asm!(
+            "msr PRIMASK, {primask}",
+            "dsb",
+            "isb",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+
+    send(b"fpu m4f lazy frame=");
+    put_hex32(exc_return);
+    send(b" lspact=");
+    send(if fpccr_entry & FPCCR_LSPACT != 0 {
+        b"1->"
+    } else {
+        b"0->"
+    });
+    send(if fpccr_after_touch & FPCCR_LSPACT == 0 {
+        b"0"
+    } else {
+        b"1"
+    });
+    send(b" fpcar=");
+    send(
+        if fpcar_entry == frame_sp.wrapping_add(0x20) && fpcar_after == fpcar_entry {
+            b"1"
+        } else {
+            b"0"
+        },
+    );
+    send(b" saved=");
+    send(if saved_s0 == THREAD_S0 { b"1" } else { b"0" });
+    send(b" restored=");
+    send(if context_restored { b"1" } else { b"0" });
+    send(if passed { b" ok\r\n" } else { b" FAIL\r\n" });
+    passed
+}
+
+#[unsafe(naked)]
+unsafe extern "C" fn fpu_irq_handler() {
+    core::arch::naked_asm!(
+        "mov r2, lr",
+        "mrs r0, msp",
+        "ldr r1, ={record}",
+        "str r0, [r1, #0]",
+        "str r2, [r1, #4]",
+        "ldr r3, ={fpccr}",
+        "ldr r3, [r3]",
+        "str r3, [r1, #8]",
+        "ldr r3, ={fpcar}",
+        "ldr r3, [r3]",
+        "str r3, [r1, #12]",
+        "push {{r4-r7}}",
+        "mov r4, r0",
+        "mov r5, r1",
+        "bl {touch}",
+        "ldr r3, ={fpccr}",
+        "ldr r3, [r3]",
+        "str r3, [r5, #16]",
+        "ldr r3, [r4, #32]",
+        "str r3, [r5, #20]",
+        "pop {{r4-r7}}",
+        "ldr r2, ={record}",
+        "ldr r2, [r2, #4]",
+        "mov lr, r2",
+        "bx lr",
+        record = const FPU_RECORD,
+        fpccr = const FPU_FPCCR,
+        fpcar = const FPU_FPCAR,
+        touch = sym fpu_irq_touch,
+    );
+}
+
+unsafe fn fpu_irq_touch() {
+    unsafe {
+        core::arch::asm!(
+            "movs r0, #0xA5",
+            "vmov s0, r0",
+            out("r0") _,
+            out("s0") _,
+            options(nostack),
+        );
+    }
 }
 
 /// Exercise the imported F401 profile's SysTick and SCB pending state. Keep

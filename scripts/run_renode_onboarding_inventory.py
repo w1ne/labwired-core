@@ -851,7 +851,8 @@ SMOKE_MAPPINGS = {
     },
     "stm32f401cdu6-blackpill": {
         "crate": "firmware-f401cdu6-blackpill-demo",
-        "target": "thumbv7em-none-eabi",
+        "target": "thumbv7em-none-eabihf",
+        "target_features": "vfp4",
         "script": "examples/renode-onboarding/stm32f401cdu6-blackpill-smoke.yaml",
     },
     "stm32l552": {
@@ -1321,6 +1322,8 @@ def main() -> int:
                 command.extend(["--crate", mapping["crate"], "--target", mapping["target"]])
             if mapping.get("features"):
                 command.extend(["--features", mapping["features"]])
+            if mapping.get("target_features"):
+                command.extend(["--target-features", mapping["target_features"]])
             if mapping.get("cli_features"):
                 command.extend(["--cli-features", mapping["cli_features"]])
             if mapping.get("cli_profile"):

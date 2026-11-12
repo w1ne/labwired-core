@@ -7,6 +7,7 @@ CRATE_FEATURES=""
 CLI_FEATURES=""
 CLI_PROFILE=""
 TARGET=""
+TARGET_FEATURES=""
 SCRIPT=""
 SYSTEM=""
 OUT_DIR=""
@@ -25,6 +26,7 @@ Usage: scripts/onboarding_smoke.sh --target-id ID --system PATH --out-dir DIR [o
 
 Smoke mode options:
   --crate NAME --target TRIPLE --script PATH
+  --target-features FEATURE[,FEATURE...]
   --prebuilt-firmware PATH --script PATH
   --firmware-build-dir DIR
   --firmware-build-script PATH
@@ -84,6 +86,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --target)
       TARGET="$2"
+      shift 2
+      ;;
+    --target-features)
+      TARGET_FEATURES="$2"
       shift 2
       ;;
     --script)
@@ -347,15 +353,29 @@ run_firmware_build() {
   if [[ "${PROFILE}" == "release" ]]; then
     args+=(--release)
   fi
+  local firmware_rustflags="${RUSTFLAGS:-}"
+  if [[ -n "${TARGET_FEATURES}" ]]; then
+    if [[ -n "${firmware_rustflags}" ]]; then
+      firmware_rustflags+=" "
+    fi
+    firmware_rustflags+="-C target-feature=+${TARGET_FEATURES//,/,+}"
+  fi
   if [[ -n "${FIRMWARE_BUILD_DIR}" ]]; then
-    (cd "${FIRMWARE_BUILD_DIR}" && cargo "${args[@]}")
+    if [[ -n "${firmware_rustflags}" ]]; then
+      (cd "${FIRMWARE_BUILD_DIR}" && RUSTFLAGS="${firmware_rustflags}" cargo "${args[@]}")
+    else
+      (cd "${FIRMWARE_BUILD_DIR}" && cargo "${args[@]}")
+    fi
+  elif [[ -n "${firmware_rustflags}" ]]; then
+    RUSTFLAGS="${firmware_rustflags}" cargo "${args[@]}"
   else
     cargo "${args[@]}"
   fi
 }
 
-# No RUSTFLAGS here. A firmware crate passes its own linker script from its
-# build.rs, so `cargo build -p <crate> --target <t>` links on its own.
+# The optional TARGET_FEATURES are applied only to this firmware build; they
+# never add linker arguments. A firmware crate passes its own linker script
+# from build.rs, so `cargo build -p <crate> --target <t>` links on its own.
 #
 # ⚠️ Exactly one place may pass `-Tlink.x`. This block used to add it for every
 # thumbv6m target; when firmware-rp2040-pio-onboarding's build.rs started

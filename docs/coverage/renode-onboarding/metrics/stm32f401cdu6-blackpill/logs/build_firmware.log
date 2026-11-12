@@ -1,17 +1,24 @@
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
-package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/h735-telematics-lab/Cargo.toml
-workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
-package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/rc-oscilloscope-lab/Cargo.toml
-workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
-package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/nrf52832/Cargo.toml
-workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
-package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/nrf52840/Cargo.toml
-workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
-package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/rp2040/Cargo.toml
-workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
-   Compiling firmware-f401cdu6-blackpill-demo v0.25.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/renode/crates/firmware-f401cdu6-blackpill-demo)
-    Finished `release` profile [optimized + debuginfo] target(s) in 6.47s
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+   Compiling firmware-f401cdu6-blackpill-demo v0.25.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/firmware-f401cdu6-blackpill-demo)
+warning: unstable feature specified for `-Ctarget-feature`: `vfp4`
+  |
+  = note: this feature is not stably supported; its behavior can change in the future
+
+warning: `firmware-f401cdu6-blackpill-demo` (bin "firmware-f401cdu6-blackpill-renode-smoke") generated 1 warning
+warning: `firmware-f401cdu6-blackpill-demo` (bin "firmware-f401cdu6-blackpill-i2c-demo") generated 1 warning (1 duplicate)
+warning: `firmware-f401cdu6-blackpill-demo` (bin "firmware-f401cdu6-blackpill-demo") generated 1 warning (1 duplicate)
+    Finished `release` profile [optimized + debuginfo] target(s) in 7.57s

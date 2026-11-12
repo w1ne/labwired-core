@@ -162,3 +162,13 @@ peripherals:
     type: "systick"
     base_address: 0xE000E010
     size: "16B"
+  - id: "fpu"
+    type: "cortex_m_fpu"
+    base_address: 0xE000EF30
+    size: "28B"
+    # Arm Cortex-M4F TRM DDI 0439B, Table 7-4. The F401 implements the
+    # single-precision FPv4 register set; MVFR2 is not implemented.
+    config:
+      mvfr0: 0x10110021
+      mvfr1: 0x11000011
+      mvfr2: 0x00000000
