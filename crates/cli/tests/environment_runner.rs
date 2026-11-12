@@ -1720,7 +1720,7 @@ assertions:
     let message = result["message"].as_str().expect("config error message");
     assert!(
         message.contains(
-            "co-simulation models are not supported in multi-node worlds yet; node 'plant' declares 1"
+            "node-level co-simulation models are not supported in worlds; node 'plant' declares 1"
         ),
         "{message}"
     );
