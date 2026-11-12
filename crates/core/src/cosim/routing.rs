@@ -257,6 +257,10 @@ pub enum SignalPath {
     GpioPad { pad: String },
     /// Live pad voltage using routed VDD, or the descriptor I/O rail.
     GpioPadVolts { pad: String },
+    /// Numeric command for the MCU's own output stage, paired in the same
+    /// model with `board.gpio_driven.<pad>`. A disabled stage has an unused
+    /// 0 V command; this is not an observation of the external pad voltage.
+    GpioDriveVolts { pad: String },
     /// `board.gpio_driven.<pad>` — whether the MCU's own output stage is driving
     /// the pad, through a GPIO output OR an alternate-function peripheral. False
     /// for an input, an analog pad, a released open-drain line, or a pad nothing
@@ -325,6 +329,11 @@ impl SignalPath {
         }
         if let Some(pad) = path.strip_prefix("board.gpio_in.") {
             return (!pad.is_empty()).then(|| Self::GpioInput {
+                pad: pad.to_string(),
+            });
+        }
+        if let Some(pad) = path.strip_prefix("board.gpio_drive_volts.") {
+            return (!pad.is_empty()).then(|| Self::GpioDriveVolts {
                 pad: pad.to_string(),
             });
         }
@@ -438,6 +447,7 @@ impl SignalPath {
                 | Self::GpioInput { .. }
                 | Self::GpioPad { .. }
                 | Self::GpioPadVolts { .. }
+                | Self::GpioDriveVolts { .. }
                 | Self::GpioDriven { .. }
                 | Self::MotorBackEmf { .. }
                 | Self::MotorPhaseBackEmf { .. }
@@ -491,6 +501,16 @@ pub enum RoutingError {
     NoDirection {
         path: String,
         pad: String,
+    },
+    /// A numeric driver command needs its explicit enable in the same model.
+    MissingDriveEnable {
+        path: String,
+        model: String,
+        pad: String,
+    },
+    /// No fresh command is available for a required output driver.
+    UnavailableDriveCommand {
+        path: String,
     },
     /// Volts are routed to `board.gpio_in.<pad>`, but the chip descriptor does
     /// not declare `key` (`gpio_input_thresholds` or `io_voltage_v`), so no
@@ -645,6 +665,14 @@ impl std::fmt::Display for RoutingError {
                 f,
                 "co-sim path '{path}': the GPIO model that owns pad '{pad}' does not report pin \
                  direction, so whether the firmware drives the pad is unknown on this chip"
+            ),
+            Self::MissingDriveEnable { path, model, pad } => write!(
+                f,
+                "co-sim path '{path}': model '{model}' must also read board.gpio_driven.{pad}; the inactive voltage is an unused driver command"
+            ),
+            Self::UnavailableDriveCommand { path } => write!(
+                f,
+                "co-sim path '{path}': no current qualified output-driver command is available"
             ),
             Self::NoInputThresholds { path, key } => write!(
                 f,
@@ -809,6 +837,10 @@ enum ReadBinding {
         peripheral: usize,
         pad: u8,
     },
+    DriveVolts {
+        peripheral: usize,
+        pad: u8,
+    },
     /// Owning peripheral index + pad number; true when
     /// `pins::own_drive` says the MCU's own output stage drives the pad (a GPIO
     /// output or an alternate-function peripheral line).
@@ -913,7 +945,20 @@ impl SignalRouter {
         // mock's static outputs; an external process only says at run time,
         // which `apply` checks.
         let mut volts_sinks: BTreeSet<&str> = BTreeSet::new();
+        let mut missing_drive_pairs = BTreeSet::new();
         for config in configs {
+            for path in config.inputs.values() {
+                let Some(SignalPath::GpioDriveVolts { pad }) = SignalPath::parse(path) else {
+                    continue;
+                };
+                let paired = config.inputs.values().any(|peer| {
+                    matches!(SignalPath::parse(peer), Some(SignalPath::GpioDriven { pad: other })
+                        if other.eq_ignore_ascii_case(&pad))
+                });
+                if !paired {
+                    missing_drive_pairs.insert((config.id.clone(), path.clone(), pad));
+                }
+            }
             sources.extend(config.inputs.values().map(String::as_str));
             for (model_signal, sink) in &config.outputs {
                 sinks.insert(sink);
@@ -925,10 +970,19 @@ impl SignalRouter {
 
         let thresholds = InputThresholds::for_bus(bus);
         let mut router = Self::default();
-        let mut errors = Vec::new();
+        let mut errors: Vec<_> = missing_drive_pairs
+            .into_iter()
+            .map(|(model, path, pad)| RoutingError::MissingDriveEnable { path, model, pad })
+            .collect();
 
         for path in &sources {
             let Some(parsed) = SignalPath::parse(path) else {
+                if let Some(pad) = path.strip_prefix("board.gpio_drive_volts.") {
+                    errors.push(RoutingError::UnknownPad {
+                        path: (*path).to_string(),
+                        pad: pad.to_string(),
+                    });
+                }
                 if path.starts_with("board.regulator.") {
                     errors.push(RoutingError::RegulatorRejected {
                         path: (*path).to_string(),
@@ -1206,6 +1260,31 @@ impl SignalRouter {
                     pad: pad_number,
                 })
             }
+            SignalPath::GpioDriveVolts { pad } => {
+                if bus.io_voltage_v.is_none_or(|v| !v.is_finite() || v <= 0.0) {
+                    return Err(RoutingError::NoInputThresholds {
+                        path: path.to_string(),
+                        key: "io_voltage_v",
+                    });
+                }
+                let (peripheral, pad_number) = resolve_pad_number(bus, pad, path)?;
+                let port = bus.peripherals[peripheral].dev.pins().ok_or_else(|| {
+                    RoutingError::NoDirection {
+                        path: path.to_string(),
+                        pad: pad.clone(),
+                    }
+                })?;
+                if pad_number >= port.pin_count() {
+                    return Err(RoutingError::UnknownPad {
+                        path: path.to_string(),
+                        pad: pad.clone(),
+                    });
+                }
+                Ok(ReadBinding::DriveVolts {
+                    peripheral,
+                    pad: pad_number,
+                })
+            }
             SignalPath::GpioDriven { pad } => {
                 let (peripheral, pad_number) = resolve_pad_number(bus, pad, path)?;
                 if bus.peripherals[peripheral].dev.pins().is_none() {
@@ -1389,6 +1468,7 @@ impl SignalRouter {
             | SignalPath::GpioDirection { .. }
             | SignalPath::GpioPad { .. }
             | SignalPath::GpioPadVolts { .. }
+            | SignalPath::GpioDriveVolts { .. }
             | SignalPath::GpioDriven { .. }
             | SignalPath::MotorBackEmf { .. }
             | SignalPath::MotorPhaseBackEmf { .. } => Err(RoutingError::NotWritable {
@@ -1534,6 +1614,7 @@ impl SignalRouter {
         self.reads.iter().any(|(_, binding)| match *binding {
             ReadBinding::PadLevel { peripheral, pad }
             | ReadBinding::PadVolts { peripheral, pad }
+            | ReadBinding::DriveVolts { peripheral, pad }
             | ReadBinding::Direction { peripheral, pad }
             | ReadBinding::Driven { peripheral, pad } => peripheral == index && pad == pin,
             ReadBinding::Input { peripheral, bit } | ReadBinding::Output { peripheral, bit } => {
@@ -1550,6 +1631,60 @@ impl SignalRouter {
             }
             _ => false,
         })
+    }
+
+    fn driver_is_held(bus: &SystemBus) -> bool {
+        bus.supply.is_held()
+            || bus.reset_input.is_held()
+            || bus.mcu_power.blocks_execution()
+            || bus
+                .mcu_power
+                .io_handle()
+                .is_some_and(|io| !io.is_available())
+    }
+
+    fn output_drive_command(bus: &SystemBus, peripheral: usize, pad: u8) -> Option<f64> {
+        // A hold cannot create a missing driver capability or resolve an unknown stage.
+        let out = bus
+            .peripherals
+            .get(peripheral)?
+            .dev
+            .pins()?
+            .driver(pad)?
+            .out;
+        if Self::driver_is_held(bus) {
+            // The separate enable is false. This value does not describe the
+            // floating/external pad and cannot qualify a live input observation.
+            return Some(0.0);
+        }
+        if out == crate::pins::Out::Off {
+            return Some(0.0);
+        }
+        let supply = bus.supply.status();
+        let high = if let Some(io) = bus.mcu_power.io_handle() {
+            if !io.is_available() {
+                return None;
+            }
+            io.effective_voltage_v()
+        } else if supply.routed {
+            supply.vdd_volts
+        } else {
+            bus.io_voltage_v
+        }
+        .filter(|volts| volts.is_finite() && *volts > 0.0)?;
+        out.level().map(|level| if level { high } else { 0.0 })
+    }
+
+    fn require_drive_commands(&self, signals: &CosimSignals) -> Result<(), RoutingError> {
+        for (path, binding) in &self.reads {
+            if matches!(binding, ReadBinding::DriveVolts { .. })
+                && !matches!(signals.get(path), Some(CosimSignalValue::F64(v))
+                    if v.is_finite() && *v >= 0.0)
+            {
+                return Err(RoutingError::UnavailableDriveCommand { path: path.clone() });
+            }
+        }
+        Ok(())
     }
 
     /// Machine → store. Called immediately before stepping the models, so a
@@ -1583,6 +1718,14 @@ impl SignalRouter {
             if let ReadBinding::Regulator { index, field } = *binding {
                 if let Some(frame) = regulator_frames.get(index) {
                     signals.insert(path.clone(), frame[usize::from(field)].clone());
+                }
+                continue;
+            }
+            if let ReadBinding::DriveVolts { peripheral, pad } = *binding {
+                // An unknown command must never reuse a previously driven value.
+                signals.remove(path);
+                if let Some(volts) = Self::output_drive_command(bus, peripheral, pad) {
+                    signals.insert(path.clone(), CosimSignalValue::F64(volts));
                 }
                 continue;
             }
@@ -1646,17 +1789,7 @@ impl SignalRouter {
                     .peripherals
                     .get(peripheral)
                     .and_then(|p| p.dev.read_gpio_pad(pad)),
-                ReadBinding::Driven { .. }
-                    if bus.supply.is_held()
-                        || bus.reset_input.is_held()
-                        || bus.mcu_power.blocks_execution()
-                        || bus
-                            .mcu_power
-                            .io_handle()
-                            .is_some_and(|io| !io.is_available()) =>
-                {
-                    Some(false)
-                }
+                ReadBinding::Driven { .. } if Self::driver_is_held(bus) => Some(false),
                 ReadBinding::Driven { peripheral, pad } => bus
                     .peripherals
                     .get(peripheral)
@@ -1666,7 +1799,8 @@ impl SignalRouter {
                 ReadBinding::Regulator { .. }
                 | ReadBinding::MotorBackEmf { .. }
                 | ReadBinding::MotorPhaseBackEmf { .. }
-                | ReadBinding::PadVolts { .. } => None,
+                | ReadBinding::PadVolts { .. }
+                | ReadBinding::DriveVolts { .. } => None,
             };
             if let Some(level) = level {
                 signals.insert(path.clone(), CosimSignalValue::Bool(level));
@@ -2625,6 +2759,9 @@ impl CosimSession {
             return Ok((Vec::new(), Vec::new()));
         }
         self.router.sample(bus, &mut self.signals);
+        self.router
+            .require_drive_commands(&self.signals)
+            .map_err(|error| SimulationError::Other(error.to_string()))?;
         let routed = self
             .runner
             .step_until_with_signals(time_ns, &mut self.signals)?;
@@ -2825,6 +2962,10 @@ impl CosimSession {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "drive_command_tests.rs"]
+mod drive_command_tests;
 
 #[cfg(test)]
 mod tests {
