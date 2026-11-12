@@ -79,6 +79,70 @@ fn diode_load_line_voltage() -> f64 {
     junction_v + current_at_junction_voltage(junction_v) * DIODE_RS_OHMS
 }
 
+/// Independent Gummel–Poon collector load line with optional high-injection
+/// rolloff. The matched branches share Early voltages and differ only in
+/// IKF/IKR/NKF.
+fn bjt_high_injection_collector_voltage(base_drive_v: f64, high_injection: bool) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const COLLECTOR_OHMS: f64 = 1_000.0;
+    const BASE_OHMS: f64 = 10_000.0;
+    const IS_A: f64 = 1e-16;
+    const BF: f64 = 80.0;
+    const BR: f64 = 4.0;
+    const VAF: f64 = 50.0;
+    const VAR: f64 = 75.0;
+    const IKF_A: f64 = 50e-6;
+    const IKR_A: f64 = 500e-6;
+    const NKF: f64 = 0.8;
+    const VT: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+
+    let currents = |vbe: f64, collector_v: f64| {
+        let vbc = vbe - collector_v;
+        let forward = (vbe / VT).exp();
+        let reverse = (vbc / VT).exp();
+        let base_width = 1.0 - vbc / VAF - vbe / VAR;
+        let q2 = if high_injection {
+            IS_A * (forward - 1.0) / IKF_A + IS_A * (reverse - 1.0) / IKR_A
+        } else {
+            0.0
+        };
+        let qb = (1.0 + (1.0 + 4.0 * q2).max(0.0).powf(NKF)) / (2.0 * base_width);
+        let transport = IS_A * (forward - reverse) / qb;
+        let base_collector = (IS_A / BR) * (reverse - 1.0);
+        let base_emitter = (IS_A / BF) * (forward - 1.0);
+        (transport - base_collector, base_emitter + base_collector)
+    };
+
+    let collector_for_vbe = |vbe: f64| {
+        let (mut low, mut high) = (0.0, SUPPLY_V);
+        for _ in 0..100 {
+            let collector_v = 0.5 * (low + high);
+            let (collector_current, _) = currents(vbe, collector_v);
+            let residual = (SUPPLY_V - collector_v) / COLLECTOR_OHMS - collector_current;
+            if residual > 0.0 {
+                low = collector_v;
+            } else {
+                high = collector_v;
+            }
+        }
+        0.5 * (low + high)
+    };
+
+    let (mut low, mut high) = (0.0, base_drive_v);
+    for _ in 0..100 {
+        let vbe = 0.5 * (low + high);
+        let collector_v = collector_for_vbe(vbe);
+        let (_, base_current) = currents(vbe, collector_v);
+        let residual = (base_drive_v - vbe) / BASE_OHMS - base_current;
+        if residual > 0.0 {
+            low = vbe;
+        } else {
+            high = vbe;
+        }
+    }
+    collector_for_vbe(0.5 * (low + high))
+}
+
 fn signal_voltage(session: &CosimSession, path: &str) -> f64 {
     match session.signals().get(path) {
         Some(CosimSignalValue::F64(volts)) => *volts,
@@ -714,6 +778,112 @@ fn nucleo_l073rz_jfet_terminal_resistances_reach_adc1_with_ntc_and_diode() {
     assert!(
         both > drain && both > source,
         "combined RD and RS exceed either terminal alone: {both} V, {drain} V, {source} V"
+    );
+}
+
+/// Reuse the generic Gummel–Poon pair on the L073 ADC path. The independent
+/// load line and ADC conversion make an ignored IKF/NKF rolloff fail this test.
+#[test]
+fn nucleo_l073rz_bjt_high_injection_reaches_adc1_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/nucleo-l073rz.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-L073RZ profile");
+    assert_eq!(profile.name, "nucleo-l073rz");
+
+    let analog = SystemManifest::from_file(root("examples/nucleo-l073rz/analog-adc-system.yaml"))
+        .expect("load unrelated generic NTC and Shockley diode routes");
+    // This asset is also used by the F103 board test; reusing it proves the
+    // board route is independent of the board-specific NTC and ADC fixture.
+    let bjt = SystemManifest::from_file(root(
+        "examples/nucleo-f103rb/analog-bjt-high-injection-adc-system.yaml",
+    ))
+    .expect("load the shared matched Gummel–Poon high-injection branches");
+    profile.cosim_models = analog.cosim_models;
+    profile.cosim_models.extend(bjt.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32L073 descriptor");
+    for (pad, channel) in [("PA0", 0), ("PA2", 2), ("PA3", 3), ("PC5", 15)] {
+        assert_eq!(
+            chip.analog_pins[pad].channel, channel,
+            "{pad} must resolve to ADC1_IN{channel}"
+        );
+        assert_eq!(chip.analog_pins[pad].peripheral, "adc1");
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-L073RZ bus");
+    adc_power_up(&mut bus);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal co-simulation")
+        .expect("fixture carries NTC, diode, and matched BJT branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "all four generic device branches must bind to ADC1 pads"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold the unrelated NTC at nominal temperature");
+    session
+        .set_signal_number("ui.bjt_high_injection.base_v", 0.0)
+        .expect("initialize matched BJT base drives");
+
+    let ntc_v = 1.65;
+    let diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    let mut high_drive_delta = None;
+    for base_drive_v in [0.8_f64, 1.5, 3.3] {
+        session
+            .set_signal_number("ui.bjt_high_injection.base_v", base_drive_v)
+            .expect("set common BJT base drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and matched BJT branches");
+        assert_eq!(steps.len(), 4, "NTC, diode, and both BJT branches solve");
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        let high_v = signal_voltage(&session, "board.analog.pa2_volts");
+        let control_v = signal_voltage(&session, "board.analog.pa3_volts");
+        let expected_high_v = bjt_high_injection_collector_voltage(base_drive_v, true);
+        let expected_control_v = bjt_high_injection_collector_voltage(base_drive_v, false);
+        assert!(
+            (signal_voltage(&session, "board.analog.pa0_volts") - ntc_v).abs() < 1e-9,
+            "unrelated 25 °C NTC remains isolated on ADC1_IN0"
+        );
+        assert!(
+            (signal_voltage(&session, "board.analog.pc5_volts") - diode_v).abs() < 2e-5,
+            "unrelated Shockley diode remains isolated on ADC1_IN15"
+        );
+        assert!(
+            (high_v - expected_high_v).abs() < 5e-5,
+            "IKF/IKR/NKF load line at base drive {base_drive_v} V should be {expected_high_v} V, got {high_v} V"
+        );
+        assert!(
+            (control_v - expected_control_v).abs() < 5e-5,
+            "matched no-rolloff load line at base drive {base_drive_v} V should be {expected_control_v} V, got {control_v} V"
+        );
+
+        for (channel, voltage_v) in [(0, ntc_v), (2, high_v), (3, control_v), (15, diode_v)] {
+            assert_eq!(
+                adc_convert(&mut bus, 1 << channel, 0),
+                code12(voltage_v),
+                "firmware-visible ADC1_IN{channel} conversion follows its solved voltage"
+            );
+        }
+        assert_eq!(
+            adc_convert(&mut bus, 1 << 4, 0),
+            UNDRIVEN_CODE,
+            "neighboring ADC1_IN4 remains undriven"
+        );
+        if base_drive_v == 3.3 {
+            high_drive_delta = Some(high_v - control_v);
+        }
+    }
+
+    let delta = high_drive_delta.expect("high-drive sample was recorded");
+    assert!(
+        delta > 0.05,
+        "IKF/NKF rolloff lowers collector current and raises collector voltage: delta {delta} V"
     );
 }
 
