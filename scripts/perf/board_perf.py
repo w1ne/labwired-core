@@ -491,33 +491,6 @@ WAIVED: dict[str, str] = {
         "RV1103 platform throughput claim. Vendor BSP/SD/ROM boot remains "
         "unimplemented and no representative perf fixture qualifies this board."
     ),
-    "esp32-devkitc-32e-gpio-smoke": (
-        "GPIO/UART0/RTC-sleep onboarding smoke twin of the classic ESP32 "
-        "(DevKitC-32E / WROOM-32E). It shares the ESP32 flash 0x400D0000 / "
-        "RAM 0x3FFB0000 map, so FIXTURES would match the stock Xtensa MMIO "
-        "spin; that fixture is not this yaml's deep/light-sleep GPIO smoke, "
-        "and no run has produced a throughput number for this descriptor. "
-        "No separate throughput claim is made. The parent `esp32` board "
-        "already carries the measured classic-ESP32 baselines."
-    ),
-    "esp32-devkitc-32e-uart1": (
-        "UART1-TX onboarding smoke twin of the classic ESP32 "
-        "(DevKitC-32E / WROOM-32E). It shares the ESP32 flash 0x400D0000 / "
-        "RAM 0x3FFB0000 map, so FIXTURES would match the stock Xtensa MMIO "
-        "spin; that fixture is not this yaml's UART1-to-GPIO16 smoke, "
-        "and no run has produced a throughput number for this descriptor. "
-        "No separate throughput claim is made. The parent `esp32` board "
-        "already carries the measured classic-ESP32 baselines."
-    ),
-    "stm32f103rb-nucleo-bme280-smoke": (
-        "Narrow NUCLEO-F103RB + BME280 onboarding profile (USART2, LD2/PA5, "
-        "I2C1 on PB8/PB9). It shares the STM32F103 flash 0x08000000 / "
-        "RAM 0x20000000 map, so FIXTURES would match a stock STM32F103 MMIO "
-        "spin; that fixture is not this yaml's BME280 CHIP_ID smoke, "
-        "and no run has produced a throughput number for this descriptor. "
-        "No separate throughput claim is made. The parent `stm32f103` board "
-        "already carries the measured family baselines."
-    ),
 }
 
 # Descriptors that are CI plumbing rather than a modelled part.
@@ -900,9 +873,24 @@ def build_fixtures(fixtures: set[str]) -> tuple[dict[str, Path], dict[str, str]]
             print(f"SKIPPING fixture '{name}': build failed\n{proc.stderr[-2000:]}", file=sys.stderr)
             continue
 
-        elf = cwd / f"target/{spec.target}/release/{spec.crate}"
-        if not elf.exists():
-            elf = REPO_ROOT / f"target/{spec.target}/release/{spec.crate}"
+        target_override = env.get("CARGO_TARGET_DIR")
+        if target_override is not None:
+            # Cargo resolves an environment override relative to its build
+            # cwd. Never substitute a stale default-target ELF for this build.
+            target_dir = Path(target_override)
+            if not target_dir.is_absolute():
+                target_dir = cwd / target_dir
+            elf = target_dir / spec.target / "release" / spec.crate
+        else:
+            elf = cwd / f"target/{spec.target}/release/{spec.crate}"
+            if not elf.exists():
+                elf = REPO_ROOT / f"target/{spec.target}/release/{spec.crate}"
+        if not elf.is_file():
+            selected = f" (CARGO_TARGET_DIR={target_override!r})" if target_override is not None else ""
+            raise RuntimeError(
+                f"fixture '{name}': Cargo succeeded but the expected ELF{selected} "
+                f"is missing or not a file: {elf}"
+            )
         shutil.copy2(elf, out)
         built[name] = out
     return built, skipped

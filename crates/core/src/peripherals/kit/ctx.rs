@@ -136,6 +136,68 @@ impl<'a> AttachCtx<'a> {
     /// work over the bus. An unresolvable pad label IS an error — that is a
     /// wiring mistake, not a choice.
     pub fn bind_output_pins(&mut self, desc: &labwired_config::DeviceDescriptor) -> Result<()> {
+        // The placement must name each output role explicitly; the name also
+        // declares a pull-up. No implicit electrical mode is inferred.
+        let open_drain_roles = match self.ext.config.get("open_drain_pullups") {
+            None => Vec::new(),
+            Some(value) => {
+                let roles = value.as_sequence().ok_or_else(|| {
+                    anyhow!(
+                        "device '{}' open_drain_pullups must be a list of output roles",
+                        self.ext.id
+                    )
+                })?;
+                let mut result = Vec::new();
+                for value in roles {
+                    let role = value.as_str().ok_or_else(|| {
+                        anyhow!(
+                            "device '{}' open_drain_pullups contains a non-string role",
+                            self.ext.id
+                        )
+                    })?;
+                    if !desc.behavior.outputs.iter().any(|known| known == role)
+                        || result.contains(&role)
+                    {
+                        return Err(anyhow!(
+                            "device '{}' has an unknown or duplicate open-drain role '{}'",
+                            self.ext.id,
+                            role
+                        ));
+                    }
+                    result.push(role);
+                }
+                result
+            }
+        };
+        // A listed role feeds an inverting open-collector stage on this
+        // board. It must also be a declared pulled-up open-drain binding.
+        let inverted_roles = match self.ext.config.get("inverting_collectors") {
+            None => Vec::new(),
+            Some(value) => {
+                let roles = value.as_sequence().ok_or_else(|| {
+                    anyhow!(
+                        "device '{}' inverting_collectors must be a list of output roles",
+                        self.ext.id
+                    )
+                })?;
+                let mut result = Vec::new();
+                for value in roles {
+                    let role = value.as_str().ok_or_else(|| {
+                        anyhow!(
+                            "device '{}' inverting_collectors contains a non-string role",
+                            self.ext.id
+                        )
+                    })?;
+                    if !open_drain_roles.contains(&role) || result.contains(&role) {
+                        return Err(anyhow!(
+                            "device '{}' inverting collector role '{}' must be unique and declared in open_drain_pullups", self.ext.id, role
+                        ));
+                    }
+                    result.push(role);
+                }
+                result
+            }
+        };
         for role in &desc.behavior.outputs {
             let key = desc
                 .behavior
@@ -143,12 +205,23 @@ impl<'a> AttachCtx<'a> {
                 .get(role)
                 .cloned()
                 .unwrap_or_else(|| role.clone());
-            let Some(label) = self.ext.config.get(&key).and_then(|v| {
+            let configured = self.ext.config.get(&key);
+            let label = configured.and_then(|v| {
                 v.as_str()
                     .map(|s| s.to_string())
                     .or_else(|| v.as_i64().map(|n| n.to_string()))
                     .or_else(|| v.as_u64().map(|n| n.to_string()))
-            }) else {
+            });
+            if configured.is_some() && label.is_none() && open_drain_roles.contains(&role.as_str())
+            {
+                return Err(anyhow!(
+                    "device '{}' open-drain output role '{}' has invalid pad value for '{}'",
+                    self.ext.id,
+                    role,
+                    key
+                ));
+            }
+            let Some(label) = label else {
                 continue;
             };
             let (addr, bit) =
@@ -161,6 +234,56 @@ impl<'a> AttachCtx<'a> {
                     label
                 )
                 })?;
+            let pad = (addr, bit);
+            if self
+                .bus
+                .device_pin_pads
+                .iter()
+                .any(|p| p.device_id == self.ext.id && p.role == *role && (p.addr, p.bit) == pad)
+            {
+                return Err(anyhow!(
+                    "device '{}' output role '{}' is already bound to this pad",
+                    self.ext.id,
+                    role
+                ));
+            }
+            if open_drain_roles.contains(&role.as_str()) {
+                let has_legacy = self
+                    .bus
+                    .device_pin_pads
+                    .iter()
+                    .any(|p| (p.addr, p.bit) == pad)
+                    && !self.bus.device_open_drain_nets.contains_pad(pad);
+                let driver = crate::bus::open_drain::OpenDrainDriver {
+                    device_id: self.ext.id.clone(),
+                    role: role.clone(),
+                };
+                let result = if inverted_roles.contains(&role.as_str()) {
+                    self.bus
+                        .device_open_drain_nets
+                        .register_inverted(pad, driver, has_legacy)
+                } else {
+                    self.bus
+                        .device_open_drain_nets
+                        .register(pad, driver, has_legacy)
+                };
+                result.map_err(|err| {
+                    anyhow!("device '{}' output role '{}': {}", self.ext.id, role, err)
+                })?;
+                let level = self
+                    .bus
+                    .device_open_drain_nets
+                    .level(pad)
+                    .expect("registered pad");
+                let _ = crate::bus::DevicePins::drive_input_bit(self.bus, addr, bit, level);
+                crate::bus::DevicePins::drive_idr_bit(self.bus, addr, bit, level);
+            } else if self.bus.device_open_drain_nets.contains_pad(pad) {
+                return Err(anyhow!(
+                    "device '{}' output role '{}' mixes a legacy driver with an open-drain pad",
+                    self.ext.id,
+                    role
+                ));
+            }
             self.bus.device_pin_pads.push(crate::bus::DevicePinPad {
                 device_id: self.ext.id.clone(),
                 role: role.clone(),
@@ -169,6 +292,21 @@ impl<'a> AttachCtx<'a> {
             });
         }
         Ok(())
+    }
+
+    /// Output roles with a delivery destination for this placement. A role
+    /// may feed several pads; the rule machine filters membership only, and
+    /// the bus still delivers each edge to every matching pad.
+    ///
+    /// When direct device-output observers are added, their source roles must
+    /// also be included here before applying the filter. Pad bindings are the
+    /// only destinations supported by the current bus.
+    pub(crate) fn bound_output_roles(&self) -> impl Iterator<Item = String> + '_ {
+        self.bus
+            .device_pin_pads
+            .iter()
+            .filter(move |pad| pad.device_id == self.ext.id)
+            .map(|pad| pad.role.clone())
     }
 
     pub fn attach_i2c_device(&mut self, mut device: Box<dyn I2cDevice>) -> Result<()> {
@@ -485,5 +623,194 @@ mod tests {
         let ext = ext_with_moisture(serde_yaml::Value::from(25));
         let ctx = AttachCtx::new(&mut bus, &ext);
         assert_eq!(ctx.config_f64("moisture"), Some(25.0));
+    }
+
+    fn output_delivery_fixture(primitive: &str) -> String {
+        let transport = match primitive {
+            "i2c_device" => "  i2c:\n    default_address: 0x29\n",
+            "spi_device" => {
+                "  spi:\n    framing: { command_bytes: 1, rw_bit: 7, rw_read_high: true, addr_mask: 0x7f }\n"
+            }
+            _ => unreachable!("test uses I2C and SPI"),
+        };
+        format!(
+            r#"type: output_delivery_probe
+behavior:
+  primitive: {primitive}
+{transport}    registers:
+      - {{ name: PORT, addr: 0, width: 1, endian: be, access: rw, reset: 0 }}
+  outputs: [LIVE, UNWIRED]
+  output_pins: {{ LIVE: live_pin }}
+  rules:
+    - on: {{ write: PORT }}
+      do:
+        - {{ pin: LIVE, level: "written & 1" }}
+        - {{ pin: UNWIRED, level: "written & 1" }}
+"#
+        )
+    }
+
+    fn write_i2c_output(device: &mut dyn I2cDevice, value: u8) {
+        device.start();
+        device.write(0);
+        device.write(value);
+        device.stop();
+    }
+
+    fn write_spi_output(device: &mut dyn SpiDevice, value: u8) {
+        device.cs_select();
+        device.transfer(0);
+        device.transfer(value);
+        device.cs_release();
+    }
+
+    #[test]
+    fn standalone_i2c_and_spi_keep_all_output_edges() {
+        use crate::peripherals::components::declarative_i2c::GenericI2cDevice;
+        use crate::peripherals::components::declarative_spi::GenericSpiDevice;
+
+        for primitive in ["i2c_device", "spi_device"] {
+            let yaml = output_delivery_fixture(primitive);
+            let drives = if primitive == "i2c_device" {
+                let mut device = GenericI2cDevice::from_yaml(&yaml, 0).unwrap();
+                for value in [0, 1, 0] {
+                    write_i2c_output(&mut device, value);
+                }
+                device.take_pin_drives()
+            } else {
+                let mut device = GenericSpiDevice::from_yaml(&yaml, "PA4").unwrap();
+                for value in [0, 1, 0] {
+                    write_spi_output(&mut device, value);
+                }
+                device.take_pin_drives()
+            };
+            assert_eq!(
+                drives,
+                vec![
+                    ("LIVE".to_owned(), false),
+                    ("UNWIRED".to_owned(), false),
+                    ("LIVE".to_owned(), true),
+                    ("UNWIRED".to_owned(), true),
+                    ("LIVE".to_owned(), false),
+                    ("UNWIRED".to_owned(), false),
+                ],
+                "{primitive}: standalone capture must preserve every role and edge"
+            );
+        }
+    }
+
+    #[test]
+    fn attached_i2c_and_spi_queue_only_this_placements_bound_output_roles() {
+        use crate::peripherals::components::declarative_i2c::DeclarativeI2cKit;
+        use crate::peripherals::components::declarative_spi::DeclarativeSpiKit;
+        use crate::peripherals::kit::PeripheralKit;
+
+        for primitive in ["i2c_device", "spi_device"] {
+            for wired in [false, true] {
+                let yaml = output_delivery_fixture(primitive);
+                let mut bus = SystemBus::new();
+                let mut ext = ext_with_moisture(serde_yaml::Value::Null);
+                ext.id = "probe".into();
+                ext.r#type = "output_delivery_probe".into();
+                ext.connection = "probe_controller".into();
+                ext.config.clear();
+                if wired {
+                    ext.config.insert("live_pin".into(), "PA0".into());
+                }
+                // Another placement's role must not authorize delivery here.
+                bus.device_pin_pads.push(crate::bus::DevicePinPad {
+                    device_id: "other".into(),
+                    role: "UNWIRED".into(),
+                    addr: 0x4001_0808,
+                    bit: 1,
+                });
+                let drives = if primitive == "i2c_device" {
+                    bus.add_peripheral(
+                        "probe_controller",
+                        0x4000_5400,
+                        0x400,
+                        None,
+                        Box::new(I2c::new()),
+                    );
+                    let mut ctx = AttachCtx::new(&mut bus, &ext);
+                    DeclarativeI2cKit::from_yaml(&yaml)
+                        .unwrap()
+                        .attach(&mut ctx)
+                        .unwrap();
+                    let controller = ctx.i2c().unwrap();
+                    let mut device = controller.attached_devices()[0].borrow_mut();
+                    for i in 0..4096 {
+                        write_i2c_output(&mut **device, (i % 2) as u8);
+                    }
+                    device.take_pin_drives()
+                } else {
+                    bus.add_peripheral(
+                        "probe_controller",
+                        0x4001_3000,
+                        0x400,
+                        None,
+                        Box::new(Spi::new()),
+                    );
+                    let mut ctx = AttachCtx::new(&mut bus, &ext);
+                    DeclarativeSpiKit::from_yaml(&yaml)
+                        .unwrap()
+                        .attach(&mut ctx)
+                        .unwrap();
+                    let device = &mut ctx.spi().unwrap().attached_devices[0];
+                    for i in 0..4096 {
+                        write_spi_output(&mut **device, (i % 2) as u8);
+                    }
+                    device.take_pin_drives()
+                };
+                let expected = if wired {
+                    (0..4096)
+                        .map(|i| ("LIVE".to_owned(), i % 2 != 0))
+                        .collect::<Vec<_>>()
+                } else {
+                    Vec::new()
+                };
+                assert_eq!(
+                    drives, expected,
+                    "{primitive}, wired {wired}: keep ordered bound edges without unwired growth"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn opted_in_output_rejects_invalid_present_pad_but_preserves_unwired_and_legacy() {
+        let descriptor = labwired_config::DeviceDescriptor::from_yaml(
+            "type: output_probe\nbehavior:\n  primitive: i2c_device\n  outputs: [INT]\n  output_pins: { INT: int_pin }\n",
+        )
+        .unwrap();
+        for yaml in ["true", "null", "1.5", "[P0.25]", "{ pin: P0.25 }"] {
+            let value: serde_yaml::Value = serde_yaml::from_str(yaml).unwrap();
+            let mut ext = ext_with_moisture(value.clone());
+            ext.config.insert("int_pin".into(), value);
+            ext.config.insert(
+                "open_drain_pullups".into(),
+                serde_yaml::from_str("[INT]").unwrap(),
+            );
+            let mut bus = SystemBus::new();
+            let error = AttachCtx::new(&mut bus, &ext)
+                .bind_output_pins(&descriptor)
+                .unwrap_err();
+            assert!(error.to_string().contains("invalid pad value"), "{error}");
+
+            ext.config.remove("open_drain_pullups");
+            let mut bus = SystemBus::new();
+            AttachCtx::new(&mut bus, &ext)
+                .bind_output_pins(&descriptor)
+                .expect("legacy malformed value keeps its existing unbound behavior");
+        }
+        let mut ext = ext_with_moisture(serde_yaml::Value::Null);
+        ext.config.insert(
+            "open_drain_pullups".into(),
+            serde_yaml::from_str("[INT]").unwrap(),
+        );
+        let mut bus = SystemBus::new();
+        AttachCtx::new(&mut bus, &ext)
+            .bind_output_pins(&descriptor)
+            .expect("an absent pad binding remains valid and unconnected");
     }
 }
