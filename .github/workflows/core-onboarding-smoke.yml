@@ -38,6 +38,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Demand rank 3 STM32F103 board coverage: C8T6 Blue Pill LED and UART.
+          - id: stm32f103-blue-pill
+            crate: firmware-stm32f103-bluepill-smoke
+            target: thumbv7m-none-eabi
+            script: examples/stm32f103-blue-pill/io-smoke.yaml
+            system: configs/systems/stm32f103-blue-pill.yaml
           - id: stm32f401cdu6
             crate: firmware-f401-demo
             target: thumbv7em-none-eabi

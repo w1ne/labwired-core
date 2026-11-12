@@ -83,3 +83,33 @@ void loop() {
   delay(2000);
 }
 ```
+
+### STM32F103C8T6 Blue Pill
+
+The exact STM32F103C8T6 is still Active and in volume production on ST's live
+product page. The retailer listing checked for this round showed the Blue Pill
+board in stock. This is board depth for the measured rank-3 STM32F103 target,
+not a new chip family. The smoke checks the reference board's active-low PC13
+LED and USART1 header output. It makes no USB, debugger, clone-uniformity, or
+physical-hardware claim.
+
+- [Wiring, scope, copy-paste Arduino example, and smoke command](../examples/stm32f103-blue-pill/README.md)
+- [Dated ST lifecycle and board availability receipt](../examples/stm32f103-blue-pill/vendor-status.md)
+- [Committed local simulator evidence](../examples/stm32f103-blue-pill/evidence/)
+
+```cpp
+#include <Arduino.h>
+
+void setup() {
+  pinMode(PC13, OUTPUT);
+  Serial1.begin(115200);  // USART1 TX=PA9, RX=PA10
+  Serial1.println("BLUEPILL_F103C8_OK");
+}
+
+void loop() {
+  digitalWrite(PC13, LOW);   // active-low user LED on
+  delay(500);
+  digitalWrite(PC13, HIGH);  // user LED off
+  delay(500);
+}
+```
