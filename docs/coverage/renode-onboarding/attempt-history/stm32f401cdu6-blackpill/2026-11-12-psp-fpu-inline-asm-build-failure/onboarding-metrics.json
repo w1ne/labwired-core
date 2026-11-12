@@ -1,0 +1,33 @@
+{
+  "target_id": "stm32f401cdu6-blackpill",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": false,
+  "booted": null,
+  "boot_evidence": null,
+  "smoke_passed": null,
+  "crate": "firmware-f401cdu6-blackpill-demo",
+  "target_triple": "thumbv7em-none-eabihf",
+  "script": "examples/renode-onboarding/stm32f401cdu6-blackpill-smoke.yaml",
+  "system": "configs/systems/onboarding/stm32f401cdu6-blackpill.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-12T01:08:15Z",
+  "finished_at_utc": "2026-11-12T01:08:26Z",
+  "elapsed_seconds": 11,
+  "elapsed_ms": 10684,
+  "failure_stage": "build_firmware",
+  "first_error_signature": "error: <inline asm>:66:1: instruction requires: fp registers",
+  "failure_hint": "Firmware build failed. Start with the first compiler error in logs/build_firmware.log.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 6.424,
+    "build_firmware": 4.246,
+    "run_smoke": null
+  },
+  "stages_ms": {
+    "build_cli": 6424,
+    "build_firmware": 4246,
+    "run_smoke": null
+  }
+}

@@ -37,6 +37,7 @@
 //!   the tail-chain reuses MSP/EXC_RETURN and preserves the handler's live R0
 //!   a second tail-chain starts in Thread mode on PSP and checks EXC_RETURN,
 //!   PSP frame reuse, Handler-mode MSP stability, live R0, and caller-state restore
+//!   Cortex-M4F lazy FP context is checked with Thread mode using both MSP and PSP
 //! A summary word goes to RAM at 0x20001000 (one bit per smoke group passed).
 
 use core::ptr::{read_volatile, write_volatile};
@@ -114,6 +115,8 @@ const SCB_CPACR: u32 = 0xE000_ED88;
 const FPU_FPCCR: u32 = 0xE000_EF34;
 const FPU_FPCAR: u32 = 0xE000_EF38;
 const FPU_RECORD: u32 = 0x2000_1300;
+const FPU_PSP_STACK_TOP: u32 = 0x2000_1500;
+const FPU_PSP_THREAD_S0: u32 = 0x4000_0000;
 
 const SYSTICK_CSR: u32 = 0xE000_E010;
 const SYSTICK_RVR: u32 = 0xE000_E014;
@@ -221,10 +224,12 @@ fn main() -> ! {
     let systick_tailchain_ok = smoke_systick_pendsv_tailchain();
     let systick_psp_tailchain_ok = smoke_systick_pendsv_psp_tailchain();
     let fpu_lazy_exception_ok = unsafe { smoke_fpu_lazy_exception() };
+    let fpu_lazy_psp_exception_ok = unsafe { smoke_fpu_lazy_psp_exception() };
     passed |= ((systick_pending_ok && systick_dispatch_ok) as u32) << 12;
     passed |=
         ((systick_priority_ok && systick_tailchain_ok && systick_psp_tailchain_ok) as u32) << 13;
     passed |= (fpu_lazy_exception_ok as u32) << 14;
+    passed |= (fpu_lazy_psp_exception_ok as u32) << 15;
 
     let ahb = rd(RCC_AHB1ENR) & 0x5;
     let apb = rd(RCC_APB1ENR) & ((1 << 0) | (1 << 17) | (1 << 21) | (1 << 22));
@@ -416,7 +421,7 @@ fn main() -> ! {
     passed |= (usart2_rx_gate_ok as u32) << 11;
 
     wr(RESULT, 0xB1AC_0000 | passed);
-    send(if passed == 0x7FFF {
+    send(if passed == 0xFFFF {
         b"BLACKPILL PASS\r\n"
     } else {
         b"BLACKPILL FAIL\r\n"
@@ -585,11 +590,274 @@ unsafe fn smoke_fpu_lazy_exception() -> bool {
     passed
 }
 
+/// Repeat the Cortex-M4F lazy-save check with Thread mode using the PSP. This
+/// distinguishes the interrupted process stack from the Handler-mode MSP and
+/// verifies that exception return restores the PSP thread's S0 value.
+unsafe fn smoke_fpu_lazy_psp_exception() -> bool {
+    const CPACR_FULL_ACCESS: u32 = 0x00F0_0000;
+    const FPCCR_ASPEN_LSPEN: u32 = 0xC000_0000;
+    const FPCCR_LSPACT: u32 = 1;
+    const FPCA: u32 = 1 << 2;
+    const SPSEL: u32 = 1 << 1;
+    const EXTENDED_FRAME_BYTES: u32 = 0x68;
+
+    let prior_primask: u32;
+    let prior_control: u32;
+    let prior_psp: u32;
+    unsafe {
+        core::arch::asm!(
+            "mrs {primask}, PRIMASK",
+            "mrs {control}, CONTROL",
+            "mrs {psp}, PSP",
+            "cpsid i",
+            primask = out(reg) prior_primask,
+            control = out(reg) prior_control,
+            psp = out(reg) prior_psp,
+            options(nomem, nostack, preserves_flags),
+        );
+    }
+    let prior_cpacr = rd(SCB_CPACR);
+    let prior_fpccr = rd(FPU_FPCCR);
+    let prior_fpcar = rd(FPU_FPCAR);
+    let prior_vtor = rd(SCB_VTOR);
+    let vector_addr = TEST_VECTOR_TABLE + FPU_VECTOR * 4;
+    let prior_vector = rd(vector_addr);
+    let prior_irq_priority = unsafe { core::ptr::read_volatile((NVIC_IPR + FPU_IRQ) as *const u8) };
+    let prior_irq_enabled = rd(NVIC_ISER1) & FPU_IRQ_BIT != 0;
+    let prior_irq_pending = rd(NVIC_ISPR1) & FPU_IRQ_BIT != 0;
+    let clean_irq_state = rd(NVIC_IABR0 + 4) & FPU_IRQ_BIT == 0 && !prior_irq_pending;
+
+    wr(NVIC_ICER1, FPU_IRQ_BIT);
+    wr(NVIC_ICPR1, FPU_IRQ_BIT);
+    wr(SCB_CPACR, prior_cpacr | CPACR_FULL_ACCESS);
+    wr(FPU_FPCCR, FPCCR_ASPEN_LSPEN);
+    wr(FPU_FPCAR, 0);
+    unsafe {
+        core::ptr::write_volatile((NVIC_IPR + FPU_IRQ) as *mut u8, 0x80);
+    }
+    wr(
+        vector_addr,
+        (fpu_irq_handler as *const () as usize as u32) | 1,
+    );
+    wr(SCB_VTOR, TEST_VECTOR_TABLE);
+    wr(NVIC_ISER1, FPU_IRQ_BIT);
+    for word in 0..8 {
+        wr(FPU_RECORD + word * 4, 0);
+    }
+    let prior_s0: u32;
+    unsafe {
+        core::arch::asm!(
+            "vmov {value}, s0",
+            value = out(reg) prior_s0,
+            options(nomem, nostack),
+        );
+        core::arch::asm!("dsb", "isb", options(nostack, preserves_flags));
+        core::arch::asm!(
+            "msr PRIMASK, {primask}",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+
+    let restored_s0 = unsafe { fpu_irq_from_psp() };
+    let frame_sp = rd(FPU_RECORD);
+    let exc_return = rd(FPU_RECORD + 4);
+    let fpccr_entry = rd(FPU_RECORD + 8);
+    let fpcar_entry = rd(FPU_RECORD + 12);
+    let fpccr_after_touch = rd(FPU_RECORD + 16);
+    let saved_s0 = rd(FPU_RECORD + 20);
+    let handler_hit = rd(FPU_RECORD + 24) == 1;
+    let thread_psp = rd(FPU_RECORD + 28);
+    let fpcar_after = rd(FPU_FPCAR);
+    let pending_after = rd(NVIC_ISPR1) & FPU_IRQ_BIT;
+    let active_after = rd(NVIC_IABR0 + 4) & FPU_IRQ_BIT;
+    let control_after: u32;
+    let psp_after: u32;
+    unsafe {
+        core::arch::asm!(
+            "mrs {control}, CONTROL",
+            "mrs {psp}, PSP",
+            control = out(reg) control_after,
+            psp = out(reg) psp_after,
+            options(nomem, nostack, preserves_flags),
+        );
+        core::arch::asm!(
+            "vmov s0, {value}",
+            value = in(reg) prior_s0,
+            out("s0") _,
+            options(nostack),
+        );
+        core::arch::asm!("cpsid i", options(nomem, nostack, preserves_flags));
+    }
+
+    let lazy_frame = frame_sp == thread_psp.wrapping_sub(EXTENDED_FRAME_BYTES)
+        && fpccr_entry & FPCCR_LSPACT != 0
+        && fpcar_entry == frame_sp.wrapping_add(0x20)
+        && fpccr_after_touch & FPCCR_LSPACT == 0
+        && fpcar_after == fpcar_entry
+        && saved_s0 == FPU_PSP_THREAD_S0;
+    let context_restored = restored_s0 == FPU_PSP_THREAD_S0 && control_after & FPCA != 0;
+    let caller_state_restored = psp_after == prior_psp && control_after == prior_control;
+    let passed = prior_primask == 0
+        && prior_control & SPSEL == 0
+        && clean_irq_state
+        && handler_hit
+        && exc_return == 0xFFFF_FFED
+        && lazy_frame
+        && context_restored
+        && caller_state_restored
+        && pending_after == 0
+        && active_after == 0;
+
+    wr(NVIC_ICER1, FPU_IRQ_BIT);
+    wr(NVIC_ICPR1, FPU_IRQ_BIT);
+    wr(vector_addr, prior_vector);
+    unsafe {
+        core::ptr::write_volatile((NVIC_IPR + FPU_IRQ) as *mut u8, prior_irq_priority);
+    }
+    wr(SCB_VTOR, prior_vtor);
+    if prior_irq_enabled {
+        wr(NVIC_ISER1, FPU_IRQ_BIT);
+    }
+    if prior_irq_pending {
+        wr(NVIC_ISPR1, FPU_IRQ_BIT);
+    }
+    wr(FPU_FPCAR, prior_fpcar);
+    wr(FPU_FPCCR, prior_fpccr);
+    wr(SCB_CPACR, prior_cpacr);
+    unsafe {
+        core::arch::asm!(
+            "msr PRIMASK, {primask}",
+            "dsb",
+            "isb",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+
+    send(b"fpu m4f psp lazy frame=");
+    put_hex32(exc_return);
+    send(b" lspact=");
+    send(if fpccr_entry & FPCCR_LSPACT != 0 {
+        b"1->"
+    } else {
+        b"0->"
+    });
+    send(if fpccr_after_touch & FPCCR_LSPACT == 0 {
+        b"0"
+    } else {
+        b"1"
+    });
+    send(b" psp_frame=");
+    send(
+        if frame_sp == thread_psp.wrapping_sub(EXTENDED_FRAME_BYTES) {
+            b"1"
+        } else {
+            b"0"
+        },
+    );
+    send(b" fpcar=");
+    send(
+        if fpcar_entry == frame_sp.wrapping_add(0x20) && fpcar_after == fpcar_entry {
+            b"1"
+        } else {
+            b"0"
+        },
+    );
+    send(b" saved=");
+    send(if saved_s0 == FPU_PSP_THREAD_S0 {
+        b"1"
+    } else {
+        b"0"
+    });
+    send(b" restored=");
+    send(if context_restored && caller_state_restored {
+        b"1"
+    } else {
+        b"0"
+    });
+    send(if passed { b" ok\r\n" } else { b" FAIL\r\n" });
+    passed
+}
+
+/// Enter Thread mode on PSP, pend the FPU test IRQ, then restore its caller's
+/// stack selection before returning the restored S0 value in R0.
+#[unsafe(naked)]
+unsafe extern "C" fn fpu_irq_from_psp() -> u32 {
+    core::arch::naked_asm!(
+        "push {{r4-r7, lr}}",
+        "sub sp, sp, #4",
+        "mrs r4, control",
+        "mrs r5, psp",
+        "ldr r1, ={stack_top}",
+        "msr psp, r1",
+        "mov r6, r4",
+        "bic r6, r6, #4",
+        "orr r6, r6, #2",
+        "msr control, r6",
+        "isb",
+        "bl {body}",
+        "msr psp, r5",
+        "msr control, r4",
+        "isb",
+        "add sp, sp, #4",
+        "pop {{r4-r7, pc}}",
+        stack_top = const FPU_PSP_STACK_TOP,
+        body = sym fpu_psp_thread_body,
+    );
+}
+
+/// Run with SPSEL set. Capture the settled process SP and arm the interrupt in
+/// one stack-neutral asm block, so the stacked frame can be checked exactly.
+unsafe fn fpu_psp_thread_body() -> u32 {
+    unsafe {
+        core::arch::asm!(
+            "mrs {thread_psp}, psp",
+            "ldr {record}, ={record_addr}",
+            "str {thread_psp}, [{record}, #28]",
+            "vmov s0, {thread_s0}",
+            "ldr {ispr}, ={ispr_addr}",
+            "ldr {irq_bit}, ={irq_mask}",
+            "str {irq_bit}, [{ispr}]",
+            "dsb",
+            "isb",
+            thread_psp = out(reg) _,
+            record = out(reg) _,
+            thread_s0 = in(reg) FPU_PSP_THREAD_S0,
+            ispr = out(reg) _,
+            irq_bit = out(reg) _,
+            record_addr = const FPU_RECORD,
+            ispr_addr = const NVIC_ISPR1,
+            irq_mask = const FPU_IRQ_BIT,
+            out("s0") _,
+            options(nostack),
+        );
+    }
+    while rd(FPU_RECORD + 24) == 0 {
+        core::hint::spin_loop();
+    }
+    let restored_s0: u32;
+    unsafe {
+        core::arch::asm!(
+            "vmov {value}, s0",
+            value = out(reg) restored_s0,
+            options(nomem, nostack),
+        );
+    }
+    restored_s0
+}
+
 #[unsafe(naked)]
 unsafe extern "C" fn fpu_irq_handler() {
     core::arch::naked_asm!(
         "mov r2, lr",
+        "tst r2, #4",
+        "beq 1f",
+        "mrs r0, psp",
+        "b 2f",
+        "1:",
         "mrs r0, msp",
+        "2:",
         "ldr r1, ={record}",
         "str r0, [r1, #0]",
         "str r2, [r1, #4]",
@@ -610,6 +878,8 @@ unsafe extern "C" fn fpu_irq_handler() {
         "str r3, [r5, #20]",
         "pop {{r4-r7}}",
         "ldr r2, ={record}",
+        "movs r3, #1",
+        "str r3, [r2, #24]",
         "ldr r2, [r2, #4]",
         "mov lr, r2",
         "bx lr",
