@@ -61,7 +61,9 @@ This test uses the shared STM32F4 ADC and analog pin routing, retains the
 Discovery board-I/O mappings, and checks the NTC temperature response, an
 independent diode load line, channel isolation, undriven adjacent channels, and
 the ADC1 data register result. It is a simulator co-simulation proof, not a
-silicon capture.
+silicon capture. It also routes matched level-1 PJF gate-diode models through
+ADC1_IN5/IN6 and checks the N=2 versus default-N=1 load lines alongside the
+unrelated NTC and diode.
 
 The heartbeat's `odr=` value is read back from `GPIOD_ODR` after each write.
 The board's ST-LINK VCP is not wired to the MCU UART (UM1472); the console
