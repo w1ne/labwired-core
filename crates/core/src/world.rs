@@ -8,7 +8,9 @@ use crate::network::Interconnect;
 use crate::{Bus, Cpu, Machine, SimResult};
 use std::collections::HashMap;
 
+mod cosim;
 mod gpio_nets;
+pub use cosim::WorldCosimStatus;
 use gpio_nets::WorldGpio;
 pub use gpio_nets::{AppliedDelivery, GpioSchedulerStats};
 
@@ -134,6 +136,7 @@ pub struct World {
     /// Round clock shared by the timed UART network, the GPIO nets and the
     /// timed CAN buses.
     round: RoundClock,
+    cosim: Option<cosim::WorldCosim>,
     /// Marker pads per node, collected while interconnects are built and
     /// watched together with the net pads once they all are.
     marker_pins: std::collections::BTreeMap<String, Vec<(String, u8)>>,
@@ -270,6 +273,40 @@ pub struct ResolvedWorldNode {
 /// Type-erased trait for machines to allow heterogeneous machines in the world.
 pub trait MachineTrait: Send {
     fn name(&self) -> &str;
+    fn reset_input_status(&self) -> Option<crate::reset_input::ResetInputStatus> {
+        None
+    }
+    fn bind_world_cosim(
+        &mut self,
+        _node: &str,
+        _configs: &[labwired_config::CosimModelConfig],
+    ) -> anyhow::Result<crate::cosim::SignalRouter> {
+        anyhow::bail!("machine does not support world analog routing")
+    }
+    fn sample_world_cosim(
+        &self,
+        _router: &crate::cosim::SignalRouter,
+        _signals: &mut crate::cosim::CosimSignals,
+    ) {
+    }
+    fn apply_world_cosim(
+        &mut self,
+        _router: &mut crate::cosim::SignalRouter,
+        _signals: &crate::cosim::CosimSignals,
+        _time_ns: u64,
+    ) -> SimResult<()> {
+        Err(crate::SimulationError::Other(
+            "machine does not support world analog routing".to_string(),
+        ))
+    }
+    fn world_cosim_claims_gpio(
+        &self,
+        _router: &crate::cosim::SignalRouter,
+        _peripheral: &str,
+        _pin: u8,
+    ) -> bool {
+        false
+    }
     fn step(&mut self) -> SimResult<()>;
     fn reset(&mut self) -> SimResult<()>;
     fn total_cycles(&self) -> u64;
@@ -542,6 +579,39 @@ pub trait MachineTrait: Send {
 }
 
 impl<C: Cpu + 'static> MachineTrait for Machine<C> {
+    fn reset_input_status(&self) -> Option<crate::reset_input::ResetInputStatus> {
+        self.bus.reset_input.status()
+    }
+    fn bind_world_cosim(
+        &mut self,
+        node: &str,
+        configs: &[labwired_config::CosimModelConfig],
+    ) -> anyhow::Result<crate::cosim::SignalRouter> {
+        Machine::bind_world_cosim(self, node, configs)
+    }
+    fn sample_world_cosim(
+        &self,
+        router: &crate::cosim::SignalRouter,
+        signals: &mut crate::cosim::CosimSignals,
+    ) {
+        Machine::sample_world_cosim(self, router, signals)
+    }
+    fn apply_world_cosim(
+        &mut self,
+        router: &mut crate::cosim::SignalRouter,
+        signals: &crate::cosim::CosimSignals,
+        time_ns: u64,
+    ) -> SimResult<()> {
+        Machine::apply_world_cosim(self, router, signals, time_ns)
+    }
+    fn world_cosim_claims_gpio(
+        &self,
+        router: &crate::cosim::SignalRouter,
+        peripheral: &str,
+        pin: u8,
+    ) -> bool {
+        Machine::world_cosim_claims_gpio(self, router, peripheral, pin)
+    }
     fn name(&self) -> &str {
         // We might need to add a name field to Machine or handle mapping in World
         "unnamed"
@@ -830,6 +900,7 @@ impl World {
             can: None,
             can_buses: Vec::new(),
             round: RoundClock::default(),
+            cosim: None,
             marker_pins: Default::default(),
             pending_nets: Vec::new(),
             gpio_lockstep: false,
@@ -953,6 +1024,9 @@ impl World {
     /// Future improvements will include Global Virtual Time (GVT) and
     /// Chandy-Lamport for distributed snapshots.
     pub fn step_all(&mut self) -> HashMap<String, SimResult<()>> {
+        if self.cosim.is_some() {
+            return self.step_all_rounds();
+        }
         if self.ble.is_some() {
             return self.step_all_time_lockstep();
         }
@@ -1001,7 +1075,11 @@ impl World {
     /// GPIO nets and no timed UART network: `step_all` runs the per-node
     /// scheduler.
     fn gpio_per_node(&self) -> bool {
-        self.gpio.is_some() && self.uart_net.is_none() && self.can.is_none() && !self.gpio_lockstep
+        self.gpio.is_some()
+            && self.uart_net.is_none()
+            && self.can.is_none()
+            && self.cosim.is_none()
+            && !self.gpio_lockstep
     }
 
     /// One round of a BLE world: step every node that is not more than
@@ -1095,6 +1173,10 @@ impl World {
         let mut ids: Vec<_> = self.machines.keys().cloned().collect();
         ids.sort();
         let mut results = HashMap::new();
+        if let Some(failure) = self.cosim.as_ref().and_then(|c| c.failure()) {
+            cosim::fail_nodes(&ids, &mut results, failure);
+            return results;
+        }
         // A world whose only round-based medium is timed CAN and that has no
         // other interconnect to tick runs every node to the round end in one
         // call: nothing passes between nodes inside a round, so slicing it
@@ -1109,6 +1191,9 @@ impl World {
             Some(target) => target,
             None => self.start_round(&ids, &mut results),
         };
+        if results.values().any(Result::is_err) {
+            return results;
+        }
         let mut all_there = true;
         let mut reached = std::collections::BTreeSet::new();
         for id in &ids {
@@ -1144,9 +1229,20 @@ impl World {
             }
             results.entry(id.clone()).or_insert(r);
         }
+        if let Some(circuit) = self.cosim.as_mut() {
+            if let Some(error) = results.values().find_map(|r| r.as_ref().err()) {
+                circuit.latch_failure(format!("world node failed before analog boundary: {error}"));
+                return results;
+            }
+        }
         if all_there {
             self.round.now_ps = target;
             self.round.end_ps = None;
+            if let Some(circuit) = self.cosim.as_mut() {
+                if let Err(error) = circuit.complete_interval(&mut self.machines, target) {
+                    cosim::fail_nodes(&ids, &mut results, &error.to_string());
+                }
+            }
             // Every node has reached the round end: what their CAN
             // controllers requested in the round is known.
             if let Some(can) = self.can.as_mut() {
@@ -1231,14 +1327,17 @@ impl World {
     /// stops at the first round end at or after `target_ps`. Stops at the
     /// first round in which a node returns an error.
     pub fn run_until_ps(&mut self, target_ps: u64) -> Option<HashMap<String, SimResult<()>>> {
-        if self.uart_net.is_none() && self.gpio.is_none() && self.can.is_none() {
+        if self.uart_net.is_none()
+            && self.gpio.is_none()
+            && self.can.is_none()
+            && self.cosim.is_none()
+        {
             return None;
         }
-        let fast = self.gpio.is_some()
-            && self.uart_net.is_none()
-            && self.can.is_none()
-            && !self.gpio_lockstep
-            && self.interconnects.is_empty();
+        // The per-node GPIO scheduler cannot advance a shared circuit. Use
+        // the same admission rule as step_all so public batched APIs cannot
+        // bypass analog boundaries, regardless of the gpio_lockstep flag.
+        let fast = self.gpio_per_node() && self.interconnects.is_empty();
         if fast {
             // Finish a round a step budget left part way, so the round clock
             // stays on round ends, then run the rest in one go.
@@ -1317,6 +1416,7 @@ impl World {
         let gpio = self.gpio.as_ref()?;
         if self.uart_net.is_some()
             || self.can.is_some()
+            || self.cosim.is_some()
             || self.gpio_lockstep
             || !self.interconnects.is_empty()
             || self.round.end_ps.is_some()
@@ -1387,6 +1487,11 @@ impl World {
                 next_event = Some(next_event.map_or(at, |e: u64| e.min(at)));
             }
         }
+        if let Some(circuit) = self.cosim.as_mut() {
+            next_event = Some(next_event.map_or(circuit.next_boundary_ps(), |at| {
+                at.min(circuit.next_boundary_ps())
+            }));
+        }
         let mut target = t + lookahead.min(quantum).max(1_000);
         if let Some(at) = next_event {
             if at > t {
@@ -1408,7 +1513,50 @@ impl World {
                 }
             }
         }
+        if let Some(circuit) = self.cosim.as_mut() {
+            if let Err(error) = circuit.sample_interval(&self.machines) {
+                cosim::fail_nodes(ids, results, &error.to_string());
+            }
+        }
         target
+    }
+
+    /// The shared circuit's actual chosen interval and completed boundary.
+    pub fn cosim_status(&self) -> Option<WorldCosimStatus> {
+        self.cosim.as_ref().map(|c| {
+            let mut status = c.status();
+            status.reset_inputs = self
+                .machines
+                .iter()
+                .filter_map(|(id, m)| m.reset_input_status().map(|r| (id.clone(), r)))
+                .collect();
+            status
+        })
+    }
+    pub fn cosim_signals(&self) -> Option<&crate::cosim::CosimSignals> {
+        self.cosim.as_ref().map(|c| c.signals())
+    }
+    pub fn analog_series(&self) -> Option<crate::analog::AnalogSeries> {
+        self.cosim.as_ref().map(|c| c.series())
+    }
+    pub fn analog_channels(&self) -> Vec<crate::analog::AnalogChannel> {
+        self.cosim.as_ref().map_or_else(Vec::new, |c| c.channels())
+    }
+    pub fn analog_trace_snapshot(&self, cursor: u64) -> crate::analog::AnalogTraceBatch {
+        self.cosim.as_ref().map_or_else(
+            || crate::analog::AnalogTraceRegistry::new().snapshot(cursor),
+            |c| c.trace(cursor),
+        )
+    }
+    pub fn set_cosim_signal(
+        &mut self,
+        path: &str,
+        value: crate::cosim::CosimSignalValue,
+    ) -> SimResult<()> {
+        self.cosim
+            .as_mut()
+            .ok_or_else(|| crate::SimulationError::Other("world has no analog model".to_string()))?
+            .set_signal(path, value)
     }
 
     /// World time a timed UART world has reached, ps.
@@ -1419,8 +1567,11 @@ impl World {
     /// World time a round-based world (timed UART network or GPIO nets) has
     /// reached, ps; `None` for any other world.
     pub fn round_now_ps(&self) -> Option<u64> {
-        (self.uart_net.is_some() || self.gpio.is_some() || self.can.is_some())
-            .then_some(self.round.now_ps)
+        (self.uart_net.is_some()
+            || self.gpio.is_some()
+            || self.can.is_some()
+            || self.cosim.is_some())
+        .then_some(self.round.now_ps)
     }
 
     /// Every net delivery applied to a pad so far (node, pad, the cycle it
@@ -1941,9 +2092,9 @@ impl World {
         if expected != actual || nodes.len() != manifest.nodes.len() {
             anyhow::bail!("resolved node ids must match environment manifest nodes exactly");
         }
-        // A world advances its nodes through `step_all`, which runs no
-        // co-simulation session. A node's `cosim_models` would therefore never
-        // step while the run reported a result, so refuse to build instead.
+        // Shared analog belongs to the environment. Per-node `cosim_models`
+        // would duplicate a circuit or leave it unstepped, so they remain
+        // refused even when the environment declares one shared model.
         // Both the CLI environment runner (`from_manifest`) and the browser
         // `WasmWorld` (`from_resolved`) come through here.
         if let Some(node) = nodes
@@ -1951,7 +2102,7 @@ impl World {
             .find(|node| !node.system.cosim_models.is_empty())
         {
             anyhow::bail!(
-                "co-simulation models are not supported in multi-node worlds yet; node '{}' declares {}",
+                "node-level co-simulation models are not supported in worlds; node '{}' declares {}",
                 node.id,
                 node.system.cosim_models.len()
             );
@@ -2160,6 +2311,18 @@ impl World {
                 }
                 other => anyhow::bail!("unsupported interconnect type '{other}'"),
             }
+        }
+        if !manifest.cosim_models.is_empty() {
+            if world.ble.is_some() {
+                anyhow::bail!("world analog with BLE scheduling is not supported");
+            }
+            let circuit = cosim::WorldCosim::new(
+                &manifest.cosim_models,
+                &mut world.machines,
+                &world.node_hz,
+            )?;
+            circuit.check_gpio_ownership(&world.machines, &world.pending_nets)?;
+            world.cosim = Some(circuit);
         }
         world.finish_pad_watches().context("gpio_net")?;
 

@@ -23,13 +23,24 @@ chip: "../chips/nrf52833.yaml"
 external_devices:
   # Selected LSM303AGR-equipped v2 variant, not the alternate FXOS8700 board.
   # Separate fixed 7-bit addresses on the internal TWIM0 bus. The shared
-  # open-drain sensor interrupt P0.25 is not connected by this bounded model.
+  # magnetometer DRDY reaches P0.25 through the V2.0 inverting collector.
+  # Accelerometer INT1 uses its own collector; the KL27 participant is absent.
+  # This digital net assumes an enabled pull-up. Physical firmware must set
+  # P0.25 PIN_CNF.PULL; missing pull configuration is not enforced here.
   - id: "accelerometer"
     type: "lsm303agr_accel"
     connection: "i2c0"
+    config:
+      int1_pin: "P0.25"
+      open_drain_pullups: [INT1]
+      inverting_collectors: [INT1]
   - id: "magnetometer"
     type: "lsm303agr_mag"
     connection: "i2c0"
+    config:
+      drdy_pin: "P0.25"
+      open_drain_pullups: [DRDY]
+      inverting_collectors: [DRDY]
   - id: "led_matrix"
     type: "led-matrix-mux"
     connection: "gpio0"

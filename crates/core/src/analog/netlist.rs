@@ -22,7 +22,7 @@
 //! | Voltage source | `V<name> n+ n- <source>` |
 //! | Current source | `I<name> n+ n- <source>` |
 //! | Switch | `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` or `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0\|1] ron=<r> roff=<r>` |
-//! | Voltage switch | `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0|1] ron=<r> roff=<r>` |
+//! | Voltage switch | `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0|1] [signed=0|1] ron=<r> roff=<r>` |
 //! | Diode | `D<name> n+ n- <model>` |
 //! | BJT | `Q<name> nc nb ne <model>` |
 //! | MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>]` |
@@ -1926,13 +1926,17 @@ pub struct VoltageSwitchControl {
     pub vh: f64,
     /// When true, the contact is the complement (NC) of the NO threshold rule.
     pub invert: bool,
+    /// Sense V(pos)-V(neg) instead of its magnitude (logic/UVLO). Default false.
+    pub signed: bool,
 }
 
 /// `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` — an ideal switch whose control is a
 /// routed boolean input name, not a circuit node.
 ///
-/// Or `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0|1] ron=<r> roff=<r>` —
+/// Or `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0|1] [signed=0|1] ron=<r> roff=<r>` —
 /// the same switch closed by the absolute voltage between `nc+` and `nc-`.
+/// `signed=1` instead senses the signed difference, for logic and undervoltage
+/// lockout where a negative supply must never count as enabled.
 /// When `voltage` is `Some`, `ctrl` is empty and the adapter does not expose a
 /// routed input for this element.
 #[derive(Debug, Clone, PartialEq)]
@@ -2707,7 +2711,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
             }
             'S' => {
                 let digital = "S<name> n1 n2 <ctrl> ron=<r> roff=<r>";
-                let voltage = "S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0|1] ron=<r> roff=<r>";
+                let voltage = "S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0|1] [signed=0|1] ron=<r> roff=<r>";
                 let rest = &tokens[1..];
                 let voltage_form = rest.iter().any(|token| {
                     token
@@ -2724,6 +2728,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     let mut vt = None;
                     let mut vh = 0.0;
                     let mut invert = false;
+                    let mut signed = false;
                     for token in &rest[4..] {
                         let (key, value) = token
                             .split_once('=')
@@ -2733,6 +2738,13 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                             "roff" => roff = Some(ctx.value(value, "roff")?),
                             "vt" => vt = Some(ctx.value(value, "vt")?),
                             "vh" => vh = ctx.value(value, "vh")?,
+                            "signed" => {
+                                let parsed = ctx.value(value, "signed")?;
+                                if parsed != 0.0 && parsed != 1.0 {
+                                    return Err(ctx.parse_err("signed must be 0 or 1"));
+                                }
+                                signed = parsed != 0.0;
+                            }
                             "invert" => {
                                 let parsed = ctx.value(value, "invert")?;
                                 if parsed != 0.0 && parsed != 1.0 {
@@ -2776,6 +2788,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                             vt,
                             vh,
                             invert,
+                            signed,
                         }),
                     });
                 } else {

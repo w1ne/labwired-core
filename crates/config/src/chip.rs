@@ -817,6 +817,9 @@ pub struct ChipDescriptor {
     /// rather than comparing against a made-up midpoint.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gpio_input_thresholds: Option<GpioInputThresholds>,
+    /// Explicit electrical/pulse limits for a separate reset pin.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reset_input: Option<crate::ResetInputConfig>,
     /// The chip's supply supervisor: power-on / power-down reset and
     /// brown-out reset thresholds, from the datasheet.
     ///
@@ -1485,6 +1488,7 @@ impl From<labwired_ir::IrDevice> for ChipDescriptor {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: None,
             supply_monitor: None,
             include: None,
         }

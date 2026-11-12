@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "base_commit": "66596e6a5438b3a4fdbe6269f97b6f9bde1e68c3",
+  "source_files_sha256": {
+    "crates/core/src/world.rs": "ed0b9c67ee6497ddbf828716ba967531a1e0b637831e1f36ed430d297d417538",
+    "crates/core/tests/world_analog.rs": "65a8e3bc95ee4384a20d2b28e66f545a6fb21be9d84e2966ce3ab56cbdd0bcaf"
+  },
+  "red": {
+    "exit_code": 101,
+    "log_sha256": "a3f9ce242685928856d21fcc88910ecbce849649587dc974b8fb792f734fc528",
+    "test_results": [
+      {
+        "passed": 0,
+        "failed": 3,
+        "ignored": 0
+      }
+    ]
+  },
+  "green": {
+    "exit_code": 0,
+    "log_sha256": "fb0da35d4eb586a6751c83bc9372cf22810e85042df2653a1e62008d03989003",
+    "test_results": [
+      {
+        "passed": 15,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 104,
+        "failed": 0,
+        "ignored": 0
+      }
+    ]
+  },
+  "green_command": "cargo test -p labwired-core --test world_analog --test world_gpio_net_buses --test world_determinism",
+  "profile": "world-analog-20261112 (debug=0, incremental=false, jobs=2)",
+  "regressions": [
+    "analog-only run_until_ps returns a result and steps MNA",
+    "mixed GPIO/analog run_until_ps preserves MNA boundaries through a partial interval",
+    "step_rounds respects a 1000 ns analog boundary before 1200 ns GPIO lookahead"
+  ],
+  "native_esc_runtime_verified": false,
+  "silicon_or_flight_claim": false
+}

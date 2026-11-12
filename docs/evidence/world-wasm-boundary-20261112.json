@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "base_commit": "edfe187eb9e0ef6aadafb7f5d0c2b760c2fd42a2",
+  "scope": "Preserve serialization errors at two World Wasm accessors; absent co-sim remains successful optional data.",
+  "source_files_sha256": {
+    "crates/wasm/src/world.rs": "5607ca72098a3e16748f74ab077a955a8b297517bab47e6d0f3ae5190b098423",
+    "crates/wasm/src/error_boundary_ratchet.rs": "aec663a1c70e00016c7b62fe14e00eed874138681707fc2244fae9cb024d21c7"
+  },
+  "regression_command": "CARGO_MANIFEST_DIR=$PWD/crates/wasm rustc --edition=2021 --test crates/wasm/src/error_boundary_ratchet.rs -o <owned-binary>; <owned-binary>",
+  "regression_mode": "Unmodified source-complete ratchet module compiled directly; no Cargo workspace or browser execution claim.",
+  "red": {
+    "exit_code": 101,
+    "passed": 3,
+    "failed": 3,
+    "log_sha256": "d2c51ac11d5aaa355958b2885962ca4df22c0000db8e18a1b28897c12e85f3e6"
+  },
+  "green": {
+    "exit_code": 0,
+    "passed": 6,
+    "failed": 0,
+    "log_sha256": "a93957e30a7d549cc85969ad9200f3ee993a242c6dfbc46e9145b53614bf1213"
+  },
+  "ratchet_changed": false,
+  "native_esc_runtime_verified": false,
+  "silicon_or_flight_claim": false
+}

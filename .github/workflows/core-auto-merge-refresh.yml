@@ -1,0 +1,40 @@
+name: Core auto-merge queue refresh
+
+# Only the default branch runs this workflow. Do not check out PR code.
+# Refresh at most one small, green PR per run to avoid a CI stampede.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Only report an eligible PR without updating its branch"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: core-auto-merge-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    if: ${{ github.repository == 'w1ne/labwired-core' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          sparse-checkout: scripts/ci/core_merge_queue.py
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Refresh one tested auto-merge PR
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
+        run: python3 scripts/ci/core_merge_queue.py

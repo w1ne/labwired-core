@@ -793,12 +793,17 @@ jobs:
         with:
           packages: gcc-arm-none-eabi
 
-      - name: UARTE stack-lifetime guest (FEATURE-OFF)
+      - name: UARTE and sensor interrupt guests (FEATURE-OFF)
         env:
           LABWIRED_UARTE_STACK_INTERVALS: "1"
+          LABWIRED_REQUIRE_SENSOR_FEATURE_OFF: "1"
         run: >
           scripts/ci/cargo-test-nonvacuous.sh
-          -p labwired-core --no-default-features --test microbit_v2_uarte_stack_guest
+          -p labwired-core --no-default-features
+          --test microbit_v2_uarte_stack_guest
+          --test microbit_v2_open_drain_guest
+          --test microbit_v2_mag_drdy_guest
+          --test microbit_v2_sensor_drdy_guest
           -- --nocapture
 
       # The workspace shards exercise SPI with event-scheduler. Keep its

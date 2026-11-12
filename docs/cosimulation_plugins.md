@@ -87,6 +87,15 @@ Worked example: [`examples/cosim-spice-rc`](../examples/cosim-spice-rc/README.md
 (Debian/Ubuntu: `apt install libngspice0`). Tests:
 `python3 -m pytest tools/cosim/test_labwired_ngspice.py`.
 
+## Shared analog in a multi-controller world
+
+An environment can own one inline `adapter: analog` model with instance-qualified
+`node.<id>.board.*` / `node.<id>.adc.*` routes. The existing world scheduler
+advances one shared circuit and applies all observations at its declared
+boundaries. Per-node co-simulation models remain refused. See
+[One shared analog circuit in a world](world-analog.md) for the manifest,
+voltage and reset semantics, trace API, validation, and sampling limits.
+
 ## Board signal paths
 
 A model that only speaks abstract observables can be driven from the command
@@ -99,11 +108,13 @@ steps the model against the pins the firmware is actually driving:
 | `board.gpio.<pad>` | machine → model | bool | The level the firmware is driving on an output pad. |
 | `board.gpio_output.<pad>` | machine → model | bool | Whether the firmware has configured `<pad>` as a general-purpose output. |
 | `board.gpio_pad.<pad>` | machine → model | bool | The live level a logic probe clipped to `<pad>` sees: the GPIO latch for a plain output, the peripheral's wire for an alternate-function pad, the input register for an input. |
+| `board.gpio_pad_volts.<pad>` | machine → model | volts | The live pad driver amplitude from the routed VDD, or the descriptor I/O voltage when VDD is not routed. Use a separate direction switch for high impedance. |
 | `board.gpio_driven.<pad>` | machine → model | bool | Whether the MCU's own output stage drives `<pad>`, through a GPIO output OR an alternate-function peripheral. False for an input, an analog pad, or a released open-drain line. |
 | `board.gpio_in.<pad>` | model → machine | bool or volts | An externally held level on an input pad (also readable). A number is volts, turned into a level with the chip's input thresholds. |
 | `board.analog.<pad>_volts` | model → machine | number | The analog level on the ADC channel belonging to `<pad>`. |
 | `adc.<peripheral>.<channel>_volts` | model → machine | number | The analog level on an explicitly named ADC channel. |
 | `board.power.vdd_volts` | model → machine | number | The MCU's supply. The chip's `supply_monitor:` holds the core in reset below its power-on threshold and resets it on power-down or brown-out; a chip without one refuses the route. |
+| `board.reset.<pin>_volts` | model → machine | volts | The descriptor-declared reset pin, with absolute or VDD-ratio thresholds and valid/invalid pulse limits. Holds execution independently of the supply supervisor. |
 | `board.motor.<id>.back_emf_v` | machine → model | number | The back-EMF of an `armature: circuit` DC motor (Ke·ω, volts), for the netlist's series EMF source. |
 | `board.motor.<id>.current_a` | model → machine | number | The winding current the netlist solved for an `armature: circuit` DC motor (amps, positive = forward torque). Until it is routed the motor holds still and reports no current. |
 | `ui.<partId>.<field>` | outside → model | bool or number | Set from outside the engine (a canvas part, a test stimulus); 0 / false until set. |

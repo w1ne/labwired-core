@@ -1373,7 +1373,7 @@ impl PeripheralKit for DeclarativeSpiKit {
         }
         // Supply state. `Some(false)` is the only value that changes anything;
         // an absent key means powered. See `components::supply`.
-        let device = device.with_powered(
+        let mut device = device.with_powered(
             crate::peripherals::components::supply::powered_from_config(ctx),
         );
         // Tier 2: bind `outputs:` roles to pads. The DRDY/IRQ twin of the I²C
@@ -1381,6 +1381,9 @@ impl PeripheralKit for DeclarativeSpiKit {
         // themselves: `QA..QH` are `outputs:` roles like any other, and the
         // rules drive them through the same narrowed `DevicePins` port.
         ctx.bind_output_pins(&self.descriptor)?;
+        if let Some(rules) = &mut device.rules {
+            rules.restrict_pin_delivery(ctx.bound_output_roles());
+        }
         ctx.attach_spi_device(Box::new(device))
     }
 }

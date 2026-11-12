@@ -580,6 +580,10 @@ fn run_world(
         uart_network: world
             .uart_network_report(0)
             .and_then(|report| serde_json::to_value(report).ok()),
+        cosim: world
+            .cosim_status()
+            .and_then(|status| serde_json::to_value(status).ok()),
+        analog_series: world.analog_series(),
         gpio_nets: Some(world.gpio_net_reports())
             .filter(|nets| !nets.is_empty())
             .and_then(|nets| serde_json::to_value(nets).ok()),
@@ -608,6 +612,14 @@ fn run_world(
         &render_uart_log(uart_sinks),
         duration,
     );
+
+    if let Some(path) = &args.analog_trace {
+        if let Err(error) =
+            crate::analog_trace::write_analog_trace(&world.analog_trace_snapshot(0), path)
+        {
+            tracing::error!("failed to write environment analog trace: {error}");
+        }
+    }
 
     EnvironmentRunOutcome {
         // The same `verdict` the result above was written from.
@@ -904,6 +916,8 @@ fn write_config_error(
         config: config.clone(),
         uart_network: None,
         gpio_nets: None,
+        cosim: None,
+        analog_series: None,
     };
     // Silent-path census (measurement only; empty fn without the
     // `silent-census` feature). The multi-node environment runner has its own
