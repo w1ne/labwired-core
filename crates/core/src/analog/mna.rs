@@ -2037,6 +2037,8 @@ impl Solver {
             let raw_gs = sign * node_diff(nodes, jfet.g, jfet.junction_s);
             let raw_gd = sign * node_diff(nodes, jfet.g, jfet.junction_d);
             let raw_ds = sign * node_diff(nodes, jfet.junction_d, jfet.junction_s);
+            // ngspice limits the gate junctions at N = 1 whatever the card's
+            // `N`; the limiter only paces Newton, the solution is unchanged.
             let vt = jfet.thermal_voltage();
             let critical =
                 device::pn_critical_voltage_at_thermal_voltage(jfet.operating_model.is, 1.0, vt);
@@ -2624,8 +2626,12 @@ impl Solver {
             .into_iter()
             .enumerate()
             {
-                let gate =
-                    device::diode_op_at_thermal_voltage(voltage, gate_model.is, 1.0, gate_vt);
+                let gate = device::diode_op_at_thermal_voltage(
+                    voltage,
+                    gate_model.is,
+                    gate_model.n,
+                    gate_vt,
+                );
                 let gate_voltage = sign * voltage;
                 let gate_terms = [(gate.gd, jfet.g, cathode, gate_voltage)];
                 stamp_linearised(matrix, rhs, dim, jfet.g, sign * gate.id, &gate_terms);

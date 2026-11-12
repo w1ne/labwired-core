@@ -545,7 +545,8 @@ from `CBD`/`CBS` or `CJ`/`CJSW` with instance `AD`/`AS`/`PD`/`PS`, plus
 intrinsic channel charge using either ngspice's piecewise Meyer formulation or
 the opt-in Ward–Dutton charge partition; and
 SPICE JFET level 1 with the Parker–Skellern `B` fit, including its two gate
-junctions and depletion charge. Tests exercise non-unit `B` in the linear and
+junctions and depletion charge. The gate-junction emission coefficient `N`
+(default 1) sets `N·kT/q` for both gate diodes, as in ngspice. Tests exercise non-unit `B` in the linear and
 saturation regions for both channel polarities. Other tests cover MOSFET/JFET
 channel-length modulation, reverse-channel operation, MOSFET body effect,
 Meyer bias regions, and Ward–Dutton
@@ -571,6 +572,7 @@ dependence. `TLEVC=1` selects the linear `CTE`/`CTC` capacitance and
 use their documented `TR*` coefficients. JFET level-1 channel `VTO`/`BETA`
 use `VTOTC` (otherwise `TCV`) and `BETATCE` (otherwise `BEX`) when an instance
 `TEMP` is supplied. The same `TEMP` scales JFET gate-junction `IS` by `EG`/`XTI`
+(the `EG` term divided by `N`, `XTI` not, as in ngspice `jfettemp.c`)
 (defaults 1.11 eV and 3), moves `PB` and `CGS`/`CGD` by the diode depletion law
 at grading 0.5, and evaluates the gate diodes at that `kT/q`. A level-1 MOSFET
 instance `TEMP` (card `TNOM`, default 27 °C) follows ngspice's `mos1temp` laws:

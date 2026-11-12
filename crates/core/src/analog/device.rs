@@ -285,7 +285,8 @@ pub fn bjt_parameters_at_temperature(
 /// SPICE level-1 JFET parameters adjusted for an explicit instance
 /// temperature. `VTOTC` overrides `TCV`; `BETATCE` overrides `BEX`, matching
 /// ngspice's documented alternatives. The gate junctions follow the diode
-/// laws: `IS` scales with `EG`/`XTI` at emission coefficient 1, and `PB` with
+/// laws: `IS` scales with `EG`/`XTI`, with the `EG` term divided by the
+/// gate emission coefficient `N` but `XTI` not (ngspice `jfettemp.c`), and `PB` with
 /// `CGS`/`CGD` follow the silicon depletion law at the JFET's fixed grading
 /// coefficient of 0.5. At `TEMP == TNOM` every parameter is returned as written.
 pub fn jfet_parameters_at_temperature(
@@ -313,11 +314,13 @@ pub fn jfet_parameters_at_temperature(
 
     let temperature_kelvin = temperature_celsius + 273.15;
     let nominal_kelvin = model.tnom_celsius + 273.15;
+    // The diode law divides both terms by `n`; scaling `XTI` by `N` here
+    // undoes that for the power-law term only.
     adjusted.is = diode_saturation_current_at_temperature(
         model.is,
-        1.0,
+        model.n,
         model.eg,
-        model.xti,
+        model.xti * model.n,
         nominal_kelvin,
         temperature_kelvin,
     );

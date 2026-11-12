@@ -378,6 +378,28 @@ fn adc_convert(bus: &mut SystemBus, channel: u8) -> u32 {
     bus.read_u32(ADC_DR).expect("read firmware-visible ADC1 DR")
 }
 
+/// Independent forward gate load line of a level-1 NJF with grounded drain
+/// and source: `(drive − V)/10k = 2·(IS·(exp(V/(N·Vt)) − 1) + GMIN·V)`, the
+/// two gate diodes in parallel. The engine's fixed 300 K sets `Vt`.
+fn jfet_gate_emission_voltage(drive_v: f64, n: f64) -> f64 {
+    const GATE_OHMS: f64 = 10_000.0;
+    const IS_A: f64 = 1e-14;
+    const GMIN_S: f64 = 1e-12;
+    const VT: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+    let gate_current =
+        |gate_v: f64| 2.0 * (IS_A * ((gate_v / (n * VT)).exp() - 1.0) + GMIN_S * gate_v);
+    let (mut low, mut high) = (0.0, drive_v);
+    for _ in 0..100 {
+        let gate_v = 0.5 * (low + high);
+        if (drive_v - gate_v) / GATE_OHMS > gate_current(gate_v) {
+            low = gate_v;
+        } else {
+            high = gate_v;
+        }
+    }
+    0.5 * (low + high)
+}
+
 fn signal_voltage(session: &CosimSession, path: &str) -> f64 {
     match session.signals().get(path) {
         Some(CosimSignalValue::F64(volts)) => *volts,
@@ -1057,6 +1079,114 @@ fn nucleo_h563zi_bjt_high_injection_reaches_adc1_alongside_ntc_and_diode() {
     assert!(
         rolloff_v - control_v > 0.05,
         "IKF/NKF rolloff lowers collector current and raises collector voltage: {rolloff_v} V vs {control_v} V"
+    );
+}
+
+/// The JFET gate emission coefficient `N` on the H563 ADC1 (a different ADC
+/// IP from the L073). The asset is the L073 one; only its two outputs move to
+/// ADC1 channels 2/3, so the device model and netlist are unchanged.
+#[test]
+fn nucleo_h563zi_jfet_gate_emission_coefficient_reaches_adc1_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/nucleo-h563zi-demo.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-H563ZI profile");
+    let generic = SystemManifest::from_file(root(
+        "examples/nucleo-h563zi/analog-ntc-diode-adc-system.yaml",
+    ))
+    .expect("load unrelated generic NTC and Shockley diode ADC routes");
+    let mut jfet = SystemManifest::from_file(root(
+        "examples/nucleo-l073rz/analog-jfet-gate-emission-adc.yaml",
+    ))
+    .expect("load the shared matched JFET gate-emission branches");
+    for model in &mut jfet.cosim_models {
+        for (key, channel) in [("emission_gate", 2), ("control_gate", 3)] {
+            model
+                .outputs
+                .insert(key.to_string(), format!("adc.adc1.{channel}_volts"));
+        }
+    }
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(jfet.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32H563 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-H563ZI bus");
+    adc_power_up(&mut bus);
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixtures carry NTC, diode, and matched JFET gate branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must bind to independent ADC1 channel endpoints"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+
+    let ntc_v = 1.65;
+    let diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    let mut high_drive = None;
+    for drive_v in [0.5_f64, 1.5, 3.3] {
+        session
+            .set_signal_number("ui.jfet_gate_emission.drive_v", drive_v)
+            .expect("set common JFET gate drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and JFET gate branches");
+        assert_eq!(steps.len(), 3, "NTC, diode, and JFET netlists solve");
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        assert!(
+            (signal_voltage(&session, "adc.adc1.0_volts") - ntc_v).abs() < 1e-9,
+            "unrelated Beta NTC remains isolated on ADC1 channel 0"
+        );
+        assert!(
+            (signal_voltage(&session, "adc.adc1.1_volts") - diode_v).abs() < 2e-5,
+            "unrelated Shockley diode remains isolated on ADC1 channel 1"
+        );
+        let emission_v = signal_voltage(&session, "adc.adc1.2_volts");
+        let control_v = signal_voltage(&session, "adc.adc1.3_volts");
+        let expected_emission_v = jfet_gate_emission_voltage(drive_v, 2.0);
+        let expected_control_v = jfet_gate_emission_voltage(drive_v, 1.0);
+        assert!(
+            (emission_v - expected_emission_v).abs() < 5e-5,
+            "N=2 gate at drive {drive_v} V should be {expected_emission_v} V, got {emission_v} V"
+        );
+        assert!(
+            (control_v - expected_control_v).abs() < 5e-5,
+            "N=1 gate at drive {drive_v} V should be {expected_control_v} V, got {control_v} V"
+        );
+
+        for (channel, voltage_v) in [(0, ntc_v), (1, diode_v), (2, emission_v), (3, control_v)] {
+            let expected_count = expected_adc12_count(voltage_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected_count as u16,
+                "solved voltage seeds ADC1 channel {channel}"
+            );
+            assert_eq!(
+                adc_convert(&mut bus, channel),
+                expected_count,
+                "firmware-visible ADC1 data register follows the generic device on channel {channel}"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 4),
+            u16::MAX,
+            "neighboring ADC1 channel 4 remains isolated"
+        );
+        if drive_v == 3.3 {
+            high_drive = Some((emission_v, control_v));
+        }
+    }
+
+    let (emission_v, control_v) = high_drive.expect("high-drive sample was recorded");
+    assert!(
+        emission_v > control_v + 0.4,
+        "N=2 doubles the gate knee voltage: {emission_v} V vs {control_v} V"
     );
 }
 

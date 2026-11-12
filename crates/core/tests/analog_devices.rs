@@ -6637,6 +6637,102 @@ mod analog {
         }
     }
 
+    /// The level-1 JFET gate emission coefficient `N` (ngspice `jfetload.c`)
+    /// sets `N·kT/q` for both gate diodes. The solved forward gate current is
+    /// compared with a hand-written Shockley law for both polarities, at the
+    /// fixed 300 K and at an instance `TEMP`. There `IS(T)` divides the `EG`
+    /// term by `N` but keeps `XTI` undivided (ngspice `jfettemp.c`), unlike
+    /// the diode law. `N <= 0` is refused.
+    #[test]
+    fn jfet_gate_emission_coefficient_scales_gate_diodes_and_is_temperature_law() {
+        let (is, tnom, vgs, eg, xti): (f64, f64, f64, f64, f64) = (1e-14, 27.0, 0.6, 1.11, 3.0);
+        let gate_current = |is_t: f64, n: f64, kelvin: f64| {
+            let vte = n * kelvin_thermal_voltage(kelvin);
+            2.0 * (is_t * ((vgs / vte).exp() - 1.0) + device::GMIN * vgs)
+        };
+        let netlist = |kind: &str, sign: f64, n: &str, temp: &str| {
+            format!(
+                "Vg g 0 dc {}\nVd d 0 dc 0\nVs s 0 dc 0\n\
+                 J1 d g s JMOD{temp}\n.model JMOD {kind}(VTO={} BETA=100u \
+                 IS={is} TNOM={tnom}{n})\n",
+                sign * vgs,
+                -2.0 * sign
+            )
+        };
+
+        for (kind, sign) in [("NJF", 1.0), ("PJF", -1.0)] {
+            let default_n = sign * source_current(&build(&netlist(kind, sign, "", "")), "Vg");
+            let mut previous = None;
+            for n in [1.0, 2.0] {
+                let card = format!(" N={n}");
+                let solver = build(&netlist(kind, sign, &card, ""));
+                assert_eq!(solver.circuit().jfets[0].model.n, n);
+                let measured = sign * source_current(&solver, "Vg");
+                let expected = gate_current(is, n, device::TEMPERATURE_K);
+                assert!(
+                    relative(measured, expected) < 1e-6,
+                    "{kind} N={n}: expected gate current {expected} A, got {measured} A"
+                );
+                if n == 1.0 {
+                    assert!(
+                        relative(measured, default_n) < 1e-12,
+                        "{kind}: omitted N must equal N=1"
+                    );
+                }
+                previous = Some(previous.map_or(measured, |unit: f64| unit / measured));
+            }
+            // At 0.6 V, N=2 halves the exponent: about five decades less current.
+            let ratio = previous.expect("both N values solved");
+            assert!(
+                ratio > 1e4,
+                "{kind}: N must reduce the gate current, ratio {ratio}"
+            );
+
+            let temperature = 85.0;
+            let kelvin = temperature + 273.15;
+            let nominal = tnom + 273.15;
+            let n = 2.0;
+            let hot = build(&netlist(
+                kind,
+                sign,
+                " N=2",
+                &format!(" TEMP={temperature}"),
+            ));
+            let expected_is = is
+                * ((eg / kelvin_thermal_voltage(nominal) - eg / kelvin_thermal_voltage(kelvin))
+                    / n)
+                    .exp()
+                * (kelvin / nominal).powf(xti);
+            let adjusted_is = hot.circuit().jfets[0].operating_model.is;
+            assert!(
+                relative(adjusted_is, expected_is) < 1e-12,
+                "{kind} N=2 at {temperature} C: IS(T) {expected_is} A, got {adjusted_is} A"
+            );
+            let diode_law_is = is
+                * ((eg / kelvin_thermal_voltage(nominal) - eg / kelvin_thermal_voltage(kelvin)
+                    + xti * (kelvin / nominal).ln())
+                    / n)
+                    .exp();
+            assert!(
+                relative(adjusted_is, diode_law_is) > 0.2,
+                "{kind}: XTI must not be divided by N as in the diode law"
+            );
+            let measured = sign * source_current(&hot, "Vg");
+            let expected = gate_current(expected_is, n, kelvin);
+            assert!(
+                relative(measured, expected) < 1e-6,
+                "{kind} N=2 at {temperature} C: expected gate current {expected} A, got \
+                 {measured} A"
+            );
+        }
+
+        for parameter in ["N=0", "N=-1"] {
+            let error = parse_netlist(&netlist("NJF", 1.0, &format!(" {parameter}"), ""))
+                .expect_err("non-positive JFET N is refused");
+            assert!(error.to_string().contains("N > 0"), "{error}");
+        }
+    }
+
     /// Instance `TEMP` moves the JFET gate potential `PB` and zero-bias
     /// `CGS`/`CGD` by the silicon depletion law at grading 0.5. A reverse-bias
     /// gate step through a resistor must then follow the same trajectory as a

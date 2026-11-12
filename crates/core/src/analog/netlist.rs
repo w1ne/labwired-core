@@ -1521,6 +1521,9 @@ pub struct JfetModel {
     pub rs: f64,
     /// Gate-junction saturation current `IS`, amps.
     pub is: f64,
+    /// Gate-junction emission coefficient `N`, shared by the gate-source and
+    /// gate-drain diodes. Default 1, as in ngspice.
+    pub n: f64,
     /// Zero-bias gate-source depletion capacitance `CGS`, farads.
     pub cgs: f64,
     /// Zero-bias gate-drain depletion capacitance `CGD`, farads.
@@ -1558,6 +1561,7 @@ impl JfetModel {
             rd: 0.0,
             rs: 0.0,
             is: 1e-14,
+            n: 1.0,
             cgs: 0.0,
             cgd: 0.0,
             pb: 1.0,
@@ -4007,6 +4011,8 @@ fn bind_models(
                     || model.beta <= 0.0
                     || !model.is.is_finite()
                     || model.is <= 0.0
+                    || !model.n.is_finite()
+                    || model.n <= 0.0
                     || !model.tnom_celsius.is_finite()
                     || model.tnom_celsius <= -273.15
                     || !model.tcv.is_finite()
@@ -4017,7 +4023,7 @@ fn bind_models(
                     || model.betatce.is_some_and(|value| !value.is_finite())
                 {
                     return Err(ctx.parse_err(
-                        "a JFET model needs finite temperature parameters, TNOM above absolute zero, BETA > 0 and IS > 0",
+                        "a JFET model needs finite temperature parameters, TNOM above absolute zero, BETA > 0, IS > 0 and N > 0",
                     ));
                 }
                 if !model.rd.is_finite()
@@ -4502,6 +4508,7 @@ fn parse_model(
             (ModelCard::Jfet(model), "RD") => model.rd = value,
             (ModelCard::Jfet(model), "RS") => model.rs = value,
             (ModelCard::Jfet(model), "IS") => model.is = value,
+            (ModelCard::Jfet(model), "N") => model.n = value,
             (ModelCard::Jfet(model), "CGS") => model.cgs = value,
             (ModelCard::Jfet(model), "CGD") => model.cgd = value,
             (ModelCard::Jfet(model), "PB") => model.pb = value,
