@@ -127,6 +127,27 @@ struct Board {
 /// A chip added to the shipped catalog MUST be added here, or the cross-check at
 /// the bottom of this file fails — a shipped board can never bypass the ratchet.
 const SHIPPED: &[Board] = &[
+    // Public onboarding profiles carry the same reset + executing-fidelity
+    // requirements as catalog boards. Use exact aliases: a parent-family
+    // differential or a survival-only boot must not satisfy these rows.
+    Board {
+        chip: "esp32-devkitc-32e-gpio-smoke",
+        aliases: &["esp32-devkitc-32e-gpio-smoke"],
+        yaml_stem: "esp32-devkitc-32e-gpio-smoke",
+        display_lab: false,
+    },
+    Board {
+        chip: "esp32-devkitc-32e-uart1",
+        aliases: &["esp32-devkitc-32e-uart1"],
+        yaml_stem: "esp32-devkitc-32e-uart1",
+        display_lab: false,
+    },
+    Board {
+        chip: "stm32f103rb-nucleo-bme280-smoke",
+        aliases: &["stm32f103rb-nucleo-bme280-smoke"],
+        yaml_stem: "stm32f103rb-nucleo-bme280-smoke",
+        display_lab: false,
+    },
     Board {
         chip: "stm32f103",
         aliases: &["stm32f103", "f103", "stm32f1"],
@@ -321,6 +342,34 @@ fn generic_cpu_tests_do_not_supply_rv1103_board_coverage() {
     assert!(!corpus.covers(&board, Class::Exec));
     assert!(!is_allowlisted(board.chip, Class::Reset));
     assert!(!is_allowlisted(board.chip, Class::Exec));
+}
+
+#[test]
+fn onboarding_profiles_require_their_own_executing_fidelity() {
+    let corpus = Corpus {
+        files: vec![
+            ("stm32f1_exec_oracle.rs".into(), "chips/stm32f103.yaml".into()),
+            ("esp32_classic_walk_differential.rs".into(), "chips/esp32.yaml".into()),
+            ("firmware_survival.rs".into(),
+                "chips/esp32-devkitc-32e-gpio-smoke.yaml chips/esp32-devkitc-32e-uart1.yaml chips/stm32f103rb-nucleo-bme280-smoke.yaml".into()),
+        ],
+    };
+    for stem in [
+        "esp32-devkitc-32e-gpio-smoke",
+        "esp32-devkitc-32e-uart1",
+        "stm32f103rb-nucleo-bme280-smoke",
+    ] {
+        let board = SHIPPED
+            .iter()
+            .find(|board| board.yaml_stem == stem)
+            .unwrap();
+        assert_eq!(required_classes(board), vec![Class::Reset, Class::Exec]);
+        assert!(
+            !corpus.covers(board, Class::Exec),
+            "{stem}: parent/survival coverage is insufficient"
+        );
+        assert!(!is_allowlisted(board.chip, Class::Exec));
+    }
 }
 
 fn core_crate_root() -> PathBuf {

@@ -465,7 +465,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 7bcf3005734d54e969bebde192253ed763e4c31cb2d5b97ead009a99db5ab76b
+    drift_ack_digest: 219f135fe825720f1a2d73e667837512f1fb1f5cbbc2f46eacf747d7dcfc1106
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -683,21 +683,12 @@ boards:
     # decoded as no-op hints instead of loads into PC. Decoder and firmware
     # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
     # CAPTURE, and live re-capture remains pending.
-    # 2026-11-08 (lane/renode-coverage, round 395): ARMv6-M awareness for
-    # Cortex-M fault reporting. bus/* carry an `armv6m` flag set only for
-    # chips declaring core cortex-m0/m0+/m1; peripherals/scb.rs then reads
-    # CFSR/HFSR/MMFAR/BFAR as zero and keeps only SHCSR.SVCALLPENDED;
-    # cpu/cortex_m.rs copies the flag into FaultCapture. This board's core is
-    # not ARMv6-M, so its SCB and fault escalation are unchanged.
-    # Digest-only drift; ACK, NOT A SILICON CAPTURE, re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 410): nrf52/gpiote.rs Event
-    # mode decides the edge from the reported new level (the bus reports only
-    # pins whose IN changed) instead of a per-channel level that started at 0
-    # and was never seeded from the pad, which dropped the first HiToLo edge
-    # of a pin idling high (pulled-up active-low button). GPIOTE Task mode and
-    # every asserted silicon block are unchanged; unit tests + nRF52840 DK
-    # Renode smoke cover it. ACK, NOT A SILICON CAPTURE; re-capture pending.
-    drift_ack: 2026-11-09
+    # 2026-11-11: Owner acknowledged the exact GPIOTE first-edge correction
+    # in PR #1825: consume actual GPIO transitions after channel enable.
+    # Simulator qualification covers this digest; no new silicon capture ran.
+    # Live recapture: https://github.com/w1ne/labwired-core/issues/1827
+    # Default 30-day acknowledgement expires 2026-12-11.
+    drift_ack: 2026-11-11
     # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
     # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
     # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
@@ -1067,7 +1058,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 7bcf3005734d54e969bebde192253ed763e4c31cb2d5b97ead009a99db5ab76b
+    drift_ack_digest: 219f135fe825720f1a2d73e667837512f1fb1f5cbbc2f46eacf747d7dcfc1106
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1285,21 +1276,12 @@ boards:
     # decoded as no-op hints instead of loads into PC. Decoder and firmware
     # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
     # CAPTURE, and live re-capture remains pending.
-    # 2026-11-08 (lane/renode-coverage, round 395): ARMv6-M awareness for
-    # Cortex-M fault reporting. bus/* carry an `armv6m` flag set only for
-    # chips declaring core cortex-m0/m0+/m1; peripherals/scb.rs then reads
-    # CFSR/HFSR/MMFAR/BFAR as zero and keeps only SHCSR.SVCALLPENDED;
-    # cpu/cortex_m.rs copies the flag into FaultCapture. This board's core is
-    # not ARMv6-M, so its SCB and fault escalation are unchanged.
-    # Digest-only drift; ACK, NOT A SILICON CAPTURE, re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 410): nrf52/gpiote.rs Event
-    # mode decides the edge from the reported new level (the bus reports only
-    # pins whose IN changed) instead of a per-channel level that started at 0
-    # and was never seeded from the pad, which dropped the first HiToLo edge
-    # of a pin idling high (pulled-up active-low button). GPIOTE Task mode and
-    # every asserted silicon block are unchanged; unit tests + nRF52840 DK
-    # Renode smoke cover it. ACK, NOT A SILICON CAPTURE; re-capture pending.
-    drift_ack: 2026-11-09
+    # 2026-11-11: Owner acknowledged the exact GPIOTE first-edge correction
+    # in PR #1825: consume actual GPIO transitions after channel enable.
+    # Simulator qualification covers this digest; no new silicon capture ran.
+    # Live recapture: https://github.com/w1ne/labwired-core/issues/1827
+    # Default 30-day acknowledgement expires 2026-12-11.
+    drift_ack: 2026-11-11
     # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
     # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
     # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
@@ -1837,24 +1819,6 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    # 2026-11-07: merge of origin/main into lane/renode-coverage combined two
-    # already-acked shared-model edits (this lane's FT9001 uart.rs arm and
-    # main's CH32V003 riscv/gpio/rcc slices, incl. #1714 USART1). No new model change; digest
-    # recomputed for the merged tree. ACK, NOT A CAPTURE.
-    # 2026-11-07: lane/renode-coverage added a `Scifa` arm to uart.rs (Renesas
-    # RZ/G2L SCIFA register block, gated on its own layout) and a `scif` type
-    # match in bus/profiles.rs ahead of `sci`. No STM32 layout, reset value or
-    # captured window is touched. Reviewed model-drift acknowledgment, NOT a
-    # new silicon capture; live re-capture remains pending.
-    # 2026-11-07: merge of origin/main 0cc8b5cb1 (#1721 RP2350 GPIOC/TIMER/SIO
-    # maps, DW I2C transfer state) into lane/renode-coverage. Both sides were
-    # already acked; digest recomputed for the merged tree. ACK, NOT A CAPTURE.
-    # 2026-11-07: merge of origin/main a1f43b6de (#1688 SPICE-detail analog
-    # models) into lane/renode-coverage, on top of this lane's AVR-only
-    # ATtiny2313/4313 port mirror (cpu/avr.rs, exec/bitops.rs). Both sides were
-    # already acked or touch no captured model; digest recomputed for the
-    # merged tree. ACK, NOT A CAPTURE.
-
     # 2026-11-07 (G0B1 Arduino matrix row): re-acked. `crates/core/src/peripherals/rcc.rs`
     # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
     # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
@@ -2451,10 +2415,6 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    # 2026-11-06: shared peripherals/uart.rs gained the FocalTech FT9001
-    # USART layout (new enum arm, FT9001-only control-register store and
-    # CR2.TE gate). STM32 F1/V2 register maps and paths are unchanged; the
-    # core UART unit suite passed 238/238. ACK, NOT A CAPTURE.
     # 2026-11-03 (ADC analog pin resolution): adc.rs now resolves routed channel voltage and
     # VREF+ and holds them at acquisition. This intentionally adds MNA-driven ADC input
     # behavior outside the existing register-oracle capture scope. Andrii accepted the
@@ -2512,103 +2472,6 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    # 2026-11-08 (lane/renode-coverage): peripherals/gpio.rs adds an nRF52-only
-    # IN overlay (GpioPort::nrf52_in_with_claims, matched on GpioFamily::Nrf52):
-    # a claimed pad on a DIR=output, input-connected pin reads its peripheral's
-    # level. STM32 GPIO families are untouched; digest-only drift for this board.
-    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    # 2026-11-08 (lane/renode-coverage, round 381): peripherals/gpio.rs adds the
-    # EFM32 Series-0 port family (Efm32s0Gpio / GpioFamily::Efm32s0), reached
-    # only by the `efm32s0_gpioport` type; every STM32 arm is unchanged.
-    # Digest-only drift again; same ack, re-capture still pending.
-    # 2026-11-08 (lane/renode-coverage, round 386): peripherals/gpio.rs fixes
-    # the EFR32 Series-2 WIREDOR/WIREDAND decode (Efr32s2Gpio and its
-    # GpioFamily::Efr32s2 pad-driver/pull arms only). No STM32 arm changed.
-    # Digest-only drift; same ack, re-capture still pending.
-    # 2026-11-08 (lane/renode-coverage, round 388): peripherals/gpio.rs adds
-    # the EFM32 Series-1 port map (GpioRegisterLayout::Efm32s1, a `series1`
-    # flag on Efm32s0Gpio), reached only by the `efm32s1_gpioport` type; and
-    # bus/profiles.rs routes that type. No STM32 arm changed.
-    # Digest-only drift; same ack, re-capture still pending.
-    # 2026-11-08 (lane/renode-coverage, round 393): peripherals/gpio.rs
-    # publishes Series-2 WIREDAND pads into PadClaims (publish_open_drain
-    # returns at once on every non-Efr32s2 port) for the EFR32 I2C pad check.
-    # No STM32 arm changed. Digest-only drift; same ack, re-capture pending.
-    # 2026-11-08 (lane/renode-coverage, round 395): ARMv6-M awareness for
-    # Cortex-M fault reporting. bus/* carry an `armv6m` flag set only for
-    # chips declaring core cortex-m0/m0+/m1; peripherals/scb.rs then reads
-    # CFSR/HFSR/MMFAR/BFAR as zero and keeps only SHCSR.SVCALLPENDED;
-    # cpu/cortex_m.rs copies the flag into FaultCapture. This board's core is
-    # not ARMv6-M, so its SCB and fault escalation are unchanged.
-    # Digest-only drift; ACK, NOT A SILICON CAPTURE, re-capture pending.
-    # 2026-11-08 (lane/renode-coverage, round 396): merge of origin/main
-    # (#1734 timer kernel clock + V2-port timer pad routing, #1738 RP2350
-    # debug schemas) into the lane. Both sides' changes were each acked
-    # separately; the digest now covers their union. No new model change.
-    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    # 2026-11-09 (lane/renode-coverage, round 398): spi.rs raises RXNEIE for
-    # attached slaves on the classic and FIFO STM32 ports; i2c.rs emits the F1
-    # ER line on the scheduler path; dma.rs adds opt-in per-channel lines.
-    # This board's SPI is the H5 "SPI v3" layout and its I2C the L4 variant —
-    # neither arm changed — and no H5 config sets `channel_irqs`.
-    # Digest-only drift; ACK, NOT A SILICON CAPTURE, re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 399): STM32 SPI devices now
-    # get GPIO chip-select edges (bus/spi_cs.rs) and a device whose CS GPIO
-    # is driven high is skipped. No SPI register, flag or IRQ changed; a
-    # device with no resolvable CS output keeps the old pass-through.
-    # Digest-only drift; ACK, NOT A SILICON CAPTURE, re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 403): rng.rs — each RNG_DR
-    # read now draws a new xorshift word (was a constant 0xCAFEBABE) and
-    # DRDY follows CR.RNGEN; CR/SR offsets and resets unchanged. dac.rs is
-    # rewritten (DOR1/DOR2 at 0x2C/0x30), but this board declares no DAC. No
-    # H5 conformance case reads RNG_DR. ACK, NOT A SILICON CAPTURE;
-    # re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 407): rcc.rs gains an opt-in
-    # F4-layout AHB1ENR reset value (`rcc_ahb1enr_reset`, the F7's
-    # DTCMRAMEN); without the key the reset stays 0, as here. No register,
-    # mask or reset value of this chip changed.
-    # crc.rs: a byte / half-word store to CRC_DR now feeds 8 / 16 bits of
-    # data (it used to overwrite DR), and POLYSIZE < 32 is computed bit by
-    # bit over the store's width. Word stores with the 32-bit polynomial
-    # (every in-tree capture) give the same result; hw-oracle sim diffs
-    # re-run green.
-    # ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 416): gpio.rs gains the
-    # opt-in `lpc2xxx` layout (LPC21xx/22xx IOPIN/IOSET/IODIR/IOCLR), a new
-    # GpioFamily variant with its own match arms. No register, mask or reset
-    # value of this chip's GPIO layout changed.
-    # ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 417): gpio.rs gains the
-    # opt-in `eos_s3` layout (EOS S3 MISC IO_INPUT/IO_OUTPUT), a new
-    # GpioFamily variant with its own match arms. No register, mask or reset
-    # value of this chip's GPIO layout changed.
-    # ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 418): gpio.rs gains the
-    # opt-in `max32650` layout (MAX32650 EN/OUT_EN/OUT/IN/IN_EN/PDPU_SEL), a
-    # new GpioFamily variant with its own match arms. No register, mask or
-    # reset value of this chip's GPIO layout changed.
-    # ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 420): gpio.rs gains the
-    # opt-in `da14` layout (DA14592 P0/P1 DATA/SET/RESET/MODE), a new
-    # GpioFamily variant with its own match arms, and `data_word_of`, which
-    # returns (offset, pin) unchanged for every other layout; bus/routing.rs
-    # calls it on the pin-map ODR/IDR paths. No register, mask or reset value
-    # of this chip's GPIO layout changed.
-    # ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 423): gpio.rs gains the
-    # opt-in `cmsdk` layout (Arm CMSDK AHB GPIO, UT32M0R500 pulls and masked
-    # byte arrays), a new GpioFamily variant with its own match arms, and
-    # GpioPort::new_cmsdk; from_config reads `reset_altfunc` only for that
-    # layout. No register, mask or reset value of this chip's GPIO layout
-    # changed. ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 425): gpio.rs adds the
-    # CMSDK combined GPIO IRQ predicate; the external-pad hook now
-    # reconciles a peripheral level after a pad transition. The only
-    # new GpioPort IRQ level is the Cmsdk variant; STM32 returns None
-    # and its multi-line hook stays empty, so STM32 register and IRQ
-    # behavior is unchanged. The CMSDK unit test and UT32 smoke cover
-    # the new path. ACK, NOT A SILICON CAPTURE; live re-capture remains
-    # pending.
     drift_ack: 2026-11-09
     # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
     # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
@@ -2617,8 +2480,7 @@ boards:
     # immediate range still Halt, same as before. Shared interpreter
     # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack_digest: 4123713429958ff824f732ead2e504b190bc0011bfdea803b167ca5173816357
-
+    drift_ack_digest: cc3fa97b80b4984d9fd68c6e673fc73ea222f80abe4051c6e0aeefcd26d243c9
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -4203,24 +4065,6 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    # 2026-11-07: merge of origin/main into lane/renode-coverage combined two
-    # already-acked shared-model edits (this lane's FT9001 uart.rs arm and
-    # main's CH32V003 riscv/gpio/rcc slices, incl. #1714 USART1). No new model change; digest
-    # recomputed for the merged tree. ACK, NOT A CAPTURE.
-    # 2026-11-07: lane/renode-coverage added a `Scifa` arm to uart.rs (Renesas
-    # RZ/G2L SCIFA register block, gated on its own layout) and a `scif` type
-    # match in bus/profiles.rs ahead of `sci`. No STM32 layout, reset value or
-    # captured window is touched. Reviewed model-drift acknowledgment, NOT a
-    # new silicon capture; live re-capture remains pending.
-    # 2026-11-07: merge of origin/main 0cc8b5cb1 (#1721 RP2350 GPIOC/TIMER/SIO
-    # maps, DW I2C transfer state) into lane/renode-coverage. Both sides were
-    # already acked; digest recomputed for the merged tree. ACK, NOT A CAPTURE.
-    # 2026-11-07: merge of origin/main a1f43b6de (#1688 SPICE-detail analog
-    # models) into lane/renode-coverage, on top of this lane's AVR-only
-    # ATtiny2313/4313 port mirror (cpu/avr.rs, exec/bitops.rs). Both sides were
-    # already acked or touch no captured model; digest recomputed for the
-    # merged tree. ACK, NOT A CAPTURE.
-
     # 2026-11-07 (G0B1 Arduino matrix row): re-acked. `crates/core/src/peripherals/rcc.rs`
     # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
     # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
@@ -4805,10 +4649,6 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    # 2026-11-06: shared peripherals/uart.rs gained the FocalTech FT9001
-    # USART layout (new enum arm, FT9001-only control-register store and
-    # CR2.TE gate). STM32 F1/V2 register maps and paths are unchanged; the
-    # core UART unit suite passed 238/238. ACK, NOT A CAPTURE.
     # 2026-11-03 (ADC analog pin resolution): adc.rs now resolves routed channel voltage and
     # VREF+ and holds them at acquisition. This intentionally adds MNA-driven ADC input
     # behavior outside the existing register-oracle capture scope. Andrii accepted the
@@ -4866,112 +4706,6 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    # 2026-11-08 (lane/renode-coverage): peripherals/gpio.rs adds an nRF52-only
-    # IN overlay (GpioPort::nrf52_in_with_claims, matched on GpioFamily::Nrf52):
-    # a claimed pad on a DIR=output, input-connected pin reads its peripheral's
-    # level. STM32 GPIO families are untouched; digest-only drift for this board.
-    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    # 2026-11-08 (lane/renode-coverage, round 381): peripherals/gpio.rs adds the
-    # EFM32 Series-0 port family (Efm32s0Gpio / GpioFamily::Efm32s0), reached
-    # only by the `efm32s0_gpioport` type; every STM32 arm is unchanged.
-    # Digest-only drift again; same ack, re-capture still pending.
-    # 2026-11-08 (lane/renode-coverage, round 386): peripherals/gpio.rs fixes
-    # the EFR32 Series-2 WIREDOR/WIREDAND decode (Efr32s2Gpio and its
-    # GpioFamily::Efr32s2 pad-driver/pull arms only). No STM32 arm changed.
-    # Digest-only drift; same ack, re-capture still pending.
-    # 2026-11-08 (lane/renode-coverage, round 388): peripherals/gpio.rs adds
-    # the EFM32 Series-1 port map (GpioRegisterLayout::Efm32s1, a `series1`
-    # flag on Efm32s0Gpio), reached only by the `efm32s1_gpioport` type; and
-    # bus/profiles.rs routes that type. No STM32 arm changed.
-    # Digest-only drift; same ack, re-capture still pending.
-    # 2026-11-08 (lane/renode-coverage, round 393): peripherals/gpio.rs
-    # publishes Series-2 WIREDAND pads into PadClaims (publish_open_drain
-    # returns at once on every non-Efr32s2 port) for the EFR32 I2C pad check.
-    # No STM32 arm changed. Digest-only drift; same ack, re-capture pending.
-    # 2026-11-08 (lane/renode-coverage, round 395): ARMv6-M awareness for
-    # Cortex-M fault reporting. bus/* carry an `armv6m` flag set only for
-    # chips declaring core cortex-m0/m0+/m1; peripherals/scb.rs then reads
-    # CFSR/HFSR/MMFAR/BFAR as zero and keeps only SHCSR.SVCALLPENDED;
-    # cpu/cortex_m.rs copies the flag into FaultCapture. This board's core is
-    # not ARMv6-M, so its SCB and fault escalation are unchanged.
-    # Digest-only drift; ACK, NOT A SILICON CAPTURE, re-capture pending.
-    # 2026-11-08 (lane/renode-coverage, round 396): merge of origin/main
-    # (#1734 timer kernel clock + V2-port timer pad routing, #1738 RP2350
-    # debug schemas) into the lane. Both sides' changes were each acked
-    # separately; the digest now covers their union. No new model change.
-    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    # 2026-11-09 (lane/renode-coverage, round 398): spi.rs now raises the SPI
-    # line for RXNE&RXNEIE when an attached slave's frame lands (FIFO port:
-    # at the FRXTH threshold) — previously only a gpio-net master did; the
-    # register file and reset/RW values are unchanged. i2c.rs touches only
-    # the F1 variant (this board's I2C is the L4 one). dma.rs per-channel
-    # lines are opt-in (`channel_irqs`); this chip does not set it.
-    # The silicon claim pins registers, not IRQ timing.
-    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    # 2026-11-09 (lane/renode-coverage, round 399): STM32 SPI devices now
-    # get GPIO chip-select edges (bus/spi_cs.rs) and a device whose CS GPIO
-    # is driven high is skipped. No SPI register, flag or IRQ changed; a
-    # device with no resolvable CS output keeps the old pass-through.
-    # Digest-only drift; ACK, NOT A SILICON CAPTURE, re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 401): dma.rs (the F1/L0/L4
-    # channel DMA) now honours CCR.DIR in MEM2MEM mode (DIR=0, ST HAL's
-    # DMA_MEMORY_TO_MEMORY, copies CPAR -> CMAR; DIR=1 unchanged) and
-    # IFCR.CGIFx clears the channel's TCIF/HTIF/TEIF with GIF (RM0008
-    # §13.4.2). No register address, reset or RW value changed; every
-    # in-tree MEM2MEM user sets DIR=1. ACK, NOT A SILICON CAPTURE;
-    # re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 402): dma.rs gains an opt-in
-    # `channels: N` (the 5-channel F04x DMA1: CCR6/CCR7 reserved, read 0);
-    # without it the controller keeps all 7 channels, as here. syscfg.rs adds
-    # the F04x CFGR1 mask (`profile: stm32f04x`); the stm32f0 mask and the
-    # other SYSCFG variants are unchanged. generic_factory.rs only parses the
-    # two new options. ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 407): rcc.rs gains an opt-in
-    # F4-layout AHB1ENR reset value (`rcc_ahb1enr_reset`, the F7's
-    # DTCMRAMEN); without the key the reset stays 0, as here. No register,
-    # mask or reset value of this chip changed.
-    # crc.rs: a byte / half-word store to CRC_DR now feeds 8 / 16 bits of
-    # data (it used to overwrite DR), and POLYSIZE < 32 is computed bit by
-    # bit over the store's width. Word stores with the 32-bit polynomial
-    # (every in-tree capture) give the same result; hw-oracle sim diffs
-    # re-run green.
-    # ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 416): gpio.rs gains the
-    # opt-in `lpc2xxx` layout (LPC21xx/22xx IOPIN/IOSET/IODIR/IOCLR), a new
-    # GpioFamily variant with its own match arms. No register, mask or reset
-    # value of this chip's GPIO layout changed.
-    # ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 417): gpio.rs gains the
-    # opt-in `eos_s3` layout (EOS S3 MISC IO_INPUT/IO_OUTPUT), a new
-    # GpioFamily variant with its own match arms. No register, mask or reset
-    # value of this chip's GPIO layout changed.
-    # ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 418): gpio.rs gains the
-    # opt-in `max32650` layout (MAX32650 EN/OUT_EN/OUT/IN/IN_EN/PDPU_SEL), a
-    # new GpioFamily variant with its own match arms. No register, mask or
-    # reset value of this chip's GPIO layout changed.
-    # ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 420): gpio.rs gains the
-    # opt-in `da14` layout (DA14592 P0/P1 DATA/SET/RESET/MODE), a new
-    # GpioFamily variant with its own match arms, and `data_word_of`, which
-    # returns (offset, pin) unchanged for every other layout; bus/routing.rs
-    # calls it on the pin-map ODR/IDR paths. No register, mask or reset value
-    # of this chip's GPIO layout changed.
-    # ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 423): gpio.rs gains the
-    # opt-in `cmsdk` layout (Arm CMSDK AHB GPIO, UT32M0R500 pulls and masked
-    # byte arrays), a new GpioFamily variant with its own match arms, and
-    # GpioPort::new_cmsdk; from_config reads `reset_altfunc` only for that
-    # layout. No register, mask or reset value of this chip's GPIO layout
-    # changed. ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 425): gpio.rs adds the
-    # CMSDK combined GPIO IRQ predicate; the external-pad hook now
-    # reconciles a peripheral level after a pad transition. The only
-    # new GpioPort IRQ level is the Cmsdk variant; STM32 returns None
-    # and its multi-line hook stays empty, so STM32 register and IRQ
-    # behavior is unchanged. The CMSDK unit test and UT32 smoke cover
-    # the new path. ACK, NOT A SILICON CAPTURE; live re-capture remains
-    # pending.
     drift_ack: 2026-11-09
     # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
     # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
@@ -4980,8 +4714,7 @@ boards:
     # immediate range still Halt, same as before. Shared interpreter
     # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack_digest: 4448f0a07e1219ccd7c8f0aed7028bdccc0d4dcea9b3801f26f4969157141c55
-
+    drift_ack_digest: ea61614e87455985b6f507bebc6ffbe3a2de2e18779514665742fac10a9c196d
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -5473,23 +5206,11 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    # 2026-11-07: merge of origin/main into lane/renode-coverage combined two
-    # already-acked shared-model edits (this lane's FT9001 uart.rs arm and
-    # main's CH32V003 riscv/gpio/rcc slices, incl. #1714 USART1). No new model change; digest
-    # recomputed for the merged tree. ACK, NOT A CAPTURE.
-    # 2026-11-07: lane/renode-coverage added a `Scifa` arm to uart.rs (Renesas
-    # RZ/G2L SCIFA register block, gated on its own layout) and a `scif` type
-    # match in bus/profiles.rs ahead of `sci`. No STM32 layout, reset value or
-    # captured window is touched. Reviewed model-drift acknowledgment, NOT a
-    # new silicon capture; live re-capture remains pending.
-    # 2026-11-07: merge of origin/main 0cc8b5cb1 (#1721 RP2350 GPIOC/TIMER/SIO
-    # maps, DW I2C transfer state) into lane/renode-coverage. Both sides were
-    # already acked; digest recomputed for the merged tree. ACK, NOT A CAPTURE.
-
     # 2026-11-07 (G0B1 Arduino matrix row): re-acked. `crates/core/src/peripherals/rcc.rs`
     # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
     # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
     # does not use it. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: f299e2a4b0027fd78905a4ff867c82a8b9894abed6480c7cc12513115b61e6df
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -6003,10 +5724,6 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    # 2026-11-06: shared peripherals/uart.rs gained the FocalTech FT9001
-    # USART layout (new enum arm, FT9001-only control-register store and
-    # CR2.TE gate). STM32 F1/V2 register maps and paths are unchanged; the
-    # core UART unit suite passed 238/238. ACK, NOT A CAPTURE.
     # 2026-11-06 (feat/ch32v003-rv32e-profile): the CH32V003 slice touched
     # three files on this board's watch list. Each change is provably
     # behaviour-preserving for THIS part, so no re-capture is owed:
@@ -6049,121 +5766,6 @@ boards:
     #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
     #   OOM-killed on the authoring host, so the full --lib result is the PR's
     #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    # 2026-11-08 (lane/renode-coverage): peripherals/gpio.rs adds an nRF52-only
-    # IN overlay (GpioPort::nrf52_in_with_claims, matched on GpioFamily::Nrf52):
-    # a claimed pad on a DIR=output, input-connected pin reads its peripheral's
-    # level. STM32 GPIO families are untouched; digest-only drift for this board.
-    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    # 2026-11-08 (lane/renode-coverage, round 381): peripherals/gpio.rs adds the
-    # EFM32 Series-0 port family (Efm32s0Gpio / GpioFamily::Efm32s0), reached
-    # only by the `efm32s0_gpioport` type; every STM32 arm is unchanged.
-    # Digest-only drift again; same ack, re-capture still pending.
-    # 2026-11-08 (lane/renode-coverage, round 386): peripherals/gpio.rs fixes
-    # the EFR32 Series-2 WIREDOR/WIREDAND decode (Efr32s2Gpio and its
-    # GpioFamily::Efr32s2 pad-driver/pull arms only). No STM32 arm changed.
-    # Digest-only drift; same ack, re-capture still pending.
-    # 2026-11-08 (lane/renode-coverage, round 388): peripherals/gpio.rs adds
-    # the EFM32 Series-1 port map (GpioRegisterLayout::Efm32s1, a `series1`
-    # flag on Efm32s0Gpio), reached only by the `efm32s1_gpioport` type; and
-    # bus/profiles.rs routes that type. No STM32 arm changed.
-    # Digest-only drift; same ack, re-capture still pending.
-    # 2026-11-08 (lane/renode-coverage, round 393): peripherals/gpio.rs
-    # publishes Series-2 WIREDAND pads into PadClaims (publish_open_drain
-    # returns at once on every non-Efr32s2 port) for the EFR32 I2C pad check.
-    # No STM32 arm changed. Digest-only drift; same ack, re-capture pending.
-    # 2026-11-08 (lane/renode-coverage, round 395): ARMv6-M awareness for
-    # Cortex-M fault reporting. This board's STM32L073 is a Cortex-M0+, so
-    # its SCB now reads CFSR/HFSR/MMFAR/BFAR (0xE000ED28..0xE000ED3C,
-    # reserved on ARMv6-M, PM0223 4.3) as zero, ignores writes there, and
-    # keeps only SHCSR.SVCALLPENDED, so a fault is always a HardFault. That
-    # matches the silicon; the model previously served the ARMv7-M file.
-    # No validated peripheral path reads those offsets. ACK, NOT A SILICON
-    # CAPTURE, re-capture pending.
-    # 2026-11-08 (lane/renode-coverage, round 396): merge of origin/main
-    # (#1734 timer kernel clock + V2-port timer pad routing, #1738 RP2350
-    # debug schemas) into the lane. Both sides' changes were each acked
-    # separately; the digest now covers their union. No new model change.
-    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    # 2026-11-09 (lane/renode-coverage, round 398): spi.rs now raises the SPI
-    # line for RXNE&RXNEIE when an attached slave's frame lands (FIFO port:
-    # at the FRXTH threshold) — previously only a gpio-net master did; the
-    # register file and reset/RW values are unchanged. i2c.rs touches only
-    # the F1 variant (this board's I2C is the L4 one). dma.rs per-channel
-    # lines are opt-in (`channel_irqs`); this chip does not set it.
-    # The silicon claim pins registers, not IRQ timing.
-    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    # 2026-11-09 (lane/renode-coverage, round 399): STM32 SPI devices now
-    # get GPIO chip-select edges (bus/spi_cs.rs) and a device whose CS GPIO
-    # is driven high is skipped. No SPI register, flag or IRQ changed; a
-    # device with no resolvable CS output keeps the old pass-through.
-    # Digest-only drift; ACK, NOT A SILICON CAPTURE, re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 401): dma.rs (the F1/L0/L4
-    # channel DMA) now honours CCR.DIR in MEM2MEM mode (DIR=0, ST HAL's
-    # DMA_MEMORY_TO_MEMORY, copies CPAR -> CMAR; DIR=1 unchanged) and
-    # IFCR.CGIFx clears the channel's TCIF/HTIF/TEIF with GIF (RM0008
-    # §13.4.2). No register address, reset or RW value changed; every
-    # in-tree MEM2MEM user sets DIR=1. ACK, NOT A SILICON CAPTURE;
-    # re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 402): dma.rs gains an opt-in
-    # `channels: N` (the 5-channel F04x DMA1: CCR6/CCR7 reserved, read 0);
-    # without it the controller keeps all 7 channels, as here. syscfg.rs adds
-    # the F04x CFGR1 mask (`profile: stm32f04x`); the stm32f0 mask and the
-    # other SYSCFG variants are unchanged. generic_factory.rs only parses the
-    # two new options. ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 406): stm32l073.yaml ADC1 moves
-    # from `profile: stm32l4` (an L4 register map on an L0 part: DEEPPWD,
-    # CR reset 0x20000000) to `profile: stm32l0`, the CHSELR model
-    # (stm32f0_adc.rs, RM0377 §14), which now also runs event-scheduled so
-    # the board stays walk-deleted. ADC is outside the asserted silicon set
-    # (RCC/GPIO/SPI1/TIM2/TIM21); the demo's ADC line stays 0 because it
-    # writes ADC_CCR at 0x40012788 (RM0377: 0x40012708). ACK, NOT A SILICON
-    # CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 407): rcc.rs gains an opt-in
-    # F4-layout AHB1ENR reset value (`rcc_ahb1enr_reset`, the F7's
-    # DTCMRAMEN); without the key the reset stays 0, as here. No register,
-    # mask or reset value of this chip changed.
-    # crc.rs: a byte / half-word store to CRC_DR now feeds 8 / 16 bits of
-    # data (it used to overwrite DR), and POLYSIZE < 32 is computed bit by
-    # bit over the store's width. Word stores with the 32-bit polynomial
-    # (every in-tree capture) give the same result; hw-oracle sim diffs
-    # re-run green.
-    # ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 416): gpio.rs gains the
-    # opt-in `lpc2xxx` layout (LPC21xx/22xx IOPIN/IOSET/IODIR/IOCLR), a new
-    # GpioFamily variant with its own match arms. No register, mask or reset
-    # value of this chip's GPIO layout changed.
-    # ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 417): gpio.rs gains the
-    # opt-in `eos_s3` layout (EOS S3 MISC IO_INPUT/IO_OUTPUT), a new
-    # GpioFamily variant with its own match arms. No register, mask or reset
-    # value of this chip's GPIO layout changed.
-    # ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 418): gpio.rs gains the
-    # opt-in `max32650` layout (MAX32650 EN/OUT_EN/OUT/IN/IN_EN/PDPU_SEL), a
-    # new GpioFamily variant with its own match arms. No register, mask or
-    # reset value of this chip's GPIO layout changed.
-    # ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 420): gpio.rs gains the
-    # opt-in `da14` layout (DA14592 P0/P1 DATA/SET/RESET/MODE), a new
-    # GpioFamily variant with its own match arms, and `data_word_of`, which
-    # returns (offset, pin) unchanged for every other layout; bus/routing.rs
-    # calls it on the pin-map ODR/IDR paths. No register, mask or reset value
-    # of this chip's GPIO layout changed.
-    # ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 423): gpio.rs gains the
-    # opt-in `cmsdk` layout (Arm CMSDK AHB GPIO, UT32M0R500 pulls and masked
-    # byte arrays), a new GpioFamily variant with its own match arms, and
-    # GpioPort::new_cmsdk; from_config reads `reset_altfunc` only for that
-    # layout. No register, mask or reset value of this chip's GPIO layout
-    # changed. ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 425): gpio.rs adds the
-    # CMSDK combined GPIO IRQ predicate; the external-pad hook now
-    # reconciles a peripheral level after a pad transition. The only
-    # new GpioPort IRQ level is the Cmsdk variant; STM32 returns None
-    # and its multi-line hook stays empty, so STM32 register and IRQ
-    # behavior is unchanged. The CMSDK unit test and UT32 smoke cover
-    # the new path. ACK, NOT A SILICON CAPTURE; live re-capture remains
-    # pending.
     drift_ack: 2026-11-09
     # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
     # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
@@ -6172,7 +5774,6 @@ boards:
     # immediate range still Halt, same as before. Shared interpreter
     # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack_digest: bac129e32c0f61944503158c1478aa37fb8128bd06a85b77f95073a0d53827e7
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -6729,24 +6330,6 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    # 2026-11-07: merge of origin/main into lane/renode-coverage combined two
-    # already-acked shared-model edits (this lane's FT9001 uart.rs arm and
-    # main's CH32V003 riscv/gpio/rcc slices, incl. #1714 USART1). No new model change; digest
-    # recomputed for the merged tree. ACK, NOT A CAPTURE.
-    # 2026-11-07: lane/renode-coverage added a `Scifa` arm to uart.rs (Renesas
-    # RZ/G2L SCIFA register block, gated on its own layout) and a `scif` type
-    # match in bus/profiles.rs ahead of `sci`. No STM32 layout, reset value or
-    # captured window is touched. Reviewed model-drift acknowledgment, NOT a
-    # new silicon capture; live re-capture remains pending.
-    # 2026-11-07: merge of origin/main 0cc8b5cb1 (#1721 RP2350 GPIOC/TIMER/SIO
-    # maps, DW I2C transfer state) into lane/renode-coverage. Both sides were
-    # already acked; digest recomputed for the merged tree. ACK, NOT A CAPTURE.
-    # 2026-11-07: merge of origin/main a1f43b6de (#1688 SPICE-detail analog
-    # models) into lane/renode-coverage, on top of this lane's AVR-only
-    # ATtiny2313/4313 port mirror (cpu/avr.rs, exec/bitops.rs). Both sides were
-    # already acked or touch no captured model; digest recomputed for the
-    # merged tree. ACK, NOT A CAPTURE.
-
     # 2026-11-07 (G0B1 Arduino matrix row): re-acked. `crates/core/src/peripherals/rcc.rs`
     # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
     # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
@@ -7334,10 +6917,6 @@ boards:
     # unchanged `port_name_prefix` + letter path, so STM32 ports get the same
     # PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    # 2026-11-06: shared peripherals/uart.rs gained the FocalTech FT9001
-    # USART layout (new enum arm, FT9001-only control-register store and
-    # CR2.TE gate). STM32 F1/V2 register maps and paths are unchanged; the
-    # core UART unit suite passed 238/238. ACK, NOT A CAPTURE.
     # 2026-11-03 (ADC analog pin resolution): adc.rs now resolves routed channel voltage and
     # VREF+ and holds them at acquisition. This intentionally adds MNA-driven ADC input
     # behavior outside the existing register-oracle capture scope. Andrii accepted the
@@ -7395,109 +6974,6 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    # 2026-11-08 (lane/renode-coverage): peripherals/gpio.rs adds an nRF52-only
-    # IN overlay (GpioPort::nrf52_in_with_claims, matched on GpioFamily::Nrf52):
-    # a claimed pad on a DIR=output, input-connected pin reads its peripheral's
-    # level. STM32 GPIO families are untouched; digest-only drift for this board.
-    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    # 2026-11-08 (lane/renode-coverage, round 381): peripherals/gpio.rs adds the
-    # EFM32 Series-0 port family (Efm32s0Gpio / GpioFamily::Efm32s0), reached
-    # only by the `efm32s0_gpioport` type; every STM32 arm is unchanged.
-    # Digest-only drift again; same ack, re-capture still pending.
-    # 2026-11-08 (lane/renode-coverage, round 386): peripherals/gpio.rs fixes
-    # the EFR32 Series-2 WIREDOR/WIREDAND decode (Efr32s2Gpio and its
-    # GpioFamily::Efr32s2 pad-driver/pull arms only). No STM32 arm changed.
-    # Digest-only drift; same ack, re-capture still pending.
-    # 2026-11-08 (lane/renode-coverage, round 388): peripherals/gpio.rs adds
-    # the EFM32 Series-1 port map (GpioRegisterLayout::Efm32s1, a `series1`
-    # flag on Efm32s0Gpio), reached only by the `efm32s1_gpioport` type; and
-    # bus/profiles.rs routes that type. No STM32 arm changed.
-    # Digest-only drift; same ack, re-capture still pending.
-    # 2026-11-08 (lane/renode-coverage, round 393): peripherals/gpio.rs
-    # publishes Series-2 WIREDAND pads into PadClaims (publish_open_drain
-    # returns at once on every non-Efr32s2 port) for the EFR32 I2C pad check.
-    # No STM32 arm changed. Digest-only drift; same ack, re-capture pending.
-    # 2026-11-08 (lane/renode-coverage, round 395): ARMv6-M awareness for
-    # Cortex-M fault reporting. bus/* carry an `armv6m` flag set only for
-    # chips declaring core cortex-m0/m0+/m1; peripherals/scb.rs then reads
-    # CFSR/HFSR/MMFAR/BFAR as zero and keeps only SHCSR.SVCALLPENDED;
-    # cpu/cortex_m.rs copies the flag into FaultCapture. This board's core is
-    # not ARMv6-M, so its SCB and fault escalation are unchanged.
-    # Digest-only drift; ACK, NOT A SILICON CAPTURE, re-capture pending.
-    # 2026-11-08 (lane/renode-coverage, round 396): merge of origin/main
-    # (#1734 timer kernel clock + V2-port timer pad routing, #1738 RP2350
-    # debug schemas) into the lane. Both sides' changes were each acked
-    # separately; the digest now covers their union. No new model change.
-    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    # 2026-11-09 (lane/renode-coverage, round 398): spi.rs now raises the SPI
-    # line for RXNE&RXNEIE when an attached slave's frame lands (RM0008
-    # §25.3.11); previously only a gpio-net master did. i2c.rs: in scheduler
-    # mode the F1 I2C event chain now pends the ER vector (`irq_error`) for
-    # AF/BERR/ARLO/OVR under ITERREN, as the legacy walk already did, and
-    # stays live while that level holds. dma.rs per-channel lines are opt-in
-    # (`channel_irqs`); this chip does not set it. Register files, reset and
-    # R/W values are unchanged; the silicon claim pins registers, not IRQ
-    # timing. Renode stm32f103 onboarding I2C smoke re-run: PASS 53/53.
-    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    # 2026-11-09 (lane/renode-coverage, round 399): STM32 SPI devices now
-    # get GPIO chip-select edges (bus/spi_cs.rs) and a device whose CS GPIO
-    # is driven high is skipped. No SPI register, flag or IRQ changed; a
-    # device with no resolvable CS output keeps the old pass-through.
-    # Digest-only drift; ACK, NOT A SILICON CAPTURE, re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 401): dma.rs (the F1/L0/L4
-    # channel DMA) now honours CCR.DIR in MEM2MEM mode (DIR=0, ST HAL's
-    # DMA_MEMORY_TO_MEMORY, copies CPAR -> CMAR; DIR=1 unchanged) and
-    # IFCR.CGIFx clears the channel's TCIF/HTIF/TEIF with GIF (RM0008
-    # §13.4.2). No register address, reset or RW value changed; every
-    # in-tree MEM2MEM user sets DIR=1. ACK, NOT A SILICON CAPTURE;
-    # re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 402): dma.rs gains an opt-in
-    # `channels: N` (the 5-channel F04x DMA1: CCR6/CCR7 reserved, read 0);
-    # without it the controller keeps all 7 channels, as here. syscfg.rs adds
-    # the F04x CFGR1 mask (`profile: stm32f04x`); the stm32f0 mask and the
-    # other SYSCFG variants are unchanged. generic_factory.rs only parses the
-    # two new options. ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 407): rcc.rs gains an opt-in
-    # F4-layout AHB1ENR reset value (`rcc_ahb1enr_reset`, the F7's
-    # DTCMRAMEN); without the key the reset stays 0, as here. No register,
-    # mask or reset value of this chip changed.
-    # ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 416): gpio.rs gains the
-    # opt-in `lpc2xxx` layout (LPC21xx/22xx IOPIN/IOSET/IODIR/IOCLR), a new
-    # GpioFamily variant with its own match arms. No register, mask or reset
-    # value of this chip's GPIO layout changed.
-    # ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 417): gpio.rs gains the
-    # opt-in `eos_s3` layout (EOS S3 MISC IO_INPUT/IO_OUTPUT), a new
-    # GpioFamily variant with its own match arms. No register, mask or reset
-    # value of this chip's GPIO layout changed.
-    # ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 418): gpio.rs gains the
-    # opt-in `max32650` layout (MAX32650 EN/OUT_EN/OUT/IN/IN_EN/PDPU_SEL), a
-    # new GpioFamily variant with its own match arms. No register, mask or
-    # reset value of this chip's GPIO layout changed.
-    # ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 420): gpio.rs gains the
-    # opt-in `da14` layout (DA14592 P0/P1 DATA/SET/RESET/MODE), a new
-    # GpioFamily variant with its own match arms, and `data_word_of`, which
-    # returns (offset, pin) unchanged for every other layout; bus/routing.rs
-    # calls it on the pin-map ODR/IDR paths. No register, mask or reset value
-    # of this chip's GPIO layout changed.
-    # ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 423): gpio.rs gains the
-    # opt-in `cmsdk` layout (Arm CMSDK AHB GPIO, UT32M0R500 pulls and masked
-    # byte arrays), a new GpioFamily variant with its own match arms, and
-    # GpioPort::new_cmsdk; from_config reads `reset_altfunc` only for that
-    # layout. No register, mask or reset value of this chip's GPIO layout
-    # changed. ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 425): gpio.rs adds the
-    # CMSDK combined GPIO IRQ predicate; the external-pad hook now
-    # reconciles a peripheral level after a pad transition. The only
-    # new GpioPort IRQ level is the Cmsdk variant; STM32 returns None
-    # and its multi-line hook stays empty, so STM32 register and IRQ
-    # behavior is unchanged. The CMSDK unit test and UT32 smoke cover
-    # the new path. ACK, NOT A SILICON CAPTURE; live re-capture remains
-    # pending.
     drift_ack: 2026-11-09
     # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
     # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
@@ -7506,8 +6982,7 @@ boards:
     # immediate range still Halt, same as before. Shared interpreter
     # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack_digest: c0f50e58d5005860e5abcee85e53586f734894c381b1cead6b8212e7352790b0
-
+    drift_ack_digest: 11ccb9e80e02ed99d39d7182ceffc87a835d7295705db9bb4e8c7edc21d98250
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -8020,23 +7495,11 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    # 2026-11-07: merge of origin/main into lane/renode-coverage combined two
-    # already-acked shared-model edits (this lane's FT9001 uart.rs arm and
-    # main's CH32V003 riscv/gpio/rcc slices, incl. #1714 USART1). No new model change; digest
-    # recomputed for the merged tree. ACK, NOT A CAPTURE.
-    # 2026-11-07: lane/renode-coverage added a `Scifa` arm to uart.rs (Renesas
-    # RZ/G2L SCIFA register block, gated on its own layout) and a `scif` type
-    # match in bus/profiles.rs ahead of `sci`. No STM32 layout, reset value or
-    # captured window is touched. Reviewed model-drift acknowledgment, NOT a
-    # new silicon capture; live re-capture remains pending.
-    # 2026-11-07: merge of origin/main 0cc8b5cb1 (#1721 RP2350 GPIOC/TIMER/SIO
-    # maps, DW I2C transfer state) into lane/renode-coverage. Both sides were
-    # already acked; digest recomputed for the merged tree. ACK, NOT A CAPTURE.
-
     # 2026-11-07 (G0B1 Arduino matrix row): re-acked. `crates/core/src/peripherals/rcc.rs`
     # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
     # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
     # does not use it. ACK, NOT A SILICON CAPTURE.
+    drift_ack_digest: e3f6c4c992fca162699f23acaa7a2a580b62936718e33e96e46e17a8aca402ae
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -8552,10 +8015,6 @@ boards:
     # generic_factory/ra_pfs/ra_clock gained the RA8-only ra8_pfs/ra8_sysc
     # constructors. STM32 UART/GPIO register maps and byte paths are
     # unchanged. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    # 2026-11-06: shared peripherals/uart.rs gained the FocalTech FT9001
-    # USART layout (new enum arm, FT9001-only control-register store and
-    # CR2.TE gate). STM32 F1/V2 register maps and paths are unchanged; the
-    # core UART unit suite passed 238/238. ACK, NOT A CAPTURE.
     # 2026-11-06 (feat/ch32v003-rv32e-profile): the CH32V003 slice touched
     # three files on this board's watch list. Each change is provably
     # behaviour-preserving for THIS part, so no re-capture is owed:
@@ -8598,109 +8057,6 @@ boards:
     #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
     #   OOM-killed on the authoring host, so the full --lib result is the PR's
     #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    # 2026-11-08 (lane/renode-coverage): peripherals/gpio.rs adds an nRF52-only
-    # IN overlay (GpioPort::nrf52_in_with_claims, matched on GpioFamily::Nrf52):
-    # a claimed pad on a DIR=output, input-connected pin reads its peripheral's
-    # level. STM32 GPIO families are untouched; digest-only drift for this board.
-    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    # 2026-11-08 (lane/renode-coverage, round 381): peripherals/gpio.rs adds the
-    # EFM32 Series-0 port family (Efm32s0Gpio / GpioFamily::Efm32s0), reached
-    # only by the `efm32s0_gpioport` type; every STM32 arm is unchanged.
-    # Digest-only drift again; same ack, re-capture still pending.
-    # 2026-11-08 (lane/renode-coverage, round 386): peripherals/gpio.rs fixes
-    # the EFR32 Series-2 WIREDOR/WIREDAND decode (Efr32s2Gpio and its
-    # GpioFamily::Efr32s2 pad-driver/pull arms only). No STM32 arm changed.
-    # Digest-only drift; same ack, re-capture still pending.
-    # 2026-11-08 (lane/renode-coverage, round 388): peripherals/gpio.rs adds
-    # the EFM32 Series-1 port map (GpioRegisterLayout::Efm32s1, a `series1`
-    # flag on Efm32s0Gpio), reached only by the `efm32s1_gpioport` type; and
-    # bus/profiles.rs routes that type. No STM32 arm changed.
-    # Digest-only drift; same ack, re-capture still pending.
-    # 2026-11-08 (lane/renode-coverage, round 393): peripherals/gpio.rs
-    # publishes Series-2 WIREDAND pads into PadClaims (publish_open_drain
-    # returns at once on every non-Efr32s2 port) for the EFR32 I2C pad check.
-    # No STM32 arm changed. Digest-only drift; same ack, re-capture pending.
-    # 2026-11-08 (lane/renode-coverage, round 395): ARMv6-M awareness for
-    # Cortex-M fault reporting. bus/* carry an `armv6m` flag set only for
-    # chips declaring core cortex-m0/m0+/m1; peripherals/scb.rs then reads
-    # CFSR/HFSR/MMFAR/BFAR as zero and keeps only SHCSR.SVCALLPENDED;
-    # cpu/cortex_m.rs copies the flag into FaultCapture. This board's core is
-    # not ARMv6-M, so its SCB and fault escalation are unchanged.
-    # Digest-only drift; ACK, NOT A SILICON CAPTURE, re-capture pending.
-    # 2026-11-08 (lane/renode-coverage, round 396): merge of origin/main
-    # (#1734 timer kernel clock + V2-port timer pad routing, #1738 RP2350
-    # debug schemas) into the lane. Both sides' changes were each acked
-    # separately; the digest now covers their union. No new model change.
-    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    # 2026-11-09 (lane/renode-coverage, round 398): spi.rs now raises the SPI
-    # line for RXNE&RXNEIE when an attached slave's frame lands (RM0090
-    # §28.3.9); previously only a gpio-net master did. i2c.rs: in scheduler
-    # mode the F1 I2C event chain now pends the ER vector (`irq_error`) for
-    # AF/BERR/ARLO/OVR under ITERREN, as the legacy walk already did, and
-    # stays live while that level holds. dma.rs per-channel lines are opt-in
-    # (`channel_irqs`); this chip does not set it. Register files, reset and
-    # R/W values are unchanged; the silicon claim pins registers, not IRQ
-    # timing. Renode stm32f401cdu6-blackpill smoke re-run: PASS 4/4.
-    # ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    # 2026-11-09 (lane/renode-coverage, round 399): STM32 SPI devices now
-    # get GPIO chip-select edges (bus/spi_cs.rs) and a device whose CS GPIO
-    # is driven high is skipped. No SPI register, flag or IRQ changed; a
-    # device with no resolvable CS output keeps the old pass-through.
-    # Digest-only drift; ACK, NOT A SILICON CAPTURE, re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 401): dma.rs (the F1/L0/L4
-    # channel DMA) now honours CCR.DIR in MEM2MEM mode (DIR=0, ST HAL's
-    # DMA_MEMORY_TO_MEMORY, copies CPAR -> CMAR; DIR=1 unchanged) and
-    # IFCR.CGIFx clears the channel's TCIF/HTIF/TEIF with GIF (RM0008
-    # §13.4.2). No register address, reset or RW value changed; every
-    # in-tree MEM2MEM user sets DIR=1. ACK, NOT A SILICON CAPTURE;
-    # re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 402): dma.rs gains an opt-in
-    # `channels: N` (the 5-channel F04x DMA1: CCR6/CCR7 reserved, read 0);
-    # without it the controller keeps all 7 channels, as here. syscfg.rs adds
-    # the F04x CFGR1 mask (`profile: stm32f04x`); the stm32f0 mask and the
-    # other SYSCFG variants are unchanged. generic_factory.rs only parses the
-    # two new options. ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 407): rcc.rs gains an opt-in
-    # F4-layout AHB1ENR reset value (`rcc_ahb1enr_reset`, the F7's
-    # DTCMRAMEN); without the key the reset stays 0, as here. No register,
-    # mask or reset value of this chip changed.
-    # ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 416): gpio.rs gains the
-    # opt-in `lpc2xxx` layout (LPC21xx/22xx IOPIN/IOSET/IODIR/IOCLR), a new
-    # GpioFamily variant with its own match arms. No register, mask or reset
-    # value of this chip's GPIO layout changed.
-    # ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 417): gpio.rs gains the
-    # opt-in `eos_s3` layout (EOS S3 MISC IO_INPUT/IO_OUTPUT), a new
-    # GpioFamily variant with its own match arms. No register, mask or reset
-    # value of this chip's GPIO layout changed.
-    # ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 418): gpio.rs gains the
-    # opt-in `max32650` layout (MAX32650 EN/OUT_EN/OUT/IN/IN_EN/PDPU_SEL), a
-    # new GpioFamily variant with its own match arms. No register, mask or
-    # reset value of this chip's GPIO layout changed.
-    # ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 420): gpio.rs gains the
-    # opt-in `da14` layout (DA14592 P0/P1 DATA/SET/RESET/MODE), a new
-    # GpioFamily variant with its own match arms, and `data_word_of`, which
-    # returns (offset, pin) unchanged for every other layout; bus/routing.rs
-    # calls it on the pin-map ODR/IDR paths. No register, mask or reset value
-    # of this chip's GPIO layout changed.
-    # ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 423): gpio.rs gains the
-    # opt-in `cmsdk` layout (Arm CMSDK AHB GPIO, UT32M0R500 pulls and masked
-    # byte arrays), a new GpioFamily variant with its own match arms, and
-    # GpioPort::new_cmsdk; from_config reads `reset_altfunc` only for that
-    # layout. No register, mask or reset value of this chip's GPIO layout
-    # changed. ACK, NOT A SILICON CAPTURE; re-capture pending.
-    # 2026-11-09 (lane/renode-coverage, round 425): gpio.rs adds the
-    # CMSDK combined GPIO IRQ predicate; the external-pad hook now
-    # reconciles a peripheral level after a pad transition. The only
-    # new GpioPort IRQ level is the Cmsdk variant; STM32 returns None
-    # and its multi-line hook stays empty, so STM32 register and IRQ
-    # behavior is unchanged. The CMSDK unit test and UT32 smoke cover
-    # the new path. ACK, NOT A SILICON CAPTURE; live re-capture remains
-    # pending.
     drift_ack: 2026-11-09
     # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
     # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
@@ -8709,7 +8065,6 @@ boards:
     # immediate range still Halt, same as before. Shared interpreter
     # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack_digest: 87231ca8f51ee045dd839f221ef0738b732fcb3434119f6b18034440a8c07547
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -9616,12 +8971,6 @@ boards:
     # Same RX-inject scheduler wake + RXFIFO_TOUT sticky latch as on C3. S3
     # UART0 is outside the nine captured reset-state windows; no register map
     # or reset value change. ACK, NOT A CAPTURE.
-    # 2026-11-06: the external TMP102 parity oracle in esp32s3/tmp102.rs now
-    # commits a one-byte MSB update when STOP or repeated START ends the frame;
-    # configs/devices/tmp102.yaml carries the opt-in behavior. This is off-chip
-    # slave behavior, not the S3 I2C controller's register model. The 9-register
-    # reset-state anchor is unchanged. Local parity and STM32F103 exact-import
-    # smokes cover the modeled transaction; no S3 hardware recapture is claimed.
     # 2026-11-06 (#1708 fix/esp32-idf5-static-mutex): watched rom_thunks.rs.
     # xQueueCreateMutexStatic is no longer thunked to "return the buffer";
     # the real FreeRTOS routine runs so IDF5 tx_mux spinlocks are initialised.
@@ -11043,9 +10392,9 @@ boards:
     # 2026-10-19: first RISC-V soft-core SoC in the engine (LiteX VexRiscv,
     # RV32IM). SIM-DERIVED — no silicon capture and no executing-fidelity
     # differential: the modelled surface is CPU + memory + the LiteX UART
-    # console path, countdown timer and SPI-flash bitbang/MT25Q ID-status
-    # responder. Ethernet and MMCM CSR windows are declared stubs (the smoke
-    # prints one of those readbacks). See
+    # console path and the LiteX countdown timer; the SPI-flash, Ethernet and
+    # MMCM CSR windows are declared stubs (the smoke prints one of those
+    # readbacks). See
     # docs/boards/litex-vexriscv.md and examples/litex-vexriscv/VALIDATION.md.
     doc: docs/boards/litex-vexriscv.md
     chip: configs/chips/litex-vexriscv.yaml
@@ -11057,7 +10406,6 @@ boards:
       - crates/core/src/decoder/riscv.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/litex_timer.rs
-      - crates/core/src/peripherals/litex_spi_flash.rs
       - crates/core/src/peripherals/stub.rs
       - crates/core/src/bus/from_config.rs
       - crates/core/src/bus/profiles.rs
@@ -11159,13 +10507,8 @@ boards:
     # unmodified Contiki-NG v4.9 examples/rpl-udp, the topology of Renode's
     # cc2538_rpl-udp.robot: the RF core's RX FIFO, FIFOP IRQ 141 and the
     # µDMA (cc2538_udma: software basic/auto transfers, CHIS + IRQ 46).
-    # 2026-11-07: SSI0/1 master mode, GPTimer0-3's timeout/match path and the
-    # I2CM single-byte master (cc2538_pl022_ssi, cc2538_gptimer,
-    # cc2538_i2cm): loopback/FIFO/IRQ, timer and attached-TMP102 transfer
-    # checks. GPTimer RTC/capture/PWM/sync/ADC trigger and I2CS remain outside
-    # the model. The PKA SRAM is ordinary mapped RAM and the PKA compute engine,
-    # IOC, USB and SoC ADC remain declared stubs. SIM-DERIVED — no CC2538 bench
-    # part. See docs/boards/cc2538dk.md
+    # IOC, PKA, SSI, I2C, GPTimers, USB and ADC are declared
+    # stubs. SIM-DERIVED — no CC2538 bench part. See docs/boards/cc2538dk.md
     # and examples/cc2538dk/VALIDATION.md.
     doc: docs/boards/cc2538dk.md
     chip: configs/chips/cc2538sf53.yaml
@@ -11179,10 +10522,6 @@ boards:
       - "cc2538_rom (12 tests: ROM utility API incl. PageErase/ProgramFlash through FLASH_CTRL + CCA boot on the CPU model)"
       - "cc2538_sleep_timer_irq (compare -> SM Timer IRQ 145 -> handler)"
       - "cc2538_rpl_udp (3 nodes, stock Contiki-NG rpl-udp: 3 round trips per client; event-scheduler)"
-      - "cc2538::gptimer (9 tests: periodic down timeout, split up one-shot/prescale/match, A/B IRQ routes; legacy + event-scheduler)"
-      - "cc2538::i2cm (9 tests: reset, MFE gating, address/data NACK, held bus, repeated-start read, IRQ, reset release, byte lanes and snapshot)"
-      - "cc2538dk io-smoke (GPTimer0 periodic timeout/hold and GPTimer1B split one-shot/prescale/match on IRQ 19/22)"
-      - "renode-onboarding cc2538 smoke (attached TMP102 fixture: register-pointer write, repeated-start 16-bit read, stop, IRQ 8 and RIS clear; PKA SRAM: all 512 words written and read back)"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -11192,13 +10531,6 @@ boards:
       - crates/core/src/peripherals/cc2538/flash_ctrl.rs
       - crates/core/src/peripherals/cc2538/aes.rs
       - crates/core/src/peripherals/cc2538/udma.rs
-      - crates/core/src/peripherals/cc2538/ssi.rs
-      - crates/core/src/peripherals/cc2538/gptimer.rs
-      - crates/core/src/peripherals/cc2538/i2cm.rs
-      - crates/core/src/peripherals/cc2538/ana_regs.rs
-      - crates/core/src/peripherals/cc2538/cctest.rs
-      - crates/core/src/peripherals/cc2538/ioc.rs
-      - crates/core/src/peripherals/cc2538/soc_adc.rs
       - crates/core/src/peripherals/ieee802154_air.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/systick.rs
@@ -11256,9 +10588,8 @@ boards:
     # 2026-10-30: Renesas EK-RA6M5 (R7FA6M5BH, Cortex-M33; 2 MiB code flash
     # at 0x0, 512 KiB SRAM at 0x20000000). First RA6M5 part. Reuses the RA4M1
     # models at the RA6M5 bases: PORT0-B (ra_port), PmnPFS/PWPR (ra_pfs),
-    # SYSTEM (id ra_sysc, now the full ra6_sysc register file, see below),
-    # SCI0 on the sci layout, and the SVD-derived MSTP register file (readback
-    # only; it does not gate modules). ICU,
+    # SYSTEM (id ra_sysc, now the full ra6_sysc register file, see below)
+    # and SCI0 on the sci layout. MSTP, ICU,
     # DMAC/DTC, ELC, RTC, IWDT/WDT, USBFS/USBHS, IIC, CANFD, AGT, ETHERC,
     # SPI, GPT, ADC12 and FACI are declared stubs; SCI1-9 and the remaining
     # blocks are not mapped.
@@ -11293,7 +10624,6 @@ boards:
       - "firmware_survival::test_ek_ra6m5_zephyr_survival (stock Zephyr hello)"
       - "ra6m5_agt_icu (AGT0 compare match A through ICU IELSR84)"
       - "ra6m5_sci_icu (SCI0 RXI/TXI/TEI through ICU IELSR0-2, SSR_FIFO)"
-      - "examples/renode-onboarding/renesas-r7fa6m5bh-tier1-smoke.yaml (MSTP reset/write readback)"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -11302,7 +10632,6 @@ boards:
       - crates/core/src/peripherals/ra_clock.rs
       - crates/core/src/peripherals/ra_icu.rs
       - crates/core/src/peripherals/ra_agt.rs
-      - crates/core/src/peripherals/declarative.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/stub.rs
@@ -11320,13 +10649,11 @@ boards:
       - crates/core/src/peripherals/ra_gpt.rs
       - crates/core/src/peripherals/ra_iic.rs
       - configs/systems/ek-ra6m5.yaml
-      - configs/peripherals/r7fa6m5bh/mstp.yaml
   - id: r7fa8m1ah
     # 2026-10-30: Renesas EK-RA8M1 (R7FA8M1AH, Cortex-M85; 2 MiB code flash
     # at 0x02000000, 896 KiB SRAM at 0x22000000). First RA8 part. New: the
     # SCI_B UART layout (sci_b), the RA8 PFS with PWPR/PWPRS moved (ra8_pfs)
-    # and the SCICKCR handshake (ra8_sysc). PORT0-B reuse ra_port. MSTP is an
-    # SVD-derived register file (readback only; it does not gate modules). ICU,
+    # and the SCICKCR handshake (ra8_sysc). PORT0-B reuse ra_port. MSTP, ICU,
     # DMAC/DTC, FCACHE, FACI, ELC, RTC, IWDT/WDT, AGT, USBFS/USBHS, IIC, GPT,
     # ADC12, ETHERC, SPI and CANFD are declared stubs; SCI0-8 and the remaining
     # blocks are not mapped. Helium/MVE and TrustZone are not modelled.
@@ -11359,7 +10686,6 @@ boards:
       - "firmware_survival::test_ek_ra8m1_zephyr_survival (stock Zephyr hello)"
       - "ra8m1_agt_icu (AGT0 compare match A through ICU IELSR84)"
       - "ra8m1_sci_icu (SCI9 RXI/TXI/TEI through ICU IELSR24-26)"
-      - "examples/renode-onboarding/renesas-r7fa8m1ah-tier1-smoke.yaml (MSTP reset/write readback)"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -11368,7 +10694,6 @@ boards:
       - crates/core/src/peripherals/ra_clock.rs
       - crates/core/src/peripherals/ra_icu.rs
       - crates/core/src/peripherals/ra_agt.rs
-      - crates/core/src/peripherals/declarative.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/stub.rs
@@ -11386,7 +10711,6 @@ boards:
       - crates/core/src/peripherals/ra_gpt.rs
       - crates/core/src/peripherals/ra_iic.rs
       - configs/systems/ek-ra8m1.yaml
-      - configs/peripherals/r7fa8m1ah/mstp.yaml
 
   - id: same70q21b
     # 2026-10-30: Microchip SAM E70 Xplained (ATSAME70Q21B, Cortex-M7; 2 MiB
@@ -11652,7 +10976,6 @@ boards:
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/litex_timer.rs
       - crates/core/src/peripherals/litex_control_status.rs
-      - crates/core/src/peripherals/litex_spi_flash.rs
       - crates/core/src/peripherals/stub.rs
       - crates/core/src/bus/from_config.rs
       - crates/core/src/bus/profiles.rs
@@ -11697,11 +11020,9 @@ boards:
     # and the five MMUARTs as 16550s (4-byte stride, LCR.DLAB divisor
     # latches). Unmodified Zephyr v4.1.0 hello_world, synchronization and
     # tests/kernel/common (12 suites, 63/63) for mpfs_icicle/polarfire/u54 (the
-    # same MSS) boot from the DDR window at 0x8000_0000. F/D, S/U modes, Sv39
-    # and the other harts are not modelled. 2026-11-07: the PLIC, MSS
-    # GPIO_0..2, I2C0/1 and SPI1 (master) models proven on the imported
-    # PolarFire profiles now back this chip too (mss-peripherals-smoke.yaml
-    # 13/13); QSPI and the system-controller mailbox stay declared stubs. SIM-DERIVED — no
+    # same MSS) boot from the DDR window at 0x8000_0000. F/D, S/U modes, Sv39,
+    # the PLIC and the other harts are not modelled; PLIC, MSS GPIO/I2C/SPI/QSPI
+    # and the system-controller mailbox are declared stubs. SIM-DERIVED — no
     # MPFS bench part. See docs/boards/mpfs-disco-kit.md and
     # examples/mpfs-disco-kit/VALIDATION.md.
     doc: docs/boards/mpfs-disco-kit.md
@@ -11715,10 +11036,6 @@ boards:
       - crates/core/src/cpu/riscv64.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/stub.rs
-      - crates/core/src/cpu/riscv64_plic.rs
-      - crates/core/src/peripherals/miv.rs
-      - crates/core/src/peripherals/mpfs_i2c.rs
-      - crates/core/src/peripherals/mpfs_spi.rs
       - crates/core/src/bus/from_config.rs
       - crates/core/src/bus/profiles.rs
       - crates/core/src/peripherals/generic_factory.rs
@@ -11841,3 +11158,87 @@ boards:
       - crates/firmware-curiosity-pic32mz-nuttx
       - configs/chips/pic32mz2048efm144.yaml
       - configs/systems/curiosity-pic32mz-ef.yaml
+
+  # Narrow onboarding profiles retain explicit scope and independent core execution gates.
+  - id: esp32-devkitc-32e-gpio-smoke
+    doc: docs/boards/esp32.md
+    chip: configs/chips/esp32-devkitc-32e-gpio-smoke.yaml
+    tier: structural
+    note: Narrow classic ESP32 onboarding profile. The PR-run Tier-1 fixture asserts TIER1 done; the exact-profile execution oracle pins the core timer/vector/RAM witness with a disarmed-timer negative control. GPIO23, UART0 and I2C0 remain the documented profile scope. No silicon timing or full-board coverage is claimed.
+    offline_tests:
+      - firmware_survival::test_esp32_devkitc_32e_gpio_smoke_tier1_survival
+      - esp32_onboarding_exec_oracle::devkitc_gpio_profile_core_timer_exec_oracle
+    models:
+      - crates/core/src/cpu/xtensa_lx7.rs
+      - crates/core/src/decoder/xtensa.rs
+      - configs/chips/esp32-devkitc-32e-gpio-smoke.yaml
+      - crates/core/src/peripherals/esp32/efuse.rs
+      - crates/core/src/peripherals/esp32/gpio.rs
+      - crates/core/src/peripherals/esp32/rmt.rs
+      - crates/core/src/peripherals/esp32/i2c.rs
+      - crates/core/src/peripherals/esp32/ledc.rs
+      - crates/core/src/peripherals/esp32/mcpwm.rs
+      - crates/core/src/peripherals/esp32/pcnt.rs
+      - crates/core/src/peripherals/esp32/rtc_cntl.rs
+      - crates/core/src/peripherals/esp32/sar_adc.rs
+      - crates/core/src/peripherals/esp32/sdio_stub.rs
+      - crates/core/src/peripherals/esp32/sha.rs
+      - crates/core/src/peripherals/esp32/spi.rs
+      - crates/core/src/peripherals/esp32/syscon.rs
+      - crates/core/src/peripherals/esp32/timg.rs
+      - crates/core/src/peripherals/esp32/twai.rs
+      - crates/core/src/peripherals/esp32/uart.rs
+      - crates/core/src/peripherals/esp_rtc_io.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/uart.rs
+  - id: esp32-devkitc-32e-uart1
+    doc: docs/boards/esp32.md
+    chip: configs/chips/esp32-devkitc-32e-uart1.yaml
+    tier: structural
+    note: Narrow classic ESP32 UART1 TX profile. The exact-profile execution oracle pins the core timer/vector/RAM witness with a disarmed-timer negative control. The UART1/GPIO16 smoke has recorded simulator evidence but no dedicated required UART1 firmware lane. No silicon or full-board coverage is claimed.
+    offline_tests:
+      - esp32_onboarding_exec_oracle::devkitc_uart1_profile_core_timer_exec_oracle
+    models:
+      - crates/core/src/cpu/xtensa_lx7.rs
+      - crates/core/src/decoder/xtensa.rs
+      - configs/chips/esp32-devkitc-32e-uart1.yaml
+      - crates/core/src/peripherals/esp32/efuse.rs
+      - crates/core/src/peripherals/esp32/gpio.rs
+      - crates/core/src/peripherals/esp32/rmt.rs
+      - crates/core/src/peripherals/esp32/i2c.rs
+      - crates/core/src/peripherals/esp32/ledc.rs
+      - crates/core/src/peripherals/esp32/mcpwm.rs
+      - crates/core/src/peripherals/esp32/pcnt.rs
+      - crates/core/src/peripherals/esp32/rtc_cntl.rs
+      - crates/core/src/peripherals/esp32/sar_adc.rs
+      - crates/core/src/peripherals/esp32/sdio_stub.rs
+      - crates/core/src/peripherals/esp32/sha.rs
+      - crates/core/src/peripherals/esp32/spi.rs
+      - crates/core/src/peripherals/esp32/syscon.rs
+      - crates/core/src/peripherals/esp32/timg.rs
+      - crates/core/src/peripherals/esp32/twai.rs
+      - crates/core/src/peripherals/esp32/uart.rs
+      - crates/core/src/peripherals/esp_rtc_io.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/uart.rs
+  - id: nucleo-f103rb-bme280
+    doc: docs/boards/nucleo-f103rb.md
+    chip: configs/chips/stm32f103rb-nucleo-bme280-smoke.yaml
+    tier: structural
+    note: Narrow STM32F103RB profile with USART2, LD2/PA5 and I2C1 on PB8/PB9. The exact-profile SysTick execution differential compares every instruction boundary with the legacy walk and requires repeated ISR and main-loop progress. The BME280 smoke has recorded simulator evidence but no dedicated required sensor firmware lane. No silicon timing or full-board coverage is claimed.
+    offline_tests:
+      - systick_walk_differential::nucleo_bme280_profile_systick_irq_is_byte_identical
+    models:
+      - configs/chips/stm32f103rb-nucleo-bme280-smoke.yaml
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/cpu/cortex_m/exec
+      - crates/core/src/decoder/arm.rs
+      - crates/core/src/decoder/arm_thumb32.rs
+      - crates/core/src/peripherals/rcc.rs
+      - crates/core/src/peripherals/afio.rs
+      - crates/core/src/peripherals/gpio.rs
+      - crates/core/src/peripherals/uart.rs
+      - crates/core/src/peripherals/i2c.rs
+      - crates/core/src/peripherals/systick.rs

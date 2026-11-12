@@ -967,6 +967,16 @@ pub(crate) fn validate_rule_names(desc: &DeviceDescriptor) -> Result<()> {
     let vars: Vec<String> = b.vars.keys().cloned().collect();
     let fifos: Vec<String> = b.fifos.iter().map(|f| f.name.clone()).collect();
     let timers: Vec<String> = b.timers.iter().map(|t| t.name.clone()).collect();
+    // Only the I2C engine emits conversion events. An unused i2c block on
+    // another primitive must not make a dead subscription appear valid.
+    let data_ready: Vec<String> = if b.primitive == "i2c_device" {
+        b.i2c
+            .iter()
+            .flat_map(|spec| spec.data_ready.iter().map(|rule| rule.name.clone()))
+            .collect()
+    } else {
+        Vec::new()
+    };
     let pins: Vec<String> = b.pin_names();
     let inputs: Vec<String> = desc
         .metadata
@@ -995,6 +1005,7 @@ pub(crate) fn validate_rule_names(desc: &DeviceDescriptor) -> Result<()> {
             vars: &vars,
             fifos: &fifos,
             timers: &timers,
+            data_ready: &data_ready,
             outputs: &b.outputs,
             inputs: &inputs,
             pins: &pins,
@@ -1112,6 +1123,54 @@ metadata:
   inputs:
     - { key: weight, label: W, unit: g, min: 0, max: 10, default: 1 }
 "#;
+
+    #[test]
+    fn non_i2c_primitives_reject_data_ready_even_with_an_unused_i2c_block() {
+        let i2c: labwired_config::I2cSpec = serde_yaml::from_str(
+            r#"
+default_address: 0x29
+registers:
+  - { name: START, addr: 0, width: 1, endian: be, access: rw, reset: 0 }
+  - { name: READY, addr: 1, width: 1, endian: be, access: r, reset: 0 }
+data_ready:
+  - name: sample
+    start_register: START
+    start_mask: 1
+    ready_register: READY
+    ready_mask: 1
+    conversion_us: 10
+"#,
+        )
+        .unwrap();
+        let subscription: labwired_config::Rule =
+            serde_yaml::from_str("{ on: { data_ready: sample }, do: [] }").unwrap();
+
+        for fixture in [FIXTURE, include_str!("declarative_spi_fixture.yaml")] {
+            for with_i2c_block in [false, true] {
+                let mut desc = DeviceDescriptor::from_yaml(fixture).unwrap();
+                if with_i2c_block {
+                    desc.behavior.i2c = Some(i2c.clone());
+                }
+                let validate = |desc: &DeviceDescriptor| match desc.behavior.primitive.as_str() {
+                    "gpio_device" => validate_descriptor(desc),
+                    "spi_device" => super::super::declarative_spi::validate_descriptor(desc),
+                    _ => unreachable!("test uses only GPIO and SPI fixtures"),
+                };
+                validate(&desc).expect("legacy descriptor without a subscription remains valid");
+                desc.behavior.rules.push(subscription.clone());
+                let error = format!(
+                    "{:#}",
+                    validate(&desc).expect_err("non-I2C conversion subscription must fail")
+                );
+                assert!(
+                    error.contains("on.data_ready")
+                        && error.contains("no data-ready conversion named 'sample'"),
+                    "{}, with_i2c_block {with_i2c_block}: {error}",
+                    desc.behavior.primitive
+                );
+            }
+        }
+    }
 
     /// A [`DevicePins`] over a flat word map, so a test can drive an "MCU
     /// output" and read back what the device drove without a whole bus.
