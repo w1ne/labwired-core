@@ -1327,14 +1327,17 @@ impl World {
     /// stops at the first round end at or after `target_ps`. Stops at the
     /// first round in which a node returns an error.
     pub fn run_until_ps(&mut self, target_ps: u64) -> Option<HashMap<String, SimResult<()>>> {
-        if self.uart_net.is_none() && self.gpio.is_none() && self.can.is_none() {
+        if self.uart_net.is_none()
+            && self.gpio.is_none()
+            && self.can.is_none()
+            && self.cosim.is_none()
+        {
             return None;
         }
-        let fast = self.gpio.is_some()
-            && self.uart_net.is_none()
-            && self.can.is_none()
-            && !self.gpio_lockstep
-            && self.interconnects.is_empty();
+        // The per-node GPIO scheduler cannot advance a shared circuit. Use
+        // the same admission rule as step_all so public batched APIs cannot
+        // bypass analog boundaries, regardless of the gpio_lockstep flag.
+        let fast = self.gpio_per_node() && self.interconnects.is_empty();
         if fast {
             // Finish a round a step budget left part way, so the round clock
             // stays on round ends, then run the rest in one go.
@@ -1413,6 +1416,7 @@ impl World {
         let gpio = self.gpio.as_ref()?;
         if self.uart_net.is_some()
             || self.can.is_some()
+            || self.cosim.is_some()
             || self.gpio_lockstep
             || !self.interconnects.is_empty()
             || self.round.end_ps.is_some()

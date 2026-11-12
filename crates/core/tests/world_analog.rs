@@ -556,3 +556,70 @@ fn output_aliases_and_missing_probes_cannot_silently_replace_observations() {
         .to_string();
     assert!(error.contains("no solved probe"), "{error}");
 }
+
+fn digital_wire(latency_ns: u64) -> String {
+    format!(
+        r#"
+interconnects:
+  - type: gpio_net
+    nodes: [a, b]
+    config:
+      name: independent-digital-wire
+      latency_ns: {latency_ns}
+      members:
+        - {{node: a, peripheral: gpioa, pin: 6}}
+        - {{node: b, peripheral: gpioa, pin: 6}}
+"#
+    )
+}
+
+fn check_three_analog_steps(w: &World) {
+    let status = w.cosim_status().unwrap();
+    assert_eq!(status.model_steps, 3);
+    assert_eq!(status.completed_time_ns, 3000);
+    assert_eq!(
+        w.analog_trace_snapshot(0)
+            .samples
+            .iter()
+            .map(|sample| sample.time_ns)
+            .collect::<Vec<_>>(),
+        vec![0, 1000, 2000, 3000]
+    );
+    close(volts(w, "sense_a"), 3.3 * 10.0 / 12.1);
+}
+
+#[test]
+fn world_advance_api_run_until_ps_steps_an_analog_only_world() {
+    let mut w = world(&["a", "b"], MODEL).unwrap();
+    drive(&mut w, "a", true);
+    let results = w
+        .run_until_ps(3_000_000)
+        .expect("an analog-only world has a round clock");
+    assert!(results.values().all(Result::is_ok), "{results:?}");
+    assert_eq!(w.round_now_ps(), Some(3_000_000));
+    check_three_analog_steps(&w);
+}
+
+#[test]
+fn world_advance_api_run_until_ps_keeps_analog_steps_in_a_gpio_world() {
+    let mut w = world(&["a", "b"], &(MODEL.to_string() + &digital_wire(100))).unwrap();
+    drive(&mut w, "a", true);
+    let results = w.run_until_ps(3_500_000).unwrap();
+    assert!(results.values().all(Result::is_ok), "{results:?}");
+    assert_eq!(w.round_now_ps(), Some(3_500_000));
+    check_three_analog_steps(&w);
+}
+
+#[test]
+fn world_advance_api_step_rounds_respects_the_analog_boundary_before_gpio_latency() {
+    let mut w = world(&["a", "b"], &(MODEL.to_string() + &digital_wire(1200))).unwrap();
+    drive(&mut w, "a", true);
+    let results = w.step_rounds(3);
+    assert!(results.values().all(Result::is_ok), "{results:?}");
+    assert_eq!(
+        w.round_now_ps(),
+        Some(3_000_000),
+        "the 1 us analog boundary takes precedence over 1.2 us GPIO lookahead"
+    );
+    check_three_analog_steps(&w);
+}

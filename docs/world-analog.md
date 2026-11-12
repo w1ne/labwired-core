@@ -93,6 +93,9 @@ series methods expose the same circuit in native and Wasm worlds. CLI
 environment results include `cosim` and `analog_series`; `--analog-trace` exports
 the world series through the existing artifact writer. A native Wasm wrapper
 test covers transport and timestamps; it does not establish browser rendering.
+`run_until_ps` and `step_rounds` use the same analog-aware round path, including
+worlds that also declare digital GPIO nets. GPIO batching cannot skip circuit
+steps, and an analog-only world exposes its round clock to these APIs.
 External `ui.*` values can change only at completed analog boundaries. A solver,
 route, or CPU failure latches the circuit failure and blocks further stepping.
 
