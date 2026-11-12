@@ -39,6 +39,10 @@ mod f767_checks;
 use f746_checks::*;
 use f767_checks::*;
 
+#[cfg(feature = "nucleo-f767zi-m7-fpu")]
+#[path = "../m7_fpu_smoke.rs"]
+mod m7_fpu_smoke;
+
 const E_RTSR: u32 = 0x08;
 const EXTI15_10_IRQ: u32 = 40;
 /// LD1 (green) PB0, LD2 (blue) PB7, LD3 (red) PB14.
@@ -1096,6 +1100,8 @@ fn main() -> ! {
     mark(16, check_pendsv_m7());
     mark(17, check_systick_pendsv_tailchain_m7());
     mark(18, check_systick_pendsv_psp_tailchain_m7());
+    #[cfg(feature = "nucleo-f767zi-m7-fpu")]
+    m7_fpu_smoke::run();
     let summary = summary | 0x7670_0000;
     wr(SUMMARY, summary);
     puts("summary ");

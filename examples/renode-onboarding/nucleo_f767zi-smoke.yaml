@@ -14,10 +14,11 @@
 # claim the Ethernet PHY, USB, ADC, DAC, CAN, SDMMC, QUADSPI, FMC, SAI or
 # the watchdogs. The core check installs a temporary vector table in SRAM,
 # checks PendSV cancellation and re-pending, then verifies SysTick-to-PendSV
-# priority handoff on the imported Cortex-M7 execution model.
+# priority handoff and FPv5-DP lazy context preservation on the imported
+# Cortex-M7 execution model.
 schema_version: "1.2"
 inputs:
-  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nucleo-f767zi-smoke"
+  firmware: "../../target/thumbv7em-none-eabihf/release/firmware-nucleo-f767zi-smoke"
   system: "../../configs/systems/onboarding/nucleo_f767zi.yaml"
 limits:
   max_steps: 6000000
@@ -66,6 +67,7 @@ assertions:
       - "pendsv m7 clear=1 repend=1 systick=1 priority=1 ok"
       - "pendsv m7 tailchain deferred=1 frame_reused=1 r0_live=1 pending_clear=1 ok"
       - "pendsv m7 psp tailchain deferred=1 frame_reused=1 r0_live=1 pending_clear=1 ok"
+      - "fpu m7 dp=1 mvfr=1 exc_return=0xFFFFFFE9 lazy=1->0 fpcar=1 saved=1 restored=1 ok"
       - "summary 0x7677FFFF"
       - "DONE"
   - memory_value:

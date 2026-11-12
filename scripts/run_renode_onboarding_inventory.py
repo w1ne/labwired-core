@@ -929,7 +929,9 @@ SMOKE_MAPPINGS = {
     },
     "nucleo_f767zi": {
         "crate": "firmware-stm32f767-smoke",
-        "target": "thumbv7em-none-eabi",
+        "target": "thumbv7em-none-eabihf",
+        "target_features": "vfp4",
+        "features": "nucleo-f767zi-m7-fpu",
         "script": "examples/renode-onboarding/nucleo_f767zi-smoke.yaml",
     },
     "imxrt1064": {

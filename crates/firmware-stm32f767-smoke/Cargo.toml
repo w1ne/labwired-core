@@ -11,6 +11,9 @@ edition = "2021"
 authors = ["LabWired Team"]
 license = "MIT"
 
+[features]
+nucleo-f767zi-m7-fpu = []
+
 [dependencies]
 cortex-m-rt = "0.7"
 panic-halt = "0.2"

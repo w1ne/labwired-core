@@ -4,7 +4,8 @@
 # the imported stm32f777 profile (the F76x/F77x surface), included whole so
 # the two rows cannot drift: 2 MiB / 512 KiB, RCC, USART1/2/3/6 +
 # UART4/5/7/8, GPIOA..K, SYSCFG + EXTI, TIM1..TIM14, SPI1..6, I2C1..4,
-# DMA1/DMA2, CRC and RNG. See stm32f777.yaml for what it does not claim.
+# DMA1/DMA2, CRC, RNG and the Cortex-M7 FPv5-DP context window. See
+# stm32f777.yaml for what it does not claim.
 #
 # The board-level parts (LD1/LD2/LD3 on PB0/PB7/PB14, B1 on PC13) live in the
 # system file. The Ethernet PHY is not declared (no Ethernet MAC model).

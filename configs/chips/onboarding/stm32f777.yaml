@@ -40,6 +40,15 @@ ram:
   base: 0x20000000
   size: 512KB
 peripherals:
+- id: fpu
+  type: cortex_m_fpu
+  base_address: 0xE000EF30
+  size: 28B
+  # STM32F767/F777 Cortex-M7 FPv5 double-precision feature registers; the
+  # NUCLEO-F767ZI exact-import smoke exercises both FP arithmetic and lazy save.
+  config:
+    mvfr0: 0x10110221
+    mvfr1: 0x12000011
 - id: rcc
   type: rcc
   base_address: 0x40023800
