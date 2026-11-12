@@ -300,6 +300,30 @@ impl CosimRunner {
         self.analog_trace.snapshot(cursor)
     }
 
+    /// Read the declared initial operating point before any world CPU runs.
+    /// This does not advance model time or consume the first scheduled step.
+    pub(crate) fn prime_with_signals(&mut self, signals: &mut CosimSignals) -> SimResult<()> {
+        let snapshot = signals.clone();
+        let mut pending = Vec::new();
+        for (index, model) in self.models.iter_mut().enumerate() {
+            if model.next_step_ns != model.config.step_ns {
+                return Err(SimulationError::Other(
+                    "co-sim initialization after time advanced".to_string(),
+                ));
+            }
+            let result = model.adapter.step(CosimStep {
+                time_ns: 0,
+                dt_ns: 0,
+                inputs: routed_inputs(&model.config, &snapshot),
+            })?;
+            pending.push((index, result.outputs));
+        }
+        for (index, outputs) in pending {
+            route_outputs(&self.models[index].config, outputs, signals);
+        }
+        Ok(())
+    }
+
     pub fn step_until(
         &mut self,
         time_ns: u64,

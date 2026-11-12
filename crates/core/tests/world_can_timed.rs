@@ -72,6 +72,7 @@ fn can_world(order: &[&str], bitrate: Option<u64>) -> World {
             nodes: order.iter().map(|id| id.to_string()).collect(),
             config,
         }],
+        cosim_models: Vec::new(),
         rf: None,
     };
     World::from_manifest(manifest, &repo_root()).expect("three F103 nodes on one bus")
@@ -423,6 +424,7 @@ fn a_world_without_can_keeps_its_stepping_path() {
         name: "no-can".to_string(),
         nodes: vec![node("a"), node("b")],
         interconnects: vec![],
+        cosim_models: Vec::new(),
         rf: None,
     };
     let mut world = World::from_manifest(manifest, &repo_root()).unwrap();

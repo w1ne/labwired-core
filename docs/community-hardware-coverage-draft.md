@@ -10,14 +10,14 @@ and simulator evidence. More demand-ranked targets remain to be added.
 
 ### ESP32-C6-DevKitC-1-N8 + BME280
 
-The exact N8 board is listed in Espressif's current user guide; Mouser showed
-1,120 in stock and immediate dispatch at the latest check. The 8 MB profile
+The exact N8 board is listed in Espressif's current user guide; the dated
+2026-11-10 receipt records 178 in stock at DigiKey. The 8 MB profile
 boots a direct-register smoke that reads BME280 ID `0x60` and raw temperature
 over I2C0 on GPIO6/GPIO7. This adds board depth on the existing ESP32-C6 model,
 not new silicon.
 
 - [Wiring, scope, and copy-paste example](../examples/esp32c6-devkitc-1-n8-bme280/README.md)
-- [Live Espressif, Mouser, and Adafruit availability receipt](../examples/esp32c6-devkitc-1-n8-bme280/evidence/bme280/vendor-status.md)
+- [Dated Espressif, DigiKey, and Adafruit availability receipt](../examples/esp32c6-devkitc-1-n8-bme280/evidence/bme280/vendor-status.md)
 - [Committed local smoke evidence](../examples/esp32c6-devkitc-1-n8-bme280/evidence/bme280/)
 
 The hosted catalog lists the C6 DevKitC as `design_only`, so this draft links

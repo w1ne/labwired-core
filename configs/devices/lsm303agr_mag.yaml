@@ -27,7 +27,14 @@
 #     from that read. Overrun bits never set. BDU and offset cancellation are
 #     not modelled; each read reports the live stimulus.
 #   * Hard-iron offsets are storage only; they are not subtracted.
-#   * The interrupt block and the INT_MAG_PIN output are not modelled.
+#   * The threshold interrupt block is not modelled. DRDY only: INT_MAG bit 0
+#     of CFG_REG_C_M routes the active-high sample-ready signal. AN4825 Rev1
+#     section 3.3.3 clears it after the HIGH byte of ANY output channel is read.
+#     Our 2-byte LE words finish at 0x69/0x6B/0x6D, including a high-byte-only
+#     read. Low-byte/status/source reads do not acknowledge DRDY.
+#   * Software reset/reboot, threshold routing (INT_MAG_PIN), single-mode
+#     return-to-idle, BDU and ODR-dependent timing remain unmodelled. The
+#     qualified DRDY boundary is continuous mode, 100 Hz, threshold route off.
 type: lsm303agr_mag
 
 behavior:
@@ -67,15 +74,49 @@ behavior:
         conversion_us: 10000    # 1 / 100 Hz
         clear_on_read: [OUTX_REG_M, OUTY_REG_M, OUTZ_REG_M]
 
+  # Native sensor output, NOT open drain. Board placements may explicitly
+  # invert it through a digital transistor collector into a pulled-up net.
+  outputs: [DRDY]
+  output_pins: { DRDY: drdy_pin }
+  vars:
+    sample_ready: 0
+  rules:
+    - on: { data_ready: xyz }
+      do:
+        - { var: sample_ready, value: 1 }
+        - { pin: DRDY, level: "reg(CFG_REG_C_M) & 1" }
+    # Route changes must expose an already-ready result without another I2C
+    # read or conversion. This variable follows conversion/read events, since
+    # reg(STATUS_REG_M) is the raw store, not the engine's ready overlay.
+    - on: { write: CFG_REG_C_M }
+      do: [ { pin: DRDY, level: "var(sample_ready) && (reg(CFG_REG_C_M) & 1)" } ]
+    # Existing data_ready lifecycle restarts on an active mode write; the pin
+    # follows that same restart. An idle write cancels only in-flight work and
+    # leaves an already-ready result to its documented read acknowledgement.
+    - on: { write: CFG_REG_A_M }
+      when: "(reg(CFG_REG_A_M) & 2) == 0"
+      do:
+        - { var: sample_ready, value: 0 }
+        - { pin: DRDY, level: 0 }
+    - on: { read: OUTX_REG_M }
+      do: [ { var: sample_ready, value: 0 }, { pin: DRDY, level: 0 } ]
+    - on: { read: OUTY_REG_M }
+      do: [ { var: sample_ready, value: 0 }, { pin: DRDY, level: 0 } ]
+    - on: { read: OUTZ_REG_M }
+      do: [ { var: sample_ready, value: 0 }, { pin: DRDY, level: 0 } ]
+
 metadata:
   label: "LSM303AGR magnetometer"
   summary: "ST LSM303AGR magnetometer half over I2C (address 0x1E)."
-  detail: "micro:bit V2 compass. Stimulus channels x/y/z in µT, reported as 16-bit two's complement at 0.15 µT/LSB. Data-ready paces at 100 Hz while MD selects continuous or single mode (ODR is not decoded); BDU, offset cancellation and interrupts are not modelled."
+  detail: "micro:bit V2 compass. Stimulus channels x/y/z in µT, reported as 16-bit two's complement at 0.15 µT/LSB. Data-ready paces at 100 Hz while MD selects continuous or single mode (ODR is not decoded); Optional active-high DRDY output follows conversion completion, routing enable and output-high-byte reads; candidate boundary is continuous 100 Hz with threshold routing off. BDU, offset cancellation, software reset and threshold interrupts are not modelled."
   category: i2c
   config_keys:
     - name: i2c_address
       ty: int
       doc: "7-bit slave address. Defaults to 0x1E."
+    - name: drdy_pin
+      ty: str
+      doc: "Optional native active-high INT_MAG/DRDY output pad; board inversion is separate."
   inputs:
     - { key: x, label: "X", unit: "µT", min: -4915.2, max: 4915.2, default: 0.0 }
     - { key: y, label: "Y", unit: "µT", min: -4915.2, max: 4915.2, default: 0.0 }
