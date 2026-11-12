@@ -492,6 +492,18 @@ impl TracingSpiDevice {
 }
 
 impl SpiDevice for TracingSpiDevice {
+    fn required_supply_rails(&self) -> &[crate::peripherals::device::DeviceSupplyRail] {
+        self.inner.required_supply_rails()
+    }
+    fn supports_power_control(&self) -> bool {
+        self.inner.supports_power_control()
+    }
+    fn power_state_changed(&mut self, powered: bool) {
+        self.inner.power_state_changed(powered);
+    }
+    fn sync_supply_state(&mut self) {
+        self.inner.sync_supply_state();
+    }
     /// Forwarded like everything else here: a decorator that fell through to
     /// the trait default would silently downgrade an edge-sampling device back
     /// to the byte-level path — the device would opt in, the engine would never

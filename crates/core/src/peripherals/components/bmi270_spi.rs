@@ -193,7 +193,8 @@ impl Bmi270Spi {
         self.next_sample_ns = [None; 2];
         self.samples = [0; 2];
         self.sample_bytes.fill(0);
-        self.unsupported.clear();
+        // Keep audit evidence across software/power resets. A later reset
+        // must not erase an unsupported transaction already observed.
         self.phase = Phase::Ignore;
         self.update_pins();
     }
@@ -455,6 +456,29 @@ impl Bmi270Spi {
 }
 
 impl SpiDevice for Bmi270Spi {
+    fn required_supply_rails(&self) -> &[crate::peripherals::device::DeviceSupplyRail] {
+        // Bosch BST-BMI270-DS000-08 electrical characteristics. VDD and
+        // VDDIO are independent required supplies, not interchangeable aliases.
+        const RAILS: &[crate::peripherals::device::DeviceSupplyRail] = &[
+            crate::peripherals::device::DeviceSupplyRail {
+                name: "vdd",
+                min_v: 1.71,
+                max_v: 3.6,
+            },
+            crate::peripherals::device::DeviceSupplyRail {
+                name: "vddio",
+                min_v: 1.2,
+                max_v: 3.6,
+            },
+        ];
+        RAILS
+    }
+    fn supports_power_control(&self) -> bool {
+        true
+    }
+    fn power_state_changed(&mut self, powered: bool) {
+        self.set_powered(powered);
+    }
     fn sampling(&self) -> SpiSampling {
         self.sampling
     }
@@ -677,6 +701,7 @@ pub static BMI270_SPI_KIT: LazyLock<Bmi270SpiKit> = LazyLock::new(|| {
         ConfigKey { name: Cow::Borrowed("int2_pin"), ty: ConfigType::Str, doc: Cow::Borrowed("Optional INT2 GPIO; nominal push-pull DRDY routing.") },
         ConfigKey { name: Cow::Borrowed("spi_mode"), ty: ConfigType::Int, doc: Cow::Borrowed("Optional edge sampling: modes 0 and 3 only. Omit for byte-transaction controllers.") },
         POWERED_CONFIG_KEY,
+        ConfigKey { name: Cow::Borrowed("supply_rails"), ty: ConfigType::Object, doc: Cow::Borrowed("Optional 1..8 named rails, each {min_v,max_v}; all finite inclusive ranges must be observed before operation. Routed supplies reset volatile state on cutoff/restore; no damage model.") },
     ]);
     Bmi270SpiKit { metadata }
 });

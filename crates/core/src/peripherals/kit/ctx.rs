@@ -362,6 +362,33 @@ impl<'a> AttachCtx<'a> {
         if let Some(si) = device.as_sim_input_mut() {
             si.set_component_id(self.ext.id.clone());
         }
+        let routed = self.ext.config.contains_key("supply_rails")
+            || self.ext.config.contains_key("supply_domain");
+        anyhow::ensure!(
+            !routed || device.supports_power_control(),
+            "device '{}' does not support routed SPI power transitions",
+            self.ext.id
+        );
+        if routed {
+            let index = self
+                .bus
+                .find_peripheral_index_by_name(&self.ext.connection)
+                .ok_or_else(|| missing_connection_err(self.ext))?;
+            anyhow::ensure!(
+                self.bus.peripherals[index]
+                    .dev
+                    .spi_attached_devices_mut()
+                    .is_some(),
+                "connection '{}' cannot publish routed SPI power transitions",
+                self.ext.connection
+            );
+        }
+        let gate = crate::peripherals::components::supply_domain::SupplyGate::from_config(self)?;
+        if gate.is_routed() {
+            device = Box::new(
+                crate::peripherals::components::supply_domain::GatedSpiDevice::new(device, gate)?,
+            );
+        }
         // Funnel through the single bus choke point (see `attach_i2c_device`).
         let connection = self.ext.connection.clone();
         self.bus
