@@ -13,4 +13,4 @@ workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
 package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/rp2040/Cargo.toml
 workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
-    Finished `dev` profile [optimized + debuginfo] target(s) in 0.22s
+    Finished `dev` profile [optimized + debuginfo] target(s) in 0.21s

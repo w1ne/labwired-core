@@ -41,6 +41,7 @@
           "fpu m4f lazy frame=FFFFFFE9 lspact=1->0 fpcar=1 saved=1 restored=1 ok",
           "fpu m4f nested lazy lspact=1 exc_return=FFFFFFF1 frame=1 saved=1 restored=1 ok",
           "fpu m4f nested active exc_return=FFFFFFE1 frames=1 saved=1 restored=1 ok",
+          "fpu m4f psp nested active outer=FFFFFFED nested=FFFFFFE1 frames=1 saved=1 restored=1 ok",
           "fpu m4f psp lazy frame=FFFFFFED lspact=1->0 psp_frame=1 fpcar=1 saved=1 restored=1 ok",
           "rcc apb1=00620001 ok",
           "led pc13 odr=00002000 ok",
@@ -106,12 +107,12 @@
       0,
       0,
       192,
-      134291711,
-      536969024,
-      134286369,
-      134290854
+      134295457,
+      536969016,
+      134290139,
+      134294624
     ],
-    "pc": 134290854,
+    "pc": 134294624,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -124,7 +125,7 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "firmware_hash": "68206cb88408745e5c8272a14931b2b394f4382d779a3a85fa0eca97a2d65a94",
+  "firmware_hash": "c10cd42db059c1d51ad9799714f574e4e3f80439fe07e59bb942c035591bea52",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabihf/release/firmware-f401cdu6-blackpill-renode-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f401cdu6-blackpill.yaml",
@@ -494,23 +495,23 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 7282,
+            "cycle": 8253,
             "value": 1
           },
           {
-            "cycle": 7285,
+            "cycle": 8256,
             "value": 0
           },
           {
-            "cycle": 7287,
+            "cycle": 8258,
             "value": 1
           },
           {
-            "cycle": 7289,
+            "cycle": 8260,
             "value": 0
           },
           {
-            "cycle": 7292,
+            "cycle": 8263,
             "value": 1
           }
         ],
@@ -518,27 +519,27 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 7276,
+            "cycle": 8247,
             "state": "0"
           },
           {
-            "cycle": 7282,
+            "cycle": 8253,
             "state": "1"
           },
           {
-            "cycle": 7285,
+            "cycle": 8256,
             "state": "0"
           },
           {
-            "cycle": 7287,
+            "cycle": 8258,
             "state": "1"
           },
           {
-            "cycle": 7289,
+            "cycle": 8260,
             "state": "0"
           },
           {
-            "cycle": 7292,
+            "cycle": 8263,
             "state": "1"
           }
         ],
@@ -618,6 +619,12 @@
       },
       {
         "text": "fpu m4f nested active exc_return=FFFFFFE1 frames=1 saved=1 restored=1 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "fpu m4f psp nested active outer=FFFFFFED nested=FFFFFFE1 frames=1 saved=1 restored=1 ok",
         "cycle_lo": 0,
         "cycle": 10000,
         "end_cycle": 10000
@@ -745,14 +752,14 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 74012,
+    "text_bytes": 77758,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 74012,
+    "flash_used_bytes": 77758,
     "ram_static_bytes": 0,
     "flash_total_bytes": 393216,
     "ram_total_bytes": 98304,
-    "flash_used_pct": 18.82,
+    "flash_used_pct": 19.77,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -762,15 +769,15 @@
   "memory": {
     "main_stack_method": "paint",
     "main_stack_limit_bytes": 98304,
-    "main_stack_high_water_bytes": 408,
-    "main_stack_free_min_bytes": 97404,
+    "main_stack_high_water_bytes": 196,
+    "main_stack_free_min_bytes": 97388,
     "main_stack_base": 536870912,
     "main_stack_top": 536969216,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
     "heap_limit_bytes": 98304,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 97404,
+    "heap_free_min_bytes": 97388,
     "heap_base": 536870912,
     "heap_top": 536969216
   },
@@ -778,23 +785,23 @@
     "cycles": 200000,
     "instructions": 200000,
     "steps_executed": 200000,
-    "memory_reads": 17367,
-    "memory_writes": 1028,
-    "peripheral_accesses": 7882,
+    "memory_reads": 18546,
+    "memory_writes": 1188,
+    "peripheral_accesses": 8102,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134290854,
+        "pc": 134294624,
         "count": 703,
         "symbol": "firmware_f401cdu6_blackpill_renode_smoke::main"
       },
       {
-        "pc": 134246388,
+        "pc": 134250296,
         "count": 39,
-        "symbol": "firmware_f401cdu6_blackpill_renode_smoke::wait"
+        "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134259290,
+        "pc": 134263104,
         "count": 39,
         "symbol": "core::ptr::read_volatile"
       }
