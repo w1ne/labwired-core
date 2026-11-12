@@ -17,8 +17,8 @@ warning: unstable feature specified for `-Ctarget-feature`: `vfp4`
   |
   = note: this feature is not stably supported; its behavior can change in the future
 
-warning: `firmware-f401cdu6-blackpill-demo` (bin "firmware-f401cdu6-blackpill-demo") generated 1 warning
-warning: `firmware-f401cdu6-blackpill-demo` (bin "firmware-f401cdu6-blackpill-i2c-demo") generated 1 warning (1 duplicate)
+warning: `firmware-f401cdu6-blackpill-demo` (bin "firmware-f401cdu6-blackpill-i2c-demo") generated 1 warning
    Compiling firmware-f401cdu6-blackpill-demo v0.25.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/firmware-f401cdu6-blackpill-demo)
 warning: `firmware-f401cdu6-blackpill-demo` (bin "firmware-f401cdu6-blackpill-renode-smoke") generated 1 warning (1 duplicate)
-    Finished `release` profile [optimized + debuginfo] target(s) in 10.54s
+warning: `firmware-f401cdu6-blackpill-demo` (bin "firmware-f401cdu6-blackpill-demo") generated 1 warning (1 duplicate)
+    Finished `release` profile [optimized + debuginfo] target(s) in 10.88s

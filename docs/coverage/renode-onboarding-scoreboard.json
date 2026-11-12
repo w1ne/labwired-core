@@ -9578,24 +9578,24 @@
       "script": "examples/renode-onboarding/stm32f401cdu6-blackpill-smoke.yaml",
       "system": "configs/systems/onboarding/stm32f401cdu6-blackpill.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-12T01:24:26Z",
-      "finished_at_utc": "2026-11-12T01:24:43Z",
-      "elapsed_seconds": 18,
-      "elapsed_ms": 17354,
+      "started_at_utc": "2026-11-12T06:53:06Z",
+      "finished_at_utc": "2026-11-12T06:53:27Z",
+      "elapsed_seconds": 22,
+      "elapsed_ms": 21128,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 5.203,
-        "build_firmware": 11.211,
-        "run_smoke": 0.89
+        "build_cli": 0.286,
+        "build_firmware": 11.05,
+        "run_smoke": 9.754
       },
       "stages_ms": {
-        "build_cli": 5203,
-        "build_firmware": 11211,
-        "run_smoke": 890
+        "build_cli": 286,
+        "build_firmware": 11050,
+        "run_smoke": 9754
       },
       "_artifact_path": "stm32f401cdu6-blackpill",
       "zero_answering_windows": [],
