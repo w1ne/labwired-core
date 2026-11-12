@@ -24,6 +24,26 @@ pub(super) const MOTOR_STALL_INPUT: crate::sim_input::InputChannel =
         default: None,
     };
 
+/// Scriptable BLDC inverter fault. Reuses the same fault path as the interactive
+/// motor inspector, so headless CI and Studio cannot disagree about the pin.
+pub(super) const MOTOR_INVERTER_FAULT_INPUT: crate::sim_input::InputChannel =
+    crate::sim_input::InputChannel {
+        key: std::borrow::Cow::Borrowed("inverter_fault"),
+        label: std::borrow::Cow::Borrowed("Inverter/driver fault"),
+        unit: std::borrow::Cow::Borrowed("boolean"),
+        min: 0.0,
+        max: 1.0,
+        default: None,
+    };
+
+pub(super) fn motor_input_channel(channel: &str) -> Option<crate::sim_input::InputChannel> {
+    match channel {
+        "stall" => Some(MOTOR_STALL_INPUT),
+        "inverter_fault" => Some(MOTOR_INVERTER_FAULT_INPUT),
+        _ => None,
+    }
+}
+
 /// Maximum production gap between motor services. This bounds exact PWM edge
 /// streaming work while leaving direct diagnostic calls exact for any delta.
 pub(super) const MOTOR_SERVICE_QUANTUM_CYCLES: u64 = 4096;
@@ -1441,12 +1461,11 @@ impl SystemBus {
         }
     }
 
-    pub(super) fn matching_motor_stall_inputs(
-        &self,
-        component: Option<&str>,
-        channel: &str,
-    ) -> usize {
-        if channel != MOTOR_STALL_INPUT.key {
+    /// Count matching virtual motor inputs by component and channel. The
+    /// inverter fault exists only on BLDC runtimes; brushed motors still expose
+    /// only mechanical stall. This count is used by BOTH discovery and dispatch.
+    pub(super) fn matching_motor_inputs(&self, component: Option<&str>, channel: &str) -> usize {
+        if motor_input_channel(channel).is_none() {
             return 0;
         }
         self.motors
@@ -1455,7 +1474,8 @@ impl SystemBus {
                 let id = match motor {
                     MotorRuntime::Dc { id, .. } | MotorRuntime::Bldc { id, .. } => id,
                 };
-                component.is_none_or(|component| component == id)
+                (channel != "inverter_fault" || matches!(motor, MotorRuntime::Bldc { .. }))
+                    && component.is_none_or(|component| component == id)
             })
             .count()
     }
@@ -1467,15 +1487,18 @@ impl SystemBus {
         value: f64,
     ) -> Result<bool, crate::sim_input::SimInputError> {
         use crate::sim_input::SimInputError;
-        if self.matching_motor_stall_inputs(component, channel) != 1 {
+        let Some(metadata) = motor_input_channel(channel) else {
+            return Ok(false);
+        };
+        if self.matching_motor_inputs(component, channel) != 1 {
             return Ok(false);
         }
-        if !(MOTOR_STALL_INPUT.min..=MOTOR_STALL_INPUT.max).contains(&value) {
+        if !value.is_finite() || !(metadata.min..=metadata.max).contains(&value) {
             return Err(SimInputError::OutOfRange {
                 key: channel.to_owned(),
                 value,
-                min: MOTOR_STALL_INPUT.min,
-                max: MOTOR_STALL_INPUT.max,
+                min: metadata.min,
+                max: metadata.max,
             });
         }
         let id = self
@@ -1485,13 +1508,17 @@ impl SystemBus {
                 let id = match motor {
                     MotorRuntime::Dc { id, .. } | MotorRuntime::Bldc { id, .. } => id,
                 };
-                component
-                    .is_none_or(|component| component == id)
-                    .then(|| id.clone())
+                (component.is_none_or(|component| component == id)
+                    && (channel != "inverter_fault" || matches!(motor, MotorRuntime::Bldc { .. })))
+                .then(|| id.clone())
             })
             .expect("exactly one matching motor was counted");
-        self.set_motor_stalled(&id, value >= 0.5)
-            .map_err(|_| SimInputError::NoDevice(format!("{id}/{channel}")))?;
+        let result = match channel {
+            "stall" => self.set_motor_stalled(&id, value >= 0.5),
+            "inverter_fault" => self.set_motor_named_fault(&id, "inverter", value >= 0.5),
+            _ => unreachable!("motor_input_channel accepted only these channels"),
+        };
+        result.map_err(|_| SimInputError::NoDevice(format!("{id}/{channel}")))?;
         Ok(true)
     }
 

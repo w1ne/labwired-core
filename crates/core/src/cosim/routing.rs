@@ -86,7 +86,7 @@ pub const ADC_VREF_VOLTS: f64 = 3.3;
 pub const UI_SIGNAL_PREFIX: &str = "ui.";
 
 /// A digital pad's input thresholds in volts: the chip descriptor's
-/// `gpio_input_thresholds` ratios times its `io_voltage_v`.
+/// `gpio_input_thresholds` supply slopes plus their optional voltage offsets.
 ///
 /// This is what turns a voltage routed to `board.gpio_in.<pad>` into the level
 /// the firmware reads, with the hysteresis of a Schmitt-trigger input: see
@@ -100,11 +100,12 @@ pub struct InputThresholds {
 }
 
 impl InputThresholds {
-    /// Thresholds for a pad supplied at `io_voltage_v`.
+    /// Thresholds for a pad at the given supply, including declared offsets.
+    /// The method name is retained for callers using ratio-only descriptors.
     pub fn from_ratios(io_voltage_v: f64, ratios: GpioInputThresholds) -> Self {
         Self {
-            vil_volts: ratios.vil * io_voltage_v,
-            vih_volts: ratios.vih * io_voltage_v,
+            vil_volts: ratios.vil * io_voltage_v + ratios.vil_offset_v,
+            vih_volts: ratios.vih * io_voltage_v + ratios.vih_offset_v,
         }
     }
 
@@ -114,6 +115,27 @@ impl InputThresholds {
         let ratios = bus.gpio_input_thresholds.ok_or("gpio_input_thresholds")?;
         let io_voltage_v = bus.io_voltage_v.ok_or("io_voltage_v")?;
         Ok(Self::from_ratios(io_voltage_v, ratios))
+    }
+
+    /// Apply a numeric pad observation using this boundary's actual supply.
+    /// A routed rail that is absent, non-finite or non-positive has no valid
+    /// logic high. Boolean routes retain their established digital behavior.
+    fn next_level_for_bus(
+        bus: &SystemBus,
+        previous: bool,
+        volts: f64,
+    ) -> Result<bool, &'static str> {
+        let coefficients = bus.gpio_input_thresholds.ok_or("gpio_input_thresholds")?;
+        let nominal = bus.io_voltage_v.ok_or("io_voltage_v")?;
+        let vdd = if bus.supply.is_routed() {
+            match bus.supply.vdd_volts() {
+                Some(value) if value.is_finite() && value > 0.0 => value,
+                _ => return Ok(false),
+            }
+        } else {
+            nominal
+        };
+        Ok(Self::from_ratios(vdd, coefficients).next_level(previous, volts))
     }
 
     /// The level a Schmitt input reads at `volts`, given the level it read
@@ -458,8 +480,13 @@ pub enum RoutingError {
     NoAdcReference {
         path: String,
     },
-    /// The routed ADC reference is not a finite positive voltage.
+    /// The routed ADC reference is not a finite non-negative voltage.
     InvalidAdcReference {
+        path: String,
+        volts: f64,
+    },
+    /// At least one reference-capable ADC refused this rail observation.
+    AdcReferenceRejected {
         path: String,
         volts: f64,
     },
@@ -600,7 +627,11 @@ impl std::fmt::Display for RoutingError {
             ),
             Self::InvalidAdcReference { path, volts } => write!(
                 f,
-                "co-sim path '{path}' needs a finite positive ADC reference voltage, got {volts} V"
+                "co-sim path '{path}' needs a finite non-negative ADC reference voltage, got {volts} V"
+            ),
+            Self::AdcReferenceRejected { path, volts } => write!(
+                f,
+                "co-sim path '{path}': one or more reference-capable ADC models refused ADC reference {volts} V"
             ),
             Self::NoResetInput { path, pin } => write!(
                 f,
@@ -728,9 +759,6 @@ enum WriteBinding {
 pub struct SignalRouter {
     reads: Vec<(String, ReadBinding)>,
     writes: Vec<(String, WriteBinding)>,
-    /// The chip's input thresholds, or the descriptor key that is missing.
-    /// `None` only on a router built by `Default`, which binds nothing.
-    thresholds: Option<Result<InputThresholds, &'static str>>,
 }
 
 impl SignalRouter {
@@ -759,10 +787,7 @@ impl SignalRouter {
         }
 
         let thresholds = InputThresholds::for_bus(bus);
-        let mut router = Self {
-            thresholds: Some(thresholds),
-            ..Self::default()
-        };
+        let mut router = Self::default();
         let mut errors = Vec::new();
 
         for path in &sources {
@@ -1180,23 +1205,18 @@ impl SignalRouter {
             match binding {
                 WriteBinding::PadInput { addr, bit, level } => {
                     let next = match value {
-                        CosimSignalValue::F64(volts) => match self.thresholds {
-                            Some(Ok(thresholds)) => thresholds.next_level(*level, *volts),
-                            Some(Err(key)) => {
-                                errors.push(RoutingError::NoInputThresholds {
-                                    path: path.clone(),
-                                    key,
-                                });
-                                continue;
+                        CosimSignalValue::F64(volts) => {
+                            match InputThresholds::next_level_for_bus(bus, *level, *volts) {
+                                Ok(next) => next,
+                                Err(key) => {
+                                    errors.push(RoutingError::NoInputThresholds {
+                                        path: path.clone(),
+                                        key,
+                                    });
+                                    continue;
+                                }
                             }
-                            None => {
-                                errors.push(RoutingError::NoInputThresholds {
-                                    path: path.clone(),
-                                    key: "gpio_input_thresholds",
-                                });
-                                continue;
-                            }
-                        },
+                        }
                         other => match signal_as_bool(other) {
                             Some(next) => next,
                             None => {
@@ -1271,13 +1291,16 @@ impl SignalRouter {
                         });
                         continue;
                     };
-                    if !volts.is_finite() || volts <= 0.0 {
+                    if !volts.is_finite() || volts < 0.0 {
                         errors.push(RoutingError::InvalidAdcReference {
                             path: path.clone(),
                             volts,
                         });
                     } else if !bus.seed_adc_reference_voltage(volts) {
-                        errors.push(RoutingError::NoAdcReference { path: path.clone() });
+                        errors.push(RoutingError::AdcReferenceRejected {
+                            path: path.clone(),
+                            volts,
+                        });
                     }
                 }
                 WriteBinding::MotorCurrent { motor } => {
@@ -2513,7 +2536,15 @@ mod tests {
 
     /// The ATmega328P at 5 V: VIL 0.3·VCC = 1.5 V, VIH 0.6·VCC = 3.0 V.
     fn atmega_thresholds() -> InputThresholds {
-        InputThresholds::from_ratios(5.0, GpioInputThresholds { vil: 0.3, vih: 0.6 })
+        InputThresholds::from_ratios(
+            5.0,
+            GpioInputThresholds {
+                vil: 0.3,
+                vih: 0.6,
+                vil_offset_v: 0.0,
+                vih_offset_v: 0.0,
+            },
+        )
     }
 
     #[test]
@@ -2645,7 +2676,12 @@ mod tests {
     #[test]
     fn an_analog_pin_route_names_whichever_key_is_missing() {
         let mut bus = crate::bus::SystemBus::new();
-        bus.gpio_input_thresholds = Some(GpioInputThresholds { vil: 0.3, vih: 0.6 });
+        bus.gpio_input_thresholds = Some(GpioInputThresholds {
+            vil: 0.3,
+            vih: 0.6,
+            vil_offset_v: 0.0,
+            vih_offset_v: 0.0,
+        });
         let mut config = mock_model(
             "circuit",
             1_000,
