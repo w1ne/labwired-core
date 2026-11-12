@@ -138,6 +138,7 @@ impl Bmi270Spi {
     pub fn set_powered(&mut self, powered: bool) {
         if self.powered != powered {
             self.reset();
+            self.selected = false;
         }
         self.powered = powered;
     }

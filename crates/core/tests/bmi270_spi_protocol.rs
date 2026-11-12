@@ -174,7 +174,15 @@ fn upload_requires_advanced_power_save_exit_delay() {
 fn reset_clears_initialization_and_requires_new_spi_selection() {
     let mut d = initialized();
     write(&mut d, 0x41, &[3]);
-    write(&mut d, 0x7e, &[0xb6]);
+    d.cs_select();
+    d.transfer(0x7e);
+    d.transfer(0xb6);
+    assert!(
+        d.is_selected(),
+        "software reset does not release the master's CS"
+    );
+    d.cs_release();
+    assert!(!d.is_selected());
     d.advance_time_us(449);
     assert_eq!(read(&mut d, 0, 1), [0xff]);
     d.advance_time_us(1);
