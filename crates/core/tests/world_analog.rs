@@ -83,6 +83,17 @@ fn configured_world(
     voltage_b: Option<f64>,
     reset_metadata: bool,
 ) -> anyhow::Result<World> {
+    configured_world_with_limits(order, model, program_a, voltage_b, reset_metadata, None)
+}
+
+fn configured_world_with_limits(
+    order: &[&str],
+    model: &str,
+    program_a: Option<&[u16]>,
+    voltage_b: Option<f64>,
+    reset_metadata: bool,
+    gpio_limits: Option<labwired_config::GpioInputThresholds>,
+) -> anyhow::Result<World> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut yaml = "name: coupled\nnodes:\n".to_string();
     for id in order {
@@ -95,6 +106,11 @@ fn configured_world(
     let mut nodes = Vec::new();
     for id in order {
         let mut chip = ChipDescriptor::from_file(root.join("configs/chips/stm32f401.yaml"))?;
+        if let Some(limits) = gpio_limits {
+            // A generic router fixture on the shipped F401 bus. The supplied
+            // limits are fixture data, not a claim about F401 silicon.
+            chip.gpio_input_thresholds = Some(limits);
+        }
         if *id == "b" {
             if let Some(volts) = voltage_b {
                 chip.io_voltage_v = Some(volts);
@@ -622,4 +638,107 @@ fn world_advance_api_step_rounds_respects_the_analog_boundary_before_gpio_latenc
         "the 1 us analog boundary takes precedence over 1.2 us GPIO lookahead"
     );
     check_three_analog_steps(&w);
+}
+
+#[test]
+fn gpio_voltage_thresholds_follow_each_nodes_same_boundary_vdd() {
+    let model = r#"
+cosim_models:
+  - id: circuit
+    adapter: analog
+    step_ns: 1000
+    inputs: {rail_b: ui.rail_b}
+    outputs:
+      supply_a: node.a.board.power.vdd_volts
+      supply_b: node.b.board.power.vdd_volts
+      input_a: node.a.board.gpio_in.pa2
+      input_b: node.b.board.gpio_in.pa2
+    config:
+      netlist_text: |
+        Va vdd_a 0 dc 2.1
+        Vb vdd_b 0 dc 3.3
+        Vsignal signal 0 dc 2.1
+        Ra vdd_a 0 10k
+        Rb vdd_b 0 10k
+        Rs signal 0 10k
+        .end
+      sources: {rail_b: Vb}
+      probes: {supply_a: 'v(vdd_a)', supply_b: 'v(vdd_b)', input_a: 'v(signal)', input_b: 'v(signal)'}
+"#;
+    let mut w = world(&["a", "b"], model).unwrap();
+    let high = |w: &World, id: &str| rd(w.machines[id].as_ref(), GPIO + 0x10) & (1 << 2) != 0;
+    assert!(
+        high(&w, "a"),
+        "2.1 V is high on the actual 2.1 V rail; nominal VIH=2.31 V must not win"
+    );
+    assert!(
+        !high(&w, "b"),
+        "the same input is below VIH on the independent 3.3 V rail"
+    );
+    w.set_cosim_signal("ui.rail_b", CosimSignalValue::F64(3.3))
+        .unwrap();
+    step(&mut w);
+    w.set_cosim_signal("ui.rail_b", CosimSignalValue::F64(2.1))
+        .unwrap();
+    step(&mut w);
+    assert!(
+        high(&w, "b"),
+        "the GPIO observation must use this boundary's changed VDD"
+    );
+    w.set_cosim_signal("ui.rail_b", CosimSignalValue::F64(0.0))
+        .unwrap();
+    step(&mut w);
+    assert!(!high(&w, "b"), "zero VDD has no valid logic high");
+    assert!(
+        high(&w, "a"),
+        "powering off node b must not change node a's thresholds"
+    );
+}
+
+#[test]
+fn affine_gpio_inputs_use_each_nodes_routed_supply_at_the_same_boundary() {
+    let model = r#"
+cosim_models:
+  - id: circuit
+    adapter: analog
+    step_ns: 1000
+    inputs: {rail_b: ui.rail_b}
+    outputs:
+      supply_a: node.a.board.power.vdd_volts
+      supply_b: node.b.board.power.vdd_volts
+      input_a: node.a.board.gpio_in.pa2
+      input_b: node.b.board.gpio_in.pa2
+    config:
+      netlist_text: |
+        Va vdd_a 0 dc 2.1
+        Vb vdd_b 0 dc 3.3
+        Vsignal signal 0 dc 1.6
+        Ra vdd_a 0 10k
+        Rb vdd_b 0 10k
+        Rs signal 0 10k
+        .end
+      sources: {rail_b: Vb}
+      probes: {supply_a: 'v(vdd_a)', supply_b: 'v(vdd_b)', input_a: 'v(signal)', input_b: 'v(signal)'}
+"#;
+    // AT32F421 Table32 guaranteed limits, on a generic F401 routing fixture.
+    let limits =
+        serde_yaml::from_str("vil: 0.28\nvih: 0.31\nvil_offset_v: 0.1\nvih_offset_v: 0.8\n")
+            .unwrap();
+    let mut w =
+        configured_world_with_limits(&["a", "b"], model, None, None, false, Some(limits)).unwrap();
+    let high = |w: &World, id: &str| rd(w.machines[id].as_ref(), GPIO + 0x10) & (1 << 2) != 0;
+    assert!(high(&w, "a"), "1.6 V exceeds VIH1.451 V at VDD2.1 V");
+    assert!(!high(&w, "b"), "1.6 V remains below VIH1.823 V at VDD3.3 V");
+    w.set_cosim_signal("ui.rail_b", CosimSignalValue::F64(2.1))
+        .unwrap();
+    step(&mut w);
+    assert!(
+        high(&w, "b"),
+        "new rail and affine threshold must apply at the same boundary"
+    );
+    w.set_cosim_signal("ui.rail_b", CosimSignalValue::F64(0.0))
+        .unwrap();
+    step(&mut w);
+    assert!(!high(&w, "b"), "an unpowered node has no valid high level");
+    assert!(high(&w, "a"));
 }

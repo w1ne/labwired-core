@@ -221,14 +221,23 @@ This is what lets a circuit node charging through a megohm reach
 `digitalRead` at the right time, instead of flipping at a guessed midpoint.
 
 The thresholds are chip data, transcribed from the datasheet into the chip
-descriptor as ratios of the I/O supply:
+descriptor as slopes of the I/O supply with optional voltage offsets:
 
 ```yaml
 io_voltage_v: 5.0          # the rail the GPIO pads run from
-gpio_input_thresholds:     # ratios of io_voltage_v
+gpio_input_thresholds:     # zero-offset limits: slope * supply
   vil: 0.3                 # highest input guaranteed to read low
   vih: 0.6                 # lowest input guaranteed to read high
 ```
+
+Optional `vil_offset_v` and `vih_offset_v` add volts to the corresponding
+slope-times-supply limit. They default to zero, preserving existing ratio-only
+documents. The slopes satisfy `0 < vil < vih < 1`; finite offsets satisfy
+`0 <= vil_offset_v <= vih_offset_v`. A routed `board.power.vdd_volts` supplies
+the actual reference for each boundary; `io_voltage_v` applies only when VDD is
+unrouted. An absent or non-positive routed rail cannot read as a logic high.
+The [shared-world electrical contract](world-analog.md#driver-voltage-and-high-impedance)
+includes an affine datasheet example and the zero-VDDA capability boundary.
 
 In-tree they are declared for `atmega328p` (5.0 V, 0.3 / 0.6, Microchip
 DS40002061B Table 30-1), `stm32f103` (3.3 V, 0.35 / 0.65, DS5319 Table 36), and
