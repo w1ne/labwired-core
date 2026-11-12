@@ -95,10 +95,28 @@ impl SystemBus {
         false
     }
 
+    /// Check every receiver before publishing a signed reference observation.
+    /// An undeclared receiver maximum preserves strict nonnegative admission.
+    pub(crate) fn adc_reference_observation_is_admissible(&self, volts: f64) -> bool {
+        let mut found = false;
+        for peripheral in &self.peripherals {
+            if peripheral.dev.supports_adc_reference_voltage() {
+                found = true;
+                if !crate::power::rail_observation_is_admissible(
+                    volts,
+                    peripheral.dev.adc_reference_observation_max_v(),
+                ) {
+                    return false;
+                }
+            }
+        }
+        found
+    }
+
     /// Drive the board's shared VDDA / ADC reference in volts. Every ADC
-    /// peripheral that declares reference support takes the same rail value.
+    /// peripheral that declares reference support takes the same raw value.
     pub(crate) fn seed_adc_reference_voltage(&mut self, volts: f64) -> bool {
-        if !volts.is_finite() || volts < 0.0 {
+        if !self.adc_reference_observation_is_admissible(volts) {
             return false;
         }
         let mut found = false;

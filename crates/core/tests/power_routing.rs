@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex};
 struct ReferenceAdc {
     reference: Arc<Mutex<f64>>,
     accepts_unpowered: bool,
+    observation_max_v: Option<f64>,
 }
 impl Peripheral for ReferenceAdc {
     fn read(&self, _offset: u64) -> SimResult<u8> {
@@ -21,8 +22,16 @@ impl Peripheral for ReferenceAdc {
     fn supports_adc_reference_voltage(&self) -> bool {
         true
     }
+    fn adc_reference_observation_max_v(&self) -> Option<f64> {
+        self.observation_max_v
+    }
     fn set_adc_reference_voltage_v(&mut self, volts: f64) -> bool {
-        if !volts.is_finite() || volts < 0.0 || (volts == 0.0 && !self.accepts_unpowered) {
+        // The test double deliberately leaves the declared roundoff bound to
+        // the router, so a routing regression cannot hide in a second check.
+        if !volts.is_finite()
+            || (volts < 0.0 && self.observation_max_v.is_none())
+            || (volts <= 0.0 && !self.accepts_unpowered)
+        {
             return false;
         }
         *self.reference.lock().unwrap() = volts;
@@ -31,9 +40,20 @@ impl Peripheral for ReferenceAdc {
 }
 
 fn fixture(zero_support: &[bool]) -> (SystemBus, SignalRouter, Vec<Arc<Mutex<f64>>>) {
+    fixture_with_maxima(
+        &zero_support
+            .iter()
+            .map(|supported| (*supported, None))
+            .collect::<Vec<_>>(),
+    )
+}
+
+fn fixture_with_maxima(
+    receivers: &[(bool, Option<f64>)],
+) -> (SystemBus, SignalRouter, Vec<Arc<Mutex<f64>>>) {
     let mut bus = SystemBus::new();
     let mut references = Vec::new();
-    for (index, accepts_unpowered) in zero_support.iter().enumerate() {
+    for (index, (accepts_unpowered, observation_max_v)) in receivers.iter().enumerate() {
         let reference = Arc::new(Mutex::new(3.3));
         bus.add_peripheral(
             &format!("adc{index}"),
@@ -43,6 +63,7 @@ fn fixture(zero_support: &[bool]) -> (SystemBus, SignalRouter, Vec<Arc<Mutex<f64
             Box::new(ReferenceAdc {
                 reference: reference.clone(),
                 accepts_unpowered: *accepts_unpowered,
+                observation_max_v: *observation_max_v,
             }),
         );
         references.push(reference);
@@ -97,6 +118,60 @@ fn every_reference_capable_adc_must_accept_a_shared_vdda_observation() {
             errors[0].to_string().contains("refused ADC reference"),
             "{errors:?}"
         );
+    }
+}
+
+#[test]
+fn declared_reference_roundoff_preserves_raw_samples_and_rejects_real_negative_voltage() {
+    let (mut bus, mut router, refs) = fixture_with_maxima(&[(true, Some(3.6)), (true, Some(1.2))]);
+    let roundoff = -f64::EPSILON * 1.2;
+    assert!(apply(&mut bus, &mut router, roundoff).is_empty());
+    for reference in &refs {
+        assert_eq!(reference.lock().unwrap().to_bits(), roundoff.to_bits());
+    }
+    for invalid in [roundoff * 2.0, -0.1, f64::NAN, f64::INFINITY] {
+        assert!(matches!(
+            apply(&mut bus, &mut router, invalid).as_slice(),
+            [RoutingError::InvalidAdcReference { .. }]
+        ));
+        for reference in &refs {
+            assert_eq!(reference.lock().unwrap().to_bits(), roundoff.to_bits());
+        }
+    }
+}
+
+#[test]
+fn a_legacy_reference_receiver_rejects_roundoff_before_any_writer() {
+    for receivers in [
+        [(true, Some(3.6)), (true, None)],
+        [(true, None), (true, Some(3.6))],
+    ] {
+        let (mut bus, mut router, refs) = fixture_with_maxima(&receivers);
+        assert!(matches!(
+            apply(&mut bus, &mut router, -1e-20).as_slice(),
+            [RoutingError::InvalidAdcReference { .. }]
+        ));
+        assert!(refs
+            .iter()
+            .all(|reference| *reference.lock().unwrap() == 3.3));
+    }
+}
+
+#[test]
+fn an_absent_or_invalid_reference_scale_never_admits_negative_voltage() {
+    for maximum in [
+        None,
+        Some(0.0),
+        Some(-1.0),
+        Some(f64::NAN),
+        Some(f64::INFINITY),
+    ] {
+        let (mut bus, mut router, refs) = fixture_with_maxima(&[(true, maximum)]);
+        assert!(matches!(
+            apply(&mut bus, &mut router, -1e-20).as_slice(),
+            [RoutingError::InvalidAdcReference { .. }]
+        ));
+        assert_eq!(*refs[0].lock().unwrap(), 3.3);
     }
 }
 

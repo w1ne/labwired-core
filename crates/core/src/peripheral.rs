@@ -1867,6 +1867,14 @@ pub trait Peripheral: std::fmt::Debug + Send {
         false
     }
 
+    /// Explicit receiver maximum used only to bound signed roundoff at zero.
+    /// An opting-in model must retain such samples as unpowered references;
+    /// this is not an operating-range qualification or a clamp. `None` keeps
+    /// the legacy nonnegative observation contract.
+    fn adc_reference_observation_max_v(&self) -> Option<f64> {
+        None
+    }
+
     /// Set the ADC's positive full-scale reference voltage, in volts. Returns
     /// false for a peripheral without a configurable analog reference.
     fn set_adc_reference_voltage_v(&mut self, _volts: f64) -> bool {

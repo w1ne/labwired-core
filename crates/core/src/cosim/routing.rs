@@ -586,7 +586,7 @@ pub enum RoutingError {
     NoAdcReference {
         path: String,
     },
-    /// The routed ADC reference is not a finite non-negative voltage.
+    /// The routed ADC reference is not admitted by every receiver's contract.
     InvalidAdcReference {
         path: String,
         volts: f64,
@@ -757,7 +757,7 @@ impl std::fmt::Display for RoutingError {
             ),
             Self::InvalidAdcReference { path, volts } => write!(
                 f,
-                "co-sim path '{path}' needs a finite non-negative ADC reference voltage, got {volts} V"
+                "co-sim path '{path}' needs a finite ADC reference voltage admitted by every receiver, got {volts} V"
             ),
             Self::AdcReferenceRejected { path, volts } => write!(
                 f,
@@ -2020,7 +2020,7 @@ impl SignalRouter {
                         });
                         continue;
                     };
-                    if !volts.is_finite() || volts < 0.0 {
+                    if !bus.adc_reference_observation_is_admissible(volts) {
                         errors.push(RoutingError::InvalidAdcReference {
                             path: path.clone(),
                             volts,
