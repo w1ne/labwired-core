@@ -26,13 +26,11 @@ fn routed() -> SystemBus {
 }
 fn slave(bus: &mut SystemBus) -> &mut dyn SpiDevice {
     let i = bus.find_peripheral_index_by_name("spi1").unwrap();
-    let spi = bus.peripherals[i]
+    bus.peripherals[i]
         .dev
-        .as_any_mut()
-        .unwrap()
-        .downcast_mut::<labwired_core::peripherals::spi::Spi>()
-        .unwrap();
-    spi.attached_devices[0].as_mut()
+        .spi_attached_devices_mut()
+        .expect("configured SPI controller exposes attached devices")[0]
+        .as_mut()
 }
 fn meta(bus: &mut SystemBus) -> serde_json::Value {
     slave(bus).artifacts("U9", &InspectOpts::default())[0]

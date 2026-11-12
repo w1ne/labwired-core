@@ -364,11 +364,20 @@ pub trait SpiDevice: Send {
     }
     /// Bus-side setter recording the resolved D/C `(ODR address, bit)`.
     fn set_dc_source(&mut self, _odr_addr: u64, _bit: u8) {}
-    fn as_any(&self) -> Option<&dyn Any> {
+    /// Concrete readback through a transparent decorator. Transfers, mutable
+    /// simulation inputs and power gating remain owned by the decorator.
+    /// A leaf device keeps the default `None` unless it exposes readback.
+    fn wrapped_device(&self) -> Option<&dyn SpiDevice> {
         None
     }
-    fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+    fn wrapped_device_mut(&mut self) -> Option<&mut dyn SpiDevice> {
         None
+    }
+    fn as_any(&self) -> Option<&dyn Any> {
+        self.wrapped_device()?.as_any()
+    }
+    fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+        self.wrapped_device_mut()?.as_any_mut()
     }
     /// Runtime-drivable view of this device, if it accepts simulated input.
     /// Same contract as the hook on `I2cDevice`: input devices override it so
