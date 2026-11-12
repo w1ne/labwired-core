@@ -22,7 +22,9 @@
 # Thread context, checks the extended lazy frame and FPCAR, and verifies the
 # handler-triggered save and exception-return restoration of S0. A second run
 # enters Thread mode on PSP and checks its separate extended frame, PSP restore,
-# and S0 restoration while Handler mode continues to use MSP.
+# and S0 restoration while Handler mode continues to use MSP. A third run keeps
+# the lazy save pending through a higher-priority nested basic exception, then
+# checks FPCAR and S0 preservation when the outer handler first touches the FPU.
 # A second TMP102 on I2C2 checks SB and ADDR isolation until ITEVTEN is enabled,
 # its event vector, and an independent repeated-start 25 °C read, including TXE
 # isolation under ITEVTEN, BTF isolation until ITEVTEN, and RXNE isolation until
@@ -61,6 +63,7 @@ assertions:
       - "systick pendsv tailchain frame=1 r0=1 pending=1 ipsr=0000000E ok"
       - "systick pendsv psp tailchain frame=1 r0=1 pending=1 ipsr=0000000E ok"
       - "fpu m4f lazy frame=FFFFFFE9 lspact=1->0 fpcar=1 saved=1 restored=1 ok"
+      - "fpu m4f nested lazy lspact=1 exc_return=FFFFFFF1 frame=1 saved=1 restored=1 ok"
       - "fpu m4f psp lazy frame=FFFFFFED lspact=1->0 psp_frame=1 fpcar=1 saved=1 restored=1 ok"
       - "rcc apb1=00620001 ok"
       - "led pc13 odr=00002000 ok"

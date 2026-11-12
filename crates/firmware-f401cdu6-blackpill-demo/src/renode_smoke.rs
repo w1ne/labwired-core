@@ -111,10 +111,14 @@ const I2C2_ER_IRQ_BIT: u32 = 1 << 2;
 const FPU_IRQ: u32 = 54;
 const FPU_IRQ_BIT: u32 = 1 << (FPU_IRQ - 32);
 const FPU_VECTOR: u32 = 16 + FPU_IRQ;
+const FPU_NESTED_IRQ: u32 = 55;
+const FPU_NESTED_IRQ_BIT: u32 = 1 << (FPU_NESTED_IRQ - 32);
+const FPU_NESTED_VECTOR: u32 = 16 + FPU_NESTED_IRQ;
 const SCB_CPACR: u32 = 0xE000_ED88;
 const FPU_FPCCR: u32 = 0xE000_EF34;
 const FPU_FPCAR: u32 = 0xE000_EF38;
 const FPU_RECORD: u32 = 0x2000_1300;
+const FPU_NESTED_RECORD: u32 = 0x2000_1340;
 const FPU_PSP_STACK_TOP: u32 = 0x2000_1500;
 const FPU_PSP_THREAD_S0: u32 = 0x4000_0000;
 
@@ -224,11 +228,12 @@ fn main() -> ! {
     let systick_tailchain_ok = smoke_systick_pendsv_tailchain();
     let systick_psp_tailchain_ok = smoke_systick_pendsv_psp_tailchain();
     let fpu_lazy_exception_ok = unsafe { smoke_fpu_lazy_exception() };
+    let fpu_lazy_nested_exception_ok = unsafe { smoke_fpu_lazy_nested_exception() };
     let fpu_lazy_psp_exception_ok = unsafe { smoke_fpu_lazy_psp_exception() };
     passed |= ((systick_pending_ok && systick_dispatch_ok) as u32) << 12;
     passed |=
         ((systick_priority_ok && systick_tailchain_ok && systick_psp_tailchain_ok) as u32) << 13;
-    passed |= (fpu_lazy_exception_ok as u32) << 14;
+    passed |= ((fpu_lazy_exception_ok && fpu_lazy_nested_exception_ok) as u32) << 14;
     passed |= (fpu_lazy_psp_exception_ok as u32) << 15;
 
     let ahb = rd(RCC_AHB1ENR) & 0x5;
@@ -590,6 +595,203 @@ unsafe fn smoke_fpu_lazy_exception() -> bool {
     passed
 }
 
+/// Check that a nested higher-priority exception leaves the interrupted
+/// Thread's lazy FP save pending. The outer handler touches S0 only after the
+/// nested basic frame has returned.
+unsafe fn smoke_fpu_lazy_nested_exception() -> bool {
+    const CPACR_FULL_ACCESS: u32 = 0x00F0_0000;
+    const FPCCR_ASPEN_LSPEN: u32 = 0xC000_0000;
+    const FPCCR_LSPACT: u32 = 1;
+    const FPCA: u32 = 1 << 2;
+    const THREAD_S0: u32 = 0x4040_0000;
+    const BASIC_FRAME_BYTES: u32 = 0x20;
+    const BOTH_IRQS: u32 = FPU_IRQ_BIT | FPU_NESTED_IRQ_BIT;
+
+    let prior_primask: u32;
+    unsafe {
+        core::arch::asm!(
+            "mrs {primask}, PRIMASK",
+            "cpsid i",
+            primask = out(reg) prior_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+    }
+
+    let prior_cpacr = rd(SCB_CPACR);
+    let prior_fpccr = rd(FPU_FPCCR);
+    let prior_fpcar = rd(FPU_FPCAR);
+    let prior_vtor = rd(SCB_VTOR);
+    let vector_addr = TEST_VECTOR_TABLE + FPU_VECTOR * 4;
+    let nested_vector_addr = TEST_VECTOR_TABLE + FPU_NESTED_VECTOR * 4;
+    let prior_vector = rd(vector_addr);
+    let prior_nested_vector = rd(nested_vector_addr);
+    let prior_irq_priority = unsafe { core::ptr::read_volatile((NVIC_IPR + FPU_IRQ) as *const u8) };
+    let prior_nested_priority =
+        unsafe { core::ptr::read_volatile((NVIC_IPR + FPU_NESTED_IRQ) as *const u8) };
+    let prior_irq_enabled = rd(NVIC_ISER1) & FPU_IRQ_BIT != 0;
+    let prior_nested_enabled = rd(NVIC_ISER1) & FPU_NESTED_IRQ_BIT != 0;
+    let prior_irq_pending = rd(NVIC_ISPR1) & FPU_IRQ_BIT != 0;
+    let prior_nested_pending = rd(NVIC_ISPR1) & FPU_NESTED_IRQ_BIT != 0;
+    let clean_irq_state =
+        rd(NVIC_IABR0 + 4) & BOTH_IRQS == 0 && !prior_irq_pending && !prior_nested_pending;
+
+    wr(NVIC_ICER1, BOTH_IRQS);
+    wr(NVIC_ICPR1, BOTH_IRQS);
+    wr(SCB_CPACR, prior_cpacr | CPACR_FULL_ACCESS);
+    wr(FPU_FPCCR, FPCCR_ASPEN_LSPEN);
+    wr(FPU_FPCAR, 0);
+    unsafe {
+        core::ptr::write_volatile((NVIC_IPR + FPU_IRQ) as *mut u8, 0x80);
+        core::ptr::write_volatile((NVIC_IPR + FPU_NESTED_IRQ) as *mut u8, 0x40);
+    }
+    wr(
+        vector_addr,
+        (fpu_nested_outer_handler as *const () as usize as u32) | 1,
+    );
+    wr(
+        nested_vector_addr,
+        (fpu_nested_handler as *const () as usize as u32) | 1,
+    );
+    wr(SCB_VTOR, TEST_VECTOR_TABLE);
+    wr(NVIC_ISER1, BOTH_IRQS);
+    for word in 0..9 {
+        wr(FPU_RECORD + word * 4, 0);
+    }
+    for word in 0..5 {
+        wr(FPU_NESTED_RECORD + word * 4, 0);
+    }
+    unsafe {
+        core::arch::asm!("dsb", "isb", options(nostack, preserves_flags));
+        core::arch::asm!(
+            "vmov s0, {thread_s0}",
+            thread_s0 = in(reg) THREAD_S0,
+            out("s0") _,
+            options(nostack),
+        );
+        core::arch::asm!(
+            "msr PRIMASK, {primask}",
+            primask = in(reg) prior_primask,
+            options(nomem, nostack, preserves_flags),
+        );
+        core::ptr::write_volatile(NVIC_ISPR1 as *mut u32, FPU_IRQ_BIT);
+        core::arch::asm!("dsb", "isb", options(nostack, preserves_flags));
+    }
+
+    let frame_sp = rd(FPU_RECORD);
+    let exc_return = rd(FPU_RECORD + 4);
+    let fpccr_entry = rd(FPU_RECORD + 8);
+    let fpcar_entry = rd(FPU_RECORD + 12);
+    let fpccr_after_nested = rd(FPU_RECORD + 16);
+    let fpcar_after_nested = rd(FPU_RECORD + 20);
+    let fpccr_after_touch = rd(FPU_RECORD + 24);
+    let saved_s0 = rd(FPU_RECORD + 28);
+    let handler_done = rd(FPU_RECORD + 32) == 1;
+    let nested_frame_sp = rd(FPU_NESTED_RECORD);
+    let nested_exc_return = rd(FPU_NESTED_RECORD + 4);
+    let nested_ipsr = rd(FPU_NESTED_RECORD + 8);
+    let nested_fpccr = rd(FPU_NESTED_RECORD + 12);
+    let nested_fpcar = rd(FPU_NESTED_RECORD + 16);
+    let fpcar_after = rd(FPU_FPCAR);
+    let pending_after = rd(NVIC_ISPR1) & BOTH_IRQS;
+    let active_after = rd(NVIC_IABR0 + 4) & BOTH_IRQS;
+    let restored_s0: u32;
+    let restored_control: u32;
+    unsafe {
+        core::arch::asm!(
+            "vmov {value}, s0",
+            value = out(reg) restored_s0,
+            options(nomem, nostack),
+        );
+        core::arch::asm!(
+            "mrs {control}, CONTROL",
+            control = out(reg) restored_control,
+            options(nomem, nostack, preserves_flags),
+        );
+        core::arch::asm!("cpsid i", options(nomem, nostack, preserves_flags));
+    }
+
+    let outer_frame_ok = exc_return == 0xFFFF_FFE9
+        && fpccr_entry & FPCCR_LSPACT != 0
+        && fpcar_entry == frame_sp.wrapping_add(0x20);
+    let nested_frame_ok = nested_exc_return == 0xFFFF_FFF1
+        && nested_ipsr == FPU_NESTED_VECTOR
+        && nested_frame_sp.wrapping_add(BASIC_FRAME_BYTES) == frame_sp;
+    let lazy_state_survived = nested_fpccr & FPCCR_LSPACT != 0
+        && nested_fpcar == fpcar_entry
+        && fpccr_after_nested & FPCCR_LSPACT != 0
+        && fpcar_after_nested == fpcar_entry;
+    let lazy_save_completed = fpccr_after_touch & FPCCR_LSPACT == 0
+        && fpcar_after == fpcar_entry
+        && saved_s0 == THREAD_S0;
+    let context_restored = restored_s0 == THREAD_S0 && restored_control & FPCA != 0;
+    let passed = prior_primask == 0
+        && clean_irq_state
+        && handler_done
+        && outer_frame_ok
+        && frame_sp & 7 == 0
+        && nested_frame_ok
+        && lazy_state_survived
+        && lazy_save_completed
+        && context_restored
+        && pending_after == 0
+        && active_after == 0;
+
+    wr(NVIC_ICER1, BOTH_IRQS);
+    wr(NVIC_ICPR1, BOTH_IRQS);
+    wr(vector_addr, prior_vector);
+    wr(nested_vector_addr, prior_nested_vector);
+    unsafe {
+        core::ptr::write_volatile((NVIC_IPR + FPU_IRQ) as *mut u8, prior_irq_priority);
+        core::ptr::write_volatile(
+            (NVIC_IPR + FPU_NESTED_IRQ) as *mut u8,
+            prior_nested_priority,
+        );
+    }
+    wr(SCB_VTOR, prior_vtor);
+    if prior_irq_enabled {
+        wr(NVIC_ISER1, FPU_IRQ_BIT);
+    }
+    if prior_nested_enabled {
+        wr(NVIC_ISER1, FPU_NESTED_IRQ_BIT);
+    }
+    if prior_irq_pending || prior_nested_pending {
+        wr(
+            NVIC_ISPR1,
+            (if prior_irq_pending { FPU_IRQ_BIT } else { 0 })
+                | (if prior_nested_pending {
+                    FPU_NESTED_IRQ_BIT
+                } else {
+                    0
+                }),
+        );
+    }
+    wr(FPU_FPCAR, prior_fpcar);
+    wr(FPU_FPCCR, prior_fpccr);
+    wr(SCB_CPACR, prior_cpacr);
+    unsafe {
+        core::arch::asm!(
+            "msr PRIMASK, {primask}",
+            "dsb",
+            "isb",
+            primask = in(reg) prior_primask,
+            options(nostack, preserves_flags),
+        );
+    }
+
+    send(b"fpu m4f nested lazy lspact=");
+    send(if lazy_state_survived { b"1" } else { b"0" });
+    send(b" exc_return=");
+    put_hex32(nested_exc_return);
+    send(b" frame=");
+    send(if nested_frame_ok { b"1" } else { b"0" });
+    send(b" saved=");
+    send(if lazy_save_completed { b"1" } else { b"0" });
+    send(b" restored=");
+    send(if context_restored { b"1" } else { b"0" });
+    send(if passed { b" ok\r\n" } else { b" FAIL\r\n" });
+    passed
+}
+
 /// Repeat the Cortex-M4F lazy-save check with Thread mode using the PSP. This
 /// distinguishes the interrupted process stack from the Handler-mode MSP and
 /// verifies that exception return restores the PSP thread's S0 value.
@@ -887,6 +1089,83 @@ unsafe extern "C" fn fpu_irq_handler() {
         fpccr = const FPU_FPCCR,
         fpcar = const FPU_FPCAR,
         touch = sym fpu_irq_touch,
+    );
+}
+
+/// Outer handler leaves the extended Thread frame lazy while a higher-priority
+/// basic IRQ preempts it. Only afterward does the outer handler touch the FPU.
+#[unsafe(naked)]
+unsafe extern "C" fn fpu_nested_outer_handler() {
+    core::arch::naked_asm!(
+        "mov r2, lr",
+        "mrs r0, msp",
+        "ldr r1, ={record}",
+        "str r0, [r1, #0]",
+        "str r2, [r1, #4]",
+        "ldr r3, ={fpccr}",
+        "ldr r3, [r3]",
+        "str r3, [r1, #8]",
+        "ldr r3, ={fpcar}",
+        "ldr r3, [r3]",
+        "str r3, [r1, #12]",
+        "ldr r3, ={ispr}",
+        "ldr r0, ={nested_irq_bit}",
+        "str r0, [r3]",
+        "dsb",
+        "isb",
+        "ldr r3, ={fpccr}",
+        "ldr r3, [r3]",
+        "str r3, [r1, #16]",
+        "ldr r3, ={fpcar}",
+        "ldr r3, [r3]",
+        "str r3, [r1, #20]",
+        "push {{r4-r7}}",
+        "ldr r4, ={record}",
+        "ldr r5, [r4, #0]",
+        "bl {touch}",
+        "ldr r3, ={fpccr}",
+        "ldr r3, [r3]",
+        "str r3, [r4, #24]",
+        "ldr r3, [r5, #32]",
+        "str r3, [r4, #28]",
+        "movs r3, #1",
+        "str r3, [r4, #32]",
+        "pop {{r4-r7}}",
+        "ldr r2, ={record}",
+        "ldr r2, [r2, #4]",
+        "mov lr, r2",
+        "bx lr",
+        record = const FPU_RECORD,
+        fpccr = const FPU_FPCCR,
+        fpcar = const FPU_FPCAR,
+        ispr = const NVIC_ISPR1,
+        nested_irq_bit = const FPU_NESTED_IRQ_BIT,
+        touch = sym fpu_irq_touch,
+    );
+}
+
+/// Nested handler uses only the integer register set, preserving the outer
+/// handler's pending lazy FP save and FPCAR pointer.
+#[unsafe(naked)]
+unsafe extern "C" fn fpu_nested_handler() {
+    core::arch::naked_asm!(
+        "mov r2, lr",
+        "mrs r0, msp",
+        "mrs r3, ipsr",
+        "ldr r1, ={record}",
+        "str r0, [r1, #0]",
+        "str r2, [r1, #4]",
+        "str r3, [r1, #8]",
+        "ldr r3, ={fpccr}",
+        "ldr r3, [r3]",
+        "str r3, [r1, #12]",
+        "ldr r3, ={fpcar}",
+        "ldr r3, [r3]",
+        "str r3, [r1, #16]",
+        "bx r2",
+        record = const FPU_NESTED_RECORD,
+        fpccr = const FPU_FPCCR,
+        fpcar = const FPU_FPCAR,
     );
 }
 
