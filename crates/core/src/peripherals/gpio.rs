@@ -2853,9 +2853,9 @@ impl crate::Peripheral for GpioPort {
         // per pin. Physical pins beyond `pin_count()` return `None`; their
         // backing register bits are masked to zero, so this word is still the
         // exact value the default low-to-high loop assembles before it stops.
-        // Every family's input offset comes from `idr_offset`. Nordic's
-        // canonical IN snapshot can bypass the register decoder, but only when
-        // the window algebra resolves exactly to IN.
+        // Every family's input offset comes from `idr_offset`. Nordic IN and
+        // EFR32 DIN snapshots can bypass the register decoder only when the
+        // window algebra resolves exactly to that family's input register.
         // Saturating subtraction for an invalid window must still take the
         // old decoder path (including its unknown-register census).
         //
@@ -2869,6 +2869,13 @@ impl crate::Peripheral for GpioPort {
                     || (self.nrf54l_offsets && self.window_offset <= 0x00C) =>
             {
                 g.effective_in()
+            }
+            // EFR32 polls four ports at each GPIO boundary. Its DIN is already
+            // resolved by the family; STM32 AF input processing does not apply.
+            // Reject translated or saturated windows so their decoder behavior
+            // (including unknown-register census) remains unchanged.
+            GpioFamily::Efr32s2(g) if !self.nrf54l_offsets && self.window_offset <= 0x14 => {
+                g.effective_din()
             }
             _ => self.read_reg(self.idr_offset()),
         }
@@ -3061,6 +3068,109 @@ mod routing_tests {
     use super::{GpioFamily, GpioMode, GpioPort, GpioRegisterLayout};
     use crate::Peripheral;
     use std::str::FromStr;
+
+    #[test]
+    fn efr32_snapshot_matches_independent_window_address_algebra() {
+        for translated in [false, true] {
+            for window in 0u64..=0x800 {
+                let mut port = GpioPort::new_with_layout(GpioRegisterLayout::Efr32s2);
+                port.write_u32(0x04, 0x4444_4444).unwrap();
+                port.write_u32(0x0c, 0x4444_4444).unwrap();
+                port.write_u32(0x10, 0xa55a).unwrap();
+                let mut port = port.with_window_offset(window);
+                port.nrf54l_offsets = translated;
+
+                // DIN is 0x14 in the Series-2 map. Work from that register
+                // address, independently of the optimized branch. A malformed
+                // compact translation adds 0x504 to these relative offsets;
+                // a window past DIN saturates the relative address at zero.
+                let relative = 0x14u64.saturating_sub(window);
+                let decoded = relative + window + if translated { 0x504 } else { 0 };
+                let expected = if decoded == 0x14 { 0xa55a } else { 0 };
+                assert_eq!(
+                    port.read_gpio_input_word(),
+                    expected,
+                    "translated={translated}, window={window:#x}, decoded={decoded:#x}"
+                );
+                assert_eq!(
+                    port.read_gpio_input_word(),
+                    port.read_reg(port.idr_offset()),
+                    "translated={translated}, window={window:#x}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn efr32_snapshot_matches_mmio_and_pin_resolution_across_drive_modes() {
+        use crate::peripherals::pad_lines::{LineDrive, PadLines};
+        use std::sync::Arc;
+
+        // Both register halves exercise every mode, including input pulls,
+        // push-pull output, and open-drain drive/release. Mixed external masks
+        // distinguish an undriven pull from an externally held low input.
+        for (model, modeh) in [(0x7654_3210u32, 0xfedc_ba98u32), (0xfedc_ba98, 0x7654_3210)] {
+            for dout in [0u32, 0xffff, 0xa55a, 0x5aa5] {
+                for external in [0u32, 0xffff, 0x5555, 0xaaaa] {
+                    for levels in [0u32, 0xffff, 0x6996] {
+                        for window in [0u64, 4, 0x10, 0x14, 0x18, 0x500] {
+                            let mut port = GpioPort::new_with_layout(GpioRegisterLayout::Efr32s2);
+                            port.write_u32(0x04, model).unwrap();
+                            port.write_u32(0x0c, modeh).unwrap();
+                            port.write_u32(0x10, dout | 0xffff_0000).unwrap();
+                            assert_eq!(port.read_u32(0x10).unwrap(), dout);
+                            for pin in 0..16u8 {
+                                if external & (1 << pin) != 0 {
+                                    assert!(port.set_gpio_input(pin, levels & (1 << pin) != 0));
+                                }
+                            }
+                            // An installed peripheral route must not cause a
+                            // Series-2 snapshot to acquire STM32 AF semantics.
+                            let lines = Arc::new(PadLines::new(&["CC0"], &[false]));
+                            port.add_pad_route(&lines, 0, None, 0, "TIMER0_CC0");
+                            lines.drive_line(0, LineDrive::PushPull, true);
+                            let port = port.with_window_offset(window);
+
+                            let mut expected = 0u32;
+                            for pin in 0..16u8 {
+                                let modes = if pin < 8 { model } else { modeh };
+                                let mode = (modes >> (4 * (pin % 8))) & 0xf;
+                                let output = dout & (1 << pin) != 0;
+                                let held = external & (1 << pin) != 0;
+                                let input = held && levels & (1 << pin) != 0;
+                                let level = match mode {
+                                    2 | 3 if !held => output,
+                                    6 | 7 => output && input,
+                                    4..=15 => output,
+                                    _ => input,
+                                };
+                                expected |= u32::from(level) << pin;
+                            }
+                            // Invalid windows continue to decode an unknown
+                            // register; they must not return the live DIN word.
+                            if window > 0x14 {
+                                expected = 0;
+                            }
+                            let snapshot = port.read_gpio_input_word();
+                            assert_eq!(
+                                snapshot, expected,
+                                "model={model:#x}, modeh={modeh:#x}, dout={dout:#x}, \
+                                 external={external:#x}, levels={levels:#x}, window={window:#x}"
+                            );
+                            assert_eq!(snapshot, port.read_u32(port.idr_offset()).unwrap());
+                            let mut pins = 0u32;
+                            for pin in 0..16u8 {
+                                pins |= u32::from(port.read_gpio_input(pin).unwrap()) << pin;
+                            }
+                            assert_eq!(snapshot, pins);
+                            assert_eq!(snapshot & 0xffff_0000, 0);
+                            assert_eq!(port.read_gpio_input(16), None);
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn nordic_snapshot_fast_guard_matches_independent_window_address_algebra() {
