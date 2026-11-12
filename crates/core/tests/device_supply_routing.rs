@@ -1,5 +1,6 @@
 //! Route actual measured rails into native SPI power gates. Tiny Cortex-M
 //! loops witness world scheduling; this does not qualify native FC firmware.
+mod mcu_power_support;
 use labwired_config::{ChipDescriptor, CosimModelConfig, EnvironmentManifest, SystemManifest};
 use labwired_core::cosim::{CosimSignalValue, CosimSignals, SignalPath, SignalRouter};
 use labwired_core::peripherals::device::SpiDevice;
@@ -391,4 +392,215 @@ fn world_unknown_and_duplicate_device_supply_routes_fail_at_construction() {
         "node.a.board.device.U9.power.vdd_volts".into(),
     );
     assert!(from_environment(duplicate).is_err());
+}
+
+#[test]
+fn routed_rail_roundoff_prevalidates_mcu_and_device_batches_before_either_changes() {
+    let mut descriptor = chip();
+    descriptor.power_domains = Some(mcu_power_support::config());
+    descriptor.supply_monitor = None;
+    descriptor.io_voltage_v = Some(3.3);
+    let mut bus = SystemBus::from_config(&descriptor, &system("U9")).unwrap();
+    let mut config = model("U9");
+    for domain in ["core", "io", "detector", "flash"] {
+        config.outputs.insert(
+            format!("mcu_{domain}"),
+            format!("board.power.{domain}_volts"),
+        );
+    }
+    let (mut router, errors) = SignalRouter::bind(&[config], &bus);
+    assert!(errors.is_empty(), "{errors:?}");
+    router.attach_mcu_power_domains(&mut bus).unwrap();
+    let mut baseline = signals("U9", CosimSignalValue::F64(1.8), CosimSignalValue::F64(3.3));
+    for (domain, voltage) in [
+        ("core", 1.1),
+        ("io", 3.3),
+        ("detector", 3.3),
+        ("flash", 3.3),
+    ] {
+        baseline.insert(
+            format!("board.power.{domain}_volts"),
+            CosimSignalValue::F64(voltage),
+        );
+    }
+    assert!(router.apply(&mut bus, &baseline, 0).is_empty());
+    let before = meta(&mut bus, "U9");
+    let core_floor = -f64::EPSILON * 1.16;
+    let device_floor = -f64::EPSILON * 3.6;
+    for (path, bad) in [
+        (
+            "board.power.core_volts".to_string(),
+            f64::from_bits(core_floor.to_bits() + 1),
+        ),
+        ("board.power.core_volts".to_string(), f64::NAN),
+        (
+            route("U9", "vddio"),
+            f64::from_bits(device_floor.to_bits() + 1),
+        ),
+        (route("U9", "vddio"), f64::NEG_INFINITY),
+    ] {
+        let mut attempted = baseline.clone();
+        attempted.insert(route("U9", "vdd"), CosimSignalValue::F64(0.0));
+        attempted.insert(path.clone(), CosimSignalValue::F64(bad));
+        let errors = router.apply(&mut bus, &attempted, 1000);
+        assert!(
+            errors.iter().any(|error| error.to_string().contains(&path)),
+            "{path}: {errors:?}"
+        );
+        assert_eq!(
+            meta(&mut bus, "U9"),
+            before,
+            "a rejected MCU or device peer must not cut a valid device rail"
+        );
+    }
+    let mut accepted = baseline;
+    for (domain, declaration) in mcu_power_support::config().rails {
+        accepted.insert(
+            format!("board.power.{domain}_volts"),
+            CosimSignalValue::F64(-f64::EPSILON * declaration.max_v),
+        );
+    }
+    accepted.insert(route("U9", "vdd"), CosimSignalValue::F64(device_floor));
+    accepted.insert(route("U9", "vddio"), CosimSignalValue::F64(device_floor));
+    let errors = router.apply(&mut bus, &accepted, 1000);
+    assert!(errors.is_empty(), "{errors:?}");
+    let observed = meta(&mut bus, "U9");
+    assert_eq!(observed["powered"], false);
+    assert_eq!(
+        observed["supply_rails"]["vdd"]["voltage_v"]
+            .as_f64()
+            .unwrap()
+            .to_bits(),
+        device_floor.to_bits()
+    );
+}
+
+fn dual_receiver_fixture() -> (SystemBus, SignalRouter, CosimSignals) {
+    let mut descriptor = chip();
+    descriptor.power_domains = Some(mcu_power_support::config());
+    descriptor.supply_monitor = None;
+    descriptor.io_voltage_v = Some(3.3);
+    let mut bus = SystemBus::from_config(&descriptor, &system("U9")).unwrap();
+    let mut config = model("U9");
+    let mut baseline = signals("U9", CosimSignalValue::F64(1.8), CosimSignalValue::F64(3.3));
+    for (domain, voltage) in [
+        ("core", 1.1),
+        ("io", 3.3),
+        ("detector", 3.3),
+        ("flash", 3.3),
+    ] {
+        let path = format!("board.power.{domain}_volts");
+        config.outputs.insert(format!("mcu_{domain}"), path.clone());
+        baseline.insert(path, CosimSignalValue::F64(voltage));
+    }
+    let (mut router, errors) = SignalRouter::bind(&[config], &bus);
+    assert!(errors.is_empty(), "{errors:?}");
+    router.attach_mcu_power_domains(&mut bus).unwrap();
+    assert!(router.apply(&mut bus, &baseline, 0).is_empty());
+    (bus, router, baseline)
+}
+
+#[test]
+fn routed_backward_mcu_time_does_not_cut_a_device_peer_rail() {
+    let (mut bus, mut router, mut values) = dual_receiver_fixture();
+    bus.apply_mcu_power_voltages(
+        &[
+            ("core".into(), 1.1),
+            ("io".into(), 3.3),
+            ("detector".into(), 3.3),
+            ("flash".into(), 3.3),
+        ],
+        5000,
+    )
+    .unwrap();
+    let device_before = meta(&mut bus, "U9");
+    let mcu_before = serde_json::to_value(bus.mcu_power.status()).unwrap();
+    values.insert(route("U9", "vdd"), CosimSignalValue::F64(0.0));
+    let errors = router.apply(&mut bus, &values, 1000);
+    assert!(
+        errors.iter().any(|e| e.to_string().contains("time")),
+        "{errors:?}"
+    );
+    assert_eq!(meta(&mut bus, "U9"), device_before);
+    assert_eq!(
+        serde_json::to_value(bus.mcu_power.status()).unwrap(),
+        mcu_before
+    );
+}
+
+#[test]
+fn routed_missing_mcu_sample_preserves_both_receivers_and_the_retry_boundary() {
+    let (mut bus, mut router, baseline) = dual_receiver_fixture();
+    let mut values = baseline.clone();
+    values.remove("board.power.flash_volts");
+    values.insert(route("U9", "vdd"), CosimSignalValue::F64(0.0));
+    let device_before = meta(&mut bus, "U9");
+    let mcu_before = serde_json::to_value(bus.mcu_power.status()).unwrap();
+    let errors = router.apply(&mut bus, &values, 1000);
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.to_string().contains("fresh numeric voltage")),
+        "{errors:?}"
+    );
+    assert_eq!(meta(&mut bus, "U9"), device_before);
+    assert_eq!(
+        serde_json::to_value(bus.mcu_power.status()).unwrap(),
+        mcu_before
+    );
+    assert!(router.apply(&mut bus, &baseline, 1000).is_empty());
+}
+
+#[test]
+fn routed_reset_queue_failure_cannot_publish_a_device_cutoff() {
+    use labwired_core::power_domains::PowerResetCause;
+    let (mut bus, mut router, baseline) = dual_receiver_fixture();
+    for time in [1000, 2000, 3000] {
+        let errors = router.apply(&mut bus, &baseline, time);
+        assert!(errors.is_empty(), "{errors:?}");
+    }
+    assert_eq!(
+        bus.mcu_power.take_reset_event(),
+        Some(PowerResetCause::PowerOn)
+    );
+    for _ in 0..32 {
+        bus.mcu_power
+            .record_reset(PowerResetCause::ExternalPin)
+            .unwrap();
+    }
+    let control = bus.mcu_power.supervisor_control().unwrap();
+    control.configure_brown_out(false, 0.93, 0.96).unwrap();
+    let mut values = baseline;
+    values.insert(
+        "board.power.detector_volts".into(),
+        CosimSignalValue::F64(0.0),
+    );
+    values.insert(route("U9", "vdd"), CosimSignalValue::F64(0.0));
+    let device_before = meta(&mut bus, "U9");
+    let mcu_before = serde_json::to_value(bus.mcu_power.status()).unwrap();
+    let errors = router.apply(&mut bus, &values, 4000);
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.to_string().contains("reset event queue is full")),
+        "{errors:?}"
+    );
+    assert_eq!(meta(&mut bus, "U9"), device_before);
+    assert_eq!(
+        serde_json::to_value(bus.mcu_power.status()).unwrap(),
+        mcu_before
+    );
+    for _ in 0..32 {
+        assert_eq!(
+            bus.mcu_power.take_reset_event(),
+            Some(PowerResetCause::ExternalPin)
+        );
+    }
+    assert_eq!(bus.mcu_power.take_reset_event(), None);
+    assert!(router.apply(&mut bus, &values, 4000).is_empty());
+    assert_eq!(meta(&mut bus, "U9")["powered"], false);
+    assert_eq!(
+        bus.mcu_power.take_reset_event(),
+        Some(PowerResetCause::PowerOn)
+    );
 }

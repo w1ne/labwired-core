@@ -1,0 +1,38 @@
+[
+  {
+    "original": "/data/build-targets/controlled-buck-20261112/rail-roundoff-20261112/deps/device_supply_rails-6108f68b14269aa0",
+    "preserved": "/data/work-evidence/declared-rail-roundoff-20261112/tested-binaries/device_supply_rails-6108f68b14269aa0",
+    "bytes": 34766104,
+    "sha256": "89e9ed39318e4572979e07a7e1684c13457ecf6e6d8fc3aa50d42737779b8a39"
+  },
+  {
+    "original": "/data/build-targets/controlled-buck-20261112/rail-roundoff-20261112/deps/device_supply_routing-82da56335f56945f",
+    "preserved": "/data/work-evidence/declared-rail-roundoff-20261112/tested-binaries/device_supply_routing-82da56335f56945f",
+    "bytes": 42569320,
+    "sha256": "007e90a05704093d55c9c5e40deb4af5550d8182ae0793397c4f51669f4761c4"
+  },
+  {
+    "original": "/data/build-targets/controlled-buck-20261112/rail-roundoff-20261112/deps/labwired_core-9af35ae1de1065c2",
+    "preserved": "/data/work-evidence/declared-rail-roundoff-20261112/tested-binaries/labwired_core-9af35ae1de1065c2",
+    "bytes": 69545624,
+    "sha256": "9b1906b34aca269cdc2749c9e146498ec23ea182d975f3f62cb4288cf28e4ac1"
+  },
+  {
+    "original": "/data/build-targets/controlled-buck-20261112/rail-roundoff-20261112/deps/mcu_power_domains-3d7ab475c7e86cca",
+    "preserved": "/data/work-evidence/declared-rail-roundoff-20261112/tested-binaries/mcu_power_domains-3d7ab475c7e86cca",
+    "bytes": 3715152,
+    "sha256": "da79c97ff61e5dd0fafed6d588a6a90544af16d2b1c9b82b474e225c88be94ba"
+  },
+  {
+    "original": "/data/build-targets/controlled-buck-20261112/rail-roundoff-20261112/deps/mcu_power_routing_timing-87356252d74702ec",
+    "preserved": "/data/work-evidence/declared-rail-roundoff-20261112/tested-binaries/mcu_power_routing_timing-87356252d74702ec",
+    "bytes": 35626160,
+    "sha256": "400ec441e9e5bee9582ddd7774f2fbd6e26ce507f0033552f8fad6f39fb17a81"
+  },
+  {
+    "original": "/data/build-targets/controlled-buck-20261112/rail-roundoff-20261112/deps/shared_supply_domains-50a6b66ab5264fd9",
+    "preserved": "/data/work-evidence/declared-rail-roundoff-20261112/tested-binaries/shared_supply_domains-50a6b66ab5264fd9",
+    "bytes": 4115960,
+    "sha256": "bec7d61a6e311e7bb70719b68db1919a767181d5bfa3dc37729a985cd1b8fad7"
+  }
+]

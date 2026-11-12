@@ -750,3 +750,23 @@ partially disconnected circuit. The older `pwm.duty:`, `adc.input_mv:`,
 `gpio.pad:`, and `gpio.input:` route forms are not supported and are rejected; use the board signal
 paths described above. Native execution of `adapter: ngspice` still requires a
 host integration and is refused explicitly by the core factory.
+
+## Numeric MCU output-driver commands
+
+`board.gpio_drive_volts.<pad>` supplies the numeric command for the MCU's own
+output stage. Each model that reads it must also read
+`board.gpio_driven.<pad>` for the same pad (pad-label ASCII case is ignored).
+The command follows `PinPort::driver`, including alternate-function outputs.
+An external driver does not change the MCU's command.
+
+A known disabled stage exports enable=false and an unused command of 0 V.
+The analog circuit still determines the external pad voltage. A known enabled
+stage requires a qualified positive I/O supply and the MCU's own Low/High
+output state. An unknown output state has no command; it does not retain a
+previous command. A missing required command must fail before model time
+advances.
+
+`board.gpio_pad_volts.<pad>` keeps its existing observation behavior. The new
+command port does not provide an observation for an unavailable or floating
+pad, and does not establish GPIO operation outside the descriptor's qualified
+voltage mode.

@@ -193,6 +193,29 @@ impl SupplySupervisor {
     }
 }
 
+#[derive(Debug)]
+pub(crate) enum RailBatchError {
+    Device(String),
+    Mcu(String),
+}
+
+/// Admit a raw rail observation without changing its value. A declared maximum
+/// permits only signed roundoff within one relative f64 epsilon of zero.
+/// Receivers without that explicit maximum retain the nonnegative contract.
+/// Operating-range qualification is separate, so admitted negative values
+/// remain unavailable to the device.
+pub(crate) fn rail_observation_is_admissible(
+    voltage_v: f64,
+    declared_maximum_v: Option<f64>,
+) -> bool {
+    let minimum = match declared_maximum_v {
+        Some(maximum) if maximum.is_finite() && maximum >= 0.0 => -f64::EPSILON * maximum,
+        None => 0.0,
+        Some(_) => return false,
+    };
+    voltage_v.is_finite() && voltage_v >= minimum
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

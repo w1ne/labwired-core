@@ -242,3 +242,145 @@ fn identical_sample_sequences_ignore_host_observation_chunking() {
         serde_json::to_value(b.status()).unwrap()
     );
 }
+
+#[test]
+fn mcu_rail_roundoff_retains_raw_zero_boundary_without_qualifying_power() {
+    let mut model = model();
+    attach(&mut model);
+    let domains = ["core", "io", "detector", "flash"];
+    for (step, factor) in [-1.0, -0.0, 0.0].into_iter().enumerate() {
+        let values: Vec<_> = domains
+            .iter()
+            .map(|domain| {
+                let max = model.handle(domain).unwrap().observation().max_v;
+                ((*domain).to_string(), factor * f64::EPSILON * max)
+            })
+            .collect();
+        model.apply_voltages(&values, step as u64 * 1000).unwrap();
+        for (domain, raw) in &values {
+            let handle = model.handle(domain).unwrap();
+            let observed = handle.observation();
+            assert_eq!(observed.voltage_v.unwrap().to_bits(), raw.to_bits());
+            assert_eq!(observed.within_operating_range, Some(false));
+            assert!(!handle.is_available());
+            assert_eq!(
+                handle.effective_voltage_v().unwrap().to_bits(),
+                raw.to_bits()
+            );
+        }
+        assert!(model.blocks_execution());
+        assert!(model.is_held());
+    }
+}
+
+#[test]
+fn mcu_rail_roundoff_rejects_the_next_value_and_preserves_the_entire_batch() {
+    let mut model = model();
+    boot(&mut model);
+    let domains = ["core", "io", "detector", "flash"];
+    let before = domains.map(|domain| model.handle(domain).unwrap().observation());
+    let floor = -f64::EPSILON * 1.16;
+    for bad in [
+        f64::from_bits(floor.to_bits() + 1),
+        -f64::EPSILON * 3.63, // Another rail's larger declared maximum is not valid here.
+        -1.0e-9,
+        f64::NAN,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+    ] {
+        assert!(model
+            .apply_voltages(&[("io".into(), 0.0), ("core".into(), bad)], 4000)
+            .is_err());
+        for (domain, expected) in domains.into_iter().zip(&before) {
+            assert_eq!(&model.handle(domain).unwrap().observation(), expected);
+        }
+        assert!(!model.is_held());
+        assert!(model.execution_qualified());
+    }
+    // Rejected batches must not consume the observation timestamp either.
+    sample(&mut model, 3500, 1.1, 3.3);
+}
+
+fn state_json(model: &McuPowerDomains) -> serde_json::Value {
+    serde_json::to_value(model.status().unwrap()).unwrap()
+}
+fn complete_values(core: f64, detector: f64) -> Vec<(String, f64)> {
+    vec![
+        ("core".into(), core),
+        ("io".into(), 3.3),
+        ("detector".into(), detector),
+        ("flash".into(), 3.3),
+    ]
+}
+
+#[test]
+fn rejected_por_deadline_preserves_rails_latch_events_and_timestamp() {
+    let mut model = model();
+    attach(&mut model);
+    sample(&mut model, 0, 1.1, 3.3);
+    let before = state_json(&model);
+    let error = model
+        .apply_voltages(&complete_values(1.1, 3.3), u64::MAX)
+        .unwrap_err();
+    assert!(error.contains("time overflow"), "{error}");
+    assert_eq!(state_json(&model), before);
+    assert_eq!(model.take_reset_event(), None);
+
+    sample(&mut model, 3000, 1.1, 3.3);
+    assert_eq!(model.take_reset_event(), Some(PowerResetCause::PowerOn));
+    assert_eq!(model.take_reset_event(), None);
+}
+
+#[test]
+fn rejected_control_deadline_retains_the_pending_command_and_live_handle() {
+    let mut model = model();
+    boot(&mut model);
+    let handle = model.handle("core").unwrap();
+    let control = model.supervisor_control().unwrap();
+    control.configure_brown_out(false, 0.93, 0.96).unwrap();
+    let before = state_json(&model);
+    assert_eq!(before["brown_out"]["pending_changes"], 1);
+    let error = model
+        .apply_voltages(&complete_values(1.09, 3.3), u64::MAX)
+        .unwrap_err();
+    assert!(error.contains("time overflow"), "{error}");
+    assert_eq!(state_json(&model), before);
+    assert_eq!(model.take_reset_event(), None);
+    assert_eq!(handle.observation().voltage_v, Some(1.1));
+    assert!(!control.brown_out_configuration().enabled);
+
+    sample(&mut model, 4000, 1.09, 3.3);
+    let after = state_json(&model);
+    assert_eq!(after["brown_out"]["pending_changes"], 0);
+    assert_eq!(after["brown_out"]["applied"]["enabled"], false);
+    assert_eq!(handle.observation().voltage_v, Some(1.09));
+}
+
+#[test]
+fn rejected_reset_enqueue_restores_consumed_control_and_all_runtime_state() {
+    let mut model = model();
+    boot(&mut model);
+    for _ in 0..32 {
+        model.record_reset(PowerResetCause::ExternalPin).unwrap();
+    }
+    assert!(model.record_reset(PowerResetCause::ExternalPin).is_err());
+    let control = model.supervisor_control().unwrap();
+    control.configure_brown_out(false, 0.93, 0.96).unwrap();
+    let before = state_json(&model);
+    assert_eq!(before["brown_out"]["pending_changes"], 1);
+    let error = model
+        .apply_voltages(&complete_values(1.09, 0.0), 4000)
+        .unwrap_err();
+    assert!(error.contains("reset event queue is full"), "{error}");
+    assert_eq!(state_json(&model), before);
+    assert!(!control.brown_out_configuration().enabled);
+    for _ in 0..32 {
+        assert_eq!(model.take_reset_event(), Some(PowerResetCause::ExternalPin));
+    }
+    assert_eq!(model.take_reset_event(), None);
+
+    sample(&mut model, 4000, 1.09, 0.0);
+    assert_eq!(model.take_reset_event(), Some(PowerResetCause::PowerOn));
+    assert_eq!(model.take_reset_event(), None);
+    assert!(model.is_held());
+}

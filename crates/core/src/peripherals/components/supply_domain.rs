@@ -64,13 +64,15 @@ impl SupplyDomain {
     ) -> anyhow::Result<DomainState> {
         let mut next = old.clone();
         for (rail, voltage) in updates {
+            let bounds = self
+                .rails
+                .get(rail)
+                .ok_or_else(|| anyhow::anyhow!("unknown supply rail '{rail}'"))?;
             anyhow::ensure!(
-                self.rails.contains_key(rail),
-                "unknown supply rail '{rail}'"
-            );
-            anyhow::ensure!(
-                voltage.is_finite() && *voltage >= 0.0,
-                "supply voltage must be finite and nonnegative"
+                crate::power::rail_observation_is_admissible(*voltage, bounds.max_v),
+                "supply rail '{rail}' voltage {voltage} V must be finite and >= {} V \
+                 (numerical zero requires a declared max_v)",
+                bounds.max_v.map_or(0.0, |max| -f64::EPSILON * max)
             );
             next.voltages.insert(rail.clone(), *voltage);
         }
@@ -303,6 +305,82 @@ pub(crate) struct SupplyDomains {
     legacy: HashMap<String, Arc<SupplyDomain>>,
     devices: HashMap<String, Arc<SupplyDomain>>,
 }
+/// All touched device locks remain held until the caller has also published
+/// its MCU receiver. No callback can observe a partially published boundary.
+pub(crate) struct PreparedDeviceSupplies<'a> {
+    states: Vec<(std::sync::MutexGuard<'a, DomainState>, DomainState)>,
+    published: bool,
+}
+impl PreparedDeviceSupplies<'_> {
+    pub(crate) fn is_empty(&self) -> bool {
+        self.states.is_empty()
+    }
+
+    /// Infallible publication of the already validated states. Keep this
+    /// object alive until every peer receiver has published, then drop it
+    /// before invoking device or MCU callbacks.
+    pub(crate) fn publish(&mut self) {
+        if self.published {
+            return;
+        }
+        for (state, next) in &mut self.states {
+            std::mem::swap(&mut **state, next);
+        }
+        self.published = true;
+    }
+}
+impl SupplyDomains {
+    fn validate_voltage(&self, device: &str, rail: &str, voltage: f64) -> anyhow::Result<()> {
+        let domain = self
+            .devices
+            .get(device)
+            .ok_or_else(|| anyhow::anyhow!("device '{device}' declares no supply_rails"))?;
+        let bounds = domain
+            .rails
+            .get(rail)
+            .ok_or_else(|| anyhow::anyhow!("device '{device}' has no supply rail '{rail}'"))?;
+        anyhow::ensure!(
+            crate::power::rail_observation_is_admissible(voltage, bounds.max_v),
+            "device '{device}' rail '{rail}' voltage {voltage} V must be finite and >= {} V \
+             (numerical zero requires a declared max_v)",
+            bounds.max_v.map_or(0.0, |max| -f64::EPSILON * max)
+        );
+        Ok(())
+    }
+
+    pub(crate) fn prepare_updates(
+        &self,
+        updates: &[(String, String, f64)],
+    ) -> anyhow::Result<PreparedDeviceSupplies<'_>> {
+        let mut grouped: BTreeMap<&str, BTreeMap<String, f64>> = BTreeMap::new();
+        for (device, rail, voltage) in updates {
+            self.validate_voltage(device, rail, *voltage)?;
+            anyhow::ensure!(
+                grouped
+                    .entry(device)
+                    .or_default()
+                    .insert(rail.clone(), *voltage)
+                    .is_none(),
+                "duplicate device supply update '{device}.{rail}'"
+            );
+        }
+        let mut states = Vec::with_capacity(grouped.len());
+        for (device, rails) in grouped {
+            let domain = &self.devices[device];
+            let state = domain
+                .state
+                .lock()
+                .map_err(|_| anyhow::anyhow!("device '{device}' supply state poisoned"))?;
+            let next = domain.next_state(&state, &rails)?;
+            states.push((state, next));
+        }
+        Ok(PreparedDeviceSupplies {
+            states,
+            published: false,
+        })
+    }
+}
+
 impl crate::bus::SystemBus {
     pub fn register_supply_domain(
         &mut self,
@@ -348,40 +426,33 @@ impl crate::bus::SystemBus {
         );
         Ok(())
     }
+    /// Validate a raw rail sample without changing any device state.
+    pub fn validate_device_supply_voltage(
+        &self,
+        device: &str,
+        rail: &str,
+        voltage: f64,
+    ) -> anyhow::Result<()> {
+        self.supply_domains.validate_voltage(device, rail, voltage)
+    }
+
     /// Validate the complete boundary before mutation. Publish each device's
     /// rails together, so a rail swap cannot invent an intermediate power edge.
     pub fn apply_device_supply_voltages(
         &mut self,
         updates: &[(String, String, f64)],
     ) -> anyhow::Result<()> {
-        let mut grouped: BTreeMap<&str, BTreeMap<String, f64>> = BTreeMap::new();
-        for (device, rail, voltage) in updates {
-            self.validate_device_supply_route(device, rail)?;
-            anyhow::ensure!(
-                voltage.is_finite() && *voltage >= 0.0,
-                "device '{device}' rail '{rail}' voltage must be finite and nonnegative"
-            );
-            anyhow::ensure!(
-                grouped
-                    .entry(device)
-                    .or_default()
-                    .insert(rail.clone(), *voltage)
-                    .is_none(),
-                "duplicate device supply update '{device}.{rail}'"
-            );
+        let mut prepared = self.supply_domains.prepare_updates(updates)?;
+        let changed = !prepared.is_empty();
+        prepared.publish();
+        drop(prepared);
+        if changed {
+            self.sync_device_supply_states();
         }
-        let mut prepared = Vec::with_capacity(grouped.len());
-        for (device, rails) in grouped {
-            let domain = self.supply_domains.devices[device].clone();
-            let state = domain.next_state(&domain.state.lock().unwrap(), &rails)?;
-            prepared.push((domain, state));
-        }
-        if prepared.is_empty() {
-            return Ok(());
-        }
-        for (domain, state) in prepared {
-            *domain.state.lock().unwrap() = state;
-        }
+        Ok(())
+    }
+
+    pub(crate) fn sync_device_supply_states(&mut self) {
         // Publish through the existing mutable SPI-device capability before
         // inspection or CPU execution. No elapsed time or bus frame is added.
         for peripheral in &mut self.peripherals {
@@ -392,7 +463,6 @@ impl crate::bus::SystemBus {
             }
         }
         self.service_device_pin_drives();
-        Ok(())
     }
 }
 pub struct GatedI2cDevice {
@@ -488,3 +558,6 @@ impl I2cDevice for GatedI2cDevice {
         self.inner.for_each_sim_input(f)
     }
 }
+
+#[cfg(test)]
+mod rail_batch_tests;

@@ -275,15 +275,24 @@ impl RegulatorRegistry {
     }
 
     /// Defense at the authoritative CPU advance seam, after construction.
+    #[inline]
     pub fn require_sampled_source(&self) -> Result<(), String> {
-        if !self.is_empty()
-            && !self
+        if self.stages.is_empty()
+            || self
                 .sampled_complete
                 .load(std::sync::atomic::Ordering::Acquire)
         {
-            return Err("declared internal regulators have no complete attached sampled circuit; CPU execution refused".into());
+            Ok(())
+        } else {
+            Err(Self::missing_sampled_source_error())
         }
-        Ok(())
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn missing_sampled_source_error() -> String {
+        "declared internal regulators have no complete attached sampled circuit; CPU execution refused"
+            .into()
     }
     pub fn get(&self, id: &str) -> Option<&RegulatorStage> {
         self.stages.get(id)

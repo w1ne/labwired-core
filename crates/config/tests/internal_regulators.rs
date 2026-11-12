@@ -67,7 +67,7 @@ fn closed_fields_and_typed_labels_reject_null_numeric_or_unknown_keys() {
 fn role_aliases_missing_domains_duplicate_owners_and_bounds_fail() {
     let base: InternalRegulatorConfig = serde_yaml::from_str(REGULATOR).unwrap();
     let power = domains();
-    assert!(validate_internal_regulators(&[base.clone()], None).is_err());
+    assert!(validate_internal_regulators(std::slice::from_ref(&base), None).is_err());
     let mut item = base.clone();
     item.input_domain = "missing".into();
     assert!(validate_internal_regulators(&[item], Some(&power)).is_err());

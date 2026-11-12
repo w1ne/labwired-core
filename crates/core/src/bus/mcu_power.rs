@@ -131,12 +131,47 @@ impl SystemBus {
         time_ns: u64,
     ) -> Result<(), String> {
         self.mcu_power.apply_voltages(updates, time_ns)?;
+        self.sync_mcu_power_domain_receivers();
+        Ok(())
+    }
+
+    /// Prepare both receiver families before either changes. Device guards
+    /// stay alive through MCU publication. Notifications run after all locks
+    /// drop and therefore observe the same complete boundary.
+    pub(crate) fn apply_power_rail_observations(
+        &mut self,
+        device_updates: &[(String, String, f64)],
+        mcu_sample: Option<(&[(String, f64)], u64)>,
+    ) -> Result<(), crate::power::RailBatchError> {
+        use crate::power::RailBatchError;
+        let mut devices = self
+            .supply_domains
+            .prepare_updates(device_updates)
+            .map_err(|error| RailBatchError::Device(error.to_string()))?;
+        let notify_devices = !devices.is_empty();
+        if let Some((updates, time_ns)) = mcu_sample {
+            self.mcu_power
+                .apply_voltages_with_publication(updates, time_ns, || devices.publish())
+                .map_err(RailBatchError::Mcu)?;
+        } else {
+            devices.publish();
+        }
+        drop(devices);
+        if notify_devices {
+            self.sync_device_supply_states();
+        }
+        if mcu_sample.is_some() {
+            self.sync_mcu_power_domain_receivers();
+        }
+        Ok(())
+    }
+
+    fn sync_mcu_power_domain_receivers(&mut self) {
         if self.mcu_power.is_measured() {
             for peripheral in &mut self.peripherals {
                 peripheral.dev.sync_power_domains();
             }
         }
-        Ok(())
     }
     pub(crate) fn gpio_threshold_mode_qualified(&self) -> bool {
         let io = self.mcu_power.io_handle();
