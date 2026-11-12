@@ -376,6 +376,16 @@ const WINDOW_OVERLAP_ALLOWLIST: &[(&str, &str, &str, &str)] = &[
          storage.",
     ),
     (
+        "rp2040-feather.yaml",
+        "clk_rst",
+        "io_bank0",
+        "Same RP2040 clock/reset catch-all as rp2040.yaml: the one 160 KB window \
+         spans CLOCKS/RESETS/PSM/XOSC/PLL_SYS/PLL_USB, with IO_BANK0 inside it. \
+         Narrowing would drop XOSC and PLL registers that firmware polls. \
+         Greatest-start-wins routing gives IO_BANK0 its 4 KB deterministically, \
+         so GPIOn_CTRL.FUNCSEL reaches the pad mux model.",
+    ),
+    (
         "rp2350.yaml",
         "clk_rst",
         "io_bank0",
