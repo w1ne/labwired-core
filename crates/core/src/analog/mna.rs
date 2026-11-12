@@ -898,7 +898,8 @@ impl Solver {
             let Some(control) = self.circuit.switches[index].voltage.clone() else {
                 continue;
             };
-            let v = node_diff(&self.node_v, control.pos, control.neg).abs();
+            let sensed = node_diff(&self.node_v, control.pos, control.neg);
+            let v = if control.signed { sensed } else { sensed.abs() };
             let on = control.vt;
             let off = (control.vt - control.vh).max(0.0);
             let closed_now = self.switch_closed[index];
