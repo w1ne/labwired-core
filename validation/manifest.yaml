@@ -465,7 +465,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 86b0c81ce18f79f9d18d02eb182f135700e90d8fdcc7fc6c3a53a49097599aa8
+    drift_ack_digest: 219f135fe825720f1a2d73e667837512f1fb1f5cbbc2f46eacf747d7dcfc1106
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -683,7 +683,12 @@ boards:
     # decoded as no-op hints instead of loads into PC. Decoder and firmware
     # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
     # CAPTURE, and live re-capture remains pending.
-    drift_ack: 2026-11-09
+    # 2026-11-11: Owner acknowledged the exact GPIOTE first-edge correction
+    # in PR #1825: consume actual GPIO transitions after channel enable.
+    # Simulator qualification covers this digest; no new silicon capture ran.
+    # Live recapture: https://github.com/w1ne/labwired-core/issues/1827
+    # Default 30-day acknowledgement expires 2026-12-11.
+    drift_ack: 2026-11-11
     # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
     # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
     # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
@@ -1053,7 +1058,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 86b0c81ce18f79f9d18d02eb182f135700e90d8fdcc7fc6c3a53a49097599aa8
+    drift_ack_digest: 219f135fe825720f1a2d73e667837512f1fb1f5cbbc2f46eacf747d7dcfc1106
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1271,7 +1276,12 @@ boards:
     # decoded as no-op hints instead of loads into PC. Decoder and firmware
     # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
     # CAPTURE, and live re-capture remains pending.
-    drift_ack: 2026-11-09
+    # 2026-11-11: Owner acknowledged the exact GPIOTE first-edge correction
+    # in PR #1825: consume actual GPIO transitions after channel enable.
+    # Simulator qualification covers this digest; no new silicon capture ran.
+    # Live recapture: https://github.com/w1ne/labwired-core/issues/1827
+    # Default 30-day acknowledgement expires 2026-12-11.
+    drift_ack: 2026-11-11
     # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
     # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
     # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
@@ -11148,3 +11158,87 @@ boards:
       - crates/firmware-curiosity-pic32mz-nuttx
       - configs/chips/pic32mz2048efm144.yaml
       - configs/systems/curiosity-pic32mz-ef.yaml
+
+  # Narrow onboarding profiles retain explicit scope and independent core execution gates.
+  - id: esp32-devkitc-32e-gpio-smoke
+    doc: docs/boards/esp32.md
+    chip: configs/chips/esp32-devkitc-32e-gpio-smoke.yaml
+    tier: structural
+    note: Narrow classic ESP32 onboarding profile. The PR-run Tier-1 fixture asserts TIER1 done; the exact-profile execution oracle pins the core timer/vector/RAM witness with a disarmed-timer negative control. GPIO23, UART0 and I2C0 remain the documented profile scope. No silicon timing or full-board coverage is claimed.
+    offline_tests:
+      - firmware_survival::test_esp32_devkitc_32e_gpio_smoke_tier1_survival
+      - esp32_onboarding_exec_oracle::devkitc_gpio_profile_core_timer_exec_oracle
+    models:
+      - crates/core/src/cpu/xtensa_lx7.rs
+      - crates/core/src/decoder/xtensa.rs
+      - configs/chips/esp32-devkitc-32e-gpio-smoke.yaml
+      - crates/core/src/peripherals/esp32/efuse.rs
+      - crates/core/src/peripherals/esp32/gpio.rs
+      - crates/core/src/peripherals/esp32/rmt.rs
+      - crates/core/src/peripherals/esp32/i2c.rs
+      - crates/core/src/peripherals/esp32/ledc.rs
+      - crates/core/src/peripherals/esp32/mcpwm.rs
+      - crates/core/src/peripherals/esp32/pcnt.rs
+      - crates/core/src/peripherals/esp32/rtc_cntl.rs
+      - crates/core/src/peripherals/esp32/sar_adc.rs
+      - crates/core/src/peripherals/esp32/sdio_stub.rs
+      - crates/core/src/peripherals/esp32/sha.rs
+      - crates/core/src/peripherals/esp32/spi.rs
+      - crates/core/src/peripherals/esp32/syscon.rs
+      - crates/core/src/peripherals/esp32/timg.rs
+      - crates/core/src/peripherals/esp32/twai.rs
+      - crates/core/src/peripherals/esp32/uart.rs
+      - crates/core/src/peripherals/esp_rtc_io.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/uart.rs
+  - id: esp32-devkitc-32e-uart1
+    doc: docs/boards/esp32.md
+    chip: configs/chips/esp32-devkitc-32e-uart1.yaml
+    tier: structural
+    note: Narrow classic ESP32 UART1 TX profile. The exact-profile execution oracle pins the core timer/vector/RAM witness with a disarmed-timer negative control. The UART1/GPIO16 smoke has recorded simulator evidence but no dedicated required UART1 firmware lane. No silicon or full-board coverage is claimed.
+    offline_tests:
+      - esp32_onboarding_exec_oracle::devkitc_uart1_profile_core_timer_exec_oracle
+    models:
+      - crates/core/src/cpu/xtensa_lx7.rs
+      - crates/core/src/decoder/xtensa.rs
+      - configs/chips/esp32-devkitc-32e-uart1.yaml
+      - crates/core/src/peripherals/esp32/efuse.rs
+      - crates/core/src/peripherals/esp32/gpio.rs
+      - crates/core/src/peripherals/esp32/rmt.rs
+      - crates/core/src/peripherals/esp32/i2c.rs
+      - crates/core/src/peripherals/esp32/ledc.rs
+      - crates/core/src/peripherals/esp32/mcpwm.rs
+      - crates/core/src/peripherals/esp32/pcnt.rs
+      - crates/core/src/peripherals/esp32/rtc_cntl.rs
+      - crates/core/src/peripherals/esp32/sar_adc.rs
+      - crates/core/src/peripherals/esp32/sdio_stub.rs
+      - crates/core/src/peripherals/esp32/sha.rs
+      - crates/core/src/peripherals/esp32/spi.rs
+      - crates/core/src/peripherals/esp32/syscon.rs
+      - crates/core/src/peripherals/esp32/timg.rs
+      - crates/core/src/peripherals/esp32/twai.rs
+      - crates/core/src/peripherals/esp32/uart.rs
+      - crates/core/src/peripherals/esp_rtc_io.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/uart.rs
+  - id: nucleo-f103rb-bme280
+    doc: docs/boards/nucleo-f103rb.md
+    chip: configs/chips/stm32f103rb-nucleo-bme280-smoke.yaml
+    tier: structural
+    note: Narrow STM32F103RB profile with USART2, LD2/PA5 and I2C1 on PB8/PB9. The exact-profile SysTick execution differential compares every instruction boundary with the legacy walk and requires repeated ISR and main-loop progress. The BME280 smoke has recorded simulator evidence but no dedicated required sensor firmware lane. No silicon timing or full-board coverage is claimed.
+    offline_tests:
+      - systick_walk_differential::nucleo_bme280_profile_systick_irq_is_byte_identical
+    models:
+      - configs/chips/stm32f103rb-nucleo-bme280-smoke.yaml
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/cpu/cortex_m/exec
+      - crates/core/src/decoder/arm.rs
+      - crates/core/src/decoder/arm_thumb32.rs
+      - crates/core/src/peripherals/rcc.rs
+      - crates/core/src/peripherals/afio.rs
+      - crates/core/src/peripherals/gpio.rs
+      - crates/core/src/peripherals/uart.rs
+      - crates/core/src/peripherals/i2c.rs
+      - crates/core/src/peripherals/systick.rs
