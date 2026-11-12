@@ -27,6 +27,18 @@ static mut TIMER_TRAP_MEPC: u64 = 0;
 static mut TIMER_TRAP_MSTATUS: u64 = 0;
 #[no_mangle]
 #[used]
+static mut SOFTWARE_TRAP_COUNT: u64 = 0;
+#[no_mangle]
+#[used]
+static mut SOFTWARE_TRAP_MCAUSE: u64 = 0;
+#[no_mangle]
+#[used]
+static mut SOFTWARE_TRAP_MEPC: u64 = 0;
+#[no_mangle]
+#[used]
+static mut SOFTWARE_TRAP_MSTATUS: u64 = 0;
+#[no_mangle]
+#[used]
 static mut PLIC_TRAP_COUNT: u64 = 0;
 #[no_mangle]
 #[used]
@@ -63,6 +75,65 @@ core::arch::global_asm!(
     "sd t0, 0(t1)",
     "mret",
     ".size fu540_trap_entry, .-fu540_trap_entry",
+    ".section .text.fu540_software_trap_entry, \"ax\"",
+    ".align 2",
+    ".global fu540_software_trap_entry",
+    ".type fu540_software_trap_entry, @function",
+    "fu540_software_trap_entry:",
+    // An interrupt can arrive between any two Rust instructions. Preserve the
+    // caller-saved ABI state before recording the trap and clearing hart 1 MSIP.
+    "addi sp, sp, -128",
+    "sd ra, 0(sp)",
+    "sd t0, 8(sp)",
+    "sd t1, 16(sp)",
+    "sd t2, 24(sp)",
+    "sd t3, 32(sp)",
+    "sd t4, 40(sp)",
+    "sd t5, 48(sp)",
+    "sd t6, 56(sp)",
+    "sd a0, 64(sp)",
+    "sd a1, 72(sp)",
+    "sd a2, 80(sp)",
+    "sd a3, 88(sp)",
+    "sd a4, 96(sp)",
+    "sd a5, 104(sp)",
+    "sd a6, 112(sp)",
+    "sd a7, 120(sp)",
+    "csrr t0, mcause",
+    "la t1, SOFTWARE_TRAP_MCAUSE",
+    "sd t0, 0(t1)",
+    "csrr t0, mepc",
+    "la t1, SOFTWARE_TRAP_MEPC",
+    "sd t0, 0(t1)",
+    "csrr t0, mstatus",
+    "la t1, SOFTWARE_TRAP_MSTATUS",
+    "sd t0, 0(t1)",
+    "la t1, SOFTWARE_TRAP_COUNT",
+    "ld t0, 0(t1)",
+    "addi t0, t0, 1",
+    "sd t0, 0(t1)",
+    // FU540 hart 1's CLINT MSIP word is at base + 4 * mhartid.
+    "li t0, 0x02000004",
+    "sw zero, 0(t0)",
+    "ld ra, 0(sp)",
+    "ld t0, 8(sp)",
+    "ld t1, 16(sp)",
+    "ld t2, 24(sp)",
+    "ld t3, 32(sp)",
+    "ld t4, 40(sp)",
+    "ld t5, 48(sp)",
+    "ld t6, 56(sp)",
+    "ld a0, 64(sp)",
+    "ld a1, 72(sp)",
+    "ld a2, 80(sp)",
+    "ld a3, 88(sp)",
+    "ld a4, 96(sp)",
+    "ld a5, 104(sp)",
+    "ld a6, 112(sp)",
+    "ld a7, 120(sp)",
+    "addi sp, sp, 128",
+    "mret",
+    ".size fu540_software_trap_entry, .-fu540_software_trap_entry",
     ".section .text.fu540_plic_trap_entry, \"ax\"",
     ".align 2",
     ".global fu540_plic_trap_entry",
@@ -137,6 +208,8 @@ const PLIC_PRIORITY4: *mut u32 = 0x0C00_0010 as *mut u32;
 const PLIC_ENABLE_HART1: *mut u32 = 0x0C00_2080 as *mut u32;
 const PLIC_PENDING: *const u32 = 0x0C00_1000 as *const u32;
 const PLIC_THRESHOLD_HART1: *mut u32 = 0x0C20_1000 as *mut u32;
+/// FU540 CLINT `msip` register for hart 1.
+const CLINT_MSIP_HART1: *mut u32 = 0x0200_0004 as *mut u32;
 /// FU540 CLINT `mtime` and hart-1 `mtimecmp` registers.
 const CLINT_MTIMECMP_HART1: *mut u64 = 0x0200_4008 as *mut u64;
 const CLINT_MTIME: *const u64 = 0x0200_BFF8 as *const u64;
@@ -264,6 +337,116 @@ fn timer_interrupt_probe() -> bool {
     pass
 }
 
+/// Set hart 1's CLINT MSIP and verify its M-mode interrupt and MRET path.
+fn software_interrupt_probe() -> bool {
+    unsafe {
+        core::ptr::write_volatile(core::ptr::addr_of_mut!(SOFTWARE_TRAP_COUNT), 0);
+        core::ptr::write_volatile(core::ptr::addr_of_mut!(SOFTWARE_TRAP_MCAUSE), 0);
+        core::ptr::write_volatile(core::ptr::addr_of_mut!(SOFTWARE_TRAP_MEPC), 0);
+        core::ptr::write_volatile(core::ptr::addr_of_mut!(SOFTWARE_TRAP_MSTATUS), 0);
+        core::ptr::write_volatile(CLINT_MSIP_HART1, 1);
+    }
+
+    let pending_before: u64;
+    unsafe {
+        core::arch::asm!(
+            "csrr {mip}, mip",
+            "srli {mip}, {mip}, 3",
+            "andi {mip}, {mip}, 1",
+            mip = lateout(reg) pending_before,
+            options(nomem, nostack),
+        );
+    }
+
+    let loop_start: u64;
+    let loop_end: u64;
+    let returned_mstatus: u64;
+    unsafe {
+        core::arch::asm!(
+            "la {loop_start}, 1f",
+            "la t0, fu540_software_trap_entry",
+            "csrw mtvec, t0",
+            "csrs mie, {msie}",
+            "csrs mstatus, {mie}",
+            "1: li t2, 20000",
+            "2: addi t2, t2, -1",
+            "bnez t2, 2b",
+            "la {loop_end}, 3f",
+            "3: csrr {returned_mstatus}, mstatus",
+            "csrc mstatus, {mie}",
+            msie = in(reg) 1u64 << 3,
+            mie = in(reg) 1u64 << 3,
+            loop_start = lateout(reg) loop_start,
+            loop_end = lateout(reg) loop_end,
+            returned_mstatus = lateout(reg) returned_mstatus,
+            out("t0") _,
+            out("t1") _,
+            out("t2") _,
+            options(nostack),
+        );
+    }
+
+    let (count, cause, mepc, entry_mstatus) = unsafe {
+        (
+            core::ptr::read_volatile(core::ptr::addr_of!(SOFTWARE_TRAP_COUNT)),
+            core::ptr::read_volatile(core::ptr::addr_of!(SOFTWARE_TRAP_MCAUSE)),
+            core::ptr::read_volatile(core::ptr::addr_of!(SOFTWARE_TRAP_MEPC)),
+            core::ptr::read_volatile(core::ptr::addr_of!(SOFTWARE_TRAP_MSTATUS)),
+        )
+    };
+    let msip_cleared = unsafe { core::ptr::read_volatile(CLINT_MSIP_HART1) == 0 };
+    let pending_after: u64;
+    unsafe {
+        core::arch::asm!(
+            "csrr {mip}, mip",
+            "srli {mip}, {mip}, 3",
+            "andi {mip}, {mip}, 1",
+            mip = lateout(reg) pending_after,
+            options(nomem, nostack),
+        );
+    }
+    let mepc_in_wait = mepc >= loop_start && mepc < loop_end;
+    let entry_mie_clear = entry_mstatus & (1 << 3) == 0;
+    let entry_mpie_set = entry_mstatus & (1 << 7) != 0;
+    let entry_mpp_machine = (entry_mstatus >> 11) & 3 == 3;
+    let return_mie_set = returned_mstatus & (1 << 3) != 0;
+    let pass = pending_before == 1
+        && count == 1
+        && cause == ((1u64 << 63) | 3)
+        && mepc_in_wait
+        && entry_mie_clear
+        && entry_mpie_set
+        && entry_mpp_machine
+        && return_mie_set
+        && msip_cleared
+        && pending_after == 0;
+
+    puts("software IRQ mcause=");
+    put_hex64(cause);
+    puts(" count=");
+    put_hex64(count);
+    puts(" mepc_in_wait=");
+    putc(if mepc_in_wait { b'1' } else { b'0' });
+    puts(" entry_mie=");
+    putc(if entry_mie_clear { b'0' } else { b'1' });
+    puts(" entry_mpie=");
+    putc(if entry_mpie_set { b'1' } else { b'0' });
+    puts(" entry_mpp=");
+    putc(b'0' + ((entry_mstatus >> 11) & 3) as u8);
+    puts(" return_mie=");
+    putc(if return_mie_set { b'1' } else { b'0' });
+    puts(" msip_pending=");
+    putc(if pending_before == 1 { b'1' } else { b'0' });
+    puts(" msip_clear=");
+    putc(if msip_cleared && pending_after == 0 {
+        b'1'
+    } else {
+        b'0'
+    });
+    puts(if pass { " ok\n" } else { " FAIL\n" });
+    pass
+}
+
 /// Exercise FU540 PLIC thresholding, then claim and complete UART0 TXWM.
 fn plic_uart_interrupt_probe() -> bool {
     unsafe {
@@ -387,6 +570,7 @@ fn main() -> ! {
     putc(b'\n');
 
     let _timer_pass = timer_interrupt_probe();
+    let _software_pass = software_interrupt_probe();
     let _plic_pass = plic_uart_interrupt_probe();
 
     loop {
