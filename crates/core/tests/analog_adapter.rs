@@ -30,6 +30,7 @@ mod analog {
             trace_samples: 20_000,
             thermistors: BTreeMap::new(),
             regulators: BTreeMap::new(),
+            max_unknowns: labwired_core::analog::MAX_UNKNOWNS,
         }
     }
 

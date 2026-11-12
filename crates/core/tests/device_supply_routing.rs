@@ -75,11 +75,8 @@ fn slave(bus: &mut SystemBus) -> &mut dyn SpiDevice {
     let index = bus.find_peripheral_index_by_name("spi1").unwrap();
     bus.peripherals[index]
         .dev
-        .as_any_mut()
-        .unwrap()
-        .downcast_mut::<labwired_core::peripherals::spi::Spi>()
-        .unwrap()
-        .attached_devices[0]
+        .spi_attached_devices_mut()
+        .unwrap()[0]
         .as_mut()
 }
 fn meta(bus: &mut SystemBus, id: &str) -> serde_json::Value {

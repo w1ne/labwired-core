@@ -1361,3 +1361,67 @@ fn declared_internal_regulator_cannot_use_the_empty_wasm_attachment_path() {
         .unwrap()
         .contains("regulator command history"));
 }
+
+#[test]
+fn analog_capacity_browser_constructor_uses_the_same_explicit_bound() {
+    fn capacity_model(unknowns: usize, max: Option<&str>) -> SystemManifest {
+        let nodes = unknowns - 1;
+        let mut deck = String::from("V1 n0 0 dc 1\n");
+        for i in 0..nodes - 1 {
+            deck.push_str(&format!("R{i} n{i} n{} 1k\n", i + 1));
+        }
+        deck.push_str(&format!("Rlast n{} 0 1k\n", nodes - 1));
+        let mut config = manifest(PLAIN_SYSTEM);
+        let mut model: labwired_config::CosimModelConfig =
+            serde_yaml::from_str("id: capacity\nadapter: analog\nstep_ns: 100\nconfig: {}\n")
+                .unwrap();
+        model
+            .config
+            .insert("netlist_text".into(), serde_yaml::Value::String(deck));
+        model.config.insert(
+            "probes".into(),
+            serde_yaml::to_value(std::collections::HashMap::from([(
+                "voltage",
+                format!("v(n{})", nodes - 1),
+            )]))
+            .unwrap(),
+        );
+        model
+            .outputs
+            .insert("voltage".into(), "board.analog.pa0_volts".into());
+        if let Some(raw) = max {
+            model
+                .config
+                .insert("max_unknowns".into(), serde_yaml::from_str(raw).unwrap());
+        }
+        config.cosim_models.push(model);
+        config
+    }
+    let mut old_default = build(PLAIN_SYSTEM);
+    let error = old_default
+        .attach_cosim_with_ngspice(&capacity_model(129, None), None)
+        .unwrap_err();
+    assert!(error.contains("129") && error.contains("128"), "{error}");
+    let mut explicit = build(PLAIN_SYSTEM);
+    explicit
+        .attach_cosim_with_ngspice(&capacity_model(379, Some("512")), None)
+        .unwrap();
+    assert!(explicit.cosim.is_some());
+    let mut measured_size = build(PLAIN_SYSTEM);
+    measured_size
+        .attach_cosim_with_ngspice(&capacity_model(667, Some("667")), None)
+        .unwrap();
+    assert!(measured_size.cosim.is_some());
+    let mut oversized = build(PLAIN_SYSTEM);
+    let error = oversized
+        .attach_cosim_with_ngspice(&capacity_model(1025, Some("1024")), None)
+        .unwrap_err();
+    assert!(error.contains("1025") && error.contains("1024"), "{error}");
+    for raw in ["1025", "1.5", ".nan", ".inf", "null", "'512'"] {
+        let mut invalid = build(PLAIN_SYSTEM);
+        let error = invalid
+            .attach_cosim_with_ngspice(&capacity_model(3, Some(raw)), None)
+            .unwrap_err();
+        assert!(error.contains("max_unknowns"), "{raw}: {error}");
+    }
+}
