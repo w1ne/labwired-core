@@ -8976,6 +8976,12 @@ boards:
     # the real FreeRTOS routine runs so IDF5 tx_mux spinlocks are initialised.
     # Firmware-library thunk only: no peripheral register map, reset value
     # or captured reset-state window changes. ACK, NOT A CAPTURE.
+    # 2026-11-09 (#1780 fix/esp32c3-rom-boot-flash-size): watched
+    # spi_mem_flash.rs. Dedicated FLASH_PP/SE/BE now decode the 24-bit address
+    # and take the PP byte count from ADDR[31:24] (ESP-IDF HAL layout), so
+    # dedicated program/erase land in flash instead of past its end. Command
+    # semantics only: no register map, reset value or captured reset-state
+    # window changes. ACK, NOT A CAPTURE.
     # 2026-11-09 (fix/xtensa-retw-64bit-return): watched exec/call_window.rs.
     # Shadow-window RETW now keeps all of the callee's a2..a5 the caller can
     # see (was a2 only), so a 64-bit return survives a wrapped call chain.
@@ -8991,7 +8997,7 @@ boards:
     # keeps its writes. This is not an S3 reset-state recapture; the nine
     # captured S3 windows are unchanged. ACK, NOT A CAPTURE.
     drift_ack: 2026-11-10
-    drift_ack_digest: 12be36686ea998c1109f22d88926b4054344bfc99c0d7c1356d494d5e678481f
+    drift_ack_digest: 8e49d6b37a9866225e56f0d77d4119d43db516eb2aa5383290383fbb0915aa50
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.
