@@ -148,6 +148,13 @@ impl I2cDevice for GatedI2cDevice {
     fn claims_address(&self, a: u8) -> bool {
         self.gate.powered() && self.inner.claims_address(a)
     }
+    fn clock_stretch_ns(&self) -> u64 {
+        if self.gate.powered() {
+            self.inner.clock_stretch_ns()
+        } else {
+            0
+        }
+    }
     fn select_address(&mut self, a: u8) {
         if self.gate.powered() {
             self.inner.select_address(a)

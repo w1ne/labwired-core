@@ -367,6 +367,9 @@ impl I2cDevice for TracingI2cDevice {
     fn claims_address(&self, addr: u8) -> bool {
         self.inner.claims_address(addr)
     }
+    fn clock_stretch_ns(&self) -> u64 {
+        self.inner.clock_stretch_ns()
+    }
     fn select_address(&mut self, addr: u8) {
         self.selected = Some(addr);
         self.inner.select_address(addr);

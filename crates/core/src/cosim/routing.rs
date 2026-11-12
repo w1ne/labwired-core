@@ -201,6 +201,8 @@ pub enum SignalPath {
     /// not what drives an AF pad. A circuit that needs the pin's real waveform
     /// (an SPI clock on a scope) pairs this with [`Self::GpioDriven`].
     GpioPad { pad: String },
+    /// Live pad voltage using routed VDD, or the descriptor I/O rail.
+    GpioPadVolts { pad: String },
     /// `board.gpio_driven.<pad>` — whether the MCU's own output stage is driving
     /// the pad, through a GPIO output OR an alternate-function peripheral. False
     /// for an input, an analog pad, a released open-drain line, or a pad nothing
@@ -215,6 +217,8 @@ pub enum SignalPath {
     /// `board.power.<rail>_volts` — the chip supply (`vdd`) or ADC reference
     /// (`vdda`).
     SupplyRail { rail: String },
+    /// Voltage on the separately declared reset pin.
+    ResetInput { pin: String },
     /// `board.motor.<id>.back_emf_v` — the back-EMF an `armature: circuit` DC
     /// motor presents to its netlist.
     MotorBackEmf { motor: String },
@@ -244,6 +248,11 @@ impl SignalPath {
         }
         if let Some(pad) = path.strip_prefix("board.gpio_in.") {
             return (!pad.is_empty()).then(|| Self::GpioInput {
+                pad: pad.to_string(),
+            });
+        }
+        if let Some(pad) = path.strip_prefix("board.gpio_pad_volts.") {
+            return (!pad.is_empty()).then(|| Self::GpioPadVolts {
                 pad: pad.to_string(),
             });
         }
@@ -285,6 +294,12 @@ impl SignalPath {
             let id = rest.strip_suffix(".current_a")?;
             return (!id.is_empty()).then(|| Self::Ina219Current { id: id.to_string() });
         }
+        if let Some(rest) = path.strip_prefix("board.reset.") {
+            let pin = rest.strip_suffix("_volts")?;
+            return (!pin.is_empty()).then(|| Self::ResetInput {
+                pin: pin.to_string(),
+            });
+        }
         if let Some(rest) = path.strip_prefix("board.power.") {
             let rail = rest.strip_suffix("_volts")?;
             return (!rail.is_empty()).then(|| Self::SupplyRail {
@@ -320,6 +335,7 @@ impl SignalPath {
                 | Self::GpioDirection { .. }
                 | Self::GpioInput { .. }
                 | Self::GpioPad { .. }
+                | Self::GpioPadVolts { .. }
                 | Self::GpioDriven { .. }
                 | Self::MotorBackEmf { .. }
         )
@@ -333,6 +349,7 @@ impl SignalPath {
                 | Self::AnalogPad { .. }
                 | Self::AdcChannel { .. }
                 | Self::SupplyRail { .. }
+                | Self::ResetInput { .. }
                 | Self::MotorCurrent { .. }
                 | Self::MotorSupply { .. }
                 | Self::Ina219Current { .. }
@@ -352,38 +369,75 @@ impl SignalPath {
 #[derive(Debug, Clone, PartialEq)]
 pub enum RoutingError {
     /// The pad label does not resolve on this chip.
-    UnknownPad { path: String, pad: String },
+    UnknownPad {
+        path: String,
+        pad: String,
+    },
     /// The pad resolves but its owning GPIO block is not on the bus.
-    UnknownGpio { path: String, pad: String },
+    UnknownGpio {
+        path: String,
+        pad: String,
+    },
     /// The GPIO model that owns the pad cannot report the pad's direction, so
     /// `board.gpio_output.<pad>` has no honest answer on this chip.
-    NoDirection { path: String, pad: String },
+    NoDirection {
+        path: String,
+        pad: String,
+    },
     /// Volts are routed to `board.gpio_in.<pad>`, but the chip descriptor does
     /// not declare `key` (`gpio_input_thresholds` or `io_voltage_v`), so no
     /// voltage can be turned into a level.
-    NoInputThresholds { path: String, key: &'static str },
+    NoInputThresholds {
+        path: String,
+        key: &'static str,
+    },
     /// A model output was routed to a `ui.` path, which only the outside world
     /// sets.
-    ExternalOnly { path: String },
+    ExternalOnly {
+        path: String,
+    },
     /// [`CosimSession::set_signal`] named a path no model input reads.
-    UnknownSignal { path: String },
+    UnknownSignal {
+        path: String,
+    },
     /// [`CosimSession::set_signal`] named a board path, which the machine owns.
-    NotSettable { path: String },
+    NotSettable {
+        path: String,
+    },
     /// [`CosimSession::set_signal_number`] was handed a NaN or an infinity.
-    NotFinite { path: String, value: f64 },
+    NotFinite {
+        path: String,
+        value: f64,
+    },
     /// A model output was routed to a path only the machine can drive.
-    NotWritable { path: String },
+    NotWritable {
+        path: String,
+    },
     /// A model input was sourced from a path the machine cannot be read from.
-    NotReadable { path: String },
+    NotReadable {
+        path: String,
+    },
     /// The chip descriptor's `analog_pins:` names no ADC input for this pad.
     /// Use the explicit `adc.<peripheral>.<channel>_volts` form instead.
-    NoAdcChannel { path: String, pad: String },
+    NoAdcChannel {
+        path: String,
+        pad: String,
+    },
     /// No ADC on the bus accepted the channel.
-    AdcUnavailable { path: String, channel: u8 },
+    AdcUnavailable {
+        path: String,
+        channel: u8,
+    },
     /// The path names a peripheral this bus does not have.
-    UnknownPeripheral { path: String, peripheral: String },
+    UnknownPeripheral {
+        path: String,
+        peripheral: String,
+    },
     /// The path names a peripheral that is not an ADC LabWired can drive.
-    NotAnAdc { path: String, peripheral: String },
+    NotAnAdc {
+        path: String,
+        peripheral: String,
+    },
     /// The ADC has no such input. Its channels are `0..channels`.
     NoSuchAdcChannel {
         path: String,
@@ -392,23 +446,52 @@ pub enum RoutingError {
         channels: u8,
     },
     /// The owning GPIO block refused an externally driven level.
-    DriveRejected { path: String },
+    DriveRejected {
+        path: String,
+    },
     /// `board.power.<rail>_volts` names neither `vdd` nor `vdda`.
-    UnknownRail { path: String, rail: String },
+    UnknownRail {
+        path: String,
+        rail: String,
+    },
     /// `board.power.vdda_volts` names no ADC that accepts a configurable reference.
-    NoAdcReference { path: String },
+    NoAdcReference {
+        path: String,
+    },
     /// The routed ADC reference is not a finite positive voltage.
-    InvalidAdcReference { path: String, volts: f64 },
+    InvalidAdcReference {
+        path: String,
+        volts: f64,
+    },
     /// VDD is routed, but the chip descriptor has no `supply_monitor:`, so no
     /// voltage can hold the core in reset.
-    NoSupplyMonitor { path: String },
+    NoSupplyMonitor {
+        path: String,
+    },
+    NoResetInput {
+        path: String,
+        pin: String,
+    },
+    ResetInputRejected {
+        path: String,
+        reason: String,
+    },
     /// `board.motor.<id>.…` names a motor the bus does not have.
-    UnknownMotor { path: String, motor: String },
+    UnknownMotor {
+        path: String,
+        motor: String,
+    },
     /// `board.motor.<id>.…` names a motor whose winding is not
     /// `armature: circuit`, so no netlist may drive or read it.
-    NotCircuitMotor { path: String, motor: String },
+    NotCircuitMotor {
+        path: String,
+        motor: String,
+    },
     /// `board.ina219.<id>.…` names no declared `ina219` external device.
-    UnknownIna219 { path: String, id: String },
+    UnknownIna219 {
+        path: String,
+        id: String,
+    },
     /// The store held a value of the wrong shape for this path.
     TypeMismatch {
         path: String,
@@ -519,6 +602,13 @@ impl std::fmt::Display for RoutingError {
                 f,
                 "co-sim path '{path}' needs a finite positive ADC reference voltage, got {volts} V"
             ),
+            Self::NoResetInput { path, pin } => write!(
+                f,
+                "co-sim path '{path}': chip has no reset_input declaration for '{pin}'"
+            ),
+            Self::ResetInputRejected { path, reason } => {
+                write!(f, "co-sim path '{path}': {reason}")
+            }
             Self::NoSupplyMonitor { path } => write!(
                 f,
                 "co-sim path '{path}' drives the MCU supply, but the chip descriptor declares no \
@@ -553,21 +643,42 @@ impl std::error::Error for RoutingError {}
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ReadBinding {
     /// Owning peripheral index + bit, read through `Peripheral::read_gpio_output`.
-    Output { peripheral: usize, bit: u8 },
+    Output {
+        peripheral: usize,
+        bit: u8,
+    },
     /// Owning peripheral index + pad number, read through
     /// `Peripheral::read_gpio_is_output`.
-    Direction { peripheral: usize, pad: u8 },
+    Direction {
+        peripheral: usize,
+        pad: u8,
+    },
     /// Owning peripheral index + bit, read through `Peripheral::read_gpio_input`.
-    Input { peripheral: usize, bit: u8 },
+    Input {
+        peripheral: usize,
+        bit: u8,
+    },
     /// Owning peripheral index + pad number, read through
     /// `Peripheral::read_gpio_pad` (the live pin a probe sees).
-    PadLevel { peripheral: usize, pad: u8 },
+    PadLevel {
+        peripheral: usize,
+        pad: u8,
+    },
+    PadVolts {
+        peripheral: usize,
+        pad: u8,
+    },
     /// Owning peripheral index + pad number; true when
     /// `pins::own_drive` says the MCU's own output stage drives the pad (a GPIO
     /// output or an alternate-function peripheral line).
-    Driven { peripheral: usize, pad: u8 },
+    Driven {
+        peripheral: usize,
+        pad: u8,
+    },
     /// Index of an `armature: circuit` motor; its back-EMF in volts.
-    MotorBackEmf { motor: usize },
+    MotorBackEmf {
+        motor: usize,
+    },
 }
 
 /// A resolved store → machine sink.
@@ -577,22 +688,38 @@ enum WriteBinding {
     /// same seam a `board_io` button and a sensor status line come through.
     /// `level` is the pad's Schmitt state: what it read last, which a voltage
     /// between VIL and VIH keeps. Low until a model says otherwise.
-    PadInput { addr: u64, bit: u8, level: bool },
+    PadInput {
+        addr: u64,
+        bit: u8,
+        level: bool,
+    },
     /// An ADC channel seeded through `SystemBus::seed_adc_channel`, on the
     /// peripheral the manifest or the chip descriptor named.
-    AdcChannel { connection: String, channel: u8 },
+    AdcChannel {
+        connection: String,
+        channel: u8,
+    },
     /// The chip's VDD, fed to its supply supervisor.
     SupplyVdd,
+    ResetInput,
     /// The ADC reference rail, written to each ADC model that supports it.
     AdcReference,
     /// Index of an `armature: circuit` motor; its winding current in amps.
-    MotorCurrent { motor: usize },
+    MotorCurrent {
+        motor: usize,
+    },
     /// Index of an `armature: circuit` motor; its supply rail in volts.
-    MotorSupply { motor: usize },
+    MotorSupply {
+        motor: usize,
+    },
     /// Id of a declared `ina219` external device; shunt current in amps.
-    Ina219Current { id: String },
+    Ina219Current {
+        id: String,
+    },
     /// Id of a declared `ina219` external device; bus voltage in volts.
-    Ina219BusV { id: String },
+    Ina219BusV {
+        id: String,
+    },
 }
 
 /// Routes manifest signal paths between a running machine and the co-sim
@@ -685,6 +812,13 @@ impl SignalRouter {
             }
         }
 
+        // References and reset pins must see the same boundary's supply.
+        router.writes.sort_by_key(|(_, binding)| match binding {
+            WriteBinding::SupplyVdd => 0,
+            WriteBinding::AdcReference => 1,
+            WriteBinding::ResetInput => 2,
+            _ => 3,
+        });
         (router, errors)
     }
 
@@ -726,6 +860,19 @@ impl SignalRouter {
                     pad: pad_number,
                 })
             }
+            SignalPath::GpioPadVolts { pad } => {
+                if bus.io_voltage_v.is_none_or(|v| !v.is_finite() || v <= 0.0) {
+                    return Err(RoutingError::NoInputThresholds {
+                        path: path.to_string(),
+                        key: "io_voltage_v",
+                    });
+                }
+                let (peripheral, pad_number) = resolve_pad_number(bus, pad, path)?;
+                Ok(ReadBinding::PadVolts {
+                    peripheral,
+                    pad: pad_number,
+                })
+            }
             SignalPath::GpioDriven { pad } => {
                 let (peripheral, pad_number) = resolve_pad_number(bus, pad, path)?;
                 if bus.peripherals[peripheral].dev.pins().is_none() {
@@ -746,6 +893,7 @@ impl SignalRouter {
             SignalPath::AnalogPad { .. }
             | SignalPath::AdcChannel { .. }
             | SignalPath::SupplyRail { .. }
+            | SignalPath::ResetInput { .. }
             | SignalPath::MotorCurrent { .. }
             | SignalPath::MotorSupply { .. }
             | SignalPath::Ina219Current { .. }
@@ -803,6 +951,20 @@ impl SignalRouter {
                     channel: *channel,
                 })
             }
+            SignalPath::ResetInput { pin } => {
+                if !bus
+                    .reset_input
+                    .config
+                    .as_ref()
+                    .is_some_and(|cfg| cfg.pin.eq_ignore_ascii_case(pin))
+                {
+                    return Err(RoutingError::NoResetInput {
+                        path: path.to_string(),
+                        pin: pin.clone(),
+                    });
+                }
+                Ok(WriteBinding::ResetInput)
+            }
             SignalPath::SupplyRail { rail } => match rail.as_str() {
                 "vdd" => {
                     if !bus.supply.has_monitor() {
@@ -844,6 +1006,7 @@ impl SignalRouter {
             SignalPath::GpioOutput { .. }
             | SignalPath::GpioDirection { .. }
             | SignalPath::GpioPad { .. }
+            | SignalPath::GpioPadVolts { .. }
             | SignalPath::GpioDriven { .. }
             | SignalPath::MotorBackEmf { .. } => Err(RoutingError::NotWritable {
                 path: path.to_string(),
@@ -852,6 +1015,12 @@ impl SignalRouter {
     }
 
     /// A circuit drives the MCU's VDD.
+    pub fn routes_reset(&self) -> bool {
+        self.writes
+            .iter()
+            .any(|(_, binding)| matches!(binding, WriteBinding::ResetInput))
+    }
+
     pub fn routes_supply(&self) -> bool {
         self.writes
             .iter()
@@ -868,6 +1037,59 @@ impl SignalRouter {
         self.reads.iter().map(|(path, _)| path.as_str())
     }
 
+    /// Compare the resolved endpoints, not their spelling. For example,
+    /// `board.analog.pa0_volts` and `adc.adc1.0_volts` can name one ADC input.
+    pub(crate) fn validate_unique_writers(&self) -> Result<(), String> {
+        for (index, (path, binding)) in self.writes.iter().enumerate() {
+            if let Some((other, _)) = self.writes[..index]
+                .iter()
+                .find(|(_, previous)| previous == binding)
+            {
+                return Err(format!(
+                    "world analog routes '{other}' and '{path}' have multiple output writers for one hardware endpoint"
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    /// Prefix already-resolved local routes after binding one world's node.
+    /// The cached peripheral indices remain private to that node's SystemBus.
+    pub(crate) fn qualify(&mut self, prefix: &str) {
+        for (path, _) in &mut self.reads {
+            *path = format!("{prefix}{path}");
+        }
+        for (path, _) in &mut self.writes {
+            *path = format!("{prefix}{path}");
+        }
+    }
+
+    /// A physical pad must have one electrical owner. A digital gpio_net and
+    /// an analog island cannot both drive the same input behind the router.
+    pub(crate) fn claims_gpio(&self, bus: &SystemBus, peripheral: &str, pin: u8) -> bool {
+        let Some(index) = bus.find_peripheral_index_by_name(peripheral) else {
+            return false;
+        };
+        let owner = &bus.peripherals[index];
+        self.reads.iter().any(|(_, binding)| match *binding {
+            ReadBinding::PadLevel { peripheral, pad }
+            | ReadBinding::PadVolts { peripheral, pad }
+            | ReadBinding::Direction { peripheral, pad }
+            | ReadBinding::Driven { peripheral, pad } => peripheral == index && pad == pin,
+            ReadBinding::Input { peripheral, bit } | ReadBinding::Output { peripheral, bit } => {
+                peripheral == index && bit == pin
+            }
+            ReadBinding::MotorBackEmf { .. } => false,
+        }) || self.writes.iter().any(|(_, binding)| match *binding {
+            WriteBinding::PadInput { addr, bit, .. } => {
+                addr >= owner.base
+                    && addr < owner.base + owner.size
+                    && pad_number(owner.dev.as_ref(), addr - owner.base, bit) == pin
+            }
+            _ => false,
+        })
+    }
+
     /// Machine → store. Called immediately before stepping the models, so a
     /// model sees the pin levels as of the boundary it is stepped to.
     ///
@@ -877,6 +1099,27 @@ impl SignalRouter {
     /// the model keeps whatever it had, instead of being told the pin is low.
     pub fn sample(&self, bus: &SystemBus, signals: &mut CosimSignals) {
         for (path, binding) in &self.reads {
+            if let ReadBinding::PadVolts { peripheral, pad } = *binding {
+                if let Some(level) = bus
+                    .peripherals
+                    .get(peripheral)
+                    .and_then(|p| p.dev.read_gpio_pad(pad))
+                {
+                    let supply = bus.supply.status();
+                    let high = if supply.routed {
+                        supply.vdd_volts.unwrap_or(0.0)
+                    } else {
+                        bus.io_voltage_v.unwrap_or(0.0)
+                    };
+                    let volts = if level && !supply.held_in_reset && !bus.reset_input.is_held() {
+                        high.max(0.0)
+                    } else {
+                        0.0
+                    };
+                    signals.insert(path.clone(), CosimSignalValue::F64(volts));
+                }
+                continue;
+            }
             if let ReadBinding::MotorBackEmf { motor } = *binding {
                 // Absent, not 0 V, if the motor cannot answer.
                 if let Some(volts) = bus.circuit_motor_back_emf_v(motor) {
@@ -901,13 +1144,16 @@ impl SignalRouter {
                     .peripherals
                     .get(peripheral)
                     .and_then(|p| p.dev.read_gpio_pad(pad)),
+                ReadBinding::Driven { .. } if bus.supply.is_held() || bus.reset_input.is_held() => {
+                    Some(false)
+                }
                 ReadBinding::Driven { peripheral, pad } => bus
                     .peripherals
                     .get(peripheral)
                     .and_then(|p| p.dev.pins())
                     .and_then(|port| crate::pins::own_drive(port, pad))
                     .map(|drive| matches!(drive, crate::logic_capture::PadDrive::Driven)),
-                ReadBinding::MotorBackEmf { .. } => None,
+                ReadBinding::MotorBackEmf { .. } | ReadBinding::PadVolts { .. } => None,
             };
             if let Some(level) = level {
                 signals.insert(path.clone(), CosimSignalValue::Bool(level));
@@ -983,6 +1229,27 @@ impl SignalRouter {
                         errors.push(RoutingError::AdcUnavailable {
                             path: path.clone(),
                             channel: *channel,
+                        });
+                    }
+                }
+                WriteBinding::ResetInput => {
+                    let Some(volts) = signal_as_f64(value) else {
+                        errors.push(RoutingError::TypeMismatch {
+                            path: path.clone(),
+                            value: value.clone(),
+                        });
+                        continue;
+                    };
+                    let status = bus.supply.status();
+                    let vdd = if status.routed {
+                        status.vdd_volts
+                    } else {
+                        bus.io_voltage_v
+                    };
+                    if let Err(reason) = bus.reset_input.apply(volts, vdd, time_ns) {
+                        errors.push(RoutingError::ResetInputRejected {
+                            path: path.clone(),
+                            reason,
                         });
                     }
                 }
@@ -1659,6 +1926,9 @@ impl CosimSession {
         if self.router.routes_supply() {
             bus.supply.attach();
         }
+        if self.router.routes_reset() {
+            bus.reset_input.attach();
+        }
         let time_ns = cycles_to_ns(total_cycles, self.cpu_hz);
         if time_ns < self.next_boundary_ns {
             return Ok((Vec::new(), Vec::new()));
@@ -1703,6 +1973,9 @@ impl CosimSession {
         // from the first model boundary: the circuit has not delivered yet.
         if self.router.routes_supply() {
             machine.attach_supply();
+        }
+        if self.router.routes_reset() {
+            machine.bus.reset_input.attach();
         }
         let to_boundary = self.cycles_until_boundary(machine.total_cycles);
         let cycle_limit = request
