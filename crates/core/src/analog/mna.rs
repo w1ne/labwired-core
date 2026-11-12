@@ -13,7 +13,8 @@
 //!
 //! `N` node voltages (ground is not an unknown) followed by `M` branch
 //! currents: one per voltage source in netlist order, then one per inductor in
-//! netlist order. `N + M` is capped at [`MAX_UNKNOWNS`]; the matrix is dense
+//! netlist order. `N + M` defaults to [`MAX_UNKNOWNS`] and can be explicitly
+//! bounded up to [`HARD_MAX_UNKNOWNS`]; the matrix is dense
 //! and the browser is the target, so a circuit that wants more wants ngspice.
 //!
 //! ## Companion models
@@ -59,11 +60,14 @@ use super::netlist::{
     MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN,
 };
 
-/// Largest MNA system the in-core engine solves: `N` nodes + `M` branch
-/// currents. The bound accommodates routed-PCB resistor terminals while keeping
-/// dense LU's `O(n³)` factorization and two `O(n²)` matrix buffers bounded.
-/// Larger circuits belong on the ngspice adapter.
+/// Default limit for `N` nodes + `M` branch currents. Existing callers retain
+/// this bound unless they explicitly select a larger bounded limit.
 pub const MAX_UNKNOWNS: usize = 128;
+
+/// Absolute limit for an explicitly configured MNA system. Two dense matrix
+/// buffers use at most 16 MiB; LU factorization remains `O(n³)`. Larger circuits
+/// belong on the ngspice adapter. Checked before any dense allocation.
+pub const HARD_MAX_UNKNOWNS: usize = 1024;
 
 /// Integration rule for the reactive companion models.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -408,11 +412,26 @@ impl Solver {
     /// (`roff`), because their control is a routed input and no input has
     /// arrived yet.
     pub fn new(circuit: Circuit, integration: Integration) -> Result<Self, AnalogError> {
+        Self::new_with_max_unknowns(circuit, integration, MAX_UNKNOWNS)
+    }
+
+    /// Build with an explicit resource bound in `1..=HARD_MAX_UNKNOWNS`.
+    /// The bound changes admission only; stamping and solve order are unchanged.
+    pub fn new_with_max_unknowns(
+        circuit: Circuit,
+        integration: Integration,
+        max_unknowns: usize,
+    ) -> Result<Self, AnalogError> {
+        if !(1..=HARD_MAX_UNKNOWNS).contains(&max_unknowns) {
+            return Err(AnalogError::Config(format!(
+                "max_unknowns must be an integer in 1..={HARD_MAX_UNKNOWNS}"
+            )));
+        }
         let unknowns = circuit.unknowns();
-        if unknowns > MAX_UNKNOWNS {
+        if unknowns > max_unknowns {
             return Err(AnalogError::TooLarge {
                 unknowns,
-                max: MAX_UNKNOWNS,
+                max: max_unknowns,
             });
         }
         if unknowns == 0 {
@@ -1631,7 +1650,7 @@ impl Solver {
     }
 
     /// Dense LU with partial pivoting, in place over the scratch matrix. Own
-    /// implementation on purpose: the systems are at most 128×128, and a linear
+    /// implementation on purpose: the systems are at most 1024×1024, and a linear
     /// algebra dependency would have to compile to WASM and stay deterministic
     /// across hosts to buy nothing at this size.
     fn factorize(&mut self) -> Result<(), AnalogError> {

@@ -42,7 +42,7 @@ pub mod netlist;
 pub mod trace;
 
 pub use adapter::{AnalogConfig, AnalogCosimAdapter, Probe, ThermistorConfig};
-pub use mna::{Integration, Solver, MAX_STEP_CUTS, MAX_UNKNOWNS};
+pub use mna::{Integration, Solver, HARD_MAX_UNKNOWNS, MAX_STEP_CUTS, MAX_UNKNOWNS};
 pub use netlist::{
     parse_netlist, parse_spice_value, AnalogError, Bjt, BjtModel, Capacitor, Cccs, Ccvs, Circuit,
     ComparatorModel, ComparatorOutput, CurrentSource, Diode, DiodeModel, Inductor, ModelCard,
