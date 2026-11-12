@@ -1529,7 +1529,7 @@ const ESP32_GPIO_OUT1_OFFSET: u64 = 0x10;
 /// would report GPIO1's direction for GPIO33.
 fn pad_number(owner: &dyn Peripheral, register_offset: u64, bit: u8) -> u8 {
     let is_port = owner.gpio_port_offsets().is_some();
-    if !is_port && register_offset == ESP32_GPIO_OUT1_OFFSET {
+    if !is_port && (register_offset == ESP32_GPIO_OUT1_OFFSET || register_offset == 0x40) {
         bit.saturating_add(32)
     } else {
         bit

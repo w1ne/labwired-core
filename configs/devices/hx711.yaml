@@ -190,5 +190,5 @@ metadata:
 emit:
   connection: gpio
   config:
-    - { key: sck_pin, from_part_pins: [SCK] }
-    - { key: dt_pin, from_part_pins: [DT] }
+    - { key: sck_pin, from_part_pin: [SCK] }
+    - { key: dt_pin, from_part_pin: [DT] }

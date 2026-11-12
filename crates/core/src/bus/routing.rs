@@ -244,7 +244,22 @@ impl SystemBus {
         let Some(idx) = self.find_peripheral_index(addr) else {
             return false;
         };
-        self.set_peripheral_gpio_input(idx, bit, level)
+        // IDR routes carry a register-local bit. The S3 PinPort accepts a
+        // physical pad number, so IN1 bit 0 is GPIO32, not GPIO0.
+        let entry = &self.peripherals[idx];
+        let is_s3 = entry
+            .dev
+            .as_any()
+            .is_some_and(|a| a.is::<crate::peripherals::esp32s3::gpio::Esp32s3Gpio>());
+        let pin = if is_s3 && addr == entry.base + 0x40 {
+            match bit.checked_add(32) {
+                Some(pin) => pin,
+                None => return false,
+            }
+        } else {
+            bit
+        };
+        self.set_peripheral_gpio_input(idx, pin, level)
     }
 
     /// Resolve a pin label to its `(IDR address, bit)` so a sensor can
@@ -290,6 +305,25 @@ impl SystemBus {
             return Some((bus.peripherals[idx].base + offsets.input, bit));
         }
         // ESP32 / ESP32-C3: "GPIO5", "gpio5", "IO5", or bare "5" → gpio peripheral IN reg.
+        // ESP32-S3 has two input banks. Match its output resolver rather
+        // than treating it as classic ESP32/C3 (which loses the entire part).
+        // ESP-IDF gpio_reg.h: GPIO_IN=0x3c, GPIO_IN1=0x40.
+        if let Some(pad) = Self::parse_esp32s3_gpio_pin(pin) {
+            if let Some(idx) = bus.find_peripheral_index_by_name("gpio") {
+                let entry = &bus.peripherals[idx];
+                if entry
+                    .dev
+                    .as_any()
+                    .is_some_and(|a| a.is::<crate::peripherals::esp32s3::gpio::Esp32s3Gpio>())
+                {
+                    return Some(if pad < 32 {
+                        (entry.base + 0x3c, pad)
+                    } else {
+                        (entry.base + 0x40, pad - 32)
+                    });
+                }
+            }
+        }
         if let Some(bit) = Self::parse_esp32_gpio_pin(pin) {
             let idx = bus.find_peripheral_index_by_name("gpio")?;
             let is_esp32 = bus.peripherals[idx]
