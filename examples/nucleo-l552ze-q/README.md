@@ -49,6 +49,14 @@ against an independent Gummel–Poon load line, confirms the finite-VAF shift as
 base drive changes, and converts both branches alongside the same NTC and
 Shockley diode. This is model behavior coverage, not silicon validation.
 
+[`analog-bjt-high-injection-adc-system.yaml`](analog-bjt-high-injection-adc-system.yaml)
+routes matched Gummel–Poon NPN branches with and without IKF/IKR/NKF rolloff
+through PB0/PB1 to ADC1_IN15/IN16. The integration test compares solved
+collector voltages with independent load-line roots over a base-drive sweep,
+checks the high-drive rolloff shift, and converts both branches alongside the
+same NTC and Shockley diode. This is model behavior coverage, not silicon
+validation.
+
 ## Build and run
 
 ```bash
