@@ -1,0 +1,34 @@
+{
+  "contract_failures": [],
+  "matched": {
+    "r7fa6m5bh": {
+      "fixture": "nrf",
+      "modes": [
+        "step",
+        "batch"
+      ]
+    },
+    "r7fa8m1ah": {
+      "fixture": "ra8m1",
+      "modes": [
+        "step",
+        "batch"
+      ]
+    }
+  },
+  "measured": {
+    "r7fa6m5bh": {
+      "batch": 1.6
+    },
+    "r7fa8m1ah": {
+      "batch": 1.5
+    }
+  },
+  "never_measured": [],
+  "ok": true,
+  "regressions": [],
+  "skipped": {},
+  "stale": [],
+  "unmeasurable": [],
+  "waived": {}
+}

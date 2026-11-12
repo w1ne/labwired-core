@@ -1,0 +1,127 @@
+{
+  "created_utc": "2026-11-12T12:34:14.747581+00:00",
+  "base_commit": "ccbda884c9aaa99ecaae749291d9f0f0580cabb2",
+  "integrated_original_commits": [
+    "12fec73c211ddb3b4e0cec4d1241f42d8b4ecb54",
+    "65efd6fd683e166169f23ccb7b47a153f681f929"
+  ],
+  "scope": "Generic rail/driver-command follow-up plus cold reset-body extraction. No native model or hardware acknowledgment.",
+  "source_sha256": {
+    "crates/config/tests/internal_regulators.rs": "b86a46374cb205a51c2617e3373e5d68b626824954dd2d8c1fc3babbe512dd76",
+    "crates/core/src/bus/mcu_power.rs": "6bd7df49f9d7dfbe047b598105f11aff6e12bfc8f05b69a0924b56d5e09ead6b",
+    "crates/core/src/cosim/drive_command_tests.rs": "3dbe8792c8414f3936ce17ac1d619ba715ceaa19c442f514ea31741f7a801f3a",
+    "crates/core/src/cosim/routing.rs": "f396aa1371126bec67c18de01128c1b3f1014500a84f5aafe96d884498240e41",
+    "crates/core/src/machine/boundary.rs": "7916af0ec7cf06ee42176473f8074312eef31adbc338bf0d130c087240c25b67",
+    "crates/core/src/peripherals/components/supply_domain.rs": "acec5867036c846089dd948c0b1196d28c0074f0eb7e2a17eac70378132d32e0",
+    "crates/core/src/peripherals/components/supply_domain/rail_batch_tests.rs": "78978b65c40bf4650a31c2b719f8d78850994efed37ab48a7f6036c3c6f4fab3",
+    "crates/core/src/power.rs": "2567931a17ecca2031721ed169e432bab68304107f4a21f2719841f35b880b7a",
+    "crates/core/src/power_domains.rs": "1364f576651f1be2bac29aefbee8b6c525f56efaeac3e0d29fccb7eecda21ece",
+    "crates/core/tests/controlled_buck_session.rs": "b2dac8247a5cf33763c9dc7e4bcb312ed4ea929cb8bf3f471dcbc4ced992ea54",
+    "crates/core/tests/device_supply_rails.rs": "b909be49cdd30a40d2e0587f8671774ddbac720d7e47c316458121642e845a45",
+    "crates/core/tests/device_supply_routing.rs": "1dae82666b2db9d8a67cf2a85f6e5c626d11b0aea821bc05ca7a1961a066116b",
+    "crates/core/tests/mcu_power_domains.rs": "10ad62b08e7b10c8d49ae7fbdafad812b1a2760d350082312ce417d32a31f2d0"
+  },
+  "cli_sha256": "fcc4fa0c821a6557b083285c7f90f92814a4de138462d62d8b8bd93a19b17879",
+  "build": {
+    "rustc": "1.95.0",
+    "features": [
+      "event-scheduler"
+    ],
+    "profile": "release",
+    "override": {
+      "CARGO_PROFILE_RELEASE_DEBUG": "0",
+      "CARGO_BUILD_JOBS": "2",
+      "CARGO_INCREMENTAL": "0"
+    }
+  },
+  "fresh_final_tests": {
+    "controlled_buck_session": 15,
+    "machine_mcu_power": 6,
+    "reset_input": 5,
+    "peripheral_reset_request_reboots_cpu_via_vector_table": 1
+  },
+  "peripheral_reset_replay": "The unchanged existing core unit test was compiled as a small external rustc --test harness against the current event-scheduler labwired-core rlib. This avoids the local monolithic unit-test memory failure; it does not replace the normal repository commit/push gates or full CI.",
+  "earlier_unchanged_component_checks": {
+    "focused_integration_tests": 89,
+    "routing_unit_tests": 41,
+    "atomic_rail_unit_tests": 5,
+    "note": "Ran before the final cold-reset extraction. The rail/driver implementation did not change afterward; final reset/regulator coverage is listed separately."
+  },
+  "performance": {
+    "step": {
+      "contract_failures": [],
+      "matched": {
+        "r7fa6m5bh": {
+          "fixture": "nrf",
+          "modes": [
+            "step",
+            "batch"
+          ]
+        },
+        "r7fa8m1ah": {
+          "fixture": "ra8m1",
+          "modes": [
+            "step",
+            "batch"
+          ]
+        }
+      },
+      "measured": {
+        "r7fa6m5bh": {
+          "step": 911.4
+        },
+        "r7fa8m1ah": {
+          "step": 909.5
+        }
+      },
+      "never_measured": [],
+      "ok": true,
+      "regressions": [],
+      "skipped": {},
+      "stale": [],
+      "unmeasurable": [],
+      "waived": {}
+    },
+    "batch": {
+      "contract_failures": [],
+      "matched": {
+        "r7fa6m5bh": {
+          "fixture": "nrf",
+          "modes": [
+            "step",
+            "batch"
+          ]
+        },
+        "r7fa8m1ah": {
+          "fixture": "ra8m1",
+          "modes": [
+            "step",
+            "batch"
+          ]
+        }
+      },
+      "measured": {
+        "r7fa6m5bh": {
+          "batch": 1.6
+        },
+        "r7fa8m1ah": {
+          "batch": 1.5
+        }
+      },
+      "never_measured": [],
+      "ok": true,
+      "regressions": [],
+      "skipped": {},
+      "stale": [],
+      "unmeasurable": [],
+      "waived": {}
+    },
+    "no_budgets_changed": true,
+    "remaining": "Full supported-board CI, including ESP32, still required."
+  },
+  "rejected_attempt": "An earlier supply-boundary rearrangement measured 928.2/926.4 Ir/step on RA6M5/RA8M1 and failed. It was reverted; advance.rs matches the public base.",
+  "limitations": [
+    "No native five-MCU execution is claimed by this generic receipt.",
+    "No physical capture or new silicon validation."
+  ]
+}

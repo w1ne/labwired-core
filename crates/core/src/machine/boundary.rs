@@ -691,35 +691,7 @@ impl<C: Cpu> Machine<C> {
         // machinery so MSP/PC reload from vector[0]/vector[1] via the CPU
         // reset path. No-op on non-Cortex-M targets (no SCB on the bus).
         if self.drain_scb_reset_request() {
-            // AIRCR.SYSRESETREQ is self-clearing across the reset. Clear the
-            // modeled readback bit too so later boundaries do not retrigger it.
-            if let Some(index) = self.scb_index {
-                self.bus.peripherals[index].dev.write_u32(0x0c, 0)?;
-            }
-            if self.bus.mcu_power.system_reset_scope()
-                == Some(labwired_config::PowerSystemResetScope::Chip)
-            {
-                self.bus
-                    .mcu_power
-                    .record_reset(crate::power_domains::PowerResetCause::System)
-                    .map_err(crate::SimulationError::Other)?;
-                self.apply_mcu_power_events()?;
-            } else {
-                // Core-only profiles keep their detector configuration and
-                // chip reset flags. The existing callback still resets core-
-                // local SysTick/debug blocks; exact profiles own its scope.
-                self.reset_core_system_state();
-                self.reset()?;
-                if !self.bus.mcu_power.is_configured() {
-                    self.record_peripheral_reset_cause(crate::PeripheralResetCause::System);
-                }
-                self.system_reset_peripherals();
-            }
-            // An emulated SoftDevice restarts with the chip (crate::sd_hle).
-            if let Some(slot) = self.sd_hle.as_mut() {
-                slot.sd.reset();
-            }
-            tracing::debug!("SCB SYSRESETREQ: CPU rebooted through vector table");
+            self.apply_scb_reset_at_boundary()?;
         }
 
         // Peripheral-requested CPU reset (e.g. a watchdog time-out with reset
@@ -729,24 +701,7 @@ impl<C: Cpu> Machine<C> {
         if !self.reset_request_indices.is_empty() {
             let requests = self.drain_peripheral_reset_requests();
             if !requests.is_empty() {
-                if self.bus.mcu_power.is_configured() {
-                    self.bus
-                        .mcu_power
-                        .record_reset(crate::power_domains::PowerResetCause::System)
-                        .map_err(crate::SimulationError::Other)?;
-                    self.apply_mcu_power_events()?;
-                } else {
-                    self.reset_core_system_state();
-                    self.reset()?;
-                    self.system_reset_peripherals();
-                }
-                for cause in requests.into_iter().flatten() {
-                    self.record_peripheral_reset_cause(cause);
-                }
-                if let Some(slot) = self.sd_hle.as_mut() {
-                    slot.sd.reset();
-                }
-                tracing::debug!("peripheral reset request: CPU rebooted through vector table");
+                self.apply_peripheral_reset_at_boundary(requests)?;
             }
         }
 
@@ -819,6 +774,71 @@ impl<C: Cpu> Machine<C> {
             self.logic_observe(logic_boundary);
         }
 
+        Ok(())
+    }
+
+    // Reset actions are rare. Keep their allocation/error paths outside the
+    // per-instruction boundary so adding a power profile does not enlarge the
+    // ordinary execution loop. The request checks and ordering stay above.
+    #[cold]
+    #[inline(never)]
+    fn apply_scb_reset_at_boundary(&mut self) -> SimResult<()> {
+        // AIRCR.SYSRESETREQ is self-clearing across the reset. Clear the
+        // modeled readback bit too so later boundaries do not retrigger it.
+        if let Some(index) = self.scb_index {
+            self.bus.peripherals[index].dev.write_u32(0x0c, 0)?;
+        }
+        if self.bus.mcu_power.system_reset_scope()
+            == Some(labwired_config::PowerSystemResetScope::Chip)
+        {
+            self.bus
+                .mcu_power
+                .record_reset(crate::power_domains::PowerResetCause::System)
+                .map_err(crate::SimulationError::Other)?;
+            self.apply_mcu_power_events()?;
+        } else {
+            // Core-only profiles keep their detector configuration and
+            // chip reset flags. The existing callback still resets core-
+            // local SysTick/debug blocks; exact profiles own its scope.
+            self.reset_core_system_state();
+            self.reset()?;
+            if !self.bus.mcu_power.is_configured() {
+                self.record_peripheral_reset_cause(crate::PeripheralResetCause::System);
+            }
+            self.system_reset_peripherals();
+        }
+        // An emulated SoftDevice restarts with the chip (crate::sd_hle).
+        if let Some(slot) = self.sd_hle.as_mut() {
+            slot.sd.reset();
+        }
+        tracing::debug!("SCB SYSRESETREQ: CPU rebooted through vector table");
+        Ok(())
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn apply_peripheral_reset_at_boundary(
+        &mut self,
+        requests: Vec<Option<crate::PeripheralResetCause>>,
+    ) -> SimResult<()> {
+        if self.bus.mcu_power.is_configured() {
+            self.bus
+                .mcu_power
+                .record_reset(crate::power_domains::PowerResetCause::System)
+                .map_err(crate::SimulationError::Other)?;
+            self.apply_mcu_power_events()?;
+        } else {
+            self.reset_core_system_state();
+            self.reset()?;
+            self.system_reset_peripherals();
+        }
+        for cause in requests.into_iter().flatten() {
+            self.record_peripheral_reset_cause(cause);
+        }
+        if let Some(slot) = self.sd_hle.as_mut() {
+            slot.sd.reset();
+        }
+        tracing::debug!("peripheral reset request: CPU rebooted through vector table");
         Ok(())
     }
 
