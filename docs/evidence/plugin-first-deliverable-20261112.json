@@ -1,0 +1,60 @@
+{
+  "date": "2026-11-12",
+  "purpose": "Synthetic first-deliverable acceptance for labwired-core PR 1699",
+  "project": {
+    "id": "78b1947279d86471af7be43f8dcbd2c8",
+    "board": "arduino-uno",
+    "visibility": "unlisted",
+    "content_hash": "ffb9fc210c67637efb83ad57bc2a4a74b923b49164bc2894f62961a5ca9b8e03"
+  },
+  "persistence": {
+    "read_back": true,
+    "source_present": true,
+    "entry_path": "src/main.ino",
+    "language": "arduino"
+  },
+  "declared_oracle": {
+    "serial": [
+      {
+        "contains": "PLUGIN_BLINK_OK"
+      }
+    ],
+    "gpio_edges": [
+      {
+        "pin": "D2",
+        "min_edges": 4
+      }
+    ]
+  },
+  "verification": {
+    "ok": true,
+    "verified": true,
+    "proof": "oracle",
+    "oracle_source": "declared",
+    "verified_hash": "ffb9fc210c67637efb83ad57bc2a4a74b923b49164bc2894f62961a5ca9b8e03"
+  },
+  "architect_assertions": [
+    {
+      "kind": "serial",
+      "status": "passed",
+      "detail": "serial matches /(?:^|[^A-Za-z0-9_])PLUGIN_BLINK_OK(?:$|[^A-Za-z0-9_])/"
+    },
+    {
+      "kind": "gpio_edges",
+      "status": "passed",
+      "detail": "D2 transitioned 4 time(s) (>= 4)",
+      "measured": {
+        "value": 4,
+        "unit": "edges"
+      }
+    }
+  ],
+  "limits": [
+    "Synthetic hosted simulation only; no physical hardware or customer activation evidence.",
+    "Names containing PR1699 were interpreted as an explicit PR1699 pad by the runtime tokenizer. Two initial calls failed before saving; a neutral name created the project.",
+    "The request asked for 330 ohms; the generated diagram contains 220 ohms. Analog current and resistor-value compliance are not covered by the serial/GPIO oracle.",
+    "The high-level response reported status working and simulation not_run despite fresh saved model_verified evidence. Explicit project_get and project_verify establish the accepted proof.",
+    "Exact timing was not proved by this oracle; only marker presence and at least four D2 transitions were checked.",
+    "Fresh Claude/Grok installation and marketplace publication are not established by this receipt."
+  ]
+}
