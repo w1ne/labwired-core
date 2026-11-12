@@ -261,7 +261,11 @@ const BSRR: u64 = GPIOA + 0x10;
 const RCC_APB2ENR: u64 = 0x4002_1018;
 
 fn rig(device_type: &str, config: &[(&str, &str)]) -> SystemBus {
-    let chip_path = repo("configs/chips/stm32f103.yaml");
+    rig_for_chip("stm32f103", device_type, config)
+}
+
+fn rig_for_chip(chip_name: &str, device_type: &str, config: &[(&str, &str)]) -> SystemBus {
+    let chip_path = repo(&format!("configs/chips/{chip_name}.yaml"));
     let chip = ChipDescriptor::from_file(&chip_path).expect("load chip descriptor");
     let mut cfg = HashMap::new();
     for (k, v) in config {
@@ -291,7 +295,9 @@ fn rig(device_type: &str, config: &[(&str, &str)]) -> SystemBus {
         memory_overrides: Default::default(),
     };
     let mut bus = SystemBus::from_config(&chip, &manifest).expect("build bus");
-    bus.write_u32(RCC_APB2ENR, 0xFFFF).expect("ungate GPIOA");
+    if chip_name == "stm32f103" {
+        bus.write_u32(RCC_APB2ENR, 0xFFFF).expect("ungate GPIOA");
+    }
     bus
 }
 
@@ -340,8 +346,21 @@ fn assert_same_artifact(got: &Artifact, want: &serde_json::Value, kind: &str, wh
         );
     }
     // Every key, both ways: a descriptor that publishes MORE than the model did
-    // is also a change, and one the browser would show.
-    let mut extra: Vec<&String> = have.keys().filter(|k| !want.contains_key(*k)).collect();
+    // is also a change, and one the browser would show. TM1637 Acc prove history
+    // (`ack_count` / `bus_frames` / `frames_seen` / `framing_errors` / live
+    // `grids`) is an intentional additive on top of the deleted model's meta —
+    // allow those keys so field-for-field decode parity stays the gate.
+    const TM1637_PROVE_META: &[&str] = &[
+        "ack_count",
+        "bus_frames",
+        "frames_seen",
+        "framing_errors",
+        "grids",
+    ];
+    let mut extra: Vec<&String> = have
+        .keys()
+        .filter(|k| !want.contains_key(*k) && !TM1637_PROVE_META.contains(&k.as_str()))
+        .collect();
     extra.sort();
     assert!(
         extra.is_empty(),
@@ -424,6 +443,145 @@ fn tm1637_rig() -> SystemBus {
     rig("tm1637-7seg", &[("clk_pin", "PA8"), ("dio_pin", "PA9")])
 }
 
+const RP_SIO_OUT: u64 = 0xD000_0010;
+const RP_SIO_OE: u64 = 0xD000_0020;
+const RP_PANEL_PINS: u32 = (1 << 2) | (1 << 3);
+
+fn rp2040_tm1637_rig() -> SystemBus {
+    let mut bus = rig_for_chip(
+        "rp2040",
+        "tm1637-7seg",
+        &[("clk_pin", "GP2"), ("dio_pin", "GP3")],
+    );
+    // IO_BANK0 GPIO2_CTRL / GPIO3_CTRL select the SIO function explicitly.
+    bus.write_u32(0x4001_4014, 5).unwrap();
+    bus.write_u32(0x4001_401C, 5).unwrap();
+    assert_eq!(
+        SystemBus::resolve_pin_odr_pub(&bus, "GP2"),
+        Some((RP_SIO_OUT, 2))
+    );
+    assert_eq!(
+        SystemBus::resolve_pin_odr_pub(&bus, "GP3"),
+        Some((RP_SIO_OUT, 3))
+    );
+    assert!(SystemBus::resolve_pin_odr_pub(&bus, "GP30").is_none());
+    bus
+}
+
+fn four_digit_script() -> Tm1637Script {
+    let mut script = Tm1637Script::new();
+    for bytes in [&[0x40][..], &[0xC0, 0x06, 0x5B, 0x4F, 0x66], &[0x8F]] {
+        script.start();
+        for &byte in bytes {
+            script.byte(byte);
+        }
+        script.stop();
+    }
+    script
+}
+
+#[test]
+fn rp2040_gp2_gp3_decode_both_latch_and_output_enable_bit_banging() {
+    let script = four_digit_script();
+    let oracle = script.oracle();
+    for open_drain in [false, true] {
+        let mut bus = rp2040_tm1637_rig();
+        if open_drain {
+            // Drive LOW with OE=1; release to the declared pull-up with OE=0.
+            // OUT never changes, so an output-latch-only observer cannot pass.
+            bus.write_u32(RP_SIO_OUT, 0).unwrap();
+        } else {
+            bus.write_u32(RP_SIO_OUT, RP_PANEL_PINS).unwrap();
+            bus.write_u32(RP_SIO_OE, RP_PANEL_PINS).unwrap();
+        }
+        for &(clk, dio) in &script.0 {
+            let high = (u32::from(clk) << 2) | (u32::from(dio) << 3);
+            let (address, value) = if open_drain {
+                (RP_SIO_OE, !high & RP_PANEL_PINS)
+            } else {
+                (RP_SIO_OUT, high)
+            };
+            bus.write_u32(address, value).unwrap();
+        }
+        if open_drain {
+            assert_eq!(bus.read_u32(RP_SIO_OUT).unwrap() & RP_PANEL_PINS, 0);
+        }
+        let artifact = inspect_artifact(bus);
+        assert_same_artifact(&artifact, &oracle.artifact(), "text_display", "RP2040");
+        assert_eq!(artifact.meta["text"], "1234");
+        assert_eq!(artifact.meta["ack_count"], 7, "open_drain={open_drain}");
+        assert_eq!(artifact.meta["framing_errors"], 0);
+        let transactions = artifact.meta["bus_frames"].as_array().unwrap();
+        assert_eq!(transactions.len(), 3);
+        for (frame, bytes) in transactions.iter().zip([
+            serde_json::json!([0x40]),
+            serde_json::json!([0xC0, 0x06, 0x5B, 0x4F, 0x66]),
+            serde_json::json!([0x8F]),
+        ]) {
+            assert_eq!(frame["bytes"], bytes);
+        }
+        let panels = artifact.meta["frames_seen"].as_array().unwrap();
+        assert_eq!(panels.len(), 2);
+        assert_eq!(panels[0]["text"], "1234");
+        assert_eq!(panels[1]["brightness"], 7);
+    }
+}
+
+#[test]
+fn rp2040_released_outputs_do_not_decode_latch_only_traffic() {
+    let mut bus = rp2040_tm1637_rig();
+    assert_eq!(bus.read_u32(RP_SIO_OE).unwrap() & RP_PANEL_PINS, 0);
+    for (clk, dio) in four_digit_script().0 {
+        bus.write_u32(RP_SIO_OUT, (u32::from(clk) << 2) | (u32::from(dio) << 3))
+            .unwrap();
+    }
+    let artifact = inspect_artifact(bus);
+    assert_eq!(artifact.meta["text"], "    ");
+    assert_eq!(artifact.meta["ack_count"], 0);
+    assert_eq!(artifact.meta["bus_frames"], serde_json::json!([]));
+    assert_eq!(artifact.meta["frames_seen"], serde_json::json!([]));
+}
+
+#[test]
+fn tm1637_history_is_bounded_and_keeps_identical_repaints() {
+    let mut script = Tm1637Script::new();
+    // The last 64 identical repaints must remain observable, even though live
+    // pixels do not change. Both history rings have the same explicit bound.
+    for _ in 0..70 {
+        script.start();
+        for byte in [0xC0, 0x06, 0x5B, 0x4F, 0x66] {
+            script.byte(byte);
+        }
+        script.stop();
+    }
+    let mut bus = tm1637_rig();
+    script.replay(&mut bus);
+    let artifact = inspect_artifact(bus);
+    assert_eq!(artifact.meta["bus_frames"].as_array().unwrap().len(), 64);
+    let panels = artifact.meta["frames_seen"].as_array().unwrap();
+    assert_eq!(panels.len(), 64);
+    assert!(panels.iter().all(|frame| frame["text"] == "1234"));
+    assert_eq!(artifact.meta["ack_count"], 350);
+    assert_eq!(artifact.meta["framing_errors"], 0);
+}
+
+#[test]
+fn tm1637_live_grids_match_text_before_transaction_stop() {
+    let mut script = Tm1637Script::new();
+    script.start();
+    script.byte(0xC0);
+    script.byte(0x06);
+    // Data RAM changes before STOP, but no completed transaction/frame may
+    // be invented. The live grid field must agree with the live text field.
+    let mut bus = tm1637_rig();
+    script.replay(&mut bus);
+    let artifact = inspect_artifact(bus);
+    assert_eq!(artifact.meta["text"], "1   ");
+    assert_eq!(artifact.meta["grids"], serde_json::json!([0x06, 0, 0, 0]));
+    assert_eq!(artifact.meta["bus_frames"], serde_json::json!([]));
+    assert_eq!(artifact.meta["frames_seen"], serde_json::json!([]));
+}
+
 /// The full write sequence a TM1637 driver performs: data command, address
 /// command plus four grids, display control. Every byte, every ACK clock, every
 /// framing edge — compared field for field against the deleted model.
@@ -462,6 +620,25 @@ fn a_full_write_sequence_matches_the_deleted_model_field_for_field() {
     assert_eq!(got.meta["text"], "1234");
     assert_eq!(got.meta["brightness"], 7);
     assert_eq!(got.meta["display_on"], serde_json::Value::Bool(true));
+    // Prove-history additive (not in the deleted model): ACKs, bus txns, frames.
+    assert!(
+        got.meta["ack_count"].as_u64().unwrap_or(0) >= 6,
+        "ack_count={}",
+        got.meta["ack_count"]
+    );
+    assert_eq!(got.meta["framing_errors"].as_u64().unwrap_or(1), 0);
+    let bus = got.meta["bus_frames"].as_array().expect("bus_frames");
+    assert!(
+        bus.iter().any(|f| f["bytes"] == serde_json::json!([0x40])),
+        "{bus:?}"
+    );
+    assert!(
+        bus.iter()
+            .any(|f| f["bytes"] == serde_json::json!([0xC0, 0x06, 0x5B, 0x4F, 0x66])),
+        "{bus:?}"
+    );
+    let frames = got.meta["frames_seen"].as_array().expect("frames_seen");
+    assert!(frames.iter().any(|f| f["text"] == "1234"), "{frames:?}");
 }
 
 /// Fixed-address mode (0x44) writes ONE grid and does not advance the pointer.

@@ -553,6 +553,18 @@ impl SpiDevice for TracingSpiDevice {
     fn cs_pin(&self) -> &str {
         self.inner.cs_pin()
     }
+    fn chain_index(&self) -> u32 {
+        self.inner.chain_index()
+    }
+    fn set_chain_index(&mut self, index: u32) {
+        self.inner.set_chain_index(index);
+    }
+    fn is_selected(&self) -> bool {
+        self.inner.is_selected()
+    }
+    fn clocks_when_deselected(&self) -> bool {
+        self.inner.clocks_when_deselected()
+    }
     fn dc_pin(&self) -> Option<&str> {
         self.inner.dc_pin()
     }

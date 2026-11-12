@@ -488,6 +488,9 @@ impl SpiDevice for Bmi270Spi {
     fn cs_pin(&self) -> &str {
         &self.cs_pin
     }
+    fn is_selected(&self) -> bool {
+        self.selected
+    }
     fn cs_select(&mut self) {
         self.selected = true;
         self.phase = if self.ready() {
