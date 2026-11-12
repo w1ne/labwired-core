@@ -65,6 +65,22 @@
       "how": "needs-build",
       "why": "ESP32-H2 descriptor and UART0 model are newer than the installed CLI this gate checks. The source-tree firmware and simulator smoke pass in examples/esp32h2-devkitm-1-n4s; switch this row after a release carries H2 support."
     },
+    "esp32c5": {
+      "how": "needs-build",
+      "why": "ESP32-C5 descriptor and UART0 model are newer than the installed CLI this gate checks. The source-tree firmware and simulator smoke pass in examples/esp32c5-devkitc-1-n8r8; switch this row after a release carries C5 support."
+    },
+    "esp32p4": {
+      "how": "needs-build",
+      "why": "ESP32-P4 descriptor and UART0 model are newer than the installed CLI this gate checks. The source-tree firmware and simulator smoke pass in examples/esp32p4x-c5-function-ev-board; switch this row after a release carries P4 support."
+    },
+    "esp32s2": {
+      "how": "needs-build",
+      "why": "ESP32-S2 descriptor and LX7 direct-ELF boot path are newer than the installed CLI this gate checks. The committed fixture smoke passes in examples/esp32s2-devkitc-1-n8r2; switch this row after a release carries S2 support."
+    },
+    "rp2040-feather": {
+      "how": "needs-build",
+      "why": "The rp2040-feather descriptor is newer than the installed CLI this gate checks. The Feather BME280 smoke passes from source in examples/adafruit-feather-rp2040; switch this row after a release carries the Feather variant."
+    },
     "nrf52840": {
       "how": "committed",
       "firmware": "tests/fixtures/tier1/nrf52840.elf",

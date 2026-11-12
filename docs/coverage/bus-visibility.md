@@ -50,6 +50,14 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * UART: the Efr32s2 layout models the console TX/RX byte path but captures no baud divisor (CLKDIV), so bit_time_cycles() is None and no wire waveform is narrated — there are no edges to decode
 * **esp32**
   * SPI: Esp32Spi does not implement line_names()/wire_lines(); pad bindings exist but the wire channel is unpublished on this model
+* **esp32c5**
+  * UART: esp32c5_uart is a TX FIFO/console model with no PadLines wire cell; bytes are proven by the esp32c5-devkitc-1-n8r8 board smoke
+* **esp32h2**
+  * UART: no ESP32-H2 UART bring-up in this harness; bytes are proven by the esp32h2-devkitm-1-n4s board smoke
+* **esp32p4**
+  * UART: esp32p4 UART0 is a TX FIFO/console model with no PadLines wire cell; bytes are proven by the esp32p4x-c5-function-ev-board smoke
+* **esp32s2**
+  * UART: no ESP32-S2 UART bring-up in this harness; bytes are proven by the esp32s2-devkitc-1-n8r2 board smoke
 * **esp32s3**
   * I2C: esp32s3.yaml is an address-map stub; from_config has no S3 I2C model
   * SPI: esp32s3.yaml is an address-map stub; from_config has no S3 SPI model
@@ -150,7 +158,11 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | esp32-devkitc-32e-gpio-smoke | ✓ | — | ✓ |
 | esp32-devkitc-32e-uart1 | — | — | ✓ |
 | esp32c3 | ✓ | ✓ | ✓ |
+| esp32c5 | — | — | — |
 | esp32c6 | ✓ | ✓ | ✓ |
+| esp32h2 | — | — | — |
+| esp32p4 | — | — | — |
+| esp32s2 | — | — | — |
 | esp32s3 | — | — | — |
 | esp32s3-zero | — | — | — |
 | imxrt1064 | — | — | — |
@@ -181,6 +193,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | r7fa8m1ah | — | — | — |
 | ra4m1 | — | — | — |
 | rp2040 | ✓ | ✓ | ✓ |
+| rp2040-feather | ✓ | ✓ | ✓ |
 | rp2350 | — | — | — |
 | rv1103 | — | — | — |
 | s32k388 | — | — | — |

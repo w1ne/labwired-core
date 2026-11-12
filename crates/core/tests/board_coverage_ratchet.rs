@@ -882,6 +882,18 @@ fn every_shipped_descriptor_is_ratcheted() {
         // modelled, so there is no bus to diff yet. Promote when the catalog
         // board, a bus model and a differential all exist.
         "ch32v003f4p6",
+        // ESP32-H2/C5/P4/S2 UART0-only board profiles. Each has a descriptor,
+        // a system manifest and a board smoke that asserts a UART0 token, but
+        // no bundled-configs.ts catalog board, no silicon oracle and no
+        // executing-fidelity differential. Promote when all three exist.
+        "esp32h2",
+        "esp32c5",
+        "esp32p4",
+        "esp32s2",
+        // Adafruit Feather RP2040 variant of the rp2040 die (133 MHz, 8 MiB
+        // flash). Its BME280 I2C1 smoke runs in core-onboarding-smoke, but it
+        // has no catalog board and no differential of its own.
+        "rp2040-feather",
     ];
     // configs/chips id -> ratchet chip id (kw41z ships as mkw41z4.yaml).
     fn to_ratchet_id(stem: &str) -> &str {

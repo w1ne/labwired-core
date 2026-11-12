@@ -1123,6 +1123,42 @@ const CHIPS: &[ChipConf] = &[
             "ch32v003_compiled_firmware::ch32v003_compiled_rv32e_firmware_toggles_pc0",
         ),
     },
+    // ESP32-H2/C5/P4/S2 UART0-only board profiles. SIM-DERIVED: no silicon
+    // capture, so no reset_oracle. Their board smokes run as CLI scripts in
+    // core-board-ci / core-onboarding-smoke, not as Rust integration tests, so
+    // no behavior_gate can resolve yet.
+    ChipConf {
+        name: "esp32h2",
+        yaml: "configs/chips/esp32h2.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "esp32c5",
+        yaml: "configs/chips/esp32c5.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "esp32p4",
+        yaml: "configs/chips/esp32p4.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "esp32s2",
+        yaml: "configs/chips/esp32s2.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    // Adafruit Feather RP2040 variant of the rp2040 die. Its BME280 I2C1 smoke
+    // runs as a CLI script in core-onboarding-smoke, not as a Rust test.
+    ChipConf {
+        name: "rp2040-feather",
+        yaml: "configs/chips/rp2040-feather.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
 ];
 
 /// Registers a cold-reset sim model can *never* reproduce from a `reset_halt`
