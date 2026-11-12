@@ -3133,6 +3133,100 @@
       ]
     },
     {
+      "device_type": "bmi270_spi",
+      "label": "BMI270 native SPI IMU",
+      "summary": "Native four-wire BMI270 with real CS/dummy-byte framing, verified configuration upload and nominal motion sampling.",
+      "detail": "Exact initialization images, register readback, nominal ODR and push-pull DRDY. FIFO, auxiliary bus, feature microcode execution, self-test, analog noise/filter response, open-drain/tri-state INT and runtime snapshots are not modeled.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "Required active-low chip-select GPIO."
+        },
+        {
+          "name": "int1_pin",
+          "ty": "str",
+          "doc": "Optional INT1 GPIO; nominal push-pull DRDY routing."
+        },
+        {
+          "name": "int2_pin",
+          "ty": "str",
+          "doc": "Optional INT2 GPIO; nominal push-pull DRDY routing."
+        },
+        {
+          "name": "spi_mode",
+          "ty": "int",
+          "doc": "Optional edge sampling: modes 0 and 3 only. Omit for byte-transaction controllers."
+        },
+        {
+          "name": "powered",
+          "ty": "bool",
+          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the part then ignores its bus entirely and reports the dark/idle state it has on a bench."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "ax",
+          "label": "Accel X",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 0.0
+        },
+        {
+          "key": "ay",
+          "label": "Accel Y",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 0.0
+        },
+        {
+          "key": "az",
+          "label": "Accel Z",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 0.0
+        },
+        {
+          "key": "gx",
+          "label": "Gyro X",
+          "unit": "°/s",
+          "min": -2000.0,
+          "max": 2000.0,
+          "default": 0.0
+        },
+        {
+          "key": "gy",
+          "label": "Gyro Y",
+          "unit": "°/s",
+          "min": -2000.0,
+          "max": 2000.0,
+          "default": 0.0
+        },
+        {
+          "key": "gz",
+          "label": "Gyro Z",
+          "unit": "°/s",
+          "min": -2000.0,
+          "max": 2000.0,
+          "default": 0.0
+        },
+        {
+          "key": "temp",
+          "label": "Temperature",
+          "unit": "°C",
+          "min": -41.0,
+          "max": 87.0,
+          "default": 23.0
+        }
+      ]
+    },
+    {
       "device_type": "max30102",
       "label": "MAX30102 PPG",
       "summary": "Maxim MAX30102 pulse-oximetry / heart-rate front-end over I2C.",
