@@ -1,0 +1,499 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# STM32H723ZGT6 — Arm Cortex-M7 (single core, FPU+MPU), 550 MHz, 1 MB flash,
+# 564 KB RAM, LQFP144. The MCU on ST's NUCLEO-H723ZG (MB1364).
+#
+# The H723 is the same RM0468 die family as the H735 (H723/733/725/735/730):
+# identical memory map, RCC/PWR/GPIO/USART/I2C/SPI/TIM/ADC/FDCAN instances,
+# bases and IRQ numbers. The H735 adds crypto/OTFDEC, which neither profile
+# declares. This file is therefore the stm32h735.yaml peripheral set under the
+# H723's part name; the per-instance debug schemas stay the H735 ones (same
+# registers). Everything stm32h735.yaml documents as omitted (H7 DMA/BDMA/
+# DMAMUX, RTC, OCTOSPI, Ethernet, ADC3) is omitted here too
+# and faults if touched. Unlike stm32h735.yaml this profile does NOT declare
+# FDCAN (see the note at the FDCAN position below). It adds FMC and CRS, which
+# stock CMSIS SystemInit / stm32duino SystemClock_Config touch on every boot,
+# and the ADC12 common block, which stock HAL_ADC_Init writes.
+#
+# Sources: ST DS13313 (STM32H723xE/G datasheet), RM0468, CMSIS stm32h723xx.h,
+# UM2407 (NUCLEO-H723ZG: LD1 PB0, LD2 PE1, LD3 PB14, ST-LINK VCP USART3
+# PD8/PD9). Fidelity: SIM-DERIVED; no H723 bench part.
+#
+# configs/chips/stm32h723zg-nucleo-smoke.yaml stays the narrow bare-metal smoke.
+
+name: "stm32h723zg"
+arch: "arm"
+core: "cortex-m7"
+registers_count: 140
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. Self-timed devices
+# scale their datasheet microseconds by it; a slower board overrides it.
+# STM32H723ZG maximum core clock, 550 MHz.
+cpu_hz: 550_000_000
+
+flash:
+  base: 0x08000000
+  # STM32H723ZG = 1 MiB single-bank flash (0x100000 bytes) at 0x08000000.
+  size: "1MiB"
+ram:
+  # DTCM @ 0x20000000 (128 KiB, zero-wait) is where Cortex-M7 firmware links
+  # its stack + .data by default (CubeMX/embassy default). AXI SRAM (320 KiB
+  # @ 0x24000000) is mapped separately below.
+  base: 0x20000000
+  size: "128KiB"
+memory_regions:
+  # AXI SRAM (D1 domain), 320 KiB. Firmware DMA buffers / large .bss often live
+  # here; mapped so pointers into it are backed.
+  - name: "axi_sram"
+    base: 0x24000000
+    size: "320KiB"
+  # SRAM1+SRAM2 (D2 domain), contiguous 32 KiB from 0x30000000.
+  - name: "sram_d2"
+    base: 0x30000000
+    size: "32KiB"
+  # SRAM4 (D3 domain), 16 KiB.
+  - name: "sram_d3"
+    base: 0x38000000
+    size: "16KiB"
+  # ITCM RAM, 64 KiB @ 0x00000000 (zero-wait instruction TCM).
+  - name: "itcm"
+    base: 0x00000000
+    size: "64KiB"
+peripherals:
+  # RCC — new H7 layout (RM0468 §8.7). Enable block AHB/APB ENR @ 0xD4..0xF4,
+  # BDCR @ 0x70, CSR @ 0x74. Oscillator/PLL ready gating + SW→SWS switch gate.
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x58024400
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32h735/rcc.yaml"
+      profile: "h7"
+  # GPIO ports A..H (A..G full + PH0/PH1 bonded on the LQFP144 STM32H723ZG). Base 0x58020000,
+  # stride 0x400. stm32v2 register IP (MODER/OSPEEDR/PUPDR/IDR/ODR/BSRR/BRR).
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x58020000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32h735/gpioa.yaml"
+      profile: "stm32v2"
+      # PA13/PA14 SWD + PA15 JTDI debug defaults (port A not all-analog).
+      reset_moder: 0xABFFFFFF
+      reset_ospeedr: 0x0C000000
+      reset_pupdr: 0x64000000
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x58020400
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32h735/gpiob.yaml"
+      profile: "stm32v2"
+      # PB3 JTDO/SWO + PB4 NJTRST debug defaults.
+      reset_moder: 0xFFFFFEBF
+      reset_ospeedr: 0x000000C0
+      reset_pupdr: 0x00000100
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x58020800
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32h735/gpioc.yaml"
+      profile: "stm32v2"
+      reset_moder: 0xFFFFFFFF
+  - id: "gpiod"
+    type: "gpio"
+    base_address: 0x58020C00
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32h735/gpiod.yaml"
+      profile: "stm32v2"
+      reset_moder: 0xFFFFFFFF
+  - id: "gpioe"
+    type: "gpio"
+    base_address: 0x58021000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32h735/gpioe.yaml"
+      profile: "stm32v2"
+      reset_moder: 0xFFFFFFFF
+  - id: "gpiof"
+    type: "gpio"
+    base_address: 0x58021400
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32h735/gpiof.yaml"
+      profile: "stm32v2"
+      reset_moder: 0xFFFFFFFF
+  - id: "gpiog"
+    type: "gpio"
+    base_address: 0x58021800
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32h735/gpiog.yaml"
+      profile: "stm32v2"
+      reset_moder: 0xFFFFFFFF
+  - id: "gpioh"
+    type: "gpio"
+    base_address: 0x58021C00
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32h735/gpioh.yaml"
+      profile: "stm32v2"
+      reset_moder: 0xFFFFFFFF
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    config:
+      calib: 0x00000000
+  # USART3 (APB1) — the LabWired console UART for this chip. stm32v2 IP.
+  - id: "usart3"
+    type: "uart"
+    base_address: 0x40004800
+    size: "1KB"
+    irq: 39
+    config:
+      debug_schema: "../peripherals/stm32h735/usart3.yaml"
+      profile: "stm32v2"
+  # USART1 (APB2) — second UART. stm32v2 IP.
+  - id: "usart1"
+    type: "uart"
+    base_address: 0x40011000
+    size: "1KB"
+    irq: 37
+    config:
+      debug_schema: "../peripherals/stm32h735/usart1.yaml"
+      profile: "stm32v2"
+  # LPUART1 (APB4, D3 domain).
+  - id: "lpuart1"
+    type: "uart"
+    base_address: 0x58000C00
+    size: "1KB"
+    irq: 142
+    config:
+      debug_schema: "../peripherals/stm32h735/lpuart1.yaml"
+      profile: "stm32v2"
+  # TIM1 advanced-control (APB2). `_pwm` id suffix declares the tier1 pwm class.
+  - id: "tim1_pwm"
+    type: "timer"
+    base_address: 0x40010000
+    size: "1KB"
+    irq: 27
+    config:
+      debug_schema: "../peripherals/stm32h735/tim1.yaml"
+      advanced: true
+    # TIM1 clocked from RCC_APB2ENR.TIM1EN (bit 0). Unclocked out of reset.
+    clock: { reg: "apb2enr", bit: 0 }
+  # TIM2 (APB1) — 32-bit general-purpose timer.
+  - id: "tim2"
+    type: "timer"
+    base_address: 0x40000000
+    size: "1KB"
+    irq: 28
+    config:
+      debug_schema: "../peripherals/stm32h735/tim2.yaml"
+      width: 32
+      # H7 general-purpose timers share the F4 input/capture register fields.
+      # This also opts TIM2 into the AF1 output-pad map used by PA0 = TIM2_CH1.
+      input_capture: "stm32f4"
+    # TIM2 clocked from RCC_APB1LENR.TIM2EN (bit 0).
+    clock: { reg: "apb1lenr", bit: 0 }
+  - id: "tim3"
+    type: "timer"
+    base_address: 0x40000400
+    size: "1KB"
+    irq: 29
+    config:
+      debug_schema: "../peripherals/stm32h735/tim3.yaml"
+  # I2C1 (APB1) — I2C v2 IP (TIMINGR/ISR), h5 profile.
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 31
+    config:
+      debug_schema: "../peripherals/stm32h735/i2c1.yaml"
+      profile: "h5"
+    # I2C1 clocked from RCC_APB1LENR.I2C1EN (bit 21).
+    clock: { reg: "apb1lenr", bit: 21 }
+  - id: "i2c2"
+    type: "i2c"
+    base_address: 0x40005800
+    size: "1KB"
+    irq: 33
+    config:
+      debug_schema: "../peripherals/stm32h735/i2c2.yaml"
+      profile: "h5"
+  # SPI1 (APB2) — SPI v2 IP (CFG1/CFG2), stm32h5 profile.
+  - id: "spi1"
+    type: "spi"
+    base_address: 0x40013000
+    size: "1KB"
+    irq: 35
+    config:
+      debug_schema: "../peripherals/stm32h735/spi1.yaml"
+      profile: "stm32h5"
+      # AF pad map for the logic analyzer. The H5 "SPI v3" register file is
+      # shared by parts with DIFFERENT pinouts (H563/H735 put SPI1_SCK on PB3,
+      # the WBA52 puts SPI1_MISO there), so the profile cannot pick the table.
+      pad_map: "stm32h5"
+    # SPI1 clocked from RCC_APB2ENR.SPI1EN (bit 12).
+    clock: { reg: "apb2enr", bit: 12 }
+  - id: "spi2"
+    type: "spi"
+    base_address: 0x40003800
+    size: "1KB"
+    irq: 36
+    config:
+      debug_schema: "../peripherals/stm32h735/spi2.yaml"
+      profile: "stm32h5"
+      # AF pad map for the logic analyzer. The H5 "SPI v3" register file is
+      # shared by parts with DIFFERENT pinouts (H563/H735 put SPI1_SCK on PB3,
+      # the WBA52 puts SPI1_MISO there), so the profile cannot pick the table.
+      pad_map: "stm32h5"
+  - id: "spi3"
+    type: "spi"
+    base_address: 0x40003C00
+    size: "1KB"
+    irq: 51
+    config:
+      debug_schema: "../peripherals/stm32h735/spi3.yaml"
+      profile: "stm32h5"
+      # Same table as spi1/spi2 above, which already carries SPI3 rows keyed on
+      # this part (PB3/PB4 on AF6, PB2/PB5 on AF7). Without this key an
+      # H5-layout SPI routes NOTHING onto the pads -- see
+      # `an_h5_spi_with_no_declared_pad_map_routes_nothing` -- so the controller
+      # would exist on the bus and stay invisible to the logic analyzer.
+      pad_map: "stm32h5"
+    # SPI3 clocked from RCC_APB1LENR.SPI3EN (bit 15).
+    clock: { reg: "apb1lenr", bit: 15 }
+  # ---------------------------------------------------------------------------
+  # Instances added 2026-08-09 so the LQFP-100 pin table stops advertising
+  # peripherals the chip does not have.
+  #
+  # `packages/board-config` publishes an H735 alternate-function table derived
+  # from ST's own device database (stm32duino PeripheralPins.c). It listed
+  # USART2, UART4, USART6, I2C3, SPI3, TIM4 and TIM8 as pin functions while this
+  # file modelled none of them, so `labwired_describe stm32h735` advertised
+  # eleven peripherals of which ten did not exist: wiring a part to PA2 gave you
+  # a pin labelled `uart2.tx` attached to nothing, and the failure was silent.
+  #
+  # Every one of these is another instance of IP this chip ALREADY runs
+  # (uart stm32v2, i2c h5, spi stm32h5, timer), so these are declarations, not
+  # new models. Base address, IRQ number and RCC enable bit are each read out of
+  # the vendored tests/fixtures/real_world/stm32h735.svd rather than recalled --
+  # the `svd_conformance` gate re-derives them from that same file, so a wrong
+  # value fails CI rather than sitting here looking plausible.
+  # ---------------------------------------------------------------------------
+  # USART2 (APB1) — PA2/PA3 on this package. NOT "uart2": ST names it USART2.
+  - id: "usart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 38
+    config:
+      debug_schema: "../peripherals/stm32h735/usart2.yaml"
+      profile: "stm32v2"
+    # RCC_APB1LENR.USART2EN (bit 17).
+    clock: { reg: "apb1lenr", bit: 17 }
+  # UART4 (APB1) — PA11/PA12 and PB8/PB9. A true UART (no synchronous mode), so
+  # unlike USART2/6 the `uart4` spelling here IS ST's name.
+  - id: "uart4"
+    type: "uart"
+    base_address: 0x40004C00
+    size: "1KB"
+    irq: 52
+    config:
+      debug_schema: "../peripherals/stm32h735/uart4.yaml"
+      profile: "stm32v2"
+    # RCC_APB1LENR.UART4EN (bit 19).
+    clock: { reg: "apb1lenr", bit: 19 }
+  # USART6 (APB2) — PC6/PC7. Again USART, not "uart6".
+  - id: "usart6"
+    type: "uart"
+    base_address: 0x40011400
+    size: "1KB"
+    irq: 71
+    config:
+      debug_schema: "../peripherals/stm32h735/usart6.yaml"
+      profile: "stm32v2"
+    # RCC_APB2ENR.USART6EN (bit 5).
+    clock: { reg: "apb2enr", bit: 5 }
+  # I2C3 (APB1) — PA8 (SCL) / PC9 (SDA).
+  - id: "i2c3"
+    type: "i2c"
+    base_address: 0x40005C00
+    size: "1KB"
+    irq: 72
+    config:
+      debug_schema: "../peripherals/stm32h735/i2c3.yaml"
+      profile: "h5"
+    # RCC_APB1LENR.I2C3EN (bit 23).
+    clock: { reg: "apb1lenr", bit: 23 }
+  # TIM4 (APB1) — general-purpose, PB6..PB9.
+  - id: "tim4"
+    type: "timer"
+    base_address: 0x40000800
+    size: "1KB"
+    irq: 30
+    config:
+      debug_schema: "../peripherals/stm32h735/tim4.yaml"
+    # RCC_APB1LENR.TIM4EN (bit 2).
+    clock: { reg: "apb1lenr", bit: 2 }
+  # TIM8 (APB2) — the second advanced-control timer, PC6..PC9. `_pwm` suffix
+  # declares the tier1 pwm class, matching tim1_pwm above. IRQ 46 is TIM8_CC,
+  # the same capture/compare line tim1_pwm uses (27 = TIM1_CC); the BRK/UP/
+  # TRG_COM lines (43/44/45) are not separately routed.
+  - id: "tim8_pwm"
+    type: "timer"
+    base_address: 0x40010400
+    size: "1KB"
+    irq: 46
+    config:
+      debug_schema: "../peripherals/stm32h735/tim8.yaml"
+      advanced: true
+    # RCC_APB2ENR.TIM8EN (bit 1).
+    clock: { reg: "apb2enr", bit: 1 }
+  # FDCAN1/FDCAN2 are NOT declared. stm32h735.yaml wires them to the shared
+  # `fdcan` model, but that model is the H5 "FDCAN lite" with a hardwired
+  # message-RAM layout (no SIDFC/XIDFC/RXF0C/TXBC address registers). The H7
+  # FDCAN is the full M_CAN with a configurable 10 KB message RAM at
+  # 0x4000_AC00 (RM0468 §56), so stock H7 firmware programs element addresses
+  # the model ignores. Until an H7-layout model exists, touching FDCAN faults.
+  # ADC12 common block (RM0468 §25.7) @ 0x4002_2300: CSR/CCR/CDR/CDR2. Its
+  # own window on the H7 (see the ADC note below). Stock HAL_ADC_Init writes
+  # CCR on every analogRead. Independent mode only: CSR/CDR/CDR2 read 0.
+  - id: "adc12_common"
+    type: "stm32_adc_common"
+    base_address: 0x40022300
+    size: "256B"
+    clock: { reg: "ahb1enr", bit: 5 }
+  # ADC1/ADC2 — the 16-bit converters (DS13312: "2×16-bit ADC, up to 3.6 MSPS
+  # in 16-bit: up to 22 channels"). Added 2026-08-09 with a REAL H7 layout
+  # (peripherals/adc.rs `Stm32H7`), not the L4 alias `profile: "h7"` used to
+  # resolve to — that alias answered PCSEL/LTR/HTR/CALFACT2 as unmapped zeros
+  # and decoded CFGR.RES with the wrong field width AND the wrong encoding.
+  #
+  # ⚠ SIZE IS 256B, NOT THE USUAL 1KB. ADC2 sits 0x100 above ADC1, so a 1 KB
+  # window on ADC1 would cover ADC2's entire register page and shadow it. Each
+  # instance really is 0x100 wide on this part; the ADC12 common block
+  # (ADC12_CCR) lives at 0x4002_2300, outside both, and is answered by the
+  # `adc12_common` window above — the `adc` model's `common_ccr` slot is
+  # unreachable here by construction.
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x40022000
+    size: "256B"
+    irq: 18  # ADC1_2 — shared by both instances
+    config:
+      debug_schema: "../peripherals/stm32h735/adc1.yaml"
+      profile: "h7"
+    # RCC_AHB1ENR.ADC12EN (bit 5) gates BOTH converters.
+    clock: { reg: "ahb1enr", bit: 5 }
+  - id: "adc2"
+    type: "adc"
+    base_address: 0x40022100
+    size: "256B"
+    irq: 18
+    config:
+      debug_schema: "../peripherals/stm32h735/adc2.yaml"
+      profile: "h7"
+    clock: { reg: "ahb1enr", bit: 5 }
+  # SYSCFG (D2, APB4) — H7 model covers the EXTI source mux and the CCCSR
+  # compensation-cell enable/READY handshake used by the stock clock setup.
+  # Analog calibration values and the other H7 SYSCFG register groups remain
+  # outside this board's tested profile.
+  - id: "syscfg"
+    type: "syscfg"
+    base_address: 0x58000400
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32h735/syscfg.yaml"
+      profile: "stm32h7"
+  # NVIC — installed unconditionally for Cortex-M; declares the tier1 irq class.
+  - id: "nvic"
+    type: "nvic"
+    base_address: 0xE000E100
+    size: "1KB"
+  # PWR (D3, AHB4) — H7 layout: VOSRDY/ACTVOSRDY voltage-scaling handshake that
+  # foreign H7 firmware (stm32h7xx-hal / embassy) polls before PLL bring-up.
+  - id: "pwr"
+    type: "pwr"
+    base_address: 0x58024800
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32h735/pwr.yaml"
+      profile: "h7"
+  # FLASH interface (RM0468) — mapped as present for ACR latency read-back so
+  # HAL clock bring-up does not fault. Bank-2 / error semantics not H7-faithful.
+  - id: "flash_iface"
+    type: "flash"
+    base_address: 0x52002000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32h735/flash.yaml"
+      profile: "stm32h5"
+  # IWDG1 (independent watchdog, LSI-clocked — no RCC enable gate).
+  - id: "iwdg"
+    type: "iwdg"
+    base_address: 0x58004800
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32h735/iwdg1.yaml"
+  # WWDG (APB3).
+  - id: "wwdg"
+    type: "wwdg"
+    base_address: 0x40002C00
+    size: "1KB"
+    irq: 0
+  # CRC (AHB4).
+  - id: "crc"
+    type: "crc"
+    base_address: 0x58024C00
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32h735/crc.yaml"
+      idr_width: 32
+  # RNG (AHB2).
+  - id: "rng"
+    type: "rng"
+    base_address: 0x48021800
+    size: "1KB"
+    # STM32H735 RNG shares HASH_RNG_IRQn = 80 (SVD); 141 is LPTIM5.
+    irq: 80
+    config:
+      debug_schema: "../peripherals/stm32h735/rng.yaml"
+  # DBGMCU (RM0468 §60) @ 0x5C001000. DEV_ID 0x483 (H72x/73x). Nominal IDCODE.
+  - id: "dbgmcu"
+    type: "dbgmcu"
+    base_address: 0x5C001000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32h735/dbgmcu.yaml"
+      idcode: 0x10016483
+  # FMC control window (RM0468 §23.7, AHB3 @ 0x5200_4000, 4 KB). CMSIS
+  # SystemInit writes FMC_BCR1 = 0x000030D2 on every H72x/H73x boot to switch
+  # off the bank-1 NOR window ST enables out of reset (ES0491 2.3.x), so the
+  # window must exist for stock firmware to reach main(). Same NOR/SRAM
+  # BCR/BTR/BWTR layout and BCR1 reset (0x000030DB) as the L4 FMC model; the
+  # H7 SDRAM registers (+0x140..) fall into the model's pass-through store.
+  - id: "fmc"
+    type: "fmc"
+    base_address: 0x52004000
+    size: "4KB"
+    irq: 48
+  # CRS (RM0468 §8.8, APB1 @ 0x4000_8400). The NUCLEO_H723ZG variant's
+  # SystemClock_Config ends in HAL_RCCEx_CRSConfig (HSI48 synced to USB SOF).
+  # H7 CRS = 6-bit TRIM, CR reset 0x2000 (stm32h723xx.h CRS_CR_TRIM_Msk).
+  # CRS_IRQn = 144; clock RCC_APB1HENR.CRSEN (bit 1).
+  - id: "crs"
+    type: "crs"
+    base_address: 0x40008400
+    size: "1KB"
+    irq: 144
+    config:
+      trim_bits: 6
+    clock: { reg: "apb1henr", bit: 1 }

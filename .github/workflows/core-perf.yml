@@ -89,6 +89,11 @@ jobs:
           persist-credentials: false
       - name: Test path and source-history admission
         run: python3 scripts/perf/test_pr_hotpath_gate.py
+      - name: Fetch event base for stale-merge admission
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: git fetch --no-tags --unshallow origin "$BASE"
       - name: Select the unchanged full gate
         id: select
         env:

@@ -25,6 +25,17 @@ use std::str::FromStr;
 // constant.
 const STM32_ADC_REF12: u32 = (3000 * 4096) / 3300; // 3723
 
+/// STM32H7 ADC_CR bits with the read/set software property from
+/// `stm32h723xx.h`: writing zero leaves the bit unchanged. Command bits that
+/// complete in this model (ADCAL/ADSTART/ADDIS) clear themselves explicitly.
+const H7_CR_READ_SET_MASK: u32 = (1 << 31) // ADCAL
+    | (1 << 5) // JADSTP
+    | (1 << 4) // ADSTP
+    | (1 << 3) // JADSTART
+    | (1 << 2) // ADSTART
+    | (1 << 1) // ADDIS
+    | (1 << 0); // ADEN
+
 /// CFGR.RES (bits [4:3]) → conversion bit-width. 0b00=12, 01=10, 10=8, 11=6.
 fn l4_resolution_bits(cfgr: u32) -> u32 {
     match (cfgr >> 3) & 0x3 {
@@ -804,7 +815,13 @@ impl Adc {
         // (no analog settling to model), so it reads back as already complete
         // rather than latching set forever.
         let calibrating = value & (1 << 31) != 0;
-        r.cr = value & !(1 << 31);
+        // RM0468 / `stm32h723xx.h` declares these as RS (read/set): writing 0
+        // does not clear an existing 1. HAL `MODIFY_REG(ADCx->CR,
+        // ADC_CR_BITS_PROPERTY_RS, ADC_CR_ADSTART)` therefore keeps ADEN set
+        // while starting a conversion. Treating the zero bits as ordinary RW
+        // cleared ADEN and left ADSTART stuck without an EOC.
+        r.cr = (value & !H7_CR_READ_SET_MASK) | ((r.cr | value) & H7_CR_READ_SET_MASK);
+        r.cr &= !(1 << 31); // ADCAL self-clears after instantaneous calibration
 
         let deeppwd = r.cr & (1 << 29) != 0;
         let advregen = r.cr & (1 << 28) != 0;
@@ -1347,7 +1364,14 @@ impl Peripheral for Adc {
                 let calibration_completes = self.calibration_completes;
                 let mut full = 0;
                 if let AdcRegs::Stm32L4(r) = &mut self.regs {
-                    full = (Self::read_reg_l4(r, dr, reg) & !mask) | val_shifted;
+                    // ISR is rc_w1: a byte write clears only the bits in that
+                    // byte. Merging in the live flags would turn every word
+                    // write (split into four bytes) into "clear everything".
+                    full = if reg == 0x00 {
+                        val_shifted
+                    } else {
+                        (Self::read_reg_l4(r, dr, reg) & !mask) | val_shifted
+                    };
                     Self::write_reg_l4(r, reg, full, calibration_completes);
                 }
                 // A write touching CR may have set ADSTART — try to convert.
@@ -1359,10 +1383,15 @@ impl Peripheral for Adc {
                 // Same byte-merge discipline as the L4 arm: read the current
                 // word, splice in this byte, write the whole word back, so a
                 // `strb` to one byte of CR cannot clear the rest of the
-                // power-up state.
+                // power-up state. ISR is the exception: it is rc_w1, so a byte
+                // write clears only its own bits. Merging the live flags in
+                // would make HAL's `ISR = EOC|EOS|OVR` (four byte writes) also
+                // clear ADRDY and LDORDY, and ADSTART would never convert.
                 let reg = offset & !3;
                 let dr = self.dr;
-                let full = if let AdcRegs::Stm32H7(r) = &self.regs {
+                let full = if reg == 0x00 {
+                    val_shifted
+                } else if let AdcRegs::Stm32H7(r) = &self.regs {
                     (Self::read_reg_h7(r, dr, reg) & !mask) | val_shifted
                 } else {
                     0
@@ -1372,9 +1401,12 @@ impl Peripheral for Adc {
             AdcRegs::Stm32U5(_) => {
                 // Same byte-merge discipline as the H7 arm: a `strb` to one
                 // byte of CR cannot clear the rest of the power-up state.
+                // ISR is rc_w1: a byte write clears only its own bits.
                 let reg = offset & !3;
                 let dr = self.dr;
-                let full = if let AdcRegs::Stm32U5(r) = &self.regs {
+                let full = if reg == 0x00 {
+                    val_shifted
+                } else if let AdcRegs::Stm32U5(r) = &self.regs {
                     (Self::read_reg_u5(r, dr, reg) & !mask) | val_shifted
                 } else {
                     0
@@ -1864,6 +1896,62 @@ mod tests {
             "ADCAL must read back clear on the H7 as well"
         );
         assert_eq!(adc.read_u32(0x08).unwrap(), 1 << 28);
+    }
+
+    /// ISR is rc_w1. Stock Cube `HAL_ADC_Start` clears EOC|EOS|OVR with one
+    /// word store after ADC_Enable saw ADRDY; the peripheral receives it as
+    /// four byte writes. Before the fix each byte was merged with the live
+    /// flags, so the store also cleared ADRDY and LDORDY, ADSTART never
+    /// converted, and stock `analogRead` on the NUCLEO-H723ZG returned 0.
+    #[test]
+    fn test_adc_h7_isr_word_clear_keeps_other_flags() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32H7);
+        adc.write_u32(0x08, 0).unwrap(); // leave deep power-down
+        adc.write_u32(0x08, 1 << 28).unwrap(); // ADVREGEN -> LDORDY
+        adc.write_u32(0x08, (1 << 28) | 1).unwrap(); // ADEN -> ADRDY
+        assert_eq!(adc.read_u32(0x00).unwrap(), (1 << 12) | 1);
+        adc.write_u32(0x00, 0x1C).unwrap(); // clear EOC|EOS|OVR only
+        assert_eq!(
+            adc.read_u32(0x00).unwrap(),
+            (1 << 12) | 1,
+            "LDORDY and ADRDY survive a clear of other flags"
+        );
+        // The 12-bit input quantizer maps 1651 mV to code 2048; H7 scaling
+        // then produces exactly 32768 at 16 bits.
+        adc.set_channel_input(15, 1651);
+        // SQ1 = channel 15.
+        adc.write_u32(0x30, 15 << 6).unwrap();
+        // HAL's MODIFY_REG write clears all RS bits in the value; silicon
+        // ignores zero for ADEN, so conversion still starts.
+        adc.write_u32(0x08, (1 << 28) | (1 << 2)).unwrap(); // ADSTART
+        assert_ne!(adc.read_u32(0x00).unwrap() & (1 << 2), 0, "EOC");
+        assert_ne!(
+            adc.read_u32(0x08).unwrap() & 1,
+            0,
+            "ADEN survives write-zero"
+        );
+        assert_eq!(
+            adc.read_u32(0x40).unwrap(),
+            32768,
+            "1651 mV quantizes to half-scale"
+        );
+        adc.write_u32(0x00, 1).unwrap(); // clear ADRDY alone
+        assert_eq!(adc.read_u32(0x00).unwrap() & 1, 0, "ADRDY rc_w1");
+    }
+
+    /// The same rc_w1 discipline on the L4 and U5 layouts.
+    #[test]
+    fn test_adc_l4_u5_isr_word_clear_keeps_other_flags() {
+        for layout in [AdcRegisterLayout::Stm32L4, AdcRegisterLayout::Stm32U5] {
+            let mut adc = Adc::new_with_layout(layout);
+            adc.write_u32(0x08, 0).unwrap();
+            adc.write_u32(0x08, 1 << 28).unwrap();
+            adc.write_u32(0x08, (1 << 28) | 1).unwrap();
+            let before = adc.read_u32(0x00).unwrap();
+            assert_ne!(before & 1, 0, "{layout:?}: ADRDY after ADEN");
+            adc.write_u32(0x00, 0x1C).unwrap();
+            assert_eq!(adc.read_u32(0x00).unwrap(), before & !0x1C, "{layout:?}");
+        }
     }
 
     /// The H563 is an L4-class ADC: `CFGR.RES` is two bits at [4:3], so the

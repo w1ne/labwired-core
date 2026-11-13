@@ -229,6 +229,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | stm32g431rb | ✓ | ✓ | ✓ |
 | stm32g474re | ✓ | ✓ | ✓ |
 | stm32h563 | ✓ | ✓ | ✓ |
+| stm32h723zg | ✓ | ✓ | ✓ |
+| stm32h723zg-nucleo-smoke | — | — | ✓ |
 | stm32h735 | ✓ | ✓ | ✓ |
 | stm32l073 | ✓ | ✓ | ✓ |
 | stm32l476 | ✓ | ✓ | ✓ |

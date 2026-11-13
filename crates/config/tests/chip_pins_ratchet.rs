@@ -117,6 +117,10 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     // G431RB is the G474RE's smaller sibling: same PA/PB/PC label form.
     "stm32g431rb",
     "stm32h563",
+    // H723 uses the same STM32 PAx/PDx label form as H735; the parser maps
+    // those labels directly to gpio<port>/bit. There is no alternate package
+    // label scheme to transcribe into a separate `pins:` override yet.
+    "stm32h723zg",
     "stm32h735",
     "stm32l073",
     "stm32l476",

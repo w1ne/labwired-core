@@ -1,0 +1,62 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      10,
+      1,
+      3758153984,
+      0,
+      603981400,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      65536,
+      604307440,
+      134251923,
+      134252312
+    ],
+    "pc": 134252312,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 134217728,
+    "waiting_for_event": false,
+    "event_register": true
+  },
+  "steps_executed": 8900653,
+  "cycles": 8900653,
+  "instructions": 8900653,
+  "stop_reason": "assertions_passed",
+  "stop_reason_details": {
+    "triggered_stop_condition": "assertions_passed",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 20000000,
+    "max_cycles": null,
+    "max_uart_bytes": 65536,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": true,
+    "stop_when_assertions_pass_settle_steps": 1000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "c881e12aacc033012782225a4c8a870114542c2795212cc90b8284514a5f152a",
+  "config": {
+    "firmware": "/home/andrii/worktrees/labwired-core/h723-onboarding-pr-clean/examples/nucleo-h723zg/evidence/arduino-matrix/stm32h723zg/L3_i2c_sensor/firmware.elf",
+    "system": "/home/andrii/worktrees/labwired-core/h723-onboarding-pr-clean/validation/arduino-matrix/systems/stm32h723zg.yaml",
+    "script": "/home/andrii/worktrees/labwired-core/h723-onboarding-pr-clean/examples/nucleo-h723zg/evidence/arduino-matrix/stm32h723zg/L3_i2c_sensor/test.yaml"
+  }
+}

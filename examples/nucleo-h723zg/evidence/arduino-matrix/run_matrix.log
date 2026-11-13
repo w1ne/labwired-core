@@ -1,0 +1,34 @@
+labwired: target/debug/labwired
+boards:   stm32h723zg
+sketches: L0_serial_boot, L1_serial_loop, L2_blink_serial, L3_i2c_sensor, L4_spi_sensor, L5_adc, L6_pwm, L7_timer, L8_can
+out:      /home/andrii/worktrees/labwired-core/hw-onboarding/examples/nucleo-h723zg/evidence/arduino-matrix
+
+==> stm32h723zg × L0_serial_boot
+    compile: ok (firmware.elf)
+    run: pass
+==> stm32h723zg × L1_serial_loop
+    compile: ok (firmware.elf)
+    run: pass
+==> stm32h723zg × L2_blink_serial
+    compile: ok (firmware.elf)
+    run: pass
+==> stm32h723zg × L3_i2c_sensor
+    compile: ok (firmware.elf)
+    run: pass
+==> stm32h723zg × L4_spi_sensor
+    compile: ok (firmware.elf)
+    run: pass
+==> stm32h723zg × L5_adc
+    compile: ok (firmware.elf)
+    run: pass
+==> stm32h723zg × L6_pwm
+    compile: ok (firmware.elf)
+    run: pass
+==> stm32h723zg × L7_timer
+    compile: ok (firmware.elf)
+    run: pass
+==> stm32h723zg × L8_can: skip (No H7 FDCAN model: the engine's fdcan model is the H5 fixed-layout FDCAN, while the H7's is the full M_CAN with a configurable message RAM at 0x4000AC00 (RM0468), so the H723 profile does not declare FDCAN)
+
+Done in 63s — 8 pass / 1 skip / 0 fail (cells 9; gate treats skip as non-fail)
+Scoreboard: /home/andrii/worktrees/labwired-core/hw-onboarding/examples/nucleo-h723zg/evidence/arduino-matrix/scoreboard.md
+Docs scoreboard unchanged (partial run; not full 35×9)

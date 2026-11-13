@@ -17,6 +17,7 @@ on:
       - "configs/chips/**"
       - "configs/systems/**"
       - "examples/**"
+      - "crates/firmware-nucleo-h723zg-smoke/**"
       - "crates/core/**"
       - "crates/firmware-stm32u575-demo/**"
       - "crates/cli/**"
@@ -43,6 +44,11 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/stm32f401cdu6/uart-smoke.yaml
             system: configs/systems/stm32f401cdu6.yaml
+          - id: nucleo-h723zg
+            crate: firmware-nucleo-h723zg-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-h723zg/onboarding-smoke.yaml
+            system: configs/systems/nucleo-h723zg.yaml
           - id: stm32h563-nucleo
             crate: firmware-h563-demo
             target: thumbv7m-none-eabi

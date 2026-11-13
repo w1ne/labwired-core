@@ -1,0 +1,12 @@
+schema_version: '1.0'
+inputs:
+  firmware: /home/andrii/worktrees/labwired-core/h723-onboarding-pr-clean/examples/nucleo-h723zg/evidence/arduino-matrix/stm32h723zg/L1_serial_loop/firmware.elf
+  system: /home/andrii/worktrees/labwired-core/h723-onboarding-pr-clean/validation/arduino-matrix/systems/stm32h723zg.yaml
+limits:
+  max_steps: 20000000
+  max_uart_bytes: 65536
+  stop_when_assertions_pass: true
+  stop_when_assertions_pass_settle_steps: 1000
+  stop_when_assertions_pass_min_steps: 0
+assertions:
+- uart_contains: LW_L1_OK

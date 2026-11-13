@@ -1,0 +1,60 @@
+{
+  "board": "nucleo-h723zg",
+  "generated_at": "2026-11-09T06:10:39+0000",
+  "platform": "ststm32@19.7.1 (STM32duino)",
+  "rows": [
+    {
+      "sketch": "L0_serial_boot",
+      "status": "pass",
+      "logic_edge_count": null,
+      "steps": 555245
+    },
+    {
+      "sketch": "L1_serial_loop",
+      "status": "pass",
+      "logic_edge_count": null,
+      "steps": 1105240
+    },
+    {
+      "sketch": "L2_blink_serial",
+      "status": "pass",
+      "logic_edge_count": 3,
+      "steps": 1655357
+    },
+    {
+      "sketch": "L3_i2c_sensor",
+      "status": "pass",
+      "logic_edge_count": null,
+      "steps": 8900653
+    },
+    {
+      "sketch": "L4_spi_sensor",
+      "status": "pass",
+      "logic_edge_count": null,
+      "steps": 1108729
+    },
+    {
+      "sketch": "L5_adc",
+      "status": "pass",
+      "logic_edge_count": null,
+      "steps": 620520
+    },
+    {
+      "sketch": "L6_pwm",
+      "status": "pass",
+      "logic_edge_count": 120,
+      "steps": 17055391
+    },
+    {
+      "sketch": "L7_timer",
+      "status": "pass",
+      "logic_edge_count": null,
+      "steps": 2205301
+    },
+    {
+      "sketch": "L8_can",
+      "status": "skipped",
+      "reason": "No H7 FDCAN model: the engine's fdcan model is the H5 fixed-layout FDCAN, while the H7's is the full M_CAN with a configurable message RAM at 0x4000AC00 (RM0468), so the H723 profile does not declare FDCAN"
+    }
+  ]
+}

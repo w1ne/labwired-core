@@ -651,6 +651,20 @@
       "SPI",
       "UART"
     ],
+    "name": "stm32h723zg"
+  },
+  {
+    "buses": [
+      "UART"
+    ],
+    "name": "stm32h723zg-nucleo-smoke"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
     "name": "stm32h735"
   },
   {

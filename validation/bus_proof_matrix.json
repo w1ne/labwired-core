@@ -1035,6 +1035,50 @@
         "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
       }
     },
+    "stm32h723zg": {
+      "in_boards": true,
+      "uart": {
+        "state": "proven",
+        "file": "validation/arduino-matrix/sketches/L0_serial_boot/src/main.ino",
+        "test": "LW_L0_OK",
+        "signal": "PlatformIO-compiled NUCLEO-H723ZG firmware emits LW_L0_OK on the modelled USART3 VCP; the matrix runner matches the marker.",
+        "lane": "core-arduino-matrix-smoke / arduino-matrix-gate; H723 L0-L7 pass in the committed matrix evidence"
+      },
+      "spi": {
+        "state": "proven",
+        "file": "validation/arduino-matrix/sketches/L4_spi_sensor/src/main.ino",
+        "test": "LW_L4_OK",
+        "signal": "Firmware clocks the attached MAX31855 over SPI1 and accepts only its exact default frame 0x01901600; LW_L4_OK is emitted on the modelled USART3.",
+        "lane": "core-arduino-matrix-smoke / arduino-matrix-gate; H723 L4 passes in the committed matrix evidence"
+      },
+      "i2c": {
+        "state": "proven",
+        "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
+        "test": "LW_L3_OK",
+        "signal": "Firmware reads INA219 registers at 0x40 over I2C1 and checks the expected configuration and bus values before emitting LW_L3_OK on the modelled USART3.",
+        "lane": "core-arduino-matrix-smoke / arduino-matrix-gate; H723 L3 passes in the committed matrix evidence"
+      }
+    },
+    "stm32h723zg-nucleo-smoke": {
+      "in_boards": false,
+      "uart": {
+        "state": "shallow",
+        "file": "examples/nucleo-h723zg/onboarding-smoke.yaml",
+        "test": "NUCLEO_H723ZG_OK LD1=PB0 USART3=PD8",
+        "gap": "The local onboarding smoke asserts the USART3 marker and LD1 edges, but Core Onboarding Smoke runs on main pushes, nightly schedule or manual dispatch, not as a PR gate.",
+        "lane": "Core Onboarding Smoke (main push, nightly or manual dispatch)"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "The narrow onboarding profile does not declare SPI.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "The narrow onboarding profile does not declare I2C.",
+        "lane": "none"
+      }
+    },
     "stm32u575": {
       "in_boards": false,
       "uart": {

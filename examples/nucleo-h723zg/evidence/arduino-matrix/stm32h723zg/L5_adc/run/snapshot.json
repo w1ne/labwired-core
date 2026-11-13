@@ -1,0 +1,62 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      7,
+      3758153984,
+      128,
+      97,
+      603980372,
+      32,
+      10,
+      603980520,
+      134249450,
+      10,
+      63,
+      0,
+      1073881136,
+      604307352,
+      134241429,
+      134241428
+    ],
+    "pc": 134241428,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 36028797018963968,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 134217728,
+    "waiting_for_event": false,
+    "event_register": true
+  },
+  "steps_executed": 620520,
+  "cycles": 620520,
+  "instructions": 620520,
+  "stop_reason": "assertions_passed",
+  "stop_reason_details": {
+    "triggered_stop_condition": "assertions_passed",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 20000000,
+    "max_cycles": null,
+    "max_uart_bytes": 65536,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": true,
+    "stop_when_assertions_pass_settle_steps": 1000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "1db98e22bc0c86710ed09a74263dc83d9ec260459b90098ff4450d884539b1b5",
+  "config": {
+    "firmware": "/home/andrii/worktrees/labwired-core/h723-onboarding-pr-clean/examples/nucleo-h723zg/evidence/arduino-matrix/stm32h723zg/L5_adc/firmware.elf",
+    "system": "/home/andrii/worktrees/labwired-core/h723-onboarding-pr-clean/validation/arduino-matrix/systems/stm32h723zg.yaml",
+    "script": "/home/andrii/worktrees/labwired-core/h723-onboarding-pr-clean/examples/nucleo-h723zg/evidence/arduino-matrix/stm32h723zg/L5_adc/test.yaml"
+  }
+}

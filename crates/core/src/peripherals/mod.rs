@@ -5,6 +5,7 @@
 // See the LICENSE file in the project root for full license information.
 
 pub mod adc;
+pub mod adc_common;
 pub mod afio;
 pub mod apollo4;
 pub mod armv7;
