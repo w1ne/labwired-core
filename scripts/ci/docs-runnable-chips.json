@@ -194,6 +194,10 @@
       "expect": null,
       "note": "v0.25.0 refuses adc1 profile 'stm32f4' (unsupported ADC register layout; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5). Fixed on main by #1222 (AdcRegisterLayout::Stm32F4). This entry flips back to committed in the first release that carries that fix; the gate fails if it starts passing while still marked blocked. Prior map: how=committed firmware=tests/fixtures/tier1/stm32f411.elf expect='TIER1 clock PASS'."
     },
+    "stm32f446re": {
+      "how": "needs-build",
+      "why": "Stock stm32duino for the NUCLEO-F446RE waits on the PWR over-drive handshake (ODRDY/ODSWRDY) and PLLI2SRDY, which land with this chip's profile; the installed LabWired CLI v0.25.0 does not model them, so the boot spins in Error_Handler. Evidence is examples/nucleo-f446re/evidence/arduino-matrix, run on a source build."
+    },
     "stm32h563": {
       "how": "committed",
       "firmware": "tests/fixtures/tier1/stm32h563.elf",
