@@ -872,6 +872,19 @@
       "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
       "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
     },
+    "stm32f446re": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "examples/nucleo-f446re/io-smoke.yaml",
+        "test": "uart_contains",
+        "signal": "Real Cortex-M4 firmware writes STM32F446RE_OK through USART2 DR at 0x40004404; the CLI smoke asserts the captured banner. Moving USART2 to a wrong address yields a precise BusFault and no banner.",
+        "lane": "local labwired test --script examples/nucleo-f446re/io-smoke.yaml (3/3 on 2026-11-13); committed fixture is in scripts/ci/docs-runnable-chips.json",
+        "note": "Basic UART2 TX only, not complete silicon parity."
+      },
+      "spi": { "state": "none", "gap": "No SPI instance is mapped or exercised in this minimal F446 model.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No I2C instance is mapped or exercised in this minimal F446 model.", "lane": "none" }
+    },
     "stm32f411ceu6": {
       "in_boards": false,
       "uart": {
