@@ -7,16 +7,29 @@ on:
     paths:
       - 'docs/**'
       - 'mkdocs.yml'
+      # docs/boards/VALIDATION_STATUS.md is rendered at deploy time from the
+      # manifest and the source it watches, so those changes republish it.
+      - 'validation/manifest.yaml'
+      - 'scripts/generate_validation_status.py'
+      - 'configs/**'
+      - 'crates/**'
       - '.github/workflows/deploy-docs.yml'
 
 permissions:
   contents: write
+
+concurrency:
+  group: deploy-docs
+  cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The validation report derives source dates from full history.
+          fetch-depth: 0
 
       - name: Configure Git User
         run: |
@@ -30,7 +43,12 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r docs/requirements.txt
+          pip install -r docs/requirements.txt pyyaml
+
+      # Not committed: render the board validation report into the docs tree so
+      # the site serves it at /boards/VALIDATION_STATUS/ and existing links work.
+      - name: Render validation status report
+        run: python3 scripts/generate_validation_status.py
 
       - name: Build and Deploy
         run: mkdocs gh-deploy --force
