@@ -1,6 +1,15 @@
 name: SAMD actual CODAL core reset
 on:
   pull_request:
+    # Lean PR gate (2026-11-13): on pull requests this lane runs only when
+    # its own files change. Shared engine paths (crates/core, crates/cli,
+    # Cargo.*) trigger it on push to main instead.
+    paths:
+      - 'crates/core/src/tests/scb_reset.rs'
+      - 'crates/core/tests/samd_real_core_reset_guest.rs'
+      - '.github/workflows/samd-real-core-reset-guest.yml'
+  push:
+    branches: [main]
     paths:
       - 'crates/core/src/cpu/cortex_m.rs'
       - 'crates/core/src/tests/scb_reset.rs'
