@@ -3,7 +3,8 @@ usart2 ok
 usart3 ok
 usart4 ok
 rcc reset=1 gate=1 ok
-usart irq u2=1 u3=1 u4=1 ok
+usart irq u2=1 u3=0 u4=1 FAIL
+usart irq detail u3quiet=1 pend=0 released=1 FAIL
 gpio pa=1 reset=1 pf=1 de=1 ok
 exti swier masked=1 routed=1 ok
 tim1 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
@@ -31,11 +32,11 @@ systick pause-resume window=1 frozen=1 resumed=1 paused=0x000006EE frozen_at=0x0
 systick external pause-resume reference=1 window=1 frozen=1 resumed=1 paused=0x00000BFF frozen_at=0x00000BFF resumed_at=0x00000BEF ok
 systick external periodic reference=1 entries=0x00000003 active=1 countflag=1 pending=0 ok
 systick external pending-coalesce reference=1 wraps=0x00000003 pending_each=1 masked=1 pending_after_disable=1 entries=0x00000001 active=1 cleared=1 ok
-systick reload-update window=1 preserved=1 first_wrap=1 next_reload=1 old=0x00000013 current=0x0000000B next=0x00000002 ok
+systick reload-update window=1 preserved=1 first_wrap=1 next_reload=1 old=0x00000013 current=0x0000000B next=0x00000001 ok
 systick calib=0x40001770 tenms=0x00001770 skew=1 noref=0 write_ignored=1 ok
 systick cvr-clear reference=1 wrapped=1 pending_before=1 countflag_clear=1 pending_preserved=1 masked=1 entries=0x00000001 handler_countflag_clear=1 active=1 returned=1 ok
 pendsv clear pending=1 canceled=1 fresh repend=1 entries=0x00000001 ipsr=0x0000000E returned=1 ok
 systick pendsv M0 tailchain deferred=1 frame_reused=1 r0_live=1 pending_clear=1 ipsr=0x0000000E ok
 systick pendsv M0 PSP tailchain frame=1 r0=1 pending=1 exc_return=0xFFFFFFFD restored=1 ok
-summary 0xFFFFFFFF
+summary 0xFFFFFFFD
 DONE

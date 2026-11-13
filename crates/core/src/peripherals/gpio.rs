@@ -4201,10 +4201,17 @@ mod routing_tests {
                                 let output = dout & (1 << pin) != 0;
                                 let held = external & (1 << pin) != 0;
                                 let input = held && levels & (1 << pin) != 0;
+                                // WIREDOR* (6, 7) is open-source and drives
+                                // only a 1; WIREDAND* (8..15) is open-drain
+                                // and drives only a 0. A released pin reads
+                                // the external level, else its pull rail
+                                // (pull-down for 7, pull-up for 10/11/14/15).
                                 let level = match mode {
                                     2 | 3 if !held => output,
-                                    6 | 7 => output && input,
-                                    4..=15 => output,
+                                    4 | 5 => output,
+                                    6 | 7 => output || input,
+                                    10 | 11 | 14 | 15 if !held => output,
+                                    8..=15 => output && input,
                                     _ => input,
                                 };
                                 expected |= u32::from(level) << pin;

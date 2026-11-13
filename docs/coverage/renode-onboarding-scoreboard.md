@@ -1,18 +1,17 @@
 # Onboarding Smoke Scoreboard
 
-- descriptors_present: `245`
 - targets_total: `245`
 - run_attempted: `226`
 - booted: `226/245`
-- boot_and_smoke_passed: `226/245`
+- boot_and_smoke_passed: `225/245`
 - not_run: `19`
-- pass: `226`
-- fail: `0`
-- pass_loading_zero_answering_windows: `0/226`
-- pass_observable_assertions: `226/226`
-- pass_stop_reason_only: `0/226`
-- pass_depth_unknown: `0/226`
-- pass_claimed_peripherals_total: `1485`
+- pass: `225`
+- fail: `1`
+- pass_loading_zero_answering_windows: `0/225`
+- pass_observable_assertions: `225/225`
+- pass_stop_reason_only: `0/225`
+- pass_depth_unknown: `0/225`
+- pass_claimed_peripherals_total: `1456`
 - pass_claimed_peripherals_median: `2`
 - median_elapsed_ms: `1341`
 - median_elapsed_seconds: `1.341`
@@ -225,7 +224,7 @@
 | `stk3700` | `pass` | `True` | `yes` | `yes` | `1172` | `1.172` | `True` | `observable` | `15` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `stk3800` | `pass` | `True` | `yes` | `yes` | `1057` | `1.057` | `True` | `observable` | `15` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `stm32f042` | `pass` | `True` | `yes` | `yes` | `2964` | `2.964` | `True` | `observable` | `21` | `uart_contains`, `uart_ordered`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
-| `stm32f072` | `pass` | `True` | `yes` | `yes` | `29681` | `29.681` | `True` | `observable` | `29` | `uart_contains`, `uart_ordered`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
+| `stm32f072` | `fail` | `True` | `yes` | `no` | `3934` | `3.934` | `True` | `observable` | `29` | `uart_contains`, `uart_ordered`, `memory_value`, `gpio_edges` | 0 | `run_smoke` | Smoke assertion mismatch. Compare expected stop/assertions with current deterministic output. | 2026-11-13T03:58:21.799517Z ERROR labwired_cli::execute: Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: ["rcc reset=1 gate=1 ok", "usart irq u2=1 u3=1 u4=1 ok", "gpio pa=1 reset=1 pf=1 de=1 ok", "exti swier masked=1 rout |
 | `stm32f072b_discovery` | `pass` | `True` | `yes` | `yes` | `995` | `0.995` | `True` | `observable` | `29` | `uart_contains`, `uart_ordered`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `stm32f103` | `pass` | `True` | `yes` | `yes` | `2249` | `2.249` | `True` | `observable` | `7` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `stm32f4` | `pass` | `True` | `yes` | `yes` | `188900` | `188.9` | `True` | `observable` | `4` | `uart_contains`, `uart_ordered` | 0 | `n/a` | n/a | n/a |

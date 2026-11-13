@@ -19,8 +19,8 @@ This page covers the public models. For every chip we model — public and priva
 | am6234 | **L1** | ✓ | 9 | — | — | firmware_survival::test_sk_am62_zephyr_survival |
 | r5f52618bgfp | **L1** | ✓ | 10 | — | — | firmware_survival::test_ek_rx261_zephyr_survival |
 | pic32mz2048efm144 | **L1** | ✓ | 10 | — | — | firmware_survival::test_curiosity_pic32mz_nuttx_survival |
-| r7fa6m5bh | **L1** | ✓ | 48 | — | — | firmware_survival::test_ek_ra6m5_smoke_survival |
-| r7fa8m1ah | **L1** | ✓ | 44 | — | — | firmware_survival::test_ek_ra8m1_smoke_survival |
+| r7fa6m5bh | **L1** | ✓ | 49 | — | — | firmware_survival::test_ek_ra6m5_smoke_survival |
+| r7fa8m1ah | **L1** | ✓ | 45 | — | — | firmware_survival::test_ek_ra8m1_smoke_survival |
 | amap42kp | **L1** | ✓ | 46 | — | — | firmware_survival::test_apollo4p_evb_smoke_survival |
 | mk64f12 | **L1** | ✓ | 25 | — | — | firmware_survival::test_frdm_k64f_smoke_survival |
 | same70q21b | **L1** | ✓ | 24 | — | — | firmware_survival::test_sam_e70_xplained_smoke_survival |

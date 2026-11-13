@@ -1,15 +1,18 @@
-2026-11-11T23:45:10.780524Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f072.yaml
-2026-11-11T23:45:13.468887Z  INFO labwired_loader: ELF Entry Point: 0x80000c1
+2026-11-13T03:58:21.347529Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f072.yaml
+2026-11-13T03:58:21.409225Z  INFO labwired_loader: ELF Entry Point: 0x80000c1
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-2026-11-11T23:45:13.975132Z  INFO labwired_cli::execute: stimulus: position = 25 applied
-2026-11-11T23:45:13.975174Z  INFO labwired_cli::execute: stimulus: temperature = 100 applied
-2026-11-11T23:45:13.975180Z  INFO labwired_cli::execute: stimulus: temperature = 50 applied
-2026-11-11T23:45:14.129021Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
-2026-11-11T23:45:14.144230Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
-2026-11-11T23:45:14.178492Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
-2026-11-11T23:45:14.249254Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
-2026-11-11T23:45:14.283647Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
-2026-11-11T23:45:14.353034Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
-labwired-cli test: idle_ff skipped 909244 of 4000000 device cycles (3090756 interpreted)
-PASS  8/8 checks · stm32f072-smoke · 4000000 steps · 0.70s
+2026-11-13T03:58:21.412183Z  INFO labwired_cli::execute: stimulus: position = 25 applied
+2026-11-13T03:58:21.412204Z  INFO labwired_cli::execute: stimulus: temperature = 100 applied
+2026-11-13T03:58:21.412208Z  INFO labwired_cli::execute: stimulus: temperature = 50 applied
+2026-11-13T03:58:21.536037Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-13T03:58:21.551005Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-13T03:58:21.584237Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-13T03:58:21.657594Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-13T03:58:21.696102Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-13T03:58:21.770839Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+labwired-cli test: idle_ff skipped 1021204 of 4000000 device cycles (2978796 interpreted)
+2026-11-13T03:58:21.799517Z ERROR labwired_cli::execute: Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: ["rcc reset=1 gate=1 ok", "usart irq u2=1 u3=1 u4=1 ok", "gpio pa=1 reset=1 pf=1 de=1 ok", "exti swier masked=1 routed=1 ok", "tim1 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok", "tim2 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok", "tim3 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok", "tim6 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok", "tim7 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok", "tim14 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok", "tim15 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok", "tim16 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok", "tim17 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok", "exti pads idle=1 presses=1 pa_quiet=1 pf1=1 pc13=1 ok", "spi1 frame=0x01901600 ds=1 data=1 pend=1 alone=1 released=1 ok", "spi1 TXEIE pend=1 released=1 ok", "spi1 RXNEIE asserted=1 repended=1 masked=1 unmasked=1 released=1 ok", "spi2 frame=0x06401600 ds=1 data=1 pend=1 alone=1 released=1 ok", "spi2 TXEIE pend=1 released=1 ok", "spi2 RXNEIE asserted=1 repended=1 masked=1 unmasked=1 released=1 ok", "dma1 spi1 frame=0x01901600 data=1 flags=1 pend=1 alone=1 released=1 ok", "i2c1 tmp102=0x00001900 oar=1 data=1 rx_pend=1 nack=1 nack_pend=1 stop=1 released=1 ok", "spi1 shared a=0x01901600 b=0x03201600 after_cut=0x01901600 a=1 b=1 restart=1 ok", "crc word=0xDF8A8A2B seed=1 std=1 init=1 ok", "adc in1=0x000007FF ts=0x00000709 cal=1 ready=1 seq=1 eos=1 pend=1 released=1 dma=1 ovr=1 awd=1 off=1 ok", "systick pause-resume window=1 frozen=1 resumed=1", "systick external pause-resume reference=1 window=1 frozen=1 resumed=1", "systick external periodic reference=1 entries=0x00000003 active=1 countflag=1 pending=0 ok", "systick external pending-coalesce reference=1 wraps=0x00000003 pending_each=1 masked=1 pending_after_disable=1 entries=0x00000001 active=1 cleared=1 ok", "systick reload-update window=1 preserved=1 first_wrap=1 next_reload=1", "systick calib=0x40001770 tenms=0x00001770 skew=1 noref=0 write_ignored=1 ok", "systick cvr-clear reference=1 wrapped=1 pending_before=1 countflag_clear=1 pending_preserved=1 masked=1 entries=0x00000001 handler_countflag_clear=1 active=1 returned=1 ok", "pendsv clear pending=1 canceled=1 fresh repend=1 entries=0x00000001 ipsr=0x0000000E returned=1 ok", "systick pendsv M0 tailchain deferred=1 frame_reused=1 r0_live=1 pending_clear=1 ipsr=0x0000000E ok", "systick pendsv M0 PSP tailchain frame=1 r0=1 pending=1 exc_return=0xFFFFFFFD restored=1 ok", "summary 0xFFFFFFFF", "DONE"] }) (captured len=2843)
+2026-11-13T03:58:21.799556Z ERROR labwired_cli::execute: Memory assertion failed at 0x20003000 (size 4): expected 0xffffffff, got 0xfffffffd (mask 0xffffffff)
+2026-11-13T03:58:21.799568Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536883200, expected_value: 4294967295, mask: None, size: Some(4), node: None } }) (captured len=2843)
+FAIL  6/8 checks · stm32f072-smoke · 4000000 steps · 0.39s

@@ -340,24 +340,41 @@ fn report_rcc(reset: bool, gate: bool) -> bool {
 /// USART3_4_IRQn = 29.
 fn check_usart_irqs() -> bool {
     let mut ok = true;
+    let mut diagnostics = [0u8; 3];
     puts("usart irq ");
-    for &(name, base, irq) in &[
+    for (index, &(name, base, irq)) in [
         ("u2", USART2, 28u32),
         ("u3", USART3, 29),
         ("u4", USART4, 29),
-    ] {
+    ]
+    .iter()
+    .enumerate()
+    {
         unpend(irq);
         let quiet = !pending(irq);
         wr(base + U_CR1, rd(base + U_CR1) | USART_CR1_TXEIE);
-        let pend = pending(irq);
+        // The UART is scheduler driven. Give the one-cycle level source a
+        // bounded window to reach the NVIC before checking its pending bit.
+        let pend = wait_pending(irq, true);
         wr(base + U_CR1, rd(base + U_CR1) & !USART_CR1_TXEIE);
         unpend(irq);
         let released = !pending(irq);
+        diagnostics[index] = u8::from(quiet) | (u8::from(pend) << 1) | (u8::from(released) << 2);
         let this = quiet && pend && released;
         flag(name, this);
         ok &= this;
     }
     verdict(ok);
+    for (name, state) in ["u2", "u3", "u4"].iter().zip(diagnostics) {
+        if state != 0b111 {
+            puts("usart irq detail ");
+            puts(name);
+            flag("quiet", state & 1 != 0);
+            flag("pend", state & 2 != 0);
+            flag("released", state & 4 != 0);
+            verdict(false);
+        }
+    }
     ok
 }
 
