@@ -872,6 +872,33 @@
       "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
       "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
     },
+    "stm32f446re": {
+      "in_boards": true,
+      "uart": {
+        "state": "proven",
+        "file": "validation/arduino-matrix/sketches/L0_serial_boot/src/main.ino",
+        "test": "LW_L0_OK",
+        "signal": "stock stm32duino NUCLEO_F446RE firmware (HSI PLL 180 MHz + PWR over-drive) prints LW_L0_OK from setup() on USART2, the ST-LINK VCP; the sim captures the bytes and a uart_contains oracle matches them",
+        "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
+        "note": "examples/nucleo-f446re/evidence/arduino-matrix/L0_serial_boot, 2026-11-09"
+      },
+      "spi": {
+        "state": "proven",
+        "file": "validation/arduino-matrix/sketches/L4_spi_sensor/src/main.ino",
+        "test": "LW_L4_OK",
+        "signal": "stock stm32duino SPI = SPI1 (PA5/PA6/PA7) clocks the MAX31855 device model and accepts ONLY the exact default kit frame 0x01901600; any other word prints LW_L4_FAIL frame=0x...; the verdict returns on USART2",
+        "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
+        "note": "needs ststm32@19.7.1 (the CI pin): 20.0.0 makes SPI.begin() a no-op. Evidence examples/nucleo-f446re/evidence/arduino-matrix/L4_spi_sensor, 2026-11-09"
+      },
+      "i2c": {
+        "state": "proven",
+        "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
+        "test": "LW_L3_OK",
+        "signal": "stock stm32duino Wire = I2C1 (PB8/PB9) reads the INA219 model's config register 0x399F and bus-voltage register 0x19CA; LW_L3_OK prints only on that exact pair (the F446 takes the exact tier, not the ACK-only one)",
+        "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
+        "note": "a full run to 3M steps prints no LW_L3_PARTIAL_NO_RX (examples/nucleo-f446re/evidence/arduino-matrix/L3_i2c_sensor/uart-full-run.log), 2026-11-09"
+      }
+    },
     "stm32f411ceu6": {
       "in_boards": false,
       "uart": {

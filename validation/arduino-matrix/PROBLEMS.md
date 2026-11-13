@@ -77,7 +77,7 @@ store gates TIMER0 off and `millis()` stops.
 | Oracle depth | ~~ACK-only L3 / weak L5–L6 / TWAI STATUS cosplay~~ | **Hardened 2026-08-12** — L3 exact INA219 regs (where RX works); L5 deterministic pairs; L6 mid duty left on; L8 TWAI ID+data |
 | L3 STM32 master-RX | Partial on some cores | INA219 `start()` + RP2040 I2C START/STOP; F407 may still take ACK-only path |
 | L5 fixed-source | Many HAL paths still return 0 or DR+1 | Prefer Arduino→ADC model wiring for 3.0/3.3 → 3723; current oracle requires deterministic pairs |
-| L6 PWM edges | Not gated fleet-wide | `pwm_watch` opt-in. STM32 TIM→pad routing covers F1 (fixed map), F4 (`input_capture: stm32f4`) and G0/G4 (timer `pad_map:`): F401/F411/G071/G0B1/G474 rows are pad-proven at 1.000 kHz / 50.2 %. F407 routes but runs 2 kHz: STM32 timers tick at HCLK, no APB-prescaler timer clock (APB1 /4 on the Disco) |
+| L6 PWM edges | Not gated fleet-wide | `pwm_watch` opt-in. STM32 TIM→pad routing covers F1 (fixed map), F4 (`input_capture: stm32f4`) and G0/G4 (timer `pad_map:`): F401/F411/F446/G071/G0B1/G474 rows are pad-proven at 1.000 kHz / 50.2 %. F407 routes but runs 2 kHz: STM32 timers tick at HCLK, no APB-prescaler timer clock (APB1 /4 on the Disco) |
 | _(fleet)_ | Arduino **L0–L8** **133 pass / 11 skip / 0 fail** | Zephyr L4+; C3 TWAI model; WBA ADC |
 
 
