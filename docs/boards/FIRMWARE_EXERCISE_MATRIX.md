@@ -374,6 +374,12 @@ _384 KiB Black-Pill package variant of the F401. Its PR-gated firmware is the UA
 - `OTG_FS global/host/device/pwrclk` (configs/chips/stm32f401cdu6.yaml:309,315,321,327 (type: stub; configs/peripherals/stm32f401/otg_fs_*.yaml)) — CLOSABLE: four zero windows — the engine's STM32 OTG FS/DWC2 model (usb_otg.rs, wired on the L476) is not wired here (the F103 USB-device window is the same stub class), no gated firmware opens them, and the declarative otg_fs_*.yaml schemas are decode-only.
 - `DBG` (configs/chips/stm32f401cdu6.yaml:336 (type: stub; configs/peripherals/stm32f401/dbg.yaml)) — CLOSABLE: zero window with no IDCODE wired even though the yaml header records the CDU6's bench-read DBGMCU IDCODE 0x10016433 — the sibling descriptor's real `dbgmcu` model (configs/chips/stm32f401.yaml:187, idcode 0x10006411) is not reused; no gated firmware reads it.
 
+### `stm32f446re`
+
+_Minimal real-register firmware smoke: reset/stack, RCC, GPIO PA5 LED and USART2 UART banner. No beyond-rubric function is exercised; the model deliberately omits F446-exclusive blocks, and no stock HAL/Zephyr or physical silicon run exists._
+
+**Dead** (2 modeled, never exercised): `PWR`, `FLASH_CTRL`
+
 ### `stm32f411ceu6`
 
 _WeAct Black Pill. Its tier-1 fixture (PR-gated `firmware_survival::test_stm32f411_tier1_survival`; nightly coverage-matrix cell examples/stm32f411ceu6-blackpill/io-smoke.yaml) drives clock/gpio/timer/i2c/spi (SPI1+SPI5)/adc/wdt/rtc over USART2, leaving dma unrecorded (the fixture never attempts it, and both stream controllers are zero stubs) and irq/pwm n/a (the fixture does not attempt either class). PWR is a real stm32f4-profile model no firmware drives; the descriptor's remaining stub windows are listed below._
