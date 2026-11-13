@@ -849,6 +849,24 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_stm32h735_tier1_survival"),
     },
     ChipConf {
+        // STM32H723ZGT6 (NUCLEO-H723ZG), SIM-DERIVED from RM0468. The Arduino
+        // matrix exercises UART, I2C, SPI, ADC, PWM and timer paths; no silicon
+        // reset capture or Rust behavior-gate target is claimed here.
+        name: "stm32h723zg",
+        yaml: "configs/chips/stm32h723zg.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        // Narrow NUCLEO-H723ZG local onboarding profile. It is the same MCU as
+        // stm32h723zg, so this row tracks only the isolated smoke descriptor;
+        // it is not a second silicon part or silicon capture.
+        name: "stm32h723zg-nucleo-smoke",
+        yaml: "configs/chips/stm32h723zg-nucleo-smoke.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
         name: "stm32l073",
         yaml: "configs/chips/stm32l073.yaml",
         reset_oracle: Some("scripts/hw-oracle/captures/stm32l073/reg_oracle.json"),

@@ -2462,7 +2462,12 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-09
+    # 2026-11-13 (feat/nucleo-h723zg-arduino-matrix): adc.rs corrects H7 ADC_CR
+    # read/set semantics and byte-sized ISR rc_w1 writes for H7/L4/U5 layouts;
+    # H563 uses the L4 layout. ADC unit tests (32/32), h563_conformance (7/7),
+    # and h563_mmio_sim_only (1/1) pass. No live silicon re-capture; ACK, NOT A
+    # CAPTURE; re-capture remains pending.
+    drift_ack: 2026-11-13
     # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
     # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
     # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
@@ -2470,7 +2475,7 @@ boards:
     # immediate range still Halt, same as before. Shared interpreter
     # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack_digest: cc3fa97b80b4984d9fd68c6e673fc73ea222f80abe4051c6e0aeefcd26d243c9
+    drift_ack_digest: 637e657f78e32216de37efac4cd74a1dcc49a20a5a6f9640414db8b50a9b3164
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -4696,7 +4701,12 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-09
+    # 2026-11-13 (feat/nucleo-h723zg-arduino-matrix): adc.rs corrects H7 ADC_CR
+    # read/set semantics and byte-sized ISR rc_w1 writes for H7/L4/U5 layouts;
+    # L476 uses the L4 layout. ADC unit tests (32/32), l476_mmio_sim_only (1/1),
+    # and stm32l476_zephyr_boot_walk_vs_scheduler_is_byte_identical (1/1) pass.
+    # No live silicon re-capture; ACK, NOT A CAPTURE; re-capture remains pending.
+    drift_ack: 2026-11-13
     # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
     # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
     # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
@@ -4704,7 +4714,7 @@ boards:
     # immediate range still Halt, same as before. Shared interpreter
     # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack_digest: ea61614e87455985b6f507bebc6ffbe3a2de2e18779514665742fac10a9c196d
+    drift_ack_digest: 24d5b144f4f3d549879096f1736247012fbd6832fb99f9f4a2f9a0cc65d90abc
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -6964,7 +6974,12 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-09
+    # 2026-11-13 (feat/nucleo-h723zg-arduino-matrix): shared adc.rs digest moved
+    # for H7/L4/U5 semantics; the STM32F1 ADC arm is unchanged. ADC unit tests
+    # (32/32), including F1 calibration/channel/SWSTART cases, and
+    # f1_mmio_sim_only (1/1) pass. No live silicon re-capture; ACK, NOT A
+    # CAPTURE; re-capture remains pending.
+    drift_ack: 2026-11-13
     # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
     # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
     # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
@@ -6972,7 +6987,7 @@ boards:
     # immediate range still Halt, same as before. Shared interpreter
     # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
     # re-capture remains pending.
-    drift_ack_digest: 11ccb9e80e02ed99d39d7182ceffc87a835d7295705db9bb4e8c7edc21d98250
+    drift_ack_digest: 9352f84934423eecbffcd0039470e7dceb5eb9ea97927ed825fda71aba3a65aa
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are

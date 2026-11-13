@@ -31,6 +31,10 @@ pins:
   PD9: { gpio: "gpiod", bit: 9, functions: [{ type: uart, peripheral: usart3, role: rx, af: 7 }] }
 
 peripherals:
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+
   - id: "rcc"
     type: "rcc"
     base_address: 0x58024400

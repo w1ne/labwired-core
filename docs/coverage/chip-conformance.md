@@ -57,7 +57,7 @@ This page covers the public models. For every chip we model — public and priva
 | rp2040 | **L1** | ✓ | 23 | — | — | firmware_survival::test_rp2040_demo_survival |
 | stm32f103 | **L1** | ✓ | 31 | — | — | stm32f1_exec_oracle |
 | stm32f103rb | **L0** | ✓ | 32 | — | — | — |
-| stm32f103rb-nucleo-bme280-smoke | **L0** | ✓ | 6 | — | — | — |
+| stm32f103rb-nucleo-bme280-smoke | **L0** | ✓ | 7 | — | — | — |
 | stm32f103c4 | **L0** | ✓ | 31 | — | — | — |
 | stm32f103c6 | **L0** | ✓ | 31 | — | — | — |
 | stm32f103r4 | **L0** | ✓ | 31 | — | — | — |
@@ -98,6 +98,8 @@ This page covers the public models. For every chip we model — public and priva
 | stm32u545 | **L1** | ✓ | 39 | — | — | firmware_survival::test_stm32u545_blinky_survival |
 | stm32u5a5zj | **L1** | ✓ | 45 | — | — | stm32u5_exec_oracle::u5a5_hash_saes_and_pka_execute_register_level_operations |
 | stm32h735 | **L1** | ✓ | 40 | — | — | firmware_survival::test_stm32h735_tier1_survival |
+| stm32h723zg | **L0** | ✓ | 41 | — | — | — |
+| stm32h723zg-nucleo-smoke | **L0** | ✓ | 5 | — | — | — |
 | stm32l073 | **L2** | ✓ | 42 | 54/54 (100%) | 6 | firmware_survival::test_nucleo_l073rz_smoke_survival |
 | stm32l476 | **L1** | ✓ | 58 | — | — | firmware_survival::test_nucleo_l476rg_demo_survival |
 | stm32wb55 | **L1** | ✓ | 22 | — | — | firmware_survival::test_stm32wb55_zephyr_survival |
