@@ -18,4 +18,4 @@ Checking size .pio/build/nano/firmware.elf
 Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
 RAM:   [=         ]   9.7% (used 199 bytes from 2048 bytes)
 Flash: [=         ]   6.3% (used 1938 bytes from 30720 bytes)
-========================= [SUCCESS] Took 4.20 seconds =========================
+========================= [SUCCESS] Took 5.19 seconds =========================

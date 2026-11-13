@@ -1,11 +1,21 @@
 {
-  "evidence_recorded_at_utc": "2026-11-11T18:02:12Z",
+  "evidence_recorded_at_utc": "2026-11-13T17:50:18Z",
   "tool": "LabWired hosted labwired_verify",
   "target": "arduino-nano",
   "language": "arduino",
   "firmware_source": "examples/arduino-nano-blinky/src/main.cpp",
   "firmware_source_sha256": "f34f5f6563fbabd2cf4a95b9321cd7fe39b714a89efeb349f4ad4ef4d1972073",
   "max_steps": 2000000,
+  "diagram": {
+    "board": "arduino-nano",
+    "parts": [
+      {
+        "id": "mcu",
+        "type": "arduino-nano"
+      }
+    ],
+    "wires": []
+  },
   "status": "model_verified",
   "run_status": "pass",
   "stop_reason": "max_steps",
