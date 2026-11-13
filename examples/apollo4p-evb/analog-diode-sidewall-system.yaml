@@ -1,0 +1,37 @@
+# Apollo4 Plus EVB: generic SPICE diodes with sidewall saturation current
+# (JSW/ISW times perimeter PJ, optional sidewall emission NS) routed to ADC
+# slot inputs SE2..SE5. SE2 is the control junction without a sidewall; the
+# test loads this beside analog-ntc-diode-system.yaml (SE0/SE1).
+name: "apollo4p-evb-analog-diode-sidewall"
+chip: "../../configs/chips/amap42kp.yaml"
+external_devices: []
+cosim_models:
+  - id: "diode_sidewall"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_control: "adc.adc.2_volts"
+      v_merged: "adc.adc.3_volts"
+      v_own_ns: "adc.adc.4_volts"
+      v_heated: "adc.adc.5_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rc supply control 1k
+        Rm supply merged 1k
+        Rn supply own_ns 100k
+        Rh supply heated 1k
+        Dc control 0 DBOTTOM
+        Dm merged 0 DSIDE pj=4
+        Dn own_ns 0 DNS pj=2
+        Dh heated 0 DHOT pj=3 temp=75
+        .model DBOTTOM D(IS=1e-14 N=1.1)
+        .model DSIDE D(IS=1e-14 N=1.1 JSW=2e-14 PJ=1.5)
+        .model DNS D(IS=1e-15 N=1 JSW=5e-10 NS=2)
+        .model DHOT D(IS=1e-14 N=1.5 JSW=1e-13 EG=1.11 XTI=3 TNOM=27)
+      probes:
+        v_control: "v(control)"
+        v_merged: "v(merged)"
+        v_own_ns: "v(own_ns)"
+        v_heated: "v(heated)"
+      vdd: 3.3

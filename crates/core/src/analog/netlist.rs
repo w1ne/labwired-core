@@ -23,7 +23,7 @@
 //! | Current source | `I<name> n+ n- <source>` |
 //! | Switch | `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` or `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0\|1] ron=<r> roff=<r>` |
 //! | Voltage switch | `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0|1] ron=<r> roff=<r>` |
-//! | Diode | `D<name> n+ n- <model>` |
+//! | Diode | `D<name> n+ n- <model> [<area>] [pj=<perimeter>]` |
 //! | BJT | `Q<name> nc nb ne <model> [temp=<°C>]` |
 //! | MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>]` |
 //! | JFET | `J<name> nd ng ns <model> [temp=<°C>]` |
@@ -70,7 +70,8 @@
 //! be declared after the elements that use it. Parameters this engine does not
 //! model (except diode forward/reverse knee currents `IK`/`IKF`/`IKR`, diode
 //! depletion capacitance `CJO`/`VJ`/`M`/`FC`, diffusion charge `TT` and
-//! soft-recovery parameter `VP`, diode transit-time temperature
+//! soft-recovery parameter `VP`, diode sidewall saturation current
+//! `JSW`/`ISW` with emission `NS` and perimeter `PJ`, diode transit-time temperature
 //! coefficients `TTT1`/`TTT2`, diode grading-coefficient temperature
 //! coefficients `TM1`/`TM2`, forward/reverse BJT transit-time temperature
 //! coefficients `TTF1`/`TTF2`/`TTR1`/`TTR2`, JFET terminal
@@ -715,9 +716,33 @@ pub struct DiodeModel {
     /// Second-order series-resistance temperature coefficient `TRS2`, per
     /// Celsius degree squared. Applies when an instance `TEMP` is present.
     pub trs2: f64,
+    /// Sidewall saturation current `JSW`/`ISW`, amps per unit of perimeter
+    /// `PJ`. Zero (the default) disables the sidewall junction. On a bound
+    /// instance it is already multiplied by `PJ`; see [`Self::with_perimeter`].
+    pub jsw: f64,
+    /// Sidewall emission coefficient `NS`. `None` merges the sidewall current
+    /// into the bottom junction and uses `N`, as ngspice-42 does; the
+    /// temperature law still uses ngspice's default `NS = 1` then.
+    pub ns: Option<f64>,
+    /// Default junction perimeter `PJ` for instances that do not give `pj=`.
+    /// ngspice's default is 0, so `JSW` alone adds no current.
+    pub pj: f64,
 }
 
 impl DiodeModel {
+    /// Fold the junction perimeter into the card: `JSW` becomes the
+    /// instance's total sidewall saturation current `JSW·PJ`, as ngspice's
+    /// `diotemp.c` does. The instance `pj=` wins over the model `PJ`. `AREA`
+    /// does not touch the sidewall. A card with `JSW = 0` returns unchanged.
+    pub fn with_perimeter(self, instance_pj: Option<f64>) -> Self {
+        let pj = instance_pj.unwrap_or(self.pj);
+        Self {
+            jsw: self.jsw * pj,
+            pj,
+            ..self
+        }
+    }
+
     /// The card one instance with SPICE `AREA` sees: the currents `IS`,
     /// `ISR`, `IK`, `IKR` and the capacitance `CJO` scale with the junction
     /// area and `RS` divides by it, as ngspice's `dioload.c` and `diotemp.c`
@@ -802,6 +827,9 @@ impl Default for DiodeModel {
             tcv: 0.0,
             trs1: 0.0,
             trs2: 0.0,
+            jsw: 0.0,
+            ns: None,
+            pj: 0.0,
         }
     }
 }
@@ -1197,6 +1225,9 @@ pub const REGULATOR_LIMIT_DIODE: DiodeModel = DiodeModel {
     tcv: 0.0,
     trs1: 0.0,
     trs2: 0.0,
+    jsw: 0.0,
+    ns: None,
+    pj: 0.0,
 };
 
 /// Floor on the input voltage a buck's power-balance sink divides by, volts.
@@ -1822,6 +1853,9 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             tcv: 0.0,
             trs1: 0.0,
             trs2: 0.0,
+            jsw: 0.0,
+            ns: None,
+            pj: 0.0,
         })),
         // SMAJ5.0A-like 400 W unidirectional TVS. Datasheet: VBR 6.40–7.07 V
         // at IT = 10 mA, VC = 9.2 V at IPP = 43.5 A. BV sits mid-window at
@@ -1854,6 +1888,9 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             tcv: 0.0,
             trs1: 0.0,
             trs2: 0.0,
+            jsw: 0.0,
+            ns: None,
+            pj: 0.0,
         })),
         "NJF" => Some(ModelCard::Jfet(JfetModel::defaults(Polarity::N))),
         "PJF" => Some(ModelCard::Jfet(JfetModel::defaults(Polarity::P))),
@@ -2763,6 +2800,8 @@ struct PendingDevice {
     temperature_celsius: Option<f64>,
     multiplier: f64,
     area: f64,
+    /// Diode junction perimeter `pj=`; `None` uses the model `PJ`.
+    perimeter: Option<f64>,
 }
 
 /// A K line held until all its L elements have been parsed.
@@ -3073,7 +3112,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
             }
             'D' | 'Q' | 'M' | 'J' => {
                 let (terminals, shape) = match letter {
-                    'D' => (2, "D<name> n+ n- <model> [<area>] [area=<factor>] [m=<count>] [temp=<°C>]"),
+                    'D' => (2, "D<name> n+ n- <model> [<area>] [area=<factor>] [pj=<perimeter>] [m=<count>] [temp=<°C>]"),
                     'Q' => (3, "Q<name> nc nb ne <model> [<area>] [area=<factor>] [m=<count>] [temp=<°C>]"),
                     'M' => (
                         4,
@@ -3096,6 +3135,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 let mut temperature_celsius = None;
                 let mut multiplier = None;
                 let mut area = None;
+                let mut perimeter = None;
                 let mut options = &rest[terminals + 1..];
                 // SPICE writes a D, Q or J area as a bare number straight
                 // after the model name; `area=` is the keyword spelling.
@@ -3125,6 +3165,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                         "area" if letter != 'M' && area.is_none() => {
                             area = Some(ctx.value(value, "area")?)
                         }
+                        "pj" if letter == 'D' => perimeter = Some(ctx.value(value, "pj")?),
                         other => {
                             return Err(ctx.parse_err(format!(
                                 "unknown parameter `{other}`; expected `{shape}`"
@@ -3159,6 +3200,9 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 if matches!(area, Some(a) if !a.is_finite() || a <= 0.0) {
                     return Err(ctx.parse_err("device area must be positive and finite"));
                 }
+                if matches!(perimeter, Some(p) if !p.is_finite() || p < 0.0) {
+                    return Err(ctx.parse_err("diode perimeter pj must be >= 0 and finite"));
+                }
                 // The terminals are interned now so that node numbering still
                 // follows netlist order; the model is bound after the last
                 // line, because `.model` may come after its elements.
@@ -3184,6 +3228,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     temperature_celsius,
                     multiplier: multiplier.unwrap_or(1.0),
                     area: area.unwrap_or(1.0),
+                    perimeter,
                 });
             }
             'E' | 'G' => {
@@ -3292,6 +3337,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     temperature_celsius: None,
                     multiplier: 1.0,
                     area: 1.0,
+                    perimeter: None,
                 });
             }
             'S' => {
@@ -3589,6 +3635,11 @@ fn bind_models(
                 let model = model.with_area(device.area);
                 if model.is <= 0.0
                     || model.n <= 0.0
+                    || !model.jsw.is_finite()
+                    || model.jsw < 0.0
+                    || matches!(model.ns, Some(ns) if !ns.is_finite() || ns <= 0.0)
+                    || !model.pj.is_finite()
+                    || model.pj < 0.0
                     || !model.eg.is_finite()
                     || model.eg < 0.0
                     || !model.xti.is_finite()
@@ -3626,10 +3677,11 @@ fn bind_models(
                     || model.fc >= 1.0
                 {
                     return Err(ctx.parse_err(
-                        "a diode model needs IS > 0, N > 0, EG >= 0, finite XTI/TCV/TRS1/TRS2/TTT1/TTT2/TM1/TM2, TNOM above absolute zero, IK/IKR >= 0, ISR >= 0, NR > 0, RS >= 0, TT >= 0, VP >= 0, CJO >= 0, VJ > 0, M >= 0 and 0 <= FC < 1"
+                        "a diode model needs IS > 0, N > 0, JSW >= 0, NS > 0, PJ >= 0, EG >= 0, finite XTI/TCV/TRS1/TRS2/TTT1/TTT2/TM1/TM2, TNOM above absolute zero, IK/IKR >= 0, ISR >= 0, NR > 0, RS >= 0, TT >= 0, VP >= 0, CJO >= 0, VJ > 0, M >= 0 and 0 <= FC < 1"
                             .to_string(),
                     ));
                 }
+                let model = model.with_perimeter(device.perimeter);
                 let (is_at_temperature, thermal_voltage) =
                     if let Some(temp_celsius) = device.temperature_celsius {
                         let temperature_kelvin = temp_celsius + 273.15;
@@ -4544,6 +4596,9 @@ fn parse_model(
             (ModelCard::Diode(model), "VJ") => model.vj = value,
             (ModelCard::Diode(model), "M") => model.m = value,
             (ModelCard::Diode(model), "FC") => model.fc = value,
+            (ModelCard::Diode(model), "JSW" | "ISW") => model.jsw = value,
+            (ModelCard::Diode(model), "NS") => model.ns = Some(value),
+            (ModelCard::Diode(model), "PJ") => model.pj = value,
             (ModelCard::OpAmp(model), "AOL") => model.aol = value,
             (ModelCard::OpAmp(model), "GBW") => model.gbw = value,
             (ModelCard::OpAmp(model), "ROUT") => model.rout = value,
@@ -4831,6 +4886,9 @@ pub const MACRO_CLAMP_DIODE: DiodeModel = DiodeModel {
     tcv: 0.0,
     trs1: 0.0,
     trs2: 0.0,
+    jsw: 0.0,
+    ns: None,
+    pj: 0.0,
 };
 
 /// Loop gain of the push-pull comparator's output node, V/V from the 1 V

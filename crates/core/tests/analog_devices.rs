@@ -7600,6 +7600,62 @@ mod analog {
         }
     }
 
+    /// Diode sidewall current `JSW`·`PJ` follows ngspice-42. Without `NS` it
+    /// merges into the bottom saturation current (shared `N`, breakdown
+    /// region and knee) but temperature-scales with `NS = 1`; with `NS` it is
+    /// a separate exponential. The instance `pj=` overrides the model `PJ`,
+    /// and `JSW` with no perimeter adds nothing. Reference values are
+    /// ngspice-42 `.op` (`.temp 26.85`, `tnom=26.85`). Without the sidewall
+    /// the rows move by 39 mV (a), 62 mV (b), 93 mV (c), 145 mV (z) and
+    /// 244 mV (e), so an ignored `JSW` fails every row.
+    #[test]
+    fn diode_sidewall_current_jsw_pj_ns_matches_ngspice() {
+        let netlist = "Vdd supply 0 dc 3.3\n\
+            R1 supply a 1k\nR2 supply b 1k\nR3 supply c 100k\nR4 supply z 470\n\
+            R5 supply e 1k\nR6 supply f 1k\n\
+            D1 a 0 DS\nD2 b 0 DS pj=4\nD3 c 0 DN pj=2\nD4 0 z DZ pj=3\n\
+            D5 e 0 DT pj=3 temp=75\nD6 f 0 DP\n\
+            .model DS D(IS=1e-14 N=1.1 JSW=2e-14 PJ=1.5)\n\
+            .model DN D(IS=1e-15 N=1 JSW=5e-10 NS=2)\n\
+            .model DZ D(IS=1e-14 BV=2.0 IBV=1m JSW=1e-12)\n\
+            .model DT D(IS=1e-14 N=1.5 JSW=1e-13 EG=1.11 XTI=3 TNOM=27)\n\
+            .model DP D(IS=1e-14 JSW=1e-12)\n";
+        let solver = build(netlist);
+        let v = |node: &str| solver.node_voltage(solver.circuit().node(node).expect("node exists"));
+        for (node, ngspice) in [
+            ("a", 0.707_932_4),
+            ("b", 0.685_121_0),
+            ("c", 0.527_559_8),
+            ("z", 1.881_026),
+            ("e", 0.742_548_9),
+            ("f", 0.679_693_5),
+        ] {
+            let got = v(node);
+            assert!(
+                (got - ngspice).abs() < 1e-4,
+                "V({node}): ngspice-42 {ngspice}, got {got}"
+            );
+        }
+
+        // JSW with no perimeter must be bit-identical to the plain diode.
+        let plain = build(&netlist.replace("DP D(IS=1e-14 JSW=1e-12)", "DP D(IS=1e-14)"));
+        let plain_f = plain.node_voltage(plain.circuit().node("f").expect("node exists"));
+        assert_eq!(v("f"), plain_f, "JSW with PJ=0 must add no current");
+
+        for card in ["JSW=-1e-12", "NS=0", "PJ=-1"] {
+            let error = parse_netlist(&format!(
+                "V1 a 0 1\nD1 a 0 DX\n.model DX D(IS=1e-14 {card})\n"
+            ))
+            .expect_err("an invalid sidewall card must be refused")
+            .to_string();
+            assert!(error.contains("JSW"), "{card}: unexpected error {error}");
+        }
+        let error = parse_netlist("V1 a 0 1\nD1 a 0 DX pj=-2\n.model DX D(IS=1e-14)\n")
+            .expect_err("a negative instance perimeter must be refused")
+            .to_string();
+        assert!(error.contains("pj"), "unexpected error {error}");
+    }
+
     /// SPICE `AREA` on D, Q and J scales the card the instance sees: the
     /// junction and channel currents, knee currents and depletion
     /// capacitances grow with area and the terminal resistances shrink. Every

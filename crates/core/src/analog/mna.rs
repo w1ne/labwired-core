@@ -185,6 +185,26 @@ fn diode_temperature_parameters(
     )
 }
 
+/// Total sidewall saturation current `JSW·PJ` at the instance temperature.
+/// ngspice-42 scales it with the `NS` law, and `NS` defaults to 1 there even
+/// when the current itself shares the bottom junction's `N`.
+fn diode_sidewall_saturation_current(model: DiodeModel, temperature_celsius: Option<f64>) -> f64 {
+    let Some(temperature_celsius) = temperature_celsius else {
+        return model.jsw;
+    };
+    if model.jsw == 0.0 {
+        return 0.0;
+    }
+    device::diode_saturation_current_at_temperature(
+        model.jsw,
+        model.ns.unwrap_or(1.0),
+        model.eg,
+        model.xti,
+        model.tnom_celsius + 273.15,
+        temperature_celsius + 273.15,
+    )
+}
+
 fn diode_model_op(
     voltage: f64,
     model: DiodeModel,
@@ -192,27 +212,38 @@ fn diode_model_op(
     temperature_celsius: Option<f64>,
 ) -> device::DiodeOp {
     let (is, isr, thermal_voltage) = diode_temperature_parameters(model, temperature_celsius);
-    let mut op = match (breakdown, temperature_celsius) {
-        (None, None) => device::diode_op(voltage, model.is, model.n),
-        (Some(xbv), None) => device::diode_op_breakdown(
-            voltage,
-            model.is,
-            model.n,
-            xbv,
-            model.nbv.unwrap_or(model.n),
-        ),
-        (None, Some(_)) => {
-            device::diode_op_at_thermal_voltage(voltage, is, model.n, thermal_voltage)
+    let isw = diode_sidewall_saturation_current(model, temperature_celsius);
+    // ngspice-42 merges a sidewall current with no `NS` of its own into the
+    // bottom saturation current, so it shares `N`, the reverse and breakdown
+    // regions and the IK/IKR knee. With `NS` it has its own characteristic.
+    let (bottom_is, sidewall) = match model.ns {
+        None => (is + isw, None),
+        Some(ns) if isw > 0.0 => (is, Some((isw, ns))),
+        Some(_) => (is, None),
+    };
+    let junction_op = |is: f64, n: f64| match (breakdown, temperature_celsius) {
+        (None, None) => device::diode_op(voltage, is, n),
+        (Some(xbv), None) => {
+            device::diode_op_breakdown(voltage, is, n, xbv, model.nbv.unwrap_or(model.n))
         }
+        (None, Some(_)) => device::diode_op_at_thermal_voltage(voltage, is, n, thermal_voltage),
         (Some(xbv), Some(_)) => device::diode_op_breakdown_at_thermal_voltage(
             voltage,
             is,
-            model.n,
+            n,
             xbv,
             model.nbv.unwrap_or(model.n),
             thermal_voltage,
         ),
     };
+    let mut op = junction_op(bottom_is, model.n);
+    if let Some((isw, ns)) = sidewall {
+        // The sidewall op carries its own GMIN term; the bottom op already
+        // has the one GMIN the junction gets.
+        let side = junction_op(isw, ns);
+        op.id += side.id - device::GMIN * voltage;
+        op.gd += side.gd - device::GMIN;
+    }
     let recombination = match temperature_celsius {
         None => {
             device::diode_recombination_op(voltage, model.isr, model.nr, model.n, model.vj, model.m)
