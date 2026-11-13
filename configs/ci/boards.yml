@@ -57,6 +57,13 @@ boards:
     kind: sim-validate
     path: examples/nucleo-f446re
     gate: true
+  # Two Nordic nRF54L application-core siblings in one cheap PR-gated
+  # simulation lane; committed exact ELFs (no Nordic SDK/toolchain dependency).
+  - id: nrf54l05-l10-smoke
+    kind: sim-validate
+    path: examples/nrf54l05-l10
+    gate: true
+    gate: true
   - id: nucleo-f103rb-bme280
     kind: sim-validate
     path: examples/nucleo-f103rb-bme280
