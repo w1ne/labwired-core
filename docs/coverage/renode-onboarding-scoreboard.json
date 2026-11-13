@@ -11,10 +11,10 @@
     "pass_observable_assertions": 226,
     "pass_stop_reason_only": 0,
     "pass_depth_unknown": 0,
-    "pass_claimed_peripherals_total": 1501,
+    "pass_claimed_peripherals_total": 1505,
     "pass_claimed_peripherals_median": 2,
-    "median_elapsed_ms": 1404,
-    "median_elapsed_seconds": 1.404,
+    "median_elapsed_ms": 1420,
+    "median_elapsed_seconds": 1.42,
     "threshold_seconds": 3600,
     "threshold_met": 226,
     "descriptors_present": 245,
@@ -1083,7 +1083,7 @@
       "booted": true,
       "boot_evidence": {
         "result_path": "simulation-output/result.json",
-        "instructions": 100000,
+        "instructions": 400000,
         "stop_reason": "max_steps"
       },
       "smoke_passed": true,
@@ -1092,28 +1092,28 @@
       "script": "examples/renode-onboarding/brd4402a-smoke.yaml",
       "system": "configs/systems/onboarding/brd4402a.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-08T16:57:34Z",
-      "finished_at_utc": "2026-11-08T16:57:35Z",
-      "elapsed_seconds": 1,
-      "elapsed_ms": 839,
+      "started_at_utc": "2026-11-13T19:18:28Z",
+      "finished_at_utc": "2026-11-13T19:18:29Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1670,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.341,
-        "build_firmware": 0.186,
-        "run_smoke": 0.301
+        "build_cli": 0.927,
+        "build_firmware": 0.352,
+        "run_smoke": 0.337
       },
       "stages_ms": {
-        "build_cli": 341,
-        "build_firmware": 186,
-        "run_smoke": 301
+        "build_cli": 927,
+        "build_firmware": 352,
+        "run_smoke": 337
       },
       "_artifact_path": "brd4402a",
       "zero_answering_windows": [],
-      "claimed_peripherals": 2,
+      "claimed_peripherals": 4,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -2779,7 +2779,7 @@
       "booted": true,
       "boot_evidence": {
         "result_path": "simulation-output/result.json",
-        "instructions": 100000,
+        "instructions": 400000,
         "stop_reason": "max_steps"
       },
       "smoke_passed": true,
@@ -2788,28 +2788,28 @@
       "script": "examples/renode-onboarding/efr32xg22-smoke.yaml",
       "system": "configs/systems/onboarding/efr32xg22.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-08T16:57:27Z",
-      "finished_at_utc": "2026-11-08T16:57:28Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1387,
+      "started_at_utc": "2026-11-13T19:12:15Z",
+      "finished_at_utc": "2026-11-13T19:18:09Z",
+      "elapsed_seconds": 354,
+      "elapsed_ms": 353953,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.328,
-        "build_firmware": 0.731,
-        "run_smoke": 0.314
+        "build_cli": 344.369,
+        "build_firmware": 5.963,
+        "run_smoke": 3.564
       },
       "stages_ms": {
-        "build_cli": 328,
-        "build_firmware": 731,
-        "run_smoke": 314
+        "build_cli": 344369,
+        "build_firmware": 5963,
+        "run_smoke": 3564
       },
       "_artifact_path": "efr32xg22",
       "zero_answering_windows": [],
-      "claimed_peripherals": 2,
+      "claimed_peripherals": 4,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"

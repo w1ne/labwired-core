@@ -1,1 +1,2 @@
 EFR32xG22 Cortex-M33 USART0 smoke
+timers w32=1 w16=1 run=1 cnt=1 stop=1 irq=3 direct_kept=1 alias_clr=1 t1of=1 t1masked=1 t1pend=1 t1rel=1 ok
