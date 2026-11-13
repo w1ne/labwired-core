@@ -1158,13 +1158,8 @@ impl SystemBus {
         let index = self.find_peripheral_index_by_name(name).ok_or_else(|| {
             format!("uart_injection: UART peripheral '{name}' not found on the bus")
         })?;
-        let delivered = if let Some(uart) = self.peripherals[index]
-            .dev
-            .as_any_mut()
-            .and_then(|dev| dev.downcast_mut::<crate::peripherals::uart::Uart>())
-        {
-            uart.inject_rx_bytes(bytes)
-                .map_err(|e| format!("uart_injection '{name}': {e}"))?
+        let delivered = if let Some(result) = self.peripherals[index].dev.inject_uart_rx(bytes) {
+            result.map_err(|e| format!("uart_injection '{name}': {e}"))?
         } else {
             let rx = self.attach_uart_rx_source_named(name).ok_or_else(|| {
                 format!("uart_injection: UART peripheral '{name}' not found on the bus")

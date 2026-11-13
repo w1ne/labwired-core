@@ -620,17 +620,13 @@ impl crate::Bus for SystemBus {
         let vic_index = self.irq_fabric.lpc2294_vic?;
         let routes = &self.irq_fabric.lpc2294_irq_sources;
         let vic = self.peripherals.get(vic_index)?;
-        let vic_model = vic
-            .dev
-            .as_any()?
-            .downcast_ref::<crate::peripherals::armv7::pl190_vic::Pl190Vic>()?;
         for &(peripheral_index, source) in routes {
             let level = self
                 .peripherals
                 .get(peripheral_index)
                 .and_then(|peripheral| peripheral.dev.irq_line_level())
                 .unwrap_or(false);
-            vic_model.set_input_level(source, level);
+            vic.dev.set_arm_irq_input_level(source, level);
         }
         vic.dev.arm_irq_fiq_levels()
     }

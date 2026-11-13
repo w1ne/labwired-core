@@ -225,11 +225,10 @@ impl Efm32Rtcc {
             IEN => self.ien = value & IF_MASK,
             POWERDOWN => self.powerdown = value & 1,
             EM4WUEN => self.em4wuen = value & 1,
-            LOCK => {
-                if value & 0xFFFF != LOCK_UNLOCK {
-                    return Self::refuse("LOCK (configuration lock)");
-                }
+            LOCK if value & 0xFFFF != LOCK_UNLOCK => {
+                return Self::refuse("LOCK (configuration lock)");
             }
+            LOCK => {}
             0x40..=0x6F => {
                 let c = &mut self.cc[((offset - CC_BASE) / 0x10) as usize];
                 match (offset & 0xF) / 4 {

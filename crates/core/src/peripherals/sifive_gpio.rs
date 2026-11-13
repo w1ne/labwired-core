@@ -258,10 +258,7 @@ mod tests {
         gpio.write_u32(0x04, 1 << 7).unwrap();
         assert_eq!(gpio.read_u32(0).unwrap(), 1 << 7);
         assert_eq!(gpio.read_gpio_input(7), Some(true));
-        assert_eq!(
-            gpio.set_external(7, External::Level(false)).unwrap().after,
-            false
-        );
+        assert!(!gpio.set_external(7, External::Level(false)).unwrap().after);
         assert_eq!(gpio.read_u32(0).unwrap(), 0);
     }
 }

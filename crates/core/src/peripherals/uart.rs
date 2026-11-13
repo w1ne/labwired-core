@@ -2799,6 +2799,10 @@ impl UartStreamHost for Uart {
 }
 
 impl crate::Peripheral for Uart {
+    fn inject_uart_rx(&mut self, bytes: &[u8]) -> Option<Result<usize, String>> {
+        Some(self.inject_rx_bytes(bytes))
+    }
+
     fn line_names(&self) -> &'static [&'static str] {
         UART_LINES
     }

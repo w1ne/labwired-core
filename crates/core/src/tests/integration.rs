@@ -901,6 +901,7 @@ pub mod integration_tests {
         bus.attach_uart_tx_sink(sink.clone(), false);
 
         let base = 0x4000_4800;
+        bus.write_u32(base, 0x9).unwrap(); // CR1: UE | TE
         bus.write_u8(base + 0x04, b'X').unwrap(); // legacy DR offset should not TX in v2 mode
         bus.write_u8(base + 0x28, b'Y').unwrap(); // TDR
         assert_eq!(bus.read_u8(base + 0x1C).unwrap(), 0xC0); // ISR ready flags
@@ -1414,6 +1415,13 @@ pub mod integration_tests {
         // Step 3: Execute MOV R0, #42 in ISR
         machine.step().unwrap();
         assert_eq!(machine.cpu.r0, 42);
+
+        // With RVR=1 the counter wraps again inside this two-instruction ISR,
+        // and a pending SysTick at BX LR tail-chains straight back into the
+        // handler. Stop the timer and clear the pend (ICSR.PENDSTCLR) so the
+        // return reaches Thread mode.
+        machine.bus.write_u32(0xE000_E010, 0).unwrap();
+        machine.bus.write_u32(0xE000_ED04, 1 << 25).unwrap();
 
         // Step 4: Execute BX LR (Exception Return)
         machine.step().unwrap();

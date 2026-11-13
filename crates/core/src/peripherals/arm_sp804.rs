@@ -158,7 +158,7 @@ impl Sp804Counter {
         let period = reload + 1;
         let position = (remaining - 1) % period;
         self.counter = (reload - position) as u32;
-        if remaining - 1 >= reload {
+        if remaining > reload {
             self.ris = true;
         }
     }
@@ -522,6 +522,9 @@ mod tests {
     #[test]
     fn word_load_write_is_one_register_write() {
         let mut t = ArmSp804Timer::new();
+        // 32-bit size first: at reset the counter is 16 bits wide and a Load
+        // write keeps only the low half.
+        t.write_u32(CONTROL, CTRL_ONESHOT | CTRL_32BIT).unwrap();
         t.write_u32(LOAD, 0x0001_0000).unwrap();
         t.write_u32(CONTROL, CTRL_ENABLE | CTRL_ONESHOT | CTRL_32BIT)
             .unwrap();

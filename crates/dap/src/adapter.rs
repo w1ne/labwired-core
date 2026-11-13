@@ -1788,6 +1788,14 @@ fn gpio_offsets_for_peripheral(
         // numbers `GpioPort::odr_offset()` / `idr_offset()` return for this
         // layout; keep the three in step.
         labwired_core::peripherals::gpio::GpioRegisterLayout::Wch => Some(default_offsets),
+        // Arm CMSDK AHB GPIO: DATA (pad input) @0x00, DATAOUT @0x04. These
+        // are the same two numbers `GpioPort::odr_offset()` /
+        // `idr_offset()` return for this layout; keep the three in step.
+        labwired_core::peripherals::gpio::GpioRegisterLayout::Cmsdk => Some(GpioOffsets {
+            idr_offset: 0x00,
+            odr_offset: 0x04,
+            ra_output_packed: false,
+        }),
     }
 }
 

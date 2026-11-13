@@ -2937,7 +2937,9 @@ fn armv7m_exception_entry_wraps_the_stack_frame_instead_of_overflowing() {
     cpu.r0 = 0xA0A0_A0A0;
     cpu.r12 = 0xCCCC_CCCC;
     // PendSV (exception 14): priority 0 from SHPR3, no NVIC ISPR to consult.
-    cpu.pending_exceptions[0] = 1 << 14;
+    // Through the setter: ICSR.PENDSVSET also raises the live PENDSV flag,
+    // and arbitration drops a pending bit that the flag does not back.
+    crate::Cpu::set_exception_pending(&mut cpu, 14);
     // Vector table entry for PendSV.
     bus.write_u32(0x38, 0x2001).unwrap();
 
@@ -3501,6 +3503,7 @@ fn t16_fast_decoder_defers_every_store_shape_under_ram_policy() {
 #[test]
 fn vldr_literal_uses_align_pc_plus_4() {
     let mut cpu = CortexM::new();
+    enable_fpu(&mut cpu);
     let mut bus = crate::bus::SystemBus::new();
     // gas: ed9f 0a00  vldr s0, [pc, #0]
     assert!(bus.flash.write_u16(0x1000, 0xed9f));
@@ -3971,6 +3974,7 @@ fn it_block_survives_an_exception_between_its_instructions() {
 #[test]
 fn vmov_two_core_registers_moves_and_stores_nothing() {
     let mut cpu = CortexM::new();
+    enable_fpu(&mut cpu);
     let mut bus = MockBus::new();
     cpu.pc = 0x2000;
     let v = 31.3f64.to_bits(); // both halves non-zero
@@ -4196,12 +4200,19 @@ fn fp_core() -> (
     Arc<crate::peripherals::cortex_m_fpu::FpContextState>,
 ) {
     let mut cpu = CortexM::new();
+    let fp = enable_fpu(&mut cpu);
+    (cpu, MockBus::new(), fp)
+}
+
+/// Give a bare core the FP extension with CP10/CP11 granted. Without it, any
+/// VFP instruction raises a NOCP UsageFault, as on a core with no FPU.
+fn enable_fpu(cpu: &mut CortexM) -> Arc<crate::peripherals::cortex_m_fpu::FpContextState> {
     let fp = Arc::new(crate::peripherals::cortex_m_fpu::FpContextState::default());
     cpu.set_shared_fp_context(fp.clone());
     cpu.set_shared_cpacr(Arc::new(std::sync::atomic::AtomicU32::new(
         crate::peripherals::scb::CPACR_CP10_CP11_MASK,
     )));
-    (cpu, MockBus::new(), fp)
+    fp
 }
 
 #[test]

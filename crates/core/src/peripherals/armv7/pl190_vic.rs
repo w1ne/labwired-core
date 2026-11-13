@@ -283,6 +283,10 @@ impl Peripheral for Pl190Vic {
         Some((state.irq_line(), state.fiq_line()))
     }
 
+    fn set_arm_irq_input_level(&self, source: usize, level: bool) {
+        self.set_input_level(source, level);
+    }
+
     fn on_node_reset(&mut self) {
         *self.lock_state() = Pl190State::default();
     }

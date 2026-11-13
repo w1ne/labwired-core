@@ -335,10 +335,8 @@ impl Stm32F0Adc {
             cr = (cr & !CR_ADVREGEN) | (value & CR_ADVREGEN);
         }
         // ADCAL is accepted only with the ADC disabled; it completes at once.
-        if value & CR_ADCAL != 0 && cr & CR_ADEN == 0 {
-            if self.family == Stm32F0AdcFamily::L0 {
-                self.isr.set(self.isr.get() | ISR_EOCAL);
-            }
+        if value & CR_ADCAL != 0 && cr & CR_ADEN == 0 && self.family == Stm32F0AdcFamily::L0 {
+            self.isr.set(self.isr.get() | ISR_EOCAL);
         }
         if value & CR_ADEN != 0 && cr & CR_ADEN == 0 && value & CR_ADDIS == 0 {
             cr |= CR_ADEN;
