@@ -174,9 +174,9 @@ fn switched_on_the_winding_carries_current_and_the_shaft_spins() {
     let current = motor.current_a.expect("a routed winding current");
     assert!(current > 0.0, "forward winding current: {current} A");
     assert!(
-        (motor.bus_voltage_v - 5.0).abs() < 0.01,
+        (motor.bus_voltage_v.unwrap() - 5.0).abs() < 0.01,
         "the motor reports the netlist rail it hangs from: {} V",
-        motor.bus_voltage_v
+        motor.bus_voltage_v.unwrap()
     );
 }
 
@@ -398,5 +398,5 @@ fn no_routed_current_holds_the_shaft_instead_of_guessing() {
     assert_eq!(motor.control_state, "circuit:no-current");
     assert_eq!(motor.speed_rpm, 0.0);
     assert_eq!(motor.current_a, None);
-    assert_eq!(motor.bus_voltage_v, 0.0, "no rail routed, none reported");
+    assert_eq!(motor.bus_voltage_v, None, "no rail routed, none reported");
 }

@@ -511,6 +511,15 @@ pub(crate) struct EnvironmentTestResult {
     pub(crate) cosim: Option<serde_json::Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) analog_series: Option<labwired_core::analog::AnalogSeries>,
+    /// Physical motor states keyed by exact owning node. No entry for nodes
+    /// without motors; the static kind tag is a write-only engine observation.
+    #[serde(
+        default,
+        skip_deserializing,
+        skip_serializing_if = "std::collections::BTreeMap::is_empty"
+    )]
+    pub(crate) node_motors:
+        std::collections::BTreeMap<String, Vec<labwired_core::bus::MotorSnapshot>>,
 }
 
 /// One final machine state in an environment snapshot.
