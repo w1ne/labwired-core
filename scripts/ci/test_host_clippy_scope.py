@@ -384,9 +384,7 @@ def test_pre_commit_uses_full_host_scope_and_propagates_failure(tmp_path, classi
         assert calls[2:] == [
             ["cargo", "check", "--package=default-member", "--package=host-crate",
              "--package=labwired-wasm"],
-            ["generate_validation_status.py"],
-            ["generate_validation_status.py", "--drift"],
-            ["git", "add", "docs/boards/VALIDATION_STATUS.md"],
+            ["generate_validation_status.py", "--check", "--drift"],
         ]
 
 

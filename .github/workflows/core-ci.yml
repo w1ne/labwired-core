@@ -548,13 +548,31 @@ jobs:
         with:
           python-version: "3.12"
 
-      # Generated docs + watch integrity; source drift is informational. Pure Python, no cargo.
-      - name: Validation status — report check + source/capture report
+      # Manifest/capture/watch-list integrity; source drift is informational. Pure
+      # Python, no cargo. docs/boards/VALIDATION_STATUS.md is NOT committed (it
+      # conflicted across PRs): --check runs every gate the old stale-file check
+      # sat beside and fails if the file is ever tracked again, and --output
+      # renders the report for the job summary + artifact below. The docs site
+      # publishes it from main (deploy-docs.yml).
+      - name: Validation status — integrity gates + rendered report
         run: |
           python -m pip install --quiet pyyaml
-          python3 scripts/generate_validation_status.py --check --drift
+          python3 scripts/generate_validation_status.py --check --drift \
+            --output out/validation/VALIDATION_STATUS.md
           python3 scripts/generate_firmware_exercise_matrix.py --check
           python3 scripts/generate_model_ratings.py --check
+
+      - name: Validation status — publish report (job summary + artifact)
+        if: ${{ !cancelled() && hashFiles('out/validation/VALIDATION_STATUS.md') != '' }}
+        run: cat out/validation/VALIDATION_STATUS.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Validation status — upload report artifact
+        if: ${{ !cancelled() && hashFiles('out/validation/VALIDATION_STATUS.md') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-status-report
+          path: out/validation/VALIDATION_STATUS.md
+          retention-days: 30
 
       # The CHEAT(...) surface FIDELITY.md defines had no gate at all: the doc
       # said "grep for it", and a convention nothing counts is a comment. This
@@ -2043,7 +2061,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Validation status — report check + source/capture report
+      - name: Validation status — integrity gates + source/capture report
         run: |
           python -m pip install --quiet pyyaml
           python3 scripts/generate_validation_status.py --check --drift
