@@ -1,6 +1,22 @@
 name: G0B1 TIOL112 digital rig
 on:
   pull_request:
+    # Lean PR gate (2026-11-13): on pull requests this lane runs only when
+    # its own files change. Shared engine paths (crates/core, crates/cli,
+    # Cargo.*) trigger it on push to main instead.
+    paths:
+      - 'configs/chips/stm32g0b1re.yaml'
+      - 'configs/systems/nucleo-g0b1re.yaml'
+      - 'crates/core/src/peripherals/components/tiol112.rs'
+      - 'crates/core/src/peripherals/components/iolink_master.rs'
+      - 'crates/core/src/peripherals/stm32g0_clock.rs'
+      - 'crates/core/tests/g0_*'
+      - 'crates/core/tests/iolink_master_config.rs'
+      - 'crates/core/tests/stm32g0_uart_dma.rs'
+      - 'crates/core/tests/common/g0_dma_recovery.rs'
+      - '.github/workflows/g0-tiol112.yml'
+  push:
+    branches: [main]
     paths:
       - 'configs/chips/stm32g0b1re.yaml'
       - 'configs/systems/nucleo-g0b1re.yaml'
@@ -22,6 +38,10 @@ on:
       - 'crates/core/tests/common/g0_dma_recovery.rs'
       - '.github/workflows/g0-tiol112.yml'
   workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 jobs:
