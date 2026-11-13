@@ -5,6 +5,9 @@ use core::ptr::{read_volatile, write_volatile};
 use cortex_m_rt::entry;
 use panic_halt as _;
 
+#[cfg(feature = "stm32f429-m4f-fpu")]
+mod m4f_fpu_smoke;
+
 const RCC: u32 = 0x4002_3800;
 const RCC_AHB1ENR: *mut u32 = (RCC + 0x30) as *mut u32;
 const RCC_APB1ENR: *mut u32 = (RCC + 0x40) as *mut u32;
@@ -383,6 +386,9 @@ fn main() -> ! {
     } else {
         b"STM32F429 PSP tailchain FAIL\r\n"
     });
+
+    #[cfg(feature = "stm32f429-m4f-fpu")]
+    m4f_fpu_smoke::run();
 
     loop {
         set_led(true);

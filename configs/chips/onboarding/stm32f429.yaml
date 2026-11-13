@@ -18,6 +18,17 @@ ram:
 # Keep only models exercised by the exact-import smoke. The broader imported
 # peripheral list included untested peripherals and zero-answering stubs.
 peripherals:
+  # The STM32F429's Cortex-M4F single-precision extension is exercised by the
+  # exact-import smoke (CPACR, MVFR0-2 and a VFPv4 add).
+  - id: fpu
+    type: cortex_m_fpu
+    bus: sysbus
+    base_address: 0xE000EF30
+    size: 28B
+    config:
+      mvfr0: 0x10110021
+      mvfr1: 0x11000011
+      mvfr2: 0x00000000
   # The Cortex-M core's architected timer is modeled by the engine and is
   # directly exercised by the PSP SysTick-to-PendSV smoke.
   - id: systick

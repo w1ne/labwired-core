@@ -921,7 +921,9 @@ SMOKE_MAPPINGS = {
     },
     "stm32f429": {
         "crate": "firmware-stm32f429-smoke",
-        "target": "thumbv7em-none-eabi",
+        "target": "thumbv7em-none-eabihf",
+        "target_features": "vfp4",
+        "features": "stm32f429-m4f-fpu",
         "script": "examples/renode-onboarding/stm32f429-smoke.yaml",
     },
     "stm32f412": {
