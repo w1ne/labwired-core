@@ -19,15 +19,17 @@ name: Core workflows lint
 on:
   pull_request:
     paths:
-      - '.github/**'
-      - 'scripts/**'
+      - '.github/workflows/**'
+      - '.github/actions/**'
+      - '.github/actionlint.yaml'
       - '**/*.sh'
       - '*.sh'
   push:
     branches: [main]
     paths:
-      - '.github/**'
-      - 'scripts/**'
+      - '.github/workflows/**'
+      - '.github/actions/**'
+      - '.github/actionlint.yaml'
       - '**/*.sh'
       - '*.sh'
   workflow_dispatch:
@@ -41,7 +43,7 @@ concurrency:
 
 jobs:
   actionlint:
-    name: "actionlint (+ shellcheck on run: blocks)"
+    name: "actionlint (+ shellcheck on run: blocks and tracked *.sh)"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -83,26 +85,10 @@ jobs:
           set -euo pipefail
           /tmp/actionlint -shellcheck=/tmp/shellcheck -pyflakes= .github/workflows/*.yml
 
-  shellcheck-scripts:
-    name: shellcheck (tracked *.sh)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install pinned shellcheck
-        run: |
-          set -euo pipefail
-          shellcheck_version=0.11.0
-          shellcheck_sha=8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
-          curl -fsSL --connect-timeout 20 --retry 5 --retry-delay 3 \
-            "https://github.com/koalaman/shellcheck/releases/download/v${shellcheck_version}/shellcheck-v${shellcheck_version}.linux.x86_64.tar.xz" \
-            -o /tmp/shellcheck.tar.xz
-          echo "${shellcheck_sha}  /tmp/shellcheck.tar.xz" | sha256sum -c -
-          tar -xJf /tmp/shellcheck.tar.xz -C /tmp "shellcheck-v${shellcheck_version}/shellcheck"
-          mv "/tmp/shellcheck-v${shellcheck_version}/shellcheck" /tmp/shellcheck
-          /tmp/shellcheck --version
-
+      # Folded in from the former `shellcheck-scripts` job (2026-11-13): it
+      # needs the same pinned shellcheck binary the step above already
+      # installed, and a separate job cost a runner slot, a checkout and a
+      # second download for under a minute of work.
       # third_party/ is vendored upstream code with its own pre-commit config;
       # linting it here would only report defects this repo cannot fix.
       #
