@@ -1468,3 +1468,153 @@ fn nucleo_u575zi_bjt_early_effect_reaches_adc1_alongside_ntc_and_diode() {
         "the finite-VAF branch must show a measurable collector-current increase: {early_effect_deltas:?}"
     );
 }
+
+#[test]
+fn nucleo_u575zi_pnp_early_effect_reaches_adc1_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/nucleo-u575zi.yaml");
+    let mut profile =
+        SystemManifest::from_file(&system_path).expect("load NUCLEO-U575ZI-Q profile");
+    let generic =
+        SystemManifest::from_file(root("examples/nucleo-u575zi/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC divider and Shockley diode");
+    let pnp = SystemManifest::from_file(root(
+        "examples/nucleo-u575zi/analog-bjt-pnp-early-effect-system.yaml",
+    ))
+    .expect("load matched generic Gummel–Poon PNP Early-effect branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(pnp.cosim_models);
+
+    let chip = labwired_config::ChipDescriptor::from_file(
+        system_path.parent().unwrap().join(&profile.chip),
+    )
+    .expect("load STM32U575 descriptor");
+    for (pin, channel) in [("PA2", 7), ("PA3", 8)] {
+        assert_eq!(
+            chip.analog_pins
+                .get(pin)
+                .map(|route| (route.peripheral.as_str(), route.channel)),
+            Some(("adc1", channel)),
+            "{pin} must resolve to its documented ADC1 input channel {channel}"
+        );
+    }
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-U575ZI-Q bus");
+
+    let ahb2enr1 = bus.read_u32(RCC_AHB2ENR1).expect("read RCC AHB2ENR1");
+    bus.write_u32(RCC_AHB2ENR1, ahb2enr1 | (1 << 10))
+        .expect("enable ADC1 clock");
+    bus.write_u32(ADC_CR, 0).expect("leave ADC deep power-down");
+    bus.write_u32(ADC_CR, 1 << 28)
+        .expect("enable ADC voltage regulator");
+    bus.write_u32(ADC_CR, (1 << 28) | (1 << 31))
+        .expect("calibrate ADC1");
+    bus.write_u32(ADC_CR, (1 << 28) | 1).expect("enable ADC1");
+    assert_ne!(
+        bus.read_u32(ADC_ISR).expect("read ADC1 ready status") & 1,
+        0,
+        "ADC1 must report ADRDY before conversion"
+    );
+    bus.write_u32(ADC_CFGR1, 0x8000_0000 | (1 << 2))
+        .expect("select 12-bit conversion resolution");
+    bus.write_u32(ADC_PCSEL, (1 << 5) | (1 << 6) | (1 << 7) | (1 << 8))
+        .expect("select NTC, diode, and both PNP ADC channels");
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries NTC, diode, and matched PNP branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must resolve PA0–PA3 to ADC1 channels 5–8"
+    );
+    assert_eq!(
+        adc_channel_count(&mut bus, 9),
+        u16::MAX,
+        "ADC1 channel 9 starts undriven"
+    );
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.bjt_pnp_early_effect.base_v", 3.3)
+        .expect("initialize matched PNP base-drive sources");
+
+    let ntc_v = 1.65;
+    let diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    let mut early_effect_deltas = Vec::new();
+    for base_drive_v in [0.70_f64, 0.78, 0.86] {
+        // Reflect the PNP base drive around VCC. This creates the same
+        // transistor junction voltages as the independent NPN load-line
+        // reference while keeping every board ADC input within 0–3.3 V.
+        let pnp_base_voltage_v = 3.3 - base_drive_v;
+        session
+            .set_signal_number("ui.bjt_pnp_early_effect.base_v", pnp_base_voltage_v)
+            .expect("set common PNP base voltage");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and matched PNP branches");
+        assert_eq!(steps.len(), 4, "all four generic analog branches solve");
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        let routed_ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let routed_diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+        assert!(
+            (routed_ntc_v - ntc_v).abs() < 1e-9,
+            "unrelated Beta NTC remains isolated on ADC1 channel 5"
+        );
+        assert!(
+            (routed_diode_v - diode_v).abs() < 2e-5,
+            "unrelated Shockley diode remains isolated on ADC1 channel 6"
+        );
+
+        let finite_vaf_v = signal_voltage(&session, "board.analog.pa2_volts");
+        let control_v = signal_voltage(&session, "board.analog.pa3_volts");
+        let expected_finite_vaf_v =
+            3.3 - bjt_early_effect_collector_voltage(base_drive_v, Some(50.0));
+        let expected_control_v = 3.3 - bjt_early_effect_collector_voltage(base_drive_v, None);
+        assert!(
+            (finite_vaf_v - expected_finite_vaf_v).abs() < 5e-5,
+            "PNP VAF=50 load line at mirrored drive {base_drive_v} V should be {expected_finite_vaf_v} V, got {finite_vaf_v} V"
+        );
+        assert!(
+            (control_v - expected_control_v).abs() < 5e-5,
+            "matched PNP no-forward-Early load line at mirrored drive {base_drive_v} V should be {expected_control_v} V, got {control_v} V"
+        );
+        assert!(
+            finite_vaf_v - control_v > 0.001,
+            "finite forward Early voltage increases PNP collector current and raises collector voltage: {finite_vaf_v} V vs {control_v} V"
+        );
+        early_effect_deltas.push(finite_vaf_v - control_v);
+
+        for (channel, voltage_v) in [
+            (5, routed_ntc_v),
+            (6, routed_diode_v),
+            (7, finite_vaf_v),
+            (8, control_v),
+        ] {
+            let expected_count = expected_adc12_count(voltage_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected_count as u16,
+                "solved voltage seeds ADC1 channel {channel}"
+            );
+            assert_eq!(
+                u5_adc_convert(&mut bus, channel),
+                expected_count,
+                "firmware-visible ADC1 data register follows channel {channel}"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 9),
+            u16::MAX,
+            "adjacent ADC1 channel 9 stays isolated"
+        );
+    }
+
+    assert!(
+        early_effect_deltas.iter().any(|delta| *delta > 0.02),
+        "the finite-VAF PNP branch must show a measurable collector-current increase: {early_effect_deltas:?}"
+    );
+}
