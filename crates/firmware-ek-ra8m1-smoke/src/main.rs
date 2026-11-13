@@ -99,6 +99,8 @@ const CFCLR_ALL: u32 = 0x9D07_0010;
 const MOCO_HZ: u32 = 8_000_000;
 const BAUD: u32 = 9600;
 const BRR: u32 = MOCO_HZ / (32 * BAUD) - 1;
+const FPU_RESULT: *mut u32 = 0x2200_0000 as *mut u32;
+const SCB_CPACR: *mut u32 = 0xE000_ED88 as *mut u32;
 
 #[derive(Clone, Copy)]
 struct Led {
@@ -224,8 +226,33 @@ fn spin(iterations: u32) {
     }
 }
 
+fn fpu_add_probe() -> u32 {
+    unsafe {
+        // Grant CP10/CP11 before executing the scalar FPU instructions.
+        write_volatile(SCB_CPACR, 0x00F0_0000);
+        core::arch::asm!("dsb", "isb", options(nostack, preserves_flags));
+        let result: u32;
+        core::arch::asm!(
+            "vmov s0, r0",
+            "vmov s1, r1",
+            "vadd.f32 s2, s0, s1",
+            "vmov r2, s2",
+            in("r0") 0x3F80_0000u32,
+            in("r1") 0x4000_0000u32,
+            lateout("r2") result,
+            out("s0") _,
+            out("s1") _,
+            out("s2") _,
+            options(nostack, preserves_flags),
+        );
+        result
+    }
+}
+
 #[entry]
 fn main() -> ! {
+    let fpu_result = fpu_add_probe();
+    unsafe { write_volatile(FPU_RESULT, fpu_result) };
     let sciclk;
     unsafe {
         // SCICLK = MOCO / 1 (SCICKCR/SCICKDIVCR are PRC0-protected).
@@ -280,6 +307,9 @@ fn main() -> ! {
     }
 
     puts(b"EK-RA8M1 SMOKE\n");
+    puts(b"FPU_SUM=");
+    put_hex(fpu_result, 8);
+    putc(b'\n');
     puts(b"cpu=cortex-m85 uart=sci9 (sci_b)\n");
     puts(b"clk src=moco sciclk=");
     put_dec32(MOCO_HZ);

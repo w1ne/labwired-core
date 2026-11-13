@@ -1,17 +1,21 @@
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
-package:   /home/andrii/worktrees/labwired-core/renode/examples/h735-telematics-lab/Cargo.toml
-workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
-package:   /home/andrii/worktrees/labwired-core/renode/examples/rc-oscilloscope-lab/Cargo.toml
-workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
-package:   /home/andrii/worktrees/labwired-core/renode/examples/tier1-fixture/nrf52832/Cargo.toml
-workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
-package:   /home/andrii/worktrees/labwired-core/renode/examples/tier1-fixture/nrf52840/Cargo.toml
-workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
-package:   /home/andrii/worktrees/labwired-core/renode/examples/tier1-fixture/rp2040/Cargo.toml
-workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
-   Compiling firmware-renesas-ck-ra6m5-smoke v0.1.0 (/home/andrii/worktrees/labwired-core/renode/crates/firmware-renesas-ck-ra6m5-smoke)
-    Finished `release` profile [optimized + debuginfo] target(s) in 0.40s
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: unstable feature specified for `-Ctarget-feature`: `fp-armv8`
+  |
+  = note: this feature is not stably supported; its behavior can change in the future
+
+warning: `firmware-renesas-ck-ra6m5-smoke` (bin "firmware-renesas-ck-ra6m5-smoke") generated 1 warning
+    Finished `release` profile [optimized + debuginfo] target(s) in 1.24s

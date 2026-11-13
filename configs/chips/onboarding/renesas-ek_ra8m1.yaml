@@ -6,6 +6,8 @@
 # Renesas RA8M1 model profile in configs/chips/r7fa8m1ah.yaml. The engine's
 # Cortex-M85 scalar Armv8-M subset and listed peripheral paths are exercised;
 # this profile does not claim Helium/MVE, TrustZone, or the unmapped RA8 blocks.
+# FPU context/CPACR is included for the scalar smoke; the MVFR feature-ID
+# window is omitted because device-specific values are not characterized.
 name: renesas-ek_ra8m1
 arch: arm
 core: cortex-m85
@@ -76,3 +78,7 @@ peripherals:
       profile: sci_b
       clock_hz: 8000000
       baud: 9600
+  - id: fpu
+    type: cortex_m_fpu
+    base_address: 0xE000EF30
+    size: 16B

@@ -228,6 +228,12 @@ peripherals:
   - id: "systick"
     type: "systick"
     base_address: 0xE000E010
+  # FP context control and CPACR gate used by the Cortex-M85 Zephyr image.
+  # The device-specific MVFR feature-ID window is not characterized here.
+  - id: "fpu"
+    type: "cortex_m_fpu"
+    base_address: 0xE000EF30
+    size: "16B"
   # SCI9 @ 0x40358900: the EK-RA8M1 console (Zephyr `zephyr,console =
   # &uart9` on sci9). SCI3 @ 0x40358300: the mikroBUS UART (Zephyr v4.0
   # `&uart3`, P310 TXD3 / P309 RXD3), which the v4.0 board opens at boot.

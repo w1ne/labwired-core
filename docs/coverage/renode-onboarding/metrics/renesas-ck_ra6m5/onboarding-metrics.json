@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/renesas-ck_ra6m5-smoke.yaml",
   "system": "configs/systems/onboarding/renesas-ck_ra6m5.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-08T04:24:29Z",
-  "finished_at_utc": "2026-11-08T04:24:41Z",
-  "elapsed_seconds": 12,
-  "elapsed_ms": 11818,
+  "started_at_utc": "2026-11-13T00:45:34Z",
+  "finished_at_utc": "2026-11-13T00:48:57Z",
+  "elapsed_seconds": 204,
+  "elapsed_ms": 203275,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 11.077,
-    "build_firmware": 0.441,
-    "run_smoke": 0.291
+    "build_cli": 201.597,
+    "build_firmware": 1.318,
+    "run_smoke": 0.326
   },
   "stages_ms": {
-    "build_cli": 11077,
-    "build_firmware": 441,
-    "run_smoke": 291
+    "build_cli": 201597,
+    "build_firmware": 1318,
+    "run_smoke": 326
   }
 }

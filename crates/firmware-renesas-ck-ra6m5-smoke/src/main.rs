@@ -21,6 +21,8 @@ const SCR_READBACK: *mut u32 = 0x2000_0004 as *mut u32;
 const PODR_READBACK: *mut u32 = 0x2000_0008 as *mut u32;
 const BUTTON_IDLE: *mut u32 = 0x2000_000C as *mut u32;
 const BUTTON_PRESSES: *mut u32 = 0x2000_0010 as *mut u32;
+const FPU_RESULT: *mut u32 = 0x2000_0014 as *mut u32;
+const SCB_CPACR: *mut u32 = 0xE000_ED88 as *mut u32;
 
 // SCI0 @ 0x40118000 (Renode renesas-r7fa6m5b.repl): SCR @ +0x02,
 // TDR @ +0x03, SSR @ +0x04 (TDRE bit 7, TEND bit 2).
@@ -48,6 +50,29 @@ fn tx(byte: u8) {
     }
 }
 
+fn fpu_add_probe() -> u32 {
+    unsafe {
+        // Grant CP10/CP11 before executing the scalar FPU instructions.
+        write_volatile(SCB_CPACR, 0x00F0_0000);
+        core::arch::asm!("dsb", "isb", options(nostack, preserves_flags));
+        let result: u32;
+        core::arch::asm!(
+            "vmov s0, r0",
+            "vmov s1, r1",
+            "vadd.f32 s2, s0, s1",
+            "vmov r2, s2",
+            in("r0") 0x3F80_0000u32,
+            in("r1") 0x4000_0000u32,
+            lateout("r2") result,
+            out("s0") _,
+            out("s1") _,
+            out("s2") _,
+            options(nostack, preserves_flags),
+        );
+        result
+    }
+}
+
 fn button_pressed() -> bool {
     unsafe { read_volatile(PORT8_PCNTR2) & BUTTON != 0 }
 }
@@ -56,6 +81,21 @@ fn button_pressed() -> bool {
 fn main() -> ! {
     let product: u32;
     unsafe {
+        let fpu_result = fpu_add_probe();
+        write_volatile(FPU_RESULT, fpu_result);
+        for &b in b"FPU_SUM=" {
+            tx(b);
+        }
+        for shift in (0..8).rev() {
+            let nibble = ((fpu_result >> (shift * 4)) & 0xF) as u8;
+            tx(if nibble < 10 {
+                b'0' + nibble
+            } else {
+                b'A' + nibble - 10
+            });
+        }
+        tx(b'\n');
+
         core::arch::asm!(
             "muls {product}, {right}",
             product = inout(reg) 17u32 => product,

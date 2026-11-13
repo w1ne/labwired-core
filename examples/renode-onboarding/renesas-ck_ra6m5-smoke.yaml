@@ -48,6 +48,8 @@ assertions:
   - memory_value: {address: 0x40084000, expected_value: 0xFFBFFF7E}  # MSTPCRA reset
   - memory_value: {address: 0x40084004, expected_value: 0xFFFFFFFF}  # MSTPCRB reset; MSTP does not gate SCI0
   - uart_contains: "CK-RA6M5 SCI0 SMOKE"
+  - uart_contains: "FPU_SUM=40400000"
+  - memory_value: {address: 0x20000014, expected_value: 0x40400000}
   - gpio_edges:
       pin: "port6:10"
       min_edges: 4

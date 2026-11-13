@@ -227,6 +227,12 @@ peripherals:
   - id: "systick"
     type: "systick"
     base_address: 0xE000E010
+  # FP context control and CPACR gate used by the Cortex-M33 Zephyr image.
+  # The device-specific MVFR feature-ID window is not characterized here.
+  - id: "fpu"
+    type: "cortex_m_fpu"
+    base_address: 0xE000EF30
+    size: "16B"
   # SCI0 @ 0x40118000: the EK-RA6M5 console (Zephyr `zephyr,console = &uart0`
   # on sci0).
   # SCI0 interrupts are ELC events linked through the ICU IELSRn: RXI 0x180

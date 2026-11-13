@@ -309,6 +309,7 @@ SMOKE_MAPPINGS = {
     "renesas-ek_ra8m1": {
         "crate": "firmware-ek-ra8m1-smoke",
         "target": "thumbv8m.main-none-eabi",
+        "target_features": "fp-armv8",
         "script": "examples/renode-onboarding/renesas-ek_ra8m1-smoke.yaml",
     },
     "cc2538": {
@@ -368,6 +369,7 @@ SMOKE_MAPPINGS = {
     "renesas-ck_ra6m5": {
         "crate": "firmware-renesas-ck-ra6m5-smoke",
         "target": "thumbv8m.main-none-eabi",
+        "target_features": "fp-armv8",
         "script": "examples/renode-onboarding/renesas-ck_ra6m5-smoke.yaml",
     },
     "nxp-s32k388": {

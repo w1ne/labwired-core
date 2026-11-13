@@ -5,7 +5,7 @@
     "registers": [
       0,
       1074266304,
-      1141,
+      1185,
       1,
       33554432,
       1,
@@ -18,9 +18,9 @@
       536870928,
       537395184,
       1,
-      3128
+      3978
     ],
-    "pc": 3128,
+    "pc": 3978,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "fa7f6ffaf2627aabffe17eb97a171363e19e9a28f03cdf76cc90863de64d0d63",
+  "firmware_hash": "99197ce060ba4a06085c9bcc17ec96562ee2c7c1a9d1cd3909878ceb4e6059d9",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-renesas-ck-ra6m5-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/renesas-ck_ra6m5.yaml",

@@ -3,7 +3,7 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      69015,
+      69058,
       2147483648,
       48,
       49,
@@ -17,10 +17,10 @@
       24,
       24,
       571342792,
-      33561701,
-      33563104
+      33562425,
+      33563828
     ],
-    "pc": 33563104,
+    "pc": 33563828,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "2e520723342326e4178ad70dc0815ad9796a94008a938149402e7955e9ea780c",
+  "firmware_hash": "419cfde4c188e0452faea45564bfb634c297cfa800d506fb58934ca4c5495871",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-ek-ra8m1-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/renesas-ek_ra8m1.yaml",

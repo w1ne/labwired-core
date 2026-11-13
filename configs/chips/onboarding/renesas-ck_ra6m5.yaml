@@ -9,9 +9,9 @@
 # at 0x0, 512 KiB SRAM at 0x20000000) and wires LEDs to P601/P609/P610 and
 # the button to P804. This profile claims only the model-backed SCI0 (classic
 # SCI; Renode sets enableFIFO: false, and its RA6M5 tests use sci0 as the
-# console), PORT6, PORT8, PFS and the R_MSTP register file exercised by the
-# smoke. R_MSTP provides SVD-derived register readback only; it does not gate
-# modules. ICU, GPT, AGT, IIC (and the board's I2C sensors), SCI1-9, the
+# console), PORT6, PORT8, PFS, FPU context, and the R_MSTP register file
+# exercised by the smoke. R_MSTP provides SVD-derived register readback only;
+# it does not gate modules. ICU, GPT, AGT, IIC (and the board's I2C sensors), SCI1-9, the
 # other ports, data flash and the SYSTEM OSCSF script are not mapped. The
 # promoted RA6M5 part with ICU/AGT/GPT and FIFO SCI is configs/chips/r7fa6m5bh.yaml.
 # Source: https://github.com/renode/renode/blob/master/platforms/boards/renesas-ck_ra6m5.repl
@@ -51,3 +51,9 @@ peripherals:
     size: 256B
     config:
       profile: sci
+  # FP context registers and CPACR gate used by the scalar FPU smoke; MVFR
+  # feature-ID registers remain unmapped.
+  - id: fpu
+    type: cortex_m_fpu
+    base_address: 0xE000EF30
+    size: 16B

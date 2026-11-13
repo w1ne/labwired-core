@@ -1,4 +1,5 @@
 EK-RA8M1 SMOKE
+FPU_SUM=40400000
 cpu=cortex-m85 uart=sci9 (sci_b)
 clk src=moco sciclk=8000000 scickcr=01 brr=25 baud=9600
 ccr3=00001200 cesr=11

@@ -113,6 +113,23 @@
     },
     {
       "assertion": {
+        "uart_contains": "FPU_SUM=40400000"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536870932,
+          "expected_value": 1077936128,
+          "mask": null,
+          "size": null
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "gpio_edges": {
           "pin": "port6:10",
           "min_edges": 4
@@ -141,7 +158,7 @@
     "registers": [
       0,
       1074266304,
-      1141,
+      1185,
       1,
       33554432,
       1,
@@ -154,9 +171,9 @@
       536870928,
       537395184,
       1,
-      3128
+      3978
     ],
-    "pc": 3128,
+    "pc": 3978,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -169,7 +186,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "fa7f6ffaf2627aabffe17eb97a171363e19e9a28f03cdf76cc90863de64d0d63",
+  "firmware_hash": "99197ce060ba4a06085c9bcc17ec96562ee2c7c1a9d1cd3909878ceb4e6059d9",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-renesas-ck-ra6m5-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/renesas-ck_ra6m5.yaml",
@@ -715,6 +732,13 @@
         "artifacts": []
       },
       {
+        "name": "fpu",
+        "kind": "native",
+        "base": 3758157616,
+        "registers": [],
+        "artifacts": []
+      },
+      {
         "name": "scb",
         "kind": "native",
         "base": 3758157056,
@@ -776,271 +800,271 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 147,
+            "cycle": 280,
             "value": 1
           },
           {
-            "cycle": 6174,
+            "cycle": 6307,
             "value": 0
           },
           {
-            "cycle": 12193,
+            "cycle": 12326,
             "value": 1
           },
           {
-            "cycle": 18212,
+            "cycle": 18345,
             "value": 0
           },
           {
-            "cycle": 24231,
+            "cycle": 24364,
             "value": 1
           },
           {
-            "cycle": 30250,
+            "cycle": 30383,
             "value": 0
           },
           {
-            "cycle": 36269,
+            "cycle": 36402,
             "value": 1
           },
           {
-            "cycle": 42288,
+            "cycle": 42421,
             "value": 0
           },
           {
-            "cycle": 48307,
+            "cycle": 48440,
             "value": 1
           },
           {
-            "cycle": 54326,
+            "cycle": 54459,
             "value": 0
           },
           {
-            "cycle": 60345,
+            "cycle": 60478,
             "value": 1
           },
           {
-            "cycle": 66364,
+            "cycle": 66497,
             "value": 0
           },
           {
-            "cycle": 72383,
+            "cycle": 72516,
             "value": 1
           },
           {
-            "cycle": 78402,
+            "cycle": 78535,
             "value": 0
           },
           {
-            "cycle": 84421,
+            "cycle": 84554,
             "value": 1
           },
           {
-            "cycle": 90440,
+            "cycle": 90573,
             "value": 0
           },
           {
-            "cycle": 96459,
+            "cycle": 96592,
             "value": 1
           },
           {
-            "cycle": 102484,
+            "cycle": 102617,
             "value": 0
           },
           {
-            "cycle": 108503,
+            "cycle": 108636,
             "value": 1
           },
           {
-            "cycle": 114522,
+            "cycle": 114655,
             "value": 0
           },
           {
-            "cycle": 120541,
+            "cycle": 120674,
             "value": 1
           },
           {
-            "cycle": 126560,
+            "cycle": 126693,
             "value": 0
           },
           {
-            "cycle": 132579,
+            "cycle": 132712,
             "value": 1
           },
           {
-            "cycle": 138598,
+            "cycle": 138731,
             "value": 0
           },
           {
-            "cycle": 144617,
+            "cycle": 144750,
             "value": 1
           },
           {
-            "cycle": 150636,
+            "cycle": 150769,
             "value": 0
           },
           {
-            "cycle": 156655,
+            "cycle": 156788,
             "value": 1
           },
           {
-            "cycle": 162674,
+            "cycle": 162807,
             "value": 0
           },
           {
-            "cycle": 168693,
+            "cycle": 168826,
             "value": 1
           },
           {
-            "cycle": 174712,
+            "cycle": 174845,
             "value": 0
           },
           {
-            "cycle": 180731,
+            "cycle": 180864,
             "value": 1
           },
           {
-            "cycle": 186750,
+            "cycle": 186883,
             "value": 0
           },
           {
-            "cycle": 192769,
+            "cycle": 192902,
             "value": 1
           },
           {
-            "cycle": 198788,
+            "cycle": 198921,
             "value": 0
           },
           {
-            "cycle": 204807,
+            "cycle": 204940,
             "value": 1
           },
           {
-            "cycle": 210826,
+            "cycle": 210959,
             "value": 0
           },
           {
-            "cycle": 216845,
+            "cycle": 216978,
             "value": 1
           },
           {
-            "cycle": 222870,
+            "cycle": 223003,
             "value": 0
           },
           {
-            "cycle": 228889,
+            "cycle": 229022,
             "value": 1
           },
           {
-            "cycle": 234908,
+            "cycle": 235041,
             "value": 0
           },
           {
-            "cycle": 240927,
+            "cycle": 241060,
             "value": 1
           },
           {
-            "cycle": 246946,
+            "cycle": 247079,
             "value": 0
           },
           {
-            "cycle": 252965,
+            "cycle": 253098,
             "value": 1
           },
           {
-            "cycle": 258984,
+            "cycle": 259117,
             "value": 0
           },
           {
-            "cycle": 265003,
+            "cycle": 265136,
             "value": 1
           },
           {
-            "cycle": 271022,
+            "cycle": 271155,
             "value": 0
           },
           {
-            "cycle": 277041,
+            "cycle": 277174,
             "value": 1
           },
           {
-            "cycle": 283060,
+            "cycle": 283193,
             "value": 0
           },
           {
-            "cycle": 289079,
+            "cycle": 289212,
             "value": 1
           },
           {
-            "cycle": 295098,
+            "cycle": 295231,
             "value": 0
           },
           {
-            "cycle": 301117,
+            "cycle": 301250,
             "value": 1
           },
           {
-            "cycle": 307136,
+            "cycle": 307269,
             "value": 0
           },
           {
-            "cycle": 313155,
+            "cycle": 313288,
             "value": 1
           },
           {
-            "cycle": 319174,
+            "cycle": 319307,
             "value": 0
           },
           {
-            "cycle": 325193,
+            "cycle": 325326,
             "value": 1
           },
           {
-            "cycle": 331212,
+            "cycle": 331345,
             "value": 0
           },
           {
-            "cycle": 337231,
+            "cycle": 337364,
             "value": 1
           },
           {
-            "cycle": 343250,
+            "cycle": 343383,
             "value": 0
           },
           {
-            "cycle": 349269,
+            "cycle": 349402,
             "value": 1
           },
           {
-            "cycle": 355288,
+            "cycle": 355421,
             "value": 0
           },
           {
-            "cycle": 361307,
+            "cycle": 361440,
             "value": 1
           },
           {
-            "cycle": 367326,
+            "cycle": 367459,
             "value": 0
           },
           {
-            "cycle": 373345,
+            "cycle": 373478,
             "value": 1
           },
           {
-            "cycle": 379364,
+            "cycle": 379497,
             "value": 0
           },
           {
-            "cycle": 385383,
+            "cycle": 385516,
             "value": 1
           },
           {
-            "cycle": 391402,
+            "cycle": 391535,
             "value": 0
           },
           {
-            "cycle": 397421,
+            "cycle": 397554,
             "value": 1
           }
         ],
@@ -1048,275 +1072,275 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 144,
+            "cycle": 277,
             "state": "0"
           },
           {
-            "cycle": 147,
+            "cycle": 280,
             "state": "1"
           },
           {
-            "cycle": 6174,
+            "cycle": 6307,
             "state": "0"
           },
           {
-            "cycle": 12193,
+            "cycle": 12326,
             "state": "1"
           },
           {
-            "cycle": 18212,
+            "cycle": 18345,
             "state": "0"
           },
           {
-            "cycle": 24231,
+            "cycle": 24364,
             "state": "1"
           },
           {
-            "cycle": 30250,
+            "cycle": 30383,
             "state": "0"
           },
           {
-            "cycle": 36269,
+            "cycle": 36402,
             "state": "1"
           },
           {
-            "cycle": 42288,
+            "cycle": 42421,
             "state": "0"
           },
           {
-            "cycle": 48307,
+            "cycle": 48440,
             "state": "1"
           },
           {
-            "cycle": 54326,
+            "cycle": 54459,
             "state": "0"
           },
           {
-            "cycle": 60345,
+            "cycle": 60478,
             "state": "1"
           },
           {
-            "cycle": 66364,
+            "cycle": 66497,
             "state": "0"
           },
           {
-            "cycle": 72383,
+            "cycle": 72516,
             "state": "1"
           },
           {
-            "cycle": 78402,
+            "cycle": 78535,
             "state": "0"
           },
           {
-            "cycle": 84421,
+            "cycle": 84554,
             "state": "1"
           },
           {
-            "cycle": 90440,
+            "cycle": 90573,
             "state": "0"
           },
           {
-            "cycle": 96459,
+            "cycle": 96592,
             "state": "1"
           },
           {
-            "cycle": 102484,
+            "cycle": 102617,
             "state": "0"
           },
           {
-            "cycle": 108503,
+            "cycle": 108636,
             "state": "1"
           },
           {
-            "cycle": 114522,
+            "cycle": 114655,
             "state": "0"
           },
           {
-            "cycle": 120541,
+            "cycle": 120674,
             "state": "1"
           },
           {
-            "cycle": 126560,
+            "cycle": 126693,
             "state": "0"
           },
           {
-            "cycle": 132579,
+            "cycle": 132712,
             "state": "1"
           },
           {
-            "cycle": 138598,
+            "cycle": 138731,
             "state": "0"
           },
           {
-            "cycle": 144617,
+            "cycle": 144750,
             "state": "1"
           },
           {
-            "cycle": 150636,
+            "cycle": 150769,
             "state": "0"
           },
           {
-            "cycle": 156655,
+            "cycle": 156788,
             "state": "1"
           },
           {
-            "cycle": 162674,
+            "cycle": 162807,
             "state": "0"
           },
           {
-            "cycle": 168693,
+            "cycle": 168826,
             "state": "1"
           },
           {
-            "cycle": 174712,
+            "cycle": 174845,
             "state": "0"
           },
           {
-            "cycle": 180731,
+            "cycle": 180864,
             "state": "1"
           },
           {
-            "cycle": 186750,
+            "cycle": 186883,
             "state": "0"
           },
           {
-            "cycle": 192769,
+            "cycle": 192902,
             "state": "1"
           },
           {
-            "cycle": 198788,
+            "cycle": 198921,
             "state": "0"
           },
           {
-            "cycle": 204807,
+            "cycle": 204940,
             "state": "1"
           },
           {
-            "cycle": 210826,
+            "cycle": 210959,
             "state": "0"
           },
           {
-            "cycle": 216845,
+            "cycle": 216978,
             "state": "1"
           },
           {
-            "cycle": 222870,
+            "cycle": 223003,
             "state": "0"
           },
           {
-            "cycle": 228889,
+            "cycle": 229022,
             "state": "1"
           },
           {
-            "cycle": 234908,
+            "cycle": 235041,
             "state": "0"
           },
           {
-            "cycle": 240927,
+            "cycle": 241060,
             "state": "1"
           },
           {
-            "cycle": 246946,
+            "cycle": 247079,
             "state": "0"
           },
           {
-            "cycle": 252965,
+            "cycle": 253098,
             "state": "1"
           },
           {
-            "cycle": 258984,
+            "cycle": 259117,
             "state": "0"
           },
           {
-            "cycle": 265003,
+            "cycle": 265136,
             "state": "1"
           },
           {
-            "cycle": 271022,
+            "cycle": 271155,
             "state": "0"
           },
           {
-            "cycle": 277041,
+            "cycle": 277174,
             "state": "1"
           },
           {
-            "cycle": 283060,
+            "cycle": 283193,
             "state": "0"
           },
           {
-            "cycle": 289079,
+            "cycle": 289212,
             "state": "1"
           },
           {
-            "cycle": 295098,
+            "cycle": 295231,
             "state": "0"
           },
           {
-            "cycle": 301117,
+            "cycle": 301250,
             "state": "1"
           },
           {
-            "cycle": 307136,
+            "cycle": 307269,
             "state": "0"
           },
           {
-            "cycle": 313155,
+            "cycle": 313288,
             "state": "1"
           },
           {
-            "cycle": 319174,
+            "cycle": 319307,
             "state": "0"
           },
           {
-            "cycle": 325193,
+            "cycle": 325326,
             "state": "1"
           },
           {
-            "cycle": 331212,
+            "cycle": 331345,
             "state": "0"
           },
           {
-            "cycle": 337231,
+            "cycle": 337364,
             "state": "1"
           },
           {
-            "cycle": 343250,
+            "cycle": 343383,
             "state": "0"
           },
           {
-            "cycle": 349269,
+            "cycle": 349402,
             "state": "1"
           },
           {
-            "cycle": 355288,
+            "cycle": 355421,
             "state": "0"
           },
           {
-            "cycle": 361307,
+            "cycle": 361440,
             "state": "1"
           },
           {
-            "cycle": 367326,
+            "cycle": 367459,
             "state": "0"
           },
           {
-            "cycle": 373345,
+            "cycle": 373478,
             "state": "1"
           },
           {
-            "cycle": 379364,
+            "cycle": 379497,
             "state": "0"
           },
           {
-            "cycle": 385383,
+            "cycle": 385516,
             "state": "1"
           },
           {
-            "cycle": 391402,
+            "cycle": 391535,
             "state": "0"
           },
           {
-            "cycle": 397421,
+            "cycle": 397554,
             "state": "1"
           }
         ],
@@ -1331,19 +1355,19 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 102484,
+            "cycle": 102617,
             "value": 1
           },
           {
-            "cycle": 162674,
+            "cycle": 162807,
             "value": 0
           },
           {
-            "cycle": 222870,
+            "cycle": 223003,
             "value": 1
           },
           {
-            "cycle": 283060,
+            "cycle": 283193,
             "value": 0
           }
         ],
@@ -1351,23 +1375,23 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 144,
+            "cycle": 277,
             "state": "0"
           },
           {
-            "cycle": 102484,
+            "cycle": 102617,
             "state": "1"
           },
           {
-            "cycle": 162674,
+            "cycle": 162807,
             "state": "0"
           },
           {
-            "cycle": 222870,
+            "cycle": 223003,
             "state": "1"
           },
           {
-            "cycle": 283060,
+            "cycle": 283193,
             "state": "0"
           }
         ],
@@ -1402,6 +1426,12 @@
   ],
   "uart_lines": {
     "lines": [
+      {
+        "text": "FPU_SUM=40400000",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
       {
         "text": "CK-RA6M5 SCI0 SMOKE",
         "cycle_lo": 0,
@@ -1463,14 +1493,14 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 3308,
+    "text_bytes": 4152,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 3308,
+    "flash_used_bytes": 4152,
     "ram_static_bytes": 0,
     "flash_total_bytes": 2097152,
     "ram_total_bytes": 524288,
-    "flash_used_pct": 0.16,
+    "flash_used_pct": 0.2,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -1481,14 +1511,14 @@
     "main_stack_method": "paint",
     "main_stack_limit_bytes": 524288,
     "main_stack_high_water_bytes": 16,
-    "main_stack_free_min_bytes": 524252,
+    "main_stack_free_min_bytes": 524248,
     "main_stack_base": 536870912,
     "main_stack_top": 537395200,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
     "heap_limit_bytes": 524288,
-    "heap_high_water_bytes": 20,
-    "heap_free_min_bytes": 524252,
+    "heap_high_water_bytes": 24,
+    "heap_free_min_bytes": 524248,
     "heap_base": 536870912,
     "heap_top": 537395200
   },
@@ -1496,25 +1526,25 @@
     "cycles": 400000,
     "instructions": 400000,
     "steps_executed": 400000,
-    "memory_reads": 265,
-    "memory_writes": 13,
-    "peripheral_accesses": 180,
+    "memory_reads": 467,
+    "memory_writes": 14,
+    "peripheral_accesses": 215,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 3130,
+        "pc": 3974,
         "count": 547,
+        "symbol": "firmware_renesas_ck_ra6m5_smoke::__cortex_m_rt_main"
+      },
+      {
+        "pc": 3976,
+        "count": 508,
         "symbol": "<i32 as core::cmp::PartialOrd>::lt"
       },
       {
-        "pc": 3132,
-        "count": 508,
-        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
-      },
-      {
-        "pc": 3128,
+        "pc": 3978,
         "count": 507,
-        "symbol": "firmware_renesas_ck_ra6m5_smoke::__cortex_m_rt_main"
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       }
     ]
   }
