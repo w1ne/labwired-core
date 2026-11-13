@@ -157,6 +157,14 @@ _No tier1 fixture. Unmodified Zephyr v3.7 hello_world boots end-to-end through C
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `DCNF/FPU/CACHE/SPU/OSC_REG/CTRLAP/GPIOTE0/DPPIC/FICR` (nrf5340_*_stub) — STRUCTURAL: SystemInit pokes them once at boot and never polls them again, so a register stub is byte-faithful for the hello_world boot path.
 
+### `nrf54l05`
+
+_Minimal nRF54L05 application-core smoke using real RRAM and SRAM geometry, UARTE20 EasyDMA and GPIO P2.09. Only a synthetic board is tested; no beyond-rubric firmware function exists. Full Zephyr/SDK boot, BLE radio, TrustZone and silicon parity are untested._
+
+### `nrf54l10`
+
+_Minimal nRF54L10 application-core smoke using real RRAM and SRAM geometry, UARTE20 EasyDMA and GPIO P2.09. Only a synthetic board is tested; no beyond-rubric firmware function exists. Full Zephyr/SDK boot, BLE radio, TrustZone and silicon parity are untested._
+
 ### `nrf54l15`
 
 _No tier1 fixture. Unmodified Zephyr v4.4 hello_world boots end-to-end (nRF54L CLOCK/LFCLK, GRTC kernel tick, TAMPC approtect gate, RRAM-mapped UARTE20 EasyDMA) and the PR-gated smart-ring probe reads four I2C sensor IDs. Beyond the rubric TEMP/EGU/GPIOTE are unit-tested models no firmware drives; TAMPC/RRAMC/regulators/FICR/UICR/DPPIC are zero-filled stub windows the boot path pokes but never polls._
