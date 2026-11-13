@@ -1269,6 +1269,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-esp32c6-devkitc-bme280-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
+]
+
+[[package]]
 name = "firmware-f103-conformance"
 version = "0.1.0"
 

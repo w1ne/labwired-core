@@ -380,7 +380,10 @@ pub struct MemAlias {
 }
 
 pub struct SystemBus {
-    pub(crate) supply_domains: crate::peripherals::components::supply_domain::SupplyDomains,
+    /// External supply routing is used at wiring and co-simulation boundaries,
+    /// not by the CPU step path. Keep its growable maps outside the hot bus
+    /// object so adding another cold routing map does not enlarge that object.
+    pub(crate) supply_domains: Box<crate::peripherals::components::supply_domain::SupplyDomains>,
     pub flash: LinearMemory,
     /// Violation record + counts + mirrored PC/cycle for the policy gate.
     pub(crate) memory_policy: crate::bus::memory_policy::MemoryPolicyState,
@@ -775,6 +778,9 @@ pub struct SystemBus {
     pub observed: Vec<std::sync::Arc<dyn ObservedDevice>>,
     /// Deterministic typed motor plants, resolved from the system manifest.
     motors: Vec<motors::MotorRuntime>,
+    /// Live native numeric observations. Allocated only when a producer exists;
+    /// separate from both historical motor series and the co-sim trace cursor.
+    live_numeric: Option<Box<crate::live_numeric::LiveNumericCapture>>,
     /// Last simulator-cycle boundary applied to `motors`.
     motor_cycle_anchor: u64,
     /// Circuit-coupled INA219 breakouts: shunt current / bus voltage samples

@@ -29,6 +29,13 @@ Cycles are not steps: a step that hits a wait-stated peripheral costs more than
 one cycle, so `max_cycles` has to be set from a cycle budget, not scaled off
 `max_steps`.
 
+`result.json` reports this same machine clock in `cycles`, `metrics.cycles`,
+and the observed value of a `max_cycles` stop. The final atomic instruction or
+peripheral operation can end after the requested boundary. If both the step
+and cycle limits are reached together, the stop reason can be `max_steps`.
+These are simulated cycles; their timing accuracy depends on the CPU and
+peripheral models.
+
 `peripheral_tick_interval` does not stop the run. Omit it and the machine ticks
 peripherals once per CPU cycle. Set it to N and the machine ticks peripherals
 every N CPU cycles. Zero is rejected. A wider interval runs faster. It can

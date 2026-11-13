@@ -1,0 +1,16 @@
+# ESP32-C6-DevKitC-1-N8 plus an Adafruit BME280 STEMMA QT breakout.
+# Reuses the existing 8 MB ESP32-C6 chip model; exposes only UART0 and I2C0.
+name: "esp32c6-devkitc-1-n8-bme280"
+chip: "../chips/esp32c6.yaml"
+cpu_hz: 160_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GPIO6"
+      scl: "GPIO7"
+    config:
+      i2c_address: 0x77
+board_io: []

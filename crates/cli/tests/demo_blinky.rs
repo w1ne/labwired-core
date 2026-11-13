@@ -11,11 +11,15 @@ fn test_demo_blinky_gpio_toggle() {
         .with_test_writer()
         .try_init();
 
-    // Load the demo-blinky firmware. The target dir is not always
-    // `<workspace>/target` — see `labwired_core::test_support::target_dir`,
-    // which this test used to open-code.
-    let firmware_path =
-        labwired_core::test_support::target_dir().join("thumbv7m-none-eabi/release/demo-blinky");
+    // cargo llvm-cov sets CARGO_TARGET_DIR to target/llvm-cov-target for the
+    // instrumented host tests, but the prebuilt ARM firmware remains in the
+    // ordinary target directory. CI supplies the exact fixture path.
+    // Other callers keep the existing target_dir lookup by default.
+    let firmware_path = std::env::var_os("LABWIRED_DEMO_BLINKY_ELF")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            labwired_core::test_support::target_dir().join("thumbv7m-none-eabi/release/demo-blinky")
+        });
 
     if !firmware_path.exists() {
         panic!(

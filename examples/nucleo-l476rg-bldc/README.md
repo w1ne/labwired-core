@@ -14,6 +14,12 @@ deliberately unbound: mechanical stall is diagnosed from missing Hall motion,
 so an open-phase/aggregate fault cannot be mislabeled as `FAULT STALL`. TIM1 main outputs use PA8/PA9/PA10 and their
 complementary outputs use PB13/PB14/PB15.
 
+The plant consumes TIM1's output-stage states. The loader checks that the six
+declared GPIO pads exist, but live `MODER`/`AFR` changes do not disconnect or
+remap those plant inputs. The intended physical mapping is AF1 on PA8–PA10
+and PB13–PB15. Native pad capture must verify that mapping separately from
+the plant response.
+
 The firmware begins with open-loop duty, selects a six-step row from the Hall
 sequence `001 → 101 → 100 → 110 → 010 → 011`, and uses a deliberately small
 bounded proportional regulator to adjust duty from Hall edge period. A 100 µs
@@ -53,3 +59,23 @@ back-EMF, shaft inertia/load, Hall sensors, encoder feedback, bus
 undervoltage, and a latched phase-current threshold. It does not model MOSFET
 switching transients, thermal behavior, magnetic saturation, field-oriented
 control, or mechanical drivetrain/contact dynamics.
+
+## Scriptable inverter fault (LabWired Core)
+
+The same inverter fault exposed by Studio can now be driven in a headless
+regression through the motor SimInput channel named inverter_fault. Use the
+drive_motor component ID, and a boolean value 0.0 (clear) or 1.0 (assert).
+The motor's normal physical fault pin remains connected to firmware input PB7.
+
+The fixture in examples/ci/l476-bldc-inverter-fault.yaml injects the fault
+at cycle 1,500,000. It requires the real STM32L476 ELF to report target
+speed before the fault markers, then checks motor-off state and inverter
+shutdown latency. Core's integration test also checks TIM1.BDTR.MOE
+and GPIOB.PB0 after fault shutdown. The starter supports mechanical stall
+through the existing stall SimInput channel.
+
+This test is an inverter/firmware behavioral proof on a reduced-order BLDC
+plant; it does not verify MOSFET transients, actual gate-driver IC behavior,
+current-sense FOC or a physical aircraft.
+
+Reproducible public consumer: https://github.com/w1ne/labwired-examples/tree/main/examples/robotics/quadrotor-bldc

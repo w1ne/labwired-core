@@ -1,0 +1,43 @@
+{
+  "checked_at_utc": "2026-11-10",
+  "service": "LabWired hosted twin",
+  "tool": "labwired_verify",
+  "scope": "Shared classic ESP32 SoC GPIO model; the hosted catalog does not contain ESP32-DevKitM-1 as a board profile.",
+  "request": {
+    "board": "esp32",
+    "target": "esp32",
+    "entryPath": "src/main.ino",
+    "language": "arduino",
+    "diagram": {
+      "version": 1,
+      "board": "esp32",
+      "parts": [{ "id": "mcu", "type": "esp32" }],
+      "wires": []
+    },
+    "oracle": {
+      "gpio": [{ "pin": "GPIO23", "state": "toggled" }]
+    },
+    "max_steps": 8000000
+  },
+  "result": {
+    "status": "model_verified",
+    "run_status": "pass",
+    "stop_reason": "max_steps",
+    "verification": "GPIO23 toggled (gpio_pins pad). Model-verified deterministically.",
+    "oracle_results": [
+      {
+        "kind": "gpio",
+        "passed": true,
+        "detail": "GPIO23 toggled (gpio_pins pad)"
+      }
+    ],
+    "gaps": [
+      {
+        "code": "approximation",
+        "scope": "model",
+        "detail": "No power net drives the MCU; the hosted run assumes an ideal 3.3 V rail, so power-on and brown-out reset are not simulated."
+      }
+    ]
+  },
+  "scope_note": "This hosted check verifies the shared ESP32 GPIO behavior, not the new DevKitM-1 bridge or local board descriptor. The repository-local onboarding smoke runs the exact board system profile."
+}
