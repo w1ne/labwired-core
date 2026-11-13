@@ -637,6 +637,23 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// GPIO-matrix capability: pads whose output select is `signal_idx`.
+    /// Empty (the default) for a peripheral that does not own a matrix.
+    fn pads_for_output_signal(&self, _signal_idx: u32) -> Vec<u8> {
+        Vec::new()
+    }
+
+    /// GPIO-matrix capability: drive an output pad to `level`, returning
+    /// whether the level actually changed. Default is a no-op.
+    fn drive_pad_output(&mut self, _pin: u8, _level: bool) -> bool {
+        false
+    }
+
+    /// GPIO-matrix capability: publish `now` to this port's observers so a
+    /// subsequent [`Self::drive_pad_output`] edge is timestamped. Default is
+    /// a no-op.
+    fn sync_observer_cycle(&mut self, _now: u64) {}
+
     /// GPIO capability: the pad level a logic probe clipped to `pin` would
     /// see. Shim over [`pins::PinPort::level`] (kept because many callers
     /// only want a level); a peripheral without pins falls back to the output
@@ -1047,9 +1064,9 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// Exists for `model_paths_drift_gate`, which asserts that every model a
     /// board actually registers appears in that board's `models:` list in
     /// `validation/manifest.yaml` — the list whose contents are hashed into
-    /// the board's drift digest. A model the list omits can be rewritten
-    /// without moving the digest, so a stale `drift_ack` goes on covering a
-    /// tree it was never written for.
+    /// the board's source digest. An omitted model can change without moving
+    /// the digest, concealing a difference from the source recorded with a
+    /// physical capture. Watch completeness remains an automated requirement.
     ///
     /// Asking the ENGINE rather than parsing the factories is the point. The
     /// first version of that gate mined `type:` -> source from the factory

@@ -34,6 +34,7 @@ cargo test -p labwired-core --lib
 step "unit tests, event-scheduler"
 cargo test -p labwired-core --features event-scheduler --lib
 
+# --drift reports source/capture differences; integrity and --check still fail on errors.
 step "generated artefacts are not stale"
 python3 scripts/generate_validation_status.py --check --drift
 python3 scripts/generate_firmware_exercise_matrix.py --check

@@ -33,6 +33,18 @@
       "firmware": "tests/fixtures/tier1/esp32.elf",
       "expect": "TIER1 clock PASS"
     },
+    "esp32-devkitc-32e-gpio-smoke": {
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/esp32.elf",
+      "expect": "TIER1 clock PASS",
+      "note": "Narrow DevKitC-32E onboarding profile of the same LX6 SoC as `esp32`. Runs the committed classic-ESP32 TIER1 image (docs-runnable expect matches parent `esp32`). The PlatformIO deep/light-sleep sketches under docs/receipts/2026-11-09-esp32-deep-sleep/sketch are not committed ELFs."
+    },
+    "esp32-devkitc-32e-uart1": {
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/esp32.elf",
+      "expect": "TIER1 clock PASS",
+      "note": "Narrow DevKitC-32E UART1-TX onboarding profile of the same LX6 SoC as `esp32`. Runs the committed classic-ESP32 TIER1 image (docs-runnable expect matches parent `esp32`). The PlatformIO UART1 sketch under examples/esp32-devkitc-32e-uart1/firmware is not a committed ELF."
+    },
     "esp32s3": {
       "how": "committed",
       "firmware": "tests/fixtures/tier1/esp32s3.elf",
@@ -103,6 +115,10 @@
     "stm32f103rb": {
       "how": "needs-build",
       "why": "Exact STM32F103RBT6 descriptor added after the current released CLI. Its NUCLEO-F103RB firmware smoke is validated from this Core source tree; clean-install release-runner support starts with a release containing this chip model."
+    },
+    "stm32f103rb-nucleo-bme280-smoke": {
+      "how": "needs-build",
+      "why": "NUCLEO-F103RB + BME280 onboarding smoke is built from crates/firmware-nucleo-f103rb-bme280-smoke, not a committed ELF. Committed evidence under examples/nucleo-f103rb-bme280/evidence shows onboarding-smoke.yaml passed (NUCLEO_F103RB_BME280_OK ID=0x60 I2C1=PB8/PB9 and >=32 LD2 edges on PA5)."
     },
     "stm32f103r8": {
       "how": "needs-build",

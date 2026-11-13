@@ -87,6 +87,15 @@ Worked example: [`examples/cosim-spice-rc`](../examples/cosim-spice-rc/README.md
 (Debian/Ubuntu: `apt install libngspice0`). Tests:
 `python3 -m pytest tools/cosim/test_labwired_ngspice.py`.
 
+## Shared analog in a multi-controller world
+
+An environment can own one inline `adapter: analog` model with instance-qualified
+`node.<id>.board.*` / `node.<id>.adc.*` routes. The existing world scheduler
+advances one shared circuit and applies all observations at its declared
+boundaries. Per-node co-simulation models remain refused. See
+[One shared analog circuit in a world](world-analog.md) for the manifest,
+voltage and reset semantics, trace API, validation, and sampling limits.
+
 ## Board signal paths
 
 A model that only speaks abstract observables can be driven from the command
@@ -99,14 +108,22 @@ steps the model against the pins the firmware is actually driving:
 | `board.gpio.<pad>` | machine → model | bool | The level the firmware is driving on an output pad. |
 | `board.gpio_output.<pad>` | machine → model | bool | Whether the firmware has configured `<pad>` as a general-purpose output. |
 | `board.gpio_pad.<pad>` | machine → model | bool | The live level a logic probe clipped to `<pad>` sees: the GPIO latch for a plain output, the peripheral's wire for an alternate-function pad, the input register for an input. |
+| `board.gpio_pad_volts.<pad>` | machine → model | volts | The live pad driver amplitude from the routed VDD, or the descriptor I/O voltage when VDD is not routed. Use a separate direction switch for high impedance. |
 | `board.gpio_driven.<pad>` | machine → model | bool | Whether the MCU's own output stage drives `<pad>`, through a GPIO output OR an alternate-function peripheral. False for an input, an analog pad, or a released open-drain line. |
 | `board.gpio_in.<pad>` | model → machine | bool or volts | An externally held level on an input pad (also readable). A number is volts, turned into a level with the chip's input thresholds. |
 | `board.analog.<pad>_volts` | model → machine | number | The analog level on the ADC channel belonging to `<pad>`. |
 | `adc.<peripheral>.<channel>_volts` | model → machine | number | The analog level on an explicitly named ADC channel. |
 | `board.power.vdd_volts` | model → machine | number | The MCU's supply. The chip's `supply_monitor:` holds the core in reset below its power-on threshold and resets it on power-down or brown-out; a chip without one refuses the route. |
+| `board.reset.<pin>_volts` | model → machine | volts | The descriptor-declared reset pin, with absolute or VDD-ratio thresholds and valid/invalid pulse limits. Holds execution independently of the supply supervisor. |
 | `board.motor.<id>.back_emf_v` | machine → model | number | The back-EMF of an `armature: circuit` DC motor (Ke·ω, volts), for the netlist's series EMF source. |
 | `board.motor.<id>.current_a` | model → machine | number | The winding current the netlist solved for an `armature: circuit` DC motor (amps, positive = forward torque). Until it is routed the motor holds still and reports no current. |
+| `board.motor.<id>.phase_{a,b,c}_back_emf_v` | machine → model | volts | The three phase EMFs of a circuit BLDC winding. |
+| `board.motor.<id>.phase_{a,b,c}_current_a` | model → machine | amps | A complete solved three-phase current vector, positive toward the floating star. |
+| `board.motor.<id>.supply_v` | model → machine | volts | Optional measured supply for a circuit DC/BLDC motor; absent remains unknown. |
 | `ui.<partId>.<field>` | outside → model | bool or number | Set from outside the engine (a canvas part, a test stimulus); 0 / false until set. |
+
+For the complete winding, ownership, timing and readback contract, see
+[Circuit-driven three-phase BLDC motors](circuit-bldc.md).
 
 `<pad>` is a pad label in whatever form the chip speaks — `pa5` / `PA5` on
 STM32, `pd2` on the ATmega328P, `p0.13` on Nordic, `gpio5` or a bare `5` on
@@ -210,14 +227,23 @@ This is what lets a circuit node charging through a megohm reach
 `digitalRead` at the right time, instead of flipping at a guessed midpoint.
 
 The thresholds are chip data, transcribed from the datasheet into the chip
-descriptor as ratios of the I/O supply:
+descriptor as slopes of the I/O supply with optional voltage offsets:
 
 ```yaml
 io_voltage_v: 5.0          # the rail the GPIO pads run from
-gpio_input_thresholds:     # ratios of io_voltage_v
+gpio_input_thresholds:     # zero-offset limits: slope * supply
   vil: 0.3                 # highest input guaranteed to read low
   vih: 0.6                 # lowest input guaranteed to read high
 ```
+
+Optional `vil_offset_v` and `vih_offset_v` add volts to the corresponding
+slope-times-supply limit. They default to zero, preserving existing ratio-only
+documents. The slopes satisfy `0 < vil < vih < 1`; finite offsets satisfy
+`0 <= vil_offset_v <= vih_offset_v`. A routed `board.power.vdd_volts` supplies
+the actual reference for each boundary; `io_voltage_v` applies only when VDD is
+unrouted. An absent or non-positive routed rail cannot read as a logic high.
+The [shared-world electrical contract](world-analog.md#driver-voltage-and-high-impedance)
+includes an affine datasheet example and the zero-VDDA capability boundary.
 
 In-tree they are declared for `atmega328p` (5.0 V, 0.3 / 0.6, Microchip
 DS40002061B Table 30-1), `stm32f103` (3.3 V, 0.35 / 0.65, DS5319 Table 36), and

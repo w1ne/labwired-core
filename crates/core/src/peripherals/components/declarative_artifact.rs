@@ -239,6 +239,11 @@ impl CompiledArtifact {
             },
         }
     }
+
+    /// Artifact `format:` string, when the descriptor named one (e.g. `tm1637_grid`).
+    pub fn format(&self) -> Option<&str> {
+        self.format.as_deref()
+    }
 }
 
 /// Parse one render-time gate expression, naming the key that carried it.

@@ -9,7 +9,7 @@ Embedded development typically requires physical hardware, even for basic testin
 
 ## The LabWired Solution
 
-LabWired allows developers to simulate an entire STM32-based system, including external peripherals like sensors, directly in their local environment and VS Code.
+LabWired runs STM32 firmware against supported MCU peripheral and external-device models, including I²C sensors. The example is a model-based firmware test, not a complete analog or physical replica of the board. See [what a green pass means](fidelity.md) and the [target support levels](target_support_rubric.md).
 
 ### Scenario: I2C Temperature Sensor Integration
 
@@ -39,9 +39,11 @@ Using the LabWired VS Code extension, the developer can:
 
 ## Impact
 
-- **Zero Setup Costs**: No hardware, cables, or probes required.
-- **Instant Reproducibility**: High-fidelity simulation ensures a bug in simulation is a bug in hardware.
-- **Modern Workflow**: Bring the power of modern software development (CI/CD, fast iteration) to the embedded world.
+- **No bench required for the model check**: Run supported firmware and device-model tests without a connected board. Physical hardware is still required for acceptance tests.
+- **Repeatable evidence**: Reuse the same firmware, system manifest and inputs to reproduce an observed model failure. A simulated failure does not automatically prove a silicon defect; a simulated pass does not prove the physical board works.
+- **CI integration**: Assert supported MCU and I²C device behavior on every change, then use physical tests to cover unmodeled electrical and timing effects.
+
+Record the firmware revision, model version, inputs, expected results and simulator artifacts. Label the result **model-verified** only when its explicit assertions pass; this is not a whole-board or hardware-acceptance verdict.
 
 ---
 

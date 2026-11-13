@@ -64,7 +64,7 @@ pub(crate) fn motor_states_json(
                 ),
                 (
                     "current_a".to_owned(),
-                    serde_json::json!(snapshot.current_a.unwrap_or(0.0)),
+                    serde_json::json!(snapshot.current_a),
                 ),
                 (
                     "bus_voltage_v".to_owned(),
@@ -76,6 +76,9 @@ pub(crate) fn motor_states_json(
                 ),
                 ("faults".to_owned(), serde_json::json!(snapshot.faults)),
             ]);
+            if let Some(coupling) = snapshot.coupling {
+                state.insert("coupling".to_owned(), serde_json::json!(coupling));
+            }
             if let Some(currents) = snapshot.phase_currents_a {
                 state.insert("phase_currents_a".to_owned(), serde_json::json!(currents));
             }
@@ -628,8 +631,10 @@ impl WasmSimulator {
     /// [{ ch, cycle, state }] }` where `state` is `"0"`, `"1"`, `"z"`
     /// (nothing drives the pad: an undriven input, a released open-drain
     /// line) or `"x"` (the MCU output fights an external driver). A channel
-    /// whose pad model cannot report drive has `initial: null` and no edges —
-    /// never a guessed "driven". `read_logic_edges` is unchanged: its boolean
+    /// whose pad model has not reported drive starts with `initial: null`.
+    /// A later explicit drive report starts its state edges at that cycle;
+    /// a never-known channel keeps no state edges. No initial state is guessed.
+    /// `read_logic_edges` is unchanged: its boolean
     /// `value` is what the pad reads, so every existing consumer keeps working.
     #[wasm_bindgen]
     pub fn read_logic_states(&mut self, cursor: f64) -> Result<JsValue, JsValue> {
@@ -1441,9 +1446,10 @@ mod motor_state_tests {
                 torque_nm: 0.3,
                 current_a: Some(2.5),
                 phase_currents_a: None,
-                bus_voltage_v: 12.0,
+                bus_voltage_v: Some(12.0),
                 commutation_sector: None,
                 control_state: "forward".into(),
+                coupling: None,
                 faults: vec!["stalled".into()],
             },
             MotorSnapshot {
@@ -1457,9 +1463,10 @@ mod motor_state_tests {
                 torque_nm: 0.6,
                 current_a: Some(3.0),
                 phase_currents_a: Some([1.0, -0.25, -0.75]),
-                bus_voltage_v: 24.0,
+                bus_voltage_v: Some(24.0),
                 commutation_sector: Some(4),
                 control_state: "sector:4".into(),
+                coupling: None,
                 faults: vec!["open-phase-a".into()],
             },
         ]);
@@ -1476,6 +1483,38 @@ mod motor_state_tests {
         );
         assert_eq!(states[1]["commutation_sector"], 4);
         assert_eq!(states[1]["faults"], serde_json::json!(["open-phase-a"]));
+    }
+    #[test]
+    fn circuit_motor_readback_preserves_unknown_measurements_and_boundary_timing() {
+        let states = motor_states_json(vec![labwired_core::bus::MotorSnapshot {
+            id: "M1".into(),
+            kind: "bldc",
+            position_rad: 0.1,
+            speed_rpm: 2.0,
+            speed_rpm_peak_abs: 2.0,
+            speed_rpm_max: 2.0,
+            speed_rpm_min: 0.0,
+            torque_nm: 0.03,
+            current_a: None,
+            phase_currents_a: Some([0.0, -1.0, 1.0]),
+            bus_voltage_v: None,
+            commutation_sector: Some(0),
+            control_state: "circuit".into(),
+            coupling: Some(labwired_core::bus::MotorCoupling {
+                mode: "interval-start-zero-order-hold",
+                step_ns: Some(100),
+                completed_time_ns: Some(300),
+            }),
+            faults: Vec::new(),
+        }]);
+        assert!(states[0]["current_a"].is_null());
+        assert!(states[0]["bus_voltage_v"].is_null());
+        assert_eq!(
+            states[0]["phase_currents_a"],
+            serde_json::json!([0.0, -1.0, 1.0])
+        );
+        assert_eq!(states[0]["coupling"]["step_ns"], 100);
+        assert_eq!(states[0]["coupling"]["completed_time_ns"], 300);
     }
 }
 

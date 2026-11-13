@@ -403,9 +403,9 @@ pub fn baseline_regressions(baseline: &Tier1Matrix, live: &Tier1Matrix) -> Vec<R
     out
 }
 
-/// One acknowledged, intentional drop. Named explicitly — silence is never
-/// sufficient. Mirrors the `drift_ack` convention in `validation/manifest.yaml`:
-/// one trailing key that has to COVER the specific observed drift, plus prose.
+/// One acknowledged, intentional chip/class regression, with a reason.
+/// This coverage ratchet remains separate from informational source/capture
+/// reporting; an entry must cover the specific observed regression.
 #[derive(Debug, Clone, Deserialize)]
 pub struct RatchetAck {
     /// `chip/class`, e.g. `esp32c3/i2c`.

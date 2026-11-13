@@ -20,35 +20,43 @@ This is the product bar beyond unit tests and UART-only CI fixtures.
 | **L7** | `L7_timer` | *(via L1 sleep)* | **Time base** — `micros()` advances (SysTick/RTC/TIM) |
 | **L8** | `L8_can` | *(labs)* | **CAN loopback** (bxCAN/FDCAN registers; not portable Arduino API) |
 
-## Chip coverage (record of intent)
+## Chip coverage
+
+The Arduino column records measured results on `main` from
+[Core Arduino Matrix Smoke run 43199232042](https://github.com/w1ne/labwired-core/actions/runs/43199232042)
+(commit `5136a4ddf78132f5b411972911042c91d5a67121`, 2026-11-12).
+The 23 board rows have 194 passing cells, 13 explicit skips and 0 failures.
+Counts list passes and skips separately. `boards.yaml` records each skip reason.
+Other columns remain a record of intent.
 
 | Chip | Arduino matrix | Zephyr matrix | L3 I2C kit | Notes |
 |------|----------------|---------------|------------|-------|
-| esp32 | ✅ L0–L4 | ❌ no ESP Zephyr path yet | ✅ Arduino | L4 SPI MISO from kits; FreeRTOS dual-core |
-| esp32c3 | ✅ L0–L4 | ❌ | ✅ Arduino | L4 SPI green; RISC-V FreeRTOS |
-| esp32s3 | ✅ L0–L4 | ❌ | ✅ Arduino | L4 via spi2_s3 Esp32s3Spi; dual-core |
-| esp32c6 | ✅ L0–L8 (9/9) | ❌ | ✅ Arduino (INA219 on GPIO23/22) | Arduino-ESP32 3.x (IDF 5.5, CI pins espressif32@8.0.0) on the in-tree C6 mask ROM. L2 = RGB LED_BUILTIN through RMT TX (C3 model, source 49). L3 = `Wire.begin(23, 22)` (variant SDA/SCL) reads the INA219 config 0x399F + bus 0x19CA. L6 = `analogWrite(2, 128)`: 1 kHz / 50 % pad edges on GPIO2 (LEDC on the PCR XTAL clock). L5 = oneshot APB_SARADC: `analogRead(A0)` 256, `A1` 529 (REG_CLK_EN gate, PWDET stub). L8 = TWAI0 @0x6000B000 (S3/C3 TWAI model, source 46) self-RX of ID 0x123 / 0xA5 |
-| nrf52832 | ✅ L0–L4 | ✅ | ✅ Arduino; Zephyr system+i2c0 | L4 legacy SPI; TWIM overlay Zephyr L3 |
-| nrf52840 | ✅ L0–L4 | ✅ | ✅ both | L4 legacy SPI; Zephyr L3 green |
+| esp32 | L0–L8 (9 pass / 0 skip) | ❌ no ESP Zephyr path yet | ✅ Arduino | L4 SPI MISO from kits; FreeRTOS dual-core |
+| esp32c3 | L0–L8 (9 pass / 0 skip) | ❌ | ✅ Arduino | L4 SPI green; RISC-V FreeRTOS; L8 TWAI self-RX on the shared S3 TWAI model (C3 source 25) |
+| esp32s3 | L0–L8 (9 pass / 0 skip) | ❌ | ✅ Arduino | L4 via spi2_s3 Esp32s3Spi; dual-core |
+| esp32c6 | L0–L8 (9 pass / 0 skip) | ❌ | ✅ Arduino (INA219 on GPIO23/22) | Arduino-ESP32 3.x (IDF 5.5, CI pins espressif32@8.0.0) on the in-tree C6 mask ROM. L2 = RGB LED_BUILTIN through RMT TX (C3 model, source 49). L3 = `Wire.begin(23, 22)` (variant SDA/SCL) reads the INA219 config 0x399F + bus 0x19CA. L6 = `analogWrite(2, 128)`: 1 kHz / 50 % pad edges on GPIO2 (LEDC on the PCR XTAL clock). L5 = oneshot APB_SARADC: `analogRead(A0)` 256, `A1` 529 (REG_CLK_EN gate, PWDET stub). L8 = TWAI0 @0x6000B000 (S3/C3 TWAI model, source 46) self-RX of ID 0x123 / 0xA5 |
+| nrf52832 | L0–L7 (8 pass / 1 skip; L8 skipped) | ✅ | ✅ Arduino; Zephyr system+i2c0 | L4 legacy SPI; TWIM overlay Zephyr L3 |
+| nrf52840 | L0–L7 (8 pass / 1 skip; L8 skipped) | ✅ | ✅ both | L4 legacy SPI; Zephyr L3 green |
 | nrf5340 | ❌ | ✅ | ❌ no I2C model | Add Arduino when PIO path exists |
 | nrf54l15 | ❌ | ❌ | — | Chip model present; frameworks TBD |
-| rp2040 | ✅ L0–L4 | ✅ | ✅ Arduino; Zephyr L3 skip | L4 SPI slave attach + bootrom auto-load |
-| stm32f103 | ✅ L0–L8 (9 pass / 0 skip) | ✅ | ✅ both | F1 Wire + Zephyr poll green; L6 on PA0 TIM2_CH1, pad-proven 1.000 kHz / 50.2 % (PC13 has no timer channel) |
-| stm32f401 | ✅ L0–L4 | ✅ | ✅ both | |
-| stm32f407 | ✅ L0–L4 | ❌ | ✅ Arduino | Add Zephyr `nucleo_f407zg` if west board ok |
-| stm32f411ceu6 | ✅ L0–L7 (L8 n/a, no CAN) | ❌ | ✅ Arduino (L3 ACK-only, F4 sketch ifdef) | WeAct Black Pill (`blackpill_f411ce`); L6 on PA0 TIM2_CH1, pad edges not routed |
-| stm32g474re | ✅ L0–L4 | ✅ | ✅ Arduino | |
-| stm32g071rb | ✅ L0–L7 (L8 n/a, no CAN) | ❌ | ✅ Arduino (L3 exact tier) | NUCLEO-G071RB (`nucleo_g071rb`); L6 on PA0 TIM2_CH1 (PA5 is DAC1_OUT2), pad edges not routed |
-| stm32h563 | ✅ L0–L4 | ✅ | ✅ Arduino | |
+| rp2040 | L0–L7 (8 pass / 1 skip; L8 skipped) | ✅ | ✅ Arduino; Zephyr L3 skip | L4 SPI slave attach + bootrom auto-load |
+| rp2350 | L0–L7 (8 pass / 1 skip; L8 skipped) | ❌ | ✅ Arduino | Raspberry Pi Pico 2 on arduino-pico; Serial = USB CDC; L6 PWM slice 4B on GP25 |
+| stm32f103 | L0–L8 (9 pass / 0 skip) | ✅ | ✅ both | F1 Wire + Zephyr poll green; L6 on PA0 TIM2_CH1, pad-proven 1.000 kHz / 50.2 % (PC13 has no timer channel) |
+| stm32f401 | L0–L7 (8 pass / 1 skip; L8 skipped) | ✅ | ✅ both | |
+| stm32f407 | L0–L8 (9 pass / 0 skip) | ❌ | ✅ Arduino | Add Zephyr `nucleo_f407zg` if west board ok |
+| stm32f411ceu6 | L0–L7 (8 pass / 1 skip; L8 skipped) | ❌ | ✅ Arduino (L3 ACK-only, F4 sketch ifdef) | WeAct Black Pill (`blackpill_f411ce`); L6 on PA0 TIM2_CH1, pad edges not routed |
+| stm32g474re | L0–L7 (8 pass / 1 skip; L8 skipped) | ✅ | ✅ Arduino | |
+| stm32g071rb | L0–L7 (8 pass / 1 skip; L8 skipped) | ❌ | ✅ Arduino (L3 exact tier) | NUCLEO-G071RB (`nucleo_g071rb`); L6 on PA0 TIM2_CH1 (PA5 is DAC1_OUT2), pad edges not routed |
+| stm32h563 | L0–L8 (9 pass / 0 skip) | ✅ | ✅ Arduino | |
 | stm32h735 | ❌ | ❌ | — | Chip model; framework path TBD |
-| stm32l073 | ✅ L0–L4 | ✅ | ✅ Arduino | |
-| stm32l476 | ✅ L0–L4 | ✅ | ✅ Arduino | |
-| stm32u575 | ✅ L0–L8 (9 pass / 0 skip) | ✅ L0–L3 | ✅ both | U5 RCC ready bits + CRS; Zephyr `nucleo_u575zi_q` |
-| stm32u545 | ✅ L0–L8 | ❌ | ✅ Arduino | Generic `U545RETxQ` variant with NUCLEO-U545RE-Q pin overrides; Zephyr not validated |
-| stm32g0b1re | ✅ L0–L8 (9 pass / 0 skip) | ❌ | ✅ Arduino | NUCLEO-G0B1RE; RCC `stm32g0b1` (HSI48), Serial = LPUART1, L6 on PA0 TIM2_CH1 (pad edges not routed), L8 FDCAN1 register-level loopback |
-| stm32wb55 | ✅ L0–L4 | ✅ | ✅ Arduino | |
-| stm32wba52 | ✅ L0–L4 | ✅ | ✅ Arduino | Custom PIO board JSON |
-| atmega328p | ✅ L0–L7 (8 pass / 1 skip, no CAN) | ❌ | ✅ Arduino TWI | Nano: USART+PORT+Timer0/1/2+TWI+SPI on CPU; L6 on D9 OC1A, pad-proven 490 Hz phase-correct (D13 has no timer output) |
+| stm32l073 | L0–L7 (8 pass / 1 skip; L8 skipped) | ✅ | ✅ Arduino | |
+| stm32l476 | L0–L8 (9 pass / 0 skip) | ✅ | ✅ Arduino | |
+| stm32u575 | L0–L8 (9 pass / 0 skip) | ✅ L0–L3 | ✅ both | U5 RCC ready bits + CRS; Zephyr `nucleo_u575zi_q` |
+| stm32u545 | L0–L8 (9 pass / 0 skip) | ❌ | ✅ Arduino | Generic `U545RETxQ` variant with NUCLEO-U545RE-Q pin overrides; Zephyr not validated |
+| stm32g0b1re | L0–L8 (9 pass / 0 skip) | ❌ | ✅ Arduino | NUCLEO-G0B1RE; RCC `stm32g0b1` (HSI48), Serial = LPUART1, L6 on PA0 TIM2_CH1 (pad edges not routed), L8 FDCAN1 register-level loopback |
+| stm32wb55 | L0–L7 (8 pass / 1 skip; L8 skipped) | ✅ | ✅ Arduino | |
+| stm32wba52 | L0–L4, L6–L7 (7 pass / 2 skip; L5/L8 skipped) | ✅ | ✅ Arduino | Custom PIO board JSON |
+| atmega328p | L0–L7 (8 pass / 1 skip; L8 skipped) | ❌ | ✅ Arduino TWI | Nano: USART+PORT+Timer0/1/2+TWI+SPI on CPU; L6 on D9 OC1A, pad-proven 490 Hz phase-correct (D13 has no timer output) |
 | mkw41z4 | ❌ | ✅ | Zephyr system ready | Zephyr only today |
 
 Legend: ✅ in `validation/*-matrix/boards.yaml` · ❌ not yet · — blocked

@@ -1,74 +1,57 @@
-# LabWired board validation manifest — the source of truth for what is actually
-# validated, and against which silicon, on what date.
+# LabWired board validation manifest — the source of truth for recorded
+# validation evidence, the source it covers, and its date.
 #
 # WHY THIS FILE EXISTS
-#   The board docs (docs/boards/*.md) used to be hand-written and drifted out of
-#   sync with the models and tests (some claimed less than was true, some more).
-#   This manifest is the machine-checkable record. `scripts/generate_validation_status.py`
-#   renders docs/boards/VALIDATION_STATUS.md from it on every CI run and fails the
-#   build if (a) the generated doc is stale, or (b) a peripheral model changed
-#   since the board's last silicon capture without an explicit drift_ack.
+#   scripts/generate_validation_status.py renders docs/boards/VALIDATION_STATUS.md.
+#   CI enforces a current generated report, complete source watch lists, valid
+#   capture metadata, and full git history. Source-only differences from saved
+#   captures are informational; no human source-review ACK or renewal is needed
+#   to commit, push, or pass CI.
 #
-# THE HONESTY RULE
-#   CI runners have no hardware, so the only thing CI can re-prove each run is the
-#   OFFLINE oracle suite (sim vs the silicon values frozen into the test sources).
-#   A `silicon.last_capture` is a HUMAN ASSERTION that a live `--ignored` diff was
-#   run on that date with that result. When you re-run a live diff (board plugged
-#   in, `--features hw-oracle-* -- --ignored`), update last_capture + result here.
+# CAPTURE EVIDENCE
+#   CI runners have no hardware. Their offline oracle suites compare simulations
+#   with silicon values saved in test sources; they do not perform a new capture.
+#   A silicon record describes an actual physical live diff and its result.
+#   Only after a new live run (board plugged in,
+#   `--features hw-oracle-* -- --ignored`) update silicon.last_capture, result,
+#   and silicon.models_digest to the source used for that capture.
 #
-# DRIFT
-#   `models` lists the source paths whose change can invalidate the capture. The
-#   generator hashes their CONTENT into a digest. If that digest differs from
-#   `silicon.models_digest` — the digest recorded when the capture was taken —
-#   the board has DRIFTED, and its "silicon-verified" claim is stale until
-#   re-captured. `drift_ack_digest` names the exact content a human looked at and
-#   accepted ("yes, the model changed, re-capture is tracked"), with `drift_ack`
-#   recording when; that keeps CI green. Any later model change moves the digest
-#   and re-fails the gate. No silent decay.
+# SOURCE/CAPTURE STATUS (informational)
+#   `models` lists paths whose content can invalidate a captured source match.
+#   The generator hashes watched paths and bytes and compares that digest with
+#   `silicon.models_digest`, recorded with the physical capture. A matching
+#   digest establishes only that source match; the recorded result and tier
+#   still define the scope of the historical hardware evidence.
 #
-#   AN ACK LAPSES. `drift_ack` covers a drifted board for 30 days
-#   (ACK_TTL_DAYS in the generator), after which `--drift` fails again. The
-#   digest rule made acks precise and, in doing so, permanent: while the models
-#   held still, an ack from any date kept a board green forever, and every acked
-#   board here read "re-capture pending" with nothing making the pending part
-#   come due. An ack is a promise to re-capture; a promise with no date is a
-#   waiver.
+#   A changed digest is reported as changed source. A capture without a saved
+#   digest is reported as source match unverified. Neither blocks source
+#   integration, and neither supports a claim of current silicon validation.
+#   A new physical capture is needed before making that current hardware claim.
+#   Simulation tests and their automated gates remain separate evidence.
 #
-#   When it lapses you have three honest moves, in order of preference:
-#     1. re-capture (bump silicon.last_capture + silicon.models_digest),
-#     2. renew the ack (new drift_ack date, then --write-ack-digests),
-#     3. set `drift_ack_expires: YYYY-MM-DD` with a note saying why a
-#        re-capture is blocked (no probe, board on order). An explicit later
-#        date is reviewable. Widening ACK_TTL_DAYS to clear a red gate is not —
-#        it silences every board at once.
+#   Commit dates cannot establish a match: rebase/squash can re-date identical
+#   content, while same-day or uncommitted edits can change content immediately.
+#   The generated document is calendar-stable.
 #
-#   The expiry never appears in a VERDICT in the generated doc, only as the
-#   `expires` date in the status column. A doc that changed with the calendar
-#   would go stale on a day nobody committed, which is the #834 defect.
+#   Legacy `drift_ack`, `drift_ack_digest` and `drift_ack_expires` fields and
+#   dated comments below remain historical source-review metadata. They are
+#   optional and have no effect on capture freshness or CI verdicts. No ACK
+#   expiry or source-review renewal gate remains. The legacy explicit
+#   `--write-ack-digests` flags only maintain that optional metadata; normal
+#   generation and CI never stamp ACKs or physical capture evidence.
 #
-#   Print the current digests with:
+#   Inspect the current and recorded digests with:
 #     python3 scripts/generate_validation_status.py --digests
-#
-#   WHY CONTENT AND NOT DATES. This gate used to compare the newest git committer
-#   date across `models` against last_capture. Squash-merging rewrites those
-#   dates to the merge commit's, so a PR could pass pr-gate under a covering ack
-#   and then red main on byte-identical content, poisoning every branch cut
-#   afterwards (#834). The merge commit does not exist at review time, so the
-#   author was being gated on a value they could not see. A digest is the same
-#   before and after a squash, and you can compute it locally.
-#
-#   Boards captured before digests existed carry no `silicon.models_digest`. That
-#   is not treated as "fresh" — freshness it cannot prove is exactly the answer
-#   this gate must never give — so they read as drifted and their drift_ack_digest
-#   carries them until the next live re-capture records a digest.
+#   Check the report and source watches, with informational drift output:
+#     python3 scripts/generate_validation_status.py --check --drift
 #
 # DRIFT-WATCH COMPLETENESS (enforced)
-#   A drift gate is only as honest as its watch list, and an INCOMPLETE `models`
+#   Source provenance is only as complete as its watch list. An INCOMPLETE `models`
 #   list fails silently — the board just reads "fresh" forever. That is exactly
 #   what happened to esp32c3: its tier is a reset-state oracle asserted against
 #   the declarative descriptors in configs/peripherals/esp32c3/, and not one of
 #   those 29 files was listed, so the only files its silicon claim rests on were
-#   invisible to the gate. The generator now audits this: every `path:` a board's
+#   invisible to the report. The generator audits this: every `path:` a board's
 #   chip yaml wires must be covered by that board's `models`, and every listed
 #   path must exist. Add the path, don't drop the reference.
 #
@@ -465,7 +448,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 358a434cc84e49767bcafd0ae2953840c701e1095f069f5b77263dd96a08c767
+    drift_ack_digest: 219f135fe825720f1a2d73e667837512f1fb1f5cbbc2f46eacf747d7dcfc1106
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -683,7 +666,19 @@ boards:
     # decoded as no-op hints instead of loads into PC. Decoder and firmware
     # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
     # CAPTURE, and live re-capture remains pending.
-    drift_ack: 2026-11-07
+    # 2026-11-11: Owner acknowledged the exact GPIOTE first-edge correction
+    # in PR #1825: consume actual GPIO transitions after channel enable.
+    # Simulator qualification covers this digest; no new silicon capture ran.
+    # Live recapture: https://github.com/w1ne/labwired-core/issues/1827
+    # Default 30-day acknowledgement expires 2026-12-11.
+    drift_ack: 2026-11-11
+    # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
+    # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
+    # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
+    # magic ('M','u',0x01) is at 0x10; any other chip's BKPT in that
+    # immediate range still Halt, same as before. Shared interpreter
+    # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -1046,7 +1041,7 @@ boards:
     # 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
     # bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
     # out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: 358a434cc84e49767bcafd0ae2953840c701e1095f069f5b77263dd96a08c767
+    drift_ack_digest: 219f135fe825720f1a2d73e667837512f1fb1f5cbbc2f46eacf747d7dcfc1106
     # 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1264,7 +1259,19 @@ boards:
     # decoded as no-op hints instead of loads into PC. Decoder and firmware
     # regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
     # CAPTURE, and live re-capture remains pending.
-    drift_ack: 2026-11-07
+    # 2026-11-11: Owner acknowledged the exact GPIOTE first-edge correction
+    # in PR #1825: consume actual GPIO transitions after channel enable.
+    # Simulator qualification covers this digest; no new silicon capture ran.
+    # Live recapture: https://github.com/w1ne/labwired-core/issues/1827
+    # Default 30-day acknowledgement expires 2026-12-11.
+    drift_ack: 2026-11-11
+    # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
+    # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
+    # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
+    # magic ('M','u',0x01) is at 0x10; any other chip's BKPT in that
+    # immediate range still Halt, same as before. Shared interpreter
+    # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -1861,6 +1868,7 @@ boards:
     # `--test h563_conformance` (6/6) on this branch; no live re-capture.
     # This is an ACK, NOT A CAPTURE — a live re-capture is owed.
     models:
+      - crates/core/src/peripherals/esp_ledc_wave.rs
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/cpu/cortex_m/exec
       - crates/core/src/decoder/arm.rs
@@ -1871,6 +1879,7 @@ boards:
       - crates/core/src/peripherals/spi.rs
       - crates/core/src/peripherals/i2c.rs
       - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/timer_output.rs
       - crates/core/src/peripherals/gpdma.rs
       - crates/core/src/peripherals/adc.rs
       - crates/core/src/peripherals/rtc_v3.rs
@@ -2448,8 +2457,15 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
-    drift_ack_digest: 1cf8837b47ec1cbc8750a7d85e04f6a664821a64a6b6595d108933ec7a135f75
+    drift_ack: 2026-11-09
+    # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
+    # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
+    # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
+    # magic ('M','u',0x01) is at 0x10; any other chip's BKPT in that
+    # immediate range still Halt, same as before. Shared interpreter
+    # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
+    drift_ack_digest: cc3fa97b80b4984d9fd68c6e673fc73ea222f80abe4051c6e0aeefcd26d243c9
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -2689,8 +2705,9 @@ boards:
     # the live capture reads the clock-gated window as bus junk (0x0008fe10).
     # This acknowledges model drift, NOT a recapture.
     # Re-stamped 2026-11-08 (round 347) over both changes above after merging main.
-    drift_ack_digest: ed30d3aceb28d77159219fbdba22d2cb1e926aafbd16261cacbb4e46c254777b
+    drift_ack_digest: afcf8ea391f732b54fbedeea7e983b71a7ca9cc41a2c4000073c9ab7b0f93971
     models:
+      - crates/core/src/peripherals/esp_ledc_wave.rs
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
       - crates/core/src/peripherals/esp32c3
@@ -3554,7 +3571,19 @@ boards:
     # the real FreeRTOS routine runs so IDF5 tx_mux spinlocks are initialised.
     # Firmware-library thunk only: no peripheral register map, reset value
     # or captured reset-state window changes. ACK, NOT A CAPTURE.
-    drift_ack: 2026-11-06
+    # 2026-11-09 (#1757 classic TIMG alarms): watched peripherals/esp32/timg.rs
+    # (the shared TIMG model; the C3 uses it for RTCCALICFG calibration).
+    # Alarms are opt-in via `with_alarms`, enabled only by the classic
+    # esp32_timg factory at 0x3FF5_F000/0x3FF6_0000; the C3 factory in
+    # generic_factory.rs does not opt in. On the merged tree: lib timg 44/44,
+    # esp32c3_rtc_slow_calibration 1/1, esp32c3_reset_conformance 2/2.
+    # ACK, NOT A CAPTURE.
+    # 2026-11-10 (#1784 feat/esp32-deep-sleep): watched shared files moved
+    # (classic ESP32 RTC_CNTL timer-wake sleep + Machine deep-sleep reboot
+    # capture in lib.rs). The C3 factory does not use that classic sleep-reboot
+    # path; no C3 register map or captured reset-state window changes.
+    # ACK, NOT A CAPTURE.
+    drift_ack: 2026-11-10
 
   - id: nucleo-l476rg
     # 2026-11-05: reviewed G0 DMA extension in shared UART/DMA source. Strict
@@ -4070,6 +4099,7 @@ boards:
     # no live re-capture. This is an ACK, NOT A CAPTURE — a live re-capture
     # is owed.
     models:
+      - crates/core/src/peripherals/esp_ledc_wave.rs
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/cpu/cortex_m/exec
       - crates/core/src/decoder/arm.rs
@@ -4081,6 +4111,7 @@ boards:
       - crates/core/src/peripherals/i2c.rs
       - crates/core/src/peripherals/exti.rs
       - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/timer_output.rs
       - crates/core/src/peripherals/dma.rs
       - crates/core/src/peripherals/adc.rs
       - crates/core/src/peripherals/rtc_v3.rs
@@ -4663,8 +4694,15 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
-    drift_ack_digest: 522b4fc22955059d1baeb90ac01cce43945353e195371493fee02b9142c894bc
+    drift_ack: 2026-11-09
+    # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
+    # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
+    # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
+    # magic ('M','u',0x01) is at 0x10; any other chip's BKPT in that
+    # immediate range still Halt, same as before. Shared interpreter
+    # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
+    drift_ack_digest: ea61614e87455985b6f507bebc6ffbe3a2de2e18779514665742fac10a9c196d
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -5160,7 +5198,7 @@ boards:
     # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
     # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
     # does not use it. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: ea8cc4cf06aec2383febd72a9949a7ff5af2728d14514370b5e07e91853e7f54
+    drift_ack_digest: f299e2a4b0027fd78905a4ff867c82a8b9894abed6480c7cc12513115b61e6df
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -5196,6 +5234,7 @@ boards:
     # no live re-capture. This is an ACK, NOT A CAPTURE — a live re-capture
     # is owed.
     models:
+      - crates/core/src/peripherals/esp_ledc_wave.rs
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/cpu/cortex_m/exec
       - crates/core/src/decoder/arm.rs
@@ -5206,6 +5245,7 @@ boards:
       - crates/core/src/peripherals/spi.rs
       - crates/core/src/peripherals/i2c.rs
       - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/timer_output.rs
       - crates/core/src/peripherals/dma.rs
       - crates/core/src/peripherals/crc.rs
       - configs/chips/stm32l073.yaml
@@ -5716,7 +5756,14 @@ boards:
     #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
     #   OOM-killed on the authoring host, so the full --lib result is the PR's
     #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
+    drift_ack: 2026-11-09
+    # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
+    # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
+    # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
+    # magic ('M','u',0x01) is at 0x10; any other chip's BKPT in that
+    # immediate range still Halt, same as before. Shared interpreter
+    # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -6321,6 +6368,7 @@ boards:
     # no live re-capture. This is an ACK, NOT A CAPTURE — a live re-capture
     # is owed.
     models:
+      - crates/core/src/peripherals/esp_ledc_wave.rs
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/cpu/cortex_m/exec
       - crates/core/src/decoder/arm.rs
@@ -6333,6 +6381,7 @@ boards:
       - crates/core/src/peripherals/i2c.rs
       - crates/core/src/peripherals/exti.rs
       - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/timer_output.rs
       - crates/core/src/peripherals/dma.rs
       - crates/core/src/peripherals/adc.rs
       - crates/core/src/peripherals/bxcan.rs
@@ -6917,8 +6966,15 @@ boards:
     # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
     # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
     # SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
-    drift_ack_digest: 2ff8315cb06b1105dc0c52eb3b6cadc903c288459b32f36eb5fe6d1618f2c834
+    drift_ack: 2026-11-09
+    # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
+    # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
+    # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
+    # magic ('M','u',0x01) is at 0x10; any other chip's BKPT in that
+    # immediate range still Halt, same as before. Shared interpreter
+    # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
+    drift_ack_digest: 11ccb9e80e02ed99d39d7182ceffc87a835d7295705db9bb4e8c7edc21d98250
     # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
     # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
     # layouts. STM32 UART register maps, byte paths and IRQ timing are
@@ -7435,7 +7491,7 @@ boards:
     # gained a `stm32g0b1` layout (G0 map + HSI48ON 22 -> HSI48RDY 23, CCIPR2 @0x58),
     # selected only by configs/chips/stm32g0b1re.yaml. No other layout changed; this board
     # does not use it. ACK, NOT A SILICON CAPTURE.
-    drift_ack_digest: c48957351eac4ba820c510649ab09854c1e6e43a277e02f35d9113ae04d4d4a6
+    drift_ack_digest: e3f6c4c992fca162699f23acaa7a2a580b62936718e33e96e46e17a8aca402ae
     # 2026-09-18 (STM32U575 fidelity expansion, Task A: RCC completeness):
     # re-acked. `crates/core/src/peripherals/rcc.rs` gained the full U5
     # enable/reset block (AHB1/AHB2ENR1+2/AHB3/APB1ENR1+2/APB2/APB3 + the
@@ -7474,6 +7530,7 @@ boards:
     # no live re-capture. This is an ACK, NOT A CAPTURE — a live re-capture
     # is owed.
     models:
+      - crates/core/src/peripherals/esp_ledc_wave.rs
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/cpu/cortex_m/exec
       - crates/core/src/decoder/arm.rs
@@ -7484,6 +7541,7 @@ boards:
       - crates/core/src/peripherals/i2c.rs
       - crates/core/src/peripherals/spi.rs
       - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/timer_output.rs
       - crates/core/src/peripherals/dma.rs
       - configs/chips/stm32f407.yaml
 
@@ -7993,7 +8051,14 @@ boards:
     #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
     #   OOM-killed on the authoring host, so the full --lib result is the PR's
     #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
-    drift_ack: 2026-11-07
+    drift_ack: 2026-11-09
+    # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
+    # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
+    # arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
+    # magic ('M','u',0x01) is at 0x10; any other chip's BKPT in that
+    # immediate range still Halt, same as before. Shared interpreter
+    # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
+    # re-capture remains pending.
     # 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
     # adds a cold p0 (GPIO coprocessor) path, reached only when the chip
     # declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
@@ -8696,6 +8761,7 @@ boards:
     # value changed.
     # ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
     models:
+      - crates/core/src/peripherals/esp_ledc_wave.rs
       - crates/core/src/cpu/xtensa_lx7.rs
       - crates/core/src/cpu/xtensa_lx7/exec
       - crates/core/src/decoder/xtensa.rs
@@ -8905,8 +8971,28 @@ boards:
     # the real FreeRTOS routine runs so IDF5 tx_mux spinlocks are initialised.
     # Firmware-library thunk only: no peripheral register map, reset value
     # or captured reset-state window changes. ACK, NOT A CAPTURE.
-    drift_ack: 2026-11-06
-    drift_ack_digest: 688e14f97c4f031e6adceca987640b45b5f96d450292dd4c8ab7201429f55d38
+    # 2026-11-09 (#1780 fix/esp32c3-rom-boot-flash-size): watched
+    # spi_mem_flash.rs. Dedicated FLASH_PP/SE/BE now decode the 24-bit address
+    # and take the PP byte count from ADDR[31:24] (ESP-IDF HAL layout), so
+    # dedicated program/erase land in flash instead of past its end. Command
+    # semantics only: no register map, reset value or captured reset-state
+    # window changes. ACK, NOT A CAPTURE.
+    # 2026-11-09 (fix/xtensa-retw-64bit-return): watched exec/call_window.rs.
+    # Shadow-window RETW now keeps all of the callee's a2..a5 the caller can
+    # see (was a2 only), so a 64-bit return survives a wrapped call chain.
+    # CPU window bookkeeping only (S3 ROM boot runs faithful_windows and never
+    # reaches it; fast boot shares it). No register map, reset value or
+    # captured reset-state window changes. ACK, NOT A CAPTURE.
+    # 2026-11-10 (#1784 feat/esp32-deep-sleep): shared lib.rs / rtc_cntl.rs
+    # moved for classic ESP32 timer-wake deep/light sleep. S3 UART0 remains
+    # outside the nine captured reset-state windows; no S3 register map or
+    # reset-value change. ACK, NOT A CAPTURE.
+    # 2026-11-10 (#1759 feat/esp32-nvs-flash): watched SPI / spi_mem_flash
+    # models gained program/erase + WEL behaviour so stock Preferences/NVS
+    # keeps its writes. This is not an S3 reset-state recapture; the nine
+    # captured S3 windows are unchanged. ACK, NOT A CAPTURE.
+    drift_ack: 2026-11-10
+    drift_ack_digest: 8e49d6b37a9866225e56f0d77d4119d43db516eb2aa5383290383fbb0915aa50
 
   - id: esp32s3-zero
     # Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.
@@ -8924,6 +9010,7 @@ boards:
       - "firmware_survival::test_esp32s3_zero_tier1_survival (Tier-1 fixture fast-boot; TIER1 class PASS lines + terminator)"
       - "session_builder_xtensa::esp32s3_fixture_prints_expected_uart_via_build_machine (same fixture via examples/esp32s3-zero/tier1-smoke.yaml)"
     models:
+      - crates/core/src/peripherals/esp_ledc_wave.rs
       - crates/core/src/cpu/xtensa_lx7.rs
       - crates/core/src/cpu/xtensa_lx7/exec
       - crates/core/src/decoder/xtensa.rs
@@ -8943,6 +9030,7 @@ boards:
     tier: smoke-manual
     note: "UART2 'smoke pass' is a manual runbook (examples/nucleo-f401re/VALIDATION.md) + a CI build step — no automated UART assertion."
     models:
+      - crates/core/src/peripherals/esp_ledc_wave.rs
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
       - configs/chips/stm32f401.yaml
@@ -8966,6 +9054,7 @@ boards:
       - crates/core/src/peripherals/stub.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/timer_output.rs
       - crates/core/src/peripherals/uart.rs
 
   - id: stm32wba52
@@ -8974,6 +9063,7 @@ boards:
     tier: smoke-manual
     note: "LPUART1 'smoke pass' is a manual runbook only; no automated test anywhere. Cortex-M33 TrustZone/radio/crypto not modeled."
     models:
+      - crates/core/src/peripherals/esp_ledc_wave.rs
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
       - configs/chips/stm32wba52.yaml
@@ -8995,6 +9085,7 @@ boards:
       - crates/core/src/peripherals/stub.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/timer_output.rs
       - crates/core/src/peripherals/uart.rs
 
   - id: nrf52832
@@ -9292,6 +9383,11 @@ boards:
       # source was not on this watch list. No silicon capture is recorded for
       # this board, so no ack is implied.
       - crates/core/src/peripherals/nrf52/dppic.rs
+      # 2026-11-09, model_paths_drift_gate: nrf5340_clock_boot registers TWIM1
+      # (nrf52/twim.rs) for the BMI270 EasyDMA CHIP_ID read, and that source
+      # was not on this watch list. No silicon capture is recorded for this
+      # board, so no ack is implied.
+      - crates/core/src/peripherals/nrf52/twim.rs
 
   - id: stm32h735
     doc: docs/boards/stm32h735.md
@@ -9359,6 +9455,7 @@ boards:
     # nothing a silicon capture asserts moved. No live re-capture is evidenced here.
     drift_ack_digest: 5ae888384d697ee6e8e441261e6b4c048ff8e0ce4d17d2d62444fa6221ac3f7c
     models:
+      - crates/core/src/peripherals/esp_ledc_wave.rs
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
       - configs/chips/stm32h735.yaml
@@ -9368,6 +9465,7 @@ boards:
       - crates/core/src/peripherals/spi.rs
       - crates/core/src/peripherals/i2c.rs
       - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/timer_output.rs
       # 2026-09-22, model_paths_drift_gate: models this board REGISTERS that
       # its list omitted, so they were invisible to the drift digest. This
       # board records no silicon capture, so there is no "silicon-verified"
@@ -9399,6 +9497,7 @@ boards:
       - "stm32u575_60north_registers::u575_hash_* (SHA-1/MD5/SHA-224/SHA-256 register digest vectors)"
       - "arduino matrix L0-L8 (validation/arduino-matrix)"
     models:
+      - crates/core/src/peripherals/esp_ledc_wave.rs
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/bus/from_config.rs
       - crates/core/src/cpu/cortex_m/exec/load_store.rs
@@ -9414,6 +9513,7 @@ boards:
       - crates/core/src/peripherals/spi.rs
       - crates/core/src/peripherals/fdcan.rs
       - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/timer_output.rs
       - crates/core/src/peripherals/adc.rs
       - crates/core/src/peripherals/rtc_v3.rs
       - crates/core/src/peripherals/iwdg.rs
@@ -9440,6 +9540,7 @@ boards:
       - crates/core/src/peripherals/mod.rs
       - crates/core/src/peripheral.rs
       - crates/core/src/lib.rs
+      - crates/core/src/live_numeric.rs
       - crates/core/src/peripherals/generic_factory.rs
       - crates/core/src/peripherals/icache.rs
       - crates/core/src/peripherals/stm32u5_sysmem.rs
@@ -9457,6 +9558,7 @@ boards:
       - "stm32u5_exec_oracle::u5a5_pka_rejects_operand_widths_above_the_hardware_limit"
       - "stm32u5_reset_conformance"
     models:
+      - crates/core/src/peripherals/esp_ledc_wave.rs
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/bus/from_config.rs
       - crates/core/src/cpu/cortex_m/exec/load_store.rs
@@ -9472,6 +9574,7 @@ boards:
       - crates/core/src/peripherals/spi.rs
       - crates/core/src/peripherals/fdcan.rs
       - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/timer_output.rs
       - crates/core/src/peripherals/adc.rs
       - crates/core/src/peripherals/rtc_v3.rs
       - crates/core/src/peripherals/iwdg.rs
@@ -9490,6 +9593,7 @@ boards:
       - crates/core/src/peripherals/mod.rs
       - crates/core/src/peripheral.rs
       - crates/core/src/lib.rs
+      - crates/core/src/live_numeric.rs
       - crates/core/src/peripherals/generic_factory.rs
       - crates/core/src/peripherals/icache.rs
       - configs/chips/stm32u5a5zj.yaml
@@ -9509,6 +9613,7 @@ boards:
       - "firmware_survival test_stm32u545_blinky_survival"
       - "arduino matrix L0-L8 (validation/arduino-matrix)"
     models:
+      - crates/core/src/peripherals/esp_ledc_wave.rs
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/bus/from_config.rs
       - crates/core/src/cpu/cortex_m/exec/load_store.rs
@@ -9524,6 +9629,7 @@ boards:
       - crates/core/src/peripherals/spi.rs
       - crates/core/src/peripherals/fdcan.rs
       - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/timer_output.rs
       - crates/core/src/peripherals/adc.rs
       - crates/core/src/peripherals/rtc_v3.rs
       - crates/core/src/peripherals/iwdg.rs
@@ -9538,6 +9644,7 @@ boards:
       - crates/core/src/peripherals/mod.rs
       - crates/core/src/peripheral.rs
       - crates/core/src/lib.rs
+      - crates/core/src/live_numeric.rs
       - crates/core/src/peripherals/generic_factory.rs
       - crates/core/src/peripherals/icache.rs
       - crates/core/src/peripherals/stm32u5_sysmem.rs
@@ -9623,6 +9730,7 @@ boards:
     # nothing a silicon capture asserts moved. No live re-capture is evidenced here.
     drift_ack_digest: af64d0e01a52f7bb1918900bb1df3ef2085b1e35afc76b7250ac1ad713e4aec9
     models:
+      - crates/core/src/peripherals/esp_ledc_wave.rs
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
       - configs/chips/stm32f411ceu6.yaml
@@ -9632,6 +9740,7 @@ boards:
       - crates/core/src/peripherals/spi.rs
       - crates/core/src/peripherals/i2c.rs
       - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/timer_output.rs
       - crates/core/src/peripherals/adc.rs
       # 2026-09-21, model_paths_drift_gate: models this board REGISTERS that
       # its list omitted, so they were invisible to the drift digest. This
@@ -9684,6 +9793,7 @@ boards:
     tier: structural
     note: "Original ESP32 (dual-core Xtensa LX6). Exercised via the tier-1 fast-boot fixture (tests/fixtures/tier1/esp32.elf) and a dedicated PR-run gate firmware_survival::test_esp32_tier1_survival (classes PASS with the documented dma gap esp32-no-mem2mem-dma, then `TIER1 done`). No silicon bench."
     models:
+      - crates/core/src/peripherals/esp_ledc_wave.rs
       - crates/core/src/cpu/xtensa_lx7.rs
       - crates/core/src/decoder/xtensa.rs
       - configs/chips/esp32.yaml
@@ -9699,6 +9809,13 @@ boards:
       # 2026-11-08: the PCNT pulse counter (was a round-trip stub), inputs from
       # the GPIO input matrix. No silicon capture on this board.
       - crates/core/src/peripherals/esp32/pcnt.rs
+      # 2026-11-10: classic RMT TX → GPIO (was a system_stub). This board
+      # records no silicon capture, so there is no silicon-verified claim
+      # for the digest to invalidate — no ack is implied.
+      - crates/core/src/peripherals/esp32/rmt.rs
+      # 2026-11-09: RTC_CNTL light/deep sleep on the RTC timer (deep sleep
+      # reboots the app with RTC memory kept). No silicon capture on this board.
+      - crates/core/src/peripherals/esp32/rtc_cntl.rs
       - crates/core/src/peripherals/esp32/sar_adc.rs
       - crates/core/src/peripherals/esp32/sdio_stub.rs
       - crates/core/src/peripherals/esp32/sha.rs
@@ -9712,6 +9829,7 @@ boards:
       - crates/core/src/peripherals/esp_rtc_io.rs
       - crates/core/src/peripherals/stub.rs
       - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/timer_output.rs
       - crates/core/src/peripherals/uart.rs
 
   - id: mkw41z4
@@ -9803,6 +9921,7 @@ boards:
       - "firmware_survival::test_stm32f405_tier1_survival (Tier-1 fixture fast-boot; class PASS lines + terminator)"
       - "examples/feather-f405/tier1-smoke.yaml (same fixture via the CLI smoke lane)"
     models:
+      - crates/core/src/peripherals/esp_ledc_wave.rs
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
       - configs/chips/stm32f405.yaml
@@ -9826,6 +9945,7 @@ boards:
       - crates/core/src/peripherals/stub.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/timer_output.rs
       - crates/core/src/peripherals/uart.rs
 
   - id: stm32f767
@@ -9837,6 +9957,7 @@ boards:
       - "firmware_survival::test_stm32f767_tier1_survival (Tier-1 fixture fast-boot; class PASS lines + terminator)"
       - "examples/nucleo-f767zi/tier1-smoke.yaml (same fixture via the CLI smoke lane)"
     models:
+      - crates/core/src/peripherals/esp_ledc_wave.rs
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
       - configs/chips/stm32f767.yaml
@@ -9859,6 +9980,7 @@ boards:
       - crates/core/src/peripherals/stub.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/timer_output.rs
       - crates/core/src/peripherals/uart.rs
 
   - id: stm32f401cdu6
@@ -9870,6 +9992,7 @@ boards:
       - "firmware_survival::test_stm32f401cdu6_demo_survival (USART2 `OK` marker)"
       - "examples/stm32f401cdu6/uart-smoke.yaml (CLI smoke lane)"
     models:
+      - crates/core/src/peripherals/esp_ledc_wave.rs
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
       - configs/chips/stm32f401cdu6.yaml
@@ -9889,6 +10012,7 @@ boards:
       - crates/core/src/peripherals/stub.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/timer_output.rs
       - crates/core/src/peripherals/uart.rs
 
   - id: atsamd21g18a
@@ -9956,6 +10080,7 @@ boards:
     offline_tests:
       - "firmware_survival::stm32g474_zephyr"
     models:
+      - crates/core/src/peripherals/esp_ledc_wave.rs
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
       - configs/chips/stm32g474re.yaml
@@ -9978,6 +10103,7 @@ boards:
       - crates/core/src/peripherals/stub.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/timer_output.rs
       - crates/core/src/peripherals/uart.rs
 
   - id: stm32g431rb
@@ -9986,6 +10112,7 @@ boards:
     tier: structural
     note: "STM32G431RB (Cortex-M4F, RM0440; NUCLEO-G431RB). Shares the RM0440 peripheral map with stm32g474re at the G431 geometry (128 KiB flash, 22 KiB SRAM + 10 KiB CCM). Exercised by the tier-1 fast-boot fixture (tests/fixtures/tier1/stm32g431rb.elf) via examples/stm32g431rb/{tier1-smoke,io-smoke}.yaml. No G431 silicon bench."
     models:
+      - crates/core/src/peripherals/esp_ledc_wave.rs
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
       - configs/chips/stm32g431rb.yaml
@@ -10004,6 +10131,7 @@ boards:
       - crates/core/src/peripherals/stub.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/timer_output.rs
       - crates/core/src/peripherals/uart.rs
 
   - id: stm32wb55
@@ -10014,6 +10142,7 @@ boards:
     offline_tests:
       - "firmware_survival::stm32wb55_zephyr"
     models:
+      - crates/core/src/peripherals/esp_ledc_wave.rs
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
       - configs/chips/stm32wb55.yaml
@@ -10037,6 +10166,7 @@ boards:
       - crates/core/src/peripherals/stub.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/timer_output.rs
       - crates/core/src/peripherals/uart.rs
 
   - id: ci-fixture-riscv
@@ -10091,6 +10221,7 @@ boards:
     offline_tests:
       - "firmware_survival::test_atsamd51_metro_m4_smoke_survival"
     models:
+      - crates/core/src/peripherals/esp_ledc_wave.rs
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/gpio.rs
@@ -10199,6 +10330,7 @@ boards:
       - "firmware_survival::test_nucleo_g071rb_smoke_survival"
       - "board_config_gates::stm32g071_from_config_builds"
     models:
+      - crates/core/src/peripherals/esp_ledc_wave.rs
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/gpio.rs
@@ -10228,6 +10360,7 @@ boards:
       - crates/core/src/peripherals/stub.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/timer_output.rs
       - crates/core/src/peripherals/wwdg.rs
   - id: esp32c6-devkitc
     doc: docs/boards/esp32c6-devkitc.md
@@ -10238,6 +10371,7 @@ boards:
       - "firmware_survival::test_esp32c6_demo_survival"
       - "svd_conformance::chip_configs_match_their_svd (configs/chips/esp32c6.yaml vs tests/fixtures/real_world/esp32c6.svd)"
     models:
+      - crates/core/src/peripherals/esp_ledc_wave.rs
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
       - crates/core/src/peripherals/esp_uart.rs
@@ -10358,6 +10492,7 @@ boards:
       - "firmware_survival::test_nucleo_l552ze_q_smoke_survival"
       - "firmware_survival::test_stm32l552_zephyr_survival (stock Zephyr hello)"
     models:
+      - crates/core/src/peripherals/esp_ledc_wave.rs
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/rcc.rs
@@ -10368,6 +10503,7 @@ boards:
       - crates/core/src/peripherals/spi.rs
       - crates/core/src/peripherals/i2c.rs
       - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/timer_output.rs
       - crates/core/src/peripherals/dma.rs
       - crates/core/src/peripherals/dmamux.rs
       - crates/core/src/peripherals/rng.rs
@@ -10534,6 +10670,7 @@ boards:
       - "ra6m5_agt_icu (AGT0 compare match A through ICU IELSR84)"
       - "ra6m5_sci_icu (SCI0 RXI/TXI/TEI through ICU IELSR0-2, SSR_FIFO)"
     models:
+      - crates/core/src/peripherals/esp_ledc_wave.rs
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/gpio.rs
@@ -10596,6 +10733,7 @@ boards:
       - "ra8m1_agt_icu (AGT0 compare match A through ICU IELSR84)"
       - "ra8m1_sci_icu (SCI9 RXI/TXI/TEI through ICU IELSR24-26)"
     models:
+      - crates/core/src/peripherals/esp_ledc_wave.rs
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/gpio.rs
@@ -10836,6 +10974,7 @@ boards:
     offline_tests:
       - "firmware_survival::test_stm32f072b_disco_smoke_survival"
     models:
+      - crates/core/src/peripherals/esp_ledc_wave.rs
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/rcc.rs
@@ -10844,6 +10983,7 @@ boards:
       - crates/core/src/peripherals/spi.rs
       - crates/core/src/peripherals/i2c.rs
       - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/timer_output.rs
       - crates/core/src/peripherals/adc.rs
       - crates/core/src/peripherals/dac.rs
       - crates/core/src/peripherals/bxcan.rs
@@ -11067,3 +11207,91 @@ boards:
       - crates/firmware-curiosity-pic32mz-nuttx
       - configs/chips/pic32mz2048efm144.yaml
       - configs/systems/curiosity-pic32mz-ef.yaml
+
+  # Narrow onboarding profiles retain explicit scope and independent core execution gates.
+  - id: esp32-devkitc-32e-gpio-smoke
+    doc: docs/boards/esp32.md
+    chip: configs/chips/esp32-devkitc-32e-gpio-smoke.yaml
+    tier: structural
+    note: Narrow classic ESP32 onboarding profile. The PR-run Tier-1 fixture asserts TIER1 done; the exact-profile execution oracle pins the core timer/vector/RAM witness with a disarmed-timer negative control. GPIO23, UART0 and I2C0 remain the documented profile scope. No silicon timing or full-board coverage is claimed.
+    offline_tests:
+      - firmware_survival::test_esp32_devkitc_32e_gpio_smoke_tier1_survival
+      - esp32_onboarding_exec_oracle::devkitc_gpio_profile_core_timer_exec_oracle
+    models:
+      - crates/core/src/peripherals/esp_ledc_wave.rs
+      - crates/core/src/cpu/xtensa_lx7.rs
+      - crates/core/src/decoder/xtensa.rs
+      - configs/chips/esp32-devkitc-32e-gpio-smoke.yaml
+      - crates/core/src/peripherals/esp32/efuse.rs
+      - crates/core/src/peripherals/esp32/gpio.rs
+      - crates/core/src/peripherals/esp32/rmt.rs
+      - crates/core/src/peripherals/esp32/i2c.rs
+      - crates/core/src/peripherals/esp32/ledc.rs
+      - crates/core/src/peripherals/esp32/mcpwm.rs
+      - crates/core/src/peripherals/esp32/pcnt.rs
+      - crates/core/src/peripherals/esp32/rtc_cntl.rs
+      - crates/core/src/peripherals/esp32/sar_adc.rs
+      - crates/core/src/peripherals/esp32/sdio_stub.rs
+      - crates/core/src/peripherals/esp32/sha.rs
+      - crates/core/src/peripherals/esp32/spi.rs
+      - crates/core/src/peripherals/esp32/syscon.rs
+      - crates/core/src/peripherals/esp32/timg.rs
+      - crates/core/src/peripherals/esp32/twai.rs
+      - crates/core/src/peripherals/esp32/uart.rs
+      - crates/core/src/peripherals/esp_rtc_io.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/timer_output.rs
+      - crates/core/src/peripherals/uart.rs
+  - id: esp32-devkitc-32e-uart1
+    doc: docs/boards/esp32.md
+    chip: configs/chips/esp32-devkitc-32e-uart1.yaml
+    tier: structural
+    note: Narrow classic ESP32 UART1 TX profile. The exact-profile execution oracle pins the core timer/vector/RAM witness with a disarmed-timer negative control. The UART1/GPIO16 smoke has recorded simulator evidence but no dedicated required UART1 firmware lane. No silicon or full-board coverage is claimed.
+    offline_tests:
+      - esp32_onboarding_exec_oracle::devkitc_uart1_profile_core_timer_exec_oracle
+    models:
+      - crates/core/src/peripherals/esp_ledc_wave.rs
+      - crates/core/src/cpu/xtensa_lx7.rs
+      - crates/core/src/decoder/xtensa.rs
+      - configs/chips/esp32-devkitc-32e-uart1.yaml
+      - crates/core/src/peripherals/esp32/efuse.rs
+      - crates/core/src/peripherals/esp32/gpio.rs
+      - crates/core/src/peripherals/esp32/rmt.rs
+      - crates/core/src/peripherals/esp32/i2c.rs
+      - crates/core/src/peripherals/esp32/ledc.rs
+      - crates/core/src/peripherals/esp32/mcpwm.rs
+      - crates/core/src/peripherals/esp32/pcnt.rs
+      - crates/core/src/peripherals/esp32/rtc_cntl.rs
+      - crates/core/src/peripherals/esp32/sar_adc.rs
+      - crates/core/src/peripherals/esp32/sdio_stub.rs
+      - crates/core/src/peripherals/esp32/sha.rs
+      - crates/core/src/peripherals/esp32/spi.rs
+      - crates/core/src/peripherals/esp32/syscon.rs
+      - crates/core/src/peripherals/esp32/timg.rs
+      - crates/core/src/peripherals/esp32/twai.rs
+      - crates/core/src/peripherals/esp32/uart.rs
+      - crates/core/src/peripherals/esp_rtc_io.rs
+      - crates/core/src/peripherals/stub.rs
+      - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/timer_output.rs
+      - crates/core/src/peripherals/uart.rs
+  - id: nucleo-f103rb-bme280
+    doc: docs/boards/nucleo-f103rb.md
+    chip: configs/chips/stm32f103rb-nucleo-bme280-smoke.yaml
+    tier: structural
+    note: Narrow STM32F103RB profile with USART2, LD2/PA5 and I2C1 on PB8/PB9. The exact-profile SysTick execution differential compares every instruction boundary with the legacy walk and requires repeated ISR and main-loop progress. The BME280 smoke has recorded simulator evidence but no dedicated required sensor firmware lane. No silicon timing or full-board coverage is claimed.
+    offline_tests:
+      - systick_walk_differential::nucleo_bme280_profile_systick_irq_is_byte_identical
+    models:
+      - configs/chips/stm32f103rb-nucleo-bme280-smoke.yaml
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/cpu/cortex_m/exec
+      - crates/core/src/decoder/arm.rs
+      - crates/core/src/decoder/arm_thumb32.rs
+      - crates/core/src/peripherals/rcc.rs
+      - crates/core/src/peripherals/afio.rs
+      - crates/core/src/peripherals/gpio.rs
+      - crates/core/src/peripherals/uart.rs
+      - crates/core/src/peripherals/i2c.rs
+      - crates/core/src/peripherals/systick.rs

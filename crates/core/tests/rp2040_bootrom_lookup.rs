@@ -72,11 +72,16 @@ const CODES: &[(u32, u32, &str)] = &[
     (0x3443, 0x49, "C4 memcpy44"),
     (0x4649, 0x35, "IF connect_internal_flash"),
     (0x5845, 0x35, "EX flash_exit_xip"),
+    (0x4552, 0x0113, "RE flash_range_erase"),
+    (0x5052, 0x012b, "RP flash_range_program"),
     (0x4346, 0x35, "FC flash_flush_cache"),
     (0x5843, 0x35, "CX flash_enter_cmd_xip"),
     (0x4255, 0x31, "UB reset_usb_boot"),
     (0x5657, 0x31, "WV wait_for_vector"),
-    (0x3350, 0x00, "P3 popcount32 (not in the minimal table)"),
+    (0x3350, 0x00bd, "P3 popcount32"),
+    (0x3352, 0x00d3, "R3 reverse32"),
+    (0x334c, 0x00e7, "L3 clz32"),
+    (0x3354, 0x00fb, "T3 ctz32"),
     (0x5a5a, 0x00, "ZZ unknown"),
 ];
 
@@ -235,6 +240,28 @@ fn unset_env_embeds_bootrom_and_lookup_returns_table_pointers() {
         let got = run_lookup(&mut machine, code);
         assert_eq!(got, expect, "{name} (code {code:#06x})");
     }
+    assert_eq!(machine.bus.read_u8(0x13).unwrap(), 3, "ROM version is V3");
+    let dt = u32::from(machine.bus.read_u16(0x16).unwrap());
+    let mut off = dt;
+    let (mut sf, mut sd) = (0u32, 0u32);
+    loop {
+        let code = u32::from(machine.bus.read_u16(u64::from(off)).unwrap());
+        let ptr = u32::from(machine.bus.read_u16(u64::from(off + 2)).unwrap());
+        if code == 0 {
+            break;
+        }
+        if code == 0x4653 {
+            sf = ptr;
+        }
+        if code == 0x4453 {
+            sd = ptr;
+        }
+        off += 4;
+    }
+    assert_ne!(sf, 0, "SF data table");
+    assert_ne!(sd, 0, "SD data table");
+    assert_eq!(machine.bus.read_u8(u64::from(sf - 2)).unwrap(), 32);
+    assert_eq!(machine.bus.read_u8(u64::from(sd - 2)).unwrap(), 32);
     let cfsr = machine.bus.read_u32(0xE000_ED28).unwrap_or(0);
     assert_eq!(
         cfsr, 0,
@@ -311,4 +338,189 @@ fn empty_bootrom_env_keeps_the_flash_alias() {
         "an empty LABWIRED_RP2040_BOOTROM must drop the base-0 window"
     );
     assert_eq!(machine.bus.read_u16(0x18).unwrap(), 0x2100);
+}
+
+fn run_rom_fn(machine: &mut Machine<CortexM>, thumb: u32) {
+    machine.cpu.set_pc(thumb & !1);
+    machine.cpu.set_sp(STACK);
+    machine.cpu.lr = SENTINEL | 1;
+    for step in 0..4_000 {
+        if machine.cpu.get_pc() == SENTINEL {
+            return;
+        }
+        machine.step().unwrap_or_else(|e| {
+            panic!(
+                "rom fn step {step} failed: {e:?} (pc {:#x})",
+                machine.cpu.get_pc()
+            )
+        });
+    }
+    panic!("rom fn did not return (pc {:#x})", machine.cpu.get_pc());
+}
+
+/// Bit-counting helpers and the V3 SF/SD tables, invoked the way pico-sdk
+/// does: `rom_func_lookup` then `blx`. HLE traps are the `bkpt` stubs.
+#[test]
+fn bitops_and_softfloat_tables_match_the_datasheet() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let (chip, manifest) = load_pico();
+    let mut machine = machine_from(&chip, &manifest);
+
+    let lookup = |m: &mut Machine<CortexM>, code: u32| -> u32 {
+        plant_lookup(m);
+        run_lookup(m, code)
+    };
+
+    let p3 = lookup(&mut machine, 0x3350);
+    machine.cpu.r0 = 0b1010_1100;
+    run_rom_fn(&mut machine, p3);
+    assert_eq!(machine.cpu.r0, 4, "popcount32");
+
+    let r3 = lookup(&mut machine, 0x3352);
+    machine.cpu.r0 = 0x8000_0001;
+    run_rom_fn(&mut machine, r3);
+    assert_eq!(machine.cpu.r0, 0x8000_0001u32.reverse_bits());
+
+    let l3 = lookup(&mut machine, 0x334c);
+    machine.cpu.r0 = 0;
+    run_rom_fn(&mut machine, l3);
+    assert_eq!(machine.cpu.r0, 32, "clz32(0)");
+    machine.cpu.r0 = 1 << 15;
+    run_rom_fn(&mut machine, l3);
+    assert_eq!(machine.cpu.r0, 16, "clz32");
+
+    let t3 = lookup(&mut machine, 0x3354);
+    machine.cpu.r0 = 0;
+    run_rom_fn(&mut machine, t3);
+    assert_eq!(machine.cpu.r0, 32, "ctz32(0)");
+    machine.cpu.r0 = 1 << 7;
+    run_rom_fn(&mut machine, t3);
+    assert_eq!(machine.cpu.r0, 7, "ctz32");
+
+    // Data-table lookup of 'SF', then the _fadd slot at offset 0.
+    plant_lookup(&mut machine);
+    machine.cpu.set_pc(LOOKUP_ADDR);
+    machine.cpu.set_sp(STACK);
+    machine.cpu.lr = SENTINEL | 1;
+    machine.cpu.r0 = 0x4653; // 'S','F'
+                             // rom_data_lookup is the same helper with the data-table pointer:
+                             // the snippet at LOOKUP_ADDR loads the *function* table from 0x14.
+                             // Call table_lookup directly with r0 = data table, r1 = 'SF'.
+    let dt = u32::from(machine.bus.read_u16(0x16).unwrap());
+    machine.cpu.set_pc(0x1c);
+    machine.cpu.r0 = dt;
+    machine.cpu.r1 = 0x4653;
+    run_rom_fn(&mut machine, 0x1d);
+    let sf = machine.cpu.r0;
+    assert_ne!(sf, 0);
+    let fadd = machine.bus.read_u32(u64::from(sf)).unwrap();
+    machine.cpu.r0 = 1.5f32.to_bits();
+    machine.cpu.r1 = 2.25f32.to_bits();
+    run_rom_fn(&mut machine, fadd);
+    assert_eq!(f32::from_bits(machine.cpu.r0), 3.75);
+
+    machine.cpu.set_pc(0x1c);
+    machine.cpu.lr = SENTINEL | 1;
+    machine.cpu.r0 = dt;
+    machine.cpu.r1 = 0x4453; // 'S','D'
+    run_rom_fn(&mut machine, 0x1d);
+    let sd = machine.cpu.r0;
+    let dadd = machine.bus.read_u32(u64::from(sd)).unwrap();
+    let a = 0.1f64.to_bits();
+    let b = 0.2f64.to_bits();
+    machine.cpu.r0 = a as u32;
+    machine.cpu.r1 = (a >> 32) as u32;
+    machine.cpu.r2 = b as u32;
+    machine.cpu.r3 = (b >> 32) as u32;
+    run_rom_fn(&mut machine, dadd);
+    let out = u64::from(machine.cpu.r0) | (u64::from(machine.cpu.r1) << 32);
+    assert_eq!(f64::from_bits(out), 0.1 + 0.2);
+
+    // Datasheet 2.8.3.2.1: float2fix(0.5, 16) == 0x8000.
+    let float2fix = machine.bus.read_u32(u64::from(sf + 0x20)).unwrap();
+    machine.cpu.r0 = 0.5f32.to_bits();
+    machine.cpu.r1 = 16;
+    run_rom_fn(&mut machine, float2fix);
+    assert_eq!(machine.cpu.r0, 0x8000);
+}
+
+/// Datasheet 2.8.3: `RE` fills the mapped XIP window with 0xFF; `RP` programs
+/// by bitwise-AND (NOR flash can only clear bits). The address is the flash
+/// offset, not the 0x10000000 window address.
+#[test]
+fn flash_range_erase_and_program_the_xip_window() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let (chip, manifest) = load_pico();
+    let mut machine = machine_from(&chip, &manifest);
+    plant_lookup(&mut machine);
+
+    const OFF: u32 = 0x400;
+    const XIP: u32 = 0x1000_0000;
+    const N: usize = 16;
+    const SRC: u32 = 0x2000_3000;
+
+    write_bytes(&mut machine.bus, XIP + OFF - 1, &[0xA5]);
+    write_bytes(&mut machine.bus, XIP + OFF, &[0x11; N]);
+    write_bytes(&mut machine.bus, XIP + OFF + N as u32, &[0x5A]);
+
+    let re = run_lookup(&mut machine, 0x4552);
+    assert_eq!(re, 0x0113, "RE pointer");
+    machine.cpu.r0 = OFF;
+    machine.cpu.r1 = N as u32;
+    machine.cpu.r2 = 0x1000;
+    machine.cpu.r3 = 0x20;
+    run_rom_fn(&mut machine, re);
+    for i in 0..N {
+        assert_eq!(
+            machine
+                .bus
+                .read_u8(u64::from(XIP + OFF) + i as u64)
+                .unwrap(),
+            0xFF,
+            "erased {i}"
+        );
+    }
+    assert_eq!(machine.bus.read_u8(u64::from(XIP + OFF - 1)).unwrap(), 0xA5);
+    assert_eq!(
+        machine
+            .bus
+            .read_u8(u64::from(XIP + OFF) + N as u64)
+            .unwrap(),
+        0x5A
+    );
+
+    write_bytes(&mut machine.bus, SRC, &[0x0F; N]);
+    let rp = run_lookup(&mut machine, 0x5052);
+    assert_eq!(rp, 0x012b, "RP pointer");
+    machine.cpu.r0 = OFF;
+    machine.cpu.r1 = SRC;
+    machine.cpu.r2 = N as u32;
+    run_rom_fn(&mut machine, rp);
+    for i in 0..N {
+        assert_eq!(
+            machine
+                .bus
+                .read_u8(u64::from(XIP + OFF) + i as u64)
+                .unwrap(),
+            0x0F,
+            "programmed {i}"
+        );
+    }
+
+    write_bytes(&mut machine.bus, SRC, &[0xF0; N]);
+    machine.cpu.r0 = OFF;
+    machine.cpu.r1 = SRC;
+    machine.cpu.r2 = N as u32;
+    run_rom_fn(&mut machine, rp);
+    for i in 0..N {
+        assert_eq!(
+            machine
+                .bus
+                .read_u8(u64::from(XIP + OFF) + i as u64)
+                .unwrap(),
+            0x00,
+            "AND {i}"
+        );
+    }
+    assert_eq!(machine.bus.read_u8(u64::from(XIP + OFF - 1)).unwrap(), 0xA5);
 }

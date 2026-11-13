@@ -547,6 +547,31 @@ impl Solver {
             .position(|s| s.name.to_ascii_lowercase() == key)
     }
 
+    /// Index of the named resistor, for routed resistance inputs.
+    pub fn resistor_index(&self, name: &str) -> Option<usize> {
+        let key = name.trim().to_ascii_lowercase();
+        self.circuit
+            .resistors
+            .iter()
+            .position(|r| r.name.to_ascii_lowercase() == key)
+    }
+
+    /// Set a positive, finite resistance in ohms for the next solver step.
+    pub fn set_resistance(&mut self, index: usize, ohms: f64) -> Result<(), AnalogError> {
+        if !ohms.is_finite() || ohms <= 0.0 || !ohms.recip().is_finite() {
+            return Err(AnalogError::Config(
+                "resistance must be positive and finite with finite conductance".to_string(),
+            ));
+        }
+        if self.circuit.resistors[index].ohms != ohms {
+            self.circuit.resistors[index].ohms = ohms;
+            self.cached_stamp = None;
+            self.restart = true;
+            self.settled = false;
+        }
+        Ok(())
+    }
+
     /// Index of a named resistor that has an NTC Beta model.
     pub fn thermistor_index(&self, name: &str) -> Option<usize> {
         let key = name.trim().to_ascii_lowercase();
@@ -662,7 +687,8 @@ impl Solver {
             let Some(control) = self.circuit.switches[index].voltage.clone() else {
                 continue;
             };
-            let v = node_diff(&self.node_v, control.pos, control.neg).abs();
+            let sensed = node_diff(&self.node_v, control.pos, control.neg);
+            let v = if control.signed { sensed } else { sensed.abs() };
             let on = control.vt;
             let off = (control.vt - control.vh).max(0.0);
             let closed_now = self.switch_closed[index];

@@ -44,6 +44,7 @@ mod mmio_words;
 mod motors;
 pub(crate) use motors::classify_logic_rail;
 mod observed_device;
+pub mod open_drain;
 pub(crate) mod part_pack;
 mod pms;
 mod policy;
@@ -69,7 +70,7 @@ pub use interrupt_fabric::{
 };
 pub use memory_policy::{CpuWritePolicy, MemoryPolicyReport, RegionPolicyStats, RegionViolation};
 pub(crate) use motors::CircuitMotorLookup;
-pub use motors::{MotorSnapshot, STEPPER_SNAPSHOT_KIND};
+pub use motors::{MotorCoupling, MotorSnapshot, STEPPER_SNAPSHOT_KIND};
 
 impl SystemBus {
     /// Cycles until the earliest event an MMIO write armed in the running CPU
@@ -379,7 +380,10 @@ pub struct MemAlias {
 }
 
 pub struct SystemBus {
-    pub(crate) supply_domains: crate::peripherals::components::supply_domain::SupplyDomains,
+    /// External supply routing is used at wiring and co-simulation boundaries,
+    /// not by the CPU step path. Keep its growable maps outside the hot bus
+    /// object so adding another cold routing map does not enlarge that object.
+    pub(crate) supply_domains: Box<crate::peripherals::components::supply_domain::SupplyDomains>,
     pub flash: LinearMemory,
     /// Violation record + counts + mirrored PC/cycle for the policy gate.
     pub(crate) memory_policy: crate::bus::memory_policy::MemoryPolicyState,
@@ -686,6 +690,11 @@ pub struct SystemBus {
     /// Classification is **peripheral-owned** (CPU-agnostic bus); see
     /// [`Peripheral::mmio_access_class`].
     freerunning_timer_poll_mmio: std::cell::Cell<u32>,
+    /// Consecutive timer-only MMIO count across hosted Cortex-M windows.
+    /// A same-batch pair still coalesces immediately; split reads wait until
+    /// four timer-only accesses (more than one `time_us_64`) so a one-shot
+    /// timestamp cannot skip. See [`Self::take_timer_poll_coalesce_eligible`].
+    timer_poll_carry: std::cell::Cell<u32>,
     /// Batch-local count of [`MmioAccessClass::SideEffecting`] accesses.
     /// Any non-zero value disqualifies timer-poll coalesce for that batch.
     side_effecting_mmio: std::cell::Cell<u32>,
@@ -756,6 +765,8 @@ pub struct SystemBus {
     ///
     /// [`service_device_pin_drives`]: Self::service_device_pin_drives
     pub(crate) device_pin_pads: Vec<DevicePinPad>,
+    /// Explicitly opted-in pulled-up device-output nets.
+    pub(crate) device_open_drain_nets: open_drain::OpenDrainNets,
     /// Off-chip models the bus holds ONLY so something can read them back — the
     /// WS2812 strip, the hobby servo, the STEP/DIR and unipolar steppers, the
     /// H-bridge channel, the parallel ILI9341 panel. Each is driven by a GPIO
@@ -767,6 +778,9 @@ pub struct SystemBus {
     pub observed: Vec<std::sync::Arc<dyn ObservedDevice>>,
     /// Deterministic typed motor plants, resolved from the system manifest.
     motors: Vec<motors::MotorRuntime>,
+    /// Live native numeric observations. Allocated only when a producer exists;
+    /// separate from both historical motor series and the co-sim trace cursor.
+    live_numeric: Option<Box<crate::live_numeric::LiveNumericCapture>>,
     /// Last simulator-cycle boundary applied to `motors`.
     motor_cycle_anchor: u64,
     /// Circuit-coupled INA219 breakouts: shunt current / bus voltage samples
@@ -915,6 +929,7 @@ pub struct SystemBus {
     /// The chip's supply supervisor (see [`crate::power`]): idle, with the
     /// ideal rail assumed, until a circuit is routed to `board.power.vdd_volts`.
     pub(crate) supply: crate::power::SupplySupervisor,
+    pub(crate) reset_input: crate::reset_input::ResetInputState,
     /// What the system manifest DECLARED under `external_devices:`, verbatim.
     ///
     /// Purely identity metadata for [`crate::Machine::inspect`], which joins it
