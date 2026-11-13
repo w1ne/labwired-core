@@ -718,6 +718,25 @@ pub struct DiodeModel {
 }
 
 impl DiodeModel {
+    /// The card one instance with SPICE `AREA` sees: the currents `IS`,
+    /// `ISR`, `IK`, `IKR` and the capacitance `CJO` scale with the junction
+    /// area and `RS` divides by it, as ngspice's `dioload.c` and `diotemp.c`
+    /// do. `IBV` stays as written: ngspice-45 fits the breakdown knee to the
+    /// unscaled `IBV`, so a larger area moves `BV` slightly. Unlike the
+    /// instance multiplier `m`, GMIN is untouched. `area == 1` returns the
+    /// card bit-identical.
+    pub fn with_area(self, area: f64) -> Self {
+        Self {
+            is: self.is * area,
+            isr: self.isr * area,
+            ik: self.ik * area,
+            ikr: self.ikr * area,
+            cjo: self.cjo * area,
+            rs: self.rs / area,
+            ..self
+        }
+    }
+
     /// Series resistance at the instance temperature, in ohms.
     ///
     /// With no instance temperature, retain the engine's historical fixed
@@ -1353,6 +1372,31 @@ pub struct BjtModel {
 }
 
 impl BjtModel {
+    /// The card one instance with SPICE `AREA` sees: `IS`, `ISE`, `ISC`,
+    /// `IKF`, `IKR`, `IRB`, `ITF`, `CJE` and `CJC` scale with the emitter
+    /// area and `RB`, `RBM`, `RC`, `RE` divide by it, as ngspice's
+    /// `bjtload.c` does when `AREAB`/`AREAC` default to `AREA`. Unlike the
+    /// instance multiplier `m`, GMIN is untouched. `area == 1` returns the
+    /// card bit-identical.
+    pub fn with_area(self, area: f64) -> Self {
+        Self {
+            is: self.is * area,
+            ise: self.ise * area,
+            isc: self.isc * area,
+            ikf: self.ikf * area,
+            ikr: self.ikr * area,
+            irb: self.irb * area,
+            itf: self.itf * area,
+            cje: self.cje * area,
+            cjc: self.cjc * area,
+            rb: self.rb / area,
+            rbm: self.rbm.map(|rbm| rbm / area),
+            rc: self.rc / area,
+            re: self.re / area,
+            ..self
+        }
+    }
+
     fn defaults(polarity: Polarity) -> Self {
         Self {
             polarity,
@@ -1592,6 +1636,22 @@ pub struct JfetModel {
 }
 
 impl JfetModel {
+    /// The card one instance with SPICE `AREA` sees: `BETA`, `IS`, `CGS` and
+    /// `CGD` scale with the gate area and `RD`, `RS` divide by it, as
+    /// ngspice's `jfetload.c` does. Unlike the instance multiplier `m`, GMIN
+    /// is untouched. `area == 1` returns the card bit-identical.
+    pub fn with_area(self, area: f64) -> Self {
+        Self {
+            beta: self.beta * area,
+            is: self.is * area,
+            cgs: self.cgs * area,
+            cgd: self.cgd * area,
+            rd: self.rd / area,
+            rs: self.rs / area,
+            ..self
+        }
+    }
+
     fn defaults(polarity: Polarity) -> Self {
         Self {
             polarity,
@@ -1965,7 +2025,7 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
     }
 }
 
-/// `D<name> n+ n- <model> [m=<count>] [temp=<°C>]` — a Shockley junction diode.
+/// `D<name> n+ n- <model> [<area>] [m=<count>] [temp=<°C>]` — a Shockley junction diode.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Diode {
     /// Element name as written, e.g. `D1`.
@@ -1984,7 +2044,7 @@ pub struct Diode {
     pub junction_anode: NodeRef,
     /// Model name as written, for diagnostics.
     pub model_name: String,
-    /// Resolved model parameters.
+    /// Resolved model parameters, already scaled by the instance `AREA`.
     pub model: DiodeModel,
     /// Model parameters with `CJO`, `VJ`, `M`, and `TT` adjusted for this
     /// instance's temperature.
@@ -2126,7 +2186,7 @@ pub struct Ccvs {
     pub ohms: f64,
 }
 
-/// `Q<name> nc nb ne <model> [m=<count>] [temp=<°C>]` — an Ebers–Moll bipolar transistor.
+/// `Q<name> nc nb ne <model> [<area>] [m=<count>] [temp=<°C>]` — an Ebers–Moll bipolar transistor.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Bjt {
     /// Element name as written, e.g. `Q1`.
@@ -2153,7 +2213,7 @@ pub struct Bjt {
     pub junction_e: NodeRef,
     /// Model name as written, for diagnostics.
     pub model_name: String,
-    /// Resolved model parameters.
+    /// Resolved model parameters, already scaled by the instance `AREA`.
     pub model: BjtModel,
     /// Model parameters adjusted for this instance's explicit `TEMP`.
     pub operating_model: BjtModel,
@@ -2304,7 +2364,7 @@ impl Mosfet {
     }
 }
 
-/// `J<name> nd ng ns <model> [m=<count>] [temp=<°C>]` — a SPICE level-1 JFET.
+/// `J<name> nd ng ns <model> [<area>] [m=<count>] [temp=<°C>]` — a SPICE level-1 JFET.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Jfet {
     /// Element name as written, e.g. `J1`.
@@ -2326,7 +2386,7 @@ pub struct Jfet {
     pub junction_s: NodeRef,
     /// Model name as written, for diagnostics.
     pub model_name: String,
-    /// Resolved model parameters.
+    /// Resolved model parameters, already scaled by the instance `AREA`.
     pub model: JfetModel,
     /// Channel `VTO`/`BETA` and gate-junction `IS`/`PB`/`CGS`/`CGD` adjusted
     /// for this instance's explicit `TEMP`.
@@ -2702,6 +2762,7 @@ struct PendingDevice {
     ps: Option<f64>,
     temperature_celsius: Option<f64>,
     multiplier: f64,
+    area: f64,
 }
 
 /// A K line held until all its L elements have been parsed.
@@ -3012,13 +3073,13 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
             }
             'D' | 'Q' | 'M' | 'J' => {
                 let (terminals, shape) = match letter {
-                    'D' => (2, "D<name> n+ n- <model> [m=<count>] [temp=<°C>]"),
-                    'Q' => (3, "Q<name> nc nb ne <model> [m=<count>] [temp=<°C>]"),
+                    'D' => (2, "D<name> n+ n- <model> [<area>] [area=<factor>] [m=<count>] [temp=<°C>]"),
+                    'Q' => (3, "Q<name> nc nb ne <model> [<area>] [area=<factor>] [m=<count>] [temp=<°C>]"),
                     'M' => (
                         4,
                         "M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>] [m=<count>] [temp=<°C>]",
                     ),
-                    _ => (3, "J<name> nd ng ns <model> [m=<count>] [temp=<°C>]"),
+                    _ => (3, "J<name> nd ng ns <model> [<area>] [area=<factor>] [m=<count>] [temp=<°C>]"),
                 };
                 let rest = &tokens[1..];
                 if rest.len() < terminals + 1 {
@@ -3034,7 +3095,19 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 let mut ps = None;
                 let mut temperature_celsius = None;
                 let mut multiplier = None;
-                for token in &rest[terminals + 1..] {
+                let mut area = None;
+                let mut options = &rest[terminals + 1..];
+                // SPICE writes a D, Q or J area as a bare number straight
+                // after the model name; `area=` is the keyword spelling.
+                if letter != 'M' {
+                    if let Some((first, tail)) = options.split_first() {
+                        if !first.contains('=') {
+                            area = Some(ctx.value(first, "area")?);
+                            options = tail;
+                        }
+                    }
+                }
+                for token in options {
                     let (key, value) = token
                         .split_once('=')
                         .ok_or_else(|| ctx.parse_err(format!("expected `{shape}`")))?;
@@ -3049,6 +3122,9 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                         "ps" if letter == 'M' => ps = Some(ctx.value(value, "ps")?),
                         "temp" => temperature_celsius = Some(ctx.value(value, "temp")?),
                         "m" => multiplier = Some(ctx.value(value, "m")?),
+                        "area" if letter != 'M' && area.is_none() => {
+                            area = Some(ctx.value(value, "area")?)
+                        }
                         other => {
                             return Err(ctx.parse_err(format!(
                                 "unknown parameter `{other}`; expected `{shape}`"
@@ -3080,6 +3156,9 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 if matches!(multiplier, Some(m) if !m.is_finite() || m <= 0.0) {
                     return Err(ctx.parse_err("device multiplier m must be positive and finite"));
                 }
+                if matches!(area, Some(a) if !a.is_finite() || a <= 0.0) {
+                    return Err(ctx.parse_err("device area must be positive and finite"));
+                }
                 // The terminals are interned now so that node numbering still
                 // follows netlist order; the model is bound after the last
                 // line, because `.model` may come after its elements.
@@ -3104,6 +3183,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     ps,
                     temperature_celsius,
                     multiplier: multiplier.unwrap_or(1.0),
+                    area: area.unwrap_or(1.0),
                 });
             }
             'E' | 'G' => {
@@ -3211,6 +3291,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     ps: None,
                     temperature_celsius: None,
                     multiplier: 1.0,
+                    area: 1.0,
                 });
             }
             'S' => {
@@ -3505,6 +3586,7 @@ fn bind_models(
                 let ModelCard::Diode(model) = card else {
                     return Err(wrong_kind("D"));
                 };
+                let model = model.with_area(device.area);
                 if model.is <= 0.0
                     || model.n <= 0.0
                     || !model.eg.is_finite()
@@ -3665,6 +3747,7 @@ fn bind_models(
                 let ModelCard::Bjt(model) = card else {
                     return Err(wrong_kind("Q"));
                 };
+                let model = model.with_area(device.area);
                 if model.is <= 0.0 || model.bf <= 0.0 || model.br <= 0.0 {
                     return Err(
                         ctx.parse_err("a BJT model needs IS > 0, BF > 0 and BR > 0".to_string())
@@ -4149,6 +4232,7 @@ fn bind_models(
                 let ModelCard::Jfet(model) = card else {
                     return Err(wrong_kind("J"));
                 };
+                let model = model.with_area(device.area);
                 if !model.vto.is_finite()
                     || !model.beta.is_finite()
                     || model.beta <= 0.0

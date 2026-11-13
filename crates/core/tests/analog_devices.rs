@@ -7599,4 +7599,116 @@ mod analog {
             );
         }
     }
+
+    /// SPICE `AREA` on D, Q and J scales the card the instance sees: the
+    /// junction and channel currents, knee currents and depletion
+    /// capacitances grow with area and the terminal resistances shrink. Every
+    /// area-scaled parameter the engine models is set, so one that stayed
+    /// unscaled would move a node. DC values are ngspice-45 `.op` with
+    /// `area=2.5` (`.temp 26.85`, `tnom=26.85`); ngspice-45 reads a bare
+    /// number after a diode's model as a thermal node, so the reference deck
+    /// uses the keyword spelling.
+    #[test]
+    fn device_area_scales_d_q_j_cards_like_ngspice() {
+        let models = ".model DR D(IS=1e-14 RS=20 N=1.2 ISR=1e-12 NR=2 IK=5m CJO=20p TT=5n)\n\
+            .model DZ D(IS=1e-14 RS=5 BV=2.0 IBV=1m)\n\
+            .model QR NPN(IS=1e-15 BF=100 RB=50 RBM=10 IRB=50u RC=10 RE=2 VAF=50 IKF=10m \
+            ISE=1e-13 NE=1.5 ISC=1e-13 NC=2 IKR=5m CJE=5p CJC=3p TF=1n XTF=1 ITF=5m)\n\
+            .model JR NJF(VTO=-2 BETA=1e-4 RD=50 RS=50 LAMBDA=0.01 IS=1e-14 CGS=4p CGD=2p)\n";
+        let deck = |supply: &str, size: &str| {
+            format!(
+                "Vdd supply 0 {supply}\nRd supply a 1k\nRz supply z 470\nRc supply c 1k\n\
+                 Rb supply b 100k\nRj supply dj 2k\n\
+                 D1 a 0 DR {size}\nD2 0 z DZ {size}\nQ1 c b 0 QR {size}\nJ1 dj 0 0 JR {size}\n\
+                 {models}"
+            )
+        };
+        let nodes = ["a", "z", "c", "b", "dj"];
+        let volts = |solver: &Solver| {
+            nodes.map(|node| solver.node_voltage(solver.circuit().node(node).expect("node exists")))
+        };
+
+        let single = volts(&build(&deck("dc 3.3", "")));
+        let keyword = volts(&build(&deck("dc 3.3", "area=2.5")));
+        let positional = volts(&build(&deck("dc 3.3", "2.5")));
+        let ngspice_single = [0.882_609_7, 2.038_933, 2.061_702, 0.725_526_4, 2.496_725];
+        let ngspice_area = [0.819_020_6, 2.031_081, 2.183_537, 0.695_149_0, 1.464_235];
+        for (index, node) in nodes.iter().enumerate() {
+            assert!(
+                (single[index] - ngspice_single[index]).abs() < 1e-4,
+                "V({node}) area 1: ngspice {}, got {}",
+                ngspice_single[index],
+                single[index]
+            );
+            assert!(
+                (keyword[index] - ngspice_area[index]).abs() < 1e-4,
+                "V({node}) area=2.5: ngspice {}, got {}",
+                ngspice_area[index],
+                keyword[index]
+            );
+            assert_eq!(
+                keyword[index], positional[index],
+                "V({node}): `area=2.5` and a bare `2.5` must be the same instance"
+            );
+        }
+
+        // The breakdown knee is where area and m part: ngspice-45 fits BV to
+        // the unscaled IBV for one area-3 junction, but m=3 is three
+        // junctions that each carry IBV at the knee.
+        let z = |size: &str| {
+            let solver = build(&deck("dc 3.3", size));
+            solver.node_voltage(solver.circuit().node("z").expect("node exists"))
+        };
+        for (size, ngspice) in [("area=3", 2.030_202), ("m=3", 2.002_458)] {
+            let got = z(size);
+            assert!(
+                (got - ngspice).abs() < 1e-4,
+                "V(z) {size}: ngspice {ngspice}, got {got}"
+            );
+        }
+
+        // Charge scales with area too. Away from breakdown, area 3 and m=3
+        // differ only in GMIN (1 pS against 3 pS), so a supply step must
+        // track to well under a microvolt, step for step.
+        let pulse = "PULSE(0 3.3 0 20n 20n 1u 2u)";
+        let mut area = build(&deck(pulse, "area=3"));
+        let mut multiplied = build(&deck(pulse, "m=3"));
+        let mut one = build(&deck(pulse, ""));
+        let mut largest_difference: f64 = 0.0;
+        for _ in 0..40 {
+            for solver in [&mut area, &mut multiplied, &mut one] {
+                solver.advance(5e-9).expect("transient step solves");
+            }
+            let (a, m, o) = (volts(&area), volts(&multiplied), volts(&one));
+            for index in 0..nodes.len() {
+                largest_difference = largest_difference.max((a[index] - o[index]).abs());
+                if nodes[index] == "z" {
+                    continue;
+                }
+                assert!(
+                    (a[index] - m[index]).abs() < 1e-6,
+                    "V({}) at {} s: area=3 gives {}, m=3 gives {}",
+                    nodes[index],
+                    area.time(),
+                    a[index],
+                    m[index]
+                );
+            }
+        }
+        assert!(
+            largest_difference > 0.1,
+            "area=3 must load the circuit differently from area 1, max diff {largest_difference} V"
+        );
+
+        for value in ["area=0", "area=-2", "area=1e999", "-1"] {
+            let error = parse_netlist(&format!("D1 a 0 DR {value}\n{models}"))
+                .expect_err("a non-positive area must be refused")
+                .to_string();
+            assert!(error.contains("area"), "{value}: unexpected error {error}");
+        }
+        let error = parse_netlist("M1 d g 0 0 MR area=2\n.model MR NMOS(LEVEL=1 VTO=1 KP=20u)\n")
+            .expect_err("a level-1 MOSFET has no area; W and L size it")
+            .to_string();
+        assert!(error.contains("unknown parameter `area`"), "{error}");
+    }
 }

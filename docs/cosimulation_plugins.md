@@ -384,10 +384,10 @@ the same circuit and the same routing as `system.yaml`.
 | Voltage source | `V<name> n+ n- <source>` |
 | Current source | `I<name> n+ n- <source>` |
 | Switch | `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` |
-| Diode | `D<name> n+ n- <model> [m=<count>] [temp=<°C>]` |
-| BJT | `Q<name> nc nb ne <model> [m=<count>] [temp=<°C>]` |
+| Diode | `D<name> n+ n- <model> [<area>] [m=<count>] [temp=<°C>]` |
+| BJT | `Q<name> nc nb ne <model> [<area>] [m=<count>] [temp=<°C>]` |
 | MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>] [m=<count>] [temp=<°C>]` |
-| JFET | `J<name> nd ng ns <model> [m=<count>] [temp=<°C>]` |
+| JFET | `J<name> nd ng ns <model> [<area>] [m=<count>] [temp=<°C>]` |
 | Op-amp / comparator | `X<name> in+ in- v+ v- out <model>` |
 
 `m=<count>` is the SPICE instance multiplier: the element acts as that many
@@ -395,6 +395,15 @@ identical devices in parallel. Every current, conductance and stored charge it
 stamps is scaled, its terminal resistances are divided, and `m` may be
 fractional. This matches ngspice, where `m=3` and three parallel copies give
 the same solution.
+
+`<area>` (a bare number after the model, or `area=<factor>`) is the SPICE area
+factor on D, Q and J. It scales the instance's card the way ngspice-45 does:
+diode `IS`, `ISR`, `IK`, `IKR`, `CJO` and `RS`; BJT `IS`, `ISE`, `ISC`,
+`IKF`, `IKR`, `IRB`, `ITF`, `CJE`, `CJC`, `RB`, `RBM`, `RC` and `RE`; JFET
+`BETA`, `IS`, `CGS`, `CGD`, `RD` and `RS`. Currents and capacitances
+multiply, resistances divide. GMIN and diode `IBV` are not scaled, so near a
+breakdown knee `area=3` and `m=3` give different answers, as in ngspice. A
+MOSFET has no area; `W`, `L`, `AD`/`AS` and `PD`/`PS` size it.
 
 Plus `*` comment lines, `;` / `$` trailing comments, `.end`, and
 `.ic V(node)=<v>`. Node `0` and `gnd` are ground. Values take the usual SPICE

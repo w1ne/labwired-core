@@ -194,3 +194,168 @@ fn microbit_v2_ntc_and_diode_netlists_reach_distinct_saadc_pads() {
         "the independent diode channel should stay constant while the NTC changes: {samples:?}"
     );
 }
+
+fn scan_all(bus: &mut SystemBus) -> [u16; 8] {
+    // CH[n] samples AIN n with gain 1/4 and the VDD/4 reference, as above.
+    for channel in 0..8u64 {
+        let base = SAADC + 0x510 + channel * 0x10;
+        bus.write_u32(base, channel as u32 + 1)
+            .expect("select SAADC positive input");
+        bus.write_u32(base + 8, 0x1200)
+            .expect("select SAADC gain and VDD/4 reference");
+    }
+    bus.write_u32(SAADC + 0x630, 8)
+        .expect("reserve eight channel results");
+    bus.write_u32(SAADC + 0x104, 0)
+        .expect("clear prior END event");
+    bus.write_u32(SAADC, 1).expect("arm SAADC EasyDMA scan");
+    bus.write_u32(SAADC + 4, 1)
+        .expect("sample configured SAADC channels");
+    bus.tick_peripherals_fully();
+    assert_eq!(bus.read_u32(SAADC + 0x104).unwrap(), 1, "scan sets END");
+    assert_eq!(
+        bus.read_u32(SAADC + 0x634).unwrap(),
+        8,
+        "scan writes all eight results"
+    );
+    std::array::from_fn(|index| bus.read_u16(RESULT + 2 * index as u64).unwrap())
+}
+
+/// SPICE `AREA` on three unrelated device kinds reaches the SAADC. Each
+/// area instance must equal the same circuit built from a hand-scaled card,
+/// and both must match ngspice-45 `.op` on the area netlist (`.temp 26.85`,
+/// `tnom=26.85`). The area-1 ngspice values show how far each node would sit
+/// if the parser dropped the area.
+#[test]
+fn microbit_v2_device_area_on_d_q_j_reaches_ain2_to_ain7() {
+    let system_path = root("configs/systems/microbit-v2.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load micro:bit V2 profile");
+    let generic =
+        SystemManifest::from_file(root("examples/microbit-v2/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and diode routes");
+    let area =
+        SystemManifest::from_file(root("examples/microbit-v2/analog-device-area-system.yaml"))
+            .expect("load area and hand-scaled-card netlists");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(area.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load nRF52833 descriptor");
+    for (pin, channel) in [
+        ("P0.04", 2),
+        ("P0.05", 3),
+        ("P0.28", 4),
+        ("P0.29", 5),
+        ("P0.30", 6),
+        ("P0.31", 7),
+    ] {
+        assert_eq!(
+            chip.analog_pins
+                .get(pin)
+                .map(|route| (route.peripheral.as_str(), route.channel)),
+            Some(("saadc", channel)),
+            "{pin} must resolve to SAADC AIN{channel}"
+        );
+    }
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build micro:bit V2 bus");
+    configure_saadc(&mut bus);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal session")
+        .expect("profile carries NTC, diode and both area netlists");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "P0.02..P0.05 and P0.28..P0.31 must bind from the chip's analog pin map"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated NTC temperature");
+
+    // ngspice-45 V(d), V(c), V(dj): (supply, with AREA, with area 1).
+    let ngspice = [
+        (
+            2.0,
+            [0.681_526_1, 0.758_511_1, 0.363_045_4],
+            [0.763_578_8, 0.800_898_5, 0.659_417_6],
+        ),
+        (
+            2.5,
+            [0.696_701_4, 0.770_154_1, 0.466_817_9],
+            [0.794_499_6, 0.818_995_8, 0.870_890_0],
+        ),
+        (
+            3.3,
+            [0.716_716_4, 0.784_774_5, 0.649_472_1],
+            [0.839_165_2, 0.844_425_2, 1.307_921],
+        ),
+    ];
+    let area_paths = [
+        "board.analog.p0.04_volts",
+        "board.analog.p0.05_volts",
+        "board.analog.p0.28_volts",
+    ];
+    let scaled_paths = [
+        "board.analog.p0.29_volts",
+        "board.analog.p0.30_volts",
+        "board.analog.p0.31_volts",
+    ];
+    let devices = ["diode area=4", "NPN area 3", "NJF area=2"];
+    let expected_diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    for (supply_v, with_area, area_one) in ngspice {
+        session
+            .set_signal_number("ui.device_area.supply_v", supply_v)
+            .expect("set shared area supply");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route all four netlists");
+        assert_eq!(steps.len(), 4, "NTC, diode and both area netlists solve");
+        assert!(
+            errors.is_empty(),
+            "unexpected analog route errors: {errors:?}"
+        );
+
+        let mut expected = [0u16; 8];
+        expected[0] = expected_saadc_code(voltage(&session, "board.analog.p0.02_volts"));
+        let diode_v = voltage(&session, "board.analog.p0.03_volts");
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "the unrelated diode load line stays at {expected_diode_v} V, got {diode_v} V"
+        );
+        expected[1] = expected_saadc_code(diode_v);
+        for index in 0..3 {
+            let area_v = voltage(&session, area_paths[index]);
+            let scaled_v = voltage(&session, scaled_paths[index]);
+            assert!(
+                (area_v - scaled_v).abs() < 1e-9,
+                "{} at {supply_v} V: area instance {area_v} V, hand-scaled card {scaled_v} V",
+                devices[index]
+            );
+            assert!(
+                (area_v - with_area[index]).abs() < 1e-4,
+                "{} at {supply_v} V: ngspice {}, got {area_v}",
+                devices[index],
+                with_area[index]
+            );
+            assert!(
+                (area_v - area_one[index]).abs() > 0.04,
+                "{} at {supply_v} V must sit away from the area-1 node {}",
+                devices[index],
+                area_one[index]
+            );
+            expected[2 + index] = expected_saadc_code(area_v);
+            expected[5 + index] = expected_saadc_code(scaled_v);
+            assert!(
+                expected_saadc_code(area_one[index]).abs_diff(expected[2 + index]) > 40,
+                "{}: the SAADC code must show the area",
+                devices[index]
+            );
+        }
+        assert_eq!(
+            scan_all(&mut bus),
+            expected,
+            "SAADC AIN0..AIN7 at {supply_v} V supply"
+        );
+    }
+}
