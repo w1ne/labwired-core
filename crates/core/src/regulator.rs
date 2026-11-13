@@ -275,12 +275,23 @@ impl RegulatorRegistry {
     }
 
     /// Defense at the authoritative CPU advance seam, after construction.
-    #[inline]
+    /// Ordinary MCU profiles have no internal regulator stages. Keep that
+    /// case to one branch per advance; leave the sampled-source admission
+    /// and its failure path cold. This changes no safety condition.
+    #[inline(always)]
     pub fn require_sampled_source(&self) -> Result<(), String> {
-        if self.stages.is_empty()
-            || self
-                .sampled_complete
-                .load(std::sync::atomic::Ordering::Acquire)
+        if self.stages.is_empty() {
+            return Ok(());
+        }
+        self.require_sampled_source_configured()
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn require_sampled_source_configured(&self) -> Result<(), String> {
+        if self
+            .sampled_complete
+            .load(std::sync::atomic::Ordering::Acquire)
         {
             Ok(())
         } else {
