@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.004813">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="23f9db1f9338f1b9950eab02fd8af873335b1544487ed751496d59a9886a1ee5"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.004813">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: FEATHER_RP2350_GPIO7_UART_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: gpio_edges: sio:7 &gt;= 2 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

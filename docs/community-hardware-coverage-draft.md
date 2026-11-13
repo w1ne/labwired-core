@@ -45,6 +45,39 @@ void setup() {
 void loop() {}
 ```
 
+## RP2040 / RP2350 — demand group 2
+
+### Adafruit Feather RP2350 with HSTX (no-PSRAM, Product ID 6000)
+
+RP2040 was reported by 12% of respondents (MCU rank 5); RP2350 was not
+measured separately. Adafruit's live product listing showed the no-PSRAM
+Feather in stock on 2026-11-13. The local smoke toggles red D13 on GPIO7 and
+captures UART0 output on the existing RP2350 model. HSTX/DVI, NeoPixel, USB,
+charging, and PSRAM behavior are outside this coverage.
+
+- [Board pin map, scope, and copy-paste Arduino example](../examples/adafruit-feather-rp2350/README.md)
+- [Dated vendor availability receipt](../examples/adafruit-feather-rp2350/evidence/vendor-status.md)
+- [Committed local simulator evidence](../examples/adafruit-feather-rp2350/evidence/run/)
+
+```cpp
+#include <Arduino.h>
+
+constexpr uint8_t LED_PIN = 7;  // D13, onboard red LED
+
+void setup() {
+  pinMode(LED_PIN, OUTPUT);
+  Serial1.begin(115200);  // UART0 on TX=GP0, RX=GP1
+  Serial1.println("FEATHER_RP2350_GPIO7_UART_OK");
+}
+
+void loop() {
+  digitalWrite(LED_PIN, HIGH);
+  delay(500);
+  digitalWrite(LED_PIN, LOW);
+  delay(500);
+}
+```
+
 ## STM32F103 — rank 3, 17% of reported MCU use
 
 ### NUCLEO-F103RB + BME280

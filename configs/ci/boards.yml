@@ -59,6 +59,12 @@ boards:
     kind: sim-validate
     path: examples/adafruit-feather-esp32-v2
     gate: true
+  # Demand group #2: current Adafruit Feather RP2350 with HSTX, no-PSRAM SKU.
+  - id: adafruit-feather-rp2350
+    kind: sim-validate
+    path: examples/adafruit-feather-rp2350
+    rust_targets: [thumbv8m.main-none-eabi]
+    gate: true
   # Narrow ESP32-DevKitC-32E onboarding profile. Committed TIER1 ELF, no
   # cross-toolchain, seconds to run. Proves the new chip descriptor through
   # `labwired test` on every PR (chip-coverage ceiling forbids another waiver).

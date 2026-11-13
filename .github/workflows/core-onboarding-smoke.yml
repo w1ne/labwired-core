@@ -138,6 +138,13 @@ jobs:
             script: examples/adafruit-feather-rp2040/io-smoke.yaml
             system: configs/systems/adafruit-feather-rp2040-bme280.yaml
             firmware_build_script: examples/adafruit-feather-rp2040/build-firmware.sh
+          # Demand group #2 (RP2040/RP2350; RP2040 MCU rank 5): Feather
+          # RP2350 D13/GPIO7 plus the default UART0 TX/RX path.
+          - id: adafruit-feather-rp2350
+            crate: firmware-adafruit-feather-rp2350-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/adafruit-feather-rp2350/io-smoke.yaml
+            system: configs/systems/adafruit-feather-rp2350.yaml
           # Maintenance-only coverage: Microchip lists ATmega328P as NRND, so
           # this preserves the existing Nano path without recommending new use.
           - id: arduino-nano-atmega328p-maintenance

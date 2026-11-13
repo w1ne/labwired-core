@@ -1,0 +1,282 @@
+# LabWired - RP2350 profile for Adafruit Feather RP2350 with HSTX
+# Cortex-M33 ×2 (core 1 held; bring-up is single-core). Addresses verified
+# against pico-sdk rp2350 hardware_regs (addressmap.h / intctrl.h): the RP2350
+# moved the whole low-APB map, so every base below is the RP2350 one, not the
+# RP2040's. Reuses the RP2040 behavioural models (PL011 UART, DW I2C/SPI, PIO,
+# SIO, DMA, ADC, PWM, watchdog, clock/reset with the rp2350 profile).
+# Not declared (documented in docs/boards/adafruit-feather-rp2350.md):
+# POWERMAN/TICKS/TRNG/
+# SHA-256/OTP/HSTX/USB enumeration/XIP QMI programming, TrustZone, Hazard3
+# RISC-V cores, second M33 core.
+name: "rp2350-feather"
+arch: "arm"
+core: "cortex-m33"
+registers_count: 240
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. Self-timed devices
+# scale their datasheet microseconds by it; a slower board overrides it.
+# RP2350 maximum system clock, 150 MHz (datasheet §8.6.3: "the maximum
+# frequencies of the chip's clock generators … for the system PLL this is
+# 150 MHz").
+cpu_hz: 150_000_000
+
+flash:
+  base: 0x10000000
+  # Adafruit's no-PSRAM Feather RP2350 has 8 MiB external QSPI NOR.
+  size: "8192KB"
+ram:
+  base: 0x20000000
+  # 520KB contiguous: 10 striped banks + the two 4KB scratch banks
+  # (SCRATCH_X @0x20080000, SCRATCH_Y @0x20081000).
+  size: "520KB"
+# Bare ELFs (cortex-m-rt) place the vector table at flash base; pico-sdk
+# RP2350 images carry IMAGE_DEF first. We fast-boot bare ELFs, so no
+# reset_vector_offset here (unlike the RP2040 descriptor's boot2 offset).
+reset_vector_offset: 0x0
+# Boot ROM @ 0x00000000, 32 KB (datasheet 2.2 address map). pico-sdk and the
+# arduino-pico OTA stage call bootrom APIs through the well-known pointers at
+# 0x14..0x19 (datasheet 5.4.1, Table 453). In-tree clean-room image
+# (crates/core/roms/rp2350/rp2350_bootrom.S — NOT a Raspberry Pi dump): the
+# table lookup plus the APIs the SDK boot path calls. Set
+# LABWIRED_RP2350_BOOTROM to a file to replace it, or to "" to drop the window
+# (address 0 then aliases flash again).
+memory_regions:
+  - name: "bootrom"
+    base: 0x00000000
+    size: "32KB"
+    image_env: "LABWIRED_RP2350_BOOTROM"
+# Double-precision coprocessor on the M33 coprocessor interface, p4 (current
+# security state) and p5 (Non-secure) — datasheet 3.6.2. pico-sdk enables
+# it in runtime_init_per_core_enable_coprocessors and routes double
+# arithmetic/conversions/compares through it (pico_double, dcp_canned).
+# GPIO coprocessor, p0 (datasheet 3.6.1): pico-sdk's gpio_put/gpio_set_dir
+# (gpio_coproc.h) and so arduino-pico's pinMode/digitalWrite; executed as
+# the equivalent SIO GPIO accesses.
+coprocessors: [rp2350_dcp, rp2350_gpioc]
+# RP2350 bank-0 labels. Feather GP0/GP1 are UART0 TX/RX, GP7 drives D13's
+# red LED, and GP12..GP19 also appear on the HSTX port. The board connector
+# labels and supported feature scope are documented in the board example.
+pins:
+  GP0: { gpio: sio, bit: 0 }
+  GP1: { gpio: sio, bit: 1 }
+  GP2: { gpio: sio, bit: 2 }
+  GP3: { gpio: sio, bit: 3 }
+  GP4: { gpio: sio, bit: 4 }
+  GP5: { gpio: sio, bit: 5 }
+  GP6: { gpio: sio, bit: 6 }
+  GP7: { gpio: sio, bit: 7 }
+  GP8: { gpio: sio, bit: 8 }
+  GP9: { gpio: sio, bit: 9 }
+  GP10: { gpio: sio, bit: 10 }
+  GP11: { gpio: sio, bit: 11 }
+  GP12: { gpio: sio, bit: 12 }
+  GP13: { gpio: sio, bit: 13 }
+  GP14: { gpio: sio, bit: 14 }
+  GP15: { gpio: sio, bit: 15 }
+  GP16: { gpio: sio, bit: 16 }
+  GP17: { gpio: sio, bit: 17 }
+  GP18: { gpio: sio, bit: 18 }
+  GP19: { gpio: sio, bit: 19 }
+  GP20: { gpio: sio, bit: 20 }
+  GP21: { gpio: sio, bit: 21 }
+  GP22: { gpio: sio, bit: 22 }
+  GP23: { gpio: sio, bit: 23 }
+  GP24: { gpio: sio, bit: 24 }
+  GP25: { gpio: sio, bit: 25 }
+  GP26: { gpio: sio, bit: 26 }
+  GP27: { gpio: sio, bit: 27 }
+  GP28: { gpio: sio, bit: 28 }
+  GP29: { gpio: sio, bit: 29 }
+# Atomic SET/CLR/XOR aliases, same scheme as RP2040 (rp2350 addressmap.h
+# REG_ALIAS_*_BITS).
+atomic_register_aliases: true
+peripherals:
+  # SYSINFO (CHIP_ID 0x30004927 = revision 3, part 0x0004, manufacturer 0x927
+  # — rp2350 sysinfo.h). The pico-sdk USB errata workaround asserts the
+  # Raspberry Pi manufacturer id here.
+  - id: "sysinfo"
+    type: "declarative"
+    base_address: 0x40000000
+    size: "4KB"
+    config:
+      path: "../peripherals/rp2350/sysinfo.yaml"
+  # CLOCKS / RESETS / XOSC / PLL_SYS / PLL_USB — the shared clock-reset model
+  # on the RP2350 address map (rp2350 profile: CLOCKS @0x40010000, RESETS
+  # @0x40020000, XOSC @0x40048000, PLLs @0x40050000/0x40058000). Window ends
+  # at ACCESSCTRL (0x40060000): 0x50000 = 320KB. (288KB stopped at
+  # 0x40058000 and cut PLL_USB off — pico-sdk pll_init(pll_usb) BusFaulted.)
+  - id: "clk_rst"
+    type: "rp2040_clkrst"
+    base_address: 0x40010000
+    size: "320KB"
+    config:
+      debug_schema: "../peripherals/rp2350/clocks.yaml"
+      profile: "rp2350"
+  # IO_BANK0: the pad function mux, inside the clk_rst window (greatest start
+  # wins, as on rp2040.yaml). The RP2040 model on the RP2350 map: same
+  # GPIOn_STATUS/CTRL array and FUNCSEL numbers for SPI/UART/I2C/PWM/SIO,
+  # the interrupt block at 0x230 (pico-sdk rp2350 io_bank0.h), IO_IRQ_BANK0
+  # = NVIC 21 (intctrl.h). Without it GPIOn_CTRL was clk_rst storage and no
+  # peripheral output (PWM, UART, SPI, I2C) reached a pad.
+  - id: "io_bank0"
+    type: "rp2040_io_bank0"
+    base_address: 0x40028000
+    size: "4KB"
+    irq: 21
+    config:
+      profile: "rp2350"
+  - id: "rosc"
+    type: "rp2040_clkrst"
+    base_address: 0x400E8000
+    size: "4KB"
+    config:
+      profile: "rp2350"
+  # POWERMAN + TICKS window (0x40100000..0x4010C000) — register storage only;
+  # no power sequencing.
+  - id: "powman"
+    type: "stub"
+    base_address: 0x40100000
+    size: "48KB"
+  - id: "uart0"
+    type: "uart"
+    base_address: 0x40070000
+    irq: 33
+    config:
+      debug_schema: "../peripherals/rp2350/uart0.yaml"
+      profile: "pl011"
+  - id: "uart1"
+    type: "uart"
+    base_address: 0x40078000
+    irq: 34
+    config:
+      profile: "pl011"
+  - id: "spi0"
+    type: "rp2040_spi"
+    base_address: 0x40080000
+    size: "4KB"
+    irq: 31
+  - id: "spi1"
+    type: "rp2040_spi"
+    base_address: 0x40088000
+    size: "4KB"
+    irq: 32
+  - id: "i2c0"
+    type: "rp2040_i2c"
+    base_address: 0x40090000
+    size: "4KB"
+    irq: 36
+  - id: "i2c1"
+    type: "rp2040_i2c"
+    base_address: 0x40098000
+    size: "4KB"
+    irq: 37
+  - id: "adc"
+    type: "rp2040_adc"
+    base_address: 0x400A0000
+    size: "4KB"
+    irq: 35
+    config:
+      debug_schema: "../peripherals/rp2350/adc.yaml"
+  # PWM: 12 slices, so EN/INTR/IRQ0_*/IRQ1_* start at 0xF0 (pico-sdk rp2350
+  # pwm.h); PWM_IRQ_WRAP_0/_1 = NVIC 8/9. The debug schema below is still the
+  # RP2040-shaped one (EN at 0xA0): names only, the model uses the profile.
+  - id: "pwm"
+    type: "rp2040_pwm"
+    base_address: 0x400A8000
+    size: "4KB"
+    irq: 8
+    config:
+      debug_schema: "../peripherals/rp2350/pwm.yaml"
+      profile: "rp2350"
+  # TIMER0. The RP2040 timer model with the RP2350 map: LOCKED/SOURCE at
+  # 0x34/0x38 push INTR/INTE/INTF/INTS to 0x3c..0x48 (pico-sdk rp2350
+  # hardware_regs/timer.h). TIMER0_IRQ_0..3 are NVIC 0..3, as on the RP2040.
+  - id: "timer0"
+    type: "rp2040_timer"
+    base_address: 0x400B0000
+    size: "4KB"
+    config:
+      profile: "rp2350"
+  # XIP_CTRL (flash cache control) — declarative storage, as on RP2040.
+  - id: "xip_ctrl"
+    type: "declarative"
+    base_address: 0x400C8000
+    size: "4KB"
+    config:
+      path: "../peripherals/rp2350/xip_ctrl.yaml"
+  - id: "watchdog"
+    type: "rp2040_watchdog"
+    base_address: 0x400D8000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2350/watchdog.yaml"
+  - id: "dma"
+    type: "rp2040_dma"
+    base_address: 0x50000000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2350/dma.yaml"
+  - id: "pio0"
+    type: "pio"
+    base_address: 0x50200000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2350/pio0.yaml"
+  - id: "pio1"
+    type: "pio"
+    base_address: 0x50300000
+    size: "4KB"
+  - id: "pio2"
+    type: "pio"
+    base_address: 0x50400000
+    size: "4KB"
+  # BOOT RAM endpoint (datasheet 4.3): 1 KB boot RAM, WRITE_ONCE0/1 and the
+  # BOOTLOCK0..7 try-locks at +0x800. pico-sdk pre-main resets the boot locks
+  # and spins claiming BOOTLOCK7 (runtime_init_bootrom_locking_enable);
+  # unmapped, the first BOOTLOCK store BusFaulted at 0x400E080C.
+  - id: "bootram"
+    type: "rp2350_bootram"
+    base_address: 0x400E0000
+    size: "4KB"
+  # USB device controller: the RP2040 one at the same addresses — DPRAM
+  # 0x50100000 + register block 0x50110000 (datasheet 12.7, MAIN_CTRL @0x040,
+  # USB_MUXING @0x074 ...) — on USBCTRL_IRQ 14 (datasheet 3.2, Table 95).
+  # pico-sdk's pre-main runtime_init_usb_power_down writes it before any user
+  # code; unmapped, that store BusFaulted at 0x5011004C. Same behavioural
+  # model and simulated host as rp2040.yaml.
+  - id: "usbctrl"
+    type: "rp2040_usb"
+    base_address: 0x50100000
+    size: "80KB"
+    irq: 14
+  # TBMAN — storage stub; PLATFORM reads 0 → ASIC path, correct for the sim.
+  - id: "tbman"
+    type: "stub"
+    base_address: 0x40160000
+    size: "4KB"
+  # SIO (single-cycle IO) — GPIO out/oe + readback. CPUID reads 0 (core 0;
+  # core 1 is not modeled yet).
+  # SIO with the RP2350 GPIO map (each register has a HI twin at +4, so
+  # OUT_SET is 0x18 and OE is 0x30, not the RP2040's 0x14 / 0x20).
+  - id: "sio"
+    type: "rp2040_sio"
+    base_address: 0xD0000000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2350/sio.yaml"
+      profile: "rp2350"
+  # Cortex-M33 SCS ACTLR (0xE000E008), a plain register: pico-sdk's
+  # spinlock_set_extexclall() sets EXTEXCLALL during runtime init.
+  - id: "actlr"
+    type: "declarative"
+    base_address: 0xE000E008
+    size: "4B"
+    config:
+      path: "../peripherals/rp2350/actlr.yaml"
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: "16B"
+  - id: "nvic"
+    type: "nvic"
+    base_address: 0xE000E100
+    size: "1KB"
