@@ -3,7 +3,7 @@
 This is maintenance for the existing Nano firmware path, not new hardware
 onboarding. The demand survey ranks ATmega328 #2 (30%) and Arduino kits #3
 (37%); Microchip's live page still marks ATmega328P **Not Recommended for new
-designs**, checked 2026-11-11 with the real Chrome profile. Do not use this
+designs**, checked 2026-11-13 with the real Chrome profile. Do not use this
 record as a recommendation for a new design.
 
 ## Smoke

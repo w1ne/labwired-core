@@ -2,8 +2,8 @@
   "result_schema_version": "1.0",
   "status": "pass",
   "steps_executed": 2000000,
-  "cycles": 2602327,
-  "instructions": 1999842,
+  "cycles": 2602959,
+  "instructions": 2000000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
@@ -188,8 +188,8 @@
     "heap_method": "unsupported"
   },
   "metrics": {
-    "cycles": 2602327,
-    "instructions": 1999842,
+    "cycles": 2602959,
+    "instructions": 2000000,
     "steps_executed": 2000000,
     "memory_reads": 0,
     "memory_writes": 96331,

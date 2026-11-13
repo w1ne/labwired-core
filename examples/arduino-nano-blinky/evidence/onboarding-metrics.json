@@ -6,24 +6,24 @@
   "script": "examples/arduino-nano-blinky/io-smoke.yaml",
   "system": "configs/systems/arduino-nano.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-11T23:44:55Z",
-  "finished_at_utc": "2026-11-11T23:50:28Z",
-  "elapsed_seconds": 333,
-  "elapsed_ms": 332746,
+  "started_at_utc": "2026-11-13T10:30:13Z",
+  "finished_at_utc": "2026-11-13T10:31:20Z",
+  "elapsed_seconds": 67,
+  "elapsed_ms": 66941,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 263.508,
-    "build_firmware": 35.618,
-    "run_smoke": 33.558
+    "build_cli": 59.896,
+    "build_firmware": 6.058,
+    "run_smoke": 0.947
   },
   "stages_ms": {
-    "build_cli": 263508,
-    "build_firmware": 35618,
-    "run_smoke": 33558
+    "build_cli": 59896,
+    "build_firmware": 6058,
+    "run_smoke": 947
   },
   "firmware_build_script": "examples/arduino-nano-blinky/build-firmware.sh"
 }

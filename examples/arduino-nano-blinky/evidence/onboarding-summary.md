@@ -1,8 +1,8 @@
 # Onboarding Smoke: arduino-nano-atmega328p-maintenance
 
 - status: `pass`
-- elapsed_seconds: `333`
-- elapsed_ms: `332746`
+- elapsed_seconds: `67`
+- elapsed_ms: `66941`
 - threshold_seconds: `3600`
 - threshold_met: `True`
 - failure_stage: `n/a`

@@ -14,8 +14,8 @@ warning: profiles for the non root package will be ignored, specify profiles at 
 package:   /data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/tier1-fixture/rp2040/Cargo.toml
 workspace: /data/worktrees/legacy-migrated/labwired-hw-onboarding/Cargo.toml
    Compiling labwired-core v0.25.0 (/data/worktrees/legacy-migrated/labwired-hw-onboarding/crates/core)
-    Finished `test` profile [optimized + debuginfo] target(s) in 35.71s
-     Running tests/avr_nano_live_run.rs (/data/build-targets/hw-onboarding/debug/deps/avr_nano_live_run-3c49dd2da13cf2d7)
+    Finished `test` profile [optimized + debuginfo] target(s) in 18.88s
+     Running tests/avr_nano_live_run.rs (target/debug/deps/avr_nano_live_run-3c49dd2da13cf2d7)
 
 running 1 test
 === Arduino Nano live run SUCCESS ===
