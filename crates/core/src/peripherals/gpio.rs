@@ -173,6 +173,34 @@ impl FromStr for GpioRegisterLayout {
     }
 }
 
+/// STM32 GPIOx_LCKR write: LCKK (bit 16) must be written 1-0-1 with the same
+/// LCK[15:0] mask before the configuration is locked (RM0008 §9.2.7, RM0456
+/// §13.4.8). LCKK reads 0 until the sequence completes. Once it reads 1, the
+/// key and pin mask stay latched until reset; later writes cannot lock more
+/// pins. `seq` is 0 idle, 1 after LCKK=1, 2 after LCKK=0.
+fn stm32_lckr_write(lckr: &mut u32, seq: &mut u8, locked_pins: &mut u32, value: u32) {
+    const LCKK: u32 = 1 << 16;
+    if *lckr & LCKK != 0 {
+        return;
+    }
+    let pins = value & 0xFFFF;
+    if value & LCKK != 0 {
+        if *seq == 2 && pins == *lckr {
+            *locked_pins = pins;
+            *seq = 0;
+            *lckr = pins | LCKK;
+        } else {
+            // A fresh key write can start (or restart) the sequence, but it
+            // cannot complete an earlier one; a changed mask also restarts.
+            *seq = if *seq == 2 { 0 } else { 1 };
+            *lckr = pins;
+        }
+    } else {
+        *seq = if *seq == 1 && pins == *lckr { 2 } else { 0 };
+        *lckr = pins;
+    }
+}
+
 // ── STM32F1 (CRL/CRH config registers) ───────────────────────────────────────
 #[derive(Debug, Default, serde::Serialize)]
 pub struct F1Gpio {
@@ -181,6 +209,12 @@ pub struct F1Gpio {
     idr: u32,  // 0x08
     odr: u32,  // 0x0C
     lckr: u32, // 0x18
+    /// LCKR lock sequence state: 0 idle, 1 LCKK=1 seen, 2 LCKK=0 seen.
+    #[serde(default)]
+    lckr_seq: u8,
+    /// Pins whose CRL/CRH nibble is locked by the LCKR sequence.
+    #[serde(default)]
+    locked_pins: u32,
     /// Pins the outside world is holding. The input pull (CNF = 10, ODR picks
     /// the rail) applies only where this bit is clear, so a button on the pad
     /// wins over the weak resistor. Not a register: snapshots stay the
@@ -277,10 +311,23 @@ impl F1Gpio {
             }
         }
     }
+    /// CRL (`high == false`) or CRH nibble mask of the locked pins.
+    fn locked_config_mask(&self, high: bool) -> u32 {
+        let pins = if high {
+            self.locked_pins >> 8
+        } else {
+            self.locked_pins
+        };
+        (0..8)
+            .filter(|pin| pins & (1 << pin) != 0)
+            .fold(0, |mask, pin| mask | (0xF << (pin * 4)))
+    }
+
     fn write_reg(&mut self, offset: u64, value: u32) {
+        let merge = |old: u32, new: u32, lock: u32| (old & lock) | (new & !lock);
         match offset {
-            0x00 => self.crl = value,
-            0x04 => self.crh = value,
+            0x00 => self.crl = merge(self.crl, value, self.locked_config_mask(false)),
+            0x04 => self.crh = merge(self.crh, value, self.locked_config_mask(true)),
             0x0C => self.odr = value & 0xFFFF,
             0x10 => {
                 // BSRR: low 16 set, high 16 reset; BS has priority over BR.
@@ -293,7 +340,12 @@ impl F1Gpio {
                 // BRR: reset selected ODR bits.
                 self.odr &= !(value & 0xFFFF);
             }
-            0x18 => self.lckr = value,
+            0x18 => stm32_lckr_write(
+                &mut self.lckr,
+                &mut self.lckr_seq,
+                &mut self.locked_pins,
+                value,
+            ),
             _ => {
                 crate::census_reg!("gpio:F1Gpio", offset, "write");
             }
@@ -434,49 +486,12 @@ impl V2Gpio {
                 self.odr &= !reset;
                 self.odr |= set;
             }
-            0x1C => {
-                // LCKR: LCKK must be written 1-0-1 with the same pin mask
-                // before the configuration is locked (RM0456 §13.4.8). Once
-                // LCKK reads as 1, the key and pin mask stay latched until
-                // reset; later writes cannot lock additional pins.
-                const LCKK: u32 = 1 << 16;
-                if self.lckr & LCKK != 0 {
-                    return;
-                }
-                let pins = value & 0xFFFF;
-                let lckk = value & LCKK != 0;
-                if lckk {
-                    match self.lckr_seq {
-                        0 | 1 => {
-                            // A fresh key write can start (or restart) the
-                            // sequence, but it cannot complete an earlier one.
-                            self.lckr_seq = 1;
-                            self.lckr = pins;
-                        }
-                        2 if pins == self.lckr => {
-                            self.locked_pins = pins;
-                            self.lckr_seq = 0;
-                            self.lckr = pins | LCKK;
-                        }
-                        2 => {
-                            // LCK[15:0] must remain constant throughout 1-0-1.
-                            self.lckr_seq = 0;
-                            self.lckr = pins;
-                        }
-                        _ => {
-                            self.lckr_seq = 0;
-                            self.lckr = pins;
-                        }
-                    }
-                } else {
-                    self.lckr_seq = if self.lckr_seq == 1 && pins == self.lckr {
-                        2
-                    } else {
-                        0
-                    };
-                    self.lckr = pins;
-                }
-            }
+            0x1C => stm32_lckr_write(
+                &mut self.lckr,
+                &mut self.lckr_seq,
+                &mut self.locked_pins,
+                value,
+            ),
             0x20 => self.afrl = merge(self.afrl, value, locked4_low),
             0x24 => self.afrh = merge(self.afrh, value, locked4_high),
             0x2C => self.hslvr = merge(self.hslvr, value, self.locked_pins),
@@ -4845,6 +4860,60 @@ mod tests {
         );
         // Must not report Stm32F1, or bus::attach applies STM32F103 pad tables.
         assert_eq!(gpio.register_layout(), GpioRegisterLayout::Wch);
+    }
+
+    #[test]
+    fn f1_lckr_sequence_freezes_locked_config_nibbles() {
+        // RM0008 §9.2.7: LCKK reads 0 until the 1-0-1 key sequence completes
+        // with the same LCK mask; then CRL/CRH nibbles of the locked pins keep
+        // their value until reset. Unlocked pins and ODR stay writable.
+        let mut gpio = GpioPort::new();
+        gpio.write_u32(0x00, 0x4444_4443).unwrap(); // PA0 push-pull output
+        gpio.write_u32(0x04, 0x4444_4448).unwrap(); // PA8 input with pull
+
+        // A single LCKK=1 write does not lock or set LCKK.
+        gpio.write_u32(0x18, 0x0001_0101).unwrap();
+        assert_eq!(gpio.read_u32(0x18).unwrap(), 0x0000_0101);
+
+        // A changed mask in the middle of the sequence restarts it.
+        gpio.write_u32(0x18, 0x0000_0101).unwrap();
+        gpio.write_u32(0x18, 0x0001_0001).unwrap();
+        assert_eq!(gpio.read_u32(0x18).unwrap() & (1 << 16), 0);
+        gpio.write_u32(0x00, 0x4444_4441).unwrap();
+        assert_eq!(gpio.read_u32(0x00).unwrap(), 0x4444_4441);
+        gpio.write_u32(0x00, 0x4444_4443).unwrap();
+
+        // Full 1-0-1 sequence with mask PA0|PA8 locks both pins.
+        gpio.write_u32(0x18, 0x0001_0101).unwrap();
+        gpio.write_u32(0x18, 0x0000_0101).unwrap();
+        gpio.write_u32(0x18, 0x0001_0101).unwrap();
+        assert_eq!(gpio.read_u32(0x18).unwrap(), 0x0001_0101);
+
+        gpio.write_u32(0x00, 0x3333_3334).unwrap();
+        assert_eq!(gpio.read_u32(0x00).unwrap(), 0x3333_3333);
+        gpio.write_u32(0x04, 0x1111_1114).unwrap();
+        assert_eq!(gpio.read_u32(0x04).unwrap(), 0x1111_1118);
+        gpio.write_u32(0x10, 0x0000_0001).unwrap();
+        assert_eq!(gpio.read_u32(0x0C).unwrap() & 1, 1);
+
+        // The latched key cannot be cleared or extended before reset.
+        gpio.write_u32(0x18, 0x0000_FFFF).unwrap();
+        gpio.write_u32(0x18, 0x0001_FFFF).unwrap();
+        assert_eq!(gpio.read_u32(0x18).unwrap(), 0x0001_0101);
+        gpio.write_u32(0x00, 0x4444_4444).unwrap();
+        assert_eq!(gpio.read_u32(0x00).unwrap() & 0xF, 0x3);
+    }
+
+    #[test]
+    fn v2_lckr_sequence_still_locks_moder() {
+        let mut gpio = GpioPort::new_with_layout(GpioRegisterLayout::Stm32V2);
+        gpio.write_u32(0x00, 0x0000_0001).unwrap();
+        gpio.write_u32(0x1C, 0x0001_0001).unwrap();
+        gpio.write_u32(0x1C, 0x0000_0001).unwrap();
+        gpio.write_u32(0x1C, 0x0001_0001).unwrap();
+        assert_eq!(gpio.read_u32(0x1C).unwrap(), 0x0001_0001);
+        gpio.write_u32(0x00, 0x0000_0002).unwrap();
+        assert_eq!(gpio.read_u32(0x00).unwrap(), 0x0000_0001);
     }
 
     #[test]

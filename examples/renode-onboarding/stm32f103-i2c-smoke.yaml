@@ -1,6 +1,7 @@
 # Cortex-M3 exception and interrupt behavior, USART2 and I2C1 NACK plus TMP102
 # transactions and BME280 behavior
-# against the imported STM32F103 system. Core checks include exception frames
+# against the imported STM32F103 system. GPIOB checks CRH reset, push-pull IDR,
+# BSRR/BRR, input pulls and the LCKR 1-0-1 configuration lock on free pads. Core checks include exception frames
 # from Thread mode using both MSP and PSP, SVC return state through both
 # stacks, SysTick wake from WFI, UsageFault and HardFault escalation, PRIMASK and BASEPRI/BASEPRI_MAX
 # masking and release, plus NVIC pending and return state, priority grouping
@@ -49,6 +50,8 @@ assertions:
   - uart_contains: "SPI1 MAX31855=01901600"
   - uart_contains: "SPI1 TXEIRQ=1 REARM=0 RXNEIRQ=1 RELEASED=1"
   - uart_contains: "SPI1 CHECKS=1"
+  - uart_contains: "GPIOB F1 CRH_RESET=1 PP=1 BRR=1 BS_PRIORITY=1 PULLUP=1 PULLDOWN=1 ok"
+  - uart_contains: "GPIOB F1 LCKR SINGLE=0 LCKK=1 LOCKED=1 UNLOCKED=1 ODR=1 ok"
   - uart_contains: "I2C_NACK_OK"
   - uart_contains: "I2C_IDLE_OK"
   - uart_contains: "TMP102=00001900"

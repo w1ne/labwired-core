@@ -42,6 +42,12 @@ const GPIOA_CRL: u32 = GPIOA_BASE + 0x00;
 
 const GPIOB_BASE: u32 = 0x4001_0C00;
 const GPIOB_CRL: u32 = GPIOB_BASE + 0x00; /* PB6 (SCL) and PB7 (SDA) live here */
+const GPIOB_CRH: u32 = GPIOB_BASE + 0x04;
+const GPIOB_IDR: u32 = GPIOB_BASE + 0x08;
+const GPIOB_ODR: u32 = GPIOB_BASE + 0x0C;
+const GPIOB_BSRR: u32 = GPIOB_BASE + 0x10;
+const GPIOB_BRR: u32 = GPIOB_BASE + 0x14;
+const GPIOB_LCKR: u32 = GPIOB_BASE + 0x18;
 
 const USART2_BASE: u32 = 0x4000_4400;
 const USART2_SR: u32 = USART2_BASE + 0x00;
@@ -297,6 +303,7 @@ fn main() -> ! {
     smoke_usart2_txe_irq();
     smoke_usart2_rx_enable_gate();
     smoke_spi1_irq_and_max31855();
+    smoke_gpiob_registers();
     unsafe {
         i2c1_init();
     }
@@ -3756,6 +3763,72 @@ fn smoke_usart2_rx_enable_gate() {
     putbytes(b" released=");
     put_flag(released);
     putbytes(if passed { b" ok\n" } else { b" FAIL\n" });
+}
+
+/// GPIOB register semantics on free pads (RM0008 §9.2): CRH reset value,
+/// push-pull IDR follows ODR, BSRR set-over-reset priority, BRR, input pull
+/// rail from ODR, then the LCKR 1-0-1 key sequence freezing only PB0's CRL
+/// nibble. PB6/PB7 stay unlocked for I2C1, which is configured afterwards.
+fn smoke_gpiob_registers() {
+    let rd = |addr: u32| unsafe { read_volatile(addr as *const u32) };
+    let wr = |addr: u32, value: u32| unsafe { write_volatile(addr as *mut u32, value) };
+
+    let crh_reset = rd(GPIOB_CRH) == 0x4444_4444;
+    // PB0 push-pull output (MODE=11, CNF=00), PB1 input with pull (CNF=10).
+    let crl = rd(GPIOB_CRL) & !0xFF;
+    wr(GPIOB_CRL, crl | 0x83);
+    wr(GPIOB_BSRR, 1 << 0);
+    let pp_high = rd(GPIOB_IDR) & 1 == 1;
+    wr(GPIOB_BRR, 1 << 0);
+    let brr = rd(GPIOB_IDR) & 1 == 0 && rd(GPIOB_ODR) & 1 == 0;
+    wr(GPIOB_BSRR, (1 << 16) | (1 << 0));
+    let bs_priority = rd(GPIOB_ODR) & 1 == 1;
+    wr(GPIOB_BSRR, 1 << 1);
+    let pull_up = rd(GPIOB_IDR) & 0b10 == 0b10;
+    wr(GPIOB_BRR, 1 << 1);
+    let pull_down = rd(GPIOB_IDR) & 0b10 == 0;
+    let gpio_ok = crh_reset && pp_high && brr && bs_priority && pull_up && pull_down;
+    putbytes(b"GPIOB F1 CRH_RESET=");
+    put_flag(crh_reset);
+    putbytes(b" PP=");
+    put_flag(pp_high);
+    putbytes(b" BRR=");
+    put_flag(brr);
+    putbytes(b" BS_PRIORITY=");
+    put_flag(bs_priority);
+    putbytes(b" PULLUP=");
+    put_flag(pull_up);
+    putbytes(b" PULLDOWN=");
+    put_flag(pull_down);
+    putbytes(if gpio_ok { b" ok\n" } else { b" FAIL\n" });
+
+    const LCKK: u32 = 1 << 16;
+    wr(GPIOB_LCKR, LCKK | 1);
+    let single = rd(GPIOB_LCKR) & LCKK != 0;
+    wr(GPIOB_LCKR, 1);
+    wr(GPIOB_LCKR, LCKK | 1);
+    let _ = rd(GPIOB_LCKR);
+    let lckk = rd(GPIOB_LCKR) & LCKK != 0;
+    // Try to turn PB0 into an input and PB1 into an output: only PB1 changes.
+    let crl = rd(GPIOB_CRL) & !0xFF;
+    wr(GPIOB_CRL, crl | 0x34);
+    let after = rd(GPIOB_CRL) & 0xFF;
+    let locked = after & 0x0F == 0x3;
+    let unlocked = after & 0xF0 == 0x30;
+    wr(GPIOB_BRR, 1 << 0);
+    let odr = rd(GPIOB_IDR) & 1 == 0;
+    let lock_ok = !single && lckk && locked && unlocked && odr;
+    putbytes(b"GPIOB F1 LCKR SINGLE=");
+    put_flag(single);
+    putbytes(b" LCKK=");
+    put_flag(lckk);
+    putbytes(b" LOCKED=");
+    put_flag(locked);
+    putbytes(b" UNLOCKED=");
+    put_flag(unlocked);
+    putbytes(b" ODR=");
+    put_flag(odr);
+    putbytes(if lock_ok { b" ok\n" } else { b" FAIL\n" });
 }
 
 fn smoke_spi1_irq_and_max31855() {

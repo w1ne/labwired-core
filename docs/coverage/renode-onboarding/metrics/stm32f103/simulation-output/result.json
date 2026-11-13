@@ -192,6 +192,18 @@
     },
     {
       "assertion": {
+        "uart_contains": "GPIOB F1 CRH_RESET=1 PP=1 BRR=1 BS_PRIORITY=1 PULLUP=1 PULLDOWN=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "GPIOB F1 LCKR SINGLE=0 LCKK=1 LOCKED=1 UNLOCKED=1 ODR=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "uart_contains": "I2C_NACK_OK"
       },
       "passed": true
@@ -518,12 +530,12 @@
       5500,
       536891364,
       632080,
-      134237544,
+      134238612,
       536891136,
       69,
-      134236224
+      134237292
     ],
-    "pc": 134236224,
+    "pc": 134237292,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -536,7 +548,7 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "firmware_hash": "cc1428accc8262b574e3269dd5fbd1cd30059bc0b8b05af85957050064279ca6",
+  "firmware_hash": "1f4c22a430aebc7f60156014c555cbaae851e84853c8c50f8203c26ecf2d27be",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-f103-i2c-demo",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f103.yaml",
@@ -804,7 +816,7 @@
       }
     ],
     "pc": "0x0800025C",
-    "lr": "0x08002427",
+    "lr": "0x0800241F",
     "exc_return": {
       "value": "0xFFFFFFF9",
       "return_to": "thread",
@@ -818,7 +830,7 @@
       "r2": "0x2000051C",
       "r3": "0x00000000",
       "r12": "0x20004F7C",
-      "lr": "0x08002427",
+      "lr": "0x0800241F",
       "pc": "0x0800025C",
       "xpsr": "0x61000000"
     },
@@ -827,8 +839,8 @@
     },
     "caller": {
       "function": "firmware_f103_i2c_demo::smoke_usagefault_and_hardfault_escalation",
-      "file": "/home/andrii/worktrees-legacy-20261109/labwired-core/renode/crates/firmware-f103-i2c-demo/src/main.rs",
-      "line": 2216
+      "file": "/data/worktrees/legacy-migrated/labwired-renode/crates/firmware-f103-i2c-demo/src/main.rs",
+      "line": 2223
     },
     "registers": {
       "hfsr": "0x00000000",
@@ -1005,6 +1017,18 @@
         "end_cycle": 40000
       },
       {
+        "text": "GPIOB F1 CRH_RESET=1 PP=1 BRR=1 BS_PRIORITY=1 PULLUP=1 PULLDOWN=1 ok",
+        "cycle_lo": 30000,
+        "cycle": 40000,
+        "end_cycle": 40000
+      },
+      {
+        "text": "GPIOB F1 LCKR SINGLE=0 LCKK=1 LOCKED=1 UNLOCKED=1 ODR=1 ok",
+        "cycle_lo": 30000,
+        "cycle": 40000,
+        "end_cycle": 40000
+      },
+      {
         "text": "INIT",
         "cycle_lo": 30000,
         "cycle": 40000,
@@ -1032,72 +1056,72 @@
         "text": "TRISE=00000009",
         "cycle_lo": 30000,
         "cycle": 40000,
-        "end_cycle": 40000
+        "end_cycle": 50000
       },
       {
         "text": "OAR1=00004000",
-        "cycle_lo": 30000,
-        "cycle": 40000,
-        "end_cycle": 40000
+        "cycle_lo": 40000,
+        "cycle": 50000,
+        "end_cycle": 50000
       },
       {
         "text": "SR1=00000000",
-        "cycle_lo": 30000,
-        "cycle": 40000,
-        "end_cycle": 40000
+        "cycle_lo": 40000,
+        "cycle": 50000,
+        "end_cycle": 50000
       },
       {
         "text": "SR2=00000000",
-        "cycle_lo": 30000,
-        "cycle": 40000,
-        "end_cycle": 40000
+        "cycle_lo": 40000,
+        "cycle": 50000,
+        "end_cycle": 50000
       },
       {
         "text": "START",
-        "cycle_lo": 30000,
-        "cycle": 40000,
-        "end_cycle": 40000
+        "cycle_lo": 40000,
+        "cycle": 50000,
+        "end_cycle": 50000
       },
       {
         "text": "CR1=00000001",
-        "cycle_lo": 30000,
-        "cycle": 40000,
-        "end_cycle": 40000
+        "cycle_lo": 40000,
+        "cycle": 50000,
+        "end_cycle": 50000
       },
       {
         "text": "CR2=00000008",
-        "cycle_lo": 30000,
-        "cycle": 40000,
-        "end_cycle": 40000
+        "cycle_lo": 40000,
+        "cycle": 50000,
+        "end_cycle": 50000
       },
       {
         "text": "CCR=00000028",
-        "cycle_lo": 30000,
-        "cycle": 40000,
-        "end_cycle": 40000
+        "cycle_lo": 40000,
+        "cycle": 50000,
+        "end_cycle": 50000
       },
       {
         "text": "TRISE=00000009",
-        "cycle_lo": 30000,
-        "cycle": 40000,
-        "end_cycle": 40000
+        "cycle_lo": 40000,
+        "cycle": 50000,
+        "end_cycle": 50000
       },
       {
         "text": "OAR1=00004000",
-        "cycle_lo": 30000,
-        "cycle": 40000,
-        "end_cycle": 40000
+        "cycle_lo": 40000,
+        "cycle": 50000,
+        "end_cycle": 50000
       },
       {
         "text": "SR1=00000001",
-        "cycle_lo": 30000,
-        "cycle": 40000,
-        "end_cycle": 40000
+        "cycle_lo": 40000,
+        "cycle": 50000,
+        "end_cycle": 50000
       },
       {
         "text": "SR2=00000000",
-        "cycle_lo": 30000,
-        "cycle": 40000,
+        "cycle_lo": 40000,
+        "cycle": 50000,
         "end_cycle": 50000
       },
       {
@@ -1222,20 +1246,20 @@
       },
       {
         "text": "TMP102_CONFIG=0000FFF0",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 50000,
+        "cycle": 60000,
+        "end_cycle": 60000
       },
       {
         "text": "TMP102_CONFIG_WRITE_OK",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 50000,
+        "cycle": 60000,
+        "end_cycle": 60000
       },
       {
         "text": "TMP102_TLOW=00003450",
-        "cycle_lo": 40000,
-        "cycle": 50000,
+        "cycle_lo": 50000,
+        "cycle": 60000,
         "end_cycle": 60000
       },
       {
@@ -1282,15 +1306,15 @@
       },
       {
         "text": "BME280_T2=00006743",
-        "cycle_lo": 50000,
-        "cycle": 60000,
-        "end_cycle": 60000
+        "cycle_lo": 60000,
+        "cycle": 70000,
+        "end_cycle": 70000
       },
       {
         "text": "BME280_CALIBRATION_READ_OK",
-        "cycle_lo": 50000,
-        "cycle": 60000,
-        "end_cycle": 60000
+        "cycle_lo": 60000,
+        "cycle": 70000,
+        "end_cycle": 70000
       },
       {
         "text": "BME280_CALIBRATION_MAP_READ_OK",
@@ -1336,21 +1360,21 @@
       },
       {
         "text": "BME280_PRESS_RAW=0005883F",
-        "cycle_lo": 90000,
-        "cycle": 100000,
-        "end_cycle": 100000
+        "cycle_lo": 100000,
+        "cycle": 110000,
+        "end_cycle": 110000
       },
       {
         "text": "BME280_TEMP_RAW=0008E910",
-        "cycle_lo": 90000,
-        "cycle": 100000,
-        "end_cycle": 100000
+        "cycle_lo": 100000,
+        "cycle": 110000,
+        "end_cycle": 110000
       },
       {
         "text": "BME280_HUM_RAW=0000853F",
-        "cycle_lo": 90000,
-        "cycle": 100000,
-        "end_cycle": 100000
+        "cycle_lo": 100000,
+        "cycle": 110000,
+        "end_cycle": 110000
       },
       {
         "text": "BME280_SEEDED_ENVIRONMENT_OK",
@@ -1585,14 +1609,14 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 25858,
+    "text_bytes": 27034,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 25858,
+    "flash_used_bytes": 27034,
     "ram_static_bytes": 0,
     "flash_total_bytes": 65536,
     "ram_total_bytes": 20480,
-    "flash_used_pct": 39.46,
+    "flash_used_pct": 41.25,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -1618,34 +1642,29 @@
     "cycles": 50000125,
     "instructions": 50000000,
     "steps_executed": 50000000,
-    "memory_reads": 149909,
-    "memory_writes": 65717,
-    "peripheral_accesses": 505375,
+    "memory_reads": 124889,
+    "memory_writes": 65708,
+    "peripheral_accesses": 505322,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134236224,
+        "pc": 134237292,
         "count": 183594,
         "symbol": "firmware_f103_i2c_demo::main"
       },
       {
-        "pc": 134220502,
-        "count": 1523,
-        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
-      },
-      {
-        "pc": 134220534,
-        "count": 1446,
+        "pc": 134220532,
+        "count": 1641,
         "symbol": "firmware_f103_i2c_demo::wait_sr1"
       },
       {
-        "pc": 134220458,
-        "count": 860,
-        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+        "pc": 134220510,
+        "count": 1406,
+        "symbol": "firmware_f103_i2c_demo::wait_sr1"
       },
       {
-        "pc": 134220532,
-        "count": 586,
+        "pc": 134220466,
+        "count": 938,
         "symbol": "firmware_f103_i2c_demo::wait_sr1"
       },
       {
@@ -1654,54 +1673,59 @@
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134220510,
+        "pc": 134220502,
+        "count": 546,
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 134220508,
         "count": 546,
         "symbol": "firmware_f103_i2c_demo::wait_sr1"
       },
       {
+        "pc": 134220534,
+        "count": 510,
+        "symbol": "firmware_f103_i2c_demo::wait_sr1"
+      },
+      {
+        "pc": 134220530,
+        "count": 508,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134220528,
+        "count": 470,
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+      },
+      {
         "pc": 134220504,
-        "count": 507,
+        "count": 469,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
         "pc": 134220526,
-        "count": 469,
+        "count": 392,
         "symbol": "<i32 as core::cmp::PartialOrd>::lt"
-      },
-      {
-        "pc": 134220528,
-        "count": 431,
-        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
-      },
-      {
-        "pc": 134220530,
-        "count": 431,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134220508,
-        "count": 430,
-        "symbol": "firmware_f103_i2c_demo::wait_sr1"
-      },
-      {
-        "pc": 134220460,
-        "count": 312,
-        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
         "pc": 134220464,
-        "count": 273,
+        "count": 312,
         "symbol": "firmware_f103_i2c_demo::wait_sr1"
+      },
+      {
+        "pc": 134220458,
+        "count": 195,
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 134220460,
+        "count": 195,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
         "pc": 134220462,
-        "count": 235,
+        "count": 195,
         "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134220466,
-        "count": 234,
-        "symbol": "firmware_f103_i2c_demo::wait_sr1"
       }
     ]
   }
