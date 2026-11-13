@@ -2129,6 +2129,26 @@
         "lane": "core-onboarding-smoke (push to main + nightly cron): matrix id adafruit-feather-rp2040-bme280 (scripts/onboarding_smoke.sh)"
       }
     },
+    "stm32f446re": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "examples/nucleo-f446re/io-smoke.yaml",
+        "test": "NUCLEO-F446RE: USART2 + LD2",
+        "signal": "crates/firmware-nucleo-f446re-smoke boots on configs/systems/nucleo-f446re.yaml, enables GPIOA and USART2 in RCC, sets PA2/PA3 to AF7 and writes the banner to USART2 (the ST-LINK VCP); uart_contains matches it, and gpio_edges requires LD2 on PA5 to toggle at least 4 times.",
+        "lane": "core-onboarding-smoke (push to main + nightly cron): matrix id nucleo-f446re (scripts/onboarding_smoke.sh)"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "SPI1 is declared on configs/chips/stm32f446re.yaml, but no F446RE firmware SPI transfer is proven.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "I2C1 is declared on configs/chips/stm32f446re.yaml, but no F446RE firmware I2C transaction is proven.",
+        "lane": "none"
+      }
+    },
     "stm32h723zg": {
       "in_boards": false,
       "uart": {

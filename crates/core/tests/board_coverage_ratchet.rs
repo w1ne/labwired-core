@@ -902,6 +902,11 @@ fn every_shipped_descriptor_is_ratcheted() {
         // LD1 + USART3 smoke runs in core-onboarding-smoke. No catalog board,
         // no silicon oracle, no differential. Promote when all three exist.
         "stm32h723zg",
+        // NUCLEO-F446RE slice of the STM32F446RE (Cortex-M4). The descriptor
+        // declares the F401-subset peripheral map only; its LD2 + USART2
+        // smoke runs in core-onboarding-smoke. No catalog board, no silicon
+        // oracle, no differential. Promote when all three exist.
+        "stm32f446re",
     ];
     // configs/chips id -> ratchet chip id (kw41z ships as mkw41z4.yaml).
     fn to_ratchet_id(stem: &str) -> &str {

@@ -1177,6 +1177,15 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: None,
     },
+    // NUCLEO-F446RE slice (F401-subset map). SIM-DERIVED: no silicon
+    // capture. Its LD2 + USART2 smoke runs as a CLI script in
+    // core-onboarding-smoke, not as a Rust test, so no behavior_gate resolves.
+    ChipConf {
+        name: "stm32f446re",
+        yaml: "configs/chips/stm32f446re.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
 ];
 
 /// Registers a cold-reset sim model can *never* reproduce from a `reset_halt`

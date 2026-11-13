@@ -215,6 +215,10 @@ _Board variant of the rp2040 die with the Feather's 133 MHz clock and 8 MiB flas
 
 _Board variant of the rp2350 die with the Feather's 8 MiB flash; it reuses the rp2350 behavioural models. No beyond-rubric peripheral is exercised under this name: the Feather smoke toggles red D13 (GPIO7) through SIO and writes UART0; both are rubric classes, not beyond-rubric content. PIO, USB, PSRAM and the onboard NeoPixel are not exercised on this board._
 
+### `stm32f446re`
+
+_No beyond-rubric F446 peripheral is exercised: the NUCLEO-F446RE smoke drives RCC enables, GPIOA (LD2 on PA5, PA2/PA3 AF7) and USART2 TX only. The descriptor declares RCC, FLASH, PWR, GPIOA/B/C, USART1/2, I2C1, SPI1, TIM1..TIM4, ADC1, IWDG, RTC, SYSCFG, EXTI and DMA1/2 at the shared F4 addresses; it does not declare USART3, UART4/5, USART6, SPI2..4, I2C2/3, FMPI2C1, CAN, SAI, QUADSPI, SPDIFRX, HDMI-CEC, DCMI, FMC, DAC, ADC2/3, TIM5..TIM14, USB OTG or GPIOD/GPIOH._
+
 ### `stm32h723zg`
 
 _No beyond-rubric H723 peripheral is exercised: the NUCLEO-H723ZG smoke drives RCC enables, GPIOB (LD1 on PB0), GPIOD AF7 and USART3 TX only. This narrow board slice declares RCC, SysTick, GPIO B/C/D/E and USART3; it does not model PWR, the cache/MPU, FMC/OCTOSPI, Ethernet, USB OTG, FDCAN, ADC, timers, DMA, I2C, SPI or the other H723 peripherals._
