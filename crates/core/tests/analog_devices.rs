@@ -7656,6 +7656,160 @@ mod analog {
         assert!(error.contains("pj"), "unexpected error {error}");
     }
 
+    /// Diode sidewall depletion charge `CJSW`/`CJP`·`PJ` with `PHP`, `MJSW`
+    /// and `FCS` follows ngspice-42. Each diode has its own source; one
+    /// backward-Euler step to a new voltage and a second step held there give
+    /// the stored-charge change as `(I_step − I_hold)·h`. Reference charges are
+    /// ngspice-42 `.dc` `@d[charge]` (`.temp 26.85`, `tnom=26.85`). Above
+    /// `FCS·PHP` ngspice-42 starts the sidewall's linear region from the
+    /// bottom junction's `F1`, so the sidewall diode parts from an otherwise
+    /// identical bottom (`CJO`) diode at 0.3 V and 0.6 V. `AREA` leaves the
+    /// sidewall unscaled, and `TEMP` moves `CJSW`/`PHP` by the junction law
+    /// (that row uses `TNOM=27`, ngspice's `REFTEMP`, in both decks).
+    #[test]
+    fn diode_sidewall_capacitance_cjsw_php_mjsw_fcs_matches_ngspice() {
+        let netlist = "V1 a 0 dc 0\nV2 b 0 dc 0\nV3 c 0 dc 0\nV4 d 0 dc 0\nV5 e 0 dc 0\n\
+            D1 a 0 DSW pj=3\nD2 b 0 DSWT pj=3 temp=75\nD3 c 0 DB\n\
+            D4 d 0 DSW pj=3 area=2\nD5 e 0 DMIX pj=2\n\
+            .model DSW D(IS=1e-14 CJSW=2p PHP=0.5 MJSW=0.4 FCS=0.5)\n\
+            .model DSWT D(IS=1e-14 CJSW=2p PHP=0.5 MJSW=0.4 FCS=0.5 TNOM=27)\n\
+            .model DB D(IS=1e-14 CJO=6p VJ=0.5 M=0.4 FC=0.5)\n\
+            .model DMIX D(IS=1e-14 CJO=4p VJ=0.7 M=0.5 FC=0.6 CJP=1p PHP=0.5 MJSW=0.4 FCS=0.5)\n";
+        let sources = ["V1", "V2", "V3", "V4", "V5"];
+        // ngspice-42 charge per diode, in the order of `sources`.
+        let ngspice: [(f64, [f64; 5]); 7] = [
+            (0.0, [0.0; 5]),
+            (
+                -3.0,
+                [
+                    -1.107_047_925e-11,
+                    -1.136_974_361e-11,
+                    -1.107_047_925e-11,
+                    -1.107_047_925e-11,
+                    -1.096_494_130e-11,
+                ],
+            ),
+            (
+                -1.2,
+                [
+                    -5.419_751_331e-12,
+                    -5.672_842_183e-12,
+                    -5.419_751_331e-12,
+                    -5.419_751_331e-12,
+                    -5.432_633_853e-12,
+                ],
+            ),
+            (
+                -0.2,
+                [
+                    -1.118_526_224e-12,
+                    -1.214_534_991e-12,
+                    -1.118_526_224e-12,
+                    -1.118_526_224e-12,
+                    -1.122_645_221e-12,
+                ],
+            ),
+            (
+                0.1,
+                [
+                    6.265_517_042e-13,
+                    7.054_815_772e-13,
+                    6.265_517_042e-13,
+                    6.265_517_042e-13,
+                    6.242_580_094e-13,
+                ],
+            ),
+            (
+                0.3,
+                [
+                    3.926_405_094e-12,
+                    4.824_073_298e-12,
+                    2.112_916_691e-12,
+                    3.926_405_094e-12,
+                    2.533_151_235e-12,
+                ],
+            ),
+            (
+                0.6,
+                [
+                    7.061_555_890e-12,
+                    8.930_539_696e-12,
+                    5.248_067_487e-12,
+                    7.061_555_890e-12,
+                    5.591_032_927e-12,
+                ],
+            ),
+        ];
+        let h = 1e-6;
+        let mut solver = Solver::new(
+            parse_netlist(netlist).expect("sidewall deck parses"),
+            Integration::BackwardEuler,
+        )
+        .expect("sidewall solver builds");
+        let indices = sources.map(|name| solver.voltage_source_index(name).expect("source exists"));
+        for window in ngspice.windows(2) {
+            let ((_, before), (voltage, after)) = (window[0], window[1]);
+            for index in indices {
+                solver.set_voltage_source(index, voltage);
+            }
+            solver.advance(h).expect("step to the new bias solves");
+            let step = sources.map(|name| source_current(&solver, name));
+            solver.advance(h).expect("held bias solves");
+            let hold = sources.map(|name| source_current(&solver, name));
+            for (column, name) in sources.iter().enumerate() {
+                let expected = after[column] - before[column];
+                let got = (step[column] - hold[column]) * h;
+                assert!(
+                    (got - expected).abs() < 1e-4 * expected.abs() + 1e-17,
+                    "{name} {voltage} V: ngspice-42 charge change {expected} C, got {got} C"
+                );
+            }
+        }
+
+        // Ignoring CJSW, the sidewall diodes would store no charge, and the
+        // forward-region F1 quirk is a 1.8 pC offset at 0.3 V.
+        let (_, at_0v3) = ngspice[5];
+        assert!(at_0v3[0] - at_0v3[2] > 1.5e-12);
+
+        // CJSW with no perimeter must be bit-identical to the plain diode.
+        let transient = |card: &str| {
+            let mut solver = Solver::new(
+                parse_netlist(&format!(
+                    "V1 in 0 PULSE(-2 0.5 0 10n 10n 1u 2u)\nR1 in a 1k\nD1 a 0 DX\n.model DX D({card})\n"
+                ))
+                .expect("transient deck parses"),
+                Integration::Trapezoidal,
+            )
+            .expect("transient solver builds");
+            let a = solver.circuit().node("a").expect("node exists");
+            (0..40)
+                .map(|_| {
+                    solver.advance(5e-9).expect("transient step solves");
+                    solver.node_voltage(a)
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            transient("IS=1e-14 CJSW=2p PHP=0.5"),
+            transient("IS=1e-14"),
+            "CJSW with PJ=0 must add no charge"
+        );
+        assert_ne!(
+            transient("IS=1e-14 CJSW=2p PHP=0.5 PJ=500"),
+            transient("IS=1e-14"),
+            "CJSW with a perimeter must load the node"
+        );
+
+        for card in ["CJSW=-1p", "PHP=0", "MJSW=-0.1", "FCS=1"] {
+            let error = parse_netlist(&format!(
+                "V1 a 0 1\nD1 a 0 DX\n.model DX D(IS=1e-14 {card})\n"
+            ))
+            .expect_err("an invalid sidewall capacitance card must be refused")
+            .to_string();
+            assert!(error.contains("CJSW"), "{card}: unexpected error {error}");
+        }
+    }
+
     /// SPICE `AREA` on D, Q and J scales the card the instance sees: the
     /// junction and channel currents, knee currents and depletion
     /// capacitances grow with area and the terminal resistances shrink. Every

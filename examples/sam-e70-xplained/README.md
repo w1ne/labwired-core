@@ -63,6 +63,7 @@ that touches configs/ or examples/.
 | `system.yaml` | Board manifest (same as `configs/systems/sam-e70-xplained.yaml`) |
 | `io-smoke.yaml` | Ordered UART assertions over 4,000,000 steps |
 | `analog-ntc-diode-system.yaml` | Generic NTC and diode netlists routed to EXT1 PC31/PA19 |
+| `analog-diode-sidewall-charge-afec-system.yaml` | Generic diode sidewall (`CJSW`/`PJ`), bottom (`CJO`) and no-charge branches on PA17/PA18/PA20 for AFEC0 |
 | `zephyr-hello.yaml` | Stock Zephyr v3.7.0 `hello_world` |
 | `zephyr-sync.yaml` | Stock Zephyr v3.7.0 `synchronization` (threads, semaphore, SysTick sleep) |
 | `ci/build.sh`, `ci/test.sh` | Board gate build and proof |

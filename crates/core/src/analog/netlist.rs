@@ -71,7 +71,8 @@
 //! model (except diode forward/reverse knee currents `IK`/`IKF`/`IKR`, diode
 //! depletion capacitance `CJO`/`VJ`/`M`/`FC`, diffusion charge `TT` and
 //! soft-recovery parameter `VP`, diode sidewall saturation current
-//! `JSW`/`ISW` with emission `NS` and perimeter `PJ`, diode transit-time temperature
+//! `JSW`/`ISW` with emission `NS` and perimeter `PJ`, diode sidewall depletion
+//! capacitance `CJSW`/`CJP` with `PHP`/`MJSW`/`FCS`, diode transit-time temperature
 //! coefficients `TTT1`/`TTT2`, diode grading-coefficient temperature
 //! coefficients `TM1`/`TM2`, forward/reverse BJT transit-time temperature
 //! coefficients `TTF1`/`TTF2`/`TTR1`/`TTR2`, JFET terminal
@@ -727,17 +728,29 @@ pub struct DiodeModel {
     /// Default junction perimeter `PJ` for instances that do not give `pj=`.
     /// ngspice's default is 0, so `JSW` alone adds no current.
     pub pj: f64,
+    /// Zero-bias sidewall depletion capacitance `CJSW`/`CJP`, farads per unit
+    /// of perimeter `PJ`. Zero (the default) disables sidewall charge. On a
+    /// bound instance it is already multiplied by `PJ`.
+    pub cjsw: f64,
+    /// Sidewall junction potential `PHP`, volts, default 1 V.
+    pub php: f64,
+    /// Sidewall grading coefficient `MJSW`, default 0.33.
+    pub mjsw: f64,
+    /// Forward-bias sidewall capacitance transition coefficient `FCS`,
+    /// default 0.5.
+    pub fcs: f64,
 }
 
 impl DiodeModel {
-    /// Fold the junction perimeter into the card: `JSW` becomes the
-    /// instance's total sidewall saturation current `JSW·PJ`, as ngspice's
-    /// `diotemp.c` does. The instance `pj=` wins over the model `PJ`. `AREA`
-    /// does not touch the sidewall. A card with `JSW = 0` returns unchanged.
+    /// Fold the junction perimeter into the card: `JSW` and `CJSW` become the
+    /// instance's total sidewall saturation current `JSW·PJ` and capacitance
+    /// `CJSW·PJ`, as ngspice's `diosetup.c`/`diotemp.c` do. The instance
+    /// `pj=` wins over the model `PJ`. `AREA` does not touch the sidewall.
     pub fn with_perimeter(self, instance_pj: Option<f64>) -> Self {
         let pj = instance_pj.unwrap_or(self.pj);
         Self {
             jsw: self.jsw * pj,
+            cjsw: self.cjsw * pj,
             pj,
             ..self
         }
@@ -830,6 +843,10 @@ impl Default for DiodeModel {
             jsw: 0.0,
             ns: None,
             pj: 0.0,
+            cjsw: 0.0,
+            php: 1.0,
+            mjsw: 0.33,
+            fcs: 0.5,
         }
     }
 }
@@ -1228,6 +1245,10 @@ pub const REGULATOR_LIMIT_DIODE: DiodeModel = DiodeModel {
     jsw: 0.0,
     ns: None,
     pj: 0.0,
+    cjsw: 0.0,
+    php: 1.0,
+    mjsw: 0.33,
+    fcs: 0.5,
 };
 
 /// Floor on the input voltage a buck's power-balance sink divides by, volts.
@@ -1856,6 +1877,10 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             jsw: 0.0,
             ns: None,
             pj: 0.0,
+            cjsw: 0.0,
+            php: 1.0,
+            mjsw: 0.33,
+            fcs: 0.5,
         })),
         // SMAJ5.0A-like 400 W unidirectional TVS. Datasheet: VBR 6.40–7.07 V
         // at IT = 10 mA, VC = 9.2 V at IPP = 43.5 A. BV sits mid-window at
@@ -1891,6 +1916,10 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             jsw: 0.0,
             ns: None,
             pj: 0.0,
+            cjsw: 0.0,
+            php: 1.0,
+            mjsw: 0.33,
+            fcs: 0.5,
         })),
         "NJF" => Some(ModelCard::Jfet(JfetModel::defaults(Polarity::N))),
         "PJF" => Some(ModelCard::Jfet(JfetModel::defaults(Polarity::P))),
@@ -3675,9 +3704,18 @@ fn bind_models(
                     || !model.fc.is_finite()
                     || model.fc < 0.0
                     || model.fc >= 1.0
+                    || !model.cjsw.is_finite()
+                    || model.cjsw < 0.0
+                    || !model.php.is_finite()
+                    || model.php <= 0.0
+                    || !model.mjsw.is_finite()
+                    || model.mjsw < 0.0
+                    || !model.fcs.is_finite()
+                    || model.fcs < 0.0
+                    || model.fcs >= 1.0
                 {
                     return Err(ctx.parse_err(
-                        "a diode model needs IS > 0, N > 0, JSW >= 0, NS > 0, PJ >= 0, EG >= 0, finite XTI/TCV/TRS1/TRS2/TTT1/TTT2/TM1/TM2, TNOM above absolute zero, IK/IKR >= 0, ISR >= 0, NR > 0, RS >= 0, TT >= 0, VP >= 0, CJO >= 0, VJ > 0, M >= 0 and 0 <= FC < 1"
+                        "a diode model needs IS > 0, N > 0, JSW >= 0, NS > 0, PJ >= 0, EG >= 0, finite XTI/TCV/TRS1/TRS2/TTT1/TTT2/TM1/TM2, TNOM above absolute zero, IK/IKR >= 0, ISR >= 0, NR > 0, RS >= 0, TT >= 0, VP >= 0, CJO >= 0, VJ > 0, M >= 0, 0 <= FC < 1, CJSW >= 0, PHP > 0, MJSW >= 0 and 0 <= FCS < 1"
                             .to_string(),
                     ));
                 }
@@ -3752,6 +3790,17 @@ fn bind_models(
                             nominal_kelvin,
                             temperature_kelvin,
                         );
+                    // ngspice-42 applies the same junction law to the
+                    // sidewall with `PHP` and `MJSW`; `TM1`/`TM2` do not
+                    // touch `MJSW`.
+                    (operating_model.cjsw, operating_model.php) =
+                        super::device::diode_depletion_parameters_at_temperature(
+                            model.cjsw,
+                            model.php,
+                            model.mjsw,
+                            nominal_kelvin,
+                            temperature_kelvin,
+                        );
                 }
                 if !operating_model.tt.is_finite() || operating_model.tt < 0.0 {
                     return Err(ctx.parse_err(
@@ -3767,9 +3816,13 @@ fn bind_models(
                     || operating_model.cjo < 0.0
                     || !operating_model.vj.is_finite()
                     || operating_model.vj <= 0.0
+                    || !operating_model.cjsw.is_finite()
+                    || operating_model.cjsw < 0.0
+                    || !operating_model.php.is_finite()
+                    || operating_model.php <= 0.0
                 {
                     return Err(ctx.parse_err(
-                        "temperature-adjusted diode CJO must be finite and >= 0 and VJ must be finite and > 0"
+                        "temperature-adjusted diode CJO/CJSW must be finite and >= 0 and VJ/PHP must be finite and > 0"
                             .to_string(),
                     ));
                 }
@@ -4599,6 +4652,10 @@ fn parse_model(
             (ModelCard::Diode(model), "JSW" | "ISW") => model.jsw = value,
             (ModelCard::Diode(model), "NS") => model.ns = Some(value),
             (ModelCard::Diode(model), "PJ") => model.pj = value,
+            (ModelCard::Diode(model), "CJSW" | "CJP") => model.cjsw = value,
+            (ModelCard::Diode(model), "PHP") => model.php = value,
+            (ModelCard::Diode(model), "MJSW") => model.mjsw = value,
+            (ModelCard::Diode(model), "FCS") => model.fcs = value,
             (ModelCard::OpAmp(model), "AOL") => model.aol = value,
             (ModelCard::OpAmp(model), "GBW") => model.gbw = value,
             (ModelCard::OpAmp(model), "ROUT") => model.rout = value,
@@ -4889,6 +4946,10 @@ pub const MACRO_CLAMP_DIODE: DiodeModel = DiodeModel {
     jsw: 0.0,
     ns: None,
     pj: 0.0,
+    cjsw: 0.0,
+    php: 1.0,
+    mjsw: 0.33,
+    fcs: 0.5,
 };
 
 /// Loop gain of the push-pull comparator's output node, V/V from the 1 V

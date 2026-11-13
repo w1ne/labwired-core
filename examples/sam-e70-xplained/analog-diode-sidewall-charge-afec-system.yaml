@@ -1,0 +1,66 @@
+# Generic Shockley diodes with sidewall depletion charge routed to the SAM E70
+# AFEC0. Each diode hangs reverse-biased from a 1 k drive: CJSW*PJ = 1 nF
+# sidewall (with area=4, which must not scale it) on PA17 / AFE0_AD6, a
+# bottom-junction CJO = 1 nF diode with the same grading on PA18 / AFE0_AD7,
+# and a pj=0 control with no charge on PA20 / AFE0_AD9. The NTC and diode
+# come from analog-ntc-diode-system.yaml
+# (crates/core/tests/cosim_same70_afec_analog.rs).
+name: sam-e70-xplained-analog-diode-sidewall-charge
+chip: ../../configs/chips/same70q21b.yaml
+external_devices: []
+board_io: []
+cosim_models:
+  - id: diode_sidewall_charge
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      drive_v: ui.diode_sidewall.drive_v
+    outputs:
+      v_sense: board.analog.pa17_volts
+    config:
+      netlist_text: |
+        Vdrive drive 0 dc 0
+        Rdrive drive sense 1k
+        D1 0 sense DSW area=4 pj=10
+        .model DSW D(IS=1e-14 CJSW=100p PHP=0.7 MJSW=0.4 FCS=0.5)
+      probes:
+        v_sense: v(sense)
+      sources:
+        drive_v: Vdrive
+      vdd: 3.3
+  - id: diode_bottom_charge
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      drive_v: ui.diode_sidewall.drive_v
+    outputs:
+      v_sense: board.analog.pa18_volts
+    config:
+      netlist_text: |
+        Vdrive drive 0 dc 0
+        Rdrive drive sense 1k
+        D1 0 sense DB
+        .model DB D(IS=1e-14 CJO=1n VJ=0.7 M=0.4 FC=0.5)
+      probes:
+        v_sense: v(sense)
+      sources:
+        drive_v: Vdrive
+      vdd: 3.3
+  - id: diode_sidewall_no_perimeter
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      drive_v: ui.diode_sidewall.drive_v
+    outputs:
+      v_sense: board.analog.pa20_volts
+    config:
+      netlist_text: |
+        Vdrive drive 0 dc 0
+        Rdrive drive sense 1k
+        D1 0 sense DSW pj=0
+        .model DSW D(IS=1e-14 CJSW=100p PHP=0.7 MJSW=0.4 FCS=0.5)
+      probes:
+        v_sense: v(sense)
+      sources:
+        drive_v: Vdrive
+      vdd: 3.3

@@ -288,14 +288,47 @@ fn diode_model_op(
 }
 
 fn diode_charge_op(voltage: f64, model: DiodeModel, op: device::DiodeOp) -> (f64, f64) {
-    let (q_depletion, c_depletion) =
+    let (q_bottom, c_bottom) =
         device::diode_depletion_charge(voltage, model.cjo, model.vj, model.m, model.fc);
+    let (q_sidewall, c_sidewall) = diode_sidewall_depletion_charge(voltage, model);
+    let (q_depletion, c_depletion) = (q_bottom + q_sidewall, c_bottom + c_sidewall);
     let (q_diffusion, c_diffusion) = if model.vp > 0.0 && model.tt > 0.0 {
         (0.0, 0.0)
     } else {
         device::diode_diffusion_charge(voltage, op, model.tt)
     };
     (q_depletion + q_diffusion, c_depletion + c_diffusion)
+}
+
+/// Sidewall depletion charge of `CJSW·PJ` with `PHP`, `MJSW` and `FCS`.
+///
+/// Below `FCS·PHP` this is the ordinary graded-junction integral. Above it,
+/// ngspice-42 `dioload.c` starts the linearised region from `CJSW·F1`, where
+/// `F1` is the *bottom* junction's transition charge per farad (from `VJ`,
+/// `M`, `FC`), not the sidewall's own. The capacitance stays continuous but
+/// the charge steps at `FCS·PHP` unless both junctions share their
+/// parameters. This keeps that offset so transient currents match ngspice.
+fn diode_sidewall_depletion_charge(voltage: f64, model: DiodeModel) -> (f64, f64) {
+    if model.cjsw == 0.0 {
+        return (0.0, 0.0);
+    }
+    let (charge, capacitance) =
+        device::junction_depletion_charge(voltage, model.cjsw, model.php, model.mjsw, model.fcs);
+    if voltage < model.fcs * model.php {
+        return (charge, capacitance);
+    }
+    let own_transition = device::junction_depletion_charge(
+        model.fcs * model.php,
+        model.cjsw,
+        model.php,
+        model.mjsw,
+        model.fcs,
+    )
+    .0;
+    let bottom_transition = model.cjsw
+        * device::junction_depletion_charge(model.fc * model.vj, 1.0, model.vj, model.m, model.fc)
+            .0;
+    (charge - own_transition + bottom_transition, capacitance)
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -352,7 +385,7 @@ fn diode_recovery_step(
 }
 
 fn diode_charge_active(model: DiodeModel) -> bool {
-    model.cjo != 0.0 || model.tt != 0.0
+    model.cjo != 0.0 || model.cjsw != 0.0 || model.tt != 0.0
 }
 
 /// One circuit and the state that carries between steps.

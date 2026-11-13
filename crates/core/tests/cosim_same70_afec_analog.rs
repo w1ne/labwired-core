@@ -246,3 +246,175 @@ fn sam_e70_afec1_eoc_interrupt_pends_afec1_irqn_40() {
     bus.write_u32(AFEC1 + CSELR, 6).expect("CSELR");
     assert_eq!(bus.read_u32(AFEC1 + CDR).unwrap(), se_code(ntc_v, 12));
 }
+
+/// Independent sidewall depletion charge of `CJSW·PJ` = 1 nF, `PHP` = 0.7 V,
+/// `MJSW` = 0.4, valid below `FCS·PHP` (the fixture stays reverse-biased).
+fn sidewall_charge(junction_v: f64) -> f64 {
+    const C0_F: f64 = 1e-9;
+    const PHP_V: f64 = 0.7;
+    const MJSW: f64 = 0.4;
+    C0_F * PHP_V / (1.0 - MJSW) * (1.0 - (1.0 - junction_v / PHP_V).powf(1.0 - MJSW))
+}
+
+/// Independent backward-Euler update of a 1 k drive into the cathode of a
+/// grounded-anode diode carrying that charge, its `IS` = 1e-14 A reverse
+/// current, and the solver's 1 pS GMIN.
+fn expected_sidewall_voltage(previous_v: f64, drive_v: f64, step_s: f64) -> f64 {
+    const DRIVE_OHMS: f64 = 1_000.0;
+    const IS_A: f64 = 1e-14;
+    const GMIN_S: f64 = 1e-12;
+    const VT: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+    let previous_charge = sidewall_charge(-previous_v);
+    let residual = |sense_v: f64| {
+        let junction_v = -sense_v;
+        let diode_a = IS_A * ((junction_v / VT).exp() - 1.0) + GMIN_S * junction_v;
+        (drive_v - sense_v) / DRIVE_OHMS
+            + diode_a
+            + (sidewall_charge(junction_v) - previous_charge) / step_s
+    };
+    let (mut low, mut high) = (previous_v.min(drive_v), previous_v.max(drive_v));
+    for _ in 0..100 {
+        let mid = 0.5 * (low + high);
+        if residual(mid) > 0.0 {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    0.5 * (low + high)
+}
+
+#[test]
+fn sam_e70_diode_sidewall_capacitance_reaches_afec0_alongside_ntc_and_diode() {
+    const STEP_S: f64 = 1e-6;
+    const SUBSTEPS: usize = 10;
+    const DRIVE_V: f64 = 3.0;
+    let system_path = root("configs/systems/sam-e70-xplained.yaml");
+    let mut profile =
+        SystemManifest::from_file(&system_path).expect("load SAM E70 Xplained profile");
+    let analog = SystemManifest::from_file(root(
+        "examples/sam-e70-xplained/analog-ntc-diode-system.yaml",
+    ))
+    .expect("load unrelated generic Beta NTC and Shockley diode netlists");
+    let sidewall = SystemManifest::from_file(root(
+        "examples/sam-e70-xplained/analog-diode-sidewall-charge-afec-system.yaml",
+    ))
+    .expect("load generic diode sidewall-charge branches");
+    profile.cosim_models = analog.cosim_models;
+    for model in &mut profile.cosim_models {
+        let (key, pad) = match model.id.as_str() {
+            "ntc_divider" => ("v_sense", "pc31"),
+            "diode_load_line" => ("v_diode", "pa19"),
+            other => panic!("unexpected model {other}"),
+        };
+        model
+            .outputs
+            .insert(key.to_string(), format!("board.analog.{pad}_volts"));
+    }
+    profile.cosim_models.extend(sidewall.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load ATSAME70Q21B descriptor");
+    for (pad, peripheral, channel) in [
+        ("PC31", "afec1", 6),
+        ("PA17", "afec0", 6),
+        ("PA18", "afec0", 7),
+        ("PA19", "afec0", 8),
+        ("PA20", "afec0", 9),
+    ] {
+        let route = &chip.analog_pins[pad];
+        assert_eq!(route.peripheral, peripheral, "{pad} AFEC instance");
+        assert_eq!(route.channel, channel, "{pad} AFEC channel");
+    }
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build SAM E70 Xplained bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries NTC, diode and three sidewall-charge branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "PC31, PA17..PA20 must resolve to AFEC inputs through analog_pins"
+    );
+    zephyr_init(&mut bus, AFEC0);
+    zephyr_init(&mut bus, AFEC1);
+
+    session
+        .set_signal_number("ui.diode_sidewall.drive_v", 0.0)
+        .expect("start every sidewall branch discharged");
+    let mut cycles = 0;
+    settle_n(&mut session, &mut bus, &mut cycles, 5);
+    assert!(signal_voltage(&session, "board.analog.pa17_volts").abs() < 1e-12);
+
+    session
+        .set_signal_number("ui.diode_sidewall.drive_v", DRIVE_V)
+        .expect("step the drive into reverse bias");
+    let mut expected_v = 0.0;
+    let mut first_step_lag_v = 0.0;
+    for step in 0..8 {
+        settle_n(&mut session, &mut bus, &mut cycles, 5);
+        for _ in 0..SUBSTEPS {
+            expected_v = expected_sidewall_voltage(expected_v, DRIVE_V, STEP_S / SUBSTEPS as f64);
+        }
+        let sidewall_v = signal_voltage(&session, "board.analog.pa17_volts");
+        let bottom_v = signal_voltage(&session, "board.analog.pa18_volts");
+        let control_v = signal_voltage(&session, "board.analog.pa20_volts");
+        assert!(
+            (sidewall_v - expected_v).abs() < 2e-8,
+            "CJSW*PJ charge at step {step}: expected {expected_v} V, got {sidewall_v} V"
+        );
+        assert!(
+            (bottom_v - sidewall_v).abs() < 1e-9,
+            "the sidewall (area=4 does not scale it) and an equal CJO junction share one law: {bottom_v} V vs {sidewall_v} V"
+        );
+        assert!(
+            (control_v - DRIVE_V).abs() < 1e-8,
+            "pj=0 stores no charge and follows the drive, got {control_v} V"
+        );
+        if step == 0 {
+            first_step_lag_v = control_v - sidewall_v;
+        }
+
+        let ntc_v = signal_voltage(&session, "board.analog.pc31_volts");
+        assert!(
+            (ntc_v - ntc_volts(25.0)).abs() < 1e-9,
+            "the NTC stays isolated"
+        );
+        let diode_v = signal_voltage(&session, "board.analog.pa19_volts");
+        assert!(diode_v > 0.5 && diode_v < 0.8, "diode drop {diode_v} V");
+
+        assert_eq!(
+            zephyr_read(&mut bus, AFEC1, 6),
+            se_code(ntc_v, 12),
+            "AFE1_AD6 NTC"
+        );
+        for (channel, volts) in [(6, sidewall_v), (7, bottom_v), (8, diode_v), (9, control_v)] {
+            assert_eq!(
+                zephyr_read(&mut bus, AFEC0, channel),
+                se_code(volts, 12),
+                "AFE0_AD{channel} at step {step}"
+            );
+        }
+        assert_eq!(zephyr_read(&mut bus, AFEC0, 10), 0, "AFE0_AD10 / PB0 idle");
+    }
+    assert!(
+        first_step_lag_v > 0.5,
+        "sidewall charge must delay the first microsecond by > 0.5 V, got {first_step_lag_v} V"
+    );
+    assert!(
+        (expected_v - DRIVE_V).abs() < 1e-3,
+        "the branch settles to the drive within 8 us, recurrence {expected_v} V"
+    );
+}
+
+/// Solve every netlist to the next boundary and check that all of them ran.
+fn settle_n(session: &mut CosimSession, bus: &mut SystemBus, cycles: &mut u64, netlists: usize) {
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold the NTC at 25 °C");
+    *cycles += session.cycles_until_boundary(*cycles);
+    let (steps, errors) = session
+        .advance_to(*cycles, bus)
+        .expect("solve and route every netlist");
+    assert_eq!(steps.len(), netlists, "every netlist solves each step");
+    assert!(errors.is_empty(), "route errors: {errors:?}");
+}
