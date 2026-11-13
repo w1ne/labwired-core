@@ -380,6 +380,7 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     ("rp2040/clocks.yaml", packed!("rp2040/clocks.yaml")),
     ("rp2040/dma.yaml", packed!("rp2040/dma.yaml")),
     ("rp2040/i2c0.yaml", packed!("rp2040/i2c0.yaml")),
+    ("rp2040/i2c1.yaml", packed!("rp2040/i2c1.yaml")),
     ("rp2040/io_bank0.yaml", packed!("rp2040/io_bank0.yaml")),
     ("rp2040/pio0.yaml", packed!("rp2040/pio0.yaml")),
     ("rp2040/pio1.yaml", packed!("rp2040/pio1.yaml")),

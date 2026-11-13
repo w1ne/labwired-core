@@ -143,7 +143,7 @@ _Drives all 13 rubric classes (incl. FDCAN→can) via real firmware — the broa
 
 ### `ch32v003f4p6`
 
-_No tier-1 fixture or hosted model-verification gate. A compiled RV32E/ILP32E bare-metal C fixture executes from flash, configures WCH RCC/GPIOC, and toggles PC0 in the local simulator; the matching CLI smoke and core integration test require two GPIO edges. A second, RV32EC (compressed) fixture clocks USART1 and prints a line through polled TX; its CLI smoke and integration test assert the exact string, and a negative control asserts silence when the USART1 clock gate is not set. This is local simulator evidence, not hosted model_verified or hardware confirmation._
+_No tier-1 fixture or hosted model-verification gate. The WCH-CH32V003EVT board profile maps its P4 LED1 through a configured jumper to PC0; committed RV32E/ILP32E bare-metal C firmware executes from flash and the PR-gated board smoke requires two GPIO edges. A second RV32EC (compressed) fixture clocks USART1 and prints a line through polled TX on PD5; the board smoke asserts the exact string. A negative control asserts silence when the USART1 clock gate is not set. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, timers, or USB, and is not hosted model_verified or hardware confirmation._
 
 ### `nrf5340`
 
@@ -190,6 +190,46 @@ _Richest Espressif rubric coverage: the tier-1 fixture drives all 12 of its decl
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `io_mux` (configs/chips/esp32c6.yaml:491 (declarative; configs/peripherals/esp32c6/io_mux.yaml)) — CLOSABLE: reset-value register storage; pad function writes are recorded but never read back or electrically enforced — the DevKitC demo writes U0TXD's MCU_SEL and the tier-1 console both pass regardless of routing. The S3's real io_mux model is the port path.
 - `hp_sys` (configs/chips/esp32c6.yaml:516 (declarative; configs/peripherals/esp32c6/hp_sys.yaml)) — CLOSABLE: declarative register file with no engine; nothing drives it today, so the false-success path is latent — timeout monitor, SDIO control, ROM-table lock and memory test are not modelled.
+
+### `esp32h2`
+
+_No beyond-rubric H2 peripheral is exercised: the board smoke covers only the UART0 FIFO/console path. This narrow profile does not model mask ROM, the USB bridge, IO_MUX, WS2812/RMT, button/strap behavior, Bluetooth LE, IEEE 802.15.4, Thread, Zigbee, or the other H2 peripherals._
+
+### `esp32c5`
+
+_No beyond-rubric C5 peripheral is exercised: the DevKitC-1-N8R8 board smoke covers only the UART0 TX FIFO/console path. This narrow profile declares UART0 only; it does not model mask ROM, the USB bridge, IO_MUX, GPIO, the RGB LED, Wi-Fi 6, Bluetooth LE, IEEE 802.15.4 or the other C5 peripherals._
+
+### `esp32c61`
+
+_No beyond-rubric C61 peripheral is exercised: the DevKitC-1-N8R2 board smoke covers only the UART0 TX FIFO/console path. This narrow profile declares UART0 only; it does not model mask ROM, the USB bridge, IO_MUX, GPIO, the RGB LED, Wi-Fi 6, Bluetooth LE, PSRAM or the other C61 peripherals._
+
+### `esp32p4`
+
+_No beyond-rubric P4 peripheral is exercised: the P4X-C5 Function EV board smoke covers only the UART0 TX FIFO/console path. This narrow profile declares UART0 only; it does not model mask ROM, the second HP core, the LP core, MIPI-CSI/DSI, the H.264/JPEG/PPA media blocks, USB, Ethernet, the companion ESP32-C5 radio or the other P4 peripherals._
+
+### `esp32s2`
+
+_No beyond-rubric S2 peripheral is exercised: the DevKitC-1-N8R2 board smoke covers only the UART0 TX FIFO through host_console. This direct-ELF profile declares UART0 only; it does not model mask ROM, flash-cache/MMU boot, PSRAM, the GPIO matrix, the RGB LED, USB OTG, Wi-Fi or the other S2 peripherals._
+
+### `rp2040-feather`
+
+_Board variant of the rp2040 die with the Feather's 133 MHz clock and 8 MiB flash; it reuses the rp2040 behavioural models. No beyond-rubric peripheral is exercised under this name: the Feather smoke reads BME280 CHIP_ID over I2C1 and drives D13 through SIO; both are rubric classes, not beyond-rubric content. PIO, USB and the onboard NeoPixel are not exercised on this board._
+
+### `rp2350-feather`
+
+_Board variant of the rp2350 die with the Feather's 8 MiB flash; it reuses the rp2350 behavioural models. No beyond-rubric peripheral is exercised under this name: the Feather smoke toggles red D13 (GPIO7) through SIO and writes UART0; both are rubric classes, not beyond-rubric content. PIO, USB, PSRAM and the onboard NeoPixel are not exercised on this board._
+
+### `esp32c6fh4`
+
+_Package variant of the esp32c6 die for the Seeed XIAO ESP32-C6: the yaml copies esp32c6.yaml and changes only the flash size to 4 MB, so it reuses the esp32c6 models and shims. No beyond-rubric peripheral is exercised under this name: the XIAO smoke toggles the active-low user LED on GPIO15 through the C6 GPIO block, a rubric class. The radio, RF switch, USB-Serial/JTAG console and LP core are not exercised on this board._
+
+### `stm32f446re`
+
+_No beyond-rubric F446 peripheral is exercised: the NUCLEO-F446RE smoke drives RCC enables, GPIOA (LD2 on PA5, PA2/PA3 AF7) and USART2 TX only. The descriptor declares RCC, FLASH, PWR, GPIOA/B/C, USART1/2, I2C1, SPI1, TIM1..TIM4, ADC1, IWDG, RTC, SYSCFG, EXTI and DMA1/2 at the shared F4 addresses; it does not declare USART3, UART4/5, USART6, SPI2..4, I2C2/3, FMPI2C1, CAN, SAI, QUADSPI, SPDIFRX, HDMI-CEC, DCMI, FMC, DAC, ADC2/3, TIM5..TIM14, USB OTG or GPIOD/GPIOH._
+
+### `stm32h723zg`
+
+_No beyond-rubric H723 peripheral is exercised: the NUCLEO-H723ZG smoke drives RCC enables, GPIOB (LD1 on PB0), GPIOD AF7 and USART3 TX only. This narrow board slice declares RCC, SysTick, GPIO B/C/D/E and USART3; it does not model PWR, the cache/MPU, FMC/OCTOSPI, Ethernet, USB OTG, FDCAN, ADC, timers, DMA, I2C, SPI or the other H723 peripherals._
 
 ### `esp32s3-zero`
 

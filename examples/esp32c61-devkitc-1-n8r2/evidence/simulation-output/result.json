@@ -1,0 +1,646 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 400000,
+  "cycles": 400000,
+  "instructions": 400000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 400000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 400000
+    }
+  },
+  "limits": {
+    "max_steps": 400000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "C61_N8R2_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      1107296568,
+      1082458096,
+      1082132480,
+      0,
+      0,
+      1082458112,
+      0,
+      1082458112,
+      0,
+      1610612736,
+      10,
+      75,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1107296950,
+    "mstatus": 0,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 1107296568,
+    "mscratch": 0,
+    "mepc": 0,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 400000,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "firmware_hash": "1a95635266aaa65fd85add0ec5defb9cebbd88d693367f5107bc0275297fa601",
+  "config": {
+    "firmware": "examples/esp32c61-devkitc-1-n8r2/../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c61-demo",
+    "system": "examples/esp32c61-devkitc-1-n8r2/../../configs/systems/esp32c61-devkitc-1-n8r2.yaml",
+    "script": "examples/esp32c61-devkitc-1-n8r2/uart-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "uart0",
+        "kind": "native",
+        "base": 1610612736,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "spimem0_flash",
+        "kind": "native",
+        "base": 1610620928,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "spimem1_flash",
+        "kind": "native",
+        "base": 1610625024,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "flash_irom_xip",
+        "kind": "native",
+        "base": 1107296256,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087e610",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087e611",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087e612",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087e613",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087f564",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087f565",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087f566",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087f567",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087fa08",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087fa0c",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087fa10",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087fa14",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087fa18",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087fa1c",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087fa84",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087fa85",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087fa86",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087fa87",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087fa88",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087fa89",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087fa8a",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087fa8b",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087faa0",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087faa1",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087faa2",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087faa3",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087faac",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087faad",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087faae",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087faaf",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087ffc8",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087ffc9",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087ffca",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087ffcb",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087ffd8",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087ffd9",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087ffda",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087ffdb",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087ffdc",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087ffdd",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087ffde",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087ffdf",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087ffe0",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087ffe1",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087ffe2",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087ffe3",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087ffe4",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087ffe5",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087ffe6",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087ffe7",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087ffec",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087ffed",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087ffee",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087ffef",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087fff0",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087fff1",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087fff2",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087fff3",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087fff8",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087fff9",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087fffa",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4087fffb",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "C61_N8R2_OK",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 170000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 840,
+    "data_bytes": 0,
+    "bss_bytes": 327680,
+    "flash_used_bytes": 840,
+    "ram_static_bytes": 327680,
+    "flash_total_bytes": 8388608,
+    "ram_total_bytes": 327680,
+    "flash_used_pct": 0.01,
+    "ram_static_pct": 100.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 400000,
+    "instructions": 400000,
+    "steps_executed": 400000,
+    "memory_reads": 0,
+    "memory_writes": 1,
+    "peripheral_accesses": 12,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 1107296950,
+        "count": 1562,
+        "symbol": "core::core_arch::riscv_shared::pause"
+      }
+    ]
+  }
+}

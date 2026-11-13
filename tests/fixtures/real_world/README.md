@@ -87,3 +87,20 @@ than it is:
   demand every SVD peripheral be declared: UART0/UART1/GPIO/IO_MUX/PCR/HP_SYS/
   INTERRUPT_CORE0 are wired; SPI, I2C, RMT, LEDC, DMA, ADC, crypto, USB and
   every radio are intentionally unmapped at L1.
+
+## esp32h2.svd
+
+**Source:** [`espressif/svd`](https://github.com/espressif/svd/tree/be20aa1/svd)
+→ `svd/esp32h2.svd` (device `ESP32-H2`, version 11, Apache-2.0).
+**Vendored:** 2026-11-11, for the ESP32-H2-DevKitM-1-N4S UART profile.
+**Snapshot:** upstream commit `be20aa1`.
+**sha256:** `ea6d33dbfa81ab81de0c22d98c33544bfd3651d091adc42d6be90d2f88770166`
+**Consumed by:** `svd_conformance.rs` (chip `esp32h2`).
+
+The profile declares UART0 (0x6000_0000 / interrupt source 33), GPIO
+(0x6009_1000), and the UART0 PCR prefix (0x6009_6000). It intentionally does
+not declare the remaining H2 SVD peripherals. The UART window ends before the
+H2-specific `CLK_CONF` and `DATE` reset values, and the PCR window ends after
+`UART0_PD_CTRL`, where the H2 and C6 register maps diverge. Trailing whitespace
+from upstream XML was stripped when vendoring; the hash above is for this
+normalized snapshot.

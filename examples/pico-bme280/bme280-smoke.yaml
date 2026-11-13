@@ -1,0 +1,12 @@
+# Read BME280.CHIP_ID over Pico I2C0 on GP4/GP5 and light GP25 on success.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/tier1/pico-bme280.elf"
+  system: "../../configs/systems/pico-bme280.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - gpio_edges:
+      pin: "sio:25"
+      min_edges: 1
+  - expected_stop_reason: max_steps

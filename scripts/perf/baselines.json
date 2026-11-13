@@ -94,8 +94,17 @@
   "esp32c3": {
     "batch": 2.5
   },
+  "esp32c5": {
+    "batch": 2.2
+  },
   "esp32c6": {
     "batch": 3.5
+  },
+  "esp32c6fh4": {
+    "batch": 3.8
+  },
+  "esp32h2": {
+    "batch": 2.4
   },
   "esp32s3": {
     "batch": 2.4,
@@ -108,6 +117,10 @@
   "imxrt1064": {
     "batch": 1.4,
     "step": 895.0
+  },
+  "mimxrt595s": {
+    "batch": 1.4,
+    "step": 892.0
   },
   "mk64f12": {
     "batch": 1.4,
@@ -161,17 +174,21 @@
     "batch": 1.6,
     "step": 905.9
   },
+  "rp2040-feather": {
+    "batch": 1.6,
+    "step": 906.8
+  },
   "rp2350": {
     "batch": 1.6,
     "step": 906.1
   },
+  "rp2350-feather": {
+    "batch": 1.7,
+    "step": 906.8
+  },
   "s32k388": {
     "batch": 1.4,
     "step": 907.8
-  },
-  "mimxrt595s": {
-    "batch": 1.4,
-    "step": 892.0
   },
   "same70q21b": {
     "batch": 1.4,
@@ -186,104 +203,104 @@
     "step": 937.3
   },
   "stm32f103c4": {
-    "step": 936.4,
-    "batch": 1.6
+    "batch": 1.6,
+    "step": 936.4
   },
   "stm32f103c6": {
-    "step": 936.4,
-    "batch": 1.6
+    "batch": 1.6,
+    "step": 936.4
   },
   "stm32f103r4": {
-    "step": 936.4,
-    "batch": 1.6
+    "batch": 1.6,
+    "step": 936.4
   },
   "stm32f103r4h": {
-    "step": 936.4,
-    "batch": 1.6
+    "batch": 1.6,
+    "step": 936.4
   },
   "stm32f103r6": {
-    "step": 936.4,
-    "batch": 1.6
+    "batch": 1.6,
+    "step": 936.4
   },
   "stm32f103r6h": {
-    "step": 936.4,
-    "batch": 1.6
+    "batch": 1.6,
+    "step": 936.4
   },
   "stm32f103r8": {
     "batch": 1.6,
     "step": 932.9
   },
   "stm32f103rb": {
-    "step": 935.4,
-    "batch": 1.6
+    "batch": 1.6,
+    "step": 935.4
   },
   "stm32f103rb-nucleo-bme280-smoke": {
     "batch": 1.5,
     "step": 921.9
   },
   "stm32f103t4": {
-    "step": 936.4,
-    "batch": 1.6
+    "batch": 1.6,
+    "step": 936.4
   },
   "stm32f103t6": {
-    "step": 936.4,
-    "batch": 1.6
+    "batch": 1.6,
+    "step": 936.4
   },
   "stm32f401": {
     "batch": 1.5,
     "step": 936.7
   },
   "stm32f401cb": {
-    "step": 935.8,
-    "batch": 1.5
+    "batch": 1.5,
+    "step": 935.8
   },
   "stm32f401cc": {
-    "step": 935.8,
-    "batch": 1.5
+    "batch": 1.5,
+    "step": 935.8
   },
   "stm32f401cd": {
-    "step": 935.8,
-    "batch": 1.5
+    "batch": 1.5,
+    "step": 935.8
   },
   "stm32f401cdu6": {
     "batch": 1.6,
     "step": 937.7
   },
   "stm32f401ce": {
-    "step": 935.8,
-    "batch": 1.5
+    "batch": 1.5,
+    "step": 935.8
   },
   "stm32f401rb": {
-    "step": 935.8,
-    "batch": 1.5
+    "batch": 1.5,
+    "step": 935.8
   },
   "stm32f401rc": {
-    "step": 935.8,
-    "batch": 1.5
+    "batch": 1.5,
+    "step": 935.8
   },
   "stm32f401rd": {
-    "step": 935.8,
-    "batch": 1.5
+    "batch": 1.5,
+    "step": 935.8
   },
   "stm32f401re": {
-    "step": 935.8,
-    "batch": 1.5
+    "batch": 1.5,
+    "step": 935.8
   },
   "stm32f401vb": {
-    "step": 935.8,
-    "batch": 1.5
+    "batch": 1.5,
+    "step": 935.8
   },
   "stm32f401vc": {
-    "step": 935.8,
-    "batch": 1.5
+    "batch": 1.5,
+    "step": 935.8
   },
   "stm32f401vd": {
-    "step": 935.8,
-    "batch": 1.5
+    "batch": 1.5,
+    "step": 935.8
   },
   "stm32f401ve": {
-    "step": 935.8,
-    "batch": 1.5
+    "batch": 1.5,
+    "step": 935.8
   },
   "stm32f405": {
     "batch": 1.5,
@@ -294,32 +311,36 @@
     "step": 936.8
   },
   "stm32f407ie": {
-    "step": 935.8,
-    "batch": 1.6
+    "batch": 1.6,
+    "step": 935.8
   },
   "stm32f407ig": {
-    "step": 935.8,
-    "batch": 1.6
+    "batch": 1.6,
+    "step": 935.8
   },
   "stm32f407ve": {
-    "step": 935.8,
-    "batch": 1.6
+    "batch": 1.6,
+    "step": 935.8
   },
   "stm32f407vg": {
-    "step": 935.8,
-    "batch": 1.6
+    "batch": 1.6,
+    "step": 935.8
   },
   "stm32f407ze": {
-    "step": 935.8,
-    "batch": 1.6
+    "batch": 1.6,
+    "step": 935.8
   },
   "stm32f407zg": {
-    "step": 935.8,
-    "batch": 1.6
+    "batch": 1.6,
+    "step": 935.8
   },
   "stm32f411ceu6": {
     "batch": 1.6,
     "step": 937.6
+  },
+  "stm32f446re": {
+    "batch": 1.6,
+    "step": 937.0
   },
   "stm32f746": {
     "batch": 1.4,
@@ -348,6 +369,10 @@
   "stm32h563": {
     "batch": 1.8,
     "step": 986.5
+  },
+  "stm32h723zg": {
+    "batch": 1.5,
+    "step": 900.5
   },
   "stm32h735": {
     "batch": 1.6,

@@ -64,7 +64,15 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     "efr32mg26",
     "esp32",
     "esp32c3",
+    // C5, C61, P4 and S2 use the same GPIO<n> label form as their ESP peers; no
+    // alternate package-label scheme exists to transcribe a `pins:` override from.
+    "esp32c5",
     "esp32c6",
+    "esp32c61",
+    // C6FH4 is a package variant of the same GPIO<n>-labelled C6 die.
+    "esp32c6fh4",
+    "esp32p4",
+    "esp32s2",
     "esp32s3",
     "esp32s3-zero",
     // The LiteX VexRiscv SoC models a UART and a timer and no GPIO bank, so
@@ -114,8 +122,6 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     // directly onto gpio<port>/bit; no alternate package-label scheme exists
     // to transcribe a `pins:` override from (same reasoning as the peers above).
     "stm32g071",
-    // G431RB is the G474RE's smaller sibling: same PA/PB/PC label form.
-    "stm32g431rb",
     "stm32h563",
     "stm32h735",
     "stm32l073",

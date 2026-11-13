@@ -34,6 +34,55 @@ boards:
     kind: sim-validate
     path: examples/esp32c3-blinky
     gate: true
+  # Demand-rank 1 ESP32-family addition: the current ESP32-S2-DevKitC-1-N8R2.
+  # The committed LX7 ELF exercises UART0 through its host-console bridge.
+  - id: esp32s2-devkitc-1-n8r2
+    kind: sim-validate
+    path: examples/esp32s2-devkitc-1-n8r2
+    gate: true
+  # ESP32-H2-DevKitM-1-N4S: rebuild the RV32IMC UART fixture and verify its
+  # UART0 FIFO/console path through the H2-specific, window-limited model.
+  - id: esp32h2-devkitm-1-n4s
+    kind: sim-validate
+    path: examples/esp32h2-devkitm-1-n4s
+    rust_targets: [riscv32imc-unknown-none-elf]
+    gate: true
+  # Demand-rank 1 ESP32-family depth: current C61 DevKitC-1 N8R2 UART0 path.
+  - id: esp32c61-devkitc-1-n8r2
+    kind: sim-validate
+    path: examples/esp32c61-devkitc-1-n8r2
+    rust_targets: [riscv32imc-unknown-none-elf]
+    gate: true
+  # Demand-rank 1 ESP32 family: current Arduino Nano ESP32 with a committed
+  # S3 GPIO48/D13 smoke fixture. The onboarding workflow rebuilds it with PIO.
+  - id: arduino-nano-esp32-gpio
+    kind: sim-validate
+    path: examples/arduino-nano-esp32
+    gate: true
+  # Demand-rank 1 Seeed XIAO ESP32C3 + BME280. Stock Arduino build boots in
+  # full and reads the sensor with Wire on D4/D5 (GPIO6/GPIO7).
+  - id: seeed-xiao-esp32c3-bme280
+    kind: sim-validate
+    path: examples/xiao-esp32c3-bme280
+    gate: true
+  # Demand-rank 1 ESP32-S3-DevKitC-1 N16R8 + BME280. Reads sensor ID and raw
+  # temperature through the S3 I2C model and the GPIO-matrix route.
+  - id: esp32s3-devkitc-1-n16r8-bme280
+    kind: sim-validate
+    path: examples/esp32s3-devkitc-1-n16r8-bme280
+    gate: true
+  # Demand-rank 1 ESP32 family: the Feather V2's on-board red GPIO13 LED.
+  # The committed fast-boot fixture keeps this board smoke quick on every PR.
+  - id: adafruit-feather-esp32-v2-gpio
+    kind: sim-validate
+    path: examples/adafruit-feather-esp32-v2
+    gate: true
+  # Demand group #2: current Adafruit Feather RP2350 with HSTX, no-PSRAM SKU.
+  - id: adafruit-feather-rp2350
+    kind: sim-validate
+    path: examples/adafruit-feather-rp2350
+    rust_targets: [thumbv8m.main-none-eabi]
+    gate: true
   # Narrow ESP32-DevKitC-32E onboarding profile. Committed TIER1 ELF, no
   # cross-toolchain, seconds to run. Proves the new chip descriptor through
   # `labwired test` on every PR (chip-coverage ceiling forbids another waiver).
@@ -200,4 +249,10 @@ boards:
     kind: sim-validate
     path: examples/frdm-k64f
     rust_targets: [thumbv7em-none-eabi]
+    gate: true
+  # WCH CH32V003EVT: committed, digest-checked RV32E/EC firmware proves the
+  # configured PC0-to-LED1 jumper and polled USART1 TX; no USB/debug claim.
+  - id: wch-ch32v003evt
+    kind: sim-validate
+    path: examples/wch-ch32v003evt
     gate: true

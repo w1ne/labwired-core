@@ -1,0 +1,44 @@
+{
+  "checked_at_utc": "2026-11-11",
+  "tool": "LabWired hosted mandatory-oracle verifier",
+  "board": "arduino-nano-esp32",
+  "diagram": {
+    "board": "arduino-nano-esp32",
+    "parts": [
+      {
+        "id": "mcu",
+        "type": "esp32-s3-devkitc-1"
+      }
+    ],
+    "wires": []
+  },
+  "language": "arduino",
+  "entry_path": "src/main.ino",
+  "max_steps": 10000000,
+  "source_sha256": "c63a9512032ff8f3e9a8b760429f4d6af03be5589b79a8178a8d807ae5132708",
+  "oracle": {
+    "serial_contains": "NANO_ESP32_GPIO48_OK",
+    "gpio": {
+      "pin": "GPIO48",
+      "state": "high"
+    }
+  },
+  "status": "model_verified",
+  "run_status": "pass",
+  "stop_reason": "max_steps",
+  "verification": "serial contains NANO_ESP32_GPIO48_OK; GPIO48 is high (gpio_pins pad). Model-verified deterministically.",
+  "oracle_results": [
+    {
+      "kind": "serial",
+      "passed": true,
+      "detail": "serial contains NANO_ESP32_GPIO48_OK"
+    },
+    {
+      "kind": "gpio",
+      "passed": true,
+      "detail": "GPIO48 is high (gpio_pins pad)"
+    }
+  ],
+  "model_gap": "No power net drives the MCU; VDD is assumed ideal, so power-on and brown-out reset are not simulated.",
+  "hardware_confirmation": false
+}

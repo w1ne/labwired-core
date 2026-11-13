@@ -1,0 +1,29 @@
+{
+  "target_id": "seeed-xiao-esp32c6",
+  "status": "pass",
+  "crate": "",
+  "target_triple": "",
+  "script": "examples/xiao-esp32c6-blinky/led-smoke.yaml",
+  "system": "configs/systems/seeed-xiao-esp32c6.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-13T16:33:11Z",
+  "finished_at_utc": "2026-11-13T16:33:34Z",
+  "elapsed_seconds": 24,
+  "elapsed_ms": 23301,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 17.345,
+    "build_firmware": 1.725,
+    "run_smoke": 4.183
+  },
+  "stages_ms": {
+    "build_cli": 17345,
+    "build_firmware": 1725,
+    "run_smoke": 4183
+  },
+  "firmware_build_script": "examples/xiao-esp32c6-blinky/ci/build-firmware.sh"
+}

@@ -94,6 +94,40 @@ const PAYLOAD: [u8; 3] = [0x53, 0x1C, 0xE1];
 /// drive to decodable edges, with the reason. Adding a silent `continue` instead
 /// of a row here is the same failure as the binding-only gate this replaced.
 const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
+    // ESP32-H2: UART0 has no bring-up arm for the H2 family in this harness.
+    // Bytes are proven by the esp32h2-devkitm-1-n4s board smoke (uart_contains).
+    (
+        "esp32h2",
+        BusKind::Uart,
+        "no ESP32-H2 UART bring-up in this harness; bytes are proven by the \
+         esp32h2-devkitm-1-n4s board smoke",
+    ),
+    // ESP32-P4: same shape as the C5 below; the P4 UART0 model is a TX
+    // FIFO/console with no PadLines wire cell. Bytes are proven by the
+    // esp32p4x-c5-function-ev-board smoke (uart_contains).
+    (
+        "esp32p4",
+        BusKind::Uart,
+        "esp32p4 UART0 is a TX FIFO/console model with no PadLines wire cell; \
+         bytes are proven by the esp32p4x-c5-function-ev-board smoke",
+    ),
+    // ESP32-S2: UART0 has no bring-up arm for the S2 family in this harness.
+    // Bytes are proven by the esp32s2-devkitc-1-n8r2 board smoke (uart_contains).
+    (
+        "esp32s2",
+        BusKind::Uart,
+        "no ESP32-S2 UART bring-up in this harness; bytes are proven by the \
+         esp32s2-devkitc-1-n8r2 board smoke",
+    ),
+    // ESP32-C5: the esp32c5_uart model is a UART0 TX FIFO/console only. It
+    // publishes no PadLines wire cell, so no TX edge reaches a pad. Bytes are
+    // proven by the esp32c5-devkitc-1-n8r8 board smoke (uart_contains).
+    (
+        "esp32c5",
+        BusKind::Uart,
+        "esp32c5_uart is a TX FIFO/console model with no PadLines wire cell; \
+         bytes are proven by the esp32c5-devkitc-1-n8r8 board smoke",
+    ),
     // CH32V003: USART1 TX is pad-routed to PD5 behind the F1-style console AF
     // gate. Even with PD5 set to AF push-pull (CFGLR 0x44B44444) and the F1
     // drive, no TX edges reached the analyzer in this harness. The F1 rows here
@@ -435,6 +469,21 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         BusKind::Uart,
         "rp2350 from_config bus not yet edge-gated (no line cells)",
     ),
+    (
+        "rp2350-feather",
+        BusKind::I2c,
+        "rp2350 die (Feather variant): from_config bus not yet edge-gated (no line cells)",
+    ),
+    (
+        "rp2350-feather",
+        BusKind::Spi,
+        "rp2350 die (Feather variant): from_config bus not yet edge-gated (no line cells)",
+    ),
+    (
+        "rp2350-feather",
+        BusKind::Uart,
+        "rp2350 die (Feather variant): from_config bus not yet edge-gated (no line cells)",
+    ),
     // AVR matrix twin: chip yaml uses generic type:i2c/spi (STM32-shaped
     // engines). Those models publish line_names for the logic analyzer but
     // never attach a PadLines cell on the AVR from_config path, so wire_lines()
@@ -579,7 +628,7 @@ fn fleet() -> Vec<String> {
 fn ram_base(chip: &str) -> u64 {
     match chip {
         "esp32c3" => 0x3FC8_0000,
-        "esp32c6" => 0x4080_0000,
+        "esp32c6" | "esp32c6fh4" => 0x4080_0000,
         "esp32"
         | "esp32s3"
         | "esp32s3-zero"
@@ -911,7 +960,7 @@ fn family_of(chip: &str) -> Family {
         Family::Nrf52
     } else if chip == "esp32c3" {
         Family::Esp32c3
-    } else if chip == "esp32c6" {
+    } else if chip == "esp32c6" || chip == "esp32c6fh4" {
         Family::Esp32c6
     } else if chip == "esp32"
         || chip == "esp32-devkitc-32e-gpio-smoke"

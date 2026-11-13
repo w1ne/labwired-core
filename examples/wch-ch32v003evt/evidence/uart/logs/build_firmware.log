@@ -1,0 +1,2 @@
+tests/fixtures/ch32v003f4p6-blink.elf: OK
+tests/fixtures/ch32v003f4p6-uart-hello.elf: OK

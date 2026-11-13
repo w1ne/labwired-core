@@ -1,0 +1,16 @@
+# Boot stock Arduino-ESP32 on the Seeed Studio XIAO ESP32C3, read the BME280
+# over I2C0 (D4/SDA = GPIO6, D5/SCL = GPIO7) with Wire, and compensate the
+# temperature from the sensor's own calibration bytes (Bosch datasheet 4.2.3).
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/tier1/seeed-xiao-esp32c3-bme280.elf"
+  system: "../../configs/systems/seeed-xiao-esp32c3-bme280.yaml"
+limits:
+  max_steps: 50000000
+  stop_when_assertions_pass: true
+assertions:
+  - uart_contains: "XIAO_C3_BOOT"
+  - uart_contains: "BME280_ID=0x60"
+  - uart_contains: "BME280_DIG_T1=28528"
+  - uart_contains: "BME280_TEMP_RAW=0x82DC0"
+  - uart_contains: "BME280_TEMP_CENTI_C=2500"

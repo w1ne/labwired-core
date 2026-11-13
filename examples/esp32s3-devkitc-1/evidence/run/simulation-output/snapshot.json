@@ -1,0 +1,61 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "xtensa_lx7",
+    "registers": [
+      1077382781,
+      1070446272,
+      1077382648,
+      1107376644,
+      1107371187,
+      0,
+      17,
+      10,
+      2,
+      1006639275,
+      10,
+      1610612736,
+      0,
+      58720256,
+      0,
+      2
+    ],
+    "pc": 1107383444,
+    "ps": 262144,
+    "window_base": 1,
+    "window_start": 3,
+    "vecbase": 1077379072
+  },
+  "steps_executed": 8000000,
+  "cycles": 8000000,
+  "instructions": 8000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 8000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 8000000
+    }
+  },
+  "limits": {
+    "max_steps": 8000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "27a61f851c798edbf2dabc38526cf4ca9211ab51a89387baba9faa1936060a5f",
+  "config": {
+    "firmware": "examples/esp32s3-devkitc-1/../../tests/fixtures/tier1/esp32s3.elf",
+    "system": "examples/esp32s3-devkitc-1/../../configs/systems/esp32s3-devkitc-1-v11.yaml",
+    "script": "examples/esp32s3-devkitc-1/io-smoke.yaml"
+  }
+}

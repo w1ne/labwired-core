@@ -3,7 +3,7 @@
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-rp2350-demo"
-  system: "./system.yaml"
+  system: "../../configs/systems/pico2.yaml"
 limits:
   max_steps: 200000
 assertions:

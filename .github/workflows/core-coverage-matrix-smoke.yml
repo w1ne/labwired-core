@@ -144,6 +144,69 @@ jobs:
             profile_dir: release
             script: examples/esp32c6-devkitc/uart-smoke.yaml
             system: examples/esp32c6-devkitc/system.yaml
+          # ESP32-H2-DevKitM-1-N4S. The exact active H2 board gets its own
+          # UART0 profile; only the H2/C6-common UART head and PCR prefix are
+          # exposed, and the USB bridge/pad route are explicitly out of scope.
+          - id: esp32h2-devkitm-1-n4s
+            target: riscv32imc-unknown-none-elf
+            crate: firmware-esp32h2-demo
+            profile: release
+            profile_dir: release
+            script: examples/esp32h2-devkitm-1-n4s/uart-smoke.yaml
+            system: configs/systems/esp32h2-devkitm-1-n4s.yaml
+          # Demand rank 1 ESP32-family coverage: C5-specific survey demand is
+          # unmeasured, but the current C5-DevKitC-1 adds a new family SKU.
+          - id: esp32c5-devkitc-1-n8r8
+            target: riscv32imc-unknown-none-elf
+            crate: firmware-esp32c5-demo
+            profile: release
+            profile_dir: release
+            script: examples/esp32c5-devkitc-1-n8r8/uart-smoke.yaml
+            system: configs/systems/esp32c5-devkitc-1-n8r8.yaml
+          # Current C61 DevKitC-1 N8R2; the narrow profile tests UART0 only.
+          - id: esp32c61-devkitc-1-n8r2
+            target: riscv32imc-unknown-none-elf
+            crate: firmware-esp32c61-demo
+            profile: release
+            profile_dir: release
+            script: examples/esp32c61-devkitc-1-n8r2/uart-smoke.yaml
+            system: configs/systems/esp32c61-devkitc-1-n8r2.yaml
+          # Current P4X-C5 Function EV board: UART0 FIFO only; the second HP core,
+          # C5 module, and multimedia/connectivity peripherals remain out of scope.
+          - id: esp32p4x-c5-function-ev-board
+            target: riscv32imc-unknown-none-elf
+            crate: firmware-esp32p4-demo
+            profile: release
+            profile_dir: release
+            script: examples/esp32p4x-c5-function-ev-board/uart-smoke.yaml
+            system: configs/systems/esp32p4x-c5-function-ev-board.yaml
+          # ESP32-S3-DevKitC-1 v1.1 / N16R8. Its exact board profile exposes
+          # the USB-to-UART bridge on UART0; the smoke intentionally does not
+          # claim the RGB LED, PSRAM, USB-OTG, radio, or buttons.
+          - id: esp32s3-devkitc-1-v11
+            script: examples/esp32s3-devkitc-1/io-smoke.yaml
+            system: configs/systems/esp32s3-devkitc-1-v11.yaml
+          # The v1.1 N16R8 board's addressable RGB LED is WS2812 on GPIO38.
+          # This fixture sends one red GRB pixel through RMT0 and checks both
+          # TX completion and the decoded device artifact.
+          - id: esp32s3-devkitc-1-v11-rgb
+            script: examples/esp32s3-devkitc-1/rgb-smoke.yaml
+            system: configs/systems/esp32s3-devkitc-1-v11-rgb.yaml
+          # N16R8 S3 DevKitC profile with a BME280 breakout; asserts the
+          # sensor's chip ID and raw-temperature data over the GPIO matrix.
+          - id: esp32s3-devkitc-1-n16r8-bme280
+            script: examples/esp32s3-devkitc-1-n16r8-bme280/bme280-smoke.yaml
+            system: configs/systems/esp32s3-devkitc-1-n16r8-bme280.yaml
+          # XIAO ESP32C3 with a BME280 breakout; the stock Arduino build boots in
+          # full and prints the compensated temperature on the USB console.
+          - id: seeed-xiao-esp32c3-bme280
+            script: examples/xiao-esp32c3-bme280/bme280-smoke.yaml
+            system: configs/systems/seeed-xiao-esp32c3-bme280.yaml
+          # Demand-rank 1 Arduino Nano ESP32. Its committed fast-boot fixture
+          # observes two transitions on the ESP32-S3 D13/GPIO48 LED pad.
+          - id: arduino-nano-esp32-gpio
+            script: examples/arduino-nano-esp32/io-smoke.yaml
+            system: configs/systems/arduino-nano-esp32.yaml
           # nRF52833 / micro:bit v2 — nRF52-family UART smoke on its own board.
           # Same firmware as tests/fixtures/microbit-v2-smoke.elf, rebuilt here.
           - id: microbit-v2
@@ -303,11 +366,9 @@ jobs:
           - id: nrf5340dk-zephyr
             script: examples/nrf5340dk/zephyr-smoke.yaml
             system: examples/nrf5340dk/system.yaml
-          # RP2350 — the last chip that no gate ran, and the cell that emptied
-          # configs/ci/chip-coverage.yaml (the file is deleted; all 26 chips are
-          # covered). The model, the reset-path test and this firmware all
-          # existed; there was no system manifest, so no script could name them
-          # together and no workflow executed the chip.
+          # Raspberry Pi Pico 2 — demand group #2 (RP2350 ranks #5, 12%). The
+          # board profile maps its onboard LED to GP25; this smoke asserts real
+          # SIO pad transitions as well as UART0 output on the RP2350 map.
           #
           # `build_dir` is not decoration: the linker script comes from the
           # crate's OWN .cargo/config.toml (`-C link-arg=-Tlink.x`), and cargo
@@ -318,16 +379,15 @@ jobs:
           # instead of leaving it as a silent empty UART.
           #
           # Non-vacuity checked: on the rp2040 descriptor — whose UART0 sits at
-          # 0x4003_4000, not the RP2350's 0x4007_0000 — the same script captures
-          # zero UART bytes and drops to 1/2.
-          - id: rp2350-demo
+          # 0x4003_4000, not the RP2350's 0x4007_0000 — the UART assertion fails.
+          - id: pico2
             target: thumbv8m.main-none-eabi
             crate: firmware-rp2350-demo
             build_dir: crates/firmware-rp2350-demo
             profile: release
             profile_dir: release
-            script: examples/rp2350-demo/io-smoke.yaml
-            system: examples/rp2350-demo/system.yaml
+            script: examples/pico2/io-smoke.yaml
+            system: configs/systems/pico2.yaml
           # atsamd21g18a's only CLI proof — the first Microchip part in the
           # engine. Same shape as the rp2350 cell above, `build_dir` included
           # and for the same reason: this crate's `-Tlink.x` comes from its own
@@ -577,6 +637,22 @@ jobs:
           fi
           printf 'entry point 0x00000000 (declared)\n'
 
+      - name: Verify DevKitC-1 v1.1 RGB fixture
+        if: matrix.id == 'esp32s3-devkitc-1-v11-rgb'
+        run: examples/esp32s3-devkitc-1/rgb-smoke/verify-fixture.sh
+
+      - name: Verify DevKitC-1 N16R8 BME280 fixture
+        if: matrix.id == 'esp32s3-devkitc-1-n16r8-bme280'
+        run: examples/esp32s3-devkitc-1-n16r8-bme280/verify-fixture.sh
+
+      - name: Verify XIAO ESP32C3 BME280 fixture
+        if: matrix.id == 'seeed-xiao-esp32c3-bme280'
+        run: examples/xiao-esp32c3-bme280/verify-fixture.sh
+
+      - name: Verify Arduino Nano ESP32 GPIO fixture
+        if: matrix.id == 'arduino-nano-esp32-gpio'
+        run: examples/arduino-nano-esp32/verify-fixture.sh
+
       - name: Run matrix smoke
         if: matrix.id != 'stm32-exact-catalog'
         run: |
@@ -595,6 +671,14 @@ jobs:
             --script "${{ matrix.script }}" \
             --output-dir "out/coverage-matrix/${{ matrix.id }}" \
             --no-uart-stdout
+
+      - name: Check decoded DevKitC-1 v1.1 RGB evidence
+        if: matrix.id == 'esp32s3-devkitc-1-v11-rgb'
+        run: |
+          python3 examples/esp32s3-devkitc-1/rgb-smoke/verify-rgb-evidence.py \
+            "out/coverage-matrix/${{ matrix.id }}/result.json"
+          python3 examples/esp32s3-devkitc-1/rgb-smoke/verify-rgb-evidence.py \
+            examples/esp32s3-devkitc-1/evidence/rgb/hosted-verify.json
 
       - name: Run exact STM32 catalog variants
         if: matrix.id == 'stm32-exact-catalog'

@@ -1,0 +1,18 @@
+# ESP32-S3-DevKitC-1 v1.1 / N16R8, including its one-pixel WS2812 RGB LED.
+# Espressif's v1.1 guide maps the onboard LED input to GPIO38.
+name: "esp32s3-devkitc-1-v1.1-rgb"
+chip: "../chips/esp32s3.yaml"
+
+external_devices:
+  - id: "rgb_led"
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO38"
+      num_pixels: 1
+      cpu_hz: 240000000
+
+connectors:
+  - type: "uart"
+    peripheral: "uart0"
+    endpoint: "host_console"

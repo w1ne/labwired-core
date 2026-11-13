@@ -38,6 +38,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Demand rank 3 STM32F103 board coverage: C8T6 Blue Pill LED and UART.
+          - id: stm32f103-blue-pill
+            crate: firmware-stm32f103-bluepill-smoke
+            target: thumbv7m-none-eabi
+            script: examples/stm32f103-blue-pill/io-smoke.yaml
+            system: configs/systems/stm32f103-blue-pill.yaml
           - id: stm32f401cdu6
             crate: firmware-f401-demo
             target: thumbv7em-none-eabi
@@ -48,6 +54,20 @@ jobs:
             target: thumbv7m-none-eabi
             script: examples/nucleo-h563zi/uart-smoke.yaml
             system: examples/nucleo-h563zi/system.yaml
+          # Demand group #4: STM32F4 is 8% of MCU use; Nucleo/Discovery is the
+          # fourth kit category at 23%. Add the Active F446 Nucleo-64.
+          - id: nucleo-f446re
+            crate: firmware-nucleo-f446re-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-f446re/io-smoke.yaml
+            system: configs/systems/nucleo-f446re.yaml
+          # Demand group #4/#4: other STM32 is 13% of MCU use; Nucleo/Discovery
+          # is the fourth kit category at 23%. Add the active H7 Nucleo-144.
+          - id: nucleo-h723zg
+            crate: firmware-nucleo-h723zg-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-h723zg/io-smoke.yaml
+            system: configs/systems/nucleo-h723zg.yaml
           - id: stm32u575-nucleo
             crate: firmware-stm32u575-demo
             target: thumbv8m.main-none-eabi
@@ -66,11 +86,102 @@ jobs:
             target: thumbv8m.main-none-eabi
             script: examples/nucleo-u575zi/star-catcher-smoke.yaml
             system: examples/nucleo-u575zi/star-catcher-system.yaml
+          # Demand-rank 1 ESP32 family expansion: active ESP32-H2-DevKitM-1-N4S.
+          - id: esp32h2-devkitm-1-n4s
+            crate: firmware-esp32h2-demo
+            target: riscv32imc-unknown-none-elf
+            script: examples/esp32h2-devkitm-1-n4s/uart-smoke.yaml
+            system: configs/systems/esp32h2-devkitm-1-n4s.yaml
+          # Demand rank 1 ESP32-family addition. The survey does not rank C5
+          # separately; this smoke covers the C5 DevKitC-1 UART0 path.
+          - id: esp32c5-devkitc-1-n8r8
+            crate: firmware-esp32c5-demo
+            target: riscv32imc-unknown-none-elf
+            script: examples/esp32c5-devkitc-1-n8r8/uart-smoke.yaml
+            system: configs/systems/esp32c5-devkitc-1-n8r8.yaml
+          # Current ESP32-C61-DevKitC-1-N8R2; smoke asserts C61 UART0 FIFO output.
+          - id: esp32c61-devkitc-1-n8r2
+            crate: firmware-esp32c61-demo
+            target: riscv32imc-unknown-none-elf
+            script: examples/esp32c61-devkitc-1-n8r2/uart-smoke.yaml
+            system: configs/systems/esp32c61-devkitc-1-n8r2.yaml
+          # Demand-rank 1 ESP32-family depth: current P4X-C5 Function EV board.
+          # The profile tests the P4 UART0 FIFO only, not the C5 radio or multimedia peripherals.
+          - id: esp32p4x-c5-function-ev-board
+            crate: firmware-esp32p4-demo
+            target: riscv32imc-unknown-none-elf
+            script: examples/esp32p4x-c5-function-ev-board/uart-smoke.yaml
+            system: configs/systems/esp32p4x-c5-function-ev-board.yaml
+          # Demand-rank 1 Arduino Nano ESP32; rebuild its actual Arduino sketch
+          # with PlatformIO before running the GPIO48/D13 model smoke.
+          - id: arduino-nano-esp32-gpio
+            script: examples/arduino-nano-esp32/io-smoke.yaml
+            system: configs/systems/arduino-nano-esp32.yaml
+            firmware_build_script: examples/arduino-nano-esp32/build-firmware.sh
+          # Demand-rank 1 ESP32 family expansion: Adafruit's in-stock Feather V2.
+          - id: adafruit-feather-esp32-v2-gpio
+            script: examples/adafruit-feather-esp32-v2/io-smoke.yaml
+            system: configs/systems/adafruit-feather-esp32-v2.yaml
+            firmware_build_script: examples/adafruit-feather-esp32-v2/build-firmware.sh
+          # The STEMMA QT BME280 path proves I2C0, its GPIO-matrix pad routing,
+          # and the Feather's GPIO2 sensor-rail enable on the same rank-1 ESP32.
+          - id: adafruit-feather-esp32-v2-bme280
+            script: examples/adafruit-feather-esp32-v2/bme280-smoke.yaml
+            system: configs/systems/adafruit-feather-esp32-v2-bme280.yaml
+            firmware_build_script: examples/adafruit-feather-esp32-v2/build-bme280-firmware.sh
+          # Demand-rank 1 ESP32-C6 DevKitC-1: read a real BME280 over C6 I2C0.
+          - id: esp32c6-devkitc-bme280
+            script: examples/esp32c6-devkitc/bme280-smoke.yaml
+            system: configs/systems/esp32c6-devkitc-bme280.yaml
+            firmware_build_script: examples/esp32c6-devkitc/build-bme280-firmware.sh
+          # Demand-rank 1 ESP32 family: the N16R8 S3 DevKitC reads a BME280
+          # over I2C0 on GPIO8/GPIO9. Rebuild the Arduino firmware with PIO.
+          - id: esp32s3-devkitc-1-n16r8-bme280
+            script: examples/esp32s3-devkitc-1-n16r8-bme280/bme280-smoke.yaml
+            system: configs/systems/esp32s3-devkitc-1-n16r8-bme280.yaml
+            firmware_build_script: examples/esp32s3-devkitc-1-n16r8-bme280/ci/build-bme280-firmware.sh
+          # Demand-rank 1 ESP32 family: the XIAO ESP32C3 reads a BME280 over
+          # I2C0 on GPIO6/GPIO7. Rebuild the stock Arduino firmware with PIO.
+          - id: seeed-xiao-esp32c3-bme280
+            script: examples/xiao-esp32c3-bme280/bme280-smoke.yaml
+            system: configs/systems/seeed-xiao-esp32c3-bme280.yaml
+            firmware_build_script: examples/xiao-esp32c3-bme280/ci/build-bme280-firmware.sh
+          # Demand-rank 1 ESP32 family: the XIAO ESP32-C6 (ESP32-C6FH4, 4 MB)
+          # toggles its active-low user LED on GPIO15 through the C6 GPIO block.
+          - id: seeed-xiao-esp32c6
+            script: examples/xiao-esp32c6-blinky/led-smoke.yaml
+            system: configs/systems/seeed-xiao-esp32c6.yaml
+            firmware_build_script: examples/xiao-esp32c6-blinky/ci/build-firmware.sh
           - id: rp2040-pio
             crate: firmware-rp2040-pio-onboarding
             target: thumbv6m-none-eabi
             script: examples/rp2040-pio/io-smoke.yaml
             system: examples/rp2040-pio/system.yaml
+          # Demand group #2 (RP2040/RP2350), MCU rank 5: exercise Pico I2C0
+          # against a BME280 and light the onboard LED only on chip-ID success.
+          - id: pico-bme280
+            script: examples/pico-bme280/bme280-smoke.yaml
+            system: configs/systems/pico-bme280.yaml
+            firmware_build_script: examples/pico-bme280/build-firmware.sh
+          # Demand group #2 (RP2040): Adafruit Feather RP2040 reads a BME280
+          # over I2C1 on the STEMMA QT pads GP2/GP3 and raises D13 on chip-ID success.
+          - id: adafruit-feather-rp2040-bme280
+            script: examples/adafruit-feather-rp2040/io-smoke.yaml
+            system: configs/systems/adafruit-feather-rp2040-bme280.yaml
+            firmware_build_script: examples/adafruit-feather-rp2040/build-firmware.sh
+          # Demand group #2 (RP2040/RP2350; RP2040 MCU rank 5): Feather
+          # RP2350 D13/GPIO7 plus the default UART0 TX/RX path.
+          - id: adafruit-feather-rp2350
+            crate: firmware-adafruit-feather-rp2350-smoke
+            target: thumbv8m.main-none-eabi
+            script: examples/adafruit-feather-rp2350/io-smoke.yaml
+            system: configs/systems/adafruit-feather-rp2350.yaml
+          # Maintenance-only coverage: Microchip lists ATmega328P as NRND, so
+          # this preserves the existing Nano path without recommending new use.
+          - id: arduino-nano-atmega328p-maintenance
+            script: examples/arduino-nano-blinky/io-smoke.yaml
+            system: configs/systems/arduino-nano.yaml
+            firmware_build_script: examples/arduino-nano-blinky/build-firmware.sh
 
     steps:
       - uses: actions/checkout@v4
@@ -78,7 +189,17 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
         with:
-          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv8m.main-none-eabi
+          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv8m.main-none-eabi,riscv32imc-unknown-none-elf
+
+      - name: Install Python for PlatformIO
+        if: ${{ matrix.firmware_build_script != '' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PlatformIO
+        if: ${{ matrix.firmware_build_script != '' }}
+        run: python -m pip install platformio==6.2.0
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
@@ -90,14 +211,19 @@ jobs:
       - name: Run onboarding smoke
         run: |
           chmod +x scripts/onboarding_smoke.sh
-          scripts/onboarding_smoke.sh \
-            --target-id "${{ matrix.id }}" \
-            --crate "${{ matrix.crate }}" \
-            --target "${{ matrix.target }}" \
-            --script "${{ matrix.script }}" \
-            --system "${{ matrix.system }}" \
-            --out-dir "out/onboarding-smoke/${{ matrix.id }}" \
+          args=(
+            --target-id "${{ matrix.id }}"
+            --script "${{ matrix.script }}"
+            --system "${{ matrix.system }}"
+            --out-dir "out/onboarding-smoke/${{ matrix.id }}"
             --threshold-seconds 3600
+          )
+          if [[ -n "${{ matrix.firmware_build_script }}" ]]; then
+            args+=(--firmware-build-script "${{ matrix.firmware_build_script }}")
+          else
+            args+=(--crate "${{ matrix.crate }}" --target "${{ matrix.target }}")
+          fi
+          scripts/onboarding_smoke.sh "${args[@]}"
 
       - name: Publish onboarding summary
         if: always()

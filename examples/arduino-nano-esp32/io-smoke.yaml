@@ -1,0 +1,16 @@
+# Arduino Nano ESP32's real D13 / GPIO48 onboard status LED.
+# The fast-boot fixture drives the GPIO48 bank-1 pad low then high; the edge
+# assertion proves the GPIO model and board pin map, not merely a serial marker.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/tier1/arduino-nano-esp32-gpio.elf"
+  system: "../../configs/systems/arduino-nano-esp32.yaml"
+limits:
+  max_steps: 2000000
+  stop_when_assertions_pass: true
+  stop_when_assertions_pass_settle_steps: 100
+  stop_when_assertions_pass_min_steps: 0
+assertions:
+  - gpio_edges:
+      pin: "gpio:48"
+      min_edges: 2

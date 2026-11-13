@@ -1,0 +1,41 @@
+# Read the BME280 CHIP_ID register (0xD0) over the Feather V2 STEMMA QT bus.
+# The fast-boot fixture sets the red user LED high only for CHIP_ID=0x60.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/tier1/adafruit-feather-esp32-v2-bme280.elf"
+  system: "../../configs/systems/adafruit-feather-esp32-v2-bme280.yaml"
+limits:
+  max_steps: 250000
+  stop_when_assertions_pass: true
+  stop_when_assertions_pass_settle_steps: 100
+  stop_when_assertions_pass_min_steps: 0
+assertions:
+  - gpio_edges:
+      pin: "gpio:13"
+      min_edges: 2
+  - memory_value:
+      address: 0x3FF53020
+      expected_value: 0x80
+      mask: 0x480
+      size: 4
+  - memory_value:
+      address: 0x3FF53008
+      expected_value: 1
+      mask: 1
+      size: 4
+  - memory_value:
+      address: 0x3FF44580
+      expected_value: 29
+      size: 4
+  - memory_value:
+      address: 0x3FF44588
+      expected_value: 30
+      size: 4
+  - memory_value:
+      address: 0x3FF441A4
+      expected_value: 0x94
+      size: 4
+  - memory_value:
+      address: 0x3FF441A8
+      expected_value: 0x96
+      size: 4

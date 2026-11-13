@@ -1,0 +1,19 @@
+# Seeed Studio XIAO ESP32C3 with an Adafruit BME280 STEMMA QT breakout.
+# The breakout is on the board's default Wire pins: D4/SDA = GPIO6 and
+# D5/SCL = GPIO7. The USB-C socket is the C3's own USB-Serial/JTAG, which is
+# where the stock XIAO Arduino build (ARDUINO_USB_CDC_ON_BOOT=1) sends Serial.
+# Only that console and I2C0 are claimed.
+name: "seeed-xiao-esp32c3-bme280"
+chip: "../chips/esp32c3.yaml"
+cpu_hz: 160_000_000
+debug_uart: "usb_serial_jtag"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GPIO6"
+      scl: "GPIO7"
+    config:
+      i2c_address: 0x77
+board_io: []

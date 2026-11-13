@@ -1,0 +1,17 @@
+[workspace]
+
+[package]
+name = "xiao-esp32c6-led-smoke"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+panic-halt = "0.2"
+riscv-rt = "0.12"
+
+[[bin]]
+name = "xiao-esp32c6-led-smoke"
+path = "src/main.rs"
+test = false
+bench = false

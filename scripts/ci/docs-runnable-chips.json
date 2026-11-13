@@ -61,6 +61,46 @@
       "expect": "OK",
       "note": "ESP32-C6-DevKitC-1 L1 smoke. Bare-metal RV32IMAC HP-core image ungates UART0 through the C6's own PCR clock/reset block, routes GPIO16/U0TXD via IO_MUX, and prints OK. The LP core, ROM bootloader/flash-image path, interrupt delivery, radios and every non-UART peripheral window are out of scope at L1."
     },
+    "esp32h2": {
+      "how": "needs-build",
+      "why": "ESP32-H2 descriptor and UART0 model are newer than the installed CLI this gate checks. The source-tree firmware and simulator smoke pass in examples/esp32h2-devkitm-1-n4s; switch this row after a release carries H2 support."
+    },
+    "esp32c5": {
+      "how": "needs-build",
+      "why": "ESP32-C5 descriptor and UART0 model are newer than the installed CLI this gate checks. The source-tree firmware and simulator smoke pass in examples/esp32c5-devkitc-1-n8r8; switch this row after a release carries C5 support."
+    },
+    "esp32c61": {
+      "how": "needs-build",
+      "why": "ESP32-C61 descriptor and UART0 model are newer than the installed CLI this gate checks. The source-tree firmware and simulator smoke pass in examples/esp32c61-devkitc-1-n8r2; switch this row after a release carries C61 support."
+    },
+    "esp32p4": {
+      "how": "needs-build",
+      "why": "ESP32-P4 descriptor and UART0 model are newer than the installed CLI this gate checks. The source-tree firmware and simulator smoke pass in examples/esp32p4x-c5-function-ev-board; switch this row after a release carries P4 support."
+    },
+    "esp32c6fh4": {
+      "how": "needs-build",
+      "why": "The esp32c6fh4 descriptor (XIAO ESP32-C6 package variant) is newer than the installed CLI this gate checks. Its GPIO15 LED smoke passes from source in examples/xiao-esp32c6-blinky; switch this row after a release carries the esp32c6fh4 descriptor."
+    },
+    "esp32s2": {
+      "how": "needs-build",
+      "why": "ESP32-S2 descriptor and LX7 direct-ELF boot path are newer than the installed CLI this gate checks. The committed fixture smoke passes in examples/esp32s2-devkitc-1-n8r2; switch this row after a release carries S2 support."
+    },
+    "stm32f446re": {
+      "how": "needs-build",
+      "why": "The STM32F446RE NUCLEO-F446RE slice is newer than the installed CLI this gate checks. Its LD2 + USART2 smoke passes from source in examples/nucleo-f446re; switch this row after a release carries the F446RE descriptor."
+    },
+    "stm32h723zg": {
+      "how": "needs-build",
+      "why": "The STM32H723ZG NUCLEO-H723ZG slice is newer than the installed CLI this gate checks. Its LD1 + USART3 smoke passes from source in examples/nucleo-h723zg; switch this row after a release carries the H723ZG descriptor."
+    },
+    "rp2350-feather": {
+      "how": "needs-build",
+      "why": "The rp2350-feather descriptor is newer than the installed CLI this gate checks. The Feather RP2350 D13/GPIO7 + UART0 smoke passes from source in examples/adafruit-feather-rp2350; switch this row after a release carries the Feather variant."
+    },
+    "rp2040-feather": {
+      "how": "needs-build",
+      "why": "The rp2040-feather descriptor is newer than the installed CLI this gate checks. The Feather BME280 smoke passes from source in examples/adafruit-feather-rp2040; switch this row after a release carries the Feather variant."
+    },
     "nrf52840": {
       "how": "committed",
       "firmware": "tests/fixtures/tier1/nrf52840.elf",

@@ -1,0 +1,11 @@
+# Narrow UART profile for the buyable ESP32-P4X-C5-Function-EV-Board.
+# J1 pin 8 is GPIO37/U0TXD and J1 pin 10 is GPIO38/U0RXD per Espressif's
+# current board guide. The twin captures UART0 internally; it does not model
+# the board's USB Serial/JTAG connector or route the signal to physical pads.
+
+name: "esp32p4x-c5-function-ev-board"
+chip: "../chips/esp32p4.yaml"
+cpu_hz: 400_000_000
+debug_uart: "uart0"
+external_devices: []
+board_io: []

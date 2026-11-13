@@ -1,0 +1,29 @@
+{
+  "target_id": "adafruit-feather-rp2040-bme280",
+  "status": "pass",
+  "crate": "",
+  "target_triple": "",
+  "script": "examples/adafruit-feather-rp2040/io-smoke.yaml",
+  "system": "configs/systems/adafruit-feather-rp2040-bme280.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-11T21:58:11Z",
+  "finished_at_utc": "2026-11-11T21:58:14Z",
+  "elapsed_seconds": 3,
+  "elapsed_ms": 2808,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.247,
+    "build_firmware": 2.076,
+    "run_smoke": 0.444
+  },
+  "stages_ms": {
+    "build_cli": 247,
+    "build_firmware": 2076,
+    "run_smoke": 444
+  },
+  "firmware_build_script": "examples/adafruit-feather-rp2040/build-firmware.sh"
+}

@@ -269,6 +269,24 @@
         "gap": "no I2C window is declared on configs/chips/esp32c6.yaml; the I2C0 window is deliberately unmapped at L1. The C3's I2C-matrix signal indices do not transfer (I2CEXT0_SCL is 45 on the C6 vs 53 on the C3)."
       }
     },
+    "esp32c6fh4": {
+      "in_boards": false,
+      "uart": {
+        "state": "none",
+        "gap": "UART0/UART1 are declared in the esp32c6.yaml copy, but the XIAO ESP32-C6 smoke asserts GPIO15 LED edges only; no esp32c6fh4 firmware UART byte is captured under this chip name.",
+        "lane": "none"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "SPI2 is declared in the esp32c6.yaml copy, but no esp32c6fh4 firmware SPI transfer is proven.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "I2C0 is declared in the esp32c6.yaml copy, but no esp32c6fh4 firmware I2C transaction is proven.",
+        "lane": "none"
+      }
+    },
     "esp32s3": {
       "in_boards": true,
       "uart": {
@@ -2026,6 +2044,166 @@
       "i2c": {
         "state": "none",
         "gap": "No KA example or test drives I2C1 on this part; the shared PIC24 I2C model is not claimed for the KA family.",
+        "lane": "none"
+      }
+    },
+    "esp32c5": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "examples/esp32c5-devkitc-1-n8r8/uart-smoke.yaml",
+        "test": "C5_N8R8_OK",
+        "signal": "firmware built from source boots in-sim on configs/systems/esp32c5-devkitc-1-n8r8.yaml and writes 'C5_N8R8_OK' to the UART0 TX FIFO; the uart_contains assertion matches it on the host_console UART capture.",
+        "lane": "core-onboarding-smoke (push to main + nightly cron): matrix id esp32c5-devkitc-1-n8r8 (scripts/onboarding_smoke.sh)"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No SPI controller is declared on configs/chips/esp32c5.yaml; the profile is UART0-only.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No I2C controller is declared on configs/chips/esp32c5.yaml; the profile is UART0-only.",
+        "lane": "none"
+      }
+    },
+    "esp32h2": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "examples/esp32h2-devkitm-1-n4s/uart-smoke.yaml",
+        "test": "H2_N4S_UART_OK",
+        "signal": "firmware built from source boots in-sim on configs/systems/esp32h2-devkitm-1-n4s.yaml and writes 'H2_N4S_UART_OK' to the UART0 TX FIFO; the uart_contains assertion matches it on the host_console UART capture.",
+        "lane": "core-board-ci (every pull request): board esp32h2-devkitm-1-n4s from configs/ci/boards.yml; also core-onboarding-smoke (push to main + nightly cron): matrix id esp32h2-devkitm-1-n4s"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No SPI controller is declared on configs/chips/esp32h2.yaml; the profile is UART0-only.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No I2C controller is declared on configs/chips/esp32h2.yaml; the profile is UART0-only.",
+        "lane": "none"
+      }
+    },
+    "esp32p4": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "examples/esp32p4x-c5-function-ev-board/uart-smoke.yaml",
+        "test": "P4X_C5_FUNCTION_EV_OK",
+        "signal": "firmware built from source boots in-sim on configs/systems/esp32p4x-c5-function-ev-board.yaml and writes 'P4X_C5_FUNCTION_EV_OK' to the UART0 TX FIFO; the uart_contains assertion matches it on the host_console UART capture.",
+        "lane": "core-onboarding-smoke (push to main + nightly cron): matrix id esp32p4x-c5-function-ev-board (scripts/onboarding_smoke.sh)"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No SPI controller is declared on configs/chips/esp32p4.yaml; the profile is UART0-only.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No I2C controller is declared on configs/chips/esp32p4.yaml; the profile is UART0-only.",
+        "lane": "none"
+      }
+    },
+    "esp32s2": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "examples/esp32s2-devkitc-1-n8r2/io-smoke.yaml",
+        "test": "ESP32S2_DEVKITC_N8R2_UART_OK",
+        "signal": "the committed ELF tests/fixtures/esp32s2-devkitc-1-n8r2-uart.elf boots in-sim on configs/systems/esp32s2-devkitc-1-n8r2.yaml and writes 'ESP32S2_DEVKITC_N8R2_UART_OK' to the UART0 TX FIFO; the uart_contains assertion matches it on the host_console UART capture.",
+        "lane": "core-board-ci (every pull request): board esp32s2-devkitc-1-n8r2 from configs/ci/boards.yml"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No SPI controller is declared on configs/chips/esp32s2.yaml; the profile is UART0-only.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No I2C controller is declared on configs/chips/esp32s2.yaml; the profile is UART0-only.",
+        "lane": "none"
+      }
+    },
+    "rp2040-feather": {
+      "in_boards": false,
+      "uart": {
+        "state": "none",
+        "gap": "The chip shares the rp2040 PL011 model, but no firmware drives a UART under the rp2040-feather name; the Feather smoke observes I2C1 and header pin D13 (GPIO13) only.",
+        "lane": "none"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "The chip shares the rp2040 PL022 model, but no firmware drives SPI under the rp2040-feather name.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "proven",
+        "file": "examples/adafruit-feather-rp2040/io-smoke.yaml",
+        "test": "data 0x60 ack",
+        "signal": "the bare-metal fixture tests/fixtures/tier1/feather-rp2040-bme280.elf (built from examples/adafruit-feather-rp2040/simulator/smoke.c) reads BME280 CHIP_ID over I2C1 on the STEMMA QT pads GP2/GP3; the peripheral_log assertion requires the I2C1 bus_trace to contain the device's 'data 0x60 ack' byte, and gpio_edges requires header pin D13 (GPIO13), driven high only on CHIP_ID 0x60, to toggle.",
+        "lane": "core-onboarding-smoke (push to main + nightly cron): matrix id adafruit-feather-rp2040-bme280 (scripts/onboarding_smoke.sh)"
+      }
+    },
+    "stm32f446re": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "examples/nucleo-f446re/io-smoke.yaml",
+        "test": "NUCLEO-F446RE: USART2 + LD2",
+        "signal": "crates/firmware-nucleo-f446re-smoke boots on configs/systems/nucleo-f446re.yaml, enables GPIOA and USART2 in RCC, sets PA2/PA3 to AF7 and writes the banner to USART2 (the ST-LINK VCP); uart_contains matches it, and gpio_edges requires LD2 on PA5 to toggle at least 4 times.",
+        "lane": "core-onboarding-smoke (push to main + nightly cron): matrix id nucleo-f446re (scripts/onboarding_smoke.sh)"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "SPI1 is declared on configs/chips/stm32f446re.yaml, but no F446RE firmware SPI transfer is proven.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "I2C1 is declared on configs/chips/stm32f446re.yaml, but no F446RE firmware I2C transaction is proven.",
+        "lane": "none"
+      }
+    },
+    "stm32h723zg": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "examples/nucleo-h723zg/io-smoke.yaml",
+        "test": "NUCLEO-H723ZG: USART3 + LD1",
+        "signal": "crates/firmware-nucleo-h723zg-smoke boots on configs/systems/nucleo-h723zg.yaml, enables GPIOB/GPIOD and USART3 in RCC, sets PD8/PD9 to AF7 and writes the banner to USART3 (the ST-LINK VCP); uart_contains matches it, and gpio_edges requires LD1 on PB0 to toggle at least 4 times.",
+        "lane": "core-onboarding-smoke (push to main + nightly cron): matrix id nucleo-h723zg (scripts/onboarding_smoke.sh)"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No SPI controller is declared on configs/chips/stm32h723zg.yaml; the NUCLEO-H723ZG slice declares RCC, SysTick, GPIO B/C/D/E and USART3 only.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No I2C controller is declared on configs/chips/stm32h723zg.yaml; the NUCLEO-H723ZG slice declares RCC, SysTick, GPIO B/C/D/E and USART3 only.",
+        "lane": "none"
+      }
+    },
+    "rp2350-feather": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "examples/adafruit-feather-rp2350/io-smoke.yaml",
+        "test": "FEATHER_RP2350_GPIO7_UART_OK",
+        "signal": "crates/firmware-adafruit-feather-rp2350-smoke boots on configs/systems/adafruit-feather-rp2350.yaml and writes the banner to the UART0 PL011 data register at 0x40070000 (no pad mux or baud setup); uart_contains matches it, and gpio_edges requires the red D13 LED on GPIO7, toggled through SIO GPIO_OUT_XOR, to change at least twice.",
+        "lane": "core-onboarding-smoke (push to main + nightly cron): matrix id adafruit-feather-rp2350 (scripts/onboarding_smoke.sh)"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "The chip shares the rp2040 PL022 model, but no firmware drives SPI under the rp2350-feather name.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "The chip shares the rp2040 I2C model, but no firmware drives I2C under the rp2350-feather name.",
         "lane": "none"
       }
     }

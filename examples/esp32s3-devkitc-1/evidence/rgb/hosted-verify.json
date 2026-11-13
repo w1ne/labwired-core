@@ -1,0 +1,74 @@
+{
+  "source": "hosted LabWired labwired_verify response",
+  "target": "esp32-s3-devkitc-1-n16r8",
+  "language": "arduino",
+  "entry_path": "src/main.ino",
+  "source_sha256": "caf41a1a0be723a4778b6cf95bffe448f490ce652ac039057c9f19818aeb04bf",
+  "status": "model_verified",
+  "verification": "serial contains \"DEVKITC1_V11_RGB38_TX_DONE\". Model-verified deterministically.",
+  "run_status": "pass",
+  "stop_reason": "assertions_passed",
+  "oracle_results": [
+    {
+      "kind": "serial",
+      "passed": true,
+      "detail": "serial contains \"DEVKITC1_V11_RGB38_TX_DONE\""
+    }
+  ],
+  "serial": "ESP-ROM:esp32s3-20210327\r\nESP-ROM:1\r\nesp32s3-20210327\r\nBuild:Mar 0x3fce2820,len:0x10cc\r\n27 2021\r\nrst:0xc (RTC_SW_CP0x403c8700,len:0xc2c\r\nU_RST),boot:0x8 (SPI_FAST_FL0x403cb700,len:0x30b0\r\nASH_BOOT)\r\nSPIWP:0entry 0x403c88b8\r\nxee\r\nmode:DIO, clock div:1\r\nload:0x3fce2820,len:0x10cc\r\nload:0x403c8700,len:0xc2c\r\nload:0x403cb700,len:0x30b0\r\nentry 0x403c88b8\r\nDEVKITC1_V11_RGB38_TX_DONE",
+  "gaps": [
+    {
+      "code": "approximation",
+      "scope": "model",
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated",
+      "address": "0x0",
+      "pc": "0x0"
+    }
+  ],
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "gpio",
+        "kind": "native",
+        "base": 1610629120,
+        "registers": [],
+        "artifacts": [
+          {
+            "kind": "framebuffer",
+            "id": "rgb",
+            "meta": {
+              "data_pin": 38,
+              "format": "ws2812_grb",
+              "generation": 15475485528314853000,
+              "h": 1,
+              "lit_pixels": 1,
+              "pixels_decoded": 1,
+              "w": 1
+            },
+            "bytes": [
+              0,
+              255,
+              0
+            ],
+            "device_type": "neopixel"
+          }
+        ]
+      },
+      {
+        "name": "rmt_s3",
+        "kind": "rmt",
+        "base": 1610702848,
+        "registers": [],
+        "artifacts": [
+          {
+            "kind": "rmt_tx",
+            "id": "tx_start",
+            "meta": {
+              "count": 1
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,38 @@
+Processing pico_bme280 (platform: raspberrypi; board: rpipico; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/raspberrypi/rpipico.html
+PLATFORM: Raspberry Pi RP2040 (1.20.0+sha.5d4561a) > Pico
+HARDWARE: RP2040 133MHz, 256KB RAM, 2MB Flash
+DEBUG: Current (blackmagic) External (blackmagic, cmsis-dap, jlink, picoprobe, raspberrypi-swd)
+PACKAGES:
+ - framework-arduinopico @ 1.60100.0+sha.fd65f6d4
+ - tool-picotool-rp2040-earlephilhower @ 5.160100.260719 (16.1.0)
+ - tool-pioasm-rp2040-earlephilhower @ 5.160100.260719 (16.1.0)
+ - toolchain-rp2040-earlephilhower @ 5.160100.260719 (16.1.0)
+Flash size: 2.00MB
+Sketch size: 2.00MB
+Filesystem size: 0.00MB
+PSRAM size: 0.00MB
+Maximium Sketch size: 2093056 EEPROM start: 0x101ff000 Filesystem start: 0x101ff000 Filesystem end: 0x101ff000
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 78 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- Wire @ 1.0
+Building in release mode
+Compiling .pio/build/pico_bme280/src/bme280_smoke.cpp.o
+Linking .pio/build/pico_bme280/firmware.elf
+Generating UF2 image
+picotool uf2 convert -t elf ".pio/build/pico_bme280/firmware.elf" ".pio/build/pico_bme280/firmware.uf2"
+Retrieving maximum program size .pio/build/pico_bme280/firmware.elf
+Checking size .pio/build/pico_bme280/firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [          ]   3.3% (used 8560 bytes from 262144 bytes)
+Flash: [          ]   1.8% (used 38168 bytes from 2093056 bytes)
+Building .pio/build/pico_bme280/firmware.bin
+Building .pio/build/pico_bme280/firmware.bin.signed
+========================= [SUCCESS] Took 1.29 seconds =========================
+set fast-boot fixture entry to labwired_entry at 0x10003209
+updated pico-bme280.elf fixture digest in /home/andrii/worktrees-legacy-20261109/labwired-core/hw-onboarding/tests/fixtures/tier1/MANIFEST.json

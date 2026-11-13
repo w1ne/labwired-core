@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="8" failures="0" errors="0" time="0.201548">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="2cfc7c80699af37789b724bd2137fd88cc4966911a4660474647519acf9084cf"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.201548">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: memory_value: @0x40800000=0x60" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: memory_value: @0x60004020=0x80" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: memory_value: @0x6009120c=0x86" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x60091208=0x87" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: memory_value: @0x6009156c=0x2e" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: memory_value: @0x60091570=0x2d" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

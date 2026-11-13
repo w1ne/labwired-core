@@ -1,0 +1,29 @@
+{
+  "target_id": "esp32s3-devkitc-1-v11",
+  "status": "pass",
+  "crate": "",
+  "target_triple": "",
+  "script": "examples/esp32s3-devkitc-1/io-smoke.yaml",
+  "system": "configs/systems/esp32s3-devkitc-1-v11.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-11T16:26:48Z",
+  "finished_at_utc": "2026-11-11T16:26:50Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1494,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.258,
+    "build_firmware": 0.036,
+    "run_smoke": 1.16
+  },
+  "stages_ms": {
+    "build_cli": 258,
+    "build_firmware": 36,
+    "run_smoke": 1160
+  },
+  "firmware_build_script": "examples/esp32s3-devkitc-1/verify-fixture.sh"
+}

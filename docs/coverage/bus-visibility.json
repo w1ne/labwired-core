@@ -143,12 +143,36 @@
     "name": "esp32c3"
   },
   {
+    "buses": [],
+    "name": "esp32c5"
+  },
+  {
     "buses": [
       "I2C",
       "SPI",
       "UART"
     ],
     "name": "esp32c6"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "esp32c6fh4"
+  },
+  {
+    "buses": [],
+    "name": "esp32h2"
+  },
+  {
+    "buses": [],
+    "name": "esp32p4"
+  },
+  {
+    "buses": [],
+    "name": "esp32s2"
   },
   {
     "buses": [],
@@ -287,8 +311,20 @@
     "name": "rp2040"
   },
   {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "rp2040-feather"
+  },
+  {
     "buses": [],
     "name": "rp2350"
+  },
+  {
+    "buses": [],
+    "name": "rp2350-feather"
   },
   {
     "buses": [],
@@ -593,6 +629,14 @@
   },
   {
     "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f446re"
+  },
+  {
+    "buses": [
       "UART"
     ],
     "name": "stm32f746"
@@ -644,6 +688,12 @@
       "UART"
     ],
     "name": "stm32h563"
+  },
+  {
+    "buses": [
+      "UART"
+    ],
+    "name": "stm32h723zg"
   },
   {
     "buses": [

@@ -1,0 +1,107 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      1073742168,
+      1341915120,
+      1341392896,
+      0,
+      0,
+      1341915136,
+      0,
+      1341915136,
+      0,
+      1343004672,
+      10,
+      79,
+      75,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1073742586,
+    "mstatus": 0,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 1073742168,
+    "mscratch": 0,
+    "mepc": 0,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 1000000,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 1000000,
+  "cycles": 3000052,
+  "instructions": 1000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 1000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 1000000
+    }
+  },
+  "limits": {
+    "max_steps": 1000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "10feebc85ae255b9db85f137be3afea8f9065e6b018b6db387d1918b72a70bfb",
+  "config": {
+    "firmware": "examples/esp32p4x-c5-function-ev-board/../../target/riscv32imc-unknown-none-elf/release/firmware-esp32p4-demo",
+    "system": "examples/esp32p4x-c5-function-ev-board/../../configs/systems/esp32p4x-c5-function-ev-board.yaml",
+    "script": "examples/esp32p4x-c5-function-ev-board/uart-smoke.yaml"
+  }
+}

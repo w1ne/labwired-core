@@ -1,0 +1,9 @@
+# Narrow ESP32-S2-DevKitC-1-N8R2 UART0 smoke.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/esp32s2-devkitc-1-n8r2-uart.elf"
+  system: "../../configs/systems/esp32s2-devkitc-1-n8r2.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "ESP32S2_DEVKITC_N8R2_UART_OK"

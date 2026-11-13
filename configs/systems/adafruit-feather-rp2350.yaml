@@ -1,0 +1,13 @@
+# Adafruit Feather RP2350 with HSTX, no-PSRAM variant (Product ID 6000).
+# Narrow board integration: onboard red D13 LED on GP7 and UART0 on GP0/GP1.
+# HSTX, NeoPixel, USB, power, and charger behavior are outside this profile.
+name: "adafruit-feather-rp2350"
+chip: "../chips/rp2350-feather.yaml"
+external_devices: []
+board_io:
+  - id: "led_d13_gp7"
+    kind: "led"
+    peripheral: "sio"
+    pin: 7
+    signal: "output"
+    active_high: true
