@@ -92,6 +92,24 @@ fn mosfet_thermometer_voltage(bias_v: f64, temperature_c: f64) -> f64 {
     0.5 * (low + high)
 }
 
+/// Independent saturated PMOS load line. `vto` is the signed card value, so
+/// polarity normalization makes a positive process-derived PMOS threshold
+/// increase the source-referenced overdrive in this ngspice level-1 card.
+fn pmos_saturated_load_line(gate_v: f64, vto: f64) -> f64 {
+    const SUPPLY_V: f64 = 5.0;
+    const LOAD_OHMS: f64 = 10_000.0;
+    const KP_A_PER_V2: f64 = 34.5e-6;
+    const W_OVER_L: f64 = 1.5;
+    let overdrive = SUPPLY_V - gate_v + vto;
+    let drain_current = 0.5 * KP_A_PER_V2 * W_OVER_L * overdrive * overdrive;
+    let drain_v = LOAD_OHMS * drain_current;
+    assert!(
+        SUPPLY_V - drain_v >= overdrive,
+        "independent PMOS load line must remain saturated"
+    );
+    drain_v
+}
+
 /// Independent forward-active Gummel–Poon collector load line, including the
 /// base resistor and optional forward Early effect.
 fn bjt_collector_voltage(base_drive_v: f64, forward_early_voltage: Option<f64>) -> f64 {
@@ -432,6 +450,135 @@ fn uno_r4_minima_heated_mosfet_thermometer_reaches_a2_a3_adc14_alongside_ntc_and
             assert!(
                 u32::from(code(reference_v)) > u32::from(code(heated_v)) + 30,
                 "firmware must resolve the temperature difference in ADC14 counts"
+            );
+        }
+    }
+}
+
+#[test]
+fn uno_r4_minima_process_derived_pmos_threshold_reaches_a2_a3_adc14_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/arduino-uno-r4-minima.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load Uno R4 profile");
+    let analog = SystemManifest::from_file(root(
+        "examples/arduino-uno-r4-minima/analog-ntc-diode-system.yaml",
+    ))
+    .expect("load generic NTC and diode netlists");
+    let pmos = SystemManifest::from_file(root(
+        "examples/arduino-uno-r4-minima/analog-mosfet-process-pmos.yaml",
+    ))
+    .expect("load matched PMOS process-threshold branches");
+    profile.cosim_models = analog.cosim_models;
+    profile.cosim_models.extend(pmos.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load RA4M1 descriptor");
+    for (pad, channel) in [("P014", 9), ("P000", 0), ("P001", 1), ("P002", 2)] {
+        assert_eq!(chip.analog_pins[pad].peripheral, "adc0");
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build Uno R4 bus");
+    let (cpu, _) = configure_cortex_m(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    const IDLE: u32 = 0x2000_2000;
+    machine
+        .bus
+        .write_u16(u64::from(IDLE), 0xE7FE)
+        .expect("place a branch-to-self instruction in RAM");
+    machine.cpu.set_pc(IDLE);
+    machine.cpu.set_sp(0x2000_7F00);
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &machine.bus)
+        .expect("build analog co-simulation")
+        .expect("profile contains analog netlists");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "A0..A3 must resolve through descriptor-backed ADC14 analog pins"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold the unrelated NTC at nominal temperature");
+
+    const PROCESS_VTO_FROM_NGSPICE: f64 = 0.036_109_2;
+    const ADC_CHANNELS: u16 = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 9);
+    let expected_diode_v = diode_load_line_voltage();
+    for gate_v in [3.0_f64, 4.0] {
+        session
+            .set_signal_number("ui.mos_pmos.gate_v", gate_v)
+            .expect("set the common PMOS gate drive");
+
+        let mut reached_boundary = false;
+        for _ in 0..256 {
+            let advance = session
+                .advance(&mut machine, AdvanceRequest::single())
+                .expect("advance the board and analog models in lockstep");
+            assert!(
+                advance.new_routing_errors.is_empty(),
+                "unexpected route errors: {:?}",
+                advance.new_routing_errors
+            );
+            if !advance.routed.is_empty() {
+                reached_boundary = true;
+                break;
+            }
+        }
+        assert!(
+            reached_boundary,
+            "the analog netlists reach the board boundary"
+        );
+
+        let reference_v = signal_number(&session, "board.analog.p001_volts");
+        let process_v = signal_number(&session, "board.analog.p002_volts");
+        let expected_reference_v = pmos_saturated_load_line(gate_v, 0.0);
+        let expected_process_v = pmos_saturated_load_line(gate_v, PROCESS_VTO_FROM_NGSPICE);
+        assert!(
+            (reference_v - expected_reference_v).abs() < 2e-5,
+            "explicit-VTO PMOS at gate={gate_v} V should be {expected_reference_v} V, got {reference_v} V"
+        );
+        assert!(
+            (process_v - expected_process_v).abs() < 2e-5,
+            "NSUB-derived PMOS at gate={gate_v} V should be {expected_process_v} V, got {process_v} V"
+        );
+        assert!(
+            process_v > reference_v + 0.015,
+            "the process-derived threshold must shift the PMOS load line: reference={reference_v}, process={process_v}"
+        );
+
+        let ntc_v = signal_number(&session, "board.analog.p014_volts");
+        let diode_v = signal_number(&session, "board.analog.p000_volts");
+        assert!(
+            (ntc_v - 2.5).abs() < 1e-9,
+            "nominal NTC remains at half supply"
+        );
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "the unrelated Shockley diode load line is unchanged"
+        );
+
+        for (adcer, full_scale) in [(0, 4095_u32), (3 << 1, 16383)] {
+            run_adc14_scan(&mut machine, &mut session, adcer, ADC_CHANNELS);
+            let code =
+                |volts: f64| ((volts * 1000.0 + 0.5).floor() as u32 * full_scale / 5000) as u16;
+            for (offset, label, volts) in [
+                (0, "AN000 diode", diode_v),
+                (2, "AN001 reference PMOS", reference_v),
+                (4, "AN002 process PMOS", process_v),
+                (18, "AN009 NTC", ntc_v),
+            ] {
+                assert_eq!(
+                    machine
+                        .bus
+                        .read_u16(ADDR0 + offset)
+                        .expect("read ADC14 result"),
+                    code(volts),
+                    "firmware-visible {label} conversion must report its solved voltage"
+                );
+            }
+            assert!(
+                code(process_v) > code(reference_v) + if full_scale == 16383 { 50 } else { 10 },
+                "the process threshold must remain observable in {full_scale} counts: reference={}, process={}",
+                code(reference_v),
+                code(process_v)
             );
         }
     }

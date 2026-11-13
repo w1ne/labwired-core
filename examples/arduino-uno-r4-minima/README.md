@@ -17,6 +17,9 @@ drives A0 with a Beta NTC divider and A1 with an independent Shockley diode.
 The board-level analog tests also route a matched Gummel–Poon NPN pair to A2/A3
 and assert the finite-VAF Early-effect shift through 12-bit and 14-bit ADC14
 conversions, alongside the unrelated NTC and diode.
+The same ADC route checks a matched PMOS reference and a process-derived PMOS:
+the latter omits `VTO` and derives its threshold from `TOX`/`NSUB`, with both
+load lines asserted at 12 and 14 bits beside the NTC and diode.
 
 **SIM-DERIVED.** Not silicon-verified. Playground bring-up is later.
 
@@ -47,3 +50,4 @@ Expected result:
 6. `analog-ntc-diode-system.yaml`: generic NTC and diode device netlists routed to A0/A1.
 7. `analog-mosfet-thermometer.yaml`: matched diode-connected level-1 NMOS threshold thermometers at 25 °C and 85 °C routed to A2/A3 (AN001/AN002).
 8. `analog-bjt-early-effect.yaml`: matched generic Gummel–Poon NPN load lines with and without forward Early effect routed to A2/A3 (AN001/AN002).
+9. `analog-mosfet-process-pmos.yaml`: matched level-1 PMOS load lines with explicit and `TOX`/`NSUB`-derived thresholds routed to A2/A3 (AN001/AN002).

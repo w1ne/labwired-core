@@ -15,6 +15,11 @@ cargo test -p labwired-core --test cosim_ra4m1_analog -- --nocapture
 The fixture is `examples/arduino-uno-r4-minima/analog-ntc-diode-system.yaml`.
 The same test also routes matched Gummel–Poon NPN branches through A2/A3 and
 asserts the finite-VAF load-line shift with ADC14 conversions at both resolutions.
+`analog-mosfet-process-pmos.yaml` adds matched PMOS load lines to those same
+channels: one card pins `VTO=0`, while the other derives `VTO` from `TOX` and
+`NSUB`. The test checks the ngspice-referenced load-line shift at two gate
+voltages and confirms both PMOS conversions at 12 and 14 bits alongside the
+unrelated NTC and diode.
 
 ## 1) Optional: ensure target installed
 
