@@ -129,15 +129,15 @@ same fields but never their source, chip YAML, binary or build paths.
 | pic24f16ka101 | open | L1 | 3 | — | — | ≥1× (CI) | — |
 | pic24f16ka102 | open | L1 | 3 | — | — | ≥1× (CI) | — |
 | ch32v003f4p6 | open | L1 | 5 | — | — | ≥1× (CI) | — |
-| esp32h2 | open | L0 | 3 | — | — | ≥1× (CI) | — |
-| esp32c5 | open | L0 | 1 | — | — | ≥1× (CI) | — |
+| esp32h2 | open | L0 | 3 | — | 2.4 | ≥1× (CI) | — |
+| esp32c5 | open | L0 | 1 | — | 2.2 | ≥1× (CI) | — |
 | esp32p4 | open | L0 | 1 | — | — | ≥1× (CI) | — |
 | esp32s2 | open | L0 | 1 | — | — | ≥1× (CI) | — |
-| rp2040-feather | open | L0 | 24 | — | — | ≥1× (CI) | — |
-| rp2350-feather | open | L0 | 27 | — | — | ≥1× (CI) | — |
-| stm32h723zg | open | L0 | 7 | — | — | ≥1× (CI) | — |
-| stm32f446re | open | L0 | 24 | — | — | ≥1× (CI) | — |
-| esp32c6fh4 | open | L0 | 69 | — | — | ≥1× (CI) | — |
+| rp2040-feather | open | L0 | 24 | 906.8 | 1.6 | ≥1× (CI) | — |
+| rp2350-feather | open | L0 | 27 | 906.8 | 1.7 | ≥1× (CI) | — |
+| stm32h723zg | open | L0 | 7 | 900.5 | 1.5 | ≥1× (CI) | — |
+| stm32f446re | open | L0 | 24 | 937.0 | 1.6 | ≥1× (CI) | — |
+| esp32c6fh4 | open | L0 | 69 | — | 3.8 | ≥1× (CI) | — |
 | k32w041z (closed) | closed | L2 | 9 | 987.8 | 1.6 | 6.50× | [doc](docs/boards/k32w041amdk6.md) |
 
 Open-model RTx is a CI receipt; the committed open perf rating is step/batch.
