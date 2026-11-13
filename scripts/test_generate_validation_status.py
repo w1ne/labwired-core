@@ -5,7 +5,7 @@
 
 Real Git fixtures cover incomplete-history failures. Source-content fixtures
 prove that optional human ACKs never block integration or upgrade physical
-capture evidence, while stale reports and invalid evidence still fail.
+capture evidence, while invalid evidence, watch holes and a committed report still fail.
 """
 
 import datetime
@@ -264,15 +264,54 @@ def test_source_only_drift_is_informational(tmp_path, monkeypatch, capsys, flags
     assert (manifest_path.read_bytes(), output.read_bytes()) == before
 
 
-def test_stale_document_still_fails_with_source_drift(tmp_path, monkeypatch, capsys):
+def test_check_does_not_depend_on_any_committed_report(tmp_path, monkeypatch):
+    """The report is generated output: a stale or absent file is not a failure."""
     board, model = _board_with_capture(tmp_path, monkeypatch)
     model.write_text("changed source\n")
     _, output = _configure_cli(monkeypatch, board, ["--check", "--drift"])
     output.write_text("stale document\n")
+    assert gvs.main() == 0
+    assert output.read_text() == "stale document\n", "--check must not rewrite the file"
+    output.unlink()
+    assert gvs.main() == 0
+    assert not output.exists()
 
+
+def test_check_output_writes_the_rendered_report(tmp_path, monkeypatch):
+    board, _ = _board_with_capture(tmp_path, monkeypatch)
+    target = tmp_path / "published" / "VALIDATION_STATUS.md"
+    _configure_cli(monkeypatch, board, ["--check", "--drift", "--output", str(target)])
+    assert gvs.main() == 0
+    assert target.read_text() == gvs.render({"boards": [board]})
+
+
+def test_check_fails_when_the_generated_report_is_committed(tmp_path, monkeypatch, capsys):
+    root = make_repo(tmp_path / "git-repo")
+    monkeypatch.setattr(gvs, "CORE_ROOT", root)
+    board = {"id": "demo", "tier": "structural", "doc": "d.md", "chip": "c.yaml", "models": ["model.txt"]}
+    manifest = root / "manifest.yaml"
+    manifest.write_text(yaml.safe_dump({"boards": [board]}, sort_keys=False))
+    output = root / "docs" / "boards" / "VALIDATION_STATUS.md"
+    output.parent.mkdir(parents=True)
+    output.write_text("committed\n")
+    monkeypatch.setattr(gvs, "MANIFEST", manifest)
+    monkeypatch.setattr(gvs, "OUT_DOC", output)
+    monkeypatch.setattr(sys, "argv", ["generate_validation_status.py", "--check"])
+    assert gvs.main() == 0, "untracked generated report is fine"
+    git(root, "add", "-f", "docs/boards/VALIDATION_STATUS.md")
     assert gvs.main() == 1
-    assert "out of date" in capsys.readouterr().err
-    assert output.read_text() == "stale document\n"
+    assert "is tracked by git" in capsys.readouterr().err
+
+
+def test_the_repository_does_not_track_the_generated_report():
+    tracked = subprocess.run(
+        ["git", "ls-files", "docs/boards/VALIDATION_STATUS.md"],
+        cwd=str(gvs.CORE_ROOT), capture_output=True, text=True,
+    ).stdout.strip()
+    ignored = subprocess.run(
+        ["git", "check-ignore", "-q", "docs/boards/VALIDATION_STATUS.md"], cwd=str(gvs.CORE_ROOT)
+    ).returncode
+    assert tracked == "" and ignored == 0
 
 
 @pytest.mark.parametrize("defect", ["missing-model", "unwatched-peripheral"])
