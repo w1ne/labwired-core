@@ -29,6 +29,16 @@ There are two chip yamls for ESP32-S3 today:
 | Validation          | Plan 4 end-to-end test: `crates/core/tests/e2e_i2c_tmp102.rs`                   |
 | Tier                | structural — declarative + Plan 2/4 peripheral models                           |
 
+## Current board system smoke: DevKitC-1 N16R8 + BME280
+
+The live ESP32-S3-DevKitC-1-N16R8 is a rank-1 ESP32-family board. The narrow
+[N16R8 + BME280 profile](../../examples/esp32s3-devkitc-1-n16r8-bme280/README.md)
+connects an Adafruit BME280 breakout to I2C0 on GPIO8/GPIO9. Its local smoke
+asserts the BME280 chip ID and raw temperature registers; the hosted Arduino
+oracle verifies the copy-paste setup path against BME280_ID=0x60. The profile
+reuses the existing S3 model and does not claim radio, USB-OTG, PSRAM, RGB LED,
+board power or physical sensor behavior.
+
 ## Peripherals (esp32s3-zero, Plan 2/4 model)
 
 | Peripheral       | Base       | Status              | Notes                                                                          |

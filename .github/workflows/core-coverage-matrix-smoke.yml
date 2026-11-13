@@ -184,6 +184,11 @@ jobs:
           - id: esp32s3-devkitc-1-v11-rgb
             script: examples/esp32s3-devkitc-1/rgb-smoke.yaml
             system: configs/systems/esp32s3-devkitc-1-v11-rgb.yaml
+          # N16R8 S3 DevKitC profile with a BME280 breakout; asserts the
+          # sensor's chip ID and raw-temperature data over the GPIO matrix.
+          - id: esp32s3-devkitc-1-n16r8-bme280
+            script: examples/esp32s3-devkitc-1-n16r8-bme280/bme280-smoke.yaml
+            system: configs/systems/esp32s3-devkitc-1-n16r8-bme280.yaml
           # Demand-rank 1 Arduino Nano ESP32. Its committed fast-boot fixture
           # observes two transitions on the ESP32-S3 D13/GPIO48 LED pad.
           - id: arduino-nano-esp32-gpio
@@ -622,6 +627,10 @@ jobs:
       - name: Verify DevKitC-1 v1.1 RGB fixture
         if: matrix.id == 'esp32s3-devkitc-1-v11-rgb'
         run: examples/esp32s3-devkitc-1/rgb-smoke/verify-fixture.sh
+
+      - name: Verify DevKitC-1 N16R8 BME280 fixture
+        if: matrix.id == 'esp32s3-devkitc-1-n16r8-bme280'
+        run: examples/esp32s3-devkitc-1-n16r8-bme280/verify-fixture.sh
 
       - name: Verify Arduino Nano ESP32 GPIO fixture
         if: matrix.id == 'arduino-nano-esp32-gpio'

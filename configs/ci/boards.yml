@@ -53,6 +53,12 @@ boards:
     kind: sim-validate
     path: examples/arduino-nano-esp32
     gate: true
+  # Demand-rank 1 ESP32-S3-DevKitC-1 N16R8 + BME280. Reads sensor ID and raw
+  # temperature through the S3 I2C model and the GPIO-matrix route.
+  - id: esp32s3-devkitc-1-n16r8-bme280
+    kind: sim-validate
+    path: examples/esp32s3-devkitc-1-n16r8-bme280
+    gate: true
   # Demand-rank 1 ESP32 family: the Feather V2's on-board red GPIO13 LED.
   # The committed fast-boot fixture keeps this board smoke quick on every PR.
   - id: adafruit-feather-esp32-v2-gpio

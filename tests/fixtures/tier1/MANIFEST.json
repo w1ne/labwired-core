@@ -130,5 +130,9 @@
   "feather-rp2040-bme280.elf": {
     "sha256": "2ab12340ccb2875c64f03686d58afdfbd83e2743921c9dba43cbb95fd6d239d6",
     "source_rev": "f396371cc8c647086a636e31d30d441b2a9d8a18"
+  },
+  "esp32s3-devkitc1-n16r8-bme280.elf": {
+    "sha256": "9731a5b51384eff99179a91d49a6919fb9cde1696009245f76763856dce8a859",
+    "source_rev": "70c26fc6c233759dc670666394cccdb86b01c5ae"
   }
 }
