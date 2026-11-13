@@ -36,6 +36,12 @@
     },
     {
       "assertion": {
+        "uart_contains": "gpt1 swr=1 cnt=1 irq=3 of1=1 of2=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "gpio_edges": {
           "pin": "gpio2:3",
           "min_edges": 1
@@ -53,24 +59,24 @@
   "cpu_state": {
     "type": "arm",
     "registers": [
-      8,
-      1075560452,
+      1075412996,
       10,
+      1,
       0,
-      0,
-      0,
-      0,
-      537001968,
-      0,
-      0,
-      0,
-      0,
+      1,
+      3221225472,
       0,
       537001968,
-      536872167,
-      536872156
+      1,
+      1,
+      3,
+      3758154252,
+      1,
+      537001952,
+      536936452,
+      536875048
     ],
-    "pc": 536872156,
+    "pc": 536875048,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -81,11 +87,11 @@
     ],
     "vtor": 536870912,
     "waiting_for_event": false,
-    "event_register": false
+    "event_register": true
   },
-  "firmware_hash": "3753c294cfbbc722bb20b4ce8351acbff8a5a27421a0ac0136a6324fdf38bff2",
+  "firmware_hash": "f43f8e559e5f98ae639cb92060761c1268dadc34004133047cc24a65ceba6e96",
   "config": {
-    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-imxrt1064-demo",
+    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-imxrt1064-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/imxrt1064.yaml",
     "script": "examples/renode-onboarding/imxrt1064-smoke.yaml"
   },
@@ -109,6 +115,13 @@
         "name": "lpuart6",
         "kind": "native",
         "base": 1075412992,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpt1",
+        "kind": "native",
+        "base": 1075757056,
         "registers": [],
         "artifacts": []
       },
@@ -178,7 +191,7 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 52,
+            "cycle": 72,
             "value": 1
           }
         ],
@@ -186,11 +199,11 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 35,
+            "cycle": 55,
             "state": "0"
           },
           {
-            "cycle": 52,
+            "cycle": 72,
             "state": "1"
           }
         ],
@@ -219,21 +232,27 @@
         "cycle_lo": 0,
         "cycle": 10000,
         "end_cycle": 10000
+      },
+      {
+        "text": "gpt1 swr=1 cnt=1 irq=3 of1=1 of2=1 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 100000
       }
     ],
     "dropped_lines": 0
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 1260,
-    "data_bytes": 0,
-    "bss_bytes": 0,
-    "flash_used_bytes": 1260,
-    "ram_static_bytes": 0,
+    "text_bytes": 4160,
+    "data_bytes": 4,
+    "bss_bytes": 12,
+    "flash_used_bytes": 4164,
+    "ram_static_bytes": 16,
     "flash_total_bytes": 65536,
     "ram_total_bytes": 65536,
-    "flash_used_pct": 1.92,
-    "ram_static_pct": 0.0,
+    "flash_used_pct": 6.35,
+    "ram_static_pct": 0.02,
     "notes": [
       "section_sum_not_bin_image",
       "totals_from_chip_catalog"
@@ -241,26 +260,58 @@
   },
   "memory": {
     "main_stack_method": "paint",
-    "main_stack_limit_bytes": 65536,
-    "main_stack_high_water_bytes": 16,
-    "main_stack_free_min_bytes": 65520,
-    "main_stack_base": 536936448,
+    "main_stack_limit_bytes": 65520,
+    "main_stack_high_water_bytes": 28,
+    "main_stack_free_min_bytes": 65452,
+    "main_stack_base": 536936464,
     "main_stack_top": 537001984,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
-    "heap_limit_bytes": 65536,
+    "heap_limit_bytes": 65520,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 65520,
-    "heap_base": 536936448,
+    "heap_free_min_bytes": 65452,
+    "heap_base": 536936464,
     "heap_top": 537001984
   },
   "metrics": {
     "cycles": 800000,
     "instructions": 800000,
     "steps_executed": 800000,
-    "memory_reads": 73,
-    "memory_writes": 6,
-    "peripheral_accesses": 12,
-    "exceptions": 0
+    "memory_reads": 25133,
+    "memory_writes": 53,
+    "peripheral_accesses": 1101,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 536873342,
+        "count": 117,
+        "symbol": "firmware_imxrt1064_smoke::wait"
+      },
+      {
+        "pc": 536873314,
+        "count": 78,
+        "symbol": "core::sync::atomic::atomic_load"
+      },
+      {
+        "pc": 536873340,
+        "count": 78,
+        "symbol": "firmware_imxrt1064_smoke::wait"
+      },
+      {
+        "pc": 536873318,
+        "count": 39,
+        "symbol": "firmware_imxrt1064_smoke::wait"
+      },
+      {
+        "pc": 536873336,
+        "count": 39,
+        "symbol": "core::sync::atomic::atomic_load"
+      },
+      {
+        "pc": 536875048,
+        "count": 12,
+        "symbol": "firmware_imxrt1064_smoke::__cortex_m_rt_main"
+      }
+    ]
   }
 }

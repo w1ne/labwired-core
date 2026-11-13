@@ -939,7 +939,7 @@ SMOKE_MAPPINGS = {
         "script": "examples/renode-onboarding/nucleo_f767zi-smoke.yaml",
     },
     "imxrt1064": {
-        "crate": "firmware-imxrt1064-demo",
+        "crate": "firmware-imxrt1064-smoke",
         "target": "thumbv7em-none-eabi",
         "script": "examples/renode-onboarding/imxrt1064-smoke.yaml",
     },

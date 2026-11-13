@@ -12,10 +12,10 @@
 - pass_observable_assertions: `226/226`
 - pass_stop_reason_only: `0/226`
 - pass_depth_unknown: `0/226`
-- pass_claimed_peripherals_total: `1491`
+- pass_claimed_peripherals_total: `1492`
 - pass_claimed_peripherals_median: `2`
-- median_elapsed_ms: `1338`
-- median_elapsed_seconds: `1.338`
+- median_elapsed_ms: `1368`
+- median_elapsed_seconds: `1.368`
 - threshold_seconds: `3600`
 - threshold_met: `226/226`
 
@@ -97,7 +97,7 @@
 | `gr716` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | `9` | n/a | 1: `timer0:stub` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no SPARC V8 (LEON3FT) CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
 | `gr716-devboard` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | `13` | n/a | 5: `switch0:button`, `switch1:button`, `switch2:button`, `switch3:button`, `timer0:stub` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no SPARC V8 (LEON3FT) CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
 | `ice40up5k-mdp-evn` | `pass` | `True` | `yes` | `yes` | `299274` | `299.274` | `True` | `observable` | `1` | `memory_value` | 0 | `n/a` | n/a | n/a |
-| `imxrt1064` | `pass` | `True` | `yes` | `yes` | `996` | `0.996` | `True` | `observable` | `3` | `uart_contains`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
+| `imxrt1064` | `pass` | `True` | `yes` | `yes` | `14369` | `14.369` | `True` | `observable` | `4` | `uart_contains`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `imxrt500` | `pass` | `True` | `yes` | `yes` | `1239` | `1.239` | `True` | `observable` | `6` | `uart_contains`, `uart_ordered` | 0 | `n/a` | n/a | n/a |
 | `kendryte_k210` | `pass` | `True` | `yes` | `yes` | `1497` | `1.497` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `leon3` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | `9` | n/a | 7: `ahbInfo:gaislerahbplugandplayinfo`, `apbController:gaislerapbcontroller`, `esaMemController:esamemorycontroller`, `timer:stub`, `eth:gaislereth`, `phy:ethernetphysicallayer`, `led:led` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no SPARC V8 (LEON3) CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |

@@ -35,3 +35,11 @@ peripherals:
   bus: sysbus
   base_address: 1075412992
   size: 4096
+# Renode imxrt1064.repl: gpTimer1 IMX_GPTimer @ 0x401EC000, IRQ -> nvic@100.
+# Source clocks are the model defaults (ipg_clk 150 MHz, perclk 75 MHz).
+- id: gpt1
+  type: imxrt_gpt
+  bus: sysbus
+  base_address: 1075757056
+  size: 16384
+  irq: 100
