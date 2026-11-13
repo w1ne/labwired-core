@@ -3844,14 +3844,23 @@ impl GpioPort {
 
 impl crate::Peripheral for GpioPort {
     fn on_system_reset(&mut self) {
-        // SAM PORT only: registers to power-on, the outside world's levels kept.
-        if let GpioFamily::SamPort(g) = &mut self.family {
-            let (external, in_latch) = (g.external, g.in_latch);
-            *g = SamGpio::default();
-            g.external = external;
-            g.in_latch = in_latch;
-            self.sync_pin_cells();
+        // Restore the register file while retaining levels held by the world.
+        match &mut self.family {
+            GpioFamily::SamPort(g) => {
+                let (external, in_latch) = (g.external, g.in_latch);
+                *g = SamGpio::default();
+                g.external = external;
+                g.in_latch = in_latch;
+            }
+            GpioFamily::Stm32F1(g) if !self.wch_single_config_register => {
+                let (external, idr) = (g.external, g.idr & g.external);
+                *g = F1Gpio::new();
+                g.external = external;
+                g.idr = idr;
+            }
+            _ => return,
         }
+        self.sync_pin_cells();
     }
     /// Not in the per-cycle walk: this model overrides neither `tick()` nor
     /// `tick_elapsed()`, so every visit ran the default no-op and returned a
