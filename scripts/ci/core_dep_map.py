@@ -13,9 +13,15 @@ WHAT IT DOES
 
   default          print the module graph as deterministic JSON
   --check          compare current kernel->leaf edges with the committed
-                   baseline; exit 1 when a kernel module gained a dependency on
-                   a leaf module, or an existing kernel->leaf edge count grew.
-                   Also reports the largest strongly connected component.
+                   baseline and report differences (new pairs, increases,
+                   decreases, largest strongly connected component) to stdout
+                   and $GITHUB_STEP_SUMMARY, with ::warning:: lines for new
+                   pairs. Advisory: exit 0 unless the script or its JSON inputs
+                   are broken.
+  --check --strict the same, but exit 1 when a kernel module gained a leaf
+                   dependency, an existing count grew, or a module is missing
+                   from core_layers.json. Intended to be switched on once
+                   vendor construction no longer lives in kernel modules.
   --update-baseline  rewrite the baseline from the current tree. Refuses to
                    raise any count or add any edge unless --allow-increase.
 
@@ -553,12 +559,17 @@ def strongly_connected(nodes: list[str], adj: dict[str, list[str]]) -> list[list
 
 
 def load_layers(path: Path) -> tuple[set[str], set[str]]:
+    """Return (kernel, leaf). Raises on unparsable JSON or overlap."""
     d = json.loads(Path(path).read_text())
     kernel, leaf = set(d["kernel"]), set(d["leaf"])
     both = kernel & leaf
     if both:
         raise SystemExit(f"core_layers: modules in both kernel and leaf: {sorted(both)}")
     return kernel, leaf
+
+
+def load_neutral(path: Path) -> set[str]:
+    return set(json.loads(Path(path).read_text()).get("neutral", []))
 
 
 def kernel_to_leaf(graph: dict, kernel: set[str], leaf: set[str]) -> dict[str, int]:
@@ -589,45 +600,68 @@ def compare(current: dict[str, int], baseline: dict[str, int]):
     return bad, good
 
 
-def check_unclassified(graph: dict, kernel: set[str], leaf: set[str]) -> list[str]:
-    return sorted(n for n in graph["modules"] if n not in kernel and n not in leaf)
+def check_unclassified(graph: dict, kernel: set[str], leaf: set[str], neutral: set[str] = frozenset()) -> list[str]:
+    return sorted(n for n in graph["modules"] if n not in kernel and n not in leaf and n not in neutral)
 
 
 def write_json(path: Path, data: dict) -> None:
     Path(path).write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
 
 
-def run_check(graph, kernel, leaf, baseline_path, out=None) -> int:
+def run_check(graph, kernel, leaf, baseline_path, out=None, strict=False, summary_path=None, neutral=frozenset()) -> int:
+    """Compare against the baseline.
+
+    Report mode (default) prints the differences, emits `::warning::` lines for
+    new kernel->leaf pairs, appends a markdown summary to `summary_path`, and
+    returns 0. Strict mode returns 1 on any increase or unclassified module.
+    Unparsable layers/baseline files raise and fail in both modes.
+    """
     out = out or sys.stdout
     base = json.loads(Path(baseline_path).read_text())["kernel_to_leaf"]
     current = kernel_to_leaf(graph, kernel, leaf)
     bad, good = compare(current, base)
     s = graph["summary"]
-    print(
+    head = (
         f"core dependency map: {s['modules']} modules, {s['production_lines']} production lines; "
         f"largest strongly connected component: {s['largest_scc_modules']} modules, "
         f"{s['largest_scc_production_lines']} lines; kernel->leaf edges: {len(current)} "
-        f"(sum {sum(current.values())}, baseline {len(base)} / {sum(base.values())})",
-        file=out,
+        f"(sum {sum(current.values())}, baseline {len(base)} / {sum(base.values())})"
     )
-    free = check_unclassified(graph, kernel, leaf)
-    if free:
-        print(f"note: neutral (neither kernel nor leaf) modules: {', '.join(free)}", file=out)
+    print(head, file=out)
+    # A module absent from both lists is reported, not failed, in report mode:
+    # adding a module is routine and should not block an unrelated PR.
+    missing = check_unclassified(graph, kernel, leaf, neutral)
+    lines = [f"### Core dependency map ({'strict' if strict else 'advisory'})", "", head, ""]
+    if missing:
+        print(f"note: modules not listed in core_layers.json (treated as neutral): {', '.join(missing)}", file=out)
+        print(f"::warning::core_layers.json does not classify: {', '.join(missing)}", file=out)
+        lines.append(f"Unclassified modules (treated as neutral): {', '.join(missing)}")
     if good:
         print("kernel->leaf dependencies decreased; lower the baseline with", file=out)
         print("  python3 scripts/ci/core_dep_map.py --update-baseline", file=out)
+        lines.append("Decreases versus baseline:")
         for g in good:
             print(f"  - {g}", file=out)
+            lines.append(f"- {g}")
     if bad:
-        print("ERROR: kernel modules must not gain dependencies on leaf modules:", file=out)
+        print("kernel modules gained dependencies on leaf modules versus the baseline:", file=out)
+        lines.append("Increases versus baseline:")
         for b in bad:
             print(f"  - {b}", file=out)
+            lines.append(f"- {b}")
+            if b.startswith("new kernel->leaf"):
+                print(f"::warning::{b}", file=out)
         print(
-            "Remove the dependency (move the vendor-specific code behind a trait or into the\n"
-            "leaf module). If the dependency is intended, change scripts/ci/core_layers.json\n"
-            "and say why in the PR; do not raise the baseline to make this pass.",
+            "Prefer putting vendor-specific code behind a trait or in the leaf module. "
+            + ("This is an error in strict mode." if strict else "This is advisory and does not fail the job."),
             file=out,
         )
+    if not (bad or good or missing):
+        lines.append("No change versus baseline.")
+    if summary_path:
+        with open(summary_path, "a") as f:
+            f.write("\n".join(lines) + "\n")
+    if strict and (bad or missing):
         return 1
     return 0
 
@@ -654,6 +688,7 @@ def main(argv=None) -> int:
     ap.add_argument("--layers", default=str(DEFAULT_LAYERS))
     ap.add_argument("--baseline", default=str(DEFAULT_BASELINE))
     ap.add_argument("--check", action="store_true")
+    ap.add_argument("--strict", action="store_true", help="with --check: fail on increases")
     ap.add_argument("--update-baseline", action="store_true")
     ap.add_argument("--allow-increase", action="store_true")
     ap.add_argument("--output", help="write the JSON graph here instead of stdout")
@@ -663,7 +698,10 @@ def main(argv=None) -> int:
         kernel, leaf = load_layers(Path(a.layers))
         if a.update_baseline:
             return update_baseline(graph, kernel, leaf, a.baseline, a.allow_increase)
-        return run_check(graph, kernel, leaf, a.baseline)
+        return run_check(
+            graph, kernel, leaf, a.baseline, strict=a.strict, neutral=load_neutral(Path(a.layers)),
+            summary_path=os.environ.get("GITHUB_STEP_SUMMARY"),
+        )
     text = json.dumps(graph, indent=2, sort_keys=True) + "\n"
     if a.output:
         Path(a.output).write_text(text)

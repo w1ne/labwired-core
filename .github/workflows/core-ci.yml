@@ -580,12 +580,14 @@ jobs:
       # line below or it will never run. test_generate_validation_status.py covers the
       # history and watch-list guards, capture provenance, and nonblocking source
       # drift policy. It needs pyyaml, installed by the step above.
-      # Module dependency map of crates/core/src: kernel modules (bus,
-      # peripherals root, generic factory, ...) must not gain dependencies on
-      # leaf modules (vendor peripheral sets, components, non-bus CPUs). Pure
-      # Python, no cargo, about 5 seconds. See docs/engineering/test_harness.md
+      # Module dependency map of crates/core/src: reports kernel modules (bus,
+      # peripherals root, generic factory, ...) gaining dependencies on leaf
+      # modules (vendor peripheral sets, components, non-bus CPUs). ADVISORY:
+      # warnings and a step summary, no failure on increases, because chip work
+      # still has to add such references. Switch to `--check --strict` once
+      # vendor construction is inverted. Pure Python, no cargo, about 5 seconds. See docs/engineering/test_harness.md
       # ("Core dependency ratchet"). Its unit tests are in the pytest line below.
-      - name: Core dependency ratchet — kernel does not gain leaf dependencies
+      - name: Core dependency ratchet — advisory report
         run: python3 scripts/ci/core_dep_map.py --check
 
       - name: Perf gate — every chip covered or waived

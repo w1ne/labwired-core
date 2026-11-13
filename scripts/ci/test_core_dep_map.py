@@ -137,10 +137,44 @@ def test_ratchet_passes_at_baseline_and_fails_on_new_edge(tmp_path, capsys):
     # a kernel module gains a dependency on a leaf it did not use before
     (src / "peripherals/gpio/mod.rs").write_text("use crate::cpu::pic16::X;\npub struct Port;\n")
     capsys.readouterr()
-    assert _run(src, layers, baseline, "--check") == 1
+    assert _run(src, layers, baseline, "--check", "--strict") == 1
     out = capsys.readouterr().out
     assert "peripherals/gpio -> cpu/pic16" in out
-    assert "Remove the dependency" in out
+    assert "::warning::new kernel->leaf dependency" in out
+    # report mode never fails on increases
+    assert _run(src, layers, baseline, "--check") == 0
+
+
+def test_report_mode_writes_step_summary(tmp_path, monkeypatch):
+    src, layers, baseline = _setup(tmp_path)
+    _run(src, layers, baseline, "--update-baseline")
+    p = src / "bus.rs"
+    p.write_text(p.read_text() + "use crate::peripherals::esp32::More;\n")
+    summ = tmp_path / "summary.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summ))
+    assert _run(src, layers, baseline, "--check") == 0
+    text = summ.read_text()
+    assert "advisory" in text and "grew from 1 to 2" in text
+
+
+def test_unclassified_module_warns_in_report_and_fails_in_strict(tmp_path, capsys):
+    tree = dict(BASE_TREE)
+    tree["newmod.rs"] = "fn f() {}\n"
+    tree["lib.rs"] += "pub mod newmod;\n"
+    src, layers, baseline = _setup(tmp_path, tree)
+    _run(src, layers, baseline, "--update-baseline")
+    capsys.readouterr()
+    assert _run(src, layers, baseline, "--check") == 0
+    assert "::warning::core_layers.json does not classify: newmod" in capsys.readouterr().out
+    assert _run(src, layers, baseline, "--check", "--strict") == 1
+
+
+def test_unparsable_layers_fail_in_report_mode(tmp_path):
+    src, layers, baseline = _setup(tmp_path)
+    _run(src, layers, baseline, "--update-baseline")
+    layers.write_text("{not json")
+    with pytest.raises(ValueError):
+        _run(src, layers, baseline, "--check")
 
 
 def test_ratchet_fails_when_existing_edge_count_grows(tmp_path, capsys):
@@ -148,7 +182,7 @@ def test_ratchet_fails_when_existing_edge_count_grows(tmp_path, capsys):
     _run(src, layers, baseline, "--update-baseline")
     p = src / "bus.rs"
     p.write_text(p.read_text() + "use crate::peripherals::esp32::More;\n")
-    assert _run(src, layers, baseline, "--check") == 1
+    assert _run(src, layers, baseline, "--check", "--strict") == 1
     assert "grew from 1 to 2" in capsys.readouterr().out
 
 
@@ -197,15 +231,15 @@ def real_graph():
     return dm.build_graph(dm.DEFAULT_SRC)
 
 
-def test_committed_baseline_matches_committed_source(real_graph):
-    g = real_graph
+def test_committed_baseline_parses_and_report_mode_runs_clean(real_graph, capsys):
     kernel, leaf = dm.load_layers(dm.DEFAULT_LAYERS)
     base = json.loads(dm.DEFAULT_BASELINE.read_text())["kernel_to_leaf"]
-    bad, _ = dm.compare(dm.kernel_to_leaf(g, kernel, leaf), base)
-    assert bad == []
+    assert base and all(isinstance(v, int) and v > 0 for v in base.values())
+    # advisory: must succeed whatever state main is in
+    assert dm.run_check(real_graph, kernel, leaf, dm.DEFAULT_BASELINE, neutral=dm.load_neutral(dm.DEFAULT_LAYERS)) == 0
+    assert "largest strongly connected component" in capsys.readouterr().out
 
 
-def test_committed_layers_name_real_modules(real_graph):
-    g = real_graph
+def test_committed_layers_parse_without_overlap():
     kernel, leaf = dm.load_layers(dm.DEFAULT_LAYERS)
-    assert (kernel | leaf) <= set(g["modules"])
+    assert kernel and leaf

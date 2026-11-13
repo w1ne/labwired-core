@@ -195,17 +195,26 @@ the components library, CPU architectures the bus does not step directly);
 everything else is neutral. `scripts/ci/core_layers_baseline.json` records the
 current kernel-to-leaf edges with their reference counts.
 
-`python3 scripts/ci/core_dep_map.py --check` runs in the `pr-gate` job and fails
-when a kernel module gains a dependency on a leaf module, or when an existing
-kernel-to-leaf count goes up. To fix a failure, remove the reference (put the
-vendor-specific code behind a trait or move it into the leaf). If a count went
-down, run `python3 scripts/ci/core_dep_map.py --update-baseline` and commit the
-lower baseline; it refuses to raise any count unless `--allow-increase` is
-given, which a reviewer should expect to see justified. The check also prints
-the size of the largest strongly connected component, as a progress measure; it
-does not fail on it. Run without flags to print the full graph as JSON. The
-parser is regex based; its limits (macro-generated paths, glob imports) are
-listed in the script's docstring. Tests: `scripts/ci/test_core_dep_map.py`.
+`python3 scripts/ci/core_dep_map.py --check` runs in the `pr-gate` job in
+advisory mode: it prints the difference from the baseline (new kernel-to-leaf
+pairs, increased counts, decreases, size of the largest strongly connected
+component) to the log and the job summary, and emits `::warning::` annotations
+for new pairs, but does not fail on them. It still fails if the script crashes
+or `core_layers.json` / the baseline cannot be parsed. A module missing from
+`core_layers.json` is a warning in this mode, because adding a module is routine.
+
+It is advisory because chip and board work currently has to add kernel-to-leaf
+references (the type-string factory, `bus/from_config.rs`, `peripherals/mod.rs`
+name vendor types), and a blocking count baseline would fail those PRs and turn
+the baseline file into a conflict hot spot. No PR is required to update the
+baseline. `--check --strict` has the failing behaviour (a new pair, a higher
+count, or an unclassified module exits 1); switch the gate to it once vendor
+construction is inverted. To lower the baseline after a decrease, run
+`python3 scripts/ci/core_dep_map.py --update-baseline`; it refuses to raise any
+count unless `--allow-increase` is given. Run without flags to print the full
+graph as JSON. The parser is regex based; its limits (macro-generated paths,
+glob imports) are listed in the script's docstring. Tests:
+`scripts/ci/test_core_dep_map.py`.
 
 The manual `Rust Core CI` dispatch also takes a `build_timings` input that runs
 a cold `cargo build -p labwired-core --timings` and uploads the report.

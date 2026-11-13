@@ -1,5 +1,5 @@
 {
-  "description": "Layer classification for crates/core/src, read by scripts/ci/core_dep_map.py. A kernel module must not gain dependencies on leaf modules (see core_layers_baseline.json). Modules in neither list are neutral: assembly, analysis and diagnostics layers whose edges are reported but not ratcheted. Node names are produced by core_dep_map.py: top-level modules, peripherals/<dir>, peripherals (files directly in peripherals/), cpu (trait and root) and cpu/<arch>.",
+  "description": "Layer classification for crates/core/src, read by scripts/ci/core_dep_map.py. A kernel module must not gain dependencies on leaf modules (see core_layers_baseline.json). Modules in `neutral` (or in none of the lists; those are reported as unclassified) are neutral: assembly, analysis and diagnostics layers whose edges are reported but not ratcheted. Node names are produced by core_dep_map.py: top-level modules, peripherals/<dir>, peripherals (files directly in peripherals/), cpu (trait and root) and cpu/<arch>.",
   "kernel": [
     "bus",
     "census",
@@ -65,6 +65,27 @@
     "peripherals/nrf54l",
     "peripherals/rp2040",
     "peripherals/sam"
+  ],
+  "neutral": [
+    "analog",
+    "boot",
+    "cosim",
+    "coverage",
+    "debug",
+    "fault_verdict",
+    "live_numeric",
+    "multi_core",
+    "pc_coverage",
+    "physics",
+    "sd_hle",
+    "session",
+    "stack_paint",
+    "system",
+    "test_support",
+    "tests",
+    "uds_evidence",
+    "vfi",
+    "world"
   ],
   "notes": {
     "peripherals": "Kernel: holds the Peripheral engines (spi, i2c, timer, dma, rcc, nvic) and the type-string device factory (generic_factory.rs). The factory and some vendor-named files placed directly in peripherals/ (esp_*, stm32*, ra_*, sam*, rp2*) name vendor types, so most of this node's kernel->leaf edges are that factory; they are the debt this ratchet exists to stop growing.",
