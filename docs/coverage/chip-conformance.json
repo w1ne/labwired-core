@@ -873,5 +873,12 @@
     "level": 0,
     "name": "rp2040-feather",
     "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "stm32h723zg",
+    "reg_match": 0
   }
 ]

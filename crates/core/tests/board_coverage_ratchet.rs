@@ -893,6 +893,11 @@ fn every_shipped_descriptor_is_ratcheted() {
         // flash). Its BME280 I2C1 smoke runs in core-onboarding-smoke, but it
         // has no catalog board and no differential of its own.
         "rp2040-feather",
+        // NUCLEO-H723ZG slice of the STM32H723ZG (Cortex-M7, RM0468). The
+        // descriptor models RCC, SysTick, GPIO B/C/D/E and USART3 only; its
+        // LD1 + USART3 smoke runs in core-onboarding-smoke. No catalog board,
+        // no silicon oracle, no differential. Promote when all three exist.
+        "stm32h723zg",
     ];
     // configs/chips id -> ratchet chip id (kw41z ships as mkw41z4.yaml).
     fn to_ratchet_id(stem: &str) -> &str {

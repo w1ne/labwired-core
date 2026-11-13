@@ -1159,6 +1159,15 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: None,
     },
+    // NUCLEO-H723ZG slice (RCC, SysTick, GPIO B/C/D/E, USART3). SIM-DERIVED:
+    // no silicon capture. Its LD1 + USART3 smoke runs as a CLI script in
+    // core-onboarding-smoke, not as a Rust test, so no behavior_gate resolves.
+    ChipConf {
+        name: "stm32h723zg",
+        yaml: "configs/chips/stm32h723zg.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
 ];
 
 /// Registers a cold-reset sim model can *never* reproduce from a `reset_halt`

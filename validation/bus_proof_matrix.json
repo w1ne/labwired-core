@@ -2128,6 +2128,26 @@
         "signal": "the bare-metal fixture tests/fixtures/tier1/feather-rp2040-bme280.elf (built from examples/adafruit-feather-rp2040/simulator/smoke.c) reads BME280 CHIP_ID over I2C1 on the STEMMA QT pads GP2/GP3; the peripheral_log assertion requires the I2C1 bus_trace to contain the device's 'data 0x60 ack' byte, and gpio_edges requires header pin D13 (GPIO13), driven high only on CHIP_ID 0x60, to toggle.",
         "lane": "core-onboarding-smoke (push to main + nightly cron): matrix id adafruit-feather-rp2040-bme280 (scripts/onboarding_smoke.sh)"
       }
+    },
+    "stm32h723zg": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "examples/nucleo-h723zg/io-smoke.yaml",
+        "test": "NUCLEO-H723ZG: USART3 + LD1",
+        "signal": "crates/firmware-nucleo-h723zg-smoke boots on configs/systems/nucleo-h723zg.yaml, enables GPIOB/GPIOD and USART3 in RCC, sets PD8/PD9 to AF7 and writes the banner to USART3 (the ST-LINK VCP); uart_contains matches it, and gpio_edges requires LD1 on PB0 to toggle at least 4 times.",
+        "lane": "core-onboarding-smoke (push to main + nightly cron): matrix id nucleo-h723zg (scripts/onboarding_smoke.sh)"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No SPI controller is declared on configs/chips/stm32h723zg.yaml; the NUCLEO-H723ZG slice declares RCC, SysTick, GPIO B/C/D/E and USART3 only.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No I2C controller is declared on configs/chips/stm32h723zg.yaml; the NUCLEO-H723ZG slice declares RCC, SysTick, GPIO B/C/D/E and USART3 only.",
+        "lane": "none"
+      }
     }
   }
 }
