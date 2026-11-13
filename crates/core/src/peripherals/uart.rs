@@ -1852,6 +1852,39 @@ impl Uart {
             || !self.wire_chars.is_empty()
     }
 
+    /// Current UART interrupt output. STM32v2 exposes TXE/TC/RX conditions as
+    /// a level to the NVIC; the scheduler also samples this on each wake so
+    /// its legacy per-tick result stays identical.
+    fn irq_asserted(&self) -> bool {
+        let txeie_set = (self.cr1 & self.txeie_mask()) != 0 && self.txeie_mask() != 0;
+        let tcie_set = (self.cr1 & self.tcie_mask()) != 0 && self.tcie_mask() != 0;
+        let rx_len = self.rx_buf.lock().map(|g| g.len()).unwrap_or(0) as u32;
+        let rxneie_set = self.layout.rxneie_mask() != 0
+            && (self.cr1 & self.layout.rxneie_mask()) != 0
+            && rx_len > 0;
+        // FIFO threshold interrupt (CR3.RXFTIE, RM0456 §66.8.4): the same
+        // threshold that sets ISR.RXFT.
+        let rxftie_set = matches!(self.layout, UartRegisterLayout::Stm32V2)
+            && self.cr1 & (1 << 29) != 0
+            && self.cr3 & (1 << 28) != 0
+            && {
+                let cfg = (self.cr3 >> 25) & 0x7;
+                let threshold = match cfg {
+                    0 => 1,
+                    1 => 2,
+                    2 => 4,
+                    3 => 6,
+                    4 => 7,
+                    5 => 8,
+                    _ => 8,
+                };
+                rx_len >= threshold
+            };
+        let sifive_irq =
+            matches!(self.layout, UartRegisterLayout::Sifive) && self.sifive_irq_asserted();
+        txeie_set || tcie_set || rxneie_set || rxftie_set || sifive_irq
+    }
+
     /// Phase 2B.3b: one tick-equivalent of work, shared verbatim by the legacy
     /// `tick()` and the scheduler `on_event` so both paths are identical.
     /// Returns `(raise_irq, dma_signals)`.
@@ -2010,35 +2043,7 @@ impl Uart {
             }
         }
 
-        // Fire while either TXEIE or TCIE is set:
-        // - TXEIE lets HAL push bytes into DR
-        // - TCIE delivers the final completion interrupt after the last byte
-        let txeie_set = (self.cr1 & self.txeie_mask()) != 0 && self.txeie_mask() != 0;
-        let tcie_set = (self.cr1 & self.tcie_mask()) != 0 && self.tcie_mask() != 0;
-        let rx_len = self.rx_buf.lock().map(|g| g.len()).unwrap_or(0) as u32;
-        let rxneie_set = self.layout.rxneie_mask() != 0
-            && (self.cr1 & self.layout.rxneie_mask()) != 0
-            && rx_len > 0;
-        // FIFO threshold interrupt (CR3.RXFTIE, RM0456 §66.8.4): the same
-        // threshold that sets ISR.RXFT.
-        let rxftie_set = matches!(self.layout, UartRegisterLayout::Stm32V2)
-            && self.cr1 & (1 << 29) != 0
-            && self.cr3 & (1 << 28) != 0
-            && {
-                let cfg = (self.cr3 >> 25) & 0x7;
-                let threshold = match cfg {
-                    0 => 1,
-                    1 => 2,
-                    2 => 4,
-                    3 => 6,
-                    4 => 7,
-                    5 => 8,
-                    _ => 8,
-                };
-                rx_len >= threshold
-            };
-        let sifive_irq =
-            matches!(self.layout, UartRegisterLayout::Sifive) && self.sifive_irq_asserted();
+        // Fire while TXEIE/TCIE is set or a buffered RX threshold is met.
         // USART_RX DMA request: asserted while a character is available in the
         // receiver and CR3.DMAR is set. The DMA reads RDR, which pops it.
         if self.layout.dmar_mask() != 0
@@ -2047,10 +2052,7 @@ impl Uart {
         {
             dma_signals.push(crate::DMA_SIGNAL_RX);
         }
-        (
-            txeie_set || tcie_set || rxneie_set || rxftie_set || sifive_irq,
-            dma_signals,
-        )
+        (self.irq_asserted(), dma_signals)
     }
 
     /// SiFive UART `ip` watermark status. This profile models the transmit
@@ -3118,10 +3120,13 @@ impl crate::Peripheral for Uart {
         self.irq_wired = irq.is_some();
     }
 
-    /// Timed UARTs and SAM USARTs report their interrupt as a level. Other
-    /// layouts keep their existing pulse semantics.
+    /// Timed UARTs, STM32v2 USARTs, SAM USARTs and SiFive UARTs report their
+    /// interrupt as a level. Other layouts keep their existing pulse semantics.
     fn irq_line_level(&self) -> Option<bool> {
         self.timed_level()
+            .or_else(|| {
+                matches!(self.layout, UartRegisterLayout::Stm32V2).then(|| self.irq_asserted())
+            })
             .or_else(|| {
                 matches!(self.layout, UartRegisterLayout::Sam).then(|| self.sam_irq_asserted())
             })
