@@ -628,8 +628,10 @@ impl WasmSimulator {
     /// [{ ch, cycle, state }] }` where `state` is `"0"`, `"1"`, `"z"`
     /// (nothing drives the pad: an undriven input, a released open-drain
     /// line) or `"x"` (the MCU output fights an external driver). A channel
-    /// whose pad model cannot report drive has `initial: null` and no edges —
-    /// never a guessed "driven". `read_logic_edges` is unchanged: its boolean
+    /// whose pad model has not reported drive starts with `initial: null`.
+    /// A later explicit drive report starts its state edges at that cycle;
+    /// a never-known channel keeps no state edges. No initial state is guessed.
+    /// `read_logic_edges` is unchanged: its boolean
     /// `value` is what the pad reads, so every existing consumer keeps working.
     #[wasm_bindgen]
     pub fn read_logic_states(&mut self, cursor: f64) -> Result<JsValue, JsValue> {

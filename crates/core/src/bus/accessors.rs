@@ -54,6 +54,7 @@ impl SystemBus {
         self.note_mmio_activity(idx, off);
         #[cfg(feature = "event-scheduler")]
         self.sync_scheduler_peripheral(idx);
+        let motor_control_write = self.begin_motor_control_write(idx);
         if DMA_TX {
             // Synchronization can advance state: recheck the actual live gate
             // and readiness before latching or invoking the accepted-byte hook.
@@ -96,6 +97,9 @@ impl SystemBus {
         } else {
             self.peripherals[idx].dev.write(off, value).map(|()| true)
         };
+        if matches!(r, Ok(true)) && motor_control_write {
+            self.finish_motor_control_write(idx);
+        }
         if matches!(r, Ok(true)) && brackets {
             self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
             self.finish_rp2040_io_bank0_write(rp_io_bank0_capture);
@@ -1313,6 +1317,7 @@ impl crate::Bus for SystemBus {
             }
             #[cfg(feature = "event-scheduler")]
             self.sync_scheduler_peripheral(idx);
+            let motor_control_write = self.begin_motor_control_write(idx);
             self.maybe_latch_dc(idx);
             // One test instead of four calls. See `pad_brackets_present`.
             let brackets = self.pad_brackets_present();
@@ -1332,6 +1337,9 @@ impl crate::Bus for SystemBus {
                 p.ticks_remaining = 0;
                 p.dev.write_u16(off, value)
             };
+            if r.is_ok() && motor_control_write {
+                self.finish_motor_control_write(idx);
+            }
             if r.is_ok() && brackets {
                 self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
                 self.finish_rp2040_io_bank0_write(rp_io_bank0_capture);
@@ -1514,6 +1522,7 @@ impl crate::Bus for SystemBus {
             }
             #[cfg(feature = "event-scheduler")]
             self.sync_scheduler_peripheral(idx);
+            let motor_control_write = self.begin_motor_control_write(idx);
             self.maybe_latch_dc(idx);
             // One test instead of four calls. See `pad_brackets_present`.
             let brackets = self.pad_brackets_present();
@@ -1533,6 +1542,9 @@ impl crate::Bus for SystemBus {
                 p.ticks_remaining = 0;
                 p.dev.write_u32(off, value)
             };
+            if r.is_ok() && motor_control_write {
+                self.finish_motor_control_write(idx);
+            }
             if r.is_ok() && brackets {
                 self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
                 self.finish_rp2040_io_bank0_write(rp_io_bank0_capture);

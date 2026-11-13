@@ -23,7 +23,7 @@ The original [pre-activation validation receipt](sensor-signals.validation.json)
 records commands, counts, source hashes, firmware hashes and the original gate
 snapshot. Its pending-path labels describe the original generic-only branch; its
 failing gate values evaluate the qualified board candidate before owner acknowledgement. The [activation receipt](microbit-sensor-activation.validation.json)
-records the exact source match and current owner-approved gate evaluations.
+records the exact source match and owner-approved gate evaluations at activation.
 No functional source changed from the qualified candidate during activation.
 
 ## Provenance and scope
@@ -57,7 +57,7 @@ contains the [commit-to-file extraction map](https://github.com/w1ne/labwired-co
   every net each tick adds work without supplying missing state. The feature-off and scheduler-on
   clock-gating regressions pass without replay.
 
-## Silicon-record acknowledgement
+## Historical silicon-record acknowledgement
 
 The owner explicitly accepted the exact GPIOTE content for `nrf52840` and
 `seeed-xiao-nrf52840-sense` on 2026-11-11. Both watched digests were recomputed
@@ -68,22 +68,28 @@ previous_ack_digest = 86b0c81ce18f79f9d18d02eb182f135700e90d8fdcc7fc6c3a53a49097
 accepted_digest     = 219f135fe825720f1a2d73e667837512f1fb1f5cbbc2f46eacf747d7dcfc1106
 ```
 
-| Record | Current gate | Live recapture |
+| Record | Gate at activation (2026-11-11) | Live recapture tracking |
 | --- | --- | --- |
 | `nrf52840` | Exact drift acknowledged; non-failing | [#1827](https://github.com/w1ne/labwired-core/issues/1827), due 2026-12-11 |
 | `seeed-xiao-nrf52840-sense` | Exact drift acknowledged; non-failing | Same capture and tracking issue |
 
-The existing 30-day policy gives an expiry of 2026-12-11. Expiry alone fails the
-gate from 2026-12-12. No explicit expiry override was added. The last live capture
+At activation, the then-current 30-day policy set expiry to 2026-12-11 and
+would have failed the gate from 2026-12-12. No expiry override was added.
+The source-review ACK and expiry requirements were removed on 2026-11-12;
+source/capture differences are now informational. This preserves the dated
+activation receipt and does not renew physical evidence. The last live capture
 remains 2026-08-09, with its probe and result unchanged. The XIAO record refers
 to the same physical silicon evidence; it is not an independent second capture.
 No fresh hardware capture was performed during this activation.
 
 [validation/manifest.yaml](../../../validation/manifest.yaml) and
 [the validation generator](../../../scripts/generate_validation_status.py)
-define this acknowledgement and recapture policy. Only the two existing ack dates
-and digests were renewed, with dated comments and the recapture issue. Other
-board records, watch coverage and performance baselines remain unchanged.
+define the current source/capture reporting policy. Neither historical ACK
+establishes capture freshness; both capture records lack a captured model digest
+and therefore have an unverified source match. During activation, only the two
+existing ACK dates and digests were renewed, with dated comments and the
+recapture issue. Other board records, watch coverage and performance baselines
+were unchanged.
 
 ## Acceptance status
 
@@ -192,5 +198,5 @@ LABWIRED_REQUIRE_SENSOR_FEATURE_OFF=0 cargo test --locked -p labwired-core \
 ```
 
 These commands replay the original software qualification from its generic base.
-The active branch records the current acknowledgement in the activation receipt;
+The activation receipt records the historical acknowledgement;
 replaying the old base does not create a fresh silicon capture.
