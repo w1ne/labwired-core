@@ -93,6 +93,40 @@ void setup() {
 void loop() {}
 ```
 
+### Seeed Studio XIAO ESP32C3 + Adafruit BME280
+
+The XIAO ESP32C3 is a USD 4.90 ESP32-C3 board; Seeed listed it in stock on
+2026-11-13. The breakout sits on the board's default Wire pins, D4 (GPIO6) and
+D5 (GPIO7). The simulator boots the unmodified Arduino build in full and the
+sketch prints the BME280 ID, the raw temperature and the compensated
+25.00 degC on the USB console. This adds board and sensor coverage over the
+existing C3 model, not new silicon.
+
+- [Wiring, scope, and copy-paste Arduino sketch](../examples/xiao-esp32c3-bme280/README.md)
+- [Dated Seeed availability receipt](../examples/xiao-esp32c3-bme280/vendor-status.md)
+- [Committed local smoke logs](../examples/xiao-esp32c3-bme280/evidence/)
+
+```cpp
+#include <Arduino.h>
+#include <Wire.h>
+
+constexpr uint8_t BME280_ADDR = 0x77;
+
+void setup() {
+  Serial.begin(115200);
+  Wire.begin();  // XIAO ESP32C3: SDA = D4 (GPIO6), SCL = D5 (GPIO7)
+  Wire.beginTransmission(BME280_ADDR);
+  Wire.write(0xD0);
+  uint8_t id = 0;
+  if (Wire.endTransmission(false) == 0 && Wire.requestFrom(BME280_ADDR, 1) == 1) {
+    id = Wire.read();
+  }
+  Serial.printf("BME280_ID=0x%02X\n", id);
+}
+
+void loop() {}
+```
+
 ## RP2040 / RP2350 — demand group 2
 
 ### Adafruit Feather RP2350 with HSTX (no-PSRAM, Product ID 6000)

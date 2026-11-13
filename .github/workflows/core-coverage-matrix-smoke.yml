@@ -189,6 +189,11 @@ jobs:
           - id: esp32s3-devkitc-1-n16r8-bme280
             script: examples/esp32s3-devkitc-1-n16r8-bme280/bme280-smoke.yaml
             system: configs/systems/esp32s3-devkitc-1-n16r8-bme280.yaml
+          # XIAO ESP32C3 with a BME280 breakout; the stock Arduino build boots in
+          # full and prints the compensated temperature on the USB console.
+          - id: seeed-xiao-esp32c3-bme280
+            script: examples/xiao-esp32c3-bme280/bme280-smoke.yaml
+            system: configs/systems/seeed-xiao-esp32c3-bme280.yaml
           # Demand-rank 1 Arduino Nano ESP32. Its committed fast-boot fixture
           # observes two transitions on the ESP32-S3 D13/GPIO48 LED pad.
           - id: arduino-nano-esp32-gpio
@@ -631,6 +636,10 @@ jobs:
       - name: Verify DevKitC-1 N16R8 BME280 fixture
         if: matrix.id == 'esp32s3-devkitc-1-n16r8-bme280'
         run: examples/esp32s3-devkitc-1-n16r8-bme280/verify-fixture.sh
+
+      - name: Verify XIAO ESP32C3 BME280 fixture
+        if: matrix.id == 'seeed-xiao-esp32c3-bme280'
+        run: examples/xiao-esp32c3-bme280/verify-fixture.sh
 
       - name: Verify Arduino Nano ESP32 GPIO fixture
         if: matrix.id == 'arduino-nano-esp32-gpio'

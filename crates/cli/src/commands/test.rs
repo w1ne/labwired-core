@@ -151,7 +151,7 @@ fn metering_exit_status(exit_code: &ExitCode) -> i32 {
     }
 }
 
-use super::esp32_boot_state::{esp32c6_appdesc_page_offset, resolve_esp_partitions_bin};
+use super::esp32_boot_state::{esp_appdesc_page_offset, resolve_esp_partitions_bin};
 
 /// True when the system manifest at `sys_path` targets the ESP32-C3. Reads the
 /// manifest and its referenced chip descriptor; any load failure → false (fall
@@ -2349,7 +2349,7 @@ pub(crate) fn run_test(
                                 // ELF landed in DROM extra_mem first — copy into
                                 // the shared NOR image so rodata/appdesc remain
                                 // visible through XIP; keep partitions @ 0x8000
-                                // and image magic @ 0x30000 (VA 0x3C03_0000).
+                                // and the image magic at the rodata page base.
                                 //
                                 // Then program MMU entries only for pages that
                                 // hold ELF DROM content (bootloader-equivalent
@@ -2478,8 +2478,19 @@ pub(crate) fn run_test(
                                                 .copy_from_slice(&pt[..n]);
                                         }
                                     }
-                                    // App image magic @ VA 0x3C03_0000 → factory+0x30000
-                                    let magic_off = FACTORY_OFF + 0x30000;
+                                    // App image magic at the DROM page base of
+                                    // `_rodata_reserved_start`: IDF 5 links
+                                    // rodata after the text, so the page moves
+                                    // with the text size (VA 0x3C03_0000 on a
+                                    // small sketch, 0x3C04_0000 once the text
+                                    // passes 192 KiB). Keep 0x30000 for an ELF
+                                    // without `.flash.appdesc`.
+                                    let magic_off = FACTORY_OFF
+                                        + esp_appdesc_page_offset(
+                                            std::path::Path::new(&firmware_path),
+                                            0x3C00_0000,
+                                        )
+                                        .unwrap_or(0x30000);
                                     if f.len() > magic_off {
                                         f[magic_off] = 0xE9;
                                     }
@@ -2581,8 +2592,9 @@ pub(crate) fn run_test(
                                     // Arduino L0 sketch). On silicon the
                                     // bootloader maps the image header there.
                                     // Stamp it only into an empty header slot.
-                                    if let Some(page_off) = esp32c6_appdesc_page_offset(
+                                    if let Some(page_off) = esp_appdesc_page_offset(
                                         std::path::Path::new(&firmware_path),
+                                        0x4200_0000,
                                     ) {
                                         let dst = factory_off + page_off;
                                         let src = page_off.min(irom_len);

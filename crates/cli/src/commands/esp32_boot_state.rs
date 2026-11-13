@@ -14,10 +14,14 @@ use std::path::{Path, PathBuf};
 /// Resolve an ESP-IDF `partitions.bin` for flash seeding @ 0x8000.
 ///
 /// Firmware-adjacent paths only (matrix copies next to the ELF). Never
-/// hard-code matrix PIO work-dir L0 fall-backs.
+/// hard-code matrix PIO work-dir L0 fall-backs. `<stem>.partitions.bin` comes
+/// first so several committed fixtures can share one directory.
 pub fn resolve_esp_partitions_bin(firmware_path: &Path) -> Option<PathBuf> {
     let mut cands: Vec<PathBuf> = Vec::new();
     if let Some(parent) = firmware_path.parent() {
+        if let Some(stem) = firmware_path.file_stem() {
+            cands.push(parent.join(format!("{}.partitions.bin", stem.to_string_lossy())));
+        }
         cands.push(parent.join("partitions.bin"));
         // out/<board>/<sketch>/firmware.elf → out/_pio_work/<board>__<sketch>/...
         if let (Some(sketch), Some(board_dir), Some(out)) = (
@@ -38,15 +42,16 @@ pub fn resolve_esp_partitions_bin(firmware_path: &Path) -> Option<PathBuf> {
     cands.into_iter().find(|p| p.is_file())
 }
 
-/// Offset into the ESP32-C6 unified flash window (0x4200_0000) of the 64 KiB
-/// page that holds `.flash.appdesc`, IDF's `_rodata_reserved_start`.
+/// Offset into an ESP flash data window of the 64 KiB page that holds
+/// `.flash.appdesc`, IDF's `_rodata_reserved_start`.
 ///
-/// ESP-IDF 5 places rodata after the text in the same window, and
+/// ESP-IDF 5 places rodata after the text in the MMU address space, and
 /// `system_early_init` reads the image magic at that page base. On silicon the
-/// bootloader maps the factory image header there. Returns `None` for an ELF
-/// with no such section (bare-metal C6 images).
-pub fn esp32c6_appdesc_page_offset(firmware_path: &Path) -> Option<usize> {
-    const WINDOW: u64 = 0x4200_0000;
+/// bootloader maps the factory image header there. The page moves with the
+/// text size. Returns `None` for an ELF with no such section (bare-metal
+/// images). The window is 0x4200_0000 on the C6 (unified) and 0x3C00_0000 on
+/// the C3 (DROM).
+pub fn esp_appdesc_page_offset(firmware_path: &Path, window: u64) -> Option<usize> {
     const PAGE: u64 = 0x1_0000;
     let bytes = std::fs::read(firmware_path).ok()?;
     let elf = goblin::elf::Elf::parse(&bytes).ok()?;
@@ -54,7 +59,7 @@ pub fn esp32c6_appdesc_page_offset(firmware_path: &Path) -> Option<usize> {
         .section_headers
         .iter()
         .find(|sh| elf.shdr_strtab.get_at(sh.sh_name) == Some(".flash.appdesc"))?;
-    let page = sh.sh_addr.checked_sub(WINDOW)? & !(PAGE - 1);
+    let page = sh.sh_addr.checked_sub(window)? & !(PAGE - 1);
     Some(page as usize)
 }
 
@@ -224,5 +229,34 @@ pub fn seed_esp32_post_brom_dram(bus: &mut SystemBus, elf_bytes: &[u8]) {
         if let Some(addr) = labwired_loader::resolve_symbol_in_elf(elf_bytes, name) {
             let _ = bus.write_u32(addr as u64, 240); // 240 MHz
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tier1(name: &str) -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/tier1")
+            .join(name)
+    }
+
+    #[test]
+    fn c3_appdesc_page_follows_text_size() {
+        // An Arduino Wire sketch has more than 192 KiB of text, so IDF links
+        // `.flash.appdesc` at 0x3C04_0020, not at the 0x3C03_0020 of a small
+        // sketch. The image magic must go to that page.
+        let elf = tier1("seeed-xiao-esp32c3-bme280.elf");
+        assert_eq!(esp_appdesc_page_offset(&elf, 0x3C00_0000), Some(0x4_0000));
+    }
+
+    #[test]
+    fn stem_partitions_bin_wins_over_shared_name() {
+        let elf = tier1("seeed-xiao-esp32c3-bme280.elf");
+        assert_eq!(
+            resolve_esp_partitions_bin(&elf),
+            Some(tier1("seeed-xiao-esp32c3-bme280.partitions.bin"))
+        );
     }
 }

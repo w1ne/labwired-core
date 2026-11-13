@@ -1,0 +1,9 @@
+[2m2026-11-13T13:12:23.247996Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../chips/esp32c3.yaml
+[2m2026-11-13T13:12:23.271396Z[0m [32m INFO[0m [2mlabwired_core::bus::from_config[0m[2m:[0m loaded 393216 bytes into 'rom' region @ 0x40000000 from /data/worktrees/legacy-migrated/labwired-hw-onboarding/crates/core/roms/esp32c3/esp32c3_rom.bin
+[2m2026-11-13T13:12:23.292911Z[0m [32m INFO[0m [2mlabwired_core::bus::from_config[0m[2m:[0m loaded 131072 bytes into 'rom_data' region @ 0x3ff00000 from /data/worktrees/legacy-migrated/labwired-hw-onboarding/crates/core/roms/esp32c3/esp32c3_drom.bin
+labwired-cli test: seeded C3 flash partitions (3072 bytes) from examples/xiao-esp32c3-bme280/../../tests/fixtures/tier1/seeed-xiao-esp32c3-bme280.partitions.bin
+[2m2026-11-13T13:12:23.394673Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x403807ca
+labwired-cli test: C3 MMU factory@0x10000 mapped 6 virt page(s) [0, 1, 2, 3, 4, 5] → phys+1; free entries for mmap
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: idle_ff skipped 6979795 of 7732532 device cycles (752737 interpreted)
+PASS  5/5 checks · bme280-smoke · 752737 steps · 0.34s
