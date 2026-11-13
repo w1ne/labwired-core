@@ -818,6 +818,13 @@ fn every_shipped_descriptor_is_ratcheted() {
         // board and no silicon oracle. Promote when it ships in the playground
         // catalog and gains an executing-fidelity differential.
         "stm32h735",
+        // NUCLEO-H723ZG demand pick (Other STM32 survey rank #4, 13%; Nucleo /
+        // Discovery kits 23%). The full MCU profile and narrow board smoke
+        // have local firmware coverage, but neither is a bundled catalog board
+        // or has an H723 silicon differential yet. Keep both outside SHIPPED
+        // until the exact hosted route and executing-fidelity evidence exist.
+        "stm32h723zg",
+        "stm32h723zg-nucleo-smoke",
         // Silicon Labs EFR32MG26 (Series-2). L1 smoke, validated via the
         // brd2709a example (uart + io scripts) and bench-proven on the
         // physical board (VCOM banner, 2026-08-18): no catalog board, no

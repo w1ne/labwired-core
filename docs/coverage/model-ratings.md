@@ -99,8 +99,8 @@ same fields but never their source, chip YAML, binary or build paths.
 | stm32u545 | open | L1 | 39 | 986.8 | 1.8 | ≥1× (CI) | — |
 | stm32u5a5zj | open | L1 | 45 | 984.9 | 1.8 | ≥1× (CI) | [doc](docs/boards/stm32u5a5zj.md) |
 | stm32h735 | open | L1 | 40 | 936.2 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32h735.md) |
-| stm32h723zg | open | L0 | 41 | — | — | ≥1× (CI) | — |
-| stm32h723zg-nucleo-smoke | open | L0 | 5 | — | — | ≥1× (CI) | — |
+| stm32h723zg | open | L0 | 41 | 935.8 | 1.7 | ≥1× (CI) | — |
+| stm32h723zg-nucleo-smoke | open | L0 | 5 | 899.5 | 1.5 | ≥1× (CI) | — |
 | stm32l073 | open | L2 | 42 | 939.5 | 1.6 | ≥1× (CI) | — |
 | stm32l476 | open | L1 | 58 | 937.6 | 1.6 | ≥1× (CI) | — |
 | stm32wb55 | open | L1 | 22 | 936.9 | 1.5 | ≥1× (CI) | [doc](docs/boards/stm32wb55.md) |
