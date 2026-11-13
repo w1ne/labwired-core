@@ -1,0 +1,59 @@
+# Matched generic Gummel-Poon NPN branches compare model-card RB/RC/RE with
+# equivalent external resistors. Their intrinsic terminals route through PA2-PA7
+# to U575 ADC1 channels 7-12.
+name: nucleo-u575zi-analog-bjt-terminal-resistances
+chip: ../../configs/chips/stm32u575.yaml
+external_devices: []
+board_io: []
+cosim_models:
+  - id: bjt_terminal_resistance_model_card_adc
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drive: ui.bjt_terminal_resistance.base_v
+    outputs:
+      collector_intrinsic: board.analog.pa2_volts
+      base_intrinsic: board.analog.pa3_volts
+      emitter_intrinsic: board.analog.pa4_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rdrive drive base 2k
+        Q1 collector base emitter NPN_TERMINAL
+        .model NPN_TERMINAL NPN(IS=1e-16 BF=20 BR=4 VAF=50 VAR=75 RB=200 RC=100 RE=100)
+      probes:
+        collector_intrinsic: v(Q1#collector)
+        base_intrinsic: v(Q1#base)
+        emitter_intrinsic: v(Q1#emitter)
+      sources:
+        base_drive: Vbase
+      vdd: 3.3
+  - id: bjt_terminal_resistance_external_adc
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drive: ui.bjt_terminal_resistance.base_v
+    outputs:
+      collector_intrinsic: board.analog.pa5_volts
+      base_intrinsic: board.analog.pa6_volts
+      emitter_intrinsic: board.analog.pa7_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Rcollector collector qc 100
+        Vbase drive 0 dc 0
+        Rdrive drive base 2k
+        Rbase base qb 200
+        Remitter emitter qe 100
+        Q1 qc qb qe NPN_TERMINAL_CONTROL
+        .model NPN_TERMINAL_CONTROL NPN(IS=1e-16 BF=20 BR=4 VAF=50 VAR=75)
+      probes:
+        collector_intrinsic: v(qc)
+        base_intrinsic: v(qb)
+        emitter_intrinsic: v(qe)
+      sources:
+        base_drive: Vbase
+      vdd: 3.3

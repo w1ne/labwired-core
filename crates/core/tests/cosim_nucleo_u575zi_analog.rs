@@ -977,6 +977,170 @@ fn nucleo_u575zi_bjt_base_resistance_rolloff_reaches_pa2_pa3_adc1_alongside_ntc_
 }
 
 #[test]
+fn nucleo_u575zi_bjt_terminal_resistances_match_external_network_through_adc1() {
+    let system_path = root("configs/systems/nucleo-u575zi.yaml");
+    let mut profile =
+        SystemManifest::from_file(&system_path).expect("load NUCLEO-U575ZI-Q profile");
+    let generic =
+        SystemManifest::from_file(root("examples/nucleo-u575zi/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and Shockley diode routes");
+    let terminal_resistance = SystemManifest::from_file(root(
+        "examples/nucleo-u575zi/analog-bjt-terminal-resistance-system.yaml",
+    ))
+    .expect("load BJT model-card and explicit terminal-resistance branches");
+    profile.cosim_models = generic.cosim_models;
+    profile
+        .cosim_models
+        .extend(terminal_resistance.cosim_models);
+
+    let chip = labwired_config::ChipDescriptor::from_file(
+        system_path.parent().unwrap().join(&profile.chip),
+    )
+    .expect("load STM32U575 descriptor");
+    for (pin, channel) in [
+        ("PA2", 7),
+        ("PA3", 8),
+        ("PA4", 9),
+        ("PA5", 10),
+        ("PA6", 11),
+        ("PA7", 12),
+    ] {
+        assert_eq!(
+            chip.analog_pins
+                .get(pin)
+                .map(|route| (route.peripheral.as_str(), route.channel)),
+            Some(("adc1", channel)),
+            "{pin} must resolve to documented ADC1 input channel {channel}"
+        );
+    }
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-U575ZI-Q bus");
+
+    let ahb2enr1 = bus.read_u32(RCC_AHB2ENR1).expect("read RCC AHB2ENR1");
+    bus.write_u32(RCC_AHB2ENR1, ahb2enr1 | (1 << 10))
+        .expect("enable ADC1 clock");
+    bus.write_u32(ADC_CR, 0).expect("leave ADC deep power-down");
+    bus.write_u32(ADC_CR, 1 << 28)
+        .expect("enable ADC voltage regulator");
+    bus.write_u32(ADC_CR, (1 << 28) | (1 << 31))
+        .expect("calibrate ADC1");
+    bus.write_u32(ADC_CR, (1 << 28) | 1).expect("enable ADC1");
+    assert_ne!(
+        bus.read_u32(ADC_ISR).expect("read ADC1 ready status") & 1,
+        0,
+        "ADC1 must report ADRDY before conversion"
+    );
+    bus.write_u32(ADC_CFGR1, 0x8000_0000 | (1 << 2))
+        .expect("select 12-bit conversion resolution");
+    bus.write_u32(
+        ADC_PCSEL,
+        (1 << 5) | (1 << 6) | (1 << 7) | (1 << 8) | (1 << 9) | (1 << 10) | (1 << 11) | (1 << 12),
+    )
+    .expect("select NTC, diode, and all six BJT terminal channels");
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries NTC, diode, and matched BJT terminal branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must resolve PA0-PA7 to ADC1 channels 5-12"
+    );
+    assert_eq!(
+        adc_channel_count(&mut bus, 13),
+        u16::MAX,
+        "adjacent ADC1 channel 13 starts undriven"
+    );
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.bjt_terminal_resistance.base_v", 0.0)
+        .expect("initialize matched BJT base drives");
+
+    let ntc_v = 1.65;
+    let diode_v = diode_load_line_voltage();
+    let terminal_routes = [
+        (
+            "intrinsic collector",
+            "board.analog.pa2_volts",
+            7,
+            "board.analog.pa5_volts",
+            10,
+        ),
+        (
+            "intrinsic base",
+            "board.analog.pa3_volts",
+            8,
+            "board.analog.pa6_volts",
+            11,
+        ),
+        (
+            "intrinsic emitter",
+            "board.analog.pa4_volts",
+            9,
+            "board.analog.pa7_volts",
+            12,
+        ),
+    ];
+    let mut cycles = 0;
+    for base_drive_v in [0.8_f64, 1.0, 1.2] {
+        session
+            .set_signal_number("ui.bjt_terminal_resistance.base_v", base_drive_v)
+            .expect("set common BJT base drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and both terminal-resistance branches");
+        assert_eq!(steps.len(), 4, "all four generic analog branches solve");
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        let routed_ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let routed_diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+        assert!(
+            (routed_ntc_v - ntc_v).abs() < 1e-9,
+            "the unrelated NTC remains isolated on ADC1 channel 5"
+        );
+        assert!(
+            (routed_diode_v - diode_v).abs() < 2e-5,
+            "the unrelated Shockley diode remains isolated on ADC1 channel 6"
+        );
+
+        let mut channel_voltages = vec![(5, routed_ntc_v), (6, routed_diode_v)];
+        for (terminal, card_path, card_channel, external_path, external_channel) in terminal_routes
+        {
+            let card_voltage = signal_voltage(&session, card_path);
+            let external_voltage = signal_voltage(&session, external_path);
+            assert!(
+                (card_voltage - external_voltage).abs() < 1e-7,
+                "model-card RB/RC/RE and equivalent explicit resistors must agree at the intrinsic {terminal}: {card_voltage} V vs {external_voltage} V"
+            );
+            channel_voltages.push((card_channel, card_voltage));
+            channel_voltages.push((external_channel, external_voltage));
+        }
+
+        for (channel, voltage_v) in channel_voltages {
+            let expected_count = expected_adc12_count(voltage_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected_count as u16,
+                "solved voltage seeds ADC1 channel {channel}"
+            );
+            assert_eq!(
+                u5_adc_convert(&mut bus, channel),
+                expected_count,
+                "firmware-visible ADC1 conversion follows channel {channel}"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 13),
+            u16::MAX,
+            "adjacent ADC1 channel 13 stays isolated"
+        );
+    }
+}
+
+#[test]
 fn nucleo_u575zi_bjt_junction_and_transit_charge_reach_adc1_end_to_end() {
     let system_path = root("configs/systems/nucleo-u575zi.yaml");
     let mut profile =
