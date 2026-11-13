@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Arduino sketch × LabWired board matrix.
 
-For every board in boards.yaml and every sketch (L0/L1/L2):
+For every board in boards/ and every sketch (L0/L1/L2):
   1. Compile with PlatformIO (framework=arduino) — unless --sim-only / cache hit
   2. Run with `labwired test` against the board system manifest
   3. Record pass/fail with stage and UART (and optional L2 GPIO edges)
@@ -31,6 +31,7 @@ _VALIDATION = Path(__file__).resolve().parent.parent
 if str(_VALIDATION) not in sys.path:
     sys.path.insert(0, str(_VALIDATION))
 
+import registry_dir  # noqa: E402  (one file per board: boards/<id>.yaml)
 from matrix_lib import (  # noqa: E402
     cacheable_cell,
     compile_fingerprint,
@@ -54,8 +55,7 @@ DEFAULT_OUT = MATRIX_DIR / "out"
 
 
 def load_config() -> dict:
-    with open(MATRIX_DIR / "boards.yaml", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    return registry_dir.load_yaml_registry(MATRIX_DIR / "boards", "boards")
 
 
 def write_pio_project(work: Path, board: dict, sketch_src: Path) -> Path:

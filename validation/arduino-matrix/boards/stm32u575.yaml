@@ -1,0 +1,15 @@
+id: stm32u575
+chip: stm32u575
+system: systems/stm32u575.yaml
+pio: { platform: ststm32, board: nucleo_u575zi_q, framework: arduino }
+max_steps: 10000000
+budget_reason: "Measured first run: L0~0.17M, L2~0.49M, L3 Wire.begin i2c_computeTiming 7.1M, L6 analogWrite 5.0M — 10M covers L0-L4/L6/L7 with ~40% headroom (was 20M H563/L476 sibling budget)"
+led_watch: "gpioc:7"
+led_min_edges: 2
+# L6 analogWrite(LED_BUILTIN): LD1/PC7 is TIM3_CH2 on AF2, routed by the
+# U5 timer AF table (pad_map: stm32u5), so L6 is proven on pad edges.
+pwm_watch: "gpioc:7"
+pwm_min_edges: 20
+family: stm32
+# L5: adc profile stm32u5; L8: FDCAN1 enter_loopback @ 0x4000A400 behind
+# RCC APB1ENR2.FDCAN1EN bit 9

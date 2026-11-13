@@ -1,0 +1,16 @@
+id: stm32g474re
+chip: stm32g474re
+system: systems/stm32g474re.yaml
+pio: { platform: ststm32, board: nucleo_g474re, framework: arduino }
+max_steps: 20000000
+budget_reason: "L0–L2 light; L3 Wire.begin runs i2c_computeTiming (~7M+ steps)"
+led_watch: "gpioa:5"
+led_min_edges: 2
+# L6 uses PA0 (TIM2) — not PA5 LED (DAC1_OUT2) — see L6 sketch. TIM2_CH1
+# reaches PA0 on AF1 through the G4 timer AF table (tim2 pad_map: stm32g4).
+pwm_watch: "gpioa:0"
+pwm_min_edges: 20
+family: stm32
+sketches_skip: [L8_can]
+sketches_skip_reason:
+  L8_can: "No FDCAN in chip yaml for matrix L8"

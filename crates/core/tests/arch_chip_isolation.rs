@@ -42,7 +42,7 @@ const ALLOWED: &[(&str, &str, &str)] = &[
     // capture, and the vendored S3 SVD (tests/fixtures/svd/esp32s3.svd) carries
     // no Wi-Fi MAC peripheral at all. The one S3-corroborated claim is the
     // interrupt source: INTERRUPT_CORE0 `PRO_MAC_INTR_MAP` @ 0x000 ⇒ source 0.
-    // validation/manifest.yaml already tracks the owed live capture of
+    // validation/boards/ already tracks the owed live capture of
     // 0x60033D14. Precedent for caution: esp32s3/interrupt_core0.yaml carried
     // the C3's map until 2026-08-20 and was wrong by 8/20/40 bytes.
     //

@@ -1,0 +1,14 @@
+id: ci-fixture-riscv
+doc: docs/boards/ci-fixture-riscv.md
+chip: configs/chips/ci-fixture-riscv.yaml
+tier: structural
+note: "Synthetic RV32I fixture used only to exercise the RISC-V core in firmware_survival::riscv_ci_fixture; not a real board, no silicon claim of any kind."
+models:
+  - crates/core/src/cpu/riscv.rs
+  - crates/core/src/decoder/riscv.rs
+  - configs/chips/ci-fixture-riscv.yaml
+  # 2026-09-21, model_paths_drift_gate: models this board REGISTERS that
+  # its list omitted, so they were invisible to the drift digest. This
+  # board records no silicon capture, so there is no "silicon-verified"
+  # claim for the corrected digest to invalidate — no ack is implied.
+  - crates/core/src/peripherals/uart.rs

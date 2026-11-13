@@ -1,0 +1,19 @@
+id: nucleo-f103rb-bme280
+doc: docs/boards/nucleo-f103rb.md
+chip: configs/chips/stm32f103rb-nucleo-bme280-smoke.yaml
+tier: structural
+note: Narrow STM32F103RB profile with USART2, LD2/PA5 and I2C1 on PB8/PB9. The exact-profile SysTick execution differential compares every instruction boundary with the legacy walk and requires repeated ISR and main-loop progress. The BME280 smoke has recorded simulator evidence but no dedicated required sensor firmware lane. No silicon timing or full-board coverage is claimed.
+offline_tests:
+  - systick_walk_differential::nucleo_bme280_profile_systick_irq_is_byte_identical
+models:
+  - configs/chips/stm32f103rb-nucleo-bme280-smoke.yaml
+  - crates/core/src/cpu/cortex_m.rs
+  - crates/core/src/cpu/cortex_m/exec
+  - crates/core/src/decoder/arm.rs
+  - crates/core/src/decoder/arm_thumb32.rs
+  - crates/core/src/peripherals/rcc.rs
+  - crates/core/src/peripherals/afio.rs
+  - crates/core/src/peripherals/gpio.rs
+  - crates/core/src/peripherals/uart.rs
+  - crates/core/src/peripherals/i2c.rs
+  - crates/core/src/peripherals/systick.rs
