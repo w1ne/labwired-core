@@ -316,6 +316,10 @@
   },
   {
     "buses": [],
+    "name": "rp2350-feather"
+  },
+  {
+    "buses": [],
     "name": "rv1103"
   },
   {

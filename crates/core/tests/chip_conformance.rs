@@ -1159,6 +1159,15 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: None,
     },
+    // Adafruit Feather RP2350 variant of the rp2350 die. Its D13/GPIO7 +
+    // UART0 smoke runs as a CLI script in core-onboarding-smoke, not as a
+    // Rust test.
+    ChipConf {
+        name: "rp2350-feather",
+        yaml: "configs/chips/rp2350-feather.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
     // NUCLEO-H723ZG slice (RCC, SysTick, GPIO B/C/D/E, USART3). SIM-DERIVED:
     // no silicon capture. Its LD1 + USART3 smoke runs as a CLI script in
     // core-onboarding-smoke, not as a Rust test, so no behavior_gate resolves.

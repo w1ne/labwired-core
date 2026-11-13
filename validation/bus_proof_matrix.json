@@ -2148,6 +2148,26 @@
         "gap": "No I2C controller is declared on configs/chips/stm32h723zg.yaml; the NUCLEO-H723ZG slice declares RCC, SysTick, GPIO B/C/D/E and USART3 only.",
         "lane": "none"
       }
+    },
+    "rp2350-feather": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "examples/adafruit-feather-rp2350/io-smoke.yaml",
+        "test": "FEATHER_RP2350_GPIO7_UART_OK",
+        "signal": "crates/firmware-adafruit-feather-rp2350-smoke boots on configs/systems/adafruit-feather-rp2350.yaml and writes the banner to the UART0 PL011 data register at 0x40070000 (no pad mux or baud setup); uart_contains matches it, and gpio_edges requires the red D13 LED on GPIO7, toggled through SIO GPIO_OUT_XOR, to change at least twice.",
+        "lane": "core-onboarding-smoke (push to main + nightly cron): matrix id adafruit-feather-rp2350 (scripts/onboarding_smoke.sh)"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "The chip shares the rp2040 PL022 model, but no firmware drives SPI under the rp2350-feather name.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "The chip shares the rp2040 I2C model, but no firmware drives I2C under the rp2350-feather name.",
+        "lane": "none"
+      }
     }
   }
 }

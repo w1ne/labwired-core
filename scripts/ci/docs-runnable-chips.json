@@ -81,6 +81,10 @@
       "how": "needs-build",
       "why": "The STM32H723ZG NUCLEO-H723ZG slice is newer than the installed CLI this gate checks. Its LD1 + USART3 smoke passes from source in examples/nucleo-h723zg; switch this row after a release carries the H723ZG descriptor."
     },
+    "rp2350-feather": {
+      "how": "needs-build",
+      "why": "The rp2350-feather descriptor is newer than the installed CLI this gate checks. The Feather RP2350 D13/GPIO7 + UART0 smoke passes from source in examples/adafruit-feather-rp2350; switch this row after a release carries the Feather variant."
+    },
     "rp2040-feather": {
       "how": "needs-build",
       "why": "The rp2040-feather descriptor is newer than the installed CLI this gate checks. The Feather BME280 smoke passes from source in examples/adafruit-feather-rp2040; switch this row after a release carries the Feather variant."

@@ -893,6 +893,10 @@ fn every_shipped_descriptor_is_ratcheted() {
         // flash). Its BME280 I2C1 smoke runs in core-onboarding-smoke, but it
         // has no catalog board and no differential of its own.
         "rp2040-feather",
+        // Adafruit Feather RP2350 variant of the rp2350 die (8 MiB flash).
+        // Its D13/GPIO7 + UART0 smoke runs in core-onboarding-smoke, but it
+        // has no catalog board and no differential of its own.
+        "rp2350-feather",
         // NUCLEO-H723ZG slice of the STM32H723ZG (Cortex-M7, RM0468). The
         // descriptor models RCC, SysTick, GPIO B/C/D/E and USART3 only; its
         // LD1 + USART3 smoke runs in core-onboarding-smoke. No catalog board,

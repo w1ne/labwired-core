@@ -134,6 +134,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | esp32p4 | open | L0 | 1 | — | — | ≥1× (CI) | — |
 | esp32s2 | open | L0 | 1 | — | — | ≥1× (CI) | — |
 | rp2040-feather | open | L0 | 24 | — | — | ≥1× (CI) | — |
+| rp2350-feather | open | L0 | 27 | — | — | ≥1× (CI) | — |
 | stm32h723zg | open | L0 | 7 | — | — | ≥1× (CI) | — |
 | k32w041z (closed) | closed | L2 | 9 | 987.8 | 1.6 | 6.50× | [doc](docs/boards/k32w041amdk6.md) |
 
