@@ -1732,10 +1732,10 @@ impl SystemBus {
                         torque_nm: s.electromagnetic_torque_nm,
                         current_a: s.dc_bus_current_a.filter(|_| {
                             integration_error.is_none()
-                                && !circuit.as_ref().is_some_and(|w| w.last_time_ns.is_none())
+                                && circuit.as_ref().is_none_or(|w| w.last_time_ns.is_some())
                         }),
                         phase_currents_a: (integration_error.is_none()
-                            && !circuit.as_ref().is_some_and(|w| w.last_time_ns.is_none()))
+                            && circuit.as_ref().is_none_or(|w| w.last_time_ns.is_some()))
                         .then_some(s.phase_currents_a),
                         bus_voltage_v: match circuit {
                             Some(w) => w.supply_v,

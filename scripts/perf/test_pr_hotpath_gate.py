@@ -87,6 +87,27 @@ class HistoryControls(unittest.TestCase):
         self.assertEqual(paths, ["README.md"])
         self.assertFalse(any(map(gate.hotpath, paths)))
 
+    def test_stale_event_base_uses_the_actual_tested_merge_parent(self):
+        self.run_git("checkout", "-b", "docs")
+        self.write("README.md", "docs-only change\n")
+        self.run_git("add", ".")
+        self.run_git("commit", "-m", "docs-only")
+        head = self.sha()
+        self.run_git("checkout", "main")
+        self.write("crates/core/src/lib.rs", "newer runtime\n")
+        self.run_git("commit", "-am", "main advances")
+        current_base = self.sha()
+        self.run_git("merge", "--no-ff", "docs", "-m", "CI merge")
+        tested = self.sha()
+        actual_base = self.run_git("rev-parse", f"{tested}^1")
+        self.assertEqual(actual_base, current_base)
+        # An event may still carry the old PR base; it cannot become the
+        # authority for a different tested merge identity.
+        with self.assertRaisesRegex(ValueError, "exact ordered base/head parents"):
+            gate.changed_paths(tested, self.initial, head)
+        self.assertEqual(gate.changed_paths(tested, actual_base, head), ["README.md"])
+        self.assertFalse(gate.select("pull_request", gate.OWNED_REPOSITORY, "docs", ["README.md"])[0])
+
     def test_runtime_rename_out_of_scope_still_selects_and_wrong_parents_refuse(self):
         self.run_git("checkout", "-b", "move")
         self.run_git("mv", "crates/core/src/lib.rs", "README.md")
