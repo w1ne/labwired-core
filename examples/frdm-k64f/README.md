@@ -18,6 +18,10 @@ A bare-register smoke firmware (`crates/firmware-frdm-k64f-smoke`) that:
 - heartbeats on **UART0** at 115200 8N1 from the reset FEI clock
   (20.97152 MHz).
 
+The board's ADC16 mixed-signal regressions also route generic netlists for MOSFETs,
+an NTC divider, and a Shockley diode through the package ADC pins. See
+[`VALIDATION.md`](VALIDATION.md) for the covered physics and evidence.
+
 ## Build and run
 
 ```bash

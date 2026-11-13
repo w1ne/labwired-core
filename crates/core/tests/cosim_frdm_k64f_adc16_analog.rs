@@ -207,6 +207,44 @@ fn nmos_drain_voltage(gate_v: f64, beta: f64) -> f64 {
     0.5 * (low + high)
 }
 
+/// Independent level-1 MOSFET bulk-diode load line for two equal drain/source
+/// junctions, including ngspice's bandgap temperature scaling for `JS`.
+fn mosfet_bulk_voltage_with_js_temperature(temperature_c: Option<f64>) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const LOAD_OHMS: f64 = 100_000.0;
+    const JS_A_PER_M2: f64 = 1e-2;
+    const AREA_M2: f64 = 100e-12;
+    const TNOM_K: f64 = 27.0 + 273.15;
+    const NOMINAL_K: f64 = 300.0; // fixed no-TEMP engine path
+    const CHARGE_C: f64 = 1.602_176_634e-19;
+    const BOLTZMANN_J_PER_K: f64 = 1.380_649e-23;
+
+    let temperature_k = temperature_c.map_or(NOMINAL_K, |celsius| celsius + 273.15);
+    let eg = |temperature_k: f64| {
+        1.16 - 7.02e-4 * temperature_k * temperature_k / (temperature_k + 1108.0)
+    };
+    let nominal_vt = BOLTZMANN_J_PER_K * TNOM_K / CHARGE_C;
+    let temperature_vt = BOLTZMANN_J_PER_K * temperature_k / CHARGE_C;
+    let saturation_ratio = temperature_c.map_or(1.0, |_| {
+        ((eg(TNOM_K) / nominal_vt) - (eg(temperature_k) / temperature_vt)).exp()
+    });
+    let total_saturation_current = 2.0 * JS_A_PER_M2 * AREA_M2 * saturation_ratio;
+    let residual = |bulk_v: f64| {
+        (SUPPLY_V - bulk_v) / LOAD_OHMS
+            - total_saturation_current * ((bulk_v / temperature_vt).exp() - 1.0)
+    };
+    let (mut low, mut high) = (0.0, SUPPLY_V);
+    for _ in 0..200 {
+        let mid = (low + high) / 2.0;
+        if residual(mid) > 0.0 {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    (low + high) / 2.0
+}
+
 /// ngspice level-1 `KP` from the process when the card gives only `TOX`.
 fn process_kp(uo_cm2_per_vs: f64, tox_m: f64) -> f64 {
     uo_cm2_per_vs * 1e-4 * 3.453_133e-11 / tox_m
@@ -884,4 +922,115 @@ fn frdm_k64f_mosfet_lateral_diffusion_and_process_kp_reach_adc16_alongside_ntc_a
             );
         }
     }
+}
+
+#[test]
+fn frdm_k64f_mosfet_js_temperature_reaches_adc16_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/frdm-k64f.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load FRDM-K64F profile");
+    let analog = SystemManifest::from_file(root("examples/frdm-k64f/analog-ntc-diode-system.yaml"))
+        .expect("load unrelated generic NTC and Shockley diode netlists");
+    let js_temperature = SystemManifest::from_file(root(
+        "examples/frdm-k64f/analog-mosfet-js-temperature-adc-system.yaml",
+    ))
+    .expect("load matched nominal and hot MOS1 JS branches");
+    profile.cosim_models = analog.cosim_models;
+    for model in &mut profile.cosim_models {
+        let (key, pad) = match model.id.as_str() {
+            "ntc_divider" => ("v_sense", "ptb2"),
+            "diode_load_line" => ("v_diode", "ptb10"),
+            other => panic!("unexpected existing model {other}"),
+        };
+        model
+            .outputs
+            .insert(key.to_string(), format!("board.analog.{pad}_volts"));
+    }
+    profile.cosim_models.extend(js_temperature.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load MK64F12 descriptor");
+    for (pad, peripheral, channel) in [
+        ("PTB0", "adc0", 8),
+        ("PTB1", "adc0", 9),
+        ("PTB2", "adc0", 12),
+        ("PTB10", "adc1", 14),
+    ] {
+        let route = &chip.analog_pins[pad];
+        assert_eq!(route.peripheral, peripheral, "{pad} ADC instance");
+        assert_eq!(route.channel, channel, "{pad} ADC channel");
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build FRDM-K64F bus");
+    init_and_calibrate(&mut bus, ADC0, MODE_12);
+    init_and_calibrate(&mut bus, ADC1, MODE_12);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries MOSFETs, NTC, and diode");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "MOSFET bulk junctions, NTC, and diode must resolve to ADC16 pads"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold unrelated NTC at 25 °C");
+    session
+        .set_signal_number("ui.mos_js_temperature.supply_v", 3.3)
+        .expect("drive both MOSFET bulk junctions");
+
+    let mut cycles = 0;
+    cycles += session.cycles_until_boundary(cycles);
+    let (steps, errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("solve and route the generic analog netlists");
+    assert_eq!(steps.len(), 3, "MOSFET, NTC, and diode netlists all solve");
+    assert!(
+        errors.is_empty(),
+        "unexpected ADC16 routing errors: {errors:?}"
+    );
+
+    let nominal_v = signal_voltage(&session, "board.analog.ptb0_volts");
+    let hot_v = signal_voltage(&session, "board.analog.ptb1_volts");
+    for (label, actual, temperature) in [
+        ("nominal", nominal_v, None),
+        ("TEMP=85 °C", hot_v, Some(85.0)),
+    ] {
+        let expected = mosfet_bulk_voltage_with_js_temperature(temperature);
+        assert!(
+            (actual - expected).abs() < 2e-5,
+            "{label} JS·AD/AS bulk load line should be {expected} V, got {actual} V"
+        );
+    }
+    assert!(
+        nominal_v > hot_v + 0.1,
+        "the level-1 bandgap law must raise JS and lower the hot bulk voltage: {nominal_v} / {hot_v} V"
+    );
+
+    let ntc_v = signal_voltage(&session, "board.analog.ptb2_volts");
+    let diode_v = signal_voltage(&session, "board.analog.ptb10_volts");
+    assert!(
+        (ntc_v - ntc_volts(25.0)).abs() < 1e-9,
+        "the unrelated Beta NTC remains on its independent divider"
+    );
+    assert!(
+        (diode_v - diode_load_line_voltage()).abs() < 2e-5,
+        "the unrelated Shockley diode remains on its independent load line"
+    );
+    for (adc, channel, voltage_v) in [
+        (ADC0, 8, nominal_v),
+        (ADC0, 9, hot_v),
+        (ADC0, AD12, ntc_v),
+        (ADC1, AD14, diode_v),
+    ] {
+        assert_eq!(
+            convert(&mut bus, adc, channel),
+            se_code(voltage_v, 12),
+            "ADC16 {adc:#x} channel {channel} must convert its solved device voltage"
+        );
+    }
+    assert_eq!(
+        convert(&mut bus, ADC0, 10),
+        0,
+        "undriven SE10 stays isolated"
+    );
 }

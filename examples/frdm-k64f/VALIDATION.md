@@ -19,6 +19,7 @@ Claims, evidence, and what is explicitly **not** claimed yet.
 | Stock Zephyr v3.7.0 `samples/hello_world` (`frdm_k64f`) | smoke-tested | `zephyr-hello.yaml` 2/2; `firmware_survival::test_frdm_k64f_zephyr_survival` |
 | Zephyr `tests/drivers/uart/uart_basic_api` (Renode `NXP-K64F.robot` UART case) | smoke-tested | `zephyr-uart-basic-api.yaml` 2/2: 7/7 ztest cases, `PROJECT EXECUTION SUCCESSFUL` |
 | UART0 C2 `TIE`/`TCIE`/`RIE` interrupts (IRQ 31) | smoke-tested + unit | IRQ-driven `fifo_fill`/`fifo_read` and the `uart_irq_is_pending` test pass; `uart::tests::test_kinetis_uart_c2_interrupt_enables` |
+| Generic MOS1 `JS` temperature law to ADC16 | model-tested | `cosim_frdm_k64f_adc16_analog::frdm_k64f_mosfet_js_temperature_reaches_adc16_alongside_ntc_and_diode` compares nominal and `TEMP=85 °C` bulk-junction load lines to an independent bandgap-law reference, converts both on ADC0_SE8/9, and checks isolation from the routed NTC and diode |
 | MCG PLL0 (`k6x` profile): FBE → PBE → PEE | smoke-tested + unit | Zephyr's `CLOCK_BootToPeeMode` settles; `mcg::tests::k6x_*`. Lock is immediate and the 120 MHz output is not derived |
 | MCG FEE (the KW41Z FLL path) | unit-tested | unchanged; `mcg::tests` |
 | SYSMPU / PMC / OSC0 | register files (NXP SVD) | Zephyr's `nxp_mpu`, `k6x_init` and `CLOCK_InitOsc0` writes land and read back; **no MPU protection, LVD or oscillator is modelled** |
