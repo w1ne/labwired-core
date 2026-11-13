@@ -1,0 +1,22 @@
+# CONTROLLINO MINI (100-000-00) — ATmega328P 5 V logic-domain profile.
+# Sources:
+# https://www.controllino.com/wp-content/uploads/2023/05/CONTROLLINO_MINI_Pinout_Table.pdf
+# https://www.controllino.com/wp-content/uploads/2023/05/CONTROLLINO_MINI_Technical_Block_Diagram.pdf
+# Digital D0..D5 and relay coils 0..5 share MCU drive signals, but their
+# high-side/relay contact circuits are NOT modeled by board_io LED bindings.
+# IN0/IN1 are 12/24 V screw terminals with automatic dividers and ESD
+# protection. button bindings below model only the resulting MCU-side level.
+name: controllino-mini
+chip: ../chips/atmega328p.yaml
+cpu_hz: 16000000
+board_io:
+  - { id: in0, kind: button, peripheral: portd, pin: 2, signal: input, active_high: true }
+  - { id: in1, kind: button, peripheral: portd, pin: 3, signal: input, active_high: true }
+  - { id: d0, kind: led, peripheral: portd, pin: 4, signal: output, active_high: true }
+  - { id: d1, kind: led, peripheral: portd, pin: 5, signal: output, active_high: true }
+  - { id: d2, kind: led, peripheral: portd, pin: 6, signal: output, active_high: true }
+  - { id: d3, kind: led, peripheral: portd, pin: 7, signal: output, active_high: true }
+  - { id: d4, kind: led, peripheral: portb, pin: 0, signal: output, active_high: true }
+  - { id: d5, kind: led, peripheral: portb, pin: 1, signal: output, active_high: true }
+  - { id: d6, kind: led, peripheral: portc, pin: 4, signal: output, active_high: true }
+  - { id: d7, kind: led, peripheral: portc, pin: 5, signal: output, active_high: true }
