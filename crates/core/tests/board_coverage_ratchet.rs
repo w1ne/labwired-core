@@ -907,6 +907,11 @@ fn every_shipped_descriptor_is_ratcheted() {
         // smoke runs in core-onboarding-smoke. No catalog board, no silicon
         // oracle, no differential. Promote when all three exist.
         "stm32f446re",
+        // Seeed XIAO ESP32-C6 package variant (ESP32-C6FH4, 4 MB flash). The
+        // yaml includes esp32c6.yaml and changes only the flash size; its
+        // GPIO15 LED smoke runs in core-onboarding-smoke. No catalog board,
+        // no silicon oracle, no differential. Promote when all three exist.
+        "esp32c6fh4",
     ];
     // configs/chips id -> ratchet chip id (kw41z ships as mkw41z4.yaml).
     fn to_ratchet_id(stem: &str) -> &str {

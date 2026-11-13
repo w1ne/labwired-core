@@ -269,6 +269,24 @@
         "gap": "no I2C window is declared on configs/chips/esp32c6.yaml; the I2C0 window is deliberately unmapped at L1. The C3's I2C-matrix signal indices do not transfer (I2CEXT0_SCL is 45 on the C6 vs 53 on the C3)."
       }
     },
+    "esp32c6fh4": {
+      "in_boards": false,
+      "uart": {
+        "state": "none",
+        "gap": "UART0/UART1 are declared through the included esp32c6.yaml, but the XIAO ESP32-C6 smoke asserts GPIO15 LED edges only; no esp32c6fh4 firmware UART byte is captured under this chip name.",
+        "lane": "none"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "SPI2 is declared through the included esp32c6.yaml, but no esp32c6fh4 firmware SPI transfer is proven.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "I2C0 is declared through the included esp32c6.yaml, but no esp32c6fh4 firmware I2C transaction is proven.",
+        "lane": "none"
+      }
+    },
     "esp32s3": {
       "in_boards": true,
       "uart": {

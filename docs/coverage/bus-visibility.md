@@ -164,6 +164,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | esp32c3 | ✓ | ✓ | ✓ |
 | esp32c5 | — | — | — |
 | esp32c6 | ✓ | ✓ | ✓ |
+| esp32c6fh4 | ✓ | ✓ | ✓ |
 | esp32h2 | — | — | — |
 | esp32p4 | — | — | — |
 | esp32s2 | — | — | — |

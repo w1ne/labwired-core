@@ -215,6 +215,10 @@ _Board variant of the rp2040 die with the Feather's 133 MHz clock and 8 MiB flas
 
 _Board variant of the rp2350 die with the Feather's 8 MiB flash; it reuses the rp2350 behavioural models. No beyond-rubric peripheral is exercised under this name: the Feather smoke toggles red D13 (GPIO7) through SIO and writes UART0; both are rubric classes, not beyond-rubric content. PIO, USB, PSRAM and the onboard NeoPixel are not exercised on this board._
 
+### `esp32c6fh4`
+
+_Package variant of the esp32c6 die for the Seeed XIAO ESP32-C6: the yaml includes esp32c6.yaml and changes only the flash size to 4 MB, so it reuses the esp32c6 models and shims. No beyond-rubric peripheral is exercised under this name: the XIAO smoke toggles the active-low user LED on GPIO15 through the C6 GPIO block, a rubric class. The radio, RF switch, USB-Serial/JTAG console and LP core are not exercised on this board._
+
 ### `stm32f446re`
 
 _No beyond-rubric F446 peripheral is exercised: the NUCLEO-F446RE smoke drives RCC enables, GPIOA (LD2 on PA5, PA2/PA3 AF7) and USART2 TX only. The descriptor declares RCC, FLASH, PWR, GPIOA/B/C, USART1/2, I2C1, SPI1, TIM1..TIM4, ADC1, IWDG, RTC, SYSCFG, EXTI and DMA1/2 at the shared F4 addresses; it does not declare USART3, UART4/5, USART6, SPI2..4, I2C2/3, FMPI2C1, CAN, SAI, QUADSPI, SPDIFRX, HDMI-CEC, DCMI, FMC, DAC, ADC2/3, TIM5..TIM14, USB OTG or GPIOD/GPIOH._
