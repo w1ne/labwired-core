@@ -1,0 +1,8 @@
+# Seeed Studio XIAO ESP32-C6 uses the ESP32-C6FH4 with 4 MB flash.
+# Reuse the C6 peripheral map while keeping this package's real flash size;
+# the ESP32-C6-DevKitC-1's WROOM module has 8 MB and uses esp32c6.yaml.
+include: esp32c6.yaml
+name: "esp32c6fh4"
+flash:
+  base: 0x42000000
+  size: "4096KB"

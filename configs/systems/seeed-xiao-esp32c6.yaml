@@ -1,0 +1,21 @@
+# Seeed Studio XIAO ESP32-C6 (ESP32-C6FH4, 4 MB flash).
+# Pin and LED wiring: Seeed Studio XIAO ESP32-C6 Getting Started guide and
+# schematic. The profile claims the active-low user LED and BOOT input only;
+# it does not model the reset/strap sequence, radio, RF switch, USB, or power.
+name: "seeed-xiao-esp32c6"
+chip: "../chips/esp32c6fh4.yaml"
+cpu_hz: 160_000_000
+external_devices: []
+board_io:
+  - id: "user_led"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 15
+    signal: "output"
+    active_high: false
+  - id: "button_boot"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 9
+    signal: "input"
+    active_high: false
