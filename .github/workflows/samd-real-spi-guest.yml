@@ -1,7 +1,23 @@
 name: SAMD actual CODAL SPI guest
 on:
   pull_request:
-    paths: ['crates/core/tests/samd_real_spi_guest.rs', 'crates/core/tests/sam_sercom_spi.rs', 'crates/core/src/lib.rs', 'crates/core/src/bus/accessors.rs', 'crates/core/src/peripherals/sam/sercom_spi.rs', '.github/workflows/samd-real-spi-guest.yml']
+    # Lean PR gate (2026-11-13): on pull requests this lane runs only when
+    # its own files change. Shared engine paths (crates/core, crates/cli,
+    # Cargo.*) trigger it on push to main instead.
+    paths:
+      - 'crates/core/tests/samd_real_spi_guest.rs'
+      - 'crates/core/tests/sam_sercom_spi.rs'
+      - 'crates/core/src/peripherals/sam/sercom_spi.rs'
+      - '.github/workflows/samd-real-spi-guest.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'crates/core/tests/samd_real_spi_guest.rs'
+      - 'crates/core/tests/sam_sercom_spi.rs'
+      - 'crates/core/src/lib.rs'
+      - 'crates/core/src/bus/accessors.rs'
+      - 'crates/core/src/peripherals/sam/sercom_spi.rs'
+      - '.github/workflows/samd-real-spi-guest.yml'
 permissions:
   contents: read
 concurrency:

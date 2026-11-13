@@ -203,7 +203,7 @@
       "how": "committed",
       "firmware": "tests/fixtures/board-smoke/stm32f446re.elf",
       "expect": "STM32F446RE_OK",
-      "note": "Small, real-register RCC/GPIOA/USART2 boot and LED test; NUCLEO-F446RE verified in LabWired, not on physical silicon; unsupported F446-only peripherals are intentionally absent."
+      "note": "Small real-register RCC/GPIOA/USART2 boot and LED test; this simulator evidence is not physical silicon validation. Stock STM32duino requires the newer source model for the PWR over-drive and PLLI2S ready handshake."
     },
     "stm32f411ceu6": {
       "how": "blocked",

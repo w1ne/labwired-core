@@ -63,7 +63,6 @@ boards:
     kind: sim-validate
     path: examples/nrf54l05-l10
     gate: true
-    gate: true
   - id: nucleo-f103rb-bme280
     kind: sim-validate
     path: examples/nucleo-f103rb-bme280

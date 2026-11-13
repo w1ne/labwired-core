@@ -593,6 +593,14 @@
   },
   {
     "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f446re"
+  },
+  {
+    "buses": [
       "UART"
     ],
     "name": "stm32f746"

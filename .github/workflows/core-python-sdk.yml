@@ -12,21 +12,13 @@ name: Python SDK
 
 on:
   pull_request:
+    # Lean PR gate (2026-11-13): on pull requests this lane runs only when
+    # its own files change. Shared engine paths (crates/core, crates/cli,
+    # Cargo.*) trigger it on push to main instead.
     branches: [main]
     paths:
       - "crates/python/**"
-      - "crates/core/**"
-      - "crates/config/**"
-      - "crates/loader/**"
-      - "crates/ir/**"
-      - "crates/hw-trace/**"
-      - "crates/svd-ingestor/**"
-      - "configs/**"
-      - "tests/fixtures/**"
       - "examples/nrf54l15-smart-ring/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "rust-toolchain.toml"
       - "scripts/ci/python-sdk-gate.sh"
       - ".github/workflows/core-python-sdk.yml"
   push:

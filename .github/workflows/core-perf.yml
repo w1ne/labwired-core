@@ -55,9 +55,9 @@ on:
       - "Cargo.lock"
       - "rust-toolchain*"
       - ".cargo/**"
-  pull_request:
-    branches:
-      - main
+  # Lean PR gate (2026-11-13): no pull_request trigger. This lane runs on
+  # push to main (and on demand via workflow_dispatch, e.g.
+  # `gh workflow run core-perf.yml --ref <branch>` for a PR that needs it).
   schedule:
     # Nightly, after core-ci's 02:30 slot.
     - cron: "45 3 * * *"
