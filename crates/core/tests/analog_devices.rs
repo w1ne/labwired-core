@@ -2100,7 +2100,15 @@ mod analog {
                 * (eg_temperature / (KB_EV * temperature_k)
                     - EG_REF / (KB_EV * TREF)
                     - 3.0 * ratio_temperature.ln());
-            let pbo = (potential - pbfact) / ratio_nominal;
+            // ngspice `bjttemp.c` refers the nominal potential back with
+            // `pbfact1`, the same factor evaluated at TNOM.
+            let eg_nominal = 1.16 - 7.02e-4 * nominal_k * nominal_k / (nominal_k + 1108.0);
+            let pbfact1 = KB_EV
+                * nominal_k
+                * (eg_nominal / (KB_EV * nominal_k)
+                    - EG_REF / (KB_EV * TREF)
+                    - 3.0 * ratio_nominal.ln());
+            let pbo = (potential - pbfact1) / ratio_nominal;
             let gma_old = (potential - pbo) / pbo;
             let cap_temperature =
                 capacitance / (1.0 + grading_at * (4e-4 * (nominal_k - TREF) - gma_old));
@@ -7808,6 +7816,217 @@ mod analog {
             .to_string();
             assert!(error.contains("CJSW"), "{card}: unexpected error {error}");
         }
+    }
+
+    /// The BJT substrate junction is a pn junction from the optional fourth
+    /// node (ground when omitted) to the internal collector of a vertical
+    /// device or the internal base of a lateral one: `CJS`/`VJS`/`MJS`
+    /// depletion charge with no `FC`, and `ISS`/`NS` current. References are
+    /// ngspice-42 `@q[qsub]` and source currents from one `.op` per bias
+    /// (`.temp 26.85`, `tnom=26.85`, `TNOM=27` on the `temp=75` cards). Q1 is
+    /// a vertical NPN, Q2 a lateral PNP (ngspice's default), Q3 a
+    /// three-terminal NPN at 75 °C with area 2 and `TMJS1`, Q4/Q5 carry
+    /// `ISS`, Q5 at 75 °C with area 3 and `TNS1`.
+    #[test]
+    fn bjt_substrate_junction_cjs_iss_matches_ngspice() {
+        let netlist = "V1 s1 0 dc 0\nV2 s2 0 dc 0\nVB2 b2 0 dc 0\nVC2 c2 0 dc 0\n\
+            V3 c3 0 dc 0\nV4 s4 0 dc 0\nV5 s5 0 dc 0\n\
+            Q1 0 0 0 s1 QN\nQ2 c2 b2 0 s2 QP\nQ3 c3 0 0 QT 2 temp=75\n\
+            Q4 0 0 0 s4 QNI\nQ5 0 0 0 s5 QNIT 3 temp=75\n\
+            .model QN NPN(IS=1e-16 CJS=2p VJS=0.6 MJS=0.4)\n\
+            .model QP PNP(IS=1e-16 CJS=3p VJS=0.7 MJS=0.5)\n\
+            .model QT NPN(IS=1e-16 CJS=2p VJS=0.6 MJS=0.4 TNOM=27 TMJS1=1e-3)\n\
+            .model QNI NPN(IS=1e-16 ISS=1e-15 NS=1.2)\n\
+            .model QNIT NPN(IS=1e-16 ISS=1e-15 NS=1.2 TNS1=2e-3 TNOM=27)\n";
+        // (substrate bias, [qsub Q1, Q2, Q3], [I(V4), I(V5)]) from ngspice-42.
+        let ngspice: [(f64, [f64; 3], [f64; 2]); 7] = [
+            (0.0, [0.0; 3], [0.0; 2]),
+            (
+                -3.0,
+                [-3.860_312_103e-12, -5.456_086_164e-12, -7.788_802_453e-12],
+                [3.000_999_998_5e-12, 4.737_947_741_9e-12],
+            ),
+            (
+                -1.2,
+                [-1.866_364_090e-12, -2.719_537_557e-12, -3.852_801_257e-12],
+                [1.200_999_976_8e-12, 2.937_870_002_1e-12],
+            ),
+            (
+                -0.2,
+                [-3.768_032_773e-13, -5.623_523_599e-13, -8.049_207_152e-13],
+                [2.009_949_833_2e-13, 1.920_013_108_7e-12],
+            ),
+            (
+                0.1,
+                [
+                    2.066_666_666_7e-13,
+                    3.107_142_857_1e-13,
+                    4.522_756_122_4e-13,
+                ],
+                [-1.241_153_283e-13, -2.027_487_920e-11],
+            ),
+            (
+                0.3,
+                [6.6e-13, 9.964_285_714_3e-13, 1.467_979_230_7e-12],
+                [-1.614_123_970e-11, -3.482_091_275e-9],
+            ),
+            (
+                0.6,
+                [1.44e-12, 2.185_714_285_7e-12, 3.269_415_643_4e-12],
+                [-2.509_771_576e-7, -6.982_336_980e-6],
+            ),
+        ];
+        let h = 1e-6;
+        let mut solver = Solver::new(
+            parse_netlist(netlist).expect("substrate deck parses"),
+            Integration::BackwardEuler,
+        )
+        .expect("substrate solver builds");
+        let index = |name: &str| solver.voltage_source_index(name).expect("source exists");
+        let (v1, v2, v3, v4, v5) = (
+            index("V1"),
+            index("V2"),
+            index("V3"),
+            index("V4"),
+            index("V5"),
+        );
+        // The DC sources carry substrate current; ngspice reports the current
+        // into the source's + terminal, the engine the current out of it.
+        let charge_sources = ["V1", "V2", "V3"];
+        // Q3's substrate is ground and its collector the cathode, so the
+        // charge current leaves through V3 with the opposite sign.
+        let orientation = [1.0, 1.0, -1.0];
+        for window in ngspice.windows(2) {
+            let ((_, before, _), (voltage, after, dc)) = (window[0], window[1]);
+            for source in [v1, v2, v4, v5] {
+                solver.set_voltage_source(source, voltage);
+            }
+            solver.set_voltage_source(v3, -voltage);
+            solver.advance(h).expect("step to the new bias solves");
+            let step = charge_sources.map(|name| source_current(&solver, name));
+            let step_base = source_current(&solver, "VB2");
+            let step_collector = source_current(&solver, "VC2");
+            solver.advance(h).expect("held bias solves");
+            let hold = charge_sources.map(|name| source_current(&solver, name));
+            let hold_base = source_current(&solver, "VB2");
+            let hold_collector = source_current(&solver, "VC2");
+            for (column, name) in charge_sources.iter().enumerate() {
+                let expected = after[column] - before[column];
+                let got = orientation[column] * (step[column] - hold[column]) * h;
+                assert!(
+                    (got - expected).abs() < 1e-6 * expected.abs() + 1e-18,
+                    "{name} {voltage} V: ngspice-42 substrate charge change {expected} C, got {got} C"
+                );
+            }
+            // A lateral PNP's substrate junction sits on the base, not the
+            // collector.
+            let expected = after[1] - before[1];
+            let base = -(step_base - hold_base) * h;
+            assert!(
+                (base - expected).abs() < 1e-6 * expected.abs() + 1e-18,
+                "Q2 {voltage} V: lateral substrate charge through the base {expected} C, got {base} C"
+            );
+            assert!(
+                ((step_collector - hold_collector) * h).abs() < 1e-18,
+                "Q2 {voltage} V: no substrate charge may reach the lateral collector"
+            );
+            // Below −3·NS·Vt ngspice-42 switches to its cubic reverse form
+            // −ISS·(1 + (3·NS·Vt/(e·V))³); the engine's shared diode path
+            // keeps −ISS·(1 − e^(V/(NS·Vt))). The two differ by at most
+            // ~1.2 % of ISS (2e-14 A for Q5 at 75 °C, area 3), worst at −0.2 V.
+            // ngspice-42 also uses CODATA-2014 k and q, the engine CODATA-2018:
+            // 3e-6 relative on the 75 °C exponential.
+            let reverse_allowance = if voltage < 0.0 { 1e-13 } else { 1e-17 };
+            for (column, name) in ["V4", "V5"].iter().enumerate() {
+                let expected = -dc[column];
+                let got = source_current(&solver, name);
+                assert!(
+                    (got - expected).abs() < 1e-5 * expected.abs() + reverse_allowance,
+                    "{name} {voltage} V: ngspice-42 substrate current {expected} A, got {got} A"
+                );
+            }
+        }
+
+        // `SUBS=1` moves a PNP's junction onto the collector, and the cathode
+        // turns round: the collector is now the anode.
+        let vertical_pnp = |subs: &str| {
+            let mut solver = Solver::new(
+                parse_netlist(&format!(
+                    "VS s 0 dc 0.5\nVB b 0 dc 0\nVC c 0 dc 0\nQ1 c b 0 s QP\n\
+                     .model QP PNP(IS=1e-16 ISS=1e-15 {subs})\n"
+                ))
+                .expect("vertical PNP deck parses"),
+                Integration::BackwardEuler,
+            )
+            .expect("vertical PNP solver builds");
+            solver.solve_operating_point().expect("vertical PNP solves");
+            [source_current(&solver, "VB"), source_current(&solver, "VC")]
+        };
+        let [lateral_base, lateral_collector] = vertical_pnp("");
+        let [vertical_base, vertical_collector] = vertical_pnp("SUBS=1");
+        // Lateral: substrate is the anode at +0.5 V, so ISS·(e^(0.5/Vt)−1)
+        // leaves through the base. Vertical: the substrate is the cathode,
+        // the junction is reverse biased, so VC supplies −(ISS + GMIN·0.5).
+        assert!(
+            lateral_base < -1e-8,
+            "lateral PNP: forward substrate current {lateral_base}"
+        );
+        assert!(lateral_collector.abs() < 1e-11);
+        assert!(vertical_base.abs() < 1e-11);
+        assert!(
+            (vertical_collector + 1e-15 + 0.5e-12).abs() < 1e-17,
+            "vertical PNP: reverse substrate current {vertical_collector}"
+        );
+
+        // A model name is never read as the substrate node, and a deck with
+        // no substrate parameters is bit-identical with or without a fourth
+        // node tied to ground.
+        let amplifier = |q: &str| {
+            let mut solver = Solver::new(
+                parse_netlist(&format!(
+                    "V1 vcc 0 5\nVIN in 0 PULSE(0.6 0.7 0 10n 10n 1u 2u)\nRB in b 10k\n\
+                     RC vcc c 2k\n{q}\n.model QA NPN(IS=1e-15 BF=100 CJE=2p CJC=1p)\n"
+                ))
+                .expect("amplifier deck parses"),
+                Integration::Trapezoidal,
+            )
+            .expect("amplifier solver builds");
+            let c = solver.circuit().node("c").expect("node exists");
+            (0..20)
+                .map(|_| {
+                    solver.advance(5e-9).expect("amplifier step solves");
+                    solver.node_voltage(c)
+                })
+                .collect::<Vec<_>>()
+        };
+        let three_terminal = amplifier("Q1 c b 0 QA");
+        assert_eq!(three_terminal, amplifier("Q1 c b 0 QA 1"));
+        assert_ne!(
+            three_terminal,
+            amplifier("Q1 c b 0 0 QA"),
+            "an explicit substrate adds ngspice's GMIN across the junction"
+        );
+        assert_ne!(
+            amplifier("Q1 c b 0 0 QA"),
+            amplifier("Q1 c b 0 0 QS\n.model QS NPN(IS=1e-15 BF=100 CJE=2p CJC=1p CJS=5p)"),
+            "CJS must load the collector"
+        );
+
+        for card in ["CJS=-1p", "VJS=0", "MJS=-0.1", "ISS=-1e-15", "NS=0"] {
+            let error = parse_netlist(&format!(
+                "V1 c 0 1\nQ1 c 0 0 s QX\n.model QX NPN(IS=1e-16 {card})\n"
+            ))
+            .expect_err("an invalid substrate junction must be refused")
+            .to_string();
+            assert!(
+                error.contains("substrate"),
+                "{card}: unexpected error {error}"
+            );
+        }
+        let error = parse_netlist("V1 c 0 1\nQ1 c 0 0 QX\n.model QX NPN(SUBS=2)\n")
+            .expect_err("SUBS must be 1 or -1")
+            .to_string();
+        assert!(error.contains("SUBS"), "unexpected error {error}");
     }
 
     /// SPICE `AREA` on D, Q and J scales the card the instance sees: the

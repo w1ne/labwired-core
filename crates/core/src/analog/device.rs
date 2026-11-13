@@ -279,6 +279,25 @@ pub fn bjt_parameters_at_temperature(
     adjusted.cjc = cjc;
     adjusted.vjc = vjc;
     adjusted.mjc = mjc;
+    // ngspice-42 `bjttemp.c` scales `ISS` by the transport `IS` factor (no
+    // `NS` division) and gives `NS` its own polynomial.
+    adjusted.iss *= libm::exp(log_current_factor);
+    adjusted.ns *= temperature_factor(model.tns1, model.tns2);
+    let (cjs, vjs, mjs) = bjt_junction_parameters_at_temperature(
+        model.cjs,
+        model.vjs,
+        model.mjs,
+        model.tmjs1,
+        model.tmjs2,
+        model.cts,
+        model.tvjs,
+        model.tnom_celsius,
+        temperature_celsius,
+        model.tlevc,
+    );
+    adjusted.cjs = cjs;
+    adjusted.vjs = vjs;
+    adjusted.mjs = mjs;
     (adjusted, thermal_voltage)
 }
 
@@ -524,17 +543,22 @@ fn bjt_junction_parameters_at_temperature(
     let temperature_kelvin = temperature_celsius + 273.15;
     let nominal_reference_ratio = nominal_kelvin / REFERENCE_TEMPERATURE_K;
     let temperature_reference_ratio = temperature_kelvin / REFERENCE_TEMPERATURE_K;
-    let bandgap_at_temperature = 1.16
-        - SILICON_VARSHNI_A_EV_PER_K * temperature_kelvin * temperature_kelvin
-            / (temperature_kelvin + SILICON_VARSHNI_B_K);
     let boltzmann_ev_per_kelvin = BOLTZMANN / ELEMENTARY_CHARGE;
-    let potential_temperature_factor = thermal_voltage_at_temperature(temperature_kelvin)
-        * (bandgap_at_temperature / (boltzmann_ev_per_kelvin * temperature_kelvin)
-            - REFERENCE_SILICON_BANDGAP_EV / (boltzmann_ev_per_kelvin * REFERENCE_TEMPERATURE_K)
-            - 3.0 * ln(temperature_reference_ratio));
+    // ngspice `bjttemp.c`'s `pbfact` (at TEMP) and `pbfact1` (at TNOM): the
+    // nominal potential is referred back to 300.15 K with the TNOM factor.
+    let potential_factor = |kelvin: f64| {
+        let bandgap =
+            1.16 - SILICON_VARSHNI_A_EV_PER_K * kelvin * kelvin / (kelvin + SILICON_VARSHNI_B_K);
+        thermal_voltage_at_temperature(kelvin)
+            * (bandgap / (boltzmann_ev_per_kelvin * kelvin)
+                - REFERENCE_SILICON_BANDGAP_EV
+                    / (boltzmann_ev_per_kelvin * REFERENCE_TEMPERATURE_K)
+                - 3.0 * ln(kelvin / REFERENCE_TEMPERATURE_K))
+    };
+    let potential_temperature_factor = potential_factor(temperature_kelvin);
 
     let nominal_reference_potential =
-        (potential - potential_temperature_factor) / nominal_reference_ratio;
+        (potential - potential_factor(nominal_kelvin)) / nominal_reference_ratio;
     let nominal_gma = (potential - nominal_reference_potential) / nominal_reference_potential;
     let mut adjusted_capacitance = capacitance
         / (1.0

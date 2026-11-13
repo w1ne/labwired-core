@@ -24,7 +24,7 @@
 //! | Switch | `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` or `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0\|1] ron=<r> roff=<r>` |
 //! | Voltage switch | `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0|1] ron=<r> roff=<r>` |
 //! | Diode | `D<name> n+ n- <model> [<area>] [pj=<perimeter>]` |
-//! | BJT | `Q<name> nc nb ne <model> [temp=<°C>]` |
+//! | BJT | `Q<name> nc nb ne [ns] <model> [temp=<°C>]` |
 //! | MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>]` |
 //! | JFET | `J<name> nd ng ns <model> [temp=<°C>]` |
 //! | VCVS | `E<name> n+ n- nc+ nc- <gain>` |
@@ -192,6 +192,12 @@
 //! terminal resistances, and `TTF*`/`TTR*` adjust forward/reverse transit time,
 //! all with `ΔT = TEMP − TNOM`. BJT junction depletion charge follows ngspice's
 //! default silicon temperature law, or its `TLEVC=1` linear coefficient form.
+//! The optional fourth node `ns` is the substrate (ground when omitted); it is
+//! read as a node unless it names a `.model`, as ngspice does. Its junction
+//! runs to the internal collector (`SUBS=1`, NPN default) or the internal base
+//! (`SUBS=-1`, PNP default) with `ISS`/`NS` current and `CJS`/`VJS`/`MJS`
+//! (also `CCS`/`CSUB`, `PS`, `MS`) depletion charge with no `FC`, following
+//! `TMJS1`/`TMJS2`, `CTS`/`TVJS` and `TNS1`/`TNS2` with `TEMP`.
 //! Self-heating is not modeled.
 //!
 //! A diode card may carry `IK`/`IKF` (forward knee current) and `IKR` (reverse
@@ -1421,6 +1427,34 @@ pub struct BjtModel {
     /// per °C².
     pub tre1: f64,
     pub tre2: f64,
+    /// Zero-bias substrate junction capacitance `CJS` (`CCS`, `CSUB`), farads.
+    /// Zero, ngspice's default, leaves only the substrate current.
+    pub cjs: f64,
+    /// Substrate junction potential `VJS` (`PS`), volts.
+    pub vjs: f64,
+    /// Substrate junction grading coefficient `MJS` (`MS`). ngspice limits
+    /// the temperature-adjusted value to 0.999.
+    pub mjs: f64,
+    /// First and second order temperature coefficients for `MJS`, per °C and
+    /// per °C².
+    pub tmjs1: f64,
+    pub tmjs2: f64,
+    /// `TLEVC=1` linear temperature coefficients for `CJS` and `VJS`, per °C.
+    pub cts: f64,
+    pub tvjs: f64,
+    /// Substrate junction saturation current `ISS`, amps. Zero, ngspice's
+    /// default, leaves only GMIN across the substrate junction.
+    pub iss: f64,
+    /// Substrate junction emission coefficient `NS`.
+    pub ns: f64,
+    /// First and second order temperature coefficients for `NS`, per °C and
+    /// per °C².
+    pub tns1: f64,
+    pub tns2: f64,
+    /// Substrate geometry `SUBS`: `Some(1)` vertical (the junction sits on
+    /// the collector), `Some(-1)` lateral (on the base). `None` is ngspice's
+    /// default: vertical for NPN, lateral for PNP.
+    pub subs: Option<i8>,
 }
 
 impl BjtModel {
@@ -1441,6 +1475,8 @@ impl BjtModel {
             itf: self.itf * area,
             cje: self.cje * area,
             cjc: self.cjc * area,
+            cjs: self.cjs * area,
+            iss: self.iss * area,
             rb: self.rb / area,
             rbm: self.rbm.map(|rbm| rbm / area),
             rc: self.rc / area,
@@ -1510,6 +1546,27 @@ impl BjtModel {
             re: 0.0,
             tre1: 0.0,
             tre2: 0.0,
+            cjs: 0.0,
+            vjs: 0.75,
+            mjs: 0.0,
+            tmjs1: 0.0,
+            tmjs2: 0.0,
+            cts: 0.0,
+            tvjs: 0.0,
+            iss: 0.0,
+            ns: 1.0,
+            tns1: 0.0,
+            tns2: 0.0,
+            subs: None,
+        }
+    }
+
+    /// Whether the substrate junction sits on the collector (vertical) rather
+    /// than the base (lateral), per `SUBS` or ngspice's polarity default.
+    pub fn substrate_is_vertical(&self) -> bool {
+        match self.subs {
+            Some(subs) => subs > 0,
+            None => self.polarity == Polarity::N,
         }
     }
 }
@@ -2252,7 +2309,7 @@ pub struct Ccvs {
     pub ohms: f64,
 }
 
-/// `Q<name> nc nb ne <model> [<area>] [m=<count>] [temp=<°C>]` — an Ebers–Moll bipolar transistor.
+/// `Q<name> nc nb ne [ns] <model> [<area>] [m=<count>] [temp=<°C>]` — an Ebers–Moll bipolar transistor.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Bjt {
     /// Element name as written, e.g. `Q1`.
@@ -2268,6 +2325,10 @@ pub struct Bjt {
     pub b: NodeRef,
     /// Emitter.
     pub e: NodeRef,
+    /// Substrate: the optional fourth terminal, ground when omitted (as in
+    /// ngspice). Its junction, when the model has one, is the internal diode
+    /// `<name>#substrate` in [`Circuit::diodes`].
+    pub s: NodeRef,
     /// Collector junction node. Equals `c` when `RC = 0`, else the internal
     /// node `<name>#collector`.
     pub junction_c: NodeRef,
@@ -2854,6 +2915,23 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
     // Line of every `F`/`H`, in the order they were pushed, for the error when
     // the element they name carries no branch current.
     let mut controls: Vec<(char, usize, String)> = Vec::new();
+    // Every `.model` name in the deck, wherever it is written. A `Q` line's
+    // fourth token is the substrate node unless it names a model, which is
+    // how ngspice's `inp2q.c` tells `Q c b e s mod` from `Q c b e mod`.
+    let declared_models: Vec<String> = text
+        .lines()
+        .filter_map(|line| {
+            let mut tokens = strip_comment(line.trim()).split_whitespace();
+            let head = tokens.next()?;
+            head.eq_ignore_ascii_case(".model")
+                .then(|| tokens.next())
+                .flatten()
+                .map(str::to_ascii_lowercase)
+        })
+        .collect();
+    let names_model = |token: &str| {
+        declared_models.contains(&token.to_ascii_lowercase()) || builtin_model(token).is_some()
+    };
 
     for (offset, raw_line) in text.lines().enumerate() {
         let number = offset + 1;
@@ -3142,7 +3220,10 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
             'D' | 'Q' | 'M' | 'J' => {
                 let (terminals, shape) = match letter {
                     'D' => (2, "D<name> n+ n- <model> [<area>] [area=<factor>] [pj=<perimeter>] [m=<count>] [temp=<°C>]"),
-                    'Q' => (3, "Q<name> nc nb ne <model> [<area>] [area=<factor>] [m=<count>] [temp=<°C>]"),
+                    'Q' => (
+                        if tokens.len() > 5 && !names_model(tokens[4]) { 4 } else { 3 },
+                        "Q<name> nc nb ne [ns] <model> [<area>] [area=<factor>] [m=<count>] [temp=<°C>]",
+                    ),
                     'M' => (
                         4,
                         "M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>] [m=<count>] [temp=<°C>]",
@@ -4051,12 +4132,91 @@ fn bind_models(
                     junction_node(circuit, device.nodes[1], operating_model.rb, "base")?;
                 let junction_e =
                     junction_node(circuit, device.nodes[2], operating_model.re, "emitter")?;
+                let substrate = device.nodes.get(3).copied().flatten();
+                // ngspice's substrate junction (`bjtload.c`) is a pn junction
+                // from the substrate to the internal collector (vertical) or
+                // base (lateral), oriented by `type·SUBS`: `ISS`/`NS` current
+                // plus `CJS`/`VJS`/`MJS` depletion charge with no `FC`. That
+                // is exactly a diode with `FC = 0`, so it is lowered onto the
+                // diode path rather than given a second copy of the
+                // junction solver. A three-terminal BJT with no substrate
+                // parameters skips it; ngspice would add only GMIN to ground.
+                if device.nodes.len() > 3 || model.cjs > 0.0 || model.iss > 0.0 {
+                    if !(model.cjs.is_finite()
+                        && model.cjs >= 0.0
+                        && model.vjs.is_finite()
+                        && model.vjs > 0.0
+                        && model.mjs.is_finite()
+                        && model.mjs >= 0.0
+                        && model.iss.is_finite()
+                        && model.iss >= 0.0
+                        && model.ns.is_finite()
+                        && model.ns > 0.0
+                        && operating_model.cjs.is_finite()
+                        && operating_model.cjs >= 0.0
+                        && operating_model.vjs.is_finite()
+                        && operating_model.vjs > 0.0
+                        && operating_model.ns.is_finite()
+                        && operating_model.ns > 0.0
+                        && operating_model.iss.is_finite())
+                    {
+                        return Err(ctx.parse_err(
+                            "a BJT substrate junction needs CJS >= 0, VJS > 0, MJS >= 0, ISS >= 0 and NS > 0, all finite at the instance temperature"
+                                .to_string(),
+                        ));
+                    }
+                    let internal_name = format!("{}#substrate", device.name);
+                    let contact = if model.substrate_is_vertical() {
+                        junction_c
+                    } else {
+                        junction_b
+                    };
+                    let polarity = if model.substrate_is_vertical() {
+                        model.polarity.sign()
+                    } else {
+                        -model.polarity.sign()
+                    };
+                    let (anode, cathode) = if polarity > 0.0 {
+                        (substrate, contact)
+                    } else {
+                        (contact, substrate)
+                    };
+                    // The card is already at the instance temperature, so its
+                    // own `TNOM` is set there with `EG = XTI = 0`: the diode
+                    // laws then leave `IS` untouched and only pick up `Vt(T)`.
+                    let junction = DiodeModel {
+                        is: operating_model.iss,
+                        n: operating_model.ns,
+                        cjo: operating_model.cjs,
+                        vj: operating_model.vjs,
+                        m: operating_model.mjs.min(0.999),
+                        fc: 0.0,
+                        eg: 0.0,
+                        xti: 0.0,
+                        tnom_celsius: device.temperature_celsius.unwrap_or(27.0),
+                        ..DiodeModel::default()
+                    };
+                    circuit.diodes.push(Diode {
+                        name: internal_name,
+                        multiplier: device.multiplier,
+                        anode,
+                        cathode,
+                        junction_anode: anode,
+                        model_name: device.model_name.clone(),
+                        model: junction,
+                        operating_model: junction,
+                        series_resistance_ohms: 0.0,
+                        temperature_celsius: device.temperature_celsius,
+                        breakdown: None,
+                    });
+                }
                 circuit.bjts.push(Bjt {
                     name: device.name,
                     multiplier: device.multiplier,
                     c: device.nodes[0],
                     b: device.nodes[1],
                     e: device.nodes[2],
+                    s: substrate,
                     junction_c,
                     junction_b,
                     junction_e,
@@ -4795,6 +4955,23 @@ fn parse_model(
             (ModelCard::Bjt(model), "RE") => model.re = value,
             (ModelCard::Bjt(model), "TRE1") => model.tre1 = value,
             (ModelCard::Bjt(model), "TRE2") => model.tre2 = value,
+            (ModelCard::Bjt(model), "CJS" | "CCS" | "CSUB") => model.cjs = value,
+            (ModelCard::Bjt(model), "VJS" | "PS") => model.vjs = value,
+            (ModelCard::Bjt(model), "MJS" | "MS") => model.mjs = value,
+            (ModelCard::Bjt(model), "TMJS1") => model.tmjs1 = value,
+            (ModelCard::Bjt(model), "TMJS2") => model.tmjs2 = value,
+            (ModelCard::Bjt(model), "CTS") => model.cts = value,
+            (ModelCard::Bjt(model), "TVJS") => model.tvjs = value,
+            (ModelCard::Bjt(model), "ISS") => model.iss = value,
+            (ModelCard::Bjt(model), "NS") => model.ns = value,
+            (ModelCard::Bjt(model), "TNS1") => model.tns1 = value,
+            (ModelCard::Bjt(model), "TNS2") => model.tns2 = value,
+            (ModelCard::Bjt(model), "SUBS") => {
+                if value != 1.0 && value != -1.0 {
+                    return Err(ctx.parse_err("BJT SUBS must be 1 (vertical) or -1 (lateral)"));
+                }
+                model.subs = Some(value as i8);
+            }
             (ModelCard::Mos(model), "VTO" | "VT0") => {
                 model.vto = value;
                 model.vto_given = true;

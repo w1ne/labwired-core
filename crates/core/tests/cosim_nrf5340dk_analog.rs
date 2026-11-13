@@ -259,6 +259,120 @@ fn nrf5340dk_bjt_high_injection_reaches_saadc_alongside_ntc_and_diode() {
     );
 }
 
+/// Independent load line of a forward-biased substrate junction: the
+/// junction drops `substrate_v − v` and feeds `v / R` into the 100 kΩ load.
+/// ngspice's substrate current is `ISS·(e^(v/(NS·Vt)) − 1) + GMIN·v`; the
+/// BJT's own junctions are reverse biased and carry ~1e-16 A, below the
+/// tolerance.
+fn substrate_load_voltage(substrate_v: f64, iss: f64, ns: f64) -> f64 {
+    const LOAD_OHMS: f64 = 100_000.0;
+    const GMIN: f64 = 1e-12;
+    const VT: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+    let (mut low, mut high) = (0.0, substrate_v.max(0.0));
+    for _ in 0..200 {
+        let load_v = 0.5 * (low + high);
+        let junction_v = substrate_v - load_v;
+        let substrate_current = iss * ((junction_v / (ns * VT)).exp() - 1.0) + GMIN * junction_v;
+        if substrate_current > load_v / LOAD_OHMS {
+            low = load_v;
+        } else {
+            high = load_v;
+        }
+    }
+    0.5 * (low + high)
+}
+
+#[test]
+fn nrf5340dk_bjt_substrate_junction_reaches_saadc_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/nrf5340dk.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load nRF5340-DK profile");
+    let generic =
+        SystemManifest::from_file(root("examples/nrf5340dk/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and diode netlists");
+    let substrate =
+        SystemManifest::from_file(root("examples/nrf5340dk/analog-bjt-substrate-system.yaml"))
+            .expect("load generic BJT substrate branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(substrate.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load nRF5340 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build nRF5340-DK bus");
+    configure_saadc_channels(&mut bus, 6);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal session")
+        .expect("profile contains NTC, diode, and BJT substrate netlists");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must resolve to SAADC channels 0 through 4"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated NTC temperature");
+
+    let expected_diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    for substrate_v in [0.0_f64, 0.7, 1.2, 2.0] {
+        session
+            .set_signal_number("ui.bjt_substrate.substrate_v", substrate_v)
+            .expect("set common substrate drive");
+        // CJS holds the loaded node for a few 1 µs steps; settle onto the DC
+        // load line before sampling.
+        for _ in 0..20 {
+            cycles += session.cycles_until_boundary(cycles);
+            let (steps, errors) = session
+                .advance_to(cycles, &mut bus)
+                .expect("solve and route NTC, diode, and substrate branches");
+            assert_eq!(steps.len(), 5, "all five generic analog branches solve");
+            assert!(
+                errors.is_empty(),
+                "unexpected analog route errors: {errors:?}"
+            );
+        }
+
+        let ntc_v = voltage(&session, "adc.saadc.0_volts");
+        let diode_v = voltage(&session, "adc.saadc.1_volts");
+        let vertical_v = voltage(&session, "adc.saadc.2_volts");
+        let lateral_v = voltage(&session, "adc.saadc.3_volts");
+        let control_v = voltage(&session, "adc.saadc.4_volts");
+        assert!((ntc_v - 1.65).abs() < 1e-9);
+        assert!((diode_v - expected_diode_v).abs() < 2e-5);
+        assert!(
+            (vertical_v - substrate_load_voltage(substrate_v, 1e-15, 1.2)).abs() < 1e-6,
+            "vertical NPN substrate-to-collector load line at {substrate_v} V, got {vertical_v} V"
+        );
+        assert!(
+            (lateral_v - substrate_load_voltage(substrate_v, 2e-15, 1.0)).abs() < 1e-6,
+            "lateral PNP substrate-to-base load line at {substrate_v} V, got {lateral_v} V"
+        );
+        assert!(
+            (control_v - substrate_load_voltage(substrate_v, 0.0, 1.0)).abs() < 1e-9,
+            "no-ISS control carries only GMIN at {substrate_v} V, got {control_v} V"
+        );
+        if substrate_v == 2.0 {
+            assert!(vertical_v > 1.2 && lateral_v > 1.2 && control_v < 1e-6);
+        }
+
+        let [ntc_code, diode_code, vertical_code, lateral_code, control_code, undriven_code] =
+            scan_saadc_channels::<6>(&mut bus);
+        for (channel, voltage_v, code) in [
+            (0, ntc_v, ntc_code),
+            (1, diode_v, diode_code),
+            (2, vertical_v, vertical_code),
+            (3, lateral_v, lateral_code),
+            (4, control_v, control_code),
+        ] {
+            assert_eq!(
+                code,
+                expected_saadc_code(voltage_v),
+                "SAADC channel {channel} converts its routed solved voltage"
+            );
+        }
+        assert_eq!(undriven_code, 0, "neighboring AIN5 stays at ground");
+    }
+}
+
 #[test]
 fn nrf5340dk_ntc_and_diode_netlists_reach_distinct_saadc_channels() {
     let system_path = root("configs/systems/nrf5340dk.yaml");
