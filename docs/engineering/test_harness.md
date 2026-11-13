@@ -183,6 +183,33 @@ Branch protection: required context **`pr-gate`** only (+ **`strict: true`**).
 Slow matrices are **not** on `pull_request` so required-check path-filter
 stalls cannot block merges; they still run every night and on main.
 
+### Core dependency ratchet
+
+`scripts/ci/core_dep_map.py` parses `crates/core/src` (no cargo build, about
+five seconds) and builds a module graph: for each top-level module, each
+`peripherals/<dir>` and each CPU architecture, the production line count and
+the `crate::`, `super::` and `self::` references it makes to other modules.
+`scripts/ci/core_layers.json` classifies modules as `kernel` (bus, peripherals
+root and factory, generic engines, hot CPUs) or `leaf` (vendor peripheral sets,
+the components library, CPU architectures the bus does not step directly);
+everything else is neutral. `scripts/ci/core_layers_baseline.json` records the
+current kernel-to-leaf edges with their reference counts.
+
+`python3 scripts/ci/core_dep_map.py --check` runs in the `pr-gate` job and fails
+when a kernel module gains a dependency on a leaf module, or when an existing
+kernel-to-leaf count goes up. To fix a failure, remove the reference (put the
+vendor-specific code behind a trait or move it into the leaf). If a count went
+down, run `python3 scripts/ci/core_dep_map.py --update-baseline` and commit the
+lower baseline; it refuses to raise any count unless `--allow-increase` is
+given, which a reviewer should expect to see justified. The check also prints
+the size of the largest strongly connected component, as a progress measure; it
+does not fail on it. Run without flags to print the full graph as JSON. The
+parser is regex based; its limits (macro-generated paths, glob imports) are
+listed in the script's docstring. Tests: `scripts/ci/test_core_dep_map.py`.
+
+The manual `Rust Core CI` dispatch also takes a `build_timings` input that runs
+a cold `cargo build -p labwired-core --timings` and uploads the report.
+
 ### Pre-push (local)
 
 `scripts/pre-push.sh`: fmt, clippy (core+cli), walk-deletion + RP2040 vector
