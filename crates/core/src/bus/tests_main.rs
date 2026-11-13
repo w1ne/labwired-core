@@ -3325,6 +3325,7 @@ motor_models:
 
     let mut stopped = build();
     configure_pwm(&mut stopped);
+    stopped.write_u32(0x4001_2c20, 0).unwrap(); // CEN alone retains the output gate state.
     stopped.write_u32(0x4001_2c00, 0).unwrap();
     stopped.write_u32(0x4001_2c44, 1 << 15).unwrap();
     stopped.set_current_cycle(100);
@@ -3342,8 +3343,13 @@ motor_models:
     unsupported.tick_peripherals_with_costs();
     assert_eq!(
         unsupported.motor_snapshots()[0].control_state,
-        "off:unsupported-mode"
+        "fault:integration"
     );
+    assert_eq!(unsupported.motor_snapshots()[0].phase_currents_a, None);
+    assert!(unsupported.motor_snapshots()[0]
+        .faults
+        .iter()
+        .any(|fault| fault.contains("unsupported enabled timer output mode")));
 
     let mut external_off = build();
     configure_pwm(&mut external_off);
@@ -3938,6 +3944,7 @@ fn test_flash_boot_alias_read_and_write() {
         device_open_drain_nets: Default::default(),
         observed: Vec::new(),
         motors: Vec::new(),
+        live_numeric: None,
         ina219_senses: Vec::new(),
         motor_cycle_anchor: 0,
         analog_inputs: Vec::new(),
@@ -4078,6 +4085,7 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         device_open_drain_nets: Default::default(),
         observed: Vec::new(),
         motors: Vec::new(),
+        live_numeric: None,
         ina219_senses: Vec::new(),
         motor_cycle_anchor: 0,
         analog_inputs: Vec::new(),
@@ -4371,6 +4379,7 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         device_open_drain_nets: Default::default(),
         observed: Vec::new(),
         motors: Vec::new(),
+        live_numeric: None,
         ina219_senses: Vec::new(),
         motor_cycle_anchor: 0,
         analog_inputs: Vec::new(),
@@ -4660,6 +4669,7 @@ fn test_peripheral_range_index_lookup() {
         device_open_drain_nets: Default::default(),
         observed: Vec::new(),
         motors: Vec::new(),
+        live_numeric: None,
         ina219_senses: Vec::new(),
         motor_cycle_anchor: 0,
         analog_inputs: Vec::new(),
@@ -4805,6 +4815,7 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         device_open_drain_nets: Default::default(),
         observed: Vec::new(),
         motors: Vec::new(),
+        live_numeric: None,
         ina219_senses: Vec::new(),
         motor_cycle_anchor: 0,
         analog_inputs: Vec::new(),

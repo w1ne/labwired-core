@@ -1,18 +1,11 @@
 # LabWired - Firmware Simulation Platform
 # Copyright (C) 2026 Andrii Shylenko
 # SPDX-License-Identifier: MIT
-"""Tests for the incomplete-history guard in generate_validation_status.py.
+"""Regression tests for source/capture reporting and its integrity gates.
 
-The rendering itself is exercised by CI running the generator with
-`--check --drift` against the committed doc. What is tested here is the property
-that actually failed in practice, and that no gate could observe: on a truncated
-history the generator did not fail, it produced a plausible document with wrong
-dates. `ci-fixture-riscv` rendered the graft commit's 2026-08-04 where the truth
-on full history is 2026-03-09, and seven other boards were skewed the same way.
-
-The shallow case is tested against a REAL shallow clone rather than a stubbed
-`git rev-parse`, because the thing worth pinning down is git's behaviour, not our
-belief about it — a stub would have happily agreed with the broken version too.
+Real Git fixtures cover incomplete-history failures. Source-content fixtures
+prove that optional human ACKs never block integration or upgrade physical
+capture evidence, while stale reports and invalid evidence still fail.
 """
 
 import datetime
@@ -77,7 +70,7 @@ def test_unshallowed_clone_is_accepted(tmp_path, monkeypatch):
 
 
 def test_not_a_repository_is_rejected(tmp_path, monkeypatch):
-    # Degrades to every date rendering "—" and a drift gate that finds nothing.
+    # Missing repository history is still invalid input for provenance reporting.
     monkeypatch.setattr(gvs, "CORE_ROOT", tmp_path)
     defect = gvs.history_defect()
     assert defect is not None and "not a git checkout" in defect
@@ -134,284 +127,278 @@ def test_require_full_history_exits_with_the_fix(tmp_path, monkeypatch, capsys):
     with pytest.raises(SystemExit) as e:
         gvs.require_full_history()
     # 2 = precondition failure (as for missing PyYAML), not 1 = gate verdict;
-    # a caller must be able to tell "I cannot judge" from "the boards drifted".
+    # history integrity remains a precondition, independent of source drift.
     assert e.value.code == 2
     err = capsys.readouterr().err
     assert "git fetch --unshallow" in err
     assert "fetch-depth: 0" in err
 
 
-# ── Drift acks are pinned to CONTENT, not to a timestamp (#834) ──────────────
-#
-# The date rule got both directions wrong. A squash merge stamps the merge time
-# onto every file a PR touched, so an ack written on the branch stopped covering
-# the very tree it was reviewed against and main went red on unchanged content.
-# In the other direction, `ack >= newest` accepted ANY content as long as the
-# ack was dated on or after the newest model commit, so an edit landing the same
-# day an ack was written slipped through.
-#
-# With a `drift_ack_digest` recorded, the verdict depends only on content. These
-# four cases are the whole contract.
+# Source/capture status uses captured bytes, not source-review ACKs or dates.
 
 
-# Inside the fixture ack's window (2026-06-01 + ACK_TTL_DAYS). The cases below
-# assert the CONTENT rule, so they pin the clock rather than drift into the
-# expiry rule as the wall clock moves past the fixture's ack. Expiry has its own
-# cases further down.
-IN_WINDOW = datetime.date(2026, 6, 15)
-
-
-def _board_with_digest(tmp_path, monkeypatch, model_body: bytes):
-    """A one-board manifest whose ack is pinned to `model_body`'s digest."""
+def _board_with_capture(tmp_path, monkeypatch):
     root = tmp_path / "repo"
     (root / "models").mkdir(parents=True)
     model = root / "models" / "periph.rs"
-    model.write_bytes(model_body)
+    model.write_bytes(b"fn model() {}\n")
     monkeypatch.setattr(gvs, "CORE_ROOT", root)
-    return {
+    monkeypatch.setattr(gvs, "newest_commit_date", lambda paths: datetime.date(2026, 1, 1))
+    board = {
         "id": "demo",
+        "tier": "silicon-verified",
+        "doc": "boards/demo.md",
+        "chip": "demo.yaml",
         "silicon": {"last_capture": datetime.date(2026, 1, 1)},
-        "drift_ack": datetime.date(2026, 6, 1),
         "models": ["models/periph.rs"],
-    }, model
+    }
+    board["silicon"]["models_digest"] = gvs.model_digest(board["models"])
+    return board, model
 
 
-@pytest.mark.parametrize("redated", [False, True], ids=["dates-unchanged", "squash-redated"])
-@pytest.mark.parametrize("mutated", [False, True], ids=["content-same", "content-CHANGED"])
-def test_digest_ack_tracks_content_not_dates(tmp_path, monkeypatch, redated, mutated):
-    body = b"fn model() {}\n"
-    board, model = _board_with_digest(tmp_path, monkeypatch, body)
-    board["drift_ack_digest"] = gvs.model_digest(board["models"])
+def _configure_cli(monkeypatch, board, flags):
+    manifest = {"boards": [board]}
+    path = gvs.CORE_ROOT / "manifest.yaml"
+    path.write_text(yaml.safe_dump(manifest, sort_keys=False))
+    output = gvs.CORE_ROOT / "VALIDATION_STATUS.md"
+    output.write_text(gvs.render(manifest))
+    monkeypatch.setattr(gvs, "MANIFEST", path)
+    monkeypatch.setattr(gvs, "OUT_DOC", output)
+    # These cases isolate policy. The tests above exercise the real history guard.
+    monkeypatch.setattr(gvs, "require_full_history", lambda: None)
+    monkeypatch.setattr(sys, "argv", ["generate_validation_status.py", *flags])
+    return path, output
 
+
+@pytest.mark.parametrize("redated", [False, True], ids=["same-date", "squash-redated"])
+@pytest.mark.parametrize("mutated", [False, True], ids=["same-content", "changed-content"])
+def test_capture_digest_tracks_content_not_dates(tmp_path, monkeypatch, redated, mutated):
+    board, model = _board_with_capture(tmp_path, monkeypatch)
     if mutated:
-        model.write_bytes(body + b"// a real change\n")
-    # A squash merge re-dates the file far past every ack without touching it.
-    monkeypatch.setattr(
-        gvs,
-        "newest_commit_date",
-        lambda paths: datetime.date(2099, 1, 1) if redated else datetime.date(2026, 5, 1),
-    )
+        model.write_bytes(model.read_bytes() + b"// real source change\n")
+    if redated:
+        monkeypatch.setattr(gvs, "newest_commit_date", lambda paths: datetime.date(2099, 1, 1))
 
-    failing = gvs.evaluate(board, today=IN_WINDOW)["failing"]
-    assert failing is mutated, (
-        f"redated={redated} mutated={mutated}: a digest-pinned ack must fail iff the "
-        "model CONTENT moved — a re-date alone must not fail, and a same-day edit "
-        "must not pass"
-    )
+    verdict = gvs.evaluate(board)
+    assert verdict["source_match"] is not mutated
+    assert verdict["drifted"] is mutated
+    assert ("source changed" in verdict["status"]) is mutated
 
 
-def test_ack_without_a_digest_keeps_the_legacy_date_rule(tmp_path, monkeypatch):
-    """Un-stamped acks must keep working, or adding the field breaks every board."""
-    board, _ = _board_with_digest(tmp_path, monkeypatch, b"fn model() {}\n")
-    assert "drift_ack_digest" not in board
-
-    monkeypatch.setattr(gvs, "newest_commit_date", lambda paths: datetime.date(2026, 5, 1))
-    assert gvs.evaluate(board, today=IN_WINDOW)["failing"] is False, "ack (06-01) >= newest (05-01) still covers"
-
-    monkeypatch.setattr(gvs, "newest_commit_date", lambda paths: datetime.date(2026, 7, 1))
-    assert gvs.evaluate(board, today=IN_WINDOW)["failing"] is True, "model newer than the ack still fails"
-
-
-def test_write_ack_digests_never_acks_an_unacked_board(tmp_path, monkeypatch):
-    """Stamping records WHICH tree was acked; it must never BE the ack."""
-    board, _ = _board_with_digest(tmp_path, monkeypatch, b"fn model() {}\n")
-    del board["drift_ack"]
-
-    manifest_path = tmp_path / "manifest.yaml"
-    manifest_path.write_text("boards:\n  - id: demo\n    models:\n      - models/periph.rs\n")
-    monkeypatch.setattr(gvs, "MANIFEST", manifest_path)
-
-    gvs.write_ack_digests({"boards": [board]})
-    assert "drift_ack_digest" not in manifest_path.read_text()
+def test_uncommitted_source_edit_is_visible_without_a_new_git_date(tmp_path, monkeypatch):
+    root = make_repo(tmp_path / "git-repo")
+    monkeypatch.setattr(gvs, "CORE_ROOT", root)
+    models = ["model.txt"]
+    captured_date = gvs.newest_commit_date(models)
+    board = {
+        "id": "uncommitted",
+        "models": models,
+        "silicon": {"last_capture": captured_date, "models_digest": gvs.model_digest(models)},
+    }
+    assert gvs.evaluate(board)["source_match"] is True
+    (root / "model.txt").write_text("uncommitted edit\n")
+    assert gvs.newest_commit_date(models) == captured_date
+    assert gvs.evaluate(board)["source_match"] is False
 
 
-def test_digests_reports_the_same_verdict_as_the_gate(tmp_path, monkeypatch, capsys):
-    """`--digests` exists because the manifest documents it, and it must not be
-    a second opinion: the manifest header tells authors to print the digest so
-    they can write an ack pre-merge, which only helps if what it prints is what
-    `--drift` will judge them on.
-    """
-    body = b"fn model() {}\n"
-    board, model = _board_with_digest(tmp_path, monkeypatch, body)
-    board["drift_ack_digest"] = gvs.model_digest(board["models"])
-    monkeypatch.setattr(gvs, "newest_commit_date", lambda paths: datetime.date(2026, 5, 1))
+@pytest.mark.parametrize("ack", ["absent", "current", "expired"])
+def test_missing_capture_digest_never_becomes_fresh(tmp_path, monkeypatch, ack):
+    board, _ = _board_with_capture(tmp_path, monkeypatch)
+    board["silicon"].pop("models_digest")
+    if ack != "absent":
+        board["drift_ack"] = "2026-01-01"
+        board["drift_ack_digest"] = gvs.model_digest(board["models"])
+        board["drift_ack_expires"] = "2020-01-01" if ack == "expired" else "2099-01-01"
 
-    # Covered by the ack: the digest prints, and the gate agrees it is not failing.
-    assert gvs.print_digests({"boards": [board]}) == 0
-    printed = capsys.readouterr().out
-    assert gvs.model_digest(board["models"]) in printed
-    assert gvs.evaluate(board, today=IN_WINDOW)["status"] in printed
-    assert not gvs.evaluate(board, today=IN_WINDOW)["failing"]
-
-    # The negative control. Move a byte of the model: the printed digest must
-    # change, the recorded ack must be shown as the thing that no longer
-    # matches, and the gate must now be failing.
-    model.write_bytes(body + b"// a real change\n")
-    assert gvs.print_digests({"boards": [board]}) == 0
-    printed = capsys.readouterr().out
-    assert gvs.model_digest(board["models"]) in printed
-    assert f"ack recorded {board['drift_ack_digest']}" in printed
-    assert gvs.evaluate(board, today=IN_WINDOW)["failing"]
+    verdict = gvs.evaluate(board)
+    assert verdict["source_match"] is None
+    assert verdict["drifted"] is False, "unknown provenance is distinct from a known mismatch"
+    assert verdict["status"] == "source match unverified — capture has no model digest"
 
 
-def test_digests_never_writes(tmp_path, monkeypatch, capsys):
-    """A report, not a stamper. `--write-ack-digests` is the writing one."""
-    board, _ = _board_with_digest(tmp_path, monkeypatch, b"fn model() {}\n")
-    manifest_path = tmp_path / "manifest.yaml"
-    original = "boards:\n  - id: demo\n    models:\n      - models/periph.rs\n"
-    manifest_path.write_text(original)
-    monkeypatch.setattr(gvs, "MANIFEST", manifest_path)
-    monkeypatch.setattr(gvs, "newest_commit_date", lambda paths: datetime.date(2026, 5, 1))
+@pytest.mark.parametrize("source", ["matching", "changed", "unverified", "no-capture"])
+def test_ack_metadata_and_clock_do_not_change_capture_status(tmp_path, monkeypatch, source):
+    board, model = _board_with_capture(tmp_path, monkeypatch)
+    if source == "changed":
+        model.write_text("changed source\n")
+    elif source == "unverified":
+        board["silicon"].pop("models_digest")
+    elif source == "no-capture":
+        board.pop("silicon")
+    baseline = gvs.evaluate(board)
 
-    gvs.print_digests({"boards": [board]})
-    capsys.readouterr()
-    assert manifest_path.read_text() == original
-
-
-# ── An ack lapses ────────────────────────────────────────────────────────────
-#
-# The digest rule made acks precise and, in doing so, PERMANENT: while the
-# models hold still, an ack from any date keeps a drifted board green forever.
-# Every acked board on the manifest reads "re-capture pending" and nothing ever
-# made the pending part come due. An ack is a promise to re-capture; a promise
-# with no date is a waiver.
-#
-# Two properties, and the second matters as much as the first: the GATE must
-# move with the calendar, and the DOCUMENT must not.
+    board.update({
+        "drift_ack": "2026-01-01",
+        "drift_ack_digest": gvs.model_digest(board["models"]),
+        "drift_ack_expires": "2026-02-01",
+    })
+    for when in (datetime.date(2020, 1, 1), datetime.date(2026, 1, 2), datetime.date(2099, 1, 1)):
+        assert gvs.evaluate(board, today=when) == baseline
+    board["drift_ack_digest"] = "0" * 64
+    assert gvs.evaluate(board) == baseline
 
 
-def _acked_drifted_board(tmp_path, monkeypatch):
-    """A board that has genuinely drifted and carries a content-covering ack."""
-    board, model = _board_with_digest(tmp_path, monkeypatch, b"fn model() {}\n")
-    board["drift_ack_digest"] = gvs.model_digest(board["models"])
-    # Newer than the 2026-01-01 capture, so `drifted` is true and the ack is
-    # the only thing keeping this board green.
-    monkeypatch.setattr(gvs, "newest_commit_date", lambda paths: datetime.date(2026, 5, 1))
-    return board
+@pytest.mark.parametrize("flags", [["--drift"], ["--check", "--drift"]])
+@pytest.mark.parametrize("source", ["changed", "unverified"])
+@pytest.mark.parametrize("ack", ["absent", "expired"])
+def test_source_only_drift_is_informational(tmp_path, monkeypatch, capsys, flags, source, ack):
+    board, model = _board_with_capture(tmp_path, monkeypatch)
+    if source == "changed":
+        model.write_text("changed source\n")
+    else:
+        board["silicon"].pop("models_digest")
+    if ack == "expired":
+        board.update({
+            "drift_ack": "2020-01-01",
+            "drift_ack_digest": "0" * 64,
+            "drift_ack_expires": "2020-02-01",
+        })
+    manifest_path, output = _configure_cli(monkeypatch, board, flags)
+    before = (manifest_path.read_bytes(), output.read_bytes())
+
+    assert gvs.main() == 0
+    printed = capsys.readouterr()
+    assert "informational; no source-review ACK required" in printed.out
+    assert gvs.evaluate(board)["status"] in printed.out
+    assert "ERROR" not in printed.err
+    assert (manifest_path.read_bytes(), output.read_bytes()) == before
 
 
-def test_a_fresh_ack_covers_the_board(tmp_path, monkeypatch):
-    board = _acked_drifted_board(tmp_path, monkeypatch)
-    v = gvs.evaluate(board, today=datetime.date(2026, 6, 2))
-    assert v["drifted"] is True, "the fixture must actually be drifted or this proves nothing"
-    assert v["expired"] is False
-    assert v["failing"] is False
+def test_stale_document_still_fails_with_source_drift(tmp_path, monkeypatch, capsys):
+    board, model = _board_with_capture(tmp_path, monkeypatch)
+    model.write_text("changed source\n")
+    _, output = _configure_cli(monkeypatch, board, ["--check", "--drift"])
+    output.write_text("stale document\n")
+
+    assert gvs.main() == 1
+    assert "out of date" in capsys.readouterr().err
+    assert output.read_text() == "stale document\n"
 
 
-def test_the_ack_lapses_on_the_day_after_its_expiry(tmp_path, monkeypatch):
-    """The whole point: unchanged content, unchanged manifest, red anyway."""
-    board = _acked_drifted_board(tmp_path, monkeypatch)
-    expires = board["drift_ack"] + datetime.timedelta(days=gvs.ACK_TTL_DAYS)
+@pytest.mark.parametrize("defect", ["missing-model", "unwatched-peripheral"])
+def test_watch_integrity_still_fails_with_informational_drift(tmp_path, monkeypatch, capsys, defect):
+    board, model = _board_with_capture(tmp_path, monkeypatch)
+    board["silicon"].pop("models_digest")
+    if defect == "missing-model":
+        model.unlink()
+    else:
+        (gvs.CORE_ROOT / "demo.yaml").write_text('peripherals:\n  p:\n    path: "unwatched.yaml"\n')
+        (gvs.CORE_ROOT / "unwatched.yaml").write_text("registers: []\n")
+    _configure_cli(monkeypatch, board, ["--drift"])
 
-    assert gvs.evaluate(board, today=expires)["failing"] is False, "valid through its last day"
-    lapsed = gvs.evaluate(board, today=expires + datetime.timedelta(days=1))
-    assert lapsed["expired"] is True
-    assert lapsed["failing"] is True, "an expired ack must stop covering the board"
-
-
-def test_an_explicit_expiry_overrides_the_default_window(tmp_path, monkeypatch):
-    """For a re-capture that is genuinely blocked — reviewable, unlike forever."""
-    board = _acked_drifted_board(tmp_path, monkeypatch)
-    board["drift_ack_expires"] = datetime.date(2027, 1, 1)
-
-    assert gvs.evaluate(board, today=datetime.date(2026, 12, 31))["failing"] is False
-    assert gvs.evaluate(board, today=datetime.date(2027, 1, 2))["failing"] is True
+    assert gvs.main() == 1
+    error = capsys.readouterr().err
+    assert ("do not exist" if defect == "missing-model" else "NOT covered") in error
 
 
-def test_expiry_cannot_fail_a_board_that_never_drifted(tmp_path, monkeypatch):
-    """A stale ack on a board whose models never moved is not a finding."""
-    board = _acked_drifted_board(tmp_path, monkeypatch)
-    # Model older than the capture: nothing drifted, so nothing to acknowledge.
-    monkeypatch.setattr(gvs, "newest_commit_date", lambda paths: datetime.date(2025, 6, 1))
-    v = gvs.evaluate(board, today=datetime.date(2099, 1, 1))
-    assert v["drifted"] is False
-    assert v["failing"] is False
+@pytest.mark.parametrize("digest", [None, "", "not-a-digest", 123, "f" * 63])
+def test_malformed_present_capture_digest_is_rejected(tmp_path, monkeypatch, digest):
+    board, _ = _board_with_capture(tmp_path, monkeypatch)
+    board["silicon"]["models_digest"] = digest
+    with pytest.raises(ValueError, match="models_digest"):
+        gvs.evaluate(board)
+    with pytest.raises(SystemExit, match="models_digest"):
+        gvs.load_manifest(yaml.safe_dump({"boards": [board]}))
 
 
-def test_a_board_with_no_ack_is_unchanged_by_expiry(tmp_path, monkeypatch):
-    board = _acked_drifted_board(tmp_path, monkeypatch)
-    del board["drift_ack"]
-    del board["drift_ack_digest"]
-    v = gvs.evaluate(board, today=datetime.date(2026, 6, 2))
-    assert v["expires"] is None
-    assert v["expired"] is False
-    assert v["failing"] is True, "still failing for the original reason — unacked drift"
+@pytest.mark.parametrize("capture", [{}, {"last_capture": None}, {"last_capture": "not-a-date"}, "invalid"])
+def test_missing_or_malformed_capture_record_is_rejected(tmp_path, monkeypatch, capture):
+    board, _ = _board_with_capture(tmp_path, monkeypatch)
+    board["silicon"] = capture
+    with pytest.raises(SystemExit, match="silicon"):
+        gvs.load_manifest(yaml.safe_dump({"boards": [board]}))
+
+
+def test_invalid_capture_cannot_be_published_as_informational_drift(tmp_path, monkeypatch):
+    board, _ = _board_with_capture(tmp_path, monkeypatch)
+    path, output = _configure_cli(monkeypatch, board, ["--drift"])
+    board["silicon"]["models_digest"] = "invalid"
+    path.write_text(yaml.safe_dump({"boards": [board]}))
+    before = output.read_bytes()
+    with pytest.raises(SystemExit, match="models_digest"):
+        gvs.main()
+    assert output.read_bytes() == before
 
 
 def test_the_generated_document_does_not_move_with_the_calendar(tmp_path, monkeypatch):
-    """The other half of the contract, and the easy half to get wrong.
-
-    `--check` diffs a COMMITTED document. If an expiry verdict leaked into a row,
-    the doc would go stale on a day nobody committed and every later PR would
-    demand a regen commit carrying no information — exactly the #834 / #798
-    defect the digest rule was introduced to end. The row states the two dates
-    (both from the manifest, both still); only the gate reads the clock.
-    """
-    board = _acked_drifted_board(tmp_path, monkeypatch)
-    board.update({"tier": "silicon-verified", "doc": "boards/demo.md", "chip": "demo"})
+    board, model = _board_with_capture(tmp_path, monkeypatch)
+    model.write_text("changed source\n")
+    board.update({"drift_ack": "2026-01-01", "drift_ack_expires": "2026-02-01"})
     manifest = {"boards": [board]}
-
-    baseline = gvs.render(manifest, today=datetime.date(2026, 6, 2))
-    for far in (datetime.date(2026, 7, 5), datetime.date(2027, 1, 1), datetime.date(2099, 1, 1)):
-        assert gvs.render(manifest, today=far) == baseline, (
-            f"the document changed at {far} — an expiry verdict leaked into a row, "
-            "which makes the committed doc rot on a day nobody committed"
-        )
-
-    # And the row must still SHOW the expiry, or a reader cannot see it coming.
-    assert "expires 2026-07-01" in baseline
+    baseline = gvs.render(manifest, today=datetime.date(2026, 1, 2))
+    for when in (datetime.date(2026, 2, 2), datetime.date(2099, 1, 1)):
+        assert gvs.render(manifest, today=when) == baseline
+    assert "source changed since capture" in baseline
+    assert "expires" not in baseline
 
 
-def test_lapsed_acks_are_the_ones_the_gate_fails(tmp_path, monkeypatch):
-    """An expiry only counts when the ack was holding a drift back.
-
-    A board with no silicon capture has `failing` false on the day the ack is
-    written and a year later: there is nothing to re-capture. The committed-
-    manifest test used to ask bare `expired`, which is true for that board, so
-    it could go red while `--drift` stayed green.
-    """
-    holding = _acked_drifted_board(tmp_path, monkeypatch)
-    holding["id"] = "holding"
-    idle = dict(holding)
-    idle["id"] = "idle"
-    idle.pop("silicon", None)
-    expires = holding["drift_ack"] + datetime.timedelta(days=gvs.ACK_TTL_DAYS)
-    today = expires + datetime.timedelta(days=1)
-
-    assert gvs.lapsed_acks({"boards": [holding, idle]}, today=today) == ["holding"]
+def test_committed_capture_records_do_not_gain_implicit_source_matches():
+    manifest = gvs.load_manifest(gvs.MANIFEST.read_text())
+    for board in manifest["boards"]:
+        silicon = board.get("silicon")
+        if silicon is not None and "models_digest" not in silicon:
+            assert gvs.evaluate(board)["source_match"] is None
 
 
-def test_the_committed_manifest_is_not_already_expired():
-    """Reads the real manifest: this change must cost nothing on the day it lands.
+def test_digests_reports_capture_provenance_and_historical_ack(tmp_path, monkeypatch, capsys):
+    board, model = _board_with_capture(tmp_path, monkeypatch)
+    board["drift_ack"] = "2020-01-01"
+    board["drift_ack_digest"] = "0" * 64
+    model.write_text("changed source\n")
+    path, output = _configure_cli(monkeypatch, board, ["--digests"])
+    before = (path.read_bytes(), output.read_bytes())
 
-    Asks `lapsed_acks`, the same question `--drift` asks. A bare `expired`
-    flag also fires for a board whose ack covers nothing, and that failure
-    cannot be cleared by a re-capture because there is no capture to refresh.
-    """
-    manifest = yaml.safe_load(gvs.MANIFEST.read_text())
-    stale = gvs.lapsed_acks(manifest, today=datetime.date.today())
-    assert not stale, (
-        "drift acks have come due: " + ", ".join(stale) + ". Re-capture and bump "
-        "silicon.last_capture, or renew the ack — do not widen ACK_TTL_DAYS to clear this."
-    )
+    assert gvs.main() == 0
+    printed = capsys.readouterr().out
+    assert gvs.model_digest(board["models"]) in printed
+    assert gvs.evaluate(board)["status"] in printed
+    assert f"capture recorded {board['silicon']['models_digest']}" in printed
+    assert f"historical ack recorded {board['drift_ack_digest']}" in printed
+    assert (path.read_bytes(), output.read_bytes()) == before
+
+
+def test_default_generation_never_stamps_ack_or_capture_fields(tmp_path, monkeypatch):
+    board, model = _board_with_capture(tmp_path, monkeypatch)
+    model.write_text("changed source\n")
+    board["drift_ack"] = "2020-01-01"
+    board["drift_ack_digest"] = "0" * 64
+    path, _ = _configure_cli(monkeypatch, board, [])
+    before = path.read_bytes()
+    assert gvs.main() == 0
+    assert path.read_bytes() == before
+
+
+def test_write_ack_digests_never_creates_an_ack(tmp_path, monkeypatch):
+    board, model = _board_with_capture(tmp_path, monkeypatch)
+    model.write_text("changed source\n")
+    path, _ = _configure_cli(monkeypatch, board, [])
+    before = path.read_bytes()
+    assert gvs.write_ack_digests({"boards": [board]}) == 0
+    assert path.read_bytes() == before
+
+
+def test_legacy_ack_stamper_cannot_upgrade_a_capture(tmp_path, monkeypatch):
+    board, model = _board_with_capture(tmp_path, monkeypatch)
+    model.write_text("changed source\n")
+    board["drift_ack"] = "2020-01-01"
+    board["drift_ack_digest"] = "0" * 64
+    path, _ = _configure_cli(monkeypatch, board, [])
+    before = gvs.evaluate(board)
+    assert gvs.write_ack_digests({"boards": [board]}) == 0
+    after = gvs.load_manifest(path.read_text())["boards"][0]
+    assert after["drift_ack_digest"] == gvs.model_digest(board["models"])
+    assert after["silicon"] == board["silicon"]
+    assert gvs.evaluate(after) == before
+
 
 def test_write_ack_digests_leaves_undrifted_boards_alone(tmp_path, monkeypatch):
-    """The stamper must not sweep boards whose digest nothing reads.
-
-    A `drift_ack_digest` is consulted by `evaluate()` for exactly one purpose:
-    deciding whether an ack still covers a DRIFTED board. Stamping a board that
-    is not drifted rewrites a line no gate consults, and on 2026-08-31 that put
-    the SAME four unrelated boards into four separate pull requests, each time
-    to be reverted by hand.
-    """
+    """The optional legacy writer keeps its bounded default and explicit all mode."""
     boards = [
         {"id": "drifted-one", "drift_ack": "2026-08-31", "drift_ack_digest": "stale",
          "models": ["m.rs"], "silicon": {"last_capture": "2020-01-01"}},
         {"id": "fresh-one", "drift_ack": "2026-08-31", "drift_ack_digest": "stale",
          "models": ["m.rs"], "silicon": {"last_capture": "2099-01-01"}},
     ]
-    seen = {"drifted": False, "fresh": False}
-
     def fake_evaluate(board, today=None):
         return {"drifted": board["id"] == "drifted-one"}
 
@@ -449,18 +436,6 @@ def test_write_ack_digests_leaves_undrifted_boards_alone(tmp_path, monkeypatch):
     assert all("newdigest" in ln for ln in lines), "--all must stamp both"
 
 
-def test_esp32c3_manifest_has_one_drift_ack():
-    # Inspect the syntax tree: safe_load silently discards duplicate keys.
-    root = yaml.compose(gvs.MANIFEST.read_text())
-    boards = next(value for key, value in root.value if key.value == "boards")
-    board = next(
-        node for node in boards.value
-        if any(key.value == "id" and value.value == "esp32c3"
-               for key, value in node.value)
-    )
-    assert sum(key.value == "drift_ack" for key, _ in board.value) == 1
-
-
 # ── Duplicate keys: PyYAML would silently keep the last one ──────────────────
 
 def test_duplicate_drift_ack_is_rejected():
@@ -478,3 +453,10 @@ def test_same_key_on_different_boards_is_fine():
 
 def test_committed_manifest_has_no_duplicate_keys():
     gvs.load_manifest(gvs.MANIFEST.read_text())
+
+
+@pytest.mark.parametrize("key", ["models", "silicon", "drift_ack_digest"])
+def test_other_duplicate_evidence_keys_are_rejected(key):
+    text = f"boards:\n  - id: demo\n    {key}: null\n    {key}: null\n"
+    with pytest.raises(SystemExit, match=f"duplicate key '{key}'"):
+        gvs.load_manifest(text)

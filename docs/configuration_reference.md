@@ -662,6 +662,36 @@ for the full BLDC form. A motor can equivalently be declared as an
 converts it to the same typed plant (`MotorModelConfig::from_external_device`),
 so the two spellings cannot drift.
 
+The BLDC plant reads channels 1–3 and their complementary outputs from the
+configured timer's output-stage snapshot. The loader resolves the six phase
+pin names, but live GPIO `MODER`/`AFR` selection does not gate the plant. The
+STM32L476 mapping uses PA8–PA10 and PB13–PB15 as AF1; native pad capture must
+check that mapping separately. Arbitrary runtime phase-pin remapping is
+outside this plant contract.
+
+Native numeric instruments can read `live_numeric_capture(cursor, maxPoints)`
+from a machine. This additive stream has its own string `epoch`, stable
+`name`/`unit` channel descriptors, and finite `f64` observations at native
+`timeNs`. Each point has a sequence `seq` and a zero-based numeric `channel`
+index. The fixed 20,000-point ring keeps the newest observations, including
+quiet accepted motor samples. Historical `analog_series` remains a separate
+65,536-point-per-channel prefix with its existing deadbands and `dropped`
+count; neither cursor nor retention policy is shared with the co-simulation
+analog ring.
+
+Pass back `nextCursor` as the next unread sequence. `oldestCursor` is the
+oldest retained sequence, `evicted` counts normal cumulative ring evictions,
+`readerMissed` counts requested points already overwritten, and `omitted`
+counts available points excluded only by this read's newest-point limit.
+Reads do not consume data. On an epoch change or `resetRequired`, discard the
+old cursor/history and reread at zero. Replacement or a true timeline rewind
+changes the epoch; a physical CPU reset on a continuing timeline does not.
+Each channel reports `valid`, `knownFromNs`, `knownUntilNs`, and
+`invalidReason`. A failed plant cannot extend its horizon using a healthy
+peer's time. A resumed channel starts a new known interval, and a channel
+without a retained native anchor has null `knownFromNs`. The export is null
+when the machine has no live numeric producer.
+
 ```yaml
 # examples/f401-hbridge-dc-motor/system.yaml (excerpt)
 external_devices:

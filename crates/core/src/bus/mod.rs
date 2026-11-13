@@ -778,6 +778,9 @@ pub struct SystemBus {
     pub observed: Vec<std::sync::Arc<dyn ObservedDevice>>,
     /// Deterministic typed motor plants, resolved from the system manifest.
     motors: Vec<motors::MotorRuntime>,
+    /// Live native numeric observations. Allocated only when a producer exists;
+    /// separate from both historical motor series and the co-sim trace cursor.
+    live_numeric: Option<Box<crate::live_numeric::LiveNumericCapture>>,
     /// Last simulator-cycle boundary applied to `motors`.
     motor_cycle_anchor: u64,
     /// Circuit-coupled INA219 breakouts: shunt current / bus voltage samples

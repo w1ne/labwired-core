@@ -1,0 +1,2820 @@
+{
+  "core": "a0b0a91c1868fe78e4af45e817e566807517ef1e",
+  "wasm_sha256": "72a14003a503cb2d6d769fcd8f76b4142d42dc3b1c442fd49841cdc8f3005c82",
+  "system_sha256": "495d6979746df32ce9a793ea61a84f61aaf5388b30ebeb3ebb167eb92ea8ff5b",
+  "chip_sha256": "6a349eb2c902f9db72d3b3c57e83fa6ae3b43a52f9a517fc9dad3d3c798a8db0",
+  "firmware_sha256": "4a51fc1c0b479710b3eaf531356749174a07c7b00036b5176b04ad7217dd41c5",
+  "samples": [
+    {
+      "cycle": 100000,
+      "motor": {
+        "bus_voltage_v": 24,
+        "commutation_sector": 1,
+        "control_state": "inverter",
+        "current_a": 0,
+        "faults": [],
+        "id": "drive_motor",
+        "kind": "bldc-motor",
+        "phase_currents_a": [
+          -2.2995954838892794,
+          -0.2210065723209829,
+          2.5206020562102625
+        ],
+        "position_rad": 0.28774256376932644,
+        "speed_rpm": 4247.6310580806485,
+        "torque_nm": -0.1914532230850939
+      }
+    },
+    {
+      "cycle": 150000,
+      "motor": {
+        "bus_voltage_v": 24,
+        "commutation_sector": 3,
+        "control_state": "inverter",
+        "current_a": 0.6266238533357187,
+        "faults": [
+          "open-phase-a"
+        ],
+        "id": "drive_motor",
+        "kind": "bldc-motor",
+        "phase_currents_a": [
+          0,
+          0.6266238533357187,
+          -0.6266238533357187
+        ],
+        "position_rad": 0.47078343159916486,
+        "speed_rpm": 2698.256054432496,
+        "torque_nm": 0.050129908266857495
+      }
+    },
+    {
+      "cycle": 200000,
+      "motor": {
+        "bus_voltage_v": 24,
+        "commutation_sector": 3,
+        "control_state": "inverter",
+        "current_a": 0,
+        "faults": [
+          "hall-b-low"
+        ],
+        "id": "drive_motor",
+        "kind": "bldc-motor",
+        "phase_currents_a": [
+          6.710845805155318,
+          0.20940536297532802,
+          -6.920251168130647
+        ],
+        "position_rad": 0.5672770073579099,
+        "speed_rpm": -3862.772792933729,
+        "torque_nm": -0.14490534236804864
+      }
+    },
+    {
+      "cycle": 250000,
+      "motor": {
+        "bus_voltage_v": 24,
+        "commutation_sector": 3,
+        "control_state": "fault:inverter",
+        "current_a": 0,
+        "faults": [
+          "inverter"
+        ],
+        "id": "drive_motor",
+        "kind": "bldc-motor",
+        "phase_currents_a": [
+          1.9906221273756155,
+          0.06211541156403572,
+          -2.052737538939651
+        ],
+        "position_rad": 0.44886999944627454,
+        "speed_rpm": 1958.2804365492252,
+        "torque_nm": 0.08452121472029296
+      }
+    },
+    {
+      "cycle": 300000,
+      "motor": {
+        "bus_voltage_v": 24,
+        "commutation_sector": 4,
+        "control_state": "inverter",
+        "current_a": 0,
+        "faults": [],
+        "id": "drive_motor",
+        "kind": "bldc-motor",
+        "phase_currents_a": [
+          0.8531409620126823,
+          1.4395057707543968,
+          -2.292646732767079
+        ],
+        "position_rad": 0.6319169242354923,
+        "speed_rpm": 2584.20054408872,
+        "torque_nm": -0.017635300323463065
+      }
+    }
+  ],
+  "register_changes": [
+    {
+      "cycle": 1,
+      "pc": 134218954,
+      "cr1": 0,
+      "cr2": 0,
+      "psc": 0,
+      "arr": 65535,
+      "ccer": 0,
+      "ccmr1": 0,
+      "ccmr2": 0,
+      "ccr1": 0,
+      "ccr2": 0,
+      "ccr3": 0,
+      "bdtr": 0,
+      "phase_revision": 0,
+      "cnt": 0,
+      "psc_cnt": 0
+    },
+    {
+      "cycle": 71,
+      "pc": 134219168,
+      "cr1": 0,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 65535,
+      "ccer": 0,
+      "ccmr1": 0,
+      "ccmr2": 0,
+      "ccr1": 0,
+      "ccr2": 0,
+      "ccr3": 0,
+      "bdtr": 0,
+      "phase_revision": 1,
+      "cnt": 0,
+      "psc_cnt": 0
+    },
+    {
+      "cycle": 73,
+      "pc": 134219174,
+      "cr1": 0,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 0,
+      "ccmr1": 0,
+      "ccmr2": 0,
+      "ccr1": 0,
+      "ccr2": 0,
+      "ccr3": 0,
+      "bdtr": 0,
+      "phase_revision": 2,
+      "cnt": 0,
+      "psc_cnt": 0
+    },
+    {
+      "cycle": 75,
+      "pc": 134219180,
+      "cr1": 0,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 0,
+      "ccmr1": 0,
+      "ccmr2": 0,
+      "ccr1": 300,
+      "ccr2": 0,
+      "ccr3": 0,
+      "bdtr": 0,
+      "phase_revision": 2,
+      "cnt": 0,
+      "psc_cnt": 0
+    },
+    {
+      "cycle": 76,
+      "pc": 134219182,
+      "cr1": 0,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 0,
+      "ccmr1": 0,
+      "ccmr2": 0,
+      "ccr1": 300,
+      "ccr2": 300,
+      "ccr3": 0,
+      "bdtr": 0,
+      "phase_revision": 2,
+      "cnt": 0,
+      "psc_cnt": 0
+    },
+    {
+      "cycle": 77,
+      "pc": 134219184,
+      "cr1": 0,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 0,
+      "ccmr1": 0,
+      "ccmr2": 0,
+      "ccr1": 300,
+      "ccr2": 300,
+      "ccr3": 300,
+      "bdtr": 0,
+      "phase_revision": 2,
+      "cnt": 0,
+      "psc_cnt": 0
+    },
+    {
+      "cycle": 79,
+      "pc": 134219190,
+      "cr1": 0,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 0,
+      "ccmr1": 26728,
+      "ccmr2": 0,
+      "ccr1": 300,
+      "ccr2": 300,
+      "ccr3": 300,
+      "bdtr": 0,
+      "phase_revision": 3,
+      "cnt": 0,
+      "psc_cnt": 0
+    },
+    {
+      "cycle": 81,
+      "pc": 134219194,
+      "cr1": 0,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 0,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 300,
+      "ccr2": 300,
+      "ccr3": 300,
+      "bdtr": 0,
+      "phase_revision": 4,
+      "cnt": 0,
+      "psc_cnt": 0
+    },
+    {
+      "cycle": 83,
+      "pc": 134219200,
+      "cr1": 0,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 0,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 300,
+      "ccr2": 300,
+      "ccr3": 300,
+      "bdtr": 0,
+      "phase_revision": 5,
+      "cnt": 0,
+      "psc_cnt": 0
+    },
+    {
+      "cycle": 84,
+      "pc": 134219202,
+      "cr1": 0,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 0,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 300,
+      "ccr2": 300,
+      "ccr3": 300,
+      "bdtr": 32816,
+      "phase_revision": 5,
+      "cnt": 0,
+      "psc_cnt": 0
+    },
+    {
+      "cycle": 85,
+      "pc": 134219204,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 0,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 300,
+      "ccr2": 300,
+      "ccr3": 300,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 0,
+      "psc_cnt": 1
+    },
+    {
+      "cycle": 40165,
+      "pc": 134220134,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 0,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 700,
+      "ccr2": 300,
+      "ccr3": 300,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 20,
+      "psc_cnt": 1
+    },
+    {
+      "cycle": 40166,
+      "pc": 134220138,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 0,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 700,
+      "ccr2": 299,
+      "ccr3": 300,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 20,
+      "psc_cnt": 2
+    },
+    {
+      "cycle": 40167,
+      "pc": 134220142,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 0,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 700,
+      "ccr2": 299,
+      "ccr3": 0,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 20,
+      "psc_cnt": 3
+    },
+    {
+      "cycle": 40171,
+      "pc": 134220158,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 65,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 700,
+      "ccr2": 299,
+      "ccr3": 0,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 21,
+      "psc_cnt": 3
+    },
+    {
+      "cycle": 80165,
+      "pc": 134220138,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 65,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 700,
+      "ccr2": 0,
+      "ccr3": 0,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 20,
+      "psc_cnt": 1
+    },
+    {
+      "cycle": 80166,
+      "pc": 134220142,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 65,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 700,
+      "ccr2": 0,
+      "ccr3": 299,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 20,
+      "psc_cnt": 2
+    },
+    {
+      "cycle": 80170,
+      "pc": 134220158,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 1025,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 700,
+      "ccr2": 0,
+      "ccr3": 299,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 21,
+      "psc_cnt": 2
+    },
+    {
+      "cycle": 120162,
+      "pc": 134220134,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 1025,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 0,
+      "ccr2": 0,
+      "ccr3": 299,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 19,
+      "psc_cnt": 2
+    },
+    {
+      "cycle": 120163,
+      "pc": 134220138,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 1025,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 0,
+      "ccr2": 700,
+      "ccr3": 299,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 19,
+      "psc_cnt": 3
+    },
+    {
+      "cycle": 120168,
+      "pc": 134220158,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 1040,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 0,
+      "ccr2": 700,
+      "ccr3": 299,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 21,
+      "psc_cnt": 0
+    },
+    {
+      "cycle": 144221,
+      "pc": 134220138,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 1040,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 0,
+      "ccr2": 699,
+      "ccr3": 299,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 34,
+      "psc_cnt": 1
+    },
+    {
+      "cycle": 144222,
+      "pc": 134220142,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 1040,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 0,
+      "ccr2": 699,
+      "ccr3": 300,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 34,
+      "psc_cnt": 2
+    },
+    {
+      "cycle": 152222,
+      "pc": 134220134,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 1040,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 697,
+      "ccr2": 699,
+      "ccr3": 300,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 34,
+      "psc_cnt": 2
+    },
+    {
+      "cycle": 152223,
+      "pc": 134220138,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 1040,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 697,
+      "ccr2": 0,
+      "ccr3": 300,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 34,
+      "psc_cnt": 3
+    },
+    {
+      "cycle": 152224,
+      "pc": 134220142,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 1040,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 697,
+      "ccr2": 0,
+      "ccr3": 302,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 35,
+      "psc_cnt": 0
+    },
+    {
+      "cycle": 152228,
+      "pc": 134220158,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 1025,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 697,
+      "ccr2": 0,
+      "ccr3": 302,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 36,
+      "psc_cnt": 0
+    },
+    {
+      "cycle": 200220,
+      "pc": 134220134,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 1025,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 0,
+      "ccr2": 0,
+      "ccr3": 302,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 34,
+      "psc_cnt": 0
+    },
+    {
+      "cycle": 200221,
+      "pc": 134220138,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 1025,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 0,
+      "ccr2": 697,
+      "ccr3": 302,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 34,
+      "psc_cnt": 1
+    },
+    {
+      "cycle": 200226,
+      "pc": 134220158,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 1040,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 0,
+      "ccr2": 697,
+      "ccr3": 302,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 35,
+      "psc_cnt": 2
+    },
+    {
+      "cycle": 224221,
+      "pc": 134220134,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 1040,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 696,
+      "ccr2": 697,
+      "ccr3": 302,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 34,
+      "psc_cnt": 1
+    },
+    {
+      "cycle": 224222,
+      "pc": 134220138,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 1040,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 696,
+      "ccr2": 0,
+      "ccr3": 302,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 34,
+      "psc_cnt": 2
+    },
+    {
+      "cycle": 224223,
+      "pc": 134220142,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 1040,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 696,
+      "ccr2": 0,
+      "ccr3": 303,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 34,
+      "psc_cnt": 3
+    },
+    {
+      "cycle": 224227,
+      "pc": 134220158,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 1025,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 696,
+      "ccr2": 0,
+      "ccr3": 303,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 35,
+      "psc_cnt": 3
+    },
+    {
+      "cycle": 256220,
+      "pc": 134220134,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 1025,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 0,
+      "ccr2": 0,
+      "ccr3": 303,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 34,
+      "psc_cnt": 0
+    },
+    {
+      "cycle": 256221,
+      "pc": 134220138,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 1025,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 0,
+      "ccr2": 695,
+      "ccr3": 303,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 34,
+      "psc_cnt": 1
+    },
+    {
+      "cycle": 256222,
+      "pc": 134220142,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 1025,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 0,
+      "ccr2": 695,
+      "ccr3": 304,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 34,
+      "psc_cnt": 2
+    },
+    {
+      "cycle": 256226,
+      "pc": 134220158,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 1040,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 0,
+      "ccr2": 695,
+      "ccr3": 304,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 35,
+      "psc_cnt": 2
+    },
+    {
+      "cycle": 296233,
+      "pc": 134220134,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 1040,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 305,
+      "ccr2": 695,
+      "ccr3": 304,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 37,
+      "psc_cnt": 1
+    },
+    {
+      "cycle": 296234,
+      "pc": 134220138,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 1040,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 305,
+      "ccr2": 694,
+      "ccr3": 304,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 37,
+      "psc_cnt": 2
+    },
+    {
+      "cycle": 296235,
+      "pc": 134220142,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 1040,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 305,
+      "ccr2": 694,
+      "ccr3": 0,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 37,
+      "psc_cnt": 3
+    },
+    {
+      "cycle": 296239,
+      "pc": 134220158,
+      "cr1": 1,
+      "cr2": 0,
+      "psc": 3,
+      "arr": 999,
+      "ccer": 20,
+      "ccmr1": 26728,
+      "ccmr2": 104,
+      "ccr1": 305,
+      "ccr2": 694,
+      "ccr3": 0,
+      "bdtr": 32816,
+      "phase_revision": 6,
+      "cnt": 38,
+      "psc_cnt": 3
+    }
+  ],
+  "startup": [
+    {
+      "cycle": 40160,
+      "timer": {
+        "cnt": 19,
+        "psc_cnt": 0,
+        "ccer": 0
+      },
+      "motor": {
+        "bus_voltage_v": 24,
+        "commutation_sector": 0,
+        "control_state": "off:outputs-disabled",
+        "current_a": 0,
+        "faults": [],
+        "id": "drive_motor",
+        "kind": "bldc-motor",
+        "phase_currents_a": [
+          0,
+          0,
+          0
+        ],
+        "position_rad": 0,
+        "speed_rpm": 0,
+        "torque_nm": 0
+      }
+    },
+    {
+      "cycle": 40161,
+      "timer": {
+        "cnt": 19,
+        "psc_cnt": 1,
+        "ccer": 0
+      },
+      "motor": {
+        "bus_voltage_v": 24,
+        "commutation_sector": 0,
+        "control_state": "off:outputs-disabled",
+        "current_a": 0,
+        "faults": [],
+        "id": "drive_motor",
+        "kind": "bldc-motor",
+        "phase_currents_a": [
+          0,
+          0,
+          0
+        ],
+        "position_rad": 0,
+        "speed_rpm": 0,
+        "torque_nm": 0
+      }
+    },
+    {
+      "cycle": 40162,
+      "timer": {
+        "cnt": 19,
+        "psc_cnt": 2,
+        "ccer": 0
+      },
+      "motor": {
+        "bus_voltage_v": 24,
+        "commutation_sector": 0,
+        "control_state": "off:outputs-disabled",
+        "current_a": 0,
+        "faults": [],
+        "id": "drive_motor",
+        "kind": "bldc-motor",
+        "phase_currents_a": [
+          0,
+          0,
+          0
+        ],
+        "position_rad": 0,
+        "speed_rpm": 0,
+        "torque_nm": 0
+      }
+    },
+    {
+      "cycle": 40163,
+      "timer": {
+        "cnt": 19,
+        "psc_cnt": 3,
+        "ccer": 0
+      },
+      "motor": {
+        "bus_voltage_v": 24,
+        "commutation_sector": 0,
+        "control_state": "off:outputs-disabled",
+        "current_a": 0,
+        "faults": [],
+        "id": "drive_motor",
+        "kind": "bldc-motor",
+        "phase_currents_a": [
+          0,
+          0,
+          0
+        ],
+        "position_rad": 0,
+        "speed_rpm": 0,
+        "torque_nm": 0
+      }
+    },
+    {
+      "cycle": 40164,
+      "timer": {
+        "cnt": 20,
+        "psc_cnt": 0,
+        "ccer": 0
+      },
+      "motor": {
+        "bus_voltage_v": 24,
+        "commutation_sector": 0,
+        "control_state": "off:outputs-disabled",
+        "current_a": 0,
+        "faults": [],
+        "id": "drive_motor",
+        "kind": "bldc-motor",
+        "phase_currents_a": [
+          0,
+          0,
+          0
+        ],
+        "position_rad": 0,
+        "speed_rpm": 0,
+        "torque_nm": 0
+      }
+    },
+    {
+      "cycle": 40165,
+      "timer": {
+        "cnt": 20,
+        "psc_cnt": 1,
+        "ccer": 0
+      },
+      "motor": {
+        "bus_voltage_v": 24,
+        "commutation_sector": 0,
+        "control_state": "off:outputs-disabled",
+        "current_a": 0,
+        "faults": [],
+        "id": "drive_motor",
+        "kind": "bldc-motor",
+        "phase_currents_a": [
+          0,
+          0,
+          0
+        ],
+        "position_rad": 0,
+        "speed_rpm": 0,
+        "torque_nm": 0
+      }
+    },
+    {
+      "cycle": 40166,
+      "timer": {
+        "cnt": 20,
+        "psc_cnt": 2,
+        "ccer": 0
+      },
+      "motor": {
+        "bus_voltage_v": 24,
+        "commutation_sector": 0,
+        "control_state": "off:outputs-disabled",
+        "current_a": 0,
+        "faults": [],
+        "id": "drive_motor",
+        "kind": "bldc-motor",
+        "phase_currents_a": [
+          0,
+          0,
+          0
+        ],
+        "position_rad": 0,
+        "speed_rpm": 0,
+        "torque_nm": 0
+      }
+    },
+    {
+      "cycle": 40167,
+      "timer": {
+        "cnt": 20,
+        "psc_cnt": 3,
+        "ccer": 0
+      },
+      "motor": {
+        "bus_voltage_v": 24,
+        "commutation_sector": 0,
+        "control_state": "off:outputs-disabled",
+        "current_a": 0,
+        "faults": [],
+        "id": "drive_motor",
+        "kind": "bldc-motor",
+        "phase_currents_a": [
+          0,
+          0,
+          0
+        ],
+        "position_rad": 0,
+        "speed_rpm": 0,
+        "torque_nm": 0
+      }
+    },
+    {
+      "cycle": 40168,
+      "timer": {
+        "cnt": 21,
+        "psc_cnt": 0,
+        "ccer": 0
+      },
+      "motor": {
+        "bus_voltage_v": 24,
+        "commutation_sector": 0,
+        "control_state": "off:outputs-disabled",
+        "current_a": 0,
+        "faults": [],
+        "id": "drive_motor",
+        "kind": "bldc-motor",
+        "phase_currents_a": [
+          0,
+          0,
+          0
+        ],
+        "position_rad": 0,
+        "speed_rpm": 0,
+        "torque_nm": 0
+      }
+    },
+    {
+      "cycle": 40169,
+      "timer": {
+        "cnt": 21,
+        "psc_cnt": 1,
+        "ccer": 0
+      },
+      "motor": {
+        "bus_voltage_v": 24,
+        "commutation_sector": 0,
+        "control_state": "off:outputs-disabled",
+        "current_a": 0,
+        "faults": [],
+        "id": "drive_motor",
+        "kind": "bldc-motor",
+        "phase_currents_a": [
+          0,
+          0,
+          0
+        ],
+        "position_rad": 0,
+        "speed_rpm": 0,
+        "torque_nm": 0
+      }
+    },
+    {
+      "cycle": 40170,
+      "timer": {
+        "cnt": 21,
+        "psc_cnt": 2,
+        "ccer": 0
+      },
+      "motor": {
+        "bus_voltage_v": 24,
+        "commutation_sector": 0,
+        "control_state": "off:outputs-disabled",
+        "current_a": 0,
+        "faults": [],
+        "id": "drive_motor",
+        "kind": "bldc-motor",
+        "phase_currents_a": [
+          0,
+          0,
+          0
+        ],
+        "position_rad": 0,
+        "speed_rpm": 0,
+        "torque_nm": 0
+      }
+    },
+    {
+      "cycle": 40171,
+      "timer": {
+        "cnt": 21,
+        "psc_cnt": 3,
+        "ccer": 65
+      },
+      "motor": {
+        "bus_voltage_v": 24,
+        "commutation_sector": 0,
+        "control_state": "inverter",
+        "current_a": 0.0008333333333333332,
+        "faults": [],
+        "id": "drive_motor",
+        "kind": "bldc-motor",
+        "phase_currents_a": [
+          0.0008333333333333332,
+          -0.0008333333333333332,
+          0
+        ],
+        "position_rad": 5.2083333333333324e-14,
+        "speed_rpm": 0.00003978873577297383,
+        "torque_nm": 0.00003333333333333333
+      }
+    },
+    {
+      "cycle": 40172,
+      "timer": {
+        "cnt": 22,
+        "psc_cnt": 0,
+        "ccer": 65
+      },
+      "motor": {
+        "bus_voltage_v": 24,
+        "commutation_sector": 0,
+        "control_state": "inverter",
+        "current_a": 0.0016666464062499997,
+        "faults": [],
+        "id": "drive_motor",
+        "kind": "bldc-motor",
+        "phase_currents_a": [
+          0.0016666464062499997,
+          -0.0016666464062499997,
+          0
+        ],
+        "position_rad": 2.0833204752611416e-13,
+        "speed_rpm": 0.0001193652250345625,
+        "torque_nm": 0.00006666585625004641
+      }
+    },
+    {
+      "cycle": 40173,
+      "timer": {
+        "cnt": 22,
+        "psc_cnt": 1,
+        "ccer": 65
+      },
+      "motor": {
+        "bus_voltage_v": 24,
+        "commutation_sector": 0,
+        "control_state": "inverter",
+        "current_a": 0.0024999392134555463,
+        "faults": [],
+        "id": "drive_motor",
+        "kind": "bldc-motor",
+        "phase_currents_a": [
+          0.0024999392134555463,
+          -0.0024999392134555463,
+          0
+        ],
+        "position_rad": 5.20826903967034e-13,
+        "speed_rpm": 0.00023872848524815007,
+        "torque_nm": 0.00009999756853850037
+      }
+    },
+    {
+      "cycle": 40174,
+      "timer": {
+        "cnt": 22,
+        "psc_cnt": 2,
+        "ccer": 65
+      },
+      "motor": {
+        "bus_voltage_v": 24,
+        "commutation_sector": 0,
+        "control_state": "inverter",
+        "current_a": 0.0033332117496557906,
+        "faults": [],
+        "id": "drive_motor",
+        "kind": "bldc-motor",
+        "phase_currents_a": [
+          0.0033332117496557906,
+          -0.0033332117496557906,
+          0
+        ],
+        "position_rad": 1.0416473775773201e-12,
+        "speed_rpm": 0.0003978775336249875,
+        "torque_nm": 0.00013332846998715997
+      }
+    },
+    {
+      "cycle": 40175,
+      "timer": {
+        "cnt": 22,
+        "psc_cnt": 3,
+        "ccer": 65
+      },
+      "motor": {
+        "bus_voltage_v": 24,
+        "commutation_sector": 0,
+        "control_state": "inverter",
+        "current_a": 0.004166464009556822,
+        "faults": [],
+        "id": "drive_motor",
+        "kind": "bldc-motor",
+        "phase_currents_a": [
+          0.004166464009556822,
+          -0.004166464009556822,
+          0
+        ],
+        "position_rad": 1.8228716564808563e-12,
+        "speed_rpm": 0.0005968113871243166,
+        "torque_nm": 0.00016665856038459377
+      }
+    },
+    {
+      "cycle": 40176,
+      "timer": {
+        "cnt": 23,
+        "psc_cnt": 0,
+        "ccer": 65
+      },
+      "motor": {
+        "bus_voltage_v": 24,
+        "commutation_sector": 0,
+        "control_state": "inverter",
+        "current_a": 0.0049996959878650035,
+        "faults": [],
+        "id": "drive_motor",
+        "kind": "bldc-motor",
+        "phase_currents_a": [
+          0.0049996959878650035,
+          -0.0049996959878650035,
+          0
+        ],
+        "position_rad": 2.916576641674466e-12,
+        "speed_rpm": 0.0008355290624534937,
+        "torque_nm": 0.00019998783951947384
+      }
+    },
+    {
+      "cycle": 40177,
+      "timer": {
+        "cnt": 23,
+        "psc_cnt": 1,
+        "ccer": 65
+      },
+      "motor": {
+        "bus_voltage_v": 24,
+        "commutation_sector": 0,
+        "control_state": "inverter",
+        "current_a": 0.005832907679286967,
+        "faults": [],
+        "id": "drive_motor",
+        "kind": "bldc-motor",
+        "phase_currents_a": [
+          0.005832907679286967,
+          -0.005832907679286967,
+          0
+        ],
+        "position_rad": 4.374837946698357e-12,
+        "speed_rpm": 0.0011140295760681135,
+        "torque_nm": 0.00023331630718057607
+      }
+    },
+    {
+      "cycle": 40178,
+      "timer": {
+        "cnt": 23,
+        "psc_cnt": 2,
+        "ccer": 65
+      },
+      "motor": {
+        "bus_voltage_v": 24,
+        "commutation_sector": 0,
+        "control_state": "inverter",
+        "current_a": 0.006666099078529617,
+        "faults": [],
+        "id": "drive_motor",
+        "kind": "bldc-motor",
+        "phase_currents_a": [
+          0.006666099078529617,
+          -0.006666099078529617,
+          0
+        ],
+        "position_rad": 6.249729897306726e-12,
+        "speed_rpm": 0.001432311944172133,
+        "torque_nm": 0.00026664396315678
+      }
+    },
+    {
+      "cycle": 40179,
+      "timer": {
+        "cnt": 23,
+        "psc_cnt": 3,
+        "ccer": 65
+      },
+      "motor": {
+        "bus_voltage_v": 24,
+        "commutation_sector": 0,
+        "control_state": "inverter",
+        "current_a": 0.0074992701803001304,
+        "faults": [],
+        "id": "drive_motor",
+        "kind": "bldc-motor",
+        "phase_currents_a": [
+          0.0074992701803001304,
+          -0.0074992701803001304,
+          0
+        ],
+        "position_rad": 8.593325531138534e-12,
+        "speed_rpm": 0.0017903751827179958,
+        "torque_nm": 0.00029997080723706863
+      }
+    },
+    {
+      "cycle": 40180,
+      "timer": {
+        "cnt": 24,
+        "psc_cnt": 0,
+        "ccer": 65
+      },
+      "motor": {
+        "bus_voltage_v": 24,
+        "commutation_sector": 0,
+        "control_state": "inverter",
+        "current_a": 0.008332420979305956,
+        "faults": [],
+        "id": "drive_motor",
+        "kind": "bldc-motor",
+        "phase_currents_a": [
+          0.008332420979305956,
+          -0.008332420979305956,
+          0
+        ],
+        "position_rad": 1.1457696597388431e-11,
+        "speed_rpm": 0.0021882183074067546,
+        "torque_nm": 0.0003332968392105289
+      }
+    }
+  ],
+  "gates": {
+    "cursor": 281,
+    "dropped": 0,
+    "edges": [
+      {
+        "ch": 0,
+        "cycle": 40171,
+        "state": "1"
+      },
+      {
+        "ch": 3,
+        "cycle": 40171,
+        "state": "1"
+      },
+      {
+        "ch": 3,
+        "cycle": 41280,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 42884,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 44084,
+        "state": "1"
+      },
+      {
+        "ch": 3,
+        "cycle": 44084,
+        "state": "1"
+      },
+      {
+        "ch": 3,
+        "cycle": 45280,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 46884,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 48084,
+        "state": "1"
+      },
+      {
+        "ch": 3,
+        "cycle": 48084,
+        "state": "1"
+      },
+      {
+        "ch": 3,
+        "cycle": 49280,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 50884,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 52084,
+        "state": "1"
+      },
+      {
+        "ch": 3,
+        "cycle": 52084,
+        "state": "1"
+      },
+      {
+        "ch": 3,
+        "cycle": 53280,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 54884,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 56084,
+        "state": "1"
+      },
+      {
+        "ch": 3,
+        "cycle": 56084,
+        "state": "1"
+      },
+      {
+        "ch": 3,
+        "cycle": 57280,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 58884,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 60084,
+        "state": "1"
+      },
+      {
+        "ch": 3,
+        "cycle": 60084,
+        "state": "1"
+      },
+      {
+        "ch": 3,
+        "cycle": 61280,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 62884,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 64084,
+        "state": "1"
+      },
+      {
+        "ch": 3,
+        "cycle": 64084,
+        "state": "1"
+      },
+      {
+        "ch": 3,
+        "cycle": 65280,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 66884,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 68084,
+        "state": "1"
+      },
+      {
+        "ch": 3,
+        "cycle": 68084,
+        "state": "1"
+      },
+      {
+        "ch": 3,
+        "cycle": 69280,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 70884,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 72084,
+        "state": "1"
+      },
+      {
+        "ch": 3,
+        "cycle": 72084,
+        "state": "1"
+      },
+      {
+        "ch": 3,
+        "cycle": 73280,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 74884,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 76084,
+        "state": "1"
+      },
+      {
+        "ch": 3,
+        "cycle": 76084,
+        "state": "1"
+      },
+      {
+        "ch": 3,
+        "cycle": 77280,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 78884,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 80084,
+        "state": "1"
+      },
+      {
+        "ch": 3,
+        "cycle": 80084,
+        "state": "1"
+      },
+      {
+        "ch": 3,
+        "cycle": 80164,
+        "state": "0"
+      },
+      {
+        "ch": 3,
+        "cycle": 80170,
+        "state": "z"
+      },
+      {
+        "ch": 5,
+        "cycle": 80170,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 81280,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 82884,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 84084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 84084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 85280,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 86884,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 88084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 88084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 89280,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 90884,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 92084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 92084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 93280,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 94884,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 96084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 96084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 97280,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 98884,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 100084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 100084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 101280,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 102884,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 104084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 104084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 105280,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 106884,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 108084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 108084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 109280,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 110884,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 112084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 112084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 113280,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 114884,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 116084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 116084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 117280,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 118884,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 120084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 120084,
+        "state": "1"
+      },
+      {
+        "ch": 0,
+        "cycle": 120161,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 120168,
+        "state": "z"
+      },
+      {
+        "ch": 2,
+        "cycle": 120168,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 121280,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 122884,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 124084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 124084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 125280,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 126884,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 128084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 128084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 129280,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 130884,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 132084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 132084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 133280,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 134884,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 136084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 136084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 137280,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 138884,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 140084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 140084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 141280,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 142884,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 144084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 144084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 145284,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 146880,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 148084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 148084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 149284,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 150880,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 152084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 152084,
+        "state": "1"
+      },
+      {
+        "ch": 2,
+        "cycle": 152222,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 152228,
+        "state": "1"
+      },
+      {
+        "ch": 2,
+        "cycle": 152228,
+        "state": "z"
+      },
+      {
+        "ch": 5,
+        "cycle": 153292,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 154872,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 156084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 156084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 157292,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 158872,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 160084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 160084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 161292,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 162872,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 164084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 164084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 165292,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 166872,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 168084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 168084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 169292,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 170872,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 172084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 172084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 173292,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 174872,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 176084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 176084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 177292,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 178872,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 180084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 180084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 181292,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 182872,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 184084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 184084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 185292,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 186872,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 188084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 188084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 189292,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 190872,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 192084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 192084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 193292,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 194872,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 196084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 196084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 197292,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 198872,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 200084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 200084,
+        "state": "1"
+      },
+      {
+        "ch": 0,
+        "cycle": 200219,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 200226,
+        "state": "z"
+      },
+      {
+        "ch": 2,
+        "cycle": 200226,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 201292,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 202872,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 204084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 204084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 205292,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 206872,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 208084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 208084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 209292,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 210872,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 212084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 212084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 213292,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 214872,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 216084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 216084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 217292,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 218872,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 220084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 220084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 221292,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 222872,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 224084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 224084,
+        "state": "1"
+      },
+      {
+        "ch": 2,
+        "cycle": 224221,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 224227,
+        "state": "1"
+      },
+      {
+        "ch": 2,
+        "cycle": 224227,
+        "state": "z"
+      },
+      {
+        "ch": 5,
+        "cycle": 225296,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 226868,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 228084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 228084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 229296,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 230868,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 232084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 232084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 233296,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 234868,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 236084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 236084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 237296,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 238868,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 240084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 240084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 241296,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 242868,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 244084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 244084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 245296,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 246868,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 248084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 248084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 249296,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 250868,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 252084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 252084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 253296,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 254868,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 256084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 256084,
+        "state": "1"
+      },
+      {
+        "ch": 0,
+        "cycle": 256219,
+        "state": "0"
+      },
+      {
+        "ch": 0,
+        "cycle": 256226,
+        "state": "z"
+      },
+      {
+        "ch": 2,
+        "cycle": 256226,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 257300,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 258864,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 260084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 260084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 261300,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 262864,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 264084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 264084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 265300,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 266864,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 268084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 268084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 269300,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 270864,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 272084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 272084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 273300,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 274864,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 276084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 276084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 277300,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 278864,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 280084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 280084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 281300,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 282864,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 284084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 284084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 285300,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 286864,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 288084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 288084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 289300,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 290864,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 292084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 292084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 293300,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 294864,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 296084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 296084,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 296234,
+        "state": "0"
+      },
+      {
+        "ch": 1,
+        "cycle": 296239,
+        "state": "1"
+      },
+      {
+        "ch": 5,
+        "cycle": 296239,
+        "state": "z"
+      },
+      {
+        "ch": 1,
+        "cycle": 297304,
+        "state": "0"
+      },
+      {
+        "ch": 2,
+        "cycle": 298860,
+        "state": "0"
+      }
+    ],
+    "initial": [
+      "z",
+      "z",
+      "z",
+      "z",
+      "z",
+      "z"
+    ],
+    "nowCycle": 300000
+  }
+}
