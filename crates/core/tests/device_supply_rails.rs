@@ -7,6 +7,145 @@ use std::path::PathBuf;
 const RAILS: &str = "{vdd: {min_v: 1.71, max_v: 3.6}, vddio: {min_v: 1.2, max_v: 3.6}}";
 const IMAGE: &[u8] = include_bytes!("fixtures/bmi270/maximum-fifo.bin");
 
+#[derive(Default)]
+struct ShiftProbeState {
+    selected: bool,
+    chain_index: u32,
+    byte: u8,
+    inputs: Vec<u8>,
+    selects: usize,
+    releases: usize,
+    elapsed_us: u64,
+}
+
+struct ShiftProbe(std::sync::Arc<std::sync::Mutex<ShiftProbeState>>);
+
+impl SpiDevice for ShiftProbe {
+    fn supports_power_control(&self) -> bool {
+        true
+    }
+    fn power_state_changed(&mut self, _powered: bool) {
+        self.0.lock().unwrap().selected = false;
+    }
+    fn cs_pin(&self) -> &str {
+        "PA4"
+    }
+    fn chain_index(&self) -> u32 {
+        self.0.lock().unwrap().chain_index
+    }
+    fn set_chain_index(&mut self, index: u32) {
+        self.0.lock().unwrap().chain_index = index;
+    }
+    fn is_selected(&self) -> bool {
+        self.0.lock().unwrap().selected
+    }
+    fn clocks_when_deselected(&self) -> bool {
+        true
+    }
+    fn cs_select(&mut self) {
+        let mut state = self.0.lock().unwrap();
+        state.selected = true;
+        state.selects += 1;
+    }
+    fn cs_release(&mut self) {
+        let mut state = self.0.lock().unwrap();
+        state.selected = false;
+        state.releases += 1;
+    }
+    fn transfer(&mut self, mosi: u8) -> u8 {
+        let mut state = self.0.lock().unwrap();
+        state.inputs.push(mosi);
+        std::mem::replace(&mut state.byte, mosi)
+    }
+    fn advance_time_us(&mut self, us: u64) {
+        self.0.lock().unwrap().elapsed_us += us;
+    }
+}
+
+#[test]
+fn nested_spi_wrappers_preserve_chain_clocks_and_power_gating() {
+    use labwired_core::peripherals::components::supply_domain::{GatedSpiDevice, SupplyGate};
+    use std::sync::{Arc, Mutex};
+
+    for powered in [false, true] {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let chip = ChipDescriptor::from_file(root.join("configs/chips/stm32l476.yaml")).unwrap();
+        let system: SystemManifest = serde_yaml::from_str(
+            "name: gated-spi-chain\nchip: stm32l476rg\nexternal_devices: []\n",
+        )
+        .unwrap();
+        let mut bus = SystemBus::from_config(&chip, &system).unwrap();
+        let near = Arc::new(Mutex::new(ShiftProbeState {
+            byte: 0x11,
+            ..Default::default()
+        }));
+        let far = Arc::new(Mutex::new(ShiftProbeState {
+            byte: 0x22,
+            ..Default::default()
+        }));
+        // Attach far first: declaration order must not replace DOUT->DIN order.
+        // attach_spi_device adds the ordinary trace wrapper outside the gate.
+        for (index, state) in [(1, far.clone()), (0, near.clone())] {
+            let mut gated =
+                GatedSpiDevice::new(Box::new(ShiftProbe(state)), SupplyGate::legacy(powered))
+                    .unwrap();
+            gated.set_chain_index(index);
+            bus.attach_spi_device("spi1", Box::new(gated)).unwrap();
+        }
+        let idx = bus.find_peripheral_index_by_name("spi1").unwrap();
+        let devices = bus.peripherals[idx].dev.spi_attached_devices_mut().unwrap();
+        assert_eq!(devices[0].chain_index(), 1);
+        assert_eq!(devices[1].chain_index(), 0);
+        for device in devices {
+            assert!(device.clocks_when_deselected());
+            assert!(!device.is_selected());
+            device.cs_select();
+            assert_eq!(device.is_selected(), powered);
+            device.cs_release();
+            assert!(!device.is_selected());
+            device.advance_time_us(5);
+        }
+        // LOAD is high. The near device must still shift MOSI into the far
+        // device, while an unpowered gate must not clock either inner probe.
+        bus.clock_parking_spi(0x5a);
+        bus.clock_parking_spi(0xa5);
+        let near = near.lock().unwrap();
+        let far = far.lock().unwrap();
+        if powered {
+            assert_eq!(near.inputs, [0x5a, 0xa5]);
+            assert_eq!(far.inputs, [0x11, 0x5a]);
+        } else {
+            assert!(near.inputs.is_empty());
+            assert!(far.inputs.is_empty());
+        }
+        for state in [&*near, &*far] {
+            assert_eq!(state.selects, usize::from(powered));
+            assert_eq!(state.releases, usize::from(powered));
+            assert_eq!(state.elapsed_us, if powered { 5 } else { 0 });
+        }
+    }
+}
+
+#[test]
+fn routed_bmi_selection_readback_follows_cs_and_power_edges() {
+    let mut bus = routed();
+    slave(&mut bus).cs_select();
+    assert!(!slave(&mut bus).is_selected());
+    apply(&mut bus, &[("vdd", 1.8), ("vddio", 3.3)]);
+    slave(&mut bus).cs_select();
+    assert!(slave(&mut bus).is_selected());
+    slave(&mut bus).cs_release();
+    assert!(!slave(&mut bus).is_selected());
+    slave(&mut bus).cs_select();
+    assert!(slave(&mut bus).is_selected());
+    apply(&mut bus, &[("vdd", 0.0)]);
+    assert!(!slave(&mut bus).is_selected());
+    slave(&mut bus).cs_select();
+    assert!(!slave(&mut bus).is_selected());
+    apply(&mut bus, &[("vdd", 1.8)]);
+    assert!(!slave(&mut bus).is_selected());
+}
+
 fn create(config: &str, kind: &str) -> anyhow::Result<SystemBus> {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let chip = ChipDescriptor::from_file(root.join("configs/chips/stm32l476.yaml"))?;
@@ -26,13 +165,11 @@ fn routed() -> SystemBus {
 }
 fn slave(bus: &mut SystemBus) -> &mut dyn SpiDevice {
     let i = bus.find_peripheral_index_by_name("spi1").unwrap();
-    let spi = bus.peripherals[i]
+    bus.peripherals[i]
         .dev
-        .as_any_mut()
-        .unwrap()
-        .downcast_mut::<labwired_core::peripherals::spi::Spi>()
-        .unwrap();
-    spi.attached_devices[0].as_mut()
+        .spi_attached_devices_mut()
+        .expect("configured SPI controller exposes attached devices")[0]
+        .as_mut()
 }
 fn meta(bus: &mut SystemBus) -> serde_json::Value {
     slave(bus).artifacts("U9", &InspectOpts::default())[0]

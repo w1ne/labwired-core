@@ -11,7 +11,7 @@ use labwired_core::sim_input::SimInput;
 const BASE: &[u8] = include_bytes!("fixtures/bmi270/base.bin");
 const MAX_FIFO: &[u8] = include_bytes!("fixtures/bmi270/maximum-fifo.bin");
 
-fn read(d: &mut Bmi270Spi, address: u8, count: usize) -> Vec<u8> {
+fn read(d: &mut dyn SpiDevice, address: u8, count: usize) -> Vec<u8> {
     d.cs_select();
     d.transfer(address | 0x80);
     d.transfer(0);
@@ -19,7 +19,7 @@ fn read(d: &mut Bmi270Spi, address: u8, count: usize) -> Vec<u8> {
     d.cs_release();
     bytes
 }
-fn write(d: &mut Bmi270Spi, address: u8, bytes: &[u8]) {
+fn write(d: &mut dyn SpiDevice, address: u8, bytes: &[u8]) {
     d.cs_select();
     d.transfer(address & 0x7f);
     for byte in bytes {
@@ -34,12 +34,12 @@ fn selected() -> Bmi270Spi {
     d.advance_time_us(450);
     d
 }
-fn prepare(d: &mut Bmi270Spi) {
+fn prepare(d: &mut dyn SpiDevice) {
     write(d, 0x7c, &[0]);
     d.advance_time_us(450);
     write(d, 0x59, &[0]);
 }
-fn upload(d: &mut Bmi270Spi, image: &[u8]) {
+fn upload(d: &mut dyn SpiDevice, image: &[u8]) {
     prepare(d);
     write(d, 0x5e, image);
     write(d, 0x59, &[1]);
@@ -174,7 +174,15 @@ fn upload_requires_advanced_power_save_exit_delay() {
 fn reset_clears_initialization_and_requires_new_spi_selection() {
     let mut d = initialized();
     write(&mut d, 0x41, &[3]);
-    write(&mut d, 0x7e, &[0xb6]);
+    d.cs_select();
+    d.transfer(0x7e);
+    d.transfer(0xb6);
+    assert!(
+        d.is_selected(),
+        "software reset does not release the master's CS"
+    );
+    d.cs_release();
+    assert!(!d.is_selected());
     d.advance_time_us(449);
     assert_eq!(read(&mut d, 0, 1), [0xff]);
     d.advance_time_us(1);
@@ -320,22 +328,13 @@ fn registry_factory_attaches_native_spi_with_explicit_cs_and_power_state() {
         &make_manifest("{cs_pin: GPIO14, powered: false}", "spi0"),
     )
     .unwrap();
-    let index = bus.find_peripheral_index_by_name("spi0").unwrap();
-    let spi = bus.peripherals[index]
-        .dev
-        .as_any_mut()
-        .unwrap()
-        .downcast_mut::<labwired_core::peripherals::rp2040::spi::Rp2040Spi>()
-        .unwrap();
-    let devices = &mut spi.attached_devices;
+    let mut devices = bus.take_spi_devices("spi0");
     assert_eq!(devices.len(), 1);
     assert_eq!(SpiDevice::component_id(&*devices[0]), Some("U9"));
     assert_eq!(devices[0].cs_pin(), "GPIO14");
-    let d = devices[0]
-        .as_any_mut()
-        .unwrap()
-        .downcast_mut::<Bmi270Spi>()
-        .unwrap();
+    // Keep the decorators in the protocol path. A concrete-model reach would
+    // skip the supply and tracing behavior this factory installed.
+    let d = devices[0].as_mut();
     d.cs_select();
     d.cs_release();
     d.advance_time_us(1000);
@@ -366,19 +365,13 @@ fn interrupt_bus(config: &str) -> labwired_core::bus::SystemBus {
     bus
 }
 
-fn interrupt_device(bus: &mut labwired_core::bus::SystemBus) -> &mut Bmi270Spi {
+fn interrupt_device(bus: &mut labwired_core::bus::SystemBus) -> &mut dyn SpiDevice {
     let index = bus.find_peripheral_index_by_name("spi1").unwrap();
-    let spi = bus.peripherals[index]
+    bus.peripherals[index]
         .dev
-        .as_any_mut()
-        .unwrap()
-        .downcast_mut::<labwired_core::peripherals::spi::Spi>()
-        .unwrap();
-    spi.attached_devices[0]
-        .as_any_mut()
-        .unwrap()
-        .downcast_mut::<Bmi270Spi>()
-        .unwrap()
+        .spi_attached_devices_mut()
+        .expect("configured SPI controller exposes attached devices")[0]
+        .as_mut()
 }
 
 fn input_pad(bus: &mut labwired_core::bus::SystemBus, label: &str) -> bool {

@@ -4,6 +4,8 @@ This example onboards the Seeed XIAO nRF52840 Sense as a LabWired board target.
 It reuses the generic `nrf52840` chip descriptor and adds board-level wiring for
 the XIAO RGB LED and SPI bus.
 
+Physical hardware: [Seeed Studio XIAO nRF52840 Sense](https://www.seeedstudio.com/Seeed-XIAO-BLE-Sense-nRF52840-p-5253.html).
+
 ## Modeled Board I/O
 
 | Signal | nRF pin | LabWired binding | Notes |

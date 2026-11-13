@@ -220,3 +220,38 @@ fn spdt_no_nc_transfer_is_atomic_same_update() {
         "expected NO/NC to transfer within a few steps after energising"
     );
 }
+
+#[test]
+fn signed_logic_switch_does_not_enable_on_negative_voltage() {
+    for signed in [false, true] {
+        for invert in [false, true] {
+            let deck = format!("* signed logic versus relay control\nVctrl ctrl ref dc -5\nVref ref 0 dc 10\nVdd vdd 0 dc 5\nRload vdd out 1k\nS1 out 0 ctrl ref vt=2.5 vh=1.7 signed={} invert={} ron=1 roff=1meg\n.end\n", u8::from(signed), u8::from(invert));
+            let circuit = parse_netlist(&deck).expect("signed control parses");
+            let mut solver = Solver::new(circuit, Integration::BackwardEuler).expect("solver");
+            let out = solver.circuit().node("out").expect("out");
+            run_to(&mut solver, 1e-6, 20);
+            let expected_closed = !signed ^ invert;
+            assert_eq!(
+                solver.node_voltage(out) < 0.05,
+                expected_closed,
+                "negative control: signed={signed} invert={invert}"
+            );
+            solver.set_voltage_source(0, 3.3);
+            run_to(&mut solver, 1e-6, 20);
+            assert_eq!(solver.node_voltage(out) < 0.05, !invert, "positive control");
+            solver.set_voltage_source(0, 1.5);
+            run_to(&mut solver, 1e-6, 20);
+            assert_eq!(solver.node_voltage(out) < 0.05, !invert, "hysteresis holds");
+            solver.set_voltage_source(0, 0.2);
+            run_to(&mut solver, 1e-6, 20);
+            assert_eq!(solver.node_voltage(out) < 0.05, invert, "drops below 0.8 V");
+        }
+    }
+}
+
+#[test]
+fn signed_switch_rejects_non_boolean_mode() {
+    let err =
+        parse_netlist("* invalid\nS1 a 0 c 0 vt=1 signed=2 ron=1 roff=1meg\n.end\n").unwrap_err();
+    assert!(err.to_string().contains("signed must be 0 or 1"), "{err}");
+}

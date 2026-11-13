@@ -553,6 +553,18 @@ impl SpiDevice for TracingSpiDevice {
     fn cs_pin(&self) -> &str {
         self.inner.cs_pin()
     }
+    fn chain_index(&self) -> u32 {
+        self.inner.chain_index()
+    }
+    fn set_chain_index(&mut self, index: u32) {
+        self.inner.set_chain_index(index);
+    }
+    fn is_selected(&self) -> bool {
+        self.inner.is_selected()
+    }
+    fn clocks_when_deselected(&self) -> bool {
+        self.inner.clocks_when_deselected()
+    }
     fn dc_pin(&self) -> Option<&str> {
         self.inner.dc_pin()
     }
@@ -565,11 +577,11 @@ impl SpiDevice for TracingSpiDevice {
     fn set_dc_source(&mut self, odr_addr: u64, bit: u8) {
         self.inner.set_dc_source(odr_addr, bit);
     }
-    fn as_any(&self) -> Option<&dyn std::any::Any> {
-        self.inner.as_any()
+    fn wrapped_device(&self) -> Option<&dyn SpiDevice> {
+        Some(self.inner.as_ref())
     }
-    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
-        self.inner.as_any_mut()
+    fn wrapped_device_mut(&mut self) -> Option<&mut dyn SpiDevice> {
+        Some(self.inner.as_mut())
     }
     fn as_sim_input_mut(&mut self) -> Option<&mut dyn crate::sim_input::SimInput> {
         self.inner.as_sim_input_mut()
@@ -679,6 +691,44 @@ mod tests {
                 BusPayload::I2c { byte, .. } => assert_eq!(*byte, 0xAF),
                 _ => panic!("wrong payload"),
             }
+        }
+    }
+
+    #[test]
+    fn nested_spi_wrappers_preserve_readback_inputs_and_power_gate() {
+        use crate::peripherals::components::{
+            bmi270_spi::Bmi270Spi,
+            supply_domain::{GatedSpiDevice, SupplyGate},
+        };
+        for powered in [false, true] {
+            let log = new_log();
+            let gated = GatedSpiDevice::new(
+                Box::new(TracingSpiDevice::new(
+                    "inner".into(),
+                    new_log(),
+                    Box::new(Bmi270Spi::new("PA4").unwrap()),
+                )),
+                SupplyGate::legacy(powered),
+            )
+            .unwrap();
+            let mut device = TracingSpiDevice::new("spi1".into(), log.clone(), Box::new(gated));
+            assert!(device.as_any().unwrap().is::<Bmi270Spi>());
+            assert!(device.as_any_mut().unwrap().is::<Bmi270Spi>());
+            // Physical stimulus and inspection stay reachable with the rail off.
+            let input = device.as_sim_input_mut().unwrap();
+            assert!(!input.input_channels().is_empty());
+            input.set_component_id("imu-probe".into());
+            assert_eq!(device.component_id(), Some("imu-probe"));
+            // Transparent readback must not bypass the wire's supply gate.
+            device.cs_select();
+            device.cs_release();
+            device.advance_time_us(450);
+            device.cs_select();
+            device.transfer(0x80);
+            device.transfer(0);
+            assert_eq!(device.transfer(0), if powered { 0x24 } else { 0xff });
+            device.cs_release();
+            assert_eq!(log.snapshot().len(), 3);
         }
     }
 

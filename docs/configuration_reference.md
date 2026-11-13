@@ -477,6 +477,7 @@ canonical `type:`; the table below is rendered from that file by
 | `adxl345_spi` | SPI | 3-axis ±16 g accelerometer over SPI (full-resolution, 256 LSB/g) |
 | `amoled-rm67162` | SPI | 240x536 RGB565 AMOLED, 4-wire SPI (DBI Type-C) |
 | `apa102` | SPI | SPI-clocked addressable RGB LED strip (write-only sink) |
+| `bmi270_spi` | SPI | Native four-wire BMI270 with real CS/dummy-byte framing, verified configuration upload and nominal motion sampling |
 | `gc9a01` | SPI | 1.28in round 240x240 RGB565 IPS TFT on a GalaxyCore GC9A01A, 4-wire SPI |
 | `hc595-7seg` | SPI | 4-digit 7-segment LED display driven by two chained 74HC595 shift registers over SPI |
 | `ili9341` | SPI | 240×320 RGB565 SPI TFT display |
@@ -663,6 +664,36 @@ so the two spellings cannot drift.
 
 For a physical three-lead winding driven by a solved inverter circuit, use
 `armature: circuit` and the [circuit BLDC contract](circuit-bldc.md).
+
+The timer-driven BLDC plant reads channels 1–3 and their complementary outputs from the
+configured timer's output-stage snapshot. The loader resolves the six phase
+pin names, but live GPIO `MODER`/`AFR` selection does not gate the plant. The
+STM32L476 mapping uses PA8–PA10 and PB13–PB15 as AF1; native pad capture must
+check that mapping separately. Arbitrary runtime phase-pin remapping is
+outside this plant contract.
+
+Native numeric instruments can read `live_numeric_capture(cursor, maxPoints)`
+from a machine. This additive stream has its own string `epoch`, stable
+`name`/`unit` channel descriptors, and finite `f64` observations at native
+`timeNs`. Each point has a sequence `seq` and a zero-based numeric `channel`
+index. The fixed 20,000-point ring keeps the newest observations, including
+quiet accepted motor samples. Historical `analog_series` remains a separate
+65,536-point-per-channel prefix with its existing deadbands and `dropped`
+count; neither cursor nor retention policy is shared with the co-simulation
+analog ring.
+
+Pass back `nextCursor` as the next unread sequence. `oldestCursor` is the
+oldest retained sequence, `evicted` counts normal cumulative ring evictions,
+`readerMissed` counts requested points already overwritten, and `omitted`
+counts available points excluded only by this read's newest-point limit.
+Reads do not consume data. On an epoch change or `resetRequired`, discard the
+old cursor/history and reread at zero. Replacement or a true timeline rewind
+changes the epoch; a physical CPU reset on a continuing timeline does not.
+Each channel reports `valid`, `knownFromNs`, `knownUntilNs`, and
+`invalidReason`. A failed plant cannot extend its horizon using a healthy
+peer's time. A resumed channel starts a new known interval, and a channel
+without a retained native anchor has null `knownFromNs`. The export is null
+when the machine has no live numeric producer.
 
 ```yaml
 # examples/f401-hbridge-dc-motor/system.yaml (excerpt)

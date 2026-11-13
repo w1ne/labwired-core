@@ -317,6 +317,31 @@ pub trait SpiDevice: Send {
     /// dispatcher to pick which device responds when the firmware drives a particular CS line.
     fn cs_pin(&self) -> &str;
 
+    /// Daisy-chain position along a shared CS: **0 = closest to MOSI** (first DIN).
+    /// Higher values are farther downstream (DOUT→DIN). Default 0 keeps every
+    /// existing single-device attach byte-identical. The bus clocks a chain
+    /// closest-first, feeding each device's DOUT into the next DIN.
+    fn chain_index(&self) -> u32 {
+        0
+    }
+
+    /// Record the configured [`chain_index`](Self::chain_index). No-op by
+    /// default so hand-written stubs and test doubles stay untouched.
+    fn set_chain_index(&mut self, _index: u32) {}
+
+    /// True while CS is held (after [`cs_select`](Self::cs_select), before
+    /// [`cs_release`](Self::cs_release)). Parts whose latch does not gate CLK
+    /// also declare [`clocks_when_deselected`](Self::clocks_when_deselected).
+    fn is_selected(&self) -> bool {
+        false
+    }
+
+    /// Whether the shift register accepts clocks while the latch pin is high.
+    /// MAX7219 LOAD only latches data; unlike MAX7221 CS, it does not gate CLK.
+    fn clocks_when_deselected(&self) -> bool {
+        false
+    }
+
     /// What this device can show of itself — its own inspect evidence.
     ///
     /// The ONE place a a SPI device's artifacts are decided is the model
@@ -364,11 +389,20 @@ pub trait SpiDevice: Send {
     }
     /// Bus-side setter recording the resolved D/C `(ODR address, bit)`.
     fn set_dc_source(&mut self, _odr_addr: u64, _bit: u8) {}
-    fn as_any(&self) -> Option<&dyn Any> {
+    /// Concrete readback through a transparent decorator. Transfers, mutable
+    /// simulation inputs and power gating remain owned by the decorator.
+    /// A leaf device keeps the default `None` unless it exposes readback.
+    fn wrapped_device(&self) -> Option<&dyn SpiDevice> {
         None
     }
-    fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+    fn wrapped_device_mut(&mut self) -> Option<&mut dyn SpiDevice> {
         None
+    }
+    fn as_any(&self) -> Option<&dyn Any> {
+        self.wrapped_device()?.as_any()
+    }
+    fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+        self.wrapped_device_mut()?.as_any_mut()
     }
     /// Runtime-drivable view of this device, if it accepts simulated input.
     /// Same contract as the hook on `I2cDevice`: input devices override it so

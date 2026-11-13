@@ -252,12 +252,16 @@ impl SystemBus {
     /// `component` accepts), falling back to the peripheral's bus name.
     pub fn list_inputs(&mut self) -> Vec<(String, crate::sim_input::InputChannel)> {
         let mut out = Vec::new();
-        out.extend(self.motors.iter().map(|motor| {
+        out.extend(self.motors.iter().flat_map(|motor| {
             let id = match motor {
                 crate::bus::motors::MotorRuntime::Dc { id, .. }
                 | crate::bus::motors::MotorRuntime::Bldc { id, .. } => id,
             };
-            (id.clone(), crate::bus::motors::MOTOR_STALL_INPUT)
+            let mut channels = vec![(id.clone(), crate::bus::motors::MOTOR_STALL_INPUT)];
+            if matches!(motor, crate::bus::motors::MotorRuntime::Bldc { .. }) {
+                channels.push((id.clone(), crate::bus::motors::MOTOR_INVERTER_FAULT_INPUT));
+            }
+            channels
         }));
         self.for_each_sim_input(&mut |name, si| {
             let owner = si.component_id().unwrap_or(name).to_string();
@@ -284,8 +288,12 @@ impl SystemBus {
         // Motor stall inputs are not SimInput devices but answer the same
         // channel vocabulary; count them so resolution and `set_input` agree
         // on uniqueness before the SimInput walk.
-        let mut matches = self.matching_motor_stall_inputs(component, channel);
-        let mut found = (matches == 1).then_some(super::motors::MOTOR_STALL_INPUT);
+        let mut matches = self.matching_motor_inputs(component, channel);
+        let mut found = if matches == 1 {
+            super::motors::motor_input_channel(channel)
+        } else {
+            None
+        };
         self.for_each_sim_input(&mut |name, si| {
             if Self::component_matches(component, name, si) {
                 if let Some(ch) = si.input_channels().iter().find(|c| c.key == channel) {

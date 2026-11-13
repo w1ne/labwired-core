@@ -97,6 +97,18 @@ impl SpiDevice for GatedSpiDevice {
     fn cs_pin(&self) -> &str {
         self.inner.cs_pin()
     }
+    fn chain_index(&self) -> u32 {
+        self.inner.chain_index()
+    }
+    fn set_chain_index(&mut self, index: u32) {
+        self.inner.set_chain_index(index);
+    }
+    fn is_selected(&self) -> bool {
+        self.inner.is_selected()
+    }
+    fn clocks_when_deselected(&self) -> bool {
+        self.inner.clocks_when_deselected()
+    }
     fn dc_pin(&self) -> Option<&str> {
         self.inner.dc_pin()
     }
@@ -112,11 +124,11 @@ impl SpiDevice for GatedSpiDevice {
     fn set_dc_source(&mut self, address: u64, bit: u8) {
         self.inner.set_dc_source(address, bit);
     }
-    fn as_any(&self) -> Option<&dyn std::any::Any> {
-        self.inner.as_any()
+    fn wrapped_device(&self) -> Option<&dyn SpiDevice> {
+        Some(self.inner.as_ref())
     }
-    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
-        self.inner.as_any_mut()
+    fn wrapped_device_mut(&mut self) -> Option<&mut dyn SpiDevice> {
+        Some(self.inner.as_mut())
     }
     fn as_sim_input_mut(&mut self) -> Option<&mut dyn crate::sim_input::SimInput> {
         self.inner.as_sim_input_mut()

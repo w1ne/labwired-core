@@ -33,10 +33,11 @@
 //!    `outputs()` was a field nothing on the board could see.
 //!    [`a_latched_byte_reaches_the_pads`] reads the levels back out of the
 //!    GPIO input register, through the tick, never off the device.
-//! 4. **Byte parity with the deleted models**, plus two DELIBERATE differences
+//! 4. **Byte parity with the deleted models**, plus deliberate corrections
 //!    that are measured rather than left to be rediscovered — the 74HC595 latch
-//!    EDGE and the dual-595 module's byte-order SEARCH. Each has its own test
-//!    naming what changed and why.
+//!    EDGE and the dual-595 module's byte-order SEARCH. MAX7219 now also retains
+//!    its shift-register tail across LOAD edges, as its datasheet requires;
+//!    the short-transfer test documents that correction to the old oracle.
 //!
 //! ## The stimulus goes through the controller's device surface
 //!
@@ -831,36 +832,23 @@ fn the_noop_and_undocumented_addresses_change_nothing() {
     assert_same_meta(&art, &oracle.artifact_meta(), "noop and undocumented");
 }
 
-/// ⚠️ A 16-BIT WRITE IS LATCHED OR IT NEVER HAPPENED. An odd byte left in the
-/// shifter must not become the next transaction's address byte, and must not be
-/// delivered as a one-byte frame whose low nibble decodes as a register.
-///
-/// This is `frames.discard_partial`, and the oracle's `cs_select` reset is what
-/// it reproduces. 0x03 alone would otherwise address digit register 3 with a
-/// data byte of 0 and blank a row the firmware lit.
+/// MAX7219 retains its shift register across LOAD edges. This corrects the
+/// deleted oracle, which reset the register at each transaction. After a NOOP
+/// ending in 0x03, shifting one byte 0xA5 leaves [0x03, 0xA5] to latch into
+/// digit 3. See the MAX7219/MAX7221 datasheet's Serial-Addressing Modes.
 #[test]
-fn an_orphan_byte_is_discarded_rather_than_decoded() {
+fn max7219_short_transfer_latches_the_retained_register_tail() {
     let mut bus = max7219_rig(true);
-    let mut oracle = Max7219::new("PC13");
-    max_write(&mut bus, &mut oracle, 0x0C, 0x01);
-    max_write(&mut bus, &mut oracle, 0x03, 0x3C);
-
-    // One byte, then CS↑: an address with no data.
-    spi_txn(&mut bus, &[0x03]);
-    oracle.cs_select();
-    oracle.transfer(0x03);
-    oracle.cs_release();
-
-    max_write(&mut bus, &mut oracle, 0x05, 0x99);
+    spi_txn(&mut bus, &[0x0C, 0x01]);
+    spi_txn(&mut bus, &[0x00, 0x03]); // NOOP, but the shifter retains 0x03
+    spi_txn(&mut bus, &[0xA5]);
     let art = inspect_artifact(bus);
+    assert_eq!(art.meta["shutdown"], false);
     assert_eq!(
-        art.bytes.as_deref().map(|b| b[2]),
-        Some(0x3C),
-        "row 3 must still hold what firmware put there — the orphan 0x03 must \
-         not have paired with a zero data byte",
+        art.bytes.as_deref(),
+        Some(&[0, 0, 0xA5, 0, 0, 0, 0, 0][..]),
+        "LOAD latches the last 16 bits; it does not clear the shift register",
     );
-    assert_eq!(art.bytes.as_deref().map(|b| b[4]), Some(0x99));
-    assert_same_meta(&art, &oracle.artifact_meta(), "orphan byte");
 }
 
 // ── the supply gate ────────────────────────────────────────────────────────

@@ -113,6 +113,7 @@ pub struct GenericLedStrip {
 
     // ── spi_frames ──────────────────────────────────────────────────────
     cs_pin: String,
+    selected: bool,
     /// Bytes of the in-flight transaction.
     frame: Vec<u8>,
     /// Latched colours. `spi_frames` only; the NRZ door keeps its own, behind
@@ -328,6 +329,7 @@ impl GenericLedStrip {
             component_id: None,
             powered: true,
             cs_pin: String::new(),
+            selected: false,
             frame: Vec::new(),
             pixels: Vec::new(),
             data_pin: 0,
@@ -667,11 +669,17 @@ impl SpiDevice for GenericLedStrip {
         self.component_id.as_deref()
     }
 
+    fn is_selected(&self) -> bool {
+        self.cs_pin.is_empty() || self.selected
+    }
+
     fn cs_select(&mut self) {
+        self.selected = true;
         self.frame.clear();
     }
 
     fn cs_release(&mut self) {
+        self.selected = false;
         self.latch();
     }
 
