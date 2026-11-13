@@ -384,11 +384,17 @@ the same circuit and the same routing as `system.yaml`.
 | Voltage source | `V<name> n+ n- <source>` |
 | Current source | `I<name> n+ n- <source>` |
 | Switch | `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` |
-| Diode | `D<name> n+ n- <model>` |
-| BJT | `Q<name> nc nb ne <model>` |
-| MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [nrd=<squares>] [nrs=<squares>]` |
-| JFET | `J<name> nd ng ns <model>` |
+| Diode | `D<name> n+ n- <model> [m=<count>] [temp=<°C>]` |
+| BJT | `Q<name> nc nb ne <model> [m=<count>] [temp=<°C>]` |
+| MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>] [m=<count>] [temp=<°C>]` |
+| JFET | `J<name> nd ng ns <model> [m=<count>] [temp=<°C>]` |
 | Op-amp / comparator | `X<name> in+ in- v+ v- out <model>` |
+
+`m=<count>` is the SPICE instance multiplier: the element acts as that many
+identical devices in parallel. Every current, conductance and stored charge it
+stamps is scaled, its terminal resistances are divided, and `m` may be
+fractional. This matches ngspice, where `m=3` and three parallel copies give
+the same solution.
 
 Plus `*` comment lines, `;` / `$` trailing comments, `.end`, and
 `.ic V(node)=<v>`. Node `0` and `gnd` are ground. Values take the usual SPICE

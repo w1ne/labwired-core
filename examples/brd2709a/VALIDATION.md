@@ -110,6 +110,18 @@ with `external_devices: []` and ignores the `--system` file's devices, so the
 pot never attaches and the conversion correctly reads 0 mV. Use `labwired
 test --script`, which is the path a lab takes.
 
+### C3a) Netlist devices with an instance multiplier on PD02..PD05
+
+```bash
+cargo test -p labwired-core --test cosim_pin_routing brd2709a_jfet_and_diode_multipliers_reach_pd2_to_pd5_iadc0
+```
+
+Observed (2026-11-13): `1 passed`. A grounded-gate NJF current sink and the
+diode card each run once as a single device and once with the SPICE instance
+multiplier (`J3 ... m=3`, `D4 ... m=4`). Independent single-device and
+m-parallel load lines set the four node voltages, and IADC0 converts each at
+12 bits. This is model coverage, not a bench measurement.
+
 ## C4) BLE smoke — ⚠️ TWIN ONLY, this one does NOT run on the board
 
 ```bash

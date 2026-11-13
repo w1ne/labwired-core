@@ -1450,13 +1450,31 @@ impl Solver {
         for bjt in &self.circuit.bjts {
             let model = bjt.operating_model;
             if model.rb > 0.0 && !device::bjt_has_bias_dependent_base_resistance(model) {
-                conductance(&mut self.matrix, dim, bjt.b, bjt.junction_b, 1.0 / model.rb);
+                conductance(
+                    &mut self.matrix,
+                    dim,
+                    bjt.b,
+                    bjt.junction_b,
+                    bjt.multiplier / model.rb,
+                );
             }
             if model.rc > 0.0 {
-                conductance(&mut self.matrix, dim, bjt.c, bjt.junction_c, 1.0 / model.rc);
+                conductance(
+                    &mut self.matrix,
+                    dim,
+                    bjt.c,
+                    bjt.junction_c,
+                    bjt.multiplier / model.rc,
+                );
             }
             if model.re > 0.0 {
-                conductance(&mut self.matrix, dim, bjt.e, bjt.junction_e, 1.0 / model.re);
+                conductance(
+                    &mut self.matrix,
+                    dim,
+                    bjt.e,
+                    bjt.junction_e,
+                    bjt.multiplier / model.re,
+                );
             }
         }
         for mosfet in &self.circuit.mosfets {
@@ -1466,7 +1484,7 @@ impl Solver {
                     dim,
                     mosfet.d,
                     mosfet.junction_d,
-                    1.0 / mosfet.drain_resistance_ohms,
+                    mosfet.multiplier / mosfet.drain_resistance_ohms,
                 );
             }
             if mosfet.source_resistance_ohms > 0.0 {
@@ -1475,7 +1493,7 @@ impl Solver {
                     dim,
                     mosfet.junction_s,
                     mosfet.s,
-                    1.0 / mosfet.source_resistance_ohms,
+                    mosfet.multiplier / mosfet.source_resistance_ohms,
                 );
             }
         }
@@ -1486,7 +1504,7 @@ impl Solver {
                     dim,
                     jfet.d,
                     jfet.junction_d,
-                    1.0 / jfet.model.rd,
+                    jfet.multiplier / jfet.model.rd,
                 );
             }
             if jfet.model.rs > 0.0 {
@@ -1495,7 +1513,7 @@ impl Solver {
                     dim,
                     jfet.junction_s,
                     jfet.s,
-                    1.0 / jfet.model.rs,
+                    jfet.multiplier / jfet.model.rs,
                 );
             }
         }
@@ -2118,6 +2136,7 @@ impl Solver {
         let rhs = &mut self.rhs;
 
         for (index, diode) in self.circuit.diodes.iter().enumerate() {
+            let m = diode.multiplier;
             let charge_model = diode.operating_model;
             if diode.series_resistance_ohms > 0.0 {
                 conductance(
@@ -2125,14 +2144,22 @@ impl Solver {
                     dim,
                     diode.anode,
                     diode.junction_anode,
-                    1.0 / diode.series_resistance_ohms,
+                    m / diode.series_resistance_ohms,
                 );
             }
             let vj = self.diode_vj[index];
             let op = diode_model_op(vj, diode.model, diode.breakdown, diode.temperature_celsius);
             let control = [(op.gd, diode.junction_anode, diode.cathode, vj)];
-            stamp_linearised(matrix, rhs, dim, diode.junction_anode, op.id, &control);
-            stamp_linearised(matrix, rhs, dim, diode.cathode, -op.id, &negate(&control));
+            stamp_linearised(matrix, rhs, dim, m, diode.junction_anode, op.id, &control);
+            stamp_linearised(
+                matrix,
+                rhs,
+                dim,
+                m,
+                diode.cathode,
+                -op.id,
+                &negate(&control),
+            );
 
             if diode_charge_active(charge_model) {
                 if let Stamp::Transient(h, rule) = stamp {
@@ -2151,6 +2178,7 @@ impl Solver {
                         matrix,
                         rhs,
                         dim,
+                        m,
                         diode.junction_anode,
                         current,
                         &charge_control,
@@ -2159,6 +2187,7 @@ impl Solver {
                         matrix,
                         rhs,
                         dim,
+                        m,
                         diode.cathode,
                         -current,
                         &negate(&charge_control),
@@ -2186,6 +2215,7 @@ impl Solver {
                         matrix,
                         rhs,
                         dim,
+                        m,
                         diode.junction_anode,
                         recovery.current,
                         &recovery_control,
@@ -2194,6 +2224,7 @@ impl Solver {
                         matrix,
                         rhs,
                         dim,
+                        m,
                         diode.cathode,
                         -recovery.current,
                         &negate(&recovery_control),
@@ -2203,6 +2234,7 @@ impl Solver {
         }
 
         for (index, bjt) in self.circuit.bjts.iter().enumerate() {
+            let m = bjt.multiplier;
             let sign = bjt.model.polarity.sign();
             let model = bjt.operating_model;
             let operating_model = bjt.operating_model;
@@ -2232,15 +2264,27 @@ impl Solver {
             // conductance stamp. Fixed RB remains in the linear build path.
             if device::bjt_has_bias_dependent_base_resistance(model) {
                 let resistance = device::bjt_base_resistance(model, op.ib);
-                conductance(matrix, dim, bjt.b, bjt.junction_b, 1.0 / resistance);
+                conductance(matrix, dim, bjt.b, bjt.junction_b, m / resistance);
             }
 
             // GMIN across both junctions. Without it a transistor that is fully
             // off leaves its base and collector tied to the rest of the circuit
             // by nothing at all, and the matrix is singular on a netlist the
             // user can see is connected.
-            conductance(matrix, dim, bjt.junction_b, bjt.junction_e, device::GMIN);
-            conductance(matrix, dim, bjt.junction_b, bjt.junction_c, device::GMIN);
+            conductance(
+                matrix,
+                dim,
+                bjt.junction_b,
+                bjt.junction_e,
+                m * device::GMIN,
+            );
+            conductance(
+                matrix,
+                dim,
+                bjt.junction_b,
+                bjt.junction_c,
+                m * device::GMIN,
+            );
 
             // Controlling voltages in circuit coordinates: u1 = v(b) − v(e),
             // u2 = v(b) − v(c). The device sees sign·u1 and sign·u2.
@@ -2258,12 +2302,21 @@ impl Solver {
                 (-op.gif - op.gpi, bjt.junction_b, bjt.junction_e, u1),
                 (op.gir, bjt.junction_b, bjt.junction_c, u2),
             ];
-            stamp_linearised(matrix, rhs, dim, bjt.junction_c, sign * op.ic, &collector);
-            stamp_linearised(matrix, rhs, dim, bjt.junction_b, sign * op.ib, &base);
             stamp_linearised(
                 matrix,
                 rhs,
                 dim,
+                m,
+                bjt.junction_c,
+                sign * op.ic,
+                &collector,
+            );
+            stamp_linearised(matrix, rhs, dim, m, bjt.junction_b, sign * op.ib, &base);
+            stamp_linearised(
+                matrix,
+                rhs,
+                dim,
+                m,
                 bjt.junction_e,
                 -sign * (op.ic + op.ib),
                 &emitter,
@@ -2307,11 +2360,12 @@ impl Solver {
                             u2,
                         ),
                     ];
-                    stamp_linearised(matrix, rhs, dim, positive, sign * current, &control);
+                    stamp_linearised(matrix, rhs, dim, m, positive, sign * current, &control);
                     stamp_linearised(
                         matrix,
                         rhs,
                         dim,
+                        m,
                         negative,
                         -sign * current,
                         &negate(&control),
@@ -2321,6 +2375,7 @@ impl Solver {
         }
 
         for (index, mosfet) in self.circuit.mosfets.iter().enumerate() {
+            let m = mosfet.multiplier;
             let sign = mosfet.operating_model.polarity.sign();
             let model = mosfet.operating_model;
             let (vgs, vds) = (self.mos_vgs[index], self.mos_vds[index]);
@@ -2333,7 +2388,7 @@ impl Solver {
                 dim,
                 mosfet.junction_d,
                 mosfet.junction_s,
-                device::GMIN,
+                m * device::GMIN,
             );
 
             // A MOSFET is symmetric: when Vds goes negative the terminal the
@@ -2375,11 +2430,12 @@ impl Solver {
                 (op.gds, drain, source, u2),
                 (op.gmb, mosfet.bulk, source, u3),
             ];
-            stamp_linearised(matrix, rhs, dim, drain, sign * op.id, &drain_terms);
+            stamp_linearised(matrix, rhs, dim, m, drain, sign * op.id, &drain_terms);
             stamp_linearised(
                 matrix,
                 rhs,
                 dim,
+                m,
                 source,
                 -sign * op.id,
                 &negate(&drain_terms),
@@ -2412,8 +2468,8 @@ impl Solver {
                         ),
                     };
                     let control = [(geq, positive, negative, voltage)];
-                    stamp_linearised(matrix, rhs, dim, positive, current, &control);
-                    stamp_linearised(matrix, rhs, dim, negative, -current, &negate(&control));
+                    stamp_linearised(matrix, rhs, dim, m, positive, current, &control);
+                    stamp_linearised(matrix, rhs, dim, m, negative, -current, &negate(&control));
                 }
 
                 if model.channel_charge_model == MosChannelChargeModel::WardDutton {
@@ -2455,7 +2511,7 @@ impl Solver {
                                     voltages[control],
                                 )
                             });
-                        stamp_linearised(matrix, rhs, dim, node, current, &control);
+                        stamp_linearised(matrix, rhs, dim, m, node, current, &control);
                     }
                 } else {
                     let channel_caps = mos_channel_capacitance_halves(
@@ -2489,8 +2545,16 @@ impl Solver {
                             }
                         };
                         let control = [(geq, positive, negative, voltage)];
-                        stamp_linearised(matrix, rhs, dim, positive, current, &control);
-                        stamp_linearised(matrix, rhs, dim, negative, -current, &negate(&control));
+                        stamp_linearised(matrix, rhs, dim, m, positive, current, &control);
+                        stamp_linearised(
+                            matrix,
+                            rhs,
+                            dim,
+                            m,
+                            negative,
+                            -current,
+                            &negate(&control),
+                        );
                     }
                 }
             }
@@ -2511,11 +2575,12 @@ impl Solver {
                 mosfet.junction_d,
                 sign * self.mos_vbd[index],
             )];
-            stamp_linearised(matrix, rhs, dim, mosfet.bulk, sign * bd.id, &bd_terms);
+            stamp_linearised(matrix, rhs, dim, m, mosfet.bulk, sign * bd.id, &bd_terms);
             stamp_linearised(
                 matrix,
                 rhs,
                 dim,
+                m,
                 mosfet.junction_d,
                 -sign * bd.id,
                 &negate(&bd_terms),
@@ -2533,11 +2598,12 @@ impl Solver {
                 mosfet.junction_s,
                 sign * self.mos_vbs[index],
             )];
-            stamp_linearised(matrix, rhs, dim, mosfet.bulk, sign * bs.id, &bs_terms);
+            stamp_linearised(matrix, rhs, dim, m, mosfet.bulk, sign * bs.id, &bs_terms);
             stamp_linearised(
                 matrix,
                 rhs,
                 dim,
+                m,
                 mosfet.junction_s,
                 -sign * bs.id,
                 &negate(&bs_terms),
@@ -2568,11 +2634,20 @@ impl Solver {
                         ),
                     };
                     let charge_terms = [(geq, mosfet.bulk, junction, sign * voltage)];
-                    stamp_linearised(matrix, rhs, dim, mosfet.bulk, sign * current, &charge_terms);
                     stamp_linearised(
                         matrix,
                         rhs,
                         dim,
+                        m,
+                        mosfet.bulk,
+                        sign * current,
+                        &charge_terms,
+                    );
+                    stamp_linearised(
+                        matrix,
+                        rhs,
+                        dim,
+                        m,
                         junction,
                         -sign * current,
                         &negate(&charge_terms),
@@ -2583,6 +2658,7 @@ impl Solver {
         }
 
         for (index, jfet) in self.circuit.jfets.iter().enumerate() {
+            let m = jfet.multiplier;
             let sign = jfet.model.polarity.sign();
             let reversed = self.jfet_vds[index] < 0.0;
             let (drain, source, vgs) = if reversed {
@@ -2604,17 +2680,24 @@ impl Solver {
             // The channel's GMIN keeps a cut-off device connected. The gate
             // junctions below each carry their own SPICE GMIN as part of the
             // diode equation.
-            conductance(matrix, dim, jfet.junction_d, jfet.junction_s, device::GMIN);
+            conductance(
+                matrix,
+                dim,
+                jfet.junction_d,
+                jfet.junction_s,
+                m * device::GMIN,
+            );
 
             let channel_terms = [
                 (op.gm, jfet.g, source, sign * vgs),
                 (op.gds, drain, source, sign * vds),
             ];
-            stamp_linearised(matrix, rhs, dim, drain, sign * op.id, &channel_terms);
+            stamp_linearised(matrix, rhs, dim, m, drain, sign * op.id, &channel_terms);
             stamp_linearised(
                 matrix,
                 rhs,
                 dim,
+                m,
                 source,
                 -sign * op.id,
                 &negate(&channel_terms),
@@ -2637,11 +2720,12 @@ impl Solver {
                 );
                 let gate_voltage = sign * voltage;
                 let gate_terms = [(gate.gd, jfet.g, cathode, gate_voltage)];
-                stamp_linearised(matrix, rhs, dim, jfet.g, sign * gate.id, &gate_terms);
+                stamp_linearised(matrix, rhs, dim, m, jfet.g, sign * gate.id, &gate_terms);
                 stamp_linearised(
                     matrix,
                     rhs,
                     dim,
+                    m,
                     cathode,
                     -sign * gate.id,
                     &negate(&gate_terms),
@@ -2667,11 +2751,20 @@ impl Solver {
                             ),
                         };
                         let charge_terms = [(geq, jfet.g, cathode, sign * voltage)];
-                        stamp_linearised(matrix, rhs, dim, jfet.g, sign * current, &charge_terms);
                         stamp_linearised(
                             matrix,
                             rhs,
                             dim,
+                            m,
+                            jfet.g,
+                            sign * current,
+                            &charge_terms,
+                        );
+                        stamp_linearised(
+                            matrix,
+                            rhs,
+                            dim,
+                            m,
                             cathode,
                             -sign * current,
                             &negate(&charge_terms),
@@ -2721,7 +2814,7 @@ impl Solver {
                 0.0
             };
             let control = [(-conductance, limit.drive, limit.output, delta)];
-            stamp_linearised(matrix, rhs, dim, limit.output, -current, &control);
+            stamp_linearised(matrix, rhs, dim, 1.0, limit.output, -current, &control);
         }
 
         // A finite SR limits only the gain-node capacitor current. The Rg
@@ -2781,8 +2874,8 @@ impl Solver {
                     node_diff(nodes, source.p, source.n),
                 ),
             ];
-            stamp_linearised(matrix, rhs, dim, source.p, current, &control);
-            stamp_linearised(matrix, rhs, dim, source.n, -current, &negate(&control));
+            stamp_linearised(matrix, rhs, dim, 1.0, source.p, current, &control);
+            stamp_linearised(matrix, rhs, dim, 1.0, source.n, -current, &negate(&control));
         }
     }
 }
@@ -2798,6 +2891,7 @@ fn stamp_linearised(
     matrix: &mut [f64],
     rhs: &mut [f64],
     dim: usize,
+    multiplier: f64,
     terminal: NodeRef,
     current: f64,
     control: &[(f64, NodeRef, NodeRef, f64)],
@@ -2808,11 +2902,11 @@ fn stamp_linearised(
     };
     let mut equivalent = current;
     for (g, p, n, u) in control {
-        add(matrix, dim, Some(row), *p, *g);
-        add(matrix, dim, Some(row), *n, -*g);
+        add(matrix, dim, Some(row), *p, multiplier * g);
+        add(matrix, dim, Some(row), *n, -multiplier * g);
         equivalent -= g * u;
     }
-    rhs[row] -= equivalent;
+    rhs[row] -= multiplier * equivalent;
 }
 
 /// The same controlling terms with every conductance negated — the other

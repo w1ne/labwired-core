@@ -1965,11 +1965,16 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
     }
 }
 
-/// `D<name> n+ n- <model>` — a Shockley junction diode.
+/// `D<name> n+ n- <model> [m=<count>] [temp=<°C>]` — a Shockley junction diode.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Diode {
     /// Element name as written, e.g. `D1`.
     pub name: String,
+    /// SPICE instance multiplier `M`: the element behaves as this many
+    /// identical devices in parallel. Every current, conductance and charge it
+    /// stamps, including its terminal resistances and GMIN, is scaled by it,
+    /// as ngspice's `*load.c` does. `1` for a single device.
+    pub multiplier: f64,
     /// Anode, the terminal the netlist names first.
     pub anode: NodeRef,
     /// Cathode.
@@ -2121,11 +2126,16 @@ pub struct Ccvs {
     pub ohms: f64,
 }
 
-/// `Q<name> nc nb ne <model> [temp=<°C>]` — an Ebers–Moll bipolar transistor.
+/// `Q<name> nc nb ne <model> [m=<count>] [temp=<°C>]` — an Ebers–Moll bipolar transistor.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Bjt {
     /// Element name as written, e.g. `Q1`.
     pub name: String,
+    /// SPICE instance multiplier `M`: the element behaves as this many
+    /// identical devices in parallel. Every current, conductance and charge it
+    /// stamps, including its terminal resistances and GMIN, is scaled by it,
+    /// as ngspice's `*load.c` does. `1` for a single device.
+    pub multiplier: f64,
     /// Collector.
     pub c: NodeRef,
     /// Base.
@@ -2154,11 +2164,16 @@ pub struct Bjt {
     pub temperature_celsius: Option<f64>,
 }
 
-/// `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>] [temp=<°C>]` — a level-1 MOSFET.
+/// `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>] [m=<count>] [temp=<°C>]` — a level-1 MOSFET.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Mosfet {
     /// Element name as written, e.g. `M1`.
     pub name: String,
+    /// SPICE instance multiplier `M`: the element behaves as this many
+    /// identical devices in parallel. Every current, conductance and charge it
+    /// stamps, including its terminal resistances and GMIN, is scaled by it,
+    /// as ngspice's `*load.c` does. `1` for a single device.
+    pub multiplier: f64,
     /// Drain.
     pub d: NodeRef,
     /// Gate.
@@ -2289,11 +2304,16 @@ impl Mosfet {
     }
 }
 
-/// `J<name> nd ng ns <model> [temp=<°C>]` — a SPICE level-1 JFET.
+/// `J<name> nd ng ns <model> [m=<count>] [temp=<°C>]` — a SPICE level-1 JFET.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Jfet {
     /// Element name as written, e.g. `J1`.
     pub name: String,
+    /// SPICE instance multiplier `M`: the element behaves as this many
+    /// identical devices in parallel. Every current, conductance and charge it
+    /// stamps, including its terminal resistances and GMIN, is scaled by it,
+    /// as ngspice's `*load.c` does. `1` for a single device.
+    pub multiplier: f64,
     /// Drain.
     pub d: NodeRef,
     /// Gate.
@@ -2681,6 +2701,7 @@ struct PendingDevice {
     pd: Option<f64>,
     ps: Option<f64>,
     temperature_celsius: Option<f64>,
+    multiplier: f64,
 }
 
 /// A K line held until all its L elements have been parsed.
@@ -2991,13 +3012,13 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
             }
             'D' | 'Q' | 'M' | 'J' => {
                 let (terminals, shape) = match letter {
-                    'D' => (2, "D<name> n+ n- <model>"),
-                    'Q' => (3, "Q<name> nc nb ne <model>"),
+                    'D' => (2, "D<name> n+ n- <model> [m=<count>] [temp=<°C>]"),
+                    'Q' => (3, "Q<name> nc nb ne <model> [m=<count>] [temp=<°C>]"),
                     'M' => (
                         4,
-                        "M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>] [temp=<°C>]",
+                        "M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>] [m=<count>] [temp=<°C>]",
                     ),
-                    _ => (3, "J<name> nd ng ns <model>"),
+                    _ => (3, "J<name> nd ng ns <model> [m=<count>] [temp=<°C>]"),
                 };
                 let rest = &tokens[1..];
                 if rest.len() < terminals + 1 {
@@ -3012,6 +3033,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 let mut pd = None;
                 let mut ps = None;
                 let mut temperature_celsius = None;
+                let mut multiplier = None;
                 for token in &rest[terminals + 1..] {
                     let (key, value) = token
                         .split_once('=')
@@ -3026,6 +3048,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                         "pd" if letter == 'M' => pd = Some(ctx.value(value, "pd")?),
                         "ps" if letter == 'M' => ps = Some(ctx.value(value, "ps")?),
                         "temp" => temperature_celsius = Some(ctx.value(value, "temp")?),
+                        "m" => multiplier = Some(ctx.value(value, "m")?),
                         other => {
                             return Err(ctx.parse_err(format!(
                                 "unknown parameter `{other}`; expected `{shape}`"
@@ -3054,6 +3077,9 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                         "device TEMP must be finite and above absolute zero (-273.15 °C)",
                     ));
                 }
+                if matches!(multiplier, Some(m) if !m.is_finite() || m <= 0.0) {
+                    return Err(ctx.parse_err("device multiplier m must be positive and finite"));
+                }
                 // The terminals are interned now so that node numbering still
                 // follows netlist order; the model is bound after the last
                 // line, because `.model` may come after its elements.
@@ -3077,6 +3103,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     pd,
                     ps,
                     temperature_celsius,
+                    multiplier: multiplier.unwrap_or(1.0),
                 });
             }
             'E' | 'G' => {
@@ -3183,6 +3210,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     pd: None,
                     ps: None,
                     temperature_celsius: None,
+                    multiplier: 1.0,
                 });
             }
             'S' => {
@@ -3621,6 +3649,7 @@ fn bind_models(
                 };
                 circuit.diodes.push(Diode {
                     name: device.name,
+                    multiplier: device.multiplier,
                     anode: device.nodes[0],
                     cathode: device.nodes[1],
                     junction_anode,
@@ -3836,6 +3865,7 @@ fn bind_models(
                     junction_node(circuit, device.nodes[2], operating_model.re, "emitter")?;
                 circuit.bjts.push(Bjt {
                     name: device.name,
+                    multiplier: device.multiplier,
                     c: device.nodes[0],
                     b: device.nodes[1],
                     e: device.nodes[2],
@@ -4093,6 +4123,7 @@ fn bind_models(
                     junction_node(circuit, device.nodes[2], source_resistance_ohms, "source")?;
                 circuit.mosfets.push(Mosfet {
                     name: device.name,
+                    multiplier: device.multiplier,
                     d: device.nodes[0],
                     g: device.nodes[1],
                     s: device.nodes[2],
@@ -4203,6 +4234,7 @@ fn bind_models(
                 let junction_s = junction_node(circuit, device.nodes[2], model.rs, "source")?;
                 circuit.jfets.push(Jfet {
                     name: device.name,
+                    multiplier: device.multiplier,
                     d: device.nodes[0],
                     g: device.nodes[1],
                     s: device.nodes[2],
@@ -4830,6 +4862,7 @@ impl Lowering<'_> {
         let name = self.name(part);
         self.circuit.diodes.push(Diode {
             name,
+            multiplier: 1.0,
             anode,
             cathode,
             junction_anode: anode,
@@ -5212,6 +5245,7 @@ fn lower_comparator(
             };
             lower.circuit.mosfets.push(Mosfet {
                 name,
+                multiplier: 1.0,
                 d: out,
                 g: q,
                 s: vee,
@@ -5380,6 +5414,7 @@ fn lower_regulator(
     let name = lower.name("dl");
     lower.circuit.diodes.push(Diode {
         name,
+        multiplier: 1.0,
         anode: a,
         cathode: l1,
         junction_anode: a,

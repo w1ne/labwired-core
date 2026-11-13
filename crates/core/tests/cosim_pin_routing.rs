@@ -2471,6 +2471,157 @@ fn brd2709a_diode_netlist_reaches_pd2_iadc0_end_to_end() {
     );
 }
 
+/// The SPICE instance multiplier `m=` is one generic mechanism for every
+/// device kind. Two unrelated parts, an n-channel JFET current sink and the
+/// BRD2709A diode card, each run as a single device and as a multiplied
+/// device on PD02..PD05. Independent load-line roots for one device and for
+/// `m` devices in parallel set each node voltage, and each voltage is then
+/// converted through IADC0. A solver that ignored `m` would put the
+/// multiplied branches on the single-device codes.
+#[test]
+fn brd2709a_jfet_and_diode_multipliers_reach_pd2_to_pd5_iadc0() {
+    const CMU_CLKEN0: u64 = 0x4000_8064;
+    const IADC0: u64 = 0x4900_4000;
+    const IADC_EN: u64 = IADC0 + 0x04;
+    const IADC_CMD: u64 = IADC0 + 0x0C;
+    const IADC_STATUS: u64 = IADC0 + 0x14;
+    const IADC_SINGLEFIFODATA: u64 = IADC0 + 0x74;
+    const IADC_SINGLE: u64 = IADC0 + 0x98;
+    const IADC_CLKEN: u32 = 1 << 10;
+    const SINGLEFIFODV: u32 = 1 << 8;
+    const SUPPLY_V: f64 = 3.3;
+    const LOAD_OHMS: f64 = 1_000.0;
+    const JFET_BETA: f64 = 1e-4;
+    const JFET_VTO: f64 = -2.0;
+    const JFET_LAMBDA: f64 = 0.01;
+    const DIODE_IS_A: f64 = 2.52e-9;
+    const DIODE_N: f64 = 1.752;
+    const DIODE_RS_OHMS: f64 = 0.568;
+    const THERMAL_V: f64 = 1.380_649e-23 * 298.15 / 1.602_176_634e-19;
+
+    let system_path = root("configs/systems/brd2709a.yaml");
+    let manifest = SystemManifest::from_file(&system_path).expect("load BRD2709A profile");
+    let chip_path = system_path.parent().unwrap().join(&manifest.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load EFR32MG26 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("build BRD2709A bus");
+    let mut session = build_session(
+        &bus,
+        &[analog_model(
+            1_000,
+            &[],
+            &[
+                ("v_j1", "adc.iadc0.50_volts"),
+                ("v_j3", "adc.iadc0.51_volts"),
+                ("v_d1", "adc.iadc0.52_volts"),
+                ("v_d4", "adc.iadc0.53_volts"),
+            ],
+            "Vcc supply 0 dc 3.3\n\
+             Rj1 supply j1 1k\nJ1 j1 0 0 JSINK\n\
+             Rj3 supply j3 1k\nJ3 j3 0 0 JSINK m=3\n\
+             Rd1 supply d1 1k\nD1 d1 0 DREF TEMP=25\n\
+             Rd4 supply d4 1k\nD4 d4 0 DREF TEMP=25 m=4\n\
+             .model JSINK NJF(VTO=-2 BETA=1e-4 LAMBDA=0.01)\n\
+             .model DREF D(IS=2.52n N=1.752 RS=0.568 TNOM=25 EG=1.11 XTI=3)\n",
+            &[
+                ("v_j1", "v(j1)"),
+                ("v_j3", "v(j3)"),
+                ("v_d1", "v(d1)"),
+                ("v_d4", "v(d4)"),
+            ],
+            &[],
+            SUPPLY_V,
+        )],
+    );
+
+    let boundary = session.cycles_until_boundary(0);
+    let (steps, errors) = session
+        .advance_to(boundary, &mut bus)
+        .expect("solve and route the multiplied branches");
+    assert_eq!(steps.len(), 1, "one 1 us analog boundary is crossed");
+    assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+    let routed = |channel: u8| match session.signals().get(&format!("adc.iadc0.{channel}_volts")) {
+        Some(CosimSignalValue::F64(volts)) => *volts,
+        other => panic!("IADC0 channel {channel} was not driven: {other:?}"),
+    };
+
+    // A grounded-gate JFET in saturation sinks m·BETA·VTO²·(1 + LAMBDA·Vds),
+    // so the drain node solves a linear equation.
+    let jfet_drain = |m: f64| {
+        let idss = m * JFET_BETA * JFET_VTO * JFET_VTO;
+        let volts = (SUPPLY_V - LOAD_OHMS * idss) / (1.0 + LOAD_OHMS * idss * JFET_LAMBDA);
+        assert!(volts > -JFET_VTO, "the m={m} JFET must stay in saturation");
+        volts
+    };
+    // m diodes in parallel: m·IS through the junction and RS/m in series.
+    let diode_node = |m: f64| {
+        let current =
+            |junction_v: f64| m * DIODE_IS_A * ((junction_v / (DIODE_N * THERMAL_V)).exp() - 1.0);
+        let residual = |junction_v: f64| {
+            (SUPPLY_V - junction_v - current(junction_v) * DIODE_RS_OHMS / m) / LOAD_OHMS
+                - current(junction_v)
+        };
+        let (mut low, mut high) = (0.0, 1.2);
+        for _ in 0..100 {
+            let mid = (low + high) / 2.0;
+            if residual(mid) > 0.0 {
+                low = mid;
+            } else {
+                high = mid;
+            }
+        }
+        let junction_v = (low + high) / 2.0;
+        junction_v + current(junction_v) * DIODE_RS_OHMS / m
+    };
+    let expected = [
+        (50, 11, 2, jfet_drain(1.0)),
+        (51, 11, 3, jfet_drain(3.0)),
+        (52, 11, 4, diode_node(1.0)),
+        (53, 11, 5, diode_node(4.0)),
+    ];
+    for (channel, _, _, volts) in expected {
+        let measured = routed(channel);
+        assert!(
+            (measured - volts).abs() < 2e-5,
+            "IADC0 channel {channel} should carry {volts} V, got {measured} V"
+        );
+    }
+    assert!(
+        routed(50) - routed(51) > 0.8,
+        "three JFETs must sink three times the current"
+    );
+    let diode_shift = routed(52) - routed(53);
+    assert!(
+        (0.05..0.07).contains(&diode_shift),
+        "four diodes must lower the node by about N*VT*ln(4), got {diode_shift} V"
+    );
+
+    bus.write_u32(CMU_CLKEN0, IADC_CLKEN)
+        .expect("enable the IADC clock");
+    bus.write_u32(IADC_EN, 1).expect("enable IADC0");
+    for (channel, port, pin, volts) in expected {
+        bus.write_u32(IADC_SINGLE, (port << 12) | (pin << 8))
+            .expect("select the PD input on IADC0");
+        bus.write_u32(IADC_CMD, 1)
+            .expect("start IADC0 single conversion");
+        bus.tick_peripherals_fully();
+        let status = bus.read_u32(IADC_STATUS).expect("read IADC0 status");
+        assert_ne!(
+            status & SINGLEFIFODV,
+            0,
+            "channel {channel} enters the FIFO"
+        );
+        let code = bus
+            .read_u32(IADC_SINGLEFIFODATA)
+            .expect("read the converted voltage");
+        let routed_mv = (volts * 1000.0 + 0.5).floor() as u32;
+        let expected_code = (routed_mv * 4096 / 3300).min(4095);
+        assert_eq!(
+            code, expected_code,
+            "IADC0's 12-bit PD{pin:02} conversion should follow the routed {volts} V"
+        );
+    }
+}
+
 /// Exercise generic MNA NTC and Shockley diode netlists against a real RA ADC12
 /// peripheral. The same device models and ADC register path are used by both
 /// EK-RA6M5 and EK-RA8M1; only each board's ADC base and executable RAM address

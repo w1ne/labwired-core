@@ -7491,4 +7491,112 @@ mod analog {
             warmed.node_voltage(node)
         );
     }
+
+    /// The SPICE instance multiplier `M` makes one element behave as that many
+    /// identical devices in parallel, for every device kind. Each element has
+    /// terminal resistances, so a multiplier that scaled only the junction
+    /// or channel current would move the bias. DC values are ngspice-45
+    /// `.op` (`.temp 26.85`, `tnom=26.85`), where `m=3` and three parallel
+    /// copies print the same five node voltages.
+    #[test]
+    fn device_multiplier_m_matches_parallel_copies_and_ngspice() {
+        let models = ".model DR D(IS=1e-14 RS=20 N=1.2 CJO=20p TT=5n)\n\
+            .model QR NPN(IS=1e-15 BF=100 RB=50 RC=10 RE=2 VAF=50 IKF=10m CJE=5p CJC=3p TF=1n)\n\
+            .model MR NMOS(LEVEL=1 VTO=1 KP=20u RD=200 RS=100 LAMBDA=0.02 CGSO=1n CGDO=1n CBD=2p)\n\
+            .model JR NJF(VTO=-2 BETA=1e-4 RD=50 RS=50 LAMBDA=0.01 CGS=4p CGD=2p)\n";
+        let devices = [
+            ("D1", "a 0 DR"),
+            ("Q1", "c b 0 QR"),
+            ("M1", "dm supply 0 0 MR W=10u L=2u"),
+            ("J1", "dj 0 0 JR"),
+        ];
+        let deck = |supply: &str, copies: usize, multiplier: Option<&str>| {
+            let mut text = format!(
+                "Vdd supply 0 {supply}\nRd supply a 1k\nRc supply c 1k\nRb supply b 100k\n\
+                 Rm supply dm 10k\nRj supply dj 2k\n"
+            );
+            for (name, rest) in devices {
+                for copy in 0..copies {
+                    let suffix = multiplier.map_or(String::new(), |m| format!(" m={m}"));
+                    text.push_str(&format!("{name}x{copy} {rest}{suffix}\n"));
+                }
+            }
+            text + models
+        };
+        let nodes = ["a", "c", "b", "dm", "dj"];
+        let volts = |solver: &Solver| {
+            nodes.map(|node| solver.node_voltage(solver.circuit().node(node).expect("node exists")))
+        };
+
+        let single = volts(&build(&deck("dc 3.3", 1, None)));
+        let multiplied = volts(&build(&deck("dc 3.3", 1, Some("3"))));
+        let parallel = volts(&build(&deck("dc 3.3", 3, None)));
+        let ngspice_single = [0.862_150_2, 1.172_329, 0.744_160_3, 1.249_760, 2.496_725];
+        let ngspice_m3 = [
+            0.796_819_9,
+            0.895_513_0,
+            0.712_543_9,
+            0.479_434_2,
+            1.259_871,
+        ];
+        for (index, node) in nodes.iter().enumerate() {
+            assert!(
+                (single[index] - ngspice_single[index]).abs() < 1e-4,
+                "V({node}) single device: ngspice {}, got {}",
+                ngspice_single[index],
+                single[index]
+            );
+            assert!(
+                (multiplied[index] - ngspice_m3[index]).abs() < 1e-4,
+                "V({node}) with m=3: ngspice {}, got {}",
+                ngspice_m3[index],
+                multiplied[index]
+            );
+            assert!(
+                (multiplied[index] - parallel[index]).abs() < 1e-9,
+                "V({node}): m=3 gives {}, three parallel copies give {}",
+                multiplied[index],
+                parallel[index]
+            );
+        }
+
+        // Stored charge scales too: a supply step charges m=3 the same way
+        // as three copies, step for step.
+        let pulse = "PULSE(0 3.3 0 20n 20n 1u 2u)";
+        let mut multiplied = build(&deck(pulse, 1, Some("3")));
+        let mut parallel = build(&deck(pulse, 3, None));
+        let mut single = build(&deck(pulse, 1, None));
+        let mut largest_difference: f64 = 0.0;
+        for _ in 0..40 {
+            for solver in [&mut multiplied, &mut parallel, &mut single] {
+                solver.advance(5e-9).expect("transient step solves");
+            }
+            let (m, p, one) = (volts(&multiplied), volts(&parallel), volts(&single));
+            for index in 0..nodes.len() {
+                assert!(
+                    (m[index] - p[index]).abs() < 1e-7,
+                    "V({}) at {} s: m=3 gives {}, three copies give {}",
+                    nodes[index],
+                    multiplied.time(),
+                    m[index],
+                    p[index]
+                );
+                largest_difference = largest_difference.max((m[index] - one[index]).abs());
+            }
+        }
+        assert!(
+            largest_difference > 0.1,
+            "m=3 must load the circuit differently from one device, max diff {largest_difference} V"
+        );
+
+        for value in ["0", "-2", "1e999"] {
+            let error = parse_netlist(&format!("D1 a 0 DR m={value}\n{models}"))
+                .expect_err("a non-positive multiplier must be refused")
+                .to_string();
+            assert!(
+                error.contains("multiplier"),
+                "m={value}: unexpected error {error}"
+            );
+        }
+    }
 }
