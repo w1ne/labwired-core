@@ -106,6 +106,56 @@ fn bjt_early_effect_collector_voltage(base_drive_v: f64, vaf_v: Option<f64>) -> 
     collector_for_vbe(0.5 * (low + high))
 }
 
+/// Independent Gummel–Poon load line with optional reverse Early effect.
+fn bjt_reverse_early_effect_collector_voltage(base_drive_v: f64, var_v: Option<f64>) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const COLLECTOR_OHMS: f64 = 1_000.0;
+    const BASE_OHMS: f64 = 10_000.0;
+    const IS_A: f64 = 1e-16;
+    const BF: f64 = 80.0;
+    const BR: f64 = 4.0;
+    const VT: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+
+    let currents = |vbe: f64, collector_v: f64| {
+        let vbc = vbe - collector_v;
+        let forward = (vbe / VT).exp();
+        let reverse = (vbc / VT).exp();
+        let base_width = 1.0 - var_v.map_or(0.0, |var| vbe / var);
+        let transport = IS_A * (forward - reverse) * base_width;
+        let base_emitter = (IS_A / BF) * (forward - 1.0);
+        let base_collector = (IS_A / BR) * (reverse - 1.0);
+        (transport - base_collector, base_emitter + base_collector)
+    };
+
+    let collector_for_vbe = |vbe: f64| {
+        let (mut low, mut high) = (0.0, SUPPLY_V);
+        for _ in 0..100 {
+            let collector_v = 0.5 * (low + high);
+            let (collector_current, _) = currents(vbe, collector_v);
+            let residual = (SUPPLY_V - collector_v) / COLLECTOR_OHMS - collector_current;
+            if residual > 0.0 {
+                low = collector_v;
+            } else {
+                high = collector_v;
+            }
+        }
+        0.5 * (low + high)
+    };
+
+    let (mut low, mut high) = (0.0, base_drive_v);
+    for _ in 0..100 {
+        let vbe = 0.5 * (low + high);
+        let collector_v = collector_for_vbe(vbe);
+        let (_, base_current) = currents(vbe, collector_v);
+        if (base_drive_v - vbe) / BASE_OHMS > base_current {
+            low = vbe;
+        } else {
+            high = vbe;
+        }
+    }
+    collector_for_vbe(0.5 * (low + high))
+}
+
 fn signal_voltage(session: &CosimSession, path: &str) -> f64 {
     match session.signals().get(path) {
         Some(CosimSignalValue::F64(volts)) => *volts,
@@ -1466,6 +1516,152 @@ fn nucleo_u575zi_bjt_early_effect_reaches_adc1_alongside_ntc_and_diode() {
     assert!(
         early_effect_deltas.iter().any(|delta| *delta > 0.02),
         "the finite-VAF branch must show a measurable collector-current increase: {early_effect_deltas:?}"
+    );
+}
+
+#[test]
+fn nucleo_u575zi_bjt_reverse_early_effect_reaches_adc1_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/nucleo-u575zi.yaml");
+    let mut profile =
+        SystemManifest::from_file(&system_path).expect("load NUCLEO-U575ZI-Q profile");
+    let generic =
+        SystemManifest::from_file(root("examples/nucleo-u575zi/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC divider and Shockley diode");
+    let reverse_early = SystemManifest::from_file(root(
+        "examples/nucleo-u575zi/analog-bjt-reverse-early-effect-system.yaml",
+    ))
+    .expect("load matched generic Gummel–Poon reverse Early-effect branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(reverse_early.cosim_models);
+
+    let chip = labwired_config::ChipDescriptor::from_file(
+        system_path.parent().unwrap().join(&profile.chip),
+    )
+    .expect("load STM32U575 descriptor");
+    for (pin, channel) in [("PA2", 7), ("PA3", 8)] {
+        assert_eq!(
+            chip.analog_pins
+                .get(pin)
+                .map(|route| (route.peripheral.as_str(), route.channel)),
+            Some(("adc1", channel)),
+            "{pin} must resolve to its documented ADC1 input channel {channel}"
+        );
+    }
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-U575ZI-Q bus");
+
+    let ahb2enr1 = bus.read_u32(RCC_AHB2ENR1).expect("read RCC AHB2ENR1");
+    bus.write_u32(RCC_AHB2ENR1, ahb2enr1 | (1 << 10))
+        .expect("enable ADC1 clock");
+    bus.write_u32(ADC_CR, 0).expect("leave ADC deep power-down");
+    bus.write_u32(ADC_CR, 1 << 28)
+        .expect("enable ADC voltage regulator");
+    bus.write_u32(ADC_CR, (1 << 28) | (1 << 31))
+        .expect("calibrate ADC1");
+    bus.write_u32(ADC_CR, (1 << 28) | 1).expect("enable ADC1");
+    assert_ne!(
+        bus.read_u32(ADC_ISR).expect("read ADC1 ready status") & 1,
+        0,
+        "ADC1 must report ADRDY before conversion"
+    );
+    bus.write_u32(ADC_CFGR1, 0x8000_0000 | (1 << 2))
+        .expect("select 12-bit conversion resolution");
+    bus.write_u32(ADC_PCSEL, (1 << 5) | (1 << 6) | (1 << 7) | (1 << 8))
+        .expect("select NTC, diode, and both BJT ADC channels");
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries NTC, diode, and matched reverse Early branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must resolve PA0–PA3 to ADC1 channels 5–8"
+    );
+    assert_eq!(
+        adc_channel_count(&mut bus, 9),
+        u16::MAX,
+        "ADC1 channel 9 starts undriven"
+    );
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.bjt_reverse_early_effect.base_v", 0.0)
+        .expect("initialize matched BJT base-drive sources");
+
+    let ntc_v = 1.65;
+    let diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    let mut reverse_early_deltas = Vec::new();
+    for base_drive_v in [0.70_f64, 0.78, 0.86] {
+        session
+            .set_signal_number("ui.bjt_reverse_early_effect.base_v", base_drive_v)
+            .expect("set common BJT base drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and matched BJT branches");
+        assert_eq!(steps.len(), 4, "all four generic analog branches solve");
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        let routed_ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let routed_diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+        assert!(
+            (routed_ntc_v - ntc_v).abs() < 1e-9,
+            "unrelated Beta NTC remains isolated on ADC1 channel 5"
+        );
+        assert!(
+            (routed_diode_v - diode_v).abs() < 2e-5,
+            "unrelated Shockley diode remains isolated on ADC1 channel 6"
+        );
+
+        let finite_var_v = signal_voltage(&session, "board.analog.pa2_volts");
+        let control_v = signal_voltage(&session, "board.analog.pa3_volts");
+        let expected_finite_var_v =
+            bjt_reverse_early_effect_collector_voltage(base_drive_v, Some(10.0));
+        let expected_control_v = bjt_reverse_early_effect_collector_voltage(base_drive_v, None);
+        assert!(
+            (finite_var_v - expected_finite_var_v).abs() < 5e-5,
+            "VAR=10 load line at base drive {base_drive_v} V should be {expected_finite_var_v} V, got {finite_var_v} V"
+        );
+        assert!(
+            (control_v - expected_control_v).abs() < 5e-5,
+            "matched no-reverse-Early load line at base drive {base_drive_v} V should be {expected_control_v} V, got {control_v} V"
+        );
+        assert!(
+            finite_var_v - control_v > 0.001,
+            "finite VAR increases base charge and lowers collector current, raising collector voltage: {finite_var_v} V vs {control_v} V"
+        );
+        reverse_early_deltas.push(finite_var_v - control_v);
+
+        for (channel, voltage_v) in [
+            (5, routed_ntc_v),
+            (6, routed_diode_v),
+            (7, finite_var_v),
+            (8, control_v),
+        ] {
+            let expected_count = expected_adc12_count(voltage_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected_count as u16,
+                "solved voltage seeds ADC1 channel {channel}"
+            );
+            assert_eq!(
+                u5_adc_convert(&mut bus, channel),
+                expected_count,
+                "firmware-visible ADC1 data register follows channel {channel}"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 9),
+            u16::MAX,
+            "adjacent ADC1 channel 9 stays isolated"
+        );
+    }
+
+    assert!(
+        reverse_early_deltas.iter().any(|delta| *delta > 0.01),
+        "the finite-VAR branch must show a measurable collector-current decrease: {reverse_early_deltas:?}"
     );
 }
 
