@@ -5033,6 +5033,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#nrf54l05" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nrf54l05
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nrf54l10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nrf54l10
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#nrf54l15" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -6749,6 +6771,10 @@
 <p><strong>Advanced peripherals — unit-tested only</strong> (no firmware drives them): <code>GPIO</code>, <code>TIMER0-2</code>, <code>RTC0</code>, <code>TWIM1 + BMI270 CHIP_ID EasyDMA transaction</code></p>
 <p><strong>Shims</strong> (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - <code>DCNF/FPU/CACHE/SPU/OSC_REG/CTRLAP/GPIOTE0/DPPIC/FICR</code> (nrf5340_*_stub) — STRUCTURAL: SystemInit pokes them once at boot and never polls them again, so a register stub is byte-faithful for the hello_world boot path.</p>
+<h3 id="nrf54l05"><code>nrf54l05</code></h3>
+<p><em>Minimal nRF54L05 application-core smoke using real RRAM and SRAM geometry, UARTE20 EasyDMA and GPIO P2.09. Only a synthetic board is tested; no beyond-rubric firmware function exists. Full Zephyr/SDK boot, BLE radio, TrustZone and silicon parity are untested.</em></p>
+<h3 id="nrf54l10"><code>nrf54l10</code></h3>
+<p><em>Minimal nRF54L10 application-core smoke using real RRAM and SRAM geometry, UARTE20 EasyDMA and GPIO P2.09. Only a synthetic board is tested; no beyond-rubric firmware function exists. Full Zephyr/SDK boot, BLE radio, TrustZone and silicon parity are untested.</em></p>
 <h3 id="nrf54l15"><code>nrf54l15</code></h3>
 <p><em>No tier1 fixture. Unmodified Zephyr v4.4 hello_world boots end-to-end (nRF54L CLOCK/LFCLK, GRTC kernel tick, TAMPC approtect gate, RRAM-mapped UARTE20 EasyDMA) and the PR-gated smart-ring probe reads four I2C sensor IDs. Beyond the rubric TEMP/EGU/GPIOTE are unit-tested models no firmware drives; TAMPC/RRAMC/regulators/FICR/UICR/DPPIC are zero-filled stub windows the boot path pokes but never polls.</em></p>
 <p><strong>Advanced peripherals — unit-tested only</strong> (no firmware drives them): <code>TEMP</code>, <code>EGU10</code>, <code>EGU20</code>, <code>GPIOTE20</code>, <code>GPIOTE30</code></p>
