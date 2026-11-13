@@ -18,6 +18,11 @@ on:
     # Nightly full integrity + feature gates (02:30 UTC).
     - cron: "30 2 * * *"
   workflow_dispatch:
+    inputs:
+      build_timings:
+        description: "Also run the labwired-core cargo build --timings job (cold build, uploads the report)"
+        type: boolean
+        default: false
 
 # PR runs still cancel superseded PR heads. push / schedule / workflow_dispatch
 # each get their own group so a manual full-CI dispatch (or nightly) cannot
@@ -575,6 +580,16 @@ jobs:
       # line below or it will never run. test_generate_validation_status.py covers the
       # history and watch-list guards, capture provenance, and nonblocking source
       # drift policy. It needs pyyaml, installed by the step above.
+      # Module dependency map of crates/core/src: reports kernel modules (bus,
+      # peripherals root, generic factory, ...) gaining dependencies on leaf
+      # modules (vendor peripheral sets, components, non-bus CPUs). ADVISORY:
+      # warnings and a step summary, no failure on increases, because chip work
+      # still has to add such references. Switch to `--check --strict` once
+      # vendor construction is inverted. Pure Python, no cargo, about 5 seconds. See docs/engineering/test_harness.md
+      # ("Core dependency ratchet"). Its unit tests are in the pytest line below.
+      - name: Core dependency ratchet — advisory report
+        run: python3 scripts/ci/core_dep_map.py --check
+
       - name: Perf gate — every chip covered or waived
         run: |
           python -m pip install --quiet pytest
@@ -589,6 +604,7 @@ jobs:
             scripts/ci/test_matrix_external_cache.py \
             scripts/ci/test_matrix_verdict.py \
             scripts/ci/test_cheat_ratchet.py \
+            scripts/ci/test_core_dep_map.py \
             scripts/ci/test_ignore_reasons.py \
             scripts/ci/test_linker_script_single_source.py \
             scripts/ci/test_host_clippy_scope.py \
@@ -739,6 +755,32 @@ jobs:
 
       - name: Unit tests (default-members lib)
         run: cargo test --lib
+
+  # Manual only: a cold `cargo build -p labwired-core --timings` on CI hardware,
+  # so build-time work (crate splits, test-binary consolidation) has a measured
+  # baseline. Dispatch with `build_timings: true`. Never runs on pull_request
+  # or push, and is not a required check. Deliberately no cache: a warm cache
+  # would hide the cost being measured.
+  core-build-timings:
+    name: core-build-timings
+    if: github.event_name == 'workflow_dispatch' && inputs.build_timings
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Build labwired-core with timings
+        run: cargo build -p labwired-core --timings
+
+      - name: Upload timing reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-build-timings
+          path: target/cargo-timings/
+          if-no-files-found: error
 
   # Tail of pr-gate, split out on 2026-09-30. Two warm runs of the same
   # Rust sources were cancelled at timeout-minutes 20 inside Firmware
