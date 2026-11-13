@@ -1,6 +1,6 @@
-// EFR32xG22 Renode-onboarding smoke. Keeps the USART0 banner, then exercises
-// TIMER0 (0x4004_8000, NVIC line 7, 32-bit) and TIMER1 (0x4004_C000, NVIC
-// line 8, 16-bit).
+// EFR32xG22 Renode-onboarding smoke. Keeps the USART0 banner, checks the
+// nine-pin GPIOA register/pad surface, then exercises TIMER0 (0x4004_8000,
+// NVIC line 7, 32-bit) and TIMER1 (0x4004_C000, NVIC line 8, 16-bit).
 // Bases, IRQ numbers, CMU_CLKEN0 bits and TIMERn_CNTWIDTH come from the
 // Silicon Labs `efr32bg22c224f512im40.h` / `efr32bg22_cmu.h` headers; Renode's
 // efr32xg22.repl maps the same bases and NVIC lines.
@@ -29,6 +29,7 @@ const CMU_CLKEN0: *mut u32 = 0x4000_8064 as *mut u32;
 const CMU_CLKEN0_TIMER0: u32 = 1 << 4;
 const CMU_CLKEN0_TIMER1: u32 = 1 << 5;
 const CMU_CLKEN0_USART0: u32 = 1 << 8;
+const CMU_CLKEN0_GPIO: u32 = 1 << 26;
 
 const USART0_BASE: usize = 0x4005_C000;
 const USART0_EN: *mut u32 = (USART0_BASE + 0x04) as *mut u32;
@@ -40,6 +41,16 @@ const USART0_TXDATA: *mut u32 = (USART0_BASE + 0x38) as *mut u32;
 const USART_CMD_TXEN: u32 = 1 << 2;
 const USART_STATUS_TXBL: u32 = 1 << 6;
 const USART0_CLKDIV_115200: u32 = 2384;
+
+// xG22 Reference Manual 25.5/25.6: GPIOA starts at 0x4003_C000; DOUT/DIN
+// are +0x10/+0x14. Bit aliases are provided at +0x1000/+0x2000/+0x3000.
+const GPIOA_BASE: usize = 0x4003_C000;
+const G_MODEL: usize = 0x04;
+const G_MODEH: usize = 0x0C;
+const G_DOUT: usize = 0x10;
+const G_DIN: usize = 0x14;
+const GPIOA_PA4: u32 = 1 << 4;
+const GPIOA_UNBONDED_PA9: u32 = 1 << 9;
 
 // TIMER_TypeDef offsets; +0x1000 is the SET alias, +0x2000 the CLR alias.
 const TIMER0_BASE: usize = 0x4004_8000;
@@ -136,7 +147,7 @@ fn main() -> ! {
     unsafe {
         write_volatile(
             CMU_CLKEN0,
-            CMU_CLKEN0_USART0 | CMU_CLKEN0_TIMER0 | CMU_CLKEN0_TIMER1,
+            CMU_CLKEN0_USART0 | CMU_CLKEN0_TIMER0 | CMU_CLKEN0_TIMER1 | CMU_CLKEN0_GPIO,
         );
         write_volatile(USART0_EN, 1);
         write_volatile(USART0_CLKDIV, USART0_CLKDIV_115200);
@@ -144,6 +155,41 @@ fn main() -> ! {
     }
 
     puts(b"EFR32xG22 Cortex-M33 USART0 smoke\r\n");
+
+    // GPIOA.MODEL configures PA4 as push-pull. PA8 is the only PA pin in
+    // MODEH on this package, so the profile must discard the PA9 mode bit.
+    wr(GPIOA_BASE, G_MODEL, 4 << (4 * 4));
+    wr(GPIOA_BASE, G_MODEH, 0x4444);
+    let mode = (rd(GPIOA_BASE, G_MODEL) == (4 << (4 * 4)) && rd(GPIOA_BASE, G_MODEH) == 4) as u32;
+
+    // Toggle PA4 high/low/high/low through Series-2 bit aliases and read the
+    // pin level from DIN. Also write unbonded PA9; it must not enter DOUT.
+    wr(
+        GPIOA_BASE,
+        ALIAS_SET + G_DOUT,
+        GPIOA_PA4 | GPIOA_UNBONDED_PA9,
+    );
+    let set = (rd(GPIOA_BASE, G_DOUT) & GPIOA_PA4 != 0) as u32;
+    let bond = (rd(GPIOA_BASE, G_DOUT) & GPIOA_UNBONDED_PA9 == 0) as u32;
+    let din_hi = (rd(GPIOA_BASE, G_DIN) == GPIOA_PA4) as u32;
+    wr(GPIOA_BASE, 0x3000 + G_DOUT, GPIOA_PA4);
+    let tgl = (rd(GPIOA_BASE, G_DOUT) == 0 && rd(GPIOA_BASE, G_DIN) == 0) as u32;
+    wr(GPIOA_BASE, ALIAS_SET + G_DOUT, GPIOA_PA4);
+    let set2 = (rd(GPIOA_BASE, G_DOUT) == GPIOA_PA4) as u32;
+    wr(GPIOA_BASE, ALIAS_CLR + G_DOUT, GPIOA_PA4);
+    let clr = (rd(GPIOA_BASE, G_DOUT) == 0 && rd(GPIOA_BASE, G_DIN) == 0) as u32;
+
+    puts(b"gpio");
+    put_kv(b"mode", mode);
+    put_kv(b"set", set);
+    put_kv(b"bond", bond);
+    put_kv(b"din_hi", din_hi);
+    put_kv(b"tgl", tgl);
+    put_kv(b"set2", set2);
+    put_kv(b"clr", clr);
+    let gpio_ok =
+        mode == 1 && set == 1 && bond == 1 && din_hi == 1 && tgl == 1 && set2 == 1 && clr == 1;
+    puts(if gpio_ok { b" ok\r\n" } else { b" FAIL\r\n" });
 
     // 1. Counter width. CFG is written while EN is clear, as on silicon.
     let t0 = TIMER0_BASE;

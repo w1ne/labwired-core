@@ -1074,12 +1074,29 @@ impl SystemBus {
                         .get("reg_offset")
                         .and_then(|v| v.as_u64())
                         .unwrap_or(0);
-                    // For nRF52 ports, an optional `num_pins` config key caps the
-                    // valid-pin range (e.g. 16 for nRF52840 P1 which has P1.0–P1.15).
-                    // Writes outside that range are discarded; reads return 0.
-                    let port = if layout == GpioRegisterLayout::Nrf52
+                    // Optional package-specific pin counts cap GPIO families whose
+                    // registers are wider than the bonded pads. Writes to absent
+                    // pins are discarded and pad access rejects them.
+                    let port = if layout == GpioRegisterLayout::Efr32s2
+                        && p_cfg.config.contains_key("num_pins")
+                    {
+                        let num_pins = p_cfg
+                            .config
+                            .get("num_pins")
+                            .and_then(|v| v.as_u64())
+                            .filter(|n| (1..=16).contains(n))
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "GPIO peripheral '{}': efr32s2 `num_pins` must be in 1..=16",
+                                    p_cfg.id
+                                )
+                            })? as u8;
+                        crate::peripherals::gpio::GpioPort::new_efr32s2(num_pins)
+                            .with_window_offset(window_offset)
+                    } else if layout == GpioRegisterLayout::Nrf52
                         || layout == GpioRegisterLayout::Nrf54l
                     {
+                        // nRF52/54 ports use this for widths such as nRF52840 P1 = 16.
                         let num_pins: u32 = p_cfg
                             .config
                             .get("num_pins")

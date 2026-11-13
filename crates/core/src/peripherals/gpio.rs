@@ -813,6 +813,9 @@ pub struct Efr32s2Gpio {
     modeh: u32, // 0x0C
     dout: u32,  // 0x10
     din: u32,   // 0x14 — latched external (button/sensor) input
+    /// Bonded pins on this physical port. Most Series-2 parts expose up to
+    /// 16 per port; small packages such as EFR32BG22 Port A expose fewer.
+    num_pins: u8,
     /// Mode masks decoded from MODEL/MODEH. DIN is read on every instruction
     /// by the GPIO edge pass, and the nibble scan used to run on that read.
     /// A mode write is the only thing that changes them. Not registers.
@@ -848,6 +851,7 @@ impl Default for Efr32s2Gpio {
             modeh: 0,
             dout: 0,
             din: 0,
+            num_pins: 16,
             cached_push_pull: 0,
             cached_wired_or: 0,
             cached_wired_and: 0,
@@ -860,6 +864,28 @@ impl Default for Efr32s2Gpio {
 }
 
 impl Efr32s2Gpio {
+    fn with_num_pins(num_pins: u8) -> Self {
+        assert!((1..=16).contains(&num_pins));
+        Self {
+            num_pins,
+            ..Self::default()
+        }
+    }
+
+    #[inline]
+    fn pin_mask(&self) -> u32 {
+        (1u32 << self.num_pins) - 1
+    }
+
+    #[inline]
+    fn mode_mask(nibbles: u8) -> u32 {
+        match nibbles {
+            0 => 0,
+            8.. => u32::MAX,
+            n => (1u32 << (u32::from(n) * 4)) - 1,
+        }
+    }
+
     /// The 4-bit mode field of `pin` (MODEL for pins 0..7, MODEH for 8..15).
     fn mode_nibble(&self, pin: u32) -> u32 {
         let reg = if pin < 8 { self.model } else { self.modeh };
@@ -867,7 +893,7 @@ impl Efr32s2Gpio {
     }
 
     fn mask_where(&self, pred: impl Fn(u32) -> bool) -> u32 {
-        (0..16u32)
+        (0..u32::from(self.num_pins))
             .filter(|&pin| pred(self.mode_nibble(pin)))
             .fold(0, |m, pin| m | (1 << pin))
     }
@@ -918,7 +944,7 @@ impl Efr32s2Gpio {
         let (pulled, up) = self.pull_masks();
         let from_pull = pulled & !self.external;
         let from_latch = !driven & !from_pull;
-        ((self.dout & driven) | (up & from_pull) | (self.din & from_latch)) & 0xFFFF
+        ((self.dout & driven) | (up & from_pull) | (self.din & from_latch)) & self.pin_mask()
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
@@ -938,18 +964,18 @@ impl Efr32s2Gpio {
         match offset {
             0x00 => self.ctrl = value,
             0x04 => {
-                self.model = value;
+                self.model = value & Self::mode_mask(self.num_pins.min(8));
                 self.recompute_drive_masks();
             }
             0x0C => {
-                self.modeh = value;
+                self.modeh = value & Self::mode_mask(self.num_pins.saturating_sub(8));
                 self.recompute_drive_masks();
             }
-            // DOUT/DIN are 16-bit on this part (GPIO_PORT_x_WIDTH = 0x10 for
-            // all four ports on the IM48). DIN is read-only for firmware —
-            // like silicon, a store to it is ignored; external input arrives
-            // via set_external_input.
-            0x10 => self.dout = value & 0xFFFF,
+            // DOUT/DIN are at most 16 bits wide. `num_pins` masks bits not
+            // bonded on this package. DIN is read-only for firmware — like
+            // silicon, a store to it is ignored; external input arrives via
+            // set_external_input.
+            0x10 => self.dout = value & self.pin_mask(),
             _ => {
                 crate::census_reg!("gpio:Efr32s2Gpio", offset, "write");
             }
@@ -3041,6 +3067,13 @@ impl GpioPort {
         })
     }
 
+    /// Build a Series-2 EFR32 GPIO port with a package-specific bonded-pin
+    /// count. `num_pins` is from the device package map, not the register
+    /// struct's maximum 16-bit width.
+    pub fn new_efr32s2(num_pins: u8) -> Self {
+        Self::from_family(GpioFamily::Efr32s2(Efr32s2Gpio::with_num_pins(num_pins)))
+    }
+
     /// Build a CMSDK AHB GPIO port whose ALTFUNC resets to `alt_func`
     /// (Renode `alternateFunctionResetValue`; UT32M0R500 GPIO2 = 0xFFFF).
     pub fn new_cmsdk(alt_func: u32) -> Self {
@@ -3619,8 +3652,8 @@ impl crate::pins::PinPort for GpioPort {
             GpioFamily::Stm32F1(_)
             | GpioFamily::Stm32V2(_)
             | GpioFamily::RaPort(_)
-            | GpioFamily::Efr32s2(_)
             | GpioFamily::Efm32s0(_) => 16,
+            GpioFamily::Efr32s2(g) => g.num_pins,
             GpioFamily::EosS3(_) => 8,
             GpioFamily::Nrf52(g) => g.num_pins.min(32) as u8,
             _ => 32,

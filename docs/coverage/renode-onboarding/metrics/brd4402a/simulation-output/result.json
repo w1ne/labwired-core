@@ -36,7 +36,22 @@
     },
     {
       "assertion": {
+        "uart_contains": "gpio mode=1 set=1 bond=1 din_hi=1 tgl=1 set2=1 clr=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "uart_contains": "timers w32=1 w16=1 run=1 cnt=1 stop=1 irq=3 direct_kept=1 alias_clr=1 t1of=1 t1masked=1 t1pend=1 t1rel=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpioa:4",
+          "min_edges": 4
+        }
       },
       "passed": true
     },
@@ -54,20 +69,20 @@
       1,
       0,
       2147483648,
-      1074118680,
+      1,
       1,
       1,
       536903664,
       0,
       1,
-      1,
-      1,
-      4469,
+      1074118680,
+      54,
+      5664,
       536903632,
       1074118680,
-      3682
+      4844
     ],
-    "pc": 3682,
+    "pc": 4844,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -80,7 +95,7 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "firmware_hash": "3491f9181ab601a45c12b952a68d9c7dead2ef3344534b510403c44a31e2d61b",
+  "firmware_hash": "63a4e338d180a0ba5cfd14726d8c081bc646862504a276a56b50ea7dd544e907",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-efr32xg22-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/brd4402a.yaml",
@@ -99,6 +114,13 @@
         "name": "usart0",
         "kind": "native",
         "base": 1074118656,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioa",
+        "kind": "native",
+        "base": 1073987584,
         "registers": [],
         "artifacts": []
       },
@@ -156,10 +178,86 @@
       "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
     }
   ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 400000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpioa",
+        "pin": 4,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 341,
+            "value": 1
+          },
+          {
+            "cycle": 347,
+            "value": 0
+          },
+          {
+            "cycle": 363,
+            "value": 1
+          },
+          {
+            "cycle": 367,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 326,
+            "state": "0"
+          },
+          {
+            "cycle": 341,
+            "state": "1"
+          },
+          {
+            "cycle": 347,
+            "state": "0"
+          },
+          {
+            "cycle": 363,
+            "state": "1"
+          },
+          {
+            "cycle": 367,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 4
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpioa",
+      "number": 4,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
   "uart_lines": {
     "lines": [
       {
         "text": "EFR32xG22 Cortex-M33 USART0 smoke",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "gpio mode=1 set=1 bond=1 din_hi=1 tgl=1 set2=1 clr=1 ok",
         "cycle_lo": 0,
         "cycle": 10000,
         "end_cycle": 10000
@@ -175,14 +273,14 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 4472,
+    "text_bytes": 5664,
     "data_bytes": 0,
     "bss_bytes": 4,
-    "flash_used_bytes": 4472,
+    "flash_used_bytes": 5664,
     "ram_static_bytes": 4,
     "flash_total_bytes": 516096,
     "ram_total_bytes": 32768,
-    "flash_used_pct": 0.87,
+    "flash_used_pct": 1.1,
     "ram_static_pct": 0.01,
     "notes": [
       "section_sum_not_bin_image",
@@ -208,20 +306,20 @@
     "cycles": 400000,
     "instructions": 400000,
     "steps_executed": 400000,
-    "memory_reads": 3545,
-    "memory_writes": 122,
-    "peripheral_accesses": 444,
+    "memory_reads": 3849,
+    "memory_writes": 168,
+    "peripheral_accesses": 578,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 3682,
-        "count": 1523,
-        "symbol": "core::core_arch::arm_shared::hints::__yield"
-      },
-      {
-        "pc": 2626,
+        "pc": 3590,
         "count": 39,
         "symbol": "firmware_efr32xg22_smoke::__cortex_m_rt_main"
+      },
+      {
+        "pc": 4844,
+        "count": 25,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
       }
     ]
   }

@@ -3,9 +3,10 @@
 # https://github.com/renode/renode/blob/master/platforms/cpus/silabs/efr32s2/efr32xg22.repl
 # https://github.com/renode/renode/blob/master/platforms/boards/silabs/brd4402a.repl
 # This exposes the primary Cortex-M33, application flash, SRAM, Series-2 CMU,
-# model-backed USART0, TIMER0 and TIMER1 only. The secondary M0+ radio
-# sequencer, radio, and generated peripheral claims are omitted. In particular,
-# the DCDC_IF Python peripheral is a zero-answering placeholder and is not
+# model-backed USART0, GPIO Port A, TIMER0 and TIMER1 only. Port A is limited
+# to the BG22 package's nine bonded pins. The secondary M0+ radio sequencer,
+# radio, and generated peripheral claims are omitted. In particular, the
+# DCDC_IF Python peripheral is a zero-answering placeholder and is not
 # advertised here.
 name: efr32xg22
 arch: arm
@@ -32,6 +33,18 @@ peripherals:
     base_address: 0x4005C000
     size: 16KB
     clock: { reg: clken0, bit: 8 }
+  # xG22 GPIO Port A starts at GPIO base; DOUT/DIN are +0x10/+0x14.
+  # EFR32xG22 Reference Manual 25.5/25.6 and 8.5.10: PA is 9 pins and
+  # CLKEN0.GPIO is bit 26. The smoke covers MODE/MODEH, DOUT aliases and DIN;
+  # CTRL slew behavior and the GPIO block routing/interrupt registers are not
+  # claimed by this port window.
+  - id: gpioa
+    type: efr32s2_gpioport
+    bus: sysbus
+    base_address: 0x4003C000
+    size: 24B
+    clock: { reg: clken0, bit: 26 }
+    config: { num_pins: 9 }
   # TIMER0/TIMER1: bases, NVIC lines 7/8, CMU_CLKEN0 bits 4/5 and
   # TIMER0_CNTWIDTH = 32 / TIMER1_CNTWIDTH = 16 from efr32bg22c224f512im40.h and
   # efr32bg22_cmu.h (EFR32MG22 headers carry the same CLKEN0 bits). Renode's
