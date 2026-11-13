@@ -47,6 +47,12 @@ boards:
     path: examples/esp32h2-devkitm-1-n4s
     rust_targets: [riscv32imc-unknown-none-elf]
     gate: true
+  # Demand-rank 1 ESP32-family depth: current C61 DevKitC-1 N8R2 UART0 path.
+  - id: esp32c61-devkitc-1-n8r2
+    kind: sim-validate
+    path: examples/esp32c61-devkitc-1-n8r2
+    rust_targets: [riscv32imc-unknown-none-elf]
+    gate: true
   # Demand-rank 1 ESP32 family: current Arduino Nano ESP32 with a committed
   # S3 GPIO48/D13 smoke fixture. The onboarding workflow rebuilds it with PIO.
   - id: arduino-nano-esp32-gpio

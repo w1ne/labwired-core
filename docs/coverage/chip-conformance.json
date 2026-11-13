@@ -857,6 +857,13 @@
     "behavior": false,
     "excluded": 0,
     "level": 0,
+    "name": "esp32c61",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
     "name": "esp32p4",
     "reg_match": 0
   },

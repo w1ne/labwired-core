@@ -1123,7 +1123,7 @@ const CHIPS: &[ChipConf] = &[
             "ch32v003_compiled_firmware::ch32v003_compiled_rv32e_firmware_toggles_pc0",
         ),
     },
-    // ESP32-H2/C5/P4/S2 UART0-only board profiles. SIM-DERIVED: no silicon
+    // ESP32-H2/C5/C61/P4/S2 UART0-only board profiles. SIM-DERIVED: no silicon
     // capture, so no reset_oracle. Their board smokes run as CLI scripts in
     // core-board-ci / core-onboarding-smoke, not as Rust integration tests, so
     // no behavior_gate can resolve yet.
@@ -1136,6 +1136,12 @@ const CHIPS: &[ChipConf] = &[
     ChipConf {
         name: "esp32c5",
         yaml: "configs/chips/esp32c5.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "esp32c61",
+        yaml: "configs/chips/esp32c61.yaml",
         reset_oracle: None,
         behavior_gate: None,
     },

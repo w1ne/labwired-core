@@ -163,6 +163,14 @@ jobs:
             profile_dir: release
             script: examples/esp32c5-devkitc-1-n8r8/uart-smoke.yaml
             system: configs/systems/esp32c5-devkitc-1-n8r8.yaml
+          # Current C61 DevKitC-1 N8R2; the narrow profile tests UART0 only.
+          - id: esp32c61-devkitc-1-n8r2
+            target: riscv32imc-unknown-none-elf
+            crate: firmware-esp32c61-demo
+            profile: release
+            profile_dir: release
+            script: examples/esp32c61-devkitc-1-n8r2/uart-smoke.yaml
+            system: configs/systems/esp32c61-devkitc-1-n8r2.yaml
           # Current P4X-C5 Function EV board: UART0 FIFO only; the second HP core,
           # C5 module, and multimedia/connectivity peripherals remain out of scope.
           - id: esp32p4x-c5-function-ev-board

@@ -69,6 +69,10 @@
       "how": "needs-build",
       "why": "ESP32-C5 descriptor and UART0 model are newer than the installed CLI this gate checks. The source-tree firmware and simulator smoke pass in examples/esp32c5-devkitc-1-n8r8; switch this row after a release carries C5 support."
     },
+    "esp32c61": {
+      "how": "needs-build",
+      "why": "ESP32-C61 descriptor and UART0 model are newer than the installed CLI this gate checks. The source-tree firmware and simulator smoke pass in examples/esp32c61-devkitc-1-n8r2; switch this row after a release carries C61 support."
+    },
     "esp32p4": {
       "how": "needs-build",
       "why": "ESP32-P4 descriptor and UART0 model are newer than the installed CLI this gate checks. The source-tree firmware and simulator smoke pass in examples/esp32p4x-c5-function-ev-board; switch this row after a release carries P4 support."

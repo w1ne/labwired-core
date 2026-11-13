@@ -1,0 +1,40 @@
+# Narrow ESP32-C61 HP-core profile for the ESP32-C61-DevKitC-1-N8R2.
+#
+# This fast-boot profile exposes only UART0's FIFO/status register head. It
+# loads a bare ELF directly; it does not execute the C61 mask ROM or the
+# Espressif bootloader. GPIO, PCR clock control, IO_MUX routing, USB, Wi-Fi,
+# Bluetooth LE, PSRAM and the addressable RGB LED are not claimed here.
+#
+# Sources checked 2026-11-13:
+#   ESP32-C61 Series Datasheet v1.1:
+#     https://documentation.espressif.com/esp32-c61_datasheet_en.html
+#   ESP32-C61-DevKitC-1 v2.0 guide:
+#     https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c61/esp32-c61-devkitc-1/user_guide.html
+#   ESP-IDF C61 register map and interrupt table:
+#     https://github.com/espressif/esp-idf/tree/master/components/soc/esp32c61
+
+name: "esp32c61"
+arch: "riscv"
+core: "rv32imac"
+registers_count: 31
+cpu_hz: 160_000_000
+
+# ESP32-C61-WROOM-1 N8R2: 8 MiB SPI flash and 2 MiB PSRAM. Only the flash
+# window and 320 KiB on-chip HP SRAM are mapped for this UART smoke.
+flash:
+  base: 0x42000000
+  size: "8192KB"
+ram:
+  base: 0x40800000
+  size: "320KB"
+
+peripherals:
+  # UART0 uses the C61 register head at 0x60000000. The descriptor exposes
+  # FIFO@0 and STATUS@0x1C only; later family-specific registers are omitted.
+  - id: "uart0"
+    type: "esp32c61_uart"
+    irq: 40 # ETS_UART0_INTR_SOURCE from C61 interrupts.h
+    base_address: 0x60000000
+    size: "32B"
+    config:
+      echo_stdout: true

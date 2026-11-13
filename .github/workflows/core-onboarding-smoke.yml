@@ -99,6 +99,12 @@ jobs:
             target: riscv32imc-unknown-none-elf
             script: examples/esp32c5-devkitc-1-n8r8/uart-smoke.yaml
             system: configs/systems/esp32c5-devkitc-1-n8r8.yaml
+          # Current ESP32-C61-DevKitC-1-N8R2; smoke asserts C61 UART0 FIFO output.
+          - id: esp32c61-devkitc-1-n8r2
+            crate: firmware-esp32c61-demo
+            target: riscv32imc-unknown-none-elf
+            script: examples/esp32c61-devkitc-1-n8r2/uart-smoke.yaml
+            system: configs/systems/esp32c61-devkitc-1-n8r2.yaml
           # Demand-rank 1 ESP32-family depth: current P4X-C5 Function EV board.
           # The profile tests the P4 UART0 FIFO only, not the C5 radio or multimedia peripherals.
           - id: esp32p4x-c5-function-ev-board

@@ -151,6 +151,7 @@ members = [
     "examples/epaper-tricolor-lab",
     "examples/nokia5110-invaders-lab",
     "examples/esp32c5-devkitc-1-n8r8/firmware",
+    "examples/esp32c61-devkitc-1-n8r2/firmware",
     "examples/esp32p4x-c5-function-ev-board/firmware",
     "examples/tier1-fixture/nrf52832",
     "examples/tier1-fixture/nrf52840",

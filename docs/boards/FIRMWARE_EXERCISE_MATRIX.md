@@ -199,6 +199,10 @@ _No beyond-rubric H2 peripheral is exercised: the board smoke covers only the UA
 
 _No beyond-rubric C5 peripheral is exercised: the DevKitC-1-N8R8 board smoke covers only the UART0 TX FIFO/console path. This narrow profile declares UART0 only; it does not model mask ROM, the USB bridge, IO_MUX, GPIO, the RGB LED, Wi-Fi 6, Bluetooth LE, IEEE 802.15.4 or the other C5 peripherals._
 
+### `esp32c61`
+
+_No beyond-rubric C61 peripheral is exercised: the DevKitC-1-N8R2 board smoke covers only the UART0 TX FIFO/console path. This narrow profile declares UART0 only; it does not model mask ROM, the USB bridge, IO_MUX, GPIO, the RGB LED, Wi-Fi 6, Bluetooth LE, PSRAM or the other C61 peripherals._
+
 ### `esp32p4`
 
 _No beyond-rubric P4 peripheral is exercised: the P4X-C5 Function EV board smoke covers only the UART0 TX FIFO/console path. This narrow profile declares UART0 only; it does not model mask ROM, the second HP core, the LP core, MIPI-CSI/DSI, the H.264/JPEG/PPA media blocks, USB, Ethernet, the companion ESP32-C5 radio or the other P4 peripherals._

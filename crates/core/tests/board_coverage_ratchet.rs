@@ -887,6 +887,7 @@ fn every_shipped_descriptor_is_ratcheted() {
         // executing-fidelity differential. Promote when all three exist.
         "esp32h2",
         "esp32c5",
+        "esp32c61",
         "esp32p4",
         "esp32s2",
         // Adafruit Feather RP2040 variant of the rp2040 die (133 MHz, 8 MiB
