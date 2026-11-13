@@ -575,15 +575,39 @@ impl crate::Peripheral for PwrWba {
 /// scaling completes instantly in the sim: any write to PWR_CR latches VOSRDY,
 /// so the reset read still returns 0 (matching silicon) but the boot poll
 /// resolves as soon as firmware selects a scale.
+///
+/// The STM32F42x/43x/446 add the over-drive regulator ([`Self::with_over_drive`],
+/// RM0390 §5.1.4 / §5.4): CR.ODEN (bit 16) and CR.ODSWEN (bit 17), answered by
+/// CSR.ODRDY (bit 16) and CSR.ODSWRDY (bit 17). On the F401/F405/F407 those
+/// bits are reserved and stay 0.
 #[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct PwrF4 {
     cr: u32,
     csr: u32,
+    #[serde(skip)]
+    over_drive: bool,
 }
+
+/// PWR_CR.ODEN / PWR_CSR.ODRDY (RM0390 §5.4.1 / §5.4.2).
+const F4_PWR_OD: u32 = 1 << 16;
+/// PWR_CR.ODSWEN / PWR_CSR.ODSWRDY.
+const F4_PWR_ODSW: u32 = 1 << 17;
 
 impl PwrF4 {
     pub fn new() -> Self {
-        Self { cr: 0, csr: 0 }
+        Self::default()
+    }
+
+    /// An F446-class PWR with the over-drive bits. HAL_PWREx_EnableOverDrive
+    /// sets ODEN and spins on ODRDY, then sets ODSWEN and spins on ODSWRDY;
+    /// both settle instantly here, like VOSRDY. ODSWRDY follows ODSWEN only
+    /// while over-drive is ready (RM0390 §5.1.4: the switch is taken after
+    /// ODRDY), and clearing ODEN drops both.
+    pub fn with_over_drive() -> Self {
+        Self {
+            over_drive: true,
+            ..Self::default()
+        }
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
@@ -604,8 +628,26 @@ impl PwrF4 {
             // CWUF(2) are write-only strobes that always read 0; bit 12 and
             // [31:16] are reserved. Selecting a voltage scale asserts VOSRDY.
             0x00 => {
-                self.cr = value & 0x0000_EFF3;
+                // The F446 adds ODEN(16), ODSWEN(17), UDEN[19:18], FMSSR(20)
+                // and FISSR(21) (RM0390 §5.4.1).
+                let mask = if self.over_drive {
+                    0x003F_EFF3
+                } else {
+                    0x0000_EFF3
+                };
+                self.cr = value & mask;
                 self.csr |= 1 << 14; // VOSRDY — scaling completes instantly
+                if self.over_drive {
+                    let od = self.cr & F4_PWR_OD != 0;
+                    let odsw = od && self.cr & F4_PWR_ODSW != 0;
+                    self.csr &= !(F4_PWR_OD | F4_PWR_ODSW);
+                    if od {
+                        self.csr |= F4_PWR_OD;
+                    }
+                    if odsw {
+                        self.csr |= F4_PWR_ODSW;
+                    }
+                }
             }
             // CSR: EWUP (bit 8) and BRE (bit 9) are the only writable bits;
             // VOSRDY/BRR/PVDO/SBF/WUF are hardware status.
@@ -656,6 +698,34 @@ mod f4_tests {
         // The L4 CR3 / SR2 / PUCRx surface must not exist on F4.
         assert_eq!(pwr.read_u32(0x08).unwrap(), 0, "no register at 0x08");
         assert_eq!(pwr.read_u32(0x14).unwrap(), 0, "no register at 0x14");
+    }
+
+    #[test]
+    fn pwr_f4_over_drive_handshake() {
+        // HAL_PWREx_EnableOverDrive order (stm32f4xx_hal_pwr_ex.c).
+        let mut pwr = PwrF4::with_over_drive();
+        pwr.write_u32(0x00, 0x0000_C000).unwrap();
+        assert_eq!(pwr.read_u32(0x04).unwrap() & (3 << 16), 0, "reset: no OD");
+        pwr.write_u32(0x00, 0x0000_C000 | 1 << 16).unwrap();
+        assert_eq!(pwr.read_u32(0x04).unwrap() & (3 << 16), 1 << 16, "ODRDY");
+        pwr.write_u32(0x00, 0x0000_C000 | 3 << 16).unwrap();
+        assert_eq!(pwr.read_u32(0x04).unwrap() & (3 << 16), 3 << 16, "ODSWRDY");
+        assert_eq!(
+            pwr.read_u32(0x00).unwrap(),
+            0x0003_C000,
+            "CR keeps ODEN|ODSWEN"
+        );
+        pwr.write_u32(0x00, 0x0000_C000).unwrap();
+        assert_eq!(pwr.read_u32(0x04).unwrap() & (3 << 16), 0, "OD off");
+    }
+
+    #[test]
+    fn pwr_f4_without_over_drive_keeps_bits_reserved() {
+        // F401/F407: bits 16/17 are reserved in CR and CSR.
+        let mut pwr = PwrF4::new();
+        pwr.write_u32(0x00, 0x0003_C000).unwrap();
+        assert_eq!(pwr.read_u32(0x00).unwrap(), 0x0000_C000);
+        assert_eq!(pwr.read_u32(0x04).unwrap() & (3 << 16), 0);
     }
 
     #[test]
