@@ -10,13 +10,63 @@ name: controllino-mini
 chip: ../chips/atmega328p.yaml
 cpu_hz: 16000000
 board_io:
-  - { id: in0, kind: button, peripheral: portd, pin: 2, signal: input, active_high: true }
-  - { id: in1, kind: button, peripheral: portd, pin: 3, signal: input, active_high: true }
-  - { id: d0, kind: led, peripheral: portd, pin: 4, signal: output, active_high: true }
-  - { id: d1, kind: led, peripheral: portd, pin: 5, signal: output, active_high: true }
-  - { id: d2, kind: led, peripheral: portd, pin: 6, signal: output, active_high: true }
-  - { id: d3, kind: led, peripheral: portd, pin: 7, signal: output, active_high: true }
-  - { id: d4, kind: led, peripheral: portb, pin: 0, signal: output, active_high: true }
-  - { id: d5, kind: led, peripheral: portb, pin: 1, signal: output, active_high: true }
-  - { id: d6, kind: led, peripheral: portc, pin: 4, signal: output, active_high: true }
-  - { id: d7, kind: led, peripheral: portc, pin: 5, signal: output, active_high: true }
+  - id: "in0"
+    kind: "button"
+    peripheral: "portd"
+    pin: 2
+    signal: "input"
+    active_high: true
+  - id: "in1"
+    kind: "button"
+    peripheral: "portd"
+    pin: 3
+    signal: "input"
+    active_high: true
+  - id: "d0"
+    kind: "led"
+    peripheral: "portd"
+    pin: 4
+    signal: "output"
+    active_high: true
+  - id: "d1"
+    kind: "led"
+    peripheral: "portd"
+    pin: 5
+    signal: "output"
+    active_high: true
+  - id: "d2"
+    kind: "led"
+    peripheral: "portd"
+    pin: 6
+    signal: "output"
+    active_high: true
+  - id: "d3"
+    kind: "led"
+    peripheral: "portd"
+    pin: 7
+    signal: "output"
+    active_high: true
+  - id: "d4"
+    kind: "led"
+    peripheral: "portb"
+    pin: 0
+    signal: "output"
+    active_high: true
+  - id: "d5"
+    kind: "led"
+    peripheral: "portb"
+    pin: 1
+    signal: "output"
+    active_high: true
+  - id: "d6"
+    kind: "led"
+    peripheral: "portc"
+    pin: 4
+    signal: "output"
+    active_high: true
+  - id: "d7"
+    kind: "led"
+    peripheral: "portc"
+    pin: 5
+    signal: "output"
+    active_high: true
