@@ -14,7 +14,7 @@ The models column hashes watched paths and file contents. It changes with source
 | `nrf52840` | 🟢 silicon-verified | 2026-08-09 | `219f135fe825720f` | source match unverified — capture has no model digest |
 | `seeed-xiao-nrf52840-sense` | 🟢 silicon-verified | 2026-08-09 | `219f135fe825720f` | source match unverified — capture has no model digest |
 | `stm32h563` | 🟢 silicon-verified | 2026-08-10 | `7654553f18ca7753` | source match unverified — capture has no model digest |
-| `esp32c3` | 🟢 silicon-verified | 2026-08-09 | `84f96bb3fc865157` | source match unverified — capture has no model digest |
+| `esp32c3` | 🟢 silicon-verified | 2026-08-09 | `ef533961feb963e3` | source match unverified — capture has no model digest |
 | `nucleo-l476rg` | 🟢 silicon-verified | 2026-08-09 | `2997afd47f687062` | source match unverified — capture has no model digest |
 | `nucleo-l073rz` | 🟢 silicon-verified | 2026-08-09 | `ee272123484c510a` | source match unverified — capture has no model digest |
 | `stm32f103` | 🟢 silicon-verified | 2026-08-09 | `0664bd0c5d058d44` | source match unverified — capture has no model digest |
