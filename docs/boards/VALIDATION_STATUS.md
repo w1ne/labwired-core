@@ -13,58 +13,58 @@ The models column hashes watched paths and file contents. It changes with source
 |-------|------|----------------------|--------|--------|
 | `nrf52840` | 🟢 silicon-verified | 2026-08-09 | `219f135fe825720f` | source match unverified — capture has no model digest |
 | `seeed-xiao-nrf52840-sense` | 🟢 silicon-verified | 2026-08-09 | `219f135fe825720f` | source match unverified — capture has no model digest |
-| `stm32h563` | 🟢 silicon-verified | 2026-08-10 | `d57fd8470a38d29e` | source match unverified — capture has no model digest |
+| `stm32h563` | 🟢 silicon-verified | 2026-08-10 | `b3a85a71fc51365e` | source match unverified — capture has no model digest |
 | `esp32c3` | 🟢 silicon-verified | 2026-08-09 | `84f96bb3fc865157` | source match unverified — capture has no model digest |
-| `nucleo-l476rg` | 🟢 silicon-verified | 2026-08-09 | `88e8befa26b1666b` | source match unverified — capture has no model digest |
-| `nucleo-l073rz` | 🟢 silicon-verified | 2026-08-09 | `7b4712c6ece69a88` | source match unverified — capture has no model digest |
-| `stm32f103` | 🟢 silicon-verified | 2026-08-09 | `81a1d37bfae423b3` | source match unverified — capture has no model digest |
-| `stm32f407` | 🟢 silicon-smoke | 2026-06-20 | `ce9157184ca3151c` | source match unverified — capture has no model digest |
+| `nucleo-l476rg` | 🟢 silicon-verified | 2026-08-09 | `1305c762a624b5f6` | source match unverified — capture has no model digest |
+| `nucleo-l073rz` | 🟢 silicon-verified | 2026-08-09 | `345d85f314f21c6f` | source match unverified — capture has no model digest |
+| `stm32f103` | 🟢 silicon-verified | 2026-08-09 | `3f2abbd790c96c17` | source match unverified — capture has no model digest |
+| `stm32f407` | 🟢 silicon-smoke | 2026-06-20 | `7720e69c1c4b2230` | source match unverified — capture has no model digest |
 | `esp32s3` | 🟢 silicon-verified | 2026-08-09 | `eb46e7337c62b8e8` | source match unverified — capture has no model digest |
 | `esp32s3-zero` | 🔵 sim-validated (deep model, no HW diff) | — | `def98bc2cf34c908` | no silicon capture |
-| `stm32f401` | 🟡 smoke-manual | — | `491dd17f69cd7c5e` | no silicon capture |
-| `stm32wba52` | 🟡 smoke-manual | — | `9c9b28a8ee68c539` | no silicon capture |
-| `nrf52832` | ⚪ structural | — | `41d4011d3edcfa0c` | no silicon capture |
-| `microbit-v1` | 🟡 smoke-manual | — | `4813b72da3632ec4` | no silicon capture |
-| `microbit-v2` | 🟡 smoke-manual | — | `7469d64f445629ef` | no silicon capture |
+| `stm32f401` | 🟡 smoke-manual | — | `7a0f515b8f89a1cf` | no silicon capture |
+| `stm32wba52` | 🟡 smoke-manual | — | `3e64871dddd5ac5a` | no silicon capture |
+| `nrf52832` | ⚪ structural | — | `ff56bcb383e11871` | no silicon capture |
+| `microbit-v1` | 🟡 smoke-manual | — | `36c64cd2bbc7d5c8` | no silicon capture |
+| `microbit-v2` | 🟡 smoke-manual | — | `a2fa626e34fdd9e3` | no silicon capture |
 | `rp2040` | ⚪ structural | — | `2110e28eefae47c3` | no silicon capture |
 | `rp2350` | 🟡 smoke-manual | — | `17d88f014fdb6c66` | no silicon capture |
-| `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | `1fac70a6c05f3443` | no silicon capture |
-| `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | `399bf65a03020020` | no silicon capture |
-| `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `9d9401d0a024395a` | no silicon capture |
-| `stm32u5a5zj` | 🔵 sim-validated (deep model, no HW diff) | — | `6acdac91868f8773` | no silicon capture |
-| `nucleo-u545re` | 🔵 sim-validated (deep model, no HW diff) | — | `622cf22287a374eb` | no silicon capture |
-| `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | `2e5091d81d4459d8` | no silicon capture |
-| `brd2709a` | 🟡 smoke-manual | — | `35fcc4e5c8985b87` | no silicon capture |
+| `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | `2304e0758c38cb95` | no silicon capture |
+| `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | `5cb561af5a37fa60` | no silicon capture |
+| `stm32u575` | 🔵 sim-validated (deep model, no HW diff) | — | `f7b013e4909f66d4` | no silicon capture |
+| `stm32u5a5zj` | 🔵 sim-validated (deep model, no HW diff) | — | `652dec48f371411f` | no silicon capture |
+| `nucleo-u545re` | 🔵 sim-validated (deep model, no HW diff) | — | `93400443ccc124da` | no silicon capture |
+| `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | `19d4cccb81e2aef7` | no silicon capture |
+| `brd2709a` | 🟡 smoke-manual | — | `7f820b97d2248957` | no silicon capture |
 | `esp32` | ⚪ structural | — | `6f92d54d3b24a1f3` | no silicon capture |
-| `mkw41z4` | 🔵 sim-validated (deep model, no HW diff) | — | `dc040f17edfe111f` | no silicon capture |
-| `stm32f405` | 🔵 sim-validated (deep model, no HW diff) | — | `3eaf972480ddd19f` | no silicon capture |
-| `stm32f767` | 🔵 sim-validated (deep model, no HW diff) | — | `bb3d5eb606b1048f` | no silicon capture |
-| `stm32f401cdu6` | 🔵 sim-validated (deep model, no HW diff) | — | `53f559c31968c41d` | no silicon capture |
-| `atsamd21g18a` | 🔵 sim-validated (deep model, no HW diff) | — | `716ac6c4254c0f47` | no silicon capture |
-| `nrf54l15` | 🔵 sim-validated (deep model, no HW diff) | — | `26e9f16b7d330520` | no silicon capture |
-| `stm32g474re` | 🔵 sim-validated (deep model, no HW diff) | — | `7741c685ff6d1475` | no silicon capture |
-| `stm32g431rb` | ⚪ structural | — | `cf8c2c11f71f3625` | no silicon capture |
-| `stm32wb55` | 🔵 sim-validated (deep model, no HW diff) | — | `177c1347cf3486dd` | no silicon capture |
+| `mkw41z4` | 🔵 sim-validated (deep model, no HW diff) | — | `907cbbfe6eb1dca1` | no silicon capture |
+| `stm32f405` | 🔵 sim-validated (deep model, no HW diff) | — | `90c551c10cc8b45e` | no silicon capture |
+| `stm32f767` | 🔵 sim-validated (deep model, no HW diff) | — | `6da6d1e8338afbda` | no silicon capture |
+| `stm32f401cdu6` | 🔵 sim-validated (deep model, no HW diff) | — | `24b00579e3e41b12` | no silicon capture |
+| `atsamd21g18a` | 🔵 sim-validated (deep model, no HW diff) | — | `eb511c4c7e5f7689` | no silicon capture |
+| `nrf54l15` | 🔵 sim-validated (deep model, no HW diff) | — | `1f77b7af91be98d3` | no silicon capture |
+| `stm32g474re` | 🔵 sim-validated (deep model, no HW diff) | — | `6ce0fb121835d8d3` | no silicon capture |
+| `stm32g431rb` | ⚪ structural | — | `dc047564d6ee3a18` | no silicon capture |
+| `stm32wb55` | 🔵 sim-validated (deep model, no HW diff) | — | `8e7c411526f8ef56` | no silicon capture |
 | `ci-fixture-riscv` | ⚪ structural | — | `9acdcc39df138ec7` | no silicon capture |
-| `nano-33-iot` | 🟡 smoke-manual | — | `e48e433e35aa499a` | no silicon capture |
-| `metro-m4` | 🟡 smoke-manual | — | `f61c76a40b798451` | no silicon capture |
-| `arduino-uno-r4-minima` | 🟡 smoke-manual | — | `2a5215c5532ea67d` | no silicon capture |
-| `teensy-41` | 🟡 smoke-manual | — | `8802d108dcff23c1` | no silicon capture |
-| `stm32f7-discovery` | 🟡 smoke-manual | — | `46dfe6139826bd5b` | no silicon capture |
-| `nucleo-g071rb` | 🟡 smoke-manual | — | `6f2bbc2714f0fa98` | no silicon capture |
+| `nano-33-iot` | 🟡 smoke-manual | — | `f11e3e32f5a1d17d` | no silicon capture |
+| `metro-m4` | 🟡 smoke-manual | — | `cbdebc338b0b54cf` | no silicon capture |
+| `arduino-uno-r4-minima` | 🟡 smoke-manual | — | `95745087dbb196a1` | no silicon capture |
+| `teensy-41` | 🟡 smoke-manual | — | `3cd05cf8e7ea089e` | no silicon capture |
+| `stm32f7-discovery` | 🟡 smoke-manual | — | `a4ffa597efd6b5ec` | no silicon capture |
+| `nucleo-g071rb` | 🟡 smoke-manual | — | `c79352dbfbe5b863` | no silicon capture |
 | `esp32c6-devkitc` | 🟡 smoke-manual | — | `05220cd52fe260a6` | no silicon capture |
 | `litex-vexriscv` | 🟡 smoke-manual | — | `d5545b8efd4cd67e` | no silicon capture |
-| `stm32l552` | 🟡 smoke-manual | — | `585cd1f719693b62` | no silicon capture |
+| `stm32l552` | 🟡 smoke-manual | — | `99c656414cf4b1b2` | no silicon capture |
 | `cc2538sf53` | 🟡 smoke-manual | — | `3dc1f3d909b7c8f8` | no silicon capture |
 | `amap42kp` | 🟡 smoke-manual | — | `00817af92e091c3f` | no silicon capture |
-| `r7fa6m5bh` | 🟡 smoke-manual | — | `158a730b110a3a6a` | no silicon capture |
-| `r7fa8m1ah` | 🟡 smoke-manual | — | `5ff251b9e34977e9` | no silicon capture |
+| `r7fa6m5bh` | 🟡 smoke-manual | — | `3e137019b6d60b8e` | no silicon capture |
+| `r7fa8m1ah` | 🟡 smoke-manual | — | `75498b47b04c1a91` | no silicon capture |
 | `same70q21b` | 🟡 smoke-manual | — | `ab10b9225d1290ab` | no silicon capture |
-| `mk64f12` | 🟡 smoke-manual | — | `f0f5c2ceba597e13` | no silicon capture |
+| `mk64f12` | 🟡 smoke-manual | — | `892ec6ad904efe72` | no silicon capture |
 | `s32k388` | 🟡 smoke-manual | — | `abc9f93661e47834` | no silicon capture |
 | `mimxrt595s` | 🟡 smoke-manual | — | `7ce8aecef652be33` | no silicon capture |
 | `sam4s16c` | 🟡 smoke-manual | — | `79f0402940b9ef27` | no silicon capture |
-| `stm32f072` | 🟡 smoke-manual | — | `4c218abdb01a3dbd` | no silicon capture |
+| `stm32f072` | 🟡 smoke-manual | — | `633eb31ebb645582` | no silicon capture |
 | `arty-litex-vexriscv` | 🟡 smoke-manual | — | `48ed3613d5f1a397` | no silicon capture |
 | `vegaboard-ri5cy` | 🟡 smoke-manual | — | `b8485f7c321ae3e3` | no silicon capture |
 | `mpfs095t` | 🟡 smoke-manual | — | `991ccc0de38bb3ec` | no silicon capture |
@@ -73,7 +73,7 @@ The models column hashes watched paths and file contents. It changes with source
 | `pic32mz2048efm144` | 🟡 smoke-manual | — | `a9f38f092cf05d9b` | no silicon capture |
 | `esp32-devkitc-32e-gpio-smoke` | ⚪ structural | — | `ddd173e22ad2350a` | no silicon capture |
 | `esp32-devkitc-32e-uart1` | ⚪ structural | — | `2ee0984a85bccf1b` | no silicon capture |
-| `nucleo-f103rb-bme280` | ⚪ structural | — | `815a6bdce9faaf9b` | no silicon capture |
+| `nucleo-f103rb-bme280` | ⚪ structural | — | `6af758998e441a06` | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
 
