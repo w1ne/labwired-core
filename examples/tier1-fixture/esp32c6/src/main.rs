@@ -17,7 +17,7 @@
 //! | YAML id           | CLASS_MARKER  | class  | status  |
 //! |-------------------|---------------|--------|---------|
 //! | uart0             | uart          | uart   | implicit PASS via `done` |
-//! | gpio              | gpio          | gpio   | PASS — OUT/ENABLE W1TS+W1TC side effects, matrix selectors, IN ≠ OUT |
+//! | gpio              | gpio          | gpio   | PASS — OUT/ENABLE W1TS+W1TC side effects, matrix selectors, IN reads back the driven pad |
 //! | interrupt_core0   | interrupt     | irq    | PASS — real CPU traps from the software doorbell AND from UART0's peripheral source |
 //! | pcr               | pcr           | clock  | PASS — PCR register round-trip + CLK_EN=0 really kills UART0 MMIO |
 //! | timg0             | timg          | timer  | PASS — T0UPDATE latches an advancing counter; disabled T0 frozen |
@@ -223,12 +223,14 @@ fn report(class: &str, result: Result<(), &'static str>) {
 // What is proven: the set/clear aliases are NOT independent storage on this
 // model — OUT_W1TS/OUT_W1TC really mutate the OUT latch and ENABLE_W1TS/W1TC
 // really mutate ENABLE, read back through OUT/ENABLE. The pad-selector words
-// of both matrices retain what firmware writes. IN is the pad-input word, not
-// the output latch: with no external drive on these pins it stays clear while
-// OUT drives ones.
+// of both matrices retain what firmware writes. IN is the pad-input word: a
+// pad whose output driver is on samples itself through its IO_MUX input
+// buffer, so IN READS BACK the driven level while the latch is high and drops
+// it again when the latch clears.
 //
 // What is NOT claimed: IO_MUX pad routing is declarative on the C6 (the yaml
-// says so), so this does not prove electrical pad behaviour.
+// says so), so this does not prove electrical pad behaviour, and no external
+// device drives these pins here.
 fn check_gpio() -> Result<(), &'static str> {
     const OUT: u32 = GPIO_BASE + 0x04;
     const OUT_W1TS: u32 = GPIO_BASE + 0x08;
@@ -292,14 +294,35 @@ fn check_gpio() -> Result<(), &'static str> {
         return Err("gpio-matrix-in-sel");
     }
 
-    // IN must NOT follow the OUT latch. No external device drives GPIO4/5 on
-    // the C6 system, and the C6 IO_MUX is a declarative stub (no pull-up
-    // electrical model), so the released input word is clear even while the
-    // output drivers are enabled and the latch is high.
+    // IN reads the pad back through its input buffer while the output driver
+    // is on (model behaviour since #1344). GPIO4/GPIO5 leave reset with
+    // IO_MUX FUN_IE=1: ESP32-C6 TRM v1.2 Table 7.12-1 gives both pads
+    // Reset=1 ("IE = 1"), and datasheet v1.5 Tables 2-1/2-2 list MTMS/MTDI as
+    // IE at and after reset. (The SVD's uniform 0x800 IO_MUX reset word, which
+    // says FUN_IE=0, disagrees with both and is wrong for these pads.) So an
+    // enabled output pad samples the level it drives, and IN must FOLLOW OUT
+    // here, and drop again when the latch clears.
+    //
+    // Pad 4's output selector was rewritten to SIG_U0TXD above (that is the
+    // matrix round-trip test); hand it back to the plain GPIO_OUT latch first,
+    // or the pad is driven by the UART signal and not by OUT.
+    wr32(FUNC0_OUT_SEL_CFG + 4 * 4, SIG_GPIO_OUT);
     wr32(ENABLE, P4 | P5);
     wr32(OUT, P4 | P5);
-    if rd32(IN) & (P4 | P5) != 0 {
+    if rd32(IN) & (P4 | P5) != (P4 | P5) {
         return Err("gpio-in-follows-out");
+    }
+    // Clearing the latch without touching ENABLE clears the readback too —
+    // this is the driven level, not a latched stale input.
+    wr32(OUT, 0);
+    if rd32(IN) & (P4 | P5) != 0 {
+        return Err("gpio-in-latch-clear");
+    }
+    // Driving one pad high and the other low must read back exactly that
+    // pattern, not an all-or-nothing word.
+    wr32(OUT, P4);
+    if rd32(IN) & (P4 | P5) != P4 {
+        return Err("gpio-in-mixed");
     }
 
     // Leave the block quiet for the rest of the run.
@@ -1048,10 +1071,12 @@ fn check_adc() -> Result<(), &'static str> {
 
 // ── pwm: run a LEDC timer and observe a live counter + overflow ────────────
 //
-// configs/chips/esp32c6.yaml wires ledc @0x6000_7000 (type esp32c3_ledc) — the
-// same live LED PWM timer engine as the C3. The registers it drives
-// (TIMER0_CONF@0xA0, TIMER0_VALUE@0xA4, INT_RAW@0xC0, INT_CLR@0xCC) are
-// offset-identical; the C6's extra gamma/event/compare/capture tail is not
+// configs/chips/esp32c6.yaml wires ledc @0x6000_7000 (type esp32c6_ledc) — the
+// C3 live LED PWM timer engine on the C6 field geometry. The registers it
+// drives (TIMER0_CONF@0xA0, TIMER0_VALUE@0xA4, INT_RAW@0xC0, INT_CLR@0xCC) are
+// offset-identical, but TIMERx_CONF is not bit-identical: DUTY_RES is [4:0],
+// CLK_DIV [22:5], PAUSE 23, RST 24 (soc/esp32c6/register/soc/ledc_reg.h; the
+// C3 is [3:0]/[21:4]/22/23). The gamma/event/compare/capture tail is not
 // touched. C6 delta: source = 45.
 //
 // What is proven: with the timer released from reset the counter advances,
@@ -1066,11 +1091,11 @@ fn check_ledc() -> Result<(), &'static str> {
     const TIMER0_VALUE: u32 = LEDC_BASE + 0xA4;
     const INT_RAW: u32 = LEDC_BASE + 0xC0;
     const INT_CLR: u32 = LEDC_BASE + 0xCC;
-    const PAUSE: u32 = 1 << 22;
-    const RST: u32 = 1 << 23;
+    const PAUSE: u32 = 1 << 23;
+    const RST: u32 = 1 << 24;
     const LSTIMER0_OVF: u32 = 1 << 0;
-    // CONF = DUTY_RES | (CLK_DIV_field << 4); CLK_DIV integer part = field>>8.
-    let conf = |duty_res: u32, div_int: u32| (duty_res & 0xF) | (((div_int & 0x3FF) << 8) << 4);
+    // CONF = DUTY_RES | (CLK_DIV_field << 5); CLK_DIV integer part = field>>8.
+    let conf = |duty_res: u32, div_int: u32| (duty_res & 0x1F) | (((div_int & 0x3FF) << 8) << 5);
 
     // DUTY_RES = 14 → period 16384 counts at divider 1 (same choice as the C3
     // fixture: many distinct sample points per period, so the counter is

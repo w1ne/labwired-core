@@ -302,6 +302,14 @@ FIXTURES = {
     ("arm", 0x00018000, 0x20000000): ("nrf51-app", SPIN_CORTEX_M),
     ("arm", 0x00000000, 0x1FFF8000): ("kinetis", SPIN_CORTEX_M),
     ("arm", 0x10000000, 0x20000000): ("rp2xxx", SPIN_CORTEX_M),
+    # TI CC2538: flash at 0x00200000 (the ROM, not flash, is at 0x0).
+    ("arm", 0x00200000, 0x20000000): ("cc2538", SPIN_CORTEX_M),
+    # Microchip SAM E70: flash at 0x00400000, SRAM at 0x20400000.
+    ("arm", 0x00400000, 0x20400000): ("same70", SPIN_CORTEX_M),
+    # Renesas RA8M1: code flash at 0x02000000, SRAM at 0x22000000.
+    ("arm", 0x02000000, 0x22000000): ("ra8m1", SPIN_CORTEX_M),
+    # Ambiq Apollo4 Plus: MRAM at 0x0, RAM (TCM first) at 0x10000000.
+    ("arm", 0x00000000, 0x10000000): ("apollo4p", SPIN_CORTEX_M),
     # i.MX RT1064's smoke image executes directly from DTCM. It is still an
     # ordinary Cortex-M ELF to the runner; only its link origins differ.
     ("arm", 0x20000000, 0x20010000): ("imxrt", SPIN_CORTEX_M),
@@ -326,6 +334,12 @@ FIXTURES = {
 # their own chip config and get their own baseline. A generic CPU-only smoke
 # fixture must not stand in for an unimplemented board platform.
 WAIVED: dict[str, str] = {
+    "ch32v003f4p6": (
+        "The CH32V003 model uses RV32EC, but CI has no RV32E-specific perf-spin "
+        "fixture or compiler. Reusing the RV32IMC fixture could execute "
+        "registers x16–x31 that this core does not implement. No throughput "
+        "claim is made for this part yet."
+    ),
     "atmega1281": (
         "The committed -mmcu=atmega1281 firmware validates boot, USART0 and GPIO, "
         "but no representative AVR6 throughput fixture is built. The available "
@@ -387,6 +401,28 @@ WAIVED: dict[str, str] = {
         "XC16 image is not a representative perf-spin workload, and this gate "
         "has no XC16 fixture builder; no throughput claim is made for this part."
     ),
+    "pic16f1829": (
+        "PIC16 enhanced mid-range L1 bring-up: boot, EUSART TX, LATA and "
+        "INT/TMR0 interrupts, with the EUSART modelled on the CPU (not a bus "
+        "peripheral), so this gate's MMIO spin fixture cannot represent it. "
+        "The checked-in SDCC image is not a representative perf-spin workload "
+        "and this gate has no SDCC fixture builder; no throughput claim is "
+        "made for this part."
+    ),
+    "pic16f877a": (
+        "PIC16 L1 bring-up: boot, USART TX and the PORTB latch, with the USART "
+        "modelled on the CPU (not a bus peripheral), so this gate's MMIO spin "
+        "fixture cannot represent it. The checked-in SDCC image is not a "
+        "representative perf-spin workload and this gate has no SDCC fixture "
+        "builder; no throughput claim is made for this part."
+    ),
+    "pic18f4520": (
+        "PIC18 L1 bring-up: boot, EUSART TX and the PORTB latch, with the "
+        "EUSART modelled on the CPU (not a bus peripheral), so this gate's MMIO "
+        "spin fixture cannot represent it. The checked-in SDCC image is not a "
+        "representative perf-spin workload and this gate has no SDCC fixture "
+        "builder; no throughput claim is made for this part."
+    ),
     "litex-vexriscv": (
         "L1 smoke, SIM-DERIVED: CPU + integrated SRAM + the LiteX UART console and "
         "countdown timer only, with no silicon capture and no executing-fidelity "
@@ -401,6 +437,31 @@ WAIVED: dict[str, str] = {
         "memory map (flash 0x20000000, RAM 0x10000000), and no throughput claim is "
         "made for this board (docs/boards/arty-litex-vexriscv.md)."
     ),
+    "am6234": (
+        "First AArch64 part (SK-AM62, Cortex-A53). This gate's perf-spin "
+        "fixtures are ARM-M/RISC-V images and no A64 spin is built; the Zephyr "
+        "fixtures are not representative perf-spin workloads. No throughput "
+        "claim is made for this part (docs/boards/sk-am62.md)."
+    ),
+    "r5f52618bgfp": (
+        "First Renesas RX part (EK-RX261, RXv3). This gate's perf-spin "
+        "fixtures are ARM/RISC-V images and no RX spin is built; the Zephyr "
+        "fixtures are not representative perf-spin workloads. No throughput "
+        "claim is made for this part (docs/boards/ek-rx261.md)."
+    ),
+    "pic32mz2048efm144": (
+        "First MIPS part (Curiosity PIC32MZ EF 2.0, MIPS32r2). This gate's "
+        "perf-spin fixtures are ARM/RISC-V images and no MIPS spin is built; "
+        "the NuttX fixtures are not representative perf-spin workloads. No "
+        "throughput claim is made for this part "
+        "(docs/boards/curiosity-pic32mz-ef.md)."
+    ),
+    "mpfs095t": (
+        "First RV64 part (PolarFire SoC U54 hart, RV64IMAC). This gate's RISC-V "
+        "perf-spin fixture is an RV32 image and no RV64 spin is built; the "
+        "Zephyr fixtures are not representative perf-spin workloads. No "
+        "throughput claim is made for this part (docs/boards/mpfs-disco-kit.md)."
+    ),
     "vegaboard-ri5cy": (
         "L1 smoke, SIM-DERIVED: CPU + flash/SRAM + the LPUART0 console only, with "
         "no silicon capture and no executing-fidelity differential. No perf fixture "
@@ -413,6 +474,13 @@ WAIVED: dict[str, str] = {
         "executing-fidelity differential. No perf fixture is built for the "
         "SAM4S map (flash 0x00400000, RAM 0x20000000), and no throughput claim "
         "is made for this board (docs/boards/sam4s-xplained.md)."
+    ),
+    "xck26-rpu": (
+        "First Cortex-R part (Zynq UltraScale+ RPU, Cortex-R5F) on the optional "
+        "native qemu-arm-system engine, which single-steps the pinned tlib core "
+        "through the bus; the default CLI this gate builds cannot run it, and the "
+        "Zephyr fixtures are not representative perf-spin workloads. No "
+        "throughput claim is made for this part."
     ),
     "rv1103": (
         "The old Cortex-A7 CPU subset fixture is not representative perf evidence. "
@@ -805,9 +873,24 @@ def build_fixtures(fixtures: set[str]) -> tuple[dict[str, Path], dict[str, str]]
             print(f"SKIPPING fixture '{name}': build failed\n{proc.stderr[-2000:]}", file=sys.stderr)
             continue
 
-        elf = cwd / f"target/{spec.target}/release/{spec.crate}"
-        if not elf.exists():
-            elf = REPO_ROOT / f"target/{spec.target}/release/{spec.crate}"
+        target_override = env.get("CARGO_TARGET_DIR")
+        if target_override is not None:
+            # Cargo resolves an environment override relative to its build
+            # cwd. Never substitute a stale default-target ELF for this build.
+            target_dir = Path(target_override)
+            if not target_dir.is_absolute():
+                target_dir = cwd / target_dir
+            elf = target_dir / spec.target / "release" / spec.crate
+        else:
+            elf = cwd / f"target/{spec.target}/release/{spec.crate}"
+            if not elf.exists():
+                elf = REPO_ROOT / f"target/{spec.target}/release/{spec.crate}"
+        if not elf.is_file():
+            selected = f" (CARGO_TARGET_DIR={target_override!r})" if target_override is not None else ""
+            raise RuntimeError(
+                f"fixture '{name}': Cargo succeeded but the expected ELF{selected} "
+                f"is missing or not a file: {elf}"
+            )
         shutil.copy2(elf, out)
         built[name] = out
     return built, skipped

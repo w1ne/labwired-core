@@ -1,0 +1,120 @@
+# ams TSL2591 light-to-digital converter — declarative I²C register-pointer
+# device.
+#
+# Datasheet: ams "TSL2591 Light-to-Digital Converter" (DS000338):
+#   §"Command Register": every transaction starts with a COMMAND byte —
+#     bit 7 CMD (must be 1), bits 6:5 TRANSACTION (01 = normal operation,
+#     11 = special function), bits 4:0 ADDR/SF. Drivers therefore write
+#     `0xA0 | reg`. The register address is the low five bits, so
+#     `pointer_mask: 0x1F`.
+#   §"Register Set" table — addresses, access and reset values:
+#     0x00 ENABLE   R/W 0x00  NPIEN(7) SAI(6) AIEN(4) AEN(1) PON(0)
+#     0x01 CONFIG   R/W 0x00  SRESET(7) AGAIN(5:4) ATIME(2:0)
+#     0x04..0x07 AILTL/AILTH/AIHTL/AIHTH      R/W 0x00  ALS interrupt thresholds
+#     0x08..0x0B NPAILTL/NPAILTH/NPAIHTL/NPAIHTH R/W 0x00 no-persist thresholds
+#     0x0C PERSIST  R/W 0x00  APERS(3:0)
+#     0x11 PID      R   0x00  package ID
+#     0x12 ID       R   0x50  device ID
+#     0x13 STATUS   R   0x00  NPINTR(5) AINT(4) AVALID(0)
+#     0x14/0x15 C0DATAL/H  R  CH0 (full spectrum), little-endian
+#     0x16/0x17 C1DATAL/H  R  CH1 (infrared), little-endian
+#   §"Control Register" AGAIN: 00 low (1×), 01 medium (25×), 10 high (428×),
+#     11 max (9876×) — the typical gain ratios.
+#   §"Control Register" ATIME: 000..101 = 100/200/300/400/500/600 ms; the
+#     maximum ADC count is 37888 at 100 ms and 65535 for every longer time.
+#   The command register auto-increments through the data registers in normal
+#   transaction mode, so `auto_increment: true` — drivers burst-read C0..C1.
+#
+# ── Stimulus ──────────────────────────────────────────────────────────────
+# The datasheet characterises the part in counts, not lux (lux is an
+# application-note formula over CH0 and CH1). The two inputs are therefore the
+# counts each channel would report at the REFERENCE setting — 1× gain, 100 ms —
+# and the register scales them by the programmed gain × (ATIME + 1), saturating
+# at the datasheet maximum for the programmed integration time.
+#
+# ── Power / validity ──────────────────────────────────────────────────────
+# Both channels read 0 (their reset value) until AEN is set, and AVALID
+# (STATUS bit 0) is raised one integration after the master sets AEN. The
+# conversion time is the SHORTEST integration (100 ms), so a driver that waits
+# its own (longer) ATIME is never stalled. AVALID stays set once raised, as the
+# datasheet's "ALS valid … integration cycle has completed since AEN was
+# asserted" says.
+#
+# ⚠️ NOT modelled, named rather than faked: the interrupt thresholds, the
+# persistence filter and the INT pin (storage only — AINT/NPINTR never rise),
+# the special-function commands (0xE4/0xE6/0xE7/0xEA are accepted as pointer
+# writes and do nothing), the CH0-latches-CH1 shadow (each read samples live),
+# a CMD bit of 0 (decoded like 1), and the PON-only gating (the data gate is
+# AEN alone). SRESET self-clears but does not reset the other registers.
+type: tsl2591
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x29
+    pointer_mask: 0x1F
+    auto_increment: true
+    unmapped_byte: 0x00
+    registers:
+      - { name: ENABLE, addr: 0x00, width: 1, endian: le, access: rw, write_mask: 0xD3, reset: 0x00 }
+      - { name: CONFIG, addr: 0x01, width: 1, endian: le, access: rw, write_mask: 0xB7, self_clearing: 0x80, reset: 0x00 }
+      - { name: AILTL, addr: 0x04, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: AILTH, addr: 0x05, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: AIHTL, addr: 0x06, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: AIHTH, addr: 0x07, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: NPAILTL, addr: 0x08, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: NPAILTH, addr: 0x09, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: NPAIHTL, addr: 0x0A, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: NPAIHTH, addr: 0x0B, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: PERSIST, addr: 0x0C, width: 1, endian: le, access: rw, write_mask: 0x0F, reset: 0x00 }
+      - { name: PID, addr: 0x11, width: 1, endian: le, access: r, reset: 0x00 }
+      - { name: ID, addr: 0x12, width: 1, endian: le, access: r, reset: 0x50 }
+      - { name: STATUS, addr: 0x13, width: 1, endian: le, access: r, reset: 0x00 }
+      - name: C0DATA
+        addr: 0x14
+        width: 2
+        endian: le
+        access: r
+        source: ch0
+        encode:
+          clamp_min: 0
+          clamp_max: 65535
+          clamp_from:
+            - { register: CONFIG, mask: 0x07, map: { 0: { min: 0, max: 37888 } } }
+        scale_from:
+          - { register: CONFIG, mask: 0x03, shift: 4, map: { 0: 1, 1: 25, 2: 428, 3: 9876 } }
+          - { register: CONFIG, mask: 0x07, map: { 0: 1, 1: 2, 2: 3, 3: 4, 4: 5, 5: 6 } }
+        zero_unless: { register: ENABLE, mask: 0x02 }
+      - name: C1DATA
+        addr: 0x16
+        width: 2
+        endian: le
+        access: r
+        source: ch1
+        encode:
+          clamp_min: 0
+          clamp_max: 65535
+          clamp_from:
+            - { register: CONFIG, mask: 0x07, map: { 0: { min: 0, max: 37888 } } }
+        scale_from:
+          - { register: CONFIG, mask: 0x03, shift: 4, map: { 0: 1, 1: 25, 2: 428, 3: 9876 } }
+          - { register: CONFIG, mask: 0x07, map: { 0: 1, 1: 2, 2: 3, 3: 4, 4: 5, 5: 6 } }
+        zero_unless: { register: ENABLE, mask: 0x02 }
+    data_ready:
+      - name: als
+        start_register: ENABLE
+        start_mask: 0x02
+        ready_register: STATUS
+        ready_mask: 0x01
+        conversion_us: 100000
+
+metadata:
+  label: "TSL2591 Light"
+  summary: "ams TSL2591 high-dynamic-range light sensor (full-spectrum + IR channels) over I²C."
+  detail: "ams TSL2591 at fixed address 0x29. Every transaction starts with the command byte 0xA0 | register. ID (0x12) reads 0x50. CH0 (full spectrum) and CH1 (infrared) are 16-bit little-endian counts that scale with the programmed gain (1×/25×/428×/9876×) and integration time (100–600 ms), saturating at 37888 for 100 ms and 65535 otherwise. Both read 0 until AEN is set; AVALID rises one 100 ms integration later. Host inputs are the counts at 1× gain / 100 ms. Interrupts, persistence and the special-function commands are not modelled."
+  category: i2c
+  config_keys:
+    - { name: i2c_address, ty: int, doc: "7-bit slave address. Defaults to 0x29 (fixed on real silicon)." }
+  inputs:
+    - { key: ch0, label: "CH0 full-spectrum counts (1×, 100 ms)", unit: counts, min: 0, max: 37888, default: 1200 }
+    - { key: ch1, label: "CH1 infrared counts (1×, 100 ms)", unit: counts, min: 0, max: 37888, default: 300 }

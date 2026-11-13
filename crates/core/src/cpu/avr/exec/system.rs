@@ -77,6 +77,13 @@ impl Avr {
         if op == 0x9598 {
             return Err(SimulationError::Halt);
         }
+        // WDR: restart the watchdog count (`avr/wdt.rs`).
+        if op == 0x95A8 {
+            self.wdt_kick();
+            self.pc = next;
+            self.cycles += 1;
+            return Ok(Some(()));
+        }
         Ok(None)
     }
 
@@ -93,7 +100,7 @@ impl Avr {
         if (op & 0xF800) == 0xB800 {
             let a = (((op >> 5) & 0x30) | (op & 0x0F)) as u8;
             let rr = ((op >> 4) & 0x1F) as usize;
-            let data_addr = 0x20u16 + a as u16;
+            let data_addr = self.io_data_address(a);
             self.data_write(data_addr, self.r[rr], bus)?;
             self.pc = next;
             self.cycles += 1;
@@ -104,7 +111,7 @@ impl Avr {
         if (op & 0xF800) == 0xB000 {
             let a = (((op >> 5) & 0x30) | (op & 0x0F)) as u8;
             let rd = ((op >> 4) & 0x1F) as usize;
-            let data_addr = 0x20u16 + a as u16;
+            let data_addr = self.io_data_address(a);
             self.r[rd] = self.data_read(data_addr, bus)?;
             self.pc = next;
             self.cycles += 1;

@@ -403,9 +403,9 @@ pub fn baseline_regressions(baseline: &Tier1Matrix, live: &Tier1Matrix) -> Vec<R
     out
 }
 
-/// One acknowledged, intentional drop. Named explicitly — silence is never
-/// sufficient. Mirrors the `drift_ack` convention in `validation/manifest.yaml`:
-/// one trailing key that has to COVER the specific observed drift, plus prose.
+/// One acknowledged, intentional chip/class regression, with a reason.
+/// This coverage ratchet remains separate from informational source/capture
+/// reporting; an entry must cover the specific observed regression.
 #[derive(Debug, Clone, Deserialize)]
 pub struct RatchetAck {
     /// `chip/class`, e.g. `esp32c3/i2c`.
@@ -669,6 +669,15 @@ pub const TIER1_TARGETS: &[Tier1Target] = &[
         "stm32g474re",
         "configs/chips/stm32g474re.yaml",
         "tests/fixtures/tier1/stm32g474re.elf",
+    ),
+    // G431RB: the demand-ranked "other STM32" 13% industrial/motor-control pick
+    // (JetBrains State of Embedded 2025), same RM0440 G4 die family as g474re.
+    // Raw-register self-test over the reused G4 peripheral map; STM32G431RBT6
+    // is Active on the ST eStore and in stock at distributors.
+    fast_boot(
+        "stm32g431rb",
+        "configs/chips/stm32g431rb.yaml",
+        "tests/fixtures/tier1/stm32g431rb.elf",
     ),
     // Second Cortex-M0+ (ARMv6-M) row after stm32l073, and the first with the
     // dedicated `stm32g0` RCC map: self-tests clock/gpio/timer/pwm/dma/irq/

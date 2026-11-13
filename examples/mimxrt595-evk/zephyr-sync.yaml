@@ -1,0 +1,26 @@
+# LabWired - MIMXRT595-EVK stock Zephyr synchronization sample
+#
+# Unmodified upstream Zephyr v3.7.0 `samples/synchronization` for board
+# `mimxrt595_evk/mimxrt595s/cm33`.
+# Rebuild: crates/firmware-mimxrt595-evk-zephyr/build.sh
+#
+# Two threads hand a semaphore back and forth; each prints, spins in
+# k_busy_wait(100 ms) on the OS timer count, then k_msleep(500 ms). The third
+# line needs thread_a's k_msleep to end, i.e. an OS timer match interrupt
+# (rt5xx_ostimer: Gray-coded EVTIMER, MATCH_L/H, OSEVENT_CTRL INTRFLAG/INTENA,
+# OS_EVENT_IRQn 41). With the timer stubbed the busy-wait never ends and this
+# fails. Device time at the stop is 2 x 100 ms + 2 x 500 ms (~1.22 s at the
+# chip's 48 MHz cpu_hz).
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/mimxrt595-zephyr-sync.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 20000000
+  stop_when_assertions_pass: true
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v3.7.0 ***"
+      - "thread_a: Hello World from cpu 0 on mimxrt595_evk!"
+      - "thread_b: Hello World from cpu 0 on mimxrt595_evk!"
+      - "thread_a: Hello World from cpu 0 on mimxrt595_evk!"

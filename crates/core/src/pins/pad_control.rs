@@ -91,8 +91,54 @@ impl PadControl {
         }
     }
 
+    /// The pin whose output flip-flops a `width`-byte store at `offset` into
+    /// the block writes, for blocks that share them with the GPIO port.
+    ///
+    /// Renesas RA only: `PmnPFS` PODR (bit 0) and PDR (bit 2) are the same
+    /// flip-flops as the port's `PCNTR1` PODR/PDR (R01UH0887 §19.2.5), so a
+    /// store that covers bits 2:0 of this port's `PmnPFS` word (the word,
+    /// its low half, or `PmnPFS_HA` / `PmnPFS_BY`, which alias the low half
+    /// and byte) sets them. A store to the upper bytes does not.
+    pub fn output_write(self, offset: u64, width: u64) -> Option<u8> {
+        let Self::RaPfs { port } = self else {
+            return None;
+        };
+        let word = offset & !3;
+        if word / 0x40 != u64::from(port) {
+            return None;
+        }
+        match (offset % 4, width) {
+            (0, _) | (2, 2) | (3, 1) => Some(((word % 0x40) / 4) as u8),
+            _ => None,
+        }
+    }
+
+    /// The direction and output level one register word sets: `(PDR, PODR)`.
+    /// Only meaningful for a pin [`Self::output_write`] named.
+    pub fn decode_output(self, word: u32) -> (bool, bool) {
+        (word & (1 << 2) != 0, word & 1 != 0)
+    }
+
     /// The pull `block` (the pad-control peripheral) configures on `pin`. A
     /// register the block cannot read is no pull.
+    /// The peripheral function a register word hands the pad to: Renesas RA
+    /// `PmnPFS` PMR (bit 16) = 1 selects PSEL (bits 28:24) (R01UH0887
+    /// §19.2.5). `None` for a pad the port owns, and for the other blocks.
+    pub fn decode_function(self, word: u32) -> Option<u8> {
+        match self {
+            Self::RaPfs { .. } if word & (1 << 16) != 0 => Some(((word >> 24) & 0x1F) as u8),
+            _ => None,
+        }
+    }
+
+    /// The peripheral function `pin`'s register selects, read from `block`.
+    pub fn function(self, block: &dyn Peripheral, pin: u8) -> Option<u8> {
+        block
+            .read_u32(self.offset(pin))
+            .ok()
+            .and_then(|word| self.decode_function(word))
+    }
+
     pub fn pull(self, block: &dyn Peripheral, pin: u8) -> Pull {
         block
             .read_u32(self.offset(pin))
@@ -122,6 +168,27 @@ mod tests {
         assert_eq!(pfs.offset(11), 0x40 + 0x2C);
         assert_eq!(pfs.decode(1 << 4), Pull::Up);
         assert_eq!(pfs.decode(1 << 2), Pull::None, "PDR alone");
+    }
+
+    #[test]
+    fn ra_pfs_low_byte_stores_write_the_port_output() {
+        let pfs = PadControl::RaPfs { port: 6 };
+        // P600PFS word, its PmnPFS_HA (+2, 16-bit) and PmnPFS_BY (+3, 8-bit).
+        assert_eq!(pfs.output_write(0x180, 4), Some(0));
+        assert_eq!(pfs.output_write(0x180, 1), Some(0));
+        assert_eq!(pfs.output_write(0x182, 2), Some(0));
+        assert_eq!(pfs.output_write(0x183, 1), Some(0));
+        assert_eq!(pfs.output_write(0x1BC, 4), Some(15), "P615PFS");
+        // Upper bytes (PSEL/PMR/ISEL) do not reach PDR/PODR.
+        assert_eq!(pfs.output_write(0x181, 1), None);
+        assert_eq!(pfs.output_write(0x182, 1), None);
+        // Another port's word, and PWPR, are not this port's pins.
+        assert_eq!(pfs.output_write(0x140, 4), None);
+        assert_eq!(pfs.output_write(0x50C, 1), None);
+        assert_eq!(pfs.decode_output(0b101), (true, true));
+        assert_eq!(pfs.decode_output(0b100), (true, false));
+        assert_eq!(pfs.decode_output(0b001), (false, true));
+        assert_eq!(PadControl::KinetisPcr.output_write(0, 4), None);
     }
 
     #[test]

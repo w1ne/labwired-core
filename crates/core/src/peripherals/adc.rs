@@ -16,8 +16,9 @@ use std::any::Any;
 use std::str::FromStr;
 
 // ── Modeled internal source (L4/V2 path) ────────────────────────────────────
-// There is no live analog input in simulation, so the L4 conversion engine
-// converts a *fixed* source: V(IN) = 3.0 V against V(REF+) = 3.3 V. The 12-bit
+// An unbound L4 channel retains the fixed internal fallback source:
+// V(IN) = 3.0 V against V(REF+) = 3.3 V. An injected channel instead converts
+// its held millivolts against the current reference. The fallback's 12-bit
 // code is round-down(3.0/3.3 * 4096) = 3723; narrower resolutions drop LSBs
 // (>> (12 - bits)), exactly as the SAR core truncates. The code is therefore
 // derived + deterministic and CHANGES with CFGR.RES — a real conversion, not a
@@ -75,6 +76,15 @@ fn scaled_adc_code(bits: u32) -> u32 {
     }
 }
 
+/// Scale an externally held 12-bit input to a wider or narrower resolution.
+fn scaled_input_code(count12: u32, bits: u32) -> u32 {
+    if bits >= 12 {
+        (count12 << (bits - 12)) & ((1 << bits) - 1)
+    } else {
+        count12 >> (12 - bits)
+    }
+}
+
 /// U5 `ADC_CFGR1.RES[3:2]` → bit width, straight from the vendored stm32u575
 /// SVD's enumerated values: 0b00=14, 0b01=12, 0b10=10, 0b11=8. The U5 is a
 /// 14-bit converter, so the reset encoding is 14, not the H7's 16 or the
@@ -90,6 +100,14 @@ fn u5_resolution_bits(cfgr: u32) -> u32 {
 
 /// Analog input channels on the widest modelled family (STM32H7 ADC1, 0..=19).
 const MAX_CHANNELS: usize = 20;
+const NO_ADC_INPUT: u16 = u16::MAX;
+
+/// The input voltage and reference latched at sample-and-hold acquisition.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
+struct HeldAdcInput {
+    millivolts: f64,
+    reference_millivolts: f64,
+}
 
 // ── STM32F1 ADC_CR2 bits (RM0008 §11.12.3 / stm32f1xx.h) ────────────────────
 // Independently checked against ST headers — NOT against this model's older
@@ -119,10 +137,8 @@ const F1_TS_AVG_SLOPE_MV_PER_C: f64 = 4.3;
 /// Internal reference voltage, typical: 1.20 V (DS5319 Table 13 "Embedded
 /// internal reference voltage", V_REFINT min 1.16 / typ 1.20 / max 1.24 V).
 const F1_VREFINT_MV: f64 = 1200.0;
-/// V_REF+ the converter's 12-bit code is taken against. A Blue Pill ties
-/// V_DDA/V_REF+ to the 3.3 V rail; the same reference `set_channel_input`
-/// assumes.
-const F1_VREF_MV: f64 = 3300.0;
+/// Default positive full-scale reference until a board route drives VDDA.
+const ADC_VREF_MV: f64 = 3300.0;
 /// Ambient temperature an F1 temperature sensor reads before anything sets
 /// one, in °C.
 pub const DEFAULT_AMBIENT_TEMPERATURE_C: f64 = 25.0;
@@ -367,10 +383,15 @@ pub struct Adc {
     converting: bool,
     cycles_remaining: u32,
     conversion_time: u32,
-    /// Per-channel injected values (12-bit counts). 0xFFFF = "no injection".
-    /// Sized for the widest family (H7, 20 channels); [`Self::channel_count`]
-    /// is how many of them this layout has.
-    channel_inputs: [u16; MAX_CHANNELS],
+    /// Per-channel injected levels, held in millivolts. `None` means no
+    /// external input; conversion waits until the ADC samples the mux.
+    channel_inputs_mv: [Option<u16>; MAX_CHANNELS],
+    /// Positive full-scale reference voltage. Defaults to the common 3.3 V
+    /// rail; `board.power.vdda_volts` can drive it explicitly.
+    reference_millivolts: f64,
+    /// F1 sample-and-hold value captured at SWSTART. A later pad, mux or Vdda
+    /// change applies to the next sample.
+    sampled_input: Option<HeldAdcInput>,
 
     /// Bus-published cycle clock (walk-free campaign). `Some` once attached →
     /// event-schedulable; `None` keeps the legacy walk.
@@ -467,7 +488,9 @@ impl Adc {
             converting: false,
             cycles_remaining: 0,
             conversion_time: 14,
-            channel_inputs: [0xFFFF; MAX_CHANNELS],
+            channel_inputs_mv: [None; MAX_CHANNELS],
+            reference_millivolts: ADC_VREF_MV,
+            sampled_input: None,
             clock: None,
             chain_live: false,
             f1_rstcal_remaining: None,
@@ -517,10 +540,40 @@ impl Adc {
         })
     }
 
-    /// 12-bit code for `mv` against the F1's 3.3 V reference, truncated as
-    /// [`Self::set_channel_input`] truncates.
-    fn f1_code_for_mv(mv: f64) -> u32 {
-        ((mv * 4095.0 / F1_VREF_MV).floor()).clamp(0.0, 4095.0) as u32
+    /// 12-bit code for `mv` against the reference latched at acquisition.
+    fn code_for_mv(mv: f64, reference_millivolts: f64) -> u32 {
+        ((mv * 4095.0 / reference_millivolts).floor()).clamp(0.0, 4095.0) as u32
+    }
+
+    /// Current positive full-scale ADC reference, in volts.
+    pub fn reference_voltage_v(&self) -> f64 {
+        self.reference_millivolts / 1000.0
+    }
+
+    /// Set the positive full-scale ADC reference. Invalid values leave it
+    /// unchanged; a conversion already in progress keeps its held reference.
+    pub fn set_reference_voltage_v(&mut self, volts: f64) -> bool {
+        if !volts.is_finite() || volts <= 0.0 {
+            return false;
+        }
+        self.reference_millivolts = volts * 1000.0;
+        true
+    }
+
+    fn sample_f1_input(&self) -> Option<HeldAdcInput> {
+        let channel = self.f1_regular_channel();
+        let injected = self
+            .channel_inputs_mv
+            .get(channel)
+            .copied()
+            .flatten()
+            .map(f64::from);
+        let (_, cr2) = self.f1_ctrl();
+        let millivolts = injected.or_else(|| self.f1_internal_channel_mv(channel, cr2))?;
+        Some(HeldAdcInput {
+            millivolts,
+            reference_millivolts: self.reference_millivolts,
+        })
     }
 
     crate::cycle_clock::scheduler_mode!();
@@ -544,18 +597,13 @@ impl Adc {
                 self.converting = false;
                 let (cr1, cr2) = self.f1_ctrl();
 
-                // Injected channel value if available; else increment DR for
-                // visual feedback. The converted channel is SQR3 SQ1[4:0]
-                // (RM0008 §11.12.14) — NOT a CR2 bit field: the earlier CR2
-                // low-bits fallback always read ≥ 1 for any firmware that
-                // holds ADON set, so a seeded channel 0 was never returned.
-                // SQR3 resets to 0, so firmware that never programs the
-                // sequence converts channel 0, exactly like silicon.
-                let ch = self.f1_regular_channel();
-                if ch < self.channel_inputs.len() && self.channel_inputs[ch] != 0xFFFF {
-                    self.dr = self.channel_inputs[ch] as u32;
-                } else if let Some(mv) = self.f1_internal_channel_mv(ch, cr2) {
-                    self.dr = Self::f1_code_for_mv(mv);
+                // The selected SQR3 channel, its input voltage and VREF+ were
+                // latched at SWSTART. Changes while SAR conversion is running
+                // are visible only to the next sample-and-hold acquisition.
+                // A channel with no external or modeled internal source keeps
+                // the old incrementing fallback for visual feedback.
+                if let Some(sample) = self.sampled_input.take() {
+                    self.dr = Self::code_for_mv(sample.millivolts, sample.reference_millivolts);
                 } else {
                     self.dr = (self.dr + 1) & 0xFFF;
                 }
@@ -574,17 +622,16 @@ impl Adc {
         irq
     }
 
-    /// Inject a millivolt reading for a specific ADC channel. The next
-    /// conversion on this channel returns the equivalent 12-bit count.
     /// Read back the injected 12-bit count for a channel (`0xFFFF` = nothing
-    /// injected). The read-back counterpart of [`Self::set_channel_input`], so
-    /// a stimulus test can assert what the next conversion will return without
-    /// running one.
+    /// injected). Conversion is evaluated against the current reference when
+    /// the ADC acquires the selected input.
     pub fn channel_input_count(&self, channel: u8) -> u16 {
-        self.channel_inputs
+        self.channel_inputs_mv
             .get(channel as usize)
             .copied()
-            .unwrap_or(0xFFFF)
+            .flatten()
+            .map(|mv| Self::code_for_mv(f64::from(mv), self.reference_millivolts) as u16)
+            .unwrap_or(NO_ADC_INPUT)
     }
 
     /// Analog input channels this register layout has, `0..count`.
@@ -605,24 +652,23 @@ impl Adc {
 
     pub fn set_channel_input(&mut self, channel: u8, millivolts: u16) {
         if channel < self.channel_count() {
-            let count = ((millivolts as u32 * 4095) / 3300).min(4095) as u16;
-            self.channel_inputs[channel as usize] = count;
+            self.channel_inputs_mv[channel as usize] = Some(millivolts);
         }
     }
 
     /// Remove the injected level from a channel, returning it to the modeled
     /// internal source. `set_channel_input` cannot express this itself: its
-    /// mV→count conversion saturates at 4095, so the 0xFFFF "no injection"
-    /// sentinel is unreachable through it by construction.
+    /// millivolt input preserves 0xFFFF as its "no injection" sentinel.
     pub fn clear_channel_input(&mut self, channel: u8) {
-        if (channel as usize) < self.channel_inputs.len() {
-            self.channel_inputs[channel as usize] = 0xFFFF;
+        if (channel as usize) < self.channel_inputs_mv.len() {
+            self.channel_inputs_mv[channel as usize] = None;
         }
     }
 
     fn start_conversion(&mut self) {
         self.converting = true;
         self.cycles_remaining = self.conversion_time;
+        self.sampled_input = self.sample_f1_input();
         self.sr &= !0x2; // clear EOC on start
     }
 
@@ -668,14 +714,15 @@ impl Adc {
     }
 
     /// L4 single-conversion engine. ADSTART (CR bit 2) with ADEN (bit 0) and a
-    /// ready converter (ISR.ADRDY) converts the fixed internal source: loads DR
-    /// with the code for CFGR.RES, raises ISR.EOC + EOS, and auto-clears
-    /// ADSTART. Deterministic and immediate (no analog settling to model).
+    /// ready converter (ISR.ADRDY) acquires the SQR1.SQ1 channel. An injected
+    /// voltage uses the current reference; an unbound channel keeps the fixed
+    /// internal source. CFGR.RES selects the width. Conversion raises EOC + EOS
+    /// and auto-clears ADSTART immediately (no analog settling to model).
     fn maybe_start_l4_conversion(&mut self, cr: u32) {
         let aden = cr & 0x1 != 0;
         let adstart = cr & (1 << 2) != 0;
-        let (adrdy, cfgr) = match &self.regs {
-            AdcRegs::Stm32L4(r) => (r.isr & 0x1 != 0, r.cfgr),
+        let (adrdy, cfgr, channel) = match &self.regs {
+            AdcRegs::Stm32L4(r) => (r.isr & 0x1 != 0, r.cfgr, ((r.sqr1 >> 6) & 0x1F) as usize),
             // H7 and U5 have their own engines (`maybe_start_h7_conversion`,
             // `maybe_start_u5_conversion`).
             AdcRegs::Stm32F1(_)
@@ -686,7 +733,14 @@ impl Adc {
         if !(aden && adstart && adrdy) {
             return;
         }
-        self.dr = l4_adc_code(l4_resolution_bits(cfgr));
+        let bits = l4_resolution_bits(cfgr);
+        self.dr = match self.channel_inputs_mv.get(channel).copied().flatten() {
+            Some(millivolts) => scaled_input_code(
+                Self::code_for_mv(f64::from(millivolts), self.reference_millivolts),
+                bits,
+            ),
+            None => l4_adc_code(bits),
+        };
         if let AdcRegs::Stm32L4(r) = &mut self.regs {
             r.cr &= !(1 << 2); // ADSTART auto-clears after a single conversion
             r.isr |= (1 << 2) | (1 << 3); // EOC | EOS
@@ -794,16 +848,14 @@ impl Adc {
         let bits = h7_resolution_bits(cfgr);
         // SQR1[10:6] is the first conversion in the regular sequence (SQ1).
         let ch = ((r.sqr1 >> 6) & 0x1F) as usize;
-        let injected = self.channel_inputs.get(ch).copied().unwrap_or(0xFFFF);
-        // Injected stimuli are held as 12-bit counts (set_channel_input), so
-        // rescale to the configured width rather than truncating to 12.
-        let code = if injected != 0xFFFF {
-            let v = injected as u32;
-            if bits >= 12 {
-                (v << (bits - 12)) & ((1 << bits) - 1)
-            } else {
-                v >> (12 - bits)
-            }
+        let injected = self.channel_inputs_mv.get(ch).copied().flatten();
+        // Preserve the existing 12-bit mV conversion, then scale to the
+        // configured width rather than truncating a raw millivolt value.
+        let code = if let Some(injected) = injected {
+            scaled_input_code(
+                Self::code_for_mv(f64::from(injected), self.reference_millivolts),
+                bits,
+            )
         } else {
             scaled_adc_code(bits)
         };
@@ -940,14 +992,12 @@ impl Adc {
         let cfgr = r.cfgr;
         let bits = u5_resolution_bits(cfgr);
         let ch = ((r.sqr1 >> 6) & 0x1F) as usize;
-        let injected = self.channel_inputs.get(ch).copied().unwrap_or(0xFFFF);
-        let code = if injected != 0xFFFF {
-            let v = injected as u32;
-            if bits >= 12 {
-                (v << (bits - 12)) & ((1 << bits) - 1)
-            } else {
-                v >> (12 - bits)
-            }
+        let injected = self.channel_inputs_mv.get(ch).copied().flatten();
+        let code = if let Some(injected) = injected {
+            scaled_input_code(
+                Self::code_for_mv(f64::from(injected), self.reference_millivolts),
+                bits,
+            )
         } else {
             scaled_adc_code(bits)
         };
@@ -1211,6 +1261,14 @@ impl Default for Adc {
 impl Peripheral for Adc {
     fn adc_channel_count(&self) -> Option<u8> {
         Some(self.channel_count())
+    }
+
+    fn supports_adc_reference_voltage(&self) -> bool {
+        true
+    }
+
+    fn set_adc_reference_voltage_v(&mut self, volts: f64) -> bool {
+        Adc::set_reference_voltage_v(self, volts)
     }
 
     fn set_ambient_temperature_c(&mut self, celsius: f64) -> bool {
@@ -1514,9 +1572,40 @@ mod tests {
         assert_eq!(convert(&mut adc), ch0, "SQR3 SQ1 = 0 converts channel 0");
     }
 
-    /// `clear_channel_input` is the only road back to "no injection": the
-    /// mV→count conversion saturates at 4095, so 0xFFFF is unreachable through
-    /// `set_channel_input`. After the clear, the same conversion must return
+    /// The F1 ADC samples the selected input and VREF+ when SWSTART begins
+    /// acquisition. Changes while the conversion countdown is running belong
+    /// to the next sample.
+    #[test]
+    fn f1_sample_hold_latches_mux_input_and_reference() {
+        let mut adc = Adc::new();
+        adc.set_channel_input(0, 1650);
+        adc.set_channel_input(3, 3300);
+        assert!(adc.set_reference_voltage_v(3.3));
+
+        f1_software_start(&mut adc); // channel 0, 1.65 V, 3.3 V VREF+
+        adc.set_channel_input(0, 3300);
+        assert!(adc.set_reference_voltage_v(1.65));
+        adc.write_u32(0x34, 3).unwrap(); // change mux while conversion is live
+        for _ in 0..15 {
+            adc.tick();
+        }
+        assert_eq!(
+            adc.dr, 2047,
+            "the first sample keeps its acquired 1.65 V / 3.3 V"
+        );
+
+        f1_software_start(&mut adc);
+        for _ in 0..15 {
+            adc.tick();
+        }
+        assert_eq!(
+            adc.dr, 4095,
+            "the next sample sees channel 3 and 1.65 V VREF+"
+        );
+    }
+
+    /// `clear_channel_input` releases the held level and restores the no-input
+    /// sentinel. After the clear, the same conversion must return
     /// the engine's own value again (here: the counter fallback the basic test
     /// pins at 1), not a stale injected count.
     #[test]
@@ -1590,6 +1679,76 @@ mod tests {
             }
         }
         panic!("ADC failed to complete conversion");
+    }
+
+    #[test]
+    fn test_adc_l4_converts_selected_injected_channel() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32L4);
+        adc.set_channel_input(1, 3300);
+        adc.write_u32(0x08, 1 << 28).unwrap(); // ADVREGEN, leave DEEPPWD
+        adc.write_u32(0x08, (1 << 28) | 1).unwrap(); // ADEN -> ADRDY
+        adc.write_u32(0x30, 5 << 6).unwrap(); // SQR1.SQ1 = channel 5
+
+        // Known divider voltages, with literal 12-bit expectations. These do
+        // not use the conversion helper to manufacture their own oracle.
+        for (millivolts, expected) in [(1650, 2047), (0, 0), (3294, 4087), (548, 680), (2751, 3413)]
+        {
+            adc.set_channel_input(5, millivolts);
+            adc.write(0x00, (1 << 2) | (1 << 3)).unwrap(); // clear EOC/EOS only
+            assert_eq!(adc.read_u32(0x00).unwrap() & 0xC, 0);
+            adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap();
+            assert_eq!(adc.read_u32(0x00).unwrap() & 0xD, 0xD, "ADRDY/EOC/EOS");
+            assert_eq!(adc.read_u32(0x08).unwrap() & (1 << 2), 0, "ADSTART clears");
+            assert_eq!(adc.read_u32(0x40).unwrap(), expected, "{millivolts} mV");
+        }
+        adc.write_u32(0x30, 1 << 6).unwrap();
+        adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap();
+        assert_eq!(adc.read_u32(0x40).unwrap(), 4095, "SQ1 selects channel 1");
+        adc.write_u32(0x30, 5 << 6).unwrap();
+        adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap();
+        assert_eq!(adc.read_u32(0x40).unwrap(), 3413, "channel 5 was preserved");
+    }
+
+    #[test]
+    fn test_adc_l4_injected_input_uses_resolution_and_current_reference() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32L4);
+        adc.set_channel_input(5, 1650);
+        adc.write_u32(0x08, 1 << 28).unwrap();
+        adc.write_u32(0x08, (1 << 28) | 1).unwrap();
+        adc.write_u32(0x30, 5 << 6).unwrap();
+        for (res, expected) in [(0, 2047), (1, 511), (2, 127), (3, 31)] {
+            adc.write_u32(0x0C, res << 3).unwrap();
+            adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap();
+            assert_eq!(adc.read_u32(0x40).unwrap(), expected, "CFGR.RES={res}");
+        }
+        adc.write_u32(0x0C, 0).unwrap();
+        // Change VREF after the voltage was injected: conversion must acquire
+        // the current reference, not reuse a count cached at injection time.
+        for (reference, expected) in [(1.65, 4095), (3.0, 2252), (3.3, 2047)] {
+            assert!(adc.set_reference_voltage_v(reference));
+            adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap();
+            assert_eq!(adc.read_u32(0x40).unwrap(), expected, "VREF={reference}");
+        }
+    }
+
+    #[test]
+    fn test_adc_l4_unbound_channel_retains_internal_source() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32L4);
+        adc.set_channel_input(5, 1650);
+        adc.write_u32(0x08, 1 << 28).unwrap();
+        adc.write_u32(0x08, (1 << 28) | 1).unwrap();
+        adc.write_u32(0x30, 6 << 6).unwrap(); // unbound, despite channel 5 injection
+        adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap();
+        assert_eq!(adc.read_u32(0x40).unwrap(), 3723);
+        adc.write_u32(0x30, 5 << 6).unwrap();
+        adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap();
+        assert_eq!(adc.read_u32(0x40).unwrap(), 2047);
+        adc.clear_channel_input(5);
+        for (res, expected) in [(0, 3723), (1, 930), (2, 232), (3, 58)] {
+            adc.write_u32(0x0C, res << 3).unwrap();
+            adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap();
+            assert_eq!(adc.read_u32(0x40).unwrap(), expected, "unbound RES={res}");
+        }
     }
 
     #[test]

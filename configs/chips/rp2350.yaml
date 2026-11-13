@@ -33,6 +33,26 @@ ram:
 # RP2350 images carry IMAGE_DEF first. We fast-boot bare ELFs, so no
 # reset_vector_offset here (unlike the RP2040 descriptor's boot2 offset).
 reset_vector_offset: 0x0
+# Boot ROM @ 0x00000000, 32 KB (datasheet 2.2 address map). pico-sdk and the
+# arduino-pico OTA stage call bootrom APIs through the well-known pointers at
+# 0x14..0x19 (datasheet 5.4.1, Table 453). In-tree clean-room image
+# (crates/core/roms/rp2350/rp2350_bootrom.S — NOT a Raspberry Pi dump): the
+# table lookup plus the APIs the SDK boot path calls. Set
+# LABWIRED_RP2350_BOOTROM to a file to replace it, or to "" to drop the window
+# (address 0 then aliases flash again).
+memory_regions:
+  - name: "bootrom"
+    base: 0x00000000
+    size: "32KB"
+    image_env: "LABWIRED_RP2350_BOOTROM"
+# Double-precision coprocessor on the M33 coprocessor interface, p4 (current
+# security state) and p5 (Non-secure) — datasheet 3.6.2. pico-sdk enables
+# it in runtime_init_per_core_enable_coprocessors and routes double
+# arithmetic/conversions/compares through it (pico_double, dcp_canned).
+# GPIO coprocessor, p0 (datasheet 3.6.1): pico-sdk's gpio_put/gpio_set_dir
+# (gpio_coproc.h) and so arduino-pico's pinMode/digitalWrite; executed as
+# the equivalent SIO GPIO accesses.
+coprocessors: [rp2350_dcp, rp2350_gpioc]
 # Atomic SET/CLR/XOR aliases, same scheme as RP2040 (rp2350 addressmap.h
 # REG_ALIAS_*_BITS).
 atomic_register_aliases: true
@@ -49,13 +69,27 @@ peripherals:
   # CLOCKS / RESETS / XOSC / PLL_SYS / PLL_USB — the shared clock-reset model
   # on the RP2350 address map (rp2350 profile: CLOCKS @0x40010000, RESETS
   # @0x40020000, XOSC @0x40048000, PLLs @0x40050000/0x40058000). Window ends
-  # before ACCESSCTRL (0x40060000).
+  # at ACCESSCTRL (0x40060000): 0x50000 = 320KB. (288KB stopped at
+  # 0x40058000 and cut PLL_USB off — pico-sdk pll_init(pll_usb) BusFaulted.)
   - id: "clk_rst"
     type: "rp2040_clkrst"
     base_address: 0x40010000
-    size: "288KB"
+    size: "320KB"
     config:
       debug_schema: "../peripherals/rp2350/clocks.yaml"
+      profile: "rp2350"
+  # IO_BANK0: the pad function mux, inside the clk_rst window (greatest start
+  # wins, as on rp2040.yaml). The RP2040 model on the RP2350 map: same
+  # GPIOn_STATUS/CTRL array and FUNCSEL numbers for SPI/UART/I2C/PWM/SIO,
+  # the interrupt block at 0x230 (pico-sdk rp2350 io_bank0.h), IO_IRQ_BANK0
+  # = NVIC 21 (intctrl.h). Without it GPIOn_CTRL was clk_rst storage and no
+  # peripheral output (PWM, UART, SPI, I2C) reached a pad.
+  - id: "io_bank0"
+    type: "rp2040_io_bank0"
+    base_address: 0x40028000
+    size: "4KB"
+    irq: 21
+    config:
       profile: "rp2350"
   - id: "rosc"
     type: "rp2040_clkrst"
@@ -109,6 +143,9 @@ peripherals:
     irq: 35
     config:
       debug_schema: "../peripherals/rp2350/adc.yaml"
+  # PWM: 12 slices, so EN/INTR/IRQ0_*/IRQ1_* start at 0xF0 (pico-sdk rp2350
+  # pwm.h); PWM_IRQ_WRAP_0/_1 = NVIC 8/9. The debug schema below is still the
+  # RP2040-shaped one (EN at 0xA0): names only, the model uses the profile.
   - id: "pwm"
     type: "rp2040_pwm"
     base_address: 0x400A8000
@@ -116,10 +153,16 @@ peripherals:
     irq: 8
     config:
       debug_schema: "../peripherals/rp2350/pwm.yaml"
+      profile: "rp2350"
+  # TIMER0. The RP2040 timer model with the RP2350 map: LOCKED/SOURCE at
+  # 0x34/0x38 push INTR/INTE/INTF/INTS to 0x3c..0x48 (pico-sdk rp2350
+  # hardware_regs/timer.h). TIMER0_IRQ_0..3 are NVIC 0..3, as on the RP2040.
   - id: "timer0"
     type: "rp2040_timer"
     base_address: 0x400B0000
     size: "4KB"
+    config:
+      profile: "rp2350"
   # XIP_CTRL (flash cache control) — declarative storage, as on RP2040.
   - id: "xip_ctrl"
     type: "declarative"
@@ -153,6 +196,25 @@ peripherals:
     type: "pio"
     base_address: 0x50400000
     size: "4KB"
+  # BOOT RAM endpoint (datasheet 4.3): 1 KB boot RAM, WRITE_ONCE0/1 and the
+  # BOOTLOCK0..7 try-locks at +0x800. pico-sdk pre-main resets the boot locks
+  # and spins claiming BOOTLOCK7 (runtime_init_bootrom_locking_enable);
+  # unmapped, the first BOOTLOCK store BusFaulted at 0x400E080C.
+  - id: "bootram"
+    type: "rp2350_bootram"
+    base_address: 0x400E0000
+    size: "4KB"
+  # USB device controller: the RP2040 one at the same addresses — DPRAM
+  # 0x50100000 + register block 0x50110000 (datasheet 12.7, MAIN_CTRL @0x040,
+  # USB_MUXING @0x074 ...) — on USBCTRL_IRQ 14 (datasheet 3.2, Table 95).
+  # pico-sdk's pre-main runtime_init_usb_power_down writes it before any user
+  # code; unmapped, that store BusFaulted at 0x5011004C. Same behavioural
+  # model and simulated host as rp2040.yaml.
+  - id: "usbctrl"
+    type: "rp2040_usb"
+    base_address: 0x50100000
+    size: "80KB"
+    irq: 14
   # TBMAN — storage stub; PLATFORM reads 0 → ASIC path, correct for the sim.
   - id: "tbman"
     type: "stub"
@@ -160,12 +222,23 @@ peripherals:
     size: "4KB"
   # SIO (single-cycle IO) — GPIO out/oe + readback. CPUID reads 0 (core 0;
   # core 1 is not modeled yet).
+  # SIO with the RP2350 GPIO map (each register has a HI twin at +4, so
+  # OUT_SET is 0x18 and OE is 0x30, not the RP2040's 0x14 / 0x20).
   - id: "sio"
     type: "rp2040_sio"
     base_address: 0xD0000000
     size: "4KB"
     config:
       debug_schema: "../peripherals/rp2350/sio.yaml"
+      profile: "rp2350"
+  # Cortex-M33 SCS ACTLR (0xE000E008), a plain register: pico-sdk's
+  # spinlock_set_extexclall() sets EXTEXCLALL during runtime init.
+  - id: "actlr"
+    type: "declarative"
+    base_address: 0xE000E008
+    size: "4B"
+    config:
+      path: "../peripherals/rp2350/actlr.yaml"
   - id: "systick"
     type: "systick"
     base_address: 0xE000E010

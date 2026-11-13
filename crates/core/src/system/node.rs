@@ -189,12 +189,52 @@ pub fn build_node_with_options(
             #[cfg(not(all(feature = "qemu-arm", not(target_arch = "wasm32"))))]
             anyhow::bail!("node '{id}': Cortex-A7 needs a native build with --features qemu-arm; browser execution is unavailable")
         }
+        MachineFamily::CortexR => {
+            #[cfg(all(feature = "qemu-arm-system", not(target_arch = "wasm32")))]
+            {
+                let NodeFirmware::Elf(bytes) = firmware else {
+                    anyhow::bail!("node '{id}': Cortex-R5F takes an initialized-memory ELF");
+                };
+                let bus =
+                    crate::bus::SystemBus::from_config_with_plugins(chip, system, opts.plugins)?;
+                Ok(Box::new(crate::system::cortex_r::load_elf(
+                    bus, chip, &bytes,
+                )?))
+            }
+            #[cfg(not(all(feature = "qemu-arm-system", not(target_arch = "wasm32"))))]
+            anyhow::bail!("node '{id}': Cortex-R5F needs a native build with --features qemu-arm-system; browser execution is unavailable")
+        }
         MachineFamily::RiscV => {
             build_riscv_node(id, chip, system, firmware, opts.plugins, opts.fab, blobs)
         }
         MachineFamily::Xtensa => build_xtensa_node(id, chip, system, firmware, blobs, opts.profile),
         MachineFamily::Avr => build_avr_node(id, chip, system, firmware, opts.plugins),
         MachineFamily::Pic24 => build_pic24_node(id, chip, system, firmware, opts.plugins),
+        MachineFamily::Pic18 => build_pic18_node(id, chip, system, firmware, opts.plugins),
+        MachineFamily::Pic16 => build_pic16_node(id, chip, system, firmware, opts.plugins),
+        MachineFamily::Rx => {
+            let NodeFirmware::Elf(bytes) = firmware else {
+                anyhow::bail!("node '{id}': RX takes an ELF");
+            };
+            let bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, opts.plugins)?;
+            Ok(Box::new(crate::system::rx::load_elf(bus, &bytes)?))
+        }
+        MachineFamily::Mips => {
+            let NodeFirmware::Elf(bytes) = firmware else {
+                anyhow::bail!("node '{id}': MIPS takes an ELF");
+            };
+            let bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, opts.plugins)?;
+            Ok(Box::new(crate::system::mips::load_elf(bus, &bytes)?))
+        }
+        MachineFamily::Aarch64 => {
+            let NodeFirmware::Elf(bytes) = firmware else {
+                anyhow::bail!("node '{id}': AArch64 takes an ELF");
+            };
+            let bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, opts.plugins)?;
+            Ok(Box::new(crate::system::aarch64::load_elf(
+                bus, chip, &bytes,
+            )?))
+        }
     }
 }
 
@@ -262,19 +302,28 @@ fn build_avr_node(
         .with_context(|| format!("node '{id}': build bus"))?;
     let mut cpu = crate::cpu::Avr::for_chip_name(&chip.name);
     cpu.load_program_image(&image);
-    // SPI/I2C kits park on bus controllers; the AVR interpreter owns
-    // transfers via SPDR / TWCR, so move slaves onto the CPU.
-    for name in ["spi", "spi0", "spi1"] {
-        for dev in bus.take_spi_devices(name) {
-            cpu.push_spi_device(dev);
-        }
-    }
+    // EEPROM programming time is in microseconds; count it in this clock.
+    cpu.set_cpu_hz(bus.cpu_hz);
+    // SPI kits stay on the bus parking controller (SPDR clocks via
+    // SystemBus::clock_parking_spi) so inspect can see the panel. I²C
+    // slaves still move onto the CPU TWI model.
     for name in ["i2c", "i2c0", "twi"] {
         for dev in bus.take_i2c_slaves(name) {
             cpu.push_i2c_slave(dev);
         }
     }
-    let machine = Machine::new(cpu, bus);
+    let mut machine = Machine::new(cpu, bus);
+    // Same run setting the C3 rom-boot / CLI hosted-fast paths apply: widen
+    // to the bus's max-safe interval once residents are walk-free (e.g.
+    // edge-serviced displays). A keypad keeps per-cycle service (#1787), so
+    // boards carrying one stay at interval 1. Exact batch boundaries keep
+    // peripheral event cadence identical to interval-1.
+    let interval = machine.max_safe_tick_interval();
+    machine.config.peripheral_tick_interval = interval;
+    machine.bus.config.peripheral_tick_interval = interval;
+    if interval > 1 {
+        machine.exact_batch_boundaries = true;
+    }
     Ok(Box::new(machine))
 }
 
@@ -305,6 +354,78 @@ fn build_pic24_node(
         .with_context(|| format!("node '{id}': build bus"))?;
     let mut cpu = crate::cpu::Pic24::new();
     cpu.load_program_image(&image);
+    let machine = Machine::new(cpu, bus);
+    Ok(Box::new(machine))
+}
+
+/// PIC18 node: ELF in, CPU-local flash sized from the chip
+/// ([`crate::cpu::Pic18::for_chip_name`]). The EUSART is CPU-internal; no
+/// node console is attached (the CLI `test` path wires it).
+fn build_pic18_node(
+    id: &str,
+    chip: &ChipDescriptor,
+    system: &SystemManifest,
+    firmware: NodeFirmware,
+    plugins: &[&dyn crate::plugin::ChipPlugin],
+) -> anyhow::Result<Box<dyn MachineTrait>> {
+    let NodeFirmware::Elf(bytes) = firmware else {
+        anyhow::bail!(
+            "node '{id}': chip '{}' boots from an ELF, but the firmware is not an ELF file",
+            chip.name
+        );
+    };
+    let image =
+        parse_elf_image(&bytes).with_context(|| format!("node '{id}': parse firmware ELF"))?;
+    if image.arch != crate::Arch::Pic18 {
+        anyhow::bail!(
+            "node '{id}': firmware architecture {:?} is incompatible with PIC18 chip '{}'",
+            image.arch,
+            chip.name
+        );
+    }
+    crate::cpu::pic18::check_pic18_entry(image.entry_point)
+        .map_err(|e| anyhow::anyhow!("node '{id}': {e}"))?;
+    let bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, plugins)
+        .with_context(|| format!("node '{id}': build bus"))?;
+    let mut cpu = crate::cpu::Pic18::for_chip_name(&chip.name);
+    cpu.load_program_image(&image);
+    let machine = Machine::new(cpu, bus);
+    Ok(Box::new(machine))
+}
+
+/// PIC16 node: ELF in, CPU-local flash sized from the chip
+/// ([`crate::cpu::Pic16::for_chip_name`]). EM_MCHP_PIC images are retargeted
+/// to PIC16 by the chip's `arch:` ([`crate::system::arch_policy::image_arch_for_chip`]).
+fn build_pic16_node(
+    id: &str,
+    chip: &ChipDescriptor,
+    system: &SystemManifest,
+    firmware: NodeFirmware,
+    plugins: &[&dyn crate::plugin::ChipPlugin],
+) -> anyhow::Result<Box<dyn MachineTrait>> {
+    let NodeFirmware::Elf(bytes) = firmware else {
+        anyhow::bail!(
+            "node '{id}': chip '{}' boots from an ELF, but the firmware is not an ELF file",
+            chip.name
+        );
+    };
+    let mut image =
+        parse_elf_image(&bytes).with_context(|| format!("node '{id}': parse firmware ELF"))?;
+    image.arch = crate::system::arch_policy::image_arch_for_chip(image.arch, chip.arch);
+    if image.arch != crate::Arch::Pic16 {
+        anyhow::bail!(
+            "node '{id}': firmware architecture {:?} is incompatible with PIC16 chip '{}'",
+            image.arch,
+            chip.name
+        );
+    }
+    crate::cpu::pic16::check_pic16_entry(image.entry_point)
+        .map_err(|e| anyhow::anyhow!("node '{id}': {e}"))?;
+    let bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, plugins)
+        .with_context(|| format!("node '{id}': build bus"))?;
+    let mut cpu = crate::cpu::Pic16::for_chip_name(&chip.name);
+    cpu.load_program_image(&image)
+        .map_err(|e| anyhow::anyhow!("node '{id}': {e}"))?;
     let machine = Machine::new(cpu, bus);
     Ok(Box::new(machine))
 }
@@ -420,6 +541,16 @@ fn build_riscv_node(
             let image = parse_elf_image(&bytes)
                 .with_context(|| format!("node '{id}': parse firmware ELF"))?;
             use crate::Cpu as _;
+            // A `core: rv64…` chip runs the 64-bit hart. Nothing ESP-specific
+            // applies, and the image sets up its own stack from reset.
+            if crate::cpu::riscv64::is_rv64_chip(chip) {
+                let mut machine = Machine::new(crate::cpu::RiscV64::for_chip(chip), bus);
+                machine
+                    .load_firmware(&image)
+                    .map_err(|e| anyhow::anyhow!("node '{id}': load firmware: {e:?}"))?;
+                machine.cpu.set_pc(image.entry_point as u32);
+                return Ok(Box::new(machine));
+            }
             // The single-chip engine's C3 bare-ELF path, step for step
             // (`builder::riscv`, the browser's `new_from_config_riscv`): the
             // real mask ROM in its windows, its reset-time `.data` copy
@@ -435,16 +566,26 @@ fn build_riscv_node(
                     crate::boot::esp32c3_rom::install_fast_boot_rom(&mut bus, &images);
                 }
             }
+            // C6 Arduino Preferences/NVS substrate (SPI_MEM + partitions @ 0x8000).
+            crate::boot::esp32c6_rom::maybe_install_arduino_flash(&mut bus, chip);
             let cpu = crate::system::riscv::configure_riscv(&mut bus);
             let mut machine = Machine::new(cpu, bus);
             machine
                 .load_firmware(&image)
                 .map_err(|e| anyhow::anyhow!("node '{id}': load firmware: {e:?}"))?;
+            // Re-seed ROM .data after ELF load (mask-ROM unpack never ran).
+            if crate::boot::esp32c6_rom::is_esp32c6(chip) {
+                crate::boot::esp32c6_rom::seed_rom_data(&mut machine.bus);
+            }
             // Fast boot skips the ROM/2nd-stage bootloader that would normally
-            // set the stack pointer, so seed it at the top of RAM (16-byte
+            // set the stack pointer, so seed it at the top of app SRAM (16-byte
             // aligned, RISC-V ABI) or the first prologue store faults.
-            let ram_size = chip.ram.size;
-            let sp_top = (chip.ram.base + ram_size) as u32;
+            // C6: below ROM-reserved HP SRAM (esp32c6_rom::APP_SRAM_END).
+            let sp_top = if crate::boot::esp32c6_rom::is_esp32c6(chip) {
+                crate::boot::esp32c6_rom::app_stack_top()
+            } else {
+                (chip.ram.base + chip.ram.size) as u32
+            };
             machine.cpu.set_sp(sp_top & !0xF);
             machine.cpu.set_pc(image.entry_point as u32);
             Ok(Box::new(machine))
@@ -763,6 +904,9 @@ pub fn parse_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::ProgramIma
     if arch == crate::Arch::Pic24 {
         crate::cpu::pic24::check_xc16_entry(elf.entry).map_err(anyhow::Error::msg)?;
     }
+    if arch == crate::Arch::Pic18 {
+        crate::cpu::pic18::check_pic18_entry(elf.entry).map_err(anyhow::Error::msg)?;
+    }
     let mut image = crate::memory::ProgramImage::new(elf.entry, arch);
     if arch == crate::Arch::Pic24 {
         // XC16 executable sections are already in the CPU's 4-byte slot form
@@ -780,7 +924,18 @@ pub fn parse_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::ProgramIma
         let off = ph.p_offset as usize;
         let n = ph.p_filesz as usize;
         check_load_segment(ph, bytes.len())?;
-        image.add_segment(ph.p_paddr, bytes[off..off + n].to_vec());
+        let addr = if arch == crate::Arch::Mips {
+            // MIPS ELFs name KSEG0/KSEG1 addresses; the bus is physical.
+            crate::system::mips::kseg_to_physical(ph.p_paddr)
+        } else if arch == crate::Arch::XtensaLx7 && ph.p_vaddr != 0 {
+            // ESP-IDF app ELFs distinguish the flash/load address in p_paddr
+            // from the address visible to the running core in p_vaddr. Fast
+            // boot skips the bootloader, so populate the runtime VMA directly.
+            ph.p_vaddr
+        } else {
+            ph.p_paddr
+        };
+        image.add_segment(addr, bytes[off..off + n].to_vec());
     }
     Ok(image)
 }

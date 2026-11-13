@@ -38,8 +38,8 @@ pub struct ScbFaultState {
     pub cfsr: AtomicU32,
     /// HFSR (0xE000ED2C) — HardFault Status. Write-1-to-clear.
     pub hfsr: AtomicU32,
-    /// MMFAR (0xE000ED34) — MemManage Fault Address. Stored for round-trip; the
-    /// MPU is not enforced, so nothing in the model ever writes it.
+    /// MMFAR (0xE000ED34) — MemManage Fault Address. Written by the core on a
+    /// data access an enforcing Armv8-M MPU denies (`armv8m_mpu`).
     pub mmfar: AtomicU32,
     /// BFAR (0xE000ED38) — BusFault Address.
     pub bfar: AtomicU32,
@@ -49,6 +49,15 @@ pub struct ScbFaultState {
     pub ccr_div_0_trp: AtomicBool,
 }
 
+/// `SHCSR.MEMFAULTENA`, bit 16 (ARMv7-M ARM B3.2.13).
+pub const SHCSR_MEMFAULTENA: u32 = 1 << 16;
+/// `CFSR.MMFSR.IACCVIOL` — MMFSR bit 0 (B3.2.15): an instruction fetch the MPU
+/// denied. MMFAR is not written.
+pub const CFSR_MMFSR_IACCVIOL: u32 = 1 << 0;
+/// `CFSR.MMFSR.DACCVIOL` — MMFSR bit 1 (B3.2.15): a data access the MPU denied.
+pub const CFSR_MMFSR_DACCVIOL: u32 = 1 << 1;
+/// `CFSR.MMFSR.MMARVALID` — MMFSR bit 7 (B3.2.15): MMFAR holds the address.
+pub const CFSR_MMFSR_MMARVALID: u32 = 1 << 7;
 /// `SHCSR.BUSFAULTENA`, bit 17 (ARMv7-M ARM B3.2.13).
 pub const SHCSR_BUSFAULTENA: u32 = 1 << 17;
 /// `CFSR.BFSR.PRECISERR` — BFSR bit 1, i.e. CFSR bit 9 (B3.2.15).
@@ -212,6 +221,15 @@ pub struct Scb {
     /// round-trips, not enforced (attributes have no effect in the model).
     pub mpu_mair0: u32,
     pub mpu_mair1: u32,
+    /// Cortex-M7 L1 cache geometry behind CLIDR/CTR/CCSIDR (0xED78..0xED80),
+    /// set by `configure_cortex_m` when the chip declares a `cortex_m7_cache`.
+    /// `None` (every other core): the identification registers read zero.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub l1_cache: Option<crate::peripherals::cortex_m7_cache::L1CacheGeometry>,
+    /// CSSELR (0xE000ED84): which cache CCSIDR describes (bit 0 InD, bits
+    /// [3:1] level). Only stored when `l1_cache` is set.
+    #[serde(default)]
+    pub csselr: u32,
     /// Set when firmware writes AIRCR with the correct VECTKEY and SYSRESETREQ.
     /// Drained by the machine reset routing via drain_reset_request().
     #[serde(skip)]
@@ -301,6 +319,8 @@ impl Scb {
             mpu_rasr: 0,
             mpu_mair0: 0,
             mpu_mair1: 0,
+            l1_cache: None,
+            csselr: 0,
             pending_reset: Cell::new(false),
             sysreset_signal: s.sysreset_signal,
             clock: None,
@@ -427,6 +447,11 @@ impl Scb {
             // ARMv8-M MPU memory attribute indirection registers (Cortex-M33).
             0xC0 => self.mpu_mair0,
             0xC4 => self.mpu_mair1,
+            // Cortex-M7 cache identification (see `cortex_m7_cache`).
+            0x78 if self.l1_cache.is_some() => self.l1_cache.map_or(0, |g| g.clidr()),
+            0x7C if self.l1_cache.is_some() => self.l1_cache.map_or(0, |g| g.ctr()),
+            0x80 if self.l1_cache.is_some() => self.l1_cache.map_or(0, |g| g.ccsidr(self.csselr)),
+            0x84 if self.l1_cache.is_some() => self.csselr,
             _ => {
                 crate::census_reg!("scb:Scb", offset, "read");
                 0
@@ -515,6 +540,7 @@ impl Scb {
             // attribute encodings have no effect since access is not enforced.
             0xC0 => self.mpu_mair0 = value,
             0xC4 => self.mpu_mair1 = value,
+            0x84 if self.l1_cache.is_some() => self.csselr = value & 0xF,
             _ => {
                 crate::census_reg!("scb:Scb", offset, "write");
             }
@@ -653,6 +679,27 @@ impl crate::Peripheral for Scb {
 mod tests {
     use super::*;
     use crate::Peripheral;
+
+    #[test]
+    fn cache_id_registers_follow_the_declared_m7_geometry() {
+        use crate::peripherals::cortex_m7_cache::L1CacheGeometry;
+        let mut scb = Scb::new(Arc::new(AtomicU32::new(0)));
+        // No cache declared: the identification registers read zero and
+        // CSSELR does not store.
+        scb.write_register(0x84, 1);
+        assert_eq!(scb.read_register(0x78), 0);
+        assert_eq!(scb.read_register(0x80), 0);
+        assert_eq!(scb.read_register(0x84), 0);
+
+        scb.l1_cache = Some(L1CacheGeometry::new(16, 16).unwrap());
+        assert_eq!(scb.read_register(0x78), 0x0900_0003, "CLIDR");
+        assert_eq!(scb.read_register(0x7C), 0x8303_C003, "CTR");
+        scb.write_register(0x84, 0); // D-cache
+        assert_eq!(scb.read_register(0x80), 0xF00F_E019);
+        scb.write_register(0x84, 1); // I-cache
+        assert_eq!(scb.read_register(0x84), 1);
+        assert_eq!(scb.read_register(0x80), 0xF01F_E009);
+    }
 
     #[test]
     fn aircr_sysresetreq_with_vectkey_latches_reset() {

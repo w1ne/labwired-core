@@ -1,0 +1,23 @@
+# LabWired - Apollo4 Plus EVB stock Zephyr hello_world
+#
+# Unmodified upstream Zephyr v3.7.0 `samples/hello_world` for board
+# `apollo4p_evb` (hal_ambiq e25327f026df). Rebuild:
+# crates/firmware-apollo4p-zephyr/build.sh
+#
+# Zephyr's Apollo4 bring-up runs unpatched: soc init calls
+# am_hal_pwrctrl_low_power_init, which powers the domains through PWRCTRL,
+# flushes and invalidates the DAXI (CPU block, polling DAXIREADY, with a
+# SYNC_READ bus flush) and spins in am_hal_delay_us through the boot ROM's
+# br_util_delay_cycles (the clean-room table at 0x0800_0000). Then the PL011
+# console comes up on UART0 (GPIO60/47).
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/amap42kp-zephyr-hello.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 3000000
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v3.7.0 ***"
+      - "Hello World! apollo4p_evb/apollo4p"
+  - expected_stop_reason: max_steps

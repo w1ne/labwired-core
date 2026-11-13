@@ -51,6 +51,10 @@ enum Hal {
     Zephyr,
     /// Arduino core sketch.
     Arduino,
+    /// Unmodified upstream Contiki-NG build.
+    Contiki,
+    /// Unmodified upstream Apache NuttX build.
+    NuttX,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -281,6 +285,281 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"verdict=GOOD rp2040",
     },
     SurvivalCase {
+        // NUCLEO-L552ZE-Q: STM32L552ZET6Q (Cortex-M33 / Armv8-M), 512 KiB flash
+        // at 0x08000000, 192 KiB SRAM1 at 0x20000000 (+64 KiB SRAM2 at
+        // 0x20030000). LPUART1 (PG7/PG8, AF8) is the VCP console; the smoke
+        // walks the PC7/PB7/PA9 LEDs with ODR readback and reads PC13.
+        // SIM-DERIVED (no STM32L552 bench part); TrustZone/MPU not modelled.
+        name: "nucleo_l552ze_q_smoke",
+        core: "cortex-m33",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "stm32l552",
+        system: "nucleo-l552ze-q",
+        fixture: "nucleo-l552ze-q-smoke.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x0807_FFFF), (0x2000_0000, 0x2003_FFFF)],
+        expected_uart_output: b"NUCLEO-L552ZE-Q SMOKE\n",
+    },
+    SurvivalCase {
+        // Stock Zephyr v3.7.0 hello_world for `nucleo_l552ze_q` (Zephyr commit
+        // 36940db938a8, crates/firmware-l552ze-zephyr/build.sh): the sample
+        // Renode's ARMv8M.robot boots on this part. Zephyr's own L5 bring-up
+        // runs unpatched: ICACHE enable (SR.BUSYF poll), DBGMCU stop/standby
+        // clear at 0xE0044000, MSI -> PLL 110 MHz, VDDIO2 for port G, then
+        // the LPUART1 console on PG7/PG8.
+        name: "stm32l552_zephyr",
+        core: "cortex-m33",
+        family: CpuFamily::CortexM,
+        hal: Hal::Zephyr,
+        chip: "stm32l552",
+        system: "nucleo-l552ze-q",
+        fixture: "stm32l552-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x0807_FFFF), (0x2000_0000, 0x2003_FFFF)],
+        expected_uart_output: b"Hello World! nucleo_l552ze_q",
+    },
+    SurvivalCase {
+        // CC2538DK: CC2538SF53 (Cortex-M3), 512 KiB flash at 0x00200000 (the
+        // ROM, not flash, sits at 0x0), 32 KiB SRAM at 0x20000000. UART0
+        // (PA0/PA1 via the IOC) is the console; the smoke reads CLOCK_STA,
+        // derives IBRD/FBRD and walks LED2-LED4 (PC1-PC3) with address-masked
+        // GPIO_DATA readback. SIM-DERIVED.
+        name: "cc2538dk_smoke",
+        core: "cortex-m3",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "cc2538sf53",
+        system: "cc2538dk",
+        fixture: "cc2538dk-smoke.elf",
+        valid_pc_ranges: &[(0x0020_0000, 0x0027_FFFF), (0x2000_0000, 0x2000_7FFF)],
+        expected_uart_output: b"CC2538DK SMOKE\n",
+    },
+    SurvivalCase {
+        // CC2538DK running REAL, unmodified upstream Contiki-NG v4.9 —
+        // examples/hello-world for TARGET=cc2538dk with the full default
+        // netstack (RPL Lite, 6LoWPAN, CSMA on the cc2538 RF driver), the
+        // binary Renode's cc2538_single-node.robot runs. It boots through the
+        // in-tree clean-room ROM (CCA -> VTOR 0x0020_2000, the 0x48 utility
+        // API for .data/.bss), waits out SYNC_32K, seeds its PRNG from the RF
+        // core (ISRXON, RSSI_VALID, RFRND), brings up the radio, reads its
+        // IEEE address from the info page and prints from its etimer process.
+        // `fade()` in platform_init busy-loops ~0.5 s of 16-MHz cycles first,
+        // hence the wider budget (see `case_cycles`). Rebuild:
+        // crates/firmware-cc2538dk-contiki/build.sh.
+        name: "cc2538dk_contiki_hello",
+        core: "cortex-m3",
+        family: CpuFamily::CortexM,
+        hal: Hal::Contiki,
+        chip: "cc2538sf53",
+        system: "cc2538dk",
+        fixture: "cc2538dk-contiki-hello.elf",
+        valid_pc_ranges: &[
+            (0x0000_0000, 0x0001_FFFF),
+            (0x0020_0000, 0x0027_FFFF),
+            (0x2000_0000, 0x2000_7FFF),
+        ],
+        expected_uart_output: b"Hello, world",
+    },
+    SurvivalCase {
+        // CC2538DK flash controller: a Contiki-NG v4.9 app
+        // (crates/firmware-cc2538dk-contiki/flash-test) running the steps of
+        // Renode's cc2538_flash_controller.robot through the clean-room ROM's
+        // PageErase/ProgramFlash into the FLASH_CTRL model (20-ms erases,
+        // FCTL/FADDR/FWDATA write sequence, NOR AND rule). The marker needs
+        // the last erase check to print [OK].
+        name: "cc2538dk_contiki_flash_test",
+        core: "cortex-m3",
+        family: CpuFamily::CortexM,
+        hal: Hal::Contiki,
+        chip: "cc2538sf53",
+        system: "cc2538dk",
+        fixture: "cc2538dk-contiki-flash-test.elf",
+        valid_pc_ranges: &[
+            (0x0000_0000, 0x0001_FFFF),
+            (0x0020_0000, 0x0027_FFFF),
+            (0x2000_0000, 0x2000_7FFF),
+        ],
+        expected_uart_output: b"[OK] Data erased successfully\nFLASH TEST DONE",
+    },
+    SurvivalCase {
+        // CC2538DK AES/SHA-256 cryptoprocessor: UNMODIFIED Contiki-NG v4.9
+        // examples/platform-specific/cc2538-common/crypto ccm-test (22 AES-CCM
+        // vectors through the key store, the DMA channels and the AES IRQ).
+        // Vector #1 has AAD but no payload, so its result arrives with the AAD
+        // transfer and only the level re-pend wakes the waiting process. The
+        // marker is the first authenticated decrypt (vector #3, after #1);
+        // examples/cc2538dk/crypto-ccm.yaml checks all 22 vectors.
+        name: "cc2538dk_contiki_crypto_ccm",
+        core: "cortex-m3",
+        family: CpuFamily::CortexM,
+        hal: Hal::Contiki,
+        chip: "cc2538sf53",
+        system: "cc2538dk",
+        fixture: "cc2538dk-contiki-crypto-ccm.elf",
+        valid_pc_ranges: &[
+            (0x0000_0000, 0x0001_FFFF),
+            (0x0020_0000, 0x0027_FFFF),
+            (0x2000_0000, 0x2000_7FFF),
+        ],
+        expected_uart_output: b"Decrypted message OK",
+    },
+    SurvivalCase {
+        // The same suite's sha256-test: nine FIPS/NIST messages through the
+        // hash engine, intermediate digests resumed from HASH_DIGEST_A..H.
+        // The marker is the first digest check; crypto-sha256.yaml checks all.
+        name: "cc2538dk_contiki_crypto_sha256",
+        core: "cortex-m3",
+        family: CpuFamily::CortexM,
+        hal: Hal::Contiki,
+        chip: "cc2538sf53",
+        system: "cc2538dk",
+        fixture: "cc2538dk-contiki-crypto-sha256.elf",
+        valid_pc_ranges: &[
+            (0x0000_0000, 0x0001_FFFF),
+            (0x0020_0000, 0x0027_FFFF),
+            (0x2000_0000, 0x2000_7FFF),
+        ],
+        expected_uart_output: b"Computed SHA-256 hash OK",
+    },
+    SurvivalCase {
+        // EK-RA6M5: R7FA6M5BH (Cortex-M33), 2 MiB code flash at 0x0, 512 KiB
+        // SRAM at 0x20000000. SCI0 (P411/P410) is the J-Link OB console; the
+        // smoke runs on the reset MOCO, walks LED1-LED3 (P006-P008) with
+        // PCNTR1 PODR readback and reads S1/S2 through the PFS pull-ups.
+        // SIM-DERIVED.
+        name: "ek_ra6m5_smoke",
+        core: "cortex-m33",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "r7fa6m5bh",
+        system: "ek-ra6m5",
+        fixture: "ek-ra6m5-smoke.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x001F_FFFF), (0x2000_0000, 0x2007_FFFF)],
+        expected_uart_output: b"EK-RA6M5 SMOKE\n",
+    },
+    SurvivalCase {
+        // Stock Zephyr v4.0.0 hello_world for `ek_ra6m5` (Zephyr commit
+        // 8469084dfae8, hal_renesas 10326518701e;
+        // crates/firmware-ek-ra6m5-zephyr/build.sh). soc_early_init_hook
+        // clears the PSCU/CPSCU attribution (stubs); FSP's bsp_clock_init
+        // runs unpatched on `ra6_sysc` (FCACHE invalidate, MOSC/PLL stable
+        // flags, SCKSCR to the PLL), then the SysTick system clock and the
+        // SCI0 console in FIFO mode (FCR reset handshake, FTDRL).
+        name: "ek_ra6m5_zephyr",
+        core: "cortex-m33",
+        family: CpuFamily::CortexM,
+        hal: Hal::Zephyr,
+        chip: "r7fa6m5bh",
+        system: "ek-ra6m5",
+        fixture: "r7fa6m5bh-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x001F_FFFF), (0x2000_0000, 0x2007_FFFF)],
+        expected_uart_output:
+            b"*** Booting Zephyr OS build v4.0.0 ***\r\nHello World! ek_ra6m5/r7fa6m5bh3cfc",
+    },
+    SurvivalCase {
+        // EK-RA8M1: R7FA8M1AH (Cortex-M85), 2 MiB code flash at 0x02000000,
+        // 896 KiB SRAM at 0x22000000. SCI9 (SCI_B, PA14/PA15) is the J-Link
+        // OB console; the smoke switches SCICLK to MOCO, waits for
+        // CESR.TIST/RIST, walks LED1-LED3 (P600/P414/P107) with PCNTR1 PODR
+        // readback and reads S1/S2 through the PFS pull-ups. SIM-DERIVED.
+        name: "ek_ra8m1_smoke",
+        core: "cortex-m85",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "r7fa8m1ah",
+        system: "ek-ra8m1",
+        fixture: "ek-ra8m1-smoke.elf",
+        valid_pc_ranges: &[(0x0200_0000, 0x021F_FFFF), (0x2200_0000, 0x220D_FFFF)],
+        expected_uart_output: b"EK-RA8M1 SMOKE\n",
+    },
+    SurvivalCase {
+        // Stock Zephyr v3.7.0 hello_world for `ek_ra8m1` (Zephyr commit
+        // 36940db938a8, hal_renesas af77d7cdfeef;
+        // crates/firmware-ek-ra8m1-zephyr/build.sh). Built for
+        // `-mcpu=cortex-m85+nomve`: the image carries Armv8.1-M DLS/LE and
+        // CSINC. FSP's bsp_clock_init runs unpatched on `ra8_sysc` (MOSC,
+        // PLL1/PLL2 stable flags, SCKSCR to PLL1P, SCICKCR handshake), then
+        // the SysTick system clock and the SCI9 (SCI_B) console.
+        name: "ek_ra8m1_zephyr",
+        core: "cortex-m85",
+        family: CpuFamily::CortexM,
+        hal: Hal::Zephyr,
+        chip: "r7fa8m1ah",
+        system: "ek-ra8m1",
+        fixture: "r7fa8m1ah-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x0200_0000, 0x021F_FFFF), (0x2200_0000, 0x220D_FFFF)],
+        expected_uart_output: b"Hello World! ek_ra8m1/r7fa8m1ahecbd",
+    },
+    SurvivalCase {
+        // Apollo4 Plus EVB: AMAP42KP-KBR (Cortex-M4F), 2 MiB MRAM at 0x0 with
+        // the application vector table at 0x18000 (the secure bootloader owns
+        // 0x0-0x17FFF and is not modelled), RAM from 0x10000000. UART0
+        // (GPIO60/47) is the console after the PWRCTRL power handshake; the
+        // smoke walks LED0-LED2 (GPIO30/90/97) with RD readback. SIM-DERIVED.
+        name: "apollo4p_evb_smoke",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "amap42kp",
+        system: "apollo4p-evb",
+        fixture: "apollo4p-evb-smoke.elf",
+        valid_pc_ranges: &[(0x0001_8000, 0x001F_FFFF), (0x1000_0000, 0x1005_FFFF)],
+        expected_uart_output: b"APOLLO4P EVB SMOKE\n",
+    },
+    SurvivalCase {
+        // Stock Zephyr v3.7.0 hello_world for `apollo4p_evb` (Zephyr commit
+        // 36940db938a8, hal_ambiq e25327f026df,
+        // crates/firmware-apollo4p-zephyr/build.sh). The AmbiqSuite HAL runs
+        // unpatched: am_hal_pwrctrl_low_power_init powers domains through
+        // PWRCTRL, flushes the DAXI (CPU block, DAXIREADY) via SYNC_READ, and
+        // am_hal_delay_us calls the boot ROM's br_util_delay_cycles at
+        // 0x0800_009D (the in-tree clean-room table, roms/apollo4).
+        name: "apollo4p_evb_zephyr",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        hal: Hal::Zephyr,
+        chip: "amap42kp",
+        system: "apollo4p-evb",
+        fixture: "amap42kp-zephyr-hello.elf",
+        valid_pc_ranges: &[
+            (0x0001_8000, 0x001F_FFFF),
+            (0x0800_0000, 0x0800_0FFF),
+            (0x1000_0000, 0x102B_FFFF),
+        ],
+        expected_uart_output: b"Hello World! apollo4p_evb",
+    },
+    SurvivalCase {
+        // FRDM-K64F: MK64FN1M0VLL12 (Cortex-M4F), 1 MiB flash at 0x00000000,
+        // 64 KiB SRAM_L at 0x1FFF0000 + 192 KiB SRAM_U at 0x20000000. UART0
+        // (PTB16/PTB17, ALT3) is the OpenSDA VCP console; the smoke walks the
+        // active-low RGB LED with PDOR readback. UART-only L1: ENET/TCP and the
+        // MCG PLL are deferred. SIM-DERIVED.
+        name: "frdm_k64f_smoke",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "mk64f12",
+        system: "frdm-k64f",
+        fixture: "frdm-k64f-smoke.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x1FFF_0000, 0x2002_FFFF)],
+        expected_uart_output: b"FRDM-K64F SMOKE\n",
+    },
+    SurvivalCase {
+        // Stock Zephyr v3.7.0 hello_world for `frdm_k64f` (Zephyr commit
+        // 36940db938a8, crates/firmware-frdm-k64f-zephyr/build.sh). Zephyr's
+        // own K6x bring-up runs unpatched: nxp_mpu programs the SYSMPU,
+        // k6x_init writes PMC_REGSC, CLOCK_InitOsc0 writes OSC_CR and
+        // CLOCK_BootToPeeMode walks the MCG to PEE (PLL0), then UART0 prints.
+        name: "frdm_k64f_zephyr",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        hal: Hal::Zephyr,
+        chip: "mk64f12",
+        system: "frdm-k64f",
+        fixture: "mk64f12-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x1FFF_0000, 0x2002_FFFF)],
+        expected_uart_output: b"Hello World! frdm_k64f",
+    },
+    SurvivalCase {
         // SAM4S Xplained: ATSAM4S16C (Cortex-M4), 1 MiB flash at 0x00400000,
         // 128 KiB SRAM at 0x20000000. UART0 is the board's virtual COM port;
         // the smoke walks the PIOC LED with ODSR readback and reads the
@@ -294,6 +573,98 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         fixture: "sam4s-xplained-smoke.elf",
         valid_pc_ranges: &[(0x0040_0000, 0x004F_FFFF), (0x2000_0000, 0x2001_FFFF)],
         expected_uart_output: b"SAM4S XPLAINED SMOKE\n",
+    },
+    SurvivalCase {
+        // SAM E70 Xplained: ATSAME70Q21B (Cortex-M7), 2 MiB flash at
+        // 0x00400000, 384 KiB SRAM at 0x20400000. USART1 (PA21/PB4) is the
+        // EDBG virtual COM port; the smoke disables the WDT, releases PB4
+        // through CCFG_SYSIO, walks LED0 (PC8, active low) with ODSR readback
+        // and reads the pulled-up SW0 (PA11). SIM-DERIVED.
+        name: "sam_e70_xplained_smoke",
+        core: "cortex-m7",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "same70q21b",
+        system: "sam-e70-xplained",
+        fixture: "sam-e70-xplained-smoke.elf",
+        valid_pc_ranges: &[(0x0040_0000, 0x005F_FFFF), (0x2040_0000, 0x2045_FFFF)],
+        expected_uart_output: b"SAM E70 XPLAINED SMOKE\n",
+    },
+    SurvivalCase {
+        // Stock Zephyr v3.7.0 hello_world for `sam_e70_xplained/same70q21b`
+        // (Zephyr commit 36940db938a8,
+        // crates/firmware-sam-e70-xplained-zephyr/build.sh). Zephyr's own
+        // SAM E70 bring-up runs unpatched: the M7 I/D cache set/way
+        // invalidate/enable/disable sequence, MAINCK RC -> crystal, PLLA + UPLL lock, MCK to
+        // PLLA, the CHIPID_CIDR check, then USART1 prints.
+        name: "sam_e70_xplained_zephyr",
+        core: "cortex-m7",
+        family: CpuFamily::CortexM,
+        hal: Hal::Zephyr,
+        chip: "same70q21b",
+        system: "sam-e70-xplained",
+        fixture: "same70q21b-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x0040_0000, 0x005F_FFFF), (0x2040_0000, 0x2045_FFFF)],
+        expected_uart_output: b"Hello World! sam_e70_xplained/same70q21b",
+    },
+    SurvivalCase {
+        // S32K388EVB-Q289: S32K388 (CM7_0, Cortex-M7), 8 MiB program flash
+        // at 0x00400000 (boot header at the base, vector table at
+        // 0x00401000), SRAM_0-2 at 0x20400000. The smoke disables SWT_0,
+        // gates SIUL2/LPUART2 in MC_ME, prints on LPUART2 and walks the six
+        // RGB LED pads through GPDO/PGPDO/MPGPDO with PGPDI readback.
+        // SIM-DERIVED.
+        name: "s32k388_evb_smoke",
+        core: "cortex-m7",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "s32k388",
+        system: "s32k388-evb",
+        fixture: "s32k388-evb-smoke.elf",
+        valid_pc_ranges: &[(0x0040_1000, 0x00BF_FFFF), (0x2040_0000, 0x204B_FFFF)],
+        expected_uart_output: b"S32K388 EVB SMOKE\n",
+    },
+    SurvivalCase {
+        // MIMXRT595-EVK: MIMXRT595S (Cortex-M33), XIP from the FlexSPI0 NOR
+        // window at 0x08000000 (FCB at 0x08000400, vector table at
+        // 0x08001000), data in SRAM at 0x20280000. The smoke sets the clock
+        // gates/resets and pads, prints on FLEXCOMM0 (USART) and walks the RGB
+        // LED through the GPIO SET/B/W/NOT/MPIN/CLR views with PIN readback.
+        // SIM-DERIVED.
+        name: "mimxrt595_evk_smoke",
+        core: "cortex-m33",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "mimxrt595s",
+        system: "mimxrt595-evk",
+        fixture: "mimxrt595-evk-smoke.elf",
+        valid_pc_ranges: &[(0x0800_1000, 0x087F_FFFF), (0x2000_0000, 0x204F_FFFF)],
+        expected_uart_output: b"MIMXRT595 EVK SMOKE\n",
+    },
+    SurvivalCase {
+        // Stock Zephyr v3.7.0 hello_world for `mimxrt595_evk/mimxrt595s/cm33`
+        // (Zephyr commit 36940db938a8, hal_nxp 862e001504bd;
+        // crates/firmware-mimxrt595-evk-zephyr/build.sh). The image runs
+        // secure: XIP through the FlexSPI secure alias 0x1800_0000, data and
+        // relocated code at 0x3018_0000, peripherals at 0x5xxx_xxxx, all
+        // mirrors of the non-secure map. Zephyr's own RT5xx bring-up runs
+        // unpatched: CLKCTL ready/REQFLAG/PFD hand-shakes, the FRO trim via
+        // the boot-ROM OTP API (clean-room roms/rt500), the FRO tuner, the
+        // FlexSPI0 re-clock (SWRESET, idle, DLL lock), then the OS timer system
+        // clock and the FLEXCOMM0 console.
+        name: "mimxrt595_evk_zephyr",
+        core: "cortex-m33",
+        family: CpuFamily::CortexM,
+        hal: Hal::Zephyr,
+        chip: "mimxrt595s",
+        system: "mimxrt595-evk",
+        fixture: "mimxrt595-zephyr-hello.elf",
+        valid_pc_ranges: &[
+            (0x1300_0000, 0x1300_FFFF),
+            (0x1800_0000, 0x187F_FFFF),
+            (0x3000_0000, 0x304F_FFFF),
+        ],
+        expected_uart_output: b"Hello World! mimxrt595_evk/mimxrt595s/cm33",
     },
     SurvivalCase {
         // STM32F072B-DISCO: STM32F072RBT6 (Cortex-M0), 128 KiB flash at
@@ -448,7 +819,8 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         // clock_control (HFCLK/LFCLK start + poll) and nrf_rtc_timer init, then
         // prints the banner over the UARTE0 EasyDMA console. Proves the shared
         // Nordic CLOCK / UARTE / RTC behavioural models satisfy the nRF5340 boot
-        // spin-loops at the 0x50000000 non-secure peripheral alias. Fixture is
+        // spin-loops at the secure cpuapp 0x50000000 peripheral view. The `/ns`
+        // target uses the separate 0x40000000 aliases. Fixture is
         // rebuilt via crates/firmware-nrf5340-zephyr/build.sh.
         name: "nrf5340_zephyr",
         core: "cortex-m33",
@@ -648,6 +1020,74 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         fixture: "vegaboard-ri5cy-smoke.elf",
         valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x2000_0000, 0x2002_FFFF)],
         expected_uart_output: b"VEGABOARD RI5CY SMOKE\n",
+    },
+    SurvivalCase {
+        // PolarFire SoC Discovery Kit (MPFS095T): unmodified Zephyr v4.1.0
+        // hello_world for `mpfs_icicle/polarfire/u54` (same MSS) on the RV64
+        // hart — mhartid 1, CLINT machine timer, MMUART1 as a 16550 with the
+        // DLAB divisor latch. Code and stack in the DDR window at 0x8000_0000.
+        // Rebuild: crates/firmware-mpfs-zephyr/build.sh. SIM-DERIVED.
+        name: "mpfs_disco_kit_zephyr",
+        core: "rv64imac",
+        family: CpuFamily::RiscV,
+        hal: Hal::Zephyr,
+        chip: "mpfs095t",
+        system: "mpfs-disco-kit",
+        fixture: "mpfs-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x8000_0000, 0x807F_FFFF)],
+        expected_uart_output: b"Hello World! mpfs_icicle/polarfire/u54",
+    },
+    SurvivalCase {
+        // SK-AM62 (TI AM6234): unmodified Zephyr v4.3.0 hello_world for
+        // `sk_am62/am6234/a53` on the AArch64 core — EL3 reset, ERET to EL1,
+        // MMU on, GICv3 and generic-timer bring-up, MAIN_UART0 as a 16550.
+        // Runs through the Session builder, the AArch64 machine family's only
+        // build path. Rebuild: crates/firmware-sk-am62-zephyr/build.sh.
+        // SIM-DERIVED.
+        name: "sk_am62_zephyr",
+        core: "cortex-a53",
+        family: CpuFamily::Session,
+        hal: Hal::Zephyr,
+        chip: "am6234",
+        system: "sk-am62",
+        fixture: "sk-am62-zephyr-hello.elf",
+        valid_pc_ranges: &[],
+        expected_uart_output: b"Hello World! sk_am62/am6234/a53",
+    },
+    SurvivalCase {
+        // EK-RX261 (R5F52618BGFP): unmodified Zephyr v4.3.0 hello_world for
+        // `ek_rx261` on the RX core — reset vector, RDP clock setup against
+        // `rx_sysc`/`rx_flash`, the SCI6 console. Runs through the Session
+        // builder, the RX machine family's only build path.
+        // Rebuild: crates/firmware-ek-rx261-zephyr/build.sh. SIM-DERIVED.
+        name: "ek_rx261_zephyr",
+        core: "rxv3",
+        family: CpuFamily::Session,
+        hal: Hal::Zephyr,
+        chip: "r5f52618bgfp",
+        system: "ek-rx261",
+        fixture: "ek-rx261-zephyr-hello.elf",
+        valid_pc_ranges: &[],
+        expected_uart_output: b"Hello World! ek_rx261/r5f52618bgfp",
+    },
+    SurvivalCase {
+        // Curiosity PIC32MZ EF 2.0 (PIC32MZ2048EFM144): unmodified upstream
+        // NuttX (apache/nuttx 7956039dfd) nsh for an out-of-tree board on the
+        // MIPS32r2 core — reset vector 0xBFC00000, the EVIC, Timer1 tick,
+        // software-interrupt context switches and the UART2 console up to
+        // the shell prompt. Runs through the Session builder, the MIPS
+        // machine family's only build path.
+        // Rebuild: crates/firmware-curiosity-pic32mz-nuttx/build.sh nsh.
+        // SIM-DERIVED.
+        name: "curiosity_pic32mz_nuttx",
+        core: "m5150",
+        family: CpuFamily::Session,
+        hal: Hal::NuttX,
+        chip: "pic32mz2048efm144",
+        system: "curiosity-pic32mz-ef",
+        fixture: "curiosity-pic32mz-ef-nuttx-nsh.elf",
+        valid_pc_ranges: &[],
+        expected_uart_output: b"NuttShell (NSH)",
     },
     SurvivalCase {
         // Hardware-validated against real NUCLEO-L476RG silicon: the
@@ -1545,6 +1985,20 @@ DONE\r\n",
         valid_pc_ranges: &[],
         expected_uart_output: b"TIER1 done",
     },
+    // Narrow DevKitC-32E GPIO/sleep onboarding profile: same LX6 SoC and the
+    // same committed Tier-1 fixture as `esp32`. Kept so this descriptor +
+    // system YAML pair is loaded, parsed and dispatched by a PR-run gate.
+    SurvivalCase {
+        name: "esp32_devkitc_32e_gpio_smoke_tier1",
+        core: "xtensa-lx6",
+        family: CpuFamily::Session,
+        hal: Hal::Bare,
+        chip: "esp32-devkitc-32e-gpio-smoke",
+        system: "esp32-devkitc-32e-gpio-smoke",
+        fixture: "tier1/esp32.elf",
+        valid_pc_ranges: &[],
+        expected_uart_output: b"TIER1 done",
+    },
     // The S3 pair shares one fixture and one transcript: the fast-boot builder
     // consumes only `cpu_hz` from the chip descriptor, so both descriptors run
     // the same machine and these two cases are behaviourally identical. The
@@ -1766,10 +2220,16 @@ fn run_survival_case(case: &SurvivalCase) {
 /// peripheral/USB setup and the sketch's 200 ms loop delay. The old 2M-cycle
 /// window covered only 16 ms once TIMER runs at its correct 1 MHz rate.
 fn case_cycles(case: &SurvivalCase) -> u32 {
-    if case.name == "rp2040_arduino_serial" {
-        125_000_000 / 2
-    } else {
-        SURVIVAL_CYCLES
+    match case.name {
+        "rp2040_arduino_serial" => 125_000_000 / 2,
+        // Contiki-NG's cc2538dk platform_init runs a busy-loop LED `fade()`
+        // (~8.0M cycles at 16 MHz) before the first "Hello, world".
+        "cc2538dk_contiki_hello" => 10_000_000,
+        // The same fade(), then four 20-ms page erases (1.28M cycles).
+        "cc2538dk_contiki_flash_test" => 12_000_000,
+        // The same fade(), then the crypto vectors.
+        "cc2538dk_contiki_crypto_ccm" | "cc2538dk_contiki_crypto_sha256" => 12_000_000,
+        _ => SURVIVAL_CYCLES,
     }
 }
 
@@ -1778,7 +2238,9 @@ fn case_cycles(case: &SurvivalCase) -> u32 {
 /// classic ESP32). Every other FAIL line fails the gate.
 fn allowed_tier1_failures(case: &SurvivalCase) -> &'static [&'static str] {
     match case.name {
-        "esp32_tier1" => &["TIER1 dma FAIL code=esp32-no-mem2mem-dma"],
+        "esp32_tier1" | "esp32_devkitc_32e_gpio_smoke_tier1" => {
+            &["TIER1 dma FAIL code=esp32-no-mem2mem-dma"]
+        }
         _ => &[],
     }
 }
@@ -1987,7 +2449,12 @@ fn run_riscv_firmware(
     // through the same one resolution the CLI, browser and debugger paths
     // use — a generic `rv32*` chip must not silently run the ESP32-C3's
     // vendor CSR set.
-    let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
+    // A `core: rv64…` chip (PolarFire SoC U54) runs the 64-bit hart.
+    let cpu: Box<dyn Cpu> = if labwired_core::cpu::riscv64::is_rv64_chip(&chip) {
+        Box::new(labwired_core::cpu::RiscV64::for_chip(&chip))
+    } else {
+        Box::new(labwired_core::system::riscv::configure_riscv(&mut bus))
+    };
     let mut machine = Machine::new(cpu, bus);
     let trace = Arc::new(TraceObserver::new(5000));
     machine.add_observer(trace.clone());
@@ -2106,6 +2573,134 @@ survival_gate!(
 survival_gate!(test_nrf52840_demo_survival, "nrf52840_demo");
 
 survival_gate!(test_sam4s_xplained_smoke_survival, "sam4s_xplained_smoke");
+
+survival_gate!(
+    test_sam_e70_xplained_smoke_survival,
+    "sam_e70_xplained_smoke"
+);
+
+survival_gate!(
+    test_sam_e70_xplained_zephyr_survival,
+    "sam_e70_xplained_zephyr"
+);
+
+survival_gate!(test_s32k388_evb_smoke_survival, "s32k388_evb_smoke");
+
+survival_gate!(test_mimxrt595_evk_smoke_survival, "mimxrt595_evk_smoke");
+survival_gate!(test_mimxrt595_evk_zephyr_survival, "mimxrt595_evk_zephyr");
+
+survival_gate!(test_cc2538dk_smoke_survival, "cc2538dk_smoke");
+survival_gate!(
+    test_cc2538dk_contiki_hello_survival,
+    "cc2538dk_contiki_hello"
+);
+survival_gate!(
+    test_cc2538dk_contiki_flash_test_survival,
+    "cc2538dk_contiki_flash_test"
+);
+survival_gate!(
+    test_cc2538dk_contiki_crypto_ccm_survival,
+    "cc2538dk_contiki_crypto_ccm"
+);
+survival_gate!(
+    test_cc2538dk_contiki_crypto_sha256_survival,
+    "cc2538dk_contiki_crypto_sha256"
+);
+survival_gate!(test_apollo4p_evb_smoke_survival, "apollo4p_evb_smoke");
+survival_gate!(test_apollo4p_evb_zephyr_survival, "apollo4p_evb_zephyr");
+
+/// The Apollo4 secure bootloader owns MRAM 0x0-0x17FFF and hands over to the
+/// application vector table at 0x0001_8000. The committed smoke ELF must load
+/// nothing below that, and its vector table must give an SP inside the TCM
+/// and a Thumb reset handler inside the application MRAM.
+#[test]
+fn test_apollo4p_evb_smoke_is_linked_after_the_bootloader() {
+    const APP: u64 = 0x0001_8000;
+    let bytes = std::fs::read(fixtures().join("apollo4p-evb-smoke.elf")).expect("read fixture");
+    let elf = goblin::elf::Elf::parse(&bytes).expect("parse fixture ELF");
+    let loads: Vec<_> = elf
+        .program_headers
+        .iter()
+        .filter(|ph| ph.p_type == goblin::elf::program_header::PT_LOAD && ph.p_filesz > 0)
+        .collect();
+    assert!(
+        loads.iter().all(|ph| ph.p_paddr >= APP),
+        "a segment loads into the bootloader region"
+    );
+    let vt = loads
+        .iter()
+        .find(|ph| ph.p_paddr == APP)
+        .map(|ph| &bytes[ph.p_offset as usize..ph.p_offset as usize + 8])
+        .expect("no segment starts at the 0x18000 vector table");
+    let sp = u32::from_le_bytes(vt[0..4].try_into().unwrap());
+    let reset = u32::from_le_bytes(vt[4..8].try_into().unwrap());
+    assert!((0x1000_0000..=0x1006_0000).contains(&sp), "SP {sp:#x}");
+    assert_eq!(reset & 1, 1, "reset handler must be Thumb");
+    assert!(
+        (0x0001_8000..0x0020_0000).contains(&(reset & !1)),
+        "reset {reset:#x}"
+    );
+}
+
+survival_gate!(test_ek_ra6m5_smoke_survival, "ek_ra6m5_smoke");
+survival_gate!(test_ek_ra6m5_zephyr_survival, "ek_ra6m5_zephyr");
+survival_gate!(test_ek_ra8m1_smoke_survival, "ek_ra8m1_smoke");
+survival_gate!(test_ek_ra8m1_zephyr_survival, "ek_ra8m1_zephyr");
+
+/// The CC2538 boot ROM reads the Customer Configuration Area (SWRU319C §8.6)
+/// in the top 44 bytes of the last flash page and only enters a valid image.
+/// The committed smoke ELF must carry: backdoor byte 0xF3 (enabled, active
+/// low, PA3), image valid = 0, vector table at 0x0020_0000, all pages and
+/// debug unlocked (0xFF).
+#[test]
+fn test_cc2538dk_smoke_customer_configuration_area_boots() {
+    const CCA: u64 = 0x0027_FFD4;
+    let bytes = std::fs::read(fixtures().join("cc2538dk-smoke.elf")).expect("read fixture");
+    let elf = goblin::elf::Elf::parse(&bytes).expect("parse fixture ELF");
+    let cca = elf
+        .program_headers
+        .iter()
+        .filter(|ph| ph.p_type == goblin::elf::program_header::PT_LOAD)
+        .find(|ph| ph.p_paddr <= CCA && CCA + 44 <= ph.p_paddr + ph.p_filesz)
+        .map(|ph| {
+            let start = (ph.p_offset + CCA - ph.p_paddr) as usize;
+            &bytes[start..start + 44]
+        })
+        .expect("no loadable segment covers the CCA at 0x0027FFD4");
+    let mut expected = [0xFFu8; 44];
+    expected[3] = 0xF3; // backdoor config (byte 2007)
+    expected[4..8].copy_from_slice(&0u32.to_le_bytes()); // image valid
+    expected[8..12].copy_from_slice(&0x0020_0000u32.to_le_bytes()); // vector table
+    assert_eq!(cca, expected, "CC2538DK smoke CCA");
+}
+
+survival_gate!(test_nucleo_l552ze_q_smoke_survival, "nucleo_l552ze_q_smoke");
+survival_gate!(test_stm32l552_zephyr_survival, "stm32l552_zephyr");
+survival_gate!(test_frdm_k64f_smoke_survival, "frdm_k64f_smoke");
+survival_gate!(test_frdm_k64f_zephyr_survival, "frdm_k64f_zephyr");
+
+/// The K64F loads FSEC/FOPT/FPROT from the Flash Configuration Field at
+/// 0x400..0x40F on reset. Code bytes there can secure (or, with MEEN=0b10,
+/// permanently lock) a real FRDM-K64F, so the committed smoke ELF must carry
+/// the unsecured FCF: key/FPROT all 0xFF, FSEC=0xFE, FOPT/FEPROT/FDPROT=0xFF.
+#[test]
+fn test_frdm_k64f_smoke_flash_config_field_is_unsecured() {
+    let bytes = std::fs::read(fixtures().join("frdm-k64f-smoke.elf")).expect("read fixture");
+    let elf = goblin::elf::Elf::parse(&bytes).expect("parse fixture ELF");
+    let fcf = elf
+        .program_headers
+        .iter()
+        .filter(|ph| ph.p_type == goblin::elf::program_header::PT_LOAD)
+        .find(|ph| ph.p_paddr <= 0x400 && 0x410 <= ph.p_paddr + ph.p_filesz)
+        .map(|ph| {
+            let start = (ph.p_offset + 0x400 - ph.p_paddr) as usize;
+            &bytes[start..start + 16]
+        })
+        .expect("no loadable segment covers the FCF at 0x400..0x410");
+    let mut expected = [0xFFu8; 16];
+    expected[12] = 0xFE; // FSEC: unsecured, mass erase enabled
+    assert_eq!(fcf, expected, "FRDM-K64F smoke FCF at 0x400");
+}
 
 survival_gate!(
     test_stm32f072b_disco_smoke_survival,
@@ -2567,6 +3162,13 @@ survival_gate!(test_litex_vexriscv_smoke_survival, "litex_vexriscv_smoke");
 
 survival_gate!(test_arty_litex_smoke_survival, "arty_litex_smoke");
 survival_gate!(test_vegaboard_ri5cy_smoke_survival, "vegaboard_ri5cy_smoke");
+survival_gate!(test_mpfs_disco_kit_zephyr_survival, "mpfs_disco_kit_zephyr");
+survival_gate!(test_sk_am62_zephyr_survival, "sk_am62_zephyr");
+survival_gate!(test_ek_rx261_zephyr_survival, "ek_rx261_zephyr");
+survival_gate!(
+    test_curiosity_pic32mz_nuttx_survival,
+    "curiosity_pic32mz_nuttx"
+);
 
 survival_gate!(test_nucleo_l476rg_smoke_survival, "nucleo_l476rg_smoke");
 
@@ -2742,6 +3344,11 @@ survival_gate!(test_stm32f401cdu6_demo_survival, "stm32f401cdu6_demo");
 survival_gate!(test_rp2350_demo_survival, "rp2350_demo");
 
 survival_gate!(test_esp32_tier1_survival, "esp32_tier1");
+
+survival_gate!(
+    test_esp32_devkitc_32e_gpio_smoke_tier1_survival,
+    "esp32_devkitc_32e_gpio_smoke_tier1"
+);
 
 survival_gate!(test_esp32s3_tier1_survival, "esp32s3_tier1");
 

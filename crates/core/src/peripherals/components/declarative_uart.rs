@@ -1030,6 +1030,7 @@ pub(crate) fn validate_descriptor(desc: &DeviceDescriptor) -> Result<()> {
             vars: &vars,
             fifos: &fifos,
             timers: &timers,
+            data_ready: &[],
             outputs: &desc.behavior.outputs,
             inputs: &inputs,
             pins: &[],

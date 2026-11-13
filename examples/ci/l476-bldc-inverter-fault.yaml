@@ -1,0 +1,42 @@
+# Deterministic BLDC driver-fault regression for an actual STM32L476 ELF.
+# Unlike an imperative host-only fault hook, inverter_fault is a generic
+# motor SimInput channel. Both Studio and CLI use the same discovery/drive API.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabihf/release/firmware-l476-bldc-six-step"
+  system: "../nucleo-l476rg-bldc/system.yaml"
+limits:
+  max_steps: 3000000
+  max_cycles: 1810000
+  max_uart_bytes: 4096
+  stop_when_assertions_pass: true
+  stop_when_assertions_pass_settle_steps: 1000
+  stop_when_assertions_pass_min_steps: 100000
+stimuli:
+  - target:
+      component: drive_motor
+      channel: inverter_fault
+    trigger: !after_cycles { cycles: 1500000 }
+    value: 1.0
+assertions:
+  - uart_ordered:
+      - "BLDC READY"
+      - "TARGET REACHED"
+      - "FAULT DRIVER"
+      - "INVERTER OFF"
+  - motor_speed_reached:
+      id: drive_motor
+      min_abs_rpm: 100.0
+      max_abs_rpm: 4000.0
+  - motor_state:
+      id: drive_motor
+      control_state: "fault:inverter"
+      fault_contains: inverter
+  - shutdown_latency:
+      from_stimulus:
+        component: drive_motor
+        channel: inverter_fault
+      stimulus_occurrence: 1
+      to_uart: "INVERTER OFF"
+      uart_occurrence: 1
+      max_cycles: 310000

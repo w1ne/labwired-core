@@ -1,0 +1,69 @@
+# LabWired - CC2538DK: SHA-256 on the AES/SHA-256 cryptoprocessor
+#
+# Firmware: tests/fixtures/cc2538dk-contiki-crypto-sha256.elf, UNMODIFIED Contiki-NG
+# v4.9 examples/platform-specific/cc2538-common/crypto/sha256-test.c (crates/firmware-cc2538dk-contiki/build.sh).
+# Every one of its 9 test vectors must print each driver call's success and
+# every "... OK" check, in order; a wrong output, tag or digest prints "wrong"
+# or "authentication failed" instead and breaks the sequence.
+#
+# Not in Renode's cc2538_cryptoprocessor.robot (which covers CBC, CBC-MAC,
+# CTR and CCM); the same Contiki-NG suite's other test.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/cc2538dk-contiki-crypto-sha256.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 30000000
+assertions:
+  - uart_ordered:
+      - "Test vector #0:"
+      - "sha256_init(): success"
+      - "sha256_process(): success"
+      - "sha256_done(): success"
+      - "Computed SHA-256 hash OK"
+      - "Test vector #1:"
+      - "sha256_init(): success"
+      - "sha256_process(): success"
+      - "sha256_done(): success"
+      - "Computed SHA-256 hash OK"
+      - "Test vector #2:"
+      - "sha256_init(): success"
+      - "sha256_process(): success"
+      - "sha256_done(): success"
+      - "Computed SHA-256 hash OK"
+      - "Test vector #3:"
+      - "sha256_init(): success"
+      - "sha256_process(): success"
+      - "sha256_done(): success"
+      - "Computed SHA-256 hash OK"
+      - "Test vector #4:"
+      - "sha256_init(): success"
+      - "sha256_process(): success"
+      - "sha256_done(): success"
+      - "Computed SHA-256 hash OK"
+      - "Test vector #5:"
+      - "sha256_init(): success"
+      - "sha256_process(): success"
+      - "sha256_done(): success"
+      - "Computed SHA-256 hash OK"
+      - "Test vector #6:"
+      - "sha256_init(): success"
+      - "sha256_process(): success"
+      - "sha256_process(): success"
+      - "sha256_done(): success"
+      - "Computed SHA-256 hash OK"
+      - "Test vector #7:"
+      - "sha256_init(): success"
+      - "sha256_process(): success"
+      - "sha256_process(): success"
+      - "sha256_done(): success"
+      - "Computed SHA-256 hash OK"
+      - "Test vector #8:"
+      - "sha256_init(): success"
+      - "sha256_process(): success"
+      - "sha256_process(): success"
+      - "sha256_process(): success"
+      - "sha256_done(): success"
+      - "Computed SHA-256 hash OK"
+      - "Done!"
+  - expected_stop_reason: max_steps

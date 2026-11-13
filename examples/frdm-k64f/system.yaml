@@ -1,0 +1,44 @@
+# LabWired - FRDM-K64F example system (MK64FN1M0VLL12)
+#
+# Same board manifest as configs/systems/frdm-k64f.yaml, kept beside the
+# example so the package is self-contained.
+#
+# NXP FRDM-K64F / Zephyr `frdm_k64f`:
+#   RGB LED (active low): red PTB22, green PTE26, blue PTB21
+#   Buttons (active low): SW2 PTC6, SW3 PTA4
+#   Console: UART0 PTB16/PTB17 (ALT3), OpenSDA VCP
+name: "frdm-k64f"
+chip: "../../configs/chips/mk64f12.yaml"
+cpu_hz: 20_971_520
+external_devices: []
+board_io:
+  - id: "led_red"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 22
+    signal: "output"
+    active_high: false
+  - id: "led_green"
+    kind: "led"
+    peripheral: "gpioe"
+    pin: 26
+    signal: "output"
+    active_high: false
+  - id: "led_blue"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 21
+    signal: "output"
+    active_high: false
+  - id: "button_sw2"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 6
+    signal: "input"
+    active_high: false
+  - id: "button_sw3"
+    kind: "button"
+    peripheral: "gpioa"
+    pin: 4
+    signal: "input"
+    active_high: false

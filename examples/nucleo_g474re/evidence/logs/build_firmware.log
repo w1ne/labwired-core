@@ -1,0 +1,3 @@
+   Compiling firmware-nucleo_g474re-demo v0.1.0 (/tmp/hw-onboarding-nucleo-g474re-pr/examples/nucleo_g474re/board_firmware)
+   Compiling panic-halt v0.2.0
+    Finished `release` profile [optimized] target(s) in 0.30s

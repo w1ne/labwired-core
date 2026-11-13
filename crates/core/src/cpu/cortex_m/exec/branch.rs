@@ -86,6 +86,69 @@ impl CortexM {
         Ok(__pc)
     }
 
+    /// DLS LR, Rn: load the loop count. The loop-info cache that lets
+    /// silicon skip the LE fetch is not modelled; LE re-executes each
+    /// iteration, which is architecturally equivalent.
+    #[inline(always)]
+    pub(in crate::cpu::cortex_m) fn exec_dls(&mut self, rn: u8) -> SimResult<PcAdvance> {
+        let count = self.read_reg(rn);
+        self.write_reg(14, count);
+        Ok(PcAdvance::Keep)
+    }
+
+    /// WLS LR, Rn, label: skip the loop when Rn is zero, else load LR.
+    #[inline(always)]
+    pub(in crate::cpu::cortex_m) fn exec_wls(&mut self, rn: u8, imm: u16) -> SimResult<PcAdvance> {
+        let count = self.read_reg(rn);
+        if count == 0 {
+            self.pc = self.pc.wrapping_add(4).wrapping_add(imm as u32);
+            return Ok(PcAdvance::Zero);
+        }
+        self.write_reg(14, count);
+        Ok(PcAdvance::Keep)
+    }
+
+    /// LE {LR,} label: with LR, branch back and decrement while LR > 1
+    /// (LR is left at 1 on exit); without LR, branch back unconditionally.
+    #[inline(always)]
+    pub(in crate::cpu::cortex_m) fn exec_le(&mut self, lr: bool, imm: u16) -> SimResult<PcAdvance> {
+        if lr {
+            let count = self.read_reg(14);
+            if count <= 1 {
+                return Ok(PcAdvance::Keep);
+            }
+            self.write_reg(14, count - 1);
+        }
+        self.pc = self.pc.wrapping_add(4).wrapping_sub(imm as u32);
+        Ok(PcAdvance::Zero)
+    }
+
+    /// CSEL/CSINC/CSINV/CSNEG (Armv8.1-M). Register 15 reads as zero.
+    #[inline(always)]
+    pub(in crate::cpu::cortex_m) fn exec_csel(
+        &mut self,
+        rd: u8,
+        rn: u8,
+        rm: u8,
+        cond: u8,
+        op: u8,
+    ) -> SimResult<PcAdvance> {
+        let zr = |cpu: &Self, r: u8| if r == 15 { 0 } else { cpu.read_reg(r) };
+        let result = if self.check_condition(cond) {
+            zr(self, rn)
+        } else {
+            let m = zr(self, rm);
+            match op {
+                0 => m,
+                1 => m.wrapping_add(1),
+                2 => !m,
+                _ => m.wrapping_neg(),
+            }
+        };
+        self.write_reg(rd, result);
+        Ok(PcAdvance::Keep)
+    }
+
     #[inline(always)]
     pub(in crate::cpu::cortex_m) fn exec_branch(&mut self, offset: i32) -> SimResult<PcAdvance> {
         let mut __pc = PcAdvance::Keep;

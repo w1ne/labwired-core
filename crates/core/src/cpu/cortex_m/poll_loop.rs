@@ -362,6 +362,7 @@ impl CortexM {
             || self.fault_entry.is_some()
             || self.lockup.is_some()
             || self.pending_data_fault.is_some()
+            || self.pending_mem_manage.is_some()
             || self.pending_undef_instruction
             || self.pending_div0
             || self.debug_batch_break()
@@ -382,6 +383,7 @@ impl CortexM {
                 || self.fault_entry.is_some()
                 || self.lockup.is_some()
                 || self.pending_data_fault.is_some()
+                || self.pending_mem_manage.is_some()
                 || self.pending_undef_instruction
                 || self.pending_div0
             {
@@ -399,6 +401,7 @@ impl CortexM {
         self.fault_entry = None;
         self.lockup = None;
         self.pending_data_fault = None;
+        self.pending_mem_manage = None;
         self.pending_undef_instruction = false;
         self.pending_div0 = false;
         period.filter(|_| same)

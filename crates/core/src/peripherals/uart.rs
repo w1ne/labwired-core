@@ -4,6 +4,7 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
+mod sci_b_irq;
 mod timed;
 
 use super::pad_lines::PadLines;
@@ -97,6 +98,12 @@ pub enum UartRegisterLayout {
     Leuart,
     /// Renesas SCI (classic SH/RX and RA-series) — SSR@0x04, byte registers.
     Sci,
+    /// Renesas SCI_B (RA8M1/RA8D1/RA8T1) — the 32-bit rework of the SCI:
+    /// RDR@0x00, TDR@0x04, CCR0-CCR4@0x08-0x18, CESR@0x1C, CSR@0x48 (TDRE
+    /// bit29, TEND bit30, RDRF bit31). Offsets from the FSP CMSIS header
+    /// `R7FA8M1AH.h` (`R_SCI_B0_Type`). TX is gated on CCR0.TE; the control
+    /// registers read back what firmware wrote.
+    SciB,
     /// Gaisler APBUART (LEON/GRLIB) — DATA@0x00, STATUS@0x04.
     Gaisler,
     /// Nuvoton NPCX — UTBUF@0x00, URBUF@0x02, readiness in UICTRL@0x04.
@@ -140,6 +147,16 @@ pub enum UartRegisterLayout {
     /// the registers firmware reads back; this model hosts the stream peers and
     /// the RX queue behind them, so the console stays with the CPU.
     Avr,
+    /// Vendor-neutral map: offsets and ready bits come from chip YAML
+    /// (`config.profile: custom` plus `tx_offset` / `status_offset` / …).
+    /// The concrete [`UartRegMap`] lives on the `Uart` instance — see
+    /// [`Uart::with_custom_map`].
+    ///
+    /// Custom maps do **not** model TX/TC IRQ enables (`txeie_mask` /
+    /// `tcie_mask` stay 0; `cr1` is unused). Fire-and-forget TX capture and
+    /// status/RX polling work; interrupt-driven TX needs a named family layout
+    /// or a future YAML extension.
+    Custom,
 }
 
 impl FromStr for UartRegisterLayout {
@@ -161,6 +178,7 @@ impl FromStr for UartRegisterLayout {
             "efr32s2" | "efr32_series2" | "efr32xg2" => Ok(Self::Efr32s2),
             "leuart" => Ok(Self::Leuart),
             "sci" | "renesas_sci" | "sh_sci" => Ok(Self::Sci),
+            "sci_b" | "renesas_sci_b" | "ra8_sci" => Ok(Self::SciB),
             "gaisler" | "apbuart" | "grlib" => Ok(Self::Gaisler),
             "npcx" | "nuvoton" => Ok(Self::Npcx),
             "max32650" | "maxim" => Ok(Self::Max32650),
@@ -177,11 +195,12 @@ impl FromStr for UartRegisterLayout {
             "esci" | "mpc5567" => Ok(Self::Esci),
             "picosoc" | "simpleuart" => Ok(Self::PicoUart),
             "avr" | "atmega" | "usart0" => Ok(Self::Avr),
+            "custom" | "generic" | "offsets" => Ok(Self::Custom),
             _ => Err(format!(
                 "unsupported UART register layout '{}'; supported: stm32f1, stm32v2, nrf52, \
                  lpuart, ns16550, dw_apb_uart, pl011, cadence, efm32, efr32, efr32s2, leuart, sci, \
-                 gaisler, npcx, max32650, opentitan, sam, sercom, imx, sifive, litex, murax, \
-                 coreuart, k6xf, pulp",
+                 sci_b, gaisler, npcx, max32650, opentitan, sam, sercom, imx, sifive, litex, murax, \
+                 coreuart, k6xf, pulp, custom",
                 value
             )),
         }
@@ -194,41 +213,44 @@ impl FromStr for UartRegisterLayout {
 /// is architecture-independent and shared. Adding or changing a family touches
 /// only its arm of `regmap`, never another family's.
 #[derive(Debug, Clone, Copy)]
-struct UartRegMap {
-    status: u64,
-    tx: u64,
-    rx: u64,
-    cr3: u64,
+pub(crate) struct UartRegMap {
+    pub(crate) status: u64,
+    pub(crate) tx: u64,
+    pub(crate) rx: u64,
+    pub(crate) cr3: u64,
     /// CR1 base offset, or `None` for families with no CR1 interrupt concept.
-    cr1: Option<u64>,
-    txeie_mask: u32,
-    tcie_mask: u32,
+    pub(crate) cr1: Option<u64>,
+    pub(crate) txeie_mask: u32,
+    pub(crate) tcie_mask: u32,
     /// Width in bytes of the status register window, [`status`, `status`+N).
     /// 4 for 32-bit status words; 1 for byte-register families (16550 LSR,
     /// Renesas SSR, NPCX UICTRL) where the next byte is a *different* register
     /// (e.g. SCI packs SSR@0x04 and RDR@0x05 adjacently).
-    status_width: u64,
+    pub(crate) status_width: u64,
     /// Status-register value at idle: every TX-ready / transmitter-empty flag
     /// set and the RX shown empty. Any byte read within the window returns the
     /// matching byte of this value (so an 8-bit LSR and a 32-bit STAT share one
     /// path).
-    status_idle: u32,
+    pub(crate) status_idle: u32,
     /// Bits OR-ed into the status word when the RX buffer holds a byte —
     /// active-high "data present" flags (16550 LSR.DR, STM32 RXNE, Kinetis RDRF).
-    rx_present_set: u32,
+    pub(crate) rx_present_set: u32,
     /// Bits cleared from the status word when the RX buffer holds a byte —
     /// active-high "empty" flags that go low when data arrives (PL011 FR.RXFE,
     /// Cadence SR.RxEMPTY). Most families leave this 0.
-    rx_present_clear: u32,
+    pub(crate) rx_present_clear: u32,
 }
 
 impl UartRegisterLayout {
-    /// RXNEIE bit in CR1. Only the STM32/LPUART layouts have the RXNE
-    /// interrupt; everything else keeps the previous "no RX level IRQ" shape.
+    /// RXNEIE bit in CR1. Only the STM32/LPUART and Kinetis K6x UART layouts
+    /// have the RX-data interrupt; everything else keeps the previous "no RX
+    /// level IRQ" shape.
     fn rxneie_mask(self) -> u32 {
         match self {
             UartRegisterLayout::Stm32F1 | UartRegisterLayout::Stm32V2 => 1 << 5,
             UartRegisterLayout::Lpuart => 1 << 5,
+            // Kinetis K6x UART C2.RIE (bit 5).
+            UartRegisterLayout::KinetisUart => 1 << 5,
             _ => 0,
         }
     }
@@ -458,6 +480,22 @@ impl UartRegisterLayout {
                 rx_present_set: 1 << 6, // RDRF
                 rx_present_clear: 0,
             },
+            // Renesas SCI_B (RA8). RDR@0x00, TDR@0x04, CSR@0x48 (32-bit):
+            // TDRE(29)|TEND(30) ready, RDRF(31) set on data. The control
+            // registers are kept in `Uart::sci_b_regs`.
+            UartRegisterLayout::SciB => UartRegMap {
+                status: 0x48,
+                tx: 0x04,
+                rx: 0x00,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 4,
+                status_idle: (1 << 29) | (1 << 30), // TDRE | TEND
+                rx_present_set: 1 << 31,            // RDRF
+                rx_present_clear: 0,
+            },
             // Gaisler APBUART (LEON/GRLIB). DATA@0x00, STATUS@0x04: TS(1)|TE(2)
             // ready, DR(0) set on data. Reset 0x06.
             UartRegisterLayout::Gaisler => UartRegMap {
@@ -632,14 +670,17 @@ impl UartRegisterLayout {
             },
             // NXP Kinetis K6x UART (classic). D@0x07, S1@0x04 (8-bit): TDRE(7)|
             // TC(6) ready, RDRF(5) set on data. Idle 0xC0. width=1 (S2@0x05).
+            // C2@0x03 carries the interrupt enables (K64P144M120SF5RM §52.3.4):
+            // TIE(7) on TDRE, TCIE(6) on TC, RIE(5) on RDRF — what Zephyr's
+            // uart_mcux irq_tx/rx_enable set. TE(3)/RE(2) are stored, not gated.
             UartRegisterLayout::KinetisUart => UartRegMap {
                 status: 0x04,
                 tx: 0x07,
                 rx: 0x07,
                 cr3: 0xF00,
-                cr1: None,
-                txeie_mask: 0,
-                tcie_mask: 0,
+                cr1: Some(0x03),    // C2
+                txeie_mask: 1 << 7, // TIE
+                tcie_mask: 1 << 6,  // TCIE
                 status_width: 1,
                 status_idle: 0xC0,      // TDRE | TC
                 rx_present_set: 1 << 5, // RDRF
@@ -708,14 +749,95 @@ impl UartRegisterLayout {
                 rx_present_set: 0x80, // RXC0
                 rx_present_clear: 0,
             },
+            // Placeholder only — `Uart::effective_regmap` uses `custom_map`.
+            UartRegisterLayout::Custom => UartRegMap {
+                status: 0,
+                tx: 0,
+                rx: 0,
+                cr3: 0xFFFF_FFFF,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 4,
+                status_idle: 0,
+                rx_present_set: 0,
+                rx_present_clear: 0,
+            },
         }
     }
 }
+
+/// SCI_B control registers stored by [`Uart::sci_b_regs`]: 0x08..0x40.
+const SCI_B_REGS: usize = 14;
+const SCI_B_CTRL_BASE: u64 = 0x08;
+/// CCR0 (index 0): TE bit 4, RE bit 0.
+const SCI_B_CCR0_TE: u32 = 1 << 4;
+const SCI_B_CCR0_RE: u32 = 1 << 0;
+/// CESR (index 5, 0x1C): TIST bit 4 / RIST bit 0 mirror CCR0.TE / CCR0.RE.
+const SCI_B_CESR_INDEX: usize = 5;
+/// FCR (index 7, 0x24): TFRST bit 15 and RFRST bit 23 are write-only.
+const SCI_B_FCR_INDEX: usize = 7;
+const SCI_B_FCR_WO: u32 = (1 << 15) | (1 << 23);
+/// FRSR (0x50): FIFO receive status. R (bits 13:8) is the RX queue length
+/// capped at the 16-stage FIFO (FSP ra8m1 `BSP_FEATURE_SCI_UART_FIFO_DEPTH`;
+/// SCI0-4 and SCI9 have the FIFO). DR (bit 0), PNUM and FNUM read 0. FTSR
+/// (0x54) reads 0: a written byte leaves at once, so the TX FIFO is empty.
+const SCI_B_FRSR: u64 = 0x50;
+/// Reset values: CCR2 0xFF00FF04 (MDDR 0xFF, BRR 0xFF, BCP 4) and FCR
+/// 0x1F1F0000, the FSP `r_sci_b_uart.c` `SCI_B_UART_CCR2_DEFAULT_VALUE` /
+/// `SCI_B_UART_FCR_DEFAULT_VALUE`. Every other stored register resets to 0.
+const SCI_B_RESET: [u32; SCI_B_REGS] = {
+    let mut r = [0u32; SCI_B_REGS];
+    r[2] = 0xFF00_FF04;
+    r[SCI_B_FCR_INDEX] = 0x1F1F_0000;
+    r
+};
+
+/// Classic SCI FIFO registers (RA6/RA4 SCI0-9 with a 16-stage FIFO,
+/// R01UH0891 "FIFO Control Register (FCR)"): FTDRH/FTDRL 0x0E/0x0F,
+/// FRDRH/FRDRL 0x10/0x11, FCR 0x14 (16-bit), FDR 0x16 (16-bit, R[4:0] in
+/// the low byte, T[4:0] in the high byte).
+const SCI_FTDRL: u64 = 0x0F;
+const SCI_FRDRH: u64 = 0x10;
+const SCI_FRDRL: u64 = 0x11;
+const SCI_FCR: u64 = 0x14;
+const SCI_FDR: u64 = 0x16;
+/// FCR: FM bit 0 (FIFO mode), RFRST bit 1 / TFRST bit 2 write-only resets.
+const SCI_FCR_FM: u16 = 1 << 0;
+const SCI_FCR_RFRST: u16 = 1 << 1;
+const SCI_FCR_TFRST: u16 = 1 << 2;
+/// FCR.RTRG (bits 11:8): the receive count that sets SSR_FIFO.RDF.
+const SCI_FCR_RTRG_SHIFT: u16 = 8;
+const SCI_FIFO_DEPTH: usize = 16;
+/// Classic SCI SCR (serial control) at 0x02 and SSR at 0x04. In FIFO mode
+/// the SSR address reads as SSR_FIFO: TDFE bit 7, RDF bit 6, TEND bit 2,
+/// DR bit 0 (FSP `R_SCI0_SSR_FIFO_*_Pos`).
+const SCI_SCR: u64 = 0x02;
+const SCI_SSR: u64 = 0x04;
+const SCI_SSR_FIFO_TDFE: u8 = 1 << 7;
+const SCI_SSR_FIFO_RDF: u8 = 1 << 6;
+const SCI_SSR_FIFO_TEND: u8 = 1 << 2;
+const SCI_SSR_FIFO_DR: u8 = 1 << 0;
 
 /// Minimal UART mock with selectable register layout.
 #[derive(serde::Serialize)]
 pub struct Uart {
     layout: UartRegisterLayout,
+    /// YAML-parameterised map when `layout` is [`UartRegisterLayout::Custom`].
+    /// Skipped in snapshots (not serialized). `Uart::restore` is a no-op, so
+    /// the live instance keeps this map across snapshot restore; it is not
+    /// rebuilt from chip YAML.
+    #[serde(skip)]
+    custom_map: Option<UartRegMap>,
+    /// Optional TX-enable gate (`config.enable_offset` / `enable_mask`).
+    /// When set, TX bytes are dropped until `(enable_value & mask) == mask`.
+    /// Skipped in snapshots — kept on the live instance like `custom_map`.
+    #[serde(skip)]
+    enable_offset: Option<u64>,
+    #[serde(skip)]
+    enable_mask: u32,
+    #[serde(skip)]
+    enable_value: u32,
     /// EFR32 only: "my TX currently reaches a pad", published by
     /// `GPIO_USARTROUTE`.
     ///
@@ -783,6 +905,16 @@ pub struct Uart {
     #[serde(default)]
     stm32_lpuart: bool,
     dma_tx_pending: bool,
+    /// 16550 line control register (Ns16550 / DwApbUart layouts). Bit 7 is
+    /// DLAB: while set, offsets 0 and 1 (times the register stride) are the
+    /// baud divisor latches DLL/DLM instead of RBR/THR and IER (PC16550D
+    /// Table II). Without it a driver's divisor write went out as a TX byte.
+    #[serde(default)]
+    lcr16550: u8,
+    #[serde(default)]
+    dll16550: u8,
+    #[serde(default)]
+    dlm16550: u8,
     /// Stream devices attached to the RX path (e.g. GPS modules).
     #[serde(skip)]
     pub attached_streams: Vec<Box<dyn UartStreamDevice>>,
@@ -917,11 +1049,32 @@ pub struct Uart {
     /// MAX485 is wired to it. See [`crate::peripherals::rs485`].
     #[serde(skip)]
     rs485: Option<Box<crate::peripherals::rs485::Rs485Gate>>,
+    /// TI single-wire CQ transceiver. Separate from the RS-485 gate.
+    #[serde(skip)]
+    tiol112: Option<super::components::tiol112::Tiol112>,
     /// AVR layout: UCSR0A as the CPU last wrote it (U2X is bit 1).
     avr_ucsra: u8,
     /// AVR layout: UBRR0 and whether firmware wrote it.
     avr_ubrr: u16,
     avr_baud_set: bool,
+    /// SCI_B layout: CCR0-CCR4, CESR, ICR, FCR, (reserved), MCR, DCR,
+    /// XCR0-XCR2 at 0x08 + 4*i, as firmware last wrote them. CESR is not
+    /// stored; it reads CCR0.TE/RE back as TIST/RIST.
+    sci_b_regs: [u32; SCI_B_REGS],
+    /// SCI_B or classic SCI layout with `elc_event` configured: the
+    /// RXI/TXI/TEI interrupt events, linked to the NVIC through the RA ICU.
+    /// `None` keeps the polled-only SCI.
+    sci_b_irq: Option<Box<sci_b_irq::SciBIrq>>,
+    /// The SCI requests are interrupt vectors of a core-side ICU (the
+    /// Renesas RX ICU) rather than ELC events for the RA ICU to link.
+    sci_irq_vectors: bool,
+    /// Classic SCI layout: FCR as firmware last wrote it, without the
+    /// write-only RFRST/TFRST bits.
+    sci_fcr: u16,
+    /// Classic SCI layout: SCR as firmware last wrote it. Zephyr's
+    /// `uart_ra_sci` read-modify-writes it (`SCR |= TIE | TEIE`) and reads
+    /// TIE/RIE back in `irq_tx_ready` / `irq_rx_ready`.
+    sci_scr: u8,
     /// The last transmitted byte went onto an RS-485 bus (driver enabled). The
     /// AVR core reads it to keep frames off its console.
     last_tx_on_bus: bool,
@@ -957,6 +1110,10 @@ impl Uart {
     pub fn new_with_layout_cr3(layout: UartRegisterLayout, cr3_mask: u32) -> Self {
         Self {
             layout,
+            custom_map: None,
+            enable_offset: None,
+            enable_mask: 0,
+            enable_value: 0,
             route_gate: None,
             tx_console_af: None,
             sink: None,
@@ -978,6 +1135,9 @@ impl Uart {
             autocr: 0x8000_0000,
             stm32_lpuart: false,
             dma_tx_pending: false,
+            lcr16550: 0,
+            dll16550: 0,
+            dlm16550: 0,
             attached_streams: Vec::new(),
             trace: crate::bus::bus_trace::BusTrace::new(),
             trace_name: String::new(),
@@ -1002,9 +1162,15 @@ impl Uart {
             wave_cursor_rx: 0,
             timed: None,
             rs485: None,
+            tiol112: None,
             avr_ucsra: 0,
             avr_ubrr: 0,
             avr_baud_set: false,
+            sci_b_regs: SCI_B_RESET,
+            sci_b_irq: None,
+            sci_irq_vectors: false,
+            sci_fcr: 0,
+            sci_scr: 0,
             last_tx_on_bus: false,
         }
     }
@@ -1032,9 +1198,252 @@ impl Uart {
     }
 
     /// Enable STM32U5-only USART status/register behavior (TXFE and AUTOCR).
+    /// SCI_B and classic SCI only: raise the RXI/TXI/TEI interrupt events
+    /// (`rxi_event`, then +1, +2) through the RA ICU, with the wire timed at
+    /// `baud` in `clock_hz` cycles. See [`sci_b_irq`].
+    pub fn set_sci_events(mut self, rxi_event: u32, clock_hz: u64, baud: u64) -> Self {
+        if matches!(
+            self.layout,
+            UartRegisterLayout::SciB | UartRegisterLayout::Sci
+        ) {
+            self.sci_b_irq = Some(Box::new(sci_b_irq::SciBIrq::new(rxi_event, clock_hz, baud)));
+        }
+        self
+    }
+
+    /// Classic SCI on a Renesas RX: raise RXI/TXI/TEI as ICU vectors
+    /// `rxi_vector`, +1, +2 (RX261 SCI6: 227/228/229), which the core's ICU
+    /// latches in `IRn` directly; there is no event link. Timing as
+    /// [`set_sci_events`].
+    pub fn set_sci_vectors(self, rxi_vector: u32, clock_hz: u64, baud: u64) -> Self {
+        let mut uart = self.set_sci_events(rxi_vector, clock_hz, baud);
+        uart.sci_irq_vectors = uart.sci_b_irq.is_some();
+        uart
+    }
+
+    /// Bus cycle for the SCI_B event timing (0 on a bus without a clock).
+    fn cycle_now(&self) -> u64 {
+        self.stream_clock.as_ref().map_or(0, |c| c.now())
+    }
+
+    /// The interrupt enables in SCI_B CCR0 positions: CCR0 itself, or the
+    /// classic SCI's SCR moved there.
+    fn sci_irq_ctrl(&self) -> u32 {
+        match self.layout {
+            UartRegisterLayout::Sci => sci_b_irq::classic_scr_as_ccr0(self.sci_scr),
+            _ => self.sci_b_regs[0],
+        }
+    }
+
+    /// Raise the SCI interrupt events due now.
+    fn sci_b_service(&mut self) -> Vec<u32> {
+        if self.sci_b_irq.is_none() {
+            return Vec::new();
+        }
+        let now = self.cycle_now();
+        let ccr0 = self.sci_irq_ctrl();
+        let rx_waiting = self.rx_buf.lock().map(|g| !g.is_empty()).unwrap_or(false);
+        match self.sci_b_irq.as_deref_mut() {
+            Some(irq) => irq.service(now, ccr0, rx_waiting),
+            None => Vec::new(),
+        }
+    }
+
     pub fn set_u5_features(mut self, yes: bool) -> Self {
         self.u5_features = yes;
         self
+    }
+
+    /// Install a YAML-parameterised register map for [`UartRegisterLayout::Custom`].
+    pub(crate) fn with_custom_map(mut self, map: UartRegMap) -> Self {
+        self.custom_map = Some(map);
+        self
+    }
+
+    /// Gate TX on an enable register write matching `mask` (all mask bits set).
+    pub(crate) fn with_enable_gate(mut self, offset: u64, mask: u32) -> Self {
+        self.enable_offset = Some(offset);
+        self.enable_mask = mask;
+        self.enable_value = 0;
+        self
+    }
+
+    fn effective_regmap(&self) -> UartRegMap {
+        self.custom_map.unwrap_or_else(|| self.layout.regmap())
+    }
+
+    /// SCI_B control-register byte at `offset`, or `None` outside the
+    /// stored window (or on other layouts).
+    fn sci_b_byte(&self, offset: u64) -> Option<u8> {
+        if !matches!(self.layout, UartRegisterLayout::SciB) {
+            return None;
+        }
+        if (SCI_B_FRSR..SCI_B_FRSR + 4).contains(&offset) {
+            // FRSR.R (bits 13:8): characters in the receive FIFO.
+            let len = self.rx_buf.lock().map(|g| g.len()).unwrap_or(0);
+            let word = (len.min(SCI_FIFO_DEPTH) as u32) << 8;
+            return Some((word >> ((offset - SCI_B_FRSR) * 8)) as u8);
+        }
+        let rel = offset.checked_sub(SCI_B_CTRL_BASE)?;
+        let index = (rel / 4) as usize;
+        if index >= SCI_B_REGS {
+            return None;
+        }
+        let word = if index == SCI_B_CESR_INDEX {
+            self.sci_b_regs[0] & (SCI_B_CCR0_TE | SCI_B_CCR0_RE)
+        } else {
+            self.sci_b_regs[index]
+        };
+        Some(((word >> ((rel % 4) * 8)) & 0xFF) as u8)
+    }
+
+    /// Store one byte of an SCI_B control register. Returns false outside
+    /// the window. CESR is read-only; FCR's FIFO-reset bits are write-only
+    /// (an RFRST write empties the RX queue).
+    fn sci_b_write(&mut self, offset: u64, value: u8) -> bool {
+        if !matches!(self.layout, UartRegisterLayout::SciB) {
+            return false;
+        }
+        let Some(rel) = offset.checked_sub(SCI_B_CTRL_BASE) else {
+            return false;
+        };
+        let index = (rel / 4) as usize;
+        if index >= SCI_B_REGS {
+            return false;
+        }
+        if index == SCI_B_CESR_INDEX {
+            return true;
+        }
+        let shift = (rel % 4) * 8;
+        let mut v = u32::from(value) << shift;
+        if index == SCI_B_FCR_INDEX {
+            if v & (1 << 23) != 0 {
+                if let Ok(mut guard) = self.rx_buf.lock() {
+                    guard.clear();
+                }
+            }
+            v &= !SCI_B_FCR_WO;
+        }
+        let old = self.sci_b_regs[index];
+        let new = (old & !(0xFFu32 << shift)) | v;
+        self.sci_b_regs[index] = new;
+        if index == 0 {
+            let now = self.cycle_now();
+            if let Some(irq) = self.sci_b_irq.as_deref_mut() {
+                irq.on_ccr0(old, new, now);
+            }
+        }
+        true
+    }
+
+    /// Classic SCI FIFO register byte at `offset` (FCR, FDR, FRDRH), or
+    /// `None` outside them (or on other layouts). FRDRL is popped by the
+    /// caller. TX drains at once, so FDR.T is always 0; FDR.R is the RX
+    /// queue length capped at the 16-stage FIFO while FCR.FM is set, 0
+    /// otherwise.
+    fn sci_fifo_byte(&self, offset: u64) -> Option<u8> {
+        if !matches!(self.layout, UartRegisterLayout::Sci) {
+            return None;
+        }
+        match offset {
+            SCI_SCR => Some(self.sci_scr),
+            SCI_FCR => Some(self.sci_fcr as u8),
+            o if o == SCI_FCR + 1 => Some((self.sci_fcr >> 8) as u8),
+            // FDR only counts in FIFO mode (FCR.FM = 1); on a FIFO-less
+            // channel or with FM = 0 there is no FIFO to report.
+            SCI_FDR if !self.sci_fifo_mode() => Some(0),
+            SCI_FDR => {
+                let rx = self.rx_buf.lock().map(|g| g.len()).unwrap_or(0);
+                Some(rx.min(SCI_FIFO_DEPTH) as u8)
+            }
+            o if o == SCI_FDR + 1 => Some(0),
+            SCI_FRDRH => Some(0),
+            _ => None,
+        }
+    }
+
+    /// SSR_FIFO, which the SSR address reads as in FIFO mode. TX drains at
+    /// once, so TDFE (count <= TTRG) and TEND read 1. RDF is the receive
+    /// count at or above FCR.RTRG (0 reads as 1); DR is a smaller count
+    /// still waiting — silicon sets it 15 ETU after the last stop bit, this
+    /// model at once. Both follow the queue, so the write-0 clears firmware
+    /// does after reading the FIFO out need no storing.
+    fn sci_ssr_fifo(&self) -> u8 {
+        let rx = self
+            .rx_buf
+            .lock()
+            .map(|g| g.len().min(SCI_FIFO_DEPTH))
+            .unwrap_or(0);
+        let rtrg = usize::from((self.sci_fcr >> SCI_FCR_RTRG_SHIFT) & 0xF).max(1);
+        let mut ssr = SCI_SSR_FIFO_TDFE | SCI_SSR_FIFO_TEND;
+        if rx >= rtrg {
+            ssr |= SCI_SSR_FIFO_RDF;
+        } else if rx > 0 {
+            ssr |= SCI_SSR_FIFO_DR;
+        }
+        ssr
+    }
+
+    /// Store the classic SCI SCR. Returns false for any other offset.
+    fn sci_scr_write(&mut self, offset: u64, value: u8) -> bool {
+        if !matches!(self.layout, UartRegisterLayout::Sci) || offset != SCI_SCR {
+            return false;
+        }
+        let old = sci_b_irq::classic_scr_as_ccr0(self.sci_scr);
+        self.sci_scr = value;
+        let now = self.cycle_now();
+        if let Some(irq) = self.sci_b_irq.as_deref_mut() {
+            irq.on_ccr0(old, sci_b_irq::classic_scr_as_ccr0(value), now);
+        }
+        true
+    }
+
+    fn sci_fifo_mode(&self) -> bool {
+        matches!(self.layout, UartRegisterLayout::Sci) && self.sci_fcr & SCI_FCR_FM != 0
+    }
+
+    /// Store one byte of the classic SCI FCR. Returns false for any other
+    /// offset. RFRST empties the RX queue; RFRST/TFRST read back 0, which
+    /// is what FSP's `r_sci_uart_fifo_cfg` waits for.
+    fn sci_fcr_write(&mut self, offset: u64, value: u8) -> bool {
+        if !matches!(self.layout, UartRegisterLayout::Sci) {
+            return false;
+        }
+        let shift = match offset {
+            SCI_FCR => 0,
+            o if o == SCI_FCR + 1 => 8,
+            _ => return false,
+        };
+        let mut v = u16::from(value) << shift;
+        if v & SCI_FCR_RFRST != 0 {
+            if let Ok(mut guard) = self.rx_buf.lock() {
+                guard.clear();
+            }
+        }
+        v &= !(SCI_FCR_RFRST | SCI_FCR_TFRST);
+        self.sci_fcr = (self.sci_fcr & !(0xFF << shift)) | v;
+        true
+    }
+
+    fn tx_enabled(&self) -> bool {
+        if matches!(self.layout, UartRegisterLayout::SciB)
+            && self.sci_b_regs[0] & SCI_B_CCR0_TE == 0
+        {
+            return false;
+        }
+        match self.enable_offset {
+            None => true,
+            Some(_) => self.enable_value & self.enable_mask == self.enable_mask,
+        }
+    }
+
+    /// True when `offset` falls in the status window, using saturating end so
+    /// hostile `status_width` cannot overflow the add in debug builds.
+    fn status_window_contains(&self, offset: u64) -> bool {
+        let m = self.effective_regmap();
+        let status = m.status;
+        let end = status.saturating_add(m.status_width);
+        offset >= status && offset < end
     }
 
     pub fn force_legacy_walk(&mut self) {
@@ -1158,7 +1567,14 @@ impl Uart {
         // A buffered narration is real work: the wire is mid-burst, and the
         // flush that ends it needs a wakeup to happen on. Without this a
         // scheduler-driven bus would leave the last print unpublished.
+        // SCI_B RXI: wake while a character waits for its RXI or behind
+        // the one being read. An empty queue needs no wake: injection
+        // (`deliver_uart_rx_named`) and stream peers re-harvest this.
+        let sci_b_rx_armed = self.sci_b_irq.is_some()
+            && sci_b_irq::SciBIrq::rx_armed(self.sci_irq_ctrl())
+            && self.rx_buf.lock().map(|g| !g.is_empty()).unwrap_or(false);
         level_irq_observable
+            || sci_b_rx_armed
             || !self.attached_streams.is_empty()
             || self.dma_tx_pending
             || !self.wire_chars.is_empty()
@@ -1209,11 +1625,13 @@ impl Uart {
             // One lock for the whole catch-up run, not one per tick-equivalent.
             // Disjoint field borrows: the guard borrows `rx_buf`, the poll loop
             // borrows `attached_streams` and `elapsed_us`.
+            let tiol_rx_enabled = self.cr1 & (1 | (1 << 2)) == (1 | (1 << 2));
             let Self {
                 rx_buf,
                 attached_streams,
                 elapsed_us,
                 rs485,
+                tiol112,
                 stream_clock,
                 trace_name,
                 ..
@@ -1250,6 +1668,12 @@ impl Uart {
                             let Some(byte) = stream.poll(credit) else {
                                 break;
                             };
+                            if let Some(phy) = tiol112.as_ref() {
+                                if !tiol_rx_enabled || !phy.accept_peer_byte() {
+                                    credit = 0;
+                                    continue;
+                                }
+                            }
                             if rs485.is_some() {
                                 on_bus.push((peer, byte));
                             } else {
@@ -1352,15 +1776,52 @@ impl Uart {
 
     // The 7 accessors below all read from the single per-family `regmap()`
     // descriptor, so a family's register map lives in exactly one place.
+    /// Register stride of the 16550-family layouts, `None` for every other map.
+    fn uart16550_stride(&self) -> Option<u64> {
+        match self.layout {
+            UartRegisterLayout::Ns16550 => Some(1),
+            UartRegisterLayout::DwApbUart => Some(4),
+            _ => None,
+        }
+    }
+
+    /// LCR, and DLL/DLM while LCR.DLAB is set (16550 family only).
+    fn lcr_dlab_read(&self, offset: u64) -> Option<u8> {
+        let stride = self.uart16550_stride()?;
+        let dlab = self.lcr16550 & 0x80 != 0;
+        match offset {
+            o if o == 3 * stride => Some(self.lcr16550),
+            0 if dlab => Some(self.dll16550),
+            o if dlab && o == stride => Some(self.dlm16550),
+            _ => None,
+        }
+    }
+
+    /// Capture an LCR write, or a DLL/DLM write while DLAB is set. `true`
+    /// when the byte was consumed (it must not reach THR or IER).
+    fn lcr_dlab_write(&mut self, offset: u64, value: u8) -> bool {
+        let Some(stride) = self.uart16550_stride() else {
+            return false;
+        };
+        let dlab = self.lcr16550 & 0x80 != 0;
+        match offset {
+            o if o == 3 * stride => self.lcr16550 = value,
+            0 if dlab => self.dll16550 = value,
+            o if dlab && o == stride => self.dlm16550 = value,
+            _ => return false,
+        }
+        true
+    }
+
     fn status_offset(&self) -> u64 {
-        self.layout.regmap().status
+        self.effective_regmap().status
     }
     /// The status register as a 32-bit word: the idle pattern adjusted for a
     /// pending RX byte (set the active-high "data present" flags, clear the
     /// active-high "empty" flags). Byte-addressed reads slice this word, so an
     /// 8-bit LSR and a 32-bit STAT share one path.
     fn status_word(&self, rx_present: bool) -> u32 {
-        let m = self.layout.regmap();
+        let m = self.effective_regmap();
         let mut v = if rx_present {
             (m.status_idle & !m.rx_present_clear) | m.rx_present_set
         } else {
@@ -1425,13 +1886,13 @@ impl Uart {
         v
     }
     fn tx_offset(&self) -> u64 {
-        self.layout.regmap().tx
+        self.effective_regmap().tx
     }
     fn rx_offset(&self) -> u64 {
-        self.layout.regmap().rx
+        self.effective_regmap().rx
     }
     fn cr3_offset(&self) -> u64 {
-        self.layout.regmap().cr3
+        self.effective_regmap().cr3
     }
 
     /// F1-layout config registers as `(base offset, silicon writable mask)`.
@@ -1503,15 +1964,15 @@ impl Uart {
     }
     /// Offset of the CR1 register. `None` for layouts without a CR1 interrupt concept.
     fn cr1_offset(&self) -> Option<u64> {
-        self.layout.regmap().cr1
+        self.effective_regmap().cr1
     }
     /// Bitmask of the TXEIE bit within CR1 for interrupt-driven TX detection.
     fn txeie_mask(&self) -> u32 {
-        self.layout.regmap().txeie_mask
+        self.effective_regmap().txeie_mask
     }
     /// Bitmask of the transmission-complete interrupt enable bit within CR1.
     fn tcie_mask(&self) -> u32 {
-        self.layout.regmap().tcie_mask
+        self.effective_regmap().tcie_mask
     }
 
     /// The shared pad-line cell for this UART's TX/RX pair, created on first
@@ -1761,6 +2222,11 @@ impl Uart {
         if !self.reaches_a_pad() {
             return;
         }
+        // Optional YAML enable gate. Open when unset — bare TX-data writes
+        // (common in smoke ELFs) still capture.
+        if !self.tx_enabled() {
+            return;
+        }
         // F1: the console sink is the same path a probe on the pad sees.
         // No alternate-function output, or no divisor, and the byte is gone.
         if let Some(gate) = &self.tx_console_af {
@@ -1776,6 +2242,14 @@ impl Uart {
         // driver is enabled; see `peripherals::rs485`.
         let mut echo = false;
         let mut on_bus = true;
+        if let Some(phy) = &self.tiol112 {
+            if self.cr1 & (1 | (1 << 3)) != (1 | (1 << 3)) || self.presc != 0 {
+                return;
+            }
+            on_bus = phy.allow_tx();
+            // TI RX is always active; the MCU must disable RE to reject echo.
+            echo = on_bus && self.cr1 & (1 | (1 << 2)) == (1 | (1 << 2));
+        }
         if self.rs485.is_some() {
             let now = self.stream_clock.as_ref().map_or(0, |c| c.now());
             let gap = self.bit_time_cycles().map_or(0, |bit| bit * 35);
@@ -1788,7 +2262,7 @@ impl Uart {
                 }
             }
         }
-        self.last_tx_on_bus = self.rs485.is_some() && on_bus;
+        self.last_tx_on_bus = (self.rs485.is_some() || self.tiol112.is_some()) && on_bus;
         // A byte the driver put on the bus is a frame, not console text: it
         // is in the `rs485` bus log instead.
         if !self.last_tx_on_bus {
@@ -1839,6 +2313,31 @@ impl Uart {
     /// The transceiver gate, when one is wired.
     pub fn rs485_gate(&self) -> Option<&crate::peripherals::rs485::Rs485Gate> {
         self.rs485.as_deref()
+    }
+
+    /// Attach the exact TI digital model; sharing one UART with another
+    /// transceiver would hide conflicting wire ownership, so reject it.
+    pub fn set_tiol112(&mut self, phy: super::components::tiol112::Tiol112) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            self.rs485.is_none() && self.tiol112.is_none(),
+            "UART already has a transceiver attached"
+        );
+        anyhow::ensure!(
+            matches!(self.layout, UartRegisterLayout::Stm32V2),
+            "TIOL112 currently requires a modern STM32 USART"
+        );
+        if let Some(t) = &self.timed {
+            t.port
+                .set_path_delays(phy.driver_delay_ps, phy.receiver_delay_ps);
+            phy.bind_timed_port(t.port.clone());
+        }
+        self.set_sink(None, false);
+        self.tiol112 = Some(phy);
+        Ok(())
+    }
+
+    pub fn tiol112(&self) -> Option<&super::components::tiol112::Tiol112> {
+        self.tiol112.as_ref()
     }
 
     pub fn set_sink(&mut self, sink: Option<Arc<Mutex<Vec<u8>>>>, echo_stdout: bool) {
@@ -1938,17 +2437,30 @@ impl crate::Peripheral for Uart {
         if let Some(byte) = self.timed_read(offset) {
             return Ok(byte);
         }
+        if let Some(byte) = self.lcr_dlab_read(offset) {
+            return Ok(byte);
+        }
         if matches!(self.layout, UartRegisterLayout::Avr) && offset == 0x07 {
             return Ok(u8::from(self.last_tx_on_bus));
         }
+        if offset == SCI_SSR && self.sci_fifo_mode() {
+            return Ok(self.sci_ssr_fifo());
+        }
         let status = self.status_offset();
-        if offset >= status && offset < status + self.layout.regmap().status_width {
+        if self.status_window_contains(offset) {
             let rx_present = self.rx_buf.lock().map(|g| !g.is_empty()).unwrap_or(false);
             let word = self.status_word(rx_present);
-            return Ok(((word >> ((offset - status) * 8)) & 0xFF) as u8);
+            let shift = (offset - status).saturating_mul(8);
+            if shift >= 32 {
+                return Ok(0);
+            }
+            return Ok(((word >> shift) & 0xFF) as u8);
         }
-        if offset == self.rx_offset() {
+        if offset == self.rx_offset() || (offset == SCI_FRDRL && self.sci_fifo_mode()) {
             // Pop one byte from RX buffer
+            if let Some(irq) = self.sci_b_irq.as_deref() {
+                irq.note_rx_pop();
+            }
             if let Ok(mut guard) = self.rx_buf.lock() {
                 return Ok(guard.pop_front().unwrap_or(0x00));
             }
@@ -1965,6 +2477,12 @@ impl crate::Peripheral for Uart {
         // `BRR >= 16`, and pico-sdk's uart_set_baudrate reads IBRD/FBRD back to
         // report the baud it achieved.
         if let Some(byte) = self.baud_register_byte(offset) {
+            return Ok(byte);
+        }
+        if let Some(byte) = self.sci_b_byte(offset) {
+            return Ok(byte);
+        }
+        if let Some(byte) = self.sci_fifo_byte(offset) {
             return Ok(byte);
         }
         if matches!(self.layout, UartRegisterLayout::Stm32V2) && offset == 0x2C {
@@ -2062,10 +2580,39 @@ impl crate::Peripheral for Uart {
             }
             return Ok(());
         }
+        if self.lcr_dlab_write(offset, value) {
+            return Ok(());
+        }
+        if let Some(en_off) = self.enable_offset {
+            let byte_off = offset.wrapping_sub(en_off);
+            if byte_off < 4 {
+                let shift = (byte_off * 8) as u32;
+                self.enable_value =
+                    (self.enable_value & !(0xFFu32 << shift)) | (u32::from(value) << shift);
+            }
+        }
         let is_legacy_tx_alias =
             matches!(self.layout, UartRegisterLayout::Stm32F1) && offset == 0x00;
 
-        if offset == self.tx_offset() || is_legacy_tx_alias {
+        if self.sci_b_write(offset, value)
+            || self.sci_fcr_write(offset, value)
+            || self.sci_scr_write(offset, value)
+        {
+            return Ok(());
+        }
+        if matches!(self.layout, UartRegisterLayout::SciB) && offset != self.tx_offset() {
+            // TDR bytes 1-3 (MPBT/TSYNC), CFCLR and the other flag-clear
+            // registers: accepted, nothing stored.
+            return Ok(());
+        }
+        let is_sci_fifo_tx = offset == SCI_FTDRL && self.sci_fifo_mode();
+        if offset == self.tx_offset() || is_legacy_tx_alias || is_sci_fifo_tx {
+            if self.sci_b_irq.is_some() && self.tx_enabled() {
+                let now = self.cycle_now();
+                if let Some(irq) = self.sci_b_irq.as_deref_mut() {
+                    irq.on_tdr_write(now);
+                }
+            }
             self.push_tx(value);
             // If DMAT bit is set, we might be in a DMA sequence.
             if (self.cr3 & (1 << 7)) != 0 {
@@ -2129,17 +2676,28 @@ impl crate::Peripheral for Uart {
     fn tick(&mut self) -> crate::PeripheralTickResult {
         if self.timed.is_some() {
             let now = self.timed_now();
+            let irq = self.timed_service(now);
+            let dma_signals = self.timed_dma_signals();
             return crate::PeripheralTickResult {
-                irq: self.timed_service(now),
+                irq,
+                dma_signals: (!dma_signals.is_empty()).then_some(dma_signals),
                 ..Default::default()
             };
         }
         let (irq, dma_signals) = self.advance_one_tick();
+        let events = self.sci_b_service();
         crate::PeripheralTickResult {
             irq,
             dma_signals: (!dma_signals.is_empty()).then_some(dma_signals),
+            explicit_irqs: (!events.is_empty()).then_some(events),
             ..Default::default()
         }
+    }
+
+    /// SCI_B with interrupt events: its explicit IRQs are ELC event numbers
+    /// (RA), or interrupt vectors the bus pends as-is (RX).
+    fn explicit_irqs_are_link_events(&self) -> bool {
+        self.sci_b_irq.is_some() && !self.sci_irq_vectors
     }
 
     /// Phase 2B.3b (issue #192): the shared `Uart` is migrated to the event
@@ -2166,6 +2724,9 @@ impl crate::Peripheral for Uart {
     fn on_node_reset(&mut self) {
         if self.timed.is_some() {
             self.timed_reset();
+        }
+        if let Some(irq) = self.sci_b_irq.as_deref_mut() {
+            irq.reset();
         }
     }
 
@@ -2219,12 +2780,18 @@ impl crate::Peripheral for Uart {
                 .map(|t| vec![(t.saturating_sub(now + 1), UART_WAKE_TOKEN)])
                 .unwrap_or_default();
         }
+        let mut wakes = Vec::new();
+        if self.sci_b_irq.is_some() {
+            let now = self.cycle_now();
+            if let Some(irq) = self.sci_b_irq.as_deref_mut() {
+                wakes.extend(irq.take_edge_wake(now));
+            }
+        }
         if self.has_active_work() && !self.scheduled {
             self.scheduled = true;
-            vec![(0, UART_WAKE_TOKEN)]
-        } else {
-            Vec::new()
+            wakes.push((0, UART_WAKE_TOKEN));
         }
+        wakes
     }
 
     /// Fire one tick-equivalent of work and re-arm while there's still work.
@@ -2234,16 +2801,34 @@ impl crate::Peripheral for Uart {
     /// (and stream pacing) going at one event per tick until work drains.
     fn on_event(
         &mut self,
-        _event_token: u32,
+        event_token: u32,
         _sched: &mut crate::sched::EventScheduler,
         bus: &mut dyn crate::Bus,
     ) -> crate::sched::EventResult {
+        if sci_b_irq::SciBIrq::is_edge_token(event_token) && self.sci_b_irq.is_some() {
+            // A TDRE/TEND edge wake: raise what is due, then re-arm the
+            // same token for the next edge (or for this one, if the clock
+            // has not reached it yet).
+            let explicit_irqs = self.sci_b_service();
+            let now = self.cycle_now();
+            let reschedule_delay = self
+                .sci_b_irq
+                .as_deref_mut()
+                .and_then(|irq| irq.on_edge_wake(event_token, now));
+            return crate::sched::EventResult {
+                explicit_irqs,
+                reschedule_delay,
+                ..Default::default()
+            };
+        }
         if self.timed.is_some() {
             let now = bus.current_cycle();
+            self.timed_event_fired();
             let raise = self.timed_service(now);
             let next = self.timed_claim_wake(now);
             return crate::sched::EventResult {
                 raise_own_irq: raise,
+                dma_signals: self.timed_dma_signals(),
                 reschedule_delay: next.map(|t| t - now),
                 ..Default::default()
             };
@@ -2316,9 +2901,11 @@ impl crate::Peripheral for Uart {
         } else {
             interval.max(1)
         };
+        let explicit_irqs = self.sci_b_service();
         crate::sched::EventResult {
             raise_own_irq: irq,
             dma_signals,
+            explicit_irqs,
             reschedule_delay: keep_going.then_some(u64::from(delay)),
             ..Default::default()
         }
@@ -2328,13 +2915,20 @@ impl crate::Peripheral for Uart {
         if let Some(byte) = self.timed_peek(offset) {
             return Some(byte);
         }
+        if offset == SCI_SSR && self.sci_fifo_mode() {
+            return Some(self.sci_ssr_fifo());
+        }
         let status = self.status_offset();
-        if offset >= status && offset < status + self.layout.regmap().status_width {
+        if self.status_window_contains(offset) {
             let rx_present = self.rx_buf.lock().map(|g| !g.is_empty()).unwrap_or(false);
             let word = self.status_word(rx_present);
-            return Some(((word >> ((offset - status) * 8)) & 0xFF) as u8);
+            let shift = (offset - status).saturating_mul(8);
+            if shift >= 32 {
+                return Some(0);
+            }
+            return Some(((word >> shift) & 0xFF) as u8);
         }
-        if offset == self.rx_offset() {
+        if offset == self.rx_offset() || (offset == SCI_FRDRL && self.sci_fifo_mode()) {
             // Peek without consuming
             if let Ok(guard) = self.rx_buf.lock() {
                 return Some(*guard.front().unwrap_or(&0x00));
@@ -2347,6 +2941,12 @@ impl crate::Peripheral for Uart {
             }
         }
         if let Some(byte) = self.baud_register_byte(offset) {
+            return Some(byte);
+        }
+        if let Some(byte) = self.sci_b_byte(offset) {
+            return Some(byte);
+        }
+        if let Some(byte) = self.sci_fifo_byte(offset) {
             return Some(byte);
         }
         if offset == self.cr3_offset() {
@@ -2412,9 +3012,21 @@ impl crate::Peripheral for Uart {
 
 #[cfg(test)]
 mod tests {
-    use super::{Uart, UartRegisterLayout};
+    use super::{Uart, UartRegMap, UartRegisterLayout};
     use crate::Peripheral;
     use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn sci_requests_are_link_events_on_ra_and_vectors_on_rx() {
+        let ra = Uart::new_with_layout(UartRegisterLayout::Sci).set_sci_events(0x180, 0, 0);
+        assert!(ra.explicit_irqs_are_link_events());
+        let rx = Uart::new_with_layout(UartRegisterLayout::Sci).set_sci_vectors(227, 0, 0);
+        assert!(rx.sci_b_irq.is_some());
+        assert!(!rx.explicit_irqs_are_link_events());
+        // Not an SCI layout: no requests, so nothing to route either way.
+        let stm = Uart::new_with_layout(UartRegisterLayout::Stm32F1).set_sci_vectors(227, 0, 0);
+        assert!(stm.sci_b_irq.is_none() && !stm.explicit_irqs_are_link_events());
+    }
 
     #[test]
     fn test_word_write_preserves_timed_transmit_and_disable() {
@@ -2607,6 +3219,29 @@ mod tests {
         assert_eq!(sink.lock().unwrap().clone(), vec![b'K']);
     }
 
+    /// 16550 family (PC16550D): with LCR.DLAB set, offsets 0 and 1 (times the
+    /// register stride) are the divisor latches DLL/DLM, so the baud divisor a
+    /// driver programs never reaches THR; clearing DLAB restores THR. Zephyr's
+    /// ns16550 driver does exactly this before its first byte (MPFS MMUART,
+    /// `reg-shift = <2>`, divisor 81 = 'Q' at 150 MHz / 115200).
+    #[test]
+    fn uart16550_dlab_routes_divisor_writes_to_the_latches() {
+        use super::UartRegisterLayout::{DwApbUart, Ns16550};
+        for (layout, stride) in [(Ns16550, 1u64), (DwApbUart, 4)] {
+            let mut uart = Uart::new_with_layout(layout);
+            let sink = Arc::new(Mutex::new(Vec::new()));
+            uart.set_sink(Some(sink.clone()), false);
+            uart.write(3 * stride, 0x83).unwrap(); // LCR: DLAB | 8N1
+            uart.write(0, 81).unwrap(); // DLL
+            uart.write(stride, 0).unwrap(); // DLM
+            assert_eq!(uart.read(0).unwrap(), 81, "{layout:?} DLL reads back");
+            assert_eq!(uart.read(3 * stride).unwrap(), 0x83);
+            uart.write(3 * stride, 0x03).unwrap(); // DLAB off
+            uart.write(0, b'Z').unwrap();
+            assert_eq!(sink.lock().unwrap().clone(), vec![b'Z'], "{layout:?}");
+        }
+    }
+
     /// Every vendor layout: a write to its TX data offset reaches the sink, and
     /// its status offset reports transmitter-ready at idle. Offsets are the
     /// datasheet values encoded in `regmap()`.
@@ -2659,6 +3294,196 @@ mod tests {
                 "{layout:?}: idle status at {status:#x}"
             );
         }
+    }
+
+    #[test]
+    fn test_sci_classic_fifo_mode() {
+        // FSP r_sci_uart (RA6M5 SCI0, 16-stage FIFO): FCR = FM | RFRST |
+        // TFRST, wait until FCR reads back without the reset bits; Zephyr's
+        // poll_out waits FDR.T <= 8 and writes FTDRL; poll_in reads FDR.R
+        // and FRDRL.
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        let mut u = Uart::new_with_layout(UartRegisterLayout::Sci);
+        u.set_sink(Some(sink.clone()), false);
+        // Non-FIFO mode: FTDRL is not a transmit register.
+        u.write(0x0F, b'x').unwrap();
+        assert!(sink.lock().unwrap().is_empty());
+        u.rx_buffer().lock().unwrap().push_back(b'q');
+        assert_eq!(u.read(0x16).unwrap(), 0, "FDR.R is 0 with FM = 0");
+        u.write(0x14, 0x07).unwrap();
+        u.write(0x15, 0xF8).unwrap();
+        assert_eq!(u.read(0x14).unwrap(), 0x01, "RFRST/TFRST read 0");
+        assert_eq!(u.read(0x15).unwrap(), 0xF8);
+        assert!(u.rx_buffer().lock().unwrap().is_empty(), "RFRST");
+        // TX drains at once: FDR.T stays 0.
+        u.write(0x0F, b'o').unwrap();
+        u.write(0x0F, b'k').unwrap();
+        assert_eq!(sink.lock().unwrap().as_slice(), b"ok");
+        assert_eq!(u.read(0x17).unwrap(), 0, "FDR.T");
+        // RX: FDR.R counts the queue (capped at 16), FRDRL pops.
+        for b in 0..20u8 {
+            u.rx_buffer().lock().unwrap().push_back(b'a' + b);
+        }
+        assert_eq!(u.read(0x16).unwrap(), 16, "FDR.R");
+        assert_eq!(u.peek(0x11), Some(b'a'));
+        assert_eq!(u.read(0x11).unwrap(), b'a');
+        assert_eq!(u.read(0x11).unwrap(), b'b');
+        assert_eq!(u.read(0x10).unwrap(), 0, "FRDRH");
+        // The non-FIFO TDR/RDR path still works.
+        u.write(0x03, b'!').unwrap();
+        assert_eq!(sink.lock().unwrap().as_slice(), b"ok!");
+    }
+
+    /// SCI_B (RA8M1, FSP `R_SCI_B0_Type`): TDR@0x04 transmits only while
+    /// CCR0.TE is set, CESR mirrors TE/RE, CSR@0x48 reports TDRE|TEND and
+    /// RDRF on RX data, control registers read back from their FSP reset.
+    #[test]
+    fn test_sci_b_tx_gate_status_and_readback() {
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        let mut u = Uart::new_with_layout(UartRegisterLayout::SciB);
+        u.set_sink(Some(sink.clone()), false);
+        assert_eq!(u.read_u32(0x10).unwrap(), 0xFF00_FF04, "CCR2 reset");
+        assert_eq!(u.read_u32(0x24).unwrap(), 0x1F1F_0000, "FCR reset");
+        assert_eq!(u.read_u32(0x48).unwrap(), 0x6000_0000, "CSR TDRE|TEND");
+        // TE off: the byte is dropped.
+        u.write_u32(0x04, b'x' as u32).unwrap();
+        assert!(sink.lock().unwrap().is_empty());
+        // CCR2 BRR = 25, CCR3 8-bit LSB-first, then TE|RE.
+        u.write_u32(0x10, 25 << 8).unwrap();
+        u.write_u32(0x14, (2 << 8) | (1 << 12)).unwrap();
+        u.write_u32(0x08, (1 << 4) | 1).unwrap();
+        assert_eq!(u.read_u32(0x10).unwrap(), 25 << 8);
+        assert_eq!(u.read_u32(0x14).unwrap(), 0x1200);
+        assert_eq!(u.read_u32(0x1C).unwrap(), 0x11, "CESR TIST|RIST");
+        // CESR is read-only.
+        u.write_u32(0x1C, 0).unwrap();
+        assert_eq!(u.read_u32(0x1C).unwrap(), 0x11);
+        u.write_u32(0x04, b'o' as u32).unwrap();
+        u.write_u32(0x04, b'k' as u32).unwrap();
+        assert_eq!(sink.lock().unwrap().as_slice(), b"ok");
+        // CFCLR (write-only) stores nothing.
+        u.write_u32(0x68, 0x9D07_0010).unwrap();
+        assert_eq!(u.read_u32(0x68).unwrap(), 0);
+        // RX: RDRF in CSR, RDR pops the byte.
+        u.rx_buffer().lock().unwrap().push_back(b'r');
+        assert_eq!(u.read_u32(0x48).unwrap() >> 31, 1, "RDRF");
+        assert_eq!(u.read(0x00).unwrap(), b'r');
+        assert_eq!(u.read_u32(0x48).unwrap() >> 31, 0);
+        // FCR: TFRST/RFRST are write-only; RFRST empties the RX queue.
+        u.rx_buffer().lock().unwrap().push_back(b'z');
+        u.write_u32(0x24, 0x1F1F_0000 | (1 << 23) | (1 << 15))
+            .unwrap();
+        assert_eq!(u.read_u32(0x24).unwrap(), 0x1F1F_0000);
+        assert!(u.rx_buffer().lock().unwrap().is_empty());
+        // TE off again: TIST drops and TX is gated.
+        u.write_u32(0x08, 1).unwrap();
+        assert_eq!(u.read_u32(0x1C).unwrap(), 0x01);
+        u.write_u32(0x04, b'!' as u32).unwrap();
+        assert_eq!(sink.lock().unwrap().as_slice(), b"ok");
+    }
+
+    #[test]
+    fn test_sci_b_profile_names() {
+        for name in ["sci_b", "renesas_sci_b", "ra8_sci"] {
+            assert_eq!(
+                name.parse::<UartRegisterLayout>().unwrap(),
+                UartRegisterLayout::SciB
+            );
+        }
+        assert_eq!(
+            "sci".parse::<UartRegisterLayout>().unwrap(),
+            UartRegisterLayout::Sci
+        );
+    }
+
+    /// YAML `profile: custom`: TX at a declared data-register offset reaches
+    /// the UART capture sink; optional enable_mask gates TX until set.
+    /// Offsets are synthetic (0x10/0x14/0x18) — not a vendor fingerprint.
+    #[test]
+    fn test_custom_layout_tx_offset_and_enable_gate() {
+        let map = UartRegMap {
+            status: 0x10,
+            tx: 0x14,
+            rx: 0x18,
+            cr3: 0xFFFF_FFFF,
+            cr1: None,
+            txeie_mask: 0,
+            tcie_mask: 0,
+            status_width: 4,
+            status_idle: 0x30,
+            rx_present_set: 1 << 6,
+            rx_present_clear: 0,
+        };
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Custom)
+            .with_custom_map(map)
+            .with_enable_gate(0x00, 1);
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        uart.set_sink(Some(sink.clone()), false);
+
+        uart.write_u32(0x14, u32::from(b'X')).unwrap();
+        assert!(
+            sink.lock().unwrap().is_empty(),
+            "TX must not capture while enable gate is closed"
+        );
+
+        uart.write_u32(0x00, 1).unwrap();
+        uart.write_u32(0x14, u32::from(b'O')).unwrap();
+        uart.write_u32(0x14, u32::from(b'K')).unwrap();
+        assert_eq!(
+            sink.lock().unwrap().clone(),
+            b"OK".to_vec(),
+            "word write to custom tx_offset must capture the low byte only"
+        );
+        assert_eq!(uart.read_u32(0x10).unwrap(), 0x30, "custom status_idle");
+        uart.write(0x10, b'Z').unwrap();
+        assert_eq!(sink.lock().unwrap().clone(), b"OK".to_vec());
+    }
+
+    /// Custom map with no enable gate: bare TX writes always capture.
+    #[test]
+    fn test_custom_layout_ungated_tx() {
+        let map = UartRegMap {
+            status: 0x100,
+            tx: 0x104,
+            rx: 0x108,
+            cr3: 0xFFFF_FFFF,
+            cr1: None,
+            txeie_mask: 0,
+            tcie_mask: 0,
+            status_width: 4,
+            status_idle: 0x01,
+            rx_present_set: 0,
+            rx_present_clear: 0,
+        };
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Custom).with_custom_map(map);
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        uart.set_sink(Some(sink.clone()), false);
+        for b in b"hi" {
+            uart.write_u32(0x104, u32::from(*b)).unwrap();
+        }
+        assert_eq!(sink.lock().unwrap().clone(), b"hi".to_vec());
+    }
+
+    /// Hostile status_width must not panic on status reads (saturating window).
+    #[test]
+    fn test_custom_layout_hostile_status_width_no_panic() {
+        let map = UartRegMap {
+            status: u64::MAX - 2,
+            tx: 0x14,
+            rx: 0x18,
+            cr3: 0xFFFF_FFFF,
+            cr1: None,
+            txeie_mask: 0,
+            tcie_mask: 0,
+            status_width: u64::MAX,
+            status_idle: 0xAB,
+            rx_present_set: 0,
+            rx_present_clear: 0,
+        };
+        let uart = Uart::new_with_layout(UartRegisterLayout::Custom).with_custom_map(map);
+        // Window saturates to end==u64::MAX; offset near status still reads.
+        assert_eq!(uart.read(u64::MAX - 2).unwrap(), 0xAB);
+        assert_eq!(uart.peek(u64::MAX - 2), Some(0xAB));
     }
 
     /// Series-2 USART (EFR32MG26 and the whole xG2 family): the register block
@@ -2736,6 +3561,40 @@ mod tests {
         let mut uart = Uart::new_with_layout(UartRegisterLayout::Lpuart);
         uart.write_u32(0x08, 1 << 19).unwrap();
         assert!(!uart.tick().irq, "TE alone must not pend");
+    }
+
+    #[test]
+    fn test_kinetis_uart_c2_interrupt_enables() {
+        // K6x UART C2 (0x03, byte register): TIE = bit 7, TCIE = bit 6,
+        // RIE = bit 5 (K64P144M120SF5RM §52.3.4). TE/RE (bits 3/2) are not
+        // interrupt enables.
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::KinetisUart);
+        uart.write(0x03, 0x0C).unwrap(); // TE | RE
+        assert!(!uart.tick().irq, "TE|RE alone must not pend");
+        assert_eq!(uart.read(0x03).unwrap(), 0x0C, "C2 reads back");
+
+        uart.write(0x03, 0x0C | 0x80).unwrap(); // + TIE, TDRE is always set
+        assert!(uart.tick().irq, "TIE must pend on TDRE");
+
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::KinetisUart);
+        uart.write(0x03, 0x0C | 0x40).unwrap(); // + TCIE
+        assert!(uart.tick().irq, "TCIE must pend on TC");
+
+        // RIE pends only while RDRF is set, and stops once D is drained —
+        // what Zephyr's uart_irq_is_pending() test checks.
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::KinetisUart);
+        uart.write(0x03, 0x0C | 0x20).unwrap(); // + RIE
+        assert!(!uart.tick().irq, "RIE with an empty receiver must not pend");
+        uart.rx_buffer().lock().unwrap().push_back(b'Q');
+        assert_eq!(uart.read(0x04).unwrap() & 0x20, 0x20, "S1.RDRF set");
+        assert!(uart.tick().irq, "RIE must pend on RDRF");
+        assert_eq!(uart.read(0x07).unwrap(), b'Q');
+        assert_eq!(
+            uart.read(0x04).unwrap() & 0x20,
+            0,
+            "RDRF clears once drained"
+        );
+        assert!(!uart.tick().irq, "drained receiver must stop pending");
     }
 
     #[test]

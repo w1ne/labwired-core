@@ -196,3 +196,36 @@ fn the_s3_firmware_bus_still_refuses_a_uart_it_does_not_have() {
     );
     assert_eq!(Arc::strong_count(&s), 1, "a refused console holds no sink");
 }
+
+const C6_SYSTEM: &str = "name: \"t\"\nchip: \"../chips/esp32c6.yaml\"\n";
+
+/// The C6 chip yaml registers the behavioural `UsbSerialJtag` (not a declarative
+/// stub) at `0x6000_F000`, so the shared console tap can hear CDC-ACM bytes.
+/// This is the contract a CDC-on-boot twin needs before the Arduino boot path
+/// exists: the window must not fault, and `attach_usb_serial_jtag_sink` must
+/// succeed.
+#[test]
+fn esp32c6_usb_serial_jtag_is_the_behavioural_console() {
+    use labwired_core::Bus;
+
+    let mut bus = bus_for("esp32c6.yaml", C6_SYSTEM);
+
+    assert!(
+        bus.attach_usb_serial_jtag_sink(sink()),
+        "C6 chip yaml must register the behavioural UsbSerialJtag as usb_serial_jtag"
+    );
+
+    // Window is live: EP1_CONF SERIAL_IN_EP_DATA_FREE reads 1 out of reset.
+    let conf = bus
+        .read_u32(0x6000_F000 + 0x04)
+        .expect("USB_DEVICE EP1_CONF must not fault");
+    assert_ne!(conf & (1 << 1), 0, "SERIAL_IN_EP_DATA_FREE reset level");
+}
+
+/// Declaring `debug_uart: usb_serial_jtag` on a C6 bus must attach, not refuse.
+#[test]
+fn esp32c6_host_console_accepts_usb_serial_jtag() {
+    let mut bus = bus_for("esp32c6.yaml", C6_SYSTEM);
+    bus.attach_host_console(&HostConsole::UsbSerialJtag, sink())
+        .expect("C6 chip yaml carries usb_serial_jtag");
+}

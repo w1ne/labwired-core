@@ -1,0 +1,33 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# Microchip PIC18F4520 (DS39631E): 8-bit PIC18 core, 32 KB flash (16K
+# single-word instructions), 1536 B SRAM, 256 B data EEPROM, 31-level
+# hardware return stack, 40 MHz max Fosc (10 MIPS).
+#
+# L1 slice: boot + EUSART TX + PORTB latch. The UART, port and interrupt
+# SFRs are CPU-internal in the PIC18 model (crates/core/src/cpu/pic18.rs),
+# so no bus-side peripherals are declared. Not modelled: oscillator/CONFIG
+# decoding, timers, CCP/ECCP, MSSP, ADC, comparators, EEPROM, WDT, EUSART RX,
+# baud timing and the extended (XINST) instruction set.
+#
+# - program memory: byte-addressed, reset vector 0x0000, high/low interrupt
+#   vectors 0x0008/0x0018; config words at 0x300000
+# - data memory: banks 0-5 GPR (0x000-0x5FF) + SFRs 0xF80-0xFFF; Access
+#   Bank split at 0x80 (0x000-0x07F GPR, 0xF80-0xFFF SFR)
+name: pic18f4520
+arch: pic18
+core: pic18
+# Instruction rate at the 40 MHz Fosc maximum (Fcy = Fosc / 4). Boards
+# override this via the system manifest.
+cpu_hz: 10000000
+flash:
+  base: 0x000000
+  size: "32KB"
+ram:
+  base: 0x000000
+  size: "1536"
+peripherals: []

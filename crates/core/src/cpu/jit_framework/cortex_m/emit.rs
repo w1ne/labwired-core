@@ -2900,11 +2900,12 @@ impl Body {
     }
 
     fn emit_exc_return_or_next_pc(&mut self, pc: u32, writes_before: &[bool; 16]) {
-        // EXC_RETURN: (addr & 0xFFFFFFF0) == 0xFFFFFFF0 → interpreter.
+        // EXC_RETURN (0xFFFFFFE0..=0xFFFFFFFF, FP-frame variants included):
+        // (addr & 0xFFFFFFE0) == 0xFFFFFFE0 → interpreter.
         self.local_get(SCRATCH_LOCAL);
-        self.i32_const(0xFFFFFFF0_u32 as i32);
+        self.i32_const(0xFFFFFFE0_u32 as i32);
         self.buf.push(op::I32_AND);
-        self.i32_const(0xFFFFFFF0_u32 as i32);
+        self.i32_const(0xFFFFFFE0_u32 as i32);
         self.buf.push(op::I32_EQ);
         self.buf.push(op::IF);
         self.buf.push(op::T_EMPTY);

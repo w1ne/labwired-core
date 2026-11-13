@@ -31,6 +31,7 @@ use crate::boot::esp32c3_rom::{
     build_rom_boot_machine, c3_rom_data_init_writes, inject_rom_regions, install_fast_boot_rom,
     RomBootOpts,
 };
+use crate::boot::esp32c6_rom;
 use crate::boot::esp32s3_rom::RomImages;
 use crate::bus::SystemBus;
 use crate::console::{ConsoleCapture, HostConsole};
@@ -106,6 +107,10 @@ fn build_program_image(
         None => false,
     };
 
+    // C6 Arduino Preferences/NVS: MSPI SPI_MEM + partition table @ 0x8000.
+    // No-op on non-C6 chips. See `boot::esp32c6_rom`.
+    esp32c6_rom::maybe_install_arduino_flash(&mut bus, chip);
+
     let console = ConsoleCapture::for_manifest(manifest);
     let uart_sink = console.heard_sink();
     // No mask ROM executes on this bare-ELF path, so nothing writes the same
@@ -131,17 +136,34 @@ fn build_program_image(
                 .map_err(|e| anyhow!(e))?;
         }
     }
-    let uart_rx_bufs = super::uart_rx_sources(&bus, &req.options)?;
+    let uart_rx_bufs = super::wire_host_streams(&mut bus, &req.options)?;
 
-    let cpu = crate::system::riscv::configure_riscv(&mut bus);
-    let boxed: Box<dyn Cpu> = Box::new(cpu);
+    // A `core: rv64…` chip runs the 64-bit hart; everything below it (ESP ROM
+    // seeding, SP seed) is a no-op or harmless for it.
+    let boxed: Box<dyn Cpu> = if crate::cpu::riscv64::is_rv64_chip(chip) {
+        Box::new(crate::cpu::RiscV64::for_chip(chip))
+    } else {
+        Box::new(crate::system::riscv::configure_riscv(&mut bus))
+    };
     let mut machine = Machine::new(boxed, bus);
 
     machine
         .load_firmware(program_image)
         .map_err(|e| anyhow!("Simulation Error: {e}"))?;
 
-    let sp_top = (chip.ram.base + chip.ram.size) as u32;
+    // C6 fast-boot: re-seed ROM .data after ELF load/reset so a segment or
+    // reset path cannot leave interface pointers (heap_tlsf_table_ptr etc.)
+    // stale — mask-ROM unpackloop never ran.
+    if esp32c6_rom::is_esp32c6(chip) {
+        esp32c6_rom::seed_rom_data(&mut machine.bus);
+    }
+
+    // C6: stay below ROM-reserved HP SRAM (see esp32c6_rom::APP_SRAM_END).
+    let sp_top = if esp32c6_rom::is_esp32c6(chip) {
+        esp32c6_rom::app_stack_top()
+    } else {
+        (chip.ram.base + chip.ram.size) as u32
+    };
     machine.cpu.set_sp(sp_top & !0xF);
     machine.cpu.set_pc(program_image.entry_point as u32);
 
@@ -195,7 +217,7 @@ fn build_flash_fastboot(
 
     let (console, usb_serial_sink) = attach_c3_flash_console(&mut bus, manifest, req)?;
     let uart_sink = console.heard_sink();
-    let uart_rx_bufs = super::uart_rx_sources(&bus, &req.options)?;
+    let uart_rx_bufs = super::wire_host_streams(&mut bus, &req.options)?;
 
     let mut machine = build_rom_boot_machine(
         bus,
@@ -260,7 +282,7 @@ fn build_romboot(
 
     let (console, usb_serial_sink) = attach_c3_flash_console(&mut bus, manifest, req)?;
     let uart_sink = console.heard_sink();
-    let uart_rx_bufs = super::uart_rx_sources(&bus, &req.options)?;
+    let uart_rx_bufs = super::wire_host_streams(&mut bus, &req.options)?;
 
     let mut machine = build_rom_boot_machine(
         bus,

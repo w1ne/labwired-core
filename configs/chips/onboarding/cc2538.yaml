@@ -4,6 +4,9 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
+# SUPERSEDED: staged onboarding descriptor (its flash at 0x08000000 / 128 KiB
+# and 256 KiB RAM do not match SWRU319C Table 4-1). The promoted CC2538 part is
+# configs/chips/cc2538sf53.yaml (board: configs/systems/cc2538dk.yaml).
 name: cc2538
 arch: arm
 flash:

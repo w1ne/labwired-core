@@ -1,0 +1,41 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# Microchip PIC16F1829 (DS40001440E): 8-bit PIC16 enhanced mid-range core
+# (49 instructions), 8K x 14-bit words of flash program memory, 1024 B SRAM,
+# 256 B data EEPROM, 16-level hardware return stack, 32 MHz max Fosc
+# (8 MIPS), 20-pin.
+#
+# L1 slice: boot + EUSART TX + PORTA latch. The EUSART, port, oscillator
+# status and interrupt SFRs are CPU-internal in the PIC16 model
+# (crates/core/src/cpu/pic16.rs, PIC16E_F182X_MAP), so no bus-side
+# peripherals are declared. Not modelled: CONFIG decoding (beyond STVREN),
+# clock switching (OSCSTAT always reads the internal oscillators ready),
+# TMR0/1/2/4/6, CCP/ECCP, MSSP, ADC, comparators, DAC, CPS, EEPROM/flash
+# self-write, WDT, EUSART RX and baud timing, IOC and external pin drive.
+#
+# - program memory: word-addressed (15-bit PC), reset vector 0x0000,
+#   interrupt vector 0x0004, 2K-word pages via PCLATH<6:3> (8K words here);
+#   the HEX/ELF image is byte-addressed (two bytes per word), so the 8K words
+#   span 16 KB of image addresses; CONFIG1/CONFIG2 at words 0x8007/0x8008
+#   (byte 0x1000E)
+# - data memory: 32 banks of 128 bytes selected by BSR; core registers at
+#   0x00-0x0B and common RAM at 0x70-0x7F in every bank; FSR0/FSR1 reach the
+#   banked map (0x0000-0x0FFF), linear GPR (0x2000-0x29AF) and program flash
+#   (0x8000-0xFFFF, read-only)
+name: pic16f1829
+arch: pic16
+core: pic16
+# Instruction rate at the 32 MHz Fosc maximum (Fcy = Fosc / 4). Boards
+# override this via the system manifest.
+cpu_hz: 8000000
+flash:
+  base: 0x000000
+  size: "16KB"
+ram:
+  base: 0x000000
+  size: "1024"
+peripherals: []

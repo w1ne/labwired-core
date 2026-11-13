@@ -49,9 +49,15 @@ pub enum CpuSnapshot {
     /// Diagnostic visible state only; native Cortex-A restore is unsupported.
     CortexA(CortexACpuSnapshot),
     RiscV(RiscVCpuSnapshot),
+    RiscV64(Box<crate::cpu::riscv64::RiscV64CpuSnapshot>),
+    Aarch64(Box<crate::cpu::aarch64::Aarch64CpuSnapshot>),
+    Rx(Box<crate::cpu::rx::RxCpuSnapshot>),
+    Mips(Box<crate::cpu::mips::MipsCpuSnapshot>),
     XtensaLx7(XtensaLx7CpuSnapshot),
     Avr(AvrCpuSnapshot),
     Pic24(Box<Pic24CpuSnapshot>),
+    Pic18(Box<Pic18CpuSnapshot>),
+    Pic16(Box<Pic16CpuSnapshot>),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -338,6 +344,57 @@ pub struct Pic24CpuSnapshot {
     pub ipc3: u16,
     #[serde(default)]
     pub ipc4: u16,
+}
+
+/// PIC18 visible architectural state (byte-addressed PC, bank selector,
+/// FSRs and the hardware return stack). Data memory is not part of the CPU
+/// snapshot: it belongs to the core's private file store for now.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Pic18CpuSnapshot {
+    pub wreg: u8,
+    pub status: u8,
+    pub bsr: u8,
+    pub pc: u32,
+    pub cycles: u64,
+    pub fsr: [u16; 3],
+    pub tblptr: u32,
+    pub tablat: u8,
+    pub pclath: u8,
+    pub pclatu: u8,
+    #[serde(default)]
+    pub prod: u16,
+    pub stkptr: u8,
+    pub stack: Vec<u32>,
+    #[serde(default)]
+    pub stk_full: bool,
+    #[serde(default)]
+    pub stk_unf: bool,
+    #[serde(default)]
+    pub asleep: bool,
+}
+
+/// PIC16 visible architectural state (word-addressed PC, W, the STATUS/FSR/
+/// PCLATH core registers and the eight-level return stack). Data memory is
+/// the core's private file store and is not part of the CPU snapshot.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Pic16CpuSnapshot {
+    pub wreg: u8,
+    pub status: u8,
+    pub fsr: u8,
+    pub pclath: u8,
+    pub pc: u32,
+    pub cycles: u64,
+    pub stkptr: u8,
+    pub stack: Vec<u32>,
+    #[serde(default)]
+    pub asleep: bool,
+    /// Enhanced mid-range only: BSR, FSR0H (FSR0L is `fsr`) and FSR1.
+    #[serde(default)]
+    pub bsr: u8,
+    #[serde(default)]
+    pub fsr0h: u8,
+    #[serde(default)]
+    pub fsr1: u16,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

@@ -1,0 +1,21 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# L1 IO smoke: boot the SDCC 4.4.0 C firmware, receive the USART banner,
+# the RB0 LED latch read back after setting it, and the result of three
+# RB0 toggles. The program then spins, so the run ends at max_steps.
+schema_version: "1.0"
+inputs:
+  firmware: "./firmware/pic16f877a-sdcc-uart-smoke.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 20000
+assertions:
+  - uart_ordered:
+      - "PIC16F877A OK\r\n"
+      - "LED=1\r\n"
+      - "TOGGLE OK\r\n"
+  - expected_stop_reason: max_steps

@@ -127,6 +127,27 @@ struct Board {
 /// A chip added to the shipped catalog MUST be added here, or the cross-check at
 /// the bottom of this file fails — a shipped board can never bypass the ratchet.
 const SHIPPED: &[Board] = &[
+    // Public onboarding profiles carry the same reset + executing-fidelity
+    // requirements as catalog boards. Use exact aliases: a parent-family
+    // differential or a survival-only boot must not satisfy these rows.
+    Board {
+        chip: "esp32-devkitc-32e-gpio-smoke",
+        aliases: &["esp32-devkitc-32e-gpio-smoke"],
+        yaml_stem: "esp32-devkitc-32e-gpio-smoke",
+        display_lab: false,
+    },
+    Board {
+        chip: "esp32-devkitc-32e-uart1",
+        aliases: &["esp32-devkitc-32e-uart1"],
+        yaml_stem: "esp32-devkitc-32e-uart1",
+        display_lab: false,
+    },
+    Board {
+        chip: "stm32f103rb-nucleo-bme280-smoke",
+        aliases: &["stm32f103rb-nucleo-bme280-smoke"],
+        yaml_stem: "stm32f103rb-nucleo-bme280-smoke",
+        display_lab: false,
+    },
     Board {
         chip: "stm32f103",
         aliases: &["stm32f103", "f103", "stm32f1"],
@@ -233,16 +254,26 @@ const KNOWN_GAPS: &[(&str, Class)] = &[
 
 /// Platform declarations are not modeled boards or coverage-gap waivers.
 /// Promotion to a modeled board must remove this entry and classify coverage.
-const DECLARED_ONLY: &[(&str, &str)] = &[(
-    "rv1103",
-    "CPU/memory declaration only; no RV1103 firmware/platform CI gate. Peripherals, boot chain and Linux/BSP execution are unimplemented. Generic Cortex-A7 CPU subset tests supply no RV1103 board coverage.",
-)];
+const DECLARED_ONLY: &[(&str, &str)] = &[
+    (
+        "rv1103",
+        "CPU/memory declaration only; no RV1103 firmware/platform CI gate. Peripherals, boot chain and Linux/BSP execution are unimplemented. Generic Cortex-A7 CPU subset tests supply no RV1103 board coverage.",
+    ),
+    (
+        "xck26-rpu",
+        "CPU/memory declaration; the RPU platform (GIC, Cadence UART, TTC) exists only on the native qemu-arm-system Cortex-R5F path, gated in core-qemu-arm (kv260_r5_zephyr, examples/kv260-r5), not the default board CI. No GPIO/I2C/SPI or other PS peripherals are modelled, so there is no board I/O coverage to classify.",
+    ),
+];
 
 fn is_declared_only_platform(stem: &str, chip: &ChipDescriptor) -> bool {
-    stem == "rv1103"
-        && chip.name == "rv1103"
+    let core = match stem {
+        "rv1103" => "cortex-a7",
+        "xck26-rpu" => "cortex-r5f",
+        _ => return false,
+    };
+    chip.name == stem
         && chip.arch == Arch::Arm
-        && chip.core.as_deref() == Some("cortex-a7")
+        && chip.core.as_deref() == Some(core)
         && chip.peripherals.is_empty()
         && chip.flash.size == 0
         && chip.flash.base == 0
@@ -250,8 +281,14 @@ fn is_declared_only_platform(stem: &str, chip: &ChipDescriptor) -> bool {
 
 #[test]
 fn declared_only_classification_rejects_other_or_modeled_platforms() {
-    assert_eq!(DECLARED_ONLY.len(), 1);
+    assert_eq!(DECLARED_ONLY.len(), 2);
     assert_eq!(DECLARED_ONLY[0].0, "rv1103");
+    assert_eq!(DECLARED_ONLY[1].0, "xck26-rpu");
+    let rpu =
+        ChipDescriptor::from_file(core_crate_root().join("../../configs/chips/xck26-rpu.yaml"))
+            .unwrap();
+    assert!(is_declared_only_platform("xck26-rpu", &rpu));
+    assert!(!is_declared_only_platform("rv1103", &rpu));
     assert!(!SHIPPED.iter().any(|board| board.yaml_stem == "rv1103"));
     let chip = ChipDescriptor::from_file(core_crate_root().join("../../configs/chips/rv1103.yaml"))
         .unwrap();
@@ -305,6 +342,34 @@ fn generic_cpu_tests_do_not_supply_rv1103_board_coverage() {
     assert!(!corpus.covers(&board, Class::Exec));
     assert!(!is_allowlisted(board.chip, Class::Reset));
     assert!(!is_allowlisted(board.chip, Class::Exec));
+}
+
+#[test]
+fn onboarding_profiles_require_their_own_executing_fidelity() {
+    let corpus = Corpus {
+        files: vec![
+            ("stm32f1_exec_oracle.rs".into(), "chips/stm32f103.yaml".into()),
+            ("esp32_classic_walk_differential.rs".into(), "chips/esp32.yaml".into()),
+            ("firmware_survival.rs".into(),
+                "chips/esp32-devkitc-32e-gpio-smoke.yaml chips/esp32-devkitc-32e-uart1.yaml chips/stm32f103rb-nucleo-bme280-smoke.yaml".into()),
+        ],
+    };
+    for stem in [
+        "esp32-devkitc-32e-gpio-smoke",
+        "esp32-devkitc-32e-uart1",
+        "stm32f103rb-nucleo-bme280-smoke",
+    ] {
+        let board = SHIPPED
+            .iter()
+            .find(|board| board.yaml_stem == stem)
+            .unwrap();
+        assert_eq!(required_classes(board), vec![Class::Reset, Class::Exec]);
+        assert!(
+            !corpus.covers(board, Class::Exec),
+            "{stem}: parent/survival coverage is insufficient"
+        );
+        assert!(!is_allowlisted(board.chip, Class::Exec));
+    }
 }
 
 fn core_crate_root() -> PathBuf {
@@ -495,6 +560,9 @@ fn every_shipped_descriptor_is_ratcheted() {
     // Chip descriptors that exist in configs/chips but are NOT in the canonical
     // shipped catalog (bundled-configs.ts). They are intentionally not ratcheted.
     const NOT_SHIPPED: &[&str] = &[
+        // ATmega328PB has a CPU-level USART1/PB5 smoke but no catalog board,
+        // package-pad map, or executing-fidelity differential yet.
+        "atmega328pb",
         // ATmega2560 (Arduino Mega 2560) on the 328P AVR model. Has a chip
         // descriptor, a system manifest, a gated sim-validate example with an
         // io-smoke and the avr_mega2560_io integration tests. It is not a
@@ -549,8 +617,18 @@ fn every_shipped_descriptor_is_ratcheted() {
         "stm32f103r4h",
         "stm32f103r6",
         "stm32f103r6h",
+        "stm32f103r8",
+        "stm32f103rb",
         "stm32f103t4",
         "stm32f103t6",
+        // STM32G431RB (demand-ordered onboarding; JetBrains State of Embedded
+        // 2025 "other STM32" 13%, the industrial/motor-control pick). A core
+        // chip descriptor, not a Playground board in bundled-configs.ts; its
+        // G4 behaviour is shared with stm32g474re. It has a TIER1 raw-register
+        // self-test but no bundled catalog board and no silicon differential.
+        // Promote when a NUCLEO-G431RB catalog board and a bench differential
+        // exist.
+        "stm32g431rb",
         "stm32f401cb",
         "stm32f401cc",
         "stm32f401cd",
@@ -578,6 +656,18 @@ fn every_shipped_descriptor_is_ratcheted() {
         // PIC24 core. Same rationale: no bundled-configs.ts board and no
         // silicon oracle yet.
         "dspic33fj32mc202",
+        // First PIC18 part on the public PIC18 core: L1 boot + EUSART TX +
+        // PORTB latch from real SDCC firmware. No bundled-configs.ts board,
+        // no silicon oracle and no executing-fidelity differential yet.
+        "pic18f4520",
+        // First PIC16 part on the new PIC16 classic mid-range core: L1 boot +
+        // USART TX + PORTB latch from real SDCC firmware. No bundled-configs.ts
+        // board, no silicon oracle and no executing-fidelity differential yet.
+        "pic16f877a",
+        // First enhanced mid-range PIC16 part: L1 boot + EUSART TX + LATA +
+        // INT/TMR0 interrupts from real SDCC firmware. No bundled-configs.ts
+        // board, no silicon oracle and no executing-fidelity differential yet.
+        "pic16f1829",
         // PIC24F KA family: six exact part descriptors plus per-part XC16 UART
         // smokes on the public PIC24 core. The modelled slice is package GPIO
         // and UART1 only; no bundled-configs.ts catalog board, no silicon
@@ -610,6 +700,62 @@ fn every_shipped_descriptor_is_ratcheted() {
         // io-smoke, a committed fixture and a survival gate; no catalog board,
         // no silicon capture and no executing-fidelity differential.
         "sam4s16c",
+        // First SAM E70 part (SAM E70 Xplained): chip + system + example with
+        // an io-smoke, a committed fixture and a survival gate; no catalog
+        // board, no silicon capture and no executing-fidelity differential.
+        "same70q21b",
+        // First S32K3 part (S32K388EVB-Q289): chip + system + example with
+        // an io-smoke, a committed fixture and a survival gate; no catalog
+        // board, no silicon capture and no executing-fidelity differential.
+        "s32k388",
+        // First i.MX RT500 part (MIMXRT595-EVK): chip + system + example with
+        // an io-smoke, a committed fixture and a survival gate; no catalog
+        // board, no silicon capture and no executing-fidelity differential.
+        "mimxrt595s",
+        // First TI CC2538 part (CC2538DK): chip + system + example with an
+        // io-smoke, a committed fixture and a survival gate; no catalog board,
+        // no silicon capture and no executing-fidelity differential.
+        "cc2538sf53",
+        // First RV64 part (PolarFire SoC Discovery Kit, MPFS095T U54 hart):
+        // chip + system + example with stock Zephyr hello/sync/kernel-common,
+        // committed fixtures and a survival gate; no catalog board, no silicon
+        // capture and no executing-fidelity differential.
+        "mpfs095t",
+        // First AArch64 part (SK-AM62, TI AM6234, Cortex-A53): chip + system
+        // + example with stock Zephyr v4.3.0 hello/sync/kernel-common,
+        // committed fixtures and a survival gate; no catalog board, no silicon
+        // capture and no executing-fidelity differential.
+        "am6234",
+        // First RX part (EK-RX261, R5F52618BGFP, RXv3): chip + system +
+        // example with stock Zephyr v4.3.0 hello/sync/kernel-common,
+        // committed fixtures and a survival gate; no catalog board, no silicon
+        // capture and no executing-fidelity differential.
+        "r5f52618bgfp",
+        // First MIPS part (Curiosity PIC32MZ EF 2.0, PIC32MZ2048EFM144,
+        // MIPS32r2 M5150): chip + system + example with stock upstream NuttX
+        // nsh/ostest, committed fixtures and a survival gate; no catalog
+        // board, no silicon capture and no executing-fidelity differential.
+        "pic32mz2048efm144",
+        // First RA6M5 part (EK-RA6M5): chip + system + example with an
+        // io-smoke, a committed fixture and a survival gate; no catalog board,
+        // no silicon capture and no executing-fidelity differential.
+        "r7fa6m5bh",
+        // First RA8 part (EK-RA8M1, Cortex-M85): chip + system + example with
+        // an io-smoke, a committed fixture and a survival gate; no catalog
+        // board, no silicon capture and no executing-fidelity differential.
+        "r7fa8m1ah",
+        // First Ambiq part (Apollo4 Plus EVB): chip + system + example with an
+        // io-smoke, a committed fixture and a survival gate; no catalog board,
+        // no silicon capture and no executing-fidelity differential.
+        "amap42kp",
+        // First STM32L5 part (NUCLEO-L552ZE-Q): chip + system + example with an
+        // io-smoke, a committed fixture and a survival gate; no catalog board,
+        // no silicon capture and no executing-fidelity differential.
+        "stm32l552",
+        // FRDM-K64F UART-only L1: chip + system + example with an io-smoke, a
+        // committed fixture and a survival gate; no catalog board, no silicon
+        // capture and no executing-fidelity differential. ENET/TCP deferred.
+        "mk64f12",
         // First STM32F0 part (STM32F072B-DISCO): chip + system + example with
         // an io-smoke, a committed fixture and a survival gate; no catalog
         // board, no silicon capture and no executing-fidelity differential.
@@ -726,6 +872,16 @@ fn every_shipped_descriptor_is_ratcheted() {
         // bundled-configs.ts catalog board. Same bar as the maker-five above:
         // promote when the catalog lands AND a differential exists.
         "esp32c6",
+        // First WCH part (CH32V003F4P6, QingKe RV32EC). L1: chip descriptor +
+        // system manifest + example with an io-smoke executed by the coverage
+        // matrix, a committed compiled-RV32E fixture and a chip-conformance
+        // behaviour gate that asserts PC0 edges. It carries no bundled-configs.ts
+        // catalog board, no silicon oracle (no CH32V003 has been diffed over
+        // SDI) and no executing-fidelity differential of its own. The slice
+        // models RCC and GPIO A/C/D only (no PFIC) — USART/I2C/SPI/ADC are not
+        // modelled, so there is no bus to diff yet. Promote when the catalog
+        // board, a bus model and a differential all exist.
+        "ch32v003f4p6",
     ];
     // configs/chips id -> ratchet chip id (kw41z ships as mkw41z4.yaml).
     fn to_ratchet_id(stem: &str) -> &str {

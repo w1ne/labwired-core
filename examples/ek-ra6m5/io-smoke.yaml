@@ -1,0 +1,30 @@
+# LabWired - EK-RA6M5 SCI0+LED IO smoke
+#
+# Build: cargo build -p firmware-ek-ra6m5-smoke --release --target thumbv8m.main-none-eabi
+#
+# The firmware unlocks PRCR.PRC0 and sets SCKDIVCR to /1 on the reset MOCO
+# (8 MHz), clears MSTPCRB.MSTPB31 (SCI0), routes P410/P411 to SCI0 and turns
+# on the S1/S2 pull-ups through PmnPFS behind PWPR, brings SCI0 up at 9600
+# 8N1 (BRR 25), then walks LED1-LED3 (P006-P008, active high) through
+# PCNTR3 POSR/PORR and prints the pin and the whole PODR it read back.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-ek-ra6m5-smoke"
+  system: "./system.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "EK-RA6M5 SMOKE"
+  - uart_ordered:
+      - "cpu=cortex-m33 uart=sci0"
+      - "clk src=moco pclka=8000000 brr=25 baud=9600"
+      - "led=blue on pin=1 podr=0040"
+      - "led=blue off pin=0 podr=0000"
+      - "led=green on pin=1 podr=0080"
+      - "led=green off pin=0 podr=0000"
+      - "led=red on pin=1 podr=0100"
+      - "led=red off pin=0 podr=0000"
+      - "s1=1 s2=1"
+      - "hb=0 podr=0040 s1=1 s2=1"
+      - "hb=1 podr=0040 s1=1 s2=1"
+  - expected_stop_reason: max_steps

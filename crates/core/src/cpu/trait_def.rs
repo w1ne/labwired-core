@@ -170,6 +170,9 @@ pub(crate) fn advance_batch_cycle(_bus: &mut dyn Bus, _delta: u64) {
 
 pub trait Cpu: Send {
     fn reset(&mut self, bus: &mut dyn Bus) -> SimResult<()>;
+    /// Reset-cause registers owned by the CPU rather than a bus peripheral
+    /// (for example AVR MCUSR). Called after a supply-triggered reset.
+    fn on_supply_reset(&mut self, _cause: crate::power::SupplyResetCause) {}
     /// JIT engine counters for this CPU, if it ran a JIT that was created.
     /// Default `None` (interpreter-only CPUs / non-JIT builds). Lets generic
     /// `C: Cpu` callers — e.g. the CLI oracle loop — assert the compiled path
@@ -507,6 +510,17 @@ pub trait Cpu: Send {
     fn supports_semihosting(&self) -> bool {
         false
     }
+
+    /// Walk SPI/I²C devices this CPU holds after a `take_*` (AVR TWI slaves,
+    /// or SPI devices attached directly to the CPU). Default: nothing.
+    ///
+    /// [`crate::Machine::inspect`] / display readout fold these into the bus
+    /// walk so a panel or sensor moved onto the CPU is still visible.
+    fn for_each_attached_device(
+        &self,
+        _f: &mut dyn FnMut(Option<&str>, crate::inspect::AttachedDeviceRef<'_>),
+    ) {
+    }
 }
 
 // Forwarding impl so `Machine<Box<dyn Cpu>>` is valid — used by the WASM
@@ -684,5 +698,12 @@ impl Cpu for Box<dyn Cpu> {
     }
     fn supports_semihosting(&self) -> bool {
         (**self).supports_semihosting()
+    }
+
+    fn for_each_attached_device(
+        &self,
+        f: &mut dyn FnMut(Option<&str>, crate::inspect::AttachedDeviceRef<'_>),
+    ) {
+        (**self).for_each_attached_device(f)
     }
 }

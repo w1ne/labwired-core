@@ -54,6 +54,7 @@ impl SystemBus {
         self.note_mmio_activity(idx, off);
         #[cfg(feature = "event-scheduler")]
         self.sync_scheduler_peripheral(idx);
+        let motor_control_write = self.begin_motor_control_write(idx);
         if DMA_TX {
             // Synchronization can advance state: recheck the actual live gate
             // and readiness before latching or invoking the accepted-byte hook.
@@ -96,10 +97,13 @@ impl SystemBus {
         } else {
             self.peripherals[idx].dev.write(off, value).map(|()| true)
         };
+        if matches!(r, Ok(true)) && motor_control_write {
+            self.finish_motor_control_write(idx);
+        }
         if matches!(r, Ok(true)) && brackets {
             self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
             self.finish_rp2040_io_bank0_write(rp_io_bank0_capture);
-            self.finish_pad_control_write(idx, pad_control_capture);
+            self.finish_pad_control_write(idx, pad_control_capture, off, 1, u32::from(value));
             self.finish_pad_claim_write(pad_claim_capture);
         }
         if matches!(r, Ok(true)) {
@@ -120,6 +124,7 @@ impl SystemBus {
         self.refresh_legacy_tick_index(idx);
         self.refresh_legacy_tick_peer_write_observers(idx);
         self.refresh_bus_tick_index(idx);
+        self.sync_timer_kernel_clocks(idx);
         self.reconcile_irq_levels_after_write(idx);
     }
 
@@ -451,9 +456,29 @@ impl SystemBus {
             None => None,
         }
     }
+
+    /// [`crate::Bus::plain_memory_slice`] without mirror translation.
+    fn plain_memory_slice_at(&self, addr: u64) -> Option<(u64, u64, &[u8])> {
+        for mem in std::iter::once(&self.ram)
+            .chain(std::iter::once(&self.flash))
+            .chain(self.extra_mem.iter())
+        {
+            let end = mem.base_addr + mem.data.len() as u64;
+            if addr >= mem.base_addr && addr < end {
+                return Some((mem.base_addr, end, &mem.data));
+            }
+        }
+        crate::Bus::fetch_slice(self, addr)
+    }
 }
 
 impl crate::Bus for SystemBus {
+    fn rp2350_dcp_mut(&mut self) -> Option<&mut crate::cpu::cortex_m::rp2350_dcp::Rp2350Dcp> {
+        self.rp2350_dcp.as_deref_mut()
+    }
+    fn rp2350_gpioc(&self) -> bool {
+        self.rp2350_gpioc
+    }
     fn read_u64(&self, addr: u64) -> SimResult<u64> {
         // Watched like every other width: a 64-bit load is a CPU access on
         // cores that have one (Cortex-A7 `w=8`), so the latch is uniform.
@@ -574,8 +599,10 @@ impl crate::Bus for SystemBus {
             // The existing RX queue capability may be filled by host input
             // between instructions. Reconcile its live level before sampling
             // GIC pins; UART entries have no legacy NVIC IRQ number.
-            // Only the two registered ARM UART sources, never a peripheral scan.
-            for (index, intid) in [(f.uart2_index, Some(59)), (f.uart4_index, f.uart4_irq)] {
+            // Only the registered ARM level sources, never a peripheral scan.
+            let fixed = [(f.uart2_index, Some(59)), (f.uart4_index, f.uart4_irq)];
+            let listed = f.level_sources.iter().map(|&(i, id)| (Some(i), Some(id)));
+            for (index, intid) in fixed.into_iter().chain(listed) {
                 if let (Some(intid), Some(level)) = (
                     intid,
                     index
@@ -608,9 +635,10 @@ impl crate::Bus for SystemBus {
         Ok(())
     }
     fn next_cpu_interrupt_deadline_cycle(&self) -> Option<u64> {
-        self.irq_fabric.armv7.as_ref()?.timer.next_deadline()
+        self.irq_fabric.armv7.as_ref()?.next_deadline()
     }
     fn read_u8(&self, addr: u64) -> SimResult<u8> {
+        let addr = self.resolve_mem_alias(addr);
         if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
             self.note_debug_watch_read(addr);
         }
@@ -720,6 +748,7 @@ impl crate::Bus for SystemBus {
     }
 
     fn write_u8(&mut self, addr: u64, value: u8) -> SimResult<()> {
+        let addr = self.resolve_mem_alias(addr);
         self.batch_stop.note_store(addr, 1);
         // Latch BEFORE the memory-policy and PMS gates below: uniform attempt
         // semantics across all four write widths — a store a gate rejects is
@@ -941,6 +970,7 @@ impl crate::Bus for SystemBus {
     }
 
     fn read_u16(&self, addr: u64) -> SimResult<u16> {
+        let addr = self.resolve_mem_alias(addr);
         if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
             self.note_debug_watch_read(addr);
         }
@@ -1028,6 +1058,7 @@ impl crate::Bus for SystemBus {
     }
 
     fn read_u32(&self, addr: u64) -> SimResult<u32> {
+        let addr = self.resolve_mem_alias(addr);
         if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
             self.note_debug_watch_read(addr);
         }
@@ -1185,6 +1216,7 @@ impl crate::Bus for SystemBus {
     }
 
     fn write_u16(&mut self, addr: u64, value: u16) -> SimResult<()> {
+        let addr = self.resolve_mem_alias(addr);
         self.batch_stop.note_store(addr, 2);
         // Latch BEFORE the memory-policy and PMS gates below: uniform attempt
         // semantics across all four write widths — a store a gate rejects is
@@ -1266,6 +1298,7 @@ impl crate::Bus for SystemBus {
             }
             #[cfg(feature = "event-scheduler")]
             self.sync_scheduler_peripheral(idx);
+            let motor_control_write = self.begin_motor_control_write(idx);
             self.maybe_latch_dc(idx);
             // One test instead of four calls. See `pad_brackets_present`.
             let brackets = self.pad_brackets_present();
@@ -1285,10 +1318,13 @@ impl crate::Bus for SystemBus {
                 p.ticks_remaining = 0;
                 p.dev.write_u16(off, value)
             };
+            if r.is_ok() && motor_control_write {
+                self.finish_motor_control_write(idx);
+            }
             if r.is_ok() && brackets {
                 self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
                 self.finish_rp2040_io_bank0_write(rp_io_bank0_capture);
-                self.finish_pad_control_write(idx, pad_control_capture);
+                self.finish_pad_control_write(idx, pad_control_capture, off, 2, u32::from(value));
                 self.finish_pad_claim_write(pad_claim_capture);
             }
             if r.is_ok() {
@@ -1313,6 +1349,7 @@ impl crate::Bus for SystemBus {
                 self.refresh_legacy_tick_index(idx);
                 self.refresh_legacy_tick_peer_write_observers(idx);
                 self.refresh_bus_tick_index(idx);
+                self.sync_timer_kernel_clocks(idx);
                 // Level reconcile at the write choke (single- and multi-line
                 // level sources): see `reconcile_irq_levels_after_write`.
                 self.reconcile_irq_levels_after_write(idx);
@@ -1326,6 +1363,7 @@ impl crate::Bus for SystemBus {
     }
 
     fn write_u32(&mut self, addr: u64, value: u32) -> SimResult<()> {
+        let addr = self.resolve_mem_alias(addr);
         self.batch_stop.note_store(addr, 4);
         // Latch BEFORE the memory-policy and PMS gates below: uniform attempt
         // semantics across all four write widths — a store a gate rejects is
@@ -1465,6 +1503,7 @@ impl crate::Bus for SystemBus {
             }
             #[cfg(feature = "event-scheduler")]
             self.sync_scheduler_peripheral(idx);
+            let motor_control_write = self.begin_motor_control_write(idx);
             self.maybe_latch_dc(idx);
             // One test instead of four calls. See `pad_brackets_present`.
             let brackets = self.pad_brackets_present();
@@ -1484,10 +1523,13 @@ impl crate::Bus for SystemBus {
                 p.ticks_remaining = 0;
                 p.dev.write_u32(off, value)
             };
+            if r.is_ok() && motor_control_write {
+                self.finish_motor_control_write(idx);
+            }
             if r.is_ok() && brackets {
                 self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
                 self.finish_rp2040_io_bank0_write(rp_io_bank0_capture);
-                self.finish_pad_control_write(idx, pad_control_capture);
+                self.finish_pad_control_write(idx, pad_control_capture, off, 4, value);
                 self.finish_pad_claim_write(pad_claim_capture);
             }
             if r.is_ok() {
@@ -1512,6 +1554,7 @@ impl crate::Bus for SystemBus {
                 self.refresh_legacy_tick_index(idx);
                 self.refresh_legacy_tick_peer_write_observers(idx);
                 self.refresh_bus_tick_index(idx);
+                self.sync_timer_kernel_clocks(idx);
                 // Level reconcile at the write choke (single- and multi-line
                 // level sources): see `reconcile_irq_levels_after_write`.
                 self.reconcile_irq_levels_after_write(idx);
@@ -1541,16 +1584,22 @@ impl crate::Bus for SystemBus {
     /// `RomThunkBank`, GPIO, declarative peripherals) keep going
     /// through the slow path so side effects fire as before.
     fn plain_memory_slice(&self, addr: u64) -> Option<(u64, u64, &[u8])> {
-        for mem in std::iter::once(&self.ram)
-            .chain(std::iter::once(&self.flash))
-            .chain(self.extra_mem.iter())
-        {
-            let end = mem.base_addr + mem.data.len() as u64;
-            if addr >= mem.base_addr && addr < end {
-                return Some((mem.base_addr, end, &mem.data));
+        // A mirror serves its target's bytes, clipped to the mirror window and
+        // reported in the mirror's own address space.
+        if !self.mem_aliases.is_empty() {
+            if let Some(a) = self
+                .mem_aliases
+                .iter()
+                .find(|a| addr >= a.start && addr < a.end)
+            {
+                let (base, end, data) = self.plain_memory_slice_at(a.target + (addr - a.start))?;
+                let lo = base.max(a.target);
+                let hi = end.min(a.target + (a.end - a.start));
+                let slice = &data[(lo - base) as usize..(hi - base) as usize];
+                return Some((a.start + (lo - a.target), a.start + (hi - a.target), slice));
             }
         }
-        self.fetch_slice(addr)
+        self.plain_memory_slice_at(addr)
     }
 
     fn fetch_slice(&self, pc: u64) -> Option<(u64, u64, &[u8])> {
@@ -1665,6 +1714,28 @@ impl crate::Bus for SystemBus {
 
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
+    }
+
+    fn clock_parking_spi(&mut self, mosi: u8) -> u8 {
+        Self::clock_parking_spi(self, mosi)
+    }
+
+    fn sync_parking_spi_cs(&mut self) -> bool {
+        Self::sync_parking_spi_cs(self)
+    }
+
+    fn parking_spi_accepts_clock(&self) -> bool {
+        for entry in &self.peripherals {
+            if let Some(devs) = entry.dev.spi_attached_devices() {
+                if devs
+                    .iter()
+                    .any(|d| d.is_selected() || d.clocks_when_deselected())
+                {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     fn device_write_bypass(&self) -> bool {
@@ -1860,8 +1931,19 @@ impl crate::Bus for SystemBus {
         // no peripheral poll at all. (The C3's per-tick aggregation does re-poll
         // each time; it can, because it only runs on buses that still tick.)
         #[cfg(feature = "event-scheduler")]
-        if self.legacy_walk_disabled && self.irq_fabric.esp32s3.routing {
-            self.recompute_esp32s3_irq_lines();
+        if self.legacy_walk_disabled {
+            if self.irq_fabric.esp32s3.routing {
+                self.recompute_esp32s3_irq_lines();
+            }
+            // Classic ESP32 (DPORT matrix), walk-free the same way. A
+            // scheduler-driven source (I2C0) lives only in `sched_sources`,
+            // and with no per-cycle aggregation nothing else re-routes it
+            // after dispatch. The ISR then read `RSR.INTERRUPT` as zero,
+            // `_xt_lowint1` called no handler, and Arduino `Wire` on ESP32
+            // timed out on every transfer (core#1712). The recompute folds the
+            // stored sources and polls no peripheral; it returns early when no
+            // DPORT owns the routing.
+            self.recompute_esp32_classic_irq_lines();
         }
     }
 }

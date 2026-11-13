@@ -28,6 +28,16 @@
 //! Register offsets / reset values are the public CMSIS-SVD values
 //! (`cmsis-svd-data: data/NXP/MKW41Z4.svd`), matching
 //! `configs/peripherals/mkw41z4/mcg.yaml`.
+//!
+//! **K6x PLL variant** ([`Mcg::new_k6x`], chip-yaml `config: { profile: k6x }`).
+//! The K64F MCG (K64P144M120SF5RM §25) has the same C1..C8/S byte map plus
+//! PLL0: `C5` (PLLCLKEN0 bit6, PRDIV0[4:0]) and `C6` (PLLS bit6, VDIV0[4:0]),
+//! with `S.PLLST` (bit5) and `S.LOCK0` (bit6). MCUXpresso's
+//! `CLOCK_BootToPeeMode` (what Zephyr's `frdm_k64f` soc init calls) waits
+//! `PLLST` after setting `C6.PLLS`, then `LOCK0`, then `CLKST == 11` after
+//! `C1.CLKS = 00`. PLL lock is modelled as immediate, like the FLL; the PLL
+//! output frequency is not derived (nothing in the engine is clocked from it).
+//! The reset C2 is 0x80 (LOCRE0 only; K6x has no FCFTRIM bit).
 
 use crate::{Peripheral, SimResult};
 use std::any::Any;
@@ -53,12 +63,22 @@ const S_OSCINIT0: u8 = 1 << 1; // OSC Initialization
 const S_CLKST_SHIFT: u8 = 2; // Clock Mode Status [3:2]
 const S_CLKST_MASK: u8 = 0b11 << S_CLKST_SHIFT;
 const S_IREFST: u8 = 1 << 4; // Internal Reference Status
+const S_PLLST: u8 = 1 << 5; // PLL Select Status (K6x only)
+const S_LOCK0: u8 = 1 << 6; // PLL0 Lock Status (K6x only)
+
+// K6x PLL0 control (absent on KW41Z / Kinetis-L, where C5/C6 are reserved).
+const C5: usize = 0x04;
+const C6: usize = 0x05;
+const C5_PLLCLKEN0: u8 = 1 << 6; // PLL enabled independent of PLLS
+const C6_PLLS: u8 = 1 << 6; // PLL Select (1 = PLL output feeds CLKS=00)
 
 /// Behavioural Kinetis MCG. Holds the control byte registers and a derived
 /// status byte that mirrors the requested clock configuration.
 #[derive(Debug)]
 pub struct Mcg {
     regs: [u8; NUM_REGS],
+    /// K6x part with PLL0 (`C5`/`C6`, `S.PLLST`/`S.LOCK0`).
+    pll: bool,
 }
 
 impl Default for Mcg {
@@ -76,7 +96,17 @@ impl Mcg {
         regs[S] = 0x10; // IREFST=1 (internal ref), CLKST=00 (FLL), OSCINIT0=0
         regs[0x08] = 0x02; // SC: FCRDIV=001
         regs[0x0D] = 0x80; // C8: LOCRE1
-        let mut m = Self { regs };
+        let mut m = Self { regs, pll: false };
+        m.recompute_status();
+        m
+    }
+
+    /// The K6x (K64F) MCG: the KW41Z byte map plus PLL0. Reset values per
+    /// K64P144M120SF5RM §25.3: C1 0x04, C2 0x80, S 0x10, SC 0x02, C8 0x80.
+    pub fn new_k6x() -> Self {
+        let mut m = Self::new();
+        m.pll = true;
+        m.regs[C2] = 0x80;
         m.recompute_status();
         m
     }
@@ -88,7 +118,8 @@ impl Mcg {
         let c1 = self.regs[C1];
         let c2 = self.regs[C2];
         // Preserve any reserved/high bits; recompute only the modelled fields.
-        let mut s = self.regs[S] & !(S_IRCST | S_OSCINIT0 | S_CLKST_MASK | S_IREFST);
+        let mut s =
+            self.regs[S] & !(S_IRCST | S_OSCINIT0 | S_CLKST_MASK | S_IREFST | S_PLLST | S_LOCK0);
 
         // IREFST (bit4): the FLL reference is the internal ref iff C1[IREFS]=1.
         // FEE clears IREFS → IREFST goes 0, which is what CLOCK_SetFeeMode waits
@@ -115,6 +146,23 @@ impl Mcg {
         // ref, 11 reserved.
         let clks = (c1 >> C1_CLKS_SHIFT) & 0b11;
         s |= clks << S_CLKST_SHIFT;
+
+        if self.pll {
+            let plls = self.regs[C6] & C6_PLLS != 0;
+            // PLLST mirrors C6[PLLS]; LOCK0 is set while PLL0 runs, which is
+            // whenever it is selected or forced on by C5[PLLCLKEN0].
+            if plls {
+                s |= S_PLLST;
+            }
+            if plls || self.regs[C5] & C5_PLLCLKEN0 != 0 {
+                s |= S_LOCK0;
+            }
+            // CLKS=00 selects the FLL-or-PLL output, so CLKST reports 11
+            // (PLL) instead of 00 once PLLS=1 (PEE / PBE->PEE hand-off).
+            if clks == 0 && plls {
+                s |= 0b11 << S_CLKST_SHIFT;
+            }
+        }
 
         self.regs[S] = s;
     }
@@ -164,7 +212,7 @@ impl Peripheral for Mcg {
     }
 
     fn snapshot(&self) -> serde_json::Value {
-        serde_json::json!({ "peripheral": "MCG", "regs": self.regs.to_vec() })
+        serde_json::json!({ "peripheral": "MCG", "regs": self.regs.to_vec(), "pll": self.pll })
     }
 }
 
@@ -214,6 +262,65 @@ mod tests {
         let mut mcg = Mcg::new();
         mcg.write(S as u64, 0xFF).unwrap();
         assert_eq!(mcg.read(S as u64).unwrap(), 0x10, "writes to S are ignored");
+    }
+
+    #[test]
+    fn kw41z_ignores_pll_bits() {
+        // No PLL on KW41Z: C6[PLLS] is reserved storage, S never shows PLLST,
+        // LOCK0 or CLKST=11.
+        let mut mcg = Mcg::new();
+        mcg.write(C6 as u64, C6_PLLS).unwrap();
+        mcg.write(C5 as u64, C5_PLLCLKEN0).unwrap();
+        assert_eq!(mcg.read(S as u64).unwrap(), 0x10);
+    }
+
+    #[test]
+    fn k6x_reset_state_is_fei() {
+        let mcg = Mcg::new_k6x();
+        assert_eq!(mcg.read(S as u64).unwrap(), 0x10);
+        assert_eq!(mcg.read(C2 as u64).unwrap(), 0x80);
+    }
+
+    #[test]
+    fn k6x_boot_to_pee_sequence_settles() {
+        // CLOCK_BootToPeeMode(kMCG_OscselOsc, kMCG_PllClkSelPll0, {PRDIV 0x13,
+        // VDIV 0x18}) on frdm_k64f (50 MHz EXTAL0 from the PHY, EREFS=0).
+        let mut mcg = Mcg::new_k6x();
+        // FBE: CLKS=10, FRDIV=111, IREFS=0 -> wait IREFST=0, CLKST=10.
+        mcg.write(C1 as u64, 0xB8).unwrap();
+        let s = mcg.read(S as u64).unwrap();
+        assert_eq!(s & S_IREFST, 0);
+        assert_eq!((s & S_CLKST_MASK) >> S_CLKST_SHIFT, 0b10);
+        assert_eq!(s & (S_PLLST | S_LOCK0), 0, "PLL off in FBE");
+        // PBE: C5 = PRDIV0, C6 = PLLS | VDIV0 -> wait PLLST, then LOCK0.
+        mcg.write(C5 as u64, 0x13).unwrap();
+        mcg.write(C6 as u64, C6_PLLS | 0x18).unwrap();
+        let s = mcg.read(S as u64).unwrap();
+        assert_eq!(s & S_PLLST, S_PLLST);
+        assert_eq!(s & S_LOCK0, S_LOCK0);
+        assert_eq!(
+            (s & S_CLKST_MASK) >> S_CLKST_SHIFT,
+            0b10,
+            "still external in PBE"
+        );
+        // PEE: CLKS=00 -> CLKST=11 (PLL output).
+        mcg.write(C1 as u64, 0x38).unwrap();
+        let s = mcg.read(S as u64).unwrap();
+        assert_eq!((s & S_CLKST_MASK) >> S_CLKST_SHIFT, 0b11);
+    }
+
+    #[test]
+    fn k6x_pllclken0_locks_without_selecting() {
+        let mut mcg = Mcg::new_k6x();
+        mcg.write(C5 as u64, C5_PLLCLKEN0).unwrap();
+        let s = mcg.read(S as u64).unwrap();
+        assert_eq!(s & S_LOCK0, S_LOCK0);
+        assert_eq!(s & S_PLLST, 0);
+        assert_eq!(
+            (s & S_CLKST_MASK) >> S_CLKST_SHIFT,
+            0b00,
+            "FLL still drives CLKS=00"
+        );
     }
 
     #[test]

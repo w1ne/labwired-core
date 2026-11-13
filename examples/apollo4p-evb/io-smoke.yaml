@@ -1,0 +1,34 @@
+# LabWired - Apollo4 Plus EVB UART+LED IO smoke
+#
+# Build: cargo build -p firmware-apollo4p-evb-smoke --release --target thumbv7em-none-eabi
+#
+# The firmware powers the UART0 domain (PWRCTRL DEVPWREN, polling
+# DEVPWRSTATUS), unlocks the pads with PADKEY 0x73, muxes UART0 onto GPIO60
+# (TX) / GPIO47 (RX), makes LED0-LED2 (GPIO30/90/97, active low) push-pull
+# outputs with the input buffer on, and the buttons (GPIO18/19) pulled-up
+# inputs. It selects the 24-MHz UART clock, derives IBRD/FBRD for 115200 8N1
+# from it, then walks the LEDs with single-bit WTC/WTS strobes and prints
+# each pad level read back through RD.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-apollo4p-evb-smoke"
+  system: "./system.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "APOLLO4P EVB SMOKE"
+  - uart_ordered:
+      - "cpu=cortex-m4f uart=uart0"
+      - "pwr perf=lp uart0_pwr=1"
+      - "uart0 clksel=1 clk=24000000 ibrd=13 fbrd=1"
+      - "led=led0 on rd=0 lit=1"
+      - "led=led0 off rd=1 lit=0"
+      - "led=led1 on rd=0 lit=2"
+      - "led=led1 off rd=1 lit=0"
+      - "led=led2 on rd=0 lit=4"
+      - "led=led2 off rd=1 lit=0"
+      - "wt0=1 wt2=1 wt3=1"
+      - "btn0=1 btn1=1"
+      - "hb=0 led0=0 led1=1 led2=1"
+      - "hb=1 led0=0 led1=1 led2=1"
+  - expected_stop_reason: max_steps

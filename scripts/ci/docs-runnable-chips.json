@@ -15,6 +15,10 @@
   ],
   "firmware_release": "firmware-demos-v3",
   "chips": {
+    "ch32v003f4p6": {
+      "how": "needs-build",
+      "why": "Requires unreleased CH32V003/RV32E core support from PR #1698; the installed LabWired CLI v0.25.0 cannot run this branch-only model yet."
+    },
     "dspic33fj32mc204": {
       "how": "committed",
       "firmware": "examples/dspic33fj32mc204/firmware/dspic33fj32mc204-uart-smoke.elf",
@@ -28,6 +32,18 @@
       "how": "committed",
       "firmware": "tests/fixtures/tier1/esp32.elf",
       "expect": "TIER1 clock PASS"
+    },
+    "esp32-devkitc-32e-gpio-smoke": {
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/esp32.elf",
+      "expect": "TIER1 clock PASS",
+      "note": "Narrow DevKitC-32E onboarding profile of the same LX6 SoC as `esp32`. Runs the committed classic-ESP32 TIER1 image (docs-runnable expect matches parent `esp32`). The PlatformIO deep/light-sleep sketches under docs/receipts/2026-11-09-esp32-deep-sleep/sketch are not committed ELFs."
+    },
+    "esp32-devkitc-32e-uart1": {
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/esp32.elf",
+      "expect": "TIER1 clock PASS",
+      "note": "Narrow DevKitC-32E UART1-TX onboarding profile of the same LX6 SoC as `esp32`. Runs the committed classic-ESP32 TIER1 image (docs-runnable expect matches parent `esp32`). The PlatformIO UART1 sketch under examples/esp32-devkitc-32e-uart1/firmware is not a committed ELF."
     },
     "esp32s3": {
       "how": "committed",
@@ -95,6 +111,18 @@
     "stm32f103r6h": {
       "how": "needs-build",
       "why": "Exact orderable geometry slice on the shared medium-density STM32F103 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f103 and exact geometry is checked by stm32_variant_geometry."
+    },
+    "stm32f103rb": {
+      "how": "needs-build",
+      "why": "Exact STM32F103RBT6 descriptor added after the current released CLI. Its NUCLEO-F103RB firmware smoke is validated from this Core source tree; clean-install release-runner support starts with a release containing this chip model."
+    },
+    "stm32f103rb-nucleo-bme280-smoke": {
+      "how": "needs-build",
+      "why": "NUCLEO-F103RB + BME280 onboarding smoke is built from crates/firmware-nucleo-f103rb-bme280-smoke, not a committed ELF. Committed evidence under examples/nucleo-f103rb-bme280/evidence shows onboarding-smoke.yaml passed (NUCLEO_F103RB_BME280_OK ID=0x60 I2C1=PB8/PB9 and >=32 LD2 edges on PA5)."
+    },
+    "stm32f103r8": {
+      "how": "needs-build",
+      "why": "Exact STM32F103R8T6 descriptor added after the current released CLI. Its boot proof (examples/stm32f103r8-smoke) is validated from this Core source tree; clean-install release-runner support starts with a release containing this chip model."
     },
     "stm32f103t4": {
       "how": "needs-build",
@@ -285,6 +313,10 @@
       "firmware": "tests/fixtures/tier1/stm32g474re.elf",
       "expect": "TIER1 clock PASS"
     },
+    "stm32g431rb": {
+      "how": "needs-build",
+      "why": "Exact STM32G431RBT6 descriptor added after the current released CLI. Its tier-1 fixture smoke (examples/stm32g431rb) is validated from this Core source tree; clean-install release-runner support starts with a release containing this chip model."
+    },
     "stm32l073": {
       "how": "committed",
       "firmware": "tests/fixtures/tier1/stm32l073.elf",
@@ -335,7 +367,11 @@
       "how": "example",
       "script": "examples/arduino-nano-blinky/io-smoke.yaml",
       "expect": null,
-      "note": "AVR runs through a system manifest, not `labwired run`. Blinky drives a pin and prints nothing, so the assertion is that it executes its whole step budget without faulting."
+      "note": "AVR runs through a system manifest, not `labwired run`. The script asserts the sketch's `nano-ok` banner on USART0 and that it then executes its whole step budget without faulting."
+    },
+    "atmega328pb": {
+      "how": "needs-build",
+      "why": "The ATmega328PB USART1 model is being added to core; the released clean-install CLI does not contain it yet. Promote to a runnable smoke after a release includes this model."
     },
     "atsamd21g18a": {
       "how": "committed",
@@ -437,6 +473,22 @@
       "how": "needs-build",
       "why": "The LiteX VexRiscv model (RV32IM profile, LiteX UART and timer) is newer than the released CLI this gate installs. The committed smoke tests/fixtures/litex-vexriscv-smoke.elf prints 'LITEX VEXRISCV SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
     },
+    "mpfs095t": {
+      "how": "needs-build",
+      "why": "The RV64 core and its run path are newer than the released CLI this gate installs. The committed tests/fixtures/mpfs-zephyr-hello.elf prints 'Hello World! mpfs_icicle/polarfire/u54' on a source-built CLI; switch to `committed` once a release carries the model"
+    },
+    "r5f52618bgfp": {
+      "how": "needs-build",
+      "why": "The RX core and its run path are newer than the released CLI this gate installs. The committed tests/fixtures/ek-rx261-zephyr-hello.elf prints 'Hello World! ek_rx261/r5f52618bgfp' on a source-built CLI; switch to `committed` once a release carries the model"
+    },
+    "am6234": {
+      "how": "needs-build",
+      "why": "The AArch64 core and its run path are newer than the released CLI this gate installs. The committed tests/fixtures/sk-am62-zephyr-hello.elf prints 'Hello World! sk_am62/am6234/a53' on a source-built CLI; switch to `committed` once a release carries the model"
+    },
+    "pic32mz2048efm144": {
+      "how": "needs-build",
+      "why": "The MIPS core and its run path are newer than the released CLI this gate installs. The committed tests/fixtures/curiosity-pic32mz-ef-nuttx-nsh.elf prints 'NuttShell (NSH)' on a source-built CLI; switch to `committed` once a release carries the model"
+    },
     "vegaboard-ri5cy": {
       "how": "needs-build",
       "why": "The RI5CY/Vega board model is newer than the released CLI this gate installs. The committed smoke tests/fixtures/vegaboard-ri5cy-smoke.elf prints 'VEGABOARD RI5CY SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
@@ -449,6 +501,18 @@
       "how": "committed",
       "firmware": "examples/dspic33fj32mc202/firmware/dspic33fj32mc202-xc16-uart-smoke.elf",
       "expect": "UART: HI"
+    },
+    "pic16f1829": {
+      "how": "needs-build",
+      "why": "The PIC16 enhanced mid-range core is newer than the released CLI this gate installs. The committed examples/pic16f1829/firmware/pic16f1829-sdcc-uart-smoke.elf prints 'PIC16F1829 OK' on a source-built CLI; switch to `committed` once a release carries the model"
+    },
+    "pic16f877a": {
+      "how": "needs-build",
+      "why": "The PIC16 core and its run path are newer than the released CLI this gate installs. The committed examples/pic16f877a/firmware/pic16f877a-sdcc-uart-smoke.elf prints 'PIC16F877A OK' on a source-built CLI; switch to `committed` once a release carries the model"
+    },
+    "pic18f4520": {
+      "how": "needs-build",
+      "why": "The PIC18 EUSART/PORT model, the completed PIC18 instruction set and the PIC18 run path are newer than the released CLI this gate installs. The committed examples/pic18f4520/firmware/pic18f4520-sdcc-uart-smoke.elf prints 'PIC18F4520 OK' on a source-built CLI; switch to `committed` once a release carries the model"
     },
     "pic24f04ka200": {
       "how": "committed",
@@ -487,6 +551,46 @@
     "sam4s16c": {
       "how": "needs-build",
       "why": "The SAM4S part (and the sam4s_pio/sam4s_pmc models) are newer than the released CLI this gate installs. The committed smoke tests/fixtures/sam4s-xplained-smoke.elf prints 'SAM4S XPLAINED SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
+    },
+    "s32k388": {
+      "how": "needs-build",
+      "why": "The S32K388 part (and the s32k3_siul2 model) are newer than the released CLI this gate installs. The committed smoke tests/fixtures/s32k388-evb-smoke.elf prints 'S32K388 EVB SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
+    },
+    "mimxrt595s": {
+      "how": "needs-build",
+      "why": "The MIMXRT595S part (and the lpc_flexcomm_usart/lpc_gpio/rt5xx_ctl models) are newer than the released CLI this gate installs. The committed smoke tests/fixtures/mimxrt595-evk-smoke.elf prints 'MIMXRT595 EVK SMOKE' on a source-built CLI; switch to `committed` once a release carries the models"
+    },
+    "same70q21b": {
+      "how": "needs-build",
+      "why": "The ATSAME70Q21B descriptor is newer than the released CLI this gate installs and has not been run against a release. The committed smoke tests/fixtures/sam-e70-xplained-smoke.elf prints 'SAM E70 XPLAINED SMOKE' on a source-built CLI; switch to `committed` once a release is verified to run it"
+    },
+    "amap42kp": {
+      "how": "needs-build",
+      "why": "The AMAP42KP part (and the apollo4_gpio/apollo4_pwrctrl models) are newer than the released CLI this gate installs. The committed smoke tests/fixtures/apollo4p-evb-smoke.elf prints 'APOLLO4P EVB SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
+    },
+    "cc2538sf53": {
+      "how": "needs-build",
+      "why": "The CC2538SF53 part (and the cc2538_pl061_gpio/cc2538_sys_ctrl models) are newer than the released CLI this gate installs. The committed smoke tests/fixtures/cc2538dk-smoke.elf prints 'CC2538DK SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
+    },
+    "r7fa6m5bh": {
+      "how": "needs-build",
+      "why": "The R7FA6M5BH descriptor is newer than the released CLI this gate installs and has not been run against a release. The committed smoke tests/fixtures/ek-ra6m5-smoke.elf prints 'EK-RA6M5 SMOKE' on a source-built CLI; switch to `committed` once a release is verified to run it"
+    },
+    "r7fa8m1ah": {
+      "how": "needs-build",
+      "why": "The R7FA8M1AH descriptor and its sci_b/ra8_pfs/ra8_sysc models are newer than the released CLI this gate installs. The committed smoke tests/fixtures/ek-ra8m1-smoke.elf prints 'EK-RA8M1 SMOKE' on a source-built CLI; switch to `committed` once a release carries the models"
+    },
+    "stm32l552": {
+      "how": "needs-build",
+      "why": "The STM32L5 part (and the new stm32l5 RCC profile) are newer than the released CLI this gate installs. The committed smoke tests/fixtures/nucleo-l552ze-q-smoke.elf prints 'NUCLEO-L552ZE-Q SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
+    },
+    "mk64f12": {
+      "how": "needs-build",
+      "why": "The MK64F12 descriptor is newer than the released CLI this gate installs. The committed smoke tests/fixtures/frdm-k64f-smoke.elf prints 'FRDM-K64F SMOKE' on a source-built CLI; switch to `committed` once a release carries the model"
+    },
+    "xck26-rpu": {
+      "how": "needs-build",
+      "why": "The Cortex-R5F core runs only in a source build with --features qemu-arm-system, which the released CLI this gate installs does not carry. The committed tests/fixtures/kv260-r5-zephyr-hello.elf prints 'Hello World! kv260_r5' on such a build (examples/kv260-r5/ci/test.sh); switch to `committed` once a release ships the model"
     }
   }
 }

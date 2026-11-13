@@ -22,6 +22,21 @@ pub enum Arch {
     /// PIC24 / dsPIC33 16-bit MCU & DSC family (24-bit instruction words).
     #[serde(alias = "dspic33", alias = "pic24f", alias = "dspic33f")]
     Pic24,
+    /// PIC18 8-bit MCU family (16-bit instruction words, byte-addressed PC).
+    #[serde(alias = "pic18f")]
+    Pic18,
+    /// PIC16 classic mid-range 8-bit MCU (14-bit instruction words).
+    #[serde(alias = "pic16f")]
+    Pic16,
+    /// AArch64 application cores (Armv8-A, Cortex-A53 class).
+    #[serde(alias = "arm64", alias = "armv8-a")]
+    Aarch64,
+    /// Renesas RX 32-bit MCU family (RXv1/v2/v3 CISC, variable-length).
+    #[serde(alias = "rxv3", alias = "renesas-rx")]
+    Rx,
+    /// MIPS32 release 2 (Microchip PIC32MZ, M5150 class).
+    #[serde(alias = "mips32", alias = "mips32r2", alias = "pic32")]
+    Mips,
     Unknown,
 }
 
@@ -94,6 +109,22 @@ pub struct NamedMemoryRange {
     /// is the first question any persistence routine asks.
     #[serde(default)]
     pub erased: bool,
+    /// Make this range a MIRROR of the window starting at `alias_of`: it holds
+    /// no bytes of its own, and an access at `base + off` (`off < size`) is the
+    /// access at `alias_of + off` — same backing, same peripheral, same side
+    /// effects. For address-decoder aliases of one physical resource, e.g. the
+    /// i.MX RT500 IDAU secure views (`0x1800_0000` FlexSPI, `0x3000_0000`
+    /// SRAM, `0x5000_0000` peripherals = the non-secure address + bit 28).
+    /// The translation is unconditional inside the window (unlike
+    /// [`ChipDescriptor::ns_alias_offset`], which is a fallback), so a mirror
+    /// must not overlap a window the chip maps for real. `image_env` and
+    /// `erased` do not apply to a mirror.
+    #[serde(
+        default,
+        deserialize_with = "deserialize_opt_u64_lax",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub alias_of: Option<u64>,
 }
 
 /// One clock-enable bit a peripheral's clock depends on.
@@ -335,10 +366,12 @@ pub struct AdcPinFn {
     pub channel: u8,
 }
 
-/// A chip's digital input thresholds, as ratios of its I/O supply
-/// ([`ChipDescriptor::io_voltage_v`]): a pad reads low at or below `vil` and
-/// high at or above `vih`, and the band between is where a Schmitt input keeps
-/// its previous level.
+/// A chip's guaranteed digital input limits, as slopes of its I/O supply plus
+/// optional voltage offsets: VIL = `vil * VDD + vil_offset_v` and
+/// VIH = `vih * VDD + vih_offset_v`. Zero offsets preserve ratio-only chips.
+/// A pad reads low at or below VIL and high at or above VIH; the Schmitt band
+/// between them keeps its previous level. A routed VDD is used at each model
+/// boundary, otherwise [`ChipDescriptor::io_voltage_v`] supplies the reference.
 ///
 /// Transcribed from the datasheet's DC characteristics (the guaranteed VIL
 /// maximum and VIH minimum), never guessed: co-simulation turns a model's node
@@ -347,10 +380,14 @@ pub struct AdcPinFn {
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
 #[serde(try_from = "GpioInputThresholdsYaml", into = "GpioInputThresholdsYaml")]
 pub struct GpioInputThresholds {
-    /// Highest input voltage guaranteed to read low, as a fraction of VDD.
+    /// Supply coefficient for the highest input guaranteed to read low.
     pub vil: f64,
-    /// Lowest input voltage guaranteed to read high, as a fraction of VDD.
+    /// Supply coefficient for the lowest input guaranteed to read high.
     pub vih: f64,
+    /// Fixed addition to VIL, in volts. Zero for ratio-only descriptors.
+    pub vil_offset_v: f64,
+    /// Fixed addition to VIH, in volts. Zero for ratio-only descriptors.
+    pub vih_offset_v: f64,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -358,20 +395,48 @@ pub struct GpioInputThresholds {
 pub(crate) struct GpioInputThresholdsYaml {
     vil: f64,
     vih: f64,
+    #[serde(default, skip_serializing_if = "gpio_offset_is_zero")]
+    vil_offset_v: f64,
+    #[serde(default, skip_serializing_if = "gpio_offset_is_zero")]
+    vih_offset_v: f64,
+}
+
+fn gpio_offset_is_zero(value: &f64) -> bool {
+    *value == 0.0
 }
 
 impl TryFrom<GpioInputThresholdsYaml> for GpioInputThresholds {
     type Error = String;
 
     fn try_from(raw: GpioInputThresholdsYaml) -> Result<Self, Self::Error> {
-        let GpioInputThresholdsYaml { vil, vih } = raw;
+        let GpioInputThresholdsYaml {
+            vil,
+            vih,
+            vil_offset_v,
+            vih_offset_v,
+        } = raw;
         if !(vil.is_finite() && vih.is_finite() && 0.0 < vil && vil < vih && vih < 1.0) {
             return Err(format!(
                 "gpio_input_thresholds must satisfy 0 < vil < vih < 1 (ratios of io_voltage_v); \
                  got vil {vil}, vih {vih}"
             ));
         }
-        Ok(Self { vil, vih })
+        if !(vil_offset_v.is_finite()
+            && vih_offset_v.is_finite()
+            && 0.0 <= vil_offset_v
+            && vil_offset_v <= vih_offset_v)
+        {
+            return Err(format!(
+                "gpio_input_thresholds offsets must be finite and satisfy 0 <= vil_offset_v <= vih_offset_v; got {vil_offset_v}, {vih_offset_v}"
+            ));
+        }
+        // Ordered slopes and offsets preserve VIL < VIH at every positive VDD.
+        Ok(Self {
+            vil,
+            vih,
+            vil_offset_v,
+            vih_offset_v,
+        })
     }
 }
 
@@ -380,6 +445,8 @@ impl From<GpioInputThresholds> for GpioInputThresholdsYaml {
         Self {
             vil: thresholds.vil,
             vih: thresholds.vih,
+            vil_offset_v: thresholds.vil_offset_v,
+            vih_offset_v: thresholds.vih_offset_v,
         }
     }
 }
@@ -641,6 +708,18 @@ impl ChipInclude {
 ///
 /// or `include: [a.yaml, b.yaml]`. Includes load first; local keys win.
 /// `peripherals` union by `id`.
+/// A vendor coprocessor on the Cortex-M coprocessor interface.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum CortexMCoprocessor {
+    /// RP2350 double-precision coprocessor, p4 (current security state) and
+    /// p5 (Non-secure) — RP2350 datasheet 3.6.2.
+    Rp2350Dcp,
+    /// RP2350 GPIO coprocessor, p0: single-cycle access to the SIO GPIO
+    /// registers (RP2350 datasheet 3.6.1, pico-sdk `gpio_coproc.h`).
+    Rp2350Gpioc,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ChipDescriptor {
     #[serde(default = "default_schema_version")]
@@ -694,6 +773,11 @@ pub struct ChipDescriptor {
     /// with the alias on a store there would be written into flash.
     #[serde(default = "default_true")]
     pub flash_boot_alias: bool,
+    /// Non-Arm coprocessors attached to the Cortex-M core's coprocessor
+    /// interface (p0..p7). Default none: every coprocessor instruction outside
+    /// the FPU's p10/p11 is UNDEFINED, which is correct for most parts.
+    #[serde(default)]
+    pub coprocessors: Vec<CortexMCoprocessor>,
     /// Atomic register aliases: the 0x1000-strided aliases of every peripheral
     /// register that a family's HAL uses for read-modify-write without a
     /// critical section. Two families do this with the SAME stride and
@@ -750,8 +834,8 @@ pub struct ChipDescriptor {
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub analog_pins: std::collections::BTreeMap<String, AdcPinFn>,
     /// The supply the chip's GPIO pads run from, in volts (5.0 on an ATmega328P
-    /// Nano, 3.3 on the STM32 boards). The reference [`Self::gpio_input_thresholds`]
-    /// are ratios of.
+    /// Nano, 3.3 on the STM32 boards). This is the reference for
+    /// [`Self::gpio_input_thresholds`] when no circuit routes the actual VDD.
     ///
     /// Absent means "not transcribed", and nothing defaults it: a board that
     /// runs the part at another supply would get thresholds for the wrong rail.
@@ -761,7 +845,7 @@ pub struct ChipDescriptor {
         skip_serializing_if = "Option::is_none"
     )]
     pub io_voltage_v: Option<f64>,
-    /// Datasheet digital input thresholds, as ratios of [`Self::io_voltage_v`].
+    /// Datasheet digital input limits, as supply slopes plus optional offsets.
     ///
     /// Co-simulation needs them to turn a voltage routed to
     /// `board.gpio_in.<pad>` into the level the firmware reads. A chip without
@@ -769,6 +853,9 @@ pub struct ChipDescriptor {
     /// rather than comparing against a made-up midpoint.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gpio_input_thresholds: Option<GpioInputThresholds>,
+    /// Explicit electrical/pulse limits for a separate reset pin.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reset_input: Option<crate::ResetInputConfig>,
     /// The chip's supply supervisor: power-on / power-down reset and
     /// brown-out reset thresholds, from the datasheet.
     ///
@@ -1408,6 +1495,7 @@ impl From<labwired_ir::IrDevice> for ChipDescriptor {
             ram,
             reset_vector_offset: 0,
             flash_boot_alias: true,
+            coprocessors: Vec::new(),
             atomic_register_aliases: AtomicAliasFlavour::None,
             ns_alias_offset: None,
             memory_regions: Vec::new(),
@@ -1436,6 +1524,7 @@ impl From<labwired_ir::IrDevice> for ChipDescriptor {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: None,
             supply_monitor: None,
             include: None,
         }

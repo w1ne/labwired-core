@@ -20,8 +20,10 @@ The DevKitC-1 carrier includes:
    RGB output.
 3. **BOOT button on GPIO9** — declared as an active-low button stub. GPIO9 is a
    strapping pin; the L1 model does not implement download-mode entry.
-4. **USB Type-C (native USB Serial/JTAG) port** — `USB_DEVICE` (0x6000_F000) is
-   deliberately unmapped. There is no USB model.
+4. **USB Type-C (native USB Serial/JTAG) port** — `USB_DEVICE` (0x6000_F000,
+   irq 48) is modelled by the shared `UsbSerialJtag` block registered as
+   `usb_serial_jtag`. The DevKitC-1's primary console remains the USB-UART
+   bridge on UART0; this is the second Type-C / CDC-ACM path.
 
 ## Adding an external device (I²C / SPI sensor, etc.)
 

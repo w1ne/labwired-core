@@ -22,7 +22,7 @@ pub(super) fn build(
         let sink = console.heard_sink();
         bus.attach_host_console_echo(console.tapped(), sink.clone(), req.options.echo_uart_stdout)
             .map_err(|error| anyhow::anyhow!(error))?;
-        let rx = super::uart_rx_sources(&bus, &req.options)?;
+        let rx = super::wire_host_streams(&mut bus, &req.options)?;
         let machine = crate::system::cortex_a::load_elf(bus, elf)?;
         Ok(BuiltMachine {
             machine: Box::new(machine),

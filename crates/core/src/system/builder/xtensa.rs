@@ -83,6 +83,7 @@ fn build_esp32(
 
     let mut bus = SystemBus::new();
     let cpu = crate::system::xtensa::configure_xtensa_esp32(&mut bus);
+    bus.attach_chip_io_levels(req.chip);
     bus.attach_plugin_peripherals(req.chip, manifest, plugins)?;
 
     // A classic ESP32 has NO USB peripheral: its devkit's CP210x sits on UART0
@@ -96,7 +97,7 @@ fn build_esp32(
         req.options.echo_uart_stdout,
     )
     .map_err(|e| anyhow!(e))?;
-    let uart_rx_bufs = super::uart_rx_sources(&bus, &req.options)?;
+    let uart_rx_bufs = super::wire_host_streams(&mut bus, &req.options)?;
 
     crate::system::xtensa::attach_esp32_external_devices(&mut bus, manifest)
         .map_err(|e| anyhow!("ESP32 external_devices: {e:#}"))?;
@@ -187,7 +188,7 @@ fn build_esp32s3_flash(
     let primary_faithful_windows = cpu.faithful_windows;
 
     let console = attach_s3_consoles(&mut bus, manifest, req)?;
-    let uart_rx_bufs = super::uart_rx_sources(&bus, &req.options)?;
+    let uart_rx_bufs = super::wire_host_streams(&mut bus, &req.options)?;
 
     crate::system::xtensa::attach_esp32_external_devices(&mut bus, manifest)
         .map_err(|e| anyhow!("ESP32-S3 external_devices: {e:#}"))?;
@@ -249,7 +250,7 @@ fn build_esp32s3(
     let mut cpu = wiring.cpu;
 
     let console = attach_s3_consoles(&mut bus, manifest, req)?;
-    let uart_rx_bufs = super::uart_rx_sources(&bus, &req.options)?;
+    let uart_rx_bufs = super::wire_host_streams(&mut bus, &req.options)?;
 
     // Wire any devices the manifest declares (e.g. an SH1107 OLED on i2c0).
     crate::system::xtensa::attach_esp32_external_devices(&mut bus, manifest)

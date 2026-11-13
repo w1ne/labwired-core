@@ -1,0 +1,28 @@
+# LabWired - CC2538DK: flash controller, the steps of Renode's
+# tests/platforms/CC2538/cc2538_flash_controller.robot
+#
+# Firmware: tests/fixtures/cc2538dk-contiki-flash-test.elf — a Contiki-NG v4.9
+# application (crates/firmware-cc2538dk-contiki/flash-test/flash-test.c) that
+# erases, programs and verifies two flash pages through the ROM utility API:
+# a ROM_memset-filled buffer, a word pattern, a one-page erase that leaves the
+# neighbour intact, and a two-page erase.
+#
+# The milestones match the Robot test's. FLASH SIZE does not: Renode prints
+# 0x10000 because its FLASH_CTRL returns the instant-of-reset DIECFG0
+# (FLASH_SIZE = 0); a CC2538SF53 reports 512 KB, 0x80000.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/cc2538dk-contiki-flash-test.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 20000000
+assertions:
+  - uart_ordered:
+      - "CC2538 FLASH TEST"
+      - "FLASH SIZE: 0x80000"
+      - "[OK] Data written with memset successfully"
+      - "[OK] Data written successfully"
+      - "[OK] Data erased successfully"
+      - "[OK] Data erased successfully"
+      - "FLASH TEST DONE"
+  - expected_stop_reason: max_steps

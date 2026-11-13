@@ -848,7 +848,7 @@ pub fn abort_halt(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
             // Dump a window of TCB words for affinity/core fields.
             let mut line = String::new();
             for w in 0..16u32 {
-                line.push_str(&format!(" {:08x}", read32(tcb + w * 4)));
+                line.push_str(&format!(" {:08x}", read32(tcb.wrapping_add(w * 4))));
             }
             eprintln!("[abort_halt] {label} words:{line}");
         }
@@ -882,33 +882,33 @@ pub fn abort_halt(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
                 // Notify state: search for non-zero in a wider TCB window
                 let mut nline = String::new();
                 for w in 16..32u32 {
-                    nline.push_str(&format!(" {:08x}", read32(tcb + w * 4)));
+                    nline.push_str(&format!(" {:08x}", read32(tcb.wrapping_add(w * 4))));
                 }
                 eprintln!("[abort_halt] {label} tcb+64:{nline}");
             }
         }
         // Walk suspended list (max 8)
-        let mut it = read32(susp + 12);
-        let end = susp + 8;
+        let mut it = read32(susp.wrapping_add(12));
+        let end = susp.wrapping_add(8);
         for i in 0..8 {
             if it == 0 || it == end {
                 break;
             }
-            let owner = read32(it + 12);
-            let _cont = read32(it + 16);
-            let next = read32(it + 4);
-            let name_ptr = owner + 52;
+            let owner = read32(it.wrapping_add(12));
+            let _cont = read32(it.wrapping_add(16));
+            let next = read32(it.wrapping_add(4));
+            let name_ptr = owner.wrapping_add(52);
             let mut name = Vec::new();
             for off in 0..12u32 {
-                match bus.read_u8((name_ptr + off) as u64) {
+                match bus.read_u8(name_ptr.wrapping_add(off) as u64) {
                     Ok(b) if (0x20..0x7f).contains(&b) => name.push(b),
                     _ => break,
                 }
             }
             let name_s = String::from_utf8_lossy(&name);
             let top = read32(owner);
-            let stack_base = read32(owner + 48);
-            let core_id = read32(owner + 68) as i32;
+            let stack_base = read32(owner.wrapping_add(48));
+            let core_id = read32(owner.wrapping_add(68)) as i32;
             eprintln!(
                 "[abort_halt] susp[{i}] item={it:#010x} tcb={owner:#010x} top={top:#010x} stack={stack_base:#010x} core={core_id} name≈{name_s:?}"
             );
@@ -1334,6 +1334,110 @@ pub fn rom_strlen(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
         len = len.wrapping_add(1);
     }
     RomThunkBank::return_with(cpu, len);
+    Ok(())
+}
+
+/// `strcmp(a, b) -> i32` — lexicographic C-string compare.
+///
+/// Args: a2 = a, a3 = b. Returns negative / zero / positive like libc.
+/// ESP32-S3 mask ROM exports this at `0x4000_1230` (`esp32s3.rom.newlib.ld`).
+/// Unregistered → `nop_return_zero` makes every `String::equals` succeed, so
+/// hook JSON lines were treated as the `state` command.
+pub fn rom_strcmp(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let a = cpu.regs.read_logical(n + 2);
+    let b = cpu.regs.read_logical(n + 3);
+    let mut i = 0u32;
+    const MAX: u32 = 1 << 20;
+    let mut ret: i32 = 0;
+    while i < MAX {
+        let ax = bus.read_u8(a.wrapping_add(i) as u64).unwrap_or(0) as i32;
+        let bx = bus.read_u8(b.wrapping_add(i) as u64).unwrap_or(0) as i32;
+        if ax != bx {
+            ret = ax - bx;
+            break;
+        }
+        if ax == 0 {
+            break;
+        }
+        i = i.wrapping_add(1);
+    }
+    RomThunkBank::return_with(cpu, ret as u32);
+    Ok(())
+}
+
+/// `strncmp(a, b, n) -> i32` — bounded lexicographic C-string compare.
+///
+/// Args: a2 = a, a3 = b, a4 = max bytes. ROM export `0x4000_123c`.
+pub fn rom_strncmp(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let a = cpu.regs.read_logical(n + 2);
+    let b = cpu.regs.read_logical(n + 3);
+    let count = cpu.regs.read_logical(n + 4);
+    let mut ret: i32 = 0;
+    for i in 0..count {
+        let ax = bus.read_u8(a.wrapping_add(i) as u64).unwrap_or(0) as i32;
+        let bx = bus.read_u8(b.wrapping_add(i) as u64).unwrap_or(0) as i32;
+        if ax != bx {
+            ret = ax - bx;
+            break;
+        }
+        if ax == 0 {
+            break;
+        }
+    }
+    RomThunkBank::return_with(cpu, ret as u32);
+    Ok(())
+}
+
+/// `strcpy(dst, src) -> dst` — copy including NUL.
+///
+/// Args: a2 = dst, a3 = src. ESP32-S3 ROM @ `0x4000_1218`.
+/// Unregistered → nop_return_zero leaves dst untouched; ArduinoJson twin
+/// `copyStr` (strncpy) then session id/project stay empty after memset.
+pub fn rom_strcpy(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let dst = cpu.regs.read_logical(n + 2);
+    let src = cpu.regs.read_logical(n + 3);
+    let mut i = 0u32;
+    const MAX: u32 = 1 << 20;
+    while i < MAX {
+        let b = bus.read_u8(src.wrapping_add(i) as u64).unwrap_or(0);
+        bus.write_u8(dst.wrapping_add(i) as u64, b)?;
+        if b == 0 {
+            break;
+        }
+        i = i.wrapping_add(1);
+    }
+    RomThunkBank::return_with(cpu, dst);
+    Ok(())
+}
+
+/// `strncpy(dst, src, n) -> dst` — copy up to n bytes; zero-fill remainder
+/// only when src is shorter (POSIX). We match newlib: pad with NULs.
+///
+/// Args: a2 = dst, a3 = src, a4 = n. ROM @ `0x4000_1224`.
+pub fn rom_strncpy(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let dst = cpu.regs.read_logical(n + 2);
+    let src = cpu.regs.read_logical(n + 3);
+    let count = cpu.regs.read_logical(n + 4);
+    let mut i = 0u32;
+    let mut hit_nul = false;
+    while i < count {
+        let b = if hit_nul {
+            0u8
+        } else {
+            let v = bus.read_u8(src.wrapping_add(i) as u64).unwrap_or(0);
+            if v == 0 {
+                hit_nul = true;
+            }
+            v
+        };
+        bus.write_u8(dst.wrapping_add(i) as u64, b)?;
+        i = i.wrapping_add(1);
+    }
+    RomThunkBank::return_with(cpu, dst);
     Ok(())
 }
 
@@ -2094,6 +2198,22 @@ pub fn rom_udivdi3(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
 /// most "first boot" / least surprising value.
 pub fn rtc_get_reset_reason(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
     RomThunkBank::return_with(cpu, 1);
+    Ok(())
+}
+
+/// Classic ESP32 `rtc_get_reset_reason(cpu_no: u32) -> u32` @ `0x4000_81d4`.
+///
+/// Decodes `RTC_CNTL_RESET_STATE` (`0x3FF4_8034`) as the BROM does:
+/// bits[5:0] for PRO_CPU (`cpu_no == 0`), bits[11:6] for APP_CPU. The
+/// RTC_CNTL model seeds POWERON_RESET at power-on and DEEPSLEEP_RESET after
+/// a deep-sleep wake-up, so `esp_reset_reason()` and
+/// `esp_sleep_get_wakeup_cause()` see the real cause.
+pub fn esp32_rtc_get_reset_reason(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let cpu_no = cpu.regs.read_logical(n + 2);
+    let state = bus.read_u32(0x3FF4_8034)?;
+    let shift = if cpu_no == 0 { 0 } else { 6 };
+    RomThunkBank::return_with(cpu, (state >> shift) & 0x3F);
     Ok(())
 }
 

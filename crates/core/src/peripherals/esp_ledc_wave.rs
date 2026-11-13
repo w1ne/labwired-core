@@ -90,6 +90,18 @@ pub(crate) enum LedcDrive {
     /// A constant level: output disabled (IDLE_LV), counter paused or held in
     /// reset, timer unconfigured.
     Level(bool),
+    /// A single delayed transition, used by an advanced timer's transition
+    /// from inactive polarity to its configured idle level after dead time.
+    Transition { before: bool, after: bool, at: u64 },
+    /// A register-write transition that precedes a periodic waveform. The
+    /// timer uses this to enforce a turn-on deadline on the same cycle axis.
+    PwmAfter {
+        before: bool,
+        at: u64,
+        timer: LedcTimebase,
+        hpoint: u64,
+        duty: u64,
+    },
     /// A running PWM.
     Pwm {
         timer: LedcTimebase,
@@ -114,6 +126,31 @@ impl LedcDrive {
     pub fn level_at(&self, t: u64) -> bool {
         match *self {
             LedcDrive::Level(l) => l,
+            LedcDrive::Transition { before, after, at } => {
+                if t < at {
+                    before
+                } else {
+                    after
+                }
+            }
+            LedcDrive::PwmAfter {
+                before,
+                at,
+                timer,
+                hpoint,
+                duty,
+            } => {
+                if t < at {
+                    before
+                } else {
+                    Self::Pwm {
+                        timer,
+                        hpoint,
+                        duty,
+                    }
+                    .level_at(t)
+                }
+            }
             LedcDrive::Pwm {
                 timer,
                 hpoint,
@@ -133,6 +170,28 @@ impl LedcDrive {
 
     /// First cycle strictly after `t` at which the output toggles.
     fn next_toggle_after(&self, t: u64) -> Option<u64> {
+        if let LedcDrive::Transition { before, after, at } = *self {
+            return (before != after && at > t).then_some(at);
+        }
+        if let LedcDrive::PwmAfter {
+            before,
+            at,
+            timer,
+            hpoint,
+            duty,
+        } = *self
+        {
+            let following = Self::Pwm {
+                timer,
+                hpoint,
+                duty,
+            };
+            return if t < at && before != following.level_at(at) {
+                Some(at)
+            } else {
+                following.next_toggle_after(t.max(at))
+            };
+        }
         let LedcDrive::Pwm {
             timer,
             hpoint,
@@ -312,6 +371,17 @@ impl LedcPads {
         }
     }
 
+    /// Control changes such as STM32 CCxE, CCxP and MOE are not duty preload.
+    /// Cancel any staged duty and apply them at the actual register-write cycle.
+    pub fn set_drive_immediate(&mut self, ch: usize, new: LedcDrive, now: u64) {
+        self.advance_to(now);
+        if let Some(drive) = self.drive.get_mut(ch) {
+            *drive = new;
+            self.pending[ch] = None;
+            self.publish(ch, self.anchor);
+        }
+    }
+
     fn publish(&self, ch: usize, at: u64) {
         if let Some(lines) = &self.lines {
             lines.set_line_at(ch, self.drive[ch].level_at(at), at);
@@ -336,6 +406,13 @@ impl LedcPads {
             }
         }
         best
+    }
+
+    /// The first cycle after the advanced-to cycle at which an edge or a
+    /// staged change is due, for a chip model that keeps its own single
+    /// scheduler wake instead of [`Self::take_scheduled_events`] (RA GPT).
+    pub fn next_change(&self) -> Option<u64> {
+        self.next_change_after(self.anchor)
     }
 
     /// Advance to `now`, publishing every edge on its own cycle and applying

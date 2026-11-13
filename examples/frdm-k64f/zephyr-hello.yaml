@@ -1,0 +1,20 @@
+# LabWired - FRDM-K64F stock Zephyr hello_world
+#
+# Unmodified upstream Zephyr v3.7.0 `samples/hello_world` for board
+# `frdm_k64f`. Rebuild: crates/firmware-frdm-k64f-zephyr/build.sh
+#
+# Zephyr's own K6x bring-up runs unpatched: the nxp_mpu driver programs the
+# SYSMPU, k6x_init writes PMC_REGSC.ACKISO, CLOCK_InitOsc0 writes OSC_CR and
+# CLOCK_BootToPeeMode walks the MCG FBE -> PBE -> PEE (PLL0 on the 50 MHz
+# EXTAL0), then the console comes up on UART0 (PTB16/PTB17).
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/mk64f12-zephyr-hello.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 3000000
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v3.7.0 ***"
+      - "Hello World! frdm_k64f"
+  - expected_stop_reason: max_steps

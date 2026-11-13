@@ -14,6 +14,10 @@
 use std::any::Any;
 use std::sync::Arc;
 
+/// A live analog level, in millivolts (`None` = not driven); see
+/// [`Peripheral::analog_output_probe`].
+pub type AnalogProbe = Arc<dyn Fn() -> Option<u16> + Send + Sync>;
+
 use crate::{logic_capture, peripherals, pins, sched, Bus, CycleClock, SimResult, SimulationError};
 
 // ── DMA request vocabulary ────────────────────────────────────────────────
@@ -446,6 +450,52 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// Clock-controller capability: a live mirror of register `name`, kept
+    /// current on every firmware write, for a model whose SOURCE-clock select
+    /// lives in the controller rather than in its own window (the ESP32-C6
+    /// LEDC is clocked from `PCR.LEDC_SCLK_CONF`). Resolved by name, like
+    /// [`Self::clock_gate_reg_offset`], so no concrete-type downcast is
+    /// needed. `None` for every other peripheral and unknown name.
+    fn clock_select_cell(&mut self, _name: &str) -> Option<Arc<std::sync::atomic::AtomicU32>> {
+        None
+    }
+
+    /// Accept the mirror from [`Self::clock_select_cell`] named by this
+    /// peripheral's `config.clock_select`. Returns `false` (a hard config
+    /// error in `resolve_clock_selects`) if the model has no use for one.
+    fn attach_clock_select_cell(&mut self, _cell: Arc<std::sync::atomic::AtomicU32>) -> bool {
+        false
+    }
+
+    /// Cortex-M7 L1 cache capability: the I/D cache geometry this peripheral
+    /// declares (`cortex_m7_cache`). `configure_cortex_m` asks every
+    /// peripheral and hands the answer to the SCB's CLIDR/CTR/CCSIDR, so the
+    /// cache model does not have to be found by downcasting. `None` for every
+    /// other peripheral, and on chips without the caches.
+    fn l1_cache_geometry(&self) -> Option<crate::peripherals::cortex_m7_cache::L1CacheGeometry> {
+        None
+    }
+
+    /// Cortex-M FP extension capability: the FP context control state
+    /// (FPCCR/FPCAR/FPDSCR) of a `cortex_m_fpu` block. `configure_cortex_m`
+    /// hands it to the core, which then tracks CONTROL.FPCA and stacks
+    /// extended frames. `None` for every other peripheral, and on chips
+    /// without the FP extension.
+    fn fp_context_state(
+        &self,
+    ) -> Option<std::sync::Arc<crate::peripherals::cortex_m_fpu::FpContextState>> {
+        None
+    }
+
+    /// Armv8-M MPU capability: the PMSAv8 region file of an `armv8m_mpu`
+    /// block. `configure_cortex_m` ends the SCB window before it and hands it
+    /// to the core for TT. `None` for every other peripheral.
+    fn armv8m_mpu_state(
+        &self,
+    ) -> Option<std::sync::Arc<crate::peripherals::armv8m_mpu::MpuV8State>> {
+        None
+    }
+
     /// Bind a power controller's backup-domain write-enable signal to its
     /// clock controller. Models without that protection ignore the signal.
     fn bind_backup_domain_write_enable(
@@ -587,6 +637,23 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// GPIO-matrix capability: pads whose output select is `signal_idx`.
+    /// Empty (the default) for a peripheral that does not own a matrix.
+    fn pads_for_output_signal(&self, _signal_idx: u32) -> Vec<u8> {
+        Vec::new()
+    }
+
+    /// GPIO-matrix capability: drive an output pad to `level`, returning
+    /// whether the level actually changed. Default is a no-op.
+    fn drive_pad_output(&mut self, _pin: u8, _level: bool) -> bool {
+        false
+    }
+
+    /// GPIO-matrix capability: publish `now` to this port's observers so a
+    /// subsequent [`Self::drive_pad_output`] edge is timestamped. Default is
+    /// a no-op.
+    fn sync_observer_cycle(&mut self, _now: u64) {}
+
     /// GPIO capability: the pad level a logic probe clipped to `pin` would
     /// see. Shim over [`pins::PinPort::level`] (kept because many callers
     /// only want a level); a peripheral without pins falls back to the output
@@ -639,6 +706,18 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// [`SystemBus::deliver_timer_input_edges`](crate::bus::SystemBus::deliver_timer_input_edges).
     fn take_timer_input_edges(&mut self) -> Vec<crate::peripherals::gpio::TimerInputEdge> {
         Vec::new()
+    }
+
+    /// GPIO capability: feed GPIO-matrix INPUT signals to the peripheral at
+    /// bus index `sink`, as its timer inputs. `taps` pairs a signal index
+    /// (the `GPIO_FUNCn_IN_SEL_CFG` it is routed by) with the input number the
+    /// sink's [`Self::timer_input_edge`] takes it as. From then on every level
+    /// change the signal sees — an outside edge on the selected pad, the pad's
+    /// own output, a routing write — is reported through
+    /// [`Self::take_timer_input_edges`]. The ESP32 pulse counter's inputs
+    /// arrive this way. `false`: this port has no input matrix.
+    fn bind_matrix_input_taps(&mut self, _taps: &[(u32, u8)], _sink: usize) -> bool {
+        false
     }
 
     /// GPIO capability: drain the outside levels that reached pads routed to
@@ -737,14 +816,39 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// An STM32 general-purpose or advanced timer, whose counter runs on the
+    /// APB timer kernel clock (TIMxCLK) rather than on HCLK. The bus feeds it
+    /// through [`Self::set_timer_kernel_clock_div`]. `false` by default.
+    fn has_timer_kernel_clock(&self) -> bool {
+        false
+    }
+
+    /// Set the timer kernel clock to HCLK / `div` (0 is taken as 1). The
+    /// timer is already synced to now. Returns whether the divider changed,
+    /// so the bus re-arms the timer's scheduled events. No-op by default.
+    fn set_timer_kernel_clock_div(&mut self, _div: u32) -> bool {
+        false
+    }
+
+    /// Timer capability: the pads its output wires are tabled to, for a timer
+    /// whose pad table is chip data rather than a bus-side datasheet table
+    /// (Renesas RA GPT `gtioc_pads`): `(line, GPIO port name, pin)`. Empty by
+    /// default.
+    fn timer_output_pads(&self) -> Vec<(usize, String, u8)> {
+        Vec::new()
+    }
+
     /// GPIO capability: bind pad `pin` CONDITIONALLY to `line` of a timer's
     /// channel-output wire `cell` — live while the pad is an alternate-function
-    /// output and the timer drives that line (STM32 F1 fixed mapping). A port
-    /// whose register layout is not F1 refuses it and returns `false`.
+    /// output and the timer drives that line. `af` is the STM32 V2 AFR nibble
+    /// that selects the channel; `None` is the STM32 F1 fixed mapping (and
+    /// the families whose port knows its own timer selector). A port whose
+    /// register layout is not the row's shape refuses it and returns `false`.
     fn bind_timer_output_pad(
         &mut self,
         _cell: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
         _pin: u8,
+        _af: Option<u8>,
         _line: usize,
         _func: &'static str,
     ) -> bool {
@@ -960,9 +1064,9 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// Exists for `model_paths_drift_gate`, which asserts that every model a
     /// board actually registers appears in that board's `models:` list in
     /// `validation/manifest.yaml` — the list whose contents are hashed into
-    /// the board's drift digest. A model the list omits can be rewritten
-    /// without moving the digest, so a stale `drift_ack` goes on covering a
-    /// tree it was never written for.
+    /// the board's source digest. An omitted model can change without moving
+    /// the digest, concealing a difference from the source recorded with a
+    /// physical capture. Watch completeness remains an automated requirement.
     ///
     /// Asking the ENGINE rather than parsing the factories is the point. The
     /// first version of that gate mined `type:` -> source from the factory
@@ -1226,6 +1330,14 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// `value` (little-endian, `transform.src_width` bytes) from its source:
     /// the data now enters the controller's FIFO. Default: not a FIFO DMA.
     fn dma_load_data(&mut self, _item: &DmaRequest, _value: u32) {}
+    /// A DMA item this controller issued completed its bus access. Called
+    /// after the destination write, before the CPU can observe the next
+    /// transfer count or completion flag. Return true to reconcile IRQ levels
+    /// and collect newly scheduled work. Legacy controllers commit when
+    /// issuing the item and retain the original no-callback path.
+    fn dma_transfer_complete(&mut self, _item: &DmaRequest) -> bool {
+        false
+    }
     /// A DMA item this controller issued faulted on the bus (an unmapped
     /// address: the bus error a DMA reports as a transfer error, STM32
     /// `TEIF` / GPDMA `DTEF`). The bus calls it on the issuer right after
@@ -1606,6 +1718,27 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// Default: reports nothing (pulse semantics on every explicit IRQ).
     fn irq_line_levels(&self, _report: &mut dyn FnMut(u32, bool)) {}
 
+    /// True when this model's `explicit_irqs` are interrupt EVENT numbers
+    /// for the chip's event-link controller (the Renesas RA ICU's ELC event
+    /// numbers), not NVIC lines. The bus then hands each one to
+    /// [`Self::link_event`] on every peripheral instead of pending it.
+    ///
+    /// Default: false (explicit IRQs are NVIC lines).
+    fn explicit_irqs_are_link_events(&self) -> bool {
+        false
+    }
+
+    /// Event-link controller hook (Renesas RA ICU `IELSRn`): take event
+    /// `event` and report every NVIC line it is linked to through `line`.
+    /// Returns true when this model is an event-link controller, so the bus
+    /// reconciles its [`Self::irq_line_levels`] afterwards (the linked lines
+    /// are level sources).
+    ///
+    /// Default: not a controller.
+    fn link_event(&mut self, _event: u32, _line: &mut dyn FnMut(u32)) -> bool {
+        false
+    }
+
     /// True for a device that only stores and serves bytes: it does not use
     /// the scheduler, has no scheduler wake owner, no SPI-attached devices, no
     /// IRQ line level, no bus tick and no legacy tick. `SystemBus`'s MMIO
@@ -1657,6 +1790,15 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// Default no-op: a peripheral with no radio has no air to move.
     fn attach_ble_air(&mut self, _air: crate::peripherals::ble_air::BleAirBus) {}
 
+    /// Put this peripheral's IEEE 802.15.4 radio on `air` (a world's shared
+    /// 802.15.4 medium). Default no-op: a peripheral with no 802.15.4 radio
+    /// has nothing to attach.
+    fn attach_ieee802154_air(
+        &mut self,
+        _air: crate::peripherals::ieee802154_air::Ieee802154AirBus,
+    ) {
+    }
+
     /// Drive the analog level, in millivolts, on one of this peripheral's ADC
     /// input channels. Returns whether it took it.
     ///
@@ -1687,6 +1829,45 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// session is built rather than written nowhere for the whole run.
     fn adc_channel_count(&self) -> Option<u8> {
         None
+    }
+
+    /// Whether this peripheral accepts a routed `VREF+`/`VDDA` voltage.
+    fn supports_adc_reference_voltage(&self) -> bool {
+        false
+    }
+
+    /// Set the ADC's positive full-scale reference voltage, in volts. Returns
+    /// false for a peripheral without a configurable analog reference.
+    fn set_adc_reference_voltage_v(&mut self, _volts: f64) -> bool {
+        false
+    }
+
+    /// A live view of one of this peripheral's analog outputs (a DAC
+    /// channel): the probe returns the pin level in millivolts, or `None`
+    /// while the output is not driven. `None` for a peripheral or channel
+    /// with no analog output (the default).
+    ///
+    /// The probe reads the output as it is at the moment it is called, so a
+    /// consumer bound through [`Peripheral::bind_adc_channel_probe`] sees
+    /// every later write without the bus pushing anything.
+    fn analog_output_probe(&self, _channel: u8) -> Option<AnalogProbe> {
+        None
+    }
+
+    /// Wire `probe` onto ADC input `channel`: while it returns a level, a
+    /// conversion of that channel reads it instead of the held
+    /// [`Peripheral::set_adc_channel_input`] level. Returns whether this ADC
+    /// took it (`false`, the default, for a peripheral that is not an ADC or
+    /// a channel it does not have).
+    fn bind_adc_channel_probe(&mut self, _channel: u8, _probe: AnalogProbe) -> bool {
+        false
+    }
+
+    /// The board wires this ADC asks for: `(channel, source peripheral,
+    /// source output)` per entry of its `analog_links` config, bound by the
+    /// bus once every peripheral exists. Empty by default.
+    fn analog_input_links(&self) -> Vec<(u8, String, u8)> {
+        Vec::new()
     }
 
     /// Set the ambient (die) temperature an on-chip temperature sensor

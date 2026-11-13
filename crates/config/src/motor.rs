@@ -84,6 +84,11 @@ pub struct BrushedMotorConfig {
     /// plant at PWM rate.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub enable_pin: Option<String>,
+    /// Optional second bridge inhibit (IBT-2 / BTS7960 L_EN and R_EN).
+    /// Both enables must be high to connect both motor terminals. Absent =
+    /// no additional inhibit, preserving single-enable driver behavior.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enable2_pin: Option<String>,
     /// Optional: unused encoder outputs may be left unwired.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub encoder_a_pin: Option<String>,
@@ -102,7 +107,7 @@ pub struct BrushedMotorConfig {
     pub timer_channel: Option<u8>,
 }
 
-/// Who drives a brushed DC motor's winding.
+/// Who drives a motor's winding or three phase windings.
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum MotorArmature {
@@ -149,6 +154,10 @@ pub struct BldcMotorConfig {
     /// its drive is cut. Absent = 0, the frictionless shaft of older configs.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub coulomb_friction_nm: f64,
+    /// The analog netlist owns circuit-mode voltage and current.
+    #[serde(default, skip_serializing_if = "MotorArmature::is_bridge")]
+    pub armature: MotorArmature,
+    #[serde(default, skip_serializing_if = "is_zero")]
     pub supply_voltage_v: f64,
     pub load_torque_nm: f64,
     pub encoder_cpr: u32,
@@ -161,17 +170,27 @@ pub struct BldcMotorConfig {
     pub simulation_clock_hz: u64,
     /// Chip-descriptor peripheral name for the advanced timer that owns the
     /// six complementary PWM legs (default `tim1` for STM32 advanced timers).
-    #[serde(default = "default_bldc_timer_name")]
-    pub timer_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timer_name: Option<String>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub phase_a_high_pin: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub phase_a_low_pin: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub phase_b_high_pin: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub phase_b_low_pin: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub phase_c_high_pin: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub phase_c_low_pin: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub enable_pin: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub hall_a_pin: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub hall_b_pin: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub hall_c_pin: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub encoder_a_pin: Option<String>,
@@ -357,6 +376,12 @@ impl MotorModelConfig {
                 );
                 validate_optional_motor_pin(
                     &config.id,
+                    "enable2_pin",
+                    config.enable2_pin.as_deref(),
+                    &mut issues,
+                );
+                validate_optional_motor_pin(
+                    &config.id,
                     "encoder_a_pin",
                     config.encoder_a_pin.as_deref(),
                     &mut issues,
@@ -395,6 +420,7 @@ impl MotorModelConfig {
                 }
             }
             Self::Bldc(config) => {
+                let circuit = config.armature == MotorArmature::Circuit;
                 validate_motor_common(
                     &config.id,
                     config.resistance_ohm,
@@ -404,7 +430,7 @@ impl MotorModelConfig {
                     config.rotor_inertia_kg_m2,
                     config.viscous_friction_nm_per_rad_s,
                     config.coulomb_friction_nm,
-                    Some(config.supply_voltage_v),
+                    (!circuit).then_some(config.supply_voltage_v),
                     config.load_torque_nm,
                     config.encoder_cpr,
                     &mut issues,
@@ -415,7 +441,11 @@ impl MotorModelConfig {
                         config.id
                     ));
                 }
-                if config.timer_name.trim().is_empty() {
+                if config
+                    .timer_name
+                    .as_deref()
+                    .is_some_and(|name| name.trim().is_empty())
+                {
                     issues.push(format!(
                         "motor_models[{}].timer_name must be nonblank",
                         config.id
@@ -435,6 +465,16 @@ impl MotorModelConfig {
                         "motor_models[{}].overcurrent_trip_steps must be greater than zero",
                         config.id
                     ));
+                }
+                if circuit {
+                    validate_circuit_bldc(config, &mut issues);
+                    if config.simulation_clock_hz == 0 {
+                        issues.push(format!(
+                            "motor_models[{}].simulation_clock_hz must be greater than zero",
+                            config.id
+                        ));
+                    }
+                    return issues;
                 }
                 validate_required_motor_pins(
                     &config.id,
@@ -523,6 +563,7 @@ fn validate_circuit_armature(config: &BrushedMotorConfig, issues: &mut Vec<Strin
         ("both_inputs_low", config.both_inputs_low.is_some()),
         ("brake_pin", config.brake_pin.is_some()),
         ("enable_pin", config.enable_pin.is_some()),
+        ("enable2_pin", config.enable2_pin.is_some()),
         ("timer_name", config.timer_name.is_some()),
         ("timer_channel", config.timer_channel.is_some()),
     ] {
@@ -550,6 +591,73 @@ fn validate_circuit_armature(config: &BrushedMotorConfig, issues: &mut Vec<Strin
     if config.encoder_a_pin.is_some() != config.encoder_b_pin.is_some() {
         issues.push(format!(
             "motor_models[{id}]: encoder A and B must be wired together, or both absent"
+        ));
+    }
+}
+
+/// A physical three-lead motor has no inferred inverter or Hall sensor wiring.
+fn validate_circuit_bldc(config: &BldcMotorConfig, issues: &mut Vec<String>) {
+    let id = &config.id;
+    if id.is_empty()
+        || !id
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
+    {
+        issues.push(format!(
+            "motor_models[{id}].id must match [A-Za-z0-9_-]+ for circuit BLDC routing"
+        ));
+    }
+
+    for (field, set) in [
+        ("phase_a_high_pin", !config.phase_a_high_pin.is_empty()),
+        ("phase_a_low_pin", !config.phase_a_low_pin.is_empty()),
+        ("phase_b_high_pin", !config.phase_b_high_pin.is_empty()),
+        ("phase_b_low_pin", !config.phase_b_low_pin.is_empty()),
+        ("phase_c_high_pin", !config.phase_c_high_pin.is_empty()),
+        ("phase_c_low_pin", !config.phase_c_low_pin.is_empty()),
+        ("enable_pin", !config.enable_pin.is_empty()),
+        ("hall_a_pin", !config.hall_a_pin.is_empty()),
+        ("hall_b_pin", !config.hall_b_pin.is_empty()),
+        ("hall_c_pin", !config.hall_c_pin.is_empty()),
+        ("timer_name", config.timer_name.is_some()),
+        ("motor_fault_pin", config.motor_fault_pin.is_some()),
+        ("inverter_fault_pin", config.inverter_fault_pin.is_some()),
+        (
+            "overcurrent_fault_pin",
+            config.overcurrent_fault_pin.is_some(),
+        ),
+        (
+            "undervoltage_fault_pin",
+            config.undervoltage_fault_pin.is_some(),
+        ),
+        ("supply_voltage_v", config.supply_voltage_v != 0.0),
+    ] {
+        if set {
+            issues.push(format!("motor_models[{id}].{field} does not apply to armature: circuit; the netlist owns the physical terminals"));
+        }
+    }
+    let kt = config.torque_constant_nm_per_a;
+    let ke = config.back_emf_constant_v_per_rad_s;
+    if (kt - ke).abs() > 1e-9 * kt.abs().max(ke.abs()) {
+        issues.push(format!("motor_models[{id}].torque_constant_nm_per_a must equal back_emf_constant_v_per_rad_s in phase-peak SI units for armature: circuit"));
+    }
+    for (field, pin) in [
+        ("encoder_a_pin", config.encoder_a_pin.as_deref()),
+        ("encoder_b_pin", config.encoder_b_pin.as_deref()),
+        ("encoder_index_pin", config.encoder_index_pin.as_deref()),
+    ] {
+        validate_optional_motor_pin(id, field, pin, issues);
+    }
+    if config.encoder_a_pin.is_some() != config.encoder_b_pin.is_some() {
+        issues.push(format!(
+            "motor_models[{id}]: encoder A and B must be wired together, or both absent"
+        ));
+    }
+    if config.encoder_index_pin.is_some()
+        && !(config.encoder_a_pin.is_some() && config.encoder_b_pin.is_some())
+    {
+        issues.push(format!(
+            "motor_models[{id}]: encoder index requires both encoder A and B"
         ));
     }
 }

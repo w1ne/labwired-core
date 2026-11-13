@@ -116,6 +116,29 @@ impl SystemBus {
         self.reconcile_multi_irq_levels(idx, LevelSync::Both);
     }
 
+    /// Hand interrupt EVENT numbers (from a model whose
+    /// [`Peripheral::explicit_irqs_are_link_events`] is true) to the chip's
+    /// event-link controller (the RA ICU, [`Peripheral::link_event`]) and
+    /// return the NVIC lines they drive, for the caller to pend. The
+    /// controller's lines are level sources, so they are marked here: the
+    /// write choke drops a pend once firmware clears the controller's flag.
+    /// Rare (one call per timer event), so a scan for the controller is fine.
+    pub(crate) fn link_events(&mut self, events: &[u32]) -> Vec<u32> {
+        let mut lines = Vec::new();
+        for idx in 0..self.peripherals.len() {
+            let mut is_controller = false;
+            for &event in events {
+                is_controller |= self.peripherals[idx]
+                    .dev
+                    .link_event(event, &mut |line| lines.push(line));
+            }
+            if is_controller {
+                self.mark_multi_irq_levels(idx);
+            }
+        }
+        lines
+    }
+
     /// The MMIO write-choke level reconcile for peripheral `idx`: its single
     /// configured line ([`Peripheral::irq_line_level`], both directions) and
     /// any multi-line levels ([`Peripheral::irq_line_levels`], drops only).
@@ -407,13 +430,21 @@ impl SystemBus {
             return;
         };
         match outcome {
-            Ok(None) => return,
-            Ok(Some(value)) => p.dev.dma_load_data(req, value),
+            Ok(None) => {
+                if !p.dev.dma_transfer_complete(req) {
+                    return;
+                }
+            }
+            Ok(Some(value)) => {
+                p.dev.dma_load_data(req, value);
+                p.dev.dma_transfer_complete(req);
+            }
             Err(e) => {
                 tracing::trace!("DMA request {req:?} failed: {e:?}");
                 p.dev.dma_transfer_error(req);
             }
         }
+        self.mark_multi_irq_levels(issuer);
         self.collect_scheduled_events(issuer);
     }
 
@@ -797,7 +828,16 @@ impl SystemBus {
                 }
             }
 
-            if let Some(irqs) = res.explicit_irqs {
+            if let Some(irqs) = res.explicit_irqs.as_deref().filter(|_| {
+                self.peripherals[peripheral_index]
+                    .dev
+                    .explicit_irqs_are_link_events()
+            }) {
+                // Event numbers (RA ELC), routed through the ICU.
+                for line in self.link_events(irqs) {
+                    pend_nvic(&self.nvic, &mut interrupts, line);
+                }
+            } else if let Some(irqs) = res.explicit_irqs {
                 for irq in &irqs {
                     pend_nvic(&self.nvic, &mut interrupts, *irq);
                 }
@@ -1154,10 +1194,11 @@ impl SystemBus {
     /// INTC control registers are decoded into the cache at the rebuild /
     /// write choke, so this body is layout-neutral: C3 `CPU_INT_ENABLE` 0x104,
     /// `CPU_INT_PRI_n` 0x114+n*4, `CPU_INT_THRESH` 0x194 inside
-    /// `interrupt_core0`; C6 the same fields inside `INTPRI` (0x00 / 0x0C+n*4
-    /// / 0x8C). A line fires only while it is enabled AND its priority >=
-    /// threshold — the parts enable/mask via these registers, NOT the RISC-V
-    /// `mie` CSR (FreeRTOS critical sections raise the threshold to mask).
+    /// `interrupt_core0`; C6 the same fields inside the PLIC (`plic_mx`
+    /// 0x00 / 0x10+n*4 / 0x90) with FROM_CPU doorbells in INTPRI. A line
+    /// fires only while it is enabled AND its priority >= threshold — the
+    /// parts enable/mask via these registers, NOT the RISC-V `mie` CSR
+    /// (FreeRTOS critical sections raise the threshold to mask).
     pub(crate) fn recompute_esp32c3_irq_lines(&mut self) {
         // Latched PMS violations assert their matrix source
         // (`ETS_CORE0_{I,D}RAM0_PMS_INTR_SOURCE`) until firmware pulses

@@ -1,19 +1,22 @@
 name: IO-Link customer firmware prerequisites
 on:
   pull_request:
+    # Lean PR gate (2026-11-13): on pull requests this lane runs only when
+    # its own files change. Shared engine paths (crates/core, crates/cli,
+    # Cargo.*) trigger it on push to main instead.
     paths:
-      - 'crates/core/**'
-      - 'crates/cli/**'
       - 'validation/iolinki/**'
       - 'configs/systems/iolinki-g0-startup.yaml'
-      - 'crates/config/**'
-      - 'crates/loader/**'
       - 'configs/chips/stm32g0b1re.yaml'
       - 'configs/chips/stm32u575.yaml'
       - '.github/workflows/iolinki-reference.yml'
   push:
     branches: [main]
   workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 jobs:
@@ -38,6 +41,9 @@ jobs:
           path: .vendor/cmsis
       - uses: dtolnay/rust-toolchain@1.95.0
       - uses: Swatinem/rust-cache@v2
+        with:
+          # Read-only on pull requests; see `core-pr-gate` in core-ci.yml.
+          save-if: ${{ github.event_name != 'pull_request' }}
       - name: Install ARM GCC
         timeout-minutes: 10
         uses: ./.github/actions/apt-install-cached
@@ -80,6 +86,9 @@ jobs:
           python-version: '3.12'
       - uses: dtolnay/rust-toolchain@1.95.0
       - uses: Swatinem/rust-cache@v2
+        with:
+          # Read-only on pull requests; see `core-pr-gate` in core-ci.yml.
+          save-if: ${{ github.event_name != 'pull_request' }}
       - name: Install ARM GCC
         timeout-minutes: 10
         uses: ./.github/actions/apt-install-cached

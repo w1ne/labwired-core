@@ -87,6 +87,15 @@ Worked example: [`examples/cosim-spice-rc`](../examples/cosim-spice-rc/README.md
 (Debian/Ubuntu: `apt install libngspice0`). Tests:
 `python3 -m pytest tools/cosim/test_labwired_ngspice.py`.
 
+## Shared analog in a multi-controller world
+
+An environment can own one inline `adapter: analog` model with instance-qualified
+`node.<id>.board.*` / `node.<id>.adc.*` routes. The existing world scheduler
+advances one shared circuit and applies all observations at its declared
+boundaries. Per-node co-simulation models remain refused. See
+[One shared analog circuit in a world](world-analog.md) for the manifest,
+voltage and reset semantics, trace API, validation, and sampling limits.
+
 ## Board signal paths
 
 A model that only speaks abstract observables can be driven from the command
@@ -99,14 +108,22 @@ steps the model against the pins the firmware is actually driving:
 | `board.gpio.<pad>` | machine → model | bool | The level the firmware is driving on an output pad. |
 | `board.gpio_output.<pad>` | machine → model | bool | Whether the firmware has configured `<pad>` as a general-purpose output. |
 | `board.gpio_pad.<pad>` | machine → model | bool | The live level a logic probe clipped to `<pad>` sees: the GPIO latch for a plain output, the peripheral's wire for an alternate-function pad, the input register for an input. |
+| `board.gpio_pad_volts.<pad>` | machine → model | volts | The live pad driver amplitude from the routed VDD, or the descriptor I/O voltage when VDD is not routed. Use a separate direction switch for high impedance. |
 | `board.gpio_driven.<pad>` | machine → model | bool | Whether the MCU's own output stage drives `<pad>`, through a GPIO output OR an alternate-function peripheral. False for an input, an analog pad, or a released open-drain line. |
 | `board.gpio_in.<pad>` | model → machine | bool or volts | An externally held level on an input pad (also readable). A number is volts, turned into a level with the chip's input thresholds. |
 | `board.analog.<pad>_volts` | model → machine | number | The analog level on the ADC channel belonging to `<pad>`. |
 | `adc.<peripheral>.<channel>_volts` | model → machine | number | The analog level on an explicitly named ADC channel. |
 | `board.power.vdd_volts` | model → machine | number | The MCU's supply. The chip's `supply_monitor:` holds the core in reset below its power-on threshold and resets it on power-down or brown-out; a chip without one refuses the route. |
+| `board.reset.<pin>_volts` | model → machine | volts | The descriptor-declared reset pin, with absolute or VDD-ratio thresholds and valid/invalid pulse limits. Holds execution independently of the supply supervisor. |
 | `board.motor.<id>.back_emf_v` | machine → model | number | The back-EMF of an `armature: circuit` DC motor (Ke·ω, volts), for the netlist's series EMF source. |
 | `board.motor.<id>.current_a` | model → machine | number | The winding current the netlist solved for an `armature: circuit` DC motor (amps, positive = forward torque). Until it is routed the motor holds still and reports no current. |
+| `board.motor.<id>.phase_{a,b,c}_back_emf_v` | machine → model | volts | The three phase EMFs of a circuit BLDC winding. |
+| `board.motor.<id>.phase_{a,b,c}_current_a` | model → machine | amps | A complete solved three-phase current vector, positive toward the floating star. |
+| `board.motor.<id>.supply_v` | model → machine | volts | Optional measured supply for a circuit DC/BLDC motor; absent remains unknown. |
 | `ui.<partId>.<field>` | outside → model | bool or number | Set from outside the engine (a canvas part, a test stimulus); 0 / false until set. |
+
+For the complete winding, ownership, timing and readback contract, see
+[Circuit-driven three-phase BLDC motors](circuit-bldc.md).
 
 `<pad>` is a pad label in whatever form the chip speaks — `pa5` / `PA5` on
 STM32, `pd2` on the ATmega328P, `p0.13` on Nordic, `gpio5` or a bare `5` on
@@ -210,14 +227,23 @@ This is what lets a circuit node charging through a megohm reach
 `digitalRead` at the right time, instead of flipping at a guessed midpoint.
 
 The thresholds are chip data, transcribed from the datasheet into the chip
-descriptor as ratios of the I/O supply:
+descriptor as slopes of the I/O supply with optional voltage offsets:
 
 ```yaml
 io_voltage_v: 5.0          # the rail the GPIO pads run from
-gpio_input_thresholds:     # ratios of io_voltage_v
+gpio_input_thresholds:     # zero-offset limits: slope * supply
   vil: 0.3                 # highest input guaranteed to read low
   vih: 0.6                 # lowest input guaranteed to read high
 ```
+
+Optional `vil_offset_v` and `vih_offset_v` add volts to the corresponding
+slope-times-supply limit. They default to zero, preserving existing ratio-only
+documents. The slopes satisfy `0 < vil < vih < 1`; finite offsets satisfy
+`0 <= vil_offset_v <= vih_offset_v`. A routed `board.power.vdd_volts` supplies
+the actual reference for each boundary; `io_voltage_v` applies only when VDD is
+unrouted. An absent or non-positive routed rail cannot read as a logic high.
+The [shared-world electrical contract](world-analog.md#driver-voltage-and-high-impedance)
+includes an affine datasheet example and the zero-VDDA capability boundary.
 
 In-tree they are declared for `atmega328p` (5.0 V, 0.3 / 0.6, Microchip
 DS40002061B Table 30-1), `stm32f103` (3.3 V, 0.35 / 0.65, DS5319 Table 36), and
@@ -357,7 +383,7 @@ cosim_models:
       vdd: 3.3                 # volts a boolean input maps to (default 3.3)
       substeps: 10             # internal solver steps per co-sim step
       integration: be          # be (default) | trap
-      probes:  { v_out: "v(out)" }   # output name <- node / branch current
+      probes:  { v_out: "v(out)" }   # output name <- voltage / element current
       sources: { gpio: Vgpio }       # input name  -> V, I or S element
       trace: ["v(in)", "i(Vgpio)"]   # extra oscilloscope channels
       trace_samples: 20000           # ring depth (default 20000)
@@ -365,6 +391,15 @@ cosim_models:
 
 Worked example: [`examples/cosim-spice-rc/system-analog.yaml`](../examples/cosim-spice-rc/system-analog.yaml),
 the same circuit and the same routing as `system.yaml`.
+
+Probes accept a node name, `v(node)`, or `i(element)`, with case-insensitive
+names. Current probes support voltage sources, inductors, `E`/`H` sources,
+and diodes, including the `i(D...)` emitted for an analog LED. A diode probe
+reports amperes flowing from anode to cathode, evaluated at the solved
+internal junction voltage with the same device law as the solver. It includes
+`RS`, configured reverse breakdown, and `GMIN`; reverse current is negative.
+Diode observations add no MNA branch unknown and do not make a diode a valid
+`F`/`H` control branch. Unknown or unsupported probes fail at construction.
 
 ### Netlist subset
 
@@ -378,7 +413,9 @@ the same circuit and the same routing as `system.yaml`.
 | Switch | `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` |
 | Diode | `D<name> n+ n- <model>` |
 | BJT | `Q<name> nc nb ne <model>` |
-| MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>]` |
+| MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [nrd=<squares>] [nrs=<squares>]` |
+| JFET | `J<name> nd ng ns <model>` |
+| Op-amp / comparator | `X<name> in+ in- v+ v- out <model>` |
 
 Plus `*` comment lines, `;` / `$` trailing comments, `.end`, and
 `.ic V(node)=<v>`. Node `0` and `gnd` are ground. Values take the usual SPICE
@@ -389,6 +426,25 @@ an element line is the worst thing a netlist parser can do.
 
 A switch's `<ctrl>` is the name of a routed boolean input, not a circuit node,
 so it needs no `sources:` entry.
+
+### Op-amp and comparator macros
+
+`X` instances use `.model <name> OPAMP(...)` or `.model <name> COMP(...)`.
+Both cards model finite gain and bandwidth, output resistance, offset voltage,
+constant input bias and offset currents, fixed input capacitances, fixed
+quiescent supply current, `RIN`, a fixed differential resistance between `in+`
+and `in-`, and `RINCM`, a fixed resistance from each input to `V−`. `RIN=0` or
+`RINCM=0`, or omission, disables those paths. Both cards accept `CMRR` in dB.
+It converts common-mode input voltage relative to the supply midpoint into
+input-referred differential voltage by `10^(−CMRR/20)`; omission means ideal
+common-mode rejection. OPAMP cards also accept output rail drops, optional
+`IOLIM`, and optional `SR` in volts per second. `SR` caps the gain-node
+capacitor current to `Cg·SR`, so large-signal ramps are slew limited while
+settled DC gain and smaller-signal finite-GBW response are preserved. COMP
+cards accept hysteresis and open-collector or push-pull outputs. These
+parameters have no temperature dependence. Signal- or load-dependent supply
+current is not modeled. The hand-calculated macro tests are in
+`crates/core/tests/analog_macros.rs`.
 
 `.options`, `.tran`, `.op`, `.print`, `.plot`, `.save`, `.probe`, `.width`,
 `.temp`, `.nodeset`, `.title` and a whole `.control` … `.endc` block are
@@ -419,11 +475,13 @@ input at a different element.
 ### Semiconductor models
 
 ```text
-.model <name> D    (IS=<a> N=<n> RS=<ohms>)
-.model <name> NPN  (IS=<a> BF=<n> BR=<n> NF=<n> NR=<n>)
+.model <name> D    (IS=<a> N=<n> ISR=<a> NR=<n> RS=<ohms> BV=<v> IBV=<a> NBV=<n>)
+.model <name> NPN  (IS=<a> BF=<n> BR=<n> NF=<n> NR=<n> IKF=<a> IKR=<a> NKF=<n> RB=<ohms> RBM=<ohms> IRB=<a>)
 .model <name> PNP  (...)
-.model <name> NMOS (VTO=<v> KP=<a/v2> LAMBDA=<1/v> W=<m> L=<m>)
+.model <name> NMOS (VTO=<v> KP=<a/v2> LAMBDA=<1/v> GAMMA=<sqrt(v)> PHI=<v> RD=<ohms> RS=<ohms> RSH=<ohms/square> CBD=<f> CBS=<f> CJ=<f/m²> CJSW=<f/m> PB=<v> MJ=<ratio> MJSW=<ratio> FC=<ratio> TOX=<m> W=<m> L=<m> [CHARGEMOD=MEYER|WARD_DUTTON])
 .model <name> PMOS (...)      ; VTO is negative, as in ngspice
+.model <name> NJF  (VTO=<v> BETA=<a/v2> LAMBDA=<1/v> RD=<ohms> RS=<ohms> IS=<a>)
+.model <name> PJF  (...)
 ```
 
 The parentheses are optional, parameters may be separated by spaces or commas,
@@ -431,36 +489,103 @@ and a card may be written after the elements that use it. A parameter omitted
 from a card takes **ngspice's** default, so a deck written out in full means the
 same thing to both engines.
 
-Parameters this engine has no term for — every capacitance (`CJO`, `CJE`,
-`CJC`, `TT`, `CGSO`…), every temperature coefficient, `VAF`, `IKF`, `GAMMA`,
-`PHI`, `BV` — are **accepted and ignored**, so a vendor card pasted off a
-datasheet runs with the large-signal DC behaviour it describes. A MOSFET
-`LEVEL` other than 1 is the one exception and is refused by name: solving a
-BSIM card with Shichman–Hodges would be wrong by orders of magnitude rather
-than by a capacitance.
+This engine models diode recombination current from `ISR`/`NR` when `ISR` is
+supplied, diode depletion capacitance from `CJO`/`VJ`/`M`/`FC`,
+BJT base-junction depletion capacitance from `CJE`/`VJE`/`MJE`,
+`CJC`/`VJC`/`MJC`, and shared `FC`, and level-1 MOSFET bulk-drain and
+bulk-source depletion capacitance from `CBD`/`CBS` with shared `PB`/`MJ`/`FC`,
+or from bottom-area `CJ` times instance `AD`/`AS` plus sidewall `CJSW` times
+instance `PD`/`PS`, graded with `MJ` and `MJSW` respectively. Explicit `CBD`
+or `CBS` replaces that terminal's `CJ` area term; sidewall capacitance remains
+additive.
+Level-1 MOSFET `TOX` enables intrinsic channel charge. `CHARGEMOD` defaults to
+`MEYER`, which follows ngspice's piecewise capacitance model. The engine-specific
+`CHARGEMOD=WARD_DUTTON` selects a charge-based long-channel inversion model with
+Ward–Dutton drain/source partitioning and a charge-conserving terminal Jacobian.
+It requires `TOX`. Without `TOX`, only explicit overlap and bulk-junction
+capacitances are present. `CHARGEMOD=WARD_DUTTON` is an in-core extension and
+is not a portable ngspice model-card parameter.
+Other device capacitances, temperature coefficients and terminal resistances
+outside the supported parameters below are accepted and ignored. BJT `RB`/`RC`/`RE`
+are modeled as series resistors, while `RBM`/`IRB` make `RB` fall with base
+current; JFET terminal resistances `RD`/`RS` and MOSFET terminal resistances `RD`/`RS` or
+`RSH` times the per-instance `NRD`/`NRS` are modeled as series resistors. An
+explicitly supplied direct MOSFET `RD` or `RS` takes precedence for that
+terminal, including an explicit zero that disables its sheet-resistance path.
+`NRD` and `NRS` default to one square and may be set to zero to disable the
+matching sheet-resistance path. Level-1 MOSFET `GAMMA` and `PHI` model body effect; their
+defaults are 0 and 0.6 V. MOSFET `LEVEL` other
+than 1 and JFET `LEVEL` other than 1 or `B` other than 1 are refused by name
+because they use different channel equations.
 
-Five built-in cards need no `.model` line at all, which is what a catalog part
+Seven built-in cards need no `.model` line at all, which is what a catalog part
 emits: `D` (1N4148-class, `IS=2.52n N=1.752`), `NPN`, `PNP` (β = 100), `NMOS`,
-`PMOS` (`VTO=±1 V`, `KP=20u`, `LAMBDA=0.02`). Those are this engine's
-convenience values, not ngspice's parameter defaults.
+`PMOS` (`VTO=±1 V`, `KP=20u`, `LAMBDA=0.02`), and `NJF`, `PJF` (level-1 model
+defaults). The MOSFET values are this engine's convenience values; the JFET
+values use ngspice's level-1 defaults.
 
-**What is modelled:** Shockley diode with `RS` and SPICE's `GMIN`;
-Ebers–Moll (transport-form Gummel–Poon with `VAF`/`VAR`/`IKF`/`IKR` infinite
-and no ohmic terminal resistances); Shichman–Hodges MOSFET level 1 with channel
--length modulation, both channel polarities and reverse mode. Every parameter is
-taken at 300.00 K; there is no temperature model, which is why decks handed to
-ngspice pin `temp`/`tnom` to 26.85 °C.
+**What is modelled:** Shockley diode with `RS` and SPICE's `GMIN`; optional
+forward high-injection current limiting from `IK` (also named `IKF`) and
+reverse high-injection limiting from `IKR` (both default to disabled); optional
+recombination current from `ISR`/`NR`, clamped in reverse bias at the
+`−3·N·Vt` boundary; diode depletion charge in transient runs from
+`CJO`/`VJ`/`M`/`FC` (`CJO` defaults to zero) and quasi-static diffusion charge
+from `TT` (defaults to zero), including first-order soft reverse recovery
+when `TT > 0` and `VP > 0`; diode breakdown when `BV` is set, with `IBV`
+setting the knee current and optional `NBV` selecting its reverse exponential
+coefficient (default `N`). Gummel–Poon BJT
+transport with `VAF`/`VAR` base-width modulation, optional
+`IKF`/`IKR` high-injection rolloff (both default to infinity) with optional
+`NKF` (also `NK`) exponent (0.5 when omitted), and B-E/B-C base
+recombination currents from `ISE`/`NE` and `ISC`/`NC`; BJT base-emitter and
+base-collector depletion charge from `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC`,
+plus forward transit-time charge from `TF` with its `XTF`/`VTF`/`ITF` bias
+adjustment and reverse transit-time charge from `TR` (all default to zero;
+`XTF`/`ITF` default to zero and `VTF` to infinity; shared `FC` defaults to
+0.5) and ohmic terminal resistances `RB`/`RC`/`RE` (all
+default to zero). `RBM` defaults to `RB` and `IRB` defaults to infinity, so
+omitting either leaves the base resistance fixed; with `RBM < RB` and finite
+`IRB`, the base resistance falls from `RB` toward `RBM` as base current rises.
+Nonzero BJT terminal resistances add probeable internal
+collector, base, or emitter nodes. Nonzero JFET and MOSFET terminal resistances
+add probeable `<element>#drain` and `<element>#source` nodes, respectively.
+Shichman–Hodges MOSFET level 1 with `RD`/`RS` ohmic terminal resistances (both
+default to zero) or `RSH` times instance `NRD`/`NRS` (RSH defaults to zero),
+`GAMMA`/`PHI` body effect, nonlinear drain/body and source/body junction charge
+from `CBD`/`CBS` or `CJ`/`CJSW` with instance `AD`/`AS`/`PD`/`PS`, plus
+`PB`/`MJ`/`MJSW`/`FC`, linear gate overlap charge from
+`CGSO`/`CGDO`/`CGBO`, and `TOX`-enabled
+intrinsic channel charge using either ngspice's piecewise Meyer formulation or
+the opt-in Ward–Dutton charge partition; and
+SPICE JFET level 1 with the Parker–Skellern `B` fit, including its two gate
+junctions and depletion charge. Tests exercise non-unit `B` in the linear and
+saturation regions for both channel polarities. Other tests cover MOSFET/JFET
+channel-length modulation, reverse-channel operation, MOSFET body effect,
+Meyer bias regions, and Ward–Dutton
+charge conservation and transient terminal response are covered by tests. The
+diode's forward and reverse knee reduction, non-default reverse-breakdown
+emission coefficient, and first-order soft-recovery response are exercised in
+[`tests/analog_devices.rs`](../crates/core/tests/analog_devices.rs). BJT `NKF`
+is checked against solved forward/reverse terminal currents and its effect on
+transit charge. Every
+parameter is taken at 300.00 K; there is no temperature
+model, which is why decks handed to ngspice pin `temp`/`tnom` to 26.85 °C.
 
-**What is not, in this first version:** device capacitances, and therefore
-anything whose behaviour comes from stored device charge — reverse recovery, a
-Miller-limited edge, a charge pump. There is no Early effect (output conductance
-in the active region is `GMIN`, not `Ic/VAF`) and no body effect (`VTH` is
-`VTO`; the bulk terminal is required by the syntax and tied through `GMIN`, but
-does not shift the threshold). A circuit that needs any of those belongs on
-`adapter: external_process` with `tools/cosim/labwired_ngspice.py`.
+**What is not modeled:** Ward–Dutton mode includes strong-inversion channel
+charge only; it omits intrinsic accumulation/depletion charge. Select Meyer
+mode when that piecewise channel capacitance is needed. Non-quasi-static MOSFET
+effects, and JFET levels other than level 1, remain unsupported.
+The diode's `TT` term is a quasi-static transit-time charge model, with the
+first-order `VP` soft-recovery extension when enabled. More detailed
+non-quasi-static effects are not modeled. Circuits needing those features
+belong on `adapter: external_process` with `tools/cosim/labwired_ngspice.py`.
 
 `RS > 0` on a diode adds one internal node named `<element>#internal`, exactly
-as SPICE does. It counts against the 64-unknown ceiling and can be probed.
+as SPICE does. Nonzero BJT `RB`, `RC`, and `RE` add `<element>#base`,
+`<element>#collector`, and `<element>#emitter` nodes, respectively. Nonzero
+JFET and MOSFET drain/source terminal resistances add `<element>#drain` and
+`<element>#source`. These
+nodes count against the 128-unknown ceiling and can be probed.
 
 ### Solver
 
@@ -471,8 +596,10 @@ as SPICE does. It counts against the 64-unknown ceiling and can be probed.
   source or switch change is taken with backward Euler, as SPICE does at a
   breakpoint, so an edge does not leave trapezoidal a half-step behind.
 - Fixed internal step `h = step_ns / substeps`. Dense LU, own implementation.
-  `N` nodes + `M` branch currents is capped at 64; a bigger circuit is an
-  error naming the ngspice adapter.
+  `N` nodes + `M` branch currents is capped at 128; a bigger circuit is an
+  error naming the ngspice adapter. Extracted PCB copper resistance retains
+  its terminal nodes under this same bound. The matrix and elimination-factor
+  buffers together use at most 256 KiB; factorization remains `O(n³)`.
 - The solver caches elimination pivots and multipliers until a switch, step
   length, or integration rule changes. Source and reactive-history changes
   refresh only the right-hand side. Multipliers replay in the original order,
@@ -487,7 +614,7 @@ as SPICE does. It counts against the 64-unknown ceiling and can be probed.
   GPIO at 0 before the firmware has done anything.
 - `CosimStep::time_ns` is the END of the interval being simulated, matching
   `tools/cosim/labwired_ngspice.py`.
-- A circuit holding a diode, BJT or MOSFET is solved by Newton–Raphson inside
+- A circuit holding a diode, BJT, JFET or MOSFET is solved by Newton–Raphson inside
   each step: the device stamps are re-linearised, re-factorised and re-solved
   until every unknown stops moving, damped by SPICE's `DEVpnjlim`, `DEVfetlim`
   and `DEVlimvds`. The limiters change the path, never the point: the converged
@@ -551,11 +678,12 @@ circuit's channels. The CSV header and VCD variables use the same names.
 
 ### The boundary
 
-The in-core engine supports the linear elements, switches, and diode, BJT and
-level-1 MOSFET models listed above. Its semiconductor models have the limitations
+The in-core engine supports the linear elements, switches, and diode, BJT,
+level-1 JFET and level-1 MOSFET models listed above. Its semiconductor models
+have the limitations
 described in [Semiconductor models](#semiconductor-models), including omitted
-device capacitances and temperature effects. Subcircuits, `.include` / `.lib`
-device libraries, other MOSFET levels, and AC/DC sweeps are not supported by
+device charge terms and temperature effects. Subcircuits, `.include` / `.lib`
+device libraries, other MOSFET or JFET levels, other JFET `B` values, and AC/DC sweeps are not supported by
 the in-core engine. Unsupported netlist constructs fail validation with guidance
 to use the native ngspice adapter.
 

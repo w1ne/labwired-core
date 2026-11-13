@@ -17,10 +17,14 @@ pub mod cortex_m_fault_escalation;
 pub mod cortex_m_jit_batch_gates;
 #[cfg(test)]
 pub mod cortex_m_memory_contract;
+pub mod cortex_m_mpu_enforcement;
 #[cfg(test)]
 pub mod device_identity_one_home;
 #[cfg(test)]
 pub mod device_time_derived;
+/// STM32 timers count the APB timer kernel clock (RCC_CFGR.PPREx), not HCLK.
+#[cfg(test)]
+pub mod stm32_timer_kernel_clock;
 /// STM32F103 timer outputs on pads, RCC gates, internal temperature sensor.
 #[cfg(test)]
 pub mod stm32f1_timer_outputs;
@@ -34,6 +38,8 @@ pub mod esp32;
 pub mod esp32c3_i2c_waveform;
 #[cfg(test)]
 pub mod esp32c3_rtc_delay_loop;
+#[cfg(test)]
+pub mod esp32c6_i2c_waveform;
 
 /// The `event-scheduler` conditional-compilation surface may not grow.
 #[cfg(test)]
@@ -59,6 +65,7 @@ pub mod riscv_cycle_counter_pulse_in;
 pub mod bench_spi_engine;
 pub mod esp32_i2c_waveform;
 pub mod esp32_ledc_waveform;
+pub mod esp32_pcnt_inputs;
 pub mod esp32c3_s3_ledc_waveform;
 #[cfg(test)]
 pub mod esp32s3_i2c_waveform;
@@ -91,8 +98,10 @@ pub mod rp2040;
 #[cfg(test)]
 pub mod rp2040_i2c_waveform;
 #[cfg(test)]
-pub mod rp2040_spi_carries_a_byte;
+pub mod rp2040_pio_pads;
+pub mod rp2040_pwm_pads;
 #[cfg(test)]
+pub mod rp2040_spi_carries_a_byte;
 pub mod rp2040_spi_waveform;
 #[cfg(test)]
 pub mod rp2040_uart_waveform;

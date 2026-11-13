@@ -1,0 +1,94 @@
+# Kinetis K64F PMC (power management controller), K64P144M120SF5RM ch. 16.
+# Generated from the NXP CMSIS-SVD MK64F12.svd (cmsis-svd-data
+# data/NXP/MK64F12.svd): offsets, sizes, access and reset values verbatim.
+# A plain register file: REGSC.ACKISO (write-1 to release the VLLS I/O
+# hold) is stored rather than acted on, and no LVD is ever raised.
+peripheral: PMC
+version: 0.1.0
+registers:
+- id: LVDSC1
+  address_offset: 0
+  size: 8
+  access: READ_WRITE
+  reset_value: 16
+  fields:
+  - name: LVDV
+    bit_range:
+    - 1
+    - 0
+    description: "Low-Voltage Detect Voltage Select"
+  - name: LVDRE
+    bit_range:
+    - 4
+    - 4
+    description: "Low-Voltage Detect Reset Enable"
+  - name: LVDIE
+    bit_range:
+    - 5
+    - 5
+    description: "Low-Voltage Detect Interrupt Enable"
+  - name: LVDACK
+    bit_range:
+    - 6
+    - 6
+    description: "Low-Voltage Detect Acknowledge"
+  - name: LVDF
+    bit_range:
+    - 7
+    - 7
+    description: "Low-Voltage Detect Flag"
+  side_effects: null
+- id: LVDSC2
+  address_offset: 1
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LVWV
+    bit_range:
+    - 1
+    - 0
+    description: "Low-Voltage Warning Voltage Select"
+  - name: LVWIE
+    bit_range:
+    - 5
+    - 5
+    description: "Low-Voltage Warning Interrupt Enable"
+  - name: LVWACK
+    bit_range:
+    - 6
+    - 6
+    description: "Low-Voltage Warning Acknowledge"
+  - name: LVWF
+    bit_range:
+    - 7
+    - 7
+    description: "Low-Voltage Warning Flag"
+  side_effects: null
+- id: REGSC
+  address_offset: 2
+  size: 8
+  access: READ_WRITE
+  reset_value: 4
+  fields:
+  - name: BGBE
+    bit_range:
+    - 0
+    - 0
+    description: "Bandgap Buffer Enable"
+  - name: REGONS
+    bit_range:
+    - 2
+    - 2
+    description: "Regulator In Run Regulation Status"
+  - name: ACKISO
+    bit_range:
+    - 3
+    - 3
+    description: "Acknowledge Isolation"
+  - name: BGEN
+    bit_range:
+    - 4
+    - 4
+    description: "Bandgap Enable In VLPx Operation"
+  side_effects: null

@@ -1,0 +1,377 @@
+{
+  "schema": "labwired-g0-tiol112-evidence-v1",
+  "test_status": "passed",
+  "profile": "type2v_pd32",
+  "firmware": {
+    "repository": "https://github.com/w1ne/iolinki",
+    "source_commit": "10e8196e2630c54474fbec16abbb301f515c7736",
+    "elf_name": "protocol-rig-64mhz-zig-diagnostic.elf",
+    "elf_sha256": "5177c4598fb2edd823a3f5cba4dbe3723d326c72a11346df7e2f509c1f57e817",
+    "compiler": "Zig 0.12.0-dev.1286+cc394431a, Clang 17.0.3/LLD; diagnostic freestanding runtime, not GCC/newlib or IAR",
+    "artifact_url": null,
+    "build_manifest": {
+      "source_commit": null,
+      "source_base_commit": "c25e5cde5720298703f64141185b3231871aea51",
+      "local_variant": "phase-floor-final",
+      "com_mode": 3,
+      "internal_dll_timing_enforcement": true,
+      "compiler": "0.12.0-dev.1286+cc394431a",
+      "compiler_family": "Zig/Clang/LLD, diagnostic freestanding libc and compiler-rt; not GCC/newlib",
+      "stm32_cmsis_ref": "f576c24e123edf3332988ecd49512c0f35f85186",
+      "cmsis_core_ref": "61e36449f53c25ef7825c40f7dd93685736f457f",
+      "elf_sha256": "5177c4598fb2edd823a3f5cba4dbe3723d326c72a11346df7e2f509c1f57e817",
+      "source_sha256": {
+        "examples/stm32g0_tiol112/protocol_rig_main.c": "7eaafc45e5ee27c76c65b07bd22279b96876599ab6eded8b21216f58f19e47c2",
+        "examples/stm32g0_tiol112/board.c": "3c608a7ffa12cf342e3a01ed33fa819a331927286f157bc7e2c00c3a269eff8b",
+        "examples/stm32g0_tiol112/rx_queue.c": "c6f6f8decd3177bf994c786edbd68a113cac3ea58101d4b472dd3c5c75d3417a",
+        "examples/stm32g0_tiol112/gcc_runtime.c": "ae041af8c899f5c3832e53229411fe393351cad0700a98dcd1b9b7e512edd0d6",
+        "examples/reference_device/reference_device.c": "0cd1c5a9ccd0d5149a68d3f17d9731a6d6ac6ee0a4bc4acb9606dac0c9d9bdbe",
+        "validation/zig-diagnostic/vendor/st/Source/Templates/system_stm32g0xx.c": "d95e3aef373a5842d9166e2e3670991b98249082f989e2eea60151bc44588841",
+        "src/phy_tiol112.c": "d548b7b460213401eb94022f1ba4d5e8e4f6d294ef6ec780cb25c7ab2a8e62da",
+        "src/crc.c": "53d653341e75df6e936a0a71f16ff7f79b2a42e2cea655886a30f47904361d53",
+        "src/frame.c": "4e28b6fcd69fa9119f6ffe8576591434bd229dee3b1a2c366a6b62fda521d812",
+        "src/dll.c": "2c2ea90f96a9d74e782fcd4ebbdb6b09fe0f428d3bfe779437137bae34081b5d",
+        "src/isdu.c": "77062877bb8fffe1f45ede6f228a4728053b7cde942dbc4855ec124931bd2452",
+        "src/events.c": "f908544eec90ef769988556a166d2b8228260d6898c7e2c2e2bffa9d68a6744c",
+        "src/params.c": "156fea4ce0c2b739a23e58e01d4bfe1235b88df11ce5de3c428614e1128d7c0b",
+        "src/data_storage.c": "4798710f09e9b9714d620906bfc8aaccdab3c9f841a464b6be45d24394d59100",
+        "src/device_info.c": "fa20995c81c6ad82a42c5fecee6495a7b32fc47409192a5253cfa261a9245ba5",
+        "src/device.c": "4d80ae1d51cb2b64b92bf8f659fc7b1c840e3c3c36cc892d2575271eac4ffad1",
+        "validation/zig-diagnostic/runtime.c": "e6cb350bd78214e5487dda324a31f9c4149f8e8016a5ba03b2f1f42a28f02375",
+        "validation/zig-diagnostic/vendor/st/Source/Templates/gcc/startup_stm32g0b1xx.s": "69dbe71ab4e214516ee2481b818f6e2f18dd733724e362908320bb4e72b1a393",
+        "examples/stm32g0_tiol112/stm32g0b1re.ld": "c3b6aacd9c5bf2e6a67ef4f9de3d3f0b64dfd3a0c451f4973428ab1e357bd4fa"
+      },
+      "header_sha256": {
+        "include/iolinki/protocol.h": "4113e0ae46a3b0ad2b08b50b780f730a547fef97fadc0b1585a7b7877fb5de7d",
+        "include/iolinki/phy_tiol112.h": "0b760a1093b79353d5dab46acfa38f4b34b4f1ed21058d1a0956877e4ece32fc",
+        "include/iolinki/frame.h": "99d7885b45de29c4eba477217b4d69f80f82f1d49db035cd71fc7f4ca9763880",
+        "include/iolinki/isdu.h": "4cbff7e99faaf2fabaa8d292b96582860102531b31a99346c246767189cc0cc4",
+        "include/iolinki/phy_generic.h": "ccb31f99200d6a3dcc40b4cc0043185bcd292a31140e2395a3220bdb58a76db3",
+        "include/iolinki/utils.h": "f286444a3e644e725beb63b431f4019ac54998ca3db11f9305df39b08b4c439d",
+        "include/iolinki/device_info.h": "5e453724f0d61029f5fe9eac9823ef060473d98503019f0dab0ad7ab576ebc81",
+        "include/iolinki/config.h": "c24ed99a62382d29c1d5234421039dec90882d851a043a2d3f1c6f947de34f4b",
+        "include/iolinki/phy.h": "e47654e0520e8a4e1d78e83d983636a544771b60dc0e5f6992d9b4322a09d83a",
+        "include/iolinki/application.h": "ff0f09583d37c0514d15e8e14ff6e887acceb7e68785a492ad4257b0f32eac48",
+        "include/iolinki/device.h": "78fc6f6a8ab4e3b648a1c41293a02357efb94eb795b63e8bf3cefa137f8b7cbf",
+        "include/iolinki/phy_virtual.h": "f934c29380127338d605f31257c016356dbdad66ad0e5586a8020069191a2ef3",
+        "include/iolinki/dll.h": "e9889f48e28be11f8a443da3a52b9742e6cb79a7fcb07d5fd4535a9afa872d27",
+        "include/iolinki/platform.h": "c08314695a582bc137d1371dc894b5f6dfce18bebd3ad57afc5c0a07f0618d13",
+        "include/iolinki/iolink.h": "ecf5767e2e1ea6f2a731b9c59350a454483123c420b32518119f7da62bc2bbb4",
+        "include/iolinki/events.h": "3921e413c5d336051825f800a402bc388eb3809cfcab96fbf1c68f67a4c52d12",
+        "include/iolinki/crc.h": "a0056cfc177e0fede1f823c532cc79001df4eb80e6c2fc669039911d097a044c",
+        "include/iolinki/data_storage.h": "7370367d1bb1d8151f3439d20a4759eb519f0485e7a724e55ce793adc29012c0",
+        "include/iolinki/time_utils.h": "f934cc6112032ce610fb90e2bef43aa3fabba7f8832c91aa8aafc98ae270f8b0",
+        "include/iolinki/params.h": "8bfa56d7322e9a1a2c7cfd971748f7b3433622833430d6bd2978fdd05c694176",
+        "include/iolinki/phy_l6362a.h": "45dc7115109aa760c1a13c72008a772e9e64cc6090e3e3068c19b0e0278c132f",
+        "examples/stm32g0_tiol112/rx_queue.h": "6bdec255a5ac8486344df14e3e0dba0aacc3f5e5bb182e8e8bc35f7dea63cb2b",
+        "examples/stm32g0_tiol112/board.h": "c68ff7b311d6eafaf4acd86e7353840f0ee6687fbcd7206b68d55bfdf8f58c88",
+        "validation/zig-diagnostic/include/string.h": "cb32831f406666adc0a3c7dc24f8d5062943eb2350718934a2f21146b434c6bf",
+        "validation/zig-diagnostic/include/stdio.h": "4e0d8a0cd804f9cc44a5b2b8d1bb4aa2fefdf68cc596412b86cf99d7b1c1c2b3",
+        "validation/zig-diagnostic/vendor/st/Include/system_stm32g0xx.h": "20ee999e4431472a7c351e2412537aa0ef7f5f5e499a21a92c1d4cc21f84ebf1",
+        "validation/zig-diagnostic/vendor/st/Include/stm32g0xx.h": "f67dcdf72b69776ef2308a84090cd3ea87affc83470c225d39377494fac7c296",
+        "validation/zig-diagnostic/vendor/st/Include/stm32g0b1xx.h": "461f2c4a7f80bc317ddb1d16c067bedd58fac6c3c41a261cf01e05cf1013236f",
+        "validation/zig-diagnostic/vendor/cmsis/Include/core_cm0plus.h": "a09fa9c6b8b21d1920bce15b98aa56182b027e9278cca0b154812bac2aea3cfa",
+        "validation/zig-diagnostic/vendor/cmsis/Include/cmsis_version.h": "184c19fd3ee73632edf35a0b4d49cd48be75fbf49e6ccb19d9db05fa83bea4b3",
+        "validation/zig-diagnostic/vendor/cmsis/Include/mpu_armv7.h": "29206b52ee02290ed6f5a5415ebd4187de802cf176d9b3cb844390d8e5571372",
+        "validation/zig-diagnostic/vendor/cmsis/Include/cmsis_compiler.h": "b51963d271c1571ca3463654c76aa7ea50c4eac5d0a2710df10414ac64d9e0f8",
+        "validation/zig-diagnostic/vendor/cmsis/Include/cmsis_gcc.h": "43bfd1fe69fbbc2ca70aaf7d43cc3e20f16e0c7f66e1bdef9b51af6dc14b2617"
+      },
+      "diagnostic_support_sha256": {
+        "validation/zig-diagnostic/build.py": "8fc72a39f8307d27fe446b78462402dbf6110afd7d897d78603b5fb44f84ec1e",
+        "validation/zig-diagnostic/runtime.c": "e6cb350bd78214e5487dda324a31f9c4149f8e8016a5ba03b2f1f42a28f02375",
+        "validation/zig-diagnostic/include/string.h": "cb32831f406666adc0a3c7dc24f8d5062943eb2350718934a2f21146b434c6bf",
+        "validation/zig-diagnostic/include/stdio.h": "4e0d8a0cd804f9cc44a5b2b8d1bb4aa2fefdf68cc596412b86cf99d7b1c1c2b3"
+      }
+    },
+    "published_source_match": {
+      "published_commit": "10e8196e2630c54474fbec16abbb301f515c7736",
+      "repository": "w1ne/iolinki",
+      "pull_request": "https://github.com/w1ne/iolinki/pull/49",
+      "elf_sha256": "5177c4598fb2edd823a3f5cba4dbe3723d326c72a11346df7e2f509c1f57e817",
+      "internal_dll_timing_enforcement": true,
+      "com_mode": 3,
+      "verification": "All compiled repository source/header bytes match this commit; compiler and local diagnostic runtime are recorded in the unchanged original manifest",
+      "compiled_source_sha256": {
+        "examples/stm32g0_tiol112/protocol_rig_main.c": "7eaafc45e5ee27c76c65b07bd22279b96876599ab6eded8b21216f58f19e47c2",
+        "examples/stm32g0_tiol112/board.c": "3c608a7ffa12cf342e3a01ed33fa819a331927286f157bc7e2c00c3a269eff8b",
+        "examples/stm32g0_tiol112/rx_queue.c": "c6f6f8decd3177bf994c786edbd68a113cac3ea58101d4b472dd3c5c75d3417a",
+        "examples/stm32g0_tiol112/gcc_runtime.c": "ae041af8c899f5c3832e53229411fe393351cad0700a98dcd1b9b7e512edd0d6",
+        "examples/reference_device/reference_device.c": "0cd1c5a9ccd0d5149a68d3f17d9731a6d6ac6ee0a4bc4acb9606dac0c9d9bdbe",
+        "validation/zig-diagnostic/vendor/st/Source/Templates/system_stm32g0xx.c": "d95e3aef373a5842d9166e2e3670991b98249082f989e2eea60151bc44588841",
+        "src/phy_tiol112.c": "d548b7b460213401eb94022f1ba4d5e8e4f6d294ef6ec780cb25c7ab2a8e62da",
+        "src/crc.c": "53d653341e75df6e936a0a71f16ff7f79b2a42e2cea655886a30f47904361d53",
+        "src/frame.c": "4e28b6fcd69fa9119f6ffe8576591434bd229dee3b1a2c366a6b62fda521d812",
+        "src/dll.c": "2c2ea90f96a9d74e782fcd4ebbdb6b09fe0f428d3bfe779437137bae34081b5d",
+        "src/isdu.c": "77062877bb8fffe1f45ede6f228a4728053b7cde942dbc4855ec124931bd2452",
+        "src/events.c": "f908544eec90ef769988556a166d2b8228260d6898c7e2c2e2bffa9d68a6744c",
+        "src/params.c": "156fea4ce0c2b739a23e58e01d4bfe1235b88df11ce5de3c428614e1128d7c0b",
+        "src/data_storage.c": "4798710f09e9b9714d620906bfc8aaccdab3c9f841a464b6be45d24394d59100",
+        "src/device_info.c": "fa20995c81c6ad82a42c5fecee6495a7b32fc47409192a5253cfa261a9245ba5",
+        "src/device.c": "4d80ae1d51cb2b64b92bf8f659fc7b1c840e3c3c36cc892d2575271eac4ffad1",
+        "validation/zig-diagnostic/runtime.c": "e6cb350bd78214e5487dda324a31f9c4149f8e8016a5ba03b2f1f42a28f02375",
+        "validation/zig-diagnostic/vendor/st/Source/Templates/gcc/startup_stm32g0b1xx.s": "69dbe71ab4e214516ee2481b818f6e2f18dd733724e362908320bb4e72b1a393",
+        "examples/stm32g0_tiol112/stm32g0b1re.ld": "c3b6aacd9c5bf2e6a67ef4f9de3d3f0b64dfd3a0c451f4973428ab1e357bd4fa"
+      },
+      "compiled_header_sha256": {
+        "include/iolinki/protocol.h": "4113e0ae46a3b0ad2b08b50b780f730a547fef97fadc0b1585a7b7877fb5de7d",
+        "include/iolinki/phy_tiol112.h": "0b760a1093b79353d5dab46acfa38f4b34b4f1ed21058d1a0956877e4ece32fc",
+        "include/iolinki/frame.h": "99d7885b45de29c4eba477217b4d69f80f82f1d49db035cd71fc7f4ca9763880",
+        "include/iolinki/isdu.h": "4cbff7e99faaf2fabaa8d292b96582860102531b31a99346c246767189cc0cc4",
+        "include/iolinki/phy_generic.h": "ccb31f99200d6a3dcc40b4cc0043185bcd292a31140e2395a3220bdb58a76db3",
+        "include/iolinki/utils.h": "f286444a3e644e725beb63b431f4019ac54998ca3db11f9305df39b08b4c439d",
+        "include/iolinki/device_info.h": "5e453724f0d61029f5fe9eac9823ef060473d98503019f0dab0ad7ab576ebc81",
+        "include/iolinki/config.h": "c24ed99a62382d29c1d5234421039dec90882d851a043a2d3f1c6f947de34f4b",
+        "include/iolinki/phy.h": "e47654e0520e8a4e1d78e83d983636a544771b60dc0e5f6992d9b4322a09d83a",
+        "include/iolinki/application.h": "ff0f09583d37c0514d15e8e14ff6e887acceb7e68785a492ad4257b0f32eac48",
+        "include/iolinki/device.h": "78fc6f6a8ab4e3b648a1c41293a02357efb94eb795b63e8bf3cefa137f8b7cbf",
+        "include/iolinki/phy_virtual.h": "f934c29380127338d605f31257c016356dbdad66ad0e5586a8020069191a2ef3",
+        "include/iolinki/dll.h": "e9889f48e28be11f8a443da3a52b9742e6cb79a7fcb07d5fd4535a9afa872d27",
+        "include/iolinki/platform.h": "c08314695a582bc137d1371dc894b5f6dfce18bebd3ad57afc5c0a07f0618d13",
+        "include/iolinki/iolink.h": "ecf5767e2e1ea6f2a731b9c59350a454483123c420b32518119f7da62bc2bbb4",
+        "include/iolinki/events.h": "3921e413c5d336051825f800a402bc388eb3809cfcab96fbf1c68f67a4c52d12",
+        "include/iolinki/crc.h": "a0056cfc177e0fede1f823c532cc79001df4eb80e6c2fc669039911d097a044c",
+        "include/iolinki/data_storage.h": "7370367d1bb1d8151f3439d20a4759eb519f0485e7a724e55ce793adc29012c0",
+        "include/iolinki/time_utils.h": "f934cc6112032ce610fb90e2bef43aa3fabba7f8832c91aa8aafc98ae270f8b0",
+        "include/iolinki/params.h": "8bfa56d7322e9a1a2c7cfd971748f7b3433622833430d6bd2978fdd05c694176",
+        "include/iolinki/phy_l6362a.h": "45dc7115109aa760c1a13c72008a772e9e64cc6090e3e3068c19b0e0278c132f",
+        "examples/stm32g0_tiol112/rx_queue.h": "6bdec255a5ac8486344df14e3e0dba0aacc3f5e5bb182e8e8bc35f7dea63cb2b",
+        "examples/stm32g0_tiol112/board.h": "c68ff7b311d6eafaf4acd86e7353840f0ee6687fbcd7206b68d55bfdf8f58c88",
+        "validation/zig-diagnostic/include/string.h": "cb32831f406666adc0a3c7dc24f8d5062943eb2350718934a2f21146b434c6bf",
+        "validation/zig-diagnostic/include/stdio.h": "4e0d8a0cd804f9cc44a5b2b8d1bb4aa2fefdf68cc596412b86cf99d7b1c1c2b3",
+        "validation/zig-diagnostic/vendor/st/Include/system_stm32g0xx.h": "20ee999e4431472a7c351e2412537aa0ef7f5f5e499a21a92c1d4cc21f84ebf1",
+        "validation/zig-diagnostic/vendor/st/Include/stm32g0xx.h": "f67dcdf72b69776ef2308a84090cd3ea87affc83470c225d39377494fac7c296",
+        "validation/zig-diagnostic/vendor/st/Include/stm32g0b1xx.h": "461f2c4a7f80bc317ddb1d16c067bedd58fac6c3c41a261cf01e05cf1013236f",
+        "validation/zig-diagnostic/vendor/cmsis/Include/core_cm0plus.h": "a09fa9c6b8b21d1920bce15b98aa56182b027e9278cca0b154812bac2aea3cfa",
+        "validation/zig-diagnostic/vendor/cmsis/Include/cmsis_version.h": "184c19fd3ee73632edf35a0b4d49cd48be75fbf49e6ccb19d9db05fa83bea4b3",
+        "validation/zig-diagnostic/vendor/cmsis/Include/mpu_armv7.h": "29206b52ee02290ed6f5a5415ebd4187de802cf176d9b3cb844390d8e5571372",
+        "validation/zig-diagnostic/vendor/cmsis/Include/cmsis_compiler.h": "b51963d271c1571ca3463654c76aa7ea50c4eac5d0a2710df10414ac64d9e0f8",
+        "validation/zig-diagnostic/vendor/cmsis/Include/cmsis_gcc.h": "43bfd1fe69fbbc2ca70aaf7d43cc3e20f16e0c7f66e1bdef9b51af6dc14b2617"
+      }
+    }
+  },
+  "runtime_model_commit": "7dc46a5803711a3fd63016b2d2c8e5d40a08e965",
+  "core_workspace_base_commit": "42b4a44c42814c2c36515c8f8f0b376467f3a700",
+  "model_source_sha256": {
+    "configs/chips/stm32g0b1re.yaml": "af092f3abf70e9408f8a2eaf9c782b2f3470f0f4af99482beed95a60436e6905",
+    "crates/core/src/network/timed_uart.rs": "8e8357cde18b8166a4021b49fc0b1a7bca568a8464a8e8f3fac2d229e902fe10",
+    "crates/core/src/peripherals/components/tiol112.rs": "0bdc230677d2c8c91dfdbac5680b08381565d5214ed3a6f4d991cac0f9a88ad7",
+    "crates/core/src/peripherals/stm32g0_clock.rs": "c028256d121918d9053aa14200f86d66f79bbfe94a7f64797dadec49c5cd7491",
+    "crates/core/src/peripherals/rcc.rs": "5a76955e9670071fb1db07d44ef990e29b79491bdf9d0dd6c9395ce028125303",
+    "crates/core/src/peripherals/uart.rs": "d40df6ad57aa7755840535b3d4232e7027f85ae55aca24dcd2f2a8d9f2caf96a",
+    "crates/core/src/peripherals/uart/timed.rs": "b5e4903caa24865c50b49816f5b5a316b37b297c8de097b7cc8ec8b8c3c19b52",
+    "crates/core/tests/g0_customer_timing.rs": "298b6fcd15db9f0a994779306ac1d4b28a32ddfb6698c6fa7e5d6ac799590689"
+  },
+  "raw_report_sha256": "d6134daaa65f52663c5ee2445350ddedc592904aeb8ca99152bb7571c80c9845",
+  "cpu_hz": 64000000,
+  "baud": 230400,
+  "firmware_dll_timing_enforcement": {
+    "enabled": true,
+    "evidence": "ELF-resolved rig_timing_enforced RAM value",
+    "external_cq_ta_and_gap_assertions": "always enabled, independent of DLL enforcement"
+  },
+  "firmware_dll_initial": {
+    "base_address": "0x200024d0",
+    "layout_proof": {
+      "elf_sha256": "5177c4598fb2edd823a3f5cba4dbe3723d326c72a11346df7e2f509c1f57e817",
+      "field_width_bytes": {
+        "dll.crc_errors": 4,
+        "dll.enforce_timing": 1,
+        "dll.framing_errors": 4,
+        "dll.min_cycle_time_us": 4,
+        "dll.t_byte_violations": 4,
+        "dll.t_cycle_violations": 4,
+        "dll.t_ren_limit_us": 4,
+        "dll.t_ren_violations": 4,
+        "dll.timeout_errors": 4,
+        "dll.timing_errors": 4
+      },
+      "offsets": {
+        "dll.crc_errors": 236,
+        "dll.enforce_timing": 24,
+        "dll.framing_errors": 244,
+        "dll.min_cycle_time_us": 20,
+        "dll.t_byte_violations": 260,
+        "dll.t_cycle_violations": 256,
+        "dll.t_ren_limit_us": 28,
+        "dll.t_ren_violations": 252,
+        "dll.timeout_errors": 240,
+        "dll.timing_errors": 248,
+        "offsetof_dll": 0,
+        "sizeof_device": 2312,
+        "sizeof_dll": 2056
+      },
+      "verification": "Offsets and widths extracted from this exact ELF's compiler-generated DWARF; the reader must verify elf_sha256 before using them"
+    },
+    "values": {
+      "dll.crc_errors": 0,
+      "dll.enforce_timing": 1,
+      "dll.framing_errors": 0,
+      "dll.min_cycle_time_us": 3000,
+      "dll.t_byte_violations": 0,
+      "dll.t_cycle_violations": 0,
+      "dll.t_ren_limit_us": 20000,
+      "dll.t_ren_violations": 0,
+      "dll.timeout_errors": 0,
+      "dll.timing_errors": 0
+    }
+  },
+  "firmware_dll_final": {
+    "base_address": "0x200024d0",
+    "layout_proof": {
+      "elf_sha256": "5177c4598fb2edd823a3f5cba4dbe3723d326c72a11346df7e2f509c1f57e817",
+      "field_width_bytes": {
+        "dll.crc_errors": 4,
+        "dll.enforce_timing": 1,
+        "dll.framing_errors": 4,
+        "dll.min_cycle_time_us": 4,
+        "dll.t_byte_violations": 4,
+        "dll.t_cycle_violations": 4,
+        "dll.t_ren_limit_us": 4,
+        "dll.t_ren_violations": 4,
+        "dll.timeout_errors": 4,
+        "dll.timing_errors": 4
+      },
+      "offsets": {
+        "dll.crc_errors": 236,
+        "dll.enforce_timing": 24,
+        "dll.framing_errors": 244,
+        "dll.min_cycle_time_us": 20,
+        "dll.t_byte_violations": 260,
+        "dll.t_cycle_violations": 256,
+        "dll.t_ren_limit_us": 28,
+        "dll.t_ren_violations": 252,
+        "dll.timeout_errors": 240,
+        "dll.timing_errors": 248,
+        "offsetof_dll": 0,
+        "sizeof_device": 2312,
+        "sizeof_dll": 2056
+      },
+      "verification": "Offsets and widths extracted from this exact ELF's compiler-generated DWARF; the reader must verify elf_sha256 before using them"
+    },
+    "values": {
+      "dll.crc_errors": 1,
+      "dll.enforce_timing": 1,
+      "dll.framing_errors": 1,
+      "dll.min_cycle_time_us": 3000,
+      "dll.t_byte_violations": 0,
+      "dll.t_cycle_violations": 0,
+      "dll.t_ren_limit_us": 20000,
+      "dll.t_ren_violations": 0,
+      "dll.timeout_errors": 0,
+      "dll.timing_errors": 0
+    }
+  },
+  "benchmark_read_count": 100,
+  "benchmark_write_count": 100,
+  "phase_results": {
+    "STARTUP": {
+      "count": 1,
+      "ta_min_us": 38.066328,
+      "ta_max_us": 38.066328,
+      "reply_byte_counts": [
+        2
+      ],
+      "maximum_reply_byte_gap_tbit": 0,
+      "maximum_en_to_first_uart_start_us": 6.796875
+    },
+    "PREOPERATE": {
+      "count": 1,
+      "ta_min_us": 26.222578,
+      "ta_max_us": 26.222578,
+      "reply_byte_counts": [
+        2
+      ],
+      "maximum_reply_byte_gap_tbit": 0,
+      "maximum_en_to_first_uart_start_us": 6.296875
+    },
+    "PREOPERATE_DEVICE_OPERATE": {
+      "count": 1,
+      "ta_min_us": 29.269453,
+      "ta_max_us": 29.269453,
+      "reply_byte_counts": [
+        1
+      ],
+      "maximum_reply_byte_gap_tbit": 0,
+      "maximum_en_to_first_uart_start_us": 6.296875
+    },
+    "OPERATE/READ/cyclic_benchmark": {
+      "count": 100,
+      "ta_min_us": 28.003828,
+      "ta_max_us": 41.128828,
+      "reply_byte_counts": [
+        34
+      ],
+      "maximum_reply_byte_gap_tbit": 0,
+      "maximum_en_to_first_uart_start_us": 7.046875
+    },
+    "OPERATE/WRITE/cyclic_benchmark": {
+      "count": 100,
+      "ta_min_us": 28.253828,
+      "ta_max_us": 41.300703,
+      "reply_byte_counts": [
+        33
+      ],
+      "maximum_reply_byte_gap_tbit": 0,
+      "maximum_en_to_first_uart_start_us": 7.046875
+    },
+    "OPERATE/READ//34_blocks_per_second": {
+      "count": 8,
+      "ta_min_us": 29.050703,
+      "ta_max_us": 38.206953,
+      "reply_byte_counts": [
+        34
+      ],
+      "maximum_reply_byte_gap_tbit": 0,
+      "maximum_en_to_first_uart_start_us": 6.796875
+    }
+  },
+  "actual_application_request_intervals_us": [
+    29412.0,
+    29412.0,
+    29412.0,
+    29412.0,
+    29412.0,
+    29412.0,
+    29412.0,
+    29412.0
+  ],
+  "negative_controls": [
+    {
+      "case": "invalid_ckt_no_response",
+      "cq_reply_characters": 0,
+      "master_request_start_cycle": 831156,
+      "master_request_start_ps": 12986812500,
+      "observation_us_after_request": 5000,
+      "passed": true,
+      "phase": "OPERATE",
+      "reply": [],
+      "request": [
+        128,
+        130,
+        107
+      ]
+    }
+  ],
+  "limits_checked": {
+    "device_byte_gap_max_tbit": 3,
+    "ta_max_tbit": 10,
+    "ta_min_tbit": 1
+  },
+  "fidelity_gaps": [
+    {
+      "address": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated",
+      "first_pc": "0x0",
+      "kind": "unpowered_rail_assumed"
+    }
+  ],
+  "limits": [
+    "Cortex-M instruction-cycle model is not calibrated silicon WCET",
+    "64MHz uses a fixed post-PLL operating timebase; clock transitions not timed",
+    "TI propagation uses configured datasheet maxima; enable/disable4us are configurable typical scenarios, not maximum guarantees",
+    "WAKE is a GPIO stimulus, not physical current-pulse detection",
+    "No IAR/Beckhoff/electrical conformance claim"
+  ],
+  "timing_reference": "IO-Link Interface and System Specification v1.1.4, June2024, A.3.4/A.3.5"
+}

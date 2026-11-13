@@ -1,5 +1,14 @@
 # Validation Report: sam_e70
 
+> **Superseded.** This is the auto-generated report for the staged
+> `onboarding/sam_e70` descriptor (a generic UART fixture on a placeholder
+> memory map: 256 MiB of flash at `0x0800_0000` and 256 MiB of RAM, copied
+> from the Renode platform, not the SAM E70's 2 MiB flash at `0x0040_0000`).
+> The promoted SAM E70 part is [`same70q21b`](same70q21b.md), and the board
+> package is **[SAM E70 Xplained](sam-e70-xplained.md)**. The staged
+> descriptor stays only because `crates/core/src/bus/known_stubs.rs` still
+> cites it.
+
 **Architecture:** ARMv7E-M.
 
 ## 1. Dynamic Simulation Validation

@@ -288,7 +288,7 @@ This repository is the engine. Everything below runs on it, and all of it is pub
 | --- | --- |
 | [firmware-test](https://github.com/LabWired/firmware-test) | GitHub Action. Run a LabWired test script as a merge gate — no hardware, no cross-toolchain on the runner. |
 | [firmware-ci-starter](https://github.com/LabWired/firmware-ci-starter) | Template repo. Firmware, test script, and workflow already wired — [generate](https://github.com/LabWired/firmware-ci-starter/generate) it and your first push runs green. |
-| [labwired-zephyr](https://github.com/w1ne/labwired-zephyr) | Zephyr west runner. `west simulate`, or `west flash -r labwired`. |
+| [labwired-zephyr](https://github.com/w1ne/labwired-zephyr) | `west labwired-simulate` on Zephyr 3.7 and 4.5. The optional native runner on 4.5 also supports `west simulate -r labwired` and `west flash -r labwired`; see the setup instructions. |
 | [labwired-vscode](https://github.com/w1ne/labwired-vscode) | VS Code extension. Run and debug firmware from the editor without a probe. |
 | [labwired-lab-template](https://github.com/w1ne/labwired-lab-template) | Bare template for a repo whose merges gate on a simulation run. |
 

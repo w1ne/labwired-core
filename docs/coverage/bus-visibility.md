@@ -10,6 +10,10 @@ This is NOT a pad-binding board. Binding answers the static question "what could
 
 Chips that cannot yet produce edges for a bus are listed here with a reason — never silently skipped.
 
+* **am6234**
+  * UART: no AArch64 core bring-up in this harness; bytes are proven by the sk_am62_zephyr survival gate
+* **amap42kp**
+  * UART: no PWRCTRL/UART0 bring-up in this harness; bytes are proven by the apollo4p-evb survival smoke
 * **arty-litex-vexriscv**
   * UART: no LiteX UART bring-up in this harness; bytes are proven by the arty-litex-vexriscv survival smoke
 * **atmega1281**
@@ -28,12 +32,20 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * UART: USART0 registers live on the AVR CPU and are forwarded to the bus-side host; this harness drives bus MMIO, not the CPU, so no bring-up exists here
   * I2C: AVR from_config I2C is generic type:i2c without PadLines cell
   * SPI: AVR from_config SPI is generic type:spi without PadLines cell
+* **atmega328pb**
+  * I2C: AVR from_config I2C is generic type:i2c without PadLines cell
+  * SPI: AVR from_config SPI is generic type:spi without PadLines cell
+  * UART: USART1 emits bytes in the CPU smoke, but this edge gate has no AVR UART waveform bring-up
 * **atsamd21**
   * UART: Nano 33 IoT twin uses generic type:uart (sercom layout); no UART bring-up for this chip family in the edge gate yet
 * **atsamd51**
   * UART: Metro M4 twin uses generic type:uart (sercom layout); no UART bring-up for this chip family in the edge gate yet
 * **atsamd51-pybadge**
   * UART: PyBadge variant of the atsamd51 twin: generic type:uart (sercom layout); no UART bring-up for this chip family in the edge gate yet
+* **cc2538sf53**
+  * UART: no UART0 bring-up in this harness; bytes are proven by the cc2538dk survival smoke
+* **ch32v003f4p6**
+  * UART: pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this harness yet; bytes are proven by ch32v003_compiled_firmware
 * **efr32mg26**
   * UART: the Efr32s2 layout models the console TX/RX byte path but captures no baud divisor (CLKDIV), so bit_time_cycles() is None and no wire waveform is narrated — there are no edges to decode
 * **esp32**
@@ -50,10 +62,16 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * UART: no edge bring-up path for i.MX LPUART in this gate yet
 * **litex-vexriscv**
   * UART: no LiteX UART bring-up in this harness; bytes are proven by the litex-vexriscv survival smoke
+* **mimxrt595s**
+  * UART: no FLEXCOMM0 USART bring-up in this harness; bytes are proven by the mimxrt595-evk survival smoke
+* **mk64f12**
+  * UART: no UART0 bring-up in this harness; bytes are proven by the frdm-k64f survival smoke
 * **mkw41z4**
   * I2C: Kinetis I2C publishes no line_names / wire_lines (honest empty)
   * SPI: no edge bring-up path for Kinetis DSPI in this gate yet
   * UART: no edge bring-up path for Kinetis LPUART in this gate yet
+* **mpfs095t**
+  * UART: no 16550 MMUART bring-up in this harness; bytes are proven by the mpfs_disco_kit_zephyr survival gate
 * **nrf51822**
   * I2C: no nRF51 legacy-TWI bring-up in this harness (the nRF52 arm drives TWIM)
   * UART: no nRF51 legacy-UART bring-up in this harness (the nRF52 arm drives UARTE EasyDMA); bytes are proven by the microbit-v1 survival smoke
@@ -69,26 +87,45 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * I2C: nRF54L pad claims unwired: PSEL.PORT is 3 bits on this family and the claim engine decodes the nRF52840 1-bit field only, so no PadLines cell is installed and no wire waveform is narrated
   * SPI: nRF54L pad claims unwired: PSEL.PORT is 3 bits on this family and the claim engine decodes the nRF52840 1-bit field only, so no PadLines cell is installed and no wire waveform is narrated
   * UART: nRF54L pad claims unwired: PSEL.PORT is 3 bits on this family and the claim engine decodes the nRF52840 1-bit field only, so no PadLines cell is installed and no wire waveform is narrated
+* **pic32mz2048efm144**
+  * UART: no MIPS core bring-up in this harness; bytes are proven by the curiosity_pic32mz_nuttx survival gate
+* **r5f52618bgfp**
+  * UART: no RX core bring-up in this harness; bytes are proven by the ek_rx261_zephyr survival gate
+* **r7fa6m5bh**
+  * UART: no SCI0 bring-up in this harness; bytes are proven by the ek-ra6m5 survival smoke
+* **r7fa8m1ah**
+  * UART: no SCI9 bring-up in this harness; bytes are proven by the ek-ra8m1 survival smoke
 * **ra4m1**
   * UART: Uno R4 Minima SCI2 uses generic type:uart (sci layout); no UART bring-up for this chip family in the edge gate yet
 * **rp2350**
   * I2C: rp2350 from_config bus not yet edge-gated (no line cells)
   * SPI: rp2350 from_config bus not yet edge-gated (no line cells)
   * UART: rp2350 from_config bus not yet edge-gated (no line cells)
+* **s32k388**
+  * UART: no LPUART2 bring-up in this harness; bytes are proven by the s32k388-evb survival smoke
 * **sam4s16c**
   * UART: no UART0 bring-up in this harness; bytes are proven by the sam4s-xplained survival smoke
+* **same70q21b**
+  * UART: no USART1 bring-up in this harness; bytes are proven by the sam-e70-xplained survival smoke
 * **stm32f072**
   * UART: no USART1 bring-up in this harness; bytes are proven by the stm32f072b-disco survival smoke
+* **stm32f103rb-nucleo-bme280-smoke**
+  * UART: this profile exposes only USART2 (the NUCLEO VCP); the F1 harness          produces no analyzer edges on pad-gated USART2 (parent stm32f103          passes on USART3, which this YAML does not include). Bytes are          proven by the boards.yml nucleo-f103rb-bme280 cell          (NUCLEO_F103RB_BME280_OK over USART2)
+* **stm32l552**
+  * UART: no LPUART1 bring-up in this harness; bytes are proven by the nucleo-l552ze-q survival smoke
 * **vegaboard-ri5cy**
   * UART: no LPUART bring-up in this harness; bytes are proven by the vegaboard-ri5cy survival smoke
 
 | Chip | I2C | SPI | UART |
 |------|-----|-----|------|
+| am6234 | — | — | — |
+| amap42kp | — | — | — |
 | arty-litex-vexriscv | — | — | — |
 | atmega1281 | — | — | — |
 | atmega2560 | — | — | — |
 | atmega2561 | — | — | — |
 | atmega328p | — | — | — |
+| atmega328pb | — | — | — |
 | atsamd21 | — | — | — |
 | atsamd21e15a | — | — | — |
 | atsamd21e16a | — | — | — |
@@ -104,17 +141,24 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | atsamd21j18a | — | — | — |
 | atsamd51 | — | — | — |
 | atsamd51-pybadge | — | — | — |
+| cc2538sf53 | — | — | — |
+| ch32v003f4p6 | — | — | — |
 | dspic33fj32mc202 | — | — | — |
 | dspic33fj32mc204 | — | — | — |
 | efr32mg26 | ✓ | ✓ | — |
 | esp32 | ✓ | — | ✓ |
+| esp32-devkitc-32e-gpio-smoke | ✓ | — | ✓ |
+| esp32-devkitc-32e-uart1 | — | — | ✓ |
 | esp32c3 | ✓ | ✓ | ✓ |
 | esp32c6 | ✓ | ✓ | ✓ |
 | esp32s3 | — | — | — |
 | esp32s3-zero | — | — | — |
 | imxrt1064 | — | — | — |
 | litex-vexriscv | — | — | — |
+| mimxrt595s | — | — | — |
+| mk64f12 | — | — | — |
 | mkw41z4 | — | — | — |
+| mpfs095t | — | — | — |
 | nrf51822 | — | — | — |
 | nrf52832 | ✓ | ✓ | ✓ |
 | nrf52833 | ✓ | ✓ | ✓ |
@@ -122,17 +166,26 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | nrf5340 | — | — | — |
 | nrf54l15 | — | — | — |
 | nrf54lm20a | — | — | — |
+| pic16f1829 | — | — | — |
+| pic16f877a | — | — | — |
+| pic18f4520 | — | — | — |
 | pic24f04ka200 | — | — | — |
 | pic24f04ka201 | — | — | — |
 | pic24f08ka101 | — | — | — |
 | pic24f08ka102 | — | — | — |
 | pic24f16ka101 | — | — | — |
 | pic24f16ka102 | — | — | — |
+| pic32mz2048efm144 | — | — | — |
+| r5f52618bgfp | — | — | — |
+| r7fa6m5bh | — | — | — |
+| r7fa8m1ah | — | — | — |
 | ra4m1 | — | — | — |
 | rp2040 | ✓ | ✓ | ✓ |
 | rp2350 | — | — | — |
 | rv1103 | — | — | — |
+| s32k388 | — | — | — |
 | sam4s16c | — | — | — |
+| same70q21b | — | — | — |
 | stm32f072 | ✓ | ✓ | — |
 | stm32f103 | ✓ | ✓ | ✓ |
 | stm32f103c4 | ✓ | ✓ | ✓ |
@@ -141,6 +194,9 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | stm32f103r4h | ✓ | ✓ | ✓ |
 | stm32f103r6 | ✓ | ✓ | ✓ |
 | stm32f103r6h | ✓ | ✓ | ✓ |
+| stm32f103r8 | ✓ | ✓ | ✓ |
+| stm32f103rb | ✓ | ✓ | ✓ |
+| stm32f103rb-nucleo-bme280-smoke | ✓ | — | — |
 | stm32f103t4 | ✓ | ✓ | ✓ |
 | stm32f103t6 | ✓ | ✓ | ✓ |
 | stm32f401 | ✓ | ✓ | ✓ |
@@ -169,15 +225,18 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | stm32f746 | — | — | ✓ |
 | stm32f767 | ✓ | ✓ | ✓ |
 | stm32g071 | ✓ | ✓ | ✓ |
-| stm32g0b1re | — | — | ✓ |
+| stm32g0b1re | ✓ | ✓ | ✓ |
+| stm32g431rb | ✓ | ✓ | ✓ |
 | stm32g474re | ✓ | ✓ | ✓ |
 | stm32h563 | ✓ | ✓ | ✓ |
 | stm32h735 | ✓ | ✓ | ✓ |
 | stm32l073 | ✓ | ✓ | ✓ |
 | stm32l476 | ✓ | ✓ | ✓ |
+| stm32l552 | ✓ | ✓ | — |
 | stm32u545 | ✓ | ✓ | ✓ |
 | stm32u575 | ✓ | ✓ | ✓ |
 | stm32u5a5zj | ✓ | ✓ | ✓ |
 | stm32wb55 | ✓ | ✓ | ✓ |
 | stm32wba52 | ✓ | ✓ | ✓ |
 | vegaboard-ri5cy | — | — | — |
+| xck26-rpu | — | — | — |

@@ -91,6 +91,13 @@ fn assert_same_artifact(old: &Artifact, new: &Artifact, what: &str) {
     keys.sort();
     keys.dedup();
     for k in keys {
+        // Additive oracle evidence on the YAML model only — frozen
+        // display_oracle copies never grew these rings. The panel artifact
+        // evidence tests cover frame history; migration parity stays about the
+        // shared picture behavior.
+        if matches!(k.as_str(), "frames_seen" | "generation_history") {
+            continue;
+        }
         assert_eq!(
             o.get(k),
             n.get(k),
@@ -2073,7 +2080,9 @@ fn rm67162_artifact_keeps_its_published_shape() {
             "dc_source",
             "display_on",
             "format",
+            "frames_seen",
             "generation",
+            "generation_history",
             "h",
             "lit",
             "madctl",
@@ -2146,16 +2155,18 @@ fn old_uc8151d() -> OldUc8151d {
 const EPD_NEW_META_KEYS: [&str; 2] = ["screen_black_ink_bytes", "screen_red_ink_bytes"];
 
 /// Compare an e-paper's two artifacts the way [`assert_same_artifact`] compares
-/// every other panel's, with ONE named exception: the descriptor publishes the
-/// two `screen_*` counts and the deleted model had no screen to count. Every
-/// other key must be identical, the payload must be identical, and the new
-/// key set must be exactly the old one plus those two.
+/// every other panel's, with the named additions that the descriptor publishes
+/// frame history and two `screen_*` counts the deleted model could not provide.
+/// Every other key and the payload must be identical.
 fn assert_same_epaper_artifact(old: &Artifact, new: &Artifact, what: &str) {
     let (o, n) = (
         old.meta.as_object().expect("old meta is an object"),
         new.meta.as_object().expect("new meta is an object"),
     );
     for (k, v) in o {
+        if matches!(k.as_str(), "frames_seen" | "generation_history") {
+            continue;
+        }
         assert_eq!(
             Some(v),
             n.get(k),
@@ -2167,12 +2178,14 @@ fn assert_same_epaper_artifact(old: &Artifact, new: &Artifact, what: &str) {
     let mut extra: Vec<&str> = n
         .keys()
         .filter(|k| !o.contains_key(*k))
+        // Additive oracle rings — not part of the deleted-model contract.
+        .filter(|k| !matches!(k.as_str(), "frames_seen" | "generation_history"))
         .map(|k| k.as_str())
         .collect();
     extra.sort_unstable();
     assert_eq!(
         extra, EPD_NEW_META_KEYS,
-        "{what}: the descriptor may add exactly the two `of: screen` counts and nothing else"
+        "{what}: the descriptor may add exactly the two `of: screen` counts"
     );
     assert_eq!(old.kind, new.kind, "{what}: artifact kind");
     assert_eq!(old.id, new.id, "{what}: artifact id");
@@ -2624,11 +2637,21 @@ fn an_epaper_runtime_snapshot_round_trips_and_an_untagged_one_is_refused() {
 
     let mut dst = new_ssd1680();
     SpiDevice::restore_runtime_snapshot(&mut dst, &blob).expect("a tagged snapshot restores");
-    assert_eq!(
-        epd_art(&dst).meta,
-        epd_art(&src).meta,
-        "every published fact survives the round trip",
-    );
+    {
+        let mut src_meta = epd_art(&src).meta.clone();
+        let mut dst_meta = epd_art(&dst).meta.clone();
+        // Oracle rings are not part of the picture snapshot (pixels + refresh only).
+        for meta in [&mut src_meta, &mut dst_meta] {
+            if let Some(object) = meta.as_object_mut() {
+                object.remove("frames_seen");
+                object.remove("generation_history");
+            }
+        }
+        assert_eq!(
+            dst_meta, src_meta,
+            "every published fact survives the round trip"
+        );
+    }
     assert_eq!(epd_art(&dst).bytes, epd_art(&src).bytes, "and every byte");
     assert_eq!(
         epd_art(&dst).meta["screen_black_ink_bytes"],

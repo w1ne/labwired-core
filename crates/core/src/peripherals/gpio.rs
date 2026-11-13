@@ -12,6 +12,7 @@
 // selects the variant; the `Peripheral` impl and the `odr_offset`/`idr_offset`
 // bus helpers dispatch to the active family.
 
+use crate::pins::PinPort;
 use crate::SimResult;
 use std::str::FromStr;
 
@@ -53,6 +54,11 @@ pub struct GpioRouting {
 pub enum GpioRegisterLayout {
     #[default]
     Stm32F1,
+    /// WCH CH32V003 GPIO port. The data and set/reset registers use the F1
+    /// register semantics, but this part has one 8-pin CFGLR at +0x00 and a
+    /// reserved word at +0x04 (not the F1 CFGHR). This remains an explicit
+    /// layout so firmware cannot read/write a fictitious high config register.
+    Wch,
     Stm32V2,
     Nrf52,
     /// Nordic **nRF54L family** (nRF54L05/10/15, nRF54LM20A/B) GPIO port.
@@ -110,6 +116,7 @@ impl FromStr for GpioRegisterLayout {
         let v = value.trim().to_ascii_lowercase();
         match v.as_str() {
             "stm32f1" | "f1" | "legacy" => Ok(Self::Stm32F1),
+            "wch" | "ch32v003" => Ok(Self::Wch),
             "stm32v2" | "v2" | "modern" | "stm32-modern" | "h5" | "stm32h5" => Ok(Self::Stm32V2),
             "nrf52" | "nordic" => Ok(Self::Nrf52),
             "nrf54l" | "nrf54lm20a" | "nrf54l15" => Ok(Self::Nrf54l),
@@ -119,10 +126,38 @@ impl FromStr for GpioRegisterLayout {
             "ra_port" | "ra4m1" | "renesas_port" => Ok(Self::RaPort),
             "imxrt" | "imxrt_gpio" => Ok(Self::Imxrt),
             _ => Err(format!(
-                "unsupported GPIO register layout '{}'; supported: stm32f1, stm32v2, nrf52, nrf54l, kinetis, efr32s2, sam_port, ra_port, imxrt",
+                "unsupported GPIO register layout '{}'; supported: stm32f1, wch, stm32v2, nrf52, nrf54l, kinetis, efr32s2, sam_port, ra_port, imxrt",
                 value
             )),
         }
+    }
+}
+
+/// STM32 GPIOx_LCKR write: LCKK (bit 16) must be written 1-0-1 with the same
+/// LCK[15:0] mask before the configuration is locked (RM0008 §9.2.7, RM0456
+/// §13.4.8). LCKK reads 0 until the sequence completes. Once it reads 1, the
+/// key and pin mask stay latched until reset; later writes cannot lock more
+/// pins. `seq` is 0 idle, 1 after LCKK=1, 2 after LCKK=0.
+fn stm32_lckr_write(lckr: &mut u32, seq: &mut u8, locked_pins: &mut u32, value: u32) {
+    const LCKK: u32 = 1 << 16;
+    if *lckr & LCKK != 0 {
+        return;
+    }
+    let pins = value & 0xFFFF;
+    if value & LCKK != 0 {
+        if *seq == 2 && pins == *lckr {
+            *locked_pins = pins;
+            *seq = 0;
+            *lckr = pins | LCKK;
+        } else {
+            // A fresh key write can start (or restart) the sequence, but it
+            // cannot complete an earlier one; a changed mask also restarts.
+            *seq = if *seq == 2 { 0 } else { 1 };
+            *lckr = pins;
+        }
+    } else {
+        *seq = if *seq == 1 && pins == *lckr { 2 } else { 0 };
+        *lckr = pins;
     }
 }
 
@@ -134,6 +169,12 @@ pub struct F1Gpio {
     idr: u32,  // 0x08
     odr: u32,  // 0x0C
     lckr: u32, // 0x18
+    /// LCKR lock sequence state: 0 idle, 1 LCKK=1 seen, 2 LCKK=0 seen.
+    #[serde(default)]
+    lckr_seq: u8,
+    /// Pins whose CRL/CRH nibble is locked by the LCKR sequence.
+    #[serde(default)]
+    locked_pins: u32,
     /// Pins the outside world is holding. The input pull (CNF = 10, ODR picks
     /// the rail) applies only where this bit is clear, so a button on the pad
     /// wins over the weak resistor. Not a register: snapshots stay the
@@ -230,10 +271,23 @@ impl F1Gpio {
             }
         }
     }
+    /// CRL (`high == false`) or CRH nibble mask of the locked pins.
+    fn locked_config_mask(&self, high: bool) -> u32 {
+        let pins = if high {
+            self.locked_pins >> 8
+        } else {
+            self.locked_pins
+        };
+        (0..8)
+            .filter(|pin| pins & (1 << pin) != 0)
+            .fold(0, |mask, pin| mask | (0xF << (pin * 4)))
+    }
+
     fn write_reg(&mut self, offset: u64, value: u32) {
+        let merge = |old: u32, new: u32, lock: u32| (old & lock) | (new & !lock);
         match offset {
-            0x00 => self.crl = value,
-            0x04 => self.crh = value,
+            0x00 => self.crl = merge(self.crl, value, self.locked_config_mask(false)),
+            0x04 => self.crh = merge(self.crh, value, self.locked_config_mask(true)),
             0x0C => self.odr = value & 0xFFFF,
             0x10 => {
                 // BSRR: low 16 set, high 16 reset; BS has priority over BR.
@@ -246,7 +300,12 @@ impl F1Gpio {
                 // BRR: reset selected ODR bits.
                 self.odr &= !(value & 0xFFFF);
             }
-            0x18 => self.lckr = value,
+            0x18 => stm32_lckr_write(
+                &mut self.lckr,
+                &mut self.lckr_seq,
+                &mut self.locked_pins,
+                value,
+            ),
             _ => {
                 crate::census_reg!("gpio:F1Gpio", offset, "write");
             }
@@ -387,49 +446,12 @@ impl V2Gpio {
                 self.odr &= !reset;
                 self.odr |= set;
             }
-            0x1C => {
-                // LCKR: LCKK must be written 1-0-1 with the same pin mask
-                // before the configuration is locked (RM0456 §13.4.8). Once
-                // LCKK reads as 1, the key and pin mask stay latched until
-                // reset; later writes cannot lock additional pins.
-                const LCKK: u32 = 1 << 16;
-                if self.lckr & LCKK != 0 {
-                    return;
-                }
-                let pins = value & 0xFFFF;
-                let lckk = value & LCKK != 0;
-                if lckk {
-                    match self.lckr_seq {
-                        0 | 1 => {
-                            // A fresh key write can start (or restart) the
-                            // sequence, but it cannot complete an earlier one.
-                            self.lckr_seq = 1;
-                            self.lckr = pins;
-                        }
-                        2 if pins == self.lckr => {
-                            self.locked_pins = pins;
-                            self.lckr_seq = 0;
-                            self.lckr = pins | LCKK;
-                        }
-                        2 => {
-                            // LCK[15:0] must remain constant throughout 1-0-1.
-                            self.lckr_seq = 0;
-                            self.lckr = pins;
-                        }
-                        _ => {
-                            self.lckr_seq = 0;
-                            self.lckr = pins;
-                        }
-                    }
-                } else {
-                    self.lckr_seq = if self.lckr_seq == 1 && pins == self.lckr {
-                        2
-                    } else {
-                        0
-                    };
-                    self.lckr = pins;
-                }
-            }
+            0x1C => stm32_lckr_write(
+                &mut self.lckr,
+                &mut self.lckr_seq,
+                &mut self.locked_pins,
+                value,
+            ),
             0x20 => self.afrl = merge(self.afrl, value, locked4_low),
             0x24 => self.afrh = merge(self.afrh, value, locked4_high),
             0x2C => self.hslvr = merge(self.hslvr, value, self.locked_pins),
@@ -1184,6 +1206,9 @@ impl ImxrtGpio {
     }
 }
 
+/// `PmnPFS.PSEL` of the GPT GTIOCnA/B pin functions.
+const RA_PSEL_GPT: u32 = 0b00011;
+
 // ── Renesas RA PORT (RA4M1 / R7FA4M1, R01UH0887 §19) ─────────────────────────
 // Port n @ 0x40040000 + n*0x20. 16 pins. FSP IOPORT v1 uses 32-bit PCNTR*:
 //   PCNTR1 @0x00: PDR[15:0] direction, PODR[31:16] output data
@@ -1192,9 +1217,21 @@ impl ImxrtGpio {
 //
 // The input pull-up is PmnPFS.PCR, outside this block; the bus hands it over
 // (`crate::pins::PadControl::RaPfs`) and PIDR reads it on an input pad nothing
-// outside holds.
+// outside holds. PmnPFS PDR/PODR are the same flip-flops as PCNTR1's, so a
+// PmnPFS store sets them too (`PadControl::output_write`).
+//
+// The 16-bit aliases of each PCNTRn are NOT in little-endian half order on
+// every RA part. FSP `R7FA4M1AB.h` / `R7FA6M5BH.h` put PODR at +0x0 and PDR
+// at +0x2 (EIDR +0x4 / PIDR +0x6, PORR +0x8 / POSR +0xA, EORR +0xC / EOSR
+// +0xE): the upper half of the 32-bit word answers at the lower address.
+// `R7FA8M1AH.h` has the natural order (PDR +0x0, PODR +0x2, ...). Chip
+// YAML picks the RA4/RA6 order with `swapped_half_aliases: true`; byte
+// accesses follow the 16-bit alias they fall in.
 #[derive(Debug, Default, serde::Serialize)]
 pub struct RaPortGpio {
+    /// RA4/RA6 16-bit alias order (see above). Not a register.
+    #[serde(skip)]
+    swapped_halves: bool,
     pdr: u16,  // direction (1 = output)
     podr: u16, // output data
     pidr: u16, // input latch (host/button injection)
@@ -1204,6 +1241,12 @@ pub struct RaPortGpio {
     /// The PFS pull-ups, as the bus last handed them over.
     #[serde(skip)]
     pulls: ConfigPulls,
+    /// Pads `PmnPFS.PMR` hands to a peripheral, and each one's PSEL, as the
+    /// bus last handed them over.
+    #[serde(skip)]
+    pmr: u16,
+    #[serde(skip)]
+    psel: [u8; 16],
 }
 
 impl RaPortGpio {
@@ -1408,6 +1451,42 @@ impl GpioFamily {
         true
     }
 
+    /// Take PDR/PODR from a `PmnPFS` store (RA only: the same flip-flops as
+    /// `PCNTR1`, see [`crate::pins::PinPort::set_config_output`]).
+    fn set_config_output(&mut self, pin: u8, output: bool, high: bool) -> bool {
+        let Self::RaPort(g) = self else {
+            return false;
+        };
+        if pin >= 16 {
+            return false;
+        }
+        let bit = 1u16 << pin;
+        g.pdr = if output { g.pdr | bit } else { g.pdr & !bit };
+        g.podr = if high { g.podr | bit } else { g.podr & !bit };
+        true
+    }
+
+    /// Take the `PmnPFS` PMR/PSEL peripheral function (RA only, see
+    /// [`crate::pins::PinPort::set_config_function`]). `true` when it changed.
+    fn set_config_function(&mut self, pin: u8, function: Option<u8>) -> bool {
+        let Self::RaPort(g) = self else {
+            return false;
+        };
+        if pin >= 16 {
+            return false;
+        }
+        let bit = 1u16 << pin;
+        let before = (g.pmr & bit != 0).then_some(g.psel[usize::from(pin)]);
+        match function {
+            Some(psel) => {
+                g.pmr |= bit;
+                g.psel[usize::from(pin)] = psel;
+            }
+            None => g.pmr &= !bit,
+        }
+        before != function
+    }
+
     /// The pull a pad-control block configures on `pin`, for the families
     /// that keep it outside (see [`Self::set_config_pull`]).
     fn config_pull(&self, pin: u8) -> crate::pins::Pull {
@@ -1586,6 +1665,9 @@ pub struct GpioPort {
     /// keeps working. Adding a family variant instead would make each of those
     /// arms silently miss this port.
     nrf54l_offsets: bool,
+    /// WCH GPIO has the F1 data/set/reset register behavior but reserves
+    /// offset +0x04 and exposes only CFGLR for pins 0..7.
+    wch_single_config_register: bool,
     /// Pads the mux can hand to a timer input. Empty on every port the bus
     /// did not wire for input capture, where the edge check costs one
     /// `is_empty`.
@@ -1622,6 +1704,9 @@ impl GpioPort {
     /// alternate-function pad would otherwise format a string each time only
     /// to have it thrown away.
     fn pad_mode(&self, pin: u8) -> Option<GpioMode> {
+        if self.wch_single_config_register && pin >= 8 {
+            return None;
+        }
         if pin >= 32 {
             return None;
         }
@@ -1705,7 +1790,9 @@ impl GpioPort {
                 if pin >= 16 {
                     return None;
                 }
-                if (g.pdr & (1u16 << pin)) != 0 {
+                if (g.pmr & (1u16 << pin)) != 0 {
+                    GpioMode::Af
+                } else if (g.pdr & (1u16 << pin)) != 0 {
                     GpioMode::Output
                 } else {
                     GpioMode::Input
@@ -1731,6 +1818,7 @@ impl GpioPort {
             window_offset: 0,
             pad_claims: None,
             nrf54l_offsets: false,
+            wch_single_config_register: false,
             capture_routes: Vec::new(),
             timer_edges: Vec::new(),
             externally_driven: 0,
@@ -1989,8 +2077,14 @@ impl GpioPort {
     }
 
     pub fn new_with_layout(layout: GpioRegisterLayout) -> Self {
+        if layout == GpioRegisterLayout::Wch {
+            let mut port = Self::from_family(GpioFamily::Stm32F1(F1Gpio::new()));
+            port.wch_single_config_register = true;
+            return port;
+        }
         Self::from_family(match layout {
             GpioRegisterLayout::Stm32F1 => GpioFamily::Stm32F1(F1Gpio::new()),
+            GpioRegisterLayout::Wch => unreachable!("handled above"),
             GpioRegisterLayout::Stm32V2 => GpioFamily::Stm32V2(V2Gpio::default()),
             GpioRegisterLayout::Nrf52 => GpioFamily::Nrf52(Nrf52Gpio::default()),
             GpioRegisterLayout::Nrf54l => {
@@ -2056,14 +2150,49 @@ impl GpioPort {
     /// through here, so a port with a non-zero window offset cannot be reached
     /// by one path and missed by another.
     fn read_reg(&self, offset: u64) -> u32 {
-        self.family
-            .read_reg(self.translate(offset) + self.window_offset)
+        let offset = self.translate(offset) + self.window_offset;
+        if self.wch_single_config_register && offset == 0x04 {
+            return 0;
+        }
+        let value = self.family.read_reg(offset);
+        if self.wch_single_config_register
+            || self.pad_routes.is_empty()
+            || !matches!(
+                (&self.family, offset),
+                (GpioFamily::Stm32F1(_), 0x08) | (GpioFamily::Stm32V2(_), 0x10)
+            )
+        {
+            return value;
+        }
+        self.stm32_af_input_word(value)
+    }
+
+    /// STM32 IDR samples the pad even while its mux selects a peripheral.
+    /// Only an active output replaces the family's input/pull resolution;
+    /// released open-drain and input lines retain that existing resolution.
+    /// Do not call `pad_level` here: its input fallback reads IDR itself.
+    fn stm32_af_input_word(&self, mut value: u32) -> u32 {
+        for pin in 0..16u8 {
+            let Some((cell, line)) = self.pad_routes.active_line(pin, |p| {
+                Self::selected_function(&self.family, self.pad_claims.as_ref(), p)
+            }) else {
+                continue;
+            };
+            if cell.drives(line) {
+                let bit = 1u32 << pin;
+                value = (value & !bit) | (u32::from(cell.level(line)) << pin);
+            }
+        }
+        value
     }
 
     fn write_reg(&mut self, offset: u64, value: u32) {
         let translated = self.translate(offset);
-        self.family
-            .write_reg(translated + self.window_offset, value);
+        let offset = translated + self.window_offset;
+        if self.wch_single_config_register && offset == 0x04 {
+            return;
+        }
+        self.family.write_reg(offset, value);
     }
 
     /// nRF54L window offset -> the nRF52 model's register offset.
@@ -2153,6 +2282,11 @@ impl GpioPort {
 
     pub(crate) fn register_layout(&self) -> GpioRegisterLayout {
         match &self.family {
+            // A WCH port reuses the F1 engine but is a different chip. Reported
+            // as `Stm32F1`, it picked up the STM32F103 pad tables in
+            // `bus::attach`: CH32V003 USART1 got bound to PA9 (an F103 pad that
+            // part does not bond), so its console gate never opened.
+            GpioFamily::Stm32F1(_) if self.wch_single_config_register => GpioRegisterLayout::Wch,
             GpioFamily::Stm32F1(_) => GpioRegisterLayout::Stm32F1,
             GpioFamily::Stm32V2(_) => GpioRegisterLayout::Stm32V2,
             // Reported as its own layout, which is what keeps
@@ -2283,6 +2417,10 @@ impl GpioPort {
             // SAM PORT: PINCFG.PMUXEN hands the pad to the PMUX function
             // (A = 0 .. N = 13); only pads with a bound route ever ask.
             GpioFamily::SamPort(g) => g.pmux_of(pin).map(u32::from),
+            // RA: `PmnPFS.PMR` hands the pad to the peripheral PSEL names.
+            GpioFamily::RaPort(g) => {
+                (pin < 16 && g.pmr & (1 << pin) != 0).then(|| u32::from(g.psel[usize::from(pin)]))
+            }
             _ => None,
         }
     }
@@ -2294,6 +2432,9 @@ impl GpioPort {
     /// peripheral publishes into; every other pad falls back to the family
     /// register truth.
     fn pad_level(&self, pin: u8) -> Option<bool> {
+        if self.wch_single_config_register && pin >= 8 {
+            return None;
+        }
         if let Some((cell, line)) = self.pad_routes.active_line(pin, |p| {
             Self::selected_function(&self.family, self.pad_claims.as_ref(), p)
         }) {
@@ -2419,7 +2560,18 @@ impl crate::pins::PinPort for GpioPort {
         }
     }
 
+    fn port_id(&self, name: &str) -> Option<crate::pins::PortId> {
+        match self.family {
+            // RA ports are numbered: `port0` .. `portb`.
+            GpioFamily::RaPort(_) => crate::pins::PortId::from_hex_numbered_name(name, "port"),
+            _ => crate::pins::PortId::from_prefixed_name(name, self.port_name_prefix()),
+        }
+    }
+
     fn pin_count(&self) -> u8 {
+        if self.wch_single_config_register {
+            return 8;
+        }
         match &self.family {
             GpioFamily::Stm32F1(_)
             | GpioFamily::Stm32V2(_)
@@ -2564,18 +2716,73 @@ impl crate::pins::PinPort for GpioPort {
         }
         taken
     }
+
+    /// RA ports take PDR/PODR from their `PmnPFS` stores; the others ignore it.
+    fn set_config_output(&mut self, pin: u8, output: bool, high: bool) -> bool {
+        if pin >= self.pin_count() {
+            return false;
+        }
+        let taken = self.family.set_config_output(pin, output, high);
+        if taken {
+            self.sync_pin_cells();
+        }
+        taken
+    }
+
+    /// RA ports take the `PmnPFS` PMR/PSEL function; the others ignore it.
+    fn set_config_function(&mut self, pin: u8, function: Option<u8>) -> bool {
+        if pin >= self.pin_count() {
+            return false;
+        }
+        let changed = self.family.set_config_function(pin, function);
+        if changed {
+            self.sync_pad_line_taps();
+            self.sync_pin_cells();
+        }
+        changed
+    }
+}
+
+impl GpioPort {
+    /// RA4/RA6 ports: the 16-bit PCNTRn aliases in FSP `R7FA6M5BH.h` order
+    /// (PODR at +0x0, PDR at +0x2, ...; see [`RaPortGpio`]). Other layouts
+    /// ignore it.
+    pub fn with_ra_swapped_half_aliases(mut self) -> Self {
+        if let GpioFamily::RaPort(g) = &mut self.family {
+            g.swapped_halves = true;
+        }
+        self
+    }
+
+    /// Where a byte (or a byte of a 16-bit access) at `offset` lands in the
+    /// 32-bit register file: the other half of the word on a RA4/RA6 port.
+    fn sub_word_offset(&self, offset: u64) -> u64 {
+        match &self.family {
+            GpioFamily::RaPort(g) if g.swapped_halves => offset ^ 2,
+            _ => offset,
+        }
+    }
 }
 
 impl crate::Peripheral for GpioPort {
     fn on_system_reset(&mut self) {
-        // SAM PORT only: registers to power-on, the outside world's levels kept.
-        if let GpioFamily::SamPort(g) = &mut self.family {
-            let (external, in_latch) = (g.external, g.in_latch);
-            *g = SamGpio::default();
-            g.external = external;
-            g.in_latch = in_latch;
-            self.sync_pin_cells();
+        // Restore the register file while retaining levels held by the world.
+        match &mut self.family {
+            GpioFamily::SamPort(g) => {
+                let (external, in_latch) = (g.external, g.in_latch);
+                *g = SamGpio::default();
+                g.external = external;
+                g.in_latch = in_latch;
+            }
+            GpioFamily::Stm32F1(g) if !self.wch_single_config_register => {
+                let (external, idr) = (g.external, g.idr & g.external);
+                *g = F1Gpio::new();
+                g.external = external;
+                g.idr = idr;
+            }
+            _ => return,
         }
+        self.sync_pin_cells();
     }
     /// Not in the per-cycle walk: this model overrides neither `tick()` nor
     /// `tick_elapsed()`, so every visit ran the default no-op and returned a
@@ -2594,6 +2801,7 @@ impl crate::Peripheral for GpioPort {
     }
 
     fn read(&self, offset: u64) -> SimResult<u8> {
+        let offset = self.sub_word_offset(offset);
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
         let reg_val = self.read_reg(reg_offset);
@@ -2601,6 +2809,7 @@ impl crate::Peripheral for GpioPort {
     }
 
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        let offset = self.sub_word_offset(offset);
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
 
@@ -2656,7 +2865,7 @@ impl crate::Peripheral for GpioPort {
     }
 
     fn read_gpio_input(&self, pin: u8) -> Option<bool> {
-        if pin >= 32 {
+        if pin >= self.pin_count() {
             return None;
         }
         let reg = self.read_reg(self.idr_offset());
@@ -2665,13 +2874,12 @@ impl crate::Peripheral for GpioPort {
 
     fn read_gpio_input_word(&self) -> u32 {
         // The same register `read_gpio_input` reads, read ONCE instead of once
-        // per pin. That is not an approximation of the default 32-call loop, it
-        // is the identity it computes: the loop's bit `pin` is
-        // `read_reg(idr_offset()) >> pin & 1` for every pin below 32, and this
-        // model answers `Some` for all 32, so the loop never breaks early and
-        // reassembles this exact word. Every family's input offset comes from
-        // `idr_offset`. Nordic's canonical IN snapshot can bypass the register
-        // decoder, but only when the window algebra resolves exactly to IN.
+        // per pin. Physical pins beyond `pin_count()` return `None`; their
+        // backing register bits are masked to zero, so this word is still the
+        // exact value the default low-to-high loop assembles before it stops.
+        // Every family's input offset comes from `idr_offset`. Nordic IN and
+        // EFR32 DIN snapshots can bypass the register decoder only when the
+        // window algebra resolves exactly to that family's input register.
         // Saturating subtraction for an invalid window must still take the
         // old decoder path (including its unknown-register census).
         //
@@ -2685,6 +2893,13 @@ impl crate::Peripheral for GpioPort {
                     || (self.nrf54l_offsets && self.window_offset <= 0x00C) =>
             {
                 g.effective_in()
+            }
+            // EFR32 polls four ports at each GPIO boundary. Its DIN is already
+            // resolved by the family; STM32 AF input processing does not apply.
+            // Reject translated or saturated windows so their decoder behavior
+            // (including unknown-register census) remains unchanged.
+            GpioFamily::Efr32s2(g) if !self.nrf54l_offsets && self.window_offset <= 0x14 => {
+                g.effective_din()
             }
             _ => self.read_reg(self.idr_offset()),
         }
@@ -2748,7 +2963,7 @@ impl crate::Peripheral for GpioPort {
     }
 
     fn read_gpio_output(&self, pin: u8) -> Option<bool> {
-        if pin >= 32 {
+        if pin >= self.pin_count() {
             return None;
         }
         if let GpioFamily::RaPort(g) = &self.family {
@@ -2780,25 +2995,41 @@ impl crate::Peripheral for GpioPort {
         fits
     }
 
-    /// F1 only: the timer channel outputs share their DEFAULT pads with
-    /// SPI1/USART/I²C, so the route is conditional — see
-    /// [`crate::peripherals::pad_routing::PadRoutes::bind_when_driving`].
+    /// STM32: conditional — see
+    /// [`crate::peripherals::pad_routing::PadRoutes::bind_when_driving`]. On
+    /// F1 the timer channel outputs share their DEFAULT pads with
+    /// SPI1/USART/I²C. On V2 the AFR nibble already picks the timer, but a
+    /// channel in input-capture mode (or with `CCxE = 0`) must leave the pad
+    /// to its capture route / the outside world, so it is conditional too.
     fn bind_timer_output_pad(
         &mut self,
         cell: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
         pin: u8,
+        af: Option<u8>,
         line: usize,
         func: &'static str,
     ) -> bool {
-        match self.family {
-            GpioFamily::Stm32F1(_) if pin < 16 => {
+        match (&self.family, af) {
+            (GpioFamily::Stm32F1(_), None) if pin < 16 => {
                 self.pad_routes
                     .bind_when_driving(cell, pin, None, line, func);
                 true
             }
+            (GpioFamily::Stm32V2(_), Some(af)) if pin < 16 && af < 16 => {
+                self.pad_routes
+                    .bind_when_driving(cell, pin, Some(u32::from(af)), line, func);
+                true
+            }
             // SAM TC waveform outputs are PMUX function E (DS60001507F 6.1).
-            GpioFamily::SamPort(_) if pin < 32 => {
+            (GpioFamily::SamPort(_), None) if pin < 32 => {
                 self.pad_routes.bind(cell, pin, Some(4), line, func);
+                true
+            }
+            // RA GPT GTIOCnA/B are PmnPFS PSEL 00011 (Zephyr
+            // `RA_PSEL_GPT1`, the EK-RA8M1/EK-RA6M5 pinctrl's GTIOC pads).
+            (GpioFamily::RaPort(_), None) if pin < 16 => {
+                self.pad_routes
+                    .bind(cell, pin, Some(RA_PSEL_GPT), line, func);
                 true
             }
             _ => false,
@@ -2861,6 +3092,109 @@ mod routing_tests {
     use super::{GpioFamily, GpioMode, GpioPort, GpioRegisterLayout};
     use crate::Peripheral;
     use std::str::FromStr;
+
+    #[test]
+    fn efr32_snapshot_matches_independent_window_address_algebra() {
+        for translated in [false, true] {
+            for window in 0u64..=0x800 {
+                let mut port = GpioPort::new_with_layout(GpioRegisterLayout::Efr32s2);
+                port.write_u32(0x04, 0x4444_4444).unwrap();
+                port.write_u32(0x0c, 0x4444_4444).unwrap();
+                port.write_u32(0x10, 0xa55a).unwrap();
+                let mut port = port.with_window_offset(window);
+                port.nrf54l_offsets = translated;
+
+                // DIN is 0x14 in the Series-2 map. Work from that register
+                // address, independently of the optimized branch. A malformed
+                // compact translation adds 0x504 to these relative offsets;
+                // a window past DIN saturates the relative address at zero.
+                let relative = 0x14u64.saturating_sub(window);
+                let decoded = relative + window + if translated { 0x504 } else { 0 };
+                let expected = if decoded == 0x14 { 0xa55a } else { 0 };
+                assert_eq!(
+                    port.read_gpio_input_word(),
+                    expected,
+                    "translated={translated}, window={window:#x}, decoded={decoded:#x}"
+                );
+                assert_eq!(
+                    port.read_gpio_input_word(),
+                    port.read_reg(port.idr_offset()),
+                    "translated={translated}, window={window:#x}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn efr32_snapshot_matches_mmio_and_pin_resolution_across_drive_modes() {
+        use crate::peripherals::pad_lines::{LineDrive, PadLines};
+        use std::sync::Arc;
+
+        // Both register halves exercise every mode, including input pulls,
+        // push-pull output, and open-drain drive/release. Mixed external masks
+        // distinguish an undriven pull from an externally held low input.
+        for (model, modeh) in [(0x7654_3210u32, 0xfedc_ba98u32), (0xfedc_ba98, 0x7654_3210)] {
+            for dout in [0u32, 0xffff, 0xa55a, 0x5aa5] {
+                for external in [0u32, 0xffff, 0x5555, 0xaaaa] {
+                    for levels in [0u32, 0xffff, 0x6996] {
+                        for window in [0u64, 4, 0x10, 0x14, 0x18, 0x500] {
+                            let mut port = GpioPort::new_with_layout(GpioRegisterLayout::Efr32s2);
+                            port.write_u32(0x04, model).unwrap();
+                            port.write_u32(0x0c, modeh).unwrap();
+                            port.write_u32(0x10, dout | 0xffff_0000).unwrap();
+                            assert_eq!(port.read_u32(0x10).unwrap(), dout);
+                            for pin in 0..16u8 {
+                                if external & (1 << pin) != 0 {
+                                    assert!(port.set_gpio_input(pin, levels & (1 << pin) != 0));
+                                }
+                            }
+                            // An installed peripheral route must not cause a
+                            // Series-2 snapshot to acquire STM32 AF semantics.
+                            let lines = Arc::new(PadLines::new(&["CC0"], &[false]));
+                            port.add_pad_route(&lines, 0, None, 0, "TIMER0_CC0");
+                            lines.drive_line(0, LineDrive::PushPull, true);
+                            let port = port.with_window_offset(window);
+
+                            let mut expected = 0u32;
+                            for pin in 0..16u8 {
+                                let modes = if pin < 8 { model } else { modeh };
+                                let mode = (modes >> (4 * (pin % 8))) & 0xf;
+                                let output = dout & (1 << pin) != 0;
+                                let held = external & (1 << pin) != 0;
+                                let input = held && levels & (1 << pin) != 0;
+                                let level = match mode {
+                                    2 | 3 if !held => output,
+                                    6 | 7 => output && input,
+                                    4..=15 => output,
+                                    _ => input,
+                                };
+                                expected |= u32::from(level) << pin;
+                            }
+                            // Invalid windows continue to decode an unknown
+                            // register; they must not return the live DIN word.
+                            if window > 0x14 {
+                                expected = 0;
+                            }
+                            let snapshot = port.read_gpio_input_word();
+                            assert_eq!(
+                                snapshot, expected,
+                                "model={model:#x}, modeh={modeh:#x}, dout={dout:#x}, \
+                                 external={external:#x}, levels={levels:#x}, window={window:#x}"
+                            );
+                            assert_eq!(snapshot, port.read_u32(port.idr_offset()).unwrap());
+                            let mut pins = 0u32;
+                            for pin in 0..16u8 {
+                                pins |= u32::from(port.read_gpio_input(pin).unwrap()) << pin;
+                            }
+                            assert_eq!(snapshot, pins);
+                            assert_eq!(snapshot & 0xffff_0000, 0);
+                            assert_eq!(port.read_gpio_input(16), None);
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn nordic_snapshot_fast_guard_matches_independent_window_address_algebra() {
@@ -2940,9 +3274,12 @@ mod routing_tests {
                 }
                 assert!(port.set_gpio_input(2, false));
                 let mut single = 0u32;
-                for pin in 0..32 {
+                for pin in 0..width.min(32) as u8 {
                     single |= u32::from(port.read_gpio_input(pin).unwrap()) << pin;
                 }
+                let pin_count = width.min(32) as u8;
+                assert_eq!(port.read_gpio_input(pin_count), None);
+                assert_eq!(port.read_gpio_output(pin_count), None);
                 assert_eq!(port.read_gpio_input_word(), single);
                 assert_eq!(
                     port.read_gpio_input_word(),
@@ -3086,6 +3423,36 @@ mod routing_tests {
     }
 
     #[test]
+    fn ra_port_16_bit_aliases_follow_the_part() {
+        // RA8 (FSP R7FA8M1AH.h): PDR +0x0, PODR +0x2, PIDR +0x4, POSR +0x8.
+        let mut p = GpioPort::new_with_layout(GpioRegisterLayout::RaPort);
+        p.write_u16(0x00, 1 << 6).unwrap();
+        p.write_u16(0x02, 1 << 6).unwrap();
+        assert_eq!(p.read_u32(0x00).unwrap(), 0x0040_0040);
+        assert_eq!(p.read_u16(0x04).unwrap(), 1 << 6, "PIDR");
+        p.write_u16(0x0A, 1 << 6).unwrap(); // PORR
+        assert_eq!(p.read_u16(0x02).unwrap(), 0, "PODR");
+        // RA4/RA6 (R7FA6M5BH.h): PODR +0x0, PDR +0x2, EIDR +0x4, PIDR +0x6,
+        // PORR +0x8, POSR +0xA. The 32-bit words keep the same halves.
+        let mut p =
+            GpioPort::new_with_layout(GpioRegisterLayout::RaPort).with_ra_swapped_half_aliases();
+        p.write_u16(0x02, 1 << 6).unwrap(); // PDR
+        assert_eq!(p.read_u32(0x00).unwrap(), 0x0000_0040);
+        p.write_u16(0x00, 1 << 6).unwrap(); // PODR
+        assert_eq!(p.read_u32(0x00).unwrap(), 0x0040_0040);
+        assert_eq!(p.read_u16(0x00).unwrap(), 1 << 6, "PODR");
+        assert_eq!(p.read_u16(0x06).unwrap(), 1 << 6, "PIDR");
+        assert_eq!(p.read_u16(0x04).unwrap(), 0, "EIDR");
+        p.write_u16(0x08, 1 << 6).unwrap(); // PORR
+        assert_eq!(p.read_u32(0x00).unwrap(), 0x0000_0040);
+        p.write_u16(0x0A, 1 << 6).unwrap(); // POSR
+        assert_eq!(p.read_u32(0x00).unwrap(), 0x0040_0040);
+        // A byte falls in its 16-bit alias: +0x0 is PODR[7:0].
+        p.write(0x00, 0).unwrap();
+        assert_eq!(p.read_u32(0x00).unwrap(), 0x0000_0040);
+    }
+
+    #[test]
     fn ra_port_from_str() {
         assert_eq!(
             GpioRegisterLayout::from_str("ra_port").unwrap(),
@@ -3196,6 +3563,92 @@ mod tests {
     }
 
     #[test]
+    fn wch_gpio_has_one_config_word_and_eight_pins() {
+        let mut gpio = GpioPort::new_with_layout(GpioRegisterLayout::Wch);
+
+        // WCH CH32V003 GPIO_TypeDef puts a reserved word at +0x04. It is not
+        // the STM32F1 CFGHR register, so writes are ignored and reads return 0.
+        assert_eq!(gpio.read_u32(0x04).unwrap(), 0);
+        gpio.write_u32(0x04, 0x0000_0003).unwrap();
+        assert_eq!(gpio.read_u32(0x04).unwrap(), 0);
+
+        // CFGLR nibble 0 selects a push-pull output; BSHR sets PC0 and BCR
+        // clears it. These offsets match WCH's own GPIO_TypeDef declaration.
+        gpio.write_u32(0x00, 0x0000_0002).unwrap();
+        gpio.write_u32(0x10, 1).unwrap();
+        assert_eq!(gpio.read_u32(0x0C).unwrap() & 1, 1);
+        assert_eq!(gpio.read_gpio_pad(0), Some(true));
+        gpio.write_u32(0x14, 1).unwrap();
+        assert_eq!(gpio.read_u32(0x0C).unwrap() & 1, 0);
+
+        assert_eq!(gpio.pins().unwrap().pin_count(), 8);
+        assert_eq!(gpio.read_gpio_input(8), None);
+        assert_eq!(gpio.read_gpio_output(8), None);
+        assert_eq!(gpio.read_gpio_is_output(8), None);
+        assert_eq!(gpio.read_gpio_pad(8), None);
+        assert_eq!(
+            " ch32v003 ".parse::<GpioRegisterLayout>().unwrap(),
+            GpioRegisterLayout::Wch
+        );
+        // Must not report Stm32F1, or bus::attach applies STM32F103 pad tables.
+        assert_eq!(gpio.register_layout(), GpioRegisterLayout::Wch);
+    }
+
+    #[test]
+    fn f1_lckr_sequence_freezes_locked_config_nibbles() {
+        // RM0008 §9.2.7: LCKK reads 0 until the 1-0-1 key sequence completes
+        // with the same LCK mask; then CRL/CRH nibbles of the locked pins keep
+        // their value until reset. Unlocked pins and ODR stay writable.
+        let mut gpio = GpioPort::new();
+        gpio.write_u32(0x00, 0x4444_4443).unwrap(); // PA0 push-pull output
+        gpio.write_u32(0x04, 0x4444_4448).unwrap(); // PA8 input with pull
+
+        // A single LCKK=1 write does not lock or set LCKK.
+        gpio.write_u32(0x18, 0x0001_0101).unwrap();
+        assert_eq!(gpio.read_u32(0x18).unwrap(), 0x0000_0101);
+
+        // A changed mask in the middle of the sequence restarts it.
+        gpio.write_u32(0x18, 0x0000_0101).unwrap();
+        gpio.write_u32(0x18, 0x0001_0001).unwrap();
+        assert_eq!(gpio.read_u32(0x18).unwrap() & (1 << 16), 0);
+        gpio.write_u32(0x00, 0x4444_4441).unwrap();
+        assert_eq!(gpio.read_u32(0x00).unwrap(), 0x4444_4441);
+        gpio.write_u32(0x00, 0x4444_4443).unwrap();
+
+        // Full 1-0-1 sequence with mask PA0|PA8 locks both pins.
+        gpio.write_u32(0x18, 0x0001_0101).unwrap();
+        gpio.write_u32(0x18, 0x0000_0101).unwrap();
+        gpio.write_u32(0x18, 0x0001_0101).unwrap();
+        assert_eq!(gpio.read_u32(0x18).unwrap(), 0x0001_0101);
+
+        gpio.write_u32(0x00, 0x3333_3334).unwrap();
+        assert_eq!(gpio.read_u32(0x00).unwrap(), 0x3333_3333);
+        gpio.write_u32(0x04, 0x1111_1114).unwrap();
+        assert_eq!(gpio.read_u32(0x04).unwrap(), 0x1111_1118);
+        gpio.write_u32(0x10, 0x0000_0001).unwrap();
+        assert_eq!(gpio.read_u32(0x0C).unwrap() & 1, 1);
+
+        // The latched key cannot be cleared or extended before reset.
+        gpio.write_u32(0x18, 0x0000_FFFF).unwrap();
+        gpio.write_u32(0x18, 0x0001_FFFF).unwrap();
+        assert_eq!(gpio.read_u32(0x18).unwrap(), 0x0001_0101);
+        gpio.write_u32(0x00, 0x4444_4444).unwrap();
+        assert_eq!(gpio.read_u32(0x00).unwrap() & 0xF, 0x3);
+    }
+
+    #[test]
+    fn v2_lckr_sequence_still_locks_moder() {
+        let mut gpio = GpioPort::new_with_layout(GpioRegisterLayout::Stm32V2);
+        gpio.write_u32(0x00, 0x0000_0001).unwrap();
+        gpio.write_u32(0x1C, 0x0001_0001).unwrap();
+        gpio.write_u32(0x1C, 0x0000_0001).unwrap();
+        gpio.write_u32(0x1C, 0x0001_0001).unwrap();
+        assert_eq!(gpio.read_u32(0x1C).unwrap(), 0x0001_0001);
+        gpio.write_u32(0x00, 0x0000_0002).unwrap();
+        assert_eq!(gpio.read_u32(0x00).unwrap(), 0x0000_0001);
+    }
+
+    #[test]
     fn test_gpio_odr_write() {
         let mut gpio = GpioPort::new();
         gpio.write(0x0C, 0x55).unwrap(); // ODR byte 0
@@ -3271,6 +3724,105 @@ mod tests {
         // BRR @ 0x28 (reset pin 0)
         gpio.write(0x28, 0x01).unwrap();
         assert_eq!(rd32(&gpio, 0x14) & 0x0001, 0x0000);
+    }
+}
+
+#[cfg(test)]
+mod stm32_af_idr_tests {
+    use super::{GpioPort, GpioRegisterLayout};
+    use crate::logic_capture::PadDrive;
+    use crate::peripherals::pad_lines::{LineDrive, PadLines};
+    use crate::Peripheral;
+    use std::sync::Arc;
+
+    fn v2_routed() -> (GpioPort, Arc<PadLines>) {
+        let mut gpio = GpioPort::new_with_layout(GpioRegisterLayout::Stm32V2);
+        let lines = Arc::new(PadLines::new(&["CH1N"], &[false]));
+        gpio.add_pad_route(&lines, 13, Some(1), 0, "TIM1_CH1N");
+        gpio.write_u32(0x00, 2 << 26).unwrap();
+        gpio.write_u32(0x24, 1 << 20).unwrap();
+        (gpio, lines)
+    }
+
+    #[test]
+    fn v2_af_idr_matches_driven_pad_for_every_read_width() {
+        let (gpio, lines) = v2_routed();
+        for level in [true, false, true] {
+            lines.drive_line(0, LineDrive::PushPull, level);
+            assert_eq!(gpio.read_gpio_pad(13), Some(level));
+            assert_eq!((gpio.read(0x11).unwrap() & (1 << 5)) != 0, level);
+            assert_eq!((gpio.read_u16(0x10).unwrap() & (1 << 13)) != 0, level);
+            assert_eq!((gpio.read_u32(0x10).unwrap() & (1 << 13)) != 0, level);
+            assert_eq!(gpio.read_gpio_input(13), Some(level));
+            assert_eq!((gpio.read_gpio_input_word() & (1 << 13)) != 0, level);
+            assert_eq!(gpio.read_u32(0x14).unwrap(), 0, "ODR is not rewritten");
+        }
+    }
+
+    #[test]
+    fn v2_af_idr_preserves_mux_and_high_z_input_resolution() {
+        let (mut gpio, lines) = v2_routed();
+        let high = |g: &GpioPort| g.read_u32(0x10).unwrap() & (1 << 13) != 0;
+        gpio.write_u32(0x0c, 2 << 26).unwrap(); // Pull down an undriven pad.
+        lines.drive_line(0, LineDrive::PushPull, true);
+        assert!(high(&gpio));
+        lines.set_mode(0, LineDrive::Input);
+        assert_eq!(gpio.read_gpio_pad_drive(13), Some(PadDrive::HighZ));
+        assert!(!high(&gpio), "a released line does not retain its old high");
+        gpio.write_u32(0x0c, 1 << 26).unwrap();
+        assert!(high(&gpio), "the existing weak pull still resolves HighZ");
+        gpio.set_gpio_input(13, false);
+        assert!(
+            !high(&gpio),
+            "external input takes precedence over the pull"
+        );
+        gpio.set_gpio_input(13, true);
+        assert!(high(&gpio));
+        lines.drive_line(0, LineDrive::OpenDrain, false);
+        assert!(!high(&gpio), "an active AF low is the native pad level");
+        lines.drive_line(0, LineDrive::OpenDrain, true);
+        assert!(
+            high(&gpio),
+            "released open drain retains external resolution"
+        );
+        lines.drive_line(0, LineDrive::PushPull, false);
+        gpio.write_u32(0x24, 2 << 20).unwrap(); // Wrong AF: route is inactive.
+        assert!(high(&gpio));
+        gpio.write_u32(0x00, 0).unwrap(); // Plain input.
+        assert!(high(&gpio));
+        gpio.write_u32(0x00, 1 << 26).unwrap(); // Plain output, ODR remains 0.
+        assert!(!high(&gpio));
+        gpio.write_u32(0x00, 3 << 26).unwrap(); // Analog disables input buffer.
+        assert!(!high(&gpio));
+    }
+
+    #[test]
+    fn f1_af_idr_follows_fixed_route_and_translated_window() {
+        let mut gpio = GpioPort::new_with_layout(GpioRegisterLayout::Stm32F1);
+        let lines = Arc::new(PadLines::new(&["CH1N"], &[true]));
+        gpio.add_pad_route(&lines, 13, None, 0, "TIM1_CH1N");
+        gpio.write_u32(0x04, 0xb << 20).unwrap(); // AF push-pull output.
+        assert_eq!(gpio.read_u32(0x08).unwrap() & (1 << 13), 1 << 13);
+        // Input offset is relative to the declared MMIO window.
+        let mut gpio = gpio.with_window_offset(4);
+        assert_eq!(gpio.read_u32(0x04).unwrap() & (1 << 13), 1 << 13);
+        lines.drive_line(0, LineDrive::PushPull, false);
+        assert_eq!(gpio.read_u32(0x04).unwrap() & (1 << 13), 0);
+        gpio.write_u32(0x00, 0x4 << 20).unwrap(); // Floating input, route disabled.
+        gpio.set_gpio_input(13, true);
+        assert_eq!(gpio.read_u32(0x04).unwrap() & (1 << 13), 1 << 13);
+    }
+
+    #[test]
+    fn non_stm32_input_register_keeps_its_existing_semantics() {
+        let mut gpio = GpioPort::new_with_layout(GpioRegisterLayout::SamPort);
+        let lines = Arc::new(PadLines::new(&["TX"], &[true]));
+        gpio.add_pad_route(&lines, 0, Some(2), 0, "SERCOM_TX");
+        gpio.write(0x30, 2).unwrap(); // PMUX peripheral C.
+        gpio.write(0x40, 3).unwrap(); // PINCFG PMUXEN and INEN.
+        assert_eq!(gpio.read_gpio_pad(0), Some(true));
+        assert_eq!(gpio.read_u32(0x20).unwrap() & 1, 0);
+        assert_eq!(gpio.read_gpio_input(0), Some(false));
     }
 }
 

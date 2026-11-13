@@ -1,10 +1,17 @@
 # STM32G0B1RE IO-Link firmware slice; not a full-chip validation claim.
 # Sources: ST stm32g0b1re.pdf and RM0444; pinned ST CMSIS
 # stm32g0b1xx.h f576c24e123edf3332988ecd49512c0f35f85186.
-# 512KiB flash; expose the 128KiB parity-protected SRAM bank only.
-# Firmware resets HSI/APB/AHB to 16MHz; no PLL or alternate clock support
-# is asserted by this slice. Only the peripherals used by the reference
-# firmware are included. GPIO EXTI excludes SWIER/internal event lines.
+# 512KiB flash; 144KiB contiguous SRAM (128KiB parity + 16KiB non-parity).
+# The simulator does not inject SRAM parity faults. Reset HSI/APB/AHB is 16MHz.
+# A fixed 64MHz operating-point run must validate RCC PLL + bus prescalers;
+# oscillator startup, dynamic clock transitions and flash wait states are not
+# timing claims. UART1/2, TIM2 and GPIO/EXTI are the supported IO-Link slice.
+# DMA1 / DMAMUX outputs 0..6 support the USART1 RX50/TX51 request slice.
+# DMA2 / DMAMUX outputs 7..11 and GPIO EXTI SWIER/internal lines are unsupported.
+# Arduino matrix slice: LPUART1 (STM32duino `Serial`), I2C1, SPI1, ADC1, CRC and
+# FDCAN1 are added so stock STM32duino on NUCLEO-G0B1RE runs L0-L8
+# (validation/arduino-matrix). They reuse the stm32g071 register models; no
+# G0B1 silicon capture backs them.
 name: stm32g0b1re
 arch: arm
 core: cortex-m0+
@@ -14,7 +21,7 @@ flash:
   size: 512KB
 ram:
   base: 0x20000000
-  size: 128KB
+  size: 144KB
 pins:
   # Pad map for the LQFP64 package (ST STM32_open_pin_data, mcu/
   # STM32G0B1R(B-C-E)Tx.xml @ 7d1f1514). Every pad on the three GPIO ports this
@@ -69,16 +76,46 @@ pins:
   PC13: { gpio: gpioc, bit: 13 }
   PC14: { gpio: gpioc, bit: 14 }
   PC15: { gpio: gpioc, bit: 15 }
+# SRAMCAN (stm32g0b1xx.h SRAMCAN_BASE) sits at 0x4000B400, 0x5000 above
+# FDCAN1's registers, while the shared `fdcan` model serves its message RAM at
+# window offset +0x800. A window that wide would claim PWR, DAC1, LPTIM and
+# TAMP in between, so this same-backing mirror routes SRAMCAN onto the model's
+# RAM instead. The mirror is 1 KiB (0x4000B400-0x4000B800 onto
+# 0x40006C00-0x40007000): the FDCAN1 section (0x350, HAL SRAMCAN_SIZE) plus the
+# head of the FDCAN2 section. fdcan1's window stops at PWR (0x40007000), so the
+# rest of FDCAN2's section has no backing; FDCAN2 is not modelled.
+memory_regions:
+- name: sramcan
+  base: 0x4000B400
+  size: 1KB
+  alias_of: 0x40006C00
 peripherals:
 - id: rcc
   type: rcc
   base_address: 0x40021000
   size: 1KB
   config:
-    profile: stm32g0
+    # stm32g0b1: the G0 map plus HSI48 (CR 22→23) and CCIPR2 @0x58.
+    profile: stm32g0b1
 - id: systick
   type: systick
   base_address: 0xe000e010
+- id: pwr
+  type: pwr
+  base_address: 0x40007000
+  size: 1KB
+  # Shared CR1.VOS / SR2.VOSF layout for the64MHz startup prerequisite.
+  # Voltage settling and low-power behavior are outside this slice.
+  clock:
+    reg: apbenr1
+    bit: 28
+- id: flash
+  type: flash
+  base_address: 0x40022000
+  size: 1KB
+  config:
+    # ACR latency register/readback only; no G0B1 programming/ECC claim.
+    profile: l4
 - id: gpioa
   type: gpio
   base_address: 0x50000000
@@ -125,6 +162,16 @@ peripherals:
   clock:
     reg: apbenr2
     bit: 14
+- id: usart2
+  type: uart
+  base_address: 0x40004400
+  size: 1KB
+  irq: 28
+  config:
+    profile: stm32v2
+  clock:
+    reg: apbenr1
+    bit: 17
 - id: tim2
   type: timer
   base_address: 0x40000000
@@ -132,9 +179,30 @@ peripherals:
   irq: 15
   config:
     width: 32
+    # Channel outputs reach the pads through the G0 AF table (TIM2 AF2; the
+    # G0B1R PinMap_TIM matches the G071R one; bus/attach.rs STM32G0_TIMER_PADS).
+    pad_map: stm32g0
   clock:
     reg: apbenr1
     bit: 0
+- id: dma1
+  type: dma
+  base_address: 0x40020000
+  size: 1KB
+  config:
+    profile: stm32g0
+  clock: {reg: ahbenr, bit: 0}
+- id: dmamux
+  type: dmamux
+  base_address: 0x40020800
+  size: 1KB
+  irq: 11
+  config:
+    dma: dma1
+    channels: 7
+    physical_channels: 12
+    requests: {usart1_rx: 50, usart1_tx: 51}
+  clock: {reg: ahbenr, bit: 0}
 - id: exti
   type: exti
   base_address: 0x40021800
@@ -148,6 +216,85 @@ peripherals:
   clock:
     reg: apbenr2
     bit: 0
+- id: lpuart1
+  type: uart
+  base_address: 0x40008000
+  size: 1KB
+  # USART3_4_5_6_LPUART1. STM32duino's NUCLEO-G0B1RE `Serial` is LPUART1
+  # (SERIAL_UART_INSTANCE 101) on PA2/PA3 AF6, the ST-Link VCP.
+  irq: 29
+  config:
+    profile: stm32v2
+  clock:
+    reg: apbenr1
+    bit: 20
+# Arduino matrix slice (validation/arduino-matrix, NUCLEO-G0B1RE row). The
+# blocks below are the RM0444 G0 register models the stm32g071 descriptor
+# already runs stock STM32duino on; bases, IRQs and clock bits are the pinned
+# stm32g0b1xx.h values. G0B1 shares vectors where G071 has one per block
+# (I2C2_3 = 24, SPI2_3 = 26, TIM3_TIM4 = 16, TIM16_FDCAN_IT0 = 21).
+- id: i2c1
+  type: i2c
+  base_address: 0x40005400
+  size: 1KB
+  irq: 23
+  config:
+    profile: stm32l4
+    pad_map: stm32g0
+  clock:
+    reg: apbenr1
+    bit: 21
+- id: spi1
+  type: spi
+  base_address: 0x40013000
+  size: 1KB
+  irq: 25
+  config:
+    profile: stm32_fifo
+    pad_map: stm32g0
+  clock:
+    reg: apbenr2
+    bit: 12
+- id: adc1
+  type: adc
+  base_address: 0x40012400
+  size: 1KB
+  irq: 12
+  config:
+    profile: stm32l4
+  clock:
+    reg: apbenr2
+    bit: 20
+# FDCAN1 (FDCAN1_BASE 0x40006400). The same Bosch M_CAN register map as the
+# H5/G4 (stm32g0b1xx.h FDCAN_GlobalTypeDef, FDCAN_CONFIG_BASE = FDCAN1 +
+# 0x100), so it uses the shared `fdcan` model. Message RAM: see `sramcan` in
+# memory_regions. Divergences: FDCAN2 (0x40006800) reads 0, and the model
+# keeps SRAMCAN where the G0B1 has CRS (0x40006C00), so CRS is not usable.
+- id: fdcan1
+  type: fdcan
+  base_address: 0x40006400
+  # 3 KiB: registers + message RAM at +0x800, ending where PWR (0x40007000)
+  # begins. A 4 KiB window collides with PWR.
+  size: 3KB
+  irq: 21  # TIM16_FDCAN_IT0; IT1 = 22 via ILS not modeled
+  # RCC_APBENR1.FDCANEN (bit 12, RCC_APBENR1_FDCANEN_Pos) gates both instances.
+  clock:
+    reg: apbenr1
+    bit: 12
+  config:
+    debug_schema: ../peripherals/stm32h563/fdcan1.yaml
+# CRC (CRC_BASE 0x40023000, AHB; 32-bit IDR on G0, RM0444 §14). STM32duino's
+# startup runs HAL_CRC_Init, which writes CRC_POL @0x14; without CRC mapped
+# that store hit unmapped MMIO. RCC_AHBENR.CRCEN bit 12.
+- id: crc
+  type: crc
+  base_address: 0x40023000
+  size: 1KB
+  config:
+    idr_width: 32
+  clock:
+    reg: ahbenr
+    bit: 12
 - id: nvic
   type: nvic
   base_address: 0xe000e100

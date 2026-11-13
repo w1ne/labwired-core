@@ -7,6 +7,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Batch 5: ten more declarative parts, closing the high-demand list. LoRa:
+  `sx1276` (the LoRa register page with §6.4 reset values, RSSI / packet RSSI /
+  SNR from stimulus, write-1-to-clear RegIrqFlags, TX → TxDone) and `sx1262`
+  (the SX126x command interface: status byte, SetStandby/Fs/Rx/Tx/Sleep,
+  Read/WriteRegister over Table 12-1, packet type, IRQ status with a DIO1 pin,
+  RSSI, BUSY); neither has an RF air link. ADCs: `mcp3008` (Figure 6-1 SPI
+  read, single-ended and differential) and `ads1256` (RREG/WREG/RDATA, MUX,
+  PGA, DRDY pin). Sensors: `bmi160` (accel/gyro/temperature with CMD power
+  modes), `bmm150` (suspend-mode Chip ID, data through a reference trim unit
+  that Bosch's compensation recovers exactly) and `veml6075` (UVA/UVB).
+  Drivers: `ht16k33` (I²C display RAM and setup commands), `sk6812` (RGBW,
+  32 bits per LED) and `tm1638` (STB/CLK/DIO bit-bang, 8-digit artifact).
+  `crates/core/tests/parts_batch5.rs` gives each a register-level smoke check
+  and a negative control that must fail against a part answering only 0x00
+  or 0xFF (a 24-bit decoder / deaf strip for the SK6812, a TM1637 / deaf
+  panel for the TM1638), plus a stimulus test per part. Each part has a
+  `docs/parts/` page.
+- `behavior.spi.miso_var` for `spi_device` message parts: the reply byte is a
+  variable read after that byte's `frame` rules ran, so MISO may depend on
+  the byte being clocked in (the MCP3008's B9:B8) or on earlier command bytes
+  (the ADS1256's two-byte RREG, the SX1262's ReadRegister). Validated at load:
+  frames-only parts, a declared variable.
+- `led_strip` `nrz_gpio` accepts `timing.bits_per_pixel: 32`: an RGBW part
+  shifts four bytes per LED and carries the fourth as `LedPixel::white`;
+  three-colour strips are unchanged. New artifact formats `sk6812_rgbw` and
+  `tm1638_grid`.
+- Three displays as declarative `configs/devices/*.yaml` descriptors on the
+  existing `display` primitive, no engine change: `st7735` (Sitronix ST7735R,
+  128x160 RGB565, 4-wire SPI), `gc9a01` (GalaxyCore GC9A01A, round 240x240
+  RGB565, 4-wire SPI; the GC9A01A lists no SWRESET) and `oled-ssd1309`
+  (Solomon Systech SSD1309, 128x64 mono, I²C; no charge pump, resets to page
+  addressing). `crates/core/tests/everyday_display_set.rs` drives each through
+  a real CASET/RASET/RAMWR (or page/column pointer) sequence and checks the
+  exact frame-memory bytes. Its negative control requires every check to FAIL
+  against a panel that reads all 0x00 or 0xFF, including one with live flags
+  over mute memory. Each part has a `docs/parts/` page. SSD1327 (needs a
+  4-bit grayscale pixel format) and SK6812 (needs a 32-bit-per-LED strip
+  decoder) were not added.
+- Four more everyday I²C parts as declarative `configs/devices/*.yaml`
+  descriptors: `mpu9250` (accel/gyro/temp; AK8963 magnetometer not modelled),
+  `ens160` (TVOC/eCO2/AQI, live only in STANDARD mode), `ina260` (fixed-LSB
+  current/power, integrated shunt) and `ina3221` (three channels, 13-bit
+  left-aligned words, shunt-voltage sum). Each has a smoke check, a
+  `*_tracks_stimulus` test and the 0x00/0xFF negative control in
+  `everyday_sensor_set.rs`, plus a `docs/parts/` page. AM2320 and VL53L5CX
+  were evaluated and not added: the `i2c_device` primitive cannot model them
+  truthfully.
+- Five more declarative parts on existing primitives, no Rust model:
+  `mcp23017` (16-bit I²C GPIO expander; IODIR-gated output pads), `pcf8575`
+  (16-bit quasi-bidirectional expander; byte-pair writes, alternating
+  port 0 / port 1 reads), `ads1015` (12-bit sibling of the ADS1115;
+  left-justified result, MUX + PGA), `uln2803` (8-channel inverting
+  Darlington sink, `logic_gate`) and `rfm95` (RFM95W / SX1276 SPI register
+  shell, no RF air link). Each is in `everyday_sensor_set.rs` with a smoke
+  check, a negative control and a stimulus test; the SPI and GPIO parts get
+  their own stand-ins. MCP3008 and ADS1256 are not included: their SPI
+  framings need engine support that does not exist yet.
+- Nine everyday I²C sensors as declarative `configs/devices/*.yaml` parts, no
+  Rust model: `sht40`, `bme680` (T/P/H; gas not modelled), `icm42688`,
+  `icm20948` (accel/gyro/temp; magnetometer not modelled), `sgp40`, `tsl2591`,
+  `dht20`, `pmsa003i`, `ina226`. Each file header cites its datasheet
+  sections, and each part has a page under `docs/parts/`.
+  `crates/core/tests/everyday_sensor_set.rs` runs a register-level smoke check
+  per part (device IDs, measurement words, CRC / check codes). It also runs a
+  negative control that requires every check to FAIL against a part that
+  answers only `0x00` or only `0xFF`. The BME680 is checked against a
+  line-for-line port of Bosch's integer compensation over 480 T/P/H points.
 - GDB watchpoints (`Z2`/`Z3`/`Z4`, write/read/access) on the RSP server,
   software-tracked by the bus accessors: ranges up to 4 KiB (a single 2 KiB
   object fits one request) and 16 concurrent ranges, debugger `M`/`m` never

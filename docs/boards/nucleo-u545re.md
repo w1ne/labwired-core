@@ -9,7 +9,9 @@ U5 IP family, smaller memory map, fewer peripherals, one user LED.
 
 > **Fidelity: SIM-DERIVED.** There is no U545 bench part. Reset values and
 > behaviour come from ST's U545 SVD and the U575-family models; nothing is a
-> silicon capture. No Renode differential exists for STM32U5.
+> silicon capture. No Renode differential has been run: upstream Renode has
+> no STM32U5 platform, and the third-party 60North `renode-stm32u5`
+> platform (STM32U575, MIT) has not been compared against this model.
 
 !!! note "Sources"
     ST's own documents (datasheet, RM0456, UM3062) could not be fetched when this

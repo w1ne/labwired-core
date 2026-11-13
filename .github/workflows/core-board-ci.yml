@@ -18,17 +18,9 @@ on:
       - "scripts/generate_tier1_scoreboard.py"
       - "docs/coverage/tier1-matrix.json"
       - ".github/workflows/core-board-ci.yml"
-  pull_request:
-    branches: [main]
-    paths:
-      - "configs/**"
-      - "examples/**"
-      - "hil/**"
-      - "platformio/**"
-      - "scripts/ci/board_matrix.py"
-      - "scripts/generate_tier1_scoreboard.py"
-      - "docs/coverage/tier1-matrix.json"
-      - ".github/workflows/core-board-ci.yml"
+  # Lean PR gate (2026-11-13): no pull_request trigger. This lane runs on
+  # push to main (and on demand via workflow_dispatch, e.g.
+  # `gh workflow run core-board-ci.yml --ref <branch>` for a PR that needs it).
   schedule:
     - cron: "0 3 * * 0"
   workflow_dispatch:
@@ -80,6 +72,12 @@ jobs:
           shared-key: core-board-${{ matrix.id }}
           workspaces: |
             . -> target
+          # Read-only on pull requests, as for `core-pr-gate` (core-ci.yml).
+          # Each board key is 270-540 MB; one PR touching configs/** wrote a
+          # PR-ref copy of every board (~6 GB, readable only by that PR) and
+          # pushed main's `core-pr-gate` entry out of the 10 GB budget, so
+          # pr-gate compiled cold and hit its 20-minute wall (2026-11-02).
+          save-if: ${{ github.event_name != 'pull_request' }}
 
       - name: Install apt packages
         if: matrix.apt != ''

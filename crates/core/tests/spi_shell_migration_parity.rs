@@ -2,26 +2,20 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! **The three SPI register shells, against the hand-written models they
-//! replace.**
+//! **SPI register-shell descriptors, against the hand-written transcripts they
+//! replaced.**
 //!
-//! `components/lora_sx1278.rs`, `components/rc522.rs` and
-//! `components/nrf24l01.rs` are DELETED. Between them they were 487 lines, and
-//! every one of those lines was an address/data phase machine over a byte
-//! array — the `register_file:` key this port adds, written three times with
-//! three different masks.
+//! `components/lora_sx1278.rs` and `components/nrf24l01.rs` are DELETED (YAML
+//! shells only). `components/rc522.rs` was re-added as the live attach kit for
+//! ISO/IEC 14443-A CL1; `configs/devices/rc522.yaml` remains for this
+//! register-shell transcript only (live `type: rc522` goes through the Rust kit).
 //!
-//! Each golden constant below is the transcript its model produced, captured by
-//! running the script beside it against the model on the commit that removed
-//! it. Where the descriptor deliberately differs the difference is asserted on
-//! its own, with the datasheet section that decides it, so neither half can be
-//! lost in a re-bless.
+//! Each golden constant below is the transcript the shell (or deleted model)
+//! produced. Where the descriptor deliberately differs the difference is
+//! asserted on its own, with the datasheet section that decides it.
 //!
-//! ⚠️ **None of these parts has a radio, and none ever did.** What is missing —
-//! the LoRa packet engine, the ISO 14443 air interface, the nRF24's TX/RX
-//! FIFOs and IRQ pad — is missing in exactly the same way it was missing
-//! before, and is stated in each descriptor's header rather than faked. A
-//! parity test can only hold a model to what it already did.
+//! ⚠️ **The LoRa and nRF24 YAML shells still have no air link.** RC522's air
+//! interface lives in the Rust kit, not in this YAML parity suite.
 
 use labwired_core::peripherals::components::declarative_spi::GenericSpiDevice;
 
@@ -160,8 +154,9 @@ fn rc_script() -> Vec<Step<'static>> {
     ])
 }
 
-/// What `components/rc522.rs` put on MISO for [`rc_script`]. **Byte-identical**
-/// — the descriptor reproduces it exactly, soft reset included.
+/// What the RC522 YAML register shell puts on MISO for [`rc_script`].
+/// **Byte-identical** to the historical shell transcript (soft reset included).
+/// Live attach uses the Rust kit; this pins the retained YAML only.
 const RC522_GOLDEN: &[u8] = &[
     0x00, 0x92, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x3D, 0x00, 0x00,
     0x00, 0x00,

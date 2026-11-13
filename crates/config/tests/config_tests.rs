@@ -89,6 +89,41 @@ peripherals: []
     assert_eq!(decimal.ns_alias_offset, Some(0x1000_0000));
 }
 
+/// `memory_regions[].alias_of` (a same-backing mirror) accepts the lax number
+/// forms and stays `None` on an ordinary region.
+#[test]
+fn memory_region_alias_of_parses() {
+    let chip: ChipDescriptor = serde_yaml::from_str(
+        r#"
+name: "test-chip"
+arch: "arm"
+flash:
+  base: 0x08000000
+  size: "1MB"
+ram:
+  base: 0x20000000
+  size: "128KB"
+memory_regions:
+  - name: "rom"
+    base: 0x03000000
+    size: "64KB"
+  - name: "flash_s"
+    base: 0x18000000
+    size: "1MB"
+    alias_of: 0x08000000
+  - name: "ram_s"
+    base: 0x30000000
+    size: 0x20000
+    alias_of: "0x2000_0000"
+peripherals: []
+"#,
+    )
+    .unwrap();
+    let aliases: Vec<_> = chip.memory_regions.iter().map(|r| r.alias_of).collect();
+    assert_eq!(aliases, [None, Some(0x0800_0000), Some(0x2000_0000)]);
+    assert_eq!(chip.memory_regions[2].size, 0x20000);
+}
+
 #[test]
 fn irq_accepts_bare_number() {
     let p: PeripheralConfig = serde_yaml::from_str(
@@ -515,7 +550,7 @@ undervoltage_fault_pin: PB5
     };
     assert_eq!(cfg.id, "spindle");
     assert_eq!(cfg.pole_pairs, 7);
-    assert_eq!(cfg.timer_name, "tim1");
+    assert_eq!(cfg.timer_name, None);
     assert_eq!(cfg.encoder_index_pin, None);
     assert_eq!(cfg.simulation_clock_hz, 80_000_000);
     assert_eq!(cfg.motor_fault_pin, None);
@@ -564,7 +599,7 @@ encoder_b_pin: PC7
     let MotorModelConfig::Bldc(cfg) = &model else {
         panic!("expected bldc motor");
     };
-    assert_eq!(cfg.timer_name, "tim8");
+    assert_eq!(cfg.timer_name.as_deref(), Some("tim8"));
     assert!(model.validate().is_empty());
 }
 

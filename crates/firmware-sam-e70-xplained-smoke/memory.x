@@ -1,0 +1,8 @@
+/* SAM E70 Xplained (ATSAME70Q21B): 2 MiB flash @ 0x00400000, 384 KiB SRAM @
+ * 0x20400000 (Zephyr samx7xx21.dtsi; DS60001527 memory map). */
+
+MEMORY
+{
+  FLASH : ORIGIN = 0x00400000, LENGTH = 2048K
+  RAM   : ORIGIN = 0x20400000, LENGTH = 384K
+}

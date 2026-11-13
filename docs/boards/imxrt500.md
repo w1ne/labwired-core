@@ -1,5 +1,11 @@
 # Validation Report: imxrt500
 
+> **Superseded.** This is the auto-generated report for the staged
+> `onboarding/imxrt500` descriptor (a generic UART fixture on a Renode-derived
+> map whose flash window is the boot ROM at 0x03000000, with no RT500
+> peripherals). The promoted part is [`mimxrt595s`](mimxrt595s.md), and the
+> board package is **[MIMXRT595-EVK](mimxrt595-evk.md)**.
+
 **Architecture:** ARMv8-M.
 
 ## 1. Dynamic Simulation Validation

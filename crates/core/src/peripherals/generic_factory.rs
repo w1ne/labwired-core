@@ -103,6 +103,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "rp2040_clkrst",
     "rp2040_xip_ssi",
     "rp2040_usb",
+    "rp2350_bootram",
     // ESP32-C3 behavioral models (esp32 factory).
     // MUST be listed: without membership the fuzzy fallback would coerce the
     // BLE baseband window onto some unrelated register map instead of erroring.
@@ -144,6 +145,20 @@ pub const MODEL_TYPES: &[&str] = &[
     // bins. Listed for the same reason as every other family type.
     "esp32c6_mwdt",
     "esp32c6_lp_rtc",
+    // C6 USB Serial/JTAG — same shared model as C3/S3, own matrix source.
+    // Listed so a fuzzy `contains("usb")` path cannot coerce it elsewhere.
+    "esp32c6_usb_serial_jtag",
+    // C6 MODEM_LPCON + I2C_ANA_MST — sticky register banks for fast-boot
+    // regi2c. `esp32c6_i2c_ana_mst` MUST be listed: fuzzy `contains("i2c")`
+    // would otherwise coerce it onto the STM32 I2C map.
+    "esp32c6_modem_lpcon",
+    "esp32c6_i2c_ana_mst",
+    // C6 EXTMEM / MSPI cache controller (DONE/freeze handshakes).
+    "esp32c6_extmem",
+    "esp32c6_systimer",
+    // C6 RMT — the shared C3 model at C6 matrix source 49.
+    "esp32c6_rmt",
+    "esp32c6_ledc",
     // nRF52 behavioral models (nrf52 factory).
     "nrf52840_twim",
     "nrf52_saadc",
@@ -202,6 +217,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "esp32_i2c",
     "esp32_ledc",
     "esp32_mcpwm",
+    "esp32_pcnt",
+    "esp32_rmt",
     "esp32_rtc_cntl",
     "esp32_rtc_io",
     "esp32_sar_adc",
@@ -326,8 +343,35 @@ pub const MODEL_TYPES: &[&str] = &[
     "sam_mclk",
     // Renesas RA SYSTEM (HOCO / OSCSF).
     "ra_sysc",
+    // Renesas RA8 / RA6 SYSTEM, full R_SYSTEM register file (adds the
+    // xxxCKCR handshake).
+    "ra8_sysc",
+    "ra6_sysc",
+    // Renesas RX SYSTEM (oscillator stable flags, clock-switch handshakes).
+    "rx_sysc",
+    // Renesas RX FLASH control registers (0xAA-keyed word writes).
+    "rx_flash",
+    // Renesas RX RTC registers as read-back storage.
+    "rx_rtc",
+    // Renesas RX compare match timer unit (CMSTR + two channels).
+    "rx_cmt",
+    // Microchip PIC32MZ UART (UxMODE/UxSTA/UxTXREG/UxRXREG/UxBRG with the
+    // CLR/SET/INV aliases; EVIC flags through explicit IRQs).
+    "pic32_uart",
+    // Microchip PIC32MZ 16-bit timer (TxCON/TMRx/PRx, Type A or B).
+    "pic32_timer",
     // Renesas RA pin function select (PmnPFS / PWPR).
     "ra_pfs",
+    // Renesas RA8 pin function select (ports 0-B, PWPR/PWPRS moved).
+    "ra8_pfs",
+    // Renesas RA ICU event-link registers (IELSRn), the 16-bit AGT, the
+    // 12-bit ADC and DAC, the IIC (RIIC) master and the GPT (saw-wave PWM).
+    "ra_icu",
+    "ra_agt",
+    "ra_adc12",
+    "ra_dac12",
+    "ra_iic",
+    "ra_gpt",
     // NXP i.MX RT CCM / IOMUXC.
     "imx_ccm",
     "imx_iomuxc",
@@ -361,6 +405,48 @@ pub const MODEL_TYPES: &[&str] = &[
     // SAM4S (the older PIO/PMC blocks; not the SAM D21 PORT/PM pair).
     "sam4s_pio",
     "sam4s_pmc",
+    // Cortex-M7 L1 cache maintenance window + the SCB cache-ID geometry.
+    "cortex_m7_cache",
+    // Cortex-M FP extension: FPCCR/FPCAR/FPDSCR/MVFR + FP context stacking.
+    "cortex_m_fpu",
+    // Armv8-M PMSAv8 MPU region file (RNR/RBAR/RLAR + aliases), shared with TT.
+    "armv8m_mpu",
+    // TI CC2538: the PL061-style GPIO port (address-masked GPIO_DATA),
+    // SYS_CTRL, the 802.15.4 RF core, the sleep timer, the flash controller, the AES/SHA-256
+    // cryptoprocessor and the µDMA. Deliberately not `cc2538_gpio`: that
+    // spelling belongs to the staged onboarding/cc2538 descriptor, which keeps its placeholder.
+    "cc2538_pl061_gpio",
+    "cc2538_sys_ctrl",
+    "cc2538_rfcore",
+    "cc2538_sleep_timer",
+    "cc2538_flash_ctrl",
+    "cc2538_aes",
+    "cc2538_udma",
+    // Ambiq Apollo4 Plus: the 128-pin GPIO block (PADKEY-locked PINCFG,
+    // RD/WT/WTS/WTC/EN banks) and PWRCTRL (DEVPWREN -> DEVPWRSTATUS).
+    // Deliberately not `ambiqapollo4_gpio`: that spelling belongs to the
+    // staged onboarding/ambiq-apollo4 descriptor, which keeps its placeholder.
+    "apollo4_gpio",
+    "apollo4_pwrctrl",
+    "apollo4_cpu",
+    // NXP S32K3 SIUL2: MSCR pad mux + GPDO/GPDI/PGPDO/PGPDI/MPGPDO GPIO.
+    // Deliberately not `s32k3xx_systemintegrationunitlite2`: that spelling
+    // belongs to the staged onboarding/nxp-s32k388 descriptors, which keep
+    // their placeholder.
+    "s32k3_siul2",
+    // NXP i.MX RT500 (MIMXRT595S): the LPC-style FLEXCOMM USART and GPIO, and
+    // the CLKCTL/RSTCTL (SET/CLR aliased) and IOPCTL (plain) register banks.
+    // Not `lpc_usart`: the Renode-import profile heuristic maps that spelling
+    // to a 16550 layout, which the FLEXCOMM USART is not.
+    "lpc_flexcomm_usart",
+    "lpc_gpio",
+    "rt5xx_ctl",
+    "rt5xx_clkctl0",
+    "rt5xx_clkctl1",
+    "rt5xx_iopctl",
+    "rt5xx_ostimer",
+    // NXP Kinetis RNGA (K64F `RNG`), not the STM32 `rng` layout.
+    "kinetis_rnga",
 ];
 
 /// True if `t` is already a canonical model-type name (see [`MODEL_TYPES`]).
@@ -725,14 +811,65 @@ pub fn try_build(
                         ))
                     }
                 };
+                // `pad_map: stm32g0 | stm32g4 | stm32l0 | ...` — the V2
+                // alternate-function table the bus routes this timer's
+                // channel outputs through (the F4 one rides on
+                // `input_capture: stm32f4`).
+                let pad_map = match p_cfg.config.get("pad_map").and_then(|v| v.as_str()) {
+                    None => None,
+                    Some("stm32g0") => Some("stm32g0"),
+                    Some("stm32g4") => Some("stm32g4"),
+                    Some("stm32l0") => Some("stm32l0"),
+                    Some("stm32l4") => Some("stm32l4"),
+                    Some("stm32wb") => Some("stm32wb"),
+                    Some("stm32wba") => Some("stm32wba"),
+                    Some("stm32u5") => Some("stm32u5"),
+                    Some("stm32h5") => Some("stm32h5"),
+                    Some(other) => {
+                        return Err(anyhow::anyhow!(
+                            "timer '{}': unknown pad_map '{other}' (supported: stm32g0, stm32g4, stm32l0, stm32l4, stm32wb, stm32wba, stm32u5, stm32h5)",
+                            p_cfg.id
+                        ))
+                    }
+                };
                 Box::new(
                     crate::peripherals::timer::Timer::new_with_layout(width, advanced)
                         .basic(basic)
-                        .ccer_np(ccer_np),
+                        .ccer_np(ccer_np)
+                        .pad_map(pad_map),
                 )
             }
         }
-        "avr_gpio" => Box::new(crate::peripherals::avr_gpio::AvrGpioPort::new()),
+        "avr_gpio" => {
+            let pin_count = p_cfg
+                .config
+                .get("pin_count")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(8);
+            if !(1..=8).contains(&pin_count) {
+                anyhow::bail!(
+                    "avr_gpio '{}': config.pin_count must be in 1..=8, got {pin_count}",
+                    p_cfg.id
+                );
+            }
+            let layout = p_cfg.config.get("layout").and_then(|v| v.as_str());
+            match layout {
+                None | Some("atmega") => Box::new(
+                    crate::peripherals::avr_gpio::AvrGpioPort::new_with_pin_count(
+                        pin_count as u8,
+                    ),
+                ),
+                Some("avrxt_vport") => Box::new(
+                    crate::peripherals::avr_gpio::AvrGpioPort::new_avrxt_vport(
+                        pin_count as u8,
+                    ),
+                ),
+                Some(other) => anyhow::bail!(
+                    "avr_gpio '{}': unknown config.layout '{other}' (supported: atmega, avrxt_vport)",
+                    p_cfg.id
+                ),
+            }
+        }
         "pic24_gpio" => {
             // The dsPIC33FJ32MC204 has no uniform port width: PORTA presents
             // RA0-4/RA7-10, PORTB RB0-15, PORTC RC0-9 (DS70283H pin diagrams,
@@ -1030,18 +1167,49 @@ pub fn try_build(
                 ),
             )
         }
-        "rp2040_timer" => Box::new(crate::peripherals::rp2040::timer::Rp2040Timer::new()),
+        "rp2040_timer" => {
+            let layout = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+                Some("rp2350") => crate::peripherals::rp2040::timer::TimerLayout::Rp2350,
+                // Absent/anything else: the RP2040 map.
+                _ => crate::peripherals::rp2040::timer::TimerLayout::Rp2040,
+            };
+            Box::new(crate::peripherals::rp2040::timer::Rp2040Timer::new().with_layout(layout))
+        }
         "rp2040_dma" => Box::new(crate::peripherals::rp2040::dma::Rp2040Dma::new()),
-        "rp2040_io_bank0" => Box::new(crate::peripherals::rp2040::io_bank0::Rp2040IoBank0::new()),
-        "rp2040_sio" => Box::new(crate::peripherals::rp2040::sio::Rp2040Sio::new()),
+        "rp2040_io_bank0" => {
+            let layout = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+                Some("rp2350") => crate::peripherals::rp2040::io_bank0::IoBankLayout::Rp2350,
+                // Absent/anything else: the RP2040 map.
+                _ => crate::peripherals::rp2040::io_bank0::IoBankLayout::Rp2040,
+            };
+            Box::new(crate::peripherals::rp2040::io_bank0::Rp2040IoBank0::new().with_layout(layout))
+        }
+        "rp2040_sio" => {
+            let layout = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+                Some("rp2350") => crate::peripherals::rp2040::sio::SioLayout::Rp2350,
+                // Absent/anything else: the RP2040 map.
+                _ => crate::peripherals::rp2040::sio::SioLayout::Rp2040,
+            };
+            Box::new(crate::peripherals::rp2040::sio::Rp2040Sio::new().with_layout(layout))
+        }
         "rp2040_spi" => Box::new(crate::peripherals::rp2040::spi::Rp2040Spi::new()),
         "rp2040_i2c" => Box::new(crate::peripherals::rp2040::i2c::Rp2040I2c::new()),
-        "rp2040_pwm" => Box::new(crate::peripherals::rp2040::pwm::Rp2040Pwm::new()),
+        "rp2040_pwm" => {
+            let layout = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+                Some("rp2350") => crate::peripherals::rp2040::pwm::PwmLayout::Rp2350,
+                // Absent/anything else: the RP2040 map.
+                _ => crate::peripherals::rp2040::pwm::PwmLayout::Rp2040,
+            };
+            Box::new(crate::peripherals::rp2040::pwm::Rp2040Pwm::new().with_layout(layout))
+        }
         "rp2040_adc" => Box::new(crate::peripherals::rp2040::adc::Rp2040Adc::new()),
         "rp2040_rtc" => Box::new(crate::peripherals::rp2040::rtc::Rp2040Rtc::new()),
         "rp2040_watchdog" => Box::new(crate::peripherals::rp2040::watchdog::Rp2040Watchdog::new()),
         "rp2040_xip_ssi" => Box::new(crate::peripherals::rp2040::xip_ssi::Rp2040XipSsi::new()),
-        "rp2040_usb" => Box::new(crate::peripherals::rp2040::usb::Rp2040Usb::new()),
+        "rp2350_bootram" => Box::new(crate::peripherals::rp2350_bootram::Rp2350BootRam::new()),
+        "rp2040_usb" => Box::new(
+            crate::peripherals::rp2040::usb::Rp2040Usb::new().with_irq(p_cfg.irq.unwrap_or(5)),
+        ),
         "crc" => {
             // IDR scratch register width: 8-bit on F0/F1/L0, 32-bit
             // on F2+/L4+. YAML: `config: { idr_width: 8 }`; default 32.
@@ -1096,7 +1264,13 @@ pub fn try_build(
         // (F1), or — `[channel, selector]` — to a channel while its L4
         // `CSELR` nibble holds the selector.
         "dma" | "stm32dma" => {
-            let mut dma = crate::peripherals::dma::Dma1::new();
+            let mut dma = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+                None | Some("legacy") => crate::peripherals::dma::Dma1::new(),
+                Some("stm32g0") => crate::peripherals::dma::Dma1::new_stm32g0(),
+                Some(profile) => {
+                    anyhow::bail!("dma `{}`: unsupported profile `{profile}`", p_cfg.id)
+                }
+            };
             for (request, v) in dma_request_table(p_cfg) {
                 let pair = v.as_sequence().map(|s| {
                     s.iter()
@@ -1132,6 +1306,17 @@ pub fn try_build(
                 .and_then(|v| v.as_str())
                 .unwrap_or("dma1");
             let mut mux = crate::peripherals::dmamux::Dmamux::new(channels, dma);
+            if let Some(total) = p_cfg
+                .config
+                .get("physical_channels")
+                .and_then(|v| v.as_u64())
+            {
+                anyhow::ensure!(
+                    total as usize >= channels && total <= 32,
+                    "dmamux physical_channels must cover modeled channels and be <=32"
+                );
+                mux = mux.with_physical_channels(total as usize);
+            }
             for (request, v) in dma_request_table(p_cfg) {
                 let Some(id) = v.as_u64() else {
                     anyhow::bail!(
@@ -1305,13 +1490,236 @@ pub fn try_build(
         // clock bring-up (which spins on MCG_S / RSIM_CONTROL status bits)
         // settles instead of hanging. A passive register bank cannot complete
         // these hand-offs. See peripherals/mcg.rs and peripherals/rsim.rs.
-        "nxp_mcg" | "kinetis_mcg" => Box::new(crate::peripherals::mcg::Mcg::new()),
+        // `config: { profile: k6x }` adds PLL0 (C5/C6, S.PLLST/LOCK0) for the
+        // K64F; the default is the PLL-less KW41Z / Kinetis-L block.
+        "nxp_mcg" | "kinetis_mcg" => match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+            Some("k6x") => Box::new(crate::peripherals::mcg::Mcg::new_k6x()),
+            None | Some("kl") => Box::new(crate::peripherals::mcg::Mcg::new()),
+            Some(other) => anyhow::bail!("nxp_mcg: unknown profile '{other}' (expected k6x or kl)"),
+        },
         "nxp_rsim" => Box::new(crate::peripherals::rsim::Rsim::new()),
+        "kinetis_rnga" => Box::new(crate::peripherals::kinetis_rnga::KinetisRnga::new()),
         "sam_pm" => Box::new(crate::peripherals::sam_clock::SamPm::new()),
         "sam_gclk" => Box::new(crate::peripherals::sam_clock::SamGclk::new()),
         "sam_mclk" => Box::new(crate::peripherals::sam_clock::SamMclk::new()),
         "ra_sysc" => Box::new(crate::peripherals::ra_clock::RaSysc::new()),
+        "ra8_sysc" => Box::new(crate::peripherals::ra_clock::RaSyscRegs::ra8()),
+        "ra6_sysc" => Box::new(crate::peripherals::ra_clock::RaSyscRegs::ra6()),
+        "rx_sysc" => Box::new(crate::peripherals::rx_sysc::RxSysc::new()),
+        // `irq`: the EVIC vector; `timer_type`: "a" (Timer1) or "b";
+        // `clock_hz`: SYSCLK; `pbclk_hz`: the timer's PBCLK3; `sosc_hz`.
+        "pic32_timer" => {
+            use crate::peripherals::pic32_timer as t;
+            let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
+            let irq = get("irq").ok_or_else(|| {
+                anyhow::anyhow!("pic32_timer '{}' needs `irq` (EVIC vector)", p_cfg.id)
+            })? as u32;
+            let type_a = match p_cfg.config.get("timer_type").and_then(|v| v.as_str()) {
+                Some("a") | Some("A") => true,
+                Some("b") | Some("B") => false,
+                other => anyhow::bail!(
+                    "pic32_timer '{}' needs `timer_type: a|b`, got {other:?}",
+                    p_cfg.id
+                ),
+            };
+            Box::new(t::Pic32Timer::new(
+                get("clock_hz").unwrap_or(t::DEFAULT_CLOCK_HZ),
+                get("pbclk_hz").unwrap_or(t::DEFAULT_PBCLK_HZ),
+                get("sosc_hz").unwrap_or(t::DEFAULT_SOSC_HZ),
+                type_a,
+                irq,
+            ))
+        }
+        // `irqs`: the EVIC vectors [fault, receive, transmit]; `clock_hz`:
+        // SYSCLK; `pbclk_hz`: the UART's PBCLK2 (baud and RX polling).
+        "pic32_uart" => {
+            let irqs = p_cfg
+                .config
+                .get("irqs")
+                .and_then(|v| v.as_sequence())
+                .map(|s| {
+                    s.iter()
+                        .filter_map(|v| v.as_u64())
+                        .map(|v| v as u32)
+                        .collect::<Vec<_>>()
+                })
+                .filter(|v| v.len() == 3)
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "pic32_uart '{}' needs `irqs: [fault, rx, tx]` (EVIC vectors)",
+                        p_cfg.id
+                    )
+                })?;
+            let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
+            use crate::peripherals::pic32_uart as u;
+            Box::new(u::Pic32Uart::with_clocks(
+                [irqs[0], irqs[1], irqs[2]],
+                get("clock_hz").unwrap_or(u::DEFAULT_CLOCK_HZ),
+                get("pbclk_hz").unwrap_or(u::DEFAULT_PBCLK_HZ),
+            ))
+        }
+        "rx_flash" => Box::new(crate::peripherals::rx_sysc::RxFlashRegs::new()),
+        "rx_rtc" => Box::new(crate::peripherals::rx_sysc::RxFlashRegs::rtc()),
+        // `vectors`: the two channels' CMI vectors; `clock_hz`: the CPU
+        // cycle rate; `pclkb_hz`: the CMT count source before CKS.
+        "rx_cmt" => {
+            use crate::peripherals::rx_cmt as cmt;
+            let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
+            let vectors = p_cfg
+                .config
+                .get("vectors")
+                .and_then(|v| v.as_sequence())
+                .map(|s| {
+                    s.iter()
+                        .filter_map(|v| v.as_u64())
+                        .map(|v| v as u32)
+                        .collect::<Vec<_>>()
+                })
+                .filter(|v| v.len() == 2)
+                .map_or([28, 29], |v| [v[0], v[1]]);
+            Box::new(cmt::RxCmt::new(
+                get("clock_hz").unwrap_or(cmt::DEFAULT_CLOCK_HZ),
+                get("pclkb_hz").unwrap_or(cmt::DEFAULT_PCLKB_HZ),
+                vectors,
+            ))
+        }
         "ra_pfs" => Box::new(crate::peripherals::ra_pfs::RaPfs::new()),
+        "ra8_pfs" => Box::new(crate::peripherals::ra_pfs::RaPfs::new_ra8()),
+        // `ielsr_lines`: IELSRn count (default 96; 0 = only the IRQ-pin half);
+        // `irq_pins`: `[port, pin, IRQn]` per IRQ pad; `pfs_base`: PmnPFS base.
+        "ra_icu" => {
+            use crate::peripherals::ra_icu as icu;
+            let lines = p_cfg
+                .config
+                .get("ielsr_lines")
+                .and_then(|v| v.as_u64())
+                .map_or(icu::LINES, |v| v as u32);
+            let irq_pins = p_cfg
+                .config
+                .get("irq_pins")
+                .and_then(|v| v.as_sequence())
+                .map(|rows| {
+                    rows.iter()
+                        .filter_map(|row| {
+                            let row = row.as_sequence()?;
+                            let get = |i: usize| row.get(i)?.as_u64().map(|v| v as u8);
+                            (row.len() == 3).then_some((get(0)?, get(1)?, get(2)?))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            let pfs_base = p_cfg.config.get("pfs_base").and_then(|v| v.as_u64());
+            Box::new(icu::RaIcu::with_irq_pins(lines, irq_pins, pfs_base))
+        }
+        // `clock_hz`: the rate the bus cycles run at; `pclkb_hz`: PCLKB for
+        // the PCLKB count sources; `elc_event`: the channel's INT event
+        // (compare A/B are +1/+2).
+        "ra_agt" => {
+            use crate::peripherals::ra_agt as agt;
+            let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
+            Box::new(agt::RaAgt::new(
+                get("clock_hz").unwrap_or(agt::DEFAULT_CLOCK_HZ),
+                get("pclkb_hz").unwrap_or(agt::DEFAULT_PCLKB_HZ),
+                get("elc_event").map_or(agt::DEFAULT_ELC_EVENT, |v| v as u32),
+            ))
+        }
+        // `clock_hz`: the rate the bus cycles run at; `elc_event`: the unit's
+        // scan-end event; `vref_mv`: the reference; `input_mv: { <ch>: <mV> }`:
+        // board-level static channel levels.
+        // `clock_hz`: the rate the bus cycles run at; `pclkb_hz`: PCLKB, the
+        // RIIC's clock; `elc_event`: the channel's RXI event (TXI/TEI/ERI
+        // are +1/+2/+3).
+        "ra_iic" => {
+            use crate::peripherals::ra_iic as iic;
+            let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
+            Box::new(iic::RaIic::new(
+                get("clock_hz").unwrap_or(iic::DEFAULT_CLOCK_HZ),
+                get("pclkb_hz").unwrap_or(iic::DEFAULT_PCLKB_HZ),
+                get("elc_event").map_or(iic::DEFAULT_ELC_EVENT, |v| v as u32),
+            ))
+        }
+        // `channels`: GPT channel count; `clock_hz`: the rate the bus cycles
+        // run at; `pclkd_hz`: PCLKD, the count clock before GTCR.TPCS;
+        // `elc_event`: GPT0's capture/compare A event (nine per channel);
+        // `wide_channels`: mask of the 32-bit channels; `gtioc_pads`:
+        // `{ GTIOCnA: Pmnn, ... }`, the pads that carry each GTIOC line.
+        "ra_gpt" => {
+            use crate::peripherals::ra_gpt as gpt;
+            let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
+            let mut pads = Vec::new();
+            if let Some(map) = p_cfg.config.get("gtioc_pads").and_then(|v| v.as_mapping()) {
+                for (signal, pad) in map {
+                    let (Some(signal), Some(pad)) = (signal.as_str(), pad.as_str()) else {
+                        continue;
+                    };
+                    match gpt::RaGpt::parse_pad(signal, pad) {
+                        Some(entry) => pads.push(entry),
+                        None => tracing::warn!(
+                            "ra_gpt '{}': gtioc_pads entry {signal}: {pad} not understood",
+                            p_cfg.id
+                        ),
+                    }
+                }
+            }
+            Box::new(
+                gpt::RaGpt::new(
+                    get("channels").map_or(gpt::MAX_CHANNELS, |v| v as usize),
+                    get("clock_hz").unwrap_or(gpt::DEFAULT_CLOCK_HZ),
+                    get("pclkd_hz").unwrap_or(gpt::DEFAULT_PCLKD_HZ),
+                    get("elc_event").map_or(gpt::DEFAULT_ELC_EVENT, |v| v as u32),
+                    get("wide_channels").map_or(0xFF, |v| v as u32),
+                )
+                .with_output_pads(pads),
+            )
+        }
+        "ra_adc12" => {
+            use crate::peripherals::ra_adc12 as adc;
+            let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
+            let mut unit = adc::RaAdc12::new(
+                get("clock_hz").unwrap_or(adc::DEFAULT_CLOCK_HZ),
+                get("elc_event").map_or(adc::DEFAULT_ELC_EVENT, |v| v as u32),
+                get("vref_mv").map_or(adc::DEFAULT_VREF_MV, |v| v as u16),
+            );
+            if let Some(map) = p_cfg.config.get("input_mv").and_then(|v| v.as_mapping()) {
+                for (k, v) in map {
+                    if let (Some(ch), Some(mv)) = (k.as_u64(), v.as_u64()) {
+                        unit.set_channel_input(ch as u8, mv as u16);
+                    }
+                }
+            }
+            // Board wires from an analog output: `analog_links: { <ch>:
+            // "<peripheral>:<output>" }`, bound by the bus after build.
+            if let Some(map) = p_cfg
+                .config
+                .get("analog_links")
+                .and_then(|v| v.as_mapping())
+            {
+                for (k, v) in map {
+                    let link = v.as_str().and_then(|s| s.rsplit_once(':'));
+                    match (
+                        k.as_u64(),
+                        link.and_then(|(p, o)| Some((p, o.parse::<u8>().ok()?))),
+                    ) {
+                        (Some(ch), Some((source, output))) => {
+                            unit.add_analog_link(ch as u8, source.to_string(), output)
+                        }
+                        _ => tracing::warn!(
+                            "ra_adc12 '{}': analog_links entry {k:?}: {v:?} not understood \
+                             (expected <channel>: \"<peripheral>:<output>\")",
+                            p_cfg.id
+                        ),
+                    }
+                }
+            }
+            Box::new(unit)
+        }
+        "ra_dac12" => {
+            use crate::peripherals::ra_dac12 as dac;
+            let vref = p_cfg.config.get("vref_mv").and_then(|v| v.as_u64());
+            Box::new(dac::RaDac12::new(
+                vref.map_or(dac::DEFAULT_VREF_MV, |v| v as u16),
+            ))
+        }
         "imx_ccm" => Box::new(crate::peripherals::imx_ccm::ImxCcm::new()),
         "imx_iomuxc" => Box::new(crate::peripherals::imx_iomuxc::ImxIomuxc::new()),
         "imxrt_ccm" => Box::new(crate::peripherals::imxrt::ccm::ImxrtCcm::new()),
@@ -1423,6 +1831,124 @@ pub fn try_build(
         "miv_coretimer" => Box::new(crate::peripherals::miv::MivCoreTimer::new()),
         "sam4s_pio" => Box::new(crate::peripherals::sam4s::Sam4sPio::new()),
         "sam4s_pmc" => Box::new(crate::peripherals::sam4s::Sam4sPmc::new()),
+        "cortex_m7_cache" => {
+            let kb = |key: &str| -> anyhow::Result<u32> {
+                p_cfg
+                    .config
+                    .get(key)
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as u32)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("cortex_m7_cache: config.{key} (KiB) is required")
+                    })
+            };
+            let geometry = crate::peripherals::cortex_m7_cache::L1CacheGeometry::new(
+                kb("icache_kb")?,
+                kb("dcache_kb")?,
+            )?;
+            Box::new(crate::peripherals::cortex_m7_cache::CortexM7Cache::new(
+                geometry,
+            ))
+        }
+        "armv8m_mpu" => {
+            let regions = p_cfg
+                .config
+                .get("regions")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(8) as usize;
+            if regions > crate::peripherals::armv8m_mpu::MAX_REGIONS || regions % 4 != 0 {
+                anyhow::bail!("armv8m_mpu: config.regions = {regions} (0/4/8/12/16)");
+            }
+            Box::new(crate::peripherals::armv8m_mpu::Armv8mMpu::new(regions))
+        }
+        "cortex_m_fpu" => {
+            let reg = |key: &str, default: u32| -> u32 {
+                p_cfg
+                    .config
+                    .get(key)
+                    .and_then(|v| v.as_u64())
+                    .map_or(default, |v| v as u32)
+            };
+            use crate::peripherals::cortex_m_fpu as fpu;
+            Box::new(fpu::CortexMFpu::new([
+                reg("mvfr0", fpu::DEFAULT_MVFR0),
+                reg("mvfr1", fpu::DEFAULT_MVFR1),
+                reg("mvfr2", fpu::DEFAULT_MVFR2),
+            ]))
+        }
+        "cc2538_pl061_gpio" => {
+            // Pads that carry the reset IOC pull-up (SWRU319C §9.2.3); port C
+            // passes 0xF0 because PC0-PC3 have no on-die pulls.
+            let mask = p_cfg
+                .config
+                .get("pull_up_mask")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0xFF);
+            Box::new(crate::peripherals::cc2538::Cc2538Gpio::with_pull_up_mask(
+                mask as u32,
+            ))
+        }
+        "cc2538_sys_ctrl" => Box::new(crate::peripherals::cc2538::Cc2538SysCtrl::new()),
+        // `clock_hz`: the CPU clock the bus cycle count runs at, which turns
+        // cycles into µs (RF timing) and 32-kHz ticks (sleep timer).
+        "cc2538_rfcore" => {
+            let hz = p_cfg
+                .config
+                .get("clock_hz")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(crate::peripherals::cc2538::rfcore::DEFAULT_CLOCK_HZ);
+            Box::new(crate::peripherals::cc2538::rfcore::Cc2538RfCore::new(hz))
+        }
+        "cc2538_sleep_timer" => {
+            let hz = p_cfg
+                .config
+                .get("clock_hz")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(crate::peripherals::cc2538::sleep_timer::DEFAULT_CLOCK_HZ);
+            Box::new(crate::peripherals::cc2538::sleep_timer::Cc2538SleepTimer::new(hz))
+        }
+        // `flash_base`/`flash_size`: the main array the controller programs;
+        // `clock_hz`: the clock its erase/write timings run at.
+        "cc2538_flash_ctrl" => {
+            use crate::peripherals::cc2538::flash_ctrl as fc;
+            let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
+            Box::new(fc::Cc2538FlashCtrl::new(
+                get("flash_base").map_or(fc::DEFAULT_FLASH_BASE, |v| v as u32),
+                get("flash_size").map_or(fc::DEFAULT_FLASH_SIZE, |v| v as u32),
+                get("clock_hz").unwrap_or(fc::DEFAULT_CLOCK_HZ),
+            ))
+        }
+        "cc2538_aes" => Box::new(crate::peripherals::cc2538::aes::Cc2538Aes::new()),
+        "cc2538_udma" => Box::new(crate::peripherals::cc2538::udma::Cc2538Udma::new()),
+        "apollo4_gpio" => Box::new(crate::peripherals::apollo4::Apollo4Gpio::new()),
+        "apollo4_pwrctrl" => Box::new(crate::peripherals::apollo4::Apollo4PwrCtrl::new()),
+        "apollo4_cpu" => Box::new(crate::peripherals::apollo4::Apollo4Cpu::new()),
+        "s32k3_siul2" => Box::new(crate::peripherals::s32k3_siul2::S32k3Siul2::new()),
+        "lpc_flexcomm_usart" => {
+            // PSELID present bits: USART/SPI/I2C/I2S (0xF0) unless the yaml
+            // narrows them for a FLEXCOMM without every function.
+            let present = p_cfg
+                .config
+                .get("present")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0xF0) as u32;
+            Box::new(crate::peripherals::lpc::flexcomm_usart::LpcFlexcommUsart::new(present))
+        }
+        "lpc_gpio" => Box::new(crate::peripherals::lpc::gpio::LpcGpio::new()),
+        "rt5xx_ctl" => Box::new(crate::peripherals::lpc::rt5xx_ctl::Rt5xxCtl::new()),
+        "rt5xx_clkctl0" => Box::new(crate::peripherals::lpc::rt5xx_ctl::Rt5xxCtl::clkctl0()),
+        "rt5xx_clkctl1" => Box::new(crate::peripherals::lpc::rt5xx_ctl::Rt5xxCtl::clkctl1()),
+        "rt5xx_iopctl" => Box::new(crate::peripherals::lpc::rt5xx_ctl::Rt5xxCtl::plain()),
+        "rt5xx_ostimer" => {
+            use crate::peripherals::lpc::ostimer::{
+                Rt5xxOsTimer, DEFAULT_CLOCK_HZ, DEFAULT_TICK_HZ,
+            };
+            let get = |k: &str, d: u64| p_cfg.config.get(k).and_then(|v| v.as_u64()).unwrap_or(d);
+            Box::new(Rt5xxOsTimer::new(
+                get("clock_hz", DEFAULT_CLOCK_HZ),
+                get("tick_hz", DEFAULT_TICK_HZ),
+            ))
+        }
         _ => return Ok(None),
     };
     Ok(Some(dev))

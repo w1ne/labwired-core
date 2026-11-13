@@ -1,0 +1,9 @@
+# LabWired - Microchip Curiosity PIC32MZ EF 2.0 (DM320209) system manifest
+#
+# PIC32MZ2048EFM144. UART2 (TX RG9, RX RE9) is the PKoB4 debugger's virtual
+# COM port; the NuttX board in crates/firmware-curiosity-pic32mz-nuttx puts
+# its console there at 115200 8N1.
+name: "curiosity-pic32mz-ef"
+chip: "../chips/pic32mz2048efm144.yaml"
+external_devices: []
+debug_uart: "uart2"

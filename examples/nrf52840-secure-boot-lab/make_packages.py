@@ -96,20 +96,20 @@ def be_words(data: bytes) -> list[str]:
 def pubkey_xy_from_private(key_path: Path) -> bytes:
     """Return uncompressed P-256 public key without 0x04 prefix (64 bytes)."""
     out = subprocess.run(
-        ["openssl", "ec", "-in", str(key_path), "-pubout", "-outform", "DER"],
+        ["openssl", "ec", "-in", str(key_path), "-pubout", "-outform", "DER",
+         "-conv_form", "uncompressed"],
         capture_output=True,
         check=True,
     )
     der = out.stdout
-    # SubjectPublicKeyInfo … BIT STRING of 0x04 || X || Y (65 bytes raw).
-    # Find the 0x04 that starts the uncompressed point near the end.
-    idx = der.rfind(b"\x04")
-    if idx < 0 or len(der) - idx < 65:
-        raise RuntimeError("could not locate uncompressed EC point in DER pubkey")
-    point = der[idx : idx + 65]
-    if point[0] != 0x04:
-        raise RuntimeError("expected uncompressed EC point")
-    return point[1:65]
+    # OpenSSL emits a named-curve P-256 SubjectPublicKeyInfo. Validate its
+    # algorithm/curve OIDs and BIT STRING header before reading X || Y.
+    # Coordinate bytes can themselves contain 0x04, so searching for the
+    # last occurrence of the uncompressed-point marker is not safe.
+    prefix = bytes.fromhex("3059301306072a8648ce3d020106082a8648ce3d03010703420004")
+    if len(der) != len(prefix) + 64 or not der.startswith(prefix):
+        raise RuntimeError("expected named-curve P-256 uncompressed public key")
+    return der[len(prefix):]
 
 
 def generate_ephemeral_key(path: Path) -> None:

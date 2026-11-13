@@ -4,5 +4,9 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
+# SUPERSEDED: staged onboarding descriptor (a generic UART fixture on the
+# Renode-derived map with 256 KiB of RAM and no S32K3 SIUL2 model). The
+# promoted S32K388 part is configs/chips/s32k388.yaml (board:
+# configs/systems/s32k388-evb.yaml).
 name: nxp-s32k388evb
 chip: ../../chips/onboarding/nxp-s32k388evb.yaml

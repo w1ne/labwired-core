@@ -1,0 +1,26 @@
+{
+  "name": "labwired",
+  "version": "0.1.1",
+  "description": "Design electronic circuits, simulate and verify embedded firmware, and lay out supported PCBs with LabWired.",
+  "author": {
+    "name": "LabWired",
+    "url": "https://labwired.com"
+  },
+  "homepage": "https://labwired.com/mcp.html",
+  "documentationUrl": "https://labwired.com/mcp.html",
+  "supportUrl": "https://labwired.com/faq.html",
+  "privacyPolicyUrl": "https://labwired.com/privacy",
+  "termsOfServiceUrl": "https://labwired.com/terms",
+  "repository": "https://github.com/w1ne/labwired-core",
+  "license": "MIT",
+  "keywords": [
+    "electronics",
+    "circuit",
+    "firmware",
+    "pcb",
+    "embedded",
+    "arduino",
+    "esp32",
+    "kicad"
+  ]
+}

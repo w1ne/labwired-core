@@ -55,26 +55,26 @@ pub(super) fn build(
         req.options.echo_uart_stdout,
     )
     .map_err(|e| anyhow!(e))?;
-    let uart_rx_bufs = super::uart_rx_sources(&bus, &req.options)?;
+    let uart_rx_bufs = super::wire_host_streams(&mut bus, &req.options)?;
 
     let program_image =
         parse_avr_elf_image(firmware).map_err(|e| anyhow!("Loader Error: {e:#}"))?;
     let mut cpu = crate::cpu::Avr::for_chip_name(&chip.name);
     cpu.load_program_image(&program_image);
+    // EEPROM programming time is in microseconds; count it in this clock.
+    cpu.set_cpu_hz(bus.cpu_hz);
     // USART TX is on the CPU, not a bus UART peripheral.
     cpu.set_serial_sink(uart_sink.clone());
-    // SPI/I2C kits park on bus controllers; SPDR/TWCR clock them from the CPU
-    // model (same as build_avr_node / CLI).
-    for name in ["spi", "spi0", "spi1"] {
-        for dev in bus.take_spi_devices(name) {
-            cpu.push_spi_device(dev);
-        }
-    }
+    // SPI kits stay on the bus parking controller so inspect / display
+    // readout can see them; SPDR clocks them via SystemBus::clock_parking_spi.
+    // I²C slaves still move onto the CPU TWI model (TWCR/TWDR).
     for name in ["i2c", "i2c0", "twi"] {
         for dev in bus.take_i2c_slaves(name) {
             cpu.push_i2c_slave(dev);
         }
     }
+    // The watchdog's 128 kHz period is counted in core clocks.
+    cpu.set_wdt_cpu_hz(bus.cpu_hz);
     let boxed: Box<dyn Cpu> = Box::new(cpu);
     let machine = Machine::new(boxed, bus);
 

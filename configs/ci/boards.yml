@@ -34,6 +34,28 @@ boards:
     kind: sim-validate
     path: examples/esp32c3-blinky
     gate: true
+  # Narrow ESP32-DevKitC-32E onboarding profile. Committed TIER1 ELF, no
+  # cross-toolchain, seconds to run. Proves the new chip descriptor through
+  # `labwired test` on every PR (chip-coverage ceiling forbids another waiver).
+  - id: esp32-devkitc-32e-gpio-smoke
+    kind: sim-validate
+    path: examples/esp32-devkitc-32e-gpio-smoke
+    gate: true
+  # Narrow UART1-TX onboarding profile of the same DevKitC-32E SoC. Committed
+  # TIER1 ELF, no cross-toolchain. Proves the new chip descriptor through
+  # `labwired test` on every PR (chip-coverage ceiling forbids another waiver).
+  - id: esp32-devkitc-32e-uart1
+    kind: sim-validate
+    path: examples/esp32-devkitc-32e-uart1
+    gate: true
+  # Narrow NUCLEO-F103RB + BME280 onboarding profile. Builds the in-repo
+  # firmware crate and runs onboarding-smoke.yaml on every PR (chip-coverage
+  # ceiling forbids another waiver).
+  - id: nucleo-f103rb-bme280
+    kind: sim-validate
+    path: examples/nucleo-f103rb-bme280
+    rust_targets: [thumbv7m-none-eabi]
+    gate: true
   # atmega2560's only CLI proof. Committed ELF, no toolchain, seconds to run.
   - id: arduino-mega-2560-io
     kind: sim-validate
@@ -44,9 +66,138 @@ boards:
     kind: sim-validate
     path: examples/atmega2561-io
     gate: true
+  # ATmega328PB: builds the exact AVR-GCC target and verifies USART1 + PB5.
+  - id: atmega328pb-usart1
+    kind: sim-validate
+    path: examples/atmega328pb-usart1
+    apt: [gcc-avr, binutils-avr, avr-libc]
+    gate: true
+  # PIC18F4520: the first PIC18 part. Committed SDCC 4.4.0 ELF (rebuilding
+  # needs the upstream SDCC pic16 port, so CI checks the HEX->ELF wrap is
+  # byte-identical instead), the EUSART/LED io-smoke and a clean 200k-step run.
+  - id: pic18f4520
+    kind: sim-validate
+    path: examples/pic18f4520
+    gate: true
+  # PIC16F877A L1: committed SDCC 4.4.0 pic14 firmware (the pic14 port is not
+  # in distro packages either, so CI checks the HEX->ELF wrap), the USART/LED
+  # io-smoke and a clean 200k-step run.
+  - id: pic16f877a
+    kind: sim-validate
+    path: examples/pic16f877a
+    gate: true
+  # PIC16F1829 L1 (first enhanced mid-range part): committed SDCC 4.4.0
+  # pic14 firmware (HEX->ELF wrap checked), the io-smoke with EUSART, LATA,
+  # software INT and TMR0 interrupts, and a clean 200k-step run.
+  - id: pic16f1829
+    kind: sim-validate
+    path: examples/pic16f1829
+    gate: true
   # Builds the real target source with avr-gcc and runs its committed ELF.
   - id: atmega1281-io
     kind: sim-validate
     path: examples/atmega1281-io
     apt: [gcc-avr, binutils-avr, avr-libc]
+    gate: true
+  # CC2538DK: the first TI CC2538 part. Builds the cortex-m-rt smoke for
+  # thumbv7m (the CC2538 is a Cortex-M3) and runs the UART0/LED io-smoke plus
+  # the unsupported-instruction audit through the CLI.
+  - id: cc2538dk
+    kind: sim-validate
+    path: examples/cc2538dk
+    rust_targets: [thumbv7m-none-eabi]
+    gate: true
+  # PolarFire SoC Discovery Kit: the first RV64 part. Committed stock Zephyr
+  # v4.1.0 fixtures (hello, synchronization, tests/kernel/common) on one U54
+  # hart, plus the unsupported-instruction audit of each image.
+  - id: mpfs-disco-kit
+    kind: sim-validate
+    path: examples/mpfs-disco-kit
+    gate: true
+  # SK-AM62: the first AArch64 part (TI AM6234, Cortex-A53). Committed stock
+  # Zephyr v4.3.0 fixtures (hello, synchronization, tests/kernel/common), plus
+  # the unsupported-instruction audit of each image.
+  - id: sk-am62
+    kind: sim-validate
+    path: examples/sk-am62
+    gate: true
+  # EK-RX261: the first Renesas RX part (RXv3 core). Committed stock Zephyr
+  # v4.3.0 fixtures (hello, synchronization, tests/kernel/common), plus the
+  # unsupported-instruction audit of each image.
+  - id: ek-rx261
+    kind: sim-validate
+    path: examples/ek-rx261
+    gate: true
+  # Curiosity PIC32MZ EF 2.0: the first MIPS part (PIC32MZ2048EFM144,
+  # MIPS32r2 M5150 core). Committed stock upstream NuttX fixtures (nsh with a
+  # scripted `hello`, ostest), plus the unsupported-instruction audit of each
+  # image.
+  - id: curiosity-pic32mz-ef
+    kind: sim-validate
+    path: examples/curiosity-pic32mz-ef
+    gate: true
+  # EK-RA6M5: the first RA6M5 part. Builds the cortex-m-rt smoke for
+  # thumbv8m.main (the RA6M5 is a Cortex-M33) and runs the SCI0/LED io-smoke
+  # plus the unsupported-instruction audit through the CLI.
+  - id: ek-ra6m5
+    kind: sim-validate
+    path: examples/ek-ra6m5
+    rust_targets: [thumbv8m.main-none-eabi]
+    gate: true
+  # EK-RA8M1: the first RA8 part. Builds the cortex-m-rt smoke for
+  # thumbv8m.main (Armv8-M Mainline code; the RA8M1's Cortex-M85 Helium/MVE
+  # and low-overhead branches are not decoded) and runs the SCI9/LED
+  # io-smoke plus the unsupported-instruction audit through the CLI.
+  - id: ek-ra8m1
+    kind: sim-validate
+    path: examples/ek-ra8m1
+    rust_targets: [thumbv8m.main-none-eabi]
+    gate: true
+  # SAM E70 Xplained: the first SAM E70 part. Builds the cortex-m-rt smoke for
+  # thumbv7em (the SAM E70 is a Cortex-M7) and runs the USART1/LED io-smoke
+  # plus the unsupported-instruction audit through the CLI.
+  - id: sam-e70-xplained
+    kind: sim-validate
+    path: examples/sam-e70-xplained
+    rust_targets: [thumbv7em-none-eabi]
+    gate: true
+  # Apollo4 Plus EVB: the first Ambiq part. Builds the cortex-m-rt smoke for
+  # thumbv7em (the Apollo4 Plus is a Cortex-M4F) and runs the UART0/LED
+  # io-smoke plus the unsupported-instruction audit through the CLI.
+  - id: apollo4p-evb
+    kind: sim-validate
+    path: examples/apollo4p-evb
+    rust_targets: [thumbv7em-none-eabi]
+    gate: true
+  # S32K388EVB-Q289: the first S32K3 part. Builds the cortex-m-rt smoke for
+  # thumbv7em (CM7_0 is a Cortex-M7) and runs the LPUART2/SIUL2 io-smoke plus
+  # the unsupported-instruction audit through the CLI.
+  - id: s32k388-evb
+    kind: sim-validate
+    path: examples/s32k388-evb
+    rust_targets: [thumbv7em-none-eabi]
+    gate: true
+  # MIMXRT595-EVK: the first i.MX RT500 part. Builds the cortex-m-rt smoke
+  # for thumbv8m.main (Cortex-M33) and runs the FLEXCOMM0/GPIO io-smoke plus
+  # the unsupported-instruction audit through the CLI.
+  - id: mimxrt595-evk
+    kind: sim-validate
+    path: examples/mimxrt595-evk
+    rust_targets: [thumbv8m.main-none-eabi]
+    gate: true
+  # NUCLEO-L552ZE-Q: the first STM32L5 part. Builds the cortex-m-rt smoke for
+  # thumbv8m.main and runs the LPUART1/GPIO io-smoke plus the unsupported-
+  # instruction audit through the CLI, so the chip is proven by a gate on
+  # every PR that touches configs/ or examples/.
+  - id: nucleo-l552ze-q
+    kind: sim-validate
+    path: examples/nucleo-l552ze-q
+    rust_targets: [thumbv8m.main-none-eabi]
+    gate: true
+  # FRDM-K64F UART-only L1: builds the Cortex-M4F smoke and runs the UART0/RGB
+  # LED io-smoke plus the unsupported-instruction audit through the CLI.
+  - id: frdm-k64f
+    kind: sim-validate
+    path: examples/frdm-k64f
+    rust_targets: [thumbv7em-none-eabi]
     gate: true

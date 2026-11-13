@@ -101,6 +101,19 @@ pub struct Systick {
     /// arrival (token mismatch) instead of racing the fresh chain.
     #[serde(skip)]
     arm_seq: u32,
+    /// Latest absolute cycle the live event of the current `arm_seq` chain
+    /// can be delivered at, or `None` when no live chain is known. A re-arm
+    /// whose expiry is no earlier than this keeps the chain instead of
+    /// superseding it: the live event arrives first, finds no wrap, and
+    /// reschedules from the new configuration. Without this, every tickless
+    /// re-arm to a later deadline leaves a dead event resident until its
+    /// deadline (Zephyr `tests/net/tcp` on FRDM-K64F held 9 at once, past the
+    /// scheduler's per-peripheral ceiling). `None` after a restore is safe:
+    /// it only forces a fresh chain. Any path that bumps `arm_seq` without
+    /// arming a new chain (node reset) must clear it, or the next arm would
+    /// ride a chain that is already dead and SysTick would never fire again.
+    #[serde(skip)]
+    live_deadline: Option<u64>,
     /// Bus-published cycle clock (walk-free plan Part 1). `Some` once the bus
     /// registration choke attaches it; `None` keeps the model on the legacy
     /// walk path.
@@ -119,6 +132,7 @@ impl Systick {
             anchor: Cell::new(0),
             pending_fires: Cell::new(0),
             arm_seq: 0,
+            live_deadline: None,
             clock: None,
         }
     }
@@ -335,6 +349,7 @@ impl crate::Peripheral for Systick {
         self.countflag.set(false);
         self.pending_fires.set(0);
         self.arm_seq = self.arm_seq.wrapping_add(1);
+        self.live_deadline = None;
     }
 
     fn systick_ticks_until_fire(&self) -> Option<u64> {
@@ -459,6 +474,21 @@ impl crate::Peripheral for Systick {
         if !self.scheduler_mode() {
             return Vec::new();
         }
+        let fire = if self.pending_fires.get() > 0 {
+            None
+        } else {
+            self.ticks_until_fire()
+        };
+        let now = self.clock.as_ref().map_or(0, |c| c.now());
+        // The bus places a delay `x` at `now + 1 + x` (MMIO write path) or
+        // `now + x` (first-drain bootstrap). Compare the earliest the new
+        // expiry can land with the latest the live event can: keeping the
+        // chain is only safe when the live event is never the later one.
+        if let (Some(d), Some(live)) = (fire, self.live_deadline) {
+            if live < now + d {
+                return Vec::new();
+            }
+        }
         // Kill any in-flight chain: the configuration (or counter) may have
         // just changed under this write, so its deadline is stale. The fresh
         // chain below carries the new token.
@@ -466,13 +496,14 @@ impl crate::Peripheral for Systick {
         if self.pending_fires.get() > 0 {
             // A wrap already materialised (mid-batch write after the expiry
             // whose event chain we just killed): deliver at the next drain.
+            self.live_deadline = Some(now + 1);
             return vec![(0, self.arm_seq)];
         }
         // `collect_scheduled_events` converts to `current_cycle + 1 + delay`;
         // the fire lands `d` walk ticks after the just-synced state, i.e. at
         // absolute cycle `current_cycle + d` — hence `d - 1` (d >= 1 always).
-        self.ticks_until_fire()
-            .map(|d| vec![(d - 1, self.arm_seq)])
+        self.live_deadline = fire.map(|d| now + d);
+        fire.map(|d| vec![(d - 1, self.arm_seq)])
             .unwrap_or_default()
     }
 
@@ -490,6 +521,9 @@ impl crate::Peripheral for Systick {
         // materialises the wrap(s) this event was scheduled for.
         self.advance_to(sched.now());
         let fires = self.pending_fires.replace(0);
+        let next = self.ticks_until_fire();
+        // `deliver_due_events` re-arms at exactly `sched.now() + delay`.
+        self.live_deadline = next.map(|d| sched.now() + d);
         crate::sched::EventResult {
             // One pend covers any number of accumulated wraps — pends merge in
             // the CPU pending bitmap exactly as they merge in silicon's single
@@ -498,7 +532,7 @@ impl crate::Peripheral for Systick {
             // Perpetuate the chain from the just-synced state: the delay is
             // measured from `sched.now()`, so the next expiry lands at its
             // exact absolute cycle — no cumulative drift at any interval.
-            reschedule_delay: self.ticks_until_fire(),
+            reschedule_delay: next,
             ..Default::default()
         }
     }
@@ -823,6 +857,68 @@ mod tests {
             let res = st.on_event(old_token, &mut sched, &mut bus);
             assert_eq!(res.system_exception, None, "stale chain must be inert");
             assert_eq!(res.reschedule_delay, None, "stale chain must not respawn");
+        }
+
+        #[test]
+        fn later_rearm_keeps_the_live_chain_and_its_wake_reschedules_exactly() {
+            // Tickless idle stretching the timeout: the live event (expiry at
+            // cycle 100) fires first, so no second event is queued.
+            let (mut st, clock) = armed_scheduler(99);
+            let token = st.take_scheduled_events()[0].1;
+            clock.publish(10);
+            st.sync_to(10);
+            st.write_u32(0x04, 999).unwrap(); // RVR
+            st.write_u32(0x08, 0).unwrap(); // CVR clear → next zero-hit at 10 + 1000
+            assert!(
+                st.take_scheduled_events().is_empty(),
+                "a later expiry must ride the live chain, not queue a second event"
+            );
+            // The old wake arrives at 100: no wrap yet, re-armed at the exact
+            // new expiry.
+            clock.publish(100);
+            let mut sched = crate::sched::EventScheduler::new();
+            sched.advance_to(100);
+            let mut bus = crate::bus::SystemBus::new();
+            let res = st.on_event(token, &mut sched, &mut bus);
+            assert_eq!(res.system_exception, None, "early wake claims nothing");
+            assert_eq!(res.reschedule_delay, Some(910), "10 + 1000 - 100");
+            clock.publish(1010);
+            sched.advance_to(1010);
+            let res = st.on_event(token, &mut sched, &mut bus);
+            assert_eq!(res.system_exception, Some(15), "wrap at the new expiry");
+        }
+
+        #[test]
+        fn node_reset_drops_the_live_chain_so_the_next_arm_schedules() {
+            // A warm reset retires the running chain (its event dies on the
+            // token check). Re-enabling afterwards must queue a fresh event
+            // even for an expiry later than the dead chain's deadline.
+            let (mut st, clock) = armed_scheduler(99);
+            let old = st.take_scheduled_events()[0].1;
+            crate::Peripheral::on_node_reset(&mut st);
+            clock.publish(10);
+            st.sync_to(10);
+            st.write_u32(0x04, 999).unwrap(); // RVR: expiry at 10 + 1000
+            st.write_u32(0x08, 0).unwrap();
+            st.write(0x00, 0x07).unwrap();
+            let evs = st.take_scheduled_events();
+            assert_eq!(evs.len(), 1, "re-enable after reset must schedule");
+            assert_ne!(evs[0].1, old, "with a token the reset did not retire");
+            assert_eq!(evs[0].1, st.arm_seq, "carrying the current arm_seq");
+        }
+
+        #[test]
+        fn earlier_rearm_supersedes_the_live_chain() {
+            let (mut st, clock) = armed_scheduler(999);
+            let old = st.take_scheduled_events()[0].1;
+            clock.publish(10);
+            st.sync_to(10);
+            st.write_u32(0x04, 49).unwrap();
+            st.write_u32(0x08, 0).unwrap(); // next zero-hit at 10 + 50
+            let evs = st.take_scheduled_events();
+            assert_eq!(evs.len(), 1, "a nearer expiry needs its own event");
+            assert_ne!(evs[0].1, old, "and kills the later chain");
+            assert_eq!(evs[0].0, 49);
         }
 
         #[test]

@@ -99,6 +99,7 @@ fn open(
             blobs: &BlobMap::new(),
             options: BuildOptions {
                 uart_rx: manifest.debug_uart.clone(),
+                rtt: None,
                 ..Default::default()
             },
         },

@@ -526,6 +526,9 @@ impl WasmSimulator {
             MachineFamily::CortexA => return Err(JsValue::from_str(
                 "Cortex-A7 requires the native qemu-arm backend; browser execution is unavailable",
             )),
+            MachineFamily::CortexR => return Err(JsValue::from_str(
+                "Cortex-R5F requires the native qemu-arm-system backend; browser execution is unavailable",
+            )),
             MachineFamily::CortexM => {
                 Self::new_from_config_arm(&chip, &manifest, firmware, blob_map)
             }
@@ -569,6 +572,21 @@ impl WasmSimulator {
             // Classic Arduino Nano / ATmega328P — same shape as `build_avr_node`.
             MachineFamily::Avr => Self::new_from_config_avr(&chip, &manifest, firmware),
             MachineFamily::Pic24 => Self::new_from_config_pic24(&chip, &manifest, firmware),
+            MachineFamily::Pic18 => Err(JsValue::from_str(
+                "PIC18 (M0) is not available in the browser build yet",
+            )),
+            MachineFamily::Pic16 => Err(JsValue::from_str(
+                "PIC16 is not available in the browser build yet",
+            )),
+            MachineFamily::Aarch64 => Err(JsValue::from_str(
+                "AArch64 is not available in the browser build yet",
+            )),
+            MachineFamily::Rx => Err(JsValue::from_str(
+                "RX is not available in the browser build yet",
+            )),
+            MachineFamily::Mips => Err(JsValue::from_str(
+                "MIPS is not available in the browser build yet",
+            )),
         }?;
         // Every architecture's machine is built by now, so co-simulation binds
         // here once rather than in each constructor above.
@@ -664,13 +682,9 @@ impl WasmSimulator {
         // hears the Nano if the CPU writes UDR0 bytes into the same sink
         // (the CLI does the same with its capture buffer).
         cpu.set_serial_sink(uart_sink.clone());
-        // SPI/I2C kits park on bus controllers; SPDR/TWCR clock them from
-        // the CPU model (same as build_avr_node / CLI).
-        for name in ["spi", "spi0", "spi1"] {
-            for dev in bus.take_spi_devices(name) {
-                cpu.push_spi_device(dev);
-            }
-        }
+        // SPI kits stay on the bus parking controller (SPDR clocks via
+        // SystemBus::clock_parking_spi) so inspect can see the panel.
+        // I²C slaves still move onto the CPU TWI model.
         for name in ["i2c", "i2c0", "twi"] {
             for dev in bus.take_i2c_slaves(name) {
                 cpu.push_i2c_slave(dev);

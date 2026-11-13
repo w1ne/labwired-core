@@ -404,8 +404,10 @@ canonical `type:`; the table below is rendered from that file by
 | `max485` | UART | Half-duplex RS-485 transceiver between a UART and a shared A/B pair |
 | `neo6m-gps` | UART | GPS module streaming NMEA sentences over UART RX |
 | `sim800l` | UART | SIM800L UART AT command shell (no cellular RF) |
+| `tiol112` | UART | TI IO-Link digital transceiver: EN, inverted CQ, WAKE and NFAULT |
 | `xy-md02` | UART | SHT20 RS-485 temperature and humidity transmitter speaking Modbus RTU |
 | `ydlidar-scanner` | UART | Spinning lidar streaming YDLIDAR scan frames over UART RX at 230400 baud |
+| `ads1015` | I²C | 4-channel 12-bit I²C ADC (TI ADS1015), sibling of the ADS1115 |
 | `ads1115` | I²C | 4-channel 16-bit I²C ADC (TI ADS1115) |
 | `adxl345` | I²C | 3-axis ±2/4/8/16 g digital accelerometer over I2C |
 | `aht20` | I²C | Aosong AHT20 I²C temperature and humidity sensor |
@@ -414,60 +416,89 @@ canonical `type:`; the table below is rendered from that file by
 | `atecc608a` | I²C | I²C secure element: P-256 sign/verify, RNG, key slots (HSM/TPM role) |
 | `bh1750` | I²C | Ambient-light sensor over I²C (single-byte opcodes) |
 | `bme280` | I²C | Bosch BME280 temp + humidity + pressure sensor over I2C |
+| `bme680` | I²C | Bosch BME680 temperature / pressure / humidity sensor over I²C (gas channel not modelled) |
+| `bmi160` | I²C | Bosch BMI160 6-axis IMU (accel + gyro + temperature) over I²C |
 | `bmi270` | I²C | Bosch BMI270 low-power IMU with hardware step counter over I2C |
+| `bmm150` | I²C | Bosch BMM150 3-axis geomagnetic sensor over I²C (chip ID 0x32, trim block) |
 | `bmp280` | I²C | Bosch BMP280 I²C pressure + temperature sensor (no humidity) |
 | `bno055` | I²C | 9-DoF absolute orientation sensor (Bosch BNO055) over I²C |
 | `cap1188` | I²C | Microchip CAP1188 8-channel capacitive touch controller over I2C |
+| `dht20` | I²C | Aosong DHT20 I²C temperature and humidity module (AHT20-based) |
 | `drv2605` | I²C | TI DRV2605 haptic motor driver over I2C |
 | `ds3231` | I²C | I²C real-time clock with temperature-compensated crystal |
+| `ens160` | I²C | ScioSense ENS160 MOx multi-gas sensor (TVOC, eCO2, AQI-UBA) over I²C |
 | `fxos8700` | I²C | NXP FXOS8700 6-axis accelerometer + magnetometer over I2C |
+| `ht16k33` | I²C | 16×8 LED matrix / 7-segment I²C controller (display RAM, setup commands) |
+| `icm20948` | I²C | TDK InvenSense ICM-20948 motion sensor (accel + gyro + temperature; magnetometer not modelled) over I²C |
+| `icm42688` | I²C | TDK InvenSense ICM-42688-P 6-axis IMU (accel + gyro + temperature) over I²C |
 | `ina219` | I²C | High-side current and bus voltage sensor over I²C |
+| `ina226` | I²C | TI INA226 bidirectional current / power monitor over I²C (36 V, 16-bit) |
+| `ina260` | I²C | TI INA260 current / voltage / power monitor with an integrated 2 mΩ shunt over I²C (36 V, 15 A) |
+| `ina3221` | I²C | TI INA3221 three-channel shunt and bus voltage monitor over I²C (26 V) |
 | `lcd1602` | I²C | 16×2 HD44780 character LCD behind a PCF8574 I2C backpack |
 | `lsm303agr_accel` | I²C | ST LSM303AGR accelerometer half over I2C (address 0x19) |
 | `lsm303agr_mag` | I²C | ST LSM303AGR magnetometer half over I2C (address 0x1E) |
 | `max30102` | I²C | Maxim MAX30102 pulse-oximetry / heart-rate front-end over I2C |
 | `mcp9808` | I²C | ±0.25 °C I²C temperature sensor with seeded noise + thermal lag |
+| `mcp23017` | I²C | Microchip MCP23017 16-bit I²C GPIO expander (IODIR / GPIO / OLAT register map) |
 | `mlx90614` | I²C | Single-point IR (non-contact) thermometer over SMBus/I2C |
 | `mlx90640` | I²C | Melexis MLX90640 32×24 far-IR thermal array over I2C |
 | `mma8451q` | I²C | 3-axis 14-bit accelerometer over I2C with standby/active gating |
 | `mpu6050` | I²C | 6-axis gyro + accelerometer over I2C |
+| `mpu9250` | I²C | TDK InvenSense MPU-9250 motion sensor (accel + gyro + temperature; AK8963 magnetometer not modelled) over I²C |
 | `nau88l21` | I²C | Nuvoton NAU88L21 stereo audio codec: I2C control port and register file |
 | `oled-sh1107` | I²C | 128×128 monochrome OLED display over I2C with a paged framebuffer |
 | `oled-ssd1306` | I²C | 128×64 monochrome OLED display over I2C with a paged framebuffer |
 | `oled-ssd1306-128x32` | I²C | 0.91″ 128×32 monochrome OLED display over I2C with a paged framebuffer |
+| `oled-ssd1309` | I²C | 2.42in 128×64 monochrome OLED on a Solomon Systech SSD1309, I2C, paged framebuffer |
 | `ov3660` | I²C | OmniVision 3 MP camera: SCCB control at 0x3C plus 8-bit DVP frames into the ESP32-S3 LCD_CAM |
 | `pca9685` | I²C | 16-channel 12-bit I²C PWM / servo controller |
 | `pcf8574` | I²C | NXP PCF8574 8-bit I²C quasi-bidirectional port expander |
+| `pcf8575` | I²C | 16-bit I²C quasi-bidirectional port expander (PCF8575) |
+| `pmsa003i` | I²C | Plantower PMSA003I particulate-matter sensor (PM1.0 / PM2.5 / PM10) over I²C |
 | `pn532` | I²C | NXP PN532 I²C NFC controller probe shell (no RF) |
 | `scd41` | I²C | Photoacoustic CO₂ + temperature + humidity sensor over I2C |
+| `sgp40` | I²C | MOx VOC sensor returning the raw SRAW_VOC signal over I²C |
 | `sgp41` | I²C | MOx gas sensor returning raw VOC/NOx signals over I2C |
 | `sht30` | I²C | Sensirion SHT30 I²C temperature and humidity sensor |
 | `sht31` | I²C | Temperature + humidity sensor over I²C (Sensirion CRC-8) |
+| `sht40` | I²C | Sensirion SHT40 I²C temperature and humidity sensor (single-byte commands, CRC-8) |
 | `sps30` | I²C | Laser particulate-matter sensor (PM1/2.5/4/10) over I2C |
 | `tmp102` | I²C | 12-bit I²C temperature sensor (self-drifting demo) |
 | `tmp117` | I²C | TI TMP117 high-accuracy digital temperature sensor over I2C |
+| `tsl2591` | I²C | ams TSL2591 high-dynamic-range light sensor (full-spectrum + IR channels) over I²C |
 | `vcnl4010` | I²C | Proximity + ambient-light sensor over I2C (fixed address 0x13) |
+| `veml6075` | I²C | UVA / UVB light sensor over I²C (16-bit counts, ID 0x0026) |
 | `veml7700` | I²C | Ambient-light sensor (lux) over I2C |
 | `vl53l0x` | I²C | Laser time-of-flight distance sensor over I²C (ST VL53L0X) |
 | `vl53l1x` | I²C | Laser time-of-flight distance sensor over I2C |
 | `74hc595` | SPI | 8-bit serial-in / parallel-out shift register over SPI |
+| `ads1256` | SPI | 8-channel 24-bit delta-sigma SPI ADC (RREG/WREG/RDATA, PGA, DRDY) |
 | `adxl345_spi` | SPI | 3-axis ±16 g accelerometer over SPI (full-resolution, 256 LSB/g) |
 | `amoled-rm67162` | SPI | 240x536 RGB565 AMOLED, 4-wire SPI (DBI Type-C) |
 | `apa102` | SPI | SPI-clocked addressable RGB LED strip (write-only sink) |
+| `bmi270_spi` | SPI | Native four-wire BMI270 with real CS/dummy-byte framing, verified configuration upload and nominal motion sampling |
+| `gc9a01` | SPI | 1.28in round 240x240 RGB565 IPS TFT on a GalaxyCore GC9A01A, 4-wire SPI |
 | `hc595-7seg` | SPI | 4-digit 7-segment LED display driven by two chained 74HC595 shift registers over SPI |
 | `ili9341` | SPI | 240×320 RGB565 SPI TFT display |
+| `ili9488` | SPI | 320×480 SPI TFT controller with modelled 18-bit COLMOD |
 | `inmp441` | SPI | Omnidirectional MEMS microphone, 24-bit I2S digital output |
 | `led-matrix` | SPI | 8×8 LED matrix driven by a MAX7219 serial display driver over SPI |
 | `lora-sx1278` | SPI | Semtech SX1278 SPI LoRa register shell (no RF) |
 | `max31855` | SPI | K-type thermocouple-to-digital converter over SPI (read-only 32-bit frame) |
 | `mcp2515` | SPI | Functional SPI classical CAN controller for standard 11-bit data frames |
+| `mcp3008` | SPI | 8-channel 10-bit SPI ADC (single-ended / differential, Figure 6-1 framing) |
 | `microsd` | SPI | SPI SD card command shell (init + single-block read zeros) |
 | `nrf24l01` | SPI | 2.4 GHz SPI transceiver register shell (no air link) |
 | `pcd8544` | SPI | Nokia 5110 (PCD8544) monochrome 84×48 LCD over SPI |
-| `rc522` | SPI | MFRC522 SPI RFID reader register shell (no RF) |
+| `rc522` | SPI | MFRC522 SPI RFID reader with ISO/IEC 14443-A cascade-level-1 air interface |
+| `rfm95` | SPI | HopeRF RFM95W (Semtech SX1276) SPI LoRa register shell (no RF) |
 | `sn74hc165` | SPI | 8-bit parallel-in / serial-out shift register over SPI |
 | `ssd1680_tricolor_290` | SPI | 2.9" tri-color (black/white/red) e-paper over SPI. Driver class GxEPD2_290_C90c -- the WeAct / Waveshare 2.9" B/W/R module. Not interchangeable with the UC8151D part |
+| `st7735` | SPI | 1.8in 128x160 RGB565 TFT on a Sitronix ST7735R, 4-wire SPI |
 | `st7789-170x320` | SPI | 1.9in 170x320 IPS TFT on a Sitronix ST7789V, 4-wire SPI |
+| `sx1262` | SPI | Semtech SX1262 LoRa transceiver, SPI command interface (status, standby/RX/TX, registers, IRQ) — no RF air link |
+| `sx1276` | SPI | Semtech SX1276 LoRa transceiver, SPI register model of the LoRa page (no RF air link) |
 | `uc8151d_tricolor_290` | SPI | 2.9" tri-color (black/white/red) e-paper over SPI. Driver class GxEPD2_290_Z13c. Different command set from the SSD1680 part -- pick by the driver class your firmware instantiates, not by how the panel looks |
 | `74cbtlv3257` | GPIO | Four 1-of-2 bus switches; S picks the A or B side, OE opens all four |
 | `74hc00` | GPIO | Four independent 2-input NAND gates, 9 ns propagation delay |
@@ -491,6 +522,8 @@ canonical `type:`; the table below is rendered from that file by
 | `keypad` | GPIO | 4×4 membrane keypad (row-drive / column-read) |
 | `l298n` | GPIO | L298N/TB6612/L293D-class dual H-bridge twin (direction + enable effort) |
 | `led-matrix-mux` | GPIO | Row/column LED matrix (micro:bit 5x5, bare 8x8) multiplexed by GPIO row and column lines, with per-pixel brightness |
+| `limit-switch` | GPIO | Mechanical end-stop with common, normally-open and normally-closed contacts |
+| `lm393-moisture` | GPIO | Resistive soil/moisture module with LM393 comparator DOUT (LOW=wet, HIGH=dry) |
 | `logic_level_shifter_4ch` | GPIO | BSS138-class 4-channel bidirectional shifter; DIR is a sim strap (not on the PCB) |
 | `neopixel` | GPIO | Addressable RGB LED strip on one data pin (edge-timed bit stream) |
 | `pybadge_buttons` | GPIO | Eight active-low buttons through the board's SN74HC165 |
@@ -498,15 +531,22 @@ canonical `type:`; the table below is rendered from that file by
 | `segment-display-mux` | GPIO | N-digit 7/14/16-segment LED display, multiplexed by GPIO segment and digit-select lines |
 | `servo` | GPIO | RC hobby servo driven by a single PWM control pin (GPIO edges and/or LEDC duty) |
 | `seven-segment` | GPIO | Bare single-digit 7-segment LED display driven straight from nine GPIO pins |
+| `sk6812` | GPIO | Addressable RGBW LED strip on one data pin (32-bit edge-timed frames) |
 | `tm1637-7seg` | GPIO | 4-digit 7-segment LED display with the TM1637 2-wire (CLK/DIO) driver |
+| `tm1638` | GPIO | 8-digit 7-segment + 8 LED display with the TM1638 3-wire (STB/CLK/DIO) driver |
 | `uln2003` | GPIO | Four-phase unipolar stepper twin (IN1..IN4) |
+| `uln2803` | GPIO | Eight inverting open-collector Darlington sink channels (500 mA each), 200 ns delay |
+| `acs712` | Analog | Ratiometric Hall current sensor, 185 mV/A and VCC/2 at zero current |
 | `gp2y0a21` | Analog | Sharp GP2Y0A21YK0F analogue infrared distance sensor, 10–80 cm (Vo on ADC) |
+| `joystick` | Analog | Two ratiometric potentiometer axes and a push contact |
 | `ldr` | Analog | CdS photoresistor + voltage divider on an ADC channel |
 | `lipo_charger` | Analog | Single-cell LiPo pack + TP4056-class analog charger on an ADC channel |
 | `mq-6` | Analog | Hanwei MQ-6 LPG/propane semiconductor gas sensor module (AOUT on ADC) |
 | `ntc-thermistor` | Analog | 10 kΩ NTC + voltage divider on an ADC channel |
 | `potentiometer` | Analog | 3-pin linear potentiometer on an ADC channel (rotary or slide) |
+| `rain-sensor` | Analog | Rain drop plate + LM393 module (AO on ADC; wetter → lower voltage) |
 | `soil-moisture` | Analog | Capacitive soil moisture probe module (AOUT on ADC; wetter → lower voltage) |
+| `sound-sensor` | Analog | Analog microphone sound-level module (A0 on ADC) |
 | `tmp36` | Analog | Analog temperature sensor, 10 mV/°C with 500 mV at 0 °C |
 | `xl4015` | Analog | Adjustable XL4015 buck; Vout setpoint observed through a ÷11 ADC divider |
 | `can-bridge` | CAN | Boundary between a CAN controller and traffic from outside the simulation |
@@ -621,6 +661,39 @@ for the full BLDC form. A motor can equivalently be declared as an
 `external_devices` entry with `type: dc-motor` or `bldc-motor`: the loader
 converts it to the same typed plant (`MotorModelConfig::from_external_device`),
 so the two spellings cannot drift.
+
+For a physical three-lead winding driven by a solved inverter circuit, use
+`armature: circuit` and the [circuit BLDC contract](circuit-bldc.md).
+
+The timer-driven BLDC plant reads channels 1–3 and their complementary outputs from the
+configured timer's output-stage snapshot. The loader resolves the six phase
+pin names, but live GPIO `MODER`/`AFR` selection does not gate the plant. The
+STM32L476 mapping uses PA8–PA10 and PB13–PB15 as AF1; native pad capture must
+check that mapping separately. Arbitrary runtime phase-pin remapping is
+outside this plant contract.
+
+Native numeric instruments can read `live_numeric_capture(cursor, maxPoints)`
+from a machine. This additive stream has its own string `epoch`, stable
+`name`/`unit` channel descriptors, and finite `f64` observations at native
+`timeNs`. Each point has a sequence `seq` and a zero-based numeric `channel`
+index. The fixed 20,000-point ring keeps the newest observations, including
+quiet accepted motor samples. Historical `analog_series` remains a separate
+65,536-point-per-channel prefix with its existing deadbands and `dropped`
+count; neither cursor nor retention policy is shared with the co-simulation
+analog ring.
+
+Pass back `nextCursor` as the next unread sequence. `oldestCursor` is the
+oldest retained sequence, `evicted` counts normal cumulative ring evictions,
+`readerMissed` counts requested points already overwritten, and `omitted`
+counts available points excluded only by this read's newest-point limit.
+Reads do not consume data. On an epoch change or `resetRequired`, discard the
+old cursor/history and reread at zero. Replacement or a true timeline rewind
+changes the epoch; a physical CPU reset on a continuing timeline does not.
+Each channel reports `valid`, `knownFromNs`, `knownUntilNs`, and
+`invalidReason`. A failed plant cannot extend its horizon using a healthy
+peer's time. A resumed channel starts a new known interval, and a channel
+without a retained native anchor has null `knownFromNs`. The export is null
+when the machine has no live numeric producer.
 
 ```yaml
 # examples/f401-hbridge-dc-motor/system.yaml (excerpt)

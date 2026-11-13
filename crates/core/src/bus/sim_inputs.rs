@@ -95,6 +95,25 @@ impl SystemBus {
         false
     }
 
+    /// Drive the board's shared VDDA / ADC reference in volts. Every ADC
+    /// peripheral that declares reference support takes the same rail value.
+    pub(crate) fn seed_adc_reference_voltage(&mut self, volts: f64) -> bool {
+        if !volts.is_finite() || volts < 0.0 {
+            return false;
+        }
+        let mut found = false;
+        let mut accepted = true;
+        for peripheral in &mut self.peripherals {
+            if peripheral.dev.supports_adc_reference_voltage() {
+                found = true;
+                // Every declared consumer must accept the rail. In particular,
+                // zero may pass only when each model supports being unpowered.
+                accepted &= peripheral.dev.set_adc_reference_voltage_v(volts);
+            }
+        }
+        found && accepted
+    }
+
     fn seed_adc_at(&mut self, idx: usize, channel: u8, millivolts: u16) -> bool {
         // Ask through the trait first. `Peripheral::set_adc_channel_input` is
         // where an ADC model says "this is my channel and I took it"; the
@@ -233,12 +252,16 @@ impl SystemBus {
     /// `component` accepts), falling back to the peripheral's bus name.
     pub fn list_inputs(&mut self) -> Vec<(String, crate::sim_input::InputChannel)> {
         let mut out = Vec::new();
-        out.extend(self.motors.iter().map(|motor| {
+        out.extend(self.motors.iter().flat_map(|motor| {
             let id = match motor {
                 crate::bus::motors::MotorRuntime::Dc { id, .. }
                 | crate::bus::motors::MotorRuntime::Bldc { id, .. } => id,
             };
-            (id.clone(), crate::bus::motors::MOTOR_STALL_INPUT)
+            let mut channels = vec![(id.clone(), crate::bus::motors::MOTOR_STALL_INPUT)];
+            if matches!(motor, crate::bus::motors::MotorRuntime::Bldc { .. }) {
+                channels.push((id.clone(), crate::bus::motors::MOTOR_INVERTER_FAULT_INPUT));
+            }
+            channels
         }));
         self.for_each_sim_input(&mut |name, si| {
             let owner = si.component_id().unwrap_or(name).to_string();
@@ -265,8 +288,12 @@ impl SystemBus {
         // Motor stall inputs are not SimInput devices but answer the same
         // channel vocabulary; count them so resolution and `set_input` agree
         // on uniqueness before the SimInput walk.
-        let mut matches = self.matching_motor_stall_inputs(component, channel);
-        let mut found = (matches == 1).then_some(super::motors::MOTOR_STALL_INPUT);
+        let mut matches = self.matching_motor_inputs(component, channel);
+        let mut found = if matches == 1 {
+            super::motors::motor_input_channel(channel)
+        } else {
+            None
+        };
         self.for_each_sim_input(&mut |name, si| {
             if Self::component_matches(component, name, si) {
                 if let Some(ch) = si.input_channels().iter().find(|c| c.key == channel) {
@@ -337,6 +364,15 @@ impl SystemBus {
         if result.is_ok() {
             self.sync_analog_inputs();
             self.sync_button_inputs();
+            // Edge/stimulus-clocked gpio_devices (pybadge buttons, displays with
+            // input rules) drive pads from `input:` events. `SimInput::set_input`
+            // only updates the rule machine; without a service pass the driven
+            // IDR bits stay stale until the next MMIO edge. Flush here so a
+            // stimulus takes effect when the device has opted out of per-cycle
+            // service. Grid-schedule parts (HC-SR04) must NOT be flushed: their
+            // first service would publish pin_defaults onto ECHO and collapse
+            // the four-state HighZ until the first real echo edge.
+            self.flush_gpio_device_inputs(component, channel);
         }
         result
     }
@@ -355,14 +391,47 @@ impl SystemBus {
         use crate::peripherals::components::button::Button;
         let pending: Vec<(u64, u8, bool)> = self
             .gpio_devices_of_mut::<Button>()
-            .filter_map(|b| {
-                let (level, changed) = b.service();
-                changed.then_some((b.gpio.0, b.gpio.1, level))
-            })
+            .flat_map(Button::pending_inputs)
             .collect();
         for (addr, bit, level) in pending {
             self.drive_input_bit(addr, bit, level);
         }
+    }
+
+    /// Service every gpio_device that owns `channel` so driven pads reflect a
+    /// just-applied stimulus. No-op when no resident advertises the channel.
+    ///
+    /// Mirrors [`Self::sync_button_inputs`]: the level is applied at the
+    /// stimulus point so a walk-free / tick-opted-out resident (keypad) does not
+    /// need the per-cycle pass to make a press visible to firmware.
+    pub(crate) fn flush_gpio_device_inputs(&mut self, component: Option<&str>, channel: &str) {
+        if self.gpio_devices.is_empty() {
+            return;
+        }
+        let now = self.current_cycle;
+        let mut devices = std::mem::take(&mut self.gpio_devices);
+        for device in &mut devices {
+            let hit = {
+                let si = device.as_sim_input();
+                if !si.input_channels().iter().any(|c| c.key == channel) {
+                    false
+                } else {
+                    // Prefer the SimInput component id so we do not re-borrow
+                    // `device` for `id()` while `si` is live.
+                    let name = si.component_id().unwrap_or("");
+                    Self::component_matches(component, name, si)
+                }
+            };
+            // Only flush residents that opted out of the tick *and* are not
+            // schedule-driven. A grid-schedule part (HC-SR04) opts out because
+            // resident deadlines cover its waveform; servicing it here would
+            // drain construction-time pin_defaults onto the bus before any
+            // trigger edge and break four-state HighZ.
+            if hit && !device.needs_per_cycle_service() && !device.has_grid_schedules() {
+                device.service(self, now);
+            }
+        }
+        self.gpio_devices = devices;
     }
 
     /// Apply several input sets as ONE transaction: every set is resolved and
@@ -417,5 +486,10 @@ impl SystemBus {
     /// `self.bus_trace` (see `crate::bus::bus_trace`), oldest first.
     pub fn bus_trace_snapshot(&self) -> Vec<bus_trace::BusTraceEvent> {
         self.bus_trace.snapshot()
+    }
+
+    /// Events the shared bus-trace ring dropped because it was full.
+    pub fn bus_trace_evicted(&self) -> u64 {
+        self.bus_trace.evicted()
     }
 }

@@ -73,6 +73,10 @@ pub struct Button {
     /// the WRONG level for an active-low button — an undriven pull-up pin must
     /// read HIGH or a `while (digitalRead(pin) == LOW)` spins forever).
     last_high: Option<bool>,
+    /// Other contacts operated by the same actuator (SPDT limit switch).
+    /// Their polarity may be complementary, but they share one stimulus and
+    /// therefore cannot be updated or resolved independently by accident.
+    additional_contacts: Vec<((u64, u8), bool, Option<bool>)>,
 }
 
 /// Every channel a contact may expose.
@@ -137,6 +141,7 @@ impl Button {
             channel: channel_or_pressed(channel),
             pressed: false,
             last_high: None,
+            additional_contacts: Vec::new(),
         }
     }
 
@@ -148,6 +153,12 @@ impl Button {
     /// Open or close the contact.
     pub fn set_pressed(&mut self, pressed: bool) {
         self.pressed = pressed;
+    }
+
+    /// Add a contact moved by this actuator. `active_high` is the MCU level
+    /// while the actuator is pressed, including the external pull resistor.
+    pub fn add_contact(&mut self, gpio: (u64, u8), active_high: bool) {
+        self.additional_contacts.push((gpio, active_high, None));
     }
 
     /// The level the MCU pin reads right now: the active level while pressed,
@@ -168,6 +179,28 @@ impl Button {
         let changed = self.last_high != Some(high);
         self.last_high = Some(high);
         (high, changed)
+    }
+
+    /// Changed pin levels for every pole of this single actuator. Called at
+    /// attach and at the stimulus boundary, without a per-cycle polling cost.
+    pub fn pending_inputs(&mut self) -> Vec<(u64, u8, bool)> {
+        let mut pending = Vec::new();
+        let (level, changed) = self.service();
+        if changed {
+            pending.push((self.gpio.0, self.gpio.1, level));
+        }
+        for (gpio, active_high, previous) in &mut self.additional_contacts {
+            let high = if self.pressed {
+                *active_high
+            } else {
+                !*active_high
+            };
+            if *previous != Some(high) {
+                *previous = Some(high);
+                pending.push((gpio.0, gpio.1, high));
+            }
+        }
+        pending
     }
 }
 
@@ -201,9 +234,7 @@ impl crate::bus::BusResidentDevice for Button {
     /// store is correctly ignored by the STM32F1 model and the button would
     /// never move its pin.
     fn service(&mut self, pins: &mut dyn crate::bus::DevicePins, _now: u64) {
-        let (high, changed) = Button::service(self);
-        if changed {
-            let (addr, bit) = self.gpio;
+        for (addr, bit, high) in self.pending_inputs() {
             pins.drive_input_bit(addr, bit, high);
         }
     }

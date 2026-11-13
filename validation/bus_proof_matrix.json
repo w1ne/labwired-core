@@ -3,6 +3,26 @@
   "chip_set_derived_from": "configs/chips/*.yaml minus ci-fixture-* (same rule as crates/core/src/tests/builtin_chip_self_contained.rs). This is a SUPERSET of the `chip:` values in the superproject's packages/board-config/src/boards.ts BOARDS array, which is why a new BOARDS chip cannot dodge this gate: it cannot ship without its chip yaml. `in_boards` records BOARDS membership as of 2026-08-03 and is informational only.",
   "surveyed": "2026-08-03",
   "chips": {
+    "ch32v003f4p6": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/ch32v003_compiled_firmware.rs",
+        "test": "ch32v003_compiled_rv32ec_firmware_prints_on_usart1",
+        "signal": "the committed RV32EC fixture ELF (examples/ch32v003f4p6/uart_hello.c) clocks USART1 from APB2PCENR bit 14, polls STATR.TXE and writes 'Hello from CH32V003\\r\\n' through DATAR (0x40013804); the test asserts the console sink receives exactly that string, and a negative control with the clock gate moved to an unset bit asserts the sink stays empty. Polled TX only: no PFIC, so USART1_IRQn is not wired",
+        "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test ch32v003_compiled_firmware"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "SPI1 (0x40013000) is not modelled; it is not in the ch32v003f4p6 descriptor's peripherals list.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "I2C1 (0x40005400) is not modelled; it is not in the ch32v003f4p6 descriptor's peripherals list.",
+        "lane": "none"
+      }
+    },
     "dspic33fj32mc204": {
       "in_boards": false,
       "uart": {
@@ -101,6 +121,26 @@
         "lane": "none"
       }
     },
+    "atmega328pb": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/avr_atmega328pb_usart1.rs",
+        "test": "atmega328pb_firmware_uses_usart1_and_drives_pb5",
+        "signal": "the committed AVR-GCC ELF compiled with -mmcu=atmega328pb prints `PB_USART1_OK` through USART1 UDR1; the integration test asserts captured serial and PB5 high, and examples/atmega328pb-usart1/io-smoke.yaml asserts the serial marker under `labwired test`. The host AVR-LibC lacks a PB header/startup object, so the example supplies data-space register definitions and a reset vector; USART1 interrupts remain unmodelled.",
+        "lane": "cargo test -p labwired-core --test avr_atmega328pb_usart1; cargo run -q -p labwired-cli -- test --script examples/atmega328pb-usart1/io-smoke.yaml --output-dir out/boards/atmega328pb-usart1/io-smoke --no-uart-stdout"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No ATmega328PB SPI evidence is included in this slice.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No ATmega328PB I2C evidence is included in this slice.",
+        "lane": "none"
+      }
+    },
     "atmega1281": {
       "in_boards": true,
       "uart": {
@@ -144,6 +184,46 @@
         "signal": "phase 2 of the fixture does a full write-pointer / repeated-start / read against the board-level BMP280 model that configure_xtensa_esp32 attaches at 0x76 (crates/core/src/system/xtensa/esp32.rs:565), and requires the byte back to be the real CHIP_ID 0x58; phase 1 requires an absent 0x20 to NACK. Reported as TIER1 i2c PASS over the real UART.",
         "lane": "core-ci / core-full (nightly 02:30 UTC) via tier1_matrix; also core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
         "note": "the arduino-matrix INA219 cell is a second, independent proof on this chip."
+      }
+    },
+    "esp32-devkitc-32e-gpio-smoke": {
+      "in_boards": false,
+      "uart": {
+        "state": "shallow",
+        "file": "docs/receipts/2026-11-09-esp32-deep-sleep/sketch/deep_sleep_timer.test.yaml",
+        "test": "uart_contains",
+        "gap": "the receipt PASSES locally via `labwired test --script docs/receipts/2026-11-09-esp32-deep-sleep/sketch/deep_sleep_timer.test.yaml` (stock Arduino-ESP32 timer-wake firmware prints LW_DS_OK over UART0 after three boots; the sibling light-sleep script prints LW_LS_OK) but runs in NO CI lane — no workflow invokes it, so nothing gates a regression.",
+        "lane": "none"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "This onboarding slice does not declare or prove a SPI controller.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "The chip yaml declares I2C0, but configs/systems/esp32-devkitc-32e-gpio-smoke.yaml attaches no external device and the committed sleep receipts do not perform an I2C transaction.",
+        "lane": "none"
+      }
+    },
+    "esp32-devkitc-32e-uart1": {
+      "in_boards": false,
+      "uart": {
+        "state": "shallow",
+        "file": "examples/esp32-devkitc-32e-uart1/uart1-smoke.yaml",
+        "test": "uart_contains",
+        "gap": "committed onboarding evidence (examples/esp32-devkitc-32e-uart1/evidence/run) shows the script PASSES: UART0 printed ESP32_DEVKITC32E_UART1_TX_OK and GPIO16 (UART1 TX) recorded >=32 edges. Firmware is PlatformIO-built, not a committed ELF, and no required CI lane invokes this script, so nothing gates a regression.",
+        "lane": "none"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "This onboarding slice does not declare or prove a SPI controller.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "This onboarding slice does not declare an I2C controller or attach an external I2C device.",
+        "lane": "none"
       }
     },
     "esp32c3": {
@@ -429,6 +509,27 @@
         "gap": "no fixture loads configs/chips/rp2350.yaml and completes an I2C transaction; the descriptor reuses the RP2040 i2c model on RP2350 bases but per-chip evidence does not transfer - a pico2 I2C fixture is follow-up work"
       }
     },
+    "xck26-rpu": {
+        "in_boards": false,
+        "uart": {
+          "state": "proven",
+          "file": "crates/core/tests/kv260_r5_zephyr.rs",
+          "test": "hello_world_prints_banner_and_greeting",
+          "signal": "committed stock Zephyr v4.1.0 kv260_r5 ELF tests/fixtures/kv260-r5-zephyr-hello.elf boots on the native Cortex-R5F and polls PS UART1 (Cadence) TX; the test asserts '*** Booting Zephyr OS build' and 'Hello World! kv260_r5' on the UART1 console sink. examples/kv260-r5/zephyr-{hello,sync,kernel-common}.yaml assert the same console through the native CLI.",
+          "lane": "core-qemu-arm (native, qemu-arm-system): cargo test -p labwired-core --test kv260_r5_zephyr; examples/kv260-r5/ci/test.sh",
+          "note": "RX and the UART interrupt path are unit-tested only (peripherals::armv7::cadence_uart); no firmware exercises interrupt-driven UART yet. Evidence captured 2026-11-01."
+        },
+        "spi": {
+          "state": "none",
+          "gap": "No ZynqMP SPI/QSPI controller is installed in the RPU platform slice.",
+          "lane": "none"
+        },
+        "i2c": {
+          "state": "none",
+          "gap": "No ZynqMP I2C controller is installed in the RPU platform slice.",
+          "lane": "none"
+        }
+      },
     "rv1103": {
       "in_boards": true,
       "uart": {
@@ -596,6 +697,60 @@
       "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
       "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
       "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f103rb": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_stm32f103_zephyr_survival",
+        "signal": "committed ELF fixture booted in-sim on configs/systems/nucleo-f103rb-epaper.yaml (chip stm32f103rb); assert_uart_contains matches 'Hello World! nucleo_f103rb' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f103rb-nucleo-bme280-smoke": {
+      "in_boards": false,
+      "uart": {
+        "state": "shallow",
+        "file": "examples/nucleo-f103rb-bme280/onboarding-smoke.yaml",
+        "test": "uart_contains",
+        "gap": "committed onboarding evidence (examples/nucleo-f103rb-bme280/evidence) shows the script PASSES: USART2 printed NUCLEO_F103RB_BME280_OK ID=0x60 I2C1=PB8/PB9 and gpioa:5 (LD2) recorded >=32 edges. Firmware is built from crates/firmware-nucleo-f103rb-bme280-smoke, not a committed ELF, and no required CI lane invokes this script, so nothing gates a regression.",
+        "lane": "none"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "This onboarding slice does not declare or prove a SPI controller.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "shallow",
+        "file": "examples/nucleo-f103rb-bme280/onboarding-smoke.yaml",
+        "test": "uart_contains",
+        "gap": "the smoke firmware reads BME280.CHIP_ID (register 0xD0) over I2C1 at 0x77 (Arduino D15/D14, PB8/PB9) and prints ID=0x60 on USART2. That is a firmware-driven I2C transaction observed via the UART marker, not a dedicated I2C capture assertion, and no required CI lane runs the script.",
+        "lane": "none"
+      }
+    },
+    "stm32f103r8": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "examples/stm32f103r8-smoke/io-smoke.yaml",
+        "test": "uart_contains: \"OK\"",
+        "signal": "the NUCLEO-F103RB smoke firmware boots on the exact STM32F103R8 descriptor (64 KiB flash / 20 KiB SRAM) and its 'OK' bytes reach the modelled USART sink, matched by uart_contains; PA5 also toggles >=4 times (gpio_edges)",
+        "lane": "core-ci: cargo test -p labwired-core --test strict_onboarding (the gate EXECUTES examples/stm32f103r8-smoke/io-smoke.yaml through the CLI and fails the board if any assertion fails)"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No exact-part firmware SPI transfer is proven for this descriptor.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No exact-part firmware I2C transaction is proven for this descriptor.",
+        "lane": "none"
+      }
     },
     "stm32f103t4": {
       "in_boards": false,
@@ -784,6 +939,30 @@
         "signal": "real Arduino firmware writes a register-pointer byte to the INA219 model attached at 0x40 in validation/arduino-matrix/systems/<chip>.yaml and Wire.endTransmission() returns 0 (the device ACKed); the verdict LW_L3_OK then comes back as real bytes on the modelled UART, matched by a uart_contains oracle",
         "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
         "note": "the ACK is meaningful because the same chips' tier-1 fixtures show an UNMATCHED address NACKs (esp32 check_i2c addr 0x20, stm32 NACKF, rp2040 ABRT_7B_ADDR_NOACK) - the bus does not blanket-ACK. LIMIT: this proves address+data out and the device's ACK back, not a payload readback. Evidence: run 30842505709, 'cells=45 expected>=45 fails=0', 2026-08-03."
+      }
+    },
+    "stm32g431rb": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "examples/stm32g431rb/io-smoke.yaml",
+        "test": "TIER1 clock PASS",
+        "signal": "the committed tier-1 fixture (tests/fixtures/tier1/stm32g431rb.elf) boots on the G431 descriptor and its banner bytes reach the modelled USART sink; uart_contains asserts 'TIER1 clock PASS', 'TIER1 gpio PASS' and 'TIER1 done'",
+        "lane": "core-ci: cargo test -p labwired-core --test strict_onboarding (the gate EXECUTES examples/stm32g431rb/io-smoke.yaml through the CLI and fails the board if any assertion fails)"
+      },
+      "spi": {
+        "state": "shallow",
+        "file": "examples/tier1-fixture/stm32g431rb/src/main.rs",
+        "test": "check_spi",
+        "gap": "firmware-driven, but nothing is on the far end of the bus: the fixture writes the data register and then asserts BSY/TXE/EOT flags. No device receives a byte, so this cannot distinguish a working shift engine from one that only moves status bits.",
+        "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
+      },
+      "i2c": {
+        "state": "shallow",
+        "file": "examples/tier1-fixture/stm32g431rb/src/main.rs",
+        "test": "check_i2c",
+        "gap": "firmware-driven register walk only: the fixture enables I2C1, sets START/STOP and checks ISR.BUSY/TXE. No device is attached, so no address ACK or payload is proven on this exact part (the G474 sibling's Arduino INA219 ACK proof does not cover the G431 descriptor).",
+        "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
       }
     },
     "stm32h563": {
@@ -1325,6 +1504,86 @@
         "lane": "none"
       }
     },
+    "mpfs095t": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_mpfs_disco_kit_zephyr_survival",
+        "signal": "committed stock Zephyr v4.1.0 hello_world ELF tests/fixtures/mpfs-zephyr-hello.elf booted in-sim on the RV64 hart; the survival gate asserts 'Hello World! mpfs_icicle/polarfire/u54' on the MMUART1 (16550) TX sink. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "The MSS SPI/QSPI controllers are declared stubs on mpfs095t.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "The MSS I2C controllers are declared stubs on mpfs095t.",
+        "lane": "none"
+      }
+    },
+    "r5f52618bgfp": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_ek_rx261_zephyr_survival",
+        "signal": "committed stock Zephyr v4.3.0 hello_world ELF tests/fixtures/ek-rx261-zephyr-hello.elf booted in-sim on the RX core; the survival gate asserts 'Hello World! ek_rx261/r5f52618bgfp' on the SCI6 TX sink. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "RSPI0 is not mapped on r5f52618bgfp yet.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "RIIC0 is not mapped on r5f52618bgfp yet.",
+        "lane": "none"
+      }
+    },
+    "am6234": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_sk_am62_zephyr_survival",
+        "signal": "committed stock Zephyr v4.3.0 hello_world ELF tests/fixtures/sk-am62-zephyr-hello.elf booted in-sim on the AArch64 core; the survival gate asserts 'Hello World! sk_am62/am6234/a53' on the MAIN_UART0 TX sink. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "MCSPI is not mapped on am6234 yet.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "MAIN_I2C is not mapped on am6234 yet.",
+        "lane": "none"
+      }
+    },
+    "pic32mz2048efm144": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_curiosity_pic32mz_nuttx_survival",
+        "signal": "committed stock upstream NuttX nsh ELF tests/fixtures/curiosity-pic32mz-ef-nuttx-nsh.elf booted in-sim on the MIPS core; the survival gate asserts 'NuttShell (NSH)' on the UART2 TX sink. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "SPI1-6 are not mapped on pic32mz2048efm144 yet.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "I2C1-5 are not mapped on pic32mz2048efm144 yet.",
+        "lane": "none"
+      }
+    },
     "vegaboard-ri5cy": {
       "in_boards": false,
       "uart": {
@@ -1385,6 +1644,149 @@
         "lane": "none"
       }
     },
+    "amap42kp": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_apollo4p_evb_smoke_survival",
+        "signal": "committed ELF fixture tests/fixtures/apollo4p-evb-smoke.elf boots on the Cortex-M4F and the survival gate asserts 'APOLLO4P EVB SMOKE\\n' on the UART0 TX sink; examples/apollo4p-evb/io-smoke.yaml asserts the full power/baud/LED/button/heartbeat stream. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival; core-board-ci: examples/apollo4p-evb/io-smoke.yaml"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "IOM0-7 and MSPI0-2 are declared `type: stub` (the Apollo4 IOM/MSPI blocks are not modelled) and no SPI device is attached on the Apollo4 Plus EVB package.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "IOM0-7 (the Apollo4 I2C/SPI masters) are declared `type: stub` and no I2C device is attached on the Apollo4 Plus EVB package.",
+        "lane": "none"
+      }
+    },
+    "cc2538sf53": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_cc2538dk_smoke_survival",
+        "signal": "committed ELF fixture tests/fixtures/cc2538dk-smoke.elf boots on the Cortex-M3 and the survival gate asserts 'CC2538DK SMOKE\\n' on the UART0 TX sink; examples/cc2538dk/io-smoke.yaml asserts the full clock/LED/key/heartbeat stream. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival; core-board-ci: examples/cc2538dk/io-smoke.yaml"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "SSI0/SSI1 are declared `type: stub` (the CC2538 SSI block is not modelled) and no SPI device is attached on the CC2538DK package.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "The I2C master/slave windows are declared `type: stub` (the CC2538 I2C block is not modelled) and no I2C device is attached on the CC2538DK package.",
+        "lane": "none"
+      }
+    },
+    "s32k388": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_s32k388_evb_smoke_survival",
+        "signal": "committed ELF fixture tests/fixtures/s32k388-evb-smoke.elf boots CM7_0 from the 0x00401000 vector table named by its boot header and the survival gate asserts 'S32K388 EVB SMOKE\\n' on the LPUART2 TX sink; examples/s32k388-evb/io-smoke.yaml asserts the full IVT/clock/LED/button/heartbeat stream. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival; core-board-ci: examples/s32k388-evb/io-smoke.yaml"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "LPSPI0-5 and QuadSPI are not mapped (the S32K3 LPSPI is not wired on this chip) and no SPI device is attached on the S32K388EVB-Q289 package.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "LPI2C0/1 are not mapped and no I2C device is attached on the S32K388EVB-Q289 package.",
+        "lane": "none"
+      }
+    },
+    "r7fa6m5bh": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_ek_ra6m5_smoke_survival",
+        "signal": "committed ELF fixture tests/fixtures/ek-ra6m5-smoke.elf boots on the Cortex-M33 and the survival gate asserts 'EK-RA6M5 SMOKE\\n' on the SCI0 TX sink; examples/ek-ra6m5/io-smoke.yaml asserts the full clock/LED/switch/heartbeat stream. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival; core-board-ci: examples/ek-ra6m5/io-smoke.yaml"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "The RSPI window is declared `type: stub` and SCI1-9 (simple SPI) are not mapped; no SPI device is attached on the EK-RA6M5 package.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "The IIC0-2 window is declared `type: stub` (the RA IIC block is not modelled) and no I2C device is attached on the EK-RA6M5 package.",
+        "lane": "none"
+      }
+    },
+    "r7fa8m1ah": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_ek_ra8m1_smoke_survival",
+        "signal": "committed ELF fixture tests/fixtures/ek-ra8m1-smoke.elf boots on the Cortex-M85 (Armv8-M Mainline code) and the survival gate asserts 'EK-RA8M1 SMOKE\\n' on the SCI9 (SCI_B) TX sink; examples/ek-ra8m1/io-smoke.yaml asserts the full clock/CCR readback/LED/switch/heartbeat stream. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival; core-board-ci: examples/ek-ra8m1/io-smoke.yaml",
+        "note": "a second independent SCI9 proof lands in the same file: test_ek_ra8m1_zephyr_survival boots the stock Zephyr v3.7.0 hello_world (tests/fixtures/r7fa8m1ah-zephyr-hello.elf, built for ek_ra8m1 with -mcpu=cortex-m85+nomve, so it runs Armv8.1-M DLS/LE and CSINC) and asserts 'Hello World! ek_ra8m1/r7fa8m1ahecbd'. Evidence captured 2026-10-31."
+      },
+      "spi": {
+        "state": "none",
+        "gap": "The SPI0/1 window is declared `type: stub` and SCI0-8 (simple SPI) are not mapped; no SPI device is attached on the EK-RA8M1 package.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "The IIC0-2 window is declared `type: stub` (the RA IIC block is not modelled) and no I2C device is attached on the EK-RA8M1 package.",
+        "lane": "none"
+      }
+    },
+    "mimxrt595s": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_mimxrt595_evk_smoke_survival",
+        "signal": "committed ELF fixture tests/fixtures/mimxrt595-evk-smoke.elf boots the Cortex-M33 from the 0x08001000 vector table behind the FlexSPI FCB and the survival gate asserts 'MIMXRT595 EVK SMOKE\\n' on the FLEXCOMM0 USART TX sink; examples/mimxrt595-evk/io-smoke.yaml asserts the full clock/pad/LED/switch/heartbeat stream. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival; core-board-ci: examples/mimxrt595-evk/io-smoke.yaml",
+        "note": "a second independent FLEXCOMM0 proof lands in the same file: test_mimxrt595_evk_zephyr_survival boots the stock Zephyr v3.7.0 hello_world (tests/fixtures/mimxrt595-zephyr-hello.elf, built for mimxrt595_evk/mimxrt595s/cm33, running on the secure aliases) and asserts 'Hello World! mimxrt595_evk/mimxrt595s/cm33'. Evidence captured 2026-10-30."
+      },
+      "spi": {
+        "state": "none",
+        "gap": "Only FLEXCOMM0 is mapped and only its USART view is modelled (with PERSEL = SPI the window reads 0); FLEXCOMM1-16 are not mapped and the FlexSPI0 controller is a declared stub, and no SPI device is attached on the MIMXRT595-EVK package.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "Only FLEXCOMM0 is mapped and only its USART view is modelled; the I2C-mode FLEXCOMMs and I3C are not mapped and no I2C device is attached on the MIMXRT595-EVK package.",
+        "lane": "none"
+      }
+    },
+    "same70q21b": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_sam_e70_xplained_smoke_survival",
+        "signal": "committed ELF fixture tests/fixtures/sam-e70-xplained-smoke.elf boots on the Cortex-M7 and the survival gate asserts 'SAM E70 XPLAINED SMOKE\\n' on the USART1 TX sink; examples/sam-e70-xplained/io-smoke.yaml asserts the full PMC/mux/LED/button/heartbeat stream. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival; core-board-ci: examples/sam-e70-xplained/io-smoke.yaml",
+        "note": "a second independent USART1 proof in the same file: test_sam_e70_xplained_zephyr_survival boots the stock Zephyr v3.7.0 hello_world (tests/fixtures/same70q21b-zephyr-hello.elf) and asserts 'Hello World! sam_e70_xplained/same70q21b'; examples/sam-e70-xplained/zephyr-sync.yaml runs the stock synchronization sample. Evidence captured 2026-10-30."
+      },
+      "spi": {
+        "state": "none",
+        "gap": "SPI0/SPI1 and QSPI are not mapped (the SAM E70 SPI blocks are not modelled) and no SPI device is attached on the SAM E70 Xplained package.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "TWIHS0-2 are not mapped (the SAM E70 TWIHS block is not modelled) and no I2C device is attached on the SAM E70 Xplained package.",
+        "lane": "none"
+      }
+    },
     "sam4s16c": {
       "in_boards": false,
       "uart": {
@@ -1402,6 +1804,108 @@
       "i2c": {
         "state": "none",
         "gap": "TWI0/TWI1 are declared `type: stub` (the SAM4S TWI block is not modelled).",
+        "lane": "none"
+      }
+    },
+    "stm32l552": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_nucleo_l552ze_q_smoke_survival",
+        "signal": "committed ELF fixture tests/fixtures/nucleo-l552ze-q-smoke.elf boots on the Cortex-M33 and the survival gate asserts 'NUCLEO-L552ZE-Q SMOKE\\n' on the LPUART1 TX sink; examples/nucleo-l552ze-q/io-smoke.yaml asserts the full LED/button/heartbeat stream. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival; strict_onboarding examples/nucleo-l552ze-q/io-smoke.yaml",
+        "note": "a second independent LPUART1 proof lands in the same file: test_stm32l552_zephyr_survival boots the stock Zephyr v3.7.0 hello_world (tests/fixtures/stm32l552-zephyr-hello.elf, built for nucleo_l552ze_q) and asserts 'Hello World! nucleo_l552ze_q'. Evidence captured 2026-10-30."
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No SPI device is attached on the NUCLEO-L552ZE-Q package; SPI1/SPI2/SPI3 are modelled but unexercised.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No I2C device is attached on the NUCLEO-L552ZE-Q package; I2C1/I2C2 are modelled but unexercised.",
+        "lane": "none"
+      }
+    },
+    "mk64f12": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_frdm_k64f_smoke_survival",
+        "signal": "committed ELF fixture tests/fixtures/frdm-k64f-smoke.elf boots on the Cortex-M4 and the survival gate asserts 'FRDM-K64F SMOKE\\n' on the UART0 TX sink; examples/frdm-k64f/io-smoke.yaml asserts the full RGB LED/heartbeat stream. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival; core-board-ci: examples/frdm-k64f/io-smoke.yaml",
+        "note": "a second independent UART0 proof in the same file: test_frdm_k64f_zephyr_survival boots the stock Zephyr v3.7.0 hello_world (tests/fixtures/mk64f12-zephyr-hello.elf) and asserts 'Hello World! frdm_k64f'. RX + IRQ-driven TX/RX are exercised by examples/frdm-k64f/zephyr-uart-basic-api.yaml (Zephyr uart_basic_api 7/7 with injected input, the Renode NXP-K64F.robot UART case). Evidence captured 2026-10-30."
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No SPI device is attached on the FRDM-K64F package; the K64F SPI controllers are not modelled in this UART-only slice.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No I2C device is attached on the FRDM-K64F package; the FXOS8700 sensor and K64F I2C controllers are not modelled in this UART-only slice.",
+        "lane": "none"
+      }
+    },
+    "pic16f1829": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/pic16f1829_smoke.rs",
+        "test": "sdcc_firmware_boots_and_prints_the_banner",
+        "signal": "the committed SDCC 4.4.0 ELF boots on pic16f1829 and writes 'PIC16F1829 OK' through 'MUL OK' (eight lines) through the EUSART TXREG (0x19A); examples/pic16f1829/io-smoke.yaml asserts the same ordered output under `labwired test`",
+        "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test pic16f1829_smoke; strict_onboarding examples/pic16f1829/io-smoke.yaml"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "The PIC16 model has no MSSP; SPI is not modelled for this part.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "The PIC16 model has no MSSP; I2C is not modelled for this part.",
+        "lane": "none"
+      }
+    },
+    "pic16f877a": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/pic16f877a_smoke.rs",
+        "test": "sdcc_firmware_boots_and_prints_the_banner",
+        "signal": "the committed SDCC 4.4.0 ELF boots on pic16f877a and writes 'PIC16F877A OK' / 'LED=1' / 'TOGGLE OK' through the USART TXREG (0x19); examples/pic16f877a/io-smoke.yaml asserts the same ordered output under `labwired test`",
+        "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test pic16f877a_smoke; strict_onboarding examples/pic16f877a/io-smoke.yaml"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "The PIC16 model has no MSSP; SPI is not modelled for this part.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "The PIC16 model has no MSSP; I2C is not modelled for this part.",
+        "lane": "none"
+      }
+    },
+    "pic18f4520": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/pic18f4520_smoke.rs",
+        "test": "sdcc_firmware_boots_and_prints_the_banner",
+        "signal": "the committed SDCC 4.4.0 ELF boots on pic18f4520 and writes 'PIC18F4520 OK' / 'LED=1' / 'TOGGLE OK' through the EUSART TXREG (0xFAD); examples/pic18f4520/io-smoke.yaml asserts the same ordered output under `labwired test`",
+        "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test pic18f4520_smoke; strict_onboarding examples/pic18f4520/io-smoke.yaml"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "The PIC18 model has no MSSP; SPI is not modelled for this part.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "The PIC18 model has no MSSP; I2C is not modelled for this part.",
         "lane": "none"
       }
     },

@@ -1,7 +1,15 @@
 {
+  "amap42kp": {
+    "batch": 1.4,
+    "step": 892.0
+  },
   "atmega328p": {
     "batch": 7.6,
     "step": 1044.8
+  },
+  "atmega328pb": {
+    "batch": 7.6,
+    "step": 1026.4
   },
   "atsamd21": {
     "batch": 1.4,
@@ -63,6 +71,10 @@
     "batch": 1.5,
     "step": 1251.8
   },
+  "cc2538sf53": {
+    "batch": 1.4,
+    "step": 892.0
+  },
   "efr32mg26": {
     "batch": 2.2,
     "step": 1513.7
@@ -70,6 +82,14 @@
   "esp32": {
     "batch": 1.4,
     "step": 955.5
+  },
+  "esp32-devkitc-32e-gpio-smoke": {
+    "batch": 1.4,
+    "step": 977.8
+  },
+  "esp32-devkitc-32e-uart1": {
+    "batch": 1.4,
+    "step": 977.8
   },
   "esp32c3": {
     "batch": 2.5
@@ -88,6 +108,10 @@
   "imxrt1064": {
     "batch": 1.4,
     "step": 895.0
+  },
+  "mk64f12": {
+    "batch": 1.4,
+    "step": 892.0
   },
   "mkw41z4": {
     "batch": 1.5,
@@ -121,6 +145,14 @@
     "batch": 2.0,
     "step": 1412.4
   },
+  "r7fa6m5bh": {
+    "batch": 1.4,
+    "step": 892.0
+  },
+  "r7fa8m1ah": {
+    "batch": 1.4,
+    "step": 892.0
+  },
   "ra4m1": {
     "batch": 1.4,
     "step": 895.0
@@ -132,6 +164,18 @@
   "rp2350": {
     "batch": 1.6,
     "step": 906.1
+  },
+  "s32k388": {
+    "batch": 1.4,
+    "step": 907.8
+  },
+  "mimxrt595s": {
+    "batch": 1.4,
+    "step": 892.0
+  },
+  "same70q21b": {
+    "batch": 1.4,
+    "step": 892.0
   },
   "stm32f072": {
     "batch": 1.6,
@@ -164,6 +208,18 @@
   "stm32f103r6h": {
     "step": 936.4,
     "batch": 1.6
+  },
+  "stm32f103r8": {
+    "batch": 1.6,
+    "step": 932.9
+  },
+  "stm32f103rb": {
+    "step": 935.4,
+    "batch": 1.6
+  },
+  "stm32f103rb-nucleo-bme280-smoke": {
+    "batch": 1.5,
+    "step": 921.9
   },
   "stm32f103t4": {
     "step": 936.4,
@@ -278,8 +334,12 @@
     "step": 937.4
   },
   "stm32g0b1re": {
-    "batch": 1.4,
-    "step": 895.0
+    "batch": 1.5,
+    "step": 937.9
+  },
+  "stm32g431rb": {
+    "batch": 1.6,
+    "step": 931.9
   },
   "stm32g474re": {
     "batch": 1.5,
@@ -300,6 +360,10 @@
   "stm32l476": {
     "batch": 1.6,
     "step": 937.6
+  },
+  "stm32l552": {
+    "batch": 1.6,
+    "step": 904.1
   },
   "stm32u545": {
     "batch": 1.8,

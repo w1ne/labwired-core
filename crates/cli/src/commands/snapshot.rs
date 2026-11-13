@@ -87,10 +87,13 @@ pub(crate) fn run_snapshot_capture(
                     chip_dir,
                     &crate::plugin_chip_yaml(plugins),
                 ) {
-                    Ok(chip) => bus.attach_debug_schemas(
-                        &chip,
-                        &labwired_core::system::builder::anchor_chip_path(&manifest, chip_dir),
-                    ),
+                    Ok(chip) => {
+                        bus.attach_chip_io_levels(&chip);
+                        bus.attach_debug_schemas(
+                            &chip,
+                            &labwired_core::system::builder::anchor_chip_path(&manifest, chip_dir),
+                        );
+                    }
                     Err(e) => eprintln!(
                         "warning: cannot load chip descriptor {:?}: {e}; \
                          inspected registers will be unnamed",

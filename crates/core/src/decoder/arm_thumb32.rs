@@ -1110,6 +1110,17 @@ pub(super) fn decode_ldst_dual_exclusive(h1: u16, h2: u16) -> Option<Instruction
     // prefix but have a specific bit pattern in h1[11:4]:
     //   STREX h1 = 0xE84_, LDREX h1 = 0xE85_  (Rn in low nibble).
     // The CPU's Unknown32 fallback handles the actual load/store.
+    // TT{T}{A} (Armv8-M T1): 1110 1000 0100 Rn | 1111 Rd A T 00 0000. It
+    // sits in STREX's space with Rt = 0b1111 (an UNPREDICTABLE STREX), so
+    // it must be picked out first.
+    if (h1 & 0xFFF0) == 0xE840 && (h2 & 0xF03F) == 0xF000 {
+        return Some(Instruction::Tt {
+            rd: ((h2 >> 8) & 0xF) as u8,
+            rn: (h1 & 0xF) as u8,
+            t: h2 & (1 << 6) != 0,
+            a: h2 & (1 << 7) != 0,
+        });
+    }
     if (h1 & 0xFFF0) == 0xE840 || (h1 & 0xFFF0) == 0xE850 {
         return Some(Instruction::Unknown32(h1, h2));
     }
@@ -1241,8 +1252,53 @@ pub(super) fn decode_ldst_dual_exclusive(h1: u16, h2: u16) -> Option<Instruction
     None
 }
 
+/// Armv8.1-M CSEL/CSINC/CSINV/CSNEG (DDI 0553, "CSEL"):
+///   1110 1010 0101 Rn   1 0 op[1:0] Rd cond Rm
+/// It shares H1 with ORRS (shifted register), whose H2[15] is (0), so
+/// H2[15:14] = 0b10 is free on earlier M profiles, where it is
+/// UNPREDICTABLE. Checked first so no data-processing matcher claims it.
+#[inline(always)]
+pub(super) fn decode_v81m_csel(h1: u16, h2: u16) -> Option<Instruction> {
+    if (h1 & 0xFFF0) == 0xEA50 && (h2 & 0xC000) == 0x8000 {
+        return Some(Instruction::Csel {
+            rd: ((h2 >> 8) & 0xF) as u8,
+            rn: (h1 & 0xF) as u8,
+            rm: (h2 & 0xF) as u8,
+            cond: ((h2 >> 4) & 0xF) as u8,
+            op: ((h2 >> 12) & 0x3) as u8,
+        });
+    }
+    None
+}
+
 #[inline(always)]
 pub(super) fn decode_branch(h1: u16, h2: u16) -> Option<Instruction> {
+    // Armv8.1-M low-overhead branches (DDI 0553, "WLS", "DLS", "LE"):
+    //   WLS LR, Rn, <label>  1111 0000 0100 Rn   1100 imm1 imm10 1
+    //   DLS LR, Rn           1111 0000 0100 Rn   1110 0000 0000 0001
+    //   LE  {LR,} <label>    1111 0000 00F0 1111 1100 imm1 imm10 1
+    // imm = imm10:imm1:'0'. These halfword pairs sit in the BLX-immediate
+    // space (H2[15:14]=11, H2[12]=0), which is UNDEFINED on every earlier
+    // M profile, so decoding them for all Cortex-M cores changes no defined
+    // behaviour. The tail-predicated forms (DLSTP/WLSTP size != 0b100,
+    // LETP F=0 T=1) need MVE and are left undecoded.
+    if (h2 & 0xF001) == 0xC001 || h2 == 0xE001 {
+        let imm = (((h2 >> 1) & 0x3FF) << 2) | (((h2 >> 11) & 1) << 1);
+        if (h1 & 0xFFF0) == 0xF040 {
+            let rn = (h1 & 0xF) as u8;
+            return Some(if h2 == 0xE001 {
+                Instruction::Dls { rn }
+            } else {
+                Instruction::Wls { rn, imm }
+            });
+        }
+        if h2 != 0xE001 && (h1 == 0xF00F || h1 == 0xF02F) {
+            return Some(Instruction::Le {
+                lr: h1 == 0xF00F,
+                imm,
+            });
+        }
+    }
     // B<c>.W (Thumb-2 conditional branch, T3)
     // 1111 0 S cond imm6 10 J1 0 J2 imm11
     if (h1 & 0xF800) == 0xF000 && (h2 & 0xD000) == 0x8000 {

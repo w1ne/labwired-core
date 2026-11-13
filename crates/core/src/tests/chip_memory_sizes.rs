@@ -156,8 +156,10 @@ fn no_chip_declares_a_size_in_decimal_mb() {
 ///   does not apply to them (the ATmega328P has 2 KiB of SRAM). The PIC24F KA
 ///   family is the documented exception: the 04KA200/201 have 512 B of data
 ///   SRAM (DS30009937C Table 1-1 and the §4.2 stack example ending at 0x09FF)
-///   and the 08KA/16KA parts have 1536 B (DS39927C Table 1-1), neither of
-///   which a whole-KiB rule can express.
+///   and the 08KA/16KA parts have 1536 B (DS39927C Table 1-1). The PIC18F4520
+///   also has 1536 B (six 256 B GPR banks, DS39631E device table), and the
+///   PIC16F877A 368 B (DS39582B device table). A whole-KiB rule can express
+///   none of these.
 ///
 /// This is the backstop for the mistake with no unit attached: `size: 4000000`
 /// spelled as a bare byte count reaches the same wrong number by hand.
@@ -210,7 +212,7 @@ fn declared_memory_sizes_are_real_part_sizes() {
     );
 }
 
-/// Non-KiB-aligned SRAM is real on exactly these PIC24F KA parts.
+/// Non-KiB-aligned SRAM is real on exactly these PIC24F KA, PIC18 and PIC16 parts.
 /// Everywhere else a non-KiB-aligned RAM size is still a transcription error.
 const NON_KIB_RAM_PARTS: &[(&str, u64)] = &[
     ("pic24f04ka200", 512),  // DS30009937C Table 1-1, §4.2
@@ -219,6 +221,9 @@ const NON_KIB_RAM_PARTS: &[(&str, u64)] = &[
     ("pic24f08ka102", 1536), // DS39927C Table 1-1
     ("pic24f16ka101", 1536), // DS39927C Table 1-1
     ("pic24f16ka102", 1536), // DS39927C Table 1-1
+    ("pic18f4520", 1536),    // DS39631E: GPR banks 0-5
+    ("pic16f877a", 368),     // DS39582B: 96 + 80 + 96 + 96 B GPR, 0x70-0x7F shared
+    ("pic16f1829", 1024),    // DS40001440E: 1024 B incl. 16 B common RAM
 ];
 
 fn ram_geometry_is_valid(chip: &ChipDescriptor) -> bool {
@@ -240,14 +245,22 @@ fn flash_geometry_is_valid(chip: &ChipDescriptor) -> bool {
     if chip.flash.size != 0 {
         return chip.flash.size % SECTOR == 0;
     }
-    chip.name == "rv1103"
-        && chip.arch == Arch::Arm
-        && chip.core.as_deref() == Some("cortex-a7")
-        && chip.flash.base == 0
+    // RV1103 boots from MicroSD; the XCK26 RPU runs from TCM/DDR the FSBL
+    // loads; the AM6234 A53s run from DDR that U-Boot (or here, the loader)
+    // fills. None has internal flash.
+    [
+        ("rv1103", "cortex-a7", Arch::Arm),
+        ("xck26-rpu", "cortex-r5f", Arch::Arm),
+        ("am6234", "cortex-a53", Arch::Aarch64),
+    ]
+    .iter()
+    .any(|(name, core, arch)| {
+        chip.name == *name && chip.core.as_deref() == Some(*core) && chip.arch == *arch
+    }) && chip.flash.base == 0
 }
 
 #[test]
-fn non_kib_ram_exception_is_exactly_the_six_pic24f_ka_parts() {
+fn non_kib_ram_exception_is_exactly_the_listed_pic_parts() {
     for (name, size) in NON_KIB_RAM_PARTS {
         let path = chips_dir().join(format!("{name}.yaml"));
         let chip = ChipDescriptor::from_file(&path).expect("load non-KiB RAM part");
@@ -269,7 +282,21 @@ fn non_kib_ram_exception_is_exactly_the_six_pic24f_ka_parts() {
 }
 
 #[test]
-fn zero_internal_flash_is_only_allowed_for_the_declared_rv1103_soc() {
+fn zero_internal_flash_is_only_allowed_for_the_declared_socs() {
+    let rpu = ChipDescriptor::from_file(chips_dir().join("xck26-rpu.yaml")).unwrap();
+    assert!(flash_geometry_is_valid(&rpu));
+    let am62 = ChipDescriptor::from_file(chips_dir().join("am6234.yaml")).unwrap();
+    assert!(flash_geometry_is_valid(&am62));
+    let mut am62_as_arm = am62.clone();
+    am62_as_arm.arch = Arch::Arm;
+    assert!(
+        !flash_geometry_is_valid(&am62_as_arm),
+        "the arch is part of the exemption"
+    );
+    let mut wrong_core = rpu.clone();
+    wrong_core.core = Some("cortex-a7".into());
+    assert!(!flash_geometry_is_valid(&wrong_core));
+
     let chip = ChipDescriptor::from_file(chips_dir().join("rv1103.yaml")).unwrap();
     assert_eq!(chip.flash.size, 0);
     assert_eq!(chip.flash.base, 0);

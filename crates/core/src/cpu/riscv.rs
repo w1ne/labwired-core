@@ -32,6 +32,8 @@ pub enum RiscVCoreProfile {
     Esp32C3,
     /// Baseline RV32 profile used by generic RISC-V targets.
     StandardRv32,
+    /// RV32E profile: the integer register file contains x0..x15 only.
+    Rv32e,
 }
 
 impl RiscVCoreProfile {
@@ -41,21 +43,115 @@ impl RiscVCoreProfile {
     /// ESP32-C3's vendor CSR set. An `esp32*` chip keeps the vendor profile —
     /// the C3 is the part whose ROM and performance-counter block the engine
     /// models, and the C6 shares that register surface today. Any other chip
-    /// that declares a generic `rv32*` core (e.g. `core: "rv32im"` on a
+    /// that declares a generic non-E `rv32*` core (e.g. `core: "rv32im"` on a
     /// VexRiscv SoC) runs the standard profile. A chip with no `core:` keeps
     /// the historical ESP32-C3 default, so descriptors written before this
     /// selection existed behave exactly as they did.
     pub fn for_chip(chip: &labwired_config::ChipDescriptor) -> Self {
+        let core = chip
+            .core
+            .as_deref()
+            .unwrap_or_default()
+            .trim()
+            .to_ascii_lowercase();
+        if matches!(core.as_str(), "rv32e" | "rv32ec" | "rv32emc" | "rv32em") {
+            return Self::Rv32e;
+        }
         if chip.name.to_ascii_lowercase().contains("esp32") {
             return Self::Esp32C3;
         }
-        match chip.core.as_deref() {
-            Some(core) if core.trim().to_ascii_lowercase().starts_with("rv32") => {
-                Self::StandardRv32
-            }
-            _ => Self::Esp32C3,
+        if core.starts_with("rv32") {
+            Self::StandardRv32
+        } else {
+            Self::Esp32C3
         }
     }
+}
+
+/// Architectural integer-register operands used by an instruction. The
+/// implicit stack-pointer operands in the compressed formats are x2, which is
+/// legal in RV32E; compressed prime-register formats are already decoded to
+/// x8..x15 by `decode_rv32`.
+fn rv32e_reg_operands(instruction: &Instruction) -> [Option<u8>; 3] {
+    use Instruction::*;
+    match *instruction {
+        Lui { rd, .. } | Auipc { rd, .. } | Jal { rd, .. } => [Some(rd), None, None],
+        Jalr { rd, rs1, .. } => [Some(rd), Some(rs1), None],
+        Beq { rs1, rs2, .. }
+        | Bne { rs1, rs2, .. }
+        | Blt { rs1, rs2, .. }
+        | Bge { rs1, rs2, .. }
+        | Bltu { rs1, rs2, .. }
+        | Bgeu { rs1, rs2, .. }
+        | Sb { rs1, rs2, .. }
+        | Sh { rs1, rs2, .. }
+        | Sw { rs1, rs2, .. } => [Some(rs1), Some(rs2), None],
+        Lb { rd, rs1, .. }
+        | Lh { rd, rs1, .. }
+        | Lw { rd, rs1, .. }
+        | Lbu { rd, rs1, .. }
+        | Lhu { rd, rs1, .. }
+        | Addi { rd, rs1, .. }
+        | Slti { rd, rs1, .. }
+        | Sltiu { rd, rs1, .. }
+        | Xori { rd, rs1, .. }
+        | Ori { rd, rs1, .. }
+        | Andi { rd, rs1, .. }
+        | Slli { rd, rs1, .. }
+        | Srli { rd, rs1, .. }
+        | Srai { rd, rs1, .. }
+        | Csrrw { rd, rs1, .. }
+        | Csrrs { rd, rs1, .. }
+        | Csrrc { rd, rs1, .. }
+        | LrW { rd, rs1 } => [Some(rd), Some(rs1), None],
+        Add { rd, rs1, rs2 }
+        | Sub { rd, rs1, rs2 }
+        | Sll { rd, rs1, rs2 }
+        | Slt { rd, rs1, rs2 }
+        | Sltu { rd, rs1, rs2 }
+        | Xor { rd, rs1, rs2 }
+        | Srl { rd, rs1, rs2 }
+        | Sra { rd, rs1, rs2 }
+        | Or { rd, rs1, rs2 }
+        | And { rd, rs1, rs2 }
+        | Mul { rd, rs1, rs2 }
+        | Mulh { rd, rs1, rs2 }
+        | Mulhsu { rd, rs1, rs2 }
+        | Mulhu { rd, rs1, rs2 }
+        | Div { rd, rs1, rs2 }
+        | Divu { rd, rs1, rs2 }
+        | Rem { rd, rs1, rs2 }
+        | Remu { rd, rs1, rs2 }
+        | ScW { rd, rs1, rs2 }
+        | AmoSwapW { rd, rs1, rs2 }
+        | AmoAddW { rd, rs1, rs2 }
+        | AmoXorW { rd, rs1, rs2 }
+        | AmoOrW { rd, rs1, rs2 }
+        | AmoAndW { rd, rs1, rs2 }
+        | AmoMinW { rd, rs1, rs2 }
+        | AmoMaxW { rd, rs1, rs2 }
+        | AmoMinuW { rd, rs1, rs2 }
+        | AmoMaxuW { rd, rs1, rs2 } => [Some(rd), Some(rs1), Some(rs2)],
+        Csrrwi { rd, .. } | Csrrsi { rd, .. } | Csrrci { rd, .. } => [Some(rd), None, None],
+        CAddi { rd, .. } | CLi { rd, .. } | CSli { rd, .. } => [Some(rd), None, None],
+        CLw { rd, rs1, .. } => [Some(rd), Some(rs1), None],
+        CSw { rs2, rs1, .. } => [Some(rs1), Some(rs2), None],
+        CJr { rs1 } | CJalr { rs1 } | CBeqz { rs1, .. } | CBnez { rs1, .. } => {
+            [Some(rs1), None, None]
+        }
+        CMv { rd, rs2 } => [Some(rd), Some(rs2), None],
+        CAddi16sp { .. } => [Some(2), None, None],
+        CAddi4spn { rd, .. } | CLwsp { rd, .. } => [Some(rd), Some(2), None],
+        CSwsp { rs2, .. } => [Some(2), Some(rs2), None],
+        Fence | Ecall | Ebreak | Mret | Wfi | CJ { .. } | Unknown(_) => [None, None, None],
+    }
+}
+
+fn rv32e_uses_high_register(instruction: &Instruction) -> bool {
+    rv32e_reg_operands(instruction)
+        .into_iter()
+        .flatten()
+        .any(|register| register >= 16)
 }
 
 #[derive(Debug)]
@@ -717,6 +813,9 @@ impl RiscV {
                 return self.triggers.read_csr(csr)
             }
             0x300 => self.mstatus,
+            // medeleg / mideleg — M-mode only emulator; esp_intr_alloc on C6
+            // does `csrrc mideleg` when binding CPU ints. Accept as RAZ/WI.
+            0x302 | 0x303 if self.core_profile == RiscVCoreProfile::Esp32C3 => 0,
             0x304 => self.mie,
             0x344 => self.mip,
             0x305 => self.mtvec,
@@ -726,6 +825,10 @@ impl RiscV {
             0x343 => self.mtval,
             // Physical Memory Protection (PMP) configuration and address registers (stubs)
             0x3A0..=0x3A3 | 0x3B0..=0x3BF => 0,
+            // Espressif Physical Memory Attributes (PMA) — CSR_PMACFG0=0xBC0,
+            // CSR_PMAADDR0=0xBD0 (riscv/csr.h). esp_cpu_configure_invalid_regions
+            // on C6 writes these during early init; side effects are not modelled.
+            0xBC0..=0xBDF if self.core_profile == RiscVCoreProfile::Esp32C3 => 0,
             // Timer CSR stubs (Standard RISC-V shadow non-privileged? No, these are machine mode)
             0xB00 => (self.mtime & 0xFFFFFFFF) as u32,
             0xB80 => (self.mtime >> 32) as u32,
@@ -741,10 +844,22 @@ impl RiscV {
             0x7E0..=0x7E2 | 0x802 if self.core_profile == RiscVCoreProfile::Esp32C3 => {
                 (self.mtime & 0xFFFFFFFF) as u32
             }
-            0xC00 if self.core_profile == RiscVCoreProfile::StandardRv32 => {
+            // The requested RV32E profile shares the baseline profile's cycle
+            // CSR behavior; this profile choice is separate from register count.
+            0xC00
+                if matches!(
+                    self.core_profile,
+                    RiscVCoreProfile::StandardRv32 | RiscVCoreProfile::Rv32e
+                ) =>
+            {
                 (self.mtime & 0xFFFFFFFF) as u32
             }
-            0xC80 if self.core_profile == RiscVCoreProfile::StandardRv32 => {
+            0xC80
+                if matches!(
+                    self.core_profile,
+                    RiscVCoreProfile::StandardRv32 | RiscVCoreProfile::Rv32e
+                ) =>
+            {
                 (self.mtime >> 32) as u32
             }
             _ => return None,
@@ -761,6 +876,8 @@ impl RiscV {
                 return self.triggers.write_csr(csr, val)
             }
             0x300 => self.mstatus = val & 0x0000_1888, // Minimal mstatus (MIE, MPP)
+            // See read_csr: medeleg/mideleg RAZ/WI on Esp32C3 profile.
+            0x302 | 0x303 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
             0x304 => self.mie = val,
             0x344 => self.mip = val,
             0x305 => self.mtvec = val,
@@ -770,6 +887,8 @@ impl RiscV {
             0x343 => self.mtval = val,
             // Physical Memory Protection (PMP) configuration and address registers (stubs)
             0x3A0..=0x3A3 | 0x3B0..=0x3BF => {}
+            // See read_csr: accept PMA cfg/addr writes as no-ops.
+            0xBC0..=0xBDF if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
             0x7E0..=0x7E2 | 0x802 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
             _ => return false,
         }
@@ -1162,6 +1281,15 @@ impl Cpu for RiscV {
             instruction,
             inst_len
         );
+
+        // RV32E reserves every integer register field above x15. Check all
+        // operands before trigger handling or instruction execution so an
+        // illegal register use cannot perform a partial memory/CSR effect.
+        if self.core_profile == RiscVCoreProfile::Rv32e && rv32e_uses_high_register(&instruction) {
+            self.mtval = 0;
+            self.handle_trap(2, self.pc);
+            return Ok(());
+        }
 
         let mut next_pc = self.pc.wrapping_add(inst_len);
 
@@ -2147,3 +2275,11 @@ impl Cpu for RiscV {
 #[cfg(test)]
 #[path = "riscv_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "riscv_rv32e_tests.rs"]
+mod rv32e_tests;
+
+#[cfg(test)]
+#[path = "riscv_ch32v003_tests.rs"]
+mod ch32v003_tests;

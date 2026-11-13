@@ -43,6 +43,7 @@
 //! The observer hook is `&self`, so the decode state of a `nrz_gpio` strip
 //! lives behind a `Mutex` and the part is held as `Arc<GenericLedStrip>`.
 
+use std::collections::{HashSet, VecDeque};
 use std::sync::Mutex;
 
 use anyhow::{bail, Context, Result};
@@ -62,6 +63,10 @@ pub struct LedPixel {
     pub wire: [u8; 3],
     /// Global brightness, or 0 on a wire that has no such field.
     pub brightness: u8,
+    /// The fourth colour byte of an RGBW part (the SK6812RGBW clocks W after
+    /// its three colour bytes), or `None` on a three-colour strip. Kept out of `wire` so a
+    /// reader of an RGB strip sees exactly the three bytes it always did.
+    pub white: Option<u8>,
 }
 
 /// Convert a nanosecond span to sim cycles at `cpu_hz` (`ns * cpu_hz / 1e9`),
@@ -70,6 +75,12 @@ pub struct LedPixel {
 fn ns_to_cycles(ns: u64, cpu_hz: u64) -> u64 {
     ((ns as u128 * cpu_hz as u128) / 1_000_000_000).max(1) as u64
 }
+
+/// Distinct latched wire frames kept for mid-run proves (blink / dim / phase
+/// history). Cap is keyed by (lit, colour family, brightness bucket) so a long
+/// virtual-time drain (Pomodoro 5+5 min) still retains boot / phase / blink
+/// samples instead of flushing them with per-frame fade updates.
+const FRAMES_SEEN_CAP: usize = 128;
 
 /// `nrz_gpio` decode state. Behind a `Mutex` because the observer hook is
 /// `&self`.
@@ -82,6 +93,10 @@ struct NrzState {
     nbits: u32,
     current: Vec<LedPixel>,
     latched: Vec<LedPixel>,
+    /// Distinct completed frames (flat wire bytes), oldest first.
+    frames_seen: VecDeque<Vec<u8>>,
+    /// Keys already stored in `frames_seen` (see `frame_key`).
+    frames_seen_keys: HashSet<(u16, u8, u16)>,
 }
 
 /// The engine device. One per placed strip.
@@ -98,6 +113,7 @@ pub struct GenericLedStrip {
 
     // ── spi_frames ──────────────────────────────────────────────────────
     cs_pin: String,
+    selected: bool,
     /// Bytes of the in-flight transaction.
     frame: Vec<u8>,
     /// Latched colours. `spi_frames` only; the NRZ door keeps its own, behind
@@ -175,9 +191,10 @@ fn validate_spec(spec: &LedStripSpec) -> Result<()> {
                     t.high_threshold_ns
                 );
             }
-            if t.bits_per_pixel != 24 {
+            if t.bits_per_pixel != 24 && t.bits_per_pixel != 32 {
                 bail!(
-                    "timing.bits_per_pixel {} — this decoder shifts three colour bytes per LED",
+                    "timing.bits_per_pixel {} — this decoder shifts three (RGB) or four (RGBW) \
+                     colour bytes per LED",
                     t.bits_per_pixel
                 );
             }
@@ -312,6 +329,7 @@ impl GenericLedStrip {
             component_id: None,
             powered: true,
             cs_pin: String::new(),
+            selected: false,
             frame: Vec::new(),
             pixels: Vec::new(),
             data_pin: 0,
@@ -395,7 +413,10 @@ impl GenericLedStrip {
 
     /// The artifact payload: colour bytes in WIRE order, LED after LED.
     fn flat(&self) -> Vec<u8> {
-        self.pixels().iter().flat_map(|p| p.wire).collect()
+        self.pixels()
+            .iter()
+            .flat_map(|p| p.wire.into_iter().chain(p.white))
+            .collect()
     }
 
     // ── the clocked wire ────────────────────────────────────────────────
@@ -426,11 +447,71 @@ impl GenericLedStrip {
                 chunk[f.colour_bytes[1] as usize],
                 chunk[f.colour_bytes[2] as usize],
             ];
-            out.push(LedPixel { wire, brightness });
+            out.push(LedPixel {
+                wire,
+                brightness,
+                white: None,
+            });
         }
         if !out.is_empty() {
             self.pixels = out;
         }
+    }
+
+    fn flat_of(pixels: &[LedPixel]) -> Vec<u8> {
+        let mut out = Vec::with_capacity(pixels.len() * 3);
+        for p in pixels {
+            out.extend_from_slice(&p.wire);
+            if let Some(w) = p.white {
+                out.push(w);
+            }
+        }
+        out
+    }
+
+    /// Coarse signature so fade micro-steps of the same phase collapse: lit
+    /// count, dominant colour family (0=dark, 1=R, 2=G, 3=B on GRB wire), and
+    /// a brightness bucket. First frame per key is kept.
+    fn frame_key(flat: &[u8]) -> (u16, u8, u16) {
+        let lit = flat
+            .chunks_exact(3)
+            .filter(|c| c.iter().any(|&b| b != 0))
+            .count() as u16;
+        let mut r = 0u32;
+        let mut g = 0u32;
+        let mut b = 0u32;
+        for c in flat.chunks_exact(3) {
+            g = g.saturating_add(c[0] as u32);
+            r = r.saturating_add(c[1] as u32);
+            b = b.saturating_add(c[2] as u32);
+        }
+        let colour = if r + g + b == 0 {
+            0
+        } else if r >= g && r >= b {
+            1
+        } else if g >= r && g >= b {
+            2
+        } else {
+            3
+        };
+        let bright = ((r + g + b) / 32) as u16;
+        (lit, colour, bright)
+    }
+
+    fn record_frame(state: &mut NrzState, flat: Vec<u8>) {
+        if state.frames_seen.back() == Some(&flat) {
+            return;
+        }
+        let key = Self::frame_key(&flat);
+        if !state.frames_seen_keys.insert(key) {
+            return;
+        }
+        if state.frames_seen.len() >= FRAMES_SEEN_CAP {
+            if let Some(old) = state.frames_seen.pop_front() {
+                state.frames_seen_keys.remove(&Self::frame_key(&old));
+            }
+        }
+        state.frames_seen.push_back(flat);
     }
 
     // ── the single wire ─────────────────────────────────────────────────
@@ -454,6 +535,8 @@ impl GenericLedStrip {
             if let Some(fall) = s.last_fall {
                 if sim_cycle.saturating_sub(fall) >= self.reset_threshold_cycles {
                     if !s.current.is_empty() {
+                        let flat = Self::flat_of(&s.current);
+                        Self::record_frame(&mut s, flat);
                         s.latched = std::mem::take(&mut s.current);
                     }
                     s.current.clear();
@@ -470,16 +553,28 @@ impl GenericLedStrip {
                 s.shift = (s.shift << 1) | bit;
                 s.nbits += 1;
                 if s.nbits == bits {
+                    // An RGBW part clocks a fourth byte (W) after the three
+                    // colour bytes; the first three keep their RGB positions.
+                    let (rgb, white) = if bits == 32 {
+                        (s.shift >> 8, Some((s.shift & 0xFF) as u8))
+                    } else {
+                        (s.shift, None)
+                    };
                     let wire = [
-                        ((s.shift >> 16) & 0xFF) as u8,
-                        ((s.shift >> 8) & 0xFF) as u8,
-                        (s.shift & 0xFF) as u8,
+                        ((rgb >> 16) & 0xFF) as u8,
+                        ((rgb >> 8) & 0xFF) as u8,
+                        (rgb & 0xFF) as u8,
                     ];
                     if s.current.len() < self.num_pixels {
                         s.current.push(LedPixel {
                             wire,
                             brightness: 0,
+                            white,
                         });
+                        if s.current.len() == self.num_pixels {
+                            let flat = Self::flat_of(&s.current);
+                            Self::record_frame(&mut s, flat);
+                        }
                     }
                     s.shift = 0;
                     s.nbits = 0;
@@ -526,13 +621,33 @@ impl GenericLedStrip {
                 LedStripMetaFlag::PixelsDecoded => serde_json::json!(pixels.len()),
                 LedStripMetaFlag::LitPixels => serde_json::json!(pixels
                     .iter()
-                    .filter(|p| p.wire.iter().any(|&c| c != 0))
+                    .filter(|p| p.wire.iter().chain(p.white.iter()).any(|&c| c != 0))
                     .count()),
                 LedStripMetaFlag::Powered => serde_json::json!(self.powered),
                 LedStripMetaFlag::CsPin => serde_json::json!(self.cs_pin),
                 LedStripMetaFlag::DataPin => serde_json::json!(self.data_pin),
             };
             meta.insert(field.key().to_string(), value);
+        }
+        // Mid-run frame history for blink / dim proves (NRZ path). Always published
+        // so an oracle can require dark+lit samples without a descriptor flag.
+        if self.spec.wire == LedStripWire::NrzGpio {
+            let s = self.nrz.lock().expect("led strip decode state");
+            let frames: Vec<serde_json::Value> = s
+                .frames_seen
+                .iter()
+                .map(|flat| {
+                    let lit = flat
+                        .chunks_exact(3)
+                        .filter(|c| c.iter().any(|&b| b != 0))
+                        .count();
+                    serde_json::json!({
+                        "lit_pixels": lit,
+                        "bytes": flat,
+                    })
+                })
+                .collect();
+            meta.insert("frames_seen".into(), serde_json::json!(frames));
         }
         vec![crate::inspect::Artifact {
             kind: "framebuffer".to_string(),
@@ -554,11 +669,17 @@ impl SpiDevice for GenericLedStrip {
         self.component_id.as_deref()
     }
 
+    fn is_selected(&self) -> bool {
+        self.cs_pin.is_empty() || self.selected
+    }
+
     fn cs_select(&mut self) {
+        self.selected = true;
         self.frame.clear();
     }
 
     fn cs_release(&mut self) {
+        self.selected = false;
         self.latch();
     }
 

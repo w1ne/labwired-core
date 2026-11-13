@@ -20,7 +20,9 @@
 //! emissions against what the core actually did, and it derives the core list
 //! from the source tree rather than trusting the list below.
 
-use labwired_core::cpu::{Avr, CortexM, Pic24, RiscV, XtensaLx7};
+use labwired_core::cpu::{
+    Aarch64, Avr, CortexM, Mips32, Pic16, Pic18, Pic24, RiscV, RiscV64, Rx, XtensaLx7,
+};
 use labwired_core::{
     trace_sp_pc, Bus, Cpu, DmaRequest, SimResult, SimulationConfig, SimulationObserver,
 };
@@ -150,6 +152,12 @@ struct CoreUnderTest {
     /// Usually equal to `step_len`; PIC24 advances one *word* per instruction
     /// while each 24-bit opcode occupies a 4-byte slot.
     opcode_bytes: u32,
+    /// The stack pointer `build` sets, which the trace trailer must report.
+    /// `0x8000` for every core with a data-memory SP; PIC18's SP is the 5-bit
+    /// hardware return-stack index `STKPTR` (0..=31) and PIC16's the 3-bit
+    /// one (0..=7), so a data address cannot be represented there and those
+    /// rows use a stack depth instead.
+    sp: u32,
     /// Build the core with `program` already loaded at `entry`.
     ///
     /// Takes the program because not every core fetches from the bus. AVR is a
@@ -171,6 +179,7 @@ fn cores() -> Vec<CoreUnderTest> {
                 .collect(),
             step_len: 4,
             opcode_bytes: 4,
+            sp: 0x8000,
             build: |_entry, _program| {
                 let mut cpu = labwired_core::cpu::CortexA7System::new().unwrap();
                 cpu.executable_range(0, 0x10000).unwrap();
@@ -187,6 +196,7 @@ fn cores() -> Vec<CoreUnderTest> {
                 .collect(),
             step_len: 4,
             opcode_bytes: 4,
+            sp: 0x8000,
             build: |_entry, _program| {
                 let mut cpu = labwired_core::cpu::CortexA7::new().unwrap();
                 cpu.set_sp(0x8000);
@@ -200,6 +210,7 @@ fn cores() -> Vec<CoreUnderTest> {
             program: vec![0x01, 0x20, 0x01, 0x20, 0x01, 0x20, 0x01, 0x20],
             step_len: 2,
             opcode_bytes: 2,
+            sp: 0x8000,
             build: |_entry, _program| {
                 let mut cpu = CortexM::new();
                 cpu.set_sp(0x8000);
@@ -215,8 +226,42 @@ fn cores() -> Vec<CoreUnderTest> {
                 .collect(),
             step_len: 4,
             opcode_bytes: 4,
+            sp: 0x8000,
             build: |_entry, _program| {
                 let mut cpu = RiscV::new();
+                cpu.set_sp(0x8000);
+                Box::new(cpu)
+            },
+        },
+        CoreUnderTest {
+            name: "RiscV64",
+            entry: 0x100,
+            // `addi x1, x1, 1` ×4 (4 bytes each), the same RV encoding.
+            program: std::iter::repeat_n(0x00108093u32, 4)
+                .flat_map(u32::to_le_bytes)
+                .collect(),
+            step_len: 4,
+            opcode_bytes: 4,
+            sp: 0x8000,
+            build: |_entry, _program| {
+                let mut cpu = RiscV64::default();
+                cpu.set_sp(0x8000);
+                Box::new(cpu)
+            },
+        },
+        CoreUnderTest {
+            name: "Aarch64",
+            entry: 0x100,
+            // `add x1, x1, #1` ×4 (A64, 4 bytes each). The PE runs at EL3 with
+            // the MMU off, so the flat bus is its physical memory.
+            program: std::iter::repeat_n(0x91000421u32, 4)
+                .flat_map(u32::to_le_bytes)
+                .collect(),
+            step_len: 4,
+            opcode_bytes: 4,
+            sp: 0x8000,
+            build: |_entry, _program| {
+                let mut cpu = Aarch64::default();
                 cpu.set_sp(0x8000);
                 Box::new(cpu)
             },
@@ -233,6 +278,7 @@ fn cores() -> Vec<CoreUnderTest> {
             program: vec![0x01, 0xE0, 0x01, 0xE0, 0x01, 0xE0, 0x01, 0xE0],
             step_len: 2,
             opcode_bytes: 2,
+            sp: 0x8000,
             build: |entry, program| {
                 let mut cpu = Avr::new();
                 // Harvard: instructions come from flash, not from the bus.
@@ -254,10 +300,89 @@ fn cores() -> Vec<CoreUnderTest> {
             // (DS50002071F "Program Counter Unit").
             step_len: 2,
             opcode_bytes: 4,
+            sp: 0x8000,
             build: |entry, program| {
                 let mut cpu = Pic24::new();
                 // Harvard: instructions come from the CPU's own flash.
                 cpu.load_flash(entry, program);
+                cpu.set_sp(0x8000);
+                Box::new(cpu)
+            },
+        },
+        CoreUnderTest {
+            name: "Pic18",
+            entry: 0x100,
+            // `MOVLW 0x01` ×4 (one 16-bit word each, little-endian in flash).
+            // A real non-zero encoding, so a hard-coded zero opcode fails.
+            program: std::iter::repeat_n(0x0E01u16, 4)
+                .flat_map(u16::to_le_bytes)
+                .collect(),
+            // PIC18 PCs are byte addresses; a one-word instruction advances 2.
+            step_len: 2,
+            opcode_bytes: 2,
+            sp: 5,
+            build: |entry, program| {
+                let mut cpu = Pic18::new();
+                // Harvard: instructions come from the CPU's own flash.
+                cpu.load_flash(entry, program);
+                cpu.set_sp(5);
+                Box::new(cpu)
+            },
+        },
+        CoreUnderTest {
+            name: "Pic16",
+            entry: 0x100,
+            // `MOVLW 0x01` ×4 (one 14-bit word each, little-endian in flash).
+            program: std::iter::repeat_n(0x3001u16, 4)
+                .flat_map(u16::to_le_bytes)
+                .collect(),
+            // PIC16 PCs are word addresses: one instruction advances 1, and
+            // each word takes two bytes of the image.
+            step_len: 1,
+            opcode_bytes: 2,
+            // SP is the 3-bit hardware return-stack index (0..=7).
+            sp: 5,
+            build: |entry, program| {
+                let mut cpu = Pic16::new();
+                // Harvard: instructions come from the CPU's own flash, which
+                // is loaded at byte addresses (two per word).
+                cpu.load_flash(entry * 2, program);
+                cpu.set_sp(5);
+                Box::new(cpu)
+            },
+        },
+        CoreUnderTest {
+            name: "Rx",
+            entry: 0x100,
+            // `add #0x1234, r1` ×4 (`72 11 34 12`, 4 bytes each). RX is
+            // variable-length (1-8 bytes) and reports the 4 bytes at PC as
+            // the opcode, so the row uses a 4-byte instruction.
+            program: std::iter::repeat_n([0x72u8, 0x11, 0x34, 0x12], 4)
+                .flatten()
+                .collect(),
+            step_len: 4,
+            opcode_bytes: 4,
+            sp: 0x8000,
+            build: |_entry, _program| {
+                let mut cpu = Rx::new();
+                cpu.set_sp(0x8000);
+                Box::new(cpu)
+            },
+        },
+        CoreUnderTest {
+            name: "Mips32",
+            entry: 0x100,
+            // `addiu at, at, 1` ×4 (`0x24210001`, little-endian). The core
+            // leaves reset with Status.ERL set, so KUSEG 0x100 is unmapped
+            // and lands on the RAM bus as is.
+            program: std::iter::repeat_n(0x2421_0001u32.to_le_bytes(), 4)
+                .flatten()
+                .collect(),
+            step_len: 4,
+            opcode_bytes: 4,
+            sp: 0x8000,
+            build: |_entry, _program| {
+                let mut cpu = Mips32::new();
                 cpu.set_sp(0x8000);
                 Box::new(cpu)
             },
@@ -269,6 +394,7 @@ fn cores() -> Vec<CoreUnderTest> {
             program: vec![0x0C, 0x12, 0x0C, 0x12, 0x0C, 0x12, 0x0C, 0x12],
             step_len: 2,
             opcode_bytes: 2,
+            sp: 0x8000,
             build: |_entry, _program| {
                 let mut cpu = XtensaLx7::new();
                 cpu.set_sp(0x8000);
@@ -355,10 +481,10 @@ fn every_core_emits_the_full_per_instruction_trace() {
                 expected_pc + core.step_len
             );
             assert_eq!(
-                sp, 0x8000,
+                sp, core.sp,
                 "{}: step {i} trailer SP is {:#x}, expected the stack pointer \
                  we set ({:#x}) — the trailer is reporting some other register",
-                core.name, sp, 0x8000u32
+                core.name, sp, core.sp
             );
         }
     }

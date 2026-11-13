@@ -23,6 +23,7 @@ pub mod hashers;
 pub mod host_time;
 pub mod inspect;
 pub mod interrupt;
+pub mod live_numeric;
 pub mod logic_capture;
 pub mod machine;
 pub mod memory;
@@ -38,6 +39,7 @@ pub mod pins;
 pub mod plugin;
 pub mod power;
 pub mod profile;
+pub mod reset_input;
 pub mod runtime_snapshot;
 pub mod sched;
 pub mod sd_hle;
@@ -63,8 +65,9 @@ pub use machine::{
     IdlePolicy,
 };
 pub use peripheral::{
-    DmaDirection, DmaRequest, DmaRoute, DmaUnitTransform, FlashStoreOutcome, MmioAccessClass,
-    Peripheral, PeripheralResetCause, PeripheralTickResult, DMA_SIGNAL_RX, DMA_SIGNAL_TX,
+    AnalogProbe, DmaDirection, DmaRequest, DmaRoute, DmaUnitTransform, FlashStoreOutcome,
+    MmioAccessClass, Peripheral, PeripheralResetCause, PeripheralTickResult, DMA_SIGNAL_RX,
+    DMA_SIGNAL_TX,
 };
 
 use std::collections::HashSet;
@@ -81,6 +84,16 @@ pub enum Arch {
     Avr,
     /// PIC24 / dsPIC33 (dsPIC33FJ32MC204-class, M0 subset).
     Pic24,
+    /// PIC18 8-bit MCU (16-bit instruction words, byte-addressed PC).
+    Pic18,
+    /// PIC16 classic mid-range 8-bit MCU (14-bit words, word-addressed PC).
+    Pic16,
+    /// AArch64 (Armv8-A, Cortex-A53 class).
+    Aarch64,
+    /// Renesas RX (RXv3, RX261 class).
+    Rx,
+    /// MIPS32r2 (PIC32MZ EF, M5150 class).
+    Mips,
     Unknown,
 }
 
@@ -289,6 +302,25 @@ pub enum StopReason {
     FirmwareExit(u32),
 }
 
+/// Classic ESP32 state a deep-sleep wake-up reboots into. See
+/// [`Machine::capture_esp32_deep_sleep_boot`].
+#[derive(Debug, Clone)]
+struct Esp32DeepSleepBoot {
+    /// `(start, bytes)` of every internal-SRAM segment of the app image.
+    segments: Vec<(u64, Vec<u8>)>,
+    entry_pc: u32,
+    pro_sp: u32,
+    app_sp: u32,
+}
+
+/// Classic ESP32 internal SRAM: DRAM `0x3FFA_E000..0x4000_0000` and IRAM
+/// `0x4007_0000..0x400C_0000` (ESP32 TRM §3.1.3). RTC memory
+/// (`0x3FF8_0000`, `0x400C_0000`, `0x5000_0000`) and the flash cache windows
+/// are outside both ranges.
+fn is_esp32_internal_sram(addr: u64) -> bool {
+    (0x3FFA_E000..0x4000_0000).contains(&addr) || (0x4007_0000..0x400C_0000).contains(&addr)
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 /// Counters collected during one measured machine run.
 ///
@@ -417,6 +449,15 @@ pub struct Machine<C: Cpu> {
     /// indexed access + one downcast. `None` for configs that don't register
     /// an RTC_CNTL peripheral (every non-ESP32-classic target).
     rtc_cntl_index: Option<usize>,
+    /// Classic ESP32 only: the internal-SRAM ranges `load_firmware` filled
+    /// from the image (IRAM and DRAM segments; never RTC memory or the flash
+    /// cache windows). [`Self::capture_esp32_deep_sleep_boot`] reads them back
+    /// once the runner has finished its post-load setup.
+    esp32_sram_segments: Vec<(u64, usize)>,
+    /// Classic ESP32 only: the state the 2nd-stage bootloader leaves after a
+    /// deep-sleep wake-up. `None` until a runner captures it; a deep sleep
+    /// that ends without it halts both cores.
+    esp32_deep_sleep_boot: Option<Esp32DeepSleepBoot>,
     /// Cached bus index of the FLASH peripheral (H5 layout). Resolved once at
     /// construction; `step()` drains pending FLASH ops (sector erase,
     /// bank-swap+reset) at clean instruction boundaries without walking the
@@ -913,6 +954,16 @@ impl<C: Cpu> Machine<C> {
         Some(series)
     }
 
+    /// Live native numeric observations, on a cursor independent of the analog
+    /// co-simulation ring and historical series. None when no producer exists.
+    pub fn live_numeric_capture(
+        &self,
+        cursor: u64,
+        max_points: usize,
+    ) -> Option<crate::live_numeric::LiveNumericBatch> {
+        self.bus.live_numeric_capture(cursor, max_points)
+    }
+
     /// Current engine cycle — the `nowCycle` reported alongside a logic-edge
     /// read so the UI can extend flat traces to "now".
     pub fn logic_now_cycle(&self) -> u64 {
@@ -1218,6 +1269,8 @@ impl<C: Cpu> Machine<C> {
             sched: sched::EventScheduler::new(),
             clocks: sched::ClockGraph::new(),
             rtc_cntl_index,
+            esp32_sram_segments: Vec::new(),
+            esp32_deep_sleep_boot: None,
             flash_index,
             simctl_index,
             scb_index,
@@ -1275,10 +1328,21 @@ impl<C: Cpu> Machine<C> {
     ///
     /// The nRF54L TWIM is never in the controller list (it does not opt in), so
     /// its slaves are advanced exactly once — by TWIM itself, off the GRTC.
+    #[inline(always)]
     fn advance_central_i2c_time(&mut self) {
-        if self.i2c_time_controller_indices.is_empty() {
+        // Keep the no-work path outside the clock/fan-out routine's register
+        // saves. Most CPU steps do not cross a derived microsecond boundary.
+        if self.i2c_time_controller_indices.is_empty()
+            || (self.i2c_time_source_index.is_none()
+                && self.total_cycles < self.next_i2c_time_cycle)
+        {
             return;
         }
+        self.advance_central_device_time_due();
+    }
+
+    #[inline(never)]
+    fn advance_central_device_time_due(&mut self) {
         let (now, derived) = match self.i2c_time_source_index {
             Some(src) => match self.bus.peripherals[src].dev.sim_time_us() {
                 Some(now) => (now, false),
@@ -1288,11 +1352,6 @@ impl<C: Cpu> Machine<C> {
                 let hz = self.bus.cpu_hz;
                 if hz == 0 {
                     // No declared core clock ⇒ nothing honest to derive from.
-                    return;
-                }
-                // The derived µs clock only changes at a µs boundary. Skip the
-                // u128 divide and the device fan-out on the cycles in between.
-                if self.total_cycles < self.next_i2c_time_cycle {
                     return;
                 }
                 let cycles_per_us = (hz / 1_000_000).max(1);
@@ -1505,6 +1564,28 @@ impl<C: Cpu> Machine<C> {
         true
     }
 
+    /// True when the single primary core is parked in an architectural wait
+    /// that nothing inside the machine can ever end: no core-local timer, no
+    /// scheduler event, no CPU-interrupt / motor / resident-device deadline,
+    /// no medium-polled bus tick and no active legacy peripheral tick. These
+    /// are exactly the sources `try_idle_fast_forward` clamps a skip to, so
+    /// when all are absent every further skip is empty time.
+    ///
+    /// A bare `loop { wfi() }` with no interrupt source is the common case.
+    /// Inputs from outside the machine (test stimuli, UART injections,
+    /// co-simulation models) are the caller's to rule out.
+    pub fn parked_without_wake_source(&self) -> bool {
+        self.cpu_secondary.is_none()
+            && self.cpu.idle_fast_forward_budget(&self.bus) == Some(u64::MAX)
+            && self.cpu.parked_wake_deadline_cycles().is_none()
+            && self.sched.next_event_deadline().is_none()
+            && self.bus.next_cpu_interrupt_deadline_cycle().is_none()
+            && self.bus.next_motor_service_deadline_cycle().is_none()
+            && self.bus.next_resident_edge_deadline_cycle().is_none()
+            && !self.bus.idle_poll_bus_tick_active()
+            && self.bus.idle_fast_forward_legacy_safe()
+    }
+
     fn try_idle_fast_forward(&mut self, _max_steps: Option<u64>, _steps: u64) -> u64 {
         // POLLED logic capture disables the skip: a scheduler event inside the
         // skipped window could toggle a watched pad, and the per-cycle poll
@@ -1681,10 +1762,14 @@ impl<C: Cpu> Machine<C> {
                 }
                 budget = budget.min(deadline_cycle - self.total_cycles);
             } else if timer_poll && wfi_budget.is_none() {
-                // No scheduled event and not WFI: cap pure millis spins so a
-                // single batch cannot leap the whole step budget when the heap
-                // is empty (still advances real device time, just bounded).
-                budget = budget.min(1_000_000);
+                // Nothing queued: `sleep_until` reads TIMERAW *before* it
+                // arms the alarm pool entry. A remaining-sized leap here
+                // jumped past that pending WFE wake. Cap the skip instead
+                // of refusing it, so a SYSTIMER/millis busy-poll still
+                // advances when no alarm is ever armed. Reuse the existing
+                // 8192-cycle medium-poll quantum (65 µs at 125 MHz) rather
+                // than adding another event-scheduler cfg site.
+                budget = budget.min(WIFI_MEDIUM_IDLE_POLL_QUANTUM);
             }
 
             // Tiny windows are not worth the skip bookkeeping on the timer-poll
@@ -1903,7 +1988,28 @@ impl<C: Cpu> Machine<C> {
 
 impl<C: Cpu> Machine<C> {
     pub fn load_firmware(&mut self, image: &memory::ProgramImage) -> SimResult<()> {
+        if self.rtc_cntl_index.is_some() {
+            self.esp32_sram_segments = image
+                .segments
+                .iter()
+                .filter(|s| is_esp32_internal_sram(s.start_addr))
+                .map(|s| (s.start_addr, s.data.len()))
+                .collect();
+        }
         for segment in &image.segments {
+            // 0. A segment linked into a same-backing mirror (the RT500
+            //    secure FlexSPI/SRAM views) loads into the mirror's target.
+            let aliased;
+            let segment = match self.bus.resolve_mem_alias(segment.start_addr) {
+                a if a == segment.start_addr => segment,
+                start_addr => {
+                    aliased = memory::Segment {
+                        start_addr,
+                        data: segment.data.clone(),
+                    };
+                    &aliased
+                }
+            };
             // 1. Try Cortex-M / ARM flash backing.
             if self.bus.flash.load_from_segment(segment) {
                 continue;
@@ -2071,6 +2177,73 @@ impl<C: Cpu> Machine<C> {
         }
     }
 
+    /// Classic ESP32: record the state a deep-sleep wake-up reboots into.
+    ///
+    /// On silicon a deep-sleep wake-up is a reset: the ROM and the 2nd-stage
+    /// bootloader load the app's IRAM and DRAM segments again but skip the
+    /// RTC segments, so `RTC_DATA_ATTR` variables survive. Fast boot has no
+    /// bootloader, so the runner calls this once its post-load setup is done.
+    /// It copies the current bytes of every SRAM segment `load_firmware`
+    /// placed, with the entry PC and the stack pointers the runner gave the
+    /// two cores. A no-op on every other target.
+    pub fn capture_esp32_deep_sleep_boot(&mut self, entry_pc: u32, pro_sp: u32, app_sp: u32) {
+        if self.rtc_cntl_index.is_none() {
+            return;
+        }
+        let mut segments = Vec::with_capacity(self.esp32_sram_segments.len());
+        for &(start, len) in &self.esp32_sram_segments {
+            let bytes: Vec<u8> = (0..len as u64)
+                .map(|i| self.bus.read_u8(start + i).unwrap_or(0))
+                .collect();
+            segments.push((start, bytes));
+        }
+        self.esp32_deep_sleep_boot = Some(Esp32DeepSleepBoot {
+            segments,
+            entry_pc,
+            pro_sp,
+            app_sp,
+        });
+    }
+
+    /// Reboot the app after a deep sleep: what the ROM and the bootloader do
+    /// on silicon. RTC_CNTL, RTC slow memory and RTC fast memory are not
+    /// touched, so the reset cause, the wake-up cause and `RTC_DATA_ATTR`
+    /// data carry over. Without a captured boot state both cores halt.
+    fn reboot_esp32_from_deep_sleep(&mut self) -> SimResult<()> {
+        let Some(boot) = self.esp32_deep_sleep_boot.take() else {
+            self.cpu.halt();
+            if let Some(cpu1) = self.cpu_secondary.as_mut() {
+                cpu1.halt();
+            }
+            tracing::warn!("ESP32 deep-sleep wake-up with no captured boot state: cores halted");
+            return Ok(());
+        };
+        self.bus.with_debug_watch_bypass(|bus| {
+            bus.with_memory_policy_bypass(|bus| {
+                for (start, bytes) in &boot.segments {
+                    for (i, b) in bytes.iter().enumerate() {
+                        let _ = bus.write_u8(start + i as u64, *b);
+                    }
+                }
+            })
+        });
+        self.reset()?;
+        self.cpu.set_pc(boot.entry_pc);
+        self.cpu.set_sp(boot.pro_sp);
+        if let Some(cpu1) = self.cpu_secondary.as_mut() {
+            // APP_CPU waits for PRO_CPU to release it, as at power-on.
+            cpu1.halt();
+            cpu1.set_sp(boot.app_sp);
+        }
+        self.system_reset_peripherals();
+        tracing::debug!(
+            "RTC_CNTL deep-sleep wake-up: app rebooted at 0x{:08X}",
+            boot.entry_pc
+        );
+        self.esp32_deep_sleep_boot = Some(boot);
+        Ok(())
+    }
+
     pub fn reset(&mut self) -> SimResult<()> {
         self.cpu.reset(&mut self.bus)?;
         if let Some(cpu1) = self.cpu_secondary.as_mut() {
@@ -2107,6 +2280,7 @@ impl<C: Cpu> Machine<C> {
             return Ok(());
         };
         self.reset()?;
+        self.cpu.on_supply_reset(cause);
         for peripheral in &mut self.bus.peripherals {
             peripheral.dev.on_supply_reset(cause);
         }
@@ -2405,7 +2579,16 @@ impl<C: Cpu> Machine<C> {
         // (`pend_irq_for_event` would mis-route it), so the NVIC fallthrough is
         // taken only when no matrix fabric claimed delivery (the Cortex-M /
         // nRF SysTick + own-line path).
-        if !self.bus.deliver_scheduled_irq_levels() {
+        if !result.explicit_irqs.is_empty()
+            && self.bus.peripherals[peripheral_idx]
+                .dev
+                .explicit_irqs_are_link_events()
+        {
+            // Event numbers (RA ELC), routed through the ICU.
+            for line in self.bus.link_events(&result.explicit_irqs) {
+                self.bus.pend_irq_for_event(line, &mut fallthrough);
+            }
+        } else if !self.bus.deliver_scheduled_irq_levels() {
             for irq in &result.explicit_irqs {
                 self.bus.pend_irq_for_event(*irq, &mut fallthrough);
             }
@@ -2461,24 +2644,25 @@ impl<C: Cpu> Machine<C> {
         }
     }
 
-    /// Returns true (and clears the latch) if the registered RTC_CNTL
-    /// peripheral has a pending software-system-reset request. Used by
-    /// `step()` to honor OPTIONS0 bit 31 writes at a clean instruction
-    /// boundary. Uses the cached `rtc_cntl_index` resolved at construction
-    /// — non-ESP32-classic configs (no RTC_CNTL on the bus) short-circuit
-    /// to `false` without touching the peripheral vector at all.
-    fn drain_rtc_cntl_reset_request(&self) -> bool {
+    /// Drain both RTC_CNTL latches: `(sw_sys_rst, deep_sleep_wake)`. Each is
+    /// true (and cleared) if the registered RTC_CNTL peripheral latched it
+    /// since the last drain. Used by `step()` to honor OPTIONS0 bit 31 writes
+    /// and timer-ended deep sleeps at a clean instruction boundary. Uses the
+    /// cached `rtc_cntl_index` resolved at construction — non-ESP32-classic
+    /// configs (no RTC_CNTL on the bus) short-circuit to `(false, false)`
+    /// without touching the peripheral vector at all.
+    fn drain_rtc_cntl_requests(&self) -> (bool, bool) {
         let Some(idx) = self.rtc_cntl_index else {
-            return false;
+            return (false, false);
         };
         let Some(p) = self.bus.peripherals.get(idx) else {
-            return false;
+            return (false, false);
         };
         p.dev
             .as_any()
             .and_then(|a| a.downcast_ref::<crate::peripherals::esp32::rtc_cntl::RtcCntl>())
-            .map(|rtc| rtc.drain_reset_request())
-            .unwrap_or(false)
+            .map(|rtc| (rtc.drain_reset_request(), rtc.drain_deep_sleep_wake()))
+            .unwrap_or((false, false))
     }
 
     /// True while RTC_CNTL has a latched SW_SYS_RST (not yet drained).
@@ -2698,8 +2882,11 @@ impl<C: Cpu> Machine<C> {
         // Device binding lives on the bus, which is the one thing that holds
         // BOTH the live models (inside controllers and directly on itself) and
         // the manifest declarations they are named from. See
-        // `crate::bus::attached_devices`.
-        let devices = self.bus.inspect_devices(filter, opts);
+        // `crate::bus::attached_devices`. CPU-held SPI/I²C (AVR take_*) are
+        // folded in via the extra walk so inspect still sees them.
+        let devices = self.bus.inspect_devices_with_extra(filter, opts, &mut |f| {
+            self.cpu.for_each_attached_device(f);
+        });
         crate::inspect::MachineInspect {
             peripherals,
             devices,

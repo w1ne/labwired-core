@@ -1,0 +1,24 @@
+# LabWired - SAM E70 Xplained stock Zephyr hello_world
+#
+# Unmodified upstream Zephyr v3.7.0 `samples/hello_world` for board
+# `sam_e70_xplained/same70q21b`. Rebuild:
+# crates/firmware-sam-e70-xplained-zephyr/build.sh
+#
+# Zephyr's own SAM E70 bring-up runs unpatched: z_arm_platform_init
+# invalidates and enables the Cortex-M7 I/D caches (CMSIS set/way loops over
+# the CCSIDR geometry; z_arm_init_arch_hw_at_boot disables them again, so
+# v3.7 runs cache-off on this board), clock_init switches MAINCK to the 12 MHz RC and then
+# the 12 MHz crystal, starts PLLA (MULA 24) and the UPLL and moves MCK to PLLA
+# (/2), atmel_same70_init reads CHIPID_CIDR, and the console comes up on
+# USART1 (PB4 TXD1).
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/same70q21b-zephyr-hello.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 3000000
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v3.7.0 ***"
+      - "Hello World! sam_e70_xplained/same70q21b"
+  - expected_stop_reason: max_steps

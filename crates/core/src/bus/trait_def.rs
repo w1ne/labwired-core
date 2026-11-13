@@ -34,6 +34,18 @@ pub enum FetchPermission {
 }
 
 pub trait Bus {
+    /// The RP2350 double-precision coprocessor attached to this core, if the
+    /// chip has one (`coprocessors: [rp2350_dcp]`). Called only when a p4/p5
+    /// coprocessor instruction executes. `None` keeps it UNDEFINED.
+    fn rp2350_dcp_mut(&mut self) -> Option<&mut crate::cpu::cortex_m::rp2350_dcp::Rp2350Dcp> {
+        None
+    }
+    /// Whether the core has the RP2350 GPIO coprocessor (`coprocessors:
+    /// [rp2350_gpioc]`). Asked only when a p0 coprocessor instruction
+    /// executes; `false` keeps it UNDEFINED.
+    fn rp2350_gpioc(&self) -> bool {
+        false
+    }
     /// ARM application-core interrupt levels, including deassertion.
     fn arm_irq_fiq_levels(&self) -> Option<(bool, bool)> {
         None
@@ -160,6 +172,25 @@ pub trait Bus {
     /// ([`crate::pins::PinPort::set_pull_ups_disabled`]). Default: a bus with
     /// no pin ports.
     fn set_pull_ups_disabled(&mut self, _disabled: bool) {}
+
+    /// Clock one SPI byte through parking SPI controllers that still hold
+    /// attached kits (latching each device's D/C first). Default: no parking
+    /// SPI — return 0. AVR SPDR uses this instead of downcasting to SystemBus.
+    fn clock_parking_spi(&mut self, _mosi: u8) -> u8 {
+        0
+    }
+
+    /// Sync parking-SPI chip-selects from live GPIO (active-low).
+    /// Return true if a CS/LOAD rising edge was observed.
+    /// AVR calls this after every PORT mirror write, including hardware SPI.
+    fn sync_parking_spi_cs(&mut self) -> bool {
+        false
+    }
+
+    /// True if a parking device accepts CLK, including LOAD-only shift registers.
+    fn parking_spi_accepts_clock(&self) -> bool {
+        false
+    }
 
     /// Is an instruction fetch at `pc` permitted by a memory-protection unit
     /// the bus models? Called by the core only when its 256-byte fetch window

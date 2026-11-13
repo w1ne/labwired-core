@@ -1,5 +1,13 @@
 # Validation Report: renesas-ck_ra6m5
 
+> **Superseded.** This is the auto-generated report for the staged
+> `onboarding/renesas-ck_ra6m5` descriptor (a generic UART fixture on a placeholder
+> memory map: its code flash at `0x0800_0000` is the RA6M5 data-flash address,
+> not the 2 MiB code flash at `0x0`). The promoted RA6M5 part is
+> [`r7fa6m5bh`](r7fa6m5bh.md), and the board package is
+> **[EK-RA6M5](ek-ra6m5.md)**. The staged descriptor stays only because
+> `crates/core/src/bus/known_stubs.rs` still cites it.
+
 **Architecture:** ARM Cortex-M33.
 
 ## 1. Dynamic Simulation Validation

@@ -1,0 +1,3380 @@
+# Kinetis K64F SYSMPU (system memory protection unit), K64P144M120SF5RM
+# chapter 18. Generated from the NXP CMSIS-SVD MK64F12.svd
+# (cmsis-svd-data data/NXP/MK64F12.svd): offsets, access and reset values
+# verbatim, dim arrays expanded. A plain register file: region descriptors
+# read back what was written, and no access is ever checked or faulted.
+peripheral: SYSMPU
+version: 0.1.0
+registers:
+- id: CESR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 8474881
+  fields:
+  - name: VLD
+    bit_range:
+    - 0
+    - 0
+    description: "Valid"
+  - name: NRGD
+    bit_range:
+    - 11
+    - 8
+    description: "Number Of Region Descriptors"
+  - name: NSP
+    bit_range:
+    - 15
+    - 12
+    description: "Number Of Slave Ports"
+  - name: HRL
+    bit_range:
+    - 19
+    - 16
+    description: "Hardware Revision Level"
+  - name: SPERR
+    bit_range:
+    - 31
+    - 27
+    description: "Slave Port n Error"
+  side_effects: null
+- id: EAR0
+  address_offset: 16
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: EADDR
+    bit_range:
+    - 31
+    - 0
+    description: "Error Address"
+  side_effects: null
+- id: EAR1
+  address_offset: 24
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: EADDR
+    bit_range:
+    - 31
+    - 0
+    description: "Error Address"
+  side_effects: null
+- id: EAR2
+  address_offset: 32
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: EADDR
+    bit_range:
+    - 31
+    - 0
+    description: "Error Address"
+  side_effects: null
+- id: EAR3
+  address_offset: 40
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: EADDR
+    bit_range:
+    - 31
+    - 0
+    description: "Error Address"
+  side_effects: null
+- id: EAR4
+  address_offset: 48
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: EADDR
+    bit_range:
+    - 31
+    - 0
+    description: "Error Address"
+  side_effects: null
+- id: EDR0
+  address_offset: 20
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ERW
+    bit_range:
+    - 0
+    - 0
+    description: "Error Read/Write"
+  - name: EATTR
+    bit_range:
+    - 3
+    - 1
+    description: "Error Attributes"
+  - name: EMN
+    bit_range:
+    - 7
+    - 4
+    description: "Error Master Number"
+  - name: EPID
+    bit_range:
+    - 15
+    - 8
+    description: "Error Process Identification"
+  - name: EACD
+    bit_range:
+    - 31
+    - 16
+    description: "Error Access Control Detail"
+  side_effects: null
+- id: EDR1
+  address_offset: 28
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ERW
+    bit_range:
+    - 0
+    - 0
+    description: "Error Read/Write"
+  - name: EATTR
+    bit_range:
+    - 3
+    - 1
+    description: "Error Attributes"
+  - name: EMN
+    bit_range:
+    - 7
+    - 4
+    description: "Error Master Number"
+  - name: EPID
+    bit_range:
+    - 15
+    - 8
+    description: "Error Process Identification"
+  - name: EACD
+    bit_range:
+    - 31
+    - 16
+    description: "Error Access Control Detail"
+  side_effects: null
+- id: EDR2
+  address_offset: 36
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ERW
+    bit_range:
+    - 0
+    - 0
+    description: "Error Read/Write"
+  - name: EATTR
+    bit_range:
+    - 3
+    - 1
+    description: "Error Attributes"
+  - name: EMN
+    bit_range:
+    - 7
+    - 4
+    description: "Error Master Number"
+  - name: EPID
+    bit_range:
+    - 15
+    - 8
+    description: "Error Process Identification"
+  - name: EACD
+    bit_range:
+    - 31
+    - 16
+    description: "Error Access Control Detail"
+  side_effects: null
+- id: EDR3
+  address_offset: 44
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ERW
+    bit_range:
+    - 0
+    - 0
+    description: "Error Read/Write"
+  - name: EATTR
+    bit_range:
+    - 3
+    - 1
+    description: "Error Attributes"
+  - name: EMN
+    bit_range:
+    - 7
+    - 4
+    description: "Error Master Number"
+  - name: EPID
+    bit_range:
+    - 15
+    - 8
+    description: "Error Process Identification"
+  - name: EACD
+    bit_range:
+    - 31
+    - 16
+    description: "Error Access Control Detail"
+  side_effects: null
+- id: EDR4
+  address_offset: 52
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ERW
+    bit_range:
+    - 0
+    - 0
+    description: "Error Read/Write"
+  - name: EATTR
+    bit_range:
+    - 3
+    - 1
+    description: "Error Attributes"
+  - name: EMN
+    bit_range:
+    - 7
+    - 4
+    description: "Error Master Number"
+  - name: EPID
+    bit_range:
+    - 15
+    - 8
+    description: "Error Process Identification"
+  - name: EACD
+    bit_range:
+    - 31
+    - 16
+    description: "Error Access Control Detail"
+  side_effects: null
+- id: RGD0_WORD0
+  address_offset: 1024
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SRTADDR
+    bit_range:
+    - 31
+    - 5
+    description: "Start Address"
+  side_effects: null
+- id: RGD1_WORD0
+  address_offset: 1040
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SRTADDR
+    bit_range:
+    - 31
+    - 5
+    description: "Start Address"
+  side_effects: null
+- id: RGD2_WORD0
+  address_offset: 1056
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SRTADDR
+    bit_range:
+    - 31
+    - 5
+    description: "Start Address"
+  side_effects: null
+- id: RGD3_WORD0
+  address_offset: 1072
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SRTADDR
+    bit_range:
+    - 31
+    - 5
+    description: "Start Address"
+  side_effects: null
+- id: RGD4_WORD0
+  address_offset: 1088
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SRTADDR
+    bit_range:
+    - 31
+    - 5
+    description: "Start Address"
+  side_effects: null
+- id: RGD5_WORD0
+  address_offset: 1104
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SRTADDR
+    bit_range:
+    - 31
+    - 5
+    description: "Start Address"
+  side_effects: null
+- id: RGD6_WORD0
+  address_offset: 1120
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SRTADDR
+    bit_range:
+    - 31
+    - 5
+    description: "Start Address"
+  side_effects: null
+- id: RGD7_WORD0
+  address_offset: 1136
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SRTADDR
+    bit_range:
+    - 31
+    - 5
+    description: "Start Address"
+  side_effects: null
+- id: RGD8_WORD0
+  address_offset: 1152
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SRTADDR
+    bit_range:
+    - 31
+    - 5
+    description: "Start Address"
+  side_effects: null
+- id: RGD9_WORD0
+  address_offset: 1168
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SRTADDR
+    bit_range:
+    - 31
+    - 5
+    description: "Start Address"
+  side_effects: null
+- id: RGD10_WORD0
+  address_offset: 1184
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SRTADDR
+    bit_range:
+    - 31
+    - 5
+    description: "Start Address"
+  side_effects: null
+- id: RGD11_WORD0
+  address_offset: 1200
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SRTADDR
+    bit_range:
+    - 31
+    - 5
+    description: "Start Address"
+  side_effects: null
+- id: RGD0_WORD1
+  address_offset: 1028
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: ENDADDR
+    bit_range:
+    - 31
+    - 5
+    description: "End Address"
+  side_effects: null
+- id: RGD1_WORD1
+  address_offset: 1044
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: ENDADDR
+    bit_range:
+    - 31
+    - 5
+    description: "End Address"
+  side_effects: null
+- id: RGD2_WORD1
+  address_offset: 1060
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: ENDADDR
+    bit_range:
+    - 31
+    - 5
+    description: "End Address"
+  side_effects: null
+- id: RGD3_WORD1
+  address_offset: 1076
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: ENDADDR
+    bit_range:
+    - 31
+    - 5
+    description: "End Address"
+  side_effects: null
+- id: RGD4_WORD1
+  address_offset: 1092
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: ENDADDR
+    bit_range:
+    - 31
+    - 5
+    description: "End Address"
+  side_effects: null
+- id: RGD5_WORD1
+  address_offset: 1108
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: ENDADDR
+    bit_range:
+    - 31
+    - 5
+    description: "End Address"
+  side_effects: null
+- id: RGD6_WORD1
+  address_offset: 1124
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: ENDADDR
+    bit_range:
+    - 31
+    - 5
+    description: "End Address"
+  side_effects: null
+- id: RGD7_WORD1
+  address_offset: 1140
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: ENDADDR
+    bit_range:
+    - 31
+    - 5
+    description: "End Address"
+  side_effects: null
+- id: RGD8_WORD1
+  address_offset: 1156
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: ENDADDR
+    bit_range:
+    - 31
+    - 5
+    description: "End Address"
+  side_effects: null
+- id: RGD9_WORD1
+  address_offset: 1172
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: ENDADDR
+    bit_range:
+    - 31
+    - 5
+    description: "End Address"
+  side_effects: null
+- id: RGD10_WORD1
+  address_offset: 1188
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: ENDADDR
+    bit_range:
+    - 31
+    - 5
+    description: "End Address"
+  side_effects: null
+- id: RGD11_WORD1
+  address_offset: 1204
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: ENDADDR
+    bit_range:
+    - 31
+    - 5
+    description: "End Address"
+  side_effects: null
+- id: RGD0_WORD2
+  address_offset: 1032
+  size: 32
+  access: READ_WRITE
+  reset_value: 6420447
+  fields:
+  - name: M0UM
+    bit_range:
+    - 2
+    - 0
+    description: "Bus Master 0 User Mode Access Control"
+  - name: M0SM
+    bit_range:
+    - 4
+    - 3
+    description: "Bus Master 0 Supervisor Mode Access Control"
+  - name: M0PE
+    bit_range:
+    - 5
+    - 5
+    description: "Bus Master 0 Process Identifier enable"
+  - name: M1UM
+    bit_range:
+    - 8
+    - 6
+    description: "Bus Master 1 User Mode Access Control"
+  - name: M1SM
+    bit_range:
+    - 10
+    - 9
+    description: "Bus Master 1 Supervisor Mode Access Control"
+  - name: M1PE
+    bit_range:
+    - 11
+    - 11
+    description: "Bus Master 1 Process Identifier enable"
+  - name: M2UM
+    bit_range:
+    - 14
+    - 12
+    description: "Bus Master 2 User Mode Access control"
+  - name: M2SM
+    bit_range:
+    - 16
+    - 15
+    description: "Bus Master 2 Supervisor Mode Access Control"
+  - name: M2PE
+    bit_range:
+    - 17
+    - 17
+    description: "Bus Master 2 Process Identifier Enable"
+  - name: M3UM
+    bit_range:
+    - 20
+    - 18
+    description: "Bus Master 3 User Mode Access Control"
+  - name: M3SM
+    bit_range:
+    - 22
+    - 21
+    description: "Bus Master 3 Supervisor Mode Access Control"
+  - name: M3PE
+    bit_range:
+    - 23
+    - 23
+    description: "Bus Master 3 Process Identifier Enable"
+  - name: M4WE
+    bit_range:
+    - 24
+    - 24
+    description: "Bus Master 4 Write Enable"
+  - name: M4RE
+    bit_range:
+    - 25
+    - 25
+    description: "Bus Master 4 Read Enable"
+  - name: M5WE
+    bit_range:
+    - 26
+    - 26
+    description: "Bus Master 5 Write Enable"
+  - name: M5RE
+    bit_range:
+    - 27
+    - 27
+    description: "Bus Master 5 Read Enable"
+  - name: M6WE
+    bit_range:
+    - 28
+    - 28
+    description: "Bus Master 6 Write Enable"
+  - name: M6RE
+    bit_range:
+    - 29
+    - 29
+    description: "Bus Master 6 Read Enable"
+  - name: M7WE
+    bit_range:
+    - 30
+    - 30
+    description: "Bus Master 7 Write Enable"
+  - name: M7RE
+    bit_range:
+    - 31
+    - 31
+    description: "Bus Master 7 Read Enable"
+  side_effects: null
+- id: RGD1_WORD2
+  address_offset: 1048
+  size: 32
+  access: READ_WRITE
+  reset_value: 6420447
+  fields:
+  - name: M0UM
+    bit_range:
+    - 2
+    - 0
+    description: "Bus Master 0 User Mode Access Control"
+  - name: M0SM
+    bit_range:
+    - 4
+    - 3
+    description: "Bus Master 0 Supervisor Mode Access Control"
+  - name: M0PE
+    bit_range:
+    - 5
+    - 5
+    description: "Bus Master 0 Process Identifier enable"
+  - name: M1UM
+    bit_range:
+    - 8
+    - 6
+    description: "Bus Master 1 User Mode Access Control"
+  - name: M1SM
+    bit_range:
+    - 10
+    - 9
+    description: "Bus Master 1 Supervisor Mode Access Control"
+  - name: M1PE
+    bit_range:
+    - 11
+    - 11
+    description: "Bus Master 1 Process Identifier enable"
+  - name: M2UM
+    bit_range:
+    - 14
+    - 12
+    description: "Bus Master 2 User Mode Access control"
+  - name: M2SM
+    bit_range:
+    - 16
+    - 15
+    description: "Bus Master 2 Supervisor Mode Access Control"
+  - name: M2PE
+    bit_range:
+    - 17
+    - 17
+    description: "Bus Master 2 Process Identifier Enable"
+  - name: M3UM
+    bit_range:
+    - 20
+    - 18
+    description: "Bus Master 3 User Mode Access Control"
+  - name: M3SM
+    bit_range:
+    - 22
+    - 21
+    description: "Bus Master 3 Supervisor Mode Access Control"
+  - name: M3PE
+    bit_range:
+    - 23
+    - 23
+    description: "Bus Master 3 Process Identifier Enable"
+  - name: M4WE
+    bit_range:
+    - 24
+    - 24
+    description: "Bus Master 4 Write Enable"
+  - name: M4RE
+    bit_range:
+    - 25
+    - 25
+    description: "Bus Master 4 Read Enable"
+  - name: M5WE
+    bit_range:
+    - 26
+    - 26
+    description: "Bus Master 5 Write Enable"
+  - name: M5RE
+    bit_range:
+    - 27
+    - 27
+    description: "Bus Master 5 Read Enable"
+  - name: M6WE
+    bit_range:
+    - 28
+    - 28
+    description: "Bus Master 6 Write Enable"
+  - name: M6RE
+    bit_range:
+    - 29
+    - 29
+    description: "Bus Master 6 Read Enable"
+  - name: M7WE
+    bit_range:
+    - 30
+    - 30
+    description: "Bus Master 7 Write Enable"
+  - name: M7RE
+    bit_range:
+    - 31
+    - 31
+    description: "Bus Master 7 Read Enable"
+  side_effects: null
+- id: RGD2_WORD2
+  address_offset: 1064
+  size: 32
+  access: READ_WRITE
+  reset_value: 6420447
+  fields:
+  - name: M0UM
+    bit_range:
+    - 2
+    - 0
+    description: "Bus Master 0 User Mode Access Control"
+  - name: M0SM
+    bit_range:
+    - 4
+    - 3
+    description: "Bus Master 0 Supervisor Mode Access Control"
+  - name: M0PE
+    bit_range:
+    - 5
+    - 5
+    description: "Bus Master 0 Process Identifier enable"
+  - name: M1UM
+    bit_range:
+    - 8
+    - 6
+    description: "Bus Master 1 User Mode Access Control"
+  - name: M1SM
+    bit_range:
+    - 10
+    - 9
+    description: "Bus Master 1 Supervisor Mode Access Control"
+  - name: M1PE
+    bit_range:
+    - 11
+    - 11
+    description: "Bus Master 1 Process Identifier enable"
+  - name: M2UM
+    bit_range:
+    - 14
+    - 12
+    description: "Bus Master 2 User Mode Access control"
+  - name: M2SM
+    bit_range:
+    - 16
+    - 15
+    description: "Bus Master 2 Supervisor Mode Access Control"
+  - name: M2PE
+    bit_range:
+    - 17
+    - 17
+    description: "Bus Master 2 Process Identifier Enable"
+  - name: M3UM
+    bit_range:
+    - 20
+    - 18
+    description: "Bus Master 3 User Mode Access Control"
+  - name: M3SM
+    bit_range:
+    - 22
+    - 21
+    description: "Bus Master 3 Supervisor Mode Access Control"
+  - name: M3PE
+    bit_range:
+    - 23
+    - 23
+    description: "Bus Master 3 Process Identifier Enable"
+  - name: M4WE
+    bit_range:
+    - 24
+    - 24
+    description: "Bus Master 4 Write Enable"
+  - name: M4RE
+    bit_range:
+    - 25
+    - 25
+    description: "Bus Master 4 Read Enable"
+  - name: M5WE
+    bit_range:
+    - 26
+    - 26
+    description: "Bus Master 5 Write Enable"
+  - name: M5RE
+    bit_range:
+    - 27
+    - 27
+    description: "Bus Master 5 Read Enable"
+  - name: M6WE
+    bit_range:
+    - 28
+    - 28
+    description: "Bus Master 6 Write Enable"
+  - name: M6RE
+    bit_range:
+    - 29
+    - 29
+    description: "Bus Master 6 Read Enable"
+  - name: M7WE
+    bit_range:
+    - 30
+    - 30
+    description: "Bus Master 7 Write Enable"
+  - name: M7RE
+    bit_range:
+    - 31
+    - 31
+    description: "Bus Master 7 Read Enable"
+  side_effects: null
+- id: RGD3_WORD2
+  address_offset: 1080
+  size: 32
+  access: READ_WRITE
+  reset_value: 6420447
+  fields:
+  - name: M0UM
+    bit_range:
+    - 2
+    - 0
+    description: "Bus Master 0 User Mode Access Control"
+  - name: M0SM
+    bit_range:
+    - 4
+    - 3
+    description: "Bus Master 0 Supervisor Mode Access Control"
+  - name: M0PE
+    bit_range:
+    - 5
+    - 5
+    description: "Bus Master 0 Process Identifier enable"
+  - name: M1UM
+    bit_range:
+    - 8
+    - 6
+    description: "Bus Master 1 User Mode Access Control"
+  - name: M1SM
+    bit_range:
+    - 10
+    - 9
+    description: "Bus Master 1 Supervisor Mode Access Control"
+  - name: M1PE
+    bit_range:
+    - 11
+    - 11
+    description: "Bus Master 1 Process Identifier enable"
+  - name: M2UM
+    bit_range:
+    - 14
+    - 12
+    description: "Bus Master 2 User Mode Access control"
+  - name: M2SM
+    bit_range:
+    - 16
+    - 15
+    description: "Bus Master 2 Supervisor Mode Access Control"
+  - name: M2PE
+    bit_range:
+    - 17
+    - 17
+    description: "Bus Master 2 Process Identifier Enable"
+  - name: M3UM
+    bit_range:
+    - 20
+    - 18
+    description: "Bus Master 3 User Mode Access Control"
+  - name: M3SM
+    bit_range:
+    - 22
+    - 21
+    description: "Bus Master 3 Supervisor Mode Access Control"
+  - name: M3PE
+    bit_range:
+    - 23
+    - 23
+    description: "Bus Master 3 Process Identifier Enable"
+  - name: M4WE
+    bit_range:
+    - 24
+    - 24
+    description: "Bus Master 4 Write Enable"
+  - name: M4RE
+    bit_range:
+    - 25
+    - 25
+    description: "Bus Master 4 Read Enable"
+  - name: M5WE
+    bit_range:
+    - 26
+    - 26
+    description: "Bus Master 5 Write Enable"
+  - name: M5RE
+    bit_range:
+    - 27
+    - 27
+    description: "Bus Master 5 Read Enable"
+  - name: M6WE
+    bit_range:
+    - 28
+    - 28
+    description: "Bus Master 6 Write Enable"
+  - name: M6RE
+    bit_range:
+    - 29
+    - 29
+    description: "Bus Master 6 Read Enable"
+  - name: M7WE
+    bit_range:
+    - 30
+    - 30
+    description: "Bus Master 7 Write Enable"
+  - name: M7RE
+    bit_range:
+    - 31
+    - 31
+    description: "Bus Master 7 Read Enable"
+  side_effects: null
+- id: RGD4_WORD2
+  address_offset: 1096
+  size: 32
+  access: READ_WRITE
+  reset_value: 6420447
+  fields:
+  - name: M0UM
+    bit_range:
+    - 2
+    - 0
+    description: "Bus Master 0 User Mode Access Control"
+  - name: M0SM
+    bit_range:
+    - 4
+    - 3
+    description: "Bus Master 0 Supervisor Mode Access Control"
+  - name: M0PE
+    bit_range:
+    - 5
+    - 5
+    description: "Bus Master 0 Process Identifier enable"
+  - name: M1UM
+    bit_range:
+    - 8
+    - 6
+    description: "Bus Master 1 User Mode Access Control"
+  - name: M1SM
+    bit_range:
+    - 10
+    - 9
+    description: "Bus Master 1 Supervisor Mode Access Control"
+  - name: M1PE
+    bit_range:
+    - 11
+    - 11
+    description: "Bus Master 1 Process Identifier enable"
+  - name: M2UM
+    bit_range:
+    - 14
+    - 12
+    description: "Bus Master 2 User Mode Access control"
+  - name: M2SM
+    bit_range:
+    - 16
+    - 15
+    description: "Bus Master 2 Supervisor Mode Access Control"
+  - name: M2PE
+    bit_range:
+    - 17
+    - 17
+    description: "Bus Master 2 Process Identifier Enable"
+  - name: M3UM
+    bit_range:
+    - 20
+    - 18
+    description: "Bus Master 3 User Mode Access Control"
+  - name: M3SM
+    bit_range:
+    - 22
+    - 21
+    description: "Bus Master 3 Supervisor Mode Access Control"
+  - name: M3PE
+    bit_range:
+    - 23
+    - 23
+    description: "Bus Master 3 Process Identifier Enable"
+  - name: M4WE
+    bit_range:
+    - 24
+    - 24
+    description: "Bus Master 4 Write Enable"
+  - name: M4RE
+    bit_range:
+    - 25
+    - 25
+    description: "Bus Master 4 Read Enable"
+  - name: M5WE
+    bit_range:
+    - 26
+    - 26
+    description: "Bus Master 5 Write Enable"
+  - name: M5RE
+    bit_range:
+    - 27
+    - 27
+    description: "Bus Master 5 Read Enable"
+  - name: M6WE
+    bit_range:
+    - 28
+    - 28
+    description: "Bus Master 6 Write Enable"
+  - name: M6RE
+    bit_range:
+    - 29
+    - 29
+    description: "Bus Master 6 Read Enable"
+  - name: M7WE
+    bit_range:
+    - 30
+    - 30
+    description: "Bus Master 7 Write Enable"
+  - name: M7RE
+    bit_range:
+    - 31
+    - 31
+    description: "Bus Master 7 Read Enable"
+  side_effects: null
+- id: RGD5_WORD2
+  address_offset: 1112
+  size: 32
+  access: READ_WRITE
+  reset_value: 6420447
+  fields:
+  - name: M0UM
+    bit_range:
+    - 2
+    - 0
+    description: "Bus Master 0 User Mode Access Control"
+  - name: M0SM
+    bit_range:
+    - 4
+    - 3
+    description: "Bus Master 0 Supervisor Mode Access Control"
+  - name: M0PE
+    bit_range:
+    - 5
+    - 5
+    description: "Bus Master 0 Process Identifier enable"
+  - name: M1UM
+    bit_range:
+    - 8
+    - 6
+    description: "Bus Master 1 User Mode Access Control"
+  - name: M1SM
+    bit_range:
+    - 10
+    - 9
+    description: "Bus Master 1 Supervisor Mode Access Control"
+  - name: M1PE
+    bit_range:
+    - 11
+    - 11
+    description: "Bus Master 1 Process Identifier enable"
+  - name: M2UM
+    bit_range:
+    - 14
+    - 12
+    description: "Bus Master 2 User Mode Access control"
+  - name: M2SM
+    bit_range:
+    - 16
+    - 15
+    description: "Bus Master 2 Supervisor Mode Access Control"
+  - name: M2PE
+    bit_range:
+    - 17
+    - 17
+    description: "Bus Master 2 Process Identifier Enable"
+  - name: M3UM
+    bit_range:
+    - 20
+    - 18
+    description: "Bus Master 3 User Mode Access Control"
+  - name: M3SM
+    bit_range:
+    - 22
+    - 21
+    description: "Bus Master 3 Supervisor Mode Access Control"
+  - name: M3PE
+    bit_range:
+    - 23
+    - 23
+    description: "Bus Master 3 Process Identifier Enable"
+  - name: M4WE
+    bit_range:
+    - 24
+    - 24
+    description: "Bus Master 4 Write Enable"
+  - name: M4RE
+    bit_range:
+    - 25
+    - 25
+    description: "Bus Master 4 Read Enable"
+  - name: M5WE
+    bit_range:
+    - 26
+    - 26
+    description: "Bus Master 5 Write Enable"
+  - name: M5RE
+    bit_range:
+    - 27
+    - 27
+    description: "Bus Master 5 Read Enable"
+  - name: M6WE
+    bit_range:
+    - 28
+    - 28
+    description: "Bus Master 6 Write Enable"
+  - name: M6RE
+    bit_range:
+    - 29
+    - 29
+    description: "Bus Master 6 Read Enable"
+  - name: M7WE
+    bit_range:
+    - 30
+    - 30
+    description: "Bus Master 7 Write Enable"
+  - name: M7RE
+    bit_range:
+    - 31
+    - 31
+    description: "Bus Master 7 Read Enable"
+  side_effects: null
+- id: RGD6_WORD2
+  address_offset: 1128
+  size: 32
+  access: READ_WRITE
+  reset_value: 6420447
+  fields:
+  - name: M0UM
+    bit_range:
+    - 2
+    - 0
+    description: "Bus Master 0 User Mode Access Control"
+  - name: M0SM
+    bit_range:
+    - 4
+    - 3
+    description: "Bus Master 0 Supervisor Mode Access Control"
+  - name: M0PE
+    bit_range:
+    - 5
+    - 5
+    description: "Bus Master 0 Process Identifier enable"
+  - name: M1UM
+    bit_range:
+    - 8
+    - 6
+    description: "Bus Master 1 User Mode Access Control"
+  - name: M1SM
+    bit_range:
+    - 10
+    - 9
+    description: "Bus Master 1 Supervisor Mode Access Control"
+  - name: M1PE
+    bit_range:
+    - 11
+    - 11
+    description: "Bus Master 1 Process Identifier enable"
+  - name: M2UM
+    bit_range:
+    - 14
+    - 12
+    description: "Bus Master 2 User Mode Access control"
+  - name: M2SM
+    bit_range:
+    - 16
+    - 15
+    description: "Bus Master 2 Supervisor Mode Access Control"
+  - name: M2PE
+    bit_range:
+    - 17
+    - 17
+    description: "Bus Master 2 Process Identifier Enable"
+  - name: M3UM
+    bit_range:
+    - 20
+    - 18
+    description: "Bus Master 3 User Mode Access Control"
+  - name: M3SM
+    bit_range:
+    - 22
+    - 21
+    description: "Bus Master 3 Supervisor Mode Access Control"
+  - name: M3PE
+    bit_range:
+    - 23
+    - 23
+    description: "Bus Master 3 Process Identifier Enable"
+  - name: M4WE
+    bit_range:
+    - 24
+    - 24
+    description: "Bus Master 4 Write Enable"
+  - name: M4RE
+    bit_range:
+    - 25
+    - 25
+    description: "Bus Master 4 Read Enable"
+  - name: M5WE
+    bit_range:
+    - 26
+    - 26
+    description: "Bus Master 5 Write Enable"
+  - name: M5RE
+    bit_range:
+    - 27
+    - 27
+    description: "Bus Master 5 Read Enable"
+  - name: M6WE
+    bit_range:
+    - 28
+    - 28
+    description: "Bus Master 6 Write Enable"
+  - name: M6RE
+    bit_range:
+    - 29
+    - 29
+    description: "Bus Master 6 Read Enable"
+  - name: M7WE
+    bit_range:
+    - 30
+    - 30
+    description: "Bus Master 7 Write Enable"
+  - name: M7RE
+    bit_range:
+    - 31
+    - 31
+    description: "Bus Master 7 Read Enable"
+  side_effects: null
+- id: RGD7_WORD2
+  address_offset: 1144
+  size: 32
+  access: READ_WRITE
+  reset_value: 6420447
+  fields:
+  - name: M0UM
+    bit_range:
+    - 2
+    - 0
+    description: "Bus Master 0 User Mode Access Control"
+  - name: M0SM
+    bit_range:
+    - 4
+    - 3
+    description: "Bus Master 0 Supervisor Mode Access Control"
+  - name: M0PE
+    bit_range:
+    - 5
+    - 5
+    description: "Bus Master 0 Process Identifier enable"
+  - name: M1UM
+    bit_range:
+    - 8
+    - 6
+    description: "Bus Master 1 User Mode Access Control"
+  - name: M1SM
+    bit_range:
+    - 10
+    - 9
+    description: "Bus Master 1 Supervisor Mode Access Control"
+  - name: M1PE
+    bit_range:
+    - 11
+    - 11
+    description: "Bus Master 1 Process Identifier enable"
+  - name: M2UM
+    bit_range:
+    - 14
+    - 12
+    description: "Bus Master 2 User Mode Access control"
+  - name: M2SM
+    bit_range:
+    - 16
+    - 15
+    description: "Bus Master 2 Supervisor Mode Access Control"
+  - name: M2PE
+    bit_range:
+    - 17
+    - 17
+    description: "Bus Master 2 Process Identifier Enable"
+  - name: M3UM
+    bit_range:
+    - 20
+    - 18
+    description: "Bus Master 3 User Mode Access Control"
+  - name: M3SM
+    bit_range:
+    - 22
+    - 21
+    description: "Bus Master 3 Supervisor Mode Access Control"
+  - name: M3PE
+    bit_range:
+    - 23
+    - 23
+    description: "Bus Master 3 Process Identifier Enable"
+  - name: M4WE
+    bit_range:
+    - 24
+    - 24
+    description: "Bus Master 4 Write Enable"
+  - name: M4RE
+    bit_range:
+    - 25
+    - 25
+    description: "Bus Master 4 Read Enable"
+  - name: M5WE
+    bit_range:
+    - 26
+    - 26
+    description: "Bus Master 5 Write Enable"
+  - name: M5RE
+    bit_range:
+    - 27
+    - 27
+    description: "Bus Master 5 Read Enable"
+  - name: M6WE
+    bit_range:
+    - 28
+    - 28
+    description: "Bus Master 6 Write Enable"
+  - name: M6RE
+    bit_range:
+    - 29
+    - 29
+    description: "Bus Master 6 Read Enable"
+  - name: M7WE
+    bit_range:
+    - 30
+    - 30
+    description: "Bus Master 7 Write Enable"
+  - name: M7RE
+    bit_range:
+    - 31
+    - 31
+    description: "Bus Master 7 Read Enable"
+  side_effects: null
+- id: RGD8_WORD2
+  address_offset: 1160
+  size: 32
+  access: READ_WRITE
+  reset_value: 6420447
+  fields:
+  - name: M0UM
+    bit_range:
+    - 2
+    - 0
+    description: "Bus Master 0 User Mode Access Control"
+  - name: M0SM
+    bit_range:
+    - 4
+    - 3
+    description: "Bus Master 0 Supervisor Mode Access Control"
+  - name: M0PE
+    bit_range:
+    - 5
+    - 5
+    description: "Bus Master 0 Process Identifier enable"
+  - name: M1UM
+    bit_range:
+    - 8
+    - 6
+    description: "Bus Master 1 User Mode Access Control"
+  - name: M1SM
+    bit_range:
+    - 10
+    - 9
+    description: "Bus Master 1 Supervisor Mode Access Control"
+  - name: M1PE
+    bit_range:
+    - 11
+    - 11
+    description: "Bus Master 1 Process Identifier enable"
+  - name: M2UM
+    bit_range:
+    - 14
+    - 12
+    description: "Bus Master 2 User Mode Access control"
+  - name: M2SM
+    bit_range:
+    - 16
+    - 15
+    description: "Bus Master 2 Supervisor Mode Access Control"
+  - name: M2PE
+    bit_range:
+    - 17
+    - 17
+    description: "Bus Master 2 Process Identifier Enable"
+  - name: M3UM
+    bit_range:
+    - 20
+    - 18
+    description: "Bus Master 3 User Mode Access Control"
+  - name: M3SM
+    bit_range:
+    - 22
+    - 21
+    description: "Bus Master 3 Supervisor Mode Access Control"
+  - name: M3PE
+    bit_range:
+    - 23
+    - 23
+    description: "Bus Master 3 Process Identifier Enable"
+  - name: M4WE
+    bit_range:
+    - 24
+    - 24
+    description: "Bus Master 4 Write Enable"
+  - name: M4RE
+    bit_range:
+    - 25
+    - 25
+    description: "Bus Master 4 Read Enable"
+  - name: M5WE
+    bit_range:
+    - 26
+    - 26
+    description: "Bus Master 5 Write Enable"
+  - name: M5RE
+    bit_range:
+    - 27
+    - 27
+    description: "Bus Master 5 Read Enable"
+  - name: M6WE
+    bit_range:
+    - 28
+    - 28
+    description: "Bus Master 6 Write Enable"
+  - name: M6RE
+    bit_range:
+    - 29
+    - 29
+    description: "Bus Master 6 Read Enable"
+  - name: M7WE
+    bit_range:
+    - 30
+    - 30
+    description: "Bus Master 7 Write Enable"
+  - name: M7RE
+    bit_range:
+    - 31
+    - 31
+    description: "Bus Master 7 Read Enable"
+  side_effects: null
+- id: RGD9_WORD2
+  address_offset: 1176
+  size: 32
+  access: READ_WRITE
+  reset_value: 6420447
+  fields:
+  - name: M0UM
+    bit_range:
+    - 2
+    - 0
+    description: "Bus Master 0 User Mode Access Control"
+  - name: M0SM
+    bit_range:
+    - 4
+    - 3
+    description: "Bus Master 0 Supervisor Mode Access Control"
+  - name: M0PE
+    bit_range:
+    - 5
+    - 5
+    description: "Bus Master 0 Process Identifier enable"
+  - name: M1UM
+    bit_range:
+    - 8
+    - 6
+    description: "Bus Master 1 User Mode Access Control"
+  - name: M1SM
+    bit_range:
+    - 10
+    - 9
+    description: "Bus Master 1 Supervisor Mode Access Control"
+  - name: M1PE
+    bit_range:
+    - 11
+    - 11
+    description: "Bus Master 1 Process Identifier enable"
+  - name: M2UM
+    bit_range:
+    - 14
+    - 12
+    description: "Bus Master 2 User Mode Access control"
+  - name: M2SM
+    bit_range:
+    - 16
+    - 15
+    description: "Bus Master 2 Supervisor Mode Access Control"
+  - name: M2PE
+    bit_range:
+    - 17
+    - 17
+    description: "Bus Master 2 Process Identifier Enable"
+  - name: M3UM
+    bit_range:
+    - 20
+    - 18
+    description: "Bus Master 3 User Mode Access Control"
+  - name: M3SM
+    bit_range:
+    - 22
+    - 21
+    description: "Bus Master 3 Supervisor Mode Access Control"
+  - name: M3PE
+    bit_range:
+    - 23
+    - 23
+    description: "Bus Master 3 Process Identifier Enable"
+  - name: M4WE
+    bit_range:
+    - 24
+    - 24
+    description: "Bus Master 4 Write Enable"
+  - name: M4RE
+    bit_range:
+    - 25
+    - 25
+    description: "Bus Master 4 Read Enable"
+  - name: M5WE
+    bit_range:
+    - 26
+    - 26
+    description: "Bus Master 5 Write Enable"
+  - name: M5RE
+    bit_range:
+    - 27
+    - 27
+    description: "Bus Master 5 Read Enable"
+  - name: M6WE
+    bit_range:
+    - 28
+    - 28
+    description: "Bus Master 6 Write Enable"
+  - name: M6RE
+    bit_range:
+    - 29
+    - 29
+    description: "Bus Master 6 Read Enable"
+  - name: M7WE
+    bit_range:
+    - 30
+    - 30
+    description: "Bus Master 7 Write Enable"
+  - name: M7RE
+    bit_range:
+    - 31
+    - 31
+    description: "Bus Master 7 Read Enable"
+  side_effects: null
+- id: RGD10_WORD2
+  address_offset: 1192
+  size: 32
+  access: READ_WRITE
+  reset_value: 6420447
+  fields:
+  - name: M0UM
+    bit_range:
+    - 2
+    - 0
+    description: "Bus Master 0 User Mode Access Control"
+  - name: M0SM
+    bit_range:
+    - 4
+    - 3
+    description: "Bus Master 0 Supervisor Mode Access Control"
+  - name: M0PE
+    bit_range:
+    - 5
+    - 5
+    description: "Bus Master 0 Process Identifier enable"
+  - name: M1UM
+    bit_range:
+    - 8
+    - 6
+    description: "Bus Master 1 User Mode Access Control"
+  - name: M1SM
+    bit_range:
+    - 10
+    - 9
+    description: "Bus Master 1 Supervisor Mode Access Control"
+  - name: M1PE
+    bit_range:
+    - 11
+    - 11
+    description: "Bus Master 1 Process Identifier enable"
+  - name: M2UM
+    bit_range:
+    - 14
+    - 12
+    description: "Bus Master 2 User Mode Access control"
+  - name: M2SM
+    bit_range:
+    - 16
+    - 15
+    description: "Bus Master 2 Supervisor Mode Access Control"
+  - name: M2PE
+    bit_range:
+    - 17
+    - 17
+    description: "Bus Master 2 Process Identifier Enable"
+  - name: M3UM
+    bit_range:
+    - 20
+    - 18
+    description: "Bus Master 3 User Mode Access Control"
+  - name: M3SM
+    bit_range:
+    - 22
+    - 21
+    description: "Bus Master 3 Supervisor Mode Access Control"
+  - name: M3PE
+    bit_range:
+    - 23
+    - 23
+    description: "Bus Master 3 Process Identifier Enable"
+  - name: M4WE
+    bit_range:
+    - 24
+    - 24
+    description: "Bus Master 4 Write Enable"
+  - name: M4RE
+    bit_range:
+    - 25
+    - 25
+    description: "Bus Master 4 Read Enable"
+  - name: M5WE
+    bit_range:
+    - 26
+    - 26
+    description: "Bus Master 5 Write Enable"
+  - name: M5RE
+    bit_range:
+    - 27
+    - 27
+    description: "Bus Master 5 Read Enable"
+  - name: M6WE
+    bit_range:
+    - 28
+    - 28
+    description: "Bus Master 6 Write Enable"
+  - name: M6RE
+    bit_range:
+    - 29
+    - 29
+    description: "Bus Master 6 Read Enable"
+  - name: M7WE
+    bit_range:
+    - 30
+    - 30
+    description: "Bus Master 7 Write Enable"
+  - name: M7RE
+    bit_range:
+    - 31
+    - 31
+    description: "Bus Master 7 Read Enable"
+  side_effects: null
+- id: RGD11_WORD2
+  address_offset: 1208
+  size: 32
+  access: READ_WRITE
+  reset_value: 6420447
+  fields:
+  - name: M0UM
+    bit_range:
+    - 2
+    - 0
+    description: "Bus Master 0 User Mode Access Control"
+  - name: M0SM
+    bit_range:
+    - 4
+    - 3
+    description: "Bus Master 0 Supervisor Mode Access Control"
+  - name: M0PE
+    bit_range:
+    - 5
+    - 5
+    description: "Bus Master 0 Process Identifier enable"
+  - name: M1UM
+    bit_range:
+    - 8
+    - 6
+    description: "Bus Master 1 User Mode Access Control"
+  - name: M1SM
+    bit_range:
+    - 10
+    - 9
+    description: "Bus Master 1 Supervisor Mode Access Control"
+  - name: M1PE
+    bit_range:
+    - 11
+    - 11
+    description: "Bus Master 1 Process Identifier enable"
+  - name: M2UM
+    bit_range:
+    - 14
+    - 12
+    description: "Bus Master 2 User Mode Access control"
+  - name: M2SM
+    bit_range:
+    - 16
+    - 15
+    description: "Bus Master 2 Supervisor Mode Access Control"
+  - name: M2PE
+    bit_range:
+    - 17
+    - 17
+    description: "Bus Master 2 Process Identifier Enable"
+  - name: M3UM
+    bit_range:
+    - 20
+    - 18
+    description: "Bus Master 3 User Mode Access Control"
+  - name: M3SM
+    bit_range:
+    - 22
+    - 21
+    description: "Bus Master 3 Supervisor Mode Access Control"
+  - name: M3PE
+    bit_range:
+    - 23
+    - 23
+    description: "Bus Master 3 Process Identifier Enable"
+  - name: M4WE
+    bit_range:
+    - 24
+    - 24
+    description: "Bus Master 4 Write Enable"
+  - name: M4RE
+    bit_range:
+    - 25
+    - 25
+    description: "Bus Master 4 Read Enable"
+  - name: M5WE
+    bit_range:
+    - 26
+    - 26
+    description: "Bus Master 5 Write Enable"
+  - name: M5RE
+    bit_range:
+    - 27
+    - 27
+    description: "Bus Master 5 Read Enable"
+  - name: M6WE
+    bit_range:
+    - 28
+    - 28
+    description: "Bus Master 6 Write Enable"
+  - name: M6RE
+    bit_range:
+    - 29
+    - 29
+    description: "Bus Master 6 Read Enable"
+  - name: M7WE
+    bit_range:
+    - 30
+    - 30
+    description: "Bus Master 7 Write Enable"
+  - name: M7RE
+    bit_range:
+    - 31
+    - 31
+    description: "Bus Master 7 Read Enable"
+  side_effects: null
+- id: RGD0_WORD3
+  address_offset: 1036
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: VLD
+    bit_range:
+    - 0
+    - 0
+    description: "Valid"
+  - name: PIDMASK
+    bit_range:
+    - 23
+    - 16
+    description: "Process Identifier Mask"
+  - name: PID
+    bit_range:
+    - 31
+    - 24
+    description: "Process Identifier"
+  side_effects: null
+- id: RGD1_WORD3
+  address_offset: 1052
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: VLD
+    bit_range:
+    - 0
+    - 0
+    description: "Valid"
+  - name: PIDMASK
+    bit_range:
+    - 23
+    - 16
+    description: "Process Identifier Mask"
+  - name: PID
+    bit_range:
+    - 31
+    - 24
+    description: "Process Identifier"
+  side_effects: null
+- id: RGD2_WORD3
+  address_offset: 1068
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: VLD
+    bit_range:
+    - 0
+    - 0
+    description: "Valid"
+  - name: PIDMASK
+    bit_range:
+    - 23
+    - 16
+    description: "Process Identifier Mask"
+  - name: PID
+    bit_range:
+    - 31
+    - 24
+    description: "Process Identifier"
+  side_effects: null
+- id: RGD3_WORD3
+  address_offset: 1084
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: VLD
+    bit_range:
+    - 0
+    - 0
+    description: "Valid"
+  - name: PIDMASK
+    bit_range:
+    - 23
+    - 16
+    description: "Process Identifier Mask"
+  - name: PID
+    bit_range:
+    - 31
+    - 24
+    description: "Process Identifier"
+  side_effects: null
+- id: RGD4_WORD3
+  address_offset: 1100
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: VLD
+    bit_range:
+    - 0
+    - 0
+    description: "Valid"
+  - name: PIDMASK
+    bit_range:
+    - 23
+    - 16
+    description: "Process Identifier Mask"
+  - name: PID
+    bit_range:
+    - 31
+    - 24
+    description: "Process Identifier"
+  side_effects: null
+- id: RGD5_WORD3
+  address_offset: 1116
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: VLD
+    bit_range:
+    - 0
+    - 0
+    description: "Valid"
+  - name: PIDMASK
+    bit_range:
+    - 23
+    - 16
+    description: "Process Identifier Mask"
+  - name: PID
+    bit_range:
+    - 31
+    - 24
+    description: "Process Identifier"
+  side_effects: null
+- id: RGD6_WORD3
+  address_offset: 1132
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: VLD
+    bit_range:
+    - 0
+    - 0
+    description: "Valid"
+  - name: PIDMASK
+    bit_range:
+    - 23
+    - 16
+    description: "Process Identifier Mask"
+  - name: PID
+    bit_range:
+    - 31
+    - 24
+    description: "Process Identifier"
+  side_effects: null
+- id: RGD7_WORD3
+  address_offset: 1148
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: VLD
+    bit_range:
+    - 0
+    - 0
+    description: "Valid"
+  - name: PIDMASK
+    bit_range:
+    - 23
+    - 16
+    description: "Process Identifier Mask"
+  - name: PID
+    bit_range:
+    - 31
+    - 24
+    description: "Process Identifier"
+  side_effects: null
+- id: RGD8_WORD3
+  address_offset: 1164
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: VLD
+    bit_range:
+    - 0
+    - 0
+    description: "Valid"
+  - name: PIDMASK
+    bit_range:
+    - 23
+    - 16
+    description: "Process Identifier Mask"
+  - name: PID
+    bit_range:
+    - 31
+    - 24
+    description: "Process Identifier"
+  side_effects: null
+- id: RGD9_WORD3
+  address_offset: 1180
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: VLD
+    bit_range:
+    - 0
+    - 0
+    description: "Valid"
+  - name: PIDMASK
+    bit_range:
+    - 23
+    - 16
+    description: "Process Identifier Mask"
+  - name: PID
+    bit_range:
+    - 31
+    - 24
+    description: "Process Identifier"
+  side_effects: null
+- id: RGD10_WORD3
+  address_offset: 1196
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: VLD
+    bit_range:
+    - 0
+    - 0
+    description: "Valid"
+  - name: PIDMASK
+    bit_range:
+    - 23
+    - 16
+    description: "Process Identifier Mask"
+  - name: PID
+    bit_range:
+    - 31
+    - 24
+    description: "Process Identifier"
+  side_effects: null
+- id: RGD11_WORD3
+  address_offset: 1212
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: VLD
+    bit_range:
+    - 0
+    - 0
+    description: "Valid"
+  - name: PIDMASK
+    bit_range:
+    - 23
+    - 16
+    description: "Process Identifier Mask"
+  - name: PID
+    bit_range:
+    - 31
+    - 24
+    description: "Process Identifier"
+  side_effects: null
+- id: RGDAAC0
+  address_offset: 2048
+  size: 32
+  access: READ_WRITE
+  reset_value: 6420447
+  fields:
+  - name: M0UM
+    bit_range:
+    - 2
+    - 0
+    description: "Bus Master 0 User Mode Access Control"
+  - name: M0SM
+    bit_range:
+    - 4
+    - 3
+    description: "Bus Master 0 Supervisor Mode Access Control"
+  - name: M0PE
+    bit_range:
+    - 5
+    - 5
+    description: "Bus Master 0 Process Identifier Enable"
+  - name: M1UM
+    bit_range:
+    - 8
+    - 6
+    description: "Bus Master 1 User Mode Access Control"
+  - name: M1SM
+    bit_range:
+    - 10
+    - 9
+    description: "Bus Master 1 Supervisor Mode Access Control"
+  - name: M1PE
+    bit_range:
+    - 11
+    - 11
+    description: "Bus Master 1 Process Identifier Enable"
+  - name: M2UM
+    bit_range:
+    - 14
+    - 12
+    description: "Bus Master 2 User Mode Access Control"
+  - name: M2SM
+    bit_range:
+    - 16
+    - 15
+    description: "Bus Master 2 Supervisor Mode Access Control"
+  - name: M2PE
+    bit_range:
+    - 17
+    - 17
+    description: "Bus Master 2 Process Identifier Enable"
+  - name: M3UM
+    bit_range:
+    - 20
+    - 18
+    description: "Bus Master 3 User Mode Access Control"
+  - name: M3SM
+    bit_range:
+    - 22
+    - 21
+    description: "Bus Master 3 Supervisor Mode Access Control"
+  - name: M3PE
+    bit_range:
+    - 23
+    - 23
+    description: "Bus Master 3 Process Identifier Enable"
+  - name: M4WE
+    bit_range:
+    - 24
+    - 24
+    description: "Bus Master 4 Write Enable"
+  - name: M4RE
+    bit_range:
+    - 25
+    - 25
+    description: "Bus Master 4 Read Enable"
+  - name: M5WE
+    bit_range:
+    - 26
+    - 26
+    description: "Bus Master 5 Write Enable"
+  - name: M5RE
+    bit_range:
+    - 27
+    - 27
+    description: "Bus Master 5 Read Enable"
+  - name: M6WE
+    bit_range:
+    - 28
+    - 28
+    description: "Bus Master 6 Write Enable"
+  - name: M6RE
+    bit_range:
+    - 29
+    - 29
+    description: "Bus Master 6 Read Enable"
+  - name: M7WE
+    bit_range:
+    - 30
+    - 30
+    description: "Bus Master 7 Write Enable"
+  - name: M7RE
+    bit_range:
+    - 31
+    - 31
+    description: "Bus Master 7 Read Enable"
+  side_effects: null
+- id: RGDAAC1
+  address_offset: 2052
+  size: 32
+  access: READ_WRITE
+  reset_value: 6420447
+  fields:
+  - name: M0UM
+    bit_range:
+    - 2
+    - 0
+    description: "Bus Master 0 User Mode Access Control"
+  - name: M0SM
+    bit_range:
+    - 4
+    - 3
+    description: "Bus Master 0 Supervisor Mode Access Control"
+  - name: M0PE
+    bit_range:
+    - 5
+    - 5
+    description: "Bus Master 0 Process Identifier Enable"
+  - name: M1UM
+    bit_range:
+    - 8
+    - 6
+    description: "Bus Master 1 User Mode Access Control"
+  - name: M1SM
+    bit_range:
+    - 10
+    - 9
+    description: "Bus Master 1 Supervisor Mode Access Control"
+  - name: M1PE
+    bit_range:
+    - 11
+    - 11
+    description: "Bus Master 1 Process Identifier Enable"
+  - name: M2UM
+    bit_range:
+    - 14
+    - 12
+    description: "Bus Master 2 User Mode Access Control"
+  - name: M2SM
+    bit_range:
+    - 16
+    - 15
+    description: "Bus Master 2 Supervisor Mode Access Control"
+  - name: M2PE
+    bit_range:
+    - 17
+    - 17
+    description: "Bus Master 2 Process Identifier Enable"
+  - name: M3UM
+    bit_range:
+    - 20
+    - 18
+    description: "Bus Master 3 User Mode Access Control"
+  - name: M3SM
+    bit_range:
+    - 22
+    - 21
+    description: "Bus Master 3 Supervisor Mode Access Control"
+  - name: M3PE
+    bit_range:
+    - 23
+    - 23
+    description: "Bus Master 3 Process Identifier Enable"
+  - name: M4WE
+    bit_range:
+    - 24
+    - 24
+    description: "Bus Master 4 Write Enable"
+  - name: M4RE
+    bit_range:
+    - 25
+    - 25
+    description: "Bus Master 4 Read Enable"
+  - name: M5WE
+    bit_range:
+    - 26
+    - 26
+    description: "Bus Master 5 Write Enable"
+  - name: M5RE
+    bit_range:
+    - 27
+    - 27
+    description: "Bus Master 5 Read Enable"
+  - name: M6WE
+    bit_range:
+    - 28
+    - 28
+    description: "Bus Master 6 Write Enable"
+  - name: M6RE
+    bit_range:
+    - 29
+    - 29
+    description: "Bus Master 6 Read Enable"
+  - name: M7WE
+    bit_range:
+    - 30
+    - 30
+    description: "Bus Master 7 Write Enable"
+  - name: M7RE
+    bit_range:
+    - 31
+    - 31
+    description: "Bus Master 7 Read Enable"
+  side_effects: null
+- id: RGDAAC2
+  address_offset: 2056
+  size: 32
+  access: READ_WRITE
+  reset_value: 6420447
+  fields:
+  - name: M0UM
+    bit_range:
+    - 2
+    - 0
+    description: "Bus Master 0 User Mode Access Control"
+  - name: M0SM
+    bit_range:
+    - 4
+    - 3
+    description: "Bus Master 0 Supervisor Mode Access Control"
+  - name: M0PE
+    bit_range:
+    - 5
+    - 5
+    description: "Bus Master 0 Process Identifier Enable"
+  - name: M1UM
+    bit_range:
+    - 8
+    - 6
+    description: "Bus Master 1 User Mode Access Control"
+  - name: M1SM
+    bit_range:
+    - 10
+    - 9
+    description: "Bus Master 1 Supervisor Mode Access Control"
+  - name: M1PE
+    bit_range:
+    - 11
+    - 11
+    description: "Bus Master 1 Process Identifier Enable"
+  - name: M2UM
+    bit_range:
+    - 14
+    - 12
+    description: "Bus Master 2 User Mode Access Control"
+  - name: M2SM
+    bit_range:
+    - 16
+    - 15
+    description: "Bus Master 2 Supervisor Mode Access Control"
+  - name: M2PE
+    bit_range:
+    - 17
+    - 17
+    description: "Bus Master 2 Process Identifier Enable"
+  - name: M3UM
+    bit_range:
+    - 20
+    - 18
+    description: "Bus Master 3 User Mode Access Control"
+  - name: M3SM
+    bit_range:
+    - 22
+    - 21
+    description: "Bus Master 3 Supervisor Mode Access Control"
+  - name: M3PE
+    bit_range:
+    - 23
+    - 23
+    description: "Bus Master 3 Process Identifier Enable"
+  - name: M4WE
+    bit_range:
+    - 24
+    - 24
+    description: "Bus Master 4 Write Enable"
+  - name: M4RE
+    bit_range:
+    - 25
+    - 25
+    description: "Bus Master 4 Read Enable"
+  - name: M5WE
+    bit_range:
+    - 26
+    - 26
+    description: "Bus Master 5 Write Enable"
+  - name: M5RE
+    bit_range:
+    - 27
+    - 27
+    description: "Bus Master 5 Read Enable"
+  - name: M6WE
+    bit_range:
+    - 28
+    - 28
+    description: "Bus Master 6 Write Enable"
+  - name: M6RE
+    bit_range:
+    - 29
+    - 29
+    description: "Bus Master 6 Read Enable"
+  - name: M7WE
+    bit_range:
+    - 30
+    - 30
+    description: "Bus Master 7 Write Enable"
+  - name: M7RE
+    bit_range:
+    - 31
+    - 31
+    description: "Bus Master 7 Read Enable"
+  side_effects: null
+- id: RGDAAC3
+  address_offset: 2060
+  size: 32
+  access: READ_WRITE
+  reset_value: 6420447
+  fields:
+  - name: M0UM
+    bit_range:
+    - 2
+    - 0
+    description: "Bus Master 0 User Mode Access Control"
+  - name: M0SM
+    bit_range:
+    - 4
+    - 3
+    description: "Bus Master 0 Supervisor Mode Access Control"
+  - name: M0PE
+    bit_range:
+    - 5
+    - 5
+    description: "Bus Master 0 Process Identifier Enable"
+  - name: M1UM
+    bit_range:
+    - 8
+    - 6
+    description: "Bus Master 1 User Mode Access Control"
+  - name: M1SM
+    bit_range:
+    - 10
+    - 9
+    description: "Bus Master 1 Supervisor Mode Access Control"
+  - name: M1PE
+    bit_range:
+    - 11
+    - 11
+    description: "Bus Master 1 Process Identifier Enable"
+  - name: M2UM
+    bit_range:
+    - 14
+    - 12
+    description: "Bus Master 2 User Mode Access Control"
+  - name: M2SM
+    bit_range:
+    - 16
+    - 15
+    description: "Bus Master 2 Supervisor Mode Access Control"
+  - name: M2PE
+    bit_range:
+    - 17
+    - 17
+    description: "Bus Master 2 Process Identifier Enable"
+  - name: M3UM
+    bit_range:
+    - 20
+    - 18
+    description: "Bus Master 3 User Mode Access Control"
+  - name: M3SM
+    bit_range:
+    - 22
+    - 21
+    description: "Bus Master 3 Supervisor Mode Access Control"
+  - name: M3PE
+    bit_range:
+    - 23
+    - 23
+    description: "Bus Master 3 Process Identifier Enable"
+  - name: M4WE
+    bit_range:
+    - 24
+    - 24
+    description: "Bus Master 4 Write Enable"
+  - name: M4RE
+    bit_range:
+    - 25
+    - 25
+    description: "Bus Master 4 Read Enable"
+  - name: M5WE
+    bit_range:
+    - 26
+    - 26
+    description: "Bus Master 5 Write Enable"
+  - name: M5RE
+    bit_range:
+    - 27
+    - 27
+    description: "Bus Master 5 Read Enable"
+  - name: M6WE
+    bit_range:
+    - 28
+    - 28
+    description: "Bus Master 6 Write Enable"
+  - name: M6RE
+    bit_range:
+    - 29
+    - 29
+    description: "Bus Master 6 Read Enable"
+  - name: M7WE
+    bit_range:
+    - 30
+    - 30
+    description: "Bus Master 7 Write Enable"
+  - name: M7RE
+    bit_range:
+    - 31
+    - 31
+    description: "Bus Master 7 Read Enable"
+  side_effects: null
+- id: RGDAAC4
+  address_offset: 2064
+  size: 32
+  access: READ_WRITE
+  reset_value: 6420447
+  fields:
+  - name: M0UM
+    bit_range:
+    - 2
+    - 0
+    description: "Bus Master 0 User Mode Access Control"
+  - name: M0SM
+    bit_range:
+    - 4
+    - 3
+    description: "Bus Master 0 Supervisor Mode Access Control"
+  - name: M0PE
+    bit_range:
+    - 5
+    - 5
+    description: "Bus Master 0 Process Identifier Enable"
+  - name: M1UM
+    bit_range:
+    - 8
+    - 6
+    description: "Bus Master 1 User Mode Access Control"
+  - name: M1SM
+    bit_range:
+    - 10
+    - 9
+    description: "Bus Master 1 Supervisor Mode Access Control"
+  - name: M1PE
+    bit_range:
+    - 11
+    - 11
+    description: "Bus Master 1 Process Identifier Enable"
+  - name: M2UM
+    bit_range:
+    - 14
+    - 12
+    description: "Bus Master 2 User Mode Access Control"
+  - name: M2SM
+    bit_range:
+    - 16
+    - 15
+    description: "Bus Master 2 Supervisor Mode Access Control"
+  - name: M2PE
+    bit_range:
+    - 17
+    - 17
+    description: "Bus Master 2 Process Identifier Enable"
+  - name: M3UM
+    bit_range:
+    - 20
+    - 18
+    description: "Bus Master 3 User Mode Access Control"
+  - name: M3SM
+    bit_range:
+    - 22
+    - 21
+    description: "Bus Master 3 Supervisor Mode Access Control"
+  - name: M3PE
+    bit_range:
+    - 23
+    - 23
+    description: "Bus Master 3 Process Identifier Enable"
+  - name: M4WE
+    bit_range:
+    - 24
+    - 24
+    description: "Bus Master 4 Write Enable"
+  - name: M4RE
+    bit_range:
+    - 25
+    - 25
+    description: "Bus Master 4 Read Enable"
+  - name: M5WE
+    bit_range:
+    - 26
+    - 26
+    description: "Bus Master 5 Write Enable"
+  - name: M5RE
+    bit_range:
+    - 27
+    - 27
+    description: "Bus Master 5 Read Enable"
+  - name: M6WE
+    bit_range:
+    - 28
+    - 28
+    description: "Bus Master 6 Write Enable"
+  - name: M6RE
+    bit_range:
+    - 29
+    - 29
+    description: "Bus Master 6 Read Enable"
+  - name: M7WE
+    bit_range:
+    - 30
+    - 30
+    description: "Bus Master 7 Write Enable"
+  - name: M7RE
+    bit_range:
+    - 31
+    - 31
+    description: "Bus Master 7 Read Enable"
+  side_effects: null
+- id: RGDAAC5
+  address_offset: 2068
+  size: 32
+  access: READ_WRITE
+  reset_value: 6420447
+  fields:
+  - name: M0UM
+    bit_range:
+    - 2
+    - 0
+    description: "Bus Master 0 User Mode Access Control"
+  - name: M0SM
+    bit_range:
+    - 4
+    - 3
+    description: "Bus Master 0 Supervisor Mode Access Control"
+  - name: M0PE
+    bit_range:
+    - 5
+    - 5
+    description: "Bus Master 0 Process Identifier Enable"
+  - name: M1UM
+    bit_range:
+    - 8
+    - 6
+    description: "Bus Master 1 User Mode Access Control"
+  - name: M1SM
+    bit_range:
+    - 10
+    - 9
+    description: "Bus Master 1 Supervisor Mode Access Control"
+  - name: M1PE
+    bit_range:
+    - 11
+    - 11
+    description: "Bus Master 1 Process Identifier Enable"
+  - name: M2UM
+    bit_range:
+    - 14
+    - 12
+    description: "Bus Master 2 User Mode Access Control"
+  - name: M2SM
+    bit_range:
+    - 16
+    - 15
+    description: "Bus Master 2 Supervisor Mode Access Control"
+  - name: M2PE
+    bit_range:
+    - 17
+    - 17
+    description: "Bus Master 2 Process Identifier Enable"
+  - name: M3UM
+    bit_range:
+    - 20
+    - 18
+    description: "Bus Master 3 User Mode Access Control"
+  - name: M3SM
+    bit_range:
+    - 22
+    - 21
+    description: "Bus Master 3 Supervisor Mode Access Control"
+  - name: M3PE
+    bit_range:
+    - 23
+    - 23
+    description: "Bus Master 3 Process Identifier Enable"
+  - name: M4WE
+    bit_range:
+    - 24
+    - 24
+    description: "Bus Master 4 Write Enable"
+  - name: M4RE
+    bit_range:
+    - 25
+    - 25
+    description: "Bus Master 4 Read Enable"
+  - name: M5WE
+    bit_range:
+    - 26
+    - 26
+    description: "Bus Master 5 Write Enable"
+  - name: M5RE
+    bit_range:
+    - 27
+    - 27
+    description: "Bus Master 5 Read Enable"
+  - name: M6WE
+    bit_range:
+    - 28
+    - 28
+    description: "Bus Master 6 Write Enable"
+  - name: M6RE
+    bit_range:
+    - 29
+    - 29
+    description: "Bus Master 6 Read Enable"
+  - name: M7WE
+    bit_range:
+    - 30
+    - 30
+    description: "Bus Master 7 Write Enable"
+  - name: M7RE
+    bit_range:
+    - 31
+    - 31
+    description: "Bus Master 7 Read Enable"
+  side_effects: null
+- id: RGDAAC6
+  address_offset: 2072
+  size: 32
+  access: READ_WRITE
+  reset_value: 6420447
+  fields:
+  - name: M0UM
+    bit_range:
+    - 2
+    - 0
+    description: "Bus Master 0 User Mode Access Control"
+  - name: M0SM
+    bit_range:
+    - 4
+    - 3
+    description: "Bus Master 0 Supervisor Mode Access Control"
+  - name: M0PE
+    bit_range:
+    - 5
+    - 5
+    description: "Bus Master 0 Process Identifier Enable"
+  - name: M1UM
+    bit_range:
+    - 8
+    - 6
+    description: "Bus Master 1 User Mode Access Control"
+  - name: M1SM
+    bit_range:
+    - 10
+    - 9
+    description: "Bus Master 1 Supervisor Mode Access Control"
+  - name: M1PE
+    bit_range:
+    - 11
+    - 11
+    description: "Bus Master 1 Process Identifier Enable"
+  - name: M2UM
+    bit_range:
+    - 14
+    - 12
+    description: "Bus Master 2 User Mode Access Control"
+  - name: M2SM
+    bit_range:
+    - 16
+    - 15
+    description: "Bus Master 2 Supervisor Mode Access Control"
+  - name: M2PE
+    bit_range:
+    - 17
+    - 17
+    description: "Bus Master 2 Process Identifier Enable"
+  - name: M3UM
+    bit_range:
+    - 20
+    - 18
+    description: "Bus Master 3 User Mode Access Control"
+  - name: M3SM
+    bit_range:
+    - 22
+    - 21
+    description: "Bus Master 3 Supervisor Mode Access Control"
+  - name: M3PE
+    bit_range:
+    - 23
+    - 23
+    description: "Bus Master 3 Process Identifier Enable"
+  - name: M4WE
+    bit_range:
+    - 24
+    - 24
+    description: "Bus Master 4 Write Enable"
+  - name: M4RE
+    bit_range:
+    - 25
+    - 25
+    description: "Bus Master 4 Read Enable"
+  - name: M5WE
+    bit_range:
+    - 26
+    - 26
+    description: "Bus Master 5 Write Enable"
+  - name: M5RE
+    bit_range:
+    - 27
+    - 27
+    description: "Bus Master 5 Read Enable"
+  - name: M6WE
+    bit_range:
+    - 28
+    - 28
+    description: "Bus Master 6 Write Enable"
+  - name: M6RE
+    bit_range:
+    - 29
+    - 29
+    description: "Bus Master 6 Read Enable"
+  - name: M7WE
+    bit_range:
+    - 30
+    - 30
+    description: "Bus Master 7 Write Enable"
+  - name: M7RE
+    bit_range:
+    - 31
+    - 31
+    description: "Bus Master 7 Read Enable"
+  side_effects: null
+- id: RGDAAC7
+  address_offset: 2076
+  size: 32
+  access: READ_WRITE
+  reset_value: 6420447
+  fields:
+  - name: M0UM
+    bit_range:
+    - 2
+    - 0
+    description: "Bus Master 0 User Mode Access Control"
+  - name: M0SM
+    bit_range:
+    - 4
+    - 3
+    description: "Bus Master 0 Supervisor Mode Access Control"
+  - name: M0PE
+    bit_range:
+    - 5
+    - 5
+    description: "Bus Master 0 Process Identifier Enable"
+  - name: M1UM
+    bit_range:
+    - 8
+    - 6
+    description: "Bus Master 1 User Mode Access Control"
+  - name: M1SM
+    bit_range:
+    - 10
+    - 9
+    description: "Bus Master 1 Supervisor Mode Access Control"
+  - name: M1PE
+    bit_range:
+    - 11
+    - 11
+    description: "Bus Master 1 Process Identifier Enable"
+  - name: M2UM
+    bit_range:
+    - 14
+    - 12
+    description: "Bus Master 2 User Mode Access Control"
+  - name: M2SM
+    bit_range:
+    - 16
+    - 15
+    description: "Bus Master 2 Supervisor Mode Access Control"
+  - name: M2PE
+    bit_range:
+    - 17
+    - 17
+    description: "Bus Master 2 Process Identifier Enable"
+  - name: M3UM
+    bit_range:
+    - 20
+    - 18
+    description: "Bus Master 3 User Mode Access Control"
+  - name: M3SM
+    bit_range:
+    - 22
+    - 21
+    description: "Bus Master 3 Supervisor Mode Access Control"
+  - name: M3PE
+    bit_range:
+    - 23
+    - 23
+    description: "Bus Master 3 Process Identifier Enable"
+  - name: M4WE
+    bit_range:
+    - 24
+    - 24
+    description: "Bus Master 4 Write Enable"
+  - name: M4RE
+    bit_range:
+    - 25
+    - 25
+    description: "Bus Master 4 Read Enable"
+  - name: M5WE
+    bit_range:
+    - 26
+    - 26
+    description: "Bus Master 5 Write Enable"
+  - name: M5RE
+    bit_range:
+    - 27
+    - 27
+    description: "Bus Master 5 Read Enable"
+  - name: M6WE
+    bit_range:
+    - 28
+    - 28
+    description: "Bus Master 6 Write Enable"
+  - name: M6RE
+    bit_range:
+    - 29
+    - 29
+    description: "Bus Master 6 Read Enable"
+  - name: M7WE
+    bit_range:
+    - 30
+    - 30
+    description: "Bus Master 7 Write Enable"
+  - name: M7RE
+    bit_range:
+    - 31
+    - 31
+    description: "Bus Master 7 Read Enable"
+  side_effects: null
+- id: RGDAAC8
+  address_offset: 2080
+  size: 32
+  access: READ_WRITE
+  reset_value: 6420447
+  fields:
+  - name: M0UM
+    bit_range:
+    - 2
+    - 0
+    description: "Bus Master 0 User Mode Access Control"
+  - name: M0SM
+    bit_range:
+    - 4
+    - 3
+    description: "Bus Master 0 Supervisor Mode Access Control"
+  - name: M0PE
+    bit_range:
+    - 5
+    - 5
+    description: "Bus Master 0 Process Identifier Enable"
+  - name: M1UM
+    bit_range:
+    - 8
+    - 6
+    description: "Bus Master 1 User Mode Access Control"
+  - name: M1SM
+    bit_range:
+    - 10
+    - 9
+    description: "Bus Master 1 Supervisor Mode Access Control"
+  - name: M1PE
+    bit_range:
+    - 11
+    - 11
+    description: "Bus Master 1 Process Identifier Enable"
+  - name: M2UM
+    bit_range:
+    - 14
+    - 12
+    description: "Bus Master 2 User Mode Access Control"
+  - name: M2SM
+    bit_range:
+    - 16
+    - 15
+    description: "Bus Master 2 Supervisor Mode Access Control"
+  - name: M2PE
+    bit_range:
+    - 17
+    - 17
+    description: "Bus Master 2 Process Identifier Enable"
+  - name: M3UM
+    bit_range:
+    - 20
+    - 18
+    description: "Bus Master 3 User Mode Access Control"
+  - name: M3SM
+    bit_range:
+    - 22
+    - 21
+    description: "Bus Master 3 Supervisor Mode Access Control"
+  - name: M3PE
+    bit_range:
+    - 23
+    - 23
+    description: "Bus Master 3 Process Identifier Enable"
+  - name: M4WE
+    bit_range:
+    - 24
+    - 24
+    description: "Bus Master 4 Write Enable"
+  - name: M4RE
+    bit_range:
+    - 25
+    - 25
+    description: "Bus Master 4 Read Enable"
+  - name: M5WE
+    bit_range:
+    - 26
+    - 26
+    description: "Bus Master 5 Write Enable"
+  - name: M5RE
+    bit_range:
+    - 27
+    - 27
+    description: "Bus Master 5 Read Enable"
+  - name: M6WE
+    bit_range:
+    - 28
+    - 28
+    description: "Bus Master 6 Write Enable"
+  - name: M6RE
+    bit_range:
+    - 29
+    - 29
+    description: "Bus Master 6 Read Enable"
+  - name: M7WE
+    bit_range:
+    - 30
+    - 30
+    description: "Bus Master 7 Write Enable"
+  - name: M7RE
+    bit_range:
+    - 31
+    - 31
+    description: "Bus Master 7 Read Enable"
+  side_effects: null
+- id: RGDAAC9
+  address_offset: 2084
+  size: 32
+  access: READ_WRITE
+  reset_value: 6420447
+  fields:
+  - name: M0UM
+    bit_range:
+    - 2
+    - 0
+    description: "Bus Master 0 User Mode Access Control"
+  - name: M0SM
+    bit_range:
+    - 4
+    - 3
+    description: "Bus Master 0 Supervisor Mode Access Control"
+  - name: M0PE
+    bit_range:
+    - 5
+    - 5
+    description: "Bus Master 0 Process Identifier Enable"
+  - name: M1UM
+    bit_range:
+    - 8
+    - 6
+    description: "Bus Master 1 User Mode Access Control"
+  - name: M1SM
+    bit_range:
+    - 10
+    - 9
+    description: "Bus Master 1 Supervisor Mode Access Control"
+  - name: M1PE
+    bit_range:
+    - 11
+    - 11
+    description: "Bus Master 1 Process Identifier Enable"
+  - name: M2UM
+    bit_range:
+    - 14
+    - 12
+    description: "Bus Master 2 User Mode Access Control"
+  - name: M2SM
+    bit_range:
+    - 16
+    - 15
+    description: "Bus Master 2 Supervisor Mode Access Control"
+  - name: M2PE
+    bit_range:
+    - 17
+    - 17
+    description: "Bus Master 2 Process Identifier Enable"
+  - name: M3UM
+    bit_range:
+    - 20
+    - 18
+    description: "Bus Master 3 User Mode Access Control"
+  - name: M3SM
+    bit_range:
+    - 22
+    - 21
+    description: "Bus Master 3 Supervisor Mode Access Control"
+  - name: M3PE
+    bit_range:
+    - 23
+    - 23
+    description: "Bus Master 3 Process Identifier Enable"
+  - name: M4WE
+    bit_range:
+    - 24
+    - 24
+    description: "Bus Master 4 Write Enable"
+  - name: M4RE
+    bit_range:
+    - 25
+    - 25
+    description: "Bus Master 4 Read Enable"
+  - name: M5WE
+    bit_range:
+    - 26
+    - 26
+    description: "Bus Master 5 Write Enable"
+  - name: M5RE
+    bit_range:
+    - 27
+    - 27
+    description: "Bus Master 5 Read Enable"
+  - name: M6WE
+    bit_range:
+    - 28
+    - 28
+    description: "Bus Master 6 Write Enable"
+  - name: M6RE
+    bit_range:
+    - 29
+    - 29
+    description: "Bus Master 6 Read Enable"
+  - name: M7WE
+    bit_range:
+    - 30
+    - 30
+    description: "Bus Master 7 Write Enable"
+  - name: M7RE
+    bit_range:
+    - 31
+    - 31
+    description: "Bus Master 7 Read Enable"
+  side_effects: null
+- id: RGDAAC10
+  address_offset: 2088
+  size: 32
+  access: READ_WRITE
+  reset_value: 6420447
+  fields:
+  - name: M0UM
+    bit_range:
+    - 2
+    - 0
+    description: "Bus Master 0 User Mode Access Control"
+  - name: M0SM
+    bit_range:
+    - 4
+    - 3
+    description: "Bus Master 0 Supervisor Mode Access Control"
+  - name: M0PE
+    bit_range:
+    - 5
+    - 5
+    description: "Bus Master 0 Process Identifier Enable"
+  - name: M1UM
+    bit_range:
+    - 8
+    - 6
+    description: "Bus Master 1 User Mode Access Control"
+  - name: M1SM
+    bit_range:
+    - 10
+    - 9
+    description: "Bus Master 1 Supervisor Mode Access Control"
+  - name: M1PE
+    bit_range:
+    - 11
+    - 11
+    description: "Bus Master 1 Process Identifier Enable"
+  - name: M2UM
+    bit_range:
+    - 14
+    - 12
+    description: "Bus Master 2 User Mode Access Control"
+  - name: M2SM
+    bit_range:
+    - 16
+    - 15
+    description: "Bus Master 2 Supervisor Mode Access Control"
+  - name: M2PE
+    bit_range:
+    - 17
+    - 17
+    description: "Bus Master 2 Process Identifier Enable"
+  - name: M3UM
+    bit_range:
+    - 20
+    - 18
+    description: "Bus Master 3 User Mode Access Control"
+  - name: M3SM
+    bit_range:
+    - 22
+    - 21
+    description: "Bus Master 3 Supervisor Mode Access Control"
+  - name: M3PE
+    bit_range:
+    - 23
+    - 23
+    description: "Bus Master 3 Process Identifier Enable"
+  - name: M4WE
+    bit_range:
+    - 24
+    - 24
+    description: "Bus Master 4 Write Enable"
+  - name: M4RE
+    bit_range:
+    - 25
+    - 25
+    description: "Bus Master 4 Read Enable"
+  - name: M5WE
+    bit_range:
+    - 26
+    - 26
+    description: "Bus Master 5 Write Enable"
+  - name: M5RE
+    bit_range:
+    - 27
+    - 27
+    description: "Bus Master 5 Read Enable"
+  - name: M6WE
+    bit_range:
+    - 28
+    - 28
+    description: "Bus Master 6 Write Enable"
+  - name: M6RE
+    bit_range:
+    - 29
+    - 29
+    description: "Bus Master 6 Read Enable"
+  - name: M7WE
+    bit_range:
+    - 30
+    - 30
+    description: "Bus Master 7 Write Enable"
+  - name: M7RE
+    bit_range:
+    - 31
+    - 31
+    description: "Bus Master 7 Read Enable"
+  side_effects: null
+- id: RGDAAC11
+  address_offset: 2092
+  size: 32
+  access: READ_WRITE
+  reset_value: 6420447
+  fields:
+  - name: M0UM
+    bit_range:
+    - 2
+    - 0
+    description: "Bus Master 0 User Mode Access Control"
+  - name: M0SM
+    bit_range:
+    - 4
+    - 3
+    description: "Bus Master 0 Supervisor Mode Access Control"
+  - name: M0PE
+    bit_range:
+    - 5
+    - 5
+    description: "Bus Master 0 Process Identifier Enable"
+  - name: M1UM
+    bit_range:
+    - 8
+    - 6
+    description: "Bus Master 1 User Mode Access Control"
+  - name: M1SM
+    bit_range:
+    - 10
+    - 9
+    description: "Bus Master 1 Supervisor Mode Access Control"
+  - name: M1PE
+    bit_range:
+    - 11
+    - 11
+    description: "Bus Master 1 Process Identifier Enable"
+  - name: M2UM
+    bit_range:
+    - 14
+    - 12
+    description: "Bus Master 2 User Mode Access Control"
+  - name: M2SM
+    bit_range:
+    - 16
+    - 15
+    description: "Bus Master 2 Supervisor Mode Access Control"
+  - name: M2PE
+    bit_range:
+    - 17
+    - 17
+    description: "Bus Master 2 Process Identifier Enable"
+  - name: M3UM
+    bit_range:
+    - 20
+    - 18
+    description: "Bus Master 3 User Mode Access Control"
+  - name: M3SM
+    bit_range:
+    - 22
+    - 21
+    description: "Bus Master 3 Supervisor Mode Access Control"
+  - name: M3PE
+    bit_range:
+    - 23
+    - 23
+    description: "Bus Master 3 Process Identifier Enable"
+  - name: M4WE
+    bit_range:
+    - 24
+    - 24
+    description: "Bus Master 4 Write Enable"
+  - name: M4RE
+    bit_range:
+    - 25
+    - 25
+    description: "Bus Master 4 Read Enable"
+  - name: M5WE
+    bit_range:
+    - 26
+    - 26
+    description: "Bus Master 5 Write Enable"
+  - name: M5RE
+    bit_range:
+    - 27
+    - 27
+    description: "Bus Master 5 Read Enable"
+  - name: M6WE
+    bit_range:
+    - 28
+    - 28
+    description: "Bus Master 6 Write Enable"
+  - name: M6RE
+    bit_range:
+    - 29
+    - 29
+    description: "Bus Master 6 Read Enable"
+  - name: M7WE
+    bit_range:
+    - 30
+    - 30
+    description: "Bus Master 7 Write Enable"
+  - name: M7RE
+    bit_range:
+    - 31
+    - 31
+    description: "Bus Master 7 Read Enable"
+  side_effects: null

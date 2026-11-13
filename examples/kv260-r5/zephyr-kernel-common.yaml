@@ -1,0 +1,20 @@
+# LabWired - AMD Kria KV260 RPU stock Zephyr tests/kernel/common
+#
+# Unmodified upstream Zephyr v4.1.0 `tests/kernel/common` (ztest: atomics,
+# bitfields, byteorder, clock, irq_offload, printk, multilib, boot delay,
+# userspace syscalls through the PMSAv7 MPU). Rebuild:
+# crates/firmware-kv260-r5-zephyr/build.sh
+# Needs a native CLI: --features qemu-arm-system,event-scheduler.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/kv260-r5-zephyr-kernel-common.elf"
+  system: "./system.yaml"
+limits:
+  # ~395 M instructions to PROJECT EXECUTION SUCCESSFUL (busy-wait boot
+  # delay and timing tests); the suite ends in its ztest halt.
+  max_steps: 800000000
+  max_cycles: 10000000000
+  wall_time_ms: 900000
+  stop_when_assertions_pass: true
+assertions:
+  - uart_contains: "PROJECT EXECUTION SUCCESSFUL"

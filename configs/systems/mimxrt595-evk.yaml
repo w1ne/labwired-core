@@ -1,0 +1,53 @@
+# LabWired - NXP MIMXRT595-EVK system manifest
+#
+# Board facts (NXP MIMXRT595-EVK, MIMXRT595SFFOC; MCUXpresso SDK
+# boards/evkmimxrt595/board.h):
+#   RGB LED: red P0_14, green P1_0, blue P3_17, on when the pin is high
+#   (LOGIC_LED_ON = 1).
+#   SW1 on P0_25, SW2 on P0_10. Taken as active-low (pressed = 0 against a
+#   board pull-up), as on the other NXP EVKs; board.h names the pins but
+#   not the polarity, and the EVK schematic was not checked.
+#   Debug console: FLEXCOMM0 (USART0), TXD P0_1 / RXD P0_2, to the on-board
+#   LPC-Link2 VCOM.
+#
+# The simulator captures the FLEXCOMM0 stream; the LPC-Link2 bridge, the
+# Octal-SPI flash/PSRAM, the codec, the sensors and the display connectors
+# are not modelled.
+
+name: "mimxrt595-evk"
+chip: "../chips/mimxrt595s.yaml"
+# The 48 MHz FRO DIV main clock the smoke selects (see the chip file).
+cpu_hz: 48_000_000
+debug_uart: "flexcomm0"
+external_devices: []
+board_io:
+  - id: "led_red"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 14
+    signal: "output"
+    active_high: true
+  - id: "led_green"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 32
+    signal: "output"
+    active_high: true
+  - id: "led_blue"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 113
+    signal: "output"
+    active_high: true
+  - id: "sw1"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 25
+    signal: "input"
+    active_high: false
+  - id: "sw2"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 10
+    signal: "input"
+    active_high: false

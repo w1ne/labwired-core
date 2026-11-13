@@ -1,0 +1,10 @@
+# NUCLEO-F103RB USART2 onboarding smoke.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-nucleo-f103rb-smoke"
+  system: "./system.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "OK"
+  - expected_stop_reason: max_steps

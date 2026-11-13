@@ -87,14 +87,14 @@ fn validate_chip(path: &PathBuf) -> anyhow::Result<()> {
             // IRAM).  `configure_xtensa` defaults to S3 wiring, which
             // leaves the ESP32 addresses unmapped and trips
             // MemoryViolation in the smoke validator.  Dispatch on the
-            // chip name so each yaml is validated against its own
-            // builder.
-            if chip.name == "esp32" {
-                let cpu = system::xtensa::configure_xtensa_esp32(&mut bus);
+            // canonical family selector so the DevKitC profiles use the
+            // classic map and S3 variants use the S3 map, just like the CLI.
+            if chip.is_esp32s3() {
+                let cpu = system::xtensa::configure_xtensa(&mut bus);
                 let mut machine = Machine::new(cpu, bus);
                 validate_registers(&mut machine, &chip)?;
             } else {
-                let cpu = system::xtensa::configure_xtensa(&mut bus);
+                let cpu = system::xtensa::configure_xtensa_esp32(&mut bus);
                 let mut machine = Machine::new(cpu, bus);
                 validate_registers(&mut machine, &chip)?;
             }
@@ -112,6 +112,41 @@ fn validate_chip(path: &PathBuf) -> anyhow::Result<()> {
             // (peripherals: []). Nothing to validate beyond load.
             println!(
                 "Skipping PIC24 register compliance for {:?} (no SVD map)",
+                path
+            );
+        }
+        Arch::Pic18 => {
+            // M0 PIC18 has no SVD-backed peripheral list yet.
+            println!(
+                "Skipping PIC18 register compliance for {:?} (no SVD map)",
+                path
+            );
+        }
+        Arch::Pic16 => {
+            // PIC16 SFRs are CPU-internal; there is no SVD-backed list.
+            println!(
+                "Skipping PIC16 register compliance for {:?} (no SVD map)",
+                path
+            );
+        }
+        Arch::Rx => {
+            // No SVD-backed register list for the RX parts yet.
+            println!(
+                "Skipping RX register compliance for {:?} (no SVD map)",
+                path
+            );
+        }
+        Arch::Mips => {
+            // No SVD-backed register list for the PIC32MZ parts yet.
+            println!(
+                "Skipping MIPS register compliance for {:?} (no SVD map)",
+                path
+            );
+        }
+        Arch::Aarch64 => {
+            // No SVD-backed register list for the AArch64 parts yet.
+            println!(
+                "Skipping AArch64 register compliance for {:?} (no SVD map)",
                 path
             );
         }

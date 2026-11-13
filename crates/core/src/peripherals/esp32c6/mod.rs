@@ -32,8 +32,11 @@
 //! the clock tree behind the dividers, peripheral-coupled DMA, peripheral-
 //! sourced matrix interrupts, and every radio.
 
+pub mod extmem;
 pub mod factory;
 pub mod gdma;
+pub mod i2c_ana_mst;
 pub mod lp_timer;
+pub mod modem_lpcon;
 pub mod pcr;
 pub mod uart;

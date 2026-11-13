@@ -35,13 +35,16 @@ pub(crate) mod external_devices;
 mod faults;
 mod from_config;
 pub use from_config::merged_peripheral_configs;
+mod ina219_circuit;
 pub mod interrupt_fabric;
 pub mod known_stubs;
 mod memory_policy;
 mod mmio_activity;
 mod mmio_words;
 mod motors;
+pub(crate) use motors::classify_logic_rail;
 mod observed_device;
+pub mod open_drain;
 pub(crate) mod part_pack;
 mod pms;
 mod policy;
@@ -52,6 +55,7 @@ mod samd51_storage;
 pub mod sim_inputs;
 mod tick;
 mod timed_can;
+mod timer_kernel_clock;
 pub(crate) use tick::reconcile_nvic_level;
 
 pub use can_devices::*;
@@ -59,13 +63,14 @@ pub use observed_device::ObservedDevice;
 pub use resident_device::{BusResidentDevice, DevicePinPad, DevicePins};
 
 pub use bus_trace::{new_log, BusPayload, BusTraceEvent, BusTraceLog, I2cSym};
+pub(crate) use ina219_circuit::CircuitIna219Lookup;
 pub use interrupt_fabric::{
     Esp32c3Fabric, Esp32c3IntcCache, Esp32s3Fabric, Esp32s3IrqAudit, Esp32s3IrqDivergence,
     InterruptFabric,
 };
 pub use memory_policy::{CpuWritePolicy, MemoryPolicyReport, RegionPolicyStats, RegionViolation};
 pub(crate) use motors::CircuitMotorLookup;
-pub use motors::MotorSnapshot;
+pub use motors::{MotorCoupling, MotorSnapshot, STEPPER_SNAPSHOT_KIND};
 
 impl SystemBus {
     /// Cycles until the earliest event an MMIO write armed in the running CPU
@@ -366,8 +371,19 @@ impl BatchStop {
     }
 }
 
+/// One mirror window `[start, end)` whose bytes are the bytes at `target..`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MemAlias {
+    pub start: u64,
+    pub end: u64,
+    pub target: u64,
+}
+
 pub struct SystemBus {
-    pub(crate) supply_domains: crate::peripherals::components::supply_domain::SupplyDomains,
+    /// External supply routing is used at wiring and co-simulation boundaries,
+    /// not by the CPU step path. Keep its growable maps outside the hot bus
+    /// object so adding another cold routing map does not enlarge that object.
+    pub(crate) supply_domains: Box<crate::peripherals::components::supply_domain::SupplyDomains>,
     pub flash: LinearMemory,
     /// Violation record + counts + mirrored PC/cycle for the policy gate.
     pub(crate) memory_policy: crate::bus::memory_policy::MemoryPolicyState,
@@ -457,6 +473,15 @@ pub struct SystemBus {
     /// into that memory would land in flash instead. See
     /// `ChipDescriptor::flash_boot_alias`.
     pub flash_boot_alias: bool,
+    /// RP2350 double-precision coprocessor state (p4/p5), present only when
+    /// the chip descriptor lists `coprocessors: [rp2350_dcp]`. Held here, not
+    /// in `CortexM`, so a core without one carries nothing extra on its step
+    /// path; the core reaches it through `Bus::rp2350_dcp_mut` only from the
+    /// cold coprocessor-instruction path.
+    pub rp2350_dcp: Option<Box<crate::cpu::cortex_m::rp2350_dcp::Rp2350Dcp>>,
+    /// The chip lists `coprocessors: [rp2350_gpioc]`: p0 instructions run as
+    /// SIO GPIO accesses (see `cpu::cortex_m::rp2350_gpioc`).
+    pub rp2350_gpioc: bool,
     /// Which family's atomic register aliases this chip implements (see
     /// `ChipDescriptor::atomic_register_aliases`). When enabled, word accesses
     /// in the peripheral window whose address has bits [13:12] set decode as a
@@ -469,6 +494,10 @@ pub struct SystemBus {
     /// `addr + offset`; the translated address is what both the range lookup
     /// and the `addr - base` offset math use. See [`Self::resolve_ns_alias`].
     pub ns_alias_offset: Option<u64>,
+    /// Same-backing address mirrors from `NamedMemoryRange::alias_of` (empty on
+    /// every chip that declares none). Every accessor first rewrites an
+    /// address inside a mirror onto its target. See [`Self::resolve_mem_alias`].
+    pub mem_aliases: Vec<MemAlias>,
     /// Plan 3: per-core bitmask of pending cpu IRQ slots (32 bits each;
     /// index 0 = PRO_CPU, 1 = APP_CPU). Aggregated by
     /// `tick_peripherals_with_costs` from peripheral `explicit_irqs` source
@@ -661,6 +690,11 @@ pub struct SystemBus {
     /// Classification is **peripheral-owned** (CPU-agnostic bus); see
     /// [`Peripheral::mmio_access_class`].
     freerunning_timer_poll_mmio: std::cell::Cell<u32>,
+    /// Consecutive timer-only MMIO count across hosted Cortex-M windows.
+    /// A same-batch pair still coalesces immediately; split reads wait until
+    /// four timer-only accesses (more than one `time_us_64`) so a one-shot
+    /// timestamp cannot skip. See [`Self::take_timer_poll_coalesce_eligible`].
+    timer_poll_carry: std::cell::Cell<u32>,
     /// Batch-local count of [`MmioAccessClass::SideEffecting`] accesses.
     /// Any non-zero value disqualifies timer-poll coalesce for that batch.
     side_effecting_mmio: std::cell::Cell<u32>,
@@ -731,6 +765,8 @@ pub struct SystemBus {
     ///
     /// [`service_device_pin_drives`]: Self::service_device_pin_drives
     pub(crate) device_pin_pads: Vec<DevicePinPad>,
+    /// Explicitly opted-in pulled-up device-output nets.
+    pub(crate) device_open_drain_nets: open_drain::OpenDrainNets,
     /// Off-chip models the bus holds ONLY so something can read them back — the
     /// WS2812 strip, the hobby servo, the STEP/DIR and unipolar steppers, the
     /// H-bridge channel, the parallel ILI9341 panel. Each is driven by a GPIO
@@ -742,8 +778,15 @@ pub struct SystemBus {
     pub observed: Vec<std::sync::Arc<dyn ObservedDevice>>,
     /// Deterministic typed motor plants, resolved from the system manifest.
     motors: Vec<motors::MotorRuntime>,
+    /// Live native numeric observations. Allocated only when a producer exists;
+    /// separate from both historical motor series and the co-sim trace cursor.
+    live_numeric: Option<Box<crate::live_numeric::LiveNumericCapture>>,
     /// Last simulator-cycle boundary applied to `motors`.
     motor_cycle_anchor: u64,
+    /// Circuit-coupled INA219 breakouts: shunt current / bus voltage samples
+    /// from the analog island, averaged over the conversion window before
+    /// latching into SimInput. Empty when no `board.ina219.*` route binds.
+    ina219_senses: Vec<ina219_circuit::Ina219CircuitSense>,
     /// Analog stimulus sources (potentiometer, NTC thermistor). Unlike a bus
     /// slave these do not sit on I2C/SPI/UART - they drive one ADC channel's
     /// injected millivolt level. They are held here so the generic stimulus
@@ -886,6 +929,7 @@ pub struct SystemBus {
     /// The chip's supply supervisor (see [`crate::power`]): idle, with the
     /// ideal rail assumed, until a circuit is routed to `board.power.vdd_volts`.
     pub(crate) supply: crate::power::SupplySupervisor,
+    pub(crate) reset_input: crate::reset_input::ResetInputState,
     /// What the system manifest DECLARED under `external_devices:`, verbatim.
     ///
     /// Purely identity metadata for [`crate::Machine::inspect`], which joins it

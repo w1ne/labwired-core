@@ -143,6 +143,7 @@ impl NativeSession {
                 blobs: &blobs,
                 options: BuildOptions {
                     uart_rx: system.debug_uart.clone(),
+                    rtt: None,
                     ..Default::default()
                 },
             },

@@ -153,6 +153,7 @@ fn run_builder(system: &SystemManifest, elf: &[u8]) -> String {
         options: BuildOptions {
             echo_uart_stdout: false,
             uart_rx: None,
+            rtt: None,
         },
     })
     .expect("build the PIC24 M3 machine");

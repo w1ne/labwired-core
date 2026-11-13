@@ -175,6 +175,47 @@ fn ssd1306_evidence_is_unchanged() {
     assert!(art.bytes.is_none(), "summary mode omits the payload");
 }
 
+/// A full 1024-byte GDDRAM write (chunked like Adafruit Wire) logs exactly one
+/// `frames_seen` entry with a sha256; a short partial write logs none.
+#[test]
+fn ssd1306_full_plane_logs_one_frame_sha() {
+    // Partial paint alone: must not count as a completed frame.
+    {
+        let mut bus = rig("oled-ssd1306", "i2c1", &[("i2c_address", 0x3Cu64.into())]);
+        oled_paint(&mut bus, &[0xAF], &[0xFF; 32]);
+        let device = inspect_panel(bus);
+        let art = evidence(&device);
+        let hist = art.meta["frames_seen"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        assert!(
+            hist.is_empty(),
+            "partial plane must not log frames_seen: {hist:?}"
+        );
+    }
+
+    // Full plane in 32-byte chunks (control 0x40 each), matching Wire MAX.
+    let mut bus = rig("oled-ssd1306", "i2c1", &[("i2c_address", 0x3Cu64.into())]);
+    oled_paint(&mut bus, &[0xAF], &[]);
+    let plane = vec![0xA5u8; 1024];
+    for chunk in plane.chunks(32) {
+        let mut px = vec![0x40u8];
+        px.extend_from_slice(chunk);
+        i2c_write(&mut bus, "i2c1", &px);
+    }
+    let device = inspect_panel(bus);
+    let art = evidence(&device);
+    let hist = art.meta["frames_seen"].as_array().expect("frames_seen");
+    assert_eq!(hist.len(), 1, "one full plane => one frame: {hist:?}");
+    let sha = hist[0]["sha256"].as_str().expect("sha256");
+    assert_eq!(sha.len(), 64);
+    assert_eq!(
+        art.meta["generation_history"].as_array().map(|a| a.len()),
+        Some(1)
+    );
+}
+
 /// The IMAX Console's panel. Same 1-bpp page geometry as the SSD1306, and it
 /// must report the same way.
 #[test]
@@ -482,15 +523,16 @@ fn pcd8544_that_painted_reports_its_ink() {
 #[test]
 fn max7219_that_was_written_reports_its_lit_leds() {
     // Registers 0x01..0x08 are the eight digit/row registers.
+    // MAX7219 latches only on CS↑ (`frames.shift_register`), so each 16-bit
+    // register write is its own CS-framed transaction — same as real silicon
+    // and the parity suite's `spi_txn` / `max_write`.
     const ROWS: [u8; 3] = [0xFF, 0x81, 0x18];
     let lit: usize = ROWS.iter().map(|b| b.count_ones() as usize).sum();
-    let mut frames: Vec<(bool, u8)> = vec![(false, 0x0C), (false, 0x01)]; // shutdown reg = normal
-    for (i, &row) in ROWS.iter().enumerate() {
-        frames.push((false, (i + 1) as u8));
-        frames.push((false, row));
-    }
     let mut bus = rig("led-matrix", "spi1", &[("cs_pin", "PA4".into())]);
-    spi_write(&mut bus, "spi1", &frames);
+    spi_write(&mut bus, "spi1", &[(false, 0x0C), (false, 0x01)]); // shutdown = normal
+    for (i, &row) in ROWS.iter().enumerate() {
+        spi_write(&mut bus, "spi1", &[(false, (i + 1) as u8), (false, row)]);
+    }
 
     let device = inspect_panel(bus);
     let art = evidence(&device);

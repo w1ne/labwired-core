@@ -85,10 +85,32 @@ fn crc8(data: &[u8], poly: u8, init: u8) -> u8 {
 /// Whether `stored` (the start register after a write) leaves `rule` started:
 /// any `start_mask` bit set, or with `start_value` the masked bits equal to it.
 fn rule_started(rule: &DataReady, stored: u32) -> bool {
+    let enabled = rule.clear_on_read_all.is_empty()
+        || rule
+            .clear_on_read_all
+            .iter()
+            .any(|result| result.enable_mask == 0 || stored & result.enable_mask != 0);
+    enabled && rule_selected(rule, stored)
+}
+
+fn rule_selected(rule: &DataReady, stored: u32) -> bool {
     match rule.start_value {
         Some(value) => stored & rule.start_mask == value,
         None => stored & rule.start_mask != 0,
     }
+}
+
+fn required_reads(rule: &DataReady, stored: u32) -> u32 {
+    rule.clear_on_read_all
+        .iter()
+        .enumerate()
+        .fold(0, |mask, (slot, result)| {
+            mask | if result.enable_mask == 0 || stored & result.enable_mask != 0 {
+                1 << slot
+            } else {
+                0
+            }
+        })
 }
 
 /// Where one [`DataReady`] rule's conversion currently stands. See the
@@ -148,10 +170,10 @@ pub struct GenericI2cDevice {
     /// A delayed response withheld until `elapsed_us >= ready_at_us`.
     pending: Option<Vec<u8>>,
     ready_at_us: u64,
-    /// True once a bus master has actually advanced this device's wall-clock —
-    /// i.e. the chip has an honest absolute-µs source. Families without one
-    /// (STM32, ESP32-classic, nRF52) never set it, and every [`DataReady`] bit
-    /// degrades to always-set there (see [`DataReady`] for why).
+    /// True after the owning controller forwards a nonzero simulated-time
+    /// advance through I2cDevice::advance_time_us. Legacy read-driven readiness
+    /// uses a compatibility fallback until that first advance; subscribed
+    /// conversions complete against their elapsed-time deadline.
     time_source_seen: bool,
 
     /// `data_ready` rules and their per-rule conversion state (parallel Vecs,
@@ -159,6 +181,14 @@ pub struct GenericI2cDevice {
     /// so devices that declare none are untouched.
     data_ready: Vec<DataReady>,
     dr_state: Vec<DataReadyState>,
+    /// Acknowledged result slots for opt-in all-enabled-result rules.
+    dr_reads: Vec<u32>,
+    /// Enabled result slots captured for a conversion. A later idle write
+    /// cannot silently change which completed results still need reading.
+    dr_required: Vec<u32>,
+    /// Only conversions explicitly referenced by a data-ready event are
+    /// promoted autonomously. Existing read-driven rules remain unchanged.
+    dr_event_subscribed: Vec<bool>,
 
     /// Currently selected register bank, and the pointer whose write selects it.
     /// `page_register: None` ⇒ a flat map and `page` stays 0 forever, so every
@@ -340,6 +370,18 @@ impl GenericI2cDevice {
         let pointer_width = spec.pointer_width.max(1);
         let default_pointer_mask = if pointer_width >= 2 { 0xFFFF } else { 0x00FF };
 
+        let dr_required = spec
+            .data_ready
+            .iter()
+            .map(|rule| {
+                let reset = spec
+                    .registers
+                    .iter()
+                    .find(|r| r.name == rule.start_register)
+                    .map_or(0, |r| r.reset);
+                required_reads(rule, reset)
+            })
+            .collect();
         let mut device = Self {
             address,
             registers: spec.registers.clone(),
@@ -364,6 +406,19 @@ impl GenericI2cDevice {
             ready_at_us: 0,
             time_source_seen: false,
             dr_state: vec![DataReadyState::Idle; spec.data_ready.len()],
+            dr_reads: vec![0; spec.data_ready.len()],
+            dr_required,
+            dr_event_subscribed: spec
+                .data_ready
+                .iter()
+                .map(|conversion| {
+                    descriptor.behavior.rules.iter().any(|rule| {
+                        matches!(
+                            &rule.on, Event::DataReady { name } if name == &conversion.name
+                        )
+                    })
+                })
+                .collect(),
             data_ready: spec.data_ready.clone(),
             page: 0,
             page_register: spec.page_register,
@@ -613,7 +668,16 @@ impl GenericI2cDevice {
         let mut overlay = 0;
         for (i, rule) in self.data_ready.iter().enumerate() {
             if rule.ready_register == register && self.data_ready_set(i) {
-                overlay |= rule.ready_mask;
+                let required = self.dr_required[i];
+                // A group with no enabled results reports no readiness.
+                if rule.clear_on_read_all.is_empty() || required != 0 {
+                    overlay |= rule.ready_mask;
+                    for (slot, result) in rule.clear_on_read_all.iter().enumerate() {
+                        if required & (1 << slot) != 0 && self.dr_reads[i] & (1 << slot) == 0 {
+                            overlay |= result.ready_mask;
+                        }
+                    }
+                }
             }
         }
         for (i, table) in self.indexed_tables.iter().enumerate() {
@@ -672,9 +736,26 @@ impl GenericI2cDevice {
     /// for each reading). `stored` is the register's value AFTER the write.
     fn start_conversions(&mut self, register: &str, stored: u32) {
         for (i, rule) in self.data_ready.iter().enumerate() {
-            if rule.start_register == register && rule_started(rule, stored) {
-                self.dr_state[i] =
-                    DataReadyState::Converting(self.elapsed_us.saturating_add(rule.conversion_us));
+            if rule.start_register == register {
+                if rule_started(rule, stored) {
+                    self.dr_reads[i] = 0;
+                    self.dr_required[i] = required_reads(rule, stored);
+                    self.dr_state[i] = DataReadyState::Converting(
+                        self.elapsed_us.saturating_add(rule.conversion_us),
+                    );
+                } else if !rule.clear_on_read_all.is_empty() && rule_selected(rule, stored) {
+                    // A selected new conversion with zero enabled results is
+                    // empty, not a retained completed result from the old set.
+                    self.dr_reads[i] = 0;
+                    self.dr_required[i] = 0;
+                    self.dr_state[i] = DataReadyState::Idle;
+                } else if self.dr_event_subscribed[i]
+                    && matches!(self.dr_state[i], DataReadyState::Converting(_))
+                {
+                    // A stopped in-flight conversion cannot report completion.
+                    // Leave an already-ready result to its declared clear rules.
+                    self.dr_state[i] = DataReadyState::Idle;
+                }
             }
         }
     }
@@ -684,22 +765,33 @@ impl GenericI2cDevice {
     /// self-timed sketch keeps getting fresh data instead of stalling).
     fn clear_on_read(&mut self, register: &str) {
         for i in 0..self.data_ready.len() {
-            if !self.data_ready[i]
-                .clear_on_read
-                .iter()
-                .any(|r| r == register)
-            {
+            let rule = &self.data_ready[i];
+            let stored = self
+                .reg_values
+                .get(&rule.start_register)
+                .copied()
+                .unwrap_or(0);
+            if !rule.clear_on_read_all.is_empty() {
+                // Early reads cannot acknowledge a future conversion or delay
+                // its deadline. The old any-result lifecycle is unchanged.
+                if self.dr_state[i] != DataReadyState::Ready {
+                    continue;
+                }
+                let required = self.dr_required[i];
+                for (slot, result) in rule.clear_on_read_all.iter().enumerate() {
+                    if result.register == register && required & (1 << slot) != 0 {
+                        self.dr_reads[i] |= 1 << slot;
+                    }
+                }
+                if required == 0 || self.dr_reads[i] & required != required {
+                    continue;
+                }
+            } else if !rule.clear_on_read.iter().any(|r| r == register) {
                 continue;
             }
-            let rule = &self.data_ready[i];
-            let still_started = rule_started(
-                rule,
-                self.reg_values
-                    .get(&rule.start_register)
-                    .copied()
-                    .unwrap_or(0),
-            );
-            self.dr_state[i] = if still_started {
+            self.dr_reads[i] = 0;
+            self.dr_state[i] = if rule_started(rule, stored) {
+                self.dr_required[i] = required_reads(rule, stored);
                 DataReadyState::Converting(self.elapsed_us.saturating_add(rule.conversion_us))
             } else {
                 DataReadyState::Idle
@@ -1651,56 +1743,80 @@ impl I2cDevice for GenericI2cDevice {
             .iter()
             .map(|channel| (channel.key.as_ref(), self.input_value(&channel.key)))
             .collect();
-        let mut meta = serde_json::json!({"registers":registers,"inputs":inputs});
-        // Register-file devices have no named register map. Export the exact
-        // model-owned bytes underlying their declared observables instead of
-        // making consumers reconstruct PWM by recording thousands of GPIO
-        // edges. This is read-only: it cannot advance firmware or the I2C bus.
+
+        // Register-file parts (PCA9685) have no named `registers:` map — the
+        // live evidence is the byte image + derived observables. Without them
+        // in meta, PRE_SCALE / LEDn_OFF / servo_angle never reach the inspect
+        // wall or the prove oracle.
+        let mut meta = serde_json::json!({"registers": registers, "inputs": inputs});
         if let Some(file) = self.file.as_ref() {
-            let mut observables = serde_json::Map::new();
-            for observable in &self.observables {
-                let mut raw = serde_json::Map::new();
-                let mut engineering = serde_json::Map::new();
-                for channel in 0..observable.channels {
-                    let start = usize::from(observable.base)
-                        + usize::from(observable.stride) * usize::from(channel);
-                    let bits = &observable.value.u12_compose;
-                    let lo = file.get(start + usize::from(bits.lo_rel));
-                    let hi = file.get(start + usize::from(bits.hi_rel));
-                    if let (Some(&lo), Some(&hi)) = (lo, hi) {
-                        let count = (u16::from(hi & bits.hi_mask) << 8) | u16::from(lo);
-                        raw.insert(channel.to_string(), serde_json::json!(count));
-                        engineering.insert(
-                            channel.to_string(),
-                            serde_json::json!(self.observable(&observable.name, channel)),
-                        );
+            // Sparse byte image — only non-zero offsets — so inspect stays
+            // small while PRE_SCALE / LEDn_* still show up by address.
+            let file_obj = serde_json::Map::from_iter(
+                file.iter()
+                    .enumerate()
+                    .filter(|(_, b)| **b != 0)
+                    .map(|(off, b)| (format!("{off}"), serde_json::json!(*b))),
+            );
+            meta["file"] = serde_json::Value::Object(file_obj);
+
+            // PCA9685-shaped parts declare a `servo_angle` observable over the
+            // LEDn block. Only then do we publish PRE_SCALE-derived period and
+            // per-channel OFF counts — other register-file devices must not
+            // inherit a PWM layout they do not have.
+            let is_pca_pwm = self.observables.iter().any(|o| o.name == "servo_angle");
+            if is_pca_pwm {
+                // PRE_SCALE @ 0xFE: update period from the internal 25 MHz
+                // oscillator (datasheet Rev. 4 §7.3.1):
+                //   period_ms = 4096 * (prescale + 1) / 25e3
+                if let Some(&prescale) = file.get(0xFE) {
+                    let period_ms = 4096.0_f64 * (f64::from(prescale) + 1.0) / 25_000.0;
+                    meta["pwm_period_ms"] = serde_json::json!(period_ms);
+                    meta["prescale"] = serde_json::json!(prescale);
+                }
+
+                let mut off_counts = serde_json::Map::new();
+                for ch in 0u8..16 {
+                    let base = 0x06u16 + u16::from(ch) * 4;
+                    let lo = file.get((base as usize) + 2).copied();
+                    let hi = file.get((base as usize) + 3).copied();
+                    if let (Some(lo), Some(hi)) = (lo, hi) {
+                        let off = u16::from(lo) | (u16::from(hi & 0x0F) << 8);
+                        off_counts.insert(format!("{ch}"), serde_json::json!(off));
                     }
                 }
-                // The legacy PCA9685 frontend uses `off_counts`: preserve that
-                // name for parity while exposing the generic named observable.
-                if observable.name == "servo_angle" {
-                    meta["off_counts"] = serde_json::Value::Object(raw.clone());
-                    meta["mode1_sleep"] =
-                        serde_json::json!(file.first().is_some_and(|value| value & 0x10 != 0));
-                    let mut full_off = serde_json::Map::new();
-                    for channel in 0..observable.channels {
-                        let high = usize::from(observable.base)
-                            + usize::from(observable.stride) * usize::from(channel)
-                            + usize::from(observable.value.u12_compose.hi_rel);
-                        if let Some(value) = file.get(high) {
-                            full_off
-                                .insert(channel.to_string(), serde_json::json!(value & 0x10 != 0));
-                        }
-                    }
-                    meta["full_off"] = serde_json::Value::Object(full_off);
+                if !off_counts.is_empty() {
+                    meta["off_counts"] = serde_json::Value::Object(off_counts);
                 }
-                observables.insert(
-                    observable.name.clone(),
-                    serde_json::json!({"raw_counts":raw,"engineering":engineering}),
-                );
+                // The raw count alone is not an enabled PWM waveform:
+                // MODE1.SLEEP and LEDn_OFF_H FULL_OFF must be observable.
+                meta["mode1_sleep"] =
+                    serde_json::json!(file.first().is_some_and(|value| value & 0x10 != 0));
+                let mut full_off = serde_json::Map::new();
+                for ch in 0u8..16 {
+                    let hi = 0x09usize + usize::from(ch) * 4;
+                    if let Some(&value) = file.get(hi) {
+                        full_off.insert(ch.to_string(), serde_json::json!(value & 0x10 != 0));
+                    }
+                }
+                meta["full_off"] = serde_json::Value::Object(full_off);
             }
-            meta["observables"] = serde_json::Value::Object(observables);
+
+            let mut observables = serde_json::Map::new();
+            for obs in &self.observables {
+                let mut channels = serde_json::Map::new();
+                for ch in 0..obs.channels {
+                    if let Some(v) = self.observable(&obs.name, ch) {
+                        channels.insert(format!("{ch}"), serde_json::json!(v));
+                    }
+                }
+                observables.insert(obs.name.clone(), serde_json::Value::Object(channels));
+            }
+            if !observables.is_empty() {
+                meta["observables"] = serde_json::Value::Object(observables);
+            }
         }
+
         vec![crate::inspect::Artifact {
             kind: "i2c_registers".into(),
             id: id.into(),
@@ -2040,6 +2156,27 @@ impl I2cDevice for GenericI2cDevice {
             self.time_source_seen = true;
         }
         self.advance_rule_time(us);
+        // Only explicitly subscribed conversions advance here. This preserves
+        // the existing read-driven behavior of descriptors with no listener.
+        let mut completed: Vec<(u64, usize)> = self
+            .dr_state
+            .iter()
+            .enumerate()
+            .filter_map(|(index, state)| match *state {
+                DataReadyState::Converting(deadline)
+                    if self.dr_event_subscribed[index] && self.elapsed_us >= deadline =>
+                {
+                    Some((deadline, index))
+                }
+                _ => None,
+            })
+            .collect();
+        completed.sort_unstable();
+        for (_, index) in completed {
+            self.dr_state[index] = DataReadyState::Ready;
+            let name = self.data_ready[index].name.clone();
+            self.raise_and_settle(Event::DataReady { name }, 0);
+        }
         // The part's own clock: every timer due at the new time fires, in
         // deadline order (see `TimerBank::due_by_timer`), before anything reads
         // a register. A device with no timers pays one `is_empty` check.
@@ -2190,7 +2327,123 @@ pub(crate) fn validate_descriptor(descriptor: &DeviceDescriptor) -> Result<()> {
     // deliberately total and validation deliberately is not).
     labwired_config::compile_rules(&descriptor.behavior.rules)
         .map_err(|e| anyhow::anyhow!("{e}"))?;
-    super::declarative_gpio::validate_rule_names(descriptor)
+    super::declarative_gpio::validate_rule_names(descriptor)?;
+    for rule in &descriptor.behavior.rules {
+        if let Event::DataReady { name } = &rule.on {
+            if !descriptor.behavior.timers.is_empty() {
+                bail!("data-ready events cannot yet be combined with device timers");
+            }
+            if spec
+                .data_ready
+                .iter()
+                .filter(|ready| &ready.name == name)
+                .count()
+                != 1
+            {
+                bail!(
+                    "data-ready event '{}' must name exactly one conversion",
+                    name
+                );
+            }
+            if spec
+                .data_ready
+                .iter()
+                .any(|ready| &ready.name == name && ready.conversion_us == 0)
+            {
+                bail!(
+                    "data-ready event '{}' cannot subscribe to a zero-duration conversion",
+                    name
+                );
+            }
+        }
+    }
+    // Rule actions write register storage directly, without the I2C write
+    // path's conversion start/cancellation side effects. Refuse this ambiguous
+    // combination rather than let a subscribed conversion outlive a rule that
+    // disables it. Unsubscribed, read-driven descriptors retain their behavior.
+    for ready in &spec.data_ready {
+        let subscribed = descriptor
+            .behavior
+            .rules
+            .iter()
+            .any(|rule| matches!(&rule.on, Event::DataReady { name } if name == &ready.name));
+        if !subscribed {
+            continue;
+        }
+        let start = spec
+            .registers
+            .iter()
+            .find(|reg| reg.name == ready.start_register)
+            .expect("validated data-ready start register");
+        if read_clears(start) {
+            bail!(
+                "subscribed data-ready start register '{}' cannot clear on read",
+                start.name
+            );
+        }
+        for update in &spec.updates {
+            let trigger = &update.trigger.read_complete;
+            if trigger.register.as_deref() == Some(start.name.as_str())
+                || trigger.pointer == Some(start.addr)
+            {
+                bail!(
+                    "read-complete update cannot modify subscribed data-ready start register '{}'",
+                    start.name
+                );
+            }
+        }
+        for table in &spec.indexed_tables {
+            if table.data_register == ready.start_register {
+                bail!(
+                    "indexed table '{}' cannot write subscribed data-ready start register '{}'",
+                    table.name,
+                    ready.start_register
+                );
+            }
+        }
+        // A self-clearing GO bit is different: it clears after the part has
+        // acted on the master's start write and is not a cancellation request.
+        // Preserve that established on-demand behavior.
+        // FIFO count/watermark reflection also mutates raw register storage
+        // without invoking the conversion lifecycle, including on a FIFO read.
+        for fifo in &descriptor.behavior.fifos {
+            let count_targets_start = fifo
+                .count
+                .as_ref()
+                .is_some_and(|count| count.register == ready.start_register);
+            let watermark_targets_start = fifo
+                .watermark
+                .as_ref()
+                .is_some_and(|watermark| watermark.set.register == ready.start_register);
+            if count_targets_start || watermark_targets_start {
+                bail!(
+                    "FIFO '{}' cannot reflect into start register '{}' of subscribed data-ready conversion '{}'",
+                    fifo.name,
+                    ready.start_register,
+                    ready.name
+                );
+            }
+        }
+        for rule in &descriptor.behavior.rules {
+            for action in &rule.actions {
+                let register = match action {
+                    labwired_config::Action::Set(bits) | labwired_config::Action::Clear(bits) => {
+                        Some(&bits.register)
+                    }
+                    labwired_config::Action::Write { register, .. } => Some(register),
+                    _ => None,
+                };
+                if register == Some(&ready.start_register) {
+                    bail!(
+                        "rule actions cannot modify start register '{}' of subscribed data-ready conversion '{}'",
+                        ready.start_register,
+                        ready.name
+                    );
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 /// A descriptor is exactly one shape (registers XOR commands XOR register_file),
@@ -2266,6 +2519,28 @@ fn validate_spec(spec: &I2cSpec) -> Result<()> {
                 );
             }
         }
+        if dr.clear_on_read_all.len() > 32
+            || (!dr.clear_on_read_all.is_empty() && !dr.clear_on_read.is_empty())
+        {
+            bail!(
+                "data_ready '{}' invalid all-result acknowledgement group",
+                dr.name
+            );
+        }
+        let mut group_registers = std::collections::HashSet::new();
+        let mut group_ready_mask = dr.ready_mask;
+        for result in &dr.clear_on_read_all {
+            if !spec.registers.iter().any(|r| r.name == result.register)
+                || !group_registers.insert(&result.register)
+                || group_ready_mask & result.ready_mask != 0
+            {
+                bail!(
+                    "data_ready '{}' invalid or duplicate all-result register/mask",
+                    dr.name
+                );
+            }
+            group_ready_mask |= result.ready_mask;
+        }
         for name in &dr.clear_on_read {
             if !spec.registers.iter().any(|r| &r.name == name) {
                 bail!(
@@ -2337,17 +2612,48 @@ fn validate_spec(spec: &I2cSpec) -> Result<()> {
                 );
             }
         }
+        // Conversion controls are stored as u32 register values. Validate
+        // the width before deriving the mask, including the legacy path with
+        // no all-result acknowledgement group.
+        let start_width_mask = match start_reg.width {
+            1..=3 => (1u32 << (8 * u32::from(start_reg.width))) - 1,
+            4 => u32::MAX,
+            width => bail!(
+                "data_ready '{}' start_register '{}' has unsupported width {}; expected 1..=4 bytes",
+                dr.name,
+                dr.start_register,
+                width
+            ),
+        };
+        for result in &dr.clear_on_read_all {
+            if result.enable_mask & !start_width_mask != 0
+                || start_reg
+                    .write_mask
+                    .is_some_and(|mask| result.enable_mask & !mask != 0)
+            {
+                bail!(
+                    "data_ready '{}' all-result enable mask is not writable",
+                    dr.name
+                );
+            }
+        }
         let ready_reg = spec
             .registers
             .iter()
             .find(|r| r.name == dr.ready_register)
             .expect("checked above");
+        if ready_reg.width < 4 && group_ready_mask >> (8 * u32::from(ready_reg.width)) != 0 {
+            bail!(
+                "data_ready '{}' all-result status mask exceeds register width",
+                dr.name
+            );
+        }
         let writable = match (ready_reg.access, ready_reg.write_mask) {
             (labwired_config::RegisterAccess::R, _) => 0,
             (labwired_config::RegisterAccess::Rw, Some(mask)) => mask,
             (labwired_config::RegisterAccess::Rw, None) => u32::MAX,
         };
-        if dr.ready_mask & writable != 0 {
+        if group_ready_mask & writable != 0 {
             bail!(
                 "data_ready '{}' ready_mask {:#x} overlaps bits firmware may write in '{}' — \
                  the status bit must be model-owned (narrow its write_mask)",
@@ -2976,6 +3282,9 @@ impl PeripheralKit for DeclarativeI2cKit {
         // wiring error is reported against the placement rather than leaving a
         // device attached with an interrupt line that goes nowhere.
         ctx.bind_output_pins(&self.descriptor)?;
+        if let Some(rules) = &mut device.rules {
+            rules.restrict_pin_delivery(ctx.bound_output_roles());
+        }
         ctx.attach_i2c_device(Box::new(device))
     }
 }
@@ -4252,6 +4561,767 @@ metadata:
         read8(&mut d, 0x68);
         d.advance_time_us(20_000);
         assert_eq!(read8(&mut d, 0x67), 0x00, "idle stops new samples");
+    }
+
+    fn accel_drdy() -> GenericI2cDevice {
+        let mut d = GenericI2cDevice::from_yaml(
+            include_str!("../../../../../configs/devices/lsm303agr_accel.yaml"),
+            0,
+        )
+        .unwrap();
+        d.advance_time_us(1);
+        d
+    }
+    fn accel_drives(d: &mut GenericI2cDevice) -> Vec<bool> {
+        d.take_pin_drives()
+            .into_iter()
+            .map(|(pin, level)| {
+                assert_eq!(pin, "INT1");
+                level
+            })
+            .collect()
+    }
+    #[test]
+    fn lsm303agr_accel_drdy_all_enabled_high_bytes_in_any_order() {
+        for enabled in 1..=7 {
+            let mut d = accel_drdy();
+            write8(&mut d, 0x22, 0x10);
+            write8(&mut d, 0x20, 0x50 | enabled);
+            accel_drives(&mut d);
+            // An early high-byte read does not delay or acknowledge conversion.
+            read8(&mut d, 0x29);
+            d.advance_time_us(9_999);
+            assert!(accel_drives(&mut d).is_empty());
+            d.advance_time_us(1);
+            assert_eq!(accel_drives(&mut d), vec![true]);
+            let mut pending = enabled;
+            assert_eq!(read8(&mut d, 0x27), 8 | pending);
+            for low in [0x28, 0x2a, 0x2c] {
+                read8(&mut d, low);
+            }
+            assert!(
+                accel_drives(&mut d).is_empty(),
+                "LSBs are not acknowledgement"
+            );
+            for (high, axis) in [(0x2d, 4), (0x29, 1), (0x2b, 2)] {
+                let before = pending;
+                read8(&mut d, high);
+                pending &= !axis;
+                if pending == 0 && before != 0 {
+                    assert_eq!(accel_drives(&mut d), vec![false]);
+                } else {
+                    assert!(accel_drives(&mut d).is_empty());
+                }
+                assert_eq!(
+                    read8(&mut d, 0x27),
+                    if pending == 0 { 0 } else { 8 | pending }
+                );
+                // Repeated high-byte reads cannot acknowledge another axis or
+                // postpone the next conversion after the final acknowledgement.
+                read8(&mut d, high);
+                assert!(accel_drives(&mut d).is_empty());
+            }
+            d.advance_time_us(10_000);
+            assert_eq!(accel_drives(&mut d), vec![true]);
+        }
+    }
+    #[test]
+    fn lsm303agr_accel_drdy_route_polarity_and_enable_after_ready() {
+        let mut d = accel_drdy();
+        write8(&mut d, 0x20, 0x57);
+        accel_drives(&mut d);
+        d.advance_time_us(10_000);
+        assert!(accel_drives(&mut d).is_empty());
+        write8(&mut d, 0x22, 0x10);
+        assert_eq!(accel_drives(&mut d), vec![true]);
+        read8(&mut d, 0x29);
+        assert!(accel_drives(&mut d).is_empty());
+        write8(&mut d, 0x22, 0);
+        assert_eq!(accel_drives(&mut d), vec![false]);
+        write8(&mut d, 0x22, 0x10);
+        assert_eq!(accel_drives(&mut d), vec![true]);
+        write8(&mut d, 0x25, 2); // H_LACTIVE: active-low
+        assert_eq!(accel_drives(&mut d), vec![false]);
+        read8(&mut d, 0x2b);
+        assert!(accel_drives(&mut d).is_empty());
+        read8(&mut d, 0x2d);
+        assert_eq!(
+            accel_drives(&mut d),
+            vec![true],
+            "inactive is high in active-low mode"
+        );
+        d.advance_time_us(10_000);
+        assert_eq!(accel_drives(&mut d), vec![false]);
+        write8(&mut d, 0x25, 0);
+        assert_eq!(accel_drives(&mut d), vec![true]);
+    }
+    #[test]
+    fn lsm303agr_accel_drdy_rearm_cancellation_and_no_enabled_axes() {
+        let mut d = accel_drdy();
+        write8(&mut d, 0x22, 0x10);
+        write8(&mut d, 0x20, 0x57);
+        accel_drives(&mut d);
+        d.advance_time_us(10_000);
+        assert_eq!(accel_drives(&mut d), vec![true]);
+        read8(&mut d, 0x29);
+        write8(&mut d, 0x20, 0x57); // new conversion forgets prior acknowledgement
+        assert_eq!(accel_drives(&mut d), vec![false]);
+        d.advance_time_us(10_000);
+        assert_eq!(accel_drives(&mut d), vec![true]);
+        read8(&mut d, 0x2b);
+        read8(&mut d, 0x2d);
+        assert!(accel_drives(&mut d).is_empty(), "X must be read again");
+        read8(&mut d, 0x29);
+        assert_eq!(accel_drives(&mut d), vec![false]);
+        write8(&mut d, 0x20, 0x07); // power-down cancels pending
+        d.advance_time_us(20_000);
+        assert!(accel_drives(&mut d).is_empty());
+        write8(&mut d, 0x20, 0x50); // no axes enabled
+        d.advance_time_us(20_000);
+        assert!(accel_drives(&mut d).is_empty());
+        assert_eq!(read8(&mut d, 0x27), 0);
+        let mut fresh = accel_drdy();
+        assert_eq!(read8(&mut fresh, 0x20), 7);
+        assert_eq!(read8(&mut fresh, 0x22), 0);
+        assert_eq!(read8(&mut fresh, 0x25), 0);
+        assert!(accel_drives(&mut fresh).is_empty());
+    }
+    #[test]
+    fn lsm303agr_accel_drdy_invalid_all_result_groups_are_rejected() {
+        let source = include_str!("../../../../../configs/devices/lsm303agr_accel.yaml");
+        for invalid in [
+            source.replace("register: OUT_X_A", "register: MISSING"),
+            source.replace("register: OUT_Y_A", "register: OUT_X_A"),
+            source.replace("enable_mask: 0x01", "enable_mask: 0x100"),
+            source.replace("ready_mask: 0x01", "ready_mask: 0x08"),
+            source.replace("ready_mask: 0x01", "ready_mask: 0x100"),
+            source.replace(
+                "        clear_on_read_all:",
+                "        clear_on_read: [OUT_X_A]\n        clear_on_read_all:",
+            ),
+        ] {
+            assert!(GenericI2cDevice::from_yaml(&invalid, 0).is_err());
+        }
+    }
+
+    #[test]
+    fn lsm303agr_accel_drdy_idle_axis_change_preserves_completed_group_consistency() {
+        // Explicit internal model contract, not a silicon reconfiguration
+        // qualification: completed results keep their original enabled set.
+        let mut d = accel_drdy();
+        write8(&mut d, 0x22, 0x10);
+        write8(&mut d, 0x20, 0x57);
+        accel_drives(&mut d);
+        d.advance_time_us(10_000);
+        assert_eq!(accel_drives(&mut d), vec![true]);
+        read8(&mut d, 0x29);
+        assert_eq!(read8(&mut d, 0x27), 0x0e);
+        write8(&mut d, 0x20, 0x01); // idle; X retained, Y/Z now disabled
+        assert!(
+            accel_drives(&mut d).is_empty(),
+            "completed group is retained"
+        );
+        assert_eq!(read8(&mut d, 0x27), 0x0e, "status and IRQ agree");
+        read8(&mut d, 0x28); // a later X low read cannot restore acknowledged X
+        read8(&mut d, 0x29);
+        assert_eq!(read8(&mut d, 0x27), 0x0e);
+        read8(&mut d, 0x2b);
+        assert_eq!(read8(&mut d, 0x27), 0x0c);
+        assert!(accel_drives(&mut d).is_empty());
+        read8(&mut d, 0x2d);
+        assert_eq!(accel_drives(&mut d), vec![false]);
+        assert_eq!(read8(&mut d, 0x27), 0);
+        d.advance_time_us(20_000);
+        assert!(accel_drives(&mut d).is_empty());
+        write8(&mut d, 0x20, 0x53); // next conversion captures X/Y only
+        d.advance_time_us(10_000);
+        assert_eq!(accel_drives(&mut d), vec![true]);
+        assert_eq!(read8(&mut d, 0x27), 0x0b);
+        read8(&mut d, 0x29);
+        read8(&mut d, 0x2b);
+        assert_eq!(accel_drives(&mut d), vec![false]);
+    }
+
+    #[test]
+    fn lsm303agr_accel_drdy_new_conversion_with_no_axes_drops_old_completed_group() {
+        let mut d = accel_drdy();
+        write8(&mut d, 0x22, 0x10);
+        write8(&mut d, 0x20, 0x57);
+        accel_drives(&mut d);
+        d.advance_time_us(10_000);
+        assert_eq!(accel_drives(&mut d), vec![true]);
+        write8(&mut d, 0x20, 0x50); // active ODR but all axes disabled
+        assert_eq!(accel_drives(&mut d), vec![false]);
+        assert_eq!(read8(&mut d, 0x27), 0, "empty new group is not stale data");
+        d.advance_time_us(20_000);
+        assert!(accel_drives(&mut d).is_empty());
+        write8(&mut d, 0x20, 0x51);
+        d.advance_time_us(10_000);
+        assert_eq!(accel_drives(&mut d), vec![true]);
+        assert_eq!(read8(&mut d, 0x27), 9);
+        read8(&mut d, 0x29);
+        assert_eq!(accel_drives(&mut d), vec![false]);
+    }
+
+    #[test]
+    fn lsm303agr_accel_drdy_active_low_mask_and_reenable_mid_group() {
+        let mut d = accel_drdy();
+        write8(&mut d, 0x25, 2);
+        assert_eq!(accel_drives(&mut d), vec![true], "inactive raw high");
+        write8(&mut d, 0x20, 0x53);
+        d.advance_time_us(10_000);
+        assert!(accel_drives(&mut d).is_empty(), "route still masked");
+        write8(&mut d, 0x22, 0x10);
+        assert_eq!(accel_drives(&mut d), vec![false]);
+        read8(&mut d, 0x29); // high first; no preceding low byte needed
+        assert_eq!(read8(&mut d, 0x27), 0x0a);
+        write8(&mut d, 0x22, 0);
+        assert_eq!(
+            accel_drives(&mut d),
+            vec![true],
+            "mask gives inactive level"
+        );
+        write8(&mut d, 0x22, 0x10);
+        assert_eq!(accel_drives(&mut d), vec![false], "Y still pending");
+        read8(&mut d, 0x2b);
+        assert_eq!(accel_drives(&mut d), vec![true]);
+        read8(&mut d, 0x2a); // low byte after high cannot restore readiness
+        assert_eq!(read8(&mut d, 0x27), 0);
+    }
+
+    #[test]
+    fn lsm303agr_accel_drdy_controls_detect_actual_descriptor_mutations() {
+        fn control(source: &str) {
+            let mut d = GenericI2cDevice::from_yaml(source, 0).unwrap();
+            d.advance_time_us(1);
+            write8(&mut d, 0x20, 0x57);
+            accel_drives(&mut d);
+            d.advance_time_us(10_000);
+            assert!(accel_drives(&mut d).is_empty(), "route off");
+            write8(&mut d, 0x22, 0x10);
+            assert_eq!(accel_drives(&mut d), vec![true], "enable after ready");
+            read8(&mut d, 0x29);
+            assert!(accel_drives(&mut d).is_empty(), "X alone cannot clear IRQ");
+            assert_eq!(read8(&mut d, 0x27), 0x0e, "Y/Z still ready");
+            write8(&mut d, 0x25, 2);
+            assert_eq!(accel_drives(&mut d), vec![false], "active-low assertion");
+            read8(&mut d, 0x2b);
+            assert!(accel_drives(&mut d).is_empty());
+            read8(&mut d, 0x2d);
+            assert_eq!(accel_drives(&mut d), vec![true], "active-low release");
+        }
+        let source = include_str!("../../../../../configs/devices/lsm303agr_accel.yaml");
+        control(source);
+        let group = "        clear_on_read_all:\n          - { register: OUT_X_A, enable_mask: 0x01, ready_mask: 0x01 }\n          - { register: OUT_Y_A, enable_mask: 0x02, ready_mask: 0x02 }\n          - { register: OUT_Z_A, enable_mask: 0x04, ready_mask: 0x04 }";
+        let mutants = [
+            source
+                .replace(group, "        clear_on_read: [OUT_X_A, OUT_Y_A, OUT_Z_A]")
+                .replace("ready_mask: 0x08", "ready_mask: 0x0f"),
+            source.replace("value: \"var(pending) & 6\"", "value: 0"),
+            source.replace("((reg(CTRL_REG3_A) & 0x10) != 0)", "1"),
+            source.replace("((reg(CTRL_REG6_A) & 2) != 0)", "0"),
+        ];
+        for (index, mutant) in mutants.iter().enumerate() {
+            assert_ne!(
+                source, mutant,
+                "mutation {index} must change actual descriptor"
+            );
+            assert!(
+                std::panic::catch_unwind(|| control(mutant)).is_err(),
+                "mutation {index} must be detected"
+            );
+        }
+    }
+
+    // AN4825 Rev1 section 3.3.3: the magnetometer's native DRDY is
+    // active high and clears on any output HIGH byte, unlike acceleration.
+    fn mag_drdy() -> GenericI2cDevice {
+        let mut d = GenericI2cDevice::from_yaml(
+            include_str!("../../../../../configs/devices/lsm303agr_mag.yaml"),
+            0,
+        )
+        .unwrap();
+        d.advance_time_us(1);
+        d
+    }
+
+    fn mag_drives(d: &mut GenericI2cDevice) -> Vec<bool> {
+        d.take_pin_drives()
+            .into_iter()
+            .map(|(pin, level)| {
+                assert_eq!(pin, "DRDY");
+                level
+            })
+            .collect()
+    }
+
+    #[test]
+    fn lsm303agr_mag_drdy_autonomous_deadline_route_and_read_clear() {
+        let mut d = mag_drdy();
+        assert_eq!(read8(&mut d, 0x62), 0);
+        assert_eq!(read8(&mut d, 0x60), 3);
+        d.advance_time_us(20_000);
+        assert!(
+            mag_drives(&mut d).is_empty(),
+            "reset idle has no completion"
+        );
+        write8(&mut d, 0x62, 1);
+        write8(&mut d, 0x60, 0x8c); // continuous 100 Hz
+        assert_eq!(mag_drives(&mut d), vec![false]);
+        d.advance_time_us(9_999);
+        assert!(mag_drives(&mut d).is_empty());
+        d.advance_time_us(1);
+        assert_eq!(
+            mag_drives(&mut d),
+            vec![true],
+            "no status poll made the edge"
+        );
+        for register in [0x67, 0x64, 0x4f, 0x68, 0x6a, 0x6c] {
+            read8(&mut d, register);
+            assert!(
+                mag_drives(&mut d).is_empty(),
+                "{register:#x} must not acknowledge"
+            );
+        }
+        assert_eq!(read8(&mut d, 0x67) & 8, 8);
+        read8(&mut d, 0x69); // high-byte-only read is sufficient
+        assert_eq!(mag_drives(&mut d), vec![false]);
+        assert_eq!(read8(&mut d, 0x67) & 8, 0);
+        d.advance_time_us(10_000);
+        assert_eq!(mag_drives(&mut d), vec![true]);
+    }
+
+    #[test]
+    fn lsm303agr_mag_drdy_enable_after_ready_and_mask_preserve_sample() {
+        let mut d = mag_drdy();
+        write8(&mut d, 0x60, 0x8c);
+        assert_eq!(mag_drives(&mut d), vec![false]);
+        d.advance_time_us(10_000);
+        assert!(mag_drives(&mut d).is_empty(), "route reset disabled");
+        write8(&mut d, 0x62, 1);
+        assert_eq!(
+            mag_drives(&mut d),
+            vec![true],
+            "enable exposes completed sample"
+        );
+        write8(&mut d, 0x62, 0);
+        assert_eq!(mag_drives(&mut d), vec![false]);
+        assert_eq!(read8(&mut d, 0x67) & 8, 8, "mask is not acknowledgement");
+        write8(&mut d, 0x62, 1);
+        assert_eq!(mag_drives(&mut d), vec![true]);
+        // IEA controls threshold INT, not DRDY polarity (AN4825 3.6.1).
+        write8(&mut d, 0x63, 0xe4);
+        assert!(mag_drives(&mut d).is_empty());
+        read8(&mut d, 0x6b);
+        assert_eq!(mag_drives(&mut d), vec![false]);
+    }
+
+    #[test]
+    fn lsm303agr_mag_drdy_all_output_high_bytes_acknowledge() {
+        for high in [0x69, 0x6b, 0x6d] {
+            let mut d = mag_drdy();
+            write8(&mut d, 0x62, 1);
+            write8(&mut d, 0x60, 0x8c);
+            mag_drives(&mut d);
+            d.advance_time_us(10_000);
+            assert_eq!(mag_drives(&mut d), vec![true]);
+            read8(&mut d, high);
+            assert_eq!(mag_drives(&mut d), vec![false], "high {high:#x}");
+            assert_eq!(read8(&mut d, 0x67) & 8, 0);
+        }
+    }
+
+    #[test]
+    fn lsm303agr_mag_drdy_idle_cancels_pending_and_retains_ready_until_read() {
+        let mut d = mag_drdy();
+        write8(&mut d, 0x62, 1);
+        write8(&mut d, 0x60, 0x8c);
+        mag_drives(&mut d);
+        d.advance_time_us(9_999);
+        write8(&mut d, 0x60, 0x8f);
+        d.advance_time_us(20_000);
+        assert!(
+            mag_drives(&mut d).is_empty(),
+            "no stale completion after idle"
+        );
+        write8(&mut d, 0x60, 0x8c);
+        mag_drives(&mut d);
+        d.advance_time_us(10_000);
+        assert_eq!(mag_drives(&mut d), vec![true]);
+        write8(&mut d, 0x60, 0x8f);
+        assert!(mag_drives(&mut d).is_empty());
+        read8(&mut d, 0x6d);
+        assert_eq!(mag_drives(&mut d), vec![false]);
+        d.advance_time_us(20_000);
+        assert!(mag_drives(&mut d).is_empty());
+        assert_eq!(read8(&mut d, 0x67) & 8, 0);
+        let mut fresh = mag_drdy();
+        assert!(
+            mag_drives(&mut fresh).is_empty(),
+            "new external device resets idle"
+        );
+        assert_eq!(read8(&mut fresh, 0x62), 0);
+    }
+
+    fn autonomous_fixture() -> String {
+        TOF_FIXTURE.replace(
+            "metadata:\n",
+            r#"  outputs: [INT]
+  rules:
+    - on: { data_ready: range }
+      do: [ { pin: INT, level: 0 } ]
+    - on: { read: RESULT_RANGE_VAL }
+      do: [ { pin: INT, level: 1 } ]
+metadata:
+"#,
+        )
+    }
+
+    #[test]
+    fn data_ready_start_register_rejects_invalid_widths_without_panicking() {
+        for (subscribed, fixture) in [
+            (false, TOF_FIXTURE.to_owned()),
+            (true, autonomous_fixture()),
+        ] {
+            for width in [0, 5, 255] {
+                let yaml = fixture.replace(
+                    "SYSRANGE_START, addr: 0x00, width: 1",
+                    &format!("SYSRANGE_START, addr: 0x00, width: {width}"),
+                );
+                assert_ne!(yaml, fixture);
+                let result = std::panic::catch_unwind(|| GenericI2cDevice::from_yaml(&yaml, 0))
+                    .unwrap_or_else(|_| {
+                        panic!("width {width}, subscribed {subscribed}: descriptor load panicked")
+                    });
+                let error = err_of(result, "invalid data-ready start-register width");
+                assert!(
+                    error.contains("start_register 'SYSRANGE_START'")
+                        && error.contains(&format!("unsupported width {width}; expected 1..=4")),
+                    "width {width}, subscribed {subscribed}: {error}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn data_ready_start_register_accepts_each_u32_width_and_byte_order() {
+        for width in 1u8..=4 {
+            for endian in ["be", "le"] {
+                for auto_increment in [false, true] {
+                    let yaml = autonomous_fixture()
+                        .replace(
+                            "SYSRANGE_START, addr: 0x00, width: 1, endian: be",
+                            &format!(
+                                "SYSRANGE_START, addr: 0x00, width: {width}, endian: {endian}"
+                            ),
+                        )
+                        .replace(
+                            "default_address: 0x29",
+                            &format!("default_address: 0x29\n    auto_increment: {auto_increment}"),
+                        );
+                    let mut d = GenericI2cDevice::from_yaml(&yaml, 0).unwrap();
+                    let bytes = if endian == "be" {
+                        1u32.to_be_bytes()[4 - usize::from(width)..].to_vec()
+                    } else {
+                        1u32.to_le_bytes()[..usize::from(width)].to_vec()
+                    };
+                    d.advance_time_us(1);
+                    d.start();
+                    d.write(0);
+                    for byte in bytes {
+                        d.write(byte);
+                    }
+                    d.stop();
+                    assert_eq!(
+                        d.dr_state[0],
+                        DataReadyState::Converting(33_001),
+                        "width {width}, endian {endian}, auto_increment {auto_increment}"
+                    );
+                    d.advance_time_us(32_999);
+                    assert!(d.take_pin_drives().is_empty());
+                    d.advance_time_us(1);
+                    assert_eq!(
+                        d.take_pin_drives(),
+                        vec![("INT".to_owned(), false)],
+                        "width {width}, endian {endian}, auto_increment {auto_increment}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn zero_duration_is_rejected_only_for_subscribed_conversions() {
+        let subscribed = autonomous_fixture().replace("conversion_us: 33000", "conversion_us: 0");
+        assert_ne!(subscribed, autonomous_fixture());
+        let error = match GenericI2cDevice::from_yaml(&subscribed, 0) {
+            Ok(_) => panic!("zero-duration subscribed conversion was accepted"),
+            Err(error) => format!("{error:#}"),
+        };
+        assert!(error.contains("zero-duration conversion"), "{error}");
+
+        let legacy = TOF_FIXTURE.replace("conversion_us: 33000", "conversion_us: 0");
+        assert_ne!(legacy, TOF_FIXTURE);
+        let mut d = GenericI2cDevice::from_yaml(&legacy, 0).unwrap();
+        d.advance_time_us(1);
+        write8(&mut d, 0x00, 1);
+        assert_eq!(read8(&mut d, 0x13), 7, "legacy read-driven readiness");
+        assert_eq!(d.dr_state[0], DataReadyState::Ready);
+    }
+
+    #[test]
+    fn subscribed_start_register_rejects_implicit_writers_only_on_that_register() {
+        fn with_writer(yaml: &str, kind: &str, target: &str) -> String {
+            match kind {
+                "read_clear" => yaml.replace(
+                    &format!("name: {target}, addr:"),
+                    &format!("name: {target}, on_read: clear, addr:"),
+                ),
+                "update_name" | "update_pointer" => {
+                    let trigger = if kind == "update_name" {
+                        format!("register: {target}")
+                    } else if target == "SYSRANGE_START" {
+                        "pointer: 0x00".into()
+                    } else {
+                        "pointer: 0xC0".into()
+                    };
+                    yaml.replace(
+                        "    data_ready:\n",
+                        &format!("    updates:\n      - trigger: {{ read_complete: {{ {trigger} }} }}\n        action: {{ add_wrap: {{ add: -1, max: 1, reset: 0 }} }}\n    data_ready:\n"),
+                    )
+                }
+                "indexed" => yaml
+                    .replace(
+                        "    default_address: 0x29\n",
+                        "    default_address: 0x29\n    auto_increment: true\n",
+                    )
+                    .replace(
+                        "    data_ready:\n",
+                        &format!("      - {{ name: NVM_STROBE, addr: 0x30, width: 1, endian: be, access: rw, write_mask: 0x7f, reset: 0 }}\n    indexed_tables:\n      - {{ name: nvm, index_register: MODEL_ID, strobe_register: NVM_STROBE, strobe_mask: 0x80, data_register: {target} }}\n    data_ready:\n"),
+                    ),
+                _ => unreachable!(),
+            }
+        }
+        for kind in ["read_clear", "update_name", "update_pointer", "indexed"] {
+            let original = autonomous_fixture();
+            let subscribed = with_writer(&original, kind, "SYSRANGE_START");
+            assert_ne!(subscribed, original, "fixture mutation for {kind}");
+            let error = match GenericI2cDevice::from_yaml(&subscribed, 0) {
+                Ok(_) => panic!("subscribed start register accepted {kind}"),
+                Err(error) => format!("{error:#}"),
+            };
+            assert!(
+                error.contains("subscribed data-ready start register"),
+                "{error}"
+            );
+            let legacy = with_writer(TOF_FIXTURE, kind, "SYSRANGE_START");
+            GenericI2cDevice::from_yaml(&legacy, 0)
+                .expect("unsubscribed legacy writer stays valid");
+            let unrelated = with_writer(&original, kind, "MODEL_ID");
+            GenericI2cDevice::from_yaml(&unrelated, 0).expect("unrelated writer stays valid");
+        }
+    }
+
+    #[test]
+    fn self_clearing_start_is_a_completed_command_not_cancellation() {
+        let yaml = autonomous_fixture()
+            .replace(
+                "    default_address: 0x29\n",
+                "    default_address: 0x29\n    auto_increment: true\n",
+            )
+            .replace(
+                "name: SYSRANGE_START, addr: 0x00, width: 1, endian: be, access: rw, reset: 0x00 }",
+                "name: SYSRANGE_START, addr: 0x00, width: 1, endian: be, access: rw, reset: 0x00, self_clearing: 1 }",
+            );
+        let mut d = GenericI2cDevice::from_yaml(&yaml, 0).unwrap();
+        d.advance_time_us(1);
+        write8(&mut d, 0x00, 1);
+        assert_eq!(read8(&mut d, 0x00), 0, "the GO bit cleared after starting");
+        d.advance_time_us(33_000);
+        assert_eq!(d.take_pin_drives(), vec![("INT".to_string(), false)]);
+    }
+
+    #[test]
+    fn subscribed_start_register_rejects_fifo_reflection_without_changing_legacy() {
+        fn add_fifo(yaml: &str, field: &str, watermark: bool) -> String {
+            let yaml = yaml
+                .replace(
+                    "name: SYSRANGE_START, addr: 0x00, width: 1, endian: be, access: rw, reset: 0x00 }",
+                    "name: SYSRANGE_START, addr: 0x00, width: 1, endian: be, access: rw, reset: 0x00, bits: [{ name: GO, shift: 0 }] }",
+                )
+                .replace(
+                    "name: MODEL_ID, addr: 0xC0, width: 1, endian: be, access: r, reset: 0xEE }",
+                    "name: MODEL_ID, addr: 0xC0, width: 1, endian: be, access: r, reset: 0xEE, bits: [{ name: GO, shift: 0 }] }",
+                );
+            let reflection = if watermark {
+                format!("watermark: {{ entries: 1, set: {field} }}")
+            } else {
+                format!("count: {field}")
+            };
+            yaml.replace(
+                "metadata:\n",
+                &format!(
+                    "  fifos:\n    - {{ name: samples, depth: 4, {reflection} }}\nmetadata:\n"
+                ),
+            )
+        }
+        for watermark in [false, true] {
+            let subscribed = add_fifo(&autonomous_fixture(), "SYSRANGE_START.GO", watermark);
+            let error = match GenericI2cDevice::from_yaml(&subscribed, 0) {
+                Ok(_) => panic!("subscribed start register accepted FIFO reflection"),
+                Err(error) => format!("{error:#}"),
+            };
+            assert!(
+                error.contains("cannot reflect into start register"),
+                "{error}"
+            );
+            let legacy = add_fifo(TOF_FIXTURE, "SYSRANGE_START.GO", watermark);
+            GenericI2cDevice::from_yaml(&legacy, 0).expect("unsubscribed legacy FIFO stays valid");
+            let unrelated = add_fifo(&autonomous_fixture(), "MODEL_ID.GO", watermark);
+            GenericI2cDevice::from_yaml(&unrelated, 0)
+                .expect("reflection into an unrelated register stays valid");
+        }
+    }
+
+    #[test]
+    fn subscribed_start_register_rule_writes_are_rejected_without_changing_legacy() {
+        for action in [
+            "{ write: { register: SYSRANGE_START, value: 0 } }",
+            "{ set: { register: SYSRANGE_START, mask: 1 } }",
+            "{ clear: { register: SYSRANGE_START, mask: 1 } }",
+        ] {
+            // An unrelated event may modify the start register just as an
+            // event from a different conversion could; inspect every rule.
+            let extra_rule = format!("  rules:\n    - on: start\n      do: [ {action} ]\n");
+            let subscribed = autonomous_fixture().replace(
+                "  rules:\n",
+                &format!("  rules:\n    - on: start\n      do: [ {action} ]\n"),
+            );
+            let err = match GenericI2cDevice::from_yaml(&subscribed, 0) {
+                Ok(_) => panic!("subscribed conversion accepted {action}"),
+                Err(err) => format!("{err:#}"),
+            };
+            assert!(err.contains("cannot modify start register"), "{err}");
+
+            let legacy = TOF_FIXTURE.replace("metadata:\n", &format!("{extra_rule}metadata:\n"));
+            GenericI2cDevice::from_yaml(&legacy, 0).expect("unsubscribed legacy rule stays valid");
+        }
+        let unrelated = autonomous_fixture().replace(
+            "  rules:\n",
+            "  rules:\n    - on: start\n      do: [ { write: { register: MODEL_ID, value: 0 } } ]\n",
+        );
+        GenericI2cDevice::from_yaml(&unrelated, 0).expect("unrelated register remains valid");
+    }
+
+    #[test]
+    fn subscribed_data_ready_fires_once_on_clock_without_a_register_read() {
+        let mut d = GenericI2cDevice::from_yaml(&autonomous_fixture(), 0).unwrap();
+        d.advance_time_us(1);
+        write8(&mut d, 0x00, 1);
+        d.advance_time_us(32_999);
+        assert_eq!(d.dr_state[0], DataReadyState::Converting(33_001));
+        assert!(d.take_pin_drives().is_empty());
+        d.advance_time_us(1);
+        assert_eq!(d.dr_state[0], DataReadyState::Ready);
+        assert_eq!(d.take_pin_drives(), vec![("INT".to_string(), false)]);
+        d.advance_time_us(10);
+        assert!(
+            d.take_pin_drives().is_empty(),
+            "ready is an edge, not a repeated event"
+        );
+        assert_eq!(read8(&mut d, 0x13), 7);
+        read8(&mut d, 0x1e);
+        assert_eq!(d.take_pin_drives(), vec![("INT".to_string(), true)]);
+        d.advance_time_us(33_000);
+        assert_eq!(d.take_pin_drives(), vec![("INT".to_string(), false)]);
+    }
+
+    #[test]
+    fn autonomous_events_follow_deadline_order_when_one_advance_spans_both() {
+        let yaml = r#"
+type: ordered_ready_probe
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x20
+    registers:
+      - { name: START, addr: 0, width: 1, endian: be, access: rw, reset: 0 }
+      - { name: STATUS, addr: 1, width: 1, endian: be, access: r, reset: 0 }
+    data_ready:
+      - { name: later, start_register: START, start_mask: 1, ready_register: STATUS, ready_mask: 1, conversion_us: 20 }
+      - { name: earlier, start_register: START, start_mask: 2, ready_register: STATUS, ready_mask: 2, conversion_us: 10 }
+  outputs: [FIRST, SECOND]
+  rules:
+    - on: { data_ready: earlier }
+      do: [ { pin: FIRST, level: 1 } ]
+    - on: { data_ready: later }
+      do: [ { pin: SECOND, level: 1 } ]
+"#;
+        let mut d = GenericI2cDevice::from_yaml(yaml, 0).unwrap();
+        d.advance_time_us(1);
+        write8(&mut d, 0, 3);
+        d.advance_time_us(20);
+        assert_eq!(
+            d.take_pin_drives(),
+            vec![("FIRST".into(), true), ("SECOND".into(), true)]
+        );
+    }
+
+    #[test]
+    fn stopping_a_subscribed_conversion_cancels_its_pending_event() {
+        let mut d = GenericI2cDevice::from_yaml(&autonomous_fixture(), 0).unwrap();
+        d.advance_time_us(1);
+        write8(&mut d, 0x00, 1);
+        d.advance_time_us(10_000);
+        write8(&mut d, 0x00, 0);
+        d.advance_time_us(100_000);
+        assert_eq!(d.dr_state[0], DataReadyState::Idle);
+        assert!(d.take_pin_drives().is_empty());
+        write8(&mut d, 0x00, 1);
+        d.advance_time_us(33_000);
+        assert_eq!(d.take_pin_drives(), vec![("INT".to_string(), false)]);
+    }
+
+    #[test]
+    fn unsubscribed_data_ready_preserves_read_driven_promotion() {
+        let mut d = GenericI2cDevice::from_yaml(TOF_FIXTURE, 0).unwrap();
+        d.advance_time_us(1);
+        write8(&mut d, 0x00, 1);
+        d.advance_time_us(33_000);
+        assert_eq!(d.dr_state[0], DataReadyState::Converting(33_001));
+        assert_eq!(read8(&mut d, 0x13), 7);
+        assert_eq!(d.dr_state[0], DataReadyState::Ready);
+    }
+
+    #[test]
+    fn data_ready_event_must_identify_one_declared_conversion() {
+        let yaml = autonomous_fixture();
+        assert!(GenericI2cDevice::from_yaml(
+            &yaml.replace("data_ready: range", "data_ready: missing"),
+            0
+        )
+        .is_err());
+        let duplicate = yaml.replace("      - name: range\n", "      - name: range\n        start_register: SYSRANGE_START\n        start_mask: 0x01\n        ready_register: RESULT_INTERRUPT_STATUS\n        ready_mask: 0x07\n        conversion_us: 33000\n      - name: range\n");
+        assert!(GenericI2cDevice::from_yaml(&duplicate, 0).is_err());
+        let mixed_timer = yaml
+            .replace(
+                "  outputs: [INT]",
+                "  timers: [{ name: clock, period_us: 100, on_fire: [] }]\n  outputs: [INT]",
+            )
+            .replace(
+                "  rules:\n",
+                "  rules:\n    - on: { timer: clock }\n      do: [ { pin: INT, level: 1 } ]\n",
+            );
+        let timer_without_subscription =
+            mixed_timer.replace("on: { data_ready: range }", "on: { write: SYSRANGE_START }");
+        assert_ne!(timer_without_subscription, mixed_timer);
+        GenericI2cDevice::from_yaml(&timer_without_subscription, 0)
+            .expect("timer with a listener and no data-ready subscription is valid");
+        let err = match GenericI2cDevice::from_yaml(&mixed_timer, 0) {
+            Ok(_) => panic!("timer and data-ready event combination was accepted"),
+            Err(err) => format!("{err:#}"),
+        };
+        assert!(err.contains("cannot yet be combined"), "{err}");
     }
 
     #[test]

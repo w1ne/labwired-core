@@ -1,0 +1,9 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# PIC18F4520 demo system — L1: boot + EUSART TX (CPU-internal) + PORTB LED.
+name: "pic18f4520-demo"
+chip: "../chips/pic18f4520.yaml"

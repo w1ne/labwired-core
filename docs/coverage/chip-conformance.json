@@ -38,6 +38,97 @@
     "behavior": true,
     "excluded": 0,
     "level": 1,
+    "name": "stm32l552",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "cc2538sf53",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "mpfs095t",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "am6234",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "r5f52618bgfp",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "pic32mz2048efm144",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "r7fa6m5bh",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "r7fa8m1ah",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "amap42kp",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "mk64f12",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "same70q21b",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "s32k388",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "mimxrt595s",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
     "name": "sam4s16c",
     "reg_match": 0
   },
@@ -171,6 +262,20 @@
     "behavior": true,
     "excluded": 0,
     "level": 1,
+    "name": "esp32-devkitc-32e-gpio-smoke",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "esp32-devkitc-32e-uart1",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
     "name": "stm32f401cdu6",
     "reg_match": 0
   },
@@ -234,6 +339,20 @@
     "behavior": false,
     "excluded": 0,
     "level": 0,
+    "name": "stm32f103rb",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "stm32f103rb-nucleo-bme280-smoke",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
     "name": "stm32f103c4",
     "reg_match": 0
   },
@@ -270,6 +389,13 @@
     "excluded": 0,
     "level": 0,
     "name": "stm32f103r6h",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "stm32f103r8",
     "reg_match": 0
   },
   {
@@ -462,6 +588,13 @@
     "reg_match": 0
   },
   {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "stm32g431rb",
+    "reg_match": 0
+  },
+  {
     "behavior": true,
     "excluded": 0,
     "level": 1,
@@ -543,6 +676,13 @@
     "excluded": 0,
     "level": 1,
     "name": "atmega328p",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "atmega328pb",
     "reg_match": 0
   },
   {
@@ -633,6 +773,27 @@
     "behavior": true,
     "excluded": 0,
     "level": 1,
+    "name": "pic18f4520",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "pic16f877a",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "pic16f1829",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
     "name": "pic24f04ka200",
     "reg_match": 0
   },
@@ -669,6 +830,13 @@
     "excluded": 0,
     "level": 1,
     "name": "pic24f16ka102",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "ch32v003f4p6",
     "reg_match": 0
   }
 ]

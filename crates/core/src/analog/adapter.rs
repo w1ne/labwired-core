@@ -18,14 +18,32 @@
 //!       substeps: 10
 //!       integration: be            # be | trap
 //!       probes:  { v_out: "v(out)" }
-//!       sources: { gpio: Vgpio }
+//!       sources: { gpio: Vgpio, temperature_c: Rntc }
 //!       trace:   ["v(in)", "i(Vgpio)"]
 //!       trace_samples: 20000
 //! ```
 //!
-//! `netlist`, `vdd`, `probes` and `sources` are spelled exactly as the ngspice
-//! wrapper spells them, so a manifest switches engines by changing `adapter:`
-//! and nothing else.
+//! `netlist`, `vdd`, `probes` and `sources` share their spelling with the
+//! ngspice wrapper. A routed resistor is an in-core extension: its numeric
+//! input is resistance in ohms and requires a finite positive value.
+//! A bounded beta-curve NTC can instead be configured as:
+//!
+//! ```yaml
+//! thermistors:
+//!   temperature:
+//!     resistor: Rntc
+//!     r_ref_ohms: 10000
+//!     beta_kelvin: 3950
+//!     reference_c: 25
+//!     min_c: 0
+//!     max_c: 85
+//! ```
+//!
+//! The input is numeric Celsius and starts at `reference_c`. All parameters
+//! and the valid temperature range must be supplied from the chosen part's
+//! data. The initial netlist resistance must equal `r_ref_ohms`; a resistor
+//! may have only one routed owner. This beta approximation does not model
+//! tolerance, self-heating or behavior outside the declared range.
 //!
 //! ## Step semantics
 //!
@@ -57,16 +75,73 @@ pub use super::mna::Integration;
 pub enum Probe {
     /// `v(node)` or a bare node name.
     NodeVoltage(NodeRef),
-    /// `i(element)` — a voltage source's or inductor's branch current.
+    /// `i(element)` — a voltage source, inductor, E or H branch current.
     BranchCurrent(usize),
+    /// `i(diode)` — anode-to-cathode current at the solved junction voltage.
+    DiodeCurrent(usize),
 }
 
 impl Probe {
     fn unit(&self) -> &'static str {
         match self {
             Self::NodeVoltage(_) => "V",
-            Self::BranchCurrent(_) => "A",
+            Self::BranchCurrent(_) | Self::DiodeCurrent(_) => "A",
         }
+    }
+}
+
+/// A bounded beta approximation for one physical NTC resistor.
+/// The caller must supply coefficients and the range in which they apply.
+#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ThermistorConfig {
+    pub resistor: String,
+    pub r_ref_ohms: f64,
+    pub beta_kelvin: f64,
+    pub reference_c: f64,
+    pub min_c: f64,
+    pub max_c: f64,
+}
+
+impl ThermistorConfig {
+    fn validate(&self) -> Result<(), AnalogError> {
+        if self.resistor.trim().is_empty()
+            || !self.r_ref_ohms.is_finite()
+            || self.r_ref_ohms <= 0.0
+            || !self.beta_kelvin.is_finite()
+            || self.beta_kelvin <= 0.0
+            || !self.reference_c.is_finite()
+            || !self.min_c.is_finite()
+            || !self.max_c.is_finite()
+            || self.min_c <= -273.15
+            || self.min_c > self.reference_c
+            || self.reference_c > self.max_c
+        {
+            return Err(AnalogError::Config("thermistor requires positive finite coefficients and a valid temperature range containing the reference".to_string()));
+        }
+        self.resistance(self.min_c)?;
+        self.resistance(self.max_c)?;
+        Ok(())
+    }
+
+    fn resistance(&self, temperature_c: f64) -> Result<f64, AnalogError> {
+        if !temperature_c.is_finite() || temperature_c < self.min_c || temperature_c > self.max_c {
+            return Err(AnalogError::Config(format!(
+                "thermistor temperature must be within {}..{} C",
+                self.min_c, self.max_c
+            )));
+        }
+        let ohms = self.r_ref_ohms
+            * libm::exp(
+                self.beta_kelvin
+                    * (1.0 / (temperature_c + 273.15) - 1.0 / (self.reference_c + 273.15)),
+            );
+        if !ohms.is_finite() || ohms <= 0.0 || !ohms.recip().is_finite() {
+            return Err(AnalogError::Config(
+                "thermistor curve produces invalid resistance".to_string(),
+            ));
+        }
+        Ok(ohms)
     }
 }
 
@@ -79,10 +154,12 @@ pub struct AnalogConfig {
     pub substeps: u32,
     /// Integration rule.
     pub integration: Integration,
-    /// LabWired output name → node or branch expression.
+    /// LabWired output name → node voltage or supported element-current expression.
     pub probes: BTreeMap<String, String>,
-    /// LabWired input name → circuit element (`V`, `I` or `S`).
+    /// LabWired input name → `V`, `I`, or `S`; an `R` accepts ohms, or Celsius for an NTC.
     pub sources: BTreeMap<String, String>,
+    /// Input name → explicitly bounded beta-curve thermistor.
+    pub thermistors: BTreeMap<String, ThermistorConfig>,
     /// Extra trace-only expressions, beyond the routed outputs.
     pub trace: Vec<String>,
     /// Ring depth for the oscilloscope trace.
@@ -97,6 +174,7 @@ impl Default for AnalogConfig {
             integration: Integration::BackwardEuler,
             probes: BTreeMap::new(),
             sources: BTreeMap::new(),
+            thermistors: BTreeMap::new(),
             trace: Vec::new(),
             trace_samples: super::trace::DEFAULT_TRACE_SAMPLES,
         }
@@ -144,6 +222,10 @@ impl AnalogConfig {
         }
         if let Some(value) = config.get("sources") {
             parsed.sources = string_map(value, "config.sources")?;
+        }
+        if let Some(value) = config.get("thermistors") {
+            parsed.thermistors = serde_yaml::from_value(value.clone())
+                .map_err(|error| AnalogError::Config(format!("config.thermistors: {error}")))?;
         }
         if let Some(value) = config.get("trace") {
             let list = value.as_sequence().ok_or_else(|| {
@@ -196,6 +278,10 @@ fn string_map(value: &Value, what: &str) -> Result<BTreeMap<String, String>, Ana
 enum InputTarget {
     VoltageSource(usize),
     CurrentSource(usize),
+    Resistance(usize),
+    Thermistor(usize, ThermistorConfig),
+    /// A Beta NTC described directly on the SPICE resistor line.
+    NetlistThermistor(usize),
     /// Every switch sharing one control name.
     Switches(Vec<usize>),
 }
@@ -260,12 +346,20 @@ impl AnalogCosimAdapter {
                     )));
                 }
                 InputTarget::CurrentSource(index)
+            } else if let Some(index) = solver.thermistor_index(element) {
+                InputTarget::NetlistThermistor(index)
+            } else if let Some(index) = solver.resistor_index(element) {
+                let ohms = solver.circuit().resistors[index].ohms;
+                if !ohms.is_finite() || ohms <= 0.0 || !ohms.recip().is_finite() {
+                    return Err(AnalogError::Config(format!("routed resistor `{element}` must have a positive finite initial resistance")));
+                }
+                InputTarget::Resistance(index)
             } else if let Some(index) = solver.switch_index(element) {
                 InputTarget::Switches(vec![index])
             } else {
                 return Err(AnalogError::Config(format!(
                     "config.sources.{input} names `{element}`, which the netlist does not declare \
-                     as a V, I or S element"
+                     as a V, I, S, or resistor element (an NTC resistor accepts temperature inputs)"
                 )));
             };
             inputs.insert(input.clone(), target);
@@ -282,6 +376,32 @@ impl AnalogCosimAdapter {
             inputs
                 .entry(switch.ctrl.clone())
                 .or_insert(InputTarget::Switches(indices));
+        }
+
+        for (input, model) in &cfg.thermistors {
+            model.validate()?;
+            if inputs.contains_key(input) {
+                return Err(AnalogError::Config(format!(
+                    "input `{input}` is assigned more than once"
+                )));
+            }
+            let index = solver.resistor_index(&model.resistor).ok_or_else(|| {
+                AnalogError::Config(format!(
+                    "thermistor `{input}` names missing resistor `{}`",
+                    model.resistor
+                ))
+            })?;
+            if inputs.values().any(|target| matches!(target, InputTarget::Resistance(i) | InputTarget::Thermistor(i, _) | InputTarget::NetlistThermistor(i) if *i == index)) {
+                return Err(AnalogError::Config(format!("resistor `{}` has multiple routed owners", model.resistor)));
+            }
+            let initial = solver.circuit().resistors[index].ohms;
+            if !initial.is_finite() || (initial - model.r_ref_ohms).abs() > model.r_ref_ohms * 1e-9
+            {
+                return Err(AnalogError::Config(format!(
+                    "thermistor `{input}` initial resistor must match r_ref_ohms"
+                )));
+            }
+            inputs.insert(input.clone(), InputTarget::Thermistor(index, model.clone()));
         }
 
         let sample_width = probes.len() + trace_extra.len();
@@ -359,6 +479,7 @@ impl AnalogCosimAdapter {
         match probe {
             Probe::NodeVoltage(node) => self.solver.node_voltage(*node),
             Probe::BranchCurrent(index) => self.solver.branch_current(*index),
+            Probe::DiodeCurrent(index) => self.solver.diode_current(*index),
         }
     }
 
@@ -400,6 +521,43 @@ impl AnalogCosimAdapter {
                 }
                 let amps = self.numeric(name, value, "amps")?;
                 self.solver.set_current_source(index, amps);
+            }
+            InputTarget::Resistance(index) => {
+                if matches!(value, CosimSignalValue::Bool(_)) {
+                    return Err(SimulationError::Other(format!(
+                        "analog input `{name}` drives a resistor; a boolean has no resistance in ohms"
+                    )));
+                }
+                let ohms = self.numeric(name, value, "ohms")?;
+                self.solver.set_resistance(index, ohms).map_err(|error| {
+                    SimulationError::Other(format!("analog input `{name}`: {error}"))
+                })?;
+            }
+            InputTarget::Thermistor(index, model) => {
+                if matches!(value, CosimSignalValue::Bool(_)) {
+                    return Err(SimulationError::Other(format!("analog input `{name}` drives a thermistor; temperature must be numeric Celsius")));
+                }
+                let celsius = self.numeric(name, value, "Celsius")?;
+                let ohms = model.resistance(celsius).map_err(|error| {
+                    SimulationError::Other(format!("analog input `{name}`: {error}"))
+                })?;
+                self.solver.set_resistance(index, ohms).map_err(|error| {
+                    SimulationError::Other(format!("analog input `{name}`: {error}"))
+                })?;
+            }
+            InputTarget::NetlistThermistor(index) => {
+                if matches!(value, CosimSignalValue::Bool(_)) {
+                    return Err(SimulationError::Other(format!(
+                        "analog input `{name}` drives an NTC temperature; a boolean has no \
+                         temperature to map to — route a number in degrees Celsius"
+                    )));
+                }
+                let celsius = self.numeric(name, value, "degrees Celsius")?;
+                if !self.solver.set_thermistor_temperature(index, celsius) {
+                    return Err(SimulationError::Other(format!(
+                        "analog input `{name}` is not a finite NTC temperature above absolute zero"
+                    )));
+                }
             }
             InputTarget::Switches(indices) => {
                 let closed = match value {
@@ -453,8 +611,13 @@ impl CosimAdapter for AnalogCosimAdapter {
             self.time_ns = step.time_ns;
         }
 
-        self.step_index += 1;
-        self.record_sample();
+        // A world reads the declared operating point before its first CPU
+        // instruction. That initial read is not an integration step and must
+        // not duplicate the t=0 trace row or advance its step counter.
+        if step.time_ns != 0 || step.dt_ns != 0 || self.time_ns != 0 {
+            self.step_index += 1;
+            self.record_sample();
+        }
 
         let mut outputs = BTreeMap::new();
         for (name, probe) in &self.probes {
@@ -463,12 +626,29 @@ impl CosimAdapter for AnalogCosimAdapter {
         Ok(CosimStepResult { outputs })
     }
 
-    /// A switch control is a logic level; a voltage or current source takes
-    /// its number as given. An input the circuit does not use has no kind.
+    fn input_initial_value(&self, name: &str) -> Option<CosimSignalValue> {
+        match self.inputs.get(name)? {
+            InputTarget::Thermistor(_, model) => Some(CosimSignalValue::F64(model.reference_c)),
+            InputTarget::NetlistThermistor(index) => self.solver.circuit().resistors[*index]
+                .ntc
+                .map(|ntc| CosimSignalValue::F64(ntc.temperature_celsius)),
+            InputTarget::Resistance(index) => Some(CosimSignalValue::F64(
+                self.solver.circuit().resistors[*index].ohms,
+            )),
+            _ => None,
+        }
+    }
+
+    /// A switch is boolean; sources and resistors are numeric. NTC numbers are
+    /// degrees Celsius. An input the circuit does not use has no kind.
     fn input_kind(&self, name: &str) -> Option<CosimInputKind> {
         Some(match self.inputs.get(name)? {
             InputTarget::Switches(_) => CosimInputKind::Bool,
-            InputTarget::VoltageSource(_) | InputTarget::CurrentSource(_) => CosimInputKind::Number,
+            InputTarget::VoltageSource(_)
+            | InputTarget::CurrentSource(_)
+            | InputTarget::Resistance(_)
+            | InputTarget::Thermistor(_, _)
+            | InputTarget::NetlistThermistor(_) => CosimInputKind::Number,
         })
     }
 
@@ -493,7 +673,7 @@ fn lock(trace: &AnalogTraceHandle) -> std::sync::MutexGuard<'_, AnalogTrace> {
     }
 }
 
-/// Resolve `v(out)`, `out`, `V(OUT)` or `i(Vgpio)` against a circuit.
+/// Resolve `v(out)`, `out`, `V(OUT)`, `i(Vgpio)` or `i(Dled)` against a circuit.
 ///
 /// Same spelling as the ngspice wrapper's probe map, so one manifest works with
 /// either engine. An unknown node or element is an error at build time: a probe
@@ -513,10 +693,17 @@ pub fn resolve_probe(solver: &Solver, expression: &str) -> Result<Probe, AnalogE
         return circuit
             .branch_index(inner)
             .map(Probe::BranchCurrent)
+            .or_else(|| {
+                circuit
+                    .diodes
+                    .iter()
+                    .position(|diode| diode.name.eq_ignore_ascii_case(inner.trim()))
+                    .map(Probe::DiodeCurrent)
+            })
             .ok_or_else(|| {
                 AnalogError::Config(format!(
-                    "probe `{expression}`: `{inner}` is not a voltage source, inductor, E or H \
-                     element; only those carry a branch current"
+                    "probe `{expression}`: `{inner}` is not a voltage source, inductor, E, H \
+                     or diode element; current probes support only those elements"
                 ))
             });
     }

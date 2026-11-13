@@ -1,0 +1,28 @@
+# LabWired - NUCLEO-L552ZE-Q IO smoke
+#
+# Build: cargo build -p firmware-l552ze-smoke --release --target thumbv8m.main-none-eabi
+#
+# The firmware enables the L5 clock gates (AHB2ENR GPIOA/B/C/G,
+# APB1ENR2.LPUART1EN), configures PG7/PG8 as LPUART1 AF8, walks the three user
+# LEDs and prints the GPIO ODR readback (`led=ld1 odr=00000080` …), then reads
+# the PC13 button and heartbeats on LPUART1.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-l552ze-smoke"
+  system: "./system.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "NUCLEO-L552ZE-Q SMOKE"
+  - uart_ordered:
+      - "cpu=cortex-m33 uart=lpuart1"
+      - "led=ld1 odr=00000080"
+      - "led=ld1_off odr=00000000"
+      - "led=ld2 odr=00000080"
+      - "led=ld2_off odr=00000000"
+      - "led=ld3 odr=00000200"
+      - "led=ld3_off odr=00000000"
+      - "btn=0"
+      - "hb=0 odr=00000080 btn=0"
+      - "hb=1 odr=00000080 btn=0"
+  - expected_stop_reason: max_steps

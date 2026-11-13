@@ -1,0 +1,26 @@
+# LabWired - CC2538DK: stock Contiki-NG v4.9 CFS/Coffee file-system test
+#
+# Firmware: tests/fixtures/cc2538dk-contiki-test-cfs.elf — UNMODIFIED upstream
+# Contiki-NG examples/storage/cfs-coffee/test-cfs.c for TARGET=cc2538dk
+# (rebuild: crates/firmware-cc2538dk-contiki/build.sh).
+#
+# Coffee (256 KiB at the start of flash, project-conf.h) writes a 65 000-byte
+# file in 128-byte chunks, reads it back and compares, then appends and
+# re-reads. Every flash change goes through the clean-room ROM's
+# PageErase/ProgramFlash (cfs-coffee-arch.c -> rom-util.h) into the
+# FLASH_CTRL model: erase, the FCTL/FADDR/FWDATA write sequence and the NOR
+# AND rule. With the old ROM stubs (both returned -1) test 1 fails at offset
+# 1920 and test 2 reports an error.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/cc2538dk-contiki-test-cfs.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 60000000
+  wall_time_ms: 120000
+assertions:
+  - uart_ordered:
+      - "[INFO: Main      ] Starting Contiki-NG-release/v4.9"
+      - "CFS test 1 completed with 0 errors"
+      - "CFS test 2 completed with 0 errors"
+  - expected_stop_reason: max_steps

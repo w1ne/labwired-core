@@ -64,7 +64,7 @@ pub(crate) fn motor_states_json(
                 ),
                 (
                     "current_a".to_owned(),
-                    serde_json::json!(snapshot.current_a.unwrap_or(0.0)),
+                    serde_json::json!(snapshot.current_a),
                 ),
                 (
                     "bus_voltage_v".to_owned(),
@@ -76,6 +76,9 @@ pub(crate) fn motor_states_json(
                 ),
                 ("faults".to_owned(), serde_json::json!(snapshot.faults)),
             ]);
+            if let Some(coupling) = snapshot.coupling {
+                state.insert("coupling".to_owned(), serde_json::json!(coupling));
+            }
             if let Some(currents) = snapshot.phase_currents_a {
                 state.insert("phase_currents_a".to_owned(), serde_json::json!(currents));
             }
@@ -191,7 +194,12 @@ impl WasmSimulator {
             include_bytes,
             peripheral: None,
         };
-        if let Some(found) = machine.bus.display_artifact(device_id, &opts) {
+        if let Some(found) = machine
+            .bus
+            .display_artifact_with_extra(device_id, &opts, &mut |f| {
+                machine.cpu.for_each_attached_device(f)
+            })
+        {
             return Some(found);
         }
         let binding = self.board_io.iter().find(|b| b.id == device_id)?;
@@ -623,8 +631,10 @@ impl WasmSimulator {
     /// [{ ch, cycle, state }] }` where `state` is `"0"`, `"1"`, `"z"`
     /// (nothing drives the pad: an undriven input, a released open-drain
     /// line) or `"x"` (the MCU output fights an external driver). A channel
-    /// whose pad model cannot report drive has `initial: null` and no edges —
-    /// never a guessed "driven". `read_logic_edges` is unchanged: its boolean
+    /// whose pad model has not reported drive starts with `initial: null`.
+    /// A later explicit drive report starts its state edges at that cycle;
+    /// a never-known channel keeps no state edges. No initial state is guessed.
+    /// `read_logic_edges` is unchanged: its boolean
     /// `value` is what the pad reads, so every existing consumer keeps working.
     #[wasm_bindgen]
     pub fn read_logic_states(&mut self, cursor: f64) -> Result<JsValue, JsValue> {
@@ -848,8 +858,10 @@ impl WasmSimulator {
 
     /// Live actuator state for canvas animation.
     ///
-    /// Returns servo states followed by configured motor-plant states.
+    /// Returns servo states, STEP/DIR steppers, then configured motor-plant states.
     /// - hobby servos (`kind: "servo"`) export shaft `angle` in degrees
+    /// - STEP/DIR steppers (`kind` = YAML type, e.g. `nema17` / `a4988`) export
+    ///   shaft `angle` in degrees plus signed `steps`
     /// - `dc-motor` exports scalar `current_a`
     /// - `bldc-motor` exports DC-bus `current_a`, `phase_currents_a`, and
     ///   `commutation_sector`
@@ -884,7 +896,38 @@ impl WasmSimulator {
                 "pulse_us": servo.pulse_us() as f64,
             }));
         }
-        states.extend(motor_states_json(machine.bus.motor_snapshots()));
+        for stepper in machine
+            .bus
+            .observed_of::<labwired_core::peripherals::components::step_dir_motor::StepDirMotor>(
+        ) {
+            let id = stepper.id();
+            if id.is_empty() {
+                continue;
+            }
+            // Capture fields before the JSON object so string keys sit more than
+            // two lines away from device_type() — the device-identity scan
+            // treats nearby literals as board_io type keys.
+            let kind = stepper.device_type().to_string();
+            let angle = stepper.angle_degrees_f64();
+            let steps = stepper.steps();
+            let active = stepper.is_enabled();
+            states.push(serde_json::json!({
+                "id": id,
+                "kind": kind,
+                "angle": angle,
+                "steps": steps,
+                "active": active,
+            }));
+        }
+        // DC/BLDC only — steppers are emitted above (motor_snapshots also
+        // folds them for prove evidence, but their actuator shape is angle/steps).
+        let dc_bldc: Vec<_> = machine
+            .bus
+            .motor_snapshots()
+            .into_iter()
+            .filter(|s| s.kind != labwired_core::bus::STEPPER_SNAPSHOT_KIND)
+            .collect();
+        states.extend(motor_states_json(dc_bldc));
 
         states
             .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
@@ -1339,8 +1382,9 @@ impl WasmSimulator {
             .into_boxed_slice())
     }
 
-    /// Read the IO-Link master peer's live state: `{ link_state, pd_valid,
-    /// input_byte }`. Returns `null` if no master is wired.
+    /// Read the IO-Link master peer's live state. The optional evaluation phase
+    /// and error are read-only diagnostics, null for legacy peers.
+    /// Returns `null` if no master is wired.
     #[wasm_bindgen]
     pub fn get_iolink_master_state(&self) -> JsValue {
         use labwired_core::peripherals::components::{IolinkLinkState, IolinkMaster};
@@ -1372,6 +1416,8 @@ impl WasmSimulator {
                         "link_state": link,
                         "pd_valid": m.pd_valid,
                         "input_byte": m.input_byte(),
+                        "evaluation_phase": m.evaluation_phase(),
+                        "evaluation_error": m.evaluation_error(),
                     });
                     return serde_wasm_bindgen::to_value(&v).unwrap_or(JsValue::NULL);
                 }
@@ -1400,9 +1446,10 @@ mod motor_state_tests {
                 torque_nm: 0.3,
                 current_a: Some(2.5),
                 phase_currents_a: None,
-                bus_voltage_v: 12.0,
+                bus_voltage_v: Some(12.0),
                 commutation_sector: None,
                 control_state: "forward".into(),
+                coupling: None,
                 faults: vec!["stalled".into()],
             },
             MotorSnapshot {
@@ -1416,9 +1463,10 @@ mod motor_state_tests {
                 torque_nm: 0.6,
                 current_a: Some(3.0),
                 phase_currents_a: Some([1.0, -0.25, -0.75]),
-                bus_voltage_v: 24.0,
+                bus_voltage_v: Some(24.0),
                 commutation_sector: Some(4),
                 control_state: "sector:4".into(),
+                coupling: None,
                 faults: vec!["open-phase-a".into()],
             },
         ]);
@@ -1435,6 +1483,38 @@ mod motor_state_tests {
         );
         assert_eq!(states[1]["commutation_sector"], 4);
         assert_eq!(states[1]["faults"], serde_json::json!(["open-phase-a"]));
+    }
+    #[test]
+    fn circuit_motor_readback_preserves_unknown_measurements_and_boundary_timing() {
+        let states = motor_states_json(vec![labwired_core::bus::MotorSnapshot {
+            id: "M1".into(),
+            kind: "bldc",
+            position_rad: 0.1,
+            speed_rpm: 2.0,
+            speed_rpm_peak_abs: 2.0,
+            speed_rpm_max: 2.0,
+            speed_rpm_min: 0.0,
+            torque_nm: 0.03,
+            current_a: None,
+            phase_currents_a: Some([0.0, -1.0, 1.0]),
+            bus_voltage_v: None,
+            commutation_sector: Some(0),
+            control_state: "circuit".into(),
+            coupling: Some(labwired_core::bus::MotorCoupling {
+                mode: "interval-start-zero-order-hold",
+                step_ns: Some(100),
+                completed_time_ns: Some(300),
+            }),
+            faults: Vec::new(),
+        }]);
+        assert!(states[0]["current_a"].is_null());
+        assert!(states[0]["bus_voltage_v"].is_null());
+        assert_eq!(
+            states[0]["phase_currents_a"],
+            serde_json::json!([0.0, -1.0, 1.0])
+        );
+        assert_eq!(states[0]["coupling"]["step_ns"], 100);
+        assert_eq!(states[0]["coupling"]["completed_time_ns"], 300);
     }
 }
 

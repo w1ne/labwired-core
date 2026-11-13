@@ -532,26 +532,13 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
                     )),
                 };
             }
-            match machine.bus.attach_uart_rx_source_named(&u.uart) {
-                Some(rx) => {
-                    let bytes = u.bytes.as_bytes();
-                    match rx.lock() {
-                        Ok(mut guard) => {
-                            guard.extend(bytes.iter().copied());
-                            info!(
-                                "uart_injection: {} byte(s) delivered to '{}'",
-                                bytes.len(),
-                                u.uart
-                            );
-                        }
-                        Err(e) => error!("uart_injection '{}': RX buffer poisoned: {e}", u.uart),
-                    }
+            let bytes = u.bytes.as_bytes();
+            match machine.bus.deliver_uart_rx_named(&u.uart, &bytes) {
+                Ok(n) => {
+                    info!("uart_injection: {n} byte(s) delivered to '{}'", u.uart);
                     None
                 }
-                None => Some(format!(
-                    "uart_injection: UART peripheral '{}' not found on the bus",
-                    u.uart
-                )),
+                Err(e) => Some(e),
             }
         };
     // A later injection that names a device which is not there could never be
@@ -1024,6 +1011,31 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
             stop_reason = StopReason::Halt;
             break;
         }
+        // Dead sleep: the core is parked and nothing can wake it. On this path
+        // `step` counts retired instructions only, so each further skip moves
+        // device time without moving `step`, and a `loop { wfi() }` firmware
+        // with no interrupt source would spin here forever. With idle
+        // fast-forward off every one of those WFI cycles is a step, so that
+        // arm stops at `max_steps` (or at `max_cycles`, whichever comes first,
+        // one cycle per step). End the run the same way.
+        if report.primary_steps == 0
+            && !ctx.counter_metrics
+            && cosim.is_none()
+            && pending_stimuli.iter().all(|(_, fired)| *fired)
+            && pending_uart_injections.iter().all(|(_, fired)| *fired)
+            && max_cycles.is_none_or(|limit| {
+                limit.saturating_sub(ctx.machine.total_cycles) > max_steps.saturating_sub(step)
+            })
+            && ctx.machine.parked_without_wake_source()
+        {
+            info!(
+                "core parked with no wake source at cycle {}; ending at max_steps",
+                ctx.machine.total_cycles
+            );
+            step = max_steps;
+            steps_executed = step;
+            break;
+        }
 
         // ── Co-simulation boundary ──────────────────────────────────────────
         // What the session did at the boundary it stopped the machine on.
@@ -1229,12 +1241,14 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         }
     }
 
-    // Final counter mirror for the JIT-eligible path: the loop-top sync runs
-    // before the LAST batch, so capture that batch's retired cycles/instructions
-    // here — `result.json` (`cycles`/`instructions`) and `stop_reason_details`
-    // read `metrics` below and must report the true totals.
+    // Every result uses the clock that enforced max_cycles and drove stimuli,
+    // peripheral time and stop_reason_details. The per-step observer counts
+    // instruction costs (for example two for Thumb32), which can differ from
+    // machine time and would make an otherwise bounded run appear over budget.
+    // Mirror after the LAST batch, before resource assertions and artifacts.
+    ctx.metrics.set_cycles(ctx.machine.total_cycles);
+    // Observer-free paths also need their retired-instruction total mirrored.
     if ctx.jit_eligible || ctx.counter_metrics || ctx.machine_metrics {
-        ctx.metrics.set_cycles(ctx.machine.total_cycles);
         ctx.metrics.set_instructions(steps_executed);
     }
 
@@ -1456,7 +1470,7 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
             // much ink, what was required), so it is logged rather than
             // reduced to a bare `false`.
             TestAssertion::DisplayRegion(a) => {
-                let passed = match evaluate_display_region(&ctx.machine.bus, &a.display_region) {
+                let passed = match evaluate_display_region(ctx.machine, &a.display_region) {
                     Ok(()) => true,
                     Err(msg) => {
                         error!("Assertion failed: {}", msg);
@@ -1799,6 +1813,10 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         logic_edges,
         gpio_pins,
         uart_lines.finish(),
+        crate::i2c_trace::i2c_trace_summary(
+            &ctx.machine.bus.bus_trace_snapshot(),
+            ctx.machine.bus.bus_trace_evicted(),
+        ),
         ctx.machine.bus.motor_snapshots(),
         ctx.machine
             .analog_series()

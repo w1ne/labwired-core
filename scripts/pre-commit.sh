@@ -18,12 +18,25 @@ echo "Running Clippy (all targets)..."
 cargo clippy --all-targets -- -D warnings
 
 echo "Running Cargo Check (Host)..."
-cargo check --workspace --exclude firmware --exclude firmware-ci-fixture --exclude riscv-ci-fixture
+# Reuse CI's crate-declared host/firmware classification. The clippy complement
+# alone omits default-members and wasm; the host check must include all of them.
+# Command substitution propagates classifier errors (process substitution does
+# not), and the read loop also works with macOS's Bash 3.2.
+host_scope="$(python3 scripts/ci/host_clippy_scope.py --host-cargo-args)"
+if [[ -z "$host_scope" ]]; then
+  echo "Host scope is empty; refusing to check only default-members." >&2
+  exit 1
+fi
+host_args=()
+while IFS= read -r package; do
+  host_args+=("$package")
+done <<< "$host_scope"
+cargo check "${host_args[@]}"
 
-# Keep the generated board validation status in sync, and block the commit if a
-# peripheral model drifted past its last silicon capture without a drift_ack.
+# Keep board validation status current and enforce source-watch integrity.
+# Source/capture differences are reported; no human source-review ACK is required.
 if command -v python3 >/dev/null 2>&1 && python3 -c "import yaml" >/dev/null 2>&1; then
-  echo "Regenerating board validation status + drift gate..."
+  echo "Regenerating board validation status + source/capture report..."
   python3 scripts/generate_validation_status.py
   python3 scripts/generate_validation_status.py --drift
   git add docs/boards/VALIDATION_STATUS.md

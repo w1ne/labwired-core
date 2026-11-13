@@ -1,0 +1,71 @@
+# LabWired - CC2538DK example system (CC2538SF53)
+#
+# Same board manifest as configs/systems/cc2538dk.yaml, kept beside the
+# example so the package is self-contained.
+#
+# TI CC2538DK / Contiki-NG + RIOT `cc2538dk`:
+#   LEDs (active high): PC0 red (USB pull-up, not driven), PC1 yellow,
+#     PC2 green, PC3 orange
+#   Keys (active low): SELECT PA3, LEFT PC4, RIGHT PC5, UP PC6, DOWN PC7
+#   Console: UART0 PA0/PA1 (IOC), SmartRF06 EB USB VCP
+name: "cc2538dk"
+chip: "../../configs/chips/cc2538sf53.yaml"
+cpu_hz: 16_000_000
+external_devices: []
+board_io:
+  # LED1 (red) PC0 doubles as the CC2538 USB D+ pull-up (Contiki-NG
+  # board.h); declared, but the smoke never drives it.
+  - id: "led1_red"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 0
+    signal: "output"
+    active_high: true
+  - id: "led2_yellow"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 1
+    signal: "output"
+    active_high: true
+  - id: "led3_green"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 2
+    signal: "output"
+    active_high: true
+  - id: "led4_orange"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 3
+    signal: "output"
+    active_high: true
+  - id: "key_select"
+    kind: "button"
+    peripheral: "gpioa"
+    pin: 3
+    signal: "input"
+    active_high: false
+  - id: "key_left"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 4
+    signal: "input"
+    active_high: false
+  - id: "key_right"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 5
+    signal: "input"
+    active_high: false
+  - id: "key_up"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 6
+    signal: "input"
+    active_high: false
+  - id: "key_down"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 7
+    signal: "input"
+    active_high: false

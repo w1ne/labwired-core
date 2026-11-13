@@ -1,0 +1,22 @@
+# LabWired - SK-AM62 stock Zephyr hello_world
+#
+# Unmodified upstream Zephyr v4.3.0 `samples/hello_world` for board target
+# `sk_am62/am6234/a53`. Rebuild: crates/firmware-sk-am62-zephyr/build.sh
+#
+# The A53 starts at the ELF entry at EL3 (the reset state), Zephyr's reset
+# path programs EL3 (SCR_EL3, ICC_SRE_EL3, VBAR_EL3) and ERETs to EL1, turns
+# the MMU on with its own page tables, brings up the GICv3 and the virtual
+# generic timer, and prints on MAIN_UART0 as a 16550.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/sk-am62-zephyr-hello.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 2000000
+  # The image idles in WFI after main() returns; idle time is not steps.
+  max_cycles: 60000000
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v4.3.0 ***"
+      - "Hello World! sk_am62/am6234/a53"
+  - expected_stop_reason: max_cycles

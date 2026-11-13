@@ -1,0 +1,88 @@
+# LabWired - CC2538DK: AES-CBC-MAC on the AES/SHA-256 cryptoprocessor
+#
+# Firmware: tests/fixtures/cc2538dk-contiki-crypto-cbc-mac.elf, UNMODIFIED Contiki-NG
+# v4.9 examples/platform-specific/cc2538-common/crypto/cbc-mac-test.c (crates/firmware-cc2538dk-contiki/build.sh).
+# Every one of its 16 test vectors must print each driver call's success and
+# every "... OK" check, in order; a wrong output, tag or digest prints "wrong"
+# or "authentication failed" instead and breaks the sequence.
+#
+# Superset of Renode's tests/platforms/CC2538/cc2538_cryptoprocessor.robot
+# "Should Handle CBC MAC Mode" (same firmware source, same milestones, plus the
+# key-store load and get_result lines).
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/cc2538dk-contiki-crypto-cbc-mac.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 30000000
+assertions:
+  - uart_ordered:
+      - "aes_load_keys(): success"
+      - "Test vector #0:"
+      - "cbc_mac_auth_start(): success"
+      - "cbc_mac_auth_get_result(): success"
+      - "MAC OK"
+      - "Test vector #1:"
+      - "cbc_mac_auth_start(): success"
+      - "cbc_mac_auth_get_result(): success"
+      - "MAC OK"
+      - "Test vector #2:"
+      - "cbc_mac_auth_start(): success"
+      - "cbc_mac_auth_get_result(): success"
+      - "MAC OK"
+      - "Test vector #3:"
+      - "cbc_mac_auth_start(): success"
+      - "cbc_mac_auth_get_result(): success"
+      - "MAC OK"
+      - "Test vector #4:"
+      - "cbc_mac_auth_start(): success"
+      - "cbc_mac_auth_get_result(): success"
+      - "MAC OK"
+      - "Test vector #5:"
+      - "cbc_mac_auth_start(): success"
+      - "cbc_mac_auth_get_result(): success"
+      - "MAC OK"
+      - "Test vector #6:"
+      - "cbc_mac_auth_start(): success"
+      - "cbc_mac_auth_get_result(): success"
+      - "MAC OK"
+      - "Test vector #7:"
+      - "cbc_mac_auth_start(): success"
+      - "cbc_mac_auth_get_result(): success"
+      - "MAC OK"
+      - "aes_load_keys(): success"
+      - "Test vector #8:"
+      - "cbc_mac_auth_start(): success"
+      - "cbc_mac_auth_get_result(): success"
+      - "MAC OK"
+      - "Test vector #9:"
+      - "cbc_mac_auth_start(): success"
+      - "cbc_mac_auth_get_result(): success"
+      - "MAC OK"
+      - "Test vector #10:"
+      - "cbc_mac_auth_start(): success"
+      - "cbc_mac_auth_get_result(): success"
+      - "MAC OK"
+      - "Test vector #11:"
+      - "cbc_mac_auth_start(): success"
+      - "cbc_mac_auth_get_result(): success"
+      - "MAC OK"
+      - "aes_load_keys(): success"
+      - "Test vector #12:"
+      - "cbc_mac_auth_start(): success"
+      - "cbc_mac_auth_get_result(): success"
+      - "MAC OK"
+      - "Test vector #13:"
+      - "cbc_mac_auth_start(): success"
+      - "cbc_mac_auth_get_result(): success"
+      - "MAC OK"
+      - "Test vector #14:"
+      - "cbc_mac_auth_start(): success"
+      - "cbc_mac_auth_get_result(): success"
+      - "MAC OK"
+      - "Test vector #15:"
+      - "cbc_mac_auth_start(): success"
+      - "cbc_mac_auth_get_result(): success"
+      - "MAC OK"
+      - "Done!"
+  - expected_stop_reason: max_steps

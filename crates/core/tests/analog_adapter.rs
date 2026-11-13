@@ -28,6 +28,7 @@ mod analog {
             sources: BTreeMap::from([("gpio".to_string(), "Vgpio".to_string())]),
             trace: vec!["v(in)".to_string(), "i(Vgpio)".to_string()],
             trace_samples: 20_000,
+            thermistors: BTreeMap::new(),
         }
     }
 
@@ -75,6 +76,41 @@ mod analog {
             error < 0.005,
             "after one tau: {volts} V vs {expected} V ({:.3} %)",
             error * 100.0
+        );
+    }
+
+    /// Electrical negative control for the source-backed RC example. If a
+    /// model ignores its capacitor value (or returns a hard-coded response),
+    /// both traces become the same and this check fails. This is a model
+    /// test, not physical-board verification.
+    #[test]
+    fn rc_capacitance_perturbation_changes_the_measured_response() {
+        let sample_at_one_ms = |netlist: &str| {
+            let mut adapter =
+                AnalogCosimAdapter::from_netlist(netlist, &rc_config()).expect("adapter builds");
+            let mut volts = 0.0;
+            for step in 1..=10 {
+                volts = step_high(&mut adapter, step * 100_000);
+            }
+            volts
+        };
+
+        // Same 10 kΩ resistance, source and GPIO stimulus. Only C changes.
+        let baseline = sample_at_one_ms(RC);
+        let negative_control = sample_at_one_ms(&RC.replace("100n", "1u"));
+        let expected_baseline = 3.3 * (1.0 - (-1.0_f64).exp());
+        let expected_slow = 3.3 * (1.0 - (-0.1_f64).exp());
+        assert!(
+            (baseline - expected_baseline).abs() < 0.02,
+            "10 kΩ × 100 nF must charge to {expected_baseline:.3} V after 1 ms, got {baseline:.3} V"
+        );
+        assert!(
+            (negative_control - expected_slow).abs() < 0.02,
+            "10 kΩ × 1 µF must charge to {expected_slow:.3} V after 1 ms, got {negative_control:.3} V"
+        );
+        assert!(
+            baseline > 4.0 * negative_control,
+            "capacitor change must affect the actual electrical result; baseline {baseline:.3} V vs negative control {negative_control:.3} V"
         );
     }
 
@@ -143,6 +179,77 @@ mod analog {
             (settled - 1.8).abs() < 1e-3,
             "a 1.8 V drive settles at 1.8 V, not vdd: {settled} V"
         );
+    }
+
+    #[test]
+    fn a_routed_temperature_updates_an_ntc_inside_the_analog_netlist() {
+        let netlist = "Vcc vcc 0 dc 3.3\nRntc vcc sense 10k beta=3950\nRpull sense 0 10k\n";
+        let cfg = AnalogConfig {
+            probes: BTreeMap::from([("v_sense".to_string(), "v(sense)".to_string())]),
+            sources: BTreeMap::from([("temperature_c".to_string(), "Rntc".to_string())]),
+            ..AnalogConfig::default()
+        };
+        let mut adapter = AnalogCosimAdapter::from_netlist(netlist, &cfg).expect("adapter builds");
+        assert_eq!(
+            adapter.input_kind("temperature_c"),
+            Some(labwired_core::cosim::CosimInputKind::Number)
+        );
+        let sample = |adapter: &mut AnalogCosimAdapter, time_ns, celsius| {
+            let result = adapter
+                .step(CosimStep {
+                    time_ns,
+                    dt_ns: 100_000,
+                    inputs: BTreeMap::from([(
+                        "temperature_c".to_string(),
+                        CosimSignalValue::F64(celsius),
+                    )]),
+                })
+                .expect("temperature step solves");
+            match result.outputs["v_sense"] {
+                CosimSignalValue::F64(volts) => volts,
+                ref other => panic!("probe should be a voltage, got {other:?}"),
+            }
+        };
+
+        let at_25_c = sample(&mut adapter, 100_000, 25.0);
+        let hot = sample(&mut adapter, 200_000, 80.0);
+        let cold = sample(&mut adapter, 300_000, -10.0);
+        assert!(
+            hot > at_25_c && at_25_c > cold,
+            "hot={hot}, 25 °C={at_25_c}, cold={cold}"
+        );
+
+        // Independently calculate the Beta resistance and divider voltage.
+        // The adapter must route each temperature into the MNA resistor stamp,
+        // not just move the output in the expected direction.
+        let expected_sense = |temperature_celsius: f64| {
+            let ntc_ohms =
+                10_000.0 * (3950.0 * (1.0 / (temperature_celsius + 273.15) - 1.0 / 298.15)).exp();
+            3.3 * 10_000.0 / (ntc_ohms + 10_000.0)
+        };
+        for (label, actual, temperature_celsius) in [
+            ("cold", cold, -10.0),
+            ("nominal", at_25_c, 25.0),
+            ("hot", hot, 80.0),
+        ] {
+            let expected = expected_sense(temperature_celsius);
+            assert!(
+                (actual - expected).abs() < 1e-9,
+                "{label} routed NTC voltage should be {expected} V at {temperature_celsius} °C, got {actual} V"
+            );
+        }
+
+        let error = adapter
+            .step(CosimStep {
+                time_ns: 400_000,
+                dt_ns: 100_000,
+                inputs: BTreeMap::from([(
+                    "temperature_c".to_string(),
+                    CosimSignalValue::Bool(true),
+                )]),
+            })
+            .expect_err("temperature input cannot be boolean");
+        assert!(error.to_string().contains("degrees Celsius"), "{error}");
     }
 
     #[test]

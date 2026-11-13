@@ -4,6 +4,10 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
+# SUPERSEDED: staged onboarding descriptor (a generic UART fixture on a
+# Renode-derived map with the flash window at 0x03000000 (the boot ROM) and no
+# RT500 peripherals). The promoted i.MX RT595S part is
+# configs/chips/mimxrt595s.yaml (board: configs/systems/mimxrt595-evk.yaml).
 name: imxrt500
 arch: arm
 flash:

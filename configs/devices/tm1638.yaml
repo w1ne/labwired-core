@@ -1,0 +1,219 @@
+# Titan Micro TM1638 LED driver with key scan ("LED&KEY" 8-digit module) —
+# 3-wire bit-banged (STB / CLK / DIO). Declarative `gpio_device`, the same
+# shape as `tm1637_7seg.yaml`. Datasheet: Titan Micro Electronics TM1638
+# "Special circuit for LED drive control", V1.3 — §IV pin description, §V
+# "Description of Instructions" (5.1 data command, 5.2 address command, 5.3
+# display control), §VI "Address of display register", §IX "Transmission
+# format of serial data".
+#
+# ── The wire ───────────────────────────────────────────────────────────────
+#   * STB — "Initialize the serial interface at falling edge … The first byte
+#     after STB goes low is regarded as an instruction. When STB is high, CLK
+#     is ignored." STB↑ in the middle of a byte abandons it ("the instruction
+#     or data being transmitted is invalid").
+#   * CLK — DIO is read "at rising edge of the clock", LSB first (§IX).
+#   * No ACK bit (unlike the TM1637): eight clocks are one byte.
+#
+# ── Instructions (§V): B7:B6 of the first byte ─────────────────────────────
+#   01  Data command   B1:B0 00 write display, 10 read key data;
+#                      B2 0 auto-increment, 1 fixed address; B3 test mode
+#   11  Address command  B3:B0 = display address 00H..0FH ("on power-up the
+#                        address is set to 00H")
+#   10  Display control  B3 display on/off, B2:B0 pulse width
+#                        (1/16, 2/16, 4/16, 10/16 … 14/16)
+# Data bytes follow the address command in the same STB-low window. "If the
+# address is 10H or higher, data will be ignored until a valid address is
+# set" — an auto-increment past 0FH drops the rest of the burst.
+#
+# ── Display RAM (§VI, Figure 2) ────────────────────────────────────────────
+# 16 bytes; GRIDn's SEG1..SEG8 is address 2(n−1) and its SEG9/SEG10 bits are
+# address 2(n−1)+1. On the common LED&KEY module the eight 7-segment digits
+# hang off SEG1..SEG8 and the eight discrete LEDs off SEG9 of the odd
+# addresses, so the artifact is the eight EVEN bytes, rendered through the
+# a–g/dp font, and `leds` reports bit 0 of the odd bytes.
+#
+# ⚠️ NOT MODELLED, named rather than faked:
+#   * KEY READING (data command 0x42): the chip DRIVES DIO for four bytes.
+#     This part observes DIO and drives nothing — the same open-drain seam the
+#     TM1637's ACK is missing — so a key read clocks back whatever the line
+#     floats to. Bytes clocked after a read command are not stored.
+#   * Power-on display RAM is "random" per the datasheet note; it is 0 here.
+#   * Test mode (B3), brightness as luminance, the 4.7 ms scan cycle.
+type: tm1638
+
+behavior:
+  primitive: gpio_device
+
+  # All three lines are MCU outputs while the host writes display data.
+  pins:
+    STB: stb_pin
+    CLK: clk_pin
+    DIO: dio_pin
+
+  vars:
+    # Idle: STB high (deselected), CLK high.
+    prev_stb: 1
+    prev_clk: 1
+    bit_buf: 0
+    bit_count: 0
+    # 1 for exactly the store in which the 8th bit landed (see tm1637_7seg).
+    byte_done: 0
+    have_cmd: 0
+    auto_inc: 1
+    read_mode: 0
+    addr: 0
+    display_on: 0
+    pulse: 0
+    g0: 0
+    g1: 0
+    g2: 0
+    g3: 0
+    g4: 0
+    g5: 0
+    g6: 0
+    g7: 0
+    g8: 0
+    g9: 0
+    g10: 0
+    g11: 0
+    g12: 0
+    g13: 0
+    g14: 0
+    g15: 0
+
+  rules:
+    # ── STB↓: a new instruction starts ────────────────────────────────────
+    - on: { pins: [STB, CLK, DIO] }
+      when: "var(prev_stb) && !pin(STB)"
+      do:
+        - { var: { name: bit_buf, value: 0 } }
+        - { var: { name: bit_count, value: 0 } }
+        - { var: { name: byte_done, value: 0 } }
+        - { var: { name: have_cmd, value: 0 } }
+
+    # ── CLK↑ with STB low: sample one bit, LSB first ──────────────────────
+    - on: { pins: [STB, CLK, DIO] }
+      when: "!var(prev_clk) && pin(CLK) && !pin(STB)"
+      do:
+        - { var: { name: bit_buf, value: "var(bit_buf) | (pin(DIO) << var(bit_count))" } }
+        - { var: { name: bit_count, value: "var(bit_count) + 1" } }
+        - { var: { name: byte_done, value: "var(bit_count) == 8" } }
+
+    # ── the first byte is the instruction ─────────────────────────────────
+    - on: { pins: [STB, CLK, DIO] }
+      when: "var(byte_done) && !var(have_cmd) && (var(bit_buf) & 0xC0) == 0x40"
+      do:
+        - { var: { name: auto_inc, value: "(var(bit_buf) & 0x04) == 0" } }
+        - { var: { name: read_mode, value: "(var(bit_buf) & 0x03) == 2" } }
+    - on: { pins: [STB, CLK, DIO] }
+      when: "var(byte_done) && !var(have_cmd) && (var(bit_buf) & 0xC0) == 0xC0"
+      do: [{ var: { name: addr, value: "var(bit_buf) & 0x0F" } }]
+    - on: { pins: [STB, CLK, DIO] }
+      when: "var(byte_done) && !var(have_cmd) && (var(bit_buf) & 0xC0) == 0x80"
+      do:
+        - { var: { name: display_on, value: "(var(bit_buf) & 0x08) != 0" } }
+        - { var: { name: pulse, value: "var(bit_buf) & 0x07" } }
+
+    # ── later bytes are display data at the pointer (00H..0FH only) ───────
+    - on: { pins: [STB, CLK, DIO] }
+      when: "var(byte_done) && var(have_cmd) && !var(read_mode) && var(addr) == 0"
+      do: [{ var: { name: g0, value: "var(bit_buf)" } }]
+    - on: { pins: [STB, CLK, DIO] }
+      when: "var(byte_done) && var(have_cmd) && !var(read_mode) && var(addr) == 1"
+      do: [{ var: { name: g1, value: "var(bit_buf)" } }]
+    - on: { pins: [STB, CLK, DIO] }
+      when: "var(byte_done) && var(have_cmd) && !var(read_mode) && var(addr) == 2"
+      do: [{ var: { name: g2, value: "var(bit_buf)" } }]
+    - on: { pins: [STB, CLK, DIO] }
+      when: "var(byte_done) && var(have_cmd) && !var(read_mode) && var(addr) == 3"
+      do: [{ var: { name: g3, value: "var(bit_buf)" } }]
+    - on: { pins: [STB, CLK, DIO] }
+      when: "var(byte_done) && var(have_cmd) && !var(read_mode) && var(addr) == 4"
+      do: [{ var: { name: g4, value: "var(bit_buf)" } }]
+    - on: { pins: [STB, CLK, DIO] }
+      when: "var(byte_done) && var(have_cmd) && !var(read_mode) && var(addr) == 5"
+      do: [{ var: { name: g5, value: "var(bit_buf)" } }]
+    - on: { pins: [STB, CLK, DIO] }
+      when: "var(byte_done) && var(have_cmd) && !var(read_mode) && var(addr) == 6"
+      do: [{ var: { name: g6, value: "var(bit_buf)" } }]
+    - on: { pins: [STB, CLK, DIO] }
+      when: "var(byte_done) && var(have_cmd) && !var(read_mode) && var(addr) == 7"
+      do: [{ var: { name: g7, value: "var(bit_buf)" } }]
+    - on: { pins: [STB, CLK, DIO] }
+      when: "var(byte_done) && var(have_cmd) && !var(read_mode) && var(addr) == 8"
+      do: [{ var: { name: g8, value: "var(bit_buf)" } }]
+    - on: { pins: [STB, CLK, DIO] }
+      when: "var(byte_done) && var(have_cmd) && !var(read_mode) && var(addr) == 9"
+      do: [{ var: { name: g9, value: "var(bit_buf)" } }]
+    - on: { pins: [STB, CLK, DIO] }
+      when: "var(byte_done) && var(have_cmd) && !var(read_mode) && var(addr) == 10"
+      do: [{ var: { name: g10, value: "var(bit_buf)" } }]
+    - on: { pins: [STB, CLK, DIO] }
+      when: "var(byte_done) && var(have_cmd) && !var(read_mode) && var(addr) == 11"
+      do: [{ var: { name: g11, value: "var(bit_buf)" } }]
+    - on: { pins: [STB, CLK, DIO] }
+      when: "var(byte_done) && var(have_cmd) && !var(read_mode) && var(addr) == 12"
+      do: [{ var: { name: g12, value: "var(bit_buf)" } }]
+    - on: { pins: [STB, CLK, DIO] }
+      when: "var(byte_done) && var(have_cmd) && !var(read_mode) && var(addr) == 13"
+      do: [{ var: { name: g13, value: "var(bit_buf)" } }]
+    - on: { pins: [STB, CLK, DIO] }
+      when: "var(byte_done) && var(have_cmd) && !var(read_mode) && var(addr) == 14"
+      do: [{ var: { name: g14, value: "var(bit_buf)" } }]
+    - on: { pins: [STB, CLK, DIO] }
+      when: "var(byte_done) && var(have_cmd) && !var(read_mode) && var(addr) == 15"
+      do: [{ var: { name: g15, value: "var(bit_buf)" } }]
+    - on: { pins: [STB, CLK, DIO] }
+      when: "var(byte_done) && var(have_cmd) && !var(read_mode) && var(auto_inc)"
+      do: [{ var: { name: addr, value: "var(addr) + 1" } }]
+
+    # ── close the byte ────────────────────────────────────────────────────
+    - on: { pins: [STB, CLK, DIO] }
+      when: "var(byte_done)"
+      do:
+        - { var: { name: have_cmd, value: 1 } }
+        - { var: { name: bit_buf, value: 0 } }
+        - { var: { name: bit_count, value: 0 } }
+        - { var: { name: byte_done, value: 0 } }
+
+    # ── STB↑: a partial byte is abandoned ─────────────────────────────────
+    - on: { pins: [STB, CLK, DIO] }
+      when: "!var(prev_stb) && pin(STB)"
+      do:
+        - { var: { name: bit_buf, value: 0 } }
+        - { var: { name: bit_count, value: 0 } }
+
+    # ── ⚠️ LAST: latch the levels this store delivered ────────────────────
+    - on: { pins: [STB, CLK, DIO] }
+      do:
+        - { var: { name: prev_stb, value: "pin(STB)" } }
+        - { var: { name: prev_clk, value: "pin(CLK)" } }
+
+  artifact:
+    kind: text_display
+    format: tm1638_grid
+    ram: { vars: [g0, g2, g4, g6, g8, g10, g12, g14] }
+    decode: { font: seven_segment, digits: 8 }
+    meta:
+      - { key: lit_segments, source: lit_bits }
+      - { key: display_on, value: "var(display_on)", type: bool }
+      - { key: pulse_width, value: "var(pulse)" }
+      - { key: leds, value: "(var(g1) & 1) | (var(g3) & 1) << 1 | (var(g5) & 1) << 2 | (var(g7) & 1) << 3 | (var(g9) & 1) << 4 | (var(g11) & 1) << 5 | (var(g13) & 1) << 6 | (var(g15) & 1) << 7" }
+
+metadata:
+  label: "TM1638 LED&KEY (8-digit)"
+  summary: "8-digit 7-segment + 8 LED display with the TM1638 3-wire (STB/CLK/DIO) driver."
+  detail: "Titan Micro TM1638, bit-banged on three GPIO lines: STB↓ starts an instruction, DIO is sampled LSB first on CLK↑, no ACK. Decodes the data command (0x40 auto-increment / 0x44 fixed), the address command (0xC0..0xCF) followed by display data, and display control (0x80..0x8F: on/off, pulse width) into the 16-byte display RAM. The artifact renders the eight digit bytes (even addresses) through the 7-segment font and reports the eight discrete LEDs (bit 0 of the odd addresses). NOT modelled: key reading (the chip would drive DIO), random power-on RAM, test mode."
+  category: gpio
+  config_keys:
+    - { name: stb_pin, ty: str, doc: "STB GPIO pin the firmware bit-bangs (e.g. \"PA7\")." }
+    - { name: clk_pin, ty: str, doc: "CLK GPIO pin the firmware bit-bangs (e.g. \"PA8\")." }
+    - { name: dio_pin, ty: str, doc: "DIO GPIO pin the firmware bit-bangs (e.g. \"PA9\")." }
+  inputs: []
+
+emit:
+  connection: gpio
+  config:
+    - { key: stb_pin, from_part_pins: [STB] }
+    - { key: clk_pin, from_part_pins: [CLK] }
+    - { key: dio_pin, from_part_pins: [DIO] }

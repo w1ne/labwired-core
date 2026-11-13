@@ -16,6 +16,7 @@ use std::collections::VecDeque;
 
 pub struct MicroSd {
     cs_pin: String,
+    selected: bool,
     cmd_buf: Vec<u8>,
     out: VecDeque<u8>,
     idle: bool,
@@ -27,6 +28,7 @@ impl MicroSd {
     pub fn new(cs_pin: impl Into<String>) -> Self {
         Self {
             cs_pin: cs_pin.into(),
+            selected: false,
             cmd_buf: Vec::new(),
             out: VecDeque::new(),
             idle: true,
@@ -116,11 +118,17 @@ impl SpiDevice for MicroSd {
     }
 
     fn cs_select(&mut self) {
+        self.selected = true;
         self.cmd_buf.clear();
     }
 
     fn cs_release(&mut self) {
+        self.selected = false;
         self.cmd_buf.clear();
+    }
+
+    fn is_selected(&self) -> bool {
+        self.selected
     }
 
     fn transfer(&mut self, mosi: u8) -> u8 {

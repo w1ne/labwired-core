@@ -6,18 +6,20 @@
 //! replace.**
 //!
 //! `components/apa102.rs` and `components/ws2812.rs` were deleted when the
-//! `led_strip` primitive landed. This file is the evidence that nothing moved.
+//! `led_strip` primitive landed. This file pins their legacy wire and pixel contracts.
 //! The template is `display_migration_parity.rs`, and the rule is the same: the
 //! deleted models live on VERBATIM in `led_strip_oracle/`, both implementations
-//! are driven by the SAME script, and three things are compared rather than one:
+//! are driven by the SAME script, and four things are compared rather than one:
 //!
 //!   * for the clocked strip, the WIRE TRANSCRIPT — every MISO byte the device
 //!     put back on the bus (an APA102 drives none, and "drives none" is itself a
 //!     claim worth pinning);
 //!   * the WHOLE LED COLOUR ARRAY, LED by LED, including the brightness field —
 //!     not a count and not a checksum;
-//!   * every field of the paint artifact's `meta`, which is what the browser's
-//!     strip overlay and the CLI's `painted bytes=` line read.
+//!   * every legacy field of the paint artifact's `meta`, which is what the
+//!     browser's strip overlay and the CLI's `painted bytes=` line read;
+//!   * WS2812's added `frames_seen` history, checked separately against the
+//!     input frames rather than added to the frozen oracle.
 //!
 //! The two wires are driven differently BECAUSE THEY ARE DIFFERENT WIRES, and
 //! that is the whole reason the primitive has two doors:
@@ -29,11 +31,16 @@
 //!     transitions into both implementations, which is the same idea: one
 //!     stimulus, two models, compare everything.
 //!
-//! ── NO DELIBERATE DIFFERENCES ───────────────────────────────────────────────
+//! ── LEGACY PARITY AND ADDITIVE FRAME HISTORY ────────────────────────────────
 //!
-//! Unlike the display ports, neither strip changed behaviour. Every assertion
-//! below is `old == new`. Two facts that LOOK like bugs are pinned as shared
-//! behaviour instead, so a later "fix" to one implementation fails here:
+//! All legacy fields, payload bytes and wire behaviour still compare exactly.
+//! WS2812 now also reports `frames_seen` for mid-run blink/dim evidence. Only
+//! after its bytes, order and lit counts match the stimulus-specific history
+//! is that one field removed from the legacy comparison. Any other added field
+//! still fails. The deleted models in `led_strip_oracle/` remain verbatim.
+//!
+//! Two facts that LOOK like bugs are pinned as shared behaviour, so a later
+//! "fix" to one implementation fails here:
 //!
 //!   1. **An APA102 ones end frame decodes as one more white LED.** The end
 //!      frame is 32 clocks whose level the APA102 datasheet leaves to the
@@ -122,6 +129,33 @@ fn assert_same_artifact(old: &Artifact, new: &Artifact, what: &str) {
     }
 }
 
+/// The only additive WS2812 field has its own input-derived oracle. Keep the
+/// exact comparator above unchanged so all legacy data and unknown keys still
+/// fail on any difference, including when history itself is correct.
+fn assert_ws2812_artifact(
+    old: &Artifact,
+    new: &Artifact,
+    expected_frames: &[serde_json::Value],
+    what: &str,
+) {
+    assert!(
+        old.meta.get("frames_seen").is_none(),
+        "{what}: the frozen oracle must not acquire new history metadata"
+    );
+    assert_eq!(
+        new.meta.get("frames_seen"),
+        Some(&serde_json::Value::Array(expected_frames.to_vec())),
+        "{what}: frames_seen must match the input frame history"
+    );
+    let mut legacy = new.clone();
+    legacy
+        .meta
+        .as_object_mut()
+        .expect("new meta is an object")
+        .remove("frames_seen");
+    assert_same_artifact(old, &legacy, what);
+}
+
 /// The oracle's `([r, g, b], brightness)` pixel in the descriptor's shape, so
 /// the two colour arrays compare as one type.
 fn old_apa_pixels(old: &OldApa102) -> Vec<LedPixel> {
@@ -130,6 +164,7 @@ fn old_apa_pixels(old: &OldApa102) -> Vec<LedPixel> {
         .map(|(rgb, brightness)| LedPixel {
             wire: *rgb,
             brightness: *brightness,
+            white: None,
         })
         .collect()
 }
@@ -144,6 +179,7 @@ fn old_ws_pixels(old: &OldWs2812) -> Vec<LedPixel> {
         .map(|grb| LedPixel {
             wire: *grb,
             brightness: 0,
+            white: None,
         })
         .collect()
 }
@@ -302,7 +338,8 @@ fn apa102_a_ones_end_frame_decodes_as_a_phantom_led_in_both_models() {
         px[1],
         LedPixel {
             wire: [0xFF, 0xFF, 0xFF],
-            brightness: 0x1F
+            brightness: 0x1F,
+            white: None,
         },
         "and it is white at full brightness"
     );
@@ -411,7 +448,12 @@ fn ws_frame(pixels: &[u32], latch: bool) -> Vec<(bool, u64)> {
 }
 
 /// Compare both WS2812 implementations after one edge list.
-fn ws2812_parity(what: &str, edges: &[(bool, u64)], pixels: usize) -> Vec<LedPixel> {
+fn ws2812_parity(
+    what: &str,
+    edges: &[(bool, u64)],
+    pixels: usize,
+    expected_frames: &[serde_json::Value],
+) -> Vec<LedPixel> {
     let old = OldWs2812::new(DATA_PIN, pixels, CPU_HZ).with_component_id("strip");
     let mut new = ws2812(DATA_PIN, pixels, CPU_HZ);
     new.set_component_id("strip");
@@ -425,7 +467,7 @@ fn ws2812_parity(what: &str, edges: &[(bool, u64)], pixels: usize) -> Vec<LedPix
     let a_new = DeviceEvidence::artifacts(&new, "strip", &opts());
     assert_eq!(a_old.len(), a_new.len(), "{what}: artifact count");
     for (o, n) in a_old.iter().zip(a_new.iter()) {
-        assert_same_artifact(o, n, what);
+        assert_ws2812_artifact(o, n, expected_frames, what);
     }
     p_new
 }
@@ -438,6 +480,10 @@ fn ws2812_a_three_pixel_frame_decodes_identically() {
         "ws2812 rgb frame",
         &ws_frame(&[0x00_FF_00, 0xFF_00_00, 0x00_00_FF], false),
         3,
+        &[serde_json::json!({
+            "bytes": [0x00, 0xFF, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00, 0xFF],
+            "lit_pixels": 3,
+        })],
     );
     assert_eq!(
         px.iter().map(|p| p.wire).collect::<Vec<_>>(),
@@ -452,6 +498,10 @@ fn ws2812_a_reset_gap_latches_the_frame_in_both_models() {
         "ws2812 latched frame",
         &ws_frame(&[0x11_22_33, 0x44_55_66], true),
         2,
+        &[serde_json::json!({
+            "bytes": [0x11, 0x22, 0x33, 0x44, 0x55, 0x66],
+            "lit_pixels": 2,
+        })],
     );
     assert_eq!(
         px.iter().map(|p| p.wire).collect::<Vec<_>>(),
@@ -468,6 +518,16 @@ fn ws2812_a_second_frame_replaces_the_first_in_both_models() {
 
     feed_edges(&old, &new, &ws_frame(&[0xAA_BB_CC, 0xDD_EE_FF], true));
     assert_eq!(old_ws_pixels(&old), new.pixels(), "after the first frame");
+    let first = serde_json::json!({
+        "bytes": [0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF],
+        "lit_pixels": 2,
+    });
+    assert_ws2812_artifact(
+        &old.artifacts("strip", &opts())[0],
+        &DeviceEvidence::artifacts(&new, "strip", &opts())[0],
+        std::slice::from_ref(&first),
+        "after the first frame",
+    );
 
     // A second frame, offset past the first, with the reset gap in between.
     let mut second = Vec::new();
@@ -484,6 +544,18 @@ fn ws2812_a_second_frame_replaces_the_first_in_both_models() {
         vec![[0x01, 0x02, 0x03], [0x04, 0x05, 0x06]],
         "the second frame replaced the first"
     );
+    assert_ws2812_artifact(
+        &old.artifacts("strip", &opts())[0],
+        &DeviceEvidence::artifacts(&new, "strip", &opts())[0],
+        &[
+            first,
+            serde_json::json!({
+                "bytes": [0x01, 0x02, 0x03, 0x04, 0x05, 0x06],
+                "lit_pixels": 2,
+            }),
+        ],
+        "after the second frame",
+    );
 }
 
 #[test]
@@ -492,13 +564,17 @@ fn ws2812_a_frame_longer_than_the_strip_is_clipped_identically() {
         "ws2812 over-long frame",
         &ws_frame(&[0x11_11_11, 0x22_22_22, 0x33_33_33], false),
         2,
+        &[serde_json::json!({
+            "bytes": [0x11, 0x11, 0x11, 0x22, 0x22, 0x22],
+            "lit_pixels": 2,
+        })],
     );
     assert_eq!(px.len(), 2, "a 2-LED strip keeps two LEDs");
 }
 
 #[test]
 fn ws2812_a_strip_that_saw_no_edges_reports_nothing_in_both_models() {
-    let px = ws2812_parity("ws2812 silent pad", &[], 4);
+    let px = ws2812_parity("ws2812 silent pad", &[], 4, &[]);
     assert!(px.is_empty(), "no edges decode to no pixels");
 
     // The artifact still reports the strip's CONFIGURED width — the asymmetry
@@ -524,12 +600,22 @@ fn ws2812_edges_on_another_pad_are_ignored_by_both_models() {
     }
     assert!(old.pixels().is_empty(), "the Rust model ignores other pads");
     assert_eq!(old_ws_pixels(&old), new.pixels(), "both ignore other pads");
+    assert_ws2812_artifact(
+        &old.artifacts("strip", &opts())[0],
+        &DeviceEvidence::artifacts(&new, "strip", &opts())[0],
+        &[],
+        "wrong pad has no history",
+    );
 
     // The positive control: the SAME waveform on the right pad decodes.
     let px = ws2812_parity(
         "ws2812 right pad control",
         &ws_frame(&[0x11_22_33, 0x44_55_66], true),
         2,
+        &[serde_json::json!({
+            "bytes": [0x11, 0x22, 0x33, 0x44, 0x55, 0x66],
+            "lit_pixels": 2,
+        })],
     );
     assert_eq!(px.len(), 2, "the waveform itself was decodable");
 }
@@ -545,4 +631,143 @@ fn ws2812_the_strip_is_shared_as_an_arc_and_still_decodes() {
     feed_edges(&o, &n, &ws_frame(&[0x0F_F0_0F], true));
     assert_eq!(old_ws_pixels(&old), new.pixels(), "through an Arc");
     assert_eq!(new.pixels()[0].wire, [0x0F, 0xF0, 0x0F]);
+    assert_ws2812_artifact(
+        &old.artifacts("strip", &opts())[0],
+        &DeviceEvidence::artifacts(new.as_ref(), "strip", &opts())[0],
+        &[serde_json::json!({"bytes": [0x0F, 0xF0, 0x0F], "lit_pixels": 1})],
+        "history through an Arc",
+    );
+}
+
+#[test]
+fn ws2812_history_records_a_partial_strip_only_after_its_reset_gap() {
+    let old = OldWs2812::new(DATA_PIN, 2, CPU_HZ);
+    let new = ws2812(DATA_PIN, 2, CPU_HZ);
+
+    // One complete pixel is visible, but a two-pixel transfer is not complete.
+    feed_edges(&old, &new, &ws_frame(&[0x00_FF_00], false));
+    assert_eq!(new.pixels()[0].wire, [0x00, 0xFF, 0x00]);
+    assert_ws2812_artifact(
+        &old.artifacts("strip", &opts())[0],
+        &DeviceEvidence::artifacts(&new, "strip", &opts())[0],
+        &[],
+        "an unfinished strip has no completed history",
+    );
+
+    // The reset ends this short frame; the history records exactly the pixel
+    // sent, not a padded second LED or an empty frame from the reset pulses.
+    feed_edges(&old, &new, &[(true, 10_000), (false, 10_002)]);
+    let expected = [serde_json::json!({
+        "bytes": [0x00, 0xFF, 0x00],
+        "lit_pixels": 1,
+    })];
+    assert_ws2812_artifact(
+        &old.artifacts("strip", &opts())[0],
+        &DeviceEvidence::artifacts(&new, "strip", &opts())[0],
+        &expected,
+        "the reset completes the short frame",
+    );
+
+    // One bit after another reset cannot fabricate another completed pixel.
+    feed_edges(&old, &new, &[(true, 20_000), (false, 20_006)]);
+    assert_ws2812_artifact(
+        &old.artifacts("strip", &opts())[0],
+        &DeviceEvidence::artifacts(&new, "strip", &opts())[0],
+        &expected,
+        "incomplete pixel bits add no history",
+    );
+}
+
+#[test]
+fn ws2812_history_retains_dark_and_lit_phases_without_repeating_them() {
+    let old = OldWs2812::new(DATA_PIN, 1, CPU_HZ);
+    let new = ws2812(DATA_PIN, 1, CPU_HZ);
+    let dark = serde_json::json!({"bytes": [0x00, 0x00, 0x00], "lit_pixels": 0});
+    let red = serde_json::json!({"bytes": [0x00, 0xFF, 0x00], "lit_pixels": 1});
+    let green = serde_json::json!({"bytes": [0xFF, 0x00, 0x00], "lit_pixels": 1});
+
+    // Explicit blink/phase stimulus and expected first-seen samples. These
+    // expectations do not reproduce the decoder's history-key algorithm.
+    let phases = [
+        (0x00_00_00, vec![dark.clone()]),
+        (0x00_FF_00, vec![dark.clone(), red.clone()]),
+        (0x00_00_00, vec![dark.clone(), red.clone()]),
+        (0xFF_00_00, vec![dark.clone(), red.clone(), green.clone()]),
+        (0x00_FF_00, vec![dark, red, green]),
+    ];
+    for (index, (grb, expected)) in phases.into_iter().enumerate() {
+        let edges: Vec<_> = ws_frame(&[grb], true)
+            .into_iter()
+            .map(|(level, cycle)| (level, cycle + index as u64 * 100_000))
+            .collect();
+        feed_edges(&old, &new, &edges);
+        assert_ws2812_artifact(
+            &old.artifacts("strip", &opts())[0],
+            &DeviceEvidence::artifacts(&new, "strip", &opts())[0],
+            &expected,
+            &format!("blink/phase sample {index}"),
+        );
+    }
+}
+
+#[test]
+fn ws2812_history_validation_rejects_corruption_and_unknown_metadata() {
+    let old = OldWs2812::new(DATA_PIN, 1, CPU_HZ);
+    let new = ws2812(DATA_PIN, 1, CPU_HZ);
+    feed_edges(&old, &new, &ws_frame(&[0x00_FF_00], true));
+    let green: Vec<_> = ws_frame(&[0xFF_00_00], true)
+        .into_iter()
+        .map(|(level, cycle)| (level, cycle + 100_000))
+        .collect();
+    feed_edges(&old, &new, &green);
+    let before = old.artifacts("strip", &opts()).remove(0);
+    let after = DeviceEvidence::artifacts(&new, "strip", &opts()).remove(0);
+    let expected = [
+        serde_json::json!({"bytes": [0x00, 0xFF, 0x00], "lit_pixels": 1}),
+        serde_json::json!({"bytes": [0xFF, 0x00, 0x00], "lit_pixels": 1}),
+    ];
+    assert_ws2812_artifact(&before, &after, &expected, "uncorrupted control");
+
+    let reject = |what: &str, corrupt: fn(&mut Artifact)| {
+        let mut altered = after.clone();
+        corrupt(&mut altered);
+        assert!(
+            std::panic::catch_unwind(|| {
+                assert_ws2812_artifact(&before, &altered, &expected, what);
+            })
+            .is_err(),
+            "the comparator accepted {what}"
+        );
+    };
+    reject("missing history", |a| {
+        a.meta.as_object_mut().unwrap().remove("frames_seen");
+    });
+    reject("corrupt historical wire byte", |a| {
+        a.meta["frames_seen"][0]["bytes"][1] = serde_json::json!(0x7F);
+    });
+    reject("incorrect historical lit count", |a| {
+        a.meta["frames_seen"][0]["lit_pixels"] = serde_json::json!(2);
+    });
+    reject("missing input frame", |a| {
+        a.meta["frames_seen"].as_array_mut().unwrap().pop();
+    });
+    reject("reversed frame order", |a| {
+        a.meta["frames_seen"].as_array_mut().unwrap().reverse();
+    });
+    reject("fabricated duplicate sample", |a| {
+        let history = a.meta["frames_seen"].as_array_mut().unwrap();
+        history.push(history[0].clone());
+    });
+    reject("unknown history field", |a| {
+        a.meta["frames_seen"][0]["unreviewed"] = serde_json::json!(true);
+    });
+    reject("unknown artifact field", |a| {
+        a.meta["unreviewed"] = serde_json::json!(true);
+    });
+    reject("changed legacy field", |a| {
+        a.meta["w"] = serde_json::json!(99);
+    });
+    reject("changed legacy payload", |a| {
+        a.bytes.as_mut().unwrap()[0] ^= 1;
+    });
 }

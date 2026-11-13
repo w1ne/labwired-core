@@ -447,9 +447,9 @@ pub fn inspect_with_schema<P: Peripheral + ?Sized>(
 /// * a **controller**, from
 ///   [`Peripheral::for_each_attached_device`](crate::Peripheral::for_each_attached_device),
 ///   for anything on a transport with addressing (I²C, SPI). Such a device is
-///   identified by WHERE it answers, so `declared_id` is `None` and the
-///   manifest name is joined on by address afterwards; `bus` is `None` because
-///   the controller that yielded the ref is itself the bus.
+///   identified by its stamped manifest id when available, otherwise by its
+///   address or chip-select. An id distinguishes SPI cascade modules sharing
+///   one LOAD pin. `bus` is `None` because the controller is itself the bus.
 /// * the **bus**, from
 ///   [`SystemBus::for_each_attached_device`](crate::bus::SystemBus::for_each_attached_device),
 ///   for a device that binds to pins rather than to an address — an HC-SR04 on
@@ -470,10 +470,9 @@ pub struct AttachedDeviceRef<'a> {
     /// Downstream channel of an I²C bus switch, or the ADC channel an analog
     /// source drives — in both cases "which channel of `bus` this device is on".
     pub channel: Option<u8>,
-    /// The `external_devices:` id this model was stamped with at attach, for
-    /// devices whose identity is their name rather than their address. `None`
-    /// for I²C/SPI devices: their identity is joined on by address, which is
-    /// what the controller actually knows.
+    /// The `external_devices:` id this model was stamped with at attach.
+    /// When absent, controller-owned devices are joined by address or CS.
+    /// SPI cascade modules sharing a CS need the stamp to remain distinct.
     pub declared_id: Option<&'a str>,
     /// This model's own id when ONE declaration built SEVERAL models — an
     /// H-bridge board's two motor channels (`<id>-a`, `<id>-b`). Such a ref
@@ -600,6 +599,10 @@ pub mod artifact_format {
     /// Emitted by BOTH tri-color e-paper models — see the module doc.
     pub const EPAPER_TRICOLOR_PLANES: &str = "epaper_tricolor_1bpp_planes";
     pub const TM1637_GRID: &str = "tm1637_grid";
+    /// The TM1638 "LED&KEY"-style module's eight digit bytes (the even
+    /// display addresses 00H, 02H … 0EH = GRID1..GRID8, SEG1..SEG8), leftmost
+    /// first. Its own name: a TM1637 reader expects at most six GRIDs.
+    pub const TM1638_GRID: &str = "tm1638_grid";
     pub const SEVEN_SEGMENT_MASK: &str = "seven_segment_mask";
     /// The chained-74HC595 4-digit module's latched segment bytes, one per
     /// digit, leftmost first. Its own name rather than `SEVEN_SEGMENT_MASK`
@@ -607,6 +610,11 @@ pub mod artifact_format {
     /// would get four.
     pub const HC595_7SEG_DIGITS: &str = "hc595_7seg_digits";
     pub const WS2812_GRB: &str = "ws2812_grb";
+    /// Four bytes per LED in WIRE order — R, G, B, W per the SK6812RGBW
+    /// datasheet's 32-bit structure. Its own name rather than `WS2812_GRB`,
+    /// because a reader that unpacked three bytes per LED would drift by one
+    /// byte per pixel.
+    pub const SK6812_RGBW: &str = "sk6812_rgbw";
     /// One brightness byte per pixel (0 = dark, 255 = full), row-major, top
     /// row first; `w`×`h` in the meta. The `led_matrix` primitive's picture.
     pub const GRAY8: &str = "gray8";
@@ -785,6 +793,125 @@ pub fn artifact_region_ink(
     Ok((ink, region.w * region.h))
 }
 
+/// Expand an authored RGB565 colour into the RGB888 triple a `serial_color`
+/// panel stores for that wire value.
+///
+/// Firmware packs RGB565 onto the 18-bit SPI wire as
+/// `(r & 0xF8, g & 0xFC, b << 3 & 0xF8)`; the ST7735R / ILI9488 decoder keeps
+/// the high six bits per channel and bit-expands them into frame memory. Prove
+/// clauses still name colours in RGB565 (`0x07FF`), so this is the one map
+/// from that spelling to the bytes in an `rgb888` artifact.
+pub fn rgb565_to_serial_color_rgb888(colour: u16) -> [u8; 3] {
+    let wire = [
+        ((colour >> 8) as u8) & 0xF8,
+        ((colour >> 3) as u8) & 0xFC,
+        ((colour << 3) as u8) & 0xF8,
+    ];
+    wire.map(|value| {
+        let six = value >> 2;
+        (six << 2) | (six >> 4)
+    })
+}
+
+/// Count pixels in `region` whose packed colour equals `colour`.
+///
+/// `rgb565_be` matches the packed big-endian value directly (ST7789 / ILI9341 /
+/// RM67162). `rgb888` matches the serial-color expansion of that same RGB565
+/// spelling (ILI9488 / ST7735R memory). Other formats return an error rather
+/// than a silent zero — same fail-closed rule as [`artifact_region_ink`].
+pub fn artifact_region_colour_count(
+    format: &str,
+    meta: &serde_json::Value,
+    bytes: &[u8],
+    region: PixelRegion,
+    colour: u16,
+) -> Result<usize, String> {
+    let dim = |k: &str| -> Result<usize, String> {
+        meta.get(k)
+            .and_then(|v| v.as_u64())
+            .and_then(|v| usize::try_from(v).ok())
+            .ok_or_else(|| format!("framebuffer artifact has no numeric `meta.{k}`"))
+    };
+    let (pw, ph) = (dim("w")?, dim("h")?);
+    if region.w == 0 || region.h == 0 {
+        return Err(format!(
+            "region {}x{} at ({},{}) is empty — an empty region can only ever be vacuously true",
+            region.w, region.h, region.x, region.y
+        ));
+    }
+    if region.x.checked_add(region.w).is_none_or(|end| end > pw)
+        || region.y.checked_add(region.h).is_none_or(|end| end > ph)
+    {
+        return Err(format!(
+            "region ({},{}) {}x{} falls outside the {pw}x{ph} panel",
+            region.x, region.y, region.w, region.h
+        ));
+    }
+    if let Some(unknown) = meta.get("unknown_pixels") {
+        match unknown.as_u64() {
+            Some(0) => {}
+            Some(n) => {
+                return Err(format!(
+                    "framebuffer has {n} unknown pixels; cannot measure an undefined frame"
+                ));
+            }
+            None => return Err("framebuffer meta.unknown_pixels is not an unsigned count".into()),
+        }
+    }
+    match format {
+        artifact_format::RGB565_BE => {
+            let need = pw
+                .checked_mul(ph)
+                .and_then(|n| n.checked_mul(2))
+                .ok_or_else(|| "rgb565_be geometry overflows payload length".to_string())?;
+            if bytes.len() < need {
+                return Err(format!(
+                    "rgb565_be payload is {} bytes, expected {need} for {pw}x{ph}",
+                    bytes.len()
+                ));
+            }
+            let want_hi = (colour >> 8) as u8;
+            let want_lo = (colour & 0xff) as u8;
+            let mut n = 0usize;
+            for y in region.y..(region.y + region.h) {
+                for x in region.x..(region.x + region.w) {
+                    let i = (y * pw + x) * 2;
+                    if bytes[i] == want_hi && bytes[i + 1] == want_lo {
+                        n += 1;
+                    }
+                }
+            }
+            Ok(n)
+        }
+        artifact_format::RGB888 => {
+            let need = pw
+                .checked_mul(ph)
+                .and_then(|n| n.checked_mul(3))
+                .ok_or_else(|| "rgb888 geometry overflows payload length".to_string())?;
+            if bytes.len() < need {
+                return Err(format!(
+                    "rgb888 payload is {} bytes, expected {need} for {pw}x{ph}",
+                    bytes.len()
+                ));
+            }
+            let want = rgb565_to_serial_color_rgb888(colour);
+            let mut n = 0usize;
+            for y in region.y..(region.y + region.h) {
+                for x in region.x..(region.x + region.w) {
+                    let i = (y * pw + x) * 3;
+                    if bytes[i] == want[0] && bytes[i + 1] == want[1] && bytes[i + 2] == want[2] {
+                        n += 1;
+                    }
+                }
+            }
+            Ok(n)
+        }
+        other => Err(format!(
+            "colour count is not implemented for framebuffer format '{other}' (only rgb565_be, rgb888)"
+        )),
+    }
+}
+
 /// Visit one I²C slave, then everything wired behind it if it is a bus switch.
 ///
 /// Every I²C controller's `for_each_attached_device` funnels through this, so
@@ -859,6 +986,7 @@ pub fn i2c_artifacts(
 
 /// Visit one SPI device. The SPI counterpart of [`visit_i2c_device`]; SPI has
 /// no bus-switch analogue in this engine, so there is nothing to unfold.
+/// Prefer its stamped id because cascaded modules share the same CS/LOAD.
 pub fn visit_spi_device(
     dev: &dyn crate::peripherals::spi::SpiDevice,
     f: &mut dyn FnMut(AttachedDeviceRef<'_>),
@@ -870,7 +998,7 @@ pub fn visit_spi_device(
         cs_pin: Some(dev.cs_pin()),
         mux_address: None,
         channel: None,
-        declared_id: None,
+        declared_id: dev.component_id(),
         instance_id: None,
         bus: None,
         evidence: Some(&evidence),
@@ -1355,6 +1483,70 @@ mod tests {
             )
             .is_err(),
             "an empty region could only ever pass vacuously"
+        );
+    }
+    // ── artifact_region_colour_count ───────────────────────────────────────
+
+    #[test]
+    fn colour_count_counts_exact_rgb565_be_pixels() {
+        use artifact_format::RGB565_BE;
+        // 2x2 panel: red, blue, red, black
+        let w = 2usize;
+        let h = 2usize;
+        let red: u16 = 0xF800;
+        let blue: u16 = 0x001F;
+        let pack = |c: u16| -> [u8; 2] { [(c >> 8) as u8, (c & 0xff) as u8] };
+        let mut bytes = Vec::new();
+        for c in [red, blue, red, 0u16] {
+            bytes.extend_from_slice(&pack(c));
+        }
+        let meta = serde_json::json!({ "w": w, "h": h, "unknown_pixels": 0 });
+        let full = PixelRegion { x: 0, y: 0, w, h };
+        assert_eq!(
+            artifact_region_colour_count(RGB565_BE, &meta, &bytes, full, red).unwrap(),
+            2
+        );
+        assert_eq!(
+            artifact_region_colour_count(RGB565_BE, &meta, &bytes, full, blue).unwrap(),
+            1
+        );
+        assert_eq!(
+            artifact_region_colour_count(RGB565_BE, &meta, &bytes, full, 0x07E0).unwrap(),
+            0
+        );
+        let left = PixelRegion {
+            x: 0,
+            y: 0,
+            w: 1,
+            h: 2,
+        };
+        assert_eq!(
+            artifact_region_colour_count(RGB565_BE, &meta, &bytes, left, red).unwrap(),
+            2
+        );
+    }
+
+    #[test]
+    fn colour_count_matches_serial_color_rgb888_expansion_of_rgb565() {
+        use artifact_format::RGB888;
+        // Cyan 0x07FF expands the same way firmware packs RGB666 onto the wire
+        // and serial_color bit-expands into frame memory.
+        let cyan = rgb565_to_serial_color_rgb888(0x07FF);
+        assert_eq!(cyan, [0x00, 0xFF, 0xFB]);
+        let w = 2usize;
+        let h = 1usize;
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&cyan);
+        bytes.extend_from_slice(&[0, 0, 0]);
+        let meta = serde_json::json!({ "w": w, "h": h, "unknown_pixels": 0 });
+        let full = PixelRegion { x: 0, y: 0, w, h };
+        assert_eq!(
+            artifact_region_colour_count(RGB888, &meta, &bytes, full, 0x07FF).unwrap(),
+            1
+        );
+        assert_eq!(
+            artifact_region_colour_count(RGB888, &meta, &bytes, full, 0xF800).unwrap(),
+            0
         );
     }
 }

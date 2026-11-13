@@ -1,0 +1,80 @@
+# LabWired - CC2538DK system manifest
+#
+# Board facts (TI CC2538DK = CC2538EM on a SmartRF06 EB; Contiki-NG
+# `cc2538dk` dev/board.h + dev/leds-arch.c + dev/board-buttons.c, RIOT
+# `cc2538dk` board.h / periph_conf.h):
+#   LEDs (active high): LED1 red PC0, LED2 yellow PC1, LED3 green PC2,
+#     LED4 orange PC3. PC0 is shared with the CC2538 USB D+ pull-up.
+#   Keys (active low, pulled up): SELECT PA3, LEFT PC4, RIGHT PC5, UP PC6,
+#     DOWN PC7.
+#   Console: UART0 PA0 (RX) / PA1 (TX), routed by the IOC, wired to the
+#     SmartRF06 EB's on-board USB debugger virtual COM port.
+#
+# The simulator captures the UART0 stream; the USB debugger bridge and the
+# SmartRF06 EB peripherals (e.g. the ambient-light sensor) are not modelled.
+
+name: "cc2538dk"
+chip: "../chips/cc2538sf53.yaml"
+# The CC2538 resets onto the 16-MHz HF-RC oscillator with SYS_DIV = 001
+# (SWRU319C Table 7-3, CLOCK_CTRL reset 0x01030109). The smoke never switches
+# to the 32-MHz crystal, so this is the real core rate, not the part's 32 MHz
+# maximum. The browser's RealtimeGovernor paces to this value.
+cpu_hz: 16_000_000
+external_devices: []
+board_io:
+  # LED1 (red) PC0 doubles as the CC2538 USB D+ pull-up (Contiki-NG
+  # board.h); declared, but the smoke never drives it.
+  - id: "led1_red"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 0
+    signal: "output"
+    active_high: true
+  - id: "led2_yellow"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 1
+    signal: "output"
+    active_high: true
+  - id: "led3_green"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 2
+    signal: "output"
+    active_high: true
+  - id: "led4_orange"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 3
+    signal: "output"
+    active_high: true
+  - id: "key_select"
+    kind: "button"
+    peripheral: "gpioa"
+    pin: 3
+    signal: "input"
+    active_high: false
+  - id: "key_left"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 4
+    signal: "input"
+    active_high: false
+  - id: "key_right"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 5
+    signal: "input"
+    active_high: false
+  - id: "key_up"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 6
+    signal: "input"
+    active_high: false
+  - id: "key_down"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 7
+    signal: "input"
+    active_high: false

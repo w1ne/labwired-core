@@ -1,0 +1,52 @@
+# LabWired - EK-RA6M5 example system (R7FA6M5BH)
+#
+# Same board manifest as configs/systems/ek-ra6m5.yaml, kept beside the
+# example so the package is self-contained.
+#
+# Board facts (Renesas EK-RA6M5; Zephyr `ek_ra6m5` ek_ra6m5.dts and
+# ek_ra6m5-pinctrl.dtsi):
+#   LEDs (active high): LED1 blue P006, LED2 green P007, LED3 red P008.
+#   Switches (active low, pull-up): S1 P005, S2 P004.
+#   Console: SCI0 P411 (TXD0) / P410 (RXD0), the J-Link OB virtual COM port.
+#
+# The simulator captures the SCI0 stream; the J-Link OB bridge and the
+# Ethernet PHY, OSPI flash and USB connectors are not modelled.
+
+name: "ek-ra6m5"
+chip: "../../configs/chips/r7fa6m5bh.yaml"
+# The RA6M5 resets onto MOCO (8 MHz). The smoke sets SCKDIVCR to /1 and never
+# starts HOCO or the PLL, so this is the real core rate, not the part's
+# 200 MHz maximum. The browser's RealtimeGovernor paces to this value.
+cpu_hz: 8_000_000
+external_devices: []
+board_io:
+  - id: "led1_blue"
+    kind: "led"
+    peripheral: "port0"
+    pin: 6
+    signal: "output"
+    active_high: true
+  - id: "led2_green"
+    kind: "led"
+    peripheral: "port0"
+    pin: 7
+    signal: "output"
+    active_high: true
+  - id: "led3_red"
+    kind: "led"
+    peripheral: "port0"
+    pin: 8
+    signal: "output"
+    active_high: true
+  - id: "s1"
+    kind: "button"
+    peripheral: "port0"
+    pin: 5
+    signal: "input"
+    active_high: false
+  - id: "s2"
+    kind: "button"
+    peripheral: "port0"
+    pin: 4
+    signal: "input"
+    active_high: false

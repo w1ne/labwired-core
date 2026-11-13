@@ -56,6 +56,10 @@ impl DeviceDescriptor {
 /// the rest are legacy aliases resolving to the same file.
 pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
     (
+        &["acs712"],
+        include_str!("../../../configs/devices/acs712.yaml"),
+    ),
+    (
         &["rotary_encoder", "rotary-encoder"],
         include_str!("../../../configs/devices/rotary_encoder.yaml"),
     ),
@@ -260,6 +264,22 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
         include_str!("../../../configs/devices/ili9341.yaml"),
     ),
     (
+        &["ili9488"],
+        include_str!("../../../configs/devices/ili9488.yaml"),
+    ),
+    (
+        &["st7735"],
+        include_str!("../../../configs/devices/st7735.yaml"),
+    ),
+    (
+        &["gc9a01"],
+        include_str!("../../../configs/devices/gc9a01.yaml"),
+    ),
+    (
+        &["oled-ssd1309"],
+        include_str!("../../../configs/devices/ssd1309.yaml"),
+    ),
+    (
         &["amoled-rm67162"],
         include_str!("../../../configs/devices/rm67162.yaml"),
     ),
@@ -301,8 +321,20 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
     ),
     (&["mq-6"], include_str!("../../../configs/devices/mq6.yaml")),
     (
+        &["sound-sensor"],
+        include_str!("../../../configs/devices/sound_sensor.yaml"),
+    ),
+    (
         &["soil-moisture"],
         include_str!("../../../configs/devices/soil_moisture.yaml"),
+    ),
+    (
+        &["rain-sensor", "rain_sensor"],
+        include_str!("../../../configs/devices/rain_sensor.yaml"),
+    ),
+    (
+        &["lm393-moisture", "lm393_moisture"],
+        include_str!("../../../configs/devices/lm393_moisture.yaml"),
     ),
     (
         &["lipo_charger"],
@@ -436,6 +468,122 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
         &["bldc_hall_driver", "bldc-hall-driver"],
         include_str!("../../../configs/devices/bldc_hall_driver.yaml"),
     ),
+    // ── The everyday sensor set (declarative from the start; no Rust model) ─
+    (
+        &["bme680"],
+        include_str!("../../../configs/devices/bme680.yaml"),
+    ),
+    (
+        &["sht40"],
+        include_str!("../../../configs/devices/sht40.yaml"),
+    ),
+    (
+        &["icm42688"],
+        include_str!("../../../configs/devices/icm42688.yaml"),
+    ),
+    (
+        &["icm20948"],
+        include_str!("../../../configs/devices/icm20948.yaml"),
+    ),
+    (
+        &["sgp40"],
+        include_str!("../../../configs/devices/sgp40.yaml"),
+    ),
+    (
+        &["tsl2591"],
+        include_str!("../../../configs/devices/tsl2591.yaml"),
+    ),
+    (
+        &["dht20"],
+        include_str!("../../../configs/devices/dht20.yaml"),
+    ),
+    (
+        &["pmsa003i"],
+        include_str!("../../../configs/devices/pmsa003i.yaml"),
+    ),
+    (
+        &["ina226"],
+        include_str!("../../../configs/devices/ina226.yaml"),
+    ),
+    // ── Batch 1b ───────────────────────────────────────────────────────────
+    (
+        &["mpu9250"],
+        include_str!("../../../configs/devices/mpu9250.yaml"),
+    ),
+    (
+        &["ens160"],
+        include_str!("../../../configs/devices/ens160.yaml"),
+    ),
+    (
+        &["ina260"],
+        include_str!("../../../configs/devices/ina260.yaml"),
+    ),
+    (
+        &["ina3221"],
+        include_str!("../../../configs/devices/ina3221.yaml"),
+    ),
+    // ── Batch 4 interfaces: expanders, ADC, driver, LoRa shell ──────────────
+    (
+        &["mcp23017"],
+        include_str!("../../../configs/devices/mcp23017.yaml"),
+    ),
+    (
+        &["pcf8575"],
+        include_str!("../../../configs/devices/pcf8575.yaml"),
+    ),
+    (
+        &["ads1015"],
+        include_str!("../../../configs/devices/ads1015.yaml"),
+    ),
+    (
+        &["uln2803"],
+        include_str!("../../../configs/devices/uln2803.yaml"),
+    ),
+    (
+        &["rfm95"],
+        include_str!("../../../configs/devices/rfm95.yaml"),
+    ),
+    // ── Batch 5: LoRa, ADCs, IMU / magnetometer, UV, LED drivers ────────────
+    (
+        &["sx1276"],
+        include_str!("../../../configs/devices/sx1276.yaml"),
+    ),
+    (
+        &["sx1262"],
+        include_str!("../../../configs/devices/sx1262.yaml"),
+    ),
+    (
+        &["mcp3008"],
+        include_str!("../../../configs/devices/mcp3008.yaml"),
+    ),
+    (
+        &["ads1256"],
+        include_str!("../../../configs/devices/ads1256.yaml"),
+    ),
+    (
+        &["bmi160"],
+        include_str!("../../../configs/devices/bmi160.yaml"),
+    ),
+    (
+        &["bmm150"],
+        include_str!("../../../configs/devices/bmm150.yaml"),
+    ),
+    (
+        &["veml6075"],
+        include_str!("../../../configs/devices/veml6075.yaml"),
+    ),
+    (
+        &["ht16k33"],
+        include_str!("../../../configs/devices/ht16k33.yaml"),
+    ),
+    (
+        &["sk6812"],
+        include_str!("../../../configs/devices/sk6812.yaml"),
+    ),
+    (
+        &["tm1638"],
+        include_str!("../../../configs/devices/tm1638.yaml"),
+    ),
 ];
 
 /// The embedded `configs/devices/*.yaml` descriptors, keyed by `type:` string.
@@ -466,6 +614,22 @@ mod spelling_tests {
     /// so a spelling in two rows silently shadows the later descriptor: a new
     /// row that reused `led-matrix` (MAX7219's alias) made the MAX7219 kit load
     /// the wrong YAML and panic on first use. One spelling, one row.
+    #[test]
+    fn ili9488_is_embedded_serial_color_18bit() {
+        let yaml = super::embedded_device_yaml("ili9488").expect("ili9488 embedded");
+        assert!(
+            yaml.contains("serial_color"),
+            "18-bit COLMOD path must use serial_color"
+        );
+        assert!(
+            yaml.contains("colmod: 6"),
+            "hardware default COLMOD is 18-bit"
+        );
+        assert!(yaml.contains("width: 320") && yaml.contains("height: 480"));
+        let desc = crate::DeviceDescriptor::from_yaml(yaml).expect("ili9488 descriptor parses");
+        assert_eq!(desc.r#type, "ili9488");
+    }
+
     #[test]
     fn every_type_spelling_names_exactly_one_descriptor() {
         let mut seen: std::collections::BTreeMap<&str, usize> = Default::default();

@@ -1,0 +1,13 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# PIC16F1829 (20-pin PDIP, PIC16F1829-I/P) in the 20-pin socket of the
+# Curiosity 8-bit board (DM164137), running from the 16 MHz HFINTOSC; the
+# EUSART TX on RB7 and LED D4 on RA5.
+name: "pic16f1829-curiosity"
+chip: "../../configs/chips/pic16f1829.yaml"
+# 16 MHz HFINTOSC = 4 MIPS (Fosc/4); the chip default is the 32 MHz maximum.
+cpu_hz: 4000000

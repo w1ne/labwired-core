@@ -144,8 +144,9 @@ pub struct Esp32c3Fabric {
     /// declarative `interrupt_core0` peripheral without the ROM-boot wiring
     /// that makes matrix routing correct, and deriving it would silently switch
     /// such a bus onto the matrix path. The C6 `INTPRI` block has no such
-    /// ambiguity: only the C6 chip descriptor declares it, and it exists for
-    /// no other purpose than the matrix enable/priority/threshold gates.
+    /// ambiguity: only the C6 chip descriptor declares it, and it exists to
+    /// host the FROM_CPU doorbells that arm the yield path (PLIC holds the
+    /// enable/priority/threshold gates).
     pub routing: bool,
     /// Level-sensitive bitmask of asserted CPU interrupt lines (1..31),
     /// recomputed by `recompute_esp32c3_irq_lines`. Read by the RISC-V core
@@ -159,13 +160,17 @@ pub struct Esp32c3Fabric {
     /// on every bus that models neither part's matrix.
     pub(crate) interrupt_core0_idx: Option<usize>,
     /// Peripheral index of the C6-only `INTPRI` block (`0x600C_5000`) that
-    /// holds `CPU_INT_ENABLE` / `CPU_INT_PRI_n` / `CPU_INT_THRESH` and the
-    /// `CPU_INTR_FROM_CPU_n` doorbells (the C3 keeps those controls split
-    /// between its `INTERRUPT_CORE0` and `SYSTEM` banks).
-    /// `None` on the C3 and on every other bus; its PRESENCE selects the C6
-    /// register layout below and enables matrix routing (a C6 bus without
-    /// INTPRI has no enable gate to route through, so it cannot route).
+    /// holds the `CPU_INTR_FROM_CPU_n` doorbells (matrix sources 22..25).
+    /// Enable / priority / threshold live in [`Self::plic_mx_idx`] on silicon
+    /// (IDF `esprv_intc_*` → PLIC @ `0x2000_1000`); INTPRI's SVD copies of
+    /// those gates are unused by ROM/Arduino. `None` on the C3; its PRESENCE
+    /// still selects the C6 layout and arms matrix routing.
     pub(crate) intpri_idx: Option<usize>,
+    /// Peripheral index of the C6 machine-mode PLIC (`plic_mx` @ `0x2000_1000`)
+    /// that holds `CPU_MXINT_ENABLE` / `CPU_MXINT_n_PRI` / `CPU_MXINT_THRESH`.
+    /// `None` when the descriptor has no PLIC (hand-built buses fall back to
+    /// reading the same fields from INTPRI for unit tests).
+    pub(crate) plic_mx_idx: Option<usize>,
     /// Decoded mirror of the `INTERRUPT_CORE0` register file, maintained at the
     /// MMIO write choke so routing never re-reads the register bank per tick.
     /// `None` on a hand-built bus with no declarative INTC, where
@@ -245,11 +250,12 @@ pub struct Esp32s3Fabric {
 /// single `INTERRUPT_CORE0` bank holds the MAPs and the control registers
 /// (`CPU_INT_ENABLE` 0x104, `CPU_INT_PRI_n` 0x114 + n*4, `CPU_INT_THRESH`
 /// 0x194, SYSTEM `FROM_CPU_INTR_n` 0x28 + n*4). On the C6 the same MAPs live
-/// at `INTERRUPT_CORE0` 0x6001_0000 + src*4, but the controls moved to the
-/// separate `INTPRI` block (enable 0x00, pri 0x0C + n*4, thresh 0x8C,
-/// `CPU_INTR_FROM_CPU_n` 0x90 + n*4). The cache is layout-neutral after the
-/// rebuild: only [`Self::from_cpu_source_base`] still records which SoC
-/// numbered the four doorbell sources.
+/// at `INTERRUPT_CORE0` 0x6001_0000 + src*4, but the enable/priority/threshold
+/// gates live in the PLIC (`plic_mx` @ 0x2000_1000: enable 0x00, pri
+/// 0x10+n*4, thresh 0x90) and the `CPU_INTR_FROM_CPU_n` doorbells stay in
+/// INTPRI (0x90+n*4). The cache is layout-neutral after the rebuild: only
+/// [`Self::from_cpu_source_base`] still records which SoC numbered the four
+/// doorbell sources.
 #[derive(Clone, Debug)]
 pub struct Esp32c3IntcCache {
     pub int_enable: u32,

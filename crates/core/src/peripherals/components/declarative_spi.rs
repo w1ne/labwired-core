@@ -32,6 +32,8 @@ use crate::sim_input::{InputChannel, SimInput, SimInputError};
 
 pub struct GenericSpiDevice {
     cs_pin: String,
+    /// Daisy-chain position: 0 = closest to MOSI (first DIN). Higher = farther.
+    chain_index: u32,
     framing: SpiFraming,
     registers: Vec<RegisterSpec>,
 
@@ -129,6 +131,9 @@ pub struct GenericSpiDevice {
     /// accumulation and the `frame` event in [`Self::transfer`] are its whole
     /// wire behaviour.
     frame_only: bool,
+    /// `behavior.spi.miso_var`: the variable a `frame_only` part answers each
+    /// byte with, read after that byte's rules ran. `None` ⇒ `0x00`.
+    miso_var: Option<String>,
     /// **Whether the module's supply pins are connected in the design.**
     ///
     /// ⚠️ NOT any power-down MODE the part itself has (the MAX7219's
@@ -205,6 +210,14 @@ pub(crate) fn validate_descriptor(descriptor: &DeviceDescriptor) -> Result<()> {
                  look like a working device"
             );
         }
+    }
+    if descriptor
+        .behavior
+        .frames
+        .as_ref()
+        .is_some_and(|f| f.shift_register && f.length.unwrap_or(0) == 0)
+    {
+        bail!("behavior.frames.shift_register requires a nonzero length");
     }
     if let Some(file) = &spec.register_file {
         if file.size == 0 {
@@ -294,6 +307,27 @@ pub(crate) fn validate_descriptor(descriptor: &DeviceDescriptor) -> Result<()> {
     // variable has to be DECLARED: inventing one no descriptor mentions would
     // make `var(opcode)` readable in a part that never asked for it, and would
     // hide the typo in a part that meant to ask and misspelled the key.
+    // `miso_var` only means something on a message part, and only if the
+    // variable exists: on a register part the command/data phases own MISO,
+    // and an undeclared variable would read 0 forever — a part that answers
+    // zeros while looking configured.
+    if let Some(var) = &spec.miso_var {
+        if !spec.registers.is_empty() || spec.register_file.is_some() {
+            bail!(
+                "behavior.spi miso_var '{var}' on a part with a register map — the command and \
+                 data phases already decide MISO there"
+            );
+        }
+        if descriptor.behavior.frames.is_none() {
+            bail!(
+                "behavior.spi miso_var '{var}' without `frames:` — no rule would ever run to set \
+                 it"
+            );
+        }
+        if !descriptor.behavior.vars.contains_key(var) {
+            bail!("behavior.spi miso_var '{var}' is not declared in `vars:`");
+        }
+    }
     if let Some(frames) = &descriptor.behavior.frames {
         if frames.opcode_byte && !descriptor.behavior.vars.contains_key("opcode") {
             bail!(
@@ -349,6 +383,7 @@ impl GenericSpiDevice {
             .collect();
         let device = Self {
             cs_pin,
+            chain_index: 0,
             framing: spec.framing.clone(),
             registers: spec.registers.clone(),
             slots,
@@ -386,6 +421,7 @@ impl GenericSpiDevice {
             frame_only: spec.registers.is_empty()
                 && spec.register_file.is_none()
                 && descriptor.behavior.frames.is_some(),
+            miso_var: spec.miso_var.clone(),
             frames: descriptor.behavior.frames.clone(),
             frame_bytes: 0,
             frame_buf: Vec::new(),
@@ -829,6 +865,11 @@ impl GenericSpiDevice {
         self.powered
     }
 
+    /// Daisy-chain position (0 = closest to MOSI). See [`SpiDevice::chain_index`].
+    pub fn set_chain_index(&mut self, index: u32) {
+        self.chain_index = index;
+    }
+
     /// Close the frame the wire just completed: hand the machine the frame's
     /// BYTES, then raise the event.
     ///
@@ -867,6 +908,10 @@ const UNPOWERED_MISO: u8 = 0xFF;
 impl SpiDevice for GenericSpiDevice {
     fn sampling(&self) -> SpiSampling {
         self.sampling
+    }
+
+    fn component_id(&self) -> Option<&str> {
+        self.component_id.as_deref()
     }
 
     /// The declared artifact, rendered from the part's own RAM. A descriptor
@@ -949,6 +994,22 @@ impl SpiDevice for GenericSpiDevice {
         &self.cs_pin
     }
 
+    fn chain_index(&self) -> u32 {
+        self.chain_index
+    }
+
+    fn set_chain_index(&mut self, index: u32) {
+        self.chain_index = index;
+    }
+
+    fn is_selected(&self) -> bool {
+        self.cs_held
+    }
+
+    fn clocks_when_deselected(&self) -> bool {
+        self.frames.as_ref().is_some_and(|f| f.shift_register)
+    }
+
     fn cs_select(&mut self) {
         // THE SUPPLY GATE, first of four. A part with no rail has no internal
         // state to reframe and no rules to run: refusing here is what leaves it
@@ -958,10 +1019,14 @@ impl SpiDevice for GenericSpiDevice {
         if !self.powered {
             return;
         }
-        // A fixed-width shift register starts a FRESH frame on CS↓: whatever
-        // was half-clocked is gone, so a re-assertion cannot pair an orphan
-        // byte with this transaction's first. See `FrameSpec::discard_partial`.
-        if self.frames.as_ref().is_some_and(|f| f.discard_partial) {
+        // Transaction-framed devices start fresh on CS↓. A continuous shift
+        // register retains its contents across LOAD edges (MAX7219 data sheet,
+        // Serial-Addressing Modes); LOAD is not a shift-register reset.
+        if self
+            .frames
+            .as_ref()
+            .is_some_and(|f| f.discard_partial && !f.shift_register)
+        {
             self.frame_bytes = 0;
             self.frame_buf.clear();
             self.frame_closed = false;
@@ -987,6 +1052,11 @@ impl SpiDevice for GenericSpiDevice {
         if !self.powered {
             return;
         }
+        // A shift register latches on a real LOAD rising edge only. Repeated
+        // synchronization of an already-high pin must not publish new data.
+        if self.clocks_when_deselected() && !self.cs_held {
+            return;
+        }
         self.cs_held = false;
         self.write_acc.clear();
         self.raise_and_settle(Event::CsRelease, 0);
@@ -994,6 +1064,18 @@ impl SpiDevice for GenericSpiDevice {
         // message is delivered rather than swallowed.
         if self.frames.is_some() {
             self.frame_bytes = 0;
+            let shift_register = self.frames.as_ref().is_some_and(|f| f.shift_register);
+            // LOAD latches the last complete register without clearing it.
+            // Once filled, a later short byte transfer replaces the oldest
+            // byte, as on silicon. Before the first full register is known,
+            // the byte-level model leaves the power-on register state alone.
+            if shift_register {
+                let length = self.frames.as_ref().and_then(|f| f.length).unwrap_or(0) as usize;
+                if length > 0 && self.frame_buf.len() == length {
+                    self.close_frame(0);
+                }
+                return;
+            }
             // A frame the LENGTH already closed leaves nothing new on the wire,
             // so this boundary frame carries no bytes — rather than re-serving
             // the frame the rules have already handled. The event itself is
@@ -1019,6 +1101,21 @@ impl SpiDevice for GenericSpiDevice {
         // their power-on values rather than blanking them at readback.
         if !self.powered {
             return UNPOWERED_MISO;
+        }
+        let shift_register = self.frames.as_ref().is_some_and(|f| f.shift_register);
+        // Hardware shift-register cascade (MAX7219 DOUT): each transfer pushes
+        // one byte into a fixed-width FIFO regardless of LOAD, and returns
+        // the oldest byte. Neither LOAD edge clears it. Only LOAD↑ latches
+        // the register. The FIFO depth is `frames.length`.
+        if shift_register {
+            let length = self.frames.as_ref().and_then(|f| f.length).unwrap_or(0) as usize;
+            let dout = if length > 0 && self.frame_buf.len() >= length {
+                self.frame_buf.remove(0)
+            } else {
+                0x00
+            };
+            self.frame_buf.push(mosi);
+            return dout;
         }
         // Framing: close the frame the moment the declared length is clocked,
         // without waiting for CS↑. Same contract as the I²C side.
@@ -1050,6 +1147,14 @@ impl SpiDevice for GenericSpiDevice {
         };
         if close_frame {
             self.close_frame(i64::from(mosi));
+        }
+        // A message part with a `miso_var` answers AFTER this byte's rules,
+        // so the reply may depend on the byte being clocked in.
+        if let (true, Some(var)) = (self.frame_only, self.miso_var.as_deref()) {
+            return self
+                .rules
+                .as_ref()
+                .map_or(0x00, |m| (m.var(var) & 0xFF) as u8);
         }
         miso
     }
@@ -1327,6 +1432,11 @@ impl PeripheralKit for DeclarativeSpiKit {
         let cs_pin = ctx.config_str("cs_pin").unwrap_or("PA4").to_string();
         let mut device =
             GenericSpiDevice::from_descriptor(&self.descriptor, cs_pin, self.channels.clone())?;
+        if let Some(idx) = ctx.config_i64("chain_index") {
+            device.set_chain_index(
+                u32::try_from(idx).context("chain_index must be between 0 and 4294967295")?,
+            );
+        }
         // Opt-in, per lab: `config: { spi_mode: N }` straps this part for
         // edge-accurate sampling in ITS mode, so a controller programmed for a
         // different CPOL/CPHA corrupts the exchange the way silicon does.
@@ -1340,7 +1450,7 @@ impl PeripheralKit for DeclarativeSpiKit {
         }
         // Supply state. `Some(false)` is the only value that changes anything;
         // an absent key means powered. See `components::supply`.
-        let device = device.with_powered(
+        let mut device = device.with_powered(
             crate::peripherals::components::supply::powered_from_config(ctx),
         );
         // Tier 2: bind `outputs:` roles to pads. The DRDY/IRQ twin of the I²C
@@ -1348,6 +1458,9 @@ impl PeripheralKit for DeclarativeSpiKit {
         // themselves: `QA..QH` are `outputs:` roles like any other, and the
         // rules drive them through the same narrowed `DevicePins` port.
         ctx.bind_output_pins(&self.descriptor)?;
+        if let Some(rules) = &mut device.rules {
+            rules.restrict_pin_delivery(ctx.bound_output_roles());
+        }
         ctx.attach_spi_device(Box::new(device))
     }
 }
@@ -1414,13 +1527,8 @@ pub static LORA_SX1278_KIT: LazyLock<DeclarativeSpiKit> = LazyLock::new(|| {
     .expect("lora_sx1278.yaml is a valid declarative spi descriptor")
 });
 
-/// NXP MFRC522 / RC522 reader (declarative `rc522.yaml`).
-pub static RC522_KIT: LazyLock<DeclarativeSpiKit> = LazyLock::new(|| {
-    DeclarativeSpiKit::from_yaml(
-        labwired_config::embedded_device_yaml("rc522").expect("rc522 descriptor embedded"),
-    )
-    .expect("rc522.yaml is a valid declarative spi descriptor")
-});
+// RC522 attach kit lives in `components::rc522` (ISO 14443-A). The YAML
+// descriptor remains embedded for register-shell migration parity.
 
 /// Maxim MAX7219 8×8 LED matrix driver (declarative `max7219.yaml`).
 ///
@@ -1492,6 +1600,58 @@ behavior:
     registers:
       - {name: VALUE, addr: 0, width: 1, endian: be, access: r, source: quotient}
 "#;
+
+    /// A message part that echoes each MOSI byte + 1 in the SAME byte: only
+    /// possible because `miso_var` is read after the byte's rules ran.
+    const MISO_VAR_FIXTURE: &str = r#"
+type: miso_var_echo
+behavior:
+  primitive: spi_device
+  spi: { miso_var: reply }
+  frames: { length: 1, discard_partial: true }
+  vars: { reply: 0 }
+  rules:
+    - on: frame
+      do: [ { var: { name: reply, value: "frame_byte(0) + 1" } } ]
+"#;
+
+    #[test]
+    fn miso_var_answers_with_the_rules_view_of_this_byte() {
+        let mut d = GenericSpiDevice::from_yaml(MISO_VAR_FIXTURE, "PA4").unwrap();
+        d.cs_select();
+        assert_eq!(
+            [d.transfer(0x10), d.transfer(0x41), d.transfer(0xFF)],
+            [0x11, 0x42, 0x00]
+        );
+        d.cs_release();
+        // Without the key the same part answers 0x00, as frame-only parts did.
+        let plain = MISO_VAR_FIXTURE.replace("spi: { miso_var: reply }", "spi: {}");
+        let mut d = GenericSpiDevice::from_yaml(&plain, "PA4").unwrap();
+        d.cs_select();
+        assert_eq!(d.transfer(0x10), 0x00);
+    }
+
+    #[test]
+    fn miso_var_is_rejected_where_it_could_not_mean_anything() {
+        // An undeclared variable would read 0 forever.
+        let undeclared = MISO_VAR_FIXTURE.replace("miso_var: reply", "miso_var: nope");
+        let Err(e) = GenericSpiDevice::from_yaml(&undeclared, "PA4") else {
+            panic!("an undeclared miso_var must be refused");
+        };
+        assert!(
+            format!("{e:#}").contains("not declared in `vars:`"),
+            "{e:#}"
+        );
+        // On a register part the command/data phases own MISO.
+        let registered = MISO_VAR_FIXTURE.replace(
+            "spi: { miso_var: reply }",
+            "spi: { miso_var: reply, register_file: { size: 4 } }",
+        );
+        let Err(e) = GenericSpiDevice::from_yaml(&registered, "PA4") else {
+            panic!("miso_var on a register part must be refused");
+        };
+        assert!(format!("{e:#}").contains("register map"), "{e:#}");
+    }
 
     #[test]
     fn exact_fault_defaults_and_inputs_are_rejected() {
@@ -2173,5 +2333,108 @@ behavior:
 
         d.set_input("temperature", 100.0).unwrap();
         assert_eq!(d.input_value("temperature"), Some(100.0));
+    }
+
+    /// Two MAX7219s daisy-chained: farthest keeps the first 16 bits, closest
+    /// the last. Matches LedControl's shift order for `addr=1` then a NOOP
+    /// pad for device 0 — the write lands only on the far module.
+    #[test]
+    fn max7219_dout_cascade_latches_on_cs_release() {
+        use crate::inspect::InspectOpts;
+        use crate::peripherals::spi::SpiDevice;
+
+        let yaml = labwired_config::embedded_device_yaml("led-matrix").unwrap();
+        let mut near = GenericSpiDevice::from_yaml(yaml, "PB2").unwrap();
+        let mut far = GenericSpiDevice::from_yaml(yaml, "PB2").unwrap();
+        near.set_chain_index(0);
+        far.set_chain_index(1);
+
+        // Wire: opcode,data for far, then NOOP for near (LedControl addr=1).
+        near.cs_select();
+        far.cs_select();
+        let mut mosi = 0x01u8; // digit 0 address → destined for FAR
+        mosi = near.transfer(mosi);
+        let _ = far.transfer(mosi);
+        mosi = 0xA5; // row data
+        mosi = near.transfer(mosi);
+        let _ = far.transfer(mosi);
+        mosi = 0x00; // NOOP addr → stays in NEAR
+        mosi = near.transfer(mosi);
+        let _ = far.transfer(mosi);
+        mosi = 0x00; // NOOP data
+        mosi = near.transfer(mosi);
+        let _ = far.transfer(mosi);
+        near.cs_release();
+        far.cs_release();
+
+        // Wake both out of power-on shutdown so the artifact shows RAM.
+        for d in [&mut near, &mut far] {
+            d.cs_select();
+            d.transfer(0x0C);
+            d.transfer(0x01);
+            d.cs_release();
+        }
+
+        let opts = InspectOpts {
+            include_bytes: true,
+            ..Default::default()
+        };
+        let near_art = SpiDevice::artifacts(&near, "near", &opts);
+        let far_art = SpiDevice::artifacts(&far, "far", &opts);
+        let near_bytes = near_art[0].bytes.as_deref().unwrap_or(&[]);
+        let far_bytes = far_art[0].bytes.as_deref().unwrap_or(&[]);
+        assert_eq!(
+            far_bytes.first().copied(),
+            Some(0xA5),
+            "far module must latch the first 16-bit frame; got {far_bytes:?}"
+        );
+        assert_eq!(
+            near_bytes.first().copied().unwrap_or(0xFF),
+            0x00,
+            "near module must keep the trailing NOOP; got {near_bytes:?}"
+        );
+    }
+
+    /// A lone MAX7219 still latches its 16-bit write on CS↑ with shift_register.
+    #[test]
+    fn max7219_single_device_still_latches_on_cs_up() {
+        use crate::inspect::InspectOpts;
+        use crate::peripherals::spi::SpiDevice;
+
+        let yaml = labwired_config::embedded_device_yaml("led-matrix").unwrap();
+        let mut d = GenericSpiDevice::from_yaml(yaml, "PB2").unwrap();
+        d.cs_select();
+        d.transfer(0x0C);
+        d.transfer(0x01); // leave shutdown — must not latch until CS↑
+                          // Still in shutdown until release:
+        {
+            let art = SpiDevice::artifacts(
+                &d,
+                "d",
+                &InspectOpts {
+                    include_bytes: true,
+                    ..Default::default()
+                },
+            );
+            assert_eq!(art[0].meta["shutdown"], true, "no latch mid-CS");
+        }
+        d.cs_release();
+        d.cs_select();
+        d.transfer(0x01);
+        d.transfer(0x3C);
+        d.cs_release();
+        let art = SpiDevice::artifacts(
+            &d,
+            "d",
+            &InspectOpts {
+                include_bytes: true,
+                ..Default::default()
+            },
+        );
+        assert_eq!(art[0].meta["shutdown"], false);
+        assert_eq!(
+            art[0].bytes.as_deref(),
+            Some(&[0x3C, 0, 0, 0, 0, 0, 0, 0][..])
+        );
     }
 }

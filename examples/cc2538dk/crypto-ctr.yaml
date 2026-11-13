@@ -1,0 +1,42 @@
+# LabWired - CC2538DK: AES-CTR on the AES/SHA-256 cryptoprocessor
+#
+# Firmware: tests/fixtures/cc2538dk-contiki-crypto-ctr.elf, UNMODIFIED Contiki-NG
+# v4.9 examples/platform-specific/cc2538-common/crypto/ctr-test.c (crates/firmware-cc2538dk-contiki/build.sh).
+# Every one of its 6 test vectors must print each driver call's success and
+# every "... OK" check, in order; a wrong output, tag or digest prints "wrong"
+# or "authentication failed" instead and breaks the sequence.
+#
+# Superset of Renode's tests/platforms/CC2538/cc2538_cryptoprocessor.robot
+# "Should Handle CTR Mode" (same firmware source, same milestones, plus the
+# key-store load and get_result lines).
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/cc2538dk-contiki-crypto-ctr.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 30000000
+assertions:
+  - uart_ordered:
+      - "aes_load_keys(): success"
+      - "Test vector #0: encrypt"
+      - "ctr_crypt_start(): success"
+      - "Output message OK"
+      - "Test vector #1: decrypt"
+      - "ctr_crypt_start(): success"
+      - "Output message OK"
+      - "aes_load_keys(): success"
+      - "Test vector #2: encrypt"
+      - "ctr_crypt_start(): success"
+      - "Output message OK"
+      - "Test vector #3: decrypt"
+      - "ctr_crypt_start(): success"
+      - "Output message OK"
+      - "aes_load_keys(): success"
+      - "Test vector #4: encrypt"
+      - "ctr_crypt_start(): success"
+      - "Output message OK"
+      - "Test vector #5: decrypt"
+      - "ctr_crypt_start(): success"
+      - "Output message OK"
+      - "Done!"
+  - expected_stop_reason: max_steps

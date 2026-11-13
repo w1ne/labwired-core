@@ -164,6 +164,8 @@ pub struct LabwiredAdapter {
     pub machine: Arc<Mutex<Option<Box<dyn SessionMachine>>>>,
     pub symbols: Arc<Mutex<Option<SymbolProvider>>>,
     pub uart_sink: Arc<Mutex<Vec<u8>>>,
+    /// SEGGER RTT up-channel bytes from a manifest-built machine with an RTT model.
+    pub rtt_sink: Arc<Mutex<Vec<u8>>>,
     pub last_telemetry: Arc<Mutex<(u64, Instant)>>, // cycles, time
     pub trace_buffer: Arc<Mutex<TraceBuffer>>,
     pub cycle_count: Arc<AtomicU64>,
@@ -246,6 +248,7 @@ impl LabwiredAdapter {
             machine: Arc::new(Mutex::new(None)),
             symbols: Arc::new(Mutex::new(None)),
             uart_sink,
+            rtt_sink: Arc::new(Mutex::new(Vec::new())),
             last_telemetry: Arc::new(Mutex::new((0, Instant::now()))),
             trace_buffer: Arc::new(Mutex::new(TraceBuffer::new(100_000))),
             cycle_count: Arc::new(AtomicU64::new(0)),
@@ -409,7 +412,7 @@ impl LabwiredAdapter {
     ) -> Result<(Box<dyn SessionMachine>, MachineFamily)> {
         use labwired_core::system::builder::{
             build_machine_with_plugins, BlobMap, BootMode, BuildOptions, BuildRequest,
-            FirmwareSource,
+            FirmwareSource, RttCapture,
         };
         let mut manifest = labwired_config::SystemManifest::from_file(sys_path)?;
         let chip_dir = sys_path
@@ -469,6 +472,13 @@ impl LabwiredAdapter {
                     blobs: &BlobMap::new(),
                     options: BuildOptions {
                         uart_rx: manifest.debug_uart.clone(),
+                        // RTT only for firmware that carries a control block.
+                        rtt: labwired_loader::resolve_symbol_in_elf(elf, "_SEGGER_RTT").map(
+                            |control_block| RttCapture {
+                                sink: self.rtt_sink.clone(),
+                                control_block: Some(control_block),
+                            },
+                        ),
                         ..Default::default()
                     },
                 },
@@ -629,6 +639,10 @@ impl LabwiredAdapter {
             out.extend(std::mem::take(&mut *console.lock().unwrap()));
         }
         out
+    }
+
+    pub fn poll_rtt(&self) -> Vec<u8> {
+        std::mem::take(&mut *self.rtt_sink.lock().unwrap())
     }
 
     pub fn step(&self) -> Result<labwired_core::StopReason> {
@@ -1521,6 +1535,7 @@ impl LabwiredAdapter {
             TraceBuffer::new(100_000),
         );
         let old_uart = std::mem::take(&mut *self.uart_sink.lock().unwrap());
+        let old_rtt = std::mem::take(&mut *self.rtt_sink.lock().unwrap());
         // The reload builds a new machine with its own console capture.
         let old_console = self.console.lock().unwrap().take();
         let old_esp32_thread = self.esp32_thread.lock().unwrap().clone();
@@ -1545,6 +1560,7 @@ impl LabwiredAdapter {
             self.cycle_count.store(old_cycles, Ordering::SeqCst);
             *self.trace_buffer.lock().unwrap() = old_trace;
             *self.uart_sink.lock().unwrap() = old_uart;
+            *self.rtt_sink.lock().unwrap() = old_rtt;
             *self.console.lock().unwrap() = old_console;
             *self.esp32_thread.lock().unwrap() = old_esp32_thread;
             return Err(match rebuilt {
@@ -1558,6 +1574,7 @@ impl LabwiredAdapter {
         }
         // Output up to the saved point was delivered before; do not repeat it.
         self.uart_sink.lock().unwrap().clear();
+        self.rtt_sink.lock().unwrap().clear();
         if let Some(console) = self.console.lock().unwrap().as_ref() {
             console.lock().unwrap().clear();
         }
@@ -1734,6 +1751,13 @@ fn gpio_offsets_for_peripheral(
             odr_offset: 0x000,
             ra_output_packed: false,
         }),
+        // WCH CH32V003: the data registers keep the STM32F1 offsets — INDR
+        // @0x08, OUTDR @0x0C (ch32v00x.h GPIO_TypeDef). Only the config
+        // register differs (one 8-pin CFGLR @0x00, no CFGHR), and that is a
+        // `GpioPort` concern, not a DAP board-IO one. These are the same two
+        // numbers `GpioPort::odr_offset()` / `idr_offset()` return for this
+        // layout; keep the three in step.
+        labwired_core::peripherals::gpio::GpioRegisterLayout::Wch => Some(default_offsets),
     }
 }
 
@@ -1823,6 +1847,7 @@ mod tests {
             schema_version: "1.0".to_string(),
             reset_vector_offset: 0,
             flash_boot_alias: true,
+            coprocessors: Vec::new(),
             atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             ns_alias_offset: None,
             memory_regions: Vec::new(),
@@ -1854,6 +1879,7 @@ mod tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: None,
             supply_monitor: None,
             include: None,
         }

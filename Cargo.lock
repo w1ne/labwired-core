@@ -1151,6 +1151,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-apollo4p-evb-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-arduino-nano-33-ble-smoke"
 version = "0.1.0"
 dependencies = [
@@ -1202,6 +1210,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-cc2538dk-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-ci-fixture"
 version = "0.25.0"
 dependencies = [
@@ -1214,6 +1230,22 @@ name = "firmware-comparative-benchmark"
 version = "0.1.0"
 dependencies = [
  "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-ek-ra6m5-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-ek-ra8m1-smoke"
+version = "0.1.0"
+dependencies = [
  "cortex-m-rt",
  "panic-halt",
 ]
@@ -1233,6 +1265,14 @@ version = "0.1.0"
 dependencies = [
  "panic-halt",
  "riscv 0.10.1",
+ "riscv-rt",
+]
+
+[[package]]
+name = "firmware-esp32c6-devkitc-bme280-smoke"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
  "riscv-rt",
 ]
 
@@ -1267,6 +1307,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-f401-lowram-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-f401cdu6-blackpill-demo"
 version = "0.25.0"
 dependencies = [
@@ -1282,6 +1330,14 @@ dependencies = [
 
 [[package]]
 name = "firmware-feather-f405-demo"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-frdm-k64f-smoke"
 version = "0.1.0"
 dependencies = [
  "cortex-m-rt",
@@ -1366,6 +1422,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-l552ze-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-litex-vexriscv-smoke"
 version = "0.1.0"
 dependencies = [
@@ -1416,6 +1480,14 @@ dependencies = [
 name = "firmware-mg26-spi"
 version = "0.25.0"
 dependencies = [
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-mimxrt595-evk-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
  "panic-halt",
 ]
 
@@ -1605,6 +1677,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-nucleo-f103rb-bme280-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-nucleo-f103rb-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-nucleo-f407-demo"
 version = "0.1.0"
 dependencies = [
@@ -1681,6 +1769,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-s32k388-evb-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-sam-e70-xplained-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-sam4s-xplained-smoke"
 version = "0.1.0"
 dependencies = [
@@ -1698,6 +1802,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-samd21-lowram-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-semihost-smoke"
 version = "0.1.0"
 dependencies = [
@@ -1707,6 +1820,14 @@ dependencies = [
 
 [[package]]
 name = "firmware-stm32f072b-disco-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-stm32f103-lowdensity-smoke"
 version = "0.1.0"
 dependencies = [
  "cortex-m-rt",
@@ -2212,6 +2333,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ili9488-tft-lab"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "ina219-power-lab"
 version = "0.1.0"
 dependencies = [
@@ -2418,6 +2548,7 @@ dependencies = [
  "libm",
  "md-5",
  "memmap2 0.9.10",
+ "miniz_oxide",
  "nrf-softdevice-hle",
  "num-bigint",
  "p256",

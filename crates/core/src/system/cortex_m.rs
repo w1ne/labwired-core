@@ -70,6 +70,27 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
     cpu.set_shared_nvic_state(nvic_state.clone());
     cpu.set_shared_sysreset_signal(sysreset_signal.clone());
     cpu.set_shared_faults(faults.clone());
+    // A core with the FP extension (`cortex_m_fpu` at 0xE000_EF30) tracks
+    // CONTROL.FPCA and stacks extended frames; every other core keeps the
+    // basic frame.
+    if let Some(fp) = bus
+        .peripherals
+        .iter()
+        .find_map(|p| p.dev.fp_context_state())
+    {
+        cpu.set_shared_fp_context(fp);
+    }
+    // An Armv8-M chip that declares the PMSAv8 MPU (`armv8m_mpu` at
+    // 0xE000_ED90) serves the MPU offsets from it; the SCB window then ends
+    // there, and the core gets the region table for TT.
+    let mpu_v8 = bus
+        .peripherals
+        .iter()
+        .find_map(|p| p.dev.armv8m_mpu_state());
+    let scb_size = if mpu_v8.is_some() { 0x90 } else { 0xC8 };
+    if let Some(mpu) = mpu_v8 {
+        cpu.set_shared_mpu_v8(mpu);
+    }
 
     bus.nvic = Some(nvic_state.clone());
 
@@ -84,6 +105,13 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
         faults,
     });
     scb.event_state = Some(nvic_state.clone());
+    // A Cortex-M7 chip that declares its L1 caches (`cortex_m7_cache` at
+    // 0xE000_EF50) gets CLIDR/CTR/CCSIDR/CSSELR with that geometry; every
+    // other chip keeps reading zero there.
+    scb.l1_cache = bus
+        .peripherals
+        .iter()
+        .find_map(|p| p.dev.l1_cache_geometry());
     // `replace_or_add_peripheral_at` attaches the bus cycle clock, so the SCB's
     // ICSR pend-drain rides the event scheduler (event-scheduler builds), and
     // rebuilds the routing/tick indices after the replacement.
@@ -91,7 +119,8 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
     // 0xC8 so the MPU block is served by the SCB/SCS model, not unmapped
     // space: TYPE/CTRL/RNR/RBAR/RASR at 0x90..0xA0 plus the ARMv8-M
     // (Cortex-M33) MAIR0/MAIR1 attribute registers at 0xC0/0xC4.
-    bus.replace_or_add_peripheral_at("scb", 0xE000_ED00, 0xC8, None, Box::new(scb));
+    // (0x90 when an `armv8m_mpu` block serves 0xED90.. instead.)
+    bus.replace_or_add_peripheral_at("scb", 0xE000_ED00, scb_size, None, Box::new(scb));
 
     // Ensure NVIC exists (shared pending/enabled state).
     //

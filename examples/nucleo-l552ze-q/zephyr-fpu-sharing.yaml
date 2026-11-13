@@ -1,0 +1,37 @@
+# LabWired - NUCLEO-L552ZE-Q stock Zephyr tests/kernel/fpu_sharing/generic
+#
+# Unmodified upstream Zephyr v3.7.0 `tests/kernel/fpu_sharing/generic`, the
+# twister `kernel.fpu_sharing.generic.arm` scenario (PI_NUM_ITERATIONS=70000),
+# for board `nucleo_l552ze_q`. Rebuild: crates/firmware-l552ze-zephyr/build.sh
+#
+# Renode's ARMv8M.robot "Should Pass Zephyr FPU Sharing Test" waits for
+# `PROJECT EXECUTION SUCCESSFUL`. load_store runs threads at two priorities
+# that each fill S0-S31 with a pattern and check it after being preempted;
+# pi runs two threads computing pi in float and compares their results. Both
+# pass only if every context switch and interrupt preserves the FP context:
+# CONTROL.FPCA, the extended exception frame (S0-S15/FPSCR) and EXC_RETURN[4],
+# which Zephyr's PendSV uses to decide whether to save S16-S31
+# (crates/core/src/peripherals/cortex_m_fpu.rs).
+schema_version: "1.2"
+inputs:
+  firmware: "../../tests/fixtures/stm32l552-zephyr-fpu-sharing.elf"
+  system: "./system.yaml"
+# 899 M cycles (8.2 s of 110 MHz simulated time, the ztest durations below)
+# and about 75 s on a release build, so ci/test.sh runs this one with
+# `--release`.
+limits:
+  max_steps: 3000000000
+  max_cycles: 1000000000
+  wall_time_ms: 900000
+assertions:
+  - uart_ordered:
+      - "*** Booting Zephyr OS build v3.7.0 ***"
+      - "Running TESTSUITE fpu_sharing_generic"
+      - "Load and store OK after 400 (high) + 6014 (low) tests"
+      - " PASS - test_load_store"
+      - "Pi calculation OK after 450 (high) + 893 (low) tests (computed 3.141611)"
+      - " PASS - test_pi"
+      - "TESTSUITE fpu_sharing_generic succeeded"
+      - "SUITE PASS - 100.00% [fpu_sharing_generic]: pass = 2, fail = 0, skip = 0, total = 2"
+      - "PROJECT EXECUTION SUCCESSFUL"
+  - expected_stop_reason: max_cycles

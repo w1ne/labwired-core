@@ -32,10 +32,17 @@ use labwired_config::{Arch, ChipDescriptor};
 pub enum MachineFamily {
     CortexM,
     CortexA,
+    /// ARMv7-R real-time profile (Cortex-R5F) on the native system backend.
+    CortexR,
     RiscV,
     Xtensa,
     Avr,
     Pic24,
+    Pic18,
+    Pic16,
+    Aarch64,
+    Rx,
+    Mips,
 }
 
 /// What machine family this chip is built as, or an error naming why not.
@@ -47,6 +54,11 @@ pub fn machine_family(chip: &ChipDescriptor) -> anyhow::Result<MachineFamily> {
     match chip.arch {
         Arch::Arm => match chip.core.as_deref().map(|core| core.trim().to_ascii_lowercase()) {
             Some(core) if core == "cortex-a7" => Ok(MachineFamily::CortexA),
+            Some(core) if core == "cortex-r5f" => Ok(MachineFamily::CortexR),
+            Some(core) if core.starts_with("cortex-r") => anyhow::bail!(
+                "chip '{}': unsupported ARM real-time core '{core}'; only cortex-r5f has a native adapter",
+                chip.name
+            ),
             Some(core) if core.starts_with("cortex-a") => anyhow::bail!(
                 "chip '{}': unsupported ARM application core '{core}'; only cortex-a7 has an experimental native adapter",
                 chip.name
@@ -57,8 +69,13 @@ pub fn machine_family(chip: &ChipDescriptor) -> anyhow::Result<MachineFamily> {
         Arch::Xtensa => Ok(MachineFamily::Xtensa),
         Arch::Avr => Ok(MachineFamily::Avr),
         Arch::Pic24 => Ok(MachineFamily::Pic24),
+        Arch::Pic18 => Ok(MachineFamily::Pic18),
+        Arch::Pic16 => Ok(MachineFamily::Pic16),
+        Arch::Rx => Ok(MachineFamily::Rx),
+        Arch::Mips => Ok(MachineFamily::Mips),
+        Arch::Aarch64 => Ok(MachineFamily::Aarch64),
         Arch::Unknown => anyhow::bail!(
-            "chip '{}' does not declare a known architecture (`arch:` must be arm, riscv, xtensa, avr, or pic24)",
+            "chip '{}' does not declare a known architecture (`arch:` must be arm, riscv, xtensa, avr, pic24, pic18, pic16, rx, aarch64, or mips)",
             chip.name
         ),
     }
@@ -80,6 +97,31 @@ pub fn elf_arch(e_machine: u16) -> Option<crate::Arch> {
         // EM_DSPIC30F (binutils elf.h) — the machine Microchip's dsPIC30/33
         // toolchains stamp on 16-bit MCU/DSC ELFs.
         118 => Some(crate::Arch::Pic24),
+        // EM_MCHP_PIC (204), the registered ELF machine value for Microchip's
+        // 8-bit PIC family (gABI). It is the only 8-bit PIC machine value
+        // available, so it names PIC18 here and the chip retargets a PIC16
+        // image ([`image_arch_for_chip`]).
+        204 => Some(crate::Arch::Pic18),
+        goblin::elf::header::EM_AARCH64 => Some(crate::Arch::Aarch64),
+        // EM_RX (173), Renesas RX (gABI; binutils elf/common.h).
+        173 => Some(crate::Arch::Rx),
+        // EM_MIPS (8): MIPS32 (o32) little-endian images from mips-*-elf GCC.
+        goblin::elf::header::EM_MIPS => Some(crate::Arch::Mips),
         _ => None,
+    }
+}
+
+/// The architecture an image runs as on `chip_arch`.
+///
+/// EM_MCHP_PIC covers both 8-bit PIC families (PIC16 and PIC18 share it and
+/// the ELF header does not tell them apart), so [`elf_arch`] reports such an
+/// image as PIC18. When the chip declares `arch: pic16`, the chip is the one
+/// fact that says which core the bytes are for. Every other pairing is
+/// returned unchanged, so a real mismatch (an ARM image on a PIC chip) is
+/// still refused by the caller.
+pub fn image_arch_for_chip(image_arch: crate::Arch, chip_arch: Arch) -> crate::Arch {
+    match (image_arch, chip_arch) {
+        (crate::Arch::Pic18, Arch::Pic16) => crate::Arch::Pic16,
+        (arch, _) => arch,
     }
 }

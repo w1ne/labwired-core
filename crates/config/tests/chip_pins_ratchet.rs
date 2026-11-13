@@ -40,12 +40,23 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     // (PB7 = portb bit 7, PK0 = portk bit 0); its config declares no `pins:`.
     "atmega2560",
     "atmega328p",
+    // ATmega328PB currently has no package-pad map; its smoke is CPU/MMIO
+    // level and makes no physical pad-routing claim.
+    "atmega328pb",
     // PIC24 M0 declares no `pins:` yet — the 44-pin map transcription is an
     // M1 item (docs/pic24-m0-reference.md). The M0 fixture drives no GPIO, so
     // no pad is read as a fact and there is nothing to mis-parse.
     "dspic33fj32mc204",
     // Same PIC24 M0 scope for the 28-pin sibling; no `pins:` map yet.
     "dspic33fj32mc202",
+    // PIC18F4520 L1: ports are CPU-internal SFRs and no package pad model
+    // or `pins:` map exists yet, so nothing is parsed as a pad fact.
+    "pic18f4520",
+    // PIC16F877A L1: same as PIC18F4520, ports are CPU-internal SFRs and there
+    // is no `pins:` map yet.
+    "pic16f877a",
+    // PIC16F1829 L1: same, ports are CPU-internal SFRs on the enhanced core.
+    "pic16f1829",
     // EFR32 pin labels ARE the parse: Silicon Labs names GPIO pins P<bank><bit>
     // (PB2 = port B, bit 2) straight through the datasheet and UG594, so the
     // label-letter parse is the datasheet truth here, not a guess. There is no
@@ -66,6 +77,18 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     // The Vega board's SoC models UARTs and timers and no GPIO bank, so there
     // are no pads to read, by parse or by map.
     "vegaboard-ri5cy",
+    // The PolarFire SoC MSS GPIO_0..2 are declared stubs (no GPIO model), and
+    // the kit's LEDs/buttons sit behind the FPGA fabric; no pads to read yet.
+    "mpfs095t",
+    // The SK-AM62 LEDs and button are on I2C GPIO expanders / MAIN GPIO, and
+    // neither is modelled; the pad configuration is a declared stub.
+    "am6234",
+    // RX261 ports are a declared stub (no RX PORT/MPC model yet), so the
+    // EK-RX261 LEDs and switch have no pads to read.
+    "r5f52618bgfp",
+    // PIC32MZ ports and PPS are a declared stub (no PIC32 port model yet), so
+    // the Curiosity PIC32MZ EF 2.0 LEDs and switches have no pads to read.
+    "pic32mz2048efm144",
     "nrf52832",
     "nrf52833",
     "nrf52840",
@@ -79,7 +102,6 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     // this part specifically because it is the first nRF with FOUR ports: P3.04
     // resolves to gpio3 bit 4, and the chip declares gpio3.
     "nrf54lm20a",
-    "rp2040",
     "rp2350",
     "stm32f103",
     "stm32f401",
@@ -92,7 +114,8 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     // directly onto gpio<port>/bit; no alternate package-label scheme exists
     // to transcribe a `pins:` override from (same reasoning as the peers above).
     "stm32g071",
-    "stm32g474re",
+    // G431RB is the G474RE's smaller sibling: same PA/PB/PC label form.
+    "stm32g431rb",
     "stm32h563",
     "stm32h735",
     "stm32l073",
@@ -136,12 +159,17 @@ fn declares_pins(chip: &str) -> bool {
         .is_some_and(|m| !m.is_empty())
 }
 
-/// A classification of this exact unmodeled SoC, not modeled-pin coverage.
+/// A classification of these exact unmodeled-pin SoCs (RV1103; the XCK26 RPU,
+/// whose MIO pins belong to the PS, not the R5F), not modeled-pin coverage.
 fn declared_only(chip: &str, doc: &serde_yaml::Value) -> bool {
-    chip == "rv1103"
-        && doc.get("name").and_then(|v| v.as_str()) == Some("rv1103")
+    let core = match chip {
+        "rv1103" => "cortex-a7",
+        "xck26-rpu" => "cortex-r5f",
+        _ => return false,
+    };
+    doc.get("name").and_then(|v| v.as_str()) == Some(chip)
         && doc.get("arch").and_then(|v| v.as_str()) == Some("arm")
-        && doc.get("core").and_then(|v| v.as_str()) == Some("cortex-a7")
+        && doc.get("core").and_then(|v| v.as_str()) == Some(core)
         && doc
             .get("peripherals")
             .and_then(|v| v.as_sequence())

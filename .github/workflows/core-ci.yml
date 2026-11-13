@@ -445,6 +445,11 @@ jobs:
     # 2026-09-30: it did. Two warm runs were cancelled at this wall inside
     # Firmware survival. The feature-off lib tests and the steps after them
     # moved to `pr-core-feature-off`, which is required on main.
+    # 2026-11-05: the default-members library compile reached the same wall
+    # after the earlier gates and Clippy passed. Its exact command now runs
+    # in pr-default-members-lib. The required pr-core-feature-off aggregate
+    # requires that job AND the distinct core-only feature-off job to pass.
+    # Execution budgets stay at 20 minutes; no test or feature graph is removed.
     timeout-minutes: 20
     steps:
       # Full history required: generate_validation_status.py uses
@@ -538,8 +543,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      # Generated docs + drift — pure Python, no cargo.
-      - name: Validation status — regen check + drift gate
+      # Generated docs + watch integrity; source drift is informational. Pure Python, no cargo.
+      - name: Validation status — report check + source/capture report
         run: |
           python -m pip install --quiet pyyaml
           python3 scripts/generate_validation_status.py --check --drift
@@ -568,9 +573,8 @@ jobs:
       #
       # ADDING A TEST FILE UNDER scripts/ OR validation/? Add it to the pytest
       # line below or it will never run. test_generate_validation_status.py covers the
-      # incomplete-history guard, which is precisely a "this ran and told you
-      # nothing" bug; a test for it that nothing executes would be the same bug
-      # one level up. It needs pyyaml, installed by the step above.
+      # history and watch-list guards, capture provenance, and nonblocking source
+      # drift policy. It needs pyyaml, installed by the step above.
       - name: Perf gate — every chip covered or waived
         run: |
           python -m pip install --quiet pytest
@@ -581,20 +585,24 @@ jobs:
             scripts/perf/test_workload_perf.py \
             scripts/ci/test_board_matrix.py \
             scripts/ci/test_chip_coverage.py \
+            scripts/ci/test_part_coverage.py \
             scripts/ci/test_matrix_external_cache.py \
             scripts/ci/test_matrix_verdict.py \
             scripts/ci/test_cheat_ratchet.py \
             scripts/ci/test_ignore_reasons.py \
             scripts/ci/test_linker_script_single_source.py \
             scripts/ci/test_host_clippy_scope.py \
+            scripts/ci/test_git_hooks.py \
             scripts/ci/test_workspace_test_shard.py \
             scripts/test_gen_debug_schemas.py \
+            scripts/test_generate_chip_catalog.py \
             scripts/test_generate_firmware_exercise_matrix.py \
             scripts/test_generate_model_ratings.py \
             scripts/test_generate_validation_status.py \
             scripts/test_labwired_audit.py \
             validation/matrix_lib/test_invoke.py
           python3 -m unittest discover -s scripts/tests -p test_cli_release_tag.py
+          python3 -m unittest discover -s examples/nrf52840-secure-boot-lab -p test_make_packages.py
 
       # Mixed-signal co-sim: the ngspice wrapper (tools/cosim) is pure Python
       # over libngspice and steps a real RC circuit; seconds, no cargo. It is a
@@ -622,25 +630,46 @@ jobs:
       - name: Chip coverage — every chip executed by a CLI gate, or a written reason
         run: python3 scripts/ci/chip_coverage.py --report
 
+      # The same question for PARTS. Every configs/devices/*.yaml is offered in
+      # the Playground catalog, and nothing asked whether any of them is ever
+      # attached to a board: 5 of 122 were attached by no lab and no test when
+      # this landed. Coverage is derived — an example lab whose manifest lists
+      # the part, or an integration test under crates/*/tests/ naming its
+      # `type:` — and configs/ci/part-coverage.yaml holds only what that cannot
+      # see, each with a reason. A new descriptor nothing exercises reddens this
+      # on the PR that adds it, and `min_lab_exercised:` stops a lab deletion
+      # from quietly dropping a part out of the Playground. Pure Python, seconds.
+      - name: Part coverage — every onboarded part exercised, or a written reason
+        run: python3 scripts/ci/part_coverage.py --report
+
       # Universal staleness gate. Regenerates EVERY committed artifact derived
       # from repo state and asserts the tree is clean. This catches the
       # generators that have no --check flag of their own (7 of 9 at the time
       # this landed, four of which no workflow referenced at all), including
       # generated Rust source, and it automatically covers any generator added
       # to regen-all.sh later.
-      - name: Generated artifacts — regenerate and assert no drift
+      #
+      # LEAN PR GATE (2026-11-13): `--no-cargo` skips the three cargo-backed
+      # regenerations (chip_conformance and bus_visibility baselines, the
+      # peripherals manifest). They compiled labwired-core twice — once
+      # feature-off for the two test binaries, once with the CLI's default
+      # event-scheduler for gen-peripherals-manifest — and cost 8.8 of
+      # pr-gate's 15 minutes. The full regen-all drift check, cargo included,
+      # runs on every push to main in `core-integrity`.
+      - name: Generated artifacts — regenerate and assert no drift (no cargo)
         run: |
           python -m pip install --quiet pyyaml
-          ./scripts/regen-all.sh
+          ./scripts/regen-all.sh --no-cargo
           if ! git diff --exit-code; then
             echo "::error::A committed generated artifact is stale."
             echo "Run scripts/regen-all.sh locally and commit the result."
             exit 1
           fi
 
-      # Clippy + lib tests over the workspace's default-members — cli, core,
+      # Clippy over the workspace's default-members — cli, core,
       # dap, loader, labwired-fuzz. Feature lanes and the firmware/matrix
-      # crates stay in nightly integrity-full.
+      # crates stay in nightly integrity-full. The matching bare library-test
+      # command is required through the pr-core-feature-off aggregate below.
       #
       # These two steps used to narrow to `-p labwired-core -p labwired-cli`,
       # which left `dap`, `loader` and `labwired-fuzz` compiled by NO pre-merge
@@ -680,19 +709,11 @@ jobs:
           cargo clippy --locked -p labwired-arm-system --all-targets -- -D warnings
           scripts/ci/cargo-test-nonvacuous.sh --locked -p labwired-arm-system --lib
 
-      - name: Unit tests (default-members lib)
-        run: cargo test --lib
-
-
-  # Tail of pr-gate, split out on 2026-09-30. Two warm runs of the same
-  # Rust sources were cancelled at timeout-minutes 20 inside Firmware
-  # survival, after every earlier step had passed. The note above pr-gate
-  # says to split at that wall, not to raise it. This job has no path
-  # filter, so it reports on every PR. It is a required context on main
-  # alongside pr-gate: a step that leaves the required job stops blocking
-  # merges.
-  pr-core-feature-off:
-    name: pr-core-feature-off
+  # Separate feature graphs compile independently so neither displaces the
+  # other's tests at the 20-minute execution wall. The protected aggregate
+  # below requires both jobs to succeed, including this bare workspace command.
+  pr-default-members-lib:
+    name: pr-default-members-lib
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -716,13 +737,50 @@ jobs:
             . -> target
           save-if: false
 
-      # THE DEFAULT CONFIGURATION, WHICH NOTHING ELSE RUNS.
+      - name: Unit tests (default-members lib)
+        run: cargo test --lib
+
+  # Tail of pr-gate, split out on 2026-09-30. Two warm runs of the same
+  # Rust sources were cancelled at timeout-minutes 20 inside Firmware
+  # survival, after every earlier step had passed. The note above pr-gate
+  # says to split at that wall, not to raise it. This job has no path
+  # filter, so it runs on every PR. Its result remains merge-blocking through
+  # the stable required pr-core-feature-off aggregate below. On 2026-11-05,
+  # putting both feature graphs in one allocation hit 20 minutes after both
+  # lib suites passed, before the guest/survival tail could run.
+  pr-core-feature-off-tests:
+    name: pr-core-feature-off-tests
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # Full history: `cargo test -p labwired-core --lib` includes the bus-proof
+      # ratchet, which refuses a shallow clone.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-pr-gate
+          workspaces: |
+            . -> target
+          save-if: false
+
+      # THE CORE-ONLY DEFAULT CONFIGURATION, WHICH NOTHING ELSE RUNS.
       #
       # `pr-workspace-tests` builds labwired-core's lib tests WITH
-      # `event-scheduler`, and so does `pr-scheduler-observable`. pr-gate's
-      # `cargo test --lib` is the default-members run, which does not carry the
-      # feature but also does not carry labwired-core's own scheduler-mode
-      # unit tests unless they are reachable from the default build.
+      # `event-scheduler`, and so does `pr-scheduler-observable`. The bare
+      # default-members job above unifies the CLI's default features,
+      # which enable event-scheduler. The explicit core-only command below
+      # has a different feature graph: core's own default feature set is empty.
+      # Both commands must remain; they do not substitute for each other.
       #
       # The gap is not theoretical: seven scheduler-mode unit tests added with
       # the nRF54L/ATSAMD21 walk migration passed every lane and failed
@@ -736,68 +794,6 @@ jobs:
       # plain `cargo test -p labwired-core` gives a contributor.
       - name: Unit tests (labwired-core, FEATURE-OFF)
         run: cargo test -p labwired-core --lib
-
-      - name: ARM C compiler for the UARTE stack-lifetime guest (FEATURE-OFF)
-        timeout-minutes: 10
-        uses: ./.github/actions/apt-install-cached
-        with:
-          packages: gcc-arm-none-eabi
-
-      - name: UARTE stack-lifetime guest (FEATURE-OFF)
-        env:
-          LABWIRED_UARTE_STACK_INTERVALS: "1"
-        run: >
-          scripts/ci/cargo-test-nonvacuous.sh
-          -p labwired-core --no-default-features --test microbit_v2_uarte_stack_guest
-          -- --nocapture
-
-      # The workspace shards exercise SPI with event-scheduler. Keep its
-      # reference/MMIO/guest cancellation tests nonvacuous without the feature,
-      # too; lib-only feature-off tests do not reach integration targets.
-      # Keep diagnostics visible: nonvacuous enumeration redirects Cargo JSON,
-      # including compiler errors, into its temporary artifact inventory.
-      - name: Compile TX completion guest with rendered diagnostics (FEATURE-OFF)
-        run: cargo test -p labwired-core --test sam_dmac_tx_completion --no-run
-
-      - name: SAM SPI controller and guest (FEATURE-OFF)
-        run: >
-          scripts/ci/cargo-test-nonvacuous.sh
-          -p labwired-core --test sam_sercom_spi --test st7735_sam_guest --test sam_dmac_byte
-          --test sam_dmac_sercom4_tx
-          --test sam_dmac_tx_completion
-          -- --nocapture
-
-      # AVR sim-smoke golden — cheap (~ms), no PlatformIO. Pins Arduino Nano
-      # UART+D13 behavior on every PR so the twin cannot regress silently.
-      - name: AVR Nano golden survival
-        run: cargo test -p labwired-core --test avr_nano_golden_survival -- --nocapture
-
-      # Walk-deletion honesty, on EVERY PR. The structural arm of this test
-      # needs no firmware, no `event-scheduler` recompile and no fixtures — it
-      # only asserts that a chip's `legacy_walk_disabled` is what the
-      # conservative derivation proves rather than a hand-written claim, and
-      # that check compiles under default features. Under DEFAULT features the
-      # file's observable twin is `#[cfg]`-ed out entirely, so this command
-      # runs exactly ONE test; its twin needs an `event-scheduler` build and
-      # lives in the `pr-scheduler-observable` job below (which runs in
-      # PARALLEL with this job, so it costs this lane nothing).
-      #
-      # It is here because the bug it covers shipped precisely BECAUSE the only
-      # lanes that could see it were nightly: a classic-ESP32 lab was 12/12 on
-      # the CLI and livelocked in the browser for as long as nobody ran a
-      # browser-configuration lane. A gate nobody runs on PRs is a gate this
-      # class walks back through.
-      #
-      # Run through `cargo-test-nonvacuous.sh`: under DEFAULT features this file
-      # is down to ONE test, and "one" and "zero" print the same colour. The
-      # wrapper asks the built binary how many tests it holds and fails on zero,
-      # so if a `#[cfg]` ever empties the structural arm this step says so
-      # instead of reporting `0 passed` as a pass.
-      - name: Walk-deletion derivation (PR-fast structural arm)
-        run: >
-          scripts/ci/cargo-test-nonvacuous.sh
-          -p labwired-core --test esp32_classic_walk_differential
-          --test ordered_debug_metadata
 
       # THE SHARED-MODEL NET THAT NEVER GATED A MERGE.
       #
@@ -864,14 +860,6 @@ jobs:
       - name: Firmware survival (committed ELF fixtures, ~50 chips)
         run: cargo test -p labwired-core --test firmware_survival
 
-      # The BLE Pong fixture is a COMMITTED copy of a published community lab,
-      # and `world_esp32c3_ble_pong` (release-only, push-to-main) is the only
-      # thing that boots it. This hashes the committed .ino/.bin pair, so
-      # neither can move without the other. It is pure in-tree consistency:
-      # no network, and a PR that touches the sketch is told before the merge.
-      - name: BLE Pong fixture provenance (committed .ino ↔ .bin)
-        run: cargo test -p labwired-core --test fixture_ble_pong_provenance
-
       # The SoftDevice HLE (crates/nrf-softdevice-hle) sits outside
       # `default-members`, so `--lib` above never reaches it. Its unit tests
       # (the Core Spec c1/s1 samples, keyset/GATT/indication regressions) and
@@ -885,6 +873,133 @@ jobs:
         run: |
           cargo test -p nrf-softdevice-hle --features capi
           cargo rustc -p nrf-softdevice-hle --features capi --crate-type cdylib
+
+  # Per-chip FEATURE-OFF guests, moved off the PR path on 2026-11-13.
+  #
+  # These used to be the tail of `pr-core-feature-off-tests`. Each one pins a
+  # single chip or board (micro:bit UARTE/sensor guests, SAM SERCOM SPI/DMAC +
+  # ST7735, AVR Nano golden, classic-ESP32 walk derivation, BLE Pong fixture
+  # hash). The broad pre-merge net for shared CPU/bus changes stays on the PR:
+  # `firmware_survival` (~50 chips) and the feature-off lib tests. These now
+  # run on every push to main, with the same commands and the same feature
+  # graph, so a per-chip regression is named on the merge commit.
+  feature-off-guests:
+    name: feature-off-guests
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-pr-gate
+          workspaces: |
+            . -> target
+          save-if: false
+
+      - name: ARM C compiler for the UARTE stack-lifetime guest (FEATURE-OFF)
+        timeout-minutes: 10
+        uses: ./.github/actions/apt-install-cached
+        with:
+          packages: gcc-arm-none-eabi
+
+      - name: UARTE and sensor interrupt guests (FEATURE-OFF)
+        env:
+          LABWIRED_UARTE_STACK_INTERVALS: "1"
+          LABWIRED_REQUIRE_SENSOR_FEATURE_OFF: "1"
+        run: >
+          scripts/ci/cargo-test-nonvacuous.sh
+          -p labwired-core --no-default-features
+          --test microbit_v2_uarte_stack_guest
+          --test microbit_v2_open_drain_guest
+          --test microbit_v2_mag_drdy_guest
+          --test microbit_v2_sensor_drdy_guest
+          -- --nocapture
+
+      # The workspace shards exercise SPI with event-scheduler. Keep its
+      # reference/MMIO/guest cancellation tests nonvacuous without the feature,
+      # too; lib-only feature-off tests do not reach integration targets.
+      # Keep diagnostics visible: nonvacuous enumeration redirects Cargo JSON,
+      # including compiler errors, into its temporary artifact inventory.
+      - name: Compile TX completion guest with rendered diagnostics (FEATURE-OFF)
+        run: cargo test -p labwired-core --test sam_dmac_tx_completion --no-run
+
+      - name: SAM SPI controller and guest (FEATURE-OFF)
+        run: >
+          scripts/ci/cargo-test-nonvacuous.sh
+          -p labwired-core --test sam_sercom_spi --test st7735_sam_guest --test sam_dmac_byte
+          --test sam_dmac_sercom4_tx
+          --test sam_dmac_tx_completion
+          -- --nocapture
+
+      # AVR sim-smoke golden — cheap (~ms), no PlatformIO. Pins Arduino Nano
+      # UART+D13 behavior on every push to main so the twin cannot regress silently.
+      - name: AVR Nano golden survival
+        run: cargo test -p labwired-core --test avr_nano_golden_survival -- --nocapture
+
+      # Walk-deletion honesty, on every push to main. The structural arm of this test
+      # needs no firmware, no `event-scheduler` recompile and no fixtures — it
+      # only asserts that a chip's `legacy_walk_disabled` is what the
+      # conservative derivation proves rather than a hand-written claim, and
+      # that check compiles under default features. Under DEFAULT features the
+      # file's observable twin is `#[cfg]`-ed out entirely, so this command
+      # runs exactly ONE test; its twin needs an `event-scheduler` build and
+      # lives in the `pr-scheduler-observable` job below (which runs in
+      # PARALLEL with this job, so it costs this lane nothing).
+      #
+      # It is here because the bug it covers shipped precisely BECAUSE the only
+      # lanes that could see it were nightly: a classic-ESP32 lab was 12/12 on
+      # the CLI and livelocked in the browser for as long as nobody ran a
+      # browser-configuration lane. A gate nobody runs on PRs is a gate this
+      # class walks back through.
+      #
+      # Run through `cargo-test-nonvacuous.sh`: under DEFAULT features this file
+      # is down to ONE test, and "one" and "zero" print the same colour. The
+      # wrapper asks the built binary how many tests it holds and fails on zero,
+      # so if a `#[cfg]` ever empties the structural arm this step says so
+      # instead of reporting `0 passed` as a pass.
+      - name: Walk-deletion derivation (PR-fast structural arm)
+        run: >
+          scripts/ci/cargo-test-nonvacuous.sh
+          -p labwired-core --test esp32_classic_walk_differential
+          --test ordered_debug_metadata
+
+      # The BLE Pong fixture is a COMMITTED copy of a published community lab,
+      # and `world_esp32c3_ble_pong` (release-only, push-to-main) is the only
+      # thing that boots it. This hashes the committed .ino/.bin pair, so
+      # neither can move without the other. It is pure in-tree consistency:
+      # no network, and a PR that touches the sketch is told before the merge.
+      - name: BLE Pong fixture provenance (committed .ino ↔ .bin)
+        run: cargo test -p labwired-core --test fixture_ble_pong_provenance
+
+  # Preserve the existing protected context. always() prevents a failed,
+  # cancelled, or skipped prerequisite from turning this gate into a skip.
+  # Both exact feature configurations must actually finish successfully.
+  pr-core-feature-off:
+    name: pr-core-feature-off
+    needs: [pr-default-members-lib, pr-core-feature-off-tests]
+    if: >
+      always() &&
+      (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Both library feature graphs and firmware checks must pass
+        env:
+          DEFAULT_MEMBERS_RESULT: ${{ needs.pr-default-members-lib.result }}
+          FEATURE_OFF_RESULT: ${{ needs.pr-core-feature-off-tests.result }}
+        run: |
+          if [ "$DEFAULT_MEMBERS_RESULT" != success ] || [ "$FEATURE_OFF_RESULT" != success ]; then
+            echo "::error::Required test jobs did not both pass: default-members=$DEFAULT_MEMBERS_RESULT feature-off=$FEATURE_OFF_RESULT"
+            exit 1
+          fi
 
   # ── Cache seed for pr-gate (push to main; asserts nothing) ────────────────
   #
@@ -999,10 +1114,7 @@ jobs:
           cargo clippy --all-targets
           cargo test --lib --no-run
           cargo test --no-run -p labwired-core \
-            --test avr_nano_golden_survival \
-            --test esp32_classic_walk_differential \
-            --test firmware_survival \
-            --test fixture_ble_pong_provenance
+            --test firmware_survival
 
   # ── Browser-configuration observable gate (PR; parallel with pr-gate) ──────
   #
@@ -1263,9 +1375,15 @@ jobs:
       - name: Browser analog macros and regulated supply (wasm == native, bit for bit)
         run: node scripts/test_browser_analog_macros.mjs
 
+  # Post-merge since 2026-11-13 (the job id keeps its old name so the
+  # lane references in crates/core/src/tests and validation/ stay valid).
+  # Every --test here is a per-chip walk/scheduler differential; the shared
+  # scheduler path is still compiled and unit-tested on every PR by
+  # `pr-default-members-lib` (the CLI's default features enable
+  # event-scheduler) and by `browser-layer`.
   pr-scheduler-observable:
     name: pr-scheduler-observable
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -1384,7 +1502,9 @@ jobs:
           --test stm32l073_walk_differential
           --test stm32l476_walk_differential
           --test esp32_classic_ahb_fifo_wakes_uart
+          --test esp32_classic_irq_resettle
           --test xtensa_poll_loop_skip
+          --test cc2538_rpl_udp
 
       # JIT-on vs interpreter on nRF TIMER0 / UART / WFI at tick 512. Needs
       # `jit` as well as `event-scheduler` (`required-features` on the target).
@@ -1535,9 +1655,10 @@ jobs:
   # and the like), so the context is always present and green in that case.
   # It is not in branch protection yet: add `lab-smoke-from-source` to the
   # required contexts once a few runs have confirmed its wall time.
+  # Post-merge since 2026-11-13: builds every demo-lab firmware from source.
   lab-smoke-from-source:
     name: lab-smoke-from-source
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -1587,8 +1708,11 @@ jobs:
         if: steps.scope.outputs.run == 'true'
         run: scripts/ci/lab-smoke-from-source.sh target/debug/labwired
 
+  # Post-merge since 2026-11-13: two release builds plus 30M-step ESP32-S3
+  # ROM boots (13 runner-minutes) for one chip family.
   xtensa-flash-boot:
     name: xtensa-flash-boot
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -1601,6 +1725,8 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: core-ci-xtensa-flash-boot
+          # Read-only on pull requests; see `core-pr-gate` above.
+          save-if: ${{ github.event_name != 'pull_request' }}
 
       # --release is not a speed preference: each test retires up to 20 M
       # instructions, which a debug build does not finish inside the timeout.
@@ -1623,12 +1749,19 @@ jobs:
           scripts/ci/cargo-test-nonvacuous.sh --release
           -p labwired-cli --test tier1_s3_batched_parity -- --nocapture
 
+  # Post-merge since 2026-11-13. Each shard compiled the WHOLE workspace's
+  # test set (`--no-run` over 270+ binaries) before running its third, so a
+  # PR paid for three full workspace builds — ~55 runner-minutes and the
+  # longest wall-clock job on the PR. It now gives main a sharded
+  # `cargo test --workspace` verdict on every push, with the same known-red
+  # accounting; the required PR lanes keep clippy, the lib unit tests of both
+  # feature graphs, firmware_survival and the browser layer.
   pr-workspace-tests:
     name: pr-workspace-tests (shard ${{ matrix.shard }})
     # `workflow_dispatch` too: it is the only way to exercise the lane against
     # a branch without opening a PR, which is how its own runtime gets
     # measured before anyone considers making it required.
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     # Sized generously until the first real runs say otherwise — the nightly
     # `Run Workspace Tests` step takes ~8 min to cover roughly half the
@@ -1643,6 +1776,36 @@ jobs:
       matrix:
         shard: [1, 2, 3]
     steps:
+      # RECLAIM DISK BEFORE THE BUILD. Measured failure, 2026-11-04: shard 2 died
+      # after 8 minutes (not at the 45-minute timeout) with
+      #
+      #   error: could not compile `labwired-cli` (test "rc_oscilloscope_lab")
+      #     No space left on device (os error 28)
+      #
+      # and shard 3 never uploaded its report at all. Every other shard red in
+      # this job - including the ones on `main` - is the same exhaustion, not a
+      # code failure. Each of the three shards builds the ENTIRE 270-binary
+      # workspace test set in one `cargo test --workspace --no-run` (that is
+      # deliberate: feature unification differs per-package, see the header of
+      # scripts/ci/workspace_test_shard.py), and the ubuntu-latest image spends
+      # most of its ~14 GB on preinstalled toolchains none of these tests use.
+      #
+      # The `.NET / Android / GHC / Swift` directories below are the standard
+      # reclaim set; skipping the download of the PowerShell and Chromium payloads
+      # saves the rest. This runs BEFORE checkout so the space is free when the
+      # build starts.
+      - name: Reclaim disk space
+        run: |
+          set -euo pipefail
+          before=$(df -m --output=avail / | tail -1)
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /usr/local/share/boost /usr/share/swift \
+                      /opt/hostedtoolcache/CodeQL 2>/dev/null || true
+          sudo apt-get clean 2>/dev/null || true
+          after=$(df -m --output=avail / | tail -1)
+          echo "root filesystem free space: ${before} MB -> ${after} MB"
+          df -h / | sed 's/^/  /'
+
       # Full history, on purpose — the same reason as `full:`: the Tier-1
       # baseline ratchet (labwired-cli lib) and bus_proof_matrix
       # (labwired-core lib) resolve their baseline from
@@ -1750,7 +1913,7 @@ jobs:
     # cancelled.
     if: >
       always() &&
-      (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -1800,7 +1963,9 @@ jobs:
     # for the wrong reason.
     # 45, not 30: the job took 24-29 min on the ten main runs up to 40fb1308,
     # and the last two were cancelled at 30 min in their final steps.
-    timeout-minutes: 45
+    # 45 -> 60 on 2026-11-13: this job now also runs the cargo-backed half of
+    # the generated-artifact drift gate (moved here from pr-gate).
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
@@ -1836,7 +2001,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Validation status — regen check + drift gate
+      - name: Validation status — report check + source/capture report
         run: |
           python -m pip install --quiet pyyaml
           python3 scripts/generate_validation_status.py --check --drift
@@ -1853,6 +2018,17 @@ jobs:
       # flow. If it ever goes red, run `cargo fmt --all` on 1.95.0.
       - name: Check Formatting
         run: cargo fmt --all -- --check
+
+      # The cargo-backed half of the generated-artifact drift gate. pr-gate
+      # runs `regen-all.sh --no-cargo`; this is the full run.
+      - name: Generated artifacts — full regenerate (cargo included) and assert no drift
+        run: |
+          ./scripts/regen-all.sh
+          if ! git diff --exit-code; then
+            echo "::error::A committed generated artifact is stale."
+            echo "Run scripts/regen-all.sh locally and commit the result."
+            exit 1
+          fi
 
       # Bare on purpose — see the long note on `Clippy (default-members)` in
       # `pr-gate`. This resolves to `default-members`, and the step below covers
