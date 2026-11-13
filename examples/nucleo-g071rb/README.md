@@ -50,13 +50,37 @@ cargo run -q -p labwired-cli -- test \
   --no-uart-stdout
 ```
 
-## Analog GPIO example
+## Analog examples
 
 [`analog-ntc-diode-system.yaml`](analog-ntc-diode-system.yaml) routes a generic
 Beta NTC divider and Shockley diode netlist into the modeled PA0/PA1 GPIO inputs.
 This verifies voltage solving and GPIO threshold routing; the threshold ratios
-are test assumptions, and the current ADC model has no external input path. Run
-the end-to-end proof from `core/` with:
+are test assumptions.
+
+[`analog-ntc-diode-adc-system.yaml`](analog-ntc-diode-adc-system.yaml) routes
+the same generic devices to explicit ADC1 IN4/IN5 endpoints.
+[`analog-jfet-terminal-resistance-adc-system.yaml`](analog-jfet-terminal-resistance-adc-system.yaml)
+adds matched level-1 NJF branches with RD/RS on ADC1 IN6–IN9. These fixtures
+prove ADC routing and firmware-visible conversion in the model; their channel
+indices are explicit co-simulation endpoints, with no PAx alias or silicon
+analog capture claimed.
+[`analog-jfet-gate-charge-adc-system.yaml`](analog-jfet-gate-charge-adc-system.yaml)
+compares a generic NJF with CGS/CGD depletion charge against a matched zero-charge
+control on ADC1 IN6/IN7, alongside the NTC and diode on IN4/IN5.
+[`analog-diode-charge-adc-system.yaml`](analog-diode-charge-adc-system.yaml)
+routes matched diode branches with depletion charge, transit-time charge, both,
+and neither to ADC1 IN10–IN13. Its deliberately large capacitance and transit
+time make transient charge effects visible at the 1 us boundary; they are a
+physics stress case rather than a typical diode parameter set.
+[`analog-bjt-recombination-adc-system.yaml`](analog-bjt-recombination-adc-system.yaml)
+compares generic Gummel–Poon branches with base-emitter recombination, base-
+collector recombination, both, and neither on ADC1 IN8–IN11, alongside the
+independent NTC and diode routes.
+[`analog-bjt-terminal-resistance-adc-system.yaml`](analog-bjt-terminal-resistance-adc-system.yaml)
+compares RB, RC, and RE model-card branches with a matched branch using explicit
+external resistors on ADC1 IN8–IN13. It asserts the load-line changes and
+equivalent circuit result through the modeled ADC alongside the NTC and diode.
+Run the end-to-end proofs from `core/` with:
 
 ```bash
 cargo test -p labwired-core --test cosim_nucleo_g071rb_analog

@@ -23,8 +23,8 @@
 //! | Current source | `I<name> n+ n- <source>` |
 //! | Switch | `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` or `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0\|1] ron=<r> roff=<r>` |
 //! | Voltage switch | `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0|1] ron=<r> roff=<r>` |
-//! | Diode | `D<name> n+ n- <model>` |
-//! | BJT | `Q<name> nc nb ne <model> [temp=<°C>]` |
+//! | Diode | `D<name> n+ n- <model> [<area>] [pj=<perimeter>]` |
+//! | BJT | `Q<name> nc nb ne [ns] <model> [temp=<°C>]` |
 //! | MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>]` |
 //! | JFET | `J<name> nd ng ns <model> [temp=<°C>]` |
 //! | VCVS | `E<name> n+ n- nc+ nc- <gain>` |
@@ -70,9 +70,9 @@
 //! be declared after the elements that use it. Parameters this engine does not
 //! model (except diode forward/reverse knee currents `IK`/`IKF`/`IKR`, diode
 //! depletion capacitance `CJO`/`VJ`/`M`/`FC`, diffusion charge `TT` and
-//! soft-recovery parameter `VP`, BJT base-resistance rolloff `RBM`/`IRB`,
-//! terminal resistances `RB`/`RC`/`RE` and their `TRB*`/`TRBM*`/`TIRB*`/
-//! `TRC*`/`TRE*` temperature coefficients, diode transit-time temperature
+//! soft-recovery parameter `VP`, diode sidewall saturation current
+//! `JSW`/`ISW` with emission `NS` and perimeter `PJ`, diode sidewall depletion
+//! capacitance `CJSW`/`CJP` with `PHP`/`MJSW`/`FCS`, diode transit-time temperature
 //! coefficients `TTT1`/`TTT2`, diode grading-coefficient temperature
 //! coefficients `TM1`/`TM2`, forward/reverse BJT transit-time temperature
 //! coefficients `TTF1`/`TTF2`/`TTR1`/`TTR2`, JFET terminal
@@ -82,6 +82,7 @@
 //! level-1 channel charge from `TOX`, gate overlap capacitance
 //! `CGSO`/`CGDO`/`CGBO`, BJT base-junction depletion capacitance
 //! `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC` with shared `FC`,
+//! including the `XCJC` split between the internal and external base,
 //! MOSFET bulk junction depletion capacitance `CBD`/`CBS` with shared
 //! `PB`/`MJ`/`FC`, or junction geometry `CJ`/`CJSW`/`MJ`/`MJSW` with instance
 //! `AD`/`AS`/`PD`/`PS`, semiconductor temperature coefficients beyond the diode,
@@ -96,7 +97,9 @@
 //! instance's `TEMP` uses model `TNOM`/`EG`/
 //! `XTI`/`XTB` to adjust thermal voltage, transport and recombination
 //! saturation currents, and forward/reverse beta. BJT `CJE`/`VJE`/`MJE` and
-//! `CJC`/`VJC`/`MJC` follow the default silicon temperature law; `TMJE1`/`2`
+//! `CJC`/`VJC`/`MJC` follow the default silicon temperature law; `XCJC` assigns
+//! the given fraction of `CJC` to the internal base and the remainder to the
+//! external base when `RB` creates both nodes. `TMJE1`/`2`
 //! and `TMJC1`/`2` adjust the grading factors. `TLEVC=1` selects the linear
 //! `CTE`/`CTC` and `TVJE`/`TVJC` law. With `TEMP`, `TRB1`/`TRB2`, `TRBM1`/`TRBM2`,
 //! `TIRB1`/`TIRB2`, `TRC1`/`TRC2`, and `TRE1`/`TRE2` adjust base,
@@ -128,13 +131,23 @@
 //! exponent 0.5), base recombination from `ISE`/`NE`/`ISC`/`NC`, and transit-time
 //! charge from `TF`/`TR`,
 //! including the forward `XTF`/`VTF`/`ITF` adjustment, plus ohmic terminal
-//! resistances `RB`/`RC`/`RE` are modelled. JFET
+//! resistances `RB`/`RC`/`RE` are modelled. `RBM`/`IRB` make the base
+//! spreading resistance fall with conduction base current using the
+//! ngspice level-1 interpolation; `TRB*`/`TRBM*`/`TIRB*` apply its temperature
+//! coefficients. JFET
 //! channel current uses the Parker–Skellern fit `B` (default 1), with explicit
 //! instance `TEMP` laws for level-1 `VTO` and `BETA`; terminal
 //! resistances `RD`/`RS` create series resistors to its intrinsic
 //! drain/source nodes. MOSFET `RD`/`RS` and `RSH` multiplied by instance
 //! `NRD`/`NRS` do the same; level-1 `GAMMA`/`PHI` body effect is also modelled;
-//! MOSFET `IS` is used for the two bulk junction currents. `CGSO` and
+//! lateral diffusion `LD` shortens the channel to `L − 2·LD` for `KP·W/L`,
+//! `TOX` channel charge and `CGBO`, and a card with `TOX` but no `KP` takes
+//! ngspice's process value `KP = UO·1e-4·εox/TOX` (`UO`/`U0`, default 600);
+//! with `TOX`, substrate doping `NSUB` derives every omitted `PHI`, `GAMMA`
+//! and `VTO` as ngspice level 1 does, using gate type `TPG` and surface-state
+//! density `NSS` for the flat-band voltage;
+//! MOSFET `IS` is used for the two bulk junction currents, or `JS` times
+//! instance `AD`/`AS` when `JS`, `AD` and `AS` are all non-zero. `CGSO` and
 //! `CGDO` are capacitance per unit width (F/m), and `CGBO` is capacitance per
 //! unit length (F/m); each is multiplied by instance `W` or `L` and integrated
 //! as linear overlap charge. `CBD` and `CBS` integrate nonlinear bulk junction
@@ -182,6 +195,12 @@
 //! terminal resistances, and `TTF*`/`TTR*` adjust forward/reverse transit time,
 //! all with `ΔT = TEMP − TNOM`. BJT junction depletion charge follows ngspice's
 //! default silicon temperature law, or its `TLEVC=1` linear coefficient form.
+//! The optional fourth node `ns` is the substrate (ground when omitted); it is
+//! read as a node unless it names a `.model`, as ngspice does. Its junction
+//! runs to the internal collector (`SUBS=1`, NPN default) or the internal base
+//! (`SUBS=-1`, PNP default) with `ISS`/`NS` current and `CJS`/`VJS`/`MJS`
+//! (also `CCS`/`CSUB`, `PS`, `MS`) depletion charge with no `FC`, following
+//! `TMJS1`/`TMJS2`, `CTS`/`TVJS` and `TNS1`/`TNS2` with `TEMP`.
 //! Self-heating is not modeled.
 //!
 //! A diode card may carry `IK`/`IKF` (forward knee current) and `IKR` (reverse
@@ -707,9 +726,64 @@ pub struct DiodeModel {
     /// Second-order series-resistance temperature coefficient `TRS2`, per
     /// Celsius degree squared. Applies when an instance `TEMP` is present.
     pub trs2: f64,
+    /// Sidewall saturation current `JSW`/`ISW`, amps per unit of perimeter
+    /// `PJ`. Zero (the default) disables the sidewall junction. On a bound
+    /// instance it is already multiplied by `PJ`; see [`Self::with_perimeter`].
+    pub jsw: f64,
+    /// Sidewall emission coefficient `NS`. `None` merges the sidewall current
+    /// into the bottom junction and uses `N`, as ngspice-42 does; the
+    /// temperature law still uses ngspice's default `NS = 1` then.
+    pub ns: Option<f64>,
+    /// Default junction perimeter `PJ` for instances that do not give `pj=`.
+    /// ngspice's default is 0, so `JSW` alone adds no current.
+    pub pj: f64,
+    /// Zero-bias sidewall depletion capacitance `CJSW`/`CJP`, farads per unit
+    /// of perimeter `PJ`. Zero (the default) disables sidewall charge. On a
+    /// bound instance it is already multiplied by `PJ`.
+    pub cjsw: f64,
+    /// Sidewall junction potential `PHP`, volts, default 1 V.
+    pub php: f64,
+    /// Sidewall grading coefficient `MJSW`, default 0.33.
+    pub mjsw: f64,
+    /// Forward-bias sidewall capacitance transition coefficient `FCS`,
+    /// default 0.5.
+    pub fcs: f64,
 }
 
 impl DiodeModel {
+    /// Fold the junction perimeter into the card: `JSW` and `CJSW` become the
+    /// instance's total sidewall saturation current `JSW·PJ` and capacitance
+    /// `CJSW·PJ`, as ngspice's `diosetup.c`/`diotemp.c` do. The instance
+    /// `pj=` wins over the model `PJ`. `AREA` does not touch the sidewall.
+    pub fn with_perimeter(self, instance_pj: Option<f64>) -> Self {
+        let pj = instance_pj.unwrap_or(self.pj);
+        Self {
+            jsw: self.jsw * pj,
+            cjsw: self.cjsw * pj,
+            pj,
+            ..self
+        }
+    }
+
+    /// The card one instance with SPICE `AREA` sees: the currents `IS`,
+    /// `ISR`, `IK`, `IKR` and the capacitance `CJO` scale with the junction
+    /// area and `RS` divides by it, as ngspice's `dioload.c` and `diotemp.c`
+    /// do. `IBV` stays as written: ngspice-45 fits the breakdown knee to the
+    /// unscaled `IBV`, so a larger area moves `BV` slightly. Unlike the
+    /// instance multiplier `m`, GMIN is untouched. `area == 1` returns the
+    /// card bit-identical.
+    pub fn with_area(self, area: f64) -> Self {
+        Self {
+            is: self.is * area,
+            isr: self.isr * area,
+            ik: self.ik * area,
+            ikr: self.ikr * area,
+            cjo: self.cjo * area,
+            rs: self.rs / area,
+            ..self
+        }
+    }
+
     /// Series resistance at the instance temperature, in ohms.
     ///
     /// With no instance temperature, retain the engine's historical fixed
@@ -775,6 +849,13 @@ impl Default for DiodeModel {
             tcv: 0.0,
             trs1: 0.0,
             trs2: 0.0,
+            jsw: 0.0,
+            ns: None,
+            pj: 0.0,
+            cjsw: 0.0,
+            php: 1.0,
+            mjsw: 0.33,
+            fcs: 0.5,
         }
     }
 }
@@ -1170,6 +1251,13 @@ pub const REGULATOR_LIMIT_DIODE: DiodeModel = DiodeModel {
     tcv: 0.0,
     trs1: 0.0,
     trs2: 0.0,
+    jsw: 0.0,
+    ns: None,
+    pj: 0.0,
+    cjsw: 0.0,
+    php: 1.0,
+    mjsw: 0.33,
+    fcs: 0.5,
 };
 
 /// Floor on the input voltage a buck's power-balance sink divides by, volts.
@@ -1265,6 +1353,10 @@ pub struct BjtModel {
     pub tmje2: f64,
     /// Zero-bias base-collector depletion capacitance `CJC`, farads.
     pub cjc: f64,
+    /// Fraction of base-collector depletion capacitance attached to the
+    /// internal base node. The remainder is attached to the external base.
+    /// The ngspice default is 1; without `RB`, both portions share one node.
+    pub xcjc: f64,
     /// Base-collector junction potential `VJC`, volts.
     pub vjc: f64,
     /// Base-collector junction grading coefficient `MJC`.
@@ -1342,9 +1434,64 @@ pub struct BjtModel {
     /// per °C².
     pub tre1: f64,
     pub tre2: f64,
+    /// Zero-bias substrate junction capacitance `CJS` (`CCS`, `CSUB`), farads.
+    /// Zero, ngspice's default, leaves only the substrate current.
+    pub cjs: f64,
+    /// Substrate junction potential `VJS` (`PS`), volts.
+    pub vjs: f64,
+    /// Substrate junction grading coefficient `MJS` (`MS`). ngspice limits
+    /// the temperature-adjusted value to 0.999.
+    pub mjs: f64,
+    /// First and second order temperature coefficients for `MJS`, per °C and
+    /// per °C².
+    pub tmjs1: f64,
+    pub tmjs2: f64,
+    /// `TLEVC=1` linear temperature coefficients for `CJS` and `VJS`, per °C.
+    pub cts: f64,
+    pub tvjs: f64,
+    /// Substrate junction saturation current `ISS`, amps. Zero, ngspice's
+    /// default, leaves only GMIN across the substrate junction.
+    pub iss: f64,
+    /// Substrate junction emission coefficient `NS`.
+    pub ns: f64,
+    /// First and second order temperature coefficients for `NS`, per °C and
+    /// per °C².
+    pub tns1: f64,
+    pub tns2: f64,
+    /// Substrate geometry `SUBS`: `Some(1)` vertical (the junction sits on
+    /// the collector), `Some(-1)` lateral (on the base). `None` is ngspice's
+    /// default: vertical for NPN, lateral for PNP.
+    pub subs: Option<i8>,
 }
 
 impl BjtModel {
+    /// The card one instance with SPICE `AREA` sees: `IS`, `ISE`, `ISC`,
+    /// `IKF`, `IKR`, `IRB`, `ITF`, `CJE` and `CJC` scale with the emitter
+    /// area and `RB`, `RBM`, `RC`, `RE` divide by it, as ngspice's
+    /// `bjtload.c` does when `AREAB`/`AREAC` default to `AREA`. Unlike the
+    /// instance multiplier `m`, GMIN is untouched. `area == 1` returns the
+    /// card bit-identical.
+    pub fn with_area(self, area: f64) -> Self {
+        Self {
+            is: self.is * area,
+            ise: self.ise * area,
+            isc: self.isc * area,
+            ikf: self.ikf * area,
+            ikr: self.ikr * area,
+            irb: self.irb * area,
+            itf: self.itf * area,
+            cje: self.cje * area,
+            cjc: self.cjc * area,
+            cjs: self.cjs * area,
+            iss: self.iss * area,
+            rb: self.rb / area,
+            rbm: self.rbm.map(|rbm| rbm / area),
+            rc: self.rc / area,
+            re: self.re / area,
+            ..self
+        }
+    }
+
     fn defaults(polarity: Polarity) -> Self {
         Self {
             polarity,
@@ -1376,6 +1523,7 @@ impl BjtModel {
             mjc: 0.33,
             tmjc1: 0.0,
             tmjc2: 0.0,
+            xcjc: 1.0,
             tlevc: 0,
             cte: 0.0,
             ctc: 0.0,
@@ -1406,6 +1554,27 @@ impl BjtModel {
             re: 0.0,
             tre1: 0.0,
             tre2: 0.0,
+            cjs: 0.0,
+            vjs: 0.75,
+            mjs: 0.0,
+            tmjs1: 0.0,
+            tmjs2: 0.0,
+            cts: 0.0,
+            tvjs: 0.0,
+            iss: 0.0,
+            ns: 1.0,
+            tns1: 0.0,
+            tns2: 0.0,
+            subs: None,
+        }
+    }
+
+    /// Whether the substrate junction sits on the collector (vertical) rather
+    /// than the base (lateral), per `SUBS` or ngspice's polarity default.
+    pub fn substrate_is_vertical(&self) -> bool {
+        match self.subs {
+            Some(subs) => subs > 0,
+            None => self.polarity == Polarity::N,
         }
     }
 }
@@ -1426,10 +1595,24 @@ pub struct MosModel {
     /// N-channel or P-channel.
     pub polarity: Polarity,
     /// Zero-bias threshold `VTO`, volts — **negative for a normal PMOS**, as
-    /// in ngspice.
+    /// in ngspice. When the card omits `VTO` but supplies `TOX` and `NSUB`,
+    /// the resolved instance uses ngspice's process value instead (see
+    /// [`Self::nsub`]).
     pub vto: f64,
-    /// Transconductance parameter `KP`, A/V².
+    /// Whether the model card explicitly supplied `VTO`.
+    pub vto_given: bool,
+    /// Transconductance parameter `KP`, A/V². When the card omits `KP` but
+    /// supplies `TOX`, the resolved instance uses ngspice's process value
+    /// `UO·1e-4·εox/TOX` instead (see [`Self::kp_given`]).
     pub kp: f64,
+    /// Whether the model card explicitly supplied `KP`.
+    pub kp_given: bool,
+    /// Surface mobility `UO`, cm²/V·s (default 600). Used only to derive `KP`
+    /// from `TOX` when `KP` is absent, as ngspice level 1 does.
+    pub uo: f64,
+    /// Lateral diffusion `LD`, metres. The channel is `L − 2·LD` long for
+    /// drain current, intrinsic oxide charge and `CGBO` (default 0).
+    pub ld: f64,
     /// Channel-length modulation `LAMBDA`, 1/V.
     pub lambda: f64,
     /// Ohmic drain terminal resistance `RD`, ohms. Zero disables the internal
@@ -1450,10 +1633,30 @@ pub struct MosModel {
     pub rsh: f64,
     /// Bulk threshold parameter `GAMMA`, sqrt(V).
     pub gamma: f64,
+    /// Whether the model card explicitly supplied `GAMMA`.
+    pub gamma_given: bool,
     /// Surface potential `PHI`, volts.
     pub phi: f64,
+    /// Whether the model card explicitly supplied `PHI`.
+    pub phi_given: bool,
+    /// Substrate doping `NSUB`, cm⁻³. With `TOX`, ngspice level 1 derives
+    /// every one of `PHI`, `GAMMA` and `VTO` the card omits from it; without
+    /// `TOX` it is ignored, as in ngspice.
+    pub nsub: Option<f64>,
+    /// Fast surface-state density `NSS`, cm⁻². Shifts the process-derived
+    /// flat-band voltage by `−NSS·q/C'ox` (default 0).
+    pub nss: f64,
+    /// Gate material type `TPG`: `+1` opposite to the substrate (default),
+    /// `−1` same as the substrate, `0` aluminium. Used only for the
+    /// process-derived `VTO`.
+    pub tpg: f64,
     /// Bulk junction saturation current `IS`, amps.
     pub is: f64,
+    /// Bulk junction saturation current density `JS`, A/m². When positive
+    /// and the instance supplies both `AD` and `AS`, ngspice level 1 uses
+    /// `JS·AD` and `JS·AS` for the drain and source junctions instead of
+    /// `IS` (default 0).
+    pub js: f64,
     /// Zero-bias bulk-drain junction capacitance `CBD`, farads.
     pub cbd: f64,
     /// Whether `CBD` was explicitly supplied; an explicit zero also overrides
@@ -1520,6 +1723,9 @@ pub struct JfetModel {
     pub rs: f64,
     /// Gate-junction saturation current `IS`, amps.
     pub is: f64,
+    /// Gate-junction emission coefficient `N`, shared by the gate-source and
+    /// gate-drain diodes. Default 1, as in ngspice.
+    pub n: f64,
     /// Zero-bias gate-source depletion capacitance `CGS`, farads.
     pub cgs: f64,
     /// Zero-bias gate-drain depletion capacitance `CGD`, farads.
@@ -1547,6 +1753,22 @@ pub struct JfetModel {
 }
 
 impl JfetModel {
+    /// The card one instance with SPICE `AREA` sees: `BETA`, `IS`, `CGS` and
+    /// `CGD` scale with the gate area and `RD`, `RS` divide by it, as
+    /// ngspice's `jfetload.c` does. Unlike the instance multiplier `m`, GMIN
+    /// is untouched. `area == 1` returns the card bit-identical.
+    pub fn with_area(self, area: f64) -> Self {
+        Self {
+            beta: self.beta * area,
+            is: self.is * area,
+            cgs: self.cgs * area,
+            cgd: self.cgd * area,
+            rd: self.rd / area,
+            rs: self.rs / area,
+            ..self
+        }
+    }
+
     fn defaults(polarity: Polarity) -> Self {
         Self {
             polarity,
@@ -1557,6 +1779,7 @@ impl JfetModel {
             rd: 0.0,
             rs: 0.0,
             is: 1e-14,
+            n: 1.0,
             cgs: 0.0,
             cgd: 0.0,
             pb: 1.0,
@@ -1577,7 +1800,11 @@ impl MosModel {
         Self {
             polarity,
             vto: 0.0,
+            vto_given: false,
             kp: 2e-5,
+            kp_given: false,
+            uo: 600.0,
+            ld: 0.0,
             lambda: 0.0,
             rd: 0.0,
             rd_given: false,
@@ -1585,8 +1812,14 @@ impl MosModel {
             rs_given: false,
             rsh: 0.0,
             gamma: 0.0,
+            gamma_given: false,
             phi: 0.6,
+            phi_given: false,
+            nsub: None,
+            nss: 0.0,
+            tpg: 1.0,
             is: 1e-14,
+            js: 0.0,
             cbd: 0.0,
             cbd_given: false,
             cbs: 0.0,
@@ -1706,6 +1939,13 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             tcv: 0.0,
             trs1: 0.0,
             trs2: 0.0,
+            jsw: 0.0,
+            ns: None,
+            pj: 0.0,
+            cjsw: 0.0,
+            php: 1.0,
+            mjsw: 0.33,
+            fcs: 0.5,
         })),
         // SMAJ5.0A-like 400 W unidirectional TVS. Datasheet: VBR 6.40–7.07 V
         // at IT = 10 mA, VC = 9.2 V at IPP = 43.5 A. BV sits mid-window at
@@ -1738,6 +1978,13 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             tcv: 0.0,
             trs1: 0.0,
             trs2: 0.0,
+            jsw: 0.0,
+            ns: None,
+            pj: 0.0,
+            cjsw: 0.0,
+            php: 1.0,
+            mjsw: 0.33,
+            fcs: 0.5,
         })),
         "NJF" => Some(ModelCard::Jfet(JfetModel::defaults(Polarity::N))),
         "PJF" => Some(ModelCard::Jfet(JfetModel::defaults(Polarity::P))),
@@ -1909,11 +2156,16 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
     }
 }
 
-/// `D<name> n+ n- <model>` — a Shockley junction diode.
+/// `D<name> n+ n- <model> [<area>] [m=<count>] [temp=<°C>]` — a Shockley junction diode.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Diode {
     /// Element name as written, e.g. `D1`.
     pub name: String,
+    /// SPICE instance multiplier `M`: the element behaves as this many
+    /// identical devices in parallel. Every current, conductance and charge it
+    /// stamps, including its terminal resistances and GMIN, is scaled by it,
+    /// as ngspice's `*load.c` does. `1` for a single device.
+    pub multiplier: f64,
     /// Anode, the terminal the netlist names first.
     pub anode: NodeRef,
     /// Cathode.
@@ -1923,7 +2175,7 @@ pub struct Diode {
     pub junction_anode: NodeRef,
     /// Model name as written, for diagnostics.
     pub model_name: String,
-    /// Resolved model parameters.
+    /// Resolved model parameters, already scaled by the instance `AREA`.
     pub model: DiodeModel,
     /// Model parameters with `CJO`, `VJ`, `M`, and `TT` adjusted for this
     /// instance's temperature.
@@ -2065,17 +2317,26 @@ pub struct Ccvs {
     pub ohms: f64,
 }
 
-/// `Q<name> nc nb ne <model> [temp=<°C>]` — an Ebers–Moll bipolar transistor.
+/// `Q<name> nc nb ne [ns] <model> [<area>] [m=<count>] [temp=<°C>]` — an Ebers–Moll bipolar transistor.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Bjt {
     /// Element name as written, e.g. `Q1`.
     pub name: String,
+    /// SPICE instance multiplier `M`: the element behaves as this many
+    /// identical devices in parallel. Every current, conductance and charge it
+    /// stamps, including its terminal resistances and GMIN, is scaled by it,
+    /// as ngspice's `*load.c` does. `1` for a single device.
+    pub multiplier: f64,
     /// Collector.
     pub c: NodeRef,
     /// Base.
     pub b: NodeRef,
     /// Emitter.
     pub e: NodeRef,
+    /// Substrate: the optional fourth terminal, ground when omitted (as in
+    /// ngspice). Its junction, when the model has one, is the internal diode
+    /// `<name>#substrate` in [`Circuit::diodes`].
+    pub s: NodeRef,
     /// Collector junction node. Equals `c` when `RC = 0`, else the internal
     /// node `<name>#collector`.
     pub junction_c: NodeRef,
@@ -2087,7 +2348,7 @@ pub struct Bjt {
     pub junction_e: NodeRef,
     /// Model name as written, for diagnostics.
     pub model_name: String,
-    /// Resolved model parameters.
+    /// Resolved model parameters, already scaled by the instance `AREA`.
     pub model: BjtModel,
     /// Model parameters adjusted for this instance's explicit `TEMP`.
     pub operating_model: BjtModel,
@@ -2098,11 +2359,16 @@ pub struct Bjt {
     pub temperature_celsius: Option<f64>,
 }
 
-/// `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>] [temp=<°C>]` — a level-1 MOSFET.
+/// `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>] [m=<count>] [temp=<°C>]` — a level-1 MOSFET.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Mosfet {
     /// Element name as written, e.g. `M1`.
     pub name: String,
+    /// SPICE instance multiplier `M`: the element behaves as this many
+    /// identical devices in parallel. Every current, conductance and charge it
+    /// stamps, including its terminal resistances and GMIN, is scaled by it,
+    /// as ngspice's `*load.c` does. `1` for a single device.
+    pub multiplier: f64,
     /// Drain.
     pub d: NodeRef,
     /// Gate.
@@ -2115,7 +2381,8 @@ pub struct Mosfet {
     /// Intrinsic source before the effective source resistance, or `s` when
     /// it is zero.
     pub junction_s: NodeRef,
-    /// Bulk. Its drain and source pn junctions use the MOS model's `IS`, and
+    /// Bulk. Its drain and source pn junctions use the MOS model's `IS`, or
+    /// `JS` times `AD`/`AS` (see [`Self::junction_saturation_currents`]), and
     /// `GAMMA`/`PHI` use its bias relative to the effective source for body effect.
     pub bulk: NodeRef,
     /// Model name as written, for diagnostics.
@@ -2128,12 +2395,13 @@ pub struct Mosfet {
     /// Explicit instance temperature, in Celsius. `None` preserves the
     /// historical fixed-300 K behaviour.
     pub temperature_celsius: Option<f64>,
-    /// `KP·W/L` at the instance temperature, A/V² — the transconductance the
-    /// solver actually stamps.
+    /// `KP·W/(L − 2·LD)` at the instance temperature, A/V² — the
+    /// transconductance the solver actually stamps.
     pub beta: f64,
     /// Instance channel width `W`, metres.
     pub w: f64,
-    /// Instance channel length `L`, metres.
+    /// Instance drawn channel length `L`, metres. See
+    /// [`Self::effective_length`] for the length the physics uses.
     pub l: f64,
     /// Drain diffusion area `AD`, m², used with model `CJ` when `CBD` is absent.
     pub ad: f64,
@@ -2150,6 +2418,19 @@ pub struct Mosfet {
 }
 
 impl Mosfet {
+    /// Bulk-drain and bulk-source junction saturation currents, amps, at the
+    /// instance temperature. ngspice level 1 (`mos1load.c`) uses `JS·AD` and
+    /// `JS·AS` only when `JS`, `AD` and `AS` are all non-zero; otherwise both
+    /// junctions use `IS`.
+    pub fn junction_saturation_currents(&self) -> (f64, f64) {
+        let model = &self.operating_model;
+        if model.js == 0.0 || self.ad == 0.0 || self.as_ == 0.0 {
+            (model.is, model.is)
+        } else {
+            (model.js * self.ad, model.js * self.as_)
+        }
+    }
+
     /// Thermal voltage of the bulk junctions: `kT/q` at the explicit instance
     /// `TEMP`, or the engine's fixed [`super::device::THERMAL_VOLTAGE`].
     pub fn thermal_voltage(&self) -> f64 {
@@ -2159,12 +2440,18 @@ impl Mosfet {
             })
     }
 
+    /// Effective channel length `L − 2·LD`, metres: the length ngspice's
+    /// level 1 uses for `β`, intrinsic oxide capacitance and `CGBO`.
+    pub fn effective_length(&self) -> f64 {
+        self.l - 2.0 * self.model.ld
+    }
+
     /// Effective linear gate overlap capacitances in G-S, G-D, G-B order.
     pub fn overlap_capacitances(&self) -> [f64; 3] {
         [
             self.model.cgso * self.w,
             self.model.cgdo * self.w,
-            self.model.cgbo * self.l,
+            self.model.cgbo * self.effective_length(),
         ]
     }
 
@@ -2212,11 +2499,16 @@ impl Mosfet {
     }
 }
 
-/// `J<name> nd ng ns <model> [temp=<°C>]` — a SPICE level-1 JFET.
+/// `J<name> nd ng ns <model> [<area>] [m=<count>] [temp=<°C>]` — a SPICE level-1 JFET.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Jfet {
     /// Element name as written, e.g. `J1`.
     pub name: String,
+    /// SPICE instance multiplier `M`: the element behaves as this many
+    /// identical devices in parallel. Every current, conductance and charge it
+    /// stamps, including its terminal resistances and GMIN, is scaled by it,
+    /// as ngspice's `*load.c` does. `1` for a single device.
+    pub multiplier: f64,
     /// Drain.
     pub d: NodeRef,
     /// Gate.
@@ -2229,7 +2521,7 @@ pub struct Jfet {
     pub junction_s: NodeRef,
     /// Model name as written, for diagnostics.
     pub model_name: String,
-    /// Resolved model parameters.
+    /// Resolved model parameters, already scaled by the instance `AREA`.
     pub model: JfetModel,
     /// Channel `VTO`/`BETA` and gate-junction `IS`/`PB`/`CGS`/`CGD` adjusted
     /// for this instance's explicit `TEMP`.
@@ -2604,6 +2896,10 @@ struct PendingDevice {
     pd: Option<f64>,
     ps: Option<f64>,
     temperature_celsius: Option<f64>,
+    multiplier: f64,
+    area: f64,
+    /// Diode junction perimeter `pj=`; `None` uses the model `PJ`.
+    perimeter: Option<f64>,
 }
 
 /// A K line held until all its L elements have been parsed.
@@ -2627,6 +2923,23 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
     // Line of every `F`/`H`, in the order they were pushed, for the error when
     // the element they name carries no branch current.
     let mut controls: Vec<(char, usize, String)> = Vec::new();
+    // Every `.model` name in the deck, wherever it is written. A `Q` line's
+    // fourth token is the substrate node unless it names a model, which is
+    // how ngspice's `inp2q.c` tells `Q c b e s mod` from `Q c b e mod`.
+    let declared_models: Vec<String> = text
+        .lines()
+        .filter_map(|line| {
+            let mut tokens = strip_comment(line.trim()).split_whitespace();
+            let head = tokens.next()?;
+            head.eq_ignore_ascii_case(".model")
+                .then(|| tokens.next())
+                .flatten()
+                .map(str::to_ascii_lowercase)
+        })
+        .collect();
+    let names_model = |token: &str| {
+        declared_models.contains(&token.to_ascii_lowercase()) || builtin_model(token).is_some()
+    };
 
     for (offset, raw_line) in text.lines().enumerate() {
         let number = offset + 1;
@@ -2914,13 +3227,16 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
             }
             'D' | 'Q' | 'M' | 'J' => {
                 let (terminals, shape) = match letter {
-                    'D' => (2, "D<name> n+ n- <model>"),
-                    'Q' => (3, "Q<name> nc nb ne <model>"),
+                    'D' => (2, "D<name> n+ n- <model> [<area>] [area=<factor>] [pj=<perimeter>] [m=<count>] [temp=<°C>]"),
+                    'Q' => (
+                        if tokens.len() > 5 && !names_model(tokens[4]) { 4 } else { 3 },
+                        "Q<name> nc nb ne [ns] <model> [<area>] [area=<factor>] [m=<count>] [temp=<°C>]",
+                    ),
                     'M' => (
                         4,
-                        "M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>] [temp=<°C>]",
+                        "M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>] [m=<count>] [temp=<°C>]",
                     ),
-                    _ => (3, "J<name> nd ng ns <model>"),
+                    _ => (3, "J<name> nd ng ns <model> [<area>] [area=<factor>] [m=<count>] [temp=<°C>]"),
                 };
                 let rest = &tokens[1..];
                 if rest.len() < terminals + 1 {
@@ -2935,7 +3251,21 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 let mut pd = None;
                 let mut ps = None;
                 let mut temperature_celsius = None;
-                for token in &rest[terminals + 1..] {
+                let mut multiplier = None;
+                let mut area = None;
+                let mut perimeter = None;
+                let mut options = &rest[terminals + 1..];
+                // SPICE writes a D, Q or J area as a bare number straight
+                // after the model name; `area=` is the keyword spelling.
+                if letter != 'M' {
+                    if let Some((first, tail)) = options.split_first() {
+                        if !first.contains('=') {
+                            area = Some(ctx.value(first, "area")?);
+                            options = tail;
+                        }
+                    }
+                }
+                for token in options {
                     let (key, value) = token
                         .split_once('=')
                         .ok_or_else(|| ctx.parse_err(format!("expected `{shape}`")))?;
@@ -2949,6 +3279,11 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                         "pd" if letter == 'M' => pd = Some(ctx.value(value, "pd")?),
                         "ps" if letter == 'M' => ps = Some(ctx.value(value, "ps")?),
                         "temp" => temperature_celsius = Some(ctx.value(value, "temp")?),
+                        "m" => multiplier = Some(ctx.value(value, "m")?),
+                        "area" if letter != 'M' && area.is_none() => {
+                            area = Some(ctx.value(value, "area")?)
+                        }
+                        "pj" if letter == 'D' => perimeter = Some(ctx.value(value, "pj")?),
                         other => {
                             return Err(ctx.parse_err(format!(
                                 "unknown parameter `{other}`; expected `{shape}`"
@@ -2977,6 +3312,15 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                         "device TEMP must be finite and above absolute zero (-273.15 °C)",
                     ));
                 }
+                if matches!(multiplier, Some(m) if !m.is_finite() || m <= 0.0) {
+                    return Err(ctx.parse_err("device multiplier m must be positive and finite"));
+                }
+                if matches!(area, Some(a) if !a.is_finite() || a <= 0.0) {
+                    return Err(ctx.parse_err("device area must be positive and finite"));
+                }
+                if matches!(perimeter, Some(p) if !p.is_finite() || p < 0.0) {
+                    return Err(ctx.parse_err("diode perimeter pj must be >= 0 and finite"));
+                }
                 // The terminals are interned now so that node numbering still
                 // follows netlist order; the model is bound after the last
                 // line, because `.model` may come after its elements.
@@ -3000,6 +3344,9 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     pd,
                     ps,
                     temperature_celsius,
+                    multiplier: multiplier.unwrap_or(1.0),
+                    area: area.unwrap_or(1.0),
+                    perimeter,
                 });
             }
             'E' | 'G' => {
@@ -3106,6 +3453,9 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     pd: None,
                     ps: None,
                     temperature_celsius: None,
+                    multiplier: 1.0,
+                    area: 1.0,
+                    perimeter: None,
                 });
             }
             'S' => {
@@ -3400,8 +3750,14 @@ fn bind_models(
                 let ModelCard::Diode(model) = card else {
                     return Err(wrong_kind("D"));
                 };
+                let model = model.with_area(device.area);
                 if model.is <= 0.0
                     || model.n <= 0.0
+                    || !model.jsw.is_finite()
+                    || model.jsw < 0.0
+                    || matches!(model.ns, Some(ns) if !ns.is_finite() || ns <= 0.0)
+                    || !model.pj.is_finite()
+                    || model.pj < 0.0
                     || !model.eg.is_finite()
                     || model.eg < 0.0
                     || !model.xti.is_finite()
@@ -3437,12 +3793,22 @@ fn bind_models(
                     || !model.fc.is_finite()
                     || model.fc < 0.0
                     || model.fc >= 1.0
+                    || !model.cjsw.is_finite()
+                    || model.cjsw < 0.0
+                    || !model.php.is_finite()
+                    || model.php <= 0.0
+                    || !model.mjsw.is_finite()
+                    || model.mjsw < 0.0
+                    || !model.fcs.is_finite()
+                    || model.fcs < 0.0
+                    || model.fcs >= 1.0
                 {
                     return Err(ctx.parse_err(
-                        "a diode model needs IS > 0, N > 0, EG >= 0, finite XTI/TCV/TRS1/TRS2/TTT1/TTT2/TM1/TM2, TNOM above absolute zero, IK/IKR >= 0, ISR >= 0, NR > 0, RS >= 0, TT >= 0, VP >= 0, CJO >= 0, VJ > 0, M >= 0 and 0 <= FC < 1"
+                        "a diode model needs IS > 0, N > 0, JSW >= 0, NS > 0, PJ >= 0, EG >= 0, finite XTI/TCV/TRS1/TRS2/TTT1/TTT2/TM1/TM2, TNOM above absolute zero, IK/IKR >= 0, ISR >= 0, NR > 0, RS >= 0, TT >= 0, VP >= 0, CJO >= 0, VJ > 0, M >= 0, 0 <= FC < 1, CJSW >= 0, PHP > 0, MJSW >= 0 and 0 <= FCS < 1"
                             .to_string(),
                     ));
                 }
+                let model = model.with_perimeter(device.perimeter);
                 let (is_at_temperature, thermal_voltage) =
                     if let Some(temp_celsius) = device.temperature_celsius {
                         let temperature_kelvin = temp_celsius + 273.15;
@@ -3513,6 +3879,17 @@ fn bind_models(
                             nominal_kelvin,
                             temperature_kelvin,
                         );
+                    // ngspice-42 applies the same junction law to the
+                    // sidewall with `PHP` and `MJSW`; `TM1`/`TM2` do not
+                    // touch `MJSW`.
+                    (operating_model.cjsw, operating_model.php) =
+                        super::device::diode_depletion_parameters_at_temperature(
+                            model.cjsw,
+                            model.php,
+                            model.mjsw,
+                            nominal_kelvin,
+                            temperature_kelvin,
+                        );
                 }
                 if !operating_model.tt.is_finite() || operating_model.tt < 0.0 {
                     return Err(ctx.parse_err(
@@ -3528,9 +3905,13 @@ fn bind_models(
                     || operating_model.cjo < 0.0
                     || !operating_model.vj.is_finite()
                     || operating_model.vj <= 0.0
+                    || !operating_model.cjsw.is_finite()
+                    || operating_model.cjsw < 0.0
+                    || !operating_model.php.is_finite()
+                    || operating_model.php <= 0.0
                 {
                     return Err(ctx.parse_err(
-                        "temperature-adjusted diode CJO must be finite and >= 0 and VJ must be finite and > 0"
+                        "temperature-adjusted diode CJO/CJSW must be finite and >= 0 and VJ/PHP must be finite and > 0"
                             .to_string(),
                     ));
                 }
@@ -3544,6 +3925,7 @@ fn bind_models(
                 };
                 circuit.diodes.push(Diode {
                     name: device.name,
+                    multiplier: device.multiplier,
                     anode: device.nodes[0],
                     cathode: device.nodes[1],
                     junction_anode,
@@ -3559,6 +3941,7 @@ fn bind_models(
                 let ModelCard::Bjt(model) = card else {
                     return Err(wrong_kind("Q"));
                 };
+                let model = model.with_area(device.area);
                 if model.is <= 0.0 || model.bf <= 0.0 || model.br <= 0.0 {
                     return Err(
                         ctx.parse_err("a BJT model needs IS > 0, BF > 0 and BR > 0".to_string())
@@ -3645,6 +4028,8 @@ fn bind_models(
                     || model.mje < 0.0
                     || !model.cjc.is_finite()
                     || model.cjc < 0.0
+                    || !model.xcjc.is_finite()
+                    || !(0.0..=1.0).contains(&model.xcjc)
                     || !model.vjc.is_finite()
                     || model.vjc <= 0.0
                     || !model.mjc.is_finite()
@@ -3664,7 +4049,7 @@ fn bind_models(
                     || model.tr < 0.0
                 {
                     return Err(ctx.parse_err(
-                        "a BJT model needs CJE/CJC/TF/TR/XTF/ITF >= 0, VJE/VJC > 0, MJE/MJC >= 0, VTF >= 0 and 0 <= FC < 1"
+                        "a BJT model needs CJE/CJC/TF/TR/XTF/ITF >= 0, 0 <= XCJC <= 1, VJE/VJC > 0, MJE/MJC >= 0, VTF >= 0 and 0 <= FC < 1"
                             .to_string(),
                     ));
                 }
@@ -3757,11 +4142,91 @@ fn bind_models(
                     junction_node(circuit, device.nodes[1], operating_model.rb, "base")?;
                 let junction_e =
                     junction_node(circuit, device.nodes[2], operating_model.re, "emitter")?;
+                let substrate = device.nodes.get(3).copied().flatten();
+                // ngspice's substrate junction (`bjtload.c`) is a pn junction
+                // from the substrate to the internal collector (vertical) or
+                // base (lateral), oriented by `type·SUBS`: `ISS`/`NS` current
+                // plus `CJS`/`VJS`/`MJS` depletion charge with no `FC`. That
+                // is exactly a diode with `FC = 0`, so it is lowered onto the
+                // diode path rather than given a second copy of the
+                // junction solver. A three-terminal BJT with no substrate
+                // parameters skips it; ngspice would add only GMIN to ground.
+                if device.nodes.len() > 3 || model.cjs > 0.0 || model.iss > 0.0 {
+                    if !(model.cjs.is_finite()
+                        && model.cjs >= 0.0
+                        && model.vjs.is_finite()
+                        && model.vjs > 0.0
+                        && model.mjs.is_finite()
+                        && model.mjs >= 0.0
+                        && model.iss.is_finite()
+                        && model.iss >= 0.0
+                        && model.ns.is_finite()
+                        && model.ns > 0.0
+                        && operating_model.cjs.is_finite()
+                        && operating_model.cjs >= 0.0
+                        && operating_model.vjs.is_finite()
+                        && operating_model.vjs > 0.0
+                        && operating_model.ns.is_finite()
+                        && operating_model.ns > 0.0
+                        && operating_model.iss.is_finite())
+                    {
+                        return Err(ctx.parse_err(
+                            "a BJT substrate junction needs CJS >= 0, VJS > 0, MJS >= 0, ISS >= 0 and NS > 0, all finite at the instance temperature"
+                                .to_string(),
+                        ));
+                    }
+                    let internal_name = format!("{}#substrate", device.name);
+                    let contact = if model.substrate_is_vertical() {
+                        junction_c
+                    } else {
+                        junction_b
+                    };
+                    let polarity = if model.substrate_is_vertical() {
+                        model.polarity.sign()
+                    } else {
+                        -model.polarity.sign()
+                    };
+                    let (anode, cathode) = if polarity > 0.0 {
+                        (substrate, contact)
+                    } else {
+                        (contact, substrate)
+                    };
+                    // The card is already at the instance temperature, so its
+                    // own `TNOM` is set there with `EG = XTI = 0`: the diode
+                    // laws then leave `IS` untouched and only pick up `Vt(T)`.
+                    let junction = DiodeModel {
+                        is: operating_model.iss,
+                        n: operating_model.ns,
+                        cjo: operating_model.cjs,
+                        vj: operating_model.vjs,
+                        m: operating_model.mjs.min(0.999),
+                        fc: 0.0,
+                        eg: 0.0,
+                        xti: 0.0,
+                        tnom_celsius: device.temperature_celsius.unwrap_or(27.0),
+                        ..DiodeModel::default()
+                    };
+                    circuit.diodes.push(Diode {
+                        name: internal_name,
+                        multiplier: device.multiplier,
+                        anode,
+                        cathode,
+                        junction_anode: anode,
+                        model_name: device.model_name.clone(),
+                        model: junction,
+                        operating_model: junction,
+                        series_resistance_ohms: 0.0,
+                        temperature_celsius: device.temperature_celsius,
+                        breakdown: None,
+                    });
+                }
                 circuit.bjts.push(Bjt {
                     name: device.name,
+                    multiplier: device.multiplier,
                     c: device.nodes[0],
                     b: device.nodes[1],
                     e: device.nodes[2],
+                    s: substrate,
                     junction_c,
                     junction_b,
                     junction_e,
@@ -3773,9 +4238,33 @@ fn bind_models(
                 });
             }
             'M' => {
-                let ModelCard::Mos(model) = card else {
+                let ModelCard::Mos(mut model) = card else {
                     return Err(wrong_kind("M"));
                 };
+                // ngspice level 1 (mos1temp.c): with `TOX` and no `KP`, the
+                // transconductance comes from the process, `UO·1e-4·εox/TOX`.
+                if !model.kp_given {
+                    if let Some(tox) = model.tox {
+                        if !model.uo.is_finite() || model.uo <= 0.0 {
+                            return Err(ctx.parse_err(
+                                "a MOSFET model deriving KP from TOX needs UO > 0 and finite",
+                            ));
+                        }
+                        if tox.is_finite() && tox > 0.0 {
+                            model.kp =
+                                model.uo * 1e-4 * super::device::OXIDE_PERMITTIVITY_F_PER_M / tox;
+                        }
+                    }
+                }
+                // ngspice level 1 (mos1temp.c): with `TOX` and `NSUB`, every
+                // one of `PHI`, `GAMMA` and `VTO` the card omits comes from
+                // the substrate doping, evaluated at `TNOM`.
+                if let (Some(nsub), Some(tox)) = (model.nsub, model.tox) {
+                    if tox.is_finite() && tox > 0.0 {
+                        super::device::mos_process_threshold(&mut model, tox, nsub)
+                            .map_err(|message| ctx.parse_err(message))?;
+                    }
+                }
                 if model.kp <= 0.0 || model.is <= 0.0 || model.gamma < 0.0 {
                     return Err(ctx.parse_err(
                         "a MOSFET model needs KP > 0, IS > 0 and GAMMA >= 0".to_string(),
@@ -3790,6 +4279,12 @@ fn bind_models(
                 let l = device.length.unwrap_or(model.l);
                 if w <= 0.0 || l <= 0.0 {
                     return Err(ctx.parse_err("a MOSFET model needs W > 0 and L > 0".to_string()));
+                }
+                let effective_length = l - 2.0 * model.ld;
+                if !model.ld.is_finite() || effective_length.is_nan() || effective_length <= 0.0 {
+                    return Err(ctx.parse_err(
+                        "a MOSFET's effective channel length L - 2*LD must be positive",
+                    ));
                 }
                 if ![model.cgso, model.cgdo, model.cgbo]
                     .into_iter()
@@ -3825,6 +4320,15 @@ fn bind_models(
                 let as_ = device.as_.unwrap_or(0.0);
                 let pd = device.pd.unwrap_or(0.0);
                 let ps = device.ps.unwrap_or(0.0);
+                if !model.js.is_finite()
+                    || model.js < 0.0
+                    || !(model.js * ad).is_finite()
+                    || !(model.js * as_).is_finite()
+                {
+                    return Err(
+                        ctx.parse_err("a MOSFET model needs JS >= 0 with finite JS*AD and JS*AS")
+                    );
+                }
                 let junction_capacitances = [
                     if model.cbd_given {
                         model.cbd
@@ -3868,7 +4372,7 @@ fn bind_models(
                 }
                 if !(model.cgso * w).is_finite()
                     || !(model.cgdo * w).is_finite()
-                    || !(model.cgbo * l).is_finite()
+                    || !(model.cgbo * effective_length).is_finite()
                 {
                     return Err(ctx.parse_err(
                         "a MOSFET model's effective overlap capacitances must be finite"
@@ -3879,7 +4383,8 @@ fn bind_models(
                     if !tox.is_finite() || tox <= 0.0 {
                         return Err(ctx.parse_err("a MOSFET model needs TOX > 0 and finite"));
                     }
-                    let cox = 3.453_133e-11 * w * l / tox;
+                    let cox =
+                        super::device::OXIDE_PERMITTIVITY_F_PER_M * w * effective_length / tox;
                     if !cox.is_finite() {
                         return Err(ctx.parse_err(
                             "a MOSFET model's effective oxide capacitance must be finite",
@@ -3908,7 +4413,7 @@ fn bind_models(
                 if !operating_model.vto.is_finite()
                     || !operating_model.kp.is_finite()
                     || operating_model.kp <= 0.0
-                    || !(operating_model.kp * w / l).is_finite()
+                    || !(operating_model.kp * w / effective_length).is_finite()
                     || !operating_model.is.is_finite()
                     || operating_model.is <= 0.0
                     || !operating_model.phi.is_finite()
@@ -3976,6 +4481,7 @@ fn bind_models(
                     junction_node(circuit, device.nodes[2], source_resistance_ohms, "source")?;
                 circuit.mosfets.push(Mosfet {
                     name: device.name,
+                    multiplier: device.multiplier,
                     d: device.nodes[0],
                     g: device.nodes[1],
                     s: device.nodes[2],
@@ -3986,7 +4492,7 @@ fn bind_models(
                     model,
                     operating_model,
                     temperature_celsius: device.temperature_celsius,
-                    beta: operating_model.kp * w / l,
+                    beta: operating_model.kp * w / effective_length,
                     w,
                     l,
                     ad,
@@ -4001,11 +4507,14 @@ fn bind_models(
                 let ModelCard::Jfet(model) = card else {
                     return Err(wrong_kind("J"));
                 };
+                let model = model.with_area(device.area);
                 if !model.vto.is_finite()
                     || !model.beta.is_finite()
                     || model.beta <= 0.0
                     || !model.is.is_finite()
                     || model.is <= 0.0
+                    || !model.n.is_finite()
+                    || model.n <= 0.0
                     || !model.tnom_celsius.is_finite()
                     || model.tnom_celsius <= -273.15
                     || !model.tcv.is_finite()
@@ -4016,7 +4525,7 @@ fn bind_models(
                     || model.betatce.is_some_and(|value| !value.is_finite())
                 {
                     return Err(ctx.parse_err(
-                        "a JFET model needs finite temperature parameters, TNOM above absolute zero, BETA > 0 and IS > 0",
+                        "a JFET model needs finite temperature parameters, TNOM above absolute zero, BETA > 0, IS > 0 and N > 0",
                     ));
                 }
                 if !model.rd.is_finite()
@@ -4084,6 +4593,7 @@ fn bind_models(
                 let junction_s = junction_node(circuit, device.nodes[2], model.rs, "source")?;
                 circuit.jfets.push(Jfet {
                     name: device.name,
+                    multiplier: device.multiplier,
                     d: device.nodes[0],
                     g: device.nodes[1],
                     s: device.nodes[2],
@@ -4309,6 +4819,13 @@ fn parse_model(
             (ModelCard::Diode(model), "VJ") => model.vj = value,
             (ModelCard::Diode(model), "M") => model.m = value,
             (ModelCard::Diode(model), "FC") => model.fc = value,
+            (ModelCard::Diode(model), "JSW" | "ISW") => model.jsw = value,
+            (ModelCard::Diode(model), "NS") => model.ns = Some(value),
+            (ModelCard::Diode(model), "PJ") => model.pj = value,
+            (ModelCard::Diode(model), "CJSW" | "CJP") => model.cjsw = value,
+            (ModelCard::Diode(model), "PHP") => model.php = value,
+            (ModelCard::Diode(model), "MJSW") => model.mjsw = value,
+            (ModelCard::Diode(model), "FCS") => model.fcs = value,
             (ModelCard::OpAmp(model), "AOL") => model.aol = value,
             (ModelCard::OpAmp(model), "GBW") => model.gbw = value,
             (ModelCard::OpAmp(model), "ROUT") => model.rout = value,
@@ -4409,6 +4926,7 @@ fn parse_model(
             (ModelCard::Bjt(model), "TMJE1") => model.tmje1 = value,
             (ModelCard::Bjt(model), "TMJE2") => model.tmje2 = value,
             (ModelCard::Bjt(model), "CJC") => model.cjc = value,
+            (ModelCard::Bjt(model), "XCJC") => model.xcjc = value,
             (ModelCard::Bjt(model), "VJC" | "PC") => model.vjc = value,
             (ModelCard::Bjt(model), "MJC" | "MC") => model.mjc = value,
             (ModelCard::Bjt(model), "TMJC1") => model.tmjc1 = value,
@@ -4448,8 +4966,33 @@ fn parse_model(
             (ModelCard::Bjt(model), "RE") => model.re = value,
             (ModelCard::Bjt(model), "TRE1") => model.tre1 = value,
             (ModelCard::Bjt(model), "TRE2") => model.tre2 = value,
-            (ModelCard::Mos(model), "VTO" | "VT0") => model.vto = value,
-            (ModelCard::Mos(model), "KP") => model.kp = value,
+            (ModelCard::Bjt(model), "CJS" | "CCS" | "CSUB") => model.cjs = value,
+            (ModelCard::Bjt(model), "VJS" | "PS") => model.vjs = value,
+            (ModelCard::Bjt(model), "MJS" | "MS") => model.mjs = value,
+            (ModelCard::Bjt(model), "TMJS1") => model.tmjs1 = value,
+            (ModelCard::Bjt(model), "TMJS2") => model.tmjs2 = value,
+            (ModelCard::Bjt(model), "CTS") => model.cts = value,
+            (ModelCard::Bjt(model), "TVJS") => model.tvjs = value,
+            (ModelCard::Bjt(model), "ISS") => model.iss = value,
+            (ModelCard::Bjt(model), "NS") => model.ns = value,
+            (ModelCard::Bjt(model), "TNS1") => model.tns1 = value,
+            (ModelCard::Bjt(model), "TNS2") => model.tns2 = value,
+            (ModelCard::Bjt(model), "SUBS") => {
+                if value != 1.0 && value != -1.0 {
+                    return Err(ctx.parse_err("BJT SUBS must be 1 (vertical) or -1 (lateral)"));
+                }
+                model.subs = Some(value as i8);
+            }
+            (ModelCard::Mos(model), "VTO" | "VT0") => {
+                model.vto = value;
+                model.vto_given = true;
+            }
+            (ModelCard::Mos(model), "KP") => {
+                model.kp = value;
+                model.kp_given = true;
+            }
+            (ModelCard::Mos(model), "UO" | "U0") => model.uo = value,
+            (ModelCard::Mos(model), "LD") => model.ld = value,
             (ModelCard::Mos(model), "LAMBDA") => model.lambda = value,
             (ModelCard::Mos(model), "RD") => {
                 model.rd = value;
@@ -4460,9 +5003,24 @@ fn parse_model(
                 model.rs_given = true;
             }
             (ModelCard::Mos(model), "RSH") => model.rsh = value,
-            (ModelCard::Mos(model), "GAMMA") => model.gamma = value,
-            (ModelCard::Mos(model), "PHI") => model.phi = value,
+            (ModelCard::Mos(model), "GAMMA") => {
+                model.gamma = value;
+                model.gamma_given = true;
+            }
+            (ModelCard::Mos(model), "PHI") => {
+                model.phi = value;
+                model.phi_given = true;
+            }
+            (ModelCard::Mos(model), "NSUB") => model.nsub = Some(value),
+            (ModelCard::Mos(model), "NSS") => model.nss = value,
+            (ModelCard::Mos(model), "TPG") => {
+                if ![-1.0, 0.0, 1.0].contains(&value) {
+                    return Err(ctx.parse_err("MOSFET TPG must be -1, 0 or 1".to_string()));
+                }
+                model.tpg = value;
+            }
             (ModelCard::Mos(model), "IS") => model.is = value,
+            (ModelCard::Mos(model), "JS") => model.js = value,
             (ModelCard::Mos(model), "CBD") => {
                 model.cbd = value;
                 model.cbd_given = true;
@@ -4501,6 +5059,7 @@ fn parse_model(
             (ModelCard::Jfet(model), "RD") => model.rd = value,
             (ModelCard::Jfet(model), "RS") => model.rs = value,
             (ModelCard::Jfet(model), "IS") => model.is = value,
+            (ModelCard::Jfet(model), "N") => model.n = value,
             (ModelCard::Jfet(model), "CGS") => model.cgs = value,
             (ModelCard::Jfet(model), "CGD") => model.cgd = value,
             (ModelCard::Jfet(model), "PB") => model.pb = value,
@@ -4572,6 +5131,13 @@ pub const MACRO_CLAMP_DIODE: DiodeModel = DiodeModel {
     tcv: 0.0,
     trs1: 0.0,
     trs2: 0.0,
+    jsw: 0.0,
+    ns: None,
+    pj: 0.0,
+    cjsw: 0.0,
+    php: 1.0,
+    mjsw: 0.33,
+    fcs: 0.5,
 };
 
 /// Loop gain of the push-pull comparator's output node, V/V from the 1 V
@@ -4687,6 +5253,7 @@ impl Lowering<'_> {
         let name = self.name(part);
         self.circuit.diodes.push(Diode {
             name,
+            multiplier: 1.0,
             anode,
             cathode,
             junction_anode: anode,
@@ -5028,7 +5595,11 @@ fn lower_comparator(
             let mos = MosModel {
                 polarity: Polarity::N,
                 vto: 0.5,
+                vto_given: true,
                 kp,
+                kp_given: true,
+                uo: 600.0,
+                ld: 0.0,
                 lambda: 0.0,
                 rd: 0.0,
                 rd_given: false,
@@ -5036,8 +5607,14 @@ fn lower_comparator(
                 rs_given: false,
                 rsh: 0.0,
                 gamma: 0.0,
+                gamma_given: true,
                 phi: 0.6,
+                phi_given: true,
+                nsub: None,
+                nss: 0.0,
+                tpg: 1.0,
                 is: 1e-14,
+                js: 0.0,
                 cbd: 0.0,
                 cbd_given: false,
                 cbs: 0.0,
@@ -5059,6 +5636,7 @@ fn lower_comparator(
             };
             lower.circuit.mosfets.push(Mosfet {
                 name,
+                multiplier: 1.0,
                 d: out,
                 g: q,
                 s: vee,
@@ -5227,6 +5805,7 @@ fn lower_regulator(
     let name = lower.name("dl");
     lower.circuit.diodes.push(Diode {
         name,
+        multiplier: 1.0,
         anode: a,
         cathode: l1,
         junction_anode: a,

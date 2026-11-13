@@ -1,0 +1,32 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+# SPDX-License-Identifier: MIT
+#
+# LiteX GPIOIn (litex/soc/cores/gpio.py): one read-only `in` CSR at the core
+# base, pin k at bit k. Zephyr drives it as `litex,gpio` without
+# `port-is-output` and reads the pins with one CSR load of the base register
+# (drivers/gpio/gpio_litex.c `litex_read(reg_addr, reg_size)`; the
+# enjoydigital litex_vexriscv board puts `gpio_in` at 0xE000_6000, 4 pins).
+# For up to eight pins the value sits in the low byte of the word at the base
+# whether the SoC's CSR data width is 8 or 32 bits.
+#
+# The core has no output latch and no direction register, so on the
+# declarative GPIO path (IN with no OUT, ENABLE or gpio_mode) every pin is an
+# input. Not modelled: the with_irq event manager (Zephyr irq_mode/irq_edge/
+# irq_pend/irq_en at +0x04/+0x08/+0x10/+0x14 at 32-bit CSR width); writes to
+# `in` are ignored, as on silicon.
+peripheral: GPIO
+version: 0.1.0
+registers:
+- id: IN
+  address_offset: 0
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: IN
+    bit_range:
+    - 31
+    - 0
+    description: in, the level of every pin of the core
+  side_effects: null

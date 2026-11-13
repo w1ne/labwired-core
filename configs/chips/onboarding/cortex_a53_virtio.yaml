@@ -6,8 +6,11 @@
 
 name: cortex_a53_virtio
 arch: arm
+# Flash at QEMU virt VIRT_FLASH 0x0 (two 64 MiB pflash banks, hw/arm/virt.c).
+# The import put it at 0x0800_0000, which is the GIC on this map, and the
+# image then shadowed 0x0800_0000.. with erased flash, PL061 included.
 flash:
-  base: 134217728
+  base: 0
   size: 67108864B
 ram:
   base: 1073741824
@@ -25,3 +28,21 @@ peripherals:
   type: virtiommioentropy
   bus: sysbus
   base_address: 167772160
+# PL061 GPIO. The Renode platform reproduces the QEMU `virt` map (PL011
+# @0x0900_0000, PL031 @0x0901_0000, virtio-mmio @0x0A00_0000, RAM
+# @0x4000_0000) but drops its GPIO; QEMU hw/arm/virt.c puts a PrimeCell
+# PL061 at VIRT_GPIO 0x0903_0000 (Linux DT "arm,pl061" pl061@9030000).
+# `cc2538_pl061_gpio` runs the PL061 core: address-masked GPIODATA over
+# 0x000-0x3FC (0x3FC reads all eight), GPIODIR @0x400 (reset 0, inputs),
+# GPIOAFSEL @0x420 (PL061 TRM DDI0190B §3.3). QEMU hw/gpio/pl061.c models
+# board pull-ups (`pullups` default 0xff, which virt.c keeps), so an
+# undriven pad reads 1, as under QEMU. Not modelled: PrimeCell ID registers
+# (0xFE0-0xFFC read 0), interrupts, the CC2538 extras at 0x520/0x524 and
+# 0x700-0x720, and virt's power-button wiring on line 3.
+- id: gpio
+  type: cc2538_pl061_gpio
+  bus: sysbus
+  base_address: 0x09030000
+  size: 4KB
+  config:
+    pull_up_mask: 0xFF

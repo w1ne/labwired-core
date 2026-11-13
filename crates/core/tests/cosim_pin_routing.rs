@@ -915,6 +915,294 @@ fn nucleo_f103rb_ntc_netlist_reaches_pa0_adc1_end_to_end() {
     );
 }
 
+/// The generic diode charge model must solve and route through the package
+/// pins into the NUCLEO-F103RB's firmware-visible ADC1, alongside an unrelated
+/// NTC divider. Matched charge/no-charge branches separate CJO depletion and
+/// TT diffusion effects, then verify that every branch returns to the same
+/// Shockley DC load line.
+#[test]
+fn nucleo_f103rb_diode_depletion_and_transit_charge_reach_adc1_end_to_end() {
+    let (mut manifest, mut bus) = bus_and_manifest("configs/systems/nucleo-f103rb.yaml");
+    let charge = SystemManifest::from_file(root(
+        "examples/nucleo-f103rb/analog-diode-charge-adc-system.yaml",
+    ))
+    .expect("load unrelated NTC and matched generic diode charge branches");
+    manifest.cosim_models = charge.cosim_models;
+    let mut session = build_session(&bus, &manifest.cosim_models);
+
+    for channel in 0..=6 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set the unrelated NTC temperature");
+    session
+        .set_signal_number("ui.diode_charge.supply_v", 0.0)
+        .expect("initialize the diode branches before the supply step");
+
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("settle NTC and all four diode branches");
+    assert_eq!(initial_steps.len(), 5, "all five analog devices solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected route errors: {initial_errors:?}"
+    );
+
+    session
+        .set_signal_number("ui.diode_charge.supply_v", 3.3)
+        .expect("step the supply on all matched diode branches");
+    let diode_load_line_voltage = || {
+        const SUPPLY_V: f64 = 3.3;
+        const LIMIT_OHMS: f64 = 1_000.0;
+        const IS_A: f64 = 2.52e-9;
+        const N: f64 = 1.752;
+        const RS_OHMS: f64 = 0.568;
+        const VT: f64 = 1.380_649e-23 * 298.15 / 1.602_176_634e-19;
+        let current = |junction_v: f64| IS_A * ((junction_v / (N * VT)).exp() - 1.0);
+        let residual = |junction_v: f64| {
+            (SUPPLY_V - junction_v - current(junction_v) * RS_OHMS) / LIMIT_OHMS
+                - current(junction_v)
+        };
+        let (mut low, mut high) = (0.0, 1.2);
+        for _ in 0..100 {
+            let mid = 0.5 * (low + high);
+            if residual(mid) > 0.0 {
+                low = mid;
+            } else {
+                high = mid;
+            }
+        }
+        let junction_v = 0.5 * (low + high);
+        junction_v + current(junction_v) * RS_OHMS
+    };
+
+    let mut samples = Vec::new();
+    for step in 0..800 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route the NTC plus four diode branches");
+        assert_eq!(
+            steps.len(),
+            5,
+            "all five analog devices solve at step {step}"
+        );
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        let voltage = |path: &str| match session.signals().get(path) {
+            Some(CosimSignalValue::F64(volts)) => *volts,
+            other => panic!("missing routed analog voltage at {path}: {other:?}"),
+        };
+        let ntc_v = voltage("board.analog.pa0_volts");
+        let reference_v = voltage("board.analog.pa2_volts");
+        let depletion_v = voltage("board.analog.pa3_volts");
+        let transit_v = voltage("board.analog.pa4_volts");
+        let combined_v = voltage("board.analog.pa5_volts");
+        assert!(
+            (ntc_v - 1.65).abs() < 1e-9,
+            "the separate 25 °C NTC stays isolated"
+        );
+        assert!(
+            (reference_v - diode_load_line_voltage()).abs() < 2e-5,
+            "the uncharged diode must match the independent Shockley load line: {reference_v} V"
+        );
+
+        for (channel, volts) in [
+            (0, ntc_v),
+            (2, reference_v),
+            (3, depletion_v),
+            (4, transit_v),
+            (5, combined_v),
+        ] {
+            let millivolts = (volts * 1000.0).round() as u32;
+            let expected = (millivolts * 4095 / 3300).min(4095) as u16;
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "the solved PA voltage must seed ADC1_IN{channel}"
+            );
+            assert_eq!(
+                f103_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "firmware-visible ADC1 conversion must return PA input channel {channel}"
+            );
+        }
+        for channel in [1, 6] {
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                0xFFFF,
+                "unrouted ADC1_IN{channel} remains undriven"
+            );
+        }
+        if step == 0 {
+            assert!(
+                (depletion_v - reference_v).abs() > 0.001,
+                "CJO depletion charge must shift the first ADC-routed transient"
+            );
+            assert!(
+                (transit_v - reference_v).abs() > 0.01,
+                "TT diffusion charge must shift the first ADC-routed transient"
+            );
+            assert!(
+                (combined_v - reference_v).abs() > 0.01,
+                "combined CJO and TT charge must shift the first routed transient"
+            );
+        }
+        samples.push((reference_v, depletion_v, transit_v, combined_v));
+    }
+
+    let settled = samples.last().expect("transient samples exist");
+    for (label, volts) in [
+        ("depletion", settled.1),
+        ("transit", settled.2),
+        ("combined", settled.3),
+    ] {
+        assert!(
+            (volts - settled.0).abs() < 2e-4,
+            "{label} charge branch must settle to the same DC load line: {volts} V vs {} V",
+            settled.0
+        );
+    }
+}
+
+/// Generic NMOS gate-drain overlap charge resolves through the NUCLEO-F103RB
+/// ADC1 alongside unrelated NTC and Shockley diode devices. A matched zero-
+/// overlap branch and the independent backward-Euler RC recurrence make the
+/// CGDO contribution observable at the board endpoint.
+#[test]
+fn nucleo_f103rb_mosfet_gate_drain_overlap_charge_reaches_adc1_end_to_end() {
+    let (mut profile, mut bus) = bus_and_manifest("configs/systems/nucleo-f103rb.yaml");
+    let analog = SystemManifest::from_file(root(
+        "examples/nucleo-f103rb/analog-mosfet-cgdo-overlap-adc-system.yaml",
+    ))
+    .expect("load NTC, diode, and matched generic MOSFET overlap branches");
+    profile.cosim_models = analog.cosim_models;
+    let mut session = build_session(&bus, &profile.cosim_models);
+
+    for channel in 0..=4 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold the unrelated NTC at nominal temperature");
+    session
+        .set_signal_number("ui.mosfet_drain_overlap.gate_v", 0.0)
+        .expect("initialize matched NMOS gate drives");
+
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("settle NTC, diode, and both MOSFET branches");
+    assert_eq!(initial_steps.len(), 4, "all four analog devices solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected route errors: {initial_errors:?}"
+    );
+
+    let voltage = |session: &CosimSession, path: &str| match session.signals().get(path) {
+        Some(CosimSignalValue::F64(volts)) => *volts,
+        other => panic!("missing routed analog voltage at {path}: {other:?}"),
+    };
+    let ntc_v = voltage(&session, "board.analog.pa0_volts");
+    let diode_v = voltage(&session, "board.analog.pa1_volts");
+    let initial_diode_v = diode_v;
+    assert!(
+        (ntc_v - 1.65).abs() < 1e-9,
+        "the unrelated NTC remains at half scale"
+    );
+    assert!(
+        diode_v > 0.4 && diode_v < 1.2,
+        "the unrelated diode has a forward load line: {diode_v} V"
+    );
+    assert!(voltage(&session, "board.analog.pa2_volts").abs() < 1e-12);
+    assert!(voltage(&session, "board.analog.pa3_volts").abs() < 1e-12);
+
+    session
+        .set_signal_number("ui.mosfet_drain_overlap.gate_v", 3.3)
+        .expect("step the generic NMOS gate");
+
+    // CGDO=10 uF/m times W=100 um gives 1 nF. The drain's 1 kOhm
+    // pull-down and 1 us backward-Euler step produce a half-step excursion,
+    // then halve the stored drain voltage on each held-input step.
+    let mut expected_drain_v = 1.65;
+    for step in 0..12 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route MOSFET gate-drain overlap charge");
+        assert_eq!(
+            steps.len(),
+            4,
+            "all four analog devices solve at step {step}"
+        );
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let ntc_v = voltage(&session, "board.analog.pa0_volts");
+        let diode_v = voltage(&session, "board.analog.pa1_volts");
+        let reference_v = voltage(&session, "board.analog.pa2_volts");
+        let charged_v = voltage(&session, "board.analog.pa3_volts");
+        assert!(
+            (ntc_v - 1.65).abs() < 1e-9,
+            "unrelated NTC remains isolated"
+        );
+        assert!(
+            (diode_v - initial_diode_v).abs() < 1e-12,
+            "unrelated diode remains isolated: {diode_v} V vs {initial_diode_v} V"
+        );
+        assert!(
+            reference_v.abs() < 1e-12,
+            "zero-overlap NMOS is the control branch"
+        );
+        assert!(
+            (charged_v - expected_drain_v).abs() < 2e-8,
+            "CGDO RC recurrence at step {step}: expected {expected_drain_v} V, got {charged_v} V"
+        );
+
+        for (channel, volts) in [(0, ntc_v), (1, diode_v), (2, reference_v), (3, charged_v)] {
+            let millivolts = (volts * 1000.0).round() as u32;
+            let expected = (millivolts * 4095 / 3300).min(4095) as u16;
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "the solved voltage must seed ADC1 channel {channel}"
+            );
+            assert_eq!(
+                f103_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "firmware-visible ADC1 conversion must report channel {channel}"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 4),
+            0xFFFF,
+            "neighboring ADC1 channel 4 remains undriven"
+        );
+        if step == 0 {
+            assert_eq!(
+                adc_channel_count(&mut bus, 3),
+                2047,
+                "the first gate-drain overlap transient reaches half scale on PA3/ADC1_IN3"
+            );
+        }
+        expected_drain_v *= 0.5;
+    }
+
+    assert!(
+        voltage(&session, "board.analog.pa3_volts") < 1e-3,
+        "gate-drain overlap charge changes the transient, not the settled DC operating point"
+    );
+}
+
 /// The same general MNA NTC divider and explicit ADC-channel route also work
 /// on the Mega's CPU-owned AVR ADC. ADC8 is selected through MUX5, so a route
 /// that reaches only the low ADC channels or a conversion that ignores MUX5
@@ -997,6 +1285,366 @@ fn arduino_mega_2560_ntc_netlist_reaches_adc8_through_mux5_end_to_end() {
         "the firmware ADC8 result follows the physical voltage: {samples:?}"
     );
     assert_eq!(samples[1].2, 512, "25 °C puts this divider at half scale");
+}
+
+/// Independent 5 V Gummel–Poon load line with optional forward Early effect
+/// and forward/reverse high-injection rolloff.
+fn gummel_poon_collector_voltage_5v(
+    base_drive_v: f64,
+    high_injection: bool,
+    forward_early_v: Option<f64>,
+) -> f64 {
+    const SUPPLY_V: f64 = 5.0;
+    const COLLECTOR_OHMS: f64 = 1_000.0;
+    const BASE_OHMS: f64 = 10_000.0;
+    const IS_A: f64 = 1e-16;
+    const BF: f64 = 80.0;
+    const BR: f64 = 4.0;
+    const VAR: f64 = 75.0;
+    const IKF_A: f64 = 50e-6;
+    const IKR_A: f64 = 500e-6;
+    const NKF: f64 = 0.8;
+    const VT: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+
+    let currents = |vbe: f64, collector_v: f64| {
+        let vbc = vbe - collector_v;
+        let forward = (vbe / VT).exp();
+        let reverse = (vbc / VT).exp();
+        let base_width = 1.0 - forward_early_v.map_or(0.0, |vaf| vbc / vaf) - vbe / VAR;
+        let q2 = if high_injection {
+            IS_A * (forward - 1.0) / IKF_A + IS_A * (reverse - 1.0) / IKR_A
+        } else {
+            0.0
+        };
+        let qb = (1.0 + (1.0 + 4.0 * q2).max(0.0).powf(NKF)) / (2.0 * base_width);
+        let transport = IS_A * (forward - reverse) / qb;
+        let base_collector = (IS_A / BR) * (reverse - 1.0);
+        let base_emitter = (IS_A / BF) * (forward - 1.0);
+        (transport - base_collector, base_emitter + base_collector)
+    };
+
+    let collector_for_vbe = |vbe: f64| {
+        let (mut low, mut high) = (0.0, SUPPLY_V);
+        for _ in 0..100 {
+            let collector_v = 0.5 * (low + high);
+            let (collector_current, _) = currents(vbe, collector_v);
+            let residual = (SUPPLY_V - collector_v) / COLLECTOR_OHMS - collector_current;
+            if residual > 0.0 {
+                low = collector_v;
+            } else {
+                high = collector_v;
+            }
+        }
+        0.5 * (low + high)
+    };
+
+    let (mut low, mut high) = (0.0, base_drive_v);
+    for _ in 0..100 {
+        let vbe = 0.5 * (low + high);
+        let collector_v = collector_for_vbe(vbe);
+        let (_, base_current) = currents(vbe, collector_v);
+        let residual = (base_drive_v - vbe) / BASE_OHMS - base_current;
+        if residual > 0.0 {
+            low = vbe;
+        } else {
+            high = vbe;
+        }
+    }
+    collector_for_vbe(0.5 * (low + high))
+}
+
+/// Independent 5 V Shockley diode load line, including series resistance.
+fn shockley_diode_voltage_5v(temperature_k: f64) -> f64 {
+    const SUPPLY_V: f64 = 5.0;
+    const LIMIT_OHMS: f64 = 1_000.0;
+    const IS_A: f64 = 2.52e-9;
+    const N: f64 = 1.752;
+    const RS_OHMS: f64 = 0.568;
+    let vt = 1.380_649e-23 * temperature_k / 1.602_176_634e-19;
+
+    let current_at_junction_voltage =
+        |junction_v: f64| IS_A * ((junction_v / (N * vt)).exp() - 1.0);
+    let residual = |junction_v: f64| {
+        let current = current_at_junction_voltage(junction_v);
+        (SUPPLY_V - junction_v - current * RS_OHMS) / LIMIT_OHMS - current
+    };
+    let (mut low, mut high) = (0.0, 1.2);
+    for _ in 0..100 {
+        let junction_v = 0.5 * (low + high);
+        if residual(junction_v) > 0.0 {
+            low = junction_v;
+        } else {
+            high = junction_v;
+        }
+    }
+    let junction_v = 0.5 * (low + high);
+    junction_v + current_at_junction_voltage(junction_v) * RS_OHMS
+}
+
+/// Convert one ATmega2560 high ADC input using ADCSRB.MUX5 and the firmware
+/// ADMUX/ADCSRA register sequence.
+fn mega2560_adc_convert(
+    machine: &mut labwired_core::Machine<labwired_core::cpu::avr::Avr>,
+    channel: u8,
+) -> u16 {
+    use labwired_core::Cpu;
+
+    assert!((8..=15).contains(&channel));
+    let mux = channel - 8;
+    machine.cpu.load_words(
+        0,
+        &[
+            0xE008,
+            0x9300,
+            0x007B, // ADCSRB.MUX5 = 1
+            0xE000 | u16::from(mux),
+            0x9300,
+            0x007C, // ADMUX.MUX4:0
+            0xEC10,
+            0x9310,
+            0x007A, // ADCSRA.ADEN | ADSC
+        ],
+    );
+    machine.cpu.set_pc(0);
+    let config = labwired_core::SimulationConfig::default();
+    for _ in 0..6 {
+        machine
+            .cpu
+            .step(&mut machine.bus, &[], &config)
+            .expect("execute Mega high-channel ADC register sequence");
+    }
+    assert_eq!(
+        machine.cpu.adcsra & (1 << 6),
+        0,
+        "ADSC clears after conversion"
+    );
+    assert_ne!(
+        machine.cpu.adcsra & (1 << 4),
+        0,
+        "ADIF records conversion complete"
+    );
+    u16::from(machine.cpu.adch) << 8 | u16::from(machine.cpu.adcl)
+}
+
+/// Convert one low AVR Mega-family ADC input using the firmware-visible
+/// ADMUX/ADCSRA sequence. These profiles bond ADC0..ADC7 without MUX5.
+fn avr_mega_adc_convert(
+    machine: &mut labwired_core::Machine<labwired_core::cpu::avr::Avr>,
+    channel: u8,
+) -> u16 {
+    use labwired_core::Cpu;
+
+    assert!(channel < 8, "the AVR Mega profile bonds ADC0 through ADC7");
+    machine.cpu.load_words(
+        0,
+        &[
+            0xE400 | u16::from(channel),
+            0x9300,
+            0x007C, // ADMUX = AVcc reference + channel
+            0xEC10,
+            0x9310,
+            0x007A, // ADCSRA = ADEN | ADSC
+        ],
+    );
+    machine.cpu.set_pc(0);
+    let config = labwired_core::SimulationConfig::default();
+    for _ in 0..4 {
+        machine
+            .cpu
+            .step(&mut machine.bus, &[], &config)
+            .expect("execute AVR Mega ADC register sequence");
+    }
+    assert_eq!(
+        machine.cpu.admux & 0x0f,
+        channel,
+        "firmware selects ADC{channel}"
+    );
+    assert_eq!(
+        machine.cpu.adcsra & (1 << 6),
+        0,
+        "ADSC clears at completion"
+    );
+    assert_ne!(machine.cpu.adcsra & (1 << 4), 0, "ADIF records completion");
+    u16::from(machine.cpu.adch) << 8 | u16::from(machine.cpu.adcl)
+}
+
+/// High-injection BJT branches route beside an unrelated Beta NTC divider on
+/// ADC8/9/10, all selected through the Mega's MUX5 path.
+#[test]
+fn arduino_mega_2560_bjt_high_injection_and_ntc_reach_firmware_adc_through_mux5() {
+    use labwired_core::cpu::avr::Avr;
+    use labwired_core::Machine;
+
+    let (manifest, bus) =
+        bus_and_manifest("examples/arduino-mega-2560-io/analog-bjt-high-injection-system.yaml");
+    let mut session = build_session(&bus, &manifest.cosim_models);
+    let mut machine = Machine::new(Avr::for_chip_name("atmega2560"), bus);
+    let mut cycles = 0;
+    let ntc_v = 2.5;
+    let mut strongest_rolloff = None;
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.bjt_high_injection.base_v", 0.0)
+        .expect("initialize matched BJT base drives");
+
+    for base_drive_v in [0.8_f64, 1.5, 3.3] {
+        session
+            .set_signal_number("ui.bjt_high_injection.base_v", base_drive_v)
+            .expect("set shared BJT base drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut machine.bus)
+            .expect("solve and route NTC and matched BJT netlists");
+        assert_eq!(steps.len(), 3, "NTC, high-injection BJT, and control solve");
+        assert!(
+            errors.is_empty(),
+            "unexpected Mega ADC route errors: {errors:?}"
+        );
+
+        let read_voltage = |path| match session.signals().get(path) {
+            Some(CosimSignalValue::F64(volts)) => *volts,
+            other => panic!("expected routed voltage at {path}, got {other:?}"),
+        };
+        let ntc = read_voltage("adc.adc.8_volts");
+        let rolloff = read_voltage("adc.adc.9_volts");
+        let control = read_voltage("adc.adc.10_volts");
+        assert!(
+            (ntc - ntc_v).abs() < 1e-9,
+            "25 °C NTC divider remains at half-scale"
+        );
+
+        let expected_rolloff = gummel_poon_collector_voltage_5v(base_drive_v, true, Some(50.0));
+        let expected_control = gummel_poon_collector_voltage_5v(base_drive_v, false, Some(50.0));
+        assert!(
+            (rolloff - expected_rolloff).abs() < 5e-5,
+            "IKF/IKR/NKF load line at {base_drive_v} V should be {expected_rolloff} V, got {rolloff} V"
+        );
+        assert!(
+            (control - expected_control).abs() < 5e-5,
+            "matched no-rolloff load line at {base_drive_v} V should be {expected_control} V, got {control} V"
+        );
+
+        for (channel, voltage) in [(8, ntc), (9, rolloff), (10, control)] {
+            let expected_count =
+                ((voltage * 1000.0 + 0.5).floor() as u32 * 1024 / 5000).min(1023) as u16;
+            assert_eq!(
+                mega2560_adc_convert(&mut machine, channel),
+                expected_count,
+                "firmware ADC{channel} conversion must follow its routed analog voltage"
+            );
+        }
+        if base_drive_v == 3.3 {
+            strongest_rolloff = Some((rolloff, control));
+        }
+    }
+
+    let (rolloff, control) = strongest_rolloff.expect("high-drive sample was recorded");
+    assert!(
+        rolloff > control + 0.1,
+        "IKF/NKF high-injection rolloff must reduce collector current: {rolloff} V vs {control} V"
+    );
+}
+
+/// Matched generic Gummel–Poon branches route the forward Early effect through
+/// the Mega's MUX5-selected ADC9/10, beside an unrelated Beta NTC and Shockley
+/// diode on ADC8/11. The four routes and their independent load lines are
+/// asserted at the firmware-visible ADC result registers.
+#[test]
+fn arduino_mega_2560_bjt_early_effect_and_unrelated_devices_reach_firmware_adc_through_mux5() {
+    use labwired_core::cpu::avr::Avr;
+    use labwired_core::Machine;
+
+    let (manifest, bus) =
+        bus_and_manifest("examples/arduino-mega-2560-io/analog-bjt-early-effect-system.yaml");
+    let mut session = build_session(&bus, &manifest.cosim_models);
+    let mut machine = Machine::new(Avr::for_chip_name("atmega2560"), bus);
+    let expected_ntc = 2.5;
+    let expected_diode = shockley_diode_voltage_5v(298.15);
+    let mut early_samples = Vec::new();
+    let mut control_samples = Vec::new();
+    let mut cycles = 0;
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold the independent Beta NTC at 25 °C");
+    session
+        .set_signal_number("ui.bjt_early.base_v", 0.0)
+        .expect("initialize the matched BJT base drives");
+
+    for base_drive_v in [0.0_f64, 0.7, 0.8, 0.9, 1.0] {
+        session
+            .set_signal_number("ui.bjt_early.base_v", base_drive_v)
+            .expect("set the common BJT base drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut machine.bus)
+            .expect("solve NTC, diode, and matched Gummel–Poon branches");
+        assert_eq!(steps.len(), 4, "all four generic analog models solve");
+        assert!(
+            errors.is_empty(),
+            "unexpected Mega MUX5 route errors: {errors:?}"
+        );
+
+        let read_voltage = |path| match session.signals().get(path) {
+            Some(CosimSignalValue::F64(volts)) => *volts,
+            other => panic!("expected routed voltage at {path}, got {other:?}"),
+        };
+        let ntc = read_voltage("adc.adc.8_volts");
+        let early = read_voltage("adc.adc.9_volts");
+        let control = read_voltage("adc.adc.10_volts");
+        let diode = read_voltage("adc.adc.11_volts");
+        let expected_early = gummel_poon_collector_voltage_5v(base_drive_v, false, Some(50.0));
+        let expected_control = gummel_poon_collector_voltage_5v(base_drive_v, false, None);
+
+        assert!(
+            (ntc - expected_ntc).abs() < 1e-9,
+            "the unrelated NTC stays at half scale"
+        );
+        assert!(
+            (diode - expected_diode).abs() < 2e-5,
+            "the unrelated Shockley diode should be {expected_diode} V, got {diode} V"
+        );
+        assert!(
+            (early - expected_early).abs() < 5e-5,
+            "VAF=50 load line at {base_drive_v} V should be {expected_early} V, got {early} V"
+        );
+        assert!(
+            (control - expected_control).abs() < 5e-5,
+            "no-forward-Early load line at {base_drive_v} V should be {expected_control} V, got {control} V"
+        );
+        if base_drive_v >= 0.7 {
+            assert!(
+                early < control - 0.001,
+                "finite VAF increases collector current: {early} V vs {control} V"
+            );
+        }
+
+        for (channel, voltage) in [(8, ntc), (9, early), (10, control), (11, diode)] {
+            let expected_count =
+                ((voltage * 1000.0 + 0.5).floor() as u32 * 1024 / 5000).min(1023) as u16;
+            assert_eq!(
+                mega2560_adc_convert(&mut machine, channel),
+                expected_count,
+                "firmware ADC{channel} must convert its independently solved voltage"
+            );
+        }
+        early_samples.push(early);
+        control_samples.push(control);
+    }
+
+    assert!(
+        early_samples[1..].windows(2).all(|pair| pair[1] < pair[0]),
+        "increasing base drive lowers the finite-VAF collector voltage: {early_samples:?}"
+    );
+    assert!(
+        control_samples[1..]
+            .windows(2)
+            .all(|pair| pair[1] < pair[0]),
+        "increasing base drive lowers the no-forward-Early collector voltage: {control_samples:?}"
+    );
 }
 
 /// The ATmega1281 standalone profile has its own eight-channel ADC input
@@ -1091,6 +1739,94 @@ fn atmega1281_ntc_netlist_reaches_adc0_end_to_end() {
         "the ATmega1281 firmware ADC result follows the physical voltage: {samples:?}"
     );
     assert_eq!(samples[1].2, 512, "25 °C puts the divider at half scale");
+}
+
+/// A generic matched Gummel–Poon NPN pair routes to the ATmega1281 ADC beside
+/// an unrelated Beta NTC and Shockley diode. Firmware-visible ADC conversions
+/// must expose the IKF/IKR/NKF high-injection collector-current rolloff.
+#[test]
+fn atmega1281_bjt_high_injection_reaches_firmware_adc_alongside_ntc_and_diode() {
+    use labwired_core::cpu::avr::Avr;
+    use labwired_core::Machine;
+
+    let (manifest, bus) =
+        bus_and_manifest("examples/atmega1281-io/analog-bjt-high-injection-system.yaml");
+    assert_eq!(manifest.name, "atmega1281-bjt-high-injection");
+    let mut session = build_session(&bus, &manifest.cosim_models);
+    let mut machine = Machine::new(Avr::for_chip_name("atmega1281"), bus);
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold the unrelated Beta NTC at nominal temperature");
+    session
+        .set_signal_number("ui.bjt_high_injection.base_v", 0.0)
+        .expect("initialize the matched Gummel–Poon branches");
+
+    let mut cycles = 0;
+    let mut high_drive_delta = None;
+    for base_drive_v in [0.8_f64, 1.5, 3.3] {
+        session
+            .set_signal_number("ui.bjt_high_injection.base_v", base_drive_v)
+            .expect("set common BJT base drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut machine.bus)
+            .expect("solve and route NTC, diode, and matched BJT netlists");
+        assert_eq!(steps.len(), 4, "NTC, diode, and both BJT branches solve");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let read_voltage = |path| match session.signals().get(path) {
+            Some(CosimSignalValue::F64(volts)) => *volts,
+            other => panic!("expected routed voltage at {path}, got {other:?}"),
+        };
+        let voltages = [
+            read_voltage("adc.adc.0_volts"),
+            read_voltage("adc.adc.1_volts"),
+            read_voltage("adc.adc.2_volts"),
+            read_voltage("adc.adc.3_volts"),
+        ];
+        assert!(
+            (voltages[0] - 2.5).abs() < 1e-9,
+            "unrelated NTC stays at half scale"
+        );
+        assert!(
+            (voltages[1] - shockley_diode_voltage_5v(300.0)).abs() < 2e-5,
+            "unrelated diode remains on its independent load line: expected {} V, got {} V",
+            shockley_diode_voltage_5v(300.0),
+            voltages[1]
+        );
+
+        let expected_rolloff = gummel_poon_collector_voltage_5v(base_drive_v, true, Some(50.0));
+        let expected_control = gummel_poon_collector_voltage_5v(base_drive_v, false, Some(50.0));
+        assert!(
+            (voltages[2] - expected_rolloff).abs() < 5e-5,
+            "IKF/IKR/NKF load line at {base_drive_v} V should be {expected_rolloff} V, got {} V",
+            voltages[2]
+        );
+        assert!(
+            (voltages[3] - expected_control).abs() < 5e-5,
+            "matched no-rolloff load line at {base_drive_v} V should be {expected_control} V, got {} V",
+            voltages[3]
+        );
+
+        for (channel, voltage) in voltages.iter().copied().enumerate() {
+            let routed_mv = (voltage * 1000.0 + 0.5).floor() as u32;
+            let expected_count = (routed_mv * 1024 / 5000).min(1023) as u16;
+            assert_eq!(
+                avr_mega_adc_convert(&mut machine, channel as u8),
+                expected_count,
+                "firmware ADC{channel} must convert its solved analog voltage"
+            );
+        }
+        if base_drive_v == 3.3 {
+            high_drive_delta = Some(voltages[2] - voltages[3]);
+        }
+    }
+
+    let high_drive_delta = high_drive_delta.expect("high-drive sample was recorded");
+    assert!(
+        high_drive_delta > 0.1,
+        "IKF/NKF high-injection rolloff reduces collector current: voltage delta {high_drive_delta} V"
+    );
 }
 
 /// The ATmega2561 profile has an independently declared eight-channel ADC
@@ -1198,6 +1934,95 @@ fn atmega2561_diode_netlist_reaches_adc0_end_to_end() {
     assert_eq!(
         undriven_adc1, 2500,
         "the adjacent undriven ADC1 channel keeps its 2.5 V fallback"
+    );
+}
+
+/// The ATmega2561 routes the generic Gummel–Poon NPN pair through ADC2/3
+/// beside a Beta NTC and unrelated Shockley diode on ADC0/1. Independent
+/// load-line checks and the firmware-visible ADC results expose high-injection
+/// collector-current rolloff on this second Mega-family profile.
+#[test]
+fn atmega2561_bjt_high_injection_reaches_firmware_adc_alongside_ntc_and_diode() {
+    use labwired_core::cpu::avr::Avr;
+    use labwired_core::Machine;
+
+    let (manifest, bus) =
+        bus_and_manifest("examples/atmega2561-io/analog-bjt-high-injection-system.yaml");
+    assert_eq!(manifest.name, "atmega2561-bjt-high-injection");
+    let mut session = build_session(&bus, &manifest.cosim_models);
+    let mut machine = Machine::new(Avr::for_chip_name("atmega2561"), bus);
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold the unrelated Beta NTC at nominal temperature");
+    session
+        .set_signal_number("ui.bjt_high_injection.base_v", 0.0)
+        .expect("initialize the matched Gummel–Poon branches");
+
+    let mut cycles = 0;
+    let mut high_drive_delta = None;
+    for base_drive_v in [0.8_f64, 1.5, 3.3] {
+        session
+            .set_signal_number("ui.bjt_high_injection.base_v", base_drive_v)
+            .expect("set common BJT base drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut machine.bus)
+            .expect("solve and route NTC, diode, and matched BJT netlists");
+        assert_eq!(steps.len(), 4, "NTC, diode, and both BJT branches solve");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let read_voltage = |path| match session.signals().get(path) {
+            Some(CosimSignalValue::F64(volts)) => *volts,
+            other => panic!("expected routed voltage at {path}, got {other:?}"),
+        };
+        let voltages = [
+            read_voltage("adc.adc.0_volts"),
+            read_voltage("adc.adc.1_volts"),
+            read_voltage("adc.adc.2_volts"),
+            read_voltage("adc.adc.3_volts"),
+        ];
+        assert!(
+            (voltages[0] - 2.5).abs() < 1e-9,
+            "unrelated NTC stays at half scale"
+        );
+        let expected_diode = shockley_diode_voltage_5v(300.0);
+        assert!(
+            (voltages[1] - expected_diode).abs() < 2e-5,
+            "unrelated diode remains on its independent load line: expected {expected_diode} V, got {} V",
+            voltages[1]
+        );
+
+        let expected_rolloff = gummel_poon_collector_voltage_5v(base_drive_v, true, Some(50.0));
+        let expected_control = gummel_poon_collector_voltage_5v(base_drive_v, false, Some(50.0));
+        assert!(
+            (voltages[2] - expected_rolloff).abs() < 5e-5,
+            "IKF/IKR/NKF load line at {base_drive_v} V should be {expected_rolloff} V, got {} V",
+            voltages[2]
+        );
+        assert!(
+            (voltages[3] - expected_control).abs() < 5e-5,
+            "matched no-rolloff load line at {base_drive_v} V should be {expected_control} V, got {} V",
+            voltages[3]
+        );
+
+        for (channel, voltage) in voltages.iter().copied().enumerate() {
+            let routed_mv = (voltage * 1000.0 + 0.5).floor() as u32;
+            let expected_count = (routed_mv * 1024 / 5000).min(1023) as u16;
+            assert_eq!(
+                avr_mega_adc_convert(&mut machine, channel as u8),
+                expected_count,
+                "firmware ADC{channel} must convert its solved analog voltage"
+            );
+        }
+        if base_drive_v == 3.3 {
+            high_drive_delta = Some(voltages[2] - voltages[3]);
+        }
+    }
+
+    let high_drive_delta = high_drive_delta.expect("high-drive sample was recorded");
+    assert!(
+        high_drive_delta > 0.1,
+        "IKF/NKF high-injection rolloff reduces collector current: voltage delta {high_drive_delta} V"
     );
 }
 
@@ -1644,6 +2469,157 @@ fn brd2709a_diode_netlist_reaches_pd2_iadc0_end_to_end() {
         code, expected_code,
         "IADC0's 12-bit PD02 conversion should follow the routed diode voltage"
     );
+}
+
+/// The SPICE instance multiplier `m=` is one generic mechanism for every
+/// device kind. Two unrelated parts, an n-channel JFET current sink and the
+/// BRD2709A diode card, each run as a single device and as a multiplied
+/// device on PD02..PD05. Independent load-line roots for one device and for
+/// `m` devices in parallel set each node voltage, and each voltage is then
+/// converted through IADC0. A solver that ignored `m` would put the
+/// multiplied branches on the single-device codes.
+#[test]
+fn brd2709a_jfet_and_diode_multipliers_reach_pd2_to_pd5_iadc0() {
+    const CMU_CLKEN0: u64 = 0x4000_8064;
+    const IADC0: u64 = 0x4900_4000;
+    const IADC_EN: u64 = IADC0 + 0x04;
+    const IADC_CMD: u64 = IADC0 + 0x0C;
+    const IADC_STATUS: u64 = IADC0 + 0x14;
+    const IADC_SINGLEFIFODATA: u64 = IADC0 + 0x74;
+    const IADC_SINGLE: u64 = IADC0 + 0x98;
+    const IADC_CLKEN: u32 = 1 << 10;
+    const SINGLEFIFODV: u32 = 1 << 8;
+    const SUPPLY_V: f64 = 3.3;
+    const LOAD_OHMS: f64 = 1_000.0;
+    const JFET_BETA: f64 = 1e-4;
+    const JFET_VTO: f64 = -2.0;
+    const JFET_LAMBDA: f64 = 0.01;
+    const DIODE_IS_A: f64 = 2.52e-9;
+    const DIODE_N: f64 = 1.752;
+    const DIODE_RS_OHMS: f64 = 0.568;
+    const THERMAL_V: f64 = 1.380_649e-23 * 298.15 / 1.602_176_634e-19;
+
+    let system_path = root("configs/systems/brd2709a.yaml");
+    let manifest = SystemManifest::from_file(&system_path).expect("load BRD2709A profile");
+    let chip_path = system_path.parent().unwrap().join(&manifest.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load EFR32MG26 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("build BRD2709A bus");
+    let mut session = build_session(
+        &bus,
+        &[analog_model(
+            1_000,
+            &[],
+            &[
+                ("v_j1", "adc.iadc0.50_volts"),
+                ("v_j3", "adc.iadc0.51_volts"),
+                ("v_d1", "adc.iadc0.52_volts"),
+                ("v_d4", "adc.iadc0.53_volts"),
+            ],
+            "Vcc supply 0 dc 3.3\n\
+             Rj1 supply j1 1k\nJ1 j1 0 0 JSINK\n\
+             Rj3 supply j3 1k\nJ3 j3 0 0 JSINK m=3\n\
+             Rd1 supply d1 1k\nD1 d1 0 DREF TEMP=25\n\
+             Rd4 supply d4 1k\nD4 d4 0 DREF TEMP=25 m=4\n\
+             .model JSINK NJF(VTO=-2 BETA=1e-4 LAMBDA=0.01)\n\
+             .model DREF D(IS=2.52n N=1.752 RS=0.568 TNOM=25 EG=1.11 XTI=3)\n",
+            &[
+                ("v_j1", "v(j1)"),
+                ("v_j3", "v(j3)"),
+                ("v_d1", "v(d1)"),
+                ("v_d4", "v(d4)"),
+            ],
+            &[],
+            SUPPLY_V,
+        )],
+    );
+
+    let boundary = session.cycles_until_boundary(0);
+    let (steps, errors) = session
+        .advance_to(boundary, &mut bus)
+        .expect("solve and route the multiplied branches");
+    assert_eq!(steps.len(), 1, "one 1 us analog boundary is crossed");
+    assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+    let routed = |channel: u8| match session.signals().get(&format!("adc.iadc0.{channel}_volts")) {
+        Some(CosimSignalValue::F64(volts)) => *volts,
+        other => panic!("IADC0 channel {channel} was not driven: {other:?}"),
+    };
+
+    // A grounded-gate JFET in saturation sinks m·BETA·VTO²·(1 + LAMBDA·Vds),
+    // so the drain node solves a linear equation.
+    let jfet_drain = |m: f64| {
+        let idss = m * JFET_BETA * JFET_VTO * JFET_VTO;
+        let volts = (SUPPLY_V - LOAD_OHMS * idss) / (1.0 + LOAD_OHMS * idss * JFET_LAMBDA);
+        assert!(volts > -JFET_VTO, "the m={m} JFET must stay in saturation");
+        volts
+    };
+    // m diodes in parallel: m·IS through the junction and RS/m in series.
+    let diode_node = |m: f64| {
+        let current =
+            |junction_v: f64| m * DIODE_IS_A * ((junction_v / (DIODE_N * THERMAL_V)).exp() - 1.0);
+        let residual = |junction_v: f64| {
+            (SUPPLY_V - junction_v - current(junction_v) * DIODE_RS_OHMS / m) / LOAD_OHMS
+                - current(junction_v)
+        };
+        let (mut low, mut high) = (0.0, 1.2);
+        for _ in 0..100 {
+            let mid = (low + high) / 2.0;
+            if residual(mid) > 0.0 {
+                low = mid;
+            } else {
+                high = mid;
+            }
+        }
+        let junction_v = (low + high) / 2.0;
+        junction_v + current(junction_v) * DIODE_RS_OHMS / m
+    };
+    let expected = [
+        (50, 11, 2, jfet_drain(1.0)),
+        (51, 11, 3, jfet_drain(3.0)),
+        (52, 11, 4, diode_node(1.0)),
+        (53, 11, 5, diode_node(4.0)),
+    ];
+    for (channel, _, _, volts) in expected {
+        let measured = routed(channel);
+        assert!(
+            (measured - volts).abs() < 2e-5,
+            "IADC0 channel {channel} should carry {volts} V, got {measured} V"
+        );
+    }
+    assert!(
+        routed(50) - routed(51) > 0.8,
+        "three JFETs must sink three times the current"
+    );
+    let diode_shift = routed(52) - routed(53);
+    assert!(
+        (0.05..0.07).contains(&diode_shift),
+        "four diodes must lower the node by about N*VT*ln(4), got {diode_shift} V"
+    );
+
+    bus.write_u32(CMU_CLKEN0, IADC_CLKEN)
+        .expect("enable the IADC clock");
+    bus.write_u32(IADC_EN, 1).expect("enable IADC0");
+    for (channel, port, pin, volts) in expected {
+        bus.write_u32(IADC_SINGLE, (port << 12) | (pin << 8))
+            .expect("select the PD input on IADC0");
+        bus.write_u32(IADC_CMD, 1)
+            .expect("start IADC0 single conversion");
+        bus.tick_peripherals_fully();
+        let status = bus.read_u32(IADC_STATUS).expect("read IADC0 status");
+        assert_ne!(
+            status & SINGLEFIFODV,
+            0,
+            "channel {channel} enters the FIFO"
+        );
+        let code = bus
+            .read_u32(IADC_SINGLEFIFODATA)
+            .expect("read the converted voltage");
+        let routed_mv = (volts * 1000.0 + 0.5).floor() as u32;
+        let expected_code = (routed_mv * 4096 / 3300).min(4095);
+        assert_eq!(
+            code, expected_code,
+            "IADC0's 12-bit PD{pin:02} conversion should follow the routed {volts} V"
+        );
+    }
 }
 
 /// Exercise generic MNA NTC and Shockley diode netlists against a real RA ADC12

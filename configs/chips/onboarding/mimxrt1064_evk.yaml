@@ -6,6 +6,7 @@
 
 name: mimxrt1064_evk
 arch: arm
+core: cortex-m7
 flash:
   base: 1879048192
   size: 4194304B

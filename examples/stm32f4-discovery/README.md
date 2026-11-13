@@ -23,7 +23,10 @@ The reusable [analog fixture](analog-ntc-diode-system.yaml) routes a generic
 Beta-model NTC divider and an unrelated Shockley diode load line to PA1/ADC1_IN1
 and PA4/ADC1_IN4. PA0 remains mapped to the on-board USER button, and PA2/PA3
 remain the USART2 console pins. The board-specific co-simulation test solves
-both netlists and checks the resulting firmware-visible ADC counts.
+both netlists and checks the resulting firmware-visible ADC counts. The
+[PJF gate-emission fixture](analog-pjfet-gate-emission-adc.yaml) extends that
+route to PA5/PA6 and checks the generic level-1 PJF gate-diode emission
+coefficient through the same ADC.
 
 ## Build and run
 

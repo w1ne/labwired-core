@@ -33,6 +33,13 @@ peripherals:
   type: leuart
   bus: sysbus
   base_address: 1074044928
+# Renode's EFM32PG1/PG12 platform keeps its EFMGPIOPort in an included
+# .repl the import dropped. Series-1 GPIO_BASE is 0x4000_A000 on both parts
+# (efm32pg1b/efm32pg12b CMSIS headers), the base efm32jg1 already declares.
+- id: gpioPort
+  type: efmgpioport
+  bus: sysbus
+  base_address: 1073782784
 - id: bitband
   type: bitbanding
   bus: sysbus
@@ -45,3 +52,14 @@ peripherals:
   type: pythonperipheral
   bus: sysbus
   base_address: 1073741832
+# ADC0, the Series-1 SAR ADC behind the APORT. ADC0_BASE = 0x40002000,
+# ADC0_IRQn = 15 (efm32pg12b500f1024gl125.h, gecko_sdk gsdk_4.4); ADC_TypeDef and the POSSEL
+# enumeration in efm32pg12b_adc.h are identical to efr32mg12p_adc.h, so this is the
+# xG12 die the efr32s1_adc model covers. SINGLECTRL.POSSEL picks the pad
+# through the APORT matrix (EFR32MG12 data sheet Table 6.12), and channel =
+# port * 16 + pin (PA3 = 3). The CMU here is a stub, so there is no clock gate.
+- id: adc0
+  type: efr32s1_adc
+  base_address: 0x40002000
+  size: 1KB
+  irq: 15

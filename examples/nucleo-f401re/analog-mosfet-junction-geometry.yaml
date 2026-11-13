@@ -1,0 +1,49 @@
+# Generic level-1 NMOS drain/source bulk-junction geometry charge on
+# PA2..PA5 / ADC1_IN2..5, with zero-charge controls. A separate diode fixture
+# stays routed to PA0 / ADC1_IN0.
+name: "nucleo-f401re-mosfet-junction-geometry"
+chip: "../../configs/chips/stm32f401.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "mosfet_bulk_geometry"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      drain_current_a: "ui.mosfet_junction.drain_current_a"
+      drain_reference_current_a: "ui.mosfet_junction.drain_reference_current_a"
+      source_current_a: "ui.mosfet_junction.source_current_a"
+      source_reference_current_a: "ui.mosfet_junction.source_reference_current_a"
+    outputs:
+      drain_geometry: "board.analog.pa2_volts"
+      drain_reference: "board.analog.pa3_volts"
+      source_geometry: "board.analog.pa4_volts"
+      source_reference: "board.analog.pa5_volts"
+    config:
+      substeps: 1
+      netlist_text: |
+        Idrain 0 drain dc 0
+        Rdrain drain 0 1k
+        Mdrain drain 0 0 0 NMOS_GEOMETRY AD=2u PD=4m
+        Idrain_ref 0 drain_ref dc 0
+        Rdrain_ref drain_ref 0 1k
+        Mdrain_ref drain_ref 0 0 0 NMOS_ZERO
+        Isource 0 source dc 0
+        Rsource source 0 1k
+        Msource 0 0 source 0 NMOS_GEOMETRY AS=3u PS=5m
+        Isource_ref 0 source_ref dc 0
+        Rsource_ref source_ref 0 1k
+        Msource_ref 0 0 source_ref 0 NMOS_ZERO
+        .model NMOS_GEOMETRY NMOS(VTO=5 KP=20u LAMBDA=0 IS=1e-30 CJ=2m CJSW=500n PB=1 MJ=0.5 MJSW=0.33 FC=0.5)
+        .model NMOS_ZERO NMOS(VTO=5 KP=20u LAMBDA=0 IS=1e-30 CBD=0 CBS=0 CJ=0 CJSW=0 PB=1 MJ=0.5 MJSW=0.33 FC=0.5)
+      probes:
+        drain_geometry: "v(drain)"
+        drain_reference: "v(drain_ref)"
+        source_geometry: "v(source)"
+        source_reference: "v(source_ref)"
+      sources:
+        drain_current_a: "Idrain"
+        drain_reference_current_a: "Idrain_ref"
+        source_current_a: "Isource"
+        source_reference_current_a: "Isource_ref"
+      vdd: 3.3

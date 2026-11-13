@@ -13,6 +13,16 @@ ram:
   base: 134217728
   size: 2097152B
 peripherals:
+# JH7100 GPIO 0..31 input: GPIODIN in the pinctrl "gpio" region at
+# 0x1191_0000 (Linux jh7100.dtsi pinctrl@11910000). The import dropped the
+# GPIO, which Renode's jh7100.repl binds as SiFive_GPIO at 0x0119_1000.
+- id: gpio
+  type: declarative
+  bus: sysbus
+  base_address: 294715392
+  size: 65536B
+  config:
+    path: ../../peripherals/jh7100/gpio_din.yaml
 - id: rstgen
   type: pythonperipheral
   bus: sysbus

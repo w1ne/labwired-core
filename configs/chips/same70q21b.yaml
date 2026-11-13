@@ -18,13 +18,16 @@
 # chip reuses `sam4s_pio` (PIOA-PIOE) and `sam4s_pmc`. UART0-4 and USART0-2
 # use the `sam` UART layout (status SR/CSR @0x14, THR @0x1C, BRGR @0x20).
 #
-# Also modelled: CHIPID (declarative, rev-B CIDR) and the Cortex-M7 L1 cache
-# geometry + maintenance window (`cortex_m7_cache`, no cache contents).
+# Also modelled: CHIPID (declarative, rev-B CIDR), the Cortex-M7 L1 cache
+# geometry + maintenance window (`cortex_m7_cache`, no cache contents) and
+# AFEC0/AFEC1 (`sam_afec`: CR.START converts the CHER set, CSELR + CDR,
+# LCDR, EMR.RES 12..16 bits; base/IRQ/pads from hal_atmel @8f95c79f
+# same70q21b.h and pio/same70q21b.h).
 #
 # Declared stubs (accept writes, read zero): EEFC, the RSTC/SUPC/RTT/WDT/RTC
 # system controller and the bus matrix (CCFG_SYSIO at +0x114, the PB4/TDI
 # select). Not mapped (access faults): GMAC, TRNG, TC0-3, SPI0/1, QSPI,
-# TWIHS0-2, MCAN0/1, AFEC0/1, DACC, PWM0/1, HSMCI, SSC, USBHS, XDMAC, AES,
+# TWIHS0-2, MCAN0/1, DACC, PWM0/1, HSMCI, SSC, USBHS, XDMAC, AES,
 # ICM, ISI, the TCM controls and the rest.
 #
 # Tier: L1 smoke — boot + USART1 console + PIO LED/button path on the SAM E70
@@ -201,6 +204,25 @@ peripherals:
     base_address: 0x40088000
     size: 512
 
+  # --- Analog Front-End Controllers ---------------------------------------
+  # AFEC0 0x4003C000 / IRQ 29 and AFEC1 0x40064000 / IRQ 40 (hal_atmel
+  # same70q21b.h). VREFP is taken as 3.3 V (VDDIO on the SAM E70 Xplained);
+  # boards with another reference set `vref_mv`.
+  - id: "afec0"
+    type: "sam_afec"
+    base_address: 0x4003C000
+    size: 256
+    irq: 29
+    config:
+      vref_mv: 3300
+  - id: "afec1"
+    type: "sam_afec"
+    base_address: 0x40064000
+    size: 256
+    irq: 40
+    config:
+      vref_mv: 3300
+
   # Cortex-M7 L1 caches: 16 KiB I-cache + 16 KiB D-cache on the SAM E70
   # (DS60001527, the Cortex-M7 configuration table). The SCB reports this
   # geometry (CLIDR/CTR/CCSIDR); the maintenance operations at 0xE000EF50 are
@@ -217,3 +239,32 @@ peripherals:
     type: "systick"
     base_address: 0xE000E010
     size: 16
+
+# AFEC input pads (X1 extra function), from hal_atmel @8f95c79f
+# pio/same70q21b.h `PIN_Pxn X1_AFECm_ADk`. All 23 are bonded on the 144-pin Q
+# package. EXT1 on the SAM E70 Xplained routes PC31 (AFE1_AD6) and PA19
+# (AFE0_AD8).
+analog_pins:
+  PD30: { peripheral: afec0, channel: 0 }
+  PA21: { peripheral: afec0, channel: 1 }
+  PB3: { peripheral: afec0, channel: 2 }
+  PE5: { peripheral: afec0, channel: 3 }
+  PE4: { peripheral: afec0, channel: 4 }
+  PB2: { peripheral: afec0, channel: 5 }
+  PA17: { peripheral: afec0, channel: 6 }
+  PA18: { peripheral: afec0, channel: 7 }
+  PA19: { peripheral: afec0, channel: 8 }
+  PA20: { peripheral: afec0, channel: 9 }
+  PB0: { peripheral: afec0, channel: 10 }
+  PB1: { peripheral: afec1, channel: 0 }
+  PC13: { peripheral: afec1, channel: 1 }
+  PC15: { peripheral: afec1, channel: 2 }
+  PC12: { peripheral: afec1, channel: 3 }
+  PC29: { peripheral: afec1, channel: 4 }
+  PC30: { peripheral: afec1, channel: 5 }
+  PC31: { peripheral: afec1, channel: 6 }
+  PC26: { peripheral: afec1, channel: 7 }
+  PC27: { peripheral: afec1, channel: 8 }
+  PC0: { peripheral: afec1, channel: 9 }
+  PE3: { peripheral: afec1, channel: 10 }
+  PE0: { peripheral: afec1, channel: 11 }

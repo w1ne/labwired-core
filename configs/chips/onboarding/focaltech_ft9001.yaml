@@ -33,3 +33,62 @@ peripherals:
   type: dwt
   bus: sysbus
   base_address: 3758100480
+# FT9001 EPORT0..7 (Zephyr dts/arm/focaltech/ft9001/ft9001.dtsi
+# eport@40019000 .. eport@40029000; Renode's focaltech_ft9001.repl only tags
+# them). Vendor HAL eport_reg.h: EPDDR @+0x03, EPPDR @+0x04, EPDR @+0x05.
+- id: eport0
+  type: declarative
+  bus: sysbus
+  base_address: 1073844224
+  size: 16B
+  config:
+    path: ../../peripherals/ft9001/eport.yaml
+- id: eport1
+  type: declarative
+  bus: sysbus
+  base_address: 1073848320
+  size: 16B
+  config:
+    path: ../../peripherals/ft9001/eport.yaml
+- id: eport2
+  type: declarative
+  bus: sysbus
+  base_address: 1073889280
+  size: 16B
+  config:
+    path: ../../peripherals/ft9001/eport.yaml
+- id: eport3
+  type: declarative
+  bus: sysbus
+  base_address: 1073893376
+  size: 16B
+  config:
+    path: ../../peripherals/ft9001/eport.yaml
+- id: eport4
+  type: declarative
+  bus: sysbus
+  base_address: 1073897472
+  size: 16B
+  config:
+    path: ../../peripherals/ft9001/eport.yaml
+- id: eport5
+  type: declarative
+  bus: sysbus
+  base_address: 1073901568
+  size: 16B
+  config:
+    path: ../../peripherals/ft9001/eport.yaml
+- id: eport6
+  type: declarative
+  bus: sysbus
+  base_address: 1073905664
+  size: 16B
+  config:
+    path: ../../peripherals/ft9001/eport.yaml
+- id: eport7
+  type: declarative
+  bus: sysbus
+  base_address: 1073909760
+  size: 16B
+  config:
+    path: ../../peripherals/ft9001/eport.yaml

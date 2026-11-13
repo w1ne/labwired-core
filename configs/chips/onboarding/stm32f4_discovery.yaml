@@ -45,6 +45,30 @@ peripherals:
   type: stm32_pwr
   bus: sysbus
   base_address: 1073770496
+- id: adc1
+  type: stm32_adc
+  bus: sysbus
+  base_address: 1073815552  # 0x40012000
+  irq: 18
+  # ST cmsis_device_f4 @9192c7b9 Include/stm32f407xx.h: ADC1_BASE = APB2PERIPH_BASE + 0x2000,
+  # ADC_IRQn 18. The F2/F4/F7 ADC map (SWSTART = CR2 bit 30); without a
+  # profile the generic `adc` model falls back to the F1 map.
+  config:
+    profile: stm32f4
+- id: adc2
+  type: stm32_adc
+  bus: sysbus
+  base_address: 1073815808  # 0x40012100
+  irq: 18
+  config:
+    profile: stm32f4
+- id: adc3
+  type: stm32_adc
+  bus: sysbus
+  base_address: 1073816064  # 0x40012200
+  irq: 18
+  config:
+    profile: stm32f4
 - id: crc
   type: stm32_crc
   bus: sysbus

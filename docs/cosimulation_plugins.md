@@ -384,11 +384,26 @@ the same circuit and the same routing as `system.yaml`.
 | Voltage source | `V<name> n+ n- <source>` |
 | Current source | `I<name> n+ n- <source>` |
 | Switch | `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` |
-| Diode | `D<name> n+ n- <model>` |
-| BJT | `Q<name> nc nb ne <model>` |
-| MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [nrd=<squares>] [nrs=<squares>]` |
-| JFET | `J<name> nd ng ns <model>` |
+| Diode | `D<name> n+ n- <model> [<area>] [m=<count>] [temp=<°C>]` |
+| BJT | `Q<name> nc nb ne <model> [<area>] [m=<count>] [temp=<°C>]` |
+| MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>] [m=<count>] [temp=<°C>]` |
+| JFET | `J<name> nd ng ns <model> [<area>] [m=<count>] [temp=<°C>]` |
 | Op-amp / comparator | `X<name> in+ in- v+ v- out <model>` |
+
+`m=<count>` is the SPICE instance multiplier: the element acts as that many
+identical devices in parallel. Every current, conductance and stored charge it
+stamps is scaled, its terminal resistances are divided, and `m` may be
+fractional. This matches ngspice, where `m=3` and three parallel copies give
+the same solution.
+
+`<area>` (a bare number after the model, or `area=<factor>`) is the SPICE area
+factor on D, Q and J. It scales the instance's card the way ngspice-45 does:
+diode `IS`, `ISR`, `IK`, `IKR`, `CJO` and `RS`; BJT `IS`, `ISE`, `ISC`,
+`IKF`, `IKR`, `IRB`, `ITF`, `CJE`, `CJC`, `RB`, `RBM`, `RC` and `RE`; JFET
+`BETA`, `IS`, `CGS`, `CGD`, `RD` and `RS`. Currents and capacitances
+multiply, resistances divide. GMIN and diode `IBV` are not scaled, so near a
+breakdown knee `area=3` and `m=3` give different answers, as in ngspice. A
+MOSFET has no area; `W`, `L`, `AD`/`AS` and `PD`/`PS` size it.
 
 Plus `*` comment lines, `;` / `$` trailing comments, `.end`, and
 `.ic V(node)=<v>`. Node `0` and `gnd` are ground. Values take the usual SPICE
@@ -455,7 +470,7 @@ input at a different element.
 .model <name> D    (IS=<a> N=<n> ISR=<a> NR=<n> RS=<ohms> TRS1=<1/°C> TRS2=<1/°C²> TT=<s> TTT1=<1/°C> TTT2=<1/°C²> TM1=<1/°C> TM2=<1/°C²>)
 .model <name> NPN  (IS=<a> BF=<n> BR=<n> NF=<n> NR=<n> IKF=<a> IKR=<a> NKF=<n> CJE=<f> VJE=<v> MJE=<ratio> CJC=<f> VJC=<v> MJC=<ratio> TMJE1=<1/°C> TMJE2=<1/°C²> TMJC1=<1/°C> TMJC2=<1/°C²> TLEVC=0|1 [CTE/CTC/TVJE/TVJC])
 .model <name> PNP  (...)
-.model <name> NMOS (VTO=<v> KP=<a/v2> LAMBDA=<1/v> GAMMA=<sqrt(v)> PHI=<v> RD=<ohms> RS=<ohms> RSH=<ohms/square> CBD=<f> CBS=<f> CJ=<f/m²> CJSW=<f/m> PB=<v> MJ=<ratio> MJSW=<ratio> FC=<ratio> TOX=<m> W=<m> L=<m> [CHARGEMOD=MEYER|WARD_DUTTON])
+.model <name> NMOS (VTO=<v> KP=<a/v2> LAMBDA=<1/v> GAMMA=<sqrt(v)> PHI=<v> RD=<ohms> RS=<ohms> RSH=<ohms/square> CBD=<f> CBS=<f> CJ=<f/m²> CJSW=<f/m> PB=<v> MJ=<ratio> MJSW=<ratio> FC=<ratio> TOX=<m> UO=<cm²/v·s> LD=<m> NSUB=<cm⁻³> NSS=<cm⁻²> TPG=-1|0|1 W=<m> L=<m> [CHARGEMOD=MEYER|WARD_DUTTON])
 .model <name> PMOS (...)      ; VTO is negative, as in ngspice
 .model <name> NJF  (VTO=<v> BETA=<a/v2> LAMBDA=<1/v> RD=<ohms> RS=<ohms> IS=<a>)
 .model <name> PJF  (...)
@@ -482,6 +497,17 @@ Ward–Dutton drain/source partitioning and a charge-conserving terminal Jacobia
 It requires `TOX`. Without `TOX`, only explicit overlap and bulk-junction
 capacitances are present. `CHARGEMOD=WARD_DUTTON` is an in-core extension and
 is not a portable ngspice model-card parameter.
+As in ngspice level 1, a card with `TOX` and no `KP` takes
+`KP = UO·1e-4·εox/TOX` (`UO` in cm²/V·s, default 600; `U0` is an alias), and
+lateral diffusion `LD` (default 0) shortens the channel to `L − 2·LD` for
+`KP·W/L`, the intrinsic oxide capacitance and `CGBO`. `L − 2·LD` must be
+positive. With `TOX` and `NSUB` (cm⁻³), each of `PHI`, `GAMMA` and `VTO`
+the card omits is derived at `TNOM` as ngspice's `mos1temp.c` does:
+`PHI = max(0.1, 2·Vt·ln(NSUB/1.45e10))`, `GAMMA = sqrt(2·εsi·q·NSUB)/C'ox`,
+and `VTO = VFB + type·(GAMMA·sqrt(PHI) + PHI)`, where the flat-band voltage
+uses gate type `TPG` (default +1, opposite to substrate) and surface-state
+density `NSS` (cm⁻², default 0). `NSUB` without `TOX` is ignored, as in
+ngspice. `NSUB` must exceed 1.45e10 cm⁻³, and `TPG` must be −1, 0 or 1.
 Other device capacitances, temperature coefficients and terminal resistances
 outside the supported parameters below are accepted and ignored. BJT `RB`/`RC`/`RE`
 are modeled as series resistors, while `RBM`/`IRB` make `RB` fall with base
@@ -545,7 +571,8 @@ from `CBD`/`CBS` or `CJ`/`CJSW` with instance `AD`/`AS`/`PD`/`PS`, plus
 intrinsic channel charge using either ngspice's piecewise Meyer formulation or
 the opt-in Ward–Dutton charge partition; and
 SPICE JFET level 1 with the Parker–Skellern `B` fit, including its two gate
-junctions and depletion charge. Tests exercise non-unit `B` in the linear and
+junctions and depletion charge. The gate-junction emission coefficient `N`
+(default 1) sets `N·kT/q` for both gate diodes, as in ngspice. Tests exercise non-unit `B` in the linear and
 saturation regions for both channel polarities. Other tests cover MOSFET/JFET
 channel-length modulation, reverse-channel operation, MOSFET body effect,
 Meyer bias regions, and Ward–Dutton
@@ -571,6 +598,7 @@ dependence. `TLEVC=1` selects the linear `CTE`/`CTC` capacitance and
 use their documented `TR*` coefficients. JFET level-1 channel `VTO`/`BETA`
 use `VTOTC` (otherwise `TCV`) and `BETATCE` (otherwise `BEX`) when an instance
 `TEMP` is supplied. The same `TEMP` scales JFET gate-junction `IS` by `EG`/`XTI`
+(the `EG` term divided by `N`, `XTI` not, as in ngspice `jfettemp.c`)
 (defaults 1.11 eV and 3), moves `PB` and `CGS`/`CGD` by the diode depletion law
 at grading 0.5, and evaluates the gate diodes at that `kT/q`. A level-1 MOSFET
 instance `TEMP` (card `TNOM`, default 27 °C) follows ngspice's `mos1temp` laws:

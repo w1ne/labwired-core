@@ -1,0 +1,33 @@
+# Matched generic level-1 NJF gate junctions routed through the NUCLEO-L073RZ
+# descriptor's PA2/PA3 ADC1 aliases. Drain and source are grounded, so each
+# gate sits on the forward knee of two gate diodes behind 10k. The branches
+# differ only in the gate emission coefficient N (2 vs the default 1).
+# NUCLEO-H563ZI reuses this asset with its outputs moved to ADC1 channels 2/3.
+name: nucleo-l073rz-analog-jfet-gate-emission-adc
+chip: ../../configs/chips/stm32l073.yaml
+external_devices: []
+board_io: []
+cosim_models:
+  - id: jfet_gate_emission_adc
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      gate_drive: ui.jfet_gate_emission.drive_v
+    outputs:
+      emission_gate: board.analog.pa2_volts
+      control_gate: board.analog.pa3_volts
+    config:
+      netlist_text: |
+        Vdrive drive 0 dc 0
+        Rgate_emission drive gate_emission 10k
+        Jemission 0 gate_emission 0 NJF_EMISSION
+        .model NJF_EMISSION NJF(VTO=-2 BETA=500u IS=1e-14 N=2)
+        Rgate_control drive gate_control 10k
+        Jcontrol 0 gate_control 0 NJF_CONTROL
+        .model NJF_CONTROL NJF(VTO=-2 BETA=500u IS=1e-14)
+      probes:
+        emission_gate: v(gate_emission)
+        control_gate: v(gate_control)
+      sources:
+        gate_drive: Vdrive
+      vdd: 3.3

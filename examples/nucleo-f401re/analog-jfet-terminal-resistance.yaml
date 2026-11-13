@@ -1,0 +1,41 @@
+# Matched generic level-1 NJF branches routed through the NUCLEO-F401RE
+# descriptor's PA2..PA5 ADC1 aliases. PA0 retains an unrelated diode route.
+name: "nucleo-f401re-analog-jfet-terminal-resistance"
+chip: "../../configs/chips/stm32f401.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "jfet_terminal_resistance"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_voltage: "ui.jfet.gate_v"
+    outputs:
+      control_drain: "board.analog.pa2_volts"
+      drain_resistance_drain: "board.analog.pa3_volts"
+      source_resistance_drain: "board.analog.pa4_volts"
+      both_resistances_drain: "board.analog.pa5_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 3.3
+        Vgate gate 0 dc 0
+        Rload_control supply drain_control 1k
+        Jcontrol drain_control gate 0 NJF_CONTROL
+        .model NJF_CONTROL NJF(VTO=-2 BETA=500u LAMBDA=0.025 B=1 PB=1 IS=1e-30)
+        Rload_drain supply drain_rd 1k
+        Jdrain drain_rd gate 0 NJF_DRAIN
+        .model NJF_DRAIN NJF(VTO=-2 BETA=500u LAMBDA=0.025 B=1 PB=1 IS=1e-30 RD=200)
+        Rload_source supply drain_rs 1k
+        Jsource drain_rs gate 0 NJF_SOURCE
+        .model NJF_SOURCE NJF(VTO=-2 BETA=500u LAMBDA=0.025 B=1 PB=1 IS=1e-30 RS=200)
+        Rload_both supply drain_both 1k
+        Jboth drain_both gate 0 NJF_BOTH
+        .model NJF_BOTH NJF(VTO=-2 BETA=500u LAMBDA=0.025 B=1 PB=1 IS=1e-30 RD=200 RS=200)
+      probes:
+        control_drain: "v(drain_control)"
+        drain_resistance_drain: "v(drain_rd)"
+        source_resistance_drain: "v(drain_rs)"
+        both_resistances_drain: "v(drain_both)"
+      sources:
+        gate_voltage: "Vgate"
+      vdd: 3.3

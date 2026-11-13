@@ -46,7 +46,7 @@ for the validation evidence and the full list of fidelity limits see
 | SPI1       | ✅ flag-level | TXE behaviour matches; data round-trip needs MOSI→MISO jumper |
 | I2C1       | ⚠️ flag-level | sim+silicon agree (no NACK on bare bus); round-trip needs a slave |
 | RCC        | ✅ silicon    | dedicated `stm32l0` layout; CFGR@0x0C, CR reset `0x300`, SW→SWS clock-switch readback matches silicon (`0x04`) |
-| ADC1       | ⚠️ analog     | silicon converts VREFINT (`~0x86`); sim returns deterministic mock |
+| ADC1       | ⚠️ analog     | F0/L0 `stm32l0` layout: CHSELR selects the channel, routed `board.analog.<pad>_volts` inputs convert (`cosim_nucleo_l073_analog`); not in the silicon capture. Demo VREFINT read: silicon `~0x86`, sim `0` (demo's CCR address leaves VREFEN clear) |
 | RNG        | ✅ clock-gated | dead unless RCC_AHBENR.RNGEN **and** RCC_CRRCR.HSI48RDY are set, as on silicon; the draw itself is deterministic (a real TRNG's value can't/shouldn't match) |
 | I2C2/3, SPI2 | ⚠️ present  | mapped, not exercised                                     |
 | TIM2/3/6/7/22, LPTIM1 | ⚠️ present | TIM2 32-bit; others 16-bit; not exercised        |

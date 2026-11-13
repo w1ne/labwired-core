@@ -1,0 +1,47 @@
+# Matched generic Gummel–Poon NPN branches route RBM/IRB base resistance
+# rolloff and its fixed-RB control through PA2/PA3 to U575 ADC1 channels 7/8.
+name: nucleo-u575zi-analog-bjt-base-resistance
+chip: ../../configs/chips/stm32u575.yaml
+external_devices: []
+board_io: []
+cosim_models:
+  - id: bjt_base_resistance_rolloff_adc
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drive: ui.bjt_base_resistance.base_v
+    outputs:
+      collector_voltage: board.analog.pa2_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rdrive drive base 2k
+        Q1 collector base 0 NPN_ROLLOFF
+        .model NPN_ROLLOFF NPN(IS=1e-16 BF=20 BR=4 VAF=50 VAR=75 RB=2k RBM=20 IRB=50u)
+      probes:
+        collector_voltage: v(collector)
+      sources:
+        base_drive: Vbase
+      vdd: 3.3
+  - id: bjt_base_resistance_fixed_adc
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drive: ui.bjt_base_resistance.base_v
+    outputs:
+      collector_voltage: board.analog.pa3_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rdrive drive base 2k
+        Q1 collector base 0 NPN_FIXED
+        .model NPN_FIXED NPN(IS=1e-16 BF=20 BR=4 VAF=50 VAR=75 RB=2k)
+      probes:
+        collector_voltage: v(collector)
+      sources:
+        base_drive: Vbase
+      vdd: 3.3

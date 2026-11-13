@@ -25,6 +25,10 @@ already present in `configs/chips/stm32l073.yaml`:
   LD2; pick SPI2 or remap if the LED is also used).
 - **USART1** (`0x40013800`) — spare UART for a second serial device.
 
-Note the I2C/SPI/ADC register models are reused from the L4 family and are
+Note the I2C/SPI register models are reused from the L4 family and are
 not L0-tuned (see `VALIDATION.md`), so a new external-device lab should
 re-validate the relevant bus before being marked silicon-accurate.
+
+Analog parts route to ADC1 through `board.analog.<pad>_volts` on the
+LQFP64 ADC pads (PA0..PA7, PB0/PB1, PC0..PC5 = ADC_IN0..IN15);
+`analog-adc-system.yaml` wires an NTC divider to PA0 and a diode to PC5.

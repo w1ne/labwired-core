@@ -71,11 +71,14 @@ peripherals:
   renode_type: max32650_i2c
   bus: sysbus
   base_address: 1073864704
+# MAX32650 10-bit ADC (msdk max32650.h MXC_BASE_ADC = 0x4003_4000):
+# AIN0..AIN3 plus AIN0/AIN1 through the divide-by-5, against 1.22 V.
 - id: adc
-  type: stub
+  type: max32650_adc
   renode_type: max32650_adc
   bus: sysbus
   base_address: 1073954816
+  irq: 36  # ADC_IRQn (msdk max32650.h)
 - id: uart0
   type: max32650_uart
   bus: sysbus

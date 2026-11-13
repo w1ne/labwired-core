@@ -17,8 +17,7 @@
 # - spi     `stm32`    — the legacy DR/SR SPI; the F0 has no FIFO.
 # - i2c     `stm32f1`  — the legacy CR1/CR2/SR1/SR2/CCR/TRISE I2C.
 # - flash   `stm32f1`  — FLASH_R: ACR/KEYR/OPTKEYR/SR/CR/AR/OBR/WRPR.
-# - adc     `stm32l4`  — the CFGR1/CFGR2 "v2" ADC (same family profile as G0);
-#                        the smoke does not exercise it.
+# - adc     `stm32f0`  — RM0360 CFGR1/CHSELR v2 ADC register map.
 # - timer   generic    — TIMx CR1/PSC/ARR/CNT.
 # - can     generic    — bxCAN (the licensed Bosch core ST wraps).
 # - dac     generic    — the F1-shaped DAC.
@@ -290,7 +289,7 @@ peripherals:
     irq: 12
     clock: { reg: "apb2enr", bit: 9 }
     config:
-      profile: "stm32l4"
+      profile: "stm32f0"
   - id: "dac1"
     type: "dac"
     base_address: 0x40007400
@@ -333,3 +332,23 @@ peripherals:
     type: "stub"
     base_address: 0x40006C00
     size: "1KB"
+
+# External ADC1 input routes for the STM32F072RBT6 LQFP64. The channels come
+# from DS9826 Table 14 (ADC_IN0..15); the ADC's CHSELR bitmap is RM0360 §12.
+analog_pins:
+  PA0: { peripheral: "adc1", channel: 0 }
+  PA1: { peripheral: "adc1", channel: 1 }
+  PA2: { peripheral: "adc1", channel: 2 }
+  PA3: { peripheral: "adc1", channel: 3 }
+  PA4: { peripheral: "adc1", channel: 4 }
+  PA5: { peripheral: "adc1", channel: 5 }
+  PA6: { peripheral: "adc1", channel: 6 }
+  PA7: { peripheral: "adc1", channel: 7 }
+  PB0: { peripheral: "adc1", channel: 8 }
+  PB1: { peripheral: "adc1", channel: 9 }
+  PC0: { peripheral: "adc1", channel: 10 }
+  PC1: { peripheral: "adc1", channel: 11 }
+  PC2: { peripheral: "adc1", channel: 12 }
+  PC3: { peripheral: "adc1", channel: 13 }
+  PC4: { peripheral: "adc1", channel: 14 }
+  PC5: { peripheral: "adc1", channel: 15 }

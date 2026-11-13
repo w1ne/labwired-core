@@ -203,3 +203,18 @@ The nRF52840 Zephyr JIT/interpreter comparisons retain their full markers,
 instruction budget, architectural/cycle/memory assertions and event ceiling.
 Failure-only observations report UART/PPI state and rethrow the original panic;
 successful execution performs no extra diagnostic reads.
+
+## Analog: SPICE device area on AIN2..AIN7
+
+```bash
+cargo test -p labwired-core --test cosim_microbit_v2_analog microbit_v2_device_area_on_d_q_j_reaches_ain2_to_ain7
+```
+
+Observed (2026-11-13): `1 passed`. A diode (`area=4`), a diode-connected NPN
+(bare positional area `3`) and a grounded-gate NJF (`area=2`) drive
+P0.04/AIN2, P0.05/AIN3 and P0.28/AIN4. The same circuits with hand-scaled
+model cards drive P0.29/AIN5..P0.31/AIN7. At 2.0, 2.5 and 3.3 V supply each
+area node equals its control within 1 nV and matches ngspice-45 `.op` within
+0.1 mV, and one EasyDMA scan converts all eight channels at 12 bits. Fixture:
+`analog-device-area-system.yaml`. This is model coverage, not a bench
+measurement.

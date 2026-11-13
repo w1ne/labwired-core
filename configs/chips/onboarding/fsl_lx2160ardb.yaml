@@ -12,6 +12,10 @@ flash:
 ram:
   base: 2147483648
   size: 2147483648B
+# 0x0 is the LX2160A boot ROM, not this DDR. Mirroring the 2 GiB image there
+# ran it to 0x8000_0000 and shadowed the whole CCSR space, the DUARTs and
+# GPIO controllers included, with erased-flash 0xFF.
+flash_boot_alias: false
 peripherals:
 - id: timer
   type: arm_generictimer
@@ -29,3 +33,33 @@ peripherals:
   type: vybridi2c
   bus: sysbus
   base_address: 33554432
+# QorIQ GPIO1..4 (Linux fsl-lx2160a.dtsi gpio@2300000 .. gpio@2330000,
+# "fsl,qoriq-gpio", little-endian). Renode's lx2160a map leaves them out.
+- id: gpio1
+  type: declarative
+  bus: sysbus
+  base_address: 36700160
+  size: 65536B
+  config:
+    path: ../../peripherals/qoriq/gpio.yaml
+- id: gpio2
+  type: declarative
+  bus: sysbus
+  base_address: 36765696
+  size: 65536B
+  config:
+    path: ../../peripherals/qoriq/gpio.yaml
+- id: gpio3
+  type: declarative
+  bus: sysbus
+  base_address: 36831232
+  size: 65536B
+  config:
+    path: ../../peripherals/qoriq/gpio.yaml
+- id: gpio4
+  type: declarative
+  bus: sysbus
+  base_address: 36896768
+  size: 65536B
+  config:
+    path: ../../peripherals/qoriq/gpio.yaml

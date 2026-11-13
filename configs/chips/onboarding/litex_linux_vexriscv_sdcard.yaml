@@ -32,13 +32,19 @@ peripherals:
   bus: i2c
   base_address: 5
 - id: gpio_out
-  type: litex_gpio
+  type: declarative
   bus: sysbus
   base_address: 4026550272
+  size: 4B
+  config:
+    path: ../../peripherals/litex/gpio_out.yaml
 - id: gpio_in
-  type: litex_gpio
+  type: declarative
   bus: sysbus
   base_address: 4026560512
+  size: 4B
+  config:
+    path: ../../peripherals/litex/gpio_in.yaml
 - id: button
   type: button
   bus: gpio_in

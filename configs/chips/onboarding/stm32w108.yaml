@@ -21,3 +21,73 @@ peripherals:
   type: stm32_timer
   bus: sysbus
   base_address: 1073803264
+# GPIO ports A-C. Renode's stm32w108 platform declares only the two timers, so
+# the import carried no GPIO. The STM32W108 (an Ember EM357 core) puts each
+# 8-pin port at 0x4000B000 + 0x400 * n with GPIO_PxCFGL @0x00, GPIO_PxCFGH
+# @0x04, GPIO_PxIN @0x08, GPIO_PxOUT @0x0C, GPIO_PxSET @0x10 and GPIO_PxCLR
+# @0x14 (RM0298 GPIO register map; Ember em357 regs.h GPIO_PAIN 0x4000B008,
+# GPIO_PBIN 0x4000B408, GPIO_PCIN 0x4000B808). Those are the STM32F1 offsets
+# (CRL/CRH/IDR/ODR/BSRR/BRR, RM0008 §9.2), with the same 4-bit pin-config
+# encoding: 0x4 floating input (the reset value), 0x8 input with pull chosen by
+# PxOUT, MODE bits [1:0] non-zero for every output mode. So the ports run on
+# `profile: stm32f1`. Not modelled: PxCFGL holds pins 0-3 only and PxCFGH pins
+# 4-7, where the F1 model gives CRL to pins 0-7 and CRH to pins 8-15, so a
+# direction or pull written for pins 4-7 lands on the wrong pins (pins 0-3 and
+# every read of PxIN are right); ports are 8 pins wide but the model answers 16;
+# the model also answers LCKR @0x18, which the W108 does not have. The wake and
+# interrupt registers at 0x4000BC00 are not declared.
+- id: gpioa
+  type: gpio
+  bus: sysbus
+  base_address: 0x4000B000
+  size: 1KB
+  config:
+    profile: stm32f1
+- id: gpiob
+  type: gpio
+  bus: sysbus
+  base_address: 0x4000B400
+  size: 1KB
+  config:
+    profile: stm32f1
+- id: gpioc
+  type: gpio
+  bus: sysbus
+  base_address: 0x4000B800
+  size: 1KB
+  config:
+    profile: stm32f1
+# General-purpose ADC (stm32w108_adc): ADC_CR @0x4000D004, OFFSETR, GAINR and
+# the DMA channel registers up to ADC_DMACNDTR @0x4000D024 (ST DocID16252
+# Rev 16 §11.3; Contiki stm32w108 regs.h BLOCK_ADC 0x4000D000..0x4000D024).
+# The result reaches firmware only through the ADC DMA into RAM. NVIC IRQ 11
+# is the ADC (regs.h INT_ADC = bit 11 of INT_CFGSET). VREF is the internal
+# 1.2 V reference.
+- id: adc
+  type: stm32w108_adc
+  bus: sysbus
+  base_address: 0x4000D000
+  size: 4KB
+  irq: 11
+# ADC_ISR (0x4000A810) and ADC_IER (0x4000A850) live in the shared event
+# block, next to the timer and serial flags that are not modelled. Each is a
+# 4-byte mirror onto offsets 0x810/0x850 of the ADC window above, so only
+# those two words of the event block are mapped.
+memory_regions:
+- name: adc_isr
+  base: 0x4000A810
+  size: 4B
+  alias_of: 0x4000D810
+- name: adc_ier
+  base: 0x4000A850
+  size: 4B
+  alias_of: 0x4000D850
+# External ADC inputs (DocID16252 Rev 16 Table 37 and §11.3.3 CHSELP: ADC0..5
+# = PB5, PB6, PB7, PC1, PA4, PA5; the ST HAL halGetADCChannelFromGPIO agrees).
+analog_pins:
+  PB5: { peripheral: adc, channel: 0 }
+  PB6: { peripheral: adc, channel: 1 }
+  PB7: { peripheral: adc, channel: 2 }
+  PC1: { peripheral: adc, channel: 3 }
+  PA4: { peripheral: adc, channel: 4 }
+  PA5: { peripheral: adc, channel: 5 }

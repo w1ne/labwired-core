@@ -1,0 +1,46 @@
+# A generic level-1 NMOS gate-source overlap capacitor routed to PA3/ADC1_IN3.
+# The intentionally large CGSO makes its RC transient visible at the 1 us
+# analog step size; the reference branch uses the same MOSFET without charge.
+name: "nucleo-f407-mosfet-gate-charge"
+chip: "../../configs/chips/stm32f407.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "mosfet_gate_charge_reference"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_voltage: "ui.mosfet_charge.gate_v"
+    outputs:
+      source_voltage: "board.analog.pa2_volts"
+    config:
+      substeps: 1
+      netlist_text: |
+        Vgate gate 0 dc 0
+        Rsource sense 0 1k
+        M1 0 gate sense 0 NMOS_TEST w=100u l=10u
+        .model NMOS_TEST NMOS(VTO=5 KP=20u LAMBDA=0)
+      probes:
+        source_voltage: "v(sense)"
+      sources:
+        gate_voltage: "Vgate"
+      vdd: 3.3
+  - id: "mosfet_gate_source_overlap_charge"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_voltage: "ui.mosfet_charge.gate_v"
+    outputs:
+      source_voltage: "board.analog.pa3_volts"
+    config:
+      substeps: 1
+      netlist_text: |
+        Vgate gate 0 dc 0
+        Rsource sense 0 1k
+        M1 0 gate sense 0 NMOS_TEST w=100u l=10u
+        .model NMOS_TEST NMOS(VTO=5 KP=20u LAMBDA=0 CGSO=10u)
+      probes:
+        source_voltage: "v(sense)"
+      sources:
+        gate_voltage: "Vgate"
+      vdd: 3.3

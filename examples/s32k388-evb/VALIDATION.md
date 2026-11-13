@@ -31,7 +31,8 @@ there is no S32K388 bench part, and no Renode parity claim is made.
 | Caches, TCM use, MPU, FPU | **not exercised** | the firmware leaves them at reset and is built without FPU instructions |
 | CM7_1, CM7_2, CM7_3 and the lockstep checkers | **not modelled** | only CM7_0 runs |
 | MSCM, PFLASH, SWT_0, STM_0, XRDC, DMAMUX0/1, MC_RGM, DCM_GPR, SIRC, SXOSC, FIRC, FXOSC, MC_CGM, MC_ME, PLL, PLL_AUX, PMC, flash controller, CONFIGURATION_GPR | declared stubs | `configs/chips/s32k388.yaml` (`type: "stub"`) |
-| Data flash, eDMA/TCDs, SWT_1–3, STM_1–3, PIT, RTC, FlexCAN, LPSPI, LPI2C, eMIOS, ADC/BCTU, GMAC, QuadSPI, SAI, FlexIO, HSE/MU, CRC, WKPU | **not mapped** | no window in `configs/chips/s32k388.yaml`; an access faults with a memory violation |
+| SAR ADC_0..ADC_2 (0x400A_0000/4000/8000, IRQ 180..182) | co-sim tested | `s32k3_adc_sar`; `cosim_s32k388_adc_analog` converts PTA11 (ADC1_S10) and PTA17 (ADC2_S19). Software-started chains only; VREFH 3.3 V is an assumption |
+| Data flash, eDMA/TCDs, SWT_1–3, STM_1–3, PIT, RTC, FlexCAN, LPSPI, LPI2C, eMIOS, BCTU, GMAC, QuadSPI, SAI, FlexIO, HSE/MU, CRC, WKPU | **not mapped** | no window in `configs/chips/s32k388.yaml`; an access faults with a memory violation |
 
 ## Commands and evidence (verified 2026-10-30)
 
@@ -99,5 +100,13 @@ cargo test -p labwired-core --test cosim_s32k388_analog -- --nocapture
 ```
 
 This uses explicit test-only GPIO thresholds and checks SIUL2's GPDI register.
-It does not claim S32K388 silicon threshold values, ADC/BCTU conversion, or a
-model of the EVB's physical potentiometers.
+It does not claim S32K388 silicon threshold values or a model of the EVB's
+physical potentiometers.
+
+```bash
+cargo test -p labwired-core --test cosim_s32k388_adc_analog -- --nocapture
+# 3 passed: PTA11 -> ADC1_S10 and PTA17 -> ADC2_S19 through analog_pins
+```
+
+The SAR ADC conversion follows the RTD `Adc_Sar_Ip` flow; BCTU triggers are
+not modelled and VREFH 3.3 V is an assumption.

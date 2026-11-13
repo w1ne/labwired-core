@@ -13,7 +13,7 @@ Authoritative sources used by this example (retrieved 2026-10-29):
 The chip descriptor (`configs/chips/stm32l552.yaml`) carries the same values
 transcribed with its own citations; this package does not restate them.
 
-Open item: the L5 non-secure FLASH controller, EXTI, ADC, FDCAN and USB are
+Open item: the L5 non-secure FLASH controller, EXTI, ADC2, FDCAN and USB are
 out of scope for this L1 slice and declared stubs in the descriptor.
 TrustZone/SAU/GTZC and MPU/PMSAv8 enforcement are engine gaps, not board
 documentation gaps.

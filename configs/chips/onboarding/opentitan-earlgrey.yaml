@@ -162,3 +162,20 @@ peripherals:
   type: pythonperipheral
   bus: sysbus
   base_address: 1092550744
+# ADC controller (opentitan_adc_ctrl) at 0x4044_0000, adc_ctrl_aon in
+# top_earlgrey.gen.hjson (size_byte 0x80), with
+# the AST ADC behind it: two 10-bit channels over 0..2.3 V (Earl Grey's
+# Nuvoton integration; OpenTitan adc_ctrl Programmer's Guide). No PLIC is
+# declared here, so no irq is wired.
+- id: adc_ctrl
+  type: opentitan_adc_ctrl
+  bus: sysbus
+  base_address: 0x40440000
+  size: 128B
+  config:
+    vref_mv: 2300
+# CC1/CC2 are the manual analog pads: chip_earlgrey_asic.sv assigns
+# ast_adc_a0_a = CC1 (channel 0) and ast_adc_a1_a = CC2 (channel 1).
+analog_pins:
+  CC1: { peripheral: adc_ctrl, channel: 0 }
+  CC2: { peripheral: adc_ctrl, channel: 1 }

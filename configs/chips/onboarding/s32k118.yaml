@@ -54,3 +54,76 @@ peripherals:
   renode_type: s32k_scg
   bus: sysbus
   base_address: 1074151424
+# GPIO ports PTA-PTE. Renode's S32K118 platform leaves GPIO out, so the import
+# carried none. GPIO_BASE_PTRS in the S32K118 device header puts PTA..PTE at
+# 0x400FF000 + 0x40 * n, with the Kinetis register set: PDOR/PSOR/PCOR/PTOR at
+# +0x00..+0x0C, PDIR +0x10, PDDR +0x14 (S32K1xx RM rev 14, ch. 12). The same
+# map as the promoted configs/chips/mk64f12.yaml, so these ports run on
+# `profile: kinetis`. PIDR (+0x18) is not modelled; its reset value (0) leaves
+# every input enabled. The PORT block (PCRn MUX/pulls) is not declared, so a
+# pin reads PDIR whatever its MUX, where silicon reads 0 until MUX = GPIO.
+- id: pta
+  type: gpio
+  bus: sysbus
+  base_address: 0x400FF000
+  size: 64B
+  config:
+    profile: kinetis
+- id: ptb
+  type: gpio
+  bus: sysbus
+  base_address: 0x400FF040
+  size: 64B
+  config:
+    profile: kinetis
+- id: ptc
+  type: gpio
+  bus: sysbus
+  base_address: 0x400FF080
+  size: 64B
+  config:
+    profile: kinetis
+- id: ptd
+  type: gpio
+  bus: sysbus
+  base_address: 0x400FF0C0
+  size: 64B
+  config:
+    profile: kinetis
+- id: pte
+  type: gpio
+  bus: sysbus
+  base_address: 0x400FF100
+  size: 64B
+  config:
+    profile: kinetis
+# ADC0 (s32k1_adc): IP_ADC0_BASE 0x4003B000 (S32K118_ADC.h) and ADC0_IRQn 28
+# (S32K118_COMMON.h), both from Zephyr hal_nxp @cc9b44ae
+# s32/drivers/s32k1/BaseNXP/header. Renode's S32K118 platform has no ADC.
+# VREFH defaults to the 5 V S32K118EVB supply.
+- id: adc0
+  type: s32k1_adc
+  base_address: 0x4003B000
+  size: 4KB
+  irq: 28
+# ADC0_SE0..SE15 pads of the LQFP64 package (hal_nxp @cc9b44ae
+# dts/nxp/s32/pinctrl/S32K118_LQFP64-pinctrl.h, a delta on
+# S32K146_LQFP64-pinctrl.h that keeps every ADC0 pad except ADC0_SE8_PTB13).
+# Channel = ADCH.
+analog_pins:
+  PTA0: { peripheral: adc0, channel: 0 }
+  PTA1: { peripheral: adc0, channel: 1 }
+  PTA6: { peripheral: adc0, channel: 2 }
+  PTA7: { peripheral: adc0, channel: 3 }
+  PTB0: { peripheral: adc0, channel: 4 }
+  PTB1: { peripheral: adc0, channel: 5 }
+  PTB2: { peripheral: adc0, channel: 6 }
+  PTB3: { peripheral: adc0, channel: 7 }
+  PTC0: { peripheral: adc0, channel: 8 }
+  PTC1: { peripheral: adc0, channel: 9 }
+  PTC2: { peripheral: adc0, channel: 10 }
+  PTC3: { peripheral: adc0, channel: 11 }
+  PTC14: { peripheral: adc0, channel: 12 }
+  PTC15: { peripheral: adc0, channel: 13 }
+  PTC16: { peripheral: adc0, channel: 14 }
+  PTC17: { peripheral: adc0, channel: 15 }

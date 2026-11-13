@@ -46,10 +46,11 @@ peripherals:
   bus: sysbus
   base_address: 1073905664
 - id: adc
-  type: stub
+  type: sam4s_adc
   renode_type: sam4s_adc
   bus: sysbus
   base_address: 1073971200
+  irq: 29  # ADC_IRQn (peripheral ID 29)
 - id: dacc
   type: stub
   renode_type: sam4s_dacc
@@ -118,3 +119,25 @@ peripherals:
   renode_type: sam4s_twi
   bus: sysbus
   base_address: 1073840128
+
+# ADC input pads, from the "Extra Function" column of the SAM4S datasheet
+# (DS11100) PIOA/PIOB/PIOC multiplexing tables
+# (AD0..AD3 = PA17..PA20, AD4..AD7 = PB0..PB3, AD8/AD9 = PA21/PA22,
+# AD10 = PC13, AD11 = PC15, AD12 = PC12, AD13/AD14 = PC29/PC30; AD15 is
+# the internal temperature sensor).
+analog_pins:
+  PA17: { peripheral: adc, channel: 0 }
+  PA18: { peripheral: adc, channel: 1 }
+  PA19: { peripheral: adc, channel: 2 }
+  PA20: { peripheral: adc, channel: 3 }
+  PB0: { peripheral: adc, channel: 4 }
+  PB1: { peripheral: adc, channel: 5 }
+  PB2: { peripheral: adc, channel: 6 }
+  PB3: { peripheral: adc, channel: 7 }
+  PA21: { peripheral: adc, channel: 8 }
+  PA22: { peripheral: adc, channel: 9 }
+  PC13: { peripheral: adc, channel: 10 }
+  PC15: { peripheral: adc, channel: 11 }
+  PC12: { peripheral: adc, channel: 12 }
+  PC29: { peripheral: adc, channel: 13 }
+  PC30: { peripheral: adc, channel: 14 }

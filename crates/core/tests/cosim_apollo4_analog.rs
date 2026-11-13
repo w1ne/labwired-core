@@ -182,3 +182,188 @@ fn apollo4p_evb_ntc_and_diode_netlists_reach_adc_slots_and_scan_fifo() {
         assert_eq!((se2 & 0xF_FFFF) >> 6, 0, "undriven SE2 converts to zero");
     }
 }
+
+/// Junction voltage of `supply → R → diode → 0` where the diode current is a
+/// sum of `(saturation current, emission coefficient)` exponentials at
+/// thermal voltage `vt`. Bisection, independent of the engine's Newton loop.
+fn sidewall_load_line_voltage(limit_ohms: f64, terms: &[(f64, f64)], vt: f64) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    let current = |v: f64| {
+        terms
+            .iter()
+            .map(|&(is, n)| is * ((v / (n * vt)).exp() - 1.0))
+            .sum::<f64>()
+    };
+    let (mut low, mut high) = (0.0, 1.2);
+    for _ in 0..100 {
+        let mid = (low + high) / 2.0;
+        if (SUPPLY_V - mid) / limit_ohms > current(mid) {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    (low + high) / 2.0
+}
+
+/// SPICE saturation-current temperature law: `IS·exp((EG/Vt0 − EG/Vt +
+/// XTI·ln(T/T0)) / n)`.
+fn saturation_current_at(is: f64, n: f64, nominal_k: f64, temperature_k: f64) -> f64 {
+    const EG: f64 = 1.11;
+    const XTI: f64 = 3.0;
+    let vt = |kelvin: f64| 1.380_649e-23 * kelvin / 1.602_176_634e-19;
+    is * ((EG / vt(nominal_k) - EG / vt(temperature_k) + XTI * (temperature_k / nominal_k).ln())
+        / n)
+        .exp()
+}
+
+/// Diode sidewall current `JSW·PJ` reaches the Apollo4 ADC. Four generic
+/// diodes share one netlist on SE2..SE5 beside the unrelated NTC (SE0) and
+/// Shockley diode (SE1): a control junction with no sidewall, a sidewall
+/// merged into the bottom junction (no `NS`, instance `pj=4` over model
+/// `PJ=1.5`), a sidewall with its own `NS=2`, and a merged sidewall at
+/// `temp=75` that temperature-scales with ngspice's default `NS=1` while it
+/// conducts with `N=1.5`. ngspice-42 `.op` gives 0.746924, 0.685121,
+/// 0.527560 and 0.742549 V for these four; the test re-derives them with an
+/// independent load-line solver, then checks the 12-bit FIFO codes.
+#[test]
+fn apollo4p_evb_diode_sidewall_current_reaches_adc_slots_with_ntc_and_diode() {
+    let profile_path = root("configs/systems/apollo4p-evb.yaml");
+    let mut profile = SystemManifest::from_file(&profile_path).expect("load Apollo4 EVB profile");
+    let base =
+        SystemManifest::from_file(root("examples/apollo4p-evb/analog-ntc-diode-system.yaml"))
+            .expect("load generic NTC and diode netlists");
+    let sidewall = SystemManifest::from_file(root(
+        "examples/apollo4p-evb/analog-diode-sidewall-system.yaml",
+    ))
+    .expect("load the diode sidewall netlist");
+    profile.cosim_models = base.cosim_models;
+    profile.cosim_models.extend(sidewall.cosim_models);
+
+    let chip_path = profile_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load Apollo4 Plus descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build Apollo4 EVB bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("profile carries the analog models");
+    assert_eq!(session.binding_errors(), &[] as &[RoutingError]);
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set NTC temperature input");
+    let cycles = session.cycles_until_boundary(0);
+    let (steps, errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("solve and route all three netlists");
+    assert_eq!(
+        steps.len(),
+        3,
+        "all three analog netlists cross the boundary"
+    );
+    assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+    let routed = |channel: usize| match session.signals().get(&format!("adc.adc.{channel}_volts")) {
+        Some(CosimSignalValue::F64(volts)) => *volts,
+        other => panic!("nothing reached ADC SE{channel}: {other:?}"),
+    };
+
+    let vt_300 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+    let (tnom_k, hot_k) = (27.0 + 273.15, 75.0 + 273.15);
+    let vt_hot = 1.380_649e-23 * hot_k / 1.602_176_634e-19;
+    let expected = [
+        (
+            2,
+            sidewall_load_line_voltage(1e3, &[(1e-14, 1.1)], vt_300),
+            0.746_923_7,
+        ),
+        // No NS: JSW·pj (pj=4 wins over PJ=1.5) joins IS under N=1.1.
+        (
+            3,
+            sidewall_load_line_voltage(1e3, &[(1e-14 + 2e-14 * 4.0, 1.1)], vt_300),
+            0.685_121_0,
+        ),
+        // NS=2: a separate exponential beside the bottom junction.
+        (
+            4,
+            sidewall_load_line_voltage(1e5, &[(1e-15, 1.0), (5e-10 * 2.0, 2.0)], vt_300),
+            0.527_559_8,
+        ),
+        // temp=75: IS scales with N=1.5, JSW·PJ with NS=1, both conduct with N.
+        (
+            5,
+            sidewall_load_line_voltage(
+                1e3,
+                &[(
+                    saturation_current_at(1e-14, 1.5, tnom_k, hot_k)
+                        + saturation_current_at(1e-13 * 3.0, 1.0, tnom_k, hot_k),
+                    1.5,
+                )],
+                vt_hot,
+            ),
+            0.742_548_9,
+        ),
+    ];
+    for &(channel, reference, ngspice) in &expected {
+        let got = routed(channel);
+        assert!(
+            (got - reference).abs() < 2e-5,
+            "SE{channel}: load-line reference {reference} V, solved {got} V"
+        );
+        assert!(
+            (got - ngspice).abs() < 1e-4,
+            "SE{channel}: ngspice-42 {ngspice} V, solved {got} V"
+        );
+    }
+    // The sidewall must move each junction measurably off its control.
+    assert!(
+        routed(2) - routed(3) > 0.05,
+        "merged sidewall lowers the forward drop"
+    );
+    assert!(
+        routed(5) < routed(2) - 0.003,
+        "heated sidewall junction conducts harder"
+    );
+
+    let adc_index = bus
+        .find_peripheral_index_by_name("adc")
+        .expect("ADC peripheral is present");
+    let adc = bus.peripherals[adc_index]
+        .dev
+        .as_any_mut()
+        .expect("ADC downcasts")
+        .downcast_mut::<Apollo4Adc>()
+        .expect("the board's ADC uses Apollo4Adc");
+    let millivolts: Vec<u32> = (0..6)
+        .map(|channel| (routed(channel) * 1000.0 + 0.5).floor() as u32)
+        .collect();
+    for (channel, &mv) in millivolts.iter().enumerate() {
+        assert_eq!(
+            adc.channel_input_mv(channel as u8).map(u32::from),
+            Some(mv),
+            "co-simulation seeds SE{channel}"
+        );
+    }
+    assert_eq!(adc.channel_input_mv(6), None, "SE6 remains undriven");
+
+    for slot in 0..6u64 {
+        bus.write_u32(SLOT0CFG + 4 * slot, 1 | ((slot as u32) << 8))
+            .expect("enable slot on its SE channel at 12 bits");
+    }
+    bus.write_u32(ADC_CFG, 1 | (1 << 12))
+        .expect("enable ADC and destructive FIFO reads");
+    bus.write_u32(ADC_SWT, 0x37).expect("start software scan");
+    assert_eq!(
+        bus.read_u32(ADC_INTSTAT).expect("read conversion status") & 0x3,
+        0x3,
+        "conversion-complete and scan-complete status are raised"
+    );
+    for (slot, &mv) in millivolts.iter().enumerate() {
+        let sample = bus.read_u32(FIFO_POP_READ).expect("pop slot result");
+        assert_eq!((sample >> 28) & 0x7, slot as u32, "FIFO sample order");
+        assert_eq!(
+            (sample & 0xF_FFFF) >> 6,
+            mv * 4095 / 1190,
+            "SE{slot} 12-bit FIFO code follows the solved voltage"
+        );
+    }
+}

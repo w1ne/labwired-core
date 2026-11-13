@@ -1,0 +1,30 @@
+# Generic level-1 NMOS bulk-junction temperature response on FRDM-K64F ADC0.
+# Matched nominal and TEMP=85 °C branches use JS·AD/AS, while the existing
+# NTC and Shockley diode fixtures provide independent routes on ADC0/ADC1.
+name: "frdm-k64f-analog-mosfet-js-temperature"
+chip: "../../configs/chips/mk64f12.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "mosfet_js_temperature"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      supply_voltage: "ui.mos_js_temperature.supply_v"
+    outputs:
+      nominal_bulk_voltage: "board.analog.ptb0_volts"
+      hot_bulk_voltage: "board.analog.ptb1_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 3.3
+        Rnom supply b_nom 100k
+        Rhot supply b_hot 100k
+        Mnom 0 0 0 b_nom NJS W=10u L=2u AD=100p AS=100p
+        Mhot 0 0 0 b_hot NJS W=10u L=2u AD=100p AS=100p TEMP=85
+        .model NJS NMOS(LEVEL=1 VTO=1 KP=20u IS=1e-14 JS=1e-2)
+      probes:
+        nominal_bulk_voltage: "v(b_nom)"
+        hot_bulk_voltage: "v(b_hot)"
+      sources:
+        supply_voltage: "Vdd"
+      vdd: 3.3

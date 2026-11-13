@@ -117,10 +117,15 @@ peripherals:
   type: arraymemory
   bus: sysbus
   base_address: 4248888292
-- id: PS_CTRL_STATUS_AMS_REGISTER
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 4289003584
+# Zynq UltraScale+ AMS (embeddedsw sysmonpsu XSYSMONPSU_BASEADDR): control
+# block, PS SYSMON at +0x800, PL SYSMON at +0xC00. Replaces Renode's
+# PythonPeripheral at 0xFFA50040, which only returned PS_CSTS = 0x08010000;
+# the model returns the same value there. No `irq`: no other peripheral in
+# this descriptor maps a GIC line.
+- id: ams
+  type: zynqmp_ams
+  base_address: 0xFFA50000
+  size: 4KB
 - id: qspi
   type: stub
   renode_type: zynqmp_gqspi
@@ -128,3 +133,23 @@ peripherals:
   base_address: 4279173120
 provenance:
   generated_by: scripts/onboard_hw_targets.py
+# PL SYSMON dedicated VP/VN pair and the VAUXP[n] inputs; channel = DRP
+# status address (xsysmonpsu.h XSM_CH_VPVN = 3, XSM_CH_AUX_MIN = 16).
+analog_pins:
+  VP: { peripheral: ams, channel: 3 }
+  AD0P: { peripheral: ams, channel: 16 }
+  AD1P: { peripheral: ams, channel: 17 }
+  AD2P: { peripheral: ams, channel: 18 }
+  AD3P: { peripheral: ams, channel: 19 }
+  AD4P: { peripheral: ams, channel: 20 }
+  AD5P: { peripheral: ams, channel: 21 }
+  AD6P: { peripheral: ams, channel: 22 }
+  AD7P: { peripheral: ams, channel: 23 }
+  AD8P: { peripheral: ams, channel: 24 }
+  AD9P: { peripheral: ams, channel: 25 }
+  AD10P: { peripheral: ams, channel: 26 }
+  AD11P: { peripheral: ams, channel: 27 }
+  AD12P: { peripheral: ams, channel: 28 }
+  AD13P: { peripheral: ams, channel: 29 }
+  AD14P: { peripheral: ams, channel: 30 }
+  AD15P: { peripheral: ams, channel: 31 }

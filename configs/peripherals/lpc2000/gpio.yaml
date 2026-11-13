@@ -1,0 +1,66 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+# SPDX-License-Identifier: MIT
+#
+# NXP LPC2000 legacy (APB) GPIO port: one 16-byte window per port, IOnPIN /
+# IOnSET / IOnDIR / IOnCLR (UM10114 LPC21xx/LPC22xx user manual, GPIO chapter;
+# LPC2294 IO0PIN @0xE002_8000, IO1PIN @0xE002_8010, IO2PIN @0xE002_8020,
+# IO3PIN @0xE002_8030). Pin k of the port is bit k of every register.
+#
+# Runs on the declarative GPIO path (IN / OUT / ENABLE). IOSET is declared
+# write-one-to-set, as silicon is, but the declarative write path does not
+# apply `one_to_set` yet, so a write stores the word. IOCLR cannot clear the
+# IOSET latch from here (a descriptor's write action acts on its own register).
+# IOPIN writes are ignored; on silicon they load the output latch.
+peripheral: GPIO
+version: 0.1.0
+registers:
+- id: IN
+  address_offset: 0
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: IOPIN
+    bit_range:
+    - 31
+    - 0
+    description: IOnPIN, the level of every pin of the port whatever its direction
+  side_effects: null
+- id: OUT
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IOSET
+    bit_range:
+    - 31
+    - 0
+    description: IOnSET, output set register; reads the output latch, a 1 written drives the pin high
+  side_effects:
+    write_action: one_to_set
+- id: ENABLE
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IODIR
+    bit_range:
+    - 31
+    - 0
+    description: IOnDIR, 1 makes the pin an output
+  side_effects: null
+- id: IOCLR
+  address_offset: 12
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: IOCLR
+    bit_range:
+    - 31
+    - 0
+    description: IOnCLR, output clear register; a 1 written drives the pin low
+  side_effects: null

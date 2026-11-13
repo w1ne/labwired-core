@@ -227,6 +227,49 @@ pub struct PeripheralDescriptor {
     pub interrupts: Option<std::collections::BTreeMap<String, u32>>,
     #[serde(default)]
     pub timing: Option<Vec<TimingDescriptor>>,
+    /// `GPIO` descriptors only: pin direction for ports that keep it in a
+    /// multi-bit mode field per pin rather than a one-bit `ENABLE` register.
+    #[serde(default)]
+    pub gpio_mode: Option<GpioModeDescriptor>,
+    /// `GPIO` descriptors only: bits from one pin to the next in the `IN`,
+    /// `OUT` and `ENABLE` registers, so pin k is bit `k * gpio_pin_stride`.
+    /// Default 1. Ports that give each pin a byte of its own (MPC5500 SIU
+    /// `GPDIn` / `GPDOn`, data in bit 0) set 8.
+    #[serde(default)]
+    pub gpio_pin_stride: Option<u8>,
+    /// `GPIO` descriptors only: bit of each pin's stride slot that holds the
+    /// pin, so pin k is bit `k * gpio_pin_stride + gpio_pin_bit`. Default 0.
+    /// Ports with a configuration register per pad keep the level inside it
+    /// (Intel `PAD_CFG_DW0` RX state, bit 1).
+    #[serde(default)]
+    pub gpio_pin_bit: Option<u8>,
+    /// `GPIO` descriptors only: pins on the port. Unset, a register holds
+    /// `width / gpio_pin_stride` pins. Set, the pins run on past the `IN` /
+    /// `OUT` / `ENABLE` register into the little-endian bytes declared after
+    /// it, as a `gpio_mode` field does, so a port with one 32-bit register
+    /// per pad (stride 64) is one `IN` run. At most 32.
+    #[serde(default)]
+    pub gpio_pins: Option<u8>,
+}
+
+/// Pin direction held in a mode field per pin (Allwinner `Pn_CFG` nibbles,
+/// Renesas RZ `PM_m` bit pairs, STM32 `MODER` bit pairs).
+///
+/// Pin k's field is bits `k * bits_per_pin ..` of the little-endian bytes
+/// starting at `register`, so it runs on into the registers declared after it
+/// (`Pn_CFG0` pins 0..7, `Pn_CFG1` pins 8..15). A value in `output` drives the
+/// pad, a value in `input` releases it, and any other value hands the pin to
+/// a function and releases it too.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct GpioModeDescriptor {
+    /// Id of the register that holds pin 0's field.
+    pub register: String,
+    /// Field width, 1..=8 bits.
+    pub bits_per_pin: u8,
+    /// Field values that turn the output driver on.
+    pub output: Vec<u32>,
+    /// Field values that make the pin a GPIO input.
+    pub input: Vec<u32>,
 }
 
 /// Declarative descriptor for a GPIO / pin-timing external device — the family
@@ -4491,6 +4534,10 @@ impl From<labwired_ir::IrPeripheral> for PeripheralDescriptor {
                     Some(timing)
                 }
             },
+            gpio_mode: None,
+            gpio_pin_stride: None,
+            gpio_pin_bit: None,
+            gpio_pins: None,
         }
     }
 }

@@ -9363,6 +9363,9 @@ boards:
       - crates/core/src/peripherals/spi.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/uart.rs
+      # 2026-11-09: ADC0 (kinetis_adc16) added to configs/chips/mkw41z4.yaml.
+      # No silicon capture, so no ack is implied.
+      - crates/core/src/peripherals/kinetis_adc16.rs
 
   - id: stm32f405
     doc: docs/boards/stm32f405.md
@@ -9878,7 +9881,10 @@ boards:
     # (RM0438 RCC — AHB1ENR/AHB2ENR/AHB3ENR/APB1ENR1/APB1ENR2/APB2ENR,
     # MSI boot, APB1ENR2.LPUART1EN), v2 GPIO, LPUART1/USART1-3/UART4-5, SPI
     # v2 FIFO, v2 I2C, timers, DMA/DMAMUX, RNG/CRC/RTC/IWDG/WWDG and PWR.
-    # FLASH controller, EXTI, ADC, FDCAN and USB are declared stubs.
+    # FLASH controller, EXTI, FDCAN and USB are declared stubs. 2026-11-08:
+    # ADC1 moved off the stub onto the shared L4-class `adc` model (L5 bit
+    # layout = L4 per ST CMSIS stm32l552xx.h) with ST open pin data
+    # analog_pins; PA0/PA1 NTC + diode convert in cosim_nucleo_l552_analog.
     # TrustZone/SAU/GTZC are NOT modelled.
     # 2026-10-30: stock Zephyr v3.7.0 samples/hello_world for
     # nucleo_l552ze_q boots and prints over LPUART1
@@ -9923,6 +9929,7 @@ boards:
       - crates/core/src/peripherals/iwdg.rs
       - crates/core/src/peripherals/wwdg.rs
       - crates/core/src/peripherals/stub.rs
+      - crates/core/src/peripherals/adc.rs
       - crates/core/src/peripherals/icache.rs
       - crates/core/src/peripherals/dbgmcu.rs
       - crates/core/src/peripherals/cortex_m_fpu.rs
@@ -9987,6 +9994,7 @@ boards:
       - crates/core/src/peripherals/cc2538/flash_ctrl.rs
       - crates/core/src/peripherals/cc2538/aes.rs
       - crates/core/src/peripherals/cc2538/udma.rs
+      - crates/core/src/peripherals/cc2538_adc.rs
       - crates/core/src/peripherals/ieee802154_air.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/systick.rs
@@ -10175,7 +10183,7 @@ boards:
     # register layouts the SAM E70 keeps, at the SAM E70 bases; UART0-4 and
     # USART0-2 on the `sam` layout. EEFC, the RSTC/SUPC/RTT/WDT/RTC system
     # controller and the bus matrix are declared stubs; GMAC, TRNG, TC, SPI,
-    # QSPI, TWIHS, MCAN, AFEC, DACC, PWM, HSMCI, SSC, USBHS and XDMAC are not
+    # QSPI, TWIHS, MCAN, DACC, PWM, HSMCI, SSC, USBHS and XDMAC are not
     # mapped. SIM-DERIVED — no SAM E70 bench part. See
     # docs/boards/sam-e70-xplained.md and examples/sam-e70-xplained/VALIDATION.md.
     # 2026-10-30 (feat/same70-zephyr-hello): stock Zephyr v3.7.0 hello_world
@@ -10184,6 +10192,9 @@ boards:
     # maintenance window at 0xE000EF50), the PMC clock generator (CKGR_MOR
     # key, PLLA/PLLB/UPLL lock, PMC_SR derived) and CHIPID (declarative,
     # rev-B CIDR). Still SIM-DERIVED.
+    # 2026-11-09: AFEC0/AFEC1 on the new sam_afec model (hal_atmel afec.h);
+    # EXT1 PC31/PA19 convert routed analog netlists
+    # (cosim_same70_afec_analog.rs). Still SIM-DERIVED.
     doc: docs/boards/sam-e70-xplained.md
     chip: configs/chips/same70q21b.yaml
     tier: smoke-manual
@@ -10209,6 +10220,7 @@ boards:
       - crates/core/src/peripherals/generic_factory.rs
       - crates/core/src/system/builder/arm.rs
       - crates/firmware-sam-e70-xplained-smoke
+      - crates/core/src/peripherals/sam_afec.rs
       - configs/chips/same70q21b.yaml
       - configs/systems/sam-e70-xplained.yaml
 
@@ -10253,6 +10265,7 @@ boards:
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/stub.rs
       - crates/core/src/peripherals/kinetis_rnga.rs
+      - crates/core/src/peripherals/kinetis_adc16.rs
       - crates/core/src/bus/from_config.rs
       - crates/core/src/bus/profiles.rs
       - crates/core/src/peripherals/generic_factory.rs
@@ -10273,8 +10286,8 @@ boards:
     # 0x20400000). First S32K3 part: the new SIUL2 model (s32k3_siul2) and
     # LPUART0-15 on the i.MX RT LPUART layout (imxrt_lpuart). MC_ME, MC_CGM,
     # SWT_0, STM_0 and the other clock/system blocks are declared stubs;
-    # FlexCAN, LPSPI, LPI2C, eMIOS, eDMA, GMAC, ADC and the other cores are
-    # not mapped. SIM-DERIVED — no S32K388 bench part. See
+    # FlexCAN, LPSPI, LPI2C, eMIOS, eDMA, GMAC, BCTU and the other cores are
+    # not mapped. 2026-11-09: ADC_0..2 run on s32k3_adc_sar. SIM-DERIVED — no S32K388 bench part. See
     # docs/boards/s32k388-evb.md and examples/s32k388-evb/VALIDATION.md.
     doc: docs/boards/s32k388-evb.md
     chip: configs/chips/s32k388.yaml
@@ -10285,6 +10298,7 @@ boards:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/s32k3_siul2.rs
+      - crates/core/src/peripherals/s32k3_adc_sar.rs
       - crates/core/src/peripherals/imxrt/lpuart.rs
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/stub.rs
@@ -10323,6 +10337,7 @@ boards:
       - "firmware_survival::test_mimxrt595_evk_smoke_survival"
       - "firmware_survival::test_mimxrt595_evk_zephyr_survival (stock Zephyr hello)"
       - "rt500_secure_map (secure aliases + boot-ROM OTP API)"
+      - "cosim_mimxrt595_lpadc_analog (LPADC0 converts routed NTC + diode)"
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -10331,6 +10346,7 @@ boards:
       - crates/core/src/peripherals/lpc/rt5xx_ctl.rs
       - crates/core/src/peripherals/lpc/ostimer.rs
       - crates/core/src/peripherals/imxrt/flexspi.rs
+      - crates/core/src/peripherals/nxp_lpadc.rs
       - crates/core/roms/rt500
       - crates/core/src/peripherals/systick.rs
       - crates/core/src/peripherals/stub.rs
@@ -10366,6 +10382,7 @@ boards:
       - crates/core/src/bus/profiles.rs
       - crates/core/src/peripherals/generic_factory.rs
       - crates/core/src/system/builder/arm.rs
+      - crates/core/src/peripherals/sam4s_adc.rs
       - crates/firmware-sam4s-xplained-smoke
       - configs/chips/sam4s16c.yaml
       - configs/systems/sam4s-xplained.yaml

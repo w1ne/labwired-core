@@ -11,8 +11,11 @@ This example provides deterministic bring-up for Adafruit Metro M4 Express (SAMD
 4. `systick`
 
 The mixed-signal fixture routes a generic Beta NTC divider to A0 and an unrelated
-Shockley diode to A4, then checks both through ADC0 conversions. This is
-simulation-derived coverage, not silicon validation. Run its end-to-end proof with:
+Shockley diode to A4, then checks both through ADC0 conversions.
+`analog-mosfet-junction-density.yaml` adds three forward-biased level-1 NMOS
+bulk junctions on A1/A2/A3: `JS` times symmetric `AD`/`AS`, `JS` times
+asymmetric `AD`/`AS`, and the ngspice fallback to `IS` when `AS` is absent.
+This is simulation-derived coverage, not silicon validation. Run its end-to-end proof with:
 
 ```bash
 cargo test -p labwired-core --test cosim_metro_m4_analog

@@ -37,7 +37,7 @@
 # - TrustZone / SAU / GTZC / secure-vs-non-secure aliasing (TT's SAU/IDAU
 #   fields read 0). The PMSAv8 MPU below is enforced (docs/isa_coverage.md).
 # - The L5 non-secure FLASH controller, EXTI (L5 has its own 64-line block),
-#   FDCAN1, ADC1/ADC2 and USB FS are declared as stubs. The `flash:` memory
+#   FDCAN1, ADC2 and USB FS are declared as stubs. The `flash:` memory
 #   region below still boots/executes; only the controller register file is a
 #   stub.
 
@@ -424,6 +424,23 @@ peripherals:
       debug_schema: "../peripherals/stm32l476/dbgmcu.yaml"
       idcode: 0x20016472
 
+  # ADC1 runs on the shared L4-class model: ST CMSIS `stm32l552xx.h` (cmsis-
+  # device-l5) gives the L4 bit layout, i.e. CFGR RES@3/ALIGN@5/EXTSEL@6/
+  # EXTEN@10/DISCEN@16, SQR1 SQ1@6, and the narrow JSQR (JEXTSEL@2, JEXTEN@6,
+  # JSQ1@8). ADC1_BASE_NS = AHB2PERIPH_BASE_NS + 0x8000, ADC1_2_IRQn = 37,
+  # clock RCC_AHB2ENR.ADCEN bit 13 (also Zephyr stm32l5.dtsi adc1). ADC2
+  # (+0x100) and the common block (+0x300) share the 1KB window but are not
+  # modelled as separate instances.
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x42028000
+    size: "1KB"
+    irq: 37
+    config:
+      debug_schema: "../peripherals/stm32l476/adc1.yaml"
+      profile: "stm32l4"
+    clock: { reg: "ahb2enr", bit: 13 }
+
   # --- Declared, not modelled (honest L1 boundary) -------------------------
   # The L5 non-secure FLASH controller (NSKEYR/NSSR/NSCR, 2 KiB pages) has a
   # different register file from the L4 profile, so it is a stub rather than a
@@ -440,10 +457,6 @@ peripherals:
     type: "stub"
     base_address: 0x4002F400
     size: "1KB"
-  - id: "adc1"
-    type: "stub"
-    base_address: 0x42028000
-    size: "1KB"
   - id: "fdcan1"
     type: "stub"
     base_address: 0x4000A400
@@ -452,3 +465,23 @@ peripherals:
     type: "stub"
     base_address: 0x4000D400
     size: "1KB"
+
+# External ADC1 pad routes from ST open pin data mcu/STM32L552Z(C-E)TxQ.xml
+# (commit 7d1f1514ed5583ec5007ad91236b4e1d377295b1), every ADC1_INx signal
+# bonded out on the LQFP144 of the NUCLEO-L552ZE-Q. That file lists no
+# ADC1_IN13/IN14 pad (unlike the L476's PC4/PC5), so none is invented here.
+analog_pins:
+  PC0: { peripheral: "adc1", channel: 1 }
+  PC1: { peripheral: "adc1", channel: 2 }
+  PC2: { peripheral: "adc1", channel: 3 }
+  PC3: { peripheral: "adc1", channel: 4 }
+  PA0: { peripheral: "adc1", channel: 5 }
+  PA1: { peripheral: "adc1", channel: 6 }
+  PA2: { peripheral: "adc1", channel: 7 }
+  PA3: { peripheral: "adc1", channel: 8 }
+  PA4: { peripheral: "adc1", channel: 9 }
+  PA5: { peripheral: "adc1", channel: 10 }
+  PA6: { peripheral: "adc1", channel: 11 }
+  PA7: { peripheral: "adc1", channel: 12 }
+  PB0: { peripheral: "adc1", channel: 15 }
+  PB1: { peripheral: "adc1", channel: 16 }

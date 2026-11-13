@@ -28,8 +28,34 @@ thresholds determine the levels read from GPIOA_IDR. The integration test also
 checks Schmitt hysteresis at intermediate NTC temperatures.
 
 This proves generic external analog voltages can drive the board's modeled
-digital inputs. It does not prove ADC conversion: ADC1 remains a declared stub
-on this profile.
+digital inputs. `analog-ntc-diode-adc-system.yaml` routes the same netlists as
+analog levels: PA0/PA1 resolve through the chip's `analog_pins` (ST open pin
+data) to ADC1_IN5/IN6, and the integration test converts them through a single
+SQ1, a 3-rank SQR scan and a 4-rank JADSTART on the shared L4-class ADC model.
+Silicon ADC accuracy is not claimed.
+
+[`analog-bjt-recombination-adc-system.yaml`](analog-bjt-recombination-adc-system.yaml)
+adds four generic Gummel–Poon NPN load lines on PA2..PA5, resolved through
+`analog_pins` to ADC1_IN7..IN10: reference, base-emitter recombination,
+base-collector recombination, and both together.
+The integration test compares solved collector voltages with an independent
+load-line calculation and converts them through ADC1 alongside the unrelated
+NTC and diode. This is model behavior coverage, not silicon validation.
+
+[`analog-bjt-early-effect-adc-system.yaml`](analog-bjt-early-effect-adc-system.yaml)
+routes a matched finite-VAF NPN and a no-forward-Early control through PA6/PA7
+to ADC1_IN11/IN12. Its integration test checks both solved collector voltages
+against an independent Gummel–Poon load line, confirms the finite-VAF shift as
+base drive changes, and converts both branches alongside the same NTC and
+Shockley diode. This is model behavior coverage, not silicon validation.
+
+[`analog-bjt-high-injection-adc-system.yaml`](analog-bjt-high-injection-adc-system.yaml)
+routes matched Gummel–Poon NPN branches with and without IKF/IKR/NKF rolloff
+through PB0/PB1 to ADC1_IN15/IN16. The integration test compares solved
+collector voltages with independent load-line roots over a base-drive sweep,
+checks the high-drive rolloff shift, and converts both branches alongside the
+same NTC and Shockley diode. This is model behavior coverage, not silicon
+validation.
 
 ## Build and run
 
@@ -85,6 +111,6 @@ modelled**. The PMSAv8 MPU is enforced (MemManage on denied data accesses and
 fetches). FP state is stacked eagerly, not lazily. Stock Zephyr
 `hello_world`, `synchronization`, `tests/kernel/fpu_sharing/generic` and
 `tests/kernel/mem_protect/protection` and `.../userspace` run from `zephyr-*.yaml` (see `VALIDATION.md`). The L5 non-secure FLASH controller, EXTI,
-ADC1, FDCAN1 and USB are declared stubs. SPI/I2C/timers/DMA/RNG/RTC are
+ADC2, FDCAN1 and USB are declared stubs; ADC1 runs on the L4-class ADC model. SPI/I2C/timers/DMA/RNG/RTC are
 modelled but unexercised in this L1 slice. See `VALIDATION.md` for the tier
 table.

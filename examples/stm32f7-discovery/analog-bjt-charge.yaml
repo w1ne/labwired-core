@@ -1,0 +1,28 @@
+# Generic Gummel–Poon NPN charge test netlist.
+# The integration test varies CJE, CJC, and TF on this same PA2/ADC1 route so
+# each intrinsic charge contribution can be compared with the uncharged load line.
+name: "stm32f7-discovery-analog-bjt-charge"
+chip: "../../configs/chips/stm32f746.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "bjt_charge_case"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_charge.base_v"
+    outputs:
+      collector_voltage: "board.analog.pa2_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 10k
+        Q1 collector base 0 NPN_TEST
+        .model NPN_TEST NPN(IS=1e-15 BF=100 BR=4 VAF=50)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3

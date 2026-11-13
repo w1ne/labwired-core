@@ -60,3 +60,17 @@ cargo run -q -p labwired-cli -- \
 Pass criteria:
 1. script exits `0`
 2. audit report exists at `out/unsupported-audit/metro-m4/report.md`
+
+## 7) Run mixed-signal ADC0 proof
+
+```bash
+cargo test -p labwired-core --test cosim_metro_m4_analog -- --nocapture
+```
+
+Pass criteria:
+1. `metro_m4_ntc_and_diode_netlists_reach_adc0_a0_and_a4` passes (NTC on A0, diode on A4).
+2. `metro_m4_mosfet_junction_density_reaches_adc0_alongside_ntc_and_diode` passes:
+   `analog-mosfet-junction-density.yaml` drives three NMOS bulk junctions on
+   A1/A2/A3 (AIN5/AIN6/AIN4). The solved voltages match ngspice-45 `.op` within
+   0.1 mV at 3.3 V and an independent load line at 3.3 V and 2.5 V, and each
+   ADC0 result equals the code for its solved voltage.

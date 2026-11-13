@@ -38,10 +38,13 @@ hb=0 odsr=00000000 btn=1
 `odsr=` is the PIOC output-data register read from the model (PC10 = bit 10);
 `btn=1` is the released, pulled-up button on PA5.
 
-The analog co-simulation fixture routes a generic Beta NTC divider and
-Shockley diode to the EXT1 analog inputs PA17/PA18 through PIO's
-voltage-thresholded input path. It does not model ADC conversion or the
-board's touch/joystick controls.
+The analog co-simulation fixtures route a generic Beta NTC divider and
+Shockley diode to the EXT1 analog inputs PA17/PA18. `analog-ntc-diode-system.yaml`
+drives PIO's voltage-thresholded input path; `analog-ntc-diode-adc-system.yaml`
+routes `board.analog.pa17_volts`/`pa18_volts` through the chip's `analog_pins`
+into ADC AD0/AD1, which firmware converts with CHER + CR.START and reads from
+CDRx/LCDR (12-bit or MR.LOWRES 10-bit, ADVREF = 3.3 V). Hardware triggers,
+the window comparator, the PDC and the touch/joystick controls are not modelled.
 
 ## Smoke test
 

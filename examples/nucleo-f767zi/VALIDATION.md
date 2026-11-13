@@ -42,6 +42,50 @@ Pass criteria: exit `0`, UART contains `OK`.
 
 Pass criteria: exit `0`, report exists.
 
+## 4) Run analog transient integration proof
+
+```bash
+cargo test -p labwired-core --test cosim_nucleo_f767zi_analog \
+  nucleo_f767zi_diode_depletion_and_transit_charge_reach_adc1_end_to_end -- --nocapture
+```
+
+The proof drives four generic diode netlists from a shared supply step. It compares
+otherwise-identical reference, CJO-only, TT-only, and combined CJO+TT branches, checks
+their first-step voltages through ADC1 channels 2–5, and verifies that all four return
+to the same DC load line. The existing Beta NTC remains on channel 0 as an unrelated
+analog device and channel 6 is asserted undriven. The synthetic 1 µF CJO is deliberately
+oversized to make its effect visible at the fixture's 1 µs step. This is model/routing
+coverage, not silicon validation.
+
+## 5) Run the BJT high-injection routing proof
+
+```bash
+cargo test -p labwired-core --test cosim_nucleo_f767zi_analog \
+  nucleo_f767zi_bjt_high_injection_rolloff_reaches_adc1_alongside_ntc_and_diode -- --nocapture
+```
+
+The test routes a matched generic Gummel–Poon NPN pair with and without
+IKF/IKR/NKF rolloff to ADC1 channels 2/3, beside the independent NTC and
+Shockley diode on channels 0/1. It checks both collector load lines against an
+independent reference across a base-drive sweep and reads all four results
+through the ADC register interface. This extends model coverage on an already
+covered profile; it is not silicon validation.
+
+## 6) Run the BJT terminal-resistance routing proof
+
+```bash
+cargo test -p labwired-core --test cosim_nucleo_f767zi_analog \
+  nucleo_f767zi_bjt_terminal_resistances_reach_adc1_with_explicit_network_references -- --nocapture
+```
+
+The test routes matched generic Gummel–Poon branches with RB, RC, and RE to
+ADC1 channels 2–7, each paired with the equivalent explicit resistor network.
+It checks each model-card result against that independent circuit, verifies each
+resistance changes the no-resistance collector load line, and converts all six
+branches through the firmware-visible ADC interface beside the unrelated NTC
+and Shockley diode on channels 0/1. This is model coverage on an already covered
+profile, not silicon validation.
+
 ## Validation record
 
 - 2026-08-05: UART smoke exit 0 (`OK` received) on the feat/stm32f767 branch;

@@ -1,0 +1,267 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+# SPDX-License-Identifier: MIT
+#
+# Intel Apollo Lake GPIO community, pads 0..7. The four communities sit in
+# the P2SB sideband window at 0xD000_0000 | PID << 16: N 0xD0C5_0000,
+# NW 0xD0C4_0000, W 0xD0C7_0000, SW 0xD0C0_0000 (coreboot apollolake
+# pcr_ids.h PID_GPIO_*; Zephyr dts/x86/intel/apollo_lake.dtsi gpio@d0c50000
+# ..). Every community has the same layout:
+#   PADBAR      @0x00C  offset of the pad configuration registers, 0x500 on
+#                       APL (coreboot gpio_apl.h PAD_CFG_BASE; Linux
+#                       pinctrl-intel.c reads it as PADBAR, Zephyr soc_gpio.h
+#                       as REG_PAD_BASE_ADDR)
+#   PAD_OWN     @0x020  2 bits per pad, 0 = host (Zephyr REG_PAD_OWNER_BASE)
+#   HOSTSW_OWN  @0x080  1 = GPIO driver owns the pad (REG_PAD_HOST_SW_OWNER)
+#   PAD_CFG_DW0 @PADBAR + 8n, PAD_CFG_DW1 @PADBAR + 8n + 4: two dwords per
+#                       pad (coreboot GPIO_NUM_PAD_CFG_REGS 2; Zephyr
+#                       PIN_OFFSET 8U; Linux nregs 2 without debounce)
+# DW0 holds TX state in bit 0, RX state (the pad level) in bit 1, TXDIS bit 8,
+# RXDIS bit 9 and PMODE bits 10..13 (Zephyr gpio_intel.c PAD_CFG0_*; Linux
+# PADCFG0_GPIORXSTATE BIT(1)). Zephyr port_get_raw reads DW0 of pad n and
+# tests RXSTATE.
+#
+# One 32-bit register per pad, level in bit 1, so the declarative GPIO path
+# runs at gpio_pin_stride 64, gpio_pin_bit 1, gpio_pins 8: pad 0's DW0 is the
+# IN register and the pins run on through the DW0/DW1 pairs after it.
+# The port is input-only here: TX state and TXDIS live in the same DW0, so
+# no separate OUT / ENABLE register can be named, and a write to DW0 stores
+# all 32 bits, RX state included, until the next routed level replaces it.
+# Not modelled: TXDIS / RXDIS / PMODE gating (a pad in a native function or
+# with RXDIS set still reports its level), RXINV, the DW0/DW1 reset values
+# (per-pad and firmware-set on silicon; 0 here), pads 8.., PADCFGLOCK and the
+# GPI interrupt / GPE registers.
+peripheral: GPIO
+version: 0.1.0
+gpio_pin_stride: 64
+gpio_pin_bit: 1
+gpio_pins: 8
+registers:
+- id: PADBAR
+  address_offset: 0x00c
+  size: 32
+  access: READ_ONLY
+  reset_value: 0x500
+  fields:
+  - name: PADBAR
+    bit_range:
+    - 31
+    - 0
+    description: offset of PAD_CFG_DW0 of pad 0
+  side_effects: null
+- id: PAD_OWN0
+  address_offset: 0x020
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x0
+  fields:
+  - name: PAD_OWN
+    bit_range:
+    - 31
+    - 0
+    description: pads 0..7 owner, 2 bits each, 0 = host (storage only)
+  side_effects: null
+- id: HOSTSW_OWN0
+  address_offset: 0x080
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x0
+  fields:
+  - name: HOSTSW_OWN
+    bit_range:
+    - 31
+    - 0
+    description: pads 0..31 host software ownership (storage only)
+  side_effects: null
+- id: IN
+  address_offset: 0x500
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x0
+  fields:
+  - name: DW0
+    bit_range:
+    - 31
+    - 0
+    description: PAD_CFG_DW0 of GPIO_0; RX state (pad level) in bit 1, the declarative IN run starts here
+  side_effects: null
+- id: PAD_CFG_DW1_0
+  address_offset: 0x504
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x0
+  fields:
+  - name: DW1
+    bit_range:
+    - 31
+    - 0
+    description: PAD_CFG_DW1 of GPIO_0 (storage only)
+  side_effects: null
+- id: PAD_CFG_DW0_1
+  address_offset: 0x508
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x0
+  fields:
+  - name: DW0
+    bit_range:
+    - 31
+    - 0
+    description: PAD_CFG_DW0 of GPIO_1; RX state (pad level) in bit 1
+  side_effects: null
+- id: PAD_CFG_DW1_1
+  address_offset: 0x50c
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x0
+  fields:
+  - name: DW1
+    bit_range:
+    - 31
+    - 0
+    description: PAD_CFG_DW1 of GPIO_1 (storage only)
+  side_effects: null
+- id: PAD_CFG_DW0_2
+  address_offset: 0x510
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x0
+  fields:
+  - name: DW0
+    bit_range:
+    - 31
+    - 0
+    description: PAD_CFG_DW0 of GPIO_2; RX state (pad level) in bit 1
+  side_effects: null
+- id: PAD_CFG_DW1_2
+  address_offset: 0x514
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x0
+  fields:
+  - name: DW1
+    bit_range:
+    - 31
+    - 0
+    description: PAD_CFG_DW1 of GPIO_2 (storage only)
+  side_effects: null
+- id: PAD_CFG_DW0_3
+  address_offset: 0x518
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x0
+  fields:
+  - name: DW0
+    bit_range:
+    - 31
+    - 0
+    description: PAD_CFG_DW0 of GPIO_3; RX state (pad level) in bit 1
+  side_effects: null
+- id: PAD_CFG_DW1_3
+  address_offset: 0x51c
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x0
+  fields:
+  - name: DW1
+    bit_range:
+    - 31
+    - 0
+    description: PAD_CFG_DW1 of GPIO_3 (storage only)
+  side_effects: null
+- id: PAD_CFG_DW0_4
+  address_offset: 0x520
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x0
+  fields:
+  - name: DW0
+    bit_range:
+    - 31
+    - 0
+    description: PAD_CFG_DW0 of GPIO_4; RX state (pad level) in bit 1
+  side_effects: null
+- id: PAD_CFG_DW1_4
+  address_offset: 0x524
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x0
+  fields:
+  - name: DW1
+    bit_range:
+    - 31
+    - 0
+    description: PAD_CFG_DW1 of GPIO_4 (storage only)
+  side_effects: null
+- id: PAD_CFG_DW0_5
+  address_offset: 0x528
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x0
+  fields:
+  - name: DW0
+    bit_range:
+    - 31
+    - 0
+    description: PAD_CFG_DW0 of GPIO_5; RX state (pad level) in bit 1
+  side_effects: null
+- id: PAD_CFG_DW1_5
+  address_offset: 0x52c
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x0
+  fields:
+  - name: DW1
+    bit_range:
+    - 31
+    - 0
+    description: PAD_CFG_DW1 of GPIO_5 (storage only)
+  side_effects: null
+- id: PAD_CFG_DW0_6
+  address_offset: 0x530
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x0
+  fields:
+  - name: DW0
+    bit_range:
+    - 31
+    - 0
+    description: PAD_CFG_DW0 of GPIO_6; RX state (pad level) in bit 1
+  side_effects: null
+- id: PAD_CFG_DW1_6
+  address_offset: 0x534
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x0
+  fields:
+  - name: DW1
+    bit_range:
+    - 31
+    - 0
+    description: PAD_CFG_DW1 of GPIO_6 (storage only)
+  side_effects: null
+- id: PAD_CFG_DW0_7
+  address_offset: 0x538
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x0
+  fields:
+  - name: DW0
+    bit_range:
+    - 31
+    - 0
+    description: PAD_CFG_DW0 of GPIO_7; RX state (pad level) in bit 1
+  side_effects: null
+- id: PAD_CFG_DW1_7
+  address_offset: 0x53c
+  size: 32
+  access: READ_WRITE
+  reset_value: 0x0
+  fields:
+  - name: DW1
+    bit_range:
+    - 31
+    - 0
+    description: PAD_CFG_DW1 of GPIO_7 (storage only)
+  side_effects: null

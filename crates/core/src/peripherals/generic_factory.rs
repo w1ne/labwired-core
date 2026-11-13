@@ -343,6 +343,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "efr32s2_timerroute",
     "efr32s2_gpio_exti",
     "efr32s2_iadc",
+    "efr32s1_adc",
+    "efm32s0_adc",
     "efr32s2_timer",
     "virtual_ble",
     // Microchip SAM clock controllers (SAMD21 PM/GCLK, SAMD51 MCLK).
@@ -415,6 +417,9 @@ pub const MODEL_TYPES: &[&str] = &[
     // SAM4S (the older PIO/PMC blocks; not the SAM D21 PORT/PM pair).
     "sam4s_pio",
     "sam4s_pmc",
+    "sam4s_adc",
+    // SAM E70/S70/V70/V71 Analog Front-End Controller.
+    "sam_afec",
     // Cortex-M7 L1 cache maintenance window + the SCB cache-ID geometry.
     "cortex_m7_cache",
     // Cortex-M FP extension: FPCCR/FPCAR/FPDSCR/MVFR + FP context stacking.
@@ -432,6 +437,52 @@ pub const MODEL_TYPES: &[&str] = &[
     "cc2538_flash_ctrl",
     "cc2538_aes",
     "cc2538_udma",
+    "cc2538_soc_adc",
+    // QuickLogic EOS S3 two-channel 12-bit ADC (qorc-sdk eoss3_hal_adc.c).
+    "eoss3_adc",
+    // MAX32650/MAX32652 10-bit ADC (msdk adc_regs.h, Renode MAX32650_ADC.cs).
+    "max32650_adc",
+    // Renesas DA1459x GPADC (Renode RenesasDA14_GPADC.cs, SDK10 adc_sample).
+    "renesasda14_gpadc",
+    // CAES UT32M0R500 delta-sigma ADC (Renode CAES_ADC.cs, CAES app notes).
+    "caes_adc",
+    // NXP Kinetis ADC16 (MK64F12.h, K66 RM ch. 39, mcux-sdk fsl_adc16.c).
+    "kinetis_adc16",
+    // NXP S32K1 12-bit ADC, 16 SC1n/Rn slots (S32K118_ADC.h, S32K144.svd).
+    "s32k1_adc",
+    // NXP S32K3 SAR ADC (S32K388_ADC.h, RTD Adc_Sar_Ip.c).
+    "s32k3_adc_sar",
+    // NXP LPADC command/trigger SAR ADC (MIMXRT595S_cm33.h, fsl_lpadc.c).
+    "nxp_lpadc",
+    // Nuvoton NPCX9 10-bit ADC (Zephyr reg_def.h/adc_npcx.c, Chromium EC).
+    "npcx_adc",
+    // GR716 on-chip ADC, eight control units (GR716-DS-UM §12, Phoenix-RTOS).
+    "gr716_adc",
+    // STM32L1 ADC1 + common CSR/CCR (STM32L151.svd, STM32CubeL1 HAL).
+    "stm32l1_adc",
+    // NXP LPC2000 10-bit ADC, ADCR/ADDR (LPC2119..2294 UM ch. 17).
+    "lpc2000_adc",
+    // Allwinner sunxi LRADC, CTRL/INTC/INTS/DATA0/1 (Linux sun4i-lradc-keys.c).
+    "sunxi_lradc",
+    // OpenTitan adc_ctrl + AST ADC (lowRISC adc_ctrl.hjson, adc_ctrl_fsm.sv).
+    "opentitan_adc_ctrl",
+    // Renesas RZ ADC_C, ADM0..3/ADINT/ADSTS/ADCRn (RZ/G FSP adc_c_iodefine.h).
+    "renesas_adc_c",
+    // Alif Ensemble/Balletto ADC12 (alif_ensemble-cmsis-dfp ADC_Type, adc.h).
+    "alif_adc12",
+    // Freescale MPC55xx eQADC (MPC5567 header `EQADC_tag`, OpenSAR Adc_eQADC.c).
+    "mpc55xx_eqadc",
+    // STM32W108 sigma-delta ADC + DMA channel (DocID16252 Rev 16 ch. 11).
+    "stm32w108_adc",
+    // MSP430 ADC12 (F1/F2) and ADC12_A (F5) (mspsim ADC12.java, TI headers).
+    "msp430_adc12",
+    "msp430_adc12_a",
+    // Zynq-7000 PS-XADC interface (Renode Xilinx_XADC.cs, embeddedsw xadcps).
+    "xilinx_xadc",
+    // Lattice Nexus hard ADC with a LabWired fabric-control bridge.
+    "lattice_nexus_adc",
+    // Zynq UltraScale+ AMS: control + PS/PL SYSMON (embeddedsw sysmonpsu).
+    "zynqmp_ams",
     // Ambiq Apollo4 Plus: the 128-pin GPIO block (PADKEY-locked PINCFG,
     // RD/WT/WTS/WTC/EN banks) and PWRCTRL (DEVPWREN -> DEVPWRSTATUS).
     // Deliberately not `ambiqapollo4_gpio`: that spelling belongs to the
@@ -667,6 +718,10 @@ pub fn try_build(
         // Its own model, NOT an `AdcRegisterLayout` variant: `adc.rs` is one
         // struct per STM32 family by design and shares no register with this.
         "efr32s2_iadc" => Box::new(crate::peripherals::efr32::iadc::Efr32s2Iadc::new()),
+        // Silicon Labs Series-1 (xG1/xG12/xG13) ADC0 behind the APORT.
+        "efr32s1_adc" => Box::new(crate::peripherals::efr32::adc_s1::Efr32s1Adc::new()),
+        // Silicon Labs EFM32/EZR32 Series-0 ADC0 with the fixed CH0..CH7 mux.
+        "efm32s0_adc" => Box::new(crate::peripherals::efr32::adc_s0::Efm32s0Adc::new()),
         "efr32s2_msc" => Box::new(crate::peripherals::efr32::msc::Efr32s2Msc::new()),
         "efr32s2_usartroute" => {
             Box::new(crate::peripherals::efr32::usart_route::Efr32s2UsartRoute::new())
@@ -1675,7 +1730,19 @@ pub fn try_build(
         "imxrt_anadig" => Box::new(crate::peripherals::imxrt::anadig::ImxrtAnadig::new()),
         "imxrt_dcdc" => Box::new(crate::peripherals::imxrt::dcdc::ImxrtDcdc::new()),
         "imxrt_adc" => {
-            let mut adc = crate::peripherals::imxrt::adc::ImxrtAdc::new();
+            // `layout: vf610` selects the Vybrid VF6xx register map of the
+            // same IP (HC0/HC1, HS @0x08, R0 @0x0C, CFG @0x14 ..., Linux
+            // vf610_adc.c); the default is the i.MX RT10xx map.
+            use crate::peripherals::imxrt::adc::{AdcLayout, ImxrtAdc};
+            let layout = match p_cfg.config.get("layout").and_then(|v| v.as_str()) {
+                None | Some("imxrt") => AdcLayout::Imxrt,
+                Some("vf610") => AdcLayout::Vf610,
+                Some(other) => anyhow::bail!(
+                    "imxrt_adc '{}': unknown layout '{other}' (imxrt, vf610)",
+                    p_cfg.id
+                ),
+            };
+            let mut adc = ImxrtAdc::with_layout(layout);
             // Board-level static channel voltages: `input_mv: { <ch>: <mV> }`.
             if let Some(map) = p_cfg.config.get("input_mv").and_then(|v| v.as_mapping()) {
                 for (k, v) in map {
@@ -1780,6 +1847,22 @@ pub fn try_build(
         "miv_coretimer" => Box::new(crate::peripherals::miv::MivCoreTimer::new()),
         "sam4s_pio" => Box::new(crate::peripherals::sam4s::Sam4sPio::new()),
         "sam4s_pmc" => Box::new(crate::peripherals::sam4s::Sam4sPmc::new()),
+        // `vref_mv`: the ADVREF level the board ties the reference pin to.
+        "sam4s_adc" => Box::new(crate::peripherals::sam4s_adc::Sam4sAdc::new(
+            p_cfg
+                .config
+                .get("vref_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(3300, |v| v as u32),
+        )),
+        // `vref_mv`: the VREFP level the board ties the reference pin to.
+        "sam_afec" => Box::new(crate::peripherals::sam_afec::SamAfec::new(
+            p_cfg
+                .config
+                .get("vref_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(3300, |v| v as u32),
+        )),
         "cortex_m7_cache" => {
             let kb = |key: &str| -> anyhow::Result<u32> {
                 p_cfg
@@ -1869,6 +1952,218 @@ pub fn try_build(
         }
         "cc2538_aes" => Box::new(crate::peripherals::cc2538::aes::Cc2538Aes::new()),
         "cc2538_udma" => Box::new(crate::peripherals::cc2538::udma::Cc2538Udma::new()),
+        // `int_ref_mv` / `avdd_mv`: the internal reference and the AVDD5 rail.
+        "cc2538_soc_adc" => {
+            let mv = |key: &str, default: u32| {
+                p_cfg
+                    .config
+                    .get(key)
+                    .and_then(|v| v.as_u64())
+                    .map_or(default, |v| v as u32)
+            };
+            Box::new(crate::peripherals::cc2538_adc::Cc2538Adc::new(
+                mv("int_ref_mv", 1190),
+                mv("avdd_mv", 3300),
+            ))
+        }
+        // `vref_mv`: the full scale, 1.4 V per the EOS S3 datasheet v3.3f.
+        "eoss3_adc" => Box::new(crate::peripherals::eoss3_adc::Eoss3Adc::new(
+            p_cfg
+                .config
+                .get("vref_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(1400, |v| v as u32),
+        )),
+        // `vref_mv`: the full scale, the 1.22 V internal bandgap.
+        "max32650_adc" => Box::new(crate::peripherals::max32650_adc::Max32650Adc::new(
+            p_cfg
+                .config
+                .get("vref_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(1220, |v| v as u32),
+        )),
+        "caes_adc" => Box::new(crate::peripherals::caes_adc::CaesAdc::new()),
+        // `vref_mv`: VREFH (REFSEL 00); `valt_mv`: VALTH (REFSEL 01), the
+        // 1.2 V VREF_OUT on K6x (RM §39.1.7).
+        "kinetis_adc16" => Box::new(crate::peripherals::kinetis_adc16::KinetisAdc16::new(
+            p_cfg
+                .config
+                .get("vref_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(3300, |v| v as u32),
+            p_cfg
+                .config
+                .get("valt_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(1200, |v| v as u32),
+        )),
+        // `vref_mv`: VREFH (REFSEL 00); `valt_mv`: VALTH (REFSEL 01). Both
+        // default to the 5 V S32K118EVB supply (NXP s32k118_cookbook ADC.c).
+        // `vref_mv`: VREFH, which every channel converts against. Defaults
+        // to 3.3 V; no S32K388EVB VREFH source is vendored.
+        "s32k3_adc_sar" => Box::new(crate::peripherals::s32k3_adc_sar::S32k3AdcSar::new(
+            p_cfg
+                .config
+                .get("vref_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(3300, |v| v as u32),
+        )),
+        "s32k1_adc" => Box::new(crate::peripherals::s32k1_adc::S32k1Adc::new(
+            p_cfg
+                .config
+                .get("vref_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(5000, |v| v as u32),
+            p_cfg
+                .config
+                .get("valt_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(5000, |v| v as u32),
+        )),
+        // `vref_mv`: the VREFH the board ties the reference to (1.8 V on
+        // the MIMXRT595-EVK); every CFG.REFSEL option converts against it.
+        // `layout: ctype_mode` selects the i.MX RT700 revision (CMDL.CTYPE/
+        // MODE, two triggers, CAL_REQ/CALOFS); `layout: single_fifo` the
+        // RV32M1 one (one FIFO, four triggers at 0xC0, CFG.CALOFS); the
+        // default is the RT500's.
+        "nxp_lpadc" => {
+            use crate::peripherals::nxp_lpadc::{Layout, NxpLpadc};
+            let layout = match p_cfg.config.get("layout").and_then(|v| v.as_str()) {
+                None | Some("diff_cscale") => Layout::DiffCscale,
+                Some("ctype_mode") => Layout::CtypeMode,
+                Some("single_fifo") => Layout::SingleFifo,
+                Some(other) => {
+                    return Err(anyhow::anyhow!(
+                        "nxp_lpadc {}: unknown layout {other:?} \
+                         (diff_cscale, ctype_mode, single_fifo)",
+                        p_cfg.id
+                    ))
+                }
+            };
+            Box::new(NxpLpadc::with_layout(
+                layout,
+                p_cfg
+                    .config
+                    .get("vref_mv")
+                    .and_then(|v| v.as_u64())
+                    .map_or(1800, |v| v as u32),
+            ))
+        }
+        "msp430_adc12" => Box::new(crate::peripherals::msp430_adc12::Msp430Adc12::new(
+            crate::peripherals::msp430_adc12::Adc12Layout::Adc12,
+        )),
+        "msp430_adc12_a" => Box::new(crate::peripherals::msp430_adc12::Msp430Adc12::new(
+            crate::peripherals::msp430_adc12::Adc12Layout::Adc12A,
+        )),
+        "xilinx_xadc" => Box::new(crate::peripherals::xilinx_xadc::XilinxXadc::new()),
+        "lattice_nexus_adc" => {
+            Box::new(crate::peripherals::lattice_nexus_adc::LatticeNexusAdc::new(
+                p_cfg
+                    .config
+                    .get("vref_mv")
+                    .and_then(|v| v.as_u64())
+                    .map_or(1800, |v| v as u16),
+            ))
+        }
+        "zynqmp_ams" => Box::new(crate::peripherals::zynqmp_ams::ZynqmpAms::new()),
+        // `vref_mv`: full scale, Zephyr npcx.dtsi `vref-mv` = 2816 by default.
+        "npcx_adc" => Box::new(crate::peripherals::npcx_adc::NpcxAdc::new(
+            p_cfg
+                .config
+                .get("vref_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(2816, |v| v as u32),
+        )),
+        // `vref_mv`: single-ended full scale, 2500 mV (GR716-DS-UM §12.2).
+        "gr716_adc" => Box::new(crate::peripherals::gr716_adc::Gr716Adc::new(
+            p_cfg
+                .config
+                .get("vref_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(2500, |v| v as u32),
+        )),
+        // `vref_mv`: VREF+, 3300 mV (the STM32 convention in `adc.rs`).
+        "stm32l1_adc" => Box::new(crate::peripherals::stm32l1_adc::Stm32l1Adc::new(
+            p_cfg
+                .config
+                .get("vref_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(3300, |v| v as u32),
+        )),
+        // `vref_mv`: V3A, the analog supply (3.3 V on LPC2294 boards).
+        // `channels`: 8 on RZ/G2L (9 with the RZ/G3S TSU input); `vref_mv`:
+        // the converter reference (Zephyr r9a07g044.dtsi `vref-mv` 1800).
+        "renesas_adc_c" => Box::new(crate::peripherals::renesas_adc_c::RenesasAdcC::new(
+            p_cfg
+                .config
+                .get("channels")
+                .and_then(|v| v.as_u64())
+                .map_or(8, |v| v.min(9) as u8),
+            p_cfg
+                .config
+                .get("vref_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(1800, |v| v as u32),
+        )),
+        // `vref_mv`: VRH - VRL (nominal 5 V on the MPC55xx).
+        "mpc55xx_eqadc" => Box::new(crate::peripherals::mpc55xx_eqadc::Mpc55xxEqadc::new(
+            p_cfg
+                .config
+                .get("vref_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(5000, |v| v as u32),
+        )),
+        // `vref_mv`: the ADC12 reference (no public source; 1800 assumed).
+        "alif_adc12" => Box::new(crate::peripherals::alif_adc12::AlifAdc12::new(
+            p_cfg
+                .config
+                .get("vref_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(1800, |v| v as u32),
+        )),
+        "lpc2000_adc" => Box::new(crate::peripherals::lpc2000_adc::Lpc2000Adc::new(
+            p_cfg
+                .config
+                .get("vref_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(3300, |v| v as u32),
+        )),
+        // `supply_mv`: the `vref-supply` rail (3.0 V on A10/A20 boards);
+        // `vref_num`/`vref_den`: the internal divider (2/3 A10 variant).
+        // `vref_mv`: the AST ADC full scale (0..2.2 V, adc_ctrl doc).
+        "opentitan_adc_ctrl" => Box::new(
+            crate::peripherals::opentitan_adc_ctrl::OpentitanAdcCtrl::new(
+                p_cfg
+                    .config
+                    .get("vref_mv")
+                    .and_then(|v| v.as_u64())
+                    .map_or(2200, |v| v as u32),
+            ),
+        ),
+        "sunxi_lradc" => {
+            let get = |key: &str, default: u32| {
+                p_cfg
+                    .config
+                    .get(key)
+                    .and_then(|v| v.as_u64())
+                    .map_or(default, |v| v as u32)
+            };
+            Box::new(crate::peripherals::sunxi_lradc::SunxiLradc::new(
+                get("supply_mv", 3000),
+                get("vref_num", 2),
+                get("vref_den", 3),
+            ))
+        }
+        "stm32w108_adc" => Box::new(crate::peripherals::stm32w108_adc::Stm32w108Adc::new(
+            p_cfg
+                .config
+                .get("vref_mv")
+                .and_then(|v| v.as_u64())
+                .map_or(1200, |v| v as u32),
+        )),
+        "renesasda14_gpadc" => {
+            Box::new(crate::peripherals::renesas_da14_gpadc::RenesasDa14Gpadc::new())
+        }
         "apollo4_gpio" => Box::new(crate::peripherals::apollo4::Apollo4Gpio::new()),
         "apollo4_adc" => Box::new(crate::peripherals::apollo4_adc::Apollo4Adc::new()),
         "apollo4_pwrctrl" => Box::new(crate::peripherals::apollo4::Apollo4PwrCtrl::new()),

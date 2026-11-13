@@ -273,6 +273,7 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     ),
     ("nrf5340/rtc0_s.yaml", packed!("nrf5340/rtc0_s.yaml")),
     ("nrf5340/rtc1_s.yaml", packed!("nrf5340/rtc1_s.yaml")),
+    ("nrf5340/saadc_s.yaml", packed!("nrf5340/saadc_s.yaml")),
     ("nrf5340/spu_s.yaml", packed!("nrf5340/spu_s.yaml")),
     ("nrf5340/timer0_s.yaml", packed!("nrf5340/timer0_s.yaml")),
     ("nrf5340/timer1_s.yaml", packed!("nrf5340/timer1_s.yaml")),
@@ -322,6 +323,10 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     (
         "nrf54l15/global_rramc_s.yaml",
         packed!("nrf54l15/global_rramc_s.yaml"),
+    ),
+    (
+        "nrf54l15/global_saadc_s.yaml",
+        packed!("nrf54l15/global_saadc_s.yaml"),
     ),
     (
         "nrf54l15/global_tampc_s.yaml",

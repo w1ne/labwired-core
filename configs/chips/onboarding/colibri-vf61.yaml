@@ -81,3 +81,90 @@ peripherals:
   type: fslnand
   bus: sysbus
   base_address: 1074659328
+# GPIO0-GPIO4. Renode's vybrid platform leaves GPIO out, so the import carried
+# none. The VF6xx GPIO module puts GPIO0..GPIO4 at 0x400FF000 + 0x40 * n (Linux
+# arch/arm/boot/dts/nxp/vf/vf610.dtsi, the second `reg` of each gpio node; the
+# first is its PORT block at 0x40049000 + 0x1000 * n), with the Kinetis register
+# set: PDOR/PSOR/PCOR/PTOR at +0x00..+0x0C and PDIR at +0x10 (VFxxx RM rev 7
+# ch. 7 GPIO; drivers/gpio/gpio-vf610.c GPIO_PDIR). That is the map the promoted
+# configs/chips/mk64f12.yaml runs on `profile: kinetis`. Not modelled: Vybrid
+# has no PDDR (+0x14), and direction and the input buffer live in the IOMUXC
+# pad register (OBE/IBE), which is not declared, so PDIR reads the pad whatever
+# IBE says and the model also answers PDDR. The PORT blocks (interrupts) are
+# not declared either.
+- id: gpio0
+  type: gpio
+  bus: sysbus
+  base_address: 0x400FF000
+  size: 64B
+  config:
+    profile: kinetis
+- id: gpio1
+  type: gpio
+  bus: sysbus
+  base_address: 0x400FF040
+  size: 64B
+  config:
+    profile: kinetis
+- id: gpio2
+  type: gpio
+  bus: sysbus
+  base_address: 0x400FF080
+  size: 64B
+  config:
+    profile: kinetis
+- id: gpio3
+  type: gpio
+  bus: sysbus
+  base_address: 0x400FF0C0
+  size: 64B
+  config:
+    profile: kinetis
+- id: gpio4
+  type: gpio
+  bus: sysbus
+  base_address: 0x400FF100
+  size: 64B
+  config:
+    profile: kinetis
+# ADC0/ADC1: the 12-bit SAR ADC, the i.MX RT ADC IP on the Vybrid register
+# map (imxrt_adc, layout vf610: HC0/HC1, HS @0x08, R0 @0x0C, CFG @0x14, GC
+# @0x18, GS @0x1C, CV @0x20, OFS @0x24, CAL @0x28, PCTL @0x30; Linux v6.12
+# drivers/iio/adc/vf610_adc.c). Bases and 4KB windows from vfxxx.dtsi
+# (adc@4003b000, adc@400bb000). Renode's vybrid platform has no ADC. The GIC
+# lines (SPI 53/54) are not declared: this profile models no GIC.
+- id: adc0
+  type: imxrt_adc
+  bus: sysbus
+  base_address: 0x4003B000
+  size: 4KB
+  config:
+    layout: vf610
+- id: adc1
+  type: imxrt_adc
+  bus: sysbus
+  base_address: 0x400BB000
+  size: 4KB
+  config:
+    layout: vf610
+# The muxed ADC pads, channel = HC0.ADCH (Linux v6.12
+# include/dt-bindings/pinctrl/vf610-pinfunc.h VF610_PAD_<pad>__ADC<n>_SE<ch>).
+# SE8/SE9 sit on dedicated analog pads that pinfunc does not list, so they
+# are not mapped here.
+analog_pins:
+  PTA18: { peripheral: adc0, channel: 0 }
+  PTA19: { peripheral: adc0, channel: 1 }
+  PTB0: { peripheral: adc0, channel: 2 }
+  PTB1: { peripheral: adc0, channel: 3 }
+  PTB4: { peripheral: adc0, channel: 4 }
+  PTC30: { peripheral: adc0, channel: 5 }
+  PTC14: { peripheral: adc0, channel: 6 }
+  PTC15: { peripheral: adc0, channel: 7 }
+  PTA16: { peripheral: adc1, channel: 0 }
+  PTA17: { peripheral: adc1, channel: 1 }
+  PTB2: { peripheral: adc1, channel: 2 }
+  PTB3: { peripheral: adc1, channel: 3 }
+  PTB5: { peripheral: adc1, channel: 4 }
+  PTC31: { peripheral: adc1, channel: 5 }
+  PTC16: { peripheral: adc1, channel: 6 }
+  PTC17: { peripheral: adc1, channel: 7 }

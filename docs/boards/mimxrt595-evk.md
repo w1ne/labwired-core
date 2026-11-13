@@ -30,6 +30,15 @@ model, and the OS event timer (`rt5xx_ostimer`) is the system clock:
 `k_busy_wait` polls its Gray-coded count and `k_msleep` wakes on its match
 interrupt.
 
+**Analog.** LPADC0 (`nxp_lpadc`, `0x4013_A000`, `ADC0_IRQn` 22) converts
+routed analog netlists: the `analog_pins` map puts CH0A/CH0B/CH1A/CH1B/CH2A/
+CH6A on P0_5/P0_6/P0_12/P0_13/P0_19/P4_18 (Zephyr hal_nxp
+`MIMXRT595SFFOC-pinctrl.h`). Software triggers run the `CMDH.NEXT` command
+chain into the two result FIFOs, 12-bit single-ended or 13-bit differential
+against VREFH 1.8 V. `cosim_mimxrt595_lpadc_analog.rs` drives it with the
+Zephyr `adc_mcux_lpadc` register flow. Hardware triggers, compare, timing and
+DMA are not modelled.
+
 !!! warning "Not claimed yet"
     The boot ROM's boot flow is not run and the FCB is not parsed: the engine
     boots from `flash.base + 0x1000` (`reset_vector_offset`); only the OTP
@@ -44,7 +53,7 @@ interrupt.
     USART has no baud timing; GPIO pin interrupts and PINT are stored only.
     SYSCTL0/1, PMC, WWDT0, INPUTMUX, CACHE64, PINT and the non-secure SCS
     bank are declared stubs. FLEXCOMM1–11/13–16, CTIMER, MRT, DMA, SDIO,
-    USB, ADC, I3C, the display/GPU, PowerQuad, the OTP controller and the
+    USB, I3C, the display/GPU, PowerQuad, the OTP controller and the
     HiFi4 DSP are **not mapped**: firmware that touches them faults with a
     memory violation. There is no silicon capture: **SIM-DERIVED**.
 

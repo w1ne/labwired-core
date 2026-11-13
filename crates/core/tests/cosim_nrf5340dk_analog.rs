@@ -58,10 +58,14 @@ fn expected_saadc_code(volts: f64) -> u16 {
 }
 
 fn configure_saadc(bus: &mut SystemBus) {
-    // CH[0..2] select physical AIN0..2. AIN2 is intentionally left undriven.
-    for (channel, ain) in [(0u64, 1u32), (1, 2), (2, 3)] {
-        let base = SAADC + 0x510 + channel * 0x10;
-        bus.write_u32(base, ain)
+    configure_saadc_channels(bus, 3);
+}
+
+fn configure_saadc_channels(bus: &mut SystemBus, channel_count: u32) {
+    // Channel k selects AINk. Tests reserve extra channels as undriven controls.
+    for channel in 0..channel_count {
+        let base = SAADC + 0x510 + u64::from(channel) * 0x10;
+        bus.write_u32(base, channel + 1)
             .expect("select SAADC positive input");
         bus.write_u32(base + 8, 0x1200)
             .expect("select gain and VDD/4 reference");
@@ -70,12 +74,16 @@ fn configure_saadc(bus: &mut SystemBus) {
         .expect("select 12-bit SAADC resolution");
     bus.write_u32(SAADC + 0x62c, RESULT as u32)
         .expect("set SAADC EasyDMA result pointer");
-    bus.write_u32(SAADC + 0x630, 3)
-        .expect("reserve three channel results");
+    bus.write_u32(SAADC + 0x630, channel_count)
+        .expect("reserve channel results");
     bus.write_u32(SAADC + 0x500, 1).expect("enable SAADC");
 }
 
 fn scan(bus: &mut SystemBus) -> [u16; 3] {
+    scan_saadc_channels::<3>(bus)
+}
+
+fn scan_saadc_channels<const N: usize>(bus: &mut SystemBus) -> [u16; N] {
     bus.write_u32(SAADC + 0x104, 0)
         .expect("clear prior END event");
     bus.write_u32(SAADC, 1).expect("arm SAADC EasyDMA scan");
@@ -86,14 +94,381 @@ fn scan(bus: &mut SystemBus) -> [u16; 3] {
     assert_eq!(bus.read_u32(SAADC + 0x104).unwrap(), 1, "scan sets END");
     assert_eq!(
         bus.read_u32(SAADC + 0x634).unwrap(),
-        3,
-        "scan writes all three results"
+        N as u32,
+        "scan writes every reserved result"
     );
-    [
-        bus.read_u16(RESULT).unwrap(),
-        bus.read_u16(RESULT + 2).unwrap(),
-        bus.read_u16(RESULT + 4).unwrap(),
-    ]
+    std::array::from_fn(|channel| bus.read_u16(RESULT + channel as u64 * 2).unwrap())
+}
+
+/// Independent Gummel–Poon NPN load-line reference including forward/reverse
+/// Early effect and optional high-injection rolloff.
+fn bjt_high_injection_collector_voltage(base_drive_v: f64, high_injection: bool) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const COLLECTOR_OHMS: f64 = 1_000.0;
+    const BASE_OHMS: f64 = 10_000.0;
+    const IS_A: f64 = 1e-16;
+    const BF: f64 = 80.0;
+    const BR: f64 = 4.0;
+    const VAF: f64 = 50.0;
+    const VAR: f64 = 75.0;
+    const IKF_A: f64 = 50e-6;
+    const IKR_A: f64 = 500e-6;
+    const NKF: f64 = 0.8;
+    const VT: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+
+    let currents = |vbe: f64, collector_v: f64| {
+        let vbc = vbe - collector_v;
+        let forward = (vbe / VT).exp();
+        let reverse = (vbc / VT).exp();
+        let base_width = 1.0 - vbc / VAF - vbe / VAR;
+        let q2 = if high_injection {
+            IS_A * (forward - 1.0) / IKF_A + IS_A * (reverse - 1.0) / IKR_A
+        } else {
+            0.0
+        };
+        let qb = (1.0 + (1.0 + 4.0 * q2).max(0.0).powf(NKF)) / (2.0 * base_width);
+        let transport = IS_A * (forward - reverse) / qb;
+        let base_collector = (IS_A / BR) * (reverse - 1.0);
+        let base_emitter = (IS_A / BF) * (forward - 1.0);
+        (transport - base_collector, base_emitter + base_collector)
+    };
+
+    let collector_for_vbe = |vbe: f64| {
+        let (mut low, mut high) = (0.0, SUPPLY_V);
+        for _ in 0..100 {
+            let collector_v = 0.5 * (low + high);
+            let (collector_current, _) = currents(vbe, collector_v);
+            let residual = (SUPPLY_V - collector_v) / COLLECTOR_OHMS - collector_current;
+            if residual > 0.0 {
+                low = collector_v;
+            } else {
+                high = collector_v;
+            }
+        }
+        0.5 * (low + high)
+    };
+
+    let (mut low, mut high) = (0.0, base_drive_v);
+    for _ in 0..100 {
+        let vbe = 0.5 * (low + high);
+        let collector_v = collector_for_vbe(vbe);
+        let (_, base_current) = currents(vbe, collector_v);
+        let residual = (base_drive_v - vbe) / BASE_OHMS - base_current;
+        if residual > 0.0 {
+            low = vbe;
+        } else {
+            high = vbe;
+        }
+    }
+    collector_for_vbe(0.5 * (low + high))
+}
+
+/// First backward-Euler step of the two linear CJC partitions. With MJC=0,
+/// depletion charge is a constant capacitor; XCJC=0 puts it directly on the
+/// external base, while XCJC=1 puts it behind RB at the internal base.
+fn bjt_xcjc_first_step_reference() -> (f64, f64) {
+    const DRIVE_OHMS: f64 = 1_000.0;
+    const RB_OHMS: f64 = 100_000.0;
+    const CJC_F: f64 = 10e-9;
+    const STEP_S: f64 = 1e-6;
+    const INITIAL_V: f64 = 0.2;
+    const DRIVE_V: f64 = 1.2;
+    let drive_g = 1.0 / DRIVE_OHMS;
+    let base_g = 1.0 / RB_OHMS;
+    let cap_g = CJC_F / STEP_S;
+
+    let external_partition_v = (drive_g * DRIVE_V + cap_g * INITIAL_V) / (drive_g + cap_g);
+    let internal_node_g = drive_g + base_g;
+    let internal_base_v = (base_g * drive_g / internal_node_g * DRIVE_V + cap_g * INITIAL_V)
+        / (base_g - base_g * base_g / internal_node_g + cap_g);
+    let external_base_v = (drive_g * DRIVE_V + base_g * internal_base_v) / internal_node_g;
+    (external_base_v, external_partition_v)
+}
+
+#[test]
+fn nrf5340dk_bjt_high_injection_reaches_saadc_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/nrf5340dk.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load nRF5340-DK profile");
+    assert_eq!(profile.name, "nrf5340dk");
+    let generic =
+        SystemManifest::from_file(root("examples/nrf5340dk/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and diode netlists");
+    let high_injection = SystemManifest::from_file(root(
+        "examples/nrf5340dk/analog-bjt-high-injection-system.yaml",
+    ))
+    .expect("load generic matched BJT high-injection branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(high_injection.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load nRF5340 descriptor");
+    assert!(chip.analog_pins.is_empty());
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build nRF5340-DK bus");
+    configure_saadc_channels(&mut bus, 5);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal session")
+        .expect("profile contains NTC, diode, and matched BJT netlists");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must resolve to SAADC channels 0 through 3"
+    );
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated NTC temperature");
+    session
+        .set_signal_number("ui.bjt_high_injection.base_v", 0.0)
+        .expect("initialize matched BJT base drives");
+
+    let expected_ntc_v = 1.65;
+    let expected_diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    let mut high_drive_samples = None;
+    for base_drive_v in [0.8_f64, 1.5, 3.3] {
+        session
+            .set_signal_number("ui.bjt_high_injection.base_v", base_drive_v)
+            .expect("set common BJT base drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and matched BJT branches");
+        assert_eq!(steps.len(), 4, "all four generic analog branches solve");
+        assert!(
+            errors.is_empty(),
+            "unexpected analog route errors: {errors:?}"
+        );
+
+        let ntc_v = voltage(&session, "adc.saadc.0_volts");
+        let diode_v = voltage(&session, "adc.saadc.1_volts");
+        let rolloff_v = voltage(&session, "adc.saadc.2_volts");
+        let control_v = voltage(&session, "adc.saadc.3_volts");
+        assert!((ntc_v - expected_ntc_v).abs() < 1e-9);
+        assert!((diode_v - expected_diode_v).abs() < 2e-5);
+        assert!(
+            (rolloff_v - bjt_high_injection_collector_voltage(base_drive_v, true)).abs() < 5e-5,
+            "IKF/IKR/NKF load line at {base_drive_v} V must match the independent reference, got {rolloff_v} V"
+        );
+        assert!(
+            (control_v - bjt_high_injection_collector_voltage(base_drive_v, false)).abs() < 5e-5,
+            "matched no-rolloff load line at {base_drive_v} V must match the independent reference, got {control_v} V"
+        );
+
+        let [ntc_code, diode_code, rolloff_code, control_code, undriven_code] =
+            scan_saadc_channels::<5>(&mut bus);
+        for (channel, voltage_v, code) in [
+            (0, ntc_v, ntc_code),
+            (1, diode_v, diode_code),
+            (2, rolloff_v, rolloff_code),
+            (3, control_v, control_code),
+        ] {
+            assert_eq!(
+                code,
+                expected_saadc_code(voltage_v),
+                "SAADC channel {channel} converts its routed solved voltage"
+            );
+        }
+        assert_eq!(undriven_code, 0, "neighboring AIN4 stays at ground");
+        if base_drive_v == 3.3 {
+            high_drive_samples = Some((rolloff_v, control_v));
+        }
+    }
+
+    let (rolloff_v, control_v) = high_drive_samples.expect("recorded high-drive sample");
+    assert!(
+        rolloff_v - control_v > 0.05,
+        "high-injection rolloff lowers collector current and raises collector voltage: {rolloff_v} V vs {control_v} V"
+    );
+}
+
+#[test]
+fn nrf5340dk_bjt_xcjc_partitions_cjc_across_the_internal_base_resistance() {
+    let system_path = root("configs/systems/nrf5340dk.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load nRF5340-DK profile");
+    let generic =
+        SystemManifest::from_file(root("examples/nrf5340dk/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and diode netlists");
+    let xcjc = SystemManifest::from_file(root("examples/nrf5340dk/analog-bjt-xcjc-system.yaml"))
+        .expect("load generic BJT XCJC partition branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(xcjc.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load nRF5340 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build nRF5340-DK bus");
+    configure_saadc_channels(&mut bus, 5);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal session")
+        .expect("profile contains NTC, diode, and CJC-partitioned BJT netlists");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic device voltages must resolve to SAADC channels 0 through 3"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated NTC temperature");
+
+    let cycles = session.cycles_until_boundary(0);
+    let (steps, errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("solve and route NTC, diode, and XCJC BJT branches");
+    assert_eq!(steps.len(), 3, "all three generic analog netlists solve");
+    assert!(
+        errors.is_empty(),
+        "unexpected analog route errors: {errors:?}"
+    );
+
+    let ntc_v = voltage(&session, "adc.saadc.0_volts");
+    let diode_v = voltage(&session, "adc.saadc.1_volts");
+    let xcjc_one_external_base_v = voltage(&session, "adc.saadc.2_volts");
+    let xcjc_zero_external_base_v = voltage(&session, "adc.saadc.3_volts");
+    assert!((ntc_v - 1.65).abs() < 1e-9);
+    assert!((diode_v - diode_load_line_voltage()).abs() < 2e-5);
+
+    let (expected_xcjc_one_v, expected_xcjc_zero_v) = bjt_xcjc_first_step_reference();
+    assert!(
+        (xcjc_one_external_base_v - expected_xcjc_one_v).abs() < 2e-5,
+        "XCJC=1 must charge CJC behind RB: expected external base {expected_xcjc_one_v} V, got {xcjc_one_external_base_v} V"
+    );
+    assert!(
+        (xcjc_zero_external_base_v - expected_xcjc_zero_v).abs() < 5e-3,
+        "XCJC=0 must charge CJC on the external base: expected {expected_xcjc_zero_v} V, got {xcjc_zero_external_base_v} V"
+    );
+    assert!(
+        xcjc_one_external_base_v - xcjc_zero_external_base_v > 0.45,
+        "XCJC changes which side of RB carries the depletion current: {xcjc_one_external_base_v} V vs {xcjc_zero_external_base_v} V"
+    );
+
+    let [ntc_code, diode_code, internal_code, external_code, undriven_code] =
+        scan_saadc_channels::<5>(&mut bus);
+    for (channel, voltage_v, code) in [
+        (0, ntc_v, ntc_code),
+        (1, diode_v, diode_code),
+        (2, xcjc_one_external_base_v, internal_code),
+        (3, xcjc_zero_external_base_v, external_code),
+    ] {
+        assert_eq!(
+            code,
+            expected_saadc_code(voltage_v),
+            "SAADC channel {channel} converts its routed solved voltage"
+        );
+    }
+    assert_eq!(undriven_code, 0, "neighboring AIN4 stays at ground");
+}
+
+/// Independent load line of a forward-biased substrate junction: the
+/// junction drops `substrate_v − v` and feeds `v / R` into the 100 kΩ load.
+/// ngspice's substrate current is `ISS·(e^(v/(NS·Vt)) − 1) + GMIN·v`; the
+/// BJT's own junctions are reverse biased and carry ~1e-16 A, below the
+/// tolerance.
+fn substrate_load_voltage(substrate_v: f64, iss: f64, ns: f64) -> f64 {
+    const LOAD_OHMS: f64 = 100_000.0;
+    const GMIN: f64 = 1e-12;
+    const VT: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+    let (mut low, mut high) = (0.0, substrate_v.max(0.0));
+    for _ in 0..200 {
+        let load_v = 0.5 * (low + high);
+        let junction_v = substrate_v - load_v;
+        let substrate_current = iss * ((junction_v / (ns * VT)).exp() - 1.0) + GMIN * junction_v;
+        if substrate_current > load_v / LOAD_OHMS {
+            low = load_v;
+        } else {
+            high = load_v;
+        }
+    }
+    0.5 * (low + high)
+}
+
+#[test]
+fn nrf5340dk_bjt_substrate_junction_reaches_saadc_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/nrf5340dk.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load nRF5340-DK profile");
+    let generic =
+        SystemManifest::from_file(root("examples/nrf5340dk/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and diode netlists");
+    let substrate =
+        SystemManifest::from_file(root("examples/nrf5340dk/analog-bjt-substrate-system.yaml"))
+            .expect("load generic BJT substrate branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(substrate.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load nRF5340 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build nRF5340-DK bus");
+    configure_saadc_channels(&mut bus, 6);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal session")
+        .expect("profile contains NTC, diode, and BJT substrate netlists");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must resolve to SAADC channels 0 through 4"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated NTC temperature");
+
+    let expected_diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    for substrate_v in [0.0_f64, 0.7, 1.2, 2.0] {
+        session
+            .set_signal_number("ui.bjt_substrate.substrate_v", substrate_v)
+            .expect("set common substrate drive");
+        // CJS holds the loaded node for a few 1 µs steps; settle onto the DC
+        // load line before sampling.
+        for _ in 0..20 {
+            cycles += session.cycles_until_boundary(cycles);
+            let (steps, errors) = session
+                .advance_to(cycles, &mut bus)
+                .expect("solve and route NTC, diode, and substrate branches");
+            assert_eq!(steps.len(), 5, "all five generic analog branches solve");
+            assert!(
+                errors.is_empty(),
+                "unexpected analog route errors: {errors:?}"
+            );
+        }
+
+        let ntc_v = voltage(&session, "adc.saadc.0_volts");
+        let diode_v = voltage(&session, "adc.saadc.1_volts");
+        let vertical_v = voltage(&session, "adc.saadc.2_volts");
+        let lateral_v = voltage(&session, "adc.saadc.3_volts");
+        let control_v = voltage(&session, "adc.saadc.4_volts");
+        assert!((ntc_v - 1.65).abs() < 1e-9);
+        assert!((diode_v - expected_diode_v).abs() < 2e-5);
+        assert!(
+            (vertical_v - substrate_load_voltage(substrate_v, 1e-15, 1.2)).abs() < 1e-6,
+            "vertical NPN substrate-to-collector load line at {substrate_v} V, got {vertical_v} V"
+        );
+        assert!(
+            (lateral_v - substrate_load_voltage(substrate_v, 2e-15, 1.0)).abs() < 1e-6,
+            "lateral PNP substrate-to-base load line at {substrate_v} V, got {lateral_v} V"
+        );
+        assert!(
+            (control_v - substrate_load_voltage(substrate_v, 0.0, 1.0)).abs() < 1e-9,
+            "no-ISS control carries only GMIN at {substrate_v} V, got {control_v} V"
+        );
+        if substrate_v == 2.0 {
+            assert!(vertical_v > 1.2 && lateral_v > 1.2 && control_v < 1e-6);
+        }
+
+        let [ntc_code, diode_code, vertical_code, lateral_code, control_code, undriven_code] =
+            scan_saadc_channels::<6>(&mut bus);
+        for (channel, voltage_v, code) in [
+            (0, ntc_v, ntc_code),
+            (1, diode_v, diode_code),
+            (2, vertical_v, vertical_code),
+            (3, lateral_v, lateral_code),
+            (4, control_v, control_code),
+        ] {
+            assert_eq!(
+                code,
+                expected_saadc_code(voltage_v),
+                "SAADC channel {channel} converts its routed solved voltage"
+            );
+        }
+        assert_eq!(undriven_code, 0, "neighboring AIN5 stays at ground");
+    }
 }
 
 #[test]

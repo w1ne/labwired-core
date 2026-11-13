@@ -1,0 +1,35 @@
+# Generic level-1 NMOS drain-bulk depletion charge routes through F103 ADC1.
+# A matched zero-capacitance MOSFET is the transient reference; the e-paper
+# profile's unrelated NTC and Shockley diode stay on ADC1_IN0/1.
+name: "nucleo-f103rb-epaper-mosfet-junction-charge"
+chip: "../../configs/chips/stm32f103rb.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "mosfet_bulk_charge"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      drain_current_a: "ui.mosfet_bulk.drain_current_a"
+      reference_current_a: "ui.mosfet_bulk.reference_current_a"
+    outputs:
+      drain_charge: "board.analog.pa2_volts"
+      drain_reference: "board.analog.pa3_volts"
+    config:
+      substeps: 1
+      netlist_text: |
+        Istep 0 drain dc 0
+        Rload drain 0 1k
+        Mcharge drain 0 0 0 NMOS_CHARGE
+        Ireference 0 drain_reference dc 0
+        Rreference drain_reference 0 1k
+        Mreference drain_reference 0 0 0 NMOS_REFERENCE
+        .model NMOS_CHARGE NMOS(VTO=5 KP=20u LAMBDA=0 CBD=1n PB=1 MJ=0 IS=1e-30)
+        .model NMOS_REFERENCE NMOS(VTO=5 KP=20u LAMBDA=0 CBD=0 PB=1 MJ=0 IS=1e-30)
+      probes:
+        drain_charge: "v(drain)"
+        drain_reference: "v(drain_reference)"
+      sources:
+        drain_current_a: "Istep"
+        reference_current_a: "Ireference"
+      vdd: 3.3

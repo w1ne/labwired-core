@@ -25,14 +25,23 @@ intentionally not modeled, per the header comment in
 - Kinetis LPUART (DATA/STAT/CTRL), MCG, RSIM, I2C1, SPI0, and GPIOC are
   modeled with real register behavior; PORTA/B/C, GPIOA/B, I2C0, TPM0, PIT,
   SIM, PMC, SMC, RCM, and TRNG0 are declarative/stub entries
+- ADC0 (Kinetis ADC16, the model shared with the FRDM-K64F): generic NTC and
+  diode netlists routed to PTB2/PTB3 and PTB18/PTA19 convert through
+  `analog_pins` at 12 and 16 bits, continuous conversion follows the NTC, and
+  `AIEN` pends ADC0_IRQn 15 (`tests/cosim_frdm_kw41z_adc16_analog.rs`)
 
 ## What is NOT proven
 
 - No KW41Z silicon diff — no bench part.
 - BLE and 802.15.4 radio (BTLE_RF/GENFSK/ZLL/XCVR) are not modeled.
+- ADC0 hardware triggers, temperature/bandgap channels, conversion timing,
+  SIM_SCGC6 clock gating, and the VALTH rail (left at the model's 1.2 V
+  default) are not modeled or asserted.
 
 ## Sources
 
 - Register surface ingested from the public CMSIS-SVD
   (`cmsis-svd-data: data/NXP/MKW41Z4.svd`) via `svd-ingestor`; see
   `configs/peripherals/mkw41z4/`.
+- ADC0 base/IRQ/layout: mcux-sdk `devices/MKW41Z4/MKW41Z4.h`; ADC pads: Zephyr
+  hal_nxp @cc9b44ae3e `dts/nxp/kinetis/kwx/pinctrl/MKW41Z512CAT4-pinctrl.h`.

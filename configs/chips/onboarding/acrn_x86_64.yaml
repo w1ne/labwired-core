@@ -15,3 +15,17 @@ peripherals:
   type: hpet
   bus: sysbus
   base_address: 4275044352
+- id: analog_io
+  type: gpio
+  bus: sysbus
+  base_address: 0xF0000000
+  size: 1KB
+  config:
+    # Simulation-only GPIO endpoint for board-level analog threshold co-simulation.
+    # This is not an ACRN or x86 silicon GPIO controller.
+    profile: stm32v2
+    simulation_only: true
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7

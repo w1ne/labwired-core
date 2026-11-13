@@ -59,3 +59,23 @@ peripherals:
   type: gaisler_gpio
   bus: sysbus
   base_address: 2150682624
+# On-chip ADC (gr716_adc): control units 0..7 at 0x80400000 + n * 0x1000,
+# 0x100 bytes each (GR716-DS-UM v1.29 Table 25); the DAC interfaces start at
+# 0x80408000, so one 32KB window holds all eight. Renode's gr716.repl has no
+# ADC. The units interrupt on lines 28..34 through the IRQMP, which this
+# profile does not model, so no irq is declared.
+- id: adc
+  type: gr716_adc
+  base_address: 0x80400000
+  size: 32KB
+# Pads ADC0..ADC7 = GPIO37..GPIO44 (GR716-MINI user manual rev 1.1). Channel
+# = ACFG.AI; every control unit reaches every pad through the shared MUX.
+analog_pins:
+  GPIO37: { peripheral: adc, channel: 0 }
+  GPIO38: { peripheral: adc, channel: 1 }
+  GPIO39: { peripheral: adc, channel: 2 }
+  GPIO40: { peripheral: adc, channel: 3 }
+  GPIO41: { peripheral: adc, channel: 4 }
+  GPIO42: { peripheral: adc, channel: 5 }
+  GPIO43: { peripheral: adc, channel: 6 }
+  GPIO44: { peripheral: adc, channel: 7 }

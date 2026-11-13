@@ -13,6 +13,7 @@
 
 use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 use std::any::Any;
+use std::cell::Cell;
 use std::str::FromStr;
 
 // ── Modeled internal source (L4/V2 path) ────────────────────────────────────
@@ -145,6 +146,19 @@ pub const DEFAULT_AMBIENT_TEMPERATURE_C: f64 = 25.0;
 /// STM32F2/F4 ADC_CR2.SWSTART (RM0090) — same legacy register *block* as F1,
 /// different bit. Kept so F4 board bindings are not silently retargeted to F1.
 const F4_CR2_SWSTART: u32 = 1 << 30;
+/// ADC_CR1.SCAN (bit 8, RM0008 §11.12.2 / RM0090 §13.13.2): one trigger
+/// converts the whole regular group `SQ1..SQ(L+1)`, not just `SQ1`.
+const F1_CR1_SCAN: u32 = 1 << 8;
+/// ADC_CR1.DISCEN / DISCNUM[2:0] (bit 11 and bits 15:13, RM0008 §11.12.2 /
+/// RM0090 §13.13.2): each trigger converts only the next DISCNUM + 1
+/// channels of the regular group (RM0008 §11.3.10 / RM0090 §13.3.10).
+const F1_CR1_DISCEN: u32 = 1 << 11;
+const F1_CR1_DISCNUM_SHIFT: u32 = 13;
+/// STM32F2/F4 ADC_CR2.EOCS (bit 10, RM0090 §13.13.3): set, `EOC` rises after
+/// every regular conversion; clear (reset), only at the end of the group. The
+/// F1 has no such bit and always raises `EOC` at the end of the group
+/// (RM0008 §11.3.8).
+const F4_CR2_EOCS: u32 = 1 << 10;
 
 /// Approximate F1 RSTCAL completion latency in model cycles (not host time).
 /// Silicon clears RSTCAL after a short internal reset; a fixed 2-cycle delay is
@@ -160,6 +174,25 @@ const F1_CAL_CYCLES: u32 = 14;
 const F1_EVT_CONVERT: u32 = 0;
 const F1_EVT_RSTCAL: u32 = 1;
 const F1_EVT_CAL: u32 = 2;
+
+// ── F1/F2/F4 injected group (RM0008 §11.3.9 / §11.12, RM0090 §13.3.8 / §13.13) ──
+/// `ADC_SR.JEOC` (bit 2): the whole injected group has converted. `JSTRT`
+/// (bit 3): an injected group was started. Same bits on the F1 and the F4.
+const F1_SR_JEOC: u32 = 1 << 2;
+const F1_SR_JSTRT: u32 = 1 << 3;
+/// `ADC_CR1.JEOCIE` (bit 7) and `JAUTO` (bit 10): interrupt on `JEOC`, and
+/// convert the injected group automatically after the regular group.
+const F1_CR1_JEOCIE: u32 = 1 << 7;
+const F1_CR1_JAUTO: u32 = 1 << 10;
+/// `ADC_CR2.ALIGN` (bit 11): left-aligned data. Same bit on the F1 and F4.
+const F1_CR2_ALIGN: u32 = 1 << 11;
+/// F1 `ADC_CR2.JEXTSEL[14:12]` = 0b111 selects `JSWSTART` (bit 21) as the
+/// injected trigger (RM0008 §11.12.3).
+const F1_CR2_JEXTSEL: u32 = 0b111 << 12;
+const F1_CR2_JSWSTART: u32 = 1 << 21;
+/// F2/F4 `ADC_CR2.JSWSTART` is bit 22 (RM0090 §13.13.3) — the bit the F1
+/// spends on its regular `SWSTART`.
+const F4_CR2_JSWSTART: u32 = 1 << 22;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -197,6 +230,33 @@ pub enum AdcRegisterLayout {
     /// 0x01FF_FFFF; `GCOMP` @ 0x70 and `CALFACT2` @ 0xC8. The H7 map differs in
     /// all of those, so the alias is a separate layout rather than a flavour.
     Stm32U5,
+    /// STM32F0/L0 "v2" ADC (RM0091 §13, RM0367 §14). Shares the L4's ISR/IER/
+    /// CR offsets and its two-bit `RES[4:3]`, but it is a one-sequencer block
+    /// with no SQRx: the channels to convert are a BITMAP in `CHSELR` @ 0x28,
+    /// scanned upward (or downward with `CFGR1.SCANDIR`). `SMPR` is one
+    /// register @ 0x14, `TR` one register @ 0x20, `CALFACT` @ 0xB4 and `CCR`
+    /// @ 0x308. There is no `DEEPPWD`: `CR` resets to 0 and `ADEN` raises
+    /// `ADRDY`. On the L4 map `CHSELR` lands on an unmodelled offset, so the
+    /// channel firmware selected never reached the converter.
+    Stm32V2,
+    /// The 12-bit "ADC4" block of the STM32WBA (RM0493 §21) — the same CHSELR
+    /// IP the STM32U5 carries as its ADC4. It runs on the [`Self::Stm32V2`]
+    /// engine but is not that map; every difference below is from the vendored
+    /// `tests/fixtures/real_world/stm32wba52.svd`:
+    /// * `CFGR1.RES` is two bits at [3:2] (12/10/8/6), not [4:3], and
+    ///   `SCANDIR` is bit 4, not bit 2.
+    /// * `CFGR1.CHSELRMOD` (bit 21) turns `CHSELR` into eight 4-bit `SQx`
+    ///   slots, `0b1111` ending the sequence.
+    /// * `CR.ADVREGEN` (bit 28) powers the internal LDO, reported by
+    ///   `ISR.LDORDY` (bit 12); `ADEN` only raises `ADRDY` once it is on.
+    /// * `CHSEL0..13` — 14 channels; `AWD1TR`/`AWD2TR`/`AWD3TR` at
+    ///   0x20/0x24/0x2C, `PWRR` @ 0x44, `AWD2CR`/`AWD3CR` @ 0xA0/0xA4 and
+    ///   `CALFACT` @ 0xC4 (the F0/L0's is at 0xB4).
+    Stm32Adc4,
+    /// STM32G4 (RM0440). The L4 map, but its `JSQR` uses the wide packing
+    /// (`JSQ1` at bit 9, as on the H5/H7/U5) that `stm32g474.svd` gives, so
+    /// the injected group reads different channels than on an L4.
+    Stm32G4,
 }
 
 impl FromStr for AdcRegisterLayout {
@@ -217,9 +277,15 @@ impl FromStr for AdcRegisterLayout {
             "stm32l4" | "l4" | "stm32f7" | "f7" | "stm32g0" | "g0" => Ok(Self::Stm32L4),
             "stm32h7" | "h7" => Ok(Self::Stm32H7),
             "stm32h5" | "h5" => Ok(Self::Stm32H5),
+            "stm32g4" | "g4" => Ok(Self::Stm32G4),
             "stm32u5" | "u5" => Ok(Self::Stm32U5),
+            // `stm32g0` stays on the L4 map above: NUCLEO-G071RB's silicon
+            // capture was taken against it, and moving it is a capture, not
+            // an alias change.
+            "stm32f0" | "f0" | "stm32l0" | "l0" => Ok(Self::Stm32V2),
+            "stm32wba" | "wba" | "stm32_adc4" | "adc4" => Ok(Self::Stm32Adc4),
             _ => Err(format!(
-                "unsupported ADC register layout '{}'; supported: stm32f1, stm32f4, stm32l4, stm32h5, stm32h7, stm32u5",
+                "unsupported ADC register layout '{}'; supported: stm32f1, stm32f4, stm32l4, stm32g4, stm32h5, stm32h7, stm32u5, stm32f0, stm32l0, stm32wba",
                 value
             )),
         }
@@ -231,28 +297,101 @@ impl FromStr for AdcRegisterLayout {
 pub struct F1AdcRegs {
     cr1: u32, // 0x04
     cr2: u32, // 0x08
-    /// ADC_SQR3 @ 0x34 (RM0008 §11.12.14). Only SQ1[4:0] — the first (and, on
-    /// this single-shot model, only) regular-sequence channel — is consumed,
-    /// by `advance_conversion`. Reset value 0 selects channel 0, which is what
+    /// ADC_SQR1 @ 0x2C (RM0008 §11.12.12): `L[23:20]` (group length minus
+    /// one) and `SQ13..SQ16`. Consumed only with `CR1.SCAN`. Left out of
+    /// snapshots while zero, so a firmware that never programs a group keeps
+    /// the same snapshot shape.
+    #[serde(skip_serializing_if = "is_zero")]
+    sqr1: u32,
+    /// ADC_SQR2 @ 0x30: `SQ7..SQ12`. Consumed only with `CR1.SCAN`.
+    #[serde(skip_serializing_if = "is_zero")]
+    sqr2: u32,
+    /// ADC_SQR3 @ 0x34 (RM0008 §11.12.14): `SQ1..SQ6`. Without `CR1.SCAN` only
+    /// SQ1[4:0] is converted. Reset value 0 selects channel 0, which is what
     /// firmware that never programs the sequence converts on silicon.
     sqr3: u32,
+    /// ADC_JOFR1..4 @ 0x14..0x20: 12-bit offsets subtracted from the
+    /// injected results in JDR1..4. Left out of snapshots while all zero.
+    #[serde(skip_serializing_if = "all_zero")]
+    jofr: [u32; 4],
+    /// ADC_JSQR @ 0x38: `JL[21:20]` and `JSQ1..JSQ4`, five bits each from
+    /// bit 0. See [`F1AdcRegs::injected_channels`] for the slot order.
+    #[serde(skip_serializing_if = "is_zero")]
+    jsqr: u32,
+    /// ADC_JDR1..4 @ 0x3C..0x48, read-only: the injected group's results in
+    /// conversion order.
+    #[serde(skip_serializing_if = "all_zero")]
+    jdr: [u32; 4],
+}
+
+fn is_zero(v: &u32) -> bool {
+    *v == 0
+}
+
+fn all_zero(v: &[u32; 4]) -> bool {
+    v.iter().all(|w| *w == 0)
+}
+
+impl F1AdcRegs {
+    /// Channels one trigger converts: `SQR1.L` + 1 with `CR1.SCAN`, else 1.
+    fn group_len(&self) -> usize {
+        if self.cr1 & F1_CR1_SCAN != 0 {
+            ((self.sqr1 >> 20) & 0xF) as usize + 1
+        } else {
+            1
+        }
+    }
+
+    /// Channel in group position `k`: `SQ1..SQ6` in SQR3, `SQ7..SQ12` in
+    /// SQR2, `SQ13..SQ16` in SQR1, five bits each from bit 0. Same on the F1
+    /// (RM0008 §11.12.12-14) and the F2/F4 (RM0090 §13.13.9-11).
+    fn group_channel(&self, k: usize) -> usize {
+        let (word, field) = match k {
+            0..=5 => (self.sqr3, k),
+            6..=11 => (self.sqr2, k - 6),
+            _ => (self.sqr1, k - 12),
+        };
+        ((word >> (5 * field)) & 0x1F) as usize
+    }
+
+    /// The injected group in conversion order: `JL` + 1 channels taken from
+    /// the END of `JSQ1..JSQ4`. With `JL` < 3 the sequence starts at
+    /// `JSQ(4 - JL)`, so one conversion converts `JSQ4` alone (RM0008
+    /// §11.12.15 and RM0090 §13.13.12, "When JL=1 ... JSQ3, JSQ4"). This is
+    /// why the ST HAL's `ADC_JSQR_RK_JL` shifts rank 1 to slot `4 - JL`.
+    fn injected_channels(&self) -> Vec<usize> {
+        let len = ((self.jsqr >> 20) & 0x3) as usize + 1;
+        (4 - len..4)
+            .map(|slot| ((self.jsqr >> (5 * slot)) & 0x1F) as usize)
+            .collect()
+    }
 }
 
 /// STM32L4 ADC register file (data `dr` is shared on `Adc`).
 #[derive(Debug, Default, serde::Serialize)]
 pub struct L4AdcRegs {
-    isr: u32,        // 0x00
-    ier: u32,        // 0x04
-    cr: u32,         // 0x08
-    cfgr: u32,       // 0x0C
-    cfgr2: u32,      // 0x10
-    smpr1: u32,      // 0x14
-    smpr2: u32,      // 0x18
-    sqr1: u32,       // 0x30
-    sqr2: u32,       // 0x34
-    sqr3: u32,       // 0x38
-    sqr4: u32,       // 0x3C
+    isr: u32,   // 0x00
+    ier: u32,   // 0x04
+    cr: u32,    // 0x08
+    cfgr: u32,  // 0x0C
+    cfgr2: u32, // 0x10
+    smpr1: u32, // 0x14
+    smpr2: u32, // 0x18
+    sqr1: u32,  // 0x30
+    sqr2: u32,  // 0x34
+    sqr3: u32,  // 0x38
+    sqr4: u32,  // 0x3C
+    /// ADC_JSQR @ 0x4C and ADC_JDR1..4 @ 0x80..0x8C, the injected group.
+    /// Left out of snapshots while zero, so captured shapes are unchanged.
+    #[serde(skip_serializing_if = "is_zero")]
+    jsqr: u32,
+    #[serde(skip_serializing_if = "all_zero")]
+    jdr: [u32; 4],
     common_ccr: u32, // 0x308
+    /// `JSQR` uses the wide (G4/H5) packing rather than the L4/WB one; see
+    /// [`sqr_injected_sequence`]. A property of the part, not a register.
+    #[serde(skip)]
+    wide_jsqr: bool,
 }
 
 /// STM32H7 ADC control registers (RM0468 §26.4; offsets and reset values taken
@@ -358,6 +497,241 @@ pub struct U5AdcRegs {
     common_ccr: u32,
 }
 
+/// STM32F0/L0 "v2" ADC control registers (RM0091 §13.12, RM0367 §14.12).
+#[derive(Debug, Default, serde::Serialize)]
+pub struct V2AdcRegs {
+    isr: u32,     // 0x00
+    ier: u32,     // 0x04
+    cr: u32,      // 0x08  reset 0 (no DEEPPWD)
+    cfgr1: u32,   // 0x0C
+    cfgr2: u32,   // 0x10
+    smpr: u32,    // 0x14
+    tr: u32,      // 0x20  reset 0x0FFF_0000 (HT = 0xFFF)
+    chselr: u32,  // 0x28  channel bitmap, IN0..IN18
+    calfact: u32, // 0xB4 (0xC4 on ADC4)
+    ccr: u32,     // 0x308
+    /// The registers only the WBA/U5 ADC4 has. `None` on the F0/L0, so their
+    /// snapshots keep the shape they were captured with.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    adc4: Option<Adc4Regs>,
+}
+
+/// ADC4-only registers (RM0493 §21; stm32wba52.svd).
+#[derive(Debug, Default, serde::Serialize)]
+pub struct Adc4Regs {
+    awd2tr: u32, // 0x24  reset 0x0FFF_0000
+    awd3tr: u32, // 0x2C  reset 0x0FFF_0000
+    pwrr: u32,   // 0x44  AUTOFF / DPD
+    awd2cr: u32, // 0xA0
+    awd3cr: u32, // 0xA4
+}
+
+/// ADC4 `CR.ADVREGEN` and the `ISR.LDORDY` it raises.
+const ADC4_CR_ADVREGEN: u32 = 1 << 28;
+const ADC4_ISR_LDORDY: u32 = 1 << 12;
+/// ADC4 `CFGR1.SCANDIR` — bit 4, where the F0/L0 put it at bit 2.
+const ADC4_CFGR1_SCANDIR: u32 = 1 << 4;
+/// ADC4 `CFGR1.CHSELRMOD`: `CHSELR` holds `SQ1..SQ8`, not a bitmap.
+const ADC4_CFGR1_CHSELRMOD: u32 = 1 << 21;
+/// `CHSEL0..CHSEL13`.
+const ADC4_CHANNELS: u32 = 14;
+/// `SQx` value that ends the sequence.
+const ADC4_SQ_END: u32 = 0xF;
+
+impl V2AdcRegs {
+    /// `CFGR1.RES` → bit width. Both maps encode 12/10/8/6; the F0/L0 put the
+    /// field at [4:3], ADC4 at [3:2].
+    fn resolution_bits(&self) -> u32 {
+        let shifted = if self.adc4.is_some() {
+            (self.cfgr1 >> 2) << 3
+        } else {
+            self.cfgr1
+        };
+        l4_resolution_bits(shifted)
+    }
+
+    /// The programmed regular sequence, in conversion order; empty if
+    /// nothing is selected.
+    ///
+    /// * Bitmap `CHSELR`: every selected channel, upward, or downward with
+    ///   `CFGR1.SCANDIR` (RM0091 §13.4.8, RM0367 §14.3.8).
+    /// * ADC4 with `CHSELRMOD`: `SQ1..SQ8` in that order, ending at the first
+    ///   `0xF` nibble (RM0493 §21.4.10). A nibble naming a channel ADC4 does
+    ///   not have also ends it.
+    fn sequence(&self) -> Vec<usize> {
+        let adc4 = self.adc4.is_some();
+        if adc4 && self.cfgr1 & ADC4_CFGR1_CHSELRMOD != 0 {
+            return (0..8)
+                .map(|slot| (self.chselr >> (4 * slot)) & 0xF)
+                .take_while(|&sq| sq != ADC4_SQ_END && sq < ADC4_CHANNELS)
+                .map(|sq| sq as usize)
+                .collect();
+        }
+        let (mask, scandir) = if adc4 {
+            ((1 << ADC4_CHANNELS) - 1, ADC4_CFGR1_SCANDIR)
+        } else {
+            (V2_CHSELR_MASK, V2_CFGR1_SCANDIR)
+        };
+        let selected = self.chselr & mask;
+        let mut channels: Vec<usize> = (0..32).filter(|bit| selected & (1 << bit) != 0).collect();
+        if self.cfgr1 & scandir != 0 {
+            channels.reverse();
+        }
+        channels
+    }
+}
+
+/// A regular sequence that `ADSTART` set running: the V2 `CHSELR` sequence,
+/// or a two-or-more-channel `SQR1..SQR4` sequence on the L4/H7/U5 maps.
+///
+/// The engine converts at once, so a multi-channel sequence cannot land all
+/// its results in the one `DR` at `ADSTART`. It lands them the way polling
+/// firmware sees them on silicon: the first at `ADSTART`, each next one as the
+/// previous result is read out of `DR` (the `CFGR1.WAIT` auto-delay timing,
+/// which a firmware that keeps up with `EOC` also sees). Every landing raises
+/// `EOC`; the landing of the sequence's last channel raises `EOS`. Each
+/// result is sampled when it lands, so a routed input that moved since
+/// `ADSTART` converts at its new level. Overrun (`OVR`) is not modelled.
+#[derive(Debug)]
+struct RegularSequence {
+    /// The whole sequence, in conversion order.
+    channels: Vec<usize>,
+    /// Position in `channels` of this trigger's first conversion: 0, or the
+    /// `DISCEN` pointer.
+    offset: usize,
+    /// Conversions this trigger runs: the sequence length, 1 with `DISCEN`,
+    /// unbounded with `CONT`.
+    limit: usize,
+    /// Conversions landed since `ADSTART`. `DR` reads run through `&self`,
+    /// so the read side effect lives in a `Cell`.
+    landed: Cell<usize>,
+    /// The result in `DR`.
+    dr: Cell<u32>,
+    /// `landed` when firmware last cleared `EOC` / `EOS` (rc_w1). The first
+    /// landing's flags go straight into `ISR`, so both start at 1.
+    eoc_cleared_at: usize,
+    eos_cleared_at: usize,
+}
+
+impl RegularSequence {
+    /// Position in `channels` of the `k`-th conversion of this trigger.
+    fn position(&self, k: usize) -> usize {
+        (self.offset + k) % self.channels.len()
+    }
+
+    /// `EOC`/`EOS` raised by landings after the first, not yet cleared.
+    fn pending_flags(&self) -> u32 {
+        let landed = self.landed.get();
+        let mut flags = 0;
+        if landed > self.eoc_cleared_at {
+            flags |= V2_ISR_EOC;
+        }
+        // The most recent landing of the sequence's last channel.
+        let last = landed - 1;
+        let since_end = (self.position(last) + 1) % self.channels.len();
+        if since_end <= last && last - since_end + 1 > self.eos_cleared_at {
+            flags |= V2_ISR_EOS;
+        }
+        flags
+    }
+}
+
+/// The regular sequence an `SQR1..SQR4` quartet programs, in conversion
+/// order: `SQR1.L[3:0]` + 1 channels, `SQ1..SQ4` at `SQR1[10:6]`, `[16:12]`,
+/// `[22:18]`, `[28:24]`, `SQ5..SQ9` five to a word in `SQR2`, `SQ10..SQ14` in
+/// `SQR3`, `SQ15..SQ16` in `SQR4`. One layout on the L4 (RM0351), the H7
+/// (RM0433) and the U5 ADC1 (RM0456) `ADC_SQRx` registers.
+fn sqr_regular_sequence(sqr: [u32; 4]) -> Vec<usize> {
+    let len = (sqr[0] & 0xF) as usize + 1;
+    (0..len)
+        .map(|slot| {
+            // SQR1 spends its first field on L, so SQ1 sits in its second.
+            let (word, field) = match slot {
+                0..=3 => (0, slot + 1),
+                4..=8 => (1, slot - 4),
+                9..=13 => (2, slot - 9),
+                _ => (3, slot - 14),
+            };
+            ((sqr[word] >> (6 * field)) & 0x1F) as usize
+        })
+        .collect()
+}
+
+/// Which `ADC_JSQR` packing a map uses. Both put `JL[1:0]` at bit 0 and
+/// space `JSQ1..JSQ4` six bits apart; they differ in the width of
+/// `JEXTSEL`, which shifts everything above it by one bit:
+///
+/// * narrow (L4 `stm32l476.svd`, WB `stm32wb55.svd`): `JEXTSEL[5:2]`,
+///   `JEXTEN[7:6]`, `JSQ1` at bit 8.
+/// * wide (G4 `stm32g474.svd`, H5 `stm32h563.svd`, H7 `stm32h735.svd`, U5
+///   `stm32u575.svd`): `JEXTSEL[6:2]`, `JEXTEN[8:7]`, `JSQ1` at bit 9.
+///
+/// Returns the injected group in conversion order (`JSQ1` first; unlike
+/// the F1, `JDRy` holds `JSQy`'s result), or `None` while `JEXTEN` selects
+/// a hardware trigger, which this model does not generate.
+fn sqr_injected_sequence(jsqr: u32, wide: bool) -> Option<Vec<usize>> {
+    let (jexten_shift, jsq1_shift) = if wide { (7, 9) } else { (6, 8) };
+    if (jsqr >> jexten_shift) & 0x3 != 0 {
+        return None;
+    }
+    let len = (jsqr & 0x3) as usize + 1;
+    Some(
+        (0..len)
+            .map(|k| ((jsqr >> (jsq1_shift + 6 * k)) & 0x1F) as usize)
+            .collect(),
+    )
+}
+
+/// `ISR` / `CR` / `CFGR` bits the L4, H7 and U5 maps share with the V2.
+const SQR_ISR_EOC: u32 = 1 << 2;
+const SQR_ISR_EOS: u32 = 1 << 3;
+const SQR_CR_ADDIS: u32 = 1 << 1;
+const SQR_CR_ADSTART: u32 = 1 << 2;
+const SQR_CR_ADSTP: u32 = 1 << 4;
+const SQR_CFGR_CONT: u32 = 1 << 13;
+/// `CFGR.DISCEN` / `DISCNUM[2:0]`: each trigger converts the next
+/// `DISCNUM` + 1 channels of the sequence. Bits 16 and 19:17 on the L4
+/// (RM0351), the H7 (RM0433) and the U5 ADC1 `CFGR1` (RM0456).
+const SQR_CFGR_DISCEN: u32 = 1 << 16;
+const SQR_CFGR_DISCNUM_SHIFT: u32 = 17;
+/// Injected group bits of the L4, G4, H5, H7 and U5 maps (one placement on
+/// all five SVDs): `ISR.JEOC` (bit 5) after each injected conversion,
+/// `ISR.JEOS` (bit 6) after the last; `CR.JADSTART` (bit 3) starts the
+/// group and `CR.JADSTP` (bit 5) stops it.
+const SQR_ISR_JEOC: u32 = 1 << 5;
+const SQR_ISR_JEOS: u32 = 1 << 6;
+const SQR_CR_JADSTART: u32 = 1 << 3;
+const SQR_CR_JADSTP: u32 = 1 << 5;
+
+/// `ADC_ISR` / `ADC_CR` / `ADC_CFGR1` bits of the v2 ADC (RM0367 §14.12).
+const V2_ISR_ADRDY: u32 = 1 << 0;
+const V2_ISR_EOSMP: u32 = 1 << 1;
+const V2_ISR_EOC: u32 = 1 << 2;
+const V2_ISR_EOS: u32 = 1 << 3;
+/// End of calibration. L0 (and G0) only; reserved on the F0.
+const V2_ISR_EOCAL: u32 = 1 << 11;
+const V2_CR_ADEN: u32 = 1 << 0;
+const V2_CR_ADDIS: u32 = 1 << 1;
+const V2_CR_ADSTART: u32 = 1 << 2;
+const V2_CR_ADSTP: u32 = 1 << 4;
+const V2_CR_ADCAL: u32 = 1 << 31;
+const V2_CFGR1_SCANDIR: u32 = 1 << 2;
+const V2_CFGR1_ALIGN: u32 = 1 << 5;
+const V2_CFGR1_CONT: u32 = 1 << 13;
+/// `CFGR1.DISCEN`: each trigger converts only the next channel of the
+/// sequence. Bit 16 on the F0/L0 and on ADC4.
+const V2_CFGR1_DISCEN: u32 = 1 << 16;
+/// `CHSELR` bits that name a channel: IN0..IN18.
+const V2_CHSELR_MASK: u32 = (1 << 19) - 1;
+/// V_REFINT is ADC_IN17 on both the F0 and the L0, connected by `CCR.VREFEN`
+/// (bit 22).
+const V2_VREFINT_CHANNEL: usize = 17;
+const V2_CCR_VREFEN: u32 = 1 << 22;
+/// V_REFINT typical, 1.224 V (DS10685 "Embedded internal reference voltage",
+/// min 1.202 / typ 1.224 / max 1.242 V). The F0 datasheets give 1.23 V typ,
+/// inside that spread.
+const V2_VREFINT_MV: f64 = 1224.0;
+
 /// Family-isolated ADC control registers.
 #[derive(Debug, serde::Serialize)]
 enum AdcRegs {
@@ -367,6 +741,7 @@ enum AdcRegs {
     Stm32L4(L4AdcRegs),
     Stm32H7(H7AdcRegs),
     Stm32U5(U5AdcRegs),
+    Stm32V2(V2AdcRegs),
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -429,6 +804,30 @@ pub struct Adc {
     /// not serialized (keeps snapshot shapes identical).
     #[serde(skip)]
     ambient_temp_c: f64,
+    /// The V2 sequence in progress, if `ADSTART` started one. Conversion
+    /// state, not a register: not serialized.
+    #[serde(skip)]
+    regular_sequence: Option<RegularSequence>,
+    /// `DISCEN` pointer (every layout): the sequence position the next
+    /// trigger converts.
+    #[serde(skip)]
+    discontinuous_next: usize,
+    /// F1/F4 `CR1.SCAN` group position being converted. Conversion state,
+    /// not a register: not serialized.
+    #[serde(skip)]
+    f1_group_pos: usize,
+    /// F1/F4 group position this trigger stops after (exclusive): the group
+    /// length, or the end of a `CR1.DISCEN` subgroup.
+    #[serde(skip)]
+    f1_run_end: usize,
+    /// F1/F4 injected group countdown (model cycles until every `JDRx`
+    /// lands). `None` = no injected group in flight.
+    #[serde(skip)]
+    injected_remaining: Option<u32>,
+    /// Inputs latched for each injected conversion at `JSWSTART`, in
+    /// conversion order.
+    #[serde(skip)]
+    injected_samples: Vec<Option<HeldAdcInput>>,
 }
 
 impl Adc {
@@ -443,13 +842,14 @@ impl Adc {
         let regs = match layout {
             AdcRegisterLayout::Stm32F1 => AdcRegs::Stm32F1(F1AdcRegs::default()),
             AdcRegisterLayout::Stm32F4 => AdcRegs::Stm32F4(F1AdcRegs::default()),
-            AdcRegisterLayout::Stm32L4 | AdcRegisterLayout::Stm32H5 => {
-                AdcRegs::Stm32L4(L4AdcRegs {
-                    cr: 0x2000_0000,
-                    cfgr: 0x8000_0000,
-                    ..Default::default()
-                })
-            }
+            AdcRegisterLayout::Stm32L4
+            | AdcRegisterLayout::Stm32H5
+            | AdcRegisterLayout::Stm32G4 => AdcRegs::Stm32L4(L4AdcRegs {
+                cr: 0x2000_0000,
+                cfgr: 0x8000_0000,
+                wide_jsqr: layout != AdcRegisterLayout::Stm32L4,
+                ..Default::default()
+            }),
             // Same DEEPPWD/JQDIS story as the L4, plus the three analog-watchdog
             // high thresholds, which reset to the 26-bit all-ones 0x03FF_FFFF
             // rather than 0.
@@ -469,6 +869,20 @@ impl Adc {
                 htr1: 0x01FF_FFFF,
                 htr2: 0x01FF_FFFF,
                 htr3: 0x01FF_FFFF,
+                ..Default::default()
+            }),
+            AdcRegisterLayout::Stm32V2 => AdcRegs::Stm32V2(V2AdcRegs {
+                tr: 0x0FFF_0000,
+                ..Default::default()
+            }),
+            // All three ADC4 watchdog threshold registers reset to HT = 0xFFF.
+            AdcRegisterLayout::Stm32Adc4 => AdcRegs::Stm32V2(V2AdcRegs {
+                tr: 0x0FFF_0000,
+                adc4: Some(Adc4Regs {
+                    awd2tr: 0x0FFF_0000,
+                    awd3tr: 0x0FFF_0000,
+                    ..Default::default()
+                }),
                 ..Default::default()
             }),
         };
@@ -497,6 +911,12 @@ impl Adc {
             f1_rstcal_live: false,
             f1_cal_live: false,
             ambient_temp_c: DEFAULT_AMBIENT_TEMPERATURE_C,
+            regular_sequence: None,
+            discontinuous_next: 0,
+            f1_group_pos: 0,
+            f1_run_end: 0,
+            injected_remaining: None,
+            injected_samples: Vec::new(),
         }
     }
 
@@ -560,7 +980,12 @@ impl Adc {
     }
 
     fn sample_f1_input(&self) -> Option<HeldAdcInput> {
-        let channel = self.f1_regular_channel();
+        self.sample_f1_channel(self.f1_regular_channel())
+    }
+
+    /// Sample-and-hold of one F1/F4 channel: its routed level (or modeled
+    /// internal source) and the current VREF+.
+    fn sample_f1_channel(&self, channel: usize) -> Option<HeldAdcInput> {
         let injected = self
             .channel_inputs_mv
             .get(channel)
@@ -607,14 +1032,46 @@ impl Adc {
                     self.dr = (self.dr + 1) & 0xFFF;
                 }
 
-                self.sr |= 1 << 1; // EOC
+                // CR1.SCAN: the next group channel is acquired as soon as this
+                // one lands. Without SCAN (or with L = 0) the group is SQ1
+                // alone, so every landing ends it, exactly as before.
+                //
+                // CR1.DISCEN: the run stops at the end of its subgroup, but
+                // EOC still marks only the end of the whole group (RM0008
+                // §11.3.10 example: "3rd trigger: sequence converted 9, 10
+                // and an EOC event generated"). Without DISCEN the run is the
+                // group, so run_done == group_done.
+                let group_done = self.f1_group_pos + 1 >= self.f1_group_len();
+                let run_done = group_done || self.f1_group_pos + 1 >= self.f1_run_end;
+                let discontinuous = cr1 & F1_CR1_DISCEN != 0;
+                let per_conversion_eoc =
+                    matches!(self.regs, AdcRegs::Stm32F4(_)) && (cr2 & F4_CR2_EOCS) != 0;
+                if group_done || per_conversion_eoc {
+                    self.sr |= 1 << 1; // EOC
 
-                if (cr1 & (1 << 5)) != 0 {
-                    irq = true; // EOCIE
+                    if (cr1 & (1 << 5)) != 0 {
+                        irq = true; // EOCIE
+                    }
                 }
-                // Continuous mode (CONT + ADON).
-                if (cr2 & F1_CR2_CONT) != 0 && (cr2 & F1_CR2_ADON) != 0 {
-                    self.start_conversion();
+                // CR1.JAUTO: the injected group follows the regular group
+                // without its own trigger (RM0008 §11.3.9 "Auto-injection").
+                if group_done && cr1 & F1_CR1_JAUTO != 0 {
+                    self.start_f1_injected();
+                }
+                if !run_done {
+                    self.f1_group_pos += 1;
+                    // Unlike a new trigger, the next group conversion does
+                    // not clear the EOC a per-conversion landing just raised.
+                    self.acquire_f1_input();
+                } else {
+                    self.f1_group_pos = 0;
+                    // Continuous mode (CONT + ADON). DISCEN wins over CONT,
+                    // a combination the RMs forbid: each trigger runs one
+                    // subgroup.
+                    if (cr2 & F1_CR2_CONT) != 0 && (cr2 & F1_CR2_ADON) != 0 && !discontinuous {
+                        self.f1_run_end = self.f1_group_len();
+                        self.start_conversion();
+                    }
                 }
             }
         }
@@ -642,9 +1099,16 @@ impl Adc {
     ///   IN17/IN18 are the temperature sensor and V_BAT.
     /// * H7 — 0..=19, the `PCSEL` bitmap's width.
     /// * U5 — 0..=19, the `PCSEL` bitmap's width.
+    /// * V2 (F0/L0) — 0..=18, the `CHSELR` bitmap's width: IN0..IN15 on pads,
+    ///   then the internal channels.
+    /// * ADC4 (WBA) — 0..=13, `CHSEL0..CHSEL13`.
     pub fn channel_count(&self) -> u8 {
         match &self.regs {
-            AdcRegs::Stm32F1(_) | AdcRegs::Stm32F4(_) | AdcRegs::Stm32L4(_) => 19,
+            AdcRegs::Stm32V2(V2AdcRegs { adc4: Some(_), .. }) => ADC4_CHANNELS as u8,
+            AdcRegs::Stm32F1(_)
+            | AdcRegs::Stm32F4(_)
+            | AdcRegs::Stm32L4(_)
+            | AdcRegs::Stm32V2(_) => 19,
             AdcRegs::Stm32H7(_) | AdcRegs::Stm32U5(_) => 20,
         }
     }
@@ -664,11 +1128,121 @@ impl Adc {
         }
     }
 
+    /// An F1/F4 trigger (SWSTART). Without `CR1.DISCEN` it converts the
+    /// whole group from SQ1. With it, it converts the next DISCNUM + 1
+    /// channels from the DISCEN pointer, stopping short at SQ(L+1) (no
+    /// rollover); the trigger after that one restarts at SQ1 (RM0008
+    /// §11.3.10, RM0090 §13.3.10).
+    fn start_f1_trigger(&mut self) {
+        let len = self.f1_group_len();
+        let (cr1, _) = self.f1_ctrl();
+        if cr1 & F1_CR1_DISCEN != 0 {
+            let offset = self.discontinuous_next % len;
+            let n = ((cr1 >> F1_CR1_DISCNUM_SHIFT) & 0x7) as usize + 1;
+            let end = (offset + n).min(len);
+            self.discontinuous_next = end % len;
+            self.f1_group_pos = offset;
+            self.f1_run_end = end;
+        } else {
+            self.f1_group_pos = 0;
+            self.f1_run_end = len;
+        }
+        self.start_conversion();
+    }
+
     fn start_conversion(&mut self) {
+        self.acquire_f1_input();
+        self.sr &= !0x2; // clear EOC on start
+    }
+
+    /// Start the F1/F4 injected group (`JSWSTART`, or `JAUTO` after the
+    /// regular group): raise `JSTRT`, clear `JEOC`, and latch every `JSQx`
+    /// channel's input and VREF+ now. All `JL` + 1 results land together
+    /// after as many single-conversion times.
+    ///
+    /// Simplification, stated: silicon samples each injected channel in
+    /// turn and pauses a regular conversion it interrupts. Here the group
+    /// is held at the trigger and the regular countdown keeps running, so a
+    /// routed level that moves mid-group, or regular/injected timing
+    /// interplay, is not reproduced. `JDISCEN` is not modelled.
+    fn start_f1_injected(&mut self) {
+        let channels = match &self.regs {
+            AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => r.injected_channels(),
+            _ => return,
+        };
+        self.injected_samples = channels
+            .iter()
+            .map(|&ch| self.sample_f1_channel(ch))
+            .collect();
+        self.injected_remaining = Some(channels.len() as u32 * (self.conversion_time + 1));
+        self.sr = (self.sr & !F1_SR_JEOC) | F1_SR_JSTRT;
+    }
+
+    /// One cycle of the injected countdown. Returns whether its landing
+    /// raises the ADC interrupt. Shared by the walk and the scheduler.
+    fn advance_injected(&mut self) -> bool {
+        let Some(left) = self.injected_remaining.as_mut() else {
+            return false;
+        };
+        *left = left.saturating_sub(1);
+        if *left > 0 {
+            return false;
+        }
+        self.injected_remaining = None;
+        self.land_injected()
+    }
+
+    /// Write the injected results to `JDR1..JDR(JL+1)` in conversion order.
+    ///
+    /// Each result is the 12-bit code minus `JOFRx` (RM0008 §11.3.11 "the
+    /// result can be a negative value"), sign-extended: right-aligned it
+    /// fills bits 15:12 with the sign; left-aligned (`CR2.ALIGN`) it is
+    /// shifted by 3 so the sign is bit 15 (RM0008 Figure 31/32). A channel
+    /// with no routed level and no modeled internal source converts 0.
+    ///
+    /// `JEOC` rises at the end of the group. On the F1, `EOC` rises too:
+    /// RM0008 §11.12.1 sets it "at the end of a group channel conversion
+    /// (regular or injected)". The F2/F4 `EOC` is regular-only (RM0090
+    /// §13.13.1), so it is left alone there.
+    fn land_injected(&mut self) -> bool {
+        let samples = std::mem::take(&mut self.injected_samples);
+        let (cr1, cr2) = self.f1_ctrl();
+        let f1 = matches!(self.regs, AdcRegs::Stm32F1(_));
+        let (AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r)) = &mut self.regs else {
+            return false;
+        };
+        for (k, sample) in samples.iter().enumerate() {
+            let code = sample
+                .map(|s| Self::code_for_mv(s.millivolts, s.reference_millivolts))
+                .unwrap_or(0) as i32;
+            let signed = code - (r.jofr[k] & 0xFFF) as i32;
+            let aligned = if cr2 & F1_CR2_ALIGN != 0 {
+                signed << 3
+            } else {
+                signed
+            };
+            r.jdr[k] = u32::from(aligned as i16 as u16);
+        }
+        self.sr |= F1_SR_JEOC;
+        if f1 {
+            self.sr |= 1 << 1; // EOC
+        }
+        cr1 & F1_CR1_JEOCIE != 0 || (f1 && cr1 & (1 << 5) != 0)
+    }
+
+    /// Sample the current group channel and start its conversion countdown.
+    fn acquire_f1_input(&mut self) {
         self.converting = true;
         self.cycles_remaining = self.conversion_time;
         self.sampled_input = self.sample_f1_input();
-        self.sr &= !0x2; // clear EOC on start
+    }
+
+    /// Channels one F1/F4 trigger converts (1 on the other layouts).
+    fn f1_group_len(&self) -> usize {
+        match &self.regs {
+            AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => r.group_len(),
+            _ => 1,
+        }
     }
 
     /// (cr1, cr2) for the F1 control registers; (0, 0) on L4 (no conversion
@@ -676,17 +1250,25 @@ impl Adc {
     fn f1_ctrl(&self) -> (u32, u32) {
         match &self.regs {
             AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => (r.cr1, r.cr2),
-            // Neither the L4, the H7 nor the U5 runs the F1 countdown engine.
-            AdcRegs::Stm32L4(_) | AdcRegs::Stm32H7(_) | AdcRegs::Stm32U5(_) => (0, 0),
+            // Neither the L4, the H7, the U5 nor the V2 runs the F1 countdown
+            // engine.
+            AdcRegs::Stm32L4(_)
+            | AdcRegs::Stm32H7(_)
+            | AdcRegs::Stm32U5(_)
+            | AdcRegs::Stm32V2(_) => (0, 0),
         }
     }
 
-    /// Regular channel being converted: SQR3 SQ1[4:0] on the F1 layout; 0 on
-    /// the other families (their engines select from their own SQR1/PCSEL).
+    /// Regular channel being converted: the current group position's `SQx`
+    /// on the F1 layout (SQR3 SQ1[4:0] without `CR1.SCAN`); 0 on the other
+    /// families (their engines select from their own SQR1/PCSEL).
     fn f1_regular_channel(&self) -> usize {
         match &self.regs {
-            AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => (r.sqr3 & 0x1F) as usize,
-            AdcRegs::Stm32L4(_) | AdcRegs::Stm32H7(_) | AdcRegs::Stm32U5(_) => 0,
+            AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => r.group_channel(self.f1_group_pos),
+            AdcRegs::Stm32L4(_)
+            | AdcRegs::Stm32H7(_)
+            | AdcRegs::Stm32U5(_)
+            | AdcRegs::Stm32V2(_) => 0,
         }
     }
 
@@ -704,6 +1286,8 @@ impl Adc {
             0x38 => r.sqr3,
             0x3C => r.sqr4,
             0x40 => dr,
+            0x4C => r.jsqr,
+            0x80..=0x8C if reg % 4 == 0 => r.jdr[((reg - 0x80) / 4) as usize],
             0x308 => r.common_ccr,
             _ => {
                 crate::census_reg!("adc:Adc", reg, "read");
@@ -712,26 +1296,206 @@ impl Adc {
         }
     }
 
-    /// L4 single-conversion engine. ADSTART (CR bit 2) with ADEN (bit 0) and a
-    /// ready converter (ISR.ADRDY) converts the fixed internal source: loads DR
-    /// with the code for CFGR.RES, raises ISR.EOC + EOS, and auto-clears
-    /// ADSTART. Deterministic and immediate (no analog settling to model).
+    /// The `DR` value one L4/H7/U5 conversion of `ch` produces now, at the
+    /// layout's `CFGR.RES`: a routed input converts against the reference; a
+    /// channel nothing drives converts the layout's fixed internal source.
+    fn sqr_dr_for_channel(&self, ch: usize) -> u32 {
+        let (bits, undriven) = match &self.regs {
+            AdcRegs::Stm32L4(r) => {
+                let bits = l4_resolution_bits(r.cfgr);
+                (bits, l4_adc_code(bits))
+            }
+            AdcRegs::Stm32H7(r) => {
+                let bits = h7_resolution_bits(r.cfgr);
+                (bits, scaled_adc_code(bits))
+            }
+            AdcRegs::Stm32U5(r) => {
+                let bits = u5_resolution_bits(r.cfgr);
+                (bits, scaled_adc_code(bits))
+            }
+            _ => return 0,
+        };
+        match self.channel_inputs_mv.get(ch).copied().flatten() {
+            // Convert at 12 bits, then scale to the configured width rather
+            // than truncating a raw millivolt value.
+            Some(mv) => scaled_input_code(
+                Self::code_for_mv(f64::from(mv), self.reference_millivolts),
+                bits,
+            ),
+            None => undriven,
+        }
+    }
+
+    /// The `DR` value the sequence's next conversion of `ch` lands.
+    fn sequence_dr_for_channel(&self, ch: usize) -> u32 {
+        match self.regs {
+            AdcRegs::Stm32V2(_) => self.v2_dr_for_channel(ch),
+            _ => self.sqr_dr_for_channel(ch),
+        }
+    }
+
+    /// `(ISR, CR, CFGR, [SQR1..SQR4])` of an L4/H7/U5 block.
+    fn sqr_regs(&mut self) -> Option<(&mut u32, &mut u32, u32, [u32; 4])> {
+        match &mut self.regs {
+            AdcRegs::Stm32L4(r) => Some((
+                &mut r.isr,
+                &mut r.cr,
+                r.cfgr,
+                [r.sqr1, r.sqr2, r.sqr3, r.sqr4],
+            )),
+            AdcRegs::Stm32H7(r) => Some((
+                &mut r.isr,
+                &mut r.cr,
+                r.cfgr,
+                [r.sqr1, r.sqr2, r.sqr3, r.sqr4],
+            )),
+            AdcRegs::Stm32U5(r) => Some((
+                &mut r.isr,
+                &mut r.cr,
+                r.cfgr,
+                [r.sqr1, r.sqr2, r.sqr3, r.sqr4],
+            )),
+            _ => None,
+        }
+    }
+
+    /// Start an L4/H7/U5 regular sequence of two or more channels (nonzero
+    /// `SQR1.L`) on the shared [`RegularSequence`] engine: `SQ1` lands in `DR` at
+    /// once and raises `EOC`; each later channel lands as the previous result
+    /// is read out of `DR`, and the landing of the last raises `EOS`. `CONT`
+    /// wraps round for as long as `DR` is read; otherwise `ADSTART`
+    /// self-clears. `DISCEN` runs only the next `DISCNUM` + 1 channels per
+    /// trigger, stopping short at the sequence end (which raises `EOS`); the
+    /// next trigger resumes from there, wrapping to `SQ1`. `DISCEN` wins over
+    /// `CONT`, which the reference manuals forbid together. Returns `false`, having dropped
+    /// any earlier sequence, for a one-channel sequence, which the caller
+    /// converts on its own (unchanged) single-conversion path.
+    fn maybe_start_sqr_sequence(&mut self) -> bool {
+        let Some((_, _, cfgr, sqr)) = self.sqr_regs() else {
+            return false;
+        };
+        let channels = sqr_regular_sequence(sqr);
+        if channels.len() < 2 {
+            self.regular_sequence = None;
+            return false;
+        }
+        let len = channels.len();
+        let discontinuous = cfgr & SQR_CFGR_DISCEN != 0;
+        let cont = !discontinuous && cfgr & SQR_CFGR_CONT != 0;
+        let (offset, limit) = if discontinuous {
+            let offset = self.discontinuous_next % len;
+            let n = ((cfgr >> SQR_CFGR_DISCNUM_SHIFT) & 0x7) as usize + 1;
+            let n = n.min(len - offset);
+            self.discontinuous_next = (offset + n) % len;
+            (offset, n)
+        } else if cont {
+            (0, usize::MAX)
+        } else {
+            (0, len)
+        };
+        let code = self.sqr_dr_for_channel(channels[offset]);
+        self.dr = code;
+        let ends_sequence = offset == len - 1;
+        self.regular_sequence = Some(RegularSequence {
+            channels,
+            offset,
+            limit,
+            landed: Cell::new(1),
+            dr: Cell::new(code),
+            eoc_cleared_at: 1,
+            eos_cleared_at: 1,
+        });
+        if let Some((isr, cr, _, _)) = self.sqr_regs() {
+            *isr |= SQR_ISR_EOC;
+            if ends_sequence {
+                *isr |= SQR_ISR_EOS;
+            }
+            if !cont {
+                *cr &= !SQR_CR_ADSTART;
+            }
+        }
+        true
+    }
+
+    /// `(ISR, CR, JSQR, wide packing, JDR1..4)` of an L4/G4/H5, H7 or U5 block.
+    fn sqr_injected_regs(&mut self) -> Option<(&mut u32, &mut u32, u32, bool, &mut [u32; 4])> {
+        match &mut self.regs {
+            AdcRegs::Stm32L4(r) => Some((&mut r.isr, &mut r.cr, r.jsqr, r.wide_jsqr, &mut r.jdr)),
+            AdcRegs::Stm32H7(r) => Some((&mut r.isr, &mut r.cr, r.jsqr, true, &mut r.jdr)),
+            AdcRegs::Stm32U5(r) => Some((&mut r.isr, &mut r.cr, r.jsqr, true, &mut r.jdr)),
+            _ => None,
+        }
+    }
+
+    /// L4/G4/H5/H7/U5 injected group (RM0351 §18.4.21, RM0440 §21.4.21,
+    /// RM0481, RM0433 §25.4.21, RM0456 §33.4.21). `JADSTART` with `ADEN`
+    /// and `ADRDY` and a software trigger (`JSQR.JEXTEN` = 0) converts
+    /// `JSQ1..JSQ(JL+1)` into `JDR1..JDR(JL+1)` at `CFGR.RES`, through the
+    /// same per-channel path as the regular sequence (routed level against
+    /// the reference, else the layout's internal source). `JEOC` and `JEOS`
+    /// rise and `JADSTART` self-clears. Immediate, like the regular engine.
+    /// `JADSTP` cancels a pending start.
+    ///
+    /// Not modelled, stated: hardware injected triggers (`JADSTART` stays
+    /// set, waiting, which is what silicon shows until the trigger fires),
+    /// `JAUTO`, `JDISCEN`, the `JSQR` context queue beyond its current
+    /// entry, `OFRy` offsets, and `JEOCIE`/`JEOSIE` interrupts (the regular
+    /// path on these maps raises none either). `DR` and the regular
+    /// sequence are untouched.
+    fn maybe_start_sqr_injected(&mut self) {
+        let Some((isr, cr, jsqr, wide, _)) = self.sqr_injected_regs() else {
+            return;
+        };
+        if *cr & SQR_CR_JADSTP != 0 {
+            *cr &= !(SQR_CR_JADSTP | SQR_CR_JADSTART);
+            return;
+        }
+        // ADEN, ADRDY, JADSTART.
+        if *cr & 0x1 == 0 || *isr & 0x1 == 0 || *cr & SQR_CR_JADSTART == 0 {
+            return;
+        }
+        let Some(channels) = sqr_injected_sequence(jsqr, wide) else {
+            return;
+        };
+        let codes: Vec<u32> = channels
+            .iter()
+            .map(|&ch| self.sqr_dr_for_channel(ch))
+            .collect();
+        if let Some((isr, cr, _, _, jdr)) = self.sqr_injected_regs() {
+            jdr[..codes.len()].copy_from_slice(&codes);
+            *isr |= SQR_ISR_JEOC | SQR_ISR_JEOS;
+            *cr &= !SQR_CR_JADSTART;
+        }
+    }
+
+    /// L4 conversion engine. ADSTART (CR bit 2) with ADEN (bit 0) and a
+    /// ready converter (ISR.ADRDY) converts the regular sequence: a routed
+    /// input converts against the reference at CFGR.RES, and a channel nothing
+    /// drives converts the fixed internal source. A one-channel sequence
+    /// (`SQR1.L` = 0) converts `SQR1.SQ1` (bits 10:6), loads DR, raises
+    /// ISR.EOC + EOS and auto-clears ADSTART; a longer one runs through
+    /// [`Self::maybe_start_sqr_sequence`]. Deterministic and immediate (no
+    /// analog settling to model).
     fn maybe_start_l4_conversion(&mut self, cr: u32) {
         let aden = cr & 0x1 != 0;
         let adstart = cr & (1 << 2) != 0;
-        let (adrdy, cfgr) = match &self.regs {
-            AdcRegs::Stm32L4(r) => (r.isr & 0x1 != 0, r.cfgr),
-            // H7 and U5 have their own engines (`maybe_start_h7_conversion`,
-            // `maybe_start_u5_conversion`).
+        let (adrdy, sqr1) = match &self.regs {
+            AdcRegs::Stm32L4(r) => (r.isr & 0x1 != 0, r.sqr1),
+            // H7, U5 and V2 have their own engines (`maybe_start_h7_conversion`,
+            // `maybe_start_u5_conversion`, `maybe_start_v2_conversion`).
             AdcRegs::Stm32F1(_)
             | AdcRegs::Stm32F4(_)
             | AdcRegs::Stm32H7(_)
-            | AdcRegs::Stm32U5(_) => return,
+            | AdcRegs::Stm32U5(_)
+            | AdcRegs::Stm32V2(_) => return,
         };
         if !(aden && adstart && adrdy) {
             return;
         }
-        self.dr = l4_adc_code(l4_resolution_bits(cfgr));
+        if self.maybe_start_sqr_sequence() {
+            return;
+        }
+        self.dr = self.sqr_dr_for_channel(((sqr1 >> 6) & 0x1F) as usize);
         if let AdcRegs::Stm32L4(r) = &mut self.regs {
             r.cr &= !(1 << 2); // ADSTART auto-clears after a single conversion
             r.isr |= (1 << 2) | (1 << 3); // EOC | EOS
@@ -827,7 +1591,8 @@ impl Adc {
         }
     }
 
-    /// One H7 regular conversion. Requires `ADEN` + `ADRDY` + `ADSTART`.
+    /// H7 regular conversion. Requires `ADEN` + `ADRDY` + `ADSTART`. A
+    /// sequence longer than `SQ1` runs through [`Self::maybe_start_sqr_sequence`].
     fn maybe_start_h7_conversion(&mut self) {
         let AdcRegs::Stm32H7(r) = &self.regs else {
             return;
@@ -836,21 +1601,12 @@ impl Adc {
             return;
         }
         let cfgr = r.cfgr;
-        let bits = h7_resolution_bits(cfgr);
+        let sqr1 = r.sqr1;
+        if self.maybe_start_sqr_sequence() {
+            return;
+        }
         // SQR1[10:6] is the first conversion in the regular sequence (SQ1).
-        let ch = ((r.sqr1 >> 6) & 0x1F) as usize;
-        let injected = self.channel_inputs_mv.get(ch).copied().flatten();
-        // Preserve the existing 12-bit mV conversion, then scale to the
-        // configured width rather than truncating a raw millivolt value.
-        let code = if let Some(injected) = injected {
-            scaled_input_code(
-                Self::code_for_mv(f64::from(injected), self.reference_millivolts),
-                bits,
-            )
-        } else {
-            scaled_adc_code(bits)
-        };
-        self.dr = code;
+        self.dr = self.sqr_dr_for_channel(((sqr1 >> 6) & 0x1F) as usize);
         let cont = cfgr & (1 << 13) != 0;
         if let AdcRegs::Stm32H7(r) = &mut self.regs {
             r.isr |= (1 << 2) | (1 << 3); // EOC | EOS
@@ -866,6 +1622,7 @@ impl Adc {
         if reg == 0x08 {
             self.h7_apply_cr(value);
             self.maybe_start_h7_conversion();
+            self.maybe_start_sqr_injected();
             return;
         }
         if let AdcRegs::Stm32H7(r) = &mut self.regs {
@@ -972,7 +1729,8 @@ impl Adc {
         }
     }
 
-    /// One U5 regular conversion. Requires `ADEN` + `ADRDY` + `ADSTART`.
+    /// U5 regular conversion. Requires `ADEN` + `ADRDY` + `ADSTART`. A
+    /// sequence longer than `SQ1` runs through [`Self::maybe_start_sqr_sequence`].
     fn maybe_start_u5_conversion(&mut self) {
         let AdcRegs::Stm32U5(r) = &self.regs else {
             return;
@@ -981,18 +1739,11 @@ impl Adc {
             return;
         }
         let cfgr = r.cfgr;
-        let bits = u5_resolution_bits(cfgr);
-        let ch = ((r.sqr1 >> 6) & 0x1F) as usize;
-        let injected = self.channel_inputs_mv.get(ch).copied().flatten();
-        let code = if let Some(injected) = injected {
-            scaled_input_code(
-                Self::code_for_mv(f64::from(injected), self.reference_millivolts),
-                bits,
-            )
-        } else {
-            scaled_adc_code(bits)
-        };
-        self.dr = code;
+        let sqr1 = r.sqr1;
+        if self.maybe_start_sqr_sequence() {
+            return;
+        }
+        self.dr = self.sqr_dr_for_channel(((sqr1 >> 6) & 0x1F) as usize);
         let cont = cfgr & (1 << 13) != 0;
         if let AdcRegs::Stm32U5(r) = &mut self.regs {
             r.isr |= (1 << 2) | (1 << 3); // EOC | EOS
@@ -1006,6 +1757,7 @@ impl Adc {
         if reg == 0x08 {
             self.u5_apply_cr(value);
             self.maybe_start_u5_conversion();
+            self.maybe_start_sqr_injected();
             return;
         }
         if let AdcRegs::Stm32U5(r) = &mut self.regs {
@@ -1039,6 +1791,296 @@ impl Adc {
                 0xC8 => r.calfact2 = value,
                 0x308 => r.common_ccr = value,
                 _ => {}
+            }
+        }
+    }
+
+    fn read_reg_v2(r: &V2AdcRegs, dr: u32, reg: u64) -> u32 {
+        if let Some(a) = &r.adc4 {
+            match reg {
+                0x24 => return a.awd2tr,
+                0x2C => return a.awd3tr,
+                0x44 => return a.pwrr,
+                0xA0 => return a.awd2cr,
+                0xA4 => return a.awd3cr,
+                0xC4 => return r.calfact,
+                0xB4 => {
+                    crate::census_reg!("adc:Adc", reg, "read");
+                    return 0;
+                }
+                _ => {}
+            }
+        }
+        match reg {
+            0x00 => r.isr,
+            0x04 => r.ier,
+            0x08 => r.cr,
+            0x0C => r.cfgr1,
+            0x10 => r.cfgr2,
+            0x14 => r.smpr,
+            0x20 => r.tr,
+            0x28 => r.chselr,
+            0x40 => dr,
+            0xB4 => r.calfact,
+            0x308 => r.ccr,
+            _ => {
+                crate::census_reg!("adc:Adc", reg, "read");
+                0
+            }
+        }
+    }
+
+    /// V2 `CR`. `ADCAL` completes at once (no analog settling to model): it
+    /// self-clears and raises `ISR.EOCAL`. `ADEN` raises `ADRDY`; there is no
+    /// `DEEPPWD` to clear first, unlike the L4. `ADDIS` turns the converter
+    /// off, and `ADSTP` stops an ongoing (continuous) conversion.
+    fn v2_apply_cr(&mut self, value: u32) {
+        let AdcRegs::Stm32V2(r) = &mut self.regs else {
+            return;
+        };
+        r.cr = value & !(V2_CR_ADCAL | V2_CR_ADDIS | V2_CR_ADSTP);
+        // ADC4: the LDO must be on before ADEN can bring the converter up.
+        let powered = if r.adc4.is_some() {
+            if r.cr & ADC4_CR_ADVREGEN != 0 {
+                r.isr |= ADC4_ISR_LDORDY;
+                true
+            } else {
+                false
+            }
+        } else {
+            true
+        };
+        if value & V2_CR_ADCAL != 0 {
+            r.isr |= V2_ISR_EOCAL;
+        }
+        if value & V2_CR_ADSTP != 0 {
+            r.cr &= !V2_CR_ADSTART;
+        }
+        if value & V2_CR_ADDIS != 0 {
+            r.cr &= !(V2_CR_ADEN | V2_CR_ADSTART);
+            r.isr &= !V2_ISR_ADRDY;
+        } else if r.cr & V2_CR_ADEN != 0 && powered {
+            r.isr |= V2_ISR_ADRDY;
+        }
+    }
+
+    /// The `DR` value one V2 conversion of `ch` produces now: at `CFGR1.RES`,
+    /// right- or left-aligned per `CFGR1.ALIGN`. A routed input converts
+    /// against the reference. IN17 is V_REFINT while `CCR.VREFEN` is set and
+    /// 0 V while it is clear; any other channel nothing drives converts the
+    /// fixed internal source, as the L4 map does.
+    fn v2_dr_for_channel(&self, ch: usize) -> u32 {
+        let AdcRegs::Stm32V2(r) = &self.regs else {
+            return 0;
+        };
+        let (cfgr1, ccr) = (r.cfgr1, r.ccr);
+        let bits = r.resolution_bits();
+        let vrefint_mv = if ccr & V2_CCR_VREFEN != 0 {
+            V2_VREFINT_MV
+        } else {
+            0.0
+        };
+        // ADC4's internal channels (V_REFINT, temperature sensor, V_CORE) are
+        // not modelled; an undriven ADC4 channel converts the fixed source.
+        let internal_mv = (r.adc4.is_none() && ch == V2_VREFINT_CHANNEL).then_some(vrefint_mv);
+        let input_mv = self.channel_inputs_mv[ch].map(f64::from).or(internal_mv);
+        let code = match input_mv {
+            Some(mv) => scaled_input_code(Self::code_for_mv(mv, self.reference_millivolts), bits),
+            None => l4_adc_code(bits),
+        };
+        // Left alignment is half-word aligned, except at 6 bits, where it is
+        // byte aligned (RM0091 §13.6.1, RM0367 §14.6.1).
+        match (cfgr1 & V2_CFGR1_ALIGN != 0, bits) {
+            (false, _) => code,
+            (true, 6) => code << 2,
+            (true, bits) => code << (16 - bits),
+        }
+    }
+
+    /// V2 conversion. `ADSTART` with the converter ready runs the `CHSELR`
+    /// sequence (see [`V2AdcRegs::sequence`]): its first channel lands in `DR`
+    /// at once and raises `EOSMP | EOC`, plus `EOS` if it is also the last.
+    /// The rest land one per `DR` read (see [`RegularSequence`]). `CONT` wraps
+    /// round the sequence for as long as `DR` is read; `DISCEN` converts only
+    /// the next channel per trigger. `ADSTART` self-clears unless `CONT` is
+    /// set. An empty `CHSELR` converts nothing.
+    fn maybe_start_v2_conversion(&mut self) {
+        let AdcRegs::Stm32V2(r) = &self.regs else {
+            return;
+        };
+        let ready = r.cr & V2_CR_ADEN != 0 && r.isr & V2_ISR_ADRDY != 0;
+        if !ready || r.cr & V2_CR_ADSTART == 0 {
+            return;
+        }
+        let channels = r.sequence();
+        if channels.is_empty() {
+            return;
+        }
+        let cfgr1 = r.cfgr1;
+        let len = channels.len();
+        let (offset, limit) = if cfgr1 & V2_CFGR1_DISCEN != 0 {
+            let offset = self.discontinuous_next % len;
+            self.discontinuous_next = (offset + 1) % len;
+            (offset, 1)
+        } else if cfgr1 & V2_CFGR1_CONT != 0 {
+            (0, usize::MAX)
+        } else {
+            (0, len)
+        };
+        let code = self.v2_dr_for_channel(channels[offset]);
+        self.dr = code;
+        let ends_sequence = offset == len - 1;
+        self.regular_sequence = Some(RegularSequence {
+            channels,
+            offset,
+            limit,
+            landed: Cell::new(1),
+            dr: Cell::new(code),
+            eoc_cleared_at: 1,
+            eos_cleared_at: 1,
+        });
+        if let AdcRegs::Stm32V2(r) = &mut self.regs {
+            r.isr |= V2_ISR_EOSMP | V2_ISR_EOC;
+            if ends_sequence {
+                r.isr |= V2_ISR_EOS;
+            }
+            if cfgr1 & V2_CFGR1_CONT == 0 {
+                r.cr &= !V2_CR_ADSTART;
+            }
+        }
+    }
+
+    /// Stop the V2 sequence: the result in `DR` stays, nothing more lands.
+    fn stop_regular_sequence(&mut self) {
+        if let Some(sequence) = self.regular_sequence.take() {
+            self.dr = sequence.dr.get();
+        }
+    }
+
+    /// V2 `DR` read: the result in `DR`, landing the sequence's next
+    /// conversion if this trigger has one.
+    fn read_sequence_dr(&self) -> u32 {
+        let Some(sequence) = &self.regular_sequence else {
+            return self.dr;
+        };
+        let value = sequence.dr.get();
+        let landed = sequence.landed.get();
+        if landed < sequence.limit {
+            let ch = sequence.channels[sequence.position(landed)];
+            sequence.dr.set(self.sequence_dr_for_channel(ch));
+            sequence.landed.set(landed + 1);
+        }
+        value
+    }
+
+    /// Register word of a sequencing layout (V2, L4, H7, U5) as firmware
+    /// reads it: `ISR` carries the flags later landings raised, `DR` (0x40 on
+    /// all four) the result of the sequence in progress. With `consume`, a
+    /// `DR` read lands the next conversion. With no sequence running this is
+    /// the plain register read.
+    fn read_sequenced_word(&self, reg: u64, consume: bool) -> u32 {
+        let plain = |reg| match &self.regs {
+            AdcRegs::Stm32L4(r) => Self::read_reg_l4(r, self.dr, reg),
+            AdcRegs::Stm32H7(r) => Self::read_reg_h7(r, self.dr, reg),
+            AdcRegs::Stm32U5(r) => Self::read_reg_u5(r, self.dr, reg),
+            AdcRegs::Stm32V2(r) => Self::read_reg_v2(r, self.dr, reg),
+            AdcRegs::Stm32F1(_) | AdcRegs::Stm32F4(_) => 0,
+        };
+        match (reg, &self.regular_sequence) {
+            (0x00, Some(sequence)) => plain(reg) | sequence.pending_flags(),
+            (0x40, _) if consume => self.read_sequence_dr(),
+            (0x40, Some(sequence)) => sequence.dr.get(),
+            _ => plain(reg),
+        }
+    }
+
+    /// Does this layout run [`RegularSequence`]s (so `DR` reads consume)?
+    fn sequences(&self) -> bool {
+        !matches!(self.regs, AdcRegs::Stm32F1(_) | AdcRegs::Stm32F4(_))
+    }
+
+    /// Book-keeping a sequencing layout's `ISR` / `CR` write does to the
+    /// sequence in progress: clearing `EOC`/`EOS` (rc_w1) records how many
+    /// landings it covered; `ADSTP` / `ADDIS` stop the sequence.
+    fn note_sequence_write(&mut self, reg: u64, value: u32) {
+        match reg {
+            0x00 => {
+                if let Some(sequence) = &mut self.regular_sequence {
+                    let landed = sequence.landed.get();
+                    if value & V2_ISR_EOC != 0 {
+                        sequence.eoc_cleared_at = landed;
+                    }
+                    if value & V2_ISR_EOS != 0 {
+                        sequence.eos_cleared_at = landed;
+                    }
+                }
+            }
+            0x08 if value & (SQR_CR_ADSTP | SQR_CR_ADDIS) != 0 => {
+                self.stop_regular_sequence();
+                self.discontinuous_next = 0;
+            }
+            // A new L4/H7/U5 sequence or mode restarts the DISCEN pointer
+            // (`write_reg_v2` does this for the V2's CFGR1 / CHSELR).
+            0x0C | 0x30 | 0x34 | 0x38 | 0x3C if !matches!(self.regs, AdcRegs::Stm32V2(_)) => {
+                self.discontinuous_next = 0;
+            }
+            _ => {}
+        }
+    }
+
+    fn write_reg_v2(&mut self, reg: u64, value: u32) {
+        if reg == 0x08 {
+            self.v2_apply_cr(value);
+            if value & (V2_CR_ADSTP | V2_CR_ADDIS) != 0 {
+                self.discontinuous_next = 0;
+            }
+            self.maybe_start_v2_conversion();
+            return;
+        }
+        // A new sequence or mode restarts the DISCEN pointer.
+        if matches!(reg, 0x0C | 0x28) {
+            self.discontinuous_next = 0;
+        }
+        if let AdcRegs::Stm32V2(r) = &mut self.regs {
+            let sequence_mode = r.cfgr1 & ADC4_CFGR1_CHSELRMOD != 0;
+            if let Some(a) = &mut r.adc4 {
+                match reg {
+                    0x24 => a.awd2tr = value,
+                    0x2C => a.awd3tr = value,
+                    0x44 => a.pwrr = value & 0x3,
+                    0xA0 => a.awd2cr = value,
+                    0xA4 => a.awd3cr = value,
+                    0xC4 => r.calfact = value,
+                    // In sequence mode every bit of CHSELR is an SQx nibble.
+                    0x28 if sequence_mode => r.chselr = value,
+                    0x28 => r.chselr = value & ((1 << ADC4_CHANNELS) - 1),
+                    0xB4 => crate::census_reg!("adc:Adc", reg, "write"),
+                    _ => {
+                        self.write_reg_v2_common(reg, value);
+                    }
+                }
+                return;
+            }
+        }
+        self.write_reg_v2_common(reg, value);
+    }
+
+    fn write_reg_v2_common(&mut self, reg: u64, value: u32) {
+        if let AdcRegs::Stm32V2(r) = &mut self.regs {
+            match reg {
+                0x00 => r.isr &= !value, // rc_w1
+                0x04 => r.ier = value,
+                0x0C => r.cfgr1 = value,
+                0x10 => r.cfgr2 = value,
+                0x14 => r.smpr = value,
+                0x20 => r.tr = value,
+                0x28 => r.chselr = value & V2_CHSELR_MASK,
+                0x40 => {} // DR read-only
+                0xB4 => r.calfact = value,
+                0x308 => r.ccr = value,
+                _ => {
+                    crate::census_reg!("adc:Adc", reg, "write");
+                }
             }
         }
     }
@@ -1095,6 +2137,8 @@ impl Adc {
             0x38 => r.sqr3 = value,
             0x3C => r.sqr4 = value,
             0x40 => {} // DR read-only
+            0x4C => r.jsqr = value,
+            0x80..=0x8C if reg % 4 == 0 => {} // JDRn read-only
             0x308 => r.common_ccr = value,
             _ => {
                 crate::census_reg!("adc:Adc", reg, "write");
@@ -1106,12 +2150,16 @@ impl Adc {
     /// once the remaining counters are cleared.
     fn cancel_f1_pending(&mut self) {
         self.converting = false;
+        self.f1_group_pos = 0;
+        self.f1_run_end = 0;
         self.cycles_remaining = 0;
         self.chain_live = false;
         self.f1_rstcal_remaining = None;
         self.f1_cal_remaining = None;
         self.f1_rstcal_live = false;
         self.f1_cal_live = false;
+        self.injected_remaining = None;
+        self.injected_samples.clear();
     }
 
     /// Apply a full CR2 word on the STM32F1 layout after a byte merge.
@@ -1129,17 +2177,21 @@ impl Adc {
     /// write — only when the scheduled completion fires, or when ADON drops
     /// (pending work is cancelled and the command bits are dropped so a HAL
     /// poll cannot hang on a cancelled request).
-    fn apply_f1_cr2(&mut self, old_cr2: u32, new_cr2: u32) -> bool {
+    ///
+    /// Returns `(regular trigger, injected trigger)`. The injected group is
+    /// software-started by a rising `JSWSTART` (bit 21) with
+    /// `JEXTSEL[14:12]` = 111, the same contract as the regular pair.
+    fn apply_f1_cr2(&mut self, old_cr2: u32, new_cr2: u32) -> (bool, bool) {
         let mut cr2 = new_cr2;
         let adon = (cr2 & F1_CR2_ADON) != 0;
         if !adon {
             self.cancel_f1_pending();
             // Drop sticky command bits so a cancelled cal cannot trap a poll.
-            cr2 &= !(F1_CR2_RSTCAL | F1_CR2_CAL | F1_CR2_SWSTART);
+            cr2 &= !(F1_CR2_RSTCAL | F1_CR2_CAL | F1_CR2_SWSTART | F1_CR2_JSWSTART);
             if let AdcRegs::Stm32F1(r) = &mut self.regs {
                 r.cr2 = cr2;
             }
-            return false;
+            return (false, false);
         }
 
         let rstcal_rise = (cr2 & F1_CR2_RSTCAL) != 0 && (old_cr2 & F1_CR2_RSTCAL) == 0;
@@ -1173,35 +2225,41 @@ impl Adc {
         // Touch the constant so a rename/removal cannot silently drop the bit.
         debug_assert_eq!(F1_CR2_EXTTRIG, 1 << 20);
 
+        let jswstart_rise = (cr2 & F1_CR2_JSWSTART) != 0 && (old_cr2 & F1_CR2_JSWSTART) == 0;
+        let mut injected = false;
+        if jswstart_rise {
+            cr2 &= !F1_CR2_JSWSTART;
+            injected = (cr2 & F1_CR2_JEXTSEL) == F1_CR2_JEXTSEL;
+        }
+
         if let AdcRegs::Stm32F1(r) = &mut self.regs {
             r.cr2 = cr2;
         }
-        trigger
+        (trigger, injected)
     }
 
-    /// F2/F4 CR2 write: SWSTART at bit 30, rising edge + ADON starts conversion.
-    fn apply_f4_cr2(&mut self, old_cr2: u32, new_cr2: u32) -> bool {
+    /// F2/F4 CR2 write: SWSTART at bit 30, rising edge + ADON starts conversion;
+    /// JSWSTART at bit 22 likewise starts the injected group. Returns
+    /// `(regular trigger, injected trigger)`.
+    fn apply_f4_cr2(&mut self, old_cr2: u32, new_cr2: u32) -> (bool, bool) {
         let mut cr2 = new_cr2;
         let adon = (cr2 & F1_CR2_ADON) != 0;
         if !adon {
             self.cancel_f1_pending();
-            cr2 &= !F4_CR2_SWSTART;
+            cr2 &= !(F4_CR2_SWSTART | F4_CR2_JSWSTART);
             if let AdcRegs::Stm32F4(r) = &mut self.regs {
                 r.cr2 = cr2;
             }
-            return false;
+            return (false, false);
         }
-        let swstart = (cr2 & F4_CR2_SWSTART) != 0;
-        let old_swstart = (old_cr2 & F4_CR2_SWSTART) != 0;
-        let mut trigger = false;
-        if swstart && !old_swstart {
-            cr2 &= !F4_CR2_SWSTART;
-            trigger = true;
-        }
+        let rise = |bit: u32| (cr2 & bit) != 0 && (old_cr2 & bit) == 0;
+        let trigger = rise(F4_CR2_SWSTART);
+        let injected = rise(F4_CR2_JSWSTART);
+        cr2 &= !(F4_CR2_SWSTART | F4_CR2_JSWSTART);
         if let AdcRegs::Stm32F4(r) = &mut self.regs {
             r.cr2 = cr2;
         }
-        trigger
+        (trigger, injected)
     }
 
     /// Advance one model cycle of F1 RSTCAL/CAL countdowns (walk path).
@@ -1275,16 +2333,23 @@ impl Peripheral for Adc {
                 0x00..=0x03 => self.sr,
                 0x04..=0x07 => r.cr1,
                 0x08..=0x0B => r.cr2,
+                0x2C..=0x2F => r.sqr1,
+                0x30..=0x33 => r.sqr2,
                 0x34..=0x37 => r.sqr3,
+                0x14..=0x23 => r.jofr[((offset - 0x14) / 4) as usize],
+                0x38..=0x3B => r.jsqr,
+                0x3C..=0x4B => r.jdr[((offset - 0x3C) / 4) as usize],
                 0x4C..=0x4F => self.dr,
                 _ => {
                     crate::census_reg!("adc:Adc", offset, "read");
                     0
                 }
             },
-            AdcRegs::Stm32L4(r) => Self::read_reg_l4(r, self.dr, offset & !3),
-            AdcRegs::Stm32H7(r) => Self::read_reg_h7(r, self.dr, offset & !3),
-            AdcRegs::Stm32U5(r) => Self::read_reg_u5(r, self.dr, offset & !3),
+            // A byte read of DR's low byte is the read that consumes it.
+            AdcRegs::Stm32L4(_)
+            | AdcRegs::Stm32H7(_)
+            | AdcRegs::Stm32U5(_)
+            | AdcRegs::Stm32V2(_) => self.read_sequenced_word(offset & !3, offset & 3 == 0),
         };
         let shift = (offset % 4) * 8;
         Ok(((val >> shift) & 0xFF) as u8)
@@ -1300,7 +2365,13 @@ impl Peripheral for Adc {
                 0x00..=0x03 => self.sr = (self.sr & !mask) | val_shifted,
                 0x04..=0x07 => match &mut self.regs {
                     AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => {
+                        let old = r.cr1;
                         r.cr1 = (r.cr1 & !mask) | val_shifted;
+                        // A new mode restarts the DISCEN pointer at SQ1.
+                        let mode = F1_CR1_SCAN | F1_CR1_DISCEN | (0x7 << F1_CR1_DISCNUM_SHIFT);
+                        if (old ^ r.cr1) & mode != 0 {
+                            self.discontinuous_next = 0;
+                        }
                     }
                     _ => {}
                 },
@@ -1313,21 +2384,44 @@ impl Peripheral for Adc {
                         AdcRegs::Stm32F4(r) => (r.cr2, (r.cr2 & !mask) | val_shifted, false),
                         _ => (0, 0, false),
                     };
-                    let trigger = if is_f1 {
+                    let (trigger, injected) = if is_f1 {
                         self.apply_f1_cr2(old_cr2, merged)
                     } else {
                         self.apply_f4_cr2(old_cr2, merged)
                     };
                     if trigger {
-                        self.start_conversion();
+                        self.start_f1_trigger();
+                    }
+                    if injected {
+                        self.start_f1_injected();
                     }
                 }
-                0x34..=0x37 => match &mut self.regs {
+                0x2C..=0x37 => match &mut self.regs {
                     AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => {
-                        r.sqr3 = (r.sqr3 & !mask) | val_shifted;
+                        let sqr = match offset & !3 {
+                            0x2C => &mut r.sqr1,
+                            0x30 => &mut r.sqr2,
+                            _ => &mut r.sqr3,
+                        };
+                        *sqr = (*sqr & !mask) | val_shifted;
+                        // A new group restarts the DISCEN pointer at SQ1.
+                        self.discontinuous_next = 0;
                     }
                     _ => {}
                 },
+                // JOFR1..4 (12-bit), JSQR (22-bit). JDR1..4 are read-only.
+                0x14..=0x23 | 0x38..=0x3B => match &mut self.regs {
+                    AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => {
+                        let (word, width) = if offset >= 0x38 {
+                            (&mut r.jsqr, 0x003F_FFFF)
+                        } else {
+                            (&mut r.jofr[((offset - 0x14) / 4) as usize], 0xFFF)
+                        };
+                        *word = ((*word & !mask) | val_shifted) & width;
+                    }
+                    _ => {}
+                },
+                0x3C..=0x4B => {}
                 _ => {
                     crate::census_reg!("adc:Adc", offset, "write");
                 }
@@ -1341,9 +2435,11 @@ impl Peripheral for Adc {
                     full = (Self::read_reg_l4(r, dr, reg) & !mask) | val_shifted;
                     Self::write_reg_l4(r, reg, full, calibration_completes);
                 }
+                self.note_sequence_write(reg, full);
                 // A write touching CR may have set ADSTART — try to convert.
                 if reg == 0x08 {
                     self.maybe_start_l4_conversion(full);
+                    self.maybe_start_sqr_injected();
                 }
             }
             AdcRegs::Stm32H7(_) => {
@@ -1358,6 +2454,7 @@ impl Peripheral for Adc {
                 } else {
                     0
                 };
+                self.note_sequence_write(reg, full);
                 self.write_reg_h7(reg, full);
             }
             AdcRegs::Stm32U5(_) => {
@@ -1370,10 +2467,47 @@ impl Peripheral for Adc {
                 } else {
                     0
                 };
+                self.note_sequence_write(reg, full);
                 self.write_reg_u5(reg, full);
+            }
+            AdcRegs::Stm32V2(_) => {
+                // Same byte-merge discipline as the H7 arm.
+                let reg = offset & !3;
+                let dr = self.dr;
+                let full = if let AdcRegs::Stm32V2(r) = &self.regs {
+                    (Self::read_reg_v2(r, dr, reg) & !mask) | val_shifted
+                } else {
+                    0
+                };
+                self.note_sequence_write(reg, full);
+                self.write_reg_v2(reg, full);
             }
         }
         Ok(())
+    }
+
+    // A sequencing layout's `DR` read lands the next conversion of a
+    // sequence, so a half-word or word read must consume it once, not once
+    // per byte.
+    fn read_u16(&self, offset: u64) -> SimResult<u16> {
+        if self.sequences() && offset & 3 != 3 {
+            let word = self.read_sequenced_word(offset & !3, offset & 3 == 0);
+            return Ok((word >> ((offset & 3) * 8)) as u16);
+        }
+        let b0 = self.read(offset)? as u16;
+        let b1 = self.read(offset + 1)? as u16;
+        Ok(b0 | (b1 << 8))
+    }
+
+    fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        if self.sequences() && offset & 3 == 0 {
+            return Ok(self.read_sequenced_word(offset, true));
+        }
+        let b0 = self.read(offset)? as u32;
+        let b1 = self.read(offset + 1)? as u32;
+        let b2 = self.read(offset + 2)? as u32;
+        let b3 = self.read(offset + 3)? as u32;
+        Ok(b0 | (b1 << 8) | (b2 << 16) | (b3 << 24))
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
@@ -1383,7 +2517,11 @@ impl Peripheral for Adc {
             return PeripheralTickResult::default();
         }
         self.advance_f1_calibration();
-        let irq = self.advance_conversion();
+        // Before the regular engine, so a JAUTO group started by this
+        // tick's regular landing counts down from the next tick, as it
+        // does on the scheduler path.
+        let injected_irq = self.advance_injected();
+        let irq = self.advance_conversion() || injected_irq;
         // Tick-cost normalization (mirrors SysTick B1): the legacy model charged
         // `cycles: 1` per converting tick into `total_cycles` — a sim artifact (a
         // real ADC conversion runs on the ADC clock and consumes zero *core*
@@ -1424,7 +2562,9 @@ impl Peripheral for Adc {
             return Vec::new();
         }
         let mut out = Vec::new();
-        if self.converting && !self.chain_live {
+        // The injected countdown rides the conversion chain: a JAUTO group
+        // starts inside `on_event`, where no new chain can be armed.
+        if (self.converting || self.injected_remaining.is_some()) && !self.chain_live {
             self.chain_live = true;
             out.push((0u64, F1_EVT_CONVERT));
         }
@@ -1468,12 +2608,14 @@ impl Peripheral for Adc {
                 }
             }
             _ => {
-                // Conversion countdown (token 0) — same engine as the walk.
-                let irq = self.advance_conversion();
-                self.chain_live = self.converting;
+                // Conversion + injected countdowns (token 0) — the same
+                // engine, in the same order, as the walk's `tick()`.
+                let injected_irq = self.advance_injected();
+                let irq = self.advance_conversion() || injected_irq;
+                self.chain_live = self.converting || self.injected_remaining.is_some();
                 crate::sched::EventResult {
                     raise_own_irq: irq,
-                    reschedule_delay: self.converting.then_some(1),
+                    reschedule_delay: self.chain_live.then_some(1),
                     ..Default::default()
                 }
             }
@@ -1561,6 +2703,285 @@ mod tests {
         adc.write_u32(0x34, 0).unwrap();
         let ch0 = adc.channel_input_count(0) as u32;
         assert_eq!(convert(&mut adc), ch0, "SQR3 SQ1 = 0 converts channel 0");
+    }
+
+    /// `SQ1..SQ16` read from SQR3, SQR2, SQR1 in that order, `L` from
+    /// `SQR1[23:20]`, and the three registers round-trip on both layouts.
+    #[test]
+    fn f1_group_reads_sq1_to_sq16_across_sqr3_sqr2_sqr1() {
+        for layout in [AdcRegisterLayout::Stm32F1, AdcRegisterLayout::Stm32F4] {
+            let mut adc = Adc::new_with_layout(layout);
+            // SQk = k + 1 (channels 1..=16), five bits per field.
+            let field = |first: u32, n: u32| (0..n).fold(0, |w, i| w | ((first + i) << (5 * i)));
+            let sqr3 = field(1, 6);
+            let sqr2 = field(7, 6);
+            let sqr1 = field(13, 4) | (15 << 20);
+            adc.write_u32(0x34, sqr3).unwrap();
+            adc.write_u32(0x30, sqr2).unwrap();
+            adc.write_u32(0x2C, sqr1).unwrap();
+            assert_eq!(adc.read_u32(0x34).unwrap(), sqr3, "{layout:?} SQR3");
+            assert_eq!(adc.read_u32(0x30).unwrap(), sqr2, "{layout:?} SQR2");
+            assert_eq!(adc.read_u32(0x2C).unwrap(), sqr1, "{layout:?} SQR1");
+            let (AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r)) = &adc.regs else {
+                unreachable!()
+            };
+            assert_eq!(r.group_len(), 1, "{layout:?}: no SCAN converts SQ1 alone");
+            adc.write_u32(0x04, F1_CR1_SCAN).unwrap();
+            let (AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r)) = &adc.regs else {
+                unreachable!()
+            };
+            assert_eq!(r.group_len(), 16, "{layout:?}: SCAN with L = 15");
+            let order: Vec<usize> = (0..16).map(|k| r.group_channel(k)).collect();
+            assert_eq!(order, (1..=16).collect::<Vec<_>>(), "{layout:?} SQ order");
+        }
+    }
+
+    /// Tick until the current conversion lands; returns the ticks it took.
+    fn tick_until_landed(adc: &mut Adc) -> usize {
+        let pos = adc.f1_group_pos;
+        for n in 1..=64 {
+            adc.tick();
+            if !adc.converting || adc.f1_group_pos != pos {
+                return n;
+            }
+        }
+        panic!("conversion never landed");
+    }
+
+    /// RM0008 §11.3.8: with `CR1.SCAN` one SWSTART converts `SQ1..SQ(L+1)`
+    /// back to back, each sampled when its own acquisition begins, and the F1
+    /// raises `EOC` (and its interrupt) once, at the end of the group, with
+    /// the LAST channel in `DR`.
+    #[test]
+    fn f1_scan_converts_the_whole_group_and_raises_eoc_at_its_end() {
+        let mut adc = Adc::new();
+        adc.set_channel_input(3, 1000);
+        adc.set_channel_input(7, 2000);
+        adc.set_channel_input(12, 3000);
+        let code = |mv: f64| Adc::code_for_mv(mv, ADC_VREF_MV);
+        // SQ1 = 7, SQ2 = 3, ..., SQ7 = 12 (in SQR2): L = 6.
+        adc.write_u32(
+            0x34,
+            7 | (3 << 5) | (3 << 10) | (3 << 15) | (3 << 20) | (3 << 25),
+        )
+        .unwrap();
+        adc.write_u32(0x30, 12).unwrap();
+        adc.write_u32(0x2C, 6 << 20).unwrap();
+        adc.write_u32(0x04, F1_CR1_SCAN | (1 << 5)).unwrap(); // SCAN | EOCIE
+        f1_software_start(&mut adc);
+
+        let mut landed = Vec::new();
+        let mut irqs = 0;
+        for k in 0..7 {
+            assert_eq!(tick_until_landed(&mut adc), 15, "conversion {k} timing");
+            landed.push(adc.dr);
+            let eoc = adc.sr & (1 << 1) != 0;
+            assert_eq!(eoc, k == 6, "F1 EOC only at the end of the group ({k})");
+            // The interrupt rides the EOC landing (`tick` reported it).
+            irqs += usize::from(eoc);
+            if k == 2 {
+                // Moved mid-group: the not-yet-acquired SQ4..SQ6 see it.
+                adc.set_channel_input(3, 500);
+            }
+        }
+        assert!(!adc.converting, "a non-CONT group stops after SQ7");
+        assert_eq!(irqs, 1);
+        assert_eq!(
+            landed,
+            vec![
+                code(2000.0),
+                code(1000.0),
+                code(1000.0),
+                // SQ4 was acquired when SQ3 landed, before the move.
+                code(1000.0),
+                code(500.0),
+                code(500.0),
+                code(3000.0)
+            ],
+            "SQ1..SQ7 in order"
+        );
+
+        // A fresh trigger restarts the group at SQ1.
+        f1_software_start(&mut adc);
+        tick_until_landed(&mut adc);
+        assert_eq!(adc.dr, code(2000.0), "SWSTART restarts at SQ1");
+    }
+
+    /// RM0090 §13.8.1: an F4 with `CR2.EOCS` raises `EOC` after every
+    /// conversion of the group, so polling firmware reads each channel; with
+    /// `EOCS` clear it behaves like the F1. `CONT` wraps round to SQ1.
+    #[test]
+    fn f4_scan_eocs_raises_eoc_per_conversion_and_cont_wraps() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32F4);
+        adc.set_channel_input(0, 600);
+        adc.set_channel_input(9, 2400);
+        let code = |mv: f64| Adc::code_for_mv(mv, ADC_VREF_MV);
+        adc.write_u32(0x34, 9).unwrap(); // SQ1 = 9, SQ2 = 0
+        adc.write_u32(0x2C, 1 << 20).unwrap(); // L = 1
+        adc.write_u32(0x04, F1_CR1_SCAN).unwrap();
+
+        let start = |adc: &mut Adc, cr2: u32| {
+            adc.write_u32(0x08, F1_CR2_ADON | cr2).unwrap();
+            adc.write_u32(0x08, F1_CR2_ADON | cr2 | F4_CR2_SWSTART)
+                .unwrap();
+        };
+
+        start(&mut adc, F4_CR2_EOCS);
+        let mut polled = Vec::new();
+        for k in 0..2 {
+            tick_until_landed(&mut adc);
+            assert_ne!(adc.sr & (1 << 1), 0, "EOCS: EOC after conversion {k}");
+            adc.write_u32(0x00, 0).unwrap(); // firmware clears EOC
+            polled.push(adc.read_u32(0x4C).unwrap());
+        }
+        assert_eq!(polled, vec![code(2400.0), code(600.0)]);
+        assert!(!adc.converting);
+
+        start(&mut adc, 0);
+        tick_until_landed(&mut adc);
+        assert_eq!(adc.sr & (1 << 1), 0, "EOCS clear: no EOC mid-group");
+        assert_eq!(adc.dr, code(2400.0));
+        tick_until_landed(&mut adc);
+        assert_ne!(adc.sr & (1 << 1), 0, "EOCS clear: EOC at the group end");
+        assert_eq!(adc.dr, code(600.0));
+
+        start(&mut adc, F4_CR2_EOCS | F1_CR2_CONT);
+        let wrapped: Vec<u32> = (0..5)
+            .map(|_| {
+                tick_until_landed(&mut adc);
+                adc.dr
+            })
+            .collect();
+        assert_eq!(
+            wrapped,
+            vec![
+                code(2400.0),
+                code(600.0),
+                code(2400.0),
+                code(600.0),
+                code(2400.0)
+            ],
+            "CONT wraps the group round to SQ1"
+        );
+        assert!(adc.converting, "CONT keeps converting");
+        adc.write_u32(0x08, 0).unwrap();
+        assert!(
+            !adc.converting && adc.f1_group_pos == 0,
+            "ADON off stops the group"
+        );
+    }
+
+    /// RM0008 §11.3.10 / RM0090 §13.3.10: with `CR1.DISCEN` each trigger
+    /// converts the next DISCNUM + 1 group channels, stopping short at
+    /// SQ(L+1) (no rollover), and the next trigger restarts at SQ1. `EOC`
+    /// rises only on the subgroup that reaches the end of the group (F1, and
+    /// F4 with `EOCS` clear). `CONT` does not chain subgroups. A new `SQRx`
+    /// or `CR1` mode restarts the pointer at SQ1.
+    #[test]
+    fn f1_f4_discen_converts_discnum_plus_one_channels_per_trigger() {
+        let code = |mv: f64| Adc::code_for_mv(mv, ADC_VREF_MV);
+        for layout in [AdcRegisterLayout::Stm32F1, AdcRegisterLayout::Stm32F4] {
+            let mut adc = Adc::new_with_layout(layout);
+            let f4 = matches!(layout, AdcRegisterLayout::Stm32F4);
+            adc.set_channel_input(2, 400);
+            adc.set_channel_input(5, 1500);
+            adc.set_channel_input(11, 2700);
+            // SQ1..SQ5 = 5, 11, 2, 5, 11; L = 4.
+            adc.write_u32(0x34, 5 | (11 << 5) | (2 << 10) | (5 << 15) | (11 << 20))
+                .unwrap();
+            adc.write_u32(0x2C, 4 << 20).unwrap();
+            // SCAN | DISCEN | DISCNUM = 1 (two channels per trigger) | EOCIE.
+            let cr1 = F1_CR1_SCAN | F1_CR1_DISCEN | (1 << F1_CR1_DISCNUM_SHIFT) | (1 << 5);
+            adc.write_u32(0x04, cr1).unwrap();
+            let trigger = |adc: &mut Adc| {
+                if f4 {
+                    // CONT is set too: DISCEN must still stop each subgroup.
+                    adc.write_u32(0x08, F1_CR2_ADON | F1_CR2_CONT).unwrap();
+                    adc.write_u32(0x08, F1_CR2_ADON | F1_CR2_CONT | F4_CR2_SWSTART)
+                        .unwrap();
+                } else {
+                    f1_software_start_with(adc, F1_CR2_CONT);
+                }
+            };
+            let run = |adc: &mut Adc| {
+                let mut out = Vec::new();
+                let mut eoc = false;
+                let mut irqs = 0;
+                while adc.converting {
+                    let pos = adc.f1_group_pos;
+                    for _ in 0..64 {
+                        irqs += usize::from(adc.tick().irq);
+                        if !adc.converting || adc.f1_group_pos != pos {
+                            break;
+                        }
+                    }
+                    out.push(adc.dr);
+                    eoc |= adc.sr & (1 << 1) != 0;
+                }
+                (out, eoc, irqs)
+            };
+            let expect = [
+                (vec![code(1500.0), code(2700.0)], false),
+                (vec![code(400.0), code(1500.0)], false),
+                (vec![code(2700.0)], true),
+                (vec![code(1500.0), code(2700.0)], false),
+            ];
+            for (k, (codes, eoc)) in expect.iter().enumerate() {
+                trigger(&mut adc);
+                let (got, got_eoc, irqs) = run(&mut adc);
+                assert_eq!(&got, codes, "{layout:?} trigger {k} subgroup");
+                assert_eq!(
+                    got_eoc, *eoc,
+                    "{layout:?} trigger {k}: EOC only at the group end"
+                );
+                assert_eq!(irqs, usize::from(*eoc), "{layout:?} trigger {k}: EOCIE");
+                assert!(
+                    !adc.converting,
+                    "{layout:?} trigger {k}: CONT does not chain"
+                );
+                adc.write_u32(0x00, 0).unwrap();
+            }
+            // The pointer now sits at SQ3. Rewriting SQR3 restarts at SQ1.
+            adc.write_u32(0x34, 2 | (11 << 5) | (2 << 10) | (5 << 15) | (11 << 20))
+                .unwrap();
+            trigger(&mut adc);
+            assert_eq!(
+                run(&mut adc).0,
+                vec![code(400.0), code(2700.0)],
+                "{layout:?} SQR restart"
+            );
+            // ...and so does a CR1 mode change (DISCNUM = 2: three channels).
+            adc.write_u32(0x04, cr1 + (1 << F1_CR1_DISCNUM_SHIFT))
+                .unwrap();
+            trigger(&mut adc);
+            assert_eq!(
+                run(&mut adc).0,
+                vec![code(400.0), code(2700.0), code(400.0)],
+                "{layout:?} CR1 restart"
+            );
+        }
+    }
+
+    /// `CR1.SCAN` with `L = 0`, or `L > 0` without `SCAN`, is the old
+    /// single-conversion engine tick for tick: one SQ1 landing, `EOC` and
+    /// done.
+    #[test]
+    fn f1_one_channel_groups_match_the_single_conversion_path() {
+        for (cr1, sqr1) in [(0, 0), (F1_CR1_SCAN, 0), (0, 5 << 20)] {
+            let mut adc = Adc::new();
+            adc.set_channel_input(4, 1234);
+            adc.write_u32(0x34, 4 | (6 << 5)).unwrap();
+            adc.write_u32(0x2C, sqr1).unwrap();
+            adc.write_u32(0x04, cr1).unwrap();
+            f1_software_start(&mut adc);
+            assert_eq!(tick_until_landed(&mut adc), 15);
+            assert!(
+                !adc.converting,
+                "cr1 {cr1:#x} sqr1 {sqr1:#x}: one conversion"
+            );
+            assert_ne!(adc.sr & (1 << 1), 0);
+            assert_eq!(adc.dr, Adc::code_for_mv(1234.0, ADC_VREF_MV));
+        }
     }
 
     /// The F1 ADC samples the selected input and VREF+ when SWSTART begins
@@ -1848,6 +3269,34 @@ mod tests {
     }
 
     #[test]
+    fn l4_layout_converts_the_routed_sq1_channel_and_falls_back_when_undriven() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32L4);
+        adc.write_u32(0x08, 0).unwrap(); // DEEPPWD = 0
+        adc.write_u32(0x08, 1 << 28).unwrap(); // ADVREGEN
+        adc.write_u32(0x08, (1 << 28) | 1).unwrap(); // ADEN -> ADRDY
+        adc.set_channel_input(5, 1650);
+        adc.set_channel_input(6, 700);
+        let (count5, count6) = (
+            adc.channel_input_count(5) as u32,
+            adc.channel_input_count(6) as u32,
+        );
+        assert_ne!(count5, count6);
+        let mut convert = |sq1: u32, res: u32| -> u32 {
+            adc.write_u32(0x30, sq1 << 6).unwrap(); // SQR1.SQ1, L = 0
+            adc.write_u32(0x0C, res << 3).unwrap(); // CFGR.RES
+            adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap(); // ADSTART
+            adc.read_u32(0x40).unwrap()
+        };
+        assert_eq!(convert(5, 0), count5, "IN5, 12-bit");
+        assert_eq!(convert(6, 0), count6, "IN6, 12-bit");
+        assert_eq!(convert(5, 2), count5 >> 4, "IN5, 8-bit");
+        // SQ1 bits sit at 10:6: a channel on IN5's neighbour is undriven and
+        // keeps the fixed source, as an unrouted L476 conversion always did.
+        assert_eq!(convert(7, 0), l4_adc_code(12), "undriven IN7");
+        assert_eq!(convert(0, 1), l4_adc_code(10), "undriven IN0, 10-bit");
+    }
+
+    #[test]
     fn tick_cost_is_normalized_to_zero_while_converting() {
         // The legacy `cycles: 1` per converting tick is gone in BOTH modes.
         let mut adc = Adc::new();
@@ -2123,6 +3572,623 @@ mod tests {
             "F4 layout must not treat bit 22 as SWSTART"
         );
     }
+
+    #[test]
+    fn v2_layout_selects_the_chselr_channel_at_each_width() {
+        for name in ["stm32f0", "f0", "stm32l0", "l0"] {
+            assert_eq!(
+                name.parse::<AdcRegisterLayout>().unwrap(),
+                AdcRegisterLayout::Stm32V2,
+                "{name}"
+            );
+        }
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32V2);
+        assert_eq!(adc.read_u32(0x20).unwrap(), 0x0FFF_0000, "TR reset");
+        adc.set_channel_input(3, 1650);
+        let count12 = adc.channel_input_count(3) as u32;
+        adc.write_u32(0x08, 1).unwrap(); // ADEN
+        adc.write_u32(0x28, 1 << 3).unwrap(); // CHSELR = IN3
+        for (cfgr1, expected) in [
+            (0, count12),
+            (2 << 3, count12 >> 4),                     // 8-bit
+            ((3 << 3) | (1 << 5), (count12 >> 6) << 2), // 6-bit left: byte aligned
+            ((2 << 3) | (1 << 5), (count12 >> 4) << 8), // 8-bit left: half-word
+        ] {
+            adc.write_u32(0x0C, cfgr1).unwrap();
+            adc.write_u32(0x08, 1 | (1 << 2)).unwrap(); // ADSTART
+            assert_eq!(adc.read_u32(0x40).unwrap(), expected, "CFGR1 {cfgr1:#x}");
+        }
+        // An unselected neighbour converts nothing routed: IN4 is undriven.
+        adc.write_u32(0x0C, 0).unwrap();
+        adc.write_u32(0x28, 1 << 4).unwrap();
+        adc.write_u32(0x08, 1 | (1 << 2)).unwrap();
+        assert_eq!(adc.read_u32(0x40).unwrap(), l4_adc_code(12));
+        // IN17 is V_REFINT, connected only by CCR.VREFEN.
+        adc.write_u32(0x28, 1 << 17).unwrap();
+        adc.write_u32(0x08, 1 | (1 << 2)).unwrap();
+        assert_eq!(adc.read_u32(0x40).unwrap(), 0, "VREFEN clear");
+        adc.write_u32(0x308, 1 << 22).unwrap();
+        adc.write_u32(0x08, 1 | (1 << 2)).unwrap();
+        assert_eq!(adc.read_u32(0x40).unwrap(), 1224 * 4095 / 3300, "1.224 V");
+    }
+
+    // ── STM32WBA ADC4 (RM0493 §21; vendored tests/fixtures/real_world/stm32wba52.svd) ──
+    #[test]
+    fn adc4_layout_needs_the_ldo_and_reads_res_scandir_and_chselrmod_at_its_own_bits() {
+        for name in ["stm32wba", "wba", "stm32_adc4", "adc4"] {
+            assert_eq!(
+                name.parse::<AdcRegisterLayout>().unwrap(),
+                AdcRegisterLayout::Stm32Adc4,
+                "{name}"
+            );
+        }
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32Adc4);
+        assert_eq!(adc.channel_count(), 14, "CHSEL0..CHSEL13");
+        for awdtr in [0x20, 0x24, 0x2C] {
+            assert_eq!(
+                adc.read_u32(awdtr).unwrap(),
+                0x0FFF_0000,
+                "AWDxTR @{awdtr:#x}"
+            );
+        }
+        adc.write_u32(0xC4, 0x5A).unwrap();
+        assert_eq!(adc.read_u32(0xC4).unwrap(), 0x5A, "CALFACT @0xC4");
+        assert_eq!(adc.read_u32(0xB4).unwrap(), 0, "no F0/L0 CALFACT @0xB4");
+        adc.write_u32(0x44, 0b11).unwrap();
+        assert_eq!(adc.read_u32(0x44).unwrap(), 0b11, "PWRR AUTOFF/DPD");
+
+        // ADEN without the LDO does not bring the converter up.
+        adc.write_u32(0x08, 1).unwrap();
+        assert_eq!(
+            adc.read_u32(0x00).unwrap() & 1,
+            0,
+            "no ADRDY without ADVREGEN"
+        );
+        adc.write_u32(0x08, 0).unwrap();
+        adc.write_u32(0x08, 1 << 28).unwrap();
+        assert_ne!(
+            adc.read_u32(0x00).unwrap() & (1 << 12),
+            0,
+            "ADVREGEN raises LDORDY"
+        );
+        adc.write_u32(0x08, (1 << 28) | 1).unwrap();
+        assert_ne!(adc.read_u32(0x00).unwrap() & 1, 0, "ADEN raises ADRDY");
+
+        adc.set_channel_input(3, 1650);
+        adc.set_channel_input(9, 2900);
+        let in3 = adc.channel_input_count(3) as u32;
+        let in9 = adc.channel_input_count(9) as u32;
+        let start = |adc: &mut Adc| adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap();
+        adc.write_u32(0x28, (1 << 3) | (1 << 9)).unwrap();
+        // RES[3:2]: the F0/L0's RES[4:3] = 0b01 (bit 3) is ADC4 RES = 0b10.
+        for (cfgr1, expected) in [
+            (0, in3),
+            (1 << 2, in3 >> 2),          // 10-bit
+            (1 << 3, in3 >> 4),          // 8-bit, not 10
+            (3 << 2, in3 >> 6),          // 6-bit
+            (1 << 4, in9),               // SCANDIR (bit 4) starts at the top
+            (1 << 2 | 1 << 4, in9 >> 2), // backward at 10-bit
+        ] {
+            adc.write_u32(0x0C, cfgr1).unwrap();
+            start(&mut adc);
+            assert_eq!(adc.read_u32(0x40).unwrap(), expected, "CFGR1 {cfgr1:#x}");
+        }
+        // CFGR1 bit 2 is RES here, not the F0/L0 SCANDIR: still IN3 first.
+        adc.write_u32(0x0C, 1 << 2).unwrap();
+        start(&mut adc);
+        assert_eq!(adc.read_u32(0x40).unwrap(), in3 >> 2);
+
+        // CHSELRMOD: CHSELR is SQ1..SQ8; SQ1 converts, 0xF ends the sequence.
+        adc.write_u32(0x0C, 1 << 21).unwrap();
+        adc.write_u32(0x28, 0xFFFF_FF39).unwrap(); // SQ1 = 9, SQ2 = 3
+        assert_eq!(adc.read_u32(0x28).unwrap(), 0xFFFF_FF39, "SQx nibbles kept");
+        start(&mut adc);
+        assert_eq!(adc.read_u32(0x40).unwrap(), in9, "SQ1 = IN9");
+        adc.write_u32(0x00, 0xC).unwrap(); // clear EOC/EOS
+        adc.write_u32(0x28, 0xFFFF_FFFF).unwrap(); // SQ1 = end
+        start(&mut adc);
+        assert_eq!(
+            adc.read_u32(0x00).unwrap() & 0x4,
+            0,
+            "empty sequence: no EOC"
+        );
+
+        // An undriven pad converts the fixed source; there is no IN17 V_REFINT.
+        adc.write_u32(0x0C, 0).unwrap();
+        adc.write_u32(0x28, 1 << 4).unwrap();
+        start(&mut adc);
+        assert_eq!(adc.read_u32(0x40).unwrap(), l4_adc_code(12));
+        adc.write_u32(0x28, 1 << 17).unwrap();
+        assert_eq!(adc.read_u32(0x28).unwrap(), 0, "CHSEL17 does not exist");
+    }
+    // ── L4/H7/U5 SQR1..SQR4 regular sequence ──
+
+    #[test]
+    fn sqr_regular_sequence_reads_all_sixteen_slots_in_order() {
+        // SQ(n) = channel n + 1 in every slot, L = 15.
+        let ch = |n: u32| n + 1;
+        let word = |first: u32, fields: std::ops::Range<u32>| {
+            fields
+                .enumerate()
+                .fold(0, |acc, (i, n)| acc | (ch(n) << (6 * (first + i as u32))))
+        };
+        let sqr = [
+            15 | word(1, 0..4),
+            word(0, 4..9),
+            word(0, 9..14),
+            word(0, 14..16),
+        ];
+        assert_eq!(sqr_regular_sequence(sqr), (1..=16).collect::<Vec<usize>>());
+        // L counts from zero: L = 0 is SQ1 alone, whatever SQ2.. hold.
+        assert_eq!(sqr_regular_sequence([3 << 6 | 9 << 12, 0, 0, 0]), vec![3]);
+        assert_eq!(
+            sqr_regular_sequence([1 | 3 << 6 | 9 << 12, 0, 0, 0]),
+            vec![3, 9]
+        );
+    }
+
+    /// Power an L4/H7/U5 block up to ADRDY, drive IN5/IN6, and return their
+    /// codes at the layout's default width.
+    fn sqr_block(layout: AdcRegisterLayout) -> (Adc, u32, u32, u32) {
+        let mut adc = Adc::new_with_layout(layout);
+        adc.write_u32(0x08, 0).unwrap(); // DEEPPWD = 0
+        adc.write_u32(0x08, 1 << 28).unwrap(); // ADVREGEN
+        adc.write_u32(0x08, (1 << 28) | 1).unwrap(); // ADEN -> ADRDY
+        assert_ne!(adc.read_u32(0x00).unwrap() & 1, 0, "{layout:?} ADRDY");
+        adc.set_channel_input(5, 1650);
+        adc.set_channel_input(6, 700);
+        let code = |adc: &mut Adc, ch: u32| {
+            adc.write_u32(0x30, ch << 6).unwrap(); // L = 0
+            adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap();
+            adc.write_u32(0x00, 0xC).unwrap();
+            adc.read_u32(0x40).unwrap()
+        };
+        let (c5, c6, c7) = (code(&mut adc, 5), code(&mut adc, 6), code(&mut adc, 7));
+        assert_ne!(c5, c6);
+        assert_ne!(c6, c7);
+        (adc, c5, c6, c7)
+    }
+
+    #[test]
+    fn sqr_layouts_scan_the_whole_regular_sequence_one_result_per_dr_read() {
+        const EOC: u32 = 1 << 2;
+        const EOS: u32 = 1 << 3;
+        for layout in [
+            AdcRegisterLayout::Stm32L4,
+            AdcRegisterLayout::Stm32H7,
+            AdcRegisterLayout::Stm32U5,
+        ] {
+            let (mut adc, c5, c6, c7) = sqr_block(layout);
+            // L = 2: SQ1 = IN6, SQ2 = IN7 (undriven), SQ3 = IN5.
+            adc.write_u32(0x30, 2 | 6 << 6 | 7 << 12 | 5 << 18).unwrap();
+            adc.write_u32(0x00, EOC | EOS).unwrap();
+            adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap();
+            assert_eq!(
+                adc.read_u32(0x08).unwrap() & (1 << 2),
+                0,
+                "{layout:?} ADSTART"
+            );
+            let mut got = Vec::new();
+            for k in 0..3 {
+                let isr = adc.read_u32(0x00).unwrap();
+                assert_ne!(isr & EOC, 0, "{layout:?} EOC for conversion {k}");
+                assert_eq!(isr & EOS != 0, k == 2, "{layout:?} EOS at {k}");
+                adc.write_u32(0x00, EOC).unwrap();
+                got.push(adc.read_u32(0x40).unwrap());
+            }
+            assert_eq!(got, vec![c6, c7, c5], "{layout:?} SQx order");
+            // The sequence is done: DR holds the last result and EOC stays
+            // clear.
+            assert_eq!(
+                adc.read_u32(0x00).unwrap() & EOC,
+                0,
+                "{layout:?} no 4th EOC"
+            );
+            assert_eq!(adc.read_u32(0x40).unwrap(), c5, "{layout:?} DR holds SQ3");
+            // A later L = 0 conversion takes the single path again: EOC|EOS
+            // at once.
+            adc.write_u32(0x00, EOC | EOS).unwrap();
+            adc.write_u32(0x30, 6 << 6).unwrap();
+            adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap();
+            assert_eq!(
+                adc.read_u32(0x00).unwrap() & (EOC | EOS),
+                EOC | EOS,
+                "{layout:?}"
+            );
+            assert_eq!(
+                adc.read_u32(0x40).unwrap(),
+                c6,
+                "{layout:?} single after scan"
+            );
+            assert_eq!(
+                adc.read_u32(0x40).unwrap(),
+                c6,
+                "{layout:?} single DR is stable"
+            );
+        }
+    }
+
+    #[test]
+    fn sqr_layouts_discen_converts_discnum_plus_one_channels_per_trigger() {
+        const EOC: u32 = 1 << 2;
+        const EOS: u32 = 1 << 3;
+        const ADSTART: u32 = 1 << 2;
+        const DISCEN: u32 = 1 << 16;
+        let cr = (1 << 28) | 1;
+        for layout in [
+            AdcRegisterLayout::Stm32L4,
+            AdcRegisterLayout::Stm32H7,
+            AdcRegisterLayout::Stm32U5,
+        ] {
+            let (mut adc, c5, c6, c7) = sqr_block(layout);
+            let cfgr = adc.read_u32(0x0C).unwrap();
+            // DISCNUM = 1: two conversions per trigger. CONT is set too and
+            // must lose to DISCEN.
+            adc.write_u32(0x0C, cfgr | DISCEN | (1 << 17) | (1 << 13))
+                .unwrap();
+            // L = 4: IN5, IN6, IN7, IN5, IN6.
+            adc.write_u32(0x30, 4 | 5 << 6 | 6 << 12 | 7 << 18 | 5 << 24)
+                .unwrap();
+            adc.write_u32(0x34, 6).unwrap();
+            // Four triggers: [5, 6], [7, 5], [6] + EOS (the last subsequence
+            // stops at the sequence end), then [5, 6] from SQ1 again.
+            let triggers: [&[u32]; 4] = [&[c5, c6], &[c7, c5], &[c6], &[c5, c6]];
+            for (t, expected) in triggers.iter().enumerate() {
+                adc.write_u32(0x00, EOC | EOS).unwrap();
+                adc.write_u32(0x08, cr | ADSTART).unwrap();
+                assert_eq!(
+                    adc.read_u32(0x08).unwrap() & ADSTART,
+                    0,
+                    "{layout:?} trigger {t}: ADSTART clears per subsequence"
+                );
+                let mut got = Vec::new();
+                for k in 0..expected.len() {
+                    let isr = adc.read_u32(0x00).unwrap();
+                    assert_ne!(isr & EOC, 0, "{layout:?} trigger {t} EOC {k}");
+                    assert_eq!(
+                        isr & EOS != 0,
+                        t == 2,
+                        "{layout:?} trigger {t}: EOS only at the sequence end"
+                    );
+                    adc.write_u32(0x00, EOC).unwrap();
+                    got.push(adc.read_u32(0x40).unwrap());
+                }
+                assert_eq!(&got, expected, "{layout:?} trigger {t}");
+                // The subsequence is done: no further landing, DR holds.
+                assert_eq!(adc.read_u32(0x00).unwrap() & EOC, 0, "{layout:?} {t}");
+                assert_eq!(adc.read_u32(0x40).unwrap(), *expected.last().unwrap());
+            }
+            // Rewriting the sequence restarts the pointer at SQ1, even
+            // mid-way through it.
+            adc.write_u32(0x08, cr | ADSTART).unwrap(); // [7, 5]
+            adc.write_u32(0x30, 4 | 7 << 6 | 6 << 12 | 7 << 18 | 5 << 24)
+                .unwrap();
+            adc.write_u32(0x00, EOC | EOS).unwrap();
+            adc.write_u32(0x08, cr | ADSTART).unwrap();
+            assert_eq!(adc.read_u32(0x40).unwrap(), c7, "{layout:?} SQ1 again");
+            assert_eq!(adc.read_u32(0x40).unwrap(), c6, "{layout:?} SQ2 again");
+        }
+    }
+
+    #[test]
+    fn sqr_injected_sequence_follows_each_svd_packing() {
+        // JL = 2, JSQ1 = 10, JSQ2 = 5, JSQ3 = 17 in each packing.
+        let narrow = 2 | 10 << 8 | 5 << 14 | 17 << 20;
+        let wide = 2 | 10 << 9 | 5 << 15 | 17 << 21;
+        assert_eq!(sqr_injected_sequence(narrow, false), Some(vec![10, 5, 17]));
+        assert_eq!(sqr_injected_sequence(wide, true), Some(vec![10, 5, 17]));
+        // Read with the other packing, the same word names other channels.
+        assert_eq!(sqr_injected_sequence(narrow, true), Some(vec![5, 2, 8]));
+        // ... and an odd narrow JSQ1 sets bit 8, the wide JEXTEN[1].
+        assert_eq!(sqr_injected_sequence(9 << 8, true), None);
+        // JL counts from zero; JEXTEN != 0 waits for a hardware trigger.
+        assert_eq!(sqr_injected_sequence(9 << 8, false), Some(vec![9]));
+        assert_eq!(sqr_injected_sequence(9 << 8 | 1 << 6, false), None);
+        assert_eq!(sqr_injected_sequence(9 << 9 | 1 << 7, true), None);
+        // The narrow JEXTEN sits on the wide packing's JEXTSEL[4] / JEXTEN[0].
+        assert_eq!(sqr_injected_sequence(1 << 6, true), Some(vec![0]));
+    }
+
+    #[test]
+    fn sqr_layouts_jadstart_converts_jsq1_to_jsqn_into_jdr1_to_jdrn() {
+        const JEOC: u32 = 1 << 5;
+        const JEOS: u32 = 1 << 6;
+        const JADSTART: u32 = 1 << 3;
+        const JADSTP: u32 = 1 << 5;
+        let cr = (1 << 28) | 1;
+        for (layout, wide) in [
+            (AdcRegisterLayout::Stm32L4, false),
+            (AdcRegisterLayout::Stm32G4, true),
+            (AdcRegisterLayout::Stm32H5, true),
+            (AdcRegisterLayout::Stm32H7, true),
+            (AdcRegisterLayout::Stm32U5, true),
+        ] {
+            let (mut adc, c5, c6, c7) = sqr_block(layout);
+            let dr = adc.read_u32(0x40).unwrap();
+            let isr = adc.read_u32(0x00).unwrap();
+            adc.write_u32(0x00, isr).unwrap();
+            let jsqr = |jl: u32, jsq: &[u32]| {
+                let first = if wide { 9 } else { 8 };
+                jsq.iter()
+                    .enumerate()
+                    .fold(jl, |acc, (k, &ch)| acc | ch << (first + 6 * k as u32))
+            };
+            // JL = 3: IN6, IN7 (undriven), IN5, IN6.
+            adc.write_u32(0x4C, jsqr(3, &[6, 7, 5, 6])).unwrap();
+            assert_eq!(adc.read_u32(0x00).unwrap() & (JEOC | JEOS), 0);
+            adc.write_u32(0x08, cr | JADSTART).unwrap();
+            let got: Vec<u32> = (0..4)
+                .map(|k| adc.read_u32(0x80 + 4 * k).unwrap())
+                .collect();
+            assert_eq!(got, vec![c6, c7, c5, c6], "{layout:?} JDRy = JSQy");
+            assert_eq!(
+                adc.read_u32(0x00).unwrap() & (JEOC | JEOS | 0xC),
+                JEOC | JEOS,
+                "{layout:?} JEOC|JEOS only: no regular EOC/EOS"
+            );
+            assert_eq!(adc.read_u32(0x08).unwrap() & JADSTART, 0, "{layout:?}");
+            assert_eq!(adc.read_u32(0x40).unwrap(), dr, "{layout:?} DR untouched");
+            // JDRn are read-only.
+            adc.write_u32(0x80, 0x123).unwrap();
+            assert_eq!(adc.read_u32(0x80).unwrap(), c6, "{layout:?} JDR1 ro");
+
+            // A routed level that moved converts at its new value on the
+            // next JADSTART; JL = 0 rewrites only JDR1.
+            adc.set_channel_input(5, 3000);
+            adc.write_u32(0x00, JEOC | JEOS).unwrap();
+            adc.write_u32(0x4C, jsqr(0, &[5])).unwrap();
+            adc.write_u32(0x08, cr | JADSTART).unwrap();
+            let moved = adc.read_u32(0x80).unwrap();
+            assert!(moved > c5, "{layout:?} 3.0 V over 1.65 V");
+            assert_eq!(adc.read_u32(0x84).unwrap(), c7, "{layout:?} JDR2 kept");
+
+            // A hardware trigger (JEXTEN = rising) leaves JADSTART waiting;
+            // JADSTP cancels it.
+            adc.write_u32(0x00, JEOC | JEOS).unwrap();
+            let jexten = if wide { 1 << 7 } else { 1 << 6 };
+            adc.write_u32(0x4C, jsqr(0, &[6]) | jexten).unwrap();
+            adc.write_u32(0x08, cr | JADSTART).unwrap();
+            assert_ne!(adc.read_u32(0x08).unwrap() & JADSTART, 0, "{layout:?}");
+            assert_eq!(adc.read_u32(0x00).unwrap() & JEOC, 0, "{layout:?}");
+            assert_eq!(adc.read_u32(0x80).unwrap(), moved, "{layout:?}");
+            adc.write_u32(0x08, cr | JADSTART | JADSTP).unwrap();
+            assert_eq!(
+                adc.read_u32(0x08).unwrap() & (JADSTART | JADSTP),
+                0,
+                "{layout:?} JADSTP"
+            );
+        }
+        // Without ADRDY nothing converts.
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32L4);
+        adc.set_channel_input(5, 1650);
+        adc.write_u32(0x4C, 5 << 8).unwrap();
+        adc.write_u32(0x08, JADSTART).unwrap();
+        assert_eq!(adc.read_u32(0x00).unwrap() & JEOC, 0);
+        assert_eq!(adc.read_u32(0x80).unwrap(), 0);
+    }
+
+    #[test]
+    fn g4_layout_is_selected_by_name() {
+        assert_eq!(
+            "stm32g4".parse::<AdcRegisterLayout>(),
+            Ok(AdcRegisterLayout::Stm32G4)
+        );
+        assert_eq!(
+            "G4".parse::<AdcRegisterLayout>(),
+            Ok(AdcRegisterLayout::Stm32G4)
+        );
+    }
+
+    #[test]
+    fn sqr_layouts_sample_each_channel_when_it_lands_wrap_with_cont_and_stop_with_adstp() {
+        for layout in [
+            AdcRegisterLayout::Stm32L4,
+            AdcRegisterLayout::Stm32H7,
+            AdcRegisterLayout::Stm32U5,
+        ] {
+            let (mut adc, c5, c6, _) = sqr_block(layout);
+            adc.write_u32(0x0C, adc.read_u32(0x0C).unwrap() | (1 << 13))
+                .unwrap(); // CONT
+            adc.write_u32(0x30, 1 | 5 << 6 | 6 << 12).unwrap();
+            adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap();
+            assert_ne!(
+                adc.read_u32(0x08).unwrap() & (1 << 2),
+                0,
+                "{layout:?} CONT keeps ADSTART"
+            );
+            assert_eq!(adc.read_u32(0x40).unwrap(), c5, "{layout:?} 1st");
+            // IN5 moves before its next landing: the wrap converts the new level.
+            adc.set_channel_input(5, 3000);
+            assert_eq!(adc.read_u32(0x40).unwrap(), c6, "{layout:?} 2nd");
+            let moved = adc.read_u32(0x40).unwrap();
+            assert!(moved > c5, "{layout:?} wrapped IN5 converts its new level");
+            // ADSTP stops it: DR keeps the result in it.
+            let held = adc.read_u32(0x40).unwrap();
+            assert_eq!(held, c6, "{layout:?} 4th is IN6 again");
+            adc.write_u32(0x08, (1 << 28) | 1 | (1 << 4)).unwrap();
+            assert_eq!(
+                adc.read_u32(0x40).unwrap(),
+                adc.read_u32(0x40).unwrap(),
+                "{layout:?} ADSTP freezes DR"
+            );
+        }
+    }
+
+    /// ADON with both software trigger selections, then a JSWSTART edge.
+    fn f1_injected_start(adc: &mut Adc, extra_cr2: u32) {
+        let armed = F1_CR2_ADON | F1_CR2_EXTSEL | F1_CR2_JEXTSEL | extra_cr2;
+        adc.write_u32(0x08, armed).unwrap();
+        adc.write_u32(0x08, armed | F1_CR2_JSWSTART).unwrap();
+    }
+
+    fn ticks_until(adc: &mut Adc, flag: u32) -> usize {
+        for t in 1..=200 {
+            adc.tick();
+            if adc.read_u32(0x00).unwrap() & flag != 0 {
+                return t;
+            }
+        }
+        panic!("SR flag {flag:#x} never rose");
+    }
+
+    #[test]
+    fn f1_injected_group_converts_jsq_slots_from_the_end_into_jdr_in_order() {
+        let mut adc = Adc::new();
+        adc.set_channel_input(2, 1000);
+        adc.set_channel_input(7, 2500);
+        let c2 = adc.channel_input_count(2) as u32;
+        let c7 = adc.channel_input_count(7) as u32;
+        // JL = 2 (three conversions): JSQ2, JSQ3, JSQ4. JSQ1 holds a channel
+        // that must NOT convert; JSQ4 = 2 again proves the slot order.
+        let jsqr = (2 << 20) | (2 << 15) | (2 << 10) | (7 << 5) | 9;
+        adc.write_u32(0x38, jsqr).unwrap();
+        assert_eq!(adc.read_u32(0x38).unwrap(), jsqr, "JSQR round-trips");
+        f1_injected_start(&mut adc, 0);
+        assert_eq!(
+            adc.read_u32(0x08).unwrap() & F1_CR2_JSWSTART,
+            0,
+            "JSWSTART self-clears"
+        );
+        let sr = adc.read_u32(0x00).unwrap();
+        assert_eq!(
+            sr & (F1_SR_JSTRT | F1_SR_JEOC),
+            F1_SR_JSTRT,
+            "JSTRT, no JEOC yet"
+        );
+        let single = (adc.conversion_time + 1) as usize;
+        assert_eq!(
+            ticks_until(&mut adc, F1_SR_JEOC),
+            3 * single,
+            "JEOC after 3 conversions"
+        );
+        assert_eq!(adc.read_u32(0x3C).unwrap(), c7, "JDR1 = JSQ2");
+        assert_eq!(adc.read_u32(0x40).unwrap(), c2, "JDR2 = JSQ3");
+        assert_eq!(adc.read_u32(0x44).unwrap(), c2, "JDR3 = JSQ4");
+        assert_eq!(adc.read_u32(0x48).unwrap(), 0, "JDR4 untouched");
+        assert_ne!(
+            adc.read_u32(0x00).unwrap() & 0x2,
+            0,
+            "F1 raises EOC for injected too"
+        );
+        assert_eq!(adc.dr, 0, "the regular DR is not written");
+
+        // JL = 0 converts JSQ4 alone.
+        adc.write_u32(0x38, (7 << 15) | 2).unwrap();
+        adc.write_u32(0x00, 0).unwrap();
+        f1_injected_start(&mut adc, 0);
+        ticks_until(&mut adc, F1_SR_JEOC);
+        assert_eq!(adc.read_u32(0x3C).unwrap(), c7, "JL=0: JDR1 = JSQ4");
+
+        // Without JEXTSEL=111 a JSWSTART edge converts nothing.
+        let mut ext = Adc::new();
+        ext.set_channel_input(2, 1000);
+        ext.write_u32(0x38, 2 << 15).unwrap();
+        ext.write_u32(0x08, F1_CR2_ADON).unwrap();
+        ext.write_u32(0x08, F1_CR2_ADON | F1_CR2_JSWSTART).unwrap();
+        for _ in 0..50 {
+            ext.tick();
+        }
+        assert_eq!(
+            ext.read_u32(0x00).unwrap(),
+            0,
+            "external JEXTSEL: no conversion"
+        );
+        assert_eq!(ext.read_u32(0x3C).unwrap(), 0);
+    }
+
+    #[test]
+    fn f1_injected_offset_is_subtracted_and_sign_extended_in_both_alignments() {
+        let mut adc = Adc::new();
+        adc.set_channel_input(4, 1650);
+        let code = adc.channel_input_count(4) as i32; // 2047
+        adc.write_u32(0x38, (1 << 20) | (4 << 15) | (4 << 10))
+            .unwrap();
+        adc.write_u32(0x14, 0xF000 | 100).unwrap(); // JOFR1, 12 bits kept
+        adc.write_u32(0x18, 3000).unwrap(); // JOFR2 > code → negative
+        assert_eq!(adc.read_u32(0x14).unwrap(), 100, "JOFR is 12 bits");
+        f1_injected_start(&mut adc, 0);
+        ticks_until(&mut adc, F1_SR_JEOC);
+        assert_eq!(adc.read_u32(0x3C).unwrap(), (code - 100) as u32);
+        let negative = adc.read_u32(0x40).unwrap();
+        assert_eq!(
+            negative,
+            u32::from((code - 3000) as i16 as u16),
+            "sign in 15:12"
+        );
+        assert_eq!(negative >> 12, 0xF, "right-aligned negative fills SEXT");
+
+        // CR2.ALIGN: shifted by 3, sign at bit 15.
+        adc.write_u32(0x00, 0).unwrap();
+        f1_injected_start(&mut adc, F1_CR2_ALIGN);
+        ticks_until(&mut adc, F1_SR_JEOC);
+        assert_eq!(adc.read_u32(0x3C).unwrap(), ((code - 100) << 3) as u32);
+        assert_eq!(
+            adc.read_u32(0x40).unwrap(),
+            u32::from(((code - 3000) << 3) as i16 as u16)
+        );
+    }
+
+    #[test]
+    fn f4_injected_uses_jswstart_bit22_and_leaves_regular_eoc_alone() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32F4);
+        adc.set_channel_input(5, 3000);
+        adc.set_channel_input(1, 500);
+        let c5 = adc.channel_input_count(5) as u32;
+        adc.write_u32(0x34, 1).unwrap(); // regular SQ1 = 1
+        adc.write_u32(0x38, 5 << 15).unwrap(); // JL=0, JSQ4 = 5
+        adc.write_u32(0x04, F1_CR1_JEOCIE).unwrap();
+        adc.write_u32(0x08, F1_CR2_ADON).unwrap();
+        adc.write_u32(0x08, F1_CR2_ADON | F4_CR2_JSWSTART).unwrap();
+        assert_eq!(
+            adc.read_u32(0x08).unwrap(),
+            F1_CR2_ADON,
+            "JSWSTART self-clears"
+        );
+        assert!(!adc.converting, "bit 22 is not the F4 regular SWSTART");
+        let mut irq_at = None;
+        for t in 1..=40 {
+            if adc.tick().irq {
+                irq_at.get_or_insert(t);
+            }
+        }
+        assert_eq!(
+            irq_at,
+            Some(adc.conversion_time as usize + 1),
+            "JEOCIE fires on JEOC"
+        );
+        let sr = adc.read_u32(0x00).unwrap();
+        assert_eq!(
+            sr & (F1_SR_JEOC | 0x2),
+            F1_SR_JEOC,
+            "F4 EOC is regular-only"
+        );
+        assert_eq!(adc.read_u32(0x3C).unwrap(), c5);
+        assert_eq!(adc.dr, 0);
+    }
+
+    #[test]
+    fn f1_jauto_converts_the_injected_group_after_the_regular_group() {
+        let mut adc = Adc::new();
+        adc.set_channel_input(0, 800);
+        adc.set_channel_input(6, 2900);
+        adc.write_u32(0x34, 0).unwrap(); // SQ1 = 0
+        adc.write_u32(0x38, 6 << 15).unwrap(); // JSQ4 = 6
+        adc.write_u32(0x04, F1_CR1_JAUTO).unwrap();
+        f1_software_start(&mut adc);
+        let single = (adc.conversion_time + 1) as usize;
+        assert_eq!(ticks_until(&mut adc, 0x2), single, "regular EOC first");
+        assert_eq!(adc.read_u32(0x00).unwrap() & F1_SR_JEOC, 0);
+        assert_eq!(adc.dr, adc.channel_input_count(0) as u32);
+        assert_eq!(
+            ticks_until(&mut adc, F1_SR_JEOC),
+            single,
+            "then the injected group"
+        );
+        assert_eq!(
+            adc.read_u32(0x3C).unwrap(),
+            adc.channel_input_count(6) as u32
+        );
+    }
 }
 
 // ── Walk-free differential: F1 ADC conversion engine walk vs scheduler ────────
@@ -2227,6 +4293,31 @@ mod scheduler_diff {
         ];
         // 2 + 15 + 15 + 15 ≈ 47 cycles covers three back-to-back conversions.
         assert_walk_identical(&script, 50);
+    }
+
+    #[test]
+    fn f1_injected_group_walk_identity() {
+        // JEOCIE + JAUTO over a two-slot injected group behind a regular SQ1:
+        // the regular landing starts the injected countdown, whose JEOC IRQ
+        // must pend on the same cycle on both routes. A second, software
+        // JSWSTART (bit 21, byte 0x0A bit 5; JEXTSEL=111 is byte 0x09 bits
+        // 6:4) re-runs the group alone.
+        let script = [
+            (1u64, Op::Write(0x04, (1 << 7) as u8)), // CR1.JEOCIE
+            (1, Op::Write(0x05, 1 << 2)),            // CR1.JAUTO (bit 10)
+            (1, Op::Write(0x34, 3)),                 // SQR3.SQ1 = channel 3
+            (1, Op::Write(0x38, 3 << 5)),            // JSQR.JSQ2 = channel 3
+            (1, Op::Write(0x39, 3 << 2)),            // JSQR.JSQ3 = 3 (bits 14:10)
+            (1, Op::Write(0x3A, 1 << 4)),            // JSQR.JL = 1 → JSQ3, JSQ4
+            (1, Op::Write(0x08, 1)),                 // CR2.ADON
+            (1, Op::Write(0x0A, 0x0E)),              // EXTSEL = 111
+            (1, Op::Write(0x09, 0x70)),              // JEXTSEL = 111
+            (2, Op::Write(0x0A, 0x4E)),              // SWSTART → regular, then JAUTO
+            (60, Op::Write(0x04, 0)),                // CR1: drop JAUTO and JEOCIE
+            (60, Op::Write(0x05, 0)),
+            (61, Op::Write(0x0A, 0x2E)), // EXTSEL | JSWSTART (bit 21)
+        ];
+        assert_walk_identical(&script, 100);
     }
 
     // ── STM32H7 ADC (RM0468) ────────────────────────────────────────────────

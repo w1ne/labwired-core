@@ -1,0 +1,76 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+# SPDX-License-Identifier: MIT
+#
+# Renesas RZ/G2L GPIO port. Each register file is indexed by the port's
+# offset `off`: P_m @0x0000+off (output data, byte), PM_m @0x0100+2*off
+# (mode, halfword, two bits per pin), PMC_m @0x0200+off (port/function,
+# byte) and PIN_m @0x0800+off (input, byte) (Linux pinctrl-rzg2l.c P(),
+# PM(), PMC(), PIN()). The controller sits at
+# 0x1103_0000 (r9a07g044.dtsi pinctrl@11030000) and port 0 has off 0x10
+# (r9a07g044_gpio_configs RZG2L_GPIO_PORT_PACK(2, 0x10, ...)), so this
+# window is based at 0x1103_0010 and its registers sit at the offsets below.
+# Pin k of the port is bit k (PM: bits 2k+1..2k).
+#
+# Runs on the declarative GPIO path (IN / OUT) at byte width. One window
+# serves one port: the next port's bytes sit at +1 inside it and are not
+# declared. Direction comes from the PM bit pairs (`gpio_mode`): 01 input,
+# 10 output, 11 output with input; 00 is Hi-Z and runs as a non-GPIO pin.
+# Not modelled: PM 00 and PMC (function) do not gate PIN, which reads the pad
+# regardless; PFC, IOLH, PUPD and the interrupt registers are not declared.
+peripheral: GPIO
+version: 0.1.0
+gpio_mode:
+  register: PM
+  bits_per_pin: 2
+  output: [2, 3]
+  input: [1]
+registers:
+- id: OUT
+  address_offset: 0
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: P
+    bit_range:
+    - 7
+    - 0
+    description: P_m, the level a pin drives when PM makes it an output
+  side_effects: null
+- id: PM
+  address_offset: 272
+  size: 16
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PM
+    bit_range:
+    - 15
+    - 0
+    description: PM_m, two bits per pin, 00 Hi-Z, 01 input, 10 output, 11 output with input
+  side_effects: null
+- id: PMC
+  address_offset: 512
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PMC
+    bit_range:
+    - 7
+    - 0
+    description: PMC_m, 0 GPIO, 1 the PFC-selected function
+  side_effects: null
+- id: IN
+  address_offset: 2048
+  size: 8
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: PIN
+    bit_range:
+    - 7
+    - 0
+    description: PIN_m, the input level of each pin
+  side_effects: null

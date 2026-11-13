@@ -1,0 +1,45 @@
+# Matched generic level-1 NMOS branches expose gate-source overlap charge.
+# Their source nodes resolve through PA2/PA3 to STM32F411 ADC1_IN2/IN3.
+name: "stm32f411ceu6-blackpill-analog-mosfet-overlap-charge"
+chip: "../../configs/chips/stm32f411ceu6.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "mosfet_overlap_reference"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_v: "ui.mosfet_overlap.gate_v"
+    outputs:
+      source_v: "board.analog.pa2_volts"
+    config:
+      substeps: 1
+      netlist_text: |
+        Vgate gate 0 dc 0
+        Rsource sense 0 1k
+        M1 0 gate sense 0 MOS_REF w=100u l=10u
+        .model MOS_REF NMOS(VTO=5 KP=20u LAMBDA=0)
+      probes:
+        source_v: "v(sense)"
+      sources:
+        gate_v: "Vgate"
+      vdd: 3.3
+  - id: "mosfet_overlap_charge"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_v: "ui.mosfet_overlap.gate_v"
+    outputs:
+      source_v: "board.analog.pa3_volts"
+    config:
+      substeps: 1
+      netlist_text: |
+        Vgate gate 0 dc 0
+        Rsource sense 0 1k
+        M1 0 gate sense 0 MOS_CGSO w=100u l=10u
+        .model MOS_CGSO NMOS(VTO=5 KP=20u LAMBDA=0 CGSO=10u)
+      probes:
+        source_v: "v(sense)"
+      sources:
+        gate_v: "Vgate"
+      vdd: 3.3

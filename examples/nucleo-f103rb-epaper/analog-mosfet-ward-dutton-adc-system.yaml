@@ -1,0 +1,31 @@
+# The generic Ward–Dutton inversion-charge pair resolves to F103 ADC1 channels
+# 2/3; the profile's unrelated NTC and Shockley diode remain on channels 0/1.
+name: "nucleo-f103rb-epaper-mosfet-ward-dutton-adc"
+chip: "../../configs/chips/stm32f103rb.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "mosfet_ward_dutton"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_v: "ui.mosfet_ward_dutton.gate_v"
+    outputs:
+      drain_charge: "board.analog.pa2_volts"
+      drain_reference: "board.analog.pa3_volts"
+    config:
+      substeps: 1
+      netlist_text: |
+        Vgate gate 0 dc 0
+        Rcharged drain_charge 0 5Meg
+        Mcharged drain_charge gate 0 0 MOS_CHARGED w=100u l=10u
+        Rreference drain_reference 0 5Meg
+        Mreference drain_reference gate 0 0 MOS_REFERENCE w=100u l=10u
+        .model MOS_CHARGED NMOS(VTO=1 KP=1e-30 IS=1e-30 TOX=10n CHARGEMOD=WARD_DUTTON)
+        .model MOS_REFERENCE NMOS(VTO=1 KP=1e-30 IS=1e-30)
+      probes:
+        drain_charge: "v(drain_charge)"
+        drain_reference: "v(drain_reference)"
+      sources:
+        gate_v: "Vgate"
+      vdd: 3.3

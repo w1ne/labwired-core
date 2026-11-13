@@ -95,6 +95,27 @@ Real board checks:
 Repository hygiene note:
 - Recording artifacts/logs are written to `/tmp` unless `--artifacts-dir` is provided.
 
+## Mixed-signal regression fixtures
+
+`analog-ntc-diode-adc-system.yaml` and `analog-mosfet-adc-system.yaml` route generic MNA
+loads to explicit `adc.adc1.<channel>_volts` co-simulation endpoints. The core test asserts
+the NTC, diode, and level-1 NMOS load lines through ADC1's modeled data-register path. These
+fixtures do not define physical H563 pad aliases or claim silicon conversion parity.
+
+`analog-bjt-recombination-adc-system.yaml` adds matched generic Gummel–Poon branches with
+base-emitter recombination, base-collector recombination, both effects, and neither effect.
+The core test compares the solved collector load lines against an independent reference and
+reads each branch through ADC1 channels 2–5 alongside isolated NTC and diode inputs on
+channels 0–1. These are explicit co-simulation routes; they do not claim physical pad aliases
+or silicon ADC parity.
+
+`analog-bjt-charge-adc-system.yaml` routes matched generic BJT branches with CJE, CJC, TF,
+and combined junction/transit charge to ADC1 channels 2–6 beside the NTC and diode on
+channels 0–1. The transient regression checks the first-step charge response, ADC data-register
+readback, isolation, and convergence to the same DC load line. Enlarged junction capacitances
+make this a solver-physics stress case at the fixture's 1 us step; it is not a device-rating
+claim.
+
 ## References
 
 - Chip config: `../../configs/chips/stm32h563.yaml`

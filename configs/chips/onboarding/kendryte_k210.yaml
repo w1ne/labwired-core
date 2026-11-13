@@ -11,3 +11,10 @@ peripherals:
   type: sifive_uart
   bus: sysbus
   base_address: 939524096
+# Renode's K210 map declares no GPIO. The 8-pin DesignWare APB GPIO sits at
+# 0x5020_0000 (kendryte-standalone-sdk platform.h GPIO_BASE_ADDR; Linux
+# k210.dtsi gpio@50200000, snps,dw-apb-gpio).
+- id: gpio
+  type: designware_apb_gpio
+  bus: sysbus
+  base_address: 1344274432

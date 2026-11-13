@@ -1,0 +1,44 @@
+# Three matched generic level-1 NMOS common-source stages routed to RA ADC12
+# ADC1 channels 3/4/5, exercised on EK-RA6M5 and EK-RA8M1. All three share
+# W=10u L=2u, KP=50u, TOX=20n, a 10k drain load and one gate drive. They
+# differ only in how the threshold is formed:
+#   nsub: NSUB=1e16 and no VTO -> ngspice derives PHI, GAMMA and VTO (~0.068 V)
+#   nss:  as nsub plus NSS=1e11 TPG=-1 -> flat-band shift, VTO ~1.091 V
+#   ref:  no NSUB -> VTO keeps its default 0 V
+# The companion test adds the generic NTC and Shockley diode from
+# analog-ntc-system.yaml on channels 0/2 of the same ADC.
+name: "ek-ra6m5-analog-mosfet-nsub"
+chip: "../../configs/chips/r7fa6m5bh.yaml"
+cpu_hz: 8000000
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "mosfet_substrate_doping"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_drive: "ui.mosfet_nsub.gate_v"
+    outputs:
+      drain_nsub: "adc.adc1.3_volts"
+      drain_nss: "adc.adc1.4_volts"
+      drain_ref: "adc.adc1.5_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 3.3
+        Vgate gate 0 dc 0
+        Rnsub supply drain_nsub 10k
+        Mnsub drain_nsub gate 0 0 NMOS_NSUB W=10u L=2u
+        .model NMOS_NSUB NMOS(LEVEL=1 KP=50u TOX=20n NSUB=1e16)
+        Rnss supply drain_nss 10k
+        Mnss drain_nss gate 0 0 NMOS_NSS W=10u L=2u
+        .model NMOS_NSS NMOS(LEVEL=1 KP=50u TOX=20n NSUB=1e16 NSS=1e11 TPG=-1)
+        Rref supply drain_ref 10k
+        Mref drain_ref gate 0 0 NMOS_REF W=10u L=2u
+        .model NMOS_REF NMOS(LEVEL=1 KP=50u TOX=20n)
+      probes:
+        drain_nsub: "v(drain_nsub)"
+        drain_nss: "v(drain_nss)"
+        drain_ref: "v(drain_ref)"
+      sources:
+        gate_drive: "Vgate"
+      vdd: 3.3

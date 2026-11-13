@@ -1,0 +1,36 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+# SPDX-License-Identifier: MIT
+#
+# StarFive JH7100 GPIO input, GPIODIN. The GPIO block is the "gpio" region
+# of `starfive,jh7100-pinctrl` at 0x1191_0000 (Linux jh7100.dtsi
+# pinctrl@11910000, reg 0x10000). GPIODIN @0x048 "dynamically reflects the
+# value of the GPIO pin", GPIO n at bit n % 32 of GPIODIN + 4 * (n / 32)
+# (Linux pinctrl-starfive-jh7100.c GPIODIN, starfive_gpio_get).
+#
+# This is StarFive's own layout, not SiFive's. Renode's jh7100.repl binds a
+# `GPIOPort.SiFive_GPIO` at 0x0119_1000, one zero short of the silicon base,
+# and keeps a "GPIO" Tag at 0x1191_0000. A SiFive input_val at +0x00 is
+# GPIOEN here, so this descriptor follows the Linux driver, not Renode.
+#
+# Only GPIODIN for GPIO 0..31 is declared, so the declarative GPIO path runs
+# this window input-only (IN with no OUT, ENABLE or gpio_mode). Output data
+# and enable are a per-GPIO signal select (GPOn_DOUT_CFG/DOEN_CFG @0x50 + 8n),
+# not a bit latch, so no OUT register is derivable. Not modelled: GPIODIN for
+# GPIO 32..63 @0x04C, GPIOEN, the interrupt registers @0x010..0x040, the
+# GPO/GPI signal routing, and the padctl block at 0x1185_8000.
+peripheral: GPIO
+version: 0.1.0
+registers:
+- id: IN
+  address_offset: 0x48
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: GPIODIN
+    bit_range:
+    - 31
+    - 0
+    description: GPIODIN, the input level of GPIO 0..31
+  side_effects: null

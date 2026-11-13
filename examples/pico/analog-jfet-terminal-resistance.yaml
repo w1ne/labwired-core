@@ -1,0 +1,30 @@
+# Matched generic level-1 NJF load lines routed to RP2040 ADC0/ADC1.
+name: "pico-analog-jfet-terminal-resistance"
+chip: "../../configs/chips/rp2040.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "jfet_terminal_resistance"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_voltage: "ui.jfet.gate_v"
+    outputs:
+      control_drain: "adc.adc.0_volts"
+      terminal_resistance_drain: "adc.adc.1_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 3.3
+        Vgate gate 0 dc 0
+        Rload_control supply drain_control 1k
+        Jcontrol drain_control gate 0 NJF_CONTROL
+        .model NJF_CONTROL NJF(VTO=-2 BETA=500u LAMBDA=0.025 B=1 PB=1 IS=1e-30)
+        Rload_terminal supply drain_terminal 1k
+        Jterminal drain_terminal gate 0 NJF_TERMINAL
+        .model NJF_TERMINAL NJF(VTO=-2 BETA=500u LAMBDA=0.025 B=1 PB=1 IS=1e-30 RD=200 RS=200)
+      probes:
+        control_drain: "v(drain_control)"
+        terminal_resistance_drain: "v(drain_terminal)"
+      sources:
+        gate_voltage: "Vgate"
+      vdd: 3.3

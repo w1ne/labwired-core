@@ -1,5 +1,7 @@
 # Generic Beta NTC divider and Shockley diode routed to the SAM E70 Xplained
-# EXT1 ADC(+) / PC31 and ADC(-) / PA19 pins. AFEC conversion is not modeled.
+# EXT1 ADC(+) / PC31 and ADC(-) / PA19 pins through PIO thresholds. Routed to
+# board.analog.<pad>_volts instead, they convert on AFEC1 AD6 / AFEC0 AD8
+# (crates/core/tests/cosim_same70_afec_analog.rs).
 name: sam-e70-xplained-analog
 chip: ../../configs/chips/same70q21b.yaml
 external_devices: []

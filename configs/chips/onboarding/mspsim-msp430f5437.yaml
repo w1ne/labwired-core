@@ -9,10 +9,76 @@ arch: unknown
 flash:
   base: 23552
   size: 256KB
+# The MSP430 has no Cortex-M boot alias: 0x0000..0x01FF is the peripheral
+# file (SFRs, byte and word peripherals), so flash must not mirror there.
+flash_boot_alias: false
 ram:
   base: 7168
   size: 16KB
-peripherals: []
+# Digital I/O PA..PF (P1:P2 .. P11): halfword PxIN/PxOUT/PxDIR at
+# 0x0200 + 0x20*n (SLAU208Q §12.4, SLAS612), on
+# configs/peripherals/msp430/port16.yaml. PJ at 0x0320 is not declared.
+peripherals:
+- id: pa
+  type: declarative
+  bus: sysbus
+  base_address: 512
+  size: 6B
+  config:
+    path: ../../peripherals/msp430/port16.yaml
+- id: pb
+  type: declarative
+  bus: sysbus
+  base_address: 544
+  size: 6B
+  config:
+    path: ../../peripherals/msp430/port16.yaml
+- id: pc
+  type: declarative
+  bus: sysbus
+  base_address: 576
+  size: 6B
+  config:
+    path: ../../peripherals/msp430/port16.yaml
+- id: pd
+  type: declarative
+  bus: sysbus
+  base_address: 608
+  size: 6B
+  config:
+    path: ../../peripherals/msp430/port16.yaml
+- id: pe
+  type: declarative
+  bus: sysbus
+  base_address: 640
+  size: 6B
+  config:
+    path: ../../peripherals/msp430/port16.yaml
+- id: pf
+  type: declarative
+  bus: sysbus
+  base_address: 672
+  size: 6B
+  config:
+    path: ../../peripherals/msp430/port16.yaml
+# ADC12_A (msp430_adc12_a): one block at 0x0700, ADC12CTL0 @0x00 ..
+# ADC12MEM15 @0x3E (msp430f5437_symbols.ld, TI msp430-gcc support files).
+# msp430f5437.h has no REFCTL0, so ADC12REFON/ADC12REF2_5V own the reference.
+- id: adc12
+  type: msp430_adc12_a
+  base_address: 1792
+  size: 64B
+# A0..A7 are the P6.0..P6.7 pads (SLAS612 pin functions P6.x/Ax); the
+# label is the ADC12 input name, so a netlist routes board.analog.a<n>_volts.
+analog_pins:
+  A0: { peripheral: adc12, channel: 0 }
+  A1: { peripheral: adc12, channel: 1 }
+  A2: { peripheral: adc12, channel: 2 }
+  A3: { peripheral: adc12, channel: 3 }
+  A4: { peripheral: adc12, channel: 4 }
+  A5: { peripheral: adc12, channel: 5 }
+  A6: { peripheral: adc12, channel: 6 }
+  A7: { peripheral: adc12, channel: 7 }
 provenance:
   source: mspsim
   repo: https://github.com/contiki-ng/mspsim

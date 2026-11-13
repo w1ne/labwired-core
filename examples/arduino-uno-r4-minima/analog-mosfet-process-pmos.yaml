@@ -1,0 +1,32 @@
+# Matched generic PMOS load lines on the Arduino Uno R4 Minima. The process
+# branch derives VTO/GAMMA/PHI from NSUB and TOX; the reference pins VTO=0.
+# Both drain voltages route through A2/A3 to ADC14 alongside the NTC and diode.
+name: "arduino-uno-r4-minima-analog-mosfet-process-pmos"
+chip: "../../configs/chips/ra4m1.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "mosfet_process_pmos"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_voltage: "ui.mos_pmos.gate_v"
+    outputs:
+      reference_drain_voltage: "board.analog.p001_volts"
+      process_drain_voltage: "board.analog.p002_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 5.0
+        Vgate gate 0 dc 3.0
+        Rreference d_reference 0 10k
+        Rprocess d_process 0 10k
+        Mreference d_reference gate supply supply PMOS_REFERENCE W=3u L=2u
+        Mprocess d_process gate supply supply PMOS_PROCESS W=3u L=2u
+        .model PMOS_REFERENCE PMOS(KP=34.5u VTO=0 GAMMA=0.23596 PHI=0.659597 LAMBDA=0 IS=1e-30)
+        .model PMOS_PROCESS PMOS(KP=34.5u TOX=20n NSUB=5e15 UO=200 LAMBDA=0 IS=1e-30)
+      probes:
+        reference_drain_voltage: "v(d_reference)"
+        process_drain_voltage: "v(d_process)"
+      sources:
+        gate_voltage: "Vgate"
+      vdd: 5.0

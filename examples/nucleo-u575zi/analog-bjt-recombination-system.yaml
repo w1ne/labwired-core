@@ -1,0 +1,87 @@
+# Generic Gummel–Poon NPN branches isolate base-emitter and base-collector
+# recombination on U575 PA4–PA7, alongside the independent NTC and diode.
+name: nucleo-u575zi-analog-bjt-recombination
+chip: ../../configs/chips/stm32u575.yaml
+external_devices: []
+board_io: []
+cosim_models:
+  - id: bjt_recombination_reference_adc
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drive: ui.bjt_recombination.base_v
+    outputs:
+      collector_voltage: board.analog.pa4_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 10k
+        Q1 collector base 0 NPN_REFERENCE
+        .model NPN_REFERENCE NPN(IS=1e-16 BF=80 BR=4 VAF=50 VAR=75)
+      probes:
+        collector_voltage: v(collector)
+      sources:
+        base_drive: Vbase
+      vdd: 3.3
+  - id: bjt_base_emitter_recombination_adc
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drive: ui.bjt_recombination.base_v
+    outputs:
+      collector_voltage: board.analog.pa5_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 10k
+        Q1 collector base 0 NPN_BE_RECOMBINATION
+        .model NPN_BE_RECOMBINATION NPN(IS=1e-16 BF=80 BR=4 VAF=50 VAR=75 ISE=2p NE=1.5)
+      probes:
+        collector_voltage: v(collector)
+      sources:
+        base_drive: Vbase
+      vdd: 3.3
+  - id: bjt_base_collector_recombination_adc
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drive: ui.bjt_recombination.base_v
+    outputs:
+      collector_voltage: board.analog.pa6_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 10k
+        Q1 collector base 0 NPN_BC_RECOMBINATION
+        .model NPN_BC_RECOMBINATION NPN(IS=1e-16 BF=80 BR=4 VAF=50 VAR=75 ISC=500p NC=2)
+      probes:
+        collector_voltage: v(collector)
+      sources:
+        base_drive: Vbase
+      vdd: 3.3
+  - id: bjt_combined_recombination_adc
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drive: ui.bjt_recombination.base_v
+    outputs:
+      collector_voltage: board.analog.pa7_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 10k
+        Q1 collector base 0 NPN_BOTH_RECOMBINATION
+        .model NPN_BOTH_RECOMBINATION NPN(IS=1e-16 BF=80 BR=4 VAF=50 VAR=75 ISE=2p NE=1.5 ISC=500p NC=2)
+      probes:
+        collector_voltage: v(collector)
+      sources:
+        base_drive: Vbase
+      vdd: 3.3
