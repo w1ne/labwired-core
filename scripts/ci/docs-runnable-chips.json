@@ -66,6 +66,18 @@
       "firmware": "tests/fixtures/tier1/nrf52840.elf",
       "expect": "TIER1 gpio PASS"
     },
+    "nrf54l05": {
+      "how": "committed",
+      "firmware": "tests/fixtures/board-smoke/nrf54l05.elf",
+      "expect": "NRF54L05_OK",
+      "note": "Executable nRF54L05 application-core subset, UART20 EasyDMA and GPIO P2.09; sibling common IP only. Tested with synthetic wiring, not physical board or full radio stack."
+    },
+    "nrf54l10": {
+      "how": "committed",
+      "firmware": "tests/fixtures/board-smoke/nrf54l10.elf",
+      "expect": "NRF54L10_OK",
+      "note": "Executable nRF54L10 application-core subset, UART20 EasyDMA and GPIO P2.09; sibling common IP only. Tested with synthetic wiring, not physical board or full radio stack."
+    },
     "nrf54l15": {
       "how": "example",
       "script": "examples/nrf54l15-dk/io-smoke.yaml",
