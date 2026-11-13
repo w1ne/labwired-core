@@ -44,7 +44,7 @@
 //! `TRB*`/`TRBM*`/`TIRB*`/`TRC*`/`TRE*`. JFET level-1 channel `VTO`/`BETA`
 //! use `VTOTC`/`TCV` and `BETATCE`/`BEX` when an instance `TEMP` is supplied,
 //! and its gate junctions use the diode `EG`/`XTI` and depletion laws. MOSFET
-//! instance `TEMP` applies the level-1 `KP`, `PHI`, `VTO`, bulk `IS`, `PB`, and
+//! instance `TEMP` applies the level-1 `KP`, `PHI`, `VTO`, bulk `IS`/`JS`, `PB`, and
 //! junction-capacitance temperature laws. Parameters without a documented
 //! temperature law are taken at [`TEMPERATURE_K`] as written. Self-heating is
 //! not modeled. A `.model` line may carry unmodelled parameters (real vendor
@@ -420,7 +420,7 @@ pub fn mos_process_threshold(model: &mut MosModel, tox: f64, nsub: f64) -> Resul
 /// - `VTO` moves with the bandgap and the surface potential,
 ///   `VTO(T) = VTO + type·γ·(√PHI(T) − √PHI) + type·½(PHI(T) − PHI)
 ///   + ½(Eg(TNOM) − Eg(T))`, in card (signed) coordinates;
-/// - bulk-junction `IS` scales by `exp(Eg(TNOM)/Vt(TNOM) − Eg(T)/Vt(T))` —
+/// - bulk-junction `IS` and `JS` scale by `exp(Eg(TNOM)/Vt(TNOM) − Eg(T)/Vt(T))` —
 ///   level 1 has no `XTI`, and its junctions use emission coefficient 1;
 /// - `CBD`/`CBS`/`CJ` (grading `MJ`) and `CJSW` (grading `MJSW`) follow the
 ///   same depletion law as the diode.
@@ -456,7 +456,9 @@ pub fn mos_parameters_at_temperature(
         + sign * model.gamma * (libm::sqrt(adjusted.phi) - libm::sqrt(model.phi))
         + sign * 0.5 * (adjusted.phi - model.phi)
         + 0.5 * (eg_nominal - eg);
-    adjusted.is = model.is * exp_clamped(eg_nominal / nominal_vt - eg / vt);
+    let saturation_ratio = exp_clamped(eg_nominal / nominal_vt - eg / vt);
+    adjusted.is = model.is * saturation_ratio;
+    adjusted.js = model.js * saturation_ratio;
 
     let bottom = |capacitance: f64| {
         diode_depletion_parameters_at_temperature(

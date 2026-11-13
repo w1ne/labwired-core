@@ -2021,10 +2021,12 @@ impl Solver {
             self.mos_vds[index] = ds;
 
             let vte = mosfet.thermal_voltage();
-            let critical =
-                device::pn_critical_voltage_at_thermal_voltage(mosfet.operating_model.is, 1.0, vte);
-            let bd = device::pn_limit(raw_bd, self.mos_vbd[index], vte, critical);
-            let bs = device::pn_limit(raw_bs, self.mos_vbs[index], vte, critical);
+            let (drain_is, source_is) = mosfet.junction_saturation_currents();
+            let drain_critical = device::pn_critical_voltage_at_thermal_voltage(drain_is, 1.0, vte);
+            let source_critical =
+                device::pn_critical_voltage_at_thermal_voltage(source_is, 1.0, vte);
+            let bd = device::pn_limit(raw_bd, self.mos_vbd[index], vte, drain_critical);
+            let bs = device::pn_limit(raw_bs, self.mos_vbs[index], vte, source_critical);
             self.limiter_clamped |= bd != raw_bd || bs != raw_bs;
             self.mos_vbd[index] = bd;
             self.mos_vbs[index] = bs;
@@ -2496,9 +2498,10 @@ impl Solver {
             // Level-1 MOSFETs have two bulk pn junctions. In NMOS coordinates
             // the bulk is the anode and drain/source are the cathodes; the
             // polarity sign reverses that orientation for PMOS.
+            let (drain_is, source_is) = mosfet.junction_saturation_currents();
             let bd = device::diode_op_at_thermal_voltage(
                 self.mos_vbd[index],
-                model.is,
+                drain_is,
                 1.0,
                 mosfet.thermal_voltage(),
             );
@@ -2520,7 +2523,7 @@ impl Solver {
 
             let bs = device::diode_op_at_thermal_voltage(
                 self.mos_vbs[index],
-                model.is,
+                source_is,
                 1.0,
                 mosfet.thermal_voltage(),
             );

@@ -4640,6 +4640,69 @@ mod analog {
         }
     }
 
+    /// ngspice level 1 (`mos1load.c`) replaces the bulk-junction `IS` with
+    /// `JS·AD` and `JS·AS` only when `JS`, `AD` and `AS` are all non-zero, and
+    /// `mos1temp.c` scales `JS` with the same bandgap law as `IS`. Each bulk
+    /// is forward biased through 100 kΩ with drain, gate and source grounded,
+    /// so its voltage reads the summed junction saturation current. Expected
+    /// voltages are ngspice-45 `.op` output for the same deck (TNOM = TEMP =
+    /// 26.85 °C, the engine's fixed 300 K, except the `TEMP=85` row at the
+    /// default TNOM of 27 °C). An engine that ignored `JS` would solve every
+    /// row except `b_fall` at 0.544 V; one that used `AD` for both junctions
+    /// would put `b_asym` 10 mV low; one that did not scale `JS` with `TEMP`
+    /// would put `b_hot` above 0.5 V.
+    #[test]
+    fn mosfet_junction_saturation_current_density_follows_ngspice_level1() {
+        let deck = "Vdd supply 0 dc 3.3\n\
+            Rarea supply b_area 100k\nRasym supply b_asym 100k\n\
+            Rfall supply b_fall 100k\nRhot supply b_hot 100k\n\
+            Marea 0 0 0 b_area NJS W=10u L=2u AD=100p AS=100p\n\
+            Masym 0 0 0 b_asym NJS W=10u L=2u AD=300p AS=100p\n\
+            Mfall 0 0 0 b_fall NJS W=10u L=2u AD=300p\n\
+            Mhot 0 0 0 b_hot NJS W=10u L=2u AD=100p AS=100p TEMP=85\n\
+            .model NJS NMOS(LEVEL=1 VTO=1 KP=20u IS=1e-14 JS=1e-2)\n";
+        let circuit = parse_netlist(deck).expect("JS card parses");
+        // (device, drain IS, source IS at the card temperature) from JS·AD/AS.
+        for (name, drain_is, source_is) in [
+            ("Marea", 1e-12, 1e-12),
+            ("Masym", 3e-12, 1e-12),
+            ("Mfall", 1e-14, 1e-14),
+        ] {
+            let mosfet = circuit
+                .mosfets
+                .iter()
+                .find(|mosfet| mosfet.name == name)
+                .expect("device exists");
+            let (drain, source) = mosfet.junction_saturation_currents();
+            assert!(
+                relative(drain, drain_is) < 1e-12 && relative(source, source_is) < 1e-12,
+                "{name}: junction IS should be ({drain_is}, {source_is}), got ({drain}, {source})"
+            );
+        }
+        let solver = build(deck);
+        for (node, volts) in [
+            ("b_area", 0.426_057_2),
+            ("b_asym", 0.408_297_2),
+            ("b_fall", 0.544_026_4),
+            ("b_hot", 0.278_212_6),
+        ] {
+            let measured = solver.node_voltage(solver.circuit().node(node).expect("node exists"));
+            assert!(
+                (measured - volts).abs() < 1e-4,
+                "V({node}) should be {volts} V, got {measured} V"
+            );
+        }
+
+        for (params, needle) in [("JS=-1", "JS"), ("JS=1e308", "JS")] {
+            let error = parse_netlist(&format!(
+                "M1 d g 0 0 MN AD=1e10 AS=1e10\n.model MN NMOS({params})\n"
+            ))
+            .expect_err("unphysical JS must be refused")
+            .to_string();
+            assert!(error.contains(needle), "{params}: unexpected error {error}");
+        }
+    }
+
     /// Forward body bias uses the level-1 linear continuation of the square
     /// root. Check its channel current and `gmb` against the hand equation,
     /// then exercise that same bias through MNA for both polarities and both

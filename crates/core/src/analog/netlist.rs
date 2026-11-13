@@ -141,7 +141,8 @@
 //! with `TOX`, substrate doping `NSUB` derives every omitted `PHI`, `GAMMA`
 //! and `VTO` as ngspice level 1 does, using gate type `TPG` and surface-state
 //! density `NSS` for the flat-band voltage;
-//! MOSFET `IS` is used for the two bulk junction currents. `CGSO` and
+//! MOSFET `IS` is used for the two bulk junction currents, or `JS` times
+//! instance `AD`/`AS` when `JS`, `AD` and `AS` are all non-zero. `CGSO` and
 //! `CGDO` are capacitance per unit width (F/m), and `CGBO` is capacitance per
 //! unit length (F/m); each is multiplied by instance `W` or `L` and integrated
 //! as linear overlap charge. `CBD` and `CBS` integrate nonlinear bulk junction
@@ -1490,6 +1491,11 @@ pub struct MosModel {
     pub tpg: f64,
     /// Bulk junction saturation current `IS`, amps.
     pub is: f64,
+    /// Bulk junction saturation current density `JS`, A/m². When positive
+    /// and the instance supplies both `AD` and `AS`, ngspice level 1 uses
+    /// `JS·AD` and `JS·AS` for the drain and source junctions instead of
+    /// `IS` (default 0).
+    pub js: f64,
     /// Zero-bias bulk-drain junction capacitance `CBD`, farads.
     pub cbd: f64,
     /// Whether `CBD` was explicitly supplied; an explicit zero also overrides
@@ -1636,6 +1642,7 @@ impl MosModel {
             nss: 0.0,
             tpg: 1.0,
             is: 1e-14,
+            js: 0.0,
             cbd: 0.0,
             cbd_given: false,
             cbs: 0.0,
@@ -2164,7 +2171,8 @@ pub struct Mosfet {
     /// Intrinsic source before the effective source resistance, or `s` when
     /// it is zero.
     pub junction_s: NodeRef,
-    /// Bulk. Its drain and source pn junctions use the MOS model's `IS`, and
+    /// Bulk. Its drain and source pn junctions use the MOS model's `IS`, or
+    /// `JS` times `AD`/`AS` (see [`Self::junction_saturation_currents`]), and
     /// `GAMMA`/`PHI` use its bias relative to the effective source for body effect.
     pub bulk: NodeRef,
     /// Model name as written, for diagnostics.
@@ -2200,6 +2208,19 @@ pub struct Mosfet {
 }
 
 impl Mosfet {
+    /// Bulk-drain and bulk-source junction saturation currents, amps, at the
+    /// instance temperature. ngspice level 1 (`mos1load.c`) uses `JS·AD` and
+    /// `JS·AS` only when `JS`, `AD` and `AS` are all non-zero; otherwise both
+    /// junctions use `IS`.
+    pub fn junction_saturation_currents(&self) -> (f64, f64) {
+        let model = &self.operating_model;
+        if model.js == 0.0 || self.ad == 0.0 || self.as_ == 0.0 {
+            (model.is, model.is)
+        } else {
+            (model.js * self.ad, model.js * self.as_)
+        }
+    }
+
     /// Thermal voltage of the bulk junctions: `kT/q` at the explicit instance
     /// `TEMP`, or the engine's fixed [`super::device::THERMAL_VOLTAGE`].
     pub fn thermal_voltage(&self) -> f64 {
@@ -3911,6 +3932,15 @@ fn bind_models(
                 let as_ = device.as_.unwrap_or(0.0);
                 let pd = device.pd.unwrap_or(0.0);
                 let ps = device.ps.unwrap_or(0.0);
+                if !model.js.is_finite()
+                    || model.js < 0.0
+                    || !(model.js * ad).is_finite()
+                    || !(model.js * as_).is_finite()
+                {
+                    return Err(
+                        ctx.parse_err("a MOSFET model needs JS >= 0 with finite JS*AD and JS*AS")
+                    );
+                }
                 let junction_capacitances = [
                     if model.cbd_given {
                         model.cbd
@@ -4574,6 +4604,7 @@ fn parse_model(
                 model.tpg = value;
             }
             (ModelCard::Mos(model), "IS") => model.is = value,
+            (ModelCard::Mos(model), "JS") => model.js = value,
             (ModelCard::Mos(model), "CBD") => {
                 model.cbd = value;
                 model.cbd_given = true;
@@ -5159,6 +5190,7 @@ fn lower_comparator(
                 nss: 0.0,
                 tpg: 1.0,
                 is: 1e-14,
+                js: 0.0,
                 cbd: 0.0,
                 cbd_given: false,
                 cbs: 0.0,
