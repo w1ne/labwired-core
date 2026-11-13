@@ -1,6 +1,6 @@
 # Chip list
 
-Every chip LabWired models: **523 parts** — **114 public** (open models in [labwired-core](https://github.com/w1ne/labwired-core)) and **409 private** (commercial models). 4 retired part(s) are kept in the table marked excluded.
+Every chip LabWired models: **524 parts** — **115 public** (open models in [labwired-core](https://github.com/w1ne/labwired-core)) and **409 private** (commercial models). 4 retired part(s) are kept in the table marked excluded.
 
 The table is generated from the live catalogues by `scripts/generate_chip_catalog.py` and refreshed in CI, so it cannot drift from the models. Private parts show a name and a coverage level only — their descriptor contents stay internal.
 
@@ -60,7 +60,7 @@ The table is generated from the live catalogues by `scripts/generate_chip_catalo
       <option value="excluded">excluded only</option>
     </select></label>
   </div>
-  <p class="lw-chips__count" id="lw-chip-count">Showing 523 of 523 chips.</p>
+  <p class="lw-chips__count" id="lw-chip-count">Showing 524 of 524 chips.</p>
   <table class="lw-chips__table">
     <thead><tr>
       <th scope="col">Chip</th>
@@ -4151,6 +4151,14 @@ The table is generated from the live catalogues by `scripts/generate_chip_catalo
         <td><span class="lw-badge lw-badge--warn">modelled</span></td>
         <td class="lw-dim">public</td>
       </tr>
+      <tr class="lw-chip" data-name="stm32f446re" data-family="Arm Cortex-M" data-vendor="STMicroelectronics" data-coverage="modelled" data-status="supported" data-search="stm32f446re stmicroelectronics arm cortex-m  modelled">
+        <td><code>stm32f446re</code></td>
+        <td>STMicroelectronics</td>
+        <td>Arm Cortex-M</td>
+        <td class="lw-dim">—</td>
+        <td><span class="lw-badge lw-badge--warn">modelled</span></td>
+        <td class="lw-dim">public</td>
+      </tr>
       <tr class="lw-chip" data-name="stm32g071rb" data-family="Arm Cortex-M" data-vendor="STMicroelectronics" data-coverage="modelled" data-status="supported" data-search="stm32g071rb stmicroelectronics arm cortex-m  modelled">
         <td><code>stm32g071rb</code></td>
         <td>STMicroelectronics</td>
@@ -4274,14 +4282,14 @@ The table is generated from the live catalogues by `scripts/generate_chip_catalo
 | Other | 13 |
 | Raspberry Pi | 2 |
 | Rockchip | 1 |
-| STMicroelectronics | 51 |
+| STMicroelectronics | 52 |
 | Silicon Labs | 1 |
 | Texas Instruments | 1 |
 
 | Family | Chips |
 |---|---|
 | AVR | 55 |
-| Arm Cortex-M | 92 |
+| Arm Cortex-M | 93 |
 | Other | 3 |
 | PIC16 | 155 |
 | PIC18 | 158 |

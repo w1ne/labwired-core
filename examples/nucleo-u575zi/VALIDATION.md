@@ -218,7 +218,7 @@ python3 scripts/generate_validation_status.py --check   # exit 0
 
 `validation/manifest.yaml` carries the `stm32u575` entry (`tier: sim-validated`,
 no `silicon:`) and the regenerated
-[`docs/boards/VALIDATION_STATUS.md`](../../docs/boards/VALIDATION_STATUS.md)
+[validation status](https://docs.labwired.com/boards/VALIDATION_STATUS/) (generated, not committed)
 renders it as "no silicon capture". `--check --drift` is green. The 7
 silicon-verified boards it used to flag (nrf52840, seeed-xiao-nrf52840-sense,
 stm32h563, nucleo-l476rg, nucleo-l073rz, stm32f103, stm32f407) were this

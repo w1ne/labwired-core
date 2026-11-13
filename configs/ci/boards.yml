@@ -51,6 +51,12 @@ boards:
   # Narrow NUCLEO-F103RB + BME280 onboarding profile. Builds the in-repo
   # firmware crate and runs onboarding-smoke.yaml on every PR (chip-coverage
   # ceiling forbids another waiver).
+  # STM32F446RE: committed real-register Cortex-M4 smoke ELF, UART2
+  # banner and PA5 edges. No extra toolchain; gate the exact descriptor on PRs.
+  - id: nucleo-f446re
+    kind: sim-validate
+    path: examples/nucleo-f446re
+    gate: true
   - id: nucleo-f103rb-bme280
     kind: sim-validate
     path: examples/nucleo-f103rb-bme280

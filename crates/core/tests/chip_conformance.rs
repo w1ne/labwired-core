@@ -475,6 +475,14 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_stm32f411_tier1_survival"),
     },
     ChipConf {
+        // F446 firmware smoke runs in the board lane, but no PR-run Rust
+        // survival gate or physical reset oracle exists for this exact part.
+        name: "stm32f446re",
+        yaml: "configs/chips/stm32f446re.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
         // micro:bit V1 / Calliope mini 1, S110 application region only. A
         // legacy-UART smoke survival gate and nothing else: no silicon capture
         // and no executing-fidelity differential, so this is L1 smoke. (The
