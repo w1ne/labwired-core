@@ -1737,6 +1737,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-nucleo-f446re-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-nucleo-h723zg-smoke"
 version = "0.1.0"
 dependencies = [

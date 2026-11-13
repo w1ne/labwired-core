@@ -1,0 +1,29 @@
+# NUCLEO-F446RE: default ST-LINK VCP USART2 plus active-high LD2 on PA5.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nucleo-f446re-smoke"
+  system: "../../configs/systems/nucleo-f446re.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "NUCLEO-F446RE: USART2 + LD2"
+  # RCC_AHB1ENR.GPIOAEN and RCC_APB1ENR.USART2EN are set.
+  - memory_value:
+      address: 0x40023830
+      expected_value: 0x1
+      mask: 0x1
+      size: 4
+  - memory_value:
+      address: 0x40023840
+      expected_value: 0x20000
+      mask: 0x20000
+      size: 4
+  # GPIOA_MODER: PA2/PA3 alternate function, PA5 output, PA13..PA15 at reset.
+  - memory_value:
+      address: 0x40020000
+      expected_value: 0xA80004A0
+      size: 4
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 4
+  - expected_stop_reason: max_steps

@@ -1,0 +1,22 @@
+# NUCLEO-F446RE (MB1136, STM32F446RET6) board wiring from ST UM1724.
+# Default solder bridges route USART2 PA2/PA3 to the ST-LINK VCP. User LED
+# LD2 is PA5 and active high. User button B1 is PC13 and active low.
+# This system profile models those GPIO signals and USART2 only. It does not
+# model the ST-LINK debugger or the 8 MHz MCO clock input from the ST-LINK.
+name: "nucleo-f446re"
+chip: "../chips/stm32f446re.yaml"
+debug_uart: "uart2"
+external_devices: []
+board_io:
+  - id: "led_ld2_green"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true
+  - id: "button_b1_user"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: false
