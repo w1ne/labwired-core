@@ -10826,6 +10826,54 @@
     },
     {
       "arch": "arm",
+      "conformance_level": null,
+      "core": "cortex-m33",
+      "coverage": "modelled",
+      "excluded_reason": null,
+      "family": "Arm Cortex-M",
+      "name": "nrf54l05",
+      "package": "",
+      "parity_counted": null,
+      "peripherals": 6,
+      "provenance": "public",
+      "reg_match": null,
+      "reg_match_excluded": null,
+      "status": "supported",
+      "tier1": {
+        "blocked": 0,
+        "na": 0,
+        "partial": 0,
+        "pass": 0,
+        "unrecorded": 0
+      },
+      "vendor": "Nordic Semiconductor"
+    },
+    {
+      "arch": "arm",
+      "conformance_level": null,
+      "core": "cortex-m33",
+      "coverage": "modelled",
+      "excluded_reason": null,
+      "family": "Arm Cortex-M",
+      "name": "nrf54l10",
+      "package": "",
+      "parity_counted": null,
+      "peripherals": 6,
+      "provenance": "public",
+      "reg_match": null,
+      "reg_match_excluded": null,
+      "status": "supported",
+      "tier1": {
+        "blocked": 0,
+        "na": 0,
+        "partial": 0,
+        "pass": 0,
+        "unrecorded": 0
+      },
+      "vendor": "Nordic Semiconductor"
+    },
+    {
+      "arch": "arm",
       "conformance_level": 1,
       "core": "cortex-m33",
       "coverage": "L1 modelled",
@@ -12583,13 +12631,13 @@
       "L0 estate": 40,
       "L1 modelled": 50,
       "L2 verified": 1,
-      "modelled": 24,
+      "modelled": 26,
       "modelled (private)": 41,
       "verified (P0-P5)": 368
     },
     "byFamily": {
       "AVR": 55,
-      "Arm Cortex-M": 93,
+      "Arm Cortex-M": 95,
       "Other": 3,
       "PIC16": 155,
       "PIC18": 158,
@@ -12604,7 +12652,7 @@
       "LiteX": 1,
       "Microchip": 434,
       "NXP": 4,
-      "Nordic Semiconductor": 7,
+      "Nordic Semiconductor": 9,
       "OpenHW": 1,
       "Other": 13,
       "Raspberry Pi": 2,
@@ -12613,10 +12661,10 @@
       "Silicon Labs": 1,
       "Texas Instruments": 1
     },
-    "chips": 524,
+    "chips": 526,
     "excluded": 4,
     "private": 409,
-    "public": 115,
-    "supported": 520
+    "public": 117,
+    "supported": 522
   }
 }
