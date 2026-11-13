@@ -18,4 +18,4 @@ warning: unstable feature specified for `-Ctarget-feature`: `fp-armv8`
   = note: this feature is not stably supported; its behavior can change in the future
 
 warning: `firmware-ek-ra8m1-smoke` (bin "firmware-ek-ra8m1-smoke") generated 1 warning
-    Finished `release` profile [optimized + debuginfo] target(s) in 0.12s
+    Finished `release` profile [optimized + debuginfo] target(s) in 4.00s

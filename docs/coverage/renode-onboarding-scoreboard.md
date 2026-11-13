@@ -14,8 +14,8 @@
 - pass_depth_unknown: `0/226`
 - pass_claimed_peripherals_total: `1485`
 - pass_claimed_peripherals_median: `2`
-- median_elapsed_ms: `1331`
-- median_elapsed_seconds: `1.331`
+- median_elapsed_ms: `1341`
+- median_elapsed_seconds: `1.341`
 - threshold_seconds: `3600`
 - threshold_met: `226/226`
 
@@ -161,7 +161,7 @@
 | `renesas-ck_ra6m5` | `pass` | `True` | `yes` | `yes` | `203275` | `203.275` | `True` | `observable` | `6` | `memory_value`, `uart_contains`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `renesas-da14592` | `pass` | `True` | `yes` | `yes` | `1865` | `1.865` | `True` | `observable` | `3` | `uart_contains`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `renesas-ek_ra2e1` | `pass` | `True` | `yes` | `yes` | `7311` | `7.311` | `True` | `observable` | `4` | `memory_value`, `uart_contains`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
-| `renesas-ek_ra8m1` | `pass` | `True` | `yes` | `yes` | `707` | `0.707` | `True` | `observable` | `9` | `uart_contains`, `memory_value`, `uart_ordered` | 0 | `n/a` | n/a | n/a |
+| `renesas-ek_ra8m1` | `pass` | `True` | `yes` | `yes` | `161302` | `161.302` | `True` | `observable` | `9` | `uart_contains`, `memory_value`, `uart_ordered` | 0 | `n/a` | n/a | n/a |
 | `renesas-r7fa2e1a9` | `pass` | `True` | `yes` | `yes` | `9510` | `9.51` | `True` | `observable` | `3` | `memory_value`, `uart_contains`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `renesas-r7fa2l1a` | `pass` | `True` | `yes` | `yes` | `7968` | `7.968` | `True` | `observable` | `3` | `memory_value`, `uart_contains`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `renesas-r7fa4m1a` | `pass` | `True` | `yes` | `yes` | `1022` | `1.022` | `True` | `observable` | `5` | `uart_contains`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
