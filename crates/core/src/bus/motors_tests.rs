@@ -668,7 +668,7 @@ fn bldc_control_test_bus(legacy_walk: bool) -> SystemBus {
         let MotorRuntime::Bldc { timer, .. } = &bus.motors[0] else {
             unreachable!();
         };
-        let timer = *timer;
+        let timer = timer.expect("this timer-drive fixture has TIM1");
         assert!(bus.peripherals[timer].dev.force_legacy_walk());
         bus.recompute_walk_deletable();
         bus.refresh_peripheral_index();
@@ -681,7 +681,7 @@ fn advance_bldc_control_test_clock(bus: &mut SystemBus, cycle: u64, legacy_walk:
         let MotorRuntime::Bldc { timer, .. } = &bus.motors[0] else {
             unreachable!();
         };
-        let timer = *timer;
+        let timer = timer.expect("this timer-drive fixture has TIM1");
         // Drive the normal timer walk without adding a motor service boundary.
         // The paired scheduler case obtains the same counter from its clock.
         for _ in bus.current_cycle..cycle {
@@ -715,7 +715,7 @@ fn bldc_service_off_paths_preserve_coasting_at_four_mhz() {
                 let MotorRuntime::Bldc { timer, .. } = &mut bus.motors[0] else {
                     unreachable!();
                 };
-                *timer = 0; // A non-timer peripheral exercises the missing-PWM branch.
+                *timer = Some(0); // A non-timer peripheral exercises the missing-PWM branch.
             }
             _ => unreachable!(),
         }
@@ -749,7 +749,7 @@ fn bldc_service_off_paths_preserve_coasting_at_four_mhz() {
                 "{off}: {final_current} vs {expected}"
             );
         }
-        assert_eq!(after.dc_bus_current_a, 0.0);
+        assert_eq!(after.dc_bus_current_a, Some(0.0));
         assert_eq!(bus.motor_snapshots()[0].control_state, format!("off:{off}"));
         assert_eq!(bus.motor_series().1, 256_000);
 
@@ -987,7 +987,7 @@ fn motor_live_numeric_continues_after_the_historical_prefix_is_full() {
         .iter()
         .all(|point| point.time_ns == 257_000 && point.value.is_finite()));
     assert_eq!(live.points[0].value, state.speed_rpm);
-    assert_eq!(live.points[1].value, state.dc_bus_current_a);
+    assert_eq!(Some(live.points[1].value), state.dc_bus_current_a);
     assert!(live
         .channels
         .iter()
@@ -1092,7 +1092,9 @@ fn bldc_phase_mapping_writes_start_at_the_write_cycle() {
             let mut expected = plant.clone();
             // This snapshot is sampled at the actual register-write boundary,
             // before the lazy timer advances through the next 137 cycles.
-            let at_write = bus.timer_output_at(*timer).unwrap();
+            let at_write = bus
+                .timer_output_at(timer.expect("timer-drive fixture has TIM1"))
+                .unwrap();
             let cap = expected.service_timestep_s().unwrap();
             for_each_pwm_segment(at_write, 123, 137.0, |command, cycles| {
                 for dt in stable_substeps(cycles / 4_000_000.0, cap) {
@@ -1157,7 +1159,9 @@ fn rcc_timer_divider_write_closes_the_old_motor_interval() {
     let MotorRuntime::Bldc { timer, plant, .. } = &automatic.motors[0] else {
         unreachable!();
     };
-    let at_write = automatic.timer_output_at(*timer).unwrap();
+    let at_write = automatic
+        .timer_output_at(timer.expect("timer-drive fixture has TIM1"))
+        .unwrap();
     assert_eq!(at_write.prescaler_divisor, 2);
     let mut expected = plant.clone();
     let cap = expected.service_timestep_s().unwrap();
@@ -1363,7 +1367,8 @@ fn bldc_stopped_and_idle_timer_gates_drive_the_plant() {
         if state == "held" {
             let mut segments = Vec::new();
             for_each_pwm_segment(
-                bus.timer_output_at(*timer).unwrap(),
+                bus.timer_output_at(timer.expect("timer-drive fixture has TIM1"))
+                    .unwrap(),
                 0,
                 128.0,
                 |command, duration| {
