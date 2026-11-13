@@ -1,14 +1,14 @@
-[2m2026-11-13T08:23:54.176613Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/stm32f103.yaml
-[2m2026-11-13T08:23:54.242117Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x8000497
+2026-11-13T09:44:04.931268Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f103.yaml
+2026-11-13T09:44:04.988888Z  INFO labwired_loader: ELF Entry Point: 0x8000497
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-[2m2026-11-13T08:23:54.243208Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m uart_injection: 2 byte(s) delivered to 'usart2'
-[2m2026-11-13T08:23:54.245880Z[0m [33m WARN[0m [2mlabwired_core::cpu::cortex_m::exec::misc[0m[2m:[0m Unknown instruction at 0x800025c: Opcode 0xde00
-[2m2026-11-13T08:23:54.245909Z[0m [33m WARN[0m [2mlabwired_core::cpu::cortex_m::exec::misc[0m[2m:[0m Unknown instruction at 0x800025c: Opcode 0xde00
-[2m2026-11-13T08:23:54.551113Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: temperature = 55 applied
-[2m2026-11-13T08:23:54.792990Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: humidity = 35 applied
-[2m2026-11-13T08:23:55.067053Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressure = 1012.5 applied
+2026-11-13T09:44:04.989925Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'usart2'
+2026-11-13T09:44:04.992420Z  WARN labwired_core::cpu::cortex_m::exec::misc: Unknown instruction at 0x800025c: Opcode 0xde00
+2026-11-13T09:44:04.992436Z  WARN labwired_core::cpu::cortex_m::exec::misc: Unknown instruction at 0x800025c: Opcode 0xde00
+2026-11-13T09:44:05.229406Z  INFO labwired_cli::execute: stimulus: temperature = 55 applied
+2026-11-13T09:44:05.423992Z  INFO labwired_cli::execute: stimulus: humidity = 35 applied
+2026-11-13T09:44:05.635848Z  INFO labwired_cli::execute: stimulus: pressure = 1012.5 applied
 labwired-cli test: idle_ff skipped 125 of 50000125 device cycles (50000000 interpreted)
-PASS  81/81 checks · stm32f103-i2c-smoke · 50000000 steps · 0.84s
+PASS  82/82 checks · stm32f103-i2c-smoke · 50000000 steps · 0.66s
 FAULT  UsageFault: undefined instruction, at PC 0x0800_025C in `_ZN22firmware_f103_i2c_demo35smoke_trigger_undefined_instruction17h47760c0d41e8d816E`, called from `firmware_f103_i2c_demo::smoke_usagefault_and_hardfault_escalation`.
        HFSR=0x00000000 CFSR=0x00010000 [UNDEFINSTR]

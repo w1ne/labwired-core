@@ -275,11 +275,16 @@ fn main() -> ! {
     // The SysTick handler reads this gate in several earlier checks, before
     // the PendSV scheduling check itself initializes the rest of its record.
     unsafe { write_volatile(SYSTICK_HANDLER_PENDSV_REQUEST, 0) };
+    let rcc_reset = unsafe {
+        read_volatile(RCC_APB1ENR as *const u32) == 0
+            && read_volatile(RCC_APB2ENR as *const u32) == 0
+    };
     unsafe {
         rcc_init();
         usart2_init();
     }
     putline(b"F103 I2C");
+    smoke_rcc_clock_gates(rcc_reset);
     unsafe { smoke_systick_exception_state() };
     unsafe { smoke_systick_external_pause_resume() };
     unsafe { smoke_systick_handler_delivery() };
@@ -3672,6 +3677,52 @@ unsafe fn usart2_init() {
     write_volatile(USART2_CR1 as *mut u32, (1 << 13) | (1 << 3));
 }
 
+/// Verify the F103 reset and APB enable readbacks, reserved-bit masking, and
+/// the declared GPIOB clock gate. An unclocked GPIO port reads as zero and
+/// drops writes; re-enabling IOPBEN restores register access.
+fn smoke_rcc_clock_gates(reset: bool) {
+    const IOPBEN: u32 = 1 << 3;
+    const GPIOB0: u32 = 1;
+    let rd = |addr: u32| unsafe { read_volatile(addr as *const u32) };
+    let wr = |addr: u32, value: u32| unsafe { write_volatile(addr as *mut u32, value) };
+
+    let apb2_before = rd(RCC_APB2ENR);
+    let apb1 = rd(RCC_APB1ENR);
+    let enabled = apb2_before == 0x0000_100D && apb1 == 0x0022_0000;
+
+    // APB2ENR bit 1 is reserved on the medium-density STM32F103C8 profile.
+    wr(RCC_APB2ENR, apb2_before | (1 << 1));
+    let reserved = rd(RCC_APB2ENR) == apb2_before;
+
+    // PB0 is a free pad. Keep its output high while gating GPIOB, then try to
+    // clear it while unclocked; the write must be dropped.
+    wr(GPIOB_CRL, (rd(GPIOB_CRL) & !0xF) | 0x3);
+    wr(GPIOB_BSRR, GPIOB0);
+    let high = rd(GPIOB_IDR) & GPIOB0 != 0;
+    wr(RCC_APB2ENR, apb2_before & !IOPBEN);
+    let gated_read = rd(GPIOB_IDR) == 0;
+    wr(GPIOB_BRR, GPIOB0);
+    wr(RCC_APB2ENR, apb2_before);
+    let dropped_write = rd(GPIOB_IDR) & GPIOB0 != 0;
+    wr(GPIOB_BRR, GPIOB0);
+    let restored = rd(GPIOB_IDR) & GPIOB0 == 0;
+
+    let passed = reset && enabled && reserved && high && gated_read && dropped_write && restored;
+    putbytes(b"RCC F1 RESET=");
+    put_flag(reset);
+    putbytes(b" APB_ENABLES=");
+    put_flag(enabled);
+    putbytes(b" RESERVED=");
+    put_flag(reserved);
+    putbytes(b" GPIOB_OFF=");
+    put_flag(gated_read);
+    putbytes(b" WRITE_DROPPED=");
+    put_flag(dropped_write);
+    putbytes(b" RESTORED=");
+    put_flag(restored);
+    putbytes(if passed { b" ok\n" } else { b" FAIL\n" });
+}
+
 fn smoke_usart2_txe_irq() {
     // TXE is set at idle. With TXEIE enabled, USART2 must pend its shared
     // external IRQ (IRQ 38, RM0008 vector table). Leave NVIC disabled so the
@@ -3685,7 +3736,9 @@ fn smoke_usart2_txe_irq() {
 
     let bank = (USART2_IRQ / 32) as usize;
     let mut pended = false;
-    for _ in 0..64 {
+    // Allow the scheduler-driven UART IRQ time to reach NVIC, as on the
+    // other STM32 imported-system TXE probes.
+    for _ in 0..128 {
         if unsafe { read_volatile(NVIC_ISPR.add(bank)) } & USART2_IRQ_BIT != 0 {
             pended = true;
             break;

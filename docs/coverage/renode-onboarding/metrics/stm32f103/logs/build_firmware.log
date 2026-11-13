@@ -14,5 +14,4 @@ warning: profiles for the non root package will be ignored, specify profiles at 
 package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/rp2040/Cargo.toml
 workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
    Compiling firmware-f103-i2c-demo v0.25.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/firmware-f103-i2c-demo)
-   Compiling panic-halt v0.2.0
-    Finished `release` profile [optimized + debuginfo] target(s) in 1.52s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.75s

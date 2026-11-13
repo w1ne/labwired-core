@@ -1,6 +1,8 @@
 # Cortex-M3 exception and interrupt behavior, USART2 and I2C1 NACK plus TMP102
 # transactions and BME280 behavior
-# against the imported STM32F103 system. GPIOB checks CRH reset, push-pull IDR,
+# against the imported STM32F103 system. RCC checks reset, APB enable readback,
+# reserved-bit masking, GPIOB clock gating, dropped writes and restored access.
+# GPIOB checks CRH reset, push-pull IDR,
 # BSRR/BRR, input pulls and the LCKR 1-0-1 configuration lock on free pads. Core checks include exception frames
 # from Thread mode using both MSP and PSP, SVC return state through both
 # stacks, SysTick wake from WFI, UsageFault and HardFault escalation, PRIMASK and BASEPRI/BASEPRI_MAX
@@ -24,6 +26,7 @@ uart_injections:
     bytes: "RS"
 assertions:
   - uart_contains: "F103 I2C"
+  - uart_contains: "RCC F1 RESET=1 APB_ENABLES=1 RESERVED=1 GPIOB_OFF=1 WRITE_DROPPED=1 RESTORED=1 ok"
   - uart_contains: "SYSTICK M3 CALIB=00002328 WRAP=1 COUNTFLAG_WRITE=1 READ_CLEAR=1 PENDING=1 CLEAR=1 ok"
   - uart_contains: "SYSTICK M3 HCLK8 REFERENCE=1 WINDOW=1 FROZEN=1 RESUMED=1 ok"
   - uart_contains: "SYSTICK M3 PERIODIC=1 REPEATED=1 VECTOR=15 IPSR=15 RETURN=1 ok"

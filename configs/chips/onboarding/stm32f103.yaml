@@ -1,7 +1,8 @@
 # Bounded Cortex-M3 profile for the imported STM32F103 platform. The memory
 # windows match the common F103C8 density; this profile makes no claim about
 # the wider STM32F1 family. The declared RCC, GPIOA/GPIOB, USART2, SPI1, I2C1
-# and core SysTick models are exercised by the exact-import smoke.
+# and core SysTick models are exercised by the exact-import smoke, including
+# RCC reset/enables/reserved-bit masking and the GPIOB APB2 clock gate.
 name: stm32f103
 arch: arm
 core: cortex-m3
