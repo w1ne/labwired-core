@@ -93,7 +93,7 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
-        run: git fetch --no-tags --depth=1 origin "$BASE"
+        run: git fetch --no-tags --unshallow origin "$BASE"
       - name: Select the unchanged full gate
         id: select
         env:
