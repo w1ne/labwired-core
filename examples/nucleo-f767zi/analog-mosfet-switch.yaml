@@ -1,0 +1,26 @@
+# Generic low-side NMOS load driven by a co-simulation gate voltage.
+# The drain resolves through STM32F767 PA3 -> ADC1_IN3.
+name: "nucleo-f767zi-analog-mosfet-switch"
+chip: "../../configs/chips/stm32f767.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "mosfet_low_side_load"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_voltage: "ui.mosfet.gate_v"
+    outputs:
+      drain_voltage: "board.analog.pa3_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 3.3
+        Rload supply drain 1k
+        Vgate gate 0 dc 0
+        M1 drain gate 0 0 NMOS_TEST
+        .model NMOS_TEST NMOS(VTO=1 KP=20u LAMBDA=0.02 W=100u L=10u)
+      probes:
+        drain_voltage: "v(drain)"
+      sources:
+        gate_voltage: "Vgate"
+      vdd: 3.3
