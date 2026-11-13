@@ -45,6 +45,54 @@ void setup() {
 void loop() {}
 ```
 
+### ESP32-S3-DevKitC-1-N16R8 + Adafruit BME280
+
+ESP32 remains demand rank 1 (38% of reported MCU use). Espressif lists the
+N16R8 board SKU; the v1.1 guide gives 16 MB flash / 8 MB PSRAM and marks the
+older N8/N8R2 variants EOL. Adafruit listed the BME280 breakout in stock on
+2026-11-13. The profile uses I2C0 on GPIO8/GPIO9 and asserts the sensor ID plus
+raw temperature registers. This adds board and sensor coverage over the
+existing S3 model, not new silicon. The hosted Arduino oracle verifies the
+copy-paste setup path; its ideal-rail assumption excludes power-on and
+brown-out behavior.
+
+- [Wiring, scope, and copy-paste Arduino sketch](../examples/esp32s3-devkitc-1-n16r8-bme280/README.md)
+- [Dated Espressif and Adafruit availability receipt](../examples/esp32s3-devkitc-1-n16r8-bme280/vendor-status.md)
+- [Committed local smoke logs](../examples/esp32s3-devkitc-1-n16r8-bme280/evidence/)
+- [Hosted `model_verified` oracle output](../examples/esp32s3-devkitc-1-n16r8-bme280/evidence/hosted-verify.json)
+
+```cpp
+#include <Arduino.h>
+#include <Wire.h>
+
+constexpr uint8_t SDA_PIN = 8;
+constexpr uint8_t SCL_PIN = 9;
+constexpr uint8_t BME280_ADDR = 0x77;
+
+bool readRegister(uint8_t reg, uint8_t &value) {
+  Wire.beginTransmission(BME280_ADDR);
+  Wire.write(reg);
+  if (Wire.endTransmission(false) != 0 || Wire.requestFrom(BME280_ADDR, 1) != 1) {
+    return false;
+  }
+  value = Wire.read();
+  return true;
+}
+
+void setup() {
+  Serial.begin(115200);
+  Wire.begin(SDA_PIN, SCL_PIN, 100000);
+  uint8_t id = 0;
+  if (readRegister(0xD0, id) && id == 0x60) {
+    Serial.printf("BME280_ID=0x%02X\n", id);
+  } else {
+    Serial.println("BME280_I2C_ERROR");
+  }
+}
+
+void loop() {}
+```
+
 ## RP2040 / RP2350 — demand group 2
 
 ### Adafruit Feather RP2350 with HSTX (no-PSRAM, Product ID 6000)
