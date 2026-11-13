@@ -468,7 +468,12 @@ impl crate::bus::BusResidentDevice for StepDirPadWatch {
                 } else {
                     !drive.active_high
                 };
-                if drive.last != Some(high) {
+                // While the carriage sits on its stop the switch is held
+                // closed, so re-assert it on every service: a hand-operated
+                // switch on the same input that is released meanwhile must
+                // not leave the line reading open. Off the stop the line is
+                // released once, leaving it free for another switch.
+                if active || drive.last != Some(high) {
                     let _ = pins.drive_input_bit(drive.addr, drive.bit, high);
                     drive.last = Some(high);
                 }
@@ -602,6 +607,43 @@ mod tests {
         pins.outputs.insert((0x10, 0), true);
         crate::bus::BusResidentDevice::service(&mut watch, &mut pins, 1);
         assert_eq!(motor.steps(), 0);
+        assert_eq!(pins.inputs.get(&(0x20, 3)), Some(&false));
+
+        // Another switch wired to the same input is released while the axis
+        // still sits on its stop: the next service re-closes the limit.
+        pins.inputs.insert((0x20, 3), true);
+        crate::bus::BusResidentDevice::service(&mut watch, &mut pins, 2);
+        assert_eq!(pins.inputs.get(&(0x20, 3)), Some(&false));
+    }
+
+    #[test]
+    fn a_limit_off_its_stop_is_released_once_and_then_left_alone() {
+        let motor = Arc::new(
+            StepDirMotor::new("axis", 0, 1, None)
+                .with_initial_steps(5)
+                .with_step_limits(Some(0), Some(10)),
+        );
+        let mut watch = StepDirPadWatch {
+            id: "axis-watch".into(),
+            motor,
+            pads: vec![(0, 0x10, 0, None), (1, 0x10, 1, None)],
+            addrs: vec![0x10],
+            min_limit: Some(LimitDrive {
+                addr: 0x20,
+                bit: 3,
+                active_high: false,
+                last: None,
+            }),
+            max_limit: None,
+        };
+        let mut pins = TestPins::default();
+        pins.outputs.insert((0x10, 0), false);
+        pins.outputs.insert((0x10, 1), false);
+        crate::bus::BusResidentDevice::service(&mut watch, &mut pins, 0);
+        assert_eq!(pins.inputs.get(&(0x20, 3)), Some(&true));
+        // A hand-pressed switch on the same input stays pressed.
+        pins.inputs.insert((0x20, 3), false);
+        crate::bus::BusResidentDevice::service(&mut watch, &mut pins, 1);
         assert_eq!(pins.inputs.get(&(0x20, 3)), Some(&false));
     }
 
