@@ -154,10 +154,9 @@ def known_ci_chip_descriptors() -> set[str]:
     an onboarding smoke that names one is a valid reference rather than a
     stale system manifest.
     """
-    return {
-        path.stem
-        for directory in (chip_dir(), onboarding_chip_dir())
-        for path in directory.glob("*.yaml")
+    return set(shipped_chips()) | {
+        f"onboarding/{path.stem}"
+        for path in onboarding_chip_dir().glob("*.yaml")
         if not path.stem.startswith(CHIP_EXCLUDE_PREFIX)
     }
 
@@ -165,9 +164,9 @@ def known_ci_chip_descriptors() -> set[str]:
 def chip_of_system(system_path: Path) -> str | None:
     """Resolve a system manifest to the chip stem it runs.
 
-    `chip:` is either a path relative to the manifest or a built-in name. Both
-    shipped descriptors and imported onboarding descriptors reduce to a stem;
-    `evaluate` checks that the corresponding file exists in its proper catalog.
+    `chip:` is either a path relative to the manifest or a built-in name.
+    Imported descriptors retain their onboarding namespace so their smoke
+    cannot be credited to a different shipped chip with the same stem.
     """
     if not system_path.is_file():
         return None
@@ -178,6 +177,11 @@ def chip_of_system(system_path: Path) -> str | None:
     if not isinstance(chip, str) or not chip:
         return None
     stem = Path(chip).stem if chip.endswith(".yaml") else chip
+    if (
+        chip.endswith(".yaml")
+        and (system_path.parent / chip).resolve().parent == onboarding_chip_dir().resolve()
+    ):
+        return f"onboarding/{stem}"
     return stem or None
 
 

@@ -3512,6 +3512,36 @@
           "name": "en_pin",
           "ty": "str",
           "doc": "Optional EN pin."
+        },
+        {
+          "name": "initial_steps",
+          "ty": "int",
+          "doc": "Signed shaft position at reset, in configured steps."
+        },
+        {
+          "name": "min_steps",
+          "ty": "int",
+          "doc": "Optional lower travel stop in signed steps."
+        },
+        {
+          "name": "max_steps",
+          "ty": "int",
+          "doc": "Optional upper travel stop in signed steps."
+        },
+        {
+          "name": "min_limit_pin",
+          "ty": "str",
+          "doc": "Optional MCU input asserted at min_steps."
+        },
+        {
+          "name": "max_limit_pin",
+          "ty": "str",
+          "doc": "Optional MCU input asserted at max_steps."
+        },
+        {
+          "name": "limit_active_high",
+          "ty": "bool",
+          "doc": "Limit output polarity; false is active-low (default)."
         }
       ],
       "labs": [],

@@ -550,7 +550,7 @@ undervoltage_fault_pin: PB5
     };
     assert_eq!(cfg.id, "spindle");
     assert_eq!(cfg.pole_pairs, 7);
-    assert_eq!(cfg.timer_name, "tim1");
+    assert_eq!(cfg.timer_name, None);
     assert_eq!(cfg.encoder_index_pin, None);
     assert_eq!(cfg.simulation_clock_hz, 80_000_000);
     assert_eq!(cfg.motor_fault_pin, None);
@@ -599,7 +599,7 @@ encoder_b_pin: PC7
     let MotorModelConfig::Bldc(cfg) = &model else {
         panic!("expected bldc motor");
     };
-    assert_eq!(cfg.timer_name, "tim8");
+    assert_eq!(cfg.timer_name.as_deref(), Some("tim8"));
     assert!(model.validate().is_empty());
 }
 

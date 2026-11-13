@@ -584,6 +584,14 @@ fn run_world(
             .cosim_status()
             .and_then(|status| serde_json::to_value(status).ok()),
         analog_series: world.analog_series(),
+        node_motors: world
+            .machines
+            .iter()
+            .filter_map(|(id, machine)| {
+                let motors = machine.motor_snapshots();
+                (!motors.is_empty()).then(|| (id.clone(), motors))
+            })
+            .collect(),
         gpio_nets: Some(world.gpio_net_reports())
             .filter(|nets| !nets.is_empty())
             .and_then(|nets| serde_json::to_value(nets).ok()),
@@ -918,6 +926,7 @@ fn write_config_error(
         gpio_nets: None,
         cosim: None,
         analog_series: None,
+        node_motors: Default::default(),
     };
     // Silent-path census (measurement only; empty fn without the
     // `silent-census` feature). The multi-node environment runner has its own

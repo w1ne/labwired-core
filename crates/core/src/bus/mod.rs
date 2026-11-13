@@ -71,7 +71,7 @@ pub use interrupt_fabric::{
 };
 pub use memory_policy::{CpuWritePolicy, MemoryPolicyReport, RegionPolicyStats, RegionViolation};
 pub(crate) use motors::CircuitMotorLookup;
-pub use motors::{MotorSnapshot, STEPPER_SNAPSHOT_KIND};
+pub use motors::{MotorCoupling, MotorSnapshot, STEPPER_SNAPSHOT_KIND};
 
 impl SystemBus {
     /// Cycles until the earliest event an MMIO write armed in the running CPU

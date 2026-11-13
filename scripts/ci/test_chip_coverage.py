@@ -172,12 +172,55 @@ def test_an_onboarding_profile_is_a_valid_ci_target_not_a_shipped_chip(tmp_path)
     try:
         cc.set_root(tmp_path)
         assert cc.shipped_chips() == []
-        assert cc.known_ci_chip_descriptors() == {"example"}
+        assert cc.known_ci_chip_descriptors() == {"onboarding/example"}
     finally:
         cc.set_root(previous_root)
 
     code, out = run_gate(tmp_path)
     assert code == 0, out
+
+
+def test_onboarding_profile_does_not_prove_a_same_named_shipped_chip(tmp_path):
+    build_tree(
+        tmp_path,
+        chips=["example"],
+        arduino_boards=[],
+        matrix_ids=[],
+        ledger=EMPTY_LEDGER,
+        scripts=((
+            "core-onboarding-smoke.yml", "examples/onboarding/example-smoke.yaml",
+            "configs/systems/onboarding/example.yaml", "example",
+        ),),
+    )
+    onboarding_dir = tmp_path / "configs/chips/onboarding"
+    onboarding_dir.mkdir(parents=True)
+    (onboarding_dir / "example.yaml").write_text("name: example\n")
+    (tmp_path / "configs/systems/onboarding/example.yaml").write_text(
+        'chip: "../../chips/onboarding/example.yaml"\n'
+    )
+    code, out = run_gate(tmp_path)
+    assert code == 1
+    assert "chip 'example' ships but NO CI gate executes firmware" in out
+
+
+def test_missing_onboarding_descriptor_is_not_accepted(tmp_path):
+    build_tree(
+        tmp_path,
+        chips=[],
+        arduino_boards=[],
+        matrix_ids=[],
+        ledger=EMPTY_LEDGER,
+        scripts=((
+            "core-onboarding-smoke.yml", "examples/onboarding/example-smoke.yaml",
+            "configs/systems/onboarding/example.yaml", "example",
+        ),),
+    )
+    (tmp_path / "configs/systems/onboarding/example.yaml").write_text(
+        'chip: "../../chips/onboarding/example.yaml"\n'
+    )
+    code, out = run_gate(tmp_path)
+    assert code == 1
+    assert "onboarding/example" in out and "stale system manifest" in out
 
 
 def test_a_boards_yaml_entry_the_workflow_never_names_is_not_coverage(tmp_path):
