@@ -53,7 +53,7 @@ impl NativeSession {
 #[pymethods]
 impl NativeSession {
     #[new]
-    #[pyo3(signature=(elf, chip_path, system_path=None, uart=None, catalog_root=None, coverage=false, flash_path=None))]
+    #[pyo3(signature=(elf, chip_path, system_path=None, uart=None, catalog_root=None, coverage=false, flash_path=None, optimized_execution=false))]
     fn new(
         elf: PathBuf,
         chip_path: Option<PathBuf>,
@@ -62,6 +62,7 @@ impl NativeSession {
         catalog_root: Option<PathBuf>,
         coverage: bool,
         flash_path: Option<PathBuf>,
+        optimized_execution: bool,
     ) -> PyResult<Self> {
         let loaded = system_path
             .as_ref()
@@ -109,19 +110,26 @@ impl NativeSession {
         // Provision the same ROM used by the native CLI, never fake a return.
         let mut blobs = BlobMap::new();
         if chip.name == "esp32c3" {
-            let images = labwired_core::boot::esp32c3_rom::provision_rom_images()
-                .ok_or_else(|| PyValueError::new_err(
-                    "ESP32-C3 ROM unavailable: install the provisioned ROM/toolchain ELF",
-                ))?;
+            let images =
+                labwired_core::boot::esp32c3_rom::provision_rom_images().ok_or_else(|| {
+                    PyValueError::new_err(
+                        "ESP32-C3 ROM unavailable: install the provisioned ROM/toolchain ELF",
+                    )
+                })?;
             blobs.insert("esp32c3_irom".into(), images.irom);
             blobs.insert("esp32c3_drom".into(), images.drom);
         }
         let flash = flash_path
-            .map(|p| std::fs::read(p).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string())))
+            .map(|p| {
+                std::fs::read(p).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
+            })
             .transpose()?;
         let (source, boot) = match flash.as_deref() {
             Some(image) => (
-                FirmwareSource::FlashImage { image, symbols: Some(&firmware) },
+                FirmwareSource::FlashImage {
+                    image,
+                    symbols: Some(&firmware),
+                },
                 BootMode::RomBoot,
             ),
             None => (FirmwareSource::Elf(&firmware), BootMode::FastBoot),
@@ -140,6 +148,7 @@ impl NativeSession {
             },
             OpenOptions {
                 coverage,
+                optimized_execution,
                 // A model's relative `model:` path resolves beside the system file.
                 cosim_base_dir: system_path
                     .as_ref()

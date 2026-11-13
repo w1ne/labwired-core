@@ -1651,10 +1651,60 @@ impl I2cDevice for GenericI2cDevice {
             .iter()
             .map(|channel| (channel.key.as_ref(), self.input_value(&channel.key)))
             .collect();
+        let mut meta = serde_json::json!({"registers":registers,"inputs":inputs});
+        // Register-file devices have no named register map. Export the exact
+        // model-owned bytes underlying their declared observables instead of
+        // making consumers reconstruct PWM by recording thousands of GPIO
+        // edges. This is read-only: it cannot advance firmware or the I2C bus.
+        if let Some(file) = self.file.as_ref() {
+            let mut observables = serde_json::Map::new();
+            for observable in &self.observables {
+                let mut raw = serde_json::Map::new();
+                let mut engineering = serde_json::Map::new();
+                for channel in 0..observable.channels {
+                    let start = usize::from(observable.base)
+                        + usize::from(observable.stride) * usize::from(channel);
+                    let bits = &observable.value.u12_compose;
+                    let lo = file.get(start + usize::from(bits.lo_rel));
+                    let hi = file.get(start + usize::from(bits.hi_rel));
+                    if let (Some(&lo), Some(&hi)) = (lo, hi) {
+                        let count = (u16::from(hi & bits.hi_mask) << 8) | u16::from(lo);
+                        raw.insert(channel.to_string(), serde_json::json!(count));
+                        engineering.insert(
+                            channel.to_string(),
+                            serde_json::json!(self.observable(&observable.name, channel)),
+                        );
+                    }
+                }
+                // The legacy PCA9685 frontend uses `off_counts`: preserve that
+                // name for parity while exposing the generic named observable.
+                if observable.name == "servo_angle" {
+                    meta["off_counts"] = serde_json::Value::Object(raw.clone());
+                    meta["mode1_sleep"] =
+                        serde_json::json!(file.first().is_some_and(|value| value & 0x10 != 0));
+                    let mut full_off = serde_json::Map::new();
+                    for channel in 0..observable.channels {
+                        let high = usize::from(observable.base)
+                            + usize::from(observable.stride) * usize::from(channel)
+                            + usize::from(observable.value.u12_compose.hi_rel);
+                        if let Some(value) = file.get(high) {
+                            full_off
+                                .insert(channel.to_string(), serde_json::json!(value & 0x10 != 0));
+                        }
+                    }
+                    meta["full_off"] = serde_json::Value::Object(full_off);
+                }
+                observables.insert(
+                    observable.name.clone(),
+                    serde_json::json!({"raw_counts":raw,"engineering":engineering}),
+                );
+            }
+            meta["observables"] = serde_json::Value::Object(observables);
+        }
         vec![crate::inspect::Artifact {
             kind: "i2c_registers".into(),
             id: id.into(),
-            meta: serde_json::json!({"registers":registers,"inputs":inputs}),
+            meta,
             bytes: None,
         }]
     }
