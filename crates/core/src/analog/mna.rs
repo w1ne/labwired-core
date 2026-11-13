@@ -243,11 +243,13 @@ fn diode_model_op(
         Some(_) => (is, None),
     };
     let junction_op = |is: f64, n: f64| match (breakdown, temperature_celsius) {
-        (None, None) => device::diode_op(voltage, is, n),
+        (None, None) => device::pn_junction_op(voltage, is, n),
         (Some(xbv), None) => {
             device::diode_op_breakdown(voltage, is, n, xbv, model.nbv.unwrap_or(model.n))
         }
-        (None, Some(_)) => device::diode_op_at_thermal_voltage(voltage, is, n, thermal_voltage),
+        (None, Some(_)) => {
+            device::pn_junction_op_at_thermal_voltage(voltage, is, n, thermal_voltage)
+        }
         (Some(xbv), Some(_)) => device::diode_op_breakdown_at_thermal_voltage(
             voltage,
             is,
@@ -2661,10 +2663,9 @@ impl Solver {
             // the bulk is the anode and drain/source are the cathodes; the
             // polarity sign reverses that orientation for PMOS.
             let (drain_is, source_is) = mosfet.junction_saturation_currents();
-            let bd = device::diode_op_at_thermal_voltage(
+            let bd = device::mos_bulk_junction_op(
                 self.mos_vbd[index],
                 drain_is,
-                1.0,
                 mosfet.thermal_voltage(),
             );
             let bd_terms = [(
@@ -2684,10 +2685,9 @@ impl Solver {
                 &negate(&bd_terms),
             );
 
-            let bs = device::diode_op_at_thermal_voltage(
+            let bs = device::mos_bulk_junction_op(
                 self.mos_vbs[index],
                 source_is,
-                1.0,
                 mosfet.thermal_voltage(),
             );
             let bs_terms = [(
@@ -2810,7 +2810,7 @@ impl Solver {
             .into_iter()
             .enumerate()
             {
-                let gate = device::diode_op_at_thermal_voltage(
+                let gate = device::pn_junction_op_at_thermal_voltage(
                     voltage,
                     gate_model.is,
                     gate_model.n,

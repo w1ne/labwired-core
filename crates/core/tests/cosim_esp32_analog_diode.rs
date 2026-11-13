@@ -366,3 +366,141 @@ fn esp32_wroom_epaper_ntc_and_diode_reach_distinct_sens_adc_channels() {
         "25 °C puts the divider at half scale"
     );
 }
+
+/// Reverse pn-junction law of one SPICE device family, as ngspice-42 writes
+/// it, with the junction current in amps for a junction voltage `v` < 0.
+#[derive(Clone, Copy, Debug)]
+enum ReverseLaw {
+    /// `dioload.c`/`jfetload.c`: cubic below `−3·N·Vt`.
+    Cubic,
+    /// `mos1load.c`: `−IS` held at or below `−3·Vt`.
+    Hold,
+    /// The plain exponential the engine used before, as a control.
+    Exponential,
+}
+
+/// Independent node voltage of a leakage circuit: `junctions` parallel
+/// junctions of saturation current `is_a` (N = 1, engine temperature 300 K)
+/// held in reverse by a 1.65 V bias, their leakage flowing into `load_ohms`.
+fn expected_leakage_voltage(law: ReverseLaw, is_a: f64, junctions: f64, load_ohms: f64) -> f64 {
+    const BIAS_V: f64 = 1.65;
+    const GMIN_S: f64 = 1e-12;
+    let vt = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+    // Reverse current, cathode to anode, of one junction at voltage v.
+    let reverse_current = |v: f64| {
+        let junction = match law {
+            ReverseLaw::Cubic if v < -3.0 * vt => {
+                let arg = 3.0 * vt / (v * std::f64::consts::E);
+                is_a * (1.0 + arg * arg * arg)
+            }
+            ReverseLaw::Hold if v <= -3.0 * vt => is_a,
+            _ => -is_a * ((v / vt).exp() - 1.0),
+        };
+        junction - GMIN_S * v
+    };
+    let (mut low, mut high) = (0.0, BIAS_V);
+    for _ in 0..200 {
+        let mid = 0.5 * (low + high);
+        if junctions * reverse_current(mid - BIAS_V) * load_ohms > mid {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    0.5 * (low + high)
+}
+
+/// Reverse-biased junction leakage of three unrelated device families reaches
+/// SENS SAR ADC1 on the Feather V2 profile beside the diode load line. In
+/// this region the diode and JFET gate take the cubic reverse form and the
+/// MOSFET bulk junction holds `−IS`; each is checked against an independent
+/// root, ngspice-42 `.op` (`.temp 26.85`, `tnom=26.85`), and a 12-bit
+/// one-shot conversion whose code differs from the plain exponential's.
+#[test]
+fn feather_esp32_reverse_junction_leakage_reaches_sens_sar_beside_diode() {
+    let profile_path = root("configs/systems/adafruit-feather-esp32-v2.yaml");
+    let mut profile = SystemManifest::from_file(&profile_path).expect("load Feather V2 profile");
+    assert_eq!(profile.name, "adafruit-feather-esp32-v2");
+    let analog = SystemManifest::from_file(root(
+        "examples/adafruit-feather-esp32-v2/analog-reverse-leakage-adc.yaml",
+    ))
+    .expect("load generic reverse-leakage fixture");
+    profile.cosim_models = analog.cosim_models;
+
+    let chip_path = profile_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load classic ESP32 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build Feather V2 bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries the diode and three leakage circuits");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "every device output must bind to its SENS SAR channel"
+    );
+    for channel in [2, 3, 4, 5, 6] {
+        assert_eq!(adc_channel_input_count(&mut bus, channel), 0xFFFF);
+    }
+
+    let boundary = session.cycles_until_boundary(0);
+    let (steps, errors) = session
+        .advance_to(boundary, &mut bus)
+        .expect("solve all four circuits");
+    assert_eq!(steps.len(), 4, "the diode and three leakage circuits solve");
+    assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+    let count = |volts: f64| (u32::from((volts * 1000.0).round() as u16) * 4095 / 3300) as u16;
+    let routed = |session: &CosimSession, channel: u8| match session
+        .signals()
+        .get(&format!("adc.sens_sar_adc.{channel}_volts"))
+    {
+        Some(CosimSignalValue::F64(volts)) => *volts,
+        other => panic!("channel {channel} was not routed: {other:?}"),
+    };
+
+    let diode = routed(&session, 6);
+    let expected_diode = expected_diode_voltage();
+    assert!(
+        (diode - expected_diode).abs() < 2e-5,
+        "the diode load line should be {expected_diode} V, got {diode} V"
+    );
+    assert_eq!(convert_adc1_channel(&mut bus, 6), count(diode));
+
+    let exponential = expected_leakage_voltage(ReverseLaw::Exponential, 1e-6, 1.0, 1.5e6);
+    // (channel, law, parallel junctions, load, ngspice-42 node voltage)
+    let cases = [
+        (3, ReverseLaw::Cubic, 1.0, 1.5e6, 1.491_286_820_4),
+        (4, ReverseLaw::Cubic, 2.0, 7.5e5, 1.491_286_371_5),
+        (5, ReverseLaw::Hold, 2.0, 7.5e5, 1.500_000_225_0),
+    ];
+    for (channel, law, junctions, load_ohms, ngspice) in cases {
+        let got = routed(&session, channel);
+        let expected = expected_leakage_voltage(law, 1e-6, junctions, load_ohms);
+        assert!(
+            (got - expected).abs() < 1e-6,
+            "channel {channel} {law:?}: independent root {expected} V, got {got} V"
+        );
+        assert!(
+            (got - ngspice).abs() < 2e-6,
+            "channel {channel} {law:?}: ngspice-42 {ngspice} V, got {got} V"
+        );
+        assert!(
+            count(got).abs_diff(count(exponential)) >= 5,
+            "channel {channel} {law:?}: the reverse law must move the code away from the \
+             exponential's {}, got {}",
+            count(exponential),
+            count(got)
+        );
+        assert_eq!(adc_channel_input_count(&mut bus, channel), count(got));
+        assert_eq!(
+            convert_adc1_channel(&mut bus, channel),
+            count(got),
+            "the one-shot SAR1 result must report channel {channel}"
+        );
+    }
+    assert_eq!(
+        adc_channel_input_count(&mut bus, 2),
+        0xFFFF,
+        "the adjacent undriven channel stays untouched"
+    );
+}

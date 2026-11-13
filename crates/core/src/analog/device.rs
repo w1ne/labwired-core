@@ -618,6 +618,53 @@ pub fn diode_op_at_thermal_voltage(
     }
 }
 
+/// SPICE two-region pn-junction current, as ngspice's `dioload.c` and
+/// `jfetload.c` (and `bjtload.c` for the substrate junction) evaluate it:
+///
+/// ```text
+/// V ≥ −3·N·Vt   I = Is·(exp(V/(N·Vt)) − 1)          (forward)
+/// V < −3·N·Vt   I = −Is·(1 + (3·N·Vt/(e·V))³)       (reverse)
+/// ```
+///
+/// plus `GMIN·V`. The cubic meets the exponential in value at `−3·N·Vt` and
+/// tends to `−Is` from below, where the exponential tends to `−Is` from above.
+/// The forward region is [`diode_op_at_thermal_voltage`]'s exactly.
+pub fn pn_junction_op(v_junction: f64, is: f64, n: f64) -> DiodeOp {
+    pn_junction_op_at_thermal_voltage(v_junction, is, n, THERMAL_VOLTAGE)
+}
+
+/// [`pn_junction_op`] using the selected thermal voltage.
+pub fn pn_junction_op_at_thermal_voltage(
+    v_junction: f64,
+    is: f64,
+    n: f64,
+    thermal_voltage: f64,
+) -> DiodeOp {
+    let vte = n * thermal_voltage;
+    if v_junction >= -3.0 * vte {
+        return diode_op_at_thermal_voltage(v_junction, is, n, thermal_voltage);
+    }
+    let arg = 3.0 * vte / (v_junction * core::f64::consts::E);
+    let arg = arg * arg * arg;
+    DiodeOp {
+        id: -is * (1.0 + arg) + GMIN * v_junction,
+        gd: is * 3.0 * arg / v_junction + GMIN,
+    }
+}
+
+/// Level-1 MOSFET bulk junction (ngspice `mos1load.c`). At or below `−3·Vt`
+/// the junction current is held at `−Is` and only `GMIN` conducts; above it
+/// the junction is the ordinary exponential with `N = 1`.
+pub fn mos_bulk_junction_op(v_junction: f64, is: f64, thermal_voltage: f64) -> DiodeOp {
+    if v_junction <= -3.0 * thermal_voltage {
+        return DiodeOp {
+            id: GMIN * v_junction - is,
+            gd: GMIN,
+        };
+    }
+    diode_op_at_thermal_voltage(v_junction, is, 1.0, thermal_voltage)
+}
+
 /// Ngspice's optional diode recombination-current branch for `ISR` and `NR`.
 ///
 /// In forward operation its current is multiplied by the junction-generation
@@ -779,11 +826,8 @@ pub fn breakdown_voltage_at_thermal_voltage(bv: f64, ibv: f64, is: f64, nbv: f64
 /// V < −xbv           I = −Is·exp(−(xbv + V)/(NBV·Vt))          (breakdown)
 /// ```
 ///
-/// plus `GMIN·V` everywhere. The forward region is [`diode_op`]'s exactly.
-/// The middle region is SPICE's cubic reverse-saturation approximation, which
-/// meets the exponential at `−3·N·Vt` in value; a diode **without** `BV` does
-/// not use it — it keeps the plain exponential it always had, so that nothing
-/// already simulated moves by a bit.
+/// plus `GMIN·V` everywhere. The first two regions are [`pn_junction_op`]'s
+/// exactly, which a diode without `BV` uses on its own.
 pub fn diode_op_breakdown(v_junction: f64, is: f64, n: f64, xbv: f64, nbv: f64) -> DiodeOp {
     diode_op_breakdown_at_thermal_voltage(v_junction, is, n, xbv, nbv, THERMAL_VOLTAGE)
 }
@@ -797,17 +841,8 @@ pub fn diode_op_breakdown_at_thermal_voltage(
     nbv: f64,
     thermal_voltage: f64,
 ) -> DiodeOp {
-    let vte = n * thermal_voltage;
-    if v_junction >= -3.0 * vte {
-        return diode_op_at_thermal_voltage(v_junction, is, n, thermal_voltage);
-    }
-    if v_junction >= -xbv {
-        let arg = 3.0 * vte / (v_junction * core::f64::consts::E);
-        let arg = arg * arg * arg;
-        return DiodeOp {
-            id: -is * (1.0 + arg) + GMIN * v_junction,
-            gd: is * 3.0 * arg / v_junction + GMIN,
-        };
+    if v_junction >= -3.0 * n * thermal_voltage || v_junction >= -xbv {
+        return pn_junction_op_at_thermal_voltage(v_junction, is, n, thermal_voltage);
     }
     let vtebrk = nbv * thermal_voltage;
     let evrev = exp_clamped(-(xbv + v_junction) / vtebrk);

@@ -2702,17 +2702,19 @@ mod analog {
     }
 
     /// A reverse-biased diode with default `CJO=0` and `TT=0` conducts its
-    /// saturation current plus `GMIN*V` and has no stored charge.
+    /// saturation current, on SPICE's cubic reverse form, plus `GMIN*V` and
+    /// has no stored charge.
     #[test]
     fn a_reverse_biased_diode_carries_only_leakage_with_no_stored_charge() {
         // The built-in `D` card is 1N4148-class.
-        let is = 2.52e-9;
+        let (is, n) = (2.52e-9, 1.752);
         let mut solver = build("Vs s 0 dc -5\nR1 s a 1\nD1 a 0 D\n");
         let current = source_current(&solver, "Vs").abs();
-        let expected = is + device::GMIN * 5.0;
+        let arg = 3.0 * n * device::THERMAL_VOLTAGE / (-5.0 * std::f64::consts::E);
+        let expected = is * (1.0 + arg * arg * arg) + device::GMIN * 5.0;
         assert!(
             relative(current, expected) < 1e-6,
-            "a reverse-biased diode should pass IS + GMIN*V = {expected} A, got {current} A"
+            "a reverse-biased diode should pass IS·(1 + (3·N·Vt/(e·V))³) + GMIN*V = {expected} A, got {current} A"
         );
         // Switch the polarity and step: a real diode would sweep stored charge
         // out over its reverse-recovery time. This one is at the new operating
@@ -8139,5 +8141,133 @@ mod analog {
             .expect_err("a level-1 MOSFET has no area; W and L size it")
             .to_string();
         assert!(error.contains("unknown parameter `area`"), "{error}");
+    }
+
+    /// Reverse-biased pn junctions follow ngspice-42's per-device laws, not
+    /// the plain exponential. A diode without `BV` and a JFET gate take the
+    /// cubic `−IS·(1 + (3·N·Vt/(e·V))³)` below `−3·N·Vt`; a sidewall with its
+    /// own `NS` switches at `−3·NS·Vt`; a level-1 MOSFET bulk junction holds
+    /// `−IS` with only `GMIN` conducting at or below `−3·Vt`. Each device
+    /// has its own source. References are ngspice-42 `.dc` with `.temp
+    /// 26.85` and `tnom=26.85` (decks: `D1 d 0 DM`, `D2 s 0 DSW pj=1`,
+    /// `J1 0 jg 0 JM`, `M1 0 0 0 mb MM`, swept together).
+    #[test]
+    fn reverse_biased_junctions_follow_ngspice_reverse_laws() {
+        let models = ".model DM D(IS=1e-9 N=1.5)\n\
+            .model DSW D(IS=1e-12 JSW=4e-10 NS=2.0)\n\
+            .model JM NJF(VTO=-2 BETA=1e-3 IS=1e-9)\n\
+            .model MM NMOS(LEVEL=1 VTO=1 KP=1e-4 IS=1e-9)\n";
+        // (V, [diode, sidewall diode, JFET gate, MOSFET bulk]) in amps.
+        let ngspice: [(f64, [f64; 4]); 7] = [
+            (
+                -1.0,
+                [
+                    -1.000_921_614_4e-9,
+                    -4.019_256_556_5e-10,
+                    -2.001_953_549_3e-9,
+                    -2.002e-9,
+                ],
+            ),
+            (
+                -0.5,
+                [
+                    -9.998_729_154_9e-10,
+                    -4.009_052_451_8e-10,
+                    -2.000_628_394_4e-9,
+                    -2.001e-9,
+                ],
+            ),
+            (
+                -0.3,
+                [
+                    -9.973_968_309_8e-10,
+                    -3.985_465_054_8e-10,
+                    -1.998_879_603_5e-9,
+                    -2.0006e-9,
+                ],
+            ),
+            (
+                -0.2,
+                [
+                    -9.904_018_045_7e-10,
+                    -3.919_069_559_8e-10,
+                    -1.994_593_662_0e-9,
+                    -2.0004e-9,
+                ],
+            ),
+            (
+                -0.15,
+                [
+                    -9.769_246_478_7e-10,
+                    -3.791_586_981_6e-10,
+                    -1.986_536_828_4e-9,
+                    -2.0003e-9,
+                ],
+            ),
+            (
+                -0.1,
+                [
+                    -9.242_336_986_1e-10,
+                    -3.432_542_998_7e-10,
+                    -1.953_749_295_7e-9,
+                    -2.0002e-9,
+                ],
+            ),
+            (
+                -0.05,
+                [
+                    -7.246_116_196_1e-10,
+                    -2.488_232_623_8e-10,
+                    -1.710_987_626_1e-9,
+                    -1.710_987_626_1e-9,
+                ],
+            ),
+        ];
+        let sources = ["Vd", "Vs", "Vj", "Vm"];
+        let mut exponential_gap = [0.0_f64; 4];
+        for (voltage, expected) in ngspice {
+            let solver = build(&format!(
+                "Vd d 0 dc {voltage}\nVs s 0 dc {voltage}\nVj jg 0 dc {voltage}\nVm mb 0 dc {voltage}\n\
+                 D1 d 0 DM\nD2 s 0 DSW pj=1\nJ1 0 jg 0 JM\nM1 0 0 0 mb MM\n{models}"
+            ));
+            for ((source, reference), gap) in sources.iter().zip(expected).zip(&mut exponential_gap)
+            {
+                let got = source_current(&solver, source);
+                assert!(
+                    relative(got, reference) < 2e-5,
+                    "{source} at {voltage} V: ngspice-42 {reference} A, got {got} A"
+                );
+                // The plain exponential every junction used before.
+                let exponential = match *source {
+                    "Vd" => device::diode_op(voltage, 1e-9, 1.5).id,
+                    "Vs" => {
+                        device::diode_op(voltage, 1e-12, 1.0).id
+                            + device::diode_op(voltage, 4e-10, 2.0).id
+                            - device::GMIN * voltage
+                    }
+                    _ => 2.0 * device::diode_op(voltage, 1e-9, 1.0).id,
+                };
+                *gap = gap.max(relative(exponential, reference));
+            }
+        }
+        // The exponential misses each reference by 0.4 % or more.
+        for (source, gap) in sources.iter().zip(exponential_gap) {
+            assert!(
+                gap > 2e-3,
+                "{source}: the sweep must reach the reverse law, gap {gap}"
+            );
+        }
+
+        // The cubic meets the exponential in value at −3·N·Vt, and the
+        // MOSFET hold conducts only GMIN.
+        let boundary = -3.0 * 1.5 * device::THERMAL_VOLTAGE;
+        let (forward, reverse) = (
+            device::pn_junction_op(boundary, 1e-9, 1.5),
+            device::pn_junction_op(boundary - 1e-12, 1e-9, 1.5),
+        );
+        assert!(relative(reverse.id, forward.id) < 1e-9);
+        let bulk = device::mos_bulk_junction_op(-0.2, 1e-9, device::THERMAL_VOLTAGE);
+        assert_eq!(bulk.gd, device::GMIN);
+        assert_eq!(bulk.id, -1e-9 - device::GMIN * 0.2);
     }
 }
