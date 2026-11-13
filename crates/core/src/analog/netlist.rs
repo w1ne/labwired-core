@@ -82,6 +82,7 @@
 //! level-1 channel charge from `TOX`, gate overlap capacitance
 //! `CGSO`/`CGDO`/`CGBO`, BJT base-junction depletion capacitance
 //! `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC` with shared `FC`,
+//! including the `XCJC` split between the internal and external base,
 //! MOSFET bulk junction depletion capacitance `CBD`/`CBS` with shared
 //! `PB`/`MJ`/`FC`, or junction geometry `CJ`/`CJSW`/`MJ`/`MJSW` with instance
 //! `AD`/`AS`/`PD`/`PS`, semiconductor temperature coefficients beyond the diode,
@@ -96,7 +97,9 @@
 //! instance's `TEMP` uses model `TNOM`/`EG`/
 //! `XTI`/`XTB` to adjust thermal voltage, transport and recombination
 //! saturation currents, and forward/reverse beta. BJT `CJE`/`VJE`/`MJE` and
-//! `CJC`/`VJC`/`MJC` follow the default silicon temperature law; `TMJE1`/`2`
+//! `CJC`/`VJC`/`MJC` follow the default silicon temperature law; `XCJC` assigns
+//! the given fraction of `CJC` to the internal base and the remainder to the
+//! external base when `RB` creates both nodes. `TMJE1`/`2`
 //! and `TMJC1`/`2` adjust the grading factors. `TLEVC=1` selects the linear
 //! `CTE`/`CTC` and `TVJE`/`TVJC` law. With `TEMP`, `TRB1`/`TRB2`, `TRBM1`/`TRBM2`,
 //! `TIRB1`/`TIRB2`, `TRC1`/`TRC2`, and `TRE1`/`TRE2` adjust base,
@@ -1350,6 +1353,10 @@ pub struct BjtModel {
     pub tmje2: f64,
     /// Zero-bias base-collector depletion capacitance `CJC`, farads.
     pub cjc: f64,
+    /// Fraction of base-collector depletion capacitance attached to the
+    /// internal base node. The remainder is attached to the external base.
+    /// The ngspice default is 1; without `RB`, both portions share one node.
+    pub xcjc: f64,
     /// Base-collector junction potential `VJC`, volts.
     pub vjc: f64,
     /// Base-collector junction grading coefficient `MJC`.
@@ -1516,6 +1523,7 @@ impl BjtModel {
             mjc: 0.33,
             tmjc1: 0.0,
             tmjc2: 0.0,
+            xcjc: 1.0,
             tlevc: 0,
             cte: 0.0,
             ctc: 0.0,
@@ -4020,6 +4028,8 @@ fn bind_models(
                     || model.mje < 0.0
                     || !model.cjc.is_finite()
                     || model.cjc < 0.0
+                    || !model.xcjc.is_finite()
+                    || !(0.0..=1.0).contains(&model.xcjc)
                     || !model.vjc.is_finite()
                     || model.vjc <= 0.0
                     || !model.mjc.is_finite()
@@ -4039,7 +4049,7 @@ fn bind_models(
                     || model.tr < 0.0
                 {
                     return Err(ctx.parse_err(
-                        "a BJT model needs CJE/CJC/TF/TR/XTF/ITF >= 0, VJE/VJC > 0, MJE/MJC >= 0, VTF >= 0 and 0 <= FC < 1"
+                        "a BJT model needs CJE/CJC/TF/TR/XTF/ITF >= 0, 0 <= XCJC <= 1, VJE/VJC > 0, MJE/MJC >= 0, VTF >= 0 and 0 <= FC < 1"
                             .to_string(),
                     ));
                 }
@@ -4916,6 +4926,7 @@ fn parse_model(
             (ModelCard::Bjt(model), "TMJE1") => model.tmje1 = value,
             (ModelCard::Bjt(model), "TMJE2") => model.tmje2 = value,
             (ModelCard::Bjt(model), "CJC") => model.cjc = value,
+            (ModelCard::Bjt(model), "XCJC") => model.xcjc = value,
             (ModelCard::Bjt(model), "VJC" | "PC") => model.vjc = value,
             (ModelCard::Bjt(model), "MJC" | "MC") => model.mjc = value,
             (ModelCard::Bjt(model), "TMJC1") => model.tmjc1 = value,

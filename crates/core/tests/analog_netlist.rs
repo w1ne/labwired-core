@@ -633,7 +633,7 @@ C1 out 0 100n $ dollar comment
     fn bjt_depletion_parameters_resolve_and_validate() {
         let circuit = parse_netlist(
             "Q1 c b e QMOD\n\
-             .model QMOD NPN(CJE=4p VJE=0.7 MJE=0.4 CJC=2p VJC=0.8 MJC=0.3 FC=0.6)\n",
+             .model QMOD NPN(CJE=4p VJE=0.7 MJE=0.4 CJC=2p XCJC=0.35 VJC=0.8 MJC=0.3 FC=0.6)\n",
         )
         .expect("BJT depletion parameters parse");
         let model = circuit.bjts[0].model;
@@ -641,6 +641,7 @@ C1 out 0 100n $ dollar comment
         assert_eq!(model.vje, 0.7);
         assert_eq!(model.mje, 0.4);
         assert_eq!(model.cjc, 2e-12);
+        assert_eq!(model.xcjc, 0.35);
         assert_eq!(model.vjc, 0.8);
         assert_eq!(model.mjc, 0.3);
         assert_eq!(model.fc, 0.6);
@@ -652,6 +653,7 @@ C1 out 0 100n $ dollar comment
         assert_eq!(defaults.vje, 0.75);
         assert_eq!(defaults.mje, 0.33);
         assert_eq!(defaults.cjc, 0.0);
+        assert_eq!(defaults.xcjc, 1.0);
         assert_eq!(defaults.vjc, 0.75);
         assert_eq!(defaults.mjc, 0.33);
         assert_eq!(defaults.fc, 0.5);
@@ -673,7 +675,17 @@ C1 out 0 100n $ dollar comment
         assert_eq!(model.tvjc, 8e-6);
 
         for parameters in [
-            "CJE=-1p", "VJE=0", "MJE=-0.1", "CJC=-1p", "VJC=0", "MJC=-0.1", "FC=-0.1", "FC=1",
+            "CJE=-1p",
+            "VJE=0",
+            "MJE=-0.1",
+            "CJC=-1p",
+            "XCJC=-0.1",
+            "XCJC=1.1",
+            "XCJC=nan",
+            "VJC=0",
+            "MJC=-0.1",
+            "FC=-0.1",
+            "FC=1",
         ] {
             let text = format!("Q1 c b e QMOD\n.model QMOD NPN({parameters})\n");
             let error =

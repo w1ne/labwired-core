@@ -83,34 +83,55 @@ enum Stamp {
     Transient(f64, Integration),
 }
 
-/// Linearised total BJT charge for the B-E and B-C branches. Each branch may
-/// depend on both junction voltages through the Gummel–Poon base-charge factor.
+/// Linearised BJT charge: B-E and internal B-C branches can depend on both
+/// junction voltages through the Gummel–Poon base-charge factor. The remaining
+/// B-C depletion charge follows the external base when `XCJC < 1`.
 struct BjtChargeOp {
-    q: [f64; 2],
-    /// `[charge branch][Vbe or Vbc]`, in farads.
-    dq: [[f64; 2]; 2],
+    /// B-E charge, internal B-C charge, and external-base B-C depletion charge.
+    q: [f64; 3],
+    /// `[charge branch][Vbe, internal Vbc, external Vbc]`, in farads.
+    dq: [[f64; 3]; 3],
 }
 
-fn bjt_charge_op(vbe: f64, vbc: f64, model: BjtModel, thermal_voltage: f64) -> BjtChargeOp {
+fn bjt_charge_op(
+    vbe: f64,
+    vbc: f64,
+    vbc_external: f64,
+    model: BjtModel,
+    thermal_voltage: f64,
+) -> BjtChargeOp {
     let transit = device::bjt_transit_charge_at_thermal_voltage(vbe, vbc, model, thermal_voltage);
     let (qbe, cbe) =
         device::junction_depletion_charge(vbe, model.cje, model.vje, model.mje, model.fc);
-    let (qbc, cbc) =
-        device::junction_depletion_charge(vbc, model.cjc, model.vjc, model.mjc, model.fc);
+    let (qbc, cbc) = device::junction_depletion_charge(
+        vbc,
+        model.cjc * model.xcjc,
+        model.vjc,
+        model.mjc,
+        model.fc,
+    );
+    let (qbc_external, cbc_external) = device::junction_depletion_charge(
+        vbc_external,
+        model.cjc * (1.0 - model.xcjc),
+        model.vjc,
+        model.mjc,
+        model.fc,
+    );
     BjtChargeOp {
-        q: [qbe + transit.qbe, qbc + transit.qbc],
+        q: [qbe + transit.qbe, qbc + transit.qbc, qbc_external],
         dq: [
-            [cbe + transit.dqbe_dvbe, transit.dqbe_dvbc],
-            [transit.dqbc_dvbe, cbc + transit.dqbc_dvbc],
+            [cbe + transit.dqbe_dvbe, transit.dqbe_dvbc, 0.0],
+            [transit.dqbc_dvbe, cbc + transit.dqbc_dvbc, 0.0],
+            [0.0, 0.0, cbc_external],
         ],
     }
 }
 
 fn bjt_charge_active(model: BjtModel, branch: usize) -> bool {
-    if branch == 0 {
-        model.cje != 0.0 || model.tf != 0.0
-    } else {
-        model.cjc != 0.0 || model.tr != 0.0
+    match branch {
+        0 => model.cje != 0.0 || model.tf != 0.0,
+        1 => model.cjc * model.xcjc != 0.0 || model.tr != 0.0,
+        _ => model.cjc * (1.0 - model.xcjc) != 0.0,
     }
 }
 
@@ -423,10 +444,10 @@ pub struct Solver {
     bjt_vbe: Vec<f64>,
     /// Each BJT's base-collector voltage in device coordinates.
     bjt_vbc: Vec<f64>,
-    /// Total depletion plus transit charge and current history for each BJT,
-    /// ordered B-E then B-C in normalized device coordinates.
-    bjt_q: Vec<[f64; 2]>,
-    bjt_i: Vec<[f64; 2]>,
+    /// Depletion plus transit charge and current history for each BJT, ordered
+    /// B-E, internal B-C, and external-base B-C depletion in device coordinates.
+    bjt_q: Vec<[f64; 3]>,
+    bjt_i: Vec<[f64; 3]>,
     /// Each MOSFET's gate-source voltage in device coordinates, as the netlist
     /// names the terminals — not swapped for reverse mode.
     mos_vgs: Vec<f64>,
@@ -586,8 +607,8 @@ impl Solver {
             diode_recovery_rate: vec![0.0; diodes],
             bjt_vbe: vec![0.0; bjts],
             bjt_vbc: vec![0.0; bjts],
-            bjt_q: vec![[0.0; 2]; bjts],
-            bjt_i: vec![[0.0; 2]; bjts],
+            bjt_q: vec![[0.0; 3]; bjts],
+            bjt_i: vec![[0.0; 3]; bjts],
             mos_vgs: vec![0.0; mosfets],
             mos_vds: vec![0.0; mosfets],
             mos_vbd: vec![0.0; mosfets],
@@ -988,8 +1009,16 @@ impl Solver {
             let sign = bjt.model.polarity.sign();
             let vbe = sign * node_diff(&self.node_v, bjt.junction_b, bjt.junction_e);
             let vbc = sign * node_diff(&self.node_v, bjt.junction_b, bjt.junction_c);
-            self.bjt_q[index] = bjt_charge_op(vbe, vbc, bjt.operating_model, bjt.thermal_voltage).q;
-            self.bjt_i[index] = [0.0; 2];
+            let vbc_external = sign * node_diff(&self.node_v, bjt.b, bjt.junction_c);
+            self.bjt_q[index] = bjt_charge_op(
+                vbe,
+                vbc,
+                vbc_external,
+                bjt.operating_model,
+                bjt.thermal_voltage,
+            )
+            .q;
+            self.bjt_i[index] = [0.0; 3];
         }
         for index in 0..self.circuit.mosfets.len() {
             let mosfet = &self.circuit.mosfets[index];
@@ -1273,14 +1302,16 @@ impl Solver {
             let voltages = [
                 sign * node_diff(nodes, bjt.junction_b, bjt.junction_e),
                 sign * node_diff(nodes, bjt.junction_b, bjt.junction_c),
+                sign * node_diff(nodes, bjt.b, bjt.junction_c),
             ];
             let charge = bjt_charge_op(
                 voltages[0],
                 voltages[1],
+                voltages[2],
                 bjt.operating_model,
                 bjt.thermal_voltage,
             );
-            for junction in 0..2 {
+            for junction in 0..3 {
                 if !bjt_charge_active(model, junction) {
                     continue;
                 }
@@ -2350,10 +2381,12 @@ impl Solver {
                 m * device::GMIN,
             );
 
-            // Controlling voltages in circuit coordinates: u1 = v(b) − v(e),
-            // u2 = v(b) − v(c). The device sees sign·u1 and sign·u2.
+            // Controlling voltages in circuit coordinates: u1 = v(b_internal)
+            // − v(e), u2 = v(b_internal) − v(c), and u3 = v(b_external) − v(c).
+            // The device sees sign·u1, sign·u2, and sign·u3.
             let u1 = sign * vbe;
             let u2 = sign * vbc;
+            let u3 = sign * node_diff(&self.solution[..self.nodes], bjt.b, bjt.junction_c);
             let collector = [
                 (op.gif, bjt.junction_b, bjt.junction_e, u1),
                 (-op.gir - op.gmu, bjt.junction_b, bjt.junction_c, u2),
@@ -2387,15 +2420,15 @@ impl Solver {
             );
 
             if let Stamp::Transient(h, rule) = stamp {
-                let charge = bjt_charge_op(vbe, vbc, operating_model, bjt.thermal_voltage);
-                for junction in 0..2 {
+                let charge = bjt_charge_op(vbe, vbc, u3, operating_model, bjt.thermal_voltage);
+                for junction in 0..3 {
                     if !bjt_charge_active(model, junction) {
                         continue;
                     }
-                    let (positive, negative) = if junction == 0 {
-                        (bjt.junction_b, bjt.junction_e)
-                    } else {
-                        (bjt.junction_b, bjt.junction_c)
+                    let (positive, negative) = match junction {
+                        0 => (bjt.junction_b, bjt.junction_e),
+                        1 => (bjt.junction_b, bjt.junction_c),
+                        _ => (bjt.b, bjt.junction_c),
                     };
                     let factor = match rule {
                         Integration::BackwardEuler => 1.0 / h,
@@ -2423,6 +2456,7 @@ impl Solver {
                             bjt.junction_c,
                             u2,
                         ),
+                        (charge.dq[junction][2] * factor, bjt.b, bjt.junction_c, u3),
                     ];
                     stamp_linearised(matrix, rhs, dim, m, positive, sign * current, &control);
                     stamp_linearised(

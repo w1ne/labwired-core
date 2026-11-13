@@ -23,7 +23,9 @@
 //! quasi-static diffusion charge (`TT`) or soft reverse-recovery charge
 //! (`TT`/`VP`), BJT
 //! base-junction depletion charge (`CJE`/`VJE`/`MJE`, `CJC`/`VJC`/`MJC`,
-//! `FC`), and JFET gate-junction depletion charge (`CGS`, `CGD`, `PB`, `FC`,
+//! `FC`) with `XCJC` partitioning collector-base depletion charge between
+//! external and internal base nodes when `RB` is present, and JFET gate-junction
+//! depletion charge (`CGS`, `CGD`, `PB`, `FC`,
 //! with level-1 `M=0.5`) are integrated in transient runs. The level-1 JFET
 //! Parker–Skellern channel fit from `B` (default 1) is solved at each operating
 //! point. MOSFET gate overlap

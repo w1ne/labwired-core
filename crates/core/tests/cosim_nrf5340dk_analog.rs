@@ -163,6 +163,28 @@ fn bjt_high_injection_collector_voltage(base_drive_v: f64, high_injection: bool)
     collector_for_vbe(0.5 * (low + high))
 }
 
+/// First backward-Euler step of the two linear CJC partitions. With MJC=0,
+/// depletion charge is a constant capacitor; XCJC=0 puts it directly on the
+/// external base, while XCJC=1 puts it behind RB at the internal base.
+fn bjt_xcjc_first_step_reference() -> (f64, f64) {
+    const DRIVE_OHMS: f64 = 1_000.0;
+    const RB_OHMS: f64 = 100_000.0;
+    const CJC_F: f64 = 10e-9;
+    const STEP_S: f64 = 1e-6;
+    const INITIAL_V: f64 = 0.2;
+    const DRIVE_V: f64 = 1.2;
+    let drive_g = 1.0 / DRIVE_OHMS;
+    let base_g = 1.0 / RB_OHMS;
+    let cap_g = CJC_F / STEP_S;
+
+    let external_partition_v = (drive_g * DRIVE_V + cap_g * INITIAL_V) / (drive_g + cap_g);
+    let internal_node_g = drive_g + base_g;
+    let internal_base_v = (base_g * drive_g / internal_node_g * DRIVE_V + cap_g * INITIAL_V)
+        / (base_g - base_g * base_g / internal_node_g + cap_g);
+    let external_base_v = (drive_g * DRIVE_V + base_g * internal_base_v) / internal_node_g;
+    (external_base_v, external_partition_v)
+}
+
 #[test]
 fn nrf5340dk_bjt_high_injection_reaches_saadc_alongside_ntc_and_diode() {
     let system_path = root("configs/systems/nrf5340dk.yaml");
@@ -257,6 +279,82 @@ fn nrf5340dk_bjt_high_injection_reaches_saadc_alongside_ntc_and_diode() {
         rolloff_v - control_v > 0.05,
         "high-injection rolloff lowers collector current and raises collector voltage: {rolloff_v} V vs {control_v} V"
     );
+}
+
+#[test]
+fn nrf5340dk_bjt_xcjc_partitions_cjc_across_the_internal_base_resistance() {
+    let system_path = root("configs/systems/nrf5340dk.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load nRF5340-DK profile");
+    let generic =
+        SystemManifest::from_file(root("examples/nrf5340dk/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and diode netlists");
+    let xcjc = SystemManifest::from_file(root("examples/nrf5340dk/analog-bjt-xcjc-system.yaml"))
+        .expect("load generic BJT XCJC partition branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(xcjc.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load nRF5340 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build nRF5340-DK bus");
+    configure_saadc_channels(&mut bus, 5);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal session")
+        .expect("profile contains NTC, diode, and CJC-partitioned BJT netlists");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic device voltages must resolve to SAADC channels 0 through 3"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated NTC temperature");
+
+    let cycles = session.cycles_until_boundary(0);
+    let (steps, errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("solve and route NTC, diode, and XCJC BJT branches");
+    assert_eq!(steps.len(), 3, "all three generic analog netlists solve");
+    assert!(
+        errors.is_empty(),
+        "unexpected analog route errors: {errors:?}"
+    );
+
+    let ntc_v = voltage(&session, "adc.saadc.0_volts");
+    let diode_v = voltage(&session, "adc.saadc.1_volts");
+    let xcjc_one_external_base_v = voltage(&session, "adc.saadc.2_volts");
+    let xcjc_zero_external_base_v = voltage(&session, "adc.saadc.3_volts");
+    assert!((ntc_v - 1.65).abs() < 1e-9);
+    assert!((diode_v - diode_load_line_voltage()).abs() < 2e-5);
+
+    let (expected_xcjc_one_v, expected_xcjc_zero_v) = bjt_xcjc_first_step_reference();
+    assert!(
+        (xcjc_one_external_base_v - expected_xcjc_one_v).abs() < 2e-5,
+        "XCJC=1 must charge CJC behind RB: expected external base {expected_xcjc_one_v} V, got {xcjc_one_external_base_v} V"
+    );
+    assert!(
+        (xcjc_zero_external_base_v - expected_xcjc_zero_v).abs() < 5e-3,
+        "XCJC=0 must charge CJC on the external base: expected {expected_xcjc_zero_v} V, got {xcjc_zero_external_base_v} V"
+    );
+    assert!(
+        xcjc_one_external_base_v - xcjc_zero_external_base_v > 0.45,
+        "XCJC changes which side of RB carries the depletion current: {xcjc_one_external_base_v} V vs {xcjc_zero_external_base_v} V"
+    );
+
+    let [ntc_code, diode_code, internal_code, external_code, undriven_code] =
+        scan_saadc_channels::<5>(&mut bus);
+    for (channel, voltage_v, code) in [
+        (0, ntc_v, ntc_code),
+        (1, diode_v, diode_code),
+        (2, xcjc_one_external_base_v, internal_code),
+        (3, xcjc_zero_external_base_v, external_code),
+    ] {
+        assert_eq!(
+            code,
+            expected_saadc_code(voltage_v),
+            "SAADC channel {channel} converts its routed solved voltage"
+        );
+    }
+    assert_eq!(undriven_code, 0, "neighboring AIN4 stays at ground");
 }
 
 /// Independent load line of a forward-biased substrate junction: the
