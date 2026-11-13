@@ -36,6 +36,36 @@
     },
     {
       "assertion": {
+        "uart_contains": "USART2 RX GATE re_off=1 ue_off=1 data=00005253 released=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "SPI1 MAX31855=01901600 TXEIRQ=1 REARM=0 RXNEIRQ=1 RELEASED=1"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "SPI1 CHECKS=1"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "SysTick PendSV tailchain frame=1 r0=1 pending=1 ipsr=14 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "SysTick PendSV PSP tailchain frame=1 r0=1 pending=1 ipsr=14 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "uart_ordered": [
           "hb=0 ld4=on odr=00001000",
           "hb=1 ld4=off odr=00000000",
@@ -55,24 +85,24 @@
   "cpu_state": {
     "type": "arm",
     "registers": [
+      13,
+      537001958,
+      0,
+      3221225472,
+      128512,
       1073759232,
       1073875988,
-      0,
-      134221400,
-      125056,
-      48,
-      19,
       537001968,
-      1,
-      537001958,
-      134221352,
-      134221343,
-      0,
-      537001948,
-      537001959,
-      134221302
+      13,
+      429496730,
+      57,
+      134235259,
+      429496730,
+      537001856,
+      19,
+      134234160
     ],
-    "pc": 134221302,
+    "pc": 134234160,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -83,9 +113,9 @@
     ],
     "vtor": 0,
     "waiting_for_event": false,
-    "event_register": false
+    "event_register": true
   },
-  "firmware_hash": "e63f22fc6d4d032e905263e8af1c9ef5cff1b22c271b3c94c48359d17e9f32fc",
+  "firmware_hash": "eb9269557997323e38a94c140242283ad2e8c3e618cd7011382cf651970e3518",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-f4-discovery-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f4.yaml",
@@ -94,9 +124,23 @@
   "inspect": {
     "peripherals": [
       {
+        "name": "systick",
+        "kind": "native",
+        "base": 3758153744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
         "name": "usart2",
         "kind": "native",
         "base": 1073759232,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "spi1",
+        "kind": "native",
+        "base": 1073819648,
         "registers": [],
         "artifacts": []
       },
@@ -150,7 +194,19 @@
         "artifacts": []
       }
     ],
-    "devices": []
+    "devices": [
+      {
+        "id": "tc_spi1",
+        "device_type": "max31855",
+        "declared": true,
+        "attachment": {
+          "transport": "spi",
+          "bus": "spi1",
+          "cs_pin": "PA4"
+        },
+        "artifacts": []
+      }
+    ]
   },
   "fidelity": [
     {
@@ -170,6 +226,36 @@
         "end_cycle": 10000
       },
       {
+        "text": "USART2 RX GATE re_off=1 ue_off=1 data=00005253 released=1 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "SPI1 MAX31855=01901600 TXEIRQ=1 REARM=0 RXNEIRQ=1 RELEASED=1",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "SPI1 CHECKS=1",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "SysTick PendSV tailchain frame=1 r0=1 pending=1 ipsr=14 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "SysTick PendSV PSP tailchain frame=1 r0=1 pending=1 ipsr=14 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
         "text": "hb=0 ld4=on odr=00001000",
         "cycle_lo": 0,
         "cycle": 10000,
@@ -177,9 +263,9 @@
       },
       {
         "text": "hb=1 ld4=off odr=00000000",
-        "cycle_lo": 200000,
-        "cycle": 210000,
-        "end_cycle": 210000
+        "cycle_lo": 210000,
+        "cycle": 220000,
+        "end_cycle": 220000
       },
       {
         "text": "hb=2 ld3=on odr=00002000",
@@ -189,9 +275,9 @@
       },
       {
         "text": "hb=3 ld3=off odr=00000000",
-        "cycle_lo": 610000,
-        "cycle": 620000,
-        "end_cycle": 620000
+        "cycle_lo": 620000,
+        "cycle": 630000,
+        "end_cycle": 630000
       },
       {
         "text": "hb=4 ld5=on odr=00004000",
@@ -207,9 +293,9 @@
       },
       {
         "text": "hb=6 ld6=on odr=00008000",
-        "cycle_lo": 1230000,
-        "cycle": 1240000,
-        "end_cycle": 1240000
+        "cycle_lo": 1240000,
+        "cycle": 1250000,
+        "end_cycle": 1250000
       },
       {
         "text": "hb=7 ld6=off odr=00000000",
@@ -225,9 +311,9 @@
       },
       {
         "text": "hb=9 ld4=off odr=00000000",
-        "cycle_lo": 1850000,
-        "cycle": 1860000,
-        "end_cycle": 1860000
+        "cycle_lo": 1860000,
+        "cycle": 1870000,
+        "end_cycle": 1870000
       },
       {
         "text": "hb=10 ld3=on odr=00002000",
@@ -243,9 +329,9 @@
       },
       {
         "text": "hb=12 ld5=on odr=00004000",
-        "cycle_lo": 2470000,
-        "cycle": 2480000,
-        "end_cycle": 2480000
+        "cycle_lo": 2480000,
+        "cycle": 2490000,
+        "end_cycle": 2490000
       },
       {
         "text": "hb=13 ld5=off odr=00000000",
@@ -261,9 +347,9 @@
       },
       {
         "text": "hb=15 ld6=off odr=00000000",
-        "cycle_lo": 3090000,
-        "cycle": 3100000,
-        "end_cycle": 3100000
+        "cycle_lo": 3100000,
+        "cycle": 3110000,
+        "end_cycle": 3110000
       },
       {
         "text": "hb=16 ld4=on odr=00001000",
@@ -273,9 +359,9 @@
       },
       {
         "text": "hb=17 ld4=off odr=00000000",
-        "cycle_lo": 3500000,
-        "cycle": 3510000,
-        "end_cycle": 3510000
+        "cycle_lo": 3510000,
+        "cycle": 3520000,
+        "end_cycle": 3520000
       },
       {
         "text": "hb=18 ld3=on odr=00002000",
@@ -294,14 +380,14 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 3688,
+    "text_bytes": 17548,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 3688,
+    "flash_used_bytes": 17548,
     "ram_static_bytes": 0,
     "flash_total_bytes": 1048576,
     "ram_total_bytes": 131072,
-    "flash_used_pct": 0.35,
+    "flash_used_pct": 1.67,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -311,15 +397,15 @@
   "memory": {
     "main_stack_method": "paint",
     "main_stack_limit_bytes": 131072,
-    "main_stack_high_water_bytes": 32,
-    "main_stack_free_min_bytes": 131040,
+    "main_stack_high_water_bytes": 160,
+    "main_stack_free_min_bytes": 130700,
     "main_stack_base": 536870912,
     "main_stack_top": 537001984,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
     "heap_limit_bytes": 131072,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 131040,
+    "heap_free_min_bytes": 130700,
     "heap_base": 536870912,
     "heap_top": 537001984
   },
@@ -327,96 +413,96 @@
     "cycles": 4000000,
     "instructions": 4000000,
     "steps_executed": 4000000,
-    "memory_reads": 887,
-    "memory_writes": 116,
-    "peripheral_accesses": 3876134,
+    "memory_reads": 3824,
+    "memory_writes": 275,
+    "peripheral_accesses": 3873534,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134221268,
+        "pc": 134234074,
+        "count": 391,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134234142,
+        "count": 390,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134234110,
+        "count": 352,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134234042,
+        "count": 313,
+        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 134234150,
         "count": 313,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134221274,
+        "pc": 134234070,
         "count": 312,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134221198,
+        "pc": 134234078,
+        "count": 312,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134234082,
+        "count": 312,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134234102,
+        "count": 312,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134234106,
+        "count": 312,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134234138,
+        "count": 312,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134234146,
+        "count": 312,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134234156,
+        "count": 312,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134234170,
+        "count": 312,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134234092,
         "count": 275,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134221200,
-        "count": 275,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134221216,
+        "pc": 134234060,
         "count": 274,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134221260,
-        "count": 274,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134221262,
-        "count": 274,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134221264,
-        "count": 274,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134221270,
-        "count": 274,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134221280,
-        "count": 274,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134221188,
-        "count": 273,
-        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
-      },
-      {
-        "pc": 134221192,
-        "count": 273,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134221196,
-        "count": 273,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134221202,
-        "count": 273,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134221204,
-        "count": 273,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134221206,
-        "count": 273,
         "symbol": "core::ptr::read_volatile"
       }
     ],
     "stalled_poll": {
       "peripheral": "gpioPortD",
       "offset": 20,
-      "accesses": 74936
+      "accesses": 71482
     }
   }
 }

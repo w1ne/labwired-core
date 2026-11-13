@@ -14,14 +14,30 @@ ram:
   size: 131072B
 # STM32F4DISCOVERY carries an STM32F407VGT6: 1 MiB Flash and 192 KiB SRAM.
 # This profile exposes main SRAM only; the separate 64 KiB CCM is omitted.
-# Keep only the F4 RCC, USART2, and GPIO A/D surfaces exercised by the smoke.
+# Keep only the Cortex-M SysTick, F4 RCC, USART2, SPI1, and GPIO A/D surfaces
+# exercised by the shared F4 Discovery smoke.
 # Board part and memory sizes: ST UM1472, https://www.st.com/resource/en/user_manual/um1472-stm32f4-discovery-stmicroelectronics.pdf
 peripherals:
+- id: systick
+  type: systick
+  bus: sysbus
+  base_address: 0xE000E010
+  size: 16B
 - id: usart2
   type: stm32_uart
   bus: sysbus
   base_address: 1073759232
   size: 1KB
+- id: spi1
+  type: spi
+  bus: sysbus
+  base_address: 0x40013000
+  size: 1KB
+  irq: 35
+  clock: { reg: apb2enr, bit: 12 }
+  config:
+    profile: stm32f4
+    pad_map: stm32f4
 - id: gpioPortA
   type: stm32_gpioport
   bus: sysbus
@@ -41,3 +57,5 @@ peripherals:
   bus: sysbus
   base_address: 1073887232
   size: 1KB
+  config:
+    profile: stm32f4

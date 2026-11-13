@@ -3,24 +3,24 @@
   "cpu": {
     "type": "arm",
     "registers": [
+      13,
+      537001958,
+      0,
+      3221225472,
+      128512,
       1073759232,
       1073875988,
-      0,
-      134221400,
-      125056,
-      48,
-      19,
       537001968,
-      1,
-      537001958,
-      134221352,
-      134221343,
-      0,
-      537001948,
-      537001959,
-      134221302
+      13,
+      429496730,
+      57,
+      134235259,
+      429496730,
+      537001856,
+      19,
+      134234160
     ],
-    "pc": 134221302,
+    "pc": 134234160,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -31,7 +31,7 @@
     ],
     "vtor": 0,
     "waiting_for_event": false,
-    "event_register": false
+    "event_register": true
   },
   "steps_executed": 4000000,
   "cycles": 4000000,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "e63f22fc6d4d032e905263e8af1c9ef5cff1b22c271b3c94c48359d17e9f32fc",
+  "firmware_hash": "eb9269557997323e38a94c140242283ad2e8c3e618cd7011382cf651970e3518",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-f4-discovery-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f4_discovery-kit.yaml",

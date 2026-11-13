@@ -6,3 +6,9 @@
 
 name: stm32f4_discovery-kit
 chip: ../../chips/onboarding/stm32f4_discovery-kit.yaml
+external_devices:
+  - id: tc_spi1
+    type: max31855
+    connection: spi1
+    config:
+      cs_pin: PA4

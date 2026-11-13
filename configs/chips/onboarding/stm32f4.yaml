@@ -1,6 +1,6 @@
 # Exact-import profile for the STM32F4 platform smoke. It claims only the
-# Cortex-M4 memory, RCC, USART2, and GPIOA/GPIOD paths exercised by the shared
-# F4 register fixture; other imported peripherals are outside this smoke.
+# Cortex-M4 memory, SysTick, RCC, USART2, SPI1, and GPIOA/GPIOD paths exercised
+# by the shared F4 Discovery smoke; other imported peripherals are outside it.
 name: stm32f4
 arch: arm
 core: cortex-m4
@@ -11,27 +11,44 @@ ram:
   base: 0x20000000
   size: 128KiB
 peripherals:
-  - id: usart2
-    type: stm32_uart
-    bus: sysbus
-    base_address: 0x40004400
-    size: 1KB
-  - id: gpioPortA
-    type: stm32_gpioport
-    bus: sysbus
-    base_address: 0x40020000
-    size: 1KB
-    config:
-      profile: stm32v2
-  - id: gpioPortD
-    type: stm32_gpioport
-    bus: sysbus
-    base_address: 0x40020C00
-    size: 1KB
-    config:
-      profile: stm32v2
-  - id: rcc
-    type: stm32f4_rcc
-    bus: sysbus
-    base_address: 0x40023800
-    size: 1KB
+- id: systick
+  type: systick
+  bus: sysbus
+  base_address: 0xE000E010
+  size: 16B
+- id: usart2
+  type: stm32_uart
+  bus: sysbus
+  base_address: 1073759232
+  size: 1KB
+- id: spi1
+  type: spi
+  bus: sysbus
+  base_address: 0x40013000
+  size: 1KB
+  irq: 35
+  clock: { reg: apb2enr, bit: 12 }
+  config:
+    profile: stm32f4
+    pad_map: stm32f4
+- id: gpioPortA
+  type: stm32_gpioport
+  bus: sysbus
+  base_address: 1073872896
+  size: 1KB
+  config:
+    profile: stm32v2
+- id: gpioPortD
+  type: stm32_gpioport
+  bus: sysbus
+  base_address: 1073875968
+  size: 1KB
+  config:
+    profile: stm32v2
+- id: rcc
+  type: stm32f4_rcc
+  bus: sysbus
+  base_address: 1073887232
+  size: 1KB
+  config:
+    profile: stm32f4
