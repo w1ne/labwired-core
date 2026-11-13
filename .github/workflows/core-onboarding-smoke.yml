@@ -54,6 +54,13 @@ jobs:
             target: thumbv7m-none-eabi
             script: examples/nucleo-h563zi/uart-smoke.yaml
             system: examples/nucleo-h563zi/system.yaml
+          # Demand group #4/#4: other STM32 is 13% of MCU use; Nucleo/Discovery
+          # is the fourth kit category at 23%. Add the active H7 Nucleo-144.
+          - id: nucleo-h723zg
+            crate: firmware-nucleo-h723zg-smoke
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-h723zg/io-smoke.yaml
+            system: configs/systems/nucleo-h723zg.yaml
           - id: stm32u575-nucleo
             crate: firmware-stm32u575-demo
             target: thumbv8m.main-none-eabi
