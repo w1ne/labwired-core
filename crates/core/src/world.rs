@@ -512,6 +512,15 @@ pub trait MachineTrait: Send {
     fn snapshot(&self) -> Option<crate::snapshot::MachineSnapshot> {
         None
     }
+    /// Physical motor observations owned by this node. Mocks default empty.
+    fn motor_snapshots(&self) -> Vec<crate::bus::MotorSnapshot> {
+        Vec::new()
+    }
+    /// Run-long shaft observations, timed by the owning simulation boundary.
+    fn motor_series(&self) -> crate::analog::AnalogSeries {
+        crate::analog::AnalogSeries::default()
+    }
+
     fn display_artifact(
         &self,
         _device_id: &str,
@@ -694,6 +703,16 @@ impl<C: Cpu + 'static> MachineTrait for Machine<C> {
 
     fn snapshot(&self) -> Option<crate::snapshot::MachineSnapshot> {
         Some(Machine::snapshot(self))
+    }
+    fn motor_snapshots(&self) -> Vec<crate::bus::MotorSnapshot> {
+        self.bus.motor_snapshots()
+    }
+    fn motor_series(&self) -> crate::analog::AnalogSeries {
+        let (channels, end_time_ns) = self.bus.motor_series();
+        crate::analog::AnalogSeries {
+            channels,
+            end_time_ns,
+        }
     }
 
     fn display_artifact(

@@ -651,8 +651,8 @@ fn bldc_load_step_lowers_speed_and_increases_bus_current() {
     for _ in 0..50_000 {
         step_bldc_commutated(&mut baseline, false, 1);
         step_bldc_commutated(&mut loaded, false, 1);
-        baseline_current += baseline.snapshot().dc_bus_current_a.abs();
-        loaded_current += loaded.snapshot().dc_bus_current_a.abs();
+        baseline_current += baseline.snapshot().dc_bus_current_a.unwrap().abs();
+        loaded_current += loaded.snapshot().dc_bus_current_a.unwrap().abs();
     }
 
     assert!(loaded.snapshot().angular_velocity_rad_s < baseline.snapshot().angular_velocity_rad_s);
@@ -664,7 +664,7 @@ fn bldc_supply_voltage_can_be_lowered_atomically() {
     let mut motor = BldcMotor::new(bldc_params(0.0)).unwrap();
     motor.set_supply_voltage_v(1.0).unwrap();
     assert_eq!(motor.params().supply_voltage_v, 1.0);
-    assert_eq!(motor.snapshot().dc_bus_voltage_v, 1.0);
+    assert_eq!(motor.snapshot().dc_bus_voltage_v, Some(1.0));
 
     let before = motor.snapshot();
     assert_eq!(
@@ -684,7 +684,7 @@ fn bldc_undervoltage_fault_controls_effective_bus_and_response() {
             ..BldcFaults::default()
         })
         .unwrap();
-    assert_eq!(undervoltage.snapshot().dc_bus_voltage_v, 1.0);
+    assert_eq!(undervoltage.snapshot().dc_bus_voltage_v, Some(1.0));
     assert_eq!(undervoltage.snapshot().faults.undervoltage_v, Some(1.0));
 
     step_bldc_commutated(&mut nominal, false, 30_000);
@@ -694,7 +694,7 @@ fn bldc_undervoltage_fault_controls_effective_bus_and_response() {
     );
 
     undervoltage.set_faults(BldcFaults::default()).unwrap();
-    assert_eq!(undervoltage.snapshot().dc_bus_voltage_v, 6.0);
+    assert_eq!(undervoltage.snapshot().dc_bus_voltage_v, Some(6.0));
     assert_eq!(undervoltage.snapshot().faults.undervoltage_v, None);
 }
 
@@ -758,7 +758,7 @@ fn bldc_open_phase_is_zero_and_other_currents_balance() {
     assert!((currents[1] + currents[2]).abs() < 1e-12);
     assert_eq!(snapshot.electromagnetic_torque_nm, snapshot_torque(&motor));
     assert_eq!(
-        snapshot.dc_bus_current_a,
+        snapshot.dc_bus_current_a.unwrap(),
         snapshot_bus_current(&motor, command)
     );
 }
@@ -803,7 +803,7 @@ fn engaging_stall_immediately_recomputes_derived_motor_values() {
     assert_eq!(snapshot.phase_back_emf_v, [0.0; 3]);
     assert_eq!(snapshot.electromagnetic_torque_nm, snapshot_torque(&motor));
     assert_eq!(
-        snapshot.dc_bus_current_a,
+        snapshot.dc_bus_current_a.unwrap(),
         snapshot_bus_current(&motor, command)
     );
 }
@@ -935,8 +935,8 @@ fn bldc_observables_stay_finite_and_currents_sum_to_zero() {
             .iter()
             .all(|value| value.is_finite()));
         assert!(snapshot.electromagnetic_torque_nm.is_finite());
-        assert!(snapshot.dc_bus_current_a.is_finite());
-        assert!(snapshot.dc_bus_voltage_v.is_finite());
+        assert!(snapshot.dc_bus_current_a.unwrap().is_finite());
+        assert!(snapshot.dc_bus_voltage_v.unwrap().is_finite());
         assert!(snapshot.position_rad.is_finite());
         assert!(snapshot.wrapped_position_rad.is_finite());
         assert!(snapshot.angular_velocity_rad_s.is_finite());
