@@ -226,3 +226,9 @@ boards:
     path: examples/frdm-k64f
     rust_targets: [thumbv7em-none-eabi]
     gate: true
+  # WCH CH32V003EVT: committed, digest-checked RV32E/EC firmware proves the
+  # configured PC0-to-LED1 jumper and polled USART1 TX; no USB/debug claim.
+  - id: wch-ch32v003evt
+    kind: sim-validate
+    path: examples/wch-ch32v003evt
+    gate: true

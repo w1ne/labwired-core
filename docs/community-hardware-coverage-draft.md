@@ -113,3 +113,37 @@ void loop() {
   delay(500);
 }
 ```
+
+## WCH — Tier C vendor bet (not a measured survey rank)
+
+### WCH CH32V003EVT
+
+This exact evaluation board is currently listed in stock by two retailers. The
+profile uses its CH32V003F4P6 and the board's LED connector: LED1 on P4-1 is
+jumpered to PC0 and toggled as an active-low output. A separate smoke writes
+through polled USART1 TX on the exposed PD5 pin. USB-C is power-only. The model
+does not claim WCH-Link, USB data, PFIC, ADC, I2C, SPI, or timers.
+
+- [Board wiring, scope, and copy-paste C example](../examples/wch-ch32v003evt/README.md)
+- [Live stock and lifecycle receipt](../examples/wch-ch32v003evt/vendor-status.md)
+- [Committed local simulator evidence](../examples/wch-ch32v003evt/evidence/)
+
+```c
+#include <stdint.h>
+
+#define RCC_APB2PCENR (*(volatile uint32_t *)0x40021018u)
+#define GPIOC_CFGLR   (*(volatile uint32_t *)0x40011000u)
+#define GPIOC_BSHR    (*(volatile uint32_t *)0x40011010u)
+#define GPIOC_BCR     (*(volatile uint32_t *)0x40011014u)
+
+void main(void) {
+  RCC_APB2PCENR |= 1u << 4;  // enable GPIOC
+  GPIOC_CFGLR = 0x2u;        // PC0 push-pull output
+  for (;;) {
+    GPIOC_BSHR = 1u;         // LED1 off
+    for (volatile uint32_t i = 0; i < 500; ++i) __asm__ volatile("nop");
+    GPIOC_BCR = 1u;          // LED1 on
+    for (volatile uint32_t i = 0; i < 500; ++i) __asm__ volatile("nop");
+  }
+}
+```

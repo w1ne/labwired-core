@@ -1,0 +1,10 @@
+schema_version: "1.2"
+inputs:
+  firmware: "../../tests/fixtures/ch32v003f4p6-blink.elf"
+  system: "../../configs/systems/wch-ch32v003evt.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - gpio_edges:
+      pin: "gpioc:0"
+      min_edges: 2

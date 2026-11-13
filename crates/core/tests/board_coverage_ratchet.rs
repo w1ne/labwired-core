@@ -872,15 +872,14 @@ fn every_shipped_descriptor_is_ratcheted() {
         // bundled-configs.ts catalog board. Same bar as the maker-five above:
         // promote when the catalog lands AND a differential exists.
         "esp32c6",
-        // First WCH part (CH32V003F4P6, QingKe RV32EC). L1: chip descriptor +
-        // system manifest + example with an io-smoke executed by the coverage
-        // matrix, a committed compiled-RV32E fixture and a chip-conformance
-        // behaviour gate that asserts PC0 edges. It carries no bundled-configs.ts
-        // catalog board, no silicon oracle (no CH32V003 has been diffed over
-        // SDI) and no executing-fidelity differential of its own. The slice
-        // models RCC and GPIO A/C/D only (no PFIC) — USART/I2C/SPI/ADC are not
-        // modelled, so there is no bus to diff yet. Promote when the catalog
-        // board, a bus model and a differential all exist.
+        // First WCH board target (CH32V003F4P6 on WCH-CH32V003EVT, QingKe
+        // RV32EC). L1: chip + board system, committed RV32E/EC fixtures, and
+        // PR-gated board smokes for the configured PC0-to-LED1 jumper and
+        // polled USART1 TX. It carries no bundled-configs.ts catalog board,
+        // no silicon oracle (no CH32V003 has been diffed over SDI), and no
+        // executing-fidelity differential of its own. The slice models RCC,
+        // GPIO A/C/D, and polled USART1 TX only (no PFIC, ADC, I2C, SPI, or
+        // timers). Promote when the catalog board and a differential exist.
         "ch32v003f4p6",
         // ESP32-H2/C5/P4/S2 UART0-only board profiles. Each has a descriptor,
         // a system manifest and a board smoke that asserts a UART0 token, but
