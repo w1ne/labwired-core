@@ -1,0 +1,14 @@
+{
+  "kind": "source code reviews, not hardware or capture acknowledgment",
+  "rail_commit": "65efd6fd683e166169f23ccb7b47a153f681f929",
+  "command_commit": "12fec73c211ddb3b4e0cec4d1241f42d8b4ecb54",
+  "guard_files": {
+    "crates/core/src/regulator.rs": "e4cd25f4879188b76045ede60b1ddedf1c31893a03b7ff38c203de945468ead4",
+    "crates/core/tests/controlled_buck_session.rs": "dc3365b2d4e5a5ce72c5538825b89fc279ed1bba310a14270d2d1a86a1cd9d47"
+  },
+  "reviewers": [
+    "root: exact rail peer-publication and guard/test review",
+    "source: exact detached MCU state and guard/test review"
+  ],
+  "normal_hooks": "required by the following ordinary git commits; no bypass"
+}

@@ -446,6 +446,30 @@ parameters have no temperature dependence. Signal- or load-dependent supply
 current is not modeled. The hand-calculated macro tests are in
 `crates/core/tests/analog_macros.rs`.
 
+An OPAMP card can additionally declare both `VMIN` and `VMAX`, for example
+`VMIN=2.5 VMAX=5.5`. The pair must be finite and satisfy
+`0 < VMIN <= VMAX` and `VMIN >= DROP_HI + DROP_LO`. The solver qualifies the
+signed difference `VCC - VEE` from the solved circuit. A span from zero up to
+(but excluding) `VMIN` disables active gain/CMRR/offset drive, input bias,
+quiescent current, rail clamps, and the output Norton/ROUT or IOLIM stage.
+Passive input resistances and capacitances remain; the compensation Cg/Rg
+network retains and dissipates its stored state. The ordinary macro operates
+at and between the two limits. A converged reverse or excessive supply span
+is refused. The sole numerical exception is an already inactive negative
+span with magnitude at most `f64::EPSILON * VMAX`. Its raw voltage remains in
+readback and traces; it does not activate the macro or relax VMIN/VMAX. This
+machine-precision zero allowance is not physical reverse-supply support.
+Omitting the pair preserves the existing macro unchanged.
+
+This off state is an explicit functional assumption. It does not establish a
+part's unpowered impedance, leakage, input protection, UVLO hysteresis or
+startup timing. A floating off output stays singular; the engine does not
+add a shunt. Every generated primitive of a qualified macro has one owner,
+so `config.sources` cannot rewrite its headroom, bias, gain or compensation.
+External supply sources and physical loads remain independently routable.
+The signed bounds, active-set convergence, passive-state retention and
+legacy parity cases are in `crates/core/tests/analog_opamp_power.rs`.
+
 `.options`, `.tran`, `.op`, `.print`, `.plot`, `.save`, `.probe`, `.width`,
 `.temp`, `.nodeset`, `.title` and a whole `.control` … `.endc` block are
 accepted and ignored, so one deck can be handed to this engine and to ngspice
@@ -585,7 +609,7 @@ as SPICE does. Nonzero BJT `RB`, `RC`, and `RE` add `<element>#base`,
 `<element>#collector`, and `<element>#emitter` nodes, respectively. Nonzero
 JFET and MOSFET drain/source terminal resistances add `<element>#drain` and
 `<element>#source`. These
-nodes count against the 128-unknown ceiling and can be probed.
+nodes count against the configured unknown limit and can be probed.
 
 ### Solver
 
@@ -596,10 +620,18 @@ nodes count against the 128-unknown ceiling and can be probed.
   source or switch change is taken with backward Euler, as SPICE does at a
   breakpoint, so an edge does not leave trapezoidal a half-step behind.
 - Fixed internal step `h = step_ns / substeps`. Dense LU, own implementation.
-  `N` nodes + `M` branch currents is capped at 128; a bigger circuit is an
-  error naming the ngspice adapter. Extracted PCB copper resistance retains
-  its terminal nodes under this same bound. The matrix and elimination-factor
-  buffers together use at most 256 KiB; factorization remains `O(n³)`.
+  `N` nodes + `M` branch currents defaults to a limit of 128. Set the analog
+  model's `config.max_unknowns` to an integer from 1 through 1024 to select an
+  explicit bound. The default remains 128 for old manifests and standalone
+  solver callers. Values outside the range, nonintegers, nulls and nonfinite
+  values are errors; a circuit above its selected limit is refused before any
+  dense matrix allocation. The same config and constructor serve CLI, WASM,
+  standalone and shared-world sessions. Extracted PCB copper resistance keeps
+  its terminal nodes under this bound. Two matrix buffers use at most 256 KiB
+  at 128 unknowns, 4 MiB at 512, or 16 MiB at 1024; factorization remains
+  `O(n³)`. Opting in changes
+  circuit admission, not equations, integration or floating-point order.
+  Larger circuits still require the ngspice adapter.
 - The solver caches elimination pivots and multipliers until a switch, step
   length, or integration rule changes. Source and reactive-history changes
   refresh only the right-hand side. Multipliers replay in the original order,
@@ -718,3 +750,23 @@ partially disconnected circuit. The older `pwm.duty:`, `adc.input_mv:`,
 `gpio.pad:`, and `gpio.input:` route forms are not supported and are rejected; use the board signal
 paths described above. Native execution of `adapter: ngspice` still requires a
 host integration and is refused explicitly by the core factory.
+
+## Numeric MCU output-driver commands
+
+`board.gpio_drive_volts.<pad>` supplies the numeric command for the MCU's own
+output stage. Each model that reads it must also read
+`board.gpio_driven.<pad>` for the same pad (pad-label ASCII case is ignored).
+The command follows `PinPort::driver`, including alternate-function outputs.
+An external driver does not change the MCU's command.
+
+A known disabled stage exports enable=false and an unused command of 0 V.
+The analog circuit still determines the external pad voltage. A known enabled
+stage requires a qualified positive I/O supply and the MCU's own Low/High
+output state. An unknown output state has no command; it does not retain a
+previous command. A missing required command must fail before model time
+advances.
+
+`board.gpio_pad_volts.<pad>` keeps its existing observation behavior. The new
+command port does not provide an observation for an unavailable or floating
+pad, and does not establish GPIO operation outside the descriptor's qualified
+voltage mode.

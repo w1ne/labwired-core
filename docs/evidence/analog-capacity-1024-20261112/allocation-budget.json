@@ -1,0 +1,37 @@
+{
+  "scope": "Analytical allocation accounting from the actual Solver constructor. Per-element state, parsed circuit, traces, allocator overhead and process memory are additional. No end-to-end memory or latency guarantee.",
+  "hard_max_unknowns": 1024,
+  "default_max_unknowns": 128,
+  "matrix_elements_each": "N*N f64",
+  "fixed_linear_buffers": "rhs, solution, previous: 3*N*f64; pivots: N*usize; node_v plus branch_i: N*f64",
+  "rows": [
+    {
+      "unknowns": 128,
+      "dense_buffer_count": 2,
+      "dense_buffer_bytes": 262144,
+      "dense_buffer_mib": 0.25,
+      "fixed_linear_buffer_bytes_64bit": 5120
+    },
+    {
+      "unknowns": 512,
+      "dense_buffer_count": 2,
+      "dense_buffer_bytes": 4194304,
+      "dense_buffer_mib": 4.0,
+      "fixed_linear_buffer_bytes_64bit": 20480
+    },
+    {
+      "unknowns": 667,
+      "dense_buffer_count": 2,
+      "dense_buffer_bytes": 7118224,
+      "dense_buffer_mib": 6.7884674072265625,
+      "fixed_linear_buffer_bytes_64bit": 26680
+    },
+    {
+      "unknowns": 1024,
+      "dense_buffer_count": 2,
+      "dense_buffer_bytes": 16777216,
+      "dense_buffer_mib": 16.0,
+      "fixed_linear_buffer_bytes_64bit": 40960
+    }
+  ]
+}

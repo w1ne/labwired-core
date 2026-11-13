@@ -15,6 +15,7 @@ pub struct ResetInputState {
     last_time_ns: u64,
     last_volts: Option<f64>,
     assertions: u64,
+    io_qualified: Option<bool>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -24,6 +25,12 @@ pub struct ResetInputStatus {
     pub volts: Option<f64>,
     pub assertions: u64,
     pub last_time_ns: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub io_domain: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nominal_io_voltage_v: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub io_qualified: Option<bool>,
 }
 
 impl ResetInputState {
@@ -59,7 +66,27 @@ impl ResetInputState {
             volts: self.last_volts,
             assertions: self.assertions,
             last_time_ns: self.last_time_ns,
+            io_domain: self.config.as_ref().unwrap().io_domain.clone(),
+            nominal_io_voltage_v: self.config.as_ref().unwrap().nominal_io_voltage_v,
+            io_qualified: self.io_qualified,
         })
+    }
+    /// An unqualified receiver supply has no valid logic observation. Keep
+    /// execution held without turning an unknown interval into a low pulse.
+    pub fn hold_unqualified(&mut self, volts: f64, time_ns: u64) -> Result<(), String> {
+        if !self.routed || !volts.is_finite() || time_ns < self.last_time_ns {
+            return Err(
+                "unqualified reset observation requires a routed finite monotonic sample".into(),
+            );
+        }
+        self.held = true;
+        self.io_qualified = Some(false);
+        self.level_high = None;
+        self.active_since_ns = None;
+        self.pulse_qualified = false;
+        self.last_time_ns = time_ns;
+        self.last_volts = Some(volts);
+        Ok(())
     }
     pub fn apply(&mut self, volts: f64, vdd: Option<f64>, time_ns: u64) -> Result<(), String> {
         let Some(config) = self.config.as_ref() else {
@@ -69,6 +96,9 @@ impl ResetInputState {
             return Err(
                 "reset input requires a routed finite voltage on a monotonic timeline".to_string(),
             );
+        }
+        if config.io_domain.is_some() {
+            self.io_qualified = Some(true);
         }
         let (vil, vih) = match config.thresholds {
             ResetInputThresholds::Absolute {

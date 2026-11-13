@@ -1,0 +1,104 @@
+diff --git a/crates/core/src/bus/sim_inputs.rs b/crates/core/src/bus/sim_inputs.rs
+index 2831852ad..f59c5e92b 100644
+--- a/crates/core/src/bus/sim_inputs.rs
++++ b/crates/core/src/bus/sim_inputs.rs
+@@ -95,10 +95,30 @@ impl SystemBus {
+         false
+     }
+ 
++    /// Check numerical admission for every consumer of the shared ADC rail.
++    /// This does not qualify conversion or change any receiver's observation.
++    pub(crate) fn adc_reference_voltage_is_admissible(&self, volts: f64) -> bool {
++        let mut found = false;
++        for peripheral in &self.peripherals {
++            if peripheral.dev.supports_adc_reference_voltage() {
++                found = true;
++                if !crate::power::rail_observation_is_admissible(
++                    volts,
++                    peripheral.dev.adc_reference_maximum_voltage_v(),
++                ) {
++                    return false;
++                }
++            }
++        }
++        found
++    }
++
+     /// Drive the board's shared VDDA / ADC reference in volts. Every ADC
+-    /// peripheral that declares reference support takes the same rail value.
++    /// peripheral that declares reference support takes the same raw value.
+     pub(crate) fn seed_adc_reference_voltage(&mut self, volts: f64) -> bool {
+-        if !volts.is_finite() || volts < 0.0 {
++        // Validate all numerical boundaries before invoking any mutating setter.
++        // Each model still owns zero-reference support and operating limits.
++        if !self.adc_reference_voltage_is_admissible(volts) {
+             return false;
+         }
+         let mut found = false;
+diff --git a/crates/core/src/cosim/routing.rs b/crates/core/src/cosim/routing.rs
+index aab7b2272..29a074c9f 100644
+--- a/crates/core/src/cosim/routing.rs
++++ b/crates/core/src/cosim/routing.rs
+@@ -586,7 +586,7 @@ pub enum RoutingError {
+     NoAdcReference {
+         path: String,
+     },
+-    /// The routed ADC reference is not a finite non-negative voltage.
++    /// The raw ADC reference violates a receiver's numerical admission bound.
+     InvalidAdcReference {
+         path: String,
+         volts: f64,
+@@ -757,7 +757,8 @@ impl std::fmt::Display for RoutingError {
+             ),
+             Self::InvalidAdcReference { path, volts } => write!(
+                 f,
+-                "co-sim path '{path}' needs a finite non-negative ADC reference voltage, got {volts} V"
++                "co-sim path '{path}' needs a finite ADC reference voltage within every \
++                 receiver's declared numerical-zero bound, got {volts} V"
+             ),
+             Self::AdcReferenceRejected { path, volts } => write!(
+                 f,
+@@ -2020,7 +2021,7 @@ impl SignalRouter {
+                         });
+                         continue;
+                     };
+-                    if !volts.is_finite() || volts < 0.0 {
++                    if !bus.adc_reference_voltage_is_admissible(volts) {
+                         errors.push(RoutingError::InvalidAdcReference {
+                             path: path.clone(),
+                             volts,
+@@ -2979,6 +2980,10 @@ impl CosimSession {
+     }
+ }
+ 
++#[cfg(test)]
++#[path = "adc_reference_tests.rs"]
++mod adc_reference_tests;
++
+ #[cfg(test)]
+ #[path = "drive_command_tests.rs"]
+ mod drive_command_tests;
+diff --git a/crates/core/src/peripheral.rs b/crates/core/src/peripheral.rs
+index 0ca78b992..b770aee82 100644
+--- a/crates/core/src/peripheral.rs
++++ b/crates/core/src/peripheral.rs
+@@ -1867,6 +1867,19 @@ pub trait Peripheral: std::fmt::Debug + Send {
+         false
+     }
+ 
++    /// Optional declared maximum for this receiver's reference-voltage domain.
++    ///
++    /// This value only sets the numerical-zero admission scale for raw routed
++    /// samples: at most `f64::EPSILON * maximum` below zero. It is not an
++    /// operating-range permission. `None` preserves the finite, nonnegative
++    /// routing contract. The receiver must retain the raw sample and own its
++    /// unpowered/conversion qualification in `set_adc_reference_voltage_v`.
++    /// An invalid maximum refuses the observation rather than supplying a
++    /// guessed scale.
++    fn adc_reference_maximum_voltage_v(&self) -> Option<f64> {
++        None
++    }
++
+     /// Set the ADC's positive full-scale reference voltage, in volts. Returns
+     /// false for a peripheral without a configurable analog reference.
+     fn set_adc_reference_voltage_v(&mut self, _volts: f64) -> bool {

@@ -1,0 +1,497 @@
+{
+  "method": "Read-only source-derived graph: independent source forest grants fixed-voltage exception; combined forest additionally contains VCVS/CCVS output terminals. Explicit and actual intrinsic charge paths then undergo the two-basis cycle check. No compiled parser/solver execution.",
+  "source_hashes": {
+    "crates/core/src/analog/netlist.rs": "ded16db56a80f41725e41afb85bc01b96d9289cf9f56a93f9a1444cab8d11c2c",
+    "crates/core/src/analog/initialization_charge.rs": "5c255bcbb81774eb1c3523e66b168b7ca5f1930b17d5ddd63b2302ea26b73706"
+  },
+  "native": [
+    {
+      "label": "cold-fc",
+      "deck_sha256": "525e8bc53b417504dc66dee43a1993fed2d97b3adb2adbbff0718ed9d2fec231",
+      "independent_voltage_source_count": 34,
+      "dependent_voltage_source_count": 27,
+      "dependent_output_edges": [
+        {
+          "name": "EU10_vil",
+          "a": "U10_vil",
+          "b": "0",
+          "source_line": 100,
+          "origin": "explicit dependent voltage source"
+        },
+        {
+          "name": "EU10_vih",
+          "a": "U10_vih",
+          "b": "0",
+          "source_line": 101,
+          "origin": "explicit dependent voltage source"
+        },
+        {
+          "name": "XU15#eh",
+          "a": "XU15#h0",
+          "b": "0",
+          "source_line": 125,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "XU15#ehd",
+          "a": "XU15#hd",
+          "b": "0",
+          "source_line": 125,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "XU15#eo",
+          "a": "XU15#oi",
+          "b": "0",
+          "source_line": 125,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "XU15#hm",
+          "a": "XU15#m",
+          "b": "0",
+          "source_line": 125,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "XU15#el",
+          "a": "XU15#l0",
+          "b": "XU15#m",
+          "source_line": 125,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "XU16#eh",
+          "a": "XU16#h0",
+          "b": "0",
+          "source_line": 143,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "XU16#ehd",
+          "a": "XU16#hd",
+          "b": "0",
+          "source_line": 143,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "XU16#eo",
+          "a": "XU16#oi",
+          "b": "0",
+          "source_line": 143,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "XU16#hm",
+          "a": "XU16#m",
+          "b": "0",
+          "source_line": 143,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "XU16#el",
+          "a": "XU16#l0",
+          "b": "XU16#m",
+          "source_line": 143,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "XU6#eh",
+          "a": "XU6#h0",
+          "b": "0",
+          "source_line": 150,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "XU6#ehd",
+          "a": "XU6#hd",
+          "b": "0",
+          "source_line": 150,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "XU6#eo",
+          "a": "XU6#oi",
+          "b": "0",
+          "source_line": 150,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "XU6#hm",
+          "a": "XU6#m",
+          "b": "0",
+          "source_line": 150,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "XU6#el",
+          "a": "XU6#l0",
+          "b": "XU6#m",
+          "source_line": 150,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "XU7#eh",
+          "a": "XU7#h0",
+          "b": "0",
+          "source_line": 157,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "XU7#ehd",
+          "a": "XU7#hd",
+          "b": "0",
+          "source_line": 157,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "XU7#eo",
+          "a": "XU7#oi",
+          "b": "0",
+          "source_line": 157,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "XU7#hm",
+          "a": "XU7#m",
+          "b": "0",
+          "source_line": 157,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "XU7#el",
+          "a": "XU7#l0",
+          "b": "XU7#m",
+          "source_line": 157,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xinternal_reg_0#eh",
+          "a": "Xinternal_reg_0#h0",
+          "b": "0",
+          "source_line": 176,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xinternal_reg_0#ehd",
+          "a": "Xinternal_reg_0#hd",
+          "b": "0",
+          "source_line": 176,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xinternal_reg_0#eo",
+          "a": "Xinternal_reg_0#oi",
+          "b": "0",
+          "source_line": 176,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xinternal_reg_0#hm",
+          "a": "Xinternal_reg_0#m",
+          "b": "0",
+          "source_line": 176,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xinternal_reg_0#el",
+          "a": "Xinternal_reg_0#l0",
+          "b": "Xinternal_reg_0#m",
+          "source_line": 176,
+          "origin": "lower_regulator dependent voltage source"
+        }
+      ],
+      "source_only_redundant_charges": [
+        "CC22",
+        "CC23"
+      ],
+      "mixed_cycle_refusals": [],
+      "intrinsic_charge_count": 1
+    },
+    {
+      "label": "five-mcu",
+      "deck_sha256": "67422deca6e3f0820174c404f3ce7149f966cdb6c6ed0c0267eb8f6e213a6fce",
+      "independent_voltage_source_count": 105,
+      "dependent_voltage_source_count": 39,
+      "dependent_output_edges": [
+        {
+          "name": "Ep006500730063005f005500310032_ref",
+          "a": "p006500730063005f005500310032_sense",
+          "b": "vn006e006500740040006500730063005f004300340031003a0031",
+          "source_line": 320,
+          "origin": "explicit dependent voltage source"
+        },
+        {
+          "name": "Ep006500730063005f005500310035_sense",
+          "a": "p006500730063005f005500310035_output",
+          "b": "p006500730063005f005500310035_regulated",
+          "source_line": 342,
+          "origin": "explicit dependent voltage source"
+        },
+        {
+          "name": "Ep00660063005f005500310030_vil",
+          "a": "p00660063005f005500310030_vil",
+          "b": "0",
+          "source_line": 625,
+          "origin": "explicit dependent voltage source"
+        },
+        {
+          "name": "Ep00660063005f005500310030_vih",
+          "a": "p00660063005f005500310030_vih",
+          "b": "0",
+          "source_line": 626,
+          "origin": "explicit dependent voltage source"
+        },
+        {
+          "name": "Xp006500730063005f005500310033#eh",
+          "a": "Xp006500730063005f005500310033#h0",
+          "b": "0",
+          "source_line": 328,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xp006500730063005f005500310033#ehd",
+          "a": "Xp006500730063005f005500310033#hd",
+          "b": "0",
+          "source_line": 328,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xp006500730063005f005500310033#eo",
+          "a": "Xp006500730063005f005500310033#oi",
+          "b": "0",
+          "source_line": 328,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xp006500730063005f005500310033#hm",
+          "a": "Xp006500730063005f005500310033#m",
+          "b": "0",
+          "source_line": 328,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xp006500730063005f005500310033#el",
+          "a": "Xp006500730063005f005500310033#l0",
+          "b": "Xp006500730063005f005500310033#m",
+          "source_line": 328,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xp006500730063005f005500310035#eh",
+          "a": "Xp006500730063005f005500310035#h0",
+          "b": "0",
+          "source_line": 341,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xp006500730063005f005500310035#ehd",
+          "a": "Xp006500730063005f005500310035#hd",
+          "b": "0",
+          "source_line": 341,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xp006500730063005f005500310035#eo",
+          "a": "Xp006500730063005f005500310035#oi",
+          "b": "0",
+          "source_line": 341,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xp006500730063005f005500310035#hm",
+          "a": "Xp006500730063005f005500310035#m",
+          "b": "0",
+          "source_line": 341,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xp006500730063005f005500310035#el",
+          "a": "Xp006500730063005f005500310035#l0",
+          "b": "Xp006500730063005f005500310035#m",
+          "source_line": 341,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xp00660063005f005500310035#eh",
+          "a": "Xp00660063005f005500310035#h0",
+          "b": "0",
+          "source_line": 650,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xp00660063005f005500310035#ehd",
+          "a": "Xp00660063005f005500310035#hd",
+          "b": "0",
+          "source_line": 650,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xp00660063005f005500310035#eo",
+          "a": "Xp00660063005f005500310035#oi",
+          "b": "0",
+          "source_line": 650,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xp00660063005f005500310035#hm",
+          "a": "Xp00660063005f005500310035#m",
+          "b": "0",
+          "source_line": 650,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xp00660063005f005500310035#el",
+          "a": "Xp00660063005f005500310035#l0",
+          "b": "Xp00660063005f005500310035#m",
+          "source_line": 650,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xp00660063005f005500310036#eh",
+          "a": "Xp00660063005f005500310036#h0",
+          "b": "0",
+          "source_line": 668,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xp00660063005f005500310036#ehd",
+          "a": "Xp00660063005f005500310036#hd",
+          "b": "0",
+          "source_line": 668,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xp00660063005f005500310036#eo",
+          "a": "Xp00660063005f005500310036#oi",
+          "b": "0",
+          "source_line": 668,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xp00660063005f005500310036#hm",
+          "a": "Xp00660063005f005500310036#m",
+          "b": "0",
+          "source_line": 668,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xp00660063005f005500310036#el",
+          "a": "Xp00660063005f005500310036#l0",
+          "b": "Xp00660063005f005500310036#m",
+          "source_line": 668,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xp00660063005f00550036#eh",
+          "a": "Xp00660063005f00550036#h0",
+          "b": "0",
+          "source_line": 675,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xp00660063005f00550036#ehd",
+          "a": "Xp00660063005f00550036#hd",
+          "b": "0",
+          "source_line": 675,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xp00660063005f00550036#eo",
+          "a": "Xp00660063005f00550036#oi",
+          "b": "0",
+          "source_line": 675,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xp00660063005f00550036#hm",
+          "a": "Xp00660063005f00550036#m",
+          "b": "0",
+          "source_line": 675,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xp00660063005f00550036#el",
+          "a": "Xp00660063005f00550036#l0",
+          "b": "Xp00660063005f00550036#m",
+          "source_line": 675,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xp00660063005f00550037#eh",
+          "a": "Xp00660063005f00550037#h0",
+          "b": "0",
+          "source_line": 682,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xp00660063005f00550037#ehd",
+          "a": "Xp00660063005f00550037#hd",
+          "b": "0",
+          "source_line": 682,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xp00660063005f00550037#eo",
+          "a": "Xp00660063005f00550037#oi",
+          "b": "0",
+          "source_line": 682,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xp00660063005f00550037#hm",
+          "a": "Xp00660063005f00550037#m",
+          "b": "0",
+          "source_line": 682,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xp00660063005f00550037#el",
+          "a": "Xp00660063005f00550037#l0",
+          "b": "Xp00660063005f00550037#m",
+          "source_line": 682,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xinternal_reg_0#eh",
+          "a": "Xinternal_reg_0#h0",
+          "b": "0",
+          "source_line": 700,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xinternal_reg_0#ehd",
+          "a": "Xinternal_reg_0#hd",
+          "b": "0",
+          "source_line": 700,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xinternal_reg_0#eo",
+          "a": "Xinternal_reg_0#oi",
+          "b": "0",
+          "source_line": 700,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xinternal_reg_0#hm",
+          "a": "Xinternal_reg_0#m",
+          "b": "0",
+          "source_line": 700,
+          "origin": "lower_regulator dependent voltage source"
+        },
+        {
+          "name": "Xinternal_reg_0#el",
+          "a": "Xinternal_reg_0#l0",
+          "b": "Xinternal_reg_0#m",
+          "source_line": 700,
+          "origin": "lower_regulator dependent voltage source"
+        }
+      ],
+      "source_only_redundant_charges": [],
+      "mixed_cycle_refusals": [],
+      "intrinsic_charge_count": 1
+    }
+  ],
+  "limits": "Actual production admission remains a required check; no device, deck, state or threshold changed."
+}

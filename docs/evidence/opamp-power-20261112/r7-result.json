@@ -1,0 +1,39 @@
+{
+  "head": "dd8b68a651ee8d91f9d653db05efa318cfd51a5e",
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "labwired-core",
+    "--test",
+    "analog_opamp_power",
+    "--test",
+    "analog_macros",
+    "--test",
+    "analog_adapter",
+    "--",
+    "--nocapture"
+  ],
+  "source_files": {
+    "crates/core/src/analog/adapter.rs": "e64afdeb58cb267ead1cc3b845e577cc8ba6f8d8ee5fa70c07894455312b593f",
+    "crates/core/src/analog/mna.rs": "fb1b407899d25e153228873d35b0982b94cd5016f3c588821a904972cf2faa46",
+    "crates/core/src/analog/mod.rs": "f180ae8f3729efe611f136fd41968075b3eeca2ca5387155e35c61c6cd686897",
+    "crates/core/src/analog/netlist.rs": "b5abd8672859ba213a3e082cf8afdb6d82e2432d1a30f86d3cab2d5e9a1e278e",
+    "crates/core/src/analog/opamp_power.rs": "4590059e4919a79c965032958ff33c8d8113a353f4d561649829a33a030b3817",
+    "crates/core/tests/analog_opamp_power.rs": "0782d742e5d6931528e42d9c6d103e479d3cdb56e84ce606b75100ee4868817f",
+    "docs/cosimulation_plugins.md": "59d7e28745e3889494e45ee159cc420e1db0d5d30af15f94080da3be064d049e",
+    "docs/evidence/opamp-power-20261112/README.md": "d90c406db958de7496aafa0c57605c6c371fda81e07b8aceccc3e3befe04a076",
+    "docs/evidence/opamp-power-20261112/files.sha256.json": "9f5487d71ee3fc1865e3fc0098d1b037d61b6710b2fb93711b27b60fcd561513",
+    "docs/evidence/opamp-power-20261112/probe-build-receipt.json": "5ffe45e04ea2226e1b5ca06aca9c499e78289024b35befdbb61f3a68b03c74a2",
+    "docs/evidence/opamp-power-20261112/r3-result.json": "ea3f3bb861e5c0883da4b4886eee16061ccf531ce53ddfbb22914eaf233e01cd",
+    "docs/evidence/opamp-power-20261112/r3.log": "0c2a87cc91b0207894bd92d5711e13dcf0526a9befc2a743e60066b788e529dc"
+  },
+  "patch_sha256": "7eb485df4bfaefdaa260a27aca95c9d5931d1f04c85e641d7d06f466851bca09",
+  "profile": "dev/test opt1 debug0 incremental0 jobs2, reused task-owned target",
+  "started_utc": "2026-11-12T09:25:43Z",
+  "exit": 0,
+  "external_stop": null,
+  "wall_seconds": 60.0169949750416,
+  "source_unchanged": true,
+  "log_sha256": "8e35e73d33ffa4f0b53839026675bad3c5172abc8e1e889212aa53550022a638"
+}

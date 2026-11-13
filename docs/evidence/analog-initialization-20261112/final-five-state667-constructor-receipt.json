@@ -1,0 +1,9 @@
+{
+  "input": "/data/work-scratch/native-five-mcu-transient-state-r1-20261112/model.json",
+  "input_sha256": "a833c1dc83087062b299d67d0a711e163911eb207549f458f4216089aa007c81",
+  "seconds": 0.03206468198914081,
+  "exit": 0,
+  "timeout": false,
+  "stdout": "/data/work-evidence/analog-transient-state-20261112/final-five-state667-constructor.json",
+  "stderr": "/data/work-evidence/analog-transient-state-20261112/final-five-state667-constructor.log"
+}

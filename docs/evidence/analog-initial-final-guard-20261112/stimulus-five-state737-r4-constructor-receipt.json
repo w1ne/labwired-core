@@ -1,0 +1,9 @@
+{
+  "input": "/data/work-scratch/native-five-mcu-opamp-direct-state-737-r4-20261112/model.json",
+  "input_sha256": "d9d08204bff52a13905150ef35eca121100e9ac0d922596df2c2dd375d3bfe44",
+  "seconds": 4.464690124965273,
+  "exit": 0,
+  "timeout": false,
+  "stdout": "/data/work-evidence/analog-initial-final-guard-20261112/stimulus-five-state737-r4-constructor.json",
+  "stderr": "/data/work-evidence/analog-initial-final-guard-20261112/stimulus-five-state737-r4-constructor.log"
+}

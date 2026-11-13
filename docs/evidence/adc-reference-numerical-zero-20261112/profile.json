@@ -1,0 +1,8 @@
+{
+  "target_dir": "/data/build-targets/controlled-buck-20261112",
+  "jobs": 2,
+  "incremental": false,
+  "cargo_wrapper": "/data/work-evidence/shared-runtime-integration-20261112/cargo-bin/cargo",
+  "cargo_wrapper_sha256": "83ce9db978abd70f226691d4a04434821958c05c2deabfcdd9df05ba734fbdb0",
+  "free_bytes_at_start": 9264513024
+}

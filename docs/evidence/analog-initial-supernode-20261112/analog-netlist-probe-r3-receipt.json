@@ -1,0 +1,30 @@
+{
+  "scope": "generic frontend numerical probe linked to exact r3 production library; OPAMP numerical-zero follow-up still pending",
+  "source": "/data/worktrees/labwired-quad-native-pcb-onboard-20261112/scripts/analog-netlist-probe.rs",
+  "source_sha256": "add9e5dde4bda6c9f2208111e7bb4d4db83f991d9b9a3de0270fa7d327c9f166",
+  "binary": "/data/work-evidence/analog-initial-supernode-20261112/analog-netlist-probe-r3",
+  "binary_sha256": "696feab140942217fea8b9dea13e75cba2f361169f5a467f6b1647403f3defe5",
+  "r3_source_receipt_sha256": "f390d9928235829150da54131a0e097e996b6e6f4c7c2097a536030cb2474400",
+  "libraries": {
+    "labwired_core": {
+      "path": "/data/build-targets/controlled-buck-20261112/shared-runtime-integration-20261112/deps/liblabwired_core-1e12c06a019b1626.rlib",
+      "sha256": "175149ec4a1b29ca71036b68719df16fe03c4f24bca1bc08d3436a97520b4d13"
+    },
+    "labwired_config": {
+      "path": "/data/build-targets/controlled-buck-20261112/shared-runtime-integration-20261112/deps/liblabwired_config-b11f1e1b5c5a7cec.rlib",
+      "sha256": "9f61af70c8b8b3bbf98e5242205c6b37b5d3671b012ebe25cb157dca34dd43b8"
+    },
+    "serde_json": {
+      "path": "/data/build-targets/controlled-buck-20261112/shared-runtime-integration-20261112/deps/libserde_json-86add3b10d7fd404.rlib",
+      "sha256": "b3b89e1b056c189839f4346bcb770fe2440c8e821bc09a655878e293b595a123"
+    },
+    "serde": {
+      "path": "/data/build-targets/controlled-buck-20261112/shared-runtime-integration-20261112/deps/libserde-3b15f3a1a99dd6c8.rlib",
+      "sha256": "f57dbb1f90ff095ed84df474f324473b1d588b3660e3eb18efd050f40a6a8a94"
+    },
+    "libm": {
+      "path": "/data/build-targets/controlled-buck-20261112/shared-runtime-integration-20261112/deps/liblibm-6698c8dd698d04c0.rlib",
+      "sha256": "150d2d4281719eb3005d65401bbb895c395b1f1473d2c34b40265de733dfd628"
+    }
+  }
+}

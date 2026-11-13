@@ -1,0 +1,19 @@
+{
+  "scope": "public production API probe linked to focused-test library, no MCU execution",
+  "source_sha256": "f7a805d3405a4e3b5e5428463aeefc600d681f399a1ab4649bcc844e4c576549",
+  "binary_sha256": "b8da7139769d897a88448dfb635d3a25211717abacfa4c87a5cc3ba086d70bbc",
+  "libraries": {
+    "labwired_core": {
+      "path": "/data/build-targets/controlled-buck-20261112/shared-runtime-integration-20261112/deps/liblabwired_core-1e12c06a019b1626.rlib",
+      "sha256": "55a9be80fd4c278d12c7e5b3ae917dcbfad14ef906861bc04da95c419b184441"
+    },
+    "labwired_config": {
+      "path": "/data/build-targets/controlled-buck-20261112/shared-runtime-integration-20261112/deps/liblabwired_config-b11f1e1b5c5a7cec.rlib",
+      "sha256": "9f61af70c8b8b3bbf98e5242205c6b37b5d3671b012ebe25cb157dca34dd43b8"
+    },
+    "serde_json": {
+      "path": "/data/build-targets/controlled-buck-20261112/shared-runtime-integration-20261112/deps/libserde_json-86add3b10d7fd404.rlib",
+      "sha256": "b3b89e1b056c189839f4346bcb770fe2440c8e821bc09a655878e293b595a123"
+    }
+  }
+}

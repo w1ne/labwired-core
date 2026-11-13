@@ -1,0 +1,31 @@
+{
+  "runner": "/data/work-scratch/at32-onboarding-20261112/labwired-reset30-ff3de522",
+  "runner_sha256": "ff3de52233350784237db2fb445987a2900221539d1184e81d19329a730a01f7",
+  "scope": "Normal capacity-enabled parser/constructor rejection before OP allocation/solve. Explicit max_unknowns=1 is a count diagnostic only; original exported512 model is unchanged. No runtime, control or firmware acceptance.",
+  "records": [
+    {
+      "label": "five_mcu",
+      "source_directory": "/data/work-scratch/native-five-mcu-regulator-circuit-r2-20261112",
+      "netlist_sha256": "67422deca6e3f0820174c404f3ce7149f966cdb6c6ed0c0267eb8f6e213a6fce",
+      "count_overlay_sha256": "af6d37a5e065154931df1630f4b2e412227529edb14568aad70f29d5404bcca8",
+      "diagnostic_max_unknowns": 1,
+      "requested_steps": 0,
+      "exit_code": 2,
+      "elapsed_s": 1.694497174990829,
+      "stderr": "error: cosim_models[0] (id 'circuit'): circuit needs 667 unknowns (nodes + branch currents), over the in-core limit of 1; use `adapter: external_process` with `tools/cosim/labwired_ngspice.py`",
+      "stdout": ""
+    },
+    {
+      "label": "fc",
+      "source_directory": "/data/work-scratch/native-fc-regulator-circuit-20261112",
+      "netlist_sha256": "0d3d1a99cedbaef6e82113bc38f3c8f2d110a272ecc4a58ba7d4250fca960c3d",
+      "count_overlay_sha256": "5f565b68fd5c0d87887594ca8e48406b6b6987563fddff63402f9ff30d7ead75",
+      "diagnostic_max_unknowns": 1,
+      "requested_steps": 0,
+      "exit_code": 2,
+      "elapsed_s": 0.0061926390044391155,
+      "stderr": "error: cosim_models[0] (id 'circuit'): circuit needs 215 unknowns (nodes + branch currents), over the in-core limit of 1; use `adapter: external_process` with `tools/cosim/labwired_ngspice.py`",
+      "stdout": ""
+    }
+  ]
+}

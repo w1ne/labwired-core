@@ -1,0 +1,72 @@
+{
+  "base": "ccbda884c9aaa99ecaae749291d9f0f0580cabb2",
+  "files": {
+    "crates/core/src/cosim/routing.rs": "0718cf6bd17fae7bfd3207db9cabd47ad957929ee47c1f85540e10fa53bc1d44",
+    "crates/core/src/cosim/drive_command_tests.rs": "3dbe8792c8414f3936ce17ac1d619ba715ceaa19c442f514ea31741f7a801f3a",
+    "docs/cosimulation_plugins.md": "a7975bb0f0d825f0656c4fb25ac09d4e76346ac6d594b0c0fe8c48a4207ec54f"
+  },
+  "profile": "opt1 debug0 incremental0 jobs2; event-scheduler",
+  "gates": [
+    {
+      "label": "routing",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "labwired-core",
+        "--features",
+        "event-scheduler",
+        "--lib",
+        "cosim::routing::",
+        "--",
+        "--nocapture"
+      ],
+      "exit": 0,
+      "external_stop": null,
+      "wall_seconds": 303.18116006598575,
+      "source_unchanged": true,
+      "log_sha256": "a53de0f068f1a4e94fc1d75c6049d54ca8b2c2b47571f6a41837503f63786cae"
+    },
+    {
+      "label": "adjacent",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "labwired-core",
+        "--features",
+        "event-scheduler",
+        "--test",
+        "world_analog",
+        "--test",
+        "mcu_power_domains",
+        "--test",
+        "machine_mcu_power",
+        "--",
+        "--nocapture"
+      ],
+      "exit": 0,
+      "external_stop": null,
+      "wall_seconds": 6.002030652947724,
+      "source_unchanged": true,
+      "log_sha256": "95a15bd8c5dff36599469a0246a3e63d4110d127e80d96649e7566b9c09dd7e1"
+    }
+  ],
+  "test_counts": {
+    "routing": {
+      "passed": 41,
+      "failed": 0,
+      "ignored": 0
+    },
+    "adjacent": {
+      "passed": 32,
+      "failed": 0,
+      "ignored": 0
+    }
+  },
+  "scope": "Generic command routing and hold/qualification boundaries; no native MCU startup or electrical qualification claim.",
+  "prior_runs": {
+    "r1": "34 passed, 6 failed because a duplicate gpioa fixture bound the existing default peripheral; production source unchanged for R2. Original logs and suffix-only metadata normalization are retained in task evidence.",
+    "r2": "72 passed. Independent review then found that held-state handling preceded driver validation; R3 resolves the driver first and adds the held unknown-driver regression."
+  }
+}

@@ -716,8 +716,9 @@ impl SystemBus {
         let timer = if circuit {
             None
         } else {
-            // Validate the declared pads; live alternate-function routing does
-            // not gate the timer output-stage snapshot used by this plant.
+            // Resolve all declared phase pads now, even though TIM1 owns their
+            // runtime levels. This rejects nonexistent/incompatible AF bindings
+            // before firmware starts.
             for (role, pin) in [
                 ("phase A high", &c.phase_a_high_pin),
                 ("phase A low", &c.phase_a_low_pin),
@@ -1729,18 +1730,13 @@ impl SystemBus {
                         speed_rpm_max: speed_extremes.max_rpm,
                         speed_rpm_min: speed_extremes.min_rpm,
                         torque_nm: s.electromagnetic_torque_nm,
-                        current_a: if integration_error.is_none() {
-                            s.dc_bus_current_a
-                        } else {
-                            None
-                        },
-                        phase_currents_a: if integration_error.is_some()
-                            || circuit.as_ref().is_some_and(|w| w.last_time_ns.is_none())
-                        {
-                            None
-                        } else {
-                            Some(s.phase_currents_a)
-                        },
+                        current_a: s.dc_bus_current_a.filter(|_| {
+                            integration_error.is_none()
+                                && circuit.as_ref().is_none_or(|w| w.last_time_ns.is_some())
+                        }),
+                        phase_currents_a: (integration_error.is_none()
+                            && circuit.as_ref().is_none_or(|w| w.last_time_ns.is_some()))
+                        .then_some(s.phase_currents_a),
                         bus_voltage_v: match circuit {
                             Some(w) => w.supply_v,
                             None => s.dc_bus_voltage_v,

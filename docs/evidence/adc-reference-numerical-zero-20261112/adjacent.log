@@ -1,0 +1,85 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/labwired-core-adc-reference-20261112/examples/h735-telematics-lab/Cargo.toml
+workspace: /data/worktrees/labwired-core-adc-reference-20261112/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/labwired-core-adc-reference-20261112/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /data/worktrees/labwired-core-adc-reference-20261112/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/labwired-core-adc-reference-20261112/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /data/worktrees/labwired-core-adc-reference-20261112/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/labwired-core-adc-reference-20261112/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /data/worktrees/labwired-core-adc-reference-20261112/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/labwired-core-adc-reference-20261112/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /data/worktrees/labwired-core-adc-reference-20261112/Cargo.toml
+   Compiling labwired-core v0.25.0 (/data/worktrees/labwired-core-adc-reference-20261112/crates/core)
+    Finished `shared-runtime-integration-20261112` profile [optimized] target(s) in 15.20s
+     Running tests/cosim_pin_routing.rs (/data/build-targets/controlled-buck-20261112/shared-runtime-integration-20261112/deps/cosim_pin_routing-49c290dc29f8576c)
+
+running 29 tests
+test an_atmega_pad_outside_its_ports_is_refused ... ok
+test every_drivable_adc_takes_an_input_on_its_last_channel ... ok
+test a_model_voltage_lands_on_the_adc_channel_of_its_pad ... ok
+test a_model_vdda_reference_sets_adc_full_scale ... ok
+test an_adc_channel_the_converter_does_not_have_is_refused_at_bind_time ... ok
+test a_firmware_driven_pad_reaches_the_signal_store ... ok
+test a_descriptor_pad_on_a_channel_the_adc_does_not_have_is_refused ... ok
+test the_direction_path_reads_ddr_on_the_atmega328p ... ok
+test a_model_output_drives_a_gpio_input_pin ... ok
+test set_signal_reaches_the_model_at_its_next_step ... ok
+test a_peripheral_that_is_not_an_adc_is_refused_at_bind_time ... ok
+test an_unroutable_pad_is_reported_at_bind_time ... ok
+test an_in_core_netlist_on_pc5_reaches_adc1_channel_15 ... ok
+test the_cycle_budget_lands_the_machine_on_the_model_boundary ... ok
+test an_adc_the_bus_does_not_have_is_refused_at_bind_time ... ok
+test nothing_is_routed_before_the_first_boundary ... ok
+test the_direction_path_reads_the_mode_register ... ok
+test set_signal_refuses_a_path_no_model_reads ... ok
+test the_explicit_adc_channel_form_routes_to_the_same_place ... ok
+test ui_inputs_exist_from_the_start_at_zero ... ok
+test the_last_channel_the_adc_has_is_routable ... ok
+test a_direction_pad_that_does_not_resolve_is_refused_at_bind_time ... ok
+test volts_on_a_pin_path_read_through_the_datasheet_thresholds ... ok
+test the_lockstep_granularity_is_the_finest_model_period ... ok
+test an_in_core_ntc_netlist_drives_the_resolved_adc_channel ... ok
+test fresh_fixture_epoch_preserves_global_time_and_rebinds_actual_board_destinations ... ok
+test the_explicit_form_works_where_the_descriptor_is_silent ... ok
+test a_pad_the_descriptor_does_not_name_is_refused ... ok
+test every_descriptor_analog_pin_names_a_channel_its_adc_has ... ok
+
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.19s
+
+     Running tests/power_routing.rs (/data/build-targets/controlled-buck-20261112/shared-runtime-integration-20261112/deps/power_routing-e2282c0501e9a90c)
+
+running 3 tests
+test affine_gpio_limits_match_datasheet_at_both_operating_supplies ... ok
+test zero_vdda_reaches_models_that_explicitly_support_an_unpowered_reference ... ok
+test every_reference_capable_adc_must_accept_a_shared_vdda_observation ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/world_analog.rs (/data/build-targets/controlled-buck-20261112/shared-runtime-integration-20261112/deps/world_analog-b70d1508fd8fc1d5)
+
+running 18 tests
+test firmware_edges_use_the_next_interval_not_the_completed_intervals_past ... ok
+test analog_results_reach_each_real_adc_independently ... ok
+test drive_amplitudes_follow_each_modeled_supply_rail ... ok
+test two_pa8_pads_control_independent_switches_on_one_shared_rail ... ok
+test gpio_voltage_thresholds_follow_each_nodes_same_boundary_vdd ... ok
+test reset_routes_require_declared_reset_metadata ... ok
+test affine_gpio_inputs_use_each_nodes_routed_supply_at_the_same_boundary ... ok
+test world_advance_api_run_until_ps_keeps_analog_steps_in_a_gpio_world ... ok
+test world_advance_api_run_until_ps_steps_an_analog_only_world ... ok
+test per_node_drive_voltage_and_high_impedance_are_independent ... ok
+test separate_reset_pins_hold_actual_cpus_and_release_from_the_same_mna_rc_network ... ok
+test supply_and_external_reset_holds_are_independent ... ok
+test world_advance_api_step_rounds_respects_the_analog_boundary_before_gpio_latency ... ok
+test node_order_and_host_step_chunking_do_not_duplicate_or_reorder_solves ... ok
+test digital_nets_and_analog_islands_have_one_physical_pad_owner ... ok
+test bad_routes_remain_fail_closed ... ok
+test output_aliases_and_missing_probes_cannot_silently_replace_observations ... ok
+test world_status_preserves_the_actual_initialization_contract ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+

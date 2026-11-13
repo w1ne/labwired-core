@@ -1,0 +1,16 @@
+[
+  "cargo",
+  "test",
+  "-p",
+  "labwired-core",
+  "--test",
+  "device_supply_rails",
+  "--test",
+  "device_supply_routing",
+  "--test",
+  "mcu_power_domains",
+  "--test",
+  "mcu_power_routing_timing",
+  "--test",
+  "shared_supply_domains"
+]

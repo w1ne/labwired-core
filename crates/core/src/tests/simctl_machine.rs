@@ -235,6 +235,8 @@ mod from_declaration {
             gpio_input_thresholds: None,
             reset_input: None,
             supply_monitor: None,
+            power_domains: None,
+            internal_regulators: Vec::new(),
             include: None,
         }
     }

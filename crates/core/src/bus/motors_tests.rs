@@ -668,7 +668,7 @@ fn bldc_control_test_bus(legacy_walk: bool) -> SystemBus {
         let MotorRuntime::Bldc { timer, .. } = &bus.motors[0] else {
             unreachable!();
         };
-        let timer = timer.expect("timer-driven BLDC fixture");
+        let timer = timer.expect("this timer-drive fixture has TIM1");
         assert!(bus.peripherals[timer].dev.force_legacy_walk());
         bus.recompute_walk_deletable();
         bus.refresh_peripheral_index();
@@ -681,7 +681,7 @@ fn advance_bldc_control_test_clock(bus: &mut SystemBus, cycle: u64, legacy_walk:
         let MotorRuntime::Bldc { timer, .. } = &bus.motors[0] else {
             unreachable!();
         };
-        let timer = timer.expect("timer-driven BLDC fixture");
+        let timer = timer.expect("this timer-drive fixture has TIM1");
         // Drive the normal timer walk without adding a motor service boundary.
         // The paired scheduler case obtains the same counter from its clock.
         for _ in bus.current_cycle..cycle {
@@ -1093,7 +1093,7 @@ fn bldc_phase_mapping_writes_start_at_the_write_cycle() {
             // This snapshot is sampled at the actual register-write boundary,
             // before the lazy timer advances through the next 137 cycles.
             let at_write = bus
-                .timer_output_at(timer.expect("timer-driven BLDC fixture"))
+                .timer_output_at(timer.expect("timer-drive fixture has TIM1"))
                 .unwrap();
             let cap = expected.service_timestep_s().unwrap();
             for_each_pwm_segment(at_write, 123, 137.0, |command, cycles| {
@@ -1160,7 +1160,7 @@ fn rcc_timer_divider_write_closes_the_old_motor_interval() {
         unreachable!();
     };
     let at_write = automatic
-        .timer_output_at(timer.expect("timer-driven BLDC fixture"))
+        .timer_output_at(timer.expect("timer-drive fixture has TIM1"))
         .unwrap();
     assert_eq!(at_write.prescaler_divisor, 2);
     let mut expected = plant.clone();
@@ -1367,7 +1367,7 @@ fn bldc_stopped_and_idle_timer_gates_drive_the_plant() {
         if state == "held" {
             let mut segments = Vec::new();
             for_each_pwm_segment(
-                bus.timer_output_at(timer.expect("timer-driven BLDC fixture"))
+                bus.timer_output_at(timer.expect("timer-drive fixture has TIM1"))
                     .unwrap(),
                 0,
                 128.0,

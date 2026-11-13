@@ -99,6 +99,18 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
+          # GitHub's pull_request.base.sha is captured at event time. When main
+          # advances before the PR merge ref is synthesized, that event SHA
+          # can differ from the merge's first parent. Grade the actual tested
+          # first-parent diff. The Python gate still requires EXACT ordered
+          # [first parent, event head] identity and fails closed otherwise.
+          if [[ "$EVENT" == pull_request ]]; then
+            tested_base="$(git rev-parse "${TESTED}^1")"
+            if [[ "$BASE" != "$tested_base" ]]; then
+              echo "PR event base $BASE differs from tested merge base $tested_base; grading the tested merge"
+            fi
+            BASE="$tested_base"
+          fi
           python3 scripts/perf/pr_hotpath_gate.py \
             --event "$EVENT" --repository "$REPOSITORY" --head-ref "$HEAD_REF" \
             --tested "$TESTED" --base "$BASE" --head "$HEAD" --output "$GITHUB_OUTPUT"

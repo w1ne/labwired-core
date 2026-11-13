@@ -1,0 +1,15 @@
+[
+  "python3",
+  "scripts/perf/board_perf.py",
+  "--boards",
+  "r7fa6m5bh,r7fa8m1ah",
+  "--modes",
+  "step",
+  "--cli",
+  "/data/work-evidence/shared-runtime-integration-20261112/perf-empty-registry-r1/labwired-after-d8551fc365ab",
+  "--rating-out",
+  "/data/work-evidence/shared-runtime-integration-20261112/perf-empty-registry-r1/after-ratings.json",
+  "--status-json",
+  "/data/work-evidence/shared-runtime-integration-20261112/perf-empty-registry-r1/after-status.json",
+  "--require-all"
+]

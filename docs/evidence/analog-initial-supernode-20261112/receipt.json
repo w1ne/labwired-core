@@ -1,0 +1,68 @@
+{
+  "scope": "generic explicit-state group and contact boundaries; no MCU firmware or flight acceptance",
+  "base_head": "8dbf55ec9daf48d93933794f5b03399c174ea27b",
+  "initializer_commit": "c914c0513e405a8f848be0e55ed69633b7eac3fe",
+  "opamp_source_commit": "7ea92647c6d69e840e57f5646c74eeb057835c4a",
+  "opamp_cherry_pick": "8dbf55ec9daf48d93933794f5b03399c174ea27b",
+  "gates": [
+    {
+      "name": "r3-core",
+      "exit": 0,
+      "passed": 324,
+      "failed": 0,
+      "ignored": 0,
+      "raw_log_sha256": "71f8715503e8a546ce465e3b96995859e559ecb31d15eba57237692e75d910d8",
+      "compressed_log": "r3-core.log.gz"
+    },
+    {
+      "name": "r3-cli",
+      "exit": 0,
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "raw_log_sha256": "19e52a8c368497720fafaaa0eaa4d5b427f98fbcc00988207b4f32afe6464e65",
+      "compressed_log": "r3-cli.log.gz"
+    },
+    {
+      "name": "r3-wasm",
+      "exit": 0,
+      "passed": 30,
+      "failed": 0,
+      "ignored": 2,
+      "raw_log_sha256": "a16579b99191f3fde8b3663f6f543eef70057377172a08411ae65c2a6a961d4d",
+      "compressed_log": "r3-wasm.log.gz"
+    }
+  ],
+  "total_passed": 358,
+  "unchanged_ignored_cases": [
+    "cosim_tests::step_batch_throughput",
+    "cosim_tests::touch_lab_step_batch_throughput"
+  ],
+  "code_sha256": {
+    "crates/core/src/analog/initialization.rs": "2ca7dfa0e41282c92f4ebc3e54740c1ce0d0f458365daf8e2636529b4cf586b6",
+    "crates/core/src/analog/mna.rs": "9ce83d32db053200de00ddfd89bba8206d5a741c3dc575a35a56c8f82dffc4e6",
+    "crates/core/src/analog/mna_initialization.rs": "eb254d690b75bef10ded956255c9bbe851cf01453e93f437a0e2ea405861e1dc",
+    "crates/core/src/analog/netlist.rs": "c33779d8d8e1754a72da1fcfbc2f68a9af97b0fe9add0180b0bda052509dcc4c",
+    "crates/core/tests/analog_transient_opamp.rs": "9af7e085ffa340c8a88be66ba4950d15c2483fdc95c2364f1c71b83d44682804",
+    "crates/core/tests/analog_transient_voltage_group.rs": "60c5cb6f540a75140f0259cd09a172676cbe61c8c3dade0e5a96b4f9c5417dd9",
+    "crates/core/tests/analog_voltage_switch_boundaries.rs": "a39628a72b0ac3b019fffb7650de88e172b86c87d770e181f560bdb504156b4b"
+  },
+  "native_r4": {
+    "fc": {
+      "base_unknowns": 214,
+      "initialization_unknowns": 232,
+      "selected_bound": 512
+    },
+    "five_mcu": {
+      "base_unknowns": 666,
+      "initialization_unknowns": 736,
+      "selected_bound": 737
+    },
+    "constructor_accepted": true,
+    "first_100ns_step_accepted": false,
+    "pending_boundary": "Strict OPAMP negative-supply guard refuses raw near-zero values -2.8303506583270205e-19 V / -6.416512125577181e-19 V. Separate numerical-zero follow-up is not included here.",
+    "stimuli": "Declared regulator/parameter defaults plus explicitly recorded zero numeric sources and false switch controls; no MCU output was executed."
+  },
+  "review_scope": "Parent reviewed group equations and source; Component authored seven independent analytic cases and reviewed OPAMP integration. This is code review, not hardware capture acknowledgment.",
+  "powered_positive_fixture": "The first positive test forced zero compensation charge below a powered 25 mV lower headroom and refused with extreme clamp current. That failure log is retained as final-core.log.gz. The passing positive test explicitly supplies 0.5 V compensation charge inside the envelope; cold native zero-charge inputs were not changed."
+}

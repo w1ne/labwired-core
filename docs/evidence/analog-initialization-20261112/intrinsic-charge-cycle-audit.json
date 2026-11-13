@@ -1,0 +1,54 @@
+{
+  "method": "Read-only source-derived charge graph following actual parser internal-node creation and current initialization_charge.rs. No solver or compiled parser run.",
+  "source_hashes": {
+    "crates/core/src/analog/netlist.rs": "ded16db56a80f41725e41afb85bc01b96d9289cf9f56a93f9a1444cab8d11c2c",
+    "crates/core/src/analog/initialization_charge.rs": "5c255bcbb81774eb1c3523e66b168b7ca5f1930b17d5ddd63b2302ea26b73706",
+    "crates/core/src/analog/mna_initialization.rs": "6b9c3e6e9fe017956c2b4ed6f6a47dfd11e3fb982236583c915156a25f765704",
+    "crates/core/src/analog/mna.rs": "f177d8da20c2c6b3202b5410dfed2416ce769375c6b1fc9f5caa4e9f0456237a"
+  },
+  "native": [
+    {
+      "label": "cold-fc",
+      "deck_sha256": "525e8bc53b417504dc66dee43a1993fed2d97b3adb2adbbff0718ed9d2fec231",
+      "implicit_charge_edges": [
+        {
+          "name": "DD8",
+          "a": "DD8#internal",
+          "b": "v_net_c38_2",
+          "external_anode": "0",
+          "series_resistance_ohms": 2.2,
+          "model": "D8_sdm02",
+          "CJO": "6p",
+          "TT": "30n",
+          "source_line": 50
+        }
+      ],
+      "native_semiconductor_cards_with_zero_charge": 8,
+      "mixed_cycle_refusals_with_explicit_and_intrinsic_charge": [],
+      "extra_initial_state_constraints": 0,
+      "state_constraint_scope": "Only explicit parsed Circuit capacitors add temporary voltage constraints; intrinsic charge is seeded from accepted node voltages."
+    },
+    {
+      "label": "five-mcu",
+      "deck_sha256": "67422deca6e3f0820174c404f3ce7149f966cdb6c6ed0c0267eb8f6e213a6fce",
+      "implicit_charge_edges": [
+        {
+          "name": "Dp00660063005f00440038",
+          "a": "Dp00660063005f00440038#internal",
+          "b": "vn006e00650074004000660063005f004300330038003a0032",
+          "external_anode": "0",
+          "series_resistance_ohms": 2.2,
+          "model": "p00660063005f00440038_sdm02",
+          "CJO": "6p",
+          "TT": "30n",
+          "source_line": 575
+        }
+      ],
+      "native_semiconductor_cards_with_zero_charge": 44,
+      "mixed_cycle_refusals_with_explicit_and_intrinsic_charge": [],
+      "extra_initial_state_constraints": 0,
+      "state_constraint_scope": "Only explicit parsed Circuit capacitors add temporary voltage constraints; intrinsic charge is seeded from accepted node voltages."
+    }
+  ],
+  "default_model_checks": "Diode defaults and macro clamp/limit diodes have CJO=TT=0. MOS defaults have zero bulk/overlap capacitance and TOX=None. Actual native model cards add only the listed SDM02 charge. Physical RS is retained as a resistance; it is not an ideal edge."
+}

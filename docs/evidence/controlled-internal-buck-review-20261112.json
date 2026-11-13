@@ -1,0 +1,46 @@
+{
+  "scope": "Independent read-only source review of four accepted controlled-BUCK findings. Final runtime pipeline results are recorded separately by the owner; this receipt does not claim native-board or physical regulator qualification.",
+  "result": "No remaining source-level blocker in the four reviewed fixes.",
+  "source_sha256": {
+    "crates/core/src/analog/controlled_buck.rs": "89f0ff3950bb9403bad00b3dedfa3717a699e3cd8069d0a3f62433ed1611d508",
+    "crates/core/src/analog/mna.rs": "904f8b9a735d58fb8e742d7c5fee952f1b243289f2e465cb774a044e923abfd6",
+    "crates/core/src/analog/adapter.rs": "709cb01fb852efb3fdcb8a22498b3231e7639a01e23a59ff8a0003fa7df6c9d7",
+    "crates/core/src/regulator.rs": "94abfa95f406da385c30571f456f9c3f250f507d3f4a900ddbcde90d88c8f47a",
+    "crates/core/src/cosim/regulator_routing.rs": "510dabab733e9ce37e2e3538b49469aec5cf0c0291f2e1f248526bb2caabb0de",
+    "crates/core/src/cosim/routing.rs": "1a434693f1b2741dd062bffebc3e5c3910a7813145680c682d10a3d22cbd8310",
+    "crates/core/src/world.rs": "e9aea1a44aea313a5d5d89b51581de9626fee924087bf3fcb64aed96745e5ed4",
+    "crates/core/src/machine/advance.rs": "491e1e06c6606d68af3d1f8848057af2925eb8e581da8dd8cde5fa25f4b8c944",
+    "crates/wasm/src/cosim.rs": "54735ec7c8f3ee3731179e56b87f7d5505421d1f3a11a20e627406fca94c6aae",
+    "crates/core/tests/controlled_buck.rs": "314c7284062dd50e2dd1ac857d1ac74d386f215100a9564806c88ab5abf97cde",
+    "crates/core/tests/controlled_buck_session.rs": "02e4653ef0ce3b8da87da74b66e1cc9452d6e31fbefdb94266a3c977c8445917",
+    "crates/core/src/world/controlled_buck_tests.rs": "e10fd215c10f704f36301b57721d7d0404be2dac37c196f1161ff567553cd326"
+  },
+  "findings": [
+    {
+      "id": "empty_model_admission",
+      "result": "Closed at standalone/Wasm/World setup and authoritative CPU advance; chips without declared stages retain legacy empty-model behavior."
+    },
+    {
+      "id": "complete_primitive_ownership",
+      "result": "Every generated primitive prefix is reserved against routed source and thermistor targets after trimming and case folding; complete field/model owner and physical domain-node checks remain strict."
+    },
+    {
+      "id": "interval_start_command_frame",
+      "result": "Standalone stores an interval-start command frame; independent halfway and faster-unrelated-model regressions require revision 0 at T and revision 1 at 2T. World explicitly samples before its interval. Observation batches validate before publication."
+    },
+    {
+      "id": "forward_only_energy_scope",
+      "result": "Public operating-point solve and each accepted nonlinear step validate finite signed SW/input/quiescent quantities. Reverse current and reverse power outside explicit 1 pA/1 pW residual tolerances fail before time/index acceptance. Direct Solver transient and OP regressions cover the placement."
+    }
+  ],
+  "adjacent_review": [
+    "HIZ omits controlled output resistance, input power sink and quiescent stamps without resetting external capacitor/inductor histories.",
+    "Controlled BUCK is always nonlinear through its power sink, so the linear settled early-return path cannot bypass the guard.",
+    "Rated-load trace follows the applied command frame and remains distinct from actual supply-envelope qualification; it is not a load injection or a new protection output."
+  ],
+  "limits": [
+    "The final solver-placement test pipeline was running at review time.",
+    "The averaged model does not establish silicon ripple, compensation, reverse conduction, parasitic behavior or physical efficiency.",
+    "No claim that the actual combined native 667-unknown deck has executed is made."
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "base_unknowns": 59,
+  "bound_initial_commands_before_constructor": [
+    {
+      "command_revision": 0,
+      "current_limit_a": 0.24,
+      "element": "Xbuck",
+      "enabled": true,
+      "rated_load_a": 0.2,
+      "target_voltage_v": 1.1
+    }
+  ],
+  "capacitors": 3,
+  "construction": "accepted",
+  "construction_seconds": 0.002268007,
+  "inductors": 2,
+  "initial_outputs": {
+    "out": 1.0999890004089927,
+    "reg.applied_revision": 0.0,
+    "reg.feedback_voltage_v": 1.0999890004089927,
+    "reg.input_current_a": 0.0,
+    "reg.input_voltage_v": 4.999500101702363,
+    "reg.output_current_a": -0.0,
+    "reg.output_enabled": true,
+    "reg.qualified": true
+  },
+  "initialization": {
+    "base_unknowns": 59,
+    "initialization_unknowns": 59,
+    "mode": "operating_point"
+  },
+  "input": "/data/work-evidence/analog-transient-state-20261112/cascaded-buck-powered.model.json",
+  "max_unknowns": 128,
+  "model_id": "circuit",
+  "requested_initialization": {
+    "mode": "operating_point"
+  },
+  "scope": "production analog constructor only; no MCU or firmware execution",
+  "step_ns": 100
+}

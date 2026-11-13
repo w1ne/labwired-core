@@ -1,0 +1,78 @@
+{
+  "scope": "Synthetic analytic capacity and unchanged numerical regressions; the native combined 667-unknown deck was counted separately, not executed by these tests.",
+  "base_commit": "a01867221d2f29d733e39118ab51d440c34584d7",
+  "focused_tests_passed": 47,
+  "stages": [
+    {
+      "stage": "core",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "labwired-core",
+        "--test",
+        "analog_capacity",
+        "--test",
+        "analog_solver",
+        "--test",
+        "analog_adapter",
+        "--test",
+        "analog_linear_golden",
+        "--test",
+        "analog_copper_capacity",
+        "--",
+        "--nocapture"
+      ],
+      "exit": 0,
+      "elapsed_s": 126.04084179602796
+    },
+    {
+      "stage": "cli",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "labwired-cli",
+        "--test",
+        "analog_capacity",
+        "--",
+        "--nocapture"
+      ],
+      "exit": 0,
+      "elapsed_s": 156.02725912100868
+    },
+    {
+      "stage": "wasm",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "labwired-wasm",
+        "--lib",
+        "analog_capacity_browser_constructor_uses_the_same_explicit_bound",
+        "--",
+        "--nocapture"
+      ],
+      "exit": 0,
+      "elapsed_s": 153.0938203500118
+    }
+  ],
+  "environment": {
+    "jobs": 2,
+    "incremental": false,
+    "dev_debug": 0,
+    "test_debug": 0
+  },
+  "source_sha256": {
+    "crates/core/src/analog/mna.rs": "612cdbc3b81ada40ea2a19ad1396a271de8bf4354ef0615f4c8889907a145aa6",
+    "crates/core/src/analog/adapter.rs": "a7f4a127796d7281b5d2b391f475b5de9dd60d446ddf1f7441f1a9eaaca2fac6",
+    "crates/core/tests/analog_capacity.rs": "3dc159947ee90a3fb5271e58ebf7bb648536bcfb741eabf0a569ddb1d8989bdb",
+    "crates/cli/tests/analog_capacity.rs": "b5521e92f5320c12ade281a9b2b06d435dae8346163c736ff051f37c3a39dd1a",
+    "crates/wasm/src/cosim_tests.rs": "e3f065f96f630d73fd25dbc07e5fd1cc72e23504177b952b3ac420f022766aa3"
+  },
+  "log_sha256": {
+    "focused-core.log": "1d32c2a65350638f7e8b7d85f07881b057a30af4d15f5b4e94a739c32f6461d4",
+    "focused-cli.log": "49f8fb205082c4ce2de7765dfb7be79ce681002384da29f5b34712749c2ffdc5",
+    "focused-wasm.log": "932ba13844e992f1c3742cf2457c31bc48590b0842b3a927471614f6a22c4206"
+  }
+}

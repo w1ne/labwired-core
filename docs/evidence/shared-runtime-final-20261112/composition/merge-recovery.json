@@ -1,0 +1,17 @@
+{
+  "head": "ccbda884c9aaa99ecaae749291d9f0f0580cabb2",
+  "parents": [
+    "5136a4ddf78132f5b411972911042c91d5a67121",
+    "65efd6fd683e166169f23ccb7b47a153f681f929",
+    "12fec73c211ddb3b4e0cec4d1241f42d8b4ecb54"
+  ],
+  "lock_inode": 15512695,
+  "lock_size": 0,
+  "lock_mtime_ns": 1794483873581654221,
+  "owner_uid": 1001,
+  "holder_exit": 1,
+  "active_worktree_git": [],
+  "data_free_bytes": 6169874432,
+  "git_free_bytes": 64887103488,
+  "action": "preserve and remove only abandoned owned zero-byte lock, then normal merge abort"
+}
