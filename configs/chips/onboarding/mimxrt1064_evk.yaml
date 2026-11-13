@@ -1,7 +1,7 @@
-# Bounded imported MIMXRT1064-EVK execution profile for the existing M7 smoke.
+# Bounded imported MIMXRT1064-EVK execution profile for the M7 smoke.
 # The memory windows are DTCM-backed firmware and stack windows, not a complete
-# RT1064 flash/SDRAM map. Only the CCM, GPIO2, and LPUART6 paths exercised by
-# the smoke are modeled here.
+# RT1064 flash/SDRAM map. Only the CCM, GPIO2, LPUART6, and GPT1 paths exercised
+# by the smoke are modeled here.
 name: mimxrt1064_evk
 arch: arm
 core: cortex-m7
@@ -30,3 +30,11 @@ peripherals:
   bus: sysbus
   base_address: 1075412992
   size: 4096
+# Renode imxrt1064.repl: gpTimer1 IMX_GPTimer @ 0x401EC000, IRQ -> nvic@100.
+# Source clocks are the model defaults (ipg_clk 150 MHz, perclk 75 MHz).
+- id: gpt1
+  type: imxrt_gpt
+  bus: sysbus
+  base_address: 1075757056
+  size: 16384
+  irq: 100

@@ -12,10 +12,10 @@
 - pass_observable_assertions: `226/226`
 - pass_stop_reason_only: `0/226`
 - pass_depth_unknown: `0/226`
-- pass_claimed_peripherals_total: `1492`
+- pass_claimed_peripherals_total: `1493`
 - pass_claimed_peripherals_median: `2`
-- median_elapsed_ms: `1368`
-- median_elapsed_seconds: `1.368`
+- median_elapsed_ms: `1395`
+- median_elapsed_seconds: `1.395`
 - threshold_seconds: `3600`
 - threshold_met: `226/226`
 
@@ -123,7 +123,7 @@
 | `max32652` | `pass` | `True` | `yes` | `yes` | `1001` | `1.001` | `True` | `observable` | `7` | `uart_contains`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `max32652-evkit` | `pass` | `True` | `yes` | `yes` | `1157` | `1.157` | `True` | `observable` | `7` | `uart_contains`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `microwatt` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | `1` | n/a | 1: `uart:stub` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no OpenPOWER (Microwatt) CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
-| `mimxrt1064_evk` | `pass` | `True` | `yes` | `yes` | `788` | `0.788` | `True` | `observable` | `3` | `uart_contains`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
+| `mimxrt1064_evk` | `pass` | `True` | `yes` | `yes` | `308185` | `308.185` | `True` | `observable` | `4` | `uart_contains`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `mimxrt700_evk` | `pass` | `True` | `yes` | `yes` | `4978` | `4.978` | `True` | `observable` | `1` | `uart_contains`, `uart_ordered`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `mimxrt798s` | `pass` | `True` | `yes` | `yes` | `57262` | `57.262` | `True` | `observable` | `1` | `uart_contains`, `uart_ordered`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `miv` | `pass` | `True` | `yes` | `yes` | `804` | `0.804` | `True` | `observable` | `1` | `uart_contains`, `uart_ordered` | 0 | `n/a` | n/a | n/a |

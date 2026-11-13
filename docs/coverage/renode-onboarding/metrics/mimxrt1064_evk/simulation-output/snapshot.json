@@ -3,24 +3,24 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      8,
-      1075560452,
+      1075412996,
       10,
+      1,
       0,
-      0,
-      0,
-      0,
-      537001968,
-      0,
-      0,
-      0,
-      0,
+      1,
+      3221225472,
       0,
       537001968,
-      536872167,
-      536872156
+      1,
+      1,
+      3,
+      3758154252,
+      1,
+      537001952,
+      536936452,
+      536875048
     ],
-    "pc": 536872156,
+    "pc": 536875048,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -31,7 +31,7 @@
     ],
     "vtor": 536870912,
     "waiting_for_event": false,
-    "event_register": false
+    "event_register": true
   },
   "steps_executed": 800000,
   "cycles": 800000,
@@ -59,9 +59,9 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "3753c294cfbbc722bb20b4ce8351acbff8a5a27421a0ac0136a6324fdf38bff2",
+  "firmware_hash": "f43f8e559e5f98ae639cb92060761c1268dadc34004133047cc24a65ceba6e96",
   "config": {
-    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-imxrt1064-demo",
+    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-imxrt1064-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/mimxrt1064_evk.yaml",
     "script": "examples/renode-onboarding/mimxrt1064_evk-smoke.yaml"
   }

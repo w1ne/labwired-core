@@ -944,7 +944,7 @@ SMOKE_MAPPINGS = {
         "script": "examples/renode-onboarding/imxrt1064-smoke.yaml",
     },
     "mimxrt1064_evk": {
-        "crate": "firmware-imxrt1064-demo",
+        "crate": "firmware-imxrt1064-smoke",
         "target": "thumbv7em-none-eabi",
         "script": "examples/renode-onboarding/mimxrt1064_evk-smoke.yaml",
     },
