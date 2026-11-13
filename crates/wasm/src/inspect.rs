@@ -34,57 +34,61 @@ pub(crate) struct LogicRef {
     pub(crate) line: Option<String>,
 }
 
-pub(crate) fn motor_states_json(
-    snapshots: Vec<labwired_core::bus::MotorSnapshot>,
-) -> Vec<serde_json::Value> {
-    snapshots
+pub(crate) fn wire_surface_value<P: Serialize, L: Serialize>(rows: Vec<(P, L)>) -> JsValue {
+    let surface: Vec<_> = rows
         .into_iter()
-        .map(|snapshot| {
-            let mut state = serde_json::Map::from_iter([
-                ("id".to_owned(), serde_json::json!(snapshot.id)),
-                (
-                    "kind".to_owned(),
-                    serde_json::json!(match snapshot.kind {
-                        "dc" => "dc-motor",
-                        "bldc" => "bldc-motor",
-                        other => other,
-                    }),
+        .map(|(peripheral, lines)| serde_json::json!({ "peripheral": peripheral, "lines": lines }))
+        .collect();
+    serde_wasm_bindgen::to_value(&surface).unwrap_or(JsValue::NULL)
+}
+
+pub(crate) fn pin_routing_value(
+    refs: JsValue,
+    route: impl Fn(&str, u8) -> Option<labwired_core::peripherals::gpio::GpioRouting>,
+) -> JsValue {
+    #[derive(serde::Deserialize)]
+    struct Ref {
+        kind: String,
+        peripheral: String,
+        pin: u8,
+    }
+    let refs: Vec<Ref> = match serde_wasm_bindgen::from_value(refs) {
+        Ok(r) => r,
+        Err(_) => return JsValue::NULL,
+    };
+
+    let out: Vec<serde_json::Value> = refs
+        .iter()
+        .map(|r| {
+            let routing = if r.kind == "gpio" {
+                route(&r.peripheral, r.pin)
+            } else {
+                None
+            };
+            let (mode, func) = match routing {
+                Some(rt) => (
+                    serde_json::to_value(rt.mode)
+                        .unwrap_or_else(|_| serde_json::Value::String("unknown".into())),
+                    rt.func
+                        .map(serde_json::Value::String)
+                        .unwrap_or(serde_json::Value::Null),
                 ),
-                (
-                    "position_rad".to_owned(),
-                    serde_json::json!(snapshot.position_rad),
+                None => (
+                    serde_json::Value::String("unknown".into()),
+                    serde_json::Value::Null,
                 ),
-                (
-                    "speed_rpm".to_owned(),
-                    serde_json::json!(snapshot.speed_rpm),
-                ),
-                (
-                    "torque_nm".to_owned(),
-                    serde_json::json!(snapshot.torque_nm),
-                ),
-                (
-                    "current_a".to_owned(),
-                    serde_json::json!(snapshot.current_a.unwrap_or(0.0)),
-                ),
-                (
-                    "bus_voltage_v".to_owned(),
-                    serde_json::json!(snapshot.bus_voltage_v),
-                ),
-                (
-                    "control_state".to_owned(),
-                    serde_json::json!(snapshot.control_state),
-                ),
-                ("faults".to_owned(), serde_json::json!(snapshot.faults)),
-            ]);
-            if let Some(currents) = snapshot.phase_currents_a {
-                state.insert("phase_currents_a".to_owned(), serde_json::json!(currents));
-            }
-            if let Some(sector) = snapshot.commutation_sector {
-                state.insert("commutation_sector".to_owned(), serde_json::json!(sector));
-            }
-            serde_json::Value::Object(state)
+            };
+            serde_json::json!({
+                "kind": r.kind,
+                "peripheral": r.peripheral,
+                "pin": r.pin,
+                "mode": mode,
+                "func": func,
+            })
         })
-        .collect()
+        .collect();
+
+    serde_wasm_bindgen::to_value(&out).unwrap_or(JsValue::NULL)
 }
 
 /// Both tri-color e-paper models emit this format. They are interchangeable to
@@ -448,14 +452,7 @@ impl WasmSimulator {
         let Some(machine) = self.machine.as_ref() else {
             return JsValue::NULL;
         };
-        let surface: Vec<serde_json::Value> = machine
-            .wire_surface()
-            .into_iter()
-            .map(|(peripheral, lines)| {
-                serde_json::json!({ "peripheral": peripheral, "lines": lines })
-            })
-            .collect();
-        serde_wasm_bindgen::to_value(&surface).unwrap_or(JsValue::NULL)
+        wire_surface_value(machine.wire_surface())
     }
 
     /// Arm deterministic, in-engine logic-analyzer capture. TWO channel kinds,
@@ -680,61 +677,15 @@ impl WasmSimulator {
     ///     `"AF4"`, …) or `null` — never a guess.
     #[wasm_bindgen]
     pub fn pin_routing(&self, refs: JsValue) -> JsValue {
-        #[derive(serde::Deserialize)]
-        struct Ref {
-            kind: String,
-            peripheral: String,
-            pin: u8,
-        }
-
-        // A panic here would throw a JS exception straight out of this wasm
-        // frame; JS exceptions do NOT run Rust destructors, so the
-        // wasm-bindgen borrow guard would never drop and EVERY later call
-        // would fail with "recursive use of an object". Never panic in an
-        // accessor — answer neutrally instead.
         let Some(machine) = self.machine.as_ref() else {
             return JsValue::NULL;
         };
-        let refs: Vec<Ref> = match serde_wasm_bindgen::from_value(refs) {
-            Ok(r) => r,
-            Err(_) => return JsValue::NULL,
-        };
-
-        let out: Vec<serde_json::Value> = refs
-            .iter()
-            .map(|r| {
-                let routing = if r.kind == "gpio" {
-                    machine
-                        .bus
-                        .find_peripheral_index_by_name(&r.peripheral)
-                        .and_then(|idx| machine.bus.peripherals[idx].dev.gpio_routing(r.pin))
-                } else {
-                    None
-                };
-                let (mode, func) = match routing {
-                    Some(rt) => (
-                        serde_json::to_value(rt.mode)
-                            .unwrap_or_else(|_| serde_json::Value::String("unknown".into())),
-                        rt.func
-                            .map(serde_json::Value::String)
-                            .unwrap_or(serde_json::Value::Null),
-                    ),
-                    None => (
-                        serde_json::Value::String("unknown".into()),
-                        serde_json::Value::Null,
-                    ),
-                };
-                serde_json::json!({
-                    "kind": r.kind,
-                    "peripheral": r.peripheral,
-                    "pin": r.pin,
-                    "mode": mode,
-                    "func": func,
-                })
-            })
-            .collect();
-
-        serde_wasm_bindgen::to_value(&out).unwrap_or(JsValue::NULL)
+        pin_routing_value(refs, |peripheral, pin| {
+            machine
+                .bus
+                .find_peripheral_index_by_name(peripheral)
+                .and_then(|index| machine.bus.peripherals[index].dev.gpio_routing(pin))
+        })
     }
 
     /// Get a peripheral's full state snapshot as JSON.
@@ -875,58 +826,9 @@ impl WasmSimulator {
         let Some(machine) = self.machine.as_ref() else {
             return JsValue::NULL;
         };
-        let mut states: Vec<serde_json::Value> = Vec::new();
-
-        for servo in machine
+        machine
             .bus
-            .observed_of::<labwired_core::peripherals::components::servo::Servo>()
-        {
-            let id = servo.id();
-            if id.is_empty() {
-                continue;
-            }
-            states.push(serde_json::json!({
-                "id": id,
-                "kind": "servo",
-                "angle": servo.angle_degrees() as f64,
-                "active": servo.is_commanded(),
-                "pulse_us": servo.pulse_us() as f64,
-            }));
-        }
-        for stepper in machine
-            .bus
-            .observed_of::<labwired_core::peripherals::components::step_dir_motor::StepDirMotor>(
-        ) {
-            let id = stepper.id();
-            if id.is_empty() {
-                continue;
-            }
-            // Capture fields before the JSON object so string keys sit more than
-            // two lines away from device_type() — the device-identity scan
-            // treats nearby literals as board_io type keys.
-            let kind = stepper.device_type().to_string();
-            let angle = stepper.angle_degrees_f64();
-            let steps = stepper.steps();
-            let active = stepper.is_enabled();
-            states.push(serde_json::json!({
-                "id": id,
-                "kind": kind,
-                "angle": angle,
-                "steps": steps,
-                "active": active,
-            }));
-        }
-        // DC/BLDC only — steppers are emitted above (motor_snapshots also
-        // folds them for prove evidence, but their actuator shape is angle/steps).
-        let dc_bldc: Vec<_> = machine
-            .bus
-            .motor_snapshots()
-            .into_iter()
-            .filter(|s| s.kind != labwired_core::bus::STEPPER_SNAPSHOT_KIND)
-            .collect();
-        states.extend(motor_states_json(dc_bldc));
-
-        states
+            .actuator_states()
             .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
             .unwrap_or(JsValue::NULL)
     }
@@ -1421,63 +1323,6 @@ impl WasmSimulator {
             }
         }
         JsValue::NULL
-    }
-}
-
-#[cfg(test)]
-mod motor_state_tests {
-    use super::*;
-    use labwired_core::bus::MotorSnapshot;
-
-    #[test]
-    fn motor_states_use_stable_browser_kinds_and_current_shapes() {
-        let states = motor_states_json(vec![
-            MotorSnapshot {
-                id: "wheel".into(),
-                kind: "dc",
-                position_rad: 1.25,
-                speed_rpm: 42.0,
-                speed_rpm_peak_abs: 42.0,
-                speed_rpm_max: 42.0,
-                speed_rpm_min: 0.0,
-                torque_nm: 0.3,
-                current_a: Some(2.5),
-                phase_currents_a: None,
-                bus_voltage_v: 12.0,
-                commutation_sector: None,
-                control_state: "forward".into(),
-                faults: vec!["stalled".into()],
-            },
-            MotorSnapshot {
-                id: "spindle".into(),
-                kind: "bldc",
-                position_rad: 2.5,
-                speed_rpm: 84.0,
-                speed_rpm_peak_abs: 84.0,
-                speed_rpm_max: 84.0,
-                speed_rpm_min: 0.0,
-                torque_nm: 0.6,
-                current_a: Some(3.0),
-                phase_currents_a: Some([1.0, -0.25, -0.75]),
-                bus_voltage_v: 24.0,
-                commutation_sector: Some(4),
-                control_state: "sector:4".into(),
-                faults: vec!["open-phase-a".into()],
-            },
-        ]);
-
-        assert_eq!(states[0]["kind"], "dc-motor");
-        assert_eq!(states[0]["current_a"], 2.5);
-        assert!(states[0].get("phase_currents_a").is_none());
-        assert!(states[0].get("commutation_sector").is_none());
-        assert_eq!(states[1]["kind"], "bldc-motor");
-        assert_eq!(states[1]["current_a"], 3.0);
-        assert_eq!(
-            states[1]["phase_currents_a"],
-            serde_json::json!([1.0, -0.25, -0.75])
-        );
-        assert_eq!(states[1]["commutation_sector"], 4);
-        assert_eq!(states[1]["faults"], serde_json::json!(["open-phase-a"]));
     }
 }
 

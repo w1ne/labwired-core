@@ -14,6 +14,22 @@ use crate::lab_tools;
 use crate::*;
 use wasm_bindgen::prelude::*;
 
+#[derive(serde::Deserialize)]
+pub(crate) struct InputSet {
+    pub(crate) channel: String,
+    pub(crate) value: f64,
+    #[serde(default)]
+    pub(crate) component: Option<String>,
+}
+pub(crate) fn parse_input_sets(sets: JsValue) -> Result<Vec<InputSet>, JsValue> {
+    serde_wasm_bindgen::from_value(sets).map_err(|error| JsValue::from_str(&error.to_string()))
+}
+pub(crate) fn input_set_refs(sets: &[InputSet]) -> Vec<(Option<&str>, &str, f64)> {
+    sets.iter()
+        .map(|set| (set.component.as_deref(), set.channel.as_str(), set.value))
+        .collect()
+}
+
 // Keep the native routing logic independent of JsValue so invalid requests can
 // be tested on the host without calling a wasm-only exception constructor.
 fn drive_adc_input(
@@ -242,23 +258,12 @@ impl WasmSimulator {
         self.record(lab_tools::Op::SetInputs(
             serde_wasm_bindgen::from_value(sets.clone()).unwrap_or(serde_json::Value::Null),
         ));
-        #[derive(serde::Deserialize)]
-        struct InputSet {
-            channel: String,
-            value: f64,
-            #[serde(default)]
-            component: Option<String>,
-        }
-        let sets: Vec<InputSet> =
-            serde_wasm_bindgen::from_value(sets).map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let sets = parse_input_sets(sets)?;
         let machine = self
             .machine
             .as_mut()
             .ok_or_else(|| JsValue::from_str("simulator not initialized"))?;
-        let refs: Vec<(Option<&str>, &str, f64)> = sets
-            .iter()
-            .map(|s| (s.component.as_deref(), s.channel.as_str(), s.value))
-            .collect();
+        let refs = input_set_refs(&sets);
         machine
             .set_inputs(&refs)
             .map_err(|e| JsValue::from_str(&e.to_string()))
@@ -963,20 +968,21 @@ motor_models:
 
     #[test]
     fn wasm_snapshot_projection_is_exact_and_repeatable_for_a_fixed_trace() {
-        fn run_trace() -> Vec<labwired_core::bus::MotorSnapshot> {
+        fn run_trace() -> labwired_core::bus::SystemBus {
             let mut bus = dc_bus();
             bus.write_u32(0x4800_0014, 0b1011).unwrap();
             for cycle in [100_u64, 250, 700] {
                 bus.set_current_cycle(cycle);
                 bus.tick_peripherals_with_costs();
             }
-            bus.motor_snapshots()
+            bus
         }
 
-        let native = run_trace();
-        let repeated = run_trace();
+        let bus = run_trace();
+        let native = bus.motor_snapshots();
+        let repeated = run_trace().motor_snapshots();
         assert_eq!(native, repeated, "fixed traces must be bit-repeatable");
-        let projected = crate::inspect::motor_states_json(native.clone());
+        let projected = bus.actuator_states();
         // Projection does no numeric conversion: native/WASM telemetry parity
         // is exact (absolute tolerance 0.0) at the public serialization seam.
         assert_eq!(projected[0]["position_rad"], native[0].position_rad);

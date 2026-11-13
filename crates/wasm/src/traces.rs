@@ -9,6 +9,73 @@ use crate::lab_tools;
 use crate::*;
 use wasm_bindgen::prelude::*;
 
+pub(crate) fn live_numeric_args(cursor: f64, max_points: f64) -> Result<(u64, usize), String> {
+    const MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
+    if !cursor.is_finite() || cursor < 0.0 || cursor.fract() != 0.0 || cursor > MAX_SAFE_INTEGER {
+        return Err(String::from(
+            "live_numeric_capture: cursor must be an exact non-negative safe integer",
+        ));
+    }
+    if !max_points.is_finite()
+        || max_points < 1.0
+        || max_points.fract() != 0.0
+        || max_points > MAX_SAFE_INTEGER
+    {
+        return Err(String::from(
+            "live_numeric_capture: maxPoints must be an exact positive safe integer",
+        ));
+    }
+    // The ring cannot return more than its fixed native capacity. Clamp
+    // before conversion so wasm32 usize cannot saturate a large JS limit.
+    let max_points =
+        max_points.min(labwired_core::live_numeric::DEFAULT_LIVE_NUMERIC_POINTS as f64) as usize;
+    Ok((cursor as u64, max_points))
+}
+
+pub(crate) fn live_numeric_value(
+    batch: &Option<labwired_core::live_numeric::LiveNumericBatch>,
+) -> Result<JsValue, JsValue> {
+    serde::Serialize::serialize(
+        batch,
+        &serde_wasm_bindgen::Serializer::new().serialize_missing_as_null(true),
+    )
+    .map_err(|error| JsValue::from_str(&format!("live_numeric_capture: {error}")))
+}
+
+pub(crate) fn uart_trace_value(trace: Vec<labwired_core::bus::BusTraceEvent>) -> JsValue {
+    use labwired_core::bus::bus_trace::{BusDir, BusPayload};
+    // Bus name → its UART events, in first-seen order so the panel's
+    // instrument list is stable across polls.
+    let mut order: Vec<String> = Vec::new();
+    let mut by_bus: std::collections::HashMap<String, Vec<serde_json::Value>> =
+        std::collections::HashMap::new();
+    for e in trace {
+        let BusPayload::Uart { direction, byte } = e.payload else {
+            continue;
+        };
+        let events = by_bus.entry(e.bus.clone()).or_insert_with(|| {
+            order.push(e.bus.clone());
+            Vec::new()
+        });
+        events.push(serde_json::json!({
+            "seq": e.seq,
+            "cycle": e.cycle,
+            "direction": match direction { BusDir::Tx => "tx", BusDir::Rx => "rx" },
+            "byte": byte,
+        }));
+    }
+
+    let snapshots = order
+        .into_iter()
+        .map(|bus| {
+            let events = by_bus.remove(&bus).unwrap_or_default();
+            serde_json::json!({ "peripheral": bus, "events": events })
+        })
+        .collect::<Vec<_>>();
+
+    serde_wasm_bindgen::to_value(&snapshots).unwrap_or(JsValue::NULL)
+}
+
 #[wasm_bindgen]
 impl WasmSimulator {
     /// Snapshot of the shared virtual-air TX trace ring buffer (last
@@ -148,43 +215,12 @@ impl WasmSimulator {
     /// system what a UART is, is what makes the answer complete.
     #[wasm_bindgen]
     pub fn uart_trace_snapshot(&self) -> JsValue {
-        use labwired_core::bus::bus_trace::{BusDir, BusPayload};
-
-        let Some(machine) = self.machine.as_ref() else {
-            return serde_wasm_bindgen::to_value(&Vec::<serde_json::Value>::new())
-                .unwrap_or(JsValue::NULL);
-        };
-
-        // Bus name → its UART events, in first-seen order so the panel's
-        // instrument list is stable across polls.
-        let mut order: Vec<String> = Vec::new();
-        let mut by_bus: std::collections::HashMap<String, Vec<serde_json::Value>> =
-            std::collections::HashMap::new();
-        for e in machine.bus.bus_trace_snapshot() {
-            let BusPayload::Uart { direction, byte } = e.payload else {
-                continue;
-            };
-            let events = by_bus.entry(e.bus.clone()).or_insert_with(|| {
-                order.push(e.bus.clone());
-                Vec::new()
-            });
-            events.push(serde_json::json!({
-                "seq": e.seq,
-                "cycle": e.cycle,
-                "direction": match direction { BusDir::Tx => "tx", BusDir::Rx => "rx" },
-                "byte": byte,
-            }));
-        }
-
-        let snapshots = order
-            .into_iter()
-            .map(|bus| {
-                let events = by_bus.remove(&bus).unwrap_or_default();
-                serde_json::json!({ "peripheral": bus, "events": events })
-            })
-            .collect::<Vec<_>>();
-
-        serde_wasm_bindgen::to_value(&snapshots).unwrap_or(JsValue::NULL)
+        uart_trace_value(
+            self.machine
+                .as_ref()
+                .map(|machine| machine.bus.bus_trace_snapshot())
+                .unwrap_or_default(),
+        )
     }
 
     /// Non-consuming WiFi 802.11 frame-trace snapshot for the network analyzer
@@ -364,39 +400,16 @@ impl WasmSimulator {
     /// historical analog_series and the co-simulation cursor are unchanged.
     #[wasm_bindgen]
     pub fn live_numeric_capture(&self, cursor: f64, max_points: f64) -> Result<JsValue, JsValue> {
-        const MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
-        if !cursor.is_finite() || cursor < 0.0 || cursor.fract() != 0.0 || cursor > MAX_SAFE_INTEGER
-        {
-            return Err(JsValue::from_str(
-                "live_numeric_capture: cursor must be an exact non-negative safe integer",
-            ));
-        }
-        if !max_points.is_finite()
-            || max_points < 1.0
-            || max_points.fract() != 0.0
-            || max_points > MAX_SAFE_INTEGER
-        {
-            return Err(JsValue::from_str(
-                "live_numeric_capture: maxPoints must be an exact positive safe integer",
-            ));
-        }
-        // The ring cannot return more than its fixed native capacity. Clamp
-        // before conversion so wasm32 usize cannot saturate a large JS limit.
-        let max_points = max_points
-            .min(labwired_core::live_numeric::DEFAULT_LIVE_NUMERIC_POINTS as f64)
-            as usize;
+        let (cursor, max_points) =
+            live_numeric_args(cursor, max_points).map_err(|error| JsValue::from_str(&error))?;
         let batch = self
             .machine
             .as_ref()
-            .and_then(|machine| machine.live_numeric_capture(cursor as u64, max_points));
+            .and_then(|machine| machine.live_numeric_capture(cursor, max_points));
         // Null is part of the additive API contract for absent producers and
         // unknown horizons. Do not let the serializer turn Option::None into
         // an omitted/undefined field that a transport cannot distinguish.
-        serde::Serialize::serialize(
-            &batch,
-            &serde_wasm_bindgen::Serializer::new().serialize_missing_as_null(true),
-        )
-        .map_err(|err| JsValue::from_str(&format!("live_numeric_capture: {err}")))
+        live_numeric_value(&batch)
     }
 
     /// UDS evidence for this run: each `uds-tester`'s executed steps (request,
