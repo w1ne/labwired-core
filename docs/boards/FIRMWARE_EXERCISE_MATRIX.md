@@ -436,6 +436,23 @@ _All 12 declared rubric classes are driven by its committed tier-1 fixture (test
 
 _All 12 declared rubric classes are driven by its committed tier-1 fixture (nightly-ratcheted by the full-CI `tier1_matrix_ratchet` step (core-ci.yml:2087), fast_boot target, USART2 console), and the two PR-gated vendor firmwares cover the non-rubric blocks: the Zephyr hello's SoC init read-modify-writes DBGMCU_CR (the reason the descriptor declares DBGMCU) and the Arduino serial startup calls HAL_PWREx_ControlVoltageScaling (PWR_CR VOS + SR2.VOSF poll) plus HAL_CRC_Init (CRC_POL/INIT/CR — the reason that survival case exists), so PWR/CRC/DBGMCU are all firmware-driven and no non-rubric block is left unexercised. The CRC polynomial engine itself is still driven by no firmware: its always-run coverage is the H563 bench oracle (h563_conformance.rs:144) plus the F103 sim-only thumb oracle (stm32f1_exec_oracle.rs:300) and IDR-width masking (crc.rs:204), and no G4-specific test asserts a computed value._
 
+### `stm32h723zg`
+
+_The full H723 profile's committed Arduino L0-L7 matrix exercises rubric peripherals; beyond-rubric coverage is unit-only for FLASH/IWDG/CRC/SYSCFG/FMC/CRS. PWR/RNG/DBGMCU have no H723 firmware exercise, and WWDG is an inert shim._
+
+**Advanced peripherals — unit-tested only** (no firmware drives them): `FLASH`, `IWDG`, `CRC`, `SYSCFG`, `FMC`, `CRS`
+
+**Dead** (3 modeled, never exercised): `PWR`, `RNG`, `DBGMCU`
+
+  > ⚠ The H7 PWR variant, RNG and DBGMCU have no H723 firmware exercise or variant-specific unit exercise. The adjacent H735 inventory likewise records its H7 PWR and DBGMCU as dead.
+
+**Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- `WWDG` (configs/chips/stm32h723zg.yaml:448 (type: wwdg; crates/core/src/peripherals/wwdg.rs:63)) — CLOSABLE: inert register bank — tick() is the trait-default no-op, so an armed watchdog never fires; no H723 firmware or test drives it.
+
+### `stm32h723zg-nucleo-smoke`
+
+_Narrow NUCLEO-H723ZG smoke tests only the rubric USART3 marker and LD1 GPIO edges. No beyond-rubric block is exercised; this smoke does not cover the full stm32h723zg profile._
+
 ### `stm32h735`
 
 _SIM-DERIVED first Cortex-M7 part. Its committed tier-1 fixture is PR-gated (`firmware_survival::test_stm32h735_tier1_survival`, Session builder) and drives clock/gpio/timer/pwm/i2c/spi/wdt/irq plus UART on USART3, leaving adc unrecorded and dma/rtc n/a (neither declared); the nightly h735-telematics-lab cell is the only other gated firmware (SPI1 TFT, USART1 BG770A modem, USART3 console), and its +QGPSLOC decode is not value-asserted — a parse failure falls back to a constant, so the transcript proves the stack ran, not the fix. Beyond the rubric, PWR (PwrH7) is driven only by the un-gated stm32h735-hal-demo/embassy-demo bring-up — no CI gate and no PwrH7 unit test — RNG is exercised only by the L073 kernel-clock unit tests over the L073 bus (rcc_kernel_clock_gate.rs:184-254 — no H735 behavioral test drives it, and rng.rs has no unit tests) and no firmware, DBGMCU is driven by nothing at all, FDCAN1/2 are pinned by fdcan.rs's 18 model unit tests plus the estate test's reset-value and CCCR-independence probes — no firmware touches them — CRC has the shared H563 bench oracle (h563_conformance.rs:144) and F103 sim-only thumb oracle (stm32f1_exec_oracle.rs:300) plus the IDR-width unit test, but no H7-specific computed-value check, and SYSCFG/WWDG are a seeded stub window and an inert register bank._

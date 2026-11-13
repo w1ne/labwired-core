@@ -199,6 +199,14 @@
       "firmware": "tests/fixtures/tier1/stm32h563.elf",
       "expect": "TIER1 clock PASS"
     },
+    "stm32h723zg": {
+      "how": "needs-build",
+      "why": "The exact H723 model is newer than the current v0.25.0 CLI release. Its committed Arduino L0-L7 matrix passes from this source tree; clean-install execution starts with a release containing stm32h723zg."
+    },
+    "stm32h723zg-nucleo-smoke": {
+      "how": "needs-build",
+      "why": "This narrow board smoke passes 3/3 from the current source tree, but v0.25.0 predates its descriptor. Clean-install execution starts with a release containing stm32h723zg-nucleo-smoke."
+    },
     "stm32h735": {
       "how": "committed",
       "firmware": "tests/fixtures/tier1/stm32h735.elf",
