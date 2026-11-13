@@ -56,7 +56,9 @@ fn fpu_add_probe() -> u32 {
         write_volatile(SCB_CPACR, 0x00F0_0000);
         core::arch::asm!("dsb", "isb", options(nostack, preserves_flags));
         let result: u32;
+        // `.fpu` lets the probe assemble on the soft-float target too.
         core::arch::asm!(
+            ".fpu fpv5-sp-d16",
             "vmov s0, r0",
             "vmov s1, r1",
             "vadd.f32 s2, s0, s1",
