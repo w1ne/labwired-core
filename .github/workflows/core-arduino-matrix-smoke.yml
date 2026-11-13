@@ -56,6 +56,7 @@ jobs:
           - stm32g474re
           - stm32g071rb
           - stm32h563
+          - stm32h723zg
           - stm32l073
           - stm32l476
           - stm32u575
