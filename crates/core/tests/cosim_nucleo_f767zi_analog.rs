@@ -183,3 +183,120 @@ fn nucleo_f767zi_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end() {
         "the 25 °C NTC divider is half scale"
     );
 }
+
+/// Independent reverse-breakdown load-line reference, including the SPICE
+/// breakdown knee fit and the diode's series resistance.
+fn zener_breakdown_voltage(supply_v: f64) -> (f64, f64, f64) {
+    const LOAD_OHMS: f64 = 1_000.0;
+    const IS_A: f64 = 1e-12;
+    const BV: f64 = 2.0;
+    const IBV_A: f64 = 1e-3;
+    const NBV: f64 = 1.5;
+    const RS_OHMS: f64 = 20.0;
+    const THERMAL_V: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+
+    // ngspice's fixed-point fit places IBV at the model's specified BV.
+    let mut xbv = BV - NBV * THERMAL_V * (1.0 + IBV_A / IS_A).ln();
+    for _ in 0..25 {
+        xbv = BV - NBV * THERMAL_V * (IBV_A / IS_A + 1.0 - xbv / THERMAL_V).ln();
+        let fitted_current =
+            IS_A * (((BV - xbv) / (NBV * THERMAL_V)).exp() - 1.0 + xbv / THERMAL_V);
+        if (fitted_current - IBV_A).abs() <= 1e-9 * IBV_A {
+            break;
+        }
+    }
+
+    let breakdown_current = |junction_v: f64| {
+        IS_A * ((junction_v - xbv) / (NBV * THERMAL_V)).exp() + 1e-12 * junction_v
+    };
+    let residual = |junction_v: f64| {
+        let current = breakdown_current(junction_v);
+        (supply_v - junction_v - current * RS_OHMS) / LOAD_OHMS - current
+    };
+    let (mut low, mut high) = (xbv, supply_v);
+    assert!(residual(low) > 0.0 && residual(high) < 0.0);
+    for _ in 0..100 {
+        let mid = 0.5 * (low + high);
+        if residual(mid) > 0.0 {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    let junction_v = 0.5 * (low + high);
+    let current = breakdown_current(junction_v);
+    (junction_v + current * RS_OHMS, junction_v, xbv)
+}
+
+#[test]
+fn nucleo_f767zi_zener_breakdown_reaches_pa5_adc1_alongside_unrelated_devices() {
+    let system_path = root("configs/systems/nucleo-f767zi.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F767ZI profile");
+    assert_eq!(profile.name, "nucleo-f767zi");
+
+    let analog =
+        SystemManifest::from_file(root("examples/nucleo-f767zi/analog-ntc-diode-system.yaml"))
+            .expect("load the independent generic NTC and forward diode netlists");
+    let zener =
+        SystemManifest::from_file(root("examples/nucleo-f767zi/analog-zener-breakdown.yaml"))
+            .expect("load the generic reverse-breakdown diode netlist");
+    profile.cosim_models = analog.cosim_models;
+    profile.cosim_models.extend(zener.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F767 descriptor");
+    for (pad, channel) in [("PA0", 0), ("PA1", 1), ("PA5", 5)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F767ZI bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries an NTC, forward diode, and reverse-breakdown diode");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "the generic netlists must resolve through PA0/PA1/PA5 to ADC1 channels 0/1/5"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set the independent NTC temperature");
+    let mut cycles = 0;
+    let mut zener_samples = Vec::new();
+    for supply_v in [2.6_f64, 3.0, 3.3] {
+        session
+            .set_signal_number("ui.zener.supply_v", supply_v)
+            .expect("drive the generic zener load line");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route all three analog netlists");
+        assert_eq!(steps.len(), 3, "all devices solve at the 1 us boundary");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let zener_v = signal_voltage(&session, "board.analog.pa5_volts");
+        let (expected_v, junction_v, xbv) = zener_breakdown_voltage(supply_v);
+        assert!(
+            junction_v > xbv,
+            "the load line must enter the reverse-breakdown region: {junction_v} V <= knee {xbv} V"
+        );
+        assert!(
+            (zener_v - expected_v).abs() < 2e-5,
+            "reverse-breakdown load line at {supply_v} V should be {expected_v} V, got {zener_v} V"
+        );
+
+        for (channel, volts) in [(0, 1.65), (1, diode_load_line_voltage()), (5, zener_v)] {
+            let expected_count = expected_adc_count(volts);
+            assert_eq!(
+                stm32f4_adc_convert(&mut bus, channel),
+                u32::from(expected_count),
+                "firmware-visible ADC1 channel {channel} conversion must report its analog voltage"
+            );
+        }
+        zener_samples.push((supply_v, zener_v));
+    }
+    assert!(
+        zener_samples.windows(2).all(|pair| pair[1].1 > pair[0].1),
+        "the breakdown voltage follows the driven load line: {zener_samples:?}"
+    );
+}
