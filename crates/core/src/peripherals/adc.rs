@@ -16,8 +16,9 @@ use std::any::Any;
 use std::str::FromStr;
 
 // ── Modeled internal source (L4/V2 path) ────────────────────────────────────
-// There is no live analog input in simulation, so the L4 conversion engine
-// converts a *fixed* source: V(IN) = 3.0 V against V(REF+) = 3.3 V. The 12-bit
+// An unbound L4 channel retains the fixed internal fallback source:
+// V(IN) = 3.0 V against V(REF+) = 3.3 V. An injected channel instead converts
+// its held millivolts against the current reference. The fallback's 12-bit
 // code is round-down(3.0/3.3 * 4096) = 3723; narrower resolutions drop LSBs
 // (>> (12 - bits)), exactly as the SAR core truncates. The code is therefore
 // derived + deterministic and CHANGES with CFGR.RES — a real conversion, not a
@@ -724,14 +725,15 @@ impl Adc {
     }
 
     /// L4 single-conversion engine. ADSTART (CR bit 2) with ADEN (bit 0) and a
-    /// ready converter (ISR.ADRDY) converts the fixed internal source: loads DR
-    /// with the code for CFGR.RES, raises ISR.EOC + EOS, and auto-clears
-    /// ADSTART. Deterministic and immediate (no analog settling to model).
+    /// ready converter (ISR.ADRDY) acquires the SQR1.SQ1 channel. An injected
+    /// voltage uses the current reference; an unbound channel keeps the fixed
+    /// internal source. CFGR.RES selects the width. Conversion raises EOC + EOS
+    /// and auto-clears ADSTART immediately (no analog settling to model).
     fn maybe_start_l4_conversion(&mut self, cr: u32) {
         let aden = cr & 0x1 != 0;
         let adstart = cr & (1 << 2) != 0;
-        let (adrdy, cfgr) = match &self.regs {
-            AdcRegs::Stm32L4(r) => (r.isr & 0x1 != 0, r.cfgr),
+        let (adrdy, cfgr, channel) = match &self.regs {
+            AdcRegs::Stm32L4(r) => (r.isr & 0x1 != 0, r.cfgr, ((r.sqr1 >> 6) & 0x1F) as usize),
             // H7 and U5 have their own engines (`maybe_start_h7_conversion`,
             // `maybe_start_u5_conversion`).
             AdcRegs::Stm32F1(_)
@@ -742,7 +744,14 @@ impl Adc {
         if !(aden && adstart && adrdy) {
             return;
         }
-        self.dr = l4_adc_code(l4_resolution_bits(cfgr));
+        let bits = l4_resolution_bits(cfgr);
+        self.dr = match self.channel_inputs_mv.get(channel).copied().flatten() {
+            Some(millivolts) => scaled_input_code(
+                Self::code_for_mv(f64::from(millivolts), self.reference_millivolts),
+                bits,
+            ),
+            None => l4_adc_code(bits),
+        };
         if let AdcRegs::Stm32L4(r) = &mut self.regs {
             r.cr &= !(1 << 2); // ADSTART auto-clears after a single conversion
             r.isr |= (1 << 2) | (1 << 3); // EOC | EOS
@@ -1702,6 +1711,76 @@ mod tests {
             }
         }
         panic!("ADC failed to complete conversion");
+    }
+
+    #[test]
+    fn test_adc_l4_converts_selected_injected_channel() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32L4);
+        adc.set_channel_input(1, 3300);
+        adc.write_u32(0x08, 1 << 28).unwrap(); // ADVREGEN, leave DEEPPWD
+        adc.write_u32(0x08, (1 << 28) | 1).unwrap(); // ADEN -> ADRDY
+        adc.write_u32(0x30, 5 << 6).unwrap(); // SQR1.SQ1 = channel 5
+
+        // Known divider voltages, with literal 12-bit expectations. These do
+        // not use the conversion helper to manufacture their own oracle.
+        for (millivolts, expected) in [(1650, 2047), (0, 0), (3294, 4087), (548, 680), (2751, 3413)]
+        {
+            adc.set_channel_input(5, millivolts);
+            adc.write(0x00, (1 << 2) | (1 << 3)).unwrap(); // clear EOC/EOS only
+            assert_eq!(adc.read_u32(0x00).unwrap() & 0xC, 0);
+            adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap();
+            assert_eq!(adc.read_u32(0x00).unwrap() & 0xD, 0xD, "ADRDY/EOC/EOS");
+            assert_eq!(adc.read_u32(0x08).unwrap() & (1 << 2), 0, "ADSTART clears");
+            assert_eq!(adc.read_u32(0x40).unwrap(), expected, "{millivolts} mV");
+        }
+        adc.write_u32(0x30, 1 << 6).unwrap();
+        adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap();
+        assert_eq!(adc.read_u32(0x40).unwrap(), 4095, "SQ1 selects channel 1");
+        adc.write_u32(0x30, 5 << 6).unwrap();
+        adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap();
+        assert_eq!(adc.read_u32(0x40).unwrap(), 3413, "channel 5 was preserved");
+    }
+
+    #[test]
+    fn test_adc_l4_injected_input_uses_resolution_and_current_reference() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32L4);
+        adc.set_channel_input(5, 1650);
+        adc.write_u32(0x08, 1 << 28).unwrap();
+        adc.write_u32(0x08, (1 << 28) | 1).unwrap();
+        adc.write_u32(0x30, 5 << 6).unwrap();
+        for (res, expected) in [(0, 2047), (1, 511), (2, 127), (3, 31)] {
+            adc.write_u32(0x0C, res << 3).unwrap();
+            adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap();
+            assert_eq!(adc.read_u32(0x40).unwrap(), expected, "CFGR.RES={res}");
+        }
+        adc.write_u32(0x0C, 0).unwrap();
+        // Change VREF after the voltage was injected: conversion must acquire
+        // the current reference, not reuse a count cached at injection time.
+        for (reference, expected) in [(1.65, 4095), (3.0, 2252), (3.3, 2047)] {
+            assert!(adc.set_reference_voltage_v(reference));
+            adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap();
+            assert_eq!(adc.read_u32(0x40).unwrap(), expected, "VREF={reference}");
+        }
+    }
+
+    #[test]
+    fn test_adc_l4_unbound_channel_retains_internal_source() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32L4);
+        adc.set_channel_input(5, 1650);
+        adc.write_u32(0x08, 1 << 28).unwrap();
+        adc.write_u32(0x08, (1 << 28) | 1).unwrap();
+        adc.write_u32(0x30, 6 << 6).unwrap(); // unbound, despite channel 5 injection
+        adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap();
+        assert_eq!(adc.read_u32(0x40).unwrap(), 3723);
+        adc.write_u32(0x30, 5 << 6).unwrap();
+        adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap();
+        assert_eq!(adc.read_u32(0x40).unwrap(), 2047);
+        adc.clear_channel_input(5);
+        for (res, expected) in [(0, 3723), (1, 930), (2, 232), (3, 58)] {
+            adc.write_u32(0x0C, res << 3).unwrap();
+            adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap();
+            assert_eq!(adc.read_u32(0x40).unwrap(), expected, "unbound RES={res}");
+        }
     }
 
     #[test]

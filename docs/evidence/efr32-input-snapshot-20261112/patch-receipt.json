@@ -1,0 +1,37 @@
+{
+  "base_commit": "a148db88c953fdf926fcd92a09abb8289f14b9d1",
+  "path": "crates/core/src/peripherals/gpio.rs",
+  "working_checkout_mutated": false,
+  "runtime_change": "Canonical EFR32 DIN snapshot only; retain noncanonical decoder fallback.",
+  "tests_added": [
+    "efr32_snapshot_matches_independent_window_address_algebra",
+    "efr32_snapshot_matches_mmio_and_pin_resolution_across_drive_modes"
+  ],
+  "tests_executed": false,
+  "performance_measured_after_change": false,
+  "ci_gate_changed": false,
+  "baseline_changed": false,
+  "files": {
+    "gpio.before.rs": {
+      "bytes": 177194,
+      "sha256": "8d77bb53d7bef77d3a2c5b139054801bb9bfd83df413d8013f5085a9ce929c48"
+    },
+    "gpio.after.rs": {
+      "bytes": 183266,
+      "sha256": "3c39554b8ca2118aef37d27b0cb4d543f04305691707f9cf1d33ee5d2517c684"
+    },
+    "efr32-input-snapshot.patch": {
+      "bytes": 7668,
+      "sha256": "0144d677bbc4463327e54ee7ad2ee5ff9582e951f4d26ff72114235e99959557"
+    }
+  },
+  "rustfmt": {
+    "exit": 0,
+    "stderr": "",
+    "scope": "isolated candidate with skip_children=true; no repository files touched"
+  },
+  "git_apply_check": {
+    "exit": 0,
+    "stderr": ""
+  }
+}

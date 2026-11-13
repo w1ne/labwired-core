@@ -102,7 +102,6 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     // this part specifically because it is the first nRF with FOUR ports: P3.04
     // resolves to gpio3 bit 4, and the chip declares gpio3.
     "nrf54lm20a",
-    "rp2040",
     "rp2350",
     "stm32f103",
     "stm32f401",
@@ -117,7 +116,6 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     "stm32g071",
     // G431RB is the G474RE's smaller sibling: same PA/PB/PC label form.
     "stm32g431rb",
-    "stm32g474re",
     "stm32h563",
     "stm32h735",
     "stm32l073",

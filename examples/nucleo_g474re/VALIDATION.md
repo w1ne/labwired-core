@@ -1,22 +1,30 @@
 # Validation
 
-Run from `core/`:
+Run the board smoke from the repository root:
 
 ```bash
-cargo build --manifest-path examples/nucleo_g474re/board_firmware/Cargo.toml --release --target thumbv7em-none-eabi
-cargo run -q -p labwired-cli -- test \
+scripts/onboarding_smoke.sh \
+  --target-id nucleo-g474re \
+  --crate firmware-nucleo_g474re-demo \
+  --firmware-build-dir examples/nucleo_g474re/board_firmware \
+  --target thumbv7em-none-eabi \
   --script examples/nucleo_g474re/uart-smoke.yaml \
-  --output-dir out/nucleo_g474re/uart-smoke \
-  --no-uart-stdout
-./scripts/unsupported_instruction_audit.sh \
-  --firmware examples/nucleo_g474re/board_firmware/target/thumbv7em-none-eabi/release/firmware-nucleo_g474re-demo \
   --system configs/systems/nucleo_g474re.yaml \
-  --max-steps 200000 \
-  --out-dir out/unsupported-audit/nucleo_g474re
+  --out-dir examples/nucleo_g474re/evidence
+python3 scripts/generate_onboarding_scoreboard.py \
+  --metrics-root examples/nucleo_g474re/evidence \
+  --markdown-out examples/nucleo_g474re/evidence/onboarding-scoreboard.md \
+  --json-out examples/nucleo_g474re/evidence/onboarding-scoreboard.json
 ```
 
 Expected evidence:
 
-- PC/SP initialize correctly
-- UART smoke output is deterministic
-- LED/button paths are mapped and exercised
+- The bare-metal image reaches the USART2 `OK` marker.
+- TIM1 channel 1 drives PA8/AF6 and produces at least eight GPIO transitions.
+- The structured result reports all assertions passing and stops at the
+  configured step limit.
+
+This smoke does not validate other G4 timer output mappings, the other
+peripherals in the chip descriptor, or physical silicon. This change adds
+only the PA8/TIM1_CH1 route; the existing G4 timer routes are outside this
+smoke's assertions.

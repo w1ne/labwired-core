@@ -198,6 +198,7 @@ impl SystemBus {
     pub fn attach_chip_io_levels(&mut self, chip: &ChipDescriptor) {
         self.io_voltage_v = chip.io_voltage_v;
         self.gpio_input_thresholds = chip.gpio_input_thresholds;
+        self.reset_input = crate::reset_input::ResetInputState::new(chip.reset_input.clone());
     }
 
     pub fn from_config(chip: &ChipDescriptor, manifest: &SystemManifest) -> anyhow::Result<Self> {
@@ -495,8 +496,10 @@ impl SystemBus {
             resident_tick_interval_override: None,
             gpio_devices: Vec::new(),
             device_pin_pads: Vec::new(),
+            device_open_drain_nets: Default::default(),
             observed: Vec::new(),
             motors: Vec::new(),
+            live_numeric: None,
             ina219_senses: Vec::new(),
             motor_cycle_anchor: 0,
             analog_inputs: Vec::new(),
@@ -527,6 +530,7 @@ impl SystemBus {
             analog_pin_map: std::collections::HashMap::new(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: crate::reset_input::ResetInputState::default(),
             supply: crate::power::SupplySupervisor::default(),
             supply_domains: Default::default(),
         };

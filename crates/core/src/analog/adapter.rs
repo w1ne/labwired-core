@@ -611,8 +611,13 @@ impl CosimAdapter for AnalogCosimAdapter {
             self.time_ns = step.time_ns;
         }
 
-        self.step_index += 1;
-        self.record_sample();
+        // A world reads the declared operating point before its first CPU
+        // instruction. That initial read is not an integration step and must
+        // not duplicate the t=0 trace row or advance its step counter.
+        if step.time_ns != 0 || step.dt_ns != 0 || self.time_ns != 0 {
+            self.step_index += 1;
+            self.record_sample();
+        }
 
         let mut outputs = BTreeMap::new();
         for (name, probe) in &self.probes {

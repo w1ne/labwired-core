@@ -39,6 +39,7 @@ pins:
   PB9: { gpio: "gpiob", bit: 9, functions: [{ type: i2c, peripheral: i2c1, role: sda }] }
 
 peripherals:
+  # SysTick is part of the Cortex-M3 core, including this narrow board profile.
   - id: "systick"
     type: "systick"
     base_address: 0xE000E010

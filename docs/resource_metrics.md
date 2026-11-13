@@ -50,7 +50,7 @@ values are nested under `metrics` together with bus and PC data:
 
 | Field | Source |
 |-------|--------|
-| `metrics.cycles` | Same as top-level `cycles` (observer or machine counters) |
+| `metrics.cycles` | Same as top-level `cycles`: the machine clock used by `max_cycles`, stimuli, and virtual time |
 | `metrics.instructions` | Same as top-level `instructions` |
 | `metrics.steps_executed` | Same as top-level `steps_executed` |
 | `metrics.memory_reads` | Successful RAM / flash / extra_mem reads (any width) |

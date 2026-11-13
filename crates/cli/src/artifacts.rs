@@ -506,6 +506,11 @@ pub(crate) struct EnvironmentTestResult {
     /// diagnostics (`GPIO_NET_CONTENTION`, `GPIO_NET_FLOATING`), times in ps.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) gpio_nets: Option<serde_json::Value>,
+    /// Actual interval, completed shared boundary, route/reset state and failures.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) cosim: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) analog_series: Option<labwired_core::analog::AnalogSeries>,
 }
 
 /// One final machine state in an environment snapshot.
