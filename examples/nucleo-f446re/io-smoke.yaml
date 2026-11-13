@@ -1,0 +1,11 @@
+# Native F446RE Thumb/Cortex-M4 ELF exercises RCC, GPIOA and USART2.
+schema_version: "1.2"
+inputs:
+  firmware: "../../tests/fixtures/board-smoke/stm32f446re.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 150000
+assertions:
+  - uart_contains: "STM32F446RE_OK"
+  - gpio_edges: { pin: "gpioa:5", min_edges: 4 }
+  - expected_stop_reason: max_steps

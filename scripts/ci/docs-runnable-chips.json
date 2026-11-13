@@ -187,6 +187,12 @@
       "how": "needs-build",
       "why": "Exact orderable geometry slice on the shared STM32F401 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f401 and exact geometry is checked by stm32_variant_geometry."
     },
+    "stm32f446re": {
+      "how": "committed",
+      "firmware": "tests/fixtures/board-smoke/stm32f446re.elf",
+      "expect": "STM32F446RE_OK",
+      "note": "Small, real-register RCC/GPIOA/USART2 boot and LED test; NUCLEO-F446RE verified in LabWired, not on physical silicon; unsupported F446-only peripherals are intentionally absent."
+    },
     "stm32f411ceu6": {
       "how": "blocked",
       "firmware": "demo-nucleo-f401.elf",

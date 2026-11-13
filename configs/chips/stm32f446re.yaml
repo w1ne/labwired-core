@@ -1,0 +1,65 @@
+# LabWired STM32F446RE — Cortex-M4F, 512 KiB flash, 128 KiB SRAM.
+# Register bases / IRQs: ST cmsis_device_f4 Include/stm32f446xx.h, RM0390;
+# memory geometry: ST DS10693. Sim-derived, NOT silicon-validated.
+# Intentionally limited model: other F446-specific peripherals remain absent;
+# an unsupported MMIO access is an error, not a fake register.
+name: "stm32f446re"
+arch: "arm"
+core: "cortex-m4"
+registers_count: 150
+# Nominal simulation scheduling frequency, not the HSI reset frequency (16 MHz).
+cpu_hz: 180_000_000
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7
+flash: { base: 0x08000000, size: "512KB" }
+ram: { base: 0x20000000, size: "128KB" }
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40023800
+    size: "1KB"
+    config: { profile: "stm32f4" }
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x40020000
+    size: "1KB"
+    config: { profile: "stm32v2", reset_moder: 0xA8000000, reset_pupdr: 0x64000000 }
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x40020400
+    size: "1KB"
+    config: { profile: "stm32v2", reset_moder: 0x00000280, reset_ospeedr: 0x000000C0, reset_pupdr: 0x00000100 }
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x40020800
+    size: "1KB"
+    config: { profile: "stm32v2" }
+  - id: "uart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 38
+    clock: { reg: "apb1enr", bit: 17 }
+    config: { cr3_mask: 0xFFF }
+  - id: "tim2"
+    type: "timer"
+    base_address: 0x40000000
+    size: "1KB"
+    irq: 28
+    clock: { reg: "apb1enr", bit: 0 }
+    config: { input_capture: "stm32f4", width: 32 }
+  - id: "flash_ctrl"
+    type: "flash"
+    base_address: 0x40023C00
+    size: "1KB"
+    config: { profile: "stm32f4" }
+  - id: "pwr"
+    type: "pwr"
+    base_address: 0x40007000
+    size: "1KB"
+    config: { profile: "stm32f4" }
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010

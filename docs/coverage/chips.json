@@ -12243,6 +12243,30 @@
     {
       "arch": "arm",
       "conformance_level": null,
+      "core": "cortex-m4",
+      "coverage": "modelled",
+      "excluded_reason": null,
+      "family": "Arm Cortex-M",
+      "name": "stm32f446re",
+      "package": "",
+      "parity_counted": null,
+      "peripherals": 9,
+      "provenance": "public",
+      "reg_match": null,
+      "reg_match_excluded": null,
+      "status": "supported",
+      "tier1": {
+        "blocked": 0,
+        "na": 0,
+        "partial": 0,
+        "pass": 0,
+        "unrecorded": 0
+      },
+      "vendor": "STMicroelectronics"
+    },
+    {
+      "arch": "arm",
+      "conformance_level": null,
       "core": "cortex-m0+",
       "coverage": "modelled",
       "excluded_reason": null,
@@ -12559,13 +12583,13 @@
       "L0 estate": 40,
       "L1 modelled": 50,
       "L2 verified": 1,
-      "modelled": 23,
+      "modelled": 24,
       "modelled (private)": 41,
       "verified (P0-P5)": 368
     },
     "byFamily": {
       "AVR": 55,
-      "Arm Cortex-M": 92,
+      "Arm Cortex-M": 93,
       "Other": 3,
       "PIC16": 155,
       "PIC18": 158,
@@ -12585,14 +12609,14 @@
       "Other": 13,
       "Raspberry Pi": 2,
       "Rockchip": 1,
-      "STMicroelectronics": 51,
+      "STMicroelectronics": 52,
       "Silicon Labs": 1,
       "Texas Instruments": 1
     },
-    "chips": 523,
+    "chips": 524,
     "excluded": 4,
     "private": 409,
-    "public": 114,
-    "supported": 519
+    "public": 115,
+    "supported": 520
   }
 }
