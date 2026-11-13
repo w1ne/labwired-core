@@ -344,6 +344,74 @@ pub fn jfet_parameters_at_temperature(
     adjusted
 }
 
+/// Vacuum permittivity ngspice uses for its level-1 process laws, F/m.
+const VACUUM_PERMITTIVITY_F_PER_M: f64 = 8.854_214_871e-12;
+
+/// Relative permittivity of silicon in ngspice's level-1 `GAMMA` law.
+const SILICON_RELATIVE_PERMITTIVITY: f64 = 11.7;
+
+/// Intrinsic carrier density ngspice's level-1 `PHI` law uses, m⁻³.
+const SILICON_INTRINSIC_DENSITY_PER_M3: f64 = 1.45e16;
+
+/// Fill in the level-1 parameters ngspice derives from substrate doping.
+///
+/// This follows `mos1temp.c` with `TOX` present and `NSUB` given, all at the
+/// model's `TNOM`, with `C'ox = εox/TOX` and `type` = +1 (NMOS) or −1 (PMOS):
+///
+/// - `PHI = max(0.1, 2·Vt(TNOM)·ln(NSUB/ni))` if the card omits `PHI`;
+/// - `GAMMA = sqrt(2·εsi·q·NSUB)/C'ox` if the card omits `GAMMA`;
+/// - `VTO = VFB + type·(GAMMA·sqrt(PHI) + PHI)` if the card omits `VTO`,
+///   where `VFB = Φms − NSS·q/C'ox` and the work-function difference `Φms`
+///   uses gate type `TPG` and `Eg(TNOM)`.
+///
+/// An explicit `PHI`/`GAMMA` on the card still feeds the derived `VTO`, as in
+/// ngspice. `NSUB` at or below the intrinsic density is an error.
+pub fn mos_process_threshold(model: &mut MosModel, tox: f64, nsub: f64) -> Result<(), String> {
+    let doping = nsub * 1e6;
+    if !doping.is_finite() || doping <= SILICON_INTRINSIC_DENSITY_PER_M3 {
+        return Err(
+            "a MOSFET model's NSUB must be finite and above the intrinsic density 1.45e10 cm^-3"
+                .to_string(),
+        );
+    }
+    if !model.nss.is_finite() {
+        return Err("a MOSFET model's NSS must be finite".to_string());
+    }
+    let nominal_kelvin = model.tnom_celsius + 273.15;
+    let nominal_vt = thermal_voltage_at_temperature(nominal_kelvin);
+    let eg = silicon_energy_gap_ev(nominal_kelvin);
+    let oxide_capacitance = OXIDE_PERMITTIVITY_F_PER_M / tox;
+    let sign = model.polarity.sign();
+
+    if !model.phi_given {
+        model.phi = f64::max(
+            0.1,
+            2.0 * nominal_vt * libm::log(doping / SILICON_INTRINSIC_DENSITY_PER_M3),
+        );
+    }
+    let fermi_substrate = sign * 0.5 * model.phi;
+    let gate_work_function = if model.tpg == 0.0 {
+        3.2
+    } else {
+        3.25 + 0.5 * eg - sign * model.tpg * 0.5 * eg
+    };
+    let work_function_difference = gate_work_function - (3.25 + 0.5 * eg + fermi_substrate);
+    if !model.gamma_given {
+        model.gamma = libm::sqrt(
+            2.0 * SILICON_RELATIVE_PERMITTIVITY
+                * VACUUM_PERMITTIVITY_F_PER_M
+                * ELEMENTARY_CHARGE
+                * doping,
+        ) / oxide_capacitance;
+    }
+    if !model.vto_given {
+        let flat_band =
+            work_function_difference - model.nss * 1e4 * ELEMENTARY_CHARGE / oxide_capacitance;
+        model.vto = flat_band + sign * (model.gamma * libm::sqrt(model.phi) + model.phi);
+    }
+    Ok(())
+}
+
 /// SPICE level-1 MOSFET parameters adjusted for an explicit instance
 /// temperature, following ngspice's `mos1temp` laws:
 ///

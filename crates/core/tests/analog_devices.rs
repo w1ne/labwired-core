@@ -4558,6 +4558,88 @@ mod analog {
         }
     }
 
+    /// ngspice level 1 derives the threshold from the process when a card has
+    /// `TOX` and `NSUB`: `PHI` from the doping, `GAMMA` from the depletion
+    /// charge, and `VTO` from the flat-band voltage (gate type `TPG`, surface
+    /// states `NSS`). The expected values are ngspice-45 `showmod` output and
+    /// `.op` drain voltages for the same deck; an engine that ignored `NSUB`
+    /// would leave `VTO=0`, `GAMMA=0`, `PHI=0.6` and miss every one of them.
+    #[test]
+    fn mosfet_substrate_doping_derives_threshold_like_ngspice_level1() {
+        let deck = "V1 vdd 0 3.3\nVG g 0 2.5\nVGP gp 0 0.8\n\
+            R1 vdd d1 10k\nR2 vdd d2 10k\nR3 d3 0 10k\nR4 vdd d4 10k\n\
+            M1 d1 g 0 0 MN W=10u L=2u\nM2 d2 g 0 0 MN2 W=10u L=2u\n\
+            M3 d3 gp vdd vdd MP W=10u L=2u\nM4 d4 g 0 0 MN3 W=10u L=2u\n\
+            .model MN NMOS(LEVEL=1 TOX=20n NSUB=1e16 UO=400)\n\
+            .model MN2 NMOS(LEVEL=1 TOX=20n NSUB=1e16 NSS=1e11 TPG=-1 UO=400)\n\
+            .model MP PMOS(LEVEL=1 TOX=20n NSUB=5e15 UO=200)\n\
+            .model MN3 NMOS(LEVEL=1 TOX=20n NSUB=1e16 PHI=0.7 UO=400)\n";
+        let circuit = parse_netlist(deck).expect("process cards parse");
+        // (device, VTO, GAMMA, PHI, drain node, drain volts) from ngspice.
+        let reference = [
+            ("M1", 0.068_466_2, 0.333_698, 0.695_453, "d1", 0.377_363_2),
+            ("M2", 1.090_76, 0.333_698, 0.695_453, "d2", 0.711_548_3),
+            ("M3", 0.036_109_2, 0.235_96, 0.659_597, "d3", 2.610_082),
+            ("M4", 0.071_647_8, 0.333_698, 0.7, "d4", 0.377_876_2),
+        ];
+        let solver = build(deck);
+        for (name, vto, gamma, phi, node, volts) in reference {
+            let mosfet = circuit
+                .mosfets
+                .iter()
+                .find(|mosfet| mosfet.name == name)
+                .expect("device exists");
+            let model = mosfet.model;
+            // ngspice's own physical constants differ from CODATA 2018 in the
+            // seventh digit; 1e-4 still separates every case below.
+            assert!(
+                (model.vto - vto).abs() < 1e-4,
+                "{name}: VTO should be {vto}, got {}",
+                model.vto
+            );
+            assert!(
+                relative(model.gamma, gamma) < 1e-4,
+                "{name}: GAMMA should be {gamma}, got {}",
+                model.gamma
+            );
+            assert!(
+                relative(model.phi, phi) < 1e-4,
+                "{name}: PHI should be {phi}, got {}",
+                model.phi
+            );
+            let measured = solver.node_voltage(solver.circuit().node(node).expect("node exists"));
+            assert!(
+                (measured - volts).abs() < 1e-4,
+                "{name}: V({node}) should be {volts} V, got {measured} V"
+            );
+        }
+
+        // Explicit values beat the derivation; NSUB without TOX is ignored,
+        // as in ngspice.
+        let explicit =
+            parse_netlist("M1 d g 0 0 MN\n.model MN NMOS(TOX=20n NSUB=1e16 VTO=0.8 GAMMA=0.5)\n")
+                .expect("explicit card parses")
+                .mosfets[0]
+                .model;
+        assert_eq!((explicit.vto, explicit.gamma), (0.8, 0.5));
+        assert!(relative(explicit.phi, 0.695_453) < 1e-4);
+        let no_tox = parse_netlist("M1 d g 0 0 MN\n.model MN NMOS(NSUB=1e16)\n")
+            .expect("card without TOX parses")
+            .mosfets[0]
+            .model;
+        assert_eq!((no_tox.vto, no_tox.gamma, no_tox.phi), (0.0, 0.0, 0.6));
+
+        for (params, needle) in [
+            ("TOX=20n NSUB=1e9", "NSUB"),
+            ("TOX=20n NSUB=1e16 TPG=2", "TPG"),
+        ] {
+            let error = parse_netlist(&format!("M1 d g 0 0 MN\n.model MN NMOS({params})\n"))
+                .expect_err("unphysical process card must be refused")
+                .to_string();
+            assert!(error.contains(needle), "{params}: unexpected error {error}");
+        }
+    }
+
     /// Forward body bias uses the level-1 linear continuation of the square
     /// root. Check its channel current and `gmb` against the hand equation,
     /// then exercise that same bias through MNA for both polarities and both

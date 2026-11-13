@@ -138,6 +138,9 @@
 //! lateral diffusion `LD` shortens the channel to `L − 2·LD` for `KP·W/L`,
 //! `TOX` channel charge and `CGBO`, and a card with `TOX` but no `KP` takes
 //! ngspice's process value `KP = UO·1e-4·εox/TOX` (`UO`/`U0`, default 600);
+//! with `TOX`, substrate doping `NSUB` derives every omitted `PHI`, `GAMMA`
+//! and `VTO` as ngspice level 1 does, using gate type `TPG` and surface-state
+//! density `NSS` for the flat-band voltage;
 //! MOSFET `IS` is used for the two bulk junction currents. `CGSO` and
 //! `CGDO` are capacitance per unit width (F/m), and `CGBO` is capacitance per
 //! unit length (F/m); each is multiplied by instance `W` or `L` and integrated
@@ -1430,8 +1433,12 @@ pub struct MosModel {
     /// N-channel or P-channel.
     pub polarity: Polarity,
     /// Zero-bias threshold `VTO`, volts — **negative for a normal PMOS**, as
-    /// in ngspice.
+    /// in ngspice. When the card omits `VTO` but supplies `TOX` and `NSUB`,
+    /// the resolved instance uses ngspice's process value instead (see
+    /// [`Self::nsub`]).
     pub vto: f64,
+    /// Whether the model card explicitly supplied `VTO`.
+    pub vto_given: bool,
     /// Transconductance parameter `KP`, A/V². When the card omits `KP` but
     /// supplies `TOX`, the resolved instance uses ngspice's process value
     /// `UO·1e-4·εox/TOX` instead (see [`Self::kp_given`]).
@@ -1464,8 +1471,23 @@ pub struct MosModel {
     pub rsh: f64,
     /// Bulk threshold parameter `GAMMA`, sqrt(V).
     pub gamma: f64,
+    /// Whether the model card explicitly supplied `GAMMA`.
+    pub gamma_given: bool,
     /// Surface potential `PHI`, volts.
     pub phi: f64,
+    /// Whether the model card explicitly supplied `PHI`.
+    pub phi_given: bool,
+    /// Substrate doping `NSUB`, cm⁻³. With `TOX`, ngspice level 1 derives
+    /// every one of `PHI`, `GAMMA` and `VTO` the card omits from it; without
+    /// `TOX` it is ignored, as in ngspice.
+    pub nsub: Option<f64>,
+    /// Fast surface-state density `NSS`, cm⁻². Shifts the process-derived
+    /// flat-band voltage by `−NSS·q/C'ox` (default 0).
+    pub nss: f64,
+    /// Gate material type `TPG`: `+1` opposite to the substrate (default),
+    /// `−1` same as the substrate, `0` aluminium. Used only for the
+    /// process-derived `VTO`.
+    pub tpg: f64,
     /// Bulk junction saturation current `IS`, amps.
     pub is: f64,
     /// Zero-bias bulk-drain junction capacitance `CBD`, farads.
@@ -1595,6 +1617,7 @@ impl MosModel {
         Self {
             polarity,
             vto: 0.0,
+            vto_given: false,
             kp: 2e-5,
             kp_given: false,
             uo: 600.0,
@@ -1606,7 +1629,12 @@ impl MosModel {
             rs_given: false,
             rsh: 0.0,
             gamma: 0.0,
+            gamma_given: false,
             phi: 0.6,
+            phi_given: false,
+            nsub: None,
+            nss: 0.0,
+            tpg: 1.0,
             is: 1e-14,
             cbd: 0.0,
             cbd_given: false,
@@ -3819,6 +3847,15 @@ fn bind_models(
                         }
                     }
                 }
+                // ngspice level 1 (mos1temp.c): with `TOX` and `NSUB`, every
+                // one of `PHI`, `GAMMA` and `VTO` the card omits comes from
+                // the substrate doping, evaluated at `TNOM`.
+                if let (Some(nsub), Some(tox)) = (model.nsub, model.tox) {
+                    if tox.is_finite() && tox > 0.0 {
+                        super::device::mos_process_threshold(&mut model, tox, nsub)
+                            .map_err(|message| ctx.parse_err(message))?;
+                    }
+                }
                 if model.kp <= 0.0 || model.is <= 0.0 || model.gamma < 0.0 {
                     return Err(ctx.parse_err(
                         "a MOSFET model needs KP > 0, IS > 0 and GAMMA >= 0".to_string(),
@@ -4500,7 +4537,10 @@ fn parse_model(
             (ModelCard::Bjt(model), "RE") => model.re = value,
             (ModelCard::Bjt(model), "TRE1") => model.tre1 = value,
             (ModelCard::Bjt(model), "TRE2") => model.tre2 = value,
-            (ModelCard::Mos(model), "VTO" | "VT0") => model.vto = value,
+            (ModelCard::Mos(model), "VTO" | "VT0") => {
+                model.vto = value;
+                model.vto_given = true;
+            }
             (ModelCard::Mos(model), "KP") => {
                 model.kp = value;
                 model.kp_given = true;
@@ -4517,8 +4557,22 @@ fn parse_model(
                 model.rs_given = true;
             }
             (ModelCard::Mos(model), "RSH") => model.rsh = value,
-            (ModelCard::Mos(model), "GAMMA") => model.gamma = value,
-            (ModelCard::Mos(model), "PHI") => model.phi = value,
+            (ModelCard::Mos(model), "GAMMA") => {
+                model.gamma = value;
+                model.gamma_given = true;
+            }
+            (ModelCard::Mos(model), "PHI") => {
+                model.phi = value;
+                model.phi_given = true;
+            }
+            (ModelCard::Mos(model), "NSUB") => model.nsub = Some(value),
+            (ModelCard::Mos(model), "NSS") => model.nss = value,
+            (ModelCard::Mos(model), "TPG") => {
+                if ![-1.0, 0.0, 1.0].contains(&value) {
+                    return Err(ctx.parse_err("MOSFET TPG must be -1, 0 or 1".to_string()));
+                }
+                model.tpg = value;
+            }
             (ModelCard::Mos(model), "IS") => model.is = value,
             (ModelCard::Mos(model), "CBD") => {
                 model.cbd = value;
@@ -5086,6 +5140,7 @@ fn lower_comparator(
             let mos = MosModel {
                 polarity: Polarity::N,
                 vto: 0.5,
+                vto_given: true,
                 kp,
                 kp_given: true,
                 uo: 600.0,
@@ -5097,7 +5152,12 @@ fn lower_comparator(
                 rs_given: false,
                 rsh: 0.0,
                 gamma: 0.0,
+                gamma_given: true,
                 phi: 0.6,
+                phi_given: true,
+                nsub: None,
+                nss: 0.0,
+                tpg: 1.0,
                 is: 1e-14,
                 cbd: 0.0,
                 cbd_given: false,
