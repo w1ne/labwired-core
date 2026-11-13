@@ -1,5 +1,6 @@
 # Cortex-M4 smoke against the imported STM32F412 system using the shared F4
-# register fixture. It exercises USART2, GPIOA, GPIOD and the F4 RCC subset.
+# register fixture. It exercises SysTick/PendSV, USART2, GPIOA, GPIOD and the
+# F4 RCC subset.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv7em-none-eabi/release/firmware-stm32f429-smoke"
@@ -8,6 +9,8 @@ limits:
   max_steps: 800000
 assertions:
   - uart_contains: "STM32F4 shared profile smoke"
+  - uart_contains: "systick pendsv psp tailchain frame=1 r0=1 pending=1 ipsr=0000000E ok"
+  - uart_contains: "STM32F429 PSP tailchain PASS"
   - gpio_edges:
       pin: "gpioPortD:12"
       min_edges: 1

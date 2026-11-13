@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="4" failures="0" errors="0" time="1.231943">
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.836448">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="66a76a91a3f989cf6c351cb4fb6553dc89cb4fb7928e249236a9105defe1c602"/>
+    <property name="firmware_hash" value="241fee494eeda9d91e77037d0661da20f3a247e132bb537fdb8aff9110de91fa"/>
   </properties>
-  <testcase classname="labwired" name="run" time="1.231943">
+  <testcase classname="labwired" name="run" time="0.836448">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: LITEX VEXRISCV SMOKE" time="0.000000">
   </testcase>

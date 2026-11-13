@@ -73,7 +73,7 @@
     }
   },
   "steps_executed": 4000000,
-  "cycles": 16000000,
+  "cycles": 4000000,
   "instructions": 4000000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "66a76a91a3f989cf6c351cb4fb6553dc89cb4fb7928e249236a9105defe1c602",
+  "firmware_hash": "241fee494eeda9d91e77037d0661da20f3a247e132bb537fdb8aff9110de91fa",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-litex-vexriscv-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/litex_vexriscv_zephyr.yaml",

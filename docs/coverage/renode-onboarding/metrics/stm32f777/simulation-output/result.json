@@ -184,7 +184,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "1747ffed8a9c91d3f09bf0e53cf540d51aa2f60c6dbd15237e6e282073869cf6",
+  "firmware_hash": "e08fa41cf79951568d40b0d83377358b9682f7279f4b874e0f8ff272b5c43c54",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-stm32f767-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f777.yaml",
@@ -541,6 +541,13 @@
         "name": "rng",
         "kind": "native",
         "base": 1342572544,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "fpu",
+        "kind": "native",
+        "base": 3758157616,
         "registers": [],
         "artifacts": []
       },
@@ -1288,16 +1295,11 @@
     "cycles": 8000000,
     "instructions": 8000000,
     "steps_executed": 8000000,
-    "memory_reads": 12921,
+    "memory_reads": 12918,
     "memory_writes": 1442,
     "peripheral_accesses": 1084973,
     "exceptions": 0,
     "pc_samples": [
-      {
-        "pc": 134249618,
-        "count": 969,
-        "symbol": "firmware_stm32f767_smoke::__cortex_m_rt_main"
-      },
       {
         "pc": 134221476,
         "count": 586,
@@ -1370,6 +1372,11 @@
       },
       {
         "pc": 134232686,
+        "count": 508,
+        "symbol": "firmware_stm32f767_smoke::f746_checks::wait_level"
+      },
+      {
+        "pc": 134232690,
         "count": 508,
         "symbol": "firmware_stm32f767_smoke::f746_checks::wait_level"
       }

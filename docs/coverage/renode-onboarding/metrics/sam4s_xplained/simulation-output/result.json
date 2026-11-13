@@ -137,7 +137,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "223a0495197ac5e1d1c897e9852a57590de64ca903696072b1540cecd527b91c",
+  "firmware_hash": "2962d2224b5a7b8b9ae84a17d58f775cc6dc92cc9834406e8ce783053f73fcd8",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-sam4s-xplained-renode-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/sam4s_xplained.yaml",
@@ -707,7 +707,7 @@
     "steps_executed": 3000000,
     "memory_reads": 6859,
     "memory_writes": 90,
-    "peripheral_accesses": 3479612,
+    "peripheral_accesses": 3479614,
     "exceptions": 0,
     "pc_samples": [
       {

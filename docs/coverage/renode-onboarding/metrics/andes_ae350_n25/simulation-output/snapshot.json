@@ -73,7 +73,7 @@
     }
   },
   "steps_executed": 100000,
-  "cycles": 400000,
+  "cycles": 100000,
   "instructions": 100000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "968de116a8f7c7e1f5d81fc7646a6864fc81241e34a803aebe05a17b49e00558",
+  "firmware_hash": "fdc94938d6637e88422bf12da4f13115b53fbc022ab18b5c80044ff75f391117",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-andes-ae350-n25-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/andes_ae350_n25.yaml",

@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="7" failures="0" errors="0" time="0.012375">
+<testsuite name="labwired" tests="7" failures="0" errors="0" time="0.012645">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="968de116a8f7c7e1f5d81fc7646a6864fc81241e34a803aebe05a17b49e00558"/>
+    <property name="firmware_hash" value="fdc94938d6637e88422bf12da4f13115b53fbc022ab18b5c80044ff75f391117"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.012375">
+  <testcase classname="labwired" name="run" time="0.012645">
   </testcase>
   <testcase classname="labwired" name="assertion 1: memory_value: @0x1000=0x143" time="0.000000">
   </testcase>

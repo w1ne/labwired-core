@@ -15,6 +15,13 @@ ram:
   size: 128KiB
 # Retain only the existing model-backed paths exercised by the smoke.
 peripherals:
+  # The Cortex-M core's architected timer is modeled by the engine and is
+  # directly exercised by the PSP SysTick-to-PendSV smoke.
+  - id: systick
+    type: systick
+    bus: sysbus
+    base_address: 0xE000E010
+    size: 16B
   - id: usart2
     type: stm32_uart
     bus: sysbus

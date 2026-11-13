@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "419cfde4c188e0452faea45564bfb634c297cfa800d506fb58934ca4c5495871",
+  "firmware_hash": "667d31e66d0973381c0c8446e348193cfb45f8ea0ab83e8b8cd75bffe9031afe",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-ek-ra8m1-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/renesas-ek_ra8m1.yaml",

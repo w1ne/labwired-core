@@ -186,7 +186,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "99197ce060ba4a06085c9bcc17ec96562ee2c7c1a9d1cd3909878ceb4e6059d9",
+  "firmware_hash": "df7dcaee18119e1be042fddeda1fb6035f41ac7f9590fdb9632108cf2bfdaf8c",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-renesas-ck-ra6m5-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/renesas-ck_ra6m5.yaml",

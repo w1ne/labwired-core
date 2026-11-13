@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/renesas-ek_ra8m1-smoke.yaml",
   "system": "configs/systems/onboarding/renesas-ek_ra8m1.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-13T02:04:14Z",
-  "finished_at_utc": "2026-11-13T02:06:55Z",
-  "elapsed_seconds": 162,
-  "elapsed_ms": 161302,
+  "started_at_utc": "2026-11-13T11:51:57Z",
+  "finished_at_utc": "2026-11-13T11:51:59Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1783,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 156.709,
-    "build_firmware": 4.043,
-    "run_smoke": 0.509
+    "build_cli": 0.308,
+    "build_firmware": 1.09,
+    "run_smoke": 0.336
   },
   "stages_ms": {
-    "build_cli": 156709,
-    "build_firmware": 4043,
-    "run_smoke": 509
+    "build_cli": 308,
+    "build_firmware": 1090,
+    "run_smoke": 336
   }
 }
