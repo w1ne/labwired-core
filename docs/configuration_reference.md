@@ -662,7 +662,10 @@ for the full BLDC form. A motor can equivalently be declared as an
 converts it to the same typed plant (`MotorModelConfig::from_external_device`),
 so the two spellings cannot drift.
 
-The BLDC plant reads channels 1–3 and their complementary outputs from the
+For a physical three-lead winding driven by a solved inverter circuit, use
+`armature: circuit` and the [circuit BLDC contract](circuit-bldc.md).
+
+The timer-driven BLDC plant reads channels 1–3 and their complementary outputs from the
 configured timer's output-stage snapshot. The loader resolves the six phase
 pin names, but live GPIO `MODER`/`AFR` selection does not gate the plant. The
 STM32L476 mapping uses PA8–PA10 and PB13–PB15 as AF1; native pad capture must

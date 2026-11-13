@@ -1349,8 +1349,8 @@ impl SystemBus {
                     plant,
                     simulation_clock_hz,
                     series,
-                    integration_error,
                     circuit,
+                    integration_error,
                     ..
                 } => {
                     if let Some(error) = integration_error {
@@ -1685,8 +1685,8 @@ impl SystemBus {
                     control_state,
                     injected_inverter_fault,
                     computed_inverter_fault,
-                    integration_error,
                     circuit,
+                    integration_error,
                     ..
                 } => {
                     let s = plant.snapshot();
