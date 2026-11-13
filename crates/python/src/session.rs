@@ -52,6 +52,10 @@ impl NativeSession {
 }
 #[pymethods]
 impl NativeSession {
+    // The Python-facing constructor intentionally has individually optional
+    // keyword arguments for backwards-compatible session setup. Grouping
+    // them into a Rust struct would not change the public Python signature.
+    #[allow(clippy::too_many_arguments)]
     #[new]
     #[pyo3(signature=(elf, chip_path, system_path=None, uart=None, catalog_root=None, coverage=false, flash_path=None, optimized_execution=false))]
     fn new(
