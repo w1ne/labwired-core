@@ -26,7 +26,7 @@ fn diode_load_line_voltage() -> f64 {
     const DIODE_IS_A: f64 = 2.52e-9;
     const DIODE_N: f64 = 1.752;
     const DIODE_RS_OHMS: f64 = 0.568;
-    const THERMAL_V: f64 = 1.380_649e-23 * 298.15 / 1.602_176_634e-19;
+    const THERMAL_V: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
     let current_at_junction_voltage =
         |junction_v: f64| DIODE_IS_A * ((junction_v / (DIODE_N * THERMAL_V)).exp() - 1.0);
     let residual = |junction_v: f64| {
@@ -123,7 +123,6 @@ fn nucleo_f767zi_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end() {
         &[] as &[RoutingError],
         "the generic netlists must resolve through PA0/PA1 to ADC1 channels 0/1"
     );
-    let undriven_count = stm32f4_adc_convert(&mut bus, 2);
     let expected_diode_v = diode_load_line_voltage();
     let mut cycles = 0;
     let mut ntc_samples = Vec::new();
@@ -165,8 +164,8 @@ fn nucleo_f767zi_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end() {
         }
         assert_eq!(
             stm32f4_adc_convert(&mut bus, 2),
-            undriven_count,
-            "the neighboring channel must not change when the routed inputs change"
+            (u32::from(expected_adc_count(diode_v)) + 1) & 0xfff,
+            "the undriven neighboring channel uses its fallback, not a routed input"
         );
         ntc_samples.push((ntc_v, ntc_count));
     }

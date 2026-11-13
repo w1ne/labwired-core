@@ -31,8 +31,8 @@ cosim_models:
       netlist_text: |
         Vcc supply 0 dc 3.3
         Rlim supply sense 1k
-        D1 sense 0 DREF TEMP=25
-        .model DREF D(IS=2.52n N=1.752 RS=0.568 TNOM=25 EG=1.11 XTI=3)
+        D1 sense 0 DREF
+        .model DREF D(IS=2.52n N=1.752 RS=0.568)
       probes:
         v_diode: "v(sense)"
       vdd: 3.3
