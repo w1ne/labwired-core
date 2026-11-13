@@ -193,6 +193,102 @@ impl WasmWorld {
             .map_err(|e| JsValue::from_str(&e))
     }
 
+    /// Atomic component-qualified input batch, with the single-machine resolver.
+    pub fn set_inputs(&mut self, node_id: &str, sets: JsValue) -> Result<(), JsValue> {
+        let sets = crate::inputs::parse_input_sets(sets)?;
+        let machine = self
+            .world
+            .machines
+            .get_mut(node_id)
+            .ok_or_else(|| JsValue::from_str(&format!("unknown world node '{node_id}'")))?;
+        machine
+            .set_input_channels(&crate::inputs::input_set_refs(&sets))
+            .map_err(|error| JsValue::from_str(&error))
+    }
+
+    /// Actual native actuator rows from this node, identical to WasmSimulator.
+    pub fn get_actuator_states(&self, node_id: &str) -> Result<JsValue, JsValue> {
+        self.machine(node_id)?
+            .actuator_states()
+            .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
+            .map_err(|error| JsValue::from_str(&format!("get_actuator_states: {error}")))
+    }
+
+    /// Per-node descriptors, separate from the World's shared analog session.
+    pub fn node_analog_channels(&self, node_id: &str) -> Result<JsValue, JsValue> {
+        serde_wasm_bindgen::to_value(&self.machine(node_id)?.analog_channels())
+            .map_err(|error| JsValue::from_str(&format!("node_analog_channels: {error}")))
+    }
+
+    /// This node's analog trace cursor; never reads or advances a peer's cursor.
+    pub fn node_analog_trace_snapshot(
+        &self,
+        node_id: &str,
+        cursor: f64,
+    ) -> Result<JsValue, JsValue> {
+        if !cursor.is_finite() || cursor < 0.0 {
+            return Err(JsValue::from_str(
+                "analog_trace_snapshot: cursor must be a non-negative number",
+            ));
+        }
+        serde_wasm_bindgen::to_value(&self.machine(node_id)?.analog_trace_snapshot(cursor as u64))
+            .map_err(|error| JsValue::from_str(&format!("node_analog_trace_snapshot: {error}")))
+    }
+
+    /// This node's authored analog and native motor history, without a global alias.
+    pub fn node_analog_series(&self, node_id: &str) -> Result<JsValue, JsValue> {
+        serde_wasm_bindgen::to_value(&self.machine(node_id)?.analog_series())
+            .map_err(|error| JsValue::from_str(&format!("node_analog_series: {error}")))
+    }
+
+    /// Independent bounded native observations on the selected node's epoch.
+    pub fn live_numeric_capture(
+        &self,
+        node_id: &str,
+        cursor: f64,
+        max_points: f64,
+    ) -> Result<JsValue, JsValue> {
+        let (cursor, max_points) = crate::traces::live_numeric_args(cursor, max_points)
+            .map_err(|error| JsValue::from_str(&error))?;
+        crate::traces::live_numeric_value(
+            &self
+                .machine(node_id)?
+                .live_numeric_capture(cursor, max_points),
+        )
+    }
+
+    /// Probeable native peripheral wires, preserving their actual line names.
+    pub fn logic_wire_surface(&self, node_id: &str) -> Result<JsValue, JsValue> {
+        Ok(crate::inspect::wire_surface_value(
+            self.machine(node_id)?.wire_surface(),
+        ))
+    }
+
+    /// GPIO modes/functions from this node's actual register-driven mux state.
+    pub fn pin_routing(&self, node_id: &str, refs: JsValue) -> Result<JsValue, JsValue> {
+        let machine = self.machine(node_id)?;
+        Ok(crate::inspect::pin_routing_value(
+            refs,
+            |peripheral, pin| machine.gpio_routing(peripheral, pin),
+        ))
+    }
+
+    /// Non-consuming UART groups from this node's native bus trace.
+    pub fn uart_trace_snapshot(&self, node_id: &str) -> Result<JsValue, JsValue> {
+        Ok(crate::traces::uart_trace_value(
+            self.machine(node_id)?.bus_trace_snapshot(),
+        ))
+    }
+
+    /// Native peripheral configuration/state used by instrument decoders.
+    pub fn get_peripheral_snapshot(&self, node_id: &str, name: &str) -> Result<JsValue, JsValue> {
+        match self.machine(node_id)?.peripheral_snapshot(name) {
+            Some(snapshot) => serde_wasm_bindgen::to_value(&snapshot)
+                .map_err(|error| JsValue::from_str(&format!("get_peripheral_snapshot: {error}"))),
+            None => Ok(JsValue::NULL),
+        }
+    }
+
     /// The drivable input channels on node `node_id`, as
     /// `WasmSimulator::list_inputs` reports them.
     pub fn list_inputs(&mut self, node_id: &str) -> Result<JsValue, JsValue> {
@@ -1567,3 +1663,7 @@ interconnects:
         }
     }
 }
+
+#[cfg(test)]
+#[path = "world_observations_tests.rs"]
+mod observation_tests;

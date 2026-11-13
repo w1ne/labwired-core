@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 mod accessors;
+mod actuators;
 mod analog_mux;
 mod trait_def;
 

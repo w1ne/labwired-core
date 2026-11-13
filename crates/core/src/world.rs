@@ -472,6 +472,43 @@ pub trait MachineTrait: Send {
     fn set_input_channel(&mut self, _channel: &str, _value: f64) -> Result<(), String> {
         Err("this machine has no input channels".to_string())
     }
+    /// Apply a component-qualified batch atomically on this native node.
+    fn set_input_channels(&mut self, _sets: &[(Option<&str>, &str, f64)]) -> Result<(), String> {
+        Err("machine does not expose atomic simulated inputs".to_owned())
+    }
+    /// Actual attached actuator state, in the shared native observation shape.
+    fn actuator_states(&self) -> Vec<serde_json::Value> {
+        Vec::new()
+    }
+    fn analog_channels(&self) -> Vec<crate::analog::AnalogChannel> {
+        Vec::new()
+    }
+    fn analog_trace_snapshot(&self, _cursor: u64) -> crate::analog::AnalogTraceBatch {
+        crate::analog::AnalogTraceBatch::default()
+    }
+    fn analog_series(&self) -> Option<crate::analog::AnalogSeries> {
+        None
+    }
+    fn live_numeric_capture(
+        &self,
+        _cursor: u64,
+        _max_points: usize,
+    ) -> Option<crate::live_numeric::LiveNumericBatch> {
+        None
+    }
+    fn wire_surface(&self) -> Vec<(String, Vec<String>)> {
+        Vec::new()
+    }
+    fn gpio_routing(
+        &self,
+        _peripheral: &str,
+        _pin: u8,
+    ) -> Option<crate::peripherals::gpio::GpioRouting> {
+        None
+    }
+    fn peripheral_snapshot(&self, _name: &str) -> Option<serde_json::Value> {
+        None
+    }
     /// The input channels the attached devices expose.
     fn list_input_channels(&mut self) -> Vec<(String, crate::sim_input::InputChannel)> {
         Vec::new()
@@ -878,6 +915,53 @@ impl<C: Cpu + 'static> MachineTrait for Machine<C> {
         Machine::set_input(self, channel, value).map_err(|e| e.to_string())
     }
 
+    fn set_input_channels(&mut self, sets: &[(Option<&str>, &str, f64)]) -> Result<(), String> {
+        Machine::set_inputs(self, sets).map_err(|error| error.to_string())
+    }
+    fn actuator_states(&self) -> Vec<serde_json::Value> {
+        self.bus.actuator_states()
+    }
+    fn analog_channels(&self) -> Vec<crate::analog::AnalogChannel> {
+        Machine::analog_channels(self)
+    }
+    fn analog_trace_snapshot(&self, cursor: u64) -> crate::analog::AnalogTraceBatch {
+        Machine::analog_trace_snapshot(self, cursor)
+    }
+    fn analog_series(&self) -> Option<crate::analog::AnalogSeries> {
+        Machine::analog_series(self)
+    }
+    fn live_numeric_capture(
+        &self,
+        cursor: u64,
+        max_points: usize,
+    ) -> Option<crate::live_numeric::LiveNumericBatch> {
+        Machine::live_numeric_capture(self, cursor, max_points)
+    }
+    fn wire_surface(&self) -> Vec<(String, Vec<String>)> {
+        Machine::wire_surface(self)
+            .into_iter()
+            .map(|(name, lines)| {
+                (
+                    name.to_owned(),
+                    lines.iter().map(|line| (*line).to_owned()).collect(),
+                )
+            })
+            .collect()
+    }
+    fn gpio_routing(
+        &self,
+        peripheral: &str,
+        pin: u8,
+    ) -> Option<crate::peripherals::gpio::GpioRouting> {
+        self.bus
+            .find_peripheral_index_by_name(peripheral)
+            .and_then(|index| self.bus.peripherals[index].dev.gpio_routing(pin))
+    }
+    fn peripheral_snapshot(&self, name: &str) -> Option<serde_json::Value> {
+        self.bus
+            .find_peripheral_index_by_name(name)
+            .map(|index| self.bus.peripherals[index].dev.snapshot())
+    }
     fn list_input_channels(&mut self) -> Vec<(String, crate::sim_input::InputChannel)> {
         Machine::list_inputs(self)
     }
