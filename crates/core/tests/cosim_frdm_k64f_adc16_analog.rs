@@ -55,6 +55,20 @@ fn ntc_volts(temperature_c: f64) -> f64 {
     3.3 * r / (10_000.0 + r)
 }
 
+/// Independent DC solution for the fixture's non-inverting OPAMP. The finite
+/// open-loop gain, output resistance, and feedback divider are all included;
+/// this is not the ideal `1 + Rfeedback/Rgain` approximation.
+fn noninverting_opamp_output_voltage(input_v: f64) -> f64 {
+    const AOL: f64 = 100_000.0;
+    const ROUT: f64 = 100.0;
+    const RFEEDBACK: f64 = 2_000.0;
+    const RGAIN: f64 = 10_000.0;
+    let output_load = RFEEDBACK + RGAIN;
+    let output_fraction = output_load / (output_load + ROUT);
+    let feedback_fraction = RGAIN / output_load;
+    AOL * output_fraction * input_v / (1.0 + AOL * output_fraction * feedback_fraction)
+}
+
 /// Independent JFET gate-junction depletion charge below `FC * PB`.
 fn jfet_gate_junction_charge(voltage_v: f64) -> f64 {
     const C0_F: f64 = 1e-9;
@@ -322,6 +336,101 @@ fn frdm_k64f_arduino_a0_and_a2_convert_ntc_and_diode_on_adc0_and_adc1() {
     assert!(
         ntc_codes[0] > ntc_codes[1] && ntc_codes[1] > ntc_codes[2],
         "the NTC codes fall as it warms: {ntc_codes:?}"
+    );
+}
+
+#[test]
+fn frdm_k64f_generic_opamp_amplifies_ntc_and_reaches_adc16_with_diode() {
+    let system_path = root("configs/systems/frdm-k64f.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load FRDM-K64F profile");
+    let fixture =
+        SystemManifest::from_file(root("examples/frdm-k64f/analog-opamp-ntc-adc-system.yaml"))
+            .expect("load generic NTC, OPAMP, and diode netlist");
+    profile.cosim_models = fixture.cosim_models;
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load MK64F12 descriptor");
+    for (pad, peripheral, channel) in [
+        ("PTB0", "adc0", 8),
+        ("PTB2", "adc0", 12),
+        ("PTB10", "adc1", 14),
+    ] {
+        let route = &chip.analog_pins[pad];
+        assert_eq!(route.peripheral, peripheral, "{pad} ADC instance");
+        assert_eq!(route.channel, channel, "{pad} ADC channel");
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build FRDM-K64F bus");
+    init_and_calibrate(&mut bus, ADC0, MODE_12);
+    init_and_calibrate(&mut bus, ADC1, MODE_12);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build OPAMP co-simulation")
+        .expect("fixture carries a generic OPAMP and two unrelated device models");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "NTC, amplifier, and diode outputs must resolve to ADC16 inputs"
+    );
+
+    let mut cycles = 0;
+    let mut sensor_codes = Vec::new();
+    let mut amplifier_codes = Vec::new();
+    for temperature_c in [25.0_f64, 50.0, 80.0] {
+        session
+            .set_signal_number("ui.ntc.temperature_c", temperature_c)
+            .expect("set NTC temperature");
+        // Let the OPAMP's compensated gain node settle after the resistor
+        // divider moves. Six 1 µs boundaries span many closed-loop time
+        // constants at this fixture's 1 MHz GBW.
+        for _ in 0..6 {
+            cycles += session.cycles_until_boundary(cycles);
+            let (steps, errors) = session
+                .advance_to(cycles, &mut bus)
+                .expect("solve and route NTC, OPAMP, and diode");
+            assert_eq!(steps.len(), 1, "the complete analog netlist solves");
+            assert!(errors.is_empty(), "ADC16 route errors: {errors:?}");
+        }
+
+        let sensor_v = signal_voltage(&session, "board.analog.ptb2_volts");
+        let amplified_v = signal_voltage(&session, "board.analog.ptb0_volts");
+        let diode_v = signal_voltage(&session, "board.analog.ptb10_volts");
+        let expected_sensor_v = ntc_volts(temperature_c);
+        let expected_amplified_v = noninverting_opamp_output_voltage(expected_sensor_v);
+        assert!(
+            (sensor_v - expected_sensor_v).abs() < 1e-9,
+            "Beta NTC at {temperature_c} °C: expected {expected_sensor_v} V, got {sensor_v} V"
+        );
+        assert!(
+            (amplified_v - expected_amplified_v).abs() < 2e-4,
+            "finite-gain OPAMP at {temperature_c} °C: expected {expected_amplified_v} V, got {amplified_v} V"
+        );
+        assert!(
+            diode_v > 0.5 && diode_v < 0.8,
+            "unrelated Shockley diode remains at its loaded forward drop: {diode_v} V"
+        );
+
+        let sensor_code = convert(&mut bus, ADC0, AD12);
+        let amplified_code = convert(&mut bus, ADC0, 8);
+        let diode_code = convert(&mut bus, ADC1, AD14);
+        assert_eq!(sensor_code, se_code(sensor_v, 12), "ADC0_SE12 sensor");
+        assert_eq!(
+            amplified_code,
+            se_code(amplified_v, 12),
+            "ADC0_SE8 amplified NTC"
+        );
+        assert_eq!(diode_code, se_code(diode_v, 12), "ADC1_SE14 diode");
+        assert_eq!(convert(&mut bus, ADC1, AD12), 0, "NTC stays on ADC0");
+        assert_eq!(convert(&mut bus, ADC0, AD14), 0, "diode stays on ADC1");
+        sensor_codes.push(sensor_code);
+        amplifier_codes.push(amplified_code);
+    }
+    assert!(
+        sensor_codes[0] > sensor_codes[1] && sensor_codes[1] > sensor_codes[2],
+        "the NTC sensor voltage falls as it warms: {sensor_codes:?}"
+    );
+    assert!(
+        amplifier_codes[0] > amplifier_codes[1] && amplifier_codes[1] > amplifier_codes[2],
+        "the closed-loop amplified output follows the NTC: {amplifier_codes:?}"
     );
 }
 
