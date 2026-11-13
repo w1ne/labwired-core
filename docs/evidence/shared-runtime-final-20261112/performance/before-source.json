@@ -1,0 +1,42 @@
+{
+  "composition_source_sha256": "e539ec18b2b597571299a9cfa3e60ba8dbc57c196b697ae1744f0dcff15218b2",
+  "source_patch_sha256": "4e0196bb5d713b5b471983d3f030315f374de64e3c19b244a4a93a381401f960",
+  "profile": "shared-runtime-integration-20261112",
+  "inherits": "dev",
+  "opt_level": 1,
+  "debug": 0,
+  "incremental": false,
+  "jobs": 2,
+  "features": [
+    "event-scheduler"
+  ],
+  "boards": [
+    "r7fa6m5bh",
+    "r7fa8m1ah"
+  ],
+  "modes": [
+    "step"
+  ],
+  "baselines_sha256": "2cdbfce68ca1a0b168904d212b580916dd45b51345a153406813af2fe7159ede",
+  "performance_script_sha256": "a5539b4b17588b7ad18921576168c52e4b760dd3aa501dd7cb09d5c75ada0561",
+  "rustc": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.95.0\nLLVM version: 22.1.2\n",
+  "scope": "paired local opt1 diagnostic; final unchanged release CI remains authoritative",
+  "esp32_local": "not measured: ESP toolchain and exact fixture absent; completed CI artifact contains reports only",
+  "binary": {
+    "path": "/data/work-evidence/shared-runtime-integration-20261112/perf-empty-registry-r1/labwired-before-fe069170500c",
+    "sha256": "fe069170500c02bb047b09601025654b77c54b541e647063ac34a9e870fcbe3a",
+    "size_bytes": 51270088
+  },
+  "measured": {
+    "r7fa6m5bh": {
+      "step": 1244.5
+    },
+    "r7fa8m1ah": {
+      "step": 1242.6
+    }
+  },
+  "fixtures": {
+    "target/perf-fixtures/perf-spin-nrf": "a4ba233ff4c83e075c735c0e4e039cf1bcd81ab89df651dfc6368384fe27cdaf",
+    "target/perf-fixtures/perf-spin-ra8m1": "2c0559ec4e09037799b8e36f036a7b182d605f1dfbde38e62ab8e8418c31107d"
+  }
+}

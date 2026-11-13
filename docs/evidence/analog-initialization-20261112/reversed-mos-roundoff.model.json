@@ -1,0 +1,17 @@
+{
+  "id": "circuit",
+  "adapter": "analog",
+  "step_ns": 100,
+  "inputs": {},
+  "outputs": {
+    "out": "plant.out"
+  },
+  "config": {
+    "substeps": 1,
+    "max_unknowns": 128,
+    "probes": {
+      "out": "v(out)"
+    },
+    "netlist_text": ".model n NMOS(VTO=.8 KP=1 IS=1e-15)\nVg gate 0 DC 0.1\nVd out 0 DC -0.2\nM1 out gate 0 0 n\n"
+  }
+}

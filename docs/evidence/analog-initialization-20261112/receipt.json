@@ -1,0 +1,144 @@
+{
+  "scope": "generic bounded initial-state implementation and public-entry validation; no native firmware startup or flight acceptance",
+  "base_generic_head": "dd8b68a651ee8d91f9d653db05efa318cfd51a5e",
+  "gates": [
+    {
+      "name": "final-limit",
+      "exit": 0,
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "raw_log_sha256": "eb8e20286b39be205a3ed20321026022d12de1fadf0dcca614618951e7593bf8",
+      "compressed_log": "final-limit.log.gz"
+    },
+    {
+      "name": "final-core",
+      "exit": 0,
+      "passed": 200,
+      "failed": 0,
+      "ignored": 0,
+      "raw_log_sha256": "2e84e861261b4c26eb3270923a7bcfe1c8d6cab2dc889c8209f68dfae963051e",
+      "compressed_log": "final-core.log.gz"
+    },
+    {
+      "name": "final-cli",
+      "exit": 0,
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "raw_log_sha256": "bd090b04ef61879efa9633a944e589a8ea788bb1802315970d06168040936ef3",
+      "compressed_log": "final-cli.log.gz"
+    },
+    {
+      "name": "final-wasm",
+      "exit": 0,
+      "passed": 30,
+      "failed": 0,
+      "ignored": 2,
+      "raw_log_sha256": "d7ca2919ce0ff0590ae2f36387cd15b0513d14c8dd6c9ba0733f2ca19f5d07b6",
+      "compressed_log": "final-wasm.log.gz"
+    }
+  ],
+  "total_passed": 236,
+  "unchanged_ignored_cases": [
+    "cosim_tests::step_batch_throughput",
+    "cosim_tests::touch_lab_step_batch_throughput"
+  ],
+  "code_sha256": {
+    "crates/cli/src/artifacts.rs": "d0b12ec6eb14ff317f01b7ac8a0e5ebb7a261e6baadd8e82ccad10b1a86bec4f",
+    "crates/cli/src/commands/cosim.rs": "558503a68bc6f0149d168ef2b40873beaca555c025fd7690d68cf867e8b3bced",
+    "crates/cli/src/execute.rs": "65e8fa20dd95e8b5f56b44b6abdc4bfabb8c2c0e79f4cd79226ccc5a6e6f4c23",
+    "crates/cli/src/lib.rs": "df5aa320109a964b4deb2ee778d70be73113cdf13f73eebff7566df538811c4f",
+    "crates/cli/src/outputs.rs": "37e5b0f388616a8e50cfa885013af571d5f21b6e23b4404ac7f19523657f2dc8",
+    "crates/cli/tests/analog_initialization.rs": "7b025564f0adb3d6069ab302d224a8b0d1bff054dc98c506f86ae2115776bb15",
+    "crates/core/src/analog/adapter.rs": "ffa9bdf1d62a72fc7749454b858661de35b1b4b9bd09b80c96753c84725347a8",
+    "crates/core/src/analog/initialization.rs": "d2e6a483d7d8bb75153f2082b8813e35d92c2968c8095f9db5ddab8c8d15e051",
+    "crates/core/src/analog/initialization_charge.rs": "9d33e24807f5b0f2fe6198abdece3a0ac9ef264ec3350a82a1fd373ba8e7cd5f",
+    "crates/core/src/analog/mna.rs": "1d6f47f72921c52e7c50769876952463feeb0014140855bf372f8ff0d0dd337a",
+    "crates/core/src/analog/mna_initialization.rs": "047b0bd89037513d608977ea4f643c9cbc9fd6848276a350fcd90040805c4553",
+    "crates/core/src/analog/mna_limit_tests.rs": "2a7b8387ac1db79d6bb3aa85fc98a7f34a7f60e583fca115e2c3a04e54290f2b",
+    "crates/core/src/analog/mod.rs": "6fe57f46918f288230fef38511b18f9e1774568685ecb96f2cd74b5ac3167678",
+    "crates/core/src/analog/netlist.rs": "c41ec8b84373f9bd4d85225e7a50c5e198ef371d3867c2f9f7673c457e6ebebd",
+    "crates/core/src/cosim/mod.rs": "f0ebc4b9ddf7c5ab92b001402b02c3101014399748a7f1ee9876ae65cbc759fa",
+    "crates/core/src/cosim/registry.rs": "9197deb389e8e4827c9b38305945ea556d93e7b6f6ad25b00c18dae01b2e8a19",
+    "crates/core/src/cosim/routing.rs": "4666679b022b03f04e570a531cea656d4b4622feecb7a2a887693f8a86e8f562",
+    "crates/core/src/world/cosim.rs": "2010884b03d19eb7264c2687be4dc16149701a3fb421b3ec159ec34a7173da92",
+    "crates/core/tests/analog_adapter.rs": "5083920c5bc90675a6dd0b2bc5925d585bcdefd2240a22b34c1ed7d024f1b55e",
+    "crates/core/tests/analog_coil_series.rs": "10614a296205cbd5935e0a982bddd1f4264ba0c41e2448c1da70cbed9f882e0f",
+    "crates/core/tests/analog_transient_dependent_source_refusal.rs": "9bfdb3f46d04ad5eed85a1851363a3cd9c334ac6d61f269af62409cca7c0305f",
+    "crates/core/tests/analog_transient_regressions.rs": "c4aa0b77ff8ceeb837f7b051b8992401eb37f8c92904a5175a10b907f666eac2",
+    "crates/core/tests/analog_transient_source_cycle_refusal.rs": "ac9d1e432d37855d9f1c58a6d6f6ee22f4dcd768f1450596ee8e5540dba2c3ad",
+    "crates/core/tests/analog_transient_state_contract.rs": "e939be153685e7ca0c8b01e66fde0549966c528e1932da2f6965ea918817ddd0",
+    "crates/core/tests/world_analog.rs": "f55f3c184199f6c96fbf3d4d5efaf2a2872f837397f55a72ccdf5e13f59d601d",
+    "crates/wasm/src/cosim_tests.rs": "79bef86bdde5fec2b9bf6bfc8c93567e7f9f44f9ba00a3b1cb32b06e9e00be6d",
+    "crates/wasm/src/traces.rs": "576e3fcf4fd09cd8f3145bb466ae0cb26cfc3d0401ccb9f190fb381c2eb37389"
+  },
+  "native_scope": {
+    "original_operating_point": "unchanged five-MCU deck still refused at singular657",
+    "explicit_initial_state": "full state inventories and topology admitted; native cold OPAMP clamp overlap still prevents convergence",
+    "measured_base_unknowns": {
+      "fc": 215,
+      "five_mcu": 667
+    },
+    "measured_five_mcu_peak_unknowns": 737,
+    "native_cpu_instructions": 0,
+    "opamp_power_contract": "separate follow-up; no VMIN/VMAX declaration or board netlist changed in this commit",
+    "explicit_five_mcu": "At separately selected737, singular255 maps to BLDC rotor1 c_l; current individual-node derivative treatment refuses the series-source cutset."
+  },
+  "review": "Independent source review found no remaining initialization/admission/diagnostic/readback blocker. This is not hardware capture acknowledgment.",
+  "evidence_sha256": {
+    "admission-source-review.json": "c1e1aaa9df9e61806c23316818b275a5c3dd0ef68e01f69d58eba9089498bb18",
+    "analog_construct_probe.rs": "f7a805d3405a4e3b5e5428463aeefc600d681f399a1ab4649bcc844e4c576549",
+    "analog_construct_probe_with_labels.rs": "5f9efb9175a0ee078950cf2827d5dd64e3d8c650368deeb5eeef3c2903a6e3a0",
+    "capacitor-voltage-cycle-audit.json": "c4a7458a838d94ef25dd4331140eb636b7d63cbfc0517ce714343b151ad4801b",
+    "cascaded-buck-powered.json": "ac66b5bb7e8a62f97bfbe2e61f7fcd4968923e4cce18812dcb486ad0bd16cd9d",
+    "cascaded-buck-unpowered.json": "2881043551438f34e21c6143cff249119eb8cb110b5e1188a94bb63fdd560674",
+    "copied-opamp-diagnostic-source.json": "a18581fd256ca3512c0fc278438b560781a9177c64bdf80a47dc67ba01488e60",
+    "copied-opamp-diagnostic.log": "4f9ed93d0b6991a2e23fe7f6bc05855cacf36840a8d7da06222262fd718cf298",
+    "dependent-charge-cycle-audit.json": "27f350bc1addcf000a9d2e02d467badbdd676fc1175bed7d4ca001b2bd2c6a44",
+    "diagnostic-source.tar.gz": "31afa635ed72519dc37410e59bc923710b2d4b4809071db82c8aaab6fc645cf6",
+    "final-cli.log.gz": "b10295a05bc6efb0ad60b3fa4aaf7b54fe73d0a2569239818e9b87c6510bded6",
+    "final-core.log.gz": "5cc76b3401ee76a84c4e1fdf8b9b07955b79cc339e3d2a71d3983e2656edb0b2",
+    "final-fc-state-constructor-receipt.json": "dbbe579336a465e36f1e9aff23ecab0c47dfde3c272bae948d7172f47cf59396",
+    "final-fc-state-constructor.json": "4490fee7034c58b7b00b56d63ade6aee7e91723b261b712612721aace5592eea",
+    "final-fc-state-constructor.log": "d9fef2c04b772d44cda9ec42d1f4d15b6fdb445ab6efb982a77f9db4c34761ff",
+    "final-five-op-constructor-receipt.json": "5be6fc1b45a8a57a859143359142dc72282a6aba5e896d542bac1483c5da9cbd",
+    "final-five-op-constructor.json": "5b0c787390533bdb700c5d3d085771ad90f3971a40788fa5a9e9d81e9e31a3e2",
+    "final-five-op-constructor.log": "69265667372fee85949d1ac27764fbcee0717e252b126045e858b674f130cad1",
+    "final-five-state667-constructor-receipt.json": "1629e080e72b7b5b721d817ddca6c17905b22d410c702de3442e48a144c7100e",
+    "final-five-state667-constructor.json": "f8bcf15764d3c632b90272174eb6df50396586faf114ef26fa6bdd3807b7daa8",
+    "final-five-state667-constructor.log": "6bcabd675aeb76efd5570ae3e4f16b5fc43b65f69c8c5fc3ee45c54155470eb3",
+    "final-five-state737-constructor-receipt.json": "a4a7c597ea21eaa15819f8550d53028a3ea0438419ca13f97f365ac0c04afdbb",
+    "final-five-state737-constructor.json": "f148b704953533c9631ec910da10af6c0422b5d4440b27506035ad0859147964",
+    "final-five-state737-constructor.log": "34e1eb94ae8b9b97778eee794efbfae450c875beb936157ec6a8fd79c5a3dd45",
+    "final-limit.log.gz": "f56c60df569e8651a7a80cce1138fae053a4c22e3c9831eadd665f9eb9c52f1b",
+    "final-wasm.log.gz": "aad7c072fbaf50322fe3f622ae319c2b3bd0a41760757e751684286997045edf",
+    "five-state737-labels.json": "f499a9349aea48f58832dbcde1b7236e351d79af4ce748adad9f8cf0fea0a195",
+    "five-state737-labels.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "focused2.log.gz": "cebecf102f36732fcb01f2078a9022bae6c2a44a415069d5fee6ad3b52658a42",
+    "initializer-mos-candidate.json": "f40f733ba47760adb30a736c8735af768ce1eda19e890bb7d81094bc57bb0a1b",
+    "intrinsic-charge-cycle-audit.json": "9129b972613778d9ff30522b480fb79f88e8044349fac90004f66cd1b73002cb",
+    "oscillating-contact-before-guard.json": "844ef783d09d00f89e46ea47bbddf897a892798792c0b72968ffed15cb62d8d7",
+    "oscillating-contact-before-guard.model.json": "7148557e685280ffbd978f58a5ad7239324df209e142b0e367ee3bd7ac3646b8",
+    "probe-build-receipt-before-limiter.json": "140680f5b905682a74b44870af405a7e06c340cb742f5490f7cc5f99a07d1435",
+    "probe-build-receipt-final.json": "c2794a7335ada095c1de8989827f176a1aba9ccb05c5437e584a33528388f52d",
+    "probe-build-receipt-post-limiter.json": "9fa2eec997ac87c42a6d8f3716ae024abf3768b896b9665b3803f7f34767d588",
+    "red-junction.log.gz": "7e7101e09057f35ec1cb1e1ee14dd9fa2b2ed5f0507ee8fe2244355d5e5ae6c9",
+    "reversed-mos-roundoff.json": "f325d59961e7ac04fe683f87e2b1bae9e0d436af9282e3e16c1e699518232a1f",
+    "reversed-mos-roundoff.model.json": "a07cd22fcc834ee734702ac47c59a96a069e6f3f41c72f42eb4b98b133a1d5e5",
+    "run-constructor-probes-final.py": "dca4462ebc6e3f0da376e989312cedaa3b0dbca429d41477e8b68b1d562e7432"
+  },
+  "post_gate_test_only_cleanup": {
+    "reason": "Normal all-target Clippy rejects err().expect(); use an equivalent explicit Result match. Production source and assertions are unchanged. The focused logs above bind the original helper hashes.",
+    "paths": {
+      "crates/core/tests/analog_transient_source_cycle_refusal.rs": {
+        "tested_sha256": "ac9d1e432d37855d9f1c58a6d6f6ee22f4dcd768f1450596ee8e5540dba2c3ad",
+        "committed_sha256": "6de66d1818556e8d79c47f1f8dd109679f9906af1e4ded745cffb87be408b34c"
+      },
+      "crates/core/tests/analog_transient_dependent_source_refusal.rs": {
+        "tested_sha256": "9bfdb3f46d04ad5eed85a1851363a3cd9c334ac6d61f269af62409cca7c0305f",
+        "committed_sha256": "30d1eeabe70dcd573c9ee9717f631ad393d67ff5cd28b8586f17897694270467"
+      }
+    }
+  }
+}

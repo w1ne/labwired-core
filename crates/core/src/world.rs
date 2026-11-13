@@ -276,6 +276,12 @@ pub trait MachineTrait: Send {
     fn reset_input_status(&self) -> Option<crate::reset_input::ResetInputStatus> {
         None
     }
+    fn power_domain_status(&self) -> Option<crate::power_domains::PowerDomainStatus> {
+        None
+    }
+    fn validate_internal_regulator_admission(&self) -> Result<(), String> {
+        Ok(())
+    }
     fn bind_world_cosim(
         &mut self,
         _node: &str,
@@ -512,6 +518,24 @@ pub trait MachineTrait: Send {
     fn snapshot(&self) -> Option<crate::snapshot::MachineSnapshot> {
         None
     }
+    /// Physical motor observations owned by this node. Mocks default empty.
+    fn motor_snapshots(&self) -> Vec<crate::bus::MotorSnapshot> {
+        Vec::new()
+    }
+    /// Run-long shaft observations, timed by the owning simulation boundary.
+    fn motor_series(&self) -> crate::analog::AnalogSeries {
+        crate::analog::AnalogSeries::default()
+    }
+
+    /// Read-only native device evidence, including non-display sensors.
+    /// The concrete machine uses the same declared-ID join as single-node inspect.
+    fn inspect_devices(
+        &self,
+        _opts: &crate::inspect::InspectOpts,
+    ) -> Vec<crate::inspect::DeviceInspect> {
+        Vec::new()
+    }
+
     fn display_artifact(
         &self,
         _device_id: &str,
@@ -581,6 +605,12 @@ pub trait MachineTrait: Send {
 impl<C: Cpu + 'static> MachineTrait for Machine<C> {
     fn reset_input_status(&self) -> Option<crate::reset_input::ResetInputStatus> {
         self.bus.reset_input.status()
+    }
+    fn power_domain_status(&self) -> Option<crate::power_domains::PowerDomainStatus> {
+        Machine::power_domain_status(self)
+    }
+    fn validate_internal_regulator_admission(&self) -> Result<(), String> {
+        self.bus.regulators.require_sampled_source()
     }
     fn bind_world_cosim(
         &mut self,
@@ -694,6 +724,25 @@ impl<C: Cpu + 'static> MachineTrait for Machine<C> {
 
     fn snapshot(&self) -> Option<crate::snapshot::MachineSnapshot> {
         Some(Machine::snapshot(self))
+    }
+    fn motor_snapshots(&self) -> Vec<crate::bus::MotorSnapshot> {
+        self.bus.motor_snapshots()
+    }
+    fn motor_series(&self) -> crate::analog::AnalogSeries {
+        let (channels, end_time_ns) = self.bus.motor_series();
+        crate::analog::AnalogSeries {
+            channels,
+            end_time_ns,
+        }
+    }
+
+    fn inspect_devices(
+        &self,
+        opts: &crate::inspect::InspectOpts,
+    ) -> Vec<crate::inspect::DeviceInspect> {
+        self.bus.inspect_devices_with_extra(None, opts, &mut |f| {
+            self.cpu.for_each_attached_device(f);
+        })
     }
 
     fn display_artifact(
@@ -1530,6 +1579,15 @@ impl World {
                 .iter()
                 .filter_map(|(id, m)| m.reset_input_status().map(|r| (id.clone(), r)))
                 .collect();
+            status.power_domains = self
+                .machines
+                .iter()
+                .filter_map(|(id, machine)| {
+                    machine
+                        .power_domain_status()
+                        .map(|state| (id.clone(), state))
+                })
+                .collect();
             status
         })
     }
@@ -2092,6 +2150,13 @@ impl World {
         if expected != actual || nodes.len() != manifest.nodes.len() {
             anyhow::bail!("resolved node ids must match environment manifest nodes exactly");
         }
+        for node in &nodes {
+            crate::regulator::require_model_presence(
+                node.chip.internal_regulators.len(),
+                !manifest.cosim_models.is_empty(),
+            )
+            .map_err(|reason| anyhow::anyhow!("node '{}': {reason}", node.id))?;
+        }
         // Shared analog belongs to the environment. Per-node `cosim_models`
         // would duplicate a circuit or leave it unstepped, so they remain
         // refused even when the environment declares one shared model.
@@ -2323,6 +2388,11 @@ impl World {
             )?;
             circuit.check_gpio_ownership(&world.machines, &world.pending_nets)?;
             world.cosim = Some(circuit);
+        }
+        for (id, machine) in &world.machines {
+            machine
+                .validate_internal_regulator_admission()
+                .map_err(|reason| anyhow::anyhow!("node '{id}': {reason}"))?;
         }
         world.finish_pad_watches().context("gpio_net")?;
 
@@ -2675,3 +2745,7 @@ external_devices: []
         assert_eq!(world.machines["n1"].read_u8(0x4000_1000).unwrap(), 0);
     }
 }
+
+#[cfg(test)]
+#[path = "world/controlled_buck_tests.rs"]
+mod controlled_buck_tests;

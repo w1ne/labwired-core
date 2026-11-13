@@ -1,0 +1,83 @@
+[
+  {
+    "name": "worktree",
+    "command": [
+      "git",
+      "-c",
+      "core.fsmonitor=false",
+      "worktree",
+      "add",
+      "-b",
+      "fix/adc-reference-numerical-zero-20261112",
+      "/data/worktrees/labwired-core-adc-reference-20261112",
+      "30e5d13abfcd78de11cd713aed394e09243395f6"
+    ],
+    "exit": 0,
+    "seconds": 2.0008235099958256,
+    "log_sha256": "416549f300a4293af9a6f3456a549737ca189a0802a20572ae82963678fd7b80"
+  },
+  {
+    "name": "format",
+    "command": [
+      "cargo",
+      "fmt",
+      "--all"
+    ],
+    "exit": 0,
+    "seconds": 8.001337001041975,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "name": "whitespace",
+    "command": [
+      "git",
+      "-c",
+      "core.fsmonitor=false",
+      "diff",
+      "--check"
+    ],
+    "exit": 0,
+    "seconds": 2.002423699013889,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "name": "routing",
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "labwired-core",
+      "--features",
+      "event-scheduler",
+      "--lib",
+      "cosim::routing::",
+      "--",
+      "--nocapture"
+    ],
+    "exit": 0,
+    "seconds": 430.1897439159802,
+    "log_sha256": "bf07da0483f55fe11f254c5bef2fe9367323c2c4329eb904971a9380a2e5a1b8"
+  },
+  {
+    "name": "adjacent",
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "labwired-core",
+      "--features",
+      "event-scheduler",
+      "--test",
+      "power_routing",
+      "--test",
+      "cosim_pin_routing",
+      "--test",
+      "world_analog",
+      "--",
+      "--nocapture"
+    ],
+    "exit": 0,
+    "seconds": 18.02056807698682,
+    "log_sha256": "53ff09c0407726e4d96050fe05034e621021bfc09ea22906e3784bec5b2155a7"
+  }
+]

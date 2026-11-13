@@ -1,0 +1,1234 @@
+{
+  "parser_source": "/data/worktrees/labwired-core-shared-runtime-integration-20261112/crates/core/src/analog/netlist.rs",
+  "parser_source_sha256": "ded16db56a80f41725e41afb85bc01b96d9289cf9f56a93f9a1444cab8d11c2c",
+  "algorithm": "Independent-source basis first; omit source-only redundant capacitors from capacitor-only basis; refuse a combined redundant edge unless already capacitor-only redundant. Preserve source/card order and check reversed order.",
+  "counterexample": {
+    "direct_source_constraints": [],
+    "capacitor_only_redundant": [],
+    "independent_capacitor_constraints": [
+      "C1"
+    ],
+    "mixed_cycle_refusals": [
+      "C2"
+    ]
+  },
+  "native": [
+    {
+      "label": "cold-fc",
+      "deck_path": "/data/work-scratch/native-fc-cold-runtime-20261112/shared.cir",
+      "deck_sha256": "525e8bc53b417504dc66dee43a1993fed2d97b3adb2adbbff0718ed9d2fec231",
+      "capacitors": 41,
+      "independent_voltage_sources": 34,
+      "classification": {
+        "direct_source_constraints": [
+          "CC22",
+          "CC23"
+        ],
+        "capacitor_only_redundant": [
+          "CC11",
+          "CC12",
+          "CC13",
+          "CC14",
+          "CC18",
+          "CC19",
+          "CC2",
+          "CC20",
+          "CC31",
+          "CC32",
+          "CC34",
+          "CC35",
+          "CC37",
+          "CC39",
+          "CC40",
+          "CC41",
+          "CC42",
+          "CC5",
+          "CC6",
+          "CC7",
+          "CC9"
+        ],
+        "independent_capacitor_constraints": [
+          "CC1",
+          "CC10",
+          "CC15",
+          "CC16",
+          "CC17",
+          "CC21",
+          "CC24",
+          "CC25",
+          "CC26",
+          "CC27",
+          "CC3",
+          "CC30",
+          "CC33",
+          "CC36",
+          "CC38",
+          "CQ1_input",
+          "CQ2_input",
+          "XU11#cg"
+        ],
+        "mixed_cycle_refusals": []
+      },
+      "reversed_card_order_mixed_cycle_refusals": [],
+      "sources": [
+        {
+          "name": "VU10_select_offset",
+          "a": "U10_select",
+          "b": "v_net_u10_s",
+          "source_line": 102,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "VU12_logic",
+          "a": "U12_logic",
+          "b": "0",
+          "source_line": 113,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "VU12_sense_offset",
+          "a": "U12_plus_sense",
+          "b": "v_net_c38_2",
+          "source_line": 114,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "VU15_reverse_offset",
+          "a": "U15_vin_sense",
+          "b": "v_net_c30_1",
+          "source_line": 127,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "VU15_logic",
+          "a": "U15_logic",
+          "b": "0",
+          "source_line": 132,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "VU7_reverse_offset",
+          "a": "U7_vin_sense",
+          "b": "v_net_c30_1",
+          "source_line": 159,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "VU7_logic",
+          "a": "U7_logic",
+          "b": "0",
+          "source_line": 164,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vsup_bench",
+          "a": "v_net_bench__plus",
+          "b": "0",
+          "source_line": 170,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_gpio11",
+          "a": "d_gpio11",
+          "b": "0",
+          "source_line": 177,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_gpio14",
+          "a": "d_gpio14",
+          "b": "0",
+          "source_line": 180,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_gpio16",
+          "a": "d_gpio16",
+          "b": "0",
+          "source_line": 182,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_gpio17",
+          "a": "d_gpio17",
+          "b": "0",
+          "source_line": 184,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_gpio23",
+          "a": "d_gpio23",
+          "b": "0",
+          "source_line": 186,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_gpio4",
+          "a": "d_gpio4",
+          "b": "0",
+          "source_line": 189,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_gpio40",
+          "a": "d_gpio40",
+          "b": "0",
+          "source_line": 191,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_gpio41",
+          "a": "d_gpio41",
+          "b": "0",
+          "source_line": 193,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_gpio45",
+          "a": "d_gpio45",
+          "b": "0",
+          "source_line": 195,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_gpio46",
+          "a": "d_gpio46",
+          "b": "0",
+          "source_line": 197,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_gpio47",
+          "a": "d_gpio47",
+          "b": "0",
+          "source_line": 199,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_gpio5",
+          "a": "d_gpio5",
+          "b": "0",
+          "source_line": 201,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_gpio6",
+          "a": "d_gpio6",
+          "b": "0",
+          "source_line": 204,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_gpio7",
+          "a": "d_gpio7",
+          "b": "0",
+          "source_line": 207,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "XU11#vhi",
+          "a": "v_net_c10_1",
+          "b": "XU11#hi",
+          "source_line": 109,
+          "origin": "lower_opamp offset_rail"
+        },
+        {
+          "name": "XU11#vlo",
+          "a": "XU11#lo",
+          "b": "0",
+          "source_line": 109,
+          "origin": "lower_opamp offset_rail"
+        },
+        {
+          "name": "XU15#vh",
+          "a": "XU15#h0",
+          "b": "XU15#h1",
+          "source_line": 125,
+          "origin": "lower_regulator"
+        },
+        {
+          "name": "XU15#vl",
+          "a": "XU15#l1",
+          "b": "XU15#l0",
+          "source_line": 125,
+          "origin": "lower_regulator"
+        },
+        {
+          "name": "XU16#vh",
+          "a": "XU16#h0",
+          "b": "XU16#h1",
+          "source_line": 143,
+          "origin": "lower_regulator"
+        },
+        {
+          "name": "XU16#vl",
+          "a": "XU16#l1",
+          "b": "XU16#l0",
+          "source_line": 143,
+          "origin": "lower_regulator"
+        },
+        {
+          "name": "XU6#vh",
+          "a": "XU6#h0",
+          "b": "XU6#h1",
+          "source_line": 150,
+          "origin": "lower_regulator"
+        },
+        {
+          "name": "XU6#vl",
+          "a": "XU6#l1",
+          "b": "XU6#l0",
+          "source_line": 150,
+          "origin": "lower_regulator"
+        },
+        {
+          "name": "XU7#vh",
+          "a": "XU7#h0",
+          "b": "XU7#h1",
+          "source_line": 157,
+          "origin": "lower_regulator"
+        },
+        {
+          "name": "XU7#vl",
+          "a": "XU7#l1",
+          "b": "XU7#l0",
+          "source_line": 157,
+          "origin": "lower_regulator"
+        },
+        {
+          "name": "Xinternal_reg_0#vh",
+          "a": "Xinternal_reg_0#h0",
+          "b": "Xinternal_reg_0#h1",
+          "source_line": 176,
+          "origin": "lower_regulator"
+        },
+        {
+          "name": "Xinternal_reg_0#vl",
+          "a": "Xinternal_reg_0#l1",
+          "b": "Xinternal_reg_0#l0",
+          "source_line": 176,
+          "origin": "lower_regulator"
+        }
+      ],
+      "scope": "Source-derived explicit Circuit capacitor/independent voltage-source graph, including actual macro expansions. No compiled parser or nonlinear-charge admission claim."
+    },
+    {
+      "label": "five-mcu",
+      "deck_path": "/data/work-scratch/native-five-mcu-runtime-r2-20261112/shared.cir",
+      "deck_sha256": "67422deca6e3f0820174c404f3ce7149f966cdb6c6ed0c0267eb8f6e213a6fce",
+      "capacitors": 159,
+      "independent_voltage_sources": 105,
+      "classification": {
+        "direct_source_constraints": [],
+        "capacitor_only_redundant": [
+          "Cp006500730063005f00430033",
+          "Cp006500730063005f004300340032",
+          "Cp006500730063005f004300340039",
+          "Cp006500730063005f0043003500300031",
+          "Cp006500730063005f0043003500300032",
+          "Cp006500730063005f0043003500300033",
+          "Cp006500730063005f0043003500300034",
+          "Cp006500730063005f0043003500300035",
+          "Cp006500730063005f0043003500300036",
+          "Cp006500730063005f0043003500300037",
+          "Cp006500730063005f0043003500300038",
+          "Cp006500730063005f0043003500300039",
+          "Cp006500730063005f004300350031",
+          "Cp006500730063005f0043003500310030",
+          "Cp006500730063005f0043003500310031",
+          "Cp006500730063005f0043003500310032",
+          "Cp006500730063005f0043003500310033",
+          "Cp006500730063005f0043003500310034",
+          "Cp006500730063005f0043003500310035",
+          "Cp006500730063005f0043003500310036",
+          "Cp006500730063005f0043003500310037",
+          "Cp006500730063005f0043003500310038",
+          "Cp006500730063005f0043003500310039",
+          "Cp006500730063005f0043003500320030",
+          "Cp006500730063005f0043003500320031",
+          "Cp006500730063005f0043003500320032",
+          "Cp006500730063005f0043003500320033",
+          "Cp006500730063005f0043003500320034",
+          "Cp006500730063005f0043003500320035",
+          "Cp006500730063005f0043003500320036",
+          "Cp006500730063005f0043003500320037",
+          "Cp006500730063005f0043003500320038",
+          "Cp006500730063005f0043003500320039",
+          "Cp006500730063005f0043003500330030",
+          "Cp006500730063005f0043003500330031",
+          "Cp006500730063005f0043003500330032",
+          "Cp006500730063005f0043003500330033",
+          "Cp006500730063005f0043003500330034",
+          "Cp006500730063005f0043003500330035",
+          "Cp006500730063005f0043003500330036",
+          "Cp006500730063005f0043003500330037",
+          "Cp006500730063005f0043003500330038",
+          "Cp006500730063005f0043003500330039",
+          "Cp006500730063005f0043003500340030",
+          "Cp006500730063005f0043003500340031",
+          "Cp006500730063005f0043003500340032",
+          "Cp006500730063005f0043003500340033",
+          "Cp006500730063005f0043003500340034",
+          "Cp006500730063005f0043003500340035",
+          "Cp006500730063005f0043003500340036",
+          "Cp006500730063005f0043003500340037",
+          "Cp006500730063005f0043003500340038",
+          "Cp006500730063005f0043003500340039",
+          "Cp006500730063005f004300350035",
+          "Cp006500730063005f004300350037",
+          "Cp006500730063005f004300350038",
+          "Cp006500730063005f00430036",
+          "Cp006500730063005f004300360031",
+          "Cp006500730063005f004300360033",
+          "Cp006500730063005f004300360036",
+          "Cp006500730063005f004300360038",
+          "Cp006500730063005f004300370034",
+          "Cp006500730063005f004300370036",
+          "Cp006500730063005f004300380031",
+          "Cp006500730063005f004300380036",
+          "Cp006500730063005f004300390033",
+          "Cp00660063005f004300310031",
+          "Cp00660063005f004300310032",
+          "Cp00660063005f004300310033",
+          "Cp00660063005f004300310034",
+          "Cp00660063005f004300310038",
+          "Cp00660063005f004300310039",
+          "Cp00660063005f00430032",
+          "Cp00660063005f004300320030",
+          "Cp00660063005f004300320032",
+          "Cp00660063005f004300320033",
+          "Cp00660063005f004300330031",
+          "Cp00660063005f004300330032",
+          "Cp00660063005f004300330034",
+          "Cp00660063005f004300330035",
+          "Cp00660063005f004300330037",
+          "Cp00660063005f004300330039",
+          "Cp00660063005f004300340030",
+          "Cp00660063005f004300340031",
+          "Cp00660063005f004300340032",
+          "Cp00660063005f00430035",
+          "Cp00660063005f00430036",
+          "Cp00660063005f00430037",
+          "Cp00660063005f00430039"
+        ],
+        "independent_capacitor_constraints": [
+          "Cp006500730063005f00430032",
+          "Cp006500730063005f004300330032",
+          "Cp006500730063005f004300330033",
+          "Cp006500730063005f004300330034",
+          "Cp006500730063005f004300330035",
+          "Cp006500730063005f004300330036",
+          "Cp006500730063005f004300330037",
+          "Cp006500730063005f004300330038",
+          "Cp006500730063005f004300330039",
+          "Cp006500730063005f00430034",
+          "Cp006500730063005f004300340030",
+          "Cp006500730063005f004300340031",
+          "Cp006500730063005f004300340037",
+          "Cp006500730063005f004300340038",
+          "Cp006500730063005f004300350030",
+          "Cp006500730063005f004300350032",
+          "Cp006500730063005f004300350033",
+          "Cp006500730063005f004300350034",
+          "Cp006500730063005f004300350036",
+          "Cp006500730063005f004300350039",
+          "Cp006500730063005f004300360030",
+          "Cp006500730063005f004300360032",
+          "Cp006500730063005f004300360034",
+          "Cp006500730063005f004300360035",
+          "Cp006500730063005f004300360037",
+          "Cp006500730063005f004300370035",
+          "Cp006500730063005f004300390034",
+          "Cp006500730063005f00510031_input",
+          "Cp006500730063005f005100310030_input",
+          "Cp006500730063005f005100310031_input",
+          "Cp006500730063005f005100310032_input",
+          "Cp006500730063005f005100310033_input",
+          "Cp006500730063005f005100310034_input",
+          "Cp006500730063005f005100310035_input",
+          "Cp006500730063005f005100310036_input",
+          "Cp006500730063005f005100310037_input",
+          "Cp006500730063005f005100310038_input",
+          "Cp006500730063005f005100310039_input",
+          "Cp006500730063005f00510032_input",
+          "Cp006500730063005f005100320030_input",
+          "Cp006500730063005f005100320031_input",
+          "Cp006500730063005f005100320032_input",
+          "Cp006500730063005f005100320033_input",
+          "Cp006500730063005f005100320034_input",
+          "Cp006500730063005f00510033_input",
+          "Cp006500730063005f00510034_input",
+          "Cp006500730063005f00510035_input",
+          "Cp006500730063005f00510036_input",
+          "Cp006500730063005f00510037_input",
+          "Cp006500730063005f00510038_input",
+          "Cp006500730063005f00510039_input",
+          "Cp00660063005f00430031",
+          "Cp00660063005f004300310030",
+          "Cp00660063005f004300310035",
+          "Cp00660063005f004300310036",
+          "Cp00660063005f004300310037",
+          "Cp00660063005f004300320031",
+          "Cp00660063005f004300320034",
+          "Cp00660063005f004300320035",
+          "Cp00660063005f004300320036",
+          "Cp00660063005f004300320037",
+          "Cp00660063005f00430033",
+          "Cp00660063005f004300330030",
+          "Cp00660063005f004300330033",
+          "Cp00660063005f004300330036",
+          "Cp00660063005f004300330038",
+          "Cp00660063005f00510031_input",
+          "Cp00660063005f00510032_input",
+          "Xp006500730063005f005500310032#cg",
+          "Xp00660063005f005500310031#cg"
+        ],
+        "mixed_cycle_refusals": []
+      },
+      "reversed_card_order_mixed_cycle_refusals": [],
+      "sources": [
+        {
+          "name": "Vp006500730063005f005500310030_logic",
+          "a": "p006500730063005f005500310030_logic",
+          "b": "0",
+          "source_line": 273,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vp006500730063005f005500310033_bootstrap",
+          "a": "p006500730063005f005500310033_bootstrap",
+          "b": "vn006e006500740040006500730063005f004300370035003a0031",
+          "source_line": 329,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vp006500730063005f00550034_logic",
+          "a": "p006500730063005f00550034_logic",
+          "b": "0",
+          "source_line": 347,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vp006500730063005f00550036_logic",
+          "a": "p006500730063005f00550036_logic",
+          "b": "0",
+          "source_line": 395,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vp006500730063005f00550038_logic",
+          "a": "p006500730063005f00550038_logic",
+          "b": "0",
+          "source_line": 443,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vsup_p006500730063005f00620065006e00630068",
+          "a": "vn006e006500740040006500730063005f00620065006e00630068003a002b",
+          "b": "0",
+          "source_line": 489,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vemf_p006500730063005f0072006f0074006f00720031_a",
+          "a": "mot_p006500730063005f0072006f0074006f00720031_a_l",
+          "b": "mot_p006500730063005f0072006f0074006f00720031_star",
+          "source_line": 492,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vemf_p006500730063005f0072006f0074006f00720031_b",
+          "a": "mot_p006500730063005f0072006f0074006f00720031_b_l",
+          "b": "mot_p006500730063005f0072006f0074006f00720031_star",
+          "source_line": 495,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vemf_p006500730063005f0072006f0074006f00720031_c",
+          "a": "mot_p006500730063005f0072006f0074006f00720031_c_l",
+          "b": "mot_p006500730063005f0072006f0074006f00720031_star",
+          "source_line": 498,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vemf_p006500730063005f0072006f0074006f00720032_a",
+          "a": "mot_p006500730063005f0072006f0074006f00720032_a_l",
+          "b": "mot_p006500730063005f0072006f0074006f00720032_star",
+          "source_line": 501,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vemf_p006500730063005f0072006f0074006f00720032_b",
+          "a": "mot_p006500730063005f0072006f0074006f00720032_b_l",
+          "b": "mot_p006500730063005f0072006f0074006f00720032_star",
+          "source_line": 504,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vemf_p006500730063005f0072006f0074006f00720032_c",
+          "a": "mot_p006500730063005f0072006f0074006f00720032_c_l",
+          "b": "mot_p006500730063005f0072006f0074006f00720032_star",
+          "source_line": 507,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vemf_p006500730063005f0072006f0074006f00720033_a",
+          "a": "mot_p006500730063005f0072006f0074006f00720033_a_l",
+          "b": "mot_p006500730063005f0072006f0074006f00720033_star",
+          "source_line": 510,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vemf_p006500730063005f0072006f0074006f00720033_b",
+          "a": "mot_p006500730063005f0072006f0074006f00720033_b_l",
+          "b": "mot_p006500730063005f0072006f0074006f00720033_star",
+          "source_line": 513,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vemf_p006500730063005f0072006f0074006f00720033_c",
+          "a": "mot_p006500730063005f0072006f0074006f00720033_c_l",
+          "b": "mot_p006500730063005f0072006f0074006f00720033_star",
+          "source_line": 516,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vemf_p006500730063005f0072006f0074006f00720034_a",
+          "a": "mot_p006500730063005f0072006f0074006f00720034_a_l",
+          "b": "mot_p006500730063005f0072006f0074006f00720034_star",
+          "source_line": 519,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vemf_p006500730063005f0072006f0074006f00720034_b",
+          "a": "mot_p006500730063005f0072006f0074006f00720034_b_l",
+          "b": "mot_p006500730063005f0072006f0074006f00720034_star",
+          "source_line": 522,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vemf_p006500730063005f0072006f0074006f00720034_c",
+          "a": "mot_p006500730063005f0072006f0074006f00720034_c_l",
+          "b": "mot_p006500730063005f0072006f0074006f00720034_star",
+          "source_line": 525,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vp00660063005f005500310030_select_offset",
+          "a": "p00660063005f005500310030_select",
+          "b": "vn006e00650074004000660063005f005500310030003a0053",
+          "source_line": 627,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vp00660063005f005500310032_logic",
+          "a": "p00660063005f005500310032_logic",
+          "b": "0",
+          "source_line": 638,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vp00660063005f005500310032_sense_offset",
+          "a": "p00660063005f005500310032_plus_sense",
+          "b": "vn006e00650074004000660063005f004300330038003a0032",
+          "source_line": 639,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vp00660063005f005500310035_reverse_offset",
+          "a": "p00660063005f005500310035_vin_sense",
+          "b": "vn006e00650074004000660063005f004300330030003a0031",
+          "source_line": 652,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vp00660063005f005500310035_logic",
+          "a": "p00660063005f005500310035_logic",
+          "b": "0",
+          "source_line": 657,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vp00660063005f00550037_reverse_offset",
+          "a": "p00660063005f00550037_vin_sense",
+          "b": "vn006e00650074004000660063005f004300330030003a0031",
+          "source_line": 684,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vp00660063005f00550037_logic",
+          "a": "p00660063005f00550037_logic",
+          "b": "0",
+          "source_line": 689,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550032_pa0",
+          "a": "d_n006500730063005f00550032_pa0",
+          "b": "0",
+          "source_line": 705,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550032_pa1",
+          "a": "d_n006500730063005f00550032_pa1",
+          "b": "0",
+          "source_line": 707,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550032_pa10",
+          "a": "d_n006500730063005f00550032_pa10",
+          "b": "0",
+          "source_line": 709,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550032_pa4",
+          "a": "d_n006500730063005f00550032_pa4",
+          "b": "0",
+          "source_line": 712,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550032_pa5",
+          "a": "d_n006500730063005f00550032_pa5",
+          "b": "0",
+          "source_line": 714,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550032_pa7",
+          "a": "d_n006500730063005f00550032_pa7",
+          "b": "0",
+          "source_line": 716,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550032_pa8",
+          "a": "d_n006500730063005f00550032_pa8",
+          "b": "0",
+          "source_line": 719,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550032_pa9",
+          "a": "d_n006500730063005f00550032_pa9",
+          "b": "0",
+          "source_line": 722,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550032_pb0",
+          "a": "d_n006500730063005f00550032_pb0",
+          "b": "0",
+          "source_line": 725,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550032_pb1",
+          "a": "d_n006500730063005f00550032_pb1",
+          "b": "0",
+          "source_line": 728,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550032_pb4",
+          "a": "d_n006500730063005f00550032_pb4",
+          "b": "0",
+          "source_line": 731,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550035_pa0",
+          "a": "d_n006500730063005f00550035_pa0",
+          "b": "0",
+          "source_line": 733,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550035_pa1",
+          "a": "d_n006500730063005f00550035_pa1",
+          "b": "0",
+          "source_line": 735,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550035_pa10",
+          "a": "d_n006500730063005f00550035_pa10",
+          "b": "0",
+          "source_line": 737,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550035_pa4",
+          "a": "d_n006500730063005f00550035_pa4",
+          "b": "0",
+          "source_line": 740,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550035_pa5",
+          "a": "d_n006500730063005f00550035_pa5",
+          "b": "0",
+          "source_line": 742,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550035_pa7",
+          "a": "d_n006500730063005f00550035_pa7",
+          "b": "0",
+          "source_line": 744,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550035_pa8",
+          "a": "d_n006500730063005f00550035_pa8",
+          "b": "0",
+          "source_line": 747,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550035_pa9",
+          "a": "d_n006500730063005f00550035_pa9",
+          "b": "0",
+          "source_line": 750,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550035_pb0",
+          "a": "d_n006500730063005f00550035_pb0",
+          "b": "0",
+          "source_line": 753,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550035_pb1",
+          "a": "d_n006500730063005f00550035_pb1",
+          "b": "0",
+          "source_line": 756,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550035_pb4",
+          "a": "d_n006500730063005f00550035_pb4",
+          "b": "0",
+          "source_line": 759,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550037_pa0",
+          "a": "d_n006500730063005f00550037_pa0",
+          "b": "0",
+          "source_line": 761,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550037_pa1",
+          "a": "d_n006500730063005f00550037_pa1",
+          "b": "0",
+          "source_line": 763,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550037_pa10",
+          "a": "d_n006500730063005f00550037_pa10",
+          "b": "0",
+          "source_line": 765,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550037_pa4",
+          "a": "d_n006500730063005f00550037_pa4",
+          "b": "0",
+          "source_line": 768,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550037_pa5",
+          "a": "d_n006500730063005f00550037_pa5",
+          "b": "0",
+          "source_line": 770,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550037_pa7",
+          "a": "d_n006500730063005f00550037_pa7",
+          "b": "0",
+          "source_line": 772,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550037_pa8",
+          "a": "d_n006500730063005f00550037_pa8",
+          "b": "0",
+          "source_line": 775,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550037_pa9",
+          "a": "d_n006500730063005f00550037_pa9",
+          "b": "0",
+          "source_line": 778,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550037_pb0",
+          "a": "d_n006500730063005f00550037_pb0",
+          "b": "0",
+          "source_line": 781,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550037_pb1",
+          "a": "d_n006500730063005f00550037_pb1",
+          "b": "0",
+          "source_line": 784,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550037_pb4",
+          "a": "d_n006500730063005f00550037_pb4",
+          "b": "0",
+          "source_line": 787,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550039_pa0",
+          "a": "d_n006500730063005f00550039_pa0",
+          "b": "0",
+          "source_line": 789,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550039_pa1",
+          "a": "d_n006500730063005f00550039_pa1",
+          "b": "0",
+          "source_line": 791,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550039_pa10",
+          "a": "d_n006500730063005f00550039_pa10",
+          "b": "0",
+          "source_line": 793,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550039_pa4",
+          "a": "d_n006500730063005f00550039_pa4",
+          "b": "0",
+          "source_line": 796,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550039_pa5",
+          "a": "d_n006500730063005f00550039_pa5",
+          "b": "0",
+          "source_line": 798,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550039_pa7",
+          "a": "d_n006500730063005f00550039_pa7",
+          "b": "0",
+          "source_line": 800,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550039_pa8",
+          "a": "d_n006500730063005f00550039_pa8",
+          "b": "0",
+          "source_line": 803,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550039_pa9",
+          "a": "d_n006500730063005f00550039_pa9",
+          "b": "0",
+          "source_line": 806,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550039_pb0",
+          "a": "d_n006500730063005f00550039_pb0",
+          "b": "0",
+          "source_line": 809,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550039_pb1",
+          "a": "d_n006500730063005f00550039_pb1",
+          "b": "0",
+          "source_line": 812,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n006500730063005f00550039_pb4",
+          "a": "d_n006500730063005f00550039_pb4",
+          "b": "0",
+          "source_line": 815,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n00660063005f00550032_gpio11",
+          "a": "d_n00660063005f00550032_gpio11",
+          "b": "0",
+          "source_line": 817,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n00660063005f00550032_gpio14",
+          "a": "d_n00660063005f00550032_gpio14",
+          "b": "0",
+          "source_line": 820,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n00660063005f00550032_gpio16",
+          "a": "d_n00660063005f00550032_gpio16",
+          "b": "0",
+          "source_line": 822,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n00660063005f00550032_gpio17",
+          "a": "d_n00660063005f00550032_gpio17",
+          "b": "0",
+          "source_line": 824,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n00660063005f00550032_gpio23",
+          "a": "d_n00660063005f00550032_gpio23",
+          "b": "0",
+          "source_line": 826,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n00660063005f00550032_gpio28",
+          "a": "d_n00660063005f00550032_gpio28",
+          "b": "0",
+          "source_line": 829,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n00660063005f00550032_gpio29",
+          "a": "d_n00660063005f00550032_gpio29",
+          "b": "0",
+          "source_line": 831,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n00660063005f00550032_gpio30",
+          "a": "d_n00660063005f00550032_gpio30",
+          "b": "0",
+          "source_line": 833,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n00660063005f00550032_gpio31",
+          "a": "d_n00660063005f00550032_gpio31",
+          "b": "0",
+          "source_line": 835,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n00660063005f00550032_gpio4",
+          "a": "d_n00660063005f00550032_gpio4",
+          "b": "0",
+          "source_line": 837,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n00660063005f00550032_gpio40",
+          "a": "d_n00660063005f00550032_gpio40",
+          "b": "0",
+          "source_line": 839,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n00660063005f00550032_gpio41",
+          "a": "d_n00660063005f00550032_gpio41",
+          "b": "0",
+          "source_line": 841,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n00660063005f00550032_gpio45",
+          "a": "d_n00660063005f00550032_gpio45",
+          "b": "0",
+          "source_line": 843,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n00660063005f00550032_gpio46",
+          "a": "d_n00660063005f00550032_gpio46",
+          "b": "0",
+          "source_line": 845,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n00660063005f00550032_gpio47",
+          "a": "d_n00660063005f00550032_gpio47",
+          "b": "0",
+          "source_line": 847,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n00660063005f00550032_gpio5",
+          "a": "d_n00660063005f00550032_gpio5",
+          "b": "0",
+          "source_line": 849,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n00660063005f00550032_gpio6",
+          "a": "d_n00660063005f00550032_gpio6",
+          "b": "0",
+          "source_line": 852,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Vdrv_n00660063005f00550032_gpio7",
+          "a": "d_n00660063005f00550032_gpio7",
+          "b": "0",
+          "source_line": 855,
+          "origin": "explicit deck"
+        },
+        {
+          "name": "Xp006500730063005f005500310032#vhi",
+          "a": "vn006e006500740040006500730063005f00430034003a0032",
+          "b": "Xp006500730063005f005500310032#hi",
+          "source_line": 322,
+          "origin": "lower_opamp offset_rail"
+        },
+        {
+          "name": "Xp006500730063005f005500310032#vlo",
+          "a": "Xp006500730063005f005500310032#lo",
+          "b": "0",
+          "source_line": 322,
+          "origin": "lower_opamp offset_rail"
+        },
+        {
+          "name": "Xp006500730063005f005500310033#vh",
+          "a": "Xp006500730063005f005500310033#h0",
+          "b": "Xp006500730063005f005500310033#h1",
+          "source_line": 328,
+          "origin": "lower_regulator"
+        },
+        {
+          "name": "Xp006500730063005f005500310033#vl",
+          "a": "Xp006500730063005f005500310033#l1",
+          "b": "Xp006500730063005f005500310033#l0",
+          "source_line": 328,
+          "origin": "lower_regulator"
+        },
+        {
+          "name": "Xp006500730063005f005500310035#vh",
+          "a": "Xp006500730063005f005500310035#h0",
+          "b": "Xp006500730063005f005500310035#h1",
+          "source_line": 341,
+          "origin": "lower_regulator"
+        },
+        {
+          "name": "Xp006500730063005f005500310035#vl",
+          "a": "Xp006500730063005f005500310035#l1",
+          "b": "Xp006500730063005f005500310035#l0",
+          "source_line": 341,
+          "origin": "lower_regulator"
+        },
+        {
+          "name": "Xp00660063005f005500310031#vhi",
+          "a": "vn006e00650074004000660063005f004300310030003a0031",
+          "b": "Xp00660063005f005500310031#hi",
+          "source_line": 634,
+          "origin": "lower_opamp offset_rail"
+        },
+        {
+          "name": "Xp00660063005f005500310031#vlo",
+          "a": "Xp00660063005f005500310031#lo",
+          "b": "0",
+          "source_line": 634,
+          "origin": "lower_opamp offset_rail"
+        },
+        {
+          "name": "Xp00660063005f005500310035#vh",
+          "a": "Xp00660063005f005500310035#h0",
+          "b": "Xp00660063005f005500310035#h1",
+          "source_line": 650,
+          "origin": "lower_regulator"
+        },
+        {
+          "name": "Xp00660063005f005500310035#vl",
+          "a": "Xp00660063005f005500310035#l1",
+          "b": "Xp00660063005f005500310035#l0",
+          "source_line": 650,
+          "origin": "lower_regulator"
+        },
+        {
+          "name": "Xp00660063005f005500310036#vh",
+          "a": "Xp00660063005f005500310036#h0",
+          "b": "Xp00660063005f005500310036#h1",
+          "source_line": 668,
+          "origin": "lower_regulator"
+        },
+        {
+          "name": "Xp00660063005f005500310036#vl",
+          "a": "Xp00660063005f005500310036#l1",
+          "b": "Xp00660063005f005500310036#l0",
+          "source_line": 668,
+          "origin": "lower_regulator"
+        },
+        {
+          "name": "Xp00660063005f00550036#vh",
+          "a": "Xp00660063005f00550036#h0",
+          "b": "Xp00660063005f00550036#h1",
+          "source_line": 675,
+          "origin": "lower_regulator"
+        },
+        {
+          "name": "Xp00660063005f00550036#vl",
+          "a": "Xp00660063005f00550036#l1",
+          "b": "Xp00660063005f00550036#l0",
+          "source_line": 675,
+          "origin": "lower_regulator"
+        },
+        {
+          "name": "Xp00660063005f00550037#vh",
+          "a": "Xp00660063005f00550037#h0",
+          "b": "Xp00660063005f00550037#h1",
+          "source_line": 682,
+          "origin": "lower_regulator"
+        },
+        {
+          "name": "Xp00660063005f00550037#vl",
+          "a": "Xp00660063005f00550037#l1",
+          "b": "Xp00660063005f00550037#l0",
+          "source_line": 682,
+          "origin": "lower_regulator"
+        },
+        {
+          "name": "Xinternal_reg_0#vh",
+          "a": "Xinternal_reg_0#h0",
+          "b": "Xinternal_reg_0#h1",
+          "source_line": 700,
+          "origin": "lower_regulator"
+        },
+        {
+          "name": "Xinternal_reg_0#vl",
+          "a": "Xinternal_reg_0#l1",
+          "b": "Xinternal_reg_0#l0",
+          "source_line": 700,
+          "origin": "lower_regulator"
+        }
+      ],
+      "scope": "Source-derived explicit Circuit capacitor/independent voltage-source graph, including actual macro expansions. No compiled parser or nonlinear-charge admission claim."
+    }
+  ],
+  "limits": [
+    "Does not close implicit nonlinear-charge ambiguity.",
+    "Does not replace production parser or solver execution.",
+    "Does not alter any native source/deck/state."
+  ]
+}

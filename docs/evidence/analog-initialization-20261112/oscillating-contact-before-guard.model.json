@@ -1,0 +1,17 @@
+{
+  "id": "circuit",
+  "adapter": "analog",
+  "step_ns": 100,
+  "inputs": {},
+  "outputs": {
+    "out": "plant.out"
+  },
+  "config": {
+    "max_unknowns": 8,
+    "substeps": 1,
+    "probes": {
+      "out": "v(out)"
+    },
+    "netlist_text": "V1 vin 0 1\nR1 vin out 1k\nS1 out 0 out 0 vt=.5 vh=0 ron=1 roff=1e12\n"
+  }
+}

@@ -178,17 +178,22 @@ pub fn run_cosim_step(args: CosimStepArgs) -> ExitCode {
     }
 
     if args.json {
+        let initialization = runner.analog_initialization_status();
         let steps: Vec<serde_json::Value> = routed
             .iter()
             .map(|step| {
-                serde_json::json!({
+                let mut value = serde_json::json!({
                     "model": step.model_id,
                     "outputs": step
                         .outputs
                         .iter()
                         .map(|(path, value)| (path.clone(), signal_to_json(value)))
                         .collect::<serde_json::Map<String, serde_json::Value>>(),
-                })
+                });
+                if let Some(status) = initialization.get(&step.model_id) {
+                    value["initialization"] = serde_json::json!(status);
+                }
+                value
             })
             .collect();
         println!("{}", serde_json::to_string_pretty(&steps).unwrap());

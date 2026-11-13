@@ -1,0 +1,41 @@
+{
+  "source": {
+    "crates/core/src/peripheral.rs": "0ee46a620fa47f81bd8334369ec50d2fb72a157aff2d096d3f10dc91fd7cb4e4",
+    "crates/core/src/bus/sim_inputs.rs": "4150409812c2533a98de153e1a37565c2a13d223054a6a0bc1b59418af193b69",
+    "crates/core/src/cosim/routing.rs": "7e537f49195324857529e3c9fcf7973f59a06faaa1cf0ee647679f15109f5f06",
+    "crates/core/src/cosim/adc_reference_tests.rs": "9d0311a6390b278b058b455e12b5343f466cb82e0cc7ea3f7a4a86c7bb78e791"
+  },
+  "counts": [
+    {
+      "name": "routing",
+      "suites": [
+        {
+          "passed": 54,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "adjacent",
+      "suites": [
+        {
+          "passed": 29,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 18,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    }
+  ],
+  "free_bytes_at_end": 8175599616
+}

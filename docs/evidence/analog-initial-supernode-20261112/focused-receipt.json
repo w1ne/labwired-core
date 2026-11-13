@@ -1,0 +1,14 @@
+{
+  "scope": "stationary-source supernode extension on c914, before OPAMP power merge",
+  "base_head": "c914c0513e405a8f848be0e55ed69633b7eac3fe",
+  "exit": 0,
+  "passed": 53,
+  "failed": 0,
+  "ignored": 0,
+  "log_sha256": "f40be5396f9cb7121ed59472b5f0748bd0beedffba6dff8238bf88931067d621",
+  "files_sha256": {
+    "crates/core/src/analog/initialization.rs": "2ca7dfa0e41282c92f4ebc3e54740c1ce0d0f458365daf8e2636529b4cf586b6",
+    "crates/core/src/analog/mna_initialization.rs": "3dcd89c7486d8966e15d6e58cbe65165b9dfd9d697b9ca847c0ba3b54cd33348",
+    "crates/core/tests/analog_transient_voltage_group.rs": "60c5cb6f540a75140f0259cd09a172676cbe61c8c3dade0e5a96b4f9c5417dd9"
+  }
+}

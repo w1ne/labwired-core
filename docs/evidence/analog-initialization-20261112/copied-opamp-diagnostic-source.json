@@ -1,0 +1,29 @@
+{
+  "scope": "copied numerical diagnostic only; no production or native MCU acceptance",
+  "base_generic_head": "dd8b68a651ee8d91f9d653db05efa318cfd51a5e",
+  "input": "/data/work-scratch/native-fc-transient-state-r1-20261112/model.json",
+  "input_sha256": "85b337f49a413b597fab8d1a40d02a4e96fad3db11e07932ceba56fcb42c8609",
+  "sources": {
+    "analog/controlled_buck.rs": "89f0ff3950bb9403bad00b3dedfa3717a699e3cd8069d0a3f62433ed1611d508",
+    "analog/device.rs": "3880ad84b80ed4a14e143fb3f85ba9435cbd16d1fc6fe5a1ddf852286c3cda27",
+    "analog/initialization.rs": "d2e6a483d7d8bb75153f2082b8813e35d92c2968c8095f9db5ddab8c8d15e051",
+    "analog/initialization_charge.rs": "9d33e24807f5b0f2fe6198abdece3a0ac9ef264ec3350a82a1fd373ba8e7cd5f",
+    "analog/mna.rs": "a550c747c0f0041964a307a3a4d328cd8597dae7b59e67d33022a039bbdb472d",
+    "analog/mna_initialization.rs": "6b9c3e6e9fe017956c2b4ed6f6a47dfd11e3fb982236583c915156a25f765704",
+    "analog/netlist.rs": "ded16db56a80f41725e41afb85bc01b96d9289cf9f56a93f9a1444cab8d11c2c",
+    "main.rs": "a05246d7349f137d502d6b78e348565f79d16e5822b024edb0d9f666ca5b73fa"
+  },
+  "binary_sha256": "db7c1908c9b85aaea138512402837c24731d7ecb5fda11317435797f9e9e5581",
+  "log_sha256": "4f9ed93d0b6991a2e23fe7f6bc05855cacf36840a8d7da06222262fd718cf298",
+  "compiler_options": [
+    "rustc",
+    "--edition=2021",
+    "-C",
+    "panic=abort",
+    "-C",
+    "opt-level=1",
+    "-C",
+    "debuginfo=0"
+  ],
+  "source_change": "diagnostic logging at final Newton iterates only; device laws, limits, tolerances, parsed deck and state unchanged"
+}

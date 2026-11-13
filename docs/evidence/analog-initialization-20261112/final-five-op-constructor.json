@@ -1,0 +1,26 @@
+{
+  "base_unknowns": 667,
+  "bound_initial_commands_before_constructor": [
+    {
+      "command_revision": 0,
+      "current_limit_a": 0.24,
+      "element": "Xinternal_reg_0",
+      "enabled": true,
+      "rated_load_a": 0.2,
+      "target_voltage_v": 1.1
+    }
+  ],
+  "capacitors": 159,
+  "construction": "refused",
+  "construction_seconds": 0.400034722,
+  "error": "circuit matrix is singular at unknown 657: check for a floating node, a zero-ohm resistor or two voltage sources in parallel",
+  "inductors": 16,
+  "input": "/data/work-scratch/native-five-mcu-667-circuit-20261112/model.json",
+  "max_unknowns": 667,
+  "model_id": "circuit",
+  "requested_initialization": {
+    "mode": "operating_point"
+  },
+  "scope": "production analog constructor only; no MCU or firmware execution",
+  "step_ns": 100
+}

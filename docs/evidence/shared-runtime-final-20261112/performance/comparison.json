@@ -1,0 +1,30 @@
+{
+  "rows": [
+    {
+      "board": "r7fa6m5bh",
+      "before_ir_per_step": 1244.5,
+      "after_ir_per_step": 1235.5,
+      "change_ir_per_step": -9.0,
+      "change_fraction": -0.007231820008035355
+    },
+    {
+      "board": "r7fa8m1ah",
+      "before_ir_per_step": 1242.6,
+      "after_ir_per_step": 1233.6,
+      "change_ir_per_step": -9.0,
+      "change_fraction": -0.00724287783679382
+    }
+  ],
+  "admission_tests": [
+    {
+      "passed": 15,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "same_profile": true,
+  "same_firmware_bytes": true,
+  "unchanged_baselines": true,
+  "esp32_local": "unmeasured; final release CI required",
+  "scope": "paired local opt1 diagnostic; final unchanged release CI remains authoritative"
+}

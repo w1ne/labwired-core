@@ -69,7 +69,7 @@ fn datasheet_transcriptions() {
         assert_eq!(desc.io_voltage_v, Some(volts), "{chip}");
         assert_eq!(
             desc.gpio_input_thresholds,
-            Some(GpioInputThresholds {
+            Some(GpioInputThresholds::Affine {
                 vil,
                 vih,
                 vil_offset_v: 0.0,

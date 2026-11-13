@@ -1,0 +1,24 @@
+{
+  "base_unknowns": 3,
+  "bound_initial_commands_before_constructor": [],
+  "capacitors": 0,
+  "construction": "accepted",
+  "construction_seconds": 0.000039429,
+  "inductors": 0,
+  "initial_outputs": {
+    "out": 0.0009990009990009992
+  },
+  "initialization": {
+    "base_unknowns": 3,
+    "initialization_unknowns": 3,
+    "mode": "operating_point"
+  },
+  "input": "/data/work-evidence/analog-transient-state-20261112/oscillating-contact-before-guard.model.json",
+  "max_unknowns": 8,
+  "model_id": "circuit",
+  "requested_initialization": {
+    "mode": "operating_point"
+  },
+  "scope": "production analog constructor only; no MCU or firmware execution",
+  "step_ns": 100
+}

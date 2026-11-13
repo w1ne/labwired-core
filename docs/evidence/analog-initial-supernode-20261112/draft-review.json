@@ -1,0 +1,13 @@
+{
+  "scope": "source-only reviewed extension proposal; tests below are expected-red before implementation",
+  "initializer_base": "c914c0513e405a8f848be0e55ed69633b7eac3fe",
+  "draft_sha256": {
+    "mna_initialization.rs.draft": "88495e99af42aaecb2c71689a84a3338e0dc16ea81d055a1b2954c2ced5afc0c",
+    "initialization.rs.draft": "2ca7dfa0e41282c92f4ebc3e54740c1ce0d0f458365daf8e2636529b4cf586b6"
+  },
+  "independent_test": {
+    "path": "/data/work-evidence/transient-state-independent-tests-20261112/analog_transient_voltage_group.rs",
+    "sha256": "60c5cb6f540a75140f0259cd09a172676cbe61c8c3dade0e5a96b4f9c5417dd9"
+  },
+  "review": "Parent read-only review found no concrete blocker; this is numerical source review, not hardware acknowledgment."
+}

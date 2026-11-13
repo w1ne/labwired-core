@@ -1,0 +1,178 @@
+{
+  "schema_version": 1,
+  "source_head": "30e28feb8f43bb65ed8e1d643fdcc42852a9a217",
+  "main_base": "9ec401ae66def27eb99512d89a3bdcb9de5c5c5b",
+  "numerical_zero_source_commit": "f2d017c70941c28c8fe818aed510ed43851cd630",
+  "focused_results": [
+    {
+      "passed": 17,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "focused_total_passed": 33,
+  "scope": "Production analog constructor and one 100 ns circuit step; explicit zero/disabled controller stimuli; no MCU or firmware execution. R4 artifacts are unchanged, distinct from later r5 mux exports.",
+  "cases": [
+    {
+      "case": "fc",
+      "input": "/data/work-scratch/native-fc-opamp-direct-cold-state-r4-20261112/model.json",
+      "input_sha256": "5ce5a6b85dec7326f4cb5f010b61162edfcaafe854f40033b24dc332275e58dc",
+      "fixture": "fc-r4-model.json.gz",
+      "netlist_sha256": "87a241320f8db7733d1aca169ff41a37a0cf7d5c0ef5479f5e3eb1d2e8eee5a3",
+      "construction": "accepted",
+      "initialization": {
+        "base_unknowns": 214,
+        "initialization_unknowns": 232,
+        "mode": "transient_state"
+      },
+      "max_unknowns": 512,
+      "capacitors": 41,
+      "inductors": 3,
+      "construction_seconds": 0.004533908,
+      "first_step": {
+        "accepted": true,
+        "step_ns": 100,
+        "seconds": 0.013891059
+      },
+      "wall_seconds": 0.03199489100370556,
+      "max_rss_kib": 4224,
+      "recorded_input_origin": "declared regulator/parameter defaults plus explicit zero numeric sources and false switch stimuli; no MCU or firmware output",
+      "raw_result": "stimulus-fc-state-r4-constructor.json",
+      "original_controller_stimulus_count": 28
+    },
+    {
+      "case": "five_mcu",
+      "input": "/data/work-scratch/native-five-mcu-opamp-direct-state-737-r4-20261112/model.json",
+      "input_sha256": "d9d08204bff52a13905150ef35eca121100e9ac0d922596df2c2dd375d3bfe44",
+      "fixture": "five_mcu-r4-model.json.gz",
+      "netlist_sha256": "fd3f20b5aa57d2193e70a99c4c63f2d3cb76072bfb1081d1911792503d183288",
+      "construction": "accepted",
+      "initialization": {
+        "base_unknowns": 666,
+        "initialization_unknowns": 736,
+        "mode": "transient_state"
+      },
+      "max_unknowns": 737,
+      "capacitors": 159,
+      "inductors": 16,
+      "construction_seconds": 0.088961693,
+      "first_step": {
+        "accepted": true,
+        "step_ns": 100,
+        "seconds": 4.3264066230000005
+      },
+      "wall_seconds": 4.464690124965273,
+      "max_rss_kib": 12928,
+      "recorded_input_origin": "declared regulator/parameter defaults plus explicit zero numeric sources and false switch stimuli; no MCU or firmware output",
+      "raw_result": "stimulus-five-state737-r4-constructor.json",
+      "original_controller_stimulus_count": 136
+    }
+  ],
+  "claims": {
+    "constructor_and_first_step": true,
+    "raw_rail_clipping": false,
+    "default_operating_point_changed": false,
+    "complete_native_world_acceptance": false,
+    "cold_power_startup": false,
+    "motor_operation": false,
+    "silicon_equivalence": false,
+    "flight_acceptance": false
+  },
+  "composition": [
+    {
+      "commit": "30e28feb8f43bb65ed8e1d643fdcc42852a9a217",
+      "subject": "fix: bound inactive opamp numerical zero at machine precision"
+    },
+    {
+      "commit": "a6faa23fd37c1be3a44110850138d5ba0233383a",
+      "subject": "fix(analog): initialize stationary voltage-connected inductive groups"
+    },
+    {
+      "commit": "8dbf55ec9daf48d93933794f5b03399c174ea27b",
+      "subject": "fix: qualify optional opamp supply envelopes from solved rails"
+    },
+    {
+      "commit": "c914c0513e405a8f848be0e55ed69633b7eac3fe",
+      "subject": "feat(analog): add bounded explicit reactive-state initialization"
+    },
+    {
+      "commit": "dd8b68a651ee8d91f9d653db05efa318cfd51a5e",
+      "subject": "fix: preserve SPI wrappers through generic readback and protocol access"
+    },
+    {
+      "commit": "693a590f8698bde2a33ab1cfbedbc37d3177109f",
+      "subject": "Merge reviewed main into shared circuit runtime integration"
+    },
+    {
+      "commit": "87caaa4be13be3c2385258ef58bdd3b4c608b1dd",
+      "subject": "Merge bounded analog capacity into shared circuit runtime"
+    },
+    {
+      "commit": "037b9996c64987bd7758d7544de5f789845cb43a",
+      "subject": "Bind internal averaged buck stages to sampled circuit control"
+    },
+    {
+      "commit": "95c2340a33ae442f31411449f23e0aaa015479ea",
+      "subject": "Allow explicit bounded analog capacity through 1024 unknowns"
+    },
+    {
+      "commit": "a01867221d2f29d733e39118ab51d440c34584d7",
+      "subject": "Record exact native production capacity probes"
+    },
+    {
+      "commit": "75ae92f336da0bf50188d98f0f045da4a8abf1e4",
+      "subject": "feat(power): supervise sampled MCU domains and scoped resets"
+    },
+    {
+      "commit": "3cced23c8de3a98f5acb56d45872912bc068b0a1",
+      "subject": "fix(cosim): apply external-device power rails atomically"
+    },
+    {
+      "commit": "de126cbb5c033989542d7446ee7735bd7c47f053",
+      "subject": "feat(power): gate external SPI devices on atomic bounded supply rails"
+    },
+    {
+      "commit": "0929aa8e54d9cf8586ec1d6020ccb0deeec9023a",
+      "subject": "fix(bmi270): bind SPI interrupt roles to MCU input pads"
+    },
+    {
+      "commit": "5f9b2b258f901bd05df07552be7bedeac893045b",
+      "subject": "Model native BMI270 SPI initialization and sampled data-ready outputs"
+    },
+    {
+      "commit": "b6fbf981c90f906360e50013771f10d26835cbcf",
+      "subject": "feat(motor): couple three-phase BLDC shafts to a shared analog circuit"
+    },
+    {
+      "commit": "bec53dcb1b4c05e160716d8dd64ddf9009af1a9b",
+      "subject": "feat(analog): add explicit bounded MNA capacity option"
+    },
+    {
+      "commit": "2829a7617be82a645d68dc3c3dd60eafeb1e674d",
+      "subject": "fix(wasm): propagate shared-world inspection errors"
+    },
+    {
+      "commit": "f2b4942a6e1921fe60fd8b96c3e102c9a48c5a7d",
+      "subject": "fix(wasm): propagate shared-world inspection errors"
+    },
+    {
+      "commit": "42a82cfc6ce270cdffb2ac7b2b54b99f402d9a05",
+      "subject": "fix(cosim): apply affine GPIO limits at each live supply boundary"
+    }
+  ]
+}

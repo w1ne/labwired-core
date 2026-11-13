@@ -1,0 +1,42 @@
+{
+  "heads": {
+    "published": "ccbda884c9aaa99ecaae749291d9f0f0580cabb2",
+    "main": "5136a4ddf78132f5b411972911042c91d5a67121",
+    "rail": "65efd6fd683e166169f23ccb7b47a153f681f929",
+    "driver": "12fec73c211ddb3b4e0cec4d1241f42d8b4ecb54"
+  },
+  "profile": "shared-runtime-integration-20261112",
+  "ratchet_unchanged": true,
+  "files": {
+    "crates/config/tests/internal_regulators.rs": "aee421e74b430c289f0a5347cd6c3375b350f4d707bac4cf7473bf60e8e652c4",
+    "crates/core/src/bus/mcu_power.rs": "6bd7df49f9d7dfbe047b598105f11aff6e12bfc8f05b69a0924b56d5e09ead6b",
+    "crates/core/src/cosim/drive_command_tests.rs": "3dbe8792c8414f3936ce17ac1d619ba715ceaa19c442f514ea31741f7a801f3a",
+    "crates/core/src/cosim/routing.rs": "f396aa1371126bec67c18de01128c1b3f1014500a84f5aafe96d884498240e41",
+    "crates/core/src/peripherals/components/supply_domain.rs": "acec5867036c846089dd948c0b1196d28c0074f0eb7e2a17eac70378132d32e0",
+    "crates/core/src/peripherals/components/supply_domain/rail_batch_tests.rs": "78978b65c40bf4650a31c2b719f8d78850994efed37ab48a7f6036c3c6f4fab3",
+    "crates/core/src/power.rs": "2567931a17ecca2031721ed169e432bab68304107f4a21f2719841f35b880b7a",
+    "crates/core/src/power_domains.rs": "1364f576651f1be2bac29aefbee8b6c525f56efaeac3e0d29fccb7eecda21ece",
+    "crates/core/src/tests/downcast_ratchet.rs": "d7696056dca5cd655b1855aa35c9cb4bc82d42280344bf0d0f641e04623d2f85",
+    "crates/core/tests/analog_adapter.rs": "8a3aa9d6e00d223c7110a759b04622cceb127ed53150749a426d9c1f96a3531e",
+    "crates/core/tests/device_supply_rails.rs": "b909be49cdd30a40d2e0587f8671774ddbac720d7e47c316458121642e845a45",
+    "crates/core/tests/device_supply_routing.rs": "1dae82666b2db9d8a67cf2a85f6e5c626d11b0aea821bc05ca7a1961a066116b",
+    "crates/core/tests/mcu_power_domains.rs": "10ad62b08e7b10c8d49ae7fbdafad812b1a2760d350082312ce417d32a31f2d0",
+    "docs/cosimulation_plugins.md": "a7975bb0f0d825f0656c4fb25ac09d4e76346ac6d594b0c0fe8c48a4207ec54f",
+    "docs/evidence/declared-rail-roundoff-20261112/README.md": "3480ffefc1be347790f07c69f71bc25f5a62d3e9e4434ff9e4e599872a894439",
+    "docs/evidence/declared-rail-roundoff-20261112/focused.log.gz": "c9c5011ede672b2b207e818ee65162938206caa58a29202653acea1f9d7f9aa9",
+    "docs/evidence/declared-rail-roundoff-20261112/normal-commit.log.gz": "8076b8f541cef1e3195d43e67e7f8444ae206bbc1e5e0e4cc0096c5ef78a3078",
+    "docs/evidence/declared-rail-roundoff-20261112/normal-result.json": "f3b571e4b90675fac00185f9dc39acd66fba0456b0cf65a7455cf584ff59389c",
+    "docs/evidence/declared-rail-roundoff-20261112/r1-source.json": "70c07445e0a1892a22300ecc6d5c9a4129d26d76cda0f97c95eaa0fcaa949927",
+    "docs/evidence/declared-rail-roundoff-20261112/r2-atomic-unit.log.gz": "3fb85ce178849e1d51bff0a0f288ff9ba1b07543eeb6dff2dbeb9e61371d1fa7",
+    "docs/evidence/declared-rail-roundoff-20261112/r2-focused-command.json": "ba319183e17e11d10893995de524605149ca490ab24d76948576081ae3a93adc",
+    "docs/evidence/declared-rail-roundoff-20261112/r2-focused.log.gz": "6a79d2f579eba21189c878d328ad8aa456b4aea10b9fe74742489cdb1c8e9f3a",
+    "docs/evidence/declared-rail-roundoff-20261112/r2-results.json": "828609b1951bc60dec642a024131ff841c1ff0b4bf7d296a0569b7357e85ddb1",
+    "docs/evidence/declared-rail-roundoff-20261112/r2-source.json": "19646159fcf32f88b0060843230b9f7ae78517208df2b6feb7be5d7a7a5e5c7f",
+    "docs/evidence/declared-rail-roundoff-20261112/r2-spi-capability.txt": "d63429eebe9404b1800e61625b83868804416dcc89b1244cd5e4b22094d13b21",
+    "docs/evidence/declared-rail-roundoff-20261112/tested-binaries.json": "41fc7522ea435beb27ba38f0661a76d72cfa141a647f2ad101e8cb8a73ccf2c9",
+    "docs/evidence/declared-rail-roundoff-20261112/validation.json": "df7359b00cf293e57140f725772e638bae48135410daadcdfcf83a9c1ab31005",
+    "docs/evidence/gpio-drive-command-20261112.json": "667bbae2c0f582313f1617c0b2792a148bf81b17ddd0e4ec0bbc2a56c1212d7b",
+    "docs/evidence/gpio-drive-command-20261112.md": "5638ae1570e853a8991837262f40dd877915af42238d12f65e0c16f197cce2ce",
+    "docs/rail-observations.md": "c51858bc65030a9d8168145f4e944ffd60cf8707bbfe1d3dca5bbb441622e55a"
+  }
+}

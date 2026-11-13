@@ -1,0 +1,34 @@
+{
+  "head": "dd8b68a651ee8d91f9d653db05efa318cfd51a5e",
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "labwired-core",
+    "--test",
+    "analog_opamp_power",
+    "--test",
+    "analog_macros",
+    "--test",
+    "analog_adapter",
+    "--",
+    "--nocapture"
+  ],
+  "source_files": {
+    "crates/core/src/analog/adapter.rs": "e64afdeb58cb267ead1cc3b845e577cc8ba6f8d8ee5fa70c07894455312b593f",
+    "crates/core/src/analog/mna.rs": "4b77d83fdfb517b5c909e874e07cc4ecf8bd3558e4657543fac672ac4d279b14",
+    "crates/core/src/analog/mod.rs": "f180ae8f3729efe611f136fd41968075b3eeca2ca5387155e35c61c6cd686897",
+    "crates/core/src/analog/netlist.rs": "b5abd8672859ba213a3e082cf8afdb6d82e2432d1a30f86d3cab2d5e9a1e278e",
+    "crates/core/src/analog/opamp_power.rs": "ae487a88aafd803fc74f19a85828a08a1b405a47d965737a4c3026013c6c5909",
+    "crates/core/tests/analog_opamp_power.rs": "627a6a7297f437e41774c5afc971242005d54d91f3f479a72fac3a5abe19dfe8",
+    "docs/cosimulation_plugins.md": "59d7e28745e3889494e45ee159cc420e1db0d5d30af15f94080da3be064d049e"
+  },
+  "patch_sha256": "826a284a52aa6b14a6fca3766f5958085f6c4e3cefe2d4d860cb38405dfbf566",
+  "profile": "dev/test opt1 debug0 incremental0 jobs2, reused task-owned target",
+  "started_utc": "2026-11-12T09:14:33Z",
+  "exit": 0,
+  "external_stop": null,
+  "wall_seconds": 4.000673387025017,
+  "source_unchanged": true,
+  "log_sha256": "0c2a87cc91b0207894bd92d5711e13dcf0526a9befc2a743e60066b788e529dc"
+}

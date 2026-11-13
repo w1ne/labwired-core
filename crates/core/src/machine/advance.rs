@@ -79,7 +79,8 @@ impl<C: Cpu> Machine<C> {
     /// `SupplySupervisor::set_vdd`), so `is_routed` covers both.
     #[inline(always)]
     fn supply_gate(&mut self, request: &AdvanceRequest) -> SimResult<Option<AdvanceReport>> {
-        if self.bus.supply.is_routed()
+        if self.bus.mcu_power.is_configured()
+            || self.bus.supply.is_routed()
             || self.bus.reset_input.is_routed()
             || !self.unpowered_rail_noted
         {
@@ -96,14 +97,21 @@ impl<C: Cpu> Machine<C> {
     #[inline(never)]
     fn supply_boundary(&mut self, request: &AdvanceRequest) -> SimResult<Option<AdvanceReport>> {
         if self.bus.reset_input.take_assertion() {
-            self.reset_node()?;
+            self.reset_from_external_pin()?;
         }
         self.apply_supply_release()?;
-        if !self.bus.supply.is_routed() && !self.unpowered_rail_noted {
+        self.apply_mcu_power_events()?;
+        if !self.bus.supply.is_routed()
+            && !self.bus.mcu_power.is_measured()
+            && !self.unpowered_rail_noted
+        {
             self.unpowered_rail_noted = true;
             crate::fidelity::record_unpowered_rail_assumed(self.bus.io_voltage_v);
         }
-        if !self.bus.supply.is_held() && !self.bus.reset_input.is_held() {
+        if !self.bus.supply.is_held()
+            && !self.bus.reset_input.is_held()
+            && !self.bus.mcu_power.blocks_execution()
+        {
             return Ok(None);
         }
         // Held in reset: no instruction runs, but time does — the circuit
@@ -151,6 +159,10 @@ impl<C: Cpu> Machine<C> {
     /// Callers must arrange an honored breakpoint, CPU progress termination,
     /// or external termination when issuing such a request.
     pub fn advance(&mut self, request: AdvanceRequest) -> SimResult<AdvanceReport> {
+        self.bus
+            .regulators
+            .require_sampled_source()
+            .map_err(crate::SimulationError::Other)?;
         if let Some(report) = self.supply_gate(&request)? {
             return Ok(report);
         }
@@ -203,6 +215,10 @@ impl<C: Cpu> Machine<C> {
             u32,
         ) -> SimResult<u32>,
     {
+        self.bus
+            .regulators
+            .require_sampled_source()
+            .map_err(crate::SimulationError::Other)?;
         if let Some(report) = self.supply_gate(&request)? {
             return Ok(report);
         }

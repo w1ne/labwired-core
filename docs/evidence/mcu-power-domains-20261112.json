@@ -1,0 +1,75 @@
+{
+  "scope": "generic sampled MCU domains and reset lifecycle; synthetic fixtures, no exact native FC power acceptance",
+  "created_at_utc": "2026-11-12T06:06:55.924318+00:00",
+  "base": "3cced23c8de3a98f5acb56d45872912bc068b0a1",
+  "tests": {
+    "config-tests": {
+      "passed": 11,
+      "ignored": 0,
+      "log_sha256": "eea15b13c30a47d5fc3b32d2f2d46055c9c73b06681deff5d89f60cfda9ca193",
+      "suites": 2
+    },
+    "focused-tests": {
+      "passed": 89,
+      "ignored": 0,
+      "log_sha256": "e814fa64e229965a6ebc68fb5f48b75819c6a3672beaf4e6061b620c88be453d",
+      "suites": 9
+    }
+  },
+  "profile": {
+    "name": "mcu-power-domains-20261112",
+    "inherits": "dev",
+    "debug": 0,
+    "incremental": false,
+    "jobs": 2,
+    "feature": "event-scheduler for core focused suites"
+  },
+  "verified": [
+    "t=0 World rail observation before CPU transactions",
+    "distinct node execution and reset holds while MNA continues",
+    "POR threshold distinct from operating qualification and detector rearm",
+    "sampled BOD assertion/release/re-enable/reprogram timing",
+    "core-only AIRCR preserves chip detector state and resets architectural SysTick",
+    "chip-scoped AIRCR restores defaults and records one System cause",
+    "peripheral reset once at assertion; later CPU vector reload preserves cause",
+    "atomic complete rail publication and malformed batch rollback",
+    "fresh owner-time routing independent of unrelated faster models",
+    "nondividing model periods select the actual earliest next boundary",
+    "missing fresh rail outputs and skipped owner intervals fail closed",
+    "same-rate separate rail models publish one atomic batch",
+    "legacy affine/ratio serialization and adjacent AT32/single-rail World behavior"
+  ],
+  "limitations": [
+    "sample-boundary-quantized detectors; sub-interval pulses are not reconstructed",
+    "absolute input thresholds are nominal calibration, not a full-range hardware guarantee",
+    "exact peripheral roles need opt-in implementations; undeclared capabilities fail",
+    "gated QMI vector readiness requires the exact source candidate integration test",
+    "no internal regulator, switching ripple, compensation, efficiency or native FC startup qualification",
+    "unmeasured standalone registries explicitly retain nominal assumptions",
+    "hardware model drift acknowledgment is not supplied or bypassed"
+  ],
+  "source_sha256": {
+    "crates/config/src/chip.rs": "0cf6d45db7b6265d38eebff516e83050b675829f13b390ba5c49f30e4740586c",
+    "crates/config/src/power_domains.rs": "f1bc3747f3e42c0a127922f860bff3e65ed2cb3d2e8a64f13002d28be4f9bcf6",
+    "crates/config/src/reset_input.rs": "837f979c335d4e6e42474017943b3e4ebea37c5cf94aef3b4b82996856899b74",
+    "crates/core/src/power_domains.rs": "63ec2c52066da46b8ccd460c83c7a54d40ab6fb6a47013bd1b79b8d9a5600b16",
+    "crates/core/src/bus/mcu_power.rs": "edd191556080d23be892b510ca539feef7839148ef5a1b8ddddf58e17fa28ffa",
+    "crates/core/src/cosim/routing.rs": "7a359c6de548e30cb6ee42c538d006d5676b63af8ee9ae4ffc91f00c404d05be",
+    "crates/core/src/cosim/registry.rs": "690f97c96af381ebefa3031ea65015e1d12f6386933986200cc6ce5ed8907970",
+    "crates/core/src/machine/boundary.rs": "667eb3f9ea679ab802c6c0d899a455b4c215155ce734bfbc354fd0d7561bd839",
+    "crates/core/src/machine/advance.rs": "4807c761af2555d8243792b4e7e11c65dcfc789e03498eb556aacdeeb8980e68",
+    "crates/core/src/machine/world_hooks.rs": "14c70cc84de9eb17921034eec0ed0d5a84bdce0d4600b60eafda34ea2e1cb16a",
+    "crates/core/src/lib.rs": "5f5d2a8b1619f4b5c139a33ae1b22a4f1e8ea72f90029bcf009696b405302f5d",
+    "crates/core/src/peripheral.rs": "822efb19c14b399f7595e70e6236e812d7ec563c9d66ea1c0028fe1dff30ccca",
+    "crates/core/src/reset_input.rs": "86fd71b021e51e088c1e24154cbbb782d169bffb450d5b423d3b8835f313ae55",
+    "crates/core/src/world.rs": "70d1fd1dbc2dca7a9c18a9a887b342ebaf9910819424fd562c196c7b84b75ecb",
+    "crates/core/src/world/cosim.rs": "cd655b831e3274a92b3ad95b41f70eabe5a1f76d7c4d89bc7e156b78dcc6a6ec",
+    "crates/wasm/src/lib.rs": "ee283d161d4e49e80133d79200f4959fd54ac50b04de0b81ce87e00298e3b98c",
+    "crates/config/tests/power_domains.rs": "50dc54e48d1da8f3105f1e2673aa5fffc0c10e11c56e902c6c9afe4bdff6b94b",
+    "crates/core/tests/mcu_power_domains.rs": "6e0a075eeba561f1be4e4781f40e9cf470efa08e5bba7e963f607f2f4b631aaf",
+    "crates/core/tests/machine_mcu_power.rs": "1e9fb0972a7132d2bac531dd4cb760c7de5321d638268d80c3774c7019f2e145",
+    "crates/core/tests/mcu_power_routing_timing.rs": "c7e27ca4e6a40fec3b2a6e7dfcac62561c3d54808768f06aec3cb09015a7a870",
+    "crates/core/tests/world_mcu_power.rs": "3f491b4d349839d76743177270dbc4762fa54470a56bd007cf841bf459797843",
+    "crates/core/tests/mcu_power_support/mod.rs": "9806dedf109726a52da5450fc90abe1ffa8b7043baef7ae405102db9911d3e7f"
+  }
+}

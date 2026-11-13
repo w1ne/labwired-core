@@ -1,0 +1,26 @@
+{
+  "base_unknowns": 59,
+  "bound_initial_commands_before_constructor": [
+    {
+      "command_revision": 0,
+      "current_limit_a": 0.24,
+      "element": "Xbuck",
+      "enabled": true,
+      "rated_load_a": 0.2,
+      "target_voltage_v": 1.1
+    }
+  ],
+  "capacitors": 3,
+  "construction": "refused",
+  "construction_seconds": 0.001202787,
+  "error": "circuit matrix is singular at unknown 53: check for a floating node, a zero-ohm resistor or two voltage sources in parallel",
+  "inductors": 2,
+  "input": "/data/work-evidence/analog-transient-state-20261112/cascaded-buck-unpowered.model.json",
+  "max_unknowns": 128,
+  "model_id": "circuit",
+  "requested_initialization": {
+    "mode": "operating_point"
+  },
+  "scope": "production analog constructor only; no MCU or firmware execution",
+  "step_ns": 100
+}

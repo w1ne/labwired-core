@@ -35,6 +35,9 @@ mod analog {
             trace: vec!["v(d)".to_string()],
             trace_samples: ring,
             thermistors: BTreeMap::new(),
+            regulators: BTreeMap::new(),
+            max_unknowns: labwired_core::analog::MAX_UNKNOWNS,
+            initialization: Default::default(),
         }
     }
 

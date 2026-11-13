@@ -499,3 +499,91 @@ fn power_cutoff_parks_the_real_mcu_interrupt_at_the_same_boundary() {
     assert_eq!(bus.read_u32(addr).unwrap() & (1 << bit), 0);
     assert_eq!(meta(&mut bus)["init_status"], 0);
 }
+
+#[test]
+fn device_rail_roundoff_keeps_the_raw_sample_and_the_spi_model_off() {
+    let mut bus = routed();
+    for raw in [-f64::EPSILON * 3.6, -0.0, 0.0] {
+        apply(&mut bus, &[("vdd", raw), ("vddio", raw)]);
+        let before = meta(&mut bus);
+        assert_eq!(before["powered"], false);
+        for rail in ["vdd", "vddio"] {
+            assert_eq!(
+                before["supply_rails"][rail]["voltage_v"]
+                    .as_f64()
+                    .unwrap()
+                    .to_bits(),
+                raw.to_bits()
+            );
+            assert_eq!(before["supply_rails"][rail]["state"], "out_of_range");
+        }
+        assert!(before["model_time_ns"].is_u64());
+        slave(&mut bus).advance_time_us(50_000);
+        assert_eq!(read(&mut bus, 0), 0xff);
+        let after = meta(&mut bus);
+        assert_eq!(after["model_time_ns"], before["model_time_ns"]);
+        assert_eq!(after["accel_samples"], 0);
+    }
+}
+
+#[test]
+fn device_rail_roundoff_refusals_keep_initialized_state_and_every_peer_rail() {
+    let mut bus = routed();
+    apply(&mut bus, &[("vdd", 1.8), ("vddio", 3.3)]);
+    initialize(&mut bus);
+    let before = meta(&mut bus);
+    let floor = -f64::EPSILON * 3.6;
+    for bad in [
+        f64::from_bits(floor.to_bits() + 1),
+        -1.0e-9,
+        f64::NAN,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+    ] {
+        assert!(bus
+            .apply_device_supply_voltages(&[
+                ("U9".into(), "vdd".into(), 0.0),
+                ("U9".into(), "vddio".into(), bad),
+            ])
+            .is_err());
+        assert_eq!(meta(&mut bus), before);
+    }
+}
+
+#[test]
+fn device_rail_roundoff_uses_each_rails_own_maximum() {
+    let mut bus = create(
+        "{cs_pin: PA4, supply_rails: {vdd: {min_v: 1.8, max_v: 3.0}, vddio: {min_v: 1.5, max_v: 3.3}}}",
+        "bmi270_spi",
+    )
+    .unwrap();
+    apply(
+        &mut bus,
+        &[("vdd", -f64::EPSILON * 3.0), ("vddio", -f64::EPSILON * 3.3)],
+    );
+    let before = meta(&mut bus);
+    assert!(bus
+        .apply_device_supply_voltages(&[("U9".into(), "vdd".into(), -f64::EPSILON * 3.3)])
+        .is_err());
+    assert_eq!(meta(&mut bus), before);
+}
+
+#[test]
+fn legacy_rail_roundoff_has_no_inferred_maximum_or_new_tolerance() {
+    let mut bus = routed();
+    let domain = bus.register_supply_domain("legacy", 1.8).unwrap();
+    bus.update_supply_domain("legacy", 3.3).unwrap();
+    let generation = domain.generation();
+    for raw in [
+        -f64::EPSILON * 3.6,
+        f64::NAN,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+    ] {
+        assert!(bus.update_supply_domain("legacy", raw).is_err());
+        assert!(domain.powered());
+        assert_eq!(domain.generation(), generation);
+    }
+    bus.update_supply_domain("legacy", 0.0).unwrap();
+    assert!(!domain.powered());
+}
