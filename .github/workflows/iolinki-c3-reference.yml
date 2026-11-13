@@ -1,15 +1,19 @@
 name: ESP32-C3 IO-Link firmware prerequisite
 on:
   pull_request:
+    # Lean PR gate (2026-11-13): on pull requests this lane runs only when
+    # its own files change. Shared engine paths (crates/core, crates/cli,
+    # Cargo.*) trigger it on push to main instead.
     paths:
-      - 'crates/core/**'
-      - 'crates/config/**'
-      - 'crates/loader/**'
       - 'configs/chips/esp32c3.yaml'
       - '.github/workflows/iolinki-c3-reference.yml'
   push:
     branches: [main]
   workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 jobs:
