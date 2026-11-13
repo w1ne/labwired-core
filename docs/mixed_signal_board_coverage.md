@@ -12,6 +12,10 @@ Current inventory: **103 top-level profiles; 103 have end-to-end analog coverage
 
 Onboarding profiles with **no end-to-end analog endpoint** (0): none.
 
+### Additional physics proof on an already covered profile
+
+`nucleo-f767zi` already had JFET channel and gate-depletion coverage. [`cosim_nucleo_f767zi_analog.rs`](../crates/core/tests/cosim_nucleo_f767zi_analog.rs)::`nucleo_f767zi_jfet_terminal_resistances_match_explicit_networks_on_adc1` now exercises generic level-1 JFET model-card `RD` and `RS`: each is compared with an equivalent explicit resistor network, both terminal voltage drops are checked against an independent Parker–Skellern load line, and the routed results are converted through ADC1 alongside an unrelated Beta NTC and Shockley diode. All board profiles already have end-to-end analog endpoints, so this round adds physics evidence but no newly covered board.
+
 
 | System profile | End-to-end proof |
 |---|---|

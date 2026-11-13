@@ -1,0 +1,91 @@
+# Generic SPICE level-1 JFET RD/RS terminal resistance, routed through
+# STM32F767 ADC1. The model-card branches are paired with explicit resistor
+# networks; the NTC and Shockley diode live in the separate shared fixture.
+name: "nucleo-f767zi-analog-jfet-terminal-resistance-adc"
+chip: "../../configs/chips/stm32f767.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "jfet_terminal_reference"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      drain_voltage: "board.analog.pa4_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 3.3
+        Rload supply drain 1k
+        Vgate gate 0 dc 0
+        J1 drain gate 0 NJF_BASE
+        .model NJF_BASE NJF(VTO=-2 BETA=500u LAMBDA=0.025 B=0.8 PB=1 IS=1e-14)
+      probes:
+        drain_voltage: "v(drain)"
+      vdd: 3.3
+  - id: "jfet_terminal_rd_card"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      drain_voltage: "board.analog.pa5_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 3.3
+        Rload supply drain 1k
+        Vgate gate 0 dc 0
+        J1 drain gate 0 NJF_RD
+        .model NJF_RD NJF(VTO=-2 BETA=500u LAMBDA=0.025 B=0.8 PB=1 IS=1e-14 RD=1k)
+      probes:
+        drain_voltage: "v(drain)"
+      vdd: 3.3
+  - id: "jfet_terminal_rd_explicit"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      drain_voltage: "board.analog.pa6_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 3.3
+        Rload supply drain 1k
+        Rseries drain junction 1k
+        Vgate gate 0 dc 0
+        J1 junction gate 0 NJF_BASE
+        .model NJF_BASE NJF(VTO=-2 BETA=500u LAMBDA=0.025 B=0.8 PB=1 IS=1e-14)
+      probes:
+        drain_voltage: "v(drain)"
+      vdd: 3.3
+  - id: "jfet_terminal_rs_card"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      drain_voltage: "board.analog.pb0_volts"
+      source_voltage: "board.analog.pb1_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 3.3
+        Rload supply drain 1k
+        Rreturn source 0 1k
+        Vgate gate 0 dc 0
+        J1 drain gate source NJF_RS
+        .model NJF_RS NJF(VTO=-2 BETA=500u LAMBDA=0.025 B=0.8 PB=1 IS=1e-14 RS=1k)
+      probes:
+        drain_voltage: "v(drain)"
+        source_voltage: "v(source)"
+      vdd: 3.3
+  - id: "jfet_terminal_rs_explicit"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      drain_voltage: "board.analog.pc0_volts"
+      source_voltage: "board.analog.pc1_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 3.3
+        Rload supply drain 1k
+        Rreturn source 0 1k
+        Rseries source junction 1k
+        Vgate gate 0 dc 0
+        J1 drain gate junction NJF_BASE
+        .model NJF_BASE NJF(VTO=-2 BETA=500u LAMBDA=0.025 B=0.8 PB=1 IS=1e-14)
+      probes:
+        drain_voltage: "v(drain)"
+        source_voltage: "v(source)"
+      vdd: 3.3
