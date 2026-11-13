@@ -1,0 +1,136 @@
+{
+  "schema": 1,
+  "head": "b4c986f361079f9a6ffb5eb9446f67ee97252733",
+  "commit": "0621e95366b2f55a1369f373f96c3ec639eaa956",
+  "tree": "539beada886c0fd51425842ac03061a65296e638",
+  "parents": [
+    "78ec4af563b70466d8e33c79193c0e270d513230",
+    "b4c986f361079f9a6ffb5eb9446f67ee97252733"
+  ],
+  "run": 38158310794,
+  "attempt": 1,
+  "source": {
+    "compiler_sha256": "8b954aa209c87cc599255fc91618e2e7cc41f913d37a1bd233fdd1c13e3274a3",
+    "schema": 1,
+    "source_commit": "3c66f0d27c865192a2b22217e71c1f88f2b3fe91",
+    "source_files": {
+      "paired-irq/arm-probe.cpp": {
+        "bytes": 4187,
+        "sha256": "e9a938b06d1277bb88ad1a5df1a179715289bb3e72bdeffb669c262e7f4c172c"
+      },
+      "paired-irq/include/PairedIrqState.h": {
+        "bytes": 3356,
+        "sha256": "05e66ca9472fb138272d3b9d7e2c72338141f48cac95255103df77166ff69484"
+      },
+      "paired-irq/profile.cpp": {
+        "bytes": 1990,
+        "sha256": "6338c2501169cd9269a5fae89f56c2fcf1430155d1bf8767249275088e0d159f"
+      },
+      "simulation/arm/control.ld": {
+        "bytes": 823,
+        "sha256": "7b20ad2dc6040d852c6fbc9b6f280c906bab291e9e3769da22d5917b1819361c"
+      },
+      "simulation/arm/irq-startup.S": {
+        "bytes": 1323,
+        "sha256": "5eb1d1ce523380d2297dec54022ea29ae0f950746a09fd66b7d689dd2e7b0bc8"
+      },
+      "simulation/include/InterruptMask.h": {
+        "bytes": 1192,
+        "sha256": "8d4fa4d8742eea9f72ec131dbb70e5a245535c902ab91adb2fc6cbebb744cd5a"
+      }
+    }
+  },
+  "profiles": {
+    "default": {
+      "log_sha256": "2bebab762f2f2bd674e281ef1ee55d0c283224c886fe1caf592983f362438fe5",
+      "results": [
+        {
+          "mode": 0,
+          "elf_sha256": "e3864544f2d02f804cf317c44a7bb552223c8511cc89e622a10fdcbdd21ea43c",
+          "status": "0x600d",
+          "fault": 0,
+          "steps": 3791,
+          "refusal_steps": 0
+        },
+        {
+          "mode": 1,
+          "elf_sha256": "816f5eaea1cc174972a0217df02c4f8dbf091277b63075ad91b51afdf8d15e2a",
+          "status": "0x201",
+          "fault": 3,
+          "steps": 369,
+          "refusal_steps": 64
+        },
+        {
+          "mode": 2,
+          "elf_sha256": "79afde9d98d01397368b89b22ccc2c4393668de99b8d6eb2e4fffff83d50dce3",
+          "status": "0x202",
+          "fault": 5,
+          "steps": 624,
+          "refusal_steps": 64
+        },
+        {
+          "mode": 3,
+          "elf_sha256": "6eace874664e81aecd5a9f9241cf96277dce8c96c3f2138f84f72c638f4f303e",
+          "status": "0x203",
+          "fault": 4,
+          "steps": 16644,
+          "refusal_steps": 64
+        },
+        {
+          "mode": 4,
+          "elf_sha256": "65d8052da17e1b58858b3562a03f378c5700cbaf6502f6af4fe53d490f07f113",
+          "status": "0x204",
+          "fault": 6,
+          "steps": 638,
+          "refusal_steps": 64
+        }
+      ]
+    },
+    "scheduler": {
+      "log_sha256": "2bebab762f2f2bd674e281ef1ee55d0c283224c886fe1caf592983f362438fe5",
+      "results": [
+        {
+          "mode": 0,
+          "elf_sha256": "e3864544f2d02f804cf317c44a7bb552223c8511cc89e622a10fdcbdd21ea43c",
+          "status": "0x600d",
+          "fault": 0,
+          "steps": 3791,
+          "refusal_steps": 0
+        },
+        {
+          "mode": 1,
+          "elf_sha256": "816f5eaea1cc174972a0217df02c4f8dbf091277b63075ad91b51afdf8d15e2a",
+          "status": "0x201",
+          "fault": 3,
+          "steps": 369,
+          "refusal_steps": 64
+        },
+        {
+          "mode": 2,
+          "elf_sha256": "79afde9d98d01397368b89b22ccc2c4393668de99b8d6eb2e4fffff83d50dce3",
+          "status": "0x202",
+          "fault": 5,
+          "steps": 624,
+          "refusal_steps": 64
+        },
+        {
+          "mode": 3,
+          "elf_sha256": "6eace874664e81aecd5a9f9241cf96277dce8c96c3f2138f84f72c638f4f303e",
+          "status": "0x203",
+          "fault": 4,
+          "steps": 16644,
+          "refusal_steps": 64
+        },
+        {
+          "mode": 4,
+          "elf_sha256": "65d8052da17e1b58858b3562a03f378c5700cbaf6502f6af4fe53d490f07f113",
+          "status": "0x204",
+          "fault": 6,
+          "steps": 638,
+          "refusal_steps": 64
+        }
+      ]
+    }
+  },
+  "boundary": "Authored paired-ABI controls only; not real fibers, peripherals or runtime admission"
+}

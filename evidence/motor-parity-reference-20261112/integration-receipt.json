@@ -1,0 +1,43 @@
+{
+  "applied_at_utc": "2026-11-12T22:01:30.812066+00:00",
+  "base_core": "a0b0a91c1868fe78e4af45e817e566807517ef1e",
+  "fixture": "crates/wasm/tests/fixtures/motor-parity-native.json",
+  "fixture_sha256": "eb182430f184396bfc737171e2a5e0d5476df8cd421441987d7202296223d59e",
+  "independent_evidence": "docs/evidence/motor-parity-reference-20261112",
+  "copied_byte_identical": {
+    "README.md": {
+      "bytes": 4220,
+      "sha256": "802b97d699f12b4001498c8247f2718ef103a0e89361d6c8ee92007e6021e925"
+    },
+    "capture-current.mjs": {
+      "bytes": 3163,
+      "sha256": "af5d779d4f49ee13ce2a4c299793de0e7e3587a01ab53a4593a57ce84d78f3e7"
+    },
+    "current-wasm-trace.json": {
+      "bytes": 51193,
+      "sha256": "f1f2f15b7af770d4b843bda56debfc23710cae8c1241a1764ce575fffd93c02c"
+    },
+    "independent-replay-results.json": {
+      "bytes": 12108,
+      "sha256": "fb01f52ba48d3ba0af9073303eb7023cf3ebf6a3413dcedf51967761c26cdfca"
+    },
+    "independent-replay.py": {
+      "bytes": 5760,
+      "sha256": "0bb538857f0b6f30306133324209d11bc64d5c2822da4b2a5d98938b083763ee"
+    },
+    "motor-parity-reference.patch": {
+      "bytes": 3459,
+      "sha256": "2fb79dfda3682f39e3df5f9aab78190a0f00b7640e5c623ec1d47ae44820b2ec"
+    },
+    "proposed-motor-parity-native.json": {
+      "bytes": 1987,
+      "sha256": "eb182430f184396bfc737171e2a5e0d5476df8cd421441987d7202296223d59e"
+    },
+    "review-receipt.json": {
+      "bytes": 13387,
+      "sha256": "e5186d079b60a4e50bfc37f031ed6ed27a27ff3b0c820ab4071ac3b8fc8f4ac3"
+    }
+  },
+  "validation": "Normal native and app checks still pending. No tolerance or runtime change made by this fixture correction.",
+  "reproduction_note": "The captured scripts retain original absolute paths and hashes. To run elsewhere, change only their capture/input/output directory paths. The recorded MMIO input, equations and numerical thresholds are retained verbatim."
+}
