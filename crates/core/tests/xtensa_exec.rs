@@ -2802,6 +2802,59 @@ fn test_exec_call4_entry_retw_full_cycle() {
     );
 }
 
+/// Shadow-window RETW keeps a 64-bit return value.
+///
+/// A CALL8 whose callee window lands on a live frame (the chain has wrapped)
+/// pushes that slot — by then the caller's a8..a11, args included — and RETW
+/// pops it back. The callee's a2:a3 come back in the caller's a10:a11, so both
+/// must survive the pop. Only a10 did: `esp_timer_get_time()` on IDF 5 read a
+/// stale high word (e.g. 0x3F400018) and every esp_timer alarm was armed at
+/// LACT_ALARMHI = 0xFFFFFFFF.
+#[test]
+fn test_exec_retw_wrapped_keeps_callee_a2_a3() {
+    const CALLEE: u32 = TEST_PC + 24;
+
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    assert!(!cpu.faithful_windows, "this is the shadow-window path");
+    // An older frame still owns slot 2, where the CALL8 callee will land.
+    cpu.regs.set_windowstart_bit(2, true);
+    // Callee's a1 = caller's a9 = phys[9].
+    cpu.regs.set_physical(9, 0x2005_0000);
+
+    write_insns(
+        &mut bus,
+        TEST_PC as u64,
+        &[
+            movi(10, 0x111),                  // stale caller a10 (arg slot)
+            movi(11, 0x222),                  // stale caller a11
+            enc_call(2, TEST_PC + 6, CALLEE), // CALL8
+            st0(4, 1, 0xF),                   // BREAK at the return point
+        ],
+    );
+    write_insns(
+        &mut bus,
+        CALLEE as u64,
+        &[
+            enc_entry(1, 4), // ENTRY a1, 32
+            movi(2, 0x345),  // return low word
+            movi(3, 0x678),  // return high word
+            enc_retw(),
+        ],
+    );
+
+    let err = run_until_error(&mut cpu, &mut bus);
+    assert!(
+        matches!(err, SimulationError::BreakpointHit(pc) if pc == TEST_PC + 9),
+        "expected BREAK after the CALL8, got {err:?}"
+    );
+    assert_eq!(cpu.regs.windowbase(), 0);
+    assert_eq!(cpu.regs.read_logical(10), 0x345, "callee a2 -> caller a10");
+    assert_eq!(cpu.regs.read_logical(11), 0x678, "callee a3 -> caller a11");
+}
+
 // ── D8: Narrow (Code Density) exec tests ────────────────────────────────────
 //
 // Narrow instructions are 2 bytes. The fetch loop in step() reads byte0, calls

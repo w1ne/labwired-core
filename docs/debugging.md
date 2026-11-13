@@ -32,7 +32,7 @@ To debug a firmware image, define a generic DAP launch configuration:
             "request": "launch",
             "name": "Debug Firmware",
             "program": "${workspaceFolder}/target/thumbv7m-none-eabi/debug/firmware",
-            "args": ["--system", "config/system.yaml"],
+            "systemConfig": "${workspaceFolder}/config/system.yaml",
             "stopOnEntry": true,
             "cwd": "${workspaceFolder}"
         }
@@ -42,7 +42,7 @@ To debug a firmware image, define a generic DAP launch configuration:
 
 ### Configuration Options
 - **program**: Path to the ELF binary with debug symbols (DWARF).
-- **args**: Command-line arguments passed to the LabWired CLI.
+- **systemConfig**: Path to the system YAML for the simulated board. The extension passes this field to the debug adapter's launch request; `args: ["--system", ...]` does not select a board model.
 - **stopOnEntry**: If `true`, the simulator halts at the Reset Vector.
 - **cwd**: Current working directory for the simulation process.
 

@@ -138,6 +138,7 @@ impl Bmi270Spi {
     pub fn set_powered(&mut self, powered: bool) {
         if self.powered != powered {
             self.reset();
+            self.selected = false;
         }
         self.powered = powered;
     }
@@ -487,6 +488,9 @@ impl SpiDevice for Bmi270Spi {
     }
     fn cs_pin(&self) -> &str {
         &self.cs_pin
+    }
+    fn is_selected(&self) -> bool {
+        self.selected
     }
     fn cs_select(&mut self) {
         self.selected = true;

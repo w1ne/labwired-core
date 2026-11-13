@@ -1,54 +1,37 @@
 #!/usr/bin/env python3
 """
-Generate docs/boards/VALIDATION_STATUS.md from validation/manifest.yaml and
-enforce the no-silent-decay rule.
+Generate docs/boards/VALIDATION_STATUS.md from validation/manifest.yaml.
 
-The board docs drift; this generated table does not. It is the single
-machine-checked view of what is actually validated, against which silicon, and
-on what date — plus an automated DRIFT gate that catches the case where a
-peripheral model changed AFTER the board's last silicon capture.
+The generated report records historical silicon evidence and whether the
+current watched source matches the content recorded with that capture.
+Source-only drift is informational: no human source-review acknowledgement,
+renewal, or expiry is required to commit, push, or pass CI.
 
 Modes
 -----
   (default)      regenerate docs/boards/VALIDATION_STATUS.md in place
-  --check        regenerate to memory and diff against the committed file;
-                 exit 1 if they differ (run this in CI so the doc cannot go stale)
-  --drift        exit 1 if any silicon-tier board has DRIFTED past its drift_ack
-  (you normally run CI with BOTH:  --check --drift)
+  --check        fail if the committed document is stale
+  --drift        report source/capture differences without failing on drift
+  --digests      print current, captured, and historical ACK content digests
 
-Either gate flag also runs the drift-watch COVERAGE audit (see below).
+Both --check and --drift enforce watch-list integrity. Every peripheral path
+referenced by a board's chip YAML must be covered by its models list, and every
+listed model path must exist. A missing watch can conceal a source change.
 
-Drift
------
-For each board with `silicon.last_capture`, the newest git commit date across
-`models` is compared to the capture date. If newer, the board has drifted. A
-dated `drift_ack` (>= the newest model date) is an explicit human acknowledgement
-that keeps it green; any later model change re-breaks the gate. An ack also
-LAPSES: it covers the board for ACK_TTL_DAYS (30), or until an explicit
-`drift_ack_expires`, after which --drift fails again. An ack is a promise to
-re-capture, and a promise with no date is a waiver.
+Capture provenance
+------------------
+A source match requires a recorded silicon.models_digest equal to the current
+content digest. A missing captured digest leaves the match unverified. Commit
+dates and legacy drift_ack fields never establish current hardware validation.
+A changed or unverified source match requires a physical re-capture before
+claiming current silicon validation, but does not block source integration.
 
-Drift-watch coverage
---------------------
-The drift gate can only see what `models` lists, and an incomplete list fails
-OPEN: the board reads "fresh" forever while the files its claim rests on change
-underneath. esp32c3 shipped that way — its tier is a reset-state oracle asserted
-against the declarative descriptors in `configs/peripherals/esp32c3/`, and all
-29 of them were outside its watch list, as was the shared `esp_uart.rs` its real
-UART0/UART1 register map moved into on 2026-07-28.
+Historical drift_ack fields remain readable metadata. The optional legacy
+--write-ack-digests flags update only that metadata when explicitly requested;
+they never change a capture or a validation verdict.
 
-So we audit the watch list itself, mechanically:
-  * every `path:` a board's chip yaml wires (resolved relative to the chip yaml)
-    must be covered by an entry in that board's `models`; and
-  * every listed `models` path must exist — a stale path is a silently disabled
-    watch, not a warning.
-Coded (non-declarative) peripheral impls cannot be derived from the yaml and are
-still listed by hand; this audit closes the mechanical half of the hole.
-
-Needs PyYAML (pip install pyyaml) and a full-history checkout (fetch-depth: 0)
-so `git log -- <path>` resolves dates. That requirement is ENFORCED, not
-documented — see require_full_history(); on a truncated history this script used
-to emit a plausible document with wrong dates rather than fail.
+Needs PyYAML and a full-history checkout (fetch-depth: 0). The existing history,
+watch coverage, duplicate-key, and capture-metadata checks remain enforced.
 """
 
 from __future__ import annotations
@@ -59,7 +42,7 @@ import posixpath
 import re
 import subprocess
 import sys
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from pathlib import Path
 
 try:
@@ -105,8 +88,8 @@ def covers(model_entry: str, path: str) -> bool:
 def watch_gaps(board: dict) -> tuple[list[str], list[str]]:
     """(uncovered chip-yaml paths, listed model paths that do not exist).
 
-    Both are drift-gate holes that fail OPEN — the board keeps reading "fresh"
-    while something its claim depends on is unwatched. See module docs.
+    Both are provenance holes: a missing watch can hide a source change while
+    the report still claims a match. These remain validation failures.
     """
     models = board.get("models", [])
     missing = [m for m in models if not (CORE_ROOT / m).exists()]
@@ -140,8 +123,8 @@ def audit_watch_lists(manifest: dict) -> int:
         if uncovered:
             print(
                 f"ERROR: {b['id']}: {len(uncovered)} path(s) wired by {b['chip']} are NOT "
-                "covered by its `models` drift-watch list, so a change to them cannot "
-                "fail the drift gate:\n  " + "\n  ".join(uncovered) + "\n"
+                "covered by its `models` watch list, so a change to them cannot "
+                "be reported:\n  " + "\n  ".join(uncovered) + "\n"
                 "       Add them (a parent directory counts) to validation/manifest.yaml.",
                 file=sys.stderr,
             )
@@ -166,8 +149,7 @@ def history_defect() -> str | None:
     Each branch below is a way for `git log -1 -- <path>` to return an answer that
     is confidently wrong rather than absent, which is why they are checked at all.
     """
-    # No repository → every `git log` returns empty, every date renders "—", and
-    # the drift gate silently degrades to "nothing has ever drifted".
+    # Without a repository, `git log` cannot supply source-history diagnostics.
     if git_out("rev-parse", "--is-inside-work-tree") != "true":
         return "not a git checkout — there is no history here to read dates from"
 
@@ -187,16 +169,12 @@ def history_defect() -> str | None:
     if git_out("for-each-ref", "--format=%(refname)", "refs/replace/"):
         return "replace refs present (refs/replace/*) — the parent chain is rewritten"
 
-    # Partial clones: only a filter that omits TREES is disqualifying, and that
-    # distinction is deliberate rather than an oversight. This script never reads
-    # file contents — it walks commits and diffs trees against a pathspec — so
-    # `--filter=blob:none` (and blob:limit=*) leaves every object the walk touches
-    # local and the dates exact. That is the cheap full-history clone worth
-    # encouraging for a metadata-only job like this one, so it is allowed. A
-    # tree-omitting filter (`tree:0`) is a different animal: git must refetch
-    # trees from the promisor one at a time to evaluate the pathspec — unusably
-    # slow when it works, and wrong when the promisor is unreachable — so treat
-    # anything that is not blob-scoped as unusable rather than guessing.
+    # The history walk reads commits and trees, so blob-only filters leave
+    # its required objects local. model_digest separately reads watched files
+    # from the working tree; watch-list checks require those paths to exist.
+    # A tree-omitting filter can force a fetch per pathspec evaluation and leave
+    # history diagnostics incomplete if the promisor is unreachable. Preserve
+    # the existing guard against every filter that is not blob-scoped.
     configured = git_out("config", "--get-regexp", r"^remote\..*\.partialclonefilter") or ""
     bad = set()
     for line in configured.splitlines():
@@ -213,39 +191,11 @@ def history_defect() -> str | None:
 
 
 def require_full_history() -> None:
-    """Refuse to run at all on a history this script cannot read correctly.
+    """Retain the full-history precondition in every reporting mode.
 
-    WHY THIS IS FATAL AND NOT A WARNING
-        Every "Newest model" date in the rendered document comes from
-        `git log -1 --format=%cI -- <path>`. On a truncated history that walk
-        bottoms out at the graft boundary instead of the real last-touching
-        commit, and git reports the boundary commit — for every path whose real
-        last change predates it. Nothing errors. The document simply comes out
-        wrong, and it comes out looking entirely plausible: on a 112-commit
-        shallow clone of this repo `ci-fixture-riscv` rendered 2026-08-04 (the
-        graft commit b730a43) where the truth on full history is 2026-03-09
-        (9957cda8) — four months out, and eight boards wrong at once. The only
-        reason it was caught is that CI, which checks out fetch-depth: 0,
-        disagreed with a locally regenerated file.
-
-        Those dates are not decoration; they are the left-hand side of the drift
-        comparison. Truncation always skews them NEW (an unreachable parent reads
-        as "created at the boundary"), which manufactures drift on boards that are
-        fine — and the natural way to silence a red gate is to stamp a drift_ack
-        at the date the tool just printed. That ack is dated from the graft, not
-        from any model change anyone reviewed, so it then blankets every genuine
-        model change up to that date: the false positive converts itself into a
-        durable false negative. A silicon-validation gate that quietly reads the
-        wrong input is worse than no gate, because it is believed.
-
-    WHY IT GUARDS EVERY MODE, NOT ONLY --check/--drift
-        Plain generate is the most dangerous mode, not the least. It is the one
-        that exits 0 and writes the wrong dates into the committed file, which is
-        how they get pushed. --check and --drift do at least fail, but they fail
-        with the wrong story — a spurious "out of date" diff, or a phantom DRIFT
-        list — and the remedy their own error text prints is the regenerate
-        command that commits the damage. No invocation of this script has any use
-        for a document built from dates it cannot trust, so all of them stop.
+    `newest_model` remains available as diagnostic metadata. Truncated,
+    replaced, grafted, or tree-incomplete history can silently invent its date.
+    The source-match verdict uses captured content digests, never those dates.
     """
     defect = history_defect()
     if defect is None:
@@ -254,7 +204,7 @@ def require_full_history() -> None:
         f"ERROR: incomplete git history ({defect}).\n"
         "       Board dates here are derived from `git log -1 -- <model path>`, which on a\n"
         "       truncated history resolves to the graft boundary instead of the real commit.\n"
-        "       Refusing to emit a document whose dates and drift verdict would be wrong.\n"
+        "       Refusing to report from untrustworthy history.\n"
         "       Fix: git fetch --unshallow\n"
         "       In CI: actions/checkout with `fetch-depth: 0`.\n"
         "       A bounded `git fetch --depth=<n>` is NOT a fix — it only moves the boundary,\n"
@@ -299,28 +249,10 @@ def newest_commit_date(paths: list[str]) -> date | None:
 def model_digest(paths: list[str]) -> str | None:
     """A content hash over every file under `paths`, or None if none exist.
 
-    WHY CONTENT AND NOT A DATE
-      The drift gate asks "has the model changed since silicon was captured?".
-      That is a question about CONTENT, but `newest_commit_date` answers it with
-      a git timestamp — and a timestamp is metadata that history rewriting moves
-      while the content stands still.
-
-      Squash-merge is the case that bit us (#834). A PR acks drift on its branch
-      with the date of its own model commit; GitHub squashes, stamping the merge
-      time onto every file the PR touched; `newest` jumps past the ack and main
-      goes red on content that was reviewed and acked. The author could not have
-      written a covering date, because the date the model "changes" on main is
-      the merge date and that commit does not exist yet at review time.
-
-      A digest is the thing that IS knowable pre-merge and invariant across the
-      merge: squash, rebase and cherry-pick all preserve content. So an ack
-      carrying a digest keeps covering exactly the tree it was written for, and
-      stops covering the moment a byte of model source actually moves.
-
-    Where a board records one, this REPLACES the date comparison rather than
-    supplementing it — see evaluate(). That is strictly stronger on both axes:
-    it stops a same-content re-date from failing, and stops a same-day content
-    edit from passing.
+    File paths and bytes determine this digest. Squash, rebase, and cherry-pick
+    can change commit dates without changing the source. Conversely, an
+    uncommitted or same-day edit changes the digest immediately. Only a digest
+    recorded with a physical capture can establish that capture's source match.
     """
     import hashlib
 
@@ -350,139 +282,65 @@ def as_date(v) -> date | None:
     return parse_iso(str(v)).date()
 
 
-# How long a `drift_ack` covers a drifted board before it must be renewed.
-#
-# WHY AN ACK NEEDS A CLOCK. The digest rule makes an ack precise -- it covers
-# exactly the tree a human looked at -- but it made it PERMANENT: while the
-# models hold still, an ack from any date keeps the board green forever. Every
-# acked board on this manifest reads "re-capture pending", and nothing ever
-# made the pending part come due. An ack is a promise to re-capture, and a
-# promise with no date is a waiver.
-#
-# 30 days. Override per board with `drift_ack_expires:` when a re-capture is
-# genuinely blocked (no probe, board on order) -- an explicit later date in the
-# manifest is reviewable; a silent forever is not.
-ACK_TTL_DAYS = 30
+def capture_provenance(board: dict) -> tuple[date | None, str | None]:
+    """Read a capture without turning missing or malformed evidence into a match."""
+    silicon = board.get("silicon")
+    if silicon is None:
+        return None, None
+    label = f"{board.get('id', '<unnamed>')}: silicon"
+    if not isinstance(silicon, dict):
+        raise ValueError(f"{label} must be a mapping or null")
+    try:
+        capture = as_date(silicon.get("last_capture"))
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{label}.last_capture must be a valid date") from exc
+    if capture is None:
+        raise ValueError(f"{label}.last_capture is required for a capture record")
 
-
-def ack_expiry(board: dict) -> date | None:
-    """When this board's ack stops covering it. None if it carries no ack.
-
-    A manifest may name `drift_ack_expires:` explicitly; otherwise the ack runs
-    for ACK_TTL_DAYS from the day it was written.
-    """
-    explicit = as_date(board.get("drift_ack_expires"))
-    if explicit:
-        return explicit
-    ack = as_date(board.get("drift_ack"))
-    return ack + timedelta(days=ACK_TTL_DAYS) if ack else None
+    # Absence is allowed for older captures, but a present malformed digest is
+    # invalid evidence, not informational source drift.
+    recorded = silicon.get("models_digest")
+    if "models_digest" in silicon:
+        if not isinstance(recorded, str) or not re.fullmatch(r"[0-9a-f]{64}", recorded):
+            raise ValueError(f"{label}.models_digest must be a lowercase SHA-256 digest")
+    return capture, recorded
 
 
 def evaluate(board: dict, today: date | None = None) -> dict:
-    """Compute drift status for one board.
+    """Report capture/source provenance independently of human ACKs or the clock.
 
-    `today` is injectable so the expiry rule is testable; it affects the
-    GATE only, never the rendered document (see the note on `status`).
+    `today` is retained for callers and calendar-stability regression tests.
+    Source drift never fails a gate. Integrity errors still fail separately.
     """
-    today = today or date.today()
-    silicon = board.get("silicon")
     models = board.get("models", [])
     newest = newest_commit_date(models)
-    capture = as_date(silicon["last_capture"]) if silicon else None
-    ack = as_date(board.get("drift_ack"))
+    digest = model_digest(models)
+    capture, captured_digest = capture_provenance(board)
+    source_match = digest == captured_digest if captured_digest is not None else None
+    drifted = source_match is False
 
-    drifted = bool(capture and newest and newest > capture)
-    # How an ack covers a model.
-    #
-    #   With a `drift_ack_digest`: CONTENT decides, and only content. The ack
-    #   covers exactly the tree it was written against.
-    #   Without one: the legacy DATE rule, kept so an un-stamped ack still works.
-    #
-    # Digest-authoritative rather than date-OR-digest, because it is strictly
-    # stronger than the date rule on BOTH axes:
-    #
-    #   * a squash merge that re-dates a model without changing a byte no longer
-    #     reds main on a reviewed, acked tree (#834), and
-    #   * a model edit made on or before the ack date no longer slips through.
-    #     The date rule accepted any content as long as `ack >= newest`, so an
-    #     edit landing the same day an ack was written was silently covered.
-    #     That was a real hole and this closes it.
-    #
-    # The cost is that any genuine model change now re-fails until a human
-    # re-acks and re-stamps, which is exactly the manifest's stated intent:
-    # "any model change PAST the ack date re-fails the gate. No silent decay."
-    recorded = board.get("drift_ack_digest")
-    if ack and recorded:
-        covers_content = recorded == model_digest(models)
-    else:
-        covers_content = bool(ack and newest and ack >= newest)
-
-    # An ack also has to still be in date. See ACK_TTL_DAYS: the digest rule
-    # made acks precise and permanent, and permanent is the failure mode --
-    # every acked board here reads "re-capture pending" and nothing made it come
-    # due.
-    expires = ack_expiry(board)
-    expired = bool(expires and today > expires)
-    acked = covers_content and not expired
-
-    # A board with no silicon capture cannot "drift" — it never claimed silicon.
-    failing = drifted and not acked
-
-    # WHY `status` DOES NOT MENTION EXPIRY.
-    #
-    # It is rendered into a COMMITTED document that `--check` diffs. Anything
-    # here that moves with the calendar would make the doc go stale on a day
-    # nobody committed, and every PR after that would demand a regen commit
-    # carrying no information — precisely the #834 / #798 defect the digest rule
-    # was introduced to end. So the row states the two dates a reader needs (the
-    # ack, and when it lapses), both of which come from the manifest and hold
-    # still. The GATE is what notices the day it lapses: `--drift` reads
-    # `failing`, which does depend on today.
-    if not silicon:
+    if capture is None:
         status = "no silicon capture"
-    elif not drifted:
-        status = "✅ fresh"
-    elif covers_content:
-        status = f"⚠ drift acked {ack:%Y-%m-%d}, expires {expires:%Y-%m-%d} (re-capture pending)"
+    elif source_match is None:
+        status = "source match unverified — capture has no model digest"
+    elif source_match:
+        status = "capture source matches (historical silicon evidence)"
     else:
-        status = f"✖ DRIFT — model {newest:%Y-%m-%d} > capture; RE-CAPTURE"
+        status = "source changed since capture — re-capture needed for current silicon claim"
 
     return {
         "newest_model": newest,
-        "digest": model_digest(models),
+        "digest": digest,
         "capture": capture,
+        "capture_digest": captured_digest,
+        "source_match": source_match,
         "drifted": drifted,
-        "expires": expires,
-        "expired": expired,
-        "failing": failing,
         "status": status,
     }
 
 
-def lapsed_acks(manifest: dict, today: date | None = None) -> list[str]:
-    """Boards whose drift_ack was holding a drift and has now run out.
-
-    One definition, shared by `--drift` and the test that reads the committed
-    manifest. An ack only does work for a board that can drift, and a board
-    drifts only against `silicon.last_capture`. A board with no capture has
-    `failing` false the day the ack is written and a year later; its expiry
-    is a date passing, and no re-capture can clear it.
-    """
-    return [
-        b["id"]
-        for b in manifest["boards"]
-        if (v := evaluate(b, today=today))["failing"] and v["expired"]
-    ]
-
-
 def render(manifest: dict, today: date | None = None) -> str:
-    """Render the committed doc.
-
-    `today` exists so a test can PROVE the output does not move with the
-    calendar. It is threaded into evaluate() and must change nothing here:
-    an expiry that leaked into this document would make it go stale on a day
-    nobody committed. See the note on `status` in evaluate().
-    """
+    """Render historical evidence and source matches without calendar changes."""
     boards = manifest["boards"]
     lines: list[str] = []
     lines.append("<!-- GENERATED by scripts/generate_validation_status.py — DO NOT EDIT BY HAND.")
@@ -491,19 +349,26 @@ def render(manifest: dict, today: date | None = None) -> str:
     lines.append("# Board validation status")
     lines.append("")
     lines.append(
-        "Machine-generated from `validation/manifest.yaml`. CI regenerates this on "
-        "every run (`--check`) and fails if a peripheral model changed after a "
-        "board's last silicon capture without a dated `drift_ack` (`--drift`). "
+        "Machine-generated from `validation/manifest.yaml`. CI enforces a current "
+        "report (`--check`), complete source watch lists, and valid capture metadata. "
+        "Source/capture differences (`--drift`) are informational and do not require "
+        "a human source-review acknowledgement. "
         "Tiers: 🟢 silicon · 🟡 manual-smoke · ⚪ structural."
     )
     lines.append("")
     lines.append(
-        "The models column is a content digest over everything that board's "
-        "`models` list watches, NOT a commit date. Rendering the newest "
-        "committer date here meant every squash merge that touched a watched "
-        "path re-dated the column and made this committed file stale, so "
-        "`--check` demanded a regen commit that carried no information (#834, "
-        "and #798 before it). A digest moves only when the models actually do."
+        "The tier and capture date describe historical evidence. A source match "
+        "requires the current `models` content digest to equal `silicon.models_digest` "
+        "recorded with that capture. Missing captured digests remain unverified; "
+        "legacy `drift_ack` fields and commit dates cannot establish a match. "
+        "A changed or unverified match needs a physical re-capture before claiming "
+        "current silicon validation. Automated simulation results remain separate evidence."
+    )
+    lines.append("")
+    lines.append(
+        "The models column hashes watched paths and file contents. It changes "
+        "with source edits, including uncommitted and same-day changes, and stays "
+        "stable when identical content is rebased or squash-merged."
     )
     lines.append("")
     lines.append("| Board | Tier | Last silicon capture | Models | Status |")
@@ -533,27 +398,13 @@ def render(manifest: dict, today: date | None = None) -> str:
             lines.append("- Silicon: none — not validated against real hardware.")
         for t in b.get("offline_tests", []):
             lines.append(f"  - offline (CI): {t}")
-        lines.append(f"- Drift status: **{ev['status']}**")
+        lines.append(f"- Source/capture status: **{ev['status']}**")
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
 
 def print_digests(manifest: dict) -> int:
-    """Print every board's CURRENT model digest beside the ones it recorded.
-
-    The drift gate's whole argument for hashing content instead of comparing
-    dates (see `model_digest`) is that the digest "is the thing that IS knowable
-    pre-merge". That only holds if an author can actually print it, so this is
-    load-bearing documentation, not a convenience: the manifest header has told
-    people to run `--digests` since the gate landed, and the flag did not exist.
-
-    The verdict comes from `evaluate()`, the same function `--drift` and the
-    generated doc use, so this can never report a board differently from the
-    gate that fails it.
-
-    Read-only by construction: it reads the manifest and hashes files. Stamping
-    an ack is `--write-ack-digests`, and acking is a human act.
-    """
+    """Print current and recorded digests without changing evidence or gating drift."""
     boards = manifest.get("boards", [])
     if not boards:
         print("manifest lists no boards")
@@ -565,49 +416,25 @@ def print_digests(manifest: dict) -> int:
         digest = verdict["digest"] or "(no model path resolves; nothing to hash)"
         print(f"{board['id']:<{width}}  {digest}  {verdict['status']}")
 
-        # Only when they disagree, so the common case stays one line per board.
-        # These are what a re-capture or a re-ack has to move.
+        # Keep capture evidence and optional historical source-review metadata
+        # distinct. Neither is rewritten by this read-only report.
         captured = (board.get("silicon") or {}).get("models_digest")
         acked = board.get("drift_ack_digest")
-        for label, recorded in (("capture", captured), ("ack", acked)):
+        for label, recorded in (("capture", captured), ("historical ack", acked)):
             if recorded and recorded != verdict["digest"]:
                 print(f"{'':<{width}}  {label} recorded {recorded}")
 
-    # A report, not a gate: `--drift` is what fails. Exit 0 even with failing
-    # boards, so this stays usable while investigating one.
+    # Source/capture differences are informational in all reporting modes.
     return 0
 
 
 def write_ack_digests(manifest: dict, stamp_all: bool = False) -> int:
-    """Stamp `drift_ack_digest` next to every existing `drift_ack`.
+    """Update optional legacy ACK metadata only when explicitly requested.
 
-    Deliberately only touches boards that ALREADY carry a human-written
-    `drift_ack`. Writing a digest is not an acknowledgement — the ack is the
-    human assertion, the digest only pins WHICH tree it was asserted about. A
-    board with no ack must stay un-acked; this must never be a way to bulk-
-    silence the gate.
-
-    Edits the YAML as text rather than round-tripping through the loader: the
-    manifest is a hand-maintained document whose comments carry the reasoning
-    for every ack, and PyYAML would drop all of them.
-
-    ⚠️ ONLY DRIFTED BOARDS ARE STAMPED, and that restriction is the point.
-
-    `evaluate()` consults a `drift_ack_digest` for exactly one purpose: deciding
-    whether an ack still covers a DRIFTED board. For a board that is not
-    drifted, the field is dead weight — no gate reads it, and re-stamping it
-    rewrites a line nothing consults.
-
-    That was not a theoretical cost. Stamping every acked board whose digest had
-    gone stale swept four unrelated boards into every model-sized change
-    (mkw41z4, rp2040, stm32f411ceu6, stm32h735 — the SAME four, four separate
-    times on 2026-08-31), and each time they had to be reverted by hand so that
-    every moved digest could be attributed to a file the change actually
-    touched. A tool that reliably produces work its user must undo is a defect,
-    not a convenience.
-
-    `--write-ack-digests-all` restores the old sweep for when a stale field
-    genuinely wants tidying — deliberately, and on its own.
+    Kept for callers that maintain historical `drift_ack` fields. This does not
+    create an ACK, change physical capture evidence, affect source-match status,
+    or satisfy a gate. The default updates only known source/capture mismatches;
+    `stamp_all` also updates other existing ACK records. Comments are preserved.
     """
     text = MANIFEST.read_text()
     lines = text.split("\n")
@@ -622,8 +449,7 @@ def write_ack_digests(manifest: dict, stamp_all: bool = False) -> int:
             continue
         if board.get("drift_ack_digest") == digest:
             continue
-        # `evaluate()` is the same function `--drift` and the rendered doc use,
-        # so this can never disagree with the gate about which boards are in play.
+        # Preserve the legacy default's bounded scope; this is never run by CI.
         if not stamp_all and not evaluate(board)["drifted"]:
             skipped_not_drifted.append(board["id"])
             continue
@@ -660,13 +486,13 @@ def write_ack_digests(manifest: dict, stamp_all: bool = False) -> int:
         stamped += 1
 
     MANIFEST.write_text("\n".join(lines))
-    print(f"stamped {stamped} drift_ack_digest value(s)")
+    print(f"stamped {stamped} historical drift_ack_digest value(s); capture evidence unchanged")
     # Name what was left alone and why. The old sweep's cost stayed invisible
     # until someone diffed the manifest and found boards they never touched.
     if skipped_not_drifted:
         print(
-            f"left {len(skipped_not_drifted)} stale digest(s) alone — not drifted, so "
-            f"nothing reads them: {', '.join(sorted(skipped_not_drifted))}"
+            f"left {len(skipped_not_drifted)} historical digest(s) alone — no known "
+            f"capture mismatch: {', '.join(sorted(skipped_not_drifted))}"
         )
         print("  (use --write-ack-digests-all to tidy those deliberately)")
     return 0
@@ -677,14 +503,10 @@ class DuplicateKeyError(ValueError):
 
 
 class _UniqueKeyLoader(yaml.SafeLoader):
-    """SafeLoader that refuses a mapping with the same key twice.
+    """SafeLoader that refuses every duplicate mapping key.
 
-    PyYAML keeps the LAST value of a repeated key and says nothing. In this
-    manifest that hid real trouble: boards piled up dozens of `drift_ack:` keys
-    (one per change), the parser read the last one, and `--write-ack-digests`
-    stamped its digest beside the FIRST, so a fresh ack could not take effect.
-    One key per board: renew an ack by changing its date and adding to its
-    comment block, never by adding another `drift_ack:` line.
+    Silently taking the last value can conceal conflicting capture evidence or
+    source paths. Historical ACK fields follow the same uniqueness rule.
     """
 
     def construct_mapping(self, node, deep=False):
@@ -702,18 +524,18 @@ class _UniqueKeyLoader(yaml.SafeLoader):
 
 def load_manifest(text: str):
     try:
-        return yaml.load(text, Loader=_UniqueKeyLoader)
-    except DuplicateKeyError as e:
-        sys.exit(
-            f"error: validation/manifest.yaml: {e}. Each board takes one "
-            "`drift_ack:`; renew it in place instead of adding another."
-        )
+        manifest = yaml.load(text, Loader=_UniqueKeyLoader)
+        for board in manifest["boards"]:
+            capture_provenance(board)
+        return manifest
+    except (DuplicateKeyError, ValueError) as exc:
+        sys.exit(f"error: validation/manifest.yaml: {exc}")
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--check", action="store_true", help="fail if committed doc is stale")
-    ap.add_argument("--drift", action="store_true", help="fail if any board drifted past its ack")
+    ap.add_argument("--drift", action="store_true", help="report source/capture differences; drift is informational, integrity errors fail")
     ap.add_argument(
         "--digests",
         action="store_true",
@@ -723,15 +545,14 @@ def main() -> int:
         "--write-ack-digests-all",
         action="store_true",
         help=(
-            "stamp EVERY acked board whose digest moved, including boards that are "
-            "not drifted. The plain flag stamps only drifted boards, whose digest is "
-            "the only one any gate reads."
+            "update all existing legacy ACK digests as optional historical metadata; "
+            "never changes capture evidence or validation status"
         ),
     )
     ap.add_argument(
         "--write-ack-digests",
         action="store_true",
-        help="stamp drift_ack_digest for every board that already carries a drift_ack",
+        help="update existing legacy ACK digests for known capture mismatches; optional metadata only",
     )
     args = ap.parse_args()
 
@@ -759,10 +580,7 @@ def main() -> int:
     if args.check:
         existing = OUT_DOC.read_text() if OUT_DOC.exists() else ""
         if existing != rendered:
-            # Print the actual difference. This doc is rendered partly from git
-            # commit dates, so a checkout whose history differs from yours can
-            # fail this gate while it passes locally — and "is out of date" on
-            # its own gives a CI reader nothing to act on.
+            # Show the exact source/evidence difference needed to refresh the report.
             diff = "".join(
                 difflib.unified_diff(
                     existing.splitlines(keepends=True),
@@ -784,37 +602,21 @@ def main() -> int:
         print(f"wrote {OUT_DOC.relative_to(CORE_ROOT)}")
 
     if args.drift:
-        verdicts = {b["id"]: evaluate(b) for b in manifest["boards"]}
-        # Two different asks, so two different messages. An EXPIRED ack means a
-        # human already looked at this drift and promised a re-capture; the
-        # promise has come due. An unacked drift has never been looked at.
-        expired = lapsed_acks(manifest)
-        unacked = [i for i, v in verdicts.items() if v["failing"] and not v["expired"]]
-        if expired:
-            print(
-                "ERROR: drift_ack EXPIRED — the promised re-capture is now due:\n  "
-                + "\n  ".join(
-                    f"{i} (acked {as_date(next(b for b in manifest['boards'] if b['id'] == i).get('drift_ack')):%Y-%m-%d}, "
-                    f"expired {verdicts[i]['expires']:%Y-%m-%d})"
-                    for i in expired
-                )
-                + "\n"
-                "       Re-run the live diff and bump silicon.last_capture + models_digest,\n"
-                "       or renew the ack (new drift_ack date, re-stamp with --write-ack-digests).\n"
-                "       If a re-capture is genuinely blocked, set an explicit drift_ack_expires\n"
-                "       with the reason in a note — a later date is reviewable, forever is not.",
-                file=sys.stderr,
-            )
-            rc = 1
-        if unacked:
-            print(
-                "ERROR: silicon validation has DRIFTED (model changed after last capture, "
-                "no covering drift_ack):\n  " + "\n  ".join(unacked) + "\n"
-                "       Re-run the live diff and bump silicon.last_capture, or set a dated "
-                "drift_ack in validation/manifest.yaml.",
-                file=sys.stderr,
-            )
-            rc = 1
+        verdicts = {
+            b["id"]: evaluate(b) for b in manifest["boards"] if b.get("silicon") is not None
+        }
+        counts = {
+            "matching": sum(v["source_match"] is True for v in verdicts.values()),
+            "changed": sum(v["source_match"] is False for v in verdicts.values()),
+            "unverified": sum(v["source_match"] is None for v in verdicts.values()),
+        }
+        print(
+            "Source/capture report (informational; no source-review ACK required): "
+            + ", ".join(f"{count} {label}" for label, count in counts.items())
+        )
+        for board_id, verdict in verdicts.items():
+            if verdict["source_match"] is not True:
+                print(f"  {board_id}: {verdict['status']}")
 
     return rc
 

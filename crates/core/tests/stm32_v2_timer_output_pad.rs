@@ -334,3 +334,222 @@ fn unknown_timer_pad_map_is_refused() {
         .expect("an unknown pad_map must be refused");
     assert!(format!("{err:#}").contains("unknown pad_map"), "{err:#}");
 }
+
+/// Native complementary output routes from STM32L476 DS10198 table 17;
+/// output-stage timing from RM0351 section 30.3.15. These checks use the same
+/// Machine logic edge ring that supplies the browser instruments.
+mod l476_complementary {
+    use super::*;
+    use labwired_core::logic_capture::LogicEdge;
+
+    const TIM1: u64 = 0x4001_2C00;
+    const GPIOB: u64 = 0x4800_0400;
+    const BDTR: u64 = 0x44;
+    const MOE: u32 = 1 << 15;
+
+    fn capture(af: u32, ccer: u32, bdtr: u32, ccr: u32, mode: u32) -> (Vec<LogicEdge>, bool) {
+        let mut m = machine(L476.system);
+        set_bits(&mut m, 0x4002_104C, 3); // GPIOA/B AHB2 clocks.
+        set_bits(&mut m, 0x4002_1060, 1 << 11); // TIM1 APB2 clock.
+        for (base, pin, function) in [(L476.gpioa, 8u32, 1u32), (GPIOB, 13, af)] {
+            let moder = m.bus.read_u32(base).unwrap();
+            m.bus
+                .write_u32(base, (moder & !(3 << (pin * 2))) | (2 << (pin * 2)))
+                .unwrap();
+            let offset = base + 0x24;
+            let shift = (pin - 8) * 4;
+            let afr = m.bus.read_u32(offset).unwrap();
+            m.bus
+                .write_u32(offset, (afr & !(15 << shift)) | (function << shift))
+                .unwrap();
+        }
+        for (offset, value) in [
+            (TIM_PSC, 0),
+            (TIM_ARR, 199),
+            (TIM_CCR1, ccr),
+            (TIM_CCMR1, mode << 4),
+            (TIM_CCER, ccer),
+            (BDTR, bdtr),
+            (TIM_EGR, 1),
+            (TIM_CR1, 1),
+        ] {
+            m.bus.write_u32(TIM1 + offset, value).unwrap();
+        }
+        let a = m.bus.find_peripheral_index_by_name("gpioa").unwrap();
+        let b = m.bus.find_peripheral_index_by_name("gpiob").unwrap();
+        m.logic_watch(&[
+            Some(LogicSource::Pad {
+                peripheral: a,
+                pin: 8,
+            }),
+            Some(LogicSource::Pad {
+                peripheral: b,
+                pin: 13,
+            }),
+        ]);
+        for _ in 0..2_000 {
+            m.step().unwrap();
+            if af == 1 && ccer & 4 != 0 && bdtr & MOE != 0 {
+                let pad = m
+                    .read_logic_level(LogicSource::Pad {
+                        peripheral: b,
+                        pin: 13,
+                    })
+                    .expect("enabled PB13 AF output has a native pad level");
+                assert_eq!(
+                    m.bus.read_u32(GPIOB + 0x10).unwrap() & (1 << 13) != 0,
+                    pad,
+                    "firmware IDR and native PB13 capture must agree"
+                );
+            }
+        }
+        let n_level = m.bus.read_u32(GPIOB + 0x10).unwrap() & (1 << 13) != 0;
+        (m.logic_read_edges(0).edges, n_level)
+    }
+
+    #[test]
+    fn l476_tim1_pb14_armed_undriven_records_later_native_states() {
+        use labwired_core::logic_capture::{
+            attach_logic_states, build_logic_edges_result, LogicChannelMeta, PadState,
+        };
+
+        let mut m = machine(L476.system);
+        set_bits(&mut m, 0x4002_104C, 2); // GPIOB AHB2 clock.
+        set_bits(&mut m, 0x4002_1060, 1 << 11); // TIM1 APB2 clock.
+        let moder = m.bus.read_u32(GPIOB).unwrap();
+        m.bus
+            .write_u32(GPIOB, (moder & !(3 << 28)) | (2 << 28))
+            .unwrap();
+        let afr = m.bus.read_u32(GPIOB + 0x24).unwrap();
+        m.bus
+            .write_u32(GPIOB + 0x24, (afr & !(15 << 24)) | (1 << 24))
+            .unwrap();
+        for (offset, value) in [
+            (TIM_PSC, 0),
+            (TIM_ARR, 199),
+            (TIM_CCR1 + 4, 80),   // CCR2.
+            (TIM_CCMR1, 6 << 12), // OC2M PWM1, immediate compare.
+            (TIM_CCER, 0),        // The observed output is genuinely disabled at arm.
+            (BDTR, MOE | 2),
+            (TIM_EGR, 1),
+            (TIM_CR1, 1),
+        ] {
+            m.bus.write_u32(TIM1 + offset, value).unwrap();
+        }
+        let b = m.bus.find_peripheral_index_by_name("gpiob").unwrap();
+        let initial = m.logic_watch(&[Some(LogicSource::pad(b, 14))]);
+        let initial_states = m.logic_initial_states().to_vec();
+        assert_eq!(initial, vec![None]);
+        assert_eq!(initial_states, vec![None]);
+        let armed_at = m.logic_now_cycle();
+        m.bus.write_u32(TIM1 + TIM_CCER, 1 << 6).unwrap(); // CC2NE.
+        for _ in 0..400 {
+            m.step().unwrap();
+        }
+        m.bus.write_u32(TIM1 + TIM_CCER, 0).unwrap();
+        for _ in 0..200 {
+            m.step().unwrap();
+        }
+        m.bus.write_u32(TIM1 + TIM_CCR1 + 4, 0).unwrap();
+        m.bus.write_u32(TIM1 + TIM_CCER, 1 << 6).unwrap();
+        for _ in 0..20 {
+            m.step().unwrap();
+        }
+
+        let edges = m.logic_read_edges(0);
+        let states = m.logic_read_states(0);
+        assert_eq!(edges.dropped, 0);
+        assert_eq!(states.dropped, 0);
+        assert!(edges.edges.iter().any(|edge| edge.value));
+        assert!(edges.edges.iter().any(|edge| !edge.value));
+        for expected in [PadState::High, PadState::HighZ, PadState::Low] {
+            assert!(
+                states.edges.iter().any(|edge| edge.state == expected),
+                "{expected:?}"
+            );
+        }
+        assert!(states
+            .edges
+            .iter()
+            .all(|edge| edge.cycle >= armed_at && edge.cycle <= m.logic_now_cycle()));
+        let meta = [LogicChannelMeta {
+            ch: 0,
+            peripheral: "gpiob".into(),
+            pin: 14,
+            initial: initial[0],
+        }];
+        let mut exported = build_logic_edges_result(&meta, &edges, m.logic_now_cycle());
+        attach_logic_states(&mut exported, &initial_states, &states);
+        assert_eq!(exported.channels[0].initial_state, None);
+        assert_eq!(
+            exported.channels[0].states.as_ref().unwrap().len(),
+            states.edges.len()
+        );
+    }
+
+    fn assert_edges(edges: &[LogicEdge], channel: u32, expected: &[(u64, bool)]) {
+        let actual: Vec<_> = edges
+            .iter()
+            .filter(|e| e.ch == channel && e.cycle >= 200)
+            .collect();
+        assert!(
+            actual.len() >= 10,
+            "channel {channel} has no native PWM edges: {actual:?}"
+        );
+        for edge in actual {
+            assert!(
+                expected.contains(&(edge.cycle % 200, edge.value)),
+                "unexpected native edge {edge:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn l476_tim1_n_only_follows_ocref_on_pb13() {
+        let (edges, _) = capture(1, 4, MOE | 2, 80, 6);
+        assert_edges(&edges, 1, &[(0, true), (80, false)]);
+        assert!(edges.iter().filter(|e| e.ch == 0).count() <= 1);
+        let (full, high) = capture(1, 4, MOE | 2, 200, 6);
+        assert!(high, "CCR=ARR+1 keeps the N-only commutation gate active");
+        assert!(full.iter().filter(|e| e.ch == 1).count() <= 1);
+    }
+
+    #[test]
+    fn l476_tim1_both_enabled_have_exact_two_cycle_dead_time() {
+        let (edges, _) = capture(1, 5, MOE | 2, 80, 6);
+        assert_edges(&edges, 0, &[(2, true), (80, false)]);
+        assert_edges(&edges, 1, &[(82, true), (0, false)]);
+        let mut levels = [false; 2];
+        for edge in edges {
+            levels[edge.ch as usize] = edge.value;
+            assert!(
+                !(levels[0] && levels[1]),
+                "overlap at native cycle {}",
+                edge.cycle
+            );
+        }
+    }
+
+    #[test]
+    fn l476_tim1_complementary_route_requires_af_enable_and_moe() {
+        for (af, enable, bdtr) in [(2, 4, MOE), (1, 0, MOE), (1, 4, 0)] {
+            let (edges, high) = capture(af, enable, bdtr, 80, 6);
+            assert!(
+                edges.iter().filter(|e| e.ch == 1).count() <= 1,
+                "false route for AF={af}, CCER={enable}, BDTR={bdtr}"
+            );
+            assert!(
+                !high,
+                "an inactive AF driver must not override the reset IDR input level"
+            );
+        }
+    }
+
+    #[test]
+    fn l476_tim1_pwm2_and_n_polarity_are_native() {
+        let (edges, _) = capture(1, 4, MOE | 2, 80, 7);
+        assert_edges(&edges, 1, &[(80, true), (0, false)]);
+        let (inverted, _) = capture(1, 12, MOE | 2, 80, 6);
+        assert_edges(&inverted, 1, &[(80, true), (0, false)]);
+    }
+}

@@ -1064,9 +1064,9 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// Exists for `model_paths_drift_gate`, which asserts that every model a
     /// board actually registers appears in that board's `models:` list in
     /// `validation/manifest.yaml` — the list whose contents are hashed into
-    /// the board's drift digest. A model the list omits can be rewritten
-    /// without moving the digest, so a stale `drift_ack` goes on covering a
-    /// tree it was never written for.
+    /// the board's source digest. An omitted model can change without moving
+    /// the digest, concealing a difference from the source recorded with a
+    /// physical capture. Watch completeness remains an automated requirement.
     ///
     /// Asking the ENGINE rather than parsing the factories is the point. The
     /// first version of that gate mined `type:` -> source from the factory

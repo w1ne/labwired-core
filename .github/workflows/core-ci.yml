@@ -543,8 +543,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      # Generated docs + drift — pure Python, no cargo.
-      - name: Validation status — regen check + drift gate
+      # Generated docs + watch integrity; source drift is informational. Pure Python, no cargo.
+      - name: Validation status — report check + source/capture report
         run: |
           python -m pip install --quiet pyyaml
           python3 scripts/generate_validation_status.py --check --drift
@@ -573,9 +573,8 @@ jobs:
       #
       # ADDING A TEST FILE UNDER scripts/ OR validation/? Add it to the pytest
       # line below or it will never run. test_generate_validation_status.py covers the
-      # incomplete-history guard, which is precisely a "this ran and told you
-      # nothing" bug; a test for it that nothing executes would be the same bug
-      # one level up. It needs pyyaml, installed by the step above.
+      # history and watch-list guards, capture provenance, and nonblocking source
+      # drift policy. It needs pyyaml, installed by the step above.
       - name: Perf gate — every chip covered or waived
         run: |
           python -m pip install --quiet pytest
@@ -603,6 +602,7 @@ jobs:
             scripts/test_labwired_audit.py \
             validation/matrix_lib/test_invoke.py
           python3 -m unittest discover -s scripts/tests -p test_cli_release_tag.py
+          python3 -m unittest discover -s examples/nrf52840-secure-boot-lab -p test_make_packages.py
 
       # Mixed-signal co-sim: the ngspice wrapper (tools/cosim) is pure Python
       # over libngspice and steps a real RC circuit; seconds, no cargo. It is a
@@ -1947,7 +1947,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Validation status — regen check + drift gate
+      - name: Validation status — report check + source/capture report
         run: |
           python -m pip install --quiet pyyaml
           python3 scripts/generate_validation_status.py --check --drift

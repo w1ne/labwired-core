@@ -23,6 +23,7 @@ pub mod hashers;
 pub mod host_time;
 pub mod inspect;
 pub mod interrupt;
+pub mod live_numeric;
 pub mod logic_capture;
 pub mod machine;
 pub mod memory;
@@ -952,6 +953,16 @@ impl<C: Cpu> Machine<C> {
         series.end_time_ns = series.end_time_ns.max(motor_end_ns);
         series.channels.extend(motor_channels);
         Some(series)
+    }
+
+    /// Live native numeric observations, on a cursor independent of the analog
+    /// co-simulation ring and historical series. None when no producer exists.
+    pub fn live_numeric_capture(
+        &self,
+        cursor: u64,
+        max_points: usize,
+    ) -> Option<crate::live_numeric::LiveNumericBatch> {
+        self.bus.live_numeric_capture(cursor, max_points)
     }
 
     /// Current engine cycle — the `nowCycle` reported alongside a logic-edge
