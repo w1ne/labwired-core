@@ -276,6 +276,9 @@ pub trait MachineTrait: Send {
     fn reset_input_status(&self) -> Option<crate::reset_input::ResetInputStatus> {
         None
     }
+    fn power_domain_status(&self) -> Option<crate::power_domains::PowerDomainStatus> {
+        None
+    }
     fn bind_world_cosim(
         &mut self,
         _node: &str,
@@ -599,6 +602,9 @@ pub trait MachineTrait: Send {
 impl<C: Cpu + 'static> MachineTrait for Machine<C> {
     fn reset_input_status(&self) -> Option<crate::reset_input::ResetInputStatus> {
         self.bus.reset_input.status()
+    }
+    fn power_domain_status(&self) -> Option<crate::power_domains::PowerDomainStatus> {
+        Machine::power_domain_status(self)
     }
     fn bind_world_cosim(
         &mut self,
@@ -1566,6 +1572,15 @@ impl World {
                 .machines
                 .iter()
                 .filter_map(|(id, m)| m.reset_input_status().map(|r| (id.clone(), r)))
+                .collect();
+            status.power_domains = self
+                .machines
+                .iter()
+                .filter_map(|(id, machine)| {
+                    machine
+                        .power_domain_status()
+                        .map(|state| (id.clone(), state))
+                })
                 .collect();
             status
         })

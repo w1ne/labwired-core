@@ -38,6 +38,7 @@ pub use from_config::merged_peripheral_configs;
 mod ina219_circuit;
 pub mod interrupt_fabric;
 pub mod known_stubs;
+mod mcu_power;
 mod memory_policy;
 mod mmio_activity;
 mod mmio_words;
@@ -929,6 +930,7 @@ pub struct SystemBus {
     /// The chip's supply supervisor (see [`crate::power`]): idle, with the
     /// ideal rail assumed, until a circuit is routed to `board.power.vdd_volts`.
     pub(crate) supply: crate::power::SupplySupervisor,
+    pub mcu_power: crate::power_domains::McuPowerDomains,
     pub(crate) reset_input: crate::reset_input::ResetInputState,
     /// What the system manifest DECLARED under `external_devices:`, verbatim.
     ///

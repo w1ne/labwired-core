@@ -1376,6 +1376,26 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// register has nothing to record.
     fn on_supply_reset(&mut self, _cause: crate::power::SupplyResetCause) {}
 
+    /// Explicit physical rail roles. Unsupported models refuse binding.
+    fn attach_power_domains(
+        &mut self,
+        _domains: std::collections::BTreeMap<String, crate::power_domains::PowerDomainHandle>,
+    ) -> Result<(), String> {
+        Err("peripheral has no declared power-domain capability".into())
+    }
+    /// Register-specific code supplies threshold voltages, not register codes.
+    fn attach_power_supervisor(
+        &mut self,
+        _control: crate::power_domains::PowerSupervisorControl,
+    ) -> Result<(), String> {
+        Err("peripheral has no sampled brown-out control capability".into())
+    }
+    /// Called after all physical rail observations are published atomically.
+    fn sync_power_domains(&mut self) {}
+    /// One actual reset transition, after the peripheral reset callbacks.
+    /// CPU vector reload on release does not call this a second time.
+    fn on_power_reset(&mut self, _cause: crate::power_domains::PowerResetCause) {}
+
     /// The node this peripheral belongs to was reset through its reset pin
     /// or `SYSRESETREQ` (a world's scripted node reset). A peripheral that
     /// must return to its reset state for the restarted firmware to behave

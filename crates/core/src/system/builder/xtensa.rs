@@ -85,6 +85,7 @@ fn build_esp32(
     let cpu = crate::system::xtensa::configure_xtensa_esp32(&mut bus);
     bus.attach_chip_io_levels(req.chip);
     bus.attach_plugin_peripherals(req.chip, manifest, plugins)?;
+    bus.attach_mcu_power_domains(req.chip)?;
 
     // A classic ESP32 has NO USB peripheral: its devkit's CP210x sits on UART0
     // and IS the USB device the host enumerates. So `debug_uart: usb_serial_jtag`
