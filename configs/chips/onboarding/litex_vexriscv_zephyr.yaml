@@ -1,15 +1,28 @@
 # LabWired - Firmware Simulation Platform
 # Copyright (C) 2026 Andrii Shylenko
-#
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
+# SPDX-License-Identifier: MIT
 
-name: litex_vexriscv_zephyr
-arch: arm
-flash:
-  base: 1073741824
-  size: 268435456B
-ram:
-  base: 1073741824
-  size: 268435456B
-peripherals: []
+name: "litex_vexriscv_zephyr"
+arch: "riscv"
+core: "rv32im"
+cpu_hz: 100_000_000
+
+# The imported Zephyr target uses the LiteX VexRiscv SoC. Keep this runtime
+# profile to the CPU, mapped memories, UART, and timer covered by the smoke.
+# The Zephyr BIOS/boot path and other LiteX CSRs are outside this profile.
+flash: { base: 0x20000000, size: "32MiB" }
+ram: { base: 0x10000000, size: "256KB" }
+flash_boot_alias: false
+memory_regions:
+  - { name: "rom", base: 0x0, size: "256KB" }
+peripherals:
+  - id: "uart"
+    type: "litex_uart"
+    base_address: 0x60001800
+    size: "2KB"
+    irq: 2
+  - id: "timer"
+    type: "litex_timer"
+    base_address: 0x60002800
+    size: "2KB"
+    irq: 1

@@ -1,0 +1,30 @@
+# Cortex-M0+, LPUART0 and GPIO port D smoke on the exact imported S32K118
+# system (crates/firmware-s32k118-smoke). Polled LPUART0 8N1 TX behind
+# STAT.TDRE/TC with VERID/PARAM/BAUD/CTRL readbacks, MULS, and PTD
+# PSOR/PCOR/PTOR read back through PDOR, then a PTD0 heartbeat. A
+# zero-answering window would never raise TDRE, so no UART text would appear.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-s32k118-smoke"
+  system: "../../configs/systems/onboarding/s32k118.yaml"
+limits:
+  max_steps: 2000000
+assertions:
+  - uart_contains: "S32K118 LPUART0 SMOKE"
+  - uart_ordered:
+      - "lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00080000"
+      - "muls=00000143"
+      - "ptd pddr=00000009 set=00000001 clr=00000000 tog=00000009"
+      - "pass=0f"
+  - gpio_edges:
+      pin: "ptd:0"
+      min_edges: 3
+  - memory_value:
+      address: 0x20000000
+      expected_value: 0x00000143
+      size: 4
+  - memory_value:
+      address: 0x20000004
+      expected_value: 0x5118000F
+      size: 4
+  - expected_stop_reason: max_steps

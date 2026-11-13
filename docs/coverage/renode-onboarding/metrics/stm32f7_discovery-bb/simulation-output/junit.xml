@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="6" failures="0" errors="0" time="0.247770">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="e2e7014c81d721c69e163d4b2e2efecf7893833b2a84f3826ec7e93697b1743f"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.247770">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: STM32F746G-DISCO SMOKE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_ordered: [&quot;rcc reset=1 gate=1 mask=1 ok&quot;, &quot;usart irq usart1=1 usart2=1 usart3=1 uart4=1 uart5=1 usart6=1 uart7=1 u…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: memory_value: @0x20003000=0x7dc07fff" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: gpio_edges: gpioi:1 &gt;= 7 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

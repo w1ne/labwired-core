@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="14" failures="0" errors="0" time="0.008967">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="df7dcaee18119e1be042fddeda1fb6035f41ac7f9590fdb9632108cf2bfdaf8c"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.008967">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: memory_value: @0x20000000=0x143" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: memory_value: @0x20000004=0x20" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: memory_value: @0x20000008=0x402" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x2000000c=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: memory_value: @0x20000010=0x2" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: memory_value: @0x40084000=0xffbfff7e" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: memory_value: @0x40084004=0xffffffff" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 8: uart_contains: CK-RA6M5 SCI0 SMOKE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 9: uart_contains: FPU_SUM=40400000" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 10: memory_value: @0x20000014=0x40400000" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 11: gpio_edges: port6:10 &gt;= 4 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 12: gpio_edges: port6:9 &gt;= 4 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 13: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

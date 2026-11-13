@@ -1,65 +1,22 @@
-# Validation Report: stm32f072b_discovery
+# Imported STM32F072B-DISCO onboarding smoke
 
-**Architecture:** ARMv6-M.
+The imported profile is bounded to the Cortex-M0, 128 KiB flash, 16 KiB SRAM,
+F0 RCC, GPIOA, GPIOC, and USART1. Other peripherals in the original Renode
+descriptor were removed because this engine does not model them for this
+profile.
 
-## 1. Dynamic Simulation Validation
-**Status:** ✅ Passed (simulation-ok)
+The exact imported-system firmware ran for 4,000,000 instructions. It enabled
+the F0 GPIOA/GPIOC and USART1 clock gates, transmitted its smoke text through
+USART1, read GPIOC ODR after setting the four LED output bits, and read PA0
+high with its internal pull-up enabled. The JUnit report passed all three
+smoke assertions. The GPIOC values are register readbacks; this run did not
+model visible LED output. The PA0 readback does not exercise a pressed button
+or an external button connection.
 
-```text
-[2m2026-10-18T14:40:25.556228Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-[2m2026-10-18T14:40:25.556591Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/stm32f072b_discovery.yaml
-[2m2026-10-18T14:40:25.558236Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-[2m2026-10-18T14:40:25.558384Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-[2m2026-10-18T14:40:25.558448Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-[2m2026-10-18T14:40:25.558483Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-[2m2026-10-18T14:40:25.559927Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-[2m2026-10-18T14:40:25.560457Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-[2m2026-10-18T14:40:25.560508Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-[2m2026-10-18T14:40:25.560628Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Simulation Error at step 2: Memory access violation at 0x2001ffe0
-[2m2026-10-18T14:40:25.560676Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-[2m2026-10-18T14:40:25.560704Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x45c
-[2m2026-10-18T14:40:25.560730Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 2
-[2m2026-10-18T14:40:25.560757Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 2
-[2m2026-10-18T14:40:25.560782Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 880.41
-```
+The run assumes an ideal power rail, so power-on and brown-out behavior are
+outside this result. This is local LabWired execution against the imported
+system manifest. It does not establish Renode equivalence, whole-board
+behavior, unsupported peripheral behavior, or physical hardware confirmation.
 
-
-## Hardware Coverage Report
-
-| Peripheral ID | Base Address | Type |
-|---|---|---|
-| `led` | `0x00000006` | `led` |
-| `usart1` | `0x40013800` | `stm32f7_usart` |
-| `usart2` | `0x40004400` | `stm32f7_usart` |
-| `usart3` | `0x40004800` | `stm32f7_usart` |
-| `usart4` | `0x40004c00` | `stm32f7_usart` |
-| `usart5` | `0x40005000` | `stm32f7_usart` |
-| `usart6` | `0x40011400` | `stm32f7_usart` |
-| `usart7` | `0x40011800` | `stm32f7_usart` |
-| `gpioPortA` | `0x48000000` | `stm32_gpioport` |
-| `gpioPortB` | `0x48000400` | `stm32_gpioport` |
-| `gpioPortC` | `0x48000800` | `stm32_gpioport` |
-| `gpioPortD` | `0x48000c00` | `stm32_gpioport` |
-| `gpioPortE` | `0x48001000` | `stm32_gpioport` |
-| `gpioPortF` | `0x48001400` | `stm32_gpioport` |
-| `i2c1` | `0x40005400` | `stm32f7_i2c` |
-| `i2c2` | `0x40005800` | `stm32f7_i2c` |
-| `spi1` | `0x40013000` | `stm32spi` |
-| `spi2` | `0x40003800` | `stm32spi` |
-| `timer1` | `0x40012c00` | `stm32_timer` |
-| `timer2` | `0x40000000` | `stm32_timer` |
-| `timer3` | `0x40000400` | `stm32_timer` |
-| `timer6` | `0x40001000` | `stm32_timer` |
-| `timer7` | `0x40001400` | `stm32_timer` |
-| `timer14` | `0x40002000` | `stm32_timer` |
-| `timer15` | `0x40014000` | `stm32_timer` |
-| `timer16` | `0x40014400` | `stm32_timer` |
-| `timer17` | `0x40014800` | `stm32_timer` |
-| `can` | `0x40006400` | `stmcan` |
-| `rtc` | `0x40002800` | `stm32f4_rtc` |
-| `rcc` | `0x40021000` | `pythonperipheral` |
-| `DMA` | `0x40020000` | `pythonperipheral` |
-| `adc` | `0x40012400` | `stm32f0_adc` |
-| `crc` | `0x40023000` | `stm32_crc` |
-
-**Total Peripherals:** 33
+Result JSON, UART output, snapshot, JUnit report, and build/run logs are under
+[`docs/coverage/renode-onboarding/metrics/stm32f072b_discovery/`](../coverage/renode-onboarding/metrics/stm32f072b_discovery/).

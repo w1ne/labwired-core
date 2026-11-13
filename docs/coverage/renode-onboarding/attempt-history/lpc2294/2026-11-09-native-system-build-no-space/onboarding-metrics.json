@@ -1,0 +1,34 @@
+{
+  "target_id": "lpc2294",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": false,
+  "booted": null,
+  "boot_evidence": null,
+  "smoke_passed": null,
+  "crate": null,
+  "target_triple": null,
+  "script": "examples/renode-onboarding/lpc2294-arm7-uart-smoke.yaml",
+  "system": "configs/systems/onboarding/lpc2294.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-09T19:42:41Z",
+  "finished_at_utc": "2026-11-09T19:44:27Z",
+  "elapsed_seconds": 106,
+  "elapsed_ms": 105470,
+  "failure_stage": "build_cli",
+  "first_error_signature": "error: failed to write bytecode to /home/andrii/worktrees/labwired-core/renode/target/native-system/deps/labwired_fuzz-958b4e4ef624f001.labwired_fuzz.7ff4a06623650859-cgu.01.rcgu.bc: No space left on device (os error 28)",
+  "failure_hint": "Fix host toolchain first: run `rustup show` and ensure CLI dependencies build on this runner.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 105.456,
+    "build_firmware": null,
+    "run_smoke": null
+  },
+  "stages_ms": {
+    "build_cli": 105456,
+    "build_firmware": null,
+    "run_smoke": null
+  },
+  "prebuilt_firmware": "tests/fixtures/lpc2294-arm7-uart-smoke.elf"
+}

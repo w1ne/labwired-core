@@ -6,3 +6,4 @@
 
 name: crosslink-nx-evn
 chip: ../../chips/onboarding/crosslink-nx-evn.yaml
+debug_uart: uart

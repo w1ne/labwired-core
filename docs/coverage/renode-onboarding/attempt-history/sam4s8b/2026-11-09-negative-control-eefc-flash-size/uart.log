@@ -1,0 +1,18 @@
+SAM4S8B RENODE SMOKE
+eefc fmr=00000500 ok
+eefc getd size=00100000 page=0200 locks=0080 FAIL
+eefc gpnvm=2 set=3 glb=2 clb=0 ok
+eefc fsr badkey=3 after=1 ok
+rstc sr=00010000 wdt mr=3fff2fff ok
+rstc software reset
+SAM4S8B RENODE SMOKE
+rstc rsttyp=3 ok
+wdt arm wdv=2
+SAM4S8B RENODE SMOKE
+wdt rsttyp=2 mr=3fff2fff ok
+wdt window sr=2 pended released ok
+wdt mr once=00801100 ok
+pmc pcsr0=1f80db00 ok
+pio ports=2 ok
+tc0 rc pend=1 ok
+SAM4S8B FAIL

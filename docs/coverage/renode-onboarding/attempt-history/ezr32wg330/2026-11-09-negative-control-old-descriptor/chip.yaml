@@ -1,0 +1,22 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: ezr32wg330
+arch: arm
+# Keep only the imported Cortex-M4F memory map and modeled UART0 used by the
+# onboarding smoke. Other generated peripheral windows are not claimed.
+core: cortex-m4f
+flash:
+  base: 134217728
+  size: 262144B
+ram:
+  base: 536870912
+  size: 32768B
+peripherals:
+- id: uart0
+  type: efm32_uart
+  bus: sysbus
+  base_address: 1073799168

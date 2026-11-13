@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      1,
+      4,
+      0,
+      2147483648,
+      35,
+      200000,
+      1,
+      536899560,
+      1073790992,
+      4294867296,
+      1073766568,
+      1073807376,
+      536870912,
+      536899520,
+      1073790976,
+      18326
+    ],
+    "pc": 18326,
+    "xpsr": 1090519040,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 400000,
+  "cycles": 400000,
+  "instructions": 400000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 400000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 400000
+    }
+  },
+  "limits": {
+    "max_steps": 400000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "53bdaa63049a9c57a9470ec7a04a7d62808aa197c35717e2ee004e310f0d0100",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-efm32lg995-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/stk3600.yaml",
+    "script": "examples/renode-onboarding/stk3600-smoke.yaml"
+  }
+}

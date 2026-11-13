@@ -1,0 +1,37 @@
+{
+  "target_id": "efm32pg1",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 200000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": "firmware-efm32pg1-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/renode-onboarding/efm32pg1-smoke.yaml",
+  "system": "configs/systems/onboarding/efm32pg1.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-09T16:42:05Z",
+  "finished_at_utc": "2026-11-09T16:42:06Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1175,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.45,
+    "build_firmware": 0.323,
+    "run_smoke": 0.389
+  },
+  "stages_ms": {
+    "build_cli": 450,
+    "build_firmware": 323,
+    "run_smoke": 389
+  }
+}

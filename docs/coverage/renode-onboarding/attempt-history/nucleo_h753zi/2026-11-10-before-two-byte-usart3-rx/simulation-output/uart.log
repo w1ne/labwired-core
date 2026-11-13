@@ -1,0 +1,22 @@
+STM32H7 register smoke
+usart3 rxne=1 data=00000052 rxne_after=0 ok
+gpiob0=high
+gpiob0=low
+gpiob0=high
+gpiob0=low
+gpiob0=high
+gpiob0=low
+gpiob0=high
+gpiob0=low
+gpiob0=high
+gpiob0=low
+gpiob0=high
+gpiob0=low
+gpiob0=high
+gpiob0=low
+gpiob0=high
+gpiob0=low
+gpiob0=high
+gpiob0=low
+gpiob0=high
+gpiob0=low

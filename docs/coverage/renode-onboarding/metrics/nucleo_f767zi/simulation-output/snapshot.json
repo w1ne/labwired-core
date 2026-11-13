@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      10,
+      3221225472,
+      1073811484,
+      4294867296,
+      1987575807,
+      1,
+      4294867296,
+      537395184,
+      1,
+      1,
+      1,
+      1,
+      70,
+      537395072,
+      70,
+      134247472
+    ],
+    "pc": 134247472,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": true
+  },
+  "steps_executed": 6000000,
+  "cycles": 6000000,
+  "instructions": 6000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 6000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 6000000
+    }
+  },
+  "limits": {
+    "max_steps": 6000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "9bfe8be0570e2bdbc5513ef6d561d5dac02d1df7509187298d8a3339efb7d14f",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabihf/release/firmware-nucleo-f767zi-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/nucleo_f767zi.yaml",
+    "script": "examples/renode-onboarding/nucleo_f767zi-smoke.yaml"
+  }
+}

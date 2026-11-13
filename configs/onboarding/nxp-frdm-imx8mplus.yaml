@@ -1,23 +1,27 @@
 name: nxp-frdm-imx8mplus
-description: 'nxp-frdm-imx8mplus (root platform, Generic). Architecture: ARM multicore
-  cluster.'
-family: Generic
+description: 'NXP FRDM i.MX 8M Plus. Architecture: AArch64; measured profile is one
+  Cortex-A53 PE, DDR and the UART4 console (polled TX) only. Other cores, other
+  peripherals, and the board boot flow are outside this measurement.'
+family: NXP FRDM i.MX 8M Plus
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100
-verified: true
+verified: false
 system: systems/onboarding/nxp-frdm-imx8mplus.yaml
 provenance:
   generated_by: scripts/onboard_hw_targets.py
-  parse_fallbacks:
-  - flash=memory_ddr
 validation:
-  method: ci-arm-fixture-simulation
-  reason: simulation-ok
+  method: renode-onboarding-aarch64-mxcuart-smoke
+  reason: bounded AArch64 + i.MX UART (UART4) polled-TX smoke; whole platform, other cores and other imported peripherals are unverified
   checks:
     system_manifest: true
     chip_descriptor: true
     simulation: true
-  timestamp_utc: '2026-10-18T14:40:13.614862+00:00'
+    uart4_polled_tx: true
+    other_cores: false
+    other_peripherals: false
+    reset_vector_boot: false
+    whole_platform: false
+  timestamp_utc: '2026-11-07T17:42:37+00:00'
   run_url: ''
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/nxp-frdm-imx8mplus.md

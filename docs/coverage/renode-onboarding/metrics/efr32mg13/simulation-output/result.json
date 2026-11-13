@@ -1,0 +1,551 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 200000,
+  "cycles": 200000,
+  "instructions": 200000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 200000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 200000
+    }
+  },
+  "limits": {
+    "max_steps": 200000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "EFR32MG13 RENODE SMOKE"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_ordered": [
+          "gpio pf4/pf5 pushpull set=1 tgl=1 clr=1 wo=1 ok",
+          "gpio reserved 0x10/0x14 no_set=1 no_clr=1 read0=1 ok",
+          "gpio pa0 disabled_din0=1 pullup=1 pulldown=1 ok",
+          "gpio pa1 wiredand pa2 wiredor hi=3 lo=0 ok",
+          "gpio pa pinlockn reset=ffff after=fffe ok",
+          "gpio pa ctrl=00500050 ovtdis=ffff ok",
+          "tim0 up of=1 masked=1 pend=1 released=1 running=1 ok",
+          "tim1 down oneshot dir=1 stopped=1 if=2 cnt=00c8 ok",
+          "tim1 updown cc3=1 of=1 dirchg=1 dir_down=1 ok",
+          "wtim0 32bit top=1 cc0=1 no_early_of=1 cnt_hi=1 of=1 masked=1 pend=1 released=1 ifs=1 ok",
+          "rtcc ret=1 of=1 of_first=1 cc1=1 tick=1 masked=1 pend=1 released=1 presc=1 comb=1 ok",
+          "EFR32MG13 PASS"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpiof:4",
+          "min_edges": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536935424,
+          "expected_value": 4012967935,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      16,
+      1437,
+      4012967935,
+      4294867296,
+      1,
+      1,
+      98316,
+      536935400,
+      98316,
+      1073807376,
+      4294867296,
+      1073783036,
+      4294867296,
+      536935360,
+      26985,
+      28098
+    ],
+    "pc": 28098,
+    "xpsr": 2164260864,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "f789e5c161238832ef7becf468b8c98c17aeed3f171173fa6dee9cf71a10c1c5",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-efr32mg13-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/efr32mg13.yaml",
+    "script": "examples/renode-onboarding/efr32mg13-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "usart0",
+        "kind": "native",
+        "base": 1073807360,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioa",
+        "kind": "native",
+        "base": 1073782784,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiob",
+        "kind": "native",
+        "base": 1073782832,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioc",
+        "kind": "native",
+        "base": 1073782880,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiod",
+        "kind": "native",
+        "base": 1073782928,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioe",
+        "kind": "native",
+        "base": 1073782976,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiof",
+        "kind": "native",
+        "base": 1073783024,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer0",
+        "kind": "native",
+        "base": 1073840128,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer1",
+        "kind": "native",
+        "base": 1073841152,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "wtimer0",
+        "kind": "native",
+        "base": 1073848320,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rtcc",
+        "kind": "native",
+        "base": 1074012160,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 200000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpiof",
+        "pin": 4,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 187,
+            "value": 1
+          },
+          {
+            "cycle": 190,
+            "value": 0
+          },
+          {
+            "cycle": 542,
+            "value": 1
+          },
+          {
+            "cycle": 547,
+            "value": 0
+          },
+          {
+            "cycle": 78520,
+            "value": 1
+          },
+          {
+            "cycle": 91020,
+            "value": 0
+          },
+          {
+            "cycle": 103520,
+            "value": 1
+          },
+          {
+            "cycle": 116020,
+            "value": 0
+          },
+          {
+            "cycle": 128520,
+            "value": 1
+          },
+          {
+            "cycle": 141020,
+            "value": 0
+          },
+          {
+            "cycle": 153520,
+            "value": 1
+          },
+          {
+            "cycle": 166020,
+            "value": 0
+          },
+          {
+            "cycle": 178520,
+            "value": 1
+          },
+          {
+            "cycle": 191020,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 180,
+            "state": "0"
+          },
+          {
+            "cycle": 187,
+            "state": "1"
+          },
+          {
+            "cycle": 190,
+            "state": "0"
+          },
+          {
+            "cycle": 542,
+            "state": "1"
+          },
+          {
+            "cycle": 547,
+            "state": "0"
+          },
+          {
+            "cycle": 78520,
+            "state": "1"
+          },
+          {
+            "cycle": 91020,
+            "state": "0"
+          },
+          {
+            "cycle": 103520,
+            "state": "1"
+          },
+          {
+            "cycle": 116020,
+            "state": "0"
+          },
+          {
+            "cycle": 128520,
+            "state": "1"
+          },
+          {
+            "cycle": 141020,
+            "state": "0"
+          },
+          {
+            "cycle": 153520,
+            "state": "1"
+          },
+          {
+            "cycle": 166020,
+            "state": "0"
+          },
+          {
+            "cycle": 178520,
+            "state": "1"
+          },
+          {
+            "cycle": 191020,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 14
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpiof",
+      "number": 4,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "EFR32MG13 RENODE SMOKE",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "gpio pf4/pf5 pushpull set=1 tgl=1 clr=1 wo=1 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "gpio reserved 0x10/0x14 no_set=1 no_clr=1 read0=1 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "gpio pa0 disabled_din0=1 pullup=1 pulldown=1 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "gpio pa1 wiredand pa2 wiredor hi=3 lo=0 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "gpio pa pinlockn reset=ffff after=fffe ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "gpio pa ctrl=00500050 ovtdis=ffff ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "tim0 up of=1 masked=1 pend=1 released=1 running=1 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "tim1 down oneshot dir=1 stopped=1 if=2 cnt=00c8 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "tim1 updown cc3=1 of=1 dirchg=1 dir_down=1 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "wtim0 32bit top=1 cc0=1 no_early_of=1 cnt_hi=1 of=1 masked=1 pend=1 released=1 ifs=1 ok",
+        "cycle_lo": 20000,
+        "cycle": 30000,
+        "end_cycle": 30000
+      },
+      {
+        "text": "rtcc ret=1 of=1 of_first=1 cc1=1 tick=1 masked=1 pend=1 released=1 presc=1 comb=1 ok",
+        "cycle_lo": 60000,
+        "cycle": 70000,
+        "end_cycle": 70000
+      },
+      {
+        "text": "EFR32MG13 PASS",
+        "cycle_lo": 60000,
+        "cycle": 70000,
+        "end_cycle": 70000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 28656,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 28656,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 524288,
+    "ram_total_bytes": 65536,
+    "flash_used_pct": 5.47,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 64512,
+    "main_stack_high_water_bytes": 60,
+    "main_stack_free_min_bytes": 64444,
+    "main_stack_base": 536870912,
+    "main_stack_top": 536935424,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 64512,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 64444,
+    "heap_base": 536870912,
+    "heap_top": 536935424
+  },
+  "metrics": {
+    "cycles": 200000,
+    "instructions": 200000,
+    "steps_executed": 200000,
+    "memory_reads": 5694,
+    "memory_writes": 53,
+    "peripheral_accesses": 16145,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 28098,
+        "count": 547,
+        "symbol": "core::ptr::write_volatile"
+      },
+      {
+        "pc": 18516,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 18518,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 22822,
+        "count": 39,
+        "symbol": "firmware_efr32mg13_smoke::s1::wait"
+      },
+      {
+        "pc": 22936,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 22954,
+        "count": 39,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 22962,
+        "count": 39,
+        "symbol": "firmware_efr32mg13_smoke::s1::wait"
+      }
+    ]
+  }
+}

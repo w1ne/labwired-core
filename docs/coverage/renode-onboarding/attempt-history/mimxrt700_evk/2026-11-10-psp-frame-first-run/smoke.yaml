@@ -1,0 +1,37 @@
+# Cortex-M33 CPU0, LP_FLEXCOMM0 selection/status, LPUART register readback,
+# TX, injected RX/NVIC, and PSP exception frame/return smoke on the exact imported
+# MIMXRT700-EVK system.
+# LPI2C/LPSPI transactions are not modelled or claimed.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt700-evk-smoke"
+  system: "../../configs/systems/onboarding/mimxrt700_evk.yaml"
+limits:
+  max_steps: 5000000
+uart_injections:
+  - uart: "flexcomm0"
+    bytes: "RS"
+assertions:
+  - uart_contains: "MIMXRT700 LP_FLEXCOMM0 LPUART SMOKE"
+  - uart_contains: "rx lpuart0 re_off=1 queued=2 masked=1 asserted=1 masked_data=1 unmasked=1 data=00000052,00000053 released=1 irq=11111 handler=1 ipsr=00000017 exc_return=fffffffd psp_context=1 frame_r0=12345678 frame_pc="
+  - uart_ordered:
+      - "flexcomm0 pselid=00103070->00103071->00103079"
+      - "lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00880000 istat=00000001"
+      - "pass=000000ff"
+  - memory_value:
+      address: 0x20000008
+      expected_value: 0x00000143
+      size: 4
+  - memory_value:
+      address: 0x2000000c
+      expected_value: 0x700000ff
+      size: 4
+  - memory_value:
+      address: 0x20000010
+      expected_value: 0x0000000f
+      size: 4
+  - memory_value:
+      address: 0x20000014
+      expected_value: 0x12345678
+      size: 4
+  - expected_stop_reason: max_steps

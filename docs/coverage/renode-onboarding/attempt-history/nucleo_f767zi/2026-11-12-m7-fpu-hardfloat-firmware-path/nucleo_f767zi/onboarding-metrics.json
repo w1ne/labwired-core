@@ -1,0 +1,37 @@
+{
+  "target_id": "nucleo_f767zi",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": false,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 0,
+    "stop_reason": "config_error"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-stm32f767-smoke",
+  "target_triple": "thumbv7em-none-eabihf",
+  "script": "examples/renode-onboarding/nucleo_f767zi-smoke.yaml",
+  "system": "configs/systems/onboarding/nucleo_f767zi.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-12T07:36:23Z",
+  "finished_at_utc": "2026-11-12T07:39:29Z",
+  "elapsed_seconds": 187,
+  "elapsed_ms": 186737,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "Failed to read firmware \"examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-nucleo-f767zi-smoke\": No such file or directory (os error 2)",
+  "failure_hint": "Path mismatch. Verify script/system paths in workflow matrix and repository layout.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 180.006,
+    "build_firmware": 4.716,
+    "run_smoke": 1.969
+  },
+  "stages_ms": {
+    "build_cli": 180006,
+    "build_firmware": 4716,
+    "run_smoke": 1969
+  }
+}

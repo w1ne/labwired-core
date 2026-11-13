@@ -1,0 +1,4 @@
+[2m2026-11-07T10:37:13.521177Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/simavr-atmega48.yaml
+[2m2026-11-07T10:37:13.522329Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x0
+labwired-cli test: idle_ff=on (event_scheduler=on)
+PASS  4/4 checks · simavr-atmega48-smoke · 100000 steps · 0.02s

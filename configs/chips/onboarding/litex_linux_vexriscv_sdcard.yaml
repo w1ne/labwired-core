@@ -1,54 +1,18 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
-#
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
-
+# Bounded direct-ELF profile of Renode's Linux-capable LiteX/VexRiscv SD-card
+# platform. It includes the RV32IMA CPU, the sourced 256 MiB DDR window and the
+# modeled LiteX UART only. Linux, SD-card, Ethernet, GPIO, SPI, I2C, and other
+# imported peripheral claims are outside this smoke profile.
+# Upstream: https://github.com/renode/renode/blob/master/platforms/cpus/litex_linux_vexriscv_sdcard.repl
 name: litex_linux_vexriscv_sdcard
-arch: arm
-flash:
-  base: 1073741824
-  size: 268435456B
+arch: riscv
+core: rv32ima
+flash: { base: 0, size: 0 }
+flash_boot_alias: false
 ram:
-  base: 1073741824
-  size: 268435456B
+  base: 0x40000000
+  size: 256MiB
 peripherals:
 - id: uart
   type: litex_uart
   bus: sysbus
-  base_address: 4026535936
-- id: spi
-  type: stub
-  renode_type: litex_spi
-  bus: sysbus
-  base_address: 4026562560
-- id: i2c
-  type: stub
-  renode_type: litex_i2c
-  bus: sysbus
-  base_address: 4026564608
-- id: si7021
-  type: si70xx
-  bus: i2c
-  base_address: 5
-- id: gpio_out
-  type: litex_gpio
-  bus: sysbus
-  base_address: 4026550272
-- id: gpio_in
-  type: litex_gpio
-  bus: sysbus
-  base_address: 4026560512
-- id: button
-  type: button
-  bus: gpio_in
-  base_address: 0
-- id: soc_controller
-  type: litex_soc_controller
-  bus: sysbus
-  base_address: 4026531840
-- id: mmcm
-  type: stub
-  renode_type: litex_mmcm
-  bus: sysbus
-  base_address: 4026570752
+  base_address: 0xF0001000

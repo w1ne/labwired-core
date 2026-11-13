@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="6" failures="0" errors="0" time="0.141606">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="56de5ebf6afa7003bd47c160450a9873c77d60cfcb3746819b06f8c688970b38"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.141606">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: STM32F4 shared profile smoke" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: systick pendsv psp tailchain frame=1 r0=1 pending=1 ipsr=0000000E ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_contains: STM32F429 PSP tailchain PASS" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: gpio_edges: gpioPortD:12 &gt;= 1 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

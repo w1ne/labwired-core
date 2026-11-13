@@ -1,0 +1,42 @@
+# Cortex-M23 board smoke against the narrowed imported EK-RA2E1: SCI9 polled
+# TX, the three board LEDs on PORT9 and button S1 (P004, active low) on PORT0.
+# S1 is pressed twice; LED2 (P914) mirrors it and the firmware counts the
+# presses in SRAM. It does not claim ICU/GPT/AGT/IIC parity.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv8m.base-none-eabi/release/firmware-renesas-ek-ra2e1-smoke"
+  system: "../../configs/systems/onboarding/renesas-ek_ra2e1.yaml"
+limits:
+  max_steps: 400000
+stimuli: []
+assertions:
+  - memory_value:
+      address: 0x20004000
+      expected_value: 0x00000143
+      size: 4
+  - memory_value:
+      address: 0x20004004
+      expected_value: 0x00000020
+      size: 4
+  # PODR after setup: LED1 and LED3 on, LED2 off.
+  - memory_value:
+      address: 0x20004008
+      expected_value: 0x0000A000
+      size: 4
+  # S1 released at boot reads high through the pull-up.
+  - memory_value:
+      address: 0x2000400C
+      expected_value: 0x00000010
+      size: 4
+  - memory_value:
+      address: 0x20004010
+      expected_value: 0x00000002
+      size: 4
+  - uart_contains: "EK-RA2E1 SCI9 SMOKE"
+  - gpio_edges:
+      pin: "port9:15"
+      min_edges: 4
+  - gpio_edges:
+      pin: "port9:14"
+      min_edges: 4
+  - expected_stop_reason: max_steps

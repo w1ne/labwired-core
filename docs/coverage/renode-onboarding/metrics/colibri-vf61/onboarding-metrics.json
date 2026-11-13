@@ -1,0 +1,38 @@
+{
+  "target_id": "colibri-vf61",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": null,
+  "target_triple": null,
+  "script": "examples/renode-onboarding/colibri-vf61-cortex-m4-smoke.yaml",
+  "system": "configs/systems/onboarding/colibri-vf61.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-07T09:12:50Z",
+  "finished_at_utc": "2026-11-07T09:13:00Z",
+  "elapsed_seconds": 11,
+  "elapsed_ms": 10349,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 9.968,
+    "build_firmware": null,
+    "run_smoke": 0.366
+  },
+  "stages_ms": {
+    "build_cli": 9968,
+    "build_firmware": null,
+    "run_smoke": 366
+  },
+  "prebuilt_firmware": "tests/fixtures/colibri-vf61-cortex-m4-smoke.elf"
+}

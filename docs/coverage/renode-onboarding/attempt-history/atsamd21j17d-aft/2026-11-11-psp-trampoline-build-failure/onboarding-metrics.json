@@ -1,0 +1,33 @@
+{
+  "target_id": "atsamd21j17d-aft",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": false,
+  "booted": null,
+  "boot_evidence": null,
+  "smoke_passed": null,
+  "crate": "firmware-samd21-j17d-smoke",
+  "target_triple": "thumbv6m-none-eabi",
+  "script": "examples/renode-onboarding/atsamd21j17d-aft-smoke.yaml",
+  "system": "configs/systems/onboarding/atsamd21j17d-aft.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-11T23:21:13Z",
+  "finished_at_utc": "2026-11-11T23:26:25Z",
+  "elapsed_seconds": 312,
+  "elapsed_ms": 311618,
+  "failure_stage": "build_firmware",
+  "first_error_signature": "error: <inline asm>:135:1: invalid instruction, any one of the following would fix this:",
+  "failure_hint": "Firmware build failed. Start with the first compiler error in logs/build_firmware.log.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 307.123,
+    "build_firmware": 4.474,
+    "run_smoke": null
+  },
+  "stages_ms": {
+    "build_cli": 307123,
+    "build_firmware": 4474,
+    "run_smoke": null
+  }
+}

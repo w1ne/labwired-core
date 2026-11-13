@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="6" failures="0" errors="0" time="0.011529">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="e236cb064d48f48fc557ba276394e53fd60b73ead877d99fc94ca6961e20ec3f"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.011529">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: EFM32PG12 RENODE SMOKE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_ordered: [&quot;gpio pf4/pf5 pushpull set=1 tgl=1 clr=1 wo=1 ok&quot;, &quot;gpio reserved 0x10/0x14 no_set=1 no_clr=1 read0=1 ok…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: gpio_edges: gpiof:4 &gt;= 4 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x2003fc00=0xef3101ff" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

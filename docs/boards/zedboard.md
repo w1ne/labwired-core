@@ -1,66 +1,33 @@
-# Validation Report: zedboard
+# Digilent ZedBoard imported profile
 
-**Architecture:** Dual ARM Cortex-A9.
+## Measured profile
 
-## 1. Dynamic Simulation Validation
-**Status:** ✅ Passed (simulation-ok)
+LabWired's onboarding profile for the imported Renode `zedboard` target is narrowed
+to one Cortex-A9 PE on the native Cortex-A9 CPU model, a 64 KiB DDR aperture
+at `0x00100000`, and PS UART1 (Cadence, UG585) at `0xE0001000`, the ZedBoard USB-UART console (polled TX only). The 64 KiB aperture starts at UG585's DDR base; it is a simulator limit, not the board's 512 MiB DDR. The Cadence register layout is the engine's existing generic-UART Cadence profile.
 
-```text
-[2m2026-10-18T14:40:38.340331Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-[2m2026-10-18T14:40:38.340808Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/zedboard.yaml
-[2m2026-10-18T14:40:39.469327Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'xilinxgpiops' (peripheral 'gpio') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-[2m2026-10-18T14:40:39.469623Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-[2m2026-10-18T14:40:39.469754Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-[2m2026-10-18T14:40:39.469792Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-[2m2026-10-18T14:40:39.469820Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-[2m2026-10-18T14:40:39.471267Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-[2m2026-10-18T14:40:39.471317Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-[2m2026-10-18T14:40:39.471352Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-[2m2026-10-18T14:40:39.475924Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Progress: 10000 steps, current IPS: 1647487.17
-[2m2026-10-18T14:40:39.496839Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-[2m2026-10-18T14:40:39.496861Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x454
-[2m2026-10-18T14:40:39.496866Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 20000
-[2m2026-10-18T14:40:39.496871Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 20004
-[2m2026-10-18T14:40:39.496875Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 740107.89
-```
+Not modeled and omitted from the descriptor: OCM and the BootROM, the second A9, SCU, GIC, L2C-310, timers, TTCs, UART0, GEMs, USB, SD, QSPI, SPI, I2C, GPIO, DMA, XADC, SLCR and the programmable logic. Interrupts, baud/framing
+timing and RX are outside the smoke.
 
+The earlier report on this page described a 2026-10-18 run of a Thumb
+Cortex-M fixture (`uart-ok-thumbv7m.elf`) against the unnarrowed import. That
+run never executed Cortex-A9 code and is withdrawn.
 
-## Hardware Coverage Report
+## Smoke evidence
 
-| Peripheral ID | Base Address | Type |
-|---|---|---|
-| `usbEhci2` | `0xe0003000` | `ehcihostcontroller` |
-| `usbEhci` | `0xe0002000` | `ehcihostcontroller` |
-| `pl310` | `0xf8f02000` | `pl310` |
-| `gem0` | `0xe000b000` | `cadencegem` |
-| `gem1` | `0xe000c000` | `cadencegem` |
-| `uart0` | `0xe0000000` | `cadence_uart` |
-| `uart1` | `0xe0001000` | `cadence_uart` |
-| `i2c1` | `0xe0005000` | `stub` |
-| `i2c0` | `0xe0004000` | `stub` |
-| `spi0` | `0xe0006000` | `stub` |
-| `spi1` | `0xe0007000` | `stub` |
-| `sdhci0` | `0xe0100000` | `stub` |
-| `sdhci1` | `0xe0101000` | `stub` |
-| `ttc0` | `0xf8001000` | `cadence_ttc` |
-| `ttc1` | `0xf8002000` | `cadence_ttc` |
-| `watchdog0` | `0xf8005000` | `stub` |
-| `globalTimer` | `0xf8f00200` | `arm_globaltimer` |
-| `scu` | `0xf8f00000` | `armsnoopcontrolunit` |
-| `qspi` | `0xe000d000` | `xilinxqspi` |
-| `gpio` | `0xe000a000` | `xilinxgpiops` |
-| `xadc` | `0xf8007100` | `stub` |
-| `slcr` | `0xf8000000` | `stub` |
-| `nand` | `0xe000e000` | `pythonperipheral` |
-| `dma_pl330` | `0xf8003000` | `pl330_dma` |
-| `phy` | `0x00000000` | `ethernetphysicallayer` |
-| `led0` | `0x0000003d` | `led` |
-| `led1` | `0x0000003e` | `led` |
-| `led2` | `0x0000003f` | `led` |
-| `led3` | `0x00000040` | `led` |
-| `led4` | `0x00000041` | `led` |
-| `led5` | `0x00000042` | `led` |
-| `led6` | `0x00000043` | `led` |
-| `led7` | `0x00000044` | `led` |
+The committed A32 fixture `tests/fixtures/zynq7000-a9-uart-smoke.elf` is linked at
+`0x00100000`, injected directly into the DDR aperture, polls `Channel_sts.TXFULL` and writes `ZYNQ7000 A9 UART SMOKE` to the TX FIFO, and then spins.
+It ran **100,000 Cortex-A9 instructions** and passed the UART banner and
+bounded `max_steps` assertions (JUnit: 3 cases, 0 failures). It does not boot
+through a boot ROM or exercise MMU, caches, interrupts or multicore.
 
-**Total Peripherals:** 33
+The exact system manifest is `configs/systems/onboarding/zedboard.yaml`, the smoke
+script is `examples/renode-onboarding/zedboard-a9-uart-smoke.yaml`, and the build
+recipe is [`scripts/build_cortex_a9_uart_smokes.sh`](../../scripts/build_cortex_a9_uart_smokes.sh).
+Per-target metrics, JUnit, UART output, simulator result, snapshot and logs are
+under `docs/coverage/renode-onboarding/metrics/zedboard/`.
+
+This is local CLI simulation evidence for the smoke assertions, not whole-SoC
+coverage, Renode equivalence, or hardware confirmation. See the
+[generated scoreboard](../coverage/renode-onboarding-scoreboard.md) for the
+current global totals.

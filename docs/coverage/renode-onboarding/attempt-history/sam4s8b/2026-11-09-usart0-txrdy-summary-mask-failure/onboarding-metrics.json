@@ -1,0 +1,37 @@
+{
+  "target_id": "sam4s8b",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 1500000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-sam4s8b-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/renode-onboarding/sam4s8b-smoke.yaml",
+  "system": "configs/systems/onboarding/sam4s8b.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-09T21:57:21Z",
+  "finished_at_utc": "2026-11-09T21:57:33Z",
+  "elapsed_seconds": 12,
+  "elapsed_ms": 11783,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "2026-11-09T21:57:33.676470Z ERROR labwired_cli::execute: Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: [\"SAM4S8B RENODE SMOKE\", \"eefc fmr=00000500 ok\", \"eefc getd size=\", \"eefc gpnvm=2 set=3 glb=2 clb=0 ok\", \"eefc fsr b",
+  "failure_hint": "Smoke assertion mismatch. Compare expected stop/assertions with current deterministic output.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 9.411,
+    "build_firmware": 1.095,
+    "run_smoke": 1.209
+  },
+  "stages_ms": {
+    "build_cli": 9411,
+    "build_firmware": 1095,
+    "run_smoke": 1209
+  }
+}

@@ -1,0 +1,16 @@
+# Bounded bare-metal smoke for the imported LiteX/VexRiscv TFTP platform.
+# It exercises the RV32IM instruction path, ROM/SRAM load, LiteX UART, and
+# LiteX timer; it does not boot the BIOS or claim SPI flash, DDR, or Ethernet.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32im-unknown-none-elf/release/firmware-litex-vexriscv-tftp-smoke"
+  system: "../../configs/systems/onboarding/litex_vexriscv_tftp.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_ordered:
+      - "LITEX VEXRISCV TFTP PROFILE RV32IM"
+      - "boot=direct-elf memory=rom+sram"
+      - "timer=running"
+      - "timer=zero"
+  - expected_stop_reason: max_steps

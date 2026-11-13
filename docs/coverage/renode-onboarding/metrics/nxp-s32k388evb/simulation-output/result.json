@@ -1,0 +1,494 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 4000000,
+  "cycles": 4000000,
+  "instructions": 4000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 4000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 4000000
+    }
+  },
+  "limits": {
+    "max_steps": 4000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "S32K388 EVB SMOKE"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_ordered": [
+          "cpu=cortex-m7 core=cm7_0 uart=lpuart2",
+          "ivt marker=5aa55aa5 cm7_0=00401000 vtor=00401000",
+          "clk aips_slow=24000000 osr=16 sbr=13 baud=115384",
+          "leds=off pgpdo11=0000 pgpdi11=0000",
+          "on ptf17 gpdi=1 pgpdo11=4000 pgpdi11=4000",
+          "on ptf18 gpdi=1 pgpdo11=6000 pgpdi11=6000",
+          "on ptf19 gpdi=1 pgpdo11=7000 pgpdi11=7000",
+          "on ptf22 gpdi=1 pgpdo11=7200 pgpdi11=7200",
+          "on ptf23 gpdi=1 pgpdo11=7300 pgpdi11=7300",
+          "on ptf24 gpdi=1 pgpdo11=7380 pgpdi11=7380",
+          "mpgpdo pgpdo11=0380 pgpdi11=0380",
+          "pgpdo pgpdo11=0000 pgpdi11=0000",
+          "pta1 pu=1 pd=0",
+          "hb=0 ptf23=1",
+          "hb=1 ptf23=0"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1076297728,
+          "expected_value": 4278190346,
+          "mask": null,
+          "size": null
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1076297736,
+          "expected_value": 800,
+          "mask": null,
+          "size": null
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1076740868,
+          "expected_value": 0,
+          "mask": null,
+          "size": null
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1076740872,
+          "expected_value": 1,
+          "mask": null,
+          "size": null
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1076740884,
+          "expected_value": 1024,
+          "mask": null,
+          "size": null
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1076740888,
+          "expected_value": 4096,
+          "mask": null,
+          "size": null
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      80707,
+      10,
+      2147483648,
+      0,
+      1077084180,
+      541851620,
+      6554,
+      541851608,
+      61,
+      429496730,
+      0,
+      5,
+      1076434708,
+      541851608,
+      4206435,
+      4207538
+    ],
+    "pc": 4207538,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 4198400,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "0796b1b041a52a5517d07e4a04aafb8f81f6ad0e73adfd6e8ac6be6e97199234",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/s32k388-evb-smoke.elf",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/nxp-s32k388evb.yaml",
+    "script": "examples/renode-onboarding/nxp-s32k388evb-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "swt0",
+        "kind": "native",
+        "base": 1076297728,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "siul2",
+        "kind": "native",
+        "base": 1076428800,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mc_me",
+        "kind": "native",
+        "base": 1076740096,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "lpuart2",
+        "kind": "native",
+        "base": 1077084160,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "systick",
+        "kind": "native",
+        "base": 3758153744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "S32K388 EVB SMOKE",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 80000
+      },
+      {
+        "text": "cpu=cortex-m7 core=cm7_0 uart=lpuart2",
+        "cycle_lo": 70000,
+        "cycle": 80000,
+        "end_cycle": 240000
+      },
+      {
+        "text": "ivt marker=5aa55aa5 cm7_0=00401000 vtor=00401000",
+        "cycle_lo": 230000,
+        "cycle": 240000,
+        "end_cycle": 440000
+      },
+      {
+        "text": "clk aips_slow=24000000 osr=16 sbr=13 baud=115384",
+        "cycle_lo": 440000,
+        "cycle": 450000,
+        "end_cycle": 650000
+      },
+      {
+        "text": "leds=off pgpdo11=0000 pgpdi11=0000",
+        "cycle_lo": 640000,
+        "cycle": 650000,
+        "end_cycle": 790000
+      },
+      {
+        "text": "on ptf17 gpdi=1 pgpdo11=4000 pgpdi11=4000",
+        "cycle_lo": 790000,
+        "cycle": 800000,
+        "end_cycle": 970000
+      },
+      {
+        "text": "on ptf18 gpdi=1 pgpdo11=6000 pgpdi11=6000",
+        "cycle_lo": 960000,
+        "cycle": 970000,
+        "end_cycle": 1140000
+      },
+      {
+        "text": "on ptf19 gpdi=1 pgpdo11=7000 pgpdi11=7000",
+        "cycle_lo": 1130000,
+        "cycle": 1140000,
+        "end_cycle": 1320000
+      },
+      {
+        "text": "on ptf22 gpdi=1 pgpdo11=7200 pgpdi11=7200",
+        "cycle_lo": 1310000,
+        "cycle": 1320000,
+        "end_cycle": 1490000
+      },
+      {
+        "text": "on ptf23 gpdi=1 pgpdo11=7300 pgpdi11=7300",
+        "cycle_lo": 1480000,
+        "cycle": 1490000,
+        "end_cycle": 1660000
+      },
+      {
+        "text": "on ptf24 gpdi=1 pgpdo11=7380 pgpdi11=7380",
+        "cycle_lo": 1660000,
+        "cycle": 1670000,
+        "end_cycle": 1840000
+      },
+      {
+        "text": "mpgpdo pgpdo11=0380 pgpdi11=0380",
+        "cycle_lo": 1830000,
+        "cycle": 1840000,
+        "end_cycle": 1980000
+      },
+      {
+        "text": "pgpdo pgpdo11=0000 pgpdi11=0000",
+        "cycle_lo": 1970000,
+        "cycle": 1980000,
+        "end_cycle": 2110000
+      },
+      {
+        "text": "pta1 pu=1 pd=0",
+        "cycle_lo": 2100000,
+        "cycle": 2110000,
+        "end_cycle": 2170000
+      },
+      {
+        "text": "hb=0 ptf23=1",
+        "cycle_lo": 2170000,
+        "cycle": 2180000,
+        "end_cycle": 2520000
+      },
+      {
+        "text": "hb=1 ptf23=0",
+        "cycle_lo": 2510000,
+        "cycle": 2520000,
+        "end_cycle": 2860000
+      },
+      {
+        "text": "hb=2 ptf23=1",
+        "cycle_lo": 2860000,
+        "cycle": 2870000,
+        "end_cycle": 3210000
+      },
+      {
+        "text": "hb=3 ptf23=0",
+        "cycle_lo": 3200000,
+        "cycle": 3210000,
+        "end_cycle": 3560000
+      },
+      {
+        "text": "hb=4 ptf23=1",
+        "cycle_lo": 3550000,
+        "cycle": 3560000,
+        "end_cycle": 3900000
+      },
+      {
+        "text": "hb=5 ptf23=",
+        "cycle_lo": 3900000,
+        "cycle": 3910000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 9688,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 9688,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 8388608,
+    "ram_total_bytes": 786432,
+    "flash_used_pct": 0.12,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 786432,
+    "main_stack_high_water_bytes": 28,
+    "main_stack_free_min_bytes": 786396,
+    "main_stack_base": 541065216,
+    "main_stack_top": 541851648,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 786432,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 786396,
+    "heap_base": 541065216,
+    "heap_top": 541851648
+  },
+  "metrics": {
+    "cycles": 4000000,
+    "instructions": 4000000,
+    "steps_executed": 4000000,
+    "memory_reads": 3709,
+    "memory_writes": 116,
+    "peripheral_accesses": 813627,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 4207534,
+        "count": 2032,
+        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 4207538,
+        "count": 2032,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 4207536,
+        "count": 2031,
+        "symbol": "firmware_s32k388_evb_smoke::spin"
+      },
+      {
+        "pc": 4201544,
+        "count": 196,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 4201552,
+        "count": 195,
+        "symbol": "firmware_s32k388_evb_smoke::putc"
+      },
+      {
+        "pc": 4201562,
+        "count": 195,
+        "symbol": "firmware_s32k388_evb_smoke::putc"
+      },
+      {
+        "pc": 4205092,
+        "count": 195,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 4205102,
+        "count": 195,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 4205106,
+        "count": 157,
+        "symbol": "firmware_s32k388_evb_smoke::putc"
+      },
+      {
+        "pc": 4200616,
+        "count": 79,
+        "symbol": "firmware_s32k388_evb_smoke::putc"
+      },
+      {
+        "pc": 4200746,
+        "count": 79,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 4199902,
+        "count": 78,
+        "symbol": "firmware_s32k388_evb_smoke::putc"
+      },
+      {
+        "pc": 4199962,
+        "count": 78,
+        "symbol": "firmware_s32k388_evb_smoke::putc"
+      },
+      {
+        "pc": 4200102,
+        "count": 78,
+        "symbol": "firmware_s32k388_evb_smoke::putc"
+      },
+      {
+        "pc": 4200204,
+        "count": 78,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 4200322,
+        "count": 78,
+        "symbol": "firmware_s32k388_evb_smoke::putc"
+      }
+    ]
+  }
+}

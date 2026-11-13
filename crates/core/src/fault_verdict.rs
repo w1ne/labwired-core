@@ -303,6 +303,11 @@ pub struct FaultCapture {
     pub entry: Option<FaultEntry>,
     /// Set when the core locked up instead of taking a handler.
     pub lockup: Option<LockupEntry>,
+    /// The core is ARMv6-M: it has no CFSR/HFSR/MMFAR/BFAR, and every fault
+    /// is a HardFault. `regs` then holds what the engine recorded about the
+    /// cause, which firmware cannot read.
+    #[serde(default)]
+    pub armv6m: bool,
 }
 
 impl FaultCapture {
@@ -452,6 +457,10 @@ pub struct FaultVerdict {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub caller: Option<CodeLocation>,
     pub registers: FaultRegsHex,
+    /// The core is ARMv6-M: `registers` and `causes` are what the engine
+    /// recorded, not registers firmware can read, and there is no escalation.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub armv6m: bool,
 }
 
 // ---- Formatting helpers ------------------------------------------------------
@@ -518,23 +527,34 @@ fn origin_name(origin: &str, regs: &FaultRegs) -> &'static str {
 }
 
 /// The cause clause: what went wrong, with the address when it is valid.
+///
+/// On ARMv6-M there is no BFAR/MMFAR to name, so the address stands alone.
 fn cause_clause(
     regs: &FaultRegs,
     origin: Option<&str>,
     reason: Option<&DataFaultReason>,
+    armv6m: bool,
 ) -> String {
     let mut parts: Vec<String> = Vec::new();
     for d in set_flags(regs.cfsr, CFSR_FLAGS) {
         let part = match d.flag {
-            "PRECISERR" if regs.cfsr & BFARVALID != 0 => match reason {
-                Some(DataFaultReason::ReadOnlyRegion { region }) => format!(
+            "PRECISERR" if regs.cfsr & BFARVALID != 0 => match (reason, armv6m) {
+                (Some(DataFaultReason::ReadOnlyRegion { region }), false) => format!(
                     "data access at {} (BFAR valid; store to read-only {region})",
                     hex_grouped(regs.bfar)
                 ),
-                None => format!("data access at {} (BFAR valid)", hex_grouped(regs.bfar)),
+                (Some(DataFaultReason::ReadOnlyRegion { region }), true) => format!(
+                    "data access at {} (store to read-only {region})",
+                    hex_grouped(regs.bfar)
+                ),
+                (None, false) => format!("data access at {} (BFAR valid)", hex_grouped(regs.bfar)),
+                (None, true) => format!("data access at {}", hex_grouped(regs.bfar)),
             },
             "PRECISERR" => "data access (address not captured)".to_string(),
             "IMPRECISERR" => "a buffered write failed; the fault address is not known".to_string(),
+            "DACCVIOL" if regs.cfsr & MMARVALID != 0 && armv6m => {
+                format!("data access violation at {}", hex_grouped(regs.mmfar))
+            }
             "DACCVIOL" if regs.cfsr & MMARVALID != 0 => format!(
                 "data access violation at {} (MMFAR valid)",
                 hex_grouped(regs.mmfar)
@@ -548,7 +568,7 @@ fn cause_clause(
             parts.push("bus error reading the vector table".into());
         } else if regs.hfsr & HFSR_DEBUGEVT != 0 {
             parts.push("debug event (e.g. BKPT) with no debugger attached".into());
-        } else if origin.is_none() && regs.hfsr & HFSR_FORCED != 0 {
+        } else if !armv6m && origin.is_none() && regs.hfsr & HFSR_FORCED != 0 {
             parts.push("fault status bits already cleared by the handler".into());
         }
     }
@@ -599,8 +619,11 @@ pub fn decode_fault(
         return None;
     }
     let regs = &capture.regs;
-    let escalated = regs.hfsr & HFSR_FORCED != 0;
-    let origin = origin_of(regs);
+    let armv6m = capture.armv6m;
+    // ARMv6-M has one fault exception: nothing escalates into HardFault.
+    let escalated = !armv6m && regs.hfsr & HFSR_FORCED != 0;
+    // No configurable fault classes on ARMv6-M.
+    let origin = if armv6m { None } else { origin_of(regs) };
     let entered = capture.entry.map(|e| e.exception);
 
     let kind: &'static str = if capture.lockup.is_some() {
@@ -618,9 +641,15 @@ pub fn decode_fault(
     let imprecise = precise == Some(false) && regs.cfsr & IMPRECISERR != 0;
 
     let (fault_address, fault_address_source) = if regs.cfsr & BFARVALID != 0 {
-        (Some(regs.bfar), Some("BFAR"))
+        (
+            Some(regs.bfar),
+            Some(if armv6m { "address" } else { "BFAR" }),
+        )
     } else if regs.cfsr & MMARVALID != 0 {
-        (Some(regs.mmfar), Some("MMFAR"))
+        (
+            Some(regs.mmfar),
+            Some(if armv6m { "address" } else { "MMFAR" }),
+        )
     } else {
         (None, None)
     };
@@ -647,7 +676,7 @@ pub fn decode_fault(
         .filter(|c| location.as_ref().and_then(|l| l.function.as_ref()) != c.function.as_ref());
 
     // ---- The sentence ----
-    let cause = cause_clause(regs, origin, reason);
+    let cause = cause_clause(regs, origin, reason, armv6m);
     let head = match (kind, entered) {
         ("lockup", _) => {
             let during = capture
@@ -714,7 +743,10 @@ pub fn decode_fault(
     }
     summary.push('.');
 
-    let mut causes: Vec<FaultCause> = set_flags(regs.hfsr, HFSR_FLAGS)
+    // HFSR.FORCED is the engine's escalation bookkeeping on ARMv6-M, not a
+    // cause: leave HFSR out there.
+    let hfsr_causes = if armv6m { 0 } else { regs.hfsr };
+    let mut causes: Vec<FaultCause> = set_flags(hfsr_causes, HFSR_FLAGS)
         .map(|d| FaultCause {
             register: d.register.to_string(),
             flag: d.flag.to_string(),
@@ -762,6 +794,7 @@ pub fn decode_fault(
             mmfar: hex(regs.mmfar),
             bfar: hex(regs.bfar),
         },
+        armv6m,
     })
 }
 
@@ -818,6 +851,7 @@ mod tests {
             },
             entry: Some(entry(3, 0x0800_1234, 0x0800_1305)),
             lockup: None,
+            armv6m: false,
         };
         let v = decode_fault(&cap, Some(&Syms), None).unwrap();
         assert_eq!(
@@ -851,6 +885,7 @@ mod tests {
             },
             entry: Some(entry(3, 0x0800_1234, 0x0800_1305)),
             lockup: None,
+            armv6m: false,
         };
         let v = decode_fault(
             &cap,
@@ -881,6 +916,7 @@ mod tests {
             },
             entry: Some(entry(3, 0x0800_1240, 0x0800_1305)),
             lockup: None,
+            armv6m: false,
         };
         let v = decode_fault(&cap, Some(&Syms), None).unwrap();
         assert_eq!(
@@ -902,6 +938,7 @@ mod tests {
             },
             entry: Some(entry(6, 0x0800_1250, 0xFFFF_FFF9)),
             lockup: None,
+            armv6m: false,
         };
         let v = decode_fault(&cap, Some(&Syms), None).unwrap();
         // LR is an EXC_RETURN, so there is no caller hint.
@@ -928,6 +965,7 @@ mod tests {
                 pc: 0x0800_1300,
                 active_exception: 3,
             }),
+            armv6m: false,
         };
         let v = decode_fault(&cap, Some(&Syms), None).unwrap();
         assert_eq!(v.kind, "lockup");
@@ -937,6 +975,54 @@ mod tests {
              running (double fault): data access at 0x9000_0000 (BFAR valid), at PC 0x0800_1300 \
              in `main` (main.c:17). The core stopped; the first fault (HardFault) was at PC \
              0x0800_1234 in `sensor_read` (main.c:42)."
+        );
+    }
+
+    /// The same capture as `escalated_precise_busfault_sentence`, on an
+    /// ARMv6-M core: a plain HardFault, no escalation, no BFAR, no HFSR cause.
+    #[test]
+    fn armv6m_hardfault_names_no_armv7m_register() {
+        let cap = FaultCapture {
+            regs: FaultRegs {
+                hfsr: HFSR_FORCED,
+                cfsr: PRECISERR | BFARVALID,
+                bfar: 0x2002_0004,
+                mmfar: 0,
+            },
+            entry: Some(entry(3, 0x0800_1234, 0x0800_1305)),
+            lockup: None,
+            armv6m: true,
+        };
+        let v = decode_fault(&cap, Some(&Syms), None).unwrap();
+        assert_eq!(
+            v.summary,
+            "HardFault: data access at 0x2002_0004, at PC 0x0800_1234 in `sensor_read` \
+             (main.c:42), called from `main`."
+        );
+        assert_eq!(v.kind, "hard_fault");
+        assert!(!v.escalated);
+        assert_eq!(v.origin, None);
+        assert!(v.armv6m);
+        assert_eq!(v.fault_address.as_deref(), Some("0x20020004"));
+        assert_eq!(v.fault_address_source.as_deref(), Some("address"));
+        assert!(v.causes.iter().all(|c| c.register != "HFSR"));
+        assert!(v.causes.iter().any(|c| c.flag == "PRECISERR"));
+
+        let lockup = FaultCapture {
+            lockup: Some(LockupEntry {
+                pc: 0x0800_1300,
+                active_exception: 3,
+            }),
+            ..cap
+        };
+        let v = decode_fault(&lockup, Some(&Syms), None).unwrap();
+        assert!(
+            v.summary.starts_with(
+                "Core LOCKUP: a fault could not be taken while the HardFault handler was running \
+                 (double fault): data access at 0x2002_0004, at PC 0x0800_1300"
+            ),
+            "{}",
+            v.summary
         );
     }
 
@@ -950,6 +1036,7 @@ mod tests {
             },
             entry: Some(entry(3, 0x0800_1234, 0x0800_1211)),
             lockup: None,
+            armv6m: false,
         };
         let v = decode_fault(&cap, Some(&Syms), None).unwrap();
         assert!(v.caller.is_none());

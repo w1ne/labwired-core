@@ -376,6 +376,8 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
         packed!("nrf54l15/global_wdt31_s.yaml"),
     ),
     ("nrf54l15/icache_s.yaml", packed!("nrf54l15/icache_s.yaml")),
+    ("r7fa6m5bh/mstp.yaml", packed!("r7fa6m5bh/mstp.yaml")),
+    ("r7fa8m1ah/mstp.yaml", packed!("r7fa8m1ah/mstp.yaml")),
     ("rp2040/adc.yaml", packed!("rp2040/adc.yaml")),
     ("rp2040/clocks.yaml", packed!("rp2040/clocks.yaml")),
     ("rp2040/dma.yaml", packed!("rp2040/dma.yaml")),

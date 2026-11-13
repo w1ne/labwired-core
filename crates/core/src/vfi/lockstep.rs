@@ -75,7 +75,7 @@ impl Isa {
         match family {
             MachineFamily::CortexM => Some(Isa::Thumb),
             // ARM/Thumb state needs a mode-aware fault decoder.
-            MachineFamily::CortexA | MachineFamily::CortexR => None,
+            MachineFamily::CortexA | MachineFamily::CortexR | MachineFamily::Arm7Tdmi => None,
             MachineFamily::RiscV => Some(Isa::RiscV),
             MachineFamily::Xtensa => Some(Isa::Xtensa),
             MachineFamily::Avr => Some(Isa::Avr),

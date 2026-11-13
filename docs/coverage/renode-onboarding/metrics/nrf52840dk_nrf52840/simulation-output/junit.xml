@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="6" failures="0" errors="0" time="1.508898">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="d3be5cd61a368c421f63b414b6280f9ea4f8f2e8c38c505a618061f44d0859fc"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="1.508898">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_ordered: [&quot;NRF52840-DK RENODE SMOKE&quot;, &quot;ficr part=52840 nvmc ready=1 ok&quot;, &quot;clock hfstat=00010001 lfstat=00010001 ok…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: memory_value: @0x2003ff00=0x528407ff" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: gpio_edges: gpio0:13 &gt;= 4 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: gpio_edges: gpio0:16 &gt;= 2 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

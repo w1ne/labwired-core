@@ -1,0 +1,270 @@
+{
+  "result_schema_version": "1.0",
+  "status": "fail",
+  "steps_executed": 4000000,
+  "cycles": 4000000,
+  "instructions": 4000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 4000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 4000000
+    }
+  },
+  "limits": {
+    "max_steps": 4000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "MIMXRT798S LP_FLEXCOMM0 LPUART SMOKE"
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "uart_ordered": [
+          "flexcomm0 pselid=00103070->00103071->00103079",
+          "lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00880000 istat=00000001",
+          "pass=0000000f"
+        ]
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536870912,
+          "expected_value": 323,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536870916,
+          "expected_value": 1879048207,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      1,
+      1074860024,
+      134223520,
+      0,
+      0,
+      0,
+      0,
+      542638000,
+      0,
+      0,
+      0,
+      0,
+      0,
+      542638000,
+      4294967289,
+      134223476
+    ],
+    "pc": 134223476,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "75bd20e615eb282cf79f0c1f0462ec86d5b8649fbefaef90255ad6c4dbc0e66d",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt798s-smoke",
+    "system": "/dev/shm/neg-system.yaml",
+    "script": "examples/renode-onboarding/mimxrt798s-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x40110ff8",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "read"
+    },
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "fault_verdict": {
+    "summary": "HardFault escalated from a precise BusFault: data access at 0x4011_0FF8 (BFAR valid), at PC 0x0800_0866 in `core::ptr::read_volatile` (mod.rs:2091), called from `main`.",
+    "kind": "hard_fault",
+    "escalated": true,
+    "origin": "bus_fault",
+    "causes": [
+      {
+        "register": "HFSR",
+        "flag": "FORCED",
+        "meaning": "a configurable fault escalated to HardFault"
+      },
+      {
+        "register": "BFSR",
+        "flag": "PRECISERR",
+        "meaning": "data access"
+      }
+    ],
+    "precise": true,
+    "fault_address": "0x40110FF8",
+    "fault_address_source": "BFAR",
+    "pc": "0x08000866",
+    "lr": "0x08001671",
+    "exc_return": {
+      "value": "0xFFFFFFF9",
+      "return_to": "thread",
+      "stack": "msp",
+      "fp_frame": false
+    },
+    "frame": {
+      "sp": "0x2057FFB8",
+      "r0": "0x00000001",
+      "r1": "0x40110FF8",
+      "r2": "0x080016A0",
+      "r3": "0x00000000",
+      "r12": "0x00000000",
+      "lr": "0x08001671",
+      "pc": "0x08000866",
+      "xpsr": "0x21000000"
+    },
+    "location": {
+      "function": "core::ptr::read_volatile",
+      "file": "/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ptr/mod.rs",
+      "line": 2091
+    },
+    "caller": {
+      "function": "main",
+      "file": "/home/andrii/worktrees/labwired-core/renode/crates/firmware-mimxrt798s-smoke/src/main.rs",
+      "line": 53
+    },
+    "registers": {
+      "hfsr": "0x40000000",
+      "cfsr": "0x00008200",
+      "mmfsr": "0x00",
+      "bfsr": "0x82",
+      "ufsr": "0x0000",
+      "mmfar": "0x00000000",
+      "bfar": "0x40110FF8"
+    }
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 5792,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 5792,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 134217728,
+    "ram_total_bytes": 5767168,
+    "flash_used_pct": 0.0,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 5767168,
+    "main_stack_high_water_bytes": 16,
+    "main_stack_free_min_bytes": 5767104,
+    "main_stack_base": 536870912,
+    "main_stack_top": 542638080,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 5767168,
+    "heap_high_water_bytes": 4,
+    "heap_free_min_bytes": 5767104,
+    "heap_base": 536870912,
+    "heap_top": 542638080
+  },
+  "metrics": {
+    "cycles": 4000000,
+    "instructions": 4000000,
+    "steps_executed": 4000000,
+    "memory_reads": 48,
+    "memory_writes": 18,
+    "peripheral_accesses": 0,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134223476,
+        "count": 15625,
+        "symbol": "HardFault_"
+      }
+    ]
+  }
+}

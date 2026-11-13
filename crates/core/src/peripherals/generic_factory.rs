@@ -44,6 +44,10 @@ pub const MODEL_TYPES: &[&str] = &[
     "pic24_gpio",
     "rcc",
     "systick",
+    "arm_sp804_timer",
+    "lpc2294_timer",
+    "arm_pl190_vic",
+    "sifive_gpio",
     "timer",
     "i2c",
     "spi",
@@ -198,6 +202,21 @@ pub const MODEL_TYPES: &[&str] = &[
     "sam_dmac_sercom4_tx_byte",
     "samd51_dmac_board",
     "samd51_usb_device_banks",
+    // SAM D21 TC3..TC7 (`build_samd21_tc`): fixed instance addresses.
+    "samd21_tc",
+    // SAM D21 RTC (`build_samd21_rtc`): fixed IRQ, optional `gclk_hz`.
+    "samd21_rtc",
+    // SAM4S TC0..TC2 / TC3..TC5 blocks (`build_sam4s_tc`): fixed addresses.
+    "sam4s_tc",
+    // EFM32 Series-0 TIMER0..3 (`build_efm32_timer`): IRQ from the yaml.
+    "efm32s0_timer",
+    // EFM32 Series-1 TIMER0/1 (same builder, Series-1 register layout).
+    "efm32s1_timer",
+    // EFM32/EFR32 Series-1 WTIMER0/1 (same builder, 32-bit counter).
+    "efm32s1_wtimer",
+    // EFR32 Series-1 RTCC (`build_efm32_rtcc`): IRQ from the yaml, optional
+    // `lfeclk_hz`.
+    "efm32s1_rtcc",
     // Reserve the full name: never fuzzy-coerce an unqualified SAM DMAC to STM32.
     "sam_dmac",
     // ⚠️ Load-bearing. Without this entry the fuzzy `contains("spi")` heuristic
@@ -396,15 +415,27 @@ pub const MODEL_TYPES: &[&str] = &[
     "litex_timer",
     // LiteX Control-and-Status (LED/switch/button CSR block).
     "litex_controlandstatus",
+    // LiteX SPI-flash bitbang controller with its MT25Q responder.
+    "litex_spi_flash",
     // Microchip Mi-V reference-design peripherals. MUST be listed: without
     // membership the fuzzy fallbacks would coerce `miv_coregpio` onto the
     // STM32 GPIO map (it was doing exactly that for the staged descriptors)
     // and `miv_coretimer` onto the STM32 timer map — silently wrong models.
     "miv_coregpio",
     "miv_coretimer",
+    // PolarFire SoC MSS GPIO (CoreGPIO semantics, MSS register map).
+    "mpfs_gpio",
+    // PolarFire SoC MSS I2C0/1 (CoreI2C-family master).
+    "mpfs_i2c",
+    // PolarFire SoC MSS SPI0/1 (CoreSPI-family master).
+    "mpfs_spi",
     // SAM4S (the older PIO/PMC blocks; not the SAM D21 PORT/PM pair).
     "sam4s_pio",
     "sam4s_pmc",
+    // SAM4S system controller: watchdog, reset controller, flash controller.
+    "sam4s_wdt",
+    "sam4s_rstc",
+    "sam4s_eefc",
     // Cortex-M7 L1 cache maintenance window + the SCB cache-ID geometry.
     "cortex_m7_cache",
     // Cortex-M FP extension: FPCCR/FPCAR/FPDSCR/MVFR + FP context stacking.
@@ -413,8 +444,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "armv8m_mpu",
     // TI CC2538: the PL061-style GPIO port (address-masked GPIO_DATA),
     // SYS_CTRL, the 802.15.4 RF core, the sleep timer, the flash controller, the AES/SHA-256
-    // cryptoprocessor and the µDMA. Deliberately not `cc2538_gpio`: that
-    // spelling belongs to the staged onboarding/cc2538 descriptor, which keeps its placeholder.
+    // cryptoprocessor, the µDMA, the SSI, the GPTimers and the I2C master.
     "cc2538_pl061_gpio",
     "cc2538_sys_ctrl",
     "cc2538_rfcore",
@@ -422,6 +452,13 @@ pub const MODEL_TYPES: &[&str] = &[
     "cc2538_flash_ctrl",
     "cc2538_aes",
     "cc2538_udma",
+    "cc2538_pl022_ssi",
+    "cc2538_gptimer",
+    "cc2538_i2cm",
+    "cc2538_ioc",
+    "cc2538_soc_adc",
+    "cc2538_cctest",
+    "cc2538_ana_regs",
     // Ambiq Apollo4 Plus: the 128-pin GPIO block (PADKEY-locked PINCFG,
     // RD/WT/WTS/WTC/EN banks) and PWRCTRL (DEVPWREN -> DEVPWRSTATUS).
     // Deliberately not `ambiqapollo4_gpio`: that spelling belongs to the
@@ -434,6 +471,10 @@ pub const MODEL_TYPES: &[&str] = &[
     // belongs to the staged onboarding/nxp-s32k388 descriptors, which keep
     // their placeholder.
     "s32k3_siul2",
+    // NXP S32K3 SWT (key-locked watchdog with reset) and MC_ME (partition /
+    // COFB clock-enable handshake).
+    "s32k3_swt",
+    "s32k3_mc_me",
     // NXP i.MX RT500 (MIMXRT595S): the LPC-style FLEXCOMM USART and GPIO, and
     // the CLKCTL/RSTCTL (SET/CLR aliased) and IOPCTL (plain) register banks.
     // Not `lpc_usart`: the Renode-import profile heuristic maps that spelling
@@ -607,6 +648,113 @@ fn build_samd51_board_model(
     })
 }
 
+// SAM D21 TC3..TC7: fixed instance addresses and IRQs, no config overrides.
+#[cold]
+#[inline(never)]
+fn build_samd21_tc(p_cfg: &PeripheralConfig) -> anyhow::Result<Box<dyn Peripheral>> {
+    use crate::peripherals::sam::tc21::{Samd21Tc, TC21_INSTANCES};
+    if !p_cfg.config.is_empty() {
+        anyhow::bail!("samd21_tc admits no config overrides");
+    }
+    let Some(instance) = TC21_INSTANCES.iter().find(|i| i.base == p_cfg.base_address) else {
+        anyhow::bail!("SAMD21 TC base must be one of TC3..TC7");
+    };
+    if p_cfg.irq != Some(instance.irq) {
+        anyhow::bail!(
+            "SAMD21 TC at {:#x} requires IRQ {}",
+            instance.base,
+            instance.irq
+        );
+    }
+    Ok(Box::new(Samd21Tc::new(*instance)))
+}
+
+// SAM4S TC block: fixed address and channel-0 IRQ, no config overrides.
+#[cold]
+#[inline(never)]
+fn build_sam4s_tc(p_cfg: &PeripheralConfig) -> anyhow::Result<Box<dyn Peripheral>> {
+    use crate::peripherals::sam::tc4s::{Sam4sTc, SAM4S_TC_BLOCKS};
+    if !p_cfg.config.is_empty() {
+        anyhow::bail!("sam4s_tc admits no config overrides");
+    }
+    let Some(block) = SAM4S_TC_BLOCKS
+        .iter()
+        .find(|b| b.base == p_cfg.base_address)
+    else {
+        anyhow::bail!("SAM4S TC base must be 0x40010000 (TC0..2) or 0x40014000 (TC3..5)");
+    };
+    if p_cfg.irq != Some(block.first_irq) {
+        anyhow::bail!(
+            "SAM4S TC at {:#x} requires IRQ {} (channel 0)",
+            block.base,
+            block.first_irq
+        );
+    }
+    Ok(Box::new(Sam4sTc::new(*block)))
+}
+
+// EFM32 Series-0/1 TIMER and Series-1 WTIMER: base from the chip yaml, IRQ
+// required (it differs per part: TIMER1 is IRQ 10 on EFM32G210, 12 on
+// EFM32GG), no config keys.
+#[cold]
+#[inline(never)]
+fn build_efm32_timer(ty: &str, p_cfg: &PeripheralConfig) -> anyhow::Result<Box<dyn Peripheral>> {
+    use crate::peripherals::efm32::timer::Efm32Timer;
+    if !p_cfg.config.is_empty() {
+        anyhow::bail!("{ty} admits no config overrides");
+    }
+    let Some(irq) = p_cfg.irq else {
+        anyhow::bail!("{ty} '{}' needs an `irq`", p_cfg.id);
+    };
+    Ok(Box::new(match ty {
+        "efm32s1_wtimer" => Efm32Timer::new_wtimer(irq),
+        "efm32s1_timer" => Efm32Timer::new_series1(irq),
+        _ => Efm32Timer::new(irq),
+    }))
+}
+
+// EFR32 Series-1 RTCC: base from the chip yaml, IRQ required (30 on MG12,
+// 31 on MG13), optional `lfeclk_hz` (default 32768, as the Renode repl).
+#[cold]
+#[inline(never)]
+fn build_efm32_rtcc(p_cfg: &PeripheralConfig) -> anyhow::Result<Box<dyn Peripheral>> {
+    use crate::peripherals::efm32::rtcc::{Efm32Rtcc, RTCC_DEFAULT_LFECLK_HZ};
+    if let Some(k) = p_cfg.config.keys().find(|k| k.as_str() != "lfeclk_hz") {
+        anyhow::bail!("efm32s1_rtcc admits only `lfeclk_hz`, not `{k}`");
+    }
+    let Some(irq) = p_cfg.irq else {
+        anyhow::bail!("efm32s1_rtcc '{}' needs an `irq`", p_cfg.id);
+    };
+    let hz = match p_cfg.config.get("lfeclk_hz") {
+        None => RTCC_DEFAULT_LFECLK_HZ,
+        Some(v) => v.as_u64().filter(|&hz| hz > 0).ok_or_else(|| {
+            anyhow::anyhow!("efm32s1_rtcc `lfeclk_hz` must be a positive integer")
+        })?,
+    };
+    Ok(Box::new(Efm32Rtcc::new(irq, hz)))
+}
+
+// SAM D21 RTC: base from the chip yaml, fixed IRQ; `gclk_hz` declares GCLK_RTC.
+#[cold]
+#[inline(never)]
+fn build_samd21_rtc(p_cfg: &PeripheralConfig) -> anyhow::Result<Box<dyn Peripheral>> {
+    use crate::peripherals::sam::rtc21::{Samd21Rtc, RTC21_DEFAULT_GCLK_HZ, RTC21_IRQ};
+    if let Some(k) = p_cfg.config.keys().find(|k| k.as_str() != "gclk_hz") {
+        anyhow::bail!("samd21_rtc admits only `gclk_hz`, not `{k}`");
+    }
+    if p_cfg.irq != Some(RTC21_IRQ) {
+        anyhow::bail!("SAMD21 RTC sits on IRQ {RTC21_IRQ}");
+    }
+    let hz = match p_cfg.config.get("gclk_hz") {
+        None => RTC21_DEFAULT_GCLK_HZ,
+        Some(v) => v
+            .as_u64()
+            .filter(|&hz| hz > 0)
+            .ok_or_else(|| anyhow::anyhow!("samd21_rtc `gclk_hz` must be a positive integer"))?,
+    };
+    Ok(Box::new(Samd21Rtc::new(hz)))
+}
+
 /// Build a generic peripheral model for `canonical_type`, or `None` if it is not
 /// a generic type (so `from_config` falls through to the descriptor loaders).
 pub fn try_build(
@@ -616,16 +764,48 @@ pub fn try_build(
     _bus_trace: &crate::bus::bus_trace::BusTrace,
 ) -> anyhow::Result<Option<Box<dyn Peripheral>>> {
     let dev: Box<dyn Peripheral> = match canonical_type {
+        "sifive_gpio" => Box::new(crate::peripherals::sifive_gpio::SifiveGpio::new()),
         "systick" | "arm_generictimer" => {
             // CALIB is implementation-defined per chip; the yaml can
-            // supply the silicon value via `config: { calib: ... }`.
-            match p_cfg.config.get("calib").and_then(|v| v.as_u64()) {
-                Some(calib) => Box::new(crate::peripherals::systick::Systick::with_calib(
-                    calib as u32,
-                )),
-                None => Box::new(crate::peripherals::systick::Systick::new()),
-            }
+            // supply it plus the external-source divider (for example HCLK/8)
+            // via `config: { calib: ..., external_clock_divider: ... }`.
+            // Cortex-M0's SYST_CSR reset is 0x2 when CALIB.NOREF is set; set
+            // `no_reference_tickint_reset: true` for that core profile. M3/M4
+            // reset only CLKSOURCE in that case.
+            let calib = p_cfg
+                .config
+                .get("calib")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0x4000_0000) as u32;
+            let external_clock_divider = match p_cfg.config.get("external_clock_divider") {
+                Some(value) => value
+                    .as_u64()
+                    .filter(|&divider| divider > 0 && divider <= u32::MAX as u64)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("systick `external_clock_divider` must be a positive u32")
+                    })? as u32,
+                None => 1,
+            };
+            let no_reference_tickint_reset = match p_cfg.config.get("no_reference_tickint_reset") {
+                None => false,
+                Some(value) => value.as_bool().ok_or_else(|| {
+                    anyhow::anyhow!("systick `no_reference_tickint_reset` must be a boolean")
+                })?,
+            };
+            let systick =
+                crate::peripherals::systick::Systick::with_calib_and_external_clock_divider(
+                    calib,
+                    external_clock_divider,
+                );
+            Box::new(if no_reference_tickint_reset {
+                systick.with_no_reference_tickint_reset()
+            } else {
+                systick
+            })
         }
+        "arm_sp804_timer" => Box::new(crate::peripherals::arm_sp804::ArmSp804Timer::new()),
+        "lpc2294_timer" => Box::new(crate::peripherals::lpc::timer::LpcTimer::new()),
+        "arm_pl190_vic" => Box::new(crate::peripherals::armv7::pl190_vic::Pl190Vic::new()),
         // Silicon Labs Series-2 GPIO external interrupts — the `attachInterrupt`
         // block, in the GPIO head at `GPIO_S_BASE + 0x400`. A separate window
         // from the four port structs, which keep their own model.
@@ -723,6 +903,14 @@ pub fn try_build(
                 m("rcc_apb1enr_mask"),
                 m("rcc_apb2enr_mask"),
             );
+            // `rcc_ahb1enr_reset`: the part's AHB1ENR reset value (F7: DTCMRAMEN).
+            if let Some(v) = p_cfg
+                .config
+                .get("rcc_ahb1enr_reset")
+                .and_then(|v| v.as_u64())
+            {
+                rcc.set_f4_ahb1enr_reset(v as u32);
+            }
             // HSE is a board component. U5 reference platforms have none
             // fitted unless the chip yaml says `hse: true`.
             if let Some(present) = p_cfg.config.get("hse").and_then(|v| v.as_bool()) {
@@ -914,6 +1102,13 @@ pub fn try_build(
         | "samd51_dac" | "samd51_adc" | "samd51_pac" | "samd51_sercom_i2cm" => {
             build_samd51_board_model(canonical_type, p_cfg)?
         }
+        "samd21_tc" => build_samd21_tc(p_cfg)?,
+        "samd21_rtc" => build_samd21_rtc(p_cfg)?,
+        "sam4s_tc" => build_sam4s_tc(p_cfg)?,
+        "efm32s0_timer" | "efm32s1_timer" | "efm32s1_wtimer" => {
+            build_efm32_timer(canonical_type, p_cfg)?
+        }
+        "efm32s1_rtcc" => build_efm32_rtcc(p_cfg)?,
         "samd51_sercom_usart" => {
             use crate::peripherals::sam::sercom_usart::{SamSercomUsart, UsartPads};
             let key = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
@@ -1259,8 +1454,9 @@ pub fn try_build(
             ))
         }
         "afio" => Box::new(crate::peripherals::afio::Afio::new()),
-        // Channel-based DMA (F1/L0/L4/G0). `config: { requests: { spi1_tx: 3,
-        // spi1_rx: [2, 1] } }` hard-wires a peripheral request to a channel
+        // Channel-based DMA (F1/L0/L4/G0). `config: { channel_irqs: [11, ...,
+        // 17] }` gives each channel its own NVIC line (F1/L1); `requests: {
+        // spi1_tx: 3, spi1_rx: [2, 1] } }` hard-wires a peripheral request to a channel
         // (F1), or — `[channel, selector]` — to a channel while its L4
         // `CSELR` nibble holds the selector.
         "dma" | "stm32dma" => {
@@ -1271,6 +1467,37 @@ pub fn try_build(
                     anyhow::bail!("dma `{}`: unsupported profile `{profile}`", p_cfg.id)
                 }
             };
+            // `channels: 5` for the F03x/F04x/F05x DMA1 (RM0091 §10.3.2).
+            let channels = match p_cfg.config.get("channels").map(|v| v.as_u64()) {
+                None => 7,
+                Some(Some(n @ 1..=7)) => n as usize,
+                Some(_) => anyhow::bail!("dma `{}`: channels must be 1..7", p_cfg.id),
+            };
+            if channels < 7 {
+                dma = dma.with_channels(channels);
+            }
+            if let Some(irqs) = p_cfg.config.get("channel_irqs") {
+                let mut irqs: Vec<u32> = irqs
+                    .as_sequence()
+                    .map(|s| {
+                        s.iter()
+                            .filter_map(|n| n.as_u64())
+                            .map(|n| n as u32)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                if irqs.len() != channels {
+                    anyhow::bail!(
+                        "dma `{}`: channel_irqs must list {channels} NVIC lines",
+                        p_cfg.id
+                    )
+                }
+                // Unimplemented channels never raise a flag; their slot only
+                // fills the array.
+                irqs.resize(7, irqs[channels - 1]);
+                let irqs: [u32; 7] = irqs.try_into().expect("resized to 7");
+                dma = dma.with_channel_irqs(irqs);
+            }
             for (request, v) in dma_request_table(p_cfg) {
                 let pair = v.as_sequence().map(|s| {
                     s.iter()
@@ -1415,9 +1642,18 @@ pub fn try_build(
             Box::new(g)
         }
         "adc" => {
-            let layout: crate::peripherals::adc::AdcRegisterLayout =
-                SystemBus::parse_profile_or_default(p_cfg, "ADC")?;
-            Box::new(crate::peripherals::adc::Adc::new_with_layout(layout))
+            // The F0/L0 CHSELR block shares no sequencer with `adc.rs`'s
+            // SQRx families, so it is its own model.
+            use crate::peripherals::stm32f0_adc::{Stm32F0Adc, Stm32F0AdcFamily};
+            match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+                Some("stm32f0") => Box::new(Stm32F0Adc::new(Stm32F0AdcFamily::F0)),
+                Some("stm32l0") => Box::new(Stm32F0Adc::new(Stm32F0AdcFamily::L0)),
+                _ => {
+                    let layout: crate::peripherals::adc::AdcRegisterLayout =
+                        SystemBus::parse_profile_or_default(p_cfg, "ADC")?;
+                    Box::new(crate::peripherals::adc::Adc::new_with_layout(layout))
+                }
+            }
         }
         "pio" => {
             let mut pio = crate::peripherals::pio::Pio::new();
@@ -1469,10 +1705,35 @@ pub fn try_build(
         "syscfg" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("stm32f4") => {
             Box::new(crate::peripherals::syscfg::Stm32F4Syscfg::new())
         }
+        // SYSCFG on STM32F74x/F75x (`profile: stm32f7`): the F4 register
+        // file with the F7 MEMRMP / PMC fields (RM0385 §7).
+        "syscfg" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("stm32f7") => {
+            Box::new(crate::peripherals::syscfg::Stm32F4Syscfg::new_f7())
+        }
+        // SYSCFG on STM32F76x/F77x (`profile: stm32f76x`): the F7 file with
+        // MEMRMP.SWP_FB (RM0410 §7).
+        "syscfg" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("stm32f76x") => {
+            Box::new(crate::peripherals::syscfg::Stm32F4Syscfg::new_f76x())
+        }
         // SYSCFG on STM32L0 (`profile: stm32l0`): the same EXTICR line-source
         // mux, among the L0's own configuration words (RM0367 §10).
         "syscfg" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("stm32l0") => {
             Box::new(crate::peripherals::syscfg::Stm32L0Syscfg::new())
+        }
+        // SYSCFG on STM32L1 (`profile: stm32l1`): the F4 offsets with the L1
+        // EXTICR port codes (H = 5, F = 6, G = 7; RM0038 §8).
+        "syscfg" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("stm32l1") => {
+            Box::new(crate::peripherals::syscfg::Stm32L1Syscfg::new())
+        }
+        // SYSCFG on STM32F0 (`profile: stm32f0`): CFGR1, EXTICR1..4 with the
+        // by-letter A..F port codes, CFGR2 (RM0091 §9).
+        "syscfg" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("stm32f0") => {
+            Box::new(crate::peripherals::syscfg::Stm32F0Syscfg::new())
+        }
+        // The F04x variant (`profile: stm32f04x`): the same map, with the F04x
+        // CFGR1 fields (PA11_PA12_RMP, no F07x/F09x remaps above bit 23).
+        "syscfg" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("stm32f04x") => {
+            Box::new(crate::peripherals::syscfg::Stm32F0Syscfg::new_f04x())
         }
         // SYSCFG elsewhere — mostly EXTI source select (harmless read-0 stub), plus the H7
         // I/O compensation cell the H7 HAL enables + polls during rcc.freeze:
@@ -1810,11 +2071,37 @@ pub fn try_build(
                 .get("clock_hz")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(crate::peripherals::imxrt::lpuart::DEFAULT_UART_CLK_HZ);
-            Box::new(crate::peripherals::imxrt::lpuart::ImxrtLpuart::new(clk))
+            let uart = crate::peripherals::imxrt::lpuart::ImxrtLpuart::new(clk);
+            // i.MX RT700 LP_FLEXCOMM: `lp_flexcomm: true` adds PSELID/ISTAT;
+            // `lp_flexcomm_present` overrides the present bits [6:4].
+            let lp_flexcomm = p_cfg
+                .config
+                .get("lp_flexcomm")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            if lp_flexcomm {
+                let present = p_cfg
+                    .config
+                    .get("lp_flexcomm_present")
+                    .and_then(|v| v.as_u64())
+                    .map_or(crate::peripherals::imxrt::lpuart::LPFC_PRESENT_ALL, |v| {
+                        v as u32
+                    });
+                Box::new(uart.with_lp_flexcomm(present))
+            } else {
+                Box::new(uart)
+            }
         }
         // LiteX countdown timer (`litex/soc/cores/timer.py`): 32-bit CSRs
         // load/reload/en/update_value/value plus the zero-event manager.
-        "litex_timer" => Box::new(crate::peripherals::litex_timer::LitexTimer::new()),
+        // `csr_data_width: 8` selects the one-byte-per-slot layout (Fomu).
+        "litex_timer" => {
+            let timer = crate::peripherals::litex_timer::LitexTimer::new();
+            match p_cfg.config.get("csr_data_width").and_then(|v| v.as_u64()) {
+                Some(8) => Box::new(timer.with_csr8()),
+                _ => Box::new(timer),
+            }
+        }
         "litex_controlandstatus" => {
             let active_low = p_cfg
                 .config
@@ -1826,11 +2113,59 @@ pub fn try_build(
                     .with_buttons_active_low(active_low),
             )
         }
+        // LiteX SPI-flash bitbang CSRs + Micron MT25Q ID/status responder
+        // (Renode `LiteX_SPI_Flash` + `Micron_MT25Q`).
+        "litex_spi_flash" => Box::new(crate::peripherals::litex_spi_flash::LitexSpiFlash::new()),
         // Microchip Mi-V reference-design peripherals.
         "miv_coregpio" => Box::new(crate::peripherals::miv::MivCoreGpio::new()),
         "miv_coretimer" => Box::new(crate::peripherals::miv::MivCoreTimer::new()),
+        // PolarFire SoC MSS GPIO_0..2: `ports` is the bank width (14, 24
+        // or 32, `NB_OF_GPIO_GPIO*` in Microchip's mss_gpio.c).
+        "mpfs_gpio" => {
+            let ports = p_cfg
+                .config
+                .get("ports")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(32);
+            if !(1..=32).contains(&ports) {
+                anyhow::bail!("mpfs_gpio `ports` must be 1..=32, got {ports}");
+            }
+            Box::new(crate::peripherals::miv::MivCoreGpio::mpfs(ports as u32))
+        }
+        // PolarFire SoC MSS I2C0/1: master mode; devices attach through
+        // `external_devices:`.
+        "mpfs_i2c" => Box::new(crate::peripherals::mpfs_i2c::MpfsI2c::new()),
+        // PolarFire SoC MSS SPI0/1: master mode; devices attach through
+        // `external_devices:` and follow SLAVE_SELECT.
+        "mpfs_spi" => Box::new(crate::peripherals::mpfs_spi::MpfsSpi::new()),
         "sam4s_pio" => Box::new(crate::peripherals::sam4s::Sam4sPio::new()),
         "sam4s_pmc" => Box::new(crate::peripherals::sam4s::Sam4sPmc::new()),
+        "sam4s_wdt" => Box::new(crate::peripherals::sam::sysc4s::Sam4sWdt::new()),
+        "sam4s_rstc" => Box::new(crate::peripherals::sam::sysc4s::Sam4sRstc::new()),
+        "sam4s_eefc" => {
+            // The GETD descriptor reports the plane size, so the part's flash
+            // size must be stated; there is no family default.
+            let Some(bytes) = p_cfg.config.get("flash_bytes").and_then(|v| v.as_u64()) else {
+                anyhow::bail!("sam4s_eefc needs config.flash_bytes (the part's flash size)");
+            };
+            // SAM E70 parts state their 16 KiB lock regions and nine GPNVM
+            // bits; the SAM4S geometry (8 KiB, two) is the default.
+            let lock_region = p_cfg
+                .config
+                .get("lock_region_bytes")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(crate::peripherals::sam::sysc4s::EEFC_LOCK_REGION as u64);
+            let gpnvm_bits = p_cfg
+                .config
+                .get("gpnvm_bits")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(2);
+            Box::new(crate::peripherals::sam::sysc4s::Sam4sEefc::with_geometry(
+                bytes as u32,
+                lock_region as u32,
+                gpnvm_bits as u32,
+            ))
+        }
         "cortex_m7_cache" => {
             let kb = |key: &str| -> anyhow::Result<u32> {
                 p_cfg
@@ -1920,10 +2255,42 @@ pub fn try_build(
         }
         "cc2538_aes" => Box::new(crate::peripherals::cc2538::aes::Cc2538Aes::new()),
         "cc2538_udma" => Box::new(crate::peripherals::cc2538::udma::Cc2538Udma::new()),
+        // SSI0/1: master-mode SPI; devices attach through `external_devices:`.
+        "cc2538_pl022_ssi" => Box::new(crate::peripherals::cc2538::ssi::Cc2538Ssi::new()),
+        // I2CM master at 0x4002_0000; external devices attach through
+        // `external_devices:`. I2CS remains a separate stub window.
+        "cc2538_i2cm" => Box::new(crate::peripherals::cc2538::i2cm::Cc2538I2cm::new()),
+        // IOC pad mux / override / input-select register file (storage only).
+        "cc2538_ioc" => Box::new(crate::peripherals::cc2538::ioc::Cc2538Ioc::new()),
+        // SOC_ADC: ADC single/sequence conversions, the RNG LFSR / CRC16 and
+        // the analog comparator. Conversions complete inside the write.
+        "cc2538_soc_adc" => Box::new(crate::peripherals::cc2538::soc_adc::Cc2538SocAdc::new()),
+        // CCTEST (CC_TESTCTRL) and ANA_REGS: register storage only.
+        "cc2538_cctest" => Box::new(crate::peripherals::cc2538::cctest::Cc2538CcTest::new()),
+        "cc2538_ana_regs" => Box::new(crate::peripherals::cc2538::ana_regs::Cc2538AnaRegs::new()),
+        // GPTIMER0-3: timer A pends the entry's `irq:`, timer B `irq_b`.
+        "cc2538_gptimer" => Box::new(crate::peripherals::cc2538::gptimer::Cc2538GpTimer::new(
+            p_cfg
+                .config
+                .get("irq_b")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as u32),
+        )),
         "apollo4_gpio" => Box::new(crate::peripherals::apollo4::Apollo4Gpio::new()),
         "apollo4_pwrctrl" => Box::new(crate::peripherals::apollo4::Apollo4PwrCtrl::new()),
         "apollo4_cpu" => Box::new(crate::peripherals::apollo4::Apollo4Cpu::new()),
         "s32k3_siul2" => Box::new(crate::peripherals::s32k3_siul2::S32k3Siul2::new()),
+        // `clock_hz`: the CPU clock the bus cycles run at; `swt_clock_hz`:
+        // the counter clock (S32K3: SIRC, 32 kHz).
+        "s32k3_swt" => {
+            use crate::peripherals::s32k3 as s;
+            let get = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
+            Box::new(s::S32k3Swt::new(
+                get("clock_hz").unwrap_or(s::DEFAULT_CLOCK_HZ),
+                get("swt_clock_hz").unwrap_or(s::DEFAULT_SWT_CLOCK_HZ),
+            ))
+        }
+        "s32k3_mc_me" => Box::new(crate::peripherals::s32k3::S32k3McMe::new()),
         "lpc_flexcomm_usart" => {
             // PSELID present bits: USART/SPI/I2C/I2S (0xF0) unless the yaml
             // narrows them for a FLEXCOMM without every function.

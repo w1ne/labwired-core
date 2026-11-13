@@ -1,121 +1,57 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
+# Bounded profile for the imported Ambiq Apollo4 target.
 #
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
+# The machine-imported chip was a Renode boot-ROM-logger scaffold, with a
+# 4 KiB flash window at 0x08000000 and generated zero-answering peripherals.
+# This profile instead uses the sourced Apollo4 Plus memory layout and only
+# the Cortex-M4, memory, UART0, GPIO, and power-control models exercised by
+# examples/renode-onboarding/ambiq-apollo4-smoke.yaml.
 #
-# SUPERSEDED: staged onboarding descriptor (its flash at 0x08000000 / 4 KiB
-# and RAM at 0x20000000 are the Renode bootrom-logger scaffold, not the
-# Apollo4 Plus map). The promoted Apollo4 Plus part is
-# configs/chips/amap42kp.yaml (board: configs/systems/apollo4p-evb.yaml).
+# Sources and fuller model notes: configs/chips/amap42kp.yaml and
+# examples/apollo4p-evb/REQUIRED_DOCS.md. The imported target's profile is
+# intentionally limited to the Apollo4 Plus EVB's CPU, memories, UART0,
+# GPIO, and power-control paths; the secure bootloader and other peripherals
+# are not modelled here.
 
 name: ambiq-apollo4
 arch: arm
+core: cortex-m4
+cpu_hz: 96000000
+
 flash:
-  base: 134217728
-  size: 4096B
+  base: 0x00000000
+  size: 2048KB
 ram:
-  base: 536870912
-  size: 2097152B
+  base: 0x10000000
+  size: 2816KB
+reset_vector_offset: 0x18000
+
+memory_regions:
+  - name: bootrom
+    base: 0x08000000
+    size: 4KB
+    image_env: LABWIRED_APOLLO4_BOOTROM
+
 peripherals:
-- id: bootrom_logger
-  type: ambiqapollo4_bootromlogger
-  bus: sysbus
-  base_address: 134217724
-- id: adc
-  type: stub
-  renode_type: ambiqapollo4_adc
-  bus: sysbus
-  base_address: 1073971200
-- id: gpio
-  type: ambiqapollo4_gpio
-  bus: sysbus
-  base_address: 1073807360
-- id: iom0
-  type: stub
-  renode_type: ambiqapollo4_iomaster
-  bus: sysbus
-  base_address: 1074069504
-- id: iom1
-  type: stub
-  renode_type: ambiqapollo4_iomaster
-  bus: sysbus
-  base_address: 1074073600
-- id: iom2
-  type: stub
-  renode_type: ambiqapollo4_iomaster
-  bus: sysbus
-  base_address: 1074077696
-- id: iom3
-  type: stub
-  renode_type: ambiqapollo4_iomaster
-  bus: sysbus
-  base_address: 1074081792
-- id: iom4
-  type: stub
-  renode_type: ambiqapollo4_iomaster
-  bus: sysbus
-  base_address: 1074085888
-- id: iom5
-  type: stub
-  renode_type: ambiqapollo4_iomaster
-  bus: sysbus
-  base_address: 1074089984
-- id: iom6
-  type: stub
-  renode_type: ambiqapollo4_iomaster
-  bus: sysbus
-  base_address: 1074094080
-- id: iom7
-  type: stub
-  renode_type: ambiqapollo4_iomaster
-  bus: sysbus
-  base_address: 1074098176
-- id: rtc
-  type: stub
-  renode_type: ambiqapollo4_rtc
-  bus: sysbus
-  base_address: 1073760256
-- id: timer
-  type: ambiqapollo4_timer
-  bus: sysbus
-  base_address: 1073774592
-- id: stimer
-  type: ambiqapollo4_systemtimer
-  bus: sysbus
-  base_address: 1073776640
-- id: uart0
-  type: pl011
-  bus: sysbus
-  base_address: 1073856512
-- id: uart1
-  type: pl011
-  bus: sysbus
-  base_address: 1073860608
-- id: uart2
-  type: pl011
-  bus: sysbus
-  base_address: 1073864704
-- id: uart3
-  type: pl011
-  bus: sysbus
-  base_address: 1073868800
-- id: pwrctrl
-  type: stub
-  renode_type: ambiqapollo4_powercontroller
-  bus: sysbus
-  base_address: 1073876992
-- id: security
-  type: stub
-  renode_type: ambiqapollo4_security
-  bus: sysbus
-  base_address: 1073938432
-- id: wdt
-  type: stub
-  renode_type: ambiqapollo4_watchdog
-  bus: sysbus
-  base_address: 1073889280
-- id: cpu_complex
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1207959552
+  - id: systick
+    type: systick
+    base_address: 0xE000E010
+    size: 16B
+  - id: uart0
+    type: uart
+    base_address: 0x4001C000
+    size: 4KB
+    irq: 15
+    config:
+      profile: pl011
+  - id: gpio
+    type: apollo4_gpio
+    base_address: 0x40010000
+    size: 2KB
+  - id: pwrctrl
+    type: apollo4_pwrctrl
+    base_address: 0x40021000
+    size: 4KB
+  - id: cpu
+    type: apollo4_cpu
+    base_address: 0x48000000
+    size: 4KB

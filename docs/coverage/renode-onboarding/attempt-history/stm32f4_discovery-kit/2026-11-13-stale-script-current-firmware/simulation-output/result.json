@@ -1,0 +1,302 @@
+{
+  "result_schema_version": "1.0",
+  "status": "fail",
+  "steps_executed": 4000000,
+  "cycles": 4000000,
+  "instructions": 4000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 4000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 4000000
+    }
+  },
+  "limits": {
+    "max_steps": 4000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "F4-DISCO SMOKE"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_ordered": [
+          "hb=0 ld4=on odr=00001000",
+          "hb=1 ld4=off odr=00000000",
+          "hb=2 ld3=on odr=00002000",
+          "hb=3 ld3=off odr=00000000"
+        ]
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      0,
+      0,
+      192,
+      537001956,
+      344300,
+      1073759232,
+      1073875988,
+      537001968,
+      0,
+      0,
+      0,
+      1073872896,
+      1,
+      537001856,
+      134235051,
+      134220160
+    ],
+    "pc": 134220160,
+    "xpsr": 1627389952,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "eb9269557997323e38a94c140242283ad2e8c3e618cd7011382cf651970e3518",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-f4-discovery-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f4_discovery-kit.yaml",
+    "script": "examples/renode-onboarding/stm32f4_discovery-kit-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "usart2",
+        "kind": "native",
+        "base": 1073759232,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortA",
+        "kind": "native",
+        "base": 1073872896,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortD",
+        "kind": "native",
+        "base": 1073875968,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073887232,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "F4-DISCO SMOKE",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 17548,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 17548,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 1048576,
+    "ram_total_bytes": 131072,
+    "flash_used_pct": 1.67,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 131072,
+    "main_stack_high_water_bytes": 16,
+    "main_stack_free_min_bytes": 131052,
+    "main_stack_base": 536870912,
+    "main_stack_top": 537001984,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 131072,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 131052,
+    "heap_base": 536870912,
+    "heap_top": 537001984
+  },
+  "metrics": {
+    "cycles": 4000000,
+    "instructions": 4000000,
+    "steps_executed": 4000000,
+    "memory_reads": 333,
+    "memory_writes": 7,
+    "peripheral_accesses": 655783,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134220004,
+        "count": 274,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134220012,
+        "count": 274,
+        "symbol": "firmware_f4_discovery_smoke::smoke_usart2_rx_enable_gate"
+      },
+      {
+        "pc": 134220044,
+        "count": 274,
+        "symbol": "firmware_f4_discovery_smoke::smoke_usart2_rx_enable_gate"
+      },
+      {
+        "pc": 134220062,
+        "count": 274,
+        "symbol": "firmware_f4_discovery_smoke::smoke_usart2_rx_enable_gate"
+      },
+      {
+        "pc": 134220094,
+        "count": 274,
+        "symbol": "firmware_f4_discovery_smoke::smoke_usart2_rx_enable_gate"
+      },
+      {
+        "pc": 134220112,
+        "count": 274,
+        "symbol": "firmware_f4_discovery_smoke::smoke_usart2_rx_enable_gate"
+      },
+      {
+        "pc": 134220144,
+        "count": 274,
+        "symbol": "firmware_f4_discovery_smoke::smoke_usart2_rx_enable_gate"
+      },
+      {
+        "pc": 134220160,
+        "count": 274,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134220164,
+        "count": 274,
+        "symbol": "firmware_f4_discovery_smoke::smoke_usart2_rx_enable_gate"
+      },
+      {
+        "pc": 134220166,
+        "count": 274,
+        "symbol": "firmware_f4_discovery_smoke::smoke_usart2_rx_enable_gate"
+      },
+      {
+        "pc": 134220186,
+        "count": 274,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134220190,
+        "count": 274,
+        "symbol": "firmware_f4_discovery_smoke::smoke_usart2_rx_enable_gate"
+      },
+      {
+        "pc": 134220196,
+        "count": 274,
+        "symbol": "firmware_f4_discovery_smoke::smoke_usart2_rx_enable_gate"
+      },
+      {
+        "pc": 134220208,
+        "count": 274,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134220214,
+        "count": 274,
+        "symbol": "firmware_f4_discovery_smoke::smoke_usart2_rx_enable_gate"
+      },
+      {
+        "pc": 134220002,
+        "count": 273,
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+      }
+    ],
+    "stalled_poll": {
+      "peripheral": "usart2",
+      "offset": 0,
+      "accesses": 655706
+    }
+  }
+}

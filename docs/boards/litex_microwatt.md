@@ -20,6 +20,6 @@
 | Peripheral ID | Base Address | Type |
 |---|---|---|
 | `uart` | `0xc0001800` | `litex_uart64` |
-| `timer0` | `0xc0002000` | `litex_timer64` |
+| `timer0` | `0xc0002000` | `stub` |
 
 **Total Peripherals:** 2

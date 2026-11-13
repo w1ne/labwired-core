@@ -1,53 +1,25 @@
+# Bounded profile for Renode's Egis ET171 fragment. The execution smoke uses
+# the generic RV32IM subset, on-chip SRAM, and uart0; the upstream Andes D25F's
+# rv32gc_xandes extensions, reset flow, and all other peripherals remain
+# unclaimed. Memory windows follow Renode's platforms/cpus/egis_et171.repl.
+# uart0 follows Renode's NS16550 @ 0xF0200020 with `wideRegisters: true`:
+# `dw_apb_uart` selects this engine's 4-byte-stride 16550 register map (polled
+# TX, LCR/DLAB divisor latches, LSR). It does not claim interrupts (the PLIC is
+# not mapped), FIFOs, or baud timing.
 name: egis_et171
-arch: arm
+arch: riscv
+core: rv32im
+flash_boot_alias: false
 flash:
-  base: 1879048192
-  size: 65536B
+  base: 0x80000000
+  size: 1MiB
 ram:
-  base: 1073741824
-  size: 262144
+  base: 0x00000000
+  size: 384KB
 peripherals:
-- id: mtimer
-  type: riscvmachinetimer
-  bus: sysbus
-  base_address: 3858759680
-- id: uart0
-  type: ns16550
-  bus: sysbus
-  base_address: 4028629024
-- id: pit0
-  type: andesatcpit100
-  bus: sysbus
-  base_address: 4030726144
-- id: gpio0
-  type: andesatcgpio100
-  bus: sysbus
-  base_address: 4033871872
-- id: watchdog
-  type: andesatcwdt200_watchdog
-  bus: sysbus
-  base_address: 4031774720
-- id: spi0
-  type: andesatcspi200
-  bus: sysbus
-  base_address: 4038066176
-- id: spi1
-  type: andesatcspi200
-  bus: sysbus
-  base_address: 4042260480
-- id: rtc0
-  type: andesatcrtc100
-  bus: sysbus
-  base_address: 4032823296
-- id: syscon
-  type: egiset171_aosmu
-  bus: sysbus
-  base_address: 4027580416
-- id: smu2
-  type: egiset171_smu2
-  bus: sysbus
-  base_address: 4041211904
-- id: crypto
-  type: egiset171_crypto
-  bus: sysbus
-  base_address: 3892314112
+  - id: uart0
+    type: ns16550
+    base_address: 0xF0200020
+    size: 32B
+    config:
+      profile: dw_apb_uart

@@ -1,11 +1,15 @@
 # Embedded ARM system backend
 
-`labwired-arm-system` implements a privileged ARMv7 core in the simulator
-process using the pinned QEMU-derived tlib translator. `ArmCpu::new()` is the
-Cortex-A7. `ArmCpu::with_model(ArmModel::CortexR5F)` is the tlib `cortex-r5f`
+`labwired-arm-system` implements ARM cores in the simulator process using the
+pinned QEMU-derived tlib translator. `ArmCpu::new()` is the Cortex-A7.
+`ArmCpu::with_model(ArmModel::CortexR5F)` is the tlib `cortex-r5f`
 (PMSAv7, MPU set to 16 regions as on the Zynq UltraScale+ RPU, VFPv3-D16) with
 the same register numbering and bus contract. The default feature set
 is empty; construction returns an explicit feature-required error.
+
+`ArmCpu::with_model(ArmModel::Arm7Tdmi)` selects tlib's `arm7tdmi` ARMv4T
+model. The LabWired LPC2294 profile uses it for a bounded integer-instruction
+smoke and does not claim LPC2294 peripherals.
 
 Native support is opt-in and currently supports x86_64 Linux GNU only:
 

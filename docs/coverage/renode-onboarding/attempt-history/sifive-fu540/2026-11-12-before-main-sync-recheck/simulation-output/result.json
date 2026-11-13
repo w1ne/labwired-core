@@ -1,0 +1,398 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 100000,
+  "cycles": 100000,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "RV64 FU540 UART0 smoke; mul=0000001100000011"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "timer IRQ mcause=8000000000000007 count=0000000000000001 mepc_in_wait=1 entry_mie=0 entry_mpie=1 entry_mpp=3 return_mie=1 compare_disarmed=1 mtip_clear=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "software IRQ mcause=8000000000000003 count=0000000000000001 mepc_in_wait=1 entry_mie=0 entry_mpie=1 entry_mpp=3 return_mie=1 msip_pending=1 msip_clear=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "PLIC UART0 source=0000000000000004 cause=800000000000000b count=0000000000000001 ip=0000000000000001 masked_pending=1 masked_meip=0 threshold_release=1 pending=0000000000000000 meip_clear=0000000000000000 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 268501008,
+          "expected_value": 0,
+          "mask": null,
+          "size": null
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 268501012,
+          "expected_value": 1,
+          "mask": null,
+          "size": null
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "risc_v64",
+    "x": [
+      0,
+      536880346,
+      2147614576,
+      2147485696,
+      0,
+      536871744,
+      33570824,
+      0,
+      268500992,
+      268500992,
+      268500992,
+      10,
+      268500992,
+      5,
+      0,
+      201330688,
+      2147482810,
+      1,
+      0,
+      0,
+      1,
+      1,
+      0,
+      0,
+      16,
+      1,
+      0,
+      1,
+      33554432,
+      0,
+      0,
+      0
+    ],
+    "pc": 536880500,
+    "mstatus": 6272,
+    "mie": 2184,
+    "mtvec": 536871744,
+    "mscratch": 0,
+    "mepc": 536878412,
+    "mcause": 9223372036854775819,
+    "mtval": 0,
+    "mcycle": 100000,
+    "minstret": 100000,
+    "pmpcfg": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pmpaddr": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "clint": {
+      "base": 33554432,
+      "msip": false,
+      "mtimecmp": 18446744073709551615,
+      "mtime": 100,
+      "divider": 1000,
+      "residue": 0
+    },
+    "plic": {
+      "base": 201326592,
+      "num_sources": 54,
+      "priority_mask": 7,
+      "context": 1,
+      "priority": [
+        0,
+        0,
+        0,
+        0,
+        3,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "pending": [
+        0,
+        0
+      ],
+      "in_service": [
+        0,
+        0
+      ],
+      "enable": [
+        [
+          0,
+          0
+        ],
+        [
+          16,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "threshold": [
+        0,
+        2,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "reservation": null
+  },
+  "firmware_hash": "4357553dc2c9fcb7d27b1bc99af7ecad913801c1262b1a99877ee160711f15bb",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/riscv64imac-unknown-none-elf/release/firmware-sifive-fu540-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/sifive-fu540.yaml",
+    "script": "examples/renode-onboarding/sifive-fu540-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "uart0",
+        "kind": "native",
+        "base": 268500992,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "RV64 FU540 UART0 smoke; mul=0000001100000011",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "timer IRQ mcause=8000000000000007 count=0000000000000001 mepc_in_wait=1 entry_mie=0 entry_mpie=1 entry_mpp=3 return_mie=1 compare_disarmed=1 mtip_clear=1 ok",
+        "cycle_lo": 40000,
+        "cycle": 50000,
+        "end_cycle": 50000
+      },
+      {
+        "text": "software IRQ mcause=8000000000000003 count=0000000000000001 mepc_in_wait=1 entry_mie=0 entry_mpie=1 entry_mpp=3 return_mie=1 msip_pending=1 msip_clear=1 ok",
+        "cycle_lo": 80000,
+        "cycle": 90000,
+        "end_cycle": 90000
+      },
+      {
+        "text": "PLIC UART0 source=0000000000000004 cause=800000000000000b count=0000000000000001 ip=0000000000000001 masked_pending=1 masked_meip=0 threshold_release=1 pending=0000000000000000 meip_clear=0000000000000000 ok",
+        "cycle_lo": 80000,
+        "cycle": 90000,
+        "end_cycle": 90000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 9836,
+    "data_bytes": 0,
+    "bss_bytes": 131072,
+    "flash_used_bytes": 9836,
+    "ram_static_bytes": 131072,
+    "flash_total_bytes": 33554432,
+    "ram_total_bytes": 131072,
+    "flash_used_pct": 0.03,
+    "ram_static_pct": 100.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 100000,
+    "instructions": 100000,
+    "steps_executed": 100000,
+    "memory_reads": 142471,
+    "memory_writes": 82,
+    "peripheral_accesses": 1136,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 536873626,
+        "count": 156,
+        "symbol": "firmware_sifive_fu540_smoke::timer_interrupt_probe"
+      },
+      {
+        "pc": 536875984,
+        "count": 156,
+        "symbol": "firmware_sifive_fu540_smoke::software_interrupt_probe"
+      },
+      {
+        "pc": 536880500,
+        "count": 78,
+        "symbol": "main"
+      }
+    ]
+  }
+}

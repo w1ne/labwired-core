@@ -1,0 +1,416 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 1500000,
+  "cycles": 1500000,
+  "instructions": 1500000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 1500000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 1500000
+    }
+  },
+  "limits": {
+    "max_steps": 1500000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_ordered": [
+          "SAM4S8B RENODE SMOKE",
+          "eefc fmr=00000500 ok",
+          "eefc getd size=",
+          "eefc gpnvm=2 set=3 glb=2 clb=0 ok",
+          "eefc fsr badkey=3 after=1 ok",
+          "rstc sr=00010000 wdt mr=3fff2fff ok",
+          "rstc software reset",
+          "SAM4S8B RENODE SMOKE",
+          "rstc rsttyp=3 ok",
+          "wdt arm wdv=2",
+          "SAM4S8B RENODE SMOKE",
+          "wdt rsttyp=2 mr=3fff2fff ok",
+          "wdt window sr=2 pended released ok",
+          "wdt mr once=00801100 ok",
+          "pmc pcsr0=",
+          "pio ports=2 ok",
+          "tc0 rc pend=1 ok",
+          "SAM4S8B PASS"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 537001728,
+          "expected_value": 1514147839,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      12767,
+      4095,
+      1073807360,
+      2147483648,
+      1074660884,
+      50,
+      8,
+      537001952,
+      1074664532,
+      537001472,
+      524288,
+      1,
+      8392960,
+      537001952,
+      4213901,
+      4214598
+    ],
+    "pc": 4214598,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "a99bc0d5f9c55b337c6e13500ed40ef7bda6e9b3ac626ee45f062b923b14de86",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-sam4s8b-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/sam4s8b.yaml",
+    "script": "examples/renode-onboarding/sam4s8b-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "tc0_1_2",
+        "kind": "native",
+        "base": 1073807360,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tc3_4_5",
+        "kind": "native",
+        "base": 1073823744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart0",
+        "kind": "native",
+        "base": 1073889280,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart1",
+        "kind": "native",
+        "base": 1073905664,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pmc",
+        "kind": "native",
+        "base": 1074660352,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart0",
+        "kind": "native",
+        "base": 1074660864,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart1",
+        "kind": "native",
+        "base": 1074661376,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "eefc",
+        "kind": "native",
+        "base": 1074661888,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pioA",
+        "kind": "native",
+        "base": 1074662912,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pioB",
+        "kind": "native",
+        "base": 1074663424,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rstc",
+        "kind": "native",
+        "base": 1074664448,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "wdt",
+        "kind": "native",
+        "base": 1074664528,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unmapped_mmio",
+      "address": "0xe000e010",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "SAM4S8B RENODE SMOKE",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "eefc fmr=00000500 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "eefc getd size=00080000 page=0200 locks=0040 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "eefc gpnvm=2 set=3 glb=2 clb=0 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "eefc fsr badkey=3 after=1 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "rstc sr=00010000 wdt mr=3fff2fff ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "rstc software reset",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "SAM4S8B RENODE SMOKE",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "rstc rsttyp=3 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "wdt arm wdv=2",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "SAM4S8B RENODE SMOKE",
+        "cycle_lo": 30000,
+        "cycle": 40000,
+        "end_cycle": 40000
+      },
+      {
+        "text": "wdt rsttyp=2 mr=3fff2fff ok",
+        "cycle_lo": 30000,
+        "cycle": 40000,
+        "end_cycle": 40000
+      },
+      {
+        "text": "wdt window sr=2 pended released ok",
+        "cycle_lo": 30000,
+        "cycle": 40000,
+        "end_cycle": 40000
+      },
+      {
+        "text": "wdt mr once=00801100 ok",
+        "cycle_lo": 30000,
+        "cycle": 40000,
+        "end_cycle": 40000
+      },
+      {
+        "text": "pmc pcsr0=1f80db00 ok",
+        "cycle_lo": 30000,
+        "cycle": 40000,
+        "end_cycle": 40000
+      },
+      {
+        "text": "pio ports=2 ok",
+        "cycle_lo": 30000,
+        "cycle": 40000,
+        "end_cycle": 40000
+      },
+      {
+        "text": "tc0 rc pend=1 ok",
+        "cycle_lo": 30000,
+        "cycle": 40000,
+        "end_cycle": 40000
+      },
+      {
+        "text": "SAM4S8B PASS",
+        "cycle_lo": 30000,
+        "cycle": 40000,
+        "end_cycle": 40000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 20316,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 20316,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 524288,
+    "ram_total_bytes": 131072,
+    "flash_used_pct": 3.87,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 131072,
+    "main_stack_high_water_bytes": 32,
+    "main_stack_free_min_bytes": 131032,
+    "main_stack_base": 536870912,
+    "main_stack_top": 537001984,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 131072,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 131032,
+    "heap_base": 536870912,
+    "heap_top": 537001984
+  },
+  "metrics": {
+    "cycles": 1500000,
+    "instructions": 1500000,
+    "steps_executed": 1500000,
+    "memory_reads": 3474,
+    "memory_writes": 90,
+    "peripheral_accesses": 6238,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 4214598,
+        "count": 1953,
+        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 4214600,
+        "count": 1953,
+        "symbol": "firmware_sam4s8b_smoke::family::spin"
+      },
+      {
+        "pc": 4214602,
+        "count": 1953,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      }
+    ]
+  }
+}

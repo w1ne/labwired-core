@@ -1,0 +1,3 @@
+EFR32xG22 Cortex-M33 USART0 smoke
+gpio mode=1 set=1 bond=1 din_hi=1 tgl=1 set2=1 clr=1 ok
+timers w32=1 w16=1 run=1 cnt=1 stop=1 irq=3 direct_kept=1 alias_clr=1 t1of=1 t1masked=1 t1pend=1 t1rel=1 ok

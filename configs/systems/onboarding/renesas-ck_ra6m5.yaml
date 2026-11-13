@@ -4,9 +4,36 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
-# SUPERSEDED: staged onboarding descriptor (its flash at 0x08000000 is the
-# RA6M5 8 KiB data flash, not the 2 MiB code flash at 0x0 per R7FA6M5BH.h /
-# Zephyr r7fa6m5bh3cfc.dtsi). The promoted RA6M5 part is
-# configs/chips/r7fa6m5bh.yaml (board: configs/systems/ek-ra6m5.yaml).
+# Board wiring from Renode platforms/boards/renesas-ck_ra6m5.repl: LED red
+# P610, green P609, blue P601; button P804. The button polarity follows
+# Renode's Button model (drives the pin high while pressed); the CK-RA6M5
+# schematic was not checked. The code flash is at 0x0 (R7FA6M5BH.h); the
+# promoted RA6M5 part is configs/chips/r7fa6m5bh.yaml (board:
+# configs/systems/ek-ra6m5.yaml).
 name: renesas-ck_ra6m5
 chip: ../../chips/onboarding/renesas-ck_ra6m5.yaml
+board_io:
+  - id: "led_red"
+    kind: "led"
+    peripheral: "port6"
+    pin: 10
+    signal: "output"
+    active_high: true
+  - id: "led_green"
+    kind: "led"
+    peripheral: "port6"
+    pin: 9
+    signal: "output"
+    active_high: true
+  - id: "led_blue"
+    kind: "led"
+    peripheral: "port6"
+    pin: 1
+    signal: "output"
+    active_high: true
+  - id: "button"
+    kind: "button"
+    peripheral: "port8"
+    pin: 4
+    signal: "input"
+    active_high: true

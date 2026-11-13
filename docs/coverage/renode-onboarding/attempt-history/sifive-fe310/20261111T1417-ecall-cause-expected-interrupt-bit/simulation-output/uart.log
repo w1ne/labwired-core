@@ -1,0 +1,5 @@
+SIFIVE FE310 SMOKE
+cpu=rv32im uart=sifive
+mul=00000143
+ecall trap mcause=0000000b mepc_match=1 count=00000001 entry_mie=0 entry_mpie=1 return_mie=1 FAIL
+gpio=PASS input_en=00080000 output_en=00080000 output_val=00080000 input_val=00080000

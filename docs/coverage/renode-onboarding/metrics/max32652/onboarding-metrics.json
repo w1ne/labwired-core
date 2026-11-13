@@ -1,0 +1,37 @@
+{
+  "target_id": "max32652",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": "firmware-max32652-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/renode-onboarding/max32652-smoke.yaml",
+  "system": "configs/systems/onboarding/max32652.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-09T14:10:56Z",
+  "finished_at_utc": "2026-11-09T14:10:57Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1001,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.368,
+    "build_firmware": 0.268,
+    "run_smoke": 0.349
+  },
+  "stages_ms": {
+    "build_cli": 368,
+    "build_firmware": 268,
+    "run_smoke": 349
+  }
+}

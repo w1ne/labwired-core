@@ -1,0 +1,15 @@
+2026-11-09T23:07:14.958713Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32l151.yaml
+2026-11-09T23:07:15.049869Z  INFO labwired_loader: ELF Entry Point: 0x8000401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-09T23:07:15.052975Z  INFO labwired_cli::execute: stimulus: temperature = 100 applied
+2026-11-09T23:07:15.052992Z  INFO labwired_cli::execute: stimulus: temperature = -25 applied
+2026-11-09T23:07:15.052997Z  INFO labwired_cli::execute: stimulus: temperature = 50 applied
+2026-11-09T23:07:15.254928Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-09T23:07:15.274129Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-09T23:07:15.309481Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-09T23:07:15.403304Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-09T23:07:15.440555Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-09T23:07:15.524947Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+labwired-cli test: idle_ff skipped 1028814 of 4000000 device cycles (2971186 interpreted)
+PASS  7/7 checks · stm32l151-smoke · 4000000 steps · 0.51s

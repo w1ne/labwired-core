@@ -1,0 +1,3 @@
+OPENTITAN EARLGREY SMOKE
+core=rv32imc uart0=opentitan
+mul=00000143

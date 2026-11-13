@@ -1,0 +1,20 @@
+# Smoke against the imported SiFive FE310 Renode system descriptor.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32im-unknown-none-elf/release/firmware-sifive-fe310-smoke"
+  system: "../../configs/systems/onboarding/sifive-fe310.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "SIFIVE FE310 SMOKE"
+  - uart_ordered:
+      - "cpu=rv32im uart=sifive"
+      - "mul=00000143"
+      - "ecall trap mcause=0000000b mepc_match=1 count=00000001 entry_mie=0 entry_mpie=1 entry_mpp=00000003 return_mie=1 ok"
+      - "ebreak trap mcause=00000003 mepc_match=1 count=00000001 resumed=1 entry_mie=0 entry_mpie=1 return_mie=1 ok"
+      - "ecall masked mret entry_mie=0 entry_mpie=0 return_mie=0 return_mpie=1 ok"
+      - "gpio=PASS input_en=00080000 output_en=00080000 output_val=00080000 input_val=00080000"
+  - gpio_edges:
+      pin: "gpio:19"
+      min_edges: 3
+  - expected_stop_reason: max_steps

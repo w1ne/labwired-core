@@ -1,0 +1,37 @@
+{
+  "target_id": "stm32l552",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 2000000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-l552ze-smoke",
+  "target_triple": "thumbv8m.main-none-eabi",
+  "script": "examples/renode-onboarding/stm32l552-smoke.yaml",
+  "system": "configs/systems/onboarding/stm32l552.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-10T12:26:56Z",
+  "finished_at_utc": "2026-11-10T12:26:58Z",
+  "elapsed_seconds": 3,
+  "elapsed_ms": 2044,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "2026-11-10T12:26:58.350837Z ERROR labwired_cli::execute: Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: [\"cpu=cortex-m33 uart=lpuart1\", \"rxft=lpuart1 thresholds=8,7,6,4,2,1 boundary=1 irq=1111 bytes=abcdef ok\", \"rx=lpuar",
+  "failure_hint": "Smoke assertion mismatch. Compare expected stop/assertions with current deterministic output.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.313,
+    "build_firmware": 0.689,
+    "run_smoke": 0.99
+  },
+  "stages_ms": {
+    "build_cli": 313,
+    "build_firmware": 689,
+    "run_smoke": 990
+  }
+}

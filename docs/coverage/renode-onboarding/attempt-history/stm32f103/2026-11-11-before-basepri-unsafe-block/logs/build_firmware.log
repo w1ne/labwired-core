@@ -1,0 +1,46 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+   Compiling firmware-f103-i2c-demo v0.25.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/renode/crates/firmware-f103-i2c-demo)
+error[E0133]: use of inline assembly is unsafe and requires unsafe function or block
+    --> crates/firmware-f103-i2c-demo/src/main.rs:1572:5
+     |
+1572 | /     core::arch::asm!(
+1573 | |         "mrs {ipsr}, IPSR",
+1574 | |         "mrs {basepri}, BASEPRI",
+1575 | |         ipsr = out(reg) ipsr,
+1576 | |         basepri = out(reg) basepri,
+1577 | |         options(nomem, nostack, preserves_flags),
+1578 | |     );
+     | |_____^ use of inline assembly
+     |
+     = note: inline assembly is entirely unchecked and can cause undefined behavior
+
+error[E0133]: use of inline assembly is unsafe and requires unsafe function or block
+    --> crates/firmware-f103-i2c-demo/src/main.rs:1600:5
+     |
+1600 | /     core::arch::asm!(
+1601 | |         "mrs {ipsr}, IPSR",
+1602 | |         "mrs {basepri}, BASEPRI",
+1603 | |         ipsr = out(reg) ipsr,
+1604 | |         basepri = out(reg) basepri,
+1605 | |         options(nomem, nostack, preserves_flags),
+1606 | |     );
+     | |_____^ use of inline assembly
+     |
+     = note: inline assembly is entirely unchecked and can cause undefined behavior
+
+For more information about this error, try `rustc --explain E0133`.
+error: could not compile `firmware-f103-i2c-demo` (bin "firmware-f103-i2c-demo") due to 2 previous errors

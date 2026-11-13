@@ -1,0 +1,58 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm7_tdmi",
+    "registers": [
+      50000,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      134217736
+    ],
+    "pc": 134217736,
+    "cpsr": 1073742291
+  },
+  "steps_executed": 100000,
+  "cycles": 100000,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "c293168be6ecac987b9ba2083516ce06a76835ebf4a6dbd4d3978371c2864a8e",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/lpc2294-arm7-cpu-smoke.elf",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/lpc2294.yaml",
+    "script": "examples/renode-onboarding/lpc2294-arm7-cpu-smoke.yaml"
+  }
+}

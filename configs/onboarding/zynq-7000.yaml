@@ -1,6 +1,5 @@
 name: zynq-7000
-description: 'AMD Xilinx Zynq-7000 All Programmable SoC baseline platform. Architecture:
-  Dual ARM Cortex-A9.'
+description: 'Imported AMD Xilinx Zynq-7000 base platform. The measured subset runs one Cortex-A9 PE from a 64 KiB DDR aperture at 0x00100000 and exercises polled TX on PS UART1 (Cadence). OCM, the BootROM, the second PE, SCU, GIC, timers and other PS peripherals are not modeled.'
 family: AMD Xilinx Zynq-7000
 url: https://www.xilinx.com/products/silicon-devices/soc/zynq-7000.html
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\

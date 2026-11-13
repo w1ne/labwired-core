@@ -5,19 +5,22 @@ url: https://www.latticesemi.com/products/developmentboardsandkits/ice40ultraplu
 family: Lattice iCE40
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
-pass_rate: 100
 verified: false
 system: systems/onboarding/ice40up5k-mdp-evn.yaml
 validation:
-  method: ci-structural
-  reason: structural-ok
+  method: renode-onboarding-rv32im-smoke
+  reason: bounded RV32IM direct-ELF multiply, SRAM readback and LiteX timer0 (CSR8) smoke; whole board remains unverified
   checks:
     system_manifest: true
     chip_descriptor: true
-    flash_base_present: true
-    ram_base_present: true
-  timestamp_utc: '2026-10-18T14:40:00.247661+00:00'
+    rv32im_integer_smoke: true
+    sram_readback: true
+    timer0_smoke: true
+    board_peripherals: false
+    reset_flow: false
+    whole_platform: false
+  timestamp_utc: '2026-11-06T04:04:14Z'
   run_url: ''
-  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/ice40up5k-mdp-evn.md
+  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/coverage/renode-onboarding/metrics/ice40up5k-mdp-evn/
 provenance:
   generated_by: scripts/onboard_hw_targets.py

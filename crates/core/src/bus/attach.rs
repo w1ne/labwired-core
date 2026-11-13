@@ -3725,8 +3725,8 @@ impl SystemBus {
         use crate::peripherals::efr32::gpio_route::{cc_token, Efr32s2TimerRoute, CC_PER_TIMER};
         use crate::peripherals::efr32::timer::Efr32s2Timer;
         use crate::peripherals::efr32::usart_route::{
-            usart_token, Efr32s2I2cRoute, Efr32s2UsartRoute, I2CROUTE_COUNT, SIGNALS_PER_USART,
-            USARTROUTE_COUNT,
+            i2c_token, usart_token, Efr32s2I2cRoute, Efr32s2UsartRoute, I2CROUTE_COUNT,
+            SIGNALS_PER_USART, USARTROUTE_COUNT,
         };
         use crate::peripherals::gpio::{GpioPort, GpioRegisterLayout};
         use crate::peripherals::pad_claims::PadClaims;
@@ -3950,6 +3950,7 @@ impl SystemBus {
             let gate: crate::peripherals::efr32::usart_route::RouteGate =
                 std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
             i2c.set_route_gate(gate.clone());
+            i2c.set_pad_check(claims.clone(), [i2c_token(index, 0), i2c_token(index, 1)]);
             i2c_gates.push((index, gate));
         }
         if !i2c_gates.is_empty() {
@@ -4161,6 +4162,7 @@ impl SystemBus {
             }
             devices.push(wrapped);
         }
+        self.note_spi_cs_watch(idx);
         Ok(())
     }
 

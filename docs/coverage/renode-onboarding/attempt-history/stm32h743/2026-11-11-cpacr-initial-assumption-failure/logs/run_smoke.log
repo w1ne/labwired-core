@@ -1,0 +1,6 @@
+2026-11-11T00:38:33.943621Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32h743.yaml
+2026-11-11T00:38:33.945431Z  INFO labwired_loader: ELF Entry Point: 0x8000401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-11T00:38:34.759114Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "cortex-m7 cpacr reset=00000000 enabled=00F00000" }) (captured len=1253)
+FAIL  15/16 checks · stm32h743-smoke · 4000000 steps · 0.81s

@@ -1,0 +1,9 @@
+EFM32G232 RENODE SMOKE
+gpio pc0/pc1 pushpull set=1 tgl=1 clr=1 wo=1 ok
+gpio pa0 disabled_din0=1 pullup=1 pulldown=1 ok
+gpio pa1 wiredand pa2 wiredor hi=3 lo=0 ok
+gpio pa pinlockn reset=ffff after=fffe ok
+tim0 up of=1 pend=1 released=1 running=1 ok
+tim1 down oneshot dir=1 stopped=1 if=2 cnt=00c8 ok
+tim2 cc0 hit=1 topbv=1 of=1 top=03e8->01f4 ok
+EFM32G PASS

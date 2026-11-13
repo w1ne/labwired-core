@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="3" failures="1" errors="0" time="0.000424">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="107a4e5593296bca06357d5531e8d09a9f3e997349e42c7d2977fdaaea4e61f4"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.000424">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: STK3800 EFM32WG995 UART0 smoke" time="0.000000">
+    <failure message="assertion failed">assertion 1: uart_contains: STK3800 EFM32WG995 UART0 smoke
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=100000
+stop_reason_details.observed.steps_executed=100000
+steps_executed=100000
+cycles=100000
+instructions=100000
+limits:
+  - max_steps=100000
+firmware_hash=107a4e5593296bca06357d5531e8d09a9f3e997349e42c7d2977fdaaea4e61f4
+firmware=examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-stk3800-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/stk3800.yaml
+script=examples/renode-onboarding/stk3800-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;STK3800 EFM32WG995 UART0 smoke&quot; }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

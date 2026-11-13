@@ -6,42 +6,69 @@
 
 name: ezr32hg320
 arch: arm
+# Measured onboarding profile from Renode
+# platforms/cpus/silabs/ezr32/ezr32hg320.repl: Cortex-M0+, flash at
+# 0x00000000 (the EZR32 memory map; Renode maps it there), the USART0
+# console, the Series-0 GPIO ports and TIMER0..2, all exercised by
+# firmware-ezr32hg320-smoke.
+# Not claimed (no model-backed coverage): I2C0, LEUART0, CMU, EMU, RMU, MSC,
+# DMA, USB, ADC0, IDAC0, WDOG, RTC, PCNT0, the USARTRF1 radio interface at
+# 0x4000C400 and the Si4460 radio. USART0 RX/TX interrupts are not declared:
+# the efm32 UART profile is polled only.
+core: cortex-m0+
 flash:
-  base: 134217728
+  base: 0
   size: 65536B
 ram:
   base: 536870912
   size: 8192B
 peripherals:
-- id: i2c0
-  type: efm32ggi2ccontroller
-  bus: sysbus
-  base_address: 1073782784
-- id: timer0
-  type: efm32timer
-  bus: sysbus
-  base_address: 1073807360
-- id: timer1
-  type: efm32timer
-  bus: sysbus
-  base_address: 1073808384
-- id: timer2
-  type: efm32timer
-  bus: sysbus
-  base_address: 1073809408
 - id: usart0
   type: efm32_uart
-  bus: sysbus
-  base_address: 1073790976
-- id: leUart0
-  type: leuart
-  bus: sysbus
-  base_address: 1074282496
-- id: gpioPort
-  type: efmgpioport
-  bus: sysbus
-  base_address: 1073766400
-- id: bitband
-  type: bitbanding
-  bus: sysbus
-  base_address: 1107296256
+  base_address: 0x4000c000
+  size: 1KB
+# Series-0 GPIO ports A..F (Renode: one `GPIOPort.EFMGPIOPort` at
+# 0x40006000). GPIO_P_TypeDef at a 0x24 stride (Gecko SDK efm32gg_gpio_p.h).
+# The block head from 0x40006100 (EXTI, ROUTE, INSENSE, EM4 wake) is NOT
+# mapped: no model behind it.
+- id: gpioa
+  type: efm32s0_gpioport
+  base_address: 0x40006000
+  size: 36B
+- id: gpiob
+  type: efm32s0_gpioport
+  base_address: 0x40006024
+  size: 36B
+- id: gpioc
+  type: efm32s0_gpioport
+  base_address: 0x40006048
+  size: 36B
+- id: gpiod
+  type: efm32s0_gpioport
+  base_address: 0x4000606c
+  size: 36B
+- id: gpioe
+  type: efm32s0_gpioport
+  base_address: 0x40006090
+  size: 36B
+- id: gpiof
+  type: efm32s0_gpioport
+  base_address: 0x400060b4
+  size: 36B
+# TIMER0..TIMER2 (Renode: `Timers.Efm32Timer`, nvic 2/7/20).
+# Counts CPU cycles / 2^PRESC; the CMU HFPERCLKEN0 gate is not modelled.
+- id: timer0
+  type: efm32s0_timer
+  base_address: 0x40010000
+  size: 1KB
+  irq: 2
+- id: timer1
+  type: efm32s0_timer
+  base_address: 0x40010400
+  size: 1KB
+  irq: 7
+- id: timer2
+  type: efm32s0_timer
+  base_address: 0x40010800
+  size: 1KB
+  irq: 20

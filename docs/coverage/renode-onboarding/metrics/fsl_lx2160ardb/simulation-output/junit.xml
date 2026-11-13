@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.002899">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="288be748b49fdbc91813739dbe7eaf2b4f86ea937675e9c77bfd7f98065ad310"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.002899">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: LX2160A A72 UART SMOKE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="8" failures="0" errors="0" time="0.127625">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="8b83e804aa9c2160fa5a979e609a3726a5e5e92df0e6f63226ece4c11713f228"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.127625">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: ZOLERTIA FIREFLY CC2538 Cortex-M3 UART0 smoke" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: FIREFLY checks PPPPPPPPP DONE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_contains: FIREFLY UART1 line" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x20007f00=0xf1ef01ff" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: gpio_edges: gpiod:5 &gt;= 8 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: fidelity_clean: true" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

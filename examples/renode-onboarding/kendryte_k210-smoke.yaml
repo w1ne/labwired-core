@@ -1,0 +1,11 @@
+# One RV64IMAC hart, K210's mapped memory window, and its Renode SiFive UART.
+# This does not test the second hart, F/D instructions, KPU, or other peripherals.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv64imac-unknown-none-elf/release/firmware-kendryte-k210-smoke"
+  system: "../../configs/systems/onboarding/kendryte_k210.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "RV64 K210 UART smoke; mul=0000001100000011"
+  - expected_stop_reason: max_steps

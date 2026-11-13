@@ -1115,6 +1115,14 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// Deliver bytes from this UART's external peer through the model's own
+    /// RX path (an STM32 USART holds them on the wire until UE and RE are
+    /// set). Default `None` = no such path; the bus falls back to
+    /// [`Self::uart_rx_source`].
+    fn inject_uart_rx(&mut self, _bytes: &[u8]) -> Option<Result<usize, String>> {
+        None
+    }
+
     /// Stimulus reachability: call `f` once for every device attached to this
     /// controller that accepts simulated input, in attach order.
     ///
@@ -1644,6 +1652,19 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// The GPIO chip-select labels this SPI controller routes edges for, or
+    /// empty when it routes none. A non-empty answer makes the bus watch the
+    /// ports owning those pins and call [`Self::sync_gpio_chip_selects`]
+    /// after each write to one (see `bus/spi_cs.rs`).
+    fn gpio_chip_select_pins(&self) -> Vec<String> {
+        Vec::new()
+    }
+
+    /// Re-read the chip-select GPIOs named by [`Self::gpio_chip_select_pins`]
+    /// and deliver the CS edges that moved. Not a tick: it must not advance
+    /// time or move bytes.
+    fn sync_gpio_chip_selects(&mut self, _bus: &dyn Bus) {}
+
     /// Hand this peripheral the bus's shared [`CycleClock`] so `&self` reads
     /// can lazily sync `Cell`-held counter state to the published "now"
     /// (batch-boundary freshness — exact at batch boundaries, < one
@@ -1694,6 +1715,19 @@ pub trait Peripheral: std::fmt::Debug + Send {
     fn irq_line_level(&self) -> Option<bool> {
         None
     }
+
+    /// ARM application-core IRQ/FIQ output pair driven by an interrupt
+    /// controller peripheral. Most peripherals do not own CPU interrupt pins;
+    /// ARM7's LPC2294 PL190 does and is sampled by `Bus::arm_irq_fiq_levels`.
+    fn arm_irq_fiq_levels(&self) -> Option<(bool, bool)> {
+        None
+    }
+
+    /// Drive one external input of an ARM interrupt controller as a level.
+    /// The bus calls this on the controller that answers
+    /// [`Self::arm_irq_fiq_levels`], before it samples IRQ/FIQ. Peripherals
+    /// that own no controller inputs ignore it.
+    fn set_arm_irq_input_level(&self, _source: usize, _level: bool) {}
 
     /// Multi-line twin of [`Self::irq_line_level`], for a LEVEL source that
     /// drives SEVERAL NVIC lines from one model (the STM32 EXTI: EXTI0..4,

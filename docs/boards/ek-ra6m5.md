@@ -64,8 +64,9 @@ Zephyr v3.7.0 has no `ek_ra6m5` board). What that needed:
     No clock rate is derived from `SCKSCR`/`SCKDIVCR`/`PLLCCR`: oscillators
     settle at once and `cpu_hz` stays the reset MOCO 8 MHz after Zephyr
     switches ICLK to the 200 MHz PLL (the SysTick-based Zephyr timebase
-    counts cycles, so it is unaffected). Module stop (MSTP) is a declared
-    stub. The ICU `IRQCRn`/NMI pin half and `DTCE` are stored only.
+    counts cycles, so it is unaffected). MSTP register reset and write
+    readbacks come from the SVD; module gating is not modelled. The ICU
+    `IRQCRn`/NMI pin half and `DTCE` are stored only.
     SCI0 raises no ERI and no receive error flags, and `SMR`/`BRR`/`SEMR`
     are not decoded (`baud` comes from the chip YAML). The AGT pulse output, event counter and
     measurement modes are not modelled. The PFS
@@ -119,7 +120,7 @@ Zephyr v3.7.0 has no `ek_ra6m5` board). What that needed:
 | FCACHE | `0x4001_C000` | `type: stub` — FCACHEIV reads 0, FLWT dropped |
 | C-cache | `0x4000_7000` | `type: stub` — no cache modelled |
 | CPSCU / PSCU | `0x4000_8000` / `0x400E_0000` | `type: stub` — no security attribution |
-| MSTP | `0x4008_4000` | `type: stub` — module stop not modelled |
+| MSTP | `0x4008_4000` | SVD-derived declarative registers — reset/write readback; module stop not modelled |
 | ICU | `0x4000_6000` | `ra_icu` — IELSR0–95 link ELC events to NVIC lines 0–95 (`IR` level, W0C); IRQCRn/NMI stored only |
 | AGT0–5 | `0x400E_8000` + `0x100`×n | `ra_agt` — 16-bit timer mode, underflow and compare A/B as ELC events (`0x040 + 3n`) |
 | PORT0–B | `0x4008_0000` + `0x20`×n | modelled (`ra_port`) — PCNTR1/2/3; 16-bit aliases upper half first (PODR +0x0, PDR +0x2, as `R7FA6M5BH.h`) |

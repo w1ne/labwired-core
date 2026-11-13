@@ -4,10 +4,13 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
-# SUPERSEDED: staged onboarding descriptor (its 256 MiB flash at 0x08000000
-# and 256 MiB RAM at 0x20000000 are not the SAM E70 map: 2 MiB flash at
-# 0x00400000, 384 KiB SRAM at 0x20400000 per Zephyr samx7xx21.dtsi). The
-# promoted SAM E70 part is configs/chips/same70q21b.yaml (board:
-# configs/systems/sam-e70-xplained.yaml).
+# Renode `sam_e70` platform system (configs/chips/onboarding/sam_e70.yaml:
+# USART0-2, UART0-4, CHIPID, PMC, PIOA-E, WDT, RSTC, EEFC, L1 cache).
+# Renode's repl is a bare SoC: no board LEDs or buttons are wired, so none are
+# declared here. The firmware console is USART1 (the Xplained EDBG virtual
+# COM port). No `debug_uart` is set on purpose: the test runner then captures
+# every UART, so the smoke can assert the lines USART0/2 and UART0-4 send.
 name: sam_e70
 chip: ../../chips/onboarding/sam_e70.yaml
+cpu_hz: 12000000
+external_devices: []

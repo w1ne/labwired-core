@@ -36,12 +36,18 @@
 //! * `mcycle`/`minstret` (and their `cycle`/`instret` user aliases), 16 PMP
 //!   entries as plain WARL storage (no enforcement), `mhartid` from the chip.
 //!
+//! * A PLIC at a chip-chosen base ([`Plic`]): peripheral IRQ numbers are its
+//!   source IDs, and its notification for this hart's M-mode context is
+//!   `MEIP`.
+//!
 //! Not modelled yet, and refused rather than guessed: the F/D extensions
-//! (any FP opcode is an illegal instruction), S/U modes and Sv39, the PLIC
-//! (`MEIP` is never set), and the other harts of a multi-hart complex.
+//! (any FP opcode is an illegal instruction), S/U modes and Sv39, and the
+//! other harts of a multi-hart complex.
 
 use crate::{Bus, Cpu, SimResult, SimulationObserver};
 use std::sync::Arc;
+
+pub use super::riscv64_plic::{Plic, PlicParams};
 
 /// CPU clocks per CLINT `mtime` tick when the chip does not say otherwise.
 pub const DEFAULT_MTIME_DIVIDER: u64 = 1;
@@ -143,6 +149,8 @@ pub struct RiscV64CpuSnapshot {
     pub pmpcfg: Vec<u8>,
     pub pmpaddr: Vec<u64>,
     pub clint: Clint,
+    #[serde(default)]
+    pub plic: Option<Plic>,
     pub reservation: Option<u64>,
 }
 
@@ -165,6 +173,7 @@ pub struct RiscV64 {
     pub pmpaddr: [u64; PMP_ENTRIES],
 
     pub clint: Clint,
+    pub plic: Option<Plic>,
 
     /// Outstanding LR reservation (address). Any store by this hart to the
     /// reserved doubleword, and every SC, clears it.
@@ -223,16 +232,23 @@ impl RiscV64 {
             pmpcfg: [0; PMP_ENTRIES],
             pmpaddr: [0; PMP_ENTRIES],
             clint: Clint::new(clint_base, mtime_divider),
+            plic: None,
             reservation: None,
             waiting_for_interrupt: false,
         }
     }
 
-    /// The hart a chip descriptor names: `mhartid`, CLINT base and `mtime`
-    /// rate per [`Rv64Params::for_chip`].
+    /// This hart with a PLIC of the given geometry.
+    pub fn with_plic(mut self, plic: Option<PlicParams>) -> Self {
+        self.plic = plic.map(Plic::new);
+        self
+    }
+
+    /// The hart a chip descriptor names: `mhartid`, CLINT base, `mtime`
+    /// rate and PLIC per [`Rv64Params::for_chip`].
     pub fn for_chip(chip: &labwired_config::ChipDescriptor) -> Self {
         let p = Rv64Params::for_chip(chip);
-        Self::new(p.hart_id, p.clint_base, p.mtime_divider)
+        Self::new(p.hart_id, p.clint_base, p.mtime_divider).with_plic(p.plic)
     }
 
     #[inline]
@@ -255,7 +271,27 @@ impl RiscV64 {
         if self.clint.mtip() {
             mip |= MIP_MTIP;
         }
+        if self.plic.as_ref().is_some_and(Plic::meip) {
+            mip |= MIP_MEIP;
+        }
         mip
+    }
+
+    /// PLIC access of `size` bytes at `off`: 32-bit registers, so a
+    /// doubleword access touches two of them, low word first.
+    fn plic_read(&mut self, off: u64, size: u64) -> Option<u64> {
+        let plic = self.plic.as_mut()?;
+        let lo = u64::from(plic.read_u32(off));
+        Some(if size >= 8 {
+            lo | (u64::from(plic.read_u32(off + 4)) << 32)
+        } else {
+            let v = lo >> ((off & 3) * 8);
+            v & ((1u64 << (size * 8)) - 1)
+        })
+    }
+
+    fn plic_offset(&self, addr: u64) -> Option<u64> {
+        self.plic.as_ref()?.offset(addr)
     }
 
     fn clint_offset(&self, addr: u64) -> Option<u64> {
@@ -313,6 +349,9 @@ impl RiscV64 {
         if let Some(off) = self.clint_offset(addr) {
             return Ok(self.clint_read(off, size));
         }
+        if let Some(off) = self.plic_offset(addr) {
+            return Ok(self.plic_read(off, size).unwrap_or(0));
+        }
         Ok(match size {
             1 => u64::from(bus.read_u8(addr)?),
             2 => u64::from(bus.read_u16(addr)?),
@@ -329,6 +368,18 @@ impl RiscV64 {
         }
         if let Some(off) = self.clint_offset(addr) {
             self.clint_write(off, size, value);
+            return Ok(());
+        }
+        if let Some(off) = self.plic_offset(addr) {
+            if let Some(plic) = self.plic.as_mut() {
+                // Sub-word stores reach the register as a full word: the
+                // PLIC's registers are 32-bit (the spec leaves narrower
+                // accesses undefined).
+                plic.write_u32(off, value as u32);
+                if size >= 8 {
+                    plic.write_u32(off + 4, (value >> 32) as u32);
+                }
+            }
             return Ok(());
         }
         match size {
@@ -1005,17 +1056,42 @@ pub struct Rv64Params {
     pub hart_id: u64,
     pub clint_base: Option<u64>,
     pub mtime_divider: u64,
+    pub plic: Option<PlicParams>,
 }
 
-/// PolarFire SoC MSS (every MPFSxxxT): hart 0 is the E51 monitor core, harts
-/// 1-4 the U54 application cores. This model runs the first U54, which is the
-/// hart Zephyr's `mpfs_icicle/polarfire/u54` target boots on
-/// (`CONFIG_RV_BOOT_HART=1`). CLINT at 0x0200_0000 (PolarFire SoC MSS TRM,
-/// memory map; Zephyr `mpfs.dtsi` `clint@2000000`). `mtime` counts the 1 MHz
-/// RTC reference (`CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC=1000000` on the board).
+/// PolarFire SoC MSS (every MPFSxxxT, including BeagleV-Fire): hart 0 is the
+/// E51 monitor core, harts 1-4 the U54 application cores. This model runs the
+/// first U54, which is the hart used by Zephyr's
+/// `mpfs_icicle/polarfire/u54` target (`CONFIG_RV_BOOT_HART=1`). The CLINT at
+/// 0x0200_0000 follows the PolarFire SoC MSS memory map and Zephyr's `mpfs.dtsi`
+/// `clint@2000000`. `mtime` counts the 1 MHz RTC reference
+/// (`CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC=1000000` on the board).
 const MPFS_U54_HART: u64 = 1;
 const MPFS_CLINT_BASE: u64 = 0x0200_0000;
 const MPFS_MTIME_HZ: u64 = 1_000_000;
+/// PolarFire SoC PLIC at 0x0C00_0000: 186 sources (`PLIC_NUM_SOURCES` 187
+/// with ID 0 in Microchip's `mss_plic.h`; Renode `polarfire-soc.repl`
+/// `numberOfSources: 186`), 7 priority levels (`PLIC_NUM_PRIORITIES`, a 3-bit
+/// field), 9 contexts (E51 M, then M and S per U54). U54_1's M-mode context
+/// is 1 (`HART1_MMODE_ENA`, repl `[1,2] -> u54_1@[11,9]`).
+const MPFS_PLIC: PlicParams = PlicParams {
+    base: 0x0C00_0000,
+    num_sources: 187,
+    num_contexts: 9,
+    priority_bits: 3,
+    context: 1,
+};
+
+/// SiFive FU540-C000 PLIC: 53 sources, 9 contexts, with hart 1's M-mode
+/// context at 1. Source IDs and context mapping are documented in the
+/// FU540-C000 Manual v1p4 §10 and Renode's `sifive-fu540.repl`.
+const FU540_PLIC: PlicParams = PlicParams {
+    base: 0x0C00_0000,
+    num_sources: 54, // Plic stores the one-past-last ID; ID 0 is reserved.
+    num_contexts: 9,
+    priority_bits: 3,
+    context: 1,
+};
 
 impl Rv64Params {
     pub fn for_chip(chip: &labwired_config::ChipDescriptor) -> Self {
@@ -1024,17 +1100,32 @@ impl Rv64Params {
 
     pub fn for_chip_name(name: &str, cpu_hz: u64) -> Self {
         let name = name.to_ascii_lowercase();
-        if name.starts_with("mpfs") {
+        if name == "sifive-fu540" {
+            // The imported profile runs the first U54 application hart. Its
+            // CLINT is at 0x0200_0000 and its `mtime` reference is the 1 MHz
+            // RTCCLK (SiFive FU540-C000 Manual v1p4, Ch. 7 and 9; Renode's
+            // `platforms/cpus/sifive-fu540.repl`). Its PLIC has 53 sources,
+            // with this hart's M-mode context at 1 (Manual §10; same REPL).
+            return Self {
+                hart_id: 1,
+                clint_base: Some(0x0200_0000),
+                mtime_divider: (cpu_hz / 1_000_000).max(1),
+                plic: Some(FU540_PLIC),
+            };
+        }
+        if name.starts_with("mpfs") || name == "beaglev-fire" || name == "polarfire-soc" {
             return Self {
                 hart_id: MPFS_U54_HART,
                 clint_base: Some(MPFS_CLINT_BASE),
                 mtime_divider: (cpu_hz / MPFS_MTIME_HZ).max(1),
+                plic: Some(MPFS_PLIC),
             };
         }
         Self {
             hart_id: 0,
             clint_base: None,
             mtime_divider: DEFAULT_MTIME_DIVIDER,
+            plic: None,
         }
     }
 }
@@ -1051,8 +1142,13 @@ pub fn is_rv64_chip(chip: &labwired_config::ChipDescriptor) -> bool {
 impl Cpu for RiscV64 {
     fn reset(&mut self, _bus: &mut dyn Bus) -> SimResult<()> {
         let (hart, base, div) = (self.hart_id, self.clint.base, self.clint.divider);
+        let plic = self.plic.take();
         let pc = self.pc;
         *self = Self::new(hart, base, div);
+        self.plic = plic.map(|mut p| {
+            p.reset();
+            p
+        });
         self.pc = pc;
         Ok(())
     }
@@ -1121,9 +1217,12 @@ impl Cpu for RiscV64 {
     fn set_sp(&mut self, val: u32) {
         self.x[2] = u64::from(val);
     }
-    fn set_exception_pending(&mut self, _exception_num: u32) {
-        // External interrupts arrive through a PLIC, which this core does not
-        // model yet; nothing to pend.
+    fn set_exception_pending(&mut self, exception_num: u32) {
+        // Without an NVIC the bus forwards a peripheral's raw IRQ number,
+        // which on this core is its PLIC source ID.
+        if let Some(plic) = self.plic.as_mut() {
+            plic.raise(exception_num);
+        }
     }
 
     fn idle_fast_forward_budget(&self, _bus: &dyn Bus) -> Option<u64> {
@@ -1175,6 +1274,7 @@ impl Cpu for RiscV64 {
             pmpcfg: self.pmpcfg.to_vec(),
             pmpaddr: self.pmpaddr.to_vec(),
             clint: self.clint,
+            plic: self.plic.clone(),
             reservation: self.reservation,
         }))
     }
@@ -1202,6 +1302,9 @@ impl Cpu for RiscV64 {
                 *dst = *src;
             }
             self.clint = s.clint;
+            if s.plic.is_some() {
+                self.plic = s.plic.clone();
+            }
             self.reservation = s.reservation;
         }
     }

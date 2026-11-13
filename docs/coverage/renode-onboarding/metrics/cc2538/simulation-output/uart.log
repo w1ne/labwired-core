@@ -1,0 +1,31 @@
+CC2538DK SMOKE
+cpu=cortex-m3 uart=uart0
+clk osc=hfrc16 sys_div=1 io_div=1 sysclk=16000000
+uart0 rcgc=1 ibrd=8 fbrd=44
+led=yellow on pin=1 leds=02
+led=yellow off pin=0 leds=00
+led=green on pin=1 leds=04
+led=green off pin=0 leds=00
+led=orange on pin=1 leds=08
+led=orange off pin=0 leds=00
+keys select=1 left=1 right=1 up=1 down=1
+ioc pa1_sel=00 pa1_over=08 pa0_over=00 rx0=00 pd7_over=04 gpt3ocp2=1f restored=00
+cctest io=00/01 obssel3=00/ff tr0=00/07 usbctrl=00/01 ivctrl=13/3f restored=13
+adc con1=33 vdd3=6b80 temp=58e0 gnd=0000 eoc=0 irq14=1
+rng reset=ffff seed=1234 clock=8d94 rctrl=0 crc=fee8
+cmp off=01 on=02
+ssi0 queued sr=12 enabled sr=07 ris=08 rx=a5 3c
+ssi0 w16=beef overrun sr=0f ris=0d cleared ris=0c drained ris=08
+i2cm read=1900 stat=20 irq8=1 ris=1 cleared=0
+i2cs rx stat=05 dr=5a after=00 mis=01 irq8=1 ris=07 tx stat=02 busy=1 m_dr=c3 m_stat=20
+pka_sram words=512 bad=0 last=751ef9b8
+sleep advanced=1 load=1 irq=1
+gpt0 to=3 nvic19=1 held=1
+gpt1b ris=0900 ctl=0000 nvic22=1 span=ok 16006
+hb=0 yellow=1 green=0 orange=0
+hb=1 yellow=1 green=0 orange=0
+hb=2 yellow=1 green=0 orange=0
+hb=3 yellow=1 green=0 orange=0
+hb=4 yellow=1 green=0 orange=0
+hb=5 yellow=1 green=0 orange=0
+hb=6 yellow=1 green=0 orange=0

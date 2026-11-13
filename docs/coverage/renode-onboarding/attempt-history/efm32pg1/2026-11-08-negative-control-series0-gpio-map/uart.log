@@ -1,0 +1,8 @@
+EFM32PG1 RENODE SMOKE
+gpio pf4/pf5 pushpull set=1 tgl=1 clr=1 wo=1 ok
+gpio reserved 0x10/0x14 no_set=0 no_clr=0 read0=1 FAIL
+gpio pa0 disabled_din0=1 pullup=1 pulldown=1 ok
+gpio pa1 wiredand pa2 wiredor hi=3 lo=0 ok
+gpio pa pinlockn reset=ffff after=fffe ok
+gpio pa ctrl=00000000 ovtdis=0000 FAIL
+EFM32PG1 FAIL

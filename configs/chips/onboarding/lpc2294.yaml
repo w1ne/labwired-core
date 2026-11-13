@@ -3,41 +3,97 @@
 #
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
-
+#
+# NXP LPC2294 (ARM7TDMI-S). Memory map: 256 KiB on-chip flash at 0x0 and
+# 16 KiB on-chip SRAM at 0x40000000 (RTEMS bsps/arm/rtl22xx/start/linkcmds:
+# SRAM ORIGIN 0x40000000 LENGTH 16k). Renode platforms/cpus/lpc2294.repl
+# maps one 64 KiB internal_sram at both 0x0 and 0x40000000 and has no flash;
+# that is a Renode shortcut, not the silicon map. The earlier import placed
+# flash at 0x08000000 and RAM at 0x20000000 (the STM32 default); neither
+# address decodes to memory on this part.
+#
+# Register addresses: RTEMS bsps/arm/rtl22xx/include/lpc22xx.h.
+# Claimed:
+# - vic: ARM PL190 register bank. Software IRQ/FIQ and vector programming are
+#   modelled; Timer0/Timer1 level outputs connect to VIC sources 4/5.
+# - uart0, uart1: 16550 register set at a 4-byte stride (RBR/THR/DLL 0x00,
+#   IER/DLM 0x04, IIR/FCR 0x08, LCR 0x0C, LSR 0x14; Renode NS16550 with
+#   wideRegisters). Polled only; UART interrupt input wiring is not modelled.
+# - timer0/timer1: timer mode, TC/PR/PC, MR0-MR3, MCR, W1C IR and level IRQ.
+#   Capture inputs, counter mode and external match pins are not claimed.
+# - port0..port3: legacy GPIO ports (IOPIN/IOSET/IODIR/IOCLR).
+# - pinsel, scb: register storage (see configs/peripherals/lpc2294/).
+# Not declared (no model in this engine): CAN1-4, I2C, SPI, ADC, RTC, watchdog,
+# PWM, external memory controller (BCFG) and external memory windows.
 name: lpc2294
 arch: arm
+core: arm7tdmi-s
 flash:
-  base: 134217728
-  size: 65536B
+  base: 0x0
+  size: 256KB
 ram:
-  base: 536870912
-  size: 65536B
+  base: 0x40000000
+  size: 16KB
 peripherals:
-- id: can1
-  type: lpc_can
-  bus: sysbus
-  base_address: 3758374912
-- id: can2
-  type: lpc_can
-  bus: sysbus
-  base_address: 3758391296
-- id: can3
-  type: lpc_can
-  bus: sysbus
-  base_address: 3758407680
-- id: can4
-  type: lpc_can
-  bus: sysbus
-  base_address: 3758424064
-- id: uart0
-  type: ns16550
-  bus: sysbus
-  base_address: 3758145536
-- id: uart1
-  type: ns16550
-  bus: sysbus
-  base_address: 3758161920
+- id: vic
+  type: arm_pl190_vic
+  base_address: 0xFFFFF000
+  size: 4KiB
 - id: timer0
-  type: lpc_ctimer
-  bus: sysbus
-  base_address: 3758112768
+  type: lpc2294_timer
+  base_address: 0xE0004000
+  size: 40B
+  irq: 4
+- id: timer1
+  type: lpc2294_timer
+  base_address: 0xE0008000
+  size: 40B
+  irq: 5
+- id: uart0
+  type: uart
+  base_address: 0xE000C000
+  size: 32B
+  config:
+    profile: dw_apb_uart
+- id: uart1
+  type: uart
+  base_address: 0xE0010000
+  size: 32B
+  config:
+    profile: dw_apb_uart
+- id: port0
+  type: gpio
+  base_address: 0xE0028000
+  size: 16B
+  config:
+    profile: lpc2xxx
+- id: port1
+  type: gpio
+  base_address: 0xE0028010
+  size: 16B
+  config:
+    profile: lpc2xxx
+- id: port2
+  type: gpio
+  base_address: 0xE0028020
+  size: 16B
+  config:
+    profile: lpc2xxx
+- id: port3
+  type: gpio
+  base_address: 0xE0028030
+  size: 16B
+  config:
+    profile: lpc2xxx
+- id: pinsel
+  type: declarative
+  base_address: 0xE002C000
+  size: 24B
+  config:
+    path: ../../peripherals/lpc2294/pinsel.yaml
+- id: scb
+  type: declarative
+  base_address: 0xE01FC000
+  size: 260B
+  config:
+    path: ../../peripherals/lpc2294/scb.yaml

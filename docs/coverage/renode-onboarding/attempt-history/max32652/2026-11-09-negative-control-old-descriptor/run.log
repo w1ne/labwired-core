@@ -1,0 +1,15 @@
+2026-11-09T14:10:31.571352Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/chip.yaml
+2026-11-09T14:10:31.574241Z  INFO labwired_loader: ELF Entry Point: 0x10000401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-09T14:10:31.578063Z ERROR labwired_cli::execute: --watch-gpio: peripheral "port2" not found on the bus; channel will stay flat
+2026-11-09T14:10:31.581947Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "MAX32652 UART0 smoke" }) (captured len=0)
+2026-11-09T14:10:31.581965Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "MAX32652 UART1 line" }) (captured len=0)
+2026-11-09T14:10:31.581969Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "MAX32652 UART2 line" }) (captured len=0)
+2026-11-09T14:10:31.581973Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "MAX32652 checks PPPPPPPPPP DONE" }) (captured len=0)
+2026-11-09T14:10:31.581977Z ERROR labwired_cli::execute: Memory assertion failed at 0x200ff000 (size 4): expected 0xa32603ff, got 0x0 (mask 0xffffffff)
+2026-11-09T14:10:31.581980Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 537915392, expected_value: 2737177599, mask: None, size: Some(4), node: None } }) (captured len=0)
+2026-11-09T14:10:31.581992Z ERROR labwired_cli::execute: Assertion failed: GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: "port2:25", min_edges: 6 } }) (captured len=0)
+FAIL  1/7 checks · smoke · 100000 steps · 0.00s
+FAULT  HardFault escalated from a precise BusFault: data access at 0x4004_3008 (BFAR valid), at PC 0x1000_0476 in `core::ptr::read_volatile` (mod.rs:2091), called from `main`.
+       HFSR=0x40000000 CFSR=0x00008200 [FORCED PRECISERR] BFAR=0x40043008

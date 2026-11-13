@@ -6,60 +6,40 @@
 
 name: renesas-r7fa2l1a
 arch: arm
+# The RA2L1 REPL inherits the Cortex-M23 CPU and code-flash base from
+# renesas-r7fa2e1a9.repl, overrides code flash to 256 KiB, and maps 32 KiB
+# SRAM at 0x20000000. This profile claims only the model-backed SCI3 (classic
+# SCI, non-FIFO; RA2L1-specific in the REPL) and PORT5/PFS surfaces exercised
+# by the smoke. ICU, GPT, AGT, IIC0/1, SCI0/1/2/9, the other ports, data flash
+# and the SYSTEM OSCSF script are not mapped.
+# Source: https://github.com/renode/renode/blob/master/platforms/cpus/renesas-r7fa2l1a.repl
+core: cortex-m23
 flash:
-  base: 134217728
-  size: 131072B
+  base: 0x00000000
+  size: 256KB
 ram:
-  base: 536887296
-  size: 16384B
+  base: 0x20000000
+  size: 32KB
 peripherals:
+- id: port5
+  type: gpio
+  bus: sysbus
+  base_address: 0x400400A0
+  size: 32B
+  config:
+    profile: ra_port
+    pad_control: pfs
+    pad_control_port: 5
+    swapped_half_aliases: true
+- id: pfs
+  type: ra_pfs
+  bus: sysbus
+  base_address: 0x40040800
+  size: 1536B
 - id: sci3
-  type: renesasra6m5_sci
+  type: uart
   bus: sysbus
-  base_address: 1074200672
-- id: iic1
-  type: stub
-  renode_type: renesasra_iic
-  bus: sysbus
-  base_address: 1074082048
-- id: portMisc
-  type: renesasra_gpiomisc
-  bus: sysbus
-  base_address: 1074007296
-- id: gpt
-  type: renesasra_gpt
-  bus: sysbus
-  base_address: 1074233344
-- id: agt0
-  type: renesasra_agt
-  bus: sysbus
-  base_address: 1074282496
-- id: agt1
-  type: renesasra_agt
-  bus: sysbus
-  base_address: 1074282752
-- id: sci0
-  type: renesasra6m5_sci
-  bus: sysbus
-  base_address: 1074200576
-- id: sci1
-  type: renesasra6m5_sci
-  bus: sysbus
-  base_address: 1074200608
-- id: sci2
-  type: renesasra6m5_sci
-  bus: sysbus
-  base_address: 1074200640
-- id: sci9
-  type: renesasra6m5_sci
-  bus: sysbus
-  base_address: 1074200864
-- id: sysc_oscsf
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1073864764
-- id: iic0
-  type: stub
-  renode_type: renesasra_iic
-  bus: sysbus
-  base_address: 1074081792
+  base_address: 0x40070060
+  size: 32B
+  config:
+    profile: sci

@@ -1,0 +1,21 @@
+2026-11-09T15:01:26.412120Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/zolertia-firefly.yaml
+2026-11-09T15:01:26.417023Z  INFO labwired_loader: ELF Entry Point: 0x200401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-09T15:01:26.424626Z ERROR labwired_cli::execute: --watch-gpio: peripheral "gpiod" not found on the bus; channel will stay flat
+2026-11-09T15:01:26.426757Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "ZOLERTIA FIREFLY CC2538 Cortex-M3 UART0 smoke" }) (captured len=0)
+2026-11-09T15:01:26.426776Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "FIREFLY checks PPPPPPPPP DONE" }) (captured len=0)
+2026-11-09T15:01:26.426783Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "FIREFLY UART1 line" }) (captured len=0)
+2026-11-09T15:01:26.426825Z ERROR labwired_cli::execute: Memory assertion failed at 0x20007f00 (size 4): expected 0xf1ef01ff, got 0x0 (mask 0xffffffff)
+2026-11-09T15:01:26.426831Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536903424, expected_value: 4058972671, mask: None, size: Some(4), node: None } }) (captured len=0)
+2026-11-09T15:01:26.426844Z ERROR labwired_cli::execute: Assertion failed: GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: "gpiod:5", min_edges: 8 } }) (captured len=0)
+2026-11-09T15:01:26.426858Z ERROR labwired_cli::execute: Assertion failed: fidelity_clean: true, but fidelity: 1 gap kind(s), 1 total hit(s):
+  unmapped MMIO:
+    0x400dc420 (read)  x1
+  approximations:
+    derived_device_time: device time derived from cpu_hz (16000000 Hz); PLL reconfiguration is not tracked
+    unpowered_rail_assumed: no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal 3 V rail, so power-on and brown-out reset are not simulated
+2026-11-09T15:01:26.426868Z ERROR labwired_cli::execute: Assertion failed: FidelityClean(FidelityCleanAssertion { fidelity_clean: true }) (captured len=0)
+FAIL  1/7 checks · smoke · 400000 steps · 0.00s
+FAULT  HardFault escalated from a precise BusFault: data access at 0x400D_C420 (BFAR valid), at PC 0x0020_0526 in `core::ptr::read_volatile` (mod.rs:2091).
+       HFSR=0x40000000 CFSR=0x00008200 [FORCED PRECISERR] BFAR=0x400DC420

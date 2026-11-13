@@ -1,0 +1,62 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+# Narrow execution profile for the imported Renode R7FA8M1A system.
+# The CPU, memory windows and register addresses match Renode's
+# renesas-r7fa8m1a.repl and the model-backed RA8M1 profile in
+# configs/chips/r7fa8m1ah.yaml. This profile claims only the surfaces the
+# smoke exercises: the SYSTEM SCICKCR switch handshake (Renode's
+# SYSC_SCICKCR Python peripheral), the MSTP register file, SCI0 on the
+# SCI_B model (polled TX), and PORT6 plus PFS on the RA port model.
+# ICU, GPT/GPT_NS, AGT0/1, SCI1-4/9, IIC0/1, ports 0-5 and 7-B, the
+# factory flash, standby SRAM and option-setting memory are not mapped.
+# Helium/MVE and TrustZone are not claimed.
+# Source: https://github.com/renode/renode/blob/master/platforms/cpus/renesas-r7fa8m1a.repl
+name: renesas-r7fa8m1a
+arch: arm
+core: cortex-m85
+cpu_hz: 8000000
+flash:
+  base: 0x02000000
+  size: 2048KB
+ram:
+  base: 0x22000000
+  size: 896KB
+memory_regions:
+  - name: itcm
+    base: 0x00000000
+    size: 64KB
+  - name: dtcm
+    base: 0x20000000
+    size: 64KB
+  - name: data_flash
+    base: 0x27000000
+    size: 12KB
+    erased: true
+peripherals:
+  # R_SYSTEM: SCICKDIVCR/SCICKCR with the CKSREQ/CKSRDY switch handshake.
+  - id: ra_sysc
+    type: ra8_sysc
+    base_address: 0x4001E000
+    size: 4KB
+  # R_MSTP: MSTPCRA-E register file from the R7FA8M1AH SVD (reset values,
+  # readback). No module is gated by it.
+  - id: mstp
+    type: declarative
+    base_address: 0x40203000
+    size: 64B
+    config:
+      path: ../../peripherals/r7fa8m1ah/mstp.yaml
+  # PORT6 @ 0x40400000 + 6*0x20: PCNTR1 (PDR/PODR) and PCNTR3 (POSR/PORR).
+  - id: port6
+    type: gpio
+    base_address: 0x404000C0
+    size: 32B
+    config: { profile: ra_port, pad_control: pfs, pad_control_port: 6 }
+  - id: pfs
+    type: ra8_pfs
+    base_address: 0x40400800
+    size: 1536B

@@ -1,0 +1,16 @@
+# Cortex-M4 smoke against the imported STM32F429 system.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabihf/release/firmware-stm32f429-smoke"
+  system: "../../configs/systems/onboarding/stm32f429.yaml"
+limits:
+  max_steps: 800000
+assertions:
+  - uart_contains: "STM32F4 shared profile smoke"
+  - uart_contains: "systick pendsv psp tailchain frame=1 r0=1 pending=1 ipsr=0000000E ok"
+  - uart_contains: "STM32F429 PSP tailchain PASS"
+  - uart_contains: "fpu m4f cpacr=1 mvfr=1 add=1 ok"
+  - gpio_edges:
+      pin: "gpioPortD:12"
+      min_edges: 1
+  - expected_stop_reason: max_steps

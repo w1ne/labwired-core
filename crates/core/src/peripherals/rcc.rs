@@ -3115,6 +3115,15 @@ impl Rcc {
         }
     }
 
+    /// Set the F4-layout AHB1ENR reset value — the per-part always-on RAM
+    /// clock: 0x0010_0000 (DTCMRAMEN) on the F7 (RM0385 §5.3.10), CCMDATARAMEN
+    /// on the F405/F407 (RM0090 §7.3.10). No-op for non-F4 layouts.
+    pub fn set_f4_ahb1enr_reset(&mut self, value: u32) {
+        if let Self::Stm32F4(r) = self {
+            r.ahbenr = value & r.ahb1_mask;
+        }
+    }
+
     /// Opt-in live G0 clock contract for a fixed-operating-point transceiver.
     /// Other RCC families are not silently treated as G0.
     pub fn g0_clock_registers(&mut self) -> Option<Arc<super::stm32g0_clock::G0ClockRegisters>> {

@@ -1,83 +1,27 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
+# Bounded imported Renode A20 profile for a direct Cortex-A7/UART0 smoke.
 #
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
-
+# Renode's platforms/cpus/a20.repl maps a 64 KiB BROM at 0xFFFF0000, 256 KiB
+# SRAM at 0x0, 2 GiB DDR at 0x40000000, and UART0 with wide 16550 registers at
+# 0x01C28000. This engine runs one Cortex-A7 PE and the smoke uses a 64 KiB
+# slice at the DDR base plus UART0 polled TX. It does not load the BROM, so the
+# flash window is absent; the rest of DDR, internal SRAM, the second PE, GIC,
+# generic timer, MMC, USB, and the other UARTs are outside this measured profile.
+#
+# `dw_apb_uart` selects this engine's existing 32-bit, 4-byte-stride 16550
+# register map to match Renode's `wideRegisters: true`; it does not claim that
+# the A20 silicon contains a Synopsys DesignWare UART.
 name: a20
 arch: arm
-flash:
-  base: 4294901760
-  size: 65536B
+core: cortex-a7
+flash: { base: 0, size: 0 }
 ram:
-  base: 536870912
-  size: 262144B
+  base: 0x40000000
+  size: 64KB
+flash_boot_alias: false
 peripherals:
-- id: uart0
-  type: ns16550
-  bus: sysbus
-  base_address: 29523968
-- id: uart1
-  type: ns16550
-  bus: sysbus
-  base_address: 29524992
-- id: uart2
-  type: ns16550
-  bus: sysbus
-  base_address: 29526016
-- id: uart3
-  type: ns16550
-  bus: sysbus
-  base_address: 29527040
-- id: uart4
-  type: ns16550
-  bus: sysbus
-  base_address: 29528064
-- id: uart5
-  type: ns16550
-  bus: sysbus
-  base_address: 29529088
-- id: uart6
-  type: ns16550
-  bus: sysbus
-  base_address: 29530112
-- id: uart7
-  type: ns16550
-  bus: sysbus
-  base_address: 29531136
-- id: usbEhci1
-  type: ehcihostcontroller
-  bus: sysbus
-  base_address: 29442048
-- id: usbHub
-  type: usbhub
-  bus: usbEhci1
-  base_address: 1
-- id: usbEhci2
-  type: ehcihostcontroller
-  bus: sysbus
-  base_address: 29474816
-- id: timer
-  type: arm_generictimer
-  bus: cpu
-  base_address: 15
-- id: sunxiMmc0
-  type: sunximmc
-  bus: sysbus
-  base_address: 29421568
-- id: sunxiMmc1
-  type: sunximmc
-  bus: sysbus
-  base_address: 29425664
-- id: sunxiMmc3
-  type: sunximmc
-  bus: sysbus
-  base_address: 29433856
-- id: sunxiHstimer
-  type: sunxihighspeedtimer
-  bus: sysbus
-  base_address: 29753344
-- id: sunxiTimer
-  type: sunxitimer
-  bus: sysbus
-  base_address: 29494272
+  - id: uart0
+    type: ns16550
+    base_address: 0x01C28000
+    size: 1KB
+    config:
+      profile: dw_apb_uart

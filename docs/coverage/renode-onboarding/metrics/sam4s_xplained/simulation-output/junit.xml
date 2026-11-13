@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="6" failures="0" errors="0" time="2.159922">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="2962d2224b5a7b8b9ae84a17d58f775cc6dc92cc9834406e8ce783053f73fcd8"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="2.159922">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_ordered: [&quot;SAM4S XPLAINED RENODE SMOKE&quot;, &quot;eefc fmr=00000500 ok&quot;, &quot;eefc getd size=00100000&quot;, &quot;eefc gpnvm=2 set=3 gl…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: gpio_edges: pioC:10 &gt;= 4 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: memory_value: @0x2001ff00=0x5a400fff" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x2001ff04=0x5a4503ff" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

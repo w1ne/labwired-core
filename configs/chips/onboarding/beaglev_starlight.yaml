@@ -4,24 +4,22 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
+# Bounded BeagleV Starlight profile based on Renode's StarFive JH7100 CPU REPL.
+# It exercises one U74 as RV64IMAC, the 8 KiB DTIM image window, the 128 KiB
+# SoC SRAM window, and UART0 polling TX. The second hart, F/D extensions,
+# supervisor mode, interrupts, and other SoC peripherals are outside scope.
+# Source: https://github.com/renode/renode/blob/master/platforms/cpus/starfive-jh7100.repl
 name: beaglev_starlight
-arch: arm
-flash:
-  base: 1048576
-  size: 8192B
-ram:
-  base: 2147483648
-  size: 8589934592B
+arch: riscv
+core: rv64imac
+flash: { base: 0x00100000, size: "8KiB" }
+ram: { base: 0x18000000, size: "128KiB" }
+flash_boot_alias: false
 peripherals:
-- id: rstgen
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 293863424
-- id: audiorstgen
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 273219584
-- id: voutsysrstgen
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 304414720
+  - id: uart0
+    type: uart
+    bus: sysbus
+    base_address: 0x11870000
+    size: "4KiB"
+    config:
+      profile: dw_apb_uart

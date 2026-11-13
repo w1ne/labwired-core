@@ -7,13 +7,38 @@
 name: simavr-atmega168
 arch: avr
 core: avr8
+cpu_hz: 16000000
 flash:
   base: 0
   size: 16KB
 ram:
   base: 256
   size: 1KB
-peripherals: []
+peripherals:
+  # The smoke exercises PORTB (PB5), PORTD (PD2) and polled USART0 TX only.
+  # ATmega168 shares the ATmega328P register summary (PINx/DDRx/PORTx at
+  # 0x23..0x2B, USART0 at 0xC0..0xC6); the CPU owns those registers and
+  # mirrors them to these high windows. PORTC is mapped so PINC reads have
+  # an input source. Timers, ADC, SPI, TWI and all interrupts are not
+  # claimed by this profile.
+  - id: portb
+    type: avr_gpio
+    base_address: 0x00010023
+    size: 3
+  - id: portc
+    type: avr_gpio
+    base_address: 0x00010026
+    size: 3
+  - id: portd
+    type: avr_gpio
+    base_address: 0x00010029
+    size: 3
+  - id: usart0
+    type: uart
+    base_address: 0x000100C0
+    size: 8
+    config:
+      profile: avr
 provenance:
   source: simavr
   repo: https://github.com/buserror/simavr

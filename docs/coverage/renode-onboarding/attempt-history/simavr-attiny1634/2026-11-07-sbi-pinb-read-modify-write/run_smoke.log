@@ -1,0 +1,6 @@
+[2m2026-11-07T23:36:18.242053Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/simavr-attiny1634.yaml
+[2m2026-11-07T23:36:18.253969Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x0
+labwired-cli test: idle_ff=on (event_scheduler=on)
+[2m2026-11-07T23:36:18.278071Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Memory assertion failed at 0x130 (size 1): expected 0x7f, got 0x6f (mask 0xffffffff)
+[2m2026-11-07T23:36:18.278119Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 304, expected_value: 127, mask: None, size: Some(1), node: None } }) (captured len=0)
+FAIL  2/3 checks · simavr-attiny1634-smoke · 100000 steps · 0.02s

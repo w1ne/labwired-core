@@ -1,0 +1,384 @@
+{
+  "result_schema_version": "1.0",
+  "status": "fail",
+  "steps_executed": 2000000,
+  "cycles": 2000000,
+  "instructions": 2000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 2000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 2000000
+    }
+  },
+  "limits": {
+    "max_steps": 2000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "S32K118 LPUART0 SMOKE"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_ordered": [
+          "lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00080000",
+          "muls=00000143",
+          "ptd pddr=00000009 set=00000001 clr=00000000 tog=00000009",
+          "pass=0f"
+        ]
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "ptd:0",
+          "min_edges": 3
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536870912,
+          "expected_value": 323,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536870916,
+          "expected_value": 1360527375,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      1,
+      67174403,
+      1074176020,
+      8388608,
+      0,
+      0,
+      48,
+      536893424,
+      0,
+      0,
+      0,
+      0,
+      0,
+      536893320,
+      6309,
+      1538
+    ],
+    "pc": 1538,
+    "xpsr": 1090519040,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "e7ca0858cb0ea05ae0cb1c66359de3d07d52347639b429f5f167a30108d1f94e",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-s32k118-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/s32k118.yaml",
+    "script": "examples/renode-onboarding/s32k118-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "lpuart0",
+        "kind": "native",
+        "base": 1074176000,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pta",
+        "kind": "native",
+        "base": 1074786304,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "ptb",
+        "kind": "native",
+        "base": 1074786368,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "ptc",
+        "kind": "native",
+        "base": 1074786432,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "ptd",
+        "kind": "native",
+        "base": 1074786496,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pte",
+        "kind": "native",
+        "base": 1074786560,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 2000000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "ptd",
+        "pin": 0,
+        "initial": 0,
+        "transitions": [],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [],
+        "mode": "input",
+        "edge_count": 0
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "ptd",
+      "number": 0,
+      "mode": "input",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "z"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "S32K118 LPUART0 SMOKE",
+        "cycle_lo": 50000,
+        "cycle": 60000,
+        "end_cycle": 1200000
+      },
+      {
+        "text": "lpuart0 verid=0",
+        "cycle_lo": 1240000,
+        "cycle": 1250000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 6316,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 6316,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 262144,
+    "ram_total_bytes": 22528,
+    "flash_used_pct": 2.41,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 22528,
+    "main_stack_high_water_bytes": 24,
+    "main_stack_free_min_bytes": 22428,
+    "main_stack_base": 536870912,
+    "main_stack_top": 536893440,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 22528,
+    "heap_high_water_bytes": 4,
+    "heap_free_min_bytes": 22428,
+    "heap_base": 536870912,
+    "heap_top": 536893440
+  },
+  "metrics": {
+    "cycles": 2000000,
+    "instructions": 2000000,
+    "steps_executed": 2000000,
+    "memory_reads": 647,
+    "memory_writes": 28,
+    "peripheral_accesses": 666661,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 462,
+        "count": 79,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 554,
+        "count": 79,
+        "symbol": "firmware_s32k118_smoke::putc"
+      },
+      {
+        "pc": 646,
+        "count": 79,
+        "symbol": "firmware_s32k118_smoke::putc"
+      },
+      {
+        "pc": 714,
+        "count": 79,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 806,
+        "count": 79,
+        "symbol": "firmware_s32k118_smoke::putc"
+      },
+      {
+        "pc": 1088,
+        "count": 79,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 1186,
+        "count": 79,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 1254,
+        "count": 79,
+        "symbol": "firmware_s32k118_smoke::putc"
+      },
+      {
+        "pc": 1352,
+        "count": 79,
+        "symbol": "firmware_s32k118_smoke::putc"
+      },
+      {
+        "pc": 1448,
+        "count": 79,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 378,
+        "count": 78,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 386,
+        "count": 78,
+        "symbol": "firmware_s32k118_smoke::putc"
+      },
+      {
+        "pc": 412,
+        "count": 78,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 420,
+        "count": 78,
+        "symbol": "firmware_s32k118_smoke::putc"
+      },
+      {
+        "pc": 428,
+        "count": 78,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 436,
+        "count": 78,
+        "symbol": "firmware_s32k118_smoke::putc"
+      }
+    ],
+    "stalled_poll": {
+      "peripheral": "lpuart0",
+      "offset": 20,
+      "accesses": 7983
+    }
+  }
+}

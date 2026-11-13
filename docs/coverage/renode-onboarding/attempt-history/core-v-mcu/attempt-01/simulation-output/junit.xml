@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="1" failures="0" errors="1" time="0.000000">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="ConfigError"/>
+    <property name="firmware_hash" value=""/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.000000">
+    <error message="config error">result_schema_version=1.0
+stop_reason=ConfigError
+message=Failed to parse Test Script YAML (expected schema_version: &quot;1.0&quot;): unknown field `name`, expected one of `schema_version`, `inputs`, `limits`, `assertions`, `stack_paint`, `faults`, `verdict`, `stimuli`, `uart_injections` at line 14 column 1
+stop_reason_details.triggered_stop_condition=ConfigError
+steps_executed=0
+cycles=0
+instructions=0
+limits:
+  - max_steps=0
+firmware_hash=
+firmware=
+script=examples/renode-onboarding/core-v-mcu-smoke.yaml
+</error>
+  </testcase>
+</testsuite>

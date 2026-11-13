@@ -1,0 +1,326 @@
+{
+  "result_schema_version": "1.0",
+  "status": "fail",
+  "steps_executed": 200000,
+  "cycles": 200000,
+  "instructions": 200000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 200000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 200000
+    }
+  },
+  "limits": {
+    "max_steps": 200000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536870912,
+          "expected_value": 323,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536870916,
+          "expected_value": 32,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536870920,
+          "expected_value": 8,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "uart_contains": "RA2L1 SCI3 SMOKE"
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "port5:3",
+          "min_edges": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      1,
+      536870912,
+      1074200676,
+      1074200674,
+      0,
+      32,
+      0,
+      536903620,
+      0,
+      0,
+      0,
+      0,
+      0,
+      536903620,
+      4294967289,
+      2722
+    ],
+    "pc": 2722,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "69d337feffe9be6c76302e37aafe412bfce2d8e5d9aa529de3488a601ca80470",
+  "config": {
+    "firmware": "/home/andrii/worktrees/labwired-core/renode/target/thumbv8m.base-none-eabi/release/firmware-renesas-r7fa2l1a-smoke",
+    "system": "/dev/shm/r353-neg/ex/../systems/renesas-r7fa2l1a.yaml",
+    "script": "/dev/shm/r353-neg/ex/smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "port5",
+        "kind": "native",
+        "base": 1074004128,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pfs",
+        "kind": "native",
+        "base": 1074006016,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x40070062",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "write"
+    },
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "fault_verdict": {
+    "summary": "HardFault escalated from a precise BusFault: data access at 0x4007_0062 (BFAR valid), at PC 0x0000_0866 in `core::ptr::write_volatile` (mod.rs:2178), called from `main`.",
+    "kind": "hard_fault",
+    "escalated": true,
+    "origin": "bus_fault",
+    "causes": [
+      {
+        "register": "HFSR",
+        "flag": "FORCED",
+        "meaning": "a configurable fault escalated to HardFault"
+      },
+      {
+        "register": "BFSR",
+        "flag": "PRECISERR",
+        "meaning": "data access"
+      }
+    ],
+    "precise": true,
+    "fault_address": "0x40070062",
+    "fault_address_source": "BFAR",
+    "pc": "0x00000866",
+    "lr": "0x00000A9F",
+    "exc_return": {
+      "value": "0xFFFFFFF9",
+      "return_to": "thread",
+      "stack": "msp",
+      "fp_frame": false
+    },
+    "frame": {
+      "sp": "0x20007FCC",
+      "r0": "0x00000001",
+      "r1": "0x20000000",
+      "r2": "0x40070064",
+      "r3": "0x40070062",
+      "r12": "0x00000000",
+      "lr": "0x00000A9F",
+      "pc": "0x00000866",
+      "xpsr": "0x21000000"
+    },
+    "location": {
+      "function": "core::ptr::write_volatile",
+      "file": "/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ptr/mod.rs",
+      "line": 2178
+    },
+    "caller": {
+      "function": "main",
+      "file": "/home/andrii/worktrees/labwired-core/renode/crates/firmware-renesas-r7fa2l1a-smoke/src/main.rs",
+      "line": 43
+    },
+    "registers": {
+      "hfsr": "0x40000000",
+      "cfsr": "0x00008200",
+      "mmfsr": "0x00",
+      "bfsr": "0x82",
+      "ufsr": "0x0000",
+      "mmfar": "0x00000000",
+      "bfar": "0x40070062"
+    }
+  },
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 200000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "port5",
+        "pin": 3,
+        "initial": 0,
+        "transitions": [],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [],
+        "mode": "input",
+        "edge_count": 0
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "port5",
+      "number": 3,
+      "mode": "input",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "z"
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 2724,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 2724,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 262144,
+    "ram_total_bytes": 32768,
+    "flash_used_pct": 1.04,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 32768,
+    "main_stack_high_water_bytes": 16,
+    "main_stack_free_min_bytes": 32708,
+    "main_stack_base": 536870912,
+    "main_stack_top": 536903680,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 32768,
+    "heap_high_water_bytes": 4,
+    "heap_free_min_bytes": 32708,
+    "heap_base": 536870912,
+    "heap_top": 536903680
+  },
+  "metrics": {
+    "cycles": 200000,
+    "instructions": 200000,
+    "steps_executed": 200000,
+    "memory_reads": 48,
+    "memory_writes": 17,
+    "peripheral_accesses": 0,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 2722,
+        "count": 781,
+        "symbol": "HardFault_"
+      }
+    ]
+  }
+}

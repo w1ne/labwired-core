@@ -1,0 +1,38 @@
+{
+  "target_id": "versatile",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": null,
+  "target_triple": null,
+  "script": "examples/renode-onboarding/versatile-arm926-uart-smoke.yaml",
+  "system": "configs/systems/onboarding/versatile.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-06T20:29:22Z",
+  "finished_at_utc": "2026-11-06T20:31:56Z",
+  "elapsed_seconds": 155,
+  "elapsed_ms": 154313,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 153.541,
+    "build_firmware": null,
+    "run_smoke": 0.764
+  },
+  "stages_ms": {
+    "build_cli": 153541,
+    "build_firmware": null,
+    "run_smoke": 764
+  },
+  "prebuilt_firmware": "tests/fixtures/versatile-arm926-uart-smoke.elf"
+}

@@ -1,0 +1,15 @@
+# Exact EK-RA6M5 system: Cortex-M33, SCI0, LED GPIO and SVD-derived R_MSTP
+# register readback. Clearing MSTPCRB.MSTPB31 is stored; module gating is not
+# modeled.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-ek-ra6m5-smoke"
+  system: "../../configs/systems/ek-ra6m5.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "EK-RA6M5 SMOKE"
+  - memory_value: {address: 0x40084000, expected_value: 0xFFBFFF7E}  # MSTPCRA reset
+  - memory_value: {address: 0x40084004, expected_value: 0x7FFFFFFF}  # MSTPB31 cleared
+  - memory_value: {address: 0x40084010, expected_value: 0xFFFFFFFF}  # MSTPCRE reset
+  - expected_stop_reason: max_steps

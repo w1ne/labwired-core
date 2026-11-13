@@ -1,0 +1,37 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: s32k118
+arch: arm
+core: cortex-m0+
+cpu_hz: 48000000
+flash:
+  base: 0x00000000
+  size: 256KB
+ram:
+  base: 0x20000000
+  size: 0x5800
+# The generated import mapped the flash to 0x08000000 and exposed zero-answer
+# stubs. This profile follows Renode's s32k118.repl
+# (https://github.com/renode/renode/blob/master/platforms/cpus/s32k118.repl):
+#   - LPUART0 @ 0x4006A000: Renode `NXP_LPUART`. The S32K1 LPUART carries
+#     VERID/PARAM/GLOBAL/PINCFG ahead of BAUD/STAT/CTRL/DATA (0x10..0x1C),
+#     VERID 0x04010003 and 4-entry FIFOs (PARAM 0x0202), which is the i.MX RT
+#     LPUART model's map. The clock is the 48 MHz FIRC. Polled TX only: no irq
+#     is declared, and DMA, RX timing and LIN are not claimed.
+#   - PTA..PTE GPIO data blocks @ 0x400FF000 + n*0x40 (Renode `NXPGPIOPort`
+#     "gpio" region): PDOR/PSOR/PCOR/PTOR/PDIR/PDDR. PIDR (0x18) is not
+#     modelled. The PORT pin-mux/interrupt blocks at 0x40049000.. are not
+#     mapped, so pin-change interrupts and PCR pull-ups are not claimed.
+# Not mapped: PCC clock gating (Renode tags PCC_LPUART0 as a constant; no gate
+# is enforced here), SCG, LPSPI0/1, LPIT, LPTMR, FlexCAN, FTM, flexnvm,
+# flexram and the lower SRAM.
+peripherals:
+  - { id: pta, type: gpio, base_address: 0x400FF000, size: 64B, config: { profile: kinetis } }
+  - { id: ptb, type: gpio, base_address: 0x400FF040, size: 64B, config: { profile: kinetis } }
+  - { id: ptc, type: gpio, base_address: 0x400FF080, size: 64B, config: { profile: kinetis } }
+  - { id: ptd, type: gpio, base_address: 0x400FF0C0, size: 64B, config: { profile: kinetis } }
+  - { id: pte, type: gpio, base_address: 0x400FF100, size: 64B, config: { profile: kinetis } }

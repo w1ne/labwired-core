@@ -1,35 +1,28 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
-#
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
-
+# Narrow imported profile for Cortex-M33 CPU0, memory, and polled UART smoke.
+# Renode's mimxrt798s.repl maps XIP1 at 0x08000000 (128 MiB) and CPU0
+# non-secure SRAM at 0x20000000 (0x580000 bytes). CPU1, DSPs, Flexcomm1-13,
+# other peripherals, and the external XSPI2 window are intentionally omitted.
+# Source: https://github.com/renode/renode/blob/master/platforms/cpus/mimxrt798s.repl
 name: mimxrt798s
 arch: arm
+core: cortex-m33
+cpu_hz: 237500000
 flash:
   base: 134217728
   size: 134217728B
 ram:
-  base: 1610612736
-  size: 16777216B
+  base: 536870912
+  size: 5767168B
 peripherals:
-- id: micfil
-  type: imxrt700_micfil
-  bus: sysbus
-  base_address: 1075896320
-- id: rstctl1_i3c0
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1074003984
-- id: i3c0_rst_cpu1
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1073741852
-- id: rstctl1_i3c3
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1074098176
-- id: syscon3_nsvtor
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1074143388
+  # Renode mimxrt798s.repl flexcomm0 has aliased mappings at 0x40110000 and
+  # 0x50110000 (IRQ nvic0@7). The imported CPU0 non-secure profile uses the
+  # former. This bounded model implements LP_FLEXCOMM selection/status and its
+  # LPUART function; LPI2C and LPSPI transactions are not modelled.
+  - id: flexcomm0
+    type: imxrt_lpuart
+    base_address: 0x40110000
+    size: 4KB
+    config:
+      clock_hz: 80000000
+      lp_flexcomm: true
+      lp_flexcomm_present: 112

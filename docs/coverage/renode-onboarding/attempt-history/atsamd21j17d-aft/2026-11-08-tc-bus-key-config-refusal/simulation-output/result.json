@@ -1,0 +1,32 @@
+{
+  "result_schema_version": "1.0",
+  "status": "error",
+  "steps_executed": 0,
+  "cycles": 0,
+  "instructions": 0,
+  "stop_reason": "config_error",
+  "stop_reason_details": {
+    "triggered_stop_condition": "config_error",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 400000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "message": "samd21_tc admits no config overrides",
+  "assertions": [],
+  "firmware_hash": "7d1a0fc19aaf4be111c4ee293a159342620b249c5ede01c8a2df4ad9cfc24286",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-samd21-j17d-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/atsamd21j17d-aft.yaml",
+    "script": "examples/renode-onboarding/atsamd21j17d-aft-smoke.yaml"
+  }
+}

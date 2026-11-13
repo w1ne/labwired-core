@@ -418,6 +418,7 @@ impl SystemBus {
         }
 
         let mut bus = Self {
+            native_code_identity: crate::bus::construct::next_native_code_identity(),
             flash_thunks: std::collections::HashMap::new(),
             flash: LinearMemory::new_erased(flash_size as usize, chip.flash.base),
             memory_policy: crate::bus::memory_policy::MemoryPolicyState::for_chip(chip),
@@ -441,6 +442,8 @@ impl SystemBus {
             cpu_hz: manifest.cpu_hz.unwrap_or(chip.cpu_hz),
             riscv_profile: crate::cpu::RiscVCoreProfile::for_chip(chip),
             bit_band_enabled: Self::chip_has_bit_band(chip),
+            armv6m: Self::chip_is_armv6m(chip),
+            armv8m_baseline: Self::chip_is_armv8m_baseline(chip),
             reset_vector_offset: chip.reset_vector_offset,
             flash_boot_alias: chip.flash_boot_alias,
             atomic_register_aliases: chip.atomic_register_aliases,
@@ -504,6 +507,7 @@ impl SystemBus {
             motor_cycle_anchor: 0,
             analog_inputs: Vec::new(),
             analog_muxes: Vec::new(),
+            spi_cs_watches: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
             can_log_players: Vec::new(),
@@ -1070,12 +1074,29 @@ impl SystemBus {
                         .get("reg_offset")
                         .and_then(|v| v.as_u64())
                         .unwrap_or(0);
-                    // For nRF52 ports, an optional `num_pins` config key caps the
-                    // valid-pin range (e.g. 16 for nRF52840 P1 which has P1.0–P1.15).
-                    // Writes outside that range are discarded; reads return 0.
-                    let port = if layout == GpioRegisterLayout::Nrf52
+                    // Optional package-specific pin counts cap GPIO families whose
+                    // registers are wider than the bonded pads. Writes to absent
+                    // pins are discarded and pad access rejects them.
+                    let port = if layout == GpioRegisterLayout::Efr32s2
+                        && p_cfg.config.contains_key("num_pins")
+                    {
+                        let num_pins = p_cfg
+                            .config
+                            .get("num_pins")
+                            .and_then(|v| v.as_u64())
+                            .filter(|n| (1..=16).contains(n))
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "GPIO peripheral '{}': efr32s2 `num_pins` must be in 1..=16",
+                                    p_cfg.id
+                                )
+                            })? as u8;
+                        crate::peripherals::gpio::GpioPort::new_efr32s2(num_pins)
+                            .with_window_offset(window_offset)
+                    } else if layout == GpioRegisterLayout::Nrf52
                         || layout == GpioRegisterLayout::Nrf54l
                     {
+                        // nRF52/54 ports use this for widths such as nRF52840 P1 = 16.
                         let num_pins: u32 = p_cfg
                             .config
                             .get("num_pins")
@@ -1108,6 +1129,23 @@ impl SystemBus {
                             cfg_u32("reset_seccfgr"),
                         )
                         .with_window_offset(window_offset)
+                    } else if layout == GpioRegisterLayout::Cmsdk
+                        && p_cfg.config.contains_key("reset_altfunc")
+                    {
+                        // CMSDK ports whose pads reset to their peripheral
+                        // function (ALTFUNC reset value from the chip yaml).
+                        let reset = p_cfg
+                            .config
+                            .get("reset_altfunc")
+                            .and_then(|v| v.as_u64())
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "GPIO peripheral '{}': `reset_altfunc` must be an integer",
+                                    p_cfg.id
+                                )
+                            })?;
+                        crate::peripherals::gpio::GpioPort::new_cmsdk(reset as u32)
+                            .with_window_offset(window_offset)
                     } else {
                         crate::peripherals::gpio::GpioPort::new_with_layout(layout)
                             .with_window_offset(window_offset)

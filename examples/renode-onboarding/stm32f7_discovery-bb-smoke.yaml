@@ -1,0 +1,61 @@
+# Cortex-M7 smoke against the STM32F746G-DISCO row, which loads the
+# stm32f746 silicon profile (Renode: boards/stm32f7_discovery-bb.repl uses
+# cpus/stm32f746.repl) plus the board IO: RCC reset state, clock gate and
+# APB2ENR mask, all eight U(S)ART TXE lines, the GPIO reset state up to port
+# K, LD1 on PI1 blinked through BSRR, SYSCFG MEMRMP/PMC/CMPCR, EXTI software
+# triggers, B1 on PI11 pressed twice by the stimuli below (port A selected in
+# EXTICR3 first: no pend; then port I: EXTI line 11 rising edge on
+# EXTI15_10 = 40), TIM1..TIM14 width, counting and update line, DMA2
+# memory-to-memory (refused on DMA1), I2C1..4 NACK on their event lines, CRC
+# (CRC-32 and a 16-bit polynomial) and RNG draws. SPI and the I2C data path
+# have no on-board slave here; the stm32f746 fixture smoke covers them. It
+# does not claim the Ethernet PHYs, the FT5336 touch controller, LTDC, SDMMC,
+# QUADSPI, FMC, SAI, USB, ADC, DAC, CAN or the watchdogs.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-stm32f746g-disco-smoke"
+  system: "../../configs/systems/onboarding/stm32f7_discovery-bb.yaml"
+limits:
+  max_steps: 6000000
+stimuli:
+  - target: { component: "b1", channel: "pressed" }
+    trigger: !after_cycles { cycles: 200000 }
+    value: 1.0
+  - target: { component: "b1", channel: "pressed" }
+    trigger: !after_cycles { cycles: 300000 }
+    value: 0.0
+  - target: { component: "b1", channel: "pressed" }
+    trigger: !after_cycles { cycles: 500000 }
+    value: 1.0
+  - target: { component: "b1", channel: "pressed" }
+    trigger: !after_cycles { cycles: 600000 }
+    value: 0.0
+assertions:
+  - uart_contains: "STM32F746G-DISCO SMOKE"
+  - uart_ordered:
+      - "rcc reset=1 gate=1 mask=1 ok"
+      - "usart irq usart1=1 usart2=1 usart3=1 uart4=1 uart5=1 usart6=1 uart7=1 uart8=1 ok"
+      - "gpio pa=1 pb=1 reset=1 pi1=1 jk=1 ok"
+      - "led=ld1 odr=0x00000002 blink=1 lit=1 off=1 ok"
+      - "syscfg memrmp=0x00000C00 pmc=0x008700FF fields=1 cmpcr=1 ok"
+      - "exti swier masked=1 routed=1 ok"
+      - "b1 idle=1 presses=1 pa_quiet=1 pi11=1 cleared=1 ok"
+      - "tim1 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim2 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim5 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim14 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "dma m2m dma1_refused=1 dma2_copied=1 ok"
+      - "i2c1 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok"
+      - "i2c4 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok"
+      - "crc word=0xDF8A8A2B crc16=0x000029B1 seed=1 std=1 init=1 idr=1 poly16=1 ok"
+      - "rng off=1 ready=1 draws=1 stopped=1 ok"
+      - "summary 0x7DC07FFF"
+      - "DONE"
+  - memory_value:
+      address: 0x20003000
+      expected_value: 0x7DC07FFF
+      size: 4
+  - gpio_edges:
+      pin: "gpioi:1"
+      min_edges: 7
+  - expected_stop_reason: max_steps

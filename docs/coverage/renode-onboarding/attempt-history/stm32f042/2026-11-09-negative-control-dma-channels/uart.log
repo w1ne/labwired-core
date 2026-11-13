@@ -1,0 +1,23 @@
+STM32F042 Cortex-M0 smoke
+usart2 ok
+rcc reset=1 gate=1 ok
+usart irq u1=1 u2=1 ok
+gpio pa=1 reset=1 pf=1 bc=1 ok
+exti swier masked=1 routed=1 ok
+tim1 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim2 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim3 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim14 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim16 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim17 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+exti pads idle=1 presses=1 pa_quiet=1 pf1=1 pc13=1 ok
+spi1 frame=0x01901600 ds=1 data=1 pend=1 alone=1 released=1 ok
+spi2 frame=0x06401600 ds=1 data=1 pend=1 alone=1 released=1 ok
+dma1 spi1 frame=0x01901600 data=1 flags=1 pend=1 alone=1 released=1 ok
+dma1 channels reserved=0 idle=0 ch5=1 FAIL
+i2c1 tmp102=0x00001900 oar=1 data=1 rx_pend=1 nack=1 nack_pend=1 stop=1 released=1 ok
+spi1 shared a=0x01901600 b=0x03201600 after_cut=0x01901600 a=1 b=1 restart=1 ok
+crc word=0xDF8A8A2B seed=1 std=1 init=1 ok
+syscfg cfgr1=0x00FF1F10 ok
+summary 0x0427BFFF
+DONE

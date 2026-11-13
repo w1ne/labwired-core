@@ -1,27 +1,18 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
-#
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
-
+# Imported Renode target `cortex-a53-gicv2`, narrowed to one Cortex-A53 PE,
+# the imported DDR window at 0x40000000 and the PL011 UART0 at 0x09000000
+# (generic UART engine, PL011 layout: polled TX via UARTFR/UARTDR). The
+# generic timer, GICv2 and PL031 RTC from the import are not modeled and are
+# intentionally omitted.
 name: cortex-a53-gicv2
-arch: arm
-flash:
-  base: 134217728
-  size: 134217728B
-ram:
-  base: 1073741824
-  size: 2147483648B
+arch: aarch64
+core: cortex-a53
+flash: { base: 0, size: 0 }
+ram: { base: 0x40000000, size: 2GiB }
+flash_boot_alias: false
 peripherals:
-- id: timer
-  type: arm_generictimer
-  bus: cpu
-  base_address: 15
 - id: uart0
-  type: pl011
-  bus: sysbus
-  base_address: 150994944
-- id: rtc
-  type: pl031
-  bus: sysbus
-  base_address: 151060480
+  type: uart
+  base_address: 0x09000000
+  size: 4096
+  config:
+    profile: "pl011"

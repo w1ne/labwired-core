@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.126855">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="0aa048d9ca211ff4c01ff31ac29196e3d873de6b685b9f646ac555e61f821e52"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.126855">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_regex: ^FT9001 SMOKE
+" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_ordered: [&quot;cpu=cortex-m4f uart=usart2&quot;, &quot;cr2=0c cr1=00 bdh=01 bdl=56 brdf=1a fcr=c0&quot;, &quot;rx fsr=64 drl=A fsr=64&quot;, &quot;r…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

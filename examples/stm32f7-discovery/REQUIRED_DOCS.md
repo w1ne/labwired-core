@@ -16,4 +16,4 @@
 ## Address Cross-Check Only (not a source of truth)
 
 1. CMSIS `stm32f746xx.h` may be used to **cross-check** peripheral base addresses against RM0385 / DS10916. Do not treat third-party simulator platform files as authoritative for LabWired models.
-2. Do not promote `core/configs/chips/onboarding/stm32f746.yaml` — that catalog stub uses non-native type names and incorrect flash/RAM sizing.
+2. Do not point this board at `core/configs/chips/onboarding/stm32f746.yaml`. That is the bare-MCU Renode-surface smoke profile (native types, F746xG 1 MiB / 320 KiB, no board wiring); this example uses `configs/chips/stm32f746.yaml`.

@@ -178,6 +178,7 @@ impl WasmSimulator {
             MachineFamily::CortexM
             | MachineFamily::CortexA
             | MachineFamily::CortexR
+            | MachineFamily::Arm7Tdmi
             | MachineFamily::Xtensa => 16,
             MachineFamily::RiscV | MachineFamily::Avr => 32,
             // W0-W15, PC (16), SR (17) — provisional (see loader).
@@ -256,7 +257,10 @@ impl WasmSimulator {
     /// The stack pointer's id for `get_register`.
     fn stack_register(&self) -> u8 {
         match self.arch {
-            MachineFamily::CortexM | MachineFamily::CortexA | MachineFamily::CortexR => 13,
+            MachineFamily::CortexM
+            | MachineFamily::CortexA
+            | MachineFamily::CortexR
+            | MachineFamily::Arm7Tdmi => 13,
             MachineFamily::RiscV => 2,
             // a1 of the current register window.
             MachineFamily::Xtensa => 1,
@@ -442,7 +446,10 @@ impl WasmSimulator {
         let sp_id = self.stack_register();
         // Cortex-M and RISC-V find a call by its return-address register.
         let ra_id = match arch {
-            MachineFamily::CortexM | MachineFamily::CortexA | MachineFamily::CortexR => Some(14),
+            MachineFamily::CortexM
+            | MachineFamily::CortexA
+            | MachineFamily::CortexR
+            | MachineFamily::Arm7Tdmi => Some(14),
             MachineFamily::RiscV => Some(1),
             _ => None,
         };

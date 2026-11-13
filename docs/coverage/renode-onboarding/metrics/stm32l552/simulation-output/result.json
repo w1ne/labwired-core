@@ -1,0 +1,426 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 2000000,
+  "cycles": 2000000,
+  "instructions": 2000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 2000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 2000000
+    }
+  },
+  "limits": {
+    "max_steps": 2000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_regex": "^NUCLEO-L552ZE-Q SMOKE"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "NUCLEO-L552ZE-Q SMOKE"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_ordered": [
+          "cpu=cortex-m33 uart=lpuart1",
+          "rxft=lpuart1 thresholds=8,7,6,4,2,1 boundary=1 states=111111111111 irq=1111 bytes=abcdef ok",
+          "rx=lpuart1 rxne_before=1 irq_isolated=1 irq_asserted=1 reasserted=1 data=00000052,00000053 rxne_after=0 irq_released=1 ok",
+          "tx_irq lpuart1 txe=1 tc=1 both=1 ok",
+          "systick pendsv m33 tailchain frame=1 r0=1 pending=1 ipsr=14 ok",
+          "led=ld1 odr=00000080",
+          "led=ld1_off odr=00000000",
+          "led=ld2 odr=00000080",
+          "led=ld2_off odr=00000000",
+          "led=ld3 odr=00000200",
+          "led=ld3_off odr=00000000",
+          "btn=0",
+          "hb=0 odr=00000080 btn=0"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      172603,
+      24,
+      8,
+      6554,
+      32,
+      1073774620,
+      87,
+      537067400,
+      429496730,
+      537067492,
+      98,
+      3,
+      429496730,
+      537067400,
+      134232849,
+      134234276
+    ],
+    "pc": 134234276,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": true
+  },
+  "firmware_hash": "6a60da6978eccb41898151d33f7531a4a99ebfaf7d85d019c1fe5200b2387f91",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-l552ze-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32l552.yaml",
+    "script": "examples/renode-onboarding/stm32l552-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "systick",
+        "kind": "native",
+        "base": 3758153744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073876992,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pwr",
+        "kind": "native",
+        "base": 1073770496,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioa",
+        "kind": "native",
+        "base": 1107427328,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiob",
+        "kind": "native",
+        "base": 1107428352,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioc",
+        "kind": "native",
+        "base": 1107429376,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiog",
+        "kind": "native",
+        "base": 1107433472,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "lpuart1",
+        "kind": "native",
+        "base": 1073774592,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "button_b1",
+        "device_type": null,
+        "declared": false,
+        "attachment": {
+          "transport": "gpio"
+        },
+        "artifacts": []
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "NUCLEO-L552ZE-Q SMOKE",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "cpu=cortex-m33 uart=lpuart1",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "rxft=lpuart1 thresholds=8,7,6,4,2,1 boundary=1 states=111111111111 irq=1111 bytes=abcdef ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "rx=lpuart1 rxne_before=1 irq_isolated=1 irq_asserted=1 reasserted=1 data=00000052,00000053 rxne_after=0 irq_released=1 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "tx_irq lpuart1 txe=1 tc=1 both=1 ok",
+        "cycle_lo": 110000,
+        "cycle": 120000,
+        "end_cycle": 120000
+      },
+      {
+        "text": "systick pendsv m33 tailchain frame=1 r0=1 pending=1 ipsr=14 ok",
+        "cycle_lo": 110000,
+        "cycle": 120000,
+        "end_cycle": 120000
+      },
+      {
+        "text": "led=ld1 odr=00000080",
+        "cycle_lo": 110000,
+        "cycle": 120000,
+        "end_cycle": 120000
+      },
+      {
+        "text": "led=ld1_off odr=00000000",
+        "cycle_lo": 110000,
+        "cycle": 120000,
+        "end_cycle": 120000
+      },
+      {
+        "text": "led=ld2 odr=00000080",
+        "cycle_lo": 110000,
+        "cycle": 120000,
+        "end_cycle": 120000
+      },
+      {
+        "text": "led=ld2_off odr=00000000",
+        "cycle_lo": 110000,
+        "cycle": 120000,
+        "end_cycle": 120000
+      },
+      {
+        "text": "led=ld3 odr=00000200",
+        "cycle_lo": 110000,
+        "cycle": 120000,
+        "end_cycle": 120000
+      },
+      {
+        "text": "led=ld3_off odr=00000000",
+        "cycle_lo": 110000,
+        "cycle": 120000,
+        "end_cycle": 120000
+      },
+      {
+        "text": "btn=0",
+        "cycle_lo": 110000,
+        "cycle": 120000,
+        "end_cycle": 120000
+      },
+      {
+        "text": "hb=0 odr=00000080 btn=0",
+        "cycle_lo": 110000,
+        "cycle": 120000,
+        "end_cycle": 120000
+      },
+      {
+        "text": "hb=1 odr=00000080 btn=0",
+        "cycle_lo": 710000,
+        "cycle": 720000,
+        "end_cycle": 720000
+      },
+      {
+        "text": "hb=2 odr=00000080 btn=0",
+        "cycle_lo": 1310000,
+        "cycle": 1320000,
+        "end_cycle": 1320000
+      },
+      {
+        "text": "hb=3 odr=00000080 btn=0",
+        "cycle_lo": 1910000,
+        "cycle": 1920000,
+        "end_cycle": 1920000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 18372,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 18372,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 524288,
+    "ram_total_bytes": 196608,
+    "flash_used_pct": 3.5,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 196608,
+    "main_stack_high_water_bytes": 108,
+    "main_stack_free_min_bytes": 196356,
+    "main_stack_base": 536870912,
+    "main_stack_top": 537067520,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 196608,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 196356,
+    "heap_base": 536870912,
+    "heap_top": 537067520
+  },
+  "metrics": {
+    "cycles": 2000000,
+    "instructions": 2000000,
+    "steps_executed": 2000000,
+    "memory_reads": 3657,
+    "memory_writes": 222,
+    "peripheral_accesses": 31359,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134234274,
+        "count": 2461,
+        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 134234276,
+        "count": 2461,
+        "symbol": "firmware_l552ze_smoke::spin"
+      },
+      {
+        "pc": 134234278,
+        "count": 2461,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 134229072,
+        "count": 78,
+        "symbol": "firmware_l552ze_smoke::smoke_lpuart_tx_irq"
+      },
+      {
+        "pc": 134229266,
+        "count": 78,
+        "symbol": "firmware_l552ze_smoke::smoke_lpuart_tx_irq"
+      },
+      {
+        "pc": 134228720,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134228730,
+        "count": 39,
+        "symbol": "firmware_l552ze_smoke::smoke_lpuart_tx_irq"
+      },
+      {
+        "pc": 134228740,
+        "count": 39,
+        "symbol": "<i32>::overflowing_add"
+      },
+      {
+        "pc": 134229062,
+        "count": 39,
+        "symbol": "firmware_l552ze_smoke::smoke_lpuart_tx_irq"
+      },
+      {
+        "pc": 134229082,
+        "count": 39,
+        "symbol": "firmware_l552ze_smoke::smoke_lpuart_tx_irq"
+      },
+      {
+        "pc": 134229276,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134229286,
+        "count": 39,
+        "symbol": "firmware_l552ze_smoke::smoke_lpuart_tx_irq"
+      }
+    ]
+  }
+}

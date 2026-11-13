@@ -6,3 +6,10 @@
 
 name: simavr-atmega1284p
 chip: ../../chips/onboarding/simavr-atmega1284p.yaml
+board_io:
+  - id: status_led
+    kind: led
+    peripheral: porta
+    pin: 0
+    signal: output
+    active_high: true

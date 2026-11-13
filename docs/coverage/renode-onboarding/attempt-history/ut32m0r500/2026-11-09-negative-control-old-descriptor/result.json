@@ -1,0 +1,318 @@
+{
+  "result_schema_version": "1.0",
+  "status": "fail",
+  "steps_executed": 200000,
+  "cycles": 200000,
+  "instructions": 200000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 200000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 200000
+    }
+  },
+  "limits": {
+    "max_steps": 200000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "UT32M0R500 Cortex-M0+ UART0 smoke"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "UT32 checks PPPPPPPPPP DONE"
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "uart_contains": "UT32 UART1 line"
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536968960,
+          "expected_value": 1580336127,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpio_bank2:13",
+          "min_edges": 6
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "fidelity_clean": true
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      1073758212,
+      1073872896,
+      16780776,
+      1073758208,
+      10,
+      0,
+      0,
+      536968840,
+      0,
+      0,
+      0,
+      0,
+      0,
+      536968840,
+      4294967289,
+      16780772
+    ],
+    "pc": 16780772,
+    "xpsr": 1627389952,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "ff7fcc9f1c61a30f6af944bf65272b678ccef6673ac346140d6edec2431ca1bc",
+  "config": {
+    "firmware": "/home/andrii/worktrees/labwired-core/renode/target/thumbv6m-none-eabi/release/firmware-ut32m0r500-smoke",
+    "system": "/tmp/r423/neg/old-descriptor/systems/ut32m0r500.yaml",
+    "script": "/tmp/r423/neg/old-descriptor/smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "uart0",
+        "kind": "native",
+        "base": 1073758208,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x40020010",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "read"
+    },
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "fault_verdict": {
+    "summary": "HardFault: data access at 0x4002_0010, at PC 0x0100_014E in `core::ptr::read_volatile` (mod.rs:2091), called from `main`.",
+    "kind": "hard_fault",
+    "escalated": false,
+    "causes": [
+      {
+        "register": "BFSR",
+        "flag": "PRECISERR",
+        "meaning": "data access"
+      }
+    ],
+    "precise": true,
+    "fault_address": "0x40020010",
+    "fault_address_source": "address",
+    "pc": "0x0100014E",
+    "lr": "0x01000DE1",
+    "exc_return": {
+      "value": "0xFFFFFFF9",
+      "return_to": "thread",
+      "stack": "msp",
+      "fp_frame": false
+    },
+    "frame": {
+      "sp": "0x20017E90",
+      "r0": "0x40004004",
+      "r1": "0x40020000",
+      "r2": "0x01000DE8",
+      "r3": "0x40004000",
+      "r12": "0x00000000",
+      "lr": "0x01000DE1",
+      "pc": "0x0100014E",
+      "xpsr": "0x61000000"
+    },
+    "location": {
+      "function": "core::ptr::read_volatile",
+      "file": "/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ptr/mod.rs",
+      "line": 2091
+    },
+    "caller": {
+      "function": "main",
+      "file": "/home/andrii/worktrees/labwired-core/renode/crates/firmware-ut32m0r500-smoke/src/main.rs",
+      "line": 152
+    },
+    "registers": {
+      "hfsr": "0x40000000",
+      "cfsr": "0x00008200",
+      "mmfsr": "0x00",
+      "bfsr": "0x82",
+      "ufsr": "0x0000",
+      "mmfar": "0x00000000",
+      "bfar": "0x40020010"
+    },
+    "armv6m": true
+  },
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 200000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpio_bank2",
+        "pin": 13,
+        "transitions": [],
+        "gaps": [],
+        "mode": "unknown",
+        "edge_count": 0
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpio_bank2",
+      "number": 13,
+      "mode": "unknown",
+      "func": null,
+      "output": null,
+      "input": null,
+      "pad": null,
+      "drive": null
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "UT32M0R500 Cortex-M0+ UART0 smoke",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 3596,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 3596,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 65536,
+    "ram_total_bytes": 98304,
+    "flash_used_pct": 5.49,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 98048,
+    "main_stack_high_water_bytes": 16,
+    "main_stack_free_min_bytes": 97992,
+    "main_stack_base": 536870912,
+    "main_stack_top": 536968960,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 98048,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 97992,
+    "heap_base": 536870912,
+    "heap_top": 536968960
+  },
+  "metrics": {
+    "cycles": 200000,
+    "instructions": 200000,
+    "steps_executed": 200000,
+    "memory_reads": 89,
+    "memory_writes": 16,
+    "peripheral_accesses": 68,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 16780772,
+        "count": 781,
+        "symbol": "HardFault_"
+      }
+    ]
+  }
+}

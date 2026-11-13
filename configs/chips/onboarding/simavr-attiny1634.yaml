@@ -13,7 +13,18 @@ flash:
 ram:
   base: 256
   size: 1KB
-peripherals: []
+peripherals:
+  # This bounded smoke claims only GPIOA/GPIOB. Port C, the PUEx pull-up
+  # registers, USART0/1, TWI, SPI, timers, ADC, analog comparator,
+  # touch controller and interrupts remain outside this profile.
+  - id: portb
+    type: avr_gpio
+    base_address: 0x0001002B
+    size: 3
+  - id: porta
+    type: avr_gpio
+    base_address: 0x0001002F
+    size: 3
 provenance:
   source: simavr
   repo: https://github.com/buserror/simavr

@@ -1,0 +1,37 @@
+{
+  "target_id": "sam4s8b",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 1500000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": "firmware-sam4s8b-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/renode-onboarding/sam4s8b-smoke.yaml",
+  "system": "configs/systems/onboarding/sam4s8b.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-09T22:30:06Z",
+  "finished_at_utc": "2026-11-09T22:30:17Z",
+  "elapsed_seconds": 11,
+  "elapsed_ms": 10582,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 8.648,
+    "build_firmware": 1.02,
+    "run_smoke": 0.903
+  },
+  "stages_ms": {
+    "build_cli": 8648,
+    "build_firmware": 1020,
+    "run_smoke": 903
+  }
+}

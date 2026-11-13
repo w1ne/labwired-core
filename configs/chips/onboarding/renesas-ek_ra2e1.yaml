@@ -6,71 +6,51 @@
 
 name: renesas-ek_ra2e1
 arch: arm
+# Renode's EK-RA2E1 board includes platforms/cpus/renesas-r7fa2e1a9.repl
+# (Cortex-M23, 128 KiB code flash at 0x0, 16 KiB SRAM at 0x20004000) and wires
+# LEDs to P913/P914/P915 and the S1/S2 buttons to P004/P015. This profile
+# claims only the model-backed SCI9 (classic SCI, non-FIFO channel), PORT0,
+# PORT9 and PFS surfaces exercised by the smoke. ICU, GPT, AGT, IIC,
+# SCI0/1/2, the other ports, data flash and the SYSTEM OSCSF script are not
+# mapped.
+# Source: https://github.com/renode/renode/blob/master/platforms/boards/renesas-ek_ra2e1.repl
+core: cortex-m23
 flash:
-  base: 134217728
-  size: 131072B
+  base: 0x00000000
+  size: 128KB
 ram:
-  base: 536887296
-  size: 16384B
+  base: 0x20004000
+  size: 16KB
 peripherals:
-- id: led_blue
-  type: led
-  bus: port9
-  base_address: 15
-- id: led_green
-  type: led
-  bus: port9
-  base_address: 14
-- id: led_red
-  type: led
-  bus: port9
-  base_address: 13
-- id: button_s2
-  type: button
-  bus: port0
-  base_address: 15
-- id: button_s1
-  type: button
-  bus: port0
-  base_address: 4
-- id: portMisc
-  type: renesasra_gpiomisc
+- id: port0
+  type: gpio
   bus: sysbus
-  base_address: 1074007296
-- id: gpt
-  type: renesasra_gpt
+  base_address: 0x40040000
+  size: 32B
+  config:
+    profile: ra_port
+    pad_control: pfs
+    pad_control_port: 0
+    swapped_half_aliases: true
+- id: port9
+  type: gpio
   bus: sysbus
-  base_address: 1074233344
-- id: agt0
-  type: renesasra_agt
+  base_address: 0x40040120
+  size: 32B
+  config:
+    profile: ra_port
+    pad_control: pfs
+    pad_control_port: 9
+    swapped_half_aliases: true
+- id: pfs
+  type: ra_pfs
   bus: sysbus
-  base_address: 1074282496
-- id: agt1
-  type: renesasra_agt
-  bus: sysbus
-  base_address: 1074282752
-- id: sci0
-  type: renesasra6m5_sci
-  bus: sysbus
-  base_address: 1074200576
-- id: sci1
-  type: renesasra6m5_sci
-  bus: sysbus
-  base_address: 1074200608
-- id: sci2
-  type: renesasra6m5_sci
-  bus: sysbus
-  base_address: 1074200640
+  base_address: 0x40040800
+  size: 1536B
 - id: sci9
-  type: renesasra6m5_sci
+  type: uart
   bus: sysbus
-  base_address: 1074200864
-- id: sysc_oscsf
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1073864764
-- id: iic0
-  type: stub
-  renode_type: renesasra_iic
-  bus: sysbus
-  base_address: 1074081792
+  base_address: 0x40070120
+  size: 32B
+  config:
+    profile: sci

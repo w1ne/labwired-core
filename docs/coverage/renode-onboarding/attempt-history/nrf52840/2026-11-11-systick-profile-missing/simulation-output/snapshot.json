@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      0,
+      3758153744,
+      1,
+      3758157060,
+      1073750024,
+      0,
+      1,
+      537132952,
+      536871040,
+      536870912,
+      1073751364,
+      1342178564,
+      1,
+      537132952,
+      4294967289,
+      4950
+    ],
+    "pc": 4950,
+    "xpsr": 1627389952,
+    "primask": true,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 4000000,
+  "cycles": 4000000,
+  "instructions": 4000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 4000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 4000000
+    }
+  },
+  "limits": {
+    "max_steps": 4000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "0a4ad3529c887bf8b2cf2be9ae22c347fc915f75b3a8b976f5a26c908eeec235",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-nrf52840-renode-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/nrf52840.yaml",
+    "script": "examples/renode-onboarding/nrf52840-smoke.yaml"
+  }
+}

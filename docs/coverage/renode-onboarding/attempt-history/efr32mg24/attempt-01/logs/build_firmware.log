@@ -1,0 +1,51 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+ Downloading crates ...
+  Downloaded futures-task v0.3.32
+  Downloaded bytes v1.12.0
+  Downloaded bit_field v0.10.3
+  Downloaded serde-wasm-bindgen v0.6.5
+  Downloaded wasm-bindgen-macro v0.2.121
+  Downloaded unindent v0.2.4
+  Downloaded heck v0.4.1
+  Downloaded ppv-lite86 v0.2.21
+  Downloaded data-encoding v2.11.0
+  Downloaded wasm-bindgen-macro-support v0.2.121
+  Downloaded memoffset v0.9.1
+  Downloaded zerocopy v0.8.48
+  Downloaded utf-8 v0.7.6
+  Downloaded futures-core v0.3.32
+  Downloaded crossbeam-utils v0.8.21
+  Downloaded target-lexicon v0.12.16
+  Downloaded pyo3-macros v0.20.3
+  Downloaded pyo3-macros-backend v0.20.3
+  Downloaded tungstenite v0.24.0
+  Downloaded wasm-bindgen-shared v0.2.121
+  Downloaded pyo3-ffi v0.20.3
+  Downloaded wasm-bindgen v0.2.121
+  Downloaded js-sys v0.3.98
+  Downloaded http v1.4.2
+  Downloaded indoc v2.0.7
+  Downloaded futures-util v0.3.32
+  Downloaded riscv v0.10.1
+  Downloaded pyo3-build-config v0.20.3
+  Downloaded rand v0.8.6
+  Downloaded crossbeam-channel v0.5.15
+  Downloaded pyo3 v0.20.3
+  Downloaded portable-atomic v1.13.1
+error: package ID specification `firmware-efr32mg24-smoke` did not match any packages
+
+help: a package with a similar name exists: `firmware-efr32mg26-smoke`

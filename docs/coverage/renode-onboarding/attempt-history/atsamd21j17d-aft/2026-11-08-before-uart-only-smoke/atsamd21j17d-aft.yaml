@@ -1,0 +1,70 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# Measured execution profile for the Renode-imported ATSAMD21J17D-AFT target.
+# The importer truncated underscore-grouped addresses and substituted geometry
+# from a larger SAM D21 variant. This profile keeps the J17D memory geometry
+# and only the register windows used by the UART smoke.
+name: atsamd21j17d-aft
+arch: arm
+core: cortex-m0+
+cpu_hz: 8000000
+flash:
+  base: 0
+  size: 128KB
+ram:
+  base: 0x20000000
+  size: 16KB
+peripherals:
+- id: pm
+  type: declarative
+  bus: sysbus
+  base_address: 0x40000400
+  size: 128B
+  config:
+    path: ../../peripherals/atsamd21g18a/pm.yaml
+- id: sysctrl
+  type: declarative
+  bus: sysbus
+  base_address: 0x40000800
+  size: 128B
+  config:
+    path: ../../peripherals/atsamd21g18a/sysctrl.yaml
+- id: gclk
+  type: declarative
+  bus: sysbus
+  base_address: 0x40000C00
+  size: 16B
+  config:
+    path: ../../peripherals/atsamd21g18a/gclk.yaml
+- id: nvmctrl
+  type: declarative
+  bus: sysbus
+  base_address: 0x41004000
+  size: 128B
+  config:
+    path: ../../peripherals/atsamd21g18a/nvmctrl.yaml
+- id: gpio_a
+  type: gpio
+  bus: sysbus
+  base_address: 0x41004400
+  size: 128B
+  config:
+    profile: sam
+    num_pins: 32
+- id: usart0
+  type: sam_sercom_usart
+  bus: sysbus
+  base_address: 0x42000800
+  size: 64B
+  irq: 9
+- id: nvic
+  type: nvic
+  bus: sysbus
+  base_address: 0xE000E100
+  size: 1KB
+- id: systick
+  type: systick
+  bus: sysbus
+  base_address: 0xE000E010
+  size: 16B

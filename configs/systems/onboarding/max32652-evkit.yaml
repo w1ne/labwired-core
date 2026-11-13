@@ -4,5 +4,36 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
+# Board I/O from the MSDK EvKit_V1 BSP (Libraries/Boards/MAX32650/EvKit_V1:
+# board.c led_pin/pb_pin, board.h LED_ON 0). LED0 P2.25 and LED1 P2.26 are
+# active low (LED_ON 0, led.c uses OutClr to switch on). Renode
+# max32652-evkit.repl inverts led0 but not led1; the vendor BSP is followed.
+# Buttons P2.28/P2.30 have a weak pull-up and read low when pressed (BSP
+# MXC_GPIO_PAD_WEAK_PULL_UP; Renode button invert true).
 name: max32652-evkit
 chip: ../../chips/onboarding/max32652-evkit.yaml
+board_io:
+  - id: "led0"
+    kind: "led"
+    peripheral: "port2"
+    pin: 25
+    signal: "output"
+    active_high: false
+  - id: "led1"
+    kind: "led"
+    peripheral: "port2"
+    pin: 26
+    signal: "output"
+    active_high: false
+  - id: "button0"
+    kind: "button"
+    peripheral: "port2"
+    pin: 28
+    signal: "input"
+    active_high: false
+  - id: "button1"
+    kind: "button"
+    peripheral: "port2"
+    pin: 30
+    signal: "input"
+    active_high: false

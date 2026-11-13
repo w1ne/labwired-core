@@ -1,58 +1,66 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
-#
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
-
+# UT32M0R500 (Frontgrade/CAES) profile: Cortex-M0+, exact Renode flash/SRAM
+# windows, UART0/UART1 (Gaisler APBUART) and the three Arm CMSDK AHB GPIO
+# banks with the UT32 pull registers, and both ARM SP804 timers (Renode
+# platforms/cpus/ut32m0r500.repl; Frontgrade app note
+# "UT32M0R500 Enable the GPIO"). GPIO2 ALTFUNC resets to 0xFFFF (Renode
+# alternateFunctionResetValue). Not declared (no model in this
+# engine): bootrom, EDAC SRAM, ADC, CAN0/1, and the
+# Renode Tag-only blocks (RTC, PWM, SPI, DACs, watchdog, I2C, NFC).
+# GPIO0 and GPIO2 expose their Renode combined interrupt outputs on NVIC 22
+# and 24. GPIO1's optional dedicated per-pin IRQ outputs are not claimed.
+# Alternate-function pad routing is also not modelled.
 name: ut32m0r500
 arch: arm
+core: cortex-m0+
 flash:
-  base: 134217728
-  size: 32768B
+  base: 16777216
+  size: 65536B
 ram:
   base: 536870912
   size: 98304B
 peripherals:
+- id: timer0
+  type: arm_sp804_timer
+  base_address: 0x40001000
+  size: 4KB
+  irq: 1
+- id: timer1
+  type: arm_sp804_timer
+  base_address: 0x40002000
+  size: 4KB
+  irq: 2
 - id: uart0
   type: gaislerapbuart
   bus: sysbus
   base_address: 1073758208
+  size: 4KB
+  config:
+    profile: gaisler
 - id: uart1
   type: gaislerapbuart
   bus: sysbus
-  base_address: 1073762304
-- id: timer0
-  type: arm_sp804_timer
-  bus: sysbus
-  base_address: 1073745920
-- id: timer1
-  type: arm_sp804_timer
-  bus: sysbus
-  base_address: 1073750016
-- id: adc
-  type: stub
-  renode_type: caes_adc
-  bus: sysbus
-  base_address: 1073803264
-- id: gpio0
-  type: arm_ahb_gpio
-  bus: sysbus
-  base_address: 1073872896
-- id: gpio1
-  type: arm_ahb_gpio
-  bus: sysbus
-  base_address: 1073876992
-- id: gpio2
-  type: arm_ahb_gpio
-  bus: sysbus
-  base_address: 1073881088
-- id: can0
-  type: stub
-  renode_type: ut32_can
-  bus: sysbus
-  base_address: 1073885184
-- id: can1
-  type: stub
-  renode_type: ut32_can
-  bus: sysbus
-  base_address: 1073889280
+  base_address: 0x40005000
+  size: 4KB
+  config:
+    profile: gaisler
+- id: gpio_bank0
+  type: gpio
+  base_address: 0x40020000
+  size: 4KB
+  irq: 22
+  config:
+    profile: cmsdk
+- id: gpio_bank1
+  type: gpio
+  base_address: 0x40021000
+  size: 4KB
+  config:
+    profile: cmsdk
+- id: gpio_bank2
+  type: gpio
+  base_address: 0x40022000
+  size: 4KB
+  irq: 24
+  config:
+    profile: cmsdk
+    reset_altfunc: 0xFFFF

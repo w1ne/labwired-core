@@ -6,72 +6,63 @@
 
 name: renesas-da14592
 arch: arm
+# DA14592 main Cortex-M33 profile from Renode platforms/cpus/renesas-da14592.repl
+# (https://github.com/renode/renode/blob/master/platforms/cpus/renesas-da14592.repl).
+#
+# Memory: ROM 0x48000 bytes at 0x0 (Renode `rom`, also at 0x900000); SRAM
+# 0x18000 bytes at 0x20000000, also at 0x800000 (Renode `sram`); eFlash data
+# area 0x40800 bytes at 0x31000000, also at 0xA00000 (Renode
+# `eflash_data_header` + `eflash_data_text`, plain memory there too). The
+# mirrors are same-backing aliases: a store through one view shows in the
+# other.
+#
+# Declared: UART0/UART1 (Renesas DA14 UART = DesignWare APB 16550, 4-byte
+# stride, polled; IRQs 3/4 not routed) and the P0/P1 GPIO block (`da14`
+# layout: DATA/SET/RESET + per-pad MODE; Renode RenesasDA14_GPIO, Zephyr
+# gpio_smartbond.c). The UARTs get explicit 256-byte windows: without a
+# size, UART0's window covered UART1 (+0x100) and GPIO (+0x600), so an
+# undeclared GPIO read returned 0 instead of faulting (negative control).
+# Not declared (no model): auxiliary Cortex-M0+ CMAC core, GPT timers 1-4,
+# system watchdog, GPADC, DMA, DesignWare I2C, SPI, clock generation and
+# XTAL32M registers, general-purpose registers, QSPI/flash controllers,
+# the tagged CHIP_ID words.
+core: cortex-m33
 flash:
-  base: 134217728
+  base: 0x00000000
   size: 294912B
 ram:
-  base: 8388608
+  base: 0x20000000
   size: 98304B
+memory_regions:
+- name: rom_mirror
+  base: 0x00900000
+  size: 294912B
+  alias_of: 0x00000000
+- name: sram_low
+  base: 0x00800000
+  size: 98304B
+  alias_of: 0x20000000
+- name: eflash_data
+  base: 0x31000000
+  size: 264192B
+- name: eflash_data_low
+  base: 0x00A00000
+  size: 264192B
+  alias_of: 0x31000000
 peripherals:
-- id: timer1
-  type: renesasda14_gpt
-  bus: sysbus
-  base_address: 1342243584
-- id: timer2
-  type: renesasda14_gpt
-  bus: sysbus
-  base_address: 1342243840
-- id: timer3
-  type: renesasda14_gpt
-  bus: sysbus
-  base_address: 1342244096
-- id: timer4
-  type: renesasda14_gpt
-  bus: sysbus
-  base_address: 1342310912
 - id: uart0
   type: renesasda14_uart
   bus: sysbus
-  base_address: 1342308352
+  base_address: 0x50020000
+  size: 256B
 - id: uart1
   type: renesasda14_uart
   bus: sysbus
-  base_address: 1342308608
-- id: gpadc
-  type: stub
-  renode_type: renesasda14_gpadc
-  bus: sysbus
-  base_address: 1342441728
+  base_address: 0x50020100
+  size: 256B
 - id: gpio
-  type: renesasda14_gpio
-  bus: sysbus
-  base_address: 1342309888
-- id: dma
-  type: renesasda14_dma
-  bus: sysbus
-  base_address: 1342571008
-- id: i2c
-  type: stub
-  renode_type: renesasda_i2c
-  bus: sysbus
-  base_address: 1342309120
-- id: clock_gen
-  type: stub
-  renode_type: renesasda14_clockgenerationcontroller
-  bus: sysbus
-  base_address: 1342177280
-- id: xtal32m_regs
-  type: stub
-  renode_type: renesasda14_xtal32mregisters
-  bus: sysbus
-  base_address: 1342242816
-- id: spi
-  type: stub
-  renode_type: renesasda_spi
-  bus: sysbus
-  base_address: 1342308864
-- id: gp_regs
-  type: stub
-  renode_type: renesasda14_generalpurposeregisters
-  bus: sysbus
-  base_address: 1342505728
+  type: gpio
+  base_address: 0x50020600
+  size: 512B
+  config:
+    profile: da14

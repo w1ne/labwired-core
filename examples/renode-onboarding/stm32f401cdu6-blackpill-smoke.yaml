@@ -1,0 +1,99 @@
+# Cortex-M4 smoke against the imported Renode STM32F401 Black Pill system.
+# Bare-register firmware enables RCC clocks, toggles the active-low PC13 user
+# LED through BSRR with ODR readback, runs TIM2 (PSC/ARR readback, counter
+# advance, UIF latch + W1C clear), and drives I2C1 and I2C2 TMP102 temperature reads
+# (25 °C) plus an absent-address NACK. SPI1 reads
+# a MAX31855 reset frame and checks TXE/RXNE interrupt levels. The I2C1
+# start phase checks SB with ITEVTEN alone; the write-address phase checks TXE
+# with ITBUFEN alone and ADDR with ITEVTEN alone;
+# the pointer byte checks BTF with ITEVTEN alone. The first TMP102 read checks
+# RXNE with ITBUFEN alone and release after DR is read; a second read holds its
+# first byte in DR to check receive BTF with ITEVTEN alone, RXNE source
+# isolation, and the IRQ release when DR is read.
+# SysTick wraps with PRIMASK set, keeps its SCB pending request independent of
+# the read-to-clear COUNTFLAG, then dispatches timer-generated exception 15
+# entries. PENDSVCLR cancels a masked request, a fresh request still dispatches,
+# and a lower-priority PendSV requested inside SysTick waits until exception 15
+# returns before entering vector 14. A separate tail-chain probe checks that
+# the MSP and EXC_RETURN frame are reused and the live SysTick R0 marker reaches
+# PendSV. A second probe runs that handoff from PSP and checks task-stack frame
+# reuse plus restoration of the caller's PSP, CONTROL, and MSP state.
+# The Cortex-M4F probe enables CP10/CP11, takes a software IRQ from an FP-active
+# Thread context, checks the extended lazy frame and FPCAR, and verifies the
+# handler-triggered save and exception-return restoration of S0. A second run
+# enters Thread mode on PSP and checks its separate extended frame, PSP restore,
+# and S0 restoration while Handler mode continues to use MSP. A third run keeps
+# the lazy save pending through a higher-priority nested basic exception, then
+# checks FPCAR and S0 preservation when the outer handler first touches the FPU.
+# A fourth nested run activates FP state in both handlers and checks each lazy
+# extended frame plus restoration of the outer and Thread S0 values.
+# A fifth nested run starts Thread mode on PSP and checks that the outer lazy
+# frame is on PSP while the active nested handler frames are stacked on MSP.
+# A second TMP102 on I2C2 checks SB and ADDR isolation until ITEVTEN is enabled,
+# its event vector, and an independent repeated-start 25 °C read, including TXE
+# isolation under ITEVTEN, BTF isolation until ITEVTEN, and RXNE isolation until
+# ITBUFEN is enabled. A second read uses the legacy POS
+# ACK-position bit, checks RXNE isolation and receive BTF IRQ assertion, then
+# generates STOP before both DR reads. It verifies BUSY release, BTF release
+# with RXNE preserved after the first read, and RXNE clearing after the second
+# read. The I2C1 absent-address probe checks ER IRQ
+# 32. The I2C2 absent-address probe checks AF status, event/error-line
+# isolation, ITERREN-gated ER IRQ 34 assertion/release, AF clearing and recovery.
+# Results print on USART2; USART1 checks TXEIE and TCIE gating on IRQ 37, plus
+# RXNEIE assertion/release with an injected RX byte. USART2 keeps its injected
+# `RS` bytes hidden until UE and RE are both set, reads them in order, and gates
+# RXNE IRQ 38. The summary word lands at 0x20001000 and is 0xB1ACFFFF on
+# success. PC13 resets low, so three on/off toggles give 5 edges, not 6. ADC,
+# EXTI, other timers and
+# other USARTs claimed by the chip are not exercised.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabihf/release/firmware-f401cdu6-blackpill-renode-smoke"
+  system: "../../configs/systems/onboarding/stm32f401cdu6-blackpill.yaml"
+limits:
+  max_steps: 200000
+uart_injections:
+  - uart: "usart1"
+    bytes: "R"
+  - uart: "usart2"
+    bytes: "RS"
+assertions:
+  - uart_ordered:
+      - "BLACKPILL F401 SMOKE"
+      - "systick wrap=1 pending=1 countflag=read-clear clear=1 ok"
+      - "systick irq entries>=2 vector=15 ipsr=15 return=1 ok"
+      - "systick priority flags=000007FF ok"
+      - "pendsv clear pending=1 fresh repend=1 ok"
+      - "systick pendsv tailchain frame=1 r0=1 pending=1 ipsr=0000000E ok"
+      - "systick pendsv psp tailchain frame=1 r0=1 pending=1 ipsr=0000000E ok"
+      - "fpu m4f lazy frame=FFFFFFE9 lspact=1->0 fpcar=1 saved=1 restored=1 ok"
+      - "fpu m4f nested lazy lspact=1 exc_return=FFFFFFF1 frame=1 saved=1 restored=1 ok"
+      - "fpu m4f nested active exc_return=FFFFFFE1 frames=1 saved=1 restored=1 ok"
+      - "fpu m4f psp nested active outer=FFFFFFED nested=FFFFFFE1 frames=1 saved=1 restored=1 ok"
+      - "fpu m4f psp lazy frame=FFFFFFED lspact=1->0 psp_frame=1 fpcar=1 saved=1 restored=1 ok"
+      - "rcc apb1=00620001 ok"
+      - "led pc13 odr=00002000 ok"
+      - "tim2 arr=00000040 ok"
+      - "i2c1 sb_irq=1 ok"
+      - "i2c1 btf_irq=1 ok"
+      - "i2c1 rxne_buf_irq=1 release=1 ok"
+      - "i2c1 btf_rx_irq=1 rxne_isolated=1 release=1 data=00001980 ok"
+      - "i2c1 tmp102=00001900 nack=00000400 buf_irq=1 buf_release=1 ev_irq=1 ev_release=1 er_irq=1 irq_released=1 ok"
+      - "i2c2 rxne_isolated=1 gate_asserted=1 release=1 ok"
+      - "i2c2 tmp102=00001900 sb_irq_gate=1 addr_irq_gate=1 txe_isolated=1 txe_buf_irq=1 txe_buf_release=1 btf_irq_gate=1 rxne_buf_irq=1 rxne_buf_release=1 ok"
+      - "pos=1 i2c2 btf_rx_irq=1 rxne_isolated=1 stop_before_dr=1 rxne_after_first=1 release=1 rxne_cleared=1 data=00001980 ok"
+      - "i2c2 nack=00000400 no_addr=1 ev_isolated=1 er_isolated=1 er_irq=1 er_masked_release=1 af_cleared=1 idle=1 er_released=1 ok"
+      - "spi1 max31855=01901600 txe_irq=1 rxne_irq=1 released=1 ok"
+      - "usart1 txe_isolated=1 gate_asserted=1 released=1 ok"
+      - "usart1 tc_isolated=1 gate_asserted=1 released=1 ok"
+      - "usart1 rxne_isolated=1 gate_asserted=1 data=00000052 released=1 ok"
+      - "usart2 rx_gate re_off=1 ue_off=1 data=00005253 rxne_after_first=1 rxne_after=0 irq=isolated,asserted,released ok"
+      - "BLACKPILL PASS"
+  - gpio_edges:
+      pin: "gpioc:13"
+      min_edges: 5
+  - memory_value:
+      address: 0x20001000
+      expected_value: 0xB1ACFFFF
+      size: 4
+  - expected_stop_reason: max_steps

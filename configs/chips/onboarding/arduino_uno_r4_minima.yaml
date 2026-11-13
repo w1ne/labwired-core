@@ -3,63 +3,51 @@
 #
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
+#
+# Renode import narrowed to the model-backed RA4M1 core, memory, system,
+# PORT1/PFS, SysTick, and SCI2 surfaces exercised by the onboarding smoke.
 
 name: arduino_uno_r4_minima
 arch: arm
+core: cortex-m4
+cpu_hz: 48000000
 flash:
-  base: 134217728
+  base: 0
   size: 262144B
 ram:
   base: 536870912
   size: 32768B
 peripherals:
-- id: gpt
-  type: renesasra_gpt
+- id: ra_sysc
+  type: ra_sysc
   bus: sysbus
-  base_address: 1074233344
-- id: agt0
-  type: renesasra_agt
+  base_address: 0x4001E000
+  size: 256B
+- id: port1
+  type: gpio
   bus: sysbus
-  base_address: 1074282496
-- id: agt1
-  type: renesasra_agt
+  base_address: 0x40040020
+  size: 32B
+  config:
+    profile: ra_port
+    pad_control: pfs
+    pad_control_port: 1
+    swapped_half_aliases: true
+- id: pfs
+  type: ra_pfs
   bus: sysbus
-  base_address: 1074282752
-- id: sci0
-  type: renesasra6m5_sci
+  base_address: 0x40040800
+  size: 1536B
+- id: systick
+  type: systick
   bus: sysbus
-  base_address: 1074200576
-- id: sci1
-  type: renesasra6m5_sci
-  bus: sysbus
-  base_address: 1074200608
+  base_address: 0xE000E010
+  size: 16B
 - id: sci2
-  type: renesasra6m5_sci
+  type: uart
   bus: sysbus
-  base_address: 1074200640
-- id: sci9
-  type: renesasra6m5_sci
-  bus: sysbus
-  base_address: 1074200864
-- id: portMisc
-  type: renesasra_gpiomisc
-  bus: sysbus
-  base_address: 1074007296
-- id: sysc_oscsf
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1073864764
-- id: sysc_vbtsr
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1073865905
-- id: iic0
-  type: stub
-  renode_type: renesasra_iic
-  bus: sysbus
-  base_address: 1074081792
-- id: iic1
-  type: stub
-  renode_type: renesasra_iic
-  bus: sysbus
-  base_address: 1074082048
+  base_address: 0x40070040
+  size: 32B
+  irq: 4
+  config:
+    profile: sci

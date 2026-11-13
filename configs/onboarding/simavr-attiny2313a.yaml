@@ -5,14 +5,32 @@
 # See the LICENSE file in the project root for full license information.
 
 name: simavr-attiny2313a
-description: 'attiny2313a (Atmel AVR). Declared from the simavr core-model - metadata-only T3 entry, not
-  runnable. Memory geometry: flash 2KB @ 0x0, ram 128B @ 0x60.'
+description: >-
+  ATtiny2313A (Atmel AVR). Imported profile measured for bounded AVR8 execution,
+  GPIOB and polled USART output. Other peripheral ranges are omitted from this
+  profile.
+  Memory geometry: flash 2KB @ 0x0, ram 128B @ 0x60.
 family: Atmel AVR
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize hardware...\n\
   \    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 0
 verified: false
 system: systems/onboarding/simavr-attiny2313a.yaml
+validation:
+  method: renode-onboarding-exact-import-smoke
+  reason: bounded AVR8 execution, GPIOB (PB0) and polled USART TX only; ideal rail assumed; whole platform remains unverified
+  checks:
+    system_manifest: true
+    chip_descriptor: true
+    avr8_cpu_sram_smoke: true
+    gpio: true
+    uart0_polled_tx: true
+    whole_platform: false
+    other_peripherals: false
+    board_io: true
+  timestamp_utc: '2026-11-07T17:30:00Z'
+  run_url: ''
+  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/simavr-attiny2313a.validation.md
 provenance:
   source: simavr
   repo: https://github.com/buserror/simavr

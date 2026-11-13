@@ -4,16 +4,27 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
+# Bounded single-hart profile of Renode's LiteX VexRiscv SMP platform.
+# Upstream defines four RV32IMA harts, 128 MiB DDR at 0x40000000, a CLINT,
+# and LiteX UART at 0xF0001800. LabWired's current profile covers one RV32IM
+# execution path, a bounded 1 MiB DDR window used by this direct-ELF smoke, and
+# the model-backed UART. Flash is absent on this CPU platform. Atomics, SMP,
+# CLINT interrupts, and the remaining DDR are not claimed.
+# Source: https://github.com/renode/renode/blob/master/platforms/cpus/litex_vexriscv_smp.repl
+
 name: litex_vexriscv_smp
-arch: arm
+arch: riscv
+core: rv32im
 flash:
-  base: 1073741824
-  size: 134217728B
+  base: 0
+  size: 0B
+flash_boot_alias: false
 ram:
-  base: 1073741824
-  size: 134217728B
+  base: 0x40000000
+  size: 1MiB
 peripherals:
 - id: uart
   type: litex_uart
   bus: sysbus
-  base_address: 4026537984
+  base_address: 0xF0001800
+  size: 2KB

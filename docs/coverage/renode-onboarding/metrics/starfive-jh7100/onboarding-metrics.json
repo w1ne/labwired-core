@@ -1,0 +1,37 @@
+{
+  "target_id": "starfive-jh7100",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": "firmware-starfive-jh7100-smoke",
+  "target_triple": "riscv64imac-unknown-none-elf",
+  "script": "examples/renode-onboarding/starfive-jh7100-smoke.yaml",
+  "system": "configs/systems/onboarding/starfive-jh7100.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-05T14:49:54Z",
+  "finished_at_utc": "2026-11-05T14:49:55Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1328,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.358,
+    "build_firmware": 0.676,
+    "run_smoke": 0.281
+  },
+  "stages_ms": {
+    "build_cli": 358,
+    "build_firmware": 676,
+    "run_smoke": 281
+  }
+}

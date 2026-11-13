@@ -1,0 +1,38 @@
+{
+  "target_id": "simavr-atmega88",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": null,
+  "target_triple": null,
+  "script": "examples/renode-onboarding/simavr-atmega88-smoke.yaml",
+  "system": "configs/systems/onboarding/simavr-atmega88.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-07T10:37:14Z",
+  "finished_at_utc": "2026-11-07T10:37:15Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1058,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.436,
+    "build_firmware": null,
+    "run_smoke": 0.587
+  },
+  "stages_ms": {
+    "build_cli": 436,
+    "build_firmware": null,
+    "run_smoke": 587
+  },
+  "prebuilt_firmware": "tests/fixtures/avr/atmega88-io-smoke.elf"
+}

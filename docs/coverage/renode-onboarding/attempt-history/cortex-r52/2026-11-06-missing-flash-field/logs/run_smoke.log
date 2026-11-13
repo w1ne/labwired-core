@@ -1,0 +1,2 @@
+2026-11-06T03:07:19.993681Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/cortex-r52.yaml
+2026-11-06T03:07:19.993773Z ERROR labwired_cli::commands::test: Failed to parse Chip Descriptor YAML: missing field `flash` at line 7 column 1

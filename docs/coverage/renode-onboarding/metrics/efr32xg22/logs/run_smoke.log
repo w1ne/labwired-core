@@ -1,0 +1,6 @@
+2026-11-13T20:50:31.264940Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/efr32xg22.yaml
+2026-11-13T20:50:31.266595Z  INFO labwired_loader: ELF Entry Point: 0x801
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+labwired-cli test: idle_ff skipped 383500 of 400000 device cycles (16500 interpreted)
+PASS  5/5 checks · efr32xg22-smoke · 400000 steps · 0.00s

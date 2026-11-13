@@ -1,0 +1,37 @@
+{
+  "target_id": "efm32jg1",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 200000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": "firmware-efm32jg1-smoke",
+  "target_triple": "thumbv7m-none-eabi",
+  "script": "examples/renode-onboarding/efm32jg1-smoke.yaml",
+  "system": "configs/systems/onboarding/efm32jg1.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-08T18:02:51Z",
+  "finished_at_utc": "2026-11-08T18:02:53Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1674,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.383,
+    "build_firmware": 0.96,
+    "run_smoke": 0.317
+  },
+  "stages_ms": {
+    "build_cli": 383,
+    "build_firmware": 960,
+    "run_smoke": 317
+  }
+}

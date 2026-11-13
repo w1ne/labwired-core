@@ -1,42 +1,24 @@
-name: verilated_ibex
-arch: arm
-flash:
-  base: 536870912
-  size: 1048576
-ram:
-  base: 16777216
-  size: 8192B
+# Bounded local execution profile for the imported Renode Verilated Ibex SoC.
+# The generated descriptor was mislabeled ARM and represented Renode's external
+# cosimulated CPU as a stub. This profile uses LabWired's RV32IMC interpreter
+# for the direct-ELF smoke; it does not claim the Verilated CPU implementation,
+# the SoC controller, or the extra generated memory windows.
+
+name: "verilated_ibex"
+arch: "riscv"
+core: "rv32imc_zicsr_zifencei"
+
+flash: { base: 0x20000000, size: "1MiB" }
+ram: { base: 0x01000000, size: "8KiB" }
+flash_boot_alias: false
 peripherals:
-- id: rom
-  type: arraymemory
-  bus: sysbus
-  base_address: 0
-- id: sram
-  type: arraymemory
-  bus: sysbus
-  base_address: 16777216
-- id: main_ram
-  type: arraymemory
-  bus: sysbus
-  base_address: 1073741824
-- id: stack
-  type: arraymemory
-  bus: sysbus
-  base_address: 4026531840
-- id: cpu
-  type: stub
-  renode_type: cosimulatedriscv32
-  bus: sysbus
-  base_address: 12
-- id: ctrl
-  type: litex_soc_controller
-  bus: sysbus
-  base_address: 2181038080
-- id: uart
-  type: litex_uart
-  bus: sysbus
-  base_address: 2181046272
-- id: timer0
-  type: litex_timer_csr32
-  bus: sysbus
-  base_address: 2181048320
+  - id: "uart"
+    type: "litex_uart"
+    base_address: 0x82002000
+    size: "2KB"
+    irq: 2
+  - id: "timer0"
+    type: "litex_timer"
+    base_address: 0x82002800
+    size: "2KB"
+    irq: 1

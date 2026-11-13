@@ -1,0 +1,599 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 400000,
+  "cycles": 400000,
+  "instructions": 400000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 400000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 400000
+    }
+  },
+  "limits": {
+    "max_steps": 400000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "ZOLERTIA FIREFLY CC2538 Cortex-M3 UART0 smoke"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "FIREFLY checks PPPPPPPPP DONE"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "FIREFLY UART1 line"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536903424,
+          "expected_value": 4058972671,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpiod:5",
+          "min_edges": 8
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "fidelity_clean": true
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      10,
+      13,
+      4058972416,
+      1,
+      1073795096,
+      255,
+      0,
+      536903408,
+      536903676,
+      1074643072,
+      1,
+      56,
+      1,
+      536903368,
+      2100661,
+      2101272
+    ],
+    "pc": 2101272,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 2097152,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "8b83e804aa9c2160fa5a979e609a3726a5e5e92df0e6f63226ece4c11713f228",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-zolertia-firefly-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/zolertia-firefly.yaml",
+    "script": "examples/renode-onboarding/zolertia-firefly-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "systick",
+        "kind": "native",
+        "base": 3758153744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart0",
+        "kind": "native",
+        "base": 1073790976,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart1",
+        "kind": "native",
+        "base": 1073795072,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioa",
+        "kind": "native",
+        "base": 1074630656,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiob",
+        "kind": "native",
+        "base": 1074634752,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioc",
+        "kind": "native",
+        "base": 1074638848,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiod",
+        "kind": "native",
+        "base": 1074642944,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "sys_ctrl",
+        "kind": "native",
+        "base": 1074601984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "ioc",
+        "kind": "native",
+        "base": 1074610176,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "flash_ctrl",
+        "kind": "native",
+        "base": 1074606080,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "smwdthrosc",
+        "kind": "native",
+        "base": 1074614272,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "ana_regs",
+        "kind": "native",
+        "base": 1074618368,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "soc_adc",
+        "kind": "native",
+        "base": 1074622464,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "ssi0",
+        "kind": "native",
+        "base": 1073774592,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "ssi1",
+        "kind": "native",
+        "base": 1073778688,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2cm",
+        "kind": "native",
+        "base": 1073872896,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gptimer0",
+        "kind": "native",
+        "base": 1073938432,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gptimer1",
+        "kind": "native",
+        "base": 1073942528,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gptimer2",
+        "kind": "native",
+        "base": 1073946624,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gptimer3",
+        "kind": "native",
+        "base": 1073950720,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rfcore",
+        "kind": "native",
+        "base": 1074298880,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "aes",
+        "kind": "native",
+        "base": 1074311168,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "udma",
+        "kind": "native",
+        "base": 1074786304,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "cctest",
+        "kind": "native",
+        "base": 1140916224,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "button_user",
+        "device_type": null,
+        "declared": false,
+        "attachment": {
+          "transport": "gpio"
+        },
+        "artifacts": []
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "derived_device_time",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "device time derived from cpu_hz (16000000 Hz); PLL reconfiguration is not tracked"
+    },
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal 3 V rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 400000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpiod",
+        "pin": 5,
+        "initial": 1,
+        "transitions": [
+          {
+            "cycle": 94,
+            "value": 0
+          },
+          {
+            "cycle": 468,
+            "value": 1
+          },
+          {
+            "cycle": 482,
+            "value": 0
+          },
+          {
+            "cycle": 18868,
+            "value": 1
+          },
+          {
+            "cycle": 24875,
+            "value": 0
+          },
+          {
+            "cycle": 30881,
+            "value": 1
+          },
+          {
+            "cycle": 36887,
+            "value": 0
+          },
+          {
+            "cycle": 42893,
+            "value": 1
+          },
+          {
+            "cycle": 48899,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 94,
+            "state": "0"
+          },
+          {
+            "cycle": 468,
+            "state": "1"
+          },
+          {
+            "cycle": 482,
+            "state": "0"
+          },
+          {
+            "cycle": 18868,
+            "state": "1"
+          },
+          {
+            "cycle": 24875,
+            "state": "0"
+          },
+          {
+            "cycle": 30881,
+            "state": "1"
+          },
+          {
+            "cycle": 36887,
+            "state": "0"
+          },
+          {
+            "cycle": 42893,
+            "state": "1"
+          },
+          {
+            "cycle": 48899,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 9
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpiod",
+      "number": 5,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "ZOLERTIA FIREFLY CC2538 Cortex-M3 UART0 smoke",
+        "cycle_lo": 102,
+        "cycle": 103,
+        "end_cycle": 463
+      },
+      {
+        "text": "FIREFLY checks PPPPPPPPP DONE",
+        "cycle_lo": 18656,
+        "cycle": 18657,
+        "end_cycle": 18840
+      },
+      {
+        "text": "FIREFLY UART1 line",
+        "cycle_lo": 54907,
+        "cycle": 54908,
+        "end_cycle": 54998
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 4252,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 4252,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 524288,
+    "ram_total_bytes": 32768,
+    "flash_used_pct": 0.81,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 32512,
+    "main_stack_high_water_bytes": 52,
+    "main_stack_free_min_bytes": 32452,
+    "main_stack_base": 536870912,
+    "main_stack_top": 536903424,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 32512,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 32452,
+    "heap_base": 536870912,
+    "heap_top": 536903424
+  },
+  "metrics": {
+    "cycles": 400000,
+    "instructions": 400000,
+    "steps_executed": 400000,
+    "memory_reads": 1086,
+    "memory_writes": 33,
+    "peripheral_accesses": 2165,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 2101272,
+        "count": 270,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 2101274,
+        "count": 270,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 2101276,
+        "count": 270,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 2101268,
+        "count": 269,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 2101270,
+        "count": 269,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 2101294,
+        "count": 63,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 2101290,
+        "count": 62,
+        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 2101292,
+        "count": 62,
+        "symbol": "firmware_zolertia_firefly_smoke::spin"
+      },
+      {
+        "pc": 2098514,
+        "count": 1,
+        "symbol": "<core::slice::iter::Iter<T> as core::iter::traits::iterator::Iterator>::next"
+      },
+      {
+        "pc": 2098698,
+        "count": 1,
+        "symbol": "firmware_zolertia_firefly_smoke::check_leds"
+      },
+      {
+        "pc": 2099020,
+        "count": 1,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 2099024,
+        "count": 1,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 2099040,
+        "count": 1,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 2099046,
+        "count": 1,
+        "symbol": "firmware_zolertia_firefly_smoke::wait_set"
+      },
+      {
+        "pc": 2099050,
+        "count": 1,
+        "symbol": "firmware_zolertia_firefly_smoke::wait_set"
+      },
+      {
+        "pc": 2099070,
+        "count": 1,
+        "symbol": "firmware_zolertia_firefly_smoke::wait_set"
+      }
+    ]
+  }
+}

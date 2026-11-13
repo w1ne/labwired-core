@@ -1,0 +1,42 @@
+# Cortex-M0+ smoke against the imported ATSAMD21J17D-AFT system. Bare-register
+# firmware runs the SAM D21 clock bring-up (NVMCTRL, OSC8M, GCLK, PM), brings
+# SERCOM0 up as the console, then checks the rest of what Renode's platform
+# models and the chip profile claims: PORT group B (PB10 DIR/OUT readback),
+# TC4 (COUNT16 MFRQ, CC0 match + OVF, IRQ 19 pend and clear, CMD STOP), TC6
+# (COUNT8 down one-shot, PER reload, RETRIGGER/STOP), and SERCOM1/SERCOM3
+# (CTRLA readback, DRE, TXC + W1C). The PA17 LED toggles in the idle loop.
+# A summary word lands at 0x20002000. The CLI's UART capture merges every
+# USART's TX, so the one 'U' each of SERCOM1/SERCOM3 sends prefixes its line.
+# The RTC (Renode's SAMD21_RTC) runs MODE2 (leap-day calendar rollover into
+# ALARM0 with the IRQ 3 pend and release), MODE0 (COMP0 + MATCHCLR: CMP0 and
+# OVF together) and MODE1 (PER wrap after COMP0/COMP1). SysTick-to-PendSV
+# tail chaining is checked with Thread mode using both MSP and PSP.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-samd21-j17d-smoke"
+  system: "../../configs/systems/onboarding/atsamd21j17d-aft.yaml"
+limits:
+  max_steps: 800000
+assertions:
+  - uart_contains: "samd21 sercom0 up"
+  - uart_ordered:
+      - "samd21 sercom0 up"
+      - "portb dir=00000400 out=00000400 clr=00000000"
+      - "tc4 cc0=000003e7 adv=1 flags=11 nvic19=1 cleared=00 stop=1"
+      - "tc6 reset_stop=1 oneshot_stop=1 ovf=1 count=20 retrigger=1 halted=1"
+      - "sercom1 ctrla=40000006 dre=1 txc=1 w1c=1"
+      - "sercom3 ctrla=40000006 dre=1 txc=1 w1c=1"
+      - "rtc mode2 alarm=1 nvic3=1 released=1 day=1d hm=0000"
+      - "rtc mode0 flags=81 wrapped=1"
+      - "rtc mode1 per=04 flags=83 wrapped=1"
+      - "systick pendsv m0+ tailchain frame=1 r0=1 pending=1 ipsr=0000000e ok"
+      - "systick pendsv m0+ psp tailchain frame=1 r0=1 pending=1 exc_return=fffffffd restored=1 ok"
+      - "SAMD21 PASS"
+  - gpio_edges:
+      pin: "gpio_a:17"
+      min_edges: 4
+  - memory_value:
+      address: 0x20002000
+      expected_value: 0x5D2100FF
+      size: 4
+  - expected_stop_reason: max_steps

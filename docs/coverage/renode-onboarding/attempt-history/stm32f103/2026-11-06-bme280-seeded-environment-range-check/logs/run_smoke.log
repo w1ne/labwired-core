@@ -1,0 +1,6 @@
+2026-11-06T13:30:44.340723Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f103.yaml
+2026-11-06T13:30:44.414974Z  INFO labwired_loader: ELF Entry Point: 0x8000009
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-06T13:30:44.465316Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "BME280_SEEDED_ENVIRONMENT_OK" }) (captured len=845)
+FAIL  22/23 checks · stm32f103-i2c-smoke · 50000000 steps · 0.05s

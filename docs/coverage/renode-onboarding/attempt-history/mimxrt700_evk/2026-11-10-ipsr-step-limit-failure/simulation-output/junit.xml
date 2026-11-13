@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="7" failures="2" errors="0" time="0.478365">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="14d1a6b733bc406f362a08c71031bd51abf3d47496d2630052ecde7456838e83"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.478365">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: MIMXRT700 LP_FLEXCOMM0 LPUART SMOKE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: rx lpuart0 re_off=1 queued=2 masked=1 asserted=1 masked_data=1 unmasked=1 data=00000052,00000053 release…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_ordered: [&quot;flexcomm0 pselid=00103070-&gt;00103071-&gt;00103079&quot;, &quot;lpuart0 verid=04010003 param=00000202 baud=0f00001a ct…" time="0.000000">
+    <failure message="assertion failed">assertion 3: uart_ordered: [&quot;flexcomm0 pselid=00103070-&gt;00103071-&gt;00103079&quot;, &quot;lpuart0 verid=04010003 param=00000202 baud=0f00001a ct…
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=4000000
+stop_reason_details.observed.steps_executed=4000000
+steps_executed=4000000
+cycles=4000000
+instructions=4000000
+limits:
+  - max_steps=4000000
+firmware_hash=14d1a6b733bc406f362a08c71031bd51abf3d47496d2630052ecde7456838e83
+firmware=examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt700-evk-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/mimxrt700_evk.yaml
+script=examples/renode-onboarding/mimxrt700_evk-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;MIMXRT700 LP_FLEXCOMM0 LPUART SMOKE&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;rx lpuart0 re_off=1 queued=2 masked=1 asserted=1 masked_data=1 unmasked=1 data=00000052,00000053 released=1 irq=11111 handler=1 ipsr=00000017 ok&quot; }): true
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;flexcomm0 pselid=00103070-&gt;00103071-&gt;00103079&quot;, &quot;lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00880000 istat=00000001&quot;, &quot;pass=0000003f&quot;] }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870920, expected_value: 323, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870924, expected_value: 1879048255, mask: None, size: Some(4), node: None } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x20000008=0x143" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: memory_value: @0x2000000c=0x7000003f" time="0.000000">
+    <failure message="assertion failed">assertion 5: memory_value: @0x2000000c=0x7000003f
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=4000000
+stop_reason_details.observed.steps_executed=4000000
+steps_executed=4000000
+cycles=4000000
+instructions=4000000
+limits:
+  - max_steps=4000000
+firmware_hash=14d1a6b733bc406f362a08c71031bd51abf3d47496d2630052ecde7456838e83
+firmware=examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt700-evk-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/mimxrt700_evk.yaml
+script=examples/renode-onboarding/mimxrt700_evk-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;MIMXRT700 LP_FLEXCOMM0 LPUART SMOKE&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;rx lpuart0 re_off=1 queued=2 masked=1 asserted=1 masked_data=1 unmasked=1 data=00000052,00000053 released=1 irq=11111 handler=1 ipsr=00000017 ok&quot; }): true
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;flexcomm0 pselid=00103070-&gt;00103071-&gt;00103079&quot;, &quot;lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00880000 istat=00000001&quot;, &quot;pass=0000003f&quot;] }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870920, expected_value: 323, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870924, expected_value: 1879048255, mask: None, size: Some(4), node: None } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

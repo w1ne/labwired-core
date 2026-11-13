@@ -1,0 +1,141 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 100000,
+  "cycles": 100000,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1073741824,
+          "expected_value": 1515978815,
+          "mask": null,
+          "size": null
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1073741828,
+          "expected_value": 5050,
+          "mask": null,
+          "size": null
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "xtensa_lx7",
+    "registers": [
+      1342177382,
+      1073872896,
+      1073741824,
+      0,
+      1515978815,
+      5050,
+      0,
+      1515978752,
+      211885776,
+      1489043438,
+      4294967295,
+      1,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1342177546,
+    "ps": 31,
+    "window_base": 0,
+    "window_start": 1,
+    "vecbase": 1073741824
+  },
+  "firmware_hash": "bea35a2ea78043c974900415f2f1a7674a34672e46af9e5df649923845fe677f",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/xtensa-sample-controller-cpu-smoke.elf",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/xtensa-sample-controller.yaml",
+    "script": "examples/renode-onboarding/xtensa-sample-controller-cpu-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 280,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 280,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 67108864,
+    "ram_total_bytes": 131072,
+    "flash_used_pct": 0.0,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 100000,
+    "instructions": 100000,
+    "steps_executed": 100000,
+    "memory_reads": 100176,
+    "memory_writes": 7,
+    "peripheral_accesses": 0,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 1342177546,
+        "count": 390
+      }
+    ]
+  }
+}

@@ -1,0 +1,1 @@
+2026-11-10T19:22:55.148504Z ERROR labwired_cli::commands::test: Failed to parse Test Script YAML (expected schema_version: "1.0"): assertions: data did not match any variant of untagged enum TestAssertion at line 20 column 3

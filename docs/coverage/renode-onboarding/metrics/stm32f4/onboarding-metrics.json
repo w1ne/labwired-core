@@ -1,0 +1,37 @@
+{
+  "target_id": "stm32f4",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 4000000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": "firmware-f4-discovery-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/renode-onboarding/stm32f4-smoke.yaml",
+  "system": "configs/systems/onboarding/stm32f4.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-13T11:20:20Z",
+  "finished_at_utc": "2026-11-13T11:20:22Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1723,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.38,
+    "build_firmware": 0.21,
+    "run_smoke": 1.096
+  },
+  "stages_ms": {
+    "build_cli": 380,
+    "build_firmware": 210,
+    "run_smoke": 1096
+  }
+}

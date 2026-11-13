@@ -700,6 +700,13 @@ pub struct I2cSpec {
     /// byte-addressable `register_file:`.
     #[serde(default = "default_pointer_width")]
     pub pointer_width: u8,
+    /// A register-mode device may accept a frame containing only the first
+    /// data byte for a wider big-endian register. When true, that byte updates
+    /// the register's most-significant byte when the frame ends at STOP or a
+    /// repeated START, preserving all lower bytes. This is opt-in because most
+    /// devices require a complete register word.
+    #[serde(default)]
+    pub update_msb_on_short_write: bool,
     /// **Write page size in bytes** for a memory-like part. A sequential write
     /// that runs past a page boundary wraps to the START of the same page
     /// instead of spilling into the next one — the single most surprising real

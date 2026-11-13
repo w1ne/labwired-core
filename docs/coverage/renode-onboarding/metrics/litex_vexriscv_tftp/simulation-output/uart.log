@@ -1,0 +1,4 @@
+LITEX VEXRISCV TFTP PROFILE RV32IM
+boot=direct-elf memory=rom+sram
+timer=running
+timer=zero

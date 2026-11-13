@@ -1,46 +1,78 @@
-# Validation Report: eos-s3
+# EOS S3 validation status
 
-**Architecture:** ARM Cortex-M4F.
+## Current measurement (2026-11-09)
 
-## 1. Dynamic Simulation Validation
-**Status:** ✅ Passed (simulation-ok)
+The imported EOS S3 system booted `firmware-eos-s3-smoke` for **100,000
+instructions** and passed **6/6 smoke assertions**. The firmware runs six
+checks and prints one letter per check; the UART capture is
+`EOS S3 checks PPPPPP DONE`, and the summary word at 0x2007FF00 is
+0xE053003F. GPIO 4 shows 6 edges. The result, UART capture, JUnit
+assertions, snapshot and build/run logs are under
+[`docs/coverage/renode-onboarding/metrics/eos-s3/`](../coverage/renode-onboarding/metrics/eos-s3/).
+The QuickFeather and Qomu rows run the same firmware on the same chip
+surface ([`eos-s3-quickfeather.md`](eos-s3-quickfeather.md),
+[`eos-s3-qomu.md`](eos-s3-qomu.md)).
 
-```text
-[2m2026-10-18T14:39:55.744062Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-[2m2026-10-18T14:39:55.747558Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/eos-s3.yaml
-[2m2026-10-18T14:39:55.749026Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-[2m2026-10-18T14:39:55.749116Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-[2m2026-10-18T14:39:55.749134Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-[2m2026-10-18T14:39:55.749139Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-[2m2026-10-18T14:39:55.750013Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-[2m2026-10-18T14:39:55.750030Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-[2m2026-10-18T14:39:55.750039Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-[2m2026-10-18T14:39:55.750114Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Simulation Error at step 2: Memory access violation at 0x2001ffe0
-[2m2026-10-18T14:39:55.750140Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-[2m2026-10-18T14:39:55.750145Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x45c
-[2m2026-10-18T14:39:55.750149Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 2
-[2m2026-10-18T14:39:55.750154Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 2
-[2m2026-10-18T14:39:55.750158Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 1971.92
-```
+Checks (source: `crates/firmware-eos-s3-smoke/src/main.rs`):
 
+0. A constant linked at 0x0 reads back through the 0x20000000 view.
+1. A `.bss` store at 0x20040000 reads back through the 0x0 view.
+2. A store at 0x0003F000 reads back at 0x2003F000.
+3. SDMA SRAM (0x4000F000, 4 KiB) holds a word at the first and last slot.
+4. IO_OUTPUT keeps bits [7:0] only (write 0xFFFFFF50 reads 0x50).
+5. IO_INPUT reads the pad inputs, not IO_OUTPUT (reads 0 with IO_OUTPUT 0xFF).
 
-## Hardware Coverage Report
+## Memory map fix
 
-| Peripheral ID | Base Address | Type |
+The EOS S3 M4 has one 512 KiB SRAM (Renode `m4mem`), mapped at 0x20000000
+and mirrored at 0x0; the bootloader copies the application into it from SPI
+flash. The import mapped two separate 512 KiB stores, so a store through one
+view never showed in the other. The descriptor now declares the SRAM as
+`ram`, an empty `flash`, a same-backing mirror `m4mem_low` (`alias_of`) at
+0x0, and `flash_boot_alias: false`. The firmware links code in the low view
+of the lower half and data in the upper half (`memory.x`).
+
+## Claimed peripherals
+
+| id | model | scope |
 |---|---|---|
-| `uart` | `0x40010000` | `pl011` |
-| `dwt` | `0xe0001000` | `dwt` |
-| `spt` | `0x40005c00` | `eoss3_simpleperiodictimer` |
-| `adc` | `0x40005a00` | `stub` |
-| `spi` | `0x40007000` | `stub` |
-| `dmaSpi` | `0x40007400` | `stub` |
-| `packetFifo` | `0x40002000` | `stub` |
-| `systemDma` | `0x4000c000` | `udma` |
-| `systemDmaBridge` | `0x4000d000` | `eoss3_systemdmabridge` |
-| `ffe` | `0x4004a000` | `stub` |
-| `i2cMaster0` | `0x00000000` | `opencoresi2c` |
-| `i2cMaster1` | `0x00000001` | `opencoresi2c` |
-| `voice` | `0x40015000` | `stub` |
-| `powerMgmt` | `0x40004400` | `pythonperipheral` |
+| `uart` | `pl011` | Polled TX. |
+| `gpio` | `gpio`, `eos_s3` layout | MISC_CTRL IO_INPUT (0x40005100) and IO_OUTPUT (0x40005104), GPIO 0-7. |
 
-**Total Peripherals:** 14
+Memory windows: SRAM 0x20000000 (512 KiB), mirror at 0x0, SDMA SRAM
+0x4000F000 (4 KiB).
+
+Sources: Renode `platforms/cpus/eos-s3.repl` and `EOSS3_IntrCtrl.cs` (misc
+region); QuickLogic qorc-sdk `HAL/inc/eoss3_dev.h` (MISC_CTRL_BASE
+0x40005000, IO_INPUT +0x100, IO_OUTPUT +0x104) and
+`HAL/src/eoss3_hal_gpio.c` (`HAL_GPIO_Read`/`HAL_GPIO_Write`).
+
+Not modelled, and stated in the descriptor:
+
+- The IO_MUX pad controls (output enable, receive enable, pulls) are not
+  modelled. IO_OUTPUT drives every pad; IO_INPUT reads only what the outside
+  world drives, as in Renode.
+- The PL011 interrupt and the GPIO interrupts go through the EOS S3
+  interrupt controller (0x40004800), which has no model.
+
+Not declared (no model in this engine): interrupt controller, IO_MUX,
+simple periodic timer, ADC, DesignWare SPI and SPI DMA, packet FIFO, uDMA
+and its bridge, FFE and its I2C masters, voice block, PMU, CRU.
+
+## Negative controls
+
+- [`attempt-history/eos-s3/2026-11-09-negative-control-old-descriptor/`](../coverage/renode-onboarding/attempt-history/eos-s3/2026-11-09-negative-control-old-descriptor/):
+  the old descriptor; BusFault at the SDMA SRAM (check 3), no UART output.
+- [`attempt-history/eos-s3/2026-11-09-negative-control-split-stores/`](../coverage/renode-onboarding/attempt-history/eos-s3/2026-11-09-negative-control-split-stores/):
+  this descriptor with the two separate stores; `FFFPPP`, checks 0-2 fail.
+- [`attempt-history/eos-s3/2026-11-09-negative-control-no-gpio/`](../coverage/renode-onboarding/attempt-history/eos-s3/2026-11-09-negative-control-no-gpio/):
+  without the GPIO port; BusFault at IO_OUTPUT (check 4).
+
+## Superseded measurements
+
+- PL011 banner only, against the two-store map: replaced by this
+  measurement; the old files are in git history before this change.
+
+The profile's `verified` field remains false. This result is limited to the
+local model behaviour; it is not datasheet validation or hardware
+confirmation.

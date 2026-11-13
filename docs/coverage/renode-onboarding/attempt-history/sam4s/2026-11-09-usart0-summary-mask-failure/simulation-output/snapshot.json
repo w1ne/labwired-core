@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      12836,
+      8191,
+      2,
+      49,
+      1074660884,
+      0,
+      50,
+      536936416,
+      0,
+      1074664532,
+      536935936,
+      1,
+      3758154240,
+      536936416,
+      4216047,
+      4216614
+    ],
+    "pc": 4216614,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 1500000,
+  "cycles": 1500000,
+  "instructions": 1500000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 1500000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 1500000
+    }
+  },
+  "limits": {
+    "max_steps": 1500000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "0dc3d787c609a4fd3b6233541a7413a6769183af284ef8f54059be3e6328c85b",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-sam4s-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/sam4s.yaml",
+    "script": "examples/renode-onboarding/sam4s-smoke.yaml"
+  }
+}

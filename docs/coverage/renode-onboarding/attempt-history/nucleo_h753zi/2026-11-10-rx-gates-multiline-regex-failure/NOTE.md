@@ -1,0 +1,1 @@
+The target booted for 4,000,000 instructions and emitted all expected H753 UART lines, including the RX RE/UE gate results. Eight other smoke assertions passed. The only failure was assertion 1: the CLI UART regex matcher did not match the multiline prefix pattern. Preserved this measurement before replacing the assertion with `uart_ordered`.

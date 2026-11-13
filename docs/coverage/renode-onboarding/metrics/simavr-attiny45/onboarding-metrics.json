@@ -1,0 +1,38 @@
+{
+  "target_id": "simavr-attiny45",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": null,
+  "target_triple": null,
+  "script": "examples/renode-onboarding/simavr-attiny45-smoke.yaml",
+  "system": "configs/systems/onboarding/simavr-attiny45.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-07T17:58:10Z",
+  "finished_at_utc": "2026-11-07T17:58:10Z",
+  "elapsed_seconds": 1,
+  "elapsed_ms": 530,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.249,
+    "build_firmware": null,
+    "run_smoke": 0.272
+  },
+  "stages_ms": {
+    "build_cli": 249,
+    "build_firmware": null,
+    "run_smoke": 272
+  },
+  "prebuilt_firmware": "tests/fixtures/avr/attiny45-io-smoke.elf"
+}

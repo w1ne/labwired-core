@@ -487,17 +487,19 @@ impl crate::Bus for SystemBus {
         if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
             self.note_debug_watch_read(addr);
         }
+        let (base, end, data) = self.plain_memory_slice_at(addr).ok_or_else(|| {
+            SimulationError::NotImplemented(format!(
+                "eight-byte physical access at {addr:#x} requires mapped memory; MMIO64 is unsupported"
+            ))
+        })?;
         let offset =
-            addr.checked_sub(self.ram.base_addr)
-                .and_then(|v| usize::try_from(v).ok())
-                .filter(|v| *v < self.ram.data.len())
-                .ok_or_else(|| {
-                    SimulationError::NotImplemented(format!(
-                "eight-byte physical access at {addr:#x} requires RAM; MMIO64 is unsupported"))
-                })?;
+            usize::try_from(addr - base).map_err(|_| SimulationError::MemoryViolation(addr))?;
+        let end_offset =
+            usize::try_from(end - base).map_err(|_| SimulationError::MemoryViolation(addr))?;
         let bytes = offset
             .checked_add(8)
-            .and_then(|end| self.ram.data.get(offset..end))
+            .filter(|finish| *finish <= end_offset)
+            .and_then(|finish| data.get(offset..finish))
             .ok_or(SimulationError::MemoryViolation(addr))?;
         self.note_memory_read();
         Ok(u64::from_le_bytes(bytes.try_into().unwrap()))
@@ -592,10 +594,15 @@ impl crate::Bus for SystemBus {
     }
 
     fn arm_code_identity(&self) -> Option<u64> {
-        self.irq_fabric.armv7.as_ref().map(|f| f.code_identity())
+        Some(
+            self.irq_fabric
+                .armv7
+                .as_ref()
+                .map_or(self.native_code_identity, |fabric| fabric.code_identity()),
+        )
     }
     fn arm_irq_fiq_levels(&self) -> Option<(bool, bool)> {
-        self.irq_fabric.armv7.as_ref().map(|f| {
+        if let Some(f) = self.irq_fabric.armv7.as_ref() {
             // The existing RX queue capability may be filled by host input
             // between instructions. Reconcile its live level before sampling
             // GIC pins; UART entries have no legacy NVIC IRQ number.
@@ -612,8 +619,20 @@ impl crate::Bus for SystemBus {
                     f.gic.lock().unwrap().set_level(intid as usize, level);
                 }
             }
-            f.gic.lock().unwrap().levels()
-        })
+            return Some(f.gic.lock().unwrap().levels());
+        }
+        let vic_index = self.irq_fabric.lpc2294_vic?;
+        let routes = &self.irq_fabric.lpc2294_irq_sources;
+        let vic = self.peripherals.get(vic_index)?;
+        for &(peripheral_index, source) in routes {
+            let level = self
+                .peripherals
+                .get(peripheral_index)
+                .and_then(|peripheral| peripheral.dev.irq_line_level())
+                .unwrap_or(false);
+            vic.dev.set_arm_irq_input_level(source, level);
+        }
+        vic.dev.arm_irq_fiq_levels()
     }
     fn arm_cp15_read(&self, key: u32, wide: bool) -> SimResult<u64> {
         self.irq_fabric
@@ -1863,7 +1882,7 @@ impl crate::Bus for SystemBus {
                 let idx = (irq / 32) as usize;
                 let bit = irq % 32;
                 if idx < 8 {
-                    nvic.ispr[idx].fetch_and(!(1 << bit), Ordering::SeqCst);
+                    nvic.clear_pending(idx, 1 << bit);
                 }
             }
         }

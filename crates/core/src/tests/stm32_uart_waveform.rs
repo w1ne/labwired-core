@@ -60,6 +60,8 @@ mod stm32_uart_waveform_tests {
     /// CR1 lives at 0x00 on the V2 map; OVER8 is bit 15.
     const CR1: u64 = 0x00;
     const CR1_OVER8: u32 = 1 << 15;
+    /// UE (bit 0) and TE (bit 3): the transmitter drives TX only with both set.
+    const CR1_UE_TE: u32 = (1 << 0) | (1 << 3);
 
     fn machine() -> Machine<CortexM> {
         let mut bus = crate::bus::SystemBus::new();
@@ -112,6 +114,7 @@ mod stm32_uart_waveform_tests {
         bus.write_u32(GPIOB_BASE + AFRH, 7 << ((pin - 8) * 4))
             .unwrap();
         bus.write_u32(USART3_BASE + BRR, USARTDIV).unwrap();
+        bus.write_u32(USART3_BASE + CR1, CR1_UE_TE).unwrap();
     }
 
     /// Write the characters into TDR, then let the engine run long enough for
@@ -208,6 +211,7 @@ mod stm32_uart_waveform_tests {
                 .unwrap();
             for uart in [USART2_BASE, USART3_BASE] {
                 machine.bus.write_u32(uart + BRR, USARTDIV).unwrap();
+                machine.bus.write_u32(uart + CR1, CR1_UE_TE).unwrap();
             }
 
             let idx = machine.bus.find_peripheral_index_by_name(port).unwrap();
@@ -332,6 +336,7 @@ mod stm32_uart_waveform_tests {
             .write_u32(GPIOA_L0 + AFRL, 4 << (PA2 * 4))
             .unwrap();
         machine.bus.write_u32(USART2 + BRR, USARTDIV).unwrap();
+        machine.bus.write_u32(USART2 + CR1, CR1_UE_TE).unwrap();
 
         let gpio_idx = machine.bus.find_peripheral_index_by_name("gpioa").unwrap();
         // Pin down WHERE a failure is before arming: a wrong AF table shows up
@@ -513,7 +518,8 @@ mod stm32_uart_waveform_tests {
             .unwrap();
         bus.write_u32(GPIOB_BASE + AFRH, 7 << ((TX_PIN - 8) * 4))
             .unwrap();
-        bus.write_u32(USART3_BASE + CR1, CR1_OVER8).unwrap();
+        bus.write_u32(USART3_BASE + CR1, CR1_OVER8 | CR1_UE_TE)
+            .unwrap();
         bus.write_u32(USART3_BASE + BRR, BRR_OVER8).unwrap();
 
         let gpio_idx = machine.bus.find_peripheral_index_by_name("gpiob").unwrap();
@@ -551,6 +557,8 @@ mod stm32_uart_waveform_tests {
             .unwrap();
         bus.write_u32(GPIOB_BASE + AFRH, 7 << ((TX_PIN - 8) * 4))
             .unwrap();
+        // Transmitter enabled, so only the missing baud rate keeps the pad quiet.
+        bus.write_u32(USART3_BASE + CR1, CR1_UE_TE).unwrap();
 
         let gpio_idx = machine.bus.find_peripheral_index_by_name("gpiob").unwrap();
         machine.logic_watch(&[Some(LogicSource::pad(gpio_idx, TX_PIN))]);

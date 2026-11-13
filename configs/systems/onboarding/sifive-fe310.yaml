@@ -6,3 +6,22 @@
 
 name: sifive-fe310
 chip: ../../chips/onboarding/sifive-fe310.yaml
+board_io:
+  - id: led_green
+    kind: led
+    peripheral: gpio
+    pin: 19
+    signal: output
+    active_high: false
+  - id: led_blue
+    kind: led
+    peripheral: gpio
+    pin: 21
+    signal: output
+    active_high: false
+  - id: led_red
+    kind: led
+    peripheral: gpio
+    pin: 22
+    signal: output
+    active_high: false

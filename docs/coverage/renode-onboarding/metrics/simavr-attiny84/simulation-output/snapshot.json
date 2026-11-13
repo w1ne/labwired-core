@@ -1,0 +1,75 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "avr",
+    "registers": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      48,
+      0,
+      165,
+      138,
+      138,
+      0,
+      38,
+      1,
+      145,
+      0,
+      90,
+      2,
+      143,
+      0
+    ],
+    "pc": 264,
+    "sp": 602,
+    "sreg": 1
+  },
+  "steps_executed": 100000,
+  "cycles": 156667,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "8f34fe69ad1f7fa34260d384a0f225f886af67842a2a541debb2df0963cb3330",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/avr/attiny84-io-smoke.elf",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/simavr-attiny84.yaml",
+    "script": "examples/renode-onboarding/simavr-attiny84-smoke.yaml"
+  }
+}

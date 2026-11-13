@@ -1,0 +1,10 @@
+# Cortex-M0+ UART smoke against the imported ATSAMD21J17D-AFT system.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-samd21-j17d-smoke"
+  system: "../../configs/systems/onboarding/atsamd21j17d-aft.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "samd21 sercom0 up"
+  - expected_stop_reason: max_steps

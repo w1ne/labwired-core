@@ -1,0 +1,37 @@
+{
+  "target_id": "sam4s_xplained",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 4000000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-sam4s-xplained-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/renode-onboarding/sam4s_xplained-smoke.yaml",
+  "system": "configs/systems/onboarding/sam4s_xplained.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-08T14:03:48Z",
+  "finished_at_utc": "2026-11-08T14:05:10Z",
+  "elapsed_seconds": 82,
+  "elapsed_ms": 81899,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "2026-11-08T14:05:10.604997Z ERROR labwired_cli::execute: Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: [\"pmc pcsr0=1f802100 ok\", \"tc0 up_rc imr=10 pends=3 released=3 cv<=rc=1 ok\", \"tc1 up adv=1 covfs=1 cleared=1 ok\", \"t",
+  "failure_hint": "Smoke assertion mismatch. Compare expected stop/assertions with current deterministic output.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 80.019,
+    "build_firmware": 0.741,
+    "run_smoke": 1.1
+  },
+  "stages_ms": {
+    "build_cli": 80019,
+    "build_firmware": 741,
+    "run_smoke": 1100
+  }
+}

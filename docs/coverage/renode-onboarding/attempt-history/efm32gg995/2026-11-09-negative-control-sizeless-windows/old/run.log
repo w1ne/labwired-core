@@ -1,0 +1,6 @@
+2026-11-09T16:41:46.336515Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/efm32gg995.yaml
+2026-11-09T16:41:46.340602Z  INFO labwired_loader: ELF Entry Point: 0x401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-09T16:41:46.347309Z  WARN labwired_core::peripherals::gpio: EFM32 GPIO PINLOCKN 0xfffe: pin lock is stored but not enforced
+PASS  7/7 checks · efm32gg995-old · 400000 steps · 0.09s

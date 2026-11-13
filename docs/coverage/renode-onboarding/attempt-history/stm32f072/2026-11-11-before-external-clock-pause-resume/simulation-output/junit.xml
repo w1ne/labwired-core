@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="9" failures="0" errors="0" time="0.459615">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="f9e82a023f86d25741157d021667c71e53e24c2e177bb1a012195c134de73f4f"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.459615">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: STM32F072 Cortex-M0 smoke" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: usart2 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_contains: usart3 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: uart_contains: usart4 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: uart_ordered: [&quot;rcc reset=1 gate=1 ok&quot;, &quot;usart irq u2=1 u3=1 u4=1 ok&quot;, &quot;gpio pa=1 reset=1 pf=1 de=1 ok&quot;, &quot;exti swier ma…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: memory_value: @0x20003000=0x73fffff" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: gpio_edges: gpiof:0 &gt;= 4 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 8: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

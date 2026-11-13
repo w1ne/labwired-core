@@ -1,6 +1,8 @@
 name: stm32f103
-description: 'STMicroelectronics STM32F103 performance line ARM Cortex-M3 (famous
-  ''Blue Pill'' target chip). Architecture: ARMv7-M.'
+description: >-
+  Imported STM32F103 Cortex-M3 profile, bounded to 64 KiB flash, 20 KiB SRAM,
+  RCC, GPIOA/GPIOB, USART2 and I2C1 with modeled TMP102 and BME280 devices. The
+  whole platform and other peripherals are unverified.
 family: STM32F1
 url: https://www.st.com/en/microcontrollers-microprocessors/stm32f103.html
 code_example: "/* Zephyr Blinky for STM32 */\n#include <zephyr/kernel.h>\n#include\
@@ -9,17 +11,34 @@ code_example: "/* Zephyr Blinky for STM32 */\n#include <zephyr/kernel.h>\n#inclu
   \    while (1) {\n        gpio_pin_toggle_dt(&led);\n        k_msleep(500);\n  \
   \  }\n}"
 pass_rate: 100
-verified: true
+verified: false
 system: systems/onboarding/stm32f103.yaml
 validation:
-  method: ci-arm-fixture-simulation
-  reason: simulation-ok
+  method: renode-onboarding-exact-import-smoke
+  reason: bounded Cortex-M3 USART2 and I2C1 NACK/STOP, TMP102 register read/write, and BME280 seeded plus live environmental input compensation and control-register storage read-back smoke; whole platform remains unverified
   checks:
     system_manifest: true
     chip_descriptor: true
-    simulation: true
-  timestamp_utc: '2026-10-18T14:40:26.905808+00:00'
+    cortex_m3_smoke: true
+    usart2_tx: true
+    i2c1_no_slave_nack: true
+    i2c1_stop_idle: true
+    tmp102_temperature_read: true
+    tmp102_configuration_write_mask: true
+    tmp102_alert_threshold_write_masks: true
+    tmp102_single_byte_msb_update: true
+    bme280_chip_id_read: true
+    bme280_calibration_read: true
+    bme280_pressure_temperature_humidity_read: true
+    bme280_seeded_environment_ranges: true
+    bme280_live_temperature_stimulus: true
+    bme280_live_humidity_stimulus: true
+    bme280_live_pressure_stimulus: true
+    bme280_control_register_storage: true
+    whole_platform: false
+    other_peripherals: false
+  timestamp_utc: '2026-11-06T14:35:52Z'
   run_url: ''
-  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/stm32f103.validation.md
+  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/coverage/renode-onboarding/metrics/stm32f103/
 provenance:
   generated_by: scripts/onboard_hw_targets.py

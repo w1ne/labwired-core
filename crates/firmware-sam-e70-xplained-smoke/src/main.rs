@@ -62,7 +62,7 @@ const PIO_SODR: u32 = 0x30;
 const PIO_CODR: u32 = 0x34;
 const PIO_ODSR: u32 = 0x38;
 const PIO_PDSR: u32 = 0x3C;
-const PIO_PUER: u32 = 0x60;
+const PIO_PUER: u32 = 0x64;
 const PIO_ABCDSR1: u32 = 0x70;
 const PIO_ABCDSR2: u32 = 0x74;
 

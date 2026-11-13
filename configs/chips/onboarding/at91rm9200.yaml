@@ -4,32 +4,40 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
+# Imported Renode target `at91rm9200`, narrowed to what the engine executes and
+# the Debug Unit smoke exercises.
+#
+# CPU: the silicon is an ARM920T (ARMv4T). Neither the pinned tlib nor the
+# embedded engine has an ARM920T model; Renode's own platform
+# (platforms/cpus/at91rm9200.repl) runs this part as tlib `arm926ej-s` with
+# ModelID overridden to 0x41009200. This profile declares that same ARM926EJ-S
+# model, without the ModelID override: MIDR reads the ARM926EJ-S value, and
+# ARMv5TE instructions an ARM920T would treat as undefined execute. The smoke
+# fixture is assembled for -mcpu=arm920t and uses only ARMv4T instructions.
+#
+# Memory: Renode's 0x30000-byte internal memory at 0x00000000. The imported
+# descriptor had placed it at 0x08000000 (an STM32 default), which was wrong.
+# The 256 MiB SDRAM at 0x20000000 (aliased at 0xC0000000) is omitted.
+#
+# Peripherals: only the Debug Unit (DBGU) at 0xFFFFF200 on the SAM USART
+# register map: DBGU_SR 0x14 with TXRDY (bit 1) and TXEMPTY (bit 9) idle-set,
+# RHR 0x18, THR 0x1C. TX is captured whether or not DBGU_CR.TXEN was written.
+# Baud rate, DBGU_CIDR/EXID, interrupts and RX are not modelled. The AIC,
+# system timer, the PLLAR/PLLBR/MCKR constant-read scripts, PIO and the rest
+# of the AT91RM9200 are not modelled and are intentionally omitted.
 name: at91rm9200
 arch: arm
-flash:
-  base: 134217728
-  size: 196608B
+core: arm926ej-s
+flash: { base: 0, size: 0 }
 ram:
-  base: 536870912
-  size: 196608B
+  base: 0x00000000
+  size: 192KB
+flash_boot_alias: false
 peripherals:
 - id: uart0
-  type: atmel91debugunit
+  type: uart
   bus: sysbus
-  base_address: 4294963712
-- id: systemTimer
-  type: atmel91systemtimer
-  bus: sysbus
-  base_address: 4294966528
-- id: ckgrPllar
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 4294966312
-- id: ckgrPllbr
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 4294966316
-- id: pmcMkcr
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 4294966320
+  base_address: 0xFFFFF200
+  size: 512
+  config:
+    profile: sam

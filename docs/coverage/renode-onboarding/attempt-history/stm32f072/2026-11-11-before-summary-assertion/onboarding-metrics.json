@@ -1,0 +1,37 @@
+{
+  "target_id": "stm32f072",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 4000000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-stm32f072-smoke",
+  "target_triple": "thumbv6m-none-eabi",
+  "script": "examples/renode-onboarding/stm32f072-smoke.yaml",
+  "system": "configs/systems/onboarding/stm32f072.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-11T20:57:54Z",
+  "finished_at_utc": "2026-11-11T20:57:57Z",
+  "elapsed_seconds": 4,
+  "elapsed_ms": 3740,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "2026-11-11T20:57:57.691732Z ERROR labwired_cli::execute: Memory assertion failed at 0x20003000 (size 4): expected 0x7fffffff, got 0xffffffff (mask 0xffffffff)",
+  "failure_hint": "Smoke assertion mismatch. Compare expected stop/assertions with current deterministic output.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.32,
+    "build_firmware": 2.569,
+    "run_smoke": 0.805
+  },
+  "stages_ms": {
+    "build_cli": 320,
+    "build_firmware": 2569,
+    "run_smoke": 805
+  }
+}

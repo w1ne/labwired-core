@@ -1,0 +1,7 @@
+2026-11-03T06:17:50.136212Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f429.yaml
+2026-11-03T06:17:50.137727Z  INFO labwired_loader: ELF Entry Point: 0x8000401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-03T06:17:50.262089Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "OK" }) (captured len=1)
+2026-11-03T06:17:50.262120Z ERROR labwired_cli::execute: Assertion failed: GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: "gpioPortI:1", min_edges: 1 } }) (captured len=1)
+FAIL  1/3 checks · stm32f429-smoke · 800000 steps · 0.12s

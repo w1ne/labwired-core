@@ -1,0 +1,409 @@
+{
+  "result_schema_version": "1.0",
+  "status": "fail",
+  "steps_executed": 3000000,
+  "cycles": 3000000,
+  "instructions": 3000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 3000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 3000000
+    }
+  },
+  "limits": {
+    "max_steps": 3000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_ordered": [
+          "SAM4S XPLAINED RENODE SMOKE",
+          "eefc fmr=00000500 ok",
+          "eefc getd size=00100000",
+          "eefc gpnvm=2 set=3 glb=2 clb=0 ok",
+          "eefc fsr badkey=3 after=1 ok",
+          "rstc sr=00010000 wdt mr=3fff2fff ok",
+          "rstc software reset",
+          "SAM4S XPLAINED RENODE SMOKE",
+          "rstc rsttyp=3 ok",
+          "wdt arm wdv=2",
+          "SAM4S XPLAINED RENODE SMOKE",
+          "wdt rsttyp=2 mr=3fff2fff ok",
+          "wdt window sr=2 pended released ok",
+          "wdt mr once=00801100 ok",
+          "pio ports=3 ok",
+          "tc0 rc pend=1 ok",
+          "SAM4S XPLAINED PASS",
+          "SAM4S XPLAINED BOARD",
+          "tc0 up_rc imr=10 pends=3 released=3 cv<=rc=1 ok",
+          "tc1 up adv=1 covfs=1 cleared=1 ok",
+          "tc2 cpcstop cpcs=1 held=1 clksta=1 ok",
+          "tc3 cpcdis running=1 cpcs=1 clksta=0 ok",
+          "tc4 tc5 idle=1 sync=1 ra=0000 ok",
+          "tc5 pmc gated=1 held=1 tc4_runs=1 ok",
+          "leds off=81 d10 lit=01 ok",
+          "bp2 wait",
+          "bp2 pressed",
+          "bp2 imr=20 idle=1 pressed=1 quiet=1 release_pend=1 isr=20 cleared=1 ok",
+          "bp2 released level=1 ok",
+          "SAM4S XPLAINED BOARD PASS"
+        ]
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "pioC:10",
+          "min_edges": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 537001728,
+          "expected_value": 1514147839,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 537001732,
+          "expected_value": 1514471935,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      1074661896,
+      0,
+      48,
+      0,
+      1074660884,
+      0,
+      0,
+      537001960,
+      0,
+      1074664532,
+      537001472,
+      0,
+      0,
+      537001960,
+      4195409,
+      4218178
+    ],
+    "pc": 4218178,
+    "xpsr": 1090519040,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "01128a4812d6e27ded108f56a848a1835f3908c3b134e24c2f1d028ccea25cbf",
+  "config": {
+    "firmware": "/home/andrii/worktrees/labwired-core/renode/target/thumbv7em-none-eabi/release/firmware-sam4s-xplained-renode-smoke",
+    "system": "/tmp/r412/neg2/./system.yaml",
+    "script": "/tmp/r412/neg2/smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "tc0_1_2",
+        "kind": "native",
+        "base": 1073807360,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tc3_4_5",
+        "kind": "native",
+        "base": 1073823744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart0",
+        "kind": "native",
+        "base": 1073889280,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart1",
+        "kind": "native",
+        "base": 1073905664,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pmc",
+        "kind": "native",
+        "base": 1074660352,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart0",
+        "kind": "native",
+        "base": 1074660864,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart1",
+        "kind": "native",
+        "base": 1074661376,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pioA",
+        "kind": "native",
+        "base": 1074662912,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pioB",
+        "kind": "native",
+        "base": 1074663424,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pioC",
+        "kind": "native",
+        "base": 1074663936,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "bp2",
+        "device_type": null,
+        "declared": false,
+        "attachment": {
+          "transport": "gpio"
+        },
+        "artifacts": []
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 3000000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "pioC",
+        "pin": 10,
+        "initial": 0,
+        "transitions": [],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [],
+        "mode": "input",
+        "edge_count": 0
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "pioC",
+      "number": 10,
+      "mode": "input",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "z"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "SAM4S XPLAINED RENODE SMOKE",
+        "cycle_lo": 44,
+        "cycle": 45,
+        "end_cycle": 181
+      },
+      {
+        "text": "eefc fmr=00000000 FAIL",
+        "cycle_lo": 197,
+        "cycle": 198,
+        "end_cycle": 345
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "stimuli": [
+    {
+      "channel": "pressed",
+      "component": "bp2",
+      "value": 1.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 2000000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 2000000
+    },
+    {
+      "channel": "pressed",
+      "component": "bp2",
+      "value": 0.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 2200000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 2200000
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 38060,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 38060,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 1048576,
+    "ram_total_bytes": 131072,
+    "flash_used_pct": 3.63,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 131072,
+    "main_stack_high_water_bytes": 24,
+    "main_stack_free_min_bytes": 131044,
+    "main_stack_base": 536870912,
+    "main_stack_top": 537001984,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 131072,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 131044,
+    "heap_base": 536870912,
+    "heap_top": 537001984
+  },
+  "metrics": {
+    "cycles": 3000000,
+    "instructions": 3000000,
+    "steps_executed": 3000000,
+    "memory_reads": 423,
+    "memory_writes": 9,
+    "peripheral_accesses": 999995,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 4218168,
+        "count": 3906,
+        "symbol": "firmware_sam4s_xplained_renode_smoke::family::eefc"
+      },
+      {
+        "pc": 4218178,
+        "count": 3906,
+        "symbol": "firmware_sam4s_xplained_renode_smoke::family::eefc"
+      },
+      {
+        "pc": 4218160,
+        "count": 3905,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 4217300,
+        "count": 1,
+        "symbol": "core::ptr::write_volatile"
+      }
+    ],
+    "stalled_poll": {
+      "peripheral": "uart1",
+      "offset": 520,
+      "accesses": 999884
+    }
+  }
+}

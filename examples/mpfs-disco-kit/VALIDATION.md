@@ -16,6 +16,8 @@ is no MPFS bench part, and no Renode or QEMU run was diffed against.
 | WFI idle fast-forward to the timer compare | unit + firmware | `wfi_idle_budget_runs_to_the_timer_compare`; hello idles at 0.07 s wall |
 | MMUART 16550: LCR.DLAB selects DLL/DLM (divisor never reaches THR) | unit + firmware | `uart16550_dlab_routes_divisor_writes_to_the_latches`; console output starts clean |
 | Instruction support for the three images | audited | `unsupported_instruction_audit.sh`: 2,000,000 instructions each, 0 unsupported; a patched FP opcode reports 1 |
+| MSS GPIO_0..2, PLIC claim/complete, I2C0 master, SPI1 master | unit + firmware | `mpfs_i2c` 8, `mpfs_spi` 10, `plic` 16 unit tests; `mss-peripherals-smoke.yaml` 13/13 (same fixture and models as the imported Icicle Kit profile) |
+| Negative control | checked | Previous stub chip on `mss-peripherals-smoke.yaml`: every readback 0, PLIC id 0, FAIL 4/13 |
 | Negative control | checked | AMOs returning the new value: `atomic` suite FAIL 2/3, `PROJECT EXECUTION FAILED` |
 | Determinism | checked | fixtures rebuild byte-identically (`build.sh`, sha256 in its output) |
 
@@ -25,8 +27,11 @@ is no MPFS bench part, and no Renode or QEMU run was diffed against.
   images are built with `CONFIG_FPU=n` (soft-float ABI).
 - **S/U modes, Sv39 MMU, `satp`, delegation**: absent; `misa` reports only
   I, M, A, C, and `mstatus` keeps MPP = M.
-- **PLIC**: declared stub; `MEIP` is never set, so no peripheral interrupt
-  reaches the hart (Zephyr's console is polled).
+- **PLIC**: only the M-mode context of this hart drives `MEIP`; the per-pin
+  direct GPIO sources 13-50 are not wired. Zephyr's console stays polled.
+- **MSS I2C/SPI**: master mode only — no slave mode, SMBus, arbitration, SPI
+  modes, TX FIFO or bit timing. SPI0 is not declared; QSPI and the
+  system-controller mailbox are zero-answering stubs.
 - **Other harts**: the E51 and U54 2-4 do not exist; their CLINT `msip` /
   `mtimecmp` words read zero.
 - **PMP**: 16 entries are WARL storage only, never enforced.

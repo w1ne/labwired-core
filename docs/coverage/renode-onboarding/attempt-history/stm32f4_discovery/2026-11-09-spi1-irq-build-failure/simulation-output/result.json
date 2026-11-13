@@ -1,0 +1,422 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 4000000,
+  "cycles": 4000000,
+  "instructions": 4000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 4000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 4000000
+    }
+  },
+  "limits": {
+    "max_steps": 4000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "F4-DISCO SMOKE"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_ordered": [
+          "hb=0 ld4=on odr=00001000",
+          "hb=1 ld4=off odr=00000000",
+          "hb=2 ld3=on odr=00002000",
+          "hb=3 ld3=off odr=00000000"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      1073759232,
+      1073875988,
+      0,
+      134221400,
+      125056,
+      48,
+      19,
+      537001968,
+      1,
+      537001958,
+      134221352,
+      134221343,
+      0,
+      537001948,
+      537001959,
+      134221302
+    ],
+    "pc": 134221302,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "e63f22fc6d4d032e905263e8af1c9ef5cff1b22c271b3c94c48359d17e9f32fc",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-f4-discovery-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f4_discovery.yaml",
+    "script": "examples/renode-onboarding/stm32f4_discovery-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "usart2",
+        "kind": "native",
+        "base": 1073759232,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortA",
+        "kind": "native",
+        "base": 1073872896,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortD",
+        "kind": "native",
+        "base": 1073875968,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073887232,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "F4-DISCO SMOKE",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "hb=0 ld4=on odr=00001000",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "hb=1 ld4=off odr=00000000",
+        "cycle_lo": 200000,
+        "cycle": 210000,
+        "end_cycle": 210000
+      },
+      {
+        "text": "hb=2 ld3=on odr=00002000",
+        "cycle_lo": 410000,
+        "cycle": 420000,
+        "end_cycle": 420000
+      },
+      {
+        "text": "hb=3 ld3=off odr=00000000",
+        "cycle_lo": 610000,
+        "cycle": 620000,
+        "end_cycle": 620000
+      },
+      {
+        "text": "hb=4 ld5=on odr=00004000",
+        "cycle_lo": 820000,
+        "cycle": 830000,
+        "end_cycle": 830000
+      },
+      {
+        "text": "hb=5 ld5=off odr=00000000",
+        "cycle_lo": 1030000,
+        "cycle": 1040000,
+        "end_cycle": 1040000
+      },
+      {
+        "text": "hb=6 ld6=on odr=00008000",
+        "cycle_lo": 1230000,
+        "cycle": 1240000,
+        "end_cycle": 1240000
+      },
+      {
+        "text": "hb=7 ld6=off odr=00000000",
+        "cycle_lo": 1440000,
+        "cycle": 1450000,
+        "end_cycle": 1450000
+      },
+      {
+        "text": "hb=8 ld4=on odr=00001000",
+        "cycle_lo": 1650000,
+        "cycle": 1660000,
+        "end_cycle": 1660000
+      },
+      {
+        "text": "hb=9 ld4=off odr=00000000",
+        "cycle_lo": 1850000,
+        "cycle": 1860000,
+        "end_cycle": 1860000
+      },
+      {
+        "text": "hb=10 ld3=on odr=00002000",
+        "cycle_lo": 2060000,
+        "cycle": 2070000,
+        "end_cycle": 2070000
+      },
+      {
+        "text": "hb=11 ld3=off odr=00000000",
+        "cycle_lo": 2270000,
+        "cycle": 2280000,
+        "end_cycle": 2280000
+      },
+      {
+        "text": "hb=12 ld5=on odr=00004000",
+        "cycle_lo": 2470000,
+        "cycle": 2480000,
+        "end_cycle": 2480000
+      },
+      {
+        "text": "hb=13 ld5=off odr=00000000",
+        "cycle_lo": 2680000,
+        "cycle": 2690000,
+        "end_cycle": 2690000
+      },
+      {
+        "text": "hb=14 ld6=on odr=00008000",
+        "cycle_lo": 2890000,
+        "cycle": 2900000,
+        "end_cycle": 2900000
+      },
+      {
+        "text": "hb=15 ld6=off odr=00000000",
+        "cycle_lo": 3090000,
+        "cycle": 3100000,
+        "end_cycle": 3100000
+      },
+      {
+        "text": "hb=16 ld4=on odr=00001000",
+        "cycle_lo": 3300000,
+        "cycle": 3310000,
+        "end_cycle": 3310000
+      },
+      {
+        "text": "hb=17 ld4=off odr=00000000",
+        "cycle_lo": 3500000,
+        "cycle": 3510000,
+        "end_cycle": 3510000
+      },
+      {
+        "text": "hb=18 ld3=on odr=00002000",
+        "cycle_lo": 3710000,
+        "cycle": 3720000,
+        "end_cycle": 3720000
+      },
+      {
+        "text": "hb=19 ld3=off odr=00000000",
+        "cycle_lo": 3920000,
+        "cycle": 3930000,
+        "end_cycle": 3930000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 3688,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 3688,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 1048576,
+    "ram_total_bytes": 131072,
+    "flash_used_pct": 0.35,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 131072,
+    "main_stack_high_water_bytes": 32,
+    "main_stack_free_min_bytes": 131040,
+    "main_stack_base": 536870912,
+    "main_stack_top": 537001984,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 131072,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 131040,
+    "heap_base": 536870912,
+    "heap_top": 537001984
+  },
+  "metrics": {
+    "cycles": 4000000,
+    "instructions": 4000000,
+    "steps_executed": 4000000,
+    "memory_reads": 887,
+    "memory_writes": 116,
+    "peripheral_accesses": 3876134,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134221268,
+        "count": 313,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134221274,
+        "count": 312,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134221198,
+        "count": 275,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134221200,
+        "count": 275,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134221216,
+        "count": 274,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134221260,
+        "count": 274,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134221262,
+        "count": 274,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134221264,
+        "count": 274,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134221270,
+        "count": 274,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134221280,
+        "count": 274,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134221188,
+        "count": 273,
+        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 134221192,
+        "count": 273,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134221196,
+        "count": 273,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134221202,
+        "count": 273,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134221204,
+        "count": 273,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134221206,
+        "count": 273,
+        "symbol": "core::ptr::read_volatile"
+      }
+    ],
+    "stalled_poll": {
+      "peripheral": "gpioPortD",
+      "offset": 20,
+      "accesses": 74936
+    }
+  }
+}

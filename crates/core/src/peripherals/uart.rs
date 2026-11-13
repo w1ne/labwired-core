@@ -104,6 +104,12 @@ pub enum UartRegisterLayout {
     /// `R7FA8M1AH.h` (`R_SCI_B0_Type`). TX is gated on CCR0.TE; the control
     /// registers read back what firmware wrote.
     SciB,
+    /// Renesas SCIFA (RZ/G2L, RZ/V2L; Renode `RenesasRZG_SCIFA`): 16-bit
+    /// register block SMR@0x00, BRR@0x02, SCR@0x04, FTDR@0x06, FSR@0x08
+    /// (TDFE bit 5, TEND bit 6, RDF bit 1, DR bit 0), FRDR@0x0A, FCR@0x0C,
+    /// FDR@0x0E, SPTR@0x10, LSR@0x12, SEMR@0x14, FTCR@0x16. TX is dropped
+    /// while SCR.TE is clear. Interrupts are not modelled.
+    Scifa,
     /// Gaisler APBUART (LEON/GRLIB) — DATA@0x00, STATUS@0x04.
     Gaisler,
     /// Nuvoton NPCX — UTBUF@0x00, URBUF@0x02, readiness in UICTRL@0x04.
@@ -112,14 +118,18 @@ pub enum UartRegisterLayout {
     Max32650,
     /// lowRISC OpenTitan — WDATA@0x1C, RDATA@0x18, STATUS@0x14.
     OpenTitan,
-    /// Atmel/Microchip SAM USART (SAM3/SAM4) — US_CSR@0x14, US_THR@0x1C.
+    /// Atmel/Microchip SAM USART (SAM3/SAM4) — US_IER/IDR/IMR@0x08/0x0C/0x10,
+    /// US_CSR@0x14, US_RHR@0x18, US_THR@0x1C. IER/IDR/IMR and level IRQs
+    /// follow the modeled CSR flags; error/status producers beyond TXRDY,
+    /// TXEMPTY, and the RX queue's RXRDY remain outside this model.
     Sam,
     /// Microchip SAMD5x/SAME5x SERCOM USART — DATA@0x28, INTFLAG@0x18.
     Sercom,
     /// NXP i.MX UART — UTXD@0x40, URXD@0x00, USR1@0x94.
     Imx,
-    /// SiFive UART (FE310) — txdata@0x00 / rxdata@0x04, status folded in data
-    /// (TX faithful, RX presence approximate).
+    /// SiFive UART (FE310/FU540) — txdata@0x00 / rxdata@0x04, status folded in
+    /// data; TX/RX watermark IE/IP at 0x10/0x14. FIFO occupancy is bounded to
+    /// immediate TX drain and the live RX byte queue.
     Sifive,
     /// LiteX UART — rxtx@0x00, txfull@0x04 (TX faithful, RX approximate).
     Litex,
@@ -142,6 +152,12 @@ pub enum UartRegisterLayout {
     /// PicoSoC simpleuart — reg_dat@0x04 (write=TX, read=RX), no status register
     /// (TX blocks in HW; RX reads -1 when empty). Estate-level.
     PicoUart,
+    /// FocalTech FT9001 USART (Renode `UART.FT9001_USART`): byte registers
+    /// BDL@0x00, BDH@0x01, CR2@0x02 (TE bit 3), CR1@0x03, DRL@0x06,
+    /// BRDF@0x0A, FCR@0x0E, FSR@0x11 (REMPTY bit 0, TEMPTY bit 2, RFTS bit 5,
+    /// FTC bit 6), FCR2@0x13 (RXFCLR bit 0), FSR2@0x15. TX is dropped while
+    /// CR2.TE is clear. Interrupts are not modelled.
+    Ft9001,
     /// Microchip AVR USART0 (ATmega328P), mirrored from the CPU: UCSR0A@0x00,
     /// UCSR0B@0x01, UCSR0C@0x02, UBRR0@0x04/0x05, UDR0@0x06. The AVR core keeps
     /// the registers firmware reads back; this model hosts the stream peers and
@@ -179,6 +195,7 @@ impl FromStr for UartRegisterLayout {
             "leuart" => Ok(Self::Leuart),
             "sci" | "renesas_sci" | "sh_sci" => Ok(Self::Sci),
             "sci_b" | "renesas_sci_b" | "ra8_sci" => Ok(Self::SciB),
+            "scifa" | "renesas_scifa" | "rzg_scifa" => Ok(Self::Scifa),
             "gaisler" | "apbuart" | "grlib" => Ok(Self::Gaisler),
             "npcx" | "nuvoton" => Ok(Self::Npcx),
             "max32650" | "maxim" => Ok(Self::Max32650),
@@ -194,13 +211,14 @@ impl FromStr for UartRegisterLayout {
             "pulp" | "udma" => Ok(Self::Pulp),
             "esci" | "mpc5567" => Ok(Self::Esci),
             "picosoc" | "simpleuart" => Ok(Self::PicoUart),
+            "ft9001" | "ft9001_usart" | "focaltech" => Ok(Self::Ft9001),
             "avr" | "atmega" | "usart0" => Ok(Self::Avr),
             "custom" | "generic" | "offsets" => Ok(Self::Custom),
             _ => Err(format!(
                 "unsupported UART register layout '{}'; supported: stm32f1, stm32v2, nrf52, \
                  lpuart, ns16550, dw_apb_uart, pl011, cadence, efm32, efr32, efr32s2, leuart, sci, \
-                 sci_b, gaisler, npcx, max32650, opentitan, sam, sercom, imx, sifive, litex, murax, \
-                 coreuart, k6xf, pulp, custom",
+                 sci_b, scifa, gaisler, npcx, max32650, opentitan, sam, sercom, imx, sifive, litex, murax, \
+                 coreuart, k6xf, pulp, esci, picosoc, ft9001, avr, custom",
                 value
             )),
         }
@@ -496,6 +514,24 @@ impl UartRegisterLayout {
                 rx_present_set: 1 << 31,            // RDRF
                 rx_present_clear: 0,
             },
+            // Renesas SCIFA (RZ/G2L). FTDR@0x06, FRDR@0x0A, FSR@0x08 (16-bit):
+            // TDFE(5)|TEND(6) at idle (Renode resets FSR to 0x60), a waiting
+            // byte sets RDF(1)|DR(0). TX leaves at once, so TDFE/TEND never
+            // drop; firmware's clear-after-read writes to FSR are accepted
+            // and ignored. The control registers live in `Uart::scifa_regs`.
+            UartRegisterLayout::Scifa => UartRegMap {
+                status: SCIFA_FSR,
+                tx: SCIFA_FTDR,
+                rx: SCIFA_FRDR,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 2,
+                status_idle: 0x60,    // TDFE | TEND
+                rx_present_set: 0x03, // RDF | DR
+                rx_present_clear: 0,
+            },
             // Gaisler APBUART (LEON/GRLIB). DATA@0x00, STATUS@0x04: TS(1)|TE(2)
             // ready, DR(0) set on data. Reset 0x06.
             UartRegisterLayout::Gaisler => UartRegMap {
@@ -733,6 +769,23 @@ impl UartRegisterLayout {
                 rx_present_set: 0,
                 rx_present_clear: 0,
             },
+            // FocalTech FT9001 USART. DRL@0x06 is both data registers;
+            // FSR@0x11 (8-bit): REMPTY(0)|TEMPTY(2)|FTC(6) at idle, and a
+            // waiting byte clears REMPTY and sets RFTS(5). Matches Renode's
+            // FT9001_USART, whose TX queue is never full.
+            UartRegisterLayout::Ft9001 => UartRegMap {
+                status: FT9001_FSR,
+                tx: FT9001_DRL,
+                rx: FT9001_DRL,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 1,
+                status_idle: 0x45,        // REMPTY | TEMPTY | FTC
+                rx_present_set: 1 << 5,   // RFTS
+                rx_present_clear: 1 << 0, // REMPTY
+            },
             // AVR USART0: UCSR0A is the status byte (UDRE0 bit 5 idle, RXC0
             // bit 7 when a byte waits), UDR0@0x06 is both data registers. No
             // TX interrupt: the model never holds a byte in UDR0.
@@ -819,6 +872,51 @@ const SCI_SSR_FIFO_RDF: u8 = 1 << 6;
 const SCI_SSR_FIFO_TEND: u8 = 1 << 2;
 const SCI_SSR_FIFO_DR: u8 = 1 << 0;
 
+/// FocalTech FT9001 USART byte registers (Renode `FT9001_USART`).
+const FT9001_CR2: u64 = 0x02;
+const FT9001_DRL: u64 = 0x06;
+const FT9001_FSR: u64 = 0x11;
+const FT9001_FCR2: u64 = 0x13;
+const FT9001_CR2_TE: u8 = 1 << 3;
+const FT9001_FCR2_RXFCLR: u8 = 1 << 0;
+/// Stored control registers and the bits that read back: BDL, BDH, CR2
+/// (RE|TE), CR1 (PT|PE|M), BRDF, FCR (RX/TX levels, TFEN, RFEN), FCR2
+/// (every enable except the write-only RXFCLR and reserved bit 6).
+const FT9001_CTRL: [(u64, u8); 7] = [
+    (0x00, 0xFF),
+    (0x01, 0xFF),
+    (FT9001_CR2, 0x0C),
+    (0x03, 0x23),
+    (0x0A, 0xFF),
+    (0x0E, 0xCF),
+    (FT9001_FCR2, 0xBE),
+];
+
+/// Renesas SCIFA 16-bit registers (Renode `RenesasRZG_SCIFA`, RZ/G2L
+/// R01UH0914 "Serial Communication Interface with FIFO").
+const SCIFA_BRR: u64 = 0x02;
+const SCIFA_SCR: u64 = 0x04;
+const SCIFA_FTDR: u64 = 0x06;
+const SCIFA_FSR: u64 = 0x08;
+const SCIFA_FRDR: u64 = 0x0A;
+const SCIFA_FCR: u64 = 0x0C;
+const SCIFA_FDR: u64 = 0x0E;
+const SCIFA_REGS: usize = 12;
+/// SCR: RE bit 4, TE bit 5.
+const SCIFA_SCR_RE: u16 = 1 << 4;
+const SCIFA_SCR_TE: u16 = 1 << 5;
+/// FCR: RFRST bit 1 empties the RX FIFO; RFRST/TFRST read back 0.
+const SCIFA_FCR_RFRST: u16 = 1 << 1;
+/// Bits that read back, indexed by offset / 2: SMR (CKS, STOP, PM, PE, CHR,
+/// C/A), BRR, SCR, -, -, -, FCR (LOOP, MCE, TTRG, RTRG, RSTRG), -, SPTR,
+/// LSR (error counts never set), SEMR (ABCS0, NFEN, DIR, MDDRS, BRME, BGDM),
+/// FTCR (TFTC, TTRGS, RFTC, RTRGS). FTDR/FSR/FRDR/FDR are handled apart.
+const SCIFA_MASK: [u16; SCIFA_REGS] = [
+    0x00FB, 0x00FF, 0x00FF, 0, 0, 0, 0x07F9, 0, 0x00FF, 0, 0x00BD, 0x9F9F,
+];
+/// Reset values: BRR 0xFF and FTCR 0x1F1F (Renode defaults).
+const SCIFA_RESET: [u16; SCIFA_REGS] = [0, 0xFF, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x1F1F];
+
 /// Minimal UART mock with selectable register layout.
 #[derive(serde::Serialize)]
 pub struct Uart {
@@ -857,6 +955,11 @@ pub struct Uart {
     sink: Option<Arc<Mutex<Vec<u8>>>>,
     #[serde(skip)]
     rx_buf: Arc<Mutex<VecDeque<u8>>>,
+    /// Scripted host input waiting for an STM32 receiver to be enabled.
+    /// It is kept separate from `rx_buf` so bytes injected before UE|RE do
+    /// not appear in DR/RDR or SR/ISR until the guest enables the receiver.
+    #[serde(skip)]
+    rx_wire_buf: Arc<Mutex<VecDeque<u8>>>,
     echo_stdout: bool,
     /// Optional prefix emitted at the start of each echoed line (used to label
     /// per-device output when several machines share one stdout, e.g. the
@@ -871,6 +974,10 @@ pub struct Uart {
     /// CR1 register (tracks TXEIE and TE bits for interrupt-driven TX simulation).
     cr1: u32,
     cr3: u32,
+    /// SAM USART interrupt mask, set/cleared through write-only IER/IDR.
+    /// The wired IRQ is the level `(US_CSR & US_IMR) != 0`.
+    #[serde(default)]
+    sam_imr: u32,
     /// F1-layout config registers, captured for read-back fidelity (BRR/CR2/GTPR
     /// have no behavioural effect in this instruction-level model, but firmware
     /// reads them back). Masked to the silicon writable bits on read. Unused by
@@ -959,6 +1066,16 @@ pub struct Uart {
     /// slow; stale `false` breaks fidelity.
     #[serde(skip)]
     irq_wired: bool,
+    /// SiFive UART control and interrupt-enable registers. Its FIFOs are not
+    /// buffered in this byte-oriented model: TX is empty after each accepted
+    /// byte, and the RX queue is the receive FIFO. The watermark interrupt
+    /// status is derived from those live occupancies.
+    #[serde(default)]
+    sifive_txctrl: u32,
+    #[serde(default)]
+    sifive_rxctrl: u32,
+    #[serde(default)]
+    sifive_ie: u32,
     /// Test/differential knob: pin this model to the legacy per-cycle walk
     /// (`uses_scheduler() == false`). `false` in every real config. See
     /// [`Uart::force_legacy_walk`].
@@ -1078,6 +1195,12 @@ pub struct Uart {
     /// The last transmitted byte went onto an RS-485 bus (driver enabled). The
     /// AVR core reads it to keep frames off its console.
     last_tx_on_bus: bool,
+    /// FT9001 layout: control registers as firmware wrote them, indexed by
+    /// offset (see [`FT9001_CTRL`]).
+    ft9001_regs: [u8; 0x14],
+    /// SCIFA layout: 16-bit registers as firmware wrote them, indexed by
+    /// offset / 2 (see [`SCIFA_MASK`]).
+    scifa_regs: [u16; SCIFA_REGS],
 }
 
 impl core::fmt::Debug for Uart {
@@ -1118,11 +1241,13 @@ impl Uart {
             tx_console_af: None,
             sink: None,
             rx_buf: Arc::new(Mutex::new(VecDeque::new())),
+            rx_wire_buf: Arc::new(Mutex::new(VecDeque::new())),
             echo_stdout: !matches!(layout, UartRegisterLayout::Avr),
             stdout_prefix: None,
             stdout_line_buf: String::new(),
             cr1: 0,
             cr3: 0,
+            sam_imr: 0,
             cr2: 0,
             brr: 0,
             gtpr: 0,
@@ -1145,6 +1270,9 @@ impl Uart {
             scheduled: false,
             // Conservative until the bus says otherwise (see `attach_irq_line`).
             irq_wired: true,
+            sifive_txctrl: 0,
+            sifive_rxctrl: 0,
+            sifive_ie: 0,
             legacy_walk_forced: false,
             stream_clock: None,
             last_stream_cycle: 0,
@@ -1172,6 +1300,8 @@ impl Uart {
             sci_fcr: 0,
             sci_scr: 0,
             last_tx_on_bus: false,
+            ft9001_regs: [0; 0x14],
+            scifa_regs: SCIFA_RESET,
         }
     }
 
@@ -1425,9 +1555,103 @@ impl Uart {
         true
     }
 
+    /// FT9001 control register at `offset`, masked to its readable bits.
+    fn ft9001_ctrl_byte(&self, offset: u64) -> Option<u8> {
+        if !matches!(self.layout, UartRegisterLayout::Ft9001) {
+            return None;
+        }
+        let (_, mask) = FT9001_CTRL.iter().find(|(o, _)| *o == offset)?;
+        Some(self.ft9001_regs[offset as usize] & mask)
+    }
+
+    /// SCIFA register byte at `offset`, other than FSR/FRDR (shared path).
+    /// FDR.R (bits 4:0) is the RX queue length capped at the 16-byte FIFO;
+    /// FDR.T reads 0 because a written byte leaves at once.
+    fn scifa_byte(&self, offset: u64) -> Option<u8> {
+        if !matches!(self.layout, UartRegisterLayout::Scifa) {
+            return None;
+        }
+        let index = (offset / 2) as usize;
+        if index >= SCIFA_REGS {
+            return None;
+        }
+        let word = if offset & !1 == SCIFA_FDR {
+            let len = self.rx_buf.lock().map(|g| g.len()).unwrap_or(0);
+            len.min(SCI_FIFO_DEPTH) as u16
+        } else {
+            self.scifa_regs[index] & SCIFA_MASK[index]
+        };
+        Some((word >> ((offset & 1) * 8)) as u8)
+    }
+
+    /// SCIFA register write other than FTDR. Returns false for FTDR (and on
+    /// other layouts) so the shared TX path transmits it. BRR only takes a
+    /// write while TE and RE are both clear, as in Renode. FCR.RFRST empties
+    /// the RX FIFO.
+    fn scifa_write(&mut self, offset: u64, value: u8) -> bool {
+        if !matches!(self.layout, UartRegisterLayout::Scifa) || offset & !1 == SCIFA_FTDR {
+            return false;
+        }
+        let index = (offset / 2) as usize;
+        if index >= SCIFA_REGS {
+            return true;
+        }
+        let scr = self.scifa_regs[(SCIFA_SCR / 2) as usize];
+        if offset & !1 == SCIFA_BRR && scr & (SCIFA_SCR_TE | SCIFA_SCR_RE) != 0 {
+            return true;
+        }
+        let shift = (offset & 1) * 8;
+        let v = u16::from(value) << shift;
+        if offset & !1 == SCIFA_FCR && v & SCIFA_FCR_RFRST != 0 {
+            if let Ok(mut guard) = self.rx_buf.lock() {
+                guard.clear();
+            }
+        }
+        let reg = &mut self.scifa_regs[index];
+        *reg = (*reg & !(0xFFu16 << shift)) | v;
+        true
+    }
+
+    /// FT9001 register write other than DRL. Returns false for DRL (and on
+    /// other layouts) so the shared TX path transmits it. RXFCLR empties the
+    /// RX FIFO; FSR is read-only and FSR2's error flags never set here.
+    fn ft9001_write(&mut self, offset: u64, value: u8) -> bool {
+        if !matches!(self.layout, UartRegisterLayout::Ft9001) || offset == FT9001_DRL {
+            return false;
+        }
+        if offset == FT9001_FCR2 && value & FT9001_FCR2_RXFCLR != 0 {
+            if let Ok(mut guard) = self.rx_buf.lock() {
+                guard.clear();
+            }
+        }
+        if FT9001_CTRL.iter().any(|(o, _)| *o == offset) {
+            self.ft9001_regs[offset as usize] = value;
+        }
+        true
+    }
+
     fn tx_enabled(&self) -> bool {
+        // Keep the STM32v2 console sink behind the same UE+TE prerequisite
+        // used by this layout's TEACK status model. A TDR write while either
+        // CR1 bit is clear is accepted by the bus, but it does not represent
+        // an emitted byte in the captured UART stream.
+        if matches!(self.layout, UartRegisterLayout::Stm32V2)
+            && self.cr1 & ((1 << 0) | (1 << 3)) != ((1 << 0) | (1 << 3))
+        {
+            return false;
+        }
+        if matches!(self.layout, UartRegisterLayout::Ft9001)
+            && self.ft9001_regs[FT9001_CR2 as usize] & FT9001_CR2_TE == 0
+        {
+            return false;
+        }
         if matches!(self.layout, UartRegisterLayout::SciB)
             && self.sci_b_regs[0] & SCI_B_CCR0_TE == 0
+        {
+            return false;
+        }
+        if matches!(self.layout, UartRegisterLayout::Scifa)
+            && self.scifa_regs[(SCIFA_SCR / 2) as usize] & SCIFA_SCR_TE == 0
         {
             return false;
         }
@@ -1526,6 +1750,36 @@ impl Uart {
         self.rx_buf.clone()
     }
 
+    /// Deliver bytes from a scripted or interactive UART peer. On STM32 F1
+    /// and V2 layouts, peer bytes sit on the wire until both UE and RE are
+    /// enabled; other layouts retain their established input-queue behavior.
+    pub fn inject_rx_bytes(&mut self, bytes: &[u8]) -> Result<usize, String> {
+        let queue = if matches!(
+            self.layout,
+            UartRegisterLayout::Stm32F1 | UartRegisterLayout::Stm32V2
+        ) {
+            &self.rx_wire_buf
+        } else {
+            &self.rx_buf
+        };
+        let mut guard = queue
+            .lock()
+            .map_err(|e| format!("UART RX queue poisoned: {e}"))?;
+        guard.extend(bytes.iter().copied());
+        Ok(bytes.len())
+    }
+
+    fn stm32_receiver_enabled(&self) -> bool {
+        let enable_mask = match self.layout {
+            // Legacy STM32 USART: UE is CR1 bit 13, RE is bit 2.
+            UartRegisterLayout::Stm32F1 => (1 << 13) | (1 << 2),
+            // Modern STM32 USART: UE is CR1 bit 0, RE is bit 2.
+            UartRegisterLayout::Stm32V2 => (1 << 0) | (1 << 2),
+            _ => return false,
+        };
+        self.cr1 & enable_mask == enable_mask
+    }
+
     /// Phase 2B.3b (issue #192): does the UART have anything that needs a
     /// per-tick wakeup? Level-triggered TXEIE/TCIE, an attached RX stream, or
     /// a pending DMA TX. Drives both the initial scheduler arm and the
@@ -1556,14 +1810,31 @@ impl Uart {
         let rxftie_armed = matches!(self.layout, UartRegisterLayout::Stm32V2)
             && self.cr1 & (1 << 29) != 0
             && self.cr3 & (1 << 28) != 0;
+        let rx_wire_ready = self.stm32_receiver_enabled()
+            && self
+                .rx_wire_buf
+                .lock()
+                .map(|g| !g.is_empty())
+                .unwrap_or(false);
+        let sam_irq_armed =
+            matches!(self.layout, UartRegisterLayout::Sam) && self.sam_irq_asserted();
+        let sifive_irq_armed = matches!(self.layout, UartRegisterLayout::Sifive)
+            && self.irq_wired
+            && self.sifive_irq_asserted();
         // RXNEIE is a level enable with no local producer: the byte arrives
         // asynchronously (an injected peer, a cross-chip link). Keep a wakeup
         // armed while it is set so a byte landing in `rx_buf` is observed and
         // the NVIC line is pended — the RX counterpart of the TXEIE/TCIE arm
         // below. Without it firmware waiting in HAL_UART_Receive_IT never sees
         // the character (60North hal-uart/hal-uart-dma).
-        let level_irq_observable =
-            self.irq_wired && (txeie_set || tcie_set || rxneie_armed || rxftie_armed || dmar_armed);
+        let level_irq_observable = self.irq_wired
+            && (txeie_set
+                || tcie_set
+                || rxneie_armed
+                || rxftie_armed
+                || dmar_armed
+                || sam_irq_armed
+                || sifive_irq_armed);
         // A buffered narration is real work: the wire is mid-burst, and the
         // flush that ends it needs a wakeup to happen on. Without this a
         // scheduler-driven bus would leave the last print unpublished.
@@ -1574,10 +1845,44 @@ impl Uart {
             && sci_b_irq::SciBIrq::rx_armed(self.sci_irq_ctrl())
             && self.rx_buf.lock().map(|g| !g.is_empty()).unwrap_or(false);
         level_irq_observable
+            || rx_wire_ready
             || sci_b_rx_armed
             || !self.attached_streams.is_empty()
             || self.dma_tx_pending
             || !self.wire_chars.is_empty()
+    }
+
+    /// Current UART interrupt output. STM32v2 exposes TXE/TC/RX conditions as
+    /// a level to the NVIC; the scheduler also samples this on each wake so
+    /// its legacy per-tick result stays identical.
+    fn irq_asserted(&self) -> bool {
+        let txeie_set = (self.cr1 & self.txeie_mask()) != 0 && self.txeie_mask() != 0;
+        let tcie_set = (self.cr1 & self.tcie_mask()) != 0 && self.tcie_mask() != 0;
+        let rx_len = self.rx_buf.lock().map(|g| g.len()).unwrap_or(0) as u32;
+        let rxneie_set = self.layout.rxneie_mask() != 0
+            && (self.cr1 & self.layout.rxneie_mask()) != 0
+            && rx_len > 0;
+        // FIFO threshold interrupt (CR3.RXFTIE, RM0456 §66.8.4): the same
+        // threshold that sets ISR.RXFT.
+        let rxftie_set = matches!(self.layout, UartRegisterLayout::Stm32V2)
+            && self.cr1 & (1 << 29) != 0
+            && self.cr3 & (1 << 28) != 0
+            && {
+                let cfg = (self.cr3 >> 25) & 0x7;
+                let threshold = match cfg {
+                    0 => 1,
+                    1 => 2,
+                    2 => 4,
+                    3 => 6,
+                    4 => 7,
+                    5 => 8,
+                    _ => 8,
+                };
+                rx_len >= threshold
+            };
+        let sifive_irq =
+            matches!(self.layout, UartRegisterLayout::Sifive) && self.sifive_irq_asserted();
+        txeie_set || tcie_set || rxneie_set || rxftie_set || sifive_irq
     }
 
     /// Phase 2B.3b: one tick-equivalent of work, shared verbatim by the legacy
@@ -1597,6 +1902,11 @@ impl Uart {
     /// default), so `n` polls is the only way to produce the `n` bytes the
     /// per-cycle path would have produced, in the same order.
     fn advance_ticks(&mut self, n: u32) -> (bool, Vec<u32>) {
+        if self.stm32_receiver_enabled() {
+            if let (Ok(mut wire), Ok(mut rx)) = (self.rx_wire_buf.lock(), self.rx_buf.lock()) {
+                rx.append(&mut wire);
+            }
+        }
         // Publish any burst the wire has now had time to carry. Cheap and
         // inert when nothing is buffered, which is every tick on a UART that
         // has no routed pads.
@@ -1733,33 +2043,7 @@ impl Uart {
             }
         }
 
-        // Fire while either TXEIE or TCIE is set:
-        // - TXEIE lets HAL push bytes into DR
-        // - TCIE delivers the final completion interrupt after the last byte
-        let txeie_set = (self.cr1 & self.txeie_mask()) != 0 && self.txeie_mask() != 0;
-        let tcie_set = (self.cr1 & self.tcie_mask()) != 0 && self.tcie_mask() != 0;
-        let rx_len = self.rx_buf.lock().map(|g| g.len()).unwrap_or(0) as u32;
-        let rxneie_set = self.layout.rxneie_mask() != 0
-            && (self.cr1 & self.layout.rxneie_mask()) != 0
-            && rx_len > 0;
-        // FIFO threshold interrupt (CR3.RXFTIE, RM0456 §66.8.4): the same
-        // threshold that sets ISR.RXFT.
-        let rxftie_set = matches!(self.layout, UartRegisterLayout::Stm32V2)
-            && self.cr1 & (1 << 29) != 0
-            && self.cr3 & (1 << 28) != 0
-            && {
-                let cfg = (self.cr3 >> 25) & 0x7;
-                let threshold = match cfg {
-                    0 => 1,
-                    1 => 2,
-                    2 => 4,
-                    3 => 6,
-                    4 => 7,
-                    5 => 8,
-                    _ => 8,
-                };
-                rx_len >= threshold
-            };
+        // Fire while TXEIE/TCIE is set or a buffered RX threshold is met.
         // USART_RX DMA request: asserted while a character is available in the
         // receiver and CR3.DMAR is set. The DMA reads RDR, which pops it.
         if self.layout.dmar_mask() != 0
@@ -1768,10 +2052,70 @@ impl Uart {
         {
             dma_signals.push(crate::DMA_SIGNAL_RX);
         }
-        (
-            txeie_set || tcie_set || rxneie_set || rxftie_set,
-            dma_signals,
-        )
+        (self.irq_asserted(), dma_signals)
+    }
+
+    /// SiFive UART `ip` watermark status. This profile models the transmit
+    /// FIFO as empty between writes and uses the receive queue as its RX FIFO.
+    /// The manual defines TXWM as `txfifo < txcnt` and RXWM as `rxfifo > rxcnt`.
+    fn sifive_ip(&self) -> u32 {
+        if !matches!(self.layout, UartRegisterLayout::Sifive) {
+            return 0;
+        }
+        let tx_threshold = (self.sifive_txctrl >> 16) & 0x7;
+        let tx_fifo_count = 0; // TXDATA is drained immediately by this model.
+        let rx_enabled = self.sifive_rxctrl & 1 != 0;
+        let rx_threshold = (self.sifive_rxctrl >> 16) & 0x7;
+        let rx_count = self.rx_buf.lock().map(|g| g.len() as u32).unwrap_or(0);
+        (u32::from(tx_fifo_count < tx_threshold))
+            | (u32::from(rx_enabled && rx_count > rx_threshold) << 1)
+    }
+
+    fn sifive_irq_asserted(&self) -> bool {
+        self.sifive_ip() & self.sifive_ie != 0
+    }
+
+    /// Byte view of the SiFive-specific control/status words. `None` leaves
+    /// data registers on the shared UART TX/RX paths.
+    fn sifive_control_byte(&self, offset: u64) -> Option<u8> {
+        if !matches!(self.layout, UartRegisterLayout::Sifive) {
+            return None;
+        }
+        let base = offset & !3;
+        let word = match base {
+            0x08 => self.sifive_txctrl,
+            0x0C => self.sifive_rxctrl,
+            0x10 => self.sifive_ie,
+            0x14 => self.sifive_ip(),
+            _ => return None,
+        };
+        let shift = ((offset - base) * 8) as u32;
+        Some((word >> shift) as u8)
+    }
+
+    /// SiFive UART writable control words. TXDATA remains handled by the
+    /// shared transmit path; `ip` is read-only.
+    fn sifive_control_write(&mut self, offset: u64, value: u8) -> bool {
+        if !matches!(self.layout, UartRegisterLayout::Sifive) {
+            return false;
+        }
+        let base = offset & !3;
+        let shift = ((offset - base) * 8) as u32;
+        let byte_mask = 0xFFu32 << shift;
+        let slot = match base {
+            0x08 => &mut self.sifive_txctrl,
+            0x0C => &mut self.sifive_rxctrl,
+            0x10 => &mut self.sifive_ie,
+            0x14 => return true, // IP is read-only.
+            _ => return false,
+        };
+        *slot = (*slot & !byte_mask) | (u32::from(value) << shift);
+        match base {
+            0x08 | 0x0C => *slot &= 0x0007_0003, // EN, NSTOP, watermark
+            0x10 => *slot &= 0x3,                // TXWM and RXWM enables
+            _ => {}
+        }
+        true
     }
 
     // The 7 accessors below all read from the single per-family `regmap()`
@@ -1816,6 +2160,42 @@ impl Uart {
     fn status_offset(&self) -> u64 {
         self.effective_regmap().status
     }
+
+    fn sam_imr_byte(&self, offset: u64) -> Option<u8> {
+        if matches!(self.layout, UartRegisterLayout::Sam) && (0x10..0x14).contains(&offset) {
+            Some((self.sam_imr >> ((offset - 0x10) * 8)) as u8)
+        } else {
+            None
+        }
+    }
+
+    fn sam_interrupt_write(&mut self, offset: u64, value: u8) -> bool {
+        if !matches!(self.layout, UartRegisterLayout::Sam) {
+            return false;
+        }
+        let (base, enable) = match offset {
+            0x08..0x0C => (0x08, true),
+            0x0C..0x10 => (0x0C, false),
+            _ => return false,
+        };
+        let shift = ((offset - base) * 8) as u32;
+        let mask = u32::from(value) << shift;
+        if enable {
+            self.sam_imr |= mask;
+        } else {
+            self.sam_imr &= !mask;
+        }
+        true
+    }
+
+    fn sam_irq_asserted(&self) -> bool {
+        if !matches!(self.layout, UartRegisterLayout::Sam) {
+            return false;
+        }
+        let rx_present = self.rx_buf.lock().map(|g| !g.is_empty()).unwrap_or(false);
+        self.status_word(rx_present) & self.sam_imr != 0
+    }
+
     /// The status register as a 32-bit word: the idle pattern adjusted for a
     /// pending RX byte (set the active-high "data present" flags, clear the
     /// active-high "empty" flags). Byte-addressed reads slice this word, so an
@@ -2421,6 +2801,10 @@ impl UartStreamHost for Uart {
 }
 
 impl crate::Peripheral for Uart {
+    fn inject_uart_rx(&mut self, bytes: &[u8]) -> Option<Result<usize, String>> {
+        Some(self.inject_rx_bytes(bytes))
+    }
+
     fn line_names(&self) -> &'static [&'static str] {
         UART_LINES
     }
@@ -2435,6 +2819,12 @@ impl crate::Peripheral for Uart {
 
     fn read(&self, offset: u64) -> SimResult<u8> {
         if let Some(byte) = self.timed_read(offset) {
+            return Ok(byte);
+        }
+        if let Some(byte) = self.sifive_control_byte(offset) {
+            return Ok(byte);
+        }
+        if let Some(byte) = self.sam_imr_byte(offset) {
             return Ok(byte);
         }
         if let Some(byte) = self.lcr_dlab_read(offset) {
@@ -2465,6 +2855,12 @@ impl crate::Peripheral for Uart {
                 return Ok(guard.pop_front().unwrap_or(0x00));
             }
             return Ok(0x00);
+        }
+        if let Some(b) = self.ft9001_ctrl_byte(offset) {
+            return Ok(b);
+        }
+        if let Some(b) = self.scifa_byte(offset) {
+            return Ok(b);
         }
         // F1 config registers (BRR/CR1/CR2/CR3/GTPR), masked read-back.
         if matches!(self.layout, UartRegisterLayout::Stm32F1) {
@@ -2563,6 +2959,12 @@ impl crate::Peripheral for Uart {
             }
             return Ok(());
         }
+        if self.sifive_control_write(offset, value) {
+            return Ok(());
+        }
+        if self.sam_interrupt_write(offset, value) {
+            return Ok(());
+        }
         if matches!(self.layout, UartRegisterLayout::Avr) {
             match offset {
                 0x00 => self.avr_ucsra = value,
@@ -2578,6 +2980,9 @@ impl crate::Peripheral for Uart {
                 0x06 => self.push_tx(value),
                 _ => {}
             }
+            return Ok(());
+        }
+        if self.ft9001_write(offset, value) || self.scifa_write(offset, value) {
             return Ok(());
         }
         if self.lcr_dlab_write(offset, value) {
@@ -2715,13 +3120,31 @@ impl crate::Peripheral for Uart {
         self.irq_wired = irq.is_some();
     }
 
-    /// Timed mode only: the USART interrupt line as a level. The default
-    /// model keeps its historical pulse semantics.
+    /// Timed UARTs, STM32v2 USARTs, SAM USARTs and SiFive UARTs report their
+    /// interrupt as a level. Other layouts keep their existing pulse semantics.
     fn irq_line_level(&self) -> Option<bool> {
         self.timed_level()
+            .or_else(|| {
+                matches!(self.layout, UartRegisterLayout::Stm32V2).then(|| self.irq_asserted())
+            })
+            .or_else(|| {
+                matches!(self.layout, UartRegisterLayout::Sam).then(|| self.sam_irq_asserted())
+            })
+            .or_else(|| {
+                matches!(self.layout, UartRegisterLayout::Sifive)
+                    .then(|| self.sifive_irq_asserted())
+            })
     }
 
     fn on_node_reset(&mut self) {
+        if matches!(self.layout, UartRegisterLayout::Sam) {
+            self.sam_imr = 0;
+        }
+        if matches!(self.layout, UartRegisterLayout::Sifive) {
+            self.sifive_txctrl = 0;
+            self.sifive_rxctrl = 0;
+            self.sifive_ie = 0;
+        }
         if self.timed.is_some() {
             self.timed_reset();
         }
@@ -2913,6 +3336,12 @@ impl crate::Peripheral for Uart {
 
     fn peek(&self, offset: u64) -> Option<u8> {
         if let Some(byte) = self.timed_peek(offset) {
+            return Some(byte);
+        }
+        if let Some(byte) = self.sifive_control_byte(offset) {
+            return Some(byte);
+        }
+        if let Some(byte) = self.sam_imr_byte(offset) {
             return Some(byte);
         }
         if offset == SCI_SSR && self.sci_fifo_mode() {
@@ -3146,11 +3575,23 @@ mod tests {
 
         // Wrong offset for v2 should not transmit.
         uart.write(0x04, b'X').unwrap();
-        // TDR offset
+        // TDR writes before UE+TE are not captured as emitted bytes.
         uart.write(0x28, b'Y').unwrap();
+        uart.write(0x00, 1 << 0).unwrap(); // UE without TE
+        uart.write(0x28, b'Z').unwrap();
+        uart.write(0x00, 1 << 3).unwrap(); // TE without UE
+        uart.write(0x28, b'W').unwrap();
+        assert!(
+            sink.lock().unwrap().is_empty(),
+            "UE and TE are both required"
+        );
+
+        // With UE and TE set, only TDR reaches the UART sink.
+        uart.write(0x00, (1 << 0) | (1 << 3)).unwrap();
+        uart.write(0x28, b'K').unwrap();
 
         let data = sink.lock().unwrap().clone();
-        assert_eq!(data, vec![b'Y']);
+        assert_eq!(data, vec![b'K']);
         assert_eq!(uart.read(0x1C).unwrap(), 0xC0); // ISR ready flags
     }
 
@@ -3297,6 +3738,52 @@ mod tests {
     }
 
     #[test]
+    fn sam_usart_ier_idr_imr_drive_the_csr_level_irq() {
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Sam);
+        assert_eq!(uart.read_u32(0x10).unwrap(), 0, "IMR resets disabled");
+        assert_eq!(uart.irq_line_level(), Some(false));
+
+        // CSR.TXRDY is already asserted by this model's idle status word.
+        uart.write_u32(0x08, 1 << 1).unwrap(); // IER.TXRDY
+        assert_eq!(uart.read_u32(0x10).unwrap(), 1 << 1);
+        assert_eq!(uart.peek(0x10), Some(1 << 1));
+        assert_eq!(uart.irq_line_level(), Some(true));
+
+        uart.write_u32(0x0C, 1 << 1).unwrap(); // IDR.TXRDY
+        assert_eq!(uart.read_u32(0x10).unwrap(), 0);
+        assert_eq!(uart.irq_line_level(), Some(false));
+
+        // RXRDY follows the live receive queue and drops when RHR is read.
+        uart.rx_buffer().lock().unwrap().push_back(b'R');
+        uart.write_u32(0x08, 1).unwrap(); // IER.RXRDY
+        assert_eq!(uart.read_u32(0x10).unwrap(), 1);
+        assert_eq!(uart.irq_line_level(), Some(true));
+        assert_eq!(uart.read_u32(0x18).unwrap() & 0xFF, u32::from(b'R'));
+        assert_eq!(uart.irq_line_level(), Some(false));
+    }
+
+    #[test]
+    fn sifive_uart_watermark_status_drives_its_level_irq() {
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Sifive);
+        assert_eq!(uart.read_u32(0x10).unwrap(), 0, "IE resets disabled");
+        assert_eq!(uart.read_u32(0x14).unwrap(), 0, "TX is disabled at reset");
+        assert_eq!(uart.irq_line_level(), Some(false));
+
+        uart.write_u32(0x08, (1 << 16) | 1).unwrap(); // TXEN and TXCNT=1.
+        assert_eq!(uart.read_u32(0x14).unwrap(), 1, "IP.TXWM follows TXCTRL");
+        assert_eq!(uart.irq_line_level(), Some(false), "IE still masks TXWM");
+
+        uart.write_u32(0x10, 1).unwrap(); // IE.TXWM
+        assert_eq!(uart.read_u32(0x10).unwrap(), 1);
+        assert_eq!(uart.irq_line_level(), Some(true));
+        assert!(uart.tick().irq, "wired level is delivered on the next tick");
+
+        uart.write_u32(0x10, 0).unwrap();
+        assert_eq!(uart.irq_line_level(), Some(false));
+        assert!(!uart.tick().irq, "disabling IE drops the UART source");
+    }
+
+    #[test]
     fn test_sci_classic_fifo_mode() {
         // FSP r_sci_uart (RA6M5 SCI0, 16-stage FIFO): FCR = FM | RFRST |
         // TFRST, wait until FCR reads back without the reset bits; Zephyr's
@@ -3394,6 +3881,48 @@ mod tests {
             "sci".parse::<UartRegisterLayout>().unwrap(),
             UartRegisterLayout::Sci
         );
+    }
+
+    #[test]
+    fn scifa_matches_the_renode_rzg_register_block() {
+        // Renode `RenesasRZG_SCIFA`: FTDR@0x06, FSR@0x08 resets to 0x60,
+        // FRDR@0x0A, SCR.TE (0x04 bit 5) gates TX, BRR locks while TE|RE.
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Scifa);
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        uart.set_sink(Some(sink.clone()), false);
+        assert_eq!(
+            "renesas_scifa".parse::<UartRegisterLayout>().unwrap(),
+            UartRegisterLayout::Scifa
+        );
+        assert_eq!(uart.read_u16(0x08).unwrap(), 0x60, "TDFE|TEND idle");
+        assert_eq!(uart.read(0x02).unwrap(), 0xFF, "BRR reset");
+        assert_eq!(uart.read_u16(0x16).unwrap(), 0x1F1F, "FTCR reset");
+
+        uart.write(0x06, b'x').unwrap();
+        assert!(sink.lock().unwrap().is_empty(), "TE clear drops TX");
+
+        uart.write_u16(0x00, 0xFFFF).unwrap();
+        uart.write(0x02, 0x1A).unwrap();
+        uart.write_u16(0x0C, 0xFFFF).unwrap();
+        assert_eq!(uart.read_u16(0x00).unwrap(), 0x00FB, "SMR readable bits");
+        assert_eq!(uart.read(0x02).unwrap(), 0x1A, "BRR reads back");
+        assert_eq!(uart.read_u16(0x0C).unwrap(), 0x07F9, "RFRST/TFRST read 0");
+
+        uart.write_u16(0x04, 0x0030).unwrap();
+        assert_eq!(uart.read_u16(0x04).unwrap(), 0x0030, "SCR keeps TE|RE");
+        uart.write(0x02, 0x55).unwrap();
+        assert_eq!(uart.read(0x02).unwrap(), 0x1A, "BRR locked while TE|RE");
+        uart.write(0x06, b'Q').unwrap();
+        assert_eq!(sink.lock().unwrap().clone(), vec![b'Q']);
+        assert_eq!(uart.read_u16(0x08).unwrap(), 0x60, "TX leaves at once");
+
+        uart.rx_buffer().lock().unwrap().extend([b'A', b'B']);
+        assert_eq!(uart.read_u16(0x08).unwrap(), 0x63, "RDF|DR on RX");
+        assert_eq!(uart.read_u16(0x0E).unwrap(), 2, "FDR.R counts RX");
+        assert_eq!(uart.read(0x0A).unwrap(), b'A');
+        uart.write_u16(0x0C, 0x0002).unwrap(); // FCR.RFRST
+        assert_eq!(uart.read_u16(0x08).unwrap(), 0x60, "RFRST emptied RX");
+        assert_eq!(uart.read_u16(0x0E).unwrap(), 0);
     }
 
     /// YAML `profile: custom`: TX at a declared data-register offset reaches
@@ -3564,6 +4093,37 @@ mod tests {
     }
 
     #[test]
+    fn ft9001_usart_matches_the_renode_register_block() {
+        // Renode `FT9001_USART`: DRL@0x06, FSR@0x11, CR2.TE (0x02 bit 3)
+        // gates TX, FCR2.RXFCLR (0x13 bit 0) empties the RX FIFO.
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Ft9001);
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        uart.set_sink(Some(sink.clone()), false);
+        assert_eq!(uart.read(0x11).unwrap(), 0x45, "REMPTY|TEMPTY|FTC idle");
+
+        uart.write(0x06, b'x').unwrap();
+        assert!(sink.lock().unwrap().is_empty(), "TE clear drops TX");
+
+        uart.write(0x02, 0xFF).unwrap();
+        uart.write(0x03, 0xFF).unwrap();
+        uart.write(0x00, 0x5A).unwrap();
+        uart.write(0x13, 0xFF).unwrap();
+        assert_eq!(uart.read(0x02).unwrap(), 0x0C, "CR2 keeps RE|TE");
+        assert_eq!(uart.read(0x03).unwrap(), 0x23, "CR1 keeps PT|PE|M");
+        assert_eq!(uart.read(0x00).unwrap(), 0x5A, "BDL reads back");
+        assert_eq!(uart.read(0x13).unwrap(), 0xBE, "RXFCLR is write-only");
+        uart.write(0x06, b'Q').unwrap();
+        assert_eq!(sink.lock().unwrap().clone(), vec![b'Q']);
+
+        uart.rx_buffer().lock().unwrap().extend([b'A', b'B']);
+        assert_eq!(uart.read(0x11).unwrap(), 0x64, "RFTS set, REMPTY clear");
+        assert_eq!(uart.read(0x06).unwrap(), b'A');
+        uart.write(0x13, 0x01).unwrap();
+        assert_eq!(uart.read(0x11).unwrap(), 0x45, "RXFCLR emptied the FIFO");
+        assert_eq!(uart.read(0x06).unwrap(), 0, "empty DRL reads 0");
+    }
+
+    #[test]
     fn test_kinetis_uart_c2_interrupt_enables() {
         // K6x UART C2 (0x03, byte register): TIE = bit 7, TCIE = bit 6,
         // RIE = bit 5 (K64P144M120SF5RM §52.3.4). TE/RE (bits 3/2) are not
@@ -3608,32 +4168,38 @@ mod tests {
         assert_eq!(uart.read(0x06).unwrap(), 0xC0, "RDRF clears once drained");
     }
 
-    /// Injected RX bytes are BUFFERED, not dropped, when they arrive before
-    /// the firmware has configured/enabled the receiver. This is the semantic
-    /// the test-script `uart_injections` field depends on: an `at_start`
-    /// injection is delivered before the firmware executes its first
-    /// instruction, so if the queue were gated on the enable bits the byte
-    /// would vanish and a script would silently pass on no input at all.
+    /// Scripted RX bytes arriving before firmware setup remain on the wire
+    /// until both STM32 receiver-enable bits are set. This is the semantic the
+    /// test-script `uart_injections` field depends on: an `at_start` injection
+    /// precedes the first instruction, but must not become visible in DR/SR
+    /// until UE and RE are enabled.
     #[test]
-    fn rx_bytes_injected_before_any_configuration_are_buffered_not_dropped() {
+    fn stm32f1_rx_bytes_wait_for_ue_and_re() {
         let mut uart = Uart::new_with_layout(UartRegisterLayout::Stm32F1);
-        // Nothing configured yet: CR1 is 0 (UE/TE/RE all clear).
-        assert_eq!(uart.cr1, 0);
-        uart.rx_buffer().lock().unwrap().push_back(b'Z');
+        assert_eq!(uart.inject_rx_bytes(b"RS").unwrap(), 2);
+        uart.advance_ticks(1);
+        assert_eq!(uart.read(0x00).unwrap() & (1 << 5), 0, "disabled UE/RE");
+        assert!(uart.rx_buffer().lock().unwrap().is_empty());
 
-        // RXNE (SR bit 5) already reads set — presence is derived from the
-        // queue, with no enable gating.
-        assert_eq!(uart.read(0x00).unwrap() & (1 << 5), 1 << 5);
-
-        // The firmware now enables the USART (UE|TE|RE) — the byte survived.
-        uart.write(0x0C, (1 << 2) | (1 << 3)).unwrap(); // RE|TE
+        // UE without RE still leaves the bytes on the wire.
+        uart.write(0x0C, 1 << 3).unwrap(); // TE
         uart.write(0x0D, 1 << 5).unwrap(); // UE (CR1 bit 13)
+        uart.advance_ticks(1);
+        assert_eq!(uart.read(0x00).unwrap() & (1 << 5), 0, "RE is clear");
+
+        // RE without UE also leaves the bytes on the wire.
+        uart.write(0x0C, (1 << 2) | (1 << 3)).unwrap(); // RE|TE
+        uart.write(0x0D, 0).unwrap(); // UE clear
+        uart.advance_ticks(1);
+        assert_eq!(uart.read(0x00).unwrap() & (1 << 5), 0, "UE is clear");
+
+        // Once both enables are present, the queued bytes reach DR in order.
+        uart.write(0x0D, 1 << 5).unwrap();
+        uart.advance_ticks(1);
         assert_eq!(uart.read(0x00).unwrap() & (1 << 5), 1 << 5);
-        assert_eq!(
-            uart.read(0x04).unwrap(),
-            b'Z',
-            "the early byte is still there"
-        );
+        assert_eq!(uart.read(0x04).unwrap(), b'R');
+        assert_eq!(uart.read(0x00).unwrap() & (1 << 5), 1 << 5);
+        assert_eq!(uart.read(0x04).unwrap(), b'S');
         assert_eq!(
             uart.read(0x00).unwrap() & (1 << 5),
             0,

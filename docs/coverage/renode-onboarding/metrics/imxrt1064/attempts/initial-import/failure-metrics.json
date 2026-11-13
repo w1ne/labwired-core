@@ -1,0 +1,37 @@
+{
+  "target_id": "imxrt1064",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": false,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 0,
+    "stop_reason": "memory_violation"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-imxrt1064-demo",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/renode-onboarding/imxrt1064-smoke.yaml",
+  "system": "configs/systems/onboarding/imxrt1064.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-03T21:12:59Z",
+  "finished_at_utc": "2026-11-03T21:13:01Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1255,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "2026-11-03T21:13:01.137265Z ERROR labwired_cli::execute: Simulation error at step 0: Memory access violation at 0xfffffffe",
+  "failure_hint": "Simulation failed. Inspect logs/run_smoke.log and fix the first failing operation only.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.279,
+    "build_firmware": 0.706,
+    "run_smoke": 0.257
+  },
+  "stages_ms": {
+    "build_cli": 279,
+    "build_firmware": 706,
+    "run_smoke": 257
+  }
+}

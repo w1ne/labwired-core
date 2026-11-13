@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="12" failures="0" errors="0" time="0.017156">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="4205bc5046276523bc790101e1a43750efd8484a78e5db5282864b99c8000ff3"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.017156">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: FRDM-K64F SMOKE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_ordered: [&quot;cpu=cortex-m4 uart=uart0&quot;, &quot;led=red on pin=0&quot;, &quot;led=red off pin=1&quot;, &quot;led=green on pin=0&quot;, &quot;led=green of…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: memory_value: @0x40048024=0x380" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x40048034=0xf0100430" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: memory_value: @0x40048038=0x42582" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: memory_value: @0x40052000=0x1d2" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: memory_value: @0x4005200e=0xd928" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 8: memory_value: @0x4004a040=0x300" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 9: memory_value: @0x4004a058=0x100" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 10: memory_value: @0x4004d068=0x100" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 11: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

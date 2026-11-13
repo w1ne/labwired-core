@@ -1,0 +1,38 @@
+{
+  "target_id": "simavr-atmega32u4",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 8,
+    "stop_reason": "memory_violation"
+  },
+  "smoke_passed": false,
+  "crate": null,
+  "target_triple": null,
+  "script": "examples/renode-onboarding/simavr-atmega32u4-smoke.yaml",
+  "system": "configs/systems/onboarding/simavr-atmega32u4.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-06T06:37:15Z",
+  "finished_at_utc": "2026-11-06T06:37:23Z",
+  "elapsed_seconds": 9,
+  "elapsed_ms": 8123,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "2026-11-06T06:37:23.698681Z ERROR labwired_cli::execute: Simulation error at step 0: Memory access violation at 0xaff",
+  "failure_hint": "Simulation failed. Inspect logs/run_smoke.log and fix the first failing operation only.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 7.813,
+    "build_firmware": null,
+    "run_smoke": 0.266
+  },
+  "stages_ms": {
+    "build_cli": 7813,
+    "build_firmware": null,
+    "run_smoke": 266
+  },
+  "prebuilt_firmware": "tests/fixtures/avr/atmega32u4-gpio-smoke.elf"
+}

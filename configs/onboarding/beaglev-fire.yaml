@@ -1,6 +1,6 @@
 name: beaglev-fire
-description: 'BeagleBoard.org BeagleV-Fire Single Board Computer using Microchip PolarFire
-  SoC. Architecture: RISC-V RV64GC.'
+description: 'BeagleBoard.org BeagleV-Fire single board computer using Microchip PolarFire
+  SoC. Measured profile: one U54 hart, RV64IMAC execution subset, bounded DDR, and MMUART0/1.'
 url: https://beagleboard.org/beaglev-fire
 family: BeagleBoard
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\

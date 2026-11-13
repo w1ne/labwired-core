@@ -1,13 +1,39 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
-#
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
-#
-# SUPERSEDED: staged onboarding descriptor (its flash at 0x08000000 / 4 KiB
-# and RAM at 0x20000000 are the Renode bootrom-logger scaffold, not the
-# Apollo4 Plus map). The promoted Apollo4 Plus part is
-# configs/chips/amap42kp.yaml (board: configs/systems/apollo4p-evb.yaml).
+# Imported Ambiq Apollo4 target, bounded to the supported Apollo4 Plus EVB
+# CPU, memory, UART0, GPIO and power-control profile. Other board devices,
+# the secure bootloader and unmodelled peripherals are not claimed here.
 
 name: ambiq-apollo4
 chip: ../../chips/onboarding/ambiq-apollo4.yaml
+cpu_hz: 96000000
+external_devices: []
+board_io:
+  - id: led0
+    kind: led
+    peripheral: gpio
+    pin: 30
+    signal: output
+    active_high: false
+  - id: led1
+    kind: led
+    peripheral: gpio
+    pin: 90
+    signal: output
+    active_high: false
+  - id: led2
+    kind: led
+    peripheral: gpio
+    pin: 97
+    signal: output
+    active_high: false
+  - id: btn0
+    kind: button
+    peripheral: gpio
+    pin: 18
+    signal: input
+    active_high: false
+  - id: btn1
+    kind: button
+    peripheral: gpio
+    pin: 19
+    signal: input
+    active_high: false

@@ -1,0 +1,409 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 100000,
+  "cycles": 100000,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "MAX32652 UART0 smoke"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "MAX32652 UART1 line"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "MAX32652 UART2 line"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "MAX32652 checks PPPPPPPPPP DONE"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 537915392,
+          "expected_value": 2737177599,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "port2:25",
+          "min_edges": 6
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      1074012168,
+      10,
+      2684354560,
+      2097148,
+      80,
+      2097148,
+      1023,
+      537915376,
+      1074016264,
+      511,
+      4294867296,
+      80,
+      1074020360,
+      537915352,
+      1073782812,
+      268440972
+    ],
+    "pc": 268440972,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "d5eb4184d539e8df4142e3f1f50efaa92767ab39d0e2f40b77f719b819d9d3fd",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-max32652-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/max32652-evkit.yaml",
+    "script": "examples/renode-onboarding/max32652-evkit-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "uart0",
+        "kind": "native",
+        "base": 1074012160,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart1",
+        "kind": "native",
+        "base": 1074016256,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart2",
+        "kind": "native",
+        "base": 1074020352,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port0",
+        "kind": "native",
+        "base": 1073774592,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port1",
+        "kind": "native",
+        "base": 1073778688,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port2",
+        "kind": "native",
+        "base": 1073782784,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port3",
+        "kind": "native",
+        "base": 1073786880,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "button0",
+        "device_type": null,
+        "declared": false,
+        "attachment": {
+          "transport": "gpio"
+        },
+        "artifacts": []
+      },
+      {
+        "id": "button1",
+        "device_type": null,
+        "declared": false,
+        "attachment": {
+          "transport": "gpio"
+        },
+        "artifacts": []
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 100000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "port2",
+        "pin": 25,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 63,
+            "value": 1
+          },
+          {
+            "cycle": 81,
+            "value": 0
+          },
+          {
+            "cycle": 283,
+            "value": 1
+          },
+          {
+            "cycle": 284,
+            "value": 0
+          },
+          {
+            "cycle": 285,
+            "value": 1
+          },
+          {
+            "cycle": 286,
+            "value": 0
+          },
+          {
+            "cycle": 287,
+            "value": 1
+          },
+          {
+            "cycle": 288,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 62,
+            "state": "0"
+          },
+          {
+            "cycle": 63,
+            "state": "1"
+          },
+          {
+            "cycle": 81,
+            "state": "0"
+          },
+          {
+            "cycle": 283,
+            "state": "1"
+          },
+          {
+            "cycle": 284,
+            "state": "0"
+          },
+          {
+            "cycle": 285,
+            "state": "1"
+          },
+          {
+            "cycle": 286,
+            "state": "0"
+          },
+          {
+            "cycle": 287,
+            "state": "1"
+          },
+          {
+            "cycle": 288,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 8
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "port2",
+      "number": 25,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "MAX32652 UART0 smoke",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "MAX32652 UART1 line",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "MAX32652 UART2 line",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "MAX32652 checks PPPPPPPPPP DONE",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 5532,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 5532,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 3145728,
+    "ram_total_bytes": 1048576,
+    "flash_used_pct": 0.18,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 1044480,
+    "main_stack_high_water_bytes": 40,
+    "main_stack_free_min_bytes": 1044440,
+    "main_stack_base": 536870912,
+    "main_stack_top": 537915392,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 1044480,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 1044440,
+    "heap_base": 536870912,
+    "heap_top": 537915392
+  },
+  "metrics": {
+    "cycles": 100000,
+    "instructions": 100000,
+    "steps_executed": 100000,
+    "memory_reads": 947,
+    "memory_writes": 14,
+    "peripheral_accesses": 232,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 268440972,
+        "count": 3,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      }
+    ]
+  }
+}

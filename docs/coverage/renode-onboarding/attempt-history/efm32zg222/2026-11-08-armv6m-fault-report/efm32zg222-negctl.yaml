@@ -1,0 +1,31 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: efm32zg222
+arch: arm
+# Measured onboarding profile: Cortex-M0+, imported flash/RAM, and the modeled
+# USART1 console, Series-0 GPIO ports and TIMER0..TIMER1 exercised by the smoke.
+# Other blocks Renode's efm32zg222.repl maps (I2C0, LEUART0, USART0) are not
+# claimed here because the engine has no model-backed coverage for them.
+core: cortex-m0+
+flash:
+  # EFM32ZG main flash is mapped at 0x00000000 (Renode efm32zg222.repl;
+  # EFM32ZG reference manual memory map).
+  base: 0
+  size: 32768B
+ram:
+  base: 536870912
+  size: 4096B
+peripherals:
+- id: usart1
+  type: efm32_uart
+  bus: sysbus
+  base_address: 1073792000
+# Series-0 GPIO ports A..F (Renode: one `GPIOPort.EFMGPIOPort` at
+# 0x40006000). GPIO_P_TypeDef at a 0x24 stride (Gecko SDK efm32zg_gpio_p.h).
+# Register sets exist for all six ports; which pins are bonded out on this
+# package is not modelled. The block head from 0x40006100 (EXTI, ROUTE,
+# INSENSE, EM4 wake) is NOT mapped: no model behind it.

@@ -1,0 +1,28 @@
+# CPU, DRAM and uart1 smoke against the narrowed imported Andes AE350 profile:
+# RV32IM MUL result, 16550 LCR/DLAB divisor readback, idle LSR, and a polled
+# banner on Renode's wide-register uart1 @ 0xF0300020.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32im-unknown-none-elf/release/firmware-andes-ae350-n25-smoke"
+  system: "../../configs/systems/onboarding/andes_ae350_n25.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - memory_value:
+      address: 0x1000
+      expected_value: 0x00000143
+      size: 4
+  - memory_value:
+      address: 0x1004
+      expected_value: 0x00000060
+      size: 4
+  - memory_value:
+      address: 0x1008
+      expected_value: 0x00030141
+      size: 4
+  - memory_value:
+      address: 0x100C
+      expected_value: 0xAE350001
+      size: 4
+  - uart_contains: "AE350 N25 uart1 ok"
+  - expected_stop_reason: max_steps

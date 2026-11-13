@@ -1,0 +1,75 @@
+# Cortex-M4 smoke against the nRF52840 DK row, which loads the nrf52840
+# silicon profile (Renode: boards/nrf52840dk_nrf52840.repl uses
+# cpus/nrf52840.repl) plus the board IO. Bare-register firmware
+# (crates/firmware-nrf52840-demo/src/nrf52840dk_smoke.rs) runs the chip row's
+# eight blocks — FICR INFO.PART + NVMC READY, CLOCK HFXO/LFXO, GPIO P0.13
+# readback, GPIOTE task toggles at the pad, TIMER0 compare/capture/clear, RTC0
+# compare, RNG, PPI EGU0->EGU1 — then LED1-4 (P0.13-16, active low) lit one at
+# a time, Button 1-4 (P0.11/12/24/25, active low on the pull-up) pressed once
+# each by the stimuli below, and a GPIOTE Event-mode HiToLo channel on Button 1
+# that must fire and pend NVIC line 6 on the fifth press and stay quiet on its
+# release. Not exercised: TEMP/ECB, radio, USBD, QSPI, SAADC, PWM, TWI/SPI,
+# UART1, WDT (as in the nrf52840 chip row).
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nrf52840dk-smoke"
+  system: "../../configs/systems/onboarding/nrf52840dk_nrf52840.yaml"
+limits:
+  max_steps: 4000000
+stimuli:
+  - target: { component: "button1", channel: "pressed" }
+    trigger: !after_cycles { cycles: 1000000 }
+    value: 1.0
+  - target: { component: "button1", channel: "pressed" }
+    trigger: !after_cycles { cycles: 1100000 }
+    value: 0.0
+  - target: { component: "button2", channel: "pressed" }
+    trigger: !after_cycles { cycles: 1200000 }
+    value: 1.0
+  - target: { component: "button2", channel: "pressed" }
+    trigger: !after_cycles { cycles: 1300000 }
+    value: 0.0
+  - target: { component: "button3", channel: "pressed" }
+    trigger: !after_cycles { cycles: 1400000 }
+    value: 1.0
+  - target: { component: "button3", channel: "pressed" }
+    trigger: !after_cycles { cycles: 1500000 }
+    value: 0.0
+  - target: { component: "button4", channel: "pressed" }
+    trigger: !after_cycles { cycles: 1600000 }
+    value: 1.0
+  - target: { component: "button4", channel: "pressed" }
+    trigger: !after_cycles { cycles: 1700000 }
+    value: 0.0
+  - target: { component: "button1", channel: "pressed" }
+    trigger: !after_cycles { cycles: 1900000 }
+    value: 1.0
+  - target: { component: "button1", channel: "pressed" }
+    trigger: !after_cycles { cycles: 2000000 }
+    value: 0.0
+assertions:
+  - uart_ordered:
+      - "NRF52840-DK RENODE SMOKE"
+      - "ficr part=52840 nvmc ready=1 ok"
+      - "clock hfstat=00010001 lfstat=00010001 ok"
+      - "gpio p0.13 in=00002000/00000000 ok"
+      - "gpiote out0 p0.14 in=10 out=0 ok"
+      - "timer0 cmp=1 cap>=50 1 clear=00000000 ok"
+      - "rtc0 cmp=1 counter>=4 1 ok"
+      - "rng valrdy=11 bytes<=ff ok"
+      - "ppi egu0->egu1 off=0 on=1 ok"
+      - "leds p0.13-16 off=1 alone=1 off=1 ok"
+      - "buttons idle=1 presses=4 ok"
+      - "gpiote in1 p0.11 quiet=1 fall=1 pend=1 rise=0 ok"
+      - "NRF52840-DK PASS"
+  - memory_value:
+      address: 0x2003FF00
+      expected_value: 0x528407FF
+      size: 4
+  - gpio_edges:
+      pin: "gpio0:13"
+      min_edges: 4
+  - gpio_edges:
+      pin: "gpio0:16"
+      min_edges: 2
+  - expected_stop_reason: max_steps

@@ -1,0 +1,37 @@
+{
+  "target_id": "eos-s3-quickfeather",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": "firmware-eos-s3-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/renode-onboarding/eos-s3-quickfeather-smoke.yaml",
+  "system": "configs/systems/onboarding/eos-s3-quickfeather.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-09T13:36:26Z",
+  "finished_at_utc": "2026-11-09T13:36:27Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1142,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.346,
+    "build_firmware": 0.339,
+    "run_smoke": 0.446
+  },
+  "stages_ms": {
+    "build_cli": 346,
+    "build_firmware": 339,
+    "run_smoke": 446
+  }
+}

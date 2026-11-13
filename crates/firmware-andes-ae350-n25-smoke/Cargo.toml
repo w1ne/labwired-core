@@ -1,0 +1,25 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+# SPDX-License-Identifier: MIT
+
+[package]
+name = "firmware-andes-ae350-n25-smoke"
+version = "0.1.0"
+edition = "2021"
+authors = ["LabWired Team"]
+license = "MIT"
+build = "build.rs"
+
+[features]
+default = []
+crosslink-nx-evn = []
+# CrossLink-NX LiteX uart + timer0 (csr_data_width 8) + CAS LED smoke.
+crosslink-litex = ["crosslink-nx-evn"]
+ae350-uart = []
+et171-uart = ["ae350-uart"]
+
+[[bin]]
+name = "firmware-andes-ae350-n25-smoke"
+path = "src/main.rs"
+test = false
+bench = false

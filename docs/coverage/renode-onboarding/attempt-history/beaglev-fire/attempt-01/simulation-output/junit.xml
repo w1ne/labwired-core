@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="3" failures="2" errors="0" time="0.051651">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="3781dda7eb3ba32fe33678ec8328f65878511ffcc49741dcf96cb038387639cc"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.051651">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_ordered: [&quot;*** Booting Zephyr OS build v4.1.0 ***&quot;, &quot;Hello World! mpfs_icicle/polarfire/u54&quot;]" time="0.000000">
+    <failure message="assertion failed">assertion 1: uart_ordered: [&quot;*** Booting Zephyr OS build v4.1.0 ***&quot;, &quot;Hello World! mpfs_icicle/polarfire/u54&quot;]
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=2000000
+stop_reason_details.observed.steps_executed=2000000
+steps_executed=2000000
+cycles=2000000
+instructions=2000000
+limits:
+  - max_steps=2000000
+  - max_cycles=60000000
+firmware_hash=3781dda7eb3ba32fe33678ec8328f65878511ffcc49741dcf96cb038387639cc
+firmware=examples/renode-onboarding/../../tests/fixtures/mpfs-zephyr-hello.elf
+system=examples/renode-onboarding/../../configs/systems/onboarding/beaglev-fire.yaml
+script=examples/renode-onboarding/beaglev-fire-smoke.yaml
+assertions:
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;*** Booting Zephyr OS build v4.1.0 ***&quot;, &quot;Hello World! mpfs_icicle/polarfire/u54&quot;] }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxCycles }): false
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: expected_stop_reason: MaxCycles" time="0.000000">
+    <failure message="assertion failed">assertion 2: expected_stop_reason: MaxCycles
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=2000000
+stop_reason_details.observed.steps_executed=2000000
+steps_executed=2000000
+cycles=2000000
+instructions=2000000
+limits:
+  - max_steps=2000000
+  - max_cycles=60000000
+firmware_hash=3781dda7eb3ba32fe33678ec8328f65878511ffcc49741dcf96cb038387639cc
+firmware=examples/renode-onboarding/../../tests/fixtures/mpfs-zephyr-hello.elf
+system=examples/renode-onboarding/../../configs/systems/onboarding/beaglev-fire.yaml
+script=examples/renode-onboarding/beaglev-fire-smoke.yaml
+assertions:
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;*** Booting Zephyr OS build v4.1.0 ***&quot;, &quot;Hello World! mpfs_icicle/polarfire/u54&quot;] }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxCycles }): false
+</failure>
+  </testcase>
+</testsuite>

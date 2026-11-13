@@ -10,11 +10,13 @@ use crate::fault_verdict::{FaultCapture, FaultEntry, FaultRegs, LockupEntry, Sta
 use crate::peripherals::armv8m_mpu::{CTRL_HFNMIENA, PERM_EXEC, PERM_READ, PERM_WRITE};
 use crate::peripherals::scb::{
     ScbFaultState, CFSR_BFSR_BFARVALID, CFSR_BFSR_PRECISERR, CFSR_MMFSR_DACCVIOL,
-    CFSR_MMFSR_IACCVIOL, CFSR_MMFSR_MMARVALID, CFSR_UFSR_DIVBYZERO, CFSR_UFSR_UNDEFINSTR,
-    HFSR_FORCED, SHCSR_BUSFAULTENA, SHCSR_MEMFAULTENA, SHCSR_USGFAULTENA,
+    CFSR_MMFSR_IACCVIOL, CFSR_MMFSR_MMARVALID, CFSR_UFSR_DIVBYZERO, CFSR_UFSR_NOCP,
+    CFSR_UFSR_UNDEFINSTR, HFSR_FORCED, SHCSR_BUSFAULTENA, SHCSR_MEMFAULTENA, SHCSR_USGFAULTENA,
 };
 use crate::{Bus, Cpu, SimResult, SimulationConfig, SimulationError, SimulationObserver};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+
+const XPSR_STACK_ALIGN: u32 = 1 << 9;
 use std::sync::Arc;
 
 /// `step_execute`'s instruction match arm bodies, one method per arm, grouped
@@ -120,8 +122,8 @@ pub struct CortexM {
     /// stale — `sp` is authoritative for it until the next stack switch.
     pub msp: u32,
     pub psp: u32,
-    /// CONTROL register. Only SPSEL (bit 1) and nPRIV (bit 0) are modelled;
-    /// FPCA (bit 2) is not (no lazy FP stacking).
+    /// CONTROL register. SPSEL (bit 1), nPRIV (bit 0), and FPCA (bit 2) are
+    /// modelled when their corresponding core features are present.
     pub control: u32,
     pub lr: u32, // R14
     pub pc: u32, // R15
@@ -164,6 +166,17 @@ pub struct CortexM {
     /// PENDSVSET and only have it dispatch on return-to-thread — the
     /// load-bearing semantics for context switching.
     pub shpr3: Arc<AtomicU32>,
+    /// Live ICSR.PENDSTSET mirror shared with the SCB. The timer's exception
+    /// pending state lives in this CPU, while ICSR is served by the SCB.
+    pub systick_pending_live: Arc<AtomicBool>,
+    /// Live ICSR.PENDSVSET mirror shared with the SCB. Once the SCB hands
+    /// PendSV to the CPU's arbitration bitmap, ICSR must continue to report it
+    /// pending until exception entry or an explicit clear.
+    pub pendsv_pending_live: Arc<AtomicBool>,
+    /// Shared AIRCR.PRIGROUP. Priority-group bits gate preemption while
+    /// subpriority bits only order simultaneous pending exceptions. Baseline
+    /// cores report PRIGROUP as reserved and use all priority bits for groups.
+    pub priority_group: Arc<AtomicU32>,
     /// Shared NVIC state for IRQ priority lookups via IPR.
     pub nvic_state: Option<Arc<crate::peripherals::nvic::NvicState>>,
     /// Shared with SCB: AIRCR.SYSRESETREQ latched by firmware. `step_batch`
@@ -188,6 +201,8 @@ pub struct CortexM {
     /// basic 8-word frame and a CONTROL with only nPRIV/SPSEL.
     /// See [`crate::peripherals::cortex_m_fpu`].
     pub fp_ctx: Option<Arc<crate::peripherals::cortex_m_fpu::FpContextState>>,
+    /// Shared SCB.CPACR state when the chip declares an FP extension.
+    pub cpacr: Option<Arc<AtomicU32>>,
     /// Shared with an `armv8m_mpu` block: the PMSAv8 region file TT reports
     /// from. `None`: TT reports no MPU region.
     pub mpu_v8: Option<Arc<crate::peripherals::armv8m_mpu::MpuV8State>>,
@@ -222,6 +237,8 @@ pub struct CortexM {
     /// so `step_internal` raises UsageFault(DIVBYZERO). Only ever written on
     /// the error path.
     pending_div0: bool,
+    /// Set when an FP instruction is denied by CPACR (or the core has no FPU).
+    pending_nocp: bool,
     /// The first fault-handler entry (HardFault/MemManage/BusFault/UsageFault)
     /// since reset: the stacked frame and EXC_RETURN, for the fault verdict.
     /// Written once, on the exception-entry path, only for exceptions 3..=6.
@@ -337,11 +354,15 @@ impl Default for CortexM {
             shpr1: Arc::new(AtomicU32::new(0)),
             shpr2: Arc::new(AtomicU32::new(0)),
             shpr3: Arc::new(AtomicU32::new(0)),
+            systick_pending_live: Arc::new(AtomicBool::new(false)),
+            pendsv_pending_live: Arc::new(AtomicBool::new(false)),
+            priority_group: Arc::new(AtomicU32::new(0)),
             nvic_state: None,
             sysreset_signal: None,
             debug_halt: None,
             faults: None,
             fp_ctx: None,
+            cpacr: None,
             mpu_v8: None,
             pending_data_fault: None,
             pending_mem_manage: None,
@@ -349,6 +370,7 @@ impl Default for CortexM {
             mpu_fetch_span: MpuSpanCache::default(),
             pending_undef_instruction: false,
             pending_div0: false,
+            pending_nocp: false,
             fault_entry: None,
             fault_entry_regs: FaultRegs {
                 hfsr: 0,
@@ -1799,6 +1821,21 @@ impl CortexM {
         self.shpr3 = shpr3;
     }
 
+    /// Wire ICSR.PENDSTSET to the CPU's live SysTick pending state.
+    pub fn set_shared_systick_pending(&mut self, pending: Arc<AtomicBool>) {
+        self.systick_pending_live = pending;
+    }
+
+    /// Wire ICSR.PENDSVSET to the CPU's live PendSV pending state.
+    pub fn set_shared_pendsv_pending(&mut self, pending: Arc<AtomicBool>) {
+        self.pendsv_pending_live = pending;
+    }
+
+    /// Wire AIRCR.PRIGROUP from the shared SCB state.
+    pub fn set_shared_priority_group(&mut self, priority_group: Arc<AtomicU32>) {
+        self.priority_group = priority_group;
+    }
+
     /// Wire the NVIC's shared state so `exception_priority` can read
     /// IPR bytes for IRQs (exception number ≥ 16).
     pub fn set_shared_nvic_state(&mut self, state: Arc<crate::peripherals::nvic::NvicState>) {
@@ -1921,6 +1958,34 @@ impl CortexM {
         self.fp_ctx = Some(fp);
     }
 
+    /// Share the SCB.CPACR register when this chip declares an FP extension.
+    pub fn set_shared_cpacr(&mut self, cpacr: Arc<AtomicU32>) {
+        self.cpacr = Some(cpacr);
+    }
+
+    /// CP10 and CP11 must both permit the current privilege level. Reserved
+    /// access value `0b10` is treated as denied; it is not a usable grant.
+    #[inline]
+    fn fp_access_allowed(&self) -> bool {
+        if self.fp_ctx.is_none() {
+            return false;
+        }
+        let Some(cpacr) = self.cpacr.as_ref() else {
+            return false;
+        };
+        let value = cpacr.load(Ordering::Relaxed);
+        let cp10 = (value >> 20) & 0x3;
+        let cp11 = (value >> 22) & 0x3;
+        let privileged = self.active_exception != 0 || self.control & 1 == 0;
+        [cp10, cp11].into_iter().all(|access| {
+            if privileged {
+                access == 0b01 || access == 0b11
+            } else {
+                access == 0b11
+            }
+        })
+    }
+
     /// Give the core the Armv8-M MPU region file (see [`CortexM::mpu_v8`]).
     pub fn set_shared_mpu_v8(&mut self, mpu: Arc<crate::peripherals::armv8m_mpu::MpuV8State>) {
         self.mpu_v8 = Some(mpu);
@@ -1937,27 +2002,44 @@ impl CortexM {
     }
 
     /// The architecture's `ExecuteFPCheck`, run before every executed FP
-    /// instruction on a core with the FP extension: with FPCCR.ASPEN set, the
-    /// first FP instruction of a context sets CONTROL.FPCA and starts FPSCR's
-    /// AHP/DN/FZ/RMode from FPDSCR.
+    /// instruction on a core with the FP extension. It completes any pending
+    /// lazy context save before the instruction can change FP state; with
+    /// FPCCR.ASPEN set, the first FP instruction of a context then sets
+    /// CONTROL.FPCA and starts FPSCR's AHP/DN/FZ/RMode from FPDSCR.
     #[inline]
-    fn fp_execute_check(&mut self) {
-        if let Some(fp) = self.fp_ctx.as_ref() {
+    fn fp_execute_check<B: Bus + ?Sized>(&mut self, bus: &mut B) -> SimResult<()> {
+        if let Some(fp) = self.fp_ctx.as_ref().cloned() {
+            if fp.lspact() {
+                let fpcar = fp.fpcar();
+                for i in 0..16 {
+                    Self::bus_store(
+                        bus,
+                        fpcar.wrapping_add(4 * i as u32),
+                        AccessWidth::Word,
+                        self.fpu_s[i],
+                    )?;
+                }
+                Self::bus_store(bus, fpcar.wrapping_add(0x40), AccessWidth::Word, self.fpscr)?;
+                fp.set_lspact(false);
+            }
             if self.control & 0x4 == 0 && fp.aspen() {
                 let m = crate::peripherals::cortex_m_fpu::FPDSCR_MASK;
                 self.fpscr = (self.fpscr & !m) | (fp.fpdscr() & m);
                 self.control |= 0x4;
             }
         }
+        Ok(())
     }
 
     /// The JIT does not run `ExecuteFPCheck`, so while a context could still
-    /// create its FP state (ASPEN set, FPCA clear) the core stays on the
-    /// interpreter.
+    /// create its FP state (ASPEN set, FPCA clear) or a lazy save is pending,
+    /// the core stays on the interpreter.
     #[cfg(feature = "jit")]
     #[inline]
     fn fp_context_pending(&self) -> bool {
-        self.control & 0x4 == 0 && self.fp_ctx.as_ref().is_some_and(|fp| fp.aspen())
+        self.fp_ctx.as_ref().is_some_and(|fp| {
+            !self.fp_access_allowed() || fp.lspact() || (self.control & 0x4 == 0 && fp.aspen())
+        })
     }
 
     /// Turn ARMv7-M fault escalation (and the SCB fault register surface) on or
@@ -1989,6 +2071,17 @@ impl CortexM {
     #[cold]
     pub(in crate::cpu::cortex_m) fn raise_div_by_zero(&mut self) -> SimResult<PcAdvance> {
         self.pending_div0 = true;
+        Err(SimulationError::ExceptionRaised {
+            cause: 6,
+            pc: self.pc,
+        })
+    }
+
+    /// Latch a NOCP UsageFault for a denied or unavailable FP instruction.
+    /// The PC stays on the coprocessor instruction so stacking identifies it.
+    #[cold]
+    fn raise_nocp(&mut self) -> SimResult<()> {
+        self.pending_nocp = true;
         Err(SimulationError::ExceptionRaised {
             cause: 6,
             pc: self.pc,
@@ -2060,13 +2153,37 @@ impl CortexM {
         }
     }
 
+    /// Convert a raw exception priority into the group priority used for
+    /// preemption and priority boosting. AIRCR.PRIGROUP assigns PRIGROUP+1
+    /// low-order bits to subpriority on ARMv7-M/ARMv8-M Mainline. ARMv6-M and
+    /// ARMv8-M Baseline have no priority grouping and use every implemented
+    /// priority bit for preemption.
+    #[inline]
+    fn group_priority(&self, priority: i32) -> i32 {
+        if !(0..=0xFF).contains(&priority)
+            || self
+                .faults
+                .as_ref()
+                .is_some_and(|faults| !faults.priority_group_supported.load(Ordering::Relaxed))
+        {
+            return priority;
+        }
+        let subpriority_bits = (self.priority_group.load(Ordering::Relaxed) & 0x7) + 1;
+        priority & !((1_i32 << subpriority_bits) - 1)
+    }
+
+    #[inline]
+    fn exception_group_priority(&self, exc: u32) -> i32 {
+        self.group_priority(self.exception_priority(exc))
+    }
+
     /// True if BASEPRI masks an exception of the given priority. A non-zero
-    /// BASEPRI masks any exception whose priority value is numerically >=
-    /// BASEPRI (equal or lower priority). NMI/HardFault (negative priority) are
-    /// never masked.
+    /// BASEPRI masks any exception whose group priority is numerically >= its
+    /// own group priority. Subpriority does not affect priority boosting.
+    /// NMI/HardFault (negative priority) are never masked.
     #[inline]
     fn masked_by_basepri(&self, prio: i32) -> bool {
-        self.basepri != 0 && prio >= self.basepri as i32
+        self.basepri != 0 && self.group_priority(prio) >= self.group_priority(self.basepri as i32)
     }
 
     /// Whether ANY exception is pending — the cheap precondition every
@@ -2109,6 +2226,33 @@ impl CortexM {
         self.active_exception = exc;
         self.vectactive
             .store(exc & 0x1FF, std::sync::atomic::Ordering::Relaxed);
+        if exc >= 16 {
+            if let Some(nvic) = &self.nvic_state {
+                let irq = exc - 16;
+                let word = (irq / 32) as usize;
+                let bit = 1u32 << (irq % 32);
+                if word < nvic.iabr.len() {
+                    nvic.iabr[word].fetch_or(bit, std::sync::atomic::Ordering::SeqCst);
+                }
+            }
+        }
+    }
+
+    /// Clear the active bit for the exception that is returning. A nested
+    /// return then restores the previously active IRQ without clearing its
+    /// bit; `set_active_exception` keeps that outer activation visible.
+    fn clear_active_exception(&self) {
+        let exc = self.active_exception;
+        if exc >= 16 {
+            if let Some(nvic) = &self.nvic_state {
+                let irq = exc - 16;
+                let word = (irq / 32) as usize;
+                let bit = 1u32 << (irq % 32);
+                if word < nvic.iabr.len() {
+                    nvic.iabr[word].fetch_and(!bit, std::sync::atomic::Ordering::SeqCst);
+                }
+            }
+        }
     }
 
     fn xpsr_with_itstate(&self, xpsr: u32) -> u32 {
@@ -2296,8 +2440,8 @@ impl CortexM {
         let Some(exc) = self.highest_priority_pending() else {
             return false;
         };
-        let exc_prio = self.exception_priority(exc);
-        let active_prio = self.exception_priority(self.active_exception);
+        let exc_prio = self.exception_group_priority(exc);
+        let active_prio = self.exception_group_priority(self.active_exception);
         exc_prio < active_prio && !self.masked_by_basepri(exc_prio) && !self.faultmask_blocks(exc)
     }
 
@@ -2350,9 +2494,9 @@ impl CortexM {
                         }
                     }
                 }
-                let priority = self.exception_priority(exc);
+                let priority = self.exception_group_priority(exc);
                 if !self.masked_by_primask(exc)
-                    && priority < self.exception_priority(self.active_exception)
+                    && priority < self.exception_group_priority(self.active_exception)
                     && !self.masked_by_basepri(priority)
                     && !self.faultmask_blocks(exc)
                 {
@@ -2420,6 +2564,101 @@ impl CortexM {
         self.exception_return(lr, bus)
     }
 
+    /// Service an already-pending IRQ on exception return without unstacking
+    /// and restacking the interrupted context. Cortex-M calls this tail
+    /// chaining. The saved frame remains in place until the final handler
+    /// returns to Thread mode (or to the previously active Handler).
+    fn tail_chain_pending_irq<B: Bus + ?Sized>(
+        &mut self,
+        return_to_exception: u32,
+        exc_return: u32,
+        bus: &mut B,
+    ) -> SimResult<bool> {
+        // This path intentionally handles configurable external IRQs and the
+        // two architected deferred exceptions. Fault escalation and NMI keep
+        // using the ordinary entry path so their fault-frame bookkeeping is
+        // unchanged.
+        if !self.systick_pending_live.load(Ordering::Relaxed) {
+            self.pending_exceptions[0] &= !(1 << 15);
+        }
+        if !self.pendsv_pending_live.load(Ordering::Relaxed) {
+            self.pending_exceptions[0] &= !(1 << 14);
+        }
+
+        let return_priority = self.exception_group_priority(return_to_exception);
+        let mut best: Option<(i32, u32)> = None;
+        let pending = self.pending_exceptions;
+        for (word_idx, &word) in pending.iter().enumerate() {
+            let mut mask = word;
+            while mask != 0 {
+                let exception = word_idx as u32 * 64 + mask.trailing_zeros();
+                mask &= mask - 1;
+
+                if exception != 14 && exception != 15 && exception < 16 {
+                    continue;
+                }
+                if exception >= 16 && !bus.is_nvic_irq_pending(exception) {
+                    self.pending_exceptions[(exception / 64) as usize] &=
+                        !(1u64 << (exception % 64));
+                    continue;
+                }
+
+                let priority = self.exception_priority(exception);
+                let group_priority = self.group_priority(priority);
+                if group_priority >= return_priority
+                    || self.masked_by_primask(exception)
+                    || self.masked_by_basepri(group_priority)
+                    || self.faultmask_blocks(exception)
+                    || self.debug_masks_irq(exception)
+                {
+                    continue;
+                }
+
+                best = Some(match best {
+                    Some((best_priority, best_exception))
+                        if best_priority < priority
+                            || (best_priority == priority && best_exception < exception) =>
+                    {
+                        (best_priority, best_exception)
+                    }
+                    _ => (priority, exception),
+                });
+            }
+        }
+
+        let Some((_, exception)) = best else {
+            return Ok(false);
+        };
+        let vector_addr = self
+            .vtor
+            .load(Ordering::SeqCst)
+            .wrapping_add(exception.wrapping_mul(4));
+        let handler = Self::bus_load(bus, vector_addr, AccessWidth::Word)?;
+
+        self.pending_exceptions[(exception / 64) as usize] &= !(1u64 << (exception % 64));
+        if exception == 14 {
+            self.pendsv_pending_live.store(false, Ordering::Relaxed);
+        } else if exception == 15 {
+            self.systick_pending_live.store(false, Ordering::Relaxed);
+        }
+        bus.clear_nvic_pending(exception);
+
+        self.clear_active_exception();
+        self.set_active_exception(exception);
+        self.xpsr = (self.xpsr & !0x1FF) | (exception & 0x1FF);
+        self.it_state = 0;
+        self.it_state_restored = true;
+        self.lr = exc_return;
+        self.pc = handler & !1;
+        if self.fp_ctx.is_some() {
+            self.control &= !0x4;
+        }
+        // Exception return sets the architectural event register even when it
+        // chains directly into another handler.
+        self.event_register = true;
+        Ok(true)
+    }
+
     fn exception_return<B: Bus + ?Sized>(&mut self, exc_return: u32, bus: &mut B) -> SimResult<()> {
         // FAULTMASK is cleared automatically on exception return, except when
         // returning from NMI (exception 2).
@@ -2435,6 +2674,12 @@ impl CortexM {
         let frame_on_psp = (exc_return & 0x4) != 0;
         let frame_ptr = if frame_on_psp { self.psp } else { self.msp };
 
+        let stacked_xpsr = bus.read_u32(frame_ptr.wrapping_add(28) as u64)?;
+        let return_to_exception = stacked_xpsr & 0x1FF;
+        if self.tail_chain_pending_irq(return_to_exception, exc_return, bus)? {
+            return Ok(());
+        }
+
         self.r0 = bus.read_u32(frame_ptr as u64)?;
         self.r1 = bus.read_u32(frame_ptr.wrapping_add(4) as u64)?;
         self.r2 = bus.read_u32(frame_ptr.wrapping_add(8) as u64)?;
@@ -2442,7 +2687,13 @@ impl CortexM {
         self.r12 = bus.read_u32(frame_ptr.wrapping_add(16) as u64)?;
         self.lr = bus.read_u32(frame_ptr.wrapping_add(20) as u64)?;
         self.pc = bus.read_u32(frame_ptr.wrapping_add(24) as u64)? & !1;
-        self.xpsr = bus.read_u32(frame_ptr.wrapping_add(28) as u64)?;
+        let stack_alignment_padding = if stacked_xpsr & XPSR_STACK_ALIGN != 0 {
+            4
+        } else {
+            0
+        };
+        // xPSR[9] is metadata in the stacked frame, not a live xPSR bit.
+        self.xpsr = stacked_xpsr & !XPSR_STACK_ALIGN;
         self.it_state = Self::itstate_from_xpsr(self.xpsr);
         self.it_state_restored = true;
 
@@ -2452,11 +2703,21 @@ impl CortexM {
         let mut frame_len = 32;
         if self.fp_ctx.is_some() {
             if exc_return & 0x10 == 0 {
-                for i in 0..16 {
-                    self.fpu_s[i] =
-                        bus.read_u32(frame_ptr.wrapping_add(0x20 + 4 * i as u32) as u64)?;
+                let lazy_save_pending = self.fp_ctx.as_ref().is_some_and(|fp| fp.lspact());
+                if lazy_save_pending {
+                    // No handler FP instruction triggered the save. The live
+                    // FP registers still belong to the interrupted context,
+                    // so discard the reserved stack area without unstacking it.
+                    if let Some(fp) = self.fp_ctx.as_ref() {
+                        fp.set_lspact(false);
+                    }
+                } else {
+                    for i in 0..16 {
+                        self.fpu_s[i] =
+                            bus.read_u32(frame_ptr.wrapping_add(0x20 + 4 * i as u32) as u64)?;
+                    }
+                    self.fpscr = bus.read_u32(frame_ptr.wrapping_add(0x60) as u64)?;
                 }
-                self.fpscr = bus.read_u32(frame_ptr.wrapping_add(0x60) as u64)?;
                 frame_len = 0x68;
                 self.control |= 0x4;
             } else {
@@ -2465,7 +2726,9 @@ impl CortexM {
         }
 
         // Advance the bank the frame was popped from.
-        let new_sp = frame_ptr.wrapping_add(frame_len);
+        let new_sp = frame_ptr
+            .wrapping_add(frame_len)
+            .wrapping_add(stack_alignment_padding);
         if frame_on_psp {
             self.psp = new_sp;
         } else {
@@ -2475,6 +2738,7 @@ impl CortexM {
         // Restore active exception from stacked xPSR IPSR bits [8:0].
         // When taking an exception, we saved the previous active_exception in IPSR,
         // so restoring it here correctly handles both non-nested and nested cases.
+        self.clear_active_exception();
         self.set_active_exception(self.xpsr & 0x1FF);
 
         // On return to Thread mode, CONTROL.SPSEL takes EXC_RETURN[2].
@@ -2532,8 +2796,8 @@ impl CortexM {
         let Some(exc) = self.highest_priority_pending() else {
             return false;
         };
-        let exc_prio = self.exception_priority(exc);
-        let active_prio = self.exception_priority(self.active_exception);
+        let exc_prio = self.exception_group_priority(exc);
+        let active_prio = self.exception_group_priority(self.active_exception);
         !self.masked_by_primask(exc)
             && exc_prio < active_prio
             && !self.masked_by_basepri(exc_prio)
@@ -2893,6 +3157,10 @@ impl Cpu for CortexM {
             regs,
             entry: self.fault_entry,
             lockup: self.lockup,
+            armv6m: self
+                .faults
+                .as_ref()
+                .is_some_and(|f| f.armv6m.load(Ordering::Relaxed)),
         };
         capture.is_fault().then_some(capture)
     }
@@ -2911,6 +3179,8 @@ impl Cpu for CortexM {
         self.pc = 0x0000_0000;
         self.sp = 0x2000_0000;
         self.pending_exceptions = [0; 4];
+        self.systick_pending_live.store(false, Ordering::Relaxed);
+        self.pendsv_pending_live.store(false, Ordering::Relaxed);
         // Reset is not exception return: no interrupt mask, IT block or
         // exception-return LR from the previous boot may survive. Cortex-M4
         // DUI0553A table 2-1 defines these reset values. General registers
@@ -2928,17 +3198,24 @@ impl Cpu for CortexM {
         self.event_register = false;
         if let Some(nvic) = &self.nvic_state {
             nvic.event_register.store(false, Ordering::Relaxed);
+            for active in &nvic.iabr {
+                active.store(0, Ordering::SeqCst);
+            }
         }
         self.set_active_exception(0);
         self.clear_decoded_state();
         self.fault_entry = None;
         self.fault_entry_regs = FaultRegs::default();
         self.lockup = None;
+        self.pending_nocp = false;
 
         // Out of reset the core is in Thread mode using MSP (CONTROL=0); PSP
         // is architecturally UNKNOWN — start it at 0.
         self.control = 0;
         self.psp = 0;
+        if let Some(cpacr) = &self.cpacr {
+            cpacr.store(0, Ordering::Relaxed);
+        }
 
         let vtor = self.vtor.load(Ordering::SeqCst) as u64;
         // NOT wrapped in `census_bus!`, deliberately. These two are the only
@@ -2979,6 +3256,11 @@ impl Cpu for CortexM {
             eprintln!("EXC pend num={} pc=0x{:08X}", exception_num, self.pc);
         }
         if exception_num < 256 {
+            if exception_num == 15 {
+                self.systick_pending_live.store(true, Ordering::Relaxed);
+            } else if exception_num == 14 {
+                self.pendsv_pending_live.store(true, Ordering::Relaxed);
+            }
             let word = &mut self.pending_exceptions[(exception_num / 64) as usize];
             let mask = 1u64 << (exception_num % 64);
             // External IRQ transitions are tracked in NVIC ISPR, including
@@ -3072,6 +3354,14 @@ impl Cpu for CortexM {
             for (i, w) in s.pending_exceptions_hi.iter().take(3).enumerate() {
                 self.pending_exceptions[i + 1] = *w;
             }
+            self.systick_pending_live.store(
+                self.pending_exceptions[0] & (1 << 15) != 0,
+                Ordering::Relaxed,
+            );
+            self.pendsv_pending_live.store(
+                self.pending_exceptions[0] & (1 << 14) != 0,
+                Ordering::Relaxed,
+            );
             self.vtor.store(s.vtor, Ordering::Relaxed);
             self.waiting_for_event = s.waiting_for_event;
             self.event_register = s.event_register;
@@ -3257,8 +3547,8 @@ impl Cpu for CortexM {
                 // pointless if an armed SysTick freezes the run loop).
                 if executed > 0 && self.any_exception_pending() {
                     if let Some(exc) = self.highest_priority_pending() {
-                        let exc_prio = self.exception_priority(exc);
-                        let active_prio = self.exception_priority(self.active_exception);
+                        let exc_prio = self.exception_group_priority(exc);
+                        let active_prio = self.exception_group_priority(self.active_exception);
                         if !self.masked_by_primask(exc)
                             && exc_prio < active_prio
                             && !self.masked_by_basepri(exc_prio)
@@ -3369,8 +3659,8 @@ impl Cpu for CortexM {
                 // exception is dispatched by `step_internal`, never spun on.
                 if executed > 0 && self.any_exception_pending() {
                     if let Some(exc) = self.highest_priority_pending() {
-                        let exc_prio = self.exception_priority(exc);
-                        let active_prio = self.exception_priority(self.active_exception);
+                        let exc_prio = self.exception_group_priority(exc);
+                        let active_prio = self.exception_group_priority(self.active_exception);
                         if !self.masked_by_primask(exc)
                             && exc_prio < active_prio
                             && !self.masked_by_basepri(exc_prio)
@@ -3614,16 +3904,16 @@ impl CortexM {
     }
 
     /// ARMv7-M **execution priority** (B1.5.4 "Execution priority and priority
-    /// boosting"): the priority of the currently executing code, which an
-    /// exception must beat (numerically smaller) to be taken.
+    /// boosting"): the group priority of the currently executing code, which
+    /// an exception must beat (numerically smaller) to be taken.
     ///
-    /// It is the minimum of the active exception's priority and the three
-    /// priority-boosting registers: `FAULTMASK` boosts to -1, `PRIMASK` to 0,
-    /// and a non-zero `BASEPRI` to its own value. Thread mode with nothing
+    /// It is the minimum of the active exception's group priority and the
+    /// three priority-boosting registers: `FAULTMASK` boosts to -1, `PRIMASK`
+    /// to 0, and a non-zero `BASEPRI` to its group priority. Thread mode with nothing
     /// boosting is 256, the "lower than anything configurable" baseline the rest
     /// of this file already uses.
     fn execution_priority(&self) -> i32 {
-        let mut prio = self.exception_priority(self.active_exception);
+        let mut prio = self.exception_group_priority(self.active_exception);
         if self.faultmask {
             prio = prio.min(-1);
         }
@@ -3631,7 +3921,7 @@ impl CortexM {
             prio = prio.min(0);
         }
         if self.basepri != 0 {
-            prio = prio.min(self.basepri as i32);
+            prio = prio.min(self.group_priority(self.basepri as i32));
         }
         prio
     }
@@ -3689,7 +3979,7 @@ impl CortexM {
 
         let busfault_enabled = faults.shcsr.load(Ordering::Relaxed) & SHCSR_BUSFAULTENA != 0;
         let exec_prio = self.execution_priority();
-        let target = if busfault_enabled && self.exception_priority(5) < exec_prio {
+        let target = if busfault_enabled && self.exception_group_priority(5) < exec_prio {
             5
         } else {
             // Escalated: the HardFault handler needs to know it is standing in
@@ -3697,7 +3987,7 @@ impl CortexM {
             faults.hfsr.fetch_or(HFSR_FORCED, Ordering::Relaxed);
             3
         };
-        if self.exception_priority(target) >= exec_prio {
+        if self.exception_group_priority(target) >= exec_prio {
             return false; // LOCKUP — see the doc comment.
         }
         if trace_exc_enabled() {
@@ -3838,13 +4128,13 @@ impl CortexM {
         }
         let memfault_enabled = faults.shcsr.load(Ordering::Relaxed) & SHCSR_MEMFAULTENA != 0;
         let exec_prio = self.execution_priority();
-        let target = if memfault_enabled && self.exception_priority(4) < exec_prio {
+        let target = if memfault_enabled && self.exception_group_priority(4) < exec_prio {
             4
         } else {
             faults.hfsr.fetch_or(HFSR_FORCED, Ordering::Relaxed);
             3
         };
-        if self.exception_priority(target) >= exec_prio {
+        if self.exception_group_priority(target) >= exec_prio {
             return false; // LOCKUP
         }
         if trace_exc_enabled() {
@@ -3882,13 +4172,13 @@ impl CortexM {
 
         let usagefault_enabled = faults.shcsr.load(Ordering::Relaxed) & SHCSR_USGFAULTENA != 0;
         let exec_prio = self.execution_priority();
-        let target = if usagefault_enabled && self.exception_priority(6) < exec_prio {
+        let target = if usagefault_enabled && self.exception_group_priority(6) < exec_prio {
             6
         } else {
             faults.hfsr.fetch_or(HFSR_FORCED, Ordering::Relaxed);
             3
         };
-        if self.exception_priority(target) >= exec_prio {
+        if self.exception_group_priority(target) >= exec_prio {
             return false; // LOCKUP — see the doc comment.
         }
         if trace_exc_enabled() {
@@ -3901,6 +4191,8 @@ impl CortexM {
             crate::peripherals::scs_debug::DEMCR_VC_STATERR
         } else if ufsr_bit == CFSR_UFSR_DIVBYZERO {
             crate::peripherals::scs_debug::DEMCR_VC_CHKERR
+        } else if ufsr_bit == CFSR_UFSR_NOCP {
+            crate::peripherals::scs_debug::DEMCR_VC_NOCPERR
         } else {
             0
         };
@@ -3937,22 +4229,24 @@ impl CortexM {
                 // next step even when escalation is off.
                 let undef = std::mem::take(&mut self.pending_undef_instruction);
                 let div0 = std::mem::take(&mut self.pending_div0);
+                let nocp = std::mem::take(&mut self.pending_nocp);
                 let data = self.pending_data_fault.take();
                 let mpu = self.pending_mem_manage.take();
                 if !self.faults_enabled() {
                     return Err(e);
                 }
-                let escalated = match (data, undef, div0) {
+                let escalated = match (data, undef, div0, nocp) {
                     _ if mpu.is_some() => mpu.map(|cause| self.escalate_mem_manage(cause)),
-                    (Some(addr), _, _) => Some(self.escalate_precise_data_fault(addr)),
+                    (Some(addr), _, _, _) => Some(self.escalate_precise_data_fault(addr)),
                     // An undefined instruction escalates to UsageFault, or to
                     // HardFault when UsageFault is not enabled. Escalation
                     // failing means LOCKUP on silicon, so the `Err` stands and
                     // stops the run — which is still incomparably better than
                     // the old behaviour of advancing the PC and continuing.
-                    (None, true, _) => Some(self.escalate_usage_fault(CFSR_UFSR_UNDEFINSTR)),
-                    (None, false, true) => Some(self.escalate_usage_fault(CFSR_UFSR_DIVBYZERO)),
-                    (None, false, false) => None,
+                    (None, true, _, _) => Some(self.escalate_usage_fault(CFSR_UFSR_UNDEFINSTR)),
+                    (None, false, true, _) => Some(self.escalate_usage_fault(CFSR_UFSR_DIVBYZERO)),
+                    (None, false, false, true) => Some(self.escalate_usage_fault(CFSR_UFSR_NOCP)),
+                    (None, false, false, false) => None,
                 };
                 match escalated {
                     Some(true) => Ok(()),
@@ -4014,14 +4308,23 @@ impl CortexM {
         // behaviour-preserving by construction: with no bit set the old
         // `unwrap_or(0)` produced `exception_num == 0`, and the `&& exception_num
         // != 0` arm below already made the whole block dead.
+        // ICSR.PENDSTCLR clears a pending SysTick in the SCB. Keep the CPU's
+        // arbitration bitmap in step with that live, architecturally visible
+        // state so a cleared exception cannot still be taken from a stale bit.
+        if !self.systick_pending_live.load(Ordering::Relaxed) {
+            self.pending_exceptions[0] &= !(1 << 15);
+        }
+        if !self.pendsv_pending_live.load(Ordering::Relaxed) {
+            self.pending_exceptions[0] &= !(1 << 14);
+        }
         let exception_num = if self.any_exception_pending() {
             self.highest_priority_pending().unwrap_or(0)
         } else {
             0
         };
         if exception_num != 0 && !self.masked_by_primask(exception_num) {
-            let take_prio = self.exception_priority(exception_num);
-            let active_prio = self.exception_priority(self.active_exception);
+            let take_prio = self.exception_group_priority(exception_num);
+            let active_prio = self.exception_group_priority(self.active_exception);
             let can_take = take_prio < active_prio
                 && !self.masked_by_basepri(take_prio)
                 && !self.faultmask_blocks(exception_num)
@@ -4044,6 +4347,11 @@ impl CortexM {
                     self.exclusive_subword = None;
                     self.pending_exceptions[(exception_num / 64) as usize] &=
                         !(1u64 << (exception_num % 64));
+                    if exception_num == 15 {
+                        self.systick_pending_live.store(false, Ordering::Relaxed);
+                    } else if exception_num == 14 {
+                        self.pendsv_pending_live.store(false, Ordering::Relaxed);
+                    }
 
                     // Clear NVIC ISPR for this exception so it isn't immediately re-pended.
                     // On real ARM hardware this happens automatically when the exception is taken.
@@ -4059,12 +4367,28 @@ impl CortexM {
                     // extended one: S0-S15 and FPSCR above the basic eight.
                     let sp = self.sp;
                     let fp_frame = self.fp_ctx.is_some() && self.control & 0x4 != 0;
-                    let frame_ptr = sp.wrapping_sub(if fp_frame { 0x68 } else { 32 });
+                    let frame_len = if fp_frame { 0x68 } else { 32 };
+                    // When CCR.STKALIGN is enabled, keep exception frames
+                    // double-word aligned and record the optional word in
+                    // stacked xPSR[9]. Hand-built cores without an SCB use the
+                    // architectural reset behavior.
+                    let stkalign = self
+                        .faults
+                        .as_ref()
+                        .is_none_or(|faults| faults.ccr_stkalign.load(Ordering::Relaxed));
+                    let stack_alignment_padding = if stkalign && sp & 0x4 != 0 { 4 } else { 0 };
+                    let frame_ptr = sp
+                        .wrapping_sub(frame_len)
+                        .wrapping_sub(stack_alignment_padding);
 
                     // Save the previous active_exception in xPSR IPSR bits [8:0] so that
                     // exception_return can restore the correct nesting level.
-                    let save_xpsr =
-                        self.xpsr_with_itstate((self.xpsr & !0x1FF) | self.active_exception);
+                    let mut save_xpsr = self.xpsr_with_itstate(
+                        (self.xpsr & !(0x1FF | XPSR_STACK_ALIGN)) | self.active_exception,
+                    );
+                    if stack_alignment_padding != 0 {
+                        save_xpsr |= XPSR_STACK_ALIGN;
+                    }
 
                     // Stack: R0, R1, R2, R3, R12, LR, PC, xPSR (with previous IPSR)
                     let stacked_lr = self.lr;
@@ -4090,25 +4414,45 @@ impl CortexM {
                         AccessWidth::Word,
                         save_xpsr,
                     )?;
-                    if fp_frame {
-                        // Eager, not lazy: the S0-S15/FPSCR slots are filled
-                        // now even with FPCCR.LSPEN set (LSPACT stays 0).
-                        for i in 0..16 {
-                            Self::bus_store(
-                                bus,
-                                frame_ptr.wrapping_add(0x20 + 4 * i as u32),
-                                AccessWidth::Word,
-                                self.fpu_s[i],
-                            )?;
-                        }
+                    if stack_alignment_padding != 0 {
+                        // The padding word's value is architecturally
+                        // unspecified. Zero it so reads remain deterministic.
                         Self::bus_store(
                             bus,
-                            frame_ptr.wrapping_add(0x60),
+                            frame_ptr.wrapping_add(frame_len),
                             AccessWidth::Word,
-                            self.fpscr,
+                            0,
                         )?;
-                        if let Some(fp) = self.fp_ctx.as_ref() {
-                            fp.set_fpcar(frame_ptr.wrapping_add(0x20));
+                    }
+                    if fp_frame {
+                        let lazy_save = self.fp_ctx.as_ref().is_some_and(|fp| fp.lspen());
+                        if lazy_save {
+                            if let Some(fp) = self.fp_ctx.as_ref() {
+                                fp.set_fpcar(frame_ptr.wrapping_add(0x20));
+                                fp.set_lspact(true);
+                            }
+                        } else {
+                            // With LSPEN clear, save the extended frame during
+                            // exception entry instead of deferring it to the
+                            // handler's first FP instruction.
+                            for i in 0..16 {
+                                Self::bus_store(
+                                    bus,
+                                    frame_ptr.wrapping_add(0x20 + 4 * i as u32),
+                                    AccessWidth::Word,
+                                    self.fpu_s[i],
+                                )?;
+                            }
+                            Self::bus_store(
+                                bus,
+                                frame_ptr.wrapping_add(0x60),
+                                AccessWidth::Word,
+                                self.fpscr,
+                            )?;
+                            if let Some(fp) = self.fp_ctx.as_ref() {
+                                fp.set_fpcar(frame_ptr.wrapping_add(0x20));
+                                fp.set_lspact(false);
+                            }
                         }
                     }
 
@@ -4281,8 +4625,11 @@ impl CortexM {
                 instruction
             );
 
-            if self.fp_ctx.is_some() && instruction.is_vfp() {
-                self.fp_execute_check();
+            if instruction.is_vfp() {
+                if !self.fp_access_allowed() {
+                    return self.raise_nocp();
+                }
+                self.fp_execute_check(bus)?;
             }
 
             // Execute

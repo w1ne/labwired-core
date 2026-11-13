@@ -74,7 +74,8 @@ image prints nothing at all.
     mapped). Clock generation is register-level only: oscillators and PLLs
     settle at once, and no rate is derived from the selected sources
     (`cpu_hz` stays 8 MHz after Zephyr moves ICLK to the 480 MHz PLL1P).
-    Module stop (MSTP) and the ICU `IRQCRn`/NMI half are declared stubs;
+    MSTP reset/write readback comes from the SVD, but module gating is not
+    modelled. The ICU `IRQCRn`/NMI half is a declared stub;
     the AGT and SCI3/SCI9 raise ELC events, the PFS peripheral mux is stored
     only, and SCI_B is async only: the FIFO trigger levels (`RTRG`, the
     `FRSR.DR` timeout), ERI and the error flags, and the `CCR2` baud decode
@@ -123,7 +124,7 @@ image prints nothing at all.
 | SRAM | `0x2200_0000`, 896 KiB | modelled — stack at the top |
 | Data flash | `0x2700_0000`, 12 KiB | mapped, erased (reads `0xFF`); no FACI programming |
 | SYSTEM | `0x4001_E000` | `ra8_sysc` — every `R_SYSTEM` register stored; `OSCSF` derived from HOCOCR/MOSCCR/PLLCR/PLL2CR; CKSREQ→CKSRDY on every xxxCKCR; no rates derived |
-| MSTP | `0x4020_3000` | `type: stub` — module stop not modelled |
+| MSTP | `0x4020_3000` | SVD-derived declarative registers — reset/write readback; module stop not modelled |
 | ICU | `0x4000_6000` (IRQCR/NMI) and `0x4000_C000` (WUPEN/IELSR) | IRQCR/NMI `type: stub`; IELSR modelled (`ra_icu`) — ELC event → `IR` → NVIC line level |
 | AGT0 / AGT1 | `0x4022_1000` / `0x4022_1100` | modelled (`ra_agt`) — 16-bit timer mode, LOCO/PCLKB sources, underflow + compare A/B as ELC events 0x046–0x04B |
 | PORT0–B | `0x4040_0000` + `0x20`×n | modelled (`ra_port`) — PCNTR1/2/3 |

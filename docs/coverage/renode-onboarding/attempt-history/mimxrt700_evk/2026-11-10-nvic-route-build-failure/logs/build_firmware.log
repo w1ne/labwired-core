@@ -1,0 +1,41 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+   Compiling firmware-mimxrt700-evk-smoke v0.1.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/renode/crates/firmware-mimxrt700-evk-smoke)
+error: invalid instruction, any one of the following would fix this:
+  |
+note: instantiated into assembly here
+ --> <inline asm>:1:2
+  |
+1 |     muls r8, r0
+  |     ^
+
+note: operand must be a register in range [r0, r12] or r14
+  |
+note: instantiated into assembly here
+ --> <inline asm>:1:5
+  |
+1 |     muls r8, r0
+  |        ^
+
+note: operand must be a register in range [r0, r7]
+  |
+note: instantiated into assembly here
+ --> <inline asm>:1:7
+  |
+1 |     muls r8, r0
+  |          ^
+
+error: could not compile `firmware-mimxrt700-evk-smoke` (bin "firmware-mimxrt700-evk-smoke") due to 1 previous error

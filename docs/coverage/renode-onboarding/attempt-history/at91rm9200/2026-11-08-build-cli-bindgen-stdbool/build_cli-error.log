@@ -1,0 +1,15 @@
+   Compiling icu_provider v2.2.0
+   Compiling num_enum v0.5.11
+error: failed to run custom build command for `unicorn-engine-sys v2.1.5`
+
+Caused by:
+  process didn't exit successfully: `/home/andrii/worktrees/labwired-core/renode/target/native-system/build/unicorn-engine-sys-05fd64f1d5e9ca18/build-script-build` (exit status: 101)
+  --- stdout
+  cargo:rerun-if-changed=/home/andrii/.cargo/registry/uc.c
+  cargo:rerun-if-changed=/home/andrii/.cargo/registry/list.c
+
+  --- stderr
+  /home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicorn-engine-sys-2.1.5/include/unicorn/platform.h:54:10: fatal error: 'stdbool.h' file not found
+
+  thread 'main' (2702331) panicked at /home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicorn-engine-sys-2.1.5/build.rs:351:10:
+  Failed to generate bindings: ClangDiagnostic("/home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicorn-engine-sys-2.1.5/include/unicorn/platform.h:54:10: fatal error: 'stdbool.h' file not found\n")

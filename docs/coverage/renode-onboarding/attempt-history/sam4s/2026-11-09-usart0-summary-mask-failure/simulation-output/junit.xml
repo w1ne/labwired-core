@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="1" errors="0" time="0.908087">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="0dc3d787c609a4fd3b6233541a7413a6769183af284ef8f54059be3e6328c85b"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.908087">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_ordered: [&quot;SAM4S RENODE SMOKE&quot;, &quot;eefc fmr=00000500 ok&quot;, &quot;eefc getd size=&quot;, &quot;eefc gpnvm=2 set=3 glb=2 clb=0 ok&quot;, &quot;e…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: memory_value: @0x2000ff00=0x5a400fff" time="0.000000">
+    <failure message="assertion failed">assertion 2: memory_value: @0x2000ff00=0x5a400fff
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=1500000
+stop_reason_details.observed.steps_executed=1500000
+steps_executed=1500000
+cycles=1500000
+instructions=1500000
+limits:
+  - max_steps=1500000
+firmware_hash=0dc3d787c609a4fd3b6233541a7413a6769183af284ef8f54059be3e6328c85b
+firmware=examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-sam4s-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/sam4s.yaml
+script=examples/renode-onboarding/sam4s-smoke.yaml
+assertions:
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;SAM4S RENODE SMOKE&quot;, &quot;eefc fmr=00000500 ok&quot;, &quot;eefc getd size=&quot;, &quot;eefc gpnvm=2 set=3 glb=2 clb=0 ok&quot;, &quot;eefc fsr badkey=3 after=1 ok&quot;, &quot;rstc sr=00010000 wdt mr=3fff2fff ok&quot;, &quot;rstc software reset&quot;, &quot;SAM4S RENODE SMOKE&quot;, &quot;rstc rsttyp=3 ok&quot;, &quot;wdt arm wdv=2&quot;, &quot;SAM4S RENODE SMOKE&quot;, &quot;wdt rsttyp=2 mr=3fff2fff ok&quot;, &quot;wdt window sr=2 pended released ok&quot;, &quot;wdt mr once=00801100 ok&quot;, &quot;pmc pcsr0=&quot;, &quot;pio ports=3 ok&quot;, &quot;tc0 rc pend=1 ok&quot;, &quot;SAM4S PASS&quot;] }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536936192, expected_value: 1514147839, mask: None, size: Some(4), node: None } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

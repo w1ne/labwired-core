@@ -1,0 +1,38 @@
+{
+  "target_id": "cortex-r52",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": false,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 0,
+    "stop_reason": "config_error"
+  },
+  "smoke_passed": false,
+  "crate": null,
+  "target_triple": null,
+  "script": "examples/renode-onboarding/cortex-r52-cpu-smoke.yaml",
+  "system": "configs/systems/onboarding/cortex-r52.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-06T03:07:59Z",
+  "finished_at_utc": "2026-11-06T03:08:20Z",
+  "elapsed_seconds": 21,
+  "elapsed_ms": 20667,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "2026-11-06T03:08:20.267301Z ERROR labwired_cli::commands::test: Failed to parse Chip Descriptor YAML: missing field `peripherals` at line 7 column 1",
+  "failure_hint": "Simulation failed. Inspect logs/run_smoke.log and fix the first failing operation only.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 20.106,
+    "build_firmware": null,
+    "run_smoke": 0.494
+  },
+  "stages_ms": {
+    "build_cli": 20106,
+    "build_firmware": null,
+    "run_smoke": 494
+  },
+  "prebuilt_firmware": "tests/fixtures/cortex-r52-cpu-smoke.elf"
+}

@@ -1,0 +1,33 @@
+{
+  "target_id": "sam4s_xplained",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": false,
+  "booted": null,
+  "boot_evidence": null,
+  "smoke_passed": null,
+  "crate": "firmware-sam4s-xplained-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/renode-onboarding/sam4s_xplained-smoke.yaml",
+  "system": "configs/systems/onboarding/sam4s_xplained.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-09T21:43:11Z",
+  "finished_at_utc": "2026-11-09T21:44:49Z",
+  "elapsed_seconds": 98,
+  "elapsed_ms": 97762,
+  "failure_stage": "build_firmware",
+  "first_error_signature": "error[E0308]: mismatched types",
+  "failure_hint": "Firmware build failed. Start with the first compiler error in logs/build_firmware.log.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 97.438,
+    "build_firmware": 0.308,
+    "run_smoke": null
+  },
+  "stages_ms": {
+    "build_cli": 97438,
+    "build_firmware": 308,
+    "run_smoke": null
+  }
+}

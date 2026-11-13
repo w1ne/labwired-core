@@ -1,0 +1,14 @@
+# Exact imported-system smoke for the bounded Renode riscv_virt profile.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-riscv-virt-smoke"
+  system: "../../configs/systems/onboarding/riscv_virt.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "RV32 VIRT"
+  - memory_value:
+      address: 0x80001000
+      expected_value: 0x00000143
+      size: 4
+  - expected_stop_reason: max_steps

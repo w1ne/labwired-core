@@ -5,14 +5,30 @@
 # See the LICENSE file in the project root for full license information.
 
 name: simavr-attiny1634
-description: 'attiny1634 (Atmel AVR). Declared from the simavr core-model - metadata-only T3 entry, not
-  runnable. Memory geometry: flash 16KB @ 0x0, ram 1KB @ 0x100.'
+description: >-
+  ATtiny1634 (Atmel AVR). Imported profile measured for bounded AVR8 execution
+  and GPIOA and GPIOB only. Other peripheral ranges are omitted from this profile.
+  Memory geometry: flash 16KB @ 0x0, ram 1KB @ 0x100.
 family: Atmel AVR
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize hardware...\n\
   \    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 0
 verified: false
 system: systems/onboarding/simavr-attiny1634.yaml
+validation:
+  method: renode-onboarding-exact-import-smoke
+  reason: bounded AVR8 execution and GPIOA and GPIOB (PB0 output) only; ideal rail assumed; whole platform remains unverified
+  checks:
+    system_manifest: true
+    chip_descriptor: true
+    avr8_cpu_sram_smoke: true
+    gpio: true
+    whole_platform: false
+    other_peripherals: false
+    board_io: true
+  timestamp_utc: '2026-11-07T23:30:00Z'
+  run_url: ''
+  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/simavr-attiny1634.validation.md
 provenance:
   source: simavr
   repo: https://github.com/buserror/simavr

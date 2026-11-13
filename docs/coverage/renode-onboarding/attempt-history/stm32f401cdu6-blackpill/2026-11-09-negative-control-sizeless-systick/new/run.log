@@ -1,0 +1,16 @@
+2026-11-09T17:06:26.226405Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f401cdu6-blackpill.yaml
+2026-11-09T17:06:26.229156Z  INFO labwired_loader: ELF Entry Point: 0x8000009
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+BLACKPILL F401 SMOKE
+rcc apb1=00220001 ok
+led pc13 odr=00002000 ok
+tim2 arr=00000040 ok
+i2c1 nack sr1=00000400 ok
+BLACKPILL PASS
+labwired-cli test: idle_ff skipped 12343 of 200000 device cycles (187657 interpreted)
+2026-11-09T17:06:26.295051Z ERROR labwired_cli::execute: Memory assertion failed to read address 0xe000edfc (size 32): Memory access violation at 0xe000edfc
+2026-11-09T17:06:26.295073Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 3758157308, expected_value: 0, mask: None, size: None, node: None } }) (captured len=135)
+2026-11-09T17:06:26.295091Z ERROR labwired_cli::execute: Memory assertion failed to read address 0xe000e020 (size 32): Memory access violation at 0xe000e020
+2026-11-09T17:06:26.295096Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 3758153760, expected_value: 0, mask: None, size: None, node: None } }) (captured len=135)
+FAIL  5/7 checks · smoke-with-probes · 200000 steps · 0.06s

@@ -1,0 +1,37 @@
+{
+  "target_id": "stm32f401cdu6-blackpill",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 200000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-f401cdu6-blackpill-demo",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/renode-onboarding/stm32f401cdu6-blackpill-smoke.yaml",
+  "system": "configs/systems/onboarding/stm32f401cdu6-blackpill.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-10T01:50:58Z",
+  "finished_at_utc": "2026-11-10T01:51:00Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1713,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "2026-11-10T01:51:00.314217Z ERROR labwired_cli::execute: Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: [\"BLACKPILL F401 SMOKE\", \"rcc apb1=00220001 ok\", \"led pc13 odr=00002000 ok\", \"tim2 arr=00000040 ok\", \"i2c1 sb_irq=1 ",
+  "failure_hint": "Smoke assertion mismatch. Compare expected stop/assertions with current deterministic output.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.253,
+    "build_firmware": 1.021,
+    "run_smoke": 0.39
+  },
+  "stages_ms": {
+    "build_cli": 253,
+    "build_firmware": 1021,
+    "run_smoke": 390
+  }
+}

@@ -177,7 +177,7 @@ impl SystemBus {
         if t.contains("rcc") || t.contains("cmu") {
             return "rcc".to_string();
         }
-        if t == "arm_generictimer" || t == "arm_globaltimer" || t == "arm_sp804_timer" {
+        if t == "arm_generictimer" || t == "arm_globaltimer" {
             return "systick".to_string();
         }
         if t.contains("timer") || t.ends_with("_gpt") || t.ends_with("_agt") {
@@ -341,6 +341,10 @@ impl SystemBus {
             // Renesas SCI_B (RA8 series: renesasra8m1_sci, sci_b). Must
             // precede the classic `sci` arm.
             SciB
+        } else if has("scif") {
+            // Renesas SCIFA (RenesasRZG_SCIFA). Must precede the classic
+            // `sci` arm.
+            Scifa
         } else if has("sci") {
             // Renesas SCI (renesas_sci, renesasraXmY_sci).
             Sci
@@ -372,8 +376,13 @@ impl SystemBus {
             KinetisUart
         } else if has("pulp") || has("udma") {
             Pulp
-        } else if has("ft9001") || has("ft900") {
-            // Bridgetek FT9xx UART is 16550-compatible.
+        } else if has("ft9001") {
+            // FocalTech FT9001 USART (Renode `UART.FT9001_USART`) — a byte
+            // register block of its own, not a 16550. Checked before `ft900`,
+            // which it contains.
+            Ft9001
+        } else if has("ft900") {
+            // Bridgetek FT900 UART is 16550-compatible.
             Ns16550
         } else if has("cosimulated") {
             // Co-simulation stub with no fixed register map — default to 16550.
@@ -457,6 +466,17 @@ impl SystemBus {
             // (efr32mg12/13, sltb004a, …) stay on the case-3b placeholder
             // below, because their register map is the Series-1 one, not this.
             GpioRegisterLayout::Efr32s2
+        } else if has("efm32s0") {
+            // Silicon Labs Series-0 EFM32 (Gecko G/GG/LG/…): GPIO_P_TypeDef
+            // at a 0x24 stride (DOUT @0x0C, DIN @0x1C). Named explicitly;
+            // Renode's `efmgpioport` stays on the placeholder above because
+            // the same Renode type also covers Series-1 parts, whose ports sit
+            // at a 0x30 stride.
+            GpioRegisterLayout::Efm32s0
+        } else if has("efm32s1") {
+            // Silicon Labs Series-1 EFM32/EFR32 (JG1/PG1/JG12/PG12): the same
+            // port struct at a 0x30 stride, DOUTSET/CLR reserved, OVTDIS @0x28.
+            GpioRegisterLayout::Efm32s1
         } else if raw == "gpio" {
             // 3a. The bare vendor-neutral "gpio" type with no profile is the
             //     dangerous case (real product chips: KW41Z / STM32 / nRF /

@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="13" failures="2" errors="0" time="0.716557">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="0ab2bf6e32538b1389e30b669c1c0c1470e5d679ea37744fe4c335f4322c2740"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.716557">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: STM32F746 Cortex-M7 smoke" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: usart2 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_contains: usart3 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: uart_contains: uart4 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: uart_contains: uart5 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: uart_contains: usart6 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: uart_contains: uart7 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 8: uart_contains: uart8 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 9: uart_ordered: [&quot;rcc reset=1 gate=1 mask=1 ok&quot;, &quot;usart irq usart1=1 usart2=1 usart3=1 uart4=1 uart5=1 usart6=1 uart7=1 u…" time="0.000000">
+    <failure message="assertion failed">assertion 9: uart_ordered: [&quot;rcc reset=1 gate=1 mask=1 ok&quot;, &quot;usart irq usart1=1 usart2=1 usart3=1 uart4=1 uart5=1 usart6=1 uart7=1 u…
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=8000000
+stop_reason_details.observed.steps_executed=8000000
+steps_executed=8000000
+cycles=8000000
+instructions=8000000
+limits:
+  - max_steps=8000000
+firmware_hash=0ab2bf6e32538b1389e30b669c1c0c1470e5d679ea37744fe4c335f4322c2740
+firmware=examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-stm32f746-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/stm32f746.yaml
+script=examples/renode-onboarding/stm32f746-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;STM32F746 Cortex-M7 smoke&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;usart2 ok&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;usart3 ok&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;uart4 ok&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;uart5 ok&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;usart6 ok&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;uart7 ok&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;uart8 ok&quot; }): true
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;rcc reset=1 gate=1 mask=1 ok&quot;, &quot;usart irq usart1=1 usart2=1 usart3=1 uart4=1 uart5=1 usart6=1 uart7=1 uart8=1 ok&quot;, &quot;gpio pa=1 pb=1 reset=1 pi1=1 jk=1 ok&quot;, &quot;syscfg memrmp=0x00000C00 pmc=0x008700FF fields=1 cmpcr=1 ok&quot;, &quot;exti swier masked=1 routed=1 ok&quot;, &quot;tim1 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim2 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim3 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim4 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim5 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim6 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim7 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim8 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim9 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim10 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim11 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim12 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim13 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim14 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;exti pads idle=1 presses=1 pa_quiet=1 pk3=1 pc13=1 ok&quot;, &quot;spi1 frame=0x01901600 ds=1 data=1 pend=1 alone=1 released=1 ok&quot;, &quot;spi2 frame=0x06401600 ds=1 data=1 pend=1 alone=1 released=1 ok&quot;, &quot;spi3 frame=0x04B01600 ds=1 data=1 pend=1 alone=1 released=1 ok&quot;, &quot;spi1 shared a=0x01901600 b=0x03201600 after_cut=0x01901600 a=1 b=1 restart=1 ok&quot;, &quot;dma2 spi1 frame=0x01901600 unselected=1 data=1 flags=1 pend=1 alone=1 released=1 ok&quot;, &quot;dma1 spi2 frame=0x06401600 unselected=1 data=1 flags=1 pend=1 alone=1 released=1 ok&quot;, &quot;dma m2m dma1_refused=1 dma2_copied=1 ok&quot;, &quot;i2c1 tmp102=0x00001900 data=1 rx_pend=1 ok&quot;, &quot;i2c1 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok&quot;, &quot;i2c2 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok&quot;, &quot;i2c3 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok&quot;, &quot;i2c4 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok&quot;, &quot;crc word=0xDF8A8A2B crc16=0x000029B1 seed=1 std=1 init=1 idr=1 poly16=1 ok&quot;, &quot;rng off=1 ready=1 draws=1 stopped=1 ok&quot;, &quot;summary 0x747FFFFF&quot;, &quot;DONE&quot;] }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536883200, expected_value: 1954545663, mask: None, size: Some(4), node: None } }): false
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpioi:1&quot;, min_edges: 4 } }): true
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 10: memory_value: @0x20003000=0x747fffff" time="0.000000">
+    <failure message="assertion failed">assertion 10: memory_value: @0x20003000=0x747fffff
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=8000000
+stop_reason_details.observed.steps_executed=8000000
+steps_executed=8000000
+cycles=8000000
+instructions=8000000
+limits:
+  - max_steps=8000000
+firmware_hash=0ab2bf6e32538b1389e30b669c1c0c1470e5d679ea37744fe4c335f4322c2740
+firmware=examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-stm32f746-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/stm32f746.yaml
+script=examples/renode-onboarding/stm32f746-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;STM32F746 Cortex-M7 smoke&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;usart2 ok&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;usart3 ok&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;uart4 ok&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;uart5 ok&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;usart6 ok&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;uart7 ok&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;uart8 ok&quot; }): true
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;rcc reset=1 gate=1 mask=1 ok&quot;, &quot;usart irq usart1=1 usart2=1 usart3=1 uart4=1 uart5=1 usart6=1 uart7=1 uart8=1 ok&quot;, &quot;gpio pa=1 pb=1 reset=1 pi1=1 jk=1 ok&quot;, &quot;syscfg memrmp=0x00000C00 pmc=0x008700FF fields=1 cmpcr=1 ok&quot;, &quot;exti swier masked=1 routed=1 ok&quot;, &quot;tim1 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim2 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim3 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim4 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim5 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim6 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim7 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim8 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim9 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim10 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim11 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim12 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim13 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim14 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;exti pads idle=1 presses=1 pa_quiet=1 pk3=1 pc13=1 ok&quot;, &quot;spi1 frame=0x01901600 ds=1 data=1 pend=1 alone=1 released=1 ok&quot;, &quot;spi2 frame=0x06401600 ds=1 data=1 pend=1 alone=1 released=1 ok&quot;, &quot;spi3 frame=0x04B01600 ds=1 data=1 pend=1 alone=1 released=1 ok&quot;, &quot;spi1 shared a=0x01901600 b=0x03201600 after_cut=0x01901600 a=1 b=1 restart=1 ok&quot;, &quot;dma2 spi1 frame=0x01901600 unselected=1 data=1 flags=1 pend=1 alone=1 released=1 ok&quot;, &quot;dma1 spi2 frame=0x06401600 unselected=1 data=1 flags=1 pend=1 alone=1 released=1 ok&quot;, &quot;dma m2m dma1_refused=1 dma2_copied=1 ok&quot;, &quot;i2c1 tmp102=0x00001900 data=1 rx_pend=1 ok&quot;, &quot;i2c1 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok&quot;, &quot;i2c2 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok&quot;, &quot;i2c3 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok&quot;, &quot;i2c4 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok&quot;, &quot;crc word=0xDF8A8A2B crc16=0x000029B1 seed=1 std=1 init=1 idr=1 poly16=1 ok&quot;, &quot;rng off=1 ready=1 draws=1 stopped=1 ok&quot;, &quot;summary 0x747FFFFF&quot;, &quot;DONE&quot;] }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536883200, expected_value: 1954545663, mask: None, size: Some(4), node: None } }): false
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpioi:1&quot;, min_edges: 4 } }): true
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 11: gpio_edges: gpioi:1 &gt;= 4 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 12: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

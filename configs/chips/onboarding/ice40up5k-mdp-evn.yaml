@@ -1,33 +1,24 @@
+# Bounded CPU/memory profile for the imported iCE40 UltraPlus MDP system.
+# Renode's board REPL includes the Fomu VexRiscv CPU profile: RV32IM, an 8 KiB
+# ROM at zero, 128 KiB SRAM at 0x10000000, and timer0 (LiteX_Timer). LiteX_I2C
+# and its sensors, SPI flash, USB, and board I/O are omitted because this
+# engine profile does not model them.
+# Sources: https://github.com/renode/renode/blob/master/platforms/boards/ice40up5k-mdp-evn.repl
+#          https://github.com/renode/renode/blob/master/platforms/cpus/fomu.repl
 name: ice40up5k-mdp-evn
-arch: arm
-flash:
-  base: 536870912
-  size: 1048576
-ram:
-  base: 268435456
-  size: 131072B
+arch: riscv
+core: rv32im
+flash: { base: 0x00000000, size: "8KB" }
+flash_boot_alias: false
+ram: { base: 0x10000000, size: "128KB" }
+# `cpus/fomu.repl` timer0: LiteX_Timer @ 0x60002800 (shadow 0xE0002800 not
+# mapped), Foboot csr_data_width = 8 — same model and layout as onboarding/fomu.
+# Its IRQ (cpu@0) is not wired into the core here; the smoke polls the event
+# CSRs.
 peripherals:
-- id: bmp180
-  type: bmp180
-  bus: i2c
-  base_address: 119
-- id: lsm330_a
-  type: lsm330_accelerometer
-  bus: i2c
-  base_address: 24
-- id: lsm330_g
-  type: lsm330_gyroscope
-  bus: i2c
-  base_address: 107
-- id: lis2ds12
-  type: lis2ds12
-  bus: i2c
-  base_address: 29
-- id: lsm303dlhc_a
-  type: lsm303dlhc_accelerometer
-  bus: i2c
-  base_address: 25
-- id: lsm303dlhc_g
-  type: lsm303dlhc_gyroscope
-  bus: i2c
-  base_address: 30
+  - id: "timer0"
+    type: "litex_timer"
+    base_address: 0x60002800
+    size: "2KB"
+    config:
+      csr_data_width: 8

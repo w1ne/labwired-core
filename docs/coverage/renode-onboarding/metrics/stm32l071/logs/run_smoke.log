@@ -1,0 +1,19 @@
+2026-11-10T15:48:53.844077Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32l071.yaml
+2026-11-10T15:48:53.907995Z  INFO labwired_loader: ELF Entry Point: 0x80000c1
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-10T15:48:53.911311Z  INFO labwired_cli::execute: stimulus: position = 25 applied
+2026-11-10T15:48:53.911338Z  INFO labwired_cli::execute: stimulus: temperature = 100 applied
+2026-11-10T15:48:53.911344Z  INFO labwired_cli::execute: stimulus: temperature = 50 applied
+2026-11-10T15:48:54.322605Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-10T15:48:54.341744Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-10T15:48:54.381975Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-10T15:48:54.466528Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-10T15:48:54.509213Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-10T15:48:54.608523Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-10T15:48:54.697563Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'usart1'
+2026-11-10T15:48:54.697592Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'usart2'
+2026-11-10T15:48:54.697596Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'usart4'
+2026-11-10T15:48:54.697600Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'usart5'
+2026-11-10T15:48:54.697603Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'lpuart1'
+PASS  6/6 checks · stm32l071-smoke · 4000000 steps · 1.16s

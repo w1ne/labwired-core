@@ -40,6 +40,13 @@
 # - `cc2538_udma`               — µDMA (PL230, SWRU319C §10): software-
 #   requested basic/auto transfers, CHIS + IRQ 46
 #   (crates/core/src/peripherals/cc2538/udma.rs).
+# - `cc2538_pl022_ssi`          — SSI0/1 master-mode SPI (IRQ 7/34)
+#   (crates/core/src/peripherals/cc2538/ssi.rs).
+# - `cc2538_i2cm`               — I2C master (§21.3): single-byte start,
+#   repeated-start and stop commands with attached I2cDevice slaves (IRQ 8).
+# - `cc2538_gptimer`            — GPTimer0-3 (§11): 32-bit and split 16-bit
+#   one-shot/periodic, up/down, prescaler, time-out + match interrupts
+#   (crates/core/src/peripherals/cc2538/gptimer.rs).
 #
 # Tier: L1 UART+LED smoke — boot, UART0 console, the SmartRF06 LEDs with
 # GPIO_DATA readback and the five keys' reset pull-up levels — plus stock
@@ -55,9 +62,10 @@
 # - SYS_CTRL clock gating: the gates are stored and read back, but no
 #   peripheral is gated by them. No oscillator start-up timing, no PM1-3, no
 #   software reset.
-# - IOC pin muxing/pad overrides (IOC_Pxx_SEL / IOC_Pxx_OVER /
-#   IOC_UARTRXD_UART0): the IOC window is a stub. The firmware writes it as
-#   silicon requires; the console model does not depend on it.
+# - IOC routing: the Table 9-7 registers (IOC_Pxx_SEL / IOC_Pxx_OVER /
+#   input selects) are stored and read back at their reset values and field
+#   widths, but no SEL/INPUT_SEL value connects a peripheral to a pad and no
+#   OVER value changes a pad's pull or output enable.
 # - GPIO interrupts (RIS/MIS never set) and the AFSEL commit lock.
 # - RF: path loss, range and collisions on the air (lossless, every node
 #   hears every other), the CSP, the MAC timer count, source matching and the
@@ -67,11 +75,23 @@
 #   and the error IRQ (a channel moves only on a software request).
 # - flash controller: no CPU stall while executing from flash during an
 #   operation, no flash DMA trigger, no flash interrupt.
-# - PKA, SSI0/1, I2C, GPTimer0-3, USB,
-#   SoC ADC/analog: declared stubs.
+# - GPTimer RTC, capture and PWM modes, the ADC trigger and timer sync.
+# - SOC_ADC: conversion timing, STSEL 01/10 sequence starts, the IOC check
+#   that skips inactive sequence channels, ADC DMA triggers, a varying
+#   temperature, the CSP-clocked RNG and the comparator's PA5 edge/IRQ.
+# - CCTEST and ANA_REGS: register storage only; no pad, observation-output,
+#   temperature-gate, USB PHY or bias effect.
+# - PKA engine (0x4400_4000) and USB controller (0x4008_9000): not mapped.
+#   Neither has a model, so the profile does not declare their windows; a
+#   load or store there is an unmapped-access error instead of a silent zero.
+#   The PKA SRAM window is plain RAM. I2CM is a synchronous byte-command
+#   master; its I2CS slave is reachable only over LPBK. Neither side has
+#   clock stretching on writes, bus timing or arbitration.
 #
-# Supersedes the staged configs/chips/onboarding/cc2538.yaml, whose memory map
-# (flash at 0x08000000/128 KiB, 256 KiB RAM) did not match Table 4-1.
+# Supersedes the staged onboarding/cc2538 chip descriptor, whose memory map
+# (flash at 0x08000000/128 KiB, 256 KiB RAM) did not match Table 4-1 and whose
+# radio, crypto, flash-controller and SSI windows answered zeros. It is deleted;
+# configs/systems/onboarding/cc2538.yaml loads this profile.
 
 name: "cc2538sf53"
 arch: "arm"
@@ -118,6 +138,14 @@ memory_regions:
     size: "2KB"
     erased: true
     image_env: "LABWIRED_CC2538_INFO_PAGE"
+  # PKA engine RAM (Table 4-1: 0x4400_6000-0x4400_67FF, 2 KiB). Plain
+  # word-addressable SRAM from the CPU side: operands and results the PKA
+  # sequencer reads and writes. Mapped as RAM so stores read back; the PKA
+  # engine itself (0x4400_4000) is not mapped, so nothing here is ever
+  # computed. The RCGCSEC.PKA clock gate is not enforced (as for every gate).
+  - name: "pka_sram"
+    base: 0x44006000
+    size: "2KB"
 
 pins:
   # CC2538DK / SmartRF06 EB wiring (Contiki-NG `cc2538dk` dev/board.h, RIOT
@@ -194,11 +222,11 @@ peripherals:
     base_address: 0x400D2000
     size: "4KB"
 
-  # --- Declared, not modelled (honest L1 boundary) -----------------------
-  # I/O muxing (IOC_Pxx_SEL / IOC_Pxx_OVER / IOC_UARTRXD_UART0): written by
-  # the smoke as §18.5 requires; not enforced by the console model.
+  # I/O control (§9.3.2, Table 9-7): Pxx_SEL / Pxx_OVER / input-select
+  # register file at its reset values (OVER = 0x4, pull-up). Storage only:
+  # the routing it describes is not applied to pads or peripherals.
   - id: "ioc"
-    type: "stub"
+    type: "cc2538_ioc"
     base_address: 0x400D4000
     size: "4KB"
   # Flash controller (§8.10, Table 8-10): page erase and the FCTL/FADDR/
@@ -222,46 +250,83 @@ peripherals:
     irq: 145
     config:
       clock_hz: 16000000
+  # ANA_REGS (§23.16.5, Table 23-12): IVCTRL storage at its 0x13 reset
+  # (crates/core/src/peripherals/cc2538/ana_regs.rs). The bias fields have no
+  # effect on the RF core or DAC models.
   - id: "ana_regs"
-    type: "stub"
+    type: "cc2538_ana_regs"
     base_address: 0x400D6000
     size: "4KB"
+  # SOC_ADC (§15-17): ADC single (ADCCON3) and ST-started sequence
+  # conversions, the RNG LFSR / CRC16 and the analog comparator
+  # (crates/core/src/peripherals/cc2538/soc_adc.rs). Conversions finish inside
+  # the register write; AIN0-7 are driven as ADC channels 0-7; AVDD5 is the
+  # routed reference rail (3.0 V by default). ADC interrupt, IRQ 14 (Table
+  # 5-2). Not modelled: conversion time, STSEL 01/10 starts, IOC channel
+  # skipping, DMA triggers, temperature changes, the comparator's PA5 edge.
   - id: "soc_adc"
-    type: "stub"
+    type: "cc2538_soc_adc"
     base_address: 0x400D7000
     size: "4KB"
+    irq: 14
+  # SSI0/SSI1 (SWRU319C §19; Renode SPI.CC2538_SSI): master
+  # mode, LBM loopback, 4..16-bit frames, 8-deep TX/RX FIFOs, RORRIS and the
+  # TX/RX FIFO-level interrupts (crates/core/src/peripherals/cc2538/ssi.rs).
+  # Not modelled: slave mode, RX timeout, TI/MICROWIRE formats, bit timing,
+  # µDMA requests. IRQ 7 / 34 in the regular map (Table 5-2).
   - id: "ssi0"
-    type: "stub"
+    type: "cc2538_pl022_ssi"
     base_address: 0x40008000
     size: "4KB"
+    irq: 7
   - id: "ssi1"
-    type: "stub"
+    type: "cc2538_pl022_ssi"
     base_address: 0x40009000
     size: "4KB"
+    irq: 34
+  # I2CM master at 0x4002_0000 and I2CS slave at 0x4002_0800 (Table 4-1),
+  # one model because they share IRQ 8 (§20.3.3) and LPBK ties them together
+  # (§20.3.4) (crates/core/src/peripherals/cc2538/i2cm.rs). The 0x900-byte
+  # window spans both register files; the reserved gap 0x100..0x7FF reads 0.
+  # Master commands are immediate; transfer timing is not modelled. The slave
+  # is only reachable through loopback, not from the external bus.
   - id: "i2cm"
-    type: "stub"
+    type: "cc2538_i2cm"
     base_address: 0x40020000
-    size: "256B"
-  - id: "i2cs"
-    type: "stub"
-    base_address: 0x40020800
-    size: "256B"
+    size: "2304B"
+    irq: 8
+  # GPTimer0-3 (§11): 32-bit or split 16-bit one-shot/periodic timers with
+  # time-out and match interrupts. Timer A pends `irq:`, timer B `irq_b`
+  # (Table 5-2 regular map: 0A/0B 19/20, 1A/1B 21/22, 2A/2B 23/24, 3A/3B
+  # 35/36). One count per CPU cycle (IO_DIV = SYS_DIV).
   - id: "gptimer0"
-    type: "stub"
+    type: "cc2538_gptimer"
     base_address: 0x40030000
     size: "4KB"
+    irq: 19
+    config:
+      irq_b: 20
   - id: "gptimer1"
-    type: "stub"
+    type: "cc2538_gptimer"
     base_address: 0x40031000
     size: "4KB"
+    irq: 21
+    config:
+      irq_b: 22
   - id: "gptimer2"
-    type: "stub"
+    type: "cc2538_gptimer"
     base_address: 0x40032000
     size: "4KB"
+    irq: 23
+    config:
+      irq_b: 24
   - id: "gptimer3"
-    type: "stub"
+    type: "cc2538_gptimer"
     base_address: 0x40033000
     size: "4KB"
+    irq: 35
+    config:
+      irq_b: 36
   # 2.4-GHz IEEE 802.15.4 RF core (§23): registers, strobes, the timed main
   # FSM, RSSI/CCA and RFRND. Alone, a radio in an empty channel (nothing is
   # received, a sent frame goes nowhere). On a world's shared 802.15.4 air
@@ -275,10 +340,6 @@ peripherals:
     irq: 141
     config:
       clock_hz: 16000000
-  - id: "usb"
-    type: "stub"
-    base_address: 0x40089000
-    size: "4KB"
   # AES/SHA-256 cryptoprocessor (Table 4-1: 0x4008_B000-0x4008_BFFF).
   # AES interrupt, IRQ 143 in the regular map (Table 5-2).
   - id: "aes"
@@ -293,16 +354,13 @@ peripherals:
     base_address: 0x400FF000
     size: "4KB"
     irq: 46
-  - id: "pka"
-    type: "stub"
-    base_address: 0x44004000
-    size: "4KB"
-  - id: "pka_sram"
-    type: "stub"
-    base_address: 0x44006000
-    size: "2KB"
-  # CCTEST / OBSSEL (Table 4-1: 0x4401_0000-0x4401_0030).
+  # CCTEST / CC_TESTCTRL (§23.16.4, Table 23-11): IO, OBSSEL0-7, TR0 and
+  # USBCTRL storage (crates/core/src/peripherals/cc2538/cctest.rs). Table 4-1
+  # gives 0x4401_0000-0x4401_0030, but Table 23-11 places TR0 at 0x34 and
+  # USBCTRL at 0x50, so the window covers both. Not modelled: pad strength,
+  # RF observation output on PC0-7, the ADCTM temperature-sensor gate and the
+  # USB PHY stand-by override.
   - id: "cctest"
-    type: "stub"
+    type: "cc2538_cctest"
     base_address: 0x44010000
-    size: "64B"
+    size: "256B"

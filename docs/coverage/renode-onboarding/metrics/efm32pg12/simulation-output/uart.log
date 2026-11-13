@@ -1,0 +1,13 @@
+EFM32PG12 RENODE SMOKE
+gpio pf4/pf5 pushpull set=1 tgl=1 clr=1 wo=1 ok
+gpio reserved 0x10/0x14 no_set=1 no_clr=1 read0=1 ok
+gpio pa0 disabled_din0=1 pullup=1 pulldown=1 ok
+gpio pa1 wiredand pa2 wiredor hi=3 lo=0 ok
+gpio pa pinlockn reset=ffff after=fffe ok
+gpio pa ctrl=00500050 ovtdis=ffff ok
+tim0 up of=1 masked=1 pend=1 released=1 running=1 ok
+tim1 down oneshot dir=1 stopped=1 if=2 cnt=00c8 ok
+tim1 updown cc3=1 of=1 dirchg=1 dir_down=1 ok
+wtim0 32bit top=1 cc0=1 no_early_of=1 cnt_hi=1 of=1 masked=1 pend=1 released=1 ifs=1 ok
+wtim1 32bit top=1 cc0=1 no_early_of=1 cnt_hi=1 of=1 masked=1 pend=1 released=1 ifs=1 ok
+EFM32PG12 PASS

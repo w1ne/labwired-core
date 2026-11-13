@@ -25,6 +25,7 @@ ELFs are not run. No wider Renode parity claim is made.
 | UART0 (PL011-compatible) TX @ 115200 from 16 MHz, `IBRD 8` / `FBRD 44` | smoke-tested | `uart0 … ibrd=8 fbrd=44` + heartbeat lines on the console sink |
 | GPIO address-masked `GPIO_DATA` write + read | smoke-tested | `led=yellow on pin=1 leds=02` … (one masked store per LED; the nibble read proves no other pin moved); unit tests cover the SWRU319C Figure 9-2/9-3 examples |
 | GPIO `GPIO_DIR` / `GPIO_AFSEL` | smoke-tested | LEDs driven only after DIR; PA0/PA1 handed to UART0 |
+| IOC register file (Table 9-7): written routing, `PD7_OVER` reset 0x4, `IOC_GPT3OCP2` field mask | smoke-tested | `ioc pa1_sel=00 pa1_over=08 pa0_over=00 rx0=00 pd7_over=04 gpt3ocp2=1f restored=00`; unit tests in `crates/core/src/peripherals/cc2538/ioc.rs` |
 | Key inputs at the reset IOC pull-up | smoke-tested | `keys select=1 left=1 right=1 up=1 down=1` |
 | Determinism (same inputs → same output) | smoke-tested | two runs, identical `uart.log` and `snapshot.json` |
 | Instruction support for this firmware | audited | `unsupported_instruction_audit.sh`: 200,000 instructions, 0 unsupported |
@@ -64,17 +65,54 @@ ELFs are not run. No wider Renode parity claim is made.
 | ROM serial boot loader | **not modelled** | ROM parks in WFI |
 | Flash: CPU stall while executing from flash during an operation, flash DMA trigger, flash interrupt, the 8-writes-per-word limit, mass erase | **not modelled** | `crates/core/src/peripherals/cc2538/flash_ctrl.rs` |
 | Watchdog, sleep-timer capture | **not modelled** | `WDCTL`/`STCC`/`STCS` are storage |
-| IOC pin mux / pad overrides | **not modelled** | the IOC window is a stub |
+| IOC pin mux / pad overrides applied to pads | **not modelled** | the registers are stored; GPIO pulls come from `pull_up_mask` |
 | GPIO interrupts, AFSEL commit lock | **not modelled** | `GPIO_RIS`/`GPIO_MIS` read 0 |
 | CCA in the smoke image | pinned | the loader enters the smoke at its flash-base table; `test_cc2538dk_smoke_customer_configuration_area_boots` pins its 44 bytes |
-| PKA, SSI, I2C, GPTimers, USB, ADC | declared stubs | `configs/chips/cc2538sf53.yaml` |
+| SSI0/SSI1 master mode: TX-FIFO queueing while disabled, LBM loopback, 4..16-bit frames, 8-deep RX FIFO overrun (RORRIS) and ICR clear, FIFO-level RIS/MIS and IRQ 7/34 | unit-tested; exercised | `cargo test -p labwired-core --lib cc2538::ssi` (10 tests); the smoke's `ssi0 ...` lines in `io-smoke.yaml` |
+| SSI slave mode, RX timeout, TI SSF / MICROWIRE formats, bit timing, µDMA requests | **not modelled** | `crates/core/src/peripherals/cc2538/ssi.rs` |
+| GPTimer0 A: 32-bit periodic down-count, three time-outs, ICR clears, NVIC pending IRQ 19, disabled-count hold | unit-tested; smoke-exercised | `cc2538::gptimer` (9 tests with legacy tick and event-scheduler); `io-smoke.yaml` UART line `gpt0 to=3 nvic19=1 held=1` |
+| GPTimer1 B: split 16-bit one-shot up-count, ÷16 prescale, match + timeout status, NVIC pending IRQ 22 | unit-tested; smoke-exercised | `cc2538::gptimer`; `io-smoke.yaml` UART line `gpt1b ris=0900 ctl=0000 nvic22=1 span=ok 16004` |
+| GPTimer RTC, capture/PWM edge handling, synchronization, ADC trigger, deferred reload, prescaler extension and CCP output | **not modelled** | `crates/core/src/peripherals/cc2538/gptimer.rs` |
+| I2CM: address and data NACK, held bus, register-pointer write, repeated-start read, STOP, completion RIS/ICR and IRQ 8 | unit-tested; smoke-exercised | `cc2538::i2cm` (9 tests); imported-system onboarding smoke reads the injected TMP102 fixture at `0x48`, checks `1900`, IRQ 8 and RIS clear |
+| I2CM transfer timing, TPR clock division, write-side clock stretching, multi-master arbitration; I2CS on the external bus (it answers only over LPBK) | **not modelled** | `crates/core/src/peripherals/cc2538/i2cm.rs` |
+| PKA SRAM (`0x4400_6000`, 2 KiB): all 512 words written and read back | smoke-exercised | `memory_regions` entry `pka_sram` in `configs/chips/cc2538sf53.yaml`; imported-system onboarding smoke line `pka_sram words=512 bad=0 last=751ef9b8` |
+| Negative control (PKA SRAM) | fail | `pka_sram` back to a `type: stub` peripheral → `pka_sram words=512 bad=512 last=00000000`, FAIL 2/3 |
+| SOC_ADC: ADCCON3 single conversion of VDD/3, temperature sensor and GND against the 1.19 V internal reference, EOC cleared by the ADCH read, NVIC pending IRQ 14; RNG reset 0xFFFF, RNDL seed, RCTRL=01 clock-once (13 shifts, x^16+x^15+x^2+1) and RNDH CRC16 of "123456789" = 0xFEE8; comparator reset/enabled outputs | 9 unit tests defined; smoke-exercised | `crates/core/src/peripherals/cc2538/soc_adc.rs` tests; smoke lines `adc con1=33 vdd3=6b80 temp=58e0 gnd=0000 eoc=0 irq14=1`, `rng reset=ffff seed=1234 clock=8d94 rctrl=0 crc=fee8`, `cmp off=01 on=02` |
+| SOC_ADC conversion time, STSEL 01/10 sequence starts, IOC_Pxx_SEL channel skipping, ADC DMA triggers, temperature variation, CSP-clocked RNG, comparator PA5 edge override and IRQ 41 | **not modelled** | `crates/core/src/peripherals/cc2538/soc_adc.rs` |
+| PKA engine (modular arithmetic, ECC) at `0x4400_4000`, USB controller at `0x4008_9000` | **not mapped** (no window; access is an unmapped-access error) | `configs/chips/cc2538sf53.yaml` |
 
-## Commands and evidence (verified 2026-10-30)
+The focused unit-test command was attempted on 2026-11-07, but rustc received
+SIGKILL while compiling the `labwired-core` test binary; no unit tests ran and
+there is no unit-test verdict. The exact imported-system smoke below passed.
+The attempt is recorded at
+`docs/coverage/renode-onboarding/attempt-history/cc2538/2026-11-07-soc-adc-unit-test-sigkill/README.md`.
+
+On 2026-11-07, the imported-platform measurement
+`CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 /usr/bin/python3 scripts/run_renode_onboarding_inventory.py --only cc2538`
+passed against the exact imported system: 4,000,000 instructions and 3/3
+smoke assertions. Alongside the previously exercised I2CM and PKA SRAM paths,
+the UART log now checks the bounded SOC_ADC register behavior for the ADC
+result/EOC/IRQ, RNG seed/clock/CRC and comparator output. The complete build,
+UART, JUnit, result and snapshot evidence is under
+`docs/coverage/renode-onboarding/metrics/cc2538/`. Its system injects a virtual
+TMP102 as a test fixture; this does not claim that the CC2538DK includes that
+sensor. The shared scoreboard remains at 245 descriptors, 224 booted and
+smoke-passing, 21 not run, and 0 measured failures. The CC2538 profile now
+declares no zero-answering stub windows: ANA_REGS and CCTEST are register
+storage models, I2CS is part of `cc2538_i2cm`, and the PKA engine and USB
+controller windows were removed rather than left answering zeros. IOC register storage and SOC_ADC behavior remain bounded to the
+surfaces exercised by their smokes.
+
+## Commands and evidence (updated 2026-11-07)
 
 ```bash
 # from the repository root
 cargo build -p firmware-cc2538dk-smoke --release --target thumbv7m-none-eabi
+CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 /usr/bin/python3 \
+  scripts/run_renode_onboarding_inventory.py --only cc2538
 #   Finished `release` profile — no warnings
+#   245 descriptors; 224 booted; 224 booted and smoke-passing; 21 not run; 0 fail
+#   cc2538: 4,000,000 instructions; 3/3 assertions; I2CM TMP102 + IRQ 8, PKA SRAM 512-word readback
 
 ./examples/cc2538dk/ci/test.sh
 #   PASS  3/3 checks · io-smoke · 4000000 steps
@@ -104,6 +142,11 @@ cargo test -p labwired-core --features event-scheduler --test cc2538_sleep_timer
 cargo test -p labwired-core --test cc2538_rom
 cargo test -p labwired-core --features event-scheduler --test cc2538_rom
 #   12 passed each
+cargo +1.95.0 test -p labwired-core --lib peripherals::cc2538::gptimer
+cargo +1.95.0 test -p labwired-core --lib --features event-scheduler peripherals::cc2538::gptimer
+#   9 passed each (legacy tick / scheduled events)
+cargo +1.95.0 clippy -p labwired-core --lib -- -D warnings
+#   clean
 cargo test -p labwired-core --test firmware_survival cc2538
 #   test_cc2538dk_smoke_survival, test_cc2538dk_contiki_hello_survival,
 #   test_cc2538dk_contiki_flash_test_survival,
@@ -193,5 +236,5 @@ done
 - `junit.xml` carries per-run wall-clock timings and is not part of the
   determinism claim; `uart.log` and `snapshot.json` are.
 - The staged `configs/chips/onboarding/cc2538.yaml` (flash at `0x08000000`,
-  128 KiB; 256 KiB RAM) did not match SWRU319C Table 4-1. It is kept, marked
-  superseded, because `crates/core/src/bus/known_stubs.rs` still cites it.
+  128 KiB; 256 KiB RAM) did not match SWRU319C Table 4-1. It has been
+  deleted, along with its five zero-answering stub types.

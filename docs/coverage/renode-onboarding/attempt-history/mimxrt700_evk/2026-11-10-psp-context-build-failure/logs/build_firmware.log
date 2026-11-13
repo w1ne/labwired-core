@@ -1,0 +1,38 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+   Compiling firmware-mimxrt700-evk-smoke v0.1.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/renode/crates/firmware-mimxrt700-evk-smoke)
+warning: unnecessary `unsafe` block
+  --> crates/firmware-mimxrt700-evk-smoke/src/main.rs:75:19
+   |
+75 |     let psp_top = unsafe { addr_of_mut!(PSP_STACK) as u32 } + (PSP_STACK_WORDS as u32) * 4;
+   |                   ^^^^^^ unnecessary `unsafe` block
+   |
+   = note: `#[warn(unused_unsafe)]` (part of `#[warn(unused)]`) on by default
+
+error[E0596]: cannot borrow immutable static item `IRQ_ENTRY` as mutable
+   --> crates/firmware-mimxrt700-evk-smoke/src/main.rs:110:29
+    |
+ 47 | static IRQ_ENTRY: AtomicU32 = AtomicU32::new(0);
+    | --------------------------- this `static` cannot be borrowed as mutable
+...
+110 |             entry = in(reg) addr_of_mut!(IRQ_ENTRY) as u32,
+    |                             ^^^^^^^^^^^^^^^^^^^^^^^ cannot borrow as mutable
+    |
+    = note: this error originates in the macro `addr_of_mut` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+For more information about this error, try `rustc --explain E0596`.
+warning: `firmware-mimxrt700-evk-smoke` (bin "firmware-mimxrt700-evk-smoke") generated 1 warning
+error: could not compile `firmware-mimxrt700-evk-smoke` (bin "firmware-mimxrt700-evk-smoke") due to 1 previous error; 1 warning emitted

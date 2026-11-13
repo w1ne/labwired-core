@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      0,
+      0,
+      1000000,
+      1000000,
+      3758157064,
+      3758153744,
+      3024,
+      536891096,
+      1073759232,
+      0,
+      536871168,
+      3758157060,
+      134237205,
+      536891096,
+      4294967289,
+      68
+    ],
+    "pc": 68,
+    "xpsr": 1090519040,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 134217728,
+    "waiting_for_event": false,
+    "event_register": true
+  },
+  "steps_executed": 50000000,
+  "cycles": 50000000,
+  "instructions": 50000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 50000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 50000000
+    }
+  },
+  "limits": {
+    "max_steps": 50000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "eaba6d27f6bc9e9a976899a7decddc1e08c482dfff2b5dd4f02db544bd0949f9",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-f103-i2c-demo",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f103.yaml",
+    "script": "examples/renode-onboarding/stm32f103-i2c-smoke.yaml"
+  }
+}

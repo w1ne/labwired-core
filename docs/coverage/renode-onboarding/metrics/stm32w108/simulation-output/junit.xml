@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="5" failures="0" errors="0" time="0.002905">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="fb9ce5ec06c50a83203a11a5d6bc3a357f0c6bc88e31d85eb7605138bf9be171"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.002905">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: memory_value: @0x20080000=0x571001ff" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: memory_value: @0x2008000c=0x44" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_contains: STM32W108 SC1 SMOKE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

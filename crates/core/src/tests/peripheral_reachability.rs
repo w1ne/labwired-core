@@ -454,83 +454,34 @@ fn nrf5340_gpio_ports_answer_at_their_own_silicon_addresses() {
     );
 }
 
-/// ATSAMD21J17D: the three SERCOM USART instances must be separately addressable.
-///
-/// Addresses from the Microchip-published `ATSAMD21J17D.svd` (cmsis-svd-data,
-/// `data/Atmel/ATSAMD21J17D.svd`): SERCOM0 @ 0x4200_0800, SERCOM1 @ 0x4200_0C00,
-/// SERCOM3 @ 0x4200_1400, 0x400 apart on APB-C. Which SERCOM each `usartN` id
-/// means comes from the upstream descriptor this chip YAML was imported from,
-/// `renode/renode` `platforms/cpus/atsamd21j17d-aft.repl`, which maps
-/// usart0→0x4200_0800, usart1→0x4200_0C00, usart2→0x4200_1400 (and whose NVIC
-/// lines 9/10/12 are SERCOM0/1/3, confirming the third is SERCOM3, not SERCOM2).
-/// SERCOM USART `DATA` is at +0x28.
-///
-/// Before the fix all five of tc4/tc6/usart0/usart1/usart2 sat at 0x4200 —
-/// the top 16 bits of their real addresses, because the importer truncated
-/// Renode's underscore-separated hex literals at the underscore. Four of the
-/// five were unreachable; the router handed every access to the last registered.
+/// The imported execution profile maps the SERCOMs Renode's repl models as
+/// USARTs (SERCOM0 console, SERCOM1, SERCOM3) — each exercised by the
+/// exact-system smoke — and leaves the others out.
 #[test]
-fn atsamd21_sercom_usarts_are_separately_addressable() {
-    use std::sync::{Arc, Mutex};
-
-    const SERCOM0: u64 = 0x4200_0800;
-    const SERCOM1: u64 = 0x4200_0C00;
-    const SERCOM3: u64 = 0x4200_1400;
-    const DATA: u64 = 0x28;
-
-    let mut bus = bus_for_chip("configs/chips/onboarding/atsamd21j17d-aft.yaml");
-
-    // Tap usart1's transmitter. Only bytes that reach THAT model may appear.
-    let sink = Arc::new(Mutex::new(Vec::new()));
-    assert!(
-        bus.attach_uart_tx_sink_named("usart1", sink.clone(), false),
-        "usart1 must exist as a UART model"
-    );
-
-    bus.write_u8(SERCOM0 + DATA, b'0').unwrap();
-    assert!(
-        sink.lock().unwrap().is_empty(),
-        "a byte written to SERCOM0 must not come out of usart1 (=SERCOM1)"
-    );
-
-    bus.write_u8(SERCOM1 + DATA, b'1').unwrap();
-    assert_eq!(
-        &*sink.lock().unwrap(),
-        b"1",
-        "a byte written to SERCOM1's DATA must come out of usart1 — if the sink \
-         is empty, usart1 is shadowed and unreachable at its own address"
-    );
-
-    bus.write_u8(SERCOM3 + DATA, b'2').unwrap();
-    assert_eq!(
-        &*sink.lock().unwrap(),
-        b"1",
-        "a byte written to SERCOM3 must not come out of usart1"
-    );
+fn atsamd21_smoke_profile_maps_only_the_exercised_sercoms() {
+    let bus = bus_for_chip("configs/chips/onboarding/atsamd21j17d-aft.yaml");
+    let owner = |addr: u64| {
+        bus.find_peripheral_index(addr)
+            .map(|i| bus.peripherals[i].name.clone())
+    };
+    assert_eq!(owner(0x4200_0800).as_deref(), Some("usart0"));
+    assert_eq!(owner(0x4200_0C00).as_deref(), Some("sercom1"));
+    assert_eq!(owner(0x4200_1400).as_deref(), Some("sercom3"));
+    assert!(owner(0x4200_1000).is_none(), "SERCOM2 is not exercised");
+    assert!(owner(0x4200_1800).is_none(), "SERCOM4 is not exercised");
 }
 
-/// ATSAMD21J17D PORT: GROUP0 (PA) and GROUP1 (PB) are 0x80 apart, not identical.
-///
-/// `ATSAMD21J17D.svd` gives PORT @ 0x4100_4400 with a 0x200 `addressBlock` and a
-/// two-element register cluster at 0x80 increments; the upstream Renode
-/// descriptor spells the same thing out as gpio_a @ 0x4100_4400,
-/// gpio_b @ 0x4100_4480. Both were imported as 0x4100.
-///
-/// `samd21_gpio` has no model in this engine (it builds a stub), so the two
-/// ports cannot be told apart by a read/write — a stub answers 0 either way.
-/// What CAN be checked, and is the whole content of the defect, is that the
-/// router dispatches each port's own address to that port.
+/// The smoke firmware configures PA10/PA11, toggles PA17 and checks PB10, so
+/// the profile maps PORT groups A and B with the engine's SAM GPIO layout and
+/// nothing past them.
 #[test]
-fn atsamd21_port_groups_route_to_their_own_instances() {
+fn atsamd21_smoke_profile_maps_port_a_and_b_only() {
     let bus = bus_for_chip("configs/chips/onboarding/atsamd21j17d-aft.yaml");
-    for (id, addr) in [("gpio_a", 0x4100_4400u64), ("gpio_b", 0x4100_4480u64)] {
-        let owner = bus
-            .find_peripheral_index(addr)
-            .map(|i| bus.peripherals[i].name.clone());
-        assert_eq!(
-            owner.as_deref(),
-            Some(id),
-            "{addr:#010x} must be served by `{id}`, not by {owner:?}"
-        );
-    }
+    let owner = |addr: u64| {
+        bus.find_peripheral_index(addr)
+            .map(|i| bus.peripherals[i].name.clone())
+    };
+    assert_eq!(owner(0x4100_4400).as_deref(), Some("gpio_a"));
+    assert_eq!(owner(0x4100_4480).as_deref(), Some("gpio_b"));
+    assert!(owner(0x4100_4500).is_none());
 }

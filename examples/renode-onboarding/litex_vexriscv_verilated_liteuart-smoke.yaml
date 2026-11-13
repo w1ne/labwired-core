@@ -1,0 +1,20 @@
+# Smoke the supported RV32IM and LiteX UART/timer surfaces of the imported
+# Verilated LiteUART system. The external UART co-simulation is omitted.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32im-unknown-none-elf/release/firmware-litex-vexriscv-smoke"
+  system: "../../configs/systems/onboarding/litex_vexriscv_verilated_liteuart.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "LITEX VEXRISCV SMOKE"
+  - uart_ordered:
+      - "cpu=rv32im uart=litex-csr-model"
+      - "mul=00000143"
+      - "timer=running"
+      - "timer=zero"
+      - "hb=0 txfull=00000000"
+      - "hb=1 txfull=00000000"
+      - "hb=2 txfull=00000000"
+      - "hb=3 txfull=00000000"
+  - expected_stop_reason: max_steps

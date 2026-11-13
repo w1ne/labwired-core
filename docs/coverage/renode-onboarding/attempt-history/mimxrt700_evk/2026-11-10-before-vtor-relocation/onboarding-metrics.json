@@ -1,0 +1,37 @@
+{
+  "target_id": "mimxrt700_evk",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 24000000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": "firmware-mimxrt700-evk-smoke",
+  "target_triple": "thumbv8m.main-none-eabi",
+  "script": "examples/renode-onboarding/mimxrt700_evk-smoke.yaml",
+  "system": "configs/systems/onboarding/mimxrt700_evk.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-10T19:35:06Z",
+  "finished_at_utc": "2026-11-10T19:35:10Z",
+  "elapsed_seconds": 4,
+  "elapsed_ms": 3752,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.267,
+    "build_firmware": 0.155,
+    "run_smoke": 3.292
+  },
+  "stages_ms": {
+    "build_cli": 267,
+    "build_firmware": 155,
+    "run_smoke": 3292
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "target_id": "efm32gg995",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 400000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": "firmware-efm32gg995-smoke",
+  "target_triple": "thumbv7m-none-eabi",
+  "script": "examples/renode-onboarding/efm32gg995-smoke.yaml",
+  "system": "configs/systems/onboarding/efm32gg995.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-09T16:41:42Z",
+  "finished_at_utc": "2026-11-09T16:41:43Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1182,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.377,
+    "build_firmware": 0.264,
+    "run_smoke": 0.525
+  },
+  "stages_ms": {
+    "build_cli": 377,
+    "build_firmware": 264,
+    "run_smoke": 525
+  }
+}

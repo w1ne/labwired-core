@@ -1,0 +1,4 @@
+2026-11-09T22:30:16.917161Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/sam4s8b.yaml
+2026-11-09T22:30:16.919123Z  INFO labwired_loader: ELF Entry Point: 0x400401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+PASS  3/3 checks · sam4s8b-smoke · 1500000 steps · 0.58s

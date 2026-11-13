@@ -1,0 +1,38 @@
+{
+  "target_id": "simavr-atmega324",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": null,
+  "target_triple": null,
+  "script": "examples/renode-onboarding/simavr-atmega324-smoke.yaml",
+  "system": "configs/systems/onboarding/simavr-atmega324.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-07T11:31:51Z",
+  "finished_at_utc": "2026-11-07T11:32:03Z",
+  "elapsed_seconds": 13,
+  "elapsed_ms": 12120,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 11.75,
+    "build_firmware": null,
+    "run_smoke": 0.358
+  },
+  "stages_ms": {
+    "build_cli": 11750,
+    "build_firmware": null,
+    "run_smoke": 358
+  },
+  "prebuilt_firmware": "tests/fixtures/avr/atmega324-io-smoke.elf"
+}

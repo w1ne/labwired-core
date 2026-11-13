@@ -1,3 +1,9 @@
+# Narrow imported simavr ATmega328 profile for the Arduino Uno smoke.
+# The imported core descriptor omitted peripherals. Keep only the modeled
+# ATmega328P flash/SRAM, GPIOB (D8-D13), and USART0 surfaces exercised here;
+# Timer0 used by the Arduino delay implementation is part of the AVR core.
+# SPI, TWI, ADC, and other board peripherals are outside this profile.
+#
 # LabWired - Firmware Simulation Platform
 # Copyright (C) 2026 Andrii Shylenko
 #
@@ -7,13 +13,24 @@
 name: simavr-atmega328
 arch: avr
 core: avr8
+cpu_hz: 16000000
 flash:
   base: 0
   size: 32KB
 ram:
   base: 256
   size: 2KB
-peripherals: []
+peripherals:
+  - id: portb
+    type: avr_gpio
+    base_address: 0x00010023
+    size: 3
+  - id: usart0
+    type: uart
+    base_address: 0x000100C0
+    size: 8
+    config:
+      profile: avr
 provenance:
   source: simavr
   repo: https://github.com/buserror/simavr

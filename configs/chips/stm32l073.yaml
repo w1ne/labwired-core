@@ -241,7 +241,7 @@ peripherals:
       debug_schema: "../peripherals/stm32l073/i2c3.yaml"
       profile: "stm32l4"
 
-  # --- ADC (12-bit SAR; L0 layout approximated by the l4 ADC model) ---------
+  # --- ADC (12-bit SAR; L0 CHSELR model, stm32f0_adc.rs) -------------------
   - id: "adc1"
     type: "adc"
     base_address: 0x40012400
@@ -249,7 +249,7 @@ peripherals:
     irq: 12
     config:
       debug_schema: "../peripherals/stm32l073/adc.yaml"
-      profile: "stm32l4"
+      profile: "stm32l0"
     # ADC1 is clocked from RCC_APB2ENR.ADCEN (bit 9). Unclocked out of reset
     # (RM0367 §7.3.13) — the converter is dead until the clock is enabled.
     clock: { reg: "apb2enr", bit: 9 }

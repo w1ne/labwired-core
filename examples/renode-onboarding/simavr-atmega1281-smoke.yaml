@@ -1,0 +1,14 @@
+# GPIOA + polled USART0 smoke against the imported ATmega1281 profile.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/avr/atmega1281-io-smoke.elf"
+  system: "../../configs/systems/onboarding/simavr-atmega1281.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "M1281 IO bits=7F"
+  - memory_value: {address: 0x0224, expected_value: 0x7F, size: 1}
+  - gpio_edges:
+      pin: "porta:0"
+      min_edges: 2
+  - expected_stop_reason: max_steps

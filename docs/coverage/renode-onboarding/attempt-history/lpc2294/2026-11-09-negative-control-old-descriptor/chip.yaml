@@ -1,0 +1,27 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# Bounded ARM7TDMI profile for the imported LPC2294 CPU and UART0 TX path.
+# Only the imported UART0 window's offset-zero transmit write is modeled here;
+# other UART registers, UART1, CAN, timer, and ADC remain outside this profile.
+name: lpc2294
+arch: arm
+core: arm7tdmi-s
+flash:
+  base: 134217728
+  size: 65536B
+ram:
+  base: 536870912
+  size: 65536B
+peripherals:
+- id: uart0
+  type: uart
+  bus: sysbus
+  base_address: 3758145536
+  size: 4
+  config:
+    profile: custom
+    tx_offset: 0

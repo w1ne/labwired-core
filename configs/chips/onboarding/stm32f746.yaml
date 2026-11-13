@@ -4,212 +4,417 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
+# STM32F746xG (Cortex-M7), from Renode's platforms/cpus/stm32f746.repl. The
+# geometry is ST's `stm32f746xx.h` / DS10916, not the repl's: 1 MiB flash
+# (the repl maps 2 MiB) and 320 KiB SRAM (DTCM 64K + SRAM1 240K + SRAM2 16K,
+# contiguous at 0x20000000; the repl maps 384 KiB).
+#
+# Claimed, each exercised by crates/firmware-stm32f746-smoke: RCC (F4 layout,
+# F746 ENR masks and the DTCMRAMEN reset), USART1/2/3/6 and UART4/5/7/8 (the
+# "v2" USART), GPIOA..K, SYSCFG (F7 MEMRMP/PMC, EXTICR port mux) and EXTI
+# (24 lines; EXTI0..4 = 6..10, EXTI9_5 = 23, EXTI15_10 = 40), TIM1..TIM14,
+# SPI1/2/3 (FIFO SPI), I2C1..4 (the "v2" I2C, EV/ER pairs), DMA1/DMA2 (8
+# streams; SPI1 on DMA2 and SPI2 on DMA1 routed), CRC (8-bit IDR,
+# programmable INIT/POL/POLYSIZE; REV_IN/REV_OUT are not modelled) and RNG
+# (no interrupt: the model has none).
+#
+# Not claimed: ADC1..3, DAC, CAN1/2, Ethernet, LTDC, DMA2D, SDMMC1, RTC, PWR,
+# the flash interface, QUADSPI, FMC, USB OTG, SAI, SPDIFRX, HDMI-CEC, LPTIM1,
+# DCMI, SPI4..6, the watchdogs, and the RCC PLLSAI/PLLI2S/DCKCFGR1/2 clock
+# muxing.
 name: stm32f746
 arch: arm
+core: cortex-m7
+# STM32F746 maximum core clock, 216 MHz.
+cpu_hz: 216_000_000
 flash:
-  base: 134217728
-  size: 2097152B
+  base: 0x08000000
+  size: 1024KB
 ram:
-  base: 536870912
-  size: 393216B
+  base: 0x20000000
+  size: 320KB
 peripherals:
-- id: usart1
-  type: stm32f7_usart
-  bus: sysbus
-  base_address: 1073811456
-- id: usart2
-  type: stm32f7_usart
-  bus: sysbus
-  base_address: 1073759232
-- id: usart3
-  type: stm32f7_usart
-  bus: sysbus
-  base_address: 1073760256
-- id: usart6
-  type: stm32f7_usart
-  bus: sysbus
-  base_address: 1073812480
-- id: can1
-  type: stmcan
-  bus: sysbus
-  base_address: 1073767424
-- id: gpioPortA
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 1073872896
-- id: gpioPortB
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 1073873920
-- id: gpioPortC
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 1073874944
-- id: gpioPortD
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 1073875968
-- id: gpioPortE
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 1073876992
-- id: gpioPortF
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 1073878016
-- id: gpioPortG
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 1073879040
-- id: gpioPortH
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 1073880064
-- id: gpioPortI
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 1073881088
-- id: gpioPortJ
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 1073882112
-- id: gpioPortK
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 1073883136
-- id: ethernet
-  type: synopsysethernetmac
-  bus: sysbus
-  base_address: 1073905664
-- id: spi1
-  type: stm32spi
-  bus: sysbus
-  base_address: 1073819648
-- id: spi2
-  type: stm32spi
-  bus: sysbus
-  base_address: 1073756160
-- id: spi3
-  type: stm32spi
-  bus: sysbus
-  base_address: 1073757184
-- id: dma1
-  type: stm32dma
-  bus: sysbus
-  base_address: 1073897472
-- id: dma2
-  type: stm32dma
-  bus: sysbus
-  base_address: 1073898496
-- id: ltdc
-  type: stm32ltdc
-  bus: sysbus
-  base_address: 1073833984
-- id: dma2d
-  type: stm32dma2d
-  bus: sysbus
-  base_address: 1073917952
-- id: i2c1
-  type: stm32f7_i2c
-  bus: sysbus
-  base_address: 1073763328
-- id: i2c2
-  type: stm32f7_i2c
-  bus: sysbus
-  base_address: 1073764352
-- id: i2c3
-  type: stm32f7_i2c
-  bus: sysbus
-  base_address: 1073765376
-- id: i2c4
-  type: stm32f7_i2c
-  bus: sysbus
-  base_address: 1073766400
-- id: syscfg
-  type: stm32_syscfg
-  bus: sysbus
-  base_address: 1073821696
-- id: lptim1Isr
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1073751040
-- id: rtc
-  type: stm32f4_rtc
-  bus: sysbus
-  base_address: 1073752064
+# Cortex-M architectural SysTick (system exception 15). This shared model is
+# part of the imported F746/F777 core even though Renode's STM32 platform file
+# does not attach it as a separate peripheral.
+- id: systick
+  type: systick
+  base_address: 0xE000E010
+# RCC (RM0385 §5): the F4 register layout. ENR masks are every *EN bit
+# `stm32f746xx.h` defines; AHB1ENR resets to DTCMRAMEN (RM0385 §5.3.10).
 - id: rcc
-  type: stm32f4_rcc
-  bus: sysbus
-  base_address: 1073887232
+  type: rcc
+  base_address: 0x40023800
+  size: 1KB
+  config:
+    profile: stm32f4
+    rcc_ahb1enr_mask: 0x7EF417FF
+    rcc_apb1enr_mask: 0xFFFFCBFF
+    rcc_apb2enr_mask: 0x04F77F33
+    rcc_ahb1enr_reset: 0x00100000
+# USART/UART (RM0385 §34): the "v2" register map (ISR/TDR).
+- id: usart1
+  type: uart
+  base_address: 0x40011000
+  size: 1KB
+  irq: 37
+  clock: { reg: apb2enr, bit: 4 }
+  config:
+    profile: stm32v2
+- id: usart2
+  type: uart
+  base_address: 0x40004400
+  size: 1KB
+  irq: 38
+  clock: { reg: apb1enr, bit: 17 }
+  config:
+    profile: stm32v2
+- id: usart3
+  type: uart
+  base_address: 0x40004800
+  size: 1KB
+  irq: 39
+  clock: { reg: apb1enr, bit: 18 }
+  config:
+    profile: stm32v2
+- id: uart4
+  type: uart
+  base_address: 0x40004C00
+  size: 1KB
+  irq: 52
+  clock: { reg: apb1enr, bit: 19 }
+  config:
+    profile: stm32v2
+- id: uart5
+  type: uart
+  base_address: 0x40005000
+  size: 1KB
+  irq: 53
+  clock: { reg: apb1enr, bit: 20 }
+  config:
+    profile: stm32v2
+- id: usart6
+  type: uart
+  base_address: 0x40011400
+  size: 1KB
+  irq: 71
+  clock: { reg: apb2enr, bit: 5 }
+  config:
+    profile: stm32v2
+- id: uart7
+  type: uart
+  base_address: 0x40007800
+  size: 1KB
+  irq: 82
+  clock: { reg: apb1enr, bit: 30 }
+  config:
+    profile: stm32v2
+- id: uart8
+  type: uart
+  base_address: 0x40007C00
+  size: 1KB
+  irq: 83
+  clock: { reg: apb1enr, bit: 31 }
+  config:
+    profile: stm32v2
+# GPIOA..K (RM0385 §6). Port A/B reset values are the JTAG/SWD pads.
+- id: gpioa
+  type: gpio
+  base_address: 0x40020000
+  size: 1KB
+  clock: { reg: ahb1enr, bit: 0 }
+  config:
+    profile: stm32v2
+    reset_moder: 0xA8000000
+    reset_pupdr: 0x64000000
+- id: gpiob
+  type: gpio
+  base_address: 0x40020400
+  size: 1KB
+  clock: { reg: ahb1enr, bit: 1 }
+  config:
+    profile: stm32v2
+    reset_moder: 0x00000280
+    reset_ospeedr: 0x000000C0
+    reset_pupdr: 0x00000100
+- id: gpioc
+  type: gpio
+  base_address: 0x40020800
+  size: 1KB
+  clock: { reg: ahb1enr, bit: 2 }
+  config:
+    profile: stm32v2
+- id: gpiod
+  type: gpio
+  base_address: 0x40020C00
+  size: 1KB
+  clock: { reg: ahb1enr, bit: 3 }
+  config:
+    profile: stm32v2
+- id: gpioe
+  type: gpio
+  base_address: 0x40021000
+  size: 1KB
+  clock: { reg: ahb1enr, bit: 4 }
+  config:
+    profile: stm32v2
+- id: gpiof
+  type: gpio
+  base_address: 0x40021400
+  size: 1KB
+  clock: { reg: ahb1enr, bit: 5 }
+  config:
+    profile: stm32v2
+- id: gpiog
+  type: gpio
+  base_address: 0x40021800
+  size: 1KB
+  clock: { reg: ahb1enr, bit: 6 }
+  config:
+    profile: stm32v2
+- id: gpioh
+  type: gpio
+  base_address: 0x40021C00
+  size: 1KB
+  clock: { reg: ahb1enr, bit: 7 }
+  config:
+    profile: stm32v2
+- id: gpioi
+  type: gpio
+  base_address: 0x40022000
+  size: 1KB
+  clock: { reg: ahb1enr, bit: 8 }
+  config:
+    profile: stm32v2
+- id: gpioj
+  type: gpio
+  base_address: 0x40022400
+  size: 1KB
+  clock: { reg: ahb1enr, bit: 9 }
+  config:
+    profile: stm32v2
+- id: gpiok
+  type: gpio
+  base_address: 0x40022800
+  size: 1KB
+  clock: { reg: ahb1enr, bit: 10 }
+  config:
+    profile: stm32v2
+# SYSCFG (RM0385 §7): EXTICR1..4 at 0x08..0x14, port codes by letter (K = 10).
+- id: syscfg
+  type: syscfg
+  base_address: 0x40013800
+  size: 1KB
+  clock: { reg: apb2enr, bit: 14 }
+  config:
+    profile: stm32f7
+- id: exti
+  type: exti
+  base_address: 0x40013C00
+  size: 1KB
+  config:
+    lines: 24
+# Timers (RM0385 §21-24). `irq` is the update line: TIM1 shares 25 with
+# TIM10 (TIM1_UP_TIM10), TIM8 shares 44 with TIM13; TIM9/11/12/14 sit on
+# the TIM1/TIM8 break and trigger vectors. TIM2 and TIM5 are 32-bit.
+- id: tim1
+  type: timer
+  base_address: 0x40010000
+  size: 1KB
+  irq: 25
+  clock: { reg: apb2enr, bit: 0 }
+  config:
+    advanced: true
+- id: tim2
+  type: timer
+  base_address: 0x40000000
+  size: 1KB
+  irq: 28
+  clock: { reg: apb1enr, bit: 0 }
+  config:
+    width: 32
+- id: tim3
+  type: timer
+  base_address: 0x40000400
+  size: 1KB
+  irq: 29
+  clock: { reg: apb1enr, bit: 1 }
+- id: tim4
+  type: timer
+  base_address: 0x40000800
+  size: 1KB
+  irq: 30
+  clock: { reg: apb1enr, bit: 2 }
+- id: tim5
+  type: timer
+  base_address: 0x40000C00
+  size: 1KB
+  irq: 50
+  clock: { reg: apb1enr, bit: 3 }
+  config:
+    width: 32
+- id: tim6
+  type: timer
+  base_address: 0x40001000
+  size: 1KB
+  irq: 54
+  clock: { reg: apb1enr, bit: 4 }
+  config:
+    basic: true
+- id: tim7
+  type: timer
+  base_address: 0x40001400
+  size: 1KB
+  irq: 55
+  clock: { reg: apb1enr, bit: 5 }
+  config:
+    basic: true
+- id: tim8
+  type: timer
+  base_address: 0x40010400
+  size: 1KB
+  irq: 44
+  clock: { reg: apb2enr, bit: 1 }
+  config:
+    advanced: true
+- id: tim9
+  type: timer
+  base_address: 0x40014000
+  size: 1KB
+  irq: 24
+  clock: { reg: apb2enr, bit: 16 }
+- id: tim10
+  type: timer
+  base_address: 0x40014400
+  size: 1KB
+  irq: 25
+  clock: { reg: apb2enr, bit: 17 }
+- id: tim11
+  type: timer
+  base_address: 0x40014800
+  size: 1KB
+  irq: 26
+  clock: { reg: apb2enr, bit: 18 }
+- id: tim12
+  type: timer
+  base_address: 0x40001800
+  size: 1KB
+  irq: 43
+  clock: { reg: apb1enr, bit: 6 }
+- id: tim13
+  type: timer
+  base_address: 0x40001C00
+  size: 1KB
+  irq: 44
+  clock: { reg: apb1enr, bit: 7 }
+- id: tim14
+  type: timer
+  base_address: 0x40002000
+  size: 1KB
+  irq: 45
+  clock: { reg: apb1enr, bit: 8 }
+# SPI1..3 (RM0385 §32): the FIFO SPI (CR2.DS, FRXTH). AF table = F4 (AF5/AF6).
+- id: spi1
+  type: spi
+  base_address: 0x40013000
+  size: 1KB
+  irq: 35
+  clock: { reg: apb2enr, bit: 12 }
+  config:
+    profile: stm32_fifo
+    pad_map: stm32f4
+- id: spi2
+  type: spi
+  base_address: 0x40003800
+  size: 1KB
+  irq: 36
+  clock: { reg: apb1enr, bit: 14 }
+  config:
+    profile: stm32_fifo
+    pad_map: stm32f4
+- id: spi3
+  type: spi
+  base_address: 0x40003C00
+  size: 1KB
+  irq: 51
+  clock: { reg: apb1enr, bit: 15 }
+  config:
+    profile: stm32_fifo
+    pad_map: stm32f4
+# I2C1..4 (RM0385 §30): the "v2" I2C, event line in `irq`, error line in
+# `irq_error`.
+- id: i2c1
+  type: i2c
+  base_address: 0x40005400
+  size: 1KB
+  irq: 31
+  clock: { reg: apb1enr, bit: 21 }
+  config:
+    profile: stm32l4
+    irq_error: 32
+- id: i2c2
+  type: i2c
+  base_address: 0x40005800
+  size: 1KB
+  irq: 33
+  clock: { reg: apb1enr, bit: 22 }
+  config:
+    profile: stm32l4
+    irq_error: 34
+- id: i2c3
+  type: i2c
+  base_address: 0x40005C00
+  size: 1KB
+  irq: 72
+  clock: { reg: apb1enr, bit: 23 }
+  config:
+    profile: stm32l4
+    irq_error: 73
+- id: i2c4
+  type: i2c
+  base_address: 0x40006000
+  size: 1KB
+  irq: 95
+  clock: { reg: apb1enr, bit: 24 }
+  config:
+    profile: stm32l4
+    irq_error: 96
+# DMA1/DMA2 (RM0385 §8): 8 streams each. Requests as [stream, SxCR.CHSEL]
+# (RM0385 Tables 26/27): SPI2 on DMA1 streams 3/4 channel 0, SPI1 on DMA2
+# streams 0/2 (RX) and 3/5 (TX) channel 3. Memory-to-memory is DMA2 only.
+- id: dma1
+  type: stm32f4_dma
+  base_address: 0x40026000
+  size: 1KB
+  clock: { reg: ahb1enr, bit: 21 }
+  config:
+    stream_irqs: [11, 12, 13, 14, 15, 16, 17, 47]
+    requests:
+      spi2_rx: [[3, 0]]
+      spi2_tx: [[4, 0]]
+- id: dma2
+  type: stm32f4_dma
+  base_address: 0x40026400
+  size: 1KB
+  clock: { reg: ahb1enr, bit: 22 }
+  config:
+    dma2: true
+    stream_irqs: [56, 57, 58, 59, 60, 68, 69, 70]
+    requests:
+      spi1_rx: [[0, 3], [2, 3]]
+      spi1_tx: [[3, 3], [5, 3]]
+# CRC (RM0385 §11): 8-bit IDR (`CRC_IDR_IDR` = 0xFF), INIT, POL, POLYSIZE.
+# CR.REV_IN / REV_OUT are stored but not modelled (no bit reversal).
+- id: crc
+  type: crc
+  base_address: 0x40023000
+  size: 1KB
+  clock: { reg: ahb1enr, bit: 12 }
+  config:
+    idr_width: 8
+# RNG (RM0385 §19). RNG_IRQn (80) is not claimed: the model raises none.
 - id: rng
-  type: stm32_rng
-  bus: sysbus
-  base_address: 1342572544
-- id: pwrCr1
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1073770496
-- id: pwrCsr1
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1073770500
-- id: sdmmc
-  type: stm32fsdmmc
-  bus: sysbus
-  base_address: 1073818624
-- id: timer1
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073807360
-- id: timer2
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073741824
-- id: timer3
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073742848
-- id: timer4
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073743872
-- id: timer5
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073744896
-- id: timer6
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073745920
-- id: timer7
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073746944
-- id: timer8
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073808384
-- id: timer9
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073823744
-- id: timer10
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073824768
-- id: timer11
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073825792
-- id: timer12
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073747968
-- id: timer13
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073748992
-- id: timer14
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073750016
+  type: rng
+  base_address: 0x50060800
+  size: 1KB
+  clock: { reg: ahb2enr, bit: 6 }

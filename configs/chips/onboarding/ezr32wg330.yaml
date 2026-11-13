@@ -6,66 +6,90 @@
 
 name: ezr32wg330
 arch: arm
+# Measured onboarding profile from Renode
+# platforms/cpus/silabs/ezr32/ezr32wg330.repl (which pulls in ezr32lg330.repl):
+# cortex-m4f, flash at 0x00000000 (the EZR32 memory map; Renode maps it there),
+# UART0/UART1/USART1/USART2, the Series-0 GPIO ports and TIMER0..3, all
+# exercised by firmware-ezr32-330-smoke.
+# Not claimed (no model-backed coverage): I2C0/1, LEUART0/1, CMU, EMU, RMU,
+# MSC, DMA, USB, ADC0, DAC0, WDOG, RTC, BURTC, LETIMER0, PCNT0-2, the
+# USARTRF0 radio interface at 0x4000C000 and the Si4460 radio, FPUEH.
+# UART RX/TX interrupts (Renode: separate ReceiveIRQ/TransmitIRQ lines) are
+# not declared: the efm32 UART profile is polled only.
+core: cortex-m4f
 flash:
-  base: 134217728
+  base: 0
   size: 262144B
 ram:
   base: 536870912
   size: 32768B
 peripherals:
-- id: i2c0
-  type: efm32ggi2ccontroller
-  bus: sysbus
-  base_address: 1073782784
-- id: i2c1
-  type: efm32ggi2ccontroller
-  bus: sysbus
-  base_address: 1073783808
-- id: timer0
-  type: efm32timer
-  bus: sysbus
-  base_address: 1073807360
-- id: timer1
-  type: efm32timer
-  bus: sysbus
-  base_address: 1073808384
-- id: timer2
-  type: efm32timer
-  bus: sysbus
-  base_address: 1073809408
-- id: timer3
-  type: efm32timer
-  bus: sysbus
-  base_address: 1073810432
+# (U)SART instances, EFM32 USART register map (CMD 0x0C, STATUS 0x10,
+# TXDATA 0x34). USART0 is the radio interface on EZR32WG (Renode tag
+# USARTRF0) and is not mapped.
 - id: uart0
   type: efm32_uart
-  bus: sysbus
-  base_address: 1073799168
+  base_address: 0x4000e000
+  size: 1KB
 - id: uart1
   type: efm32_uart
-  bus: sysbus
-  base_address: 1073800192
+  base_address: 0x4000e400
+  size: 1KB
 - id: usart1
   type: efm32_uart
-  bus: sysbus
-  base_address: 1073792000
+  base_address: 0x4000c400
+  size: 1KB
 - id: usart2
   type: efm32_uart
-  bus: sysbus
-  base_address: 1073793024
-- id: leUart0
-  type: leuart
-  bus: sysbus
-  base_address: 1074282496
-- id: leUart1
-  type: leuart
-  bus: sysbus
-  base_address: 1074283520
-- id: gpioPort
-  type: efmgpioport
-  bus: sysbus
-  base_address: 1073766400
-- id: bitband
-  type: bitbanding
-  bus: sysbus
-  base_address: 1107296256
+  base_address: 0x4000c800
+  size: 1KB
+# Series-0 GPIO ports A..F (Renode: one `GPIOPort.EFMGPIOPort` at
+# 0x40006000). GPIO_P_TypeDef at a 0x24 stride (Gecko SDK efm32gg_gpio_p.h).
+# The block head from 0x40006100 (EXTI, ROUTE, INSENSE, EM4 wake) is NOT
+# mapped: no model behind it.
+- id: gpioa
+  type: efm32s0_gpioport
+  base_address: 0x40006000
+  size: 36B
+- id: gpiob
+  type: efm32s0_gpioport
+  base_address: 0x40006024
+  size: 36B
+- id: gpioc
+  type: efm32s0_gpioport
+  base_address: 0x40006048
+  size: 36B
+- id: gpiod
+  type: efm32s0_gpioport
+  base_address: 0x4000606c
+  size: 36B
+- id: gpioe
+  type: efm32s0_gpioport
+  base_address: 0x40006090
+  size: 36B
+- id: gpiof
+  type: efm32s0_gpioport
+  base_address: 0x400060b4
+  size: 36B
+# TIMER0..TIMER3 (Renode: `Timers.Efm32Timer`, nvic 2/12/13/14).
+# Counts CPU cycles / 2^PRESC; the CMU HFPERCLKEN0 gate is not modelled.
+- id: timer0
+  type: efm32s0_timer
+  base_address: 0x40010000
+  size: 1KB
+  irq: 2
+- id: timer1
+  type: efm32s0_timer
+  base_address: 0x40010400
+  size: 1KB
+  irq: 12
+- id: timer2
+  type: efm32s0_timer
+  base_address: 0x40010800
+  size: 1KB
+  irq: 13
+- id: timer3
+  type: efm32s0_timer
+  base_address: 0x40010c00
+  size: 1KB
+  irq: 14

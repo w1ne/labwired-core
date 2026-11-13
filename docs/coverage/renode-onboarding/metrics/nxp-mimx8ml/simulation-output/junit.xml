@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.002256">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="8515c5f253b07712e686d533f4b9d5e54d47e07e11416cb1423cb81509ee7403"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.002256">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: IMX8MP A53 MXCUART SMOKE USR1=OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

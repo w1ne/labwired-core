@@ -6,3 +6,65 @@
 
 name: stm32l071
 chip: ../../chips/onboarding/stm32l071.yaml
+# Smoke fixture inputs, not a board: Renode's stm32l071.repl is a bare CPU
+# platform. Two switches to ground on PH1 and PC13 (pressed = low, against
+# the GPIO pull-up) give the EXTI port mux real pad edges to route. A
+# MAX31855 on each SPI (CS on PA4 / PB12; the smoke scenario sets SPI2's
+# thermocouple to 100 °C), a second MAX31855 on SPI1 behind its own CS on
+# PB0 (50 °C) and a TMP102 on each I2C give the serial blocks real slaves.
+# Two potentiometers on ADC IN1 (PA1, centred: 1.65 V) and IN9 (PB1; the
+# scenario turns it to 25 %: 0.825 V) give the ADC real pad voltages.
+external_devices:
+  - id: "pot_in1"
+    type: "potentiometer"
+    connection: "adc"
+    config:
+      channel: 1
+  - id: "pot_in9"
+    type: "potentiometer"
+    connection: "adc"
+    config:
+      channel: 9
+  - id: "tc_spi1"
+    type: "max31855"
+    connection: "spi1"
+    config:
+      cs_pin: "PA4"
+  - id: "tc_spi1b"
+    type: "max31855"
+    connection: "spi1"
+    config:
+      cs_pin: "PB0"
+  - id: "tc_spi2"
+    type: "max31855"
+    connection: "spi2"
+    config:
+      cs_pin: "PB12"
+  - id: "tmp102_i2c1"
+    type: "tmp102"
+    connection: "i2c1"
+    config:
+      i2c_address: 0x48
+  - id: "tmp102_i2c2"
+    type: "tmp102"
+    connection: "i2c2"
+    config:
+      i2c_address: 0x48
+  - id: "tmp102_i2c3"
+    type: "tmp102"
+    connection: "i2c3"
+    config:
+      i2c_address: 0x48
+board_io:
+  - id: "sw_ph1"
+    kind: "button"
+    peripheral: "gpioh"
+    pin: 1
+    signal: "input"
+    active_high: false
+  - id: "sw_pc13"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: false

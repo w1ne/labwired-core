@@ -1,0 +1,6 @@
+2026-11-13T15:51:14.361157Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/mimxrt1064_evk.yaml
+2026-11-13T15:51:14.362321Z  INFO labwired_loader: ELF Entry Point: 0x20000401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+labwired-cli test: idle_ff skipped 706915 of 800000 device cycles (93085 interpreted)
+PASS  4/4 checks · mimxrt1064_evk-smoke · 800000 steps · 0.00s

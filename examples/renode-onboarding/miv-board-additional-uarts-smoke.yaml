@@ -1,0 +1,12 @@
+# Smoke the exact imported Mi-V additional-UART system descriptor.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32im-unknown-none-elf/release/firmware-miv-rv32-smoke"
+  system: "../../configs/systems/onboarding/miv-board-additional-uarts.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "MIV RV32 SMOKE"
+  - uart_contains: "MIV ADDITIONAL UART 1"
+  - uart_contains: "MIV ADDITIONAL UART 2"
+  - expected_stop_reason: max_steps

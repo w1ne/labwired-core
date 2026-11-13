@@ -1,0 +1,37 @@
+{
+  "target_id": "efr32xg22",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 400000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": "firmware-efr32xg22-smoke",
+  "target_triple": "thumbv8m.main-none-eabi",
+  "script": "examples/renode-onboarding/efr32xg22-smoke.yaml",
+  "system": "configs/systems/onboarding/efr32xg22.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-13T20:48:35Z",
+  "finished_at_utc": "2026-11-13T20:50:31Z",
+  "elapsed_seconds": 116,
+  "elapsed_ms": 115495,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 114.31,
+    "build_firmware": 0.896,
+    "run_smoke": 0.255
+  },
+  "stages_ms": {
+    "build_cli": 114310,
+    "build_firmware": 896,
+    "run_smoke": 255
+  }
+}

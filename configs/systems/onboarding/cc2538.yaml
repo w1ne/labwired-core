@@ -4,8 +4,17 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
-# SUPERSEDED: staged onboarding descriptor (its flash at 0x08000000 / 128 KiB
-# and 256 KiB RAM do not match SWRU319C Table 4-1). The promoted CC2538 part is
-# configs/chips/cc2538sf53.yaml (board: configs/systems/cc2538dk.yaml).
+# Imported Renode CC2538 platform, backed by the modelled CC2538SF53 execution
+# profile. The generated onboarding chip descriptor had the wrong flash and
+# RAM map and zero-answering peripherals, so it is intentionally not referenced.
 name: cc2538
-chip: ../../chips/onboarding/cc2538.yaml
+chip: ../../chips/cc2538sf53.yaml
+cpu_hz: 16_000_000
+# The imported CC2538DK does not include this sensor. It is an injected I2C
+# fixture for the master smoke, attached at the TMP102 default address.
+external_devices:
+  - id: tmp102
+    type: tmp102
+    connection: i2cm
+    config:
+      i2c_address: 0x48

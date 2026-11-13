@@ -1,13 +1,25 @@
+# Narrowed local execution profile based on Renode's imported
+# platforms/cpus/verilated/litex_vexriscv_verilated_liteuart.repl.
+# The imported REPL uses a VexRiscv CPU, LiteX timer and external
+# CoSimulatedUART. This profile tests the supported RV32IM CPU, its mapped
+# memories, and LabWired's LiteX UART CSR model. It does not claim the external
+# UART co-simulation, the default RV32IMAC extension set, or unlisted blocks.
+# Source REPL: https://github.com/renode/renode/blob/master/platforms/cpus/verilated/litex_vexriscv_verilated_liteuart.repl
 name: litex_vexriscv_verilated_liteuart
-arch: arm
-flash:
-  base: 536870912
-  size: 1048576
-ram:
-  base: 268435456
-  size: 262144B
+arch: riscv
+core: rv32im
+cpu_hz: 100_000_000
+flash: { base: 0x00000000, size: 0 }
+ram: { base: 0x10000000, size: "256KB" }
+flash_boot_alias: false
 peripherals:
-- id: uart
-  type: cosimulateduart
-  bus: sysbus
-  base_address: 3758100480
+  - id: uart
+    type: litex_uart
+    base_address: 0xE0001000
+    size: "4KB"
+    irq: 2
+  - id: timer
+    type: litex_timer
+    base_address: 0xE0002800
+    size: "4KB"
+    irq: 1

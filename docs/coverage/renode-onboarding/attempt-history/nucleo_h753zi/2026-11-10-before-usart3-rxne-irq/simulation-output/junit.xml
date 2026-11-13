@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="5" failures="0" errors="0" time="0.796884">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="f3cb33440bd4b64c820cacc10dbc7c0c84d9b2091b5b211d7acd5bff427e2b61"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.796884">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: STM32H7 register smoke" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: usart3 rx=00000052,00000053 rxne_after=0 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: gpio_edges: gpioPortB:0 &gt;= 1 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

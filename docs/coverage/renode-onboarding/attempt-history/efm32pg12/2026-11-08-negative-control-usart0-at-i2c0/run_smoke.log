@@ -1,0 +1,8 @@
+2026-11-08T17:29:28.869644Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/efm32pg12-negctl.yaml
+2026-11-08T17:29:28.874501Z  INFO labwired_loader: ELF Entry Point: 0x401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-08T17:29:28.879979Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "EFM32PG12 USART0 smoke" }) (captured len=0)
+FAIL  1/2 checks · efm32pg12-negctl-smoke · 100000 steps · 0.00s
+FAULT  HardFault escalated from a precise BusFault: data access at 0x4001_000C (BFAR valid), at PC 0x0000_0458 in `core::ptr::write_volatile` (mod.rs:2178), called from `main`.
+       HFSR=0x40000000 CFSR=0x00008200 [FORCED PRECISERR] BFAR=0x4001000C

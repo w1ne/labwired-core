@@ -18,6 +18,11 @@ ram:
   base: 536870912   # 0x20000000 — Nordic nRF52840 SRAM
   size: 262144B     # 256 KiB
 peripherals:
+- id: systick
+  type: systick
+  bus: sysbus
+  base_address: 0xE000E010 # Cortex-M4 SysTick is part of the core profile.
+  size: 16B
 - id: uart0
   type: nrf52840_uart
   bus: sysbus

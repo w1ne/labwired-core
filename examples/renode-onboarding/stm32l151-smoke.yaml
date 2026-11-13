@@ -1,0 +1,88 @@
+# Cortex-M3 smoke against the imported STM32L151xD profile: USART1/2/3 TX,
+# plus USART2 UE/RE receiver gates, ordered two-byte RXNE and IRQ 38
+# assertion, re-pend, RXNEIE mask/re-enable and release behavior;
+# GPIOA..H reset values and set/reset, EXTI software and pad edges through
+# the SYSCFG port mux (L1 codes: PH = 5, PG = 7), and TIM2..TIM7/TIM9..TIM11
+# width, counting and update interrupt on the right NVIC line; SPI1..3 each
+# reading its own MAX31855 frame (polled, then SPI1 again through DMA1
+# channels 2/3 with the channel-2 line), and I2C1 reading a TMP102 plus a
+# NACK on the error line; then two MAX31855s sharing SPI1 behind GPIO chip
+# selects PA4 / PB0, each answering only when selected, and a frame cut short
+# by CS↑ that the next CS↓ restarts. The two fixture switches (PH1, PC13) are pressed
+# by the stimuli below; the first stimuli set the SPI2/SPI3 thermocouples.
+# It does not claim RCC, I2S, I2C2, DMA2, RTC or ADC.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-stm32l151-smoke"
+  system: "../../configs/systems/onboarding/stm32l151.yaml"
+limits:
+  max_steps: 4000000
+uart_injections:
+  - uart: "usart2"
+    bytes: "RS"
+stimuli:
+  - target: { component: "tc_spi2", channel: "temperature" }
+    trigger: !after_cycles { cycles: 1000 }
+    value: 100.0
+  - target: { component: "tc_spi3", channel: "temperature" }
+    trigger: !after_cycles { cycles: 1000 }
+    value: -25.0
+  - target: { component: "tc_spi1b", channel: "temperature" }
+    trigger: !after_cycles { cycles: 1000 }
+    value: 50.0
+  - target: { component: "sw_ph1", channel: "pressed" }
+    trigger: !after_cycles { cycles: 1500000 }
+    value: 1.0
+  - target: { component: "sw_ph1", channel: "pressed" }
+    trigger: !after_cycles { cycles: 1700000 }
+    value: 0.0
+  - target: { component: "sw_ph1", channel: "pressed" }
+    trigger: !after_cycles { cycles: 2100000 }
+    value: 1.0
+  - target: { component: "sw_ph1", channel: "pressed" }
+    trigger: !after_cycles { cycles: 2300000 }
+    value: 0.0
+  - target: { component: "sw_pc13", channel: "pressed" }
+    trigger: !after_cycles { cycles: 2700000 }
+    value: 1.0
+  - target: { component: "sw_pc13", channel: "pressed" }
+    trigger: !after_cycles { cycles: 2900000 }
+    value: 0.0
+assertions:
+  - uart_contains: "STM32L151 Cortex-M3 smoke"
+  - uart_contains: "usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,reasserted,masked,unmasked,released ok"
+  - uart_contains: "usart2 ok"
+  - uart_contains: "usart3 ok"
+  - uart_ordered:
+      - "usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,reasserted,masked,unmasked,released ok"
+      - "gpio pa=1 pb=1 pc=1 ph=1 fg=1 ok"
+      - "exti swier masked=1 routed=1 ok"
+      - "tim2 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim3 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim4 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim5 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim6 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim7 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim9 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim10 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "tim11 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
+      - "exti pads idle=1 presses=1 pg_quiet=1 ph1=1 pc13=1 ok"
+      - "spi1 frame=0x01901600 data=1 pend=1 alone=1 released=1 ok"
+      - "spi1 TXEIE pend=1 released=1 ok"
+      - "spi2 frame=0x06401600 data=1 pend=1 alone=1 released=1 ok"
+      - "spi2 TXEIE pend=1 released=1 ok"
+      - "spi3 frame=0xFE701600 data=1 pend=1 alone=1 released=1 ok"
+      - "spi3 TXEIE pend=1 released=1 ok"
+      - "dma1 spi1 frame=0x01901600 data=1 flags=1 pend=1 alone=1 released=1 ok"
+      - "i2c1 tmp102=0x00001900 oar=1 data=1 ev=1 af=1 er_pend=1 ev_quiet=1 stop=1 released=1 ok"
+      - "spi1 shared a=0x01901600 b=0x03201600 after_cut=0x01901600 a=1 b=1 restart=1 ok"
+      - "summary 0x1517FFFF"
+      - "DONE"
+  - memory_value:
+      address: 0x20008000
+      expected_value: 0x1517FFFF
+      size: 4
+  - gpio_edges:
+      pin: "gpioh:0"
+      min_edges: 4
+  - expected_stop_reason: max_steps

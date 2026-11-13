@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="10" failures="1" errors="0" time="0.956889">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="a1310454bcf825b88aab4f5f78c28b9798478d08137bb07b8c122e7b3fcb780e"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.956889">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_regex: ^STM32H7 register smoke
+usart3 rx_gate re_off=1 ue_off=1 ok
+usart3 rx=00000052,00000053 rxne_irq=isolated,a…" time="0.000000">
+    <failure message="assertion failed">assertion 1: uart_regex: ^STM32H7 register smoke
+usart3 rx_gate re_off=1 ue_off=1 ok
+usart3 rx=00000052,00000053 rxne_irq=isolated,a…
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=4000000
+stop_reason_details.observed.steps_executed=4000000
+steps_executed=4000000
+cycles=4000000
+instructions=4000000
+limits:
+  - max_steps=4000000
+firmware_hash=a1310454bcf825b88aab4f5f78c28b9798478d08137bb07b8c122e7b3fcb780e
+firmware=examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-stm32h743-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/nucleo_h753zi.yaml
+script=examples/renode-onboarding/nucleo_h753zi-smoke.yaml
+assertions:
+  - UartRegex(UartRegexAssertion { uart_regex: &quot;^STM32H7 register smoke\nusart3 rx_gate re_off=1 ue_off=1 ok\nusart3 rx=00000052,00000053 rxne_irq=isolated,asserted,reasserted,released ok\nusart3 tx_gate ue_only=1 te_only=1 ok&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;STM32H7 register smoke&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;usart3 rx_gate re_off=1 ue_off=1 ok&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;usart3 rx=00000052,00000053 rxne_irq=isolated,asserted,reasserted,released ok&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;usart3 tx_gate ue_only=1 te_only=1 ok&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;usart3 txe_irq=isolated,asserted,reasserted,released ok&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;usart3 tc_irq=isolated,asserted,reasserted,released ok&quot; }): true
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpioPortB:0&quot;, min_edges: 1 } }): true
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: STM32H7 register smoke" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_contains: usart3 rx_gate re_off=1 ue_off=1 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: uart_contains: usart3 rx=00000052,00000053 rxne_irq=isolated,asserted,reasserted,released ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: uart_contains: usart3 tx_gate ue_only=1 te_only=1 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: uart_contains: usart3 txe_irq=isolated,asserted,reasserted,released ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: uart_contains: usart3 tc_irq=isolated,asserted,reasserted,released ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 8: gpio_edges: gpioPortB:0 &gt;= 1 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 9: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

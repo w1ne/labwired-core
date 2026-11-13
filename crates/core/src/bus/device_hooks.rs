@@ -228,6 +228,14 @@ impl SystemBus {
             self.collect_scheduled_events(idx);
         }
         self.deliver_wire_input_edges(idx);
+        // A GPIO pad transition may latch a peripheral-local level interrupt
+        // (CMSDK AHB GPIO INTSTATUS is the current user). Unlike a timer event,
+        // this source is fully determined by the new pad state, so reconcile
+        // it at the same boundary as an MMIO write instead of waiting for a
+        // per-cycle peripheral walk.
+        if change.is_some() {
+            self.reconcile_irq_levels_after_write(idx);
+        }
         change
     }
 
@@ -364,6 +372,9 @@ impl SystemBus {
         // A select pad of an analog mux may have moved: re-route before the
         // next instruction can start a conversion.
         self.route_analog_muxes_on_write(idx);
+        // A chip-select pad may have moved: deliver the CS edge before the
+        // next SPI frame.
+        self.route_spi_cs_on_write(idx);
         // A store to a GPIO input register (a device driving a pad through
         // `drive_idr_bit`) is an external edge like `set_gpio_input`.
         if self.timer_capture_wired {

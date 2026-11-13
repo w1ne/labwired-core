@@ -9,13 +9,13 @@ pass_rate: 100
 verified: true
 system: systems/onboarding/atsamd21j17d-aft.yaml
 validation:
-  method: ci-arm-fixture-simulation
-  reason: simulation-ok
+  method: renode-onboarding-smoke
+  reason: smoke-pass
   checks:
     system_manifest: true
     chip_descriptor: true
     simulation: true
-  timestamp_utc: '2026-10-18T14:39:50.723885+00:00'
+  timestamp_utc: '2026-11-03T13:13:11Z'
   run_url: ''
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/atsamd21j17d-aft.md
 provenance:

@@ -6,3 +6,10 @@
 
 name: simavr-atmega169p
 chip: ../../chips/onboarding/simavr-atmega169p.yaml
+board_io:
+  - id: status_led
+    kind: led
+    peripheral: portb
+    pin: 0
+    signal: output
+    active_high: true

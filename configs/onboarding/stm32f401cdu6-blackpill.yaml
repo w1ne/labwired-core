@@ -1,10 +1,9 @@
 name: stm32f401cdu6-blackpill
 description: STMicroelectronics STM32F401CDU6 Black Pill ARM Cortex-M4 board with
-  384KB Flash, 96KB RAM, active-low PC13 LED, and a broad STM32F401xB/xC peripheral
-  map. LabWired executable models cover RCC, GPIO, SysTick, USART, I2C, SPI, timers,
-  ADC, and EXTI; DMA stream controllers and remaining mapped blocks without F401-compatible
-  behavior are safe stubs. Physical validation is ST-Link USB/SWD sanity only; UART
-  and I2C output are simulation evidence.
+  384KB Flash, 96KB RAM, and active-low PC13 LED. The imported profile lists modeled
+  RCC, GPIO, SysTick, USART, I2C, SPI, timer, ADC, and EXTI blocks; unmodeled DMA,
+  USB OTG, SDIO, RTC, watchdog, and support windows are omitted. Physical validation
+  is ST-Link USB/SWD sanity only; UART output is simulation evidence.
 family: STM32F4
 url: https://www.st.com/en/microcontrollers-microprocessors/stm32f401cd.html
 code_example: "/* LabWired STM32F401 simulation smoke */\nint main(void) {\n    /*\

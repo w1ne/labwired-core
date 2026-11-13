@@ -8,7 +8,7 @@
 //!
 //! | Address      | Register | What it does here                               |
 //! |--------------|----------|-------------------------------------------------|
-//! | 0xE000_EF34  | FPCCR    | ASPEN (31), LSPEN (30); reset 0xC000_0000       |
+//! | 0xE000_EF34  | FPCCR    | ASPEN (31), LSPEN (30), LSPACT (0)            |
 //! | 0xE000_EF38  | FPCAR    | address of the S0 slot of the last FP frame     |
 //! | 0xE000_EF3C  | FPDSCR   | AHP/DN/FZ/RMode a new FP context starts with    |
 //! | 0xE000_EF40  | MVFR0    | media and FP feature register 0 (read-only)     |
@@ -32,24 +32,26 @@
 //!
 //! - sets CONTROL.FPCA (and loads FPSCR[26:22] from FPDSCR) on the first FP
 //!   instruction of a context when FPCCR.ASPEN is set (`ExecuteFPCheck`);
-//! - stacks the extended 0x68-byte frame (R0-R3, R12, LR, PC, xPSR, S0-S15,
+//! - reserves the extended 0x68-byte frame (R0-R3, R12, LR, PC, xPSR, S0-S15,
 //!   FPSCR, reserved) on exception entry while CONTROL.FPCA is set, returns
-//!   EXC_RETURN with bit 4 clear (0xFFFF_FFE1/E9/ED), and clears FPCA;
-//! - on exception return with EXC_RETURN[4] = 0 unstacks S0-S15 and FPSCR,
-//!   and sets CONTROL.FPCA = NOT EXC_RETURN[4];
+//!   EXC_RETURN with bit 4 clear (0xFFFF_FFE1/E9/ED), and clears FPCA; with
+//!   LSPEN clear it writes the FP slots immediately, while with LSPEN set it
+//!   sets LSPACT and defers the write until the handler's first FP instruction;
+//! - on exception return with EXC_RETURN[4] = 0, restores S0-S15 and FPSCR when
+//!   a lazy save completed, or skips the reserved FP area when LSPACT is still
+//!   set, then sets CONTROL.FPCA = NOT EXC_RETURN[4];
 //! - exposes CONTROL.FPCA through MRS/MSR.
 //!
 //! Without this model none of that happens: CONTROL bit 2 reads zero, every
 //! frame is the basic 8-word one and the window is unmapped (the previous
 //! behaviour, which a Zephyr `CONFIG_FPU_SHARING` image BusFaults on).
 //!
-//! Not modelled: lazy state preservation. With LSPEN set, silicon only
-//! reserves the S0-S15/FPSCR slots at entry and fills them when the handler
-//! first touches the FPU (FPCCR.LSPACT marks the pending save). This model
-//! always fills them at entry, so LSPACT always reads 0. The stacked values and
-//! what software sees after the return are the same either way; what differs is
-//! the cycle cost of the entry and any software that reads LSPACT or the
-//! HFRDY/MMRDY/BFRDY/MONRDY/USER/THREAD bits, which read 0. The Armv8-M
+//! With LSPEN set, exception entry reserves the S0-S15/FPSCR slots and sets
+//! FPCCR.LSPACT without writing the slots. The first FP instruction in the
+//! handler saves the active context to FPCAR and clears LSPACT; exception return
+//! skips unstacking when the handler never touched the FPU. Other FPCCR status
+//! bits (HFRDY, MMRDY, BFRDY, MONRDY, USER, THREAD) are not modelled and read
+//! zero. The Armv8-M
 //! Security Extension FPCCR bits (S, SFRDY, TS, CLRONRET, ...) are not
 //! modelled either: the core runs Non-secure-only.
 
@@ -60,8 +62,10 @@ use crate::{Peripheral, SimResult};
 
 /// FPCCR.ASPEN: set CONTROL.FPCA on FP instruction execution.
 pub const FPCCR_ASPEN: u32 = 1 << 31;
-/// FPCCR.LSPEN: lazy state preservation (stored; stacking is always eager).
+/// FPCCR.LSPEN: enable lazy state preservation on exception entry.
 pub const FPCCR_LSPEN: u32 = 1 << 30;
+/// FPCCR.LSPACT: a reserved FP frame still awaits lazy preservation.
+pub const FPCCR_LSPACT: u32 = 1;
 const FPCCR_RESET: u32 = FPCCR_ASPEN | FPCCR_LSPEN;
 const FPCCR_WRITABLE: u32 = FPCCR_ASPEN | FPCCR_LSPEN;
 /// FPCAR[31:3]: the address is doubleword-aligned.
@@ -111,6 +115,16 @@ impl FpContextState {
     }
 
     #[inline]
+    pub fn lspen(&self) -> bool {
+        self.fpccr() & FPCCR_LSPEN != 0
+    }
+
+    #[inline]
+    pub fn lspact(&self) -> bool {
+        self.fpccr() & FPCCR_LSPACT != 0
+    }
+
+    #[inline]
     pub fn fpdscr(&self) -> u32 {
         self.fpdscr.load(Ordering::Relaxed)
     }
@@ -125,8 +139,23 @@ impl FpContextState {
         self.fpcar.store(addr & FPCAR_WRITABLE, Ordering::Relaxed);
     }
 
-    fn set_fpccr(&self, v: u32) {
-        self.fpccr.store(v & FPCCR_WRITABLE, Ordering::Relaxed);
+    pub(crate) fn set_fpccr(&self, v: u32) {
+        let lspact = self.fpccr() & FPCCR_LSPACT;
+        self.fpccr
+            .store((v & FPCCR_WRITABLE) | lspact, Ordering::Relaxed);
+    }
+
+    pub(crate) fn set_lspact(&self, active: bool) {
+        if active {
+            self.fpccr.fetch_or(FPCCR_LSPACT, Ordering::Relaxed);
+        } else {
+            self.fpccr.fetch_and(!FPCCR_LSPACT, Ordering::Relaxed);
+        }
+    }
+
+    fn restore_fpccr(&self, v: u32) {
+        self.fpccr
+            .store(v & (FPCCR_WRITABLE | FPCCR_LSPACT), Ordering::Relaxed);
     }
 
     fn set_fpdscr(&self, v: u32) {
@@ -225,7 +254,7 @@ impl Peripheral for CortexMFpu {
     fn restore(&mut self, state: serde_json::Value) -> SimResult<()> {
         let get = |k: &str| state.get(k).and_then(|v| v.as_u64()).map(|v| v as u32);
         if let Some(v) = get("fpccr") {
-            self.state.set_fpccr(v);
+            self.state.restore_fpccr(v);
         }
         if let Some(v) = get("fpcar") {
             self.state.set_fpcar(v);
@@ -260,6 +289,9 @@ mod tests {
         // Byte store into FPCCR's top byte clears ASPEN/LSPEN only.
         f.write(FPCCR + 3, 0xC0).unwrap();
         assert_eq!(f.read_reg(FPCCR), 0xC000_0000);
+        f.state.set_lspact(true);
+        f.write_u32(FPCCR, FPCCR_ASPEN).unwrap();
+        assert_eq!(f.read_reg(FPCCR), FPCCR_ASPEN | FPCCR_LSPACT);
         f.on_node_reset();
         assert_eq!(f.read_reg(FPCCR), 0xC000_0000);
         assert_eq!(f.read_reg(FPDSCR), 0);
@@ -269,11 +301,12 @@ mod tests {
     fn snapshot_round_trips() {
         let mut f = CortexMFpu::default();
         f.write_u32(FPCCR, FPCCR_ASPEN).unwrap();
+        f.state.set_lspact(true);
         f.write_u32(FPDSCR, 1 << 24).unwrap();
         let s = f.snapshot();
         let mut g = CortexMFpu::default();
         g.restore(s).unwrap();
-        assert_eq!(g.read_reg(FPCCR), FPCCR_ASPEN);
+        assert_eq!(g.read_reg(FPCCR), FPCCR_ASPEN | FPCCR_LSPACT);
         assert_eq!(g.read_reg(FPDSCR), 1 << 24);
     }
 }

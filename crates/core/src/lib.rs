@@ -2172,6 +2172,7 @@ impl<C: Cpu> Machine<C> {
             0xE000_ED18,
             0xE000_ED1C,
             0xE000_ED20,
+            0xE000_ED88,
         ] {
             let _ = self.bus.write_u32(addr, 0);
         }

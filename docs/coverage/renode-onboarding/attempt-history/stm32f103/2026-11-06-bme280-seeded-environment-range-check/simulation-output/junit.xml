@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="24" failures="1" errors="0" time="0.049430">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="415668d89e530a614603094c6ce228bbdf8d2462ce5efbced01b6ca8833daf80"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.049430">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: F103 I2C" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: I2C_NACK_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_contains: I2C_IDLE_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: uart_contains: TMP102=00001900" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: uart_contains: TMP102_READ_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: uart_contains: TMP102_CONFIG=0000FFF0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: uart_contains: TMP102_CONFIG_WRITE_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 8: uart_contains: TMP102_TLOW=00003450" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 9: uart_contains: TMP102_TLOW_WRITE_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 10: uart_contains: TMP102_THIGH=00006788" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 11: uart_contains: TMP102_THIGH_WRITE_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 12: uart_contains: TMP102_TLOW_SHORT=00002250" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 13: uart_contains: TMP102_TLOW_SHORT_WRITE_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 14: uart_contains: BME280_ID=00000060" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 15: uart_contains: BME280_ID_READ_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 16: uart_contains: BME280_T2=00006743" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 17: uart_contains: BME280_CALIBRATION_READ_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 18: uart_contains: BME280_PRESS_RAW=" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 19: uart_contains: BME280_TEMP_RAW=" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 20: uart_contains: BME280_HUM_RAW=" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 21: uart_contains: BME280_SEEDED_ENVIRONMENT_OK" time="0.000000">
+    <failure message="assertion failed">assertion 21: uart_contains: BME280_SEEDED_ENVIRONMENT_OK
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=50000000
+stop_reason_details.observed.steps_executed=50000000
+steps_executed=50000000
+cycles=50000000
+instructions=50000000
+limits:
+  - max_steps=50000000
+firmware_hash=415668d89e530a614603094c6ce228bbdf8d2462ce5efbced01b6ca8833daf80
+firmware=examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-f103-i2c-demo
+system=examples/renode-onboarding/../../configs/systems/onboarding/stm32f103.yaml
+script=examples/renode-onboarding/stm32f103-i2c-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;F103 I2C&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;I2C_NACK_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;I2C_IDLE_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102=00001900&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_READ_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_CONFIG=0000FFF0&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_CONFIG_WRITE_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_TLOW=00003450&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_TLOW_WRITE_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_THIGH=00006788&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_THIGH_WRITE_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_TLOW_SHORT=00002250&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;TMP102_TLOW_SHORT_WRITE_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_ID=00000060&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_ID_READ_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_T2=00006743&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_CALIBRATION_READ_OK&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_PRESS_RAW=&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_TEMP_RAW=&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_HUM_RAW=&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;BME280_SEEDED_ENVIRONMENT_OK&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;DONE&quot; }): true
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 22: uart_contains: DONE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 23: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

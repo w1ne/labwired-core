@@ -1,0 +1,868 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 4000000,
+  "cycles": 4000000,
+  "instructions": 4000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 4000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 4000000
+    }
+  },
+  "limits": {
+    "max_steps": 4000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "STM32F072B-DISCO SMOKE"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_ordered": [
+          "cpu=cortex-m0 uart=usart1",
+          "rcc reset=1 gate=1 ok",
+          "aircr prigroup=0 reserved=writes_ignored=1 ok",
+          "usart irq u2=1 u3=1 u4=1 ok",
+          "usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 released=1 ok",
+          "led=ld3 odr=0x00000040",
+          "led=ld4 odr=0x00000140",
+          "led=ld5 odr=0x00000340",
+          "led=ld6 odr=0x000003C0",
+          "leds walk=1 blink=1 off=1 ok",
+          "b1 idle=1 presses=1 pc_quiet=1 pa0=1 cleared=1 ok",
+          "tim1 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+          "tim2 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+          "tim3 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+          "tim6 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+          "tim7 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+          "tim14 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+          "tim15 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+          "tim16 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+          "tim17 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+          "dma1 m2m tc=1 data=1 pend=1 alone=1 released=1 ok",
+          "crc word=0xDF8A8A2B seed=1 std=1 ok",
+          "adc ts=0x00000709 vref=0x000005F6 cal=1 ready=1 seq=1 eos=1 pend=1 released=1 gated=1 off=1 ok",
+          "irq exception hit=1 ipsr=0x00000015 active=0x00000020 pending=0x00000000 frame=1 regs=0x00000011,0x00000022,0x00000033,0x00000044,0x00000055 lr=",
+          " pc=",
+          " exc_return=0xFFFFFFF9 sp=",
+          " returned=1 ok",
+          "nmi repend entered=1 entries=0x00000002 after_pend_ipsr=0x00000002 after_pend_entries=0x00000001 irq=0x00000015 nmi=0x00000002 resumed=0x00000015 icsr=0x00000002 irq_active=0x00000020 primask=0x00000001 restored=0x00000001 cleanup=ok=1 ok",
+          "nmi deferred irq pending_in_nmi=0x00000040 active_in_nmi=0x00000000 after_unmask_ipsr=0x00000015 irq6_active_while_irq5=0x00000000 irq6_pending_in_irq5=0x00000040 irq_ipsr=0x00000016 irq_active=0x00000040 irq_pending=0x00000000 nmi_count=0x00000002 irq5_priority=0x00000040 irq6_priority=0x00000080 ok",
+          "systick ipsr=0x0000000F active=0x0000000F countflag=1 read_clear=1 pending_after=0x00000000 thread_ipsr=0x00000000 vtor_restored=1 ok",
+          "systick primask clear=honored=1 masked=1 ipsr=0x0000000F active=0x0000000F primask=0x00000000 pending_after=0x00000000 thread_ipsr=0x00000000 vtor_restored=1 ok",
+          "systick icsr set_readback=1 clear=1 canceled=1 masked=1 ipsr=0x0000000F active=0x0000000F pending_handler=0 pending_after=0 thread_ipsr=0x00000000 vtor_restored=1 ok",
+          "systick icsr repend entries=0x00000002 first_ipsr=0x0000000F first_active=0x0000000F pending_after_pend=1 count_after_pend=0x00000001 second_ipsr=0x0000000F second_active=0x0000000F second_pending=0 thread_ipsr=0x00000000 vtor_restored=1 ok",
+          "systick periodic entries=0x00000003 reload=0x0000007F ipsr=0x0000000F,0x0000000F,0x0000000F active=1 countflag=1 pending=0 thread_ipsr=0x00000000 vtor_restored=1 ok",
+          "summary 0x0DFFFFFF",
+          "DONE"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536883200,
+          "expected_value": 234881023,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpioc:6",
+          "min_edges": 5
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      3221225472,
+      3221225472,
+      10,
+      3221225472,
+      13,
+      1073821724,
+      4294867296,
+      536887280,
+      0,
+      0,
+      0,
+      0,
+      85,
+      536887024,
+      134267253,
+      134267534
+    ],
+    "pc": 134267534,
+    "xpsr": 2164260864,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": true
+  },
+  "firmware_hash": "61c5317908f3c978e8dfaae3727a38f0fb5f6231505aedb5467c16f7721daa83",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-stm32f072b-disco-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f072b_discovery.yaml",
+    "script": "examples/renode-onboarding/stm32f072b_discovery-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "systick",
+        "kind": "native",
+        "base": 3758153744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073876992,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart1",
+        "kind": "native",
+        "base": 1073821696,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart2",
+        "kind": "native",
+        "base": 1073759232,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart3",
+        "kind": "native",
+        "base": 1073760256,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart4",
+        "kind": "native",
+        "base": 1073761280,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioa",
+        "kind": "native",
+        "base": 1207959552,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiob",
+        "kind": "native",
+        "base": 1207960576,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioc",
+        "kind": "native",
+        "base": 1207961600,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiod",
+        "kind": "native",
+        "base": 1207962624,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioe",
+        "kind": "native",
+        "base": 1207963648,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiof",
+        "kind": "native",
+        "base": 1207964672,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "syscfg",
+        "kind": "native",
+        "base": 1073807360,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "exti",
+        "kind": "native",
+        "base": 1073808384,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tim1",
+        "kind": "native",
+        "base": 1073818624,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tim2",
+        "kind": "native",
+        "base": 1073741824,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tim3",
+        "kind": "native",
+        "base": 1073742848,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tim6",
+        "kind": "native",
+        "base": 1073745920,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tim7",
+        "kind": "native",
+        "base": 1073746944,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tim14",
+        "kind": "native",
+        "base": 1073750016,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tim15",
+        "kind": "native",
+        "base": 1073823744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tim16",
+        "kind": "native",
+        "base": 1073824768,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "tim17",
+        "kind": "native",
+        "base": 1073825792,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "spi1",
+        "kind": "native",
+        "base": 1073819648,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "spi2",
+        "kind": "native",
+        "base": 1073756160,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c1",
+        "kind": "i2c",
+        "base": 1073763328,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dma1",
+        "kind": "native",
+        "base": 1073872896,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "crc",
+        "kind": "native",
+        "base": 1073885184,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "adc",
+        "kind": "native",
+        "base": 1073816576,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "b1",
+        "device_type": null,
+        "declared": false,
+        "attachment": {
+          "transport": "gpio"
+        },
+        "artifacts": []
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 4000000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpioc",
+        "pin": 6,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 2146,
+            "value": 1
+          },
+          {
+            "cycle": 3069,
+            "value": 0
+          },
+          {
+            "cycle": 3071,
+            "value": 1
+          },
+          {
+            "cycle": 3074,
+            "value": 0
+          },
+          {
+            "cycle": 3077,
+            "value": 1
+          },
+          {
+            "cycle": 3084,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 2134,
+            "state": "0"
+          },
+          {
+            "cycle": 2146,
+            "state": "1"
+          },
+          {
+            "cycle": 3069,
+            "state": "0"
+          },
+          {
+            "cycle": 3071,
+            "state": "1"
+          },
+          {
+            "cycle": 3074,
+            "state": "0"
+          },
+          {
+            "cycle": 3077,
+            "state": "1"
+          },
+          {
+            "cycle": 3084,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 6
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpioc",
+      "number": 6,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "STM32F072B-DISCO SMOKE",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "cpu=cortex-m0 uart=usart1",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "rcc reset=1 gate=1 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "aircr prigroup=0 reserved=writes_ignored=1 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "usart irq u2=1 u3=1 u4=1 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 released=1 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "led=ld3 odr=0x00000040",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "led=ld4 odr=0x00000140",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "led=ld5 odr=0x00000340",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "led=ld6 odr=0x000003C0",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "leds walk=1 blink=1 off=1 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "b1 idle=1 presses=1 pc_quiet=1 pa0=1 cleared=1 ok",
+        "cycle_lo": 1200000,
+        "cycle": 1210000,
+        "end_cycle": 1210000
+      },
+      {
+        "text": "tim1 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+        "cycle_lo": 1200000,
+        "cycle": 1210000,
+        "end_cycle": 1210000
+      },
+      {
+        "text": "tim2 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+        "cycle_lo": 1200000,
+        "cycle": 1210000,
+        "end_cycle": 1210000
+      },
+      {
+        "text": "tim3 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+        "cycle_lo": 1200000,
+        "cycle": 1210000,
+        "end_cycle": 1210000
+      },
+      {
+        "text": "tim6 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+        "cycle_lo": 1200000,
+        "cycle": 1210000,
+        "end_cycle": 1210000
+      },
+      {
+        "text": "tim7 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+        "cycle_lo": 1200000,
+        "cycle": 1210000,
+        "end_cycle": 1210000
+      },
+      {
+        "text": "tim14 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+        "cycle_lo": 1210000,
+        "cycle": 1220000,
+        "end_cycle": 1220000
+      },
+      {
+        "text": "tim15 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+        "cycle_lo": 1210000,
+        "cycle": 1220000,
+        "end_cycle": 1220000
+      },
+      {
+        "text": "tim16 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+        "cycle_lo": 1210000,
+        "cycle": 1220000,
+        "end_cycle": 1220000
+      },
+      {
+        "text": "tim17 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+        "cycle_lo": 1210000,
+        "cycle": 1220000,
+        "end_cycle": 1220000
+      },
+      {
+        "text": "dma1 m2m tc=1 data=1 pend=1 alone=1 released=1 ok",
+        "cycle_lo": 1210000,
+        "cycle": 1220000,
+        "end_cycle": 1220000
+      },
+      {
+        "text": "crc word=0xDF8A8A2B seed=1 std=1 ok",
+        "cycle_lo": 1210000,
+        "cycle": 1220000,
+        "end_cycle": 1220000
+      },
+      {
+        "text": "adc ts=0x00000709 vref=0x000005F6 cal=1 ready=1 seq=1 eos=1 pend=1 released=1 gated=1 off=1 ok",
+        "cycle_lo": 1210000,
+        "cycle": 1220000,
+        "end_cycle": 1220000
+      },
+      {
+        "text": "irq exception hit=1 ipsr=0x00000015 active=0x00000020 pending=0x00000000 frame=1 regs=0x00000011,0x00000022,0x00000033,0x00000044,0x00000055 lr=0x08002D5F pc=0x080003E6 xpsr=0x21000000 exc_return=0xFFFFFFF9 sp=0x20003EC8 expected_sp=0x20003EC8 restored_msp=0x20003EF0 returned=1 ok",
+        "cycle_lo": 1220000,
+        "cycle": 1230000,
+        "end_cycle": 1230000
+      },
+      {
+        "text": "nmi repend entered=1 entries=0x00000002 after_pend_ipsr=0x00000002 after_pend_entries=0x00000001 irq=0x00000015 nmi=0x00000002 resumed=0x00000015 icsr=0x00000002 irq_active=0x00000020 primask=0x00000001 restored=0x00000001 cleanup=ok=1 ok",
+        "cycle_lo": 1220000,
+        "cycle": 1230000,
+        "end_cycle": 1230000
+      },
+      {
+        "text": "nmi deferred irq pending_in_nmi=0x00000040 active_in_nmi=0x00000000 after_unmask_ipsr=0x00000015 irq6_active_while_irq5=0x00000000 irq6_pending_in_irq5=0x00000040 irq_ipsr=0x00000016 irq_active=0x00000040 irq_pending=0x00000000 nmi_count=0x00000002 irq5_priority=0x00000040 irq6_priority=0x00000080 ok",
+        "cycle_lo": 1220000,
+        "cycle": 1230000,
+        "end_cycle": 1230000
+      },
+      {
+        "text": "systick ipsr=0x0000000F active=0x0000000F countflag=1 read_clear=1 pending_after=0x00000000 thread_ipsr=0x00000000 vtor_restored=1 ok",
+        "cycle_lo": 1220000,
+        "cycle": 1230000,
+        "end_cycle": 1230000
+      },
+      {
+        "text": "systick primask clear=honored=1 masked=1 ipsr=0x0000000F active=0x0000000F primask=0x00000000 pending_after=0x00000000 thread_ipsr=0x00000000 vtor_restored=1 ok",
+        "cycle_lo": 1220000,
+        "cycle": 1230000,
+        "end_cycle": 1240000
+      },
+      {
+        "text": "systick icsr set_readback=1 clear=1 canceled=1 masked=1 ipsr=0x0000000F active=0x0000000F pending_handler=0 pending_after=0 thread_ipsr=0x00000000 vtor_restored=1 ok",
+        "cycle_lo": 1230000,
+        "cycle": 1240000,
+        "end_cycle": 1240000
+      },
+      {
+        "text": "systick icsr repend entries=0x00000002 first_ipsr=0x0000000F first_active=0x0000000F pending_after_pend=1 count_after_pend=0x00000001 second_ipsr=0x0000000F second_active=0x0000000F second_pending=0 thread_ipsr=0x00000000 vtor_restored=1 ok",
+        "cycle_lo": 1230000,
+        "cycle": 1240000,
+        "end_cycle": 1240000
+      },
+      {
+        "text": "systick periodic entries=0x00000003 reload=0x0000007F ipsr=0x0000000F,0x0000000F,0x0000000F active=1 countflag=1 pending=0 thread_ipsr=0x00000000 vtor_restored=1 ok",
+        "cycle_lo": 1230000,
+        "cycle": 1240000,
+        "end_cycle": 1240000
+      },
+      {
+        "text": "summary 0x0DFFFFFF",
+        "cycle_lo": 1230000,
+        "cycle": 1240000,
+        "end_cycle": 1240000
+      },
+      {
+        "text": "DONE",
+        "cycle_lo": 1230000,
+        "cycle": 1240000,
+        "end_cycle": 1240000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "stimuli": [
+    {
+      "channel": "pressed",
+      "component": "b1",
+      "value": 1.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 400000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 400000
+    },
+    {
+      "channel": "pressed",
+      "component": "b1",
+      "value": 0.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 600000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 600000
+    },
+    {
+      "channel": "pressed",
+      "component": "b1",
+      "value": 1.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 1000000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 1000000
+    },
+    {
+      "channel": "pressed",
+      "component": "b1",
+      "value": 0.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 1200000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 1200000
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 54768,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 54768,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 131072,
+    "ram_total_bytes": 16384,
+    "flash_used_pct": 41.78,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 16384,
+    "main_stack_high_water_bytes": 268,
+    "main_stack_free_min_bytes": 15572,
+    "main_stack_base": 536870912,
+    "main_stack_top": 536887296,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 16384,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 15572,
+    "heap_base": 536870912,
+    "heap_top": 536887296
+  },
+  "metrics": {
+    "cycles": 4000000,
+    "instructions": 4000000,
+    "steps_executed": 4000000,
+    "memory_reads": 16876,
+    "memory_writes": 2385,
+    "peripheral_accesses": 301351,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134267534,
+        "count": 159,
+        "symbol": "firmware_stm32f072b_disco_smoke::__cortex_m_rt_main"
+      },
+      {
+        "pc": 134224668,
+        "count": 157,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134224670,
+        "count": 156,
+        "symbol": "firmware_stm32f072b_disco_smoke::wait_level"
+      },
+      {
+        "pc": 134224672,
+        "count": 156,
+        "symbol": "firmware_stm32f072b_disco_smoke::wait_level"
+      },
+      {
+        "pc": 134224682,
+        "count": 156,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 134224684,
+        "count": 156,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134224686,
+        "count": 156,
+        "symbol": "firmware_stm32f072b_disco_smoke::wait_level"
+      },
+      {
+        "pc": 134224688,
+        "count": 156,
+        "symbol": "firmware_stm32f072b_disco_smoke::wait_level"
+      },
+      {
+        "pc": 134224780,
+        "count": 156,
+        "symbol": "firmware_stm32f072b_disco_smoke::wait_level"
+      },
+      {
+        "pc": 134224678,
+        "count": 118,
+        "symbol": "firmware_stm32f072b_disco_smoke::wait_level"
+      },
+      {
+        "pc": 134224782,
+        "count": 118,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134224790,
+        "count": 118,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 134224798,
+        "count": 118,
+        "symbol": "firmware_stm32f072b_disco_smoke::wait_level"
+      },
+      {
+        "pc": 134224674,
+        "count": 117,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134224676,
+        "count": 117,
+        "symbol": "firmware_stm32f072b_disco_smoke::wait_level"
+      },
+      {
+        "pc": 134224680,
+        "count": 117,
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+      }
+    ]
+  }
+}

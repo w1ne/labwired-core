@@ -1,0 +1,23 @@
+# Zolertia Firefly smoke on the cc2538sf53 chip surface: 16-MHz reset clock,
+# LEDs PD5/PD4/PD3 through masked GPIO_DATA, GPIO_D DIR, the user button
+# PA3 released level, SSI0 loopback, GPTimer0 time-outs, the sleep timer,
+# UART1 divisors, SRAM top; red LED (PD5) pulses and a line on UART1.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-zolertia-firefly-smoke"
+  system: "../../configs/systems/onboarding/zolertia-firefly.yaml"
+limits:
+  max_steps: 400000
+assertions:
+  - uart_contains: "ZOLERTIA FIREFLY CC2538 Cortex-M3 UART0 smoke"
+  - uart_contains: "FIREFLY checks PPPPPPPPP DONE"
+  - uart_contains: "FIREFLY UART1 line"
+  - memory_value:
+      address: 0x20007F00
+      expected_value: 0xF1EF01FF
+      size: 4
+  - gpio_edges:
+      pin: "gpiod:5"
+      min_edges: 8
+  - fidelity_clean: true
+  - expected_stop_reason: max_steps

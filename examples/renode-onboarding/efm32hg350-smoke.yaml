@@ -1,0 +1,32 @@
+# Cortex-M0+ smoke against the imported EFM32HG350 platform. Renode's
+# efm32hg350.repl maps the Series-0 GPIO block and three TIMERs (IRQ 2/7/20);
+# the firmware (firmware-efm32hg350-smoke) runs the checks shared with the
+# EFM32GG995 smoke (s0.rs) over USART0 as the console: GPIO push-pull on the
+# STK LED0/LED1 pins, DISABLED/INPUTPULL/WIREDAND/WIREDOR/PINLOCKN, TIMER0 UP
+# overflow + NVIC line 2, TIMER1 DOWN one-shot, TIMER2 CC0 + TOPB. LED0 (pf4) toggles in
+# the idle loop on TIMER0 overflows. Summary word at 0x20001F00.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-efm32hg350-smoke"
+  system: "../../configs/systems/onboarding/efm32hg350.yaml"
+limits:
+  max_steps: 400000
+assertions:
+  - uart_contains: "EFM32HG350 RENODE SMOKE"
+  - uart_ordered:
+      - "gpio pf4/pf5 pushpull set=1 tgl=1 clr=1 wo=1 ok"
+      - "gpio pa0 disabled_din0=1 pullup=1 pulldown=1 ok"
+      - "gpio pa1 wiredand pa2 wiredor hi=3 lo=0 ok"
+      - "gpio pa pinlockn reset=ffff after=fffe ok"
+      - "tim0 up of=1 pend=1 released=1 running=1 ok"
+      - "tim1 down oneshot dir=1 stopped=1 if=2 cnt=00c8 ok"
+      - "tim2 cc0 hit=1 topbv=1 of=1 top=03e8->01f4 ok"
+      - "EFM32HG PASS"
+  - gpio_edges:
+      pin: "gpiof:4"
+      min_edges: 4
+  - memory_value:
+      address: 0x20001F00
+      expected_value: 0xEF32007F
+      size: 4
+  - expected_stop_reason: max_steps

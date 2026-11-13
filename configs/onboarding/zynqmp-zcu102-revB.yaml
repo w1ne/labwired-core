@@ -1,6 +1,5 @@
 name: zynqmp-zcu102-revB
-description: 'zynqmp-zcu102-revB (root platform, AMD Xilinx Zynq). Architecture: ARM
-  multicore cluster.'
+description: 'Imported ZCU102 Evaluation Board (Rev B) target. Measured profile covers one Cortex-A53 PE, low DDR and PS UART0 (Cadence, polled TX); the GIC, timers, RPU and other PS peripherals are not modeled.'
 family: AMD Xilinx Zynq
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"

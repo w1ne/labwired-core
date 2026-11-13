@@ -1,0 +1,5 @@
+[2m2026-11-08T05:32:36.459507Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/mimxrt798s.yaml
+[2m2026-11-08T05:32:36.532026Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x8000801
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+PASS  5/5 checks · mimxrt798s-smoke · 4000000 steps · 0.29s

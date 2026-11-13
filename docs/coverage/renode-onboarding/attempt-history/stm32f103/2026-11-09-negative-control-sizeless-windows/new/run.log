@@ -1,0 +1,12 @@
+2026-11-09T16:41:31.434060Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f103.yaml
+2026-11-09T16:41:31.509269Z  INFO labwired_loader: ELF Entry Point: 0x8000017
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-09T16:41:31.864748Z  INFO labwired_cli::execute: stimulus: temperature = 55 applied
+2026-11-09T16:41:32.147971Z  INFO labwired_cli::execute: stimulus: humidity = 35 applied
+2026-11-09T16:41:32.475036Z  INFO labwired_cli::execute: stimulus: pressure = 1012.5 applied
+2026-11-09T16:41:32.506963Z ERROR labwired_cli::execute: Memory assertion failed to read address 0x40011000 (size 32): Memory access violation at 0x40011000
+2026-11-09T16:41:32.506990Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1073811456, expected_value: 0, mask: None, size: None, node: None } }) (captured len=1988)
+2026-11-09T16:41:32.507002Z ERROR labwired_cli::execute: Memory assertion failed to read address 0x40005800 (size 32): Memory access violation at 0x40005800
+2026-11-09T16:41:32.507006Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1073764352, expected_value: 0, mask: None, size: None, node: None } }) (captured len=1988)
+FAIL  53/55 checks · stm32f103-new · 50000000 steps · 1.00s

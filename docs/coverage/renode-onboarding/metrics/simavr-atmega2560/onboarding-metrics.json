@@ -1,0 +1,38 @@
+{
+  "target_id": "simavr-atmega2560",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 14998582,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": null,
+  "target_triple": null,
+  "script": "examples/renode-onboarding/simavr-atmega2560-smoke.yaml",
+  "system": "configs/systems/onboarding/simavr-atmega2560.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-06T06:22:42Z",
+  "finished_at_utc": "2026-11-06T06:22:54Z",
+  "elapsed_seconds": 12,
+  "elapsed_ms": 11541,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 7.34,
+    "build_firmware": null,
+    "run_smoke": 4.194
+  },
+  "stages_ms": {
+    "build_cli": 7340,
+    "build_firmware": null,
+    "run_smoke": 4194
+  },
+  "prebuilt_firmware": "tests/fixtures/avr/arduino-mega-2560-io.elf"
+}

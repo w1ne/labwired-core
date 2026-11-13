@@ -40,7 +40,7 @@ const TIM2_BASE: u32 = 0x4000_0000; // type timer, width 32
 const DMA1_BASE: u32 = 0x4002_0000; // type dma (Dma1, 7ch)
 const I2C1_BASE: u32 = 0x4000_5400; // type i2c, profile stm32l4
 const SPI1_BASE: u32 = 0x4001_3000; // type spi, profile stm32 (classic)
-const ADC1_BASE: u32 = 0x4001_2400; // type adc, profile stm32l4
+const ADC1_BASE: u32 = 0x4001_2400; // type adc, profile stm32l0
 const RTC_BASE: u32 = 0x4000_2800; // type rtc (stm32l4 layout)
 const IWDG_BASE: u32 = 0x4000_3000; // type iwdg
 
@@ -345,13 +345,14 @@ fn check_spi() -> Result<(), &'static [u8]> {
     Ok(())
 }
 
-/// Run one ADC1 single conversion at CFGR.RES = `res`, returning DR. The model
-/// converts a fixed internal source (V(IN)=3.0 V, V(REF+)=3.3 V): the 12-bit
-/// code is (3.0/3.3)*4096=3723, narrower resolutions drop LSBs.
+/// Run one ADC1 single conversion of V_REFINT (IN17) at CFGR1.RES = `res`,
+/// returning DR. The model converts V_REFINT typ 1.224 V (DS10182) against
+/// V(REF+)=3.3 V: the 12-bit code is floor(1224*4095/3300)=1518, narrower
+/// resolutions drop LSBs.
 fn adc_convert(res: u32) -> Result<u32, &'static [u8]> {
-    let cfgr = rd32(ADC1_BASE + 0x0C) & !(0x3 << 3);
-    wr32(ADC1_BASE + 0x0C, cfgr | (res << 3));
-    wr32(ADC1_BASE + 0x00, 1 << 2); // ISR rc_w1: clear any stale EOC
+    let cfgr1 = rd32(ADC1_BASE + 0x0C) & !(0x3 << 3);
+    wr32(ADC1_BASE + 0x0C, cfgr1 | (res << 3)); // CFGR1.RES
+    wr32(ADC1_BASE + 0x00, (1 << 3) | (1 << 2)); // ISR rc_w1: clear EOS|EOC
     wr32(ADC1_BASE + 0x08, rd32(ADC1_BASE + 0x08) | (1 << 2)); // CR.ADSTART
     let mut eoc = false;
     for _ in 0..20_000 {
@@ -366,20 +367,26 @@ fn adc_convert(res: u32) -> Result<u32, &'static [u8]> {
     Ok(rd32(ADC1_BASE + 0x40) & 0xFFFF)
 }
 
-/// adc: ADC1 (stm32l4 model). Power up (clear DEEPPWD, ADVREGEN, ADEN ->
-/// ISR.ADRDY; ADRDY must NOT assert before ADEN), then prove a REAL conversion
-/// BY VALUE: ADSTART converts the fixed internal source and the code must scale
-/// when CFGR.RES narrows. Fails if the model returned a constant.
+/// adc: ADC1 (stm32l0 CHSELR model, RM0377 §14). Calibrate (ADCAL -> EOCAL),
+/// enable (ADEN -> ISR.ADRDY; ADRDY must NOT assert before ADEN), then prove a
+/// REAL conversion BY VALUE: V_REFINT reads 0 until CCR.VREFEN, then its code
+/// must scale when CFGR1.RES narrows. Fails if the model returned a constant.
 fn check_adc() -> Result<(), &'static [u8]> {
     // clock-gating: ADC1 (RCC_APB2ENR.ADCEN bit 9, ENR @ 0x34) is unclocked out
-    // of reset, so CR reads 0 (not its 0x20000000 DEEPPWD clocked reset). Prove
-    // the dead state, then enable the bus clock.
-    if rd32(ADC1_BASE + 0x08) != 0 {
+    // of reset, so TR reads 0 (not its 0x0FFF0000 clocked reset). Prove the
+    // dead state, then enable the bus clock.
+    if rd32(ADC1_BASE + 0x20) != 0 {
         return Err(b"adc-gated");
     }
     wr32(RCC_BASE + 0x34, rd32(RCC_BASE + 0x34) | (1 << 9)); // APB2ENR.ADCEN
-    wr32(ADC1_BASE + 0x08, 0); // CR: clear DEEPPWD
+    if rd32(ADC1_BASE + 0x20) != 0x0FFF_0000 || rd32(ADC1_BASE + 0x08) != 0 {
+        return Err(b"adc-reset");
+    }
     wr32(ADC1_BASE + 0x08, 1 << 28); // CR: ADVREGEN
+    wr32(ADC1_BASE + 0x08, (1 << 28) | (1 << 31)); // CR: ADCAL
+    if rd32(ADC1_BASE + 0x00) & (1 << 11) == 0 {
+        return Err(b"adc-eocal");
+    }
     if rd32(ADC1_BASE + 0x00) & 0x1 != 0 {
         return Err(b"adc-adrdy-early");
     }
@@ -387,12 +394,17 @@ fn check_adc() -> Result<(), &'static [u8]> {
     if rd32(ADC1_BASE + 0x00) & 0x1 == 0 {
         return Err(b"adc-adrdy");
     }
+    wr32(ADC1_BASE + 0x28, 1 << 17); // CHSELR: IN17 = V_REFINT
+    if adc_convert(0)? != 0 {
+        return Err(b"adc-vrefint-off");
+    }
+    wr32(ADC1_BASE + 0x308, 1 << 22); // CCR.VREFEN
     let code12 = adc_convert(0)?;
-    if code12 != 3723 {
+    if code12 != 1518 {
         return Err(b"adc-code12");
     }
     let code10 = adc_convert(1)?;
-    if code10 != 930 {
+    if code10 != 379 {
         return Err(b"adc-code10");
     }
     if code10 >= code12 {

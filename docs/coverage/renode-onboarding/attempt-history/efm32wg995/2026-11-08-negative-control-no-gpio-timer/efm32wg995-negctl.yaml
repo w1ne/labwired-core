@@ -1,0 +1,23 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: efm32wg995
+arch: arm
+# Measured onboarding profile: Cortex-M4, imported flash/RAM, and the modeled
+# UART0 register window exercised by the smoke. Other generated blocks are not
+# claimed here because the engine has no model-backed coverage for them.
+core: cortex-m4
+flash:
+  base: 134217728
+  size: 262144B
+ram:
+  base: 536870912
+  size: 32768B
+peripherals:
+- id: uart0
+  type: efm32_uart
+  bus: sysbus
+  base_address: 1073799168

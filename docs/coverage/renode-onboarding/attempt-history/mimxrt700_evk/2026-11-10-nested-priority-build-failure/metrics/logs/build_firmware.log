@@ -1,0 +1,135 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+   Compiling firmware-mimxrt700-evk-smoke v0.1.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/renode/crates/firmware-mimxrt700-evk-smoke)
+error[E0599]: no method named `add` found for type `usize` in the current scope
+   --> crates/firmware-mimxrt700-evk-smoke/src/main.rs:560:34
+    |
+560 |         write_volatile(NVIC_IPR0.add(7) as *mut u8, 0x80);
+    |                                  ^^^ method not found in `usize`
+    |
+   --> /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ops/arith.rs:92:7
+    |
+    = note: the method is available for `usize` here
+    |
+    = help: items from traits can only be used if the trait is in scope
+help: trait `Add` which provides `add` is implemented but not in scope; perhaps you want to import it
+    |
+  4 + use core::ops::Add;
+    |
+
+error[E0599]: no method named `add` found for type `usize` in the current scope
+   --> crates/firmware-mimxrt700-evk-smoke/src/main.rs:561:34
+    |
+561 |         write_volatile(NVIC_IPR0.add(8) as *mut u8, 0x20);
+    |                                  ^^^ method not found in `usize`
+    |
+   --> /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ops/arith.rs:92:7
+    |
+    = note: the method is available for `usize` here
+    |
+    = help: items from traits can only be used if the trait is in scope
+help: trait `Add` which provides `add` is implemented but not in scope; perhaps you want to import it
+    |
+  4 + use core::ops::Add;
+    |
+
+error[E0599]: no method named `add` found for type `usize` in the current scope
+   --> crates/firmware-mimxrt700-evk-smoke/src/main.rs:616:33
+    |
+616 |         read_volatile(NVIC_IPR0.add(7)) == 0x80 && read_volatile(NVIC_IPR0.add(8)) == 0x20
+    |                                 ^^^ method not found in `usize`
+    |
+   --> /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ops/arith.rs:92:7
+    |
+    = note: the method is available for `usize` here
+    |
+    = help: items from traits can only be used if the trait is in scope
+help: trait `Add` which provides `add` is implemented but not in scope; perhaps you want to import it
+    |
+  4 + use core::ops::Add;
+    |
+
+error[E0599]: no method named `add` found for type `usize` in the current scope
+   --> crates/firmware-mimxrt700-evk-smoke/src/main.rs:616:76
+    |
+616 |         read_volatile(NVIC_IPR0.add(7)) == 0x80 && read_volatile(NVIC_IPR0.add(8)) == 0x20
+    |                                                                            ^^^ method not found in `usize`
+    |
+   --> /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ops/arith.rs:92:7
+    |
+    = note: the method is available for `usize` here
+    |
+    = help: items from traits can only be used if the trait is in scope
+help: trait `Add` which provides `add` is implemented but not in scope; perhaps you want to import it
+    |
+  4 + use core::ops::Add;
+    |
+
+error[E0599]: no method named `add` found for type `usize` in the current scope
+   --> crates/firmware-mimxrt700-evk-smoke/src/main.rs:659:42
+    |
+659 |     hex(unsafe { read_volatile(NVIC_IPR0.add(7)) as u32 });
+    |                                          ^^^ method not found in `usize`
+    |
+   --> /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ops/arith.rs:92:7
+    |
+    = note: the method is available for `usize` here
+    |
+    = help: items from traits can only be used if the trait is in scope
+help: trait `Add` which provides `add` is implemented but not in scope; perhaps you want to import it
+    |
+  4 + use core::ops::Add;
+    |
+
+error[E0599]: no method named `add` found for type `usize` in the current scope
+   --> crates/firmware-mimxrt700-evk-smoke/src/main.rs:661:42
+    |
+661 |     hex(unsafe { read_volatile(NVIC_IPR0.add(8)) as u32 });
+    |                                          ^^^ method not found in `usize`
+    |
+   --> /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ops/arith.rs:92:7
+    |
+    = note: the method is available for `usize` here
+    |
+    = help: items from traits can only be used if the trait is in scope
+help: trait `Add` which provides `add` is implemented but not in scope; perhaps you want to import it
+    |
+  4 + use core::ops::Add;
+    |
+
+warning: unused variable: `stacked_r0`
+    --> crates/firmware-mimxrt700-evk-smoke/src/main.rs:1007:13
+     |
+1007 |         let stacked_r0 = unsafe { read_volatile(frame) };
+     |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_stacked_r0`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `stacked_pc`
+    --> crates/firmware-mimxrt700-evk-smoke/src/main.rs:1008:13
+     |
+1008 |         let stacked_pc = unsafe { read_volatile(frame.add(6)) };
+     |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_stacked_pc`
+
+warning: unused variable: `stacked_xpsr`
+    --> crates/firmware-mimxrt700-evk-smoke/src/main.rs:1009:13
+     |
+1009 |         let stacked_xpsr = unsafe { read_volatile(frame.add(7)) };
+     |             ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_stacked_xpsr`
+
+For more information about this error, try `rustc --explain E0599`.
+warning: `firmware-mimxrt700-evk-smoke` (bin "firmware-mimxrt700-evk-smoke") generated 3 warnings
+error: could not compile `firmware-mimxrt700-evk-smoke` (bin "firmware-mimxrt700-evk-smoke") due to 6 previous errors; 3 warnings emitted

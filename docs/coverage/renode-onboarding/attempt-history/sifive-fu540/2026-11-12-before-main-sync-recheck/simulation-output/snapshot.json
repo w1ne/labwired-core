@@ -1,0 +1,246 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v64",
+    "x": [
+      0,
+      536880346,
+      2147614576,
+      2147485696,
+      0,
+      536871744,
+      33570824,
+      0,
+      268500992,
+      268500992,
+      268500992,
+      10,
+      268500992,
+      5,
+      0,
+      201330688,
+      2147482810,
+      1,
+      0,
+      0,
+      1,
+      1,
+      0,
+      0,
+      16,
+      1,
+      0,
+      1,
+      33554432,
+      0,
+      0,
+      0
+    ],
+    "pc": 536880500,
+    "mstatus": 6272,
+    "mie": 2184,
+    "mtvec": 536871744,
+    "mscratch": 0,
+    "mepc": 536878412,
+    "mcause": 9223372036854775819,
+    "mtval": 0,
+    "mcycle": 100000,
+    "minstret": 100000,
+    "pmpcfg": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pmpaddr": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "clint": {
+      "base": 33554432,
+      "msip": false,
+      "mtimecmp": 18446744073709551615,
+      "mtime": 100,
+      "divider": 1000,
+      "residue": 0
+    },
+    "plic": {
+      "base": 201326592,
+      "num_sources": 54,
+      "priority_mask": 7,
+      "context": 1,
+      "priority": [
+        0,
+        0,
+        0,
+        0,
+        3,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "pending": [
+        0,
+        0
+      ],
+      "in_service": [
+        0,
+        0
+      ],
+      "enable": [
+        [
+          0,
+          0
+        ],
+        [
+          16,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "threshold": [
+        0,
+        2,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "reservation": null
+  },
+  "steps_executed": 100000,
+  "cycles": 100000,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "4357553dc2c9fcb7d27b1bc99af7ecad913801c1262b1a99877ee160711f15bb",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/riscv64imac-unknown-none-elf/release/firmware-sifive-fu540-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/sifive-fu540.yaml",
+    "script": "examples/renode-onboarding/sifive-fu540-smoke.yaml"
+  }
+}

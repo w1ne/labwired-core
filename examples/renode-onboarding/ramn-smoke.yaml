@@ -1,0 +1,35 @@
+# LPUART1 + GPIO smoke on one imported RAMN ECU (STM32L552, Cortex-M33),
+# crates/firmware-ramn-smoke. Follows the RAMN firmware's bring-up: LPUART1 on
+# PA2/PA3 AF8 at 115200 (BRR 8888 from MSI 4 MHz), PA9 HW_TYPE input with
+# pull-up, PB6 FDCAN1_STB output via BSRR, then a PB6 heartbeat.
+# PA MODER keeps the RM/repl reset 0xABFFFFFF outside PA2/PA3/PA9.
+# 0x5A4E003F = magic | six checks: PA MODER/AFRL, HW_TYPE pull-up high, BRR
+# readback, idle TXE|TC, PB6 set/clear, TC after the banner. A zero-answering
+# LPUART window would never raise TXE, so no console text would appear.
+# Not claimed: CAN, ADC, LCD, ECU enables, other UARTs or four-node behavior.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-ramn-smoke"
+  system: "../../configs/systems/onboarding/ramn.yaml"
+limits:
+  max_steps: 400000
+assertions:
+  - uart_contains: "RAMN LPUART1 SMOKE"
+  - uart_ordered:
+      - "lpuart1 brr=000022b8"
+      - "pa moder=abf3ffaf afrl=00008800"
+      - "hw_type=00000001"
+      - "pb6 set=00000001 clr=00000000"
+      - "pass=0000003f"
+  - gpio_edges:
+      pin: "gpiob:6"
+      min_edges: 3
+  - memory_value:
+      address: 0x20001000
+      expected_value: 0x00000143
+      size: 4
+  - memory_value:
+      address: 0x20001004
+      expected_value: 0x5A4E003F
+      size: 4
+  - expected_stop_reason: max_steps

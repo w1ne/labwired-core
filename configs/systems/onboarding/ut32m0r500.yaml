@@ -6,3 +6,10 @@
 
 name: ut32m0r500
 chip: ../../chips/onboarding/ut32m0r500.yaml
+board_io:
+  - id: "gpio2_irq_button"
+    kind: "button"
+    peripheral: "gpio_bank2"
+    pin: 13
+    signal: "input"
+    active_high: true

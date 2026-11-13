@@ -1,0 +1,37 @@
+{
+  "target_id": "renesas-ek_ra2e1",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 400000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": "firmware-renesas-ek-ra2e1-smoke",
+  "target_triple": "thumbv8m.base-none-eabi",
+  "script": "examples/renode-onboarding/renesas-ek_ra2e1-smoke.yaml",
+  "system": "configs/systems/onboarding/renesas-ek_ra2e1.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-08T03:59:16Z",
+  "finished_at_utc": "2026-11-08T03:59:24Z",
+  "elapsed_seconds": 8,
+  "elapsed_ms": 7311,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 6.629,
+    "build_firmware": 0.386,
+    "run_smoke": 0.286
+  },
+  "stages_ms": {
+    "build_cli": 6629,
+    "build_firmware": 386,
+    "run_smoke": 286
+  }
+}

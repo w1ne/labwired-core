@@ -1,16 +1,19 @@
+# Bounded direct-ELF smoke profile for Renode's LiteX/VexRiscv TFTP system.
+# The firmware exercises the RV32IM core, 64 KiB ROM, 32 KiB SRAM, LiteX UART,
+# and LiteX timer. SPI flash, DDR, Ethernet/TFTP, and the SoC controller are
+# outside this profile.
+# Upstream platform: https://github.com/renode/renode/blob/master/platforms/cpus/litex_vexriscv_tftp.repl
 name: litex_vexriscv_tftp
-arch: arm
+arch: riscv
+core: rv32im
 flash:
-  base: 536870912
-  size: 1048576
+  base: 0
+  size: 65536B
+flash_boot_alias: false
 ram:
   base: 16777216
   size: 32768B
 peripherals:
-- id: ctrl
-  type: litex_soc_controller
-  bus: sysbus
-  base_address: 2181038080
 - id: uart
   type: litex_uart
   bus: sysbus
@@ -19,7 +22,3 @@ peripherals:
   type: litex_timer
   bus: sysbus
   base_address: 2181048320
-- id: ethphy
-  type: ethernetphysicallayer
-  bus: ethmac
-  base_address: 0

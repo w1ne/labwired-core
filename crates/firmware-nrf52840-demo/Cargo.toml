@@ -14,3 +14,15 @@ name = "firmware-nrf52840-demo"
 path = "src/main.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "firmware-nrf52840-renode-smoke"
+path = "src/renode_smoke.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "firmware-nrf52840dk-smoke"
+path = "src/nrf52840dk_smoke.rs"
+test = false
+bench = false

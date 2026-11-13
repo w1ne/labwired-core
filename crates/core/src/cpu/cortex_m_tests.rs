@@ -407,8 +407,7 @@ fn armv7m_strexh_fails_without_matching_unchanged_reservation() {
 ///   vcmpe.f32 s15, s14 ; vmrs APSR_nzcv, fpscr ; bmi ...
 /// ```
 ///
-/// Neither instruction was decoded: VCMPE raised UNDEFINSTR and the image
-/// hard-faulted. Each case checks the APSR flags the branch will read.
+/// Each case checks the FPSCR result and the APSR flags the branch reads.
 #[test]
 fn vcmpe_f32_then_vmrs_apsr_nzcv_sets_branch_flags() {
     let nan = 0x7FC0_0000u32;
@@ -420,8 +419,7 @@ fn vcmpe_f32_then_vmrs_apsr_nzcv_sets_branch_flags() {
         ("unordered", nan, 1.0f32.to_bits(), 0b0011),
     ];
     for (name, s15, s14, want) in cases {
-        let mut cpu = CortexM::new();
-        let mut bus = MockBus::new();
+        let (mut cpu, mut bus, _fp) = fp_core();
         cpu.pc = 0x2000;
         cpu.fpu_s[15] = s15;
         cpu.fpu_s[14] = s14;
@@ -442,8 +440,7 @@ fn vcmpe_f32_then_vmrs_apsr_nzcv_sets_branch_flags() {
 
 #[test]
 fn vcmp_f32_with_zero_and_fz_flushes_denormals() {
-    let mut cpu = CortexM::new();
-    let mut bus = MockBus::new();
+    let (mut cpu, mut bus, _fp) = fp_core();
     cpu.pc = 0x2000;
     cpu.fpu_s[15] = 0x0000_0001; // smallest positive denormal
     run_test_instr(&mut cpu, &mut bus, 0xEEF57A40, true); // vcmp.f32 s15, #0.0
@@ -456,8 +453,7 @@ fn vcmp_f32_with_zero_and_fz_flushes_denormals() {
 
 #[test]
 fn vmsr_vmrs_round_trip_fpscr() {
-    let mut cpu = CortexM::new();
-    let mut bus = MockBus::new();
+    let (mut cpu, mut bus, _fp) = fp_core();
     cpu.pc = 0x2000;
     cpu.r0 = 0xFFFF_FFFF;
     run_test_instr(&mut cpu, &mut bus, 0xEEE10A10, true); // vmsr fpscr, r0
@@ -476,8 +472,7 @@ fn vmsr_vmrs_round_trip_fpscr() {
 #[test]
 fn vfp_unary_ops_and_vnmul_f32() {
     let nan = 0x7F80_0001u32; // signalling NaN, payload 1
-    let mut cpu = CortexM::new();
-    let mut bus = MockBus::new();
+    let (mut cpu, mut bus, _fp) = fp_core();
     cpu.pc = 0x2000;
     cpu.fpu_s[0] = (-2.5f32).to_bits();
     run_test_instr(&mut cpu, &mut bus, 0xEEB00AC0, true); // vabs.f32 s0, s0
@@ -662,6 +657,36 @@ fn basepri_masks_equal_or_lower_priority_exceptions() {
         handler & !1,
         "with BASEPRI=0 the pending exception is taken"
     );
+}
+
+#[test]
+fn aircr_priority_group_uses_only_group_bits_for_preemption_and_basepri() {
+    use std::sync::atomic::Ordering;
+    use std::sync::Arc;
+
+    let mut cpu = CortexM::new();
+    cpu.priority_group.store(5, Ordering::Relaxed);
+
+    // PRIGROUP=5 assigns [7:6] to group priority and [5:0] to subpriority.
+    assert_eq!(cpu.group_priority(0x80), 0x80);
+    assert_eq!(cpu.group_priority(0x9F), 0x80);
+    assert_eq!(cpu.group_priority(0xC0), 0xC0);
+
+    // Priority boosting is qualified by the same group split: BASEPRI=0x80
+    // masks a priority in that group even when its subpriority bits differ.
+    cpu.basepri = 0x80;
+    assert!(cpu.masked_by_basepri(0x9F));
+    assert!(!cpu.masked_by_basepri(0x7F));
+
+    // On ARMv6-M and ARMv8-M Baseline, PRIGROUP is reserved and all
+    // implemented priority bits are group priority.
+    let faults = Arc::new(crate::peripherals::scb::ScbFaultState::default());
+    faults.armv6m.store(true, Ordering::Relaxed);
+    faults
+        .priority_group_supported
+        .store(false, Ordering::Relaxed);
+    cpu.set_shared_faults(faults);
+    assert_eq!(cpu.group_priority(0x9F), 0x9F);
 }
 
 #[test]
@@ -1476,8 +1501,7 @@ fn test_thumb2_vfp_smoke_3_14_times_2() {
     //   vstr s15, [sp, #20]
     //   ldr r4, [sp, #20]          ; r4 = IEEE bits of 6.28
     // Hardware-verified result: 3.14f * 2.0f = 6.28f = 0x40C8F5C3.
-    let mut cpu = CortexM::new();
-    let mut bus = MockBus::new();
+    let (mut cpu, mut bus, _fp) = fp_core();
     // Set up memory so the VLDR/VSTR have somewhere to land.
     cpu.sp = 0x2000_0100;
     bus.write_u32(0x2000_010C, 0x4048_F5C3).unwrap(); // 3.14f
@@ -1525,8 +1549,7 @@ fn vfp_arith_encoding(h1_op: u16, sd: u8, sn: u8, sm: u8, op_b: u32) -> u32 {
 
 #[test]
 fn test_thumb2_vfp_add_sub_div() {
-    let mut cpu = CortexM::new();
-    let mut bus = MockBus::new();
+    let (mut cpu, mut bus, _fp) = fp_core();
     cpu.fpu_s[0] = (6.0_f32).to_bits();
     cpu.fpu_s[1] = (2.0_f32).to_bits();
 
@@ -1592,8 +1615,7 @@ fn test_thumb2_vfma_decodes_the_real_h563_opcode() {
     // M=0 (h2 bit5), Vm=6 (h2[3:0]) this decodes to
     // VFMA.F32 S15, S14, S12 (not S7,S7,S6 — Vd/Vn/Vm are only half of
     // each register number).
-    let mut cpu = CortexM::new();
-    let mut bus = MockBus::new();
+    let (mut cpu, mut bus, _fp) = fp_core();
     cpu.fpu_s[14] = (2.0_f32).to_bits();
     cpu.fpu_s[12] = (3.0_f32).to_bits();
     cpu.fpu_s[15] = (2.0_f32).to_bits();
@@ -1618,8 +1640,7 @@ fn test_thumb2_vfma_is_truly_fused_not_double_rounded() {
         "test operands must actually exercise the fused/unfused difference"
     );
 
-    let mut cpu = CortexM::new();
-    let mut bus = MockBus::new();
+    let (mut cpu, mut bus, _fp) = fp_core();
     cpu.fpu_s[0] = a.to_bits();
     cpu.fpu_s[1] = b.to_bits();
     cpu.fpu_s[2] = c.to_bits();
@@ -1639,8 +1660,7 @@ fn test_thumb2_vfma_is_truly_fused_not_double_rounded() {
 
 #[test]
 fn test_thumb2_vfms_vfnma_vfnms_sign_handling() {
-    let mut cpu = CortexM::new();
-    let mut bus = MockBus::new();
+    let (mut cpu, mut bus, _fp) = fp_core();
     cpu.fpu_s[0] = (6.0_f32).to_bits(); // Sn
     cpu.fpu_s[1] = (2.0_f32).to_bits(); // Sm
     cpu.fpu_s[2] = (5.0_f32).to_bits(); // Sd (accumulator)
@@ -2561,6 +2581,56 @@ fn exception_entry_from_thread_psp_sets_exc_return_fd() {
 }
 
 #[test]
+fn exception_stack_alignment_padding_round_trips_for_psp() {
+    let mut cpu = CortexM::new();
+    let mut bus = MockBus::new();
+    let scb_state = Arc::new(ScbFaultState::default());
+    cpu.set_shared_faults(scb_state.clone());
+    cpu.pc = 0x1000;
+    cpu.xpsr = 0x0100_0000;
+    cpu.control = 0x2; // Thread/PSP
+    cpu.sp = 0x6004; // Bit 2 set: exception entry must align down to 8 bytes.
+    cpu.msp = 0x8000;
+
+    take_exception(&mut cpu, &mut bus, 16, 0x2000);
+
+    assert_eq!(cpu.psp, 0x5FE0, "frame is padded to an 8-byte boundary");
+    assert_eq!(
+        bus.read_u32(0x5FE0 + 28).unwrap(),
+        0x0100_0200,
+        "stacked xPSR marks the alignment word"
+    );
+    assert_eq!(
+        bus.read_u32(0x6000).unwrap(),
+        0,
+        "padding word is deterministic"
+    );
+
+    cpu.exception_return(cpu.lr, &mut bus).unwrap();
+    assert_eq!(cpu.psp, 0x6004, "return consumes the alignment word");
+    assert_eq!(cpu.sp, 0x6004, "Thread mode resumes on the original PSP");
+    assert_eq!(
+        cpu.xpsr, 0x0100_0000,
+        "stack metadata is not restored to xPSR"
+    );
+
+    // CCR.STKALIGN is writable. When software clears it, entry preserves the
+    // four-byte alignment and does not add the metadata/padding word.
+    scb_state.ccr_stkalign.store(false, Ordering::Relaxed);
+    cpu.pc = 0x1000;
+    cpu.sp = 0x6004;
+    cpu.control = 0x2;
+    cpu.active_exception = 0;
+    cpu.xpsr = 0x0100_0000;
+    take_exception(&mut cpu, &mut bus, 16, 0x2000);
+    assert_eq!(cpu.psp, 0x5FE4);
+    assert_eq!(bus.read_u32(0x5FE4 + 28).unwrap(), 0x0100_0000);
+    cpu.exception_return(cpu.lr, &mut bus).unwrap();
+    assert_eq!(cpu.psp, 0x6004);
+    assert_eq!(cpu.xpsr, 0x0100_0000);
+}
+
+#[test]
 fn exception_entry_from_thread_msp_sets_exc_return_f9() {
     let mut cpu = CortexM::new();
     let mut bus = MockBus::new();
@@ -2867,7 +2937,9 @@ fn armv7m_exception_entry_wraps_the_stack_frame_instead_of_overflowing() {
     cpu.r0 = 0xA0A0_A0A0;
     cpu.r12 = 0xCCCC_CCCC;
     // PendSV (exception 14): priority 0 from SHPR3, no NVIC ISPR to consult.
-    cpu.pending_exceptions[0] = 1 << 14;
+    // Through the setter: ICSR.PENDSVSET also raises the live PENDSV flag,
+    // and arbitration drops a pending bit that the flag does not back.
+    crate::Cpu::set_exception_pending(&mut cpu, 14);
     // Vector table entry for PendSV.
     bus.write_u32(0x38, 0x2001).unwrap();
 
@@ -3086,8 +3158,7 @@ fn test_vfp_fma_honors_fz_and_dn() {
 fn test_thumb2_vfp_fpscr_modes_apply_to_instructions() {
     // VADD.F32 S2, S0, S1 with FPSCR.FZ/DN written straight into the
     // core state. Pins the interpreter wiring, not just the helper.
-    let mut cpu = CortexM::new();
-    let mut bus = MockBus::new();
+    let (mut cpu, mut bus, _fp) = fp_core();
     cpu.fpu_s[0] = 0x0000_0001; // 2^-149 (denormal)
     cpu.fpu_s[1] = 0x0000_0002; // 2^-148 (denormal)
     run_test_instr(
@@ -3432,6 +3503,7 @@ fn t16_fast_decoder_defers_every_store_shape_under_ram_policy() {
 #[test]
 fn vldr_literal_uses_align_pc_plus_4() {
     let mut cpu = CortexM::new();
+    enable_fpu(&mut cpu);
     let mut bus = crate::bus::SystemBus::new();
     // gas: ed9f 0a00  vldr s0, [pc, #0]
     assert!(bus.flash.write_u16(0x1000, 0xed9f));
@@ -3902,6 +3974,7 @@ fn it_block_survives_an_exception_between_its_instructions() {
 #[test]
 fn vmov_two_core_registers_moves_and_stores_nothing() {
     let mut cpu = CortexM::new();
+    enable_fpu(&mut cpu);
     let mut bus = MockBus::new();
     cpu.pc = 0x2000;
     let v = 31.3f64.to_bits(); // both halves non-zero
@@ -4127,14 +4200,90 @@ fn fp_core() -> (
     Arc<crate::peripherals::cortex_m_fpu::FpContextState>,
 ) {
     let mut cpu = CortexM::new();
-    let fp = Arc::new(crate::peripherals::cortex_m_fpu::FpContextState::default());
-    cpu.set_shared_fp_context(fp.clone());
+    let fp = enable_fpu(&mut cpu);
     (cpu, MockBus::new(), fp)
 }
 
+/// Give a bare core the FP extension with CP10/CP11 granted. Without it, any
+/// VFP instruction raises a NOCP UsageFault, as on a core with no FPU.
+fn enable_fpu(cpu: &mut CortexM) -> Arc<crate::peripherals::cortex_m_fpu::FpContextState> {
+    let fp = Arc::new(crate::peripherals::cortex_m_fpu::FpContextState::default());
+    cpu.set_shared_fp_context(fp.clone());
+    cpu.set_shared_cpacr(Arc::new(std::sync::atomic::AtomicU32::new(
+        crate::peripherals::scb::CPACR_CP10_CP11_MASK,
+    )));
+    fp
+}
+
+#[test]
+fn fp_access_requires_cp10_and_cp11_and_respects_privilege() {
+    let (mut cpu, _bus, _fp) = fp_core();
+    let cpacr = cpu.cpacr.as_ref().unwrap().clone();
+
+    cpacr.store(
+        (0b01 << 20) | (0b01 << 22),
+        std::sync::atomic::Ordering::Relaxed,
+    );
+    assert!(
+        cpu.fp_access_allowed(),
+        "privileged code may use privileged access"
+    );
+    cpu.control = 1;
+    assert!(!cpu.fp_access_allowed(), "unprivileged code is denied");
+
+    cpacr.store(
+        crate::peripherals::scb::CPACR_CP10_CP11_MASK,
+        std::sync::atomic::Ordering::Relaxed,
+    );
+    assert!(
+        cpu.fp_access_allowed(),
+        "full access permits unprivileged code"
+    );
+    cpacr.store(0b11 << 20, std::sync::atomic::Ordering::Relaxed);
+    assert!(!cpu.fp_access_allowed(), "both CP10 and CP11 are required");
+
+    let plain = CortexM::new();
+    assert!(
+        !plain.fp_access_allowed(),
+        "a core without an FPU must deny VFP"
+    );
+}
+
+#[test]
+fn cpacr_denied_fp_instruction_raises_nocp_usagefault() {
+    use std::sync::atomic::Ordering;
+
+    let (mut cpu, mut bus, _fp) = fp_core();
+    let cpacr = Arc::new(std::sync::atomic::AtomicU32::new(0));
+    cpu.set_shared_cpacr(cpacr);
+    let faults = Arc::new(crate::peripherals::scb::ScbFaultState::new(true));
+    faults.shcsr.store(
+        crate::peripherals::scb::SHCSR_USGFAULTENA,
+        Ordering::Relaxed,
+    );
+    cpu.set_shared_faults(faults.clone());
+
+    cpu.pc = 0x1000;
+    cpu.sp = 0x4000;
+    bus.write_u32(6 * 4, 0x5001).unwrap(); // UsageFault vector
+    bus.write_u16(0x1000, 0xEEB0).unwrap(); // VMOV.F32 s0, s1
+    bus.write_u16(0x1002, 0x0A60).unwrap();
+
+    let config = bus.config.clone();
+    cpu.step_internal(&mut bus, &[], &config).unwrap();
+    assert_ne!(
+        faults.cfsr.load(Ordering::Relaxed) & crate::peripherals::scb::CFSR_UFSR_NOCP,
+        0,
+        "CFSR must record NOCP when CP10/CP11 access is denied"
+    );
+    cpu.step_internal(&mut bus, &[], &config).unwrap();
+    assert_eq!(cpu.active_exception, 6);
+    assert_eq!(cpu.pc, 0x5000);
+}
+
 /// `ExecuteFPCheck`: with FPCCR.ASPEN (reset value) the first FP instruction
-/// sets CONTROL.FPCA and starts FPSCR's mode bits from FPDSCR; a core without
-/// the FP extension block never sets FPCA.
+/// sets CONTROL.FPCA and starts FPSCR's mode bits from FPDSCR. A core without
+/// the FP extension denies the instruction and never sets FPCA.
 #[test]
 fn fp_instruction_sets_control_fpca_with_aspen() {
     let (mut cpu, mut bus, _fp) = fp_core();
@@ -4160,11 +4309,13 @@ fn fp_instruction_sets_control_fpca_with_aspen() {
     let mut plain = CortexM::new();
     let mut bus2 = MockBus::new();
     plain.pc = 0x1000;
-    run_test_instr(&mut plain, &mut bus2, 0xEEB0_0A60, true);
+    bus2.write_u16(0x1000, 0xEEB0).unwrap();
+    bus2.write_u16(0x1002, 0x0A60).unwrap();
+    let config = bus2.config.clone();
+    assert!(plain.step_internal(&mut bus2, &[], &config).is_err());
     assert_eq!(plain.control & 0x4, 0);
-    plain.r0 = 0x4;
-    run_test_instr(&mut plain, &mut bus2, 0xF380_8814, true);
     assert_eq!(plain.control & 0x4, 0, "no FP extension: FPCA not writable");
+    assert_eq!(plain.control_mask(), 0x3, "no FP extension exposes no FPCA");
 }
 
 /// ASPEN clear: FP instructions leave FPCA alone (software manages it).
@@ -4204,6 +4355,8 @@ fn new_fp_context_starts_from_fpdscr() {
 #[test]
 fn fp_context_extended_frame_round_trip() {
     let (mut cpu, mut bus, fp) = fp_core();
+    // Exercise eager stacking independently of the reset LSPEN setting.
+    fp.set_fpccr(crate::peripherals::cortex_m_fpu::FPCCR_ASPEN);
     cpu.pc = 0x1000;
     cpu.sp = 0x8000; // Thread/MSP
     cpu.control = 0x4; // FPCA
@@ -4228,6 +4381,7 @@ fn fp_context_extended_frame_round_trip() {
     }
     assert_eq!(bus.read_u32(0x8000 - 0x68 + 0x60).unwrap(), 0x0100_0000);
     assert_eq!(fp.fpcar(), 0x8000 - 0x68 + 0x20);
+    assert!(!fp.lspact());
 
     // The handler clobbers caller-saved S0-S15 and FPSCR.
     for i in 0..16 {
@@ -4248,6 +4402,194 @@ fn fp_context_extended_frame_round_trip() {
     assert_eq!(cpu.fpu_s[20], 0xAAAA_AAAA);
     assert_eq!(cpu.fpscr, 0x0100_0000);
     assert_eq!(cpu.control & 0x4, 0x4, "FPCA = NOT EXC_RETURN[4]");
+}
+
+/// Lazy exception entry reserves the FP area and leaves it untouched. If the
+/// handler does not execute an FP instruction, exception return keeps the
+/// still-live FP registers and discards the reserved area.
+#[test]
+fn fp_lazy_frame_is_skipped_when_handler_does_not_use_fpu() {
+    let (mut cpu, mut bus, fp) = fp_core();
+    cpu.pc = 0x1000;
+    cpu.sp = 0x8000;
+    cpu.control = 0x4;
+    for i in 0..32 {
+        cpu.fpu_s[i] = 0x3F80_0000 + i as u32;
+    }
+    cpu.fpscr = 0x0100_0000;
+    let frame = 0x8000 - 0x68;
+    for i in 0..17u32 {
+        bus.write_u32((frame + 0x20 + i * 4) as u64, 0xDEAD_0000 + i)
+            .unwrap();
+    }
+
+    take_exception(&mut cpu, &mut bus, 16, 0x2000);
+
+    assert_eq!(cpu.lr, 0xFFFF_FFE9);
+    assert_eq!(cpu.sp, frame);
+    assert_eq!(fp.fpcar(), frame + 0x20);
+    assert_eq!(
+        fp.fpccr() & crate::peripherals::cortex_m_fpu::FPCCR_LSPACT,
+        1
+    );
+    for i in 0..17u32 {
+        assert_eq!(
+            bus.read_u32((frame + 0x20 + i * 4) as u64).unwrap(),
+            0xDEAD_0000 + i,
+            "reserved FP word {i} must not be written before the handler uses the FPU"
+        );
+    }
+
+    run_test_instr(&mut cpu, &mut bus, 0x0000_4770, false); // bx lr
+
+    assert_eq!(
+        fp.fpccr() & crate::peripherals::cortex_m_fpu::FPCCR_LSPACT,
+        0
+    );
+    assert_eq!(cpu.sp, 0x8000);
+    assert_eq!(cpu.control & 0x4, 0x4);
+    for i in 0..16 {
+        assert_eq!(cpu.fpu_s[i], 0x3F80_0000 + i as u32, "S{i} remains live");
+    }
+    assert_eq!(cpu.fpscr, 0x0100_0000);
+}
+
+/// The first handler FP instruction completes the pending save before it can
+/// change an FP register; exception return then restores from that stack area.
+#[test]
+fn fp_lazy_frame_is_saved_before_handler_fp_instruction() {
+    let (mut cpu, mut bus, fp) = fp_core();
+    cpu.pc = 0x1000;
+    cpu.sp = 0x8000;
+    cpu.control = 0x4;
+    for i in 0..32 {
+        cpu.fpu_s[i] = 0x4000_0000 + i as u32;
+    }
+    cpu.fpscr = 0x2100_0000;
+    let frame = 0x8000 - 0x68;
+
+    take_exception(&mut cpu, &mut bus, 16, 0x2000);
+    assert_ne!(
+        fp.fpccr() & crate::peripherals::cortex_m_fpu::FPCCR_LSPACT,
+        0
+    );
+
+    // VMOV.F32 s0, s1 triggers lazy preservation before executing.
+    run_test_instr(&mut cpu, &mut bus, 0xEEB0_0A60, true);
+    assert_eq!(
+        fp.fpccr() & crate::peripherals::cortex_m_fpu::FPCCR_LSPACT,
+        0
+    );
+    for i in 0..16u64 {
+        assert_eq!(
+            bus.read_u32((frame + 0x20 + 4 * i as u32) as u64).unwrap(),
+            0x4000_0000 + i as u32,
+            "lazy save S{i}"
+        );
+    }
+    assert_eq!(bus.read_u32((frame + 0x60) as u64).unwrap(), 0x2100_0000);
+
+    run_test_instr(&mut cpu, &mut bus, 0x0000_4770, false); // bx lr
+    assert_eq!(cpu.sp, 0x8000);
+    assert_eq!(cpu.control & 0x4, 0x4);
+    for i in 0..16 {
+        assert_eq!(cpu.fpu_s[i], 0x4000_0000 + i as u32, "S{i} restored");
+    }
+    assert_eq!(cpu.fpscr, 0x2100_0000);
+}
+
+/// A nested basic exception must leave the outer exception's lazy FP save
+/// pending. The first FP instruction in the outer handler then saves the
+/// interrupted Thread context into the original FPCAR before changing it.
+#[test]
+fn fp_lazy_save_survives_nested_exception_until_outer_handler_uses_fpu() {
+    let (mut cpu, mut bus, fp) = fp_core();
+    let nvic = Arc::new(crate::peripherals::nvic::NvicState::default());
+    // IRQ0 (exception 16) runs at 0x80; IRQ1 (exception 17) can preempt at 0x20.
+    nvic.ipr[0].store(0x0000_2080, Ordering::Relaxed);
+    cpu.set_shared_nvic_state(nvic);
+    cpu.pc = 0x1000;
+    cpu.sp = 0x8000;
+    cpu.control = 0x4;
+    for i in 0..16 {
+        cpu.fpu_s[i] = 0x4100_0000 + i as u32;
+    }
+    cpu.fpscr = 0x2100_0000;
+    let outer_frame = 0x8000 - 0x68;
+    for i in 0..17u32 {
+        bus.write_u32((outer_frame + 0x20 + i * 4) as u64, 0xDEAD_0000 + i)
+            .unwrap();
+    }
+
+    take_exception(&mut cpu, &mut bus, 16, 0x2000);
+    assert_eq!(cpu.active_exception, 16);
+    assert_eq!(cpu.lr, 0xFFFF_FFE9);
+    assert_eq!(cpu.sp, outer_frame);
+    assert_eq!(fp.fpcar(), outer_frame + 0x20);
+    assert_eq!(
+        fp.fpccr() & crate::peripherals::cortex_m_fpu::FPCCR_LSPACT,
+        1
+    );
+
+    // The nested IRQ has a basic frame because the outer handler has not
+    // used the FPU; it must not replace the outer frame's FPCAR or LSPACT.
+    cpu.pc = 0x2000;
+    let nested_frame = outer_frame - 32;
+    take_exception(&mut cpu, &mut bus, 17, 0x3000);
+    assert_eq!(cpu.active_exception, 17);
+    assert_eq!(cpu.lr, 0xFFFF_FFF1);
+    assert_eq!(cpu.sp, nested_frame);
+    assert_eq!(
+        bus.read_u32((nested_frame + 20) as u64).unwrap(),
+        0xFFFF_FFE9
+    );
+    assert_eq!(
+        bus.read_u32((nested_frame + 28) as u64).unwrap() & 0x1FF,
+        16
+    );
+    assert_eq!(fp.fpcar(), outer_frame + 0x20);
+    assert_eq!(
+        fp.fpccr() & crate::peripherals::cortex_m_fpu::FPCCR_LSPACT,
+        1
+    );
+
+    run_test_instr(&mut cpu, &mut bus, 0x0000_4770, false); // nested bx lr
+    assert_eq!(cpu.active_exception, 16);
+    assert_eq!(cpu.pc, 0x2000);
+    assert_eq!(cpu.sp, outer_frame);
+    assert_eq!(cpu.lr, 0xFFFF_FFE9);
+    assert_eq!(fp.fpcar(), outer_frame + 0x20);
+    assert_eq!(
+        fp.fpccr() & crate::peripherals::cortex_m_fpu::FPCCR_LSPACT,
+        1
+    );
+
+    // VMOV.F32 s0, s1 completes the original lazy save before changing S0.
+    run_test_instr(&mut cpu, &mut bus, 0xEEB0_0A60, true);
+    assert_eq!(
+        fp.fpccr() & crate::peripherals::cortex_m_fpu::FPCCR_LSPACT,
+        0
+    );
+    for i in 0..16u32 {
+        assert_eq!(
+            bus.read_u32((outer_frame + 0x20 + 4 * i) as u64).unwrap(),
+            0x4100_0000 + i,
+            "outer lazy save S{i}"
+        );
+    }
+    assert_eq!(
+        bus.read_u32((outer_frame + 0x60) as u64).unwrap(),
+        0x2100_0000
+    );
+
+    run_test_instr(&mut cpu, &mut bus, 0x0000_4770, false); // outer bx lr
+    assert_eq!(cpu.active_exception, 0);
+    assert_eq!(cpu.sp, 0x8000);
+    assert_eq!(cpu.control & 0x4, 0x4);
+    for i in 0..16 {
+        assert_eq!(cpu.fpu_s[i], 0x4100_0000 + i as u32, "Thread S{i} restored");
+    }
+    assert_eq!(cpu.fpscr, 0x2100_0000);
 }
 
 /// FPCA clear on an FP-extension core: basic frame, EXC_RETURN bit 4 set, and
@@ -4326,4 +4668,49 @@ fn tt_reports_the_mpu_region() {
     plain.r0 = 0x2000_0100;
     run_test_instr(&mut plain, &mut bus, 0xE840_F300, true);
     assert_eq!(plain.r3 & (1 << 16), 0);
+}
+
+#[test]
+fn nvic_iabr_tracks_nested_external_exception_return() {
+    use crate::peripherals::nvic::NvicState;
+    use std::sync::atomic::Ordering;
+    use std::sync::Arc;
+
+    let mut cpu = CortexM::new();
+    let mut bus = MockBus::new();
+    let nvic = Arc::new(NvicState::default());
+    cpu.set_shared_nvic_state(Arc::clone(&nvic));
+
+    // IRQ 7 is active when higher-priority IRQ 8 preempts it.
+    cpu.set_active_exception(23);
+    cpu.set_active_exception(24);
+    assert_eq!(nvic.iabr[0].load(Ordering::SeqCst), (1 << 7) | (1 << 8));
+
+    // The nested frame is on MSP and carries the outer active exception in
+    // stacked IPSR. Returning to it clears only IRQ 8's active bit.
+    cpu.msp = 0x2000_0100;
+    cpu.sp = cpu.msp;
+    for (index, value) in [0, 0, 0, 0, 0, 0x2000_0000, 0x2000_1000, 0x0100_0000 | 23]
+        .into_iter()
+        .enumerate()
+    {
+        bus.write_u32(cpu.msp as u64 + (index * 4) as u64, value)
+            .unwrap();
+    }
+    cpu.exception_return(0xFFFF_FFF1, &mut bus).unwrap();
+    assert_eq!(cpu.active_exception, 23);
+    assert_eq!(nvic.iabr[0].load(Ordering::SeqCst), 1 << 7);
+
+    // Returning from the outer IRQ to Thread/PSP clears its bit as well.
+    cpu.psp = 0x2000_0200;
+    for (index, value) in [0, 0, 0, 0, 0, 0x2000_0000, 0x2000_2000, 0x0100_0000]
+        .into_iter()
+        .enumerate()
+    {
+        bus.write_u32(cpu.psp as u64 + (index * 4) as u64, value)
+            .unwrap();
+    }
+    cpu.exception_return(0xFFFF_FFFD, &mut bus).unwrap();
+    assert_eq!(cpu.active_exception, 0);
+    assert_eq!(nvic.iabr[0].load(Ordering::SeqCst), 0);
 }
