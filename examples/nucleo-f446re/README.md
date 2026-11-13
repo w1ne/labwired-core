@@ -7,8 +7,10 @@ contains LD2 on PA5, B1 on PC13 and USART2 on PA2/PA3 connected to ST-LINK VCP.
 **Scope of this fixture:** ARM reset, valid SRAM stack, RCC AHB1/APB1 enables,
 GPIOA AF7 configuration, USART2 TX, and observable LED GPIO edges. The timer,
 PWR and flash controller addresses are available but *not* verified by this
-fixture. DMA streams, USB OTG, FMC, QuadSPI, DCMI and most other F446 blocks are
-not modeled. No physical hardware comparison has been made.
+fixture. The broader chip model includes DMA streams and additional peripherals;
+the earlier stock STM32duino matrix evidence is in `evidence/arduino-matrix/`.
+USB OTG, FMC, QuadSPI, DCMI and other F446 blocks remain unmodeled. No physical
+hardware comparison has been made.
 
 ## Reproduce
 

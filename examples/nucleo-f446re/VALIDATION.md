@@ -30,7 +30,8 @@ labwired run --chip configs/chips/stm32f446re.yaml \
 - Result: `PASS 3/3`, 150000 steps, 0.88 s as reported by the CLI.
 - UART: `STM32F446RE_OK`; GPIO PA5 edge count passes, stop reason `max_steps`.
 
-These prove the executable subset, **not** a stock STM32Cube HAL/Zephyr
-image, whole-chip parity, physical silicon reset parity, dual-core operation
-or analog/camera/USB function. Hardware matching and stock firmware
-bring-up remain required before an L2/L3 claim.
+This receipt covers the minimal executable subset. Earlier source-build evidence
+for stock STM32duino is recorded separately in `evidence/arduino-matrix/`; it
+does not establish stock STM32Cube HAL/Zephyr operation, whole-chip parity,
+physical silicon reset parity or analog/camera/USB function. Hardware matching
+and stronger conformance evidence remain required before an L2/L3 claim.
