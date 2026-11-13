@@ -62,6 +62,10 @@ def chip_dir() -> Path:
     return REPO_ROOT / "configs/chips"
 
 
+def onboarding_chip_dir() -> Path:
+    return chip_dir() / "onboarding"
+
+
 def workflow_dir() -> Path:
     return REPO_ROOT / ".github/workflows"
 
@@ -142,11 +146,27 @@ def shipped_chips() -> list[str]:
     )
 
 
+def known_ci_chip_descriptors() -> set[str]:
+    """Shipped chips plus imported profiles that CI may exercise.
+
+    Renode onboarding profiles are intentionally separate from the shipped
+    catalogue: they are not counted as shipped chips or as coverage debt, but
+    an onboarding smoke that names one is a valid reference rather than a
+    stale system manifest.
+    """
+    return set(shipped_chips()) | {
+        f"onboarding/{path.stem}"
+        for path in onboarding_chip_dir().glob("*.yaml")
+        if not path.stem.startswith(CHIP_EXCLUDE_PREFIX)
+    }
+
+
 def chip_of_system(system_path: Path) -> str | None:
     """Resolve a system manifest to the chip stem it runs.
 
-    `chip:` is either a path relative to the manifest or a built-in name; both
-    forms end at a `configs/chips/<stem>.yaml`, so both reduce to the stem.
+    `chip:` is either a path relative to the manifest or a built-in name.
+    Imported descriptors retain their onboarding namespace so their smoke
+    cannot be credited to a different shipped chip with the same stem.
     """
     if not system_path.is_file():
         return None
@@ -157,6 +177,11 @@ def chip_of_system(system_path: Path) -> str | None:
     if not isinstance(chip, str) or not chip:
         return None
     stem = Path(chip).stem if chip.endswith(".yaml") else chip
+    if (
+        chip.endswith(".yaml")
+        and (system_path.parent / chip).resolve().parent == onboarding_chip_dir().resolve()
+    ):
+        return f"onboarding/{stem}"
     return stem or None
 
 
@@ -465,6 +490,7 @@ def load_ledger() -> tuple[dict[str, dict], int]:
 def evaluate() -> tuple[dict[str, set[str]], list[str], list[str]]:
     """Return (proofs, uncovered chips, errors)."""
     chips = shipped_chips()
+    known_descriptors = known_ci_chip_descriptors()
     proofs, unrun_boards = arduino_proofs()
     for chip, sources in script_proofs().items():
         proofs.setdefault(chip, set()).update(sources)
@@ -478,7 +504,7 @@ def evaluate() -> tuple[dict[str, set[str]], list[str], list[str]]:
     for chip in sorted(proofs):
         # `ci-fixture-*` descriptors are gated deliberately and excluded from the
         # shipped list; a proof naming one is expected, not drift.
-        if chip not in chips and not chip.startswith(CHIP_EXCLUDE_PREFIX):
+        if chip not in known_descriptors and not chip.startswith(CHIP_EXCLUDE_PREFIX):
             errors.append(
                 f"a CI gate runs chip '{chip}', which is not in configs/chips/ — "
                 "stale system manifest or renamed descriptor"
