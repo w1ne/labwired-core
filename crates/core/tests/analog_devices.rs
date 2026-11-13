@@ -4465,6 +4465,99 @@ mod analog {
         }
     }
 
+    /// ngspice level 1 shortens the channel by lateral diffusion `LD` and,
+    /// when `KP` is absent, takes it from the process: `UO·1e-4·εox/TOX`.
+    /// Check the solved drain current against the hand Shichman–Hodges law
+    /// for both polarities, so an engine that ignored `LD`, `UO` or the
+    /// derivation would miss by a factor of two or more.
+    #[test]
+    fn mosfet_lateral_diffusion_and_process_kp_follow_ngspice_level1() {
+        let (w, l, vto, lambda, vgs, vds): (f64, f64, f64, f64, f64, f64) =
+            (10e-6, 2e-6, 1.0, 0.02, 2.0, 3.0);
+        let saturation = |kp: f64, length: f64| {
+            0.5 * kp * w / length * (vgs - vto).powi(2) * (1.0 + lambda * vds) + device::GMIN * vds
+        };
+        let tox = 20e-9;
+        let process_kp = |uo: f64| uo * 1e-4 * device::OXIDE_PERMITTIVITY_F_PER_M / tox;
+        let cases = [
+            ("drawn length", "KP=50u", 50e-6, l),
+            ("LD=0.5u", "KP=50u LD=0.5u", 50e-6, l - 1e-6),
+            ("UO default 600", "TOX=20n", process_kp(600.0), l),
+            ("UO=400", "TOX=20n UO=400", process_kp(400.0), l),
+            ("U0 alias", "TOX=20n U0=400", process_kp(400.0), l),
+            (
+                "UO with LD",
+                "TOX=20n UO=400 LD=0.25u",
+                process_kp(400.0),
+                l - 0.5e-6,
+            ),
+            ("explicit KP beats UO", "KP=50u TOX=20n UO=400", 50e-6, l),
+        ];
+        assert!(
+            (process_kp(600.0) / 50e-6 - 1.0).abs() > 0.5,
+            "the cases must be far enough apart to tell the laws apart"
+        );
+        for (kind, sign) in [("NMOS", 1.0), ("PMOS", -1.0)] {
+            for (label, params, kp, length) in cases {
+                let netlist = format!(
+                    "Vg g 0 dc {}\nVd d 0 dc {}\nM1 d g 0 0 MMOD W={w} L={l}\n.model MMOD {kind}(VTO={} LAMBDA={lambda} {params})\n",
+                    sign * vgs,
+                    sign * vds,
+                    sign * vto,
+                );
+                let circuit = parse_netlist(&netlist).expect("level-1 card parses");
+                let mosfet = &circuit.mosfets[0];
+                assert_eq!(mosfet.l, l, "{kind} {label}: drawn L is kept");
+                assert!(
+                    relative(mosfet.effective_length(), length) < 1e-12,
+                    "{kind} {label}: effective length"
+                );
+                assert!(
+                    relative(mosfet.beta, kp * w / length) < 1e-12,
+                    "{kind} {label}: beta should be {} A/V², got {}",
+                    kp * w / length,
+                    mosfet.beta
+                );
+                let solver = build(&netlist);
+                let measured = sign * source_current(&solver, "Vd");
+                let expected = saturation(kp, length);
+                assert!(
+                    relative(measured, expected) < 1e-6,
+                    "{kind} {label}: drain current should be {expected} A, got {measured} A"
+                );
+            }
+        }
+
+        let overlap = parse_netlist(
+            "M1 d g 0 0 MMOD W=10u L=2u\n.model MMOD NMOS(KP=50u LD=0.5u CGBO=2n CGSO=3n)\n",
+        )
+        .expect("overlap card parses")
+        .mosfets[0]
+            .overlap_capacitances();
+        assert!(
+            relative(overlap[2], 2e-9 * 1e-6) < 1e-12,
+            "CGBO uses L - 2*LD: {overlap:?}"
+        );
+        assert!(
+            relative(overlap[0], 3e-9 * 10e-6) < 1e-12,
+            "CGSO still uses W: {overlap:?}"
+        );
+
+        for (params, needle) in [
+            ("KP=50u LD=1u", "L - 2*LD"),
+            ("KP=50u LD=2u", "L - 2*LD"),
+            ("TOX=20n UO=0", "UO"),
+            ("TOX=20n UO=-5", "UO"),
+        ] {
+            let error = parse_netlist(&format!(
+                "M1 d g 0 0 MMOD W=10u L=2u\n.model MMOD NMOS({params})\n"
+            ))
+            .expect_err("unphysical LD/UO must be refused")
+            .to_string();
+            assert!(error.contains(needle), "{params}: unexpected error {error}");
+        }
+    }
+
     /// Forward body bias uses the level-1 linear continuation of the square
     /// root. Check its channel current and `gmb` against the hand equation,
     /// then exercise that same bias through MNA for both polarities and both
@@ -5344,56 +5437,60 @@ mod analog {
         let width = 2e-6;
         let length = 1e-6;
         let tox = 10e-9;
-        let cox = 3.453_133e-11 * width * length / tox;
         let resistance = 1e3;
         let h = 10e-12;
         let gate_step = 0.1;
-        let ratio = resistance * cox / h;
 
         for (kind, sign) in [("NMOS", 1.0), ("PMOS", -1.0)] {
             let vto = sign;
-            let netlist = format!(
-                "Vg g 0 dc {}\nR1 x 0 {resistance}\n\
-                 M1 0 g 0 x MMOD w={width} l={length}\n\
-                 .model MMOD {kind}(VTO={vto} KP=20u IS=1e-30 PHI=0.6 TOX={tox})\n",
-                sign * gate_step
-            );
-            for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
-                let mut solver = Solver::new(
-                    parse_netlist(&netlist).expect("MOS TOX model parses"),
-                    integration,
-                )
-                .expect("MOS TOX solver builds");
-                let x = solver.circuit().node("x").expect("bulk node");
-                let source = solver.voltage_source_index("Vg").expect("gate source");
-
-                solver.advance(h).expect("initially biased TOX step solves");
-                assert!(
-                    solver.node_voltage(x).abs() < 1e-10,
-                    "{kind} {integration:?}: operating-point channel charge must not create a startup impulse"
+            for (geometry, effective_length) in
+                [("", length), (" LD=0.25u", length - 2.0 * 0.25e-6)]
+            {
+                let cox = 3.453_133e-11 * width * effective_length / tox;
+                let ratio = resistance * cox / h;
+                let netlist = format!(
+                    "Vg g 0 dc {}\nR1 x 0 {resistance}\n\
+                     M1 0 g 0 x MMOD w={width} l={length}\n\
+                     .model MMOD {kind}(VTO={vto} KP=20u IS=1e-30 PHI=0.6 TOX={tox}{geometry})\n",
+                    sign * gate_step
                 );
+                for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+                    let mut solver = Solver::new(
+                        parse_netlist(&netlist).expect("MOS TOX model parses"),
+                        integration,
+                    )
+                    .expect("MOS TOX solver builds");
+                    let x = solver.circuit().node("x").expect("bulk node");
+                    let source = solver.voltage_source_index("Vg").expect("gate source");
 
-                solver.set_voltage_source(source, sign * 2.0 * gate_step);
-                solver.advance(h).expect("gate charge step solves");
-                let first = solver.node_voltage(x);
-                let expected_first = sign * gate_step * ratio / (1.0 + ratio);
-                assert!(
-                    (first - expected_first).abs() < 1e-8,
-                    "{kind} {integration:?} first step: expected {expected_first} V, got {first} V"
-                );
+                    solver.advance(h).expect("initially biased TOX step solves");
+                    assert!(
+                        solver.node_voltage(x).abs() < 1e-10,
+                        "{kind} {geometry} {integration:?}: operating-point channel charge must not create a startup impulse"
+                    );
 
-                solver.advance(h).expect("held gate charge step solves");
-                let actual_second = solver.node_voltage(x);
-                let expected_second = match integration {
-                    Integration::BackwardEuler => ratio * expected_first / (1.0 + ratio),
-                    Integration::Trapezoidal => {
-                        ratio * (3.0 * expected_first - sign * gate_step) / (1.0 + 2.0 * ratio)
-                    }
-                };
-                assert!(
-                    (actual_second - expected_second).abs() < 1e-8,
-                    "{kind} {integration:?} second step: expected {expected_second} V, got {actual_second} V"
-                );
+                    solver.set_voltage_source(source, sign * 2.0 * gate_step);
+                    solver.advance(h).expect("gate charge step solves");
+                    let first = solver.node_voltage(x);
+                    let expected_first = sign * gate_step * ratio / (1.0 + ratio);
+                    assert!(
+                        (first - expected_first).abs() < 1e-8,
+                        "{kind} {geometry} {integration:?} first step: expected {expected_first} V, got {first} V"
+                    );
+
+                    solver.advance(h).expect("held gate charge step solves");
+                    let actual_second = solver.node_voltage(x);
+                    let expected_second = match integration {
+                        Integration::BackwardEuler => ratio * expected_first / (1.0 + ratio),
+                        Integration::Trapezoidal => {
+                            ratio * (3.0 * expected_first - sign * gate_step) / (1.0 + 2.0 * ratio)
+                        }
+                    };
+                    assert!(
+                        (actual_second - expected_second).abs() < 1e-8,
+                        "{kind} {geometry} {integration:?} second step: expected {expected_second} V, got {actual_second} V"
+                    );
+                }
             }
         }
     }

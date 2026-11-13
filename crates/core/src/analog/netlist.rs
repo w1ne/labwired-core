@@ -135,6 +135,9 @@
 //! resistances `RD`/`RS` create series resistors to its intrinsic
 //! drain/source nodes. MOSFET `RD`/`RS` and `RSH` multiplied by instance
 //! `NRD`/`NRS` do the same; level-1 `GAMMA`/`PHI` body effect is also modelled;
+//! lateral diffusion `LD` shortens the channel to `L − 2·LD` for `KP·W/L`,
+//! `TOX` channel charge and `CGBO`, and a card with `TOX` but no `KP` takes
+//! ngspice's process value `KP = UO·1e-4·εox/TOX` (`UO`/`U0`, default 600);
 //! MOSFET `IS` is used for the two bulk junction currents. `CGSO` and
 //! `CGDO` are capacitance per unit width (F/m), and `CGBO` is capacitance per
 //! unit length (F/m); each is multiplied by instance `W` or `L` and integrated
@@ -1429,8 +1432,18 @@ pub struct MosModel {
     /// Zero-bias threshold `VTO`, volts — **negative for a normal PMOS**, as
     /// in ngspice.
     pub vto: f64,
-    /// Transconductance parameter `KP`, A/V².
+    /// Transconductance parameter `KP`, A/V². When the card omits `KP` but
+    /// supplies `TOX`, the resolved instance uses ngspice's process value
+    /// `UO·1e-4·εox/TOX` instead (see [`Self::kp_given`]).
     pub kp: f64,
+    /// Whether the model card explicitly supplied `KP`.
+    pub kp_given: bool,
+    /// Surface mobility `UO`, cm²/V·s (default 600). Used only to derive `KP`
+    /// from `TOX` when `KP` is absent, as ngspice level 1 does.
+    pub uo: f64,
+    /// Lateral diffusion `LD`, metres. The channel is `L − 2·LD` long for
+    /// drain current, intrinsic oxide charge and `CGBO` (default 0).
+    pub ld: f64,
     /// Channel-length modulation `LAMBDA`, 1/V.
     pub lambda: f64,
     /// Ohmic drain terminal resistance `RD`, ohms. Zero disables the internal
@@ -1583,6 +1596,9 @@ impl MosModel {
             polarity,
             vto: 0.0,
             kp: 2e-5,
+            kp_given: false,
+            uo: 600.0,
+            ld: 0.0,
             lambda: 0.0,
             rd: 0.0,
             rd_given: false,
@@ -2133,12 +2149,13 @@ pub struct Mosfet {
     /// Explicit instance temperature, in Celsius. `None` preserves the
     /// historical fixed-300 K behaviour.
     pub temperature_celsius: Option<f64>,
-    /// `KP·W/L` at the instance temperature, A/V² — the transconductance the
-    /// solver actually stamps.
+    /// `KP·W/(L − 2·LD)` at the instance temperature, A/V² — the
+    /// transconductance the solver actually stamps.
     pub beta: f64,
     /// Instance channel width `W`, metres.
     pub w: f64,
-    /// Instance channel length `L`, metres.
+    /// Instance drawn channel length `L`, metres. See
+    /// [`Self::effective_length`] for the length the physics uses.
     pub l: f64,
     /// Drain diffusion area `AD`, m², used with model `CJ` when `CBD` is absent.
     pub ad: f64,
@@ -2164,12 +2181,18 @@ impl Mosfet {
             })
     }
 
+    /// Effective channel length `L − 2·LD`, metres: the length ngspice's
+    /// level 1 uses for `β`, intrinsic oxide capacitance and `CGBO`.
+    pub fn effective_length(&self) -> f64 {
+        self.l - 2.0 * self.model.ld
+    }
+
     /// Effective linear gate overlap capacitances in G-S, G-D, G-B order.
     pub fn overlap_capacitances(&self) -> [f64; 3] {
         [
             self.model.cgso * self.w,
             self.model.cgdo * self.w,
-            self.model.cgbo * self.l,
+            self.model.cgbo * self.effective_length(),
         ]
     }
 
@@ -3778,9 +3801,24 @@ fn bind_models(
                 });
             }
             'M' => {
-                let ModelCard::Mos(model) = card else {
+                let ModelCard::Mos(mut model) = card else {
                     return Err(wrong_kind("M"));
                 };
+                // ngspice level 1 (mos1temp.c): with `TOX` and no `KP`, the
+                // transconductance comes from the process, `UO·1e-4·εox/TOX`.
+                if !model.kp_given {
+                    if let Some(tox) = model.tox {
+                        if !model.uo.is_finite() || model.uo <= 0.0 {
+                            return Err(ctx.parse_err(
+                                "a MOSFET model deriving KP from TOX needs UO > 0 and finite",
+                            ));
+                        }
+                        if tox.is_finite() && tox > 0.0 {
+                            model.kp =
+                                model.uo * 1e-4 * super::device::OXIDE_PERMITTIVITY_F_PER_M / tox;
+                        }
+                    }
+                }
                 if model.kp <= 0.0 || model.is <= 0.0 || model.gamma < 0.0 {
                     return Err(ctx.parse_err(
                         "a MOSFET model needs KP > 0, IS > 0 and GAMMA >= 0".to_string(),
@@ -3795,6 +3833,12 @@ fn bind_models(
                 let l = device.length.unwrap_or(model.l);
                 if w <= 0.0 || l <= 0.0 {
                     return Err(ctx.parse_err("a MOSFET model needs W > 0 and L > 0".to_string()));
+                }
+                let effective_length = l - 2.0 * model.ld;
+                if !model.ld.is_finite() || effective_length.is_nan() || effective_length <= 0.0 {
+                    return Err(ctx.parse_err(
+                        "a MOSFET's effective channel length L - 2*LD must be positive",
+                    ));
                 }
                 if ![model.cgso, model.cgdo, model.cgbo]
                     .into_iter()
@@ -3873,7 +3917,7 @@ fn bind_models(
                 }
                 if !(model.cgso * w).is_finite()
                     || !(model.cgdo * w).is_finite()
-                    || !(model.cgbo * l).is_finite()
+                    || !(model.cgbo * effective_length).is_finite()
                 {
                     return Err(ctx.parse_err(
                         "a MOSFET model's effective overlap capacitances must be finite"
@@ -3884,7 +3928,8 @@ fn bind_models(
                     if !tox.is_finite() || tox <= 0.0 {
                         return Err(ctx.parse_err("a MOSFET model needs TOX > 0 and finite"));
                     }
-                    let cox = 3.453_133e-11 * w * l / tox;
+                    let cox =
+                        super::device::OXIDE_PERMITTIVITY_F_PER_M * w * effective_length / tox;
                     if !cox.is_finite() {
                         return Err(ctx.parse_err(
                             "a MOSFET model's effective oxide capacitance must be finite",
@@ -3913,7 +3958,7 @@ fn bind_models(
                 if !operating_model.vto.is_finite()
                     || !operating_model.kp.is_finite()
                     || operating_model.kp <= 0.0
-                    || !(operating_model.kp * w / l).is_finite()
+                    || !(operating_model.kp * w / effective_length).is_finite()
                     || !operating_model.is.is_finite()
                     || operating_model.is <= 0.0
                     || !operating_model.phi.is_finite()
@@ -3991,7 +4036,7 @@ fn bind_models(
                     model,
                     operating_model,
                     temperature_celsius: device.temperature_celsius,
-                    beta: operating_model.kp * w / l,
+                    beta: operating_model.kp * w / effective_length,
                     w,
                     l,
                     ad,
@@ -4456,7 +4501,12 @@ fn parse_model(
             (ModelCard::Bjt(model), "TRE1") => model.tre1 = value,
             (ModelCard::Bjt(model), "TRE2") => model.tre2 = value,
             (ModelCard::Mos(model), "VTO" | "VT0") => model.vto = value,
-            (ModelCard::Mos(model), "KP") => model.kp = value,
+            (ModelCard::Mos(model), "KP") => {
+                model.kp = value;
+                model.kp_given = true;
+            }
+            (ModelCard::Mos(model), "UO" | "U0") => model.uo = value,
+            (ModelCard::Mos(model), "LD") => model.ld = value,
             (ModelCard::Mos(model), "LAMBDA") => model.lambda = value,
             (ModelCard::Mos(model), "RD") => {
                 model.rd = value;
@@ -5037,6 +5087,9 @@ fn lower_comparator(
                 polarity: Polarity::N,
                 vto: 0.5,
                 kp,
+                kp_given: true,
+                uo: 600.0,
+                ld: 0.0,
                 lambda: 0.0,
                 rd: 0.0,
                 rd_given: false,

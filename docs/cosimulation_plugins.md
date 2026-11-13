@@ -455,7 +455,7 @@ input at a different element.
 .model <name> D    (IS=<a> N=<n> ISR=<a> NR=<n> RS=<ohms> TRS1=<1/°C> TRS2=<1/°C²> TT=<s> TTT1=<1/°C> TTT2=<1/°C²> TM1=<1/°C> TM2=<1/°C²>)
 .model <name> NPN  (IS=<a> BF=<n> BR=<n> NF=<n> NR=<n> IKF=<a> IKR=<a> NKF=<n> CJE=<f> VJE=<v> MJE=<ratio> CJC=<f> VJC=<v> MJC=<ratio> TMJE1=<1/°C> TMJE2=<1/°C²> TMJC1=<1/°C> TMJC2=<1/°C²> TLEVC=0|1 [CTE/CTC/TVJE/TVJC])
 .model <name> PNP  (...)
-.model <name> NMOS (VTO=<v> KP=<a/v2> LAMBDA=<1/v> GAMMA=<sqrt(v)> PHI=<v> RD=<ohms> RS=<ohms> RSH=<ohms/square> CBD=<f> CBS=<f> CJ=<f/m²> CJSW=<f/m> PB=<v> MJ=<ratio> MJSW=<ratio> FC=<ratio> TOX=<m> W=<m> L=<m> [CHARGEMOD=MEYER|WARD_DUTTON])
+.model <name> NMOS (VTO=<v> KP=<a/v2> LAMBDA=<1/v> GAMMA=<sqrt(v)> PHI=<v> RD=<ohms> RS=<ohms> RSH=<ohms/square> CBD=<f> CBS=<f> CJ=<f/m²> CJSW=<f/m> PB=<v> MJ=<ratio> MJSW=<ratio> FC=<ratio> TOX=<m> UO=<cm²/v·s> LD=<m> W=<m> L=<m> [CHARGEMOD=MEYER|WARD_DUTTON])
 .model <name> PMOS (...)      ; VTO is negative, as in ngspice
 .model <name> NJF  (VTO=<v> BETA=<a/v2> LAMBDA=<1/v> RD=<ohms> RS=<ohms> IS=<a>)
 .model <name> PJF  (...)
@@ -482,6 +482,11 @@ Ward–Dutton drain/source partitioning and a charge-conserving terminal Jacobia
 It requires `TOX`. Without `TOX`, only explicit overlap and bulk-junction
 capacitances are present. `CHARGEMOD=WARD_DUTTON` is an in-core extension and
 is not a portable ngspice model-card parameter.
+As in ngspice level 1, a card with `TOX` and no `KP` takes
+`KP = UO·1e-4·εox/TOX` (`UO` in cm²/V·s, default 600; `U0` is an alias), and
+lateral diffusion `LD` (default 0) shortens the channel to `L − 2·LD` for
+`KP·W/L`, the intrinsic oxide capacitance and `CGBO`. `L − 2·LD` must be
+positive. `NSUB`-derived `VTO`/`GAMMA`/`PHI` are not modelled.
 Other device capacitances, temperature coefficients and terminal resistances
 outside the supported parameters below are accepted and ignored. BJT `RB`/`RC`/`RE`
 are modeled as series resistors, while `RBM`/`IRB` make `RB` fall with base

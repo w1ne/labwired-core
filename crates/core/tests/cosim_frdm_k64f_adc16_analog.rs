@@ -13,6 +13,8 @@
 //!   the signed difference of the two netlists, sign-extended in `R[0]`.
 //! - a generic level-1 JFET's gate-junction depletion charge follows a
 //!   transient through ADC0_SE13/14 beside the unrelated NTC and diode.
+//! - matched level-1 NMOS stages separate by lateral diffusion `LD` and the
+//!   `UO`/`TOX`-derived `KP` through ADC0_SE8/9/13.
 
 mod common;
 use common::root;
@@ -158,6 +160,42 @@ fn bjt_early_collector_voltage(base_drive_v: f64, forward_early_voltage: Option<
         }
     }
     collector_for_vbe(0.5 * (low + high))
+}
+
+/// Independent level-1 NMOS common-source load line: 3.3 V through 10 kΩ
+/// into the drain, source and bulk grounded, `VTO = 1`, `LAMBDA = 0`. Drain
+/// current is Shichman–Hodges with `beta = KP·W/(L − 2·LD)` plus the
+/// engine's drain-source `GMIN`; bisection, not the solver.
+fn nmos_drain_voltage(gate_v: f64, beta: f64) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const LOAD_OHMS: f64 = 10_000.0;
+    const VTO_V: f64 = 1.0;
+    const GMIN_S: f64 = 1e-12;
+    let channel = |drain_v: f64| {
+        let overdrive = gate_v - VTO_V;
+        if overdrive <= 0.0 {
+            0.0
+        } else if drain_v < overdrive {
+            beta * drain_v * (overdrive - 0.5 * drain_v)
+        } else {
+            0.5 * beta * overdrive * overdrive
+        }
+    };
+    let (mut low, mut high) = (0.0, SUPPLY_V);
+    for _ in 0..100 {
+        let drain_v = 0.5 * (low + high);
+        if (SUPPLY_V - drain_v) / LOAD_OHMS > channel(drain_v) + GMIN_S * drain_v {
+            low = drain_v;
+        } else {
+            high = drain_v;
+        }
+    }
+    0.5 * (low + high)
+}
+
+/// ngspice level-1 `KP` from the process when the card gives only `TOX`.
+fn process_kp(uo_cm2_per_vs: f64, tox_m: f64) -> f64 {
+    uo_cm2_per_vs * 1e-4 * 3.453_133e-11 / tox_m
 }
 
 fn signal_voltage(session: &CosimSession, path: &str) -> f64 {
@@ -614,4 +652,127 @@ fn frdm_k64f_bjt_early_effect_reaches_adc16_alongside_ntc_and_diode() {
         control_samples[1] > control_samples[2] && control_samples[2] > control_samples[3],
         "increasing base drive lowers the no-forward-Early collector voltage: {control_samples:?}"
     );
+}
+
+/// Level-1 MOSFET lateral diffusion `LD` and the `UO`/`TOX`-derived `KP` on
+/// the K64F ADC16 path. The three matched stages differ only in how
+/// `KP·W/Leff` is formed; an engine that ignored `LD` or `UO` would put two
+/// of them on the reference load line and fail the independent check.
+#[test]
+fn frdm_k64f_mosfet_lateral_diffusion_and_process_kp_reach_adc16_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/frdm-k64f.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load FRDM-K64F profile");
+    let unrelated =
+        SystemManifest::from_file(root("examples/frdm-k64f/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC divider and Shockley diode");
+    let mosfet = SystemManifest::from_file(root(
+        "examples/frdm-k64f/analog-mosfet-ld-uo-adc-system.yaml",
+    ))
+    .expect("load matched generic level-1 NMOS stages");
+    profile.cosim_models = unrelated.cosim_models;
+    for model in &mut profile.cosim_models {
+        let (key, pad) = match model.id.as_str() {
+            "ntc_divider" => ("v_sense", "ptb2"),
+            "diode_load_line" => ("v_diode", "ptb10"),
+            other => panic!("unexpected base model {other}"),
+        };
+        model
+            .outputs
+            .insert(key.to_string(), format!("board.analog.{pad}_volts"));
+    }
+    profile.cosim_models.extend(mosfet.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load MK64F12 descriptor");
+    for (pad, channel) in [("PTB0", 8), ("PTB1", 9), ("PTB2", 12), ("PTB3", 13)] {
+        assert_eq!(
+            chip.analog_pins[pad].peripheral, "adc0",
+            "{pad} ADC instance"
+        );
+        assert_eq!(chip.analog_pins[pad].channel, channel, "{pad} ADC channel");
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build FRDM-K64F bus");
+    init_and_calibrate(&mut bus, ADC0, MODE_12);
+    init_and_calibrate(&mut bus, ADC1, MODE_12);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries an NTC, diode, and matched NMOS stages");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic NMOS, NTC, and diode routes must resolve through K64F ADC16 inputs"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated NTC temperature");
+
+    let (w, l) = (10e-6, 2e-6);
+    let beta_ld = 50e-6 * w / (l - 2.0 * 0.5e-6);
+    let beta_uo = process_kp(400.0, 20e-9) * w / l;
+    let beta_ref = 50e-6 * w / l;
+    let expected_diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    for gate_v in [0.0_f64, 1.5, 2.0, 2.5] {
+        session
+            .set_signal_number("ui.mosfet_ld_uo.gate_v", gate_v)
+            .expect("set common NMOS gate drive");
+        // Two boundaries: the TOX stage's Meyer charge settles in the first.
+        for _ in 0..2 {
+            cycles += session.cycles_until_boundary(cycles);
+            let (steps, errors) = session
+                .advance_to(cycles, &mut bus)
+                .expect("solve and route NTC, diode, and NMOS stages");
+            assert_eq!(steps.len(), 3, "all three analog netlists solve");
+            assert!(
+                errors.is_empty(),
+                "unexpected ADC16 route errors: {errors:?}"
+            );
+        }
+
+        let ld_v = signal_voltage(&session, "board.analog.ptb0_volts");
+        let uo_v = signal_voltage(&session, "board.analog.ptb1_volts");
+        let ref_v = signal_voltage(&session, "board.analog.ptb3_volts");
+        for (label, actual_v, beta) in [
+            ("LD=0.5u", ld_v, beta_ld),
+            ("UO=400 TOX=20n", uo_v, beta_uo),
+            ("reference", ref_v, beta_ref),
+        ] {
+            let expected_v = nmos_drain_voltage(gate_v, beta);
+            assert!(
+                (actual_v - expected_v).abs() < 5e-5,
+                "{label} drain at {gate_v} V gate should be {expected_v} V, got {actual_v} V"
+            );
+        }
+        if gate_v > 1.0 {
+            assert!(
+                ld_v < uo_v - 0.05 && uo_v < ref_v - 0.05,
+                "LD and process KP raise drain current above the reference: {ld_v} / {uo_v} / {ref_v} V"
+            );
+        }
+        let ntc_v = signal_voltage(&session, "board.analog.ptb2_volts");
+        let diode_v = signal_voltage(&session, "board.analog.ptb10_volts");
+        assert!(
+            (ntc_v - ntc_volts(25.0)).abs() < 1e-9,
+            "unrelated NTC stays isolated"
+        );
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "unrelated Shockley diode remains at its independent load line"
+        );
+
+        for (adc, channel, voltage_v) in [
+            (ADC0, 8, ld_v),
+            (ADC0, 9, uo_v),
+            (ADC0, AD12, ntc_v),
+            (ADC0, 13, ref_v),
+            (ADC1, AD14, diode_v),
+        ] {
+            assert_eq!(
+                convert(&mut bus, adc, channel),
+                se_code(voltage_v, 12),
+                "ADC16 {adc:#x} channel {channel} follows its independently checked analog route"
+            );
+        }
+    }
 }

@@ -1603,7 +1603,8 @@ pub fn mos_ward_dutton_channel_charge(
     };
     let r = channel_drop / overdrive;
     let r2 = r * r;
-    let cox = Dual3::constant(OXIDE_PERMITTIVITY_F_PER_M * mosfet.w * mosfet.l / tox);
+    let cox =
+        Dual3::constant(OXIDE_PERMITTIVITY_F_PER_M * mosfet.w * mosfet.effective_length() / tox);
     let total_magnitude = cox * overdrive * (Dual3::constant(1.0) - r + r2 / Dual3::constant(3.0))
         / (Dual3::constant(1.0) - r / Dual3::constant(2.0));
     let drain_share = (Dual3::constant(0.5) - Dual3::constant(2.5) * r / Dual3::constant(3.0)

@@ -137,7 +137,7 @@ fn mos_channel_capacitance_halves(
     } else {
         (vgs, vds, vbs)
     };
-    let cox = device::OXIDE_PERMITTIVITY_F_PER_M * mosfet.w * mosfet.l / tox;
+    let cox = device::OXIDE_PERMITTIVITY_F_PER_M * mosfet.w * mosfet.effective_length() / tox;
     let mut caps = device::mos_meyer_capacitance_halves(
         vgs_eff,
         vds_eff,
