@@ -3162,6 +3162,7 @@ mod tests {
             "UE and TE are both required"
         );
         uart.write(0x00, (1 << 0) | (1 << 3)).unwrap();
+        uart.write(0x04, b'Q').unwrap(); // CR2 is not the v2 TDR
         uart.write(0x28, b'K').unwrap();
         assert_eq!(sink.lock().unwrap().clone(), vec![b'K']);
         assert_eq!(uart.read(0x1C).unwrap(), 0xC0); // ISR ready flags
