@@ -1,0 +1,39 @@
+# AXIOM H1 — physical controller peripherals used by the live firmware ↔ physics bridge.
+# A native LabWired firmware session runs the exact ESP32-C3 ELF produced by PlatformIO.
+name: axiom-h1-native
+chip: ../../configs/chips/esp32c3.yaml
+cpu_hz: 160_000_000
+external_devices:
+  - id: pwm1
+    type: pca9685
+    connection: i2c0
+    route: { sda: GPIO8, scl: GPIO9 }
+    config: { i2c_address: 0x40 }
+  - id: pwm2
+    type: pca9685
+    connection: i2c0
+    route: { sda: GPIO8, scl: GPIO9 }
+    config: { i2c_address: 0x41 }
+  - id: imu
+    type: mpu6050
+    connection: i2c0
+    route: { sda: GPIO8, scl: GPIO9 }
+    config: { i2c_address: 0x68 }
+  - id: tof
+    type: vl53l0x
+    connection: i2c0
+    route: { sda: GPIO8, scl: GPIO9 }
+    config: { i2c_address: 0x29 }
+board_io:
+  - id: estop
+    kind: button
+    peripheral: gpio
+    pin: 10
+    signal: input
+    active_high: false
+  - id: status_led
+    kind: led
+    peripheral: gpio
+    pin: 5
+    signal: output
+    active_high: true
