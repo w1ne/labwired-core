@@ -3,9 +3,9 @@
 # platforms/cpus/silabs/efr32s2/efr32mg24.repl.
 # https://github.com/renode/renode/blob/master/platforms/boards/silabs/brd4186c.repl
 # Only the primary Cortex-M33, code-fetch flash, SRAM, Series-2 CMU, USART0,
-# TIMER0, and TIMER1
-# exercised by the smoke are exposed. The board GPIOs, radio sequencer, MSC,
-# DCDC_IF Python placeholder, and other untested blocks are omitted.
+# GPIO IPVERSION and port B, TIMER0, and TIMER1 exercised by the smoke are
+# exposed. The radio sequencer, MSC, DCDC_IF Python placeholder, and other
+# untested blocks are omitted.
 name: brd4186c
 arch: arm
 core: cortex-m33
@@ -29,6 +29,22 @@ peripherals:
     base_address: 0x4005C000
     size: 16KB
     clock: { reg: clken0, bit: 9 }
+  # Series-2 GPIO IPVERSION is the only mapped word in the block head.
+  - id: gpio_head
+    type: efr32s2_gpio_head
+    bus: sysbus
+    base_address: 0x4003C000
+    size: 4B
+    clock: { reg: clken0, bit: 26 }
+  # BRD4186C's EFR32MG24 GPIO_S_BASE + 0x60 port-B struct. The measured claim
+  # is PB MODEL/DOUT/DIN, including DOUT SET/CLR/TGL aliases; slew/drive
+  # control, pin mux, EXTI, analog buses and other ports are omitted.
+  - id: gpiob
+    type: efr32s2_gpioport
+    bus: sysbus
+    base_address: 0x4003C060
+    size: 48B
+    clock: { reg: clken0, bit: 26 }
   # TIMER0/TIMER1: bases, NVIC lines 4/5, CMU_CLKEN0 bits 4/5 and
   # TIMER_CNTWIDTH = 32 from efr32mg24b220f1536im48.h. Renode's xG24 REPL maps
   # both at the same bases but declares `width: 16`; the vendor header wins.

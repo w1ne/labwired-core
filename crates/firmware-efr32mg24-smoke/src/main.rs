@@ -1,5 +1,6 @@
-// EFR32MG24 Renode-onboarding smoke. Keeps the USART0 banner, then exercises
-// TIMER0 (0x4004_8000, NVIC line 4) and TIMER1 (0x4004_C000, NVIC line 5).
+// EFR32MG24 Renode-onboarding smoke. Keeps the USART0 banner, exercises PB02
+// GPIO, then TIMER0 (0x4004_8000, NVIC line 4) and TIMER1 (0x4004_C000,
+// NVIC line 5).
 // Bases, IRQ numbers, CMU_CLKEN0 bits and TIMER_CNTWIDTH = 32 come from the
 // Silicon Labs `efr32mg24b220f1536im48.h` / `efr32mg24_timer.h` headers;
 // Renode's efr32xg24.repl maps the same blocks (it declares `width: 16`,
@@ -26,6 +27,7 @@ use panic_halt as _;
 
 // EFR32 Series-2 CMU and USART0 register map, as used by the imported xG24 REPL.
 const CMU_CLKEN0: *mut u32 = 0x4000_8064 as *mut u32;
+const CMU_CLKEN0_GPIO: u32 = 1 << 26;
 const CMU_CLKEN0_TIMER0: u32 = 1 << 4;
 const CMU_CLKEN0_TIMER1: u32 = 1 << 5;
 const CMU_CLKEN0_USART0: u32 = 1 << 9;
@@ -44,6 +46,16 @@ const USART0_CLKDIV_115200: u32 = 2384;
 // TIMER_TypeDef offsets; +0x1000 is the SET alias, +0x2000 the CLR alias.
 const TIMER0_BASE: usize = 0x4004_8000;
 const TIMER1_BASE: usize = 0x4004_C000;
+const GPIO_IPVERSION: *const u32 = 0x4003_C000 as *const u32;
+const GPIOB_BASE: usize = 0x4003_C060;
+const GPIOB_MODEL: *mut u32 = (GPIOB_BASE + 0x04) as *mut u32;
+const GPIOB_DOUT: *const u32 = (GPIOB_BASE + 0x10) as *const u32;
+const GPIOB_DIN: *const u32 = (GPIOB_BASE + 0x14) as *const u32;
+const GPIOB_DOUT_SET: *mut u32 = (GPIOB_BASE + 0x1010) as *mut u32;
+const GPIOB_DOUT_CLR: *mut u32 = (GPIOB_BASE + 0x2010) as *mut u32;
+const GPIOB_DOUT_TGL: *mut u32 = (GPIOB_BASE + 0x3010) as *mut u32;
+const GPIOB_PIN2: u32 = 1 << 2;
+const GPIOB_PIN2_PUSHPULL: u32 = 4 << (2 * 4);
 const T_CFG: usize = 0x04;
 const T_CMD: usize = 0x0C;
 const T_STATUS: usize = 0x10;
@@ -136,7 +148,7 @@ fn main() -> ! {
     unsafe {
         write_volatile(
             CMU_CLKEN0,
-            CMU_CLKEN0_USART0 | CMU_CLKEN0_TIMER0 | CMU_CLKEN0_TIMER1,
+            CMU_CLKEN0_GPIO | CMU_CLKEN0_USART0 | CMU_CLKEN0_TIMER0 | CMU_CLKEN0_TIMER1,
         );
         write_volatile(USART0_EN, 1);
         write_volatile(USART0_CLKDIV, USART0_CLKDIV_115200);
@@ -144,6 +156,53 @@ fn main() -> ! {
     }
 
     puts(b"EFR32MG24 Cortex-M33 USART0 smoke\r\n");
+
+    // PB02 is LED0 on the BRD4186C. Check the block version, configure the
+    // Series-2 MODE field, and exercise DOUT's SET/TGL/CLR aliases. DIN must
+    // follow the driven output level, and the smoke script watches PB02 for
+    // the four real low/high transitions.
+    let gpio_ipversion = unsafe { read_volatile(GPIO_IPVERSION) };
+    unsafe {
+        write_volatile(GPIOB_MODEL, GPIOB_PIN2_PUSHPULL);
+        write_volatile(GPIOB_DOUT_CLR, GPIOB_PIN2);
+        write_volatile(GPIOB_DOUT_SET, GPIOB_PIN2);
+    }
+    let gpio_mode = (unsafe { read_volatile(GPIOB_MODEL) } == GPIOB_PIN2_PUSHPULL) as u32;
+    let gpio_set = (unsafe { read_volatile(GPIOB_DOUT) } & GPIOB_PIN2 != 0) as u32;
+    let gpio_din_high = (unsafe { read_volatile(GPIOB_DIN) } & GPIOB_PIN2 != 0) as u32;
+    unsafe { write_volatile(GPIOB_DOUT_TGL, GPIOB_PIN2) };
+    let gpio_toggle = (unsafe { read_volatile(GPIOB_DOUT) } & GPIOB_PIN2 == 0) as u32;
+    let gpio_din_low = (unsafe { read_volatile(GPIOB_DIN) } & GPIOB_PIN2 == 0) as u32;
+    unsafe {
+        write_volatile(GPIOB_DOUT_SET, GPIOB_PIN2);
+    }
+    let gpio_set_again = (unsafe { read_volatile(GPIOB_DOUT) } & GPIOB_PIN2 != 0) as u32;
+    unsafe { write_volatile(GPIOB_DOUT_CLR, GPIOB_PIN2) };
+    let gpio_clear = (unsafe { read_volatile(GPIOB_DOUT) } & GPIOB_PIN2 == 0) as u32;
+    let gpio_din_low_after_clear = (unsafe { read_volatile(GPIOB_DIN) } & GPIOB_PIN2 == 0) as u32;
+    let gpio_ok = (gpio_ipversion == 7
+        && gpio_mode == 1
+        && gpio_set == 1
+        && gpio_din_high == 1
+        && gpio_toggle == 1
+        && gpio_din_low == 1
+        && gpio_set_again == 1
+        && gpio_clear == 1
+        && gpio_din_low_after_clear == 1) as u32;
+    puts(b"gpio");
+    put_kv(b"ip", gpio_ipversion);
+    put_kv(b"mode", gpio_mode);
+    put_kv(b"set", gpio_set);
+    put_kv(b"din_hi", gpio_din_high);
+    put_kv(b"tgl", gpio_toggle);
+    put_kv(b"din_lo", gpio_din_low);
+    put_kv(b"set2", gpio_set_again);
+    put_kv(b"clr", gpio_clear);
+    puts(if gpio_ok == 1 {
+        b" ok\r\n"
+    } else {
+        b" FAIL\r\n"
+    });
 
     // 1. Counter width. CFG is written while EN is clear, as on silicon.
     let t0 = TIMER0_BASE;

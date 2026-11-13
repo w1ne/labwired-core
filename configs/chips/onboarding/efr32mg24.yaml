@@ -1,14 +1,14 @@
 # Narrow profile for the imported EFR32MG24 system, following Renode's
 # platforms/cpus/silabs/efr32s2/efr32xg24.repl
 # (https://github.com/renode/renode/blob/master/platforms/cpus/silabs/efr32s2/efr32xg24.repl).
-# This exposes the primary
-# Cortex-M33, code-fetch flash window, SRAM, real Series-2 CMU, USART0, TIMER0
-# and TIMER1.
+# This exposes the primary Cortex-M33, code-fetch flash window, SRAM, real
+# Series-2 CMU, USART0, GPIO IPVERSION and port B, TIMER0 and TIMER1.
 # The REPL's halted radio sequencer and generated peripherals are omitted;
 # in particular, the imported DCDC_IF Python stub is not advertised here.
 # Flash is a mapped execution window in this engine, not an MSC programming
-# model. USART0, TIMER0, TIMER1 and CMU behavior are the only peripheral claims in
-# this profile.
+# model. USART0, GPIO port B, TIMER0, TIMER1 and CMU behavior are the
+# peripheral claims in this profile. GPIO pin mux, EXTI, analog buses and the
+# other GPIO ports remain omitted.
 name: efr32mg24
 arch: arm
 core: cortex-m33
@@ -33,6 +33,22 @@ peripherals:
     size: 4KB
     clock: { reg: clken0, bit: 9 }
     irq: 10
+  # Series-2 GPIO IPVERSION is the only mapped word in the block head.
+  - id: gpio_head
+    type: efr32s2_gpio_head
+    bus: sysbus
+    base_address: 0x4003C000
+    size: 4B
+    clock: { reg: clken0, bit: 26 }
+  # The EFR32MG24 GPIO_S_BASE + 0x60 port-B struct (GPIO_PORT_TypeDef).
+  # The measured claim is PB MODEL/DOUT/DIN, including DOUT SET/CLR/TGL aliases;
+  # slew/drive control, pin mux, EXTI, analog buses and other ports are omitted.
+  - id: gpiob
+    type: efr32s2_gpioport
+    bus: sysbus
+    base_address: 0x4003C060
+    size: 48B
+    clock: { reg: clken0, bit: 26 }
   # TIMER0/TIMER1: bases, NVIC lines 4/5, CMU_CLKEN0 bits 4/5 and
   # TIMER_CNTWIDTH = 32 from efr32mg24b220f1536im48.h. Renode's xG24 REPL maps
   # both at the same bases but declares `width: 16`; the vendor header wins.
