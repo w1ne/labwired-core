@@ -1,8 +1,8 @@
 # Onboarding Smoke: seeed-xiao-esp32c6
 
 - status: `pass`
-- elapsed_seconds: `4`
-- elapsed_ms: `3132`
+- elapsed_seconds: `24`
+- elapsed_ms: `23301`
 - threshold_seconds: `3600`
 - threshold_met: `True`
 - failure_stage: `n/a`

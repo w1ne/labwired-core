@@ -1186,7 +1186,7 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: None,
     },
-    // XIAO ESP32-C6 package variant (includes esp32c6.yaml, 4 MB flash).
+    // XIAO ESP32-C6 package variant (copy of esp32c6.yaml, 4 MB flash).
     // SIM-DERIVED: no silicon capture. Its GPIO15 LED smoke runs as a CLI
     // script in core-onboarding-smoke, not as a Rust test.
     ChipConf {

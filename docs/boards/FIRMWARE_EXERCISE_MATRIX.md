@@ -217,7 +217,7 @@ _Board variant of the rp2350 die with the Feather's 8 MiB flash; it reuses the r
 
 ### `esp32c6fh4`
 
-_Package variant of the esp32c6 die for the Seeed XIAO ESP32-C6: the yaml includes esp32c6.yaml and changes only the flash size to 4 MB, so it reuses the esp32c6 models and shims. No beyond-rubric peripheral is exercised under this name: the XIAO smoke toggles the active-low user LED on GPIO15 through the C6 GPIO block, a rubric class. The radio, RF switch, USB-Serial/JTAG console and LP core are not exercised on this board._
+_Package variant of the esp32c6 die for the Seeed XIAO ESP32-C6: the yaml copies esp32c6.yaml and changes only the flash size to 4 MB, so it reuses the esp32c6 models and shims. No beyond-rubric peripheral is exercised under this name: the XIAO smoke toggles the active-low user LED on GPIO15 through the C6 GPIO block, a rubric class. The radio, RF switch, USB-Serial/JTAG console and LP core are not exercised on this board._
 
 ### `stm32f446re`
 

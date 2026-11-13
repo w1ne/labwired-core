@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "$0")/../../.." && pwd)"
+repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
 
 python3 - "${repo_root}/tests/fixtures/tier1/esp32s3-devkitc1-n16r8-bme280.elf" \
   "${repo_root}/tests/fixtures/tier1/MANIFEST.json" <<'PY'

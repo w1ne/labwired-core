@@ -908,7 +908,7 @@ fn every_shipped_descriptor_is_ratcheted() {
         // oracle, no differential. Promote when all three exist.
         "stm32f446re",
         // Seeed XIAO ESP32-C6 package variant (ESP32-C6FH4, 4 MB flash). The
-        // yaml includes esp32c6.yaml and changes only the flash size; its
+        // yaml copies esp32c6.yaml and changes only the flash size; its
         // GPIO15 LED smoke runs in core-onboarding-smoke. No catalog board,
         // no silicon oracle, no differential. Promote when all three exist.
         "esp32c6fh4",

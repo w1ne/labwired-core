@@ -1,1 +1,9 @@
-    Finished `release` profile [optimized] target(s) in 0.15s
+ Downloading crates ...
+  Downloaded riscv-rt v0.12.2
+  Downloaded embedded-hal v1.0.0
+  Downloaded critical-section v1.2.0
+  Downloaded unicode-ident v1.0.27
+  Downloaded riscv-rt-macros v0.2.2
+  Downloaded panic-halt v0.2.0
+  Downloaded riscv v0.11.1
+    Finished `release` profile [optimized] target(s) in 1.56s

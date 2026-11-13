@@ -273,17 +273,17 @@
       "in_boards": false,
       "uart": {
         "state": "none",
-        "gap": "UART0/UART1 are declared through the included esp32c6.yaml, but the XIAO ESP32-C6 smoke asserts GPIO15 LED edges only; no esp32c6fh4 firmware UART byte is captured under this chip name.",
+        "gap": "UART0/UART1 are declared in the esp32c6.yaml copy, but the XIAO ESP32-C6 smoke asserts GPIO15 LED edges only; no esp32c6fh4 firmware UART byte is captured under this chip name.",
         "lane": "none"
       },
       "spi": {
         "state": "none",
-        "gap": "SPI2 is declared through the included esp32c6.yaml, but no esp32c6fh4 firmware SPI transfer is proven.",
+        "gap": "SPI2 is declared in the esp32c6.yaml copy, but no esp32c6fh4 firmware SPI transfer is proven.",
         "lane": "none"
       },
       "i2c": {
         "state": "none",
-        "gap": "I2C0 is declared through the included esp32c6.yaml, but no esp32c6fh4 firmware I2C transaction is proven.",
+        "gap": "I2C0 is declared in the esp32c6.yaml copy, but no esp32c6fh4 firmware I2C transaction is proven.",
         "lane": "none"
       }
     },

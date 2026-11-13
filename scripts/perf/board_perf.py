@@ -342,7 +342,7 @@ WAIVED: dict[str, str] = {
     ),
     "esp32c6fh4": (
         "Seeed XIAO ESP32-C6 package variant: configs/chips/esp32c6fh4.yaml "
-        "includes esp32c6.yaml and changes only the flash size to 4 MB. It runs "
+        "copies esp32c6.yaml and changes only the flash size to 4 MB. It runs "
         "the same RISC-V HP core and memory map that the esp32c6 perf-spin "
         "fixture measures, so no separate throughput claim is made for this "
         "package (examples/xiao-esp32c6-blinky)."
