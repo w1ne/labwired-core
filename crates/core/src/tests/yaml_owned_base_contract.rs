@@ -396,6 +396,17 @@ const WINDOW_OVERLAP_ALLOWLIST: &[(&str, &str, &str, &str)] = &[
          deterministically, so GPIOn_CTRL.FUNCSEL reaches the pad mux model.",
     ),
     (
+        "rp2350-feather.yaml",
+        "clk_rst",
+        "io_bank0",
+        "The Feather-specific descriptor keeps the RP2350 320 KB clock/reset\
+         catch-all from rp2350.yaml so XOSC and both PLL windows remain mapped.\
+         IO_BANK0 is nested at 0x4002_8000; greatest-start-wins routing gives\
+         it its 4 KB deterministically, so GPIOn_CTRL.FUNCSEL reaches the pad\
+         mux model. This profile differs in board flash geometry and pin labels,\
+         not in the peripheral window map.",
+    ),
+    (
         "esp32.yaml",
         "rtcio",
         "sens_sar_adc",
