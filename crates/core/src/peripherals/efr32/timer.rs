@@ -960,6 +960,18 @@ impl Peripheral for Efr32s2Timer {
         }
     }
 
+    /// The TIMER line is a LEVEL: `IF & IEN`, the same conjunction the walk
+    /// and the event chain re-pend on. Without it the bus treats the line as
+    /// a pulse, so a pend latched while the handler runs survives the
+    /// handler's `IF_CLR` and the core re-enters once with `IF` already
+    /// clear: measured on the imported EFR32MG24 smoke as two handler
+    /// entries per overflow. Scheduler mode syncs first so a post-write
+    /// reconcile reads the flag the alias store just cleared.
+    fn irq_line_level(&self) -> Option<bool> {
+        self.sync_from_clock();
+        Some(self.iflag.get() & self.ien != 0)
+    }
+
     fn tick_elapsed(&mut self, cycles: u64) -> PeripheralTickResult {
         // A scheduler-mode instance is walk-skipped and the event chain owns
         // the counter; the guard keeps a stray direct call from double-counting
@@ -1506,6 +1518,25 @@ mod tests {
         ack_if(&mut t, IF_OF);
         assert_eq!(t.read_word(OFF_IF) & IF_OF, 0);
         assert!(!t.tick_elapsed(0).irq);
+    }
+
+    /// The line is published as a level, so the bus can drop a pend that a
+    /// handler's `IF_CLR` made stale instead of re-entering the handler.
+    #[test]
+    fn the_irq_line_is_a_level_that_follows_if_and_ien() {
+        let mut t = running(T0_BITS);
+        t.write_word(OFF_TOP, 9);
+        assert_eq!(t.irq_line_level(), Some(false));
+
+        t.tick_elapsed(10);
+        assert_eq!(t.read_word(OFF_IF) & IF_OF, IF_OF);
+        assert_eq!(t.irq_line_level(), Some(false), "IEN clear masks the line");
+
+        t.write_word(OFF_IEN, IF_OF);
+        assert_eq!(t.irq_line_level(), Some(true));
+
+        ack_if(&mut t, IF_OF);
+        assert_eq!(t.irq_line_level(), Some(false), "IF_CLR drops the line");
     }
 
     #[test]

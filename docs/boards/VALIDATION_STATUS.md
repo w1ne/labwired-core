@@ -34,7 +34,7 @@ The models column hashes watched paths and file contents. It changes with source
 | `stm32u5a5zj` | 🔵 sim-validated (deep model, no HW diff) | — | `5f8befc9636d96ff` | no silicon capture |
 | `nucleo-u545re` | 🔵 sim-validated (deep model, no HW diff) | — | `35888f8366059938` | no silicon capture |
 | `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | `1f20b8201ea58235` | no silicon capture |
-| `brd2709a` | 🟡 smoke-manual | — | `6c9a28e9e260b491` | no silicon capture |
+| `brd2709a` | 🟡 smoke-manual | — | `f59fbfbde66e8848` | no silicon capture |
 | `esp32` | ⚪ structural | — | `7914c514e75d2d34` | no silicon capture |
 | `mkw41z4` | 🔵 sim-validated (deep model, no HW diff) | — | `afc916b96b813df3` | no silicon capture |
 | `stm32f405` | 🔵 sim-validated (deep model, no HW diff) | — | `c83726498314c519` | no silicon capture |

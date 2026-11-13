@@ -2,7 +2,8 @@
 # with Renode's platforms/boards/silabs/brd4186c.repl and
 # platforms/cpus/silabs/efr32s2/efr32mg24.repl.
 # https://github.com/renode/renode/blob/master/platforms/boards/silabs/brd4186c.repl
-# Only the primary Cortex-M33, code-fetch flash, SRAM, Series-2 CMU, and USART0
+# Only the primary Cortex-M33, code-fetch flash, SRAM, Series-2 CMU, USART0,
+# TIMER0, and TIMER1
 # exercised by the smoke are exposed. The board GPIOs, radio sequencer, MSC,
 # DCDC_IF Python placeholder, and other untested blocks are omitted.
 name: brd4186c
@@ -28,3 +29,24 @@ peripherals:
     base_address: 0x4005C000
     size: 16KB
     clock: { reg: clken0, bit: 9 }
+  # TIMER0/TIMER1: bases, NVIC lines 4/5, CMU_CLKEN0 bits 4/5 and
+  # TIMER_CNTWIDTH = 32 from efr32mg24b220f1536im48.h. Renode's xG24 REPL maps
+  # both at the same bases but declares `width: 16`; the vendor header wins.
+  # Timebase is the 19 MHz HFRCODPLL startup clock (system_efr32mg24.c), the
+  # same clock the USART0 divisor assumes.
+  - id: timer0
+    type: efr32s2_timer
+    bus: sysbus
+    base_address: 0x40048000
+    size: 16KB
+    clock: { reg: clken0, bit: 4 }
+    config: { counter_bits: 32, peripheral_hz: 19000000 }
+    irq: 4
+  - id: timer1
+    type: efr32s2_timer
+    bus: sysbus
+    base_address: 0x4004C000
+    size: 16KB
+    clock: { reg: clken0, bit: 5 }
+    config: { counter_bits: 32, peripheral_hz: 19000000 }
+    irq: 5

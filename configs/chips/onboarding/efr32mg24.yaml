@@ -2,11 +2,13 @@
 # platforms/cpus/silabs/efr32s2/efr32xg24.repl
 # (https://github.com/renode/renode/blob/master/platforms/cpus/silabs/efr32s2/efr32xg24.repl).
 # This exposes the primary
-# Cortex-M33, code-fetch flash window, SRAM, real Series-2 CMU, and USART0.
+# Cortex-M33, code-fetch flash window, SRAM, real Series-2 CMU, USART0, TIMER0
+# and TIMER1.
 # The REPL's halted radio sequencer and generated peripherals are omitted;
 # in particular, the imported DCDC_IF Python stub is not advertised here.
 # Flash is a mapped execution window in this engine, not an MSC programming
-# model. USART0 and CMU behavior are the only peripheral claims in this profile.
+# model. USART0, TIMER0, TIMER1 and CMU behavior are the only peripheral claims in
+# this profile.
 name: efr32mg24
 arch: arm
 core: cortex-m33
@@ -31,3 +33,24 @@ peripherals:
     size: 4KB
     clock: { reg: clken0, bit: 9 }
     irq: 10
+  # TIMER0/TIMER1: bases, NVIC lines 4/5, CMU_CLKEN0 bits 4/5 and
+  # TIMER_CNTWIDTH = 32 from efr32mg24b220f1536im48.h. Renode's xG24 REPL maps
+  # both at the same bases but declares `width: 16`; the vendor header wins.
+  # Timebase is the 19 MHz HFRCODPLL startup clock (system_efr32mg24.c), the
+  # same clock the USART0 divisor assumes.
+  - id: timer0
+    type: efr32s2_timer
+    bus: sysbus
+    base_address: 0x40048000
+    size: 4KB
+    clock: { reg: clken0, bit: 4 }
+    config: { counter_bits: 32, peripheral_hz: 19000000 }
+    irq: 4
+  - id: timer1
+    type: efr32s2_timer
+    bus: sysbus
+    base_address: 0x4004C000
+    size: 4KB
+    clock: { reg: clken0, bit: 5 }
+    config: { counter_bits: 32, peripheral_hz: 19000000 }
+    irq: 5
