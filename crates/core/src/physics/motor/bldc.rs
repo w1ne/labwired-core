@@ -422,6 +422,18 @@ impl BldcMotor {
         self.params
     }
 
+    /// Bus-service substep with a 2.5% normalized-step accuracy budget inside
+    /// the coupled electrical/mechanical envelope enforced by `step`.
+    /// The electrical `L/R` time constant alone does not bound a low-inertia
+    /// motor; merely staying stable also leaves large first-order errors.
+    pub(crate) fn service_timestep_s(&self) -> Result<f64, ModelError> {
+        let [electrical_rate, mechanical_rate, coupling_rate] = integration_rates(self.params);
+        let step_s = 0.025 / (electrical_rate + mechanical_rate + coupling_rate);
+        validate_positive("dt_s", step_s)?;
+        validate_timestep(self.params, step_s)?;
+        Ok(step_s)
+    }
+
     pub fn faults(&self) -> BldcFaults {
         self.faults
     }
@@ -761,19 +773,7 @@ fn validate_faults(faults: BldcFaults, supply_voltage_v: f64) -> Result<(), Mode
     Ok(())
 }
 
-fn validate_timestep(params: BldcMotorParams, dt_s: f64) -> Result<(), ModelError> {
-    let electrical_ratio = dt_s * params.resistance_ohm / params.inductance_h;
-    if !electrical_ratio.is_finite() || electrical_ratio >= 1.0 {
-        return Err(ModelError {
-            field: "dt_s",
-            message: "exceeds the conservative electrical integration envelope \
-                      (dt_s * resistance_ohm / inductance_h must be less than 1)"
-                .to_owned(),
-        });
-    }
-
-    let mechanical_ratio =
-        dt_s * params.shaft.viscous_friction_nm_per_rad_s / params.shaft.inertia_kg_m2;
+fn integration_rates(params: BldcMotorParams) -> [f64; 3] {
     // The zero-speed branch uses Kt while the power-consistent running branch
     // has effective torque gain Ke. Bound the stronger of the two so unequal
     // constants cannot make this envelope optimistic.
@@ -784,6 +784,26 @@ fn validate_timestep(params: BldcMotorParams, dt_s: f64) -> Result<(), ModelErro
         / params.inductance_h
         / params.shaft.inertia_kg_m2)
         .sqrt();
+    [
+        params.resistance_ohm / params.inductance_h,
+        params.shaft.viscous_friction_nm_per_rad_s / params.shaft.inertia_kg_m2,
+        coupling_rate,
+    ]
+}
+
+fn validate_timestep(params: BldcMotorParams, dt_s: f64) -> Result<(), ModelError> {
+    let [electrical_rate, mechanical_rate, coupling_rate] = integration_rates(params);
+    let electrical_ratio = dt_s * electrical_rate;
+    if !electrical_ratio.is_finite() || electrical_ratio >= 1.0 {
+        return Err(ModelError {
+            field: "dt_s",
+            message: "exceeds the conservative electrical integration envelope \
+                      (dt_s * resistance_ohm / inductance_h must be less than 1)"
+                .to_owned(),
+        });
+    }
+
+    let mechanical_ratio = dt_s * mechanical_rate;
     let coupled_ratio = electrical_ratio + mechanical_ratio + dt_s * coupling_rate;
     if !mechanical_ratio.is_finite()
         || !coupling_rate.is_finite()

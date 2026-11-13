@@ -166,8 +166,8 @@ const STM32L0_TIMER_PADS: &[TimerAfPad] = &[
 /// Read off stm32duino's `PinMap_TIM` for the L476R variant
 /// (`variants/STM32L4xx/L475R(C-E-G)T_L476R(C-E-G)T_L486RGT/PeripheralPins.c`):
 /// TIM1/TIM2 on AF1, TIM3/TIM4/TIM5 on AF2.
-/// Only TIM1-TIM5 OCx rows; the complementary OCxN pads are not generated
-/// by the timer model, so they are left out.
+/// Main OCx rows shared by capture and output routing. Complementary outputs
+/// have no TIx input path and are listed separately below.
 const STM32L4_TIMER_PADS: &[TimerAfPad] = &[
     ("tim1", 'a', 8, 1, 0, "TIM1_CH1"),
     ("tim1", 'a', 9, 1, 1, "TIM1_CH2"),
@@ -200,6 +200,20 @@ const STM32L4_TIMER_PADS: &[TimerAfPad] = &[
     ("tim5", 'a', 1, 2, 1, "TIM5_CH2"),
     ("tim5", 'a', 2, 2, 2, "TIM5_CH3"),
     ("tim5", 'a', 3, 2, 3, "TIM5_CH4"),
+];
+
+/// Output-only routes from STM32L476 DS10198 Rev 11, table 17. Native timer
+/// wire indices 4..6 are CH1N..CH3N. These must never enter the TIx capture map.
+const STM32L4_COMPLEMENTARY_PADS: &[TimerAfPad] = &[
+    ("tim1", 'a', 7, 1, 4, "TIM1_CH1N"),
+    ("tim1", 'b', 13, 1, 4, "TIM1_CH1N"),
+    ("tim1", 'e', 8, 1, 4, "TIM1_CH1N"),
+    ("tim1", 'b', 0, 1, 5, "TIM1_CH2N"),
+    ("tim1", 'b', 14, 1, 5, "TIM1_CH2N"),
+    ("tim1", 'e', 10, 1, 5, "TIM1_CH2N"),
+    ("tim1", 'b', 1, 1, 6, "TIM1_CH3N"),
+    ("tim1", 'b', 15, 1, 6, "TIM1_CH3N"),
+    ("tim1", 'e', 12, 1, 6, "TIM1_CH3N"),
 ];
 
 /// STM32WB timer channel pads, selected by the timer's `pad_map: stm32wb`.
@@ -3022,7 +3036,7 @@ impl SystemBus {
         self.timer_capture_wired |= wired;
     }
 
-    /// Route each STM32 timer's channel OUTPUTS (OC1..OC4) onto the GPIO pads
+    /// Route each STM32 timer's channel OUTPUTS onto the GPIO pads
     /// that carry them, so a pad configured as an alternate-function output
     /// reads — and the logic analyzer records — the PWM / output-compare
     /// waveform the timer generates, instead of the idle output latch.
@@ -3091,6 +3105,7 @@ impl SystemBus {
             (STM32G4_TIMER_PADS, Some("stm32g4")),
             (STM32L0_TIMER_PADS, Some("stm32l0")),
             (STM32L4_TIMER_PADS, Some("stm32l4")),
+            (STM32L4_COMPLEMENTARY_PADS, Some("stm32l4")),
             (STM32WB_TIMER_PADS, Some("stm32wb")),
             (STM32WBA_TIMER_PADS, Some("stm32wba")),
             (STM32U5_TIMER_PADS, Some("stm32u5")),
