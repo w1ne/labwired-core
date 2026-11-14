@@ -37,10 +37,19 @@ fn enable_l476_uart_clocks(bus: &mut SystemBus) {
     bus.write_u32(RCC + 0x58, 1 << 17).unwrap(); // APB1ENR1: USART2EN
 }
 
+/// Set UE | TE in USART1/USART2 CR1: the V2 transmitter only shifts a TDR write
+/// out once firmware has enabled it, so these seam tests must do that as well.
+fn enable_l476_uart_transmitters(bus: &mut SystemBus) {
+    for base in [0x4001_3800u64, 0x4000_4400] {
+        bus.write_u32(base, (1 << 0) | (1 << 3)).unwrap();
+    }
+}
+
 #[test]
 fn attach_uart_stream_by_id_wires_a_live_stream() {
     let mut bus = l476_bus();
     enable_l476_uart_clocks(&mut bus);
+    enable_l476_uart_transmitters(&mut bus);
     let seen = Arc::new(Mutex::new(Vec::new()));
     bus.attach_uart_stream_by_id("uart2", Box::new(Recorder(seen.clone())))
         .expect("uart2 should accept a stream device");
@@ -55,6 +64,7 @@ fn attach_uart_stream_by_id_wires_a_live_stream() {
 fn detach_uart_sink_by_id_keeps_crosslink_bytes_out_of_the_console() {
     let mut bus = l476_bus();
     enable_l476_uart_clocks(&mut bus);
+    enable_l476_uart_transmitters(&mut bus);
     let console = Arc::new(Mutex::new(Vec::new()));
     // The console sink is attached to EVERY UART (as the wasm bridge does).
     bus.attach_uart_tx_sink(console.clone(), false);
