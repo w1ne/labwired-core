@@ -98,5 +98,49 @@
   "stm32wba52.elf": {
     "sha256": "c10bbe2e2ffeed0dc45c8e970bc18a5ca59835cbff1aa7731f26f1be2aea71ec",
     "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
+  },
+  "esp32s3-devkitc1-rgb.elf": {
+    "sha256": "88c0a38b75aaf742d49b2aaa0f58ffcc577df5d38e6b72a283878164dd152063",
+    "source_rev": "0f9591020c91fcb83845fca5f5b31c628f9bc5dc"
+  },
+  "esp32s3-devkitc1-rgb-flash.bin": {
+    "sha256": "3979e8cc2577328530dbbe7f3e0c8e0f8bddddcd4aee0c16f339e7b87d9f571b",
+    "source_rev": "0f9591020c91fcb83845fca5f5b31c628f9bc5dc"
+  },
+  "arduino-nano-esp32-gpio.elf": {
+    "sha256": "79802dcdfe3c16811a38e8d7c94173bb0ced3d88a9926c68cf7e40b78c28bb54",
+    "source_rev": "43b62fef67018fb5b03dd81fa59e0829ff30d9b4"
+  },
+  "adafruit-feather-esp32-v2-gpio.elf": {
+    "sha256": "484593d35d394901918966faa5ca04b214e7448a7a2bd1cba81e81b9faff0e43",
+    "source_rev": "b1be150adade5986ee3cc66335cdae6df8d30c79"
+  },
+  "adafruit-feather-esp32-v2-bme280.elf": {
+    "sha256": "439037257d2a58d7378ed02690d3021dc53a5a36fa010a854217c08494179239",
+    "source_rev": "b284a170f89b0cafcec118447470b80bd07b387f"
+  },
+  "pico-bme280.elf": {
+    "sha256": "182d3d685846e3368d9d2ed2c3224ebd4cc4cc8cb89bfdf505066cf2b3876919",
+    "source_rev": "c65d24890e75fdee8df5c2a4ec578878e09a279c"
+  },
+  "esp32c6-devkitc-bme280.elf": {
+    "sha256": "2cfc7c80699af37789b724bd2137fd88cc4966911a4660474647519acf9084cf",
+    "source_rev": "c22c8886643f64d96703c68f5e62aae91807df70"
+  },
+  "feather-rp2040-bme280.elf": {
+    "sha256": "2ab12340ccb2875c64f03686d58afdfbd83e2743921c9dba43cbb95fd6d239d6",
+    "source_rev": "f396371cc8c647086a636e31d30d441b2a9d8a18"
+  },
+  "esp32s3-devkitc1-n16r8-bme280.elf": {
+    "sha256": "9731a5b51384eff99179a91d49a6919fb9cde1696009245f76763856dce8a859",
+    "source_rev": "70c26fc6c233759dc670666394cccdb86b01c5ae"
+  },
+  "seeed-xiao-esp32c3-bme280.elf": {
+    "sha256": "7d877c363ea6395666ba06b63773ea5e2801527c4e342b046ba31cc77b71bba1",
+    "source_rev": "2b8bed09df23d29a0f81dddb29c89011d2c5a522"
+  },
+  "seeed-xiao-esp32c3-bme280.partitions.bin": {
+    "sha256": "148b959cbff1c38aa8e1d5c0ba9d612c54997b945e56a63f41223eef650653a1",
+    "source_rev": "2b8bed09df23d29a0f81dddb29c89011d2c5a522"
   }
 }

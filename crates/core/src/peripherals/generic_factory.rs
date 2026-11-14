@@ -145,6 +145,11 @@ pub const MODEL_TYPES: &[&str] = &[
     // bins. Listed for the same reason as every other family type.
     "esp32c6_mwdt",
     "esp32c6_lp_rtc",
+    // ESP32-H2's narrow DevKitM-1 UART profile. It reuses the C6-compatible
+    // UART head and PCR UART0 gate; those register windows are size-limited by
+    // the H2 descriptor because the full H2 PCR map differs from the C6's.
+    "esp32h2_uart",
+    "esp32h2_pcr",
     // C6 USB Serial/JTAG — same shared model as C3/S3, own matrix source.
     // Listed so a fuzzy `contains("usb")` path cannot coerce it elsewhere.
     "esp32c6_usb_serial_jtag",
@@ -159,6 +164,16 @@ pub const MODEL_TYPES: &[&str] = &[
     // C6 RMT — the shared C3 model at C6 matrix source 49.
     "esp32c6_rmt",
     "esp32c6_ledc",
+    // C5 UART0 uses the shared Espressif UART head at its own 240 MHz pacing
+    // rate and interrupt source 47. It is intentionally window-limited by the
+    // C5 chip descriptor; do not route it through the fuzzy STM32 UART arm.
+    "esp32c5_uart",
+    // C61 UART0 uses the shared Espressif FIFO/status head at its 160 MHz
+    // core rate and interrupt source 40; the descriptor limits the window.
+    "esp32c61_uart",
+    // P4 UART0 uses the shared FIFO/status head with P4's 400 MHz core and
+    // 90 MHz APB clock. Its chip descriptor exposes only FIFO and STATUS.
+    "esp32p4_uart",
     // nRF52 behavioral models (nrf52 factory).
     "nrf52840_twim",
     "nrf52_saadc",
