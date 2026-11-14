@@ -543,3 +543,39 @@ fn tmp102_pointer_masking_is_byte_equivalent() {
     ];
     drive_both(&mut Tmp102::new(), &mut declarative("tmp102"), &ops);
 }
+
+// Direct native inspection must expose the actual PWM counts.
+#[test]
+fn pca9685_inspect_exposes_raw_pwm_counts_and_output_gates() {
+    use labwired_core::inspect::InspectOpts;
+    let mut dev = declarative("pca9685");
+    let reset = I2cDevice::artifacts(&dev, "pwm", &InspectOpts::default());
+    assert_eq!(reset[0].meta["mode1_sleep"], true);
+    assert_eq!(reset[0].meta["full_off"]["0"], true);
+    assert_eq!(reset[0].meta["off_counts"]["0"], 0);
+    assert_eq!(
+        reset[0].meta["observables"]["servo_angle"]["0"],
+        serde_json::Value::Null
+    );
+
+    // MODE1 AI=1, SLEEP=0. Channel 0 off-count 311 = 0x137.
+    dev.start();
+    dev.write(0x00);
+    dev.write(0x20);
+    dev.stop();
+    dev.start();
+    for value in [0x06, 0x00, 0x00, 0x37, 0x01] {
+        dev.write(value);
+    }
+    dev.stop();
+
+    let artifact = I2cDevice::artifacts(&dev, "pwm", &InspectOpts::default());
+    let meta = &artifact[0].meta;
+    assert_eq!(meta["mode1_sleep"], false);
+    assert_eq!(meta["full_off"]["0"], false);
+    assert_eq!(meta["off_counts"]["0"], 311);
+    let measured = meta["observables"]["servo_angle"]["0"].as_f64().unwrap();
+    let baseline = dev.observable("servo_angle", 0).unwrap();
+    assert!((measured - baseline).abs() < 1e-9);
+    assert_eq!(meta["off_counts"]["1"], 0);
+}

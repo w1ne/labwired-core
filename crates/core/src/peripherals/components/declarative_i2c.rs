@@ -1788,6 +1788,18 @@ impl I2cDevice for GenericI2cDevice {
                 if !off_counts.is_empty() {
                     meta["off_counts"] = serde_json::Value::Object(off_counts);
                 }
+                // The raw count alone is not an enabled PWM waveform:
+                // MODE1.SLEEP and LEDn_OFF_H FULL_OFF must be observable.
+                meta["mode1_sleep"] =
+                    serde_json::json!(file.first().is_some_and(|value| value & 0x10 != 0));
+                let mut full_off = serde_json::Map::new();
+                for ch in 0u8..16 {
+                    let hi = 0x09usize + usize::from(ch) * 4;
+                    if let Some(&value) = file.get(hi) {
+                        full_off.insert(ch.to_string(), serde_json::json!(value & 0x10 != 0));
+                    }
+                }
+                meta["full_off"] = serde_json::Value::Object(full_off);
             }
 
             let mut observables = serde_json::Map::new();
