@@ -281,11 +281,17 @@ peripherals:
     type: "ra_can"
     base_address: 0x40050000
     size: "4KB"
-  # USBFS stub — USB CDC (the Minima's `Serial`) is not modelled.
+  # USBFS register file. TinyUSB dcd_init (native-USB variants: Minima,
+  # Nano R4) sets SYSCFG.SCKE and polls until it reads back, so a read-zero
+  # stub hangs boot. Registers latch only: no USB protocol, no host, and
+  # INTSTS0.VBSTS reads 0 (no cable), so USB CDC `Serial` stays unconnected.
+  # USBMC sits at +0x400, so the window is 2 KB.
   - id: "usbfs"
-    type: "stub"
+    type: "declarative"
     base_address: 0x40090000
-    size: "1KB"
+    size: "2KB"
+    config:
+      path: "../peripherals/ra4m1/usbfs.yaml"
   # R_FCACHE (0x4001C000): FSP SystemInit disables/invalidates the flash
   # cache (FCACHEE +0x100, FCACHEIV +0x104, polled until it reads 0) and
   # sets the wait states before the clock switch. Declared stub: reads 0,

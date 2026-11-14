@@ -1,0 +1,257 @@
+# RA4M1 USBFS (R_USB_FS0 @ 0x40090000) register file. R01UH0887 section 28.
+# Register latch only: SCKE reads back, so TinyUSB dcd_init completes.
+# No USB protocol, no host, no VBUS: INTSTS0.VBSTS reads 0 (cable absent).
+peripheral: USBFS
+version: 0.1.0
+registers:
+- id: SYSCFG
+  address_offset: 0
+  size: 16
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: USBE
+    bit_range:
+    - 0
+    - 0
+  - name: DPRPU
+    bit_range:
+    - 4
+    - 4
+  - name: DRPD
+    bit_range:
+    - 5
+    - 5
+  - name: DCFM
+    bit_range:
+    - 6
+    - 6
+  - name: SCKE
+    bit_range:
+    - 10
+    - 10
+  side_effects: null
+- id: BUSWAIT
+  address_offset: 2
+  size: 16
+  access: READ_WRITE
+  reset_value: 15
+  fields:
+  - name: BWAIT
+    bit_range:
+    - 3
+    - 0
+  side_effects: null
+- id: SYSSTS0
+  address_offset: 4
+  size: 16
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: LNST
+    bit_range:
+    - 1
+    - 0
+  side_effects: null
+- id: DVSTCTR0
+  address_offset: 8
+  size: 16
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RHST
+    bit_range:
+    - 2
+    - 0
+  side_effects: null
+- id: INTENB0
+  address_offset: 48
+  size: 16
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BRDYE
+    bit_range:
+    - 8
+    - 8
+  - name: NRDYE
+    bit_range:
+    - 9
+    - 9
+  - name: BEMPE
+    bit_range:
+    - 10
+    - 10
+  - name: CTRE
+    bit_range:
+    - 11
+    - 11
+  - name: DVSE
+    bit_range:
+    - 12
+    - 12
+  - name: SOFE
+    bit_range:
+    - 13
+    - 13
+  - name: RSME
+    bit_range:
+    - 14
+    - 14
+  - name: VBSE
+    bit_range:
+    - 15
+    - 15
+  side_effects: null
+- id: INTENB1
+  address_offset: 50
+  size: 16
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SACKE
+    bit_range:
+    - 4
+    - 4
+  side_effects: null
+- id: BRDYENB
+  address_offset: 54
+  size: 16
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PIPEBRDYE
+    bit_range:
+    - 9
+    - 0
+  side_effects: null
+- id: NRDYENB
+  address_offset: 56
+  size: 16
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PIPENRDYE
+    bit_range:
+    - 9
+    - 0
+  side_effects: null
+- id: BEMPENB
+  address_offset: 58
+  size: 16
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PIPEBEMPE
+    bit_range:
+    - 9
+    - 0
+  side_effects: null
+- id: INTSTS0
+  address_offset: 64
+  size: 16
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CTSQ
+    bit_range:
+    - 2
+    - 0
+  - name: VALID
+    bit_range:
+    - 3
+    - 3
+  - name: DVSQ
+    bit_range:
+    - 6
+    - 4
+  - name: VBSTS
+    bit_range:
+    - 7
+    - 7
+  - name: BRDY
+    bit_range:
+    - 8
+    - 8
+  - name: NRDY
+    bit_range:
+    - 9
+    - 9
+  - name: BEMP
+    bit_range:
+    - 10
+    - 10
+  - name: CTRT
+    bit_range:
+    - 11
+    - 11
+  - name: DVST
+    bit_range:
+    - 12
+    - 12
+  - name: SOFR
+    bit_range:
+    - 13
+    - 13
+  - name: RESM
+    bit_range:
+    - 14
+    - 14
+  - name: VBINT
+    bit_range:
+    - 15
+    - 15
+  side_effects: null
+- id: DCPMAXP
+  address_offset: 94
+  size: 16
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MXPS
+    bit_range:
+    - 6
+    - 0
+  - name: DEVSEL
+    bit_range:
+    - 15
+    - 12
+  side_effects: null
+- id: PHYSLEW
+  address_offset: 240
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SLEWR00
+    bit_range:
+    - 0
+    - 0
+  - name: SLEWR01
+    bit_range:
+    - 1
+    - 1
+  - name: SLEWF00
+    bit_range:
+    - 2
+    - 2
+  - name: SLEWF01
+    bit_range:
+    - 3
+    - 3
+  side_effects: null
+- id: USBMC
+  address_offset: 1024
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: VDDUSBE
+    bit_range:
+    - 0
+    - 0
+  - name: VDCEN
+    bit_range:
+    - 7
+    - 7
+  side_effects: null

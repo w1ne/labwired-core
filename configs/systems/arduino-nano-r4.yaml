@@ -1,0 +1,26 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# Arduino Nano R4 (ABX00142, R7FA4M1AB). SIM-DERIVED — not silicon-verified.
+# Pins follow ArduinoCore-renesas 1.6.0 variants/NANOR4:
+#   LED_BUILTIN = P204; Serial1 = SCI2 on D0 (P301 RX) / D1 (P302 TX).
+# Claimed: stock-core boot, LED_BUILTIN GPIO, Serial1 on the D0/D1 header.
+# Not claimed: native USB CDC `Serial` (USBFS is a register file with no
+# host), the RGB LED (P409-P411), the Qwiic connector, and the 3V3 enable.
+name: "arduino-nano-r4"
+chip: "../chips/ra4m1.yaml"
+external_devices: []
+board_io:
+  - id: "led_builtin"
+    kind: "led"
+    peripheral: "port2"
+    pin: 4   # P204 — variants/NANOR4 LED_BUILTIN
+    signal: "output"
+    active_high: true
+connectors:
+  - type: "uart"
+    peripheral: "sci2"
+    endpoint: "host_console"

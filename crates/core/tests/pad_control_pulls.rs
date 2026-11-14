@@ -24,9 +24,13 @@ fn root() -> PathBuf {
 }
 
 fn bus(chip_file: &str) -> SystemBus {
-    let chip = ChipDescriptor::from_file(root().join("configs/chips").join(chip_file)).unwrap();
+    // The manifest carries the full chip path: declarative descriptors in
+    // the chip resolve relative to it.
+    let chip_path = root().join("configs/chips").join(chip_file);
+    let chip = ChipDescriptor::from_file(&chip_path).unwrap();
     let manifest: SystemManifest = serde_yaml::from_str(&format!(
-        "name: pad-control\nchip: {chip_file}\nexternal_devices: []\nboard_io: []\n"
+        "name: pad-control\nchip: {}\nexternal_devices: []\nboard_io: []\n",
+        chip_path.display()
     ))
     .unwrap();
     let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
