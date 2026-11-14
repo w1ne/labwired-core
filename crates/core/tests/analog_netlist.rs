@@ -127,6 +127,7 @@ C1 out 0 100n
     #[test]
     fn refuses_invalid_resistor_temperature_coefficients() {
         for text in [
+            "R1 a 0 1e-320 tc1=0",
             "R1 a 0 1k tc1=NaN temp=100",
             "R1 a 0 1k tc2=1u tnom=-273.15",
             "R1 a 0 1k tc1=1m temp=-300",

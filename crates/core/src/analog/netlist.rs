@@ -2490,9 +2490,12 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                         temperature_celsius,
                     };
                     let resistance = model.resistance_ohms(ohms);
-                    if !resistance.is_finite() || resistance <= 0.0 {
+                    if !resistance.is_finite()
+                        || resistance <= 0.0
+                        || !resistance.recip().is_finite()
+                    {
                         return Err(ctx.parse_err(
-                            "resistor temperature coefficients must produce a finite positive resistance",
+                            "resistor temperature coefficients must produce a finite positive resistance with finite conductance",
                         ));
                     }
                     Some(model)

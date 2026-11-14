@@ -605,7 +605,7 @@ impl Solver {
         };
         ntc.temperature_celsius = celsius;
         let resistance = ntc.resistance_ohms(resistor.ohms);
-        if !resistance.is_finite() || resistance <= 0.0 {
+        if !resistance.is_finite() || resistance <= 0.0 || !resistance.recip().is_finite() {
             return false;
         }
         if resistor.ntc != Some(ntc) {
@@ -648,7 +648,7 @@ impl Solver {
             .map(|model| model.resistance_ohms(resistor.ohms))
             .or_else(|| temperature_coefficients.map(|model| model.resistance_ohms(resistor.ohms)))
             .unwrap_or(f64::NAN);
-        if !resistance.is_finite() || resistance <= 0.0 {
+        if !resistance.is_finite() || resistance <= 0.0 || !resistance.recip().is_finite() {
             return false;
         }
         if resistor.ntc != ntc || resistor.temperature_coefficients != temperature_coefficients {

@@ -347,6 +347,26 @@ mod analog {
     }
 
     #[test]
+    fn routed_tempco_rejects_infinite_conductance_without_changing_temperature() {
+        let netlist = "Vcc vcc 0 dc 3.3\nRhot vcc sense 1e-307 tc1=-0.009999999999999 tnom=25 temp=25\nRpull sense 0 10k\n";
+        let cfg = AnalogConfig {
+            sources: BTreeMap::from([("temperature_c".to_string(), "Rhot".to_string())]),
+            ..AnalogConfig::default()
+        };
+        let mut adapter = AnalogCosimAdapter::from_netlist(netlist, &cfg).unwrap();
+        let result = adapter.step(CosimStep {
+            time_ns: 100_000,
+            dt_ns: 100_000,
+            inputs: BTreeMap::from([("temperature_c".to_string(), CosimSignalValue::F64(125.0))]),
+        });
+        assert!(result.is_err(), "infinite conductance must be rejected");
+        assert_eq!(
+            adapter.input_initial_value("temperature_c"),
+            Some(CosimSignalValue::F64(25.0))
+        );
+    }
+
+    #[test]
     fn an_input_that_is_not_a_circuit_source_is_ignored() {
         let mut adapter =
             AnalogCosimAdapter::from_netlist(RC, &rc_config()).expect("adapter builds");
