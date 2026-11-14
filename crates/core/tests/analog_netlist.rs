@@ -98,12 +98,42 @@ C1 out 0 100n
     }
 
     #[test]
+    fn parses_resistor_temperature_coefficients_and_applies_both_orders() {
+        let circuit = parse_netlist("Rtemp a 0 1k tc1=4m tc2=1u tnom=25 temp=125\n")
+            .expect("temperature-coefficient resistor parses");
+        let resistor = &circuit.resistors[0];
+        let model = resistor
+            .temperature_coefficients
+            .expect("TC parameters attach to the resistor");
+        assert_eq!(model.tc1, 4e-3);
+        assert_eq!(model.tc2, 1e-6);
+        assert_eq!(model.nominal_temperature_celsius, 25.0);
+        assert_eq!(model.temperature_celsius, 125.0);
+        assert_eq!(resistor.resistance_ohms(), 1410.0);
+    }
+
+    #[test]
     fn refuses_invalid_ntc_parameters() {
         for text in [
             "Rntc a 0 10k beta=0",
             "Rntc a 0 -10k beta=3950",
             "Rntc a 0 10k beta=3950 temp=-273.15",
             "Rntc a 0 10k temp=25",
+        ] {
+            assert!(parse_netlist(text).is_err(), "must refuse `{text}`");
+        }
+    }
+
+    #[test]
+    fn refuses_invalid_resistor_temperature_coefficients() {
+        for text in [
+            "R1 a 0 1e-320 tc1=0",
+            "R1 a 0 1k tc1=NaN temp=100",
+            "R1 a 0 1k tc2=1u tnom=-273.15",
+            "R1 a 0 1k tc1=1m temp=-300",
+            "R1 a 0 1k tc1=-1m temp=2027 tnom=27",
+            "R1 a 0 1k tc1=1m beta=3950",
+            "R1 a 0 1k temp=100",
         ] {
             assert!(parse_netlist(text).is_err(), "must refuse `{text}`");
         }
@@ -160,6 +190,24 @@ C1 out 0 100n
         let mut solver = Solver::new(circuit, Integration::BackwardEuler).unwrap();
         assert!(solver.set_resistance(0, 1e-308).is_err());
         assert_eq!(solver.circuit().resistors[0].ohms, 1.0);
+    }
+
+    #[test]
+    fn changing_tempco_nominal_resistance_checks_effective_conductance() {
+        let circuit = parse_netlist("R1 a 0 1 tc1=-0.009999999999999 tnom=25 temp=125").unwrap();
+        let mut solver = Solver::new(circuit, Integration::BackwardEuler).unwrap();
+        assert!(solver.set_resistance(0, 1e-307).is_err());
+        assert_eq!(solver.circuit().resistors[0].ohms, 1.0);
+    }
+
+    #[test]
+    fn changing_tempco_nominal_resistance_accepts_finite_effective_conductance() {
+        let circuit = parse_netlist("R1 a 0 1e-319 tc1=1e11 tnom=25 temp=125").unwrap();
+        let mut solver = Solver::new(circuit, Integration::BackwardEuler).unwrap();
+        solver
+            .set_resistance(0, 1e-320)
+            .expect("effective conductance remains finite");
+        assert_eq!(solver.circuit().resistors[0].ohms, 1e-320);
     }
 
     #[test]

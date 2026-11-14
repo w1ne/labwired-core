@@ -5507,6 +5507,23 @@ mod analog {
         assert!(build("V1 in 0 dc 0\nR1 in d 1k\nJ1 d in 0 NJF\n").is_nonlinear());
     }
 
+    /// A solved load line checks that TC1/TC2 change the resistor stamp, not
+    /// only the parsed fields. At ΔT=100 °C, the coefficients multiply 1 kΩ
+    /// by 1 + 0.4 + 0.01 = 1.41.
+    #[test]
+    fn resistor_temperature_coefficients_change_the_operating_point() {
+        let solver = build(
+            "V1 in 0 dc 1.41\n\
+             R1 in 0 1k tc1=4m tc2=1u tnom=25 temp=125\n",
+        );
+
+        assert!(
+            (source_current(&solver, "V1") - 1e-3).abs() < 1e-12,
+            "1.41 V across the adjusted 1.41 kΩ resistor must be 1 mA, got {} A",
+            source_current(&solver, "V1")
+        );
+    }
+
     /// An ideal voltage source connected straight across a junction with no
     /// series resistance is not a hard circuit, it is an impossible one: the
     /// junction conductance runs away and the matrix loses its pivot. That has
