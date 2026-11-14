@@ -1,0 +1,21 @@
+{
+  "id": "pic24f08ka101",
+  "in_boards": false,
+  "uart": {
+    "state": "proven",
+    "file": "crates/core/tests/pic24_ka_smoke.rs",
+    "test": "pic24f08ka101_uart_smoke",
+    "signal": "the committed XC16 v1.70 ELF boots on pic24f08ka101 and writes 'HI' through U1TXREG (0x0224); examples/pic24f08ka101/io-smoke.yaml asserts the same output under `labwired test`",
+    "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test pic24_ka_smoke; strict_onboarding examples/pic24f08ka101/io-smoke.yaml"
+  },
+  "spi": {
+    "state": "none",
+    "gap": "No KA example or test drives SPI1 on this part; the shared PIC24 SPI model is not claimed for the KA family.",
+    "lane": "none"
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "No KA example or test drives I2C1 on this part; the shared PIC24 I2C model is not claimed for the KA family.",
+    "lane": "none"
+  }
+}

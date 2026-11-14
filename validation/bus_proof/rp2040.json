@@ -1,0 +1,27 @@
+{
+  "id": "rp2040",
+  "in_boards": true,
+  "uart": {
+    "state": "proven",
+    "file": "crates/core/tests/firmware_survival.rs",
+    "test": "test_rp2040_demo_survival",
+    "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'RP2040_SMOKE_OK\\\\n' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
+    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+  },
+  "spi": {
+    "state": "proven",
+    "file": "crates/core/src/tests/rp2040_spi_carries_a_byte.rs",
+    "test": "rp2040_spi_loopback_carries_a_real_byte_under_firmware",
+    "signal": "the committed tests/fixtures/tier1/rp2040.elf runs in-sim; its check_spi puts the PL022 in internal loopback (CR1.LBM), writes 0xA5 to SSPDR, waits for SR.RNE and requires the byte read back to be 0xA5. The test asserts 'TIER1 spi PASS' on the real UART sink, asserts 'TIER1 spi FAIL' is absent, asserts the transcript is non-empty, and separately re-reads the fixture SOURCE to require the 0xA5 comparison still exists so a weakened check cannot keep the claim alive on a stale ELF.",
+    "lane": "core-ci / pr-gate - EVERY PULL REQUEST (cargo test --lib over default-members)",
+    "note": "watched fail first: forcing the loopback path off in peripherals/rp2040/spi.rs makes the firmware print 'TIER1 spi FAIL code=spi-data' and the test go red. It is internal loopback, not an external device - the byte round-trips through the shift engine, nothing on the board receives it."
+  },
+  "i2c": {
+    "state": "proven",
+    "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
+    "test": "LW_L3_OK",
+    "signal": "real Arduino firmware writes a register-pointer byte to the INA219 model attached at 0x40 in validation/arduino-matrix/systems/<chip>.yaml and Wire.endTransmission() returns 0 (the device ACKed); the verdict LW_L3_OK then comes back as real bytes on the modelled UART, matched by a uart_contains oracle",
+    "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
+    "note": "the ACK is meaningful because the same chips' tier-1 fixtures show an UNMATCHED address NACKs (esp32 check_i2c addr 0x20, stm32 NACKF, rp2040 ABRT_7B_ADDR_NOACK) - the bus does not blanket-ACK. LIMIT: this proves address+data out and the device's ACK back, not a payload readback. Evidence: run 30842505709, 'cells=45 expected>=45 fails=0', 2026-08-03. rp2040_i2c_irq_delivery.rs drives the real shipped chip through Machine::advance but asserts only NVIC.ISPR bits; the byte-content proof in peripherals/rp2040/i2c.rs is a bare unit test with no chip and no firmware."
+  }
+}

@@ -173,7 +173,7 @@ The Zephyr case asserts `Hello World! nucleo_u575zi_q` (the full stock line is
 capture; the Arduino case asserts the `LW_L0_OK` marker and exercises the
 Cube-startup `CRC->POL` write plus the U5 CRS register surface.
 
-`validation/bus_proof_matrix.json` carries the U575 row (`uart`/`i2c`/`spi` all
+`validation/bus_proof/stm32u575.json` carries the U575 row (`uart`/`i2c`/`spi` all
 `proven`), gated by `cargo test -p labwired-core --lib bus_proof_matrix`:
 
 ```
