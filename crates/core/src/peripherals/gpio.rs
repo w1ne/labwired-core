@@ -2774,6 +2774,13 @@ impl GpioPort {
 }
 
 impl crate::Peripheral for GpioPort {
+    fn is_stm32_gpio_port(&self) -> bool {
+        matches!(
+            &self.family,
+            GpioFamily::Stm32F1(_) | GpioFamily::Stm32V2(_)
+        )
+    }
+
     fn register_stm32_gpio_observer(
         &mut self,
         port_index: u8,
