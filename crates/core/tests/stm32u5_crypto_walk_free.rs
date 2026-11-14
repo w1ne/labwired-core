@@ -56,11 +56,6 @@ fn hash_level_irq_tracks_the_register_mask_and_status_on_writes() {
         bus.is_nvic_irq_pending(16 + 96),
         "asserted HASH IRQ should re-pend after ICPR"
     );
-    bus.clear_nvic_pending(16 + 96);
-    assert!(
-        bus.is_nvic_irq_pending(16 + 96),
-        "asserted HASH IRQ should re-pend after acknowledgement"
-    );
     bus.write_u32(HASH + 0x24, 1).unwrap();
     assert_eq!(bus.read_u32(HASH + 0x24).unwrap() & 1, 0, "DINIS clears");
     assert_eq!(

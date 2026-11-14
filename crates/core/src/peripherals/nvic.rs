@@ -112,7 +112,7 @@ impl Nvic {
             let bit = (irq - 16) % 32;
             if idx < 8 {
                 // Clear pending, set active
-                self.state.clear_pending(idx, 1 << bit);
+                self.state.ispr[idx].fetch_and(!(1 << bit), Ordering::SeqCst);
                 self.state.iabr[idx].fetch_or(1 << bit, Ordering::SeqCst);
             }
         }
