@@ -13,7 +13,7 @@
  *   - QEI1 in x4 mode with index reset (QEIM = 110), POSRES = 1, MAXCNT = 199,
  *     QEA = RP0/RB0, QEB = RP1/RB1, INDX = RP2/RB2.
  * Then it writes a completion marker to 0x0E00 and loops. The integration
- * test (crates/core/tests/pic24_xc16_m2.rs) steps until the marker, checks
+ * test (crates/core/tests/pic/pic24_xc16_m2.rs) steps until the marker, checks
  * the register image and the PWM pads, injects quadrature edges and checks
  * POS1CNT/UPDN/QEIIF, then resets the index and checks the direction-aware
  * reset.

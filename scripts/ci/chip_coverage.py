@@ -90,7 +90,7 @@ def system_dir() -> Path:
 
 
 def survival_test() -> Path:
-    return REPO_ROOT / "crates/core/tests/firmware_survival.rs"
+    return REPO_ROOT / "crates/core/tests/gates/firmware_survival.rs"
 
 
 def ledger_path() -> Path:

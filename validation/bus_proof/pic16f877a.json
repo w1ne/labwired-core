@@ -3,10 +3,10 @@
   "in_boards": false,
   "uart": {
     "state": "proven",
-    "file": "crates/core/tests/pic16f877a_smoke.rs",
+    "file": "crates/core/tests/pic/pic16f877a_smoke.rs",
     "test": "sdcc_firmware_boots_and_prints_the_banner",
     "signal": "the committed SDCC 4.4.0 ELF boots on pic16f877a and writes 'PIC16F877A OK' / 'LED=1' / 'TOGGLE OK' through the USART TXREG (0x19); examples/pic16f877a/io-smoke.yaml asserts the same ordered output under `labwired test`",
-    "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test pic16f877a_smoke; strict_onboarding examples/pic16f877a/io-smoke.yaml"
+    "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test pic pic16f877a_smoke::; strict_onboarding examples/pic16f877a/io-smoke.yaml"
   },
   "spi": {
     "state": "none",

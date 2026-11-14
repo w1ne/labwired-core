@@ -3,11 +3,11 @@
   "in_boards": false,
   "uart": {
     "state": "proven",
-    "file": "crates/core/tests/firmware_survival.rs",
+    "file": "crates/core/tests/gates/firmware_survival.rs",
     "test": "test_stm32u545_blinky_survival",
     "signal": "the committed bare-metal blinky ELF (tests/fixtures/nucleo-u545re-blinky.elf) is booted in-sim and assert_uart_contains matches 'OK\\n' on a real bus.attach_uart_tx_sink capture of USART1 (VCP, PA9). Fixture absence is a hard assert!, not a skip.",
-    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival",
-    "note": "crates/core/tests/nucleo_u545re.rs additionally proves button PC13 reports over the VCP and a byte injected on USART1 RX is echoed on TX; the Arduino matrix L0 cell is a second proof. Evidence captured 2026-10-03."
+    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test gates firmware_survival::",
+    "note": "crates/core/tests/stm32/nucleo_u545re.rs additionally proves button PC13 reports over the VCP and a byte injected on USART1 RX is echoed on TX; the Arduino matrix L0 cell is a second proof. Evidence captured 2026-10-03."
   },
   "spi": {
     "state": "proven",

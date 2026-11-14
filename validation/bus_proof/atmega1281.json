@@ -3,10 +3,10 @@
   "in_boards": true,
   "uart": {
     "state": "proven",
-    "file": "crates/core/tests/avr_atmega1281_firmware.rs",
+    "file": "crates/core/tests/avr/avr_atmega1281_firmware.rs",
     "test": "atmega1281_compiled_firmware_prints_and_drives_pb5",
     "signal": "the committed AVR-GCC atmega1281 ELF prints `1281 OK` through USART0 and the test asserts the captured serial sink plus PB5 package output; no silicon or wire-waveform claim is made",
-    "lane": "Core Board CI / atmega1281-io and pr-workspace-tests: cargo test -p labwired-core --test avr_atmega1281_firmware"
+    "lane": "Core Board CI / atmega1281-io and pr-workspace-tests: cargo test -p labwired-core --test avr avr_atmega1281_firmware::"
   },
   "spi": {
     "state": "none",

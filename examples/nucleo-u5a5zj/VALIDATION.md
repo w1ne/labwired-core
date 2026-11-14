@@ -25,8 +25,8 @@ arithmetic subtraction with sign extension through 4160-bit operands. It
 rejects widths above 4160 bits.
 
 ```bash
-cargo test -p labwired-core --test stm32u5_exec_oracle -- --nocapture
-cargo test -p labwired-core --test stm32u5_reset_conformance -- --nocapture
+cargo test -p labwired-core --test stm32 stm32u5_exec_oracle:: -- --nocapture
+cargo test -p labwired-core --test stm32 stm32u5_reset_conformance:: -- --nocapture
 ```
 
 Pass criteria: the oracle tests and memory/reset conformance test pass. This

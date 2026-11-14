@@ -28,7 +28,7 @@
 //! Like [`HcSr04`](crate::peripherals::hc_sr04::HcSr04) and
 //! [`Dht22`](crate::peripherals::components::dht22::Dht22), the encoder DRIVES
 //! two pins the MCU samples as inputs and observes nothing, so it can't be a
-//! plain memory-mapped device. The [`SystemBus`](crate::bus::SystemBus) holds a
+//! plain memory-mapped device. The [`SystemBus`](labwired_core::bus::SystemBus) holds a
 //! list of [`RotaryEncoder`] links; a cheap per-tick pass drives each channel's
 //! input register, touching the bus only when a level changes.
 //!
@@ -202,9 +202,9 @@ impl RotaryEncoder {
 /// Drivable target position, in detents from the origin. Rotary encoders live
 /// directly on the bus (`SystemBus::gpio_devices`), so the bus input walk
 /// reaches this impl and reports each encoder under its `id`.
-impl crate::sim_input::SimInput for RotaryEncoder {
-    fn input_channels(&self) -> &'static [crate::sim_input::InputChannel] {
-        use crate::sim_input::InputChannel;
+impl labwired_core::sim_input::SimInput for RotaryEncoder {
+    fn input_channels(&self) -> &'static [labwired_core::sim_input::InputChannel] {
+        use labwired_core::sim_input::InputChannel;
         // Relative detents from the origin; range is a generous soft bound for a
         // UI slider — the model itself imposes no hard limit.
         const CH: &[InputChannel] = &[InputChannel {
@@ -218,7 +218,11 @@ impl crate::sim_input::SimInput for RotaryEncoder {
         CH
     }
 
-    fn set_input(&mut self, key: &str, value: f64) -> Result<(), crate::sim_input::SimInputError> {
+    fn set_input(
+        &mut self,
+        key: &str,
+        value: f64,
+    ) -> Result<(), labwired_core::sim_input::SimInputError> {
         self.require_channel(key, value)?;
         self.set_position_detents(value.round() as i64);
         Ok(())
@@ -229,13 +233,13 @@ impl crate::sim_input::SimInput for RotaryEncoder {
     }
 }
 
-impl crate::bus::BusResidentDevice for RotaryEncoder {
+impl labwired_core::bus::BusResidentDevice for RotaryEncoder {
     /// Advance the shaft to `now` and drive whichever of its CLK/DT input-register
     /// bits changed. This is the body of the former
     /// `SystemBus::drive_rotary_encoder`, moved onto the device; the register IO
-    /// stays on the far side of the [`DevicePins`](crate::bus::DevicePins) port.
+    /// stays on the far side of the [`DevicePins`](labwired_core::bus::DevicePins) port.
     /// Two independent pins, each a transition-only IDR write.
-    fn service(&mut self, pins: &mut dyn crate::bus::DevicePins, now: u64) {
+    fn service(&mut self, pins: &mut dyn labwired_core::bus::DevicePins, now: u64) {
         // Inherent `RotaryEncoder::service` (chosen over the trait method here —
         // inherent methods win resolution) does the phase advance + change flags.
         let ((clk_high, dt_high), (clk_changed, dt_changed)) = self.service(now);
@@ -264,7 +268,7 @@ impl crate::bus::BusResidentDevice for RotaryEncoder {
         }
     }
 
-    fn as_sim_input(&mut self) -> &mut dyn crate::sim_input::SimInput {
+    fn as_sim_input(&mut self) -> &mut dyn labwired_core::sim_input::SimInput {
         self
     }
 

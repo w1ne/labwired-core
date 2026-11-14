@@ -662,7 +662,7 @@ Each hook was one part's private copy of
 resolved GPIO peripheral indices, called from three places in
 `bus/accessors.rs`. **The bus now has no typed display field at all**, and
 `no_typed_display_field_on_the_bus` in
-`crates/core/tests/bus_resident_device_port.rs` fails if one comes back.
+`crates/core/tests/bus/bus_resident_device_port.rs` fails if one comes back.
 
 Two facts a bus-resident display states, and both are load-bearing:
 
@@ -856,7 +856,7 @@ pub trait I80Panel: std::fmt::Debug + Send + Sync {
 `&self`, because a panel is shared between the GPIO observer watching its pads
 and the peripheral strobing its bus. One method, because a second one is how a
 controller learns about a part again — `i80_panel_seam_stays_narrow` in
-`crates/core/tests/esp32s3_lcd_i80_pixels.rs` reads the trait's body and fails
+`crates/core/tests/display/esp32s3_lcd_i80_pixels.rs` reads the trait's body and fails
 on it, the same way `resident_device_port_stays_narrow` guards `DevicePins`.
 
 ⚠️ **Read a panel by FORMAT, never by concrete type.**

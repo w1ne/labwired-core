@@ -151,7 +151,7 @@ Verification: 16 `dsp_*` unit tests use the PRM's MAC/MPY/MPY.N/MSC/CLR/
 MOVSAC/LAC/SAC/SAC.R examples as golden vectors, plus saturation-mode,
 rounding-tie, unsigned, sticky-flag and full prefetch-table coverage; a real
 XC16 v1.70 firmware (`firmware/xc16-dsp-mac.c`) boots and reproduces the
-example-1 sequence (`crates/core/tests/pic24_xc16_dsp.rs`).
+example-1 sequence (`crates/core/tests/pic/pic24_xc16_dsp.rs`).
 
 ### 3.3 Motor Control PWM + QEI (M2, implemented 2026-10-23)
 
@@ -211,7 +211,7 @@ PWM with dead time, override, fault entry/release, the postscaler, the QEI
 decoder in x2/x4, match/index resets, CNTERR/CEID, timer mode and the
 digital filter; the real XC16 firmware `xc16-m2-pwm-qei.c` configures both
 blocks and the integration test checks the register image, the PWM pads and
-injected quadrature edges (`crates/core/tests/pic24_xc16_m2.rs`).
+injected quadrature edges (`crates/core/tests/pic/pic24_xc16_m2.rs`).
 
 **Approximations** (documented, not guessed): active-high PWM polarity and
 PWMPIN = 1 (erased-device FPOR) since configuration bits are not modelled;
@@ -310,7 +310,7 @@ added four base-ISA encodings the XC16 startup uses: 3-operand `SUB`,
 `INC Ws,Wd` (C/DC/N/OV/Z), and the WREG forms of `CLR Wd`/`SETM Wd`
 (no status flags; DS70283H Table 22-2 #15/#39/#69), pinned by xc16-as words. The real XC16 firmware
 `xc16-m3-adc-spi-i2c.c` samples AN4, loops 0xA5 through SPI1 and reads the
-TMP102; `crates/core/tests/pic24_xc16_m3.rs` checks the results,
+TMP102; `crates/core/tests/pic/pic24_xc16_m3.rs` checks the results,
 `"M3 OK\n"` on UART1 and the register image.
 
 **Approximations** (documented, not guessed): ADRC = 1 (internal RC)

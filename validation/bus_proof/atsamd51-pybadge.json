@@ -3,7 +3,7 @@
   "in_boards": false,
   "uart": {
     "state": "none",
-    "gap": "no test loads configs/chips/atsamd51-pybadge.yaml and moves a byte. crates/core/tests/pybadge_config.rs builds the PyBadge bus and asserts the 0x4000 reset-vector boot state (SP/PC) only; it runs a `b .` stub, not firmware that touches SERCOM. The atsamd51 Metro M4 SERCOM3 proof does not transfer: firmware_survival loads configs/chips/atsamd51.yaml, and the PyBadge Feather UART is SERCOM1.",
+    "gap": "no test loads configs/chips/atsamd51-pybadge.yaml and moves a byte. crates/core/tests/samd/pybadge_config.rs builds the PyBadge bus and asserts the 0x4000 reset-vector boot state (SP/PC) only; it runs a `b .` stub, not firmware that touches SERCOM. The atsamd51 Metro M4 SERCOM3 proof does not transfer: firmware_survival loads configs/chips/atsamd51.yaml, and the PyBadge Feather UART is SERCOM1.",
     "lane": "none"
   },
   "spi": {
