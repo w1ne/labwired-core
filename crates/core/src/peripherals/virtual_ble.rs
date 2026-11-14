@@ -613,13 +613,14 @@ impl crate::Peripheral for VirtualBle {
         self.cpu_hz = hz.max(1);
     }
 
-    fn attach_ble_air(&mut self, air: BleAirBus) {
+    fn attach_ble_air(&mut self, air: BleAirBus) -> bool {
         self.rx_cursor = air.current_seq();
         self.air = air;
         // Anything queued came off the OLD air and belongs to a lab this
         // controller is no longer in.
         self.queued.clear();
         self.iflag &= !RX_AVAIL;
+        true
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {
