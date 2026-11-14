@@ -515,11 +515,10 @@ impl<'a> AttachCtx<'a> {
                 }
                 let name = format!("gpio{}", port.to_ascii_lowercase());
                 let idx = self.bus.find_peripheral_index_by_name(&name)?;
-                self.bus.peripherals[idx]
-                    .dev
-                    .as_any()?
-                    .downcast_ref::<crate::peripherals::gpio::GpioPort>()?;
-                return Some((port as u8 - b'A') * 16 + pin);
+                if self.bus.peripherals[idx].dev.is_stm32_gpio_port() {
+                    return Some((port as u8 - b'A') * 16 + pin);
+                }
+                return None;
             }
         }
         SystemBus::parse_esp32s3_gpio_pin(label).or_else(|| SystemBus::parse_esp32_gpio_pin(label))
