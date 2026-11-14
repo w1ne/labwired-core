@@ -2,12 +2,12 @@
 
 Every case but the last builds a SYNTHETIC fleet and a synthetic results tree.
 Grading the real out-ci here is impossible (it exists only on a runner), and
-grading the real boards.yaml for a *verdict* would make these tests a mirror of
+grading the real boards/ for a *verdict* would make these tests a mirror of
 today's fleet: they would go green for the wrong reason the moment someone
 waived a cell, and they could never express "a column of pure skips must fail",
 because the committed fleet is by design not in that state.
 
-The last case does read the real boards.yaml, and it asserts the gate's own
+The last case does read the real boards/, and it asserts the gate's own
 claim about it -- that the committed fleet is gradeable and that an honest run
 over it comes back clean -- rather than restating the fleet's contents.
 
@@ -21,7 +21,7 @@ from pathlib import Path
 import matrix_verdict as mv
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-REAL_FLEET = REPO_ROOT / "validation/arduino-matrix/boards.yaml"
+REAL_FLEET = REPO_ROOT / "validation/arduino-matrix/boards"
 
 SKETCHES = ["L0", "L1", "L2"]
 FLEET = {"alpha": set(), "beta": {"L2"}}
@@ -29,23 +29,22 @@ FLEET = {"alpha": set(), "beta": {"L2"}}
 
 def write_fleet(root: Path, *, boards, sketches=SKETCHES):
     """boards: list of (id, [skips], external_compile?)."""
-    lines = ["boards:"]
+    fleet = root / "boards"
+    fleet.mkdir()
+    sketch_lines = ["sketches:"]
+    for sid in sketches:
+        sketch_lines += [f"  - id: {sid}", f"    dir: sketches/{sid}"]
+    (fleet / "_index.yaml").write_text("\n".join(sketch_lines) + "\n")
     for entry in boards:
         bid, skips = entry[0], entry[1]
         external = entry[2] if len(entry) > 2 else False
-        lines.append(f"  - id: {bid}")
-        lines.append(f"    chip: {bid}")
+        lines = [f"id: {bid}", f"chip: {bid}"]
         if skips:
-            lines.append(f"    sketches_skip: [{', '.join(skips)}]")
+            lines.append(f"sketches_skip: [{', '.join(skips)}]")
         if external:
-            lines.append("    external_compile: { lane: elsewhere }")
-    lines.append("sketches:")
-    for sid in sketches:
-        lines.append(f"  - id: {sid}")
-        lines.append(f"    dir: sketches/{sid}")
-    path = root / "boards.yaml"
-    path.write_text("\n".join(lines) + "\n")
-    return path
+            lines.append("external_compile: { lane: elsewhere }")
+        (fleet / f"{bid}.yaml").write_text("\n".join(lines) + "\n")
+    return fleet
 
 
 def write_results(root: Path, rows_by_artifact):
@@ -166,7 +165,7 @@ def test_main_end_to_end_over_a_synthetic_tree(tmp_path):
 
 
 def test_the_committed_fleet_is_gradeable_and_an_honest_run_is_clean():
-    """Reads the real boards.yaml -- the gate's claim about it, not its contents.
+    """Reads the real boards/ -- the gate's claim about it, not its contents.
 
     Asserts the fleet parses into a non-trivial simulated set, and that a run in
     which every non-waived cell passes grades clean. If someone adds a board or

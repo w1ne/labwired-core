@@ -557,6 +557,10 @@ jobs:
       - name: Validation status — integrity gates + rendered report
         run: |
           python -m pip install --quiet pyyaml
+          # One-file-per-entry registries: file name == id, no duplicate ids,
+          # no empty/unparsable/stray files (validation/boards and
+          # validation/arduino-matrix/boards).
+          python3 validation/registry_dir.py --check
           python3 scripts/generate_validation_status.py --check --drift \
             --output out/validation/VALIDATION_STATUS.md
           python3 scripts/generate_firmware_exercise_matrix.py --check
@@ -634,7 +638,8 @@ jobs:
             scripts/test_generate_model_ratings.py \
             scripts/test_generate_validation_status.py \
             scripts/test_labwired_audit.py \
-            validation/matrix_lib/test_invoke.py
+            validation/matrix_lib/test_invoke.py \
+            validation/test_registry_dir.py
           python3 -m unittest discover -s scripts/tests -p test_cli_release_tag.py
           python3 -m unittest discover -s examples/nrf52840-secure-boot-lab -p test_make_packages.py
 

@@ -1,0 +1,32 @@
+id: nrf52832
+doc: docs/boards/nrf52832.md
+chip: configs/chips/nrf52832.yaml
+tier: structural
+note: "Chip yaml declares UART0 only. UART0 smoke test + empty-assertion survival test exist; no silicon."
+models:
+  - crates/core/src/cpu/cortex_m.rs
+  - crates/core/src/decoder/arm.rs
+  - configs/chips/nrf52832.yaml
+  # 2026-09-21, model_paths_drift_gate: models this board REGISTERS that
+  # its list omitted, so they were invisible to the drift digest. This
+  # board records no silicon capture, so there is no "silicon-verified"
+  # claim for the corrected digest to invalidate — no ack is implied.
+  - crates/core/src/peripherals/gpio.rs
+  - crates/core/src/peripherals/nrf52/clock.rs
+  - crates/core/src/peripherals/nrf52/ficr.rs
+  - crates/core/src/peripherals/nrf52/nvmc.rs
+  - crates/core/src/peripherals/nrf52/pwm.rs
+  - crates/core/src/peripherals/nrf52/radio.rs
+  - crates/core/src/peripherals/nrf52/rtc.rs
+  - crates/core/src/peripherals/nrf52/saadc.rs
+  - crates/core/src/peripherals/nrf52/serial_instance.rs
+  - crates/core/src/peripherals/nrf52/timer.rs
+  - crates/core/src/peripherals/nrf52/twim.rs
+  - crates/core/src/peripherals/nrf52/uarte.rs
+  - crates/core/src/peripherals/nrf52/uicr.rs
+  - crates/core/src/peripherals/nrf52/wdt.rs
+  - crates/core/src/peripherals/spi.rs
+  # 2026-10-16 (#1394), model_paths_drift_gate: the chip descriptor now
+  # declares the Cortex-M SysTick, so its model joins the watch list. No
+  # silicon capture is recorded for this board, so no ack is implied.
+  - crates/core/src/peripherals/systick.rs
