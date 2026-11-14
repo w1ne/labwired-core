@@ -78,8 +78,8 @@ fn repo_root() -> PathBuf {
 const PROFILE: &str = "crates/core/src/system/xtensa/arduino_esp32_profile.rs";
 const BROWSER: &str = "crates/wasm/src/install.rs";
 
-fn read(root: &Path, rel: &str) -> String {
-    std::fs::read_to_string(root.join(rel))
+fn read(_root: &Path, rel: &str) -> String {
+    std::fs::read_to_string(super::src_roots::workspace_path(rel))
         .unwrap_or_else(|e| panic!("{rel} must be readable for this guard to mean anything: {e}"))
 }
 

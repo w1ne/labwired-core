@@ -72,6 +72,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
+# The ONE place this tool names where the engine source lives. Module names in
+# the report and in core_layers*.json are relative to this directory, so they do
+# not change if the directory does; override per run with `--src`.
 DEFAULT_SRC = REPO / "crates" / "core" / "src"
 DEFAULT_LAYERS = HERE / "core_layers.json"
 DEFAULT_BASELINE = HERE / "core_layers_baseline.json"

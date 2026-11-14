@@ -11,6 +11,8 @@
 // This test scans the source and fails if any chip module references another
 // chip module's path, outside comments and outside the explicit allow-list.
 
+#[path = "common/src_roots.rs"]
+mod src_roots;
 use std::fs;
 use std::path::Path;
 
@@ -111,10 +113,11 @@ fn scan_dir(dir: &Path, chip: &str, others: &[&str], violations: &mut Vec<String
 
 #[test]
 fn chip_peripheral_modules_are_self_contained() {
-    let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/peripherals");
     let mut violations = Vec::new();
     for &chip in CHIPS {
-        let dir = base.join(chip);
+        // Resolved per chip, so a chip whose directory moves to its own crate
+        // is still found (and still scanned) through the source roots.
+        let dir = src_roots::core_src(&format!("peripherals/{chip}"));
         if !dir.exists() {
             continue;
         }

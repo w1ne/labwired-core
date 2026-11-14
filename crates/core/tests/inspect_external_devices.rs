@@ -17,6 +17,8 @@
 //! bookkeeping: the topology (a device behind a bus switch is still a device)
 //! and the evidence (a panel that was painted says so in structured form).
 
+#[path = "common/src_roots.rs"]
+mod src_roots;
 use labwired_config::SystemManifest;
 use labwired_core::bus::SystemBus;
 use labwired_core::inspect::{DeviceInspect, InspectOpts};
@@ -328,29 +330,14 @@ fn unpainted_panel_reports_zero_rather_than_nothing() {
 /// at the source level rather than by whichever rig happens to notice.
 #[test]
 fn record_external_devices_has_one_home() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    // Module-relative names (`bus/from_config.rs`), so the expected set does not
+    // change when the source tree is rearranged.
     let mut callers = Vec::new();
-    let mut stack = vec![root];
-    while let Some(dir) = stack.pop() {
-        for entry in std::fs::read_dir(&dir).expect("read src dir") {
-            let path = entry.expect("dir entry").path();
-            if path.is_dir() {
-                stack.push(path);
-                continue;
-            }
-            if path.extension().and_then(|e| e.to_str()) != Some("rs") {
-                continue;
-            }
-            let text = std::fs::read_to_string(&path).expect("read source");
-            for line in text.lines() {
-                if line.contains(".record_external_devices(") {
-                    let rel = path
-                        .strip_prefix(env!("CARGO_MANIFEST_DIR"))
-                        .unwrap_or(&path)
-                        .to_string_lossy()
-                        .into_owned();
-                    callers.push(rel);
-                }
+    for file in src_roots::core_src_files_under("") {
+        let text = std::fs::read_to_string(&file.path).expect("read source");
+        for line in text.lines() {
+            if line.contains(".record_external_devices(") {
+                callers.push(file.rel.clone());
             }
         }
     }
@@ -358,13 +345,13 @@ fn record_external_devices_has_one_home() {
     assert_eq!(
         callers,
         vec![
-            "src/bus/external_devices.rs".to_string(),
-            "src/bus/from_config.rs".to_string(),
+            "bus/external_devices.rs".to_string(),
+            "bus/from_config.rs".to_string(),
             // PIC24 SPI1/I2C1 are CPU-internal: the builder strips the
             // manifest for the bus and attaches the devices to the CPU, but
             // still records the declarations for inspection.
-            "src/system/builder/pic24.rs".to_string(),
-            "src/system/xtensa/esp32.rs".to_string(),
+            "system/builder/pic24.rs".to_string(),
+            "system/xtensa/esp32.rs".to_string(),
         ],
         "a new external-device attach path must record its declarations too, \
          or its devices inspect as anonymous addresses"

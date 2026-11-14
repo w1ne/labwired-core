@@ -204,7 +204,7 @@ fn peripheral_sources() -> Vec<(String, String)> {
             }
         }
     }
-    let root = repo_root("crates/core/src/peripherals");
+    let root = super::src_roots::core_src("peripherals");
     let mut out = Vec::new();
     walk(&root, &root, &mut out);
     out.sort();

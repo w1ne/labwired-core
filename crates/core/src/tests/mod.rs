@@ -115,6 +115,11 @@ pub mod simctl_machine;
 /// One home for reading Rust source as code rather than as prose.
 #[cfg(test)]
 pub mod source_text;
+/// The one place that knows where the engine's Rust source lives (shared with
+/// the integration tests, which include the same file).
+#[cfg(test)]
+#[path = "../../tests/common/src_roots.rs"]
+pub mod src_roots;
 #[cfg(test)]
 pub mod spi_byte_level_golden;
 #[cfg(test)]

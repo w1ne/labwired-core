@@ -35,8 +35,8 @@ fn repo_root() -> PathBuf {
         .expect("repo root")
 }
 
-fn read(root: &Path, rel: &str) -> String {
-    std::fs::read_to_string(root.join(rel))
+fn read(_root: &Path, rel: &str) -> String {
+    std::fs::read_to_string(super::src_roots::workspace_path(rel))
         .unwrap_or_else(|e| panic!("{rel} must be readable for this guard to mean anything: {e}"))
 }
 
