@@ -1,0 +1,5 @@
+name: "nrf54l05-smoke"
+chip: "../../configs/chips/nrf54l05.yaml"
+external_devices: []
+board_io:
+  - { id: "led_p2_09", kind: "led", peripheral: "gpio2", pin: 9, signal: "output", active_high: true }
