@@ -117,6 +117,19 @@ pub fn diode_saturation_current_at_temperature(
     is_nominal * exp_clamped(log_factor / n)
 }
 
+/// Diode trap-assisted tunnel current `−JT·(exp(−V/(NTUN·Vt)) − 1)` and its
+/// conductance, as ngspice-42 `dioload.c` evaluates it at every bias. It
+/// grows with reverse bias and saturates at `JT` in forward bias. No `GMIN`
+/// is added; the junction op already carries it.
+pub fn diode_tunnel_op(voltage: f64, saturation: f64, ntun: f64, thermal_voltage: f64) -> DiodeOp {
+    let slope_voltage = ntun * thermal_voltage;
+    let growth = exp_clamped(-voltage / slope_voltage);
+    DiodeOp {
+        id: -saturation * (growth - 1.0),
+        gd: saturation * growth / slope_voltage,
+    }
+}
+
 /// SPICE diode zero-bias depletion capacitance and junction potential at an
 /// instance temperature, following ngspice's silicon Varshni temperature law.
 ///

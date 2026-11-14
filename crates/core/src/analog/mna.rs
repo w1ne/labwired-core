@@ -245,6 +245,45 @@ fn diode_sidewall_saturation_current(model: DiodeModel, temperature_celsius: Opt
     )
 }
 
+/// Trap-assisted tunnel current from `JTUN·AREA + JTUNSW·PJ`, or `None`
+/// when the card has none. ngspice-42 adds it to the junction current, so it
+/// passes through the `IK`/`IKR` knee and the `TT` diffusion charge. Its
+/// saturation current follows the `IS` temperature law with `NTUN`, `XTITUN`
+/// and `KEG·EG`.
+fn diode_tunnel_op(
+    voltage: f64,
+    model: DiodeModel,
+    temperature_celsius: Option<f64>,
+) -> Option<device::DiodeOp> {
+    let saturation = model.jtun + model.jtunsw;
+    if saturation <= 0.0 {
+        return None;
+    }
+    let Some(temperature_celsius) = temperature_celsius else {
+        return Some(device::diode_tunnel_op(
+            voltage,
+            saturation,
+            model.ntun,
+            device::THERMAL_VOLTAGE,
+        ));
+    };
+    let temperature_kelvin = temperature_celsius + 273.15;
+    let saturation = device::diode_saturation_current_at_temperature(
+        saturation,
+        model.ntun,
+        model.keg * model.eg,
+        model.xtitun,
+        model.tnom_celsius + 273.15,
+        temperature_kelvin,
+    );
+    Some(device::diode_tunnel_op(
+        voltage,
+        saturation,
+        model.ntun,
+        device::thermal_voltage_at_temperature(temperature_kelvin),
+    ))
+}
+
 fn diode_model_op(
     voltage: f64,
     model: DiodeModel,
@@ -285,6 +324,10 @@ fn diode_model_op(
         let side = junction_op(isw, ns);
         op.id += side.id - device::GMIN * voltage;
         op.gd += side.gd - device::GMIN;
+    }
+    if let Some(tunnel) = diode_tunnel_op(voltage, model, temperature_celsius) {
+        op.id += tunnel.id;
+        op.gd += tunnel.gd;
     }
     let recombination = match temperature_celsius {
         None => {

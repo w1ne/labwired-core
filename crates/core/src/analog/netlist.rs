@@ -93,7 +93,11 @@
 //! breakdown voltage; `TRS1`/`TRS2` adjust series resistance, `TTT1`/`TTT2`
 //! adjust transit time, and `TM1`/`TM2` adjust the depletion grading
 //! coefficient; `CJO` and `VJ` follow the diode junction-capacitance
-//! temperature law. A BJT
+//! temperature law. Diode `JTUN`·area + `JTUNSW`·`PJ` add the trap-assisted
+//! tunnel current `−JT·(exp(−V/(NTUN·Vt)) − 1)` (`NTUN` default 30); with
+//! `TEMP`, `JT` follows the saturation-current law with `XTITUN` (default 3)
+//! and `KEG·EG` (`KEG` default 1). Diode `TLEV` is accepted and ignored:
+//! ngspice-42 gives identical results for 0, 1 and 2. A BJT
 //! instance's `TEMP` uses model `TNOM`/`EG`/
 //! `XTI`/`XTB` to adjust thermal voltage, transport and recombination
 //! saturation currents, and forward/reverse beta. BJT `CJE`/`VJE`/`MJE` and
@@ -768,6 +772,19 @@ pub struct DiodeModel {
     /// `TLEVC=1` linear temperature coefficient of `PHP` (`TPHP`), volts per
     /// Celsius degree; `PHP` falls by `TPHP·ΔT`.
     pub tphp: f64,
+    /// Bottom tunnel saturation current `JTUN`, amps per unit area. Zero (the
+    /// default) disables trap-assisted tunnelling. On a bound instance it is
+    /// already multiplied by `AREA`.
+    pub jtun: f64,
+    /// Sidewall tunnel saturation current `JTUNSW`, amps per unit of perimeter
+    /// `PJ`. On a bound instance it is already multiplied by `PJ`.
+    pub jtunsw: f64,
+    /// Tunnel emission coefficient `NTUN`, default 30.
+    pub ntun: f64,
+    /// Tunnel saturation-current temperature exponent `XTITUN`, default 3.
+    pub xtitun: f64,
+    /// Fraction `KEG` of `EG` in the tunnel temperature law, default 1.
+    pub keg: f64,
 }
 
 impl DiodeModel {
@@ -780,6 +797,7 @@ impl DiodeModel {
         Self {
             jsw: self.jsw * pj,
             cjsw: self.cjsw * pj,
+            jtunsw: self.jtunsw * pj,
             pj,
             ..self
         }
@@ -799,6 +817,7 @@ impl DiodeModel {
             ik: self.ik * area,
             ikr: self.ikr * area,
             cjo: self.cjo * area,
+            jtun: self.jtun * area,
             rs: self.rs / area,
             ..self
         }
@@ -881,6 +900,11 @@ impl Default for DiodeModel {
             ctp: 0.0,
             tpb: 0.0,
             tphp: 0.0,
+            jtun: 0.0,
+            jtunsw: 0.0,
+            ntun: 30.0,
+            xtitun: 3.0,
+            keg: 1.0,
         }
     }
 }
@@ -1288,6 +1312,11 @@ pub const REGULATOR_LIMIT_DIODE: DiodeModel = DiodeModel {
     ctp: 0.0,
     tpb: 0.0,
     tphp: 0.0,
+    jtun: 0.0,
+    jtunsw: 0.0,
+    ntun: 30.0,
+    xtitun: 3.0,
+    keg: 1.0,
 };
 
 /// Floor on the input voltage a buck's power-balance sink divides by, volts.
@@ -2011,6 +2040,11 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             ctp: 0.0,
             tpb: 0.0,
             tphp: 0.0,
+            jtun: 0.0,
+            jtunsw: 0.0,
+            ntun: 30.0,
+            xtitun: 3.0,
+            keg: 1.0,
         })),
         // SMAJ5.0A-like 400 W unidirectional TVS. Datasheet: VBR 6.40–7.07 V
         // at IT = 10 mA, VC = 9.2 V at IPP = 43.5 A. BV sits mid-window at
@@ -2055,6 +2089,11 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             ctp: 0.0,
             tpb: 0.0,
             tphp: 0.0,
+            jtun: 0.0,
+            jtunsw: 0.0,
+            ntun: 30.0,
+            xtitun: 3.0,
+            keg: 1.0,
         })),
         "NJF" => Some(ModelCard::Jfet(JfetModel::defaults(Polarity::N))),
         "PJF" => Some(ModelCard::Jfet(JfetModel::defaults(Polarity::P))),
@@ -3883,6 +3922,20 @@ fn bind_models(
                             .to_string(),
                     ));
                 }
+                if !model.jtun.is_finite()
+                    || model.jtun < 0.0
+                    || !model.jtunsw.is_finite()
+                    || model.jtunsw < 0.0
+                    || !model.ntun.is_finite()
+                    || model.ntun <= 0.0
+                    || !model.xtitun.is_finite()
+                    || !model.keg.is_finite()
+                {
+                    return Err(ctx.parse_err(
+                        "a diode model needs JTUN >= 0, JTUNSW >= 0, NTUN > 0 and finite XTITUN/KEG"
+                            .to_string(),
+                    ));
+                }
                 let model = model.with_perimeter(device.perimeter);
                 let (is_at_temperature, thermal_voltage) =
                     if let Some(temp_celsius) = device.temperature_celsius {
@@ -4959,6 +5012,11 @@ fn parse_model(
             (ModelCard::Diode(model), "CTP") => model.ctp = value,
             (ModelCard::Diode(model), "TPB" | "TVJ") => model.tpb = value,
             (ModelCard::Diode(model), "TPHP") => model.tphp = value,
+            (ModelCard::Diode(model), "JTUN") => model.jtun = value,
+            (ModelCard::Diode(model), "JTUNSW") => model.jtunsw = value,
+            (ModelCard::Diode(model), "NTUN") => model.ntun = value,
+            (ModelCard::Diode(model), "XTITUN") => model.xtitun = value,
+            (ModelCard::Diode(model), "KEG") => model.keg = value,
             (ModelCard::OpAmp(model), "AOL") => model.aol = value,
             (ModelCard::OpAmp(model), "GBW") => model.gbw = value,
             (ModelCard::OpAmp(model), "ROUT") => model.rout = value,
@@ -5289,6 +5347,11 @@ pub const MACRO_CLAMP_DIODE: DiodeModel = DiodeModel {
     ctp: 0.0,
     tpb: 0.0,
     tphp: 0.0,
+    jtun: 0.0,
+    jtunsw: 0.0,
+    ntun: 30.0,
+    xtitun: 3.0,
+    keg: 1.0,
 };
 
 /// Loop gain of the push-pull comparator's output node, V/V from the 1 V

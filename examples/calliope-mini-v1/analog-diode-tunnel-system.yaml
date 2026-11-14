@@ -1,0 +1,26 @@
+# A reverse-biased diode with trap-assisted tunnel current (JTUN) drives two
+# nRF51 ADC inputs from one netlist: the same card at 25 °C on AIN2 and at
+# 85 °C on AIN3. Each 1 MΩ pull-up turns the tunnel current into a voltage.
+name: "calliope-mini-v1-analog-diode-tunnel"
+chip: "../../configs/chips/nrf51822.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "diode_tunnel"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_warm: "adc.adc.2_volts"
+      v_hot: "adc.adc.3_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rw supply warm 1Meg
+        Rh supply hot 1Meg
+        Dw 0 warm DTUN TEMP=25
+        Dh 0 hot DTUN TEMP=85
+        .model DTUN D(IS=1e-14 JTUN=1e-9 NTUN=20 XTITUN=3 KEG=1 EG=1.11 TNOM=25)
+      probes:
+        v_warm: "v(warm)"
+        v_hot: "v(hot)"
+      vdd: 3.3

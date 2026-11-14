@@ -7672,6 +7672,73 @@ mod analog {
         assert!(error.contains("pj"), "unexpected error {error}");
     }
 
+    /// Diode trap-assisted tunnel current `JTUN`·`AREA` + `JTUNSW`·`PJ`
+    /// follows ngspice-42: `−JT·(exp(−V/(NTUN·Vt)) − 1)`, with `JT` on the
+    /// `IS` temperature law using `NTUN`, `XTITUN` and `KEG·EG`. Each
+    /// reverse-biased diode sits behind 1 MΩ, so its tunnel current sets the
+    /// node. Rows: bottom card (a), `area=2` hot with its own `XTITUN`/`KEG`/
+    /// `EG` (b), sidewall only `pj=3` cold (c), `IKR` knee applied to the
+    /// tunnel current (d), `m=2` (e), `BV` breakdown beside tunnelling (f),
+    /// forward bias where the tunnel current saturates at `JT` (g). Reference
+    /// values are ngspice-42 `.op` (`.temp 26.85`, `tnom=26.85`). Without the
+    /// tunnel current rows a–e sit within 10 µV of 5 V, so an ignored `JTUN`
+    /// fails by more than 0.6 V.
+    #[test]
+    fn diode_tunnel_current_jtun_jtunsw_matches_ngspice() {
+        let netlist = "Vdd supply 0 dc 5\n\
+            R1 supply a 1Meg\nR2 supply b 1Meg\nR3 supply c 1Meg\nR4 supply d 1Meg\n\
+            R5 supply e 1Meg\nR6 supply f 10k\nR7 supply g 1Meg\n\
+            D1 0 a DT\nD2 0 b DTH area=2 temp=85\nD3 0 c DSW pj=3 temp=-20\n\
+            D4 0 d DK\nD5 0 e DT m=2\nD6 0 f DZ\nD7 g 0 DT\n\
+            .model DT D(IS=1e-14 JTUN=1e-9 NTUN=20)\n\
+            .model DTH D(IS=1e-14 EG=1.2 JTUN=1e-9 NTUN=25 XTITUN=2 KEG=0.8 TNOM=27)\n\
+            .model DSW D(IS=1e-14 JTUNSW=4e-10 NTUN=15 TNOM=27)\n\
+            .model DK D(IS=1e-14 JTUN=1e-9 NTUN=20 IKR=1e-7)\n\
+            .model DZ D(IS=1e-14 BV=4.5 IBV=1u JTUN=1e-8)\n";
+        let solver = build(netlist);
+        let v = |node: &str| solver.node_voltage(solver.circuit().node(node).expect("node exists"));
+        for (node, ngspice) in [
+            ("a", 3.705_459_244),
+            ("b", 4.312_420_041),
+            ("c", 2.663_463_447),
+            ("d", 4.389_849_681),
+            ("e", 3.442_840_377),
+            ("f", 4.593_311_114),
+            ("g", 0.515_004_686),
+        ] {
+            let got = v(node);
+            assert!(
+                (got - ngspice).abs() < 1e-4,
+                "V({node}): ngspice-42 {ngspice}, got {got}"
+            );
+        }
+
+        // No tunnel card must be bit-identical to the plain diode.
+        let plain = build(&netlist.replace("JTUN=1e-9 NTUN=20)", ")"));
+        let tunnel_free = build(&netlist.replace("JTUN=1e-9 NTUN=20)", "JTUN=0 NTUN=20)"));
+        for node in ["a", "e", "g"] {
+            let node_index = plain.circuit().node(node).expect("node exists");
+            assert_eq!(
+                plain.node_voltage(node_index),
+                tunnel_free.node_voltage(node_index),
+                "JTUN=0 must add no current at {node}"
+            );
+            assert!(
+                plain.node_voltage(node_index) > v(node),
+                "the tunnel current must load {node}"
+            );
+        }
+
+        for card in ["JTUN=-1e-9", "JTUNSW=-1e-9", "NTUN=0", "XTITUN=1e999"] {
+            let error = parse_netlist(&format!(
+                "V1 a 0 1\nD1 a 0 DX\n.model DX D(IS=1e-14 {card})\n"
+            ))
+            .expect_err("an invalid tunnel card must be refused")
+            .to_string();
+            assert!(error.contains("JTUN"), "{card}: unexpected error {error}");
+        }
+    }
+
     /// Diode sidewall depletion charge `CJSW`/`CJP`·`PJ` with `PHP`, `MJSW`
     /// and `FCS` follows ngspice-42. Each diode has its own source; one
     /// backward-Euler step to a new voltage and a second step held there give

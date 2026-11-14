@@ -158,3 +158,125 @@ fn calliope_mini_ntc_and_diode_netlists_reach_distinct_adc_channels() {
         "the independent diode channel should stay constant while the NTC changes: {samples:?}"
     );
 }
+
+/// Node voltage of a 1 MΩ pull-up from 3.3 V into a reverse-biased diode
+/// whose current is the fixture card's tunnel term plus GMIN, by bisection.
+/// `JT(T) = JTUN·exp((T/Tn − 1)·KEG·EG/(NTUN·Vt) + XTITUN/NTUN·ln(T/Tn))`.
+fn tunnel_pull_up_voltage(temperature_c: f64) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const PULL_UP_OHMS: f64 = 1e6;
+    const JTUN_A: f64 = 1e-9;
+    const NTUN: f64 = 20.0;
+    const XTITUN: f64 = 3.0;
+    const KEG_EG_EV: f64 = 1.11;
+    const GMIN: f64 = 1e-12;
+    let kelvin = temperature_c + 273.15;
+    let ratio = kelvin / (25.0 + 273.15);
+    let thermal_v = 1.380_649e-23 * kelvin / 1.602_176_634e-19;
+    let saturation = JTUN_A
+        * ((ratio - 1.0) * KEG_EG_EV / (NTUN * thermal_v) + XTITUN / NTUN * ratio.ln()).exp();
+    let residual = |node_v: f64| {
+        (SUPPLY_V - node_v) / PULL_UP_OHMS
+            - saturation * ((node_v / (NTUN * thermal_v)).exp() - 1.0)
+            - GMIN * node_v
+    };
+    let (mut low, mut high) = (0.0, SUPPLY_V);
+    for _ in 0..100 {
+        let mid = (low + high) / 2.0;
+        if residual(mid) > 0.0 {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    (low + high) / 2.0
+}
+
+#[test]
+fn calliope_mini_diode_tunnel_current_reaches_adc_beside_ntc_and_diode() {
+    let system_path = root("configs/systems/calliope-mini-v1.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load Calliope profile");
+    let analog = SystemManifest::from_file(root(
+        "examples/calliope-mini-v1/analog-ntc-diode-system.yaml",
+    ))
+    .expect("load independent NTC and diode netlists");
+    let tunnel = SystemManifest::from_file(root(
+        "examples/calliope-mini-v1/analog-diode-tunnel-system.yaml",
+    ))
+    .expect("load generic tunnel-diode netlist");
+    profile.cosim_models = analog.cosim_models;
+    profile.cosim_models.extend(tunnel.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load nRF51822 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build Calliope system bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal session")
+        .expect("profile carries three analog netlists");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "all netlists must bind to AIN0..AIN3"
+    );
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold the NTC at 25 °C");
+    let cycles = session.cycles_until_boundary(0);
+    let (steps, errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("solve and route every netlist");
+    assert_eq!(steps.len(), 3, "NTC, diode and tunnel netlists all solve");
+    assert!(errors.is_empty(), "route errors: {errors:?}");
+
+    // ngspice-42 `.op` of the fixture netlist.
+    let mut codes = Vec::new();
+    for (channel, temperature_c, ngspice_v) in [(2, 25.0, 2.974_456_604), (3, 85.0, 3.083_403_732)]
+    {
+        let solved = signal_voltage(&session, &format!("adc.adc.{channel}_volts"));
+        let expected = tunnel_pull_up_voltage(temperature_c);
+        assert!(
+            (solved - expected).abs() < 1e-4,
+            "AIN{channel} at {temperature_c} °C: tunnel law {expected} V, got {solved} V"
+        );
+        assert!(
+            (solved - ngspice_v).abs() < 1e-4,
+            "AIN{channel} at {temperature_c} °C: ngspice-42 {ngspice_v} V, got {solved} V"
+        );
+        let code = convert_channel(&mut bus, channel);
+        assert_eq!(
+            code,
+            expected_10_bit_code(solved),
+            "AIN{channel}'s firmware-visible result must follow the tunnel load line"
+        );
+        codes.push(code);
+    }
+
+    // Without JTUN the pull-ups sit at 3.3 V (code 938). The tunnel current
+    // pulls both well below, and the hot diode conducts less at this bias.
+    let tunnel_free = expected_10_bit_code(3.3);
+    assert!(
+        codes.iter().all(|code| tunnel_free - code >= 60),
+        "tunnel current must move both codes >= 60 LSB below {tunnel_free}: {codes:?}"
+    );
+    assert!(
+        codes[1] - codes[0] >= 20,
+        "the 85 °C tunnel diode must read >= 20 LSB above the 25 °C one: {codes:?}"
+    );
+
+    let ntc_code = convert_channel(&mut bus, 0);
+    let ntc_v = signal_voltage(&session, "adc.adc.0_volts");
+    assert!(
+        (ntc_v - 1.65).abs() < 1e-9,
+        "NTC divider at 25 °C is mid-rail"
+    );
+    assert_eq!(ntc_code, expected_10_bit_code(ntc_v));
+    let diode_v = signal_voltage(&session, "adc.adc.1_volts");
+    assert!((diode_v - diode_load_line_voltage()).abs() < 2e-5);
+    let diode_code = convert_channel(&mut bus, 1);
+    assert_eq!(
+        diode_code,
+        expected_10_bit_code(diode_v),
+        "the plain diode channel is unaffected by the tunnel netlist"
+    );
+}
