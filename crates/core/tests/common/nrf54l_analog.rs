@@ -44,21 +44,28 @@ fn diode_load_line_voltage() -> f64 {
     junction_v + current_at_junction_voltage(junction_v) * DIODE_RS_OHMS
 }
 
-fn voltage(session: &CosimSession, path: &str) -> f64 {
+pub fn voltage(session: &CosimSession, path: &str) -> f64 {
     match session.signals().get(path) {
         Some(CosimSignalValue::F64(volts)) => *volts,
         other => panic!("expected solved voltage at {path}, got {other:?}"),
     }
 }
 
-fn expected_saadc_code(volts: f64) -> u16 {
+pub fn expected_saadc_code(volts: f64) -> u16 {
     let millivolts = (volts * 1000.0).round() as u32;
     ((millivolts * 4096 / 3600).min(4095)) as u16
 }
 
 fn configure_saadc(bus: &mut SystemBus) {
     // Route three external channels for two driven devices and one ground check.
-    for (channel, pin) in [(0u64, 2u32), (1, 3), (2, 4)] {
+    configure_saadc_channels(bus, 3);
+}
+
+/// Connect SAADC channels `0..count` to external inputs (AIN `channel + 2`),
+/// 12-bit, with an EasyDMA buffer for one result per channel.
+pub fn configure_saadc_channels(bus: &mut SystemBus, count: u32) {
+    for channel in 0..u64::from(count) {
+        let pin = channel as u32 + 2;
         let base = SAADC + 0x510 + channel * 0x10;
         bus.write_u32(base, (1 << 30) | pin)
             .expect("select an external analog input");
@@ -69,12 +76,18 @@ fn configure_saadc(bus: &mut SystemBus) {
         .expect("select 12-bit SAADC resolution");
     bus.write_u32(SAADC + 0x62c, RESULT as u32)
         .expect("set SAADC EasyDMA result pointer");
-    bus.write_u32(SAADC + 0x630, 3)
-        .expect("reserve three channel results");
+    bus.write_u32(SAADC + 0x630, count)
+        .expect("reserve one result per channel");
     bus.write_u32(SAADC + 0x500, 1).expect("enable SAADC");
 }
 
 fn scan(bus: &mut SystemBus) -> [u16; 3] {
+    let results = scan_channels(bus, 3);
+    [results[0], results[1], results[2]]
+}
+
+/// Run one EasyDMA scan over the `count` configured channels.
+pub fn scan_channels(bus: &mut SystemBus, count: u32) -> Vec<u16> {
     bus.write_u32(SAADC + 0x104, 0)
         .expect("clear prior END event");
     bus.write_u32(SAADC, 1).expect("arm SAADC EasyDMA scan");
@@ -85,14 +98,12 @@ fn scan(bus: &mut SystemBus) -> [u16; 3] {
     assert_eq!(bus.read_u32(SAADC + 0x104).unwrap(), 1, "scan sets END");
     assert_eq!(
         bus.read_u32(SAADC + 0x634).unwrap(),
-        3,
-        "scan writes all three results"
+        count,
+        "scan writes one result per channel"
     );
-    [
-        bus.read_u16(RESULT).unwrap(),
-        bus.read_u16(RESULT + 2).unwrap(),
-        bus.read_u16(RESULT + 4).unwrap(),
-    ]
+    (0..u64::from(count))
+        .map(|channel| bus.read_u16(RESULT + 2 * channel).unwrap())
+        .collect()
 }
 
 /// Prove the same NTC and diode netlists against an nRF54L system profile.

@@ -752,6 +752,22 @@ pub struct DiodeModel {
     /// Forward-bias sidewall capacitance transition coefficient `FCS`,
     /// default 0.5.
     pub fcs: f64,
+    /// Depletion temperature law selector `TLEVC`. 0 (the default) is
+    /// ngspice's silicon-bandgap law; 1 is the linear `CTA`/`CTP`/`TPB`/`TPHP`
+    /// law. Both apply only with an instance `TEMP`.
+    pub tlevc: u8,
+    /// `TLEVC=1` linear temperature coefficient of `CJO` (`CTA`/`CTC`), per
+    /// Celsius degree.
+    pub cta: f64,
+    /// `TLEVC=1` linear temperature coefficient of `CJSW` (`CTP`), per
+    /// Celsius degree.
+    pub ctp: f64,
+    /// `TLEVC=1` linear temperature coefficient of `VJ` (`TPB`/`TVJ`), volts
+    /// per Celsius degree; `VJ` falls by `TPB·ΔT`.
+    pub tpb: f64,
+    /// `TLEVC=1` linear temperature coefficient of `PHP` (`TPHP`), volts per
+    /// Celsius degree; `PHP` falls by `TPHP·ΔT`.
+    pub tphp: f64,
 }
 
 impl DiodeModel {
@@ -860,6 +876,11 @@ impl Default for DiodeModel {
             php: 1.0,
             mjsw: 0.33,
             fcs: 0.5,
+            tlevc: 0,
+            cta: 0.0,
+            ctp: 0.0,
+            tpb: 0.0,
+            tphp: 0.0,
         }
     }
 }
@@ -1262,6 +1283,11 @@ pub const REGULATOR_LIMIT_DIODE: DiodeModel = DiodeModel {
     php: 1.0,
     mjsw: 0.33,
     fcs: 0.5,
+    tlevc: 0,
+    cta: 0.0,
+    ctp: 0.0,
+    tpb: 0.0,
+    tphp: 0.0,
 };
 
 /// Floor on the input voltage a buck's power-balance sink divides by, volts.
@@ -1980,6 +2006,11 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             php: 1.0,
             mjsw: 0.33,
             fcs: 0.5,
+            tlevc: 0,
+            cta: 0.0,
+            ctp: 0.0,
+            tpb: 0.0,
+            tphp: 0.0,
         })),
         // SMAJ5.0A-like 400 W unidirectional TVS. Datasheet: VBR 6.40–7.07 V
         // at IT = 10 mA, VC = 9.2 V at IPP = 43.5 A. BV sits mid-window at
@@ -2019,6 +2050,11 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             php: 1.0,
             mjsw: 0.33,
             fcs: 0.5,
+            tlevc: 0,
+            cta: 0.0,
+            ctp: 0.0,
+            tpb: 0.0,
+            tphp: 0.0,
         })),
         "NJF" => Some(ModelCard::Jfet(JfetModel::defaults(Polarity::N))),
         "PJF" => Some(ModelCard::Jfet(JfetModel::defaults(Polarity::P))),
@@ -3907,7 +3943,15 @@ fn bind_models(
                 operating_model.tt = model.transit_time_seconds(device.temperature_celsius);
                 operating_model.m =
                     model.grading_coefficient_at_temperature(device.temperature_celsius);
-                if let Some(temperature_celsius) = device.temperature_celsius {
+                if let (Some(temperature_celsius), 1) = (device.temperature_celsius, model.tlevc) {
+                    // ngspice-42 `diotemp.c` `TLEVC=1`: linear in ΔT from
+                    // `TNOM`, with `M` still on its `TM1`/`TM2` law.
+                    let delta = temperature_celsius - model.tnom_celsius;
+                    operating_model.cjo = model.cjo * (1.0 + model.cta * delta);
+                    operating_model.vj = model.vj - model.tpb * delta;
+                    operating_model.cjsw = model.cjsw * (1.0 + model.ctp * delta);
+                    operating_model.php = model.php - model.tphp * delta;
+                } else if let Some(temperature_celsius) = device.temperature_celsius {
                     let nominal_kelvin = model.tnom_celsius + 273.15;
                     let temperature_kelvin = temperature_celsius + 273.15;
                     (operating_model.cjo, operating_model.vj) =
@@ -4905,6 +4949,16 @@ fn parse_model(
             (ModelCard::Diode(model), "PHP") => model.php = value,
             (ModelCard::Diode(model), "MJSW") => model.mjsw = value,
             (ModelCard::Diode(model), "FCS") => model.fcs = value,
+            (ModelCard::Diode(model), "TLEVC") => {
+                if value != 0.0 && value != 1.0 {
+                    return Err(ctx.parse_err("diode TLEVC must be 0 or 1".to_string()));
+                }
+                model.tlevc = value as u8;
+            }
+            (ModelCard::Diode(model), "CTA" | "CTC") => model.cta = value,
+            (ModelCard::Diode(model), "CTP") => model.ctp = value,
+            (ModelCard::Diode(model), "TPB" | "TVJ") => model.tpb = value,
+            (ModelCard::Diode(model), "TPHP") => model.tphp = value,
             (ModelCard::OpAmp(model), "AOL") => model.aol = value,
             (ModelCard::OpAmp(model), "GBW") => model.gbw = value,
             (ModelCard::OpAmp(model), "ROUT") => model.rout = value,
@@ -5230,6 +5284,11 @@ pub const MACRO_CLAMP_DIODE: DiodeModel = DiodeModel {
     php: 1.0,
     mjsw: 0.33,
     fcs: 0.5,
+    tlevc: 0,
+    cta: 0.0,
+    ctp: 0.0,
+    tpb: 0.0,
+    tphp: 0.0,
 };
 
 /// Loop gain of the push-pull comparator's output node, V/V from the 1 V

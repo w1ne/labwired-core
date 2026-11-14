@@ -7826,6 +7826,163 @@ mod analog {
         }
     }
 
+    /// Diode `TLEVC=1` moves `CJO`/`CJSW` by `1 + CTA·ΔT`/`1 + CTP·ΔT` and
+    /// `VJ`/`PHP` down by `TPB·ΔT`/`TPHP·ΔT`, instead of the silicon-bandgap
+    /// law. References are ngspice-42 `@d[charge]` from one `.op` per bias.
+    /// D1 is hot with bottom and sidewall, D2 cold with `TM1` and the
+    /// `CTC`/`TVJ` aliases, D3 hot with `area=2`, D4 has no `TEMP`, D5 is
+    /// the same card as D1 with the default `TLEVC=0`.
+    #[test]
+    fn diode_tlevc1_linear_depletion_temperature_matches_ngspice() {
+        let netlist = "V1 a 0 dc 0\nV2 b 0 dc 0\nV3 c 0 dc 0\nV4 d 0 dc 0\nV5 e 0 dc 0\n\
+            D1 a 0 DL pj=2 temp=85\nD2 b 0 DLM temp=-20\nD3 c 0 DL pj=2 area=2 temp=85\n\
+            D4 d 0 DL pj=2\nD5 e 0 DL0 pj=2 temp=85\n\
+            .model DL D(IS=1e-14 CJO=5p VJ=0.7 M=0.45 FC=0.5 CJSW=1p PHP=0.6 MJSW=0.33 FCS=0.5 TLEVC=1 CTA=2e-3 CTP=3e-3 TPB=1.5e-3 TPHP=1e-3 TNOM=27)\n\
+            .model DLM D(IS=1e-14 CJO=4p VJ=0.8 M=0.5 FC=0.6 TM1=2e-3 TLEVC=1 CTC=1.5e-3 TVJ=2e-3 TNOM=27)\n\
+            .model DL0 D(IS=1e-14 CJO=5p VJ=0.7 M=0.45 FC=0.5 CJSW=1p PHP=0.6 MJSW=0.33 FCS=0.5 TNOM=27)\n";
+        let sources = ["V1", "V2", "V3", "V4", "V5"];
+        // ngspice-42 charge per diode, in the order of `sources`.
+        let ngspice: [(f64, [f64; 5]); 7] = [
+            (0.0, [0.0; 5]),
+            (
+                -3.0,
+                [
+                    -1.506_132_274e-11,
+                    -7.513_574_003e-12,
+                    -2.534_110_133e-11,
+                    -1.369_520_363e-11,
+                    -1.412_662_093e-11,
+                ],
+            ),
+            (
+                -1.2,
+                [
+                    -7.325_643_398e-12,
+                    -3.602_898_798e-12,
+                    -1.239_787_255e-11,
+                    -6.605_381_013e-12,
+                    -6.909_207_012e-12,
+                ],
+            ),
+            (
+                -0.2,
+                [
+                    -1.489_757_059e-12,
+                    -7.095_177_273e-13,
+                    -2.534_638_375e-12,
+                    -1.324_024_446e-12,
+                    -1.417_791_153e-12,
+                ],
+            ),
+            (
+                0.1,
+                [
+                    8.228_825_663e-13,
+                    3.817_680_467e-13,
+                    1.403_160_733e-12,
+                    7.232_397_590e-13,
+                    7.887_860_491e-13,
+                ],
+            ),
+            (
+                0.3,
+                [
+                    2.838_662_622e-12,
+                    1.217_671_813e-12,
+                    4.760_700_056e-12,
+                    2.492_772_001e-12,
+                    2.799_690_438e-12,
+                ],
+            ),
+            (
+                0.6,
+                [
+                    6.685_641_025e-12,
+                    2.767_961_031e-12,
+                    1.137_621_681e-11,
+                    5.684_632_893e-12,
+                    6.615_391_695e-12,
+                ],
+            ),
+        ];
+        let h = 1e-6;
+        let mut solver = Solver::new(
+            parse_netlist(netlist).expect("TLEVC deck parses"),
+            Integration::BackwardEuler,
+        )
+        .expect("TLEVC solver builds");
+        let indices = sources.map(|name| solver.voltage_source_index(name).expect("source exists"));
+        for window in ngspice.windows(2) {
+            let ((_, before), (voltage, after)) = (window[0], window[1]);
+            for index in indices {
+                solver.set_voltage_source(index, voltage);
+            }
+            solver.advance(h).expect("step to the new bias solves");
+            let step = sources.map(|name| source_current(&solver, name));
+            solver.advance(h).expect("held bias solves");
+            let hold = sources.map(|name| source_current(&solver, name));
+            for (column, name) in sources.iter().enumerate() {
+                let expected = after[column] - before[column];
+                let got = (step[column] - hold[column]) * h;
+                assert!(
+                    (got - expected).abs() < 1e-4 * expected.abs() + 1e-17,
+                    "{name} {voltage} V: ngspice-42 charge change {expected} C, got {got} C"
+                );
+            }
+        }
+
+        // The linear law is not the bandgap law: at -3 V the same card holds
+        // 0.93 pC more under TLEVC=1 than under TLEVC=0.
+        let (_, at_minus_3) = ngspice[1];
+        assert!(at_minus_3[4] - at_minus_3[0] > 0.9e-12);
+
+        // The coefficients do nothing without TLEVC=1, and TLEVC=1 does
+        // nothing without an instance TEMP.
+        let transient = |card: &str, temp: &str| {
+            let mut solver = Solver::new(
+                parse_netlist(&format!(
+                    "V1 in 0 PULSE(-2 0.5 0 10n 10n 1u 2u)\nR1 in a 1k\nD1 a 0 DX {temp}\n.model DX D(IS=1e-14 CJO=5p VJ=0.7 {card})\n"
+                ))
+                .expect("transient deck parses"),
+                Integration::Trapezoidal,
+            )
+            .expect("transient solver builds");
+            let a = solver.circuit().node("a").expect("node exists");
+            (0..40)
+                .map(|_| {
+                    solver.advance(5e-9).expect("transient step solves");
+                    solver.node_voltage(a)
+                })
+                .collect::<Vec<_>>()
+        };
+        let coefficients = "CTA=2e-3 TPB=1.5e-3";
+        assert_eq!(transient(coefficients, "temp=85"), transient("", "temp=85"));
+        assert_eq!(
+            transient(&format!("TLEVC=1 {coefficients}"), ""),
+            transient("", "")
+        );
+        assert_ne!(
+            transient(&format!("TLEVC=1 {coefficients}"), "temp=85"),
+            transient("", "temp=85")
+        );
+
+        for card in ["TLEVC=2", "TLEVC=0.5"] {
+            let error = parse_netlist(&format!(
+                "V1 a 0 1\nD1 a 0 DX\n.model DX D(IS=1e-14 {card})\n"
+            ))
+            .expect_err("an unknown TLEVC must be refused")
+            .to_string();
+            assert!(error.contains("TLEVC"), "{card}: unexpected error {error}");
+        }
+        // A linear law that drives VJ through zero is refused, not solved.
+        let error = parse_netlist(
+            "V1 a 0 1\nD1 a 0 DX temp=600\n.model DX D(IS=1e-14 CJO=5p VJ=0.7 TLEVC=1 TPB=1.5e-3)\n",
+        )
+        .expect_err("a non-positive temperature-adjusted VJ must be refused")
+        .to_string();
+        assert!(error.contains("VJ"), "unexpected error {error}");
+    }
+
     /// The BJT substrate junction is a pn junction from the optional fourth
     /// node (ground when omitted) to the internal collector of a vertical
     /// device or the internal base of a lateral one: `CJS`/`VJS`/`MJS`
