@@ -74,7 +74,7 @@
 use std::collections::BTreeSet;
 
 use super::out_of_line_test_modules::out_of_line_cfg_test_files;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Frozen allowlists. Adding a line here is a deliberate act; read the rule
@@ -214,25 +214,6 @@ const DEFAULT_TICK_BODIES: &[&str] = &[
 // Scanner
 // ─────────────────────────────────────────────────────────────────────────────
 
-fn src_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src")
-}
-
-fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
-    };
-    let mut paths: Vec<PathBuf> = entries.filter_map(|e| e.ok()).map(|e| e.path()).collect();
-    paths.sort();
-    for p in paths {
-        if p.is_dir() {
-            rust_files(&p, out);
-        } else if p.extension().is_some_and(|e| e == "rs") {
-            out.push(p);
-        }
-    }
-}
-
 /// Replace comments and string literals with spaces so brace matching and
 /// keyword search never trip over `"{"` or a doc comment. Length-preserving, so
 /// byte offsets stay usable for line numbers.
@@ -370,20 +351,17 @@ fn normalise(body: &str) -> String {
 
 /// Find every `impl Peripheral for T { .. }` in production source.
 fn parse_peripheral_impls() -> Vec<PeripheralImpl> {
-    let root = src_root();
-    let mut files = Vec::new();
-    rust_files(&root, &mut files);
+    let files: Vec<PathBuf> = super::src_roots::core_src_files_under("")
+        .into_iter()
+        .map(|f| f.path)
+        .collect();
     let out_of_line_tests = out_of_line_cfg_test_files(&files);
     let mut impls = Vec::new();
     for path in files {
         if out_of_line_tests.contains(&path) {
             continue;
         }
-        let rel = path
-            .strip_prefix(&root)
-            .unwrap_or(&path)
-            .to_string_lossy()
-            .replace('\\', "/");
+        let rel = super::src_roots::module_rel(&path);
         // `src/tests/` is this crate's lib-test tree — scaffolding, not models.
         if rel.starts_with("tests/") || rel.ends_with("tests_main.rs") {
             continue;
@@ -677,9 +655,10 @@ fn rule_c_detector_is_not_vacuous() {
 /// asks each peripheral) or the per-config `manifest.walk_deleted` opt-in.
 #[test]
 fn walk_deletion_is_derived_not_asserted() {
-    let root = src_root();
-    let mut files = Vec::new();
-    rust_files(&root, &mut files);
+    let files: Vec<PathBuf> = super::src_roots::core_src_files_under("")
+        .into_iter()
+        .map(|f| f.path)
+        .collect();
     let out_of_line_tests = out_of_line_cfg_test_files(&files);
     let pending: BTreeSet<&str> = RULE_C_PENDING_FIX.iter().map(|(f, _)| *f).collect();
     let mut pending_seen: BTreeSet<String> = BTreeSet::new();
@@ -690,11 +669,7 @@ fn walk_deletion_is_derived_not_asserted() {
         if out_of_line_tests.contains(&path) {
             continue;
         }
-        let rel = path
-            .strip_prefix(&root)
-            .unwrap_or(&path)
-            .to_string_lossy()
-            .replace('\\', "/");
+        let rel = super::src_roots::module_rel(&path);
         if rel.starts_with("tests/") || rel.ends_with("tests_main.rs") {
             continue;
         }

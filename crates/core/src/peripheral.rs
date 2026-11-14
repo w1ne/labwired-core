@@ -1787,8 +1787,11 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// simulation restart, so a controller that kept a stale cursor would
     /// replay the previous run's backlog as live packets.
     ///
-    /// Default no-op: a peripheral with no radio has no air to move.
-    fn attach_ble_air(&mut self, _air: crate::peripherals::ble_air::BleAirBus) {}
+    /// Returns true when this peripheral joined the shared medium. The default
+    /// no-op has no radio and returns false.
+    fn attach_ble_air(&mut self, _air: crate::peripherals::ble_air::BleAirBus) -> bool {
+        false
+    }
 
     /// Put this peripheral's IEEE 802.15.4 radio on `air` (a world's shared
     /// 802.15.4 medium). Default no-op: a peripheral with no 802.15.4 radio

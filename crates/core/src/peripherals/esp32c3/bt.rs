@@ -2512,8 +2512,9 @@ impl Peripheral for Esp32c3Bt {
     /// Move onto a lab's own air. Reached through the trait so
     /// `SystemBus::attach_lab_air` does not have to downcast to this concrete
     /// model to find it — see [`crate::Peripheral::attach_ble_air`].
-    fn attach_ble_air(&mut self, air: BleAirBus) {
+    fn attach_ble_air(&mut self, air: BleAirBus) -> bool {
         self.set_air(air);
+        true
     }
 
     /// Walk-free: once the bus hands over a cycle clock the comparators ride

@@ -1,0 +1,19 @@
+id: stm32g071rb
+chip: stm32g071
+system: systems/stm32g071rb.yaml
+pio: { platform: ststm32, board: nucleo_g071rb, framework: arduino }
+max_steps: 20000000
+budget_reason: "NUCLEO-G071RB 64 MHz: L0~0.07M L2~0.20M; L3 Wire.begin i2c_computeTiming ~11M; L5 ~5.9M; L6 ~2.0M"
+led_watch: "gpioa:5"
+led_min_edges: 2
+# L6 drives TIM2_CH1 on PA0, not LD4/PA5: PA5 is DAC1_OUT2 and the twin
+# models DAC1, so analogWrite(LED_BUILTIN) took the DAC path (DAC_CR.EN2=1,
+# TIM2 untouched) and passed without any PWM. On PA0, TIM2 reaches
+# CEN/PWM1/CC1E with PA0 on AF2, which reaches the pad through the G0
+# timer AF table (tim2 pad_map: stm32g0).
+pwm_watch: "gpioa:0"
+pwm_min_edges: 20
+family: stm32
+sketches_skip: [L8_can]
+sketches_skip_reason:
+  L8_can: "STM32G071 has no CAN peripheral"

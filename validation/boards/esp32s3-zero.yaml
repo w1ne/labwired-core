@@ -1,0 +1,29 @@
+id: esp32s3-zero
+# Board variant of esp32s3: same silicon (LX7), 4 MiB flash / 480 KiB RAM.
+# The board gate is a survival case on the zero descriptor + system: it pins
+# that both YAMLs load, parse and dispatch (arch / `cpu_hz` sanity) through
+# the S3 fast-boot path. It does NOT pin the descriptor's flash/RAM geometry:
+# that builder reads only `cpu_hz` (sizes come from Esp32s3Opts::default()),
+# so a zero-specific memory-map check would need the rom-boot path.
+# No bench part → no silicon capture.
+doc: docs/boards/esp32s3.md
+chip: configs/chips/esp32s3-zero.yaml
+tier: sim-validated
+note: "Waveshare ESP32-S3-Zero (FH4R2). Runs the committed Tier-1 S3 fixture (tests/fixtures/tier1/esp32s3.elf) in fast boot through both the esp32s3-zero descriptor/system and the CLI smoke script examples/esp32s3-zero/tier1-smoke.yaml; the fixture reports clock/gpio/timer/irq/dma/mcpwm/rmt/i2c PASS then `TIER1 done`. The fast-boot builder consumes only `cpu_hz` from the chip descriptor, so this gate pins that the zero chip + system YAMLs load, parse and dispatch — not the descriptor's flash/RAM geometry. Shares the esp32s3 model wholesale (crates/core/src/peripherals/esp32s3 + esp_xtensa_common). No silicon capture — no bench board."
+offline_tests:
+  - "firmware_survival::test_esp32s3_zero_tier1_survival (Tier-1 fixture fast-boot; TIER1 class PASS lines + terminator)"
+  - "session_builder_xtensa::esp32s3_fixture_prints_expected_uart_via_build_machine (same fixture via examples/esp32s3-zero/tier1-smoke.yaml)"
+models:
+  - crates/core/src/peripherals/esp_ledc_wave.rs
+  - crates/core/src/cpu/xtensa_lx7.rs
+  - crates/core/src/cpu/xtensa_lx7/exec
+  - crates/core/src/decoder/xtensa.rs
+  - crates/core/src/peripherals/esp32s3
+  - crates/core/src/peripherals/esp_xtensa_common
+  - crates/core/src/system/xtensa/esp32s3.rs
+  - crates/core/src/peripherals/esp_uart.rs
+  - crates/core/src/peripherals/esp_systimer.rs
+  - crates/core/src/peripherals/esp_rtc_io.rs
+  - crates/core/src/cpu/xtensa_jit
+  - configs/chips/esp32s3-zero.yaml
+  - configs/peripherals/esp32s3

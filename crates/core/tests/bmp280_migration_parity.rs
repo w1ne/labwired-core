@@ -56,7 +56,7 @@ const ADDR: u8 = 0x76;
 // NOT a copy pasted in here: `components/bmp280.rs` still exists. It stays
 // because the ESP32 and ESP32-C3 I²C controller tests attach a register-pointer
 // slave and any one will do, and `crates/core/src/peripherals/esp32c3/` is
-// covered by a silicon drift-ack digest (`validation/manifest.yaml`) that an
+// covered by a silicon drift-ack digest (`validation/boards/`) that an
 // edit to a test module inside it would invalidate — a red `--check --drift`
 // gate for a change that touches no model. The struct is excluded from the
 // declarative-coverage ratchet with that reason, exactly as `veml7700.rs` and

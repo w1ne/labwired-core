@@ -1,0 +1,62 @@
+# Arduino sketch matrix — every LabWired-supported chip with an Arduino path.
+#
+# LAYOUT: one file per board, boards/<id>.yaml (`id:` must equal the file name);
+#   this file holds the sketch list and these notes. core-arduino-matrix-smoke.yml
+#   computes its job matrix from the board files (scripts/ci/arduino_matrix_plan.py),
+#   so adding a board is one new file. Validated by validation/registry_dir.py.
+#
+# Fields of a board file:
+#   chip: configs/chips/<name>.yaml stem
+#   system: relative to this matrix dir
+#   pio: PlatformIO platform / board / framework
+#   max_steps: sim budget (document why in budget_reason — no silent inflation)
+#   led_watch: optional "peripheral:pin" for L2 GPIO oracle (--watch-gpio)
+#   led_min_edges: min logic transitions required when led_watch is set (default 2)
+#   family: grouping only
+
+
+sketches:
+  - id: L0_serial_boot
+    dir: sketches/L0_serial_boot
+    marker: "LW_L0_OK"
+    description: "setup() prints once — proves Arduino core boot + UART"
+
+  - id: L1_serial_loop
+    dir: sketches/L1_serial_loop
+    marker: "LW_L1_OK"
+    description: "loop() prints — proves millis/loop scheduling"
+
+  - id: L2_blink_serial
+    dir: sketches/L2_blink_serial
+    marker: "LW_L2_OK"
+    description: "LED_BUILTIN toggle + serial — UART + optional GPIO edges"
+
+  - id: L3_i2c_sensor
+    dir: sketches/L3_i2c_sensor
+    marker: "LW_L3_OK"
+    description: "Wire + INA219@0x40 — exact config 0x399F + bus 0x19CA when master-RX works; else ACK + PARTIAL marker"
+
+  - id: L4_spi_sensor
+    dir: sketches/L4_spi_sensor
+    marker: "LW_L4_OK"
+    description: "SPI + MAX31855@CS — exact frame 0x01901600"
+
+  - id: L5_adc
+    dir: sketches/L5_adc
+    marker: "LW_L5_OK"
+    description: "analogRead() — family-faithful deterministic codes (not bare 0..4095)"
+
+  - id: L6_pwm
+    dir: sketches/L6_pwm
+    marker: "LW_L6_OK"
+    description: "analogWrite mid duty left running + optional GPIO edge oracle"
+
+  - id: L7_timer
+    dir: sketches/L7_timer
+    marker: "LW_L7_OK"
+    description: "micros() advances ≥1 ms and stays monotonic"
+
+  - id: L8_can
+    dir: sketches/L8_can
+    marker: "LW_L8_OK"
+    description: "CAN loopback ID+data (bxCAN/FDCAN) or TWAI self-RX decode 0x123/0xA5"

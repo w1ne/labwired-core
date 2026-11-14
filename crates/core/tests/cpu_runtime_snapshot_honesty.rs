@@ -25,6 +25,8 @@
 //! `Option`, which carries no arch tag to invent, and the restore's default is
 //! an `Err`. These tests hold both ends, plus the pairing between them.
 
+#[path = "common/src_roots.rs"]
+mod src_roots;
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::avr::Avr;
 use labwired_core::runtime_snapshot::CpuKind;
@@ -254,7 +256,7 @@ fn machine_round_trip_still_works_where_it_is_modelled() {
 /// matches nothing fails instead of passing.
 #[test]
 fn every_core_implements_both_snapshot_halves_or_neither() {
-    let cpu_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/cpu");
+    let cpu_dir = src_roots::core_src("cpu");
     let mut captures: Vec<String> = Vec::new();
     let mut restores: Vec<String> = Vec::new();
     let mut files_read = 0usize;
