@@ -1,0 +1,28 @@
+{
+  "id": "stm32u545",
+  "in_boards": false,
+  "uart": {
+    "state": "proven",
+    "file": "crates/core/tests/firmware_survival.rs",
+    "test": "test_stm32u545_blinky_survival",
+    "signal": "the committed bare-metal blinky ELF (tests/fixtures/nucleo-u545re-blinky.elf) is booted in-sim and assert_uart_contains matches 'OK\\n' on a real bus.attach_uart_tx_sink capture of USART1 (VCP, PA9). Fixture absence is a hard assert!, not a skip.",
+    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival",
+    "note": "crates/core/tests/nucleo_u545re.rs additionally proves button PC13 reports over the VCP and a byte injected on USART1 RX is echoed on TX; the Arduino matrix L0 cell is a second proof. Evidence captured 2026-10-03."
+  },
+  "spi": {
+    "state": "proven",
+    "file": "validation/arduino-matrix/sketches/L4_spi_sensor/src/main.ino",
+    "test": "LW_L4_OK",
+    "signal": "real PlatformIO-compiled Arduino firmware (generic U545RETxQ variant) clocks the MAX31855 device model over spi1 and accepts ONLY the exact default kit frame 0x01901600; the LW_L4_OK verdict returns as real bytes on USART1, matched by a uart_contains oracle.",
+    "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
+    "note": "stm32u545.yaml shares the U575 spi1 pad_map: stm32u5 declaration (drift-guarded). Local run 2026-10-03: 9/9 matrix cells pass."
+  },
+  "i2c": {
+    "state": "proven",
+    "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
+    "test": "LW_L3_OK",
+    "signal": "real PlatformIO-compiled Arduino firmware drives an INA219 model attached at 0x40 on i2c1 through the Wire (stm32l4 engine) path; the device ACKs and the LW_L3_OK verdict returns as real bytes on the modelled USART1, matched by a uart_contains oracle.",
+    "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
+    "note": "same ACK-level caveat as the U575 row: the lane asserts LW_L3_OK, which the sketch also prints for its ACK-only PARTIAL tier. Local run 2026-10-03."
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "id": "stm32g0b1re",
+  "in_boards": false,
+  "uart": {
+    "state": "shallow",
+    "file": "crates/core/tests/g0_reference_firmware.rs",
+    "test": "customer_g0_firmware_initializes_and_handles_external_wake",
+    "gap": "Actual customer ELF configures USART1 COM2 after its real WAKE ISR; register assertions do not prove exchanged UART bytes.",
+    "lane": "iolinki-reference / g0-firmware-wake (every relevant PR and main push; --include-ignored, mandatory built ELF)"
+  },
+  "spi": {
+    "state": "none",
+    "gap": "No SPI firmware byte exchange witness for the minimal G0 descriptor.",
+    "lane": "none"
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "No I2C firmware byte exchange witness for the minimal G0 descriptor.",
+    "lane": "none"
+  }
+}

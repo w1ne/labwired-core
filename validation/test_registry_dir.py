@@ -66,7 +66,8 @@ def test_missing_directory_is_refused(tmp_path):
 
 def test_committed_registries_are_valid():
     for rel, key in rd.COMMITTED.items():
-        assert len(rd.load_yaml_registry(REPO / rel, key)[key]) > 10, rel
+        load = rd.load_json_registry if rel in rd.JSON_DIRS else rd.load_yaml_registry
+        assert len(load(REPO / rel, key)[key]) > 10, rel
 
 
 def test_cli_check_fails_on_a_bad_directory_and_passes_on_the_repo(tmp_path):

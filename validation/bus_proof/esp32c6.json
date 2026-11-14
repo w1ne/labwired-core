@@ -1,0 +1,19 @@
+{
+  "id": "esp32c6",
+  "in_boards": true,
+  "uart": {
+    "state": "proven",
+    "file": "crates/core/tests/firmware_survival.rs",
+    "test": "test_esp32c6_demo_survival",
+    "signal": "committed ELF fixture (tests/fixtures/esp32c6-demo.elf) booted in-sim; assert_uart_contains matches 'OK\\\\n' on a real bus.attach_uart_tx_sink capture after the firmware ungates UART0 through the C6's PCR and routes GPIO16/U0TXD via IO_MUX. Fixture absence is a hard assert!, not a skip. Independently corroborated by the bus_visibility edge gate: esp32c6 shows UART decodable-edge visibility on the wire channel.",
+    "lane": "core-ci / pr-workspace-tests: cargo test -p labwired-core --test firmware_survival"
+  },
+  "spi": {
+    "state": "none",
+    "gap": "no SPI window is declared on configs/chips/esp32c6.yaml, so there is nothing to drive; the SPI0/1/2 windows are deliberately unmapped at L1."
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "no I2C window is declared on configs/chips/esp32c6.yaml; the I2C0 window is deliberately unmapped at L1. The C3's I2C-matrix signal indices do not transfer (I2CEXT0_SCL is 45 on the C6 vs 53 on the C3)."
+  }
+}

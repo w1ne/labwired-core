@@ -1,0 +1,26 @@
+{
+  "id": "esp32",
+  "in_boards": true,
+  "uart": {
+    "state": "proven",
+    "file": "crates/core/tests/esp32_classic_walk_differential.rs",
+    "test": "esp32_classic_serial_reaches_sink_under_browser_policy",
+    "signal": "the committed tests/fixtures/tier1/esp32.elf runs under the BROWSER's event-scheduler policy and the test asserts the UART TX sink is non-empty, printing sink_bytes=N as evidence",
+    "lane": "core-ci / pr-scheduler-observable - EVERY PULL REQUEST (cargo test -p labwired-core --features event-scheduler --test esp32_classic_walk_differential -- --nocapture)"
+  },
+  "spi": {
+    "state": "shallow",
+    "file": "examples/tier1-fixture/esp32/src/main.rs",
+    "test": "check_spi",
+    "gap": "the fixture's own comment says it: 'No SPI device is attached in the tier-1 setup; the streamed bytes go nowhere'. Asserts FIFO word storage + CMD.USR self-clear. The real device-level SPI proofs exist but run in NO lane: examples/esp32-bay-occupancy (ILI9341 over SPI3, panel ink 6610/6610/6352) has no committed ELF and no workflow, and crates/core/tests/e2e_labwired_ereader.rs silently `return`s at line 69 unless LABWIRED_EREADER_ELF points at an ELF - grep over .github/workflows/ finds neither that var nor LABWIRED_REQUIRE_EREADER_ELF anywhere.",
+    "lane": "none"
+  },
+  "i2c": {
+    "state": "proven",
+    "file": "examples/tier1-fixture/esp32/src/main.rs",
+    "test": "check_i2c",
+    "signal": "phase 2 of the fixture does a full write-pointer / repeated-start / read against the board-level BMP280 model that configure_xtensa_esp32 attaches at 0x76 (crates/core/src/system/xtensa/esp32.rs:565), and requires the byte back to be the real CHIP_ID 0x58; phase 1 requires an absent 0x20 to NACK. Reported as TIER1 i2c PASS over the real UART.",
+    "lane": "core-ci / core-full (nightly 02:30 UTC) via tier1_matrix; also core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
+    "note": "the arduino-matrix INA219 cell is a second, independent proof on this chip."
+  }
+}
