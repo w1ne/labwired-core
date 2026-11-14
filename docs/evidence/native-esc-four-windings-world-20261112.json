@@ -1,0 +1,644 @@
+{
+  "schema_version": 1,
+  "scope": "Actual native four-controller AM32 world, complete electrical deck and four explicit floating-star winding models; bounded 0.1/1/10 us operating-point integration only.",
+  "inputs": {
+    "schema_version": 1,
+    "scope": "Prepared runtime overlay only; circuit BLDC candidate runner is pending.",
+    "source_bundle": "/data/work-scratch/native-esc-four-windings-coulomb-20261112",
+    "source_receipt_sha256": "8644067c84e9d20b83e508724e13ff6d0933ffc4121168c14c683469b187c1d0",
+    "source_sha256": "c0bd4ddf960230f8d99baa0ebd93953c9221793a74e3967e424473dd6f3db2fb",
+    "motor_parameter_scope": "Parameters preserved from the existing demonstration. No motor SKU, propeller load or measured constants have been qualified.",
+    "phase_mapping_verified_by_exporter": true,
+    "world_sha256": "42dcb4638ad67f723b3fcb2cd279acf465b44b96cebdb9ca0937a79000b24704",
+    "netlist_sha256": "f0c3fcaa52f94ab105160c0276937cbc1cdf2192cb60a52ecea3c476823cc912",
+    "firmware_sha256": "0fb1b141c3cafd006ef85017d8f90da8f61cd0c67e1aa45ca79eac570914cc44",
+    "system_overlay": {
+      "reset_vector_offset": 4096
+    },
+    "world_modified": false,
+    "max_unknowns": 512,
+    "step_ns": 100,
+    "initial_conditions": "constant16.8V operating point; no cold ramp",
+    "files_sha256": {
+      "U2/chip.yaml": "8b35a3b6479a010a47809430cae5558fe4fb852b02a3e5f9523bdcac4d17e792",
+      "U2/firmware.bin": "0fb1b141c3cafd006ef85017d8f90da8f61cd0c67e1aa45ca79eac570914cc44",
+      "U2/system.yaml": "f96253b2e385956e3b59709176bba6ae90c19ebc832470668930653f6d7cb802",
+      "U5/chip.yaml": "8b35a3b6479a010a47809430cae5558fe4fb852b02a3e5f9523bdcac4d17e792",
+      "U5/firmware.bin": "0fb1b141c3cafd006ef85017d8f90da8f61cd0c67e1aa45ca79eac570914cc44",
+      "U5/system.yaml": "451b2bc54e6b723cf72bda0c7457a25acbae278e48a16a5a0281d4889e821d1f",
+      "U7/chip.yaml": "8b35a3b6479a010a47809430cae5558fe4fb852b02a3e5f9523bdcac4d17e792",
+      "U7/firmware.bin": "0fb1b141c3cafd006ef85017d8f90da8f61cd0c67e1aa45ca79eac570914cc44",
+      "U7/system.yaml": "7cf2edfa0c5e22a614547b7b463094a4f12e611d1b1445fd4ee8becb1364c9e3",
+      "U9/chip.yaml": "8b35a3b6479a010a47809430cae5558fe4fb852b02a3e5f9523bdcac4d17e792",
+      "U9/firmware.bin": "0fb1b141c3cafd006ef85017d8f90da8f61cd0c67e1aa45ca79eac570914cc44",
+      "U9/system.yaml": "d1c8ebf4da27a8b6af92a2f01e34c99f426d4ca6bd820f077bf1ba75e6863c27",
+      "probe-1.yaml": "718bd9a56748200f559139389fb03466b2b8277c2ad3951ae9b155b3d94109bb",
+      "probe-10.yaml": "c8f6a4b09ac9282720cf39420c39c3e2a3d7ed6bcd2ee472fd38bf5e6b27e9f6",
+      "probe-100.yaml": "c285ebc2f12c3ac11abd3c64a720ba5f0b4bef283bde915f3c8d1a9e0d50244c",
+      "shared.cir": "f0c3fcaa52f94ab105160c0276937cbc1cdf2192cb60a52ecea3c476823cc912",
+      "world.yaml": "42dcb4638ad67f723b3fcb2cd279acf465b44b96cebdb9ca0937a79000b24704"
+    },
+    "runtime_verified": false,
+    "motor_operation_verified": false,
+    "flight_verified": false
+  },
+  "runner": {
+    "path": "/data/work-scratch/at32-onboarding-20261112/labwired-reset30-ff3de522",
+    "sha256": "ff3de52233350784237db2fb445987a2900221539d1184e81d19329a730a01f7",
+    "bytes": 51222384,
+    "source_receipt": "/data/work-scratch/at32-onboarding-20261112/reset30-source.json",
+    "profile": "dev opt1 debug0 incremental0, event-scheduler; not release"
+  },
+  "source": {
+    "base": "f537ea777af940d91f230446958884f3c9e409a8",
+    "patch_sha256": "1a3af0de0fed630a4a262bd2efaaf9a1741fafb38b1ba727a3a1099e9b4ed54c",
+    "new_archive_sha256": "547505a75755155483f9035dab9b062c1b33f1d5810c342cefff6f94ef480335",
+    "utc": "2026-11-12T05:06:41Z",
+    "jobs": 2,
+    "target": "/data/build-targets/at32-20261112",
+    "profile": "test/dev opt1 debug0 incremental0; event-scheduler"
+  },
+  "source_receipt_sha256": "34b21786f1899c82ac4624a6d30ded0144111cf22b80d6ec65ab7cdc0b74d64b",
+  "runs": [
+    {
+      "rounds": 1,
+      "completed_time_ns": 100,
+      "step_ns": 100,
+      "exit_code": 0,
+      "wall_seconds": 0.26461188099347055,
+      "max_rss_kib": 66432,
+      "aggregate_instructions": 4,
+      "max_node_cycles": 12,
+      "channels": 108,
+      "csv_samples": 2,
+      "max_phase_current_abs_a": 9.489959e-15,
+      "max_phase_current_kcl_residual_a": 6.999999998739711e-22,
+      "max_final_shaft_speed_abs_rpm": 4.107602829245065e-15,
+      "cpu": [
+        {
+          "id": "U2",
+          "cycles": 12,
+          "pc_hex": "0x8004916",
+          "vtor_hex": "0x8001000"
+        },
+        {
+          "id": "U5",
+          "cycles": 12,
+          "pc_hex": "0x8004916",
+          "vtor_hex": "0x8001000"
+        },
+        {
+          "id": "U7",
+          "cycles": 12,
+          "pc_hex": "0x8004916",
+          "vtor_hex": "0x8001000"
+        },
+        {
+          "id": "U9",
+          "cycles": 12,
+          "pc_hex": "0x8004916",
+          "vtor_hex": "0x8001000"
+        }
+      ],
+      "reset_inputs": {
+        "U2": {
+          "assertions": 0,
+          "held": false,
+          "last_time_ns": 100,
+          "pin": "NRST",
+          "volts": 3.3001671441476637
+        },
+        "U5": {
+          "assertions": 0,
+          "held": false,
+          "last_time_ns": 100,
+          "pin": "NRST",
+          "volts": 3.3001671441476637
+        },
+        "U7": {
+          "assertions": 0,
+          "held": false,
+          "last_time_ns": 100,
+          "pin": "NRST",
+          "volts": 3.3001671441476566
+        },
+        "U9": {
+          "assertions": 0,
+          "held": false,
+          "last_time_ns": 100,
+          "pin": "NRST",
+          "volts": 3.3001671441476557
+        }
+      },
+      "node_motors": {
+        "U2": [
+          {
+            "id": "rotor1",
+            "kind": "bldc",
+            "position_rad": -3.6993113535628114e-29,
+            "speed_rpm": -3.5325821277329494e-21,
+            "speed_rpm_peak_abs": 3.5325821277329494e-21,
+            "speed_rpm_max": 0.0,
+            "speed_rpm_min": -3.5325821277329494e-21,
+            "torque_nm": -3.6993113535628104e-22,
+            "current_a": null,
+            "phase_currents_a": [
+              2.980814563476199e-16,
+              -1.49036104034618e-16,
+              -1.490453523130019e-16
+            ],
+            "bus_voltage_v": null,
+            "commutation_sector": 0,
+            "control_state": "circuit",
+            "coupling": {
+              "mode": "interval-start-zero-order-hold",
+              "step_ns": 100,
+              "completed_time_ns": 100
+            },
+            "faults": []
+          }
+        ],
+        "U5": [
+          {
+            "id": "rotor2",
+            "kind": "bldc",
+            "position_rad": -6.311864168947223e-29,
+            "speed_rpm": -6.027386295675411e-21,
+            "speed_rpm_peak_abs": 6.027386295675411e-21,
+            "speed_rpm_max": 0.0,
+            "speed_rpm_min": -6.027386295675411e-21,
+            "torque_nm": -6.311864168947221e-22,
+            "current_a": null,
+            "phase_currents_a": [
+              5.94032192720005e-16,
+              -2.9700820652979136e-16,
+              -2.9702398619021373e-16
+            ],
+            "bus_voltage_v": null,
+            "commutation_sector": 0,
+            "control_state": "circuit",
+            "coupling": {
+              "mode": "interval-start-zero-order-hold",
+              "step_ns": 100,
+              "completed_time_ns": 100
+            },
+            "faults": []
+          }
+        ],
+        "U7": [
+          {
+            "id": "rotor3",
+            "kind": "bldc",
+            "position_rad": 6.297775198015428e-24,
+            "speed_rpm": 6.013932319474171e-16,
+            "speed_rpm_peak_abs": 6.013932319474171e-16,
+            "speed_rpm_max": 6.013932319474171e-16,
+            "speed_rpm_min": 0.0,
+            "torque_nm": 6.297775198015427e-17,
+            "current_a": null,
+            "phase_currents_a": [
+              -5.578011557918841e-16,
+              -5.083213218559865e-16,
+              1.0661224776478702e-15
+            ],
+            "bus_voltage_v": null,
+            "commutation_sector": 0,
+            "control_state": "circuit",
+            "coupling": {
+              "mode": "interval-start-zero-order-hold",
+              "step_ns": 100,
+              "completed_time_ns": 100
+            },
+            "faults": []
+          }
+        ],
+        "U9": [
+          {
+            "id": "rotor4",
+            "kind": "bldc",
+            "position_rad": 4.3014716240736487e-23,
+            "speed_rpm": 4.107602829245065e-15,
+            "speed_rpm_peak_abs": 4.107602829245065e-15,
+            "speed_rpm_max": 4.107602829245065e-15,
+            "speed_rpm_min": 0.0,
+            "torque_nm": 4.301471624073648e-16,
+            "current_a": null,
+            "phase_currents_a": [
+              8.226239618120716e-15,
+              -9.48995933915242e-15,
+              1.2637197210317005e-15
+            ],
+            "bus_voltage_v": null,
+            "commutation_sector": 0,
+            "control_state": "circuit",
+            "coupling": {
+              "mode": "interval-start-zero-order-hold",
+              "step_ns": 100,
+              "completed_time_ns": 100
+            },
+            "faults": []
+          }
+        ]
+      },
+      "files_sha256": {
+        "am32-1/result.json": "79180e1ae8ccc54c9ae54664dfccdb3bff37bcf72a516bdd0d325cc48f9f53bf",
+        "am32-1/snapshot.json": "6f1fb68b5b544ad3d534504f91f4c239e1f002ad4608ce3800bd19624d80992e",
+        "am32-1.csv": "abe74e55f38a1b1d2a2bb723c7f79a6a65e8060b6389241073cc524d1ce54bba",
+        "am32-1.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "rounds": 10,
+      "completed_time_ns": 1000,
+      "step_ns": 100,
+      "exit_code": 0,
+      "wall_seconds": 0.7657821790198795,
+      "max_rss_kib": 66304,
+      "aggregate_instructions": 40,
+      "max_node_cycles": 120,
+      "channels": 108,
+      "csv_samples": 11,
+      "max_phase_current_abs_a": 1.13983614e-14,
+      "max_phase_current_kcl_residual_a": 8.0000000025039745e-22,
+      "max_final_shaft_speed_abs_rpm": 1.2217940820648925e-14,
+      "cpu": [
+        {
+          "id": "U2",
+          "cycles": 120,
+          "pc_hex": "0x8004916",
+          "vtor_hex": "0x8001000"
+        },
+        {
+          "id": "U5",
+          "cycles": 120,
+          "pc_hex": "0x8004916",
+          "vtor_hex": "0x8001000"
+        },
+        {
+          "id": "U7",
+          "cycles": 120,
+          "pc_hex": "0x8004916",
+          "vtor_hex": "0x8001000"
+        },
+        {
+          "id": "U9",
+          "cycles": 120,
+          "pc_hex": "0x8004916",
+          "vtor_hex": "0x8001000"
+        }
+      ],
+      "reset_inputs": {
+        "U2": {
+          "assertions": 0,
+          "held": false,
+          "last_time_ns": 1000,
+          "pin": "NRST",
+          "volts": 3.3001671441476637
+        },
+        "U5": {
+          "assertions": 0,
+          "held": false,
+          "last_time_ns": 1000,
+          "pin": "NRST",
+          "volts": 3.3001671441476637
+        },
+        "U7": {
+          "assertions": 0,
+          "held": false,
+          "last_time_ns": 1000,
+          "pin": "NRST",
+          "volts": 3.3001671441475855
+        },
+        "U9": {
+          "assertions": 0,
+          "held": false,
+          "last_time_ns": 1000,
+          "pin": "NRST",
+          "volts": 3.3001671441475846
+        }
+      },
+      "node_motors": {
+        "U2": [
+          {
+            "id": "rotor1",
+            "kind": "bldc",
+            "position_rad": -4.233017195577187e-22,
+            "speed_rpm": -8.100591142200686e-15,
+            "speed_rpm_peak_abs": 1.0214369325050569e-14,
+            "speed_rpm_max": 0.0,
+            "speed_rpm_min": -1.0214369325050569e-14,
+            "torque_nm": -8.88268312535763e-17,
+            "current_a": null,
+            "phase_currents_a": [
+              -6.222481344701612e-15,
+              4.22157606302051e-15,
+              2.0009052816811025e-15
+            ],
+            "bus_voltage_v": null,
+            "commutation_sector": 0,
+            "control_state": "circuit",
+            "coupling": {
+              "mode": "interval-start-zero-order-hold",
+              "step_ns": 100,
+              "completed_time_ns": 1000
+            },
+            "faults": []
+          }
+        ],
+        "U5": [
+          {
+            "id": "rotor2",
+            "kind": "bldc",
+            "position_rad": -1.312197775123834e-22,
+            "speed_rpm": -6.46089210635663e-15,
+            "speed_rpm_peak_abs": 6.46089210635663e-15,
+            "speed_rpm_max": 2.886481012242724e-15,
+            "speed_rpm_min": -6.46089210635663e-15,
+            "torque_nm": -2.777982965285504e-16,
+            "current_a": null,
+            "phase_currents_a": [
+              -3.493168915580969e-15,
+              5.219063164397365e-15,
+              -1.7258942488163948e-15
+            ],
+            "bus_voltage_v": null,
+            "commutation_sector": 0,
+            "control_state": "circuit",
+            "coupling": {
+              "mode": "interval-start-zero-order-hold",
+              "step_ns": 100,
+              "completed_time_ns": 1000
+            },
+            "faults": []
+          }
+        ],
+        "U7": [
+          {
+            "id": "rotor3",
+            "kind": "bldc",
+            "position_rad": 2.0100545667369613e-22,
+            "speed_rpm": 2.6612060158978847e-15,
+            "speed_rpm_peak_abs": 4.464178753589671e-15,
+            "speed_rpm_max": 4.464178753589671e-15,
+            "speed_rpm_min": 0.0,
+            "torque_nm": -1.8880546111538869e-16,
+            "current_a": null,
+            "phase_currents_a": [
+              -1.3436151210380222e-15,
+              3.03187582446137e-15,
+              -1.6882607034233473e-15
+            ],
+            "bus_voltage_v": null,
+            "commutation_sector": 0,
+            "control_state": "circuit",
+            "coupling": {
+              "mode": "interval-start-zero-order-hold",
+              "step_ns": 100,
+              "completed_time_ns": 1000
+            },
+            "faults": []
+          }
+        ],
+        "U9": [
+          {
+            "id": "rotor4",
+            "kind": "bldc",
+            "position_rad": 1.6649337382642325e-21,
+            "speed_rpm": 1.2217940820648925e-14,
+            "speed_rpm_peak_abs": 2.3798072248495085e-14,
+            "speed_rpm_max": 2.3798072248495085e-14,
+            "speed_rpm_min": 0.0,
+            "torque_nm": -3.3828992698767106e-16,
+            "current_a": null,
+            "phase_currents_a": [
+              -4.3560699431495325e-15,
+              6.406659058920656e-15,
+              -2.0505891157711196e-15
+            ],
+            "bus_voltage_v": null,
+            "commutation_sector": 0,
+            "control_state": "circuit",
+            "coupling": {
+              "mode": "interval-start-zero-order-hold",
+              "step_ns": 100,
+              "completed_time_ns": 1000
+            },
+            "faults": []
+          }
+        ]
+      },
+      "files_sha256": {
+        "am32-10/result.json": "4062b5986d42149374ec3a57dbf2732a50acc4ed584ab113c9ab63ba4f1fd11b",
+        "am32-10/snapshot.json": "e87d78766eed444e147f0f138dda87a2247c0cba90faa4b586d226c34c278eee",
+        "am32-10.csv": "eced36e2d08cdf43426d1b25cd88701fe4761d1d4cbd93340b5eef28df3b6109",
+        "am32-10.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "rounds": 100,
+      "completed_time_ns": 10000,
+      "step_ns": 100,
+      "exit_code": 0,
+      "wall_seconds": 6.083957763039507,
+      "max_rss_kib": 66304,
+      "aggregate_instructions": 400,
+      "max_node_cycles": 1200,
+      "channels": 108,
+      "csv_samples": 101,
+      "max_phase_current_abs_a": 1.1856316e-14,
+      "max_phase_current_kcl_residual_a": 9.999999998199587e-22,
+      "max_final_shaft_speed_abs_rpm": 3.667478253813469e-14,
+      "cpu": [
+        {
+          "id": "U2",
+          "cycles": 1200,
+          "pc_hex": "0x8004916",
+          "vtor_hex": "0x8001000"
+        },
+        {
+          "id": "U5",
+          "cycles": 1200,
+          "pc_hex": "0x8004916",
+          "vtor_hex": "0x8001000"
+        },
+        {
+          "id": "U7",
+          "cycles": 1200,
+          "pc_hex": "0x8004916",
+          "vtor_hex": "0x8001000"
+        },
+        {
+          "id": "U9",
+          "cycles": 1200,
+          "pc_hex": "0x8004916",
+          "vtor_hex": "0x8001000"
+        }
+      ],
+      "reset_inputs": {
+        "U2": {
+          "assertions": 0,
+          "held": false,
+          "last_time_ns": 10000,
+          "pin": "NRST",
+          "volts": 3.3001671441476637
+        },
+        "U5": {
+          "assertions": 0,
+          "held": false,
+          "last_time_ns": 10000,
+          "pin": "NRST",
+          "volts": 3.3001671441476637
+        },
+        "U7": {
+          "assertions": 0,
+          "held": false,
+          "last_time_ns": 10000,
+          "pin": "NRST",
+          "volts": 3.300167144146875
+        },
+        "U9": {
+          "assertions": 0,
+          "held": false,
+          "last_time_ns": 10000,
+          "pin": "NRST",
+          "volts": 3.300167144146874
+        }
+      },
+      "node_motors": {
+        "U2": [
+          {
+            "id": "rotor1",
+            "kind": "bldc",
+            "position_rad": -2.200216662993997e-20,
+            "speed_rpm": -3.377251825799343e-14,
+            "speed_rpm_peak_abs": 4.072084529231997e-14,
+            "speed_rpm_max": 0.0,
+            "speed_rpm_min": -4.072084529231997e-14,
+            "torque_nm": -5.684162811004142e-18,
+            "current_a": null,
+            "phase_currents_a": [
+              -3.59756925331105e-15,
+              1.869836661793077e-15,
+              1.7277325915179736e-15
+            ],
+            "bus_voltage_v": null,
+            "commutation_sector": 0,
+            "control_state": "circuit",
+            "coupling": {
+              "mode": "interval-start-zero-order-hold",
+              "step_ns": 100,
+              "completed_time_ns": 10000
+            },
+            "faults": []
+          }
+        ],
+        "U5": [
+          {
+            "id": "rotor2",
+            "kind": "bldc",
+            "position_rad": 1.3667036807578203e-21,
+            "speed_rpm": 8.005560370349861e-15,
+            "speed_rpm_peak_abs": 3.247831856362405e-14,
+            "speed_rpm_max": 3.247831856362405e-14,
+            "speed_rpm_min": -2.1089799224049838e-14,
+            "torque_nm": 4.9890719404672493e-17,
+            "current_a": null,
+            "phase_currents_a": [
+              -5.761632557916417e-16,
+              -3.355523646625854e-16,
+              9.117156204542269e-16
+            ],
+            "bus_voltage_v": null,
+            "commutation_sector": 0,
+            "control_state": "circuit",
+            "coupling": {
+              "mode": "interval-start-zero-order-hold",
+              "step_ns": 100,
+              "completed_time_ns": 10000
+            },
+            "faults": []
+          }
+        ],
+        "U7": [
+          {
+            "id": "rotor3",
+            "kind": "bldc",
+            "position_rad": 1.883052215867933e-20,
+            "speed_rpm": 3.667478253813469e-14,
+            "speed_rpm_peak_abs": 4.11086025896365e-14,
+            "speed_rpm_max": 4.11086025896365e-14,
+            "speed_rpm_min": -3.2766084356254327e-15,
+            "torque_nm": 4.839539723421917e-16,
+            "current_a": null,
+            "phase_currents_a": [
+              -2.042998505426008e-15,
+              -5.027925401564391e-15,
+              7.070923906990401e-15
+            ],
+            "bus_voltage_v": null,
+            "commutation_sector": 0,
+            "control_state": "circuit",
+            "coupling": {
+              "mode": "interval-start-zero-order-hold",
+              "step_ns": 100,
+              "completed_time_ns": 10000
+            },
+            "faults": []
+          }
+        ],
+        "U9": [
+          {
+            "id": "rotor4",
+            "kind": "bldc",
+            "position_rad": -1.9258620871419006e-20,
+            "speed_rpm": -1.7116090885600986e-14,
+            "speed_rpm_peak_abs": 4.1520631299765133e-14,
+            "speed_rpm_max": 2.3798072248495085e-14,
+            "speed_rpm_min": -4.1520631299765133e-14,
+            "torque_nm": -1.3880729614273745e-16,
+            "current_a": null,
+            "phase_currents_a": [
+              -3.8254193708595674e-16,
+              1.9263621703271966e-15,
+              -1.5438202332412396e-15
+            ],
+            "bus_voltage_v": null,
+            "commutation_sector": 0,
+            "control_state": "circuit",
+            "coupling": {
+              "mode": "interval-start-zero-order-hold",
+              "step_ns": 100,
+              "completed_time_ns": 10000
+            },
+            "faults": []
+          }
+        ]
+      },
+      "files_sha256": {
+        "am32-100/result.json": "7a049d69ee81bdd0248b911190b415ef097a97ea06a1fde4b47a5c0b228bc618",
+        "am32-100/snapshot.json": "cd541e5416192dc302638c863c6092cdb03768b8441e5cba426e6d3cb9ee5feb",
+        "am32-100.csv": "47b6001f4ab7837edae404ca12f376b951fc02c40e357471705765fd9563baed",
+        "am32-100.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  ],
+  "readiness": {
+    "native_world_constructed": true,
+    "bounded_electrical_coupling_passed": true,
+    "four_independent_winding_models_sampled": true,
+    "full_startup_verified": false,
+    "commutation_verified": false,
+    "cold_start_verified": false,
+    "motor_hardware_parameters_qualified": false,
+    "flight_verified": false
+  },
+  "limits": [
+    "No firmware changes, warm start or EEPROM substitution. Each node uses explicit application-vector offset 0x1000.",
+    "Constant 16.8 V operating-point initialization, not a cold supply ramp.",
+    "All motor R/L/Ke/Kt/inertia/friction/load values remain documented demonstration assumptions.",
+    "Currents and speeds over this short idle interval remain numerical near-zero; this is not evidence of commanded rotation.",
+    "No CFSR or fidelity field is exposed in this environment snapshot; no zero-fault claim is inferred from an absent field.",
+    "CLI assertions are empty: the status means the bounded run completed. The accompanying evidence assertions separately verify coupling, identities, vectors, current balance and null unmeasured readouts.",
+    "Analog coupling is interval-start zero-order hold at 100 ns; no edge-exact PWM claim."
+  ]
+}

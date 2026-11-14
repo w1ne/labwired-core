@@ -605,7 +605,7 @@ impl SpiDevice for Bmi270Spi {
             kind: "spi_registers".into(),
             id: id.into(),
             bytes: None,
-            meta: serde_json::json!({"powered": self.powered, "transport": "spi", "init_status": self.init_status,
+            meta: serde_json::json!({"powered": self.powered, "transport": "spi", "model_time_ns": self.now_ns, "init_status": self.init_status,
                 "config_image": self.config_image, "initialized_bytes": self.written.iter().filter(|b| **b).count(),
                 "accel_samples": self.samples[0], "gyro_samples": self.samples[1],
                 "unsupported_requests": self.unsupported,
