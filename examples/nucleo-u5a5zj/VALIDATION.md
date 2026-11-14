@@ -36,5 +36,5 @@ complete PKA mode coverage, or silicon parity.
 ## Validation record
 
 - 2026-10-26: simulator register-path and reset conformance checks are recorded
-  in `validation/manifest.yaml` and gated by the Core CI validation generator.
+  in `validation/boards/` and gated by the Core CI validation generator.
   Physical board acceptance remains pending.

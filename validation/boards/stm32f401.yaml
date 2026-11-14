@@ -1,0 +1,32 @@
+id: stm32f401
+doc: docs/boards/stm32f401.md
+chip: configs/chips/stm32f401.yaml
+tier: smoke-manual
+note: "UART2 'smoke pass' is a manual runbook (examples/nucleo-f401re/VALIDATION.md) + a CI build step — no automated UART assertion."
+models:
+  - crates/core/src/peripherals/esp_ledc_wave.rs
+  - crates/core/src/cpu/cortex_m.rs
+  - crates/core/src/decoder/arm.rs
+  - configs/chips/stm32f401.yaml
+  # 2026-09-21, model_paths_drift_gate: models this board REGISTERS that
+  # its list omitted, so they were invisible to the drift digest. This
+  # board records no silicon capture, so there is no "silicon-verified"
+  # claim for the corrected digest to invalidate — no ack is implied.
+  - crates/core/src/peripherals/adc.rs
+  - crates/core/src/peripherals/dbgmcu.rs
+  - crates/core/src/peripherals/exti.rs
+  - crates/core/src/peripherals/syscfg.rs
+  - crates/core/src/peripherals/flash.rs
+  - crates/core/src/peripherals/gpio.rs
+  - crates/core/src/peripherals/i2c.rs
+  - crates/core/src/peripherals/iwdg.rs
+  - crates/core/src/peripherals/pwr.rs
+  - crates/core/src/peripherals/rcc.rs
+  - crates/core/src/peripherals/rtc.rs
+  - crates/core/src/peripherals/spi.rs
+  - crates/core/src/peripherals/stm32f4_dma.rs
+  - crates/core/src/peripherals/stub.rs
+  - crates/core/src/peripherals/systick.rs
+  - crates/core/src/peripherals/timer.rs
+  - crates/core/src/peripherals/timer_output.rs
+  - crates/core/src/peripherals/uart.rs

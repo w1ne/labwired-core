@@ -1,0 +1,22 @@
+id: arduino-uno-r4-minima
+doc: docs/boards/arduino-uno-r4-minima.md
+chip: configs/chips/ra4m1.yaml
+tier: smoke-manual
+note: "Arduino Uno R4 Minima (Renesas R7FA4M1AB). Bare-metal UART/LED smoke prints OK on SCI2 (D0/D1) after the HOCO/OSCSF bring-up; USBFS is a stub. First Renesas RA part in the engine. SIM-DERIVED — no silicon diff; no executing-fidelity differential."
+offline_tests:
+  - "firmware_survival::test_ra4m1_uno_r4_smoke_survival"
+models:
+  - crates/core/src/cpu/cortex_m.rs
+  - crates/core/src/decoder/arm.rs
+  - crates/core/src/peripherals/gpio.rs
+  - crates/core/src/peripherals/ra_clock.rs
+  - crates/core/src/peripherals/ra_pfs.rs
+  - crates/core/src/peripherals/uart.rs
+  - configs/chips/ra4m1.yaml
+  - configs/systems/arduino-uno-r4-minima.yaml
+  # 2026-09-21, model_paths_drift_gate: models this board REGISTERS that
+  # its list omitted, so they were invisible to the drift digest. This
+  # board records no silicon capture, so there is no "silicon-verified"
+  # claim for the corrected digest to invalidate — no ack is implied.
+  - crates/core/src/peripherals/stub.rs
+  - crates/core/src/peripherals/systick.rs

@@ -1,0 +1,13 @@
+id: nrf52832
+chip: nrf52832
+system: systems/nrf52832.yaml
+pio: { platform: nordicnrf52, board: nrf52_dk, framework: arduino }
+max_steps: 3000000
+budget_reason: "Arduino nRF boot ~0.7M; L2 ~0.26M after short delays"
+# PIN_CNF.DIR sync + LED1 = P0.17 on nRF52 DK Arduino core
+led_watch: "gpio0:17"
+led_min_edges: 2
+family: nrf
+sketches_skip: [L8_can]
+sketches_skip_reason:
+  L8_can: "No on-chip CAN model"

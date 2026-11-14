@@ -5,7 +5,7 @@
 //!
 //! # Why
 //!
-//! `validation/manifest.yaml` records a `models:` path list per board, and
+//! `validation/boards/` (one file per board) records a `models:` path list per board, and
 //! `scripts/generate_validation_status.py` hashes exactly those files into the
 //! board's source digest. An omitted model can change without moving that
 //! digest, concealing a difference from the source recorded with a capture.
@@ -84,7 +84,7 @@ fn type_path_to_source(type_path: &str, root: &Path) -> Option<String> {
 
 /// Drop all but the LAST occurrence of a repeated board-level key.
 ///
-/// `validation/manifest.yaml` carries duplicate `drift_ack:` keys — ten boards
+/// the board files can carry duplicate `drift_ack:` keys — ten boards
 /// do, up to sixteen times on `stm32h563`, `nucleo-l476rg` and `stm32f103`.
 /// A YAML mapping is supposed to have unique keys; PyYAML silently keeps the
 /// last, `serde_yaml` refuses the document outright.
@@ -148,9 +148,43 @@ struct Board {
     models: BTreeSet<String>,
 }
 
+/// `validation/boards/<id>.yaml` is one board's mapping each. Rebuild the
+/// `boards:` list the old single manifest had (entry lines indented under a
+/// `  - ` marker) so everything below sees the same text as before. Files load
+/// in file-name order; `_index.yaml` is the header, not a board.
+fn manifest_text(root: &Path) -> String {
+    let dir = root.join("validation/boards");
+    let mut paths: Vec<PathBuf> = std::fs::read_dir(&dir)
+        .unwrap_or_else(|e| panic!("read {}: {e}", dir.display()))
+        .map(|e| e.expect("dir entry").path())
+        .filter(|p| {
+            p.extension().and_then(|s| s.to_str()) == Some("yaml")
+                && p.file_name().and_then(|s| s.to_str()) != Some("_index.yaml")
+        })
+        .collect();
+    paths.sort();
+    let mut out = String::from("boards:\n");
+    for p in paths {
+        let text =
+            std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("read {}: {e}", p.display()));
+        let mut lines = text.lines().skip_while(|l| !l.starts_with("id:"));
+        let Some(first) = lines.next() else {
+            panic!("{}: no `id:` line", p.display());
+        };
+        out.push_str(&format!("  - {first}\n"));
+        for l in lines {
+            if l.is_empty() {
+                out.push('\n');
+            } else {
+                out.push_str(&format!("    {l}\n"));
+            }
+        }
+    }
+    out
+}
+
 fn boards(root: &Path) -> Vec<Board> {
-    let text = std::fs::read_to_string(root.join("validation/manifest.yaml"))
-        .expect("read validation/manifest.yaml");
+    let text = manifest_text(root);
     let doc: serde_yaml::Value =
         serde_yaml::from_str(&last_wins_duplicate_keys(&text)).expect("parse manifest");
     let list = doc
@@ -341,7 +375,7 @@ fn every_registered_model_is_in_its_board_models_list() {
     assert!(
         holes.is_empty(),
         "models registered by a board but absent from its `models:` list in \
-         validation/manifest.yaml:\n{}\n\n\
+         validation/boards/<id>.yaml:\n{}\n\n\
          These files are invisible to that board's source digest, so their \
          changes cannot be compared with captured source. Add them to `models:` \
          or record the board in ALLOWLIST with a reason. Source-review ACKs \
