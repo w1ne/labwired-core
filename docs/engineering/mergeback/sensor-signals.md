@@ -82,7 +82,7 @@ remains 2026-08-09, with its probe and result unchanged. The XIAO record refers
 to the same physical silicon evidence; it is not an independent second capture.
 No fresh hardware capture was performed during this activation.
 
-[validation/manifest.yaml](../../../validation/manifest.yaml) and
+[validation/boards/](../../../validation/boards/) and
 [the validation generator](../../../scripts/generate_validation_status.py)
 define the current source/capture reporting policy. Neither historical ACK
 establishes capture freshness; both capture records lack a captured model digest

@@ -4,7 +4,7 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-//! Cross-registry consistency: `validation/manifest.yaml` is the single source
+//! Cross-registry consistency: `validation/boards/` (one file per board) is the single source
 //! of truth for which boards exist and what is claimed about them. Four
 //! registries independently name chips — the manifest, `SURVIVAL_CASES`
 //! (firmware_survival.rs), `TIER1_TARGETS` (labwired-cli), and the F4 silicon
@@ -24,11 +24,34 @@ fn workspace_root() -> PathBuf {
         .to_path_buf()
 }
 
-/// Every `chip:` path named by `validation/manifest.yaml`, as a chip stem
+/// Every board file under `validation/boards/` (one `<id>.yaml` per board; the
+/// `_index.yaml` header is skipped), concatenated in file-name order. Callers
+/// scan it line by line, so concatenation is equivalent to the old single file.
+fn manifest_text() -> String {
+    let dir = workspace_root().join("validation/boards");
+    let mut paths: Vec<PathBuf> = std::fs::read_dir(&dir)
+        .unwrap_or_else(|e| panic!("read {}: {e}", dir.display()))
+        .map(|e| e.expect("dir entry").path())
+        .filter(|p| {
+            p.extension().is_some_and(|x| x == "yaml")
+                && p.file_name().is_some_and(|n| n != "_index.yaml")
+        })
+        .collect();
+    paths.sort();
+    let mut out = String::new();
+    for p in paths {
+        out.push_str(
+            &std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("read {}: {e}", p.display())),
+        );
+        out.push('\n');
+    }
+    out
+}
+
+/// Every `chip:` path named by `validation/boards/`, as a chip stem
 /// (`configs/chips/stm32f401.yaml` → `stm32f401`).
 fn manifest_chip_stems() -> BTreeSet<String> {
-    let text = std::fs::read_to_string(workspace_root().join("validation/manifest.yaml"))
-        .expect("read validation/manifest.yaml");
+    let text = manifest_text();
     let mut out = BTreeSet::new();
     for line in text.lines() {
         let line = line.trim();
@@ -46,10 +69,9 @@ fn manifest_chip_stems() -> BTreeSet<String> {
     out
 }
 
-/// Every `doc:` path named by `validation/manifest.yaml`.
+/// Every `doc:` path named by `validation/boards/`.
 fn manifest_doc_paths() -> Vec<String> {
-    let text = std::fs::read_to_string(workspace_root().join("validation/manifest.yaml"))
-        .expect("read validation/manifest.yaml");
+    let text = manifest_text();
     let mut out = Vec::new();
     for line in text.lines() {
         let line = line.trim();
@@ -91,7 +113,7 @@ fn every_manifest_chip_path_exists_on_disk() {
             .join(format!("{stem}.yaml"));
         assert!(
             path.exists(),
-            "validation/manifest.yaml names chip {stem:?} but {path:?} does not exist"
+            "validation/boards/ names chip {stem:?} but {path:?} does not exist"
         );
     }
 }
@@ -102,7 +124,7 @@ fn every_manifest_doc_path_exists_on_disk() {
         let path = workspace_root().join(&doc);
         assert!(
             path.exists(),
-            "validation/manifest.yaml names doc {doc:?} but {path:?} does not exist"
+            "validation/boards/ names doc {doc:?} but {path:?} does not exist"
         );
     }
 }
@@ -114,7 +136,7 @@ fn every_survival_chip_is_a_known_manifest_board() {
         assert!(
             manifest.contains(&stem),
             "SURVIVAL_CASES runs chip {stem:?} but no board in \
-             validation/manifest.yaml declares it. Add a board entry — the \
+             validation/boards/ declares it. Add a board entry — the \
              manifest is the source of truth for what is claimed."
         );
     }

@@ -1,0 +1,18 @@
+id: stm32f411ceu6
+chip: stm32f411ceu6
+system: systems/stm32f411ceu6.yaml
+pio: { platform: ststm32, board: blackpill_f411ce, framework: arduino }
+max_steps: 4000000
+budget_reason: "Black Pill 100 MHz: L0~0.10M L2~0.29M L4~0.20M; L6 30x delay(1) ~2.98M"
+led_watch: "gpioc:13"
+led_min_edges: 2
+# L6 drives TIM2_CH1 on PA0 (PC13 has no timer channel, so analogWrite
+# would fall back to digitalWrite). TIM2 PWM1/CC1E with PA0 on AF1 reaches
+# the pad through the F4 timer AF table (bus/attach.rs), so L6 is proven
+# on PA0 edges, not on the UART marker.
+pwm_watch: "gpioa:0"
+pwm_min_edges: 20
+family: stm32
+sketches_skip: [L8_can]
+sketches_skip_reason:
+  L8_can: "STM32F411 has no CAN peripheral"
