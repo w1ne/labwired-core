@@ -42,7 +42,7 @@
 - A monolithic `cargo test --workspace` run reached the long e-paper E2E path
   and was terminated by the local environment. The suite was then verified in
   split lanes:
-  - `cargo test -p labwired-core --test intmatrix_alarm`
+  - `cargo test -p labwired-core --test esp intmatrix_alarm::`
   - focused core continuation lanes through `xtensa_regs`
   - `cargo test -p labwired-cli --test breakpoints`
   - `cargo test --workspace --exclude labwired-core --exclude labwired-cli --exclude labwired-dap --exclude labwired-gdbstub`

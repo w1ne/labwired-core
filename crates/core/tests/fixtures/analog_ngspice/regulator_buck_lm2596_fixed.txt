@@ -1,4 +1,4 @@
-# ngspice-47 reference for `regulator_buck_lm2596_fixed` (crates/core/tests/analog_ngspice_macros.rs)
+# ngspice-47 reference for `regulator_buck_lm2596_fixed` (crates/core/tests/analog/analog_ngspice_macros.rs)
 # v(out) at every 2e-5 s, t = 0 excluded
 # deck f4f59224083bd03f
 -2.74993385306923285e-3

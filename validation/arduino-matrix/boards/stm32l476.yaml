@@ -1,0 +1,14 @@
+id: stm32l476
+chip: stm32l476
+system: systems/stm32l476.yaml
+pio: { platform: ststm32, board: nucleo_l476rg, framework: arduino }
+max_steps: 20000000
+budget_reason: "L0~0.8M; L3 Wire.begin i2c_computeTiming ~7.3M steps measured"
+led_watch: "gpioa:5"
+led_min_edges: 2
+# L6 drives TIM2_CH1 on PA0 (AF1), not LD2/PA5: PA5 is DAC1_OUT2 and the
+# twin models the DAC. Routed by the L4 timer AF table (pad_map: stm32l4).
+pwm_watch: "gpioa:0"
+pwm_min_edges: 20
+family: stm32
+# L8_can: bxCAN1 loopback

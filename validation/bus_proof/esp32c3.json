@@ -1,0 +1,26 @@
+{
+  "id": "esp32c3",
+  "in_boards": true,
+  "uart": {
+    "state": "proven",
+    "file": "crates/core/tests/gates/firmware_survival.rs",
+    "test": "test_esp32c3_demo_survival",
+    "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'ESP OK\\\\n' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
+    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test gates firmware_survival::"
+  },
+  "spi": {
+    "state": "shallow",
+    "file": "examples/tier1-fixture/esp32c3/src/main.rs",
+    "test": "check_spi",
+    "gap": "fixture comment: 'With no device on the bus the controller shifts in an idle (pulled-high) MISO line'. Asserts USR self-clear, TRANS_DONE and W0 == 0xFFFFFFFF. No configs/systems/*.yaml attaches an SPI device to an esp32c3 bus anywhere in the repo.",
+    "lane": "core-ci / core-full (nightly) via tier1_matrix"
+  },
+  "i2c": {
+    "state": "proven",
+    "file": "crates/cli/tests/e2e_leo_airquality.rs",
+    "test": "leo_normal_scenario_boots_all_sensors_and_flips_verdict",
+    "signal": "a committed ELF running UNMODIFIED Sensirion vendor drivers (SCD41/SGP41/SPS30) plus VEML7700 and an SSD1306 decodes real sensor values over the C3 I2C0 command-list engine; the test asserts the decoded values drive a verdict state machine and that assert_oled_rendered counts >200 lit pixels in the panel's own framebuffer",
+    "lane": "core-nightly (cron 03:05 UTC): cargo test --release -p labwired-cli --test e2e_leo_airquality",
+    "note": "tier1 check_i2c (BMP280 CHIP_ID 0x58) and the arduino-matrix INA219 cell are two further independent proofs on this chip."
+  }
+}

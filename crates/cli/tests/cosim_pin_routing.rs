@@ -6,7 +6,7 @@
 //! firmware, routing pins in both directions.
 //!
 //! The unit tests in `cosim::routing` cover the grammar, and
-//! `crates/core/tests/cosim_pin_routing.rs` covers the routing against a real
+//! `crates/core/tests/cosim/cosim_pin_routing.rs` covers the routing against a real
 //! bus. Neither can catch the thing this file exists for: that the run loop
 //! actually CALLS any of it. Before the hook existed, every one of those tests
 //! passed while `labwired test` stepped no model at all.

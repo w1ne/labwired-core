@@ -179,8 +179,8 @@ unit test count has grown since (`cargo test -p labwired-core --lib cpu::pic18`)
 | `cargo fmt --all -- --check` | PASS |
 | XC8 local check (`command -v xc8-cc` / `xc8`, repository fixture search) | No XC8 compiler on PATH and no PIC18 ELF/HEX fixture in the worktree; no real firmware smoke is claimed |
 | `cargo test -p labwired-core one_arch_policy` | PASS: 8 passed; 0 failed |
-| `cargo test -p labwired-core --test session_catalog` | PASS: 1 passed; 0 failed |
-| `cargo test -p labwired-core --test register_compliance` | PASS: 1 passed; 0 failed |
+| `cargo test -p labwired-core --test session session_catalog::` | PASS: 1 passed; 0 failed |
+| `cargo test -p labwired-core --test bus register_compliance::` | PASS: 1 passed; 0 failed |
 | `cargo test -p labwired-core --test register_coverage` | PASS: 1 passed; 0 failed |
 | `cargo test -p labwired-config --lib --tests` | PASS: 265 passed across 9 binaries; 0 failed |
 | `cargo test -p labwired-config` | PASS: 265 passed (including 0 doctests); 0 failed |

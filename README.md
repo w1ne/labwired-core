@@ -263,7 +263,7 @@ pins and declared memory geometry; RV1103 peripherals and Linux boot remain unim
 
 Check the per-board status before you assume a peripheral is modeled. It is in
 [docs/boards](docs/boards/), the
-[validation status matrix](docs/boards/VALIDATION_STATUS.md), and the browsable catalog at
+[validation status matrix](https://docs.labwired.com/boards/VALIDATION_STATUS/), and the browsable catalog at
 [app.labwired.com/validation](https://app.labwired.com/validation).
 
 | To see | Run |

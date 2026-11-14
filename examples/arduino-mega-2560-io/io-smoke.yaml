@@ -3,7 +3,7 @@
 # Boots the Mega sketch through this example's system.yaml (5 V pots on A8 and
 # A9, both centred) and asserts its banner and second report line: A8/A9 read
 # 512 through ADCSRB.MUX5, and the `f=` field came back through an EICALL. The
-# per-pin and timing behaviour is proven in crates/core/tests/avr_mega2560_io.rs.
+# per-pin and timing behaviour is proven in crates/core/tests/avr/avr_mega2560_io.rs.
 schema_version: "1.0"
 inputs:
   firmware: "../../tests/fixtures/avr/arduino-mega-2560-io.elf"

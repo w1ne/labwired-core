@@ -1,7 +1,7 @@
 name: Prospective Timer adversary harness controls
 on:
   pull_request:
-    paths: ['crates/core/tests/samd_real_timer_adversary_guest.rs', '.github/workflows/samd-real-timer-adversary-controls.yml']
+    paths: ['crates/core/tests/samd/samd_real_timer_adversary_guest.rs', '.github/workflows/samd-real-timer-adversary-controls.yml']
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -19,4 +19,4 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.95.0
       - uses: Swatinem/rust-cache@v2
       - name: Compile prospective harness and run manufactured refusal controls only
-        run: cargo test --release -p labwired-core --test samd_real_timer_adversary_guest -- --nocapture
+        run: 'cargo test --release -p labwired-core --test samd -- --nocapture samd_real_timer_adversary_guest::'

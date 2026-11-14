@@ -1,0 +1,26 @@
+{
+  "id": "stm32f103",
+  "in_boards": true,
+  "uart": {
+    "state": "proven",
+    "file": "crates/core/tests/gates/firmware_survival.rs",
+    "test": "test_stm32f103_zephyr_survival",
+    "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'Hello World! nucleo_f103rb' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
+    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test gates firmware_survival::"
+  },
+  "spi": {
+    "state": "shallow",
+    "file": "examples/tier1-fixture/stm32f103/src/main.rs",
+    "test": "check_spi",
+    "gap": "firmware-driven, but nothing is on the far end of the bus: the fixture writes the data register and then asserts BSY/TXE/EOT flags. No device receives a byte, so this cannot distinguish a working shift engine from one that only moves status bits.",
+    "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
+  },
+  "i2c": {
+    "state": "proven",
+    "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
+    "test": "LW_L3_OK",
+    "signal": "real Arduino firmware writes a register-pointer byte to the INA219 model attached at 0x40 in validation/arduino-matrix/systems/<chip>.yaml and Wire.endTransmission() returns 0 (the device ACKed); the verdict LW_L3_OK then comes back as real bytes on the modelled UART, matched by a uart_contains oracle",
+    "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
+    "note": "the ACK is meaningful because the same chips' tier-1 fixtures show an UNMATCHED address NACKs (esp32 check_i2c addr 0x20, stm32 NACKF, rp2040 ABRT_7B_ADDR_NOACK) - the bus does not blanket-ACK. LIMIT: this proves address+data out and the device's ACK back, not a payload readback. Evidence: run 30842505709, 'cells=45 expected>=45 fails=0', 2026-08-03."
+  }
+}

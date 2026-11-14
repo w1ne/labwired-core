@@ -1,0 +1,26 @@
+{
+  "id": "stm32f407",
+  "in_boards": false,
+  "uart": {
+    "state": "proven",
+    "file": "crates/core/tests/gates/firmware_survival.rs",
+    "test": "test_nucleo_f407_smoke_survival",
+    "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'the F407 smoke transcript' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
+    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test gates firmware_survival::"
+  },
+  "spi": {
+    "state": "shallow",
+    "file": "examples/tier1-fixture/stm32f407/src/main.rs",
+    "test": "check_spi",
+    "gap": "firmware-driven, but nothing is on the far end of the bus: the fixture writes the data register and then asserts BSY/TXE/EOT flags. No device receives a byte, so this cannot distinguish a working shift engine from one that only moves status bits.",
+    "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
+  },
+  "i2c": {
+    "state": "proven",
+    "file": "crates/core/tests/e2e_stm32f407_i2c.rs",
+    "test": "firmware_drives_aht20_and_bmp280_through_simulator",
+    "signal": "real cross-built firmware drives the AHT20 and BMP280 models through the F407 I2C1 state machine; the test asserts GPIOA.ODR bit 5 goes high, a branch the firmware only takes once AHT20 BUSY has cleared AND the BMP280 returned chip-ID 0x58",
+    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test e2e_stm32f407_i2c",
+    "note": "the arduino-matrix INA219 cell is a second, independent proof on this chip."
+  }
+}

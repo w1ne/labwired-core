@@ -43,7 +43,7 @@ all five IRQ routes and channel31; masks, no trigger, disabled controller/channe
 reset, read/write bus failures and no success after a failed beat. Compare both
 feature configurations and preserve existing SPI/scheduler regressions.
 
-`crates/core/tests/sam_dmac_byte.rs` declares90 authored guest cases per feature
+`crates/core/tests/samd/sam_dmac_byte.rs` declares90 authored guest cases per feature
 configuration. Reset must interrupt actual partial progress, not just precede
 all work. The second-beat read/write-error controls require63 beats remaining;
 the failed beat must not decrement. A separate failed-writeback control cannot

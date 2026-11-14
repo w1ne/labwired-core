@@ -18,6 +18,11 @@ on:
     # Nightly full integrity + feature gates (02:30 UTC).
     - cron: "30 2 * * *"
   workflow_dispatch:
+    inputs:
+      build_timings:
+        description: "Also run the labwired-core cargo build --timings job (cold build, uploads the report)"
+        type: boolean
+        default: false
 
 # PR runs still cancel superseded PR heads. push / schedule / workflow_dispatch
 # each get their own group so a manual full-CI dispatch (or nightly) cannot
@@ -543,13 +548,36 @@ jobs:
         with:
           python-version: "3.12"
 
-      # Generated docs + watch integrity; source drift is informational. Pure Python, no cargo.
-      - name: Validation status — report check + source/capture report
+      # Manifest/capture/watch-list integrity; source drift is informational. Pure
+      # Python, no cargo. docs/boards/VALIDATION_STATUS.md is NOT committed (it
+      # conflicted across PRs): --check runs every gate the old stale-file check
+      # sat beside and fails if the file is ever tracked again, and --output
+      # renders the report for the job summary + artifact below. The docs site
+      # publishes it from main (deploy-docs.yml).
+      - name: Validation status — integrity gates + rendered report
         run: |
           python -m pip install --quiet pyyaml
-          python3 scripts/generate_validation_status.py --check --drift
+          # One-file-per-entry registries: file name == id, no duplicate ids,
+          # no empty/unparsable/stray files (validation/boards,
+          # validation/arduino-matrix/boards, and validation/bus_proof, which
+          # also checks the bus-proof schema and canonical key order).
+          python3 validation/registry_dir.py --check
+          python3 scripts/generate_validation_status.py --check --drift \
+            --output out/validation/VALIDATION_STATUS.md
           python3 scripts/generate_firmware_exercise_matrix.py --check
           python3 scripts/generate_model_ratings.py --check
+
+      - name: Validation status — publish report (job summary + artifact)
+        if: ${{ !cancelled() && hashFiles('out/validation/VALIDATION_STATUS.md') != '' }}
+        run: cat out/validation/VALIDATION_STATUS.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Validation status — upload report artifact
+        if: ${{ !cancelled() && hashFiles('out/validation/VALIDATION_STATUS.md') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-status-report
+          path: out/validation/VALIDATION_STATUS.md
+          retention-days: 30
 
       # The CHEAT(...) surface FIDELITY.md defines had no gate at all: the doc
       # said "grep for it", and a convention nothing counts is a comment. This
@@ -575,6 +603,23 @@ jobs:
       # line below or it will never run. test_generate_validation_status.py covers the
       # history and watch-list guards, capture provenance, and nonblocking source
       # drift policy. It needs pyyaml, installed by the step above.
+      # Module dependency map of crates/core/src: reports kernel modules (bus,
+      # peripherals root, generic factory, ...) gaining dependencies on leaf
+      # modules (vendor peripheral sets, components, non-bus CPUs). ADVISORY:
+      # warnings and a step summary, no failure on increases, because chip work
+      # still has to add such references. Switch to `--check --strict` once
+      # vendor construction is inverted. Pure Python, no cargo, about 5 seconds. See docs/engineering/test_harness.md
+      # ("Core dependency ratchet"). Its unit tests are in the pytest line below.
+      - name: Core dependency ratchet — advisory report
+        run: python3 scripts/ci/core_dep_map.py --check
+
+      # Every `--test <target>` in a workflow, script or doc must name a real
+      # cargo test target (and `<module>::` filters a real module of a grouped
+      # binary). Path-filtered and post-merge lanes would otherwise only
+      # discover a stale name when they next run.
+      - name: Test-target references resolve
+        run: python3 scripts/ci/check_test_target_refs.py --check
+
       - name: Perf gate — every chip covered or waived
         run: |
           python -m pip install --quiet pytest
@@ -589,6 +634,8 @@ jobs:
             scripts/ci/test_matrix_external_cache.py \
             scripts/ci/test_matrix_verdict.py \
             scripts/ci/test_cheat_ratchet.py \
+            scripts/ci/test_core_dep_map.py \
+            scripts/ci/test_check_test_target_refs.py \
             scripts/ci/test_ignore_reasons.py \
             scripts/ci/test_linker_script_single_source.py \
             scripts/ci/test_host_clippy_scope.py \
@@ -600,9 +647,14 @@ jobs:
             scripts/test_generate_model_ratings.py \
             scripts/test_generate_validation_status.py \
             scripts/test_labwired_audit.py \
-            validation/matrix_lib/test_invoke.py
+            validation/matrix_lib/test_invoke.py \
+            validation/test_bus_proof_matrix.py \
+            validation/test_registry_dir.py
           python3 -m unittest discover -s scripts/tests -p test_cli_release_tag.py
           python3 -m unittest discover -s examples/nrf52840-secure-boot-lab -p test_make_packages.py
+
+      - name: Rerun-on-runner-loss classifier unit tests
+        run: node --test scripts/ci/rerun-on-runner-loss.test.mjs
 
       # Mixed-signal co-sim: the ngspice wrapper (tools/cosim) is pure Python
       # over libngspice and steps a real RC circuit; seconds, no cargo. It is a
@@ -740,6 +792,32 @@ jobs:
       - name: Unit tests (default-members lib)
         run: cargo test --lib
 
+  # Manual only: a cold `cargo build -p labwired-core --timings` on CI hardware,
+  # so build-time work (crate splits, test-binary consolidation) has a measured
+  # baseline. Dispatch with `build_timings: true`. Never runs on pull_request
+  # or push, and is not a required check. Deliberately no cache: a warm cache
+  # would hide the cost being measured.
+  core-build-timings:
+    name: core-build-timings
+    if: github.event_name == 'workflow_dispatch' && inputs.build_timings
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Build labwired-core with timings
+        run: cargo build -p labwired-core --timings
+
+      - name: Upload timing reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-build-timings
+          path: target/cargo-timings/
+          if-no-files-found: error
+
   # Tail of pr-gate, split out on 2026-09-30. Two warm runs of the same
   # Rust sources were cancelled at timeout-minutes 20 inside Firmware
   # survival, after every earlier step had passed. The note above pr-gate
@@ -858,7 +936,7 @@ jobs:
       # else. #880 is the regression that escaped; this is the suite that
       # catches it.
       - name: Firmware survival (committed ELF fixtures, ~50 chips)
-        run: cargo test -p labwired-core --test firmware_survival
+        run: 'cargo test -p labwired-core --test gates -- firmware_survival::'
 
       # The SoftDevice HLE (crates/nrf-softdevice-hle) sits outside
       # `default-members`, so `--lib` above never reaches it. Its unit tests
@@ -915,13 +993,7 @@ jobs:
           LABWIRED_UARTE_STACK_INTERVALS: "1"
           LABWIRED_REQUIRE_SENSOR_FEATURE_OFF: "1"
         run: >
-          scripts/ci/cargo-test-nonvacuous.sh
-          -p labwired-core --no-default-features
-          --test microbit_v2_uarte_stack_guest
-          --test microbit_v2_open_drain_guest
-          --test microbit_v2_mag_drdy_guest
-          --test microbit_v2_sensor_drdy_guest
-          -- --nocapture
+          scripts/ci/cargo-test-nonvacuous.sh -p labwired-core --no-default-features --test nrf -- --nocapture microbit_v2_uarte_stack_guest:: microbit_v2_open_drain_guest:: microbit_v2_mag_drdy_guest:: microbit_v2_sensor_drdy_guest::
 
       # The workspace shards exercise SPI with event-scheduler. Keep its
       # reference/MMIO/guest cancellation tests nonvacuous without the feature,
@@ -929,20 +1001,16 @@ jobs:
       # Keep diagnostics visible: nonvacuous enumeration redirects Cargo JSON,
       # including compiler errors, into its temporary artifact inventory.
       - name: Compile TX completion guest with rendered diagnostics (FEATURE-OFF)
-        run: cargo test -p labwired-core --test sam_dmac_tx_completion --no-run
+        run: 'cargo test -p labwired-core --test samd --no-run -- sam_dmac_tx_completion::'
 
       - name: SAM SPI controller and guest (FEATURE-OFF)
         run: >
-          scripts/ci/cargo-test-nonvacuous.sh
-          -p labwired-core --test sam_sercom_spi --test st7735_sam_guest --test sam_dmac_byte
-          --test sam_dmac_sercom4_tx
-          --test sam_dmac_tx_completion
-          -- --nocapture
+          scripts/ci/cargo-test-nonvacuous.sh -p labwired-core --test samd -- --nocapture sam_sercom_spi:: st7735_sam_guest:: sam_dmac_byte:: sam_dmac_sercom4_tx:: sam_dmac_tx_completion::
 
       # AVR sim-smoke golden — cheap (~ms), no PlatformIO. Pins Arduino Nano
       # UART+D13 behavior on every push to main so the twin cannot regress silently.
       - name: AVR Nano golden survival
-        run: cargo test -p labwired-core --test avr_nano_golden_survival -- --nocapture
+        run: 'cargo test -p labwired-core --test avr -- --nocapture avr_nano_golden_survival::'
 
       # Walk-deletion honesty, on every push to main. The structural arm of this test
       # needs no firmware, no `event-scheduler` recompile and no fixtures — it
@@ -967,9 +1035,8 @@ jobs:
       # instead of reporting `0 passed` as a pass.
       - name: Walk-deletion derivation (PR-fast structural arm)
         run: >
-          scripts/ci/cargo-test-nonvacuous.sh
-          -p labwired-core --test esp32_classic_walk_differential
-          --test ordered_debug_metadata
+          scripts/ci/cargo-test-nonvacuous.sh -p labwired-core --test esp -- esp32_classic_walk_differential:: &&
+          scripts/ci/cargo-test-nonvacuous.sh -p labwired-core --test session -- ordered_debug_metadata::
 
       # The BLE Pong fixture is a COMMITTED copy of a published community lab,
       # and `world_esp32c3_ble_pong` (release-only, push-to-main) is the only
@@ -977,7 +1044,7 @@ jobs:
       # neither can move without the other. It is pure in-tree consistency:
       # no network, and a PR that touches the sketch is told before the merge.
       - name: BLE Pong fixture provenance (committed .ino ↔ .bin)
-        run: cargo test -p labwired-core --test fixture_ble_pong_provenance
+        run: 'cargo test -p labwired-core --test esp -- fixture_ble_pong_provenance::'
 
   # Preserve the existing protected context. always() prevents a failed,
   # cancelled, or skipped prerequisite from turning this gate into a skip.
@@ -1113,8 +1180,7 @@ jobs:
         run: |
           cargo clippy --all-targets
           cargo test --lib --no-run
-          cargo test --no-run -p labwired-core \
-            --test firmware_survival
+          cargo test --no-run -p labwired-core --test gates -- firmware_survival::
 
   # ── Browser-configuration observable gate (PR; parallel with pr-gate) ──────
   #
@@ -1415,9 +1481,7 @@ jobs:
       # "was skipped" is the failure mode this job was added to remove.
       - name: Observable arm — classic-ESP32 serial reaches the sink (browser policy)
         run: >
-          scripts/ci/cargo-test-nonvacuous.sh
-          -p labwired-core --features event-scheduler
-          --test esp32_classic_walk_differential -- --nocapture
+          scripts/ci/cargo-test-nonvacuous.sh -p labwired-core --features event-scheduler --test esp -- --nocapture esp32_classic_walk_differential::
 
       # SCHEDULER-ONLY FIDELITY LANES — the tests that no PR job could run.
       #
@@ -1468,14 +1532,11 @@ jobs:
       # in pr-feature-off. Bounded prototype pixels/controls, not native Arcade
       # or actual module/timing qualification.
       - name: Compile TX completion guest with rendered diagnostics (FEATURE-ON)
-        run: cargo test -p labwired-core --features event-scheduler --test sam_dmac_tx_completion --no-run
+        run: 'cargo test -p labwired-core --features event-scheduler --test samd --no-run -- sam_dmac_tx_completion::'
 
       - name: SAM split IRQ and ST7735 controller-memory guests (FEATURE-ON)
         run: >
-          scripts/ci/cargo-test-nonvacuous.sh
-          -p labwired-core --features event-scheduler
-          --test sam_sercom_spi --test st7735_sam_guest --test sam_dmac_byte
-          --test sam_dmac_sercom4_tx --test sam_dmac_tx_completion -- --nocapture
+          scripts/ci/cargo-test-nonvacuous.sh -p labwired-core --features event-scheduler --test samd -- --nocapture sam_sercom_spi:: st7735_sam_guest:: sam_dmac_byte:: sam_dmac_sercom4_tx:: sam_dmac_tx_completion::
 
       - name: Scheduler-only fidelity lanes (walk≡scheduler timing gates)
         run: >
@@ -2001,7 +2062,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Validation status — report check + source/capture report
+      - name: Validation status — integrity gates + source/capture report
         run: |
           python -m pip install --quiet pyyaml
           python3 scripts/generate_validation_status.py --check --drift
@@ -2077,12 +2138,11 @@ jobs:
 
       - name: Firmware survival + F407 I2C e2e (fixtures)
         run: >
-          cargo test -p labwired-core
-          --test firmware_survival
-          --test e2e_stm32f407_i2c
+          cargo test -p labwired-core --test e2e_stm32f407_i2c &&
+          cargo test -p labwired-core --test gates -- firmware_survival::
 
       - name: Board-coverage ratchet (static naming scan)
-        run: cargo test -p labwired-core --test board_coverage_ratchet -- --nocapture
+        run: 'cargo test -p labwired-core --test gates -- --nocapture board_coverage_ratchet::'
 
       # Chip configs vs the vendored SVDs — peripheral base addresses and NVIC
       # numbers. Pure data (~20s, no firmware build, no toolchain), and it is
@@ -2092,13 +2152,13 @@ jobs:
       # WB55 RCC misplacement and the WBA52 LPUART1/SPI1 vector collision both
       # sat on main for months, so it runs on every push.
       - name: SVD conformance (config addresses + IRQs vs silicon)
-        run: cargo test -p labwired-core --test svd_conformance -- --nocapture
+        run: 'cargo test -p labwired-core --test gates -- --nocapture svd_conformance::'
 
       # RELEASE-ONLY CODE — the lane that did not exist.
       #
       # Every other cargo step in this file builds DEBUG, so a
       # `#[cfg(not(debug_assertions))]` block is not merely untested: the
-      # compiler never sees it. `crates/core/tests/event_scheduler.rs` rotted
+      # compiler never sees it. `crates/core/tests/gates/event_scheduler.rs` rotted
       # exactly that way — its release-only block called `drain_due(&[0u32])`
       # against a 0-argument API, so `cargo test --release -p labwired-core`
       # could not COMPILE, while every green lane above silently excluded the
@@ -2139,13 +2199,9 @@ jobs:
       - name: Release-gated tests — cfg(not(debug_assertions))
         if: ${{ !cancelled() }}
         run: >
-          cargo test --release -p labwired-core --features event-scheduler
-          --lib --test event_scheduler --test release_only_cfg_ratchet
-          --test world_esp32c3_ble_pong
-          --test esp32c3_usb_cdc_console
-          --test esp32c3_pms_shipped_firmware
-          --test world_can_perf
-          --test world_can_dashboard_demo
+          cargo test --release -p labwired-core --features event-scheduler --lib --test world_esp32c3_ble_pong --test esp32c3_usb_cdc_console --test esp32c3_pms_shipped_firmware --test world_can_dashboard_demo &&
+          cargo test --release -p labwired-core --features event-scheduler --test gates -- event_scheduler:: release_only_cfg_ratchet:: &&
+          cargo test --release -p labwired-core --features event-scheduler --test world -- world_can_perf::
 
       # `esp32_classic_walk_differential` is BOTH arms here, and both arms are
       # covered pre-merge as well — do not read this step as their only lane.
@@ -2171,26 +2227,8 @@ jobs:
       - name: Feature gate — scheduler IRQ delivery (jit + event-scheduler)
         if: ${{ !cancelled() }}
         run: >
-          cargo test -p labwired-core --features jit,event-scheduler
-          --test intmatrix_alarm
-          --test esp32_classic_walk_differential
-          --test esp32s3_walk_differential
-          --test esp32c3_walk_differential
-          --test stm32_timer_walk_differential
-          --test stm32_dma_walk_differential
-          --test kw41z_walk_free_differential
-          --test efr32mg26_walk_differential
-          --test nrf52_timer_walk_differential
-          --test nrf52_easydma_tick512_fidelity
-          --test nrf52840_timer_machine_gate
-          --test nrf54l15_grtc_walk_differential
-          --test rp2040_timer_machine_gate
-          --test rp2040_i2c_irq_delivery
-          --test stm32f103_dma_walk_differential
-          --test systick_walk_differential
-          --test board_batch_width
-          --test cortex_m_jit_nrf_differential
-          --lib
+          cargo test -p labwired-core --features jit,event-scheduler --lib --test esp32s3_walk_differential --test esp32c3_walk_differential --test stm32_timer_walk_differential --test stm32_dma_walk_differential --test kw41z_walk_free_differential --test efr32mg26_walk_differential --test nrf52_timer_walk_differential --test nrf52_easydma_tick512_fidelity --test nrf52840_timer_machine_gate --test nrf54l15_grtc_walk_differential --test rp2040_timer_machine_gate --test rp2040_i2c_irq_delivery --test stm32f103_dma_walk_differential --test systick_walk_differential --test board_batch_width --test cortex_m_jit_nrf_differential &&
+          cargo test -p labwired-core --features jit,event-scheduler --test esp -- intmatrix_alarm:: esp32_classic_walk_differential::
 
       # HARDWARE ORACLE UNDER THE SCHEDULER FEATURE — the configuration that
       # single-crate commands cannot reproduce.
@@ -2231,7 +2269,7 @@ jobs:
       # nrf52_onboarding_diff, nrf52_power_conformance,
       # nrf52_full_register_conformance and nrf52_timer_rtc_conformance. The
       # bring-up harness for a whole chip family was unbuildable and nothing
-      # said so, exactly as `crates/core/tests/event_scheduler.rs` rotted behind
+      # said so, exactly as `crates/core/tests/gates/event_scheduler.rs` rotted behind
       # `cfg(not(debug_assertions))` until the release lane above existed.
       #
       # The crate is small and its dependency graph is already warm from the
@@ -2512,6 +2550,7 @@ jobs:
         run: |
           set -uo pipefail
           python3 scripts/ci/known_red.py --rows > /tmp/known-red.txt
+          # test-target-refs: dynamic (rows come from workspace-test-shards.json known_red; the checker validates that file)
           while read -r pkg target test issue; do
             [ -n "${pkg:-}" ] || continue
             if cargo test -p "$pkg" --test "$target" -- --exact "$test"; then

@@ -5,7 +5,7 @@
 
 Real Git fixtures cover incomplete-history failures. Source-content fixtures
 prove that optional human ACKs never block integration or upgrade physical
-capture evidence, while stale reports and invalid evidence still fail.
+capture evidence, while invalid evidence, watch holes and a committed report still fail.
 """
 
 import datetime
@@ -156,10 +156,22 @@ def _board_with_capture(tmp_path, monkeypatch):
     return board, model
 
 
+def _write_manifest_dir(directory, boards):
+    """Lay boards out the way the repo does: one <id>.yaml each plus _index.yaml."""
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "_index.yaml").write_text("# test manifest\n")
+    for b in boards:
+        (directory / f"{b['id']}.yaml").write_text(yaml.safe_dump(b, sort_keys=False))
+    return directory
+
+
+def _snap(directory):
+    return {p.name: p.read_bytes() for p in sorted(directory.iterdir())}
+
+
 def _configure_cli(monkeypatch, board, flags):
     manifest = {"boards": [board]}
-    path = gvs.CORE_ROOT / "manifest.yaml"
-    path.write_text(yaml.safe_dump(manifest, sort_keys=False))
+    path = _write_manifest_dir(gvs.CORE_ROOT / "boards", [board])
     output = gvs.CORE_ROOT / "VALIDATION_STATUS.md"
     output.write_text(gvs.render(manifest))
     monkeypatch.setattr(gvs, "MANIFEST", path)
@@ -254,25 +266,63 @@ def test_source_only_drift_is_informational(tmp_path, monkeypatch, capsys, flags
             "drift_ack_expires": "2020-02-01",
         })
     manifest_path, output = _configure_cli(monkeypatch, board, flags)
-    before = (manifest_path.read_bytes(), output.read_bytes())
+    before = (_snap(manifest_path), output.read_bytes())
 
     assert gvs.main() == 0
     printed = capsys.readouterr()
     assert "informational; no source-review ACK required" in printed.out
     assert gvs.evaluate(board)["status"] in printed.out
     assert "ERROR" not in printed.err
-    assert (manifest_path.read_bytes(), output.read_bytes()) == before
+    assert (_snap(manifest_path), output.read_bytes()) == before
 
 
-def test_stale_document_still_fails_with_source_drift(tmp_path, monkeypatch, capsys):
+def test_check_does_not_depend_on_any_committed_report(tmp_path, monkeypatch):
+    """The report is generated output: a stale or absent file is not a failure."""
     board, model = _board_with_capture(tmp_path, monkeypatch)
     model.write_text("changed source\n")
     _, output = _configure_cli(monkeypatch, board, ["--check", "--drift"])
     output.write_text("stale document\n")
+    assert gvs.main() == 0
+    assert output.read_text() == "stale document\n", "--check must not rewrite the file"
+    output.unlink()
+    assert gvs.main() == 0
+    assert not output.exists()
 
+
+def test_check_output_writes_the_rendered_report(tmp_path, monkeypatch):
+    board, _ = _board_with_capture(tmp_path, monkeypatch)
+    target = tmp_path / "published" / "VALIDATION_STATUS.md"
+    _configure_cli(monkeypatch, board, ["--check", "--drift", "--output", str(target)])
+    assert gvs.main() == 0
+    assert target.read_text() == gvs.render({"boards": [board]})
+
+
+def test_check_fails_when_the_generated_report_is_committed(tmp_path, monkeypatch, capsys):
+    root = make_repo(tmp_path / "git-repo")
+    monkeypatch.setattr(gvs, "CORE_ROOT", root)
+    board = {"id": "demo", "tier": "structural", "doc": "d.md", "chip": "c.yaml", "models": ["model.txt"]}
+    manifest = _write_manifest_dir(root / "boards", [board])
+    output = root / "docs" / "boards" / "VALIDATION_STATUS.md"
+    output.parent.mkdir(parents=True)
+    output.write_text("committed\n")
+    monkeypatch.setattr(gvs, "MANIFEST", manifest)
+    monkeypatch.setattr(gvs, "OUT_DOC", output)
+    monkeypatch.setattr(sys, "argv", ["generate_validation_status.py", "--check"])
+    assert gvs.main() == 0, "untracked generated report is fine"
+    git(root, "add", "-f", "docs/boards/VALIDATION_STATUS.md")
     assert gvs.main() == 1
-    assert "out of date" in capsys.readouterr().err
-    assert output.read_text() == "stale document\n"
+    assert "is tracked by git" in capsys.readouterr().err
+
+
+def test_the_repository_does_not_track_the_generated_report():
+    tracked = subprocess.run(
+        ["git", "ls-files", "docs/boards/VALIDATION_STATUS.md"],
+        cwd=str(gvs.CORE_ROOT), capture_output=True, text=True,
+    ).stdout.strip()
+    ignored = subprocess.run(
+        ["git", "check-ignore", "-q", "docs/boards/VALIDATION_STATUS.md"], cwd=str(gvs.CORE_ROOT)
+    ).returncode
+    assert tracked == "" and ignored == 0
 
 
 @pytest.mark.parametrize("defect", ["missing-model", "unwatched-peripheral"])
@@ -313,7 +363,7 @@ def test_invalid_capture_cannot_be_published_as_informational_drift(tmp_path, mo
     board, _ = _board_with_capture(tmp_path, monkeypatch)
     path, output = _configure_cli(monkeypatch, board, ["--drift"])
     board["silicon"]["models_digest"] = "invalid"
-    path.write_text(yaml.safe_dump({"boards": [board]}))
+    _write_manifest_dir(path, [board])
     before = output.read_bytes()
     with pytest.raises(SystemExit, match="models_digest"):
         gvs.main()
@@ -333,7 +383,7 @@ def test_the_generated_document_does_not_move_with_the_calendar(tmp_path, monkey
 
 
 def test_committed_capture_records_do_not_gain_implicit_source_matches():
-    manifest = gvs.load_manifest(gvs.MANIFEST.read_text())
+    manifest = gvs.load_manifest_dir(gvs.MANIFEST)
     for board in manifest["boards"]:
         silicon = board.get("silicon")
         if silicon is not None and "models_digest" not in silicon:
@@ -346,7 +396,7 @@ def test_digests_reports_capture_provenance_and_historical_ack(tmp_path, monkeyp
     board["drift_ack_digest"] = "0" * 64
     model.write_text("changed source\n")
     path, output = _configure_cli(monkeypatch, board, ["--digests"])
-    before = (path.read_bytes(), output.read_bytes())
+    before = (_snap(path), output.read_bytes())
 
     assert gvs.main() == 0
     printed = capsys.readouterr().out
@@ -354,7 +404,7 @@ def test_digests_reports_capture_provenance_and_historical_ack(tmp_path, monkeyp
     assert gvs.evaluate(board)["status"] in printed
     assert f"capture recorded {board['silicon']['models_digest']}" in printed
     assert f"historical ack recorded {board['drift_ack_digest']}" in printed
-    assert (path.read_bytes(), output.read_bytes()) == before
+    assert (_snap(path), output.read_bytes()) == before
 
 
 def test_default_generation_never_stamps_ack_or_capture_fields(tmp_path, monkeypatch):
@@ -363,18 +413,18 @@ def test_default_generation_never_stamps_ack_or_capture_fields(tmp_path, monkeyp
     board["drift_ack"] = "2020-01-01"
     board["drift_ack_digest"] = "0" * 64
     path, _ = _configure_cli(monkeypatch, board, [])
-    before = path.read_bytes()
+    before = _snap(path)
     assert gvs.main() == 0
-    assert path.read_bytes() == before
+    assert _snap(path) == before
 
 
 def test_write_ack_digests_never_creates_an_ack(tmp_path, monkeypatch):
     board, model = _board_with_capture(tmp_path, monkeypatch)
     model.write_text("changed source\n")
     path, _ = _configure_cli(monkeypatch, board, [])
-    before = path.read_bytes()
+    before = _snap(path)
     assert gvs.write_ack_digests({"boards": [board]}) == 0
-    assert path.read_bytes() == before
+    assert _snap(path) == before
 
 
 def test_legacy_ack_stamper_cannot_upgrade_a_capture(tmp_path, monkeypatch):
@@ -385,7 +435,7 @@ def test_legacy_ack_stamper_cannot_upgrade_a_capture(tmp_path, monkeypatch):
     path, _ = _configure_cli(monkeypatch, board, [])
     before = gvs.evaluate(board)
     assert gvs.write_ack_digests({"boards": [board]}) == 0
-    after = gvs.load_manifest(path.read_text())["boards"][0]
+    after = gvs.load_manifest_dir(path)["boards"][0]
     assert after["drift_ack_digest"] == gvs.model_digest(board["models"])
     assert after["silicon"] == board["silicon"]
     assert gvs.evaluate(after) == before
@@ -408,32 +458,36 @@ def test_write_ack_digests_leaves_undrifted_boards_alone(tmp_path, monkeypatch):
     monkeypatch.setattr(gvs, "evaluate", fake_evaluate)
     monkeypatch.setattr(gvs, "model_digest", fake_digest)
 
-    manifest_text = (
-        "boards:\n"
-        "  - id: drifted-one\n"
-        "    drift_ack: 2026-08-31\n"
-        "    drift_ack_digest: stale\n"
-        "  - id: fresh-one\n"
-        "    drift_ack: 2026-08-31\n"
-        "    drift_ack_digest: stale\n"
-    )
-    manifest_file = tmp_path / "manifest.yaml"
-    manifest_file.write_text(manifest_text)
-    monkeypatch.setattr(gvs, "MANIFEST", manifest_file)
+    manifest_dir = tmp_path / "boards"
+    texts = {
+        "drifted-one": "id: drifted-one\ndrift_ack: 2026-08-31\ndrift_ack_digest: stale\n",
+        "fresh-one": "id: fresh-one\ndrift_ack: 2026-08-31\ndrift_ack_digest: stale\n",
+    }
+
+    def reset():
+        manifest_dir.mkdir(exist_ok=True)
+        for name, text in texts.items():
+            (manifest_dir / f"{name}.yaml").write_text(text)
+
+    reset()
+    monkeypatch.setattr(gvs, "MANIFEST", manifest_dir)
 
     gvs.write_ack_digests({"boards": boards})
-    after = manifest_file.read_text()
-
-    drifted_line = [ln for ln in after.splitlines() if "drift_ack_digest" in ln][0]
-    fresh_line = [ln for ln in after.splitlines() if "drift_ack_digest" in ln][1]
+    drifted_line = (manifest_dir / "drifted-one.yaml").read_text()
+    fresh_line = (manifest_dir / "fresh-one.yaml").read_text()
     assert "newdigest" in drifted_line, "a drifted board must be stamped"
     assert "stale" in fresh_line, "an undrifted board must be left alone"
 
     # And the escape hatch still does the old thing, deliberately.
-    manifest_file.write_text(manifest_text)
+    reset()
     gvs.write_ack_digests({"boards": boards}, stamp_all=True)
-    lines = [ln for ln in manifest_file.read_text().splitlines() if "drift_ack_digest" in ln]
-    assert all("newdigest" in ln for ln in lines), "--all must stamp both"
+    lines = [
+        ln
+        for f in sorted(manifest_dir.glob("*.yaml"))
+        for ln in f.read_text().splitlines()
+        if "drift_ack_digest" in ln
+    ]
+    assert len(lines) == 2 and all("newdigest" in ln for ln in lines), "--all must stamp both"
 
 
 # ── Duplicate keys: PyYAML would silently keep the last one ──────────────────
@@ -452,7 +506,7 @@ def test_same_key_on_different_boards_is_fine():
 
 
 def test_committed_manifest_has_no_duplicate_keys():
-    gvs.load_manifest(gvs.MANIFEST.read_text())
+    gvs.load_manifest_dir(gvs.MANIFEST)
 
 
 @pytest.mark.parametrize("key", ["models", "silicon", "drift_ack_digest"])

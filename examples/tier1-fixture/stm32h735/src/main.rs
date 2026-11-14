@@ -461,6 +461,8 @@ unsafe fn DefaultHandler(irqn: i16) {
 
 #[entry]
 fn main() -> ! {
+    // USART3 UE + TE: the simulated transmitter now follows the hardware enable bits.
+    unsafe { write_volatile(USART3_BASE as *mut u32, (1 << 0) | (1 << 3)) };
     report(b"clock", check_clock());
     report(b"gpio", check_gpio());
     report(b"timer", check_timer());

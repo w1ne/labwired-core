@@ -6,7 +6,7 @@ on:
     # Cargo.*) trigger it on push to main instead.
     paths:
       - 'crates/core/src/tests/scb_reset.rs'
-      - 'crates/core/tests/samd_real_core_reset_guest.rs'
+      - 'crates/core/tests/samd/samd_real_core_reset_guest.rs'
       - '.github/workflows/samd-real-core-reset-guest.yml'
   push:
     branches: [main]
@@ -15,7 +15,7 @@ on:
       - 'crates/core/src/tests/scb_reset.rs'
       - 'crates/core/src/config.rs'
       - 'crates/core/src/bus/**'
-      - 'crates/core/tests/samd_real_core_reset_guest.rs'
+      - 'crates/core/tests/samd/samd_real_core_reset_guest.rs'
       - '.github/workflows/samd-real-core-reset-guest.yml'
 permissions:
   contents: read
@@ -52,7 +52,7 @@ jobs:
           (cd owned-reset-source; bash runtime-services/build.sh "../owned-reset-core-19" "$RUNNER_TEMP/core-reset" 19)
       - name: Nonvacuous reset controls and source-reviewed CPU reset controls
         run: |
-          cargo test --release --locked -p labwired-core --test samd_real_core_reset_guest -- --nocapture
+          cargo test --release --locked -p labwired-core --test samd -- --nocapture samd_real_core_reset_guest::
           cargo test --release --locked -p labwired-core --lib scb_reset_tests -- --nocapture
           cargo test --release --locked -p labwired-core --lib test_wide_ram_store_observation_is_explicit_and_exact -- --nocapture
       - name: Execute the reset caller in both profiles
@@ -64,7 +64,7 @@ jobs:
             if test "$profile" = event-scheduler; then feature_args=(--features event-scheduler); fi
             echo "SAMD_CORE_RESET_BEGIN profile=$profile"
             export LABWIRED_RESET_FIXTURE_DIR="$RUNNER_TEMP/core-reset"
-            if ! cargo test --release --locked -p labwired-core "${feature_args[@]}" --test samd_real_core_reset_guest -- --ignored --nocapture 2>&1 | tee "core-reset-new-$profile.log"; then reset_failures=$((reset_failures+1)); fi
+            if ! cargo test --release --locked -p labwired-core "${feature_args[@]}" --test samd -- --ignored --nocapture samd_real_core_reset_guest:: 2>&1 | tee "core-reset-new-$profile.log"; then reset_failures=$((reset_failures+1)); fi
             echo "SAMD_CORE_RESET_END profile=$profile"
           done
           test "$reset_failures" -eq 0

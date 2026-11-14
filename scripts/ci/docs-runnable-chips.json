@@ -66,6 +66,18 @@
       "firmware": "tests/fixtures/tier1/nrf52840.elf",
       "expect": "TIER1 gpio PASS"
     },
+    "nrf54l05": {
+      "how": "committed",
+      "firmware": "tests/fixtures/board-smoke/nrf54l05.elf",
+      "expect": "NRF54L05_OK",
+      "note": "Executable nRF54L05 application-core subset, UART20 EasyDMA and GPIO P2.09; sibling common IP only. Tested with synthetic wiring, not physical board or full radio stack."
+    },
+    "nrf54l10": {
+      "how": "committed",
+      "firmware": "tests/fixtures/board-smoke/nrf54l10.elf",
+      "expect": "NRF54L10_OK",
+      "note": "Executable nRF54L10 application-core subset, UART20 EasyDMA and GPIO P2.09; sibling common IP only. Tested with synthetic wiring, not physical board or full radio stack."
+    },
     "nrf54l15": {
       "how": "example",
       "script": "examples/nrf54l15-dk/io-smoke.yaml",
@@ -443,7 +455,7 @@
     },
     "atsamd51-pybadge": {
       "how": "needs-build",
-      "why": "Adafruit PyBadge application layout (atsamd51 with reset_vector_offset 0x4000, UF2 bootloader resident below). No PyBadge application image linked at 0x4000 is committed or published as a firmware-demos release asset yet; crates/core/tests/pybadge_config.rs proves the 0x4000 boot contract with an in-test stub only"
+      "why": "Adafruit PyBadge application layout (atsamd51 with reset_vector_offset 0x4000, UF2 bootloader resident below). No PyBadge application image linked at 0x4000 is committed or published as a firmware-demos release asset yet; crates/core/tests/samd/pybadge_config.rs proves the 0x4000 boot contract with an in-test stub only"
     },
     "ra4m1": {
       "how": "committed",

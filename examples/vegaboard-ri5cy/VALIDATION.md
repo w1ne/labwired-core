@@ -48,7 +48,7 @@ cargo build -p firmware-vegaboard-ri5cy-smoke --release --target riscv32imc-unkn
   --max-steps 200000 --out-dir out/unsupported-audit/vegaboard-ri5cy
 #   simulator exit 0 · Instructions executed: 200000 · Unsupported: 0
 
-cargo test -p labwired-core --test firmware_survival test_vegaboard_ri5cy_smoke_survival
+cargo test -p labwired-core --test gates firmware_survival::test_vegaboard_ri5cy_smoke_survival
 ```
 
 ## Notes

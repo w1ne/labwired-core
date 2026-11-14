@@ -113,10 +113,10 @@ These are **not** “blinky on N boards.” They exercise links and stacks.
 
 | Proof | Location | What it proves |
 |-------|----------|----------------|
-| Two ESP32-C3s, UART PING/PONG | [`examples/ci-two-c3-link`](../../examples/ci-two-c3-link), [`world_esp32c3_pingpong`](../../crates/core/tests/world_esp32c3_pingpong.rs) | Cross-chip serial + C3 UART model |
+| Two ESP32-C3s, UART PING/PONG | [`examples/ci-two-c3-link`](../../examples/ci-two-c3-link), [`world_esp32c3_pingpong`](../../crates/core/tests/esp/world_esp32c3_pingpong.rs) | Cross-chip serial + C3 UART model |
 | Human-readable lab | [`examples/esp32c3-pingpong`](../../examples/esp32c3-pingpong) | Same idea with Arduino + OLED |
 | IO-Link multi-chip station | [`world_multichip`](../../crates/core/tests/world_multichip.rs), `examples/iolink-station` | N Cortex-M nodes + UART links |
-| CAN multi-node | [`world_can_bus`](../../crates/core/tests/world_can_bus.rs) | FDCAN traffic across machines |
+| CAN multi-node | [`world_can_bus`](../../crates/core/tests/world/world_can_bus.rs) | FDCAN traffic across machines |
 
 ### Wireless / radio
 

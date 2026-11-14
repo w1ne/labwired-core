@@ -199,7 +199,7 @@ release delay is not introduced by this generic change.
 
 ## Regression evidence
 
-`crates/core/tests/world_analog.rs` builds real ARM nodes and a single MNA deck.
+`crates/core/tests/analog/world_analog.rs` builds real ARM nodes and a single MNA deck.
 It checks equal-named pin independence, shared-rail load coupling and KCL,
 independent ADC conversions, high impedance, distinct nominal and routed VDD,
 interval-start sampling, deterministic node order and host chunking, reset RC
