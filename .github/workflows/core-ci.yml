@@ -643,6 +643,9 @@ jobs:
           python3 -m unittest discover -s scripts/tests -p test_cli_release_tag.py
           python3 -m unittest discover -s examples/nrf52840-secure-boot-lab -p test_make_packages.py
 
+      - name: Rerun-on-runner-loss classifier unit tests
+        run: node --test scripts/ci/rerun-on-runner-loss.test.mjs
+
       # Mixed-signal co-sim: the ngspice wrapper (tools/cosim) is pure Python
       # over libngspice and steps a real RC circuit; seconds, no cargo. It is a
       # separate step so a missing libngspice shows up as THIS step, not as a
