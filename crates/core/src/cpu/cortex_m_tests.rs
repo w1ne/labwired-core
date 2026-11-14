@@ -4242,10 +4242,12 @@ fn fp_access_requires_cp10_and_cp11_and_respects_privilege() {
     cpacr.store(0b11 << 20, std::sync::atomic::Ordering::Relaxed);
     assert!(!cpu.fp_access_allowed(), "both CP10 and CP11 are required");
 
+    // A core whose chip does not declare `cortex_m_fpu` has no CPACR state;
+    // it keeps executing VFP (STM32L476 and other undeclared FPU parts).
     let plain = CortexM::new();
     assert!(
-        !plain.fp_access_allowed(),
-        "a core without an FPU must deny VFP"
+        plain.fp_access_allowed(),
+        "a core without a declared FPU keeps executing VFP"
     );
 }
 
@@ -4283,7 +4285,7 @@ fn cpacr_denied_fp_instruction_raises_nocp_usagefault() {
 
 /// `ExecuteFPCheck`: with FPCCR.ASPEN (reset value) the first FP instruction
 /// sets CONTROL.FPCA and starts FPSCR's mode bits from FPDSCR. A core without
-/// the FP extension denies the instruction and never sets FPCA.
+/// a declared FP extension executes the instruction but never sets FPCA.
 #[test]
 fn fp_instruction_sets_control_fpca_with_aspen() {
     let (mut cpu, mut bus, _fp) = fp_core();
@@ -4309,11 +4311,10 @@ fn fp_instruction_sets_control_fpca_with_aspen() {
     let mut plain = CortexM::new();
     let mut bus2 = MockBus::new();
     plain.pc = 0x1000;
-    bus2.write_u16(0x1000, 0xEEB0).unwrap();
-    bus2.write_u16(0x1002, 0x0A60).unwrap();
-    let config = bus2.config.clone();
-    assert!(plain.step_internal(&mut bus2, &[], &config).is_err());
+    run_test_instr(&mut plain, &mut bus2, 0xEEB0_0A60, true);
     assert_eq!(plain.control & 0x4, 0);
+    plain.r0 = 0x4;
+    run_test_instr(&mut plain, &mut bus2, 0xF380_8814, true);
     assert_eq!(plain.control & 0x4, 0, "no FP extension: FPCA not writable");
     assert_eq!(plain.control_mask(), 0x3, "no FP extension exposes no FPCA");
 }
