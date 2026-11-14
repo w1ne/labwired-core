@@ -408,6 +408,15 @@ impl Solver {
     /// (`roff`), because their control is a routed input and no input has
     /// arrived yet.
     pub fn new(circuit: Circuit, integration: Integration) -> Result<Self, AnalogError> {
+        for resistor in &circuit.resistors {
+            let resistance = resistor.resistance_ohms();
+            if !resistance.is_finite() || resistance == 0.0 || !resistance.recip().is_finite() {
+                return Err(AnalogError::Config(format!(
+                    "resistor `{}` must have finite non-zero resistance and finite conductance",
+                    resistor.name
+                )));
+            }
+        }
         let unknowns = circuit.unknowns();
         if unknowns > MAX_UNKNOWNS {
             return Err(AnalogError::TooLarge {
@@ -596,7 +605,7 @@ impl Solver {
         };
         ntc.temperature_celsius = celsius;
         let resistance = ntc.resistance_ohms(resistor.ohms);
-        if !resistance.is_finite() || resistance <= 0.0 {
+        if !resistance.is_finite() || resistance <= 0.0 || !resistance.recip().is_finite() {
             return false;
         }
         if resistor.ntc != Some(ntc) {

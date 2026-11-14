@@ -110,6 +110,51 @@ C1 out 0 100n
     }
 
     #[test]
+    fn parsed_resistors_reject_nonfinite_conductance() {
+        for text in [
+            "Rtiny a 0 1e-320",
+            "Rtiny a 0 -1e-320",
+            "Rntc a 0 1 beta=225000 temp=10000",
+        ] {
+            assert!(parse_netlist(text).is_err(), "must refuse `{text}`");
+        }
+        assert!(
+            parse_netlist("Rnegative a 0 -1k").is_ok(),
+            "finite negative resistors remain supported"
+        );
+        assert!(
+            parse_netlist("Rntc a 0 1e-320 beta=3950 temp=-180").is_ok(),
+            "a small nominal value remains valid when its modeled resistance has finite conductance"
+        );
+    }
+
+    #[test]
+    fn routed_ntc_rejects_nonfinite_conductance_without_changing_state() {
+        let circuit =
+            parse_netlist("Vcc vcc 0 dc 1\nRntc vcc sense 1 beta=225000\nRpull sense 0 1\n")
+                .unwrap();
+        let mut solver = Solver::new(circuit, Integration::BackwardEuler).unwrap();
+        let index = solver.thermistor_index("Rntc").unwrap();
+        assert!(!solver.set_thermistor_temperature(index, 10000.0));
+        assert_eq!(
+            solver.circuit().resistors[index]
+                .ntc
+                .unwrap()
+                .temperature_celsius,
+            25.0
+        );
+    }
+
+    #[test]
+    fn solver_rejects_nonfinite_conductance_in_hand_built_circuits() {
+        let mut circuit = parse_netlist("R1 a 0 1").unwrap();
+        circuit.resistors[0].ohms = 1e-320;
+        let error =
+            Solver::new(circuit, Integration::BackwardEuler).expect_err("invalid conductance");
+        assert!(matches!(error, AnalogError::Config(message) if message.contains("conductance")));
+    }
+
+    #[test]
     fn changing_ntc_temperature_rebuilds_the_mna_resistor_stamp() {
         let circuit =
             parse_netlist("Vcc vcc 0 dc 3.3\nRntc vcc sense 10k beta=3950\nRpull sense 0 10k\n")
