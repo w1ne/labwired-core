@@ -1,7 +1,7 @@
 name: SAMD actual CODAL clock-gated SPI timeout guest
 on:
   pull_request:
-    paths: ['crates/core/tests/samd_real_spi_timeout_guest.rs', '.github/workflows/samd-real-spi-timeout-guest.yml']
+    paths: ['crates/core/tests/samd/samd_real_spi_timeout_guest.rs', '.github/workflows/samd-real-spi-timeout-guest.yml']
 permissions:
   contents: read
 concurrency:

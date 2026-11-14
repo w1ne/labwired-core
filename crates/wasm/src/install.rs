@@ -159,7 +159,7 @@ impl WasmSimulator {
         // "lock" → APP_CPU fault in esp_intr_alloc) was actually an APP_CPU
         // dual-core bring-up bug, not an allocator bug — it disappeared once
         // the real second core landed (see new_from_config_xtensa_esp32 +
-        // crates/core/tests/e2e_labwired_ereader.rs, which paints identically
+        // crates/core/tests/esp/e2e_labwired_ereader.rs, which paints identically
         // with the real heap: refresh_gen=1, 1429 ink bytes).
 
         // No-op stubs for ESP-IDF / Arduino-ESP32 init paths we don't model.
@@ -252,7 +252,7 @@ impl WasmSimulator {
             // system/xtensa/esp32.rs by mapping apb_ctrl to its tail; the real
             // HardwareSerial path now runs against the real UART model and
             // demo-labwired-ereader.elf emits its own markers while still
-            // painting. See crates/core/tests/esp32_syscon_overlap.rs.
+            // painting. See crates/core/tests/esp/esp32_syscon_overlap.rs.
             "_Z14serialEventRunv",
             // vListInsert is NOT nop'd: with the fake FreeRTOS create functions
             // gone, real xQueueCreateMutex / scheduler code runs and depends on
@@ -278,7 +278,7 @@ impl WasmSimulator {
         // built on them (xQueueSemaphoreTake/Send "always succeed") and dropped
         // the SPI payload → blank render. Removing all of it lets the real SPI
         // bus mutex and critical sections run, matching the proven e2e path in
-        // crates/core/tests/e2e_labwired_ereader.rs. (xQueueCreateMutexStatic
+        // crates/core/tests/esp/e2e_labwired_ereader.rs. (xQueueCreateMutexStatic
         // runs for real too.)
         // spi_flash_init_lock / op_lock / op_unlock are NOT stubbed: the real
         // FreeRTOS mutex create runs (see above), as in the shared profile.
@@ -326,7 +326,7 @@ impl WasmSimulator {
         // FreeRTOS object and the SPI critical sections run for real, so the byte
         // stream actually reaches the panel (the fakes matched the transaction
         // count but dropped the payload → blank render). Mirrors the proven e2e
-        // path in crates/core/tests/e2e_labwired_ereader.rs.
+        // path in crates/core/tests/esp/e2e_labwired_ereader.rs.
 
         // No GxEPD2 cmd/data bypass. The real compiled _writeCommand/_writeData
         // run: digitalWrite(DC=GPIO17) → SPI.transfer → spiTransferByteNL writes

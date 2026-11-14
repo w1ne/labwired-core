@@ -3,10 +3,10 @@
   "in_boards": false,
   "uart": {
     "state": "proven",
-    "file": "crates/core/tests/pic24_ka_smoke.rs",
+    "file": "crates/core/tests/pic/pic24_ka_smoke.rs",
     "test": "pic24f08ka101_uart_smoke",
     "signal": "the committed XC16 v1.70 ELF boots on pic24f08ka101 and writes 'HI' through U1TXREG (0x0224); examples/pic24f08ka101/io-smoke.yaml asserts the same output under `labwired test`",
-    "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test pic24_ka_smoke; strict_onboarding examples/pic24f08ka101/io-smoke.yaml"
+    "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test pic pic24_ka_smoke::; strict_onboarding examples/pic24f08ka101/io-smoke.yaml"
   },
   "spi": {
     "state": "none",

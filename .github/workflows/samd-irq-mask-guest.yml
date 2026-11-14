@@ -1,7 +1,7 @@
 name: SAMD authored software IRQ mask ARM guest
 on:
   pull_request:
-    paths: ['crates/core/tests/samd_irq_mask_guest.rs', 'scripts/samd-irq-mask/**', '.github/workflows/samd-irq-mask-guest.yml']
+    paths: ['crates/core/tests/samd/samd_irq_mask_guest.rs', 'scripts/samd-irq-mask/**', '.github/workflows/samd-irq-mask-guest.yml']
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -39,8 +39,8 @@ jobs:
           LABWIRED_IRQ_FIXTURE_DIR: ${{ runner.temp }}/irq-guests
         run: |
           set -o pipefail
-          cargo test --release -p labwired-core --test samd_irq_mask_guest -- --ignored --nocapture | tee irq-guest-default.log
-          cargo test --release -p labwired-core --features event-scheduler --test samd_irq_mask_guest -- --ignored --nocapture | tee irq-guest-scheduler.log
+          cargo test --release -p labwired-core --test samd -- --ignored --nocapture samd_irq_mask_guest:: | tee irq-guest-default.log
+          cargo test --release -p labwired-core --features event-scheduler --test samd -- --ignored --nocapture samd_irq_mask_guest:: | tee irq-guest-scheduler.log
       - name: Bind execution to actual source snapshot
         env:
           QUALIFICATION_HEAD: ${{ github.event.pull_request.head.sha }}

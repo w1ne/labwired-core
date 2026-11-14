@@ -21,7 +21,7 @@ Mirrors the workflow already proven on
 ## Survival traces
 
 Each row is a captured byte stream that the simulator must reproduce
-byte-for-byte (`crates/core/tests/firmware_survival.rs::test_nucleo_f407_*`).
+byte-for-byte (`crates/core/tests/gates/firmware_survival.rs::test_nucleo_f407_*`).
 
 | Trace                   | Fixture ELF                                     | Hardware capture file                                  | Status                          |
 |-------------------------|-------------------------------------------------|--------------------------------------------------------|---------------------------------|
@@ -47,7 +47,7 @@ For each trace, the bench-side workflow is:
 
 3. **Run the sim-only assertion** to lock in the expected output:
    ```bash
-   cargo test -p labwired-core --test firmware_survival \
+   cargo test -p labwired-core --test gates firmware_survival:: \
        test_nucleo_f407_smoke_survival --release
    ```
    This must pass with the current `expected_uart_output` literal in

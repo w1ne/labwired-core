@@ -3,10 +3,10 @@
   "in_boards": false,
   "uart": {
     "state": "proven",
-    "file": "crates/core/tests/firmware_survival.rs",
+    "file": "crates/core/tests/gates/firmware_survival.rs",
     "test": "test_curiosity_pic32mz_nuttx_survival",
     "signal": "committed stock upstream NuttX nsh ELF tests/fixtures/curiosity-pic32mz-ef-nuttx-nsh.elf booted in-sim on the MIPS core; the survival gate asserts 'NuttShell (NSH)' on the UART2 TX sink. Fixture absence is a hard assert!, not a skip.",
-    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test gates firmware_survival::"
   },
   "spi": {
     "state": "none",

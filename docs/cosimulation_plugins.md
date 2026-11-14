@@ -448,7 +448,7 @@ settled DC gain and smaller-signal finite-GBW response are preserved. COMP
 cards accept hysteresis and open-collector or push-pull outputs. These
 parameters have no temperature dependence. Signal- or load-dependent supply
 current is not modeled. The hand-calculated macro tests are in
-`crates/core/tests/analog_macros.rs`.
+`crates/core/tests/analog/analog_macros.rs`.
 
 `.options`, `.tran`, `.op`, `.print`, `.plot`, `.save`, `.probe`, `.width`,
 `.temp`, `.nodeset`, `.title` and a whole `.control` … `.endc` block are
@@ -569,7 +569,7 @@ Meyer bias regions, and Ward–Dutton
 charge conservation and transient terminal response are covered by tests. The
 diode's forward and reverse knee reduction, non-default reverse-breakdown
 emission coefficient, and first-order soft-recovery response are exercised in
-[`tests/analog_devices.rs`](../crates/core/tests/analog_devices.rs). BJT `NKF`
+[`tests/analog_devices.rs`](../crates/core/tests/analog/analog_devices.rs). BJT `NKF`
 is checked against solved forward/reverse terminal currents and its effect on
 transit charge. Every
 parameter is taken at 300.00 K; there is no temperature
@@ -627,7 +627,7 @@ nodes count against the 128-unknown ceiling and can be probed.
   was still moving — never a `NaN` written into the trace.
 - A circuit with **no** nonlinear element takes the pre-Newton code path
   unchanged, down to the floating-point operation order.
-  `crates/core/tests/analog_linear_golden.rs` pins that against bit patterns
+  `crates/core/tests/analog/analog_linear_golden.rs` pins that against bit patterns
   captured from the engine before any of this existed.
 - Agreement with ngspice on nonlinear decks is measured, not asserted:
   `crates/cli/tests/analog_vs_ngspice_differential.rs` hands the same SPICE

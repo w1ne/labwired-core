@@ -520,7 +520,7 @@ silicon:
 # 2026-06-11 capture and h563_conformance pin only those); C8..C15 are now
 # addressable storage slots reading the idle state where they previously
 # read 0, a sim widening with no H563 silicon counterpart. Ran:
-# `cargo test -p labwired-core --test h563_conformance` (6/6) and
+# `cargo test -p labwired-core --test stm32 h563_conformance::` (6/6) and
 # `cargo test -p labwired-core --lib` (0 failures) on this branch; no live
 # re-capture. This is an ACK, NOT A CAPTURE — a live re-capture is owed.
 # 2026-09-18 (STM32U575 fidelity expansion, Task C: SPI pad map):
@@ -544,8 +544,8 @@ silicon:
 # H5 the geometry returns the same 1 MiB/8 KiB values the drain used
 # before, and `h5_program_byte`/`h5_error_flags_enabled` are untouched. The
 # digest moves because it hashes whole files. Ran:
-# `cargo test -p labwired-core --test flash_h5_ops` (6/6) and
-# `--test h563_conformance` (6/6) on this branch; no live re-capture.
+# `cargo test -p labwired-core --test stm32 flash_h5_ops::` (6/6) and
+# `--test stm32 h563_conformance::` (6/6) on this branch; no live re-capture.
 # This is an ACK, NOT A CAPTURE — a live re-capture is owed.
 models:
   - crates/core/src/peripherals/esp_ledc_wave.rs

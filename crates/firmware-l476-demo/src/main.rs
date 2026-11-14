@@ -8,7 +8,7 @@
 //! Exercises every peripheral that has been hardware-validated against
 //! real silicon: USART2 (Virtual COM Port), GPIOA (LD2 user LED),
 //! GPIOC (B1 user button), SPI1, I2C1, ADC1, DMA1. The output stream
-//! is locked as a survival test in `crates/core/tests/firmware_survival.rs`
+//! is locked as a survival test in `crates/core/tests/gates/firmware_survival.rs`
 //! so any drift in the simulator's L4 peripheral models breaks CI.
 //!
 //! Pin map (per UM1724 STM32 Nucleo-64 user manual):

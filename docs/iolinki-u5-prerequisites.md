@@ -31,8 +31,8 @@ commit, so fetch the commit and run `west init -l` on that checkout, then
 
 ```sh
 export IOLINKI_U5_ELF=/absolute/path/to/zephyr.elf
-cargo test -p labwired-core --test u5_exti --test u5_reference_firmware -- --include-ignored
-cargo test -p labwired-core --features event-scheduler --test u5_exti --test u5_reference_firmware -- --include-ignored
+cargo test -p labwired-core --test stm32 -- --include-ignored u5_exti:: u5_reference_firmware::
+cargo test -p labwired-core --features event-scheduler --test stm32 -- --include-ignored u5_exti:: u5_reference_firmware::
 ```
 
 The actual-ELF test is ignored in ordinary host runs because it requires an

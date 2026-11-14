@@ -39,9 +39,9 @@ Focused tests:
 
 ```sh
 python3 -m unittest discover -s scripts/tests -p test_prepare_rv1103_linux.py
-CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_PROFILE_TEST_OPT_LEVEL=0 cargo +1.95.0 test -p labwired-core --test rv1103_linux_loader
-CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_PROFILE_TEST_OPT_LEVEL=0 LABWIRED_RV1103_ARTIFACTS=/tmp/rv1103-linux cargo +1.95.0 test -p labwired-core --test rv1103_linux_loader -- --ignored
-CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_PROFILE_TEST_OPT_LEVEL=0 LABWIRED_RV1103_ARTIFACTS=/tmp/rv1103-linux cargo +1.95.0 test -p labwired-core --features qemu-arm-system,event-scheduler --test rv1103_linux_loader -- --include-ignored
+CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_PROFILE_TEST_OPT_LEVEL=0 cargo +1.95.0 test -p labwired-core --test rv1103 rv1103_linux_loader::
+CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_PROFILE_TEST_OPT_LEVEL=0 LABWIRED_RV1103_ARTIFACTS=/tmp/rv1103-linux cargo +1.95.0 test -p labwired-core --test rv1103 rv1103_linux_loader:: -- --ignored
+CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_PROFILE_TEST_OPT_LEVEL=0 LABWIRED_RV1103_ARTIFACTS=/tmp/rv1103-linux cargo +1.95.0 test -p labwired-core --features qemu-arm-system,event-scheduler --test rv1103 rv1103_linux_loader:: -- --include-ignored
 CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_PROFILE_TEST_OPT_LEVEL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_DEV_OPT_LEVEL=0 CARGO_PROFILE_DEV_PANIC=unwind LABWIRED_RV1103_ARTIFACTS=/tmp/rv1103-linux cargo +1.95.0 test -p labwired-cli --features qemu-arm-system --test rv1103_linux_cli -- --include-ignored
 ```
 

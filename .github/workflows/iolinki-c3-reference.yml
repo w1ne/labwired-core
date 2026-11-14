@@ -58,8 +58,8 @@ jobs:
         env:
           IOLINKI_C3_ELF: ${{ github.workspace }}/.iolinki/examples/esp32_l6362a/.pio/build/esp32c3/firmware.elf
         run: |
-          cargo test -p labwired-core --test c3_gpio_interrupts --test c3_reference_firmware -- --include-ignored
-          cargo test -p labwired-core --features event-scheduler --test c3_gpio_interrupts --test c3_reference_firmware -- --include-ignored
+          cargo test -p labwired-core --test esp -- --include-ignored c3_gpio_interrupts:: c3_reference_firmware::
+          cargo test -p labwired-core --features event-scheduler --test esp -- --include-ignored c3_gpio_interrupts:: c3_reference_firmware::
       - uses: actions/upload-artifact@v4
         with:
           name: iolinki-c3-esp-idf-firmware-prerequisite

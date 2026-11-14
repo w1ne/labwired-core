@@ -15,7 +15,7 @@ cargo build -p firmware-atsamd51-pybadge-demo --release --target thumbv7em-none-
 cargo run -q -p labwired-cli -- test --script examples/pybadge/io-smoke.yaml --no-uart-stdout
 ```
 
-The machine-run test is `crates/core/tests/pybadge_firmware.rs`.
+The machine-run test is `crates/core/tests/samd/pybadge_firmware.rs`.
 
 ## Sources
 

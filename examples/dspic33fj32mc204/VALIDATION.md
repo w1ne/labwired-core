@@ -6,20 +6,20 @@ Claims, evidence, and what is explicitly **not** claimed yet.
 
 | Capability | Tier | Evidence |
 | :--- | :--- | :--- |
-| Boot from ELF: PC 0 → reset `GOTO` → `__reset` | smoke-tested | `crates/core/tests/pic24_m0_smoke.rs`, `pic24_xc16_elf_boot.rs` |
+| Boot from ELF: PC 0 → reset `GOTO` → `__reset` | smoke-tested | `crates/core/tests/pic/pic24_m0_smoke.rs`, `pic24_xc16_elf_boot.rs` |
 | Base ISA (`MOV`/`MOV.B`, `ADD`/`AND`/`IOR`, `CLR`/`SETM`, `CP0`, `BSET`/`BCLR`/`BTG`, `SE`, `LSR`, `BRA`/`RCALL`/`CALL`/`GOTO`, `RETURN`/`RETLW`/`LNK`/`ULNK`/`RETFIE`) | unit-tested | `crates/core/src/cpu/pic24.rs` (`#[cfg(test)]`), real-XC16 boot test |
 | Stack semantics: `PUSH [W15++]` / `POP [--W15]` (DS70283H Figure 4-4) | unit-tested | `call_and_return_use_the_upward_stack`, `lnk_and_ulnk_allocate_a_frame` |
 | UART1 TX (`U1TXREG`) → console sink | smoke-tested | unit test `mov_w0_to_u1txreg_reaches_sink`, integration tests, io-smoke |
 | Determinism (same inputs → same output) | smoke-tested | both integration tests run their firmware twice and compare |
-| **Real XC16 v1.70 firmware boots** (`xc16-uart-smoke.c`, stock linker script): UART `HI` + `LATB0` toggle loop | integration | `crates/core/tests/pic24_xc16_elf_boot.rs` |
+| **Real XC16 v1.70 firmware boots** (`xc16-uart-smoke.c`, stock linker script): UART `HI` + `LATB0` toggle loop | integration | `crates/core/tests/pic/pic24_xc16_elf_boot.rs` |
 | XC16 ELF section layout (4-byte slots, PC-unit addresses, reset GOTO, IVT addresses) | integration | `xc16_elf_sections_land_at_their_pc_unit_addresses` |
 | Timers T1/T2/T3: TON, TCKPS 1:1–1:256, `TMR > PR` match, 32-bit T2/T3 pair (M1a) | unit-tested | `timer1_counts_to_period_and_raises_flag`, `timer1_prescaler_1_to_8`, `timer23_pair_counts_32_bit_and_flags_timer3` |
 | Interrupts: IFS0/IEC0/IPC0-2, DISI/NSTDIS gating, **IVT/AIVT vector fetch of the 24-bit ISR address**, two-word frame, RETFIE (M1a) | unit-tested | `timer1_interrupt_vectors_frames_and_returns`, `disabled_source_does_not_vector` |
 | `ACCA*` / `ACCB*` 40-bit SFR storage (M1a) | unit-tested | `accumulator_sfr_words_round_trip` |
-| **DSP MAC class (M1c)**: `MAC`/`MPY`/`MPY.N`/`MSC` (incl. squares), `CLR`, `MOVSAC`, `LAC`, `SAC`, `SAC.R`, X/Y prefetch + W12 offset, write-back, CORCON modes, OA/OB/SA/SB | unit + integration | `dsp_*` tests (PRM golden vectors); `crates/core/tests/pic24_xc16_dsp.rs` (real XC16 firmware) |
-| **Motor Control PWM + QEI (M2)**: MCPWM1 time base (free/single/up-down/double), 3 duty generators + buffering/IUE, complementary/independent pairs with dead time, P1OVDCON override, FLTA1 faults, PWM1IF postscale; QEI1 x2/x4, POS1CNT/MAX1CNT, match/index resets with IMV, CNTERR/CEID, digital filter, timer mode; IFS3/IEC3/IPC14/15 | unit + integration | `pwm_*`/`qei_*`/`m2_*` tests; `crates/core/tests/pic24_xc16_m2.rs` (real XC16 firmware) |
+| **DSP MAC class (M1c)**: `MAC`/`MPY`/`MPY.N`/`MSC` (incl. squares), `CLR`, `MOVSAC`, `LAC`, `SAC`, `SAC.R`, X/Y prefetch + W12 offset, write-back, CORCON modes, OA/OB/SA/SB | unit + integration | `dsp_*` tests (PRM golden vectors); `crates/core/tests/pic/pic24_xc16_dsp.rs` (real XC16 firmware) |
+| **Motor Control PWM + QEI (M2)**: MCPWM1 time base (free/single/up-down/double), 3 duty generators + buffering/IUE, complementary/independent pairs with dead time, P1OVDCON override, FLTA1 faults, PWM1IF postscale; QEI1 x2/x4, POS1CNT/MAX1CNT, match/index resets with IMV, CNTERR/CEID, digital filter, timer mode; IFS3/IEC3/IPC14/15 | unit + integration | `pwm_*`/`qei_*`/`m2_*` tests; `crates/core/tests/pic/pic24_xc16_m2.rs` (real XC16 firmware) |
 | DSP accumulator arithmetic (`ADD`/`SUB`/`MAX`/`MIN`/`SFTAC`/`FBCL` on ACCA/ACCB) | **not modelled** | decode error on unsupported opcodes; no claims |
-| **ADC1 + SPI1 + I2C1 (M3)**: 10/12-bit ADC (FORM, SAMP/DONE/ASAM, SSRC manual/TMR3/PWM1/internal, CHPS, scan, BUFM, SMPI, TAD/SAMC), SPI master/slave (8/16-bit, prescalers, SPIROV, loopback), I2C master (start/restart/stop, ACKSTAT, BRG, TMP102) and slave seams; IFS1/IEC1/IPC3/4 | unit + integration | `adc_*`/`spi_*`/`i2c_*` tests; `crates/core/tests/pic24_xc16_m3.rs` (real XC16 firmware + TMP102) |
+| **ADC1 + SPI1 + I2C1 (M3)**: 10/12-bit ADC (FORM, SAMP/DONE/ASAM, SSRC manual/TMR3/PWM1/internal, CHPS, scan, BUFM, SMPI, TAD/SAMC), SPI master/slave (8/16-bit, prescalers, SPIROV, loopback), I2C master (start/restart/stop, ACKSTAT, BRG, TMP102) and slave seams; IFS1/IEC1/IPC3/4 | unit + integration | `adc_*`/`spi_*`/`i2c_*` tests; `crates/core/tests/pic/pic24_xc16_m3.rs` (real XC16 firmware + TMP102) |
 | GPIO ports A/B/C: TRISx/PORTx/LATx/ODCx, 44-pin masks (M1b) | unit-tested | `gpio_output_drives_the_pad_model`, `port_read_sees_external_levels_and_own_latch`; `peripherals::pic24_gpio` tests |
 | PPS slice: RPINR7 inputs, RPOR0-12 outputs, RP0-15 = RB0-15 / RP16-25 = RC0-9 (M1b) | unit-tested | exercised by the OC/IC tests below |
 | Input capture 1/2: edge modes, prescalers, 4-deep FIFO, ICI, ICOV/ICBNE (M1b) | unit-tested | `ic1_captures_tmr2_on_a_rising_edge_of_rp0`, `ic_interrupt_divider_and_overflow_rules` |
@@ -37,7 +37,7 @@ cargo test -p labwired-core --lib pic24
 #   test result: ok. 8 passed; 0 failed
 
 # 2. Integration smoke — 2 passed (boot + UART + determinism ×2)
-cargo test -p labwired-core --test pic24_m0_smoke
+cargo test -p labwired-core --test pic pic24_m0_smoke::
 #   test pic24_fixture_boots_and_writes_h_to_uart ... ok
 #   test pic24_fixture_is_deterministic ... ok
 #   test result: ok. 2 passed; 0 failed
@@ -61,11 +61,11 @@ cargo test -p labwired-core --test strict_onboarding
 #   Found example directory: "examples/dspic33fj32mc204"
 #   PASS  2/2 checks · io-smoke · 64 steps · 0.00s
 #   [PASS] dspic33fj32mc204 is strictly onboarded.
-cargo test -p labwired-core --test board_coverage_ratchet      # 4 passed
-cargo test -p labwired-core --test session_catalog             # 1 passed (51-chip catalog incl. PIC24)
-cargo test -p labwired-core --test chip_conformance            # 8 passed (declared-only board regenerated)
-cargo test -p labwired-core --test cpu_trace_conformance       # 3 passed (Pic24 emits the full trace contract)
-cargo test -p labwired-core --test register_compliance         # 1 passed
+cargo test -p labwired-core --test gates board_coverage_ratchet::      # 4 passed
+cargo test -p labwired-core --test session session_catalog::             # 1 passed (51-chip catalog incl. PIC24)
+cargo test -p labwired-core --test gates chip_conformance::            # 8 passed (declared-only board regenerated)
+cargo test -p labwired-core --test bus cpu_trace_conformance::       # 3 passed (Pic24 emits the full trace contract)
+cargo test -p labwired-core --test bus register_compliance::         # 1 passed
 cargo test -p labwired-core --test register_coverage           # 1 passed
 cargo test -p labwired-core --lib one_arch_policy              # 8 passed
 cargo test -p labwired-core --lib cpu_hz                       # 4 passed
@@ -91,8 +91,8 @@ cargo test -p labwired-core --lib pic24
 #   test result: ok. 14 passed; 0 failed
 
 # 2. Integration + trace gates unaffected
-cargo test -p labwired-core --test pic24_m0_smoke        # 2 passed (fixture unchanged)
-cargo test -p labwired-core --test cpu_trace_conformance # 3 passed (per-instruction trace contract kept)
+cargo test -p labwired-core --test pic pic24_m0_smoke::        # 2 passed (fixture unchanged)
+cargo test -p labwired-core --test bus cpu_trace_conformance:: # 3 passed (per-instruction trace contract kept)
 
 # 3. fmt / clippy
 cargo fmt --all -- --check                              # clean
@@ -125,14 +125,14 @@ cargo test -p labwired-core --lib pic24
 cargo test -p labwired-core --lib conformance
 
 # 3. Integration + trace gates unaffected
-cargo test -p labwired-core --test pic24_m0_smoke        # 2 passed
-cargo test -p labwired-core --test cpu_trace_conformance # 3 passed
+cargo test -p labwired-core --test pic pic24_m0_smoke::        # 2 passed
+cargo test -p labwired-core --test bus cpu_trace_conformance:: # 3 passed
 
 # 4. Registry boards regenerated and re-checked (chip promoted from
 #    declared-only to a modelled conformance row with a behaviour gate)
-UPDATE_CONFORMANCE_BASELINE=1 cargo test -p labwired-core --test chip_conformance
-UPDATE_BUS_VISIBILITY_BASELINE=1 cargo test -p labwired-core --test bus_visibility
-cargo test -p labwired-core --test chip_conformance --test bus_visibility   # both green
+UPDATE_CONFORMANCE_BASELINE=1 cargo test -p labwired-core --test gates chip_conformance::
+UPDATE_BUS_VISIBILITY_BASELINE=1 cargo test -p labwired-core --test bus bus_visibility::
+cargo test -p labwired-core --test gates --test bus -- chip_conformance:: bus_visibility::   # both green
 
 # 5. fmt / clippy
 cargo fmt --all -- --check                              # clean
@@ -166,15 +166,15 @@ cargo test -p labwired-core --lib pic24
 #   test result: ok. 55 passed; 0 failed
 
 # 2. The real XC16 ELF boots — 3 passed
-cargo test -p labwired-core --test pic24_xc16_elf_boot
+cargo test -p labwired-core --test pic pic24_xc16_elf_boot::
 #   xc16_elf_sections_land_at_their_pc_unit_addresses ... ok
 #   xc16_firmware_boots_and_writes_hi_to_uart ... ok
 #   xc16_firmware_is_deterministic ... ok
 
 # 3. Fixture, trace and catalogue gates — green
-cargo test -p labwired-core --test pic24_m0_smoke        # 2 passed
-cargo test -p labwired-core --test cpu_trace_conformance # 3 passed
-cargo test -p labwired-core --test session_catalog       # 1 passed
+cargo test -p labwired-core --test pic pic24_m0_smoke::        # 2 passed
+cargo test -p labwired-core --test bus cpu_trace_conformance:: # 3 passed
+cargo test -p labwired-core --test session session_catalog::       # 1 passed
 cargo test -p labwired-loader                            # 0 tests (parsers covered via core)
 
 # 4. fmt / clippy
@@ -200,7 +200,7 @@ cargo test -p labwired-core --lib pic24
 #   test result: ok. 55 passed; 0 failed
 
 # 2. The real XC16 DSP firmware boots and lands its expected state
-cargo test -p labwired-core --test pic24_xc16_dsp
+cargo test -p labwired-core --test pic pic24_xc16_dsp::
 #   xc16_dsp_firmware_runs_the_mac_class_and_saturates ... ok
 ```
 
@@ -228,7 +228,7 @@ cargo test -p labwired-core --lib pic24
 #   test result: ok. 71 passed; 0 failed
 
 # 2. The real XC16 M2 firmware configures PWM1+QEI1 and counts edges
-cargo test -p labwired-core --test pic24_xc16_m2
+cargo test -p labwired-core --test pic pic24_xc16_m2::
 #   xc16_m2_firmware_configures_pwm_and_qei ... ok
 ```
 
@@ -264,7 +264,7 @@ cargo test -p labwired-core --lib pic24
 #   test result: ok. 98 passed; 0 failed
 
 # 2. The real XC16 M3 firmware samples AN4, loops SPI and reads the TMP102
-cargo test -p labwired-core --test pic24_xc16_m3
+cargo test -p labwired-core --test pic pic24_xc16_m3::
 #   xc16_m3_firmware_samples_adc_loops_spi_and_reads_tmp102 ... ok
 #   example_system_builder_attaches_the_m3_devices ... ok  (plus a no-device
 #   negative control that must print M3 FAIL)

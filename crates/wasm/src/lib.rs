@@ -1251,7 +1251,7 @@ impl WasmSimulator {
         // This replaces the old single-core handshake-forging stub: loopTask
         // (pinned to CONFIG_ARDUINO_RUNNING_CORE=1) now runs on a genuine
         // second core, and the cross-core yield IPI is delivered by the core's
-        // DPORT through Machine::step — see crates/core/tests/e2e_labwired_ereader.rs.
+        // DPORT through Machine::step — see crates/core/tests/esp/e2e_labwired_ereader.rs.
         let app_cpu: Box<dyn Cpu> = Box::new(labwired_core::cpu::XtensaLx7::new_app_cpu());
         let mut machine = Machine::new(boxed, bus).with_secondary_cpu(app_cpu);
 
@@ -3695,7 +3695,7 @@ external_devices:
     }
 
     /// The browser boot path must read the partition table and bring up NVS,
-    /// as the CLI path does (`crates/core/tests/e2e_labwired_ereader.rs`).
+    /// as the CLI path does (`crates/core/tests/esp/e2e_labwired_ereader.rs`).
     /// Before the browser ran the real esp_flash driver and seeded
     /// `g_rom_flashchip`, every classic-ESP32 lab printed these two lines.
     #[test]
