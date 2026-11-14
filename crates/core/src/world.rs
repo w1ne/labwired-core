@@ -521,6 +521,15 @@ pub trait MachineTrait: Send {
         crate::analog::AnalogSeries::default()
     }
 
+    /// Read-only native device evidence, including non-display sensors.
+    /// The concrete machine uses the same declared-ID join as single-node inspect.
+    fn inspect_devices(
+        &self,
+        _opts: &crate::inspect::InspectOpts,
+    ) -> Vec<crate::inspect::DeviceInspect> {
+        Vec::new()
+    }
+
     fn display_artifact(
         &self,
         _device_id: &str,
@@ -713,6 +722,15 @@ impl<C: Cpu + 'static> MachineTrait for Machine<C> {
             channels,
             end_time_ns,
         }
+    }
+
+    fn inspect_devices(
+        &self,
+        opts: &crate::inspect::InspectOpts,
+    ) -> Vec<crate::inspect::DeviceInspect> {
+        self.bus.inspect_devices_with_extra(None, opts, &mut |f| {
+            self.cpu.for_each_attached_device(f);
+        })
     }
 
     fn display_artifact(
