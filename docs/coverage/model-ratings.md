@@ -50,6 +50,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | esp32-devkitc-32e-uart1 | open | L0 | 3 | 977.8 | 1.4 | ≥1× (CI) | — |
 | stm32f401cdu6 | open | L1 | 45 | 937.7 | 1.6 | ≥1× (CI) | — |
 | stm32f411ceu6 | open | L1 | 46 | 937.6 | 1.6 | ≥1× (CI) | — |
+| stm32f446re | open | L0 | 34 | 935.5 | 1.5 | ≥1× (CI) | [doc](docs/boards/stm32f446re.md) |
 | nrf51822 | open | L1 | 22 | 1335.6 | 2.0 | ≥1× (CI) | — |
 | nrf52832 | open | L1 | 17 | 1330.2 | 2.0 | ≥1× (CI) | [doc](docs/boards/nrf52832.md) |
 | nrf52833 | open | L1 | 48 | 1368.6 | 2.1 | ≥1× (CI) | — |

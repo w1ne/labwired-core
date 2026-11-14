@@ -30,8 +30,8 @@ then run from this repository:
 
 ```sh
 export IOLINKI_G0_ELF=/absolute/path/to/reference-device.elf
-cargo test -p labwired-core --test g0_uart_pad --test g0_exti --test g0_reference_firmware -- --include-ignored
-cargo test -p labwired-core --features event-scheduler --test g0_uart_pad --test g0_exti --test g0_reference_firmware -- --include-ignored
+cargo test -p labwired-core --test stm32 -- --include-ignored g0_uart_pad:: g0_exti:: g0_reference_firmware::
+cargo test -p labwired-core --features event-scheduler --test stm32 -- --include-ignored g0_uart_pad:: g0_exti:: g0_reference_firmware::
 ```
 
 The firmware test is explicitly ignored without an external build; the CI

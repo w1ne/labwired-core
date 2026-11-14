@@ -2558,6 +2558,12 @@ pub struct GpioPort {
     /// (Kinetis PORTx, RA PFS, i.MX RT IOMUXC): its peripheral id and the
     /// encoding. Chip yaml `config: { pad_control: … }`.
     pad_control: Option<(String, crate::pins::PadControl)>,
+    /// STM32 GPIO outputs watched by off-chip STEP/DIR twins. The port
+    /// prefix encodes PA0..PH15 as 0..127; the common GPIO observer contract
+    /// intentionally remains unchanged for ESP32 devices.
+    stm32_observers: Vec<std::sync::Arc<dyn crate::peripherals::device::GpioObserver>>,
+    stm32_port_prefix: u8,
+    stm32_observer_clock: Option<crate::CycleClock>,
 }
 
 impl Default for GpioPort {
@@ -2567,6 +2573,50 @@ impl Default for GpioPort {
 }
 
 impl GpioPort {
+    /// Register an off-chip GPIO watcher only on actual STM32 GPIO ports.
+    /// MMIO edge notifications preserve BSRR/ODR semantics and are inert
+    /// when no consumer has subscribed.
+    pub fn add_stm32_observer(
+        &mut self,
+        port_index: u8,
+        observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver>,
+        clock: crate::CycleClock,
+    ) -> bool {
+        if !matches!(self.family, GpioFamily::Stm32F1(_) | GpioFamily::Stm32V2(_))
+            || port_index > 15
+        {
+            return false;
+        }
+        self.stm32_port_prefix = port_index * 16;
+        self.stm32_observer_clock = Some(clock);
+        self.stm32_observers.push(observer);
+        true
+    }
+
+    #[inline]
+    fn observe_stm32_output_changes(&self, before: Option<u32>) {
+        let Some(before) = before else { return };
+        let changed = before ^ self.read_reg(self.odr_offset());
+        if changed == 0 {
+            return;
+        }
+        let cycle = self
+            .stm32_observer_clock
+            .as_ref()
+            .map_or(0, crate::CycleClock::now);
+        for pin in 0..16u8 {
+            let mask = 1u32 << pin;
+            // Off-chip drivers see the GPIO pad, not a dormant output latch.
+            if changed & mask == 0 || self.pad_mode(pin) != Some(GpioMode::Output) {
+                continue;
+            }
+            let from = before & mask != 0;
+            for observer in &self.stm32_observers {
+                observer.on_pin_change(self.stm32_port_prefix + pin, from, !from, cycle);
+            }
+        }
+    }
+
     /// The pad's [`GpioMode`], from the SAME register truth `read_gpio_pad`
     /// reads. The mode half of `gpio_routing`, without building a `func`
     /// name: co-simulation samples direction at every model boundary, and an
@@ -2752,6 +2802,9 @@ impl GpioPort {
             wire_edges: Vec::new(),
             console_af: Vec::new(),
             pad_control: None,
+            stm32_observers: Vec::new(),
+            stm32_port_prefix: 0,
+            stm32_observer_clock: None,
         }
     }
 
@@ -3843,6 +3896,22 @@ impl GpioPort {
 }
 
 impl crate::Peripheral for GpioPort {
+    fn is_stm32_gpio_port(&self) -> bool {
+        matches!(
+            &self.family,
+            GpioFamily::Stm32F1(_) | GpioFamily::Stm32V2(_)
+        )
+    }
+
+    fn register_stm32_gpio_observer(
+        &mut self,
+        port_index: u8,
+        observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver>,
+        clock: crate::CycleClock,
+    ) -> bool {
+        self.add_stm32_observer(port_index, observer, clock)
+    }
+
     fn on_system_reset(&mut self) {
         // Restore the register file while retaining levels held by the world.
         match &mut self.family {
@@ -3897,6 +3966,8 @@ impl crate::Peripheral for GpioPort {
     }
 
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        let observed_before =
+            (!self.stm32_observers.is_empty()).then(|| self.read_reg(self.odr_offset()));
         let offset = self.sub_word_offset(offset);
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
@@ -3916,6 +3987,7 @@ impl crate::Peripheral for GpioPort {
             0
         };
         self.mutate_pads(|s| s.write_reg(reg_offset, reg_val));
+        self.observe_stm32_output_changes(observed_before);
         self.sync_wire_inputs();
         self.refresh_console_af();
         self.publish_open_drain();
@@ -3930,6 +4002,8 @@ impl crate::Peripheral for GpioPort {
     }
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        let observed_before =
+            (!self.stm32_observers.is_empty()).then(|| self.read_reg(self.odr_offset()));
         // GPIO data registers are word-access. BSRR (atomic set/reset) only
         // behaves correctly when the whole 32-bit word is presented at once:
         // the default byte-decomposition would split BSRR's set half (low 16)
@@ -3945,6 +4019,7 @@ impl crate::Peripheral for GpioPort {
             0
         };
         self.mutate_pads(|s| s.write_reg(offset & !3, value));
+        self.observe_stm32_output_changes(observed_before);
         self.sync_wire_inputs();
         self.refresh_console_af();
         self.publish_open_drain();

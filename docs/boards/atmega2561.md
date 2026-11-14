@@ -36,7 +36,7 @@ package.
 ## How to run
 
 ```bash
-cargo test -p labwired-core --test avr_atmega2561
+cargo test -p labwired-core --test avr avr_atmega2561::
 cargo run -q -p labwired-cli -- test \
   --script examples/atmega2561-io/io-smoke.yaml --no-uart-stdout
 ```

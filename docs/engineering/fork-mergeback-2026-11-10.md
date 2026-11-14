@@ -34,7 +34,7 @@ Source: [523dcbca32ec3e2b1f4514dad5a8f389fedc6568](https://github.com/CrispStrob
 
 Current upstream already has the `I2cDevice::clock_stretch_ns` capability and a SAMD51 SERCOM timing consumer. The trace decorator, supply decorator and TCA9548A mux omit forwarding, so they replace a device's hold with the default zero. The prepared patch adds 20 production lines and three regression tests. It preserves live supply cutoff and uses the maximum hold among selected enabled downstream devices. It fixes misplaced method documentation present in the fork patch.
 
-The first mergeback batch ports only the three wrapper methods and adds `crates/core/tests/i2c_clock_stretch_wrappers.rs`. The existing generic trait is sufficient. No new device-specific tool, schema or simulator is needed. Runtime verification is recorded below after testing against the pinned upstream.
+The first mergeback batch ports only the three wrapper methods and adds `crates/core/tests/bus/i2c_clock_stretch_wrappers.rs`. The existing generic trait is sufficient. No new device-specific tool, schema or simulator is needed. Runtime verification is recorded below after testing against the pinned upstream.
 
 The timing test executes the real SERCOM model. At 48 MHz, a payload's nine 10-cycle periods plus 25 us stretch require 1290 cycles. It must remain pending at 1289 and deliver the byte at 1290 for direct, trace, supply, mux and composed wrappers. Other cases cover a live supply cutoff/restart, a live change in hold duration, independent addresses, disabled channels, control-address traffic and maximum rather than first/summed stretching.
 

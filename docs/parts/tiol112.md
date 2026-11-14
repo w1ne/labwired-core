@@ -89,7 +89,7 @@ stream mode models a physical reply stop/start waveform. Use the native timed
 test for timing evidence:
 
 ```bash
-cargo test -p labwired-core --test g0_tiol112 --test modern_uart_timing
+cargo test -p labwired-core --test stm32 -- g0_tiol112:: modern_uart_timing::
 ```
 
 ## Fidelity limits

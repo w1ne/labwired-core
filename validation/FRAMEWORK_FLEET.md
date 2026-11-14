@@ -26,7 +26,7 @@ The Arduino column records measured results on `main` from
 [Core Arduino Matrix Smoke run 43199232042](https://github.com/w1ne/labwired-core/actions/runs/43199232042)
 (commit `5136a4ddf78132f5b411972911042c91d5a67121`, 2026-11-12).
 The 23 board rows have 194 passing cells, 13 explicit skips and 0 failures.
-Counts list passes and skips separately. `boards.yaml` records each skip reason.
+Counts list passes and skips separately. each file under `validation/arduino-matrix/boards/` records each skip reason.
 Other columns remain a record of intent.
 
 | Chip | Arduino matrix | Zephyr matrix | L3 I2C kit | Notes |

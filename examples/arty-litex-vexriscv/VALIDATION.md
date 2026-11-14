@@ -58,7 +58,7 @@ cargo build -p firmware-arty-litex-smoke --release --target riscv32im-unknown-no
 #   simulator exit 0 · Instructions executed: 200000 · Unsupported: 0
 
 cargo test -p labwired-core --lib litex_control_status     # 6 passed
-cargo test -p labwired-core --test firmware_survival test_arty_litex_smoke_survival
+cargo test -p labwired-core --test gates firmware_survival::test_arty_litex_smoke_survival
 ```
 
 ## Notes

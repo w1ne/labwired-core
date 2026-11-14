@@ -3573,7 +3573,7 @@ mod tests {
         let sink = Arc::new(Mutex::new(Vec::new()));
         uart.set_sink(Some(sink.clone()), false);
 
-        // Wrong offset for v2 should not transmit.
+        // A disabled transmitter accepts TDR writes without emitting a byte.
         uart.write(0x04, b'X').unwrap();
         // TDR writes before UE+TE are not captured as emitted bytes.
         uart.write(0x28, b'Y').unwrap();
@@ -3585,13 +3585,10 @@ mod tests {
             sink.lock().unwrap().is_empty(),
             "UE and TE are both required"
         );
-
-        // With UE and TE set, only TDR reaches the UART sink.
         uart.write(0x00, (1 << 0) | (1 << 3)).unwrap();
+        uart.write(0x04, b'Q').unwrap(); // CR2 is not the v2 TDR
         uart.write(0x28, b'K').unwrap();
-
-        let data = sink.lock().unwrap().clone();
-        assert_eq!(data, vec![b'K']);
+        assert_eq!(sink.lock().unwrap().clone(), vec![b'K']);
         assert_eq!(uart.read(0x1C).unwrap(), 0xC0); // ISR ready flags
     }
 

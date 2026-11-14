@@ -1,0 +1,21 @@
+{
+  "id": "stm32f103r8",
+  "in_boards": false,
+  "uart": {
+    "state": "proven",
+    "file": "examples/stm32f103r8-smoke/io-smoke.yaml",
+    "test": "uart_contains: \"OK\"",
+    "signal": "the NUCLEO-F103RB smoke firmware boots on the exact STM32F103R8 descriptor (64 KiB flash / 20 KiB SRAM) and its 'OK' bytes reach the modelled USART sink, matched by uart_contains; PA5 also toggles >=4 times (gpio_edges)",
+    "lane": "core-ci: cargo test -p labwired-core --test strict_onboarding (the gate EXECUTES examples/stm32f103r8-smoke/io-smoke.yaml through the CLI and fails the board if any assertion fails)"
+  },
+  "spi": {
+    "state": "none",
+    "gap": "No exact-part firmware SPI transfer is proven for this descriptor.",
+    "lane": "none"
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "No exact-part firmware I2C transaction is proven for this descriptor.",
+    "lane": "none"
+  }
+}

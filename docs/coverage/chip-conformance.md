@@ -49,6 +49,7 @@ This page covers the public models. For every chip we model — public and priva
 | esp32-devkitc-32e-uart1 | **L0** | ✓ | 3 | — | — | — |
 | stm32f401cdu6 | **L1** | ✓ | 45 | — | — | firmware_survival::test_stm32f401cdu6_demo_survival |
 | stm32f411ceu6 | **L1** | ✓ | 46 | — | — | firmware_survival::test_stm32f411_tier1_survival |
+| stm32f446re | **L0** | ✓ | 34 | — | — | — |
 | nrf51822 | **L1** | ✓ | 22 | — | — | firmware_survival::test_nrf51822_microbit_v1_smoke_survival |
 | nrf52832 | **L1** | ✓ | 17 | — | — | firmware_survival::test_nrf52832_demo_survival |
 | nrf52833 | **L1** | ✓ | 48 | — | — | firmware_survival::test_nrf52833_microbit_v2_smoke_survival |

@@ -1,0 +1,17 @@
+id: stm32f446re
+chip: stm32f446re
+system: systems/stm32f446re.yaml
+# Pinned like CI (core-arduino-matrix-smoke maps stm32* to 19.7.1):
+# ststm32 20.0.0 makes SPI.begin() a no-op and L4 spins on a null SPI.
+pio: { platform: ststm32@19.7.1, board: nucleo_f446re, framework: arduino }
+max_steps: 10000000
+budget_reason: "NUCLEO-F446RE 180 MHz, measured 2026-11-09: L0 0.18M, L2 0.54M, L3 0.73M, L7 0.72M, L6 5.58M"
+# LD2 = PA5 (UM1724 §6.4).
+led_watch: "gpioa:5"
+led_min_edges: 2
+# L6 drives TIM2_CH1 on PA0 (AF1), not LD2/PA5: PA5 is DAC_OUT2 as well,
+# and stock analogWrite prefers the DAC, which this chip does not model.
+pwm_watch: "gpioa:0"
+pwm_min_edges: 20
+family: stm32
+notes: "Stock stm32duino NUCLEO_F446RE (HSI PLL 180 MHz + over-drive); L8 bxCAN1 loopback"

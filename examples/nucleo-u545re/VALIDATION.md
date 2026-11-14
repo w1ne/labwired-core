@@ -28,7 +28,7 @@ ELF: `tests/fixtures/nucleo-u545re-blinky.elf` (arm-none-eabi-gcc 13.2.1,
 
 ## B. The twin drives the board's pins
 
-`cargo test -p labwired-core --test nucleo_u545re` (8 pass, 1 ignored):
+`cargo test -p labwired-core --test stm32 nucleo_u545re::` (8 pass, 1 ignored):
 
 | Test | Proves |
 |------|--------|
@@ -67,7 +67,7 @@ audit at 200k steps: `unknown_thumb16: 0`, `unhandled_thumb32: 0`,
 ## D. Chip drift guard
 
 `stm32u545.yaml` is a standalone derivative of `stm32u575.yaml`.
-`crates/core/tests/u545_u575_drift_guard.rs` checks every shared peripheral
+`crates/core/tests/stm32/u545_u575_drift_guard.rs` checks every shared peripheral
 (type, base, size, irq, clock gate, config) against an explicit allow-list:
 DBGMCU `idcode` and `sysmem.config.flash_size_kb` (512 vs 2048 KiB). The
 top-level allow-list covers name, flash/RAM sizes, and package pin maps; only

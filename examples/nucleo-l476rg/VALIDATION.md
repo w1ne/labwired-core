@@ -17,7 +17,7 @@ revealed each bug, and which simulator commits closed each gap.
 ## Survival traces
 
 Each row is a captured byte stream from `/dev/ttyACM1` at 115200 8N1.
-Sim must reproduce verbatim (`crates/core/tests/firmware_survival.rs`).
+Sim must reproduce verbatim (`crates/core/tests/gates/firmware_survival.rs`).
 
 | Trace                       | Fixture ELF                                   | Hardware capture file                                          |
 |-----------------------------|-----------------------------------------------|----------------------------------------------------------------|

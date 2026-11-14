@@ -180,6 +180,24 @@ pub enum MmioAccessClass {
 }
 
 pub trait Peripheral: std::fmt::Debug + Send {
+    /// An STM32 GPIO port can bind physical pad names such as PB0.
+    /// Reject a non-GPIO peripheral that accidentally uses the same instance name.
+    fn is_stm32_gpio_port(&self) -> bool {
+        false
+    }
+
+    /// Subscribe an off-chip device to actual STM32 GPIO output transitions.
+    /// Other peripheral families decline without a concrete downcast.
+    /// The bus supplies the physical port number and cycle clock.
+    fn register_stm32_gpio_observer(
+        &mut self,
+        _port_index: u8,
+        _observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver>,
+        _clock: crate::CycleClock,
+    ) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8>;
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()>;
 
@@ -1821,8 +1839,11 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// simulation restart, so a controller that kept a stale cursor would
     /// replay the previous run's backlog as live packets.
     ///
-    /// Default no-op: a peripheral with no radio has no air to move.
-    fn attach_ble_air(&mut self, _air: crate::peripherals::ble_air::BleAirBus) {}
+    /// Returns true when this peripheral joined the shared medium. The default
+    /// no-op has no radio and returns false.
+    fn attach_ble_air(&mut self, _air: crate::peripherals::ble_air::BleAirBus) -> bool {
+        false
+    }
 
     /// Put this peripheral's IEEE 802.15.4 radio on `air` (a world's shared
     /// 802.15.4 medium). Default no-op: a peripheral with no 802.15.4 radio

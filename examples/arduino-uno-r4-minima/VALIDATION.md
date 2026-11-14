@@ -30,7 +30,7 @@ Pass criteria:
 ## 4) Run firmware survival gate
 
 ```bash
-cargo test -p labwired-core --test firmware_survival test_ra4m1_uno_r4_smoke_survival -- --nocapture
+cargo test -p labwired-core --test gates firmware_survival::test_ra4m1_uno_r4_smoke_survival -- --nocapture
 ```
 
 Pass criteria:

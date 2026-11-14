@@ -64,7 +64,7 @@ cargo test -p labwired-core --lib litex_timer
 #   6 passed — reset values, one-shot, periodic re-arm, W1C, IRQ gate,
 #   update_value latch
 
-cargo test -p labwired-core --test firmware_survival test_litex_vexriscv_smoke_survival
+cargo test -p labwired-core --test gates firmware_survival::test_litex_vexriscv_smoke_survival
 #   1 passed — the committed fixture boots and prints the banner
 ```
 

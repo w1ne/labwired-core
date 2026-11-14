@@ -40,7 +40,7 @@ breadth (the product) and genericity-via-resident-ROM, not deeper boot emulation
 section: per chip, every modeled peripheral is **proven-by-fw** (a booting
 firmware drives it), **unit-only** (register test, no firmware), **dead**
 (modeled, never run), or **shim** (hardcoded stub). It is the companion to
-`VALIDATION_STATUS.md`: that asks "is the model right vs silicon?", this asks
+`VALIDATION_STATUS.md` (generated, published on the docs site): that asks "is the model right vs silicon?", this asks
 "does any firmware actually run against it?".
 
 Two lessons paid for in a 2026-06-30 audit:
@@ -149,7 +149,7 @@ with RXNE at the middle of the stop bit, ORE on a character that completes while
 RXNE is set, FE/PE from sampling the line at the receiver's own baud rate. The
 default model is unchanged for every other use. Golden numbers (one hop of a
 5-byte message = 49.5 bit times) are checked cycle-exactly in
-`crates/core/tests/world_uart_network.rs`, with a negative control that shows
+`crates/core/tests/world/world_uart_network.rs`, with a negative control that shows
 the check fails under instant delivery.
 
 ## Interrupt-pending fidelity — a software pending-clear must reach the CPU
@@ -267,7 +267,7 @@ RAM/flash regions correctly modeled as backing store. Real register models
   `xSemaphoreCreateMutexWithCaps` queues uninitialised and the UART tx_mux deadlocked),
   `x_task_get_current_task_handle`, `getreent_dram_fake_ptr`,
   `esp_chip_info_stub`, `xthal_window_spill_thunk`.
-  - **RETIRED in the canonical proof harness** (`tests/e2e_labwired_ereader.rs`):
+  - **RETIRED in the canonical proof harness** (`tests/esp/e2e_labwired_ereader.rs`):
     `spi_start_bus_fake`, `spi_class_begin_transaction`, and the SPI bus-lock
     `xQueueSemaphoreTake/xQueueGenericSend → pdTRUE`. The real compiled
     `SPIClass::begin → spiStartBus` runs: it creates a **real** recursive bus
@@ -284,9 +284,9 @@ RAM/flash regions correctly modeled as backing store. Real register models
   SPI registers from Rust) are **deleted**. The real compiled GxEPD2 firmware now
   drives the panel through the real SPI3 FIFO/MOSI_DLEN/CMD.USR registers, framed
   by the firmware's own `digitalWrite(DC)` GPIO. Proven end-to-end against the
-  real PlatformIO `firmware.elf`: `tests/e2e_labwired_ereader.rs` reaches a panel
+  real PlatformIO `firmware.elf`: `tests/esp/e2e_labwired_ereader.rs` reaches a panel
   refresh via **431 real SPI3 transactions** with zero per-byte thunks; the
-  register-level path is locked by `tests/e2e_spi3_dc_epaper.rs`.
+  register-level path is locked by `tests/display/e2e_spi3_dc_epaper.rs`.
 - **NOP (real cheat, ~5):** `nop_return_zero` (installed at ~25 addresses),
   `return_pd_true`, `nop_return_fake_ptr`, `abort_halt`, `monotonic_counter_32`.
 
@@ -389,7 +389,7 @@ the esp32c3 rom-boot effort, ×dual-core), sequenced below.
 
 Goal: eliminate the per-firmware thunk profile so the real HW binary runs. ~126
 thunks. Validate every step against the oracle: `spi3 transactions=19033, ink=1429/4736`
-(`tests/e2e_labwired_ereader.rs`); board `/dev/cu.usbserial-0001` for real reg values.
+(`tests/esp/e2e_labwired_ereader.rs`); board `/dev/cu.usbserial-0001` for real reg values.
 
 **THE KEYSTONE (most thunks gate on this): real heap → real FreeRTOS queues.**
 `xQueueCreateMutex`→NULL, `xQueueSemaphoreTake`/`xQueueGenericSend`→pdTRUE are faked

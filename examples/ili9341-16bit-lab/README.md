@@ -36,7 +36,7 @@ Matches `system.yaml` and the e2e smoke test.
 
 ```bash
 cd core
-cargo test -p labwired-core --test e2e_ili9341_16bit_gpio_smoke -- --nocapture
+cargo test -p labwired-core --test display e2e_ili9341_16bit_gpio_smoke:: -- --nocapture
 ```
 
 The test:

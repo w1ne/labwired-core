@@ -14,7 +14,7 @@ HopeRF RFM95W LoRa module (Semtech SX1276) as an SPI register shell. **No RF air
 | Address | — (NSS via `cs_pin`) |
 | Source | [`configs/devices/rfm95.yaml`](../../configs/devices/rfm95.yaml) (declarative, no Rust model) |
 | Datasheet | Semtech *SX1276/77/78/79* rev. 4, §4.3 SPI Interface, §6.1 Table 41; HopeRF *RFM95/96/97/98(W)* V1 |
-| Tier | smoke-proven (register-level tests: `crates/core/tests/everyday_sensor_set.rs`) |
+| Tier | smoke-proven (register-level tests: `crates/core/tests/misc/everyday_sensor_set.rs`) |
 
 ## Pins / attachment
 
@@ -53,7 +53,7 @@ None — no measurement channel.
          cs_pin: "PA4"
    ```
 2. Agent: `labwired_list` → `labwired_describe id=rfm95` → wire → `labwired_validate` → `labwired_run` / `labwired_verify`.
-3. Register-level smoke: `cargo test -p labwired-core --test everyday_sensor_set` — RegVersion, power-on RegOpMode / RegFrf / RegPaConfig / RegPaDac, and a RegOpMode write. The SPI negative control proves the check fails against a part that answers only 0x00 or only 0xFF; `rfm95_tracks_stimulus` stores a 915 MHz setup and checks RegVersion refuses a write.
+3. Register-level smoke: `cargo test -p labwired-core --test misc everyday_sensor_set::` — RegVersion, power-on RegOpMode / RegFrf / RegPaConfig / RegPaDac, and a RegOpMode write. The SPI negative control proves the check fails against a part that answers only 0x00 or only 0xFF; `rfm95_tracks_stimulus` stores a 915 MHz setup and checks RegVersion refuses a write.
 
 ## Limitations
 

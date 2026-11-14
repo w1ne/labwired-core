@@ -30,7 +30,7 @@ Pass criteria: exit 0, `PASS 10/10 checks`.
 ## Tests
 
 ```bash
-cargo test --release -p labwired-core --test rs485_modbus
+cargo test --release -p labwired-core --test misc rs485_modbus::
 python -m pip install pymodbus pytest
 python -m pytest scripts/ci/test_modbus_pymodbus.py
 ```
