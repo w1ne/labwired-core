@@ -33,6 +33,7 @@ mod gpio_list_roles;
 mod gpio_schedule_firmware;
 mod iolink_master_config;
 mod keypad_scan_directions;
+mod led_strip_system_configs;
 mod logic_analyzer_f1_rp2040_pad_visibility;
 mod logic_analyzer_lab_pad_visibility;
 mod logic_capture_bench;
