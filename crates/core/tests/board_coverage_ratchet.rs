@@ -782,6 +782,12 @@ fn every_shipped_descriptor_is_ratcheted() {
         // walk-vs-scheduler differential, no silicon oracle — there is no F411
         // bench part). Promote to SHIPPED only when both of those exist.
         "stm32f411ceu6",
+        // NUCLEO-F446RE full-chip profile. Runs the stock stm32duino Arduino
+        // matrix row (L0-L8) on the shared stm32f4 models plus PWR over-drive
+        // and PLLI2S/PLLSAI, but it is not a bundled-configs.ts catalog board
+        // and has no silicon oracle or executing-fidelity differential of its
+        // own. Same bar as stm32f411ceu6 above.
+        "stm32f446re",
         "stm32g474re", // G4 peripheral models in progress, not shipped
         "stm32wb55",   // BLE not modelled, not shipped
         "stm32wba52",  // WBA early onboarding, not shipped
@@ -890,6 +896,14 @@ fn every_shipped_descriptor_is_ratcheted() {
         "esp32c61",
         "esp32p4",
         "esp32s2",
+        // nRF54L05 / nRF54L10 application-core subsets (#1865). Each reuses
+        // UARTE20, GPIO P0/P1/P2, SysTick and TIMER10 from the nRF54L15 model
+        // and has a committed-fixture smoke (examples/nrf54l05-l10) that
+        // asserts a UART banner and P2.09 edges on synthetic wiring. No
+        // catalog board, no silicon oracle, no differential. Promote when all
+        // three exist.
+        "nrf54l05",
+        "nrf54l10",
         // Adafruit Feather RP2040 variant of the rp2040 die (133 MHz, 8 MiB
         // flash). Its BME280 I2C1 smoke runs in core-onboarding-smoke, but it
         // has no catalog board and no differential of its own.
@@ -903,11 +917,6 @@ fn every_shipped_descriptor_is_ratcheted() {
         // LD1 + USART3 smoke runs in core-onboarding-smoke. No catalog board,
         // no silicon oracle, no differential. Promote when all three exist.
         "stm32h723zg",
-        // NUCLEO-F446RE slice of the STM32F446RE (Cortex-M4). The descriptor
-        // declares the F401-subset peripheral map only; its LD2 + USART2
-        // smoke runs in core-onboarding-smoke. No catalog board, no silicon
-        // oracle, no differential. Promote when all three exist.
-        "stm32f446re",
         // Seeed XIAO ESP32-C6 package variant (ESP32-C6FH4, 4 MB flash). The
         // yaml copies esp32c6.yaml and changes only the flash size; its
         // GPIO15 LED smoke runs in core-onboarding-smoke. No catalog board,

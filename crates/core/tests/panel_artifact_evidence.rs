@@ -25,6 +25,8 @@
 //! pinned too, so a change that adds the missing ones by disturbing the
 //! existing ones cannot pass.
 
+#[path = "common/src_roots.rs"]
+mod src_roots;
 use labwired_config::{ChipDescriptor, ExternalDevice, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::inspect::{Artifact, DeviceInspect, InspectOpts};
@@ -606,7 +608,7 @@ fn every_panel_the_browser_renders_reports_evidence_to_inspect() {
         other => other.to_string(),
     };
 
-    let components = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/peripherals/components");
+    let components = src_roots::core_src("peripherals/components");
     let devices = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../configs/devices");
 
     // A panel reports artifacts from ONE of two places, and the test demands

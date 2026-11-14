@@ -239,6 +239,8 @@ pub enum SignalPath {
     /// `board.power.<rail>_volts` — the chip supply (`vdd`) or ADC reference
     /// (`vdda`).
     SupplyRail { rail: String },
+    /// A declared external device's measured supply rail.
+    DeviceSupply { device: String, rail: String },
     /// Voltage on the separately declared reset pin.
     ResetInput { pin: String },
     /// `board.motor.<id>.back_emf_v` — the back-EMF an `armature: circuit` DC
@@ -334,6 +336,14 @@ impl SignalPath {
             let id = rest.strip_suffix(".current_a")?;
             return (!id.is_empty()).then(|| Self::Ina219Current { id: id.to_string() });
         }
+        if let Some(rest) = path.strip_prefix("board.device.") {
+            let (device, rail) = rest.rsplit_once(".power.")?;
+            let rail = rail.strip_suffix("_volts")?;
+            return (!device.is_empty() && !rail.is_empty()).then(|| Self::DeviceSupply {
+                device: device.to_owned(),
+                rail: rail.to_owned(),
+            });
+        }
         if let Some(rest) = path.strip_prefix("board.reset.") {
             let pin = rest.strip_suffix("_volts")?;
             return (!pin.is_empty()).then(|| Self::ResetInput {
@@ -390,6 +400,7 @@ impl SignalPath {
                 | Self::AnalogPad { .. }
                 | Self::AdcChannel { .. }
                 | Self::SupplyRail { .. }
+                | Self::DeviceSupply { .. }
                 | Self::ResetInput { .. }
                 | Self::MotorCurrent { .. }
                 | Self::MotorPhaseCurrent { .. }
@@ -514,6 +525,10 @@ pub enum RoutingError {
     /// voltage can hold the core in reset.
     NoSupplyMonitor {
         path: String,
+    },
+    DeviceSupplyRejected {
+        path: String,
+        reason: String,
     },
     NoResetInput {
         path: String,
@@ -657,6 +672,7 @@ impl std::fmt::Display for RoutingError {
                 f,
                 "co-sim path '{path}': one or more reference-capable ADC models refused ADC reference {volts} V"
             ),
+            Self::DeviceSupplyRejected { path, reason } => write!(f, "co-sim path '{path}': {reason}"),
             Self::NoResetInput { path, pin } => write!(
                 f,
                 "co-sim path '{path}': chip has no reset_input declaration for '{pin}'"
@@ -761,6 +777,11 @@ enum WriteBinding {
     },
     /// The chip's VDD, fed to its supply supervisor.
     SupplyVdd,
+    /// Collected and published once as an atomic device-rail batch.
+    DeviceSupply {
+        device: String,
+        rail: String,
+    },
     ResetInput,
     /// The ADC reference rail, written to each ADC model that supports it.
     AdcReference,
@@ -827,6 +848,12 @@ impl SignalRouter {
 
         for path in &sources {
             let Some(parsed) = SignalPath::parse(path) else {
+                if path.starts_with("board.device.") {
+                    errors.push(RoutingError::DeviceSupplyRejected {
+                        path: (*path).to_string(),
+                        reason: "expected board.device.<device>.power.<rail>_volts".into(),
+                    });
+                }
                 continue; // Plain store path — the runner owns it.
             };
             if !parsed.is_readable() {
@@ -849,6 +876,12 @@ impl SignalRouter {
                 continue;
             }
             let Some(parsed) = SignalPath::parse(path) else {
+                if path.starts_with("board.device.") {
+                    errors.push(RoutingError::DeviceSupplyRejected {
+                        path: (*path).to_string(),
+                        reason: "expected board.device.<device>.power.<rail>_volts".into(),
+                    });
+                }
                 continue;
             };
             if !parsed.is_writable() {
@@ -879,6 +912,22 @@ impl SignalRouter {
             WriteBinding::ResetInput => 2,
             _ => 3,
         });
+        // The ordinary sink set deduplicates identical paths. Count declared
+        // rail writers before that deduplication can hide competing producers.
+        let mut rail_writers = BTreeMap::<(String, String), usize>::new();
+        for route in configs.iter().flat_map(|config| config.outputs.values()) {
+            if let Some(SignalPath::DeviceSupply { device, rail }) = SignalPath::parse(route) {
+                *rail_writers.entry((device, rail)).or_default() += 1;
+            }
+        }
+        for ((device, rail), writers) in rail_writers {
+            if writers > 1 {
+                errors.push(RoutingError::DeviceSupplyRejected {
+                    path: format!("board.device.{device}.power.{rail}_volts"),
+                    reason: format!("device supply rail has {writers} model output writers; exactly one is required"),
+                });
+            }
+        }
         router.bind_circuit_bldc(configs, bus, &mut errors);
         (router, errors)
     }
@@ -1026,6 +1075,7 @@ impl SignalRouter {
             SignalPath::AnalogPad { .. }
             | SignalPath::AdcChannel { .. }
             | SignalPath::SupplyRail { .. }
+            | SignalPath::DeviceSupply { .. }
             | SignalPath::ResetInput { .. }
             | SignalPath::MotorCurrent { .. }
             | SignalPath::MotorPhaseCurrent { .. }
@@ -1125,6 +1175,17 @@ impl SignalRouter {
                     rail: rail.clone(),
                 }),
             },
+            SignalPath::DeviceSupply { device, rail } => {
+                bus.validate_device_supply_route(device, rail)
+                    .map_err(|error| RoutingError::DeviceSupplyRejected {
+                        path: path.to_string(),
+                        reason: error.to_string(),
+                    })?;
+                Ok(WriteBinding::DeviceSupply {
+                    device: device.clone(),
+                    rail: rail.clone(),
+                })
+            }
             SignalPath::MotorCurrent { motor } => Ok(WriteBinding::MotorCurrent {
                 motor: circuit_motor(bus, motor, path)?,
             }),
@@ -1320,6 +1381,33 @@ impl SignalRouter {
         time_ns: u64,
     ) -> Vec<RoutingError> {
         let mut errors = Vec::new();
+        // Validate and collect every supplied device rail before any power
+        // transition. A malformed peer rail must not half-apply the boundary.
+        let mut device_rails = Vec::new();
+        for (path, binding) in &self.writes {
+            let WriteBinding::DeviceSupply { device, rail } = binding else {
+                continue;
+            };
+            let Some(value) = signals.get(path.as_str()) else {
+                continue;
+            };
+            match signal_as_f64(value).filter(|volts| volts.is_finite() && *volts >= 0.0) {
+                Some(volts) => device_rails.push((device.clone(), rail.clone(), volts)),
+                None => errors.push(RoutingError::DeviceSupplyRejected {
+                    path: path.clone(),
+                    reason: format!("device supply needs finite nonnegative volts, got {value}"),
+                }),
+            }
+        }
+        if !errors.is_empty() {
+            return errors;
+        }
+        if let Err(error) = bus.apply_device_supply_voltages(&device_rails) {
+            return vec![RoutingError::DeviceSupplyRejected {
+                path: "board.device".into(),
+                reason: error.to_string(),
+            }];
+        }
         for (motor, _, _) in &self.circuit_bldc {
             bus.begin_circuit_bldc_boundary(*motor);
         }
@@ -1328,6 +1416,7 @@ impl SignalRouter {
                 continue; // No model produced this output on this step.
             };
             match binding {
+                WriteBinding::DeviceSupply { .. } => {} // Published in the atomic batch above.
                 WriteBinding::PadInput { addr, bit, level } => {
                     let next = match value {
                         CosimSignalValue::F64(volts) => {

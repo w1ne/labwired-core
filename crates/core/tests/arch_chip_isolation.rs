@@ -11,6 +11,8 @@
 // This test scans the source and fails if any chip module references another
 // chip module's path, outside comments and outside the explicit allow-list.
 
+#[path = "common/src_roots.rs"]
+mod src_roots;
 use std::fs;
 use std::path::Path;
 
@@ -42,7 +44,7 @@ const ALLOWED: &[(&str, &str, &str)] = &[
     // capture, and the vendored S3 SVD (tests/fixtures/svd/esp32s3.svd) carries
     // no Wi-Fi MAC peripheral at all. The one S3-corroborated claim is the
     // interrupt source: INTERRUPT_CORE0 `PRO_MAC_INTR_MAP` @ 0x000 ⇒ source 0.
-    // validation/manifest.yaml already tracks the owed live capture of
+    // validation/boards/ already tracks the owed live capture of
     // 0x60033D14. Precedent for caution: esp32s3/interrupt_core0.yaml carried
     // the C3's map until 2026-08-20 and was wrong by 8/20/40 bytes.
     //
@@ -111,10 +113,11 @@ fn scan_dir(dir: &Path, chip: &str, others: &[&str], violations: &mut Vec<String
 
 #[test]
 fn chip_peripheral_modules_are_self_contained() {
-    let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/peripherals");
     let mut violations = Vec::new();
     for &chip in CHIPS {
-        let dir = base.join(chip);
+        // Resolved per chip, so a chip whose directory moves to its own crate
+        // is still found (and still scanned) through the source roots.
+        let dir = src_roots::core_src(&format!("peripherals/{chip}"));
         if !dir.exists() {
             continue;
         }

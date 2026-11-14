@@ -475,6 +475,14 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_stm32f411_tier1_survival"),
     },
     ChipConf {
+        // F446 firmware smoke runs in the board lane, but no PR-run Rust
+        // survival gate or physical reset oracle exists for this exact part.
+        name: "stm32f446re",
+        yaml: "configs/chips/stm32f446re.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
         // micro:bit V1 / Calliope mini 1, S110 application region only. A
         // legacy-UART smoke survival gate and nothing else: no silicon capture
         // and no executing-fidelity differential, so this is L1 smoke. (The
@@ -1145,6 +1153,22 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: None,
     },
+    // nRF54L05 / nRF54L10 application-core subsets (#1865). SIM-DERIVED: no
+    // silicon capture. Their UARTE20 + P2.09 smokes run as CLI scripts
+    // (examples/nrf54l05-l10), not as Rust tests, so no behavior_gate
+    // resolves.
+    ChipConf {
+        name: "nrf54l05",
+        yaml: "configs/chips/nrf54l05.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "nrf54l10",
+        yaml: "configs/chips/nrf54l10.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
     ChipConf {
         name: "esp32p4",
         yaml: "configs/chips/esp32p4.yaml",
@@ -1180,15 +1204,6 @@ const CHIPS: &[ChipConf] = &[
     ChipConf {
         name: "stm32h723zg",
         yaml: "configs/chips/stm32h723zg.yaml",
-        reset_oracle: None,
-        behavior_gate: None,
-    },
-    // NUCLEO-F446RE slice (F401-subset map). SIM-DERIVED: no silicon
-    // capture. Its LD2 + USART2 smoke runs as a CLI script in
-    // core-onboarding-smoke, not as a Rust test, so no behavior_gate resolves.
-    ChipConf {
-        name: "stm32f446re",
-        yaml: "configs/chips/stm32f446re.yaml",
         reset_oracle: None,
         behavior_gate: None,
     },

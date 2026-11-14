@@ -40,7 +40,7 @@ breadth (the product) and genericity-via-resident-ROM, not deeper boot emulation
 section: per chip, every modeled peripheral is **proven-by-fw** (a booting
 firmware drives it), **unit-only** (register test, no firmware), **dead**
 (modeled, never run), or **shim** (hardcoded stub). It is the companion to
-`VALIDATION_STATUS.md`: that asks "is the model right vs silicon?", this asks
+`VALIDATION_STATUS.md` (generated, published on the docs site): that asks "is the model right vs silicon?", this asks
 "does any firmware actually run against it?".
 
 Two lessons paid for in a 2026-06-30 audit:

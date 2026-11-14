@@ -2,16 +2,14 @@ name: Native QEMU-derived ARM core
 
 on:
   pull_request:
+    # Lean PR gate (2026-11-13): on pull requests this lane runs only when
+    # its own files change. Shared engine paths (crates/core, crates/cli,
+    # Cargo.*) trigger it on push to main instead.
     paths:
-      - "Cargo.*"
-      - "crates/core/**"
       - "crates/arm-system/**"
       - "crates/arm-core/**"
       - "third_party/tlib/**"
       - "third_party/tlib-PROVENANCE.md"
-      - "crates/cli/**"
-      - "crates/config/**"
-      - "crates/loader/**"
       - "configs/chips/rv1103.yaml"
       - "configs/systems/luckfox-pico-mini-a.yaml"
       - "examples/cortex-a7-core/**"

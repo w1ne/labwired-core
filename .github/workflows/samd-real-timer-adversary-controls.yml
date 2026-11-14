@@ -2,6 +2,10 @@ name: Prospective Timer adversary harness controls
 on:
   pull_request:
     paths: ['crates/core/tests/samd_real_timer_adversary_guest.rs', '.github/workflows/samd-real-timer-adversary-controls.yml']
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 jobs:

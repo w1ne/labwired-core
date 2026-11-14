@@ -2,6 +2,10 @@ name: SAMD authored strict paired IRQ ARM guest
 on:
   pull_request:
     paths: ['crates/core/tests/samd_paired_irq_guest.rs', 'scripts/samd-paired-irq/**', '.github/workflows/samd-paired-irq-guest.yml']
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 env:

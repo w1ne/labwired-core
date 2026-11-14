@@ -50,6 +50,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | esp32-devkitc-32e-uart1 | open | L0 | 3 | 977.8 | 1.4 | ≥1× (CI) | — |
 | stm32f401cdu6 | open | L1 | 45 | 937.7 | 1.6 | ≥1× (CI) | — |
 | stm32f411ceu6 | open | L1 | 46 | 937.6 | 1.6 | ≥1× (CI) | — |
+| stm32f446re | open | L0 | 34 | 935.5 | 1.5 | ≥1× (CI) | [doc](docs/boards/stm32f446re.md) |
 | nrf51822 | open | L1 | 22 | 1335.6 | 2.0 | ≥1× (CI) | — |
 | nrf52832 | open | L1 | 17 | 1330.2 | 2.0 | ≥1× (CI) | [doc](docs/boards/nrf52832.md) |
 | nrf52833 | open | L1 | 48 | 1368.6 | 2.1 | ≥1× (CI) | — |
@@ -131,12 +132,14 @@ same fields but never their source, chip YAML, binary or build paths.
 | ch32v003f4p6 | open | L1 | 5 | — | — | ≥1× (CI) | — |
 | esp32h2 | open | L0 | 3 | — | 2.4 | ≥1× (CI) | — |
 | esp32c5 | open | L0 | 1 | — | 2.2 | ≥1× (CI) | — |
+| esp32c61 | open | L0 | 1 | — | — | ≥1× (CI) | — |
+| nrf54l05 | open | L0 | 6 | 1377.5 | 1.9 | ≥1× (CI) | [doc](docs/boards/nrf54l05.md) |
+| nrf54l10 | open | L0 | 6 | 1377.5 | 1.9 | ≥1× (CI) | [doc](docs/boards/nrf54l10.md) |
 | esp32p4 | open | L0 | 1 | — | — | ≥1× (CI) | — |
 | esp32s2 | open | L0 | 1 | — | — | ≥1× (CI) | — |
 | rp2040-feather | open | L0 | 24 | 906.8 | 1.6 | ≥1× (CI) | — |
 | rp2350-feather | open | L0 | 27 | 906.8 | 1.7 | ≥1× (CI) | — |
 | stm32h723zg | open | L0 | 7 | 900.5 | 1.5 | ≥1× (CI) | — |
-| stm32f446re | open | L0 | 24 | 937.0 | 1.6 | ≥1× (CI) | — |
 | esp32c6fh4 | open | L0 | 69 | — | 3.8 | ≥1× (CI) | — |
 | k32w041z (closed) | closed | L2 | 9 | 987.8 | 1.6 | 6.50× | [doc](docs/boards/k32w041amdk6.md) |
 

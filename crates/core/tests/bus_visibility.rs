@@ -128,6 +128,15 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "esp32c5_uart is a TX FIFO/console model with no PadLines wire cell; \
          bytes are proven by the esp32c5-devkitc-1-n8r8 board smoke",
     ),
+    // ESP32-C61: the esp32c61_uart model is a UART0 TX FIFO/console only. It
+    // publishes no PadLines wire cell, so no TX edge reaches a pad. Bytes are
+    // proven by the esp32c61-devkitc-1-n8r2 board smoke (uart_contains).
+    (
+        "esp32c61",
+        BusKind::Uart,
+        "esp32c61_uart is a TX FIFO/console model with no PadLines wire cell; \
+         bytes are proven by the esp32c61-devkitc-1-n8r2 board smoke",
+    ),
     // CH32V003: USART1 TX is pad-routed to PD5 behind the F1-style console AF
     // gate. Even with PD5 set to AF push-pull (CFGLR 0x44B44444) and the F1
     // drive, no TX edges reached the analyzer in this harness. The F1 rows here

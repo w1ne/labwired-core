@@ -287,6 +287,13 @@
     "reg_match": 0
   },
   {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "stm32f446re",
+    "reg_match": 0
+  },
+  {
     "behavior": true,
     "excluded": 0,
     "level": 1,
@@ -864,6 +871,20 @@
     "behavior": false,
     "excluded": 0,
     "level": 0,
+    "name": "nrf54l05",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "nrf54l10",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
     "name": "esp32p4",
     "reg_match": 0
   },
@@ -893,13 +914,6 @@
     "excluded": 0,
     "level": 0,
     "name": "stm32h723zg",
-    "reg_match": 0
-  },
-  {
-    "behavior": false,
-    "excluded": 0,
-    "level": 0,
-    "name": "stm32f446re",
     "reg_match": 0
   },
   {

@@ -52,6 +52,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * SPI: Esp32Spi does not implement line_names()/wire_lines(); pad bindings exist but the wire channel is unpublished on this model
 * **esp32c5**
   * UART: esp32c5_uart is a TX FIFO/console model with no PadLines wire cell; bytes are proven by the esp32c5-devkitc-1-n8r8 board smoke
+* **esp32c61**
+  * UART: esp32c61_uart is a TX FIFO/console model with no PadLines wire cell; bytes are proven by the esp32c61-devkitc-1-n8r2 board smoke
 * **esp32h2**
   * UART: no ESP32-H2 UART bring-up in this harness; bytes are proven by the esp32h2-devkitm-1-n4s board smoke
 * **esp32p4**
@@ -164,6 +166,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | esp32c3 | ✓ | ✓ | ✓ |
 | esp32c5 | — | — | — |
 | esp32c6 | ✓ | ✓ | ✓ |
+| esp32c61 | — | — | — |
 | esp32c6fh4 | ✓ | ✓ | ✓ |
 | esp32h2 | — | — | — |
 | esp32p4 | — | — | — |
@@ -181,6 +184,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | nrf52833 | ✓ | ✓ | ✓ |
 | nrf52840 | ✓ | ✓ | ✓ |
 | nrf5340 | — | — | — |
+| nrf54l05 | — | — | — |
+| nrf54l10 | — | — | — |
 | nrf54l15 | — | — | — |
 | nrf54lm20a | — | — | — |
 | pic16f1829 | — | — | — |

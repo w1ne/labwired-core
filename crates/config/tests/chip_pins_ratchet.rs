@@ -69,6 +69,8 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     "esp32c5",
     "esp32c6",
     "esp32c61",
+    "nrf54l05",
+    "nrf54l10",
     // C6FH4 is a package variant of the same GPIO<n>-labelled C6 die.
     "esp32c6fh4",
     "esp32p4",

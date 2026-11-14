@@ -1,0 +1,16 @@
+id: stm32l073
+chip: stm32l073
+system: systems/stm32l073.yaml
+pio: { platform: ststm32, board: nucleo_l073rz, framework: arduino }
+max_steps: 15000000
+budget_reason: "L0 light; L3 may run I2C timing compute under stm32duino"
+led_watch: "gpioa:5"
+led_min_edges: 2
+# L6 drives TIM2_CH1 on PA0 (AF2), not LD2/PA5: PA5 is DAC_OUT2 and the
+# twin models the DAC. Routed by the L0 timer AF table (pad_map: stm32l0).
+pwm_watch: "gpioa:0"
+pwm_min_edges: 20
+family: stm32
+sketches_skip: [L8_can]
+sketches_skip_reason:
+  L8_can: "No CAN peripheral on L0 series"

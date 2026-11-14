@@ -2,6 +2,9 @@ name: Core IO-Link Native
 
 on:
   push:
+    # main only: a branch push already gets the pull_request run.
+    branches:
+      - main
     paths:
       - ".github/workflows/core-iolink-native.yml"
       - "Cargo.lock"
@@ -23,23 +26,19 @@ on:
       - "third_party/iolinki"
       - "third_party/iolinki-master/**"
   pull_request:
+    # Lean PR gate (2026-11-13): on pull requests this lane runs only when
+    # its own files change. Shared engine paths (crates/core, crates/cli,
+    # Cargo.*) trigger it on push to main instead.
     branches:
       - main
     paths:
       - ".github/workflows/core-iolink-native.yml"
-      - "Cargo.lock"
-      - "crates/core/Cargo.toml"
       - "crates/core/build.rs"
       - "crates/core/native/**"
       - "crates/core/src/peripherals/components/iolink_master.rs"
       - "crates/core/src/peripherals/components/iolink_native.rs"
       - "crates/core/src/peripherals/components/iolink_station.rs"
-      - "crates/core/src/world.rs"
       - "crates/core/tests/iolink_native_master.rs"
-      - "crates/core/tests/world_multichip.rs"
-      - "crates/core/tests/world_station_services.rs"
-      - "crates/core/src/network/mod.rs"
-      - "crates/core/src/fidelity.rs"
       - "examples/iolink-dido/**"
       - "examples/iolink-station/**"
       - "examples/esp32c3-mlx90640-thermal/**"

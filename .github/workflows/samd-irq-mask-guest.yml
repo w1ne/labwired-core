@@ -2,6 +2,10 @@ name: SAMD authored software IRQ mask ARM guest
 on:
   pull_request:
     paths: ['crates/core/tests/samd_irq_mask_guest.rs', 'scripts/samd-irq-mask/**', '.github/workflows/samd-irq-mask-guest.yml']
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 jobs:

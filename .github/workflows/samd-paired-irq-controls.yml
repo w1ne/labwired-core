@@ -2,6 +2,10 @@ name: Prospective SAMD paired IRQ receipt controls
 on:
   pull_request:
     paths: ['scripts/samd-paired-irq/**', 'crates/core/tests/samd_paired_irq_guest.rs', '.github/workflows/samd-paired-irq-controls.yml']
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 jobs:

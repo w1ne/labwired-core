@@ -157,6 +157,14 @@ _No tier1 fixture. Unmodified Zephyr v3.7 hello_world boots end-to-end through C
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `DCNF/FPU/CACHE/SPU/OSC_REG/CTRLAP/GPIOTE0/DPPIC/FICR` (nrf5340_*_stub) — STRUCTURAL: SystemInit pokes them once at boot and never polls them again, so a register stub is byte-faithful for the hello_world boot path.
 
+### `nrf54l05`
+
+_Minimal nRF54L05 application-core smoke using real RRAM and SRAM geometry, UARTE20 EasyDMA and GPIO P2.09. Only a synthetic board is tested; no beyond-rubric firmware function exists. Full Zephyr/SDK boot, BLE radio, TrustZone and silicon parity are untested._
+
+### `nrf54l10`
+
+_Minimal nRF54L10 application-core smoke using real RRAM and SRAM geometry, UARTE20 EasyDMA and GPIO P2.09. Only a synthetic board is tested; no beyond-rubric firmware function exists. Full Zephyr/SDK boot, BLE radio, TrustZone and silicon parity are untested._
+
 ### `nrf54l15`
 
 _No tier1 fixture. Unmodified Zephyr v4.4 hello_world boots end-to-end (nRF54L CLOCK/LFCLK, GRTC kernel tick, TAMPC approtect gate, RRAM-mapped UARTE20 EasyDMA) and the PR-gated smart-ring probe reads four I2C sensor IDs. Beyond the rubric TEMP/EGU/GPIOTE are unit-tested models no firmware drives; TAMPC/RRAMC/regulators/FICR/UICR/DPPIC are zero-filled stub windows the boot path pokes but never polls._
@@ -222,10 +230,6 @@ _Board variant of the rp2350 die with the Feather's 8 MiB flash; it reuses the r
 ### `esp32c6fh4`
 
 _Package variant of the esp32c6 die for the Seeed XIAO ESP32-C6: the yaml copies esp32c6.yaml and changes only the flash size to 4 MB, so it reuses the esp32c6 models and shims. No beyond-rubric peripheral is exercised under this name: the XIAO smoke toggles the active-low user LED on GPIO15 through the C6 GPIO block, a rubric class. The radio, RF switch, USB-Serial/JTAG console and LP core are not exercised on this board._
-
-### `stm32f446re`
-
-_No beyond-rubric F446 peripheral is exercised: the NUCLEO-F446RE smoke drives RCC enables, GPIOA (LD2 on PA5, PA2/PA3 AF7) and USART2 TX only. The descriptor declares RCC, FLASH, PWR, GPIOA/B/C, USART1/2, I2C1, SPI1, TIM1..TIM4, ADC1, IWDG, RTC, SYSCFG, EXTI and DMA1/2 at the shared F4 addresses; it does not declare USART3, UART4/5, USART6, SPI2..4, I2C2/3, FMPI2C1, CAN, SAI, QUADSPI, SPDIFRX, HDMI-CEC, DCMI, FMC, DAC, ADC2/3, TIM5..TIM14, USB OTG or GPIOD/GPIOH._
 
 ### `stm32h723zg`
 
@@ -413,6 +417,12 @@ _384 KiB Black-Pill package variant of the F401. Its PR-gated firmware is the UA
 - `DMA1/DMA2` (configs/chips/stm32f401cdu6.yaml:248,254 (type: stub; the real engine is `stm32f4_dma`, used by configs/chips/stm32f401.yaml:216,226)) — CLOSABLE: both stream controllers are zero windows, so the sibling fixture's byte-exact DMA2 memcpy fails here (`dma-ndtr`) — the stm32f401 row's dma pass belongs to that descriptor's real DMA2, not this window. Port path: declare `type: stm32f4_dma` with the AHB1ENR gates and stream_irqs as the F401/F405/F407/F767 descriptors do.
 - `OTG_FS global/host/device/pwrclk` (configs/chips/stm32f401cdu6.yaml:309,315,321,327 (type: stub; configs/peripherals/stm32f401/otg_fs_*.yaml)) — CLOSABLE: four zero windows — the engine's STM32 OTG FS/DWC2 model (usb_otg.rs, wired on the L476) is not wired here (the F103 USB-device window is the same stub class), no gated firmware opens them, and the declarative otg_fs_*.yaml schemas are decode-only.
 - `DBG` (configs/chips/stm32f401cdu6.yaml:336 (type: stub; configs/peripherals/stm32f401/dbg.yaml)) — CLOSABLE: zero window with no IDCODE wired even though the yaml header records the CDU6's bench-read DBGMCU IDCODE 0x10016433 — the sibling descriptor's real `dbgmcu` model (configs/chips/stm32f401.yaml:187, idcode 0x10006411) is not reused; no gated firmware reads it.
+
+### `stm32f446re`
+
+_Minimal real-register firmware smoke: reset/stack, RCC, GPIO PA5 LED and USART2 UART banner. No beyond-rubric function is exercised; the model deliberately omits F446-exclusive blocks, and no stock HAL/Zephyr or physical silicon run exists._
+
+**Dead** (2 modeled, never exercised): `PWR`, `FLASH_CTRL`
 
 ### `stm32f411ceu6`
 

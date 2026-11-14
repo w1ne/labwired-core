@@ -155,6 +155,10 @@
     "name": "esp32c6"
   },
   {
+    "buses": [],
+    "name": "esp32c61"
+  },
+  {
     "buses": [
       "I2C",
       "SPI",
@@ -237,6 +241,14 @@
   {
     "buses": [],
     "name": "nrf5340"
+  },
+  {
+    "buses": [],
+    "name": "nrf54l05"
+  },
+  {
+    "buses": [],
+    "name": "nrf54l10"
   },
   {
     "buses": [],

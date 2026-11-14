@@ -77,9 +77,17 @@ def test_batch_noise_floor_is_symmetric_for_stale_baselines():
 
 
 def test_recommended_tick_interval_is_a_performance_ratchet():
-    source = (bp.REPO_ROOT / "crates/core/src/bus/mod.rs").read_text()
-    match = re.search(r"RECOMMENDED_TICK_INTERVAL:\s*u32\s*=\s*(\d+)", source)
-    assert match, "RECOMMENDED_TICK_INTERVAL declaration moved or disappeared"
+    # Found by what it declares, not by the file it sits in.
+    pattern = re.compile(r"pub const RECOMMENDED_TICK_INTERVAL:\s*u32\s*=\s*(\d+)")
+    matches = [
+        m
+        for path in sorted((bp.REPO_ROOT / "crates/core").rglob("*.rs"))
+        if "/tests/" not in path.as_posix()
+        for m in [pattern.search(path.read_text(encoding="utf-8", errors="ignore"))]
+        if m
+    ]
+    assert len(matches) == 1, "RECOMMENDED_TICK_INTERVAL must be declared exactly once"
+    match = matches[0]
     assert int(match.group(1)) >= bp.MIN_RECOMMENDED_TICK_INTERVAL
 
 

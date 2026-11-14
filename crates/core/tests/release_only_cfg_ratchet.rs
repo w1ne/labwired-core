@@ -32,6 +32,8 @@
 //! Deliberately a plain source scan, not a compile-time trick: the whole point
 //! is to see code the compiler is NOT looking at.
 
+#[path = "common/src_roots.rs"]
+mod src_roots;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -96,9 +98,20 @@ fn covered_by_release_lane(rel: &Path) -> bool {
 #[test]
 fn release_only_code_is_compiled_by_the_release_lane() {
     let root = crate_root();
-    let mut files = Vec::new();
-    rust_sources(&root.join("src"), &root, &mut files);
-    rust_sources(&root.join("tests"), &root, &mut files);
+    // (label, absolute path). A library source file is labelled `src/<module
+    // path>`: `src/` in RELEASE_LANE_TARGETS names the `--lib` target, not a
+    // directory, so the label survives the library's sources moving.
+    let mut files: Vec<(PathBuf, PathBuf)> = src_roots::core_src_files_under("")
+        .into_iter()
+        .map(|f| (PathBuf::from("src").join(f.rel), f.path))
+        .collect();
+    let mut test_files = Vec::new();
+    rust_sources(&root.join("tests"), &root, &mut test_files);
+    files.extend(
+        test_files
+            .into_iter()
+            .map(|rel| (rel.clone(), root.join(rel))),
+    );
     files.sort();
 
     // A scan that finds nothing because it looked nowhere is the exact failure
@@ -111,8 +124,8 @@ fn release_only_code_is_compiled_by_the_release_lane() {
 
     let mut orphans = Vec::new();
     let mut seen_any = false;
-    for rel in &files {
-        let Ok(text) = fs::read_to_string(root.join(rel)) else {
+    for (rel, abs) in &files {
+        let Ok(text) = fs::read_to_string(abs) else {
             continue;
         };
         if !text.contains(RELEASE_ONLY_MARKER) {
