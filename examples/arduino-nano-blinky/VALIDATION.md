@@ -22,7 +22,7 @@ scripts/onboarding_smoke.sh \
 The smoke builds the stock Arduino sketch with PlatformIO and runs it through
 the Nano system manifest. It requires the USART0 `nano-ok` marker and execution
 to the full 2,000,000-step budget without a fault. The sketch also toggles the
-board's PB5/D13 LED. `cargo test -p labwired-core --test avr_nano_live_run`
+board's PB5/D13 LED. `cargo test -p labwired-core --test avr avr_nano_live_run::`
 checks that PB5 reaches both levels and toggles while `nano-ok` is emitted.
 
 Evidence is committed under `evidence/`: the build and run logs, structured
