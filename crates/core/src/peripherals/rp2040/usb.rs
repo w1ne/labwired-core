@@ -266,13 +266,26 @@ impl Rp2040Usb {
 
     /// True while the host state machine still has work it can do *this*
     /// tick. A delay-1 chain that stays live just because USB is attached
-    /// (EP0 left armed waiting for the next SETUP, or a held IRQ level)
-    /// pins every CPU window to one instruction and blocks timer-poll idle
-    /// fast-forward on sketches that only call `millis()` after enumerate.
-    /// Waiting for the device is MMIO-driven: the write that clears
-    /// `BUS_RESET`, arms a buffer, or fills a bulk-IN harvests a new chain
-    /// via [`Peripheral::take_scheduled_events`].
+    /// (EP0 left armed waiting for the next SETUP, or a held IRQ level
+    /// after enumeration) pins every CPU window to one instruction and
+    /// blocks timer-poll idle fast-forward on sketches that only call
+    /// `millis()` after enumerate.
+    ///
+    /// During attach / reset / control-transfer enumeration the chain must
+    /// stay live while `INTS` is high: `tick` re-pends level-sensitive
+    /// `USBCTRL_IRQ` each cycle, matching NVIC (pending is cleared on ISR
+    /// entry; if the ISR returns without clearing `BUS_RESET` / `SETUP_REC`
+    /// / `BUFF_STATUS` the line must be re-asserted). #1794 dropped that
+    /// keep-alive so a single pulse could be lost and CDC DTR never
+    /// asserted — `test_rp2040_arduino_serial_survival` then captured an
+    /// empty UART under `--features event-scheduler`. After
+    /// [`HostState::Configured`] a leftover `INTS` or empty-armed EP0
+    /// still does not pin the scheduler; the write that fills a bulk-IN
+    /// harvests a new chain via [`Peripheral::take_scheduled_events`].
     fn needs_event_chain(&self) -> bool {
+        if self.host != HostState::Configured && self.ints() != 0 {
+            return true;
+        }
         match self.host {
             HostState::Detached => {
                 // Attach debounce countdown after pull-up.
@@ -292,7 +305,12 @@ impl Rp2040Usb {
     /// typically leaves EP0 OUT armed between control transfers.
     fn service_needed(&self) -> bool {
         if self.awaiting_idle {
-            return self.device_idle();
+            // Keep polling until `try_next_transfer` can issue the next
+            // SETUP or mark the device Configured (DTR asserted). Returning
+            // only `device_idle()` stops the chain while the ISR is still
+            // draining; a subsequent empty-armed EP0 OUT then makes
+            // `device_idle()` false forever, so no later harvest arrives.
+            return true;
         }
         let in_ctrl = self.dpram_u32(ep_in_buf_ctrl(0));
         if in_ctrl & BUF_CTRL_AVAIL != 0 && in_ctrl & BUF_CTRL_FULL != 0 {
@@ -808,6 +826,45 @@ mod tests {
         assert!(
             !u.needs_event_chain(),
             "after the bulk-IN is drained the chain must stop"
+        );
+    }
+
+    #[test]
+    fn enumeration_keeps_the_chain_while_setup_irq_is_level_high() {
+        let mut u = Rp2040Usb::new();
+        u.host = HostState::Transfer;
+        // Unmask SETUP so INTS tracks the level line the NVIC sees.
+        wr(&mut u, INTE, INTR_SETUP_REQ);
+        u.send_setup(0);
+        assert!(
+            u.needs_event_chain(),
+            "a pending SETUP_REC must keep the delay-1 chain live so tick() can re-pend the level IRQ"
+        );
+        // Once the device has cleared the source and not yet armed EP0, the
+        // chain may stop — the next arm or INTS pulse harvests a new one.
+        wr(&mut u, SIE_STATUS, SIE_STATUS_SETUP_REC);
+        assert!(
+            !u.needs_event_chain(),
+            "clearing SETUP_REC without an armed EP0 must not pin the scheduler"
+        );
+    }
+
+    #[test]
+    fn awaiting_idle_keeps_the_chain_even_if_ep0_out_is_rearmed() {
+        let mut u = Rp2040Usb::new();
+        u.host = HostState::Transfer;
+        u.awaiting_idle = true;
+        // Typical post-status re-arm: EP0 OUT AVAILABLE, not FULL. That is
+        // not device_idle(), so a harvest-only policy would deadlock and
+        // never issue SET_CONTROL_LINE_STATE.
+        u.set_dpram_u32(ep_out_buf_ctrl(0), BUF_CTRL_AVAIL | 64);
+        assert!(
+            !u.device_idle(),
+            "re-armed EP0 OUT is the case that must not drop the chain"
+        );
+        assert!(
+            u.needs_event_chain(),
+            "awaiting_idle must keep polling until the next SETUP or Configured"
         );
     }
 

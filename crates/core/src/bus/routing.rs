@@ -1273,11 +1273,12 @@ impl SystemBus {
         nrf_air: crate::peripherals::nrf52::radio::VirtualAirBus,
         ble_air: crate::peripherals::ble_air::BleAirBus,
         cellular: crate::network::SimMqttFabric,
-    ) {
+    ) -> bool {
         use crate::peripherals::components::QuectelBg770a;
         use crate::peripherals::nrf52::radio::Nrf52Radio;
         use crate::peripherals::uart::Uart;
         let medium = nrf_air.medium_slot();
+        let mut joined = false;
         for entry in &mut self.peripherals {
             if let Some(radio) = entry
                 .dev
@@ -1286,13 +1287,14 @@ impl SystemBus {
             {
                 radio.set_air(nrf_air.clone());
                 radio.set_node_id(node_id);
+                joined = true;
             }
             // Every BLE controller, asked through the trait: an ESP32-C3
             // RW-BLE core, a LabWired `VirtualBle`, or whatever comes next.
             // This used to downcast to `Esp32c3Bt`, which silently left any
             // other controller on the process-global air — two labs in one
             // process would then hear each other.
-            entry.dev.attach_ble_air(ble_air.clone());
+            joined |= entry.dev.attach_ble_air(ble_air.clone());
             if let Some(uart) = entry
                 .dev
                 .as_any_mut()
@@ -1309,10 +1311,12 @@ impl SystemBus {
                         // Always label the UE with the lab node id so multi-node
                         // fabric endpoints differ (device id is often both "modem").
                         modem.set_rf_node_id(node_id);
+                        joined = true;
                     }
                 }
             }
         }
+        joined
     }
 
     /// True if any Quectel BG770A modem stream is attached (needs lab AirBus).

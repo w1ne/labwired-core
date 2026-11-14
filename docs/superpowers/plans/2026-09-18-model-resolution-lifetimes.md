@@ -23,7 +23,7 @@ but loading or editing a manifest must not grow that collection.
 ## Resolver
 
 - [x] Establish baseline with `cargo test -p labwired-core --test i2c_mux_tca9548a --test part_pack_contract --test i2c_factory_kit_coverage` (36 passed).
-- [x] Add `crates/core/tests/yaml_mux_resolution.rs`: every embedded I²C descriptor and manifest-carried sensors must validate and execute behind nested muxes. Check configuration seeding, identity, overrides, wrong transports and address validation.
+- [x] Add `crates/core/tests/bus/yaml_mux_resolution.rs`: every embedded I²C descriptor and manifest-carried sensors must validate and execute behind nested muxes. Check configuration seeding, identity, overrides, wrong transports and address validation.
 - [x] Run the original eight regression cases before production changes (eight failed); confirm the two additional address/mux override cases fail before fixing them.
 - [x] Update `crates/core/src/peripherals/components/i2c_factory.rs` to use descriptor discovery instead of the per-device YAML allowlist; share leaf resolution with topology validation.
 - [x] Ensure `crates/core/src/bus/part_pack.rs` uses the same configuration seeding as built-ins and preserves override precedence. Move noise-knob seeding into the shared model method after reproducing its failure behind a mux.

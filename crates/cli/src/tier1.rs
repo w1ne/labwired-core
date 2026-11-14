@@ -403,9 +403,9 @@ pub fn baseline_regressions(baseline: &Tier1Matrix, live: &Tier1Matrix) -> Vec<R
     out
 }
 
-/// One acknowledged, intentional drop. Named explicitly — silence is never
-/// sufficient. Mirrors the `drift_ack` convention in `validation/manifest.yaml`:
-/// one trailing key that has to COVER the specific observed drift, plus prose.
+/// One acknowledged, intentional chip/class regression, with a reason.
+/// This coverage ratchet remains separate from informational source/capture
+/// reporting; an entry must cover the specific observed regression.
 #[derive(Debug, Clone, Deserialize)]
 pub struct RatchetAck {
     /// `chip/class`, e.g. `esp32c3/i2c`.
@@ -1577,8 +1577,25 @@ peripherals:
     /// this half of the check lives here instead).
     #[test]
     fn every_tier1_target_is_a_known_manifest_board() {
-        let text = std::fs::read_to_string(workspace_root().join("validation/manifest.yaml"))
-            .expect("read validation/manifest.yaml");
+        // One file per board under validation/boards/ (`_index.yaml` is the
+        // header, not a board); line-scanned, so concatenation is enough.
+        let dir = workspace_root().join("validation/boards");
+        let mut files: Vec<std::path::PathBuf> = std::fs::read_dir(&dir)
+            .unwrap_or_else(|e| panic!("read {}: {e}", dir.display()))
+            .map(|e| e.expect("dir entry").path())
+            .filter(|p| {
+                p.extension().is_some_and(|x| x == "yaml")
+                    && p.file_name().is_some_and(|n| n != "_index.yaml")
+            })
+            .collect();
+        files.sort();
+        let text: String = files
+            .iter()
+            .map(|p| {
+                std::fs::read_to_string(p).unwrap_or_else(|e| panic!("read {}: {e}", p.display()))
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
         let mut manifest = BTreeSet::new();
         for line in text.lines() {
             let line = line.trim();
@@ -1605,7 +1622,7 @@ peripherals:
             assert!(
                 manifest.contains(&stem),
                 "TIER1_TARGETS builds the matrix for chip {stem:?} but no board in \
-                 validation/manifest.yaml declares it"
+                 validation/boards/ declares it"
             );
         }
     }

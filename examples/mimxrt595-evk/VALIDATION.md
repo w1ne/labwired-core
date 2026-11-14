@@ -64,7 +64,7 @@ cargo build -p firmware-mimxrt595-evk-smoke --release --target thumbv8m.main-non
 cmp out/rt595-run1/uart.log out/rt595-run2/uart.log          # clean
 cmp out/rt595-run1/snapshot.json out/rt595-run2/snapshot.json  # clean
 
-cargo test -p labwired-core --test firmware_survival mimxrt595
+cargo test -p labwired-core --test gates mimxrt595
 #   2 passed (test_mimxrt595_evk_smoke_survival, test_mimxrt595_evk_zephyr_survival)
 
 # Stock Zephyr v3.7.0 (rebuild: crates/firmware-mimxrt595-evk-zephyr/build.sh;
@@ -87,7 +87,7 @@ cargo test -p labwired-core --test firmware_survival mimxrt595
 #   OS timer as a stub         -> hello still passes (no timed wait);
 #                                 zephyr-sync FAILs (k_busy_wait never ends)
 
-cargo test -p labwired-core --test rt500_secure_map
+cargo test -p labwired-core --test vendor rt500_secure_map::
 #   5 passed
 
 cargo test -p labwired-core --lib lpc::

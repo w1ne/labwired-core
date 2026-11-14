@@ -38,7 +38,7 @@ Pass criteria:
 ## 4) Run firmware survival gate
 
 ```bash
-cargo test -p labwired-core --test firmware_survival test_esp32c6_demo_survival -- --nocapture
+cargo test -p labwired-core --test gates firmware_survival::test_esp32c6_demo_survival -- --nocapture
 ```
 
 Pass criteria:

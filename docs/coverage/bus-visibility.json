@@ -130,6 +130,12 @@
   },
   {
     "buses": [
+      "UART"
+    ],
+    "name": "esp32-devkitc-32e-uart1"
+  },
+  {
+    "buses": [
       "I2C",
       "SPI",
       "UART"
@@ -207,6 +213,14 @@
   {
     "buses": [],
     "name": "nrf5340"
+  },
+  {
+    "buses": [],
+    "name": "nrf54l05"
+  },
+  {
+    "buses": [],
+    "name": "nrf54l10"
   },
   {
     "buses": [],
@@ -378,6 +392,12 @@
       "UART"
     ],
     "name": "stm32f103rb"
+  },
+  {
+    "buses": [
+      "I2C"
+    ],
+    "name": "stm32f103rb-nucleo-bme280-smoke"
   },
   {
     "buses": [
@@ -578,6 +598,14 @@
       "UART"
     ],
     "name": "stm32f411ceu6"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f446re"
   },
   {
     "buses": [

@@ -50,7 +50,7 @@
 //! fidelity note, never a panic. A rule can therefore not take the machine down,
 //! which matters because rules arrive from a part document a generator wrote.
 
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use anyhow::{Context, Result};
 use labwired_config::expr::{EvalCtx, Expr};
@@ -276,6 +276,10 @@ pub struct RuleMachine {
     observed_levels: BTreeMap<String, bool>,
     /// `(role, level)` waiting for the bus to put on a pad.
     pending_pins: Vec<(String, bool)>,
+    /// Delivery destinations selected at kit attachment. None keeps standalone
+    /// devices' capture-all behavior; an empty set means every output is unwired.
+    /// This is wiring, so a device reset must retain it.
+    pin_delivery_roles: Option<BTreeSet<String>>,
     /// **The bytes of the message frame the current event closed**, MOSI order,
     /// as [`Expr::FrameByte`] (`frame_byte(N)`) reads them.
     ///
@@ -390,6 +394,7 @@ impl RuleMachine {
             pin_levels: BTreeMap::new(),
             observed_levels: BTreeMap::new(),
             pending_pins: Vec::new(),
+            pin_delivery_roles: None,
             frame_bytes: Vec::new(),
             elapsed_us: 0,
             written: 0,
@@ -520,6 +525,15 @@ impl RuleMachine {
     /// Take the queued `(pin role, level)` transitions for the bus to apply.
     pub fn take_pin_drives(&mut self) -> Vec<(String, bool)> {
         std::mem::take(&mut self.pending_pins)
+    }
+
+    /// Limit queued delivery to the roles wired by a kit. Keep every retained
+    /// edge in its original order, including edges queued before attachment.
+    /// Output levels remain device state even when no destination observes them.
+    pub(crate) fn restrict_pin_delivery(&mut self, roles: impl IntoIterator<Item = String>) {
+        let roles: BTreeSet<String> = roles.into_iter().collect();
+        self.pending_pins.retain(|(role, _)| roles.contains(role));
+        self.pin_delivery_roles = Some(roles);
     }
 
     /// Fidelity notes worth recording in the census: the approximations this
@@ -869,6 +883,7 @@ impl RuleMachine {
             }
             (Event::Read { register: a }, Event::Read { register: b }) => a == b,
             (Event::Timer { name: a }, Event::Timer { name: b }) => a == b,
+            (Event::DataReady { name: a }, Event::DataReady { name: b }) => a == b,
             (Event::Input { key: a }, Event::Input { key: b }) => a == b,
             (
                 Event::Pin {
@@ -994,7 +1009,13 @@ impl RuleMachine {
             return;
         }
         self.pin_levels.insert(role.to_string(), level);
-        self.pending_pins.push((role.to_string(), level));
+        if self
+            .pin_delivery_roles
+            .as_ref()
+            .is_none_or(|roles| roles.contains(role))
+        {
+            self.pending_pins.push((role.to_string(), level));
+        }
     }
 
     fn mask_write(&mut self, bits: &RegBits, set: bool, ctx: &mut dyn RuleCtx) {
@@ -1232,6 +1253,48 @@ mod tests {
         );
         assert_eq!(m.var("n"), 2);
         assert!(m.take_pin_drives().is_empty());
+    }
+
+    #[test]
+    fn pin_delivery_filter_preserves_levels_edge_order_and_reset_binding() {
+        let mut m = machine("  outputs: [LIVE, UNWIRED]\n");
+        m.drive_pin("UNWIRED", false);
+        m.drive_pin("LIVE", false);
+        m.drive_pin("UNWIRED", true);
+        m.drive_pin("LIVE", true);
+        m.restrict_pin_delivery(["LIVE".to_owned(), "LIVE".to_owned()]);
+        assert_eq!(
+            m.take_pin_drives(),
+            vec![("LIVE".to_owned(), false), ("LIVE".to_owned(), true)],
+            "attachment removes only unwired deliveries, not intermediate bound edges"
+        );
+
+        for i in 0..4096 {
+            m.drive_pin("UNWIRED", i % 2 != 0);
+        }
+        assert!(
+            m.take_pin_drives().is_empty(),
+            "unwired toggles must not accumulate"
+        );
+        assert_eq!(m.pin_levels.get("UNWIRED"), Some(&true));
+        for level in [false, true, false] {
+            m.drive_pin("LIVE", level);
+        }
+        assert_eq!(
+            m.take_pin_drives(),
+            vec![
+                ("LIVE".to_owned(), false),
+                ("LIVE".to_owned(), true),
+                ("LIVE".to_owned(), false),
+            ],
+            "bound edges must not coalesce"
+        );
+
+        m.reset();
+        m.drive_pin("UNWIRED", true);
+        m.drive_pin("LIVE", true);
+        assert_eq!(m.pin_levels.get("UNWIRED"), Some(&true));
+        assert_eq!(m.take_pin_drives(), vec![("LIVE".to_owned(), true)]);
     }
 
     #[test]

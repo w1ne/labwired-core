@@ -1,4 +1,4 @@
-# ngspice-47 reference for `tvs_clamp_smaj5v0a` (crates/core/tests/analog_ngspice_macros.rs)
+# ngspice-47 reference for `tvs_clamp_smaj5v0a` (crates/core/tests/analog/analog_ngspice_macros.rs)
 # v(prot) at every 5e-7 s, t = 0 excluded
 # deck 2b58f9f1d122e5d7
 -1.30742577652084679e-98

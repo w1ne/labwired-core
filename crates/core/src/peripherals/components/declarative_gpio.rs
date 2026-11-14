@@ -44,6 +44,7 @@ use super::declarative_artifact::CompiledArtifact;
 use super::declarative_regs::{apply_timing_action, TimerBank};
 use super::gpio_schedule::ScheduleBank;
 use super::rule_machine::{PinOnlyCtx, RuleMachine};
+use super::tm1637_trace::Tm1637Trace;
 use crate::bus::{BusResidentDevice, DevicePins};
 use crate::sim_input::{InputChannel, SimInput, SimInputError};
 
@@ -138,6 +139,8 @@ pub struct DeclarativeGpioDevice {
     /// a rule listens for a pin EDGE — see
     /// [`BusResidentDevice::edge_service_addrs`].
     edge_addrs: Vec<u64>,
+    /// TM1637 bus/panel history when `artifact.format` is `tm1637_grid`.
+    tm1637_trace: Option<Tm1637Trace>,
 }
 
 impl DeclarativeGpioDevice {
@@ -206,10 +209,17 @@ impl DeclarativeGpioDevice {
         let cycle_timers =
             descriptor.behavior.timer_clock == labwired_config::GpioTimerClock::CyclesFloor;
         let listens_for_pin_sets = machine.listens_for_pin_sets();
+        let artifact = CompiledArtifact::from_descriptor(descriptor)?;
+        let tm1637_trace = artifact
+            .as_ref()
+            .and_then(|a| a.format())
+            .filter(|f| *f == "tm1637_grid")
+            .map(|_| Tm1637Trace::new());
         Ok(Self {
             id,
             powered: true,
-            artifact: CompiledArtifact::from_descriptor(descriptor)?,
+            artifact,
+            tm1637_trace,
             listens_for_pin_sets,
             moved: Vec::new(),
             seed_input_clamp: descriptor.behavior.seed_input_clamp,
@@ -598,6 +608,13 @@ impl BusResidentDevice for DeclarativeGpioDevice {
         }
 
         self.advance_clock(now);
+        if let Some(trace) = self.tm1637_trace.as_mut() {
+            // Observe after Pins+edges and the clock tick so STOP / ACK /
+            // GRID changes are stamped with the current device time.
+            if changed_any {
+                trace.observe(&self.machine, self.elapsed_us);
+            }
+        }
         self.drain_schedule_requests(now);
 
         let pending = self.machine.take_pin_drives();
@@ -763,7 +780,16 @@ impl crate::inspect::DeviceEvidence for DeclarativeGpioDevice {
             expr_scale: &self.expr_scale,
             expr_precision: &self.expr_precision,
         };
-        let rendered = artifact.render(&self.machine, &ctx, id, opts);
+        let mut rendered = artifact.render(&self.machine, &ctx, id, opts);
+        if let Some(trace) = &self.tm1637_trace {
+            // History rings are Acc/prove evidence. Always publish them (they
+            // are small, CAP=64) so `include_bytes: false` inspect still sees
+            // frames_seen / bus_frames / ack_count. `grids` mirrors the live
+            // GRID RAM for callers that prefer raw bytes over decoded text.
+            if let Some(meta) = rendered.meta.as_object_mut() {
+                trace.write_meta(meta);
+            }
+        }
         // Published, never swallowed, and stamped with WHY it is blank.
         vec![if self.powered {
             rendered
@@ -967,6 +993,16 @@ pub(crate) fn validate_rule_names(desc: &DeviceDescriptor) -> Result<()> {
     let vars: Vec<String> = b.vars.keys().cloned().collect();
     let fifos: Vec<String> = b.fifos.iter().map(|f| f.name.clone()).collect();
     let timers: Vec<String> = b.timers.iter().map(|t| t.name.clone()).collect();
+    // Only the I2C engine emits conversion events. An unused i2c block on
+    // another primitive must not make a dead subscription appear valid.
+    let data_ready: Vec<String> = if b.primitive == "i2c_device" {
+        b.i2c
+            .iter()
+            .flat_map(|spec| spec.data_ready.iter().map(|rule| rule.name.clone()))
+            .collect()
+    } else {
+        Vec::new()
+    };
     let pins: Vec<String> = b.pin_names();
     let inputs: Vec<String> = desc
         .metadata
@@ -995,6 +1031,7 @@ pub(crate) fn validate_rule_names(desc: &DeviceDescriptor) -> Result<()> {
             vars: &vars,
             fifos: &fifos,
             timers: &timers,
+            data_ready: &data_ready,
             outputs: &b.outputs,
             inputs: &inputs,
             pins: &pins,
@@ -1112,6 +1149,54 @@ metadata:
   inputs:
     - { key: weight, label: W, unit: g, min: 0, max: 10, default: 1 }
 "#;
+
+    #[test]
+    fn non_i2c_primitives_reject_data_ready_even_with_an_unused_i2c_block() {
+        let i2c: labwired_config::I2cSpec = serde_yaml::from_str(
+            r#"
+default_address: 0x29
+registers:
+  - { name: START, addr: 0, width: 1, endian: be, access: rw, reset: 0 }
+  - { name: READY, addr: 1, width: 1, endian: be, access: r, reset: 0 }
+data_ready:
+  - name: sample
+    start_register: START
+    start_mask: 1
+    ready_register: READY
+    ready_mask: 1
+    conversion_us: 10
+"#,
+        )
+        .unwrap();
+        let subscription: labwired_config::Rule =
+            serde_yaml::from_str("{ on: { data_ready: sample }, do: [] }").unwrap();
+
+        for fixture in [FIXTURE, include_str!("declarative_spi_fixture.yaml")] {
+            for with_i2c_block in [false, true] {
+                let mut desc = DeviceDescriptor::from_yaml(fixture).unwrap();
+                if with_i2c_block {
+                    desc.behavior.i2c = Some(i2c.clone());
+                }
+                let validate = |desc: &DeviceDescriptor| match desc.behavior.primitive.as_str() {
+                    "gpio_device" => validate_descriptor(desc),
+                    "spi_device" => super::super::declarative_spi::validate_descriptor(desc),
+                    _ => unreachable!("test uses only GPIO and SPI fixtures"),
+                };
+                validate(&desc).expect("legacy descriptor without a subscription remains valid");
+                desc.behavior.rules.push(subscription.clone());
+                let error = format!(
+                    "{:#}",
+                    validate(&desc).expect_err("non-I2C conversion subscription must fail")
+                );
+                assert!(
+                    error.contains("on.data_ready")
+                        && error.contains("no data-ready conversion named 'sample'"),
+                    "{}, with_i2c_block {with_i2c_block}: {error}",
+                    desc.behavior.primitive
+                );
+            }
+        }
+    }
 
     /// A [`DevicePins`] over a flat word map, so a test can drive an "MCU
     /// output" and read back what the device drove without a whole bus.

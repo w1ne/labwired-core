@@ -23,6 +23,7 @@ pub mod hashers;
 pub mod host_time;
 pub mod inspect;
 pub mod interrupt;
+pub mod live_numeric;
 pub mod logic_capture;
 pub mod machine;
 pub mod memory;
@@ -38,6 +39,7 @@ pub mod pins;
 pub mod plugin;
 pub mod power;
 pub mod profile;
+pub mod reset_input;
 pub mod runtime_snapshot;
 pub mod sched;
 pub mod sd_hle;
@@ -952,6 +954,16 @@ impl<C: Cpu> Machine<C> {
         Some(series)
     }
 
+    /// Live native numeric observations, on a cursor independent of the analog
+    /// co-simulation ring and historical series. None when no producer exists.
+    pub fn live_numeric_capture(
+        &self,
+        cursor: u64,
+        max_points: usize,
+    ) -> Option<crate::live_numeric::LiveNumericBatch> {
+        self.bus.live_numeric_capture(cursor, max_points)
+    }
+
     /// Current engine cycle — the `nowCycle` reported alongside a logic-edge
     /// read so the UI can extend flat traces to "now".
     pub fn logic_now_cycle(&self) -> u64 {
@@ -1316,10 +1328,21 @@ impl<C: Cpu> Machine<C> {
     ///
     /// The nRF54L TWIM is never in the controller list (it does not opt in), so
     /// its slaves are advanced exactly once — by TWIM itself, off the GRTC.
+    #[inline(always)]
     fn advance_central_i2c_time(&mut self) {
-        if self.i2c_time_controller_indices.is_empty() {
+        // Keep the no-work path outside the clock/fan-out routine's register
+        // saves. Most CPU steps do not cross a derived microsecond boundary.
+        if self.i2c_time_controller_indices.is_empty()
+            || (self.i2c_time_source_index.is_none()
+                && self.total_cycles < self.next_i2c_time_cycle)
+        {
             return;
         }
+        self.advance_central_device_time_due();
+    }
+
+    #[inline(never)]
+    fn advance_central_device_time_due(&mut self) {
         let (now, derived) = match self.i2c_time_source_index {
             Some(src) => match self.bus.peripherals[src].dev.sim_time_us() {
                 Some(now) => (now, false),
@@ -1329,11 +1352,6 @@ impl<C: Cpu> Machine<C> {
                 let hz = self.bus.cpu_hz;
                 if hz == 0 {
                     // No declared core clock ⇒ nothing honest to derive from.
-                    return;
-                }
-                // The derived µs clock only changes at a µs boundary. Skip the
-                // u128 divide and the device fan-out on the cycles in between.
-                if self.total_cycles < self.next_i2c_time_cycle {
                     return;
                 }
                 let cycles_per_us = (hz / 1_000_000).max(1);

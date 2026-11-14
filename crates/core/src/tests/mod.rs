@@ -119,6 +119,11 @@ pub mod source_text;
 pub mod spi_byte_level_golden;
 #[cfg(test)]
 pub mod spi_edge_sampling_lab;
+/// The one place that knows where the engine's Rust source lives (shared with
+/// the integration tests, which include the same file).
+#[cfg(test)]
+#[path = "../../tests/common/src_roots.rs"]
+pub mod src_roots;
 #[cfg(test)]
 pub mod stm32_i2c_waveform;
 #[cfg(test)]

@@ -256,7 +256,10 @@ def write_baseline(markers: list[dict]) -> None:
 
 def reconcile(markers: list[dict]) -> None:
     """Print the three ledgers side by side. A report, not a gate."""
-    profile = CORE_ROOT / "crates/core/src/system/xtensa/arduino_esp32_profile.rs"
+    profile = next(
+        (p for p in rust_files() if p.name == "arduino_esp32_profile.rs"),
+        CORE_ROOT / "arduino_esp32_profile.rs",
+    )
     loader = CORE_ROOT / "crates/loader/src/lib.rs"
 
     ceiling = "?"

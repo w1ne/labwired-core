@@ -1,4 +1,4 @@
-# ngspice-47 reference for `regulator_ldo_dropout_ams1117` (crates/core/tests/analog_ngspice_macros.rs)
+# ngspice-47 reference for `regulator_ldo_dropout_ams1117` (crates/core/tests/analog/analog_ngspice_macros.rs)
 # v(out) at every 2e-5 s, t = 0 excluded
 # deck 2ff912e4799719cf
 -2.96871287466753033e-3

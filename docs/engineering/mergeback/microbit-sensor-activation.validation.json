@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "record_kind": "owner_acknowledged_board_activation",
+  "date": "2026-11-11",
+  "timezone": "Europe/Budapest",
+  "generic_base_commit": "2dbbcc4ed9c2aadcfb37411d9c437287f6a9e965",
+  "review_pr": "https://github.com/w1ne/labwired-core/pull/1825",
+  "recapture_issue": "https://github.com/w1ne/labwired-core/issues/1827",
+  "authorized_records": [
+    "nrf52840",
+    "seeed-xiao-nrf52840-sense"
+  ],
+  "authorized_model_digest": "219f135fe825720f1a2d73e667837512f1fb1f5cbbc2f46eacf747d7dcfc1106",
+  "board_patch_sha256": "68b6b82e3cf882be9e8474fc9852e20c7821816d9408599eb7c826405ea5054d",
+  "qualified_source_files_verified": 31,
+  "qualified_source_receipt": {
+    "commit": "2dbbcc4ed9c2aadcfb37411d9c437287f6a9e965",
+    "path": "docs/engineering/mergeback/sensor-signals.validation.json",
+    "sha256": "f1afd098a0505c144a84ac47881c64edcb7388be0051c8fd3c9c18d195727c01"
+  },
+  "qualification_reused": {
+    "reason": "All 31 qualified source files match the previously tested candidate exactly.",
+    "feature_off_tests": 436,
+    "generic_subset_tests": 417,
+    "scheduler_tests": 23,
+    "restored_feature_off_guest_tests": 8,
+    "independent_negative_controls": 3,
+    "note": "These are the original qualified runs, not new executions during acknowledgement recording."
+  },
+  "manifest_scalar_changes_per_record": [
+    "drift_ack",
+    "drift_ack_digest"
+  ],
+  "all_other_board_fields_unchanged": true,
+  "new_silicon_capture": false,
+  "model_checks": {
+    "nrf52840": {
+      "watched_digest": "219f135fe825720f1a2d73e667837512f1fb1f5cbbc2f46eacf747d7dcfc1106",
+      "ack_date": "2026-11-11",
+      "ack_expires": "2026-12-11",
+      "last_silicon_capture": "2026-08-09",
+      "gate": {
+        "digest": "219f135fe825720f1a2d73e667837512f1fb1f5cbbc2f46eacf747d7dcfc1106",
+        "capture": "2026-08-09",
+        "drifted": true,
+        "expires": "2026-12-11",
+        "expired": false,
+        "failing": false
+      },
+      "assessment": "exact_drift_acknowledged_recapture_pending"
+    },
+    "seeed-xiao-nrf52840-sense": {
+      "watched_digest": "219f135fe825720f1a2d73e667837512f1fb1f5cbbc2f46eacf747d7dcfc1106",
+      "ack_date": "2026-11-11",
+      "ack_expires": "2026-12-11",
+      "last_silicon_capture": "2026-08-09",
+      "gate": {
+        "digest": "219f135fe825720f1a2d73e667837512f1fb1f5cbbc2f46eacf747d7dcfc1106",
+        "capture": "2026-08-09",
+        "drifted": true,
+        "expires": "2026-12-11",
+        "expired": false,
+        "failing": false
+      },
+      "assessment": "exact_drift_acknowledged_recapture_pending"
+    }
+  },
+  "required_publication_checks": [
+    "Normal pre-commit hook",
+    "Committed-tree validation status --check --drift",
+    "Normal pre-push hook",
+    "PR CI checks"
+  ]
+}

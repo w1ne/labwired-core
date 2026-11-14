@@ -1,0 +1,705 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-11",
+  "integration_base": "75700134a3b31124bb46eae118acc67d65b4b546",
+  "provenance": "CrispStrobe/labwired-core@d543a46bba894f9e7e3aa31cdba6feb561b2d08e",
+  "qualified_composition_source_sha256": {
+    ".github/workflows/core-ci.yml": "8d3cf73bbb4f0f8302b76741365d522ffbfdea838ec7b5a39954797c61f3fc65",
+    "configs/devices/lsm303agr_accel.yaml": "4836d8bcdaca3d9142e4dbedb443a27d12a3cfff8f5a68ab566244eff9088e6c",
+    "configs/devices/lsm303agr_mag.yaml": "66a7b870104e3f472bd1c62e2e6879fab05a2375be5495d505cabac256ffa651",
+    "configs/systems/microbit-v2.yaml": "4eec0bfce96dc5f827b63569c99168e02d04527622c05e1ef75b2c62651fc137",
+    "crates/config/src/peripherals.rs": "6c116044a2ca477736b3f2688d3521dbcff572901eacfb99381b251aaa88dcdc",
+    "crates/config/src/rules.rs": "82d27ea86dbdcc1a5c7814e3c90919cea7197535c33467e5cc0c7a1924b624e1",
+    "crates/core/src/bus/construct.rs": "70197c434143365a2c24956ac615071036c020c954aadf7b91ea725e7335e8c4",
+    "crates/core/src/bus/device_hooks.rs": "cc2b6d54758667e322dac9cd82b1156ed1d283e37894a15f29930b31521cd3e0",
+    "crates/core/src/bus/from_config.rs": "cb7dbbec3876520d2500608d680003667c0de37c2f420f4b6f25f8f41ab10eca",
+    "crates/core/src/bus/mod.rs": "9dc3c593cbdc784f96a24c28cd91c4d38175c78528c86f8290f2a26af13c17be",
+    "crates/core/src/bus/open_drain.rs": "6db2a601af8e425ca94b5efb045ed5f0d48b055c3a082fc76cbbeb95c41e96d2",
+    "crates/core/src/bus/tests_main.rs": "09ad3be3ad0ebe8f9b45a7f66d21af1b28fd729214ad02255f00f4b5f6ae7ef1",
+    "crates/core/src/peripherals/components/declarative_gpio.rs": "61515768d2d491d4e330c8d1ef882e0a3cdea696a1ac5cb878bd918b22f3f11b",
+    "crates/core/src/peripherals/components/declarative_i2c.rs": "af8d960f46cc899c0aa4a9101c90ea97d86eeb6de20a5820d28383bbe6ac0d99",
+    "crates/core/src/peripherals/components/declarative_spi.rs": "0e69103918b9fe8273fde6ef060921785c12124a7440f7164a93bccf919c7940",
+    "crates/core/src/peripherals/components/declarative_uart.rs": "8be33c03bde06421bb976c5355cec1d1b7b568a3e3de09d1946722bd30631fc4",
+    "crates/core/src/peripherals/components/rule_machine.rs": "c17e36fc3eda94396ea769b179ebfdd2df1835b9fd6e2b523a433566f7b914e3",
+    "crates/core/src/peripherals/kit/ctx.rs": "429c9267c57a7550afe6ef1e5cac32b22abcb9a0e06d1a420a2b969870c80d0d",
+    "crates/core/src/peripherals/nrf52/gpiote.rs": "0ee460b19d3777cba47f5e903ce4fb7af210d30024be155049c576f4812fee96",
+    "crates/core/tests/common/microbit_sensor_guest.rs": "1a8eb7e770593c61f81c07446829dd6eff75ec3742b195b1ba93b52cb13ee29d",
+    "crates/core/tests/fixtures/microbit-drdy/README.md": "bfec684d90015d334fb35f0e25308adc1aa109244c1995bcb151836e6220cc9b",
+    "crates/core/tests/fixtures/microbit-drdy/guest.ld": "a701c40b9718e311a1f3e26a541cd6f5860e35532f850413f60a39015a467073",
+    "crates/core/tests/fixtures/microbit-drdy/mag-drdy.S": "cdaf667d5f142ebea03815cb2f4a1a1839627a0a199b71ac2465ef5306fa8310",
+    "crates/core/tests/fixtures/microbit-drdy/motion-drdy.S": "d71422875839665dafa035bf27dc0197c6590fa2fa28af5a218942a27d80fae4",
+    "crates/core/tests/fixtures/microbit-drdy/shared-gpiote.S": "d6a43f5a386a6f1d41e0f1f0cc2af61f46e049e7da8c24f84b1e2bc4c70a8e0c",
+    "crates/core/tests/fixtures/microbit-drdy/twim-register.inc": "f419512eae87de365bb05bb5e28021c1ae2bb485def82c08222e87588933764f",
+    "crates/core/tests/fixtures/peripherals/manifest.json": "a999ef1b545f727c27614320b7fa18d4234c3cf2701cab30f17619091cdec462",
+    "crates/core/tests/microbit_v2_mag_drdy_guest.rs": "dce15bab853364577a75848a7c22da410adc7bcd2ba03f2c382f6ce898c46078",
+    "crates/core/tests/microbit_v2_open_drain_guest.rs": "e5ea4a4cf5b53980c58d004819cc051af7d6b6a77d9717a582abb15ec52fbd24",
+    "crates/core/tests/microbit_v2_sensor_drdy_guest.rs": "7d8276a22dfc0b07e121c1c75c7df7422daedd4c6f104004af8d04af24fe90f8",
+    "crates/core/tests/tier2_device_pins.rs": "4e4de4146be99e578e5e8413f1ae01ff6178ac9e7308c3f937145a39cbf3a11f"
+  },
+  "active_paths": [
+    "configs/devices/lsm303agr_accel.yaml",
+    "configs/devices/lsm303agr_mag.yaml",
+    "crates/config/src/peripherals.rs",
+    "crates/config/src/rules.rs",
+    "crates/core/src/bus/construct.rs",
+    "crates/core/src/bus/device_hooks.rs",
+    "crates/core/src/bus/from_config.rs",
+    "crates/core/src/bus/mod.rs",
+    "crates/core/src/bus/open_drain.rs",
+    "crates/core/src/bus/tests_main.rs",
+    "crates/core/src/peripherals/components/declarative_gpio.rs",
+    "crates/core/src/peripherals/components/declarative_i2c.rs",
+    "crates/core/src/peripherals/components/declarative_spi.rs",
+    "crates/core/src/peripherals/components/declarative_uart.rs",
+    "crates/core/src/peripherals/components/rule_machine.rs",
+    "crates/core/src/peripherals/kit/ctx.rs",
+    "crates/core/tests/fixtures/peripherals/manifest.json",
+    "crates/core/tests/tier2_device_pins.rs"
+  ],
+  "pending_board_paths": [
+    ".github/workflows/core-ci.yml",
+    "configs/systems/microbit-v2.yaml",
+    "crates/core/src/peripherals/nrf52/gpiote.rs",
+    "crates/core/tests/common/microbit_sensor_guest.rs",
+    "crates/core/tests/fixtures/microbit-drdy/README.md",
+    "crates/core/tests/fixtures/microbit-drdy/guest.ld",
+    "crates/core/tests/fixtures/microbit-drdy/mag-drdy.S",
+    "crates/core/tests/fixtures/microbit-drdy/motion-drdy.S",
+    "crates/core/tests/fixtures/microbit-drdy/shared-gpiote.S",
+    "crates/core/tests/fixtures/microbit-drdy/twim-register.inc",
+    "crates/core/tests/microbit_v2_mag_drdy_guest.rs",
+    "crates/core/tests/microbit_v2_open_drain_guest.rs",
+    "crates/core/tests/microbit_v2_sensor_drdy_guest.rs"
+  ],
+  "pending_board_patch_sha256": "68b6b82e3cf882be9e8474fc9852e20c7821816d9408599eb7c826405ea5054d",
+  "positive_runs": [
+    {
+      "name": "positive-off",
+      "result": {
+        "name": "positive-off",
+        "commands": [
+          {
+            "argv": [
+              "cargo",
+              "test",
+              "--locked",
+              "-p",
+              "labwired-config",
+              "--no-default-features",
+              "--lib"
+            ],
+            "returncode": 0,
+            "seconds": 35.496
+          },
+          {
+            "argv": [
+              "cargo",
+              "test",
+              "--locked",
+              "-p",
+              "labwired-core",
+              "--no-default-features",
+              "--lib",
+              "peripherals::components::declarative_i2c::tests::",
+              "--",
+              "--test-threads=1"
+            ],
+            "returncode": 0,
+            "seconds": 405.059
+          },
+          {
+            "argv": [
+              "cargo",
+              "test",
+              "--locked",
+              "-p",
+              "labwired-core",
+              "--no-default-features",
+              "--lib",
+              "peripherals::components::declarative_gpio::tests::",
+              "--",
+              "--test-threads=1"
+            ],
+            "returncode": 0,
+            "seconds": 4.191
+          },
+          {
+            "argv": [
+              "cargo",
+              "test",
+              "--locked",
+              "-p",
+              "labwired-core",
+              "--no-default-features",
+              "--lib",
+              "peripherals::components::declarative_spi::tests::",
+              "--",
+              "--test-threads=1"
+            ],
+            "returncode": 0,
+            "seconds": 0.23
+          },
+          {
+            "argv": [
+              "cargo",
+              "test",
+              "--locked",
+              "-p",
+              "labwired-core",
+              "--no-default-features",
+              "--lib",
+              "peripherals::components::rule_machine::tests::",
+              "--",
+              "--test-threads=1"
+            ],
+            "returncode": 0,
+            "seconds": 0.22
+          },
+          {
+            "argv": [
+              "cargo",
+              "test",
+              "--locked",
+              "-p",
+              "labwired-core",
+              "--no-default-features",
+              "--lib",
+              "peripherals::kit::ctx::tests::",
+              "--",
+              "--test-threads=1"
+            ],
+            "returncode": 0,
+            "seconds": 0.266
+          },
+          {
+            "argv": [
+              "cargo",
+              "test",
+              "--locked",
+              "-p",
+              "labwired-core",
+              "--no-default-features",
+              "--lib",
+              "bus::open_drain::tests::",
+              "--",
+              "--test-threads=1"
+            ],
+            "returncode": 0,
+            "seconds": 0.218
+          },
+          {
+            "argv": [
+              "cargo",
+              "test",
+              "--locked",
+              "-p",
+              "labwired-core",
+              "--no-default-features",
+              "--lib",
+              "peripherals::nrf52::gpiote::tests::",
+              "--",
+              "--test-threads=1"
+            ],
+            "returncode": 0,
+            "seconds": 0.202
+          },
+          {
+            "argv": [
+              "cargo",
+              "test",
+              "--locked",
+              "-p",
+              "labwired-core",
+              "--no-default-features",
+              "--test",
+              "tier2_device_pins",
+              "--test",
+              "peripheral_kit_gate",
+              "--test",
+              "microbit_v2_open_drain_guest",
+              "--test",
+              "microbit_v2_mag_drdy_guest",
+              "--test",
+              "microbit_v2_sensor_drdy_guest",
+              "--",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "returncode": 0,
+            "seconds": 53.568
+          }
+        ],
+        "environment": {
+          "CARGO_TARGET_DIR": "/data/labwired-fork-audit-20261110/target",
+          "CARGO_BUILD_JOBS": "1",
+          "CARGO_INCREMENTAL": "0",
+          "CARGO_PROFILE_DEV_DEBUG": "0",
+          "CARGO_PROFILE_TEST_DEBUG": "0",
+          "TMPDIR": "/data/labwired-fork-audit-20261110/tmp",
+          "LABWIRED_REQUIRE_SENSOR_FEATURE_OFF": "1"
+        },
+        "started": 1794354311.3484478,
+        "finished": 1794354810.7989068
+      },
+      "test_summaries": [
+        {
+          "passed": 205,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "passed": 96,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 5496
+        },
+        {
+          "passed": 19,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 5573
+        },
+        {
+          "passed": 41,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 5551
+        },
+        {
+          "passed": 18,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 5574
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 5588
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 5586
+        },
+        {
+          "passed": 11,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 5581
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "passed": 13,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "passed": 15,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        }
+      ],
+      "total_passed": 436,
+      "profiles": [
+        [
+          "mag-drdy.S",
+          "false",
+          "1"
+        ],
+        [
+          "motion-drdy.S",
+          "false",
+          "1"
+        ],
+        [
+          "shared-gpiote.S",
+          "false",
+          "1"
+        ]
+      ]
+    },
+    {
+      "name": "positive-on",
+      "result": {
+        "name": "positive-on",
+        "commands": [
+          {
+            "argv": [
+              "cargo",
+              "test",
+              "--locked",
+              "-p",
+              "labwired-core",
+              "--no-default-features",
+              "--features",
+              "event-scheduler",
+              "--test",
+              "tier2_device_pins",
+              "--test",
+              "microbit_v2_open_drain_guest",
+              "--test",
+              "microbit_v2_mag_drdy_guest",
+              "--test",
+              "microbit_v2_sensor_drdy_guest",
+              "--",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "returncode": 0,
+            "seconds": 292.382
+          }
+        ],
+        "environment": {
+          "CARGO_TARGET_DIR": "/data/labwired-fork-audit-20261110/target",
+          "CARGO_BUILD_JOBS": "1",
+          "CARGO_INCREMENTAL": "0",
+          "CARGO_PROFILE_DEV_DEBUG": "0",
+          "CARGO_PROFILE_TEST_DEBUG": "0",
+          "TMPDIR": "/data/labwired-fork-audit-20261110/tmp",
+          "LABWIRED_REQUIRE_SENSOR_FEATURE_OFF": "0"
+        },
+        "started": 1794354840.589119,
+        "finished": 1794355132.9708521
+      },
+      "test_summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "passed": 15,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        }
+      ],
+      "total_passed": 23,
+      "profiles": [
+        [
+          "mag-drdy.S",
+          "true",
+          "1"
+        ],
+        [
+          "mag-drdy.S",
+          "true",
+          "512"
+        ],
+        [
+          "motion-drdy.S",
+          "true",
+          "1"
+        ],
+        [
+          "motion-drdy.S",
+          "true",
+          "512"
+        ],
+        [
+          "shared-gpiote.S",
+          "true",
+          "1"
+        ],
+        [
+          "shared-gpiote.S",
+          "true",
+          "512"
+        ]
+      ]
+    },
+    {
+      "name": "restored-guests-off",
+      "result": {
+        "name": "restored-guests-off",
+        "argv": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "labwired-core",
+          "--no-default-features",
+          "--test",
+          "microbit_v2_open_drain_guest",
+          "--test",
+          "microbit_v2_mag_drdy_guest",
+          "--test",
+          "microbit_v2_sensor_drdy_guest",
+          "--",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "returncode": 0,
+        "seconds": 243.334
+      },
+      "test_summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 0
+        }
+      ],
+      "total_passed": 8,
+      "profiles": [
+        [
+          "mag-drdy.S",
+          "false",
+          "1"
+        ],
+        [
+          "motion-drdy.S",
+          "false",
+          "1"
+        ],
+        [
+          "shared-gpiote.S",
+          "false",
+          "1"
+        ]
+      ]
+    }
+  ],
+  "negative_controls": [
+    {
+      "name": "negative-autonomous-completion",
+      "file": "crates/core/src/peripherals/components/declarative_i2c.rs",
+      "source_before_sha256": "af8d960f46cc899c0aa4a9101c90ea97d86eeb6de20a5820d28383bbe6ac0d99",
+      "mutation_sha256": "61ff140f6a805c4a0a307ca2779331af578764bac1f1941285b650ad0c7c1e05",
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "labwired-core",
+        "--no-default-features",
+        "--test",
+        "microbit_v2_open_drain_guest",
+        "guest_sees_autonomous_data_ready_without_polling",
+        "--",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started": 1794355133.0182261,
+      "returncode": 101,
+      "expected_failure": true,
+      "source_restored_sha256": "af8d960f46cc899c0aa4a9101c90ea97d86eeb6de20a5820d28383bbe6ac0d99",
+      "seconds": 204.144
+    },
+    {
+      "name": "negative-retained-driver",
+      "file": "crates/core/src/bus/open_drain.rs",
+      "source_before_sha256": "6db2a601af8e425ca94b5efb045ed5f0d48b055c3a082fc76cbbeb95c41e96d2",
+      "mutation_sha256": "a597318cad9a0a6b148a3929c33a13d0756dbb10eb9e192d94c380ea4fc4523e",
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "labwired-core",
+        "--no-default-features",
+        "--test",
+        "microbit_v2_open_drain_guest",
+        "guest_observes_two_independent_retained_drivers",
+        "--",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started": 1794355337.1628976,
+      "returncode": 101,
+      "expected_failure": true,
+      "source_restored_sha256": "6db2a601af8e425ca94b5efb045ed5f0d48b055c3a082fc76cbbeb95c41e96d2",
+      "seconds": 199.74
+    },
+    {
+      "name": "negative-gpiote-final-firmware",
+      "base": "75700134a3b31124bb46eae118acc67d65b4b546",
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "labwired-core",
+        "--no-default-features",
+        "--test",
+        "microbit_v2_open_drain_guest",
+        "guest_observes_first_gpiote_falling_edge_after_channel_enable",
+        "--",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "qualified_source_sha256": "0ee460b19d3777cba47f5e903ce4fb7af210d30024be155049c576f4812fee96",
+      "baseline_source_sha256": "60a3f7d8eb2068397ff73e6b5326f891dc9be1cef56bfc6ad3f82df24c30d6d4",
+      "started": 1794355782.878298,
+      "returncode": 101,
+      "expected_failure": true,
+      "seconds": 236.469
+    }
+  ],
+  "deterministic_firmware": [
+    {
+      "source": "shared-gpiote.S",
+      "sha256": "3b1946249c097bdda2326be9cb90d2789173fc6269d40bbc0e00e783feb95837",
+      "builds": 2
+    },
+    {
+      "source": "mag-drdy.S",
+      "sha256": "20659ba20f0919ac744145a64a770c23e458e5f6c6f9218fe839b9e2f07837f0",
+      "builds": 2
+    },
+    {
+      "source": "motion-drdy.S",
+      "sha256": "76183d24acbf58b6bb8595ebb4cb9bfe030a677c7aa7a17fad0c13906292de67",
+      "builds": 2
+    }
+  ],
+  "silicon_gate": [
+    {
+      "id": "nrf52840",
+      "recorded_ack_digest": "86b0c81ce18f79f9d18d02eb182f135700e90d8fdcc7fc6c3a53a49097599aa8",
+      "candidate_digest": "219f135fe825720f1a2d73e667837512f1fb1f5cbbc2f46eacf747d7dcfc1106",
+      "evaluation": {
+        "newest_model": "2026-11-09",
+        "digest": "219f135fe825720f1a2d73e667837512f1fb1f5cbbc2f46eacf747d7dcfc1106",
+        "capture": "2026-08-09",
+        "drifted": true,
+        "expires": "2026-12-09",
+        "expired": false,
+        "failing": true,
+        "status": "\u2716 DRIFT \u2014 model 2026-11-09 > capture; RE-CAPTURE"
+      }
+    },
+    {
+      "id": "seeed-xiao-nrf52840-sense",
+      "recorded_ack_digest": "86b0c81ce18f79f9d18d02eb182f135700e90d8fdcc7fc6c3a53a49097599aa8",
+      "candidate_digest": "219f135fe825720f1a2d73e667837512f1fb1f5cbbc2f46eacf747d7dcfc1106",
+      "evaluation": {
+        "newest_model": "2026-11-09",
+        "digest": "219f135fe825720f1a2d73e667837512f1fb1f5cbbc2f46eacf747d7dcfc1106",
+        "capture": "2026-08-09",
+        "drifted": true,
+        "expires": "2026-12-09",
+        "expired": false,
+        "failing": true,
+        "status": "\u2716 DRIFT \u2014 model 2026-11-09 > capture; RE-CAPTURE"
+      }
+    }
+  ],
+  "qualification_notes": [
+    "The final restored-off guest run and scheduler-on runs use the listed deterministic complete ELFs.",
+    "Earlier feature-off guest builds had the same loadable images, with varying GCC temporary STT_FILE metadata.",
+    "The initial pre-pull-up GPIOTE failure is superseded here by the final identical-firmware control.",
+    "All negative mutations failed at runtime; no build failure or silent skip qualified a control.",
+    "No hardware recapture or performance gain is claimed."
+  ],
+  "toolchain": {
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+    "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+    "arm_gcc": "arm-none-eabi-gcc (15:13.2.rel1-2) 13.2.1 20231009"
+  },
+  "required_publication_checks": [
+    "scripts/pre-commit.sh",
+    "scripts/pre-push.sh",
+    "repository required PR checks"
+  ],
+  "full_candidate_lint": {
+    "status": "passed",
+    "commands": [
+      {
+        "argv": [
+          "cargo",
+          "fmt",
+          "--all",
+          "--",
+          "--check"
+        ],
+        "returncode": 0,
+        "seconds": 21.52
+      },
+      {
+        "argv": [
+          "cargo",
+          "clippy",
+          "--all-targets",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "returncode": 0,
+        "seconds": 649.922
+      }
+    ],
+    "started": 1794356106.8626122,
+    "finished": 1794356778.305396
+  }
+}

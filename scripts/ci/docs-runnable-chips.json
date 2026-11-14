@@ -39,6 +39,12 @@
       "expect": "TIER1 clock PASS",
       "note": "Narrow DevKitC-32E onboarding profile of the same LX6 SoC as `esp32`. Runs the committed classic-ESP32 TIER1 image (docs-runnable expect matches parent `esp32`). The PlatformIO deep/light-sleep sketches under docs/receipts/2026-11-09-esp32-deep-sleep/sketch are not committed ELFs."
     },
+    "esp32-devkitc-32e-uart1": {
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/esp32.elf",
+      "expect": "TIER1 clock PASS",
+      "note": "Narrow DevKitC-32E UART1-TX onboarding profile of the same LX6 SoC as `esp32`. Runs the committed classic-ESP32 TIER1 image (docs-runnable expect matches parent `esp32`). The PlatformIO UART1 sketch under examples/esp32-devkitc-32e-uart1/firmware is not a committed ELF."
+    },
     "esp32s3": {
       "how": "committed",
       "firmware": "tests/fixtures/tier1/esp32s3.elf",
@@ -59,6 +65,18 @@
       "how": "committed",
       "firmware": "tests/fixtures/tier1/nrf52840.elf",
       "expect": "TIER1 gpio PASS"
+    },
+    "nrf54l05": {
+      "how": "committed",
+      "firmware": "tests/fixtures/board-smoke/nrf54l05.elf",
+      "expect": "NRF54L05_OK",
+      "note": "Executable nRF54L05 application-core subset, UART20 EasyDMA and GPIO P2.09; sibling common IP only. Tested with synthetic wiring, not physical board or full radio stack."
+    },
+    "nrf54l10": {
+      "how": "committed",
+      "firmware": "tests/fixtures/board-smoke/nrf54l10.elf",
+      "expect": "NRF54L10_OK",
+      "note": "Executable nRF54L10 application-core subset, UART20 EasyDMA and GPIO P2.09; sibling common IP only. Tested with synthetic wiring, not physical board or full radio stack."
     },
     "nrf54l15": {
       "how": "example",
@@ -109,6 +127,10 @@
     "stm32f103rb": {
       "how": "needs-build",
       "why": "Exact STM32F103RBT6 descriptor added after the current released CLI. Its NUCLEO-F103RB firmware smoke is validated from this Core source tree; clean-install release-runner support starts with a release containing this chip model."
+    },
+    "stm32f103rb-nucleo-bme280-smoke": {
+      "how": "needs-build",
+      "why": "NUCLEO-F103RB + BME280 onboarding smoke is built from crates/firmware-nucleo-f103rb-bme280-smoke, not a committed ELF. Committed evidence under examples/nucleo-f103rb-bme280/evidence shows onboarding-smoke.yaml passed (NUCLEO_F103RB_BME280_OK ID=0x60 I2C1=PB8/PB9 and >=32 LD2 edges on PA5)."
     },
     "stm32f103r8": {
       "how": "needs-build",
@@ -176,6 +198,12 @@
     "stm32f401ve": {
       "how": "needs-build",
       "why": "Exact orderable geometry slice on the shared STM32F401 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f401 and exact geometry is checked by stm32_variant_geometry."
+    },
+    "stm32f446re": {
+      "how": "committed",
+      "firmware": "tests/fixtures/board-smoke/stm32f446re.elf",
+      "expect": "STM32F446RE_OK",
+      "note": "Small real-register RCC/GPIOA/USART2 boot and LED test; this simulator evidence is not physical silicon validation. Stock STM32duino requires the newer source model for the PWR over-drive and PLLI2S ready handshake."
     },
     "stm32f411ceu6": {
       "how": "blocked",
@@ -427,7 +455,7 @@
     },
     "atsamd51-pybadge": {
       "how": "needs-build",
-      "why": "Adafruit PyBadge application layout (atsamd51 with reset_vector_offset 0x4000, UF2 bootloader resident below). No PyBadge application image linked at 0x4000 is committed or published as a firmware-demos release asset yet; crates/core/tests/pybadge_config.rs proves the 0x4000 boot contract with an in-test stub only"
+      "why": "Adafruit PyBadge application layout (atsamd51 with reset_vector_offset 0x4000, UF2 bootloader resident below). No PyBadge application image linked at 0x4000 is committed or published as a firmware-demos release asset yet; crates/core/tests/samd/pybadge_config.rs proves the 0x4000 boot contract with an in-test stub only"
     },
     "ra4m1": {
       "how": "committed",

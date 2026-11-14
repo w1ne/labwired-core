@@ -35,7 +35,7 @@ SDCC emits Intel HEX; `firmware/hex2elf.py` wraps it byte for byte in an
 `EM_MCHP_PIC` ELF. Both 8-bit PIC families share that ELF machine value, so
 the loader reports the image as PIC18 and the chip's `arch: pic16` selects
 the PIC16 core (`arch_policy::image_arch_for_chip`).
-`crates/core/tests/pic16f877a_smoke.rs` and `ci/test.sh` both check that the
+`crates/core/tests/pic/pic16f877a_smoke.rs` and `ci/test.sh` both check that the
 ELF payload equals the HEX.
 
 ## Build and run

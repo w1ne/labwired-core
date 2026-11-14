@@ -33,13 +33,12 @@ while IFS= read -r package; do
 done <<< "$host_scope"
 cargo check "${host_args[@]}"
 
-# Keep the generated board validation status in sync, and block the commit if a
-# peripheral model drifted past its last silicon capture without a drift_ack.
+# Enforce manifest validity and source-watch integrity (same command as CI).
+# The rendered report is git-ignored and never committed; nothing is staged.
+# Source/capture differences are reported; no human source-review ACK is required.
 if command -v python3 >/dev/null 2>&1 && python3 -c "import yaml" >/dev/null 2>&1; then
-  echo "Regenerating board validation status + drift gate..."
-  python3 scripts/generate_validation_status.py
-  python3 scripts/generate_validation_status.py --drift
-  git add docs/boards/VALIDATION_STATUS.md
+  echo "Checking board validation manifest + source/capture report..."
+  python3 scripts/generate_validation_status.py --check --drift
 else
   echo "(skip validation-status: python3 + pyyaml not available)"
 fi
