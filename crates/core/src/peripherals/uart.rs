@@ -1426,6 +1426,12 @@ impl Uart {
     }
 
     fn tx_enabled(&self) -> bool {
+        // STM32v2 emits only when the USART and its transmitter are enabled.
+        if matches!(self.layout, UartRegisterLayout::Stm32V2)
+            && self.cr1 & ((1 << 0) | (1 << 3)) != ((1 << 0) | (1 << 3))
+        {
+            return false;
+        }
         if matches!(self.layout, UartRegisterLayout::SciB)
             && self.sci_b_regs[0] & SCI_B_CCR0_TE == 0
         {
@@ -3144,13 +3150,21 @@ mod tests {
         let sink = Arc::new(Mutex::new(Vec::new()));
         uart.set_sink(Some(sink.clone()), false);
 
-        // Wrong offset for v2 should not transmit.
+        // A disabled transmitter accepts TDR writes without emitting a byte.
         uart.write(0x04, b'X').unwrap();
-        // TDR offset
         uart.write(0x28, b'Y').unwrap();
-
-        let data = sink.lock().unwrap().clone();
-        assert_eq!(data, vec![b'Y']);
+        uart.write(0x00, 1 << 0).unwrap();
+        uart.write(0x28, b'Z').unwrap();
+        uart.write(0x00, 1 << 3).unwrap();
+        uart.write(0x28, b'W').unwrap();
+        assert!(
+            sink.lock().unwrap().is_empty(),
+            "UE and TE are both required"
+        );
+        uart.write(0x00, (1 << 0) | (1 << 3)).unwrap();
+        uart.write(0x04, b'Q').unwrap(); // CR2 is not the v2 TDR
+        uart.write(0x28, b'K').unwrap();
+        assert_eq!(sink.lock().unwrap().clone(), vec![b'K']);
         assert_eq!(uart.read(0x1C).unwrap(), 0xC0); // ISR ready flags
     }
 
