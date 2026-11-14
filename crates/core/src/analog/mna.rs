@@ -408,6 +408,15 @@ impl Solver {
     /// (`roff`), because their control is a routed input and no input has
     /// arrived yet.
     pub fn new(circuit: Circuit, integration: Integration) -> Result<Self, AnalogError> {
+        for resistor in &circuit.resistors {
+            let resistance = resistor.resistance_ohms();
+            if !resistance.is_finite() || resistance == 0.0 || !resistance.recip().is_finite() {
+                return Err(AnalogError::Config(format!(
+                    "resistor `{}` must have finite non-zero resistance and finite conductance",
+                    resistor.name
+                )));
+            }
+        }
         let unknowns = circuit.unknowns();
         if unknowns > MAX_UNKNOWNS {
             return Err(AnalogError::TooLarge {
@@ -558,9 +567,19 @@ impl Solver {
 
     /// Set a positive, finite resistance in ohms for the next solver step.
     pub fn set_resistance(&mut self, index: usize, ohms: f64) -> Result<(), AnalogError> {
-        if !ohms.is_finite() || ohms <= 0.0 || !ohms.recip().is_finite() {
+        if !ohms.is_finite() || ohms <= 0.0 {
             return Err(AnalogError::Config(
-                "resistance must be positive and finite with finite conductance".to_string(),
+                "resistance must be positive and finite".to_string(),
+            ));
+        }
+        let effective = self.circuit.resistors[index]
+            .ntc
+            .map(|ntc| ntc.resistance_ohms(ohms))
+            .unwrap_or(ohms);
+        if !effective.is_finite() || effective <= 0.0 || !effective.recip().is_finite() {
+            return Err(AnalogError::Config(
+                "effective resistance must be positive and finite with finite conductance"
+                    .to_string(),
             ));
         }
         if self.circuit.resistors[index].ohms != ohms {
@@ -596,7 +615,7 @@ impl Solver {
         };
         ntc.temperature_celsius = celsius;
         let resistance = ntc.resistance_ohms(resistor.ohms);
-        if !resistance.is_finite() || resistance <= 0.0 {
+        if !resistance.is_finite() || resistance <= 0.0 || !resistance.recip().is_finite() {
             return false;
         }
         if resistor.ntc != Some(ntc) {
