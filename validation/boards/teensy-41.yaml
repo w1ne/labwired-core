@@ -1,0 +1,22 @@
+id: teensy-41
+doc: docs/boards/teensy-41.md
+chip: configs/chips/imxrt1064.yaml
+tier: smoke-manual
+note: "Teensy 4.1 (MIMXRT1062 silicon; RT1064-class chip yaml). Bare-metal UART/LED smoke prints OK on LPUART6 after CCM CCGR ungating, toggles GPIO2_IO03; images run from DTCM (XIP skipped), FlexSPI is a stub. SIM-DERIVED — no silicon diff; no executing-fidelity differential."
+offline_tests:
+  - "firmware_survival::test_imxrt1064_teensy41_smoke_survival"
+models:
+  - crates/core/src/cpu/cortex_m.rs
+  - crates/core/src/decoder/arm.rs
+  - crates/core/src/peripherals/gpio.rs
+  - crates/core/src/peripherals/imx_ccm.rs
+  - crates/core/src/peripherals/imx_iomuxc.rs
+  - crates/core/src/peripherals/uart.rs
+  - configs/chips/imxrt1064.yaml
+  - configs/systems/teensy-41.yaml
+  # 2026-09-21, model_paths_drift_gate: models this board REGISTERS that
+  # its list omitted, so they were invisible to the drift digest. This
+  # board records no silicon capture, so there is no "silicon-verified"
+  # claim for the corrected digest to invalidate — no ack is implied.
+  - crates/core/src/peripherals/stub.rs
+  - crates/core/src/peripherals/systick.rs

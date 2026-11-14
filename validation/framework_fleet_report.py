@@ -14,8 +14,10 @@ except ImportError:
 
 ROOT = Path(__file__).resolve().parent.parent
 CHIPS = ROOT / "configs" / "chips"
-ARD = ROOT / "validation" / "arduino-matrix" / "boards.yaml"
+ARD = ROOT / "validation" / "arduino-matrix" / "boards"
 ZEP = ROOT / "validation" / "zephyr-matrix" / "boards.yaml"
+
+import registry_dir  # noqa: E402
 
 # Chips that are CI fixtures / variants, not product fleet targets
 SKIP_CHIPS = {
@@ -31,7 +33,7 @@ def main() -> int:
         for p in CHIPS.glob("*.yaml")
         if p.stem not in SKIP_CHIPS and not p.stem.startswith(".")
     )
-    ard = yaml.safe_load(ARD.read_text()) if ARD.is_file() else {"boards": [], "sketches": []}
+    ard = registry_dir.load_yaml_registry(ARD, "boards") if ARD.is_dir() else {"boards": [], "sketches": []}
     zep = yaml.safe_load(ZEP.read_text()) if ZEP.is_file() else {"boards": []}
     ard_ids = {b["chip"]: b["id"] for b in ard.get("boards") or []}
     # zephyr uses chip field

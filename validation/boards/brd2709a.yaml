@@ -1,0 +1,27 @@
+id: brd2709a
+doc: docs/boards/brd2709a.md
+chip: configs/chips/efr32mg26.yaml
+tier: smoke-manual
+note: "Silicon Labs EFR32MG26 (Series-2, Cortex-M33) Explorer Kit. L1 smoke: deterministic UART + IO scripts (examples/brd2709a/uart-smoke.yaml, io-smoke.yaml) pass via the CLI test lane, printing 'brd2709a: MG26 OK' and the LED/button pin states over the modelled Series-2 USART1 + GPIO port layouts (DOUT drives pins, DIN reads them). CMU/TIMER0 are stub windows, GPIO ROUTE/EXTI unmodelled, no silicon register diff. Silicon smoke 2026-08-18 (J-Link OB 1366:0105:000440338937, probe-rs): the sim-built firmware-mg26-demo ELF flashes and prints the full banner + IO lines on the physical VCOM (115200 8N1, clean ASCII — confirming the 19 MHz EM01GRPA/HFRCO baud basis); USART1 STATUS reads 0x2062 and GPIOC DOUT 0x300 after the run (both bus-FAULT before the firmware's CMU clock enables — the Series-2 clock-gating wall the init sequence exists to climb)."
+models:
+  - configs/chips/efr32mg26.yaml
+  # 2026-09-21, model_paths_drift_gate: models this board REGISTERS that
+  # its list omitted, so they were invisible to the drift digest. This
+  # board records no silicon capture, so there is no "silicon-verified"
+  # claim for the corrected digest to invalidate — no ack is implied.
+  - crates/core/src/peripherals/efr32/busalloc.rs
+  - crates/core/src/peripherals/efr32/cmu.rs
+  - crates/core/src/peripherals/efr32/gpio_exti.rs
+  - crates/core/src/peripherals/efr32/gpio_route.rs
+  - crates/core/src/peripherals/efr32/iadc.rs
+  - crates/core/src/peripherals/efr32/msc.rs
+  - crates/core/src/peripherals/efr32/smu.rs
+  - crates/core/src/peripherals/efr32/timer.rs
+  - crates/core/src/peripherals/efr32/usart_route.rs
+  - crates/core/src/peripherals/gpio.rs
+  - crates/core/src/peripherals/i2c.rs
+  - crates/core/src/peripherals/spi.rs
+  - crates/core/src/peripherals/stub.rs
+  - crates/core/src/peripherals/systick.rs
+  - crates/core/src/peripherals/uart.rs
+  - crates/core/src/peripherals/virtual_ble.rs

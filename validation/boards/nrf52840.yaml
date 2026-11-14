@@ -1,0 +1,660 @@
+id: nrf52840
+# 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
+# 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
+# 2026-09-15: Cortex-M JIT SysTick countdown clamp (`block_would_cross_irq`). ticks_until_fire math unchanged; consume_cycles is JIT-only and no-ops in scheduler mode. Interpreter/silicon path unchanged.
+# 2026-09-15 (#1120): Cortex-M wasm-JIT is opt-in (`cortex_m_jit_enabled` default off). Interpreter path unchanged; JIT-on vs off lockstep in cortex_m_jit_nrf_differential. No silicon capture pins JIT.
+# 2026-09-15 (#1119): PeripheralConfig gained irq_controller (None). No silicon-visible behaviour change.
+doc: docs/boards/nrf52840.md
+chip: configs/chips/nrf52840.yaml
+tier: silicon-verified
+offline_tests:
+  - "nrf52_conformance::conformance_sim (digest vs frozen 2026-06-09 capture)"
+  - "nrf52_mmio_diff / nrf52_gpio_conformance (sim halves)"
+silicon:
+  last_capture: 2026-08-09
+  probe: "ST-LINK V2 (V2J37S7, serial 48FF6B064884534929321087), openocd 0.12.0 hla_swd; nRF52840 FICR INFO.PART=0x00052840, DEVICEID 707dc298"
+  result: "re-captured live 2026-08-09 with NRF52_STRICT=1: ALL 11 hw-oracle suites pass — conformance, cpu_conformance, mmio 16/16, gpio, onboarding, power, spis_twis, timer_rtc, spim_easydma, full_register, ccm. NOT a second board: DEVICEID 707dc298 matches the 2026-06-09 baseline, so this is a re-read of the SAME part (unlike the C3/S3 re-captures, which were cross-board). The run was NOT clean on arrival and found three real defects, all fixed in this commit: (1) seven nrf52_* hw-oracle tests had not COMPILED since the 2026-07-18 bus consolidation removed the inherent SystemBus read_u32/write_u32 shadows — they build only under --features hw-oracle-nrf52, which CI never enables, so the 're-capture pending' ack pointed at a path that could not build; (2) mmio was 15/16, SPIM0 PSEL_MISO sim=0x0 vs hw=0x2E, because the serial-instance broadcast PSEL WRITES to both halves but dispatched READS to TWIM, which models only 0x508/0x50C; (3) SPIM PSEL.CSN (0x514) was missing from Nrf52SpiRegs entirely — corroborated present on silicon (wrote 0x2B, read 0x2B). Guarded going forward by a hardware-free unit test, serial_instance::psel_block_reads_back_while_disabled."
+# The UARTE model gained an EasyDMA TX path (STARTTX now reads the TXD buffer,
+# emits the bytes, and raises TXSTARTED/TXDRDY/ENDTX/TXSTOPPED) so an unmodified
+# nrfx console boots under the sim. Additive: the 2026-06-17 register sweep
+# (conformance/mmio/GPIO/POWER/SPIS/TWIS/RTC/TIMER) is unaffected. No live SWD
+# re-capture of the new TX register sequence was run this session (no bench
+# board); a UARTE TX live diff is tracked.
+# 2026-06-27: SAADC + PWM gained Tier-3 behavioral engines (real conversion /
+# duty output) for the coverage matrix. Additive and behavioral-only; the
+# 2026-06-17 register sweep is unaffected. No live SWD re-capture this session.
+# 2026-06-29: unified SPIM0/TWIM0 serial-instance mux (Nrf52SerialInstance) at
+# 0x40003000 replaces the generic spi0 chip-YAML entry. The 2026-06-17 register
+# sweep did not cover SPIM0/TWIM0 shared-MMIO behaviour (it tested SPIS/TWIS/
+# TIMER/RTC/POWER/GPIO). This is a new model for an untested path; additive
+# and validated by 6 offline unit tests (twim_path_reads_bme280_chip_id etc.).
+# 2026-06-30: four temporal/clock-domain fidelity fixes so an unmodified Zephyr
+# BME280 ztest now passes in-sim: (1) TWIM completion EVENTS/IRQ fire after a
+# physical-latency countdown (transfer_cycles) instead of the same tick as
+# TASKS_START; (2) TWIM TASKS_RESUME/SUSPEND made no-ops (only STARTTX/STARTRX
+# initiate); (3) Cortex-M no longer re-latches an NVIC pending bit the firmware
+# cleared via ICPR (is_nvic_irq_pending gate — kills a spurious double-ISR);
+# (4) nRF52 RTC counts on the 32.768 kHz LFCLK via an exact fractional
+# accumulator instead of the 64 MHz core clock. Behavioural timing/IRQ changes,
+# NOT register-reset-value changes: the 2026-06-17 register sweep (conformance/
+# mmio/GPIO/POWER/SPIS/TWIS/RTC/TIMER) is unaffected. The success-path BME280
+# read was NOT live-diffed on silicon this session (no BME280 wired to the
+# bench board — only the NACK/no-device path was captured 2026-06-30); a live
+# success-path TWIM+RTC re-capture is tracked.
+# 2026-07-04: modeled the legacy UART personality of UART0/UARTE0 — a byte
+# written to TXD (0x51C) is transmitted and EVENTS_TXDRDY (0x11C) is raised on
+# the same access, and TASKS_STARTTX no longer arms EasyDMA when ENABLE selects
+# legacy UART (=4). Unblocks the Adafruit/Arduino nRF52 core's blocking
+# Uart::write. Additive register behaviour on a path the 2026-06-17 sweep did
+# not cover (it exercised UARTE EasyDMA, not the legacy TXD shifter); the reset
+# sweep (conformance/mmio/GPIO/POWER/SPIS/TWIS/RTC/TIMER) is unaffected. No live
+# SWD re-capture of the legacy-UART TX sequence this session (no bench board).
+# 2026-07-10: bus-trace single-choke-point refactor (attach wraps at SystemBus::attach_i2c_slave/attach_spi_device; no per-callsite set_bus_trace) + cycle stamp on trace events + gpio_routing/pin_routing metadata. Additive; oracle output unchanged.
+# 2026-07-19: unified stimulus interface — every bus controller gained a
+# `for_each_attached_sim_input` impl (and TWIM/SPIM gained `as_any` +
+# attached-device accessors) so SimInput reaches devices without
+# downcasting. PURELY ADDITIVE: `git diff` over every model file listed
+# below shows 0 removed lines — no existing method body was modified, so
+# no register read/write path changed. Reset values, register layout and
+# byte paths are unchanged; the mmio/conformance diffs pass unchanged.
+# Drift is the shared-file commit date only. No live re-capture.
+# 2026-07-20: per-cycle-walk participation only. Six shared peripheral
+# models (gpio, stub, nrf52 timer/egu/temp/uarte) gained
+# `legacy_tick_active()` / `legacy_tick_dynamic()` overrides so peripherals
+# that do nothing are skipped by the legacy walk (nRF54L15 measured
+# 2.74M -> 5.09M IPS). PURELY ADDITIVE: `git diff origin/main..HEAD` over
+# those six files shows +12/+18 and **0 removed lines** — no existing method
+# body was touched, so no register read/write path, reset value or layout
+# changed. A peripheral is skipped ONLY in states where its `tick()` already
+# returned a default PeripheralTickResult (or where it overrides no tick at
+# all), and the bus re-arms the entry via `refresh_legacy_tick_index()` on
+# any MMIO write. GPIOTE was tried the same way and REVERTED — its tick()
+# detects IN edges rather than draining a queue, and
+# nrf52840_onboarding_gpiote_event_in_fires_on_edge caught it. Offline
+# oracle/mmio/conformance suites pass unchanged. No live re-capture.
+# 2026-07-21: GPIOTE now DOES opt out of the walk — but safely, unlike the
+# reverted attempt. `legacy_tick_active()` returns true whenever any queue
+# is non-empty (pending_gpio_writes / pending_in_events / pending_in_mask),
+# so it stays in the walk exactly when its tick() has an IN edge or GPIO
+# write to deliver, and drops out ONLY when genuinely idle (all queues
+# empty, tick() takes its no-op early return). NVIC also opted out (its
+# tick() is the trait-default no-op). PURELY ADDITIVE: +16/+11, 0 removed
+# lines — no register read/write path, reset value or layout touched.
+# EVIDENCE it is byte-identical: nrf52840_onboarding_gpiote_event_in_fires_
+# on_edge (the exact test that caught the reverted attempt) passes, and all
+# cross-chip walk-vs-scheduler byte-identical differentials pass (82 walk
+# tests + f401/h563/l073/l476 Zephyr-boot). No live re-capture required.
+# 2026-07-22: BLE virtual air moved from a process-static (static AIR) to an
+# injected VirtualAirBus handle each Nrf52Radio holds. Nrf52Radio::new() (what
+# the factory builds) binds a transitional process-global bus, so existing
+# behaviour is byte-identical: cross_instance_via_virtual_air and
+# nrf52840_ble_loopback_through_virtual_air pass UNCHANGED. No register
+# read/write path, reset value or layout touched — drift is the shared nrf52
+# file commit date only. No live re-capture.
+# 2026-07-24: IR-component-engine retirement (phase B) removed the dead
+# `type: ir` SPI escape-hatch branch from nrf52/factory.rs. No register
+# read/write path, reset value or layout touched — drift is the shared nrf52
+# file commit date only. No live re-capture.
+# 2026-07-27: configs/chips/nrf52840.yaml corrected three NVIC numbers against tests/fixtures/real_world/nrf52840.svd — PDM 31->29 (31 is unassigned), PWM1 29->33 (29 was PDM's vector), PWM2 30->34 (30 is unassigned) — surfaced by the new SVD conformance gate. Numbers only; no peripheral model, register layout or base address changed, and the ACL / GPIO P1 base deviations were reviewed and left as recorded modelling limitations rather than silently 'fixed'. Evidence re-run on this commit: full cargo test -p labwired-core green, including this board's conformance, onboarding and firmware_survival cases. No live re-capture.
+# 2026-07-31: I2C transaction dispatch in nrf52/twim.rs gained `claims_address` /
+# `select_address` hooks so a bus switch (TCA9548A) can answer for addresses
+# reachable behind an enabled channel. The DEFAULT `claims_address` is
+# `self.address() == addr` — the exact predicate the previous
+# `position(|d| d.borrow().address() == addr)` lookup used — so every existing
+# device dispatches byte-identically; only the switch overrides it. No register
+# read/write path, reset value, layout or base address changed. Evidence re-run
+# on this commit: full `cargo test -p labwired-core` green, 82 test binaries, 0
+# failures. No live re-capture.
+# 2026-07-30: crates/core/src/peripherals/nrf52/rtc.rs gained a `tick_elapsed_forced` override. Under `event-scheduler` the RTC's `tick` no-ops and the counter advances only from the bus-published cycle clock, which the bare-CPU forced walk freezes — so RTC0 could never reach its compare and nrf52840_onboarding_rtc0_fires_compare_and_pends_irq failed under `cargo test --workspace`. The override restores the legacy one-tick-per-bus-tick advance on that oracle-only path and carries `anchor` with it so no cycle is replayed. No register layout, base address or reset value changed, and the production event chain (take_scheduled_events / on_event) is untouched — this path is never reached from Machine execution, so nothing the 2026-06-17 capture asserts can move. Evidence: full `cargo test --workspace --lib` green, this board's conformance/onboarding/firmware_survival cases green, and the feature-off path unchanged at 2423 passed. No live re-capture.
+# 2026-07-30: configs/chips/nrf52840.yaml gained a 4KB zero-filled `nrf_errata_probe` memory region at 0xF0000000 (#708), so the Nordic nRF5 SDK / ArduinoCore-nRF5 errata probes that read 0xF0000FE0 stop recording unmapped_mmio. MEMORY MAP ONLY: no peripheral model, register layout, base address or reset value changed, and that window was previously UNMAPPED — it is not part of the 2026-06-17 asserted set (conformance 16/16, mmio 16/16, GPIO P0/P1, POWER/SPIS/TWIS/RTC0/TIMER0 sweeps all sit in the 0x4000_0000/0x5000_0000 peripheral space), so no captured value can move. The zero fill is a RECORDED MODELLING LIMITATION, not silicon parity: real die returns a package/rev fingerprint there, and zeros make the probe read 'not this rev' rather than have the sim invent a fingerprint it has never captured off the bench. Same pattern already carried by configs/chips/nrf52832.yaml. A live re-capture is still owed for the fingerprint window itself, but not for the drifted claim. No live re-capture.
+# 2026-07-31: I²C slave resolution changed from a flat `d.address() == addr`
+# first-match to `d.claims_address(addr)` plus a `select_address` hook at the TWIM
+# dispatch sites in crates/core/src/peripherals/nrf52/{twim,factory}.rs (#720), so
+# a TCA9548A bus switch can route for itself. DISPATCH ONLY: both hooks are
+# defaulted on the `I2cDevice` trait — `claims_address` defaults to
+# `self.address() == addr` and `select_address` to a no-op — so with no mux on the
+# bus the resolution is byte-identical to the code it replaces. No TWIM register
+# layout, base address, reset value or EasyDMA read/write path moved, and slave
+# selection is not part of the 2026-06-17 asserted set (conformance 16/16, mmio
+# 16/16, GPIO P0/P1, POWER/SPIS/TWIS/RTC0/TIMER0 sweeps), so no captured value can
+# move. Evidence: the new per-family mux coverage drives a real EasyDMA
+# transaction through this controller and passes unchanged. No live re-capture.
+# 2026-08-03: ⚠ REAL MODEL CHANGE, not metadata. `spi2` in configs/chips/nrf52840.yaml had NO `config.profile`, and every *RegisterLayout derives Default = STM32 — so this nRF52840 SPI peripheral was being modelled with the STM32 SPI register map, silently. It now states `profile: "nrf52_spim"` and gets the Nordic SPIM layout (#753). This can only move values TOWARD silicon (the previous layout was the wrong vendor's), and SPI2 is not in the 2026-06-17 asserted set — that capture covers conformance 16/16, mmio 16/16, GPIO P0/P1 and POWER/SPIS/TWIS/RTC0/TIMER0 sweeps, none of which touch SPIM2 @ 0x40023000. But this is a fidelity change and a live SPIM2 re-capture IS owed; acking so the gate tracks it rather than hiding it. Same board also gained debug_schema entries (metadata only, see the note pattern on the other boards). Evidence: all 249 nrf52 tests green.
+    # 2026-08-05: additive RX + NVM control changes. UARTE gains an RX injection
+# queue with EasyDMA drain (RXD.PTR/MAXCNT/AMOUNT/ENDRX) and legacy RXD pop;
+# NVMC gains Wen gating (flash stores drop without it, commit 1->0 AND) and
+# real ERASEPAGE/ERASEALL/ERASEUICR drained at the instruction boundary;
+# UICR gains erase() and both models implement as_any (their absence made
+# downcast lookups silently no-op). No reset-state readback, no TX path and
+# no swept register in the 2026-06-17 asserted set moves: UARTE TX is
+# untouched, NVMC reset reads (READY=1 etc.) are unchanged, and the new
+# behaviors only fire on firmware actions (STARTRX, flash store, erase
+# request) that no capture performs. Evidence: 263 nrf52 tests + 7 new
+# nvmc tests green. Live re-capture owed for the RX drain timing.
+# 2026-08-06: universal I2C kits + external_devices attach path; nRF UARTE RX test style only.
+# No register map / base / reset change on silicon-asserted set. Offline gates unchanged.
+# 2026-08-07: nRF52 GPIOTE `observe_gpio_change` now REPORTS whether it latched an
+# edge (return type only — the channel/polarity matching logic is byte-identical),
+# and the bus stopped seeding its GPIO edge baseline at zero, so a level the
+# outside world already holds is no longer a phantom rising edge at cycle 1. No
+# register map, base address, reset value or readback in the 2026-06-17 asserted
+# set moves; the only observable delta is a GPIOTE EVENTS_IN that used to latch
+# with no contact having moved. Offline gates unchanged. Live re-capture still
+# owed for the RX drain timing.
+# 2026-08-07: RADIO air-time accounting — a packet's air time now ends at its
+# computed deadline instead of at the first wake that happens to land inside
+# it. Scheduling behaviour, not silicon surface: no register in the asserted
+# 16/16 sweep changes address, reset value or access, and no base moves.
+# Owner-authorised ack WITHOUT a live re-capture; the RADIO packet-timing
+# live diff remains owed and is NOT evidenced by this entry.
+# 2026-08-08: TIMER scheduler re-arm dedup (#861). `take_scheduled_events`
+# kept minting a fresh arming token on every drain, which runs after every
+# MMIO write; since scheduler dedup keys on (peripheral, token, deadline),
+# a poll loop left one far-future compare wake resident per poll until the
+# live-event ceiling tripped. The token now holds steady when a re-arm
+# targets the instant already in flight. Scheduler bookkeeping, not silicon
+# surface: no register in the asserted 16/16 sweep changes address, reset
+# value or access; counter width/BITMODE masking, prescaler division,
+# CC compare matching, SHORTS and EVENTS_COMPARE latching are all untouched,
+# and TIMER0's 16/0 sweep re-runs green. Acked WITHOUT a live re-capture —
+# no TIMER live diff is evidenced by this entry.
+# 2026-08-09: RNG byte production now stops while a byte sits unread in
+# VALUE. BEHAVIOURAL, not additive — the diff is +21/-0 in nrf52/rng.rs and
+# removes no line, but it changes WHEN bytes are produced: the model used to
+# keep generating for every BYTE_PERIOD a batch covered, overwriting VALUE
+# and handing firmware only the last one. Real silicon free-runs and a slow
+# reader does miss bytes, so this is a deliberate divergence: on silicon the
+# pacing is the chip's, in the sim it was the host's batching choice, and no
+# firmware-visible sequence may depend on that. The byte SEQUENCE is
+# unchanged (same xorshift32 chain from the same seed, one byte per byte
+# read); only production timing moves.
+#
+# No register address, reset value, access or layout changes, and the
+# asserted 2026-06-17 sweep does not cover RNG at all — it is
+# conformance/mmio/GPIO/POWER/SPIS/TWIS/RTC0/TIMER0 plus SPIM0/CCM. Acked
+# WITHOUT a live re-capture (no bench board); an RNG live diff is owed and is
+# NOT evidenced by this entry.
+# 2026-08-09 census ack: the silent-path census adds `census_reg!(..)` to the
+# catch-all arms of peripheral read/write. With `default = []` the macro
+# expands to `()`, so every default build compiles to exactly the code that
+# was captured — the source digest moved, the model did not. Accepted by
+# Andrii without a live re-capture; no new silicon diff is evidenced here.
+# 2026-08-10: rides the logic-analyzer wire-channel contract. This board's models gained ONLY
+# the two additive accessors line_names() and wire_lines(); the diff across
+# crates/core/src/peripherals/{nrf52,esp32c3,esp32s3,rp2040} is +72 lines and ZERO deletions, so
+# no existing code path was altered. The source digest moved; the model did not. No live
+# re-capture is evidenced here.
+# 2026-08-10 UARTE BAUDRATE reset correction. Unlike the acks above this is
+# NOT digest-only churn: it changes a RESET VALUE the model answers with.
+# UARTE BAUDRATE reset was 0x01D7_E000 (Baud115200); silicon resets it to
+# 0x0400_0000 (Baud250000) per nRF52840 PS v1.11 §6.34.9.27 p847, and p830
+# for the legacy UART. The old value was the engine's invention, so the
+# register sweep in the 2026-06-17 capture recorded 115200 only because the
+# model said so — a live re-read of BAUDRATE at reset is exactly what would
+# settle it, and no bench board was available this session.
+#
+# Accepted because the datasheet is unambiguous and cited, the change is
+# confined to the reset constant plus the zero-BAUDRATE fallback that
+# already referenced it, and firmware that sets BAUDRATE before use (all of
+# ours) is unaffected. A live UARTE re-capture is tracked with the UARTE TX
+# diff already noted above; whoever runs it should read BAUDRATE at reset
+# first, because that single register is the whole claim here.
+#
+# 2026-08-09: a bench board WAS attached and all 11 suites re-ran live (see
+# silicon.result), so the ack is discharged. One caveat it raised survives
+# the discharge: RNG is still not covered by any asserted sweep. That is a
+# COVERAGE gap, not a drift gap — re-capturing cannot close it, only adding
+# an RNG oracle can. Do not read "fresh" as "RNG is validated".
+#
+# Merged 2026-08-10: the discharge recorded above applies to the tree as it
+# stood at that live capture. The acks below cover model changes that
+# postdate it and are NOT evidenced by that capture.
+# 2026-08-13 (#962): the chip descriptor now declares the clock its core
+# runs at (`ChipDescriptor::cpu_hz`), which moved every configs/chips/*.yaml
+# and this board's digest with them. NOTHING THIS CAPTURE PINS MOVED: the
+# field is declarative and no peripheral model reads it — the ESP/nRF
+# peripherals keep their own CPU_CLOCK_HZ constants, and a new test
+# (cpu_hz_single_source) asserts the descriptor agrees with them rather
+# than replacing them. What consumes the clock is the external-device
+# attach path (DHT22, HC-SR04, rotary encoder, WS2812), and no silicon
+# capture covers any of those. No live re-capture owed for this change;
+# any re-capture already owed above still is.
+# 2026-08-21 (CPU): `cpu/cortex_m.rs` — a CORRECTNESS FIX, not a
+# refactor, and it changes what firmware does. The nine 16-bit T1
+# data-processing encodings ADC/AND/BIC/EOR/MUL/MVN/ORR/RSB/SBC set flags
+# unconditionally; their `setflags` is `!InITBlock()`. Leaking them
+# corrupted the CONDITION of every instruction still to run in the same IT
+# block. Measured on real gcc output: an `orrls` before a `strls` in one
+# `itt ls` cleared Z, so the store never ran and a peripheral register was
+# silently never written. LSL and the arithmetic forms already carried the
+# guard (with a note citing an earlier H563/WBA52 regression); these nine
+# did not.
+#
+# Why no re-capture is owed: what this board's capture PINS is a cold-reset
+# REGISTER dump, not an execution trace, and no register's reset value
+# moved. The behaviour gates that DO execute firmware — firmware_survival
+# (61 passed), board_io_button_stimulus, the tier-1 suites — are unchanged
+# by it. A future live re-capture should agree BETTER than the last one,
+# since the CPU now runs IT blocks the way the silicon that produced the
+# capture does.
+#
+# Re-stamped again for the EFR32 silicon capture work: `i2c.rs` gained a
+# `txc` and a `bus_idle_known` field and corrected `STATE`/`STATUS`/`IF`
+# reset values — ALL inside `Efr32s2I2c`, whose variant these boards never
+# construct. The STM32 arms are untouched; only the file's digest moved.
+#
+# Digest re-stamped the same day for a follow-up commit that is TEST-ONLY:
+# a `!(x == 1)` simplification in the IT-block test itself, a feature-gated
+# match arm in i2c.rs, and a doc comment moved back onto the enum it
+# documents in spi.rs. No executable path moved, so nothing above changes.
+#
+# Re-stamped 2026-08-22 a THIRD time, for GPIO_TIMERROUTE. The shared
+# pad-claim table moved out of the Nordic module (`NrfPinClaims` is now an
+# alias for `PadClaims`) and `GpioPort`'s claim field was generalised, so
+# `gpio.rs` and the nRF files moved. ⚠️ Behaviour on these boards is
+# unchanged: the nRF52 pad tests, the STM32 AFR path and every `bus_
+# visibility` row pass untouched — an STM32 pad still answers from its own
+# AFR nibble and never consults a claim table.
+#
+# Re-stamped 2026-08-22 AGAIN, for the EFR32 I²C/SPI wire narration: both
+# `i2c.rs` and `spi.rs` gained a `PadLines` cell and a narrator call on the
+# `Efr32s2*` arms, plus `Efr32s2SpiRegs` fields. The STM32 arms are
+# untouched, these boards never construct the EFR32 variants, and the STM32
+# waveform gates (`stm32h5_reset_values_match_silicon`, the L4 I²C
+# narration tests, `bus_visibility` for every stm32 row) pass unchanged.
+#
+# Re-stamped 2026-08-22 for the EFR32MG26 reset-value corrections. `i2c.rs`
+# and `spi.rs` both moved, and both edits are confined to their `Efr32s2*`
+# arms: the I2C IPVERSION constant, and in spi.rs a hand-written `Default`
+# for `Efr32s2SpiRegs` plus a `txc` flag so `STATUS` stops asserting TXC
+# before anything has been transmitted. `SpiRegs::Stm32*` and the STM32 I2C
+# layouts are not touched — these boards never construct the EFR32 variant,
+# and the STM32 reset-value tests (`stm32h5_reset_values_match_silicon`,
+# `test_i2c_reset_values`) pass unchanged.
+#
+# Re-stamped 2026-08-22 for explicit wrapping ops on GUEST arithmetic.
+# `cortex_m.rs` and `riscv.rs` replace `+`/`<<` with `wrapping_add`/`wrapping_shl`
+# at sites where the guest ISA specifies modulo-2^32 behaviour: exception entry
+# and return stacking (`frame_ptr + 4..32`), branch target `pc + 4 + offset`,
+# `vtor + n*4`, the BL link address, and the RISC-V vectored trap base and
+# SLLI/SRLI/SRAI shifts (shamt is masked to 5 bits at decode).
+#
+# `a + b` and `a.wrapping_add(b)` differ ONLY when the op overflows, which under
+# `overflow-checks = true` was a PANIC, never a wrong value. So no silicon-anchored
+# register can have moved: every input that used to produce a number still produces
+# the same number. Four inputs that used to CRASH the simulator now wrap the way the
+# part does — see the four new tests (`armv7m_exception_entry/return_wraps_the_stack
+# _frame`, `armv7m_branch_wraps_at_the_signed_pc_boundary`,
+# `riscv_vectored_trap_wraps_at_the_top_of_the_address_space`). Confirmed by
+# restoring one site to `+`: it panics at cortex_m.rs:1367 `attempt to add with
+# overflow`.
+#
+# Ran: labwired-core --lib 3260 pass / 0 fail, and nrf52_timer_walk_differential,
+# stm32f401/stm32l476_walk_differential, kw41z_walk_free_differential. This is an
+# ack, not a capture — no live re-capture was made.
+# Re-stamped 2026-08-22 for the EFR32 walk-free migration. Two files these
+# boards watch moved, and neither moves a register they anchor:
+#
+#   * `i2c.rs` — `scheduler_mode()` was hardcoded false for the SHARED model.
+#     Now switchable; the STM32 arms keep the walk-driven mode they had, pinned
+#     by `the_efr32_i2c_drive_mode_is_switchable_in_both_directions`.
+#   * `bus/routing.rs` — the per-cycle GPIO-edge pass was guarded by a peripheral
+#     NAMED `gpio0`/`gpio1`, a Nordic spelling. The guard now also asks
+#     `Peripheral::observes_gpio_edges()`. The change is additive (`||`), so no bus
+#     that ran the pass can stop running it; it only reaches parts that letter
+#     their ports. On an EFR32 the fast path would otherwise have deleted the only
+#     route from a pad movement to an EXTI line — a button press latching nothing.
+#
+# `nrf52/gpiote.rs` gains only the `observes_gpio_edges()` override that keeps the
+# Nordic behaviour explicit rather than name-derived.
+#
+# Ran: labwired-core --lib, nrf52_timer_walk_differential, stm32f401/stm32l476
+# walk differentials, bus_visibility and logic_wire_channels_cross_family under
+# (none) / event-scheduler / jit,event-scheduler. This is an ack, not a capture.
+# 2026-09-17 (#1142): no model change. The inline `#[cfg(test)] mod tests`
+# blocks were moved out of 13 model source files (spi.rs, i2c.rs, tick.rs,
+# cortex_m.rs, esp32c3/{i2c,bt,virtual_wifi}.rs, esp32s3/gdma.rs, ...) into
+# sibling `*_tests.rs` files. Production code is byte-identical apart from the
+# removed test block and a 3-line `#[path]` module declaration; per-file
+# `#[test]` counts before and after match exactly. The digest moves because
+# it hashes the whole file. This is an ACK, NOT A CAPTURE — a live
+# re-capture is still owed.
+# 2026-09-18 (STM32U575 onboarding branch): re-acked. Watched CPU content
+# moved after the previous 2026-09-15 digest:
+#   * crates/core/src/cpu/cortex_m.rs + crates/core/src/decoder/arm.rs —
+#     ARMv7-M 32-bit shift flag semantics. 8fc10178 makes register-form
+#     LSRS.W/LSLS.W/ASRS.W/RORS.W set NZ/C from the barrel shifter (ShiftReg32
+#     now carries the decoder's S bit); 8313957c makes immediate-shifted
+#     logical operands take the shifter carry-out when S=1; 2a795d09
+#     implements RRX (ROR #0) as rotate-through-carry with carry-out Rm[0].
+#     This is a REAL
+#     interpreter-semantics change for firmware executing those encodings.
+# No other watched path moved on the branch: crates/core/src/peripherals/nrf52/
+# and configs/chips/nrf52840.yaml are byte-identical to the 2026-09-15 tree.
+# Ran: cargo test -p labwired-core --lib (3545 passed, 0 failed) on this
+# branch; no live re-capture was run. The digest is re-stamped over the
+# rebased tree, which also carries main's #1142/#1182/#1184 CPU+decoder
+# refactors and the perf passes above. This is a RE-ACK with rationale, not a
+# capture.
+# 2026-08-22: the Thumb-2 decoder gained SMLABB/BT/TB/TT and SMULBB/BT/TB/TT
+# (ARMv7-M A7.7.166/171). They were UNDECODED, which in this core means a
+# silent no-op — `digitalWrite` on EFR32MG26 computes its port base with
+# SMLABB and was writing to a garbage address, so blink did not blink.
+# Purely additive: one new `else if` in decoder/arm.rs and one new match arm
+# in cortex_m.rs; `git diff` removes no existing line, so every encoding that
+# decoded before decodes identically now.
+# ⚠ MEASURED, NOT ASSUMED, because a newly-decoded instruction genuinely does
+# change behaviour for firmware that executes it — this is the one drift note
+# in this file where "additive" is not by itself an argument. All 96 committed
+# ELF fixtures were disassembled: exactly ONE contains the family, the
+# `smulbb r0, r1, r0` divide-by-3 in
+# crates/wasm/tests/fixtures/firmware-l476-bldc-six-step.elf, and its committed
+# golden trace (crates/wasm/tests/fixtures/motor-parity-native.json) still
+# matches. No other pinned firmware on any board reaches the encoding, so
+# nothing a silicon capture asserts moved. No live re-capture is evidenced here.
+# 2026-09-17 (perf/bus-scheduler-pass): per-instruction COST only, no model
+# change. Three edits: `CortexM::step_execute` asks "is anything pending"
+# before ranking exceptions (the ranking it now skips returned `None`, and
+# the `exception_num != 0` arm already made the block dead); `SystemBus`
+# negative-caches the hole between `extra_mem` windows, which an access
+# wholly inside provably misses; and `RiscV` remembers an aligned fetch
+# window base whose refill just failed instead of re-deriving the same
+# failure every instruction (the fetch still falls through to
+# `bus.read_u32`, the path it was already taking). No register map, reset
+# value, timing or IRQ route is touched.
+# EVIDENCE: seven runs of five firmwares at --max-steps 5000000 (nrf52840
+# Zephyr step+batch, nrf52840 tier1, stm32f405 tier1 step+batch, esp32c3
+# tier1, esp32c3 demo) hash 21/21 IDENTICAL over stdout, the cycle-stamped
+# `--bus-trace-out` event list and the `[batched]` summary, against a
+# binary built from 80c01390d. The digest moves because it hashes whole
+# files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+# 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
+# top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
+# 2026-11-01 (#1603 review): word LDREX/LDAEX now open the shared local
+# exclusive monitor and STREX/STLEX consume it (fail with Rd=1 and no store
+# when it is not intact), matching the sub-word forms. ACK, NOT A SILICON CAPTURE.
+# 2026-11-01 (feat/rp2350-dcp): cortex_m.rs/exec/misc.rs dispatch p4/p5
+# coprocessor instructions to the RP2350 DCP model ONLY when the chip
+# declares `coprocessors: [rp2350_dcp]`; with none declared (every chip
+# here) they stay UNDEFINED exactly as before. ChipDescriptor/SystemBus gain
+# the empty-by-default coprocessor list. ACK, NOT A SILICON CAPTURE.
+# 2026-11-01 (feat/rp2350-dcp, perf): DCP state moved off CortexM onto the
+# bus (Bus::rp2350_dcp_mut, default None) and its dispatch made cold and
+# out of line; no change for chips without a DCP. ACK, NOT A SILICON CAPTURE.
+drift_ack_digest: 219f135fe825720f1a2d73e667837512f1fb1f5cbbc2f46eacf747d7dcfc1106
+# 2026-09-18: no execution change, step_execute arm bodies moved verbatim into cpu/cortex_m/exec/*; perf gate within noise; ACK, NOT A CAPTURE
+models:
+  - crates/core/src/cpu/cortex_m.rs
+  - crates/core/src/cpu/cortex_m/exec
+  - crates/core/src/decoder/arm.rs
+  - crates/core/src/decoder/arm_thumb32.rs
+  - crates/core/src/peripherals/nrf52
+  - configs/chips/nrf52840.yaml
+
+# 2026-09-18: decode_thumb_32 split into per-encoding-group functions in a new
+# crates/core/src/decoder/arm_thumb32.rs. Pure refactor: all 43 encoding blocks
+# moved verbatim (same masks, same field extraction, same order); decode_thumb_32
+# calls them in the original order. Exhaustive differential over h1=0xE800..=0xFFFF
+# and h2=0x0000..=0xFFFF (402,653,184 inputs) matched the pre-split reference
+# exactly. No decode change. This is an ACK, NOT A CAPTURE — a live re-capture
+# is still owed.
+# 2026-09-20 (#1205): recover 26 Cortex-M DSP multiply variants, repair
+# SMLA sticky Q overflow, and fault unsupported FBxx multiplies rather
+# than silently treating them as branches. GNU-assembled opcode evidence
+# and standalone decoder/arithmetic regressions; full-core checks in PR CI.
+# This is a content drift ACK, NOT a silicon capture. Re-capture remains
+# pending; silicon dates/digests are unchanged. Scope/details:
+# docs/architecture/cortex-m-dsp-recovery.md.
+# 2026-09-21: Cortex-M hot-loop batching and the FLASH-op batch watch
+# (cpu/cortex_m.rs, bus/policy.rs). Execution scheduling and a batch
+# end-condition only — no register, reset value or programming
+# semantics moved, so nothing this board's silicon anchor asserts is
+# reachable from it. ACK, NOT A CAPTURE.
+# 2026-09-24 (#1230): bkpt #0xAB serves semihosting on the Cortex-M
+# execute path (WRITEC, WRITE0, WRITE, READ, EXIT). Watched
+# cortex_m.rs and cortex_m/exec moved. No register map, reset value,
+# or peripheral programming model on this board changed.
+# ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
+# 2026-09-25: DHCSR halt. Fetch stops when C_DEBUGEN and C_HALT are set
+# through the debug port. Watched cortex_m.rs moved. No register map,
+# reset value, or peripheral programming model on this board changed.
+# 2026-09-25: Cortex-M step loop publishes the cycle with one bus call
+# (`advance_cycle`) instead of a read plus a write of the same number.
+# Watched cortex_m.rs moved. No register map, reset value, or peripheral
+# programming model on this board changed.
+# ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
+# 2026-09-28: Cortex-M fixes found running NXP i.MX RT1052 firmware. 16-bit
+# ADD/MOV with a high register read PC as insn+4 (the ARMv7-M PC read rule;
+# an old lockstep test asserted the wrong value), ADD PC,Rm branches, IT state
+# kept across exception return, FPv5 VFP forms decoded. No register map, reset
+# value, or peripheral programming model on this board changed.
+# ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
+# 2026-09-28 (#1259): speed only. The supply check runs once per advance
+# before the step loop, not inside it, and the IT-state-restored flag is
+# written only for IT-block instructions. Same behaviour; watched
+# cortex_m.rs and machine/advance.rs moved. No register map, reset value,
+# or peripheral programming model on this board changed.
+# ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
+# 2026-09-28: Cortex-M fault verdict. The CPU now records the first fault-handler
+# entry (stacked frame + EXC_RETURN) and LOCKUP for `fault_verdict::decode_fault`,
+# observation only; and SDIV/UDIV by zero raise UsageFault(DIVBYZERO) when firmware
+# sets CCR.DIV_0_TRP (off at reset, so no existing firmware changes behaviour).
+# No register map, reset value, or peripheral programming model changed.
+# ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
+# 2026-09-29: GPIOTE fidelity (nRF52 GPIOTE PS §6.9). A CONFIG write in
+# Task mode now drives the pin to OUTINIT at once, and a Task-mode channel
+# owns its pad through the nRF pin-claim table (wire_nrf52_pads), so the pad
+# reads the GPIOTE level whatever the port's DIR/OUT say. GPIOTE latches
+# only its own pin's IN bit (engine-internal per-pin op in the reserved
+# GPIO space) instead of a whole IN word from a zeroed shadow, which had
+# reset every other pin's latched external level. No register map or reset
+# value changed. Pinned by gpiote unit tests, gpio nrf52_pad_latch_tests and
+# tests/microbit_v2_led_matrix.rs (real CODAL V2 LED matrix checked by a
+# local probe). ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
+# 2026-09-30: undriven nRF inputs follow PIN_CNF.PULL (an external driver
+# and an output still win). load_firmware keeps a UICR record that was
+# already programmed. UARTE raises ENDTX and TXSTOPPED. NVMC erase uses
+# the chip page size; nRF52 stays 4 KiB. SYSRESETREQ restores the boot
+# VTOR and clears NVIC, SysTick and SCR/SHPR; peripheral models are not
+# reset. Cortex-M also executes LDREXB/LDREXH, STREXB/STREXH, VCMP/VCMPE,
+# VMRS/VMSR, VABS/VNEG/VSQRT/VNMUL and ADR.W.
+# ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
+# 2026-09-30: spin-loop coalescing. Cortex-M retires a terminal branch and a
+# volatile store-spin in one step; AVR does the same for inc/rjmp; RISC-V
+# and Xtensa collapse a plain store-spin into one write; a stable ESP32-C3
+# UART status poll repeats without taking the lock. The recommended
+# scheduler interval is 1024. An nRF52 TIMER compare moved later keeps the
+# wake already in flight instead of stacking another. No register map or
+# reset value changed.
+# ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
+# 2026-09-30: Cortex-M drops a cached decode when a store rewrites those
+# bytes, and VLDR/VSTR literals use Align(PC+4, 4). No register map or
+# reset value changed.
+# ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
+# 2026-09-30: nRF52 UARTE waits one framed byte per character after the
+# stop bit. Legacy TXDRDY and EasyDMA both use that delay. A zero-length
+# EasyDMA arm still completes on the next cycle. The nRF54 wake stays
+# immediate, shared with the RX poll and the IRQ edge. Feature-off counts
+# the legacy byte down in the bus tick. No register map or reset value
+# changed.
+# ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
+# 2026-10-05: Cortex-M LDRD (literal) — `ldrd rt, rt2, [pc, #imm]` now reads
+# from Align(PC + 4, 4) + imm (A7.7.50) instead of the bare instruction
+# address, the rule vfp_literal_base already applies to VLDR. No other
+# instruction, register map or reset value changed. Pinned by
+# test_ldrd_literal_base_is_aligned_pc_plus_4. ACK, NOT A CAPTURE.
+# 2026-10-05 (later): fork intake (micro:bit V2 / PyBadge). Cortex-M T16
+# fast-block discovery stops searching backward at the first entry that
+# cannot join a block; a miss falls back to the interpreter, so only
+# discovery cost changes (t16_discovery_tests). nRF52 GPIO's private pad
+# latch moves 0xFF0 -> 0x7F0 (reserved space, also inside the compact
+# nRF52833 P1 window); nRF52 PWM drives its duty onto the pad and
+# PSEL.OUT resets Disconnected; SAADC scan appends per START. Review fixes
+# on top: PWM COUNTERTOP resets 0x3FF and SEQ[n].REFRESH 1, STOP cancels a
+# SEQSTART not yet serviced; SAADC samples VDDHDIV5 and completes
+# CALIBRATEOFFSET; feature-off PWM ticks a playing waveform only when pad
+# lines are wired. Then the fork's Cortex-M speed work (#134 discovery
+# memo, #136 countdown coalescing, #143 probe selection) and its Nordic
+# GPIO pull/snapshot fast paths (#137), each with unit tests asserting
+# identical retirement; full core lib green in both scheduler modes. No
+# STM32 peripheral model changed. ACK, NOT A CAPTURE.
+# 2026-10-06: Cortex-M widened batches now end once an event armed by a
+# write in the batch is due (RISC-V's Gap #1 cut), and T16 fast-path chunks
+# stop before it. Instruction semantics, register maps and reset values are
+# unchanged; only WHEN a batch returns to the scheduler moves (earlier, to
+# the event's own cycle). Pinned by arm_batched_path
+# batched_transcript_keeps_pace_at_intermediate_cutoffs. ACK, NOT A CAPTURE.
+# 2026-10-10: watched Thumb decoder (decoder/arm_thumb32.rs). VMOV between
+# two core registers and a D/S pair (P=0,U=0 extension load/store space)
+# now decodes as a register move; it used to run as a 16-word VSTM/VLDM
+# below Rt2 (STM32duino 3 Serial.print(float) BusFault on L476/F401).
+# VLDM/VSTM/VPUSH/VPOP decode unchanged. No register map or reset value
+# changed. No physical probe connected. ACK, NOT A CAPTURE.
+# 2026-10-11 (#1360 gpio-net scheduler): CPU batch loops (Cortex-M, RISC-V,
+# shared loop, AVR fill) now end a batch on a net-pad write so the world
+# scheduler can stop a node at its own drive change; logic capture and
+# machine world hooks gained a read-only idle query. No register map, reset
+# value or instruction semantics changed; pinned by the lockstep-vs-scheduler
+# equivalence tests. Approved by the maintainer. ACK, NOT A CAPTURE.
+# 2026-10-11 (#1367 nRF52 buses over nets): nRF serial instance, shared SPI wire
+# engine, bus pad-claim bracket and Machine::drive_gpio_input changed for SPIM/SPIS/
+# TWIM/TWIS over gpio nets. No register map or reset value of this board changed.
+# Pinned by world_gpio_net_buses. Approved by the maintainer. ACK, NOT A CAPTURE.
+# 2026-10-15 (#1384 hardware NSS/CSN on gpio nets): bus/attach.rs gives L476 SPI
+# NSS pads and G474/WB55/L073 their own SPI pad tables; nRF52840 gains SPIM3
+# (CSN, CSNPOL, IFTIMING.CSNDUR, DCX) at 0x4002F000; spi.rs keeps an nRF net
+# transfer in the bus-tick set. No register map or reset value of this board
+# changed. Pinned by world_gpio_net_buses. Approved by the maintainer. ACK, NOT A CAPTURE.
+# 2026-10-16 (#1394 nRF SysTick): configs/chips/nrf52840.yaml gains the Cortex-M
+# core SysTick block at 0xE000E010 (16B). It was missing, so Arduino and Zephyr
+# firmware faulted on its first SYST_CSR write. Core PPB peripheral only: no
+# nRF52 vendor register map, base address or reset value changed, and nothing in
+# the 2026-08-09 asserted set (0x4000_0000/0x5000_0000 peripheral space) can
+# move. Pinned by chip_cortex_m_systick. Approved by the maintainer.
+# ACK, NOT A CAPTURE.
+# 2026-10-16 (fork #242): core-local reset guest and 38 affected caller
+# cases passed; reset mask/IT/xPSR/LR semantics changed. ACK, NOT a
+# physical capture. Preserve the existing acknowledgement age; physical
+# re-capture is owed.
+# 2026-10-16 (fork A10 / PR244+PR247): source-built UARTE stack-reuse and
+# ENDTX/STOPTX guest passed under the scheduler; UARTE buffer capture and
+# configured local PPI / nRF5340 DPPI stop routing changed. Physical
+# re-capture remains owed. ACK, NOT A CAPTURE.
+# 2026-10-17, labwired-core#1413: the shared Cortex-M core (cortex_m.rs)
+# ends a CPU batch on a device access when the machine asks for exact
+# batch boundaries (the hosted `labwired test` fast path). It changes no
+# register, reset value or readback; tests/hosted_fast_cortex_m_exact.rs
+# compares result.json with the fast path on and off. ACK, NOT A CAPTURE.
+# Same day, the follow-up PR: cortex_m.rs (+ new cortex_m/poll_loop.rs)
+# skips proven fixed-point poll loops. No register, reset value or
+# readback changes; tests/cortex_m_poll_loop_skip.rs compares result.json
+# with the skip on and with no skip at all. ACK, NOT A CAPTURE.
+# 2026-10-17: test-suite trim — test-module-only edits inside this board's
+# listed model sources (consolidated shared suites/macros; no production-path
+# behaviour change). ACK, NOT A CAPTURE.
+# 2026-10-18, labwired-core#1423 read-only memory regions: shared bus and
+# Cortex-M core sources gained the `cpu_writes` store gate (chip YAML
+# `flash:`/`ram:` policy; default `allow` is byte-identical), violation
+# PC/cycle stamping, and a JIT refusal while a non-default RAM policy is in
+# force. No register map, reset value or default-config readback changes;
+# pinned by readonly_flash_e2e and the determinism guard.
+# ACK, NOT A CAPTURE — physical re-capture remains owed.
+# 2026-10-18, A3 (GDB conformance, follow-on to labwired-core#1423 round):
+# shared bus and Cortex-M/RISC-V sources gained the software debug-watch
+# latch (accessors; DMA and debugger transfers exempt; one branch while
+# disarmed), the watchpoint window clamp (armed watches pin the CPU window
+# to one instruction), StopReason::Watchpoint and the P single-register
+# packet. No register map, reset value or default-config readback changes;
+# pinned by the six RSP conformance scenarios, the debug_watch suites and
+# the determinism guard.
+# ACK, NOT A CAPTURE — physical re-capture remains owed.
+# 2026-10-19, round follow-ups (FU4): peripheral-internal DMA/RTT transfers
+# are wrapped in `with_device_write_bypass` (nRF52 UARTE/TWIM/SPIS/SAADC/ECB/
+# CCM/PWM/RADIO, SPI EasyDMA, host RTT). The flag only exempts hardware-
+# originated guest-memory transfers from the CPU-store policy and debug
+# watches; CPU-visible register/reset reads and writes are unchanged.
+# ACK, NOT A CAPTURE.
+# 2026-10-20 (perf/cortex-m-loop-traces): Cortex-M JIT compiles counted
+# pure-ALU loops (bl leaf; adds; subs; bne head) into one wasm block/loop run
+# N times per dispatch, behind `cortex_m_jit_loop_traces` (default off, and
+# inert unless the JIT itself is on). The interpreter is untouched: the same
+# firmware run traced vs untraced is byte-identical in state, RAM, cycle
+# count and UART (cortex_m_loop_trace_differential, cortex_m_loop_trace_lab),
+# pinning the emitter's cap/iteration arithmetic against the walk. No
+# register map, reset value, timing or IRQ route changes; JIT code is not
+# covered by any silicon capture. The digest moves only because it hashes
+# whole files. ACK, NOT A CAPTURE.
+# 2026-10-25 (STM32U575 onboarding review): the watched Cortex-M
+# source now decodes Thumb-2 wide immediate LDRB/STRB/LDRH/STRH
+# forms with 12-bit offsets, used by the U5 HAL. Added unit
+# regressions cover instruction decode/execute only. This
+# digest-matched acknowledgement is NOT A SILICON CAPTURE; live
+# nRF re-capture remains pending.
+# 2026-10-25 follow-up: the -D warnings cleanup removes redundant integer
+# casts in the Thumb-2 decoder, makes the zero-length FDCAN standard-filter
+# word count explicit, and expresses equivalent SPI frame-byte ceiling
+# arithmetic. Behavior is unchanged; this is an ACK, NOT A CAPTURE. The
+# previously owed live re-capture remains pending.
+# 2026-10-25 CI repair: Thumb-2 PLD/PLDW encodings with Rt=PC are
+# decoded as no-op hints instead of loads into PC. Decoder and firmware
+# regressions cover this shared Cortex-M behavior; ACK, NOT A SILICON
+# CAPTURE, and live re-capture remains pending.
+# 2026-11-11: Owner acknowledged the exact GPIOTE first-edge correction
+# in PR #1825: consume actual GPIO transitions after channel enable.
+# Simulator qualification covers this digest; no new silicon capture ran.
+# Live recapture: https://github.com/w1ne/labwired-core/issues/1827
+# Default 30-day acknowledgement expires 2026-12-11.
+drift_ack: 2026-11-11
+# 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
+# BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
+# arms only when PC is in the 16 KiB ROM window and the RP2040 ROM
+# magic ('M','u',0x01) is at 0x10; any other chip's BKPT in that
+# immediate range still Halt, same as before. Shared interpreter
+# path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
+# re-capture remains pending.
+# 2026-11-07 (feat/arduino-matrix-pico2-rp2350): cortex_m exec/misc.rs
+# adds a cold p0 (GPIO coprocessor) path, reached only when the chip
+# declares `coprocessors: [rp2350_gpioc]` (RP2350 only); every other
+# core keeps p0 UNDEFINED. bus/* and config carry the flag;
+# generic_factory.rs adds an optional `profile: rp2350` to rp2040_timer
+# / rp2040_sio (default: the RP2040 map, unchanged). This board's paths
+# see no change. ACK, NOT A SILICON CAPTURE; live re-capture pending.
+# 2026-11-01 (fix/rp2350-boot-hardfault): cortex_m exec/misc.rs makes
+# LDAEXB/H open the same sub-word exclusive reservation as LDREXB/H and
+# STLEXB/H check it like STREXB/H; word LDAEX/STLEX are unchanged.
+# generic_factory.rs adds the RP2350-only bootram type and an optional
+# rp2040_usb `irq` (default 5, unchanged). STM32/nRF code paths that do
+# not issue LDAEXB/H see no change. ACK, NOT A SILICON CAPTURE; live
+# re-capture remains pending.
+# 2026-11-01 (perf/armv8m-mpu-disabled-fast-path): cortex_m.rs decides
+# an access with the Armv8-M MPU disabled from the default memory map
+# without the span cache (same decisions: default-map XN for fetches, the
+# unprivileged-PPB rule for data). Only cores given an `armv8m_mpu` region
+# file reach it; this board declares none. ACK, NOT A SILICON CAPTURE;
+# live re-capture remains pending.
+# 2026-10-31 (feat/l552-mpu-protection): cortex_m.rs now enforces the
+# Armv8-M PMSAv8 MPU (MemManage on denied accesses/fetches), but only on
+# cores given an `armv8m_mpu` region file. This board declares none, so
+# every access takes the unchanged path (one `Option` test). MSR from
+# unprivileged Thread mode now writes only the APSR (architectural on
+# every Cortex-M); privileged code, which is all this board's firmware
+# runs, is unchanged. ACK, NOT A SILICON CAPTURE; live re-capture
+# remains pending.
+# 2026-10-31 (feat/l552-fpu-sharing): new opt-in `cortex_m_fpu` (FP
+# context: CONTROL.FPCA, extended frames) and `armv8m_mpu` (PMSAv8 region
+# file) blocks, and the Armv8-M TT instruction. This board declares
+# neither block, so its core keeps the basic frame and CONTROL[1:0]. The
+# shared changes are TT decoding out of STREX-with-Rt=PC (UNPREDICTABLE on
+# Armv7-M) and EXC_RETURN matching 0xFFFFFFE0.. as well as 0xFFFFFFF0..
+# (only the FP-frame values E1/E9/ED, which this core never generates).
+# No defined instruction of this board changes. ACK, NOT A SILICON
+# CAPTURE; live re-capture remains pending.
+# 2026-10-31 (feat/ek-ra8m1-zephyr-hello): the Thumb-2 decoder now decodes
+# the Armv8.1-M DLS/WLS/LE and CSEL family. Those encodings are UNDEFINED
+# on Armv6/7/8.0-M (BLX-immediate space / ORRS with H2[15]=1), so no defined
+# instruction of this board changes; the generic_factory ra8_sysc arm moved
+# to a new type. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+# 2026-10-25 (perf/cortex-m-decode-reference): the Cortex-M decode cache
+# now checks the PC tag through a borrow and copies only on a hit. The
+# interpreter's decoded instruction stream and state are unchanged;
+# Core Identity and the perf evidence pin it. ACK, NOT A CAPTURE.
