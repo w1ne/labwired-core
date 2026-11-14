@@ -332,6 +332,24 @@ impl<'a> AttachCtx<'a> {
     /// (`Transport::GpioGroup`). Accepts ESP32/S3 spellings (`GPIO15`, `IO4`,
     /// bare `15`) used by the ESP GPIO edge-observer path.
     pub fn parse_gpio_pin(&self, label: &str) -> Option<u8> {
+        // Parse port-qualified STM32 pads *before* the ESP parser: the latter
+        // strips all leading letters and would misread PB0 as ESP GPIO0.
+        let label = label.trim();
+        if let Some(rest) = label.strip_prefix('P') {
+            let mut letters = rest.chars();
+            if let Some(port @ 'A'..='P') = letters.next() {
+                let pin = letters.as_str().parse::<u8>().ok()?;
+                if pin > 15 {
+                    return None;
+                }
+                let name = format!("gpio{}", port.to_ascii_lowercase());
+                let idx = self.bus.find_peripheral_index_by_name(&name)?;
+                if self.bus.peripherals[idx].dev.is_stm32_gpio_port() {
+                    return Some((port as u8 - b'A') * 16 + pin);
+                }
+                return None;
+            }
+        }
         SystemBus::parse_esp32s3_gpio_pin(label).or_else(|| SystemBus::parse_esp32_gpio_pin(label))
     }
 

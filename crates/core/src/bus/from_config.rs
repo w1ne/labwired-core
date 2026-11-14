@@ -1661,7 +1661,22 @@ impl SystemBus {
                 return true;
             }
         }
-        false
+        // STM32 has one GPIO peripheral per port. STEP/DIR observers watch
+        // the actual output latch transitions (including atomic BSRR writes).
+        let mut installed = false;
+        for port in b'A'..=b'P' {
+            let name = format!("gpio{}", (port as char).to_ascii_lowercase());
+            let Some(idx) = bus.find_peripheral_index_by_name(&name) else {
+                continue;
+            };
+            let clock = bus.cycle_clock.clone();
+            installed |= bus.peripherals[idx].dev.register_stm32_gpio_observer(
+                port - b'A',
+                observer.clone(),
+                clock,
+            );
+        }
+        installed
     }
 
     #[allow(dead_code)] // residual GPIO helpers kept for CAN/tester arms that may re-use them
