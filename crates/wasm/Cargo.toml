@@ -30,7 +30,7 @@ js-sys = "0.3"
 # Phase 2B.1 (issue #192): the event-driven peripheral scheduler. This
 # feature is also enabled by default in the CLI. Core-only test lanes still
 # need `--features event-scheduler` to exercise it (see the classic-ESP32 gate in
-# `crates/core/tests/esp/esp32_classic_walk_differential.rs`).
+# `crates/core/tests/esp32_classic_walk_differential.rs`).
 #
 # The comment that used to live here claimed the browser's ESP32-classic bus had
 # "every peripheral migrated or inert", so the per-cycle-walk deletion was free

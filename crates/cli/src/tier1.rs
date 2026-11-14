@@ -1571,7 +1571,7 @@ peripherals:
     }
 
     /// Cross-registry consistency (see also
-    /// crates/core/tests/gates/board_registry_consistency.rs, which cannot import
+    /// crates/core/tests/board_registry_consistency.rs, which cannot import
     /// TIER1_TARGETS across an integration-test binary boundary — and taking
     /// labwired-core as a dev-dependency of labwired-cli would be a cycle, so
     /// this half of the check lives here instead).
