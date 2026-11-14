@@ -5174,7 +5174,7 @@ conventions, new interrupt model, new SVD quirks.</p>
 <h2 id="honest-caveat-on-supported">Honest caveat on "supported"</h2>
 <p>Onboarding a chip means it boots, runs firmware and passes the tier-1 matrix. It
 does <strong>not</strong> mean silicon-verified — that needs a bench part and an SWD capture
-(see <code>validation/manifest.yaml</code>). As of 2026-09-19 the manifest carries 34 board
+(see <code>validation/boards/</code>). As of 2026-09-19 the manifest carries 34 board
 entries: 9 silicon-tier (1 <code>silicon-smoke</code>, 8 <code>silicon-verified</code>), 9
 <code>sim-validated</code>, 12 <code>smoke-manual</code>, 4 <code>structural</code>. The three parts in this batch
 landed at <code>smoke-manual</code> (SIM-DERIVED, no bench capture), so plan onboarding and
