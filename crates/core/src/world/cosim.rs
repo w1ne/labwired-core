@@ -23,6 +23,8 @@ pub struct WorldCosimStatus {
     pub coupling: &'static str,
     pub failure: Option<String>,
     pub reset_inputs: BTreeMap<String, crate::reset_input::ResetInputStatus>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub power_domains: BTreeMap<String, crate::power_domains::PowerDomainStatus>,
 }
 
 pub(super) struct WorldCosim {
@@ -89,6 +91,7 @@ impl WorldCosim {
                 coupling: "interval-start-zero-order-hold",
                 failure: None,
                 reset_inputs: BTreeMap::new(),
+                power_domains: BTreeMap::new(),
             },
             sample_due: true,
         };
@@ -173,6 +176,9 @@ impl WorldCosim {
         }
         let now = self.status.next_boundary_ns;
         let result = (|| {
+            for router in self.routers.values() {
+                router.clear_mcu_power_outputs(&mut self.signals);
+            }
             let steps = self
                 .runner
                 .step_until_with_signals(now, &mut self.signals)?;
