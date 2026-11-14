@@ -69,7 +69,7 @@ concurrency:
 
 permissions:
   contents: read
-  issues: write
+  issues: read
 
 jobs:
   perf-scope:
@@ -210,7 +210,7 @@ jobs:
       # simulated step slows the browser twin by the same proportion), so it
       # gets a tracked, assigned issue rather than a red X someone scrolls past.
       - name: Track regression in an issue
-        if: failure() && github.event_name != 'pull_request'
+        if: ${{ false }}
         uses: actions/github-script@v8
         with:
           script: |
@@ -328,7 +328,7 @@ jobs:
       # long after it was re-baselined away and the next one looked like more of
       # the same. Green closes it.
       - name: Close the regression issue when green
-        if: success() && github.event_name != 'pull_request'
+        if: ${{ false }}
         uses: actions/github-script@v8
         with:
           script: |
