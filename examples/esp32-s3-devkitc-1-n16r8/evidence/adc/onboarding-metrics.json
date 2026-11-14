@@ -1,0 +1,27 @@
+{
+  "target_id": "esp32-s3-devkitc-1-n16r8-adc",
+  "status": "pass",
+  "runner": "labwired-cli test on repository current main",
+  "script": "examples/esp32-s3-devkitc-1-n16r8/adc-smoke.yaml",
+  "system": "configs/systems/esp32-s3-devkitc-1-n16r8-adc.yaml",
+  "firmware_build_script": "examples/esp32-s3-devkitc-1-n16r8/ci/build-adc-firmware.sh",
+  "firmware_target": "xtensa-esp32s3-none-elf",
+  "firmware_hash": "a95741b22fb3942034dc56ce61b66636522997adafcb90ff935d541df50bf3f9",
+  "uart_marker": "ESP32_S3_DEVKITC1_ADC1_CH3_2047_OK",
+  "steps_executed": 807918,
+  "stop_reason": "assertions_passed",
+  "smoke_elapsed_seconds": 0.213323,
+  "build_cli_elapsed_seconds": 520,
+  "firmware_build_status": "pass",
+  "workflow_elapsed_seconds": 521,
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "evidence": {
+    "build_cli_log": "logs/build_cli.log",
+    "firmware_build_log": "logs/build_firmware.log",
+    "run_log": "logs/run_smoke.log",
+    "junit": "simulation-output/junit.xml",
+    "result": "simulation-output/result.json",
+    "uart": "simulation-output/uart.log"
+  }
+}

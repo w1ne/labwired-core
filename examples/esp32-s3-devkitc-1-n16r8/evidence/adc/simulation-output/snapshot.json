@@ -1,0 +1,55 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "xtensa_lx7",
+    "registers": [
+      0,
+      1070464960,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1070464960,
+      2151120980,
+      1070464912,
+      1077379224,
+      0,
+      0,
+      0,
+      0,
+      1070464912
+    ],
+    "pc": 1077379171,
+    "ps": 262144,
+    "window_base": 0,
+    "window_start": 1,
+    "vecbase": 1073741824
+  },
+  "steps_executed": 807918,
+  "cycles": 807918,
+  "instructions": 807918,
+  "stop_reason": "assertions_passed",
+  "stop_reason_details": {
+    "triggered_stop_condition": "assertions_passed",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 1000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": true,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "a95741b22fb3942034dc56ce61b66636522997adafcb90ff935d541df50bf3f9",
+  "config": {
+    "firmware": "examples/esp32-s3-devkitc-1-n16r8/../../target/xtensa-esp32s3-none-elf/release/firmware-esp32s3-devkitc-n16r8-adc-smoke",
+    "system": "examples/esp32-s3-devkitc-1-n16r8/../../configs/systems/esp32-s3-devkitc-1-n16r8-adc.yaml",
+    "script": "examples/esp32-s3-devkitc-1-n16r8/adc-smoke.yaml"
+  }
+}

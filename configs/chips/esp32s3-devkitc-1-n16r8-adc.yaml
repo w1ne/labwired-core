@@ -1,0 +1,36 @@
+# Narrow ESP32-S3-DevKitC-1 v1.1 N16R8 profile for UART0 and GPIO4 ADC1_CH3.
+name: "esp32s3-devkitc-1-n16r8-adc"
+arch: "xtensa-lx7"
+cpu_hz: 240_000_000
+
+flash:
+  base: 0x42000000
+  size: "16384KB"
+ram:
+  base: 0x3FC88000
+  size: "512KB"
+
+pins:
+  # Espressif maps GPIO4 / J1 pin 4 to ADC1_CH3 on DevKitC-1 v1.1.
+  GPIO4: { gpio: "gpio", bit: 4, peripheral: "sens_s3", channel: 3, functions: [{ type: gpio, peripheral: gpio }] }
+  GPIO43: { gpio: "gpio", bit: 43, functions: [{ type: uart, peripheral: uart0, role: tx }] }
+  GPIO44: { gpio: "gpio", bit: 44, functions: [{ type: uart, peripheral: uart0, role: rx }] }
+
+peripherals:
+  - id: "gpio"
+    type: "esp32s3_gpio"
+    base_address: 0x60004000
+    size: "2KB"
+
+  - id: "uart0"
+    type: "uart"
+    base_address: 0x60000000
+    size: "512B"
+    config:
+      debug_schema: "../peripherals/esp32s3/uart0.yaml"
+
+  # SENS SAR ADC1: register model is installed by configure_xtensa_esp32s3.
+  - id: "sens_s3"
+    type: "esp32s3_sens"
+    base_address: 0x60008800
+    size: "1KB"
