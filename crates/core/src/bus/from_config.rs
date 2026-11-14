@@ -1675,13 +1675,11 @@ impl SystemBus {
                 continue;
             };
             let clock = bus.cycle_clock.clone();
-            if let Some(gpio) = bus.peripherals[idx]
-                .dev
-                .as_any_mut()
-                .and_then(|a| a.downcast_mut::<crate::peripherals::gpio::GpioPort>())
-            {
-                installed |= gpio.add_stm32_observer(port - b'A', observer.clone(), clock);
-            }
+            installed |= bus.peripherals[idx].dev.register_stm32_gpio_observer(
+                port - b'A',
+                observer.clone(),
+                clock,
+            );
         }
         installed
     }

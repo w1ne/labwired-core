@@ -2818,6 +2818,15 @@ impl GpioPort {
 }
 
 impl crate::Peripheral for GpioPort {
+    fn register_stm32_gpio_observer(
+        &mut self,
+        port_index: u8,
+        observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver>,
+        clock: crate::CycleClock,
+    ) -> bool {
+        self.add_stm32_observer(port_index, observer, clock)
+    }
+
     fn on_system_reset(&mut self) {
         // Restore the register file while retaining levels held by the world.
         match &mut self.family {

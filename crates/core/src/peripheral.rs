@@ -180,6 +180,18 @@ pub enum MmioAccessClass {
 }
 
 pub trait Peripheral: std::fmt::Debug + Send {
+    /// Subscribe an off-chip device to actual STM32 GPIO output transitions.
+    /// Other peripheral families decline without a concrete downcast.
+    /// The bus supplies the physical port number and cycle clock.
+    fn register_stm32_gpio_observer(
+        &mut self,
+        _port_index: u8,
+        _observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver>,
+        _clock: crate::CycleClock,
+    ) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8>;
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()>;
 
