@@ -216,6 +216,14 @@
   },
   {
     "buses": [],
+    "name": "nrf54l05"
+  },
+  {
+    "buses": [],
+    "name": "nrf54l10"
+  },
+  {
+    "buses": [],
     "name": "nrf54l15"
   },
   {
