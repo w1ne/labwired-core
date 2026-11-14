@@ -1,0 +1,21 @@
+{
+  "id": "esp32p4",
+  "in_boards": false,
+  "uart": {
+    "state": "proven",
+    "file": "examples/esp32p4x-c5-function-ev-board/uart-smoke.yaml",
+    "test": "P4X_C5_FUNCTION_EV_OK",
+    "signal": "firmware built from source boots in-sim on configs/systems/esp32p4x-c5-function-ev-board.yaml and writes 'P4X_C5_FUNCTION_EV_OK' to the UART0 TX FIFO; the uart_contains assertion matches it on the host_console UART capture.",
+    "lane": "core-onboarding-smoke (push to main + nightly cron): matrix id esp32p4x-c5-function-ev-board (scripts/onboarding_smoke.sh)"
+  },
+  "spi": {
+    "state": "none",
+    "gap": "No SPI controller is declared on configs/chips/esp32p4.yaml; the profile is UART0-only.",
+    "lane": "none"
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "No I2C controller is declared on configs/chips/esp32p4.yaml; the profile is UART0-only.",
+    "lane": "none"
+  }
+}

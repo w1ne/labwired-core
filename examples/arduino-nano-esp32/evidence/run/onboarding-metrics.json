@@ -1,0 +1,29 @@
+{
+  "target_id": "arduino-nano-esp32-gpio",
+  "status": "pass",
+  "crate": "",
+  "target_triple": "",
+  "script": "examples/arduino-nano-esp32/io-smoke.yaml",
+  "system": "configs/systems/arduino-nano-esp32.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-11T18:27:52Z",
+  "finished_at_utc": "2026-11-11T18:27:56Z",
+  "elapsed_seconds": 5,
+  "elapsed_ms": 4425,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.249,
+    "build_firmware": 3.614,
+    "run_smoke": 0.524
+  },
+  "stages_ms": {
+    "build_cli": 249,
+    "build_firmware": 3614,
+    "run_smoke": 524
+  },
+  "firmware_build_script": "examples/arduino-nano-esp32/build-firmware.sh"
+}

@@ -1321,6 +1321,15 @@ pub(crate) fn expand_chip_includes(
 }
 
 impl ChipDescriptor {
+    /// Is this an ESP32-S2 (Xtensa LX7) part?
+    ///
+    /// The S2 is a single-core LX7 with a different memory/peripheral map from
+    /// both the classic dual-core ESP32 and the S3. Keep its constructor
+    /// dispatch explicit so it cannot fall through to the classic ESP32 bank.
+    pub fn is_esp32s2(&self) -> bool {
+        self.arch == Arch::Xtensa && self.name.starts_with("esp32s2")
+    }
+
     /// Is this an ESP32-S3 (Xtensa LX7) part?
     ///
     /// The S3 needs its own memory map — DROM 0x3C00_xxxx, DRAM 0x3FC8_xxxx,

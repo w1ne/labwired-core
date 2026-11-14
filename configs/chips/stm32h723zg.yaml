@@ -1,0 +1,115 @@
+# LabWired chip profile for the STM32H723ZGT6 on NUCLEO-H723ZG.
+#
+# Vendor sources:
+# - https://www.st.com/en/microcontrollers-microprocessors/stm32h723zg.html
+#   lists STM32H723ZGT6 as Active and in volume production (checked 2026-11-13).
+# - https://www.st.com/resource/en/datasheet/stm32h723zg.pdf gives the H723
+#   memory capacity and variant features.
+# - https://www.st.com/resource/en/reference_manual/dm00603761.pdf (RM0468)
+#   covers the H723/H733/H725/H735/H730 RCC and peripheral register map.
+# - UM2407 identifies the board wiring in configs/systems/nucleo-h723zg.yaml.
+#
+# This descriptor intentionally covers the board-facing smoke subset only:
+# H7 RCC, GPIOB/C/D/E, USART3 and SysTick. Other H723 peripherals are not
+# mapped by this profile. No H723 silicon capture is available; the model is
+# SIM-DERIVED and reuses the shared H7 RCC, STM32v2 GPIO and UART models.
+
+name: "stm32h723zg"
+arch: "arm"
+core: "cortex-m7"
+cpu_hz: 550_000_000
+package: "LQFP144"
+pin_count: 144
+
+flash:
+  base: 0x08000000
+  size: "1MiB"
+ram:
+  base: 0x20000000
+  size: "128KiB"
+memory_regions:
+  - name: "axi_sram"
+    base: 0x24000000
+    size: "320KiB"
+  - name: "sram_d2"
+    base: 0x30000000
+    size: "32KiB"
+  - name: "sram_d3"
+    base: 0x38000000
+    size: "16KiB"
+  - name: "itcm"
+    base: 0x00000000
+    size: "64KiB"
+  - name: "backup_sram"
+    base: 0x38800000
+    size: "4KiB"
+
+# Pins used by the NUCLEO-H723ZG smoke profile. GPIO port/pin names follow the
+# STM32H723ZGT6 LQFP144 pinout and the board wiring in UM2407.
+pins:
+  PB0: { gpio: "gpiob", bit: 0 }
+  PB14: { gpio: "gpiob", bit: 14 }
+  PC13: { gpio: "gpioc", bit: 13 }
+  PD8: { gpio: "gpiod", bit: 8 }
+  PD9: { gpio: "gpiod", bit: 9 }
+  PE1: { gpio: "gpioe", bit: 1 }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x58024400
+    size: "1KB"
+    config:
+      profile: "h7"
+
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    config:
+      calib: 0x00000000
+
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x58020400
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+      reset_moder: 0xFFFFFEBF
+    clock: { reg: "ahb4enr", bit: 1 }
+
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x58020800
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+      reset_moder: 0xFFFFFFFF
+    clock: { reg: "ahb4enr", bit: 2 }
+
+  - id: "gpiod"
+    type: "gpio"
+    base_address: 0x58020C00
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+      reset_moder: 0xFFFFFFFF
+    clock: { reg: "ahb4enr", bit: 3 }
+
+  - id: "gpioe"
+    type: "gpio"
+    base_address: 0x58021000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+      reset_moder: 0xFFFFFFFF
+    clock: { reg: "ahb4enr", bit: 4 }
+
+  # USART3 is the default ST-LINK virtual COM port, routed on PD8/PD9.
+  - id: "usart3"
+    type: "uart"
+    base_address: 0x40004800
+    size: "1KB"
+    irq: 39
+    config:
+      profile: "stm32v2"
+    clock: { reg: "apb1lenr", bit: 18 }
