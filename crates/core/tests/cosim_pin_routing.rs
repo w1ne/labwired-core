@@ -1269,3 +1269,97 @@ fn every_drivable_adc_takes_an_input_on_its_last_channel() {
     classic.set_channel_input(last, 1650);
     assert_eq!(classic.channel_input_count(last), 2047);
 }
+
+/// Load a board manifest and its referenced chip descriptor as one fixture.
+fn bus_and_manifest(rel_system_path: &str) -> (SystemManifest, SystemBus) {
+    let system_path = root(rel_system_path);
+    let manifest = SystemManifest::from_file(&system_path).expect("load board system");
+    let chip_path = system_path.parent().unwrap().join(&manifest.chip);
+    let descriptor = ChipDescriptor::from_file(&chip_path).expect("load system chip descriptor");
+    let bus = SystemBus::from_config(&descriptor, &manifest).expect("build board bus");
+    (manifest, bus)
+}
+
+/// The same general MNA NTC divider and explicit ADC-channel route also work
+/// on the Mega's CPU-owned AVR ADC. ADC8 is selected through MUX5, so a route
+/// that reaches only the low ADC channels or a conversion that ignores MUX5
+/// cannot satisfy these assertions.
+#[test]
+fn arduino_mega_2560_ntc_netlist_reaches_adc8_through_mux5_end_to_end() {
+    use labwired_core::cpu::avr::Avr;
+    use labwired_core::{Cpu, Machine, SimulationConfig};
+
+    let (manifest, bus) = bus_and_manifest("examples/arduino-mega-2560-io/analog-ntc-system.yaml");
+    let mut session = build_session(&bus, &manifest.cosim_models);
+    let mut cpu = Avr::for_chip_name("atmega2560");
+    // LDI/STS: ADCSRB.MUX5=1; ADMUX selects AVcc with MUX4:0=0 (ADC8);
+    // ADCSRA enables the ADC and starts a conversion.
+    cpu.load_words(
+        0,
+        &[
+            0xE008, 0x9300, 0x007B, 0xE400, 0x9300, 0x007C, 0xEC10, 0x9310, 0x007A,
+        ],
+    );
+    let mut machine = Machine::new(cpu, bus);
+    let config = SimulationConfig::default();
+    let mut cycles = 0;
+    let mut samples = Vec::new();
+
+    for temperature_c in [-10.0_f64, 25.0, 80.0] {
+        session
+            .set_signal_number("ui.ntc.temperature_c", temperature_c)
+            .expect("the analog model reads the routed temperature");
+        cycles += session.cycles_until_boundary(cycles);
+        let (_, errors) = session
+            .advance_to(cycles, &mut machine.bus)
+            .expect("solve and route the NTC divider");
+        assert!(errors.is_empty(), "unexpected routing errors: {errors:?}");
+
+        let volts = match session.signals().get("adc.adc.8_volts") {
+            Some(CosimSignalValue::F64(volts)) => *volts,
+            other => panic!("the NTC voltage did not reach Mega ADC8: {other:?}"),
+        };
+        let ntc_ohms = 10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp();
+        let expected_volts = 5.0 * 10_000.0 / (ntc_ohms + 10_000.0);
+        assert!(
+            (volts - expected_volts).abs() < 1e-9,
+            "at {temperature_c} °C the MNA divider should be {expected_volts} V, got {volts} V"
+        );
+
+        machine.cpu.set_pc(0);
+        for _ in 0..6 {
+            machine
+                .cpu
+                .step(&mut machine.bus, &[], &config)
+                .expect("execute the Mega ADC8 register sequence");
+        }
+        let adc_count = u16::from(machine.cpu.adch) << 8 | u16::from(machine.cpu.adcl);
+        let routed_mv = (expected_volts * 1000.0 + 0.5).floor() as u32;
+        let expected_count = (routed_mv * 1024 / 5000).min(1023) as u16;
+        assert_eq!(
+            adc_count, expected_count,
+            "firmware ADC8 should convert the routed NTC voltage at {temperature_c} °C"
+        );
+        assert_eq!(
+            machine.cpu.adcsra & (1 << 6),
+            0,
+            "ADSC clears after conversion"
+        );
+        assert_ne!(
+            machine.cpu.adcsra & (1 << 4),
+            0,
+            "ADIF records conversion complete"
+        );
+        samples.push((temperature_c, volts, adc_count));
+    }
+
+    assert!(
+        samples[2].1 > samples[1].1 && samples[1].1 > samples[0].1,
+        "the NTC divider rises as it heats: {samples:?}"
+    );
+    assert!(
+        samples[2].2 > samples[1].2 && samples[1].2 > samples[0].2,
+        "the firmware ADC8 result follows the physical voltage: {samples:?}"
+    );
+    assert_eq!(samples[1].2, 512, "25 °C puts this divider at half scale");
+}
