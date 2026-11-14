@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="30" failures="0" errors="0" time="0.703158">
+<testsuite name="labwired" tests="30" failures="0" errors="0" time="0.644184">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="1e0d34dbad4f268a2f3eb6cf11888c854ff51214e551932bc92b0df5aa8b13ed"/>
+    <property name="firmware_hash" value="005b774b5741b1658f7e56b50726bc84136803d267fbfaec7f7ec3d6b35b8ba7"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.703158">
+  <testcase classname="labwired" name="run" time="0.644184">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: STM32H7 register smoke" time="0.000000">
   </testcase>
@@ -59,7 +59,7 @@
   </testcase>
   <testcase classname="labwired" name="assertion 26: uart_contains: cortex-m7 cpacr handler fp=1 ipsr=0000000B thread_unprivileged=00000001 nocp=00000000 result=000000C3" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 27: uart_contains: tim2 gated=1 arr_reset=1 w32=1 ug=1 uif_clr=1 run=1 masked=1 irq=3 stray=0 stop=1 rel=1 ok" time="0.000000">
+  <testcase classname="labwired" name="assertion 27: uart_contains: tim2 gated=1 arr_reset=1 w32=1 ug=1 uif_clr=1 run=1 masked=1 irq=3 stray=0 stop=1 opm=1 opm_irq=2 rel=1 …" time="0.000000">
   </testcase>
   <testcase classname="labwired" name="assertion 28: gpio_edges: gpioPortB:0 &gt;= 1 edges" time="0.000000">
   </testcase>

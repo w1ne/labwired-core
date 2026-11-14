@@ -211,6 +211,8 @@ const TIM_ARR: *mut u32 = (TIM2 + 0x2C) as *mut u32;
 #[cfg(feature = "stm32h743-tim2")]
 const TIM_CEN: u32 = 1 << 0;
 #[cfg(feature = "stm32h743-tim2")]
+const TIM_OPM: u32 = 1 << 3;
+#[cfg(feature = "stm32h743-tim2")]
 const TIM_UIF: u32 = 1 << 0;
 #[cfg(feature = "stm32h743-tim2")]
 const TIM2_IRQ: i16 = 28;
@@ -323,6 +325,54 @@ fn check_tim2() {
     }
     let stopped =
         unsafe { read_volatile(TIM_CNT) } == stopped_at && unsafe { read_volatile(record) } == irqs;
+
+    // One-pulse mode, RM0433 Rev 8 TIMx_CR1.OPM: "Counter stops counting at
+    // the next update event (clearing the bit CEN)". First with UIE clear:
+    // the overflow sets UIF, clears CEN, and leaves the counter at 0.
+    unsafe {
+        write_volatile(TIM_SR, !TIM_UIF);
+        write_volatile(TIM_CNT, 0);
+        write_volatile(TIM_CR1, TIM_OPM | TIM_CEN);
+    }
+    let opm_running = unsafe { read_volatile(TIM_CR1) } == TIM_OPM | TIM_CEN;
+    for _ in 0..20_000 {
+        if unsafe { read_volatile(TIM_CR1) } & TIM_CEN == 0 {
+            break;
+        }
+    }
+    let opm_stopped = unsafe { read_volatile(TIM_CR1) } == TIM_OPM
+        && unsafe { read_volatile(TIM_SR) } & TIM_UIF != 0
+        && unsafe { read_volatile(TIM_CNT) } == 0;
+    for _ in 0..2_000 {
+        let _ = unsafe { read_volatile(TIM_SR) };
+    }
+    let opm_held = unsafe { read_volatile(TIM_CNT) } == 0
+        && unsafe { read_volatile(TIM_CR1) } == TIM_OPM
+        && unsafe { read_volatile(record) } == irqs;
+    // With UIE set each CEN write gives exactly one update interrupt.
+    unsafe {
+        write_volatile(TIM_SR, !TIM_UIF);
+        write_volatile(record, 0);
+        write_volatile(TIM_DIER, 1);
+    }
+    let mut opm_single = true;
+    for pulse in 1..=2 {
+        unsafe {
+            write_volatile(TIM_CR1, TIM_OPM | TIM_CEN);
+        }
+        for _ in 0..4_000 {
+            let _ = unsafe { read_volatile(TIM_SR) };
+        }
+        opm_single &= unsafe { read_volatile(record) } == pulse
+            && unsafe { read_volatile(TIM_CR1) } == TIM_OPM
+            && unsafe { read_volatile(TIM_CNT) } == 0;
+    }
+    let opm_irqs = unsafe { read_volatile(record) };
+    unsafe {
+        write_volatile(TIM_CR1, 0);
+        write_volatile(TIM_DIER, 0);
+    }
+    let opm = opm_running && opm_stopped && opm_held && opm_single;
     let stray = unsafe { read_volatile(record.add(1)) };
 
     unsafe {
@@ -344,6 +394,9 @@ fn check_tim2() {
     send(b" stray=");
     send(&[b'0' + (stray.min(9) as u8)]);
     send_flag(b" stop=", stopped);
+    send_flag(b" opm=", opm);
+    send(b" opm_irq=");
+    send(&[b'0' + (opm_irqs.min(9) as u8)]);
     send_flag(b" rel=", released);
     let ok = gated
         && arr_reset
@@ -355,6 +408,8 @@ fn check_tim2() {
         && irqs == 3
         && stray == 0
         && stopped
+        && opm
+        && opm_irqs == 2
         && released;
     send(if ok { b" ok\r\n" } else { b" fail\r\n" });
 }

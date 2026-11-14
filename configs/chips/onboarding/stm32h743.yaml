@@ -41,9 +41,10 @@ peripherals:
   # RM0433 Rev 8: TIM2 is the 32-bit general-purpose timer at 0x40000000
   # with NVIC position 28, clocked by RCC_APB1LENR.TIM2EN (bit 0). Renode
   # stm32h7.repl timer2 agrees on base and line.
-  # The smoke covers the gate, 32-bit CNT/ARR, UG, UIF, and the update
-  # interrupt in up-counting mode. Not modelled: CR1.OPM, DIR, and CMS are
-  # stored without effect (measured 2026-11-14: OPM does not clear CEN).
+  # The smoke covers the gate, 32-bit CNT/ARR, UG, UIF, the update interrupt
+  # in up-counting mode, and one-pulse mode (CR1.OPM: the overflow clears
+  # CEN). Not modelled: CR1.DIR and CMS are stored without effect, and a
+  # software UG does not end a one-pulse run.
   # Channels, pads, and the count rate are not exercised.
   - id: tim2
     type: timer
