@@ -1863,7 +1863,7 @@ impl crate::Bus for SystemBus {
                 let idx = (irq / 32) as usize;
                 let bit = irq % 32;
                 if idx < 8 {
-                    nvic.ispr[idx].fetch_and(!(1 << bit), Ordering::SeqCst);
+                    nvic.clear_pending(idx, 1 << bit);
                 }
             }
         }
