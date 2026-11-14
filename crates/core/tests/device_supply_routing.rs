@@ -1,5 +1,7 @@
 //! Route actual measured rails into native SPI power gates. Tiny Cortex-M
 //! loops witness world scheduling; this does not qualify native FC firmware.
+mod mcu_power_support;
+
 use labwired_config::{ChipDescriptor, CosimModelConfig, EnvironmentManifest, SystemManifest};
 use labwired_core::cosim::{CosimSignalValue, CosimSignals, SignalPath, SignalRouter};
 use labwired_core::peripherals::device::SpiDevice;
@@ -391,4 +393,37 @@ fn world_unknown_and_duplicate_device_supply_routes_fail_at_construction() {
         "node.a.board.device.U9.power.vdd_volts".into(),
     );
     assert!(from_environment(duplicate).is_err());
+}
+
+#[test]
+fn rejected_mcu_deadline_does_not_publish_device_rails() {
+    let mut chip = chip();
+    chip.supply_monitor = None;
+    let mut domains = mcu_power_support::config();
+    domains.brown_out.as_mut().unwrap().enable_delay_ns = u64::MAX;
+    chip.power_domains = Some(domains);
+    let mut bus = SystemBus::from_config(&chip, &system("U9")).unwrap();
+    let mut config = model("U9");
+    config
+        .outputs
+        .insert("core".into(), "board.power.core_volts".into());
+    let (mut router, errors) = SignalRouter::bind(&[config], &bus);
+    assert!(errors.is_empty(), "{errors:?}");
+    router.attach_mcu_power_domains(&mut bus).unwrap();
+    let mut initial = signals("U9", CosimSignalValue::F64(1.8), CosimSignalValue::F64(3.3));
+    initial.insert("board.power.core_volts".into(), CosimSignalValue::F64(1.1));
+    assert!(router.apply(&mut bus, &initial, 0).is_empty());
+    bus.mcu_power
+        .record_reset(labwired_core::power_domains::PowerResetCause::System)
+        .unwrap();
+    let before_device = meta(&mut bus, "U9");
+    let before_core = bus.mcu_power.handle("core").unwrap().observation();
+    let mut rejected = signals("U9", CosimSignalValue::F64(0.0), CosimSignalValue::F64(3.3));
+    rejected.insert("board.power.core_volts".into(), CosimSignalValue::F64(0.0));
+    assert!(!router.apply(&mut bus, &rejected, 1000).is_empty());
+    assert_eq!(meta(&mut bus, "U9"), before_device);
+    assert_eq!(
+        bus.mcu_power.handle("core").unwrap().observation(),
+        before_core
+    );
 }

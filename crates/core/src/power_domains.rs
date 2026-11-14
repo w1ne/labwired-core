@@ -36,7 +36,7 @@ struct RailState {
     voltage_v: Option<f64>,
     observed_time_ns: Option<u64>,
 }
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 struct Registry {
     measured_mode: bool,
     rails: BTreeMap<String, RailState>,
@@ -90,7 +90,7 @@ pub struct BrownOutConfiguration {
     pub falling_v: f64,
     pub rising_v: f64,
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct ControlState {
     sampled_source: bool,
     accepted: BrownOutConfiguration,
@@ -192,7 +192,7 @@ pub struct PowerDomainStatus {
 pub struct McuPowerDomains {
     runtime: Option<Box<DomainRuntime>>,
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct DomainRuntime {
     config: PowerDomainsConfig,
     registry: Arc<Mutex<Registry>>,
@@ -373,36 +373,84 @@ impl McuPowerDomains {
         {
             return Err("MCU power observations must use a monotonic simulation timeline".into());
         }
+
+        // Hold both live locks through preparation and publication. Existing
+        // peripheral handles keep their Arcs, and concurrent control writes
+        // cannot be lost when a staged transition commits.
+        let registry_arc = Arc::clone(&runtime.registry);
+        let control_arc = runtime
+            .control
+            .as_ref()
+            .map(|control| Arc::clone(&control.inner));
+        let mut registry = registry_arc
+            .lock()
+            .map_err(|_| "power domain registry poisoned")?;
+        let mut control = control_arc
+            .as_ref()
+            .map(|arc| arc.lock().map_err(|_| "power supervisor control poisoned"))
+            .transpose()?;
+        if !registry.measured_mode {
+            return if updates.is_empty() {
+                Ok(())
+            } else {
+                Err("MCU rail observations require an attached sampled source".into())
+            };
+        }
+        let mut seen = BTreeSet::new();
+        for (domain, volts) in updates {
+            let rail = registry
+                .rails
+                .get(domain)
+                .ok_or_else(|| format!("MCU has no declared power domain '{domain}'"))?;
+            if !rail.routed || !seen.insert(domain) || !volts.is_finite() || *volts < 0.0 {
+                return Err(format!("power domain '{domain}' requires one routed finite nonnegative voltage per boundary"));
+            }
+        }
+        let mut staged = (**runtime).clone();
+        staged.registry = Arc::new(Mutex::new(registry.clone()));
+        staged.control = control.as_ref().map(|state| PowerSupervisorControl {
+            inner: Arc::new(Mutex::new((**state).clone())),
+        });
         {
-            let mut registry = runtime
+            let mut staged_registry = staged
                 .registry
                 .lock()
-                .map_err(|_| "power domain registry poisoned")?;
-            if !registry.measured_mode {
-                return if updates.is_empty() {
-                    Ok(())
-                } else {
-                    Err("MCU rail observations require an attached sampled source".into())
-                };
-            }
-            let mut seen = BTreeSet::new();
+                .map_err(|_| "staged power registry poisoned")?;
             for (domain, volts) in updates {
-                let rail = registry
-                    .rails
-                    .get(domain)
-                    .ok_or_else(|| format!("MCU has no declared power domain '{domain}'"))?;
-                if !rail.routed || !seen.insert(domain) || !volts.is_finite() || *volts < 0.0 {
-                    return Err(format!("power domain '{domain}' requires one routed finite nonnegative voltage per boundary"));
-                }
-            }
-            for (domain, volts) in updates {
-                let rail = registry.rails.get_mut(domain).unwrap();
+                let rail = staged_registry.rails.get_mut(domain).unwrap();
                 rail.voltage_v = Some(*volts);
                 rail.observed_time_ns = Some(time_ns);
             }
         }
-        runtime.last_sample_ns = Some(time_ns);
-        runtime.advance(time_ns)
+        staged.last_sample_ns = Some(time_ns);
+        staged.advance(time_ns)?;
+
+        let next_registry = staged
+            .registry
+            .lock()
+            .map_err(|_| "staged power registry poisoned")?
+            .clone();
+        let next_control = staged
+            .control
+            .as_ref()
+            .map(|value| {
+                value
+                    .inner
+                    .lock()
+                    .map(|state| state.clone())
+                    .map_err(|_| "staged supervisor control poisoned")
+            })
+            .transpose()?;
+        *registry = next_registry;
+        if let (Some(live), Some(next)) = (control.as_mut(), next_control) {
+            **live = next;
+        }
+        staged.registry = Arc::clone(&registry_arc);
+        staged.control = control_arc.as_ref().map(|inner| PowerSupervisorControl {
+            inner: Arc::clone(inner),
+        });
+        **runtime = staged;
+        Ok(())
     }
     pub fn is_held(&self) -> bool {
         self.is_measured()

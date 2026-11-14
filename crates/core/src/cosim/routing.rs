@@ -1600,20 +1600,29 @@ impl SignalRouter {
         if !errors.is_empty() {
             return errors;
         }
-        if let Err(error) = bus.apply_device_supply_voltages(&device_rails) {
-            return vec![RoutingError::DeviceSupplyRejected {
-                path: "board.device".into(),
-                reason: error.to_string(),
-            }];
-        }
+        // Prepare all device updates before mutating either set of rails. The
+        // MCU transition also stages every fallible supervisor operation.
+        let prepared_devices = match bus.prepare_device_supply_voltages(&device_rails) {
+            Ok(prepared) => prepared,
+            Err(error) => {
+                return vec![RoutingError::DeviceSupplyRejected {
+                    path: "board.device".into(),
+                    reason: error.to_string(),
+                }]
+            }
+        };
         if let Some(sample_ns) = domain_sample {
-            if let Err(reason) = bus.apply_mcu_power_voltages(&domain_rails, sample_ns) {
+            if let Err(reason) = bus.mcu_power.apply_voltages(&domain_rails, sample_ns) {
                 return vec![RoutingError::PowerDomainRejected {
                     path: "board.power".into(),
                     reason,
                 }];
             }
             self.domain_last_sample_ns = Some(sample_ns);
+        }
+        bus.commit_device_supply_voltages(prepared_devices);
+        if domain_sample.is_some() {
+            bus.sync_mcu_power_domains();
         }
         for (motor, _, _) in &self.circuit_bldc {
             bus.begin_circuit_bldc_boundary(*motor);

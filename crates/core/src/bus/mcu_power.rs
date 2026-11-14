@@ -100,12 +100,16 @@ impl SystemBus {
         time_ns: u64,
     ) -> Result<(), String> {
         self.mcu_power.apply_voltages(updates, time_ns)?;
+        self.sync_mcu_power_domains();
+        Ok(())
+    }
+
+    pub(crate) fn sync_mcu_power_domains(&mut self) {
         if self.mcu_power.is_measured() {
             for peripheral in &mut self.peripherals {
                 peripheral.dev.sync_power_domains();
             }
         }
-        Ok(())
     }
     pub(crate) fn gpio_threshold_mode_qualified(&self) -> bool {
         let io = self.mcu_power.io_handle();

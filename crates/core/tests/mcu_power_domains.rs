@@ -242,3 +242,77 @@ fn identical_sample_sequences_ignore_host_observation_chunking() {
         serde_json::to_value(b.status()).unwrap()
     );
 }
+
+#[test]
+fn overflowing_supervisor_deadline_does_not_publish_or_consume_reset() {
+    let mut config = mcu_power_support::config();
+    config.brown_out.as_mut().unwrap().enable_delay_ns = u64::MAX;
+    let mut model = McuPowerDomains::new(Some(config)).unwrap();
+    attach(&mut model);
+    sample(&mut model, 0, 1.1, 3.3);
+    model.record_reset(PowerResetCause::System).unwrap();
+    let before = model.handle("io").unwrap().observation();
+    let before_time = model.status().unwrap().last_sample_ns;
+    for _ in 0..2 {
+        let result = model.apply_voltages(&[("io".into(), 0.0)], 1);
+        assert!(result.is_err(), "overflow must reject every retry");
+        assert_eq!(model.handle("io").unwrap().observation(), before);
+        assert_eq!(model.status().unwrap().last_sample_ns, before_time);
+    }
+}
+
+#[test]
+fn rejected_control_deadline_keeps_pending_control_and_existing_handle() {
+    let mut config = mcu_power_support::config();
+    config.brown_out.as_mut().unwrap().reprogram_delay_ns = u64::MAX;
+    let mut model = McuPowerDomains::new(Some(config)).unwrap();
+    boot(&mut model);
+    let io = model.handle("io").unwrap();
+    let before = io.observation();
+    let control = model.supervisor_control().unwrap();
+    control.configure_brown_out(false, 0.946, 0.95546).unwrap();
+    assert_eq!(
+        model.status().unwrap().brown_out.unwrap().pending_changes,
+        1
+    );
+    assert!(model.apply_voltages(&[("io".into(), 0.0)], 4000).is_err());
+    assert_eq!(io.observation(), before);
+    let status = model.status().unwrap();
+    assert_eq!(status.last_sample_ns, Some(3000));
+    assert_eq!(status.brown_out.unwrap().pending_changes, 1);
+    assert!(model.apply_voltages(&[("io".into(), 0.0)], 4000).is_err());
+    assert_eq!(io.observation(), before);
+}
+
+#[test]
+fn full_reset_queue_rejects_boundary_without_publishing_rails() {
+    let mut model = model();
+    attach(&mut model);
+    for _ in 0..32 {
+        model.record_reset(PowerResetCause::System).unwrap();
+    }
+    sample(&mut model, 0, 1.1, 3.3);
+    let io = model.handle("io").unwrap();
+    let before = io.observation();
+    let before_events = model.status().unwrap().reset_events;
+    for _ in 0..2 {
+        assert!(model.apply_voltages(&[("io".into(), 0.0)], 3000).is_err());
+        assert_eq!(io.observation(), before);
+        let status = model.status().unwrap();
+        assert_eq!(status.last_sample_ns, Some(0));
+        assert_eq!(status.reset_events, before_events);
+        assert!(!status.por_latched);
+    }
+}
+
+#[test]
+fn existing_domain_handle_observes_successful_staged_publication() {
+    let mut model = model();
+    let io = model.handle("io").unwrap();
+    attach(&mut model);
+    sample(&mut model, 0, 1.1, 3.3);
+    assert_eq!(io.observation().voltage_v, Some(3.3));
+    model.apply_voltages(&[("io".into(), 2.5)], 1000).unwrap();
+    assert_eq!(io.observation().voltage_v, Some(2.5));
+    assert_eq!(io.observation().observed_time_ns, Some(1000));
+}
