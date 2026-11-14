@@ -2368,8 +2368,8 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     return Err(ctx.parse_err("expected `R<name> n1 n2 <value>`"));
                 }
                 let ohms = ctx.value(rest[2], "resistance")?;
-                if ohms == 0.0 {
-                    return Err(ctx.parse_err("resistance must be non-zero"));
+                if !ohms.is_finite() || ohms == 0.0 {
+                    return Err(ctx.parse_err("resistance must be finite and non-zero"));
                 }
                 let mut beta = None;
                 let mut nominal_temperature_celsius = 25.0;
@@ -2412,13 +2412,20 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                         nominal_temperature_celsius,
                         temperature_celsius,
                     };
-                    if !model.resistance_ohms(ohms).is_finite() {
-                        return Err(ctx.parse_err("NTC parameters produce a non-finite resistance"));
+                    let resistance = model.resistance_ohms(ohms);
+                    if !resistance.is_finite()
+                        || resistance <= 0.0
+                        || !resistance.recip().is_finite()
+                    {
+                        return Err(ctx.parse_err("NTC parameters must produce positive finite resistance with finite conductance"));
                     }
                     Some(model)
                 } else {
                     None
                 };
+                if ntc.is_none() && !ohms.recip().is_finite() {
+                    return Err(ctx.parse_err("resistance must have finite conductance"));
+                }
                 let a = circuit.intern(rest[0]);
                 let b = circuit.intern(rest[1]);
                 circuit.resistors.push(Resistor {
