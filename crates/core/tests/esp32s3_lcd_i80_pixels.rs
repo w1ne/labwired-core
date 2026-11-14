@@ -16,6 +16,8 @@
 //! `esp_lcd_panel_io_i80.c` emits; the comments name the driver call each write
 //! comes from.
 
+#[path = "common/src_roots.rs"]
+mod src_roots;
 use labwired_config::SystemManifest;
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::XtensaLx7;
@@ -611,11 +613,7 @@ fn gpio_bitbang_path_still_paints_without_lcd_cam() {
 /// reads `DevicePins`.
 #[test]
 fn i80_panel_seam_stays_narrow() {
-    let src = std::fs::read_to_string(
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("src/peripherals/components/i80_panel.rs"),
-    )
-    .expect("read peripherals/components/i80_panel.rs");
+    let src = src_roots::read_core_src("peripherals/components/i80_panel.rs");
     let body = src
         .split_once("pub trait I80Panel:")
         .expect("I80Panel declaration — this test is measuring the wrong file")
@@ -644,11 +642,7 @@ fn i80_panel_seam_stays_narrow() {
     );
 
     // And the controller must not name a concrete panel anywhere.
-    let lcd = std::fs::read_to_string(
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("src/peripherals/esp32s3/lcd_cam.rs"),
-    )
-    .expect("read esp32s3/lcd_cam.rs");
+    let lcd = src_roots::read_core_src("peripherals/esp32s3/lcd_cam.rs");
     assert!(
         lcd.contains("dyn crate::peripherals::components::I80Panel"),
         "lcd_cam must hold the TRAIT — this test is reading the wrong file if not"
