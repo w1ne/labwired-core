@@ -2774,6 +2774,15 @@ impl GpioPort {
 }
 
 impl crate::Peripheral for GpioPort {
+    fn register_stm32_gpio_observer(
+        &mut self,
+        port_index: u8,
+        observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver>,
+        clock: crate::CycleClock,
+    ) -> bool {
+        self.add_stm32_observer(port_index, observer, clock)
+    }
+
     fn on_system_reset(&mut self) {
         // SAM PORT only: registers to power-on, the outside world's levels kept.
         if let GpioFamily::SamPort(g) = &mut self.family {
