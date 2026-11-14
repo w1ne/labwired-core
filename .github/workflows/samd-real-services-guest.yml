@@ -60,7 +60,7 @@ jobs:
           ref: 2ed19d64ec3359143409a4b0a9758b4aeef3ee7d
           path: owned-heap-alignment-core
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: dtolnay/rust-toolchain@1.99.1
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: lancaster-university/codal-core

@@ -90,7 +90,7 @@ impl Apa102 {
             return;
         }
         let mut out: Vec<Pixel> = Vec::new();
-        for chunk in f[4..].chunks_exact(4) {
+        for chunk in f[4..].as_chunks::<4>().0 {
             if out.len() >= self.num_pixels {
                 break;
             }

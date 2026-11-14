@@ -179,10 +179,12 @@ fn main() -> ! {
     match wait_flags(I2C_IF_ACK | I2C_IF_NACK) {
         Some(f) if f & I2C_IF_NACK != 0 => {
             puts("i2c nack: no sensor at 0x48\n");
+            #[allow(clippy::empty_loop)] // bare-metal firmware: park the core forever
             loop {}
         }
         None => {
             puts("i2c timeout\n");
+            #[allow(clippy::empty_loop)] // bare-metal firmware: park the core forever
             loop {}
         }
         _ => {}
@@ -195,6 +197,7 @@ fn main() -> ! {
     write_u32(I2C_TXDATA, (TMP102_ADDR << 1) | 1);
     if wait_flags(I2C_IF_ACK | I2C_IF_NACK).is_none() {
         puts("i2c timeout\n");
+        #[allow(clippy::empty_loop)] // bare-metal firmware: park the core forever
         loop {}
     }
 
@@ -204,6 +207,7 @@ fn main() -> ! {
         spins += 1;
         if spins >= POLL_LIMIT {
             puts("i2c no data\n");
+            #[allow(clippy::empty_loop)] // bare-metal firmware: park the core forever
             loop {}
         }
     }
@@ -218,10 +222,12 @@ fn main() -> ! {
     puthex16((msb << 8) | lsb);
     putc(b'\n');
 
+    #[allow(clippy::empty_loop)] // bare-metal firmware: park the core forever
     loop {}
 }
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
+    #[allow(clippy::empty_loop)] // bare-metal firmware: park the core forever
     loop {}
 }

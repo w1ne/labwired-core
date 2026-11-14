@@ -1605,7 +1605,7 @@ mod tests {
         u.write_u32(OFF_ENABLE, ENABLE_UARTE).unwrap();
         u.write_u32(OFF_INTENSET, (1 << 8) | (1 << 22)).unwrap();
         let mut sched = EventScheduler::new();
-        for (i, byte) in [b'A', b'B'].into_iter().enumerate() {
+        for (i, byte) in b"AB".iter().copied().enumerate() {
             u.write_u32(OFF_TXD_PTR, 0x2000_0010 + i as u32).unwrap();
             u.write_u32(OFF_TXD_MAXCNT, 1).unwrap();
             u.write_u32(OFF_TASKS_STARTTX, 1).unwrap();

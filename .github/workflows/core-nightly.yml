@@ -37,7 +37,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.95.0
+        uses: dtolnay/rust-toolchain@1.99.1
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
@@ -97,7 +97,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.95.0
+        uses: dtolnay/rust-toolchain@1.99.1
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
@@ -148,7 +148,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust (stable)
-        uses: dtolnay/rust-toolchain@1.95.0
+        uses: dtolnay/rust-toolchain@1.99.1
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
@@ -252,7 +252,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.95.0
+        uses: dtolnay/rust-toolchain@1.99.1
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
@@ -382,7 +382,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.95.0
+        uses: dtolnay/rust-toolchain@1.99.1
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
@@ -453,7 +453,7 @@ jobs:
 
       - name: Install Rust
         if: env.SKIP_DRIFT != '1'
-        uses: dtolnay/rust-toolchain@1.95.0
+        uses: dtolnay/rust-toolchain@1.99.1
 
       - name: Cache dependencies
         if: env.SKIP_DRIFT != '1'
@@ -561,7 +561,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.95.0
+        uses: dtolnay/rust-toolchain@1.99.1
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
@@ -699,7 +699,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.95.0
+        uses: dtolnay/rust-toolchain@1.99.1
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2

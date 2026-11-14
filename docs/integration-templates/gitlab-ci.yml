@@ -4,7 +4,7 @@ stages:
 
 build:firmware:
   stage: build
-  image: rust:1.95
+  image: rust:1.99
   before_script:
     - rustup target add thumbv7m-none-eabi
   script:

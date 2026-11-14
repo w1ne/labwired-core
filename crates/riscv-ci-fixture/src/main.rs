@@ -21,5 +21,6 @@ fn main() -> ! {
     }
 
     // Deterministic "PC stuck" for `no_progress` tests.
+    #[allow(clippy::empty_loop)] // bare-metal firmware: park the core forever
     loop {}
 }

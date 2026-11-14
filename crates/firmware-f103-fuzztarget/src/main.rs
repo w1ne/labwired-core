@@ -156,5 +156,6 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
     // A Rust panic is a logic bug, not a hardware fault — mark it as FAULT too so
     // the harness treats a panic as a crash, not a hang.
     unsafe { wr(VERDICT, FAULT_MAGIC) };
+    #[allow(clippy::empty_loop)] // bare-metal firmware: park the core forever
     loop {}
 }

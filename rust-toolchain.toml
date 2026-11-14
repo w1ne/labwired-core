@@ -6,13 +6,13 @@
 
 # Pin the host toolchain to the version CI already uses.
 #
-# Every workflow job installs `dtolnay/rust-toolchain@1.95.0` (22 call sites
-# across .github/workflows/), and Dockerfile.ci builds the release image on
-# `rust:1.95-slim-bookworm`. Nothing pinned the LOCAL compiler, so a developer
-# built with whatever `rustup default` happened to be — on this machine that is
-# 1.97.1 — and "it passes here" and "it passes in CI" were two different
-# compilers. For a simulator sold as a deterministic oracle, the compiler is
-# part of the machine under test.
+# Every workflow job installs `dtolnay/rust-toolchain@1.99.1` (69 call sites
+# across .github/workflows/), and core-release.yml builds the Linux archives on
+# `rust:1.99-bullseye` (the glibc 2.31 floor). Nothing pinned the LOCAL
+# compiler, so a developer built with whatever `rustup default` happened to be
+# and "it passes here" and "it passes in CI" were two different compilers. For
+# a simulator sold as a deterministic oracle, the compiler is part of the
+# machine under test.
 #
 # Deliberately channel-only:
 #   * no `components` — several jobs install rustfmt/clippy selectively
@@ -27,7 +27,7 @@
 # rust-toolchain.toml pinning `channel = "esp"`, and rustup's nearest-ancestor
 # lookup finds those before this file.
 #
-# When bumping: change this file and the 22 `dtolnay/rust-toolchain@` refs in
+# When bumping: change this file and the 69 `dtolnay/rust-toolchain@` refs in
 # the same commit, or the two disagree again.
 [toolchain]
-channel = "1.95.0"
+channel = "1.99.1"

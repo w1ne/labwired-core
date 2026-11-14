@@ -143,6 +143,7 @@ fn main() -> ! {
     let id = read_u32(BLE_ID);
     if id != LWBL_MAGIC {
         puts("BLE NO CONTROLLER\n");
+        #[allow(clippy::empty_loop)] // bare-metal firmware: park the core forever
         loop {}
     }
     puts("BLE ID LWBL\n");
@@ -185,5 +186,6 @@ fn main() -> ! {
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
+    #[allow(clippy::empty_loop)] // bare-metal firmware: park the core forever
     loop {}
 }

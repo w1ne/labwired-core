@@ -13,7 +13,7 @@ The output must be fresh. A hash-addressed cache is rehashed on every use; `--of
 Build and run the explicit optional native mode (x86_64 Linux GNU, panic unwind):
 
 ```sh
-CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 cargo +1.95.0 build --locked -p labwired-cli --bin labwired --profile native-system --features qemu-arm-system,event-scheduler
+CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 cargo +1.99.1 build --locked -p labwired-cli --bin labwired --profile native-system --features qemu-arm-system,event-scheduler
 ./target/native-system/labwired rv1103-linux --artifacts /tmp/rv1103-linux --receipt /tmp/rv1103-boot.json --cpu-hz 24000000 --wall-seconds 1800
 ```
 
@@ -26,7 +26,7 @@ LABWIRED_RV1103_ARTIFACTS=/tmp/rv1103-linux \
 LABWIRED_RV1103_CLI="$PWD/target/native-system/labwired" \
 LABWIRED_RV1103_BOOT_RECEIPT=/tmp/rv1103-boot-new.json \
 CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 \
-cargo +1.95.0 test --locked -p labwired-core --profile native-system --features qemu-arm-system,event-scheduler --test rv1103_linux_boot -- --ignored --nocapture
+cargo +1.99.1 test --locked -p labwired-core --profile native-system --features qemu-arm-system,event-scheduler --test rv1103_linux_boot -- --ignored --nocapture
 ```
 
 This explicitly ignored, feature-required test fails on missing prerequisites. It invokes the CLI once, independently rehashes all inputs and the executable, and checks the complete fresh receipt. The [native workflow](../../.github/workflows/core-qemu-arm.yml) offers the same production gate only through the manual `linux_acceptance` boolean; its structural/default-off suites run separately. Local acceptance does not claim that CI has run.

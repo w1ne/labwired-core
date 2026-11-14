@@ -223,7 +223,9 @@ fn the_deck_firmware_drives_every_part() {
     // loop ran, not that anything reached the panel.
     let bytes = art.bytes.as_ref().expect("include_bytes was requested");
     let inked = bytes
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .filter(|px| px[0] != 0 || px[1] != 0)
         .count();
     assert_eq!(

@@ -1008,8 +1008,10 @@ mod tests {
         let b = std::fs::read(&output).unwrap();
         assert_eq!(u32::from_le_bytes(b[24..28].try_into().unwrap()), 44_100);
         let pcm: Vec<i16> = b[44..]
-            .chunks_exact(2)
-            .map(|p| i16::from_le_bytes([p[0], p[1]]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|p| i16::from_le_bytes(*p))
             .collect();
         assert_eq!(pcm, vec![100, 200, 300, 400]);
         let _ = std::fs::remove_file(input);

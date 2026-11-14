@@ -102,6 +102,7 @@ fn main() -> ! {
 
     putline(b"DONE");
 
+    #[allow(clippy::empty_loop)] // bare-metal firmware: park the core forever
     loop {}
 }
 
@@ -229,5 +230,6 @@ unsafe fn rmw32(addr: u32, set_bits: u32) {
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
+    #[allow(clippy::empty_loop)] // bare-metal firmware: park the core forever
     loop {}
 }

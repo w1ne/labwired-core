@@ -53,5 +53,6 @@ fn main() -> ! {
         // Toggle LED via POSR (set PODR[11]).
         write_volatile(PORT1_PCNTR3, LED);
     }
+    #[allow(clippy::empty_loop)] // bare-metal firmware: park the core forever
     loop {}
 }

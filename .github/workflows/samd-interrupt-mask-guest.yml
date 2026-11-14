@@ -22,7 +22,7 @@ jobs:
           ref: e15482fd6b537ffd208919c31d568c0bea14d47a
           path: owned-mask-source
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: dtolnay/rust-toolchain@1.99.1
       - uses: Swatinem/rust-cache@v2
       - name: Build source-bound owned PRIMASK guests
         run: |

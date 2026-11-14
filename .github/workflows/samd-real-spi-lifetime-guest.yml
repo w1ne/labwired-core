@@ -30,7 +30,7 @@ jobs:
             git clone --no-checkout https://github.com/lancaster-university/codal-core.git "owned-lifetime-core-$mode"
             git -C "owned-lifetime-core-$mode" checkout --detach 2ed19d64ec3359143409a4b0a9758b4aeef3ee7d
           done
-      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: dtolnay/rust-toolchain@1.99.1
       - uses: Swatinem/rust-cache@v2
       - name: Build separate lifetime and positive callers
         run: |

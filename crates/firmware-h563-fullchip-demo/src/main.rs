@@ -109,10 +109,12 @@ fn main() -> ! {
     uart_write_str("GPIOA=1 GPIOB=1 GPIOC=1 GPIOD=1 GPIOE=1 GPIOF=1 GPIOG=1\n");
     uart_write_str("ALL=1\n");
 
+    #[allow(clippy::empty_loop)] // bare-metal firmware: park the core forever
     loop {}
 }
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
+    #[allow(clippy::empty_loop)] // bare-metal firmware: park the core forever
     loop {}
 }
