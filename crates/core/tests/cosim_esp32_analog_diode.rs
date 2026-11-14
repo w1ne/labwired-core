@@ -12,7 +12,7 @@ use common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::cosim::{CosimSession, CosimSignalValue, RoutingError};
-use labwired_core::peripherals::esp32::sar_adc::{Esp32SarAdc, SENS_BASE};
+use labwired_core::peripherals::esp32::sar_adc::SENS_BASE;
 use labwired_core::Bus;
 use std::path::Path;
 
@@ -51,6 +51,15 @@ fn expected_diode_voltage() -> f64 {
     junction_v + current_at_junction_voltage(junction_v) * DIODE_RS_OHMS
 }
 
+fn sample_sar1(bus: &mut SystemBus, channel: u8) -> u32 {
+    bus.write_u32(u64::from(SENS_BASE), 3 << 16).unwrap();
+    let start = (1u32 << (19 + u32::from(channel))) | (1 << 18) | (1 << 17);
+    bus.write_u32(u64::from(SENS_BASE) + 0x54, start).unwrap();
+    let result = bus.read_u32(u64::from(SENS_BASE) + 0x54).unwrap();
+    assert_ne!(result & (1 << 16), 0, "DONE_SAR is raised");
+    result & 0x0FFF
+}
+
 #[test]
 fn feather_esp32_diode_netlist_reaches_sens_sar_channel_and_one_shot_result() {
     let system_path = root("examples/adafruit-feather-esp32-v2/analog-diode-system.yaml");
@@ -66,6 +75,9 @@ fn feather_esp32_diode_netlist_reaches_sens_sar_channel_and_one_shot_result() {
         &[] as &[RoutingError],
         "the diode output must resolve to SENS SAR ADC channel {CHANNEL}"
     );
+
+    let selected_before = sample_sar1(&mut bus, CHANNEL);
+    let neighbor_before = sample_sar1(&mut bus, CHANNEL - 1);
 
     let boundary = session.cycles_until_boundary(0);
     let (steps, errors) = session
@@ -84,42 +96,20 @@ fn feather_esp32_diode_netlist_reaches_sens_sar_channel_and_one_shot_result() {
         "the solved nonlinear load line should be {expected_voltage} V, got {routed_voltage} V"
     );
 
-    let adc_index = bus
-        .find_peripheral_index_by_name("sens_sar_adc")
-        .expect("the board declares the classic ESP32 SENS SAR ADC");
-    let adc = bus.peripherals[adc_index]
-        .dev
-        .as_any_mut()
-        .expect("SENS SAR downcasts")
-        .downcast_mut::<Esp32SarAdc>()
-        .expect("sens_sar_adc uses the classic ESP32 SAR model");
     let expected_mv = (expected_voltage * 1000.0).round() as u16;
-    let expected_count = (u32::from(expected_mv) * 4095 / 3300) as u16;
-    assert_eq!(
-        adc.channel_input_count(CHANNEL),
-        expected_count,
-        "the MNA result must seed the selected SENS SAR input"
+    let expected_count = u32::from(expected_mv) * 4095 / 3300;
+    let selected_after = sample_sar1(&mut bus, CHANNEL);
+    let neighbor_after = sample_sar1(&mut bus, CHANNEL - 1);
+    assert_ne!(
+        selected_after, selected_before,
+        "the routed voltage changes the selected channel"
     );
     assert_eq!(
-        adc.channel_input_count(CHANNEL - 1),
-        0xFFFF,
-        "the neighboring channel must remain undriven"
+        selected_after, expected_count,
+        "SAR1 DATA_SAR reports the diode voltage"
     );
-
-    // SENS_SAR_READ_CTRL.SAR1_SAMPLE_BIT = 0b11 selects 12-bit conversion.
-    bus.write_u32(u64::from(SENS_BASE), 3 << 16)
-        .expect("select 12-bit SAR1 conversion");
-    // SAR_MEAS_START1: EN_PAD is one-hot at CHANNEL, force is set, then SAR starts.
-    let start = (1u32 << (19 + u32::from(CHANNEL))) | (1 << 18) | (1 << 17);
-    bus.write_u32(u64::from(SENS_BASE) + 0x54, start)
-        .expect("start SAR1 conversion on the routed channel");
-    let result = bus
-        .read_u32(u64::from(SENS_BASE) + 0x54)
-        .expect("read firmware-visible SAR1 result");
-    assert_ne!(result & (1 << 16), 0, "DONE_SAR is raised");
     assert_eq!(
-        result & 0x0FFF,
-        u32::from(expected_count),
-        "SAR1 DATA_SAR must report the diode's routed voltage"
+        neighbor_after, neighbor_before,
+        "the neighboring ADC channel is unchanged"
     );
 }
