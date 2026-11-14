@@ -1,6 +1,6 @@
 # Chip list
 
-Every chip LabWired models: **524 parts** — **115 public** (open models in [labwired-core](https://github.com/w1ne/labwired-core)) and **409 private** (commercial models). 4 retired part(s) are kept in the table marked excluded.
+Every chip LabWired models: **526 parts** — **117 public** (open models in [labwired-core](https://github.com/w1ne/labwired-core)) and **409 private** (commercial models). 4 retired part(s) are kept in the table marked excluded.
 
 The table is generated from the live catalogues by `scripts/generate_chip_catalog.py` and refreshed in CI, so it cannot drift from the models. Private parts show a name and a coverage level only — their descriptor contents stay internal.
 
@@ -60,7 +60,7 @@ The table is generated from the live catalogues by `scripts/generate_chip_catalo
       <option value="excluded">excluded only</option>
     </select></label>
   </div>
-  <p class="lw-chips__count" id="lw-chip-count">Showing 524 of 524 chips.</p>
+  <p class="lw-chips__count" id="lw-chip-count">Showing 526 of 526 chips.</p>
   <table class="lw-chips__table">
     <thead><tr>
       <th scope="col">Chip</th>
@@ -3679,6 +3679,22 @@ The table is generated from the live catalogues by `scripts/generate_chip_catalo
         <td><span class="lw-badge lw-badge--ok">L1 modelled</span></td>
         <td class="lw-dim">public</td>
       </tr>
+      <tr class="lw-chip" data-name="nrf54l05" data-family="Arm Cortex-M" data-vendor="Nordic Semiconductor" data-coverage="modelled" data-status="supported" data-search="nrf54l05 nordic semiconductor arm cortex-m  modelled">
+        <td><code>nrf54l05</code></td>
+        <td>Nordic Semiconductor</td>
+        <td>Arm Cortex-M</td>
+        <td class="lw-dim">—</td>
+        <td><span class="lw-badge lw-badge--warn">modelled</span></td>
+        <td class="lw-dim">public</td>
+      </tr>
+      <tr class="lw-chip" data-name="nrf54l10" data-family="Arm Cortex-M" data-vendor="Nordic Semiconductor" data-coverage="modelled" data-status="supported" data-search="nrf54l10 nordic semiconductor arm cortex-m  modelled">
+        <td><code>nrf54l10</code></td>
+        <td>Nordic Semiconductor</td>
+        <td>Arm Cortex-M</td>
+        <td class="lw-dim">—</td>
+        <td><span class="lw-badge lw-badge--warn">modelled</span></td>
+        <td class="lw-dim">public</td>
+      </tr>
       <tr class="lw-chip" data-name="nrf54l15" data-family="Arm Cortex-M" data-vendor="Nordic Semiconductor" data-coverage="L1 modelled" data-status="supported" data-search="nrf54l15 nordic semiconductor arm cortex-m  l1 modelled">
         <td><code>nrf54l15</code></td>
         <td>Nordic Semiconductor</td>
@@ -4277,7 +4293,7 @@ The table is generated from the live catalogues by `scripts/generate_chip_catalo
 | LiteX | 1 |
 | Microchip | 434 |
 | NXP | 4 |
-| Nordic Semiconductor | 7 |
+| Nordic Semiconductor | 9 |
 | OpenHW | 1 |
 | Other | 13 |
 | Raspberry Pi | 2 |
@@ -4289,7 +4305,7 @@ The table is generated from the live catalogues by `scripts/generate_chip_catalo
 | Family | Chips |
 |---|---|
 | AVR | 55 |
-| Arm Cortex-M | 93 |
+| Arm Cortex-M | 95 |
 | Other | 3 |
 | PIC16 | 155 |
 | PIC18 | 158 |
