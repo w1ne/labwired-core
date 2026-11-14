@@ -164,6 +164,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | nrf52833 | ✓ | ✓ | ✓ |
 | nrf52840 | ✓ | ✓ | ✓ |
 | nrf5340 | — | — | — |
+| nrf54l05 | — | — | — |
+| nrf54l10 | — | — | — |
 | nrf54l15 | — | — | — |
 | nrf54lm20a | — | — | — |
 | pic16f1829 | — | — | — |
