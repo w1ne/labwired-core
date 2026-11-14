@@ -57,7 +57,7 @@ jobs:
             for profile in default scheduler; do
               feature_args=()
               if test "$profile" = scheduler; then feature_args=(--features event-scheduler); fi
-              if ! cargo test --release --locked -p labwired-core "${feature_args[@]}" --test "$fixture" -- --ignored --nocapture 2>&1 | tee "spi-lifetime-$mode-$profile.log"; then
+              if ! cargo test --release --locked -p labwired-core "${feature_args[@]}" --test samd -- --ignored --nocapture "$fixture::" 2>&1 | tee "spi-lifetime-$mode-$profile.log"; then
                 lifetime_failures=$((lifetime_failures + 1))
               fi
             done

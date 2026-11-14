@@ -43,7 +43,6 @@ compile without Unix dependencies. Windows previously exposed the unbounded
 synchronous process path; it now fails explicitly until a bounded Windows pipe
 transport is implemented. No bounded Windows behavior is claimed.
 
-Tests: `cargo test -p labwired-core --test cosim cosim_external_process_bounds::
---test cosim -- cosim_contract:: cosim_canonical_basket::`. The canonical basket test
+Tests: `cargo test -p labwired-core --test cosim -- cosim_external_process_bounds:: cosim_contract:: cosim_canonical_basket::`. The canonical basket test
 uses the generated native manifest and the existing Python power wrapper,
 not a Linux guest or new private battery/sensor implementation.

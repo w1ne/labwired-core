@@ -551,11 +551,8 @@ cargo run --locked -q -p labwired-cli -- test \
   --script examples/nucleo-u575zi/io-smoke.yaml
 cargo run --locked -q -p labwired-cli -- test \
   --script examples/nucleo-u575zi/uart-smoke.yaml
-cargo test --locked -p labwired-core \
-  --test gpio_logic board_io_button_stimulus:: \
-  --test stm32 stm32u575_60north_registers:: \
-  --test stm32 u545_u575_drift_guard:: \
-  --test stm32 h563_conformance::
+cargo test --locked -p labwired-core --test gpio_logic board_io_button_stimulus::
+cargo test --locked -p labwired-core --test stm32 -- stm32u575_60north_registers:: u545_u575_drift_guard:: h563_conformance::
 ./scripts/unsupported_instruction_audit.sh \
   --firmware target/thumbv8m.main-none-eabi/release/nucleo-u575-star-catcher \
   --system examples/nucleo-u575zi/star-catcher-system.yaml \

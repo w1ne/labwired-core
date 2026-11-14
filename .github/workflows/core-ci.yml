@@ -613,6 +613,13 @@ jobs:
       - name: Core dependency ratchet — advisory report
         run: python3 scripts/ci/core_dep_map.py --check
 
+      # Every `--test <target>` in a workflow, script or doc must name a real
+      # cargo test target (and `<module>::` filters a real module of a grouped
+      # binary). Path-filtered and post-merge lanes would otherwise only
+      # discover a stale name when they next run.
+      - name: Test-target references resolve
+        run: python3 scripts/ci/check_test_target_refs.py --check
+
       - name: Perf gate — every chip covered or waived
         run: |
           python -m pip install --quiet pytest
@@ -628,6 +635,7 @@ jobs:
             scripts/ci/test_matrix_verdict.py \
             scripts/ci/test_cheat_ratchet.py \
             scripts/ci/test_core_dep_map.py \
+            scripts/ci/test_check_test_target_refs.py \
             scripts/ci/test_ignore_reasons.py \
             scripts/ci/test_linker_script_single_source.py \
             scripts/ci/test_host_clippy_scope.py \
@@ -2542,6 +2550,7 @@ jobs:
         run: |
           set -uo pipefail
           python3 scripts/ci/known_red.py --rows > /tmp/known-red.txt
+          # test-target-refs: dynamic (rows come from workspace-test-shards.json known_red; the checker validates that file)
           while read -r pkg target test issue; do
             [ -n "${pkg:-}" ] || continue
             if cargo test -p "$pkg" --test "$target" -- --exact "$test"; then

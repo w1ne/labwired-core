@@ -132,7 +132,8 @@ cargo test -p labwired-core --test bus cpu_trace_conformance:: # 3 passed
 #    declared-only to a modelled conformance row with a behaviour gate)
 UPDATE_CONFORMANCE_BASELINE=1 cargo test -p labwired-core --test gates chip_conformance::
 UPDATE_BUS_VISIBILITY_BASELINE=1 cargo test -p labwired-core --test bus bus_visibility::
-cargo test -p labwired-core --test gates --test bus -- chip_conformance:: bus_visibility::   # both green
+cargo test -p labwired-core --test gates chip_conformance::   # green
+cargo test -p labwired-core --test bus bus_visibility::   # green
 
 # 5. fmt / clippy
 cargo fmt --all -- --check                              # clean
