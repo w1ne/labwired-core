@@ -24,6 +24,7 @@ on:
 
 permissions:
   actions: write
+  checks: read # job annotations tell runner loss from a cancel
   contents: read
 
 jobs:
