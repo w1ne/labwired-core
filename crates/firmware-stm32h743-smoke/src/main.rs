@@ -3,6 +3,8 @@
 
 use core::ptr::{read_volatile, write_volatile};
 use cortex_m_rt::entry;
+#[cfg(feature = "stm32h743-tim2")]
+use cortex_m_rt::exception;
 use panic_halt as _;
 
 #[cfg(feature = "stm32h743-exception-frame")]
@@ -186,6 +188,176 @@ const USART_RECEIVER_ENABLE: u32 = if cfg!(feature = "nucleo-h753zi-rx") {
     0
 };
 const LED: u32 = 1;
+
+// RM0433 Rev 8: TIM2 is a 32-bit general-purpose timer at 0x4000_0000 on
+// APB1, clocked by RCC_APB1LENR.TIM2EN (bit 0), with its global
+// interrupt at NVIC position 28.
+#[cfg(feature = "stm32h743-tim2")]
+const TIM2: u32 = 0x4000_0000;
+#[cfg(feature = "stm32h743-tim2")]
+const TIM_CR1: *mut u32 = TIM2 as *mut u32;
+#[cfg(feature = "stm32h743-tim2")]
+const TIM_DIER: *mut u32 = (TIM2 + 0x0C) as *mut u32;
+#[cfg(feature = "stm32h743-tim2")]
+const TIM_SR: *mut u32 = (TIM2 + 0x10) as *mut u32;
+#[cfg(feature = "stm32h743-tim2")]
+const TIM_EGR: *mut u32 = (TIM2 + 0x14) as *mut u32;
+#[cfg(feature = "stm32h743-tim2")]
+const TIM_CNT: *mut u32 = (TIM2 + 0x24) as *mut u32;
+#[cfg(feature = "stm32h743-tim2")]
+const TIM_PSC: *mut u32 = (TIM2 + 0x28) as *mut u32;
+#[cfg(feature = "stm32h743-tim2")]
+const TIM_ARR: *mut u32 = (TIM2 + 0x2C) as *mut u32;
+#[cfg(feature = "stm32h743-tim2")]
+const TIM_CEN: u32 = 1 << 0;
+#[cfg(feature = "stm32h743-tim2")]
+const TIM_UIF: u32 = 1 << 0;
+#[cfg(feature = "stm32h743-tim2")]
+const TIM2_IRQ: i16 = 28;
+#[cfg(feature = "stm32h743-tim2")]
+const TIM2_IRQ_BIT: u32 = 1 << 28;
+#[cfg(feature = "stm32h743-tim2")]
+const TIM2_NVIC_ISER0: *mut u32 = 0xE000_E100 as *mut u32;
+#[cfg(feature = "stm32h743-tim2")]
+const TIM2_NVIC_ICER0: *mut u32 = 0xE000_E180 as *mut u32;
+#[cfg(feature = "stm32h743-tim2")]
+const TIM2_NVIC_ISPR0: *mut u32 = 0xE000_E200 as *mut u32;
+#[cfg(feature = "stm32h743-tim2")]
+const TIM2_NVIC_ICPR0: *mut u32 = 0xE000_E280 as *mut u32;
+
+// [0] = TIM2 interrupt entries, [1] = entries for any other vector.
+#[cfg(feature = "stm32h743-tim2")]
+static mut TIM2_IRQ_RECORD: [u32; 2] = [0; 2];
+
+#[cfg(feature = "stm32h743-tim2")]
+#[exception]
+unsafe fn DefaultHandler(irqn: i16) {
+    let record = core::ptr::addr_of_mut!(TIM2_IRQ_RECORD).cast::<u32>();
+    if irqn == TIM2_IRQ {
+        // SR is rc_w0: writing 0 to UIF clears the request at its source.
+        write_volatile(TIM_SR, !TIM_UIF);
+        write_volatile(record, read_volatile(record).wrapping_add(1));
+    } else {
+        write_volatile(record.add(1), read_volatile(record.add(1)).wrapping_add(1));
+    }
+}
+
+#[cfg(feature = "stm32h743-tim2")]
+fn send_flag(label: &[u8], ok: bool) {
+    send(label);
+    send(if ok { b"1" } else { b"0" });
+}
+
+#[cfg(feature = "stm32h743-tim2")]
+fn check_tim2() {
+    let record = unsafe { core::ptr::addr_of_mut!(TIM2_IRQ_RECORD).cast::<u32>() };
+    unsafe {
+        // TIM2EN is clear out of reset: the write must be dropped and the
+        // register must read zero rather than its 0xFFFF_FFFF reset value.
+        write_volatile(TIM_ARR, 0x1234);
+    }
+    let gated = unsafe { read_volatile(TIM_ARR) } == 0;
+    unsafe {
+        write_volatile(RCC_APB1LENR, read_volatile(RCC_APB1LENR) | 1);
+    }
+    let arr_reset = unsafe { read_volatile(TIM_ARR) } == 0xFFFF_FFFF;
+    unsafe {
+        write_volatile(TIM_CNT, 0x1234_5678);
+    }
+    let width32 = unsafe { read_volatile(TIM_CNT) } == 0x1234_5678;
+
+    // Free-running: PSC=0, ARR=999, UG loads the counter and sets UIF.
+    unsafe {
+        write_volatile(TIM_PSC, 0);
+        write_volatile(TIM_ARR, 999);
+        write_volatile(TIM_EGR, 1);
+    }
+    let ug =
+        unsafe { read_volatile(TIM_SR) } & TIM_UIF != 0 && unsafe { read_volatile(TIM_CNT) } == 0;
+    unsafe {
+        write_volatile(TIM_SR, !TIM_UIF);
+    }
+    let uif_cleared = unsafe { read_volatile(TIM_SR) } & TIM_UIF == 0;
+
+    // Update events with UIE clear must set UIF and leave NVIC line 28 idle.
+    unsafe {
+        write_volatile(TIM2_NVIC_ICPR0, TIM2_IRQ_BIT);
+        write_volatile(TIM_CR1, TIM_CEN);
+    }
+    let first = unsafe { read_volatile(TIM_CNT) };
+    let mut advanced = false;
+    let mut overflowed = false;
+    for _ in 0..20_000 {
+        let now = unsafe { read_volatile(TIM_CNT) };
+        advanced |= now != first && now <= 999;
+        if unsafe { read_volatile(TIM_SR) } & TIM_UIF != 0 {
+            overflowed = true;
+            break;
+        }
+    }
+    let masked = overflowed && unsafe { read_volatile(TIM2_NVIC_ISPR0) } & TIM2_IRQ_BIT == 0;
+
+    // Enable the line and count three serviced update interrupts.
+    unsafe {
+        write_volatile(TIM_CR1, 0);
+        write_volatile(TIM_SR, !TIM_UIF);
+        write_volatile(record, 0);
+        write_volatile(record.add(1), 0);
+        write_volatile(TIM2_NVIC_ISER0, TIM2_IRQ_BIT);
+        write_volatile(TIM_DIER, 1);
+        write_volatile(TIM_CR1, TIM_CEN);
+    }
+    for _ in 0..100_000 {
+        if unsafe { read_volatile(record) } >= 3 {
+            break;
+        }
+    }
+    unsafe {
+        write_volatile(TIM_CR1, 0);
+        write_volatile(TIM_DIER, 0);
+    }
+    let irqs = unsafe { read_volatile(record) };
+    let stopped_at = unsafe { read_volatile(TIM_CNT) };
+    for _ in 0..2_000 {
+        let _ = unsafe { read_volatile(TIM_SR) };
+    }
+    let stopped =
+        unsafe { read_volatile(TIM_CNT) } == stopped_at && unsafe { read_volatile(record) } == irqs;
+    let stray = unsafe { read_volatile(record.add(1)) };
+
+    unsafe {
+        write_volatile(TIM2_NVIC_ICER0, TIM2_IRQ_BIT);
+        write_volatile(TIM_SR, !TIM_UIF);
+        write_volatile(TIM2_NVIC_ICPR0, TIM2_IRQ_BIT);
+    }
+    let released = unsafe { read_volatile(TIM2_NVIC_ISPR0) } & TIM2_IRQ_BIT == 0;
+
+    send_flag(b"tim2 gated=", gated);
+    send_flag(b" arr_reset=", arr_reset);
+    send_flag(b" w32=", width32);
+    send_flag(b" ug=", ug);
+    send_flag(b" uif_clr=", uif_cleared);
+    send_flag(b" run=", advanced);
+    send_flag(b" masked=", masked);
+    send(b" irq=");
+    send(&[b'0' + (irqs.min(9) as u8)]);
+    send(b" stray=");
+    send(&[b'0' + (stray.min(9) as u8)]);
+    send_flag(b" stop=", stopped);
+    send_flag(b" rel=", released);
+    let ok = gated
+        && arr_reset
+        && width32
+        && ug
+        && uif_cleared
+        && advanced
+        && masked
+        && irqs == 3
+        && stray == 0
+        && stopped
+        && released;
+    send(if ok { b" ok\r\n" } else { b" fail\r\n" });
+}
 
 #[cfg(feature = "nucleo-h753zi-rx")]
 fn check_uart_rx_enable_gates() -> bool {
@@ -2752,6 +2924,10 @@ fn main() -> ! {
 
     set_led(false);
     send(b"STM32H7 register smoke\r\n");
+    // Runs before the exception-frame checks, which leave VTOR on their RAM
+    // table: the TIM2 interrupt must enter through the flash vector table.
+    #[cfg(feature = "stm32h743-tim2")]
+    check_tim2();
     #[cfg(feature = "stm32h743-exception-frame")]
     {
         unsafe {

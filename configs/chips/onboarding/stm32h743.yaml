@@ -1,7 +1,7 @@
 # Imported STM32H743 smoke profile. The imported Renode catalogue listed a
 # wider set of peripherals, including blocks that are stubs in this engine.
-# Keep only the H7 RCC, GPIOB/GPIOD, USART3, Cortex-M FPU state, flash, and
-# DTCM used by the smoke.
+# Keep only the H7 RCC, GPIOB/GPIOD, USART3, TIM2, Cortex-M FPU state, flash,
+# and DTCM used by the smoke.
 # RM0433 documents the H743 memory map; 1 MiB flash is a conservative window for
 # this generic descriptor because it does not distinguish xG from xI density.
 name: stm32h743
@@ -38,6 +38,21 @@ peripherals:
     size: 1KB
     config:
       profile: stm32v2
+  # RM0433 Rev 8: TIM2 is the 32-bit general-purpose timer at 0x40000000
+  # with NVIC position 28, clocked by RCC_APB1LENR.TIM2EN (bit 0). Renode
+  # stm32h7.repl timer2 agrees on base and line.
+  # The smoke covers the gate, 32-bit CNT/ARR, UG, UIF, and the update
+  # interrupt in up-counting mode. Not modelled: CR1.OPM, DIR, and CMS are
+  # stored without effect (measured 2026-11-14: OPM does not clear CEN).
+  # Channels, pads, and the count rate are not exercised.
+  - id: tim2
+    type: timer
+    base_address: 0x40000000
+    size: 1KB
+    irq: 28
+    clock: { reg: apb1lenr, bit: 0 }
+    config:
+      width: 32
   - id: fpu
     type: cortex_m_fpu
     base_address: 0xE000EF30
