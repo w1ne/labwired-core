@@ -117,7 +117,13 @@ steps the model against the pins the firmware is actually driving:
 | `board.reset.<pin>_volts` | model → machine | volts | The descriptor-declared reset pin, with absolute or VDD-ratio thresholds and valid/invalid pulse limits. Holds execution independently of the supply supervisor. |
 | `board.motor.<id>.back_emf_v` | machine → model | number | The back-EMF of an `armature: circuit` DC motor (Ke·ω, volts), for the netlist's series EMF source. |
 | `board.motor.<id>.current_a` | model → machine | number | The winding current the netlist solved for an `armature: circuit` DC motor (amps, positive = forward torque). Until it is routed the motor holds still and reports no current. |
+| `board.motor.<id>.phase_{a,b,c}_back_emf_v` | machine → model | volts | The three phase EMFs of a circuit BLDC winding. |
+| `board.motor.<id>.phase_{a,b,c}_current_a` | model → machine | amps | A complete solved three-phase current vector, positive toward the floating star. |
+| `board.motor.<id>.supply_v` | model → machine | volts | Optional measured supply for a circuit DC/BLDC motor; absent remains unknown. |
 | `ui.<partId>.<field>` | outside → model | bool or number | Set from outside the engine (a canvas part, a test stimulus); 0 / false until set. |
+
+For the complete winding, ownership, timing and readback contract, see
+[Circuit-driven three-phase BLDC motors](circuit-bldc.md).
 
 `<pad>` is a pad label in whatever form the chip speaks — `pa5` / `PA5` on
 STM32, `pd2` on the ATmega328P, `p0.13` on Nordic, `gpio5` or a bare `5` on

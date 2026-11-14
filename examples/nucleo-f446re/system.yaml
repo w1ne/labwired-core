@@ -1,0 +1,6 @@
+name: "nucleo-f446re-smoke"
+chip: "../../configs/chips/stm32f446re.yaml"
+external_devices: []
+board_io:
+  - { id: "led2_pa5", kind: "led", peripheral: "gpioa", pin: 5, signal: "output", active_high: true }
+  - { id: "button_user_pc13", kind: "button", peripheral: "gpioc", pin: 13, signal: "input", active_high: false }

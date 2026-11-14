@@ -22,6 +22,8 @@
 //! analog (NTC thermistor on an ADC channel) and CAN (a UDS tester node, a
 //! candump replay node).
 
+#[path = "common/src_roots.rs"]
+mod src_roots;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::cortex_m::CortexM;
@@ -252,9 +254,7 @@ fn attached_device_walk_covers_every_bus_collection() {
 }
 
 fn core_src(rel: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("src")
-        .join(rel)
+    src_roots::core_src(rel)
 }
 
 /// Field names of every `SystemBus` collection that holds external-device

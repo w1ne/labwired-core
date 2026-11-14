@@ -28,11 +28,12 @@
 
 #[path = "common/keypad.rs"]
 mod keypad_fixture;
+#[path = "common/src_roots.rs"]
+mod src_roots;
 use keypad_fixture::{keypad, COLS, ROWS};
 use labwired_core::bus::DevicePins;
 use labwired_core::sim_input::SimInput;
 use std::collections::HashMap;
-use std::path::PathBuf;
 
 /// A `DevicePins` that is not a bus: a flat `(addr, bit) -> level` map for the
 /// MCU's output pins, and a log of everything the device drove back.
@@ -208,13 +209,7 @@ fn resident_device_port_stays_narrow() {
         "self", "mut", "u8", "u16", "u32", "u64", "usize", "bool", "Option",
     ];
 
-    let src = std::fs::read_to_string(
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("src")
-            .join("bus")
-            .join("resident_device.rs"),
-    )
-    .expect("read bus/resident_device.rs");
+    let src = src_roots::read_core_src("bus/resident_device.rs");
 
     let body = src
         .split_once("pub trait DevicePins {")
@@ -589,9 +584,7 @@ fn a_part_that_shows_nothing_publishes_no_artifact() {
 /// field got there the first time, so the guard is a source read.
 #[test]
 fn no_typed_display_field_on_the_bus() {
-    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("src")
-        .join("bus");
+    let dir = src_roots::core_src("bus");
     let mod_rs = std::fs::read_to_string(dir.join("mod.rs")).expect("read bus/mod.rs");
     let accessors =
         std::fs::read_to_string(dir.join("accessors.rs")).expect("read bus/accessors.rs");

@@ -1,0 +1,17 @@
+id: stm32wb55
+chip: stm32wb55
+system: systems/stm32wb55.yaml
+pio: { platform: ststm32, board: nucleo_wb55rg_p, framework: arduino }
+max_steps: 20000000
+budget_reason: "L0 light; L3 Wire.begin i2c_computeTiming needs multi-M steps"
+led_watch: "gpiob:5"
+led_min_edges: 2
+# L6 drives TIM2_CH1 on PA0 (AF1): LD2/PB5 has no timer channel, so
+# analogWrite would fall back to digitalWrite. Routed by the WB timer AF
+# table (pad_map: stm32wb).
+pwm_watch: "gpioa:0"
+pwm_min_edges: 20
+family: stm32
+sketches_skip: [L8_can]
+sketches_skip_reason:
+  L8_can: "No CAN model in matrix path"

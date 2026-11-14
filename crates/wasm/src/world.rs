@@ -332,6 +332,18 @@ impl WasmWorld {
             .map_err(|error| JsValue::from_str(&format!("analog_channels: {error}")))
     }
 
+    /// Node-local shaft state; unknown measured electrical quantities stay null.
+    pub fn get_actuator_states(&self, node_id: &str) -> Result<JsValue, JsValue> {
+        let states = crate::inspect::motor_states_json(self.machine(node_id)?.motor_snapshots());
+        serde_wasm_bindgen::to_value(&states)
+            .map_err(|error| JsValue::from_str(&format!("get_actuator_states: {error}")))
+    }
+
+    pub fn motor_series(&self, node_id: &str) -> Result<JsValue, JsValue> {
+        serde_wasm_bindgen::to_value(&self.machine(node_id)?.motor_series())
+            .map_err(|error| JsValue::from_str(&format!("motor_series: {error}")))
+    }
+
     pub fn analog_trace_snapshot(&self, cursor: f64) -> Result<JsValue, JsValue> {
         if !cursor.is_finite() || cursor < 0.0 {
             return Err(JsValue::from_str(

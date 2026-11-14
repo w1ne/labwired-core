@@ -1,0 +1,37 @@
+id: nrf5340
+doc: docs/boards/nrf5340.md
+chip: configs/chips/nrf5340.yaml
+tier: sim-validated
+note: "Application core (Cortex-M33). Boots UNMODIFIED upstream Zephyr v3.7 hello_world (board nrf5340dk/nrf5340/cpuapp) end to end and prints its banner over the UARTE0 EasyDMA console — asserted by firmware_survival::test_nrf5340_zephyr_survival. The ELF-independent nrf5340_clock_boot gate checks the secure cpuapp 0x5000_0000 mapping, HFCLK/LFCLK polls, and a TWIM1 EasyDMA repeated-START read of BMI270 CHIP_ID 0x24 on SDA P1.02 / SCL P1.03. Network core, radio, TrustZone/SPU enforcement, physical I²C edge narration, and analog trims are not modeled. No nRF5340 silicon diff — no bench board."
+offline_tests:
+  - "firmware_survival::test_nrf5340_zephyr_survival (real Zephyr ELF boots + banner)"
+  - "nrf5340_clock_boot (secure cpuapp mapping + HFCLK/LFCLK polls + TWIM1/BMI270 EasyDMA read)"
+models:
+  - crates/core/src/cpu/cortex_m.rs
+  - crates/core/src/decoder/arm.rs
+  - configs/chips/nrf5340.yaml
+  - crates/core/src/peripherals/nrf52
+  - crates/core/src/peripherals/scb.rs
+  # 2026-09-21, model_paths_drift_gate: models this board REGISTERS that
+  # its list omitted, so they were invisible to the drift digest. This
+  # board records no silicon capture, so there is no "silicon-verified"
+  # claim for the corrected digest to invalidate — no ack is implied.
+  - crates/core/src/peripherals/gpio.rs
+  - crates/core/src/peripherals/nrf52/clock.rs
+  - crates/core/src/peripherals/nrf52/rtc.rs
+  - crates/core/src/peripherals/nrf52/timer.rs
+  - crates/core/src/peripherals/nrf52/uarte.rs
+  - crates/core/src/peripherals/stub.rs
+  # 2026-10-16 (#1394), model_paths_drift_gate: the chip descriptor now
+  # declares the Cortex-M SysTick, so its model joins the watch list. No
+  # silicon capture is recorded for this board, so no ack is implied.
+  - crates/core/src/peripherals/systick.rs
+  # 2026-10-17, model_paths_drift_gate: #1407 registers nrf5340_dppic, whose
+  # source was not on this watch list. No silicon capture is recorded for
+  # this board, so no ack is implied.
+  - crates/core/src/peripherals/nrf52/dppic.rs
+  # 2026-11-09, model_paths_drift_gate: nrf5340_clock_boot registers TWIM1
+  # (nrf52/twim.rs) for the BMI270 EasyDMA CHIP_ID read, and that source
+  # was not on this watch list. No silicon capture is recorded for this
+  # board, so no ack is implied.
+  - crates/core/src/peripherals/nrf52/twim.rs

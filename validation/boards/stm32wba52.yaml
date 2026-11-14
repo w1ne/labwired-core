@@ -1,0 +1,30 @@
+id: stm32wba52
+doc: docs/boards/stm32wba52.md
+chip: configs/chips/stm32wba52.yaml
+tier: smoke-manual
+note: "LPUART1 'smoke pass' is a manual runbook only; no automated test anywhere. Cortex-M33 TrustZone/radio/crypto not modeled."
+models:
+  - crates/core/src/peripherals/esp_ledc_wave.rs
+  - crates/core/src/cpu/cortex_m.rs
+  - crates/core/src/decoder/arm.rs
+  - configs/chips/stm32wba52.yaml
+  # 2026-09-21, model_paths_drift_gate: models this board REGISTERS that
+  # its list omitted, so they were invisible to the drift digest. This
+  # board records no silicon capture, so there is no "silicon-verified"
+  # claim for the corrected digest to invalidate — no ack is implied.
+  - crates/core/src/peripherals/crc.rs
+  - crates/core/src/peripherals/dbgmcu.rs
+  - crates/core/src/peripherals/flash.rs
+  - crates/core/src/peripherals/gpdma.rs
+  - crates/core/src/peripherals/gpio.rs
+  - crates/core/src/peripherals/i2c.rs
+  - crates/core/src/peripherals/iwdg.rs
+  - crates/core/src/peripherals/pwr.rs
+  - crates/core/src/peripherals/rcc.rs
+  - crates/core/src/peripherals/rtc.rs
+  - crates/core/src/peripherals/spi.rs
+  - crates/core/src/peripherals/stub.rs
+  - crates/core/src/peripherals/systick.rs
+  - crates/core/src/peripherals/timer.rs
+  - crates/core/src/peripherals/timer_output.rs
+  - crates/core/src/peripherals/uart.rs

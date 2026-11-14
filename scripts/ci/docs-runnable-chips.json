@@ -66,6 +66,18 @@
       "firmware": "tests/fixtures/tier1/nrf52840.elf",
       "expect": "TIER1 gpio PASS"
     },
+    "nrf54l05": {
+      "how": "committed",
+      "firmware": "tests/fixtures/board-smoke/nrf54l05.elf",
+      "expect": "NRF54L05_OK",
+      "note": "Executable nRF54L05 application-core subset, UART20 EasyDMA and GPIO P2.09; sibling common IP only. Tested with synthetic wiring, not physical board or full radio stack."
+    },
+    "nrf54l10": {
+      "how": "committed",
+      "firmware": "tests/fixtures/board-smoke/nrf54l10.elf",
+      "expect": "NRF54L10_OK",
+      "note": "Executable nRF54L10 application-core subset, UART20 EasyDMA and GPIO P2.09; sibling common IP only. Tested with synthetic wiring, not physical board or full radio stack."
+    },
     "nrf54l15": {
       "how": "example",
       "script": "examples/nrf54l15-dk/io-smoke.yaml",
@@ -186,6 +198,12 @@
     "stm32f401ve": {
       "how": "needs-build",
       "why": "Exact orderable geometry slice on the shared STM32F401 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f401 and exact geometry is checked by stm32_variant_geometry."
+    },
+    "stm32f446re": {
+      "how": "committed",
+      "firmware": "tests/fixtures/board-smoke/stm32f446re.elf",
+      "expect": "STM32F446RE_OK",
+      "note": "Small real-register RCC/GPIOA/USART2 boot and LED test; this simulator evidence is not physical silicon validation. Stock STM32duino requires the newer source model for the PWR over-drive and PLLI2S ready handshake."
     },
     "stm32f411ceu6": {
       "how": "blocked",

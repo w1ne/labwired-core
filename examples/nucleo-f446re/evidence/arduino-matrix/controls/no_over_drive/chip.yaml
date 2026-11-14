@@ -1,0 +1,345 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# STM32F446RET6 — Cortex-M4F, 180 MHz, 512 KiB flash, 128 KiB SRAM
+# (SRAM1 112 KiB + SRAM2 16 KiB, contiguous at 0x2000_0000), LQFP64.
+# Reference board: NUCLEO-F446RE (MB1136). This is the full-chip profile the
+# stock stm32duino core runs on; `stm32f446re-smoke.yaml` stays the narrow
+# bare-metal smoke profile.
+#
+# Sources: RM0390 Rev 6 (STM32F446xx reference manual) for the register maps,
+# DS10693 Rev 10 (STM32F446xC/E datasheet) for memory, pinout and the
+# alternate-function table, and ST's CMSIS stm32f446xx.h (shipped with
+# stm32duino) for IRQ numbers and RCC/PWR bit positions.
+#
+# Modelled: RCC (F4 + PLLI2S/PLLSAI ready flags), PWR (F4 + over-drive),
+# FLASH, GPIOA-D/H, SysTick, USART1/2/3/6, I2C1-3, SPI1-3, TIM1-5, ADC1,
+# bxCAN1, SYSCFG, EXTI, IWDG, RTC, DBGMCU, DMA1/2.
+# Not declared (no window, firmware that touches them faults as unmapped):
+# UART4/5, SPI4, FMPI2C1, TIM6-14, ADC2/3, DAC, bxCAN2, SAI1/2, SPDIFRX,
+# HDMI-CEC, QUADSPI, FMC, DCMI, USB OTG FS/HS, SDIO, CRC. No zero-answering
+# stubs are declared.
+
+name: "stm32f446re"
+arch: "arm"
+core: "cortex-m4"
+registers_count: 150
+# STM32F446RE maximum core clock (DS10693 §1), the clock stm32duino's
+# NUCLEO_F446RE SystemClock_Config programs: HSI 16 MHz / M 8 * N 180 / P 2.
+cpu_hz: 180_000_000
+# DS10693 Rev 10 §6.3.17 Table 57 "I/O static characteristics", FT/TTa I/O:
+# VIL max 0.3·VDD, VIH min 0.7·VDD (1.7 V <= VDD <= 3.6 V).
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7
+
+flash:
+  base: 0x08000000
+  size: "512KB"
+ram:
+  base: 0x20000000
+  size: "128KB"
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40023800
+    size: "1KB"
+    config:
+      profile: "stm32f4"
+      # F446 PLLSAI + DCKCFGR/DCKCFGR2 (RM0390 §6.3). stm32duino's
+      # SystemClock_Config also starts PLLI2S and waits on PLLI2SRDY.
+      pllsai: true
+  # FLASH interface (RM0390 §3.8). stm32duino waits on ACR.LATENCY = 5 before
+  # switching SYSCLK to the 180 MHz PLL.
+  - id: "flash"
+    type: "flash"
+    base_address: 0x40023C00
+    size: "1KB"
+    config:
+      profile: "stm32f4"
+  # PWR (RM0390 §5.4). The F446 adds the over-drive regulator: stock
+  # SystemClock_Config calls HAL_PWREx_EnableOverDrive, which sets CR.ODEN and
+  # spins on CSR.ODRDY, then sets CR.ODSWEN and spins on CSR.ODSWRDY.
+  - id: "pwr"
+    type: "pwr"
+    base_address: 0x40007000
+    size: "1KB"
+    config:
+      profile: "stm32f4"
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x40020000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+      # RM0390 §7.4.1: GPIOA MODER reset 0xA800_0000 (PA13/14/15 SWD/JTAG AF),
+      # PUPDR reset 0x6400_0000.
+      reset_moder: 0xA8000000
+      reset_pupdr: 0x64000000
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x40020400
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+      # RM0390 §7.4.1/7.4.3/7.4.4: PB3 (JTDO/SWO) and PB4 (NJTRST) in AF.
+      reset_moder: 0x00000280
+      reset_ospeedr: 0x000000C0
+      reset_pupdr: 0x00000100
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x40020800
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+  # LQFP64 bonds PD2 only.
+  - id: "gpiod"
+    type: "gpio"
+    base_address: 0x40020C00
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+  # PH0/PH1 (OSC_IN/OSC_OUT).
+  - id: "gpioh"
+    type: "gpio"
+    base_address: 0x40021C00
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+  # USART2 = the NUCLEO's ST-LINK Virtual COM Port (PA2/PA3, UM1724 §6.8),
+  # stm32duino's `Serial`.
+  - id: "uart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 38
+    clock: { reg: "apb1enr", bit: 17 }
+    config:
+      cr3_mask: 0xFFF
+  - id: "usart1"
+    type: "uart"
+    base_address: 0x40011000
+    size: "1KB"
+    irq: 37
+    clock: { reg: "apb2enr", bit: 4 }
+    config:
+      cr3_mask: 0xFFF
+  - id: "usart3"
+    type: "uart"
+    base_address: 0x40004800
+    size: "1KB"
+    irq: 39
+    clock: { reg: "apb1enr", bit: 18 }
+    config:
+      cr3_mask: 0xFFF
+  - id: "usart6"
+    type: "uart"
+    base_address: 0x40011400
+    size: "1KB"
+    irq: 71
+    clock: { reg: "apb2enr", bit: 5 }
+    config:
+      cr3_mask: 0xFFF
+  # I2C1 = stm32duino `Wire` on the NUCLEO's Arduino D15/D14 = PB8/PB9 (AF4).
+  # Two NVIC lines: EV 31 and ER 32 (stm32f446xx.h).
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 31
+    clock: { reg: "apb1enr", bit: 21 }
+    config:
+      irq_error: 32
+  - id: "i2c2"
+    type: "i2c"
+    base_address: 0x40005800
+    size: "1KB"
+    irq: 33
+    clock: { reg: "apb1enr", bit: 22 }
+    config:
+      irq_error: 34
+  - id: "i2c3"
+    type: "i2c"
+    base_address: 0x40005C00
+    size: "1KB"
+    irq: 72
+    clock: { reg: "apb1enr", bit: 23 }
+    config:
+      irq_error: 73
+  # SPI1 = stm32duino `SPI` on Arduino D13/D12/D11 = PA5/PA6/PA7 (AF5).
+  # F4 classic SPI masks as on the F401/F407: CR2 bit 4 (FRF) writable,
+  # CR1 bit 12 (CRCNEXT) not latched.
+  - id: "spi1"
+    type: "spi"
+    base_address: 0x40013000
+    size: "1KB"
+    irq: 35
+    clock: { reg: "apb2enr", bit: 12 }
+    config:
+      cr2_mask: 0xF7
+      cr1_mask: 0xEFFF
+  - id: "spi2"
+    type: "spi"
+    base_address: 0x40003800
+    size: "1KB"
+    irq: 36
+    clock: { reg: "apb1enr", bit: 14 }
+    config:
+      cr2_mask: 0xF7
+      cr1_mask: 0xEFFF
+  - id: "spi3"
+    type: "spi"
+    base_address: 0x40003C00
+    size: "1KB"
+    irq: 51
+    clock: { reg: "apb1enr", bit: 15 }
+    config:
+      cr2_mask: 0xF7
+      cr1_mask: 0xEFFF
+  # Timers: every F446 general-purpose timer has the CCxNP bits
+  # (`input_capture: stm32f4`), which also routes its channels to the F4 AF
+  # pads (AF1 TIM1/TIM2, AF2 TIM3/4/5; DS10693 Table 11).
+  - id: "tim1_pwm"
+    type: "timer"
+    base_address: 0x40010000
+    size: "1KB"
+    irq: 27
+    clock: { reg: "apb2enr", bit: 0 }
+    config:
+      input_capture: "stm32f4"
+      advanced: true
+  # TIM2_CH1 on PA5 (AF1) is LD2 / Arduino D13, so stock
+  # analogWrite(LED_BUILTIN) is a TIM2 PWM on the board LED.
+  - id: "tim2"
+    type: "timer"
+    base_address: 0x40000000
+    size: "1KB"
+    irq: 28
+    clock: { reg: "apb1enr", bit: 0 }
+    config:
+      input_capture: "stm32f4"
+      width: 32
+  - id: "tim3"
+    type: "timer"
+    base_address: 0x40000400
+    size: "1KB"
+    irq: 29
+    clock: { reg: "apb1enr", bit: 1 }
+    config:
+      input_capture: "stm32f4"
+  - id: "tim4"
+    type: "timer"
+    base_address: 0x40000800
+    size: "1KB"
+    irq: 30
+    clock: { reg: "apb1enr", bit: 2 }
+    config:
+      input_capture: "stm32f4"
+  - id: "tim5"
+    type: "timer"
+    base_address: 0x40000C00
+    size: "1KB"
+    irq: 50
+    clock: { reg: "apb1enr", bit: 3 }
+    config:
+      input_capture: "stm32f4"
+      width: 32
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x40012000
+    size: "1KB"
+    irq: 18
+    clock: { reg: "apb2enr", bit: 8 }
+    config:
+      profile: "stm32f4"
+  # bxCAN1 (RM0390 §30), RCC_APB1ENR.CAN1EN bit 25. Arduino D15/D14 do not
+  # carry it; the matrix L8 sketch uses the register-level loopback.
+  - id: "bxcan1"
+    type: "bxcan"
+    base_address: 0x40006400
+    size: "1KB"
+    clock: { reg: "apb1enr", bit: 25 }
+  - id: "syscfg"
+    type: "syscfg"
+    base_address: 0x40013800
+    size: "1KB"
+    clock: { reg: "apb2enr", bit: 14 }
+    config:
+      profile: "stm32f4"
+  # RM0390 §10.2: 23 EXTI lines (16 GPIO + PVD, RTC alarm, USB OTG FS wakeup,
+  # USB OTG HS wakeup, RTC tamper/timestamp, RTC wakeup).
+  - id: "exti"
+    type: "exti"
+    base_address: 0x40013C00
+    size: "1KB"
+    config:
+      lines: 23
+  - id: "nvic"
+    type: "nvic"
+    base_address: 0xE000E100
+    size: "1KB"
+  - id: "iwdg"
+    type: "iwdg"
+    base_address: 0x40003000
+    size: "1KB"
+  - id: "rtc"
+    type: "rtc"
+    base_address: 0x40002800
+    size: "1KB"
+  - id: "dbgmcu"
+    type: "dbgmcu"
+    base_address: 0xE0042000
+    size: "1KB"
+    config:
+      # RM0390 §33.6.1: DEV_ID = 0x421 for the STM32F446xx; REV_ID 0x1000 =
+      # revision A, the only revision RM0390 lists.
+      idcode: 0x10006421
+  - id: "dma1"
+    type: "stm32f4_dma"
+    base_address: 0x40026000
+    size: "1KB"
+    clock: { reg: "ahb1enr", bit: 21 }
+    config:
+      # DMA1_Stream0..7 NVIC positions (stm32f446xx.h): 11..17, then 47.
+      stream_irqs: [11, 12, 13, 14, 15, 16, 17, 47]
+  - id: "dma2"
+    type: "stm32f4_dma"
+    base_address: 0x40026400
+    size: "1KB"
+    clock: { reg: "ahb1enr", bit: 22 }
+    config:
+      dma2: true
+      # DMA2_Stream0..7 NVIC positions (stm32f446xx.h): 56..60, then 68..70.
+      stream_irqs: [56, 57, 58, 59, 60, 68, 69, 70]
+      # RM0390 Table 29, DMA2 request mapping: SPI1_RX streams 0/2, SPI1_TX
+      # streams 3/5, all channel 3.
+      requests:
+        spi1_rx: [[0, 3], [2, 3]]
+        spi1_tx: [[3, 3], [5, 3]]
+
+# Regular ADC1 inputs by pad, DS10693 Rev 10 Table 10 (LQFP64): ADC123_IN0..3,
+# ADC12_IN4..9, ADC123_IN10..13, ADC12_IN14..15. Only ADC1 is modelled.
+analog_pins:
+  PA0: { peripheral: "adc1", channel: 0 }
+  PA1: { peripheral: "adc1", channel: 1 }
+  PA2: { peripheral: "adc1", channel: 2 }
+  PA3: { peripheral: "adc1", channel: 3 }
+  PA4: { peripheral: "adc1", channel: 4 }
+  PA5: { peripheral: "adc1", channel: 5 }
+  PA6: { peripheral: "adc1", channel: 6 }
+  PA7: { peripheral: "adc1", channel: 7 }
+  PB0: { peripheral: "adc1", channel: 8 }
+  PB1: { peripheral: "adc1", channel: 9 }
+  PC0: { peripheral: "adc1", channel: 10 }
+  PC1: { peripheral: "adc1", channel: 11 }
+  PC2: { peripheral: "adc1", channel: 12 }
+  PC3: { peripheral: "adc1", channel: 13 }
+  PC4: { peripheral: "adc1", channel: 14 }
+  PC5: { peripheral: "adc1", channel: 15 }
