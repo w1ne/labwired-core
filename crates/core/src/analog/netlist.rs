@@ -131,7 +131,11 @@
 //! exponent 0.5), base recombination from `ISE`/`NE`/`ISC`/`NC`, and transit-time
 //! charge from `TF`/`TR`,
 //! including the forward `XTF`/`VTF`/`ITF` adjustment, plus ohmic terminal
-//! resistances `RB`/`RC`/`RE` are modelled. `RBM`/`IRB` make the base
+//! resistances `RB`/`RC`/`RE` are modelled. `RCO` enables Kull's
+//! quasi-saturation model of the epitaxial collector, with `VO`, `GAMMA` and
+//! the epitaxial charge `QCO`, between the collector contact behind `RC` and
+//! the intrinsic collector; `QUASIMOD=1` applies its `CN`/`D`/`VG`
+//! temperature laws with `TEMP`. `RBM`/`IRB` make the base
 //! spreading resistance fall with conduction base current using the
 //! ngspice level-1 interpolation; `TRB*`/`TRBM*`/`TIRB*` apply its temperature
 //! coefficients. JFET
@@ -1462,6 +1466,27 @@ pub struct BjtModel {
     /// the collector), `Some(-1)` lateral (on the base). `None` is ngspice's
     /// default: vertical for NPN, lateral for PNP.
     pub subs: Option<i8>,
+    /// Epitaxial collector resistance `RCO`, ohms. `Some` enables Kull's
+    /// quasi-saturation model between the collector contact and the intrinsic
+    /// collector, as in ngspice, which also raises a supplied value below
+    /// 0.01 Ω to 0.01 Ω. `None`, the default, leaves the collector ohmic.
+    pub rco: Option<f64>,
+    /// Epitaxial drift saturation voltage `VO`, volts.
+    pub vo: f64,
+    /// Epitaxial doping factor `GAMMA`.
+    pub gamma: f64,
+    /// Epitaxial charge factor `QCO`, coulombs.
+    pub qco: f64,
+    /// `QUASIMOD`: 1 applies the `CN`/`D`/`VG` temperature laws to
+    /// `RCO`/`VO`/`GAMMA` with an instance `TEMP`; 0 leaves them fixed.
+    pub quasimod: u8,
+    /// Energy gap `VG` for the `QUASIMOD=1` `GAMMA` law, eV.
+    pub vg: f64,
+    /// Temperature exponents `CN` of `RCO` and `D` of `VO` for `QUASIMOD=1`.
+    /// `None` takes ngspice's polarity defaults: 2.42 and 0.87 for NPN,
+    /// 2.2 and 0.52 for PNP.
+    pub cn: Option<f64>,
+    pub d: Option<f64>,
 }
 
 impl BjtModel {
@@ -1469,8 +1494,9 @@ impl BjtModel {
     /// `IKF`, `IKR`, `IRB`, `ITF`, `CJE` and `CJC` scale with the emitter
     /// area and `RB`, `RBM`, `RC`, `RE` divide by it, as ngspice's
     /// `bjtload.c` does when `AREAB`/`AREAC` default to `AREA`. Unlike the
-    /// instance multiplier `m`, GMIN is untouched. `area == 1` returns the
-    /// card bit-identical.
+    /// instance multiplier `m`, GMIN is untouched. The quasi-saturation
+    /// parameters `RCO`/`VO`/`GAMMA`/`QCO` are not area-scaled, as in
+    /// ngspice. `area == 1` returns the card bit-identical.
     pub fn with_area(self, area: f64) -> Self {
         Self {
             is: self.is * area,
@@ -1566,6 +1592,14 @@ impl BjtModel {
             tns1: 0.0,
             tns2: 0.0,
             subs: None,
+            rco: None,
+            vo: 10.0,
+            gamma: 1e-11,
+            qco: 0.0,
+            quasimod: 0,
+            vg: 1.206,
+            cn: None,
+            d: None,
         }
     }
 
@@ -2337,9 +2371,14 @@ pub struct Bjt {
     /// ngspice). Its junction, when the model has one, is the internal diode
     /// `<name>#substrate` in [`Circuit::diodes`].
     pub s: NodeRef,
-    /// Collector junction node. Equals `c` when `RC = 0`, else the internal
-    /// node `<name>#collector`.
+    /// Collector junction node: the intrinsic collector. Without `RCO` it
+    /// equals `c` when `RC = 0`, else the internal node `<name>#collector`.
+    /// With `RCO` it is always the internal node `<name>#collector`.
     pub junction_c: NodeRef,
+    /// Collector contact behind `RC`: the outer end of the `RCO` epitaxial
+    /// region. Equals `junction_c` without `RCO`; with `RCO` it equals `c`
+    /// when `RC = 0`, else the internal node `<name>#collcx`.
+    pub junction_cx: NodeRef,
     /// Base junction node. Equals `b` when `RB = 0`, else the internal node
     /// `<name>#base`.
     pub junction_b: NodeRef,
@@ -4069,6 +4108,27 @@ fn bind_models(
                         "a BJT model needs RB/RC/RE >= 0, 0 <= RBM <= RB and IRB > 0".to_string(),
                     ));
                 }
+                if model.rco.is_some_and(|rco| !rco.is_finite())
+                    || !model.vo.is_finite()
+                    || model.vo <= 0.0
+                    || !model.gamma.is_finite()
+                    || model.gamma < 0.0
+                    || !model.qco.is_finite()
+                    || model.qco < 0.0
+                    || !model.vg.is_finite()
+                    || model.cn.is_some_and(|cn| !cn.is_finite())
+                    || model.d.is_some_and(|d| !d.is_finite())
+                {
+                    return Err(ctx.parse_err(
+                        "a BJT quasi-saturation model needs finite RCO/VG/CN/D, VO > 0, GAMMA >= 0 and QCO >= 0"
+                            .to_string(),
+                    ));
+                }
+                // ngspice `bjtsetup.c` raises a supplied `RCO` below 0.01 Ω.
+                let model = BjtModel {
+                    rco: model.rco.map(|rco| rco.max(0.01)),
+                    ..model
+                };
                 let (operating_model, thermal_voltage) =
                     super::device::bjt_parameters_at_temperature(model, device.temperature_celsius);
                 if !operating_model.is.is_finite()
@@ -4114,6 +4174,13 @@ fn bind_models(
                     || operating_model.mjc < 0.0
                     || !thermal_voltage.is_finite()
                     || thermal_voltage <= 0.0
+                    || operating_model
+                        .rco
+                        .is_some_and(|rco| !rco.is_finite() || rco <= 0.0)
+                    || !operating_model.vo.is_finite()
+                    || operating_model.vo <= 0.0
+                    || !operating_model.gamma.is_finite()
+                    || operating_model.gamma < 0.0
                 {
                     return Err(ctx.parse_err(
                         "temperature-adjusted BJT currents, beta, resistances and junction charges must remain finite and valid"
@@ -4136,8 +4203,19 @@ fn bind_models(
                     }
                     Ok(circuit.intern(&internal_name))
                 };
-                let junction_c =
-                    junction_node(circuit, device.nodes[0], operating_model.rc, "collector")?;
+                // ngspice `bjtsetup.c`: `RC` runs from the collector to the
+                // contact node; with `RCO` the epitaxial region then runs
+                // from that contact to a separate intrinsic collector.
+                let (junction_cx, junction_c) = if operating_model.rco.is_some() {
+                    let contact =
+                        junction_node(circuit, device.nodes[0], operating_model.rc, "collcx")?;
+                    let intrinsic = junction_node(circuit, contact, 1.0, "collector")?;
+                    (contact, intrinsic)
+                } else {
+                    let contact =
+                        junction_node(circuit, device.nodes[0], operating_model.rc, "collector")?;
+                    (contact, contact)
+                };
                 let junction_b =
                     junction_node(circuit, device.nodes[1], operating_model.rb, "base")?;
                 let junction_e =
@@ -4228,6 +4306,7 @@ fn bind_models(
                     e: device.nodes[2],
                     s: substrate,
                     junction_c,
+                    junction_cx,
                     junction_b,
                     junction_e,
                     model_name: device.model_name,
@@ -4983,6 +5062,19 @@ fn parse_model(
                 }
                 model.subs = Some(value as i8);
             }
+            (ModelCard::Bjt(model), "RCO") => model.rco = Some(value),
+            (ModelCard::Bjt(model), "VO") => model.vo = value,
+            (ModelCard::Bjt(model), "GAMMA") => model.gamma = value,
+            (ModelCard::Bjt(model), "QCO") => model.qco = value,
+            (ModelCard::Bjt(model), "QUASIMOD") => {
+                if value != 0.0 && value != 1.0 {
+                    return Err(ctx.parse_err("BJT QUASIMOD must be 0 or 1"));
+                }
+                model.quasimod = value as u8;
+            }
+            (ModelCard::Bjt(model), "VG") => model.vg = value,
+            (ModelCard::Bjt(model), "CN") => model.cn = Some(value),
+            (ModelCard::Bjt(model), "D") => model.d = Some(value),
             (ModelCard::Mos(model), "VTO" | "VT0") => {
                 model.vto = value;
                 model.vto_given = true;

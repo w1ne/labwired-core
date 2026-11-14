@@ -105,7 +105,9 @@ physical potentiometers.
 
 ```bash
 cargo test -p labwired-core --test cosim_s32k388_adc_analog -- --nocapture
-# 3 passed: PTA11 -> ADC1_S10 and PTA17 -> ADC2_S19 through analog_pins
+# 4 passed: PTA11 -> ADC1_S10 and PTA17 -> ADC2_S19 through analog_pins;
+# BJT quasi-saturation stages on PTA16/PTB15/PTB16 (ADC1) and PTA21 (ADC2)
+# (verified 2026-11-14)
 ```
 
 The SAR ADC conversion follows the RTD `Adc_Sar_Ip` flow; BCTU triggers are

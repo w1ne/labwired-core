@@ -68,6 +68,7 @@ that touches configs/ or examples/.
 | `system.yaml` | Board manifest (same as `configs/systems/s32k388-evb.yaml`) |
 | `io-smoke.yaml` | Ordered UART assertions over 4,000,000 steps |
 | `analog-ntc-diode-system.yaml` | Generic NTC and diode netlists routed to PTA11/PTA17 |
+| `analog-bjt-quasi-saturation-adc.yaml` | BJT quasi-saturation (`RCO`/`VO`/`GAMMA`) switch stages on PTA16/PTB15/PTB16/PTA21, beside the NTC and diode |
 | `ci/build.sh`, `ci/test.sh` | Board gate build and proof |
 | `VALIDATION.md` | Claims, evidence and non-claims |
 | `REQUIRED_DOCS.md` | Sources |

@@ -8537,4 +8537,414 @@ mod analog {
             }
         }
     }
+
+    /// `RCO` puts Kull's quasi-saturation model between the collector contact
+    /// behind `RC` and the intrinsic collector: an epitaxial region whose
+    /// resistance falls as the forward-biased collector junction injects
+    /// carriers into it (`GAMMA`) and whose current saturates with the drop
+    /// across it (`VO`). References are ngspice-42 `.op` node voltages
+    /// (`.temp 26.85`, `tnom=26.85`). Q1 is an NPN with `RC`, Q2 its PNP
+    /// mirror, Q3 has no `RC`, other `VO`/`GAMMA` and `m=2`, and Q4 gives
+    /// `RCO=0.001`, which ngspice raises to 0.01 Ω. Every reference bias
+    /// has the collector current flowing forward, where the engine and
+    /// ngspice share one expression.
+    #[test]
+    fn bjt_quasi_saturation_rco_vo_gamma_qco_matches_ngspice() {
+        let models = ".model QN NPN(IS=1e-14 BF=100 BR=2 RC=2 RCO=50 VO=10 GAMMA=1e-11)\n\
+                      .model QP PNP(IS=1e-14 BF=100 BR=2 RC=2 RCO=50 VO=10 GAMMA=1e-11)\n\
+                      .model QZ NPN(IS=1e-14 BF=100 BR=2 RCO=50 VO=3 GAMMA=2e-10)\n\
+                      .model QLO NPN(IS=1e-14 BF=100 BR=2 RCO=0.001)\n\
+                      .model QPLAIN NPN(IS=1e-14 BF=100 BR=2 RC=2)\n";
+        let deck = |vb: f64, vc: f64| {
+            build(&format!(
+                "Vb b 0 dc {vb}\nVc c 0 dc {vc}\nVbp bp 0 dc {}\nVcp cp 0 dc {}\n\
+                 Rb1 b b1 1k\nRl1 c c1 200\nQ1 c1 b1 0 QN\n\
+                 Rb2 bp b2 1k\nRl2 cp c2 200\nQ2 c2 b2 0 QP\n\
+                 Rb3 b b3 1k\nRl3 c c3 200\nQ3 c3 b3 0 QZ m=2\n\
+                 Rb4 b b4 1k\nRl4 c c4 200\nQ4 c4 b4 0 QLO\n\
+                 Rb5 b b5 1k\nRl5 c c5 200\nQ5 c5 b5 0 QPLAIN\n{models}",
+                -vb, -vc
+            ))
+        };
+        let nodes = ["c1", "b1", "c2", "b2", "c3", "b3", "c4"];
+        // (Vb, Vc, ngspice v(c1), v(b1), v(c2), v(b2), v(c3), v(b3), v(c4)).
+        let ngspice: [(f64, f64, [f64; 7]); 13] = [
+            (
+                0.7,
+                5.0,
+                [
+                    4.533_600_542_213_7,
+                    6.766_800_302_548_9e-1,
+                    -4.533_600_549_514,
+                    -6.766_800_298_991e-1,
+                    4.348_237_747_930_0,
+                    6.674_118_934_233_7e-1,
+                    4.533_600_541_002_3,
+                ],
+            ),
+            (
+                0.7,
+                0.2,
+                [
+                    8.316_937_676_024_6e-2,
+                    6.464_132_608_382_6e-1,
+                    -8.316_937_693_253e-2,
+                    -6.464_132_607_519e-1,
+                    6.533_077_936_267_1e-2,
+                    6.326_653_955_512_6e-1,
+                    5.932_076_220_484_0e-2,
+                ],
+            ),
+            (
+                0.8,
+                5.0,
+                [
+                    3.224_714_340_002_4,
+                    7.112_357_183_730_9e-1,
+                    -3.224_714_351_567,
+                    -7.112_357_182_127e-1,
+                    2.942_586_841_681_6,
+                    6.971_293_447_209_4e-1,
+                    3.224_714_332_342_8,
+                ],
+            ),
+            (
+                0.8,
+                0.2,
+                [
+                    6.868_221_000_869_7e-2,
+                    6.562_060_399_339_9e-1,
+                    -6.868_221_006_422e-2,
+                    -6.562_060_398_850e-1,
+                    4.966_841_194_044_5e-2,
+                    6.414_050_378_416_3e-1,
+                    3.953_466_613_950_5e-2,
+                ],
+            ),
+            (
+                1.0,
+                5.0,
+                [
+                    1.208_664_878_904_6,
+                    7.311_640_546_157_9e-1,
+                    -1.208_664_879_087,
+                    -7.311_640_546_119e-1,
+                    7.634_674_191_688_3e-1,
+                    7.160_572_121_681_2e-1,
+                    1.652_892_731_428_1e-1,
+                ],
+            ),
+            (
+                1.0,
+                40.0,
+                [
+                    3.478_214_709_409_8e1,
+                    7.391_073_871_188_4e-1,
+                    -3.478_214_711_419e1,
+                    -7.391_073_870_522e-1,
+                    3.445_518_591_489_7e1,
+                    7.227_593_612_995_8e-1,
+                    3.478_214_706_523_9e1,
+                ],
+            ),
+            (
+                1.0,
+                0.2,
+                [
+                    5.896_835_961_363_8e-2,
+                    6.677_721_363_240_2e-1,
+                    -5.896_835_963_369e-2,
+                    -6.677_721_362_938e-1,
+                    3.758_629_565_206_2e-2,
+                    6.520_917_157_584_3e-1,
+                    2.738_065_936_333_9e-2,
+                ],
+            ),
+            (
+                1.5,
+                5.0,
+                [
+                    1.166_734_529_278_3,
+                    7.333_012_190_964_5e-1,
+                    -1.166_734_529_307,
+                    -7.333_012_190_937e-1,
+                    6.842_844_260_723_2e-1,
+                    7.181_841_637_810_5e-1,
+                    8.450_280_742_518_7e-2,
+                ],
+            ),
+            (
+                1.5,
+                40.0,
+                [
+                    2.531_707_634_563_0e1,
+                    7.658_538_355_056_1e-1,
+                    -2.531_707_636_431e1,
+                    -7.658_538_354_795e-1,
+                    2.497_074_524_763_0e1,
+                    7.485_373_000_694_1e-1,
+                    2.531_707_622_840_5e1,
+                ],
+            ),
+            (
+                1.5,
+                0.2,
+                [
+                    5.062_640_212_184_0e-2,
+                    6.840_533_228_254_0e-1,
+                    -5.062_640_212_895e-2,
+                    -6.840_533_228_090e-1,
+                    2.742_853_786_913_9e-2,
+                    6.674_422_800_931_1e-1,
+                    1.892_441_113_692_7e-2,
+                ],
+            ),
+            (
+                3.0,
+                5.0,
+                [
+                    1.134_399_334_452_4,
+                    7.383_666_468_060_9e-1,
+                    -1.134_399_334_463,
+                    -7.383_666_468_039e-1,
+                    5.952_202_192_836_7e-1,
+                    7.230_286_615_634_8e-1,
+                    5.338_554_141_948_3e-2,
+                ],
+            ),
+            (
+                3.0,
+                40.0,
+                [
+                    1.573_839_972_147_1e1,
+                    7.794_548_561_466_0e-1,
+                    -1.573_839_972_149e1,
+                    -7.794_548_561_461e-1,
+                    1.918_069_433_024_0e1,
+                    7.578_166_062_358_4e-1,
+                    1.611_966_754_933_0e-1,
+                ],
+            ),
+            (
+                3.0,
+                0.2,
+                [
+                    4.203_538_333_099_4e-2,
+                    7.066_941_629_810_6e-1,
+                    -4.203_538_333_355e-2,
+                    -7.066_941_629_740e-1,
+                    1.985_273_529_288_8e-2,
+                    6.893_187_176_671_7e-1,
+                    1.387_325_026_340_5e-2,
+                ],
+            ),
+        ];
+        // Largest gap between Q1 and the same transistor with an ohmic
+        // collector (Q5): the sweep must reach quasi-saturation.
+        let mut ohmic_gap = 0.0_f64;
+        for (vb, vc, expected) in ngspice {
+            let solver = deck(vb, vc);
+            let voltage =
+                |name: &str| solver.node_voltage(solver.circuit().node(name).expect("node exists"));
+            for (name, reference) in nodes.iter().zip(expected) {
+                let got = voltage(name);
+                assert!(
+                    relative(got, reference) < 2e-5,
+                    "v({name}) at Vb={vb} V, Vc={vc} V: ngspice-42 {reference} V, got {got} V"
+                );
+            }
+            ohmic_gap = ohmic_gap.max((voltage("c1") - voltage("c5")).abs());
+        }
+        assert!(
+            ohmic_gap > 1.0,
+            "RCO must lift the saturated collector well above the ohmic one, gap {ohmic_gap} V"
+        );
+
+        // The internal nodes follow ngspice's topology: `RC` to the contact,
+        // then the epitaxial region to the intrinsic collector.
+        let solver = deck(1.0, 5.0);
+        let circuit = solver.circuit();
+        let (q1, q3, q5) = (&circuit.bjts[0], &circuit.bjts[2], &circuit.bjts[4]);
+        assert_eq!(q1.junction_cx, circuit.node("Q1#collcx").expect("contact"));
+        assert_eq!(
+            q1.junction_c,
+            circuit.node("Q1#collector").expect("intrinsic")
+        );
+        assert_eq!(q3.junction_cx, q3.c);
+        assert_eq!(
+            q3.junction_c,
+            circuit.node("Q3#collector").expect("intrinsic")
+        );
+        assert_eq!(q5.junction_cx, q5.junction_c);
+        assert!(circuit.node("Q5#collcx").is_none());
+
+        // The conductances are the derivatives of the current on both sides
+        // of zero drop, and the slope is continuous through it. ngspice
+        // switches to the plain resistor there, which made Newton alternate
+        // between the two sides on the base step from 2.0 V to 3.3 V below.
+        let epi = |vbc: f64, vbcx: f64| device::bjt_epi_op(vbc, vbcx, 50.0, 30.0, 1e-8, VT);
+        for (vbc, vbcx) in [(0.69, -0.4), (0.70, 0.69), (0.3, 0.72), (-2.0, -30.0)] {
+            let step = 1e-7;
+            let op = epi(vbc, vbcx);
+            let slope_vbc =
+                (epi(vbc + step, vbcx).current - epi(vbc - step, vbcx).current) / (2.0 * step);
+            let slope_vbcx =
+                (epi(vbc, vbcx + step).current - epi(vbc, vbcx - step).current) / (2.0 * step);
+            assert!(
+                relative(op.g_vbc, slope_vbc) < 1e-6 && relative(op.g_vbcx, slope_vbcx) < 1e-6,
+                "Vbc={vbc} V, Vbcx={vbcx} V: {op:?} against {slope_vbc}, {slope_vbcx}"
+            );
+        }
+        let (below, above) = (epi(0.7, 0.7 + 1e-9), epi(0.7, 0.7 - 1e-9));
+        assert!(relative(below.g_vbcx, above.g_vbcx) < 1e-6);
+        assert_eq!(epi(0.7, 0.7).current, 0.0);
+        let mut solver = build(
+            "Vcc supply 0 dc 3.3\nRload supply collector 100\nVbase drive 0 dc 2.0\n\
+             Rbase drive base 1k\nQ1 collector base 0 QEPI\n\
+             .model QEPI NPN(IS=1e-14 BF=100 BR=2 RC=2 RCO=50 VO=30 GAMMA=1e-8)\n",
+        );
+        let source = solver.voltage_source_index("Vbase").expect("source exists");
+        solver.set_voltage_source(source, 3.3);
+        solver
+            .advance(1e-6)
+            .expect("the step into deep saturation solves");
+        let collector = solver.node_voltage(solver.circuit().node("collector").unwrap());
+        assert!(
+            relative(collector, 2.235_675_251_767_3e-1) < 2e-5,
+            "ngspice-42 0.22356752517673 V, got {collector} V"
+        );
+
+        // `QUASIMOD=1` moves `RCO`, `VO` and `GAMMA` with the instance
+        // temperature by `CN`, `D` and `VG`; `QUASIMOD=0` leaves them fixed.
+        // ngspice-42 `.op` with `tnom=27` and `temp=75` on each instance:
+        // (model, polarity sign, v(c), v(b)).
+        for (card, sign, collector, base) in [
+            (
+                "NPN(IS=1e-14 BF=100 BR=2 RC=2 RCO=50 VO=10 GAMMA=1e-11 QUASIMOD=1)",
+                1.0,
+                1.506_177_262_004_6,
+                6.580_025_120_821_9e-1,
+            ),
+            (
+                "PNP(IS=1e-14 BF=100 BR=2 RC=2 RCO=50 VO=10 GAMMA=1e-11 QUASIMOD=1 VG=1.1 CN=1.5 D=0.4)",
+                -1.0,
+                -1.376_436_212_892,
+                -6.589_562_341_562e-1,
+            ),
+            (
+                "NPN(IS=1e-14 BF=100 BR=2 RC=2 RCO=50 VO=10 GAMMA=1e-11)",
+                1.0,
+                1.178_804_445_911_4,
+                6.603_533_697_164_9e-1,
+            ),
+        ] {
+            let solver = build(&format!(
+                "Vb b 0 dc {}\nVc c 0 dc {}\nRb1 b b1 1k\nRl1 c c1 200\n\
+                 Q1 c1 b1 0 QT temp=75\n.model QT {card}\n",
+                1.5 * sign,
+                5.0 * sign
+            ));
+            for (name, reference) in [("c1", collector), ("b1", base)] {
+                let got = solver.node_voltage(solver.circuit().node(name).expect("node exists"));
+                assert!(
+                    relative(got, reference) < 2e-5,
+                    "{card}: v({name}) ngspice-42 {reference} V, got {got} V"
+                );
+            }
+        }
+
+        // `QCO` stores the epitaxial charge QCO·K(v), K = sqrt(1 + GAMMA·
+        // e^(v/Vt)), on the intrinsic B-C junction and from the base to the
+        // collector contact. Both terminals are driven, so the contact
+        // voltage is known; `BR=1e6` keeps the resistive base current
+        // independent of the intrinsic collector. A base step from 0.70 V to
+        // 0.75 V then has to deliver exactly the change of both charges.
+        // ngspice-42 `.dc` gives `@q1[qbc]` at the two biases; it does not
+        // expose the contact charge, which is the same K at Vb − Vc.
+        let (qco, gamma) = (2e-10, 1e-9);
+        let charge_deck = |polarity: &str, sign: f64| {
+            build(&format!(
+                "Vb b 0 dc {}\nVc c 0 dc {}\nQ1 c b 0 QQ\n\
+                 .model QQ {polarity}(IS=1e-14 BF=100 BR=1e6 RCO=50 VO=10 GAMMA={gamma} QCO={qco})\n",
+                0.70 * sign,
+                0.1 * sign
+            ))
+        };
+        let contact_charge = |vbcx: f64| qco * (1.0 + gamma * (vbcx / VT).exp()).sqrt();
+        let expected = (9.039_746_204_354_4e-9 - 2.214_525_708_243_7e-9)
+            + (contact_charge(0.65) - contact_charge(0.60));
+        for (polarity, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
+            let settled = {
+                let mut solver = charge_deck(polarity, sign);
+                let source = solver.voltage_source_index("Vb").expect("source exists");
+                solver.set_voltage_source(source, 0.75 * sign);
+                solver
+                    .solve_operating_point()
+                    .expect("settled point solves");
+                source_current(&solver, "Vb")
+            };
+            let mut solver = charge_deck(polarity, sign);
+            let source = solver.voltage_source_index("Vb").expect("source exists");
+            solver.set_voltage_source(source, 0.75 * sign);
+            let h = 1e-6;
+            let mut delivered = 0.0;
+            for _ in 0..400 {
+                solver.advance(h).expect("charge step solves");
+                delivered += (source_current(&solver, "Vb") - settled) * h;
+            }
+            assert!(
+                relative(sign * delivered, expected) < 1e-5,
+                "{polarity}: epitaxial charge {expected} C expected, base delivered {delivered} C"
+            );
+        }
+
+        for card in ["VO=0", "GAMMA=-1e-11", "QCO=-1e-9", "QUASIMOD=2"] {
+            parse_netlist(&format!(
+                "V1 c 0 1\nQ1 c 0 0 QX\n.model QX NPN(IS=1e-16 RCO=10 {card})\n"
+            ))
+            .expect_err("an invalid quasi-saturation card must be refused");
+        }
+    }
+
+    /// The `XCJC` share of `CJC` on the external base is controlled by
+    /// v(b) − v(c') in circuit coordinates for both polarities: a PNP stage
+    /// with every source mirrored must trace the NPN stage with every node
+    /// voltage negated.
+    #[test]
+    fn bjt_xcjc_external_base_charge_is_polarity_symmetric() {
+        let stage = |polarity: &str, sign: f64| {
+            let mut solver = Solver::new(
+                parse_netlist(&format!(
+                    "V1 vcc 0 {}\nVIN in 0 PULSE({} {} 0 10n 10n 1u 2u)\nRS in b 10k\n\
+                     RL vcc c 2k\nQ1 c b 0 QA\n\
+                     .model QA {polarity}(IS=1e-15 BF=100 RB=200 CJC=20p XCJC=0.3)\n",
+                    5.0 * sign,
+                    0.6 * sign,
+                    0.9 * sign
+                ))
+                .expect("stage parses"),
+                Integration::Trapezoidal,
+            )
+            .expect("stage builds");
+            let c = solver.circuit().node("c").expect("node exists");
+            (0..40)
+                .map(|_| {
+                    solver.advance(5e-9).expect("stage step solves");
+                    sign * solver.node_voltage(c)
+                })
+                .collect::<Vec<_>>()
+        };
+        let npn = stage("NPN", 1.0);
+        let pnp = stage("PNP", -1.0);
+        assert!(
+            npn.first().unwrap() - npn.last().unwrap() > 0.2,
+            "the stage must switch: {npn:?}"
+        );
+        for (step, (n, p)) in npn.iter().zip(&pnp).enumerate() {
+            assert!(
+                (n - p).abs() < 1e-9,
+                "step {step}: NPN collector {n} V, mirrored PNP {p} V"
+            );
+        }
+    }
 }

@@ -54,8 +54,12 @@ const fn resn(bits: u32) -> u32 {
 /// Standard-input channel ids (`ADCx_Sn` = 32 + n - 8).
 const ADC1_S10: u8 = 34;
 const ADC2_S19: u8 = 43;
-/// `ADC1_S13` (PTA16), a real ADC1 pad left unwired.
+/// `ADC1_S13` (PTA16), a real ADC1 pad left unwired by the pot fixture.
 const ADC1_S13: u8 = 37;
+/// `ADC1_S11` (PTB15), `ADC1_S12` (PTB16) and `ADC2_S12` (PTA21).
+const ADC1_S11: u8 = 35;
+const ADC1_S12: u8 = 36;
+const ADC2_S12: u8 = 36;
 /// `ADC1_IRQn` (S32K388_COMMON.h).
 const ADC1_IRQ: usize = 181;
 
@@ -268,4 +272,161 @@ fn s32k388_evb_scan_mode_follows_the_ntc_and_pends_adc1_irq() {
     bus.write_u32(ADC1 + MCR, MODE_SCAN | OWREN)
         .expect("stop scan");
     assert_eq!(bus.read_u32(ADC1 + MSR).unwrap() & NSTART, 0);
+}
+
+/// BJT quasi-saturation (`RCO`/`VO`/`GAMMA`) on the SAR ADCs. Four switch
+/// stages share one base drive and differ only in the collector model; the
+/// expected collector voltages are ngspice-42 `.op` values (`.temp 26.85`,
+/// `tnom=26.85`). An engine that ignored `RCO` would put the PTA16 stage on
+/// the PTB15 values, and one that read it as a plain resistor on the PTB16
+/// values.
+#[test]
+fn s32k388_evb_bjt_quasi_saturation_reaches_adc1_and_adc2_beside_ntc_and_diode() {
+    let system_path = root("configs/systems/s32k388-evb.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load S32K388 EVB profile");
+    let analog = SystemManifest::from_file(root(
+        "examples/s32k388-evb/analog-bjt-quasi-saturation-adc.yaml",
+    ))
+    .expect("load NTC, diode and BJT switch netlists");
+    profile.cosim_models = analog.cosim_models;
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load S32K388 descriptor");
+    for (pad, peripheral, channel) in [
+        ("PTA16", "adc1", ADC1_S13),
+        ("PTB15", "adc1", ADC1_S11),
+        ("PTB16", "adc1", ADC1_S12),
+        ("PTA21", "adc2", ADC2_S12),
+    ] {
+        assert_eq!(chip.analog_pins[pad].peripheral, peripheral, "{pad}");
+        assert_eq!(chip.analog_pins[pad].channel, channel, "{pad}");
+    }
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build S32K388 EVB bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries six analog devices");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "every pad must resolve to an ADC1/ADC2 input through analog_pins"
+    );
+    init(&mut bus, ADC1, 12);
+    init(&mut bus, ADC2, 12);
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set NTC temperature");
+
+    // (base drive, quasi-saturation, RC only, RC = 52 Ω, PNP mirror).
+    let ngspice = [
+        (
+            0.0,
+            3.299_999_999_338_5,
+            3.299_999_999_338_5,
+            3.299_999_999_338_5,
+            3.314_999_985_751_9e-10,
+        ),
+        (
+            0.8,
+            2.412_357_176_719_6,
+            2.412_357_173_140_8,
+            2.412_357_176_666_8,
+            8.876_428_431_343_4e-1,
+        ),
+        (
+            1.2,
+            9.196_663_842_814_4e-1,
+            1.844_354_238_128_9e-1,
+            1.193_335_448_565_9,
+            2.380_333_617_669_5,
+        ),
+        (
+            2.0,
+            5.164_523_078_025_2e-1,
+            1.391_453_167_792_8e-1,
+            1.171_130_339_596_0,
+            2.783_547_693_160_3,
+        ),
+        (
+            3.3,
+            2.235_675_251_767_3e-1,
+            1.199_240_335_400_7e-1,
+            1.159_979_452_818_3,
+            3.076_432_475_002_1,
+        ),
+    ];
+    let mut cycles = 0;
+    let mut quasi_codes = Vec::new();
+    for (drive, quasi_ref, ohmic_ref, resistive_ref, pnp_ref) in ngspice {
+        session
+            .set_signal_number("ui.bjt_switch.base_v", drive)
+            .expect("set the common base drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route all six netlists");
+        assert_eq!(steps.len(), 6, "all six netlists solve each step");
+        assert!(errors.is_empty(), "route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "board.analog.pta11_volts");
+        assert!((ntc_v - ntc_volts(25.0)).abs() < 1e-9, "NTC stays isolated");
+        let diode_v = signal_voltage(&session, "board.analog.pta17_volts");
+        assert!(diode_v > 0.5 && diode_v < 0.8, "diode drop {diode_v} V");
+        assert_eq!(
+            unpack(convert(&mut bus, ADC1, ADC1_S10, 0), 12),
+            code(ntc_v, 12)
+        );
+        assert_eq!(
+            unpack(convert(&mut bus, ADC2, ADC2_S19, 0), 12),
+            code(diode_v, 12)
+        );
+
+        let mut codes = [0_u32; 4];
+        for (slot, (pad, adc, channel, reference)) in [
+            ("pta16", ADC1, ADC1_S13, quasi_ref),
+            ("ptb15", ADC1, ADC1_S11, ohmic_ref),
+            ("ptb16", ADC1, ADC1_S12, resistive_ref),
+            ("pta21", ADC2, ADC2_S12, pnp_ref),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let volts = signal_voltage(&session, &format!("board.analog.{pad}_volts"));
+            assert!(
+                (volts - reference).abs() < 2e-5,
+                "{pad} at {drive} V drive: ngspice-42 {reference} V, got {volts} V"
+            );
+            codes[slot] = unpack(convert(&mut bus, adc, channel, 0), 12);
+            assert_eq!(codes[slot], code(volts, 12), "{pad} at {drive} V drive");
+            assert!(
+                codes[slot].abs_diff(code(reference, 12)) <= 1,
+                "{pad} at {drive} V drive: code {} against ngspice-42 {reference} V",
+                codes[slot]
+            );
+        }
+        let [quasi, ohmic, resistive, pnp] = codes;
+        // The PNP stage is the mirror image about the 3.3 V rail.
+        assert!(
+            (quasi + pnp).abs_diff(code(3.3, 12)) <= 2,
+            "PNP mirror at {drive} V drive: {quasi} + {pnp}"
+        );
+        if drive >= 1.2 {
+            // The epitaxial region sits between a hard-saturated collector
+            // and an unmodulated 52 Ω one, at least 100 codes from each.
+            assert!(
+                quasi > ohmic + 100 && quasi + 100 < resistive,
+                "{drive} V drive: RC only {ohmic}, quasi-saturation {quasi}, 52 Ω {resistive}"
+            );
+        }
+        quasi_codes.push(quasi);
+    }
+    // More base drive injects more carriers into the epitaxial region and
+    // pulls the collector down; the 52 Ω stage moves by under 50 codes over
+    // the last three drives.
+    assert!(
+        quasi_codes.windows(2).all(|pair| pair[0] > pair[1]),
+        "the collector code falls with base drive: {quasi_codes:?}"
+    );
+    assert!(
+        quasi_codes[2] - quasi_codes[4] > 800,
+        "conductivity modulation spans the saturated drives: {quasi_codes:?}"
+    );
 }

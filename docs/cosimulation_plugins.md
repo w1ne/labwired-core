@@ -511,7 +511,19 @@ ngspice. `NSUB` must exceed 1.45e10 cm⁻³, and `TPG` must be −1, 0 or 1.
 Other device capacitances, temperature coefficients and terminal resistances
 outside the supported parameters below are accepted and ignored. BJT `RB`/`RC`/`RE`
 are modeled as series resistors, while `RBM`/`IRB` make `RB` fall with base
-current; JFET terminal resistances `RD`/`RS` and MOSFET terminal resistances `RD`/`RS` or
+current. BJT `RCO` selects Kull's quasi-saturation model of the epitaxial
+collector: between the collector contact behind `RC` and the intrinsic
+collector, the current is `(V + Vcorr)/RCO/(1 + |V|/VO)`, where `Vcorr` is the
+conductivity modulation set by `GAMMA` and the two junction voltages, and
+`QCO` adds the epitaxial charge on both junctions. `VO` defaults to 10 V,
+`GAMMA` to 1e-11 and `QCO` to zero; a supplied `RCO` below 0.01 Ω is raised to
+0.01 Ω, and `RCO`/`VO`/`GAMMA`/`QCO` are not scaled by `AREA`, as in ngspice.
+`QUASIMOD=1` scales `RCO`, `VO` and `GAMMA` with instance `TEMP` by `CN`, `D`
+and `VG`. With the collector current flowing forward the model equals
+ngspice's. ngspice replaces the region by the plain resistor `RCO`, and drops
+the epitaxial charge, when the current flows backwards; the engine keeps
+Kull's expression there so that current, slope and charge stay continuous
+through zero. JFET terminal resistances `RD`/`RS` and MOSFET terminal resistances `RD`/`RS` or
 `RSH` times the per-instance `NRD`/`NRS` are modeled as series resistors. An
 explicitly supplied direct MOSFET `RD` or `RS` takes precedence for that
 terminal, including an explicit zero that disables its sheet-resistance path.
@@ -624,7 +636,9 @@ belong on `adapter: external_process` with `tools/cosim/labwired_ngspice.py`.
 
 `RS > 0` on a diode adds one internal node named `<element>#internal`, exactly
 as SPICE does. Nonzero BJT `RB`, `RC`, and `RE` add `<element>#base`,
-`<element>#collector`, and `<element>#emitter` nodes, respectively. Nonzero
+`<element>#collector`, and `<element>#emitter` nodes, respectively. With
+`RCO`, `<element>#collector` is the intrinsic collector behind the epitaxial
+region and a nonzero `RC` adds `<element>#collcx` for the contact. Nonzero
 JFET and MOSFET drain/source terminal resistances add `<element>#drain` and
 `<element>#source`. These
 nodes count against the 64-unknown ceiling and can be probed.

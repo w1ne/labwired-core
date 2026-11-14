@@ -85,21 +85,32 @@ enum Stamp {
 
 /// Linearised BJT charge: B-E and internal B-C branches can depend on both
 /// junction voltages through the Gummel–Poon base-charge factor. The remaining
-/// B-C depletion charge follows the external base when `XCJC < 1`.
+/// B-C depletion charge follows the external base when `XCJC < 1`. With `RCO`
+/// and `QCO`, Kull's epitaxial charge adds to the internal B-C branch and to a
+/// fourth branch from the internal base to the collector contact.
 struct BjtChargeOp {
-    /// B-E charge, internal B-C charge, and external-base B-C depletion charge.
-    q: [f64; 3],
-    /// `[charge branch][Vbe, internal Vbc, external Vbc]`, in farads.
-    dq: [[f64; 3]; 3],
+    /// B-E charge, internal B-C charge, external-base B-C depletion charge,
+    /// and base-to-collector-contact epitaxial charge.
+    q: [f64; 4],
+    /// `[charge branch][Vbe, internal Vbc, external Vbc, contact Vbcx]`, in
+    /// farads.
+    dq: [[f64; 4]; 4],
 }
 
 fn bjt_charge_op(
     vbe: f64,
     vbc: f64,
     vbc_external: f64,
+    vbcx: f64,
     model: BjtModel,
     thermal_voltage: f64,
 ) -> BjtChargeOp {
+    let epi = |voltage: f64| match model.rco {
+        Some(_) => device::bjt_epi_charge(voltage, model.qco, model.gamma, thermal_voltage),
+        None => (0.0, 0.0),
+    };
+    let (qbci, cbci) = epi(vbc);
+    let (qbcx, cbcx) = epi(vbcx);
     let transit = device::bjt_transit_charge_at_thermal_voltage(vbe, vbc, model, thermal_voltage);
     let (qbe, cbe) =
         device::junction_depletion_charge(vbe, model.cje, model.vje, model.mje, model.fc);
@@ -118,20 +129,28 @@ fn bjt_charge_op(
         model.fc,
     );
     BjtChargeOp {
-        q: [qbe + transit.qbe, qbc + transit.qbc, qbc_external],
+        q: [
+            qbe + transit.qbe,
+            qbc + transit.qbc + qbci,
+            qbc_external,
+            qbcx,
+        ],
         dq: [
-            [cbe + transit.dqbe_dvbe, transit.dqbe_dvbc, 0.0],
-            [transit.dqbc_dvbe, cbc + transit.dqbc_dvbc, 0.0],
-            [0.0, 0.0, cbc_external],
+            [cbe + transit.dqbe_dvbe, transit.dqbe_dvbc, 0.0, 0.0],
+            [transit.dqbc_dvbe, cbc + transit.dqbc_dvbc + cbci, 0.0, 0.0],
+            [0.0, 0.0, cbc_external, 0.0],
+            [0.0, 0.0, 0.0, cbcx],
         ],
     }
 }
 
 fn bjt_charge_active(model: BjtModel, branch: usize) -> bool {
+    let epi = model.rco.is_some() && model.qco != 0.0;
     match branch {
         0 => model.cje != 0.0 || model.tf != 0.0,
-        1 => model.cjc * model.xcjc != 0.0 || model.tr != 0.0,
-        _ => model.cjc * (1.0 - model.xcjc) != 0.0,
+        1 => model.cjc * model.xcjc != 0.0 || model.tr != 0.0 || epi,
+        2 => model.cjc * (1.0 - model.xcjc) != 0.0,
+        _ => epi,
     }
 }
 
@@ -446,10 +465,14 @@ pub struct Solver {
     bjt_vbe: Vec<f64>,
     /// Each BJT's base-collector voltage in device coordinates.
     bjt_vbc: Vec<f64>,
+    /// Each BJT's voltage from the internal base to the collector contact in
+    /// device coordinates. It differs from `bjt_vbc` only with `RCO`.
+    bjt_vbcx: Vec<f64>,
     /// Depletion plus transit charge and current history for each BJT, ordered
-    /// B-E, internal B-C, and external-base B-C depletion in device coordinates.
-    bjt_q: Vec<[f64; 3]>,
-    bjt_i: Vec<[f64; 3]>,
+    /// B-E, internal B-C, external-base B-C depletion, and base-to-contact
+    /// epitaxial charge in device coordinates.
+    bjt_q: Vec<[f64; 4]>,
+    bjt_i: Vec<[f64; 4]>,
     /// Each MOSFET's gate-source voltage in device coordinates, as the netlist
     /// names the terminals — not swapped for reverse mode.
     mos_vgs: Vec<f64>,
@@ -500,6 +523,7 @@ pub struct Solver {
     saved_diode_vj: Vec<f64>,
     saved_bjt_vbe: Vec<f64>,
     saved_bjt_vbc: Vec<f64>,
+    saved_bjt_vbcx: Vec<f64>,
     saved_mos_vgs: Vec<f64>,
     saved_mos_vds: Vec<f64>,
     saved_mos_vbd: Vec<f64>,
@@ -609,8 +633,9 @@ impl Solver {
             diode_recovery_rate: vec![0.0; diodes],
             bjt_vbe: vec![0.0; bjts],
             bjt_vbc: vec![0.0; bjts],
-            bjt_q: vec![[0.0; 3]; bjts],
-            bjt_i: vec![[0.0; 3]; bjts],
+            bjt_vbcx: vec![0.0; bjts],
+            bjt_q: vec![[0.0; 4]; bjts],
+            bjt_i: vec![[0.0; 4]; bjts],
             mos_vgs: vec![0.0; mosfets],
             mos_vds: vec![0.0; mosfets],
             mos_vbd: vec![0.0; mosfets],
@@ -636,6 +661,7 @@ impl Solver {
             saved_diode_vj: vec![0.0; diodes],
             saved_bjt_vbe: vec![0.0; bjts],
             saved_bjt_vbc: vec![0.0; bjts],
+            saved_bjt_vbcx: vec![0.0; bjts],
             saved_mos_vgs: vec![0.0; mosfets],
             saved_mos_vds: vec![0.0; mosfets],
             saved_mos_vbd: vec![0.0; mosfets],
@@ -1012,15 +1038,17 @@ impl Solver {
             let vbe = sign * node_diff(&self.node_v, bjt.junction_b, bjt.junction_e);
             let vbc = sign * node_diff(&self.node_v, bjt.junction_b, bjt.junction_c);
             let vbc_external = sign * node_diff(&self.node_v, bjt.b, bjt.junction_c);
+            let vbcx = sign * node_diff(&self.node_v, bjt.junction_b, bjt.junction_cx);
             self.bjt_q[index] = bjt_charge_op(
                 vbe,
                 vbc,
                 vbc_external,
+                vbcx,
                 bjt.operating_model,
                 bjt.thermal_voltage,
             )
             .q;
-            self.bjt_i[index] = [0.0; 3];
+            self.bjt_i[index] = [0.0; 4];
         }
         for index in 0..self.circuit.mosfets.len() {
             let mosfet = &self.circuit.mosfets[index];
@@ -1154,6 +1182,7 @@ impl Solver {
         self.saved_diode_vj.copy_from_slice(&self.diode_vj);
         self.saved_bjt_vbe.copy_from_slice(&self.bjt_vbe);
         self.saved_bjt_vbc.copy_from_slice(&self.bjt_vbc);
+        self.saved_bjt_vbcx.copy_from_slice(&self.bjt_vbcx);
         self.saved_mos_vgs.copy_from_slice(&self.mos_vgs);
         self.saved_mos_vds.copy_from_slice(&self.mos_vds);
         self.saved_mos_vbd.copy_from_slice(&self.mos_vbd);
@@ -1172,6 +1201,7 @@ impl Solver {
         self.diode_vj.copy_from_slice(&self.saved_diode_vj);
         self.bjt_vbe.copy_from_slice(&self.saved_bjt_vbe);
         self.bjt_vbc.copy_from_slice(&self.saved_bjt_vbc);
+        self.bjt_vbcx.copy_from_slice(&self.saved_bjt_vbcx);
         self.mos_vgs.copy_from_slice(&self.saved_mos_vgs);
         self.mos_vds.copy_from_slice(&self.saved_mos_vds);
         self.mos_vbd.copy_from_slice(&self.saved_mos_vbd);
@@ -1305,15 +1335,17 @@ impl Solver {
                 sign * node_diff(nodes, bjt.junction_b, bjt.junction_e),
                 sign * node_diff(nodes, bjt.junction_b, bjt.junction_c),
                 sign * node_diff(nodes, bjt.b, bjt.junction_c),
+                sign * node_diff(nodes, bjt.junction_b, bjt.junction_cx),
             ];
             let charge = bjt_charge_op(
                 voltages[0],
                 voltages[1],
                 voltages[2],
+                voltages[3],
                 bjt.operating_model,
                 bjt.thermal_voltage,
             );
-            for junction in 0..3 {
+            for junction in 0..4 {
                 if !bjt_charge_active(model, junction) {
                     continue;
                 }
@@ -1560,7 +1592,7 @@ impl Solver {
                     &mut self.matrix,
                     dim,
                     bjt.c,
-                    bjt.junction_c,
+                    bjt.junction_cx,
                     bjt.multiplier / model.rc,
                 );
             }
@@ -2088,6 +2120,15 @@ impl Solver {
             self.limiter_clamped |= be != raw_be || bc != raw_bc;
             self.bjt_vbe[index] = be;
             self.bjt_vbc[index] = bc;
+            // The epitaxial current is exponential in the base-to-contact
+            // voltage too, so that voltage gets the collector junction's
+            // limiter. ngspice leaves it unlimited.
+            if model.rco.is_some() {
+                let raw_bcx = sign * node_diff(nodes, bjt.junction_b, bjt.junction_cx);
+                let bcx = device::pn_limit(raw_bcx, self.bjt_vbcx[index], vtr, crit_r);
+                self.limiter_clamped |= bcx != raw_bcx;
+                self.bjt_vbcx[index] = bcx;
+            }
         }
 
         for index in 0..self.circuit.mosfets.len() {
@@ -2388,7 +2429,7 @@ impl Solver {
             // The device sees sign·u1, sign·u2, and sign·u3.
             let u1 = sign * vbe;
             let u2 = sign * vbc;
-            let u3 = sign * node_diff(&self.solution[..self.nodes], bjt.b, bjt.junction_c);
+            let u3 = node_diff(&self.solution[..self.nodes], bjt.b, bjt.junction_c);
             let collector = [
                 (op.gif, bjt.junction_b, bjt.junction_e, u1),
                 (-op.gir - op.gmu, bjt.junction_b, bjt.junction_c, u2),
@@ -2421,16 +2462,56 @@ impl Solver {
                 &emitter,
             );
 
+            // Kull's quasi-saturation region from the collector contact to
+            // the intrinsic collector, controlled by u2 and by
+            // u4 = v(b_internal) − v(c_contact).
+            let vbcx = self.bjt_vbcx[index];
+            let u4 = sign * vbcx;
+            if let Some(rco) = model.rco {
+                let epi =
+                    device::bjt_epi_op(vbc, vbcx, rco, model.vo, model.gamma, bjt.thermal_voltage);
+                let control = [
+                    (epi.g_vbc, bjt.junction_b, bjt.junction_c, u2),
+                    (epi.g_vbcx, bjt.junction_b, bjt.junction_cx, u4),
+                ];
+                stamp_linearised(
+                    matrix,
+                    rhs,
+                    dim,
+                    m,
+                    bjt.junction_cx,
+                    sign * epi.current,
+                    &control,
+                );
+                stamp_linearised(
+                    matrix,
+                    rhs,
+                    dim,
+                    m,
+                    bjt.junction_c,
+                    -sign * epi.current,
+                    &negate(&control),
+                );
+            }
+
             if let Stamp::Transient(h, rule) = stamp {
-                let charge = bjt_charge_op(vbe, vbc, u3, operating_model, bjt.thermal_voltage);
-                for junction in 0..3 {
+                let charge = bjt_charge_op(
+                    vbe,
+                    vbc,
+                    sign * u3,
+                    vbcx,
+                    operating_model,
+                    bjt.thermal_voltage,
+                );
+                for junction in 0..4 {
                     if !bjt_charge_active(model, junction) {
                         continue;
                     }
                     let (positive, negative) = match junction {
                         0 => (bjt.junction_b, bjt.junction_e),
                         1 => (bjt.junction_b, bjt.junction_c),
-                        _ => (bjt.b, bjt.junction_c),
+                        2 => (bjt.b, bjt.junction_c),
+                        _ => (bjt.junction_b, bjt.junction_cx),
                     };
                     let factor = match rule {
                         Integration::BackwardEuler => 1.0 / h,
@@ -2459,6 +2540,12 @@ impl Solver {
                             u2,
                         ),
                         (charge.dq[junction][2] * factor, bjt.b, bjt.junction_c, u3),
+                        (
+                            charge.dq[junction][3] * factor,
+                            bjt.junction_b,
+                            bjt.junction_cx,
+                            u4,
+                        ),
                     ];
                     stamp_linearised(matrix, rhs, dim, m, positive, sign * current, &control);
                     stamp_linearised(

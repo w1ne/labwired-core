@@ -32,7 +32,9 @@
 //! charge (`CGSO`, `CGDO`, `CGBO`) is integrated as linear capacitance using
 //! instance `W` and `L`; BJT transit-time charge (`TF`/`TR`) is integrated
 //! using ideal transit times with ngspice's forward `XTF`/`VTF`/`ITF` bias
-//! adjustment. BJT junction depletion parameters follow ngspice's default
+//! adjustment. BJT `RCO` selects Kull's quasi-saturation model of the
+//! epitaxial collector (`VO`, `GAMMA`, charge `QCO`), solved at each operating
+//! point. BJT junction depletion parameters follow ngspice's default
 //! silicon temperature law or its `TLEVC=1` linear form. MOSFET intrinsic
 //! channel charge from `TOX` uses the level-1 Meyer model by default; opt-in
 //! Ward–Dutton mode integrates strong-inversion
@@ -300,7 +302,93 @@ pub fn bjt_parameters_at_temperature(
     adjusted.cjs = cjs;
     adjusted.vjs = vjs;
     adjusted.mjs = mjs;
+    // ngspice `bjttemp.c`: only `QUASIMOD=1` moves the quasi-saturation
+    // parameters with temperature. `XTI` is the `GAMMA` exponent.
+    if let (Some(rco), 1) = (model.rco, model.quasimod) {
+        let npn = model.polarity == super::netlist::Polarity::N;
+        let cn = model.cn.unwrap_or(if npn { 2.42 } else { 2.2 });
+        let d = model.d.unwrap_or(if npn { 0.87 } else { 0.52 });
+        adjusted.rco = Some(rco * libm::exp(cn * log_ratio));
+        adjusted.vo = model.vo * libm::exp(d * log_ratio);
+        adjusted.gamma = model.gamma
+            * libm::exp(model.xti * log_ratio - model.vg * (1.0 - ratio) / thermal_voltage);
+    }
     (adjusted, thermal_voltage)
+}
+
+/// Current of the epitaxial collector region under Kull's quasi-saturation
+/// model, with its derivatives.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BjtEpiOp {
+    /// Current from the collector contact to the intrinsic collector, amps,
+    /// in the device's own polarity.
+    pub current: f64,
+    /// Its derivative with respect to the intrinsic base-collector voltage.
+    pub g_vbc: f64,
+    /// Its derivative with respect to the base-to-contact voltage.
+    pub g_vbcx: f64,
+}
+
+/// `K(v) = sqrt(1 + GAMMA·exp(v/Vt))` of Kull's model and its derivative.
+fn bjt_epi_k(voltage: f64, gamma: f64, thermal_voltage: f64) -> (f64, f64) {
+    let injected = gamma * exp_clamped(voltage / thermal_voltage);
+    let k = libm::sqrt(1.0 + injected);
+    (k, injected / (2.0 * thermal_voltage * k))
+}
+
+/// Kull's quasi-saturation current through the epitaxial collector. `vbc` is
+/// the intrinsic base-collector voltage and `vbcx` the voltage from the
+/// intrinsic base to the collector contact, both in the device's own
+/// polarity; the region drops `vbc − vbcx`.
+///
+/// The ohmic current `(drop + Vcorr)/RCO` is divided by the
+/// velocity-saturation term `1 + |drop|/VO`; `Vcorr` is the conductivity
+/// modulation by the carriers the two junction voltages inject. GMIN shunts
+/// the region.
+///
+/// With the drop positive this is ngspice's `bjtload.c` expression. ngspice
+/// replaces the region by the plain resistor `RCO` when the drop is at or
+/// below zero, which changes the slope at zero by the modulation factor and
+/// makes Newton's method alternate between the two sides near deep
+/// saturation. The engine keeps Kull's expression on both sides, where it is
+/// continuous with a continuous slope, so the two differ only for a
+/// collector current that flows backwards.
+pub fn bjt_epi_op(
+    vbc: f64,
+    vbcx: f64,
+    rco: f64,
+    vo: f64,
+    gamma: f64,
+    thermal_voltage: f64,
+) -> BjtEpiOp {
+    let drop = vbc - vbcx;
+    let (kbci, kbci_slope) = bjt_epi_k(vbc, gamma, thermal_voltage);
+    let (kbcx, kbcx_slope) = bjt_epi_k(vbcx, gamma, thermal_voltage);
+    let correction = thermal_voltage * (kbci - kbcx - ln((1.0 + kbci) / (1.0 + kbcx)));
+    let correction_vbc = thermal_voltage * (kbci_slope - kbci_slope / (1.0 + kbci));
+    let correction_vbcx = thermal_voltage * (kbcx_slope / (1.0 + kbcx) - kbcx_slope);
+    let ohmic = (drop + correction) / rco;
+    let quotient = 1.0 + drop.abs() / vo;
+    let quotient_slope = if drop < 0.0 { -1.0 / vo } else { 1.0 / vo };
+    let g_drop = 1.0 / (rco * quotient) - ohmic * quotient_slope / (quotient * quotient) + GMIN;
+    BjtEpiOp {
+        current: ohmic / quotient + GMIN * drop,
+        g_vbc: g_drop + correction_vbc / (rco * quotient),
+        g_vbcx: -g_drop + correction_vbcx / (rco * quotient),
+    }
+}
+
+/// Epitaxial charge `QCO·K(v)` of Kull's model at one of its two junction
+/// voltages, with its capacitance.
+///
+/// ngspice `bjtload.c` zeroes this charge while the epitaxial drop is at or
+/// below zero, which steps it by at least `QCO` at the crossing. The engine
+/// keeps the charge at every bias so that it stays continuous, as it does
+/// for the current in [`bjt_epi_op`]; the two agree whenever the collector
+/// current flows forward.
+pub fn bjt_epi_charge(voltage: f64, qco: f64, gamma: f64, thermal_voltage: f64) -> (f64, f64) {
+    let (k, slope) = bjt_epi_k(voltage, gamma, thermal_voltage);
+    (qco * k, qco * slope)
 }
 
 /// SPICE level-1 JFET parameters adjusted for an explicit instance
