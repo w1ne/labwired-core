@@ -273,6 +273,10 @@
          <lastmod>2026-11-14</lastmod>
     </url>
     <url>
+         <loc>https://docs.labwired.com/boards/adafruit-feather-rp2350/</loc>
+         <lastmod>2026-11-14</lastmod>
+    </url>
+    <url>
          <loc>https://docs.labwired.com/boards/alif_ae822fa0e5597bs0/</loc>
          <lastmod>2026-11-14</lastmod>
     </url>
@@ -605,11 +609,23 @@
          <lastmod>2026-11-14</lastmod>
     </url>
     <url>
+         <loc>https://docs.labwired.com/boards/esp32c5-devkitc-1-n8r8/</loc>
+         <lastmod>2026-11-14</lastmod>
+    </url>
+    <url>
          <loc>https://docs.labwired.com/boards/esp32c6-devkitc-1-n8-bme280/</loc>
          <lastmod>2026-11-14</lastmod>
     </url>
     <url>
          <loc>https://docs.labwired.com/boards/esp32c6-devkitc/</loc>
+         <lastmod>2026-11-14</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.labwired.com/boards/esp32c61-devkitc-1-n8r2/</loc>
+         <lastmod>2026-11-14</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.labwired.com/boards/esp32h2-devkitm-1-n4s/</loc>
          <lastmod>2026-11-14</lastmod>
     </url>
     <url>
@@ -1190,6 +1206,10 @@
     </url>
     <url>
          <loc>https://docs.labwired.com/boards/stm32f072b_discovery/</loc>
+         <lastmod>2026-11-14</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.labwired.com/boards/stm32f103-blue-pill/</loc>
          <lastmod>2026-11-14</lastmod>
     </url>
     <url>

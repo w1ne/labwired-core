@@ -4944,6 +4944,16 @@
 <li>UART: the Efr32s2 layout models the console TX/RX byte path but captures no baud divisor (CLKDIV), so bit_time_cycles() is None and no wire waveform is narrated — there are no edges to decode</li>
 <li><strong>esp32</strong></li>
 <li>SPI: Esp32Spi does not implement line_names()/wire_lines(); pad bindings exist but the wire channel is unpublished on this model</li>
+<li><strong>esp32c5</strong></li>
+<li>UART: esp32c5_uart is a TX FIFO/console model with no PadLines wire cell; bytes are proven by the esp32c5-devkitc-1-n8r8 board smoke</li>
+<li><strong>esp32c61</strong></li>
+<li>UART: esp32c61_uart is a TX FIFO/console model with no PadLines wire cell; bytes are proven by the esp32c61-devkitc-1-n8r2 board smoke</li>
+<li><strong>esp32h2</strong></li>
+<li>UART: no ESP32-H2 UART bring-up in this harness; bytes are proven by the esp32h2-devkitm-1-n4s board smoke</li>
+<li><strong>esp32p4</strong></li>
+<li>UART: esp32p4 UART0 is a TX FIFO/console model with no PadLines wire cell; bytes are proven by the esp32p4x-c5-function-ev-board smoke</li>
+<li><strong>esp32s2</strong></li>
+<li>UART: no ESP32-S2 UART bring-up in this harness; bytes are proven by the esp32s2-devkitc-1-n8r2 board smoke</li>
 <li><strong>esp32s3</strong></li>
 <li>I2C: esp32s3.yaml is an address-map stub; from_config has no S3 I2C model</li>
 <li>SPI: esp32s3.yaml is an address-map stub; from_config has no S3 SPI model</li>
@@ -4995,6 +5005,10 @@
 <li>I2C: rp2350 from_config bus not yet edge-gated (no line cells)</li>
 <li>SPI: rp2350 from_config bus not yet edge-gated (no line cells)</li>
 <li>UART: rp2350 from_config bus not yet edge-gated (no line cells)</li>
+<li><strong>rp2350-feather</strong></li>
+<li>I2C: rp2350 die (Feather variant): from_config bus not yet edge-gated (no line cells)</li>
+<li>SPI: rp2350 die (Feather variant): from_config bus not yet edge-gated (no line cells)</li>
+<li>UART: rp2350 die (Feather variant): from_config bus not yet edge-gated (no line cells)</li>
 <li><strong>s32k388</strong></li>
 <li>UART: no LPUART2 bring-up in this harness; bytes are proven by the s32k388-evb survival smoke</li>
 <li><strong>sam4s16c</strong></li>
@@ -5213,10 +5227,46 @@
 <td>✓</td>
 </tr>
 <tr>
+<td>esp32c5</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
 <td>esp32c6</td>
 <td>✓</td>
 <td>✓</td>
 <td>✓</td>
+</tr>
+<tr>
+<td>esp32c61</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td>esp32c6fh4</td>
+<td>✓</td>
+<td>✓</td>
+<td>✓</td>
+</tr>
+<tr>
+<td>esp32h2</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td>esp32p4</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td>esp32s2</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
 </tr>
 <tr>
 <td>esp32s3</td>
@@ -5411,7 +5461,19 @@
 <td>✓</td>
 </tr>
 <tr>
+<td>rp2040-feather</td>
+<td>✓</td>
+<td>✓</td>
+<td>✓</td>
+</tr>
+<tr>
 <td>rp2350</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td>rp2350-feather</td>
 <td>—</td>
 <td>—</td>
 <td>—</td>
@@ -5702,6 +5764,12 @@
 <td>stm32h563</td>
 <td>✓</td>
 <td>✓</td>
+<td>✓</td>
+</tr>
+<tr>
+<td>stm32h723zg</td>
+<td>—</td>
+<td>—</td>
 <td>✓</td>
 </tr>
 <tr>

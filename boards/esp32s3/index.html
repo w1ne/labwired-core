@@ -2072,6 +2072,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#current-board-system-smoke-devkitc-1-n16r8-bme280" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current board system smoke: DevKitC-1 N16R8 + BME280
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#peripherals-esp32s3-zero-plan-24-model" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4995,6 +5006,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#current-board-system-smoke-devkitc-1-n16r8-bme280" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current board system smoke: DevKitC-1 N16R8 + BME280
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#peripherals-esp32s3-zero-plan-24-model" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5119,6 +5141,14 @@ external YAML descriptors under <code>configs/peripherals/esp32s3/</code>.</p>
 </tr>
 </tbody>
 </table>
+<h2 id="current-board-system-smoke-devkitc-1-n16r8-bme280">Current board system smoke: DevKitC-1 N16R8 + BME280</h2>
+<p>The live ESP32-S3-DevKitC-1-N16R8 is a rank-1 ESP32-family board. The narrow
+<a href="../../examples/esp32s3-devkitc-1-n16r8-bme280/README.md">N16R8 + BME280 profile</a>
+connects an Adafruit BME280 breakout to I2C0 on GPIO8/GPIO9. Its local smoke
+asserts the BME280 chip ID and raw temperature registers; the hosted Arduino
+oracle verifies the copy-paste setup path against BME280_ID=0x60. The profile
+reuses the existing S3 model and does not claim radio, USB-OTG, PSRAM, RGB LED,
+board power or physical sensor behavior.</p>
 <h2 id="peripherals-esp32s3-zero-plan-24-model">Peripherals (esp32s3-zero, Plan 2/4 model)</h2>
 <table>
 <thead>

@@ -5088,6 +5088,105 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#esp32h2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        esp32h2
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#esp32c5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        esp32c5
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#esp32c61" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        esp32c61
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#esp32p4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        esp32p4
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#esp32s2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        esp32s2
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rp2040-feather" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rp2040-feather
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rp2350-feather" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rp2350-feather
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#esp32c6fh4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        esp32c6fh4
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stm32h723zg" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stm32h723zg
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#esp32s3-zero" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -6763,7 +6862,7 @@
 <p><em>Drives all 13 rubric classes (incl. FDCAN→can) via real firmware — the broadest rubric coverage. UDS bootloader/ECU examples exist but are not yet gated as automated tests.</em></p>
 <p><strong>Advanced peripherals — unit-tested only</strong> (no firmware drives them): <code>UDS bootloader/ECU (0x10/0x27/0x34/0x36/0x37/0x85/0x28 — example firmware, not gated)</code></p>
 <h3 id="ch32v003f4p6"><code>ch32v003f4p6</code></h3>
-<p><em>No tier-1 fixture or hosted model-verification gate. A compiled RV32E/ILP32E bare-metal C fixture executes from flash, configures WCH RCC/GPIOC, and toggles PC0 in the local simulator; the matching CLI smoke and core integration test require two GPIO edges. A second, RV32EC (compressed) fixture clocks USART1 and prints a line through polled TX; its CLI smoke and integration test assert the exact string, and a negative control asserts silence when the USART1 clock gate is not set. This is local simulator evidence, not hosted model_verified or hardware confirmation.</em></p>
+<p><em>No tier-1 fixture or hosted model-verification gate. The WCH-CH32V003EVT board profile maps its P4 LED1 through a configured jumper to PC0; committed RV32E/ILP32E bare-metal C firmware executes from flash and the PR-gated board smoke requires two GPIO edges. A second RV32EC (compressed) fixture clocks USART1 and prints a line through polled TX on PD5; the board smoke asserts the exact string. A negative control asserts silence when the USART1 clock gate is not set. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, timers, or USB, and is not hosted model_verified or hardware confirmation.</em></p>
 <h3 id="nrf5340"><code>nrf5340</code></h3>
 <p><em>No tier1 fixture. Unmodified Zephyr v3.7 hello_world boots end-to-end through CLOCK/UARTE0/RTC1. TWIM1 is a behavioural EasyDMA model; the PR-gated nrf5340_clock_boot test attaches the declarative BMI270 model and reads CHIP_ID 0x24 with a repeated-START transaction. Nine peripheral blocks remain benign boot stubs.</em></p>
 <p><strong>Functional device/protocol reads</strong> (real driver, decoded value):
@@ -6798,6 +6897,24 @@
 <p><strong>Shims</strong> (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - <code>io_mux</code> (configs/chips/esp32c6.yaml:491 (declarative; configs/peripherals/esp32c6/io_mux.yaml)) — CLOSABLE: reset-value register storage; pad function writes are recorded but never read back or electrically enforced — the DevKitC demo writes U0TXD's MCU_SEL and the tier-1 console both pass regardless of routing. The S3's real io_mux model is the port path.
 - <code>hp_sys</code> (configs/chips/esp32c6.yaml:516 (declarative; configs/peripherals/esp32c6/hp_sys.yaml)) — CLOSABLE: declarative register file with no engine; nothing drives it today, so the false-success path is latent — timeout monitor, SDIO control, ROM-table lock and memory test are not modelled.</p>
+<h3 id="esp32h2"><code>esp32h2</code></h3>
+<p><em>No beyond-rubric H2 peripheral is exercised: the board smoke covers only the UART0 FIFO/console path. This narrow profile does not model mask ROM, the USB bridge, IO_MUX, WS2812/RMT, button/strap behavior, Bluetooth LE, IEEE 802.15.4, Thread, Zigbee, or the other H2 peripherals.</em></p>
+<h3 id="esp32c5"><code>esp32c5</code></h3>
+<p><em>No beyond-rubric C5 peripheral is exercised: the DevKitC-1-N8R8 board smoke covers only the UART0 TX FIFO/console path. This narrow profile declares UART0 only; it does not model mask ROM, the USB bridge, IO_MUX, GPIO, the RGB LED, Wi-Fi 6, Bluetooth LE, IEEE 802.15.4 or the other C5 peripherals.</em></p>
+<h3 id="esp32c61"><code>esp32c61</code></h3>
+<p><em>No beyond-rubric C61 peripheral is exercised: the DevKitC-1-N8R2 board smoke covers only the UART0 TX FIFO/console path. This narrow profile declares UART0 only; it does not model mask ROM, the USB bridge, IO_MUX, GPIO, the RGB LED, Wi-Fi 6, Bluetooth LE, PSRAM or the other C61 peripherals.</em></p>
+<h3 id="esp32p4"><code>esp32p4</code></h3>
+<p><em>No beyond-rubric P4 peripheral is exercised: the P4X-C5 Function EV board smoke covers only the UART0 TX FIFO/console path. This narrow profile declares UART0 only; it does not model mask ROM, the second HP core, the LP core, MIPI-CSI/DSI, the H.264/JPEG/PPA media blocks, USB, Ethernet, the companion ESP32-C5 radio or the other P4 peripherals.</em></p>
+<h3 id="esp32s2"><code>esp32s2</code></h3>
+<p><em>No beyond-rubric S2 peripheral is exercised: the DevKitC-1-N8R2 board smoke covers only the UART0 TX FIFO through host_console. This direct-ELF profile declares UART0 only; it does not model mask ROM, flash-cache/MMU boot, PSRAM, the GPIO matrix, the RGB LED, USB OTG, Wi-Fi or the other S2 peripherals.</em></p>
+<h3 id="rp2040-feather"><code>rp2040-feather</code></h3>
+<p><em>Board variant of the rp2040 die with the Feather's 133 MHz clock and 8 MiB flash; it reuses the rp2040 behavioural models. No beyond-rubric peripheral is exercised under this name: the Feather smoke reads BME280 CHIP_ID over I2C1 and drives D13 through SIO; both are rubric classes, not beyond-rubric content. PIO, USB and the onboard NeoPixel are not exercised on this board.</em></p>
+<h3 id="rp2350-feather"><code>rp2350-feather</code></h3>
+<p><em>Board variant of the rp2350 die with the Feather's 8 MiB flash; it reuses the rp2350 behavioural models. No beyond-rubric peripheral is exercised under this name: the Feather smoke toggles red D13 (GPIO7) through SIO and writes UART0; both are rubric classes, not beyond-rubric content. PIO, USB, PSRAM and the onboard NeoPixel are not exercised on this board.</em></p>
+<h3 id="esp32c6fh4"><code>esp32c6fh4</code></h3>
+<p><em>Package variant of the esp32c6 die for the Seeed XIAO ESP32-C6: the yaml copies esp32c6.yaml and changes only the flash size to 4 MB, so it reuses the esp32c6 models and shims. No beyond-rubric peripheral is exercised under this name: the XIAO smoke toggles the active-low user LED on GPIO15 through the C6 GPIO block, a rubric class. The radio, RF switch, USB-Serial/JTAG console and LP core are not exercised on this board.</em></p>
+<h3 id="stm32h723zg"><code>stm32h723zg</code></h3>
+<p><em>No beyond-rubric H723 peripheral is exercised: the NUCLEO-H723ZG smoke drives RCC enables, GPIOB (LD1 on PB0), GPIOD AF7 and USART3 TX only. This narrow board slice declares RCC, SysTick, GPIO B/C/D/E and USART3; it does not model PWR, the cache/MPU, FMC/OCTOSPI, Ethernet, USB OTG, FDCAN, ADC, timers, DMA, I2C, SPI or the other H723 peripherals.</em></p>
 <h3 id="esp32s3-zero"><code>esp32s3-zero</code></h3>
 <p><em>Board variant of the esp32s3 die: same configure_xtensa_esp32s3 wiring and the same committed tier-1 ELF, which non-ignored CLI/workspace tests boot under this chip's name and assert through <code>TIER1 ... PASS</code> (SYSTIMER runs the clock check; USB-Serial/JTAG is the console of the TMP102 e2e, so neither is a gap). The yaml's IRAM/ROM-thunk/XIP windows are memory-map declarations, not per-chip models, and its eFuse/RTC_CNTL stubs are the shared family stubs listed on the esp32s3 entry. <code>spi_mem_flash</code>/<code>extmem</code> stay unit-only here too: mask-ROM bring-up reads are not firmware exercise.</em></p>
 <p><strong>Advanced peripherals — unit-tested only</strong> (no firmware drives them): <code>aes</code>, <code>ds</code>, <code>hmac</code>, <code>rsa</code>, <code>rng</code>, <code>sha</code>, <code>i2s</code>, <code>lcd_cam</code>, <code>sdmmc</code>, <code>usb_otg</code>, <code>gpspi</code>, <code>pcnt</code>, <code>io_mux</code>, <code>extmem</code>, <code>spi_mem_flash</code>, <code>sens</code>, <code>system</code>, <code>core1_control</code>, <code>crosscore_ipi</code></p>

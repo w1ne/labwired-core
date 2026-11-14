@@ -4889,6 +4889,56 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#esp32-s3-devkitc-1-n16r8-adafruit-bme280" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ESP32-S3-DevKitC-1-N16R8 + Adafruit BME280
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#seeed-studio-xiao-esp32c3-adafruit-bme280" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Seeed Studio XIAO ESP32C3 + Adafruit BME280
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rp2040-rp2350-demand-group-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RP2040 / RP2350 — demand group 2
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="RP2040 / RP2350 — demand group 2">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#adafruit-feather-rp2350-with-hstx-no-psram-product-id-6000" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adafruit Feather RP2350 with HSTX (no-PSRAM, Product ID 6000)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -4911,6 +4961,45 @@
     <span class="md-ellipsis">
       
         NUCLEO-F103RB + BME280
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stm32f103c8t6-blue-pill" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        STM32F103C8T6 Blue Pill
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wch-tier-c-vendor-bet-not-a-measured-survey-rank" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WCH — Tier C vendor bet (not a measured survey rank)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="WCH — Tier C vendor bet (not a measured survey rank)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#wch-ch32v003evt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WCH CH32V003EVT
       
     </span>
   </a>
@@ -4981,6 +5070,111 @@ or physical hardware validation.</p>
 </span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>
 </span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="kt">void</span><span class="w"> </span><span class="nf">loop</span><span class="p">()</span><span class="w"> </span><span class="p">{}</span>
 </span></code></pre></div>
+<h3 id="esp32-s3-devkitc-1-n16r8-adafruit-bme280">ESP32-S3-DevKitC-1-N16R8 + Adafruit BME280</h3>
+<p>ESP32 remains demand rank 1 (38% of reported MCU use). Espressif lists the
+N16R8 board SKU; the v1.1 guide gives 16 MB flash / 8 MB PSRAM and marks the
+older N8/N8R2 variants EOL. Adafruit listed the BME280 breakout in stock on
+2026-11-13. The profile uses I2C0 on GPIO8/GPIO9 and asserts the sensor ID plus
+raw temperature registers. This adds board and sensor coverage over the
+existing S3 model, not new silicon. The hosted Arduino oracle verifies the
+copy-paste setup path; its ideal-rail assumption excludes power-on and
+brown-out behavior.</p>
+<ul>
+<li><a href="../examples/esp32s3-devkitc-1-n16r8-bme280/README.md">Wiring, scope, and copy-paste Arduino sketch</a></li>
+<li><a href="../examples/esp32s3-devkitc-1-n16r8-bme280/vendor-status.md">Dated Espressif and Adafruit availability receipt</a></li>
+<li><a href="../examples/esp32s3-devkitc-1-n16r8-bme280/evidence/">Committed local smoke logs</a></li>
+<li><a href="../examples/esp32s3-devkitc-1-n16r8-bme280/evidence/hosted-verify.json">Hosted <code>model_verified</code> oracle output</a></li>
+</ul>
+<div class="language-cpp highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;Arduino.h&gt;</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;Wire.h&gt;</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="k">constexpr</span><span class="w"> </span><span class="kt">uint8_t</span><span class="w"> </span><span class="n">SDA_PIN</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">8</span><span class="p">;</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="k">constexpr</span><span class="w"> </span><span class="kt">uint8_t</span><span class="w"> </span><span class="n">SCL_PIN</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">9</span><span class="p">;</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="k">constexpr</span><span class="w"> </span><span class="kt">uint8_t</span><span class="w"> </span><span class="n">BME280_ADDR</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0x77</span><span class="p">;</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="kt">bool</span><span class="w"> </span><span class="nf">readRegister</span><span class="p">(</span><span class="kt">uint8_t</span><span class="w"> </span><span class="n">reg</span><span class="p">,</span><span class="w"> </span><span class="kt">uint8_t</span><span class="w"> </span><span class="o">&amp;</span><span class="n">value</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">  </span><span class="n">Wire</span><span class="p">.</span><span class="n">beginTransmission</span><span class="p">(</span><span class="n">BME280_ADDR</span><span class="p">);</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">  </span><span class="n">Wire</span><span class="p">.</span><span class="n">write</span><span class="p">(</span><span class="n">reg</span><span class="p">);</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">Wire</span><span class="p">.</span><span class="n">endTransmission</span><span class="p">(</span><span class="nb">false</span><span class="p">)</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">Wire</span><span class="p">.</span><span class="n">requestFrom</span><span class="p">(</span><span class="n">BME280_ADDR</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">  </span><span class="p">}</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">  </span><span class="n">value</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Wire</span><span class="p">.</span><span class="n">read</span><span class="p">();</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="p">}</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="kt">void</span><span class="w"> </span><span class="nf">setup</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="w">  </span><span class="n">Serial</span><span class="p">.</span><span class="n">begin</span><span class="p">(</span><span class="mi">115200</span><span class="p">);</span>
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="w">  </span><span class="n">Wire</span><span class="p">.</span><span class="n">begin</span><span class="p">(</span><span class="n">SDA_PIN</span><span class="p">,</span><span class="w"> </span><span class="n">SCL_PIN</span><span class="p">,</span><span class="w"> </span><span class="mi">100000</span><span class="p">);</span>
+</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="w">  </span><span class="kt">uint8_t</span><span class="w"> </span><span class="n">id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">readRegister</span><span class="p">(</span><span class="mh">0xD0</span><span class="p">,</span><span class="w"> </span><span class="n">id</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">id</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mh">0x60</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="w">    </span><span class="n">Serial</span><span class="p">.</span><span class="n">printf</span><span class="p">(</span><span class="s">"BME280_ID=0x%02X</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="w"> </span><span class="n">id</span><span class="p">);</span>
+</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a><span class="w">  </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a><span class="w">    </span><span class="n">Serial</span><span class="p">.</span><span class="n">println</span><span class="p">(</span><span class="s">"BME280_I2C_ERROR"</span><span class="p">);</span>
+</span><span id="__span-1-26"><a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a><span class="w">  </span><span class="p">}</span>
+</span><span id="__span-1-27"><a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a><span class="p">}</span>
+</span><span id="__span-1-28"><a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a>
+</span><span id="__span-1-29"><a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a><span class="kt">void</span><span class="w"> </span><span class="nf">loop</span><span class="p">()</span><span class="w"> </span><span class="p">{}</span>
+</span></code></pre></div>
+<h3 id="seeed-studio-xiao-esp32c3-adafruit-bme280">Seeed Studio XIAO ESP32C3 + Adafruit BME280</h3>
+<p>The XIAO ESP32C3 is a USD 4.90 ESP32-C3 board; Seeed listed it in stock on
+2026-11-13. The breakout sits on the board's default Wire pins, D4 (GPIO6) and
+D5 (GPIO7). The simulator boots the unmodified Arduino build in full and the
+sketch prints the BME280 ID, the raw temperature and the compensated
+25.00 degC on the USB console. This adds board and sensor coverage over the
+existing C3 model, not new silicon.</p>
+<ul>
+<li><a href="../examples/xiao-esp32c3-bme280/README.md">Wiring, scope, and copy-paste Arduino sketch</a></li>
+<li><a href="../examples/xiao-esp32c3-bme280/vendor-status.md">Dated Seeed availability receipt</a></li>
+<li><a href="../examples/xiao-esp32c3-bme280/evidence/">Committed local smoke logs</a></li>
+</ul>
+<div class="language-cpp highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;Arduino.h&gt;</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;Wire.h&gt;</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="k">constexpr</span><span class="w"> </span><span class="kt">uint8_t</span><span class="w"> </span><span class="n">BME280_ADDR</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0x77</span><span class="p">;</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="kt">void</span><span class="w"> </span><span class="nf">setup</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="n">Serial</span><span class="p">.</span><span class="n">begin</span><span class="p">(</span><span class="mi">115200</span><span class="p">);</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">  </span><span class="n">Wire</span><span class="p">.</span><span class="n">begin</span><span class="p">();</span><span class="w">  </span><span class="c1">// XIAO ESP32C3: SDA = D4 (GPIO6), SCL = D5 (GPIO7)</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">  </span><span class="n">Wire</span><span class="p">.</span><span class="n">beginTransmission</span><span class="p">(</span><span class="n">BME280_ADDR</span><span class="p">);</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">  </span><span class="n">Wire</span><span class="p">.</span><span class="n">write</span><span class="p">(</span><span class="mh">0xD0</span><span class="p">);</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">  </span><span class="kt">uint8_t</span><span class="w"> </span><span class="n">id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">Wire</span><span class="p">.</span><span class="n">endTransmission</span><span class="p">(</span><span class="nb">false</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">Wire</span><span class="p">.</span><span class="n">requestFrom</span><span class="p">(</span><span class="n">BME280_ADDR</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">    </span><span class="n">id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Wire</span><span class="p">.</span><span class="n">read</span><span class="p">();</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">  </span><span class="p">}</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">  </span><span class="n">Serial</span><span class="p">.</span><span class="n">printf</span><span class="p">(</span><span class="s">"BME280_ID=0x%02X</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="w"> </span><span class="n">id</span><span class="p">);</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="p">}</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="kt">void</span><span class="w"> </span><span class="nf">loop</span><span class="p">()</span><span class="w"> </span><span class="p">{}</span>
+</span></code></pre></div>
+<h2 id="rp2040-rp2350-demand-group-2">RP2040 / RP2350 — demand group 2</h2>
+<h3 id="adafruit-feather-rp2350-with-hstx-no-psram-product-id-6000">Adafruit Feather RP2350 with HSTX (no-PSRAM, Product ID 6000)</h3>
+<p>RP2040 was reported by 12% of respondents (MCU rank 5); RP2350 was not
+measured separately. Adafruit's live product listing showed the no-PSRAM
+Feather in stock on 2026-11-13. The local smoke toggles red D13 on GPIO7 and
+captures UART0 output on the existing RP2350 model. HSTX/DVI, NeoPixel, USB,
+charging, and PSRAM behavior are outside this coverage.</p>
+<ul>
+<li><a href="../examples/adafruit-feather-rp2350/README.md">Board pin map, scope, and copy-paste Arduino example</a></li>
+<li><a href="../examples/adafruit-feather-rp2350/evidence/vendor-status.md">Dated vendor availability receipt</a></li>
+<li><a href="../examples/adafruit-feather-rp2350/evidence/run/">Committed local simulator evidence</a></li>
+</ul>
+<div class="language-cpp highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;Arduino.h&gt;</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="k">constexpr</span><span class="w"> </span><span class="kt">uint8_t</span><span class="w"> </span><span class="n">LED_PIN</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">7</span><span class="p">;</span><span class="w">  </span><span class="c1">// D13, onboard red LED</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="kt">void</span><span class="w"> </span><span class="nf">setup</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span><span class="n">pinMode</span><span class="p">(</span><span class="n">LED_PIN</span><span class="p">,</span><span class="w"> </span><span class="n">OUTPUT</span><span class="p">);</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">  </span><span class="n">Serial1</span><span class="p">.</span><span class="n">begin</span><span class="p">(</span><span class="mi">115200</span><span class="p">);</span><span class="w">  </span><span class="c1">// UART0 on TX=GP0, RX=GP1</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">  </span><span class="n">Serial1</span><span class="p">.</span><span class="n">println</span><span class="p">(</span><span class="s">"FEATHER_RP2350_GPIO7_UART_OK"</span><span class="p">);</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="p">}</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="kt">void</span><span class="w"> </span><span class="nf">loop</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">  </span><span class="n">digitalWrite</span><span class="p">(</span><span class="n">LED_PIN</span><span class="p">,</span><span class="w"> </span><span class="n">HIGH</span><span class="p">);</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">  </span><span class="n">delay</span><span class="p">(</span><span class="mi">500</span><span class="p">);</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="w">  </span><span class="n">digitalWrite</span><span class="p">(</span><span class="n">LED_PIN</span><span class="p">,</span><span class="w"> </span><span class="n">LOW</span><span class="p">);</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="w">  </span><span class="n">delay</span><span class="p">(</span><span class="mi">500</span><span class="p">);</span>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="p">}</span>
+</span></code></pre></div>
 <h2 id="stm32f103-rank-3-17-of-reported-mcu-use">STM32F103 — rank 3, 17% of reported MCU use</h2>
 <h3 id="nucleo-f103rb-bme280">NUCLEO-F103RB + BME280</h3>
 <p>The NUCLEO-F103RB's STM32F103RBT6 boots a register-level smoke, reads the
@@ -4991,30 +5185,87 @@ D14/SDA = PB9), and pulses LD2 after the successful read.</p>
 <li><a href="../examples/nucleo-f103rb-bme280/evidence/vendor-status.md">Live vendor status</a></li>
 <li><a href="../examples/nucleo-f103rb-bme280/evidence/">Committed local simulator evidence</a></li>
 </ul>
-<div class="language-cpp highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;Wire.h&gt;</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;Adafruit_BME280.h&gt;</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">Adafruit_BME280</span><span class="w"> </span><span class="n">bme</span><span class="p">;</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="kt">void</span><span class="w"> </span><span class="nf">setup</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="n">Serial</span><span class="p">.</span><span class="n">begin</span><span class="p">(</span><span class="mi">115200</span><span class="p">);</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span><span class="n">Wire</span><span class="p">.</span><span class="n">begin</span><span class="p">();</span><span class="w">  </span><span class="c1">// NUCLEO-F103RB D14/D15: PB9/PB8, I2C1</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">bme</span><span class="p">.</span><span class="n">begin</span><span class="p">(</span><span class="mh">0x77</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">Wire</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">    </span><span class="n">Serial</span><span class="p">.</span><span class="n">println</span><span class="p">(</span><span class="s">"BME280 not found"</span><span class="p">);</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">    </span><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="nb">true</span><span class="p">)</span><span class="w"> </span><span class="n">delay</span><span class="p">(</span><span class="mi">10</span><span class="p">);</span>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">  </span><span class="p">}</span>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">  </span><span class="n">Serial</span><span class="p">.</span><span class="n">println</span><span class="p">(</span><span class="s">"NUCLEO_F103RB_BME280_OK"</span><span class="p">);</span>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="p">}</span>
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>
-</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="kt">void</span><span class="w"> </span><span class="nf">loop</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="w">  </span><span class="n">Serial</span><span class="p">.</span><span class="n">print</span><span class="p">(</span><span class="s">"Temperature C: "</span><span class="p">);</span>
-</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="w">  </span><span class="n">Serial</span><span class="p">.</span><span class="n">println</span><span class="p">(</span><span class="n">bme</span><span class="p">.</span><span class="n">readTemperature</span><span class="p">());</span>
-</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="w">  </span><span class="n">Serial</span><span class="p">.</span><span class="n">print</span><span class="p">(</span><span class="s">"Pressure hPa: "</span><span class="p">);</span>
-</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="w">  </span><span class="n">Serial</span><span class="p">.</span><span class="n">println</span><span class="p">(</span><span class="n">bme</span><span class="p">.</span><span class="n">readPressure</span><span class="p">()</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mf">100.0F</span><span class="p">);</span>
-</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="w">  </span><span class="n">Serial</span><span class="p">.</span><span class="n">print</span><span class="p">(</span><span class="s">"Humidity %: "</span><span class="p">);</span>
-</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="w">  </span><span class="n">Serial</span><span class="p">.</span><span class="n">println</span><span class="p">(</span><span class="n">bme</span><span class="p">.</span><span class="n">readHumidity</span><span class="p">());</span>
-</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="w">  </span><span class="n">delay</span><span class="p">(</span><span class="mi">2000</span><span class="p">);</span>
-</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a><span class="p">}</span>
+<div class="language-cpp highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;Wire.h&gt;</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;Adafruit_BME280.h&gt;</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">Adafruit_BME280</span><span class="w"> </span><span class="n">bme</span><span class="p">;</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="kt">void</span><span class="w"> </span><span class="nf">setup</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span><span class="n">Serial</span><span class="p">.</span><span class="n">begin</span><span class="p">(</span><span class="mi">115200</span><span class="p">);</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">  </span><span class="n">Wire</span><span class="p">.</span><span class="n">begin</span><span class="p">();</span><span class="w">  </span><span class="c1">// NUCLEO-F103RB D14/D15: PB9/PB8, I2C1</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">bme</span><span class="p">.</span><span class="n">begin</span><span class="p">(</span><span class="mh">0x77</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">Wire</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">    </span><span class="n">Serial</span><span class="p">.</span><span class="n">println</span><span class="p">(</span><span class="s">"BME280 not found"</span><span class="p">);</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">    </span><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="nb">true</span><span class="p">)</span><span class="w"> </span><span class="n">delay</span><span class="p">(</span><span class="mi">10</span><span class="p">);</span>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">  </span><span class="p">}</span>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">  </span><span class="n">Serial</span><span class="p">.</span><span class="n">println</span><span class="p">(</span><span class="s">"NUCLEO_F103RB_BME280_OK"</span><span class="p">);</span>
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="p">}</span>
+</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>
+</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="kt">void</span><span class="w"> </span><span class="nf">loop</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="w">  </span><span class="n">Serial</span><span class="p">.</span><span class="n">print</span><span class="p">(</span><span class="s">"Temperature C: "</span><span class="p">);</span>
+</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="w">  </span><span class="n">Serial</span><span class="p">.</span><span class="n">println</span><span class="p">(</span><span class="n">bme</span><span class="p">.</span><span class="n">readTemperature</span><span class="p">());</span>
+</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="w">  </span><span class="n">Serial</span><span class="p">.</span><span class="n">print</span><span class="p">(</span><span class="s">"Pressure hPa: "</span><span class="p">);</span>
+</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a><span class="w">  </span><span class="n">Serial</span><span class="p">.</span><span class="n">println</span><span class="p">(</span><span class="n">bme</span><span class="p">.</span><span class="n">readPressure</span><span class="p">()</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mf">100.0F</span><span class="p">);</span>
+</span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="w">  </span><span class="n">Serial</span><span class="p">.</span><span class="n">print</span><span class="p">(</span><span class="s">"Humidity %: "</span><span class="p">);</span>
+</span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="w">  </span><span class="n">Serial</span><span class="p">.</span><span class="n">println</span><span class="p">(</span><span class="n">bme</span><span class="p">.</span><span class="n">readHumidity</span><span class="p">());</span>
+</span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="w">  </span><span class="n">delay</span><span class="p">(</span><span class="mi">2000</span><span class="p">);</span>
+</span><span id="__span-4-24"><a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="p">}</span>
+</span></code></pre></div>
+<h3 id="stm32f103c8t6-blue-pill">STM32F103C8T6 Blue Pill</h3>
+<p>The exact STM32F103C8T6 is still Active and in volume production on ST's live
+product page. The retailer listing checked for this round showed the Blue Pill
+board in stock. This is board depth for the measured rank-3 STM32F103 target,
+not a new chip family. The smoke checks the reference board's active-low PC13
+LED and USART1 header output. It makes no USB, debugger, clone-uniformity, or
+physical-hardware claim.</p>
+<ul>
+<li><a href="../examples/stm32f103-blue-pill/README.md">Wiring, scope, copy-paste Arduino example, and smoke command</a></li>
+<li><a href="../examples/stm32f103-blue-pill/vendor-status.md">Dated ST lifecycle and board availability receipt</a></li>
+<li><a href="../examples/stm32f103-blue-pill/evidence/">Committed local simulator evidence</a></li>
+</ul>
+<div class="language-cpp highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;Arduino.h&gt;</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="kt">void</span><span class="w"> </span><span class="nf">setup</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span><span class="n">pinMode</span><span class="p">(</span><span class="n">PC13</span><span class="p">,</span><span class="w"> </span><span class="n">OUTPUT</span><span class="p">);</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span><span class="n">Serial1</span><span class="p">.</span><span class="n">begin</span><span class="p">(</span><span class="mi">115200</span><span class="p">);</span><span class="w">  </span><span class="c1">// USART1 TX=PA9, RX=PA10</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">  </span><span class="n">Serial1</span><span class="p">.</span><span class="n">println</span><span class="p">(</span><span class="s">"BLUEPILL_F103C8_OK"</span><span class="p">);</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="p">}</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="kt">void</span><span class="w"> </span><span class="nf">loop</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">  </span><span class="n">digitalWrite</span><span class="p">(</span><span class="n">PC13</span><span class="p">,</span><span class="w"> </span><span class="n">LOW</span><span class="p">);</span><span class="w">   </span><span class="c1">// active-low user LED on</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">  </span><span class="n">delay</span><span class="p">(</span><span class="mi">500</span><span class="p">);</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">  </span><span class="n">digitalWrite</span><span class="p">(</span><span class="n">PC13</span><span class="p">,</span><span class="w"> </span><span class="n">HIGH</span><span class="p">);</span><span class="w">  </span><span class="c1">// user LED off</span>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">  </span><span class="n">delay</span><span class="p">(</span><span class="mi">500</span><span class="p">);</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="p">}</span>
+</span></code></pre></div>
+<h2 id="wch-tier-c-vendor-bet-not-a-measured-survey-rank">WCH — Tier C vendor bet (not a measured survey rank)</h2>
+<h3 id="wch-ch32v003evt">WCH CH32V003EVT</h3>
+<p>This exact evaluation board is currently listed in stock by two retailers. The
+profile uses its CH32V003F4P6 and the board's LED connector: LED1 on P4-1 is
+jumpered to PC0 and toggled as an active-low output. A separate smoke writes
+through polled USART1 TX on the exposed PD5 pin. USB-C is power-only. The model
+does not claim WCH-Link, USB data, PFIC, ADC, I2C, SPI, or timers.</p>
+<ul>
+<li><a href="../examples/wch-ch32v003evt/README.md">Board wiring, scope, and copy-paste C example</a></li>
+<li><a href="../examples/wch-ch32v003evt/vendor-status.md">Live stock and lifecycle receipt</a></li>
+<li><a href="../examples/wch-ch32v003evt/evidence/">Committed local simulator evidence</a></li>
+</ul>
+<div class="language-c highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stdint.h&gt;</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="cp">#define RCC_APB2PCENR (*(volatile uint32_t *)0x40021018u)</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="cp">#define GPIOC_CFGLR   (*(volatile uint32_t *)0x40011000u)</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="cp">#define GPIOC_BSHR    (*(volatile uint32_t *)0x40011010u)</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="cp">#define GPIOC_BCR     (*(volatile uint32_t *)0x40011014u)</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="kt">void</span><span class="w"> </span><span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">  </span><span class="n">RCC_APB2PCENR</span><span class="w"> </span><span class="o">|=</span><span class="w"> </span><span class="mi">1u</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">4</span><span class="p">;</span><span class="w">  </span><span class="c1">// enable GPIOC</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">  </span><span class="n">GPIOC_CFGLR</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0x2u</span><span class="p">;</span><span class="w">        </span><span class="c1">// PC0 push-pull output</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="p">(;;)</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">    </span><span class="n">GPIOC_BSHR</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1u</span><span class="p">;</span><span class="w">         </span><span class="c1">// LED1 off</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">volatile</span><span class="w"> </span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">500</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="n">__asm__</span><span class="w"> </span><span class="k">volatile</span><span class="p">(</span><span class="s">"nop"</span><span class="p">);</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">    </span><span class="n">GPIOC_BCR</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1u</span><span class="p">;</span><span class="w">          </span><span class="c1">// LED1 on</span>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">volatile</span><span class="w"> </span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">500</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="n">__asm__</span><span class="w"> </span><span class="k">volatile</span><span class="p">(</span><span class="s">"nop"</span><span class="p">);</span>
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">  </span><span class="p">}</span>
+</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="p">}</span>
 </span></code></pre></div>
 
 

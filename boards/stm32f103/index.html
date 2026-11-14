@@ -2307,10 +2307,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#not-yet-modeled-commonly-expected-on-f103" class="md-nav__link">
+  <a href="#model-boundaries" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Not yet modeled (commonly expected on F103)
+        Model boundaries
       
     </span>
   </a>
@@ -4984,10 +4984,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#not-yet-modeled-commonly-expected-on-f103" class="md-nav__link">
+  <a href="#model-boundaries" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Not yet modeled (commonly expected on F103)
+        Model boundaries
       
     </span>
   </a>
@@ -5026,10 +5026,8 @@
 
 
 <h1 id="stm32f103-bluepill-demo-blinky">STM32F103 (Bluepill / demo-blinky)</h1>
-<p>The STM32F103C8 (Cortex-M3, 64 KB flash, 20 KB SRAM in the popular C8
-package; this chip yaml advertises 1 MB / 128 KB to fit the full F103xE
-memory map) is LabWired's reference Cortex-M3 target. It is the chip used
-by <a href="../../examples/demo-blinky/README.md"><code>examples/demo-blinky/</code></a>, the
+<p>The STM32F103C8 (Cortex-M3, 64 KB flash, 20 KB SRAM) is LabWired's reference
+Cortex-M3 target and is used by <a href="../../examples/demo-blinky/README.md"><code>examples/demo-blinky/</code></a>, the
 canonical example for <strong>attaching an external device model (TMP102) over
 I²C</strong>.</p>
 <p>For build/run instructions, see
@@ -5052,15 +5050,15 @@ I²C</strong>.</p>
 </tr>
 <tr>
 <td>System yamls</td>
-<td><code>configs/systems/stm32f103-bare.yaml</code>, <code>…-integrated-test.yaml</code>, <code>labwired-demo-board.yaml</code></td>
+<td><a href="../../configs/systems/stm32f103-blue-pill.yaml"><code>STM32F103C8T6 Blue Pill</code></a>, <a href="../../configs/systems/nucleo-f103rb.yaml"><code>NUCLEO-F103RB</code></a>, and the bare-chip profiles</td>
 </tr>
 <tr>
 <td>Reference firmware</td>
-<td><code>crates/firmware-stm32f103-blinky/</code>, <code>crates/firmware-stm32f103-uart/</code></td>
+<td><a href="../../examples/stm32f103-blue-pill/"><code>examples/stm32f103-blue-pill/</code></a>, <a href="../../examples/demo-blinky/"><code>examples/demo-blinky/</code></a></td>
 </tr>
 <tr>
 <td>Tier</td>
-<td>smoke-validated (UART + GPIO + I²C round-trip via demo-blinky)</td>
+<td>local board smoke (USART1 + PC13 GPIO) and I²C round-trip via demo-blinky</td>
 </tr>
 <tr>
 <td>Hardware parity</td>
@@ -5094,8 +5092,8 @@ I²C</strong>.</p>
 <tr>
 <td>RCC</td>
 <td>0x40021000</td>
-<td>⚙ yaml-listed</td>
-<td>F1 layout; no profile pinned in yaml</td>
+<td>✅ modeled</td>
+<td>STM32F1 register layout</td>
 </tr>
 <tr>
 <td>GPIOA</td>
@@ -5118,14 +5116,14 @@ I²C</strong>.</p>
 <tr>
 <td>USART1</td>
 <td>0x40013800</td>
-<td>⚙ yaml-listed</td>
-<td>IRQ 37</td>
+<td>✅ modeled</td>
+<td>Board smoke captures USART1 TX</td>
 </tr>
 <tr>
 <td>USART2</td>
 <td>0x40004400</td>
-<td>⚙ yaml-listed</td>
-<td>IRQ 38</td>
+<td>✅ modeled</td>
+<td>NUCLEO-F103RB VCP</td>
 </tr>
 <tr>
 <td>I²C1</td>
@@ -5136,41 +5134,40 @@ I²C</strong>.</p>
 <tr>
 <td>I²C2</td>
 <td>0x40005800</td>
-<td>⚙ yaml-listed</td>
-<td>IRQ 33</td>
+<td>✅ modeled</td>
+<td>STM32F1 I²C layout</td>
 </tr>
 <tr>
 <td>AFIO</td>
 <td>0x40010000</td>
-<td>⚙ yaml-listed</td>
+<td>✅ modeled</td>
 <td>Alternate-function I/O remap</td>
 </tr>
 <tr>
 <td>EXTI</td>
 <td>0x40010400</td>
-<td>⚙ yaml-listed</td>
-<td>External interrupt controller</td>
+<td>✅ modeled</td>
+<td>19 F103 lines</td>
 </tr>
 <tr>
 <td>DMA1</td>
 <td>0x40020000</td>
-<td>⚙ yaml-listed</td>
-<td>No DMA stream survival test on this chip yet</td>
+<td>✅ modeled</td>
+<td>Channel/request model; see exercise matrix</td>
 </tr>
 </tbody>
 </table>
-<h2 id="not-yet-modeled-commonly-expected-on-f103">Not yet modeled (commonly expected on F103)</h2>
-<p>The chip yaml does not declare: <strong>SPI1/2</strong>, <strong>TIM1–TIM8</strong>, <strong>ADC1/2</strong>,
-<strong>USB-FS</strong>, <strong>bxCAN</strong>, <strong>RTC</strong>, <strong>IWDG/WWDG</strong>, <strong>BKP</strong>, <strong>PWR</strong>. Firmware
-that touches any of these registers will hit <code>MemoryAccessViolation</code> or
-stall in a polling loop. See
-<a href="../../getting_started_firmware/"><code>docs/getting_started_firmware.md</code></a> for
-the diagnosis pattern.</p>
+<h2 id="model-boundaries">Model boundaries</h2>
+<p>The chip config also declares SPI1/2, timers, ADC, bxCAN, RTC, IWDG, and PWR.
+The USB device and BKP windows are zero-answering stubs; WWDG is an inert
+model. The Blue Pill board smoke does not exercise those paths. For the
+peripheral-by-peripheral firmware evidence, see the
+<a href="../FIRMWARE_EXERCISE_MATRIX/#stm32f103"><code>FIRMWARE_EXERCISE_MATRIX</code></a>.</p>
 <h2 id="validation">Validation</h2>
 <ul>
-<li>No <code>VALIDATION.md</code> for an F103 board in <code>examples/</code> yet; closest
-  validation evidence is the I²C round-trip in
-  <a href="../../examples/demo-blinky/"><code>examples/demo-blinky/</code></a>.</li>
+<li>Board-level smoke evidence is available for the
+  <a href="../stm32f103-blue-pill/">STM32F103C8T6 Blue Pill</a> and
+  <a href="../nucleo-f103rb/">NUCLEO-F103RB</a>; the latter also has a BME280 I²C smoke.</li>
 <li>For the byte-parity validation pattern, see
   <a href="../nucleo-l476rg/"><code>docs/boards/nucleo-l476rg.md</code></a>.</li>
 </ul>

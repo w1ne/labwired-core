@@ -5004,14 +5004,17 @@
 
 
 <h1 id="rp2350-raspberry-pi-pico-2">RP2350 (Raspberry Pi Pico 2)</h1>
-<p>The RP2350 (dual Cortex-M33, 2 MB XIP flash, 520 KB SRAM) is onboarded as a
+<p>The RP2350 (dual Cortex-M33, 4 MB XIP flash on the Pico 2 board, 520 KB SRAM) is onboarded as a
 descriptor-level derivative of the RP2040 lane: it reuses the RP2040
 behavioural models for UART (PL011), I2C, SPI, DMA, PIO (v1-compatible on
 PIO0–2), SIO, ADC, PWM, timer, and watchdog, with a <code>profile: rp2350</code> on the
 shared clock/reset model for the moved APB map. It is <strong>smoke-validated, not
 hardware-validated</strong> — no Pico 2 has been on the bench.</p>
 <p>This page is the <strong>Pico 2 carrier</strong> (user LED GP25). The USB-C castellated
-module is <strong><a href="../rp2350-zero/">Waveshare RP2350-Zero</a></strong> (WS2812 on GP16).</p>
+module is <strong><a href="../rp2350-zero/">Waveshare RP2350-Zero</a></strong> (WS2812 on GP16).
+The <strong><a href="../adafruit-feather-rp2350/">Adafruit Feather RP2350 with HSTX</a></strong> is a
+separate 8 MiB carrier profile; it currently claims only UART0 and the D13
+GPIO7 LED smoke, not HSTX or the onboard NeoPixel.</p>
 <p>For Pico 2 build/run instructions, see
 <a href="../../examples/pico2/README.md"><code>examples/pico2/README.md</code></a>.
 Zero: <a href="../../examples/rp2350-zero/README.md"><code>examples/rp2350-zero/README.md</code></a>.</p>
@@ -5033,11 +5036,11 @@ Zero: <a href="../../examples/rp2350-zero/README.md"><code>examples/rp2350-zero/
 </tr>
 <tr>
 <td>Reference firmware</td>
-<td><code>crates/firmware-rp2350-demo/</code> (M33 bare-metal UART smoke)</td>
+<td><code>crates/firmware-rp2350-demo/</code> (M33 bare-metal UART + SIO LED smoke)</td>
 </tr>
 <tr>
 <td>Validation</td>
-<td>UART smoke pass — <a href="../../examples/pico2/VALIDATION.md"><code>examples/pico2/VALIDATION.md</code></a>; stock Arduino matrix row <code>rp2350</code> (arduino-pico core, <code>rpipico2</code>): L0–L7 pass, L8 n/a (no CAN)</td>
+<td>Pico 2 UART + GP25/SIO smoke — <a href="../../examples/pico2/VALIDATION.md"><code>examples/pico2/VALIDATION.md</code></a>; stock Arduino matrix row <code>rp2350</code> (arduino-pico core, <code>rpipico2</code>): L0–L7 pass, L8 n/a (no CAN)</td>
 </tr>
 <tr>
 <td>Tier</td>
