@@ -1,7 +1,7 @@
 # Narrow imported STM32H753 profile used by the Renode onboarding smoke.
 # The imported catalogue listed many peripherals that are zero-answering stubs
-# in this engine. Only retain the H7 RCC, GPIOB/GPIOD and USART3 surfaces used
-# by the shared H7 fixture. The 1 MiB flash window is conservative for this
+# in this engine. Only retain the H7 RCC, GPIOB/GPIOD, USART3 and TIM2 surfaces
+# used by the shared H7 fixture. The 1 MiB flash window is conservative for this
 # generic profile; ST lists 2 MiB for H753xI devices. The RAM window is DTCM.
 name: stm32h753
 arch: arm
@@ -37,3 +37,18 @@ peripherals:
     size: 1KB
     config:
       profile: stm32v2
+  # RM0433 Rev 8 covers STM32H742/743/753/750: TIM2 is the 32-bit
+  # general-purpose timer at 0x40000000 with NVIC position 28, clocked by
+  # RCC_APB1LENR.TIM2EN (bit 0). Same declaration as the stm32h743 profile.
+  # The smoke covers the gate, 32-bit CNT/ARR, UG, UIF, the update interrupt
+  # in up-counting mode, and one-pulse mode (CR1.OPM). Not modelled: CR1.DIR
+  # and CMS are stored without effect, and a software UG does not end a
+  # one-pulse run. Channels, pads, and the count rate are not exercised.
+  - id: tim2
+    type: timer
+    base_address: 0x40000000
+    size: 1KB
+    irq: 28
+    clock: { reg: apb1lenr, bit: 0 }
+    config:
+      width: 32

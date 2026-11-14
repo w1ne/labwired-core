@@ -7,6 +7,7 @@ limits:
   max_steps: 4000000
 assertions:
   - uart_contains: "STM32H7 register smoke"
+  - uart_contains: "tim2 gated=1 arr_reset=1 w32=1 ug=1 uif_clr=1 run=1 masked=1 irq=3 stray=0 stop=1 opm=1 opm_irq=2 rel=1 ok"
   - gpio_edges:
       pin: "gpioPortB:0"
       min_edges: 1
