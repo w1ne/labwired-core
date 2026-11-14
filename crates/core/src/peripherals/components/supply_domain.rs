@@ -44,6 +44,8 @@ struct DomainState {
     on: bool,
     generation: u64,
 }
+pub(crate) struct PreparedDeviceSupplies(Vec<(Arc<SupplyDomain>, DomainState)>);
+
 impl SupplyDomain {
     fn new(rails: BTreeMap<String, RailBounds>) -> Self {
         Self {
@@ -354,6 +356,15 @@ impl crate::bus::SystemBus {
         &mut self,
         updates: &[(String, String, f64)],
     ) -> anyhow::Result<()> {
+        let prepared = self.prepare_device_supply_voltages(updates)?;
+        self.commit_device_supply_voltages(prepared);
+        Ok(())
+    }
+
+    pub(crate) fn prepare_device_supply_voltages(
+        &self,
+        updates: &[(String, String, f64)],
+    ) -> anyhow::Result<PreparedDeviceSupplies> {
         let mut grouped: BTreeMap<&str, BTreeMap<String, f64>> = BTreeMap::new();
         for (device, rail, voltage) in updates {
             self.validate_device_supply_route(device, rail)?;
@@ -376,8 +387,13 @@ impl crate::bus::SystemBus {
             let state = domain.next_state(&domain.state.lock().unwrap(), &rails)?;
             prepared.push((domain, state));
         }
+        Ok(PreparedDeviceSupplies(prepared))
+    }
+
+    pub(crate) fn commit_device_supply_voltages(&mut self, prepared: PreparedDeviceSupplies) {
+        let prepared = prepared.0;
         if prepared.is_empty() {
-            return Ok(());
+            return;
         }
         for (domain, state) in prepared {
             *domain.state.lock().unwrap() = state;
@@ -392,7 +408,6 @@ impl crate::bus::SystemBus {
             }
         }
         self.service_device_pin_drives();
-        Ok(())
     }
 }
 pub struct GatedI2cDevice {

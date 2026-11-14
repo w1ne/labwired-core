@@ -76,6 +76,7 @@ pub mod integration_tests {
             gpio_input_thresholds: None,
             reset_input: None,
             supply_monitor: None,
+            power_domains: None,
             include: None,
         }
     }
@@ -526,6 +527,7 @@ pub mod integration_tests {
             gpio_input_thresholds: None,
             reset_input: None,
             supply_monitor: None,
+            power_domains: None,
             include: None,
         };
 
@@ -747,6 +749,7 @@ pub mod integration_tests {
             gpio_input_thresholds: None,
             reset_input: None,
             supply_monitor: None,
+            power_domains: None,
             include: None,
         };
 
@@ -828,6 +831,7 @@ pub mod integration_tests {
             gpio_input_thresholds: None,
             reset_input: None,
             supply_monitor: None,
+            power_domains: None,
             include: None,
         };
 
@@ -1044,6 +1048,7 @@ pub mod integration_tests {
             gpio_input_thresholds: None,
             reset_input: None,
             supply_monitor: None,
+            power_domains: None,
             include: None,
             reset_vector_offset: 0,
             flash_boot_alias: true,
@@ -2365,6 +2370,7 @@ pub mod integration_tests {
             gpio_input_thresholds: None,
             reset_input: None,
             supply_monitor: None,
+            power_domains: None,
             include: None,
         };
 
@@ -2471,6 +2477,7 @@ pub mod integration_tests {
             gpio_input_thresholds: None,
             reset_input: None,
             supply_monitor: None,
+            power_domains: None,
             include: None,
         };
 
@@ -2562,6 +2569,7 @@ pub mod integration_tests {
             gpio_input_thresholds: None,
             reset_input: None,
             supply_monitor: None,
+            power_domains: None,
             include: None,
         };
 
@@ -2986,6 +2994,7 @@ pub mod integration_tests {
             gpio_input_thresholds: None,
             reset_input: None,
             supply_monitor: None,
+            power_domains: None,
             include: None,
         };
 
@@ -3122,6 +3131,7 @@ pub mod integration_tests {
                 gpio_input_thresholds: None,
                 reset_input: None,
                 supply_monitor: None,
+                power_domains: None,
                 include: None,
             };
             let manifest = SystemManifest {
@@ -3205,6 +3215,7 @@ pub mod integration_tests {
                 gpio_input_thresholds: None,
                 reset_input: None,
                 supply_monitor: None,
+                power_domains: None,
                 include: None,
             };
             let manifest = SystemManifest {
@@ -3322,6 +3333,7 @@ pub mod integration_tests {
                 gpio_input_thresholds: None,
                 reset_input: None,
                 supply_monitor: None,
+                power_domains: None,
                 include: None,
             };
             let mut oled_config = HashMap::new();

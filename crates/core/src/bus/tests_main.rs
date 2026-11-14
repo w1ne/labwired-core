@@ -1071,6 +1071,7 @@ fn test_from_config_attaches_adxl345_external_device_to_i2c() {
         gpio_input_thresholds: None,
         reset_input: None,
         supply_monitor: None,
+        power_domains: None,
         include: None,
     };
 
@@ -1912,6 +1913,7 @@ fn esp32c3_i2c0_chip(name: &str) -> ChipDescriptor {
         gpio_input_thresholds: None,
         reset_input: None,
         supply_monitor: None,
+        power_domains: None,
         include: None,
     }
 }
@@ -3637,6 +3639,7 @@ fn chip_with_i2c_and_uart() -> labwired_config::ChipDescriptor {
         gpio_input_thresholds: None,
         reset_input: None,
         supply_monitor: None,
+        power_domains: None,
         include: None,
     }
 }
@@ -3976,6 +3979,7 @@ fn test_flash_boot_alias_read_and_write() {
         gpio_input_thresholds: None,
         reset_input: crate::reset_input::ResetInputState::default(),
         supply: crate::power::SupplySupervisor::default(),
+        mcu_power: crate::power_domains::McuPowerDomains::default(),
         supply_domains: Default::default(),
     };
 
@@ -4117,6 +4121,7 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         gpio_input_thresholds: None,
         reset_input: crate::reset_input::ResetInputState::default(),
         supply: crate::power::SupplySupervisor::default(),
+        mcu_power: crate::power_domains::McuPowerDomains::default(),
         supply_domains: Default::default(),
     };
     bus.rebuild_peripheral_ranges();
@@ -4411,6 +4416,7 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         gpio_input_thresholds: None,
         reset_input: crate::reset_input::ResetInputState::default(),
         supply: crate::power::SupplySupervisor::default(),
+        mcu_power: crate::power_domains::McuPowerDomains::default(),
         supply_domains: Default::default(),
     };
     bus.rebuild_peripheral_ranges();
@@ -4701,6 +4707,7 @@ fn test_peripheral_range_index_lookup() {
         gpio_input_thresholds: None,
         reset_input: crate::reset_input::ResetInputState::default(),
         supply: crate::power::SupplySupervisor::default(),
+        mcu_power: crate::power_domains::McuPowerDomains::default(),
         supply_domains: Default::default(),
     };
 
@@ -4847,6 +4854,7 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         gpio_input_thresholds: None,
         reset_input: crate::reset_input::ResetInputState::default(),
         supply: crate::power::SupplySupervisor::default(),
+        mcu_power: crate::power_domains::McuPowerDomains::default(),
         supply_domains: Default::default(),
     };
     bus.rebuild_peripheral_ranges();

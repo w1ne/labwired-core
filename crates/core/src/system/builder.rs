@@ -140,6 +140,7 @@ pub fn build_esp32_system_from_manifest_with_plugins(
     // resolved descriptor's electrical data, just as SystemBus::from_config does.
     // Keep absent metadata absent so co-simulation refuses untranscribed levels.
     bus.attach_chip_io_levels(&chip);
+    bus.attach_mcu_power_domains(&chip)?;
     crate::system::xtensa::attach_esp32_external_devices(&mut bus, manifest)?;
     // The peripheral BANK is programmatic (above), but the chip YAML is still
     // where a peripheral's debugger register schema is declared. Without this,
