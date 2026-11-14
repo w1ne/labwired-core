@@ -39,7 +39,7 @@ jobs:
           repository: ARM-software/CMSIS_5
           ref: 61e36449f53c25ef7825c40f7dd93685736f457f
           path: .vendor/cmsis
-      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: dtolnay/rust-toolchain@1.99.1
       - uses: Swatinem/rust-cache@v2
         with:
           # Read-only on pull requests; see `core-pr-gate` in core-ci.yml.
@@ -84,7 +84,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: dtolnay/rust-toolchain@1.99.1
       - uses: Swatinem/rust-cache@v2
         with:
           # Read-only on pull requests; see `core-pr-gate` in core-ci.yml.

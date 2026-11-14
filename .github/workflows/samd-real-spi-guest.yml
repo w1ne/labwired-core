@@ -46,7 +46,7 @@ jobs:
           ref: 2ed19d64ec3359143409a4b0a9758b4aeef3ee7d
           path: owned-spi-core
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: dtolnay/rust-toolchain@1.99.1
       - uses: Swatinem/rust-cache@v2
       - name: Build actual SPI caller and preserve selected source provenance
         run: |

@@ -135,6 +135,7 @@ fn main() -> ! {
         spins += 1;
         if spins >= POLL_LIMIT {
             puts("adc timeout\n");
+            #[allow(clippy::empty_loop)] // bare-metal firmware: park the core forever
             loop {}
         }
     }
@@ -143,10 +144,12 @@ fn main() -> ! {
     put_u32(read_u32(IADC_SINGLEFIFODATA) & 0xFFF);
     putc(b'\n');
 
+    #[allow(clippy::empty_loop)] // bare-metal firmware: park the core forever
     loop {}
 }
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
+    #[allow(clippy::empty_loop)] // bare-metal firmware: park the core forever
     loop {}
 }

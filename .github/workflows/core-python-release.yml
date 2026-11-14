@@ -76,7 +76,7 @@ jobs:
           args: --release --out dist --manifest-path crates/python/Cargo.toml
           target: ${{ matrix.target }}
           manylinux: ${{ matrix.manylinux || 'auto' }}
-          rust-toolchain: "1.95.0"
+          rust-toolchain: "1.99.1"
 
       - name: Check the wheel is abi3
         shell: bash
@@ -132,7 +132,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.95.0
+        uses: dtolnay/rust-toolchain@1.99.1
 
       - uses: actions/setup-python@v5
         with:

@@ -303,7 +303,7 @@ impl Cpu for CountingCpu {
             }
         };
         let mut pending = Vec::with_capacity(pending_len);
-        for chunk in bytes[HEADER_LEN..].chunks_exact(8) {
+        for chunk in bytes[HEADER_LEN..].as_chunks::<8>().0 {
             let mut raw = [0_u8; 8];
             raw.copy_from_slice(chunk);
             pending.push(u64::from_le_bytes(raw));

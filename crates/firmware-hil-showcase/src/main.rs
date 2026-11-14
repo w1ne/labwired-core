@@ -123,5 +123,6 @@ fn main() -> ! {
         core::arch::asm!("bkpt #0");
     }
 
+    #[allow(clippy::empty_loop)] // bare-metal firmware: park the core forever
     loop {}
 }

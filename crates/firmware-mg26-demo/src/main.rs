@@ -142,10 +142,12 @@ fn main() -> ! {
     write_u32(GPIOC_DOUT, LED_MASK); // final state: both LEDs on
     puts("MG26-IO DONE\n");
 
+    #[allow(clippy::empty_loop)] // bare-metal firmware: park the core forever
     loop {}
 }
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
+    #[allow(clippy::empty_loop)] // bare-metal firmware: park the core forever
     loop {}
 }

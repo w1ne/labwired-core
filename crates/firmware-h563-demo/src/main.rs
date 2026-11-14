@@ -22,10 +22,12 @@ fn main() -> ! {
         core::ptr::write_volatile(USART3_TDR_PTR, b'\n');
     }
 
+    #[allow(clippy::empty_loop)] // bare-metal firmware: park the core forever
     loop {}
 }
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
+    #[allow(clippy::empty_loop)] // bare-metal firmware: park the core forever
     loop {}
 }

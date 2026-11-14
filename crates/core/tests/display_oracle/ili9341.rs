@@ -578,7 +578,7 @@ impl SpiDevice for Ili9341 {
         // something was. "6352 bytes changed" cannot be checked against a photo
         // of real silicon; "top colour 0x07E0" (RGB565 green) can.
         let mut counts: std::collections::HashMap<u16, usize> = std::collections::HashMap::new();
-        for px in fb.chunks_exact(2) {
+        for px in fb.as_chunks::<2>().0 {
             let v = u16::from_be_bytes([px[0], px[1]]);
             if v != 0 {
                 *counts.entry(v).or_default() += 1;

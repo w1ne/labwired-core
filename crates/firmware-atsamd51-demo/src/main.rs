@@ -40,5 +40,6 @@ fn main() -> ! {
         }
         write_volatile(PORTA_OUTTGL, LED);
     }
+    #[allow(clippy::empty_loop)] // bare-metal firmware: park the core forever
     loop {}
 }

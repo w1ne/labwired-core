@@ -527,7 +527,7 @@ impl Cc2538Aes {
             self.int_stat |= INT_KEY_ST_WR_ERR | INT_RESULT_AV;
             return;
         }
-        for (i, chunk) in data.chunks_exact(16).enumerate() {
+        for (i, chunk) in data.as_chunks::<16>().0.iter().enumerate() {
             self.ks_ram[first as usize + i].copy_from_slice(chunk);
         }
         self.ks_written |= areas;
@@ -551,8 +551,10 @@ impl Cc2538Aes {
             msg.extend_from_slice(&self.hash_length.to_be_bytes());
         }
         let blocks: Vec<_> = msg
-            .chunks_exact(64)
-            .map(GenericArray::clone_from_slice)
+            .as_chunks::<64>()
+            .0
+            .iter()
+            .map(|c| GenericArray::clone_from_slice(c))
             .collect();
         sha2::compress256(&mut state, &blocks);
         self.digest = state.map(u32::swap_bytes);

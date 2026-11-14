@@ -353,5 +353,6 @@ pub unsafe extern "C" fn reset_handler() {
 /// handler installed. Never returns.
 #[no_mangle]
 pub unsafe extern "C" fn default_handler() {
+    #[allow(clippy::empty_loop)] // bare-metal firmware: park the core forever
     loop {}
 }

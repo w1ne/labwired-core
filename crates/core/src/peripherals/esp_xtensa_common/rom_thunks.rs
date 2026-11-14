@@ -272,7 +272,7 @@ const DCACHE_FIELD: u32 = 0x00FF_F000; // bits[23:12]
 
 fn set_cache_field(bus: &mut dyn Bus, mask: u32, frozen: bool) -> SimResult<()> {
     let v = bus.read_u32(EXTMEM_CACHE_STATE)?;
-    let one = mask & mask.wrapping_neg(); // value `1` placed in the field's LSB
+    let one = mask.isolate_lowest_one(); // value `1` placed in the field's LSB
     let nv = if frozen { (v & !mask) | one } else { v & !mask };
     bus.write_u32(EXTMEM_CACHE_STATE, nv)
 }
@@ -1707,22 +1707,21 @@ pub(crate) fn md5_digest(data: &[u8]) -> [u8; 16] {
         }
     };
 
-    let mut chunks = data.chunks_exact(64);
-    for chunk in &mut chunks {
+    let (chunks, rest) = data.as_chunks::<64>();
+    for chunk in chunks {
         load(chunk, &mut block);
         md5_step(&mut state, &block);
     }
 
     // Standard MD5 padding: 0x80, zeroes, then the message length in BITS as a
     // little-endian u64.
-    let rest = chunks.remainder();
     let mut tail = [0u8; 128];
     tail[..rest.len()].copy_from_slice(rest);
     tail[rest.len()] = 0x80;
     let tail_len = if rest.len() < 56 { 64 } else { 128 };
     let bits = (data.len() as u64).wrapping_mul(8);
     tail[tail_len - 8..tail_len].copy_from_slice(&bits.to_le_bytes());
-    for chunk in tail[..tail_len].chunks_exact(64) {
+    for chunk in tail[..tail_len].as_chunks::<64>().0 {
         load(chunk, &mut block);
         md5_step(&mut state, &block);
     }

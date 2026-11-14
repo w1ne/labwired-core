@@ -298,18 +298,18 @@ fn main() -> ! {
 
             // Program it into UICR CUSTOMER[0..4] (one-time flash: bits only
             // go 1->0, so this is write-once on an erased device).
-            for (i, chunk) in key.chunks_exact(4).enumerate() {
-                let word = u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+            for (i, chunk) in key.as_chunks::<4>().0.iter().enumerate() {
+                let word = u32::from_le_bytes(*chunk);
                 wr(UICR_BASE, UICR_CUSTOMER_FIRST + i * 4, word);
             }
 
             // Read back and require an exact match before declaring the
             // root of trust provisioned.
             let mut ok = true;
-            for (i, chunk) in key.chunks_exact(4).enumerate() {
+            for (i, chunk) in key.as_chunks::<4>().0.iter().enumerate() {
                 let back = rd(UICR_BASE, UICR_CUSTOMER_FIRST + i * 4);
                 results.key_words[i] = back;
-                if back != u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]) {
+                if back != u32::from_le_bytes(*chunk) {
                     ok = false;
                 }
             }
@@ -436,8 +436,8 @@ fn main() -> ! {
                 let payload = &stage[12..12 + 64];
                 wr(NVMC_BASE, NVMC_CONFIG, NVMC_CONFIG_WEN);
                 while rd(NVMC_BASE, NVMC_READY) == 0 {}
-                for (i, word) in payload.chunks_exact(4).enumerate() {
-                    let w = u32::from_le_bytes([word[0], word[1], word[2], word[3]]);
+                for (i, word) in payload.as_chunks::<4>().0.iter().enumerate() {
+                    let w = u32::from_le_bytes(*word);
                     write_volatile((UPDATE_SLOT + i * 4) as *mut u32, w);
                     while rd(NVMC_BASE, NVMC_READY) == 0 {}
                 }
@@ -479,7 +479,7 @@ fn main() -> ! {
         // survived the reboot.
         {
             let mut slot = [0u8; 64];
-            for (i, word) in slot.chunks_exact_mut(4).enumerate() {
+            for (i, word) in slot.as_chunks_mut::<4>().0.iter_mut().enumerate() {
                 let w = read_volatile((UPDATE_SLOT + i * 4) as *const u32);
                 word.copy_from_slice(&w.to_le_bytes());
             }
