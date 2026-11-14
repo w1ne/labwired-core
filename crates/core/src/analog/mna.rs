@@ -567,9 +567,19 @@ impl Solver {
 
     /// Set a positive, finite resistance in ohms for the next solver step.
     pub fn set_resistance(&mut self, index: usize, ohms: f64) -> Result<(), AnalogError> {
-        if !ohms.is_finite() || ohms <= 0.0 || !ohms.recip().is_finite() {
+        if !ohms.is_finite() || ohms <= 0.0 {
             return Err(AnalogError::Config(
-                "resistance must be positive and finite with finite conductance".to_string(),
+                "resistance must be positive and finite".to_string(),
+            ));
+        }
+        let effective = self.circuit.resistors[index]
+            .ntc
+            .map(|ntc| ntc.resistance_ohms(ohms))
+            .unwrap_or(ohms);
+        if !effective.is_finite() || effective <= 0.0 || !effective.recip().is_finite() {
+            return Err(AnalogError::Config(
+                "effective resistance must be positive and finite with finite conductance"
+                    .to_string(),
             ));
         }
         if self.circuit.resistors[index].ohms != ohms {
