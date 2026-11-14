@@ -8,10 +8,11 @@
 //! helpers (I²C mux) and cosim test fixtures (`shm_i2c`) — not for “we forgot
 //! to register a kit”.
 
+#[path = "common/src_roots.rs"]
+mod src_roots;
 use labwired_core::peripherals::kit::registry;
 use std::collections::HashSet;
 use std::fs;
-use std::path::PathBuf;
 
 /// Types allowed to exist only in `i2c_factory` without a kit.
 /// Shrink this list; never grow it without a design note.
@@ -23,14 +24,9 @@ const FACTORY_ONLY_ALLOWLIST: &[&str] = &[
     "shm_i2c",
 ];
 
-fn workspace_root() -> PathBuf {
-    let p = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    p.parent().and_then(|p| p.parent()).unwrap().to_path_buf()
-}
-
 /// Parse `"type"` and `"a" | "b"` arms from `build_i2c_device`'s match.
 fn factory_type_literals() -> Vec<String> {
-    let path = workspace_root().join("crates/core/src/peripherals/components/i2c_factory.rs");
+    let path = src_roots::core_src("peripherals/components/i2c_factory.rs");
     let src = fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
     // Restrict to the build_i2c_device function body roughly.
     let start = src

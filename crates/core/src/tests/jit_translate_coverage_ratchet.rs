@@ -49,7 +49,7 @@
 //! on every run.
 
 use super::source_text::strip_comments_and_strings;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 // ---------------------------------------------------------------------------
 // Source-text plumbing, shared with the other counting gates: blank
@@ -76,16 +76,9 @@ use std::path::{Path, PathBuf};
 // is the direction it should fail in.
 // ---------------------------------------------------------------------------
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .expect("repo root")
-}
-
 /// Read `path` under the repo root, comment/string-stripped.
 fn read_stripped(path: &Path) -> String {
-    let full = repo_root().join(path);
+    let full = super::src_roots::workspace_path(&path.to_string_lossy());
     let src =
         std::fs::read_to_string(&full).unwrap_or_else(|e| panic!("read {}: {e}", full.display()));
     strip_comments_and_strings(&src)

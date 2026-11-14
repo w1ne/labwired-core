@@ -40,6 +40,8 @@
 //! [`Peripheral::impl_type_path`]. There is no second implementation of the
 //! dispatch chain to drift out of step with the first.
 
+#[path = "common/src_roots.rs"]
+mod src_roots;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use std::collections::{BTreeMap, BTreeSet};
@@ -68,8 +70,11 @@ fn type_path_to_source(type_path: &str, root: &Path) -> Option<String> {
     if segs.is_empty() {
         return None;
     }
-    let base = root.join("crates/core/src").join(segs.join("/"));
-    for cand in [base.with_extension("rs"), base.join("mod.rs")] {
+    let module = segs.join("/");
+    for cand in [
+        src_roots::core_src(&format!("{module}.rs")),
+        src_roots::core_src(&format!("{module}/mod.rs")),
+    ] {
         if cand.exists() {
             return Some(
                 cand.strip_prefix(root)
