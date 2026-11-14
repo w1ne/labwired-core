@@ -1,0 +1,81 @@
+# ESP32-H2 single-core RISC-V profile for the active ESP32-H2-MINI-1 module.
+#
+# This descriptor is intentionally narrow: UART0, the common GPIO data/enable
+# head, and the first three H2 PCR words. The H2 UART SVD matches the C6
+# register offsets through RXD_CNT at 0x84; its CLK_CONF reset value at 0x88
+# differs, so the UART window ends before that register. The H2 PCR diverges
+# from the C6 after UART0_PD_CTRL at 0x08, so its window ends at 0x0B.
+#
+# Sources (live vendor documents, checked 2026-11-11):
+#   ESP32-H2 Series Datasheet v1.3:
+#     https://documentation.espressif.com/esp32-h2_datasheet_en.html
+#   ESP32-H2-DevKitM-1 User Guide (N4S current variant):
+#     https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32h2/esp32-h2-devkitm-1/user_guide.html
+#   Espressif SVD snapshot be20aa1 (UART0/PCR/GPIO addresses and reset map):
+#     https://github.com/espressif/svd/tree/be20aa1/svd
+#   Espressif ESP-IDF H2 register headers:
+#     https://github.com/espressif/esp-idf/tree/master/components/soc/esp32h2/register/soc
+
+name: "esp32h2"
+arch: "riscv"
+core: "rv32imac"
+registers_count: 31
+cpu_hz: 96_000_000
+
+# The N4S board module carries 4 MiB flash. The H2 maps IROM and DROM to the
+# same cached flash window; its HP SRAM is a single 320 KiB IRAM/DRAM window.
+flash:
+  base: 0x42000000
+  size: "4096KB"
+ram:
+  base: 0x40800000
+  size: "320KB"
+memory_regions:
+  - name: "rom"
+    base: 0x40000000
+    size: "128KB"
+  - name: "lp_sram"
+    base: 0x50000000
+    size: "4KB"
+
+# The DevKitM-1-N4S exposes UART0 on GPIO24 (TX) and GPIO23 (RX). GPIO8 is
+# the addressable RGB LED data pin; GPIO9 is BOOT. Their pin identities are
+# recorded, while the WS2812 protocol and button/strap behavior remain outside
+# this UART-only board profile.
+pins:
+  GPIO8: { gpio: "gpio", bit: 8 }
+  GPIO9: { gpio: "gpio", bit: 9 }
+  GPIO23:
+    gpio: "gpio"
+    bit: 23
+    functions: [{ type: uart, peripheral: "uart0", role: rx }]
+  GPIO24:
+    gpio: "gpio"
+    bit: 24
+    functions: [{ type: uart, peripheral: "uart0", role: tx }]
+
+peripherals:
+  - id: "uart0"
+    type: "esp32h2_uart"
+    irq: 33 # UART0 source in Espressif's esp32h2.svd
+    base_address: 0x60000000
+    # H2/C6 common UART registers through RXD_CNT at 0x84; omit H2's distinct
+    # CLK_CONF and DATE reset values at 0x88 and 0x8C.
+    size: "136B"
+    clock: { controller: "pcr", reg: "UART0_CONF", bit: 0 }
+    config:
+      echo_stdout: true
+
+  - id: "gpio"
+    # H2 GPIO OUT/W1TS/W1TC/ENABLE/IN head matches the shared C3 register
+    # model. The 64-byte window ends at IN@0x3C; matrix routing, GPIO IRQs,
+    # and pad electrical behavior are not part of this board profile.
+    type: "esp32c3_gpio"
+    base_address: 0x60091000
+    size: "64B"
+
+  - id: "pcr"
+    type: "esp32h2_pcr"
+    base_address: 0x60096000
+    # UART0_CONF@0, UART0_SCLK_CONF@4, UART0_PD_CTRL@8 only.
+    size: "12B"

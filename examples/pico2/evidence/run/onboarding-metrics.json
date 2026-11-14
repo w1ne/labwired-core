@@ -1,0 +1,28 @@
+{
+  "target_id": "pico2",
+  "status": "pass",
+  "crate": "firmware-rp2350-demo",
+  "target_triple": "thumbv8m.main-none-eabi",
+  "script": "examples/pico2/io-smoke.yaml",
+  "system": "configs/systems/pico2.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-11T16:03:28Z",
+  "finished_at_utc": "2026-11-11T16:03:29Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1196,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.293,
+    "build_firmware": 0.4,
+    "run_smoke": 0.457
+  },
+  "stages_ms": {
+    "build_cli": 293,
+    "build_firmware": 400,
+    "run_smoke": 457
+  }
+}

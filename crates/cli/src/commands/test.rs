@@ -151,7 +151,7 @@ fn metering_exit_status(exit_code: &ExitCode) -> i32 {
     }
 }
 
-use super::esp32_boot_state::{esp32c6_appdesc_page_offset, resolve_esp_partitions_bin};
+use super::esp32_boot_state::{esp_appdesc_page_offset, resolve_esp_partitions_bin};
 
 /// True when the system manifest at `sys_path` targets the ESP32-C3. Reads the
 /// manifest and its referenced chip descriptor; any load failure → false (fall
@@ -1180,16 +1180,14 @@ pub(crate) fn run_test(
 
     // For Xtensa, short-circuit: build bus + CPU together via build_esp32_system_from_manifest.
     if is_xtensa {
-        // --resume-snapshot is wired for the C3 (RISC-V) rom-boot path only.
-        // The S3 faithful machine has no load_firmware step and populates some
-        // app regions via bootloader copies during the cold boot, so resuming
-        // it needs cache re-derivation work that is deferred; fail loudly rather
-        // than silently restore a partial state. (--capture-app-entry still
-        // works on S3 — it flows through the generic execute_test_loop.)
+        // --resume-snapshot is not wired for Xtensa systems: the S3 faithful
+        // machine populates app regions via bootloader copies, while the S2
+        // and classic paths fast-boot ELF images. Fail loudly rather than
+        // silently restore a partial state.
         if args.resume_snapshot.is_some() {
-            let msg = "--resume-snapshot is not yet supported for ESP32-S3 (Xtensa); \
-                       cold-boot with --rom-boot instead"
-                .to_string();
+            let msg =
+                "--resume-snapshot is not yet supported for Xtensa systems; cold-boot instead"
+                    .to_string();
             error!("{}", msg);
             write_config_error_outputs(
                 &args,
@@ -1250,7 +1248,7 @@ pub(crate) fn run_test(
             // machine. `--rom-boot` on an S3 chip takes the real-ROM path;
             // classic ESP32 stays on the legacy fast-boot (its rom-boot is a
             // separate task).
-            let is_esp32s3 = {
+            let (is_esp32s2, is_esp32s3) = {
                 let chip_dir = sys_path
                     .parent()
                     .unwrap_or_else(|| std::path::Path::new("."));
@@ -1259,11 +1257,73 @@ pub(crate) fn run_test(
                     chip_dir,
                     &crate::plugin_chip_yaml(plugins),
                 )
-                .map(|c| c.is_esp32s3())
-                .unwrap_or(false)
+                .map(|c| (c.is_esp32s2(), c.is_esp32s3()))
+                .unwrap_or((false, false))
             };
 
-            let mut machine = if is_esp32s3 {
+            let mut machine = if is_esp32s2 {
+                // The S2 is a single-core LX7 with a descriptor-defined memory
+                // map. It must not fall through to the classic dual-core LX6
+                // peripheral bank below.
+                if args.rom_boot {
+                    let msg = "ESP32-S2 ROM boot is not modelled; this profile supports direct ELF fast boot only".to_string();
+                    error!("{}", msg);
+                    write_config_error_outputs(
+                        &args,
+                        Some(&firmware_path),
+                        system_path.as_ref(),
+                        Some(&firmware_bytes),
+                        Some(&resolved_limits),
+                        msg,
+                    );
+                    return ExitCode::from(EXIT_CONFIG_ERROR);
+                }
+                let (mut s2_bus, s2_cpu, stack_top) =
+                    match labwired_core::system::builder::build_esp32s2_system_from_manifest_with_plugins(
+                        manifest,
+                        sys_path,
+                        &crate::plugin_chip_yaml(plugins),
+                        plugins,
+                    ) {
+                        Ok(system) => system,
+                        Err(e) => {
+                            let msg = format!("{:#}", e);
+                            error!("{}", msg);
+                            write_config_error_outputs(
+                                &args,
+                                Some(&firmware_path),
+                                system_path.as_ref(),
+                                Some(&firmware_bytes),
+                                Some(&resolved_limits),
+                                msg,
+                            );
+                            return ExitCode::from(EXIT_CONFIG_ERROR);
+                        }
+                    };
+                s2_bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
+                let mut machine = labwired_core::Machine::new(s2_cpu, s2_bus);
+                crate::log_ts::set_hz(machine.bus.cpu_hz);
+                apply_run_speed_opts(&mut machine);
+                if let Err(e) = machine.load_firmware(&program) {
+                    return handle_load_error(
+                        &args,
+                        &metrics,
+                        &resolved_limits,
+                        &firmware_bytes,
+                        &uart_tx,
+                        &rtt_tx,
+                        &itm_tx,
+                        &machine.cpu,
+                        &firmware_path,
+                        system_path.as_ref(),
+                        e,
+                    );
+                }
+                machine.cpu.set_pc(program.entry_point as u32);
+                machine.cpu.set_sp(stack_top);
+                machine.add_observer(metrics.clone());
+                machine
+            } else if is_esp32s3 {
                 // ── ESP32-S3 (LX7): S3 memmap + XIP, NOT classic ESP32 map ──
                 // Classic `build_esp32_system_from_manifest` uses LX6 IRAM/DROM
                 // bases — Arduino-S3 ELF segments (0x3C00_xxxx DROM, 0x3FC8_xxxx
@@ -2289,7 +2349,7 @@ pub(crate) fn run_test(
                                 // ELF landed in DROM extra_mem first — copy into
                                 // the shared NOR image so rodata/appdesc remain
                                 // visible through XIP; keep partitions @ 0x8000
-                                // and image magic @ 0x30000 (VA 0x3C03_0000).
+                                // and the image magic at the rodata page base.
                                 //
                                 // Then program MMU entries only for pages that
                                 // hold ELF DROM content (bootloader-equivalent
@@ -2418,8 +2478,19 @@ pub(crate) fn run_test(
                                                 .copy_from_slice(&pt[..n]);
                                         }
                                     }
-                                    // App image magic @ VA 0x3C03_0000 → factory+0x30000
-                                    let magic_off = FACTORY_OFF + 0x30000;
+                                    // App image magic at the DROM page base of
+                                    // `_rodata_reserved_start`: IDF 5 links
+                                    // rodata after the text, so the page moves
+                                    // with the text size (VA 0x3C03_0000 on a
+                                    // small sketch, 0x3C04_0000 once the text
+                                    // passes 192 KiB). Keep 0x30000 for an ELF
+                                    // without `.flash.appdesc`.
+                                    let magic_off = FACTORY_OFF
+                                        + esp_appdesc_page_offset(
+                                            std::path::Path::new(&firmware_path),
+                                            0x3C00_0000,
+                                        )
+                                        .unwrap_or(0x30000);
                                     if f.len() > magic_off {
                                         f[magic_off] = 0xE9;
                                     }
@@ -2521,8 +2592,9 @@ pub(crate) fn run_test(
                                     // Arduino L0 sketch). On silicon the
                                     // bootloader maps the image header there.
                                     // Stamp it only into an empty header slot.
-                                    if let Some(page_off) = esp32c6_appdesc_page_offset(
+                                    if let Some(page_off) = esp_appdesc_page_offset(
                                         std::path::Path::new(&firmware_path),
+                                        0x4200_0000,
                                     ) {
                                         let dst = factory_off + page_off;
                                         let src = page_off.min(irom_len);
