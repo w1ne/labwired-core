@@ -313,6 +313,78 @@ impl AvrModel {
     }
 }
 
+/// Flash and SRAM geometry of a classic megaAVR or AT90USB part that has no
+/// [`AvrModel`] of its own.
+///
+/// These parts run on the ATmega328P model: its instruction set and its
+/// peripherals at the 328P addresses. Only the memory geometry is the part's
+/// own. Without it every one of them ran with 32 KB flash and SRAM at
+/// 0x0100..=0x08FF, so avr-libc startup code, which sets SP to the part's
+/// RAMEND, faulted on its first push on any part whose RAMEND is above 0x08FF,
+/// and parts whose SRAM starts at 0x0060 had 328P extended I/O where the
+/// first 160 bytes of their SRAM are.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AvrGeometry {
+    pub flash_size: usize,
+    pub sram_start: u16,
+    pub ramend: u16,
+}
+
+/// (part, flash bytes, SRAM start, RAMEND). Values are FLASHEND + 1, RAMSTART
+/// and RAMEND of the part's avr-libc `io*.h` header, which follow the
+/// datasheet's memory map. A name matches with an optional A, L, V, P, PA or
+/// PV suffix, never by prefix: `atmega16` must not capture `atmega162` or
+/// `atmega168`, nor `atmega64` the `atmega640`.
+const CLASSIC_MEGA_GEOMETRY: &[(&str, usize, u16, u16)] = &[
+    ("atmega8", 8 * 1024, 0x0060, 0x045F),
+    ("atmega16", 16 * 1024, 0x0060, 0x045F),
+    ("atmega32", 32 * 1024, 0x0060, 0x085F),
+    ("atmega64", 64 * 1024, 0x0100, 0x10FF),
+    ("atmega128", 128 * 1024, 0x0100, 0x10FF),
+    ("atmega8515", 8 * 1024, 0x0060, 0x025F),
+    ("atmega8535", 8 * 1024, 0x0060, 0x025F),
+    ("atmega162", 16 * 1024, 0x0100, 0x04FF),
+    ("atmega48", 4 * 1024, 0x0100, 0x02FF),
+    ("atmega88", 8 * 1024, 0x0100, 0x04FF),
+    ("atmega168", 16 * 1024, 0x0100, 0x04FF),
+    ("atmega164", 16 * 1024, 0x0100, 0x04FF),
+    ("atmega324", 32 * 1024, 0x0100, 0x08FF),
+    ("atmega644", 64 * 1024, 0x0100, 0x10FF),
+    ("atmega1284", 128 * 1024, 0x0100, 0x40FF),
+    ("atmega165", 16 * 1024, 0x0100, 0x04FF),
+    ("atmega169", 16 * 1024, 0x0100, 0x04FF),
+    ("atmega325", 32 * 1024, 0x0100, 0x08FF),
+    ("atmega329", 32 * 1024, 0x0100, 0x08FF),
+    ("atmega3250", 32 * 1024, 0x0100, 0x08FF),
+    ("atmega3290", 32 * 1024, 0x0100, 0x08FF),
+    ("atmega645", 64 * 1024, 0x0100, 0x10FF),
+    ("atmega649", 64 * 1024, 0x0100, 0x10FF),
+    ("atmega6450", 64 * 1024, 0x0100, 0x10FF),
+    ("atmega6490", 64 * 1024, 0x0100, 0x10FF),
+    ("at90usb646", 64 * 1024, 0x0100, 0x10FF),
+    ("at90usb1286", 128 * 1024, 0x0100, 0x20FF),
+];
+
+impl AvrGeometry {
+    /// The geometry of a classic megaAVR / AT90USB chip name, or `None` when
+    /// the name is not in the table (the part then keeps its model's geometry).
+    pub fn for_chip_name(name: &str) -> Option<Self> {
+        let n = name.trim().to_ascii_lowercase();
+        CLASSIC_MEGA_GEOMETRY
+            .iter()
+            .find(|(part, ..)| {
+                n.strip_prefix(part).is_some_and(|suffix| {
+                    matches!(suffix, "" | "a" | "l" | "v" | "p" | "pa" | "pv")
+                })
+            })
+            .map(|&(_, flash_size, sram_start, ramend)| Self {
+                flash_size,
+                sram_start,
+                ramend,
+            })
+    }
+}
+
 /// ATmega2560 data-space addresses of PINx for ports A..L (DDRx = +1, PORTx = +2).
 pub const MEGA2560_PIN_ADDRS: [u16; 11] = [
     0x20, 0x23, 0x26, 0x29, 0x2C, 0x2F, 0x32, 0x100, 0x103, 0x106, 0x109,
@@ -707,7 +779,43 @@ impl Avr {
 
     /// The CPU for a chip descriptor's `name` (see [`AvrModel::from_chip_name`]).
     pub fn for_chip_name(name: &str) -> Self {
-        Self::new_model(AvrModel::from_chip_name(name))
+        let model = AvrModel::from_chip_name(name);
+        let mut cpu = Self::new_model(model);
+        // Only a name that fell through to the default model takes a table
+        // geometry; a part with its own model already has its own.
+        if model == AvrModel::Atmega328p {
+            if let Some(geometry) = AvrGeometry::for_chip_name(name) {
+                cpu.set_geometry(geometry);
+            }
+        }
+        cpu
+    }
+
+    /// The flash size and SRAM window this CPU was built with.
+    pub fn geometry(&self) -> AvrGeometry {
+        AvrGeometry {
+            flash_size: self.flash.len(),
+            sram_start: self.sram_start,
+            ramend: self.ramend,
+        }
+    }
+
+    /// Resize flash and SRAM to `geometry`. For use before firmware is loaded:
+    /// both memories are cleared and SP returns to the new RAMEND.
+    fn set_geometry(&mut self, geometry: AvrGeometry) {
+        self.flash = vec![0xFF; geometry.flash_size];
+        self.sram_start = geometry.sram_start;
+        self.ramend = geometry.ramend;
+        self.sram = vec![0; usize::from(geometry.ramend - geometry.sram_start) + 1];
+        self.sp = geometry.ramend;
+    }
+
+    /// SRAM that begins inside the 328P's extended I/O file (0x0060..=0x00FF),
+    /// as on every part whose I/O file is only 64 registers. On those parts
+    /// the address is SRAM and must not reach a 328P register arm.
+    #[inline]
+    fn is_low_sram(&self, addr: u16) -> bool {
+        self.sram_start < 0x0100 && (self.sram_start..=self.ramend).contains(&addr)
     }
 
     pub fn new_model(model: AvrModel) -> Self {
@@ -832,7 +940,12 @@ impl Avr {
     #[inline]
     fn is_pin_reg(&self, addr: u16) -> bool {
         match self.model {
-            AvrModel::Atmega328p | AvrModel::Atmega328pb => {
+            // ATtiny48/88 keep PINB/PINC/PIND at the 328P addresses
+            // (datasheet register summary: 0x23, 0x26, 0x29).
+            AvrModel::Atmega328p
+            | AvrModel::Atmega328pb
+            | AvrModel::Attiny48
+            | AvrModel::Attiny88 => {
                 matches!(addr, AVR_PINB | AVR_PINC | AVR_PIND)
             }
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => MEGA2560_PIN_ADDRS.contains(&addr),
@@ -855,9 +968,7 @@ impl Avr {
             | AvrModel::Attiny461
             | AvrModel::Attiny861
             | AvrModel::Attiny44
-            | AvrModel::Attiny84
-            | AvrModel::Attiny48
-            | AvrModel::Attiny88 => false,
+            | AvrModel::Attiny84 => false,
         }
     }
 
@@ -888,9 +999,10 @@ impl Avr {
 
     fn is_port_reg(&self, addr: u16) -> bool {
         match self.model {
-            AvrModel::Atmega328p | AvrModel::Atmega328pb => {
-                (AVR_PINB..=AVR_PIND + 2).contains(&addr)
-            }
+            AvrModel::Atmega328p
+            | AvrModel::Atmega328pb
+            | AvrModel::Attiny48
+            | AvrModel::Attiny88 => (AVR_PINB..=AVR_PIND + 2).contains(&addr),
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => {
                 (0x20..=0x34).contains(&addr) || (0x100..=0x10B).contains(&addr)
             }
@@ -913,9 +1025,7 @@ impl Avr {
             | AvrModel::Attiny461
             | AvrModel::Attiny861
             | AvrModel::Attiny44
-            | AvrModel::Attiny84
-            | AvrModel::Attiny48
-            | AvrModel::Attiny88 => false,
+            | AvrModel::Attiny84 => false,
         }
     }
 
@@ -1089,6 +1199,7 @@ impl Avr {
         }
         match addr {
             0x0000..=0x001F => Ok(self.r[addr as usize]),
+            a if self.is_low_sram(a) => Ok(self.sram[(a - self.sram_start) as usize]),
             // PINB/PINC/PIND — the registers on this part whose value the
             // OUTSIDE WORLD moves, so they are the ones the IO shadow cannot
             // answer alone.
@@ -1234,6 +1345,11 @@ impl Avr {
         match addr {
             0x0000..=0x001F => {
                 self.r[addr as usize] = value;
+                Ok(())
+            }
+            a if self.is_low_sram(a) => {
+                self.sram[(a - self.sram_start) as usize] = value;
+                bus.write_u8(a as u64, value)?;
                 Ok(())
             }
             0x005D => {
@@ -4108,6 +4224,204 @@ mod tests {
                 "{name} is classic AVR, not AVRxt"
             );
         }
+    }
+
+    /// Classic megaAVR / AT90USB parts without a model of their own keep the
+    /// 328P model but must take their own flash and SRAM geometry.
+    ///
+    /// Regression guard. Before the geometry table every one of these names
+    /// ran with 32 KB flash and SRAM 0x0100..=0x08FF. avr-libc startup sets SP
+    /// to the part's RAMEND, so e.g. an ATmega128 image faulted on its first
+    /// push at 0x10FF. Values are avr-libc FLASHEND + 1, RAMSTART and RAMEND.
+    #[test]
+    fn classic_megaavr_names_take_their_own_flash_and_sram_geometry() {
+        // (name, flash, sram_start, ramend)
+        let cases: &[(&str, usize, u16, u16)] = &[
+            ("atmega8", 8 * 1024, 0x0060, 0x045F),
+            ("atmega8a", 8 * 1024, 0x0060, 0x045F),
+            ("atmega16", 16 * 1024, 0x0060, 0x045F),
+            ("ATmega16A", 16 * 1024, 0x0060, 0x045F),
+            ("atmega32", 32 * 1024, 0x0060, 0x085F),
+            ("atmega64", 64 * 1024, 0x0100, 0x10FF),
+            ("atmega64a", 64 * 1024, 0x0100, 0x10FF),
+            ("atmega128", 128 * 1024, 0x0100, 0x10FF),
+            ("atmega8515", 8 * 1024, 0x0060, 0x025F),
+            ("atmega8535", 8 * 1024, 0x0060, 0x025F),
+            ("atmega162", 16 * 1024, 0x0100, 0x04FF),
+            ("atmega48", 4 * 1024, 0x0100, 0x02FF),
+            ("atmega48p", 4 * 1024, 0x0100, 0x02FF),
+            ("atmega88pa", 8 * 1024, 0x0100, 0x04FF),
+            ("atmega168", 16 * 1024, 0x0100, 0x04FF),
+            ("atmega168p", 16 * 1024, 0x0100, 0x04FF),
+            ("atmega164p", 16 * 1024, 0x0100, 0x04FF),
+            ("atmega324p", 32 * 1024, 0x0100, 0x08FF),
+            ("atmega644", 64 * 1024, 0x0100, 0x10FF),
+            ("atmega644p", 64 * 1024, 0x0100, 0x10FF),
+            ("atmega1284p", 128 * 1024, 0x0100, 0x40FF),
+            ("atmega165p", 16 * 1024, 0x0100, 0x04FF),
+            ("atmega169", 16 * 1024, 0x0100, 0x04FF),
+            ("atmega325", 32 * 1024, 0x0100, 0x08FF),
+            ("atmega329p", 32 * 1024, 0x0100, 0x08FF),
+            ("atmega3250", 32 * 1024, 0x0100, 0x08FF),
+            ("atmega3290p", 32 * 1024, 0x0100, 0x08FF),
+            ("atmega645", 64 * 1024, 0x0100, 0x10FF),
+            ("atmega649", 64 * 1024, 0x0100, 0x10FF),
+            ("atmega6450", 64 * 1024, 0x0100, 0x10FF),
+            ("atmega6490", 64 * 1024, 0x0100, 0x10FF),
+            ("at90usb646", 64 * 1024, 0x0100, 0x10FF),
+            ("at90usb1286", 128 * 1024, 0x0100, 0x20FF),
+        ];
+        for &(name, flash, sram_start, ramend) in cases {
+            let cpu = Avr::for_chip_name(name);
+            assert_eq!(
+                cpu.model,
+                AvrModel::Atmega328p,
+                "{name} keeps the 328P model"
+            );
+            assert_eq!(cpu.flash.len(), flash, "{name} flash size");
+            assert_eq!(cpu.sram_start, sram_start, "{name} SRAM start");
+            assert_eq!(cpu.ramend, ramend, "{name} RAMEND");
+            assert_eq!(
+                cpu.sram.len(),
+                usize::from(ramend - sram_start) + 1,
+                "{name} SRAM size"
+            );
+            assert_eq!(cpu.sp, ramend, "{name} SP resets to RAMEND");
+            assert_eq!(
+                Some(cpu.geometry()),
+                AvrGeometry::for_chip_name(name),
+                "{name} reports the table geometry"
+            );
+        }
+
+        // Names outside the table keep their model's geometry. The first two
+        // are the parts the table's shorter names must not capture.
+        for name in ["atmega640", "atmega1280", "atmega328p", "atmega328", ""] {
+            assert_eq!(
+                AvrGeometry::for_chip_name(name),
+                None,
+                "{name:?} not in table"
+            );
+            let cpu = Avr::for_chip_name(name);
+            assert_eq!(cpu.flash.len(), FLASH_SIZE, "{name:?} flash size");
+            assert_eq!(
+                (cpu.sram_start, cpu.ramend),
+                (SRAM_START, RAMEND),
+                "{name:?} SRAM"
+            );
+        }
+        // A part with its own model is not resized by the table.
+        let cpu = Avr::for_chip_name("atmega1281");
+        assert_eq!(cpu.model, AvrModel::Atmega1281);
+        assert_eq!((cpu.flash.len(), cpu.ramend), (128 * 1024, 0x21FF));
+    }
+
+    /// ATtiny48/88 have PORTB/PORTC/PORTD at the 328P addresses, so an OUT to
+    /// PORTB must reach the bus-side port window like it does on the 328P.
+    #[test]
+    fn attiny48_and_attiny88_mirror_portb_to_the_bus_port_window() {
+        for name in ["attiny48", "attiny88"] {
+            let mut cpu = Avr::for_chip_name(name);
+            cpu.load_words(
+                0,
+                &[
+                    0xEF0F, // LDI r16, 0xFF
+                    0xB904, // OUT DDRB(0x04), r16
+                    0xEA0A, // LDI r16, 0xAA
+                    0xB905, // OUT PORTB(0x05), r16
+                ],
+            );
+            let mut bus = MockBus::new();
+            step_n(&mut cpu, &mut bus, 4);
+            assert_eq!(
+                bus.mem.get(&(AVR_IO_MIRROR_BASE + 0x25)),
+                Some(&0xAA),
+                "{name} PORTB latch is mirrored"
+            );
+            assert_eq!(
+                bus.mem.get(&(AVR_IO_MIRROR_BASE + 0x24)),
+                Some(&0xFF),
+                "{name} DDRB is mirrored"
+            );
+        }
+    }
+
+    /// The ATmega128 stack starts at RAMEND 0x10FF, above the 328P's 0x08FF.
+    #[test]
+    fn atmega128_calls_through_a_stack_at_its_own_ramend() {
+        let mut cpu = Avr::for_chip_name("atmega128");
+        cpu.load_words(
+            0,
+            &[
+                0xEA05, // LDI r16, 0xA5
+                0x9300, 0x0100, // STS 0x0100, r16 (first SRAM byte)
+                0xD001, // RCALL subroutine two words ahead
+                0xCFFF, // loop forever after return
+                0x9110, 0x0100, // subroutine: LDS r17, 0x0100
+                0x9508, // RET
+            ],
+        );
+        let mut bus = MockBus::new();
+        step_n(&mut cpu, &mut bus, 5);
+
+        assert_eq!(cpu.r[17], 0xA5, "subroutine ran and read SRAM back");
+        assert_eq!(cpu.sp, 0x10FF, "RET restores SP to RAMEND");
+        assert_eq!(cpu.sram[0x0FFE], 4, "return PC low byte pushed at 0x10FE");
+        assert_eq!(cpu.pc, 8, "returned to word 4, the one after RCALL");
+
+        // The same image on the 328P geometry has no memory at 0x10FF.
+        let mut cpu = Avr::new();
+        cpu.sp = 0x10FF;
+        cpu.load_words(0, &[0xD000, 0xCFFF]); // RCALL .+0
+        let cfg = SimulationConfig::default();
+        assert!(
+            matches!(
+                cpu.step(&mut bus, &[], &cfg),
+                Err(SimulationError::MemoryViolation(0x10FF))
+            ),
+            "ATmega328P has no SRAM at 0x10FF"
+        );
+    }
+
+    /// On a part whose SRAM starts at 0x0060, data 0x0060..=0x00FF is SRAM.
+    /// On the 328P those addresses are WDTCSR (0x60) and UDR0 (0xC6).
+    #[test]
+    fn atmega16_sram_at_0x60_is_memory_and_not_328p_extended_io() {
+        let mut cpu = Avr::for_chip_name("atmega16");
+        let serial = Arc::new(Mutex::new(Vec::new()));
+        cpu.set_serial_sink(serial.clone());
+        cpu.load_words(
+            0,
+            &[
+                0xE50A, // LDI r16, 0x5A
+                0x9300, 0x0060, // STS 0x0060, r16 (RAMSTART; 328P WDTCSR)
+                0x9300, 0x00C6, // STS 0x00C6, r16 (328P UDR0)
+                0x9300, 0x045F, // STS 0x045F, r16 (RAMEND)
+                0x9110, 0x0060, // LDS r17, 0x0060
+                0x9120, 0x00C6, // LDS r18, 0x00C6
+                0x9130, 0x045F, // LDS r19, 0x045F
+                0x9300, 0x0460, // STS 0x0460, r16 (one past RAMEND)
+            ],
+        );
+        let mut bus = MockBus::new();
+        step_n(&mut cpu, &mut bus, 7);
+
+        assert_eq!(cpu.sram[0], 0x5A, "0x0060 is the first SRAM byte");
+        assert_eq!(cpu.sram[0x66], 0x5A, "0x00C6 is SRAM");
+        assert_eq!(cpu.sram[0x3FF], 0x5A, "0x045F is the last SRAM byte");
+        assert_eq!((cpu.r[17], cpu.r[18], cpu.r[19]), (0x5A, 0x5A, 0x5A));
+        assert!(
+            serial.lock().unwrap().is_empty(),
+            "a store to SRAM 0x00C6 must not transmit on the 328P USART"
+        );
+        let cfg = SimulationConfig::default();
+        assert!(
+            matches!(
+                cpu.step(&mut bus, &[], &cfg),
+                Err(SimulationError::MemoryViolation(0x0460))
+            ),
+            "the address after RAMEND is not memory"
+        );
     }
 
     #[test]
