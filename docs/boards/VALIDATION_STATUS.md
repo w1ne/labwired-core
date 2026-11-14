@@ -46,7 +46,7 @@ The models column is a content digest over everything that board's `models` list
 | `ci-fixture-riscv` | ⚪ structural | — | `9acdcc39df138ec7` | no silicon capture |
 | `nano-33-iot` | 🟡 smoke-manual | — | `e723ef5421202eb6` | no silicon capture |
 | `metro-m4` | 🟡 smoke-manual | — | `23100c20d7a9fcf8` | no silicon capture |
-| `arduino-uno-r4-minima` | 🟡 smoke-manual | — | `b23dec56fc85fb6c` | no silicon capture |
+| `arduino-uno-r4-minima` | 🟡 smoke-manual | — | `038cdbca58828fec` | no silicon capture |
 | `teensy-41` | 🟡 smoke-manual | — | `b098f9014f2d334a` | no silicon capture |
 | `stm32f7-discovery` | 🟡 smoke-manual | — | `b80612764092f91d` | no silicon capture |
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `9e47fd800cc9fd16` | no silicon capture |
@@ -395,7 +395,7 @@ The models column is a content digest over everything that board's `models` list
 ## `arduino-uno-r4-minima` — 🟡 smoke-manual
 
 - Doc: [`docs/boards/arduino-uno-r4-minima.md`](arduino-uno-r4-minima.md)  ·  Chip: `configs/chips/ra4m1.yaml`
-- Note: Arduino Uno R4 Minima (Renesas R7FA4M1AB). Bare-metal UART/LED smoke prints OK on SCI2 (D0/D1) after the HOCO/OSCSF bring-up; USBFS is a stub. First Renesas RA part in the engine. SIM-DERIVED — no silicon diff; no executing-fidelity differential.
+- Note: Arduino Uno R4 Minima (Renesas R7FA4M1AB). Bare-metal UART/LED smoke prints OK on SCI2 (D0/D1) after the HOCO/OSCSF bring-up; USBFS is a register file (no USB protocol, no host). First Renesas RA part in the engine. SIM-DERIVED — no silicon diff; no executing-fidelity differential.
 - Silicon: none — not validated against real hardware.
   - offline (CI): firmware_survival::test_ra4m1_uno_r4_smoke_survival
 - Drift status: **no silicon capture**

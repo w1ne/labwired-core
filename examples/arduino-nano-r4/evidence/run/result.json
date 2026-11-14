@@ -1,0 +1,1226 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 1220000,
+  "cycles": 1220000,
+  "instructions": 1220000,
+  "stop_reason": "assertions_passed",
+  "stop_reason_details": {
+    "triggered_stop_condition": "assertions_passed",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 5000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": true,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "NANO_R4_BOOT"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "NANO_R4_OK blink=2"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "port2:4",
+          "min_edges": 4
+        }
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      5,
+      516,
+      16,
+      24,
+      536872456,
+      24,
+      5,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      536903368,
+      18449,
+      18438
+    ],
+    "pc": 18438,
+    "xpsr": 2164260864,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 536903424,
+    "waiting_for_event": false,
+    "event_register": true
+  },
+  "firmware_hash": "e0888a5bd5c01918127b7215eb62b888772dcc90c030105baa7711e57f4f85f3",
+  "config": {
+    "firmware": "examples/arduino-nano-r4/./firmware/nano_r4_smoke.elf",
+    "system": "examples/arduino-nano-r4/../../configs/systems/arduino-nano-r4.yaml",
+    "script": "examples/arduino-nano-r4/smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "ra_sysc",
+        "kind": "native",
+        "base": 1073864704,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mstp",
+        "kind": "native",
+        "base": 1074032640,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "icu",
+        "kind": "native",
+        "base": 1073766400,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port0",
+        "kind": "native",
+        "base": 1074003968,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port1",
+        "kind": "native",
+        "base": 1074004000,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port2",
+        "kind": "native",
+        "base": 1074004032,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port3",
+        "kind": "native",
+        "base": 1074004064,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port4",
+        "kind": "native",
+        "base": 1074004096,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port5",
+        "kind": "native",
+        "base": 1074004128,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port6",
+        "kind": "native",
+        "base": 1074004160,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port7",
+        "kind": "native",
+        "base": 1074004192,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port8",
+        "kind": "native",
+        "base": 1074004224,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port9",
+        "kind": "native",
+        "base": 1074004256,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pfs",
+        "kind": "native",
+        "base": 1074006016,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "systick",
+        "kind": "native",
+        "base": 3758153744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "sci0",
+        "kind": "native",
+        "base": 1074200576,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "sci1",
+        "kind": "native",
+        "base": 1074200608,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "sci2",
+        "kind": "native",
+        "base": 1074200640,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "sci9",
+        "kind": "native",
+        "base": 1074200864,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "agt0",
+        "kind": "native",
+        "base": 1074282496,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "agt1",
+        "kind": "native",
+        "base": 1074282752,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "iic0",
+        "kind": "i2c",
+        "base": 1074081792,
+        "registers": [
+          {
+            "name": "ICCR1",
+            "offset": 0,
+            "size": 8,
+            "value": 31,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICCR2",
+            "offset": 1,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICMR1",
+            "offset": 2,
+            "size": 8,
+            "value": 8,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICMR2",
+            "offset": 3,
+            "size": 8,
+            "value": 6,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICMR3",
+            "offset": 4,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICFER",
+            "offset": 5,
+            "size": 8,
+            "value": 114,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICSER",
+            "offset": 6,
+            "size": 8,
+            "value": 9,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICIER",
+            "offset": 7,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICSR1",
+            "offset": 8,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICSR2",
+            "offset": 9,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICBRL",
+            "offset": 16,
+            "size": 8,
+            "value": 255,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICBRH",
+            "offset": 17,
+            "size": 8,
+            "value": 255,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICDRT",
+            "offset": 18,
+            "size": 8,
+            "value": 255,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICDRR",
+            "offset": 19,
+            "size": 8,
+            "value": 255,
+            "fields": [],
+            "access": "ro"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "iic1",
+        "kind": "i2c",
+        "base": 1074082048,
+        "registers": [
+          {
+            "name": "ICCR1",
+            "offset": 0,
+            "size": 8,
+            "value": 31,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICCR2",
+            "offset": 1,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICMR1",
+            "offset": 2,
+            "size": 8,
+            "value": 8,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICMR2",
+            "offset": 3,
+            "size": 8,
+            "value": 6,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICMR3",
+            "offset": 4,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICFER",
+            "offset": 5,
+            "size": 8,
+            "value": 114,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICSER",
+            "offset": 6,
+            "size": 8,
+            "value": 9,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICIER",
+            "offset": 7,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICSR1",
+            "offset": 8,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICSR2",
+            "offset": 9,
+            "size": 8,
+            "value": 0,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICBRL",
+            "offset": 16,
+            "size": 8,
+            "value": 255,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICBRH",
+            "offset": 17,
+            "size": 8,
+            "value": 255,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICDRT",
+            "offset": 18,
+            "size": 8,
+            "value": 255,
+            "fields": [],
+            "access": "rw"
+          },
+          {
+            "name": "ICDRR",
+            "offset": 19,
+            "size": 8,
+            "value": 255,
+            "fields": [],
+            "access": "ro"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "gpt",
+        "kind": "native",
+        "base": 1074233344,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dmac_dtc",
+        "kind": "native",
+        "base": 1073762304,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "elc",
+        "kind": "native",
+        "base": 1074008064,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "spi0",
+        "kind": "native",
+        "base": 1074208768,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "spi1",
+        "kind": "native",
+        "base": 1074209024,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "can0",
+        "kind": "native",
+        "base": 1074069504,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usbfs",
+        "kind": "declarative",
+        "base": 1074331648,
+        "registers": [
+          {
+            "name": "SYSCFG",
+            "offset": 0,
+            "size": 16,
+            "value": 1025,
+            "fields": [
+              {
+                "name": "USBE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 1
+              },
+              {
+                "name": "DPRPU",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "DRPD",
+                "bits": [
+                  5,
+                  5
+                ],
+                "value": 0
+              },
+              {
+                "name": "DCFM",
+                "bits": [
+                  6,
+                  6
+                ],
+                "value": 0
+              },
+              {
+                "name": "SCKE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "BUSWAIT",
+            "offset": 2,
+            "size": 16,
+            "value": 15,
+            "fields": [
+              {
+                "name": "BWAIT",
+                "bits": [
+                  3,
+                  0
+                ],
+                "value": 15
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "SYSSTS0",
+            "offset": 4,
+            "size": 16,
+            "value": 0,
+            "fields": [
+              {
+                "name": "LNST",
+                "bits": [
+                  1,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "DVSTCTR0",
+            "offset": 8,
+            "size": 16,
+            "value": 0,
+            "fields": [
+              {
+                "name": "RHST",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INTENB0",
+            "offset": 48,
+            "size": 16,
+            "value": 56576,
+            "fields": [
+              {
+                "name": "BRDYE",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 1
+              },
+              {
+                "name": "NRDYE",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "BEMPE",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 1
+              },
+              {
+                "name": "CTRE",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 1
+              },
+              {
+                "name": "DVSE",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 1
+              },
+              {
+                "name": "SOFE",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "RSME",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 1
+              },
+              {
+                "name": "VBSE",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INTENB1",
+            "offset": 50,
+            "size": 16,
+            "value": 0,
+            "fields": [
+              {
+                "name": "SACKE",
+                "bits": [
+                  4,
+                  4
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "BRDYENB",
+            "offset": 54,
+            "size": 16,
+            "value": 1,
+            "fields": [
+              {
+                "name": "PIPEBRDYE",
+                "bits": [
+                  9,
+                  0
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "NRDYENB",
+            "offset": 56,
+            "size": 16,
+            "value": 0,
+            "fields": [
+              {
+                "name": "PIPENRDYE",
+                "bits": [
+                  9,
+                  0
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "BEMPENB",
+            "offset": 58,
+            "size": 16,
+            "value": 1,
+            "fields": [
+              {
+                "name": "PIPEBEMPE",
+                "bits": [
+                  9,
+                  0
+                ],
+                "value": 1
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "INTSTS0",
+            "offset": 64,
+            "size": 16,
+            "value": 0,
+            "fields": [
+              {
+                "name": "CTSQ",
+                "bits": [
+                  2,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "VALID",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              },
+              {
+                "name": "DVSQ",
+                "bits": [
+                  6,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "VBSTS",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "BRDY",
+                "bits": [
+                  8,
+                  8
+                ],
+                "value": 0
+              },
+              {
+                "name": "NRDY",
+                "bits": [
+                  9,
+                  9
+                ],
+                "value": 0
+              },
+              {
+                "name": "BEMP",
+                "bits": [
+                  10,
+                  10
+                ],
+                "value": 0
+              },
+              {
+                "name": "CTRT",
+                "bits": [
+                  11,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "DVST",
+                "bits": [
+                  12,
+                  12
+                ],
+                "value": 0
+              },
+              {
+                "name": "SOFR",
+                "bits": [
+                  13,
+                  13
+                ],
+                "value": 0
+              },
+              {
+                "name": "RESM",
+                "bits": [
+                  14,
+                  14
+                ],
+                "value": 0
+              },
+              {
+                "name": "VBINT",
+                "bits": [
+                  15,
+                  15
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "DCPMAXP",
+            "offset": 94,
+            "size": 16,
+            "value": 64,
+            "fields": [
+              {
+                "name": "MXPS",
+                "bits": [
+                  6,
+                  0
+                ],
+                "value": 64
+              },
+              {
+                "name": "DEVSEL",
+                "bits": [
+                  15,
+                  12
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "PHYSLEW",
+            "offset": 240,
+            "size": 32,
+            "value": 5,
+            "fields": [
+              {
+                "name": "SLEWR00",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 1
+              },
+              {
+                "name": "SLEWR01",
+                "bits": [
+                  1,
+                  1
+                ],
+                "value": 0
+              },
+              {
+                "name": "SLEWF00",
+                "bits": [
+                  2,
+                  2
+                ],
+                "value": 1
+              },
+              {
+                "name": "SLEWF01",
+                "bits": [
+                  3,
+                  3
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          },
+          {
+            "name": "USBMC",
+            "offset": 1024,
+            "size": 32,
+            "value": 0,
+            "fields": [
+              {
+                "name": "VDDUSBE",
+                "bits": [
+                  0,
+                  0
+                ],
+                "value": 0
+              },
+              {
+                "name": "VDCEN",
+                "bits": [
+                  7,
+                  7
+                ],
+                "value": 0
+              }
+            ],
+            "access": "rw"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "fcache",
+        "kind": "native",
+        "base": 1073856512,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mpu_spmon",
+        "kind": "native",
+        "base": 1073745152,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "adc0",
+        "kind": "native",
+        "base": 1074118656,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "adc1_reserved",
+        "kind": "native",
+        "base": 1074119168,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "derived_device_time",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "device time derived from cpu_hz (48000000 Hz); PLL reconfiguration is not tracked"
+    },
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 1220000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "port2",
+        "pin": 4,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 97983,
+            "value": 1
+          },
+          {
+            "cycle": 331451,
+            "value": 0
+          },
+          {
+            "cycle": 571464,
+            "value": 1
+          },
+          {
+            "cycle": 811452,
+            "value": 0
+          },
+          {
+            "cycle": 1210174,
+            "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 28246,
+            "state": "0"
+          },
+          {
+            "cycle": 97983,
+            "state": "1"
+          },
+          {
+            "cycle": 331451,
+            "state": "0"
+          },
+          {
+            "cycle": 571464,
+            "state": "1"
+          },
+          {
+            "cycle": 811452,
+            "state": "0"
+          },
+          {
+            "cycle": 1210174,
+            "state": "1"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 5
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "port2",
+      "number": 4,
+      "mode": "output",
+      "func": null,
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "NANO_R4_BOOT",
+        "cycle_lo": 40000,
+        "cycle": 50000,
+        "end_cycle": 100000
+      },
+      {
+        "text": "NANO_R4_OK blink=2 LED=P204 UART=SCI2",
+        "cycle_lo": 1050000,
+        "cycle": 1060000,
+        "end_cycle": 1210000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 38172,
+    "data_bytes": 188,
+    "bss_bytes": 13072,
+    "flash_used_bytes": 38360,
+    "ram_static_bytes": 13260,
+    "flash_total_bytes": 262144,
+    "ram_total_bytes": 32768,
+    "flash_used_pct": 14.63,
+    "ram_static_pct": 40.47,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 28724,
+    "main_stack_high_water_bytes": 228,
+    "main_stack_free_min_bytes": 28316,
+    "main_stack_base": 536874700,
+    "main_stack_top": 536903424,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 28724,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 28316,
+    "heap_base": 536874700,
+    "heap_top": 536903424
+  },
+  "metrics": {
+    "cycles": 1220000,
+    "instructions": 1220000,
+    "steps_executed": 1220000,
+    "memory_reads": 217926,
+    "memory_writes": 11134,
+    "peripheral_accesses": 1264,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 18438,
+        "count": 664
+      },
+      {
+        "pc": 18440,
+        "count": 585
+      },
+      {
+        "pc": 18426,
+        "count": 548
+      },
+      {
+        "pc": 18436,
+        "count": 547
+      },
+      {
+        "pc": 18448,
+        "count": 546
+      },
+      {
+        "pc": 18444,
+        "count": 509
+      },
+      {
+        "pc": 18442,
+        "count": 390
+      },
+      {
+        "pc": 16852,
+        "count": 274
+      },
+      {
+        "pc": 16856,
+        "count": 273
+      },
+      {
+        "pc": 16858,
+        "count": 273
+      },
+      {
+        "pc": 53002,
+        "count": 78
+      },
+      {
+        "pc": 24878,
+        "count": 39
+      },
+      {
+        "pc": 53012,
+        "count": 39
+      }
+    ]
+  }
+}

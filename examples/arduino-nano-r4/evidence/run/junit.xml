@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.428485">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="AssertionsPassed"/>
+    <property name="firmware_hash" value="e0888a5bd5c01918127b7215eb62b888772dcc90c030105baa7711e57f4f85f3"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.428485">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: NANO_R4_BOOT" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: NANO_R4_OK blink=2" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: gpio_edges: port2:4 &gt;= 4 edges" time="0.000000">
+  </testcase>
+</testsuite>

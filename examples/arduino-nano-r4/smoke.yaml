@@ -1,0 +1,17 @@
+# LabWired - Arduino Nano R4 board smoke
+# Stock ArduinoCore-renesas sketch (firmware/src/main.cpp, PlatformIO
+# renesas-ra 1.9.0, board nano_r4). Boots through TinyUSB dcd_init, prints on
+# Serial1 (SCI2, D1/P302) and toggles LED_BUILTIN (P204).
+schema_version: "1.0"
+inputs:
+  firmware: "./firmware/nano_r4_smoke.elf"
+  system: "../../configs/systems/arduino-nano-r4.yaml"
+limits:
+  max_steps: 5000000
+  stop_when_assertions_pass: true
+assertions:
+  - uart_contains: "NANO_R4_BOOT"
+  - uart_contains: "NANO_R4_OK blink=2"
+  - gpio_edges:
+      pin: "port2:4"
+      min_edges: 4
