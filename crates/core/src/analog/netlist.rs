@@ -15,7 +15,7 @@
 //!
 //! | Element | Line |
 //! |---|---|
-//! | Resistor | `R<name> n1 n2 <value> [beta=<K> [tnom=<°C>] [temp=<°C>]]` |
+//! | Resistor | `R<name> n1 n2 <value> [beta=<K> [tnom=<°C>] [temp=<°C>]] [tc1=<1/°C> [tc2=<1/°C²>] [tnom=<°C>] [temp=<°C>]` |
 //! | Capacitor | `C<name> n1 n2 <value> [ic=<v>]` |
 //! | Inductor | `L<name> n1 n2 <value> [ic=<i>]` |
 //! | Mutual inductance | `K<name> L<name1> L<name2> <k>` |
@@ -57,6 +57,12 @@
 //! carries a function is driven by the clock, so it cannot also be a routed
 //! input — [`super::adapter`] rejects a manifest that wires one.
 //!
+//! A resistor can use either an NTC `beta` law or the instance coefficients
+//! `tc1`/`tc2`, not both. The polynomial form is
+//! `R = Rnom · (1 + TC1·ΔT + TC2·ΔT²)`; `tnom` and `temp` default to 27 °C for
+//! that form. The temperature is imposed externally; self-heating is not
+//! modelled.
+//!
 //! ## Models
 //!
 //! `.model <name> D|NPN|PNP|NMOS|PMOS|NJF|PJF (<param>=<value> ...)` declares a model
@@ -74,7 +80,7 @@
 //! `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC` with shared `FC`,
 //! MOSFET bulk junction depletion capacitance `CBD`/`CBS` with shared
 //! `PB`/`MJ`/`FC`, or junction geometry `CJ`/`CJSW`/`MJ`/`MJSW` with instance
-//! `AD`/`AS`/`PD`/`PS`, temperature coefficients, and most terminal
+//! `AD`/`AS`/`PD`/`PS`, semiconductor temperature coefficients, and most terminal
 //! resistances, …) are **accepted
 //! and ignored rather than rejected**. OPAMP and COMP `IBIAS`/`IOS` model the
 //! average and signed difference of DC currents at the two input pins; `RIN`
@@ -304,6 +310,31 @@ pub struct NtcModel {
     pub temperature_celsius: f64,
 }
 
+/// Polynomial temperature coefficients on a resistor instance.
+///
+/// The resistor value is `Rnom · (1 + TC1·ΔT + TC2·ΔT²)`, where `ΔT` is the
+/// instance temperature minus the parameter measurement temperature. This is
+/// an externally specified temperature; the resistor does not self-heat.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ResistorTemperatureModel {
+    /// First-order coefficient, per °C.
+    pub tc1: f64,
+    /// Second-order coefficient, per °C².
+    pub tc2: f64,
+    /// Parameter measurement temperature, in °C.
+    pub nominal_temperature_celsius: f64,
+    /// Instance temperature, in °C.
+    pub temperature_celsius: f64,
+}
+
+impl ResistorTemperatureModel {
+    /// Resistance at `temperature_celsius`, in ohms.
+    pub fn resistance_ohms(self, nominal_ohms: f64) -> f64 {
+        let delta = self.temperature_celsius - self.nominal_temperature_celsius;
+        nominal_ohms * (1.0 + self.tc1 * delta + self.tc2 * delta * delta)
+    }
+}
+
 impl NtcModel {
     /// Resistance at `temperature_celsius`, in ohms.
     pub fn resistance_ohms(self, r25_ohms: f64) -> f64 {
@@ -313,7 +344,7 @@ impl NtcModel {
     }
 }
 
-/// `R<name> n1 n2 <ohms> [beta=<K> [tnom=<°C>] [temp=<°C>]]`.
+/// `R<name> n1 n2 <ohms>` with optional NTC or `tc1=`/`tc2=` temperature data.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Resistor {
     /// Element name as written, e.g. `R1`.
@@ -322,18 +353,24 @@ pub struct Resistor {
     pub a: NodeRef,
     /// Second terminal.
     pub b: NodeRef,
-    /// Fixed resistance, or NTC resistance at `ntc.nominal_temperature_celsius`.
+    /// Fixed resistance, or nominal resistance for either temperature model.
     pub ohms: f64,
     /// Optional external-temperature Beta model.
     pub ntc: Option<NtcModel>,
+    /// Optional first- and second-order temperature coefficient model.
+    pub temperature_coefficients: Option<ResistorTemperatureModel>,
 }
 
 impl Resistor {
     /// Resistance at the model's current external temperature, in ohms.
     pub fn resistance_ohms(&self) -> f64 {
-        self.ntc
-            .map(|ntc| ntc.resistance_ohms(self.ohms))
-            .unwrap_or(self.ohms)
+        if let Some(ntc) = self.ntc {
+            ntc.resistance_ohms(self.ohms)
+        } else if let Some(model) = self.temperature_coefficients {
+            model.resistance_ohms(self.ohms)
+        } else {
+            self.ohms
+        }
     }
 }
 
@@ -2372,38 +2409,52 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     return Err(ctx.parse_err("resistance must be non-zero"));
                 }
                 let mut beta = None;
-                let mut nominal_temperature_celsius = 25.0;
-                let mut temperature_celsius = 25.0;
+                let mut nominal_temperature_celsius = None;
+                let mut temperature_celsius = None;
+                let mut tc1 = None;
+                let mut tc2 = None;
                 let mut has_temperature_parameter = false;
                 for token in &rest[3..] {
                     let (key, value) = token.split_once('=').ok_or_else(|| {
-                        ctx.parse_err("NTC resistor options must be `beta=`, `tnom=` or `temp=`")
+                        ctx.parse_err(
+                            "resistor options must be `beta=`, `tc1=`, `tc2=`, `tnom=` or `temp=`",
+                        )
                     })?;
                     let parsed = ctx.value(value, key)?;
                     match key.to_ascii_lowercase().as_str() {
                         "beta" => beta = Some(parsed),
+                        "tc1" => tc1 = Some(parsed),
+                        "tc2" => tc2 = Some(parsed),
                         "tnom" => {
-                            nominal_temperature_celsius = parsed;
+                            nominal_temperature_celsius = Some(parsed);
                             has_temperature_parameter = true;
                         }
                         "temp" => {
-                            temperature_celsius = parsed;
+                            temperature_celsius = Some(parsed);
                             has_temperature_parameter = true;
                         }
                         other => {
                             return Err(ctx.parse_err(format!(
-                                "unknown resistor parameter `{other}`; expected `beta`, `tnom` or `temp`"
+                                "unknown resistor parameter `{other}`; expected `beta`, `tc1`, `tc2`, `tnom` or `temp`"
                             )))
                         }
                     }
                 }
-                if beta.is_none() && has_temperature_parameter {
-                    return Err(ctx.parse_err("`tnom` and `temp` require an NTC `beta`"));
+                let has_temperature_coefficients = tc1.is_some() || tc2.is_some();
+                if beta.is_some() && has_temperature_coefficients {
+                    return Err(ctx.parse_err("an NTC `beta` model cannot also use `tc1` or `tc2`"));
+                }
+                if beta.is_none() && !has_temperature_coefficients && has_temperature_parameter {
+                    return Err(ctx.parse_err(
+                        "`tnom` and `temp` require an NTC `beta` or resistor `tc1`/`tc2`",
+                    ));
                 }
                 let ntc = if let Some(beta) = beta {
                     if beta <= 0.0 || ohms <= 0.0 {
                         return Err(ctx.parse_err("an NTC resistor needs `beta > 0` and `r25 > 0`"));
                     }
+                    let nominal_temperature_celsius = nominal_temperature_celsius.unwrap_or(25.0);
+                    let temperature_celsius = temperature_celsius.unwrap_or(25.0);
                     if nominal_temperature_celsius <= -273.15 || temperature_celsius <= -273.15 {
                         return Err(ctx.parse_err("NTC temperatures must be above absolute zero"));
                     }
@@ -2419,6 +2470,35 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 } else {
                     None
                 };
+                let temperature_coefficients = if has_temperature_coefficients {
+                    let tc1 = tc1.unwrap_or(0.0);
+                    let tc2 = tc2.unwrap_or(0.0);
+                    let nominal_temperature_celsius = nominal_temperature_celsius.unwrap_or(27.0);
+                    let temperature_celsius = temperature_celsius.unwrap_or(27.0);
+                    if !tc1.is_finite() || !tc2.is_finite() {
+                        return Err(ctx.parse_err("resistor `tc1` and `tc2` must be finite"));
+                    }
+                    if nominal_temperature_celsius <= -273.15 || temperature_celsius <= -273.15 {
+                        return Err(
+                            ctx.parse_err("resistor temperatures must be above absolute zero")
+                        );
+                    }
+                    let model = ResistorTemperatureModel {
+                        tc1,
+                        tc2,
+                        nominal_temperature_celsius,
+                        temperature_celsius,
+                    };
+                    let resistance = model.resistance_ohms(ohms);
+                    if !resistance.is_finite() || resistance <= 0.0 {
+                        return Err(ctx.parse_err(
+                            "resistor temperature coefficients must produce a finite positive resistance",
+                        ));
+                    }
+                    Some(model)
+                } else {
+                    None
+                };
                 let a = circuit.intern(rest[0]);
                 let b = circuit.intern(rest[1]);
                 circuit.resistors.push(Resistor {
@@ -2427,6 +2507,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     b,
                     ohms,
                     ntc,
+                    temperature_coefficients,
                 });
             }
             'C' => {
@@ -3887,6 +3968,7 @@ impl Lowering<'_> {
             b,
             ohms,
             ntc: None,
+            temperature_coefficients: None,
         });
     }
 
