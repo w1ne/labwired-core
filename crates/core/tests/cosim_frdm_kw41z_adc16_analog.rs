@@ -10,7 +10,10 @@
 //! - the same two netlists moved to PTB18 (SE4) and PTA19 (SE5) convert at
 //!   16 bits, and the old pads go back to 0 V;
 //! - `SC1A.AIEN` raises ADC0_IRQn (15) in the NVIC on conversion complete;
-//! - one continuous conversion (`SC3.ADCO`) started once follows the NTC.
+//! - one continuous conversion (`SC3.ADCO`) started once follows the NTC;
+//! - on both FRDM-KW41Z profiles, reverse-biased BJT junction leakage (NPN,
+//!   PNP, unequal biases) converts at 16 bits on PTB1, PTB18 and PTA19 and
+//!   follows ngspice's cubic reverse law, not the plain exponential.
 
 mod common;
 use common::root;
@@ -238,4 +241,136 @@ fn frdm_kw41z_continuous_conversion_started_once_follows_the_ntc() {
     }
     bus.write_u32(ADC0 + SC1A, ADCH_DISABLED).expect("disable");
     assert_eq!(bus.read_u32(ADC0 + SC2).unwrap() & ADACT, 0);
+}
+
+/// `kT/q` at the engine's fixed 300 K, repeated here so the independent root
+/// below cannot drift together with the solver.
+const VT: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+const GMIN: f64 = 1e-12;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum ReverseLaw {
+    /// ngspice `bjtload.c`: cubic below `−3·N·Vt`.
+    Cubic,
+    /// The plain exponential every BJT junction used before.
+    Exponential,
+}
+
+/// One junction's current `I·(exp(V/(N·Vt)) − 1)`, or the cubic reverse form.
+fn junction_current(law: ReverseLaw, volts: f64, saturation: f64, n: f64) -> f64 {
+    let vte = n * VT;
+    if law == ReverseLaw::Exponential || volts >= -3.0 * vte {
+        return saturation * ((volts / vte).exp() - 1.0);
+    }
+    let arg = 3.0 * vte / (volts * std::f64::consts::E);
+    -saturation * (1.0 + arg * arg * arg)
+}
+
+/// Current out of the base of the fixture's `QLEAK` card with `vbe` and `vbc`
+/// in device coordinates: `IS/BF` and `ISE` on B-E, `IS/BR` and `ISC` on B-C,
+/// plus `GMIN` across each junction.
+fn base_leakage(law: ReverseLaw, vbe: f64, vbc: f64) -> f64 {
+    let (is, bf, br, nf, nr, ise, ne, isc, nc) =
+        (0.2e-6, 4.0, 2.0, 1.0, 1.2, 0.4e-6, 2.0, 0.5e-6, 1.5);
+    -(junction_current(law, vbe, is, nf) / bf
+        + junction_current(law, vbe, ise, ne)
+        + junction_current(law, vbc, is, nr) / br
+        + junction_current(law, vbc, isc, nc)
+        + GMIN * (vbe + vbc))
+}
+
+/// Independent root of `v = I_leak(v)·R`: the base (the PNP's mirrored base
+/// node) sits `v` above ground, the collector at 1.65 V and the emitter at
+/// `emitter_volts`.
+fn expected_leakage_voltage(law: ReverseLaw, emitter_volts: f64, load_ohms: f64) -> f64 {
+    let (mut low, mut high) = (0.0, 1.65);
+    for _ in 0..200 {
+        let mid = 0.5 * (low + high);
+        if base_leakage(law, mid - emitter_volts, mid - 1.65) * load_ohms > mid {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    0.5 * (low + high)
+}
+
+/// Reverse-biased BJT junction leakage reaches ADC0 on both FRDM-KW41Z
+/// profiles beside the NTC and the diode. Each node is checked against an
+/// independent root and ngspice-42 `.op` (`.temp 26.85`, `tnom=26.85`), and
+/// each 16-bit conversion differs from the plain exponential's code.
+#[test]
+fn frdm_kw41z_profiles_convert_bjt_reverse_junction_leakage_on_adc0_beside_ntc_and_diode() {
+    for profile_name in ["frdm-kw41z", "frdm-kw41z-lcd"] {
+        let system_path = root(&format!("configs/systems/{profile_name}.yaml"));
+        let mut profile = SystemManifest::from_file(&system_path).expect("load board profile");
+        assert_eq!(profile.name, profile_name);
+        let analog = SystemManifest::from_file(root(
+            "examples/frdm-kw41z/analog-bjt-reverse-leakage-adc.yaml",
+        ))
+        .expect("load generic BJT reverse-leakage fixture");
+        profile.cosim_models = analog.cosim_models;
+        let chip_path = system_path.parent().unwrap().join(&profile.chip);
+        let chip = ChipDescriptor::from_file(&chip_path).expect("load MKW41Z4 descriptor");
+        let mut bus = SystemBus::from_config(&chip, &profile).expect("build board bus");
+        let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+            .expect("build analog co-simulation")
+            .expect("fixture carries five analog circuits");
+        assert_eq!(
+            session.binding_errors(),
+            &[] as &[RoutingError],
+            "{profile_name}: every pad must resolve to an ADC16 input"
+        );
+
+        init_and_calibrate(&mut bus, ADC0, MODE_16);
+        session
+            .set_signal_number("ui.ntc.temperature_c", 25.0)
+            .expect("set NTC temperature");
+        let boundary = session.cycles_until_boundary(0);
+        let (steps, errors) = session
+            .advance_to(boundary, &mut bus)
+            .expect("solve all five circuits");
+        assert_eq!(steps.len(), 5, "{profile_name}: five circuits solve");
+        assert!(errors.is_empty(), "route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "board.analog.ptb2_volts");
+        assert!((ntc_v - ntc_volts(25.0)).abs() < 1e-9);
+        assert_eq!(convert(&mut bus, ADC0, SE3), se_code(ntc_v, 16), "NTC");
+        let diode_v = signal_voltage(&session, "board.analog.ptb3_volts");
+        assert!(diode_v > 0.5 && diode_v < 0.8, "diode drop {diode_v} V");
+        assert_eq!(convert(&mut bus, ADC0, SE2), se_code(diode_v, 16), "diode");
+
+        // (pad, ADCH, emitter volts, load, ngspice-42 node voltage)
+        let cases = [
+            ("ptb1", SE1, 1.65, 1.2e6, 1.257_642_932_381),
+            ("ptb18", SE4, 1.65, 1.0e6, 1.049_453_216_728),
+            ("pta19", SE5, 3.3, 1.2e6, 1.259_124_085_905),
+        ];
+        for (pad, channel, emitter_volts, load_ohms, ngspice) in cases {
+            let got = signal_voltage(&session, &format!("board.analog.{pad}_volts"));
+            let expected = expected_leakage_voltage(ReverseLaw::Cubic, emitter_volts, load_ohms);
+            assert!(
+                (got - expected).abs() < 1e-6,
+                "{profile_name} {pad}: independent root {expected} V, got {got} V"
+            );
+            assert!(
+                (got - ngspice).abs() < 5e-6,
+                "{profile_name} {pad}: ngspice-42 {ngspice} V, got {got} V"
+            );
+            let exponential =
+                expected_leakage_voltage(ReverseLaw::Exponential, emitter_volts, load_ohms);
+            let code = convert(&mut bus, ADC0, channel);
+            assert_eq!(
+                code,
+                se_code(got, 16),
+                "{profile_name} {pad}: ADCH {channel}"
+            );
+            assert!(
+                code.abs_diff(se_code(exponential, 16)) >= 19,
+                "{profile_name} {pad}: the cubic law must move the 16-bit code away from the \
+                 exponential's {}, got {code}",
+                se_code(exponential, 16)
+            );
+        }
+    }
 }

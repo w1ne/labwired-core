@@ -2256,8 +2256,10 @@ mod analog {
         }
         assert_eq!(charge.dqbc_dvbe, 0.0);
 
-        let reverse_be = device::bjt_transit_charge(-0.1, vbc, model);
-        let expected_reverse_be = model.tf * model.is * ((-0.1 / vtf).exp() - 1.0);
+        // Above −3·NF·Vt, so still on the exponential; the cubic reverse form
+        // is checked by `bjt_reverse_biased_junctions_follow_ngspice_cubic_law`.
+        let reverse_be = device::bjt_transit_charge(-0.05, vbc, model);
+        let expected_reverse_be = model.tf * model.is * ((-0.05 / vtf).exp() - 1.0);
         assert!((reverse_be.qbe - expected_reverse_be).abs() < 1e-25);
     }
 
@@ -3497,7 +3499,9 @@ mod analog {
     fn bjt_early_effect_partials_match_transport_and_junction_derivatives() {
         let (is, bf, br, nf, nr, vaf, var) = (2e-15, 75.0, 3.0, 1.1, 1.2, 42.0, 65.0);
         let delta = 1e-7;
-        for (vbe, vbc) in [(0.62, -0.1), (-0.1, 0.58)] {
+        // The reverse bias stays above −3·N·Vt, on the exponential; below it
+        // `bjt_reverse_biased_junctions_follow_ngspice_cubic_law` applies.
+        for (vbe, vbc) in [(0.62, -0.05), (-0.05, 0.58)] {
             let currents = |vbe: f64, vbc: f64| {
                 let forward = (vbe / (nf * VT)).exp();
                 let reverse = (vbc / (nr * VT)).exp();
@@ -4219,7 +4223,9 @@ mod analog {
             (is / br) * ((vbc / (nr * VT)).exp() - 1.0) + isc * ((vbc / (nc * VT)).exp() - 1.0)
         };
 
-        for (vbe, vbc) in [(0.62, -0.1), (-0.1, 0.58)] {
+        // The reverse bias stays above −3·N·Vt, on the exponential; below it
+        // `bjt_reverse_biased_junctions_follow_ngspice_cubic_law` applies.
+        for (vbe, vbc) in [(0.62, -0.05), (-0.05, 0.58)] {
             let op = device::bjt_op(
                 vbe,
                 vbc,
@@ -8269,5 +8275,266 @@ mod analog {
         let bulk = device::mos_bulk_junction_op(-0.2, 1e-9, device::THERMAL_VOLTAGE);
         assert_eq!(bulk.gd, device::GMIN);
         assert_eq!(bulk.id, -1e-9 - device::GMIN * 0.2);
+    }
+
+    /// The four BJT junction currents (`IS` forward and reverse, `ISE`,
+    /// `ISC`) follow ngspice-42 `bjtload.c` in reverse bias: below `−3·N·Vt`,
+    /// with each junction's own `N`, the cubic `−I·(1 + (3·N·Vt/(e·V))³)`
+    /// replaces the exponential. The transport current and the `TF`/`TR`
+    /// transit charges use the same values. References are ngspice-42 `.op`
+    /// and `.dc` (`@q1[qbe]`, `@q1[qbc]`, `@q1[cpi]`, `@q1[cmu]`) with `.temp
+    /// 26.85` and `tnom=26.85` (deck: `Q1 c b 0 QN`, `Q2 cp bp 0 QP`, base
+    /// and collector on voltage sources).
+    #[test]
+    fn bjt_reverse_biased_junctions_follow_ngspice_cubic_law() {
+        let card = "IS=1e-9 BF=50 BR=2 NF=1.2 NR=1.6 ISE=4e-9 NE=2 ISC=6e-9 NC=1.4";
+        let models = format!(".model QN NPN({card} TF=1e-6 TR=2e-6)\n.model QP PNP({card})\n");
+        // (Vbe = Vbc, ngspice i(Vb), i(Vc), i(Vbp), i(Vcp)). The PNP sees the
+        // mirrored bias. ngspice also ties GMIN from the substrate node
+        // (ground) to a vertical NPN's collector and a lateral PNP's base;
+        // the engine has no substrate junction on a three-node BJT, so that
+        // `GMIN·V` is taken out of the reference.
+        let ngspice: [(f64, [f64; 4]); 8] = [
+            (
+                -5.0,
+                [
+                    1.052_999_060_831e-8,
+                    -6.504_996_120_44e-9,
+                    -1.053_499_060_83e-8,
+                    6.504_996_120_437e-9,
+                ],
+            ),
+            (
+                -1.0,
+                [
+                    1.052_082_603_835e-8,
+                    -6.500_515_054_65e-9,
+                    -1.052_182_603_83e-8,
+                    6.500_515_054_648e-9,
+                ],
+            ),
+            (
+                -0.5,
+                [
+                    1.051_160_830_676e-8,
+                    -6.496_620_437_18e-9,
+                    -1.051_210_830_68e-8,
+                    6.496_620_437_181e-9,
+                ],
+            ),
+            (
+                -0.3,
+                [
+                    1.047_711_993_871e-8,
+                    -6.482_339_061_02e-9,
+                    -1.047_741_993_87e-8,
+                    6.482_339_061_021e-9,
+                ],
+            ),
+            (
+                -0.2,
+                [
+                    1.037_365_479_314e-8,
+                    -6.439_581_830_95e-9,
+                    -1.037_385_479_31e-8,
+                    6.439_581_830_946e-9,
+                ],
+            ),
+            (
+                -0.15,
+                [
+                    1.017_282_605_328e-8,
+                    -6.356_462_488_17e-9,
+                    -1.017_297_605_33e-8,
+                    6.356_462_488_169e-9,
+                ],
+            ),
+            (
+                -0.1,
+                [
+                    9.517_985_240_281e-9,
+                    -6.027_911_560_09e-9,
+                    -9.518_085_240_28e-9,
+                    6.027_911_560_091e-9,
+                ],
+            ),
+            (
+                -0.05,
+                [
+                    7.338_787_575_242e-9,
+                    -4.744_536_448_88e-9,
+                    -7.338_837_575_24e-9,
+                    4.744_536_448_879e-9,
+                ],
+            ),
+        ];
+        let sources = ["Vb", "Vc", "Vbp", "Vcp"];
+        let deck = |vb: f64, vc: f64| {
+            build(&format!(
+                "Vb b 0 dc {vb}\nVc c 0 dc {vc}\nVbp bp 0 dc {}\nVcp cp 0 dc {}\n\
+                 Q1 c b 0 QN\nQ2 cp bp 0 QP\n{models}",
+                -vb, -vc
+            ))
+        };
+        // The plain exponential every BJT junction used before, as the
+        // current out of the base and collector sources of the NPN.
+        let exponential = |vbe: f64, vbc: f64| {
+            let junction = |v: f64, is: f64, n: f64| is * ((v / (n * VT)).exp() - 1.0);
+            let ibe = junction(vbe, 1e-9, 1.2) / 50.0 + junction(vbe, 4e-9, 2.0);
+            let ibc = junction(vbc, 1e-9, 1.6) / 2.0 + junction(vbc, 6e-9, 1.4);
+            let transport = junction(vbe, 1e-9, 1.2) - junction(vbc, 1e-9, 1.6);
+            (
+                ibe + ibc + device::GMIN * (vbe + vbc),
+                transport - ibc - device::GMIN * vbc,
+            )
+        };
+        let mut exponential_gap = [0.0_f64; 2];
+        for (voltage, expected) in ngspice {
+            let solver = deck(voltage, 0.0);
+            for (source, reference) in sources.iter().zip(expected) {
+                let reference = match *source {
+                    "Vbp" => reference - device::GMIN * voltage,
+                    _ => reference,
+                };
+                // ngspice reports the current into the source's + terminal,
+                // the engine the current out of it.
+                let got = -source_current(&solver, source);
+                assert!(
+                    relative(got, reference) < 2e-5,
+                    "{source} at {voltage} V: ngspice-42 {reference} A, got {got} A"
+                );
+            }
+            let (base, collector) = exponential(voltage, voltage);
+            exponential_gap[0] = exponential_gap[0].max(relative(-base, expected[0]));
+            exponential_gap[1] = exponential_gap[1].max(relative(-collector, expected[1]));
+        }
+        // The exponential misses the base and collector references by 0.3 %
+        // or more somewhere in the sweep.
+        for (source, gap) in sources.iter().zip(exponential_gap) {
+            assert!(
+                gap > 3e-3,
+                "{source}: the sweep must reach the reverse law, gap {gap}"
+            );
+        }
+
+        // Unequal reverse biases (Vbe = −0.2 V, Vbc = −2 V), then reverse
+        // active (Vbe = −1 V, Vbc = +0.5 V), where the cubic B-E current
+        // enters the transport term beside a conducting B-C junction.
+        for (vb, vc, base, collector) in [
+            (-0.2, 1.8, 1.042_914_451_450e-8, -6.508_751_041_21e-9),
+            (0.5, 0.0, -6.348_465_784_84e-3, -3.729_987_810_78e-3),
+        ] {
+            let solver = deck(vb, vc);
+            for (source, reference) in [("Vb", base), ("Vc", collector + device::GMIN * vc)] {
+                let got = -source_current(&solver, source);
+                assert!(
+                    relative(got, reference) < 2e-5,
+                    "{source} at Vb={vb} V, Vc={vc} V: ngspice-42 {reference} A, got {got} A"
+                );
+            }
+        }
+
+        // Transit charge: Qbe = TF·Ibe and Qbc = TR·Ibc on the cubic, with
+        // capacitances TF·gbe and TR·gbc. (Vbe = Vbc, qbe, qbc, cpi, cmu).
+        let model = parse_netlist(&format!("Q1 c b 0 QN\n{models}"))
+            .expect("transit deck parses")
+            .bjts[0]
+            .model;
+        let charges = [
+            (
+                -1.0,
+                -9.999_598_665_92e-16,
+                -1.999_809_737_92e-15,
+                1.204_002_254_305e-19,
+                5.707_862_538_928e-19,
+            ),
+            (
+                -0.5,
+                -9.996_789_327_32e-16,
+                -1.998_477_903_32e-15,
+                1.926_403_606_888e-18,
+                9.132_580_062_285e-18,
+            ),
+            (
+                -0.2,
+                -9.949_833_239_40e-16,
+                -1.976_217_239_42e-15,
+                7.525_014_089_407e-17,
+                3.567_414_086_830e-16,
+            ),
+            (
+                -0.15,
+                -9.881_086_197_11e-16,
+                -1.943_626_049_00e-15,
+                2.378_276_057_887e-16,
+                1.127_479_020_035e-15,
+            ),
+            (
+                -0.1,
+                -9.598_665_915_23e-16,
+                -1.821_730_990_82e-15,
+                1.204_002_254_305e-15,
+                4.309_847_186_838e-15,
+            ),
+            (
+                -0.05,
+                -8.004_597_233_49e-16,
+                -1.402_891_954_20e-15,
+                6.432_137_617_586e-15,
+                1.443_573_643_726e-14,
+            ),
+        ];
+        for (voltage, qbe, qbc, cpi, cmu) in charges {
+            let charge = device::bjt_transit_charge(voltage, voltage, model);
+            for (name, got, reference) in [
+                ("qbe", charge.qbe, qbe),
+                ("qbc", charge.qbc, qbc),
+                ("cpi", charge.dqbe_dvbe, cpi),
+                ("cmu", charge.dqbc_dvbc, cmu),
+            ] {
+                assert!(
+                    relative(got, reference) < 2e-5,
+                    "{name} at {voltage} V: ngspice-42 {reference}, got {got}"
+                );
+            }
+        }
+        // At −0.2 V the exponential's Qbe is 0.3 % away from ngspice's.
+        let exponential_qbe = 1e-6 * 1e-9 * ((-0.2 / (1.2 * VT)).exp() - 1.0);
+        assert!(relative(exponential_qbe, -9.949_833_239_40e-16) > 3e-3);
+
+        // Each cubic meets its exponential in value at −3·N·Vt.
+        let boundary = -3.0 * 1.2 * device::THERMAL_VOLTAGE;
+        let at = device::bjt_transit_charge(boundary, 0.0, model);
+        let below = device::bjt_transit_charge(boundary - 1e-12, 0.0, model);
+        assert!(relative(below.qbe, at.qbe) < 1e-9);
+
+        // The conductances are the derivatives of the cubic currents, with
+        // Early effect and both knees active.
+        let op = |vbe: f64, vbc: f64| {
+            device::bjt_op(
+                vbe, vbc, 1e-9, 50.0, 2.0, 1.2, 1.6, 40.0, 60.0, 1e-3, 2e-3, 4e-9, 2.0, 6e-9, 1.4,
+            )
+        };
+        let delta = 1e-5;
+        for (vbe, vbc) in [(-0.4, -0.7), (-0.3, 0.1), (0.1, -0.6)] {
+            let at = op(vbe, vbc);
+            let (be_plus, be_minus) = (op(vbe + delta, vbc), op(vbe - delta, vbc));
+            let (bc_plus, bc_minus) = (op(vbe, vbc + delta), op(vbe, vbc - delta));
+            for (name, got, expected) in [
+                ("gpi", at.gpi, (be_plus.ib - be_minus.ib) / (2.0 * delta)),
+                ("gmu", at.gmu, (bc_plus.ib - bc_minus.ib) / (2.0 * delta)),
+                ("gif", at.gif, (be_plus.ic - be_minus.ic) / (2.0 * delta)),
+                (
+                    "gir + gmu",
+                    at.gir + at.gmu,
+                    -(bc_plus.ic - bc_minus.ic) / (2.0 * delta),
+                ),
+            ] {
+                assert!(
+                    relative(got, expected) < 1e-5,
+                    "{name} at Vbe={vbe} V, Vbc={vbc} V: {got} vs finite difference {expected}"
+                );
+            }
+        }
     }
 }

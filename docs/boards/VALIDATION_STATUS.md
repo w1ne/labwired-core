@@ -47,7 +47,7 @@ The models column is a content digest over everything that board's `models` list
 | `metro-m4` | 🟡 smoke-manual | — | `5665e1684f1649a3` | no silicon capture |
 | `arduino-uno-r4-minima` | 🟡 smoke-manual | — | `d531e89b30bc67ae` | no silicon capture |
 | `teensy-41` | 🟡 smoke-manual | — | `cc3a8d8596be6c87` | no silicon capture |
-| `stm32f7-discovery` | 🟡 smoke-manual | — | `07e306b43954105d` | no silicon capture |
+| `stm32f7-discovery` | 🟡 smoke-manual | — | `39df8eed4c690e58` | no silicon capture |
 | `nucleo-g071rb` | 🟡 smoke-manual | — | `c33841185bd6e94e` | no silicon capture |
 | `esp32c6-devkitc` | 🟡 smoke-manual | — | `b7282dbe0b40cd85` | no silicon capture |
 | `litex-vexriscv` | 🟡 smoke-manual | — | `24d891e28402dc92` | no silicon capture |
@@ -61,7 +61,7 @@ The models column is a content digest over everything that board's `models` list
 | `s32k388` | 🟡 smoke-manual | — | `8c21fa981f782cce` | no silicon capture |
 | `mimxrt595s` | 🟡 smoke-manual | — | `ec7a5d885ce1f216` | no silicon capture |
 | `sam4s16c` | 🟡 smoke-manual | — | `ed651b4532c5e73b` | no silicon capture |
-| `stm32f072` | 🟡 smoke-manual | — | `030a0f23bff5556d` | no silicon capture |
+| `stm32f072` | 🟡 smoke-manual | — | `f6dd949225f04a4f` | no silicon capture |
 | `arty-litex-vexriscv` | 🟡 smoke-manual | — | `c4d61829e11a9f48` | no silicon capture |
 | `vegaboard-ri5cy` | 🟡 smoke-manual | — | `34dff7963ce69ce0` | no silicon capture |
 | `mpfs095t` | 🟡 smoke-manual | — | `e5a65e084ff2bbd9` | no silicon capture |

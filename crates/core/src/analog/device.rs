@@ -626,8 +626,8 @@ pub fn diode_op_at_thermal_voltage(
 /// V < −3·N·Vt   I = −Is·(1 + (3·N·Vt/(e·V))³)       (reverse)
 /// ```
 ///
-/// plus `GMIN·V`. The cubic meets the exponential in value at `−3·N·Vt` and
-/// tends to `−Is` from below, where the exponential tends to `−Is` from above.
+/// plus `GMIN·V`. The cubic meets the exponential in value at `−3·N·Vt` and,
+/// like it, tends to `−Is` from above, but only as `1/V³`.
 /// The forward region is [`diode_op_at_thermal_voltage`]'s exactly.
 pub fn pn_junction_op(v_junction: f64, is: f64, n: f64) -> DiodeOp {
     pn_junction_op_at_thermal_voltage(v_junction, is, n, THERMAL_VOLTAGE)
@@ -973,6 +973,11 @@ pub struct BjtOp {
 /// Ic  = Ict − Ibc          Ib = Ibe + Ibc          Ie = −(Ic + Ib)
 /// ```
 ///
+/// Each of the four exponentials is a junction of its own. Below `−3·N·Vt`
+/// (with that junction's `N`) ngspice's `bjtload.c` replaces `exp(V/(N·Vt)) − 1`
+/// by the cubic reverse form `−(1 + (3·N·Vt/(e·V))³)`, as [`pn_junction_op`]
+/// does for a diode; `Ict` and `q2` use the same values.
+///
 /// Infinite `IKF` or `IKR` disables that direction's rolloff term; with both
 /// infinite, the legacy arithmetic is retained exactly. With `RB` = `RC` =
 /// `RE` = 0 and no capacitances, this is the portion of ngspice's model
@@ -1044,6 +1049,20 @@ pub fn bjt_op_with_nkf(
     )
 }
 
+/// Factors `(c, g)` of one BJT junction, such that its current is
+/// `Is·(c − 1)` and its conductance `Is·g/(N·Vt)`. At or above `−3·N·Vt` both
+/// are `exp(V/(N·Vt))`; below it they carry ngspice's cubic reverse form, so
+/// the forward-region arithmetic of the callers is unchanged.
+fn bjt_junction_factors(v_junction: f64, vte: f64) -> (f64, f64) {
+    if v_junction >= -3.0 * vte {
+        let exponential = exp_clamped(v_junction / vte);
+        return (exponential, exponential);
+    }
+    let arg = 3.0 * vte / (v_junction * core::f64::consts::E);
+    let arg = arg * arg * arg;
+    (-arg, 3.0 * arg * vte / v_junction)
+}
+
 /// Gummel–Poon operating point with an explicit junction thermal voltage.
 #[allow(clippy::too_many_arguments)] // Mirrors the scalar parameters of a SPICE BJT model card.
 pub fn bjt_op_with_nkf_at_thermal_voltage(
@@ -1069,8 +1088,8 @@ pub fn bjt_op_with_nkf_at_thermal_voltage(
     let vtr = nr * thermal_voltage;
     let vte = ne * thermal_voltage;
     let vtc = nc * thermal_voltage;
-    let forward = exp_clamped(vbe / vtf);
-    let reverse = exp_clamped(vbc / vtr);
+    let (forward, forward_slope) = bjt_junction_factors(vbe, vtf);
+    let (reverse, reverse_slope) = bjt_junction_factors(vbc, vtr);
     let inv_vaf = if vaf > 0.0 && vaf.is_finite() {
         1.0 / vaf
     } else {
@@ -1089,8 +1108,8 @@ pub fn bjt_op_with_nkf_at_thermal_voltage(
     let (ict, gif, gir) = if ikf.is_infinite() && ikr.is_infinite() {
         (
             transport * base_width,
-            is * forward / vtf * base_width - transport * inv_var,
-            is * reverse / vtr * base_width + transport * inv_vaf,
+            is * forward_slope / vtf * base_width - transport * inv_var,
+            is * reverse_slope / vtr * base_width + transport * inv_vaf,
         )
     } else {
         let q1 = 1.0 / base_width;
@@ -1126,8 +1145,8 @@ pub fn bjt_op_with_nkf_at_thermal_voltage(
             };
             (
                 qb,
-                q1 * (qb * inv_var + inv_ikf * is * forward / vtf * d_rolloff_d_q2),
-                q1 * (qb * inv_vaf + inv_ikr * is * reverse / vtr * d_rolloff_d_q2),
+                q1 * (qb * inv_var + inv_ikf * is * forward_slope / vtf * d_rolloff_d_q2),
+                q1 * (qb * inv_vaf + inv_ikr * is * reverse_slope / vtr * d_rolloff_d_q2),
             )
         } else {
             // ngspice uses 1 when the clamped argument is zero, keeping both
@@ -1138,12 +1157,12 @@ pub fn bjt_op_with_nkf_at_thermal_voltage(
                 1.0
             };
             let qb = q1 * (1.0 + sqrt_q2) / 2.0;
-            let d_qb_d_vbe = q1 * (qb * inv_var + inv_ikf * is * forward / vtf / sqrt_q2);
-            let d_qb_d_vbc = q1 * (qb * inv_vaf + inv_ikr * is * reverse / vtr / sqrt_q2);
+            let d_qb_d_vbe = q1 * (qb * inv_var + inv_ikf * is * forward_slope / vtf / sqrt_q2);
+            let d_qb_d_vbc = q1 * (qb * inv_vaf + inv_ikr * is * reverse_slope / vtr / sqrt_q2);
             (qb, d_qb_d_vbe, d_qb_d_vbc)
         };
-        let d_transport_d_vbe = is * forward / vtf;
-        let d_transport_d_vbc = -is * reverse / vtr;
+        let d_transport_d_vbe = is * forward_slope / vtf;
+        let d_transport_d_vbc = -is * reverse_slope / vtr;
         let qb_squared = qb * qb;
         (
             transport / qb,
@@ -1152,24 +1171,24 @@ pub fn bjt_op_with_nkf_at_thermal_voltage(
         )
     };
     // Early effect and high injection change transport current. Recombination
-    // is a separate exponential current in each base junction.
+    // is a separate junction current in each base junction.
     let (ibe, gpi) = if ise > 0.0 {
-        let exp_be = exp_clamped(vbe / vte);
+        let (exp_be, exp_be_slope) = bjt_junction_factors(vbe, vte);
         (
             (is / bf) * (forward - 1.0) + ise * (exp_be - 1.0),
-            is * forward / vtf / bf + ise * exp_be / vte,
+            is * forward_slope / vtf / bf + ise * exp_be_slope / vte,
         )
     } else {
-        ((is / bf) * (forward - 1.0), is * forward / vtf / bf)
+        ((is / bf) * (forward - 1.0), is * forward_slope / vtf / bf)
     };
     let (ibc, gmu) = if isc > 0.0 {
-        let exp_bc = exp_clamped(vbc / vtc);
+        let (exp_bc, exp_bc_slope) = bjt_junction_factors(vbc, vtc);
         (
             (is / br) * (reverse - 1.0) + isc * (exp_bc - 1.0),
-            is * reverse / vtr / br + isc * exp_bc / vtc,
+            is * reverse_slope / vtr / br + isc * exp_bc_slope / vtc,
         )
     } else {
-        ((is / br) * (reverse - 1.0), is * reverse / vtr / br)
+        ((is / br) * (reverse - 1.0), is * reverse_slope / vtr / br)
     };
 
     BjtOp {
@@ -1245,7 +1264,8 @@ pub struct BjtTransitCharge {
 /// ```
 ///
 /// For `Vbe <= 0`, forward transit charge uses the unscaled junction current,
-/// as ngspice's level-1 BJT model does. `qb` is the same Early-effect and
+/// as ngspice's level-1 BJT model does. Both junction currents take the cubic
+/// reverse form of [`bjt_op`] below `−3·N·Vt`. `qb` is the same Early-effect and
 /// high-injection base-charge factor used by [`bjt_op`]. `VTF = 0` disables
 /// only the exponential voltage dependence; the default infinity makes its
 /// exponential equal one. `ITF = 0` disables current suppression.
@@ -1266,12 +1286,12 @@ pub fn bjt_transit_charge_at_thermal_voltage(
 
     let vtf = model.nf * thermal_voltage;
     let vtr = model.nr * thermal_voltage;
-    let forward = exp_clamped(vbe / vtf);
-    let reverse = exp_clamped(vbc / vtr);
+    let (forward, forward_slope) = bjt_junction_factors(vbe, vtf);
+    let (reverse, reverse_slope) = bjt_junction_factors(vbc, vtr);
     let cbe = model.is * (forward - 1.0);
-    let gbe = model.is * forward / vtf;
+    let gbe = model.is * forward_slope / vtf;
     let cbc = model.is * (reverse - 1.0);
-    let gbc = model.is * reverse / vtr;
+    let gbc = model.is * reverse_slope / vtr;
 
     let inv_vaf = if model.vaf > 0.0 && model.vaf.is_finite() {
         1.0 / model.vaf
