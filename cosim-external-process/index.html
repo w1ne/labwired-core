@@ -4917,8 +4917,7 @@ Windows return an explicit unsupported error at spawn; the browser continues to
 compile without Unix dependencies. Windows previously exposed the unbounded
 synchronous process path; it now fails explicitly until a bounded Windows pipe
 transport is implemented. No bounded Windows behavior is claimed.</p>
-<p>Tests: <code>cargo test -p labwired-core --test cosim_external_process_bounds
---test cosim_contract --test cosim_canonical_basket</code>. The canonical basket test
+<p>Tests: <code>cargo test -p labwired-core --test cosim -- cosim_external_process_bounds:: cosim_contract:: cosim_canonical_basket::</code>. The canonical basket test
 uses the generated native manifest and the existing Python power wrapper,
 not a Linux guest or new private battery/sensor implementation.</p>
 

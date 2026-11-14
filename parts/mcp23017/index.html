@@ -5128,7 +5128,7 @@
 </tr>
 <tr>
 <td>Tier</td>
-<td>smoke-proven (register-level tests: <code>crates/core/tests/everyday_sensor_set.rs</code>)</td>
+<td>smoke-proven (register-level tests: <code>crates/core/tests/misc/everyday_sensor_set.rs</code>)</td>
 </tr>
 </tbody>
 </table>
@@ -5235,7 +5235,7 @@
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">      </span><span class="nt">gpb7_pin</span><span class="p">:</span><span class="w"> </span><span class="s">"PC1"</span>
 </span></code></pre></div></li>
 <li>Agent: <code>labwired_list</code> → <code>labwired_describe id=mcp23017</code> → wire → <code>labwired_validate</code> → <code>labwired_run</code> / <code>labwired_verify</code>.</li>
-<li>Register-level smoke: <code>cargo test -p labwired-core --test everyday_sensor_set</code> — the 22-byte power-on map, the 0x15 → 0x00 rollover, IOCON mirroring and GPIO → OLAT. The same file's negative control proves the check fails against a part that answers only 0x00 or only 0xFF; <code>mcp23017_tracks_stimulus</code> checks IODIR-gated pad drives and IPOL.</li>
+<li>Register-level smoke: <code>cargo test -p labwired-core --test misc everyday_sensor_set::</code> — the 22-byte power-on map, the 0x15 → 0x00 rollover, IOCON mirroring and GPIO → OLAT. The same file's negative control proves the check fails against a part that answers only 0x00 or only 0xFF; <code>mcp23017_tracks_stimulus</code> checks IODIR-gated pad drives and IPOL.</li>
 </ol>
 <h2 id="limitations">Limitations</h2>
 <ul>

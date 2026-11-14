@@ -5110,7 +5110,7 @@ RAM according to that hook; it does not claim every unqualified peripheral has
 silicon-complete reset behavior. The AT32 datasheet's typical 4.5 ms power-on
 release delay is not introduced by this generic change.</p>
 <h2 id="regression-evidence">Regression evidence</h2>
-<p><code>crates/core/tests/world_analog.rs</code> builds real ARM nodes and a single MNA deck.
+<p><code>crates/core/tests/analog/world_analog.rs</code> builds real ARM nodes and a single MNA deck.
 It checks equal-named pin independence, shared-rail load coupling and KCL,
 independent ADC conversions, high impedance, distinct nominal and routed VDD,
 interval-start sampling, deterministic node order and host chunking, reset RC

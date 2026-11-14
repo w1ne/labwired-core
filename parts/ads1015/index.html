@@ -5128,7 +5128,7 @@
 </tr>
 <tr>
 <td>Tier</td>
-<td>smoke-proven (register-level tests: <code>crates/core/tests/everyday_sensor_set.rs</code>)</td>
+<td>smoke-proven (register-level tests: <code>crates/core/tests/misc/everyday_sensor_set.rs</code>)</td>
 </tr>
 </tbody>
 </table>
@@ -5212,7 +5212,7 @@
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span><span class="nt">connection</span><span class="p">:</span><span class="w"> </span><span class="s">"i2c0"</span><span class="w">   </span><span class="c1"># the bus id your chip system uses</span>
 </span></code></pre></div></li>
 <li>Agent: <code>labwired_list</code> → <code>labwired_describe id=ads1015</code> → wire → <code>labwired_validate</code> → <code>labwired_run</code> / <code>labwired_verify</code>.</li>
-<li>Register-level smoke: <code>cargo test -p labwired-core --test everyday_sensor_set</code> — CONFIG / threshold power-on words and reserved-bit behaviour. The same file's negative control proves the check fails against a part that answers only 0x00 or only 0xFF; <code>ads1015_tracks_stimulus</code> checks the MUX, every PGA range, 12-bit quantisation and clipping.</li>
+<li>Register-level smoke: <code>cargo test -p labwired-core --test misc everyday_sensor_set::</code> — CONFIG / threshold power-on words and reserved-bit behaviour. The same file's negative control proves the check fails against a part that answers only 0x00 or only 0xFF; <code>ads1015_tracks_stimulus</code> checks the MUX, every PGA range, 12-bit quantisation and clipping.</li>
 </ol>
 <h2 id="limitations">Limitations</h2>
 <ul>

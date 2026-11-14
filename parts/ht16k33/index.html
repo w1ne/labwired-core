@@ -5128,7 +5128,7 @@
 </tr>
 <tr>
 <td>Tier</td>
-<td>smoke-proven (register-level tests: <code>crates/core/tests/parts_batch5.rs</code>)</td>
+<td>smoke-proven (register-level tests: <code>crates/core/tests/bus/parts_batch5.rs</code>)</td>
 </tr>
 </tbody>
 </table>
@@ -5202,7 +5202,7 @@
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span><span class="nt">connection</span><span class="p">:</span><span class="w"> </span><span class="s">"i2c1"</span>
 </span></code></pre></div></li>
 <li>Agent: <code>labwired_list</code> → <code>labwired_describe id=ht16k33</code> → wire → <code>labwired_validate</code> → <code>labwired_run</code> / <code>labwired_verify</code>.</li>
-<li>Register-level smoke: <code>cargo test -p labwired-core --test parts_batch5</code> — oscillator/display/dimming commands, a 16-byte display-RAM write read back from 00h and 05h, and key RAM; <code>ht16k33_decodes_its_setup_commands</code> covers the command decode. The same file's negative control proves the check fails against a stand-in that answers only 0x00 or only 0xFF.</li>
+<li>Register-level smoke: <code>cargo test -p labwired-core --test bus parts_batch5::</code> — oscillator/display/dimming commands, a 16-byte display-RAM write read back from 00h and 05h, and key RAM; <code>ht16k33_decodes_its_setup_commands</code> covers the command decode. The same file's negative control proves the check fails against a stand-in that answers only 0x00 or only 0xFF.</li>
 </ol>
 <h2 id="limitations">Limitations</h2>
 <ul>

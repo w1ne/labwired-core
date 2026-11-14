@@ -5108,7 +5108,7 @@ The user approves or vetoes each row before execution. Nothing is deleted until 
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/firmware_survival.rs &gt; capture_l4periphs2_sim_output, capture_r12_sim_output, capture_r11_sim_output, capture_tim1_advanced_sim_output, capture_cubemx_hal_sim_output</td>
+<td>crates/core/tests/gates/firmware_survival.rs &gt; capture_l4periphs2_sim_output, capture_r12_sim_output, capture_r11_sim_output, capture_tim1_advanced_sim_output, capture_cubemx_hal_sim_output</td>
 <td>DELETE</td>
 <td>one-shot UART capture helpers (L2737-2814); their stated purpose "audit before locking the bytes into a survival case" is complete: locked-in cases <code>nucleo_l476rg_l4periphs2/cubemx_hal/tim1_advanced/r11/r12</code> with <code>expected_uart_output</code> exist (L845-1036) and run as non-ignored gates (L2566-2582, L2714); helpers assert nothing</td>
 <td>78</td>
@@ -5157,14 +5157,14 @@ The user approves or vetoes each row before execution. Nothing is deleted until 
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/jit_lockstep.rs &gt; lockstep_noop, lockstep_detects_register_corruption, lockstep_windowed_call_long_run, lockstep_multi_op_hot_bb_aligned</td>
+<td>crates/core/tests/gates/jit_lockstep.rs &gt; lockstep_noop, lockstep_detects_register_corruption, lockstep_windowed_call_long_run, lockstep_multi_op_hot_bb_aligned</td>
 <td>KEEP</td>
 <td>4 real attrs "needs labwired-ereader ELF"; header L8-11 says the ELF is an Arduino sketch no CI lane builds; test panics if run without it</td>
 <td>0</td>
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/rv1103_basket_loader.rs &gt; reviewed_prepared_profile_is_accepted, same_reviewed_profile_accepts_independent_build_location, exact_archive_rejects_mode_body_duplicate, artifact_and_clock_preflight_fail_without_mutating_ram, native_startup_holds_releases_then_initializes_entry, closed_fresh_bus_refuses_shadow_flash</td>
+<td>crates/core/tests/rv1103/rv1103_basket_loader.rs &gt; reviewed_prepared_profile_is_accepted, same_reviewed_profile_accepts_independent_build_location, exact_archive_rejects_mode_body_duplicate, artifact_and_clock_preflight_fail_without_mutating_ram, native_startup_holds_releases_then_initializes_entry, closed_fresh_bus_refuses_shadow_flash</td>
 <td>KEEP</td>
 <td>all 6 "requires reviewed pinned artifacts in LABWIRED_RV1103_BASKET_ARTIFACTS"</td>
 <td>0</td>
@@ -5178,14 +5178,14 @@ The user approves or vetoes each row before execution. Nothing is deleted until 
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/e2e_labwired_ereader.rs</td>
+<td>crates/core/tests/esp/e2e_labwired_ereader.rs</td>
 <td>KEEP</td>
 <td>audit FP: 0 real attrs; L44-48 explicitly says the test is "NOT <code>#[ignore]</code>d" after a real blank-demo bug shipped behind a green board</td>
 <td>0</td>
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/esp32c3_bt_active_walk_pinners.rs &gt; ble_pong_advertising_node_walk_pinners</td>
+<td>crates/core/tests/esp/esp32c3_bt_active_walk_pinners.rs &gt; ble_pong_advertising_node_walk_pinners</td>
 <td>KEEP</td>
 <td>1 real attr: "boots the real C3 BLE Pong image (~60M steps); run with --release --ignored" (L196); audit counted 3 (2 doc)</td>
 <td>0</td>
@@ -5206,14 +5206,14 @@ The user approves or vetoes each row before execution. Nothing is deleted until 
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/xtensa_exec.rs &gt; test_exec_entry_window_overflow_of4, test_exec_entry_window_overflow_of8, test_exec_entry_window_overflow_of12</td>
+<td>crates/core/tests/esp/xtensa_exec.rs &gt; test_exec_entry_window_overflow_of4, test_exec_entry_window_overflow_of8, test_exec_entry_window_overflow_of12</td>
 <td>DELETE</td>
 <td>dead by design: ENTRY overflow vectoring does not exist in any mode — <code>exec_entry</code> (call_window.rs:169-214) rotates WB and writes the callee SP with no overflow check, and the live per-instruction F5 path <code>window_overflow_vectored</code> (xtensa_lx7.rs:1419-1454, runtime-gated on <code>faithful_windows</code>, set by the S3 builder at system/builder/xtensa.rs:175) explicitly skips <code>Entry</code> (xtensa_lx7.rs:1424-1429); the <code>#[cfg(any())]</code> phrasing survives only in a stale comment (xtensa_lx7.rs:1480). Tests assert OF12 vector dispatch that cannot happen; <code>setup_entry_overflow</code> (L4035-4045) and OF*_VECOFS consts (L4027-4030) are used only by these 3 tests</td>
 <td>145</td>
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/e2e_esp32c3_snapshot_resume.rs &gt; resume_is_byte_equivalent_to_cold_boot_and_far_cheaper</td>
+<td>crates/core/tests/esp/e2e_esp32c3_snapshot_resume.rs &gt; resume_is_byte_equivalent_to_cold_boot_and_far_cheaper</td>
 <td>KEEP</td>
 <td>1 real attr "boots the real C3 mask ROM (~150M steps); run with --release --ignored"; audit counted 2 (1 doc)</td>
 <td>0</td>
@@ -5290,35 +5290,35 @@ The user approves or vetoes each row before execution. Nothing is deleted until 
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/c3_reference_firmware.rs &gt; customer_c3_esp_idf_firmware_initializes_its_gpio_and_uart_driver</td>
+<td>crates/core/tests/esp/c3_reference_firmware.rs &gt; customer_c3_esp_idf_firmware_initializes_its_gpio_and_uart_driver</td>
 <td>KEEP</td>
 <td>"requires the ESP-IDF customer ELF and sibling flash images in IOLINKI_C3_ELF" (L12)</td>
 <td>0</td>
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/diag_c3_yield.rs &gt; diag_c3_first_yield</td>
+<td>crates/core/tests/esp/diag_c3_yield.rs &gt; diag_c3_first_yield</td>
 <td>KEEP</td>
 <td>"diagnostic probe, not a gate"; needs validation/arduino-matrix/out/esp32c3/L0_serial_boot/firmware.elf, a PlatformIO matrix output not in the tree (see Maybe)</td>
 <td>0</td>
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/diag_esp32_dual_core_boot.rs &gt; diag_app_cpu_boot_progress</td>
+<td>crates/core/tests/esp/diag_esp32_dual_core_boot.rs &gt; diag_app_cpu_boot_progress</td>
 <td>KEEP</td>
 <td>"diagnostic only" (L13); 1201-line harness (see Maybe)</td>
 <td>0</td>
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/diag_esp32c3_boot.rs &gt; diag_c3_boot_progress</td>
+<td>crates/core/tests/esp/diag_esp32c3_boot.rs &gt; diag_c3_boot_progress</td>
 <td>KEEP</td>
 <td>"diagnostic probe, not a gate"; matrix output not in tree (see Maybe)</td>
 <td>0</td>
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/diag_esp32c3_panic.rs &gt; diag_c3_panic_message</td>
+<td>crates/core/tests/esp/diag_esp32c3_panic.rs &gt; diag_c3_panic_message</td>
 <td>KEEP</td>
 <td>"diagnostic probe, not a gate"; matrix output not in tree (see Maybe)</td>
 <td>0</td>
@@ -5346,7 +5346,7 @@ The user approves or vetoes each row before execution. Nothing is deleted until 
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/e2e_external_arduino_esp32_in_sim.rs &gt; external_arduino_esp32_firmware_drives_panel_in_sim</td>
+<td>crates/core/tests/esp/e2e_external_arduino_esp32_in_sim.rs &gt; external_arduino_esp32_firmware_drives_panel_in_sim</td>
 <td>KEEP</td>
 <td>only runs when LABWIRED_EXTERNAL_ARDUINO_ESP32_ELF is set (L30)</td>
 <td>0</td>
@@ -5360,28 +5360,28 @@ The user approves or vetoes each row before execution. Nothing is deleted until 
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/esp32s3_oled_profile.rs &gt; esp32s3_oled_native_baseline</td>
+<td>crates/core/tests/display/esp32s3_oled_profile.rs &gt; esp32s3_oled_native_baseline</td>
 <td>KEEP</td>
 <td>"native S3 workload benchmark; run explicitly with --release --ignored" (L209)</td>
 <td>0</td>
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/g0_reference_firmware.rs &gt; customer_g0_firmware_initializes_and_handles_external_wake</td>
+<td>crates/core/tests/stm32/g0_reference_firmware.rs &gt; customer_g0_firmware_initializes_and_handles_external_wake</td>
 <td>KEEP</td>
 <td>"requires the built customer G0 ELF in IOLINKI_G0_ELF" (L7)</td>
 <td>0</td>
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/inspect_device_binding_universal.rs &gt; dump_devices_json</td>
+<td>crates/core/tests/session/inspect_device_binding_universal.rs &gt; dump_devices_json</td>
 <td>KEEP</td>
 <td>"diagnostic dump, not an assertion" (L166); documented reproducer paired with 5 active assert-tests in the same file</td>
 <td>0</td>
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/logic_capture_bench.rs &gt; bench_logic_capture_overhead</td>
+<td>crates/core/tests/gpio_logic/logic_capture_bench.rs &gt; bench_logic_capture_overhead</td>
 <td>KEEP</td>
 <td>"manual timing harness, run with --release --nocapture" (L167)</td>
 <td>0</td>
@@ -5402,7 +5402,7 @@ The user approves or vetoes each row before execution. Nothing is deleted until 
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/nucleo_u545re.rs &gt; cube_hal_firmware_reaches_160mhz_blinks_ld2_and_reports_b1</td>
+<td>crates/core/tests/stm32/nucleo_u545re.rs &gt; cube_hal_firmware_reaches_160mhz_blinks_ld2_and_reports_b1</td>
 <td>KEEP</td>
 <td>"20M-step Cube HAL run (~1 min); run with --ignored" (L156)</td>
 <td>0</td>
@@ -5423,14 +5423,14 @@ The user approves or vetoes each row before execution. Nothing is deleted until 
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/runtime_snapshot.rs &gt; agentdeck_snapshot_file_restores_post_paint_panel</td>
+<td>crates/core/tests/session/runtime_snapshot.rs &gt; agentdeck_snapshot_file_restores_post_paint_panel</td>
 <td>KEEP</td>
 <td>"needs /tmp/agentdeck-postpaint.lwrs from a manual capture" (L286) (see Maybe)</td>
 <td>0</td>
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/rv1103_devices.rs &gt; gic_level_sampling_benchmark</td>
+<td>crates/core/tests/rv1103/rv1103_devices.rs &gt; gic_level_sampling_benchmark</td>
 <td>KEEP</td>
 <td>"explicit performance measurement, no wall-clock pass threshold" (L652)</td>
 <td>0</td>
@@ -5444,14 +5444,14 @@ The user approves or vetoes each row before execution. Nothing is deleted until 
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/rv1103_linux_loader.rs &gt; pinned_artifacts_load_or_backend_refusal_is_atomic</td>
+<td>crates/core/tests/rv1103/rv1103_linux_loader.rs &gt; pinned_artifacts_load_or_backend_refusal_is_atomic</td>
 <td>KEEP</td>
 <td>"requires independently prepared pinned Alpine artifacts in LABWIRED_RV1103_ARTIFACTS" (L207)</td>
 <td>0</td>
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/u5_reference_firmware.rs &gt; customer_u5_firmware_initializes_and_handles_external_wake</td>
+<td>crates/core/tests/stm32/u5_reference_firmware.rs &gt; customer_u5_firmware_initializes_and_handles_external_wake</td>
 <td>KEEP</td>
 <td>"requires the built customer U5 ELF in IOLINKI_U5_ELF" (L7)</td>
 <td>0</td>
@@ -5465,7 +5465,7 @@ The user approves or vetoes each row before execution. Nothing is deleted until 
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/world_can_perf.rs &gt; three_f103_can_world_throughput</td>
+<td>crates/core/tests/world/world_can_perf.rs &gt; three_f103_can_world_throughput</td>
 <td>KEEP</td>
 <td>"manual perf probe" (L287)</td>
 <td>0</td>
@@ -5753,7 +5753,7 @@ The user approves or vetoes each row before execution. Nothing is deleted until 
 </tr>
 </tbody>
 </table>
-<p>Excluded: <code>crates/core/tests/chip_conformance.rs</code> — all 14 audit matches are inside doc comments and <code>r#"..."#</code> fixture strings (L749, 809, 936, 1030, 1047, 1055, 1074, 1119, 1134, 1154, 1159, 1185, 1189); 0 real attributes. That file is the ratchet that <em>detects</em> ignored tests; its own tests run normally.</p>
+<p>Excluded: <code>crates/core/tests/gates/chip_conformance.rs</code> — all 14 audit matches are inside doc comments and <code>r#"..."#</code> fixture strings (L749, 809, 936, 1030, 1047, 1055, 1074, 1119, 1134, 1154, 1159, 1185, 1189); 0 real attributes. That file is the ratchet that <em>detects</em> ignored tests; its own tests run normally.</p>
 <p>Totals (ignored section): DELETE 10 tests in 4 file rows (~265 lines); KEEP 89 rows covering the other 87 files (93 rows = 91 files + 2 split rows for esp32c3_oled_profile.rs and hw-oracle oracles.rs); STRIP 0; CONSOLIDATE 0; FIX 0; KEEP-RED 0. Counting correction: 146 real attrs / 81 files vs audit 216 occurrences / 92 files (chip_conformance.rs excluded as false positive and noted at the end of the table).</p>
 <h3 id="duplicate-test-names">Duplicate test names</h3>
 <table>
@@ -5888,7 +5888,7 @@ The user approves or vetoes each row before execution. Nothing is deleted until 
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/diag_c3_yield.rs</td>
+<td>crates/core/tests/esp/diag_c3_yield.rs</td>
 <td>KEEP</td>
 <td>env-gated diagnostic (matrix output not in tree); see Maybe</td>
 <td>0</td>
@@ -5965,7 +5965,7 @@ The user approves or vetoes each row before execution. Nothing is deleted until 
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/avr_nano_machine_run.rs</td>
+<td>crates/core/tests/avr/avr_nano_machine_run.rs</td>
 <td>KEEP</td>
 <td>runs the Nano ELF until "nano-ok", panics otherwise; panic-based golden</td>
 <td>0</td>
@@ -5979,14 +5979,14 @@ The user approves or vetoes each row before execution. Nothing is deleted until 
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/intmatrix_alarm.rs</td>
+<td>crates/core/tests/esp/intmatrix_alarm.rs</td>
 <td>KEEP</td>
 <td>hand-assembled ISR drives the full IRQ chain; panics unless 3+ GPIO2 transitions</td>
 <td>0</td>
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/register_compliance.rs</td>
+<td>crates/core/tests/bus/register_compliance.rs</td>
 <td>KEEP</td>
 <td>scans every chip YAML and fails on MemoryViolation at each peripheral base; panic/anyhow-based</td>
 <td>0</td>
@@ -6102,7 +6102,7 @@ The user approves or vetoes each row before execution. Nothing is deleted until 
 <td>low</td>
 </tr>
 <tr>
-<td>crates/core/tests/runtime_snapshot.rs &gt; agentdeck_snapshot_file_restores_post_paint_panel</td>
+<td>crates/core/tests/session/runtime_snapshot.rs &gt; agentdeck_snapshot_file_restores_post_paint_panel</td>
 <td>DELETE (low)</td>
 <td>depends on /tmp/agentdeck-postpaint.lwrs from a manual capture; the file has no in-tree producer (L286-360)</td>
 <td>75</td>
@@ -6113,7 +6113,7 @@ The user approves or vetoes each row before execution. Nothing is deleted until 
 <p>Totals (Maybe): 3 low-confidence DELETE rows (if approved: +~2,950 lines — diag cluster 2,705 + e2e_esp32_epaper 172 + runtime_snapshot 75, mostly the two big diag harnesses).</p>
 <h2 id="verified-audit-false-positives-all-marked-keep-above">Verified audit false positives (all marked KEEP above)</h2>
 <ol>
-<li><code>crates/core/tests/chip_conformance.rs</code> — 14/14 mentions inside comments and <code>r#"..."#</code> fixtures; 0 real attrs (excluded from the ignored rows per instructions).</li>
+<li><code>crates/core/tests/gates/chip_conformance.rs</code> — 14/14 mentions inside comments and <code>r#"..."#</code> fixtures; 0 real attrs (excluded from the ignored rows per instructions).</li>
 <li><code>crates/hw-oracle-macros/src/lib.rs</code> — 6 of 12 are doc mentions; the 6 real ones are macro bodies that generate hardware-gated tests; its "tests with 0 asserts" are <code>quote!</code> bodies.</li>
 <li><code>crates/hw-oracle-macros/tests/cases/add_oracle.rs</code> — 2/2 doc mentions.</li>
 <li><code>hw-oracle</code> doc/comment mentions: oracles.rs (3), stm32f1_exec_oracle.rs (2), thumb_oracles.rs (2), riscv_oracles.rs (2), rp2040_timer_exec_oracle.rs (1), nrf52_spim_easydma_conformance.rs (1), nrf52_full_register_conformance.rs (1), src/flash.rs (1) = 13.</li>
@@ -6143,28 +6143,28 @@ The user approves or vetoes each row before execution. Nothing is deleted until 
 </thead>
 <tbody>
 <tr>
-<td>crates/core/tests/xtensa_exec.rs &gt; test_exec_retw_window_underflow_uf4 / uf8 / uf12</td>
+<td>crates/core/tests/esp/xtensa_exec.rs &gt; test_exec_retw_window_underflow_uf4 / uf8 / uf12</td>
 <td>STRIP</td>
 <td>three normalized-identical bodies (0.99-1.0 similarity): same six-assert shape — PC = VECBASE+{0x040,0x0C0,0x140}, EPC1 = faulting PC, PS.EXCM set, WB rotates to 0, OWB saves N, WindowStart unchanged — with only N (=1/2/3) and the vector offset varying; <code>exec_retw</code> (src/cpu/xtensa_lx7/exec/call_window.rs:217) picks all three offsets in one code path. Collapse to one table-driven test over [(1,0x040),(2,0x0C0),(3,0x140)]; <code>setup_retw_underflow</code> (L4234) stays as the shared setup</td>
 <td>~90</td>
 <td>med</td>
 </tr>
 <tr>
-<td>crates/core/tests/xtensa_exec.rs &gt; test_exec_rotw_pos / rotw_neg / rotw_neg_wraparound / rotw_max_pos / rotw_max_neg / rotw_does_not_change_windowstart</td>
+<td>crates/core/tests/esp/xtensa_exec.rs &gt; test_exec_rotw_pos / rotw_neg / rotw_neg_wraparound / rotw_max_pos / rotw_max_neg / rotw_does_not_change_windowstart</td>
 <td>STRIP</td>
 <td>five tests assert the same shape on one code path (<code>exec_rotw</code>, call_window.rs:353): WB == (old+n)&amp;0xF, WindowStart unchanged, PC+3, differing only in (WB, n) = (3,+1),(5,-1),(0,-1),(2,+7),(5,-8); pos↔neg bodies are 0.99 similar and the WS-invariance assert is repeated in all five plus its own test. Collapse rotations into one table loop, keep one dedicated WS-untouched assertion, keep the HW-oracle byte notes as table comments</td>
 <td>~115</td>
 <td>med</td>
 </tr>
 <tr>
-<td>crates/core/tests/xtensa_exec.rs &gt; test_general_exception_movsp_alloca_redirects_pc</td>
+<td>crates/core/tests/esp/xtensa_exec.rs &gt; test_general_exception_movsp_alloca_redirects_pc</td>
 <td>STRIP</td>
 <td>duplicates the F6 test <code>test_exec_movsp_overflow_raises_exception</code> (L4794): both set <code>faithful_windows</code>, WB=0/WS[1] live, run <code>movsp a3,a4</code>, and assert EXCCAUSE=5 + EPC1=TEST_PC + PS.EXCM + PC=VECBASE+0x300 (0.83 body overlap); the G1 copy's only delta is clearing EXCM first. Keep the F6 gate (it also pins the "step returns Ok like silicon" contract the G1 doc points back to)</td>
 <td>~40</td>
 <td>med</td>
 </tr>
 <tr>
-<td>crates/core/tests/firmware_survival.rs &gt; 72 one-line <code>run_survival_case(case_by_name(...))</code> wrappers (test_stm32f103_blinky_survival … test_stm32h735_tier1_survival)</td>
+<td>crates/core/tests/gates/firmware_survival.rs &gt; 72 one-line <code>run_survival_case(case_by_name(...))</code> wrappers (test_stm32f103_blinky_survival … test_stm32h735_tier1_survival)</td>
 <td>CONSOLIDATE</td>
 <td>72 of the 92 tests are exactly <code>run_survival_case(case_by_name("…"))</code> (356 lines incl. blanks, e.g. L1949-1952, L2510-2513, L2826-2829); a <code>macro_rules!</code> emitting <code>#[test] fn $name() { run_survival_case(case_by_name($case)) }</code> keeps every CI-visible test name/failure attribution and collapses the boilerplate. Doc-commented regression wrappers (e.g. L2636-2642 CRC-&gt;POL, L2725-2729 PLLSAI1RDY) keep their comments at the invocation; the SURVIVAL_CASES table and the ~15 special/ratchet tests are untouched</td>
 <td>~270</td>
@@ -6185,21 +6185,21 @@ The user approves or vetoes each row before execution. Nothing is deleted until 
 <td>med</td>
 </tr>
 <tr>
-<td>crates/core/tests/world_gpio_net_buses.rs</td>
+<td>crates/core/tests/world/world_gpio_net_buses.rs</td>
 <td>KEEP</td>
 <td>104 tests in bus-family modules; the 20 <code>*do_not_depend_on_node_order_or_round_size</code> tests are 1-3-line calls to the shared helpers <code>assert_order_and_round_independent</code> (L180) / <code>same_on_every_driver</code> (L41) over distinct env fixtures (node-order + 37 ns round + driver matrix) — no prod motion in the helpers; primary per-family tests assert hand-derived bytes/edge counts (e.g. spi L254-288 checks DR contents, CS/MOSI/MISO edge counts). Two inline fingerprint blocks (L292, L1042) exist because those tests also invoke <code>same_on_every_driver</code> with extra <code>total_cycles</code> observables; neither is a stale copy</td>
 <td>0</td>
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/chip_conformance.rs</td>
+<td>crates/core/tests/gates/chip_conformance.rs</td>
 <td>KEEP</td>
 <td>verified pass-1 FP: 14/14 audit ignore matches are doc/<code>r#"…"#</code> mentions; its 29 <code>#[test]</code> occurrences include the detector fixtures (<code>discards_comments_and_literals</code> cases at L1043-1193). Real tests are the behavior-gate resolver + fleet ratchet; no trim candidates</td>
 <td>0</td>
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/display_migration_parity.rs</td>
+<td>crates/core/tests/device_parity/display_migration_parity.rs</td>
 <td>KEEP</td>
 <td>per-panel old-vs-descriptor parity (SSD1306/ST7789/SH1107/PCD8544/ILI9341/RM67162/SSD1680/UC8151D); repeated names across panels (madctl/unpowered/artifact/top-colour) are distinct SUTs, not copies; the deliberate SSD1306 0x20 fix is asserted in both directions (L291-356) so neither half can be removed; cross-file legacy copies measured — display_oracle/ vs other migration files never exceed 0.5 similarity</td>
 <td>0</td>
@@ -6213,14 +6213,14 @@ The user approves or vetoes each row before execution. Nothing is deleted until 
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/bus_visibility.rs</td>
+<td>crates/core/tests/bus/bus_visibility.rs</td>
 <td>KEEP</td>
 <td>3 tests (fleet ratchet, classifier contract L1964, exclusion uniqueness L1980) sitting on a 1.9k-line measurement harness that drives UART/SPI/I2C through real CPU execution per chip; the ratchet is the only gate that catches a bus silently losing decodable edges. Giant single-purpose harness, not padding</td>
 <td>0</td>
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/xtensa_decode.rs</td>
+<td>crates/core/tests/esp/xtensa_decode.rs</td>
 <td>KEEP</td>
 <td>99 per-opcode decoder tests; each wide/narrow opcode is its own decoder arm (narrow l32i.n…ill.n each a separate form); similarity scan shows shape repeats but no identical-body families; no ignored/dead tests here</td>
 <td>0</td>
@@ -6234,7 +6234,7 @@ The user approves or vetoes each row before execution. Nothing is deleted until 
 <td>high</td>
 </tr>
 <tr>
-<td>crates/core/tests/firmware_survival.rs (table + special tests; see CONSOLIDATE row for the wrappers)</td>
+<td>crates/core/tests/gates/firmware_survival.rs (table + special tests; see CONSOLIDATE row for the wrappers)</td>
 <td>KEEP</td>
 <td>76-case table with per-fixture markers and two ratchet tests (<code>session_cases_carry_no_pc_ranges</code> L2862, <code>session_tier1_class_gating_matches_the_marker</code> L2886), plus real end-to-end tests: pixel-level KW41Z cow checks (L2148-2322), nRF54L15 P2.09 GPIO readback (L2077), bus-trace capture (L2415), tier-1 transcript scan negative controls (L2917-2941). Duplicate fixtures: <code>tier1/esp32s3.elf</code> twice is the esp32s3_tier1 vs esp32s3_zero_tier1 pair (different boot state)</td>
 <td>0</td>
@@ -6285,21 +6285,21 @@ The user approves or vetoes each row before execution. Nothing is deleted until 
 </thead>
 <tbody>
 <tr>
-<td>crates/core/tests/xtensa_exec.rs &gt; test_exec_call4_sets_callinc, test_exec_call8_sets_callinc, test_exec_call12_sets_callinc</td>
+<td>crates/core/tests/esp/xtensa_exec.rs &gt; test_exec_call4_sets_callinc, test_exec_call8_sets_callinc, test_exec_call12_sets_callinc</td>
 <td>STRIP (low)</td>
 <td>1.0-similar bodies (L2279-2358) differing only in callinc/return-register; wrappers exec_call4/8/12 (call_window.rs:57-103) are three copies of one body differing only in <code>1/2/3</code>, so one loop keeps all three wrapper paths</td>
 <td>~55</td>
 <td>low</td>
 </tr>
 <tr>
-<td>crates/core/tests/xtensa_exec.rs &gt; test_exec_rfe_round_trip_via_epc1</td>
+<td>crates/core/tests/esp/xtensa_exec.rs &gt; test_exec_rfe_round_trip_via_epc1</td>
 <td>STRIP (low)</td>
 <td>its two asserts (PC==EPC1, EXCM==0) are strict subsets of <code>test_exec_rfe_clears_excm_and_jumps</code> (L5222-5244, which adds the INTLEVEL-pinned check); only the EPC1 value differs</td>
 <td>~20</td>
 <td>low</td>
 </tr>
 <tr>
-<td>crates/core/tests/xtensa_exec.rs &gt; test_exec_s32e_negative_offset</td>
+<td>crates/core/tests/esp/xtensa_exec.rs &gt; test_exec_s32e_negative_offset</td>
 <td>STRIP (low)</td>
 <td>0.91-similar to <code>test_exec_s32e_in_excm_writes</code> (L4464), same store-at-EA shape; its only delta is imm=-64 (the encoding boundary), which the enc_s32e helper already exercises elsewhere. Borderline — keep if the -64 encoding edge is considered load-bearing</td>
 <td>~23</td>
@@ -6313,7 +6313,7 @@ The user approves or vetoes each row before execution. Nothing is deleted until 
 <td>low</td>
 </tr>
 <tr>
-<td>crates/core/tests/avr_nano_live_run.rs &gt; live_run_arduino_nano_blinky_sketch</td>
+<td>crates/core/tests/avr/avr_nano_live_run.rs &gt; live_run_arduino_nano_blinky_sketch</td>
 <td>DELETE (low)</td>
 <td>same raw Avr + MockBus seam and the same golden ELF (arduino-nano-blinky.elf) as avr_nano_golden_survival.rs, asserting the same observables (serial contains "nano-ok", PB5 toggles); golden_survival additionally pins resets==0 and the SP floor (L127-153). The live-run file's extra value is its printed evidence block, which is why this is a low-confidence delete rather than a main-table row</td>
 <td>~100</td>
@@ -6674,7 +6674,7 @@ The user approves or vetoes each row before execution. Nothing is deleted until 
 <tr>
 <td>crates/config/tests/ordered_interrupt_metadata.rs (pass-1 <code>publicorderedtypecontract</code> group)</td>
 <td>KEEP</td>
-<td>re-measured against <code>crates/core/tests/ordered_debug_metadata.rs</code>: only the name matches. This file pins <code>PeripheralDescriptor.interrupts: Option&lt;BTreeMap&gt;</code> across 16 input permutations plus IR duplicate semantics (L13-129); a different struct and surface. Explicit agreement with pass 1's coincidence note</td>
+<td>re-measured against <code>crates/core/tests/session/ordered_debug_metadata.rs</code>: only the name matches. This file pins <code>PeripheralDescriptor.interrupts: Option&lt;BTreeMap&gt;</code> across 16 input permutations plus IR duplicate semantics (L13-129); a different struct and surface. Explicit agreement with pass 1's coincidence note</td>
 <td>0</td>
 <td>high</td>
 </tr>

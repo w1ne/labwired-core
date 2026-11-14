@@ -5003,7 +5003,7 @@ USART0 and drives PB5 high.</p>
 from DS40002211A Figure 1-3: 54 GPIO lines, with PG6/PG7 absent on the 64-pin
 package.</p>
 <h2 id="how-to-run">How to run</h2>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>cargo<span class="w"> </span><span class="nb">test</span><span class="w"> </span>-p<span class="w"> </span>labwired-core<span class="w"> </span>--test<span class="w"> </span>avr_atmega2561
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>cargo<span class="w"> </span><span class="nb">test</span><span class="w"> </span>-p<span class="w"> </span>labwired-core<span class="w"> </span>--test<span class="w"> </span>avr<span class="w"> </span>avr_atmega2561::
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>cargo<span class="w"> </span>run<span class="w"> </span>-q<span class="w"> </span>-p<span class="w"> </span>labwired-cli<span class="w"> </span>--<span class="w"> </span><span class="nb">test</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span>--script<span class="w"> </span>examples/atmega2561-io/io-smoke.yaml<span class="w"> </span>--no-uart-stdout
 </span></code></pre></div>

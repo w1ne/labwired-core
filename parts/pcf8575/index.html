@@ -5128,7 +5128,7 @@
 </tr>
 <tr>
 <td>Tier</td>
-<td>smoke-proven (register-level tests: <code>crates/core/tests/everyday_sensor_set.rs</code>)</td>
+<td>smoke-proven (register-level tests: <code>crates/core/tests/misc/everyday_sensor_set.rs</code>)</td>
 </tr>
 </tbody>
 </table>
@@ -5220,7 +5220,7 @@
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">      </span><span class="nt">p17_pin</span><span class="p">:</span><span class="w"> </span><span class="s">"PC1"</span>
 </span></code></pre></div></li>
 <li>Agent: <code>labwired_list</code> → <code>labwired_describe id=pcf8575</code> → wire → <code>labwired_validate</code> → <code>labwired_run</code> / <code>labwired_verify</code>.</li>
-<li>Register-level smoke: <code>cargo test -p labwired-core --test everyday_sensor_set</code> — power-on 0xFF 0xFF, and a written pair 0x34 0x12 read back as 34 12 34 12. The same file's negative control proves the check fails against a part that answers only 0x00 or only 0xFF; <code>pcf8575_tracks_stimulus</code> covers pairing, odd bytes and the 16 pad drives.</li>
+<li>Register-level smoke: <code>cargo test -p labwired-core --test misc everyday_sensor_set::</code> — power-on 0xFF 0xFF, and a written pair 0x34 0x12 read back as 34 12 34 12. The same file's negative control proves the check fails against a part that answers only 0x00 or only 0xFF; <code>pcf8575_tracks_stimulus</code> covers pairing, odd bytes and the 16 pad drives.</li>
 </ol>
 <h2 id="limitations">Limitations</h2>
 <ul>

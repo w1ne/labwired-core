@@ -5128,7 +5128,7 @@
 </tr>
 <tr>
 <td>Tier</td>
-<td>smoke-proven (pad-level tests on a NUCLEO-L476RG bus: <code>crates/core/tests/everyday_sensor_set.rs</code>)</td>
+<td>smoke-proven (pad-level tests on a NUCLEO-L476RG bus: <code>crates/core/tests/misc/everyday_sensor_set.rs</code>)</td>
 </tr>
 </tbody>
 </table>
@@ -5208,7 +5208,7 @@
 </span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">      </span><span class="c1"># … in2_pin/out2_pin through in8_pin/out8_pin</span>
 </span></code></pre></div></li>
 <li>Agent: <code>labwired_list</code> → <code>labwired_describe id=uln2803</code> → wire → <code>labwired_validate</code> → <code>labwired_run</code> / <code>labwired_verify</code>.</li>
-<li>Pad-level smoke: <code>cargo test -p labwired-core --test everyday_sensor_set</code> — all-off, all-on, both checkerboards and a walking one, read back through the GPIO input registers. The negative control proves the check fails against outputs stuck low, stuck high, or following the inputs; <code>uln2803_tracks_stimulus</code> walks the 200 ns delay cycle by cycle.</li>
+<li>Pad-level smoke: <code>cargo test -p labwired-core --test misc everyday_sensor_set::</code> — all-off, all-on, both checkerboards and a walking one, read back through the GPIO input registers. The negative control proves the check fails against outputs stuck low, stuck high, or following the inputs; <code>uln2803_tracks_stimulus</code> walks the 200 ns delay cycle by cycle.</li>
 </ol>
 <h2 id="limitations">Limitations</h2>
 <ul>

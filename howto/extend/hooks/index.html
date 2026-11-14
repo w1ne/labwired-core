@@ -5518,7 +5518,7 @@ script uses the unqualified form above, as this run shows.</p>
 <h3 id="receipt-2-the-committed-schedule-parity-test">Receipt 2: the committed schedule-parity test</h3>
 <p>The in-tree test pins the decoded bytes, not just the transition count — four
 temperature/humidity seeds, exact and batched stepping, 5 ms peripheral ticks:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>cargo<span class="w"> </span><span class="nb">test</span><span class="w"> </span>-p<span class="w"> </span>labwired-core<span class="w"> </span>--test<span class="w"> </span>gpio_schedule_firmware<span class="w"> </span>busy_polled_dht
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>cargo<span class="w"> </span><span class="nb">test</span><span class="w"> </span>-p<span class="w"> </span>labwired-core<span class="w"> </span>--test<span class="w"> </span>gpio_logic<span class="w"> </span>busy_polled_dht
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>running 1 test
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>test busy_polled_dht_frames_preserve_every_interval_with_coarse_ticks ... ok
@@ -5526,8 +5526,8 @@ temperature/humidity seeds, exact and batched stepping, 5 ms peripheral ticks:</
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 2.34s
 </span></code></pre></div>
 <p>Its expected bytes for 22.0 °C / 50 % are <code>[1, 244, 0, 220, 209]</code>
-(<code>crates/core/tests/gpio_schedule_firmware.rs:46</code>), with the raw pulse-width
-array decoded at <code>crates/core/tests/gpio_schedule_firmware.rs:65-72</code>.</p>
+(<code>crates/core/tests/gpio_logic/gpio_schedule_firmware.rs:46</code>), with the raw pulse-width
+array decoded at <code>crates/core/tests/gpio_logic/gpio_schedule_firmware.rs:65-72</code>.</p>
 <h2 id="2-host-observation-bus-trace-console-stop-logic-capture-python-frames">2. Host observation: bus trace, console stop, logic capture, Python frames</h2>
 <h3 id="-bus-trace-out-the-wire-record-vcd-or-json"><code>--bus-trace-out</code> — the wire record, VCD or JSON</h3>
 <p><strong>What fires.</strong> Each transacted byte is pushed as a <code>BusTraceEvent</code>
@@ -5690,7 +5690,7 @@ bodies: <code>on_simulation_start</code>/<code>on_simulation_stop</code>, <code>
 <li><code>PcCoverageObserver</code> — firmware coverage (<code>crates/core/src/pc_coverage.rs:227</code>).</li>
 </ul>
 <p><strong>Receipt — delivery to a bus observer and to a machine-registered observer:</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>cargo<span class="w"> </span><span class="nb">test</span><span class="w"> </span>-p<span class="w"> </span>labwired-core<span class="w"> </span>--test<span class="w"> </span>observer_store_visibility
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>cargo<span class="w"> </span><span class="nb">test</span><span class="w"> </span>-p<span class="w"> </span>labwired-core<span class="w"> </span>--test<span class="w"> </span>session<span class="w"> </span>observer_store_visibility::
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>running 7 tests
 </span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>test machine_registered_observer_sees_bus_stores ... ok
@@ -5706,7 +5706,7 @@ bodies: <code>on_simulation_start</code>/<code>on_simulation_stop</code>, <code>
 <p>The test also pins the two registration traps that used to silently produce an
 empty trace: wide MMIO stores must publish one event per byte (no phantom
 bytes), and registering on the <code>Machine</code> must not evict a bus-only observer
-(<code>crates/core/tests/observer_store_visibility.rs:59-184</code>).</p>
+(<code>crates/core/tests/session/observer_store_visibility.rs:59-184</code>).</p>
 <h3 id="peripheral-attach-points-and-the-tick-seam"><code>Peripheral</code> — attach points and the tick seam</h3>
 <p>The model trait is <code>crates/core/src/lib.rs:980</code>. The seams a hook typically
 implements:</p>

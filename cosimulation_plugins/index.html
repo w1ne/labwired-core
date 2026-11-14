@@ -5803,7 +5803,7 @@ settled DC gain and smaller-signal finite-GBW response are preserved. COMP
 cards accept hysteresis and open-collector or push-pull outputs. These
 parameters have no temperature dependence. Signal- or load-dependent supply
 current is not modeled. The hand-calculated macro tests are in
-<code>crates/core/tests/analog_macros.rs</code>.</p>
+<code>crates/core/tests/analog/analog_macros.rs</code>.</p>
 <p><code>.options</code>, <code>.tran</code>, <code>.op</code>, <code>.print</code>, <code>.plot</code>, <code>.save</code>, <code>.probe</code>, <code>.width</code>,
 <code>.temp</code>, <code>.nodeset</code>, <code>.title</code> and a whole <code>.control</code> … <code>.endc</code> block are
 accepted and ignored, so one deck can be handed to this engine and to ngspice
@@ -5928,7 +5928,7 @@ Meyer bias regions, and Ward–Dutton
 charge conservation and transient terminal response are covered by tests. The
 diode's forward and reverse knee reduction, non-default reverse-breakdown
 emission coefficient, and first-order soft-recovery response are exercised in
-<a href="../crates/core/tests/analog_devices.rs"><code>tests/analog_devices.rs</code></a>. BJT <code>NKF</code>
+<a href="../crates/core/tests/analog/analog_devices.rs"><code>tests/analog_devices.rs</code></a>. BJT <code>NKF</code>
 is checked against solved forward/reverse terminal currents and its effect on
 transit charge. Every
 parameter is taken at 300.00 K; there is no temperature
@@ -5983,7 +5983,7 @@ nodes count against the 128-unknown ceiling and can be probed.</p>
   was still moving — never a <code>NaN</code> written into the trace.</li>
 <li>A circuit with <strong>no</strong> nonlinear element takes the pre-Newton code path
   unchanged, down to the floating-point operation order.
-  <code>crates/core/tests/analog_linear_golden.rs</code> pins that against bit patterns
+  <code>crates/core/tests/analog/analog_linear_golden.rs</code> pins that against bit patterns
   captured from the engine before any of this existed.</li>
 <li>Agreement with ngspice on nonlinear decks is measured, not asserted:
   <code>crates/cli/tests/analog_vs_ngspice_differential.rs</code> hands the same SPICE

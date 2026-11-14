@@ -5128,7 +5128,7 @@
 </tr>
 <tr>
 <td>Tier</td>
-<td>smoke-proven (register-level tests: <code>crates/core/tests/everyday_sensor_set.rs</code>)</td>
+<td>smoke-proven (register-level tests: <code>crates/core/tests/misc/everyday_sensor_set.rs</code>)</td>
 </tr>
 </tbody>
 </table>
@@ -5213,7 +5213,7 @@
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span><span class="nt">connection</span><span class="p">:</span><span class="w"> </span><span class="s">"i2c0"</span><span class="w">   </span><span class="c1"># the bus id your chip system uses</span>
 </span></code></pre></div></li>
 <li>Agent: <code>labwired_list</code> → <code>labwired_describe id=ina3221</code> → wire → <code>labwired_validate</code> → <code>labwired_run</code> / <code>labwired_verify</code>.</li>
-<li>Register-level smoke: <code>cargo test -p labwired-core --test everyday_sensor_set</code> — IDs, Configuration 0x7127, CH1 shunt 4000 and bus 5000 at 0.2 A / 5 V. The same file's negative control proves the check fails against a part that answers only 0x00 or only 0xFF.</li>
+<li>Register-level smoke: <code>cargo test -p labwired-core --test misc everyday_sensor_set::</code> — IDs, Configuration 0x7127, CH1 shunt 4000 and bus 5000 at 0.2 A / 5 V. The same file's negative control proves the check fails against a part that answers only 0x00 or only 0xFF.</li>
 </ol>
 <h2 id="limitations">Limitations</h2>
 <ul>

@@ -5128,7 +5128,7 @@
 </tr>
 <tr>
 <td>Tier</td>
-<td>smoke-proven (register-level tests: <code>crates/core/tests/everyday_sensor_set.rs</code>)</td>
+<td>smoke-proven (register-level tests: <code>crates/core/tests/misc/everyday_sensor_set.rs</code>)</td>
 </tr>
 </tbody>
 </table>
@@ -5219,7 +5219,7 @@
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">      </span><span class="nt">cs_pin</span><span class="p">:</span><span class="w"> </span><span class="s">"PA4"</span>
 </span></code></pre></div></li>
 <li>Agent: <code>labwired_list</code> → <code>labwired_describe id=rfm95</code> → wire → <code>labwired_validate</code> → <code>labwired_run</code> / <code>labwired_verify</code>.</li>
-<li>Register-level smoke: <code>cargo test -p labwired-core --test everyday_sensor_set</code> — RegVersion, power-on RegOpMode / RegFrf / RegPaConfig / RegPaDac, and a RegOpMode write. The SPI negative control proves the check fails against a part that answers only 0x00 or only 0xFF; <code>rfm95_tracks_stimulus</code> stores a 915 MHz setup and checks RegVersion refuses a write.</li>
+<li>Register-level smoke: <code>cargo test -p labwired-core --test misc everyday_sensor_set::</code> — RegVersion, power-on RegOpMode / RegFrf / RegPaConfig / RegPaDac, and a RegOpMode write. The SPI negative control proves the check fails against a part that answers only 0x00 or only 0xFF; <code>rfm95_tracks_stimulus</code> stores a 915 MHz setup and checks RegVersion refuses a write.</li>
 </ol>
 <h2 id="limitations">Limitations</h2>
 <ul>

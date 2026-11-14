@@ -5106,7 +5106,7 @@
 </tr>
 <tr>
 <td>Tier</td>
-<td>smoke-proven (<code>crates/core/tests/everyday_display_set.rs</code>)</td>
+<td>smoke-proven (<code>crates/core/tests/display/everyday_display_set.rs</code>)</td>
 </tr>
 </tbody>
 </table>
@@ -5199,7 +5199,7 @@
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">    </span><span class="nt">config</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> cs_pin</span><span class="p">:</span><span class="w"> </span><span class="s">"PA4"</span><span class="p p-Indicator">,</span><span class="nt"> dc_pin</span><span class="p">:</span><span class="w"> </span><span class="s">"PA3"</span><span class="w"> </span><span class="p p-Indicator">}</span>
 </span></code></pre></div></li>
 <li>Agent: <code>labwired_list</code> → <code>labwired_describe id=gc9a01</code> → wire → <code>labwired_validate</code> → <code>labwired_run</code> / <code>labwired_verify</code>.</li>
-<li>Smoke: <code>cargo test -p labwired-core --test everyday_display_set</code>. It runs the same RGB565 check as the ST7735 against a 240×240 memory. The <code>gc9a01_*</code> tests then cover the artifact's <code>painted_bytes</code> / <code>lit</code>, the missing SWRESET and the 239 − pointer mirror.</li>
+<li>Smoke: <code>cargo test -p labwired-core --test display everyday_display_set::</code>. It runs the same RGB565 check as the ST7735 against a 240×240 memory. The <code>gc9a01_*</code> tests then cover the artifact's <code>painted_bytes</code> / <code>lit</code>, the missing SWRESET and the 239 − pointer mirror.</li>
 </ol>
 <h2 id="limitations">Limitations</h2>
 <ul>

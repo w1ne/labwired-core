@@ -5051,11 +5051,6 @@
 <td><code>crates/core/tests/bench_walk_free_kw41z.rs</code></td>
 </tr>
 <tr>
-<td><code>customer_c3_esp_idf_firmware_initializes_its_gpio_and_uart_driver</code></td>
-<td>requires the ESP-IDF customer ELF and sibling flash images in IOLINKI_C3_ELF</td>
-<td><code>crates/core/tests/c3_reference_firmware.rs</code></td>
-</tr>
-<tr>
 <td><code>collects_animated_frames</code></td>
 <td>slow: builds + runs the Space Invaders firmware in-sim (~minutes)</td>
 <td><code>crates/core/tests/capture_nokia5110_frames.rs</code></td>
@@ -5071,26 +5066,6 @@
 <td><code>crates/core/tests/capture_nokia5110_frames.rs</code></td>
 </tr>
 <tr>
-<td><code>diag_c3_first_yield</code></td>
-<td>diagnostic probe, not a gate: it eprintln!s the PC/symbol trace around the C3 first FreeRTOS yield and asserts nothing. Needs validation/arduino-matrix/out/esp32c3/L0_serial_boot/firmware.elf, a PlatformIO matrix build output that is not in the tree</td>
-<td><code>crates/core/tests/diag_c3_yield.rs</code></td>
-</tr>
-<tr>
-<td><code>diag_app_cpu_boot_progress</code></td>
-<td>diagnostic only</td>
-<td><code>crates/core/tests/diag_esp32_dual_core_boot.rs</code></td>
-</tr>
-<tr>
-<td><code>diag_c3_boot_progress</code></td>
-<td>diagnostic probe, not a gate: it eprintln!s C3 Arduino L0 boot progress and asserts nothing past the fixture existing. Needs validation/arduino-matrix/out/esp32c3/L0_serial_boot/firmware.elf, a PlatformIO matrix build output that is not in the tree</td>
-<td><code>crates/core/tests/diag_esp32c3_boot.rs</code></td>
-</tr>
-<tr>
-<td><code>diag_c3_panic_message</code></td>
-<td>diagnostic probe, not a gate: it eprintln!s the C3 Arduino L0 panic message and asserts nothing past the fixture existing. Needs validation/arduino-matrix/out/esp32c3/L0_serial_boot/firmware.elf, a PlatformIO matrix build output not in the tree</td>
-<td><code>crates/core/tests/diag_esp32c3_panic.rs</code></td>
-</tr>
-<tr>
 <td><code>diag_s3_boot</code></td>
 <td>diagnostic probe, not a gate: it eprintln!s S3 Arduino L0 boot progress and asserts nothing. Needs validation/arduino-matrix/out/esp32s3/L0_serial_boot/firmware.elf, a PlatformIO matrix build output that is not in the tree</td>
 <td><code>crates/core/tests/diag_esp32s3_boot.rs</code></td>
@@ -5101,19 +5076,14 @@
 <td><code>crates/core/tests/diag_esp32s3_l2.rs</code></td>
 </tr>
 <tr>
+<td><code>esp32s3_oled_native_baseline</code></td>
+<td>native S3 workload benchmark; run explicitly with --release --ignored</td>
+<td><code>crates/core/tests/display/esp32s3_oled_profile.rs</code></td>
+</tr>
+<tr>
 <td><code>firmware_drives_panel_to_ereader_bitmap</code></td>
 <td>needs +esp-built epaper ELF; NO CI lane builds it yet — manual only</td>
 <td><code>crates/core/tests/e2e_esp32_epaper.rs</code></td>
-</tr>
-<tr>
-<td><code>resume_is_byte_equivalent_to_cold_boot_and_far_cheaper</code></td>
-<td>boots the real C3 mask ROM (~150M steps); run with --release --ignored</td>
-<td><code>crates/core/tests/e2e_esp32c3_snapshot_resume.rs</code></td>
-</tr>
-<tr>
-<td><code>external_arduino_esp32_firmware_drives_panel_in_sim</code></td>
-<td>loads a large external Arduino-ESP32 firmware ELF; only runs when LABWIRED_EXTERNAL_ARDUINO_ESP32_ELF is set. Run with <code>cargo test -- --ignored external_arduino_esp32_firmware_drives_panel_in_sim</code>.</td>
-<td><code>crates/core/tests/e2e_external_arduino_esp32_in_sim.rs</code></td>
 </tr>
 <tr>
 <td><code>labwired_wifi_fixture_connects_and_gets</code></td>
@@ -5151,6 +5121,46 @@
 <td><code>crates/core/tests/e2e_nrf52840_proximity.rs</code></td>
 </tr>
 <tr>
+<td><code>customer_c3_esp_idf_firmware_initializes_its_gpio_and_uart_driver</code></td>
+<td>requires the ESP-IDF customer ELF and sibling flash images in IOLINKI_C3_ELF</td>
+<td><code>crates/core/tests/esp/c3_reference_firmware.rs</code></td>
+</tr>
+<tr>
+<td><code>diag_c3_first_yield</code></td>
+<td>diagnostic probe, not a gate: it eprintln!s the PC/symbol trace around the C3 first FreeRTOS yield and asserts nothing. Needs validation/arduino-matrix/out/esp32c3/L0_serial_boot/firmware.elf, a PlatformIO matrix build output that is not in the tree</td>
+<td><code>crates/core/tests/esp/diag_c3_yield.rs</code></td>
+</tr>
+<tr>
+<td><code>diag_app_cpu_boot_progress</code></td>
+<td>diagnostic only</td>
+<td><code>crates/core/tests/esp/diag_esp32_dual_core_boot.rs</code></td>
+</tr>
+<tr>
+<td><code>diag_c3_boot_progress</code></td>
+<td>diagnostic probe, not a gate: it eprintln!s C3 Arduino L0 boot progress and asserts nothing past the fixture existing. Needs validation/arduino-matrix/out/esp32c3/L0_serial_boot/firmware.elf, a PlatformIO matrix build output that is not in the tree</td>
+<td><code>crates/core/tests/esp/diag_esp32c3_boot.rs</code></td>
+</tr>
+<tr>
+<td><code>diag_c3_panic_message</code></td>
+<td>diagnostic probe, not a gate: it eprintln!s the C3 Arduino L0 panic message and asserts nothing past the fixture existing. Needs validation/arduino-matrix/out/esp32c3/L0_serial_boot/firmware.elf, a PlatformIO matrix build output not in the tree</td>
+<td><code>crates/core/tests/esp/diag_esp32c3_panic.rs</code></td>
+</tr>
+<tr>
+<td><code>resume_is_byte_equivalent_to_cold_boot_and_far_cheaper</code></td>
+<td>boots the real C3 mask ROM (~150M steps); run with --release --ignored</td>
+<td><code>crates/core/tests/esp/e2e_esp32c3_snapshot_resume.rs</code></td>
+</tr>
+<tr>
+<td><code>external_arduino_esp32_firmware_drives_panel_in_sim</code></td>
+<td>loads a large external Arduino-ESP32 firmware ELF; only runs when LABWIRED_EXTERNAL_ARDUINO_ESP32_ELF is set. Run with <code>cargo test -- --ignored external_arduino_esp32_firmware_drives_panel_in_sim</code>.</td>
+<td><code>crates/core/tests/esp/e2e_external_arduino_esp32_in_sim.rs</code></td>
+</tr>
+<tr>
+<td><code>ble_pong_advertising_node_walk_pinners</code></td>
+<td>boots the real C3 BLE Pong image (~60M steps); run with --release --ignored</td>
+<td><code>crates/core/tests/esp/esp32c3_bt_active_walk_pinners.rs</code></td>
+</tr>
+<tr>
 <td><code>probe_ble_pong_idle_ff</code></td>
 <td>measurement probe, not a gate</td>
 <td><code>crates/core/tests/esp32c3_ble_pong_perf_probe.rs</code></td>
@@ -5184,11 +5194,6 @@
 <td><code>probe_air_peer_isolation_rounds</code></td>
 <td>measurement probe, not a gate</td>
 <td><code>crates/core/tests/esp32c3_ble_pong_perf_probe.rs</code></td>
-</tr>
-<tr>
-<td><code>ble_pong_advertising_node_walk_pinners</code></td>
-<td>boots the real C3 BLE Pong image (~60M steps); run with --release --ignored</td>
-<td><code>crates/core/tests/esp32c3_bt_active_walk_pinners.rs</code></td>
 </tr>
 <tr>
 <td><code>diag_first_divergence_point_interval_1_vs_64</code></td>
@@ -5301,54 +5306,34 @@
 <td><code>crates/core/tests/esp32s3_irq_cache_differential.rs</code></td>
 </tr>
 <tr>
-<td><code>esp32s3_oled_native_baseline</code></td>
-<td>native S3 workload benchmark; run explicitly with --release --ignored</td>
-<td><code>crates/core/tests/esp32s3_oled_profile.rs</code></td>
-</tr>
-<tr>
-<td><code>real_g0_firmware_timed_cq_session</code></td>
-<td>requires IOLINKI_G0_ELF; optional HZ/BAUD/PROFILE select the built firmware</td>
-<td><code>crates/core/tests/g0_customer_timing.rs</code></td>
-</tr>
-<tr>
-<td><code>customer_g0_firmware_initializes_and_handles_external_wake</code></td>
-<td>requires the built customer G0 ELF in IOLINKI_G0_ELF</td>
-<td><code>crates/core/tests/g0_reference_firmware.rs</code></td>
-</tr>
-<tr>
-<td><code>dump_devices_json</code></td>
-<td>diagnostic dump, not an assertion</td>
-<td><code>crates/core/tests/inspect_device_binding_universal.rs</code></td>
-</tr>
-<tr>
-<td><code>real_type2v_elf_runs_the_same_one_action_uart_fixture</code></td>
-<td>requires source-pinned IOLINKI_G0_ELF at 64 MHz/COM3 with the Type2V payload</td>
-<td><code>crates/core/tests/iolink_master_config.rs</code></td>
-</tr>
-<tr>
 <td><code>lockstep_noop_jit_matches_interpreter_on_ereader_firmware</code></td>
 <td>needs labwired-ereader ELF; run with: cargo test -p labwired-core --test jit_lockstep -- --ignored --nocapture</td>
-<td><code>crates/core/tests/jit_lockstep.rs</code></td>
+<td><code>crates/core/tests/gates/jit_lockstep.rs</code></td>
 </tr>
 <tr>
 <td><code>lockstep_detects_register_corruption_on_real_firmware</code></td>
 <td>needs labwired-ereader ELF; run with: cargo test -p labwired-core --test jit_lockstep -- --ignored --nocapture</td>
-<td><code>crates/core/tests/jit_lockstep.rs</code></td>
+<td><code>crates/core/tests/gates/jit_lockstep.rs</code></td>
 </tr>
 <tr>
 <td><code>lockstep_windowed_call_long_run</code></td>
 <td>needs labwired-ereader ELF; run with: cargo test -p labwired-core --release --features jit --test jit_lockstep lockstep_windowed_call_long_run -- --ignored --nocapture</td>
-<td><code>crates/core/tests/jit_lockstep.rs</code></td>
+<td><code>crates/core/tests/gates/jit_lockstep.rs</code></td>
 </tr>
 <tr>
 <td><code>lockstep_multi_op_hot_bb_aligned</code></td>
 <td>needs labwired-ereader ELF; run with: cargo test -p labwired-core --release --features jit --test jit_lockstep lockstep_multi_op_hot_bb_aligned -- --ignored --nocapture</td>
-<td><code>crates/core/tests/jit_lockstep.rs</code></td>
+<td><code>crates/core/tests/gates/jit_lockstep.rs</code></td>
+</tr>
+<tr>
+<td><code>real_type2v_elf_runs_the_same_one_action_uart_fixture</code></td>
+<td>requires source-pinned IOLINKI_G0_ELF at 64 MHz/COM3 with the Type2V payload</td>
+<td><code>crates/core/tests/gpio_logic/iolink_master_config.rs</code></td>
 </tr>
 <tr>
 <td><code>bench_logic_capture_overhead</code></td>
 <td>manual timing harness, run with --release --nocapture</td>
-<td><code>crates/core/tests/logic_capture_bench.rs</code></td>
+<td><code>crates/core/tests/gpio_logic/logic_capture_bench.rs</code></td>
 </tr>
 <tr>
 <td><code>active_display_button_workload_throughput</code></td>
@@ -5359,11 +5344,6 @@
 <td><code>active_motion_display_button_workload_throughput</code></td>
 <td>explicit release-mode active-motion performance qualification</td>
 <td><code>crates/core/tests/microbit_v2_motion_io_guest.rs</code></td>
-</tr>
-<tr>
-<td><code>cube_hal_firmware_reaches_160mhz_blinks_ld2_and_reports_b1</code></td>
-<td>20M-step Cube HAL run (~1 min); run with --ignored</td>
-<td><code>crates/core/tests/nucleo_u545re.rs</code></td>
 </tr>
 <tr>
 <td><code>bench_alu_loop_beats_interpreter</code></td>
@@ -5381,44 +5361,44 @@
 <td><code>crates/core/tests/riscv_jit_combined_bench.rs</code></td>
 </tr>
 <tr>
-<td><code>agentdeck_snapshot_file_restores_post_paint_panel</code></td>
-<td>needs /tmp/agentdeck-postpaint.lwrs from a manual capture</td>
-<td><code>crates/core/tests/runtime_snapshot.rs</code></td>
-</tr>
-<tr>
 <td><code>reviewed_prepared_profile_is_accepted</code></td>
 <td>requires reviewed pinned artifacts in LABWIRED_RV1103_BASKET_ARTIFACTS</td>
-<td><code>crates/core/tests/rv1103_basket_loader.rs</code></td>
+<td><code>crates/core/tests/rv1103/rv1103_basket_loader.rs</code></td>
 </tr>
 <tr>
 <td><code>same_reviewed_profile_accepts_independent_build_location_without_self_authorizing_artifacts</code></td>
 <td>requires reviewed pinned artifacts in LABWIRED_RV1103_BASKET_ARTIFACTS</td>
-<td><code>crates/core/tests/rv1103_basket_loader.rs</code></td>
+<td><code>crates/core/tests/rv1103/rv1103_basket_loader.rs</code></td>
 </tr>
 <tr>
 <td><code>exact_archive_rejects_mode_body_duplicate_and_concatenated_overlay</code></td>
 <td>requires reviewed pinned artifacts in LABWIRED_RV1103_BASKET_ARTIFACTS</td>
-<td><code>crates/core/tests/rv1103_basket_loader.rs</code></td>
+<td><code>crates/core/tests/rv1103/rv1103_basket_loader.rs</code></td>
 </tr>
 <tr>
 <td><code>artifact_and_clock_preflight_fail_without_mutating_any_ram</code></td>
 <td>requires reviewed pinned artifacts in LABWIRED_RV1103_BASKET_ARTIFACTS</td>
-<td><code>crates/core/tests/rv1103_basket_loader.rs</code></td>
+<td><code>crates/core/tests/rv1103/rv1103_basket_loader.rs</code></td>
 </tr>
 <tr>
 <td><code>native_startup_holds_releases_then_initializes_entry_without_rewind_or_ram_erase</code></td>
 <td>requires reviewed pinned artifacts in LABWIRED_RV1103_BASKET_ARTIFACTS</td>
-<td><code>crates/core/tests/rv1103_basket_loader.rs</code></td>
+<td><code>crates/core/tests/rv1103/rv1103_basket_loader.rs</code></td>
 </tr>
 <tr>
 <td><code>closed_fresh_bus_refuses_shadow_flash_or_preexisting_cycle_before_ram_commit</code></td>
 <td>requires reviewed pinned artifacts in LABWIRED_RV1103_BASKET_ARTIFACTS</td>
-<td><code>crates/core/tests/rv1103_basket_loader.rs</code></td>
+<td><code>crates/core/tests/rv1103/rv1103_basket_loader.rs</code></td>
 </tr>
 <tr>
 <td><code>gic_level_sampling_benchmark</code></td>
 <td>explicit performance measurement, no wall-clock pass threshold</td>
-<td><code>crates/core/tests/rv1103_devices.rs</code></td>
+<td><code>crates/core/tests/rv1103/rv1103_devices.rs</code></td>
+</tr>
+<tr>
+<td><code>pinned_artifacts_load_or_backend_refusal_is_atomic</code></td>
+<td>requires independently prepared pinned Alpine artifacts in LABWIRED_RV1103_ARTIFACTS</td>
+<td><code>crates/core/tests/rv1103/rv1103_linux_loader.rs</code></td>
 </tr>
 <tr>
 <td><code>production_zimage_reaches_pid1_and_advancing_guest_uptime</code></td>
@@ -5426,174 +5406,194 @@
 <td><code>crates/core/tests/rv1103_linux_boot.rs</code></td>
 </tr>
 <tr>
-<td><code>pinned_artifacts_load_or_backend_refusal_is_atomic</code></td>
-<td>requires independently prepared pinned Alpine artifacts in LABWIRED_RV1103_ARTIFACTS</td>
-<td><code>crates/core/tests/rv1103_linux_loader.rs</code></td>
-</tr>
-<tr>
 <td><code>actual_zflash_driver_program_erase_and_refusals</code></td>
 <td>requires explicitly source-bound hosted ARM ZFlash fixture; never a default runtime claim</td>
-<td><code>crates/core/tests/samd51_zflash_guest.rs</code></td>
+<td><code>crates/core/tests/samd/samd51_zflash_guest.rs</code></td>
 </tr>
 <tr>
 <td><code>authored_interrupt_mask_executes_and_rejects_enabled_restore</code></td>
 <td>hosted source-built PRIMASK fixture; run the dedicated qualification workflow</td>
-<td><code>crates/core/tests/samd_interrupt_mask_guest.rs</code></td>
+<td><code>crates/core/tests/samd/samd_interrupt_mask_guest.rs</code></td>
 </tr>
 <tr>
 <td><code>authored_irq_waits_for_outer_restore_and_detects_early_delivery</code></td>
 <td>hosted source-built IRQ0 fixture; run the dedicated qualification workflow</td>
-<td><code>crates/core/tests/samd_irq_mask_guest.rs</code></td>
+<td><code>crates/core/tests/samd/samd_irq_mask_guest.rs</code></td>
 </tr>
 <tr>
 <td><code>authored_paired_irq_delivery_and_four_terminal_refusals</code></td>
 <td>prospective hosted controls; qualified source and dedicated execution required</td>
-<td><code>crates/core/tests/samd_paired_irq_guest.rs</code></td>
+<td><code>crates/core/tests/samd/samd_paired_irq_guest.rs</code></td>
 </tr>
 <tr>
 <td><code>actual_codal_core_reset_and_invalid_key</code></td>
 <td>actual source-bound CODAL reset needs dedicated clean hosted build and both scheduler/batch profiles</td>
-<td><code>crates/core/tests/samd_real_core_reset_guest.rs</code></td>
+<td><code>crates/core/tests/samd/samd_real_core_reset_guest.rs</code></td>
 </tr>
 <tr>
 <td><code>actual_services_deliver_timer_event_to_real_waiting_fibers_and_refuse_closed_switch</code></td>
 <td>prospective real services; dedicated source-bound hosted execution required</td>
-<td><code>crates/core/tests/samd_real_services_guest.rs</code></td>
+<td><code>crates/core/tests/samd/samd_real_services_guest.rs</code></td>
 </tr>
 <tr>
 <td><code>actual_codal_spi_cancellation_and_recovery</code></td>
 <td>actual source-bound CODAL cancellation caller requires dedicated hosted build and both scheduler profiles</td>
-<td><code>crates/core/tests/samd_real_spi_cancel_guest.rs</code></td>
+<td><code>crates/core/tests/samd/samd_real_spi_cancel_guest.rs</code></td>
 </tr>
 <tr>
 <td><code>actual_codal_spi_dma_error_and_recovery</code></td>
 <td>actual source-bound CODAL DMA error caller requires dedicated hosted build and both scheduler profiles</td>
-<td><code>crates/core/tests/samd_real_spi_error_guest.rs</code></td>
+<td><code>crates/core/tests/samd/samd_real_spi_error_guest.rs</code></td>
 </tr>
 <tr>
 <td><code>actual_codal_spi_callback_and_blocking_fiber_ordering</code></td>
 <td>actual source-bound CODAL SPI caller requires dedicated hosted build and both scheduler profiles</td>
-<td><code>crates/core/tests/samd_real_spi_guest.rs</code></td>
+<td><code>crates/core/tests/samd/samd_real_spi_guest.rs</code></td>
 </tr>
 <tr>
 <td><code>actual_codal_spi_blocking_result_lease_and_recovery</code></td>
 <td>actual source-bound CODAL blocking result lease requires dedicated hosted build and both scheduler profiles</td>
-<td><code>crates/core/tests/samd_real_spi_lease_guest.rs</code></td>
+<td><code>crates/core/tests/samd/samd_real_spi_lease_guest.rs</code></td>
 </tr>
 <tr>
 <td><code>actual_codal_spi_lifetime_and_idle_reconstruction</code></td>
 <td>actual source-bound SPI destruction callers require dedicated hosted builds and both scheduler profiles</td>
-<td><code>crates/core/tests/samd_real_spi_lifetime_guest.rs</code></td>
+<td><code>crates/core/tests/samd/samd_real_spi_lifetime_guest.rs</code></td>
 </tr>
 <tr>
 <td><code>actual_codal_spi_stale_dispatch_and_recovery</code></td>
 <td>actual source-bound CODAL software-pended stale IRQ caller requires dedicated hosted build and both scheduler profiles</td>
-<td><code>crates/core/tests/samd_real_spi_stale_guest.rs</code></td>
+<td><code>crates/core/tests/samd/samd_real_spi_stale_guest.rs</code></td>
 </tr>
 <tr>
 <td><code>actual_codal_spi_clock_gated_timeout_and_recovery</code></td>
 <td>actual source-bound CODAL clock-gated timeout callers requires dedicated hosted build and both scheduler profiles</td>
-<td><code>crates/core/tests/samd_real_spi_timeout_guest.rs</code></td>
+<td><code>crates/core/tests/samd/samd_real_spi_timeout_guest.rs</code></td>
 </tr>
 <tr>
 <td><code>actual_timer_adversaries_reject_exactly_and_remain_terminal</code></td>
 <td>prospective Timer adapter mutants; bound hosted build and dedicated guest qualification required</td>
-<td><code>crates/core/tests/samd_real_timer_adversary_guest.rs</code></td>
+<td><code>crates/core/tests/samd/samd_real_timer_adversary_guest.rs</code></td>
 </tr>
 <tr>
 <td><code>actual_timer_nested_callers_restore_and_deliver_two_irqs</code></td>
 <td>prospective actual Timer caller; qualified source and dedicated hosted execution required</td>
-<td><code>crates/core/tests/samd_real_timer_guest.rs</code></td>
+<td><code>crates/core/tests/samd/samd_real_timer_guest.rs</code></td>
 </tr>
 <tr>
 <td><code>authored_transfer_state_executes_and_rejects_premature_success</code></td>
 <td>hosted source-built fixture; run the dedicated qualification workflow</td>
-<td><code>crates/core/tests/samd_transfer_state_guest.rs</code></td>
+<td><code>crates/core/tests/samd/samd_transfer_state_guest.rs</code></td>
+</tr>
+<tr>
+<td><code>dump_devices_json</code></td>
+<td>diagnostic dump, not an assertion</td>
+<td><code>crates/core/tests/session/inspect_device_binding_universal.rs</code></td>
+</tr>
+<tr>
+<td><code>agentdeck_snapshot_file_restores_post_paint_panel</code></td>
+<td>needs /tmp/agentdeck-postpaint.lwrs from a manual capture</td>
+<td><code>crates/core/tests/session/runtime_snapshot.rs</code></td>
+</tr>
+<tr>
+<td><code>real_g0_firmware_timed_cq_session</code></td>
+<td>requires IOLINKI_G0_ELF; optional HZ/BAUD/PROFILE select the built firmware</td>
+<td><code>crates/core/tests/stm32/g0_customer_timing.rs</code></td>
+</tr>
+<tr>
+<td><code>customer_g0_firmware_initializes_and_handles_external_wake</code></td>
+<td>requires the built customer G0 ELF in IOLINKI_G0_ELF</td>
+<td><code>crates/core/tests/stm32/g0_reference_firmware.rs</code></td>
+</tr>
+<tr>
+<td><code>cube_hal_firmware_reaches_160mhz_blinks_ld2_and_reports_b1</code></td>
+<td>20M-step Cube HAL run (~1 min); run with --ignored</td>
+<td><code>crates/core/tests/stm32/nucleo_u545re.rs</code></td>
 </tr>
 <tr>
 <td><code>core_smoke_maps_memories_and_services_interrupts</code></td>
 <td>requires external 60North firmware; set RENODE_U5_FIRMWARE and run with --ignored</td>
-<td><code>crates/core/tests/stm32u575_60north.rs</code></td>
+<td><code>crates/core/tests/stm32/stm32u575_60north.rs</code></td>
 </tr>
 <tr>
 <td><code>core_smoke_restarts_after_machine_reset</code></td>
 <td>requires external 60North firmware; set RENODE_U5_FIRMWARE and run with --ignored</td>
-<td><code>crates/core/tests/stm32u575_60north.rs</code></td>
+<td><code>crates/core/tests/stm32/stm32u575_60north.rs</code></td>
 </tr>
 <tr>
 <td><code>clock_init_reaches_160mhz_and_done_stage</code></td>
 <td>requires external 60North firmware; set RENODE_U5_FIRMWARE and run with --ignored</td>
-<td><code>crates/core/tests/stm32u575_60north.rs</code></td>
+<td><code>crates/core/tests/stm32/stm32u575_60north.rs</code></td>
 </tr>
 <tr>
 <td><code>hal_clock_completes_and_reports_160mhz</code></td>
 <td>requires external 60North firmware; set RENODE_U5_FIRMWARE and run with --ignored</td>
-<td><code>crates/core/tests/stm32u575_60north.rs</code></td>
+<td><code>crates/core/tests/stm32/stm32u575_60north.rs</code></td>
 </tr>
 <tr>
 <td><code>hal_gpio_toggles_mirrors_and_counts_rising_edges</code></td>
 <td>requires external 60North firmware; set RENODE_U5_FIRMWARE and run with --ignored</td>
-<td><code>crates/core/tests/stm32u575_60north.rs</code></td>
+<td><code>crates/core/tests/stm32/stm32u575_60north.rs</code></td>
 </tr>
 <tr>
 <td><code>hal_uart_prints_configures_baud_and_echoes</code></td>
 <td>requires external 60North firmware; set RENODE_U5_FIRMWARE and run with --ignored</td>
-<td><code>crates/core/tests/stm32u575_60north.rs</code></td>
+<td><code>crates/core/tests/stm32/stm32u575_60north.rs</code></td>
 </tr>
 <tr>
 <td><code>hal_spi_loops_back_8_and_16_bit_frames</code></td>
 <td>requires external 60North firmware; set RENODE_U5_FIRMWARE and run with --ignored</td>
-<td><code>crates/core/tests/stm32u575_60north.rs</code></td>
+<td><code>crates/core/tests/stm32/stm32u575_60north.rs</code></td>
 </tr>
 <tr>
 <td><code>hal_spi_dma_transmits_all_bytes</code></td>
 <td>requires external 60North firmware; set RENODE_U5_FIRMWARE and run with --ignored</td>
-<td><code>crates/core/tests/stm32u575_60north.rs</code></td>
+<td><code>crates/core/tests/stm32/stm32u575_60north.rs</code></td>
 </tr>
 <tr>
 <td><code>hal_spi_dma_loopback_receives_what_it_sent</code></td>
 <td>requires external 60North firmware; set RENODE_U5_FIRMWARE and run with --ignored</td>
-<td><code>crates/core/tests/stm32u575_60north.rs</code></td>
+<td><code>crates/core/tests/stm32/stm32u575_60north.rs</code></td>
 </tr>
 <tr>
 <td><code>hal_uart_dma_receives_text</code></td>
 <td>requires external 60North firmware; set RENODE_U5_FIRMWARE and run with --ignored</td>
-<td><code>crates/core/tests/stm32u575_60north.rs</code></td>
+<td><code>crates/core/tests/stm32/stm32u575_60north.rs</code></td>
 </tr>
 <tr>
 <td><code>st_spi_fullduplex_polling_master_sends_and_receives</code></td>
 <td>requires external 60North firmware; set RENODE_U5_FIRMWARE and run with --ignored</td>
-<td><code>crates/core/tests/stm32u575_60north.rs</code></td>
+<td><code>crates/core/tests/stm32/stm32u575_60north.rs</code></td>
 </tr>
 <tr>
 <td><code>st_i2c_twoboards_master_writes_and_reads_back</code></td>
 <td>requires external 60North firmware; set RENODE_U5_FIRMWARE and run with --ignored</td>
-<td><code>crates/core/tests/stm32u575_60north.rs</code></td>
+<td><code>crates/core/tests/stm32/stm32u575_60north.rs</code></td>
 </tr>
 <tr>
 <td><code>st_dma_flash_to_ram_copies_and_blinks</code></td>
 <td>requires external 60North firmware; set RENODE_U5_FIRMWARE and run with --ignored</td>
-<td><code>crates/core/tests/stm32u575_60north.rs</code></td>
+<td><code>crates/core/tests/stm32/stm32u575_60north.rs</code></td>
 </tr>
 <tr>
 <td><code>st_fdcan_loopback_receives_its_own_frames</code></td>
 <td>requires external 60North firmware; set RENODE_U5_FIRMWARE and run with --ignored</td>
-<td><code>crates/core/tests/stm32u575_60north.rs</code></td>
+<td><code>crates/core/tests/stm32/stm32u575_60north.rs</code></td>
 </tr>
 <tr>
 <td><code>customer_u5_firmware_initializes_and_handles_external_wake</code></td>
 <td>requires the built customer U5 ELF in IOLINKI_U5_ELF</td>
-<td><code>crates/core/tests/u5_reference_firmware.rs</code></td>
+<td><code>crates/core/tests/stm32/u5_reference_firmware.rs</code></td>
+</tr>
+<tr>
+<td><code>three_f103_can_world_throughput</code></td>
+<td>manual perf probe; run with --release -- --ignored --nocapture</td>
+<td><code>crates/core/tests/world/world_can_perf.rs</code></td>
 </tr>
 <tr>
 <td><code>the_demo_world_runs_faster_than_real_time</code></td>
 <td>wall-clock probe; run with --release -- --ignored --nocapture</td>
 <td><code>crates/core/tests/world_can_dashboard_demo.rs</code></td>
-</tr>
-<tr>
-<td><code>three_f103_can_world_throughput</code></td>
-<td>manual perf probe; run with --release -- --ignored --nocapture</td>
-<td><code>crates/core/tests/world_can_perf.rs</code></td>
 </tr>
 <tr>
 <td><code>two_c3_nodes_connect_discover_read_write_and_notify</code></td>

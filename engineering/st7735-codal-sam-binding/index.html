@@ -4937,7 +4937,7 @@ The hosted trace job requires that exact fixture hash and compares freshly
 executed driver commands against it. Compiler-version metadata is retained, not
 silently normalized or required to match a future host's compiler string.</p>
 <h2 id="proposed-authored-guest-proof">Proposed authored guest proof</h2>
-<p>The sixth test in <code>crates/core/tests/st7735_sam_guest.rs</code> embeds those captured
+<p>The sixth test in <code>crates/core/tests/samd/st7735_sam_guest.rs</code> embeds those captured
 CASET, RASET, RGBSET and RAMWR payloads into authored Thumb instructions. The
 guest configures clocks, mux and SPI, drives CS/D/C and polls TXC. It writes the
 actual production palette upload, not the earlier independently authored LUT.

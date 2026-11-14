@@ -6231,7 +6231,7 @@ typed field per bit-banged part. It used to carry three:</p>
 resolved GPIO peripheral indices, called from three places in
 <code>bus/accessors.rs</code>. <strong>The bus now has no typed display field at all</strong>, and
 <code>no_typed_display_field_on_the_bus</code> in
-<code>crates/core/tests/bus_resident_device_port.rs</code> fails if one comes back.</p>
+<code>crates/core/tests/bus/bus_resident_device_port.rs</code> fails if one comes back.</p>
 <p>Two facts a bus-resident display states, and both are load-bearing:</p>
 <ul>
 <li><code>edge_service_addrs()</code> — the ODR addresses, sorted and <strong>deduped</strong>. The bus
@@ -6442,7 +6442,7 @@ engine has no type to hold.</p>
 <p><code>&amp;self</code>, because a panel is shared between the GPIO observer watching its pads
 and the peripheral strobing its bus. One method, because a second one is how a
 controller learns about a part again — <code>i80_panel_seam_stays_narrow</code> in
-<code>crates/core/tests/esp32s3_lcd_i80_pixels.rs</code> reads the trait's body and fails
+<code>crates/core/tests/display/esp32s3_lcd_i80_pixels.rs</code> reads the trait's body and fails
 on it, the same way <code>resident_device_port_stays_narrow</code> guards <code>DevicePins</code>.</p>
 <p>⚠️ <strong>Read a panel by FORMAT, never by concrete type.</strong>
 <code>bus.observed_of::&lt;Ili9341Parallel&gt;()</code> answers an empty iterator for a panel of

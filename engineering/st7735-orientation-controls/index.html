@@ -5016,7 +5016,7 @@ windows: guest TXC polling must still complete, but the fixed crop must contain
 zero known and eight unknown pixels, with frame bytes withheld. The host only
 attaches the fixture crop; it performs no guest MMIO setup or pixel injection.</p>
 <h2 id="acceptance-and-exclusions">Acceptance and exclusions</h2>
-<p>Execute all seven tests in <code>crates/core/tests/st7735_sam_guest.rs</code> in both
+<p>Execute all seven tests in <code>crates/core/tests/samd/st7735_sam_guest.rs</code> in both
 feature configurations, retain the live original-driver/fixture comparison, and
 require every enabled exact-head check to pass before landing. Record the tested
 source, guest hash and tested/landed tree identities. Static source review or

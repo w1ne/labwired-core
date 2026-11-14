@@ -5225,7 +5225,7 @@ descriptor into something it isn't.</p>
   for the DMA/IRQ propagation detail through the two-phase tick.</li>
 </ul>
 <h2 id="4-validate-against-silicon-capture-model-oracle-validate">4. Validate against silicon (capture → model → oracle → validate)</h2>
-<p>The L476 path (<code>crates/core/tests/firmware_survival.rs</code>) is the canonical
+<p>The L476 path (<code>crates/core/tests/gates/firmware_survival.rs</code>) is the canonical
 "done right" example. Scaffolding lives in <code>scripts/hw-oracle/</code> and <code>crates/hw-oracle</code>.</p>
 <ol>
 <li><strong>Capture.</strong> Flash a probe firmware that exercises <em>only</em> the target peripheral,

@@ -5128,7 +5128,7 @@
 </tr>
 <tr>
 <td>Tier</td>
-<td>smoke-proven (register-level tests: <code>crates/core/tests/parts_batch5.rs</code>)</td>
+<td>smoke-proven (register-level tests: <code>crates/core/tests/bus/parts_batch5.rs</code>)</td>
 </tr>
 </tbody>
 </table>
@@ -5214,7 +5214,7 @@
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">      </span><span class="nt">cs_pin</span><span class="p">:</span><span class="w"> </span><span class="s">"PA4"</span>
 </span></code></pre></div></li>
 <li>Agent: <code>labwired_list</code> → <code>labwired_describe id=sx1276</code> → wire → <code>labwired_validate</code> → <code>labwired_run</code> / <code>labwired_verify</code>.</li>
-<li>Register-level smoke: <code>cargo test -p labwired-core --test parts_batch5</code> — RegVersion, the LoRa-page reset values and the RSSI word in LoRa mode; <code>sx1276_tx_raises_txdone_and_irq_flags_clear_on_one</code> covers the LF offset, SNR, write-1-to-clear and TX. The same file's negative control proves the check fails against a stand-in that answers only 0x00 or only 0xFF.</li>
+<li>Register-level smoke: <code>cargo test -p labwired-core --test bus parts_batch5::</code> — RegVersion, the LoRa-page reset values and the RSSI word in LoRa mode; <code>sx1276_tx_raises_txdone_and_irq_flags_clear_on_one</code> covers the LF offset, SNR, write-1-to-clear and TX. The same file's negative control proves the check fails against a stand-in that answers only 0x00 or only 0xFF.</li>
 </ol>
 <h2 id="limitations">Limitations</h2>
 <ul>

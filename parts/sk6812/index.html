@@ -5128,7 +5128,7 @@
 </tr>
 <tr>
 <td>Tier</td>
-<td>smoke-proven (register-level tests: <code>crates/core/tests/parts_batch5.rs</code>)</td>
+<td>smoke-proven (register-level tests: <code>crates/core/tests/bus/parts_batch5.rs</code>)</td>
 </tr>
 </tbody>
 </table>
@@ -5205,7 +5205,7 @@
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">      </span><span class="nt">data_pin</span><span class="p">:</span><span class="w"> </span><span class="s">"GPIO48"</span>
 </span></code></pre></div></li>
 <li>Agent: <code>labwired_list</code> → <code>labwired_describe id=sk6812</code> → wire → <code>labwired_validate</code> → <code>labwired_run</code> / <code>labwired_verify</code>.</li>
-<li>Register-level smoke: <code>cargo test -p labwired-core --test parts_batch5</code> — a two-LED frame at the datasheet timing (one LED lit by W alone) decoded to its wire bytes plus the artifact; the negative control runs the same check against the 24-bit WS2812 decoder and a strip on another pad, and both must fail. The same file's negative control proves the check fails against a stand-in that answers only 0x00 or only 0xFF.</li>
+<li>Register-level smoke: <code>cargo test -p labwired-core --test bus parts_batch5::</code> — a two-LED frame at the datasheet timing (one LED lit by W alone) decoded to its wire bytes plus the artifact; the negative control runs the same check against the 24-bit WS2812 decoder and a strip on another pad, and both must fail. The same file's negative control proves the check fails against a stand-in that answers only 0x00 or only 0xFF.</li>
 </ol>
 <h2 id="limitations">Limitations</h2>
 <ul>

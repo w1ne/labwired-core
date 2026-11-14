@@ -5098,7 +5098,7 @@ values. Native environment results expose nonempty motor vectors under
 and series; they return errors for unknown nodes or serialization failure.
 The World actuator getter currently provides motor states.</p>
 <h2 id="evidence-and-scope">Evidence and scope</h2>
-<p>The executable regression is <code>crates/core/tests/world_circuit_bldc.rs</code>. It
+<p>The executable regression is <code>crates/core/tests/analog/world_circuit_bldc.rs</code>. It
 constructs two real Cortex-M nodes with small instruction loops and two motors
 on one solved supply. It checks independent current/rotation signs with the
 same local motor ID, shared-rail sag, reset-independent mechanics, absence of

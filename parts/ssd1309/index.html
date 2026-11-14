@@ -5106,7 +5106,7 @@
 </tr>
 <tr>
 <td>Tier</td>
-<td>smoke-proven (<code>crates/core/tests/everyday_display_set.rs</code>)</td>
+<td>smoke-proven (<code>crates/core/tests/display/everyday_display_set.rs</code>)</td>
 </tr>
 </tbody>
 </table>
@@ -5199,7 +5199,7 @@
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span><span class="nt">connection</span><span class="p">:</span><span class="w"> </span><span class="s">"i2c0"</span>
 </span></code></pre></div></li>
 <li>Agent: <code>labwired_list</code> → <code>labwired_describe id=oled-ssd1309</code> → wire → <code>labwired_validate</code> → <code>labwired_run</code> / <code>labwired_verify</code>.</li>
-<li>Smoke: <code>cargo test -p labwired-core --test everyday_display_set</code>. It checks display-off at reset, then sends an init sequence whose parameter bytes are themselves valid opcodes. The datasheet's own Figure 10-2 example (B2h / 03h / 10h → PAGE2, column 3) follows, then the page-mode wrap and a horizontal-mode window. It compares the whole 1024-byte GDDRAM against the eight bytes written. The negative control requires the check to FAIL against a panel that reads all 0x00 or all 0xFF.</li>
+<li>Smoke: <code>cargo test -p labwired-core --test display everyday_display_set::</code>. It checks display-off at reset, then sends an init sequence whose parameter bytes are themselves valid opcodes. The datasheet's own Figure 10-2 example (B2h / 03h / 10h → PAGE2, column 3) follows, then the page-mode wrap and a horizontal-mode window. It compares the whole 1024-byte GDDRAM against the eight bytes written. The negative control requires the check to FAIL against a panel that reads all 0x00 or all 0xFF.</li>
 </ol>
 <h2 id="limitations">Limitations</h2>
 <ul>

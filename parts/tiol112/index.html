@@ -5183,7 +5183,7 @@ sessions use tick pacing; the explicit <code>tiol112-eval</code> profile uses el
 byte pacing, a Start action, logical WAKE and validated DPP bring-up. Neither
 stream mode models a physical reply stop/start waveform. Use the native timed
 test for timing evidence:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>cargo<span class="w"> </span><span class="nb">test</span><span class="w"> </span>-p<span class="w"> </span>labwired-core<span class="w"> </span>--test<span class="w"> </span>g0_tiol112<span class="w"> </span>--test<span class="w"> </span>modern_uart_timing
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>cargo<span class="w"> </span><span class="nb">test</span><span class="w"> </span>-p<span class="w"> </span>labwired-core<span class="w"> </span>--test<span class="w"> </span>stm32<span class="w"> </span>--<span class="w"> </span>g0_tiol112::<span class="w"> </span>modern_uart_timing::
 </span></code></pre></div>
 <h2 id="fidelity-limits">Fidelity limits</h2>
 <p>The 4 µs enable/disable figures are modeled as explicit typical scenarios;
