@@ -2,11 +2,16 @@
 """Shared loader for registries stored as one file per entry.
 
 A registry that used to be one list in one file (`validation/manifest.yaml`,
-`validation/arduino-matrix/boards.yaml`) is now a directory:
+`validation/arduino-matrix/boards.yaml`, `validation/bus_proof_matrix.json`) is
+now a directory:
 
     <dir>/_index.yaml     everything that is not an entry (header comments,
                           sibling top-level keys such as `sketches:`)
     <dir>/<entry-id>.yaml exactly one entry, as a top-level mapping
+
+`validation/bus_proof` is the same layout with `.json` files (`_index.json`,
+`<chip>.json`); its entry schema is checked by `validation/bus_proof_matrix.py`,
+which `--check` also runs.
 
 `load_yaml_registry` returns the structure the single file used to parse to:
 `{**index_keys, "<list_key>": [entry, ...]}`, entries in sorted file-name order.
@@ -28,6 +33,7 @@ checks the committed registry directories (all of them when none is named).
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -39,6 +45,8 @@ except ImportError:  # pragma: no cover - environment precondition
 
 INDEX_NAME = "_index.yaml"
 SUFFIX = ".yaml"
+JSON_INDEX_NAME = "_index.json"
+JSON_SUFFIX = ".json"
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -46,16 +54,37 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 COMMITTED = {
     "validation/boards": "boards",
     "validation/arduino-matrix/boards": "boards",
+    "validation/bus_proof": "entries",
 }
+
+# directories whose files are JSON rather than YAML
+JSON_DIRS = {"validation/bus_proof"}
 
 
 class RegistryError(ValueError):
     """The registry directory is not a valid one-file-per-entry registry."""
 
 
-def entry_files(directory: Path) -> list[Path]:
+def entry_files(directory: Path, index_name: str = INDEX_NAME) -> list[Path]:
     """Sorted entry files of `directory` (everything but the index)."""
-    return sorted(p for p in directory.iterdir() if p.name != INDEX_NAME)
+    return sorted(p for p in directory.iterdir() if p.name != index_name)
+
+
+def _json_load(text: str, Loader=None):
+    return json.loads(text)
+
+
+def load_json_registry(directory: Path, list_key: str = "entries", *, id_key: str = "id") -> dict:
+    """Same contract as `load_yaml_registry`, for `_index.json` + `<id>.json`."""
+    return load_yaml_registry(
+        directory,
+        list_key,
+        id_key=id_key,
+        suffix=JSON_SUFFIX,
+        index_name=JSON_INDEX_NAME,
+        _parse=_json_load,
+        _parse_errors=(json.JSONDecodeError,),
+    )
 
 
 def load_yaml_registry(
@@ -64,7 +93,12 @@ def load_yaml_registry(
     *,
     yaml_loader=yaml.SafeLoader,
     id_key: str = "id",
+    suffix: str = SUFFIX,
+    index_name: str = INDEX_NAME,
+    _parse=None,
+    _parse_errors=(yaml.YAMLError, ValueError),
 ) -> dict:
+    parse = _parse or yaml.load
     directory = Path(directory)
     if not directory.is_dir():
         raise RegistryError(f"{directory}: registry directory does not exist")
@@ -72,13 +106,13 @@ def load_yaml_registry(
     errors: list[str] = []
 
     index: dict = {}
-    index_path = directory / INDEX_NAME
+    index_path = directory / index_name
     if not index_path.is_file():
         errors.append(f"{index_path}: missing (header and non-entry keys live here)")
     else:
         try:
-            data = yaml.load(index_path.read_text(encoding="utf-8"), Loader=yaml_loader)
-        except (yaml.YAMLError, ValueError) as exc:
+            data = parse(index_path.read_text(encoding="utf-8"), Loader=yaml_loader)
+        except _parse_errors as exc:
             errors.append(f"{index_path}: does not parse: {exc}")
             data = None
         if data is None:
@@ -92,15 +126,15 @@ def load_yaml_registry(
 
     entries: list[dict] = []
     first_seen: dict[str, str] = {}
-    for path in entry_files(directory):
-        if not path.is_file() or path.suffix != SUFFIX:
+    for path in entry_files(directory, index_name):
+        if not path.is_file() or path.suffix != suffix:
             errors.append(
-                f"{path}: stray file; only {INDEX_NAME} and <{id_key}>{SUFFIX} are allowed here"
+                f"{path}: stray file; only {index_name} and <{id_key}>{suffix} are allowed here"
             )
             continue
         try:
-            entry = yaml.load(path.read_text(encoding="utf-8"), Loader=yaml_loader)
-        except (yaml.YAMLError, ValueError) as exc:
+            entry = parse(path.read_text(encoding="utf-8"), Loader=yaml_loader)
+        except _parse_errors as exc:
             errors.append(f"{path}: does not parse: {exc}")
             continue
         if entry is None:
@@ -114,7 +148,7 @@ def load_yaml_registry(
             errors.append(f"{path}: has no string `{id_key}:`")
             continue
         if path.stem != eid:
-            errors.append(f"{path}: file name must be {eid}{SUFFIX} (entry {id_key} is {eid!r})")
+            errors.append(f"{path}: file name must be {eid}{suffix} (entry {id_key} is {eid!r})")
         if eid in first_seen:
             errors.append(f"{path}: duplicate {id_key} {eid!r} (also in {first_seen[eid]})")
         else:
@@ -141,8 +175,14 @@ def main(argv: list[str] | None = None) -> int:
     for target in targets:
         key = COMMITTED.get(target.resolve().relative_to(REPO_ROOT).as_posix(), "boards") \
             if target.resolve().is_relative_to(REPO_ROOT) else "boards"
+        is_json = target.resolve().is_relative_to(REPO_ROOT) and \
+            target.resolve().relative_to(REPO_ROOT).as_posix() in JSON_DIRS
         try:
-            reg = load_yaml_registry(target, key)
+            reg = load_json_registry(target, key) if is_json else load_yaml_registry(target, key)
+            if is_json:
+                import bus_proof_matrix
+
+                bus_proof_matrix.validate_directory(target)
         except RegistryError as exc:
             print(f"ERROR: {exc}", file=sys.stderr)
             rc = 1

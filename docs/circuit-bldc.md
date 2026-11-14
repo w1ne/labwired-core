@@ -149,7 +149,7 @@ The World actuator getter currently provides motor states.
 
 ## Evidence and scope
 
-The executable regression is `crates/core/tests/world_circuit_bldc.rs`. It
+The executable regression is `crates/core/tests/analog/world_circuit_bldc.rs`. It
 constructs two real Cortex-M nodes with small instruction loops and two motors
 on one solved supply. It checks independent current/rotation signs with the
 same local motor ID, shared-rail sag, reset-independent mechanics, absence of

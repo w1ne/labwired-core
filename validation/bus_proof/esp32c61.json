@@ -1,0 +1,21 @@
+{
+  "id": "esp32c61",
+  "in_boards": false,
+  "uart": {
+    "state": "proven",
+    "file": "examples/esp32c61-devkitc-1-n8r2/uart-smoke.yaml",
+    "test": "C61_N8R2_OK",
+    "signal": "firmware built from source boots in-sim on configs/systems/esp32c61-devkitc-1-n8r2.yaml and writes 'C61_N8R2_OK' to the UART0 TX FIFO; the uart_contains assertion matches it on the host_console UART capture.",
+    "lane": "core-onboarding-smoke (push to main + nightly cron): matrix id esp32c61-devkitc-1-n8r2 (scripts/onboarding_smoke.sh)"
+  },
+  "spi": {
+    "state": "none",
+    "gap": "No SPI controller is declared on configs/chips/esp32c61.yaml; the profile is UART0-only.",
+    "lane": "none"
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "No I2C controller is declared on configs/chips/esp32c61.yaml; the profile is UART0-only.",
+    "lane": "none"
+  }
+}

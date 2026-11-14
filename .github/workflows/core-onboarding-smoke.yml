@@ -299,10 +299,8 @@ jobs:
         run: |
           set -euo pipefail
           # These are LabWired runs of reference firmware, not Renode differential or silicon tests.
-          cargo test --locked -p labwired-core --test stm32u575_60north -- --ignored --nocapture \
-            2>&1 | tee out/stm32u575-reference/firmware-tests.log
-          cargo test --locked -p labwired-core --test stm32u575_60north_registers --test u545_u575_drift_guard -- --nocapture \
-            2>&1 | tee out/stm32u575-reference/register-drift-tests.log
+          cargo test --locked -p labwired-core --test stm32 -- --ignored --nocapture stm32u575_60north:: 2>&1 | tee out/stm32u575-reference/firmware-tests.log
+          cargo test --locked -p labwired-core --test stm32 -- --nocapture stm32u575_60north_registers:: u545_u575_drift_guard:: 2>&1 | tee out/stm32u575-reference/register-drift-tests.log
 
       - name: Upload reference evidence
         if: always()

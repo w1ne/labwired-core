@@ -16,4 +16,4 @@ pio run -d examples/arduino-nano-wdt
 cp examples/arduino-nano-wdt/.pio/build/nano/firmware.elf tests/fixtures/avr/arduino-nano-wdt.elf
 ```
 
-The proof is `crates/core/tests/avr_nano_wdt.rs`.
+The proof is `crates/core/tests/avr/avr_nano_wdt.rs`.

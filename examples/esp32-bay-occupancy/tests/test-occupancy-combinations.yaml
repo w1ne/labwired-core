@@ -1,7 +1,7 @@
 # Ryan's test 7: simultaneous occupancy across all four bays.
 #
 # The ENGINE proves all sixteen combinations read back exactly
-# (crates/core/tests/vcnl4010_bay_occupancy.rs ::
+# (crates/core/tests/misc/vcnl4010_bay_occupancy.rs ::
 # every_combination_of_four_bays_reads_back_exactly). This is the FIRMWARE
 # half: that the application maps a simultaneous multi-bay pattern onto four
 # independent published states, through one shared I2C switch.

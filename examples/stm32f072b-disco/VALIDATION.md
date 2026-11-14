@@ -48,7 +48,7 @@ cargo build -p firmware-stm32f072b-disco-smoke --release --target thumbv6m-none-
   --max-steps 200000 --out-dir out/unsupported-audit/stm32f072b-disco
 #   simulator exit 0 · Instructions executed: 200000 · Unsupported: 0
 
-cargo test -p labwired-core --test firmware_survival test_stm32f072b_disco_smoke_survival
+cargo test -p labwired-core --test gates firmware_survival::test_stm32f072b_disco_smoke_survival
 ```
 
 ## Notes
