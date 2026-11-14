@@ -20,6 +20,8 @@
 //! emissions against what the core actually did, and it derives the core list
 //! from the source tree rather than trusting the list below.
 
+#[path = "common/src_roots.rs"]
+mod src_roots;
 use labwired_core::cpu::{
     Aarch64, Avr, CortexM, Mips32, Pic16, Pic18, Pic24, RiscV, RiscV64, Rx, XtensaLx7,
 };
@@ -27,7 +29,6 @@ use labwired_core::{
     trace_sp_pc, Bus, Cpu, DmaRequest, SimResult, SimulationConfig, SimulationObserver,
 };
 use labwired_hw_trace::TraceEvent;
-use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -518,7 +519,7 @@ fn no_core_traces_when_nobody_is_observing() {
 fn every_cpu_core_is_covered_by_this_file() {
     // Derived from the source tree, so a new core cannot ship untraced: adding
     // `impl Cpu for Foo` fails this test until Foo is in `cores()` above.
-    let cpu_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/cpu");
+    let cpu_dir = src_roots::core_src("cpu");
     let mut found: Vec<String> = Vec::new();
     let mut stack = vec![cpu_dir.clone()];
     while let Some(dir) = stack.pop() {

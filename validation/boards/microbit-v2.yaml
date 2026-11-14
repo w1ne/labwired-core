@@ -1,0 +1,51 @@
+id: microbit-v2
+doc: docs/boards/microbit-v2.md
+chip: configs/chips/nrf52833.yaml
+tier: smoke-manual
+note: "BBC micro:bit v2, target nRF52833. Bare-metal UARTE0 EasyDMA smoke prints OK\\n from a RAM (.data) buffer, PSEL.TXD=P0.06 / PSEL.RXD=P1.08 (the interface-MCU bridge; micro:bit schematic labels are interface-side), BAUDRATE=115200, ENABLE=8. Radio/BLE, USB protocol, NFC, the charlieplexed 5x5 LED matrix and all on-board sensors are not modelled. SIM-DERIVED — no silicon diff; no executing-fidelity differential."
+offline_tests:
+  - "firmware_survival::test_nrf52833_microbit_v2_smoke_survival"
+models:
+  - crates/core/src/cpu/cortex_m.rs
+  - crates/core/src/decoder/arm.rs
+  - crates/core/src/peripherals/gpio.rs
+  - crates/core/src/peripherals/nrf52
+  - configs/chips/nrf52833.yaml
+  - configs/systems/microbit-v2.yaml
+  # 2026-09-21, model_paths_drift_gate: models this board REGISTERS that
+  # its list omitted, so they were invisible to the drift digest. This
+  # board records no silicon capture, so there is no "silicon-verified"
+  # claim for the corrected digest to invalidate — no ack is implied.
+  - crates/core/src/peripherals/nrf52/aar.rs
+  - crates/core/src/peripherals/nrf52/clock.rs
+  - crates/core/src/peripherals/nrf52/comp.rs
+  - crates/core/src/peripherals/nrf52/ecb.rs
+  - crates/core/src/peripherals/nrf52/egu.rs
+  - crates/core/src/peripherals/nrf52/ficr.rs
+  - crates/core/src/peripherals/nrf52/gpiote.rs
+  - crates/core/src/peripherals/nrf52/i2s.rs
+  - crates/core/src/peripherals/nrf52/mwu.rs
+  - crates/core/src/peripherals/nrf52/nfct.rs
+  - crates/core/src/peripherals/nrf52/nvmc.rs
+  - crates/core/src/peripherals/nrf52/pdm.rs
+  - crates/core/src/peripherals/nrf52/ppi.rs
+  - crates/core/src/peripherals/nrf52/pwm.rs
+  - crates/core/src/peripherals/nrf52/qdec.rs
+  - crates/core/src/peripherals/nrf52/radio.rs
+  - crates/core/src/peripherals/nrf52/rng.rs
+  - crates/core/src/peripherals/nrf52/rtc.rs
+  - crates/core/src/peripherals/nrf52/saadc.rs
+  - crates/core/src/peripherals/nrf52/serial_instance.rs
+  - crates/core/src/peripherals/nrf52/temp.rs
+  - crates/core/src/peripherals/nrf52/timer.rs
+  - crates/core/src/peripherals/nrf52/twim.rs
+  - crates/core/src/peripherals/nrf52/uarte.rs
+  - crates/core/src/peripherals/nrf52/uicr.rs
+  - crates/core/src/peripherals/nrf52/usbd.rs
+  - crates/core/src/peripherals/nrf52/wdt.rs
+  - crates/core/src/peripherals/spi.rs
+  - crates/core/src/peripherals/stub.rs
+  # 2026-10-16 (#1394), model_paths_drift_gate: the chip descriptor now
+  # declares the Cortex-M SysTick, so its model joins the watch list. No
+  # silicon capture is recorded for this board, so no ack is implied.
+  - crates/core/src/peripherals/systick.rs

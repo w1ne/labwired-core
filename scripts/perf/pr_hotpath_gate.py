@@ -8,8 +8,14 @@ import re
 import subprocess
 
 OWNED_REPOSITORY = "w1ne/labwired-core"
+# Production Rust of the engine crate: `crates/core/src/` and, once the engine
+# is split, any nested crate source dir (`crates/core/<group>/<crate>/src/`).
+# Never its tests, examples or benches directories.
+CORE_NESTED = r"crates/core/(?!tests/|examples/|benches/)(?:[^/]+/)*"
+CORE_RUNTIME_RE = re.compile(CORE_NESTED + r"src/")
+CORE_TEST_TREE_RE = re.compile(CORE_NESTED + r"src/tests/")
+CORE_BUILD_FILE_RE = re.compile(CORE_NESTED + r"(?:Cargo\.toml|build\.rs)$")
 RUNTIME_PREFIXES = (
-    "crates/core/src/",
     "crates/cli/src/",
     "crates/config/src/",
     "configs/chips/",
@@ -31,9 +37,13 @@ FIRMWARE_PREFIXES = tuple(
 
 def hotpath(path):
     # These separately compiled tests do not change the release engine.
-    if path.startswith("crates/core/src/tests/"):
+    if CORE_TEST_TREE_RE.match(path):
         return False
-    return path in BUILD_FILES or path.startswith(RUNTIME_PREFIXES + FIRMWARE_PREFIXES)
+    return (
+        path in BUILD_FILES
+        or path.startswith(RUNTIME_PREFIXES + FIRMWARE_PREFIXES)
+        or bool(CORE_RUNTIME_RE.match(path) or CORE_BUILD_FILE_RE.match(path))
+    )
 
 
 def select(event, repository, head_ref, paths):

@@ -1698,13 +1698,15 @@ impl WasmSimulator {
     /// for path-loss layout and UE identity.
     #[wasm_bindgen]
     pub fn attach_lab_air(&mut self, node_id: &str, air: &AirBus) {
-        self.untracked("on the shared radio air bus with other MCUs");
-        self.machine().bus.attach_lab_air(
+        let joined = self.machine().bus.attach_lab_air(
             node_id,
             air.nrf.clone(),
             air.ble.clone(),
             air.cellular.clone(),
         );
+        if joined {
+            self.untracked("on the shared radio air bus with other MCUs");
+        }
     }
 
     /// The pc of the core a debugger follows: core 0, or the second core of a

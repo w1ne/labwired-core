@@ -442,6 +442,32 @@
         "gap": "no TWIM/I2C test, example, firmware crate or system manifest references nrf5340 I2C anywhere. The chip is also not in the arduino matrix."
       }
     },
+    "nrf54l05": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "examples/nrf54l05-l10/nrf54l05-smoke.yaml",
+        "test": "uart_contains",
+        "signal": "Part-specific Cortex-M33 ELF programs UARTE20 EasyDMA TX registers and sends NRF54L05_OK; labwired test asserts the actual UART banner, memory banner, and GPIO P2.09 edges. Moving UARTE20 to a wrong address yields a precise BusFault and no banner (nRF54L05 negative control).",
+        "lane": "local labwired test --script examples/nrf54l05-l10/nrf54l05-smoke.yaml (4/4 on 2026-11-13); committed fixture appears in scripts/ci/docs-runnable-chips.json",
+        "note": "Synthetic board wiring only; no actual Nordic SDK, physical board UART, or full silicon parity."
+      },
+      "spi": { "state": "none", "gap": "No SPIM model is present in this deliberately limited nRF54L sibling profile; no firmware SPI transfer.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No TWIM model is present in this deliberately limited nRF54L sibling profile; no firmware I2C transaction.", "lane": "none" }
+    },
+    "nrf54l10": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "examples/nrf54l05-l10/nrf54l10-smoke.yaml",
+        "test": "uart_contains",
+        "signal": "Part-specific Cortex-M33 ELF programs UARTE20 EasyDMA TX registers and sends NRF54L10_OK; labwired test asserts the actual UART banner, memory banner, and GPIO P2.09 edges. Moving UARTE20 to a wrong address yields a precise BusFault and no banner (nRF54L05 negative control).",
+        "lane": "local labwired test --script examples/nrf54l05-l10/nrf54l10-smoke.yaml (4/4 on 2026-11-13); committed fixture appears in scripts/ci/docs-runnable-chips.json",
+        "note": "Synthetic board wiring only; no actual Nordic SDK, physical board UART, or full silicon parity."
+      },
+      "spi": { "state": "none", "gap": "No SPIM model is present in this deliberately limited nRF54L sibling profile; no firmware SPI transfer.", "lane": "none" },
+      "i2c": { "state": "none", "gap": "No TWIM model is present in this deliberately limited nRF54L sibling profile; no firmware I2C transaction.", "lane": "none" }
+    },
     "nrf54l15": {
       "in_boards": true,
       "uart": {
@@ -871,6 +897,33 @@
       "uart": { "state": "none", "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.", "lane": "none" },
       "spi": { "state": "none", "gap": "No exact-part firmware SPI transfer is proven for this descriptor.", "lane": "none" },
       "i2c": { "state": "none", "gap": "No exact-part firmware I2C transaction is proven for this descriptor.", "lane": "none" }
+    },
+    "stm32f446re": {
+      "in_boards": true,
+      "uart": {
+        "state": "proven",
+        "file": "validation/arduino-matrix/sketches/L0_serial_boot/src/main.ino",
+        "test": "LW_L0_OK",
+        "signal": "stock stm32duino NUCLEO_F446RE firmware (HSI PLL 180 MHz + PWR over-drive) prints LW_L0_OK from setup() on USART2, the ST-LINK VCP; the sim captures the bytes and a uart_contains oracle matches them",
+        "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
+        "note": "examples/nucleo-f446re/evidence/arduino-matrix/L0_serial_boot, 2026-11-09"
+      },
+      "spi": {
+        "state": "proven",
+        "file": "validation/arduino-matrix/sketches/L4_spi_sensor/src/main.ino",
+        "test": "LW_L4_OK",
+        "signal": "stock stm32duino SPI = SPI1 (PA5/PA6/PA7) clocks the MAX31855 device model and accepts ONLY the exact default kit frame 0x01901600; any other word prints LW_L4_FAIL frame=0x...; the verdict returns on USART2",
+        "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
+        "note": "needs ststm32@19.7.1 (the CI pin): 20.0.0 makes SPI.begin() a no-op. Evidence examples/nucleo-f446re/evidence/arduino-matrix/L4_spi_sensor, 2026-11-09"
+      },
+      "i2c": {
+        "state": "proven",
+        "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
+        "test": "LW_L3_OK",
+        "signal": "stock stm32duino Wire = I2C1 (PB8/PB9) reads the INA219 model's config register 0x399F and bus-voltage register 0x19CA; LW_L3_OK prints only on that exact pair (the F446 takes the exact tier, not the ACK-only one)",
+        "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
+        "note": "a full run to 3M steps prints no LW_L3_PARTIAL_NO_RX (examples/nucleo-f446re/evidence/arduino-matrix/L3_i2c_sensor/uart-full-run.log), 2026-11-09"
+      }
     },
     "stm32f411ceu6": {
       "in_boards": false,

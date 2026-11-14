@@ -33,6 +33,10 @@
 // complementary output the twin's timer does not generate. Use TIM2_CH1 on
 // PA0.
 #    define LW_PWM_PIN PA0
+#  elif defined(ARDUINO_NUCLEO_F446RE)
+// NUCLEO-F446RE LD2 is PA5 = DAC_OUT2 too; stock analogWrite would take the
+// DAC path (not modelled). Use TIM2_CH1 on PA0 (AF1).
+#    define LW_PWM_PIN PA0
 #  elif defined(ARDUINO_BLACKPILL_F411CE)
 // WeAct Black Pill LED is PC13, which has no timer channel on F411, so
 // analogWrite would fall back to digitalWrite. Use TIM2_CH1 on PA0.

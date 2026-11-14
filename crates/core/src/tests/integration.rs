@@ -901,6 +901,7 @@ pub mod integration_tests {
         bus.attach_uart_tx_sink(sink.clone(), false);
 
         let base = 0x4000_4800;
+        bus.write_u32(base, (1 << 0) | (1 << 3)).unwrap(); // UE + TE
         bus.write_u8(base + 0x04, b'X').unwrap(); // legacy DR offset should not TX in v2 mode
         bus.write_u8(base + 0x28, b'Y').unwrap(); // TDR
         assert_eq!(bus.read_u8(base + 0x1C).unwrap(), 0xC0); // ISR ready flags

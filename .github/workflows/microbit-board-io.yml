@@ -2,13 +2,13 @@ name: microbit active board qualification
 on:
   workflow_dispatch:
   pull_request:
+    # Lean PR gate (2026-11-13): on pull requests this lane runs only when
+    # its own files change. Shared engine paths (crates/core, crates/cli,
+    # Cargo.*) trigger it on push to main instead.
     paths:
       - 'configs/chips/nrf52833.yaml'
       - 'configs/peripherals/nrf52833/**'
       - 'configs/systems/microbit-v2.yaml'
-      - 'crates/core/src/**'
-      - 'crates/core/Cargo.toml'
-      - 'crates/wasm/src/inputs.rs'
       - 'crates/core/tests/microbit_v2*.rs'
       - 'examples/microbit-v2/**'
       - 'scripts/perf/*microbit*'

@@ -1,0 +1,56 @@
+# nrf54l10 application-core executable subset.
+# Nordic official product data and Zephyr dts/vendor/nordic/nrf54l10.dtsi:
+# RRAM and SRAM sizes; nrf54l_05_10_15.dtsi has shared MMIO bases.
+# Reuses ONLY UARTE20, GPIO P0/P1/P2, SysTick and TIMER10 from nRF54L15.
+# Physical silicon parity, radio, TrustZone, LF peripherals and remaining
+# SoC IP are not claimed. RRAM mapped at 0x0; secure MMIO + NS alias.
+name: nrf54l10
+arch: arm
+core: cortex-m33
+cpu_hz: 128000000
+ns_alias_offset: 268435456
+flash:
+  base: 0
+  size: 1012KB
+ram:
+  base: 536870912
+  size: 192KB
+peripherals:
+- id: uart20
+  type: nrf54l_uarte
+  base_address: 1342988288
+  size: 4KB
+  irq: 198
+  config: {}
+- id: gpio0
+  type: gpio
+  base_address: 1343266816
+  size: 768
+  config:
+    profile: nrf54l
+    num_pins: 7
+- id: gpio1
+  type: gpio
+  base_address: 1343062528
+  size: 768
+  config:
+    profile: nrf54l
+    num_pins: 17
+- id: gpio2
+  type: gpio
+  base_address: 1342505984
+  size: 768
+  config:
+    profile: nrf54l
+    num_pins: 11
+- id: systick
+  type: systick
+  base_address: 3758153744
+  size: 16B
+- id: timer10
+  type: nrf52840_timer
+  base_address: 1342722048
+  size: 4KB
+  irq: 133
+  config:
+    num_cc: 8

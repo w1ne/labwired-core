@@ -15,7 +15,7 @@
 #
 # THIS IS NOT A PR CHECK. Hosted CI has no hardware. Run it on the bench (or a
 # self-hosted `hil`+`esp32c3` runner / the weekly core-validate-hw-targets job),
-# then record the dated result in validation/manifest.yaml (the honesty ledger).
+# then record the dated result in validation/boards/ (the honesty ledger).
 #
 # Prereq: openocd-esp32 (Espressif fork — vanilla openocd 0.12 has no C3 target).
 #   xPack:  npm i -g @xpack-dev-tools/openocd  (or the esp-idf openocd)
