@@ -580,6 +580,15 @@ impl Solver {
         })
     }
 
+    /// Index of a named resistor whose resistance depends on external temperature.
+    pub fn temperature_dependent_resistor_index(&self, name: &str) -> Option<usize> {
+        let key = name.trim().to_ascii_lowercase();
+        self.circuit.resistors.iter().position(|resistor| {
+            (resistor.ntc.is_some() || resistor.temperature_coefficients.is_some())
+                && resistor.name.to_ascii_lowercase() == key
+        })
+    }
+
     /// Set an NTC's external temperature input in Celsius. A changed value
     /// invalidates the linear stamp so its resistance is rebuilt next step.
     /// Returns false for a non-NTC element, an invalid temperature or a model
@@ -601,6 +610,50 @@ impl Solver {
         }
         if resistor.ntc != Some(ntc) {
             resistor.ntc = Some(ntc);
+            self.cached_stamp = None;
+            self.restart = true;
+            self.settled = false;
+        }
+        true
+    }
+
+    /// Set an NTC or temperature-coefficient resistor's external temperature.
+    /// A changed value invalidates the linear stamp so its resistance is
+    /// rebuilt on the next step. Returns false for a fixed resistor, an invalid
+    /// temperature, or a model whose resulting resistance is not finite and
+    /// positive.
+    pub fn set_resistor_temperature(&mut self, index: usize, celsius: f64) -> bool {
+        if !celsius.is_finite() || celsius <= -273.15 {
+            return false;
+        }
+        let Some(resistor) = self.circuit.resistors.get_mut(index) else {
+            return false;
+        };
+        let (ntc, temperature_coefficients) =
+            match (resistor.ntc, resistor.temperature_coefficients) {
+                (Some(mut ntc), None) => {
+                    ntc.temperature_celsius = celsius;
+                    (Some(ntc), None)
+                }
+                (None, Some(mut model)) => {
+                    model.temperature_celsius = celsius;
+                    (None, Some(model))
+                }
+                // Parsing rejects a resistor that has both temperature laws.
+                // Treat a fixed resistor (or an invalid hand-built circuit) as
+                // non-routable.
+                _ => return false,
+            };
+        let resistance = ntc
+            .map(|model| model.resistance_ohms(resistor.ohms))
+            .or_else(|| temperature_coefficients.map(|model| model.resistance_ohms(resistor.ohms)))
+            .unwrap_or(f64::NAN);
+        if !resistance.is_finite() || resistance <= 0.0 {
+            return false;
+        }
+        if resistor.ntc != ntc || resistor.temperature_coefficients != temperature_coefficients {
+            resistor.ntc = ntc;
+            resistor.temperature_coefficients = temperature_coefficients;
             self.cached_stamp = None;
             self.restart = true;
             self.settled = false;

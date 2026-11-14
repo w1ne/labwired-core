@@ -384,7 +384,7 @@ cosim_models:
       substeps: 10             # internal solver steps per co-sim step
       integration: be          # be (default) | trap
       probes:  { v_out: "v(out)" }   # output name <- voltage / element current
-      sources: { gpio: Vgpio }       # input name  -> V, I or S element
+      sources: { gpio: Vgpio }       # input name -> V, I, S, or R (ohms / Celsius)
       trace: ["v(in)", "i(Vgpio)"]   # extra oscilloscope channels
       trace_samples: 20000           # ring depth (default 20000)
 ```
@@ -426,6 +426,10 @@ an element line is the worst thing a netlist parser can do.
 
 A switch's `<ctrl>` is the name of a routed boolean input, not a circuit node,
 so it needs no `sources:` entry.
+
+A `sources:` entry may also target a resistor with `beta=` or `tc1=`/`tc2=`.
+The routed number is its external temperature in degrees Celsius; a value
+change rebuilds that resistor's MNA conductance on the next step.
 
 ### Op-amp and comparator macros
 
