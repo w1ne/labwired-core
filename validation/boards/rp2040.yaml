@@ -1,0 +1,100 @@
+id: rp2040
+doc: docs/boards/rp2040.md
+chip: configs/chips/rp2040.yaml
+tier: structural
+note: "Behavioural models for clocks/resets (RESET_DONE/PLL-LOCK/XOSC-STABLE), the 64-bit free-running TIMER, SIO GPIO (drive/readback round-trip) + hardware spinlocks (SPINLOCK0..31 try-lock/release), PL022 SPI0 (loopback transfer), DW_apb_i2c I2C0 (no-slave address-NACK abort), the XIP_SSI flash controller (boot2 QSPI bring-up: SSI shift engine + W25Q-style RDSR/WREN/WRSR responder, so the stage-2 bootloader and pico-sdk flash_enable_xip_via_boot2 complete), a TBMAN storage stub (running_on_fpga probe), and the PL011 UART0 console. Each is exercised by the tier-1 fixture (tests/fixtures/tier1/rp2040.elf) which reports clock/timer/gpio/spi/i2c PASS over UART. PIO0 is declared but has no test coverage. No silicon bench."
+# 2026-07-04: added the XIP_SSI flash-controller model + SIO spinlocks +
+# TBMAN stub to fix the boot2/XIP bus-read fault at 0x18000028. Structural
+# tier (no silicon bench), so this is documentation, not a re-capture claim.
+# 2026-08-05: shared clkrst model gained ClockResetProfile::Rp2350 for the
+# RP2350 address map; RP2040 default path is unit-tested unchanged
+# (rp2350_clkrst_profile::rp2040_profile_is_unchanged).
+# 2026-08-10 RP2040 probe re-binding. This is the board the change is FOR:
+# SIO's tap_snapshot/tap_report became pub(crate) and the bus now calls them
+# around an IO_BANK0 GPIOn_CTRL write, because FUNCSEL lives in IO_BANK0 and
+# not in SIO — so a probe armed before firmware muxes the pad kept watching
+# the old source and drew a flat line. Observability only: no register
+# read/write path, reset value or layout changed, and the frozen capture
+# covers register values rather than probe binding. No live re-capture.
+# 2026-08-13 (#962): the chip descriptor now declares the clock its core
+# runs at (`ChipDescriptor::cpu_hz`), which moved every configs/chips/*.yaml
+# and this board's digest with them. NOTHING THIS CAPTURE PINS MOVED: the
+# field is declarative and no peripheral model reads it, and a new test
+# (cpu_hz_single_source) asserts the descriptor agrees with the peripheral
+# constants rather than replacing them. What consumes the clock is the
+# external-device attach path (DHT22, HC-SR04, rotary encoder, WS2812), and
+# no silicon capture covers any of those. The digest is re-stamped here so
+# this ack names content a human actually read; no live re-capture owed for
+# this change, and any already owed above still is.
+# 2026-08-20 (#1021): the dead `Peripheral::write_word_32` contract was
+# deleted, taking with it the no-op override in
+# crates/core/src/peripherals/rp2040/usb.rs — which this board watches as a
+# directory, hence the moved digest. The override forwarded to
+# `self.write_u32(offset, value)` and nothing ever invoked it: a 32-bit MMIO
+# store dispatches through `dev.write_u32(off, value)` at
+# crates/core/src/bus/accessors.rs:653, and `write_word_32` appears nowhere
+# in crates/core/src/bus/. Deleting unreachable code cannot move a modelled
+# value: no register read/write path, reset value, layout or base address
+# changed, and the tier-1 fixture's clock/timer/gpio/spi/i2c PASS line is
+# unaffected. This board is `structural` with no silicon bench, so as ever
+# this is documentation rather than a re-capture claim. `drift_ack` moves to
+# today because the digest is re-stamped today and the pair must name the
+# same reading. Evidence: 3121 lib tests + 3251 under event-scheduler, 0
+# failed; clippy and fmt clean.
+  # Re-stamped 2026-08-22 for the flash-size correction in this branch. The
+  # only model file that moved for this board is its chip descriptor, and the
+  # only field that changed is flash `size`, respelled from MB to KB because
+  # `parse_size` reads MB as 10^6 — the modelled part grows to the size of the
+  # real one. No register layout, reset value or peripheral behaviour is
+  # touched, which is what the silicon capture asserts, so the capture stands.
+# 2026-09-22: the 2026-08-22 ack lapsed (30 days). This board is still
+# structural and has no silicon bench, so there is nothing to re-capture.
+# The date moves so the gate's expiry check stays current; the digest below
+# is unchanged because no model file moved for this renewal.
+drift_ack: 2026-09-22
+# 2026-08-22: the Thumb-2 decoder gained SMLABB/BT/TB/TT and SMULBB/BT/TB/TT
+# (ARMv7-M A7.7.166/171). They were UNDECODED, which in this core means a
+# silent no-op — `digitalWrite` on EFR32MG26 computes its port base with
+# SMLABB and was writing to a garbage address, so blink did not blink.
+# Purely additive: one new `else if` in decoder/arm.rs and one new match arm
+# in cortex_m.rs; `git diff` removes no existing line, so every encoding that
+# decoded before decodes identically now.
+# ⚠ MEASURED, NOT ASSUMED, because a newly-decoded instruction genuinely does
+# change behaviour for firmware that executes it — this is the one drift note
+# in this file where "additive" is not by itself an argument. All 96 committed
+# ELF fixtures were disassembled: exactly ONE contains the family, the
+# `smulbb r0, r1, r0` divide-by-3 in
+# crates/wasm/tests/fixtures/firmware-l476-bldc-six-step.elf, and its committed
+# golden trace (crates/wasm/tests/fixtures/motor-parity-native.json) still
+# matches. No other pinned firmware on any board reaches the encoding, so
+# nothing a silicon capture asserts moved. No live re-capture is evidenced here.
+drift_ack_digest: dbf661e76d9fca317f8e91370c3f96d116e2b699f880a31d4510306e3f1a77c9
+models:
+  - crates/core/src/cpu/cortex_m.rs
+  - crates/core/src/decoder/arm.rs
+  - configs/chips/rp2040.yaml
+  - crates/core/src/peripherals/rp2040
+  - crates/core/src/peripherals/rp2040_clocks.rs
+  - configs/peripherals/rp2040
+  # 2026-09-21, model_paths_drift_gate: models this board REGISTERS that
+  # its list omitted, so they were invisible to the drift digest. This
+  # board records no silicon capture, so there is no "silicon-verified"
+  # claim for the corrected digest to invalidate — no ack is implied.
+  - crates/core/src/peripherals/declarative.rs
+  - crates/core/src/peripherals/pio.rs
+  - crates/core/src/peripherals/rp2040/adc.rs
+  - crates/core/src/peripherals/rp2040/dma.rs
+  - crates/core/src/peripherals/rp2040/i2c.rs
+  - crates/core/src/peripherals/rp2040/io_bank0.rs
+  - crates/core/src/peripherals/rp2040/pwm.rs
+  - crates/core/src/peripherals/rp2040/rtc.rs
+  - crates/core/src/peripherals/rp2040/sio.rs
+  - crates/core/src/peripherals/rp2040/spi.rs
+  - crates/core/src/peripherals/rp2040/timer.rs
+  - crates/core/src/peripherals/rp2040/usb.rs
+  - crates/core/src/peripherals/rp2040/watchdog.rs
+  - crates/core/src/peripherals/rp2040/xip_ssi.rs
+  - crates/core/src/peripherals/simctl.rs
+  - crates/core/src/peripherals/stub.rs
+  - crates/core/src/peripherals/systick.rs
+  - crates/core/src/peripherals/uart.rs

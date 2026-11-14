@@ -216,7 +216,7 @@ INA219 model attached.
 python3 scripts/generate_validation_status.py --check   # exit 0
 ```
 
-`validation/manifest.yaml` carries the `stm32u575` entry (`tier: sim-validated`,
+`validation/boards/` carries the `stm32u575` entry (`tier: sim-validated`,
 no `silicon:`) and the regenerated
 [validation status](https://docs.labwired.com/boards/VALIDATION_STATUS/) (generated, not committed)
 renders it as "no silicon capture". `--check --drift` is green. The 7
@@ -227,7 +227,7 @@ branch's own drift, not a pre-existing red: the CPU shift-flag edits
 V2 RCC PLL1/U5 CR-ready edits (`crates/core/src/peripherals/rcc.rs`) changed
 their watched content digests past the old `drift_ack_digest`. Each was
 re-acked on 2026-09-18 with a note naming the changed paths (see its
-`drift_ack` block in `validation/manifest.yaml`) and re-stamped with
+`drift_ack` block in `validation/boards/`) and re-stamped with
 `python3 scripts/generate_validation_status.py --write-ack-digests`; a live
 re-capture remains owed. U575 is not among them.
 

@@ -1,0 +1,26 @@
+id: nrf54l15
+doc: docs/boards/nrf54l15.md
+chip: configs/chips/nrf54l15.yaml
+tier: sim-validated
+note: "RRAM-based (NVM at 0x0, 1524 KB; 256 KB SRAM, initial SP at 0x2004_0000) rather than flash. Boots a bare smoke fixture and UNMODIFIED upstream Zephyr hello_world through the real nrfx/Zephyr boot path (TAMPC approtect gate, nRF54L CLOCK XO/LFCLK, GRTC, nRF54L-generation UARTE DMA.TX) — firmware_survival::nrf54l15_smoke/nrf54l15_zephyr. No nRF54L15 silicon diff — no bench board."
+offline_tests:
+  - "firmware_survival::nrf54l15_smoke / nrf54l15_zephyr"
+models:
+  - crates/core/src/cpu/cortex_m.rs
+  - crates/core/src/decoder/arm.rs
+  - configs/chips/nrf54l15.yaml
+  # 2026-09-21, model_paths_drift_gate: the models this board actually
+  # REGISTERS, previously invisible to its drift digest. nrf54l/{clock,
+  # uarte,twim}.rs were all rewritten by the walk-deletion work without
+  # moving the hash, which is what prompted the gate.
+  - crates/core/src/peripherals/gpio.rs
+  - crates/core/src/peripherals/nrf52/egu.rs
+  - crates/core/src/peripherals/nrf52/gpiote.rs
+  - crates/core/src/peripherals/nrf52/temp.rs
+  - crates/core/src/peripherals/nrf52/timer.rs
+  - crates/core/src/peripherals/nrf54l/clock.rs
+  - crates/core/src/peripherals/nrf54l/grtc.rs
+  - crates/core/src/peripherals/nrf54l/twim.rs
+  - crates/core/src/peripherals/nrf54l/uarte.rs
+  - crates/core/src/peripherals/stub.rs
+  - crates/core/src/peripherals/systick.rs

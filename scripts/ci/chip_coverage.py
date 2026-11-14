@@ -9,14 +9,14 @@ and both lists are hand-written — so a chip added to `configs/chips/` ran real
 firmware in no gate at all and nothing said so. 8 of 26 were in that state when
 this landed.
 
-Worse, membership in `validation/arduino-matrix/boards.yaml` is not by itself
+Worse, membership in `validation/arduino-matrix/boards/` is not by itself
 coverage: a board there that the workflow's matrix does not name runs nowhere.
 That is the same shape as the h735 lab whose `io-smoke.yaml` sat in the tree
 with no workflow running it (see core-coverage-matrix-smoke.yml).
 
 So coverage here is DERIVED, never declared:
 
-  * a chip is proven by the Arduino matrix only if some board in boards.yaml
+  * a chip is proven by the Arduino matrix only if some board in boards/
     names it AND that board id appears in the workflow's matrix list;
   * a chip is proven by a script only if some workflow (or a board manifest's
     `ci/test.sh`) passes that script to `labwired test`, and the script's
@@ -42,6 +42,9 @@ import sys
 from pathlib import Path
 
 import yaml
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "validation"))
+import registry_dir  # noqa: E402  (shared one-file-per-board loader)
 
 EXACT_MATRIX_JOB_CONDITION = (
     "${{ github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core' }}"
@@ -71,7 +74,7 @@ def workflow_dir() -> Path:
 
 
 def arduino_boards() -> Path:
-    return REPO_ROOT / "validation/arduino-matrix/boards.yaml"
+    return REPO_ROOT / "validation/arduino-matrix/boards"
 
 
 def arduino_workflow() -> Path:
@@ -106,6 +109,13 @@ SCRIPT_KEY_RE = re.compile(r"^\s*script:\s*[\"']?([\w./-]+\.yaml)", re.MULTILINE
 SURVIVAL_SYSTEM_RE = re.compile(r"^\s*system:\s*\"([\w.-]+)\"", re.MULTILINE)
 
 KINDS = ("pending", "waived")
+
+# A matrix computed from boards/: `matrix: ${{ fromJSON(needs.<job>.outputs.matrix) }}`
+# fed by scripts/ci/arduino_matrix_plan.py.
+DYNAMIC_MATRIX_RE = re.compile(
+    r"fromJSON\(\s*needs\.[\w-]+\.outputs\.matrix\s*\)(?s:.*)arduino_matrix_plan\.py"
+    r"|arduino_matrix_plan\.py(?s:.*)fromJSON\(\s*needs\.[\w-]+\.outputs\.matrix\s*\)"
+)
 
 
 class CoverageError(RuntimeError):
@@ -393,7 +403,7 @@ def script_proofs() -> dict[str, set[str]]:
 def arduino_proofs() -> tuple[dict[str, set[str]], list[str]]:
     """chip -> arduino matrix cells, plus boards.yaml entries that run nowhere.
 
-    A boards.yaml entry the workflow does not name is NOT coverage. Reporting
+    A boards/ entry the workflow does not run is NOT coverage. Reporting
     it as coverage is exactly how a lab ends up in the tree gating nothing.
 
     ⚠️ ONE board is legitimately absent from this repo's workflow matrix, and
@@ -413,16 +423,26 @@ def arduino_proofs() -> tuple[dict[str, set[str]], list[str]]:
     open it. What it CAN enforce is that the claim is made explicitly, and it
     does.
     """
-    if not arduino_boards().is_file() or not arduino_workflow().is_file():
-        raise CoverageError("the Arduino matrix manifest or workflow is missing")
+    if not arduino_boards().is_dir() or not arduino_workflow().is_file():
+        raise CoverageError("the Arduino matrix manifest (boards/) or workflow is missing")
+    try:
+        fleet = registry_dir.load_yaml_registry(arduino_boards(), "boards")
+    except registry_dir.RegistryError as exc:
+        raise CoverageError(str(exc)) from exc
     workflow_text = arduino_workflow().read_text()
-    # The matrix lists board ids as `- <id>` under `board:`; match on the exact
-    # list item so a substring (esp32 vs esp32s3) cannot forge a hit.
-    listed = set(re.findall(r"^\s+-\s+([\w.-]+)\s*$", workflow_text, re.MULTILINE))
+    if DYNAMIC_MATRIX_RE.search(workflow_text):
+        # The workflow computes its matrix from boards/ with the very function
+        # used here (scripts/ci/arduino_matrix_plan.py): every board without
+        # `external_compile:` runs, by construction.
+        listed = {b["id"] for b in fleet["boards"] if b.get("id") and not b.get("external_compile")}
+    else:
+        # Literal matrix: board ids as `- <id>` under `board:`; match on the
+        # exact list item so a substring (esp32 vs esp32s3) cannot forge a hit.
+        listed = set(re.findall(r"^\s+-\s+([\w.-]+)\s*$", workflow_text, re.MULTILINE))
 
     proofs: dict[str, set[str]] = {}
     unrun: list[str] = []
-    for board in load_yaml(arduino_boards()).get("boards") or []:
+    for board in fleet.get("boards") or []:
         bid, chip = board.get("id"), board.get("chip")
         if not bid or not chip:
             raise CoverageError(f"arduino board entry {bid!r} has no id/chip")
@@ -438,7 +458,7 @@ def arduino_proofs() -> tuple[dict[str, set[str]], list[str]]:
             if not lane:
                 raise CoverageError(
                     f"arduino board '{bid}' declares external_compile: but names no `lane:`. "
-                    "Nothing anywhere runs it, and boards.yaml is claiming coverage it does "
+                    "Nothing anywhere runs it, and boards/ is claiming coverage it does "
                     "not have."
                 )
             proofs.setdefault(chip, set()).add(f"arduino-matrix (external lane): {bid} -> {lane}")
@@ -498,7 +518,7 @@ def evaluate() -> tuple[dict[str, set[str]], list[str], list[str]]:
     errors: list[str] = []
     for bid in sorted(unrun_boards):
         errors.append(
-            f"arduino board '{bid}' is declared in boards.yaml but the matrix in "
+            f"arduino board '{bid}' is declared in boards/ but the matrix in "
             "core-arduino-matrix-smoke.yml does not name it, so nothing runs it"
         )
     for chip in sorted(proofs):
@@ -518,7 +538,7 @@ def evaluate() -> tuple[dict[str, set[str]], list[str], list[str]]:
         if entry is None:
             errors.append(
                 f"chip '{chip}' ships but NO CI gate executes firmware on it. Add a cell "
-                "(validation/arduino-matrix/boards.yaml + the workflow matrix, or a script "
+                "(a validation/arduino-matrix/boards/<id>.yaml file, or a script "
                 "a workflow runs), or add it to configs/ci/chip-coverage.yaml with a reason."
             )
             continue

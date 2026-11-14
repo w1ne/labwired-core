@@ -9,7 +9,8 @@ on:
       - 'mkdocs.yml'
       # docs/boards/VALIDATION_STATUS.md is rendered at deploy time from the
       # manifest and the source it watches, so those changes republish it.
-      - 'validation/manifest.yaml'
+      - 'validation/boards/**'
+      - 'validation/registry_dir.py'
       - 'scripts/generate_validation_status.py'
       - 'configs/**'
       - 'crates/**'
