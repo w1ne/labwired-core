@@ -12,6 +12,10 @@ Current inventory: **103 top-level profiles; 103 have end-to-end analog coverage
 
 Onboarding profiles with **no end-to-end analog endpoint** (0): none.
 
+### Chip analog pad maps
+
+[`cosim_analog_pins_every_chip.rs`](../crates/core/tests/cosim_analog_pins_every_chip.rs)::`every_declared_analog_pad_binds_and_applies_on_its_adc` drives `board.analog.<pad>_volts` on every `analog_pins:` entry of every chip descriptor (909 pads on 68 chips on 2026-11-15) through one mock model. Each path must bind (the named peripheral answers `adc_channel_count` and has the channel) and apply (the ADC model accepts the value). `a_wrong_channel_or_a_non_adc_is_refused_on_every_family_shape` is the negative control on S32K3, Kinetis, SAM AFEC, SAMD21, RP2350 and PIC24F. This check does not prove that a channel number matches the datasheet, and it does not count as board coverage.
+
 ### Additional physics proof on an already covered profile
 
 `s32k388-evb` now proves BJT quasi-saturation. `RCO` selects Kull's model of the epitaxial collector between the collector contact behind `RC` and the intrinsic collector: its resistance falls as the forward-biased collector junction injects carriers (`GAMMA`), its current saturates with the drop across it (`VO`), and `QCO` stores the epitaxial charge. Before this change `RCO`, `VO`, `GAMMA` and `QCO` were accepted and ignored. [`cosim_s32k388_adc_analog.rs`](../crates/core/tests/cosim_s32k388_adc_analog.rs)::`s32k388_evb_bjt_quasi_saturation_reaches_adc1_and_adc2_beside_ntc_and_diode` drives four switch stages from one base voltage and converts their collectors on PTA16 (ADC1_S13), PTB15 (ADC1_S11), PTB16 (ADC1_S12) and PTA21 (ADC2_S12) against ngspice-42 values: the quasi-saturation NPN, the same card with `RC` only, the same card with `RC = 52 Ω`, and the PNP mirror. The same change fixes transient runs of a PNP with `RB` and `XCJC < 1`, which did not converge because the external-base charge stamp used the wrong sign for its control voltage. All board profiles already have end-to-end analog endpoints, so this round adds physics evidence on an already covered board and no newly covered board.
