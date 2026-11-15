@@ -51,6 +51,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "avr_gpio",
     "avr_adc",
     "pic24_gpio",
+    "pic24_adc_pads",
     "rcc",
     "systick",
     "timer",
@@ -930,6 +931,25 @@ pub fn try_build(
                 .map(|v| v as u16)
                 .unwrap_or(default_mask);
             Box::new(crate::peripherals::pic24_gpio::Pic24GpioPort::new(mask))
+        }
+        "pic24_adc_pads" => {
+            // ADC1 is CPU-internal; this is the bus landing point for routed
+            // AN0-AN8 levels. `config.channels` is the package's ANx mask
+            // (0x003F on the 28-pin part), `config.vref_mv` the AVDD reference.
+            let channels = p_cfg
+                .config
+                .get("channels")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0x01FF) as u16;
+            let vref_mv = p_cfg
+                .config
+                .get("vref_mv")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(3300)
+                .min(u64::from(u16::MAX)) as u16;
+            Box::new(crate::peripherals::pic24_adc_pads::Pic24AdcPads::new(
+                channels, vref_mv,
+            ))
         }
         "avr_adc" => {
             // `config.channels`: 8 on the ATmega328P (default), 16 on the ATmega2560.

@@ -31,7 +31,8 @@ ram:
   base: 0x000800
   size: "2KB"
 # Generic mixed-signal GPIO threshold assumptions for cosim voltage inputs.
-# These are not a silicon-captured claim; ADC pad routing remains separate.
+# These are not a silicon-captured claim. ADC1 pad levels route through
+# `analog_pins` below.
 io_voltage_v: 3.3
 gpio_input_thresholds:
   vil: 0.3
@@ -39,6 +40,16 @@ gpio_input_thresholds:
 # M1: 28-pin package pads (DS70283H 28-pin pin diagrams): RA0-RA4,
 # RB0-RB15, no PORTC. The masks are the package truth; the CPU derives its
 # TRIS/LAT/ODC masks from these entries (44-pin defaults when absent).
+# ADC1 analog pads (DS70283H Table 1-1): AN0-AN5. `board.analog.<pad>_volts`
+# and `adc.adc1.<n>_volts` routes land on the `pic24_adc_pads` window, which
+# the core's ADC1 converts against AVDD (VCFG = 000).
+analog_pins:
+  RA0: { peripheral: "adc1", channel: 0 }
+  RA1: { peripheral: "adc1", channel: 1 }
+  RB0: { peripheral: "adc1", channel: 2 }
+  RB1: { peripheral: "adc1", channel: 3 }
+  RB2: { peripheral: "adc1", channel: 4 }
+  RB3: { peripheral: "adc1", channel: 5 }
 peripherals:
   - id: "gpioa"
     type: "pic24_gpio"
@@ -55,3 +66,10 @@ peripherals:
     base_address: 0x000102E0
     size: "12"
     config: { port: "c", mask: 0x0000 }
+  # Not silicon: the routed AN pin levels ADC1 converts (see
+  # `peripherals::pic24_adc_pads`). Past the mirrored SFR space.
+  - id: "adc1"
+    type: "pic24_adc_pads"
+    base_address: 0x00010800
+    size: "24"
+    config: { channels: 0x003F, vref_mv: 3300 }

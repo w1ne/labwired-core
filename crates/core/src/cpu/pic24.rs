@@ -544,6 +544,11 @@ fn wrap40(value: i64) -> i64 {
 /// (`peripherals::pic24_gpio`): `PIC24_IO_MIRROR_BASE + data-space address`.
 pub const PIC24_IO_MIRROR_BASE: u64 = 0x0001_0000;
 
+/// The routed ADC1 pad levels (`peripherals::pic24_adc_pads`). It sits past
+/// the mirrored SFR space (data-space SFRs end at 0x07FF) because it is not an
+/// SFR: it carries the AN0-AN8 pin voltages a co-simulated circuit drives.
+pub const PIC24_ADC_PAD_BASE: u64 = PIC24_IO_MIRROR_BASE + 0x0800;
+
 /// I/O port registers (DS70283H Table 4-19 … 4-22).
 pub const SFR_TRISA: u16 = 0x02C0;
 pub const SFR_PORTA: u16 = 0x02C2;
@@ -888,6 +893,18 @@ pub struct Pic24 {
     adc_buf: [u16; ADC1_BUF_COUNT],
     /// Injected analog codes (raw 10/12-bit) for AN0-AN8 and the spare pins.
     adc_analog: [u16; 16],
+    /// Routed pad levels pulled from the bus (`PIC24_ADC_PAD_BASE`): the
+    /// generation last seen, the held-channel mask, the levels in mV and the
+    /// AVDD reference. A held channel converts its voltage; a released one
+    /// keeps the harness code in `adc_analog`.
+    adc_pad_generation: u16,
+    adc_pad_held: u16,
+    adc_pad_mv: [u16; 16],
+    adc_pad_vref_mv: u16,
+    /// Whether the board has a `pic24_adc_pads` window at
+    /// `PIC24_ADC_PAD_BASE` ([`Pic24::set_adc_pad_window`]). Board wiring,
+    /// not machine state, so not snapshotted.
+    adc_pad_window: bool,
     adc_state: AdcState,
     /// Remaining TAD cycles of the current conversion.
     adc_conv_remaining: u32,
@@ -1059,6 +1076,11 @@ impl Pic24 {
             ad1cssl: 0,
             adc_buf: [0; ADC1_BUF_COUNT],
             adc_analog: [0; 16],
+            adc_pad_generation: 0,
+            adc_pad_held: 0,
+            adc_pad_mv: [0; 16],
+            adc_pad_vref_mv: 3300,
+            adc_pad_window: false,
             adc_state: AdcState::Off,
             adc_conv_remaining: 0,
             adc_sample_remaining: 0,
@@ -4082,6 +4104,15 @@ impl Pic24 {
         self.adc_analog[usize::from(channel)] = code & 0x0FFF;
     }
 
+    /// Declare that the bus carries a `pic24_adc_pads` window at
+    /// [`PIC24_ADC_PAD_BASE`]: ADC1 then converts the routed AN0-AN8 levels
+    /// it publishes. The session builder sets this from the chip descriptor.
+    pub fn set_adc_pad_window(&mut self, present: bool) {
+        self.adc_pad_window = present;
+        self.adc_pad_generation = 0;
+        self.adc_pad_held = 0;
+    }
+
     /// Attach a device to the SPI1 wires. The first attached device answers
     /// each transfer: this model has no SS/CS routing (documented in the M3
     /// reference). The device is called once per 8-bit frame, high byte
@@ -4204,23 +4235,67 @@ impl Pic24 {
         if !self.adc_channel_present(ch) || self.ad1pcfgl & (1 << ch) != 0 {
             return 0;
         }
-        let pos = self.adc_analog[usize::from(ch)];
+        let twelve = self.ad1con1 & AD1CON1_AD12B != 0;
+        let pos = self.adc_input_code(ch, twelve);
         let neg = self
             .adc_negative_channel(self.adc_seq_pos)
             .map(|n| {
                 if n <= 8 {
-                    self.adc_analog[usize::from(n)]
+                    self.adc_input_code(n, twelve)
                 } else {
                     0
                 }
             })
             .unwrap_or(0);
-        let max = if self.ad1con1 & AD1CON1_AD12B != 0 {
-            4095
-        } else {
-            1023
-        };
+        let max = if twelve { 4095 } else { 1023 };
         pos.saturating_sub(neg).min(max)
+    }
+
+    /// The code AN`ch` presents to the converter. A routed pad level converts
+    /// through the ideal transfer function `Vin · 2^N / VREF`, truncated and
+    /// clamped to full scale (DS70183D §16.12, VCFG = 000: AVDD/AVSS; the
+    /// external VREF± selections are not modelled). Otherwise the harness code.
+    fn adc_input_code(&self, ch: u8, twelve: bool) -> u16 {
+        let idx = usize::from(ch);
+        if self.adc_pad_held & (1 << ch) == 0 {
+            return self.adc_analog[idx];
+        }
+        let bits = if twelve { 12 } else { 10 };
+        let full = 1u32 << bits;
+        let code = u32::from(self.adc_pad_mv[idx]) * full / u32::from(self.adc_pad_vref_mv.max(1));
+        code.min(full - 1) as u16
+    }
+
+    /// Pull the routed AN0-AN8 levels when the pad model reports a change.
+    /// One bus read per step while ADC1 is on; nothing when it is off or the
+    /// board declares no `pic24_adc_pads` window. The window starts at
+    /// generation 0 with nothing held, so an unseeded board keeps the
+    /// harness codes.
+    fn pull_adc_pads(&mut self, bus: &dyn Bus) {
+        use crate::peripherals::pic24_adc_pads as pads;
+        if self.ad1con1 & AD1CON1_ADON == 0 || !self.adc_pad_window {
+            return;
+        }
+        let Ok(generation) = bus.read_u16(PIC24_ADC_PAD_BASE + pads::OFF_GENERATION) else {
+            return;
+        };
+        if generation == self.adc_pad_generation {
+            return;
+        }
+        self.adc_pad_generation = generation;
+        self.adc_pad_vref_mv = bus
+            .read_u16(PIC24_ADC_PAD_BASE + pads::OFF_VREF_MV)
+            .unwrap_or(3300)
+            .max(1);
+        self.adc_pad_held = bus
+            .read_u16(PIC24_ADC_PAD_BASE + pads::OFF_HELD)
+            .unwrap_or(0)
+            & ((1 << pads::CHANNELS) - 1);
+        for ch in 0..pads::CHANNELS {
+            self.adc_pad_mv[ch] = bus
+                .read_u16(PIC24_ADC_PAD_BASE + pads::OFF_CHANNEL_MV + 2 * ch as u64)
+                .unwrap_or(0);
+        }
     }
 
     /// FORM<1:0> output formatting (DS70183D §16.4.5 / Figure 16-14):
@@ -4817,6 +4892,7 @@ impl Cpu for Pic24 {
         // M2: run the PWM time base (and sample FLTA1) before publishing the
         // pad drive, then sample the QEI inputs with the input capture units.
         self.advance_mcpwm(used, bus);
+        self.pull_adc_pads(bus);
         self.advance_adc(used);
         self.advance_spi(used);
         self.advance_i2c(used);
@@ -5008,6 +5084,10 @@ impl Cpu for Pic24 {
             ad1cssl: self.ad1cssl,
             adc_buf: self.adc_buf,
             adc_analog: self.adc_analog,
+            adc_pad_generation: self.adc_pad_generation,
+            adc_pad_held: self.adc_pad_held,
+            adc_pad_mv: self.adc_pad_mv,
+            adc_pad_vref_mv: self.adc_pad_vref_mv,
             adc_state: match self.adc_state {
                 AdcState::Off => 0,
                 AdcState::Sampling => 1,
@@ -5161,6 +5241,14 @@ impl Cpu for Pic24 {
             self.ad1cssl = s.ad1cssl;
             self.adc_buf = s.adc_buf;
             self.adc_analog = s.adc_analog;
+            self.adc_pad_generation = s.adc_pad_generation;
+            self.adc_pad_held = s.adc_pad_held;
+            self.adc_pad_mv = s.adc_pad_mv;
+            self.adc_pad_vref_mv = if s.adc_pad_vref_mv == 0 {
+                3300
+            } else {
+                s.adc_pad_vref_mv
+            };
             self.adc_state = match s.adc_state {
                 1 => AdcState::Sampling,
                 2 => AdcState::Converting,

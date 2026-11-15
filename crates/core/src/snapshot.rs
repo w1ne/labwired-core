@@ -269,6 +269,16 @@ pub struct Pic24CpuSnapshot {
     pub adc_buf: [u16; 16],
     #[serde(default)]
     pub adc_analog: [u16; 16],
+    /// Routed ADC1 pad levels (`cpu::pic24::PIC24_ADC_PAD_BASE`).
+    #[serde(default)]
+    pub adc_pad_generation: u16,
+    #[serde(default)]
+    pub adc_pad_held: u16,
+    #[serde(default)]
+    pub adc_pad_mv: [u16; 16],
+    /// 0 in snapshots that predate the field: restored as 3300.
+    #[serde(default)]
+    pub adc_pad_vref_mv: u16,
     /// 0 = off, 1 = sampling, 2 = converting.
     #[serde(default)]
     pub adc_state: u8,

@@ -20,6 +20,7 @@ set and serial pins. There is no silicon capture.
 | M3 ADC1/SPI1/I2C1 on 202 pins | ✅ | real XC16 M3 ELF; `crates/core/tests/pic24_xc16_202_m3.rs` (AN4=RB2, AN0-AN5 only; SPI1 0xA5 loopback; TMP102 at 0x48; `M3 OK`, marker 0xBEEF) |
 | M3 demo system | ✅ | `system-m3.yaml` — TMP102 on `i2c1`, loopback on `spi1` |
 | Generic mixed-signal GPIO input | ✅ | `analog-ntc-diode-system.yaml`; `crates/core/tests/cosim_dspic33fj32mc202_analog.rs` solves an NTC and a Shockley diode onto RB0/RB1 and asserts PORTB levels and hysteresis |
+| Generic netlist → ADC1 (AN4) | ✅ | `crates/core/tests/cosim_pic24_adc1_analog.rs`: an NTC divider routed to `board.analog.RB2_volts` is converted by the real XC16 M3 ELF to ADC1BUF0 = 873/512/115 at -10/25/80 °C; AN6/RC0 routes are refused at session build |
 | Generic BJT `IBE`/`IBC` input | ✅ | `analog-bjt-ibe-system.yaml`; `dspic33fj32mc202_bjt_ibe_ibc_switch_flips_gpio_beside_ntc_and_diode` solves two BJT switches onto RB2/RB3 within 1e-4 of ngspice-42 and asserts RB2 low, RB3 high |
 | M0-M3 scope | ✅ complete | all four milestones evidenced below; nothing remains in M0-M3 |
 | Silicon capture / oracle | ❌ none | simulation-derived only |
@@ -98,8 +99,11 @@ is no silicon capture, so no reset-oracle match is claimed.
   SPI has no SS/CS routing (the first device answers; the example uses a wire
   loopback); I²C ACK bits are not delivered to the slave model; 10-bit
   addressing is decoded but cannot match a 7-bit slave address; ANx/SPI/I²C
-  pin electrical mapping is not routed through the pad model. The new GPIO
-  netlist example reaches the modeled digital pads, not the CPU's ADC1.
+  pin electrical mapping is not routed through the pad model. The GPIO
+  netlist example reaches the modeled digital pads; ADC1 takes routed AN0-AN5
+  levels through the `pic24_adc_pads` window (row below), converted against
+  AVDD with the ideal `Vin · 2^N / VREF` transfer function. External VREF±
+  (VCFG ≠ 000), sample-and-hold settling and INL/DNL are not modelled.
 - The GPIO `io_voltage_v` and `gpio_input_thresholds` values are simulation
   assumptions until checked against silicon; no ADC support or silicon
   validation is implied by the GPIO-level mixed-signal proof.

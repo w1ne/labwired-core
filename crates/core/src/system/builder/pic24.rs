@@ -69,6 +69,12 @@ pub(super) fn build(
 
     let mut cpu = crate::cpu::Pic24::new();
     cpu.set_port_masks(super::pic24_port_masks(chip));
+    // ADC1 converts routed AN levels only when the chip declares the window.
+    cpu.set_adc_pad_window(
+        chip.peripherals
+            .iter()
+            .any(|p| p.r#type == "pic24_adc_pads"),
+    );
     cpu.load_program_image(&program_image);
     // UART1 TX is on the CPU, not a bus UART peripheral.
     cpu.set_serial_sink(uart_sink.clone());

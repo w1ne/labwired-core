@@ -54,7 +54,14 @@ unrelated Shockley diode load line to RB0 and RB1. The integration test
 `crates/core/tests/cosim_dspic33fj32mc202_analog.rs` checks each solved voltage,
 the PORTB threshold result, and NTC Schmitt hysteresis across temperature
 changes. The GPIO thresholds in the chip descriptor are simulation
-assumptions, and this example does not route netlist voltages into ADC1.
+assumptions.
+
+Netlist voltages also reach ADC1. The chip descriptor maps AN0-AN5 to their
+pads (`analog_pins`: RA0, RA1, RB0-RB3), so a co-simulation output to
+`board.analog.RB2_volts` or `adc.adc1.4_volts` drives AN4, and
+`board.power.vdda_volts` sets the converter reference.
+`crates/core/tests/cosim_pic24_adc1_analog.rs` runs the real XC16 M3 ELF
+against a routed NTC divider and checks ADC1BUF0 at three temperatures.
 
 `analog-bjt-ibe-system.yaml` adds two BJT switches on RB2 and RB3 to the same
 NTC and diode. Both have one base divider and one `IS`/`BF`/`BR` card; only the

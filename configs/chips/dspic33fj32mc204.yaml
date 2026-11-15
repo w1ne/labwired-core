@@ -43,6 +43,19 @@ gpio_input_thresholds:
 # Output Compare drive here; `PORTx` reads and input-capture edges come from
 # the same model. `config.port` picks the package mask
 # (RA0-4/RA7-10, RB0-15, RC0-9).
+# ADC1 analog pads (DS70283H Table 1-1): AN0-AN8. `board.analog.<pad>_volts`
+# and `adc.adc1.<n>_volts` routes land on the `pic24_adc_pads` window, which
+# the core's ADC1 converts against AVDD (VCFG = 000).
+analog_pins:
+  RA0: { peripheral: "adc1", channel: 0 }
+  RA1: { peripheral: "adc1", channel: 1 }
+  RB0: { peripheral: "adc1", channel: 2 }
+  RB1: { peripheral: "adc1", channel: 3 }
+  RB2: { peripheral: "adc1", channel: 4 }
+  RB3: { peripheral: "adc1", channel: 5 }
+  RC0: { peripheral: "adc1", channel: 6 }
+  RC1: { peripheral: "adc1", channel: 7 }
+  RC2: { peripheral: "adc1", channel: 8 }
 peripherals:
   - id: "gpioa"
     type: "pic24_gpio"
@@ -59,3 +72,10 @@ peripherals:
     base_address: 0x000102E0
     size: "12"
     config: { port: "c" }
+  # Not silicon: the routed AN pin levels ADC1 converts (see
+  # `peripherals::pic24_adc_pads`). Past the mirrored SFR space.
+  - id: "adc1"
+    type: "pic24_adc_pads"
+    base_address: 0x00010800
+    size: "24"
+    config: { channels: 0x01FF, vref_mv: 3300 }
