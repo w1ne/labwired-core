@@ -35,6 +35,17 @@ fn l4_resolution_bits(cfgr: u32) -> u32 {
     }
 }
 
+/// F2/F4 `ADC_CR1.RES` (bits [25:24]) → conversion bit-width, RM0383 §11.12.2:
+/// 0b00=12, 01=10, 10=8, 11=6. The F1 has no RES field (always 12 bits).
+fn f4_resolution_bits(cr1: u32) -> u32 {
+    match (cr1 >> 24) & 0x3 {
+        0 => 12,
+        1 => 10,
+        2 => 8,
+        _ => 6,
+    }
+}
+
 /// Converted code for the fixed internal source at the given bit-width.
 fn l4_adc_code(bits: u32) -> u32 {
     STM32_ADC_REF12 >> (12 - bits)
@@ -603,7 +614,11 @@ impl Adc {
                 // A channel with no external or modeled internal source keeps
                 // the old incrementing fallback for visual feedback.
                 if let Some(sample) = self.sampled_input.take() {
-                    self.dr = Self::code_for_mv(sample.millivolts, sample.reference_millivolts);
+                    let count12 = Self::code_for_mv(sample.millivolts, sample.reference_millivolts);
+                    self.dr = match &self.regs {
+                        AdcRegs::Stm32F4(_) => scaled_input_code(count12, f4_resolution_bits(cr1)),
+                        _ => count12,
+                    };
                 } else {
                     self.dr = (self.dr + 1) & 0xFFF;
                 }
@@ -2179,6 +2194,37 @@ mod tests {
         adc.write_u32(0x08, 0).unwrap(); // ADON off
         assert!(adc.f1_cal_remaining.is_none());
         assert_eq!(adc.read_u32(0x08).unwrap() & F1_CR2_CAL, 0);
+    }
+
+    /// F4 `CR1.RES[25:24]` narrows a held input the way the SAR truncates:
+    /// 1650 mV of 3.3 V is 2047 at 12 bits, 511 at 10, 127 at 8, 31 at 6.
+    /// STM32duino programs 10 bits in hardware and does not re-map.
+    #[test]
+    fn f4_cr1_res_narrows_held_input() {
+        for (res, want) in [(0u32, 2047u32), (1, 511), (2, 127), (3, 31)] {
+            let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32F4);
+            adc.set_channel_input(0, 1650);
+            adc.write_u32(0x04, res << 24).unwrap();
+            adc.write_u32(0x08, F1_CR2_ADON | F4_CR2_SWSTART).unwrap();
+            for _ in 0..15 {
+                adc.tick();
+            }
+            assert_eq!(adc.dr, want, "CR1.RES={res}");
+        }
+    }
+
+    /// The F1 layout has no RES field: CR1 bit 24 is DUALMOD there and must
+    /// not narrow the 12-bit result.
+    #[test]
+    fn f1_cr1_bit24_does_not_narrow() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32F1);
+        adc.set_channel_input(0, 1650);
+        adc.write_u32(0x04, 1 << 24).unwrap();
+        f1_software_start(&mut adc);
+        for _ in 0..15 {
+            adc.tick();
+        }
+        assert_eq!(adc.dr, 2047);
     }
 
     /// F4 layout still starts on bit 30 (board bindings share the legacy block).

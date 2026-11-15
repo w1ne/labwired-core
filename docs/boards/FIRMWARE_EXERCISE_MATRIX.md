@@ -424,6 +424,15 @@ _Minimal real-register firmware smoke: reset/stack, RCC, GPIO PA5 LED and USART2
 
 **Dead** (2 modeled, never exercised): `PWR`, `FLASH_CTRL`
 
+### `stm32f411re`
+
+_NUCLEO-F411RE (same die and register set as stm32f411ceu6, LQFP64). PR-gated raw-register smoke (examples/nucleo-f411re/io-smoke.yaml): reset/stack, RCC, GPIOA, USART2 banner and PA5 LED edges. Stock stm32duino also runs the Arduino matrix row L0-L7 (INA219 over I2C1 at the exact tier, MAX31855 over SPI1, ADC1_IN0 at a board-held 1650 mV read at 10 bits = 511, TIM2_CH1 PWM on PA5 at 1.000 kHz), but that lane runs nightly and on main, not on PRs, so nothing is recorded as functional here. No physical silicon run exists._
+
+**Advanced peripherals — unit-tested only** (no firmware drives them): `PWR`
+
+**Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- `WWDG/I2S2EXT/I2S3EXT/SDIO/CRC/DMA1/DMA2/OTG_FS/DBG` (configs/chips/stm32f411re.yaml (type: stub; same windows as stm32f411ceu6)) — CLOSABLE: the same zero windows as the Black Pill descriptor; see the stm32f411ceu6 row for each one.
+
 ### `stm32f411ceu6`
 
 _WeAct Black Pill. Its tier-1 fixture (PR-gated `firmware_survival::test_stm32f411_tier1_survival`; nightly coverage-matrix cell examples/stm32f411ceu6-blackpill/io-smoke.yaml) drives clock/gpio/timer/i2c/spi (SPI1+SPI5)/adc/wdt/rtc over USART2, leaving dma unrecorded (the fixture never attempts it, and both stream controllers are zero stubs) and irq/pwm n/a (the fixture does not attempt either class). PWR is a real stm32f4-profile model no firmware drives; the descriptor's remaining stub windows are listed below._
