@@ -29,37 +29,10 @@ on:
       - "tools/cosim/**"
       - "examples/smart-basket-power/**"
       - ".github/workflows/core-qemu-arm.yml"
-  push:
-    branches: [main]
-    paths:
-      - "Cargo.*"
-      - "crates/core/**"
-      - "crates/arm-system/**"
-      - "crates/arm-core/**"
-      - "third_party/tlib/**"
-      - "third_party/tlib-PROVENANCE.md"
-      - "crates/cli/**"
-      - "crates/config/**"
-      - "crates/loader/**"
-      - "configs/chips/rv1103.yaml"
-      - "configs/systems/luckfox-pico-mini-a.yaml"
-      - "examples/cortex-a7-core/**"
-      - "examples/luckfox-pico-mini-a-linux/**"
-      - "scripts/prepare-rv1103-linux.py"
-      - "scripts/tests/test_prepare_rv1103_linux.py"
-      - "scripts/prepare-rv1103-basket.py"
-      - "scripts/tests/test_prepare_rv1103_basket.py"
-      - "scripts/tests/test_basket_ci.py"
-      - "scripts/ci/validate-basket-ci-inputs.py"
-      - "tests/fixtures/cortex-a7-core-smoke.elf"
-      - "tests/fixtures/kv260-r5-zephyr-*.elf"
-      - "crates/firmware-kv260-r5-zephyr/**"
-      - "configs/chips/xck26-rpu.yaml"
-      - "configs/systems/kv260-r5.yaml"
-      - "examples/kv260-r5/**"
-      - "tools/cosim/**"
-      - "examples/smart-basket-power/**"
-      - ".github/workflows/core-qemu-arm.yml"
+  # CI cut O11: no push-to-main run (25 min each merge); nightly instead.
+  # PRs touching the lane's own paths still run it.
+  schedule:
+    - cron: "30 3 * * *"
   workflow_dispatch:
     inputs:
       linux_acceptance:
@@ -88,6 +61,7 @@ concurrency:
 
 jobs:
   native-arm:
+    if: ${{ github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -111,6 +85,7 @@ jobs:
           /usr/bin/python3 -m pytest tools/cosim/test_smart_basket_power.py tools/cosim/test_labwired_ngspice.py -q
           /usr/bin/python3 examples/smart-basket-power/run_scenarios.py --output "$RUNNER_TEMP/smart-basket-power"
   default-cli:
+    if: ${{ github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -140,6 +115,7 @@ jobs:
         run: 'cargo test --locked -p labwired-core --test rv1103 -- rv1103_linux_loader:: rv1103_devices:: rv1103_basket_loader:: rv1103_rk3x_i2c:: rv1103_uart4_esp_at:: && cargo test --locked -p labwired-core --test session -- cpu_runtime_snapshot_honesty::'
 
   native-system:
+    if: ${{ github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
