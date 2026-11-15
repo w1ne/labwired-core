@@ -1131,6 +1131,16 @@ const CHIPS: &[ChipConf] = &[
             "ch32v003_compiled_firmware::ch32v003_compiled_rv32e_firmware_toggles_pc0",
         ),
     },
+    // CH32V203C8T6 (QingKe V4B, RV32IMAC). SIM-DERIVED: no silicon capture,
+    // so no reset_oracle. The gate boots a committed ELF that blinks PC13.
+    ChipConf {
+        name: "ch32v203c8t6",
+        yaml: "configs/chips/ch32v203c8t6.yaml",
+        reset_oracle: None,
+        behavior_gate: Some(
+            "ch32v203_compiled_firmware::ch32v203_compiled_rv32imac_firmware_toggles_pc13",
+        ),
+    },
     // ESP32-H2/C5/C61/P4/S2 UART0-only board profiles. SIM-DERIVED: no silicon
     // capture, so no reset_oracle. Their board smokes run as CLI scripts in
     // core-board-ci / core-onboarding-smoke, not as Rust integration tests, so

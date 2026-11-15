@@ -101,6 +101,10 @@
   },
   {
     "buses": [],
+    "name": "ch32v203c8t6"
+  },
+  {
+    "buses": [],
     "name": "dspic33fj32mc202"
   },
   {

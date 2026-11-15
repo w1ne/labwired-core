@@ -887,6 +887,11 @@ fn every_shipped_descriptor_is_ratcheted() {
         // GPIO A/C/D, and polled USART1 TX only (no PFIC, ADC, I2C, SPI, or
         // timers). Promote when the catalog board and a differential exist.
         "ch32v003f4p6",
+        // CH32V203C8T6: RV32IMAC descriptor with F1-layout RCC, GPIO A..D and
+        // polled USART1/USART2 TX (no PFIC, timers, ADC, I2C, SPI, CAN or
+        // USB). Booted by committed ELFs. No catalog board, no silicon oracle,
+        // no differential.
+        "ch32v203c8t6",
         // ESP32-H2/C5/P4/S2 UART0-only board profiles. Each has a descriptor,
         // a system manifest and a board smoke that asserts a UART0 token, but
         // no bundled-configs.ts catalog board, no silicon oracle and no
