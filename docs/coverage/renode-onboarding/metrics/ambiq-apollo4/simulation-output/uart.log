@@ -1,5 +1,6 @@
 APOLLO4P EVB SMOKE
 cpu=cortex-m4f uart=uart0
+pl011 irq=pass ris=48 mis=16 nvic=1 rx=82 ris_after=32 mis_after=0 nvic_after=0
 pwr perf=lp uart0_pwr=1
 uart0 clksel=1 clk=24000000 ibrd=13 fbrd=1
 led=led0 on rd=0 lit=1

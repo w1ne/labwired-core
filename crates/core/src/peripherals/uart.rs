@@ -991,6 +991,14 @@ pub struct Uart {
     /// zero — and used by [`Uart::bit_time_cycles`] as the wire timebase.
     ibrd: u32,
     fbrd: u32,
+    /// PL011 UARTCR and UARTIMSC. This UART profile has an immediate TX sink
+    /// and a byte-queue RX path, so the level conditions model TX FIFO empty
+    /// and RX FIFO non-empty; FIFO thresholds, RX timeout, and error sources
+    /// are not modelled.
+    #[serde(default)]
+    pl011_cr: u32,
+    #[serde(default)]
+    pl011_imsc: u32,
     /// CR3 writable mask — a per-part delta on the shared F1 USART map. The F1
     /// USART implements bits [10:0] (`0x07FF`); the F4 USART adds bit 11
     /// (ONEBIT, one-sample-bit mode) → `0x0FFF`, silicon-confirmed on the bench
@@ -1253,6 +1261,8 @@ impl Uart {
             gtpr: 0,
             ibrd: 0,
             fbrd: 0,
+            pl011_cr: 0,
+            pl011_imsc: 0,
             cr3_mask,
             full_featured: false,
             presc: 0,
@@ -1821,6 +1831,7 @@ impl Uart {
         let sifive_irq_armed = matches!(self.layout, UartRegisterLayout::Sifive)
             && self.irq_wired
             && self.sifive_irq_asserted();
+        let pl011_irq_armed = self.irq_wired && self.pl011_irq_asserted();
         // RXNEIE is a level enable with no local producer: the byte arrives
         // asynchronously (an injected peer, a cross-chip link). Keep a wakeup
         // armed while it is set so a byte landing in `rx_buf` is observed and
@@ -1834,7 +1845,8 @@ impl Uart {
                 || rxftie_armed
                 || dmar_armed
                 || sam_irq_armed
-                || sifive_irq_armed);
+                || sifive_irq_armed
+                || pl011_irq_armed);
         // A buffered narration is real work: the wire is mid-burst, and the
         // flush that ends it needs a wakeup to happen on. Without this a
         // scheduler-driven bus would leave the last print unpublished.
@@ -1882,7 +1894,7 @@ impl Uart {
             };
         let sifive_irq =
             matches!(self.layout, UartRegisterLayout::Sifive) && self.sifive_irq_asserted();
-        txeie_set || tcie_set || rxneie_set || rxftie_set || sifive_irq
+        txeie_set || tcie_set || rxneie_set || rxftie_set || sifive_irq || self.pl011_irq_asserted()
     }
 
     /// Phase 2B.3b: one tick-equivalent of work, shared verbatim by the legacy
@@ -2073,6 +2085,72 @@ impl Uart {
 
     fn sifive_irq_asserted(&self) -> bool {
         self.sifive_ip() & self.sifive_ie != 0
+    }
+
+    /// PL011 raw interrupt status for the two FIFO conditions this byte-level
+    /// model can observe: TX FIFO empty (TXE enabled) and an RX byte waiting
+    /// (RXE enabled). Error, modem, and receive-timeout sources are absent.
+    fn pl011_ris(&self) -> u32 {
+        const UARTEN: u32 = 1;
+        const TXE: u32 = 1 << 8;
+        const RXE: u32 = 1 << 9;
+        if !matches!(self.layout, UartRegisterLayout::Pl011) || self.pl011_cr & UARTEN == 0 {
+            return 0;
+        }
+        let mut raw = 0;
+        if self.pl011_cr & TXE != 0 {
+            raw |= 1 << 5; // TX: the model drains each accepted byte immediately.
+        }
+        if self.pl011_cr & RXE != 0 && self.rx_buf.lock().map(|g| !g.is_empty()).unwrap_or(false) {
+            raw |= 1 << 4; // RX: at least one byte is waiting in the modeled FIFO.
+        }
+        raw
+    }
+
+    fn pl011_irq_asserted(&self) -> bool {
+        matches!(self.layout, UartRegisterLayout::Pl011) && self.pl011_ris() & self.pl011_imsc != 0
+    }
+
+    /// PL011's interrupt/control word registers. Unmodelled IFLS, DMA, and
+    /// error-control registers keep the generic UART's existing zero/no-op
+    /// behavior.
+    fn pl011_control_byte(&self, offset: u64) -> Option<u8> {
+        if !matches!(self.layout, UartRegisterLayout::Pl011) {
+            return None;
+        }
+        let base = offset & !3;
+        let word = match base {
+            0x30 => self.pl011_cr,
+            0x38 => self.pl011_imsc,
+            0x3C => self.pl011_ris(),
+            0x40 => self.pl011_ris() & self.pl011_imsc,
+            0x44 => 0, // ICR has no modeled latched sources to clear.
+            _ => return None,
+        };
+        Some((word >> ((offset - base) * 8)) as u8)
+    }
+
+    fn pl011_control_write(&mut self, offset: u64, value: u8) -> bool {
+        if !matches!(self.layout, UartRegisterLayout::Pl011) {
+            return false;
+        }
+        let base = offset & !3;
+        let shift = ((offset - base) * 8) as u32;
+        let byte_mask = 0xFFu32 << shift;
+        match base {
+            0x30 => {
+                self.pl011_cr =
+                    ((self.pl011_cr & !byte_mask) | (u32::from(value) << shift)) & 0x0000_FFFF;
+                true
+            }
+            0x38 => {
+                self.pl011_imsc =
+                    ((self.pl011_imsc & !byte_mask) | (u32::from(value) << shift)) & 0x7FF;
+                true
+            }
+            0x3C | 0x40 | 0x44 => true, // RIS/MIS are read-only; ICR clears no modeled source.
+            _ => false,
+        }
     }
 
     /// Byte view of the SiFive-specific control/status words. `None` leaves
@@ -2827,6 +2905,9 @@ impl crate::Peripheral for Uart {
         if let Some(byte) = self.sam_imr_byte(offset) {
             return Ok(byte);
         }
+        if let Some(byte) = self.pl011_control_byte(offset) {
+            return Ok(byte);
+        }
         if let Some(byte) = self.lcr_dlab_read(offset) {
             return Ok(byte);
         }
@@ -2963,6 +3044,9 @@ impl crate::Peripheral for Uart {
             return Ok(());
         }
         if self.sam_interrupt_write(offset, value) {
+            return Ok(());
+        }
+        if self.pl011_control_write(offset, value) {
             return Ok(());
         }
         if matches!(self.layout, UartRegisterLayout::Avr) {
@@ -3120,10 +3204,14 @@ impl crate::Peripheral for Uart {
         self.irq_wired = irq.is_some();
     }
 
-    /// Timed UARTs, STM32v2 USARTs, SAM USARTs and SiFive UARTs report their
-    /// interrupt as a level. Other layouts keep their existing pulse semantics.
+    /// Timed UARTs, PL011, STM32v2 USARTs, SAM USARTs and SiFive UARTs report
+    /// their interrupt as a level. Other layouts keep their existing pulse
+    /// semantics.
     fn irq_line_level(&self) -> Option<bool> {
         self.timed_level()
+            .or_else(|| {
+                matches!(self.layout, UartRegisterLayout::Pl011).then(|| self.pl011_irq_asserted())
+            })
             .or_else(|| {
                 matches!(self.layout, UartRegisterLayout::Stm32V2).then(|| self.irq_asserted())
             })
@@ -3136,7 +3224,15 @@ impl crate::Peripheral for Uart {
             })
     }
 
+    fn reads_can_deassert_irq(&self) -> bool {
+        matches!(self.layout, UartRegisterLayout::Pl011)
+    }
+
     fn on_node_reset(&mut self) {
+        if matches!(self.layout, UartRegisterLayout::Pl011) {
+            self.pl011_cr = 0;
+            self.pl011_imsc = 0;
+        }
         if matches!(self.layout, UartRegisterLayout::Sam) {
             self.sam_imr = 0;
         }
@@ -3342,6 +3438,9 @@ impl crate::Peripheral for Uart {
             return Some(byte);
         }
         if let Some(byte) = self.sam_imr_byte(offset) {
+            return Some(byte);
+        }
+        if let Some(byte) = self.pl011_control_byte(offset) {
             return Some(byte);
         }
         if offset == SCI_SSR && self.sci_fifo_mode() {
@@ -4365,6 +4464,57 @@ mod v2_irq_gating_tests {
         assert!(uart.tick().irq, "TXEIE must pend");
         uart.write_u32(0x00, 0x2000_004D).unwrap(); // TCIE instead
         assert!(uart.tick().irq, "TCIE must pend");
+    }
+}
+
+#[cfg(test)]
+mod pl011_irq_tests {
+    use super::*;
+    use crate::Peripheral;
+
+    const UARTEN: u32 = 1;
+    const RXE: u32 = 1 << 9;
+    const TXE: u32 = 1 << 8;
+    const RXIM: u32 = 1 << 4;
+    const TXIM: u32 = 1 << 5;
+
+    #[test]
+    fn rx_interrupt_is_masked_until_enabled_and_drops_when_data_is_read() {
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Pl011);
+        uart.write_u32(0x30, UARTEN | RXE).unwrap();
+        uart.inject_rx_bytes(b"R").unwrap();
+
+        assert_eq!(uart.read_u32(0x3C).unwrap(), RXIM, "RIS is raw status");
+        assert_eq!(uart.read_u32(0x40).unwrap(), 0, "IMSC masks the source");
+        assert_eq!(uart.irq_line_level(), Some(false));
+
+        uart.write_u32(0x38, RXIM).unwrap();
+        assert_eq!(uart.read_u32(0x38).unwrap(), RXIM);
+        assert_eq!(uart.read_u32(0x40).unwrap(), RXIM, "MIS is RIS & IMSC");
+        assert_eq!(uart.irq_line_level(), Some(true));
+
+        assert_eq!(uart.read_u32(0x00).unwrap(), u32::from(b'R'));
+        assert_eq!(uart.read_u32(0x3C).unwrap(), 0);
+        assert_eq!(uart.read_u32(0x40).unwrap(), 0);
+        assert_eq!(uart.irq_line_level(), Some(false));
+    }
+
+    #[test]
+    fn tx_empty_is_a_level_condition_and_icr_does_not_clear_it() {
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Pl011);
+        uart.write_u32(0x30, UARTEN | TXE).unwrap();
+        uart.write_u32(0x38, TXIM | (1 << 31)).unwrap();
+
+        assert_eq!(
+            uart.read_u32(0x38).unwrap(),
+            TXIM,
+            "IMSC reserved bits read zero"
+        );
+        assert_eq!(uart.read_u32(0x3C).unwrap(), TXIM);
+        assert_eq!(uart.read_u32(0x40).unwrap(), TXIM);
+        uart.write_u32(0x44, TXIM).unwrap();
+        assert_eq!(uart.read_u32(0x40).unwrap(), TXIM, "TX FIFO is still empty");
+        assert_eq!(uart.irq_line_level(), Some(true));
     }
 }
 

@@ -1,16 +1,20 @@
 # Imported Ambiq Apollo4 Plus EVB UART+GPIO smoke.
-# Exercises only the Cortex-M4, memory, UART0, GPIO, and PWRCTRL profile
-# declared by configs/systems/onboarding/ambiq-apollo4.yaml.
-schema_version: "1.0"
+# Exercises Cortex-M4, memory, PL011 UART0 RX/TX, GPIO, and PWRCTRL declared
+# by configs/systems/onboarding/ambiq-apollo4.yaml.
+schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv7em-none-eabi/release/firmware-apollo4p-evb-smoke"
   system: "../../configs/systems/onboarding/ambiq-apollo4.yaml"
 limits:
   max_steps: 4000000
+uart_injections:
+  - uart: "uart0"
+    bytes: "R"
 assertions:
   - uart_contains: "APOLLO4P EVB SMOKE"
   - uart_ordered:
       - "cpu=cortex-m4f uart=uart0"
+      - "pl011 irq=pass ris=48 mis=16 nvic=1 rx=82 ris_after=32 mis_after=0 nvic_after=0"
       - "pwr perf=lp uart0_pwr=1"
       - "uart0 clksel=1 clk=24000000 ibrd=13 fbrd=1"
       - "led=led0 on rd=0 lit=1"
