@@ -1243,7 +1243,11 @@ jobs:
     # Same trigger set as pr-gate, and for the same reason: a dispatch is the
     # only way out of a wedged concurrency group when a required context has to
     # be reported against a head SHA.
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    # `push` too: main is the only ref whose rust-cache entry PRs can read, and
+    # `core-browser-layer` was never written there (the job ran on PRs only, and
+    # a PR-ref save is invisible to other PRs), so every PR compiled the wasm
+    # graph cold. The cache is saved on push only (see `save-if` below).
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     runs-on: ubuntu-latest
     # Standalone this job pays for `labwired-core` itself, which pr-gate had
     # already built by the time these steps ran there — so the 185s measured
@@ -1277,6 +1281,9 @@ jobs:
         with:
           shared-key: core-browser-layer
           workspaces: . -> target
+          # Main owns the cache, PRs only restore (same policy as core-pr-gate).
+          save-if: ${{ github.event_name == 'push' }}
+          cache-on-failure: true
 
       # THE BROWSER LAYER. `crates/wasm` is a cdylib and is NOT a default-member
       # (see `default-members` in the root Cargo.toml), so every step above
