@@ -6,7 +6,7 @@
   "booted": true,
   "boot_evidence": {
     "result_path": "simulation-output/result.json",
-    "instructions": 100000,
+    "instructions": 400000,
     "stop_reason": "max_steps"
   },
   "smoke_passed": true,
@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/brd4116a-smoke.yaml",
   "system": "configs/systems/onboarding/brd4116a.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T14:47:42Z",
-  "finished_at_utc": "2026-11-05T14:47:43Z",
-  "elapsed_seconds": 2,
-  "elapsed_ms": 1101,
+  "started_at_utc": "2026-11-15T16:15:44Z",
+  "finished_at_utc": "2026-11-15T16:18:17Z",
+  "elapsed_seconds": 153,
+  "elapsed_ms": 152508,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.308,
-    "build_firmware": 0.508,
-    "run_smoke": 0.274
+    "build_cli": 151.624,
+    "build_firmware": 0.557,
+    "run_smoke": 0.292
   },
   "stages_ms": {
-    "build_cli": 308,
-    "build_firmware": 508,
-    "run_smoke": 274
+    "build_cli": 151624,
+    "build_firmware": 557,
+    "run_smoke": 292
   }
 }

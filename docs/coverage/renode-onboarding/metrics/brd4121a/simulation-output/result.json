@@ -1,23 +1,23 @@
 {
   "result_schema_version": "1.0",
   "status": "pass",
-  "steps_executed": 100000,
-  "cycles": 100000,
-  "instructions": 100000,
+  "steps_executed": 400000,
+  "cycles": 400000,
+  "instructions": 400000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 100000
+      "value": 400000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 100000
+      "value": 400000
     }
   },
   "limits": {
-    "max_steps": 100000,
+    "max_steps": 400000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -36,6 +36,12 @@
     },
     {
       "assertion": {
+        "uart_contains": "timers w32=1 t1w32=1 run=1 cnt=1 stop=1 irq=3 direct_kept=1 alias_clr=1 t1of=1 t1masked=1 t1pend=1 t1rel=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "expected_stop_reason": "max_steps"
       },
       "passed": true
@@ -44,25 +50,25 @@
   "cpu_state": {
     "type": "arm",
     "registers": [
-      1074397208,
-      35,
-      2147483648,
       10,
+      1,
       0,
-      0,
-      0,
+      2147483648,
+      1074397208,
+      1,
+      1,
       537395184,
       0,
-      0,
-      0,
-      0,
-      134219968,
-      537395184,
-      134219961,
-      134219950
+      1,
+      1,
+      1,
+      134222187,
+      537395152,
+      1074397208,
+      134221394
     ],
-    "pc": 134219950,
-    "xpsr": 1627389952,
+    "pc": 134221394,
+    "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -72,9 +78,9 @@
     ],
     "vtor": 0,
     "waiting_for_event": false,
-    "event_register": false
+    "event_register": true
   },
-  "firmware_hash": "4a411c33abbaa26fb061e876c8cd005c6d0b17979d1e5c7ad6498c6c2633f499",
+  "firmware_hash": "b6be03c4b28a2badc7e762617d4c1be1dcf34cefa5e67f686ff783d5624f3ee3",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-efr32xg26-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/brd4121a.yaml",
@@ -93,6 +99,20 @@
         "name": "usart0",
         "kind": "native",
         "base": 1074397184,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer0",
+        "kind": "native",
+        "base": 1074036736,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer1",
+        "kind": "native",
+        "base": 1074053120,
         "registers": [],
         "artifacts": []
       },
@@ -143,20 +163,26 @@
         "cycle_lo": 0,
         "cycle": 10000,
         "end_cycle": 10000
+      },
+      {
+        "text": "timers w32=1 t1w32=1 run=1 cnt=1 stop=1 irq=3 direct_kept=1 alias_clr=1 t1of=1 t1masked=1 t1pend=1 t1rel=1 ok",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
       }
     ],
     "dropped_lines": 0
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 2276,
+    "text_bytes": 4460,
     "data_bytes": 0,
-    "bss_bytes": 0,
-    "flash_used_bytes": 2276,
-    "ram_static_bytes": 0,
+    "bss_bytes": 4,
+    "flash_used_bytes": 4460,
+    "ram_static_bytes": 4,
     "flash_total_bytes": 3268608,
     "ram_total_bytes": 524288,
-    "flash_used_pct": 0.07,
+    "flash_used_pct": 0.14,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -165,32 +191,37 @@
   },
   "memory": {
     "main_stack_method": "paint",
-    "main_stack_limit_bytes": 524288,
-    "main_stack_high_water_bytes": 16,
-    "main_stack_free_min_bytes": 524272,
-    "main_stack_base": 536870912,
+    "main_stack_limit_bytes": 524284,
+    "main_stack_high_water_bytes": 88,
+    "main_stack_free_min_bytes": 524196,
+    "main_stack_base": 536870916,
     "main_stack_top": 537395200,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
-    "heap_limit_bytes": 524288,
+    "heap_limit_bytes": 524284,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 524272,
-    "heap_base": 536870912,
+    "heap_free_min_bytes": 524196,
+    "heap_base": 536870916,
     "heap_top": 537395200
   },
   "metrics": {
-    "cycles": 100000,
-    "instructions": 100000,
-    "steps_executed": 100000,
-    "memory_reads": 104,
-    "memory_writes": 6,
-    "peripheral_accesses": 74,
+    "cycles": 400000,
+    "instructions": 400000,
+    "steps_executed": 400000,
+    "memory_reads": 3581,
+    "memory_writes": 122,
+    "peripheral_accesses": 449,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134219950,
-        "count": 390,
+        "pc": 134221394,
+        "count": 1523,
         "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 134220350,
+        "count": 39,
+        "symbol": "firmware_efr32xg26_smoke::__cortex_m_rt_main"
       }
     ]
   }

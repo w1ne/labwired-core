@@ -3,25 +3,25 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      1074397208,
-      35,
-      2147483648,
       10,
+      1,
       0,
-      0,
-      0,
+      2147483648,
+      1074397208,
+      1,
+      1,
       537395184,
       0,
-      0,
-      0,
-      0,
-      134219968,
-      537395184,
-      134219961,
-      134219950
+      1,
+      1,
+      1,
+      134222187,
+      537395152,
+      1074397208,
+      134221394
     ],
-    "pc": 134219950,
-    "xpsr": 1627389952,
+    "pc": 134221394,
+    "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -31,25 +31,25 @@
     ],
     "vtor": 0,
     "waiting_for_event": false,
-    "event_register": false
+    "event_register": true
   },
-  "steps_executed": 100000,
-  "cycles": 100000,
-  "instructions": 100000,
+  "steps_executed": 400000,
+  "cycles": 400000,
+  "instructions": 400000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 100000
+      "value": 400000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 100000
+      "value": 400000
     }
   },
   "limits": {
-    "max_steps": 100000,
+    "max_steps": 400000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "4a411c33abbaa26fb061e876c8cd005c6d0b17979d1e5c7ad6498c6c2633f499",
+  "firmware_hash": "b6be03c4b28a2badc7e762617d4c1be1dcf34cefa5e67f686ff783d5624f3ee3",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-efr32xg26-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/brd4121a.yaml",

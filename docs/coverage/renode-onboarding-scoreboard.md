@@ -12,10 +12,10 @@
 - pass_observable_assertions: `226/226`
 - pass_stop_reason_only: `0/226`
 - pass_depth_unknown: `0/226`
-- pass_claimed_peripherals_total: `1514`
-- pass_claimed_peripherals_median: `2`
-- median_elapsed_ms: `1420`
-- median_elapsed_seconds: `1.42`
+- pass_claimed_peripherals_total: `1524`
+- pass_claimed_peripherals_median: `3`
+- median_elapsed_ms: `1444`
+- median_elapsed_seconds: `1.444`
 - threshold_seconds: `3600`
 - threshold_met: `226/226`
 
@@ -39,11 +39,11 @@
 | `atsamd51g19a` | `pass` | `True` | `yes` | `yes` | `1028` | `1.028` | `True` | `observable` | `4` | `uart_contains`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `beaglev-fire` | `pass` | `True` | `yes` | `yes` | `657` | `0.657` | `True` | `observable` | `8` | `uart_contains`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `beaglev_starlight` | `pass` | `True` | `yes` | `yes` | `7993` | `7.993` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
-| `brd4116a` | `pass` | `True` | `yes` | `yes` | `1101` | `1.101` | `True` | `observable` | `2` | `uart_contains` | 0 | `n/a` | n/a | n/a |
-| `brd4117a` | `pass` | `True` | `yes` | `yes` | `752` | `0.752` | `True` | `observable` | `2` | `uart_contains` | 0 | `n/a` | n/a | n/a |
-| `brd4118a` | `pass` | `True` | `yes` | `yes` | `741` | `0.741` | `True` | `observable` | `2` | `uart_contains` | 0 | `n/a` | n/a | n/a |
-| `brd4120a` | `pass` | `True` | `yes` | `yes` | `762` | `0.762` | `True` | `observable` | `2` | `uart_contains` | 0 | `n/a` | n/a | n/a |
-| `brd4121a` | `pass` | `True` | `yes` | `yes` | `741` | `0.741` | `True` | `observable` | `2` | `uart_contains` | 0 | `n/a` | n/a | n/a |
+| `brd4116a` | `pass` | `True` | `yes` | `yes` | `152508` | `152.508` | `True` | `observable` | `4` | `uart_contains` | 0 | `n/a` | n/a | n/a |
+| `brd4117a` | `pass` | `True` | `yes` | `yes` | `1322` | `1.322` | `True` | `observable` | `4` | `uart_contains` | 0 | `n/a` | n/a | n/a |
+| `brd4118a` | `pass` | `True` | `yes` | `yes` | `888` | `0.888` | `True` | `observable` | `4` | `uart_contains` | 0 | `n/a` | n/a | n/a |
+| `brd4120a` | `pass` | `True` | `yes` | `yes` | `908` | `0.908` | `True` | `observable` | `4` | `uart_contains` | 0 | `n/a` | n/a | n/a |
+| `brd4121a` | `pass` | `True` | `yes` | `yes` | `1307` | `1.307` | `True` | `observable` | `4` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `brd4162a` | `pass` | `True` | `yes` | `yes` | `1180` | `1.18` | `True` | `observable` | `12` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `brd4186c` | `pass` | `True` | `yes` | `yes` | `758` | `0.758` | `True` | `observable` | `6` | `uart_contains`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `brd4402a` | `pass` | `True` | `yes` | `yes` | `727` | `0.727` | `True` | `observable` | `5` | `uart_contains`, `gpio_edges` | 0 | `n/a` | n/a | n/a |

@@ -1,11 +1,15 @@
 # Narrow smoke profile for the imported BRD4118A / EFR32xG26 system. The
 # current Renode board description uses the xG26 Cortex-M33, 3,192 KiB flash,
-# 512 KiB SRAM, Series-2 CMU, and USART0. Radio and sequencer cores, GPIO board
-# wiring, and other peripherals are omitted from this profile.
+# 512 KiB SRAM, Series-2 CMU, USART0, TIMER0 and TIMER1. Radio and sequencer
+# cores, GPIO board wiring, and other peripherals are omitted from this
+# profile.
 name: brd4118a
 arch: arm
 core: cortex-m33
 cpu_hz: 39000000
+# Series-2 SET/CLR/TGL aliases at +0x1000/+0x2000/+0x3000, as in
+# configs/chips/efr32mg26.yaml. The TIMER smoke clears IF.OF through CLR.
+atomic_register_aliases: efr32s2
 flash:
   base: 0x08000000
   size: 0x31E000
@@ -25,3 +29,26 @@ peripherals:
     size: 16KB
     clock: { reg: clken0, bit: 9 }
     irq: 15
+  # TIMER0/TIMER1: bases 0x40048000/0x4004C000 and NVIC 4/5 match Renode's
+  # silabs/efr32s2/efr32xg26.repl and efr32mg26b510f3200im48.h. Renode
+  # declares `width: 16`; the vendor header gives TIMER0/TIMER1_CNTWIDTH 0x20,
+  # so these are 32-bit, as in configs/chips/efr32mg26.yaml. CMU_CLKEN0 bits
+  # 4/5 from efr32mg26_cmu.h (simplicity_sdk sisdk-2025.6). The timebase is
+  # the 19 MHz HFRCODPLL startup clock; rate is not timed. TIMER2..9 are not
+  # claimed.
+  - id: timer0
+    type: efr32s2_timer
+    bus: sysbus
+    base_address: 0x40048000
+    size: 4KB
+    clock: { reg: clken0, bit: 4 }
+    config: { counter_bits: 32, peripheral_hz: 19000000 }
+    irq: 4
+  - id: timer1
+    type: efr32s2_timer
+    bus: sysbus
+    base_address: 0x4004C000
+    size: 4KB
+    clock: { reg: clken0, bit: 5 }
+    config: { counter_bits: 32, peripheral_hz: 19000000 }
+    irq: 5
