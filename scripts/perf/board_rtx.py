@@ -195,10 +195,13 @@ def main() -> int:
         steps = max(1, round(hz * args.seconds))
         samples: list[float] = []
         widths: list[float] = []
+        timings: list[dict] = []
         for _ in range(args.repeats):
             wall, width = run_once(cli, board, firmware[covered[board]], steps)
-            samples.append((steps / hz) / wall)
+            value = (steps / hz) / wall
+            samples.append(value)
             widths.append(width)
+            timings.append({"wall_s": wall, "rtx": value, "steps_per_batch": width})
         median = statistics.median(samples)
         lo, hi = min(samples), max(samples)
         width = statistics.median(widths)
@@ -210,6 +213,7 @@ def main() -> int:
             "steps": steps,
             "repeats": args.repeats,
             "steps_per_batch": width,
+            "samples": timings,
         }
         verdict = "" if median >= args.min_rtx else "  FAIL"
         print(
@@ -222,17 +226,27 @@ def main() -> int:
     rtf_doc = None
     if not args.no_workloads and not args.chip_name:
         # The 1 s spin above takes tens of ms, so process startup and host
-        # noise swing it by 2x. Re-time each workload chip's spin for ~1 s of
+        # noise swing it by 2x. Scale each workload chip's spin to target ~1 s of
         # wall clock (best of N) as the host-speed reference for the index.
         spin = {}
+        spin_reference = {}
         for chip in sorted({w.chip for w in board_rtf.WORKLOADS} & set(rows)):
             hz = rows[chip]["clock_hz"]
             steps = round(hz * max(1.0, rows[chip]["median_rtx"]))
-            walls = [
-                run_once(cli, chip, firmware[covered[chip]], steps)[0]
+            timings = [
+                run_once(cli, chip, firmware[covered[chip]], steps)
                 for _ in range(args.repeats)
             ]
-            spin[chip] = (steps / hz) / min(walls)
+            spin[chip] = (steps / hz) / min(wall for wall, _ in timings)
+            spin_reference[chip] = {
+                "clock_hz": hz, "steps": steps, "reference_seconds": steps / hz,
+                "reference_definition": "requested instructions / configured cpu_hz",
+                "repeats": args.repeats, "best_rtx": spin[chip],
+                "samples": [{"wall_s": wall, "rtx": (steps / hz) / wall,
+                             "steps_per_batch": width} for wall, width in timings],
+                "firmware": board_rtf.file_provenance(firmware[covered[chip]]),
+                "chip": board_rtf.file_provenance(bp.CHIP_DIR / f"{chip}.yaml"),
+            }
         try:
             # Only chips whose spin RTx was measured: the index needs it.
             rtf_doc = board_rtf.run(
@@ -243,10 +257,15 @@ def main() -> int:
                 args.rtf_tolerance,
                 args.rtf_json,
                 update=args.update_rtf,
+                spin_reference=spin_reference,
             )
         except RuntimeError as exc:
             print(f"error: workload RTF failed: {exc}", file=sys.stderr)
-            rtf_doc = {"ok": False, "failures": [str(exc)], "boards": []}
+            rtf_doc = board_rtf.report(
+                [], [str(exc)], args.rtf_tolerance, spin_reference=spin_reference,
+                provenance={"recording_error": str(exc)},
+            )
+            args.rtf_json.write_text(json.dumps(rtf_doc, indent=2) + "\n")
         if rtf_doc:
             failures.extend(f"rtf:{f}" for f in rtf_doc["failures"])
 

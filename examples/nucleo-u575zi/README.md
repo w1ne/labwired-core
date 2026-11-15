@@ -98,7 +98,7 @@ PATH="$HOME/zephyrproject/.venv/bin:$PATH" \
 ### 4. Survival fixtures (PR gate)
 
 ```bash
-cargo test -p labwired-core --test firmware_survival stm32u575 -- --nocapture
+cargo test -p labwired-core --test gates stm32u575 -- --nocapture
 ```
 
 Runs the committed stock Zephyr `hello_world` ELF and the Arduino L0 sketch

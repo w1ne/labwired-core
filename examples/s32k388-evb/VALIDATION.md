@@ -56,7 +56,7 @@ cargo build -p firmware-s32k388-evb-smoke --release --target thumbv7em-none-eabi
 cmp out/s32k388-run1/uart.log out/s32k388-run2/uart.log          # clean
 cmp out/s32k388-run1/snapshot.json out/s32k388-run2/snapshot.json  # clean
 
-cargo test -p labwired-core --test firmware_survival s32k388
+cargo test -p labwired-core --test gates s32k388
 #   1 passed (test_s32k388_evb_smoke_survival)
 
 cargo test -p labwired-core --lib s32k3_siul2

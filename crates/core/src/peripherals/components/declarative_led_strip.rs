@@ -113,6 +113,7 @@ pub struct GenericLedStrip {
 
     // ── spi_frames ──────────────────────────────────────────────────────
     cs_pin: String,
+    selected: bool,
     /// Bytes of the in-flight transaction.
     frame: Vec<u8>,
     /// Latched colours. `spi_frames` only; the NRZ door keeps its own, behind
@@ -328,6 +329,7 @@ impl GenericLedStrip {
             component_id: None,
             powered: true,
             cs_pin: String::new(),
+            selected: false,
             frame: Vec::new(),
             pixels: Vec::new(),
             data_pin: 0,
@@ -667,11 +669,17 @@ impl SpiDevice for GenericLedStrip {
         self.component_id.as_deref()
     }
 
+    fn is_selected(&self) -> bool {
+        self.cs_pin.is_empty() || self.selected
+    }
+
     fn cs_select(&mut self) {
+        self.selected = true;
         self.frame.clear();
     }
 
     fn cs_release(&mut self) {
+        self.selected = false;
         self.latch();
     }
 
@@ -874,7 +882,7 @@ impl PeripheralKit for DeclarativeLedStripKit {
                 let label = ctx.config_str("data_pin").unwrap_or("GPIO48").to_string();
                 let pin = ctx.parse_gpio_pin(&label).ok_or_else(|| {
                     anyhow::anyhow!(
-                        "{} '{}' data_pin '{}' could not be parsed to an ESP GPIO (0..=48)",
+                        "{} '{}' data_pin '{}' could not be resolved to a GPIO pad (ESP GPIO name, STM32 port pad, or chip-declared pin)",
                         self.descriptor.r#type,
                         ctx.device_id(),
                         label

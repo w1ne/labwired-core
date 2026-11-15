@@ -143,12 +143,40 @@
     "name": "esp32c3"
   },
   {
+    "buses": [],
+    "name": "esp32c5"
+  },
+  {
     "buses": [
       "I2C",
       "SPI",
       "UART"
     ],
     "name": "esp32c6"
+  },
+  {
+    "buses": [],
+    "name": "esp32c61"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "esp32c6fh4"
+  },
+  {
+    "buses": [],
+    "name": "esp32h2"
+  },
+  {
+    "buses": [],
+    "name": "esp32p4"
+  },
+  {
+    "buses": [],
+    "name": "esp32s2"
   },
   {
     "buses": [],
@@ -165,6 +193,10 @@
   {
     "buses": [],
     "name": "litex-vexriscv"
+  },
+  {
+    "buses": [],
+    "name": "mimxrt1062-teensy41"
   },
   {
     "buses": [],
@@ -213,6 +245,14 @@
   {
     "buses": [],
     "name": "nrf5340"
+  },
+  {
+    "buses": [],
+    "name": "nrf54l05"
+  },
+  {
+    "buses": [],
+    "name": "nrf54l10"
   },
   {
     "buses": [],
@@ -287,8 +327,20 @@
     "name": "rp2040"
   },
   {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "rp2040-feather"
+  },
+  {
     "buses": [],
     "name": "rp2350"
+  },
+  {
+    "buses": [],
+    "name": "rp2350-feather"
   },
   {
     "buses": [],
@@ -305,6 +357,14 @@
   {
     "buses": [],
     "name": "same70q21b"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32c031c6"
   },
   {
     "buses": [
@@ -593,6 +653,14 @@
   },
   {
     "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f446re"
+  },
+  {
+    "buses": [
       "UART"
     ],
     "name": "stm32f746"
@@ -644,6 +712,12 @@
       "UART"
     ],
     "name": "stm32h563"
+  },
+  {
+    "buses": [
+      "UART"
+    ],
+    "name": "stm32h723zg"
   },
   {
     "buses": [

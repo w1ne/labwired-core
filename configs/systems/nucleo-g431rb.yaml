@@ -1,0 +1,20 @@
+# LabWired — NUCLEO-G431RB system manifest (MB1367, STM32G431RBT6).
+# Board wiring per ST UM2505: LD2 is PA5 (SB6, active high), B1 is PC13
+# (SB16, active low), and the default ST-LINK virtual COM connection is
+# LPUART1 on PA2/PA3 (SB17/SB23).
+name: "nucleo-g431rb"
+chip: "../chips/stm32g431rb.yaml"
+external_devices: []
+board_io:
+  - id: "led_ld2"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true
+  - id: "button_b1"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: false

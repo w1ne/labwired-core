@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MIT
  *
  * STM32F401 boot logger for the supply-supervisor tests
- * (crates/core/tests/supply_supervisor.rs, crates/wasm/src/cosim_tests.rs).
+ * (crates/core/tests/analog/supply_supervisor.rs, crates/wasm/src/cosim_tests.rs).
  *
  * On every reset it reads RCC_CSR — the reset cause, as ST's HAL
  * __HAL_RCC_GET_FLAG does — appends it to a log in .noinit RAM, counts the

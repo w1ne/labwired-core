@@ -116,8 +116,10 @@ impl SystemBus {
             resident_tick_interval_override: None,
             gpio_devices: Vec::new(),
             device_pin_pads: Vec::new(),
+            device_open_drain_nets: Default::default(),
             observed: Vec::new(),
             motors: Vec::new(),
+            live_numeric: None,
             ina219_senses: Vec::new(),
             motor_cycle_anchor: 0,
             analog_inputs: Vec::new(),
@@ -148,6 +150,7 @@ impl SystemBus {
             analog_pin_map: std::collections::HashMap::new(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: crate::reset_input::ResetInputState::default(),
             supply: crate::power::SupplySupervisor::default(),
             supply_domains: Default::default(),
             external_device_decls: Vec::new(),
@@ -231,8 +234,10 @@ impl SystemBus {
             resident_tick_interval_override: None,
             gpio_devices: Vec::new(),
             device_pin_pads: Vec::new(),
+            device_open_drain_nets: Default::default(),
             observed: Vec::new(),
             motors: Vec::new(),
+            live_numeric: None,
             ina219_senses: Vec::new(),
             motor_cycle_anchor: 0,
             analog_inputs: Vec::new(),
@@ -263,6 +268,7 @@ impl SystemBus {
             analog_pin_map: std::collections::HashMap::new(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: crate::reset_input::ResetInputState::default(),
             supply: crate::power::SupplySupervisor::default(),
             supply_domains: Default::default(),
             external_device_decls: Vec::new(),
@@ -629,6 +635,12 @@ impl SystemBus {
             // USB CDC, so the console text arrives on the USB bulk-IN endpoint,
             // not UART0. Route it into the same capture sink.
             if let Some(usb) = any.downcast_mut::<crate::peripherals::rp2040::usb::Rp2040Usb>() {
+                usb.set_sink(Some(sink.clone()));
+                continue;
+            }
+            // i.MX RT USB1 device CDC (Teensy 4.x `Serial`): the console is
+            // the bulk IN endpoint once the scripted host has enumerated.
+            if let Some(usb) = any.downcast_mut::<crate::peripherals::imxrt::usb::ImxrtUsb>() {
                 usb.set_sink(Some(sink.clone()));
                 continue;
             }

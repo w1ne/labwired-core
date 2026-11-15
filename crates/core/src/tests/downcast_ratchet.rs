@@ -37,7 +37,7 @@ use std::path::{Path, PathBuf};
 /// Committed ceilings. LOWER these when a conversion lands; the test fails if
 /// you do not, so a shrink cannot go unrecorded and quietly leave headroom for
 /// the next regression.
-/// 193 → 194 / 207 → 208: `tests/esp32s3_lcd_i80_pixels.rs` reaches through
+/// 193 → 194 / 207 → 208: `tests/display/esp32s3_lcd_i80_pixels.rs` reaches through
 /// `bus.peripherals[..].dev` to the concrete `Esp32s3LcdCam` to assert that the
 /// kit binds the parallel panel to LCD_CAM and not only to the GPIO observer.
 /// That is the "a test reaching into a concrete model" case the module doc
@@ -173,7 +173,7 @@ use std::path::{Path, PathBuf};
 /// test instrumentation into the runtime interface without reducing coupling.
 const MAX_AS_ANY: usize = 197;
 // GPIO schedule migration removes four concrete sensor downcasts.
-// 195 → 196: `tests/sim_input_reachability.rs` reads the ADXL345 back out of
+// 195 → 196: `tests/session/sim_input_reachability.rs` reads the ADXL345 back out of
 // `Rp2040I2c` by downcast, the same independent-witness reach every other
 // controller row in that table already pays (the walk under test cannot be
 // its own witness). Test-only; no production path gained a reach.
@@ -239,7 +239,7 @@ const MAX_DOWNCAST_REF: usize = 198;
 // through `Peripheral::i2c_slave_host` (it also hosts GPIO-matrix twins), so
 // `attach_i2c_slave_with_route` lost its `Esp32s3I2c` arm.
 // Raised 271 -> 272 and 336 -> 337 by the `Box<dyn Cpu>` forwarding gate
-// (`crates/core/tests/cpu_dyn_forwarding.rs`). The test calls `as_any_mut()`
+// (`crates/core/tests/bus/cpu_dyn_forwarding.rs`). The test calls `as_any_mut()`
 // and `downcast_mut::<SpyCpu>()` deliberately: that is the behaviour it pins,
 // and it is the only way to prove the boxed call reaches the concrete core
 // rather than the trait default. This is test-only verification; no production
@@ -250,11 +250,11 @@ const MAX_DOWNCAST_REF: usize = 198;
 // the C3 GPIO model must be asked whether its layout numbers LEDC signals at
 // all (the C6 reuses it and numbers 45/46 as I²C). Three chips, one set of
 // reaches, instead of three.
-// 272 → 273 / 338 → 339: the RP2040 row of `tests/sim_input_reachability.rs`
+// 272 → 273 / 338 → 339: the RP2040 row of `tests/session/sim_input_reachability.rs`
 // reads its ADXL345 back by `as_any_mut()` + `downcast_mut`, like every other
 // row's readback (see MAX_DOWNCAST_REF). Test-only.
 // 273 → 276 / 339 → 342: two test-only reaches in
-// `tests/iolink_master_config.rs` inspect the UART and its attached master,
+// `tests/gpio_logic/iolink_master_config.rs` inspect the UART and its attached master,
 // proving manifest configuration reaches the real peer. One production reach
 // in `components::tiol112::attach` obtains the STM32G0 RCC's live clock-register
 // snapshot at attachment time. The frame path reads shared atomics and never
@@ -262,7 +262,12 @@ const MAX_DOWNCAST_REF: usize = 198;
 // snapshot capability should replace the reach if another clock family needs
 // it, rather than adding an unused general trait for one binding today.
 const MAX_AS_ANY_MUT: usize = 275;
-const MAX_DOWNCAST_MUT: usize = 341;
+// 341 → 342 (`downcast_mut` only): `attach_uart_tx_sink` hands the console
+// sink to the i.MX RT USB1 device controller, whose bulk IN endpoint carries
+// Teensy 4.x `Serial` (USB CDC) — the same one-time attach arm the RP2040 USB
+// and ESP USB-Serial-JTAG consoles already pay. It is not a UART, so it must
+// not claim `as_uart_stream_host` (cross-links would bind to it).
+const MAX_DOWNCAST_MUT: usize = 342;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

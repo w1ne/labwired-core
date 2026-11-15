@@ -1,4 +1,4 @@
-# ngspice-47 reference for `comparator_pushpull_vhys` (crates/core/tests/analog_ngspice_macros.rs)
+# ngspice-47 reference for `comparator_pushpull_vhys` (crates/core/tests/analog/analog_ngspice_macros.rs)
 # v(out) at every 1e-7 s, t = 0 excluded
 # deck 11deda8cfd1fc089
 # edge 6.02917753185537233e-9

@@ -12,5 +12,8 @@
 
 ## Board
 
-1. Raspberry Pi Pico 2 product brief / pinout (GP25 user LED):
+1. Raspberry Pi Pico 2 product page (4 MB flash, available now, production
+   commitment through January 2040):
    https://www.raspberrypi.com/products/raspberry-pi-pico-2/
+2. Official Pico 2 pinout (GP25 user LED; GP0/GP1 are UART0 TX/RX):
+   https://pip-assets.raspberrypi.com/categories/1005-raspberry-pi-pico-2/documents/RP-008301-DS-1-Pico-2-Pinout.pdf

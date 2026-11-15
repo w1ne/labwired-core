@@ -8,6 +8,7 @@
 #![allow(clippy::empty_loop)]
 
 // NUCLEO-H563ZI VCP maps COM1 to USART3 in BSP (`stm32h5xx_nucleo.h`).
+const USART3_CR1_PTR: *mut u32 = 0x4000_4800 as *mut u32;
 const USART3_TDR_PTR: *mut u8 = (0x4000_4800 + 0x28) as *mut u8;
 
 #[no_mangle]
@@ -17,6 +18,7 @@ pub extern "C" fn Reset() -> ! {
 
 fn main() -> ! {
     unsafe {
+        core::ptr::write_volatile(USART3_CR1_PTR, (1 << 0) | (1 << 3)); // UE + TE
         core::ptr::write_volatile(USART3_TDR_PTR, b'O');
         core::ptr::write_volatile(USART3_TDR_PTR, b'K');
         core::ptr::write_volatile(USART3_TDR_PTR, b'\n');

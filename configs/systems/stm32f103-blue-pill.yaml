@@ -1,0 +1,17 @@
+# STM32F103C8T6 Blue Pill minimum-system board profile.
+# Reference Blue Pill schematic: PC13 sinks current through the user LED.
+# USART1 is exposed on the board headers at PA9/PA10; there is no USB-UART
+# bridge, so `debug_uart` is only the simulator console route.
+
+name: "stm32f103-blue-pill"
+chip: "../chips/stm32f103.yaml"
+cpu_hz: 8_000_000
+debug_uart: "uart1"
+external_devices: []
+board_io:
+  - id: "led_user"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "output"
+    active_high: false

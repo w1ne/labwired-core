@@ -23,6 +23,7 @@ pub mod hashers;
 pub mod host_time;
 pub mod inspect;
 pub mod interrupt;
+pub mod live_numeric;
 pub mod logic_capture;
 pub mod machine;
 pub mod memory;
@@ -38,6 +39,7 @@ pub mod pins;
 pub mod plugin;
 pub mod power;
 pub mod profile;
+pub mod reset_input;
 pub mod runtime_snapshot;
 pub mod sched;
 pub mod sd_hle;
@@ -950,6 +952,16 @@ impl<C: Cpu> Machine<C> {
         series.end_time_ns = series.end_time_ns.max(motor_end_ns);
         series.channels.extend(motor_channels);
         Some(series)
+    }
+
+    /// Live native numeric observations, on a cursor independent of the analog
+    /// co-simulation ring and historical series. None when no producer exists.
+    pub fn live_numeric_capture(
+        &self,
+        cursor: u64,
+        max_points: usize,
+    ) -> Option<crate::live_numeric::LiveNumericBatch> {
+        self.bus.live_numeric_capture(cursor, max_points)
     }
 
     /// Current engine cycle — the `nowCycle` reported alongside a logic-edge
@@ -2101,6 +2113,30 @@ impl<C: Cpu> Machine<C> {
                 }
             } else {
                 false
+            };
+
+            // i.MX RT serial-NOR boot: at `flash_base + reset_vector_offset`
+            // sits an Image Vector Table, not a Cortex-M vector table
+            // (IMXRT1060RM §9.7.1: header tag 0xD1, version 0x40..0x43, then
+            // the entry address). The boot ROM jumps to `entry` with its own
+            // stack in OCRAM; the image sets SP and VTOR itself (Teensyduino's
+            // ResetHandler does both). Offset 0x1000 on FlexSPI NOR.
+            let relocated = relocated || {
+                let table = flash_base + offset;
+                let hdr = if offset != 0 {
+                    self.bus.read_u32(table).unwrap_or(0)
+                } else {
+                    0
+                };
+                if hdr & 0xFF == 0xD1 && (0x40..=0x43).contains(&(hdr >> 24)) {
+                    let entry = self.bus.read_u32(table + 4)? & !1;
+                    let ram_top = self.bus.ram.base_addr + self.bus.ram.data.len() as u64;
+                    self.cpu.set_sp(ram_top as u32);
+                    self.cpu.set_pc(entry);
+                    true
+                } else {
+                    false
+                }
             };
 
             // Last-resort fallback if the vector table is missing/zero.

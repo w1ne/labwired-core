@@ -63,10 +63,58 @@
       "expect": "OK",
       "note": "ESP32-C6-DevKitC-1 L1 smoke. Bare-metal RV32IMAC HP-core image ungates UART0 through the C6's own PCR clock/reset block, routes GPIO16/U0TXD via IO_MUX, and prints OK. The LP core, ROM bootloader/flash-image path, interrupt delivery, radios and every non-UART peripheral window are out of scope at L1."
     },
+    "esp32h2": {
+      "how": "needs-build",
+      "why": "ESP32-H2 descriptor and UART0 model are newer than the installed CLI this gate checks. The source-tree firmware and simulator smoke pass in examples/esp32h2-devkitm-1-n4s; switch this row after a release carries H2 support."
+    },
+    "esp32c5": {
+      "how": "needs-build",
+      "why": "ESP32-C5 descriptor and UART0 model are newer than the installed CLI this gate checks. The source-tree firmware and simulator smoke pass in examples/esp32c5-devkitc-1-n8r8; switch this row after a release carries C5 support."
+    },
+    "esp32c61": {
+      "how": "needs-build",
+      "why": "ESP32-C61 descriptor and UART0 model are newer than the installed CLI this gate checks. The source-tree firmware and simulator smoke pass in examples/esp32c61-devkitc-1-n8r2; switch this row after a release carries C61 support."
+    },
+    "esp32p4": {
+      "how": "needs-build",
+      "why": "ESP32-P4 descriptor and UART0 model are newer than the installed CLI this gate checks. The source-tree firmware and simulator smoke pass in examples/esp32p4x-c5-function-ev-board; switch this row after a release carries P4 support."
+    },
+    "esp32c6fh4": {
+      "how": "needs-build",
+      "why": "The esp32c6fh4 descriptor (XIAO ESP32-C6 package variant) is newer than the installed CLI this gate checks. Its GPIO15 LED smoke passes from source in examples/xiao-esp32c6-blinky; switch this row after a release carries the esp32c6fh4 descriptor."
+    },
+    "esp32s2": {
+      "how": "needs-build",
+      "why": "ESP32-S2 descriptor and LX7 direct-ELF boot path are newer than the installed CLI this gate checks. The committed fixture smoke passes in examples/esp32s2-devkitc-1-n8r2; switch this row after a release carries S2 support."
+    },
+    "stm32h723zg": {
+      "how": "needs-build",
+      "why": "The STM32H723ZG NUCLEO-H723ZG slice is newer than the installed CLI this gate checks. Its LD1 + USART3 smoke passes from source in examples/nucleo-h723zg; switch this row after a release carries the H723ZG descriptor."
+    },
+    "rp2350-feather": {
+      "how": "needs-build",
+      "why": "The rp2350-feather descriptor is newer than the installed CLI this gate checks. The Feather RP2350 D13/GPIO7 + UART0 smoke passes from source in examples/adafruit-feather-rp2350; switch this row after a release carries the Feather variant."
+    },
+    "rp2040-feather": {
+      "how": "needs-build",
+      "why": "The rp2040-feather descriptor is newer than the installed CLI this gate checks. The Feather BME280 smoke passes from source in examples/adafruit-feather-rp2040; switch this row after a release carries the Feather variant."
+    },
     "nrf52840": {
       "how": "committed",
       "firmware": "tests/fixtures/tier1/nrf52840.elf",
       "expect": "TIER1 gpio PASS"
+    },
+    "nrf54l05": {
+      "how": "committed",
+      "firmware": "tests/fixtures/board-smoke/nrf54l05.elf",
+      "expect": "NRF54L05_OK",
+      "note": "Executable nRF54L05 application-core subset, UART20 EasyDMA and GPIO P2.09; sibling common IP only. Tested with synthetic wiring, not physical board or full radio stack."
+    },
+    "nrf54l10": {
+      "how": "committed",
+      "firmware": "tests/fixtures/board-smoke/nrf54l10.elf",
+      "expect": "NRF54L10_OK",
+      "note": "Executable nRF54L10 application-core subset, UART20 EasyDMA and GPIO P2.09; sibling common IP only. Tested with synthetic wiring, not physical board or full radio stack."
     },
     "nrf54l15": {
       "how": "example",
@@ -187,6 +235,12 @@
     "stm32f401ve": {
       "how": "needs-build",
       "why": "Exact orderable geometry slice on the shared STM32F401 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f401 and exact geometry is checked by stm32_variant_geometry."
+    },
+    "stm32f446re": {
+      "how": "committed",
+      "firmware": "tests/fixtures/board-smoke/stm32f446re.elf",
+      "expect": "STM32F446RE_OK",
+      "note": "Small real-register RCC/GPIOA/USART2 boot and LED test; this simulator evidence is not physical silicon validation. Stock STM32duino requires the newer source model for the PWR over-drive and PLLI2S ready handshake."
     },
     "stm32f411ceu6": {
       "how": "committed",
@@ -433,7 +487,7 @@
     },
     "atsamd51-pybadge": {
       "how": "needs-build",
-      "why": "Adafruit PyBadge application layout (atsamd51 with reset_vector_offset 0x4000, UF2 bootloader resident below). No PyBadge application image linked at 0x4000 is committed or published as a firmware-demos release asset yet; crates/core/tests/pybadge_config.rs proves the 0x4000 boot contract with an in-test stub only"
+      "why": "Adafruit PyBadge application layout (atsamd51 with reset_vector_offset 0x4000, UF2 bootloader resident below). No PyBadge application image linked at 0x4000 is committed or published as a firmware-demos release asset yet; crates/core/tests/samd/pybadge_config.rs proves the 0x4000 boot contract with an in-test stub only"
     },
     "ra4m1": {
       "how": "committed",
@@ -446,6 +500,10 @@
       "firmware": "tests/fixtures/imxrt1064-teensy41-smoke.elf",
       "expect": "OK",
       "note": "Teensy 4.1 UART/LED smoke. Serial1 is LPUART6. Image is DTCM-linked."
+    },
+    "mimxrt1062-teensy41": {
+      "how": "needs-build",
+      "why": "The Teensy 4.1 profile boots stock Teensyduino from the FlexSPI NOR IVT and prints over a USB CDC scripted host; both are newer than the installed v0.25.0 CLI this gate checks. The arduino-matrix teensy41 row (L0-L3, L5, L7) passes from source; switch this row after a release carries the mimxrt1062-teensy41 descriptor."
     },
     "stm32f746": {
       "how": "committed",
@@ -464,6 +522,10 @@
       "script": "examples/stm32g0b1re/io-smoke.yaml",
       "expect": "exti0 port=B falling imr=1",
       "note": "In-repo USART1 PA9 AF1, TIM2 PSC, and G0 EXTI examples. The customer IO-Link ELF is still built by iolinki-reference.yml; see docs/iolinki-g0-prerequisites.md."
+    },
+    "stm32c031c6": {
+      "how": "needs-build",
+      "why": "New in this PR: the STM32C0 RCC profile (`stm32c0`) and the C0 timer pad table are newer than the released CLI this gate installs. The stock-stm32duino Arduino matrix row stm32c031c6 runs it on a source-built CLI; switch to `committed` once a release carries the model"
     },
     "litex-vexriscv": {
       "how": "needs-build",

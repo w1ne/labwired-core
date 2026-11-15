@@ -39,7 +39,7 @@ binary must account for its upstream license.
 From the core repository root, with Rust and native CMake/Clang build tools:
 
 ```sh
-cargo test --locked -p labwired-core --features qemu-arm --test qemu_arm_core --test cpu_trace_conformance
+cargo test --locked -p labwired-core --features qemu-arm --test qemu_arm_core --test bus -- cpu_trace_conformance::
 cargo test --locked -p labwired-cli --features qemu-arm --test cortex_a_cli
 cargo run --locked -p labwired-cli --features qemu-arm -- run --firmware tests/fixtures/cortex-a7-core-smoke.elf --system examples/cortex-a7-core/system.yaml --max-steps 10
 cargo run --locked -p labwired-cli --features qemu-arm -- test --script examples/cortex-a7-core/smoke.yaml --output-dir /tmp/labwired-cortex-a7-smoke

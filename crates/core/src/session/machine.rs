@@ -47,6 +47,9 @@ pub trait SessionMachine: DebugControl + crate::debug::SourceStepTarget + Send {
     /// Let the run loop skip cycles the firmware spends idle (`wfi`, `waiti`,
     /// an idle-loop budget), as the browser does. Off by default.
     fn set_idle_fast_forward(&mut self, enabled: bool);
+    /// Opt in to the same bounded fast execution settings as world nodes.
+    /// The bus-provided max interval preserves peripheral timing limits.
+    fn set_optimized_execution(&mut self, enabled: bool);
     /// Simulated machine cycles since construction.
     fn cycles(&self) -> u64;
     /// Drive one simulated input channel.
@@ -119,6 +122,14 @@ impl<C: Cpu + 'static> SessionMachine for Machine<C> {
     }
     fn set_idle_fast_forward(&mut self, enabled: bool) {
         self.config.idle_fast_forward_enabled = enabled;
+    }
+    fn set_optimized_execution(&mut self, enabled: bool) {
+        if enabled {
+            let interval = self.max_safe_tick_interval();
+            self.config.peripheral_tick_interval = interval;
+            self.bus.config.peripheral_tick_interval = interval;
+            self.config.idle_fast_forward_enabled = true;
+        }
     }
 
     fn cycles(&self) -> u64 {

@@ -50,7 +50,7 @@ cargo build -p firmware-sam4s-xplained-smoke --release --target thumbv7em-none-e
 cargo test -p labwired-core --lib peripherals::sam4s::tests
 #   5 passed; 0 failed
 
-cargo test -p labwired-core --test firmware_survival test_sam4s_xplained_smoke_survival
+cargo test -p labwired-core --test gates firmware_survival::test_sam4s_xplained_smoke_survival
 ```
 
 ## Notes

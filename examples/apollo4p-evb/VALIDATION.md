@@ -60,8 +60,8 @@ PATH=~/tools/zephyr-venv/bin:$PATH crates/firmware-apollo4p-zephyr/build.sh
 #   PASS  2/2 checks · zephyr-hello · 3000000 steps
 #   *** Booting Zephyr OS build v3.7.0 ***
 #   Hello World! apollo4p_evb/apollo4p
-cargo test -p labwired-core --test apollo4_bootrom
-cargo test -p labwired-core --features event-scheduler --test apollo4_bootrom
+cargo test -p labwired-core --test esp apollo4_bootrom::
+cargo test -p labwired-core --features event-scheduler --test esp apollo4_bootrom::
 #   3 passed each
 
 ./target/release/labwired \

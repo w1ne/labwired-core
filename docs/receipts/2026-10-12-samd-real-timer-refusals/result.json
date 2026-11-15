@@ -168,7 +168,7 @@
   },
   "head": "6947637378841a3fe0e249620b8ec8316efe93a3",
   "helpers": {
-    "crates/core/tests/samd_real_timer_adversary_guest.rs": {
+    "crates/core/tests/samd/samd_real_timer_adversary_guest.rs": {
       "bytes": 10547,
       "sha256": "c3f534a81ace07682f8b5736c62c2007531d8297c4fa88f84c1f8951baf5a6a2"
     },

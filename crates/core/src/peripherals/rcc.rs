@@ -111,6 +111,11 @@ pub enum RccRegisterLayout {
     /// (RCC_CR_HSI48ON_Pos 22, RCC_CR_HSI48RDY_Pos 23, CCIPR2 offset 0x58).
     /// The G071 has no HSI48, so its bits 22/23 stay reserved there.
     Stm32G0b1,
+    /// STM32C0 (RM0490 Rev 5 §6): the [`Self::Stm32G0`] register file at the
+    /// G0 offsets, minus the PLL. CR resets to 0x0000_1540 (HSIDIV /4, HSION,
+    /// HSIRDY); PLLON/PLLRDY and PLLCFGR are reserved and CFGR SW=010 selects
+    /// no ready source on the C031.
+    Stm32C0,
     /// STM32F0 family (RM0360 §6.4, STM32F030x4/x6/x8/xC and F070). The F1
     /// register map for CR/CFGR/CIR/APB2RSTR/APB1RSTR/AHBENR/APB2ENR/APB1ENR/
     /// BDCR/CSR at 0x00–0x24 — with the same CR enable→ready pairs and the
@@ -145,9 +150,10 @@ impl FromStr for RccRegisterLayout {
             "wch" => Ok(Self::Wch),
             "stm32g0" | "g0" => Ok(Self::Stm32G0),
             "stm32g0b1" | "g0b1" => Ok(Self::Stm32G0b1),
+            "stm32c0" | "c0" => Ok(Self::Stm32C0),
             "stm32f0" | "f0" => Ok(Self::Stm32F0),
             _ => Err(format!(
-                "unsupported RCC register layout '{}'; supported: stm32f1, stm32f4, stm32v2, stm32h5, stm32h7, stm32l4, stm32l5, stm32l0, stm32g4, stm32wb, stm32wba, wch, stm32g0, stm32g0b1, stm32f0",
+                "unsupported RCC register layout '{}'; supported: stm32f1, stm32f4, stm32v2, stm32h5, stm32h7, stm32l4, stm32l5, stm32l0, stm32g4, stm32wb, stm32wba, wch, stm32g0, stm32g0b1, stm32c0, stm32f0",
                 value
             )),
         }
@@ -440,21 +446,57 @@ impl RccModel for F0Rcc {
 #[derive(Debug, Default, serde::Serialize)]
 pub struct F4Rcc {
     cr: u32,
-    pllcfgr: u32,  // 0x04
-    cfgr: u32,     // 0x08
-    cir: u32,      // 0x0C
-    ahbenr: u32,   // AHB1ENR 0x30
-    ahb2enr: u32,  // 0x34
-    apb1enr: u32,  // 0x40
-    apb2enr: u32,  // 0x44
-    ahbrstr: u32,  // AHB1RSTR 0x10
-    apb1rstr: u32, // 0x20
-    apb2rstr: u32, // 0x24
-    csr: u32,      // 0x74 — LSION bit0 → LSIRDY bit1
+    pllcfgr: u32,    // 0x04
+    cfgr: u32,       // 0x08
+    cir: u32,        // 0x0C
+    ahbenr: u32,     // AHB1ENR 0x30
+    ahb2enr: u32,    // 0x34
+    apb1enr: u32,    // 0x40
+    apb2enr: u32,    // 0x44
+    ahbrstr: u32,    // AHB1RSTR 0x10
+    apb1rstr: u32,   // 0x20
+    apb2rstr: u32,   // 0x24
+    csr: u32,        // 0x74 — LSION bit0 → LSIRDY bit1
+    plli2scfgr: u32, // 0x84
+    // F42x/F446 only (`pllsai: true`): PLLSAICFGR 0x88, DCKCFGR 0x8C,
+    // DCKCFGR2 0x94 (RM0390 §6.3.24/25/28).
+    pllsaicfgr: u32,
+    dckcfgr: u32,
+    dckcfgr2: u32,
     // Per-part ENR writable masks (silicon-pinned); 0xFFFF_FFFF = unmasked.
     ahb1_mask: u32,
     apb1_mask: u32,
     apb2_mask: u32,
+    pllsai: bool,
+}
+
+/// RCC_CR.PLLI2SON (bit 26) → PLLI2SRDY (bit 27), on every F4 (RM0368 §6.3.1,
+/// RM0090 §6.3.1, RM0390 §6.3.1).
+const F4_CR_PLLI2S: (u32, u32) = (26, 27);
+/// RCC_CR.PLLSAION (bit 28) → PLLSAIRDY (bit 29), F42x/F446 only (RM0390
+/// §6.3.1); reserved on F401/F405/F407.
+const F4_CR_PLLSAI: (u32, u32) = (28, 29);
+
+impl F4Rcc {
+    /// The classic HSI/HSE/PLL ready rule plus the F4 PLLI2S (and, on a part
+    /// that has it, PLLSAI) lock: each ON bit auto-sets its RDY bit.
+    fn cr_ready(&self, value: u32) -> u32 {
+        let mut cr = classic_cr_ready(value);
+        let mut plls = vec![F4_CR_PLLI2S];
+        if self.pllsai {
+            plls.push(F4_CR_PLLSAI);
+        } else {
+            cr &= !(1 << F4_CR_PLLSAI.0 | 1 << F4_CR_PLLSAI.1);
+        }
+        for (on, rdy) in plls {
+            if cr & (1 << on) != 0 {
+                cr |= 1 << rdy;
+            } else {
+                cr &= !(1 << rdy);
+            }
+        }
+        cr
+    }
 }
 
 impl F4Rcc {
@@ -467,6 +509,10 @@ impl F4Rcc {
             // PLLCFGR reset = 0x24003010 (RM0090 §6.3.2) — the factory default
             // PLL config word; firmware reads it back before reconfiguring.
             pllcfgr: 0x2400_3010,
+            // PLLI2SCFGR / PLLSAICFGR resets per ST's STM32F401x / STM32F446x
+            // SVDs (resetValue 0x20003000 / 0x24003000).
+            plli2scfgr: 0x2000_3000,
+            pllsaicfgr: 0x2400_3000,
             ahb1_mask: 0xFFFF_FFFF,
             apb1_mask: 0xFFFF_FFFF,
             apb2_mask: 0xFFFF_FFFF,
@@ -516,6 +562,10 @@ impl RccModel for F4Rcc {
             0x40 => self.apb1enr,
             0x44 => self.apb2enr,
             0x74 => self.csr,
+            0x84 => self.plli2scfgr,
+            0x88 if self.pllsai => self.pllsaicfgr,
+            0x8C if self.pllsai => self.dckcfgr,
+            0x94 if self.pllsai => self.dckcfgr2,
             _ => {
                 crate::census_reg!("rcc:F4Rcc", offset, "read");
                 0
@@ -524,7 +574,7 @@ impl RccModel for F4Rcc {
     }
     fn write_reg(&mut self, offset: u64, value: u32) {
         match offset {
-            0x00 => self.cr = classic_cr_ready(value),
+            0x00 => self.cr = self.cr_ready(value),
             // PLLCFGR writable = PLLM/PLLN/PLLP/PLLSRC/PLLQ = 0x7F43_7FFF
             // (silicon-confirmed on F407). Reserved bits read 0.
             0x04 => self.pllcfgr = value & 0x7F43_7FFF,
@@ -569,6 +619,13 @@ impl RccModel for F4Rcc {
                 };
                 self.csr = flags | control;
             }
+            // Stored as written: the I2S/SAI kernel clocks they select are not
+            // modelled, so the field layouts differ per part but nothing
+            // downstream reads them.
+            0x84 => self.plli2scfgr = value,
+            0x88 if self.pllsai => self.pllsaicfgr = value,
+            0x8C if self.pllsai => self.dckcfgr = value,
+            0x94 if self.pllsai => self.dckcfgr2 = value,
             _ => {
                 crate::census_reg!("rcc:F4Rcc", offset, "write");
             }
@@ -2466,6 +2523,10 @@ pub struct G0Rcc {
     /// G0B1/G0C1: HSI48ON(22)→HSI48RDY(23) and CCIPR2 exist. False on G071.
     #[serde(skip)]
     hsi48: bool,
+    /// STM32C0 (RM0490): no PLL — CR bits 24/25 and PLLCFGR (0x0C) are
+    /// reserved, and CFGR SW=010 is not a source on the C031.
+    #[serde(skip)]
+    no_pll: bool,
 }
 
 impl G0Rcc {
@@ -2488,6 +2549,19 @@ impl G0Rcc {
         s
     }
 
+    /// STM32C0 (see [`RccRegisterLayout::Stm32C0`]). RM0490 Rev 5 §6.4.1:
+    /// RCC_CR resets to 0x0000_1540 — HSIDIV[13:11]=010 (HSI48/4 = 12 MHz
+    /// HSISYS), HSION bit 8, HSIRDY bit 10.
+    fn new_c0() -> Self {
+        let mut s = Self {
+            cr: 0x0000_1540,
+            no_pll: true,
+            ..Default::default()
+        };
+        s.cr = s.ready(s.cr);
+        s
+    }
+
     /// G0 CR ready rule: HSION(8)→HSIRDY(10), HSEON(16)→HSERDY(17),
     /// PLLON(24)→PLLRDY(25). HSEBYP is not gated on here — the L4 model's
     /// bypass gate exists because CubeL4 polls it; the G0 smoke path and the
@@ -2495,7 +2569,8 @@ impl G0Rcc {
     /// HSI48ON(22)→HSI48RDY(23).
     fn ready(&self, mut cr: u32) -> u32 {
         let g0b1: &[(u32, u32)] = if self.hsi48 { &[(22, 23)] } else { &[] };
-        for &(on, rdy) in [(8u32, 10u32), (16, 17), (24, 25)].iter().chain(g0b1) {
+        let pll: &[(u32, u32)] = if self.no_pll { &[] } else { &[(24, 25)] };
+        for &(on, rdy) in [(8u32, 10u32), (16, 17)].iter().chain(pll).chain(g0b1) {
             if cr & (1 << on) != 0 {
                 cr |= 1 << rdy;
             } else {
@@ -2512,7 +2587,7 @@ impl RccModel for G0Rcc {
             0x00 => self.cr,
             0x04 => self.icscr,
             0x08 => self.cfgr,
-            0x0C => self.pllcfgr,
+            0x0C if !self.no_pll => self.pllcfgr,
             0x18 => self.cier,
             0x1C => self.cifr,
             0x20 => self.cicr,
@@ -2552,7 +2627,7 @@ impl RccModel for G0Rcc {
                 let ready = match sw {
                     0 => self.cr & (1 << 10) != 0,
                     1 => self.cr & (1 << 17) != 0,
-                    2 => self.cr & (1 << 25) != 0,
+                    2 => !self.no_pll && self.cr & (1 << 25) != 0,
                     3 => self.csr & (1 << 1) != 0,
                     4 => self.bdcr & (1 << 1) != 0,
                     _ => false,
@@ -2564,7 +2639,7 @@ impl RccModel for G0Rcc {
                 };
                 self.cfgr = (value & !(0x7 << 3)) | sws;
             }
-            0x0C => self.pllcfgr = value,
+            0x0C if !self.no_pll => self.pllcfgr = value,
             0x18 => self.cier = value,
             0x1C => self.cifr = value,
             // CICR is write-1-to-clear against CIFR (RM0444 §5.4.7).
@@ -2868,6 +2943,7 @@ impl Rcc {
             RccRegisterLayout::Stm32G4 => Self::Stm32G4(G4Rcc::new()),
             RccRegisterLayout::Stm32G0 => Self::Stm32G0(G0Rcc::new()),
             RccRegisterLayout::Stm32G0b1 => Self::Stm32G0(G0Rcc::new_g0b1()),
+            RccRegisterLayout::Stm32C0 => Self::Stm32G0(G0Rcc::new_c0()),
             RccRegisterLayout::Stm32F0 => Self::Stm32F0(F0Rcc::new()),
             RccRegisterLayout::Wch => Self::Wch(WchRcc::new()),
             // Same V2 model, RM0434 enable/reset placement.
@@ -3104,6 +3180,14 @@ impl Rcc {
         }
     }
 
+    /// Declare the F42x/F446 PLLSAI (CR.PLLSAION → PLLSAIRDY, PLLSAICFGR,
+    /// DCKCFGR, DCKCFGR2). No-op for non-F4 layouts.
+    pub fn set_f4_pllsai(&mut self, present: bool) {
+        if let Self::Stm32F4(r) = self {
+            r.pllsai = present;
+        }
+    }
+
     /// Set the F4 clock-enable (ENR) writable masks — the per-part delta (which
     /// peripherals the device has). No-op for non-F4 layouts. `0xFFFF_FFFF`
     /// leaves a register unmasked.
@@ -3121,6 +3205,10 @@ impl Rcc {
         let Self::Stm32G0(r) = self else {
             return None;
         };
+        // The G0 clock math assumes HSI16 and a PLL; a C0 is neither.
+        if r.no_pll {
+            return None;
+        }
         let live = r
             .live_clocks
             .get_or_insert_with(|| Arc::new(Default::default()));
@@ -3926,6 +4014,36 @@ mod tests {
     }
 
     #[test]
+    fn test_rcc_f4_plli2s_and_pllsai_lock() {
+        // Every F4: PLLI2SON (26) → PLLI2SRDY (27), PLLI2SCFGR @0x84 stored.
+        let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Stm32F4);
+        assert_eq!(rcc.read_u32(0x84).unwrap(), 0x2000_3000, "PLLI2SCFGR reset");
+        let cr = rcc.read_u32(0x00).unwrap();
+        rcc.write_u32(0x00, cr | 1 << 26).unwrap();
+        assert_ne!(rcc.read_u32(0x00).unwrap() & 1 << 27, 0, "PLLI2SRDY");
+        rcc.write_u32(0x00, cr).unwrap();
+        assert_eq!(rcc.read_u32(0x00).unwrap() & 1 << 27, 0, "PLLI2S off");
+        rcc.write_u32(0x84, 0x2200_3000).unwrap();
+        assert_eq!(rcc.read_u32(0x84).unwrap(), 0x2200_3000);
+        // No PLLSAI unless declared (F401/F407: bits 28/29 and 0x88+ reserved).
+        rcc.write_u32(0x00, cr | 1 << 28).unwrap();
+        assert_eq!(rcc.read_u32(0x00).unwrap() & 3 << 28, 0, "no PLLSAI");
+        rcc.write_u32(0x8C, 0x1).unwrap();
+        assert_eq!(rcc.read_u32(0x8C).unwrap(), 0, "no DCKCFGR");
+
+        // F446 (`pllsai: true`): PLLSAION (28) → PLLSAIRDY (29), DCKCFGR/2.
+        let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Stm32F4);
+        rcc.set_f4_pllsai(true);
+        assert_eq!(rcc.read_u32(0x88).unwrap(), 0x2400_3000, "PLLSAICFGR reset");
+        rcc.write_u32(0x00, cr | 1 << 28).unwrap();
+        assert_ne!(rcc.read_u32(0x00).unwrap() & 1 << 29, 0, "PLLSAIRDY");
+        rcc.write_u32(0x8C, 0x0100_0000).unwrap();
+        rcc.write_u32(0x94, 0x0000_0001).unwrap();
+        assert_eq!(rcc.read_u32(0x8C).unwrap(), 0x0100_0000, "DCKCFGR");
+        assert_eq!(rcc.read_u32(0x94).unwrap(), 0x0000_0001, "DCKCFGR2");
+    }
+
+    #[test]
     fn test_rcc_h5_reset_values() {
         // Reset values captured from NUCLEO-H563ZI silicon at reset halt
         // (scripts/hw-capture-stm32h563.sh, 2026-06-10).
@@ -4344,6 +4462,38 @@ mod tests {
     /// CCIPR2 @ 0x58. STM32duino's NUCLEO-G0B1RE SystemClock_Config turns on
     /// HSI48 for USB and calls Error_Handler when HSI48RDY never rises. The
     /// G071 has neither, so on `stm32g0` the same writes must stay inert.
+    /// STM32C0 (RM0490 Rev 5 §6.4): the G0 offsets with no PLL. The stock
+    /// NUCLEO_C031C6 SystemClock_Config sets HSEON, waits HSERDY, then SW=001
+    /// and waits SWS=001; a PLL bring-up must never complete.
+    #[test]
+    fn test_rcc_c0_reset_hse_switch_and_no_pll() {
+        let mut rcc = Rcc::new_with_layout("stm32c0".parse().unwrap());
+        assert_eq!(rcc.read_u32(0x00).unwrap(), 0x0000_1540, "C0 CR reset");
+        assert_eq!(rcc.rcc_reg_offset("iopenr"), Some(0x34));
+        assert_eq!(rcc.rcc_reg_offset("apbenr1"), Some(0x3C));
+        assert_eq!(rcc.rcc_reg_offset("apbenr2"), Some(0x40));
+
+        rcc.write_u32(0x00, 0x1540 | (1 << 16) | (1 << 24)).unwrap();
+        let cr = rcc.read_u32(0x00).unwrap();
+        assert_ne!(cr & (1 << 17), 0, "HSERDY follows HSEON");
+        assert_eq!(cr & (1 << 25), 0, "no PLLRDY: the C0 has no PLL");
+        rcc.write_u32(0x0C, 0x1234_5678).unwrap();
+        assert_eq!(rcc.read_u32(0x0C).unwrap(), 0, "PLLCFGR is reserved");
+
+        rcc.write_u32(0x08, 0b010).unwrap();
+        assert_eq!(
+            (rcc.read_u32(0x08).unwrap() >> 3) & 0x7,
+            0,
+            "SW=010 never lands"
+        );
+        rcc.write_u32(0x08, 0b001).unwrap();
+        assert_eq!((rcc.read_u32(0x08).unwrap() >> 3) & 0x7, 0b001, "SWS=HSE");
+        assert!(
+            rcc.g0_clock_registers().is_none(),
+            "no G0 clock contract on C0"
+        );
+    }
+
     #[test]
     fn test_rcc_g0b1_hsi48_and_ccipr2() {
         let mut rcc = Rcc::new_with_layout("stm32g0b1".parse().unwrap());

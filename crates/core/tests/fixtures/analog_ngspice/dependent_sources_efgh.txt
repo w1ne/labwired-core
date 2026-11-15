@@ -1,4 +1,4 @@
-# ngspice-47 reference for `dependent_sources_efgh` (crates/core/tests/analog_ngspice_macros.rs)
+# ngspice-47 reference for `dependent_sources_efgh` (crates/core/tests/analog/analog_ngspice_macros.rs)
 # v(out) at every 5e-6 s, t = 0 excluded
 # deck 64c01dbcb3ae8f1b
 -1.54444802038861389e-3

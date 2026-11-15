@@ -3,9 +3,9 @@
 One realistic stock-Arduino sketch per main board, timed by
 `scripts/perf/board_rtf.py` (run from `scripts/perf/board_rtx.py`, which the
 Core Perf `board-throughput` job already runs). Each sketch runs forever and
-prints `RTF_READY <id>` once, so a dead boot cannot pass as a fast run.
-The Pico workload also proves continued display updates; a ready marker alone
-does not prove that its application loop kept running.
+prints `RTF_READY <id>` once. Every measured run must reach that marker and
+the complete cycle budget. The Pico workload also proves continued display
+progress; a startup marker alone did not detect its old ROM stall.
 
 | id | board | parts | guest time |
 |----|-------|-------|-----------:|
@@ -35,48 +35,31 @@ cargo build --release -p labwired-cli --features event-scheduler
 python3 scripts/perf/board_rtx.py --boards atmega328p,rp2040,esp32c3,stm32f411ceu6
 ```
 
-This writes `rtf.json` (board, workload, guest_s, wall_s, Mcycles/s, rtf,
-commit, runner). The gate compares `index = best workload RTF / best spin RTx of the same chip`
-against `scripts/perf/rtf_baselines.json`, so a faster or slower runner does
-not move it; a drop of more than 25% (`--rtf-tolerance`) fails. The
-deterministic Ir/step gate (`board_perf.py`) stays the fine-grained detector. After an intended change,
-re-baseline with `--update-rtf`.
+This writes `rtf.json`, including each workload sample, the long-spin samples
+and denominator, and hashes of the CLI, firmware, ROM, configurations and
+harness. The checkout identity is recorded separately; it does not prove
+which source built a supplied CLI.
 
+The gate compares `index = best workload RTF / best spin RTx of the same chip`
+against `scripts/perf/rtf_baselines.json`. This normalization cancels a common
+host-speed factor. Different instruction mixes, host contention and independent
+spin optimizations can still move the ratio. A drop of more than 25%
+(`--rtf-tolerance`) fails. The deterministic Ir/step gate (`board_perf.py`)
+remains the finer detector.
 
-## RP2040 baseline correction (2026-11-10)
+For `pico_oled_pwm`, each eight-second sample must contain at least 75 distinct
+nonblank OLED frames and a final frame at or after 7.5 seconds. The sketch
+redraws every 100 ms; this allows five updates for startup or missed draws.
+The guard checks the existing result's declared I2C0/0x3C display, dimensions,
+power state, frame hashes and increasing timestamps. It adds no execution
+observer. Missing or malformed evidence fails the measurement.
 
-The original `pico_oled_pwm` index, 0.0776, came from
-[Core Perf run 42653202653](https://github.com/w1ne/labwired-core/actions/runs/42653202653).
-Its ROM was the minimal stub before
-[the clean-room ROM implementation](https://github.com/w1ne/labwired-core/commit/15717d9f13f88dd925eca4cc604a7b21785350d4).
-That stub let the sketch print its ready marker and draw one frame, then the
-first `analogWrite` soft-float call stopped the application from progressing.
-The simulator could still spend the full cycle budget by servicing interrupts
-and skipping idle time. The old gate therefore timed a stalled application.
+The former Pico baseline used a ROM without the floating-point table required
+by the committed ELF. Replaying that ROM produces one display frame and then
+stalls after the ready marker. The corrected ROM produces 79 frames. Its replacement
+measurement and positive/negative controls are recorded in
+[`2026-11-10-rp2040-rtf-progress.json`](../../../scripts/perf/receipts/2026-11-10-rp2040-rtf-progress.json).
 
-A same-binary, same-firmware control that changed only the ROM proved the
-semantic difference over the full 8 guest seconds:
-
-| ROM | Distinct OLED frames | Last draw in firmware | PWM enable register |
-|-----|---------------------:|----------------------:|--------------------:|
-| Old minimal stub | 1 | 100 ms | `0x00` |
-| Current clean-room ROM | 79 | 7900 ms | `0x80` (slice 7) |
-
-The current ROM performs the counter redraws and PWM writes that the workload
-was intended to measure. Restoring the old execution path would restore an
-incorrect result. Only the Pico RTF baseline is remeasured for this correction;
-the three other workload baselines and the 25% regression tolerance stay fixed.
-The fresh release binary measured index 0.04132 (best workload RTF 3.17206
-divided by spin RTx 76.762012; best of three for each).
-Measurement inputs, hashes, commands, spin normalization, timing samples and
-the old-ROM negative control are recorded in
-[`2026-11-10-rp2040-rtf-rom-correction.json`](../../../scripts/perf/receipts/2026-11-10-rp2040-rtf-rom-correction.json).
-
-The gate now checks the existing universal framebuffer history in every timed
-Pico run. The sketch redraws every 100 ms. Over 8 seconds, allowing two update
-periods for startup and the budget boundary requires at least 78 distinct frame
-hashes and a final update at or after 7.8 seconds. These are minimum progress
-bounds, not an exact frame-count equality. Missing history, a frozen image,
-insufficient updates and early cessation all fail. The old ROM is a live
-negative control: it still prints `RTF_READY` and reaches `max_cycles`, but its
-single frame at 101531 microseconds is now rejected.
+Use `--update-rtf` only after verifying equivalent useful work, reviewing the
+reason for a baseline change, and retaining the raw measurement and build
+provenance. A failing progress check must never be re-baselined as a fast run.

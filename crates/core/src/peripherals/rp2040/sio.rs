@@ -658,6 +658,21 @@ impl Peripheral for Rp2040Sio {
         self.io_bank0_idx
     }
 
+    /// Clearing GPIO_OE releases an SIO output regardless of GPIO_OUT. An
+    /// open-drain protocol can therefore hold OUT low and toggle only OE.
+    fn gpio_input_is_released(&self) -> bool {
+        true
+    }
+
+    /// GPIO_OUT / GPIO_IN offsets let chip `pins:` labels (GP0..) resolve
+    /// through the bus pin router for attached GPIO devices.
+    fn gpio_port_offsets(&self) -> Option<crate::peripherals::gpio::GpioPortOffsets> {
+        Some(crate::peripherals::gpio::GpioPortOffsets {
+            output: GPIO_OUT,
+            input: GPIO_IN,
+        })
+    }
+
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }

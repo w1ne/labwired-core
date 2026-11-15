@@ -1,0 +1,17 @@
+# WCH CH32V003EVT evaluation board.
+# The board's LED row is brought to P4 (LED1 on P4-1), rather than being
+# hard-wired to an MCU pin. This profile includes a jumper from P4-1 to PC0.
+# USB-C provides power only. USART1 TX is exposed at PD5; debug_uart below is
+# only the simulator's console capture route, not an on-board USB-UART bridge.
+name: "wch-ch32v003evt"
+chip: "../chips/ch32v003f4p6.yaml"
+cpu_hz: 24_000_000
+debug_uart: "usart1"
+external_devices: []
+board_io:
+  - id: "led1_pc0"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 0
+    signal: "output"
+    active_high: false
