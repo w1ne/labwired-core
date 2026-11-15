@@ -13,13 +13,18 @@
 # 0x20000000+n. (The import mapped two separate 512 KiB stores, so a write
 # through one view never showed in the other.)
 #
-# Declared: PL011 UART (polled; its IRQ reaches the NVIC only through the
-# EOS S3 interrupt controller at 0x40004800, which has no model), the eight
-# M4 GPIOs in MISC_CTRL (IO_INPUT 0x40005100 / IO_OUTPUT 0x40005104; qorc-sdk
-# HAL/inc/eoss3_dev.h, HAL/src/eoss3_hal_gpio.c), and the 4 KiB SDMA SRAM.
-# Not declared (no model): interrupt controller and GPIO interrupts, IO_MUX
-# pad controls, simple periodic timer, ADC, DesignWare SPI + SPI DMA, packet
-# FIFO, uDMA + bridge, FFE and its I2C masters, voice block, PMU, CRU.
+# Declared: PL011 UART (polled: the model has no IMSC/MIS interrupt
+# registers, so nothing reaches INTR_CTRL OTHER_INTR bit 1 / NVIC 7), the
+# eight M4 GPIOs in MISC_CTRL (IO_INPUT 0x40005100 / IO_OUTPUT 0x40005104;
+# qorc-sdk HAL/inc/eoss3_dev.h, HAL/src/eoss3_hal_gpio.c), the 4 KiB SDMA
+# SRAM, and INTR_CTRL at 0x40004800 (Renode EOSS3_IntrCtrl): only the two
+# software interrupts are live (SW_INTR_1 -> NVIC 1, SW_INTR_2 -> NVIC 0,
+# each gated by its EN_M4 bit). Its GPIO/OTHER/FFE/FB enable and type words
+# are stored, but their status words read 0: no GPIO edge or peripheral
+# source is routed through it.
+# Not declared (no model): IO_MUX pad controls, simple periodic timer, ADC,
+# DesignWare SPI + SPI DMA, packet FIFO, uDMA + bridge, FFE and its I2C
+# masters, voice block, PMU, CRU.
 name: eos-s3
 arch: arm
 core: cortex-m4
@@ -42,6 +47,10 @@ peripherals:
 - id: uart
   type: pl011
   base_address: 0x40010000
+- id: intr_ctrl
+  type: eos_s3_intr_ctrl
+  base_address: 0x40004800
+  size: 1KB
 - id: gpio
   type: gpio
   base_address: 0x40005100

@@ -517,6 +517,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "ft9001_cpm",
     "ft9001_reset",
     "ft9001_trng",
+    // QuickLogic EOS S3 INTR_CTRL (peripherals/eos_s3_intr.rs).
+    "eos_s3_intr_ctrl",
 ];
 
 /// True if `t` is already a canonical model-type name (see [`MODEL_TYPES`]).
@@ -1884,6 +1886,7 @@ pub fn try_build(
         "ft9001_cpm" => Box::new(crate::peripherals::ft9001_sys::Ft9001Cpm::new()),
         "ft9001_reset" => Box::new(crate::peripherals::ft9001_sys::Ft9001Reset::new()),
         "ft9001_trng" => Box::new(crate::peripherals::ft9001_sys::Ft9001Trng::new()),
+        "eos_s3_intr_ctrl" => Box::new(crate::peripherals::eos_s3_intr::EosS3IntrCtrl::new()),
         "sam_pm" => Box::new(crate::peripherals::sam_clock::SamPm::new()),
         "sam_gclk" => Box::new(crate::peripherals::sam_clock::SamGclk::new()),
         "sam_mclk" => Box::new(crate::peripherals::sam_clock::SamMclk::new()),

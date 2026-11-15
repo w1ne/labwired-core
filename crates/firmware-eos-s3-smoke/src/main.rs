@@ -2,7 +2,8 @@
 #![no_main]
 
 use core::ptr::{read_volatile, write_volatile};
-use cortex_m_rt::entry;
+use core::sync::atomic::{AtomicU32, Ordering};
+use cortex_m_rt::{entry, exception};
 use panic_halt as _;
 
 // Renode platforms/cpus/eos-s3.repl: PL011 at 0x4001_0000.
@@ -14,11 +15,50 @@ const SDMA_SRAM: *mut u32 = 0x4000_F000 as *mut u32;
 // qorc-sdk eoss3_dev.h: MISC_CTRL 0x4000_5000, IO_INPUT +0x100, IO_OUTPUT +0x104.
 const IO_INPUT: *mut u32 = 0x4000_5100 as *mut u32;
 const IO_OUTPUT: *mut u32 = 0x4000_5104 as *mut u32;
+// qorc-sdk eoss3_dev.h INTR_CTRL at 0x4000_4800.
+const INTR_CTRL: u32 = 0x4000_4800;
+const GPIO_INTR_EN_M4: *mut u32 = (INTR_CTRL + 0x14) as *mut u32;
+const OTHER_INTR: *mut u32 = (INTR_CTRL + 0x30) as *mut u32;
+const OTHER_INTR_EN_M4: *mut u32 = (INTR_CTRL + 0x38) as *mut u32;
+const SW_INTR_1: *mut u32 = (INTR_CTRL + 0x40) as *mut u32;
+const SW_INTR_1_EN_M4: *mut u32 = (INTR_CTRL + 0x48) as *mut u32;
+const SW_INTR_2: *mut u32 = (INTR_CTRL + 0x50) as *mut u32;
+const SW_INTR_2_EN_M4: *mut u32 = (INTR_CTRL + 0x58) as *mut u32;
+// NVIC ISER0 / ISPR0. SwInt2_IRQn = 0, SwInt1_IRQn = 1.
+const NVIC_ISER0: *mut u32 = 0xE000_E100 as *mut u32;
+const NVIC_ISPR0: *mut u32 = 0xE000_E200 as *mut u32;
 // Smoke summary: 0xE0530000 | pass bits.
 const SUMMARY: *mut u32 = 0x2007_FF00 as *mut u32;
 
 static MARKER: u32 = 0x5EED_E053;
 static mut DATA_WORD: u32 = 0;
+static SW1_HITS: AtomicU32 = AtomicU32::new(0);
+static SW2_HITS: AtomicU32 = AtomicU32::new(0);
+static OTHER_HITS: AtomicU32 = AtomicU32::new(0);
+
+// Every IRQ lands here; the handler clears the software request it serves.
+#[exception]
+unsafe fn DefaultHandler(irqn: i16) {
+    match irqn {
+        1 => {
+            SW1_HITS.fetch_add(1, Ordering::Relaxed);
+            write_volatile(SW_INTR_1, 0);
+        }
+        0 => {
+            SW2_HITS.fetch_add(1, Ordering::Relaxed);
+            write_volatile(SW_INTR_2, 0);
+        }
+        _ => {
+            OTHER_HITS.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+}
+
+fn settle() {
+    for _ in 0..16 {
+        core::hint::spin_loop();
+    }
+}
 
 fn puts(s: &[u8]) {
     for byte in s {
@@ -29,7 +69,7 @@ fn puts(s: &[u8]) {
 #[entry]
 fn main() -> ! {
     let mut pass = 0u32;
-    let mut marks = [b'F'; 6];
+    let mut marks = [b'F'; 10];
     let mut check = |i: usize, ok: bool| {
         if ok {
             pass |= 1 << i;
@@ -80,6 +120,57 @@ fn main() -> ! {
         let input = read_volatile(IO_INPUT);
         write_volatile(IO_OUTPUT, 0);
         check(5, input == 0);
+
+        // 6: SW_INTR_1 with EN_M4 clear is stored but raises nothing.
+        write_volatile(NVIC_ISER0, 0b11);
+        write_volatile(SW_INTR_1, 1);
+        settle();
+        check(
+            6,
+            read_volatile(SW_INTR_1) == 1
+                && SW1_HITS.load(Ordering::Relaxed) == 0
+                && read_volatile(NVIC_ISPR0) & 0b11 == 0,
+        );
+
+        // 7: setting EN_M4 over the held request enters NVIC 1 once; the
+        // handler's clear ends it.
+        write_volatile(SW_INTR_1_EN_M4, 1);
+        settle();
+        check(
+            7,
+            SW1_HITS.load(Ordering::Relaxed) == 1 && read_volatile(SW_INTR_1) == 0,
+        );
+
+        // 8: SW_INTR_2 (enabled first) enters NVIC 0 once; nothing else fires.
+        write_volatile(SW_INTR_2_EN_M4, 1);
+        write_volatile(SW_INTR_2, 1);
+        settle();
+        check(
+            8,
+            SW2_HITS.load(Ordering::Relaxed) == 1
+                && read_volatile(SW_INTR_2) == 0
+                && SW1_HITS.load(Ordering::Relaxed) == 1
+                && read_volatile(NVIC_ISPR0) & 0b11 == 0,
+        );
+
+        // 9: a second SW1 request enters again; the enable words keep their
+        // documented widths and the unsourced OTHER_INTR status reads 0.
+        write_volatile(SW_INTR_1, 1);
+        settle();
+        write_volatile(GPIO_INTR_EN_M4, 0xFFFF_FFFF);
+        write_volatile(OTHER_INTR_EN_M4, 0xFFFF_FFFF);
+        let gpio_en = read_volatile(GPIO_INTR_EN_M4);
+        let other_en = read_volatile(OTHER_INTR_EN_M4);
+        write_volatile(GPIO_INTR_EN_M4, 0);
+        write_volatile(OTHER_INTR_EN_M4, 0);
+        check(
+            9,
+            SW1_HITS.load(Ordering::Relaxed) == 2
+                && gpio_en == 0xFF
+                && other_en == 0x00FF_FFFF
+                && read_volatile(OTHER_INTR) == 0
+                && OTHER_HITS.load(Ordering::Relaxed) == 0,
+        );
     }
 
     puts(b"EOS S3 Cortex-M4F PL011 smoke\r\n");

@@ -3,24 +3,24 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      10,
+      78,
+      13,
       1073807360,
+      68,
+      99,
       104,
-      32,
       80,
-      69,
-      79,
       537394928,
+      51,
       101,
+      115,
+      69,
       107,
-      80,
-      80,
-      83,
-      537394912,
-      80,
-      1762
+      537394888,
+      10,
+      2228
     ],
-    "pc": 1762,
+    "pc": 2228,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -31,7 +31,7 @@
     ],
     "vtor": 0,
     "waiting_for_event": false,
-    "event_register": false
+    "event_register": true
   },
   "steps_executed": 100000,
   "cycles": 100000,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "2b885be1e4ef729fa6c33372bfe1144dde9d2e30f083201272af831d28dc5c7d",
+  "firmware_hash": "1c99bead4e5d3ea1b271b01b29bac1388982e87ec323012fb6035f43bb02be4d",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-eos-s3-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/eos-s3-quickfeather.yaml",

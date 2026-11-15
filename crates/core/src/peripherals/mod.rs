@@ -30,6 +30,7 @@ pub mod dmamux;
 pub mod dwt;
 pub mod efm32;
 pub mod efr32;
+pub mod eos_s3_intr;
 pub mod esp32;
 pub mod esp32c3;
 pub mod esp32c5;
