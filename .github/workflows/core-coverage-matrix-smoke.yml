@@ -25,7 +25,7 @@ on:
 
 concurrency:
   group: core-coverage-matrix-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   coverage-matrix-smoke:

@@ -31,7 +31,7 @@ on:
 
 concurrency:
   group: core-arduino-matrix-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # Board list = one file per board under validation/arduino-matrix/boards/.
@@ -146,14 +146,33 @@ jobs:
               ;;
           esac
           echo "platform=$platform" >> "$GITHUB_OUTPUT"
+          # Cache budget (10 GB per repo, shared with every Rust cache): the
+          # two single-board platforms below are 2.4 GB and 1.6 GB on their
+          # own (measured 2026-11-15) and are the reason the cargo caches
+          # PRs restore kept being evicted. They are not cached; they
+          # download on each run. Every other platform is <= 1.0 GB.
+          case "$platform" in
+            espressif32@8.0.0|https://*) echo "cache_pio=false" >> "$GITHUB_OUTPUT" ;;
+            *)                           echo "cache_pio=true"  >> "$GITHUB_OUTPUT" ;;
+          esac
+          # One key per platform per month: stable between board-file edits
+          # (the old key hashed boards/*.yaml, so every edit minted a new
+          # multi-GB entry), refreshed monthly so a floating platform does not
+          # go stale forever.
+          echo "month=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
           echo "board ${{ matrix.board }} -> platform $platform"
 
-      - name: Cache PlatformIO packages
-        uses: actions/cache@v4
+      # Restore everywhere; save only from a non-PR run (below). The previous
+      # single `actions/cache` step saved only when the whole job succeeded,
+      # and this lane fails on every push, so it never saved at all.
+      - name: Restore PlatformIO packages
+        id: pio-cache
+        if: steps.pio.outputs.cache_pio == 'true'
+        uses: actions/cache/restore@v4
         with:
           path: |
             ~/.platformio
-          key: pio-${{ steps.pio.outputs.platform }}-${{ hashFiles('validation/arduino-matrix/boards/*.yaml') }}
+          key: pio-${{ steps.pio.outputs.platform }}-${{ steps.pio.outputs.month }}
           restore-keys: |
             pio-${{ steps.pio.outputs.platform }}-
 
@@ -175,6 +194,14 @@ jobs:
             --boards "${{ matrix.board }}" \
             --sketches L0_serial_boot,L1_serial_loop,L2_blink_serial,L3_i2c_sensor,L4_spi_sensor,L5_adc,L6_pwm,L7_timer,L8_can \
             --out "$OUT"
+
+      - name: Save PlatformIO packages
+        if: ${{ !cancelled() && github.event_name != 'pull_request' && steps.pio.outputs.cache_pio == 'true' && steps.pio-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.platformio
+          key: ${{ steps.pio-cache.outputs.cache-primary-key }}
 
       - name: Upload board artifacts
         if: always()
