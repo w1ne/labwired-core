@@ -74,18 +74,45 @@ mod tests {
         assert_eq!(&HOT_BB_WASM[4..8], &[0x01, 0x00, 0x00, 0x00]);
     }
 
-    /// Constants must match the JIT module's view of the block (so the
-    /// browser can reference them without pulling in the `jit` feature).
-    #[cfg(feature = "jit")]
+    /// The JIT module must not hold its own copy of these constants.
+    ///
+    /// This was `#[cfg(feature = "jit")] constants_agree_with_jit_module`,
+    /// which never ran in a default build and, since `bb_multi.rs` began
+    /// re-exporting these very items, compared each constant with itself. The
+    /// real property is "one home", and it is checkable from source without the
+    /// feature: `bb_multi.rs` may re-export the constants but must not declare
+    /// them.
     #[test]
-    fn constants_agree_with_jit_module() {
-        use crate::cpu::xtensa_jit::{
-            HOT_BB_END as JIT_END, HOT_BB_INSTR_COUNT as JIT_N, HOT_BB_L32R_ADDR as JIT_L32R,
-            HOT_BB_PC as JIT_PC,
-        };
-        assert_eq!(HOT_BB_PC, JIT_PC);
-        assert_eq!(HOT_BB_END, JIT_END);
-        assert_eq!(HOT_BB_INSTR_COUNT, JIT_N);
-        assert_eq!(HOT_BB_L32R_ADDR, JIT_L32R);
+    fn jit_module_reexports_the_constants_and_declares_none() {
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/cpu/xtensa_jit/bb_multi.rs");
+        let src = std::fs::read_to_string(&path).expect("read bb_multi.rs");
+        for name in [
+            "HOT_BB_PC",
+            "HOT_BB_END",
+            "HOT_BB_INSTR_COUNT",
+            "HOT_BB_L32R_ADDR",
+        ] {
+            assert!(
+                src.contains(name),
+                "{name} no longer appears in bb_multi.rs: update this guard"
+            );
+            let declared = src.lines().any(|l| {
+                let l = l.trim_start();
+                (l.starts_with("pub const ")
+                    || l.starts_with("pub(crate) const ")
+                    || l.starts_with("const "))
+                    && l.contains(&format!("{name}:"))
+            });
+            assert!(
+                !declared,
+                "bb_multi.rs declares its own {name}; it must re-export \
+                 cpu::xtensa_jit_bytes::{name} (one home)"
+            );
+        }
+        assert!(
+            src.contains("xtensa_jit_bytes::{"),
+            "bb_multi.rs no longer re-exports from xtensa_jit_bytes"
+        );
     }
 }
