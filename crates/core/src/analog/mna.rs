@@ -144,6 +144,22 @@ fn bjt_charge_op(
     }
 }
 
+/// Weil's second-order excess-phase filter over one step of `h` seconds, as
+/// ngspice's `bjtload.c` discretises `td²/3·y'' + td·y' + y = cbe/qb` with
+/// group delay `td`. Returns the history term `cc` and the weight `arg3` of
+/// the present `cbe`, so the delayed transport current is `cc + arg3·cbe/qb`.
+/// `previous` is the last step length; with none yet the two history points
+/// are equal and the ratio cancels.
+fn excess_phase_step(delay: f64, h: f64, previous: f64, history: [f64; 2]) -> (f64, f64) {
+    let arg1 = h / delay;
+    let arg2 = 3.0 * arg1;
+    let arg1 = arg2 * arg1;
+    let denom = 1.0 + arg1 + arg2;
+    let ratio = if previous > 0.0 { h / previous } else { 1.0 };
+    let cc = (history[0] * (1.0 + ratio + arg2) - history[1] * ratio) / denom;
+    (cc, arg1 / denom)
+}
+
 fn bjt_charge_active(model: BjtModel, branch: usize) -> bool {
     let epi = model.rco.is_some() && model.qco != 0.0;
     match branch {
@@ -516,6 +532,13 @@ pub struct Solver {
     /// epitaxial charge in device coordinates.
     bjt_q: Vec<[f64; 4]>,
     bjt_i: Vec<[f64; 4]>,
+    /// Weil excess-phase history of each BJT with `PTF`: the delayed
+    /// transport current `cc + cex/qb` (ngspice's `cexbc`) at the last two
+    /// accepted steps, newest first.
+    bjt_excess: Vec<[f64; 2]>,
+    /// Length of the last accepted transient step, seconds; zero right after
+    /// the operating point (ngspice's `CKTdeltaOld[1]`).
+    previous_step: f64,
     /// Each MOSFET's gate-source voltage in device coordinates, as the netlist
     /// names the terminals — not swapped for reverse mode.
     mos_vgs: Vec<f64>,
@@ -683,6 +706,8 @@ impl Solver {
             bjt_vbcx: vec![0.0; bjts],
             bjt_q: vec![[0.0; 4]; bjts],
             bjt_i: vec![[0.0; 4]; bjts],
+            bjt_excess: vec![[0.0; 2]; bjts],
+            previous_step: 0.0,
             mos_vgs: vec![0.0; mosfets],
             mos_vds: vec![0.0; mosfets],
             mos_vbd: vec![0.0; mosfets],
@@ -1097,7 +1122,13 @@ impl Solver {
             )
             .q;
             self.bjt_i[index] = [0.0; 4];
+            // ngspice MODEINITTRAN: both history points hold the DC cbe/qb.
+            let transport =
+                device::bjt_forward_transport(vbe, vbc, bjt.operating_model, bjt.thermal_voltage);
+            let delayed = transport.cbe / transport.qb;
+            self.bjt_excess[index] = [delayed, delayed];
         }
+        self.previous_step = 0.0;
         for index in 0..self.circuit.mosfets.len() {
             let mosfet = &self.circuit.mosfets[index];
             let sign = mosfet.operating_model.polarity.sign();
@@ -1410,7 +1441,25 @@ impl Solver {
                 self.bjt_q[index][junction] = q_new;
                 self.bjt_i[index][junction] = i_new;
             }
+            let delay = device::bjt_excess_phase_delay(bjt.model);
+            if delay > 0.0 {
+                let transport = device::bjt_forward_transport(
+                    voltages[0],
+                    voltages[1],
+                    model,
+                    bjt.thermal_voltage,
+                );
+                let (history, arg3) =
+                    excess_phase_step(delay, h, self.previous_step, self.bjt_excess[index]);
+                let delayed = history + transport.cbe * arg3 / transport.qb;
+                let [newest, older] = self.bjt_excess[index];
+                self.settled &= newest.to_bits() == delayed.to_bits()
+                    && older.to_bits() == newest.to_bits()
+                    && self.previous_step.to_bits() == h.to_bits();
+                self.bjt_excess[index] = [delayed, newest];
+            }
         }
+        self.previous_step = h;
         for index in 0..self.circuit.jfets.len() {
             let jfet = &self.circuit.jfets[index];
             let sign = jfet.model.polarity.sign();
@@ -2512,6 +2561,29 @@ impl Solver {
                 operating_model.nkf,
                 bjt.thermal_voltage,
             );
+            let mut op = op;
+            if let Stamp::Transient(h, _) = stamp {
+                let delay = device::bjt_excess_phase_delay(bjt.model);
+                if delay > 0.0 {
+                    // ngspice replaces cbe by cex = arg3·cbe in the transport
+                    // current and adds the history term cc; the base current
+                    // keeps the undelayed cbe.
+                    let transport = device::bjt_forward_transport(
+                        vbe,
+                        vbc,
+                        operating_model,
+                        bjt.thermal_voltage,
+                    );
+                    let (history, arg3) =
+                        excess_phase_step(delay, h, self.previous_step, self.bjt_excess[index]);
+                    let shift = transport.cbe * (arg3 - 1.0);
+                    let qb_squared = transport.qb * transport.qb;
+                    op.ic += history + shift / transport.qb;
+                    op.gif += transport.gbe * (arg3 - 1.0) / transport.qb
+                        - shift * transport.dqb_dvbe / qb_squared;
+                    op.gir += shift * transport.dqb_dvbc / qb_squared;
+                }
+            }
 
             // The Gummel–Poon base resistance is updated from the transistor's
             // base current on each Newton pass, following ngspice's RBM/IRB

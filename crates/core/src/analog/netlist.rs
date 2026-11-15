@@ -229,7 +229,9 @@
 //! adds quasi-static diffusion charge, or `TT` with `VP > 0` selects the
 //! first-order soft reverse-recovery model. BJT `TF`/`TR`
 //! add transit-time charge based on the forward/reverse transport current;
-//! `XTF`/`VTF`/`ITF` adjust the forward transit time with bias;
+//! `XTF`/`VTF`/`ITF` adjust the forward transit time with bias; `PTF`
+//! delays the forward transport current by Weil's excess-phase filter with
+//! `td = PTF·π/180·TF` in transient steps, as ngspice does;
 //! `RB`/`RC`/`RE` add series resistance between the external terminals and
 //! probeable internal junction nodes when nonzero. JFET
 //! `CGS`/`CGD`/`PB`/`FC` add gate-junction depletion charge; fixed level-1
@@ -1457,6 +1459,11 @@ pub struct BjtModel {
     /// High-current scale `ITF` for the forward transit-time adjustment,
     /// amps. Zero disables current suppression, matching ngspice's default.
     pub itf: f64,
+    /// Excess phase `PTF` at `1/(2π·TF)`, degrees. Zero disables Weil's
+    /// second-order delay of the forward transport current, matching
+    /// ngspice's default. The delay `PTF·π/180·TF` uses the card `TF`, before
+    /// `TTF1`/`TTF2`, as ngspice's `bjttemp.c` does.
+    pub ptf: f64,
     /// Ideal reverse transit time `TR`, seconds. Zero disables reverse
     /// diffusion charge, matching ngspice's default.
     pub tr: f64,
@@ -1624,6 +1631,7 @@ impl BjtModel {
             xtf: 0.0,
             vtf: f64::INFINITY,
             itf: 0.0,
+            ptf: 0.0,
             tr: 0.0,
             ttr1: 0.0,
             ttr2: 0.0,
@@ -4175,6 +4183,9 @@ fn bind_models(
                 if model.nf <= 0.0 || model.nr <= 0.0 {
                     return Err(ctx.parse_err("a BJT model needs NF > 0 and NR > 0".to_string()));
                 }
+                if !model.ptf.is_finite() || model.ptf < 0.0 {
+                    return Err(ctx.parse_err("a BJT model needs a finite PTF >= 0".to_string()));
+                }
                 if model.vaf.is_nan() || model.vaf < 0.0 || model.var.is_nan() || model.var < 0.0 {
                     return Err(ctx.parse_err(
                         "a BJT model needs VAF >= 0 and VAR >= 0 (zero disables Early effect)"
@@ -5192,6 +5203,7 @@ fn parse_model(
             (ModelCard::Bjt(model), "XTF") => model.xtf = value,
             (ModelCard::Bjt(model), "VTF") => model.vtf = value,
             (ModelCard::Bjt(model), "ITF") => model.itf = value,
+            (ModelCard::Bjt(model), "PTF") => model.ptf = value,
             (ModelCard::Bjt(model), "TR") => model.tr = value,
             (ModelCard::Bjt(model), "TTR1") => model.ttr1 = value,
             (ModelCard::Bjt(model), "TTR2") => model.ttr2 = value,

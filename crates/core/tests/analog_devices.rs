@@ -9294,4 +9294,109 @@ mod analog {
             .to_string();
         assert!(error.contains("`ic`"), "unexpected error {error}");
     }
+
+    /// `PTF` delays the forward transport current by Weil's second-order
+    /// Bessel filter with group delay `td = PTF·π/180·TF`, as ngspice-42's
+    /// `bjtload.c` discretises it. A 0.6 → 0.75 V base step reaches each
+    /// collector source; ngspice-42 was run on the same deck with
+    /// `tran 1p 16n 0 1p`, `reltol=1e-6` and `linearize`.
+    /// - QA: plain card, td = 1.047 ns.
+    /// - QB: `VAF`/`VAR`/`IKF`/`NKF`, so `qb` and its slopes enter `cc`.
+    /// - QP: PNP, td = 1.571 ns.
+    /// - QT: `TTF1` at 80 °C. The delay still uses the card `TF`.
+    /// - Q0: no `PTF`, so the collector follows the base in one step.
+    #[test]
+    fn bjt_ptf_excess_phase_delays_transport_current_as_ngspice() {
+        let deck =
+            "VB b 0 PULSE(0.6 0.75 10n 1p 1p 1 2)\nVBP bp 0 PULSE(-0.6 -0.75 10n 1p 1p 1 2)\n\
+            VC1 c1 0 dc 3\nVC2 c2 0 dc 3\nVC3 c3 0 dc -3\nVC4 c4 0 dc 3\nVC5 c5 0 dc 3\n\
+            Q1 c1 b 0 QA temp=27\nQ2 c2 b 0 QB temp=27\nQ3 c3 bp 0 QP temp=27\n\
+            Q4 c4 b 0 QT temp=80\nQ5 c5 b 0 Q0 temp=27\n\
+            .model QA NPN(IS=1e-15 BF=100 TF=1n PTF=60)\n\
+            .model QB NPN(IS=1e-15 BF=100 VAF=20 VAR=30 IKF=2m NKF=0.6 TF=1n PTF=90)\n\
+            .model QP PNP(IS=2e-15 BF=60 TF=2n PTF=45)\n\
+            .model QT NPN(IS=1e-15 BF=100 TF=1n TTF1=0.02 PTF=60)\n\
+            .model Q0 NPN(IS=1e-15 BF=100 TF=1n)\n";
+        let sources = ["VC1", "VC2", "VC3", "VC4", "VC5"];
+        // ngspice-42 collector current per row (out of each collector
+        // source), in the order of `sources`.
+        #[rustfmt::skip]
+        let ngspice: [(f64, [f64; 5]); 10] = [
+            (10.25e-9, [2.7405389964e-04, 7.1195896462e-05, -2.7613481350e-04, 3.8075603253e-03, 3.9188005821e-03]),
+            (10.50e-9, [8.4037326339e-04, 2.1192290728e-04, -8.8634216123e-04, 1.1225447208e-02, 3.9188005821e-03]),
+            (10.75e-9, [1.4872620469e-03, 3.9539303230e-04, -1.6819473247e-03, 1.9698407858e-02, 3.9188005821e-03]),
+            (11.00e-9, [2.0957624822e-03, 5.9437676107e-04, -2.5448542583e-03, 2.7668446833e-02, 3.9188005821e-03]),
+            (11.50e-9, [3.0218999080e-03, 9.7448862605e-04, -4.1932772962e-03, 3.9798707158e-02, 3.9188005821e-03]),
+            (12.00e-9, [3.5512450810e-03, 1.2811655117e-03, -5.5232623653e-03, 4.6731833759e-02, 3.9188005821e-03]),
+            (12.50e-9, [3.8039632237e-03, 1.5010526835e-03, -6.4768733654e-03, 5.0041792980e-02, 3.9188005821e-03]),
+            (13.00e-9, [3.9037849214e-03, 1.6455704740e-03, -7.1036276005e-03, 5.1349186018e-02, 3.9188005821e-03]),
+            (14.00e-9, [3.9349141180e-03, 1.7828607547e-03, -7.6990456377e-03, 5.1756876643e-02, 3.9188005821e-03]),
+            (16.00e-9, [3.9198493393e-03, 1.8222442872e-03, -7.8698572206e-03, 5.1559559665e-02, 3.9188005821e-03]),
+        ];
+        // Fixed 5 ps steps against ngspice's 1 ps ones agree within 0.1 %
+        // of each final current; the bound is 0.2 %.
+        let h: f64 = 5e-12;
+        let edge = (10e-9 / h).round() as u64;
+        let mut solver = build(deck);
+        let mut step = 0_u64;
+        let mut before = 0.0;
+        let mut trajectory = Vec::new();
+        for (time, expected) in ngspice {
+            let target = (time / h).round() as u64;
+            while step < target {
+                solver.advance(h).expect("PTF transient step solves");
+                step += 1;
+                let current = source_current(&solver, "VC1");
+                if step == edge {
+                    before = current;
+                } else if step > edge {
+                    trajectory.push((step as f64 * h - 10e-9, current));
+                }
+            }
+            for (column, name) in sources.iter().enumerate() {
+                let got = source_current(&solver, name);
+                let final_value = ngspice[9].1[column];
+                assert!(
+                    (got - expected[column]).abs() < 2e-3 * final_value.abs(),
+                    "{name} at {time:e} s: ngspice-42 {} A, got {got} A",
+                    expected[column]
+                );
+            }
+        }
+
+        // The continuous law behind the recursion is td²/3·y'' + td·y' + y = x.
+        // Its step response is 1 − e^(−αt)·(cos βt + α/β·sin βt), with
+        // α = 1.5/td and β = √3/(2·td): 0.43 % overshoot, then settled.
+        let td = 60.0 * std::f64::consts::PI / 180.0 * 1e-9;
+        let (alpha, beta) = (1.5 / td, 3f64.sqrt() / (2.0 * td));
+        let after = ngspice[9].1[0];
+        let mut peak = 0.0_f64;
+        for (t, current) in trajectory {
+            let response =
+                1.0 - (-alpha * t).exp() * ((beta * t).cos() + alpha / beta * (beta * t).sin());
+            let expected = before + (after - before) * response;
+            assert!(
+                (current - expected).abs() < 3e-3 * after,
+                "QA {t:e} s after the edge: Bessel step {expected} A, got {current} A"
+            );
+            peak = peak.max(current);
+        }
+        assert!(
+            peak > after * 1.003,
+            "Weil's filter overshoots its final value"
+        );
+    }
+
+    /// `PTF` is an angle; a negative or non-finite one has no delay to model.
+    #[test]
+    fn bjt_ptf_must_be_finite_and_non_negative() {
+        for card in ["PTF=-10", "PTF=inf"] {
+            let error = parse_netlist(&format!(
+                "V1 c 0 3\nV2 b 0 0.7\nQ1 c b 0 QX\n.model QX NPN(IS=1e-15 TF=1n {card})\n"
+            ))
+            .expect_err("PTF must be refused")
+            .to_string();
+            assert!(error.contains("PTF"), "unexpected error {error}");
+        }
+    }
 }

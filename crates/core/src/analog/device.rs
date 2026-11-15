@@ -1302,6 +1302,86 @@ pub fn bjt_op_with_nkf_at_thermal_voltage(
     }
 }
 
+/// Weil's excess-phase delay `td = PTF·π/180·TF`, seconds, from the card
+/// `TF` (ngspice `bjttemp.c` applies no `TTF1`/`TTF2` to it). Zero when
+/// `PTF` or `TF` is zero, which leaves the transport current undelayed.
+pub fn bjt_excess_phase_delay(model: BjtModel) -> f64 {
+    model.ptf * core::f64::consts::PI / 180.0 * model.tf
+}
+
+/// The forward diffusion current, its slope and the normalised base charge
+/// `qb` with its two junction slopes, as ngspice's `bjtload.c` names them
+/// (`cbe`, `gbe`, `qb`, `dqbdve`, `dqbdvc`). Excess phase delays `cbe/qb`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BjtForwardTransport {
+    pub cbe: f64,
+    pub gbe: f64,
+    pub qb: f64,
+    pub dqb_dvbe: f64,
+    pub dqb_dvbc: f64,
+}
+
+/// [`BjtForwardTransport`] at one bias, with the same junction factors and
+/// base-charge law as [`bjt_op_with_nkf_at_thermal_voltage`].
+pub fn bjt_forward_transport(
+    vbe: f64,
+    vbc: f64,
+    model: BjtModel,
+    thermal_voltage: f64,
+) -> BjtForwardTransport {
+    let vtf = model.nf * thermal_voltage;
+    let vtr = model.nr * thermal_voltage;
+    let (forward, forward_slope) = bjt_junction_factors(vbe, vtf);
+    let (reverse, reverse_slope) = bjt_junction_factors(vbc, vtr);
+    let inverse = |value: f64| {
+        if value > 0.0 && value.is_finite() {
+            1.0 / value
+        } else {
+            0.0
+        }
+    };
+    let (inv_vaf, inv_var) = (inverse(model.vaf), inverse(model.var));
+    let (inv_ikf, inv_ikr) = (inverse(model.ikf), inverse(model.ikr));
+    let cbe = model.is * (forward - 1.0);
+    let gbe = model.is * forward_slope / vtf;
+    let gbc = model.is * reverse_slope / vtr;
+    let q1 = 1.0 / (1.0 - vbc * inv_vaf - vbe * inv_var);
+    let (qb, dqb_dvbe, dqb_dvbc) = if inv_ikf == 0.0 && inv_ikr == 0.0 {
+        (q1, q1 * q1 * inv_var, q1 * q1 * inv_vaf)
+    } else {
+        let q2 = inv_ikf * cbe + inv_ikr * model.is * (reverse - 1.0);
+        let argument = (1.0 + 4.0 * q2).max(0.0);
+        // d(rolloff)/dq2 / 2, so dqb = q1·(qb/VA + d(q2)·this). A clamped
+        // zero argument keeps bjt_op's tangents: 1 for the square root (as
+        // ngspice), 0 for an explicit NKF.
+        let (rolloff, half_slope) = match model.nkf {
+            None if argument > 0.0 => {
+                let root = libm::sqrt(argument);
+                (root, 1.0 / root)
+            }
+            None => (1.0, 1.0),
+            Some(nkf) if argument > 0.0 => {
+                let power = libm::pow(argument, nkf);
+                (power, 2.0 * power * nkf / argument)
+            }
+            Some(_) => (1.0, 0.0),
+        };
+        let qb = q1 * (1.0 + rolloff) / 2.0;
+        (
+            qb,
+            q1 * (qb * inv_var + inv_ikf * gbe * half_slope),
+            q1 * (qb * inv_vaf + inv_ikr * gbc * half_slope),
+        )
+    };
+    BjtForwardTransport {
+        cbe,
+        gbe,
+        qb,
+        dqb_dvbe,
+        dqb_dvbc,
+    }
+}
+
 /// Ngspice's level-1 Gummel–Poon base-spreading resistance for the current
 /// flowing into the base. `RBM` defaults to `RB` and `IRB` defaults to
 /// infinity, so an omitted transition leaves the old fixed resistor exactly

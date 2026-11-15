@@ -567,7 +567,10 @@ base-collector depletion charge from `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC`,
 plus forward transit-time charge from `TF` with its `XTF`/`VTF`/`ITF` bias
 adjustment and reverse transit-time charge from `TR` (all default to zero;
 `XTF`/`ITF` default to zero and `VTF` to infinity; shared `FC` defaults to
-0.5) and ohmic terminal resistances `RB`/`RC`/`RE` (all
+0.5), excess phase `PTF` in degrees (default zero: in transient steps the
+forward transport current lags through ngspice's Weil second-order filter
+with delay `PTF·π/180·TF`, from the card `TF` before `TTF1`/`TTF2`) and
+ohmic terminal resistances `RB`/`RC`/`RE` (all
 default to zero). `RBM` defaults to `RB` and `IRB` defaults to infinity, so
 omitting either leaves the base resistance fixed; with `RBM < RB` and finite
 `IRB`, the base resistance falls from `RB` toward `RBM` as base current rises.

@@ -260,3 +260,133 @@ fn arduino_nano_33_ble_bjt_early_effect_reaches_saadc_with_unrelated_devices() {
         "finite VAF must measurably shift the collector load line: {early_effect_deltas:?}"
     );
 }
+
+/// Independent collector voltages of the two excess-phase stages after each
+/// 50 ns step of a 0 → `base_v` base step, from ngspice `bjtload.c`'s Weil
+/// recursion `y_n = (y_{n−1}·(2 + 3h/td) − y_{n−2} + 3(h/td)²·x)/denom`
+/// (equal steps) on `x = IS·(exp(Vbe/Vt) − 1)`. The B-C junction stays more
+/// than 1 V reverse-biased, so its diffusion and 1 pS GMIN currents are below
+/// 4 pA: a few nanovolts across the load.
+fn excess_phase_collector_voltages(base_v: f64, steps: usize) -> Vec<(f64, f64)> {
+    const SUPPLY_V: f64 = 3.3;
+    const LOAD_OHMS: f64 = 1_000.0;
+    const IS_A: f64 = 1e-15;
+    const STEP_S: f64 = 50e-9;
+    const VT: f64 = 1.380_649e-23 * 300.15 / 1.602_176_634e-19;
+    let td = 90.0 * std::f64::consts::PI / 180.0 * 1e-6;
+    let x = IS_A * ((base_v / VT).exp() - 1.0);
+    let arg2 = 3.0 * STEP_S / td;
+    let arg1 = arg2 * STEP_S / td;
+    let denom = 1.0 + arg1 + arg2;
+    let (mut newest, mut older) = (0.0, 0.0);
+    (0..steps)
+        .map(|_| {
+            let delayed = (newest * (2.0 + arg2) - older + arg1 * x) / denom;
+            (older, newest) = (newest, delayed);
+            (SUPPLY_V - LOAD_OHMS * delayed, SUPPLY_V - LOAD_OHMS * x)
+        })
+        .collect()
+}
+
+#[test]
+fn arduino_nano_33_ble_bjt_excess_phase_reaches_saadc_beside_ntc_and_diode() {
+    const SUBSTEPS: usize = 20;
+    const BASE_V: f64 = 0.72;
+    let system_path = root("configs/systems/arduino-nano-33-ble.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load Nano 33 BLE profile");
+    let analog_path = root("examples/arduino-nano-33-ble/analog-bjt-excess-phase-system.yaml");
+    let analog = SystemManifest::from_file(&analog_path).expect("load generic analog netlists");
+    profile.cosim_models = analog.cosim_models;
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load nRF52840 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build Nano 33 BLE bus");
+    configure_saadc(&mut bus);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal session")
+        .expect("profile contains NTC, diode and two excess-phase stages");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must resolve to SAADC channels 0 through 3"
+    );
+
+    let mut cycles = 0;
+    let mut boundary = |session: &mut CosimSession, bus: &mut SystemBus| {
+        session
+            .set_signal_number("ui.ntc.temperature_c", 25.0)
+            .expect("hold the unrelated NTC at 25 °C");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, bus)
+            .expect("solve and route every netlist");
+        assert_eq!(steps.len(), 4, "all four netlists solve each microsecond");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+    };
+
+    session
+        .set_signal_number("ui.bjt_ptf.base_v", 0.0)
+        .expect("start both stages off");
+    boundary(&mut session, &mut bus);
+    let off_v = voltage(&session, 2);
+    assert!((off_v - 3.3).abs() < 1e-8, "off stage at {off_v} V");
+
+    session
+        .set_signal_number("ui.bjt_ptf.base_v", BASE_V)
+        .expect("step both bases");
+    let ntc_r = ntc_resistance_ohms(25.0);
+    let expected_ntc_v = 3.3 * ntc_r / (ntc_r + 10_000.0);
+    let expected_diode_v = diode_load_line_voltage();
+    let microseconds = 8;
+    let reference = excess_phase_collector_voltages(BASE_V, microseconds * SUBSTEPS);
+    let mut first = None;
+    for microsecond in 0..microseconds {
+        boundary(&mut session, &mut bus);
+        let (expected_ptf_v, expected_control_v) = reference[(microsecond + 1) * SUBSTEPS - 1];
+        let voltages = std::array::from_fn::<_, 4, _>(|channel| voltage(&session, channel));
+        assert!(
+            (voltages[2] - expected_ptf_v).abs() < 1e-6,
+            "PTF=90 stage at {} µs: Weil recursion {expected_ptf_v} V, got {} V",
+            microsecond + 1,
+            voltages[2]
+        );
+        assert!(
+            (voltages[3] - expected_control_v).abs() < 1e-6,
+            "PTF=0 stage at {} µs: static {expected_control_v} V, got {} V",
+            microsecond + 1,
+            voltages[3]
+        );
+        assert!((voltages[0] - expected_ntc_v).abs() < 1e-9, "NTC isolated");
+        assert!(
+            (voltages[1] - expected_diode_v).abs() < 2e-5,
+            "diode isolated"
+        );
+
+        let codes = scan_saadc(&mut bus);
+        for (channel, volts) in voltages.iter().copied().enumerate() {
+            assert_eq!(
+                codes[channel],
+                expected_saadc_code(volts),
+                "SAADC channel {channel} at {} µs",
+                microsecond + 1
+            );
+        }
+        assert_eq!(codes[4], 0, "undriven SAADC AIN4 must stay at ground");
+        if microsecond == 0 {
+            first = Some((codes[2], codes[3]));
+        }
+        if microsecond == microseconds - 1 {
+            // Five delays later the PTF stage has settled onto the control.
+            assert!(codes[2].abs_diff(codes[3]) <= 2, "settled codes {codes:?}");
+        }
+    }
+
+    // One microsecond (0.64·td) after the step the delayed stage has swung
+    // less than half way, while the undelayed one is already there.
+    let (ptf_code, control_code) = first.expect("first microsecond recorded");
+    let off_code = expected_saadc_code(3.3);
+    assert!(
+        off_code - ptf_code < (off_code - control_code) / 2,
+        "PTF must hold the collector up: {ptf_code} vs control {control_code} (off {off_code})"
+    );
+}
