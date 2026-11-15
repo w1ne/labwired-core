@@ -206,8 +206,14 @@ pub const MODEL_TYPES: &[&str] = &[
     "samd51_eic",
     "samd51_dac",
     "samd51_adc",
+    // The SAMD21 ADC: a different register layout, same conversion slice.
+    "samd21_adc",
+    // The same TCC slice on the SAMD21 instances (single IRQ line, PM clock gate).
+    "samd21_tcc",
     "samd51_pac",
     "samd51_sercom_i2cm",
+    // The same I2C master slice on SAMD21 SERCOM instances.
+    "samd21_sercom_i2cm",
     "samd51_sercom_usart",
     "sam_dmac_byte",
     "sam_dmac_sercom4_tx_byte",
@@ -523,7 +529,9 @@ fn build_samd51_board_model(
     // master's is the board's SCL rise time.
     let admitted = |key: &String| match kind {
         "samd51_dac" => key == "vrefa_mv" || key == "vddana_mv",
-        "samd51_sercom_i2cm" => key == "scl_rise_ns",
+        "samd51_sercom_i2cm" | "samd21_sercom_i2cm" => key == "scl_rise_ns",
+        // Board-level static levels on the AIN inputs: `input_mv: { <ain>: <mV> }`.
+        "samd21_adc" => key == "input_mv",
         _ => false,
     };
     if !p_cfg.config.keys().all(admitted) {
@@ -546,8 +554,29 @@ fn build_samd51_board_model(
             }
             Box::new(Samd51Adc::new(*instance))
         }
+        "samd21_adc" => {
+            use crate::peripherals::sam::adc21::Samd21Adc;
+            if p_cfg.base_address != 0x42004000 {
+                anyhow::bail!("SAMD21 ADC requires base 0x42004000");
+            }
+            if p_cfg.irq.is_some() {
+                anyhow::bail!("SAMD21 ADC interrupts are not modelled");
+            }
+            let mut adc = Samd21Adc::new();
+            if let Some(map) = p_cfg.config.get("input_mv").and_then(|v| v.as_mapping()) {
+                for (k, v) in map {
+                    match (k.as_u64(), v.as_u64()) {
+                        (Some(ain), Some(mv)) if ain < 20 => {
+                            adc.set_input_millivolts(ain as usize, mv as u32)
+                        }
+                        _ => anyhow::bail!("SAMD21 ADC input_mv wants {{ <ain 0..19>: <mV> }}"),
+                    }
+                }
+            }
+            Box::new(adc)
+        }
         "samd51_tcc" => {
-            use crate::peripherals::sam::tcc::{Samd51Tcc, TCC_INSTANCES};
+            use crate::peripherals::sam::tcc::{SamTcc, TCC_INSTANCES};
             let Some(instance) = TCC_INSTANCES.iter().find(|i| i.base == p_cfg.base_address) else {
                 anyhow::bail!("SAMD51 TCC base must be one of TCC0..TCC4");
             };
@@ -555,7 +584,20 @@ fn build_samd51_board_model(
             if p_cfg.irq.is_some_and(|irq| irq != instance.irq) {
                 anyhow::bail!("SAMD51 TCC IRQ must be its first line {}", instance.irq);
             }
-            Box::new(Samd51Tcc::new(*instance))
+            Box::new(SamTcc::new(*instance))
+        }
+        "samd21_tcc" => {
+            use crate::peripherals::sam::tcc::{SamTcc, SAMD21_TCC_INSTANCES};
+            let Some(instance) = SAMD21_TCC_INSTANCES
+                .iter()
+                .find(|i| i.base == p_cfg.base_address)
+            else {
+                anyhow::bail!("SAMD21 TCC base must be one of TCC0..TCC2");
+            };
+            if p_cfg.irq.is_some_and(|irq| irq != instance.irq) {
+                anyhow::bail!("SAMD21 TCC IRQ must be {}", instance.irq);
+            }
+            Box::new(SamTcc::new(*instance))
         }
         "samd51_dac" | "samd51_pac" => {
             let base = if kind == "samd51_dac" {
@@ -576,17 +618,22 @@ fn build_samd51_board_model(
                 Box::new(crate::peripherals::sam::pac::Samd51Pac::new())
             }
         }
-        "samd51_sercom_i2cm" => {
-            use crate::peripherals::sam::sercom_i2cm::{Samd51SercomI2cm, SERCOM_INSTANCES};
-            let Some(instance) = SERCOM_INSTANCES
-                .iter()
-                .find(|i| i.base == p_cfg.base_address)
-            else {
-                anyhow::bail!("SAMD51 SERCOM base must be one of SERCOM0..SERCOM5");
+        "samd51_sercom_i2cm" | "samd21_sercom_i2cm" => {
+            use crate::peripherals::sam::sercom_i2cm::{
+                Samd51SercomI2cm, SAMD21_SERCOM_INSTANCES, SERCOM_INSTANCES,
             };
-            // Four lines (first_irq..first_irq+3) are reported by the model itself.
+            let instances = if kind == "samd21_sercom_i2cm" {
+                &SAMD21_SERCOM_INSTANCES
+            } else {
+                &SERCOM_INSTANCES
+            };
+            let Some(instance) = instances.iter().find(|i| i.base == p_cfg.base_address) else {
+                anyhow::bail!("{kind} base must be one of SERCOM0..SERCOM5");
+            };
+            // The model reports its own lines: four on the SAMD51, the
+            // instance's single line on the SAMD21.
             if p_cfg.irq.is_some() {
-                anyhow::bail!("SAMD51 SERCOM I2C master takes no single IRQ");
+                anyhow::bail!("{kind} takes no single IRQ");
             }
             let rise = p_cfg.config.get("scl_rise_ns").and_then(|v| v.as_u64());
             Box::new(Samd51SercomI2cm::new(*instance).with_scl_rise_ns(rise.unwrap_or(0)))
@@ -634,11 +681,14 @@ pub fn try_build(
         "systick" | "arm_generictimer" => {
             // CALIB is implementation-defined per chip; the yaml can
             // supply the silicon value via `config: { calib: ... }`.
-            match p_cfg.config.get("calib").and_then(|v| v.as_u64()) {
-                Some(calib) => Box::new(crate::peripherals::systick::Systick::with_calib(
-                    calib as u32,
-                )),
-                None => Box::new(crate::peripherals::systick::Systick::new()),
+            let st = match p_cfg.config.get("calib").and_then(|v| v.as_u64()) {
+                Some(calib) => crate::peripherals::systick::Systick::with_calib(calib as u32),
+                None => crate::peripherals::systick::Systick::new(),
+            };
+            // `external_ref_hz`: the reference clock CLKSOURCE = 0 selects.
+            match p_cfg.config.get("external_ref_hz").and_then(|v| v.as_u64()) {
+                Some(hz) => Box::new(st.with_external_ref_hz(hz)),
+                None => Box::new(st),
             }
         }
         // Silicon Labs Series-2 GPIO external interrupts — the `attachInterrupt`
@@ -837,6 +887,7 @@ pub fn try_build(
                 let pad_map = match p_cfg.config.get("pad_map").and_then(|v| v.as_str()) {
                     None => None,
                     Some("stm32g0") => Some("stm32g0"),
+                    Some("stm32c0") => Some("stm32c0"),
                     Some("stm32g4") => Some("stm32g4"),
                     Some("stm32l0") => Some("stm32l0"),
                     Some("stm32l4") => Some("stm32l4"),
@@ -846,7 +897,7 @@ pub fn try_build(
                     Some("stm32h5") => Some("stm32h5"),
                     Some(other) => {
                         return Err(anyhow::anyhow!(
-                            "timer '{}': unknown pad_map '{other}' (supported: stm32g0, stm32g4, stm32l0, stm32l4, stm32wb, stm32wba, stm32u5, stm32h5)",
+                            "timer '{}': unknown pad_map '{other}' (supported: stm32g0, stm32c0, stm32g4, stm32l0, stm32l4, stm32wb, stm32wba, stm32u5, stm32h5)",
                             p_cfg.id
                         ))
                     }
@@ -930,7 +981,8 @@ pub fn try_build(
             Box::new(crate::peripherals::sam::sercom_usart::SamSercomUsart::new())
         }
         "samd51_oscctrl" | "samd51_gclk" | "samd51_tc" | "samd51_tcc" | "samd51_eic"
-        | "samd51_dac" | "samd51_adc" | "samd51_pac" | "samd51_sercom_i2cm" => {
+        | "samd51_dac" | "samd51_adc" | "samd51_pac" | "samd51_sercom_i2cm"
+        | "samd21_sercom_i2cm" | "samd21_adc" | "samd21_tcc" => {
             build_samd51_board_model(canonical_type, p_cfg)?
         }
         "samd51_sercom_usart" => {
@@ -1773,6 +1825,14 @@ pub fn try_build(
             // `host: false` leaves the port unplugged (no enumeration).
             if p_cfg.config.get("host").and_then(|v| v.as_bool()) == Some(false) {
                 usb.set_host_enabled(false);
+            }
+            // `host_steps:` run after enumeration (usb_host::parse_host_steps),
+            // e.g. the CDC SET_LINE_CODING / SET_CONTROL_LINE_STATE a terminal
+            // sends when it opens the port.
+            if let Some(steps) = p_cfg.config.get("host_steps") {
+                let steps = crate::peripherals::usb_host::parse_host_steps(steps)
+                    .map_err(|e| anyhow::anyhow!("imxrt_usb host_steps: {e}"))?;
+                usb.queue_host_steps(steps);
             }
             Box::new(usb)
         }

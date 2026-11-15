@@ -179,6 +179,35 @@ def test_an_in_crate_unit_test_is_not_coverage(tmp_path):
     assert "part '74hc32'" in out
 
 
+def test_a_nested_crates_integration_test_is_exercised(tmp_path):
+    """A module group split into `crates/core/<group>/<crate>` keeps its tests counted."""
+    build_tree(
+        tmp_path,
+        parts=["uln2803"],
+        tests=[("crates/core/chips/physics/tests/bench.rs", 'attach("uln2803");')],
+        ledger=ledger(),
+    )
+    code, out = run_gate(tmp_path)
+    assert code == 0, out
+    assert "1 test-exercised" in out
+
+
+def test_a_nested_crates_unit_test_is_not_coverage(tmp_path):
+    """Nesting must not widen the scan to `src/tests` or an example's own `tests/`."""
+    build_tree(
+        tmp_path,
+        parts=["74hc32"],
+        tests=[
+            ("crates/core/chips/physics/src/tests/logic.rs", 'let t = ["74hc32"];'),
+            ("crates/core/chips/physics/examples/demo/tests/t.rs", 'let t = ["74hc32"];'),
+        ],
+        ledger=ledger(),
+    )
+    code, out = run_gate(tmp_path)
+    assert code == 1, out
+    assert "part '74hc32'" in out
+
+
 # ── the ledger ────────────────────────────────────────────────────────────
 
 

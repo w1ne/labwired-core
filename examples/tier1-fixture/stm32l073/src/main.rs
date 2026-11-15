@@ -468,6 +468,9 @@ unsafe fn DefaultHandler(irqn: i16) {
 
 #[entry]
 fn main() -> ! {
+    // Console UART CR1 UE | TE: the transmitter only shifts out when both are
+    // set, on silicon and in the simulated stm32v2 UART.
+    wr32(USART2_BASE, (1 << 0) | (1 << 3));
     report(b"clock", check_clock());
     report(b"gpio", check_gpio());
     report(b"timer", check_timer());
