@@ -1729,6 +1729,27 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// that bypass the choke points keep the old exact semantics.
     fn attach_irq_line(&mut self, _irq: Option<u32>) {}
 
+    /// Whether this peripheral accepts IRQ levels from other peripherals.
+    /// The bus caches this at peripheral attach so ordinary IRQ delivery does
+    /// not scan every device on every level transition.
+    fn accepts_irq_inputs(&self) -> bool {
+        false
+    }
+
+    /// Accept a level from another peripheral's configured IRQ output.
+    ///
+    /// A peripheral that acts as an interrupt concentrator can consume a
+    /// source line and expose its own output through [`Self::irq_line_levels`]
+    /// instead of letting the bus pend the source line directly. `source` is
+    /// the source peripheral's configured IRQ number. Return `None` when this
+    /// device does not accept that input; return `Some(changed)` when it does,
+    /// where `changed` reports whether the input level changed.
+    ///
+    /// Default: no inputs accepted.
+    fn set_irq_input_level(&self, _source: u32, _level: bool) -> Option<bool> {
+        None
+    }
+
     /// The CURRENT state of this peripheral's interrupt line, for level
     /// reconciliation. `Some(level)` marks the model as a LEVEL source —
     /// its line is a live conjunction (status & enable), not a pulse —

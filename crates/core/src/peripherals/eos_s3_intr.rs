@@ -19,6 +19,8 @@
 //!   `SW_INTR_n & EN_M4` is a LEVEL on NVIC 1 (SW1) / NVIC 0 (SW2): it is
 //!   pended when it rises, and the pend is dropped when firmware clears
 //!   the request or the enable.
+//! - The PL011 RX interrupt input (source IRQ 7) drives `OTHER_INTR` bit 1;
+//!   `OTHER_INTR_EN_M4` bit 1 gates the level output to NVIC 7.
 //! - The configuration words are stored at their documented widths:
 //!   `GPIO_INTR_TYPE` / `_POL` / `_EN_AP` / `_EN_M4` / `_EN_FFE0` /
 //!   `_EN_FFE1` (8 bits), `OTHER_INTR_EN_AP` / `_EN_M4` (24 bits),
@@ -26,16 +28,17 @@
 //!   `FFE1_FB_INTR_EN_*` (8 bits), and the `FB_INTR_TYPE` / `_POL` /
 //!   `_EN_*` and `M4_MEM_AON_INTR_EN` words (32 bits; no width published).
 //!
-//! NOT modelled: every interrupt SOURCE except the two software requests.
-//! `GPIO_INTR`, `GPIO_INTR_RAW`, `OTHER_INTR`, `FFE_INTR`, `FFE1_FB_INTR`,
-//! `FB_INTR`, `FB_INTR_RAW` and `M4_MEM_AON_INTR` read 0 and ignore
-//! writes: no GPIO edge or level is detected, and no peripheral (PL011,
-//! timer, watchdog, ...) is routed through `OTHER_INTR`, so NVIC 3..29
-//! never assert from this block. The AP and FFE outputs go nowhere. The
-//! re-entry when a handler returns with the request still set is not
-//! modelled: the line is pended again only when it rises again.
+//! NOT modelled: every interrupt SOURCE except the two software requests and
+//! the PL011 RX level. `GPIO_INTR`, `GPIO_INTR_RAW`, `FFE_INTR`,
+//! `FFE1_FB_INTR`, `FB_INTR`, `FB_INTR_RAW` and `M4_MEM_AON_INTR` read 0
+//! and ignore writes: no GPIO edge or level is detected, and no timer,
+//! watchdog, or other peripheral is routed through `OTHER_INTR`. The AP and
+//! FFE outputs go nowhere. The
+//! Re-entry when a handler returns with a software request still set is not
+//! modelled: its line is pended again only when it rises again.
 
 use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
+use std::cell::Cell;
 
 /// Renode `Size => 0x400`.
 const WORDS: usize = 0x400 / 4;
@@ -44,6 +47,10 @@ const SW1: usize = 0x40 / 4;
 const SW1_EN_M4: usize = 0x48 / 4;
 const SW2: usize = 0x50 / 4;
 const SW2_EN_M4: usize = 0x58 / 4;
+const OTHER_INTR: usize = 0x30 / 4;
+const OTHER_INTR_EN_M4: usize = 0x38 / 4;
+const UART_IRQ: u32 = 7;
+const UART_OTHER_BIT: u32 = 1 << 1;
 
 /// NVIC lines (qorc-sdk `SwInt1_IRQn`, `SwInt2_IRQn`).
 pub const SW1_IRQ: u32 = 1;
@@ -69,8 +76,8 @@ fn word_mask(index: usize) -> u32 {
     }
 }
 
-/// Status words that exist but have no modelled source (read 0).
-fn is_unsourced_status(index: usize) -> bool {
+/// Status words with no software-writable bits.
+fn is_read_only_status(index: usize) -> bool {
     matches!(
         index * 4,
         0x00 | 0x04 | 0x30 | 0x60 | 0x70 | 0x80 | 0x84 | 0xA0
@@ -81,6 +88,13 @@ fn is_unsourced_status(index: usize) -> bool {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct EosS3IntrCtrl {
     regs: Vec<u32>,
+    /// True after the PL011 source has been attached through the bus IRQ hook.
+    #[serde(skip, default)]
+    uart_input_connected: Cell<bool>,
+    /// External PL011 RX level. The bus read path is immutable, so the linked
+    /// controller input uses interior mutability at that choke point.
+    #[serde(skip, default)]
+    uart_input_level: Cell<bool>,
     /// NVIC lines that rose since the last delivery.
     raise: Vec<u32>,
     /// A raise event is queued for the scheduler.
@@ -100,6 +114,8 @@ impl EosS3IntrCtrl {
     pub fn new() -> Self {
         Self {
             regs: vec![0; WORDS],
+            uart_input_connected: Cell::new(false),
+            uart_input_level: Cell::new(false),
             raise: Vec::new(),
             pending_event: false,
             clock: None,
@@ -116,14 +132,25 @@ impl EosS3IntrCtrl {
         self.regs[SW2] & self.regs[SW2_EN_M4] & 1 != 0
     }
 
+    fn uart_line(&self) -> bool {
+        self.uart_input_connected.get()
+            && self.uart_input_level.get()
+            && self.regs[OTHER_INTR_EN_M4] & UART_OTHER_BIT != 0
+    }
+
     fn read_word(&self, index: usize) -> u32 {
-        self.regs.get(index).copied().unwrap_or(0)
+        let value = self.regs.get(index).copied().unwrap_or(0);
+        if index == OTHER_INTR && self.uart_input_level.get() {
+            value | UART_OTHER_BIT
+        } else {
+            value
+        }
     }
 
     fn write_word(&mut self, index: usize, value: u32) {
         let mask = word_mask(index);
         if mask == 0 {
-            if !is_unsourced_status(index) {
+            if !is_read_only_status(index) {
                 crate::census_reg!(
                     "eos_s3_intr_ctrl:EosS3IntrCtrl",
                     (index * 4) as u64,
@@ -132,7 +159,7 @@ impl EosS3IntrCtrl {
             }
             return;
         }
-        let (was1, was2) = (self.sw1_line(), self.sw2_line());
+        let (was1, was2, was_uart) = (self.sw1_line(), self.sw2_line(), self.uart_line());
         self.regs[index] = value & mask;
         if !was1 && self.sw1_line() {
             self.raise.push(SW1_IRQ);
@@ -140,13 +167,16 @@ impl EosS3IntrCtrl {
         if !was2 && self.sw2_line() {
             self.raise.push(SW2_IRQ);
         }
+        if !was_uart && self.uart_line() {
+            self.raise.push(UART_IRQ);
+        }
     }
 
     fn take_raise(&mut self) -> Option<Vec<u32>> {
         // A line that rose and fell before delivery is not pended.
-        let (l1, l2) = (self.sw1_line(), self.sw2_line());
+        let (l1, l2, uart) = (self.sw1_line(), self.sw2_line(), self.uart_line());
         let mut lines = std::mem::take(&mut self.raise);
-        lines.retain(|&l| (l == SW1_IRQ && l1) || (l == SW2_IRQ && l2));
+        lines.retain(|&l| (l == SW1_IRQ && l1) || (l == SW2_IRQ && l2) || (l == UART_IRQ && uart));
         lines.dedup();
         (!lines.is_empty()).then_some(lines)
     }
@@ -194,11 +224,28 @@ impl Peripheral for EosS3IntrCtrl {
         self.clock = Some(clock);
     }
 
+    fn accepts_irq_inputs(&self) -> bool {
+        true
+    }
+
+    fn set_irq_input_level(&self, source: u32, level: bool) -> Option<bool> {
+        if source != UART_IRQ {
+            return None;
+        }
+        let was_line = self.uart_line();
+        self.uart_input_connected.set(true);
+        self.uart_input_level.set(level);
+        Some(was_line != self.uart_line())
+    }
+
     /// Both software lines are levels: clearing the request (or its M4
     /// enable) inside the handler drops a pend that is still waiting.
     fn irq_line_levels(&self, report: &mut dyn FnMut(u32, bool)) {
         report(SW1_IRQ, self.sw1_line());
         report(SW2_IRQ, self.sw2_line());
+        if self.uart_input_connected.get() {
+            report(UART_IRQ, self.uart_line());
+        }
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
@@ -320,5 +367,38 @@ mod tests {
         assert_eq!(c.read_u32(0x40).unwrap(), 0);
         assert_eq!(c.read_u32(0x48).unwrap(), 0);
         assert_eq!(c.tick().explicit_irqs, None);
+    }
+
+    #[test]
+    fn pl011_rx_level_drives_other_intr_and_is_gated_to_nvic_7() {
+        let mut c = EosS3IntrCtrl::new();
+        c.write_u32(0x30, u32::MAX).unwrap();
+        assert_eq!(c.read_u32(0x30).unwrap(), 0);
+        assert_eq!(c.set_irq_input_level(UART_IRQ, true), Some(false));
+        assert_eq!(c.read_u32(0x30).unwrap(), UART_OTHER_BIT);
+        let mut levels = Vec::new();
+        c.irq_line_levels(&mut |irq, level| levels.push((irq, level)));
+        assert_eq!(
+            levels,
+            vec![(SW1_IRQ, false), (SW2_IRQ, false), (UART_IRQ, false)]
+        );
+
+        c.write_u32(0x38, UART_OTHER_BIT).unwrap();
+        assert_eq!(c.tick().explicit_irqs, Some(vec![UART_IRQ]));
+        levels.clear();
+        c.irq_line_levels(&mut |irq, level| levels.push((irq, level)));
+        assert_eq!(
+            levels,
+            vec![(SW1_IRQ, false), (SW2_IRQ, false), (UART_IRQ, true)]
+        );
+
+        assert_eq!(c.set_irq_input_level(UART_IRQ, false), Some(true));
+        assert_eq!(c.read_u32(0x30).unwrap(), 0);
+        levels.clear();
+        c.irq_line_levels(&mut |irq, level| levels.push((irq, level)));
+        assert_eq!(
+            levels,
+            vec![(SW1_IRQ, false), (SW2_IRQ, false), (UART_IRQ, false)]
+        );
     }
 }

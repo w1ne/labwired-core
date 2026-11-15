@@ -364,6 +364,12 @@ impl SystemBus {
             .enumerate()
             .filter_map(|(index, p)| p.dev.uses_scheduler().then_some(index))
             .collect();
+        self.irq_input_receiver_indices = self
+            .peripherals
+            .iter()
+            .enumerate()
+            .filter_map(|(index, p)| p.dev.accepts_irq_inputs().then_some(index))
+            .collect();
         self.peripheral_hint.set(None);
         self.last_route.set(None);
         self.prev_route.set(None);

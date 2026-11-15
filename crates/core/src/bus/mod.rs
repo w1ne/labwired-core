@@ -534,6 +534,10 @@ pub struct SystemBus {
     /// `rebuild_peripheral_ranges` so IRQ-level re-derivation on MMIO write
     /// can poll only those models (not the full bus).
     scheduler_driver_indices: Vec<usize>,
+    /// Indices of interrupt concentrators that consume peripheral IRQ levels.
+    /// Filled in `rebuild_peripheral_ranges` so ordinary IRQ delivery does not
+    /// scan every peripheral on the execution path.
+    irq_input_receiver_indices: Vec<usize>,
     /// Retained scratch for `poll_scheduler_matrix_sources`: each scheduler-driven
     /// peripheral fills this buffer via `Peripheral::matrix_irq_sources_into`
     /// instead of returning a freshly-allocated `Vec` per poll. Cleared before

@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/eos-s3-quickfeather-smoke.yaml",
   "system": "configs/systems/onboarding/eos-s3-quickfeather.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-15T21:42:08Z",
-  "finished_at_utc": "2026-11-15T21:42:09Z",
+  "started_at_utc": "2026-11-15T23:37:32Z",
+  "finished_at_utc": "2026-11-15T23:37:34Z",
   "elapsed_seconds": 2,
-  "elapsed_ms": 1559,
+  "elapsed_ms": 1941,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.469,
-    "build_firmware": 0.476,
-    "run_smoke": 0.521
+    "build_cli": 1.244,
+    "build_firmware": 0.226,
+    "run_smoke": 0.425
   },
   "stages_ms": {
-    "build_cli": 469,
-    "build_firmware": 476,
-    "run_smoke": 521
+    "build_cli": 1244,
+    "build_firmware": 226,
+    "run_smoke": 425
   }
 }

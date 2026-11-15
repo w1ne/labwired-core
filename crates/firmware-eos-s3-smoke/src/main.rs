@@ -8,6 +8,9 @@ use panic_halt as _;
 
 // Renode platforms/cpus/eos-s3.repl: PL011 at 0x4001_0000.
 const UART_DATA: *mut u32 = 0x4001_0000 as *mut u32;
+const UART_CR: *mut u32 = (0x4001_0000 + 0x30) as *mut u32;
+const UART_IMSC: *mut u32 = (0x4001_0000 + 0x38) as *mut u32;
+const UART_RIS: *mut u32 = (0x4001_0000 + 0x3C) as *mut u32;
 // m4mem: 512 KiB SRAM at 0x2000_0000, mirrored at 0x0.
 const SRAM: u32 = 0x2000_0000;
 // Renode systemDmaSram: 4 KiB at 0x4000_F000.
@@ -34,6 +37,11 @@ static MARKER: u32 = 0x5EED_E053;
 static mut DATA_WORD: u32 = 0;
 static SW1_HITS: AtomicU32 = AtomicU32::new(0);
 static SW2_HITS: AtomicU32 = AtomicU32::new(0);
+static UART_HITS: AtomicU32 = AtomicU32::new(0);
+static UART_OTHER_BEFORE: AtomicU32 = AtomicU32::new(0);
+static UART_OTHER_AFTER: AtomicU32 = AtomicU32::new(0);
+static UART_RIS_BEFORE: AtomicU32 = AtomicU32::new(0);
+static UART_RX_BYTE: AtomicU32 = AtomicU32::new(0);
 static OTHER_HITS: AtomicU32 = AtomicU32::new(0);
 
 // Every IRQ lands here; the handler clears the software request it serves.
@@ -47,6 +55,13 @@ unsafe fn DefaultHandler(irqn: i16) {
         0 => {
             SW2_HITS.fetch_add(1, Ordering::Relaxed);
             write_volatile(SW_INTR_2, 0);
+        }
+        7 => {
+            UART_OTHER_BEFORE.store(read_volatile(OTHER_INTR), Ordering::Relaxed);
+            UART_RIS_BEFORE.store(read_volatile(UART_RIS as *const u32), Ordering::Relaxed);
+            UART_RX_BYTE.store(read_volatile(UART_DATA), Ordering::Relaxed);
+            UART_OTHER_AFTER.store(read_volatile(OTHER_INTR), Ordering::Relaxed);
+            UART_HITS.fetch_add(1, Ordering::Relaxed);
         }
         _ => {
             OTHER_HITS.fetch_add(1, Ordering::Relaxed);
@@ -66,10 +81,23 @@ fn puts(s: &[u8]) {
     }
 }
 
+fn put_hex32(mut value: u32) {
+    for shift in (0..8).rev() {
+        let digit = ((value >> (shift * 4)) & 0xF) as u8;
+        let byte = if digit < 10 {
+            b'0' + digit
+        } else {
+            b'A' + digit - 10
+        };
+        unsafe { write_volatile(UART_DATA, u32::from(byte)) };
+        value &= !(0xF << (shift * 4));
+    }
+}
+
 #[entry]
 fn main() -> ! {
     let mut pass = 0u32;
-    let mut marks = [b'F'; 10];
+    let mut marks = [b'F'; 11];
     let mut check = |i: usize, ok: bool| {
         if ok {
             pass |= 1 << i;
@@ -154,7 +182,7 @@ fn main() -> ! {
         );
 
         // 9: a second SW1 request enters again; the enable words keep their
-        // documented widths and the unsourced OTHER_INTR status reads 0.
+        // documented widths, and OTHER_INTR stays low while UART RX is off.
         write_volatile(SW_INTR_1, 1);
         settle();
         write_volatile(GPIO_INTR_EN_M4, 0xFFFF_FFFF);
@@ -171,7 +199,43 @@ fn main() -> ! {
                 && read_volatile(OTHER_INTR) == 0
                 && OTHER_HITS.load(Ordering::Relaxed) == 0,
         );
+
+        // 10: PL011 RX routes through OTHER_INTR bit 1 to NVIC 7. The handler
+        // reads DR and must deassert the controller status and pending line.
+        write_volatile(OTHER_INTR_EN_M4, 1 << 1);
+        write_volatile(NVIC_ISER0, 1 << 7);
+        write_volatile(UART_CR, (1 << 0) | (1 << 9)); // UARTEN | RXE
+        write_volatile(UART_IMSC, 1 << 4); // RXIM
+        for _ in 0..50_000 {
+            if UART_HITS.load(Ordering::Relaxed) != 0 {
+                break;
+            }
+            core::hint::spin_loop();
+        }
+        check(
+            10,
+            UART_HITS.load(Ordering::Relaxed) == 1
+                && UART_OTHER_BEFORE.load(Ordering::Relaxed) == 1 << 1
+                && UART_RIS_BEFORE.load(Ordering::Relaxed) == 1 << 4
+                && UART_RX_BYTE.load(Ordering::Relaxed) == u32::from(b'R')
+                && UART_OTHER_AFTER.load(Ordering::Relaxed) == 0
+                && read_volatile(OTHER_INTR) == 0
+                && read_volatile(NVIC_ISPR0) & (1 << 7) == 0
+                && OTHER_HITS.load(Ordering::Relaxed) == 0,
+        );
     }
+
+    puts(b"PL011 IRQ7 status=");
+    put_hex32(UART_OTHER_BEFORE.load(Ordering::Relaxed));
+    puts(b" rx=");
+    put_hex32(UART_RX_BYTE.load(Ordering::Relaxed));
+    puts(b" cleared=");
+    put_hex32(UART_OTHER_AFTER.load(Ordering::Relaxed));
+    puts(b" ris=");
+    put_hex32(UART_RIS_BEFORE.load(Ordering::Relaxed));
+    puts(b" hits=");
+    put_hex32(UART_HITS.load(Ordering::Relaxed));
+    puts(b"\r\n");
 
     puts(b"EOS S3 Cortex-M4F PL011 smoke\r\n");
     // GPIO 4: three pulses for the gpio_edges assertion.

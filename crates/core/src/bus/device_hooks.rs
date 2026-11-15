@@ -161,7 +161,8 @@ impl SystemBus {
             return;
         }
         if let Some(irq) = p.irq {
-            if p.dev.irq_line_level() == Some(false) {
+            if p.dev.irq_line_level() == Some(false) && !self.route_irq_input_level(idx, irq, false)
+            {
                 super::reconcile_nvic_level(&self.nvic, irq, false);
             }
         }
