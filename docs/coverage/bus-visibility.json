@@ -33,6 +33,10 @@
   },
   {
     "buses": [],
+    "name": "atmega4809"
+  },
+  {
+    "buses": [],
     "name": "atsamd21"
   },
   {

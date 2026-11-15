@@ -962,6 +962,16 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: Some("avr_atmega2561::atmega2561_boots_and_prints"),
     },
+    // ATmega4809 (megaAVR 0-series, Arduino Nano Every). SIM-DERIVED from the
+    // Microchip ATDF: no silicon capture. Its Arduino matrix row and
+    // examples/arduino-nano-every/io-smoke.yaml run through PlatformIO and the
+    // CLI, not as a Rust test, so no behavior_gate resolves.
+    ChipConf {
+        name: "atmega4809",
+        yaml: "configs/chips/atmega4809.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
     // 64-pin ATmega1281. The committed AVR-GCC image exercises the exact
     // two-byte-PC profile, USART0 output and PB5 package pin. No silicon
     // capture exists, so the behavior gate supports L1 only.

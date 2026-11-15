@@ -140,6 +140,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | atmega2561 | — | — | — |
 | atmega328p | — | — | — |
 | atmega328pb | — | — | — |
+| atmega4809 | — | — | — |
 | atsamd21 | — | — | — |
 | atsamd21e15a | — | — | — |
 | atsamd21e16a | — | — | — |

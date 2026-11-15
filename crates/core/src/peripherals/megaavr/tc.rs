@@ -721,6 +721,14 @@ mod tests {
         (t, clock)
     }
 
+    /// The IRQs the timers raise now. Goes through `service()` so the test is
+    /// the same with and without the event scheduler (`tick()` is a no-op in
+    /// scheduler mode, where `on_event` delivers them).
+    fn poll(t: &mut MegaAvrTimers) -> Option<Vec<u32>> {
+        let irqs = t.service();
+        (!irqs.is_empty()).then_some(irqs)
+    }
+
     fn w16(t: &mut MegaAvrTimers, o: u64, v: u16) {
         t.write(o, v as u8).unwrap();
         t.write(o + 1, (v >> 8) as u8).unwrap();
@@ -748,15 +756,15 @@ mod tests {
         assert_eq!(t.read(0xBA).unwrap(), 100, "CNTL counts TCA ticks");
         assert_eq!(t.read(0xB6).unwrap(), 0, "no wrap yet");
         clock.publish(16384 - 1);
-        assert_eq!(t.tick().explicit_irqs, None);
+        assert_eq!(poll(&mut t), None);
         clock.publish(16384);
         assert_eq!(t.read(0xB6).unwrap(), 1, "CAPT visible before the wake");
-        assert_eq!(t.tick().explicit_irqs, Some(vec![36]));
+        assert_eq!(poll(&mut t), Some(vec![36]));
         assert_eq!(t.read(0xBA).unwrap(), 0);
         t.write(0xB6, 0x01).unwrap(); // the ISR clears CAPT
         assert_eq!(t.read(0xB6).unwrap(), 0);
         clock.publish(2 * 16384);
-        assert_eq!(t.tick().explicit_irqs, Some(vec![36]));
+        assert_eq!(poll(&mut t), Some(vec![36]));
     }
 
     #[test]

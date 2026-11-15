@@ -2056,6 +2056,21 @@ pub fn try_build(
     Ok(Some(dev))
 }
 
+/// `config.<key>`: exactly `len` unsigned integers, or `None`.
+fn u32_list(p_cfg: &PeripheralConfig, key: &str, len: usize) -> Option<Vec<u32>> {
+    p_cfg
+        .config
+        .get(key)
+        .and_then(|v| v.as_sequence())
+        .map(|s| {
+            s.iter()
+                .filter_map(|v| v.as_u64())
+                .map(|v| v as u32)
+                .collect::<Vec<_>>()
+        })
+        .filter(|v| v.len() == len)
+}
+
 #[cfg(test)]
 mod registry_agreement {
     use super::MODEL_TYPES;
@@ -2236,19 +2251,4 @@ mod registry_agreement {
             );
         }
     }
-}
-
-/// `config.<key>`: exactly `len` unsigned integers, or `None`.
-fn u32_list(p_cfg: &PeripheralConfig, key: &str, len: usize) -> Option<Vec<u32>> {
-    p_cfg
-        .config
-        .get(key)
-        .and_then(|v| v.as_sequence())
-        .map(|s| {
-            s.iter()
-                .filter_map(|v| v.as_u64())
-                .map(|v| v as u32)
-                .collect::<Vec<_>>()
-        })
-        .filter(|v| v.len() == len)
 }
