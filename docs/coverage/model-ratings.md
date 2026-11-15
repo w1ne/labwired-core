@@ -30,7 +30,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | sam4s16c | open | L1 | 20 | — | — | ≥1× (CI) | [doc](docs/boards/sam4s16c.md) |
 | stm32f072 | open | L1 | 39 | 937.9 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32f072.md) |
 | nrf54l15 | open | L1 | 29 | 1364.0 | 1.9 | ≥1× (CI) | [doc](docs/boards/nrf54l15.md) |
-| atsamd21g18a | open | L1 | 15 | 895.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/atsamd21g18a.md) |
+| atsamd21g18a | open | L1 | 21 | 895.0 | 1.4 | ≥1× (CI) | [doc](docs/boards/atsamd21g18a.md) |
 | atsamd21e15a | open | L0 | 13 | 893.0 | 1.4 | ≥1× (CI) | — |
 | atsamd21e16a | open | L0 | 13 | 893.0 | 1.4 | ≥1× (CI) | — |
 | atsamd21e17a | open | L0 | 13 | 893.0 | 1.4 | ≥1× (CI) | — |

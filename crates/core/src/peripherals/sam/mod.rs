@@ -15,6 +15,7 @@
 //! controller depending on `CTRLA.MODE`.
 
 pub mod adc;
+pub mod adc21;
 pub mod clock_tree;
 pub mod cmcc;
 pub mod dac;
