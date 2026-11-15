@@ -165,7 +165,7 @@ mod stm32f1_bus_visibility_tests {
             .join(rel)
     }
 
-    /// The same minimal manifest `crates/core/tests/bus_visibility.rs` uses, so
+    /// The same minimal manifest `crates/core/tests/bus/bus_visibility.rs` uses, so
     /// this gate measures the construction path that board measures.
     fn dummy_manifest(path: &str) -> SystemManifest {
         SystemManifest {

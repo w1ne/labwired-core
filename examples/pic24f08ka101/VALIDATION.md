@@ -17,7 +17,7 @@ There is no silicon capture.
 ## Evidence
 
 ```bash
-cargo test -p labwired-core --test pic24_ka_smoke
+cargo test -p labwired-core --test pic pic24_ka_smoke::
 # test result: ok. 7 passed; 0 failed
 
 cargo run -q -p labwired-cli -- test \

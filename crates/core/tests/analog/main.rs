@@ -1,0 +1,54 @@
+// LabWired - Firmware Simulation Platform
+// Copyright (C) 2026 Andrii Shylenko
+//
+// This software is released under the MIT License.
+// See the LICENSE file in the project root for full license information.
+
+//! One integration-test binary for the `analog` group. Every other file in this
+//! directory is a module: a test that was `<name>` in its own `<file>` binary
+//! is now `<file>::<name>` here. Run one former file with
+//! `cargo test -p labwired-core --test analog <file>::`.
+//!
+//! Tests that mutate process-global state (environment variables, the working
+//! directory, the global allocator), tests behind a cargo feature and tests the
+//! CI shard classification names individually keep their own top-level
+//! binaries; the reasons are listed next to the `[[test]]` entries in
+//! `crates/core/Cargo.toml`.
+
+#[path = "../common/mod.rs"]
+mod common;
+
+mod analog_adapter;
+mod analog_beta_thermistor;
+mod analog_coil_series;
+mod analog_copper_capacity;
+mod analog_devices;
+mod analog_diode_current;
+mod analog_linear_golden;
+mod analog_macros;
+mod analog_motor_circuit;
+mod analog_mux_e2e;
+mod analog_netlist;
+mod analog_ngspice_macros;
+mod analog_plant_migration_parity;
+mod analog_solver;
+mod analog_stimulus;
+mod analog_variable_resistance;
+mod analog_voltage_switch;
+mod circuit_bldc;
+mod cosim_esp32_analog_diode;
+mod cosim_nucleo_f767zi_analog;
+mod declarative_noise;
+mod device_supply_rails;
+mod device_supply_routing;
+mod lm393_moisture_dout;
+mod motor_models;
+mod mpu6050_noise;
+mod noise_model;
+mod power_routing;
+mod rain_sensor_analog;
+mod shared_supply_domains;
+mod sound_sensor_analog;
+mod supply_supervisor;
+mod world_analog;
+mod world_circuit_bldc;

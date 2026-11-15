@@ -9,26 +9,41 @@ name: Core workflows lint
 # with shellcheck wired in it also lints every `run:` block — the shell that CI
 # actually executes and that nothing else in this repo looked at.
 #
-# Deliberately NOT path-filtered: a path-filtered workflow emits no check at
-# all on PRs that miss the filter, which makes it useless as a required check
-# and easy to forget. Both jobs finish in seconds on a hosted runner.
+# Path-filtered to the files actually linted: workflow definitions and shell
+# scripts. As of 2026-11-10 this workflow is NOT a required branch-protection
+# context; the required contexts are pr-gate, release-runner-contract,
+# browser-layer, and pr-core-feature-off. If lint becomes a required context,
+# retain an always-emitted lightweight status job rather than filtering that
+# required context. The lint jobs no longer consume runners on unrelated PRs.
 
 on:
   pull_request:
+    paths:
+      - '.github/workflows/**'
+      - '.github/actions/**'
+      - '.github/actionlint.yaml'
+      - '**/*.sh'
+      - '*.sh'
   push:
     branches: [main]
+    paths:
+      - '.github/workflows/**'
+      - '.github/actions/**'
+      - '.github/actionlint.yaml'
+      - '**/*.sh'
+      - '*.sh'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: core-workflows-lint-${{ github.ref }}
-  cancel-in-progress: true
+  group: core-workflows-lint-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   actionlint:
-    name: "actionlint (+ shellcheck on run: blocks)"
+    name: "actionlint (+ shellcheck on run: blocks and tracked *.sh)"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -70,26 +85,10 @@ jobs:
           set -euo pipefail
           /tmp/actionlint -shellcheck=/tmp/shellcheck -pyflakes= .github/workflows/*.yml
 
-  shellcheck-scripts:
-    name: shellcheck (tracked *.sh)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install pinned shellcheck
-        run: |
-          set -euo pipefail
-          shellcheck_version=0.11.0
-          shellcheck_sha=8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
-          curl -fsSL --connect-timeout 20 --retry 5 --retry-delay 3 \
-            "https://github.com/koalaman/shellcheck/releases/download/v${shellcheck_version}/shellcheck-v${shellcheck_version}.linux.x86_64.tar.xz" \
-            -o /tmp/shellcheck.tar.xz
-          echo "${shellcheck_sha}  /tmp/shellcheck.tar.xz" | sha256sum -c -
-          tar -xJf /tmp/shellcheck.tar.xz -C /tmp "shellcheck-v${shellcheck_version}/shellcheck"
-          mv "/tmp/shellcheck-v${shellcheck_version}/shellcheck" /tmp/shellcheck
-          /tmp/shellcheck --version
-
+      # Folded in from the former `shellcheck-scripts` job (2026-11-13): it
+      # needs the same pinned shellcheck binary the step above already
+      # installed, and a separate job cost a runner slot, a checkout and a
+      # second download for under a minute of work.
       # third_party/ is vendored upstream code with its own pre-commit config;
       # linting it here would only report defects this repo cannot fix.
       #

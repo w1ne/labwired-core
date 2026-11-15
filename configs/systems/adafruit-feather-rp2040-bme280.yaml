@@ -1,0 +1,12 @@
+# Adafruit Feather RP2040 with a BME280 STEMMA QT breakout.
+# The connector is wired to I2C1 on GP2 (SDA) / GP3 (SCL); the breakout's
+# default address is 0x77 and its board includes I2C pull-ups.
+name: "adafruit-feather-rp2040-bme280"
+chip: "../chips/rp2040-feather.yaml"
+cpu_hz: 133000000
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c1"
+    config:
+      i2c_address: 0x77

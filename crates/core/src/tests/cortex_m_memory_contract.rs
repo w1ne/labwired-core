@@ -119,7 +119,7 @@ mod no_discarded_bus_access {
     ];
 
     fn cpu_root() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/cpu")
+        crate::tests::src_roots::core_src("cpu")
     }
 
     fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {

@@ -9,10 +9,14 @@
  *          and the 16-bit rom_table_lookup pointer (0x18);
  *   2.8.3  the lookup codes and each function's signature and behaviour:
  *          Table 164 bit ops (P3 R3 L3 T3), 2.8.3.1.2 memory fill/copy
- *          (MS S4 MC C4), Tables 169/170 the soft-float 'SF' and soft-double
- *          'SD' tables (V2/V3: 32 entries, offsets 0x00..0x7c, 0x48 = sincos
- *          in V3). The word count before each float table is what pico-sdk
- *          (pico_float/pico_double init) asserts for a V2+ ROM.
+ *          (MS S4 MC C4), flash helpers (IF EX FC CX no-ops — the twin maps
+ *          the QSPI window at 0x10000000 directly; RE and RP erase/program
+ *          that window: erase fills 0xFF, program bitwise-ANDs, because NOR
+ *          can only clear bits; the address is the flash offset), Tables
+ *          169/170 the soft-float 'SF' and soft-double 'SD' tables (V2/V3:
+ *          32 entries, offsets 0x00..0x7c, 0x48 = sincos in V3). The word
+ *          count before each float table is what pico-sdk (pico_float /
+ *          pico_double init) asserts for a V2+ ROM.
  * The routine bodies and the layout are ours.
  *
  * Bytes 0x00..0x5b are the earlier minimal stub, unchanged, so every
@@ -62,7 +66,7 @@ dead:
     wfi
     b     dead
 
-/* 0x34  flash helpers: the twin maps flash directly, nothing to do */
+/* 0x34  IF/EX/FC/CX: the twin maps flash directly, nothing to do */
 ret:
     bx    lr
     nop
@@ -103,8 +107,8 @@ func_table:
     .byte 'W','V'; .hword dead + 1
     .byte 'I','F'; .hword ret + 1
     .byte 'E','X'; .hword ret + 1
-    .byte 'R','E'; .hword ret + 1
-    .byte 'R','P'; .hword ret + 1
+    .byte 'R','E'; .hword flash_range_erase + 1
+    .byte 'R','P'; .hword flash_range_program + 1
     .byte 'F','C'; .hword ret + 1
     .byte 'C','X'; .hword ret + 1
     .byte 'P','3'; .hword popcount32 + 1
@@ -174,6 +178,45 @@ ctz32:                          /* trailing zeros; 32 for 0 */
 2:  movs  r0, r1
     pop   {r1}
     bx    lr
+
+/* flash_range_erase(addr r0, count r1, block_size r2, block_cmd r3)
+ * Datasheet 2.8.3: erase [addr, addr+count) of the external QSPI flash.
+ * The twin maps that flash at 0x10000000, so this writes 0xFF into the
+ * window. block_size / block_cmd select 4 KB vs larger erase commands
+ * on silicon; every byte in range becomes 0xFF either way. */
+flash_range_erase:
+    push  {r4, r5, lr}
+    movs  r4, #1
+    lsls  r4, r4, #28          /* XIP_BASE 0x10000000 */
+    adds  r0, r4
+    movs  r4, #0xFF
+    movs  r5, #0
+1:  cmp   r5, r1
+    bcs   2f
+    strb  r4, [r0, r5]
+    adds  r5, #1
+    b     1b
+2:  pop   {r4, r5, pc}
+
+/* flash_range_program(addr r0, data r1, count r2)
+ * Datasheet 2.8.3: program count bytes from data into flash at addr.
+ * NOR programming can only clear bits, so each stored byte is the AND
+ * of the source and the byte already in the window. */
+flash_range_program:
+    push  {r4, r5, lr}
+    movs  r3, #1
+    lsls  r3, r3, #28          /* XIP_BASE 0x10000000 */
+    adds  r0, r3
+    movs  r3, #0
+1:  cmp   r3, r2
+    bcs   2f
+    ldrb  r4, [r1, r3]
+    ldrb  r5, [r0, r3]
+    ands  r4, r5
+    strb  r4, [r0, r3]
+    adds  r3, #1
+    b     1b
+2:  pop   {r4, r5, pc}
 
 /* Soft-float / soft-double tables. pico-sdk reads the entry count from
  * the byte two below the table. */

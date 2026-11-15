@@ -45,16 +45,20 @@ This page covers the public models. For every chip we model — public and priva
 | esp32 | **L1** | ✓ | 32 | — | — | firmware_survival::test_esp32_tier1_survival |
 | esp32s3 | **L1** | ✓ | 14 | — | — | firmware_survival::test_esp32s3_tier1_survival |
 | esp32s3-zero | **L1** | ✓ | 17 | — | — | firmware_survival::test_esp32s3_zero_tier1_survival |
+| esp32-devkitc-32e-gpio-smoke | **L1** | ✓ | 3 | — | — | firmware_survival::test_esp32_devkitc_32e_gpio_smoke_tier1_survival |
+| esp32-devkitc-32e-uart1 | **L0** | ✓ | 3 | — | — | — |
 | stm32f401cdu6 | **L1** | ✓ | 45 | — | — | firmware_survival::test_stm32f401cdu6_demo_survival |
 | stm32f411ceu6 | **L1** | ✓ | 46 | — | — | firmware_survival::test_stm32f411_tier1_survival |
+| stm32f446re | **L0** | ✓ | 34 | — | — | — |
 | nrf51822 | **L1** | ✓ | 22 | — | — | firmware_survival::test_nrf51822_microbit_v1_smoke_survival |
 | nrf52832 | **L1** | ✓ | 17 | — | — | firmware_survival::test_nrf52832_demo_survival |
 | nrf52833 | **L1** | ✓ | 48 | — | — | firmware_survival::test_nrf52833_microbit_v2_smoke_survival |
 | nrf52840 | **L1** | ✓ | 51 | — | — | firmware_survival::test_nrf52840_demo_survival |
 | nrf5340 | **L1** | ✓ | 22 | — | — | firmware_survival::test_nrf5340_zephyr_survival |
-| rp2040 | **L1** | ✓ | 23 | — | — | firmware_survival::test_rp2040_demo_survival |
+| rp2040 | **L1** | ✓ | 24 | — | — | firmware_survival::test_rp2040_demo_survival |
 | stm32f103 | **L1** | ✓ | 31 | — | — | stm32f1_exec_oracle |
 | stm32f103rb | **L0** | ✓ | 32 | — | — | — |
+| stm32f103rb-nucleo-bme280-smoke | **L0** | ✓ | 7 | — | — | — |
 | stm32f103c4 | **L0** | ✓ | 31 | — | — | — |
 | stm32f103c6 | **L0** | ✓ | 31 | — | — | — |
 | stm32f103r4 | **L0** | ✓ | 31 | — | — | — |
@@ -124,7 +128,18 @@ This page covers the public models. For every chip we model — public and priva
 | pic24f08ka102 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f08ka102_uart_smoke |
 | pic24f16ka101 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f16ka101_uart_smoke |
 | pic24f16ka102 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f16ka102_uart_smoke |
-| ch32v003f4p6 | **L1** | ✓ | 13 | — | — | ch32v003_compiled_firmware::ch32v003_compiled_rv32e_firmware_toggles_pc0 |
+| ch32v003f4p6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_compiled_rv32e_firmware_toggles_pc0 |
+| esp32h2 | **L0** | ✓ | 3 | — | — | — |
+| esp32c5 | **L0** | ✓ | 1 | — | — | — |
+| esp32c61 | **L0** | ✓ | 1 | — | — | — |
+| nrf54l05 | **L0** | ✓ | 6 | — | — | — |
+| nrf54l10 | **L0** | ✓ | 6 | — | — | — |
+| esp32p4 | **L0** | ✓ | 1 | — | — | — |
+| esp32s2 | **L0** | ✓ | 1 | — | — | — |
+| rp2040-feather | **L0** | ✓ | 24 | — | — | — |
+| rp2350-feather | **L0** | ✓ | 27 | — | — | — |
+| stm32h723zg | **L0** | ✓ | 7 | — | — | — |
+| esp32c6fh4 | **L0** | ✓ | 69 | — | — | — |
 
 ## Declared platforms without a model
 

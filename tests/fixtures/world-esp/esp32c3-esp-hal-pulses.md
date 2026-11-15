@@ -1,7 +1,7 @@
 # ESP32-C3 esp-hal pulse fixture
 
 `esp32c3-esp-hal-pulses.elf` is a bare esp-hal 1.1 application for the
-ESP32-C3, used by `crates/core/tests/world_esp_nodes.rs` and the
+ESP32-C3, used by `crates/core/tests/esp/world_esp_nodes.rs` and the
 `labwired-wasm` world tests as a C3 bare-ELF world node.
 
 It is the `examples/esp32c3-hello-world` crate (same `Cargo.toml` /

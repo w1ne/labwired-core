@@ -98,7 +98,7 @@ Pass criteria:
 ## H) Silicon Reset-State Capture + Smoke Conformance
 
 Reset-state register capture from the real board (ground truth for the chip
-model's reset values; pinned by `crates/core/tests/h563_conformance.rs`):
+model's reset values; pinned by `crates/core/tests/stm32/h563_conformance.rs`):
 
 ```bash
 bash scripts/hw-capture-stm32h563.sh

@@ -28,22 +28,22 @@ cargo build --release -p labwired-cli
 
 - **M0** — `firmware/xc16-uart-smoke.c` configures UART1, transmits `HI`,
   then toggles LATB0 forever. Booted by
-  `crates/core/tests/pic24_xc16_202_smoke.rs`.
+  `crates/core/tests/pic/pic24_xc16_202_smoke.rs`.
 - **M1** — `firmware/xc16-m1-gpio.c` transmits `G1`, makes PORTA/PORTB
   outputs and toggles RA0/RB0 forever. Booted by
-  `crates/core/tests/pic24_xc16_202_m1.rs`, which also checks the 28-pin
+  `crates/core/tests/pic/pic24_xc16_202_m1.rs`, which also checks the 28-pin
   masks (`TRISA = 0x001F`, `TRISB = 0xFFFF`, `TRISC = 0`) and the pad levels.
 - **M2** — `firmware/xc16-m2-pwm-qei.c` waits for T1IF, configures PWM1
   (complementary pair on RB14/RB15, 2 TCY dead time) and QEI1 (x4 index
   reset, QEA/QEB/INDX on RB0/RB1/RB2), then writes `0xBEEF` to 0x0E00.
-  Booted by `crates/core/tests/pic24_xc16_202_m2.rs`, which injects
+  Booted by `crates/core/tests/pic/pic24_xc16_202_m2.rs`, which injects
   quadrature edges, checks the PWM pads and the direction-aware index reset.
 - **M3** — `firmware/xc16-m3-adc-spi-i2c.c` samples AN4 (RB2) with the
   10-bit ADC (the 28-pin package exposes AN0-AN5 only; AN6-AN8 are RC0-RC2
   and absent), shifts `0xA5` through SPI1 (wire loopback), reads the TMP102
   at `0x48` over I2C1, then prints `M3 OK` on UART1 and writes `0xBEEF` to
   0x0E00 together with the ADC/SPI/I²C results. Booted by
-  `crates/core/tests/pic24_xc16_202_m3.rs`; `system-m3.yaml` declares the
+  `crates/core/tests/pic/pic24_xc16_202_m3.rs`; `system-m3.yaml` declares the
   TMP102 on `i2c1` and the SPI loopback on `spi1` for the session builder
   (the base `system.yaml` stays device-free for the CLI `test` path).
 

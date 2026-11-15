@@ -1,0 +1,153 @@
+{
+  "schema_version": 1,
+  "base_commit": "edfe187eb9e0ef6aadafb7f5d0c2b760c2fd42a2",
+  "source_files_sha256": {
+    "crates/config/src/chip.rs": "6c9fa9ed758134ec34c6f590344d77f26301ab42b3da162f8b46ed9e74fbc992",
+    "crates/config/tests/chip_io_levels.rs": "37f78d5785149b5ebfa3f2c2e9abcf79868dcee42d3c9b134bf0a6ec53f2f330",
+    "crates/core/src/bus/sim_inputs.rs": "91f754adf88d70fbc093036e6baac48f60f9d675e1aba902f57796e34caf4c4b",
+    "crates/core/src/cosim/routing.rs": "607e16a455965d750c4f1b84229a87499b220a8ca294ab57c22ce3a3de24b450",
+    "crates/core/src/power.rs": "71e61e64310cf1d20e9e3269bd34c94b78d41f1be264cef0c9789500e662cc16",
+    "crates/core/tests/power_routing.rs": "1879f5fc71b47c9e5af43e332465075f7b24bcdccc644660c3bc28a49a6c79df",
+    "crates/core/tests/world_analog.rs": "107a4809766008e7ca121df5bf14fbb5ef5509998e10a321e09c18aba0198532"
+  },
+  "profile": "world-analog-20261112 (debug=0, incremental=false, jobs=2)",
+  "red": {
+    "red-config": {
+      "exit_code": 101,
+      "log_sha256": "cad7ed3ff95ccce2f467e3ef1f74b7ab5c0be23e8caf91937d47ff5e7a977031",
+      "test_results": [
+        {
+          "passed": 5,
+          "failed": 1,
+          "ignored": 0
+        }
+      ]
+    },
+    "red-core": {
+      "exit_code": 101,
+      "log_sha256": "c2cc72557867dc56cf3d1405161afa4310cf6d200e3ae0a6bd8ab14a7bf8919f",
+      "test_results": [
+        {
+          "passed": 0,
+          "failed": 3,
+          "ignored": 0
+        },
+        {
+          "passed": 15,
+          "failed": 2,
+          "ignored": 0
+        }
+      ]
+    }
+  },
+  "green": {
+    "green-config": {
+      "exit_code": 0,
+      "log_sha256": "20e7a421a9b8e7c7f51d4b12c5e682743f0c80c91327e5ad43ba82c01a19f726",
+      "test_results": [
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    "green-core": {
+      "exit_code": 0,
+      "log_sha256": "84487c3baa52a419f3b00f3f321508529ea5995feff26d5911689208c6d3582f",
+      "test_results": [
+        {
+          "passed": 29,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 17,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    }
+  },
+  "green_commands": [
+    "cargo test -p labwired-config --test chip_io_levels",
+    "cargo test -p labwired-core --test power_routing --test world_analog --test cosim_pin_routing --no-fail-fast"
+  ],
+  "electrical_source": {
+    "url": "https://www.arterychip.com/download/DS/DS_AT32F421_V2.03_EN.pdf",
+    "version": "2.03",
+    "table": 32,
+    "printed_page": 44,
+    "pdf_sha256": "953409957662e1fe4fada766411913ca832382551500f20fad474dec0739c0de",
+    "vil_formula": "0.28 * VDD + 0.1 V",
+    "vih_formula": "0.31 * VDD + 0.8 V",
+    "fixture_limits_v": [
+      {
+        "vdd": 2.1,
+        "vil": 0.688,
+        "vih": 1.451
+      },
+      {
+        "vdd": 3.3,
+        "vil": 1.024,
+        "vih": 1.823
+      }
+    ],
+    "scope": "guaranteed DC limits; deterministic Schmitt-band retention, not measured switching points"
+  },
+  "verified_behavior": [
+    "ratio-only descriptor serialization unchanged",
+    "finite ordered affine offsets; malformed/nonfinite/order negatives refused",
+    "same-boundary per-node actual VDD for ratio and affine inputs",
+    "powering off one node clears its numeric GPIO high without changing the other node",
+    "finite nonnegative VDDA accepted only if every reference-capable ADC accepts it",
+    "absolute NRST thresholds remain independent of VDD"
+  ],
+  "capability_tests_use_explicit_adc_test_doubles": true,
+  "native_world_runtime_verified": false,
+  "silicon_or_flight_claim": false,
+  "native_export_rejections": {
+    "world_sha256": "2e5e44f19de33617050c43dfd26ed2e31b2c006dfdea32d4410a41ad59245398",
+    "netlist_sha256": "40b1745f2371b54431bd161cad10f925dc64aa6cc65391a062e9fb5470f286f6",
+    "runner_sha256": "09c3166242e2797228bd1ada879636f431343b47c0ac42db0e0627c6350ec8d1",
+    "world_attempt": {
+      "exit_code": 2,
+      "log_sha256": "871ac20f041509bada15b87b3b91690eee538451e31928c72eb7f3065d11322f",
+      "error": "U2 numeric GPIO inputs refuse missing gpio_input_thresholds before MNA parse/solve",
+      "timing_scope": "configuration rejection only; no solver timing or MCU acceptance"
+    },
+    "circuit_only_attempt": {
+      "receipt": {
+        "exit_code": 2,
+        "wall_seconds": 0.015933679009322077,
+        "max_rss_kib": 65152,
+        "steps_requested": 1,
+        "step_ns": 100,
+        "runner_sha256": "09c3166242e2797228bd1ada879636f431343b47c0ac42db0e0627c6350ec8d1",
+        "scope": "circuit-only parser/solver cost; no MCUs instantiated; no firmware/reset/GPIO acceptance"
+      },
+      "input_receipt_sha256": "9b3f8df3e840b3b722979d96636fcf7d553ccfa154ba3fad61fcf60798836083",
+      "stderr_sha256": "667ce7b82a04c6c9af2bd5926ec8895756b104bb76d7ce35e3076638e2fb302f",
+      "error": "379 unknowns exceeds production MAX_UNKNOWNS128; no solve",
+      "production_limit_unchanged": true
+    }
+  },
+  "precommit": {
+    "exit_code": 0,
+    "log_sha256": "b086138846df176896bf07846d809a3264ada54f4d2a3354f64b196ff2fd8502",
+    "gates": [
+      "format",
+      "clippy all targets warnings denied",
+      "all host package checks",
+      "validation status regeneration",
+      "unchanged human drift gate"
+    ],
+    "capture_and_acknowledgment_fields_changed": false,
+    "generated_validation_status_changed": false
+  }
+}

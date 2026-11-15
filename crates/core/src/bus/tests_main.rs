@@ -159,6 +159,21 @@ fn timer_poll_coalesce_uses_peripheral_access_class_not_chip_names() {
     let gpio_idx = bus.find_peripheral_index_by_name("gpio").unwrap();
 
     bus.reset_mmio_activity_counters();
+    for i in 1..=3 {
+        bus.note_mmio_activity(sys_idx, 0x04);
+        assert!(
+            !bus.take_timer_poll_coalesce_eligible(),
+            "split time_us_64 ({i}/3 TIMERAW loads) must not skip"
+        );
+        bus.reset_mmio_activity_counters();
+    }
+    bus.note_mmio_activity(sys_idx, 0x04);
+    assert!(
+        bus.take_timer_poll_coalesce_eligible(),
+        "a second time_us_64 (4th consecutive timer-only access) should coalesce"
+    );
+
+    bus.reset_mmio_activity_counters();
     bus.note_mmio_activity(sys_idx, 0x04); // poll class (model decides)
     bus.note_mmio_activity(sys_idx, 0x44); // poll class
     assert!(
@@ -1054,6 +1069,7 @@ fn test_from_config_attaches_adxl345_external_device_to_i2c() {
         analog_pins: Default::default(),
         io_voltage_v: None,
         gpio_input_thresholds: None,
+        reset_input: None,
         supply_monitor: None,
         include: None,
     };
@@ -1894,6 +1910,7 @@ fn esp32c3_i2c0_chip(name: &str) -> ChipDescriptor {
         analog_pins: Default::default(),
         io_voltage_v: None,
         gpio_input_thresholds: None,
+        reset_input: None,
         supply_monitor: None,
         include: None,
     }
@@ -3308,6 +3325,7 @@ motor_models:
 
     let mut stopped = build();
     configure_pwm(&mut stopped);
+    stopped.write_u32(0x4001_2c20, 0).unwrap(); // CEN alone retains the output gate state.
     stopped.write_u32(0x4001_2c00, 0).unwrap();
     stopped.write_u32(0x4001_2c44, 1 << 15).unwrap();
     stopped.set_current_cycle(100);
@@ -3325,8 +3343,13 @@ motor_models:
     unsupported.tick_peripherals_with_costs();
     assert_eq!(
         unsupported.motor_snapshots()[0].control_state,
-        "off:unsupported-mode"
+        "fault:integration"
     );
+    assert_eq!(unsupported.motor_snapshots()[0].phase_currents_a, None);
+    assert!(unsupported.motor_snapshots()[0]
+        .faults
+        .iter()
+        .any(|fault| fault.contains("unsupported enabled timer output mode")));
 
     let mut external_off = build();
     configure_pwm(&mut external_off);
@@ -3612,6 +3635,7 @@ fn chip_with_i2c_and_uart() -> labwired_config::ChipDescriptor {
         analog_pins: Default::default(),
         io_voltage_v: None,
         gpio_input_thresholds: None,
+        reset_input: None,
         supply_monitor: None,
         include: None,
     }
@@ -3896,6 +3920,7 @@ fn test_flash_boot_alias_read_and_write() {
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
+        timer_poll_carry: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
         batch_stop: Default::default(),
         memory_reads: std::cell::Cell::new(0),
@@ -3916,8 +3941,10 @@ fn test_flash_boot_alias_read_and_write() {
         resident_tick_interval_override: None,
         gpio_devices: Vec::new(),
         device_pin_pads: Vec::new(),
+        device_open_drain_nets: Default::default(),
         observed: Vec::new(),
         motors: Vec::new(),
+        live_numeric: None,
         ina219_senses: Vec::new(),
         motor_cycle_anchor: 0,
         analog_inputs: Vec::new(),
@@ -3947,6 +3974,7 @@ fn test_flash_boot_alias_read_and_write() {
         analog_pin_map: std::collections::HashMap::new(),
         io_voltage_v: None,
         gpio_input_thresholds: None,
+        reset_input: crate::reset_input::ResetInputState::default(),
         supply: crate::power::SupplySupervisor::default(),
         supply_domains: Default::default(),
     };
@@ -4033,6 +4061,7 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
+        timer_poll_carry: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
         batch_stop: Default::default(),
         memory_reads: std::cell::Cell::new(0),
@@ -4053,8 +4082,10 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         resident_tick_interval_override: None,
         gpio_devices: Vec::new(),
         device_pin_pads: Vec::new(),
+        device_open_drain_nets: Default::default(),
         observed: Vec::new(),
         motors: Vec::new(),
+        live_numeric: None,
         ina219_senses: Vec::new(),
         motor_cycle_anchor: 0,
         analog_inputs: Vec::new(),
@@ -4084,6 +4115,7 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         analog_pin_map: std::collections::HashMap::new(),
         io_voltage_v: None,
         gpio_input_thresholds: None,
+        reset_input: crate::reset_input::ResetInputState::default(),
         supply: crate::power::SupplySupervisor::default(),
         supply_domains: Default::default(),
     };
@@ -4323,6 +4355,7 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
+        timer_poll_carry: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
         batch_stop: Default::default(),
         memory_reads: std::cell::Cell::new(0),
@@ -4343,8 +4376,10 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         resident_tick_interval_override: None,
         gpio_devices: Vec::new(),
         device_pin_pads: Vec::new(),
+        device_open_drain_nets: Default::default(),
         observed: Vec::new(),
         motors: Vec::new(),
+        live_numeric: None,
         ina219_senses: Vec::new(),
         motor_cycle_anchor: 0,
         analog_inputs: Vec::new(),
@@ -4374,6 +4409,7 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         analog_pin_map: std::collections::HashMap::new(),
         io_voltage_v: None,
         gpio_input_thresholds: None,
+        reset_input: crate::reset_input::ResetInputState::default(),
         supply: crate::power::SupplySupervisor::default(),
         supply_domains: Default::default(),
     };
@@ -4609,6 +4645,7 @@ fn test_peripheral_range_index_lookup() {
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
+        timer_poll_carry: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
         batch_stop: Default::default(),
         memory_reads: std::cell::Cell::new(0),
@@ -4629,8 +4666,10 @@ fn test_peripheral_range_index_lookup() {
         resident_tick_interval_override: None,
         gpio_devices: Vec::new(),
         device_pin_pads: Vec::new(),
+        device_open_drain_nets: Default::default(),
         observed: Vec::new(),
         motors: Vec::new(),
+        live_numeric: None,
         ina219_senses: Vec::new(),
         motor_cycle_anchor: 0,
         analog_inputs: Vec::new(),
@@ -4660,6 +4699,7 @@ fn test_peripheral_range_index_lookup() {
         analog_pin_map: std::collections::HashMap::new(),
         io_voltage_v: None,
         gpio_input_thresholds: None,
+        reset_input: crate::reset_input::ResetInputState::default(),
         supply: crate::power::SupplySupervisor::default(),
         supply_domains: Default::default(),
     };
@@ -4751,6 +4791,7 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
+        timer_poll_carry: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
         batch_stop: Default::default(),
         memory_reads: std::cell::Cell::new(0),
@@ -4771,8 +4812,10 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         resident_tick_interval_override: None,
         gpio_devices: Vec::new(),
         device_pin_pads: Vec::new(),
+        device_open_drain_nets: Default::default(),
         observed: Vec::new(),
         motors: Vec::new(),
+        live_numeric: None,
         ina219_senses: Vec::new(),
         motor_cycle_anchor: 0,
         analog_inputs: Vec::new(),
@@ -4802,6 +4845,7 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         analog_pin_map: std::collections::HashMap::new(),
         io_voltage_v: None,
         gpio_input_thresholds: None,
+        reset_input: crate::reset_input::ResetInputState::default(),
         supply: crate::power::SupplySupervisor::default(),
         supply_domains: Default::default(),
     };
@@ -6923,4 +6967,80 @@ fn bus_without_a_flash_store_owner_commits_as_before() {
         0xFFFF_0000,
         "plain overwrite, no AND"
     );
+}
+
+/// A GPIO observer on STM32 must receive *real BSRR output edges*, not just
+/// an ESP32 GPIO-number parse or synthetic motor telemetry. The A1 mini's
+/// four A4988 channels use STM32F411 PB0..PB12 in this exact configuration.
+#[test]
+fn stm32f4_step_dir_kit_counts_firmware_gpio_edges() {
+    use crate::peripherals::components::step_dir_motor::StepDirMotor;
+    use crate::peripherals::gpio::{GpioPort, GpioRegisterLayout};
+    use crate::peripherals::kit::{AttachCtx, PeripheralKit};
+
+    const GPIOB: u64 = 0x4002_0400;
+    const BSRR: u64 = GPIOB + 0x18;
+    let mut bus = SystemBus::new();
+    bus.add_peripheral(
+        "gpiob",
+        GPIOB,
+        0x400,
+        None,
+        Box::new(GpioPort::new_with_layout(GpioRegisterLayout::Stm32V2)),
+    );
+    bus.refresh_peripheral_index();
+
+    let manifest: SystemManifest = serde_yaml::from_str(
+        r#"
+name: stm32-step-dir-proof
+chip: unused
+external_devices:
+  - id: x_driver
+    type: a4988
+    connection: gpio
+    config:
+      step_pin: PB0
+      dir_pin: PB1
+      en_pin: PB12
+board_io: []
+"#,
+    )
+    .unwrap();
+    let ext = &manifest.external_devices[0];
+    let mut ctx = AttachCtx::new(&mut bus, ext);
+    assert_eq!(ctx.parse_gpio_pin("PB0"), Some(16));
+    assert_eq!(ctx.parse_gpio_pin("PB12"), Some(28));
+    assert_eq!(ctx.parse_gpio_pin("PB16"), None);
+    assert_eq!(ctx.parse_gpio_pin("PC0"), None); // no fictional port
+    crate::peripherals::components::step_dir_motor::STEP_DIR_MOTOR_KIT
+        .attach(&mut ctx)
+        .expect("A4988 on STM32 GPIOB must attach");
+
+    // MODER bits (2 per pin): PB0 STEP, PB1 DIR, PB12 EN all GPIO output.
+    bus.write_u32(GPIOB, (1 << 0) | (1 << 2) | (1 << 24))
+        .unwrap();
+    // DIR HIGH, EN LOW: two counted rising STEP edges, low pulses do not count.
+    bus.write_u32(BSRR, 1 << 1).unwrap();
+    for cycle in 0..2 {
+        bus.set_current_cycle(cycle * 10 + 1);
+        bus.write_u32(BSRR, 1 << 0).unwrap();
+        bus.write_u32(BSRR, 1 << 16).unwrap();
+    }
+    let motor: &StepDirMotor = bus.observed_of().next().expect("observed A4988");
+    assert_eq!(motor.steps(), 2);
+    assert!((motor.angle_degrees_f64() - 3.6).abs() < 1e-9);
+
+    // Reverse DIR; one more pulse must decrement position.
+    bus.write_u32(BSRR, 1 << (1 + 16)).unwrap();
+    bus.write_u32(BSRR, 1 << 0).unwrap();
+    bus.write_u32(BSRR, 1 << 16).unwrap();
+    assert_eq!(bus.observed_of::<StepDirMotor>().next().unwrap().steps(), 1);
+
+    // Disabled EN HIGH: further STEP pulses cannot move the shaft.
+    bus.write_u32(BSRR, 1 << 12).unwrap();
+    bus.write_u32(BSRR, 1 << 0).unwrap();
+    bus.write_u32(BSRR, 1 << 16).unwrap();
+    let motor: &StepDirMotor = bus.observed_of().next().unwrap();
+    assert_eq!(motor.steps(), 1);
+    assert!(!motor.is_enabled());
 }

@@ -38,7 +38,7 @@ U5 IP family, smaller memory map, fewer peripherals, one user LED.
 ## Differences from the U575 chip descriptor
 
 `stm32u545.yaml` is a self-contained derivative of `stm32u575.yaml`. A drift guard
-(`crates/core/tests/u545_u575_drift_guard.rs`) checks every shared peripheral;
+(`crates/core/tests/stm32/u545_u575_drift_guard.rs`) checks every shared peripheral;
 its explicit peripheral-field allow-list is `dbgmcu.config.idcode` and
 `sysmem.config.flash_size_kb`. Top-level flash/RAM sizes and package pin maps
 also differ, and USART2/GPIOF/GPIOI are absent on U545.
@@ -109,5 +109,5 @@ labwired run --system configs/systems/nucleo-u545re.yaml \
 ## Related
 
 - [`examples/nucleo-u545re/VALIDATION.md`](../../examples/nucleo-u545re/VALIDATION.md)
-- [`crates/core/tests/nucleo_u545re.rs`](../../crates/core/tests/nucleo_u545re.rs) - pin proofs
-- [`crates/core/tests/u545_u575_drift_guard.rs`](../../crates/core/tests/u545_u575_drift_guard.rs)
+- [`crates/core/tests/stm32/nucleo_u545re.rs`](../../crates/core/tests/stm32/nucleo_u545re.rs) - pin proofs
+- [`crates/core/tests/stm32/u545_u575_drift_guard.rs`](../../crates/core/tests/stm32/u545_u575_drift_guard.rs)

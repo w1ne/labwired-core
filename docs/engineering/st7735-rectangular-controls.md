@@ -1,6 +1,6 @@
 # Rectangular ST7735 blocking controls — qualification pending
 
-This next P3 slice extends `crates/core/tests/st7735_sam_guest.rs`, not the
+This next P3 slice extends `crates/core/tests/samd/st7735_sam_guest.rs`, not the
 production model or PyBadge wiring. The existing four tests remain; a fifth
 authored Cortex-M test adds a nonzero, non-square controller-memory window and
 an intentionally wrong-axis negative, in ordinary and forced-legacy SPI paths.

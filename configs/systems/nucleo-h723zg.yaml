@@ -1,0 +1,34 @@
+# NUCLEO-H723ZG (MB1364, STM32H723ZGT6) board wiring from ST UM2407.
+# Default solder bridges route USART3 PD8/PD9 to the ST-LINK VCP. The default
+# LD1 connection is PB0; LD2 is PE1; LD3 is PB14. B1 is PC13 and active high.
+# This system profile models those GPIO signals and USART3 only. It does not
+# model the on-board Ethernet, USB, or ST-LINK debugger.
+name: "nucleo-h723zg"
+chip: "../chips/stm32h723zg.yaml"
+debug_uart: "usart3"
+external_devices: []
+board_io:
+  - id: "led_ld1_green"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 0
+    signal: "output"
+    active_high: true
+  - id: "led_ld2_yellow"
+    kind: "led"
+    peripheral: "gpioe"
+    pin: 1
+    signal: "output"
+    active_high: true
+  - id: "led_ld3_red"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 14
+    signal: "output"
+    active_high: true
+  - id: "button_b1_user"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: true

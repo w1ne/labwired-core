@@ -1,7 +1,7 @@
 name: SAMD actual CODAL services guest
 on:
   pull_request:
-    paths: ['crates/core/tests/samd_real_services_guest.rs', '.github/workflows/samd-real-services-guest.yml']
+    paths: ['crates/core/tests/samd/samd_real_services_guest.rs', '.github/workflows/samd-real-services-guest.yml']
 permissions:
   contents: read
 concurrency:
@@ -94,9 +94,9 @@ jobs:
           LABWIRED_SERVICES_FIXTURE_DIR: ${{ runner.temp }}/runtime-services
         run: |
           set -o pipefail
-          cargo test --release --locked -p labwired-core --test samd_real_services_guest -- --nocapture
-          cargo test --release --locked -p labwired-core --test samd_real_services_guest -- --ignored --nocapture | tee services-guest-default.log
-          cargo test --release --locked -p labwired-core --features event-scheduler --test samd_real_services_guest -- --ignored --nocapture | tee services-guest-scheduler.log
+          cargo test --release --locked -p labwired-core --test samd -- --nocapture samd_real_services_guest::
+          cargo test --release --locked -p labwired-core --test samd -- --ignored --nocapture samd_real_services_guest:: | tee services-guest-default.log
+          cargo test --release --locked -p labwired-core --features event-scheduler --test samd -- --ignored --nocapture samd_real_services_guest:: | tee services-guest-scheduler.log
       - name: Preserve source-bound build and actual execution evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

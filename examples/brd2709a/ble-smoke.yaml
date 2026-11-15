@@ -11,7 +11,7 @@
 # legacy advertising PDU, and starts advertising and scanning. That the PDU
 # then reaches a peer is proven at the model level in
 # `peripherals::virtual_ble::tests` and across two machines in
-# `crates/core/tests/efr32mg26_ble.rs`.
+# `crates/core/tests/vendor/efr32mg26_ble.rs`.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv7m-none-eabi/release/firmware-mg26-ble"
