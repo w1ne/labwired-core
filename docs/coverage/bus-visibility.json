@@ -97,6 +97,10 @@
   },
   {
     "buses": [],
+    "name": "ch32l103c8t6"
+  },
+  {
+    "buses": [],
     "name": "ch32v003f4p6"
   },
   {

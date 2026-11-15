@@ -892,6 +892,11 @@ fn every_shipped_descriptor_is_ratcheted() {
         // executing-fidelity differential of its own. The slice models RCC,
         // GPIO A/C/D, and polled USART1 TX only (no PFIC, ADC, I2C, SPI, or
         // timers). Promote when the catalog board and a differential exist.
+        // CH32L103C8T6: RV32IMAC descriptor with F1-layout RCC, GPIO A..D and
+        // polled USART1/USART2 TX (no PFIC, timers, ADC, I2C, SPI, CAN FD or
+        // USB). Booted by committed ELFs. No catalog board, no silicon oracle,
+        // no differential.
+        "ch32l103c8t6",
         "ch32v003f4p6",
         // ESP32-H2/C5/P4/S2 UART0-only board profiles. Each has a descriptor,
         // a system manifest and a board smoke that asserts a UART0 token, but

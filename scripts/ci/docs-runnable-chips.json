@@ -15,6 +15,10 @@
   ],
   "firmware_release": "firmware-demos-v3",
   "chips": {
+    "ch32l103c8t6": {
+      "how": "needs-build",
+      "why": "New CH32L103 descriptor on this branch; the installed LabWired CLI v0.25.0 does not ship it yet. Committed ELFs under tests/fixtures run with a source build."
+    },
     "ch32v003f4p6": {
       "how": "needs-build",
       "why": "Requires unreleased CH32V003/RV32E core support from PR #1698; the installed LabWired CLI v0.25.0 cannot run this branch-only model yet."
