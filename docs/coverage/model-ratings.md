@@ -100,6 +100,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | stm32u545 | open | L1 | 39 | 986.8 | 1.8 | ≥1× (CI) | — |
 | stm32u5a5zj | open | L1 | 45 | 984.9 | 1.8 | ≥1× (CI) | [doc](docs/boards/stm32u5a5zj.md) |
 | stm32h735 | open | L1 | 40 | 936.2 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32h735.md) |
+| stm32c031c6 | open | L0 | 29 | 937.4 | 1.6 | ≥1× (CI) | — |
 | stm32l073 | open | L2 | 42 | 939.5 | 1.6 | ≥1× (CI) | — |
 | stm32l432kc | open | L0 | 42 | 937.1 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32l432kc.md) |
 | stm32l476 | open | L1 | 58 | 937.6 | 1.6 | ≥1× (CI) | — |

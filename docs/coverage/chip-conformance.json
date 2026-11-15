@@ -637,6 +637,13 @@
     "reg_match": 0
   },
   {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "stm32c031c6",
+    "reg_match": 0
+  },
+  {
     "behavior": true,
     "excluded": 6,
     "level": 2,

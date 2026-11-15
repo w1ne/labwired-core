@@ -856,6 +856,16 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: Some("firmware_survival::test_stm32h735_tier1_survival"),
     },
+    // NUCLEO-C031C6, the first STM32C0 part (G0-derived RCC without a PLL).
+    // SIM-DERIVED: no silicon capture. Its stock-stm32duino Arduino matrix
+    // row runs through PlatformIO and the CLI, not as a Rust test, so no
+    // behavior_gate resolves.
+    ChipConf {
+        name: "stm32c031c6",
+        yaml: "configs/chips/stm32c031c6.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
     ChipConf {
         name: "stm32l073",
         yaml: "configs/chips/stm32l073.yaml",

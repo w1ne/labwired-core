@@ -99,6 +99,7 @@ This page covers the public models. For every chip we model — public and priva
 | stm32u545 | **L1** | ✓ | 39 | — | — | firmware_survival::test_stm32u545_blinky_survival |
 | stm32u5a5zj | **L1** | ✓ | 45 | — | — | stm32u5_exec_oracle::u5a5_hash_saes_and_pka_execute_register_level_operations |
 | stm32h735 | **L1** | ✓ | 40 | — | — | firmware_survival::test_stm32h735_tier1_survival |
+| stm32c031c6 | **L0** | ✓ | 29 | — | — | — |
 | stm32l073 | **L2** | ✓ | 42 | 54/54 (100%) | 6 | firmware_survival::test_nucleo_l073rz_smoke_survival |
 | stm32l432kc | **L0** | ✓ | 42 | — | — | — |
 | stm32l476 | **L1** | ✓ | 58 | — | — | firmware_survival::test_nucleo_l476rg_demo_survival |
