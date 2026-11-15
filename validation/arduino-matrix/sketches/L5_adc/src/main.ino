@@ -21,6 +21,12 @@
 // the S2: analogRead returns 0 without converting). A0 = GPIO1 = ADC1_CH0.
 #    define LW_ADC_PIN A0
 #    define LW_ADC_RES_BITS 12
+#  elif defined(ARDUINO_SAMD_ZERO)
+// ArduinoCore-samd's A0 is a `static const uint8_t`, not a macro, so
+// `defined(A0)` misses it. analogRead(0) would still land on A0 (the core
+// adds A0 to pins below it), but name it: A0 = PA02 = AIN0, the input the
+// matrix board drives.
+#    define LW_ADC_PIN A0
 #  elif defined(A0)
 #    define LW_ADC_PIN A0
 #  else
@@ -64,6 +70,13 @@ static bool samples_ok(int v0, int v1) {
   // esp32s2_sens mid-scale 0x1000 (13-bit) -> 2048 at 12 bits. Exact; a 0
   // here means analogRead never converted.
   return v0 == 2048 && v1 == 2048;
+
+#elif defined(ARDUINO_SAMD_ZERO)
+  // samd21_adc: the matrix system drives AIN0 at 1650 mV. AR_DEFAULT is GAIN
+  // DIV2 against INTVCC1 (VDDANA / 2), so full scale is 3.3 V and the 10-bit
+  // code is 512. Exact; a 0 here means no conversion, or the pad was never
+  // handed to the ADC.
+  return v0 == 512 && v1 == 512;
 
 #elif defined(ARDUINO_ARCH_RP2040)
   // rp2040/adc.rs: unseeded GPIO inputs convert 0 (no fabricated mid-scale).
