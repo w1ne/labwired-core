@@ -108,17 +108,17 @@ Reg match = verifiable cold-reset registers reproduced. "Excluded" = registers a
 | imxrt1064 | **L1** | ✓ | 7 | — | — | firmware_survival::test_imxrt1064_teensy41_smoke_survival |
 | stm32f746 | **L1** | ✓ | 18 | — | — | firmware_survival::test_stm32f746_discovery_smoke_survival |
 | stm32g071 | **L1** | ✓ | 41 | — | — | firmware_survival::test_nucleo_g071rb_smoke_survival |
-| dspic33fj32mc204 | **L1** | ✓ | 3 | — | — | pic24_m0_smoke::pic24_fixture_boots_and_writes_h_to_uart |
-| dspic33fj32mc202 | **L1** | ✓ | 3 | — | — | pic24_xc16_202_smoke::xc16_202_firmware_boots_and_writes_hi_to_uart |
+| dspic33fj32mc204 | **L1** | ✓ | 4 | — | — | pic24_m0_smoke::pic24_fixture_boots_and_writes_h_to_uart |
+| dspic33fj32mc202 | **L1** | ✓ | 4 | — | — | pic24_xc16_202_smoke::xc16_202_firmware_boots_and_writes_hi_to_uart |
 | pic18f4520 | **L1** | ✓ | 1 | — | — | pic18f4520_smoke::sdcc_firmware_boots_and_prints_the_banner |
 | pic16f877a | **L1** | ✓ | 1 | — | — | pic16f877a_smoke::sdcc_firmware_boots_and_prints_the_banner |
 | pic16f1829 | **L1** | ✓ | 1 | — | — | pic16f1829_smoke::sdcc_firmware_boots_and_prints_the_banner |
 | pic24f04ka200 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f04ka200_uart_smoke |
 | pic24f04ka201 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f04ka201_uart_smoke |
-| pic24f08ka101 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f08ka101_uart_smoke |
-| pic24f08ka102 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f08ka102_uart_smoke |
-| pic24f16ka101 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f16ka101_uart_smoke |
-| pic24f16ka102 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f16ka102_uart_smoke |
+| pic24f08ka101 | **L1** | ✓ | 4 | — | — | pic24_ka_smoke::pic24f08ka101_uart_smoke |
+| pic24f08ka102 | **L1** | ✓ | 4 | — | — | pic24_ka_smoke::pic24f08ka102_uart_smoke |
+| pic24f16ka101 | **L1** | ✓ | 4 | — | — | pic24_ka_smoke::pic24f16ka101_uart_smoke |
+| pic24f16ka102 | **L1** | ✓ | 4 | — | — | pic24_ka_smoke::pic24f16ka102_uart_smoke |
 
 ## Declared platforms without a model
 

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Analog pad levels for the dsPIC33F/PIC24 ADC1 inputs (AN0-AN8).
+//! Analog pad levels for the dsPIC33F/PIC24 ADC1 inputs (AN0-AN15).
 //!
 //! ADC1 itself lives in the PIC24 core's data-space SFR map (`cpu::pic24`),
 //! so the generic analog seam — [`Peripheral::set_adc_channel_input`], which
@@ -26,9 +26,11 @@
 
 use crate::{Peripheral, SimResult};
 
-/// AN0-AN8: the analog inputs the dsPIC33FJ32MC20x family bonds out
-/// (DS70283H Table 1-1). The package decides which of them exist.
-pub const CHANNELS: usize = 9;
+/// AN0-AN15: the CH0SA/AD1PCFG input space of the 10-bit PIC24 ADC1. The
+/// package decides which of them exist: AN0-AN8 on the dsPIC33FJ32MC20x
+/// (DS70283H Table 1-1), AN0-AN5 and AN10-AN12 on the PIC24F16KA102 family
+/// (DS39927C Table 1-2).
+pub const CHANNELS: usize = 16;
 /// Bumps on every level or reference change.
 pub const OFF_GENERATION: u64 = 0x00;
 /// Positive full-scale reference in millivolts.
@@ -56,7 +58,7 @@ impl Pic24AdcPads {
     /// reference the converter uses with VCFG = 000.
     pub fn new(present: u16, vref_mv: u16) -> Self {
         Self {
-            present: present & ((1 << CHANNELS) - 1),
+            present,
             generation: 0,
             vref_mv: vref_mv.max(1),
             held: 0,
@@ -189,7 +191,20 @@ mod tests {
         assert_eq!(Pic24AdcPads::new(0x01FF, 3300).adc_channel_count(), Some(9));
         assert!(!pads.set_adc_channel_input(6, 100), "AN6 is RC0: no PORTC");
         assert!(!pads.set_adc_channel_input(9, 100), "no AN9 on this family");
+        assert!(!pads.set_adc_channel_input(16, 100), "past AN15");
         assert!(!pads.set_adc_reference_voltage_v(0.0));
         assert_eq!(read_u16(&pads, OFF_GENERATION), 0);
+    }
+
+    #[test]
+    fn sparse_upper_channels_route_on_the_pic24f_ka102() {
+        // DS39927C Table 1-2: AN0-AN5 and AN10-AN12; AN6-AN9 do not exist.
+        let mut pads = Pic24AdcPads::new(0x1C3F, 3300);
+        assert_eq!(pads.adc_channel_count(), Some(13), "AN0 up to AN12");
+        assert!(!pads.set_adc_channel_input(9, 100), "no AN9 on the KA102");
+        assert!(pads.set_adc_channel_input(12, 2048));
+        assert_eq!(read_u16(&pads, OFF_HELD), 1 << 12);
+        assert_eq!(read_u16(&pads, OFF_CHANNEL_MV + 24), 2048);
+        assert_eq!(WINDOW_BYTES, 38);
     }
 }

@@ -12,6 +12,7 @@ There is no silicon capture.
 | System manifest | ✅ | `examples/pic24f16ka101/system.yaml` |
 | Boot + UART1 | ✅ | real XC16 v1.70 ELF; `pic24_ka_smoke::pic24f16ka101_uart_smoke` |
 | CLI smoke | ✅ | `examples/pic24f16ka101/io-smoke.yaml` |
+| ADC1 analog routing | ✅ (shared core) | `analog_pins` AN0-AN5 (RA2/AN4, RA3/AN5) and AN10-AN12 (RB14-RB12), `pic24_adc_pads` window; `cosim_pic24f_ka_adc1_analog` (hand-encoded PIC24 conversion program, no XC16 ELF) |
 | Silicon capture | ❌ none | simulation-derived only |
 
 ## Evidence
@@ -38,7 +39,7 @@ are the package masks (TRISA 0x007F, TRISB 0xF397, TRISC 0).
 
 Validated: boot, UART1 TX, package GPIO masks and RA0. Not validated or not
 modelled for this part: data EEPROM (512 B at 0x7FFE00), UART2 at 0x0230,
-timers, ADC, SPI, I2C, RTCC, CTMU, comparators, deep sleep, PPS and alternate
+timers, ADC1 external VREF±/band gap, SPI, I2C, RTCC, CTMU, comparators, deep sleep, PPS and alternate
 pin functions. The public core's flash/SRAM backing is the larger
 dsPIC33FJ32MC204-sized store; the descriptor still records the exact part
 geometry (16 KB / 1536 B), and the real image fits unchanged.

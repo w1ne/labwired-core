@@ -546,7 +546,7 @@ pub const PIC24_IO_MIRROR_BASE: u64 = 0x0001_0000;
 
 /// The routed ADC1 pad levels (`peripherals::pic24_adc_pads`). It sits past
 /// the mirrored SFR space (data-space SFRs end at 0x07FF) because it is not an
-/// SFR: it carries the AN0-AN8 pin voltages a co-simulated circuit drives.
+/// SFR: it carries the AN0-AN15 pin voltages a co-simulated circuit drives.
 pub const PIC24_ADC_PAD_BASE: u64 = PIC24_IO_MIRROR_BASE + 0x0800;
 
 /// I/O port registers (DS70283H Table 4-19 … 4-22).
@@ -804,9 +804,13 @@ pub struct Pic24 {
     odc: [u16; 3],
     /// Package pad mask per port (RA/RB/RC): which bits exist on this part.
     port_masks: [u16; 3],
-    /// Analog channels (AN0-AN8) bonded out on this package, derived from
-    /// `port_masks` (DS70283H Table 1-1).
+    /// Analog channels (AN0-AN15) bonded out on this package: the descriptor's
+    /// map when the builder set one, else derived from `port_masks` with the
+    /// dsPIC33FJ32MC20x layout (DS70283H Table 1-1).
     adc_channels: u16,
+    /// The descriptor's ADC1 channel set ([`Pic24::set_adc_channels`]). Board
+    /// wiring, so it is not part of the snapshot.
+    adc_channel_map: Option<u16>,
     /// Last sampled live pad levels (`PORTx`), one word per port.
     pad_in: [u16; 3],
     /// The drive the Output Compare units present on their routed pads.
@@ -1013,6 +1017,7 @@ impl Pic24 {
             acc_b: 0,
             port_masks: [PORT_A_MASK, PORT_B_MASK, PORT_C_MASK],
             adc_channels: 0x01FF,
+            adc_channel_map: None,
             tris: [PORT_A_MASK, PORT_B_MASK, PORT_C_MASK],
             lat: [0; 3],
             odc: [0; 3],
@@ -1297,7 +1302,9 @@ impl Pic24 {
     /// from its `pic24_gpio` peripheral configs.
     pub fn set_port_masks(&mut self, masks: [u16; 3]) {
         self.port_masks = masks;
-        self.adc_channels = Self::adc_channels_from_port_masks(masks);
+        self.adc_channels = self
+            .adc_channel_map
+            .unwrap_or_else(|| Self::adc_channels_from_port_masks(masks));
         self.tris = masks;
         for (port, mask) in masks.iter().enumerate() {
             self.lat[port] &= *mask;
@@ -2794,8 +2801,8 @@ impl Pic24 {
                     SFR_AD1CON3 => self.ad1con3 = val & 0x9FFF,
                     SFR_AD1CHS123 => self.ad1chs123 = val & 0x0707,
                     SFR_AD1CHS0 => self.ad1chs0 = val & 0x9F9F,
-                    SFR_AD1PCFGL => self.ad1pcfgl = val & 0x01FF,
-                    SFR_AD1CSSL => self.ad1cssl = val & 0x01FF,
+                    SFR_AD1PCFGL => self.ad1pcfgl = val & self.adc_reg_mask(),
+                    SFR_AD1CSSL => self.ad1cssl = val & self.adc_reg_mask(),
                     // ADC1BUF0-15 are read-only.
                     a if (SFR_ADC1BUF0..SFR_ADC1BUF0 + 2 * ADC1_BUF_COUNT as u16).contains(&a) => {}
                     SFR_SPI1STAT => {
@@ -4087,16 +4094,34 @@ impl Pic24 {
 // ── M3: ADC1, SPI1, I2C1 ────────────────────────────────────────────────────
 
 impl Pic24 {
-    /// Whether AN`channel` is bonded out on this package (DS70283H Table 1-1).
+    /// Whether AN`channel` is bonded out on this package (DS70283H Table 1-1,
+    /// or the descriptor's `analog_pins`).
     pub fn adc_channel_present(&self, channel: u8) -> bool {
-        channel <= 8 && self.adc_channels & (1 << channel) != 0
+        channel < 16 && self.adc_channels & (1 << channel) != 0
     }
 
-    /// Inject a raw 10/12-bit code for analog channel `channel` (AN0-AN8).
+    /// Set the ADC1 channels this part bonds out (bit `n` = AN`n`), from the
+    /// chip descriptor's `analog_pins`. Without it the channels follow the
+    /// dsPIC33FJ32MC20x layout of the port masks (AN0-AN8 on RA0, RA1,
+    /// RB0-RB3, RC0-RC2), which is wrong for other families: the PIC24F16KA102
+    /// family bonds AN0-AN5 and AN10-AN12 (DS39927C Table 1-2). The mask also
+    /// sets the implemented AD1PCFG/AD1CSSL bits.
+    pub fn set_adc_channels(&mut self, channels: u16) {
+        self.adc_channel_map = Some(channels);
+        self.adc_channels = channels;
+    }
+
+    /// The implemented PCFG/CSSL bits: AN0-AN8 on the dsPIC33FJ32MC20x
+    /// (AD1PCFGL/AD1CSSL bits 8:0), else the descriptor's channel set.
+    fn adc_reg_mask(&self) -> u16 {
+        self.adc_channel_map.unwrap_or(0x01FF)
+    }
+
+    /// Inject a raw 10/12-bit code for analog channel `channel` (AN0-AN15).
     /// This is the harness seam for an analog source; the session builder
-    /// leaves unconnected inputs at 0. AN0-AN8 map to RA0, RA1, RB0-RB3,
-    /// RC0-RC2 (DS70283H Table 1-1). Channels not bonded out on this part
-    /// and channels above AN8 are ignored.
+    /// leaves unconnected inputs at 0. On the dsPIC33FJ32MC20x AN0-AN8 map to
+    /// RA0, RA1, RB0-RB3, RC0-RC2 (DS70283H Table 1-1). Channels not bonded
+    /// out on this part are ignored.
     pub fn set_adc_analog(&mut self, channel: u8, code: u16) {
         if !self.adc_channel_present(channel) {
             return;
@@ -4105,7 +4130,7 @@ impl Pic24 {
     }
 
     /// Declare that the bus carries a `pic24_adc_pads` window at
-    /// [`PIC24_ADC_PAD_BASE`]: ADC1 then converts the routed AN0-AN8 levels
+    /// [`PIC24_ADC_PAD_BASE`]: ADC1 then converts the routed AN0-AN15 levels
     /// it publishes. The session builder sets this from the chip descriptor.
     pub fn set_adc_pad_window(&mut self, present: bool) {
         self.adc_pad_window = present;
@@ -4147,12 +4172,12 @@ impl Pic24 {
     /// The next channel in the AD1CSSL scan list (CSCNA), or CH0SA when the
     /// list is empty.
     fn adc_scan_channel(&self) -> u8 {
-        let list = self.ad1cssl & 0x01FF;
+        let list = self.ad1cssl;
         if list == 0 {
             return (self.ad1chs0 & 0x1F) as u8;
         }
-        for offset in 0..9u8 {
-            let ch = (self.adc_scan_next + offset) % 9;
+        for offset in 0..16u8 {
+            let ch = (self.adc_scan_next + offset) % 16;
             if list & (1 << ch) != 0 {
                 return ch;
             }
@@ -4266,7 +4291,7 @@ impl Pic24 {
         code.min(full - 1) as u16
     }
 
-    /// Pull the routed AN0-AN8 levels when the pad model reports a change.
+    /// Pull the routed AN0-AN15 levels when the pad model reports a change.
     /// One bus read per step while ADC1 is on; nothing when it is off or the
     /// board declares no `pic24_adc_pads` window. The window starts at
     /// generation 0 with nothing held, so an unseeded board keeps the
@@ -4289,9 +4314,9 @@ impl Pic24 {
             .max(1);
         self.adc_pad_held = bus
             .read_u16(PIC24_ADC_PAD_BASE + pads::OFF_HELD)
-            .unwrap_or(0)
-            & ((1 << pads::CHANNELS) - 1);
-        for ch in 0..pads::CHANNELS {
+            .unwrap_or(0);
+        // Only held channels: the window may be sized for fewer inputs.
+        for ch in (0..pads::CHANNELS).filter(|ch| self.adc_pad_held & (1 << ch) != 0) {
             self.adc_pad_mv[ch] = bus
                 .read_u16(PIC24_ADC_PAD_BASE + pads::OFF_CHANNEL_MV + 2 * ch as u64)
                 .unwrap_or(0);
@@ -4397,7 +4422,7 @@ impl Pic24 {
             // Move past the channel this sequence used, not just to the next
             // bit index: with a sparse list (0,2,4) the latter repeats AN2.
             let used = self.adc_scan_channel();
-            self.adc_scan_next = (used + 1) % 9;
+            self.adc_scan_next = (used + 1) % 16;
         }
         // ALTS: this sequence used its MUX; the next one uses the other.
         if self.ad1con2 & AD1CON2_ALTS != 0 {
@@ -5171,7 +5196,9 @@ impl Cpu for Pic24 {
             self.acc_a = s.acc_a;
             self.acc_b = s.acc_b;
             self.port_masks = s.port_masks;
-            self.adc_channels = Self::adc_channels_from_port_masks(s.port_masks);
+            self.adc_channels = self
+                .adc_channel_map
+                .unwrap_or_else(|| Self::adc_channels_from_port_masks(s.port_masks));
             self.tris = s.tris;
             self.lat = s.lat;
             self.odc = s.odc;
@@ -7972,6 +7999,37 @@ mod tests {
         cpu.set_adc_analog(6, 0xABC);
         assert_eq!(cpu.adc_read_channel(6), 0, "AN6 is not bonded out");
         assert_eq!(cpu.adc_read_channel(4), 0x2AA, "AN4 keeps its code");
+    }
+
+    #[test]
+    fn adc_descriptor_channels_replace_the_dspic_layout() {
+        // PIC24F16KA102 (DS39927C Table 1-2): AN0-AN5 and AN10-AN12.
+        let mut cpu = adc_cpu(0, false);
+        cpu.set_adc_channels(0x1C3F);
+        // The descriptor map survives a later port-mask update.
+        cpu.set_port_masks([0x00FF, 0xFFFF, 0x0000]);
+        assert!(cpu.adc_channel_present(12));
+        assert!(!cpu.adc_channel_present(6), "AN6-AN9 do not exist");
+        assert!(!cpu.adc_channel_present(9));
+        write_sfr(&mut cpu, SFR_AD1PCFGL, 0xFFFF);
+        assert_eq!(cpu.ad1pcfgl, 0x1C3F, "PCFG12:10 and PCFG5:0 only");
+        write_sfr(&mut cpu, SFR_AD1CSSL, 0xFFFF);
+        assert_eq!(cpu.ad1cssl, 0x1C3F);
+        write_sfr(&mut cpu, SFR_AD1PCFGL, !(1u16 << 12));
+        cpu.set_adc_analog(12, 0x155);
+        assert_eq!(cpu.adc_read_channel(12), 0x155);
+        // Scan wraps past AN8: 10, 11, 12, then back to 0.
+        cpu.ad1cssl = (1 << 0) | (1 << 10) | (1 << 12);
+        cpu.adc_scan_next = 11;
+        assert_eq!(cpu.adc_scan_channel(), 12);
+        cpu.adc_scan_next = 13;
+        assert_eq!(cpu.adc_scan_channel(), 0);
+        // The dsPIC default keeps its AN0-AN8 register masks.
+        let mut dspic = adc_cpu(0, false);
+        dspic.set_port_masks([0x001F, 0xFFFF, 0x0000]);
+        write_sfr(&mut dspic, SFR_AD1PCFGL, 0xFFFF);
+        assert_eq!(dspic.ad1pcfgl, 0x01FF);
+        assert!(!dspic.adc_channel_present(12));
     }
 
     #[test]
