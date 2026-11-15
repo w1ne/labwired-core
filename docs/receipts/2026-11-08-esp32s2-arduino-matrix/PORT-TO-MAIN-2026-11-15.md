@@ -30,3 +30,22 @@ L3 I2C INA219, L4 SPI MAX31855, L5 ADC fixed mid-scale, L6 LEDC 1 kHz on
 GPIO2, L8 TWAI self-RX. Controls: L5 ADC follows the applied voltage on
 ADC1_CH0; erased partition table never reaches `setup()`; no INA219 gives a
 NACK; no MAX31855 reads 0xffffffff.
+
+## Arduino matrix row on `main`
+
+`run_matrix.py --boards esp32s2` with the port branch's CLI, all nine stock
+sketches compiled fresh by PlatformIO `espressif32` 8.0.0
+([log](main-port-matrix-esp32s2-2026-11-15.log),
+[scoreboard](main-port-scoreboard-2026-11-15.md),
+[results, gzip](main-port-results-2026-11-15.json.gz)):
+
+**9 pass / 0 skip / 0 fail.**
+
+| cell | pad / oracle measurement |
+|---|---|
+| L2 blink | 96 edges on the GPIO18 pad (WS2812 frames), 2 RMT TX_STARTs; oracle needs ≥ 48 edges and ≥ 1 TX_START |
+| L6 PWM | GPIO2 pad (`LEDC_LS_CH6`): period 240,000 cycles = 1.000 kHz at 240 MHz, high 120,000 cycles = 50.0 % duty, 58 edges |
+
+The other cells pass on their UART markers, which the sketches print only
+after exact value checks (L3 INA219 registers, L4 MAX31855 frame, L5 code
+2048, L8 TWAI ID 0x123 / data 0xA5).
