@@ -7064,3 +7064,126 @@ board_io: []
     assert_eq!(motor.steps(), 1);
     assert!(!motor.is_enabled());
 }
+
+/// An observer on an STM32 pad that a timer drives in alternate-function mode
+/// must see the timer's own edges: no GPIO store happens, so the output-latch
+/// path never fires. The edges must carry the PWM period and duty, and a pad
+/// switched back to plain GPIO must stop forwarding the (still running) wire.
+#[test]
+fn stm32_af_pad_observer_sees_timer_pwm_edges_with_period_and_duty() {
+    use crate::peripherals::kit::AttachCtx;
+    use crate::system::cortex_m::configure_cortex_m;
+    use crate::{DebugControl, Machine};
+    use std::sync::Mutex;
+
+    #[derive(Debug, Default)]
+    struct Recorder(Mutex<Vec<(u8, bool, u64)>>);
+    impl crate::peripherals::device::GpioObserver for Recorder {
+        fn on_pin_change(&self, pin: u8, _from: bool, to: bool, cycle: u64) {
+            self.0.lock().unwrap().push((pin, to, cycle));
+        }
+    }
+
+    let chip: ChipDescriptor = serde_yaml::from_str(
+        r#"
+name: stm32f1-af-observer
+arch: arm
+core: cortex-m3
+flash: {base: 0x08000000, size: "64KB"}
+ram: {base: 0x20000000, size: "20KB"}
+peripherals:
+  - id: gpioa
+    type: gpio
+    base_address: 0x40010800
+    size: "1KB"
+    config: {profile: stm32f1}
+  - id: tim2
+    type: timer
+    base_address: 0x40000000
+    size: "1KB"
+"#,
+    )
+    .unwrap();
+    let mut bus = SystemBus::from_config(
+        &chip,
+        &SystemManifest::from_yaml("name: m\nchip: unused\n").unwrap(),
+    )
+    .unwrap();
+    // Any declaration will do: the test drives `install_gpio_observer` itself.
+    let manifest: SystemManifest = serde_yaml::from_str(
+        r#"
+name: probe
+chip: unused
+external_devices:
+  - {id: probe, type: probe, connection: gpio}
+"#,
+    )
+    .unwrap();
+    let recorder = std::sync::Arc::new(Recorder::default());
+    {
+        let mut ctx = AttachCtx::new(&mut bus, &manifest.external_devices[0]);
+        assert_eq!(ctx.parse_gpio_pin("PA0"), Some(0));
+        assert!(ctx.install_gpio_observer(recorder.clone()));
+    }
+    let spin_pc = 0x0800_0040;
+    bus.write_u16(spin_pc, 0xe7fe).unwrap(); // b .
+    let (mut cpu, _) = configure_cortex_m(&mut bus);
+    cpu.pc = spin_pc as u32;
+    cpu.sp = 0x2000_5000;
+    let mut machine = Machine::new(cpu, bus);
+    machine.config.peripheral_tick_interval = 1;
+    machine.bus.config.peripheral_tick_interval = 1;
+
+    let gpioa = 0x4001_0800;
+    machine.bus.write_u32(gpioa, 0x4444_444b).unwrap(); // PA0: AF push-pull 2 MHz
+    machine.bus.write_u32(0x4000_0028, 0).unwrap(); // PSC
+    machine.bus.write_u32(0x4000_002c, 99).unwrap(); // ARR: period 100 ticks
+    machine.bus.write_u32(0x4000_0034, 25).unwrap(); // CCR1: 25 % duty
+    machine.bus.write_u32(0x4000_0018, 0x60).unwrap(); // CH1 PWM mode 1
+    machine.bus.write_u32(0x4000_0020, 0x1).unwrap(); // CC1E
+    machine.bus.write_u32(0x4000_0000, 1).unwrap(); // CEN
+    for _ in 0..1000 {
+        machine.run(Some(1)).unwrap();
+    }
+
+    let edges: Vec<(bool, u64)> = recorder
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|&(pin, to, cycle)| {
+            assert_eq!(pin, 0, "PA0 is pad id 0");
+            (to, cycle)
+        })
+        .collect();
+    let rising: Vec<u64> = edges.iter().filter(|e| e.0).map(|e| e.1).collect();
+    let falling: Vec<u64> = edges.iter().filter(|e| !e.0).map(|e| e.1).collect();
+    assert!(
+        rising.len() >= 8 && falling.len() >= 8,
+        "ten PWM periods must give at least eight of each edge: {edges:?}"
+    );
+    for pair in rising.windows(2) {
+        assert_eq!(pair[1] - pair[0], 100, "period: {edges:?}");
+    }
+    let first_rise = rising
+        .iter()
+        .copied()
+        .find(|r| falling.iter().any(|f| f > r));
+    let rise = first_rise.unwrap();
+    let fall = falling.iter().copied().find(|f| *f > rise).unwrap();
+    assert_eq!(fall - rise, 25, "duty: {edges:?}");
+
+    // The pad goes back to plain GPIO input: the timer wire keeps toggling but
+    // is no longer on the pad, so the observer must hear nothing more.
+    let before = recorder.0.lock().unwrap().len();
+    machine.bus.write_u32(gpioa, 0x4444_4444).unwrap();
+    let after_mode_change = recorder.0.lock().unwrap().len();
+    for _ in 0..500 {
+        machine.run(Some(1)).unwrap();
+    }
+    assert_eq!(
+        recorder.0.lock().unwrap().len(),
+        after_mode_change,
+        "a pad released from AF must not forward the timer wire (had {before})"
+    );
+}
