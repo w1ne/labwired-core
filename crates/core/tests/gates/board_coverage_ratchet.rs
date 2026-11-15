@@ -887,6 +887,11 @@ fn every_shipped_descriptor_is_ratcheted() {
         // GPIO A/C/D, and polled USART1 TX only (no PFIC, ADC, I2C, SPI, or
         // timers). Promote when the catalog board and a differential exist.
         "ch32v003f4p6",
+        // CH32V005F6P6: RV32EmC descriptor with the CH32V003 RCC/GPIO layout
+        // and polled USART1 TX (no PFIC, timers, ADC, OPA, I2C, SPI or DMA).
+        // Booted by committed ELFs. No catalog board, no silicon oracle, no
+        // differential.
+        "ch32v005f6p6",
         // CH32V006K8U6: RV32EmC descriptor with the CH32V003 RCC/GPIO layout
         // plus GPIOB, and polled USART1 TX (no PFIC, timers, ADC, OPA, I2C,
         // SPI or DMA). Booted by committed ELFs. No catalog board, no silicon
