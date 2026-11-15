@@ -213,7 +213,7 @@ fn check_timer() -> Result<(), &'static str> {
 // the register holds the CPU interrupt slot (bits [4:0]). Use a real source
 // row: I2C_EXT0 = ETS_I2C_EXT0_INTR_SOURCE = 42. This proves the matrix
 // wiring (slot binding round-trips); delivery is covered by
-// `crates/core/tests/intmatrix_alarm.rs` (SYSTIMER alarm → intmatrix → CPU
+// `crates/core/tests/esp/intmatrix_alarm.rs` (SYSTIMER alarm → intmatrix → CPU
 // vector). The binding stays inert: every check here polls INT_RAW with
 // INT_ENA = 0, so no source ever asserts.
 fn check_irq() -> Result<(), &'static str> {

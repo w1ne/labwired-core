@@ -1,6 +1,6 @@
 // Arduino Mega 2560 I/O smoke: the pins, ADC channels, timer and USART a
 // typical sketch uses on the Mega, as exercised by
-// crates/core/tests/avr_mega2560_io.rs.
+// crates/core/tests/avr/avr_mega2560_io.rs.
 //
 // Every 100 ms (millis(), Timer0) one of 12 LEDs is lit, in the order
 // D3 D4 D5 A2 A1 A0 D13 D12 D8 D7 D6 D2 (ports E, G, F, B, H), and one line goes

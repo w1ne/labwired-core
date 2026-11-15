@@ -225,6 +225,7 @@ mod u575_fdcan_tests {
                     serde_yaml::Value::String("fdcan1".to_string()),
                 )]),
             }],
+            cosim_models: Vec::new(),
             rf: None,
         };
 

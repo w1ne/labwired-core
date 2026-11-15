@@ -32,7 +32,7 @@ a hidden gap.
    name or a wished-for test is not a behavior gate. (Three chips —
    stm32f401cdu6, stm32f411ceu6, stm32h735 — were carrying exactly such strings
    and have been demoted.)
-5. Re-baseline: `UPDATE_CONFORMANCE_BASELINE=1 cargo test -p labwired-core --test chip_conformance`.
+5. Re-baseline: `UPDATE_CONFORMANCE_BASELINE=1 cargo test -p labwired-core --test gates chip_conformance::`.
 
 Transports: `openocd-esp32` (ESP32 USB-JTAG) implemented; ST-Link SWD / CMSIS-DAP
 slot in as new branches in `hw_conform.sh`. The HIL runner (continuous nightly)

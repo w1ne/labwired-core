@@ -1,0 +1,34 @@
+id: stm32wb55
+doc: docs/boards/stm32wb55.md
+chip: configs/chips/stm32wb55.yaml
+tier: sim-validated
+note: "Dual-core STM32WB55 (Cortex-M4 app core + Cortex-M0+ CPU2). Boots UNMODIFIED upstream Zephyr hello_world end to end via firmware_survival::stm32wb55_zephyr, exercising the HSEM inter-core lock (granted to CPU1) and the RCC BDCR LSE path. No WB55 silicon diff — no bench part."
+offline_tests:
+  - "firmware_survival::stm32wb55_zephyr"
+models:
+  - crates/core/src/peripherals/esp_ledc_wave.rs
+  - crates/core/src/cpu/cortex_m.rs
+  - crates/core/src/decoder/arm.rs
+  - configs/chips/stm32wb55.yaml
+  # 2026-09-21, model_paths_drift_gate: models this board REGISTERS that
+  # its list omitted, so they were invisible to the drift digest. This
+  # board records no silicon capture, so there is no "silicon-verified"
+  # claim for the corrected digest to invalidate — no ack is implied.
+  - crates/core/src/peripherals/adc.rs
+  - crates/core/src/peripherals/crc.rs
+  - crates/core/src/peripherals/dbgmcu.rs
+  - crates/core/src/peripherals/dma.rs
+  - crates/core/src/peripherals/flash.rs
+  - crates/core/src/peripherals/gpio.rs
+  - crates/core/src/peripherals/hsem.rs
+  - crates/core/src/peripherals/i2c.rs
+  - crates/core/src/peripherals/iwdg.rs
+  - crates/core/src/peripherals/pwr.rs
+  - crates/core/src/peripherals/rcc.rs
+  - crates/core/src/peripherals/rtc.rs
+  - crates/core/src/peripherals/spi.rs
+  - crates/core/src/peripherals/stub.rs
+  - crates/core/src/peripherals/systick.rs
+  - crates/core/src/peripherals/timer.rs
+  - crates/core/src/peripherals/timer_output.rs
+  - crates/core/src/peripherals/uart.rs

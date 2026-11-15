@@ -1,0 +1,36 @@
+# Realtime-factor workload system: Uno + LCD1602 (I2C 0x27) + 4x4 keypad + DC motor on D11.
+name: "rtf-uno-feeder"
+chip: "../../../../configs/chips/atmega328p.yaml"
+external_devices:
+  - id: "DS1"
+    type: "lcd1602"
+    connection: "i2c"
+    route: { sda: "A4", scl: "A5" }
+    config:
+      i2c_address: 0x27
+  - id: "KP1"
+    type: "keypad"
+    connection: "gpio"
+    config:
+      row_pins: ["PB1", "PB0", "PD7", "PD6"]
+      col_pins: ["PD5", "PD4", "PD3", "PD2"]
+  - id: "M1"
+    type: "dc-motor"
+    connection: "gpio"
+    config:
+      pwm_pin: "PB3"
+      direction_pin: "3V3"
+      brake_pin: "GND"
+      enable_pin: "3V3"
+      simulation_clock_hz: 16000000
+      resistance_ohm: 1.2
+      inductance_h: 0.002
+      torque_constant_nm_per_a: 0.08
+      back_emf_constant_v_per_rad_s: 0.08
+      rotor_inertia_kg_m2: 0.00004
+      viscous_friction_nm_per_rad_s: 0.00001
+      coulomb_friction_nm: 0.006
+      supply_voltage_v: 12
+      load_torque_nm: 0
+      encoder_cpr: 1024
+board_io: []

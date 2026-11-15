@@ -667,10 +667,18 @@ impl<C: Cpu> Machine<C> {
         // ESP32 rev3 BROM `_ResetVector` is fixed at `0x4000_0400`; SP is
         // re-seeded to the top of DRAM the BROM uses (`0x3FFE_0000`),
         // matching the smoke-test cold-boot setup.
-        if self.drain_rtc_cntl_reset_request() {
+        let (rtc_sw_reset, rtc_deep_sleep_wake) = self.drain_rtc_cntl_requests();
+        if rtc_sw_reset {
             self.cpu.set_pc(0x4000_0400);
             self.cpu.set_sp(0x3FFE_0000);
             tracing::debug!("RTC_CNTL SW_SYS_RST: CPU re-pointed at reset vector 0x40000400");
+        }
+
+        // RTC_CNTL deep-sleep wake-up (STATE0.SLEEP_EN with DG_WRAP_PD_EN and
+        // the RTC timer armed). Same clean-boundary contract as SW_SYS_RST:
+        // the store that started the sleep never returns on silicon.
+        if rtc_deep_sleep_wake {
+            self.reboot_esp32_from_deep_sleep()?;
         }
 
         // Cortex-M SCB system reset (AIRCR.SYSRESETREQ with the VECTKEY).

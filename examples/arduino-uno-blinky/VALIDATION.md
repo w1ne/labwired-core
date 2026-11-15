@@ -37,7 +37,7 @@ Pass criteria: exit `0`, `PASS 1/1 checks`, UART contains `uno-ok`.
 cargo run -q -p labwired-cli -- test \
   --script examples/arduino-uno-io/io-smoke.yaml \
   --no-uart-stdout
-cargo test -p labwired-core --test avr_uno_io --test avr_uno_machine_run
+cargo test -p labwired-core --test avr -- avr_uno_io:: avr_uno_machine_run::
 ```
 
 Pass criteria: the smoke prints `D2=1 A0=337` (button released, knob centred);

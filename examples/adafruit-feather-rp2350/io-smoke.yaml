@@ -1,0 +1,13 @@
+# Adafruit Feather RP2350: blink onboard red D13/GPIO7 and capture UART0.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-adafruit-feather-rp2350-smoke"
+  system: "../../configs/systems/adafruit-feather-rp2350.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "FEATHER_RP2350_GPIO7_UART_OK"
+  - gpio_edges:
+      pin: "sio:7"
+      min_edges: 2
+  - expected_stop_reason: max_steps

@@ -447,9 +447,9 @@ pub fn inspect_with_schema<P: Peripheral + ?Sized>(
 /// * a **controller**, from
 ///   [`Peripheral::for_each_attached_device`](crate::Peripheral::for_each_attached_device),
 ///   for anything on a transport with addressing (I²C, SPI). Such a device is
-///   identified by WHERE it answers, so `declared_id` is `None` and the
-///   manifest name is joined on by address afterwards; `bus` is `None` because
-///   the controller that yielded the ref is itself the bus.
+///   identified by its stamped manifest id when available, otherwise by its
+///   address or chip-select. An id distinguishes SPI cascade modules sharing
+///   one LOAD pin. `bus` is `None` because the controller is itself the bus.
 /// * the **bus**, from
 ///   [`SystemBus::for_each_attached_device`](crate::bus::SystemBus::for_each_attached_device),
 ///   for a device that binds to pins rather than to an address — an HC-SR04 on
@@ -470,10 +470,9 @@ pub struct AttachedDeviceRef<'a> {
     /// Downstream channel of an I²C bus switch, or the ADC channel an analog
     /// source drives — in both cases "which channel of `bus` this device is on".
     pub channel: Option<u8>,
-    /// The `external_devices:` id this model was stamped with at attach, for
-    /// devices whose identity is their name rather than their address. `None`
-    /// for I²C/SPI devices: their identity is joined on by address, which is
-    /// what the controller actually knows.
+    /// The `external_devices:` id this model was stamped with at attach.
+    /// When absent, controller-owned devices are joined by address or CS.
+    /// SPI cascade modules sharing a CS need the stamp to remain distinct.
     pub declared_id: Option<&'a str>,
     /// This model's own id when ONE declaration built SEVERAL models — an
     /// H-bridge board's two motor channels (`<id>-a`, `<id>-b`). Such a ref
@@ -987,6 +986,7 @@ pub fn i2c_artifacts(
 
 /// Visit one SPI device. The SPI counterpart of [`visit_i2c_device`]; SPI has
 /// no bus-switch analogue in this engine, so there is nothing to unfold.
+/// Prefer its stamped id because cascaded modules share the same CS/LOAD.
 pub fn visit_spi_device(
     dev: &dyn crate::peripherals::spi::SpiDevice,
     f: &mut dyn FnMut(AttachedDeviceRef<'_>),
@@ -998,7 +998,7 @@ pub fn visit_spi_device(
         cs_pin: Some(dev.cs_pin()),
         mux_address: None,
         channel: None,
-        declared_id: None,
+        declared_id: dev.component_id(),
         instance_id: None,
         bus: None,
         evidence: Some(&evidence),

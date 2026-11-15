@@ -1,0 +1,23 @@
+{
+  "id": "nrf54l15",
+  "in_boards": true,
+  "uart": {
+    "state": "proven",
+    "file": "crates/core/tests/gates/firmware_survival.rs",
+    "test": "test_nrf54l15_smoke_survival",
+    "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'nRF54L15 boot OK' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
+    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test gates firmware_survival::"
+  },
+  "spi": {
+    "state": "none",
+    "gap": "no SPI/SPIM test, example or manifest references nrf54l15 SPI. configs/systems/nrf54l15dk.yaml, smart-ring.yaml and examples/nrf54l15-dk wire GPIO and TWIM devices only."
+  },
+  "i2c": {
+    "state": "proven",
+    "file": "crates/core/tests/nrf/nrf54l15_smart_ring_probe.rs",
+    "test": "smart_ring_firmware_reads_all_four_sensor_ids_over_i2c",
+    "signal": "the committed nrf54l15-smart-ring.elf does WHO_AM_I reads of four device models on TWIM21 and the test asserts each returned that model's REAL datasheet identity (BMI270 0x24, MAX30102 0x15, TMP117 0x0117, DRV2605 0xE0), that nothing NACKed, and that the firmware's 0xEE RX-buffer poison sentinel did not survive - a stub or a no-op cannot pass",
+    "lane": "core-ci / core-full (nightly 02:30 UTC): cargo test --workspace",
+    "note": "the strongest single bus proof in the repo. Fixture absence is a hard assert!, not a skip. It runs nightly only: core-integrity's push gate runs --lib plus four named --test targets, and this is not one of them."
+  }
+}

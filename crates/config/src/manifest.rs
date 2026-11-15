@@ -223,6 +223,9 @@ pub struct EnvironmentManifest {
     pub nodes: Vec<NodeConfig>,
     #[serde(default)]
     pub interconnects: Vec<InterconnectConfig>,
+    /// One world-owned analog circuit. Hardware routes are instance-qualified.
+    #[serde(default)]
+    pub cosim_models: Vec<CosimModelConfig>,
     /// Shared RF medium parameters (optional).
     #[serde(default)]
     pub rf: Option<EnvironmentRfConfig>,
@@ -249,8 +252,76 @@ impl EnvironmentManifest {
             name: name.into(),
             nodes,
             interconnects,
+            cosim_models: Vec::new(),
             rf: None,
         }
+    }
+
+    /// The first world circuit contract is deliberately bounded: one in-core,
+    /// inline analog deck, with every hardware endpoint naming its node.
+    fn validate_world_cosim(&self, node_ids: &HashSet<&String>) -> Result<()> {
+        if self.cosim_models.is_empty() {
+            return Ok(());
+        }
+        if self.cosim_models.len() != 1 {
+            anyhow::bail!("world cosim_models supports exactly one shared analog model");
+        }
+        let model = &self.cosim_models[0];
+        if model.adapter != CosimAdapter::Analog {
+            anyhow::bail!("world cosim_models supports only adapter: analog");
+        }
+        if model.id.trim().is_empty() || model.step_ns == 0 || model.step_ns > u64::MAX / 1_000 {
+            anyhow::bail!(
+                "world analog model requires an id and a positive, representable step_ns"
+            );
+        }
+        if model.config.contains_key("netlist")
+            || model
+                .config
+                .get("netlist_text")
+                .and_then(|v| v.as_str())
+                .is_none_or(|v| v.trim().is_empty())
+        {
+            anyhow::bail!("world analog model requires inline config.netlist_text; file-backed decks are unsupported");
+        }
+        if !model.config.contains_key("probes") {
+            anyhow::bail!("world analog model requires config.probes");
+        }
+        for node in &self.nodes {
+            if node.id.len() > 32
+                || !node
+                    .id
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+            {
+                anyhow::bail!("world analog node id '{}' must use 1-32 ASCII letters, digits, underscores or hyphens", node.id);
+            }
+        }
+        let mut sinks = HashSet::new();
+        for (output, routes) in [(false, &model.inputs), (true, &model.outputs)] {
+            for route in routes.values() {
+                if !output && route.strip_prefix("ui.").is_some_and(|v| !v.is_empty()) {
+                    continue;
+                }
+                let Some((node, local)) =
+                    route.strip_prefix("node.").and_then(|s| s.split_once('.'))
+                else {
+                    anyhow::bail!(
+                        "world analog route '{route}' must name node.<id>.<board-or-adc-route>"
+                    );
+                };
+                if !node_ids.iter().any(|id| id.as_str() == node) {
+                    anyhow::bail!("world analog route '{route}' names unknown node '{node}'");
+                }
+                if !(local.starts_with("board.") || local.starts_with("adc.")) {
+                    anyhow::bail!("world analog route '{route}' must name a board or ADC endpoint");
+                }
+                if output && !sinks.insert(route) {
+                    anyhow::bail!("world analog route '{route}' has multiple output writers");
+                }
+            }
+        }
+        Ok(())
     }
 
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
@@ -315,6 +386,8 @@ impl EnvironmentManifest {
                 }
             }
         }
+
+        self.validate_world_cosim(&node_ids)?;
 
         for (index, interconnect) in self.interconnects.iter().enumerate() {
             validate_environment_interconnect_config(index, interconnect)?;

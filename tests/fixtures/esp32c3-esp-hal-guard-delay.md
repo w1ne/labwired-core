@@ -1,7 +1,7 @@
 # ESP32-C3 esp-hal stack-guard + Delay fixture
 
 `esp32c3-esp-hal-guard-delay.elf` is a bare esp-hal 1.1 application for the
-ESP32-C3, used by `crates/core/tests/esp32c3_trigger_systimer.rs` on the
+ESP32-C3, used by `crates/core/tests/esp/esp32c3_trigger_systimer.rs` on the
 bare-ELF fast boot (with the vendored mask ROM injected).
 
 It is the `examples/esp32c3-hello-world` crate (same `Cargo.toml` /

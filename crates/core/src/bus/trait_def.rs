@@ -180,6 +180,18 @@ pub trait Bus {
         0
     }
 
+    /// Sync parking-SPI chip-selects from live GPIO (active-low).
+    /// Return true if a CS/LOAD rising edge was observed.
+    /// AVR calls this after every PORT mirror write, including hardware SPI.
+    fn sync_parking_spi_cs(&mut self) -> bool {
+        false
+    }
+
+    /// True if a parking device accepts CLK, including LOAD-only shift registers.
+    fn parking_spi_accepts_clock(&self) -> bool {
+        false
+    }
+
     /// Is an instruction fetch at `pc` permitted by a memory-protection unit
     /// the bus models? Called by the core only when its 256-byte fetch window
     /// does not already cover `pc`, i.e. once per window refill. That is exact

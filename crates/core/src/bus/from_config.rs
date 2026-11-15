@@ -198,6 +198,7 @@ impl SystemBus {
     pub fn attach_chip_io_levels(&mut self, chip: &ChipDescriptor) {
         self.io_voltage_v = chip.io_voltage_v;
         self.gpio_input_thresholds = chip.gpio_input_thresholds;
+        self.reset_input = crate::reset_input::ResetInputState::new(chip.reset_input.clone());
     }
 
     pub fn from_config(chip: &ChipDescriptor, manifest: &SystemManifest) -> anyhow::Result<Self> {
@@ -481,6 +482,7 @@ impl SystemBus {
             cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
             freerunning_timer_poll_mmio: Cell::new(0),
+            timer_poll_carry: Cell::new(0),
             side_effecting_mmio: Cell::new(0),
             batch_stop: Default::default(),
             memory_reads: Cell::new(0),
@@ -494,8 +496,10 @@ impl SystemBus {
             resident_tick_interval_override: None,
             gpio_devices: Vec::new(),
             device_pin_pads: Vec::new(),
+            device_open_drain_nets: Default::default(),
             observed: Vec::new(),
             motors: Vec::new(),
+            live_numeric: None,
             ina219_senses: Vec::new(),
             motor_cycle_anchor: 0,
             analog_inputs: Vec::new(),
@@ -526,6 +530,7 @@ impl SystemBus {
             analog_pin_map: std::collections::HashMap::new(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: crate::reset_input::ResetInputState::default(),
             supply: crate::power::SupplySupervisor::default(),
             supply_domains: Default::default(),
         };
@@ -618,6 +623,10 @@ impl SystemBus {
                 .or_else(|| crate::peripherals::esp32s3::factory::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32c3::factory::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32c6::factory::try_build(&canonical_type, p_cfg))
+                .or_else(|| crate::peripherals::esp32c5::try_build(&canonical_type, p_cfg))
+                .or_else(|| crate::peripherals::esp32c61::try_build(&canonical_type, p_cfg))
+                .or_else(|| crate::peripherals::esp32h2::try_build(&canonical_type, p_cfg))
+                .or_else(|| crate::peripherals::esp32p4::try_build(&canonical_type, p_cfg))
                 // ESP32-classic was missing from this chain. Its factory has
                 // always existed with all 14 `esp32_*` types, but only the
                 // Xtensa builder called it, so a plain `from_config` bus --
@@ -1661,7 +1670,22 @@ impl SystemBus {
                 return true;
             }
         }
-        false
+        // STM32 has one GPIO peripheral per port. STEP/DIR observers watch
+        // the actual output latch transitions (including atomic BSRR writes).
+        let mut installed = false;
+        for port in b'A'..=b'P' {
+            let name = format!("gpio{}", (port as char).to_ascii_lowercase());
+            let Some(idx) = bus.find_peripheral_index_by_name(&name) else {
+                continue;
+            };
+            let clock = bus.cycle_clock.clone();
+            installed |= bus.peripherals[idx].dev.register_stm32_gpio_observer(
+                port - b'A',
+                observer.clone(),
+                clock,
+            );
+        }
+        installed
     }
 
     #[allow(dead_code)] // residual GPIO helpers kept for CAN/tester arms that may re-use them

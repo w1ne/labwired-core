@@ -59,6 +59,7 @@ while IFS=$'\t' read -r id test features env_json; do
   feat_args=()
   [ -n "$features" ] && feat_args=(--features "$features")
 
+  # test-target-refs: dynamic (the board table names hw-oracle targets)
   # The oracle _hw/_diff tests are #[ignore]; --test-threads=1 serialises the
   # single physical board.
   if cargo test --manifest-path "$root/Cargo.toml" \

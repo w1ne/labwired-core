@@ -1,0 +1,102 @@
+# LabWired board validation manifest — the source of truth for recorded
+# validation evidence, the source it covers, and its date.
+#
+# LAYOUT: one file per board, validation/boards/<id>.yaml, holding exactly that
+#   board's entry as a top-level mapping (`id:` must equal the file name).
+#   This file only carries the notes below; adding or changing a board edits
+#   only that board's file. The loader (validation/registry_dir.py) refuses a
+#   mismatched name, a duplicate id, an empty/unparsable file or a stray file;
+#   `python3 validation/registry_dir.py --check` runs just that check.
+#   Moving a pre-split entry over: scripts/registry_split.py.
+#
+# WHY THIS FILE EXISTS
+#   scripts/generate_validation_status.py renders docs/boards/VALIDATION_STATUS.md.
+#   CI enforces a current generated report, complete source watch lists, valid
+#   capture metadata, and full git history. Source-only differences from saved
+#   captures are informational; no human source-review ACK or renewal is needed
+#   to commit, push, or pass CI.
+#
+# CAPTURE EVIDENCE
+#   CI runners have no hardware. Their offline oracle suites compare simulations
+#   with silicon values saved in test sources; they do not perform a new capture.
+#   A silicon record describes an actual physical live diff and its result.
+#   Only after a new live run (board plugged in,
+#   `--features hw-oracle-* -- --ignored`) update silicon.last_capture, result,
+#   and silicon.models_digest to the source used for that capture.
+#
+# SOURCE/CAPTURE STATUS (informational)
+#   `models` lists paths whose content can invalidate a captured source match.
+#   The generator hashes watched paths and bytes and compares that digest with
+#   `silicon.models_digest`, recorded with the physical capture. A matching
+#   digest establishes only that source match; the recorded result and tier
+#   still define the scope of the historical hardware evidence.
+#
+#   A changed digest is reported as changed source. A capture without a saved
+#   digest is reported as source match unverified. Neither blocks source
+#   integration, and neither supports a claim of current silicon validation.
+#   A new physical capture is needed before making that current hardware claim.
+#   Simulation tests and their automated gates remain separate evidence.
+#
+#   Commit dates cannot establish a match: rebase/squash can re-date identical
+#   content, while same-day or uncommitted edits can change content immediately.
+#   The generated document is calendar-stable.
+#
+#   Legacy `drift_ack`, `drift_ack_digest` and `drift_ack_expires` fields and
+#   dated comments below remain historical source-review metadata. They are
+#   optional and have no effect on capture freshness or CI verdicts. No ACK
+#   expiry or source-review renewal gate remains. The legacy explicit
+#   `--write-ack-digests` flags only maintain that optional metadata; normal
+#   generation and CI never stamp ACKs or physical capture evidence.
+#
+#   Inspect the current and recorded digests with:
+#     python3 scripts/generate_validation_status.py --digests
+#   Check the report and source watches, with informational drift output:
+#     python3 scripts/generate_validation_status.py --check --drift
+#
+# DRIFT-WATCH COMPLETENESS (enforced)
+#   Source provenance is only as complete as its watch list. An INCOMPLETE `models`
+#   list fails silently — the board just reads "fresh" forever. That is exactly
+#   what happened to esp32c3: its tier is a reset-state oracle asserted against
+#   the declarative descriptors in configs/peripherals/esp32c3/, and not one of
+#   those 29 files was listed, so the only files its silicon claim rests on were
+#   invisible to the report. The generator audits this: every `path:` a board's
+#   chip yaml wires must be covered by that board's `models`, and every listed
+#   path must exist. Add the path, don't drop the reference.
+#
+# TIERS
+#   silicon-verified   — live register/behaviour diff vs real silicon (dated)
+#   silicon-smoke      — boot + one path (usually UART) byte-parity vs silicon
+#   sim-validated      — deep peripheral models + green sim/e2e tests, but no
+#                        silicon-diff oracle yet (model is real; HW diff is the gap)
+#   smoke-manual       — a manual runbook exists; no automated/silicon assertion
+#   structural         — thin/declarative model only (e.g. UART0 stub), no silicon
+
+# Banner comments that sat between entries in the old single file.
+# Each notes the entry that followed it; the entries now live one per file.
+#
+# --- before: nrf52840 ---
+# ── Fresh: re-verified on live silicon 2026-06-17 ────────────────────────────
+#
+# --- before: esp32 ---
+# ── Discovered by board_registry_consistency: these chips already had
+# configs/chips/*.yaml + SURVIVAL_CASES/TIER1_TARGETS coverage but no
+# manifest board entry. Added honestly at the tier the coverage actually
+# supports rather than deleting the registry entries.
+#
+# --- before: nano-33-iot ---
+# ── Maker-five smoke boards (#1124) ──────────────────────────────────────────
+# The five Playground-ready maker chips added with #1124. Each has a
+# UART/LED smoke survival case and a config-build test; none has an
+# executing-fidelity differential or a silicon capture. They are not in the
+# Playground's bundled-configs.ts catalog yet (registration is an open
+# superproject PR), so they are smoke-manual, not shipped.
+#
+# --- before: nucleo-g071rb ---
+# ── STM32G0 ──────────────────────────────────────────────────────────────────
+# First STM32G0 part. L1 smoke only: dedicated `stm32g0` RCC layout + G0
+# IOPENR/APBENR1 clock gates, USART2 (ST-LINK VCP) byte path, LD4/PA5. No
+# NUCLEO-G071RB has been probed over SWD, so there is no silicon capture and
+# no executing-fidelity differential — tier smoke-manual, not shipped.
+#
+# --- before: esp32-devkitc-32e-gpio-smoke ---
+# Narrow onboarding profiles retain explicit scope and independent core execution gates.

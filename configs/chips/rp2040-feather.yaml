@@ -1,0 +1,326 @@
+# LabWired - Adafruit Feather RP2040 Chip Descriptor
+name: "rp2040-feather"
+arch: "arm"
+core: "cortex-m0+"
+registers_count: 240
+# Feather RP2040 board default system clock, 133 MHz.
+cpu_hz: 133_000_000
+
+flash:
+  base: 0x10000000
+  # Feather RP2040 has 8 MiB of external QSPI NOR. Size is spelled in KB
+  # because `parse_size` reads MB as 10^6 rather than MiB.
+  size: "8192KB"
+ram:
+  base: 0x20000000
+  # 264KB contiguous: 4×64KB striped banks + the two 4KB scratch banks
+  # (SCRATCH_X @0x20040000, SCRATCH_Y @0x20041000) Zephyr uses for early stacks.
+  size: "264KB"
+# The RP2040 bootrom runs a 256-byte second-stage bootloader (boot2) from the
+# top of flash; the application vector table follows it at flash_base + 0x100.
+# LabWired does not execute boot2 (flash is directly mapped), so it relocates
+# the reset vector past the stage-2 blob using this offset.
+reset_vector_offset: 0x100
+# Mask ROM @ 0x00000000 — rom_func_lookup reads well-known table at 0x14/0x18.
+# In-tree minimal B0-compatible image (crates/core/roms/rp2040/bootrom.bin).
+memory_regions:
+  - name: "bootrom"
+    base: 0x00000000
+    size: "16KB"
+    image_env: "LABWIRED_RP2040_BOOTROM"
+# The RP2040 HAL drives register setup through atomic SET/CLR/XOR aliases.
+atomic_register_aliases: true
+# Bank-0 pads (datasheet §1.4). Label form matches the Pico pinout / playground emit (GP0..GP29).
+pins:
+  GP0: { gpio: sio, bit: 0 }
+  GP1: { gpio: sio, bit: 1 }
+  GP2: { gpio: sio, bit: 2 }
+  GP3: { gpio: sio, bit: 3 }
+  GP4: { gpio: sio, bit: 4 }
+  GP5: { gpio: sio, bit: 5 }
+  GP6: { gpio: sio, bit: 6 }
+  GP7: { gpio: sio, bit: 7 }
+  GP8: { gpio: sio, bit: 8 }
+  GP9: { gpio: sio, bit: 9 }
+  GP10: { gpio: sio, bit: 10 }
+  GP11: { gpio: sio, bit: 11 }
+  GP12: { gpio: sio, bit: 12 }
+  GP13: { gpio: sio, bit: 13 }
+  GP14: { gpio: sio, bit: 14 }
+  GP15: { gpio: sio, bit: 15 }
+  GP16: { gpio: sio, bit: 16 }
+  GP17: { gpio: sio, bit: 17 }
+  GP18: { gpio: sio, bit: 18 }
+  GP19: { gpio: sio, bit: 19 }
+  GP20: { gpio: sio, bit: 20 }
+  GP21: { gpio: sio, bit: 21 }
+  GP22: { gpio: sio, bit: 22 }
+  GP23: { gpio: sio, bit: 23 }
+  GP24: { gpio: sio, bit: 24 }
+  GP25: { gpio: sio, bit: 25 }
+  GP26: { gpio: sio, bit: 26 }
+  GP27: { gpio: sio, bit: 27 }
+  GP28: { gpio: sio, bit: 28 }
+  GP29: { gpio: sio, bit: 29 }
+peripherals:
+  # SYSINFO (datasheet §2.21). Read-only identity block; the only load-bearing
+  # register is CHIP_ID, which the pico-sdk USB errata-E5 workaround reads (from
+  # the USB ISR on bus reset) and asserts carries the Raspberry Pi manufacturer
+  # id — a zero here aborts USB enumeration inside the ISR.
+  - id: "sysinfo"
+    type: "declarative"
+    base_address: 0x40000000
+    size: "4KB"
+    config:
+      path: "../peripherals/rp2040/sysinfo.yaml"
+  # DMA controller (datasheet §2.5, base 0x50000000). Twelve channels; each a
+  # transfer engine with READ_ADDR / WRITE_ADDR / TRANS_COUNT / CTRL_TRIG and
+  # the four aliased register windows (AL1/AL2/AL3). Behavioural model — real
+  # memory-to-memory byte movement over the chip bus for TREQ_PERMANENT
+  # channels: address increment, TRANS_COUNT decrement, CHAIN_TO handoff, and
+  # INTS0/INTS1 completion IRQ aggregation onto DMA_IRQ_0 (NVIC 11) /
+  # DMA_IRQ_1 (NVIC 12). Paced (DREQ) transfers are a documented follow-up.
+  - id: "dma"
+    type: "rp2040_dma"
+    base_address: 0x50000000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2040/dma.yaml"
+  - id: "pio0"
+    type: "pio"
+    base_address: 0x50200000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2040/pio0.yaml"
+  # PIO1 (datasheet §3.7, PIO1_BASE): the second, identical PIO block.
+  # IO_BANK0 FUNCSEL 7 routes its pin outputs to the pads.
+  - id: "pio1"
+    type: "pio"
+    base_address: 0x50300000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2040/pio1.yaml"
+  # CLOCKS / RESETS / PSM / XOSC / PLL_SYS / PLL_USB as one block. Models the
+  # boot "ready" bits (RESET_DONE, XOSC STABLE, PLL LOCK, CLK_*_SELECTED) so
+  # Zephyr's clock bring-up completes; everything else is register storage.
+  # Window 0x40008000..0x40030000 stops short of UART0 (0x40034000).
+  - id: "clk_rst"
+    type: "rp2040_clkrst"
+    base_address: 0x40008000
+    size: "160KB"
+    config:
+      debug_schema: "../peripherals/rp2040/clocks.yaml"
+  - id: "uart0"
+    type: "uart"
+    base_address: 0x40034000
+    config:
+      debug_schema: "../peripherals/rp2040/uart0.yaml"
+      profile: "pl011"
+  # ROSC (ring oscillator): same model, separate window above UART0. Models
+  # ROSC.STATUS.STABLE so the ROSC start-up poll terminates.
+  - id: "rosc"
+    type: "rp2040_clkrst"
+    base_address: 0x40060000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2040/rosc.yaml"
+  # WATCHDOG + tick generator (datasheet §4.7). Behavioural model — TICK.CYCLES
+  # divides the reference clock into watchdog ticks (RUNNING needs a non-zero
+  # ratio, which is why the reset state reads 0x200), and the counter decrements
+  # TWICE per tick per errata RP2040-E1, so a LOAD is in half-microseconds. That
+  # quirk is why pico-sdk's watchdog_enable() multiplies milliseconds by 2000,
+  # and firmware that assumes 1 us must be wrong here too. An expiry latches
+  # REASON.TIMER and stops the dog rather than resetting the CPU (the same
+  # convention the Nordic WDT model uses); CTRL.TRIGGER latches REASON.FORCE.
+  # The block has no interrupt line on this silicon.
+  - id: "watchdog"
+    type: "rp2040_watchdog"
+    base_address: 0x40058000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2040/watchdog.yaml"
+    errata:
+      - id: "RP2040-E1"
+        summary: "Watchdog count is decremented twice per tick."
+        model_check: "crates/core/src/peripherals/rp2040/watchdog.rs::tests::counter_decrements_twice_per_tick"
+  # ADC + temperature sensor (datasheet §4.9). Behavioural model — a 12-bit SAR
+  # over five inputs (0..3 = GPIO26..29, 4 = the on-die sensor) with the 8-entry
+  # sample FIFO, the round-robin sequencer and DIV-paced free-running mode.
+  # Inputs 0..3 carry whatever a component/`set_input` drives onto them and 0
+  # otherwise (no external source is wired to the RP2040 ADC inputs); input 4 converts the
+  # datasheet transfer function T = 27 - (V - 0.706)/0.001721, so 27 C reads 876
+  # — derived, not a hardcoded constant. ADC_IRQ_FIFO (NVIC 22) is held while
+  # the FIFO is at or above FCS.THRESH; INTR is a level, not a latch.
+  - id: "adc"
+    type: "rp2040_adc"
+    base_address: 0x4004c000
+    size: "4KB"
+    irq: 22
+    config:
+      debug_schema: "../peripherals/rp2040/adc.yaml"
+  # RTC (datasheet §4.8). Behavioural model — a real calendar (year/month/day/
+  # dotw/hour/min/sec) clocked at one second per CLKDIV_M1+1 ticks, with the
+  # RP2040's own leap rule (year % 4, hence CTRL.FORCE_NOTLEAPYEAR) and the
+  # per-field alarm on RTC_IRQ (NVIC 25). It models the datasheet's read
+  # ordering: RTC_1 latches the date+time pair and RTC_0 returns the latch, so
+  # firmware that reads RTC_0 first gets a stale time here exactly as it does on
+  # silicon.
+  - id: "rtc"
+    type: "rp2040_rtc"
+    base_address: 0x4005c000
+    size: "4KB"
+    irq: 25
+    config:
+      debug_schema: "../peripherals/rp2040/rtc.yaml"
+  # NVIC — installed unconditionally for Cortex-M (see system/cortex_m.rs);
+  # declared here so the tier1 irq class is claimed rather than reading `na`.
+  # No `debug_schema`: an ARMv7-M/ARMv8-M core peripheral, absent from this
+  # vendor SVD (which starts at the PPB), so there is no base match to attach.
+  - id: "nvic"
+    type: "nvic"
+    base_address: 0xE000E100
+    size: "1KB"
+  # PWM: 8 independent slices (datasheet §4.5). Behavioural model — each slice
+  # counts on its own 8.4 fixed-point divided clock, wraps at TOP and latches
+  # its INTR bit; PWM_IRQ_WRAP (NVIC 4) is held while a masked wrap is pending.
+  # Phase-correct mode ramps up and back down with period 2*TOP.
+  - id: "pwm"
+    type: "rp2040_pwm"
+    base_address: 0x40050000
+    size: "4KB"
+    irq: 4
+    config:
+      debug_schema: "../peripherals/rp2040/pwm.yaml"
+  # TIMER: 64-bit free-running microsecond timer (datasheet §4.6). Behavioural
+  # model — the counter advances on every tick, sampled via TIMERAWL/TIMERAWH
+  # (and TIMELR/TIMEHR); PAUSE freezes it.
+  - id: "timer"
+    type: "rp2040_timer"
+    base_address: 0x40054000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2040/timer.yaml"
+  # SPI0: PL022 SSP (datasheet §4.4). Behavioural model — internal-loopback
+  # (SSPCR1.LBM) transfer round-trip through SSPDR with SSPSR FIFO flags.
+  - id: "spi0"
+    type: "rp2040_spi"
+    base_address: 0x4003c000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2040/spi0.yaml"
+  # I2C0: Synopsys DW_apb_i2c (datasheet §4.3). Behavioural master engine — a
+  # command to an unconnected target raises TX_ABRT with a 7-bit address NACK,
+  # the genuine no-slave bus response.
+  - id: "i2c0"
+    type: "rp2040_i2c"
+    base_address: 0x40044000
+    size: "4KB"
+    # RP2040 datasheet §2.3.2 — I2C0_IRQ = 23 (NVIC). Zephyr i2c_dw is
+    # interrupt-driven (TX_EMPTY / STOP_DET → device_sync_sem); without this
+    # the transfer times out with -EAGAIN.
+    irq: 23
+    config:
+      debug_schema: "../peripherals/rp2040/i2c0.yaml"
+  # I2C1: second Synopsys DW_apb_i2c instance (RP2040 datasheet §4.3).
+  # Feather RP2040's STEMMA QT connector uses this controller on GP2/GP3;
+  # exposing it here lets the same behavioral model serve both I2C instances.
+  - id: "i2c1"
+    type: "rp2040_i2c"
+    base_address: 0x40048000
+    size: "4KB"
+    irq: 24
+    config:
+      debug_schema: "../peripherals/rp2040/i2c1.yaml"
+  # Cortex-M0+ SysTick (SCS). Behavioural model: the ARMv7-M SysTick timer
+  # (edge-triggered — raises system exception 15 only on the count-down to
+  # zero, and only while ENABLE+TICKINT are set). The Arduino Mbed-OS core
+  # drives the RTX kernel tick off SysTick, so a storage stub left the RTOS
+  # without a scheduler tick and it faulted on the first mutex lock.
+  # No `debug_schema`: an ARMv7-M/ARMv8-M core peripheral, absent from this
+  # vendor SVD (which starts at the PPB), so there is no base match to attach.
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: "16B"
+  # Single-cycle IO (SIO): GPIO out/oe via direct + set/clr/xor registers
+  # (datasheet §2.3.1). Behavioural model — GPIO_IN reads back the driven
+  # level (GPIO_OUT & GPIO_OE), a real set-drive-readback round-trip. CPUID
+  # reads 0 (core 0). No atomic aliases on this block (it sits at 0xD0000000,
+  # outside the APB/AHB window).
+  # IO_BANK0: the pad function mux (datasheet §2.19.2). GPIOn_CTRL.FUNCSEL
+  # decides which peripheral drives each pad — without it the engine cannot
+  # answer "who is driving GP4?", so a bus clipped to a pad reads the SIO latch
+  # instead of the wire and a logic analyzer shows a flat line.
+  - id: "io_bank0"
+    type: "rp2040_io_bank0"
+    base_address: 0x40014000
+    size: "4KB"
+    # IO_IRQ_BANK0 (datasheet §2.3.2): the GPIO interrupt, PROC0_INTS != 0.
+    irq: 13
+    config:
+      debug_schema: "../peripherals/rp2040/io_bank0.yaml"
+  - id: "sio"
+    type: "rp2040_sio"
+    base_address: 0xD0000000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2040/sio.yaml"
+  # XIP_SSI: Synopsys DW_apb_ssi flash controller (datasheet §4.10). The
+  # second-stage bootloader (boot2) programs it to bring up the QSPI flash and
+  # switch to execute-in-place; the pico-sdk runtime re-runs a RAM copy of boot2
+  # (flash_enable_xip_via_boot2) during start-up. Behavioural model — a real SSI
+  # shift engine (DR0 clocks a frame each way, SR reports TFE/BUSY/RFNE) with a
+  # W25Q-style flash command responder so boot2's status polling and quad-enable
+  # sequence complete. The XIP window itself (0x10000000) is the directly-mapped
+  # flash image, so instruction fetch + .rodata execute-in-place transparently.
+  - id: "xip_ssi"
+    type: "rp2040_xip_ssi"
+    base_address: 0x18000000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2040/ssi.yaml"
+  # USB device controller (datasheet §4.1). One window spans both the 4KB DPRAM
+  # (0x50100000) and the register block (0x50110000); the atomic SET/CLR/XOR
+  # aliases resolve into it. Behavioural model with an attached simulated USB
+  # host: it enumerates the device (GET_DESCRIPTOR / SET_ADDRESS /
+  # SET_CONFIGURATION) then asserts CDC DTR (SET_CONTROL_LINE_STATE), which is
+  # what flips the Arduino Mbed-OS core's `_terminal_connected` so `Serial`
+  # (USB CDC) actually transmits — the sketch's bulk-IN bytes are captured off
+  # the CDC data endpoint. Raises USBCTRL_IRQ (NVIC 5).
+  - id: "usbctrl"
+    type: "rp2040_usb"
+    base_address: 0x50100000
+    size: "80KB"
+    config:
+      debug_schema: "../peripherals/rp2040/usb_dpram.yaml"
+  # TBMAN (Test Bench Manager, datasheet §2.20). The pico-sdk runtime probes
+  # TBMAN.PLATFORM in running_on_fpga()/running_on_asic() during clock bring-up.
+  # Storage stub: PLATFORM reads 0, so the FPGA bit (bit 1) is clear and the
+  # runtime takes the ASIC path — the correct behaviour for the simulated part.
+  # XIP_CTRL (datasheet 2.6.3) — the flash-cache control block, distinct from
+  # the SSI at 0x18000000. pico-sdk's runtime writes CTRL here during boot to
+  # enable the cache; an unmodelled block made that a bus write fault, which
+  # halted the sim before a single Arduino sketch line ran. Descriptor already
+  # existed in configs/peripherals/rp2040 and was simply never wired up.
+  - id: "xip_ctrl"
+    type: "declarative"
+    base_address: 0x14000000
+    size: "4KB"
+    config:
+      path: "../peripherals/rp2040/xip_ctrl.yaml"
+  # VREG_AND_CHIP_RESET (datasheet 2.10) — on-chip voltage regulator + reset
+  # reason. Declared 16KB, not 4KB, so the RP2040 atomic register aliases
+  # (+0x1000 XOR, +0x2000 SET, +0x3000 CLR) fall inside the window: the
+  # observed fault was a write to 0x40065000, i.e. the SET alias.
+  - id: "vreg_and_chip_reset"
+    type: "declarative"
+    base_address: 0x40064000
+    size: "16KB"
+    config:
+      path: "../peripherals/rp2040/vreg_and_chip_reset.yaml"
+  - id: "tbman"
+    type: "stub"
+    base_address: 0x4006c000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2040/tbman.yaml"

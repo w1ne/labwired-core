@@ -88,11 +88,14 @@ type: tm1637-7seg
 behavior:
   primitive: gpio_device
 
-  # Both lines are MCU OUTPUTS while the host writes display data, so both are
-  # observed (ODR) and neither is driven.
+  # Observe the master's output/release state. OE/DDR-controlled hosts may
+  # keep their output latch low and release either line to the module's pull-up.
+  # This does not model the TM1637 driving an ACK back to the host.
   pins:
     CLK: clk_pin
     DIO: dio_pin
+  pin_sampling: { CLK: open_drain_release, DIO: open_drain_release }
+  pin_defaults: { CLK: true, DIO: true }
 
   vars:
     # Idle bus is both lines HIGH — see the unresolved-read note above.

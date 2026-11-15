@@ -79,7 +79,10 @@ impl<C: Cpu> Machine<C> {
     /// `SupplySupervisor::set_vdd`), so `is_routed` covers both.
     #[inline(always)]
     fn supply_gate(&mut self, request: &AdvanceRequest) -> SimResult<Option<AdvanceReport>> {
-        if self.bus.supply.is_routed() || !self.unpowered_rail_noted {
+        if self.bus.supply.is_routed()
+            || self.bus.reset_input.is_routed()
+            || !self.unpowered_rail_noted
+        {
             return self.supply_boundary(request);
         }
         Ok(None)
@@ -92,12 +95,15 @@ impl<C: Cpu> Machine<C> {
     #[cold]
     #[inline(never)]
     fn supply_boundary(&mut self, request: &AdvanceRequest) -> SimResult<Option<AdvanceReport>> {
+        if self.bus.reset_input.take_assertion() {
+            self.reset_node()?;
+        }
         self.apply_supply_release()?;
         if !self.bus.supply.is_routed() && !self.unpowered_rail_noted {
             self.unpowered_rail_noted = true;
             crate::fidelity::record_unpowered_rail_assumed(self.bus.io_voltage_v);
         }
-        if !self.bus.supply.is_held() {
+        if !self.bus.supply.is_held() && !self.bus.reset_input.is_held() {
             return Ok(None);
         }
         // Held in reset: no instruction runs, but time does — the circuit

@@ -12,5 +12,5 @@ cargo run -q -p labwired-cli -- test --script examples/nucleo-u5a5zj/io-smoke.ya
 ```
 
 The shared demo firmware is used only for its USART1 `OK` smoke. Crypto
-register-level operations are covered by `crates/core/tests/stm32u5_exec_oracle.rs`.
+register-level operations are covered by `crates/core/tests/stm32/stm32u5_exec_oracle.rs`.
 The model is simulator-validated; no physical U5A5 board test is claimed.

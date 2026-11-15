@@ -1,0 +1,21 @@
+{
+  "id": "sam4s16c",
+  "in_boards": false,
+  "uart": {
+    "state": "proven",
+    "file": "crates/core/tests/gates/firmware_survival.rs",
+    "test": "test_sam4s_xplained_smoke_survival",
+    "signal": "committed ELF fixture tests/fixtures/sam4s-xplained-smoke.elf booted in-sim; the survival gate asserts 'SAM4S XPLAINED SMOKE\\n' on the UART0 TX sink. Fixture absence is a hard assert!, not a skip.",
+    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test gates firmware_survival::"
+  },
+  "spi": {
+    "state": "none",
+    "gap": "SPI0 is a declared `type: stub` (the SAM4S SPI block is not modelled).",
+    "lane": "none"
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "TWI0/TWI1 are declared `type: stub` (the SAM4S TWI block is not modelled).",
+    "lane": "none"
+  }
+}

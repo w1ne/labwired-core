@@ -92,9 +92,11 @@ void setup() {
   }
 
   // Tier-1: exact multi-byte register reads when master-receive works.
-#if !defined(STM32F4xx) && !defined(STM32F407xx) && !defined(ARDUINO_DISCO_F407VG)
+#if defined(STM32F446xx) || (!defined(STM32F4xx) && !defined(STM32F407xx) && !defined(ARDUINO_DISCO_F407VG))
   // F407 classic I2C master-receive can hang the Wire stack under sim; skip
-  // the read attempt there and keep ACK-only survival for that board.
+  // the read attempt there and keep ACK-only survival for that board. The
+  // NUCLEO-F446RE reads both registers exactly (measured 2026-11-09), so it
+  // takes the exact tier.
   uint16_t cfg = 0;
   uint16_t bus = 0;
   if (ina219_read_u16(INA219_REG_CONFIG, &cfg) && ina219_read_u16(INA219_REG_BUS, &bus)) {
