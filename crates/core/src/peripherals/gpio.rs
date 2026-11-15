@@ -1695,6 +1695,58 @@ pub struct GpioPort {
     stm32_observers: Vec<std::sync::Arc<dyn crate::peripherals::device::GpioObserver>>,
     stm32_port_prefix: u8,
     stm32_observer_clock: Option<crate::CycleClock>,
+    /// Alternate-function edges for the same observers: one listener per
+    /// (observer, pad, route), kept alive here and held weakly by the wire.
+    stm32_af_listeners: Vec<std::sync::Arc<dyn crate::peripherals::pad_lines::LineListener>>,
+    /// Per pin, the selector (AF nibble; F1: any AF) the pad currently holds,
+    /// shared with the listeners. [`AF_NONE`] while the pad is plain GPIO.
+    stm32_af_selectors: Vec<std::sync::Arc<std::sync::atomic::AtomicU32>>,
+    /// `PadRoutes::route_count` the listeners were built for.
+    stm32_af_routes_built: usize,
+}
+
+/// Selector value of a pad that carries no alternate function.
+const AF_NONE: u32 = u32::MAX;
+
+/// One STM32 pad as an observer sees it while the pad carries an alternate
+/// function: re-evaluated from the wire on every change of any route the pad
+/// can take, by the same selection rule a pad read uses.
+#[derive(Debug)]
+struct Stm32AfPad {
+    pad: u8,
+    routes: Vec<crate::peripherals::pad_routing::PinRoute>,
+    selector: std::sync::Arc<std::sync::atomic::AtomicU32>,
+    observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver>,
+    clock: crate::CycleClock,
+    /// Level last reported to the observer for this pad.
+    last: std::sync::Mutex<bool>,
+}
+
+#[derive(Debug)]
+struct Stm32AfEdgeListener(std::sync::Arc<Stm32AfPad>);
+
+impl crate::peripherals::pad_lines::LineListener for Stm32AfEdgeListener {
+    fn line_edge(&self, _line: usize, _level: bool, at: Option<u64>) {
+        let pad = &*self.0;
+        let current = pad.selector.load(std::sync::atomic::Ordering::Relaxed);
+        if current == AF_NONE {
+            return; // plain GPIO: the output-latch path owns this pad
+        }
+        // A released or unrouted alternate-function pad drives nothing the
+        // off-chip device could read as high.
+        let level = crate::peripherals::pad_routing::PinRoute::select(&pad.routes, Some(current))
+            .map(|i| &pad.routes[i])
+            .is_some_and(|r| r.cell.drives(r.line) && r.cell.level(r.line));
+        let from = {
+            let mut last = pad.last.lock().unwrap();
+            if *last == level {
+                return;
+            }
+            std::mem::replace(&mut *last, level)
+        };
+        let cycle = at.unwrap_or_else(|| pad.clock.now());
+        pad.observer.on_pin_change(pad.pad, from, level, cycle);
+    }
 }
 
 impl Default for GpioPort {
@@ -1721,7 +1773,63 @@ impl GpioPort {
         self.stm32_port_prefix = port_index * 16;
         self.stm32_observer_clock = Some(clock);
         self.stm32_observers.push(observer);
+        self.stm32_af_routes_built = usize::MAX; // rebuild for the new observer
+        self.sync_stm32_af_observers();
         true
+    }
+
+    /// Keep the alternate-function edge listeners equal to the pads' routing:
+    /// publish each pad's current selector, and rebuild the listeners when
+    /// routes were bound since they were built. A pad in alternate-function
+    /// mode is driven by a peripheral, not the output latch, so its edges come
+    /// from the wire the peripheral drives, not from register writes.
+    fn sync_stm32_af_observers(&mut self) {
+        if self.stm32_observers.is_empty() {
+            return;
+        }
+        if self.stm32_af_selectors.is_empty() {
+            self.stm32_af_selectors = (0..16)
+                .map(|_| std::sync::Arc::new(std::sync::atomic::AtomicU32::new(AF_NONE)))
+                .collect();
+        }
+        for pin in 0..16u8 {
+            let selected = Self::selected_function(&self.family, self.pad_claims.as_ref(), pin);
+            self.stm32_af_selectors[pin as usize].store(
+                selected.unwrap_or(AF_NONE),
+                std::sync::atomic::Ordering::Relaxed,
+            );
+        }
+        let route_count = self.pad_routes.route_count();
+        if self.stm32_af_routes_built == route_count {
+            return;
+        }
+        self.stm32_af_routes_built = route_count;
+        self.stm32_af_listeners.clear();
+        let Some(clock) = self.stm32_observer_clock.clone() else {
+            return;
+        };
+        for pin in 0..16u8 {
+            let routes = self.pad_routes.pin_routes(pin);
+            if routes.is_empty() {
+                continue;
+            }
+            for observer in &self.stm32_observers {
+                let pad = std::sync::Arc::new(Stm32AfPad {
+                    pad: self.stm32_port_prefix + pin,
+                    routes: routes.clone(),
+                    selector: self.stm32_af_selectors[pin as usize].clone(),
+                    observer: observer.clone(),
+                    clock: clock.clone(),
+                    last: std::sync::Mutex::new(false),
+                });
+                for route in &routes {
+                    let listener: std::sync::Arc<dyn crate::peripherals::pad_lines::LineListener> =
+                        std::sync::Arc::new(Stm32AfEdgeListener(pad.clone()));
+                    route.cell.add_listener(route.line, &listener);
+                    self.stm32_af_listeners.push(listener);
+                }
+            }
+        }
     }
 
     #[inline]
@@ -1879,6 +1987,9 @@ impl GpioPort {
             stm32_observers: Vec::new(),
             stm32_port_prefix: 0,
             stm32_observer_clock: None,
+            stm32_af_listeners: Vec::new(),
+            stm32_af_selectors: Vec::new(),
+            stm32_af_routes_built: 0,
         }
     }
 
@@ -2852,6 +2963,7 @@ impl crate::Peripheral for GpioPort {
             _ => return,
         }
         self.sync_pin_cells();
+        self.sync_stm32_af_observers();
     }
     /// Not in the per-cycle walk: this model overrides neither `tick()` nor
     /// `tick_elapsed()`, so every visit ran the default no-op and returned a
@@ -2900,6 +3012,7 @@ impl crate::Peripheral for GpioPort {
         };
         self.mutate_pads(|s| s.write_reg(reg_offset, reg_val));
         self.observe_stm32_output_changes(observed_before);
+        self.sync_stm32_af_observers();
         self.sync_wire_inputs();
         self.refresh_console_af();
         if reg_offset == self.idr_offset() {
@@ -2931,6 +3044,7 @@ impl crate::Peripheral for GpioPort {
         };
         self.mutate_pads(|s| s.write_reg(offset & !3, value));
         self.observe_stm32_output_changes(observed_before);
+        self.sync_stm32_af_observers();
         self.sync_wire_inputs();
         self.refresh_console_af();
         if input_reg {
@@ -3105,6 +3219,23 @@ impl crate::Peripheral for GpioPort {
             (GpioFamily::RaPort(_), None) if pin < 16 => {
                 self.pad_routes
                     .bind(cell, pin, Some(RA_PSEL_GPT), line, func);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn bind_timer_output_pad_function(
+        &mut self,
+        cell: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
+        pin: u8,
+        function: u32,
+        line: usize,
+        func: &'static str,
+    ) -> bool {
+        match self.family {
+            GpioFamily::SamPort(_) if pin < 32 && function < 16 => {
+                self.pad_routes.bind(cell, pin, Some(function), line, func);
                 true
             }
             _ => false,

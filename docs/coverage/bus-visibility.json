@@ -33,6 +33,10 @@
   },
   {
     "buses": [],
+    "name": "atmega32u4"
+  },
+  {
+    "buses": [],
     "name": "atsamd21"
   },
   {
@@ -196,6 +200,10 @@
   },
   {
     "buses": [],
+    "name": "mimxrt1062-teensy41"
+  },
+  {
+    "buses": [],
     "name": "mimxrt595s"
   },
   {
@@ -353,6 +361,14 @@
   {
     "buses": [],
     "name": "same70q21b"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32c031c6"
   },
   {
     "buses": [
