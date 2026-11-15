@@ -1454,7 +1454,8 @@ pub struct BjtModel {
     /// `VBC`/current-dependent adjustment, matching ngspice's default.
     pub xtf: f64,
     /// Voltage scale `VTF` for the forward transit-time `VBC` dependence,
-    /// volts. Infinity disables that voltage dependence, matching ngspice's default.
+    /// volts: the factor is `exp(VBC/(1.44·VTF))`, as in SPICE2 and ngspice.
+    /// Infinity disables that voltage dependence, matching ngspice's default.
     pub vtf: f64,
     /// High-current scale `ITF` for the forward transit-time adjustment,
     /// amps. Zero disables current suppression, matching ngspice's default.
@@ -1531,6 +1532,46 @@ pub struct BjtModel {
     /// per °C².
     pub tns1: f64,
     pub tns2: f64,
+    /// Temperature law `TLEV` for saturation currents and beta: 0 (the
+    /// `XTB` power law), 1 (`1 + XTB·ΔT`) or 3 (`IS^(1 + TIS1·ΔT + TIS2·ΔT²)`).
+    pub tlev: u8,
+    /// First and second order temperature coefficients, per °C and per °C²,
+    /// for `BF`, `BR`, `IKF`, `IKR`, `NF`, `NR`, `NE`, `NC`, `VAF`, `VAR` and
+    /// `ITF`, as ngspice-42 `bjttemp.c` applies them. `TBF1`/`TBF2` (and
+    /// `TBR1`/`TBR2`) replace the `XTB` beta factor when either is given.
+    pub tbf1: f64,
+    pub tbf2: f64,
+    pub tbr1: f64,
+    pub tbr2: f64,
+    pub tikf1: f64,
+    pub tikf2: f64,
+    pub tikr1: f64,
+    pub tikr2: f64,
+    pub tnf1: f64,
+    pub tnf2: f64,
+    pub tnr1: f64,
+    pub tnr2: f64,
+    pub tne1: f64,
+    pub tne2: f64,
+    pub tnc1: f64,
+    pub tnc2: f64,
+    pub tvaf1: f64,
+    pub tvaf2: f64,
+    pub tvar1: f64,
+    pub tvar2: f64,
+    pub titf1: f64,
+    pub titf2: f64,
+    pub tbf_given: bool,
+    pub tbr_given: bool,
+    /// `TLEV=3` exponent coefficients for `IS`, `ISE`, `ISC` and `ISS`.
+    pub tis1: f64,
+    pub tis2: f64,
+    pub tise1: f64,
+    pub tise2: f64,
+    pub tisc1: f64,
+    pub tisc2: f64,
+    pub tiss1: f64,
+    pub tiss2: f64,
     /// Substrate geometry `SUBS`: `Some(1)` vertical (the junction sits on
     /// the collector), `Some(-1)` lateral (on the base). `None` is ngspice's
     /// default: vertical for NPN, lateral for PNP.
@@ -1661,6 +1702,39 @@ impl BjtModel {
             ns: 1.0,
             tns1: 0.0,
             tns2: 0.0,
+            tlev: 0,
+            tbf1: 0.0,
+            tbf2: 0.0,
+            tbr1: 0.0,
+            tbr2: 0.0,
+            tikf1: 0.0,
+            tikf2: 0.0,
+            tikr1: 0.0,
+            tikr2: 0.0,
+            tnf1: 0.0,
+            tnf2: 0.0,
+            tnr1: 0.0,
+            tnr2: 0.0,
+            tne1: 0.0,
+            tne2: 0.0,
+            tnc1: 0.0,
+            tnc2: 0.0,
+            tvaf1: 0.0,
+            tvaf2: 0.0,
+            tvar1: 0.0,
+            tvar2: 0.0,
+            titf1: 0.0,
+            titf2: 0.0,
+            tis1: 0.0,
+            tis2: 0.0,
+            tise1: 0.0,
+            tise2: 0.0,
+            tisc1: 0.0,
+            tisc2: 0.0,
+            tiss1: 0.0,
+            tiss2: 0.0,
+            tbf_given: false,
+            tbr_given: false,
             subs: None,
             rco: None,
             vo: 10.0,
@@ -4134,6 +4208,7 @@ fn bind_models(
                 let ModelCard::Bjt(model) = card else {
                     return Err(wrong_kind("Q"));
                 };
+                let unscaled_model = model;
                 let model = model.with_area(device.area);
                 if model.is <= 0.0 || model.bf <= 0.0 || model.br <= 0.0 {
                     return Err(
@@ -4173,6 +4248,36 @@ fn bind_models(
                     || !model.ctc.is_finite()
                     || !model.tvje.is_finite()
                     || !model.tvjc.is_finite()
+                    || !model.tbf1.is_finite()
+                    || !model.tbf2.is_finite()
+                    || !model.tbr1.is_finite()
+                    || !model.tbr2.is_finite()
+                    || !model.tikf1.is_finite()
+                    || !model.tikf2.is_finite()
+                    || !model.tikr1.is_finite()
+                    || !model.tikr2.is_finite()
+                    || !model.tnf1.is_finite()
+                    || !model.tnf2.is_finite()
+                    || !model.tnr1.is_finite()
+                    || !model.tnr2.is_finite()
+                    || !model.tne1.is_finite()
+                    || !model.tne2.is_finite()
+                    || !model.tnc1.is_finite()
+                    || !model.tnc2.is_finite()
+                    || !model.tvaf1.is_finite()
+                    || !model.tvaf2.is_finite()
+                    || !model.tvar1.is_finite()
+                    || !model.tvar2.is_finite()
+                    || !model.titf1.is_finite()
+                    || !model.titf2.is_finite()
+                    || !model.tis1.is_finite()
+                    || !model.tis2.is_finite()
+                    || !model.tise1.is_finite()
+                    || !model.tise2.is_finite()
+                    || !model.tisc1.is_finite()
+                    || !model.tisc2.is_finite()
+                    || !model.tiss1.is_finite()
+                    || !model.tiss2.is_finite()
                     || model.tlevc > 1
                 {
                     return Err(ctx.parse_err(
@@ -4286,8 +4391,24 @@ fn bind_models(
                     rco: model.rco.map(|rco| rco.max(0.01)),
                     ..model
                 };
-                let (operating_model, thermal_voltage) =
-                    super::device::bjt_parameters_at_temperature(model, device.temperature_celsius);
+                // `TLEV=3` raises the card's own `IS`/`ISE`/`ISC`/`ISS` to a
+                // power before `AREA` multiplies them (ngspice `bjttemp.c`).
+                // Every other temperature law is a pure factor, so it
+                // commutes with the area scaling and keeps the old order.
+                let (operating_model, thermal_voltage) = if model.tlev == 3
+                    && device.temperature_celsius.is_some()
+                {
+                    let (unscaled, thermal_voltage) = super::device::bjt_parameters_at_temperature(
+                        BjtModel {
+                            rco: model.rco,
+                            ..unscaled_model
+                        },
+                        device.temperature_celsius,
+                    );
+                    (unscaled.with_area(device.area), thermal_voltage)
+                } else {
+                    super::device::bjt_parameters_at_temperature(model, device.temperature_celsius)
+                };
                 if !operating_model.is.is_finite()
                     || operating_model.is <= 0.0
                     || !operating_model.bf.is_finite()
@@ -4338,6 +4459,24 @@ fn bind_models(
                     || operating_model.vo <= 0.0
                     || !operating_model.gamma.is_finite()
                     || operating_model.gamma < 0.0
+                    || !operating_model.nf.is_finite()
+                    || operating_model.nf <= 0.0
+                    || !operating_model.nr.is_finite()
+                    || operating_model.nr <= 0.0
+                    || !operating_model.ne.is_finite()
+                    || operating_model.ne <= 0.0
+                    || !operating_model.nc.is_finite()
+                    || operating_model.nc <= 0.0
+                    || operating_model.ikf.is_nan()
+                    || operating_model.ikf <= 0.0
+                    || operating_model.ikr.is_nan()
+                    || operating_model.ikr <= 0.0
+                    || operating_model.vaf.is_nan()
+                    || operating_model.vaf < 0.0
+                    || operating_model.var.is_nan()
+                    || operating_model.var < 0.0
+                    || !operating_model.itf.is_finite()
+                    || operating_model.itf < 0.0
                 {
                     return Err(ctx.parse_err(
                         "temperature-adjusted BJT currents, beta, resistances and junction charges must remain finite and valid"
@@ -5164,12 +5303,12 @@ fn parse_model(
             (ModelCard::Bjt(model), "NR") => model.nr = value,
             (ModelCard::Bjt(model), "VAF" | "VA") => model.vaf = value,
             (ModelCard::Bjt(model), "VAR" | "VB") => model.var = value,
-            (ModelCard::Bjt(model), "IKF") => model.ikf = value,
+            (ModelCard::Bjt(model), "IKF" | "IK") => model.ikf = value,
             (ModelCard::Bjt(model), "IKR") => model.ikr = value,
             (ModelCard::Bjt(model), "NKF" | "NK") => model.nkf = Some(value),
-            (ModelCard::Bjt(model), "ISE") => model.ise = value,
+            (ModelCard::Bjt(model), "ISE" | "C2") => model.ise = value,
             (ModelCard::Bjt(model), "NE") => model.ne = value,
-            (ModelCard::Bjt(model), "ISC") => model.isc = value,
+            (ModelCard::Bjt(model), "ISC" | "C4") => model.isc = value,
             (ModelCard::Bjt(model), "NC") => model.nc = value,
             (ModelCard::Bjt(model), "TNOM" | "TREF") => model.tnom_celsius = value,
             (ModelCard::Bjt(model), "EG") => model.eg = value,
@@ -5208,7 +5347,7 @@ fn parse_model(
             (ModelCard::Bjt(model), "TTR1") => model.ttr1 = value,
             (ModelCard::Bjt(model), "TTR2") => model.ttr2 = value,
             (ModelCard::Bjt(model), "RB") => model.rb = value,
-            (ModelCard::Bjt(model), "TRB1") => model.trb1 = value,
+            (ModelCard::Bjt(model), "TRB1" | "TRB") => model.trb1 = value,
             (ModelCard::Bjt(model), "TRB2") => model.trb2 = value,
             (ModelCard::Bjt(model), "RBM") => model.rbm = Some(value),
             (ModelCard::Bjt(model), "TRBM1" | "TRM1") => model.trbm1 = value,
@@ -5217,10 +5356,10 @@ fn parse_model(
             (ModelCard::Bjt(model), "TIRB1") => model.tirb1 = value,
             (ModelCard::Bjt(model), "TIRB2") => model.tirb2 = value,
             (ModelCard::Bjt(model), "RC") => model.rc = value,
-            (ModelCard::Bjt(model), "TRC1") => model.trc1 = value,
+            (ModelCard::Bjt(model), "TRC1" | "TRC") => model.trc1 = value,
             (ModelCard::Bjt(model), "TRC2") => model.trc2 = value,
             (ModelCard::Bjt(model), "RE") => model.re = value,
-            (ModelCard::Bjt(model), "TRE1") => model.tre1 = value,
+            (ModelCard::Bjt(model), "TRE1" | "TRE") => model.tre1 = value,
             (ModelCard::Bjt(model), "TRE2") => model.tre2 = value,
             (ModelCard::Bjt(model), "CJS" | "CCS" | "CSUB") => model.cjs = value,
             (ModelCard::Bjt(model), "VJS" | "PS") => model.vjs = value,
@@ -5233,6 +5372,54 @@ fn parse_model(
             (ModelCard::Bjt(model), "NS") => model.ns = value,
             (ModelCard::Bjt(model), "TNS1") => model.tns1 = value,
             (ModelCard::Bjt(model), "TNS2") => model.tns2 = value,
+            (ModelCard::Bjt(model), "TLEV") => {
+                if ![0.0, 1.0, 3.0].contains(&value) {
+                    return Err(ctx.parse_err("BJT TLEV must be 0, 1 or 3".to_string()));
+                }
+                model.tlev = value as u8;
+            }
+            (ModelCard::Bjt(model), "TBF1") => {
+                model.tbf1 = value;
+                model.tbf_given = true;
+            }
+            (ModelCard::Bjt(model), "TBF2") => {
+                model.tbf2 = value;
+                model.tbf_given = true;
+            }
+            (ModelCard::Bjt(model), "TBR1") => {
+                model.tbr1 = value;
+                model.tbr_given = true;
+            }
+            (ModelCard::Bjt(model), "TBR2") => {
+                model.tbr2 = value;
+                model.tbr_given = true;
+            }
+            (ModelCard::Bjt(model), "TIKF1") => model.tikf1 = value,
+            (ModelCard::Bjt(model), "TIKF2") => model.tikf2 = value,
+            (ModelCard::Bjt(model), "TIKR1") => model.tikr1 = value,
+            (ModelCard::Bjt(model), "TIKR2") => model.tikr2 = value,
+            (ModelCard::Bjt(model), "TNF1") => model.tnf1 = value,
+            (ModelCard::Bjt(model), "TNF2") => model.tnf2 = value,
+            (ModelCard::Bjt(model), "TNR1") => model.tnr1 = value,
+            (ModelCard::Bjt(model), "TNR2") => model.tnr2 = value,
+            (ModelCard::Bjt(model), "TNE1") => model.tne1 = value,
+            (ModelCard::Bjt(model), "TNE2") => model.tne2 = value,
+            (ModelCard::Bjt(model), "TNC1") => model.tnc1 = value,
+            (ModelCard::Bjt(model), "TNC2") => model.tnc2 = value,
+            (ModelCard::Bjt(model), "TVAF1") => model.tvaf1 = value,
+            (ModelCard::Bjt(model), "TVAF2") => model.tvaf2 = value,
+            (ModelCard::Bjt(model), "TVAR1") => model.tvar1 = value,
+            (ModelCard::Bjt(model), "TVAR2") => model.tvar2 = value,
+            (ModelCard::Bjt(model), "TITF1") => model.titf1 = value,
+            (ModelCard::Bjt(model), "TITF2") => model.titf2 = value,
+            (ModelCard::Bjt(model), "TIS1") => model.tis1 = value,
+            (ModelCard::Bjt(model), "TIS2") => model.tis2 = value,
+            (ModelCard::Bjt(model), "TISE1") => model.tise1 = value,
+            (ModelCard::Bjt(model), "TISE2") => model.tise2 = value,
+            (ModelCard::Bjt(model), "TISC1") => model.tisc1 = value,
+            (ModelCard::Bjt(model), "TISC2") => model.tisc2 = value,
+            (ModelCard::Bjt(model), "TISS1") => model.tiss1 = value,
+            (ModelCard::Bjt(model), "TISS2") => model.tiss2 = value,
             (ModelCard::Bjt(model), "SUBS") => {
                 if value != 1.0 && value != -1.0 {
                     return Err(ctx.parse_err("BJT SUBS must be 1 (vertical) or -1 (lateral)"));

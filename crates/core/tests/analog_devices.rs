@@ -2225,7 +2225,8 @@ mod analog {
         let qb = (1.0 - vbc / model.vaf - vbe / model.var).recip()
             * (1.0 + (1.0 + 4.0 * (cbe / model.ikf + cbc / model.ikr)).sqrt())
             / 2.0;
-        let tf_adjustment = model.xtf * (vbc / model.vtf).exp() * (cbe / (cbe + model.itf)).powi(2);
+        let tf_adjustment =
+            model.xtf * (vbc / (1.44 * model.vtf)).exp() * (cbe / (cbe + model.itf)).powi(2);
         assert!((charge.qbe - model.tf * cbe * (1.0 + tf_adjustment) / qb).abs() < 1e-25);
         assert!((charge.qbc - model.tr * cbc).abs() < 1e-25);
 
@@ -2311,7 +2312,9 @@ mod analog {
                         if forward {
                             tf * current
                                 * (1.0
-                                    + xtf * (vbc / vtf).exp() * (current / (current + itf)).powi(2))
+                                    + xtf
+                                        * (vbc / (1.44 * vtf)).exp()
+                                        * (current / (current + itf)).powi(2))
                         } else {
                             tr * is * ((vbc / VT).exp() - 1.0)
                         }
@@ -9398,5 +9401,151 @@ mod analog {
             .to_string();
             assert!(error.contains("PTF"), "unexpected error {error}");
         }
+    }
+
+    /// The BJT temperature laws ngspice-42 `bjttemp.c` applies beyond
+    /// `XTI`/`XTB`: `TLEV` 0/1/3, `TBF`/`TBR` beta polynomials, the
+    /// `TIS`/`TISE`/`TISC` power law of `TLEV=3` (applied before `AREA`), and
+    /// the `TIKF`/`TIKR`/`TVAF`/`TVAR`/`TNF`/`TNR`/`TNE`/`TNC` polynomials.
+    /// Every device sits at 80 °C with pinned terminals; each coefficient card
+    /// has a twin without it, so a dropped coefficient fails by percents.
+    #[test]
+    fn bjt_tlev_and_temperature_coefficients_match_ngspice() {
+        let card = "IS=1e-15 BF=100 BR=3 ISE=1e-13 NE=1.6 ISC=1e-13 NC=1.8";
+        let deck = format!(
+            "VBP bp 0 dc -0.7\nVBR br 0 dc 0.6\nVBR0 br0 0 dc 0.6\n\
+             VB1 b1 0 dc 0.7\nVB2 b2 0 dc 0.7\nVB3 b3 0 dc 0.7\nVB4 b4 0 dc 0.7\n\
+             VB5 b5 0 dc 0.7\nVB6 b6 0 dc 0.7\nVB7 b7 0 dc 0.7\nVB8 b8 0 dc 0.7\n\
+             VC1 c1 0 dc 2\nVC2 c2 0 dc 2\nVC3 c3 0 dc 2\nVC4 c4 0 dc 2\n\
+             VC5 c5 0 dc 2\nVC6 c6 0 dc 2\nVC7 c7 0 dc 2\nVC8 c8 0 dc 2\n\
+             VCP cp 0 dc -2\nVE9 e9 0 dc 1\nVE0 e0 0 dc 1\n\
+             Q1 c1 b1 0 QB temp=80\nQ2 c2 b2 0 QL1 temp=80\nQ3 c3 b3 0 QL3 2 temp=80\n\
+             Q4 c4 b4 0 QN temp=80\nQ5 c5 b5 0 Q0 temp=80\nQ6 c6 b6 0 QL0X temp=80\n\
+             Q7 c7 b7 0 QL1X temp=80\nQ8 c8 b8 0 QL3X 2 temp=80\nQP cp bp 0 QPT temp=80\n\
+             Q9 0 br e9 QR temp=80\nQ10 0 br0 e0 Q0R temp=80\n\
+             .model QB NPN({card} XTB=1.5 TBF1=5e-3 TBF2=2e-5 TBR1=-4e-3)\n\
+             .model QL1 NPN({card} XTB=0.01 TLEV=1)\n\
+             .model QL3 NPN({card} TLEV=3 TIS1=-2e-3 TIS2=1e-6 TISE1=-1e-3 TISC1=-1.5e-3)\n\
+             .model QN NPN({card} VAF=30 IKF=5m TVAF1=-3e-3 TIKF1=-4e-3 TIKF2=1e-5 \
+             TNF1=1e-3 TNE1=-2e-3 TNC1=2e-3)\n\
+             .model Q0 NPN({card} VAF=30 IKF=5m)\n\
+             .model QL0X NPN({card} XTB=1.5)\n\
+             .model QL1X NPN({card} XTB=1.5 TLEV=1)\n\
+             .model QL3X NPN({card} XTB=1.5 TLEV=3)\n\
+             .model QPT PNP(IS=2e-15 BF=60 BR=2 ISE=5e-14 NE=1.5 TLEV=3 TIS1=-1.8e-3 \
+             TISE1=-8e-4 TBF1=4e-3 TBF2=-1e-5)\n\
+             .model QR NPN(IS=1e-15 BF=100 BR=3 VAR=8 IKR=2m TVAR1=5e-3 TIKR1=-3e-3 \
+             TNR1=2e-3 TBR1=6e-3)\n\
+             .model Q0R NPN(IS=1e-15 BF=100 BR=3 VAR=8 IKR=2m)\n"
+        );
+        // ngspice-42 `op` (reltol=1e-9): current out of each source's `+`
+        // terminal, as `(source, amps)`.
+        #[rustfmt::skip]
+        let ngspice = [
+            ("VC1", 9.9688910282e-03), ("VB1", 8.5882966681e-05),
+            ("VC2", 9.9688910274e-03), ("VB2", 7.3855011776e-05),
+            ("VC3", 6.8952166253e-04), ("VB3", 8.6074465924e-06),
+            ("VC4", 2.1829459512e-03), ("VB4", 1.0450942253e-04),
+            ("VC5", 5.2058401739e-03), ("VB5", 1.1299816834e-04),
+            ("VC6", 9.9688910280e-03), ("VB6", 8.8540120517e-05),
+            ("VC7", 9.9688910242e-03), ("VB7", 1.4037033620e-06),
+            ("VC8", 1.9529134175e-05), ("VB8", 5.4568947472e-07),
+            ("VCP", -4.93133664066e-04), ("VBP", -7.77911669879e-06),
+            ("VE9", 5.6738337583e-05), ("VBR", 1.4251932582e-05),
+            ("VE0", 3.3732513447e-04), ("VBR0", 1.2428889286e-04),
+        ];
+        let solver = build(&deck);
+        for (name, expected) in ngspice {
+            let got = source_current(&solver, name);
+            assert!(
+                relative(got, expected) < 1e-4,
+                "{name}: ngspice-42 {expected} A, got {got} A"
+            );
+        }
+        // Each coefficient moves its device well beyond that bound: TBF
+        // against plain XTB (VB1/VB6), TLEV=1 against TLEV=0 (VB7/VB6),
+        // TLEV=3 against TLEV=0 (VC8/VC6), the forward and reverse
+        // polynomials against their bare twins (VC4/VC5, VE9/VE0).
+        for (with, without) in [
+            ("VB1", "VB6"),
+            ("VB7", "VB6"),
+            ("VC8", "VC6"),
+            ("VC4", "VC5"),
+            ("VE9", "VE0"),
+        ] {
+            let (a, b) = (
+                source_current(&solver, with),
+                source_current(&solver, without),
+            );
+            assert!(relative(a, b) > 0.03, "{with} {a} A vs {without} {b} A");
+        }
+    }
+
+    /// `TITF1` scales `ITF`, which only shapes the forward diffusion charge,
+    /// so the proof is the base current a ramped `VBE` draws while charging.
+    /// `QX` drops `ITF` to pin `VTF` alone: SPICE2 and ngspice-42 scale `VBC`
+    /// by 1.44·VTF, and the plain-`VTF` form this engine used before was 19 %
+    /// low on `QX` at 9 ns.
+    #[test]
+    fn bjt_titf_and_vtf_shape_diffusion_charge_current_as_ngspice() {
+        let deck = "VB b 0 PULSE(0.5 0.65 1n 10n 1n 100n 200n)\n\
+            VB0 b0 0 PULSE(0.5 0.65 1n 10n 1n 100n 200n)\n\
+            VBX bx 0 PULSE(0.5 0.65 1n 10n 1n 100n 200n)\n\
+            VC c 0 dc 3\nVC0 c0 0 dc 3\n\
+            Q1 c b 0 QI temp=80\nQ2 c0 b0 0 Q0 temp=80\nQ3 c bx 0 QX temp=80\n\
+            .model QI NPN(IS=1e-15 BF=100 TF=1n XTF=4 VTF=2 ITF=20m TITF1=-8e-3)\n\
+            .model Q0 NPN(IS=1e-15 BF=100 TF=1n XTF=4 VTF=2 ITF=20m)\n\
+            .model QX NPN(IS=1e-15 BF=100 TF=1n XTF=4 VTF=2)\n";
+        let sources = ["VB", "VB0", "VBX"];
+        // ngspice-42 `tran 1p` (trap, reltol=1e-9): base currents out of
+        // each base source, amps, in the order of `sources`.
+        #[rustfmt::skip]
+        let ngspice: [(f64, [f64; 3]); 5] = [
+            (3e-9, [1.8797193131e-05, 1.8796538126e-05, 5.0382944381e-05]),
+            (5e-9, [5.0391887316e-05, 5.0379368678e-05, 1.3591057127e-04]),
+            (7e-9, [1.3535010294e-04, 1.3511767074e-04, 3.6663499013e-04]),
+            (9e-9, [3.6799211618e-04, 3.6398903998e-04, 9.8906660538e-04]),
+            (10.5e-9, [8.0651909680e-04, 7.7625612911e-04, 2.0819794709e-03]),
+        ];
+        // Backward Euler at 2 ps stays within 0.1 % of ngspice's 1 ps
+        // trapezoidal run on this 10 ns ramp; the bound is 0.2 %.
+        let h: f64 = 2e-12;
+        let mut solver = build(deck);
+        let mut step = 0_u64;
+        for (time, expected) in ngspice {
+            let target = (time / h).round() as u64;
+            while step < target {
+                solver.advance(h).expect("TITF/VTF transient step solves");
+                step += 1;
+            }
+            for (column, name) in sources.iter().enumerate() {
+                let got = source_current(&solver, name);
+                assert!(
+                    relative(got, expected[column]) < 2e-3,
+                    "{name} at {time:e} s: ngspice-42 {} A, got {got} A",
+                    expected[column]
+                );
+            }
+        }
+        // At 10.5 ns the coefficient is worth 3.9 % of the base current.
+        let (with, without) = (
+            source_current(&solver, "VB"),
+            source_current(&solver, "VB0"),
+        );
+        assert!(
+            relative(with, without) > 0.03,
+            "TITF1 moved nothing: {with} vs {without}"
+        );
+    }
+
+    /// `TLEV` 2 does not exist in ngspice-42 `bjttemp.c` (no saturation
+    /// current would be set), so the card refuses it.
+    #[test]
+    fn bjt_tlev_must_be_0_1_or_3() {
+        let error =
+            parse_netlist("V1 c 0 3\nV2 b 0 0.7\nQ1 c b 0 QX\n.model QX NPN(IS=1e-15 TLEV=2)\n")
+                .expect_err("TLEV=2 must be refused")
+                .to_string();
+        assert!(error.contains("TLEV"), "unexpected error {error}");
     }
 }

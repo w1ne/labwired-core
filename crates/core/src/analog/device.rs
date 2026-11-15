@@ -222,7 +222,9 @@ pub fn ln(value: f64) -> f64 {
 /// This covers the standard `TNOM`/`EG`/`XTI` transport saturation-current
 /// law, `XTB` beta scaling, and the corresponding `ISE`/`ISC` recombination
 /// currents, the first and second order coefficients for forward/reverse
-/// transit time, and the coefficients for `RB`/`RBM`/`IRB`/`RC`/`RE`.
+/// transit time, and the coefficients for `RB`/`RBM`/`IRB`/`RC`/`RE`,
+/// `BF`/`BR`, `IKF`/`IKR`, `NF`/`NR`/`NE`/`NC`, `VAF`/`VAR` and `ITF`.
+/// `TLEV` selects the saturation-current and beta law (0, 1 or 3).
 /// `None` preserves the engine's historical fixed-300 K path. With an
 /// instance temperature, B-E and B-C depletion parameters use ngspice's
 /// default silicon-bandgap law (`TLEVC=0`) or its linear `CTE`/`CTC` and
@@ -246,18 +248,61 @@ pub fn bjt_parameters_at_temperature(
     // exponent. `EG` is in eV, so the numerical value is volts after dividing
     // by Vt.
     let log_current_factor = (ratio - 1.0) * model.eg / thermal_voltage + model.xti * log_ratio;
-    let beta_factor = libm::exp(model.xtb * log_ratio);
+    // ngspice-42 `bjttemp.c`: `TLEV=0` scales beta by (T/TNOM)^XTB,
+    // `TLEV=1` by 1 + XTB·ΔT, and `TLEV=3` leaves it to `TBF`/`TBR`.
+    let beta_factor = match model.tlev {
+        0 => libm::exp(model.xtb * log_ratio),
+        1 => 1.0 + model.xtb * delta,
+        _ => 1.0,
+    };
 
     let mut adjusted = model;
-    adjusted.is *= libm::exp(log_current_factor);
-    adjusted.bf *= beta_factor;
-    adjusted.br *= beta_factor;
-    if adjusted.ise > 0.0 {
-        adjusted.ise *= libm::exp(log_current_factor / model.ne) / beta_factor;
+    if model.tlev == 3 {
+        // `TLEV=3` raises each card current to a temperature-dependent power.
+        // ngspice applies `AREA` after the power, so the `Q` lowering passes
+        // this branch the unscaled card and scales the result.
+        let raised = |current: f64, first: f64, second: f64| -> f64 {
+            if current > 0.0 {
+                libm::pow(current, temperature_factor(first, second))
+            } else {
+                current
+            }
+        };
+        adjusted.is = raised(model.is, model.tis1, model.tis2);
+        adjusted.ise = raised(model.ise, model.tise1, model.tise2);
+        adjusted.isc = raised(model.isc, model.tisc1, model.tisc2);
+        adjusted.iss = raised(model.iss, model.tiss1, model.tiss2);
+    } else {
+        adjusted.is *= libm::exp(log_current_factor);
+        if adjusted.ise > 0.0 {
+            adjusted.ise *= libm::exp(log_current_factor / model.ne) / beta_factor;
+        }
+        if adjusted.isc > 0.0 {
+            adjusted.isc *= libm::exp(log_current_factor / model.nc) / beta_factor;
+        }
+        // ngspice-42 `bjttemp.c` scales `ISS` by the transport `IS` factor
+        // (no `NS` division) and gives `NS` its own polynomial.
+        adjusted.iss *= libm::exp(log_current_factor);
     }
-    if adjusted.isc > 0.0 {
-        adjusted.isc *= libm::exp(log_current_factor / model.nc) / beta_factor;
-    }
+    adjusted.bf *= if model.tbf_given {
+        temperature_factor(model.tbf1, model.tbf2)
+    } else {
+        beta_factor
+    };
+    adjusted.br *= if model.tbr_given {
+        temperature_factor(model.tbr1, model.tbr2)
+    } else {
+        beta_factor
+    };
+    adjusted.ikf *= temperature_factor(model.tikf1, model.tikf2);
+    adjusted.ikr *= temperature_factor(model.tikr1, model.tikr2);
+    adjusted.nf *= temperature_factor(model.tnf1, model.tnf2);
+    adjusted.nr *= temperature_factor(model.tnr1, model.tnr2);
+    adjusted.ne *= temperature_factor(model.tne1, model.tne2);
+    adjusted.nc *= temperature_factor(model.tnc1, model.tnc2);
+    adjusted.vaf *= temperature_factor(model.tvaf1, model.tvaf2);
+    adjusted.var *= temperature_factor(model.tvar1, model.tvar2);
+    adjusted.itf *= temperature_factor(model.titf1, model.titf2);
     adjusted.tf *= temperature_factor(model.ttf1, model.ttf2);
     adjusted.tr *= temperature_factor(model.ttr1, model.ttr2);
     adjusted.rb *= temperature_factor(model.trb1, model.trb2);
@@ -296,9 +341,6 @@ pub fn bjt_parameters_at_temperature(
     adjusted.cjc = cjc;
     adjusted.vjc = vjc;
     adjusted.mjc = mjc;
-    // ngspice-42 `bjttemp.c` scales `ISS` by the transport `IS` factor (no
-    // `NS` division) and gives `NS` its own polynomial.
-    adjusted.iss *= libm::exp(log_current_factor);
     adjusted.ns *= temperature_factor(model.tns1, model.tns2);
     let (cjs, vjs, mjs) = bjt_junction_parameters_at_temperature(
         model.cjs,
@@ -1548,10 +1590,13 @@ pub fn bjt_transit_charge_at_thermal_voltage(
                 -model.tf * cbe * dqb_dvbc / qb_squared,
             )
         } else {
+            // SPICE2 and ngspice-42 (`bjttemp.c`: `1/(VTF·1.44)`) scale
+            // `VBC` by 1.44·VTF, not VTF.
+            let vbc_scale = 1.44 * model.vtf;
             let voltage_factor = if model.vtf == 0.0 {
                 1.0
             } else {
-                exp_clamped(vbc / model.vtf)
+                exp_clamped(vbc / vbc_scale)
             };
             let current_ratio = if model.itf == 0.0 {
                 1.0
@@ -1569,7 +1614,7 @@ pub fn bjt_transit_charge_at_thermal_voltage(
             let dboost_dvbc = if model.vtf == 0.0 || model.vtf.is_infinite() {
                 0.0
             } else {
-                boost / model.vtf
+                boost / vbc_scale
             };
             let adjusted_current = cbe * (1.0 + boost);
             (

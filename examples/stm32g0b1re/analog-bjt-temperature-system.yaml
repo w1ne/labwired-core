@@ -1,0 +1,63 @@
+# Generic NTC divider, Shockley diode and two hot BJT switches for the
+# STM32G0B1RE. The two switches share one base drive and one 80 °C instance
+# temperature; only the `TBF1` beta coefficient (ngspice-42 `bjttemp.c`)
+# differs. It drops beta from 100 to 20.5, so the PA2 collector stays above
+# the G0 VIH while its twin on PA3 pulls below VIL. The netlists are
+# board-agnostic; only their solved node voltages are routed to the pads.
+name: stm32g0b1re-analog-bjt-temperature
+chip: ../../configs/chips/stm32g0b1re.yaml
+external_devices: []
+board_io: []
+cosim_models:
+  - id: ntc_divider
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      temperature: ui.ntc.temperature_c
+    outputs:
+      v_sense: board.gpio_in.pa0
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 3.3
+        Rpull vcc sense 10k
+        Rntc sense 0 10k beta=3950 tnom=25 temp=25
+      probes:
+        v_sense: v(sense)
+      sources:
+        temperature: Rntc
+      vdd: 3.3
+  - id: diode_load_line
+    adapter: analog
+    step_ns: 1000
+    outputs:
+      v_diode: board.gpio_in.pa1
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rlim supply sense 1k
+        D1 sense 0 DREF TEMP=25
+        .model DREF D(IS=2.52n N=1.752 RS=0.568 TNOM=25 EG=1.11 XTI=3)
+      probes:
+        v_diode: v(sense)
+      vdd: 3.3
+  - id: bjt_beta_temperature
+    adapter: analog
+    step_ns: 1000
+    outputs:
+      v_tbf: board.gpio_in.pa2
+      v_twin: board.gpio_in.pa3
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 3.3
+        Rb1 vcc b1 1Meg
+        Rc1 vcc c1 10k
+        Q1 c1 b1 0 QTBF temp=80
+        Rb2 vcc b2 1Meg
+        Rc2 vcc c2 10k
+        Q2 c2 b2 0 QHOT temp=80
+        .model QTBF NPN(IS=1e-15 BF=100 TBF1=-0.015)
+        .model QHOT NPN(IS=1e-15 BF=100)
+      probes:
+        v_tbf: v(c1)
+        v_twin: v(c2)
+      vdd: 3.3
