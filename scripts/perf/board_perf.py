@@ -340,6 +340,19 @@ WAIVED: dict[str, str] = {
         "registers x16–x31 that this core does not implement. No throughput "
         "claim is made for this part yet."
     ),
+    "esp32p4": (
+        "ESP32-P4X-C5-Function-EV fast-boot profile: a bare-ELF UART0 smoke on "
+        "the HP core only (flash 0x40000000, RAM 0x4FF40000). No perf-spin "
+        "fixture is linked for this memory map, so no throughput claim is made "
+        "for this part (examples/esp32p4x-c5-function-ev-board)."
+    ),
+    "esp32s2": (
+        "ESP32-S2-DevKitC-1 N8R2 fast-boot profile: a bare-ELF UART0 smoke "
+        "(flash 0x40080000, RAM 0x3FFB0000). The Xtensa perf-spin fixtures are "
+        "linked for the ESP32 and ESP32-S3 maps and no S2 build exists, so no "
+        "throughput claim is made for this part "
+        "(examples/esp32s2-devkitc-1-n8r2)."
+    ),
     "atmega1281": (
         "The committed -mmcu=atmega1281 firmware validates boot, USART0 and GPIO, "
         "but no representative AVR6 throughput fixture is built. The available "

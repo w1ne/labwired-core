@@ -1,0 +1,21 @@
+{
+  "id": "esp32s2",
+  "in_boards": false,
+  "uart": {
+    "state": "proven",
+    "file": "examples/esp32s2-devkitc-1-n8r2/io-smoke.yaml",
+    "test": "ESP32S2_DEVKITC_N8R2_UART_OK",
+    "signal": "the committed ELF tests/fixtures/esp32s2-devkitc-1-n8r2-uart.elf boots in-sim on configs/systems/esp32s2-devkitc-1-n8r2.yaml and writes 'ESP32S2_DEVKITC_N8R2_UART_OK' to the UART0 TX FIFO; the uart_contains assertion matches it on the host_console UART capture.",
+    "lane": "core-board-ci (every pull request): board esp32s2-devkitc-1-n8r2 from configs/ci/boards.yml"
+  },
+  "spi": {
+    "state": "none",
+    "gap": "No SPI controller is declared on configs/chips/esp32s2.yaml; the profile is UART0-only.",
+    "lane": "none"
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "No I2C controller is declared on configs/chips/esp32s2.yaml; the profile is UART0-only.",
+    "lane": "none"
+  }
+}
