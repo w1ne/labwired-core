@@ -1,0 +1,20 @@
+{
+  "id": "stm32f405",
+  "in_boards": true,
+  "uart": {
+    "state": "proven",
+    "file": "examples/feather-f405/uart-smoke.yaml",
+    "test": "uart_contains",
+    "signal": "real firmware (firmware-f401-demo, link-compatible reuse) boots on the stm32f405 descriptor and its UART2 output matches the uart_contains 'OK' oracle; run 2026-08-04, exit 0",
+    "lane": "manual example run (examples/feather-f405) - not yet CI-wired",
+    "note": "evidence covers the F4-profile shared IP the F405 reuses; F405-only instances (I2C2/SPI2/USART3/TIM3-5) are not yet declared in the chip yaml"
+  },
+  "spi": {
+    "state": "none",
+    "gap": "no fixture loads configs/chips/stm32f405.yaml and moves SPI bytes; the descriptor reuses the F4 spi1 model but evidence does not transfer automatically - a feather-f405 SPI fixture is follow-up work"
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "no fixture loads configs/chips/stm32f405.yaml and completes an I2C transaction; the descriptor reuses the F4 i2c1 model but evidence does not transfer automatically - a feather-f405 I2C fixture is follow-up work"
+  }
+}

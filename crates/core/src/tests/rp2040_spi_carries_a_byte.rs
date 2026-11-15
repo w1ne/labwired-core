@@ -6,7 +6,7 @@
 //!
 //! Why this file exists
 //! ====================
-//! `validation/bus_proof_matrix.json` recorded `rp2040/spi` as `shallow`, and
+//! `validation/bus_proof/rp2040.json` recorded `rp2040/spi` as `shallow`, and
 //! the reason was not that the evidence was weak — it was that the evidence ran
 //! nowhere. `examples/tier1-fixture/rp2040/src/main.rs::check_spi` already does
 //! the real thing: put the PL022 in internal loopback (`CR1.LBM`), write `0xA5`
@@ -96,7 +96,7 @@ fn rp2040_spi_loopback_carries_a_real_byte_under_firmware() {
             "rp2040 tier-1 check_spi no longer contains `{needed}`. This test asserts that \
              `TIER1 spi PASS` means a byte round-tripped through the PL022 shift engine; if \
              check_spi has been reduced to a register poke, that claim is no longer true. \
-             Fix check_spi, or downgrade rp2040/spi in validation/bus_proof_matrix.json."
+             Fix check_spi, or downgrade rp2040/spi in validation/bus_proof/rp2040.json."
         );
     }
 

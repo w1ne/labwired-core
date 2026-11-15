@@ -230,6 +230,17 @@ const SIG_U2TXD: u32 = 198;
 /// `ledcAttachPin` routes a pad with `gpio_matrix_out(pin, LEDC_HS_SIG_OUT0_IDX +
 /// channel, ...)`.
 const SIG_LEDC_HS0: u32 = 71;
+/// GPIO-matrix output signal indices for RMT TX channels 0..7 (TRM Table 4-2 /
+/// `RMT_SIG_OUT0`..`RMT_SIG_OUT7`). ESP-IDF `rmt_ll` / `gpio_matrix_out` route a
+/// channel's waveform to a pad by writing one of these into `FUNCn_OUT_SEL`.
+pub const RMT_SIG_OUT0: u32 = 87;
+pub const RMT_SIG_OUT1: u32 = 88;
+pub const RMT_SIG_OUT2: u32 = 89;
+pub const RMT_SIG_OUT3: u32 = 90;
+pub const RMT_SIG_OUT4: u32 = 91;
+pub const RMT_SIG_OUT5: u32 = 92;
+pub const RMT_SIG_OUT6: u32 = 93;
+pub const RMT_SIG_OUT7: u32 = 94;
 
 /// Names of the 16 LEDC output signals, as `gpio_sig_map.h` spells them.
 const LEDC_SIGNAL_NAMES: [&str; 16] = [
@@ -1191,6 +1202,57 @@ impl Esp32Gpio {
         }
     }
 
+    /// Drive pad `pin` (0..39) to `level` by writing the GPIO_OUT / GPIO_OUT1
+    /// latch and notifying observers — the classic twin of S3
+    /// [`crate::peripherals::esp32s3::gpio::Esp32s3Gpio::drive_pad_output`].
+    /// Used by the RMT TX engine to put bit-level edges on a matrix-routed pad
+    /// so a WS2812 observer (or logic capture) sees the waveform. Returns
+    /// false for an out-of-range pad.
+    pub fn drive_pad_output(&mut self, pin: u8, level: bool) -> bool {
+        if pin >= PAD_COUNT {
+            return false;
+        }
+        if pin < 32 {
+            let mask = 1u32 << pin;
+            let new_out = if level {
+                self.out | mask
+            } else {
+                self.out & !mask
+            };
+            self.apply_out(new_out);
+        } else {
+            let mask = 1u32 << (pin - 32);
+            let new_out1 = if level {
+                self.out1 | mask
+            } else {
+                self.out1 & !mask
+            };
+            self.apply_out1(new_out1);
+        }
+        true
+    }
+
+    /// Pads whose `FUNCn_OUT_SEL` routes peripheral output `signal_idx` — what
+    /// an RMT channel uses to find the GPIO its waveform reaches (`RMT_SIG_OUT0`
+    /// .. `RMT_SIG_OUT7`). Ascending pad order; a signal may fan out.
+    pub fn pads_for_output_signal(&self, signal_idx: u32) -> Vec<u8> {
+        // Match S3: resolve from FUNCn_OUT_SEL alone. `matrix_signal` also
+        // gates on ENABLE (classic approximation for LEDC/UART pad_routes);
+        // RMT TX must still find a matrix-routed pad the way silicon does when
+        // OEN comes from the peripheral (`OEN_SEL=0`) even if GPIO_ENABLE is
+        // clear — NeoPixel `rmtInit` programs the matrix before/with pinMode.
+        let want = signal_idx & OUT_SEL_MASK;
+        (0..PAD_COUNT)
+            .filter(|&pin| (self.out_sel[pin as usize] & OUT_SEL_MASK) == want)
+            .collect()
+    }
+
+    /// Advance the observer timestamp to `now` before an RMT edge so WS2812
+    /// HIGH/LOW durations are measured in real sim cycles (scheduler path).
+    pub fn sync_observer_cycle(&mut self, now: u64) {
+        self.sync_to(now);
+    }
+
     fn read_word(&self, word_off: u64) -> u32 {
         match word_off {
             // OUT bank (GPIO0..31): TRM Table 4-3.
@@ -1607,6 +1669,18 @@ impl Peripheral for Esp32Gpio {
 
     fn pins_mut(&mut self) -> Option<&mut dyn PinPort> {
         Some(self)
+    }
+
+    fn pads_for_output_signal(&self, signal_idx: u32) -> Vec<u8> {
+        Esp32Gpio::pads_for_output_signal(self, signal_idx)
+    }
+
+    fn drive_pad_output(&mut self, pin: u8, level: bool) -> bool {
+        Esp32Gpio::drive_pad_output(self, pin, level)
+    }
+
+    fn sync_observer_cycle(&mut self, now: u64) {
+        Esp32Gpio::sync_observer_cycle(self, now)
     }
 
     fn gpio_routing(&self, pin: u8) -> Option<crate::peripherals::gpio::GpioRouting> {

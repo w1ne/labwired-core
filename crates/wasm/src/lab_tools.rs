@@ -705,6 +705,97 @@ mod tests {
         .unwrap()
     }
 
+    #[test]
+    fn lab_air_only_disables_replay_when_a_device_joins_it() {
+        let sys = root().join("examples/demo-blinky/system.yaml");
+        let system_yaml = std::fs::read_to_string(&sys).unwrap();
+        let manifest: labwired_config::SystemManifest = serde_yaml::from_str(&system_yaml).unwrap();
+        let chip_yaml =
+            std::fs::read_to_string(sys.parent().unwrap().join(&manifest.chip)).unwrap();
+        let firmware = std::fs::read(root().join("tests/fixtures/stm32f103-blinky.elf")).unwrap();
+        let mut blinky = WasmSimulator::new_from_config_parts(Rc::new(CtorInputs {
+            system_yaml,
+            chip_yaml,
+            firmware,
+            blobs: HashMap::new(),
+        }))
+        .unwrap();
+        let air = crate::AirBus::new();
+        blinky.attach_lab_air("blinky", &air);
+        assert_eq!(
+            blinky.snapshot_refusal(),
+            None,
+            "a chip without a radio or modem did not join air"
+        );
+        let saved: serde_json::Value =
+            serde_json::from_str(&blinky.snapshot_save_s(None).unwrap()).unwrap();
+        blinky.step_batch(100).unwrap();
+        blinky
+            .snapshot_restore_s(saved["id"].as_u64().unwrap() as u32)
+            .unwrap();
+        assert_eq!(blinky.machine_s().unwrap().total_cycles, 0);
+
+        let sys = root().join("examples/nrf52840-rtt-lab/system.yaml");
+        let system_yaml = std::fs::read_to_string(&sys).unwrap();
+        let manifest: labwired_config::SystemManifest = serde_yaml::from_str(&system_yaml).unwrap();
+        let chip_yaml =
+            std::fs::read_to_string(sys.parent().unwrap().join(&manifest.chip)).unwrap();
+        let firmware = std::fs::read(root().join("tests/fixtures/nrf52840-demo.elf")).unwrap();
+        let mut radio = WasmSimulator::new_from_config_parts(Rc::new(CtorInputs {
+            system_yaml,
+            chip_yaml,
+            firmware,
+            blobs: HashMap::new(),
+        }))
+        .unwrap();
+        let radio_saved: serde_json::Value =
+            serde_json::from_str(&radio.snapshot_save_s(None).unwrap()).unwrap();
+        radio.attach_lab_air("ring", &air);
+        assert!(radio
+            .snapshot_refusal()
+            .unwrap()
+            .contains("shared radio air bus"));
+        assert!(radio.snapshot_save_s(None).is_err());
+        assert!(radio
+            .snapshot_restore_s(radio_saved["id"].as_u64().unwrap() as u32)
+            .is_err());
+
+        let sys = root().join("examples/quectel-bg770a-lab/system.yaml");
+        let system_yaml = std::fs::read_to_string(&sys).unwrap();
+        let manifest: labwired_config::SystemManifest = serde_yaml::from_str(&system_yaml).unwrap();
+        let chip_yaml =
+            std::fs::read_to_string(sys.parent().unwrap().join(&manifest.chip)).unwrap();
+        let firmware = std::fs::read(root().join("tests/fixtures/stm32f103-blinky.elf")).unwrap();
+        let mut cellular = WasmSimulator::new_from_config_parts(Rc::new(CtorInputs {
+            system_yaml,
+            chip_yaml,
+            firmware,
+            blobs: HashMap::new(),
+        }))
+        .unwrap();
+        cellular.attach_lab_air("cellular", &air);
+        assert!(cellular
+            .snapshot_refusal()
+            .unwrap()
+            .contains("shared radio air bus"));
+        assert!(cellular.snapshot_save_s(None).is_err());
+
+        for device in [
+            Box::new(labwired_core::peripherals::virtual_ble::VirtualBle::new_default())
+                as Box<dyn labwired_core::peripheral::Peripheral>,
+            Box::new(labwired_core::peripherals::esp32c3::bt::Esp32c3Bt::new()),
+        ] {
+            let mut bus = labwired_core::bus::SystemBus::new();
+            bus.add_peripheral("ble", 0x1000, 0x1000, None, device);
+            assert!(bus.attach_lab_air(
+                "ble",
+                air.nrf.clone(),
+                air.ble.clone(),
+                air.cellular.clone()
+            ));
+        }
+    }
+
     /// Everything a user can observe: cycles, registers, RAM (the digest) and
     /// the console printed since the last drain.
     fn trace(sim: &WasmSimulator) -> (u64, u64, Vec<u8>) {

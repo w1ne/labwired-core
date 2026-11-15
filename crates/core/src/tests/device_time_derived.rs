@@ -245,6 +245,140 @@ impl SpiDevice for TimeCounter {
     }
 }
 
+impl I2cDevice for TimeCounter {
+    fn address(&self) -> u8 {
+        0x44
+    }
+    fn read(&mut self) -> u8 {
+        0xFF
+    }
+    fn write(&mut self, _data: u8) {}
+    fn advance_time_us(&mut self, us: u64) {
+        SpiDevice::advance_time_us(self, us);
+    }
+}
+
+#[test]
+fn idle_ra_iic_picks_up_late_devices_at_microsecond_boundaries() {
+    use crate::peripherals::ra_iic::{RaIic, DEFAULT_ELC_EVENT};
+    use crate::Peripheral;
+
+    const CPU_HZ: u64 = 8_000_000;
+    crate::fidelity::reset();
+    let controller = RaIic::new(CPU_HZ, CPU_HZ, DEFAULT_ELC_EVENT);
+    assert!(
+        !controller.has_attached_time_devices(),
+        "an empty RIIC must not request time conversion and empty-device fan-out"
+    );
+    let mut bus = crate::bus::SystemBus::new();
+    bus.cpu_hz = CPU_HZ;
+    bus.add_peripheral("riic0", 0x4009_0000, 0x20, None, Box::new(controller));
+    let mut machine = Machine::new(CountingCpu::default(), bus);
+    for cycles in [0, 8] {
+        machine.total_cycles = cycles;
+        machine.advance_central_i2c_time();
+    }
+
+    assert!(
+        derived_notes().is_empty(),
+        "an empty RIIC must not claim that a device clock was derived"
+    );
+    let total = Arc::new(Mutex::new(0));
+    let calls = Arc::new(Mutex::new(0));
+    let controller = &mut machine
+        .bus
+        .peripherals
+        .iter_mut()
+        .find(|p| p.name == "riic0")
+        .unwrap()
+        .dev;
+    controller
+        .i2c_slave_host()
+        .unwrap()
+        .attach_slave(Box::new(TimeCounter {
+            total_us: total.clone(),
+            calls: calls.clone(),
+        }));
+    assert!(controller.has_attached_time_devices());
+
+    // The next microsecond boundary anchors the newly attached device. It
+    // receives no time from before attachment, no fractional microseconds,
+    // and exactly the elapsed delta at later boundaries, including the last.
+    for (cycles, expected_us, expected_calls) in [
+        (15, 0, 0),
+        (16, 0, 0),
+        (23, 0, 0),
+        (24, 1, 1),
+        (80, 8, 2),
+        (80, 8, 2),
+    ] {
+        machine.total_cycles = cycles;
+        machine.advance_central_i2c_time();
+        assert_eq!(*total.lock().unwrap(), expected_us, "at cycle {cycles}");
+        assert_eq!(*calls.lock().unwrap(), expected_calls, "at cycle {cycles}");
+    }
+    assert_eq!(derived_notes().len(), 1);
+    crate::fidelity::reset();
+}
+
+#[test]
+fn absolute_source_reloads_ignore_derived_deadlines() {
+    use crate::peripherals::ra_iic::{RaIic, DEFAULT_ELC_EVENT};
+    use crate::Peripheral;
+
+    #[derive(Debug)]
+    struct Source(Arc<Mutex<u64>>);
+    impl Peripheral for Source {
+        fn read(&self, _offset: u64) -> crate::SimResult<u8> {
+            Ok(0)
+        }
+        fn write(&mut self, _offset: u64, _value: u8) -> crate::SimResult<()> {
+            Ok(())
+        }
+        fn sim_time_us(&self) -> Option<u64> {
+            Some(*self.0.lock().unwrap())
+        }
+    }
+
+    let now = Arc::new(Mutex::new(100));
+    let total = Arc::new(Mutex::new(0));
+    let calls = Arc::new(Mutex::new(0));
+    let mut controller = RaIic::new(8_000_000, 8_000_000, DEFAULT_ELC_EVENT);
+    controller.attach(Box::new(TimeCounter {
+        total_us: total.clone(),
+        calls: calls.clone(),
+    }));
+    let mut bus = crate::bus::SystemBus::new();
+    bus.cpu_hz = 8_000_000;
+    bus.add_peripheral(
+        "source",
+        0x5000_0000,
+        4,
+        None,
+        Box::new(Source(now.clone())),
+    );
+    bus.add_peripheral("riic0", 0x4009_0000, 0x20, None, Box::new(controller));
+    let mut machine = Machine::new(CountingCpu::default(), bus);
+    // A modelled absolute counter is authoritative even when a derived-clock
+    // deadline lies ahead. Reloading it backwards must re-anchor, not underflow.
+    machine.next_i2c_time_cycle = 1_000;
+    crate::fidelity::reset();
+    for (source_us, expected_us, expected_calls) in [
+        (100, 0, 0),
+        (105, 5, 1),
+        (102, 5, 1),
+        (104, 7, 2),
+        (104, 7, 2),
+    ] {
+        *now.lock().unwrap() = source_us;
+        machine.advance_central_i2c_time();
+        assert_eq!(*total.lock().unwrap(), expected_us);
+        assert_eq!(*calls.lock().unwrap(), expected_calls);
+    }
+    assert!(derived_notes().is_empty());
+    crate::fidelity::reset();
+}
+
 /// The elapsed µs an SPI device is handed must equal the elapsed µs of the run
 /// — the SAME number an I²C slave on the same machine gets, because it comes
 /// from the same drive.

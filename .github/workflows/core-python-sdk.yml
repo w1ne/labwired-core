@@ -12,21 +12,13 @@ name: Python SDK
 
 on:
   pull_request:
+    # Lean PR gate (2026-11-13): on pull requests this lane runs only when
+    # its own files change. Shared engine paths (crates/core, crates/cli,
+    # Cargo.*) trigger it on push to main instead.
     branches: [main]
     paths:
       - "crates/python/**"
-      - "crates/core/**"
-      - "crates/config/**"
-      - "crates/loader/**"
-      - "crates/ir/**"
-      - "crates/hw-trace/**"
-      - "crates/svd-ingestor/**"
-      - "configs/**"
-      - "tests/fixtures/**"
       - "examples/nrf54l15-smart-ring/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "rust-toolchain.toml"
       - "scripts/ci/python-sdk-gate.sh"
       - ".github/workflows/core-python-sdk.yml"
   push:
@@ -59,7 +51,10 @@ concurrency:
 jobs:
   python-sdk:
     name: python-sdk (wheel + pytest, 0 skipped)
-    runs-on: ubuntu-latest
+    # setup-python no longer publishes Python 3.9 for the Ubuntu 26.04
+    # `ubuntu-latest` image. Pin the OS so this job keeps testing the declared
+    # cp39 abi3 floor instead of silently moving the compatibility baseline.
+    runs-on: ubuntu-22.04
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4

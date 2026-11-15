@@ -1,0 +1,5 @@
+{
+  "$schema_note": "Per-chip UART/SPI/I2C evidence. THE GATE for this file is crates/core/src/tests/bus_proof_matrix.rs, which runs in core-ci's `pr-gate` job (cargo test --lib) on every pull request. Read that file's module docs before editing this one. States: proven | shallow | none. proven = real firmware moved observable data. shallow = evidence exists but asserts register state only, OR moves bytes without firmware, OR is #[ignore]d / self-skips and therefore passes vacuously. none = nothing.",
+  "chip_set_derived_from": "configs/chips/*.yaml minus ci-fixture-* (same rule as crates/core/src/tests/builtin_chip_self_contained.rs). This is a SUPERSET of the `chip:` values in the superproject's packages/board-config/src/boards.ts BOARDS array, which is why a new BOARDS chip cannot dodge this gate: it cannot ship without its chip yaml. `in_boards` records BOARDS membership as of 2026-08-03 and is informational only.",
+  "surveyed": "2026-08-03"
+}

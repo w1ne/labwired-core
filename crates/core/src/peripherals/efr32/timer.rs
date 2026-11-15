@@ -960,6 +960,13 @@ impl Peripheral for Efr32s2Timer {
         }
     }
 
+    // Expose the asserted flag as a level so clearing IF also clears a stale
+    // pending interrupt, including when the scheduler owns the counter.
+    fn irq_line_level(&self) -> Option<bool> {
+        self.sync_from_clock();
+        Some(self.iflag.get() & self.ien != 0)
+    }
+
     fn tick_elapsed(&mut self, cycles: u64) -> PeripheralTickResult {
         // A scheduler-mode instance is walk-skipped and the event chain owns
         // the counter; the guard keeps a stray direct call from double-counting
@@ -1506,6 +1513,20 @@ mod tests {
         ack_if(&mut t, IF_OF);
         assert_eq!(t.read_word(OFF_IF) & IF_OF, 0);
         assert!(!t.tick_elapsed(0).irq);
+    }
+
+    #[test]
+    fn the_irq_line_is_a_level_that_follows_if_and_ien() {
+        let mut t = running(T0_BITS);
+        t.write_word(OFF_TOP, 9);
+        assert_eq!(t.irq_line_level(), Some(false));
+        t.tick_elapsed(10);
+        assert_eq!(t.read_word(OFF_IF) & IF_OF, IF_OF);
+        assert_eq!(t.irq_line_level(), Some(false), "IEN clear masks the line");
+        t.write_word(OFF_IEN, IF_OF);
+        assert_eq!(t.irq_line_level(), Some(true));
+        ack_if(&mut t, IF_OF);
+        assert_eq!(t.irq_line_level(), Some(false), "IF_CLR drops the line");
     }
 
     #[test]

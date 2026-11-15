@@ -65,6 +65,103 @@ pub(crate) struct ObserverMux {
 }
 
 impl<C: Cpu> Machine<C> {
+    /// Bind only this instance's qualified routes, then restore their full
+    /// store keys. A binding error prevents a world from being constructed.
+    pub(crate) fn bind_world_cosim(
+        &mut self,
+        node: &str,
+        configs: &[labwired_config::CosimModelConfig],
+    ) -> anyhow::Result<crate::cosim::SignalRouter> {
+        let prefix = format!("node.{node}.");
+        let local: Vec<_> = configs
+            .iter()
+            .map(|config| {
+                let mut config = config.clone();
+                config.inputs.retain(|_, route| route.starts_with(&prefix));
+                config.outputs.retain(|_, route| route.starts_with(&prefix));
+                for route in config
+                    .inputs
+                    .values_mut()
+                    .chain(config.outputs.values_mut())
+                {
+                    *route = route[prefix.len()..].to_string();
+                }
+                config
+            })
+            .collect();
+        for route in local
+            .iter()
+            .flat_map(|c| c.inputs.values().chain(c.outputs.values()))
+        {
+            if crate::cosim::SignalPath::parse(route).is_none() {
+                anyhow::bail!("node '{node}' has unknown hardware route '{route}'");
+            }
+        }
+        let (mut router, errors) = crate::cosim::SignalRouter::bind(&local, &self.bus);
+        if !errors.is_empty() {
+            anyhow::bail!(
+                "node '{node}' analog bindings: {}",
+                errors
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            );
+        }
+        router
+            .validate_unique_writers()
+            .map_err(anyhow::Error::msg)?;
+        if router.routes_supply() {
+            self.attach_supply();
+        }
+        if router.routes_reset() {
+            self.bus.reset_input.attach();
+        }
+        router.qualify(&prefix);
+        Ok(router)
+    }
+
+    pub(crate) fn sample_world_cosim(
+        &self,
+        router: &crate::cosim::SignalRouter,
+        signals: &mut crate::cosim::CosimSignals,
+    ) {
+        router.sample(&self.bus, signals);
+    }
+
+    pub(crate) fn apply_world_cosim(
+        &mut self,
+        router: &mut crate::cosim::SignalRouter,
+        signals: &crate::cosim::CosimSignals,
+        time_ns: u64,
+    ) -> SimResult<()> {
+        let errors = router.apply(&mut self.bus, signals, time_ns);
+        if errors.is_empty() {
+            if self.bus.reset_input.take_assertion() {
+                self.reset_node()?;
+            }
+            self.apply_supply_release()?;
+            Ok(())
+        } else {
+            Err(crate::SimulationError::Other(
+                errors
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join("; "),
+            ))
+        }
+    }
+
+    pub(crate) fn world_cosim_claims_gpio(
+        &self,
+        router: &crate::cosim::SignalRouter,
+        peripheral: &str,
+        pin: u8,
+    ) -> bool {
+        router.claims_gpio(&self.bus, peripheral, pin)
+    }
+
     /// Run until `total_cycles >= target` (or the CPU stops making progress).
     /// Batched, with idle fast-forward, as a continuous run.
     pub fn advance_to_cycle(&mut self, target: u64) -> SimResult<()> {
@@ -155,6 +252,7 @@ impl<C: Cpu> Machine<C> {
             || self.cpu_secondary.is_some()
             || self.bus.requires_cycle_accurate()
             || self.bus.supply.is_routed()
+            || self.bus.reset_input.is_routed()
             || self.bus.idle_poll_bus_tick_active()
             || self.bus.logic_tap.pending_len() != 0
             || !self.bus.idle_fast_forward_legacy_safe()

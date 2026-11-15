@@ -845,7 +845,7 @@ motor_models:
         let initial = bus.motor_snapshots();
         bus.set_motor_named_input("wheel", "supply-voltage-v", 6.0)
             .unwrap();
-        assert_eq!(bus.motor_snapshots()[0].bus_voltage_v, 6.0);
+        assert_eq!(bus.motor_snapshots()[0].bus_voltage_v, Some(6.0));
         assert_eq!(
             bus.motor_snapshots()[0].position_rad,
             initial[0].position_rad,
@@ -875,10 +875,10 @@ motor_models:
 
         bus.set_motor_named_fault("drive_motor", "undervoltage", true)
             .unwrap();
-        assert_eq!(bus.motor_snapshots()[0].bus_voltage_v, 12.0);
+        assert_eq!(bus.motor_snapshots()[0].bus_voltage_v, Some(12.0));
         bus.set_motor_named_fault("drive_motor", "undervoltage", false)
             .unwrap();
-        assert_eq!(bus.motor_snapshots()[0].bus_voltage_v, 24.0);
+        assert_eq!(bus.motor_snapshots()[0].bus_voltage_v, Some(24.0));
     }
 
     #[test]

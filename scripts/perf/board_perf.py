@@ -340,6 +340,19 @@ WAIVED: dict[str, str] = {
         "registers x16–x31 that this core does not implement. No throughput "
         "claim is made for this part yet."
     ),
+    "esp32p4": (
+        "ESP32-P4X-C5-Function-EV fast-boot profile: a bare-ELF UART0 smoke on "
+        "the HP core only (flash 0x40000000, RAM 0x4FF40000). No perf-spin "
+        "fixture is linked for this memory map, so no throughput claim is made "
+        "for this part (examples/esp32p4x-c5-function-ev-board)."
+    ),
+    "esp32s2": (
+        "ESP32-S2-DevKitC-1 N8R2 fast-boot profile: a bare-ELF UART0 smoke "
+        "(flash 0x40080000, RAM 0x3FFB0000). The Xtensa perf-spin fixtures are "
+        "linked for the ESP32 and ESP32-S3 maps and no S2 build exists, so no "
+        "throughput claim is made for this part "
+        "(examples/esp32s2-devkitc-1-n8r2)."
+    ),
     "atmega1281": (
         "The committed -mmcu=atmega1281 firmware validates boot, USART0 and GPIO, "
         "but no representative AVR6 throughput fixture is built. The available "
@@ -873,9 +886,24 @@ def build_fixtures(fixtures: set[str]) -> tuple[dict[str, Path], dict[str, str]]
             print(f"SKIPPING fixture '{name}': build failed\n{proc.stderr[-2000:]}", file=sys.stderr)
             continue
 
-        elf = cwd / f"target/{spec.target}/release/{spec.crate}"
-        if not elf.exists():
-            elf = REPO_ROOT / f"target/{spec.target}/release/{spec.crate}"
+        target_override = env.get("CARGO_TARGET_DIR")
+        if target_override is not None:
+            # Cargo resolves an environment override relative to its build
+            # cwd. Never substitute a stale default-target ELF for this build.
+            target_dir = Path(target_override)
+            if not target_dir.is_absolute():
+                target_dir = cwd / target_dir
+            elf = target_dir / spec.target / "release" / spec.crate
+        else:
+            elf = cwd / f"target/{spec.target}/release/{spec.crate}"
+            if not elf.exists():
+                elf = REPO_ROOT / f"target/{spec.target}/release/{spec.crate}"
+        if not elf.is_file():
+            selected = f" (CARGO_TARGET_DIR={target_override!r})" if target_override is not None else ""
+            raise RuntimeError(
+                f"fixture '{name}': Cargo succeeded but the expected ELF{selected} "
+                f"is missing or not a file: {elf}"
+            )
         shutil.copy2(elf, out)
         built[name] = out
     return built, skipped

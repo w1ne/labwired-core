@@ -92,7 +92,7 @@ ELF loaded at IRAM.
 
 Results are left in SRAM at 0x20000100 (see the comment at the top of each
 source). The tests are
-`cargo test -p labwired-core --test world_gpio_net_buses`.
+`cargo test -p labwired-core --test world world_gpio_net_buses::`.
 
 ## Rebuild the firmware
 

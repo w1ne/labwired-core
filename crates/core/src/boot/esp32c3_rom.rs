@@ -316,6 +316,15 @@ pub fn build_rom_boot_machine<C: crate::Cpu, F: FnOnce(crate::cpu::RiscV) -> C>(
     use crate::Cpu as _;
     use std::sync::{Arc, Mutex};
 
+    // The image file ends at its last written partition, but the part is the
+    // chip's whole flash. Pad with erased cells so firmware can program and
+    // read back data partitions past the image end (stock MicroPython formats
+    // its VFS there; writes beyond the image used to be dropped, OSError 28).
+    let mut flash_bytes = flash_bytes;
+    let part_len = bus.flash.data.len();
+    if flash_bytes.len() < part_len {
+        flash_bytes.resize(part_len, 0xFF);
+    }
     let backing = Arc::new(Mutex::new(flash_bytes));
     // Route reads through peripherals first: the fast path checks the
     // chip's `flash`/`drom` memory-regions (zero-filled in rom-boot) before

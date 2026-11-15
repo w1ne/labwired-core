@@ -1,0 +1,26 @@
+id: rp2350
+chip: rp2350
+system: systems/rp2350.yaml
+# Raspberry Pi Pico 2 on Earle Philhower's arduino-pico core. The registry
+# `raspberrypi` platform has no RP2350 boards (and its `pico` board is the
+# Mbed core the rp2040 row uses), so this pins Max Gerhardt's platform,
+# the one arduino-pico documents for PlatformIO, at a fixed commit.
+pio: { platform: "https://github.com/maxgerhardt/platform-raspberrypi.git#5d4561a05e3b212660ac6fdd3fbfb328d1988aa1", board: rpipico2, framework: arduino }
+# Serial is native USB CDC: the sketches wait for the simulated host's
+# DTR (`while (!Serial)`), so every cell pays USB enumeration first.
+max_steps: 3000000
+budget_reason: "USB CDC enumeration + DTR before the first print: L0/L5 ~0.73M steps; ~4x headroom"
+# Pico 2 LED = GP25 via SIO (pinMode/digitalWrite go through the GPIO
+# coprocessor, p0).
+led_watch: "sio:25"
+led_min_edges: 2
+# L6: arduino-pico analogWrite(LED_BUILTIN, 128) = PWM slice 4 B on GP25
+# (FUNCSEL 4) via the RP2350 IO_BANK0 model: 150,004 cycles @150 MHz =
+# 1.000 kHz, 50.2 % high; ~60 edges in the 3M-step window.
+pwm_watch: "sio:25"
+pwm_min_edges: 20
+family: rp2040
+notes: "arduino-pico core; Serial = USB CDC; L6 analogWrite = PWM slice 4B on GP25"
+sketches_skip: [L8_can]
+sketches_skip_reason:
+  L8_can: "RP2350 has no CAN controller"

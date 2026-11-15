@@ -30,6 +30,8 @@ pub mod semihost;
 #[path = "cortex_m/poll_loop.rs"]
 mod poll_loop;
 
+#[path = "cortex_m/rp2040_rom_hle.rs"]
+mod rp2040_rom_hle;
 #[path = "cortex_m/rp2350_dcp.rs"]
 pub mod rp2350_dcp;
 #[path = "cortex_m/rp2350_gpioc.rs"]

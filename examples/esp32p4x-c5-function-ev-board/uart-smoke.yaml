@@ -1,0 +1,10 @@
+# ESP32-P4X-C5-Function-EV-Board UART0 FIFO smoke.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-esp32p4-demo"
+  system: "../../configs/systems/esp32p4x-c5-function-ev-board.yaml"
+limits:
+  max_steps: 1000000
+assertions:
+  - uart_contains: "P4X_C5_FUNCTION_EV_OK"
+  - expected_stop_reason: max_steps

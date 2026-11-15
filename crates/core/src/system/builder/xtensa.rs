@@ -40,7 +40,14 @@ pub(super) fn build(
     req: BuildRequest<'_>,
     plugins: &[&dyn crate::plugin::ChipPlugin],
 ) -> anyhow::Result<BuiltMachine> {
-    if req.chip.is_esp32s3() {
+    if req.chip.is_esp32s2() {
+        match (&req.firmware, req.boot) {
+            (FirmwareSource::Elf(elf), BootMode::FastBoot) => build_esp32s2(&req, elf, plugins),
+            _ => Err(anyhow!(
+                "not supported: ESP32-S2 currently boots ELF firmware only; merged flash-image and mask-ROM boot are not modelled"
+            )),
+        }
+    } else if req.chip.is_esp32s3() {
         match (&req.firmware, req.boot) {
             (FirmwareSource::Elf(elf), BootMode::FastBoot) => build_esp32s3(&req, elf, plugins),
             (FirmwareSource::FlashImage { image, symbols }, BootMode::RomBoot) => {
@@ -65,6 +72,54 @@ pub(super) fn build(
             )),
         }
     }
+}
+
+/// Narrow ESP32-S2 fast boot. The board profiles currently model the on-chip
+/// UART and the memory windows needed by a directly loaded ELF; this does not
+/// emulate the S2 mask ROM, flash cache/MMU, Wi-Fi, USB or GPIO matrix.
+fn build_esp32s2(
+    req: &BuildRequest<'_>,
+    firmware: &[u8],
+    plugins: &[&dyn crate::plugin::ChipPlugin],
+) -> anyhow::Result<BuiltMachine> {
+    let manifest = req.system;
+    let mut bus = SystemBus::from_config_with_plugins(req.chip, manifest, plugins)?;
+    // ESP32-S2 has no Cortex-M bit-band aperture. Its memory and UART windows
+    // are already supplied by the chip descriptor.
+    bus.bit_band_enabled = false;
+
+    let console = ConsoleCapture::for_manifest(manifest);
+    let uart_sink = console.heard_sink();
+    bus.attach_host_console_echo(console.tapped(), uart_sink, req.options.echo_uart_stdout)
+        .map_err(|e| anyhow!(e))?;
+    let uart_rx_bufs = super::wire_host_streams(&mut bus, &req.options)?;
+    bus.refresh_peripheral_index();
+
+    let program_image = parse_elf_image(firmware).map_err(|e| anyhow!("Loader Error: {e:#}"))?;
+    let stack_top = req
+        .chip
+        .ram
+        .base
+        .checked_add(req.chip.ram.size)
+        .and_then(|top| top.checked_sub(16))
+        .and_then(|top| u32::try_from(top).ok())
+        .ok_or_else(|| anyhow!("ESP32-S2 RAM range cannot provide a 32-bit stack"))?;
+
+    let cpu: Box<dyn Cpu> = Box::new(crate::cpu::XtensaLx7::new());
+    let mut machine = Machine::new(cpu, bus);
+    machine
+        .load_firmware(&program_image)
+        .map_err(|e| anyhow!("Simulation Error: {e}"))?;
+    machine.cpu.set_pc(program_image.entry_point as u32);
+    machine.cpu.set_sp(stack_top);
+
+    Ok(built(
+        machine,
+        console,
+        uart_rx_bufs,
+        manifest,
+        firmware.to_vec(),
+    ))
 }
 
 /// `new_from_config_xtensa_esp32`: ESP32-classic (Xtensa LX6).

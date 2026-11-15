@@ -376,6 +376,16 @@ const WINDOW_OVERLAP_ALLOWLIST: &[(&str, &str, &str, &str)] = &[
          storage.",
     ),
     (
+        "rp2040-feather.yaml",
+        "clk_rst",
+        "io_bank0",
+        "Same RP2040 clock/reset catch-all as rp2040.yaml: the one 160 KB window \
+         spans CLOCKS/RESETS/PSM/XOSC/PLL_SYS/PLL_USB, with IO_BANK0 inside it. \
+         Narrowing would drop XOSC and PLL registers that firmware polls. \
+         Greatest-start-wins routing gives IO_BANK0 its 4 KB deterministically, \
+         so GPIOn_CTRL.FUNCSEL reaches the pad mux model.",
+    ),
+    (
         "rp2350.yaml",
         "clk_rst",
         "io_bank0",
@@ -384,6 +394,17 @@ const WINDOW_OVERLAP_ALLOWLIST: &[(&str, &str, &str, &str)] = &[
          0x4006_0000) and IO_BANK0 sits inside it at 0x4002_8000, below XOSC \
          and both PLLs. Greatest-start-wins routing gives io_bank0 its 4 KB \
          deterministically, so GPIOn_CTRL.FUNCSEL reaches the pad mux model.",
+    ),
+    (
+        "rp2350-feather.yaml",
+        "clk_rst",
+        "io_bank0",
+        "The Feather-specific descriptor keeps the RP2350 320 KB clock/reset\
+         catch-all from rp2350.yaml so XOSC and both PLL windows remain mapped.\
+         IO_BANK0 is nested at 0x4002_8000; greatest-start-wins routing gives\
+         it its 4 KB deterministically, so GPIOn_CTRL.FUNCSEL reaches the pad\
+         mux model. This profile differs in board flash geometry and pin labels,\
+         not in the peripheral window map.",
     ),
     (
         "esp32.yaml",
@@ -434,27 +455,8 @@ const MMIO_FLOOR: u64 = 0x1000_0000;
 /// (`base_address: 1`, `0xf`) used by the imported Renode-style platform files.
 const MIN_MMIO_WINDOW_BASE: u64 = 0x1000;
 
-fn core_src_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src")
-}
-
 fn configs_chips_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../configs/chips")
-}
-
-fn rust_sources_under(dir: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
-    };
-    let mut paths: Vec<PathBuf> = entries.flatten().map(|e| e.path()).collect();
-    paths.sort();
-    for p in paths {
-        if p.is_dir() {
-            rust_sources_under(&p, out);
-        } else if p.extension().is_some_and(|e| e == "rs") {
-            out.push(p);
-        }
-    }
 }
 
 fn yaml_files_under(dir: &Path, out: &mut Vec<PathBuf>) {
@@ -651,10 +653,10 @@ struct BaseConst {
 /// Find `const|static NAME: uNN = 0x…;` where NAME mentions BASE or ADDR and
 /// the literal is an absolute MMIO address.
 fn scan_hardcoded_bases() -> Vec<BaseConst> {
-    let root = core_src_dir();
-    let scan_root = root.join("peripherals");
-    let mut files = Vec::new();
-    rust_sources_under(&scan_root, &mut files);
+    let files: Vec<PathBuf> = super::src_roots::core_src_files_under("peripherals")
+        .into_iter()
+        .map(|f| f.path)
+        .collect();
     let out_of_line_tests = out_of_line_cfg_test_files(&files);
 
     let mut found = Vec::new();
@@ -666,11 +668,7 @@ fn scan_hardcoded_bases() -> Vec<BaseConst> {
             continue;
         };
         let code = blank_test_modules(&blank_noncode(&raw));
-        let rel = path
-            .strip_prefix(&root)
-            .unwrap_or(&path)
-            .to_string_lossy()
-            .replace('\\', "/");
+        let rel = super::src_roots::module_rel(&path);
         for (idx, line) in code.lines().enumerate() {
             if let Some(hit) = parse_base_const(line) {
                 let (name, value) = hit;
@@ -975,9 +973,7 @@ fn rule1_allowlist_shrinks_only() {
 /// Rule 1 vacuously green forever.
 #[test]
 fn rule1_scanner_is_not_vacuous() {
-    let root = core_src_dir().join("peripherals");
-    let mut files = Vec::new();
-    rust_sources_under(&root, &mut files);
+    let files = super::src_roots::core_src_files_under("peripherals");
     assert!(
         files.len() > 100,
         "expected the peripherals tree to hold >100 .rs files, found {} — \

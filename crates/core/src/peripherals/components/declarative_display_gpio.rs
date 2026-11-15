@@ -79,6 +79,18 @@ impl SpiDevice for DisplaySpiHandle {
     fn cs_pin(&self) -> &str {
         &self.cs_pin
     }
+    fn chain_index(&self) -> u32 {
+        self.display.lock().unwrap().chain_index()
+    }
+    fn set_chain_index(&mut self, index: u32) {
+        self.display.lock().unwrap().set_chain_index(index);
+    }
+    fn is_selected(&self) -> bool {
+        self.display.lock().unwrap().is_selected()
+    }
+    fn clocks_when_deselected(&self) -> bool {
+        self.display.lock().unwrap().clocks_when_deselected()
+    }
     fn dc_pin(&self) -> Option<&str> {
         self.dc_pin.as_deref()
     }

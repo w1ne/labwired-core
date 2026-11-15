@@ -10,7 +10,7 @@ Build and run from `core/`:
 ```sh
 cargo build -p firmware-nrf52840-obd2-scanner --release --target thumbv7em-none-eabi
 make -C examples/nrf52840-obd2-scanner/ecu/firmware
-cargo test -p labwired-core --test e2e_nrf52840_obd2_scanner -- --nocapture
+cargo test -p labwired-core --test e2e e2e_nrf52840_obd2_scanner:: -- --nocapture
 cargo run -q -p labwired-cli -- environment-test \
   --env examples/nrf52840-obd2-scanner/env.yaml --max-steps 12000000
 ```

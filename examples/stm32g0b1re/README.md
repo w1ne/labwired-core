@@ -92,4 +92,4 @@ falling flags are separate (`RPR1` at `0x0C`, `RTSR1` at `0x00`).
 
 The smoke checks the three configuration words. It does not inject the
 pad edge; the customer ELF test does that, and
-`crates/core/tests/g0_exti.rs` checks the edge without firmware.
+`crates/core/tests/stm32/g0_exti.rs` checks the edge without firmware.

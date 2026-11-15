@@ -255,3 +255,11 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32g474re/dbgmcu.yaml"
       idcode: 0x00000468
+
+# Package pins used by NUCLEO-G431RB (64-pin STM32G431RBT6). Board-level
+# solder-bridge connections are recorded in configs/systems/nucleo-g431rb.yaml.
+pins:
+  PA2: { gpio: "gpioa", bit: 2, functions: [{ type: uart, peripheral: "lpuart1", role: tx }] }
+  PA3: { gpio: "gpioa", bit: 3, functions: [{ type: uart, peripheral: "lpuart1", role: rx }] }
+  PA5: { gpio: "gpioa", bit: 5, functions: [{ type: gpio, peripheral: "gpioa" }] }
+  PC13: { gpio: "gpioc", bit: 13, functions: [{ type: gpio, peripheral: "gpioc" }] }

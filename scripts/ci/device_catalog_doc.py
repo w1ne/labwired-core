@@ -12,7 +12,7 @@ advertises a model that no longer exists (or omits one that does).
 
 This gate regenerates the table from that manifest and fails when the committed
 block differs. The manifest itself is already checked against the registry --
-`crates/core/tests/peripheral_kit_gate.rs` re-runs the generator and diffs --
+`crates/core/tests/bus/peripheral_kit_gate.rs` re-runs the generator and diffs --
 so this adds no second source of truth, only a rendering of the one we have.
 
 The table between the markers keeps the shape the doc already used: `type`,

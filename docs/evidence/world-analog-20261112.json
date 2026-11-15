@@ -1,0 +1,218 @@
+{
+  "schema_version": 1,
+  "recorded_at_utc": "2026-11-12T02:59:47.542044+00:00",
+  "base_commit": "e7fc57d1e520fa2b5cb0f3818cee26c8aa04f07d",
+  "source_file_sha256": {
+    "crates/cli/src/artifacts.rs": "9100458ea4f04bb2215b301fc5785fa65603c8439c0ae3019bbf653a9201ba2b",
+    "crates/cli/src/commands/environment_test.rs": "0d7e10c4067cdb54e60ed996aca0a538e7e6d88fa1f51323106408b82c72e2fa",
+    "crates/cli/tests/environment_runner.rs": "e183927dca0958ef391d1ce8a177567ad14cdfbf16ccea2366fd8d774be72bc8",
+    "crates/config/src/chip.rs": "0167e3c40bad5cddfd070e36d4a7d4b58959f9aac0e109c691e85cfbc95e1a4a",
+    "crates/config/src/lib.rs": "1df8ec3332912afd2be47ba728c32a6835f874c0c6044e508495429dc4b4a1be",
+    "crates/config/src/manifest.rs": "8be32e2cdce0432b9861fa2cf9af315a9270229fdbbae804ca5927b5cfade658",
+    "crates/config/src/reset_input.rs": "56a4f654513d9828805bb9667caa804768445670561b7a1ee82fd74c813b9183",
+    "crates/config/tests/world_cosim.rs": "8982f520029b125c73a5e85895f06fa151c0ff041db73b3c0253078edb728e20",
+    "crates/core/src/analog/adapter.rs": "57ae4e2bd44e4aeadc6724d0c7f914ec9699ab1b3e62691939d2f290dc50a582",
+    "crates/core/src/bus/construct.rs": "6fbae6822ef2ceef1c3f3cfc237a1a9a55841854ab9c4ff956f3196ecc224090",
+    "crates/core/src/bus/from_config.rs": "2df4478be530349dae1274578c4f557d7a89c452a184dc412cce673b0eb78f05",
+    "crates/core/src/bus/mod.rs": "e2b9f720e0a150832709b49d55269d59fbcb27f0b2614c2e3ef057b984d5a31e",
+    "crates/core/src/bus/tests_main.rs": "def3ae72d082ddd3ecb858eb98ba342ecf7653884fa9d8c57538dc5fbba14329",
+    "crates/core/src/cosim/registry.rs": "b7f3e4c9f7371091c0598f2d0ba2b5bf5708a3317937eb978435b1bb4d865a99",
+    "crates/core/src/cosim/routing.rs": "9d8bd11cba14591fed3f2020ac54b0558b1d517456c4c39fd3c595887bda630b",
+    "crates/core/src/lib.rs": "b47c862e08a47a201a6cb9644223925331e84ae74ce55c397ab1c31eca33084c",
+    "crates/core/src/machine/advance.rs": "32ce59aa5bb137589de3c0e330d85e43cde68efdf8fe111a6855b8d9724c210b",
+    "crates/core/src/machine/world_hooks.rs": "ce5594df64c0232ec6267b789cb3af815a70837143fad8d754a0b9d57c9ad0f3",
+    "crates/core/src/reset_input.rs": "d6c886452e7d2dc0e99344cd243e58f7e4013f0c742369054b77b877c7a13bc5",
+    "crates/core/src/tests/integration.rs": "b730c20459193baa7b9ebffdc3a7765f254d39fa6b88aeb728ea11e8e9866f8c",
+    "crates/core/src/tests/simctl_machine.rs": "bf3666f2b5b996759df46e9cd0870957c24c369002e82c40d86d94df925347ab",
+    "crates/core/src/tests/spi_edge_sampling_lab.rs": "0508f8903816cab30128ac01fcc18f4dcfdfb5f8517c8faa8fd22ccfe9c7f34f",
+    "crates/core/src/tests/u575_fdcan.rs": "c60bcec75ca233dee80a6edc299281509fb84d002701faba931d35c532d51f87",
+    "crates/core/src/world.rs": "b649296c151322766c33bb332c0e78b15f85e28be356a2001d3a6a91998c4998",
+    "crates/core/src/world/cosim.rs": "c930afc4fa4379b3effc2a1e2794ce0d21258824c7f9bf4a442efd7975b0b03a",
+    "crates/core/tests/reset_input.rs": "9d98ef5cc079251fe6fe146e8345093d77ddeea37cad2120aa9ce15d3e3a4c26",
+    "crates/core/tests/world_analog.rs": "9639ab9a3fd64a1ab7007e8cb05c4cea6873327c81c0fd52d0cb57fb32606203",
+    "crates/core/tests/world_can_bus.rs": "30ebeb4fe8a233c94e099894d2476bad981d5acc2d5348b4b12782786b8d1814",
+    "crates/core/tests/world_can_perf.rs": "b839833bc038d0d9035283a15135f4ea7ae097ef02a7dcecf2adb38f877d330a",
+    "crates/core/tests/world_can_timed.rs": "99bd0afc3f2526e20a1332b22a54679b25fa941f0993b7555450732e8279ff39",
+    "crates/core/tests/world_manifest_validation.rs": "d81904b37e58b1411f9a29641dd351426408144dfe090cd815c9b1d01a096ee4",
+    "crates/core/tests/world_multichip.rs": "19efca776a582ed77dc7bb1626e6088f98bbdb53d1d381644187d81801501a03",
+    "crates/core/tests/world_yaml_and_plugin.rs": "b44998a3750f7a167a50c43873260dddfc418a802d814e43c25bc58155f825bc",
+    "crates/dap/src/adapter.rs": "f6efb26a242093b4424e73e0d172ad2c04c4d0836544cdf43c1633d0f63c6d6d",
+    "crates/wasm/src/world.rs": "d9a3753d754a6ae4940e2a5e9322909293e00d8106c295de657cbda86c5ac8ea"
+  },
+  "source_set_sha256": "7552368506d7cd812479715f6bb085700f82f1477f9bf8ce4ab6fb3be7691ed4",
+  "profile": {
+    "focused": "world-analog-20261112",
+    "inherits": "dev",
+    "debug": 0,
+    "incremental": false,
+    "build_jobs": 2,
+    "normal_hooks": "unchanged scripts, private task target, dev/test debug disabled"
+  },
+  "red_evidence": {
+    "scope": "one world-manifest test before implementation",
+    "error": "unknown field `cosim_models`, expected one of `schema_version`, `name`, `nodes`, `interconnects`, `rf`"
+  },
+  "gates": [
+    {
+      "gate": "config-red",
+      "command": "cargo test -p labwired-config --test world_cosim world_accepts_one_explicit_shared_analog_model",
+      "exit_code": 101,
+      "test_results": [
+        {
+          "passed": 0,
+          "failed": 1,
+          "ignored": 0
+        }
+      ],
+      "log_sha256": "b08e292123de7dafedc2c3f4821cb803a32695e4bb333ca099f7a22852235ff9"
+    },
+    {
+      "gate": "reviewed-focused",
+      "command": "cargo test -p labwired-core --test world_analog --test reset_input --test cosim_pin_routing --test analog_adapter --test world_manifest_validation --test world_determinism",
+      "exit_code": 0,
+      "test_results": [
+        {
+          "passed": 21,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 29,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "log_sha256": "3341c1fb30097602e5b7f80dd963b71c61da2abe2440c8f591707a52f40204ec"
+    },
+    {
+      "gate": "reviewed-config",
+      "command": "cargo test -p labwired-config --test world_cosim",
+      "exit_code": 0,
+      "test_results": [
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "log_sha256": "094890d93a60f5df1359d563364fe5fdb9a3e66e76c615c6cdb914de9d54d5d0"
+    },
+    {
+      "gate": "reviewed-wasm",
+      "command": "cargo test -p labwired-wasm --lib world::tests::a_wasm_world_preserves_the_shared_analog_boundary_and_trace",
+      "exit_code": 0,
+      "test_results": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "log_sha256": "cb5d25f81752e9ac557c57625941c53b58adbe5bbe709a62f21bdec13e45e28d"
+    },
+    {
+      "gate": "cli-check",
+      "command": "cargo check -p labwired-cli",
+      "exit_code": 0,
+      "test_results": [],
+      "log_sha256": "9345a2e8b401eaf9e05d127740e6acbf0162b2f52a303b12ef118e8aa5895477"
+    },
+    {
+      "gate": "precommit",
+      "command": "./scripts/pre-commit.sh",
+      "exit_code": 0,
+      "test_results": [],
+      "log_sha256": "9d4a34049624d57a1ca46fac57a4f1af4a280eb6b5093b021e5e4807655f744c"
+    },
+    {
+      "gate": "prepush",
+      "command": "./scripts/pre-push.sh",
+      "exit_code": 0,
+      "test_results": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 31,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 43,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "log_sha256": "a7035f40865de1a7396a7e7f458c9b67e28a57f3cff1ce8a9850a13d98e43d3a"
+    }
+  ],
+  "claims": {
+    "one_shared_solver": true,
+    "same_named_gpio_independent": true,
+    "shared_rail_load_coupling_and_kcl": true,
+    "distinct_real_adc_conversions": true,
+    "native_wasm_transport_test": true,
+    "live_browser_test": false,
+    "comparator_chip_integration": false,
+    "full_native_esc_runtime": false,
+    "silicon_validation": false,
+    "flight_validation": false,
+    "coupling": "interval-start-zero-order-hold",
+    "cpu_alignment": "first instruction boundary at or after requested world boundary",
+    "gpio_driver_amplitude": "actual routed VDD, else declared io_voltage_v",
+    "gpio_input_thresholds": "existing nominal descriptor thresholds; actual-VDD follow-up required",
+    "power_on_release_delay_modeled": false,
+    "vdda_zero_routing_supported": false,
+    "capture_or_acknowledgment_fields_changed": false
+  },
+  "reset_source": {
+    "url": "https://www.arterychip.com/download/DS/DS_AT32F421_V2.03_EN.pdf",
+    "revision": "Ver 2.03",
+    "printed_page": 46,
+    "table": 35,
+    "sha256": "953409957662e1fe4fada766411913ca832382551500f20fad474dec0739c0de",
+    "fixture_scope": "explicit reset-limit fixture on shipped F401 bus; not an F401 silicon claim"
+  }
+}

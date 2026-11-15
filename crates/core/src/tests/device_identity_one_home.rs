@@ -68,7 +68,7 @@
 //! `labwired-wasm` to link would run nowhere on a pull request — the same
 //! "parked in an excluded lane" failure the concepts above are about. Reading
 //! its source is what makes this gate reachable from the lane that actually
-//! blocks a merge. `crates/core/tests/panel_artifact_evidence.rs` derives the
+//! blocks a merge. `crates/core/tests/display/panel_artifact_evidence.rs` derives the
 //! panel list from the same files for the same reason.
 
 use crate::peripherals::kit::registry;

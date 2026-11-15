@@ -1,0 +1,22 @@
+id: rp2040
+chip: rp2040
+system: systems/rp2040.yaml
+pio: { platform: raspberrypi, board: pico, framework: arduino }
+# TIMER runs at its real 1 MHz since #1454, so mbed's pre-main
+# busy_wait_us(100_000) (double_tap_usb_boot) alone costs 12.5M cycles at
+# 125 MHz; 40M = 320 ms (the CLI caps scripts at 50M steps).
+max_steps: 40000000
+budget_reason: "real-rate TIMER: 100 ms pre-main double-tap wait = 12.5M cycles; 320 ms window (was 8M, red since #1454)"
+# Pico LED = GPIO25 via SIO (not APB GPIO)
+led_watch: "sio:25"
+led_min_edges: 2
+# L6: Mbed analogWrite(LED_BUILTIN) = PWM slice 4 B on GP25 (FUNCSEL 4),
+# period_ms(2): DIV 250.0, TOP 1000 = 250,250 cycles (499.5 Hz), CC 502.
+# 30 ms of sketch = 30 edges.
+pwm_watch: "sio:25"
+pwm_min_edges: 20
+family: rp2040
+notes: "Needs platform raspberrypi (pio pkg install -g -p raspberrypi if missing); SPI slave attach for L4"
+sketches_skip: [L8_can]
+sketches_skip_reason:
+  L8_can: "No on-chip CAN model"
