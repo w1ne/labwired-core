@@ -2861,11 +2861,7 @@ impl SystemBus {
             // nothing reads. A chip with no row for this instance therefore
             // must not reach `pad_lines_arc` at all.
             let mut plan: Vec<(char, u8, Option<u8>, usize, &'static str)> = Vec::new();
-            let wch_x035 = self.peripherals[uart_idx]
-                .dev
-                .as_any()
-                .and_then(|a| a.downcast_ref::<Uart>())
-                .is_some_and(Uart::is_wch_x035_pad_map);
+            let wch_x035 = self.peripherals[uart_idx].dev.uart_pad_map_wch_x035();
             for port in ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'] {
                 let Some(gpio_idx) = self.find_peripheral_index_by_name(&format!("gpio{port}"))
                 else {

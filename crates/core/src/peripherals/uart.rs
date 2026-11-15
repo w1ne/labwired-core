@@ -1270,10 +1270,6 @@ impl Uart {
         Ok(self)
     }
 
-    pub(crate) fn is_wch_x035_pad_map(&self) -> bool {
-        self.pad_map_wch_x035
-    }
-
     /// Install a YAML-parameterised register map for [`UartRegisterLayout::Custom`].
     pub(crate) fn with_custom_map(mut self, map: UartRegMap) -> Self {
         self.custom_map = Some(map);
@@ -2447,6 +2443,10 @@ impl UartStreamHost for Uart {
 }
 
 impl crate::Peripheral for Uart {
+    fn uart_pad_map_wch_x035(&self) -> bool {
+        self.pad_map_wch_x035
+    }
+
     fn line_names(&self) -> &'static [&'static str] {
         UART_LINES
     }
