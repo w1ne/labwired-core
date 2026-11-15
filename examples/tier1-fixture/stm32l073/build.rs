@@ -10,11 +10,11 @@ use std::path::PathBuf;
 
 fn main() {
     // cortex-m-rt's link.x consumes this memory.x for the FLASH/RAM regions.
-    // The `-Tlink.x` link arg is supplied globally for thumbv6m targets by
-    // the repo-level .cargo/config.toml (mirrors crates/firmware-l073-demo),
-    // so it must NOT be emitted here a second time.
+    // The repo-level .cargo/config.toml no longer passes -Tlink.x globally for
+    // thumbv6m (it duplicated MEMORY regions), so the fixture supplies it here.
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     fs::copy("memory.x", out_dir.join("memory.x")).unwrap();
     println!("cargo:rustc-link-search={}", out_dir.display());
+    println!("cargo:rustc-link-arg=-Tlink.x");
     println!("cargo:rerun-if-changed=memory.x");
 }
