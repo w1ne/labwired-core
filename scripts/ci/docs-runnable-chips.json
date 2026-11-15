@@ -517,6 +517,10 @@
       "expect": "OK",
       "note": "Teensy 4.1 UART/LED smoke. Serial1 is LPUART6. Image is DTCM-linked."
     },
+    "mimxrt1062-teensy41": {
+      "how": "needs-build",
+      "why": "The Teensy 4.1 profile boots stock Teensyduino from the FlexSPI NOR IVT and prints over a USB CDC scripted host; both are newer than the installed v0.25.0 CLI this gate checks. The arduino-matrix teensy41 row (L0-L3, L5, L7) passes from source; switch this row after a release carries the mimxrt1062-teensy41 descriptor."
+    },
     "stm32f746": {
       "how": "committed",
       "firmware": "tests/fixtures/stm32f746-discovery-smoke.elf",
@@ -534,6 +538,10 @@
       "script": "examples/stm32g0b1re/io-smoke.yaml",
       "expect": "exti0 port=B falling imr=1",
       "note": "In-repo USART1 PA9 AF1, TIM2 PSC, and G0 EXTI examples. The customer IO-Link ELF is still built by iolinki-reference.yml; see docs/iolinki-g0-prerequisites.md."
+    },
+    "stm32c031c6": {
+      "how": "needs-build",
+      "why": "New in this PR: the STM32C0 RCC profile (`stm32c0`) and the C0 timer pad table are newer than the released CLI this gate installs. The stock-stm32duino Arduino matrix row stm32c031c6 runs it on a source-built CLI; switch to `committed` once a release carries the model"
     },
     "litex-vexriscv": {
       "how": "needs-build",

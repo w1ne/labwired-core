@@ -3414,6 +3414,94 @@ fn test_important_core_regression_matrix_is_complete() {
     }
 }
 
+/// Cores that chip descriptors declare but this matrix deliberately does not
+/// boot, each exercised by a dedicated suite instead. Shrink-only: an entry that
+/// gains a survival case, or that no chip declares any more, fails the test
+/// below, so it cannot linger.
+const CORES_COVERED_ELSEWHERE: &[(&str, &str)] = &[
+    (
+        "avr8",
+        "avr test binary (avr_nano_golden_survival and the AVR session builders)",
+    ),
+    (
+        "pic16",
+        "PIC16/PIC18 session builders and their instruction-set suites",
+    ),
+    (
+        "pic18",
+        "PIC16/PIC18 session builders and their instruction-set suites",
+    ),
+    (
+        "pic24f",
+        "PIC24/dsPIC session builders and their instruction-set suites",
+    ),
+    (
+        "dspic33f",
+        "PIC24/dsPIC session builders and their instruction-set suites",
+    ),
+    (
+        "cortex-a7",
+        "RV1103 Linux loader and device suites (the `rv1103` test binary)",
+    ),
+    ("cortex-r5f", "declared chip; no committed boot fixture yet"),
+    ("rv32ec", "RV32EC profile covered by the CH32V003 suites"),
+    (
+        "rv32emc",
+        "RV32EmC (QingKe V2C) covered by the CH32V005/CH32V006 compiled-firmware \
+         suites (`vendor` test binary) and riscv_rv32e_tests",
+    ),
+];
+
+/// The expectation comes from the chip descriptors that actually ship, not
+/// from a list written beside the cases it checks: every distinct top-level
+/// `core:` in `configs/chips/*.yaml` must have a survival case or an entry in
+/// [`CORES_COVERED_ELSEWHERE`].
+#[test]
+fn every_core_a_shipped_chip_declares_has_a_survival_case_or_a_named_exemption() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../configs/chips");
+    let mut declared = std::collections::BTreeSet::new();
+    for entry in std::fs::read_dir(&dir).expect("read configs/chips") {
+        let path = entry.unwrap().path();
+        if path.extension().and_then(|e| e.to_str()) != Some("yaml") {
+            continue;
+        }
+        for line in std::fs::read_to_string(&path).unwrap().lines() {
+            if let Some(v) = line.strip_prefix("core:") {
+                let v = v.split('#').next().unwrap_or("").trim().trim_matches('"');
+                declared.insert(v.to_string());
+            }
+        }
+    }
+    assert!(
+        declared.len() >= 10,
+        "found only {} chip cores under {}: the scan is vacuous",
+        declared.len(),
+        dir.display()
+    );
+    let covered: std::collections::BTreeSet<&str> = SURVIVAL_CASES.iter().map(|c| c.core).collect();
+    let exempt: std::collections::BTreeSet<&str> =
+        CORES_COVERED_ELSEWHERE.iter().map(|(c, _)| *c).collect();
+
+    let missing: Vec<&String> = declared
+        .iter()
+        .filter(|c| !covered.contains(c.as_str()) && !exempt.contains(c.as_str()))
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "chip descriptors declare cores with no survival case and no exemption: {missing:?}. \
+         Add a SURVIVAL_CASES entry (preferred) or a justified CORES_COVERED_ELSEWHERE entry."
+    );
+    let stale: Vec<&str> = exempt
+        .iter()
+        .copied()
+        .filter(|c| covered.contains(c) || !declared.contains(*c))
+        .collect();
+    assert!(
+        stale.is_empty(),
+        "CORES_COVERED_ELSEWHERE entries that are now covered or no longer declared: {stale:?}"
+    );
+}
+
 // The esp32 transcript contains an allowlisted `dma FAIL`, so the passing gate
 // alone cannot show the scan would reject a regression. These feed the scan
 // synthetic transcripts instead.
