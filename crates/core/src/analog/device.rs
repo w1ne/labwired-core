@@ -269,6 +269,9 @@ pub fn bjt_parameters_at_temperature(
             }
         };
         adjusted.is = raised(model.is, model.tis1, model.tis2);
+        // `IBE`/`IBC` take the `IS` exponents (ngspice `bjttemp.c`).
+        adjusted.ibe = model.ibe.map(|ibe| raised(ibe, model.tis1, model.tis2));
+        adjusted.ibc = model.ibc.map(|ibc| raised(ibc, model.tis1, model.tis2));
         adjusted.ise = raised(model.ise, model.tise1, model.tise2);
         adjusted.isc = raised(model.isc, model.tisc1, model.tisc2);
         adjusted.iss = raised(model.iss, model.tiss1, model.tiss2);
@@ -280,9 +283,26 @@ pub fn bjt_parameters_at_temperature(
         if adjusted.isc > 0.0 {
             adjusted.isc *= libm::exp(log_current_factor / model.nc) / beta_factor;
         }
+        // ngspice-42 `bjttemp.c` divides the `IS` exponent by `NF` for `IBE`
+        // and by `NR` for `IBC`, using the card emission coefficients.
+        let split = model.ibe.is_some() && model.ibc.is_some();
+        if split {
+            adjusted.ibe = model
+                .ibe
+                .map(|ibe| ibe * libm::exp(log_current_factor / model.nf));
+            adjusted.ibc = model
+                .ibc
+                .map(|ibc| ibc * libm::exp(log_current_factor / model.nr));
+        }
         // ngspice-42 `bjttemp.c` scales `ISS` by the transport `IS` factor
-        // (no `NS` division) and gives `NS` its own polynomial.
-        adjusted.iss *= libm::exp(log_current_factor);
+        // (no `NS` division) and gives `NS` its own polynomial. With
+        // `IBE`/`IBC` that factor variable still holds the `IBC` one, so
+        // `ISS` follows it.
+        adjusted.iss *= libm::exp(if split {
+            log_current_factor / model.nr
+        } else {
+            log_current_factor
+        });
     }
     adjusted.bf *= if model.tbf_given {
         temperature_factor(model.tbf1, model.tbf2)
@@ -1227,6 +1247,53 @@ pub fn bjt_op_with_nkf_at_thermal_voltage(
     nkf: Option<f64>,
     thermal_voltage: f64,
 ) -> BjtOp {
+    bjt_op_split_at_thermal_voltage(
+        vbe,
+        vbc,
+        (is, is),
+        bf,
+        br,
+        nf,
+        nr,
+        vaf,
+        var,
+        ikf,
+        ikr,
+        ise,
+        ne,
+        isc,
+        nc,
+        nkf,
+        thermal_voltage,
+    )
+}
+
+/// Gummel–Poon operating point with separate B-E and B-C saturation
+/// currents `(IBE, IBC)`, as [`BjtModel::junction_saturation_currents`]
+/// returns them. ngspice-42 `bjtload.c` forms `cbe = IBE·(exp − 1)` and
+/// `cbc = IBC·(exp − 1)`; the transport current is `(cbe − cbc)/qb` and the
+/// base current `cbe/BF + cbc/BR` plus recombination. Equal currents give
+/// [`bjt_op_with_nkf_at_thermal_voltage`] bit for bit.
+#[allow(clippy::too_many_arguments)] // Mirrors the scalar parameters of a SPICE BJT model card.
+pub fn bjt_op_split_at_thermal_voltage(
+    vbe: f64,
+    vbc: f64,
+    (is_be, is_bc): (f64, f64),
+    bf: f64,
+    br: f64,
+    nf: f64,
+    nr: f64,
+    vaf: f64,
+    var: f64,
+    ikf: f64,
+    ikr: f64,
+    ise: f64,
+    ne: f64,
+    isc: f64,
+    nc: f64,
+    nkf: Option<f64>,
+    thermal_voltage: f64,
+) -> BjtOp {
     let vtf = nf * thermal_voltage;
     let vtr = nr * thermal_voltage;
     let vte = ne * thermal_voltage;
@@ -1244,15 +1311,19 @@ pub fn bjt_op_with_nkf_at_thermal_voltage(
         0.0
     };
     let base_width = 1.0 - vbc * inv_vaf - vbe * inv_var;
-    let transport = is * (forward - reverse);
+    let transport = if is_be == is_bc {
+        is_be * (forward - reverse)
+    } else {
+        is_be * (forward - 1.0) - is_bc * (reverse - 1.0)
+    };
 
     // Leave the common infinite-knee path in its original form. Besides being
     // cheaper, preserving the operations keeps existing model cards bit stable.
     let (ict, gif, gir) = if ikf.is_infinite() && ikr.is_infinite() {
         (
             transport * base_width,
-            is * forward_slope / vtf * base_width - transport * inv_var,
-            is * reverse_slope / vtr * base_width + transport * inv_vaf,
+            is_be * forward_slope / vtf * base_width - transport * inv_var,
+            is_bc * reverse_slope / vtr * base_width + transport * inv_vaf,
         )
     } else {
         let q1 = 1.0 / base_width;
@@ -1266,8 +1337,8 @@ pub fn bjt_op_with_nkf_at_thermal_voltage(
         } else {
             0.0
         };
-        let ibe_injection = is * (forward - 1.0);
-        let ibc_injection = is * (reverse - 1.0);
+        let ibe_injection = is_be * (forward - 1.0);
+        let ibc_injection = is_bc * (reverse - 1.0);
         let q2 = inv_ikf * ibe_injection + inv_ikr * ibc_injection;
         let q2_argument = (1.0 + 4.0 * q2).max(0.0);
         let (qb, d_qb_d_vbe, d_qb_d_vbc) = if let Some(nkf) = nkf {
@@ -1288,8 +1359,8 @@ pub fn bjt_op_with_nkf_at_thermal_voltage(
             };
             (
                 qb,
-                q1 * (qb * inv_var + inv_ikf * is * forward_slope / vtf * d_rolloff_d_q2),
-                q1 * (qb * inv_vaf + inv_ikr * is * reverse_slope / vtr * d_rolloff_d_q2),
+                q1 * (qb * inv_var + inv_ikf * is_be * forward_slope / vtf * d_rolloff_d_q2),
+                q1 * (qb * inv_vaf + inv_ikr * is_bc * reverse_slope / vtr * d_rolloff_d_q2),
             )
         } else {
             // ngspice uses 1 when the clamped argument is zero, keeping both
@@ -1300,12 +1371,12 @@ pub fn bjt_op_with_nkf_at_thermal_voltage(
                 1.0
             };
             let qb = q1 * (1.0 + sqrt_q2) / 2.0;
-            let d_qb_d_vbe = q1 * (qb * inv_var + inv_ikf * is * forward_slope / vtf / sqrt_q2);
-            let d_qb_d_vbc = q1 * (qb * inv_vaf + inv_ikr * is * reverse_slope / vtr / sqrt_q2);
+            let d_qb_d_vbe = q1 * (qb * inv_var + inv_ikf * is_be * forward_slope / vtf / sqrt_q2);
+            let d_qb_d_vbc = q1 * (qb * inv_vaf + inv_ikr * is_bc * reverse_slope / vtr / sqrt_q2);
             (qb, d_qb_d_vbe, d_qb_d_vbc)
         };
-        let d_transport_d_vbe = is * forward_slope / vtf;
-        let d_transport_d_vbc = -is * reverse_slope / vtr;
+        let d_transport_d_vbe = is_be * forward_slope / vtf;
+        let d_transport_d_vbc = -is_bc * reverse_slope / vtr;
         let qb_squared = qb * qb;
         (
             transport / qb,
@@ -1318,20 +1389,26 @@ pub fn bjt_op_with_nkf_at_thermal_voltage(
     let (ibe, gpi) = if ise > 0.0 {
         let (exp_be, exp_be_slope) = bjt_junction_factors(vbe, vte);
         (
-            (is / bf) * (forward - 1.0) + ise * (exp_be - 1.0),
-            is * forward_slope / vtf / bf + ise * exp_be_slope / vte,
+            (is_be / bf) * (forward - 1.0) + ise * (exp_be - 1.0),
+            is_be * forward_slope / vtf / bf + ise * exp_be_slope / vte,
         )
     } else {
-        ((is / bf) * (forward - 1.0), is * forward_slope / vtf / bf)
+        (
+            (is_be / bf) * (forward - 1.0),
+            is_be * forward_slope / vtf / bf,
+        )
     };
     let (ibc, gmu) = if isc > 0.0 {
         let (exp_bc, exp_bc_slope) = bjt_junction_factors(vbc, vtc);
         (
-            (is / br) * (reverse - 1.0) + isc * (exp_bc - 1.0),
-            is * reverse_slope / vtr / br + isc * exp_bc_slope / vtc,
+            (is_bc / br) * (reverse - 1.0) + isc * (exp_bc - 1.0),
+            is_bc * reverse_slope / vtr / br + isc * exp_bc_slope / vtc,
         )
     } else {
-        ((is / br) * (reverse - 1.0), is * reverse_slope / vtr / br)
+        (
+            (is_bc / br) * (reverse - 1.0),
+            is_bc * reverse_slope / vtr / br,
+        )
     };
 
     BjtOp {
@@ -1384,14 +1461,15 @@ pub fn bjt_forward_transport(
     };
     let (inv_vaf, inv_var) = (inverse(model.vaf), inverse(model.var));
     let (inv_ikf, inv_ikr) = (inverse(model.ikf), inverse(model.ikr));
-    let cbe = model.is * (forward - 1.0);
-    let gbe = model.is * forward_slope / vtf;
-    let gbc = model.is * reverse_slope / vtr;
+    let (is_be, is_bc) = model.junction_saturation_currents();
+    let cbe = is_be * (forward - 1.0);
+    let gbe = is_be * forward_slope / vtf;
+    let gbc = is_bc * reverse_slope / vtr;
     let q1 = 1.0 / (1.0 - vbc * inv_vaf - vbe * inv_var);
     let (qb, dqb_dvbe, dqb_dvbc) = if inv_ikf == 0.0 && inv_ikr == 0.0 {
         (q1, q1 * q1 * inv_var, q1 * q1 * inv_vaf)
     } else {
-        let q2 = inv_ikf * cbe + inv_ikr * model.is * (reverse - 1.0);
+        let q2 = inv_ikf * cbe + inv_ikr * is_bc * (reverse - 1.0);
         let argument = (1.0 + 4.0 * q2).max(0.0);
         // d(rolloff)/dq2 / 2, so dqb = q1·(qb/VA + d(q2)·this). A clamped
         // zero argument keeps bjt_op's tangents: 1 for the square root (as
@@ -1511,10 +1589,11 @@ pub fn bjt_transit_charge_at_thermal_voltage(
     let vtr = model.nr * thermal_voltage;
     let (forward, forward_slope) = bjt_junction_factors(vbe, vtf);
     let (reverse, reverse_slope) = bjt_junction_factors(vbc, vtr);
-    let cbe = model.is * (forward - 1.0);
-    let gbe = model.is * forward_slope / vtf;
-    let cbc = model.is * (reverse - 1.0);
-    let gbc = model.is * reverse_slope / vtr;
+    let (is_be, is_bc) = model.junction_saturation_currents();
+    let cbe = is_be * (forward - 1.0);
+    let gbe = is_be * forward_slope / vtf;
+    let cbc = is_bc * (reverse - 1.0);
+    let gbc = is_bc * reverse_slope / vtr;
 
     let inv_vaf = if model.vaf > 0.0 && model.vaf.is_finite() {
         1.0 / model.vaf

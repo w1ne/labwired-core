@@ -1368,6 +1368,12 @@ pub struct BjtModel {
     pub polarity: Polarity,
     /// Transport saturation current `IS`, amps.
     pub is: f64,
+    /// Base-emitter and base-collector saturation currents `IBE`/`IBC`,
+    /// amps. As in ngspice-42, they replace `IS` in the two junction
+    /// currents only when both are given; `IS` then sets only the Newton
+    /// limiter's critical voltage. See [`BjtModel::junction_saturation_currents`].
+    pub ibe: Option<f64>,
+    pub ibc: Option<f64>,
     /// Forward current gain `BF`.
     pub bf: f64,
     /// Reverse current gain `BR`.
@@ -1610,6 +1616,8 @@ impl BjtModel {
     pub fn with_area(self, area: f64) -> Self {
         Self {
             is: self.is * area,
+            ibe: self.ibe.map(|ibe| ibe * area),
+            ibc: self.ibc.map(|ibc| ibc * area),
             ise: self.ise * area,
             isc: self.isc * area,
             ikf: self.ikf * area,
@@ -1632,6 +1640,8 @@ impl BjtModel {
         Self {
             polarity,
             is: 1e-16,
+            ibe: None,
+            ibc: None,
             bf: 100.0,
             br: 1.0,
             nf: 1.0,
@@ -1744,6 +1754,17 @@ impl BjtModel {
             vg: 1.206,
             cn: None,
             d: None,
+        }
+    }
+
+    /// Saturation currents `(B-E, B-C)` of the two junction diodes. ngspice-42
+    /// `bjttemp.c` uses `IBE`/`IBC` only when both are given, and `IS` for
+    /// both otherwise. The transport current is their difference, so the
+    /// forward, reverse, base and transit currents all follow them.
+    pub fn junction_saturation_currents(&self) -> (f64, f64) {
+        match (self.ibe, self.ibc) {
+            (Some(ibe), Some(ibc)) => (ibe, ibc),
+            _ => (self.is, self.is),
         }
     }
 
@@ -4215,6 +4236,13 @@ fn bind_models(
                         ctx.parse_err("a BJT model needs IS > 0, BF > 0 and BR > 0".to_string())
                     );
                 }
+                if [model.ibe, model.ibc]
+                    .into_iter()
+                    .flatten()
+                    .any(|current| !current.is_finite() || current <= 0.0)
+                {
+                    return Err(ctx.parse_err("BJT IBE and IBC must be finite and > 0".to_string()));
+                }
                 if !model.is.is_finite()
                     || !model.bf.is_finite()
                     || !model.br.is_finite()
@@ -5297,6 +5325,8 @@ fn parse_model(
                 )))
             }
             (ModelCard::Bjt(model), "IS") => model.is = value,
+            (ModelCard::Bjt(model), "IBE") => model.ibe = Some(value),
+            (ModelCard::Bjt(model), "IBC") => model.ibc = Some(value),
             (ModelCard::Bjt(model), "BF") => model.bf = value,
             (ModelCard::Bjt(model), "BR") => model.br = value,
             (ModelCard::Bjt(model), "NF") => model.nf = value,

@@ -9538,6 +9538,121 @@ mod analog {
         );
     }
 
+    /// `IBE`/`IBC` replace `IS` in the B-E and B-C junction currents when
+    /// both are given (ngspice-42 `bjttemp.c`/`bjtload.c`): forward, reverse,
+    /// saturated, `AREA`, PNP, the `IS·exp(factlog/NF)` and `/NR`
+    /// temperature law and the `TLEV=3` power law. `IBE` alone is ignored,
+    /// so `Q7` equals its plain twin `Q8` in ngspice and here.
+    #[test]
+    fn bjt_ibe_ibc_split_saturation_currents_match_ngspice() {
+        let deck = "VB1 b1 0 dc 0.7\nVC1 c1 0 dc 2\nVB2 b2 0 dc 0.75\nVC2 c2 0 dc 0.2\n\
+            VB3 b3 0 dc 0.65\nVE3 e3 0 dc 2\nVB4 b4 0 dc 0.7\nVC4 c4 0 dc 0.3\n\
+            VB5 b5 0 dc 0.7\nVC5 c5 0 dc 0.3\nVB6 b6 0 dc 0.7\nVC6 c6 0 dc 0.3\n\
+            VB7 b7 0 dc 0.7\nVC7 c7 0 dc 2\nVB8 b8 0 dc 0.7\nVC8 c8 0 dc 2\n\
+            VBP bp 0 dc -0.72\nVCP cp 0 dc -0.25\n\
+            Q1 c1 b1 0 QS temp=27\nQ2 c2 b2 0 QS temp=27\nQ3 0 b3 e3 QS temp=27\n\
+            Q4 c4 b4 0 QT temp=80\nQ5 c5 b5 0 QS 2 temp=27\nQ6 c6 b6 0 Q3 temp=80\n\
+            Q7 c7 b7 0 QHALF temp=27\nQ8 c8 b8 0 QPLAIN temp=27\nQP cp bp 0 QPS temp=27\n\
+            .model QS NPN(IS=1e-15 IBE=2e-15 IBC=6e-17 BF=100 BR=3 VAF=30 VAR=8 IKF=5m \
+            IKR=2m ISE=1e-14 NE=1.6 ISC=1e-14 NC=1.8)\n\
+            .model QT NPN(IS=1e-15 IBE=2e-15 IBC=6e-17 BF=100 BR=3 NF=1.04 NR=1.1 \
+            ISE=1e-14 NE=1.6 XTB=1.5)\n\
+            .model Q3 NPN(IS=1e-15 IBE=2e-15 IBC=6e-17 BF=100 BR=3 TLEV=3 TIS1=-2e-3 \
+            TIS2=1e-6)\n\
+            .model QHALF NPN(IS=1e-15 IBE=2e-15 BF=100 BR=3)\n\
+            .model QPLAIN NPN(IS=1e-15 BF=100 BR=3)\n\
+            .model QPS PNP(IS=2e-15 IBE=1e-15 IBC=8e-16 BF=60 BR=2 VAF=40 IKF=10m)\n";
+        // ngspice-42 `op` (reltol=1e-9, numdgt=11): current out of each
+        // source's `+` terminal, amps.
+        #[rustfmt::skip]
+        let ngspice = [
+            ("VB1", 1.1562515635e-05), ("VC1", 9.1051299597e-04),
+            ("VB2", 7.9154261470e-05), ("VC2", 3.7653278813e-03),
+            ("VB3", 1.6525229864e-06), ("VE3", 5.6330984343e-06),
+            ("VB4", 5.0452207776e-05), ("VC4", 6.3056295071e-03),
+            ("VB5", 2.3125349466e-05), ("VC5", 1.7130653428e-03),
+            ("VB6", 6.4197339584e-06), ("VC6", 6.4192312264e-04),
+            ("VB7", 5.6703461711e-06), ("VC7", 5.6703468044e-04),
+            ("VB8", 5.6703461711e-06), ("VC8", 5.6703468044e-04),
+            ("VBP", -2.05086201032e-05), ("VCP", -1.09317935528e-03),
+        ];
+        let solver = build(deck);
+        for (name, expected) in ngspice {
+            let got = source_current(&solver, name);
+            assert!(
+                relative(got, expected) < 1e-4,
+                "{name}: ngspice-42 {expected} A, got {got} A"
+            );
+        }
+        // The split currents move every bias point well beyond that bound:
+        // the same card with `IS` alone gives a different device.
+        let plain = build(
+            &deck
+                .replace(" IBE=2e-15 IBC=6e-17", "")
+                .replace(" IBE=1e-15 IBC=8e-16", ""),
+        );
+        for name in ["VC1", "VB2", "VE3", "VC4", "VC5", "VC6", "VCP"] {
+            let (a, b) = (source_current(&solver, name), source_current(&plain, name));
+            assert!(relative(a, b) > 0.03, "{name}: IBE/IBC {a} A vs IS {b} A");
+        }
+    }
+
+    /// The transit charges `TF·cbe` and `TR·cbc` follow `IBE`/`IBC`, so a
+    /// saturating base ramp draws more charging current than the `IS` twin.
+    #[test]
+    fn bjt_ibe_ibc_drive_transit_charge_as_ngspice() {
+        let deck = "VB b 0 PULSE(0.55 0.75 1n 10n 1n 100n 200n)\nVC c 0 dc 0.3\n\
+            VB0 b0 0 PULSE(0.55 0.75 1n 10n 1n 100n 200n)\nVC0 c0 0 dc 0.3\n\
+            Q1 c b 0 QS temp=27\nQ2 c0 b0 0 Q0 temp=27\n\
+            .model QS NPN(IS=1e-15 IBE=2e-15 IBC=6e-17 BF=100 BR=3 TF=1n TR=20n XTF=2 \
+            ITF=10m)\n\
+            .model Q0 NPN(IS=1e-15 BF=100 BR=3 TF=1n TR=20n XTF=2 ITF=10m)\n";
+        // ngspice-42 `tran 1p` (trap, reltol=1e-9), linearised: currents
+        // out of each source, amps.
+        #[rustfmt::skip]
+        let ngspice: [(f64, [(&str, f64); 2]); 3] = [
+            (4e-9, [("VB", 2.7377525579e-05), ("VB0", 1.3690486279e-05)]),
+            (7e-9, [("VB", 2.8039388333e-04), ("VB0", 1.3952055910e-04)]),
+            (10e-9, [("VB", 3.8075629008e-03), ("VC", 3.6171269850e-03)]),
+        ];
+        let h: f64 = 2e-12;
+        let mut solver = build(deck);
+        let mut step = 0_u64;
+        for (time, expected) in ngspice {
+            let target = (time / h).round() as u64;
+            while step < target {
+                solver.advance(h).expect("IBE/IBC transient step solves");
+                step += 1;
+            }
+            for (name, value) in expected {
+                let got = source_current(&solver, name);
+                assert!(
+                    relative(got, value) < 2e-3,
+                    "{name} at {time:e} s: ngspice-42 {value} A, got {got} A"
+                );
+            }
+        }
+        let (with, without) = (
+            source_current(&solver, "VB"),
+            source_current(&solver, "VB0"),
+        );
+        assert!(
+            relative(with, without) > 0.5,
+            "IBE/IBC moved nothing: {with} vs {without}"
+        );
+    }
+
+    /// `IBE`/`IBC` must be positive currents.
+    #[test]
+    fn bjt_ibe_ibc_must_be_positive() {
+        let error = parse_netlist(
+            "V1 c 0 3\nV2 b 0 0.7\nQ1 c b 0 QX\n.model QX NPN(IS=1e-15 IBE=0 IBC=1e-16)\n",
+        )
+        .expect_err("IBE=0 must be refused")
+        .to_string();
+        assert!(error.contains("IBE"), "unexpected error {error}");
+    }
+
     /// `TLEV` 2 does not exist in ngspice-42 `bjttemp.c` (no saturation
     /// current would be set), so the card refuses it.
     #[test]

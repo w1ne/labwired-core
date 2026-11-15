@@ -56,6 +56,12 @@ the PORTB threshold result, and NTC Schmitt hysteresis across temperature
 changes. The GPIO thresholds in the chip descriptor are simulation
 assumptions, and this example does not route netlist voltages into ADC1.
 
+`analog-bjt-ibe-system.yaml` adds two BJT switches on RB2 and RB3 to the same
+NTC and diode. Both have one base divider and one `IS`/`BF`/`BR` card; only the
+SPICE `IBE`/`IBC` split saturation currents differ. The test
+`dspic33fj32mc202_bjt_ibe_ibc_switch_flips_gpio_beside_ntc_and_diode` checks
+both collectors against ngspice-42 and asserts RB2 low and RB3 high.
+
 Rebuild the ELFs (Linux x86-64 container; XC16 itself is proprietary and is
 not redistributed — only its output is committed):
 

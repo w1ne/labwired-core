@@ -1,0 +1,65 @@
+# Generic NTC divider, Shockley diode and two BJT switches for the
+# dsPIC33FJ32MC202. Both switches have the same base divider (about 0.59 V)
+# and the same IS/BF/BR card; only the `IBE`/`IBC` split saturation currents
+# (ngspice-42 `bjttemp.c`) differ. With the base held by voltage, `IBE` sets
+# the collector current, so the RB2 switch saturates below the assumed VIL
+# while its `IS`-only twin on RB3 stays above VIH. The chip descriptor's GPIO
+# voltage thresholds are simulation assumptions.
+name: "dspic33fj32mc202-demo-analog-bjt-ibe"
+chip: "../../configs/chips/dspic33fj32mc202.yaml"
+external_devices: []
+cosim_models:
+  - id: "ntc_divider"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      temperature: "ui.ntc.temperature_c"
+    outputs:
+      v_sense: "board.gpio_in.gpiob.0"
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 3.3
+        Rpull vcc sense 10k
+        Rntc sense 0 10k beta=3950 tnom=25 temp=25
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        temperature: "Rntc"
+      vdd: 3.3
+  - id: "diode_load_line"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_diode: "board.gpio_in.gpiob.1"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rlim supply sense 1k
+        D1 sense 0 DREF TEMP=25
+        .model DREF D(IS=2.52n N=1.752 RS=0.568 TNOM=25 EG=1.11 XTI=3)
+      probes:
+        v_diode: "v(sense)"
+      vdd: 3.3
+  - id: "bjt_split_saturation"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_split: "board.gpio_in.gpiob.2"
+      v_twin: "board.gpio_in.gpiob.3"
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 3.3
+        Rt1 vcc b1 1k
+        Rd1 b1 0 220
+        Rc1 vcc c1 10k
+        Q1 c1 b1 0 QSPLIT temp=27
+        Rt2 vcc b2 1k
+        Rd2 b2 0 220
+        Rc2 vcc c2 10k
+        Q2 c2 b2 0 QIS temp=27
+        .model QSPLIT NPN(IS=1e-15 IBE=1e-13 IBC=4e-13 BF=100 BR=3)
+        .model QIS NPN(IS=1e-15 BF=100 BR=3)
+      probes:
+        v_split: "v(c1)"
+        v_twin: "v(c2)"
+      vdd: 3.3

@@ -2542,10 +2542,10 @@ impl Solver {
             let model = bjt.operating_model;
             let operating_model = bjt.operating_model;
             let (vbe, vbc) = (self.bjt_vbe[index], self.bjt_vbc[index]);
-            let op = device::bjt_op_with_nkf_at_thermal_voltage(
+            let op = device::bjt_op_split_at_thermal_voltage(
                 vbe,
                 vbc,
-                operating_model.is,
+                operating_model.junction_saturation_currents(),
                 operating_model.bf,
                 operating_model.br,
                 operating_model.nf,

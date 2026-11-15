@@ -20,6 +20,7 @@ set and serial pins. There is no silicon capture.
 | M3 ADC1/SPI1/I2C1 on 202 pins | ✅ | real XC16 M3 ELF; `crates/core/tests/pic24_xc16_202_m3.rs` (AN4=RB2, AN0-AN5 only; SPI1 0xA5 loopback; TMP102 at 0x48; `M3 OK`, marker 0xBEEF) |
 | M3 demo system | ✅ | `system-m3.yaml` — TMP102 on `i2c1`, loopback on `spi1` |
 | Generic mixed-signal GPIO input | ✅ | `analog-ntc-diode-system.yaml`; `crates/core/tests/cosim_dspic33fj32mc202_analog.rs` solves an NTC and a Shockley diode onto RB0/RB1 and asserts PORTB levels and hysteresis |
+| Generic BJT `IBE`/`IBC` input | ✅ | `analog-bjt-ibe-system.yaml`; `dspic33fj32mc202_bjt_ibe_ibc_switch_flips_gpio_beside_ntc_and_diode` solves two BJT switches onto RB2/RB3 within 1e-4 of ngspice-42 and asserts RB2 low, RB3 high |
 | M0-M3 scope | ✅ complete | all four milestones evidenced below; nothing remains in M0-M3 |
 | Silicon capture / oracle | ❌ none | simulation-derived only |
 
