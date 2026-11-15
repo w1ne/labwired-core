@@ -16,7 +16,7 @@ with arduino-cli, `arduino:avr` 1.8.x, board `arduino:avr:mega`, from
 
 `analogWrite` reaches the pads on the six Timer0/1/2 pins: D13 (OC0A), D4
 (OC0B), D11/D12 (OC1A/OC1B), D10 (OC2A) and D9 (OC2B), see
-`cargo test -p labwired-core --test avr_mega2560_pwm`. The stock Arduino matrix
+`cargo test -p labwired-core --test avr avr_mega2560_pwm::`. The stock Arduino matrix
 row (`validation/arduino-matrix`, board `atmega2560`) passes L0–L7, evidence in
 [`evidence/arduino-matrix/`](evidence/arduino-matrix/).
 
