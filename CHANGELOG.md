@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.26.0] - 2026-11-11
+## [0.26.0] - 2026-11-15
 
 ### Release highlights
 - Multi-MCU systems now exchange timed GPIO, SPI, I2C, UART and CAN traffic;
@@ -30,6 +30,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   feature's scope and limitations.
 
 ### Added
+- Stock Arduino cores on more boards: Arduino Zero (SAMD21, #1739), Teensy 4.1
+  (i.MX RT1062, #1745), NUCLEO-C031C6 (first STM32C0, #1756), Arduino Mega 2560
+  Timer0/1/2 PWM on its pads (#1737) and an executable NUCLEO-F446RE smoke
+  (#1864). Each board's Arduino matrix row lists the levels that pass.
+- nRF54L05 and nRF54L10 application-core subsets (#1865) and a CONTROLLINO MINI
+  logic profile (#1886).
+- One analog circuit can now be shared by several MCU nodes in a world (#1833).
+  Resistors take temperature coefficients (#1900), external-device power rails
+  switch atomically at analog boundaries (#1837), and BLDC shafts couple to
+  shared analog worlds (#1836).
+- STEP/DIR drivers get travel stops, a startup position and limit-switch
+  outputs (#1866), and count real STM32 BSRR edges (#1906).
+- Native firmware/physics co-simulation with typed PCA9685 telemetry (#1881).
 - Classic ESP32 RMT transmit channels drive GPIO and NeoPixel/WS2812 LED
   strips, with decoded WS2812 output checks through the GPIO path (#1692).
 - Batch 5: ten more declarative parts, closing the high-demand list. LoRa:
@@ -282,6 +295,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a run without any skip. The four-servo trajectory lab (two cores, loopTask
   on APP_CPU) goes from 0.03x to 2.0x real time in WASM (Node, 12 s).
 ### Fixed
+- STM32 USARTs with the v2 register layout transmit only with CR1.UE and TE
+  set, as on silicon; the affected tier-1 fixtures now enable them (#1887,
+  #1923). Firmware that wrote TDR without enabling the USART no longer prints.
+- STM32 SPI, EFR32 timer and asserted NVIC level interrupts stay pending until
+  cleared (#1895, #1894, #1897). STM32F1 GPIO configuration lock and reset are
+  enforced (#1879). Timer alternate-function edges reach GPIO pad observers
+  (#1927).
+- ESP32-C3 GPIO input thresholds follow the supply voltage in mixed-signal
+  runs (#1869). HX711 readings no longer tear when the weight changes
+  mid-frame (#1847). Non-finite resistor conductance is rejected (#1902).
+- Classic megaAVR parts use their own flash and SRAM sizes (#1912), and
+  port-style pin names resolve on SAMD and AVR boards (#1913).
+- An assertions-pass early stop waits for scheduled inputs (#1911); replay is
+  refused only for attached air devices (#1867).
 - Avoid central device-clock work before its next deadline. Empty Renesas RIIC
   controllers no longer advance a nonexistent device clock; late device
   attachment and absolute-counter reload behavior remain covered by tests.
