@@ -46,6 +46,39 @@ fn diode_load_line_voltage() -> f64 {
     junction_v + current_at_junction_voltage(junction_v) * DIODE_RS_OHMS
 }
 
+/// Independent first backward-Euler step of ngspice's `TT`/`VP` soft
+/// reverse-recovery equation. The diode starts at the forward DC load line,
+/// then the source is pulled to zero while stored charge continues to flow.
+fn diode_soft_recovery_first_step_voltage(initial_voltage_v: f64) -> f64 {
+    const IS_A: f64 = 1e-12;
+    const RESISTANCE_OHMS: f64 = 1_000.0;
+    const TT_S: f64 = 10e-6;
+    const VP: f64 = 0.2;
+    const STEP_S: f64 = 1e-6;
+    const THERMAL_V: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+    let diode_current = |voltage_v: f64| IS_A * ((voltage_v / THERMAL_V).exp() - 1.0);
+    let initial_state = -TT_S * diode_current(initial_voltage_v);
+    let ratio = TT_S * VP / STEP_S;
+
+    let recovery_residual = |voltage_v: f64| {
+        let current = diode_current(voltage_v);
+        let state = (-TT_S * current + ratio * initial_state) / (1.0 + ratio);
+        let state_rate = (state - initial_state) / STEP_S;
+        let recovery_current = -(1.0 - VP) * state_rate;
+        -voltage_v / RESISTANCE_OHMS - current - recovery_current
+    };
+    let (mut low, mut high) = (-1.0, 1.0);
+    for _ in 0..100 {
+        let mid = (low + high) / 2.0;
+        if recovery_residual(mid) > 0.0 {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    (low + high) / 2.0
+}
+
 /// Independent level-1 NMOS load-line reference for the board-routed test.
 fn mosfet_drain_voltage(gate_v: f64) -> f64 {
     const SUPPLY_V: f64 = 3.3;
@@ -607,6 +640,111 @@ fn nucleo_f407_diode_depletion_and_transit_charge_reach_adc1_end_to_end() {
             settled.0
         );
     }
+}
+
+#[test]
+fn nucleo_f407_diode_soft_reverse_recovery_reaches_adc1_with_ntc_and_diode() {
+    let system_path = root("configs/systems/nucleo-f407.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F407 profile");
+    let generic =
+        SystemManifest::from_file(root("examples/nucleo-f407/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and Shockley diode netlists");
+    let recovery =
+        SystemManifest::from_file(root("examples/nucleo-f407/analog-diode-soft-recovery.yaml"))
+            .expect("load matched generic soft-recovery and TT control netlists");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(recovery.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F407 descriptor");
+    for (pad, channel) in [("PA0", 0), ("PA1", 1), ("PA2", 2), ("PA3", 3)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F407 bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries an NTC, diode, soft-recovery diode and control");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "all four generic analog devices must route through ADC1 channels 0..3"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.diode_recovery.supply_v", 1.0)
+        .expect("forward-bias both matched diode charge branches");
+
+    let mut cycles = session.cycles_until_boundary(0);
+    for _ in 0..40 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("settle the NTC and forward-biased diode branches");
+        assert_eq!(steps.len(), 4, "all four analog branches solve");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+    }
+    let forward_soft_v = signal_voltage(&session, "board.analog.pa2_volts");
+    let forward_control_v = signal_voltage(&session, "board.analog.pa3_volts");
+    assert!(
+        (forward_soft_v - forward_control_v).abs() < 1e-4,
+        "VP changes the recovery dynamics, not the DC forward load line: {forward_soft_v} V vs {forward_control_v} V"
+    );
+
+    session
+        .set_signal_number("ui.diode_recovery.supply_v", 0.0)
+        .expect("remove forward drive and expose stored charge");
+    cycles += session.cycles_until_boundary(cycles);
+    let (steps, errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("solve the first reverse-recovery step");
+    assert_eq!(steps.len(), 4, "all four analog branches solve");
+    assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+    let recovered_v = signal_voltage(&session, "board.analog.pa2_volts");
+    let control_v = signal_voltage(&session, "board.analog.pa3_volts");
+    let expected_v = diode_soft_recovery_first_step_voltage(forward_soft_v);
+    assert!(
+        (recovered_v - expected_v).abs() < 2e-4,
+        "the VP state must follow the independent backward-Euler charge equation: expected {expected_v} V, got {recovered_v} V"
+    );
+    assert!(
+        recovered_v > 0.1 && (recovered_v - control_v).abs() > 0.01,
+        "stored charge must create a measurable ADC-visible reverse-recovery pulse: VP={recovered_v} V, quasi-static TT={control_v} V"
+    );
+
+    for (channel, path, volts) in [
+        (0, "board.analog.pa0_volts", 1.65),
+        (1, "board.analog.pa1_volts", diode_load_line_voltage()),
+        (2, "board.analog.pa2_volts", recovered_v),
+        (3, "board.analog.pa3_volts", control_v),
+    ] {
+        let routed_v = signal_voltage(&session, path);
+        if channel < 2 {
+            assert!(
+                (routed_v - volts).abs() < 2e-5,
+                "the unrelated device on ADC1_IN{channel} stays isolated: expected {volts} V, got {routed_v} V"
+            );
+        }
+        let expected_count = expected_adc_count(routed_v);
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            expected_count,
+            "ADC1 channel {channel} receives the routed analog voltage"
+        );
+        assert_eq!(
+            stm32f4_adc_convert(&mut bus, channel),
+            u32::from(expected_count),
+            "firmware-visible ADC1 conversion reports channel {channel}"
+        );
+    }
+    assert_eq!(
+        adc_channel_count(&mut bus, 4),
+        0xFFFF,
+        "the neighboring ADC1 channel remains undriven"
+    );
 }
 
 #[test]
