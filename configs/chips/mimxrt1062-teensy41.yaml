@@ -121,49 +121,168 @@ peripherals:
     base_address: 0x401F0000
     size: "16KB"
     irq: 101
-  - { id: "lpuart1", type: "imxrt_lpuart", base_address: 0x40184000, size: "16KB", irq: 20 }
-  - { id: "lpuart2", type: "imxrt_lpuart", base_address: 0x40188000, size: "16KB", irq: 21 }
-  - { id: "lpuart3", type: "imxrt_lpuart", base_address: 0x4018C000, size: "16KB", irq: 22 }
-  - { id: "lpuart4", type: "imxrt_lpuart", base_address: 0x40190000, size: "16KB", irq: 23 }
-  - { id: "lpuart5", type: "imxrt_lpuart", base_address: 0x40194000, size: "16KB", irq: 24 }
-  - { id: "lpuart6", type: "imxrt_lpuart", base_address: 0x40198000, size: "16KB", irq: 25 }
-  - { id: "lpuart7", type: "imxrt_lpuart", base_address: 0x4019C000, size: "16KB", irq: 26 }
-  - { id: "lpuart8", type: "imxrt_lpuart", base_address: 0x401A0000, size: "16KB", irq: 27 }
+  - id: "lpuart1"
+    type: "imxrt_lpuart"
+    base_address: 0x40184000
+    size: "16KB"
+    irq: 20
+  - id: "lpuart2"
+    type: "imxrt_lpuart"
+    base_address: 0x40188000
+    size: "16KB"
+    irq: 21
+  - id: "lpuart3"
+    type: "imxrt_lpuart"
+    base_address: 0x4018C000
+    size: "16KB"
+    irq: 22
+  - id: "lpuart4"
+    type: "imxrt_lpuart"
+    base_address: 0x40190000
+    size: "16KB"
+    irq: 23
+  - id: "lpuart5"
+    type: "imxrt_lpuart"
+    base_address: 0x40194000
+    size: "16KB"
+    irq: 24
+  - id: "lpuart6"
+    type: "imxrt_lpuart"
+    base_address: 0x40198000
+    size: "16KB"
+    irq: 25
+  - id: "lpuart7"
+    type: "imxrt_lpuart"
+    base_address: 0x4019C000
+    size: "16KB"
+    irq: 26
+  - id: "lpuart8"
+    type: "imxrt_lpuart"
+    base_address: 0x401A0000
+    size: "16KB"
+    irq: 27
   - id: "lpi2c1"
     type: "imxrt_lpi2c"
     base_address: 0x403F0000
     size: "16KB"
     irq: 28
-  - { id: "gpio1", type: "gpio", base_address: 0x401B8000, size: "16KB", config: { profile: "imxrt" } }
-  - { id: "gpio2", type: "gpio", base_address: 0x401BC000, size: "16KB", config: { profile: "imxrt" } }
-  - { id: "gpio3", type: "gpio", base_address: 0x401C0000, size: "16KB", config: { profile: "imxrt" } }
-  - { id: "gpio4", type: "gpio", base_address: 0x401C4000, size: "16KB", config: { profile: "imxrt" } }
-  - { id: "gpio5", type: "gpio", base_address: 0x400C0000, size: "16KB", config: { profile: "imxrt" } }
-  - { id: "gpio6", type: "gpio", base_address: 0x42000000, size: "16KB", config: { profile: "imxrt" } }
-  - { id: "gpio7", type: "gpio", base_address: 0x42004000, size: "16KB", config: { profile: "imxrt" } }
-  - { id: "gpio8", type: "gpio", base_address: 0x42008000, size: "16KB", config: { profile: "imxrt" } }
-  - { id: "gpio9", type: "gpio", base_address: 0x4200C000, size: "16KB", config: { profile: "imxrt" } }
+  - id: "gpio1"
+    type: "gpio"
+    base_address: 0x401B8000
+    size: "16KB"
+    config: { profile: "imxrt" }
+  - id: "gpio2"
+    type: "gpio"
+    base_address: 0x401BC000
+    size: "16KB"
+    config: { profile: "imxrt" }
+  - id: "gpio3"
+    type: "gpio"
+    base_address: 0x401C0000
+    size: "16KB"
+    config: { profile: "imxrt" }
+  - id: "gpio4"
+    type: "gpio"
+    base_address: 0x401C4000
+    size: "16KB"
+    config: { profile: "imxrt" }
+  - id: "gpio5"
+    type: "gpio"
+    base_address: 0x400C0000
+    size: "16KB"
+    config: { profile: "imxrt" }
+  - id: "gpio6"
+    type: "gpio"
+    base_address: 0x42000000
+    size: "16KB"
+    config: { profile: "imxrt" }
+  - id: "gpio7"
+    type: "gpio"
+    base_address: 0x42004000
+    size: "16KB"
+    config: { profile: "imxrt" }
+  - id: "gpio8"
+    type: "gpio"
+    base_address: 0x42008000
+    size: "16KB"
+    config: { profile: "imxrt" }
+  - id: "gpio9"
+    type: "gpio"
+    base_address: 0x4200C000
+    size: "16KB"
+    config: { profile: "imxrt" }
   - id: "iomuxc"
     type: "imx_iomuxc"
     base_address: 0x401F8000
     size: "16KB"
-  - { id: "iomuxc_snvs_gpr", type: "stub", base_address: 0x400A4000, size: "16KB" }
-  - { id: "iomuxc_snvs", type: "stub", base_address: 0x400A8000, size: "16KB" }
-  - { id: "iomuxc_gpr", type: "stub", base_address: 0x400AC000, size: "16KB" }
-  - { id: "flexram", type: "stub", base_address: 0x400B0000, size: "16KB" }
-  - { id: "snvs", type: "stub", base_address: 0x400D4000, size: "16KB" }
-  - { id: "pit", type: "stub", base_address: 0x40084000, size: "16KB" }
-  - { id: "ocotp", type: "stub", base_address: 0x401F4000, size: "16KB" }
-  - { id: "src", type: "stub", base_address: 0x400F8000, size: "16KB" }
-  - { id: "gpc", type: "stub", base_address: 0x400F4000, size: "16KB" }
-  - { id: "tmr1", type: "stub", base_address: 0x401DC000, size: "16KB" }
-  - { id: "tmr2", type: "stub", base_address: 0x401E0000, size: "16KB" }
-  - { id: "tmr3", type: "stub", base_address: 0x401E4000, size: "16KB" }
-  - { id: "tmr4", type: "stub", base_address: 0x401E8000, size: "16KB" }
-  - { id: "pwm1", type: "stub", base_address: 0x403DC000, size: "16KB" }
-  - { id: "pwm2", type: "stub", base_address: 0x403E0000, size: "16KB" }
-  - { id: "pwm3", type: "stub", base_address: 0x403E4000, size: "16KB" }
-  - { id: "pwm4", type: "stub", base_address: 0x403E8000, size: "16KB" }
+  - id: "iomuxc_snvs_gpr"
+    type: "stub"
+    base_address: 0x400A4000
+    size: "16KB"
+  - id: "iomuxc_snvs"
+    type: "stub"
+    base_address: 0x400A8000
+    size: "16KB"
+  - id: "iomuxc_gpr"
+    type: "stub"
+    base_address: 0x400AC000
+    size: "16KB"
+  - id: "flexram"
+    type: "stub"
+    base_address: 0x400B0000
+    size: "16KB"
+  - id: "snvs"
+    type: "stub"
+    base_address: 0x400D4000
+    size: "16KB"
+  - id: "pit"
+    type: "stub"
+    base_address: 0x40084000
+    size: "16KB"
+  - id: "ocotp"
+    type: "stub"
+    base_address: 0x401F4000
+    size: "16KB"
+  - id: "src"
+    type: "stub"
+    base_address: 0x400F8000
+    size: "16KB"
+  - id: "gpc"
+    type: "stub"
+    base_address: 0x400F4000
+    size: "16KB"
+  - id: "tmr1"
+    type: "stub"
+    base_address: 0x401DC000
+    size: "16KB"
+  - id: "tmr2"
+    type: "stub"
+    base_address: 0x401E0000
+    size: "16KB"
+  - id: "tmr3"
+    type: "stub"
+    base_address: 0x401E4000
+    size: "16KB"
+  - id: "tmr4"
+    type: "stub"
+    base_address: 0x401E8000
+    size: "16KB"
+  - id: "pwm1"
+    type: "stub"
+    base_address: 0x403DC000
+    size: "16KB"
+  - id: "pwm2"
+    type: "stub"
+    base_address: 0x403E0000
+    size: "16KB"
+  - id: "pwm3"
+    type: "stub"
+    base_address: 0x403E4000
+    size: "16KB"
+  - id: "pwm4"
+    type: "stub"
+    base_address: 0x403E8000
+    size: "16KB"
   # CoreDebug (DHCSR/DCRSR/DCRDR/DEMCR, ARMv7-M C1.6). The engine maps the
   # real block only when an SWD probe attaches (`attach_swd_dp`, which
   # replaces this window by name). Teensyduino's ResetHandler2 writes
@@ -171,7 +290,10 @@ peripherals:
   # unmapped that store is a precise BusFault. TRCENA does not gate the DWT
   # model, so dropping the write changes nothing the firmware can observe
   # except DEMCR reading 0.
-  - { id: "scs_debug", type: "stub", base_address: 0xE000EDF0, size: "16B" }
+  - id: "scs_debug"
+    type: "stub"
+    base_address: 0xE000EDF0
+    size: "16B"
   # Cortex-M7 L1 cache geometry + maintenance window (32 KB I + 32 KB D,
   # IMXRT1060 datasheet §1). No cache contents: simulated memory is coherent,
   # so ICIALLU / DCCIMVAC & co. are accepted as no-ops.
