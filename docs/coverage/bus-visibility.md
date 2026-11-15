@@ -175,6 +175,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | esp32s3-zero | — | — | — |
 | imxrt1064 | — | — | — |
 | litex-vexriscv | — | — | — |
+| mimxrt1062-teensy41 | — | — | — |
 | mimxrt595s | — | — | — |
 | mk64f12 | — | — | — |
 | mkw41z4 | — | — | — |

@@ -196,6 +196,10 @@
   },
   {
     "buses": [],
+    "name": "mimxrt1062-teensy41"
+  },
+  {
+    "buses": [],
     "name": "mimxrt595s"
   },
   {
