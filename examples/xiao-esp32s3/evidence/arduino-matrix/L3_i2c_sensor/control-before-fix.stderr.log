@@ -1,0 +1,3 @@
+2026-11-15T21:51:30.704780Z ERROR labwired_cli::execute: Simulation error at step 10636: Exception raised: cause=0 at pc=0x4037b2cc
+2026-11-15T21:51:30.808995Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "LW_L3_OK" }) (captured len=0)
+FAIL  0/1 checks · test · 10636 steps · 0.11s

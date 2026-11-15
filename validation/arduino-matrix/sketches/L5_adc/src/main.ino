@@ -21,6 +21,10 @@
 // adds A0 to pins below it), but name it: A0 = PA02 = AIN0, the input the
 // matrix board drives.
 #    define LW_ADC_PIN A0
+#  elif defined(ARDUINO_XIAO_ESP32S3)
+// Same trap: the XIAO ESP32S3 variant's A0 (GPIO1 = ADC1_CH0) is a
+// `static const uint8_t`. analogRead(0) would read GPIO0, which has no ADC.
+#    define LW_ADC_PIN A0
 #  elif defined(A0)
 #    define LW_ADC_PIN A0
 #  else
@@ -72,6 +76,12 @@ static bool samples_ok(int v0, int v1) {
   // code is 512. Exact; a 0 here means no conversion, or the pad was never
   // handed to the ADC.
   return v0 == 512 && v1 == 512;
+
+#elif defined(ARDUINO_XIAO_ESP32S3)
+  // esp32s3 SENS oneshot: the matrix system holds A0 (GPIO1 = ADC1_CH0) at
+  // 1650 mV with a centred potentiometer. Arduino-ESP32 returns the raw
+  // 12-bit code, 2047. Exact; the idle unseeded channel reads 0.
+  return v0 == 2047 && v1 == 2047;
 
 #elif defined(ARDUINO_ARCH_RP2040)
   // rp2040/adc.rs: unseeded GPIO inputs convert 0 (no fabricated mid-scale).

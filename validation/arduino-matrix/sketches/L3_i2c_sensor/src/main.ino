@@ -45,6 +45,9 @@ static void logLine(const char *s) {
 static void wireBegin() {
 #if defined(CONFIG_IDF_TARGET_ESP32C3) || defined(ARDUINO_ESP32C3_DEV) || defined(ARDUINO_ESP32C3_SUPER_MINI)
   Wire.begin(4, 5);
+#elif defined(ARDUINO_XIAO_ESP32S3)
+  // Seeed XIAO ESP32S3: the variant's SDA = D4 = GPIO5, SCL = D5 = GPIO6.
+  Wire.begin(SDA, SCL);
 #elif defined(CONFIG_IDF_TARGET_ESP32S3) || defined(ARDUINO_ESP32S3_DEV)
   Wire.begin(8, 9);
 #elif defined(CONFIG_IDF_TARGET_ESP32C6)
