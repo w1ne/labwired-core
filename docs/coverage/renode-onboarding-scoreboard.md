@@ -12,10 +12,10 @@
 - pass_observable_assertions: `226/226`
 - pass_stop_reason_only: `0/226`
 - pass_depth_unknown: `0/226`
-- pass_claimed_peripherals_total: `1512`
+- pass_claimed_peripherals_total: `1514`
 - pass_claimed_peripherals_median: `2`
-- median_elapsed_ms: `1406`
-- median_elapsed_seconds: `1.406`
+- median_elapsed_ms: `1420`
+- median_elapsed_seconds: `1.42`
 - threshold_seconds: `3600`
 - threshold_met: `226/226`
 
@@ -81,7 +81,7 @@
 | `efr32mg12` | `pass` | `True` | `yes` | `yes` | `1048` | `1.048` | `True` | `observable` | `12` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `efr32mg13` | `pass` | `True` | `yes` | `yes` | `1236` | `1.236` | `True` | `observable` | `11` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `efr32mg24` | `pass` | `True` | `yes` | `yes` | `248744` | `248.744` | `True` | `observable` | `6` | `uart_contains`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
-| `efr32mg26` | `pass` | `True` | `yes` | `yes` | `1013` | `1.013` | `True` | `observable` | `2` | `uart_contains` | 0 | `n/a` | n/a | n/a |
+| `efr32mg26` | `pass` | `True` | `yes` | `yes` | `296701` | `296.701` | `True` | `observable` | `4` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `efr32xg22` | `pass` | `True` | `yes` | `yes` | `115495` | `115.495` | `True` | `observable` | `5` | `uart_contains`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `egis_et171` | `pass` | `True` | `yes` | `yes` | `1200` | `1.2` | `True` | `observable` | `1` | `memory_value`, `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `eos-s3` | `pass` | `True` | `yes` | `yes` | `192963` | `192.963` | `True` | `observable` | `2` | `uart_contains`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |

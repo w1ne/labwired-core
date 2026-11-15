@@ -1,14 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.001893">
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.003634">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="34bbcffc9fdb35588e0c172a61269863b9d73fc315d1749f69464c814b9dcd0f"/>
+    <property name="firmware_hash" value="acb5fb72597622b98c7da5f13edccef8d6bb02bf8450ef88e066a3eb3cf845eb"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.001893">
+  <testcase classname="labwired" name="run" time="0.003634">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: EFR32MG26 Cortex-M33 USART1 smoke" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 2: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 2: uart_contains: timers w32=1 t1w32=1 run=1 cnt=1 stop=1 irq=3 direct_kept=1 alias_clr=1 t1of=1 t1masked=1 t1pend=1 t1rel…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>
