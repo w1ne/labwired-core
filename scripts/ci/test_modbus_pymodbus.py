@@ -37,7 +37,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def cargo_test(filter_: str, env: dict) -> None:
     subprocess.run(
-        ["cargo", "test", "--release", "-p", "labwired-core", "--test", "rs485_modbus", filter_],
+        ["cargo", "test", "--release", "-p", "labwired-core", "--test", "misc", f"rs485_modbus::{filter_}"],
         cwd=ROOT,
         env={**os.environ, **env},
         check=True,

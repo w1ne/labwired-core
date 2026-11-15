@@ -1,11 +1,14 @@
-# LabWired - Pico 2 (RP2350) UART smoke test
-# Firmware: firmware-rp2350-demo (bare-metal, targets RP2350 UART0 @0x40070000).
+# LabWired - Raspberry Pi Pico 2 board smoke
+# Exercises the onboard GP25 LED through SIO and captures output from UART0.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-rp2350-demo"
-  system: "./system.yaml"
+  system: "../../configs/systems/pico2.yaml"
 limits:
   max_steps: 200000
 assertions:
-  - uart_contains: "RP2350_SMOKE_OK"
+  - uart_contains: "PICO2_GPIO25_UART_OK"
+  - gpio_edges:
+      pin: "sio:25"
+      min_edges: 2
   - expected_stop_reason: max_steps

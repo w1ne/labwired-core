@@ -1,0 +1,21 @@
+{
+  "id": "dspic33fj32mc204",
+  "in_boards": false,
+  "uart": {
+    "state": "proven",
+    "file": "crates/core/tests/pic/pic24_m0_smoke.rs",
+    "test": "pic24_fixture_boots_and_writes_h_to_uart",
+    "signal": "the committed fixture ELF writes 'H' through U1TXREG (0x0224) and the test asserts the console sink receives it; `labwired run --chip configs/chips/dspic33fj32mc204.yaml --firmware ...` prints `UART: H`",
+    "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test pic pic24_m0_smoke::; io-smoke via strict_onboarding"
+  },
+  "spi": {
+    "state": "none",
+    "gap": "PIC24 M0 does not model SPI; it lands in M3 per docs/pic24-m0-reference.md.",
+    "lane": "none"
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "PIC24 M0 does not model I2C; it lands in M3 per docs/pic24-m0-reference.md.",
+    "lane": "none"
+  }
+}

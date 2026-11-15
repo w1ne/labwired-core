@@ -145,6 +145,11 @@ pub const MODEL_TYPES: &[&str] = &[
     // bins. Listed for the same reason as every other family type.
     "esp32c6_mwdt",
     "esp32c6_lp_rtc",
+    // ESP32-H2's narrow DevKitM-1 UART profile. It reuses the C6-compatible
+    // UART head and PCR UART0 gate; those register windows are size-limited by
+    // the H2 descriptor because the full H2 PCR map differs from the C6's.
+    "esp32h2_uart",
+    "esp32h2_pcr",
     // C6 USB Serial/JTAG — same shared model as C3/S3, own matrix source.
     // Listed so a fuzzy `contains("usb")` path cannot coerce it elsewhere.
     "esp32c6_usb_serial_jtag",
@@ -156,6 +161,19 @@ pub const MODEL_TYPES: &[&str] = &[
     // C6 EXTMEM / MSPI cache controller (DONE/freeze handshakes).
     "esp32c6_extmem",
     "esp32c6_systimer",
+    // C6 RMT — the shared C3 model at C6 matrix source 49.
+    "esp32c6_rmt",
+    "esp32c6_ledc",
+    // C5 UART0 uses the shared Espressif UART head at its own 240 MHz pacing
+    // rate and interrupt source 47. It is intentionally window-limited by the
+    // C5 chip descriptor; do not route it through the fuzzy STM32 UART arm.
+    "esp32c5_uart",
+    // C61 UART0 uses the shared Espressif FIFO/status head at its 160 MHz
+    // core rate and interrupt source 40; the descriptor limits the window.
+    "esp32c61_uart",
+    // P4 UART0 uses the shared FIFO/status head with P4's 400 MHz core and
+    // 90 MHz APB clock. Its chip descriptor exposes only FIFO and STATUS.
+    "esp32p4_uart",
     // nRF52 behavioral models (nrf52 factory).
     "nrf52840_twim",
     "nrf52_saadc",
@@ -215,6 +233,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "esp32_ledc",
     "esp32_mcpwm",
     "esp32_pcnt",
+    "esp32_rmt",
     "esp32_rtc_cntl",
     "esp32_rtc_io",
     "esp32_sar_adc",
@@ -722,6 +741,10 @@ pub fn try_build(
                 m("rcc_apb1enr_mask"),
                 m("rcc_apb2enr_mask"),
             );
+            // F42x/F446 PLLSAI + DCKCFGR/DCKCFGR2 (`pllsai: true`).
+            if p_cfg.config.get("pllsai").and_then(|v| v.as_bool()) == Some(true) {
+                rcc.set_f4_pllsai(true);
+            }
             // HSE is a board component. U5 reference platforms have none
             // fitted unless the chip yaml says `hse: true`.
             if let Some(present) = p_cfg.config.get("hse").and_then(|v| v.as_bool()) {
@@ -1113,7 +1136,19 @@ pub fn try_build(
                 Some("stm32wba") | Some("wba") => Box::new(crate::peripherals::pwr::PwrWba::new()),
                 // F4 has only PWR_CR/PWR_CSR (RM0368 §5.4) — a distinct reset
                 // shape from the L4 CR1..CR4 / PUCRx set.
-                Some("stm32f4") | Some("f4") => Box::new(crate::peripherals::pwr::PwrF4::new()),
+                // `over_drive: true` adds the F42x/F446 ODEN/ODSWEN handshake.
+                Some("stm32f4") | Some("f4") => {
+                    if p_cfg
+                        .config
+                        .get("over_drive")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false)
+                    {
+                        Box::new(crate::peripherals::pwr::PwrF4::with_over_drive())
+                    } else {
+                        Box::new(crate::peripherals::pwr::PwrF4::new())
+                    }
+                }
                 _ => Box::new(crate::peripherals::pwr::Pwr::new()),
             }
         }

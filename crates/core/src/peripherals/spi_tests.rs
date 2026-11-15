@@ -1650,3 +1650,33 @@ fn nrf54l_spim_prescaler_resets_to_0x40() {
         "PSEL.SCK resets DISCONNECTED"
     );
 }
+
+#[test]
+fn stm32_irq_level_tracks_enabled_transmit_and_receive_status() {
+    let mut spi = Spi::new_with_layout(SpiRegisterLayout::Stm32);
+    assert_eq!(spi.irq_line_level(), Some(false));
+    spi.write(0x04, 1 << 7).unwrap(); // TXEIE, transmitter starts empty
+    assert_eq!(spi.irq_line_level(), Some(true));
+    spi.write(0x04, 1 << 6).unwrap(); // RXNEIE, no received data yet
+    assert_eq!(spi.irq_line_level(), Some(false));
+    spi.write(0x00, 0x40).unwrap(); // SPI enable
+    spi.write(0x0c, 0x5a).unwrap();
+    run_engine(&mut spi);
+    assert_eq!(spi.irq_line_level(), Some(true));
+    spi.read(0x0c).unwrap();
+    assert_eq!(spi.irq_line_level(), Some(false));
+}
+
+#[test]
+fn stm32_fifo_irq_tracks_rx_threshold_and_deasserts_on_read() {
+    let mut spi = fifo_master(&[0x5a]);
+    spi.write(0x00, 0x44).unwrap(); // SPE | MSTR
+    spi.write_u16(0x04, 0x1740).unwrap(); // DS=8, FRXTH, RXNEIE
+    assert_eq!(spi.irq_line_level(), Some(false));
+    spi.write(0x0c, 0xa5).unwrap();
+    run_engine(&mut spi);
+    assert_eq!(spi.irq_line_level(), Some(true));
+    assert!(spi.reads_can_deassert_irq());
+    assert_eq!(spi.read(0x0c).unwrap(), 0x5a);
+    assert_eq!(spi.irq_line_level(), Some(false));
+}

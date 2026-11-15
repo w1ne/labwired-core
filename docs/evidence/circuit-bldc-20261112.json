@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "recorded_utc": "2026-11-12T04:42:39.617941+00:00",
+  "base_commit": "2829a7617be82a645d68dc3c3dd60eafeb1e674d",
+  "scope": "Generic circuit-driven BLDC shaft/three-phase current coupling. No native motor or hardware validation claim.",
+  "source_files_sha256": {
+    "configs/devices/bldc_motor.yaml": "5e2a8275ea367b7a51cf6086f523578b20e9b10906b7447340acbbfde0e982d2",
+    "crates/cli/src/artifacts.rs": "c2f1ce355363d4222050c6cc5824ae80f622ce9d8f6b39343fb3a64ff20e3996",
+    "crates/cli/src/commands/environment_test.rs": "537a4d33c0aafbf3195dd35f27fd160c8c54ef5d6d76cd6c337fcf3080930a9e",
+    "crates/config/src/motor.rs": "28ff75942e10e3aeefa00848ceb4f7ef5b5c5c6b11164505665fc5637c2140d2",
+    "crates/config/tests/circuit_bldc.rs": "40706123fd131a0661e0becea1d743fff75edc8ed47b2c820e28bbc99d5ed1c5",
+    "crates/config/tests/config_tests.rs": "d1537ad3d57ee41e607836f9f69f65a6431a477884bb7f0d9f3fc5c456c8f4df",
+    "crates/core/src/bus/mod.rs": "b8598f88969b06eae01fca0c8df756db279334757a8020b8658adfd5813be32d",
+    "crates/core/src/bus/motors.rs": "bfb6feef04b4ea92185df4e00d5524c42fcdd6f34058eff41e5fd3e62aec2d21",
+    "crates/core/src/cosim/routing.rs": "9f6b0e5f03745e6b50d521e0cb5c4d078c544d68ae24d659bb45385922fa4f4e",
+    "crates/core/src/physics/motor/bldc.rs": "45dd299db21c13a448bc19a012bfa88e37f1c3870798a5e48378717a514460b8",
+    "crates/core/src/world.rs": "fe3a8f523cfd6a2931d1f607ff49aad8706e0b413c6f0333edaedc5a0122e19e",
+    "crates/core/tests/analog_motor_circuit.rs": "79922b1790543bb81ea9479a07163490c2e9b9092c5d04e3955cd2076d123418",
+    "crates/core/tests/circuit_bldc.rs": "bc9a8182a3e9e0f393be8b7569981c2f3c9cd539edae3c8fc6c6a5bb198839a3",
+    "crates/core/tests/motor_models.rs": "dbdea17d216ea025f8b28f673abe7c6b4ff3d2de1ce346e95ed5de302a5a028d",
+    "crates/core/tests/world_circuit_bldc.rs": "4fada83fee7e11c6bdae32413a493e47b838c4ef9999a07f6884dd5987805ea1",
+    "crates/wasm/src/inputs.rs": "cea5d2205f60abda99c8f99a5df7b051d79308d3a9d8da59feb43efc17cf3210",
+    "crates/wasm/src/inspect.rs": "efacc68d62a7db7e64a09696b97e8317c533bb078fb11e19cc51f70c011d446d",
+    "crates/wasm/src/world.rs": "e5a684459aa9dee60eeb7feaf6a1e6a110d685071a04dac0f534ae81e59fa44d"
+  },
+  "build": {
+    "profile": "circuit-bldc-20261112",
+    "inherits": "dev",
+    "debug": 0,
+    "incremental": false,
+    "jobs": 2,
+    "private_target": "/data/build-targets/circuit-bldc-20261112",
+    "cargo_config_sha256": "175072d37ce989511ed6c52357abeb8f0c6400c696153cdfab979971991c7222",
+    "normal_hook_profile_wrapper_sha256": "89ec0b64321ccdacb6a10eb65037c5a1bf167a4a4ec5d45752d213c78797b94a",
+    "normal_hook_scope_changed": false,
+    "profile_setup": "Cargo external clippy subcommand needs --config after the subcommand so its child receives the named profile; a focused normal Clippy invocation confirmed the profile transport. Hook scope unchanged."
+  },
+  "gates": {
+    "config": {
+      "command": "cargo test -p labwired-config --test circuit_bldc --test config_tests",
+      "passed_per_binary": [
+        5,
+        37
+      ],
+      "exit_code": 0,
+      "log_sha256": "4806c389affe7493a16aac9da63762fc0512196a10caba9f5b7faa906edb9fa5"
+    },
+    "core": {
+      "command": "cargo test -p labwired-core --test circuit_bldc --test world_circuit_bldc --test motor_models --test analog_motor_circuit --test world_analog",
+      "passed_per_binary": [
+        7,
+        4,
+        38,
+        17,
+        6
+      ],
+      "exit_code": 0,
+      "log_sha256": "0fd29f1af010b2bc38121bcb050bd563ce0b779c784e32f6781fccd7e43f0c44"
+    },
+    "wasm_motor_projection": {
+      "command": "cargo test -p labwired-wasm --lib motor_state_tests",
+      "passed_per_binary": [
+        2
+      ],
+      "exit_code": 0,
+      "log_sha256": "e6f7743d675f69fb91a88869ecd0262da0a1d846caf7f6e83cf14f4a1ac11a79",
+      "browser_execution": false
+    },
+    "wasm_boundary_ratchet": {
+      "mode": "Unchanged source module compiled directly with rustc --test; not a browser run",
+      "passed_per_binary": [
+        6
+      ],
+      "exit_code": 0,
+      "log_sha256": "a93957e30a7d549cc85969ad9200f3ee993a242c6dfbc46e9145b53614bf1213",
+      "ratchet_modified": false
+    },
+    "missing_owner_regression_red": {
+      "exit_code": 101,
+      "failed": 1,
+      "log_sha256": "4403842959561f5353ba5e9f37610356e9509a21e2888f75deb30ac50c248dc2",
+      "green": "core suite includes all six World circuit BLDC cases"
+    }
+  },
+  "energy_convergence": {
+    "fixture": "crates/core/tests/world_circuit_bldc.rs::actual_winding_energy_and_motion_converge_as_the_hold_interval_shrinks",
+    "duration_ns": 100000,
+    "step_ns": [
+      2000,
+      1000,
+      500
+    ],
+    "energy_residual_j": [
+      1.2878994191218521e-06,
+      6.634509409445552e-07,
+      3.3660441105899446e-07
+    ],
+    "source_energy_j": [
+      0.000402509283900261,
+      0.0003996765325739982,
+      0.0003982618036698553
+    ],
+    "speed_rpm": [
+      512.4907362132088,
+      508.88396527088423,
+      507.0826784602269
+    ],
+    "parameters": "Controlled test assumptions, no manufacturer qualification"
+  },
+  "contract": {
+    "one_owner_per_physical_shaft": true,
+    "complete_same_boundary_vector": true,
+    "missing_owner_refused": true,
+    "mixed_rate_standalone_refused": true,
+    "cpu_reset_does_not_pause_mechanics": true,
+    "dc_current_unmeasured_is_null": true,
+    "unmeasured_bus_voltage_is_null": true,
+    "coupling": "interval-start-zero-order-hold",
+    "current_limit_effect": "diagnostic only; no clipping or disconnection"
+  },
+  "native_motor_free_receipt_sha256": "beb49810a640db89e29378505ccccf3f682877558099b7e00ba300dc417970c0",
+  "not_established": [
+    "native sensorless commutation",
+    "native motor startup",
+    "motor/propeller parameter qualification",
+    "cold native board power sequence",
+    "flight acceptance",
+    "silicon equivalence"
+  ]
+}

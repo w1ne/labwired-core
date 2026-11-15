@@ -1,0 +1,13 @@
+id: stm32f103
+chip: stm32f103
+system: systems/stm32f103.yaml
+pio: { platform: ststm32, board: bluepill_f103c8, framework: arduino }
+max_steps: 15000000
+budget_reason: "L0~0.7M L2~0.22M; L3 Wire I2C may need multi-M steps"
+led_watch: "gpioc:13"
+led_min_edges: 2
+# L6 drives PA0 = TIM2_CH1 (1 kHz). PC13 has no timer channel, so
+# analogWrite(LED_BUILTIN, 128) was a digitalWrite(HIGH).
+pwm_watch: "gpioa:0"
+pwm_min_edges: 20
+family: stm32

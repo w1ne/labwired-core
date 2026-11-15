@@ -338,9 +338,10 @@ pub struct BldcMotorSnapshot {
     pub phase_back_emf_v: [f64; 3],
     pub electromagnetic_torque_nm: f64,
     /// Positive current flows out of the DC bus through enabled high-side legs.
-    pub dc_bus_current_a: f64,
-    /// Effective bus voltage after applying any undervoltage fault.
-    pub dc_bus_voltage_v: f64,
+    pub dc_bus_current_a: Option<f64>,
+    /// Effective ideal-inverter bus voltage. A circuit-owned winding has no
+    /// DC-bus observation here; the netlist may publish one separately.
+    pub dc_bus_voltage_v: Option<f64>,
     pub position_rad: f64,
     pub wrapped_position_rad: f64,
     pub angular_velocity_rad_s: f64,
@@ -360,6 +361,8 @@ pub struct BldcMotorSnapshot {
 #[derive(Debug, Clone)]
 pub struct BldcMotor {
     params: BldcMotorParams,
+    /// The netlist owns phase R/L integration and inverter conduction.
+    circuit_driven: bool,
     shaft: Shaft,
     hall_sensors: HallSensors,
     phase_currents_a: [f64; 3],
@@ -378,6 +381,37 @@ pub struct BldcMotor {
 
 impl BldcMotor {
     pub fn new(params: BldcMotorParams) -> Result<Self, ModelError> {
+        Self::new_with_mode(params, false)
+    }
+
+    /// A floating-star winding solved by an external analog circuit. The
+    /// supplied bus-voltage field must be zero/absent: it is not an energy
+    /// source and no DC bus voltage or current is inferred by this plant.
+    pub fn new_circuit(params: BldcMotorParams) -> Result<Self, ModelError> {
+        if params.supply_voltage_v != 0.0 {
+            return Err(ModelError {
+                field: "supply_voltage_v",
+                message: "must be absent (zero) for a circuit-owned winding".into(),
+            });
+        }
+        let scale = params
+            .torque_constant_nm_per_a
+            .abs()
+            .max(params.back_emf_constant_v_per_rad_s.abs());
+        if (params.torque_constant_nm_per_a - params.back_emf_constant_v_per_rad_s).abs()
+            > 1e-9 * scale
+        {
+            return Err(ModelError {
+                field: "torque_constant_nm_per_a",
+                message:
+                    "circuit mode requires matching SI phase-peak torque and back-EMF constants"
+                        .into(),
+            });
+        }
+        Self::new_with_mode(params, true)
+    }
+
+    fn new_with_mode(params: BldcMotorParams, circuit_driven: bool) -> Result<Self, ModelError> {
         validate_positive("resistance_ohm", params.resistance_ohm)?;
         validate_positive("inductance_h", params.inductance_h)?;
         validate_positive("torque_constant_nm_per_a", params.torque_constant_nm_per_a)?;
@@ -385,7 +419,9 @@ impl BldcMotor {
             "back_emf_constant_v_per_rad_s",
             params.back_emf_constant_v_per_rad_s,
         )?;
-        validate_positive("supply_voltage_v", params.supply_voltage_v)?;
+        if !circuit_driven {
+            validate_positive("supply_voltage_v", params.supply_voltage_v)?;
+        }
         if let Some(limit) = params.current_limit_a {
             validate_positive("current_limit_a", limit)?;
             if params.overcurrent_trip_steps == 0 {
@@ -401,6 +437,7 @@ impl BldcMotor {
 
         Ok(Self {
             params,
+            circuit_driven,
             shaft,
             hall_sensors,
             phase_currents_a: [0.0; 3],
@@ -422,6 +459,18 @@ impl BldcMotor {
         self.params
     }
 
+    /// Bus-service substep with a 2.5% normalized-step accuracy budget inside
+    /// the coupled electrical/mechanical envelope enforced by `step`.
+    /// The electrical `L/R` time constant alone does not bound a low-inertia
+    /// motor; merely staying stable also leaves large first-order errors.
+    pub(crate) fn service_timestep_s(&self) -> Result<f64, ModelError> {
+        let [electrical_rate, mechanical_rate, coupling_rate] = integration_rates(self.params);
+        let step_s = 0.025 / (electrical_rate + mechanical_rate + coupling_rate);
+        validate_positive("dt_s", step_s)?;
+        validate_timestep(self.params, step_s)?;
+        Ok(step_s)
+    }
+
     pub fn faults(&self) -> BldcFaults {
         self.faults
     }
@@ -432,8 +481,8 @@ impl BldcMotor {
             phase_currents_a: self.phase_currents_a,
             phase_back_emf_v: self.phase_back_emf_v,
             electromagnetic_torque_nm: self.electromagnetic_torque_nm,
-            dc_bus_current_a: self.dc_bus_current_a,
-            dc_bus_voltage_v: self.effective_bus_voltage_v(),
+            dc_bus_current_a: (!self.circuit_driven).then_some(self.dc_bus_current_a),
+            dc_bus_voltage_v: (!self.circuit_driven).then(|| self.effective_bus_voltage_v()),
             position_rad: shaft.position_rad,
             wrapped_position_rad: shaft.wrapped_position_rad,
             angular_velocity_rad_s: shaft.angular_velocity_rad_s,
@@ -448,6 +497,24 @@ impl BldcMotor {
 
     /// Atomically replaces active motor and Hall faults.
     pub fn set_faults(&mut self, faults: BldcFaults) -> Result<(), ModelError> {
+        if self.circuit_driven {
+            if faults.open_phases != [false; 3]
+                || faults.undervoltage_v.is_some()
+                || faults.forced_hall_state.is_some()
+                || faults.hall_line_low.is_some()
+                || faults.overcurrent != self.faults.overcurrent
+            {
+                return Err(ModelError { field: "faults", message: "circuit electrical and sensor faults must be represented in the netlist; only mechanical stall is accepted here".into() });
+            }
+            let mut candidate = self.clone();
+            candidate.faults = faults;
+            if faults.stalled {
+                candidate.shaft.hold_still();
+            }
+            candidate.refresh_derived_state()?;
+            *self = candidate;
+            return Ok(());
+        }
         validate_faults(faults, self.params.supply_voltage_v)?;
         let mut candidate = self.clone();
         candidate.faults = faults;
@@ -480,6 +547,12 @@ impl BldcMotor {
 
     /// Atomically updates the DC supply used by subsequent inverter steps.
     pub fn set_supply_voltage_v(&mut self, supply_voltage_v: f64) -> Result<(), ModelError> {
+        if self.circuit_driven {
+            return Err(ModelError {
+                field: "supply_voltage_v",
+                message: "the circuit owns the supply; route a physical probe for readback".into(),
+            });
+        }
         validate_positive("supply_voltage_v", supply_voltage_v)?;
         let mut candidate = self.clone();
         candidate.params.supply_voltage_v = supply_voltage_v;
@@ -503,6 +576,12 @@ impl BldcMotor {
     /// `1e-9 rad/s` of zero the startup-safe fallback is
     /// `Kt * sum(normalized_emf_shape_phase*i_phase)`.
     pub fn step(&mut self, command: InverterCommand, dt_s: f64) -> Result<(), ModelError> {
+        if self.circuit_driven {
+            return Err(ModelError {
+                field: "armature",
+                message: "circuit mode requires a complete solved phase-current observation".into(),
+            });
+        }
         validate_positive("dt_s", dt_s)?;
         validate_timestep(self.params, dt_s)?;
         let resolution = Inverter::resolve(command, self.effective_bus_voltage_v())?;
@@ -597,6 +676,73 @@ impl BldcMotor {
 
         if !candidate.faults.stalled {
             candidate.shaft.step(torque_nm, dt_s)?;
+        }
+        candidate.refresh_observables()?;
+        *self = candidate;
+        Ok(())
+    }
+
+    /// Consume one complete MNA observation. Current is positive from each
+    /// external phase terminal toward the floating star. No R/L integration,
+    /// current clamp, neutral-current projection, or ideal inverter is used.
+    /// The interval holds the start angle/EMF and uses the solved endpoint
+    /// current for torque; the refreshed EMF applies to the next interval.
+    /// `dt_s == 0` primes observations without advancing mechanics or a trip.
+    pub fn step_with_phase_currents(
+        &mut self,
+        currents: [f64; 3],
+        dt_s: f64,
+    ) -> Result<(), ModelError> {
+        if !self.circuit_driven {
+            return Err(ModelError {
+                field: "armature",
+                message: "phase-current observations require circuit mode".into(),
+            });
+        }
+        validate_non_negative("dt_s", dt_s)?;
+        validate_array("phase_currents_a", currents)?;
+        let residual = currents.iter().sum::<f64>().abs();
+        let tolerance = 1e-9 + 1e-6 * currents.iter().map(|v| v.abs()).sum::<f64>();
+        if !residual.is_finite() || !tolerance.is_finite() || residual > tolerance {
+            return Err(ModelError { field: "phase_currents_a", message: format!("floating-star KCL residual {residual} A exceeds {tolerance} A; currents are not projected") });
+        }
+        if dt_s > 0.0 {
+            validate_timestep(self.params, dt_s)?;
+        }
+        let mut candidate = self.clone();
+        if candidate.faults.stalled {
+            candidate.shaft.hold_still();
+        }
+        let omega = candidate.shaft.angular_velocity_rad_s();
+        let shapes = phase_back_emf_shapes(candidate.electrical_angle_rad)?;
+        let emf =
+            shapes.map(|shape| candidate.params.back_emf_constant_v_per_rad_s * omega * shape);
+        let torque = calculate_electromagnetic_torque(
+            candidate.params.torque_constant_nm_per_a,
+            omega,
+            shapes,
+            emf,
+            currents,
+        );
+        validate_finite("electromagnetic_torque_nm", torque)?;
+        candidate.phase_currents_a = currents;
+        candidate.electromagnetic_torque_nm = torque;
+        if dt_s > 0.0 {
+            if candidate
+                .params
+                .current_limit_a
+                .is_some_and(|limit| currents.iter().any(|i| i.abs() > limit))
+            {
+                candidate.overcurrent_steps = candidate.overcurrent_steps.saturating_add(1);
+                if candidate.overcurrent_steps >= candidate.params.overcurrent_trip_steps {
+                    candidate.faults.overcurrent = true;
+                }
+            } else {
+                candidate.overcurrent_steps = 0;
+            }
+            if !candidate.faults.stalled {
+                candidate.shaft.step(torque, dt_s)?;
+            }
         }
         candidate.refresh_observables()?;
         *self = candidate;
@@ -761,19 +907,7 @@ fn validate_faults(faults: BldcFaults, supply_voltage_v: f64) -> Result<(), Mode
     Ok(())
 }
 
-fn validate_timestep(params: BldcMotorParams, dt_s: f64) -> Result<(), ModelError> {
-    let electrical_ratio = dt_s * params.resistance_ohm / params.inductance_h;
-    if !electrical_ratio.is_finite() || electrical_ratio >= 1.0 {
-        return Err(ModelError {
-            field: "dt_s",
-            message: "exceeds the conservative electrical integration envelope \
-                      (dt_s * resistance_ohm / inductance_h must be less than 1)"
-                .to_owned(),
-        });
-    }
-
-    let mechanical_ratio =
-        dt_s * params.shaft.viscous_friction_nm_per_rad_s / params.shaft.inertia_kg_m2;
+fn integration_rates(params: BldcMotorParams) -> [f64; 3] {
     // The zero-speed branch uses Kt while the power-consistent running branch
     // has effective torque gain Ke. Bound the stronger of the two so unequal
     // constants cannot make this envelope optimistic.
@@ -784,6 +918,26 @@ fn validate_timestep(params: BldcMotorParams, dt_s: f64) -> Result<(), ModelErro
         / params.inductance_h
         / params.shaft.inertia_kg_m2)
         .sqrt();
+    [
+        params.resistance_ohm / params.inductance_h,
+        params.shaft.viscous_friction_nm_per_rad_s / params.shaft.inertia_kg_m2,
+        coupling_rate,
+    ]
+}
+
+fn validate_timestep(params: BldcMotorParams, dt_s: f64) -> Result<(), ModelError> {
+    let [electrical_rate, mechanical_rate, coupling_rate] = integration_rates(params);
+    let electrical_ratio = dt_s * electrical_rate;
+    if !electrical_ratio.is_finite() || electrical_ratio >= 1.0 {
+        return Err(ModelError {
+            field: "dt_s",
+            message: "exceeds the conservative electrical integration envelope \
+                      (dt_s * resistance_ohm / inductance_h must be less than 1)"
+                .to_owned(),
+        });
+    }
+
+    let mechanical_ratio = dt_s * mechanical_rate;
     let coupled_ratio = electrical_ratio + mechanical_ratio + dt_s * coupling_rate;
     if !mechanical_ratio.is_finite()
         || !coupling_rate.is_finite()

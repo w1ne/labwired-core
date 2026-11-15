@@ -100,6 +100,7 @@ fn is_read(addr: u8) -> bool {
 
 pub struct Rc522 {
     cs_pin: String,
+    selected: bool,
     regs: [u8; 0x40],
     fifo: [u8; FIFO_CAP],
     fifo_len: usize,
@@ -125,6 +126,7 @@ impl Rc522 {
         regs[REG_CONTROL as usize] = 0x10;
         Self {
             cs_pin: cs_pin.into(),
+            selected: false,
             regs,
             fifo: [0; FIFO_CAP],
             fifo_len: 0,
@@ -477,11 +479,17 @@ impl SpiDevice for Rc522 {
     }
 
     fn cs_select(&mut self) {
+        self.selected = true;
         self.phase = Phase::Address;
     }
 
     fn cs_release(&mut self) {
+        self.selected = false;
         self.phase = Phase::Address;
+    }
+
+    fn is_selected(&self) -> bool {
+        self.selected
     }
 
     fn transfer(&mut self, mosi: u8) -> u8 {

@@ -1,0 +1,11 @@
+# ESP32-C5-DevKitC-1-N8R8 narrow UART profile.
+# Board pin map (Espressif v1.2 guide): J3 TX is GPIO11/U0TXD; J3 RX is
+# GPIO12/U0RXD. UART0 is captured by the simulator's host console. The
+# USB-UART bridge and GPIO11/12 pad routing are outside this simulation.
+
+name: "esp32c5-devkitc-1-n8r8"
+chip: "../chips/esp32c5.yaml"
+cpu_hz: 240_000_000
+debug_uart: "uart0"
+external_devices: []
+board_io: []

@@ -98,13 +98,13 @@ cmp out/cc2538dk-run1/snapshot.json out/cc2538dk-run2/snapshot.json  # clean
 
 cargo test -p labwired-core --lib cc2538
 #   47 passed (GPIO + SYS_CTRL as before; rfcore 9; sleep_timer 8; flash_ctrl 8; aes 13)
-cargo test -p labwired-core --test cc2538_sleep_timer_irq
-cargo test -p labwired-core --features event-scheduler --test cc2538_sleep_timer_irq
+cargo test -p labwired-core --test vendor cc2538_sleep_timer_irq::
+cargo test -p labwired-core --features event-scheduler --test vendor cc2538_sleep_timer_irq::
 #   1 passed each (legacy walk / scheduled event)
-cargo test -p labwired-core --test cc2538_rom
-cargo test -p labwired-core --features event-scheduler --test cc2538_rom
+cargo test -p labwired-core --test vendor cc2538_rom::
+cargo test -p labwired-core --features event-scheduler --test vendor cc2538_rom::
 #   12 passed each
-cargo test -p labwired-core --test firmware_survival cc2538
+cargo test -p labwired-core --test gates cc2538
 #   test_cc2538dk_smoke_survival, test_cc2538dk_contiki_hello_survival,
 #   test_cc2538dk_contiki_flash_test_survival,
 #   test_cc2538dk_contiki_crypto_ccm_survival,

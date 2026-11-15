@@ -575,14 +575,30 @@ fn scan(dir: &Path, keep: &dyn Fn(&Path) -> bool) -> Counts {
     c
 }
 
+/// The engine's source roots (see `src_roots`), rooted at the canonical repo root.
+fn model_roots() -> Vec<PathBuf> {
+    super::src_roots::CORE_SRC_ROOTS
+        .iter()
+        .map(|(dir, _)| repo_root().join(dir))
+        .collect()
+}
+
 fn model_counts() -> Counts {
-    scan(&repo_root().join("crates/core/src"), &|_| true)
+    model_roots()
+        .iter()
+        .map(|root| scan(root, &|_| true))
+        .fold(Counts::default(), |a, b| Counts {
+            attrs: a.attrs + b.attrs,
+            macros: a.macros + b.macros,
+            files: a.files + b.files,
+        })
 }
 
 fn harness_counts() -> Counts {
-    let root = repo_root();
-    let model = root.join("crates/core/src");
-    scan(&root.join("crates"), &|p| !p.starts_with(&model))
+    let models = model_roots();
+    scan(&repo_root().join("crates"), &|p| {
+        !models.iter().any(|m| p.starts_with(m))
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -766,7 +782,7 @@ fn non_ascii_prose_does_not_derail_the_scan() {
 /// every other file that merely discusses the feature.
 #[test]
 fn this_file_contributes_no_sites() {
-    let me = repo_root().join("crates/core/src/tests/event_scheduler_cfg_ratchet.rs");
+    let me = super::src_roots::core_src("tests/event_scheduler_cfg_ratchet.rs");
     let src = std::fs::read_to_string(&me).expect("read this file");
     assert!(
         src.contains(FEATURE),

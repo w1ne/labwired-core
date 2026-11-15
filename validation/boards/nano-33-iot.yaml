@@ -1,0 +1,22 @@
+id: nano-33-iot
+doc: docs/boards/nano-33-iot.md
+chip: configs/chips/atsamd21.yaml
+tier: smoke-manual
+note: "Arduino Nano 33 IoT (SAMD21G18A). Bare-metal UART/LED smoke prints OK on SERCOM5 (D0/D1 header); on-board NINA/ATECC/IMU are not attached. SIM-DERIVED — no silicon diff; no executing-fidelity differential."
+offline_tests:
+  - "firmware_survival::test_atsamd21_nano33_smoke_survival"
+models:
+  - crates/core/src/cpu/cortex_m.rs
+  - crates/core/src/decoder/arm.rs
+  - crates/core/src/peripherals/gpio.rs
+  - crates/core/src/peripherals/sam_clock.rs
+  - crates/core/src/peripherals/sam/sercom_usart.rs
+  - configs/chips/atsamd21.yaml
+  - configs/systems/nano-33-iot.yaml
+  # 2026-09-21, model_paths_drift_gate: models this board REGISTERS that
+  # its list omitted, so they were invisible to the drift digest. This
+  # board records no silicon capture, so there is no "silicon-verified"
+  # claim for the corrected digest to invalidate — no ack is implied.
+  - crates/core/src/peripherals/stub.rs
+  - crates/core/src/peripherals/systick.rs
+  - crates/core/src/peripherals/uart.rs

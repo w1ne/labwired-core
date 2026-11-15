@@ -180,6 +180,24 @@ pub enum MmioAccessClass {
 }
 
 pub trait Peripheral: std::fmt::Debug + Send {
+    /// An STM32 GPIO port can bind physical pad names such as PB0.
+    /// Reject a non-GPIO peripheral that accidentally uses the same instance name.
+    fn is_stm32_gpio_port(&self) -> bool {
+        false
+    }
+
+    /// Subscribe an off-chip device to actual STM32 GPIO output transitions.
+    /// Other peripheral families decline without a concrete downcast.
+    /// The bus supplies the physical port number and cycle clock.
+    fn register_stm32_gpio_observer(
+        &mut self,
+        _port_index: u8,
+        _observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver>,
+        _clock: crate::CycleClock,
+    ) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8>;
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()>;
 
@@ -450,6 +468,23 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// Clock-controller capability: a live mirror of register `name`, kept
+    /// current on every firmware write, for a model whose SOURCE-clock select
+    /// lives in the controller rather than in its own window (the ESP32-C6
+    /// LEDC is clocked from `PCR.LEDC_SCLK_CONF`). Resolved by name, like
+    /// [`Self::clock_gate_reg_offset`], so no concrete-type downcast is
+    /// needed. `None` for every other peripheral and unknown name.
+    fn clock_select_cell(&mut self, _name: &str) -> Option<Arc<std::sync::atomic::AtomicU32>> {
+        None
+    }
+
+    /// Accept the mirror from [`Self::clock_select_cell`] named by this
+    /// peripheral's `config.clock_select`. Returns `false` (a hard config
+    /// error in `resolve_clock_selects`) if the model has no use for one.
+    fn attach_clock_select_cell(&mut self, _cell: Arc<std::sync::atomic::AtomicU32>) -> bool {
+        false
+    }
+
     /// Cortex-M7 L1 cache capability: the I/D cache geometry this peripheral
     /// declares (`cortex_m7_cache`). `configure_cortex_m` asks every
     /// peripheral and hands the answer to the SCB's CLIDR/CTR/CCSIDR, so the
@@ -619,6 +654,23 @@ pub trait Peripheral: std::fmt::Debug + Send {
     fn pins_mut(&mut self) -> Option<&mut dyn pins::PinPort> {
         None
     }
+
+    /// GPIO-matrix capability: pads whose output select is `signal_idx`.
+    /// Empty (the default) for a peripheral that does not own a matrix.
+    fn pads_for_output_signal(&self, _signal_idx: u32) -> Vec<u8> {
+        Vec::new()
+    }
+
+    /// GPIO-matrix capability: drive an output pad to `level`, returning
+    /// whether the level actually changed. Default is a no-op.
+    fn drive_pad_output(&mut self, _pin: u8, _level: bool) -> bool {
+        false
+    }
+
+    /// GPIO-matrix capability: publish `now` to this port's observers so a
+    /// subsequent [`Self::drive_pad_output`] edge is timestamped. Default is
+    /// a no-op.
+    fn sync_observer_cycle(&mut self, _now: u64) {}
 
     /// GPIO capability: the pad level a logic probe clipped to `pin` would
     /// see. Shim over [`pins::PinPort::level`] (kept because many callers
@@ -1030,9 +1082,9 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// Exists for `model_paths_drift_gate`, which asserts that every model a
     /// board actually registers appears in that board's `models:` list in
     /// `validation/manifest.yaml` — the list whose contents are hashed into
-    /// the board's drift digest. A model the list omits can be rewritten
-    /// without moving the digest, so a stale `drift_ack` goes on covering a
-    /// tree it was never written for.
+    /// the board's source digest. An omitted model can change without moving
+    /// the digest, concealing a difference from the source recorded with a
+    /// physical capture. Watch completeness remains an automated requirement.
     ///
     /// Asking the ENGINE rather than parsing the factories is the point. The
     /// first version of that gate mined `type:` -> source from the factory
@@ -1753,8 +1805,11 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// simulation restart, so a controller that kept a stale cursor would
     /// replay the previous run's backlog as live packets.
     ///
-    /// Default no-op: a peripheral with no radio has no air to move.
-    fn attach_ble_air(&mut self, _air: crate::peripherals::ble_air::BleAirBus) {}
+    /// Returns true when this peripheral joined the shared medium. The default
+    /// no-op has no radio and returns false.
+    fn attach_ble_air(&mut self, _air: crate::peripherals::ble_air::BleAirBus) -> bool {
+        false
+    }
 
     /// Put this peripheral's IEEE 802.15.4 radio on `air` (a world's shared
     /// 802.15.4 medium). Default no-op: a peripheral with no 802.15.4 radio

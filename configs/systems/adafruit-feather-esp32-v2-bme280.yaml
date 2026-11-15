@@ -1,0 +1,21 @@
+# Adafruit ESP32 Feather V2 with the Adafruit BME280 STEMMA QT breakout.
+# The sensor is on I2C0 at 0x77 (SDO high); the stocked Adafruit breakout has
+# two 10 kΩ pull-ups. This digital system model attaches the sensor to I2C0;
+# it does not calculate analog bus voltage or couple GPIO2 to sensor presence.
+# Feather V2 defaults are SDA=GPIO22, SCL=GPIO20. Physical firmware must drive
+# GPIO2 high to enable the STEMMA QT rail.
+name: "adafruit-feather-esp32-v2-bme280"
+chip: "../chips/esp32.yaml"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x77
+board_io:
+  - id: "status_led"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 13
+    signal: "output"
+    active_high: true

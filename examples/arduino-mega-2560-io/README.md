@@ -8,7 +8,7 @@ on ports E, G, F, B and H) and prints one line on Serial:
 
 `system.yaml` puts two 5 V potentiometers on A8 (ADC8) and A9 (ADC9).
 
-    cargo test -p labwired-core --test avr_mega2560_io
+    cargo test -p labwired-core --test avr avr_mega2560_io::
 
 The committed ELF (`tests/fixtures/avr/arduino-mega-2560-io.elf`) was built
 with arduino-cli, `arduino:avr` 1.8.x, board `arduino:avr:mega`, from

@@ -92,6 +92,7 @@ impl SystemBus {
             }
             if p.dev.set_timer_kernel_clock_div(div) {
                 p.ticks_remaining = 0;
+                self.finish_motor_control_write(t);
                 self.collect_scheduled_events(t);
             }
         }

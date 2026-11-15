@@ -141,6 +141,11 @@ struct GatedTest {
 
 struct Scan {
     gated: Vec<GatedTest>,
+    /// Feature-gated files found INSIDE a grouped test binary
+    /// (`tests/<group>/<file>.rs` next to a `tests/<group>/main.rs`). A group
+    /// is one cargo target, so a file in it cannot carry its own
+    /// `required-features`; see `grouped_modules_are_never_feature_gated`.
+    grouped_gated: Vec<String>,
     crates_with_tests: usize,
     test_files: usize,
 }
@@ -310,6 +315,7 @@ fn declared_test_targets(manifest_src: &str) -> BTreeMap<String, Vec<String>> {
 fn scan() -> Scan {
     let root = repo_root();
     let mut gated = Vec::new();
+    let mut grouped_gated = Vec::new();
     let mut test_files = 0usize;
     let crates = crates_with_test_dirs(&root);
 
@@ -329,6 +335,43 @@ fn scan() -> Scan {
             .filter(|p| p.is_file() && p.extension().and_then(|e| e.to_str()) == Some("rs"))
             .collect();
         files.sort();
+
+        // Grouped binaries: `tests/<group>/main.rs` plus one module per former
+        // test file. Every module counts as an integration test file (so the
+        // floors below still measure the whole suite), but none of them may be
+        // gated on a feature: the group is the cargo target.
+        let mut group_dirs: Vec<PathBuf> = std::fs::read_dir(&tests_dir)
+            .unwrap_or_else(|e| panic!("read {}: {e}", tests_dir.display()))
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.is_dir() && p.join("main.rs").is_file())
+            .collect();
+        group_dirs.sort();
+        for dir in group_dirs {
+            let mut modules: Vec<PathBuf> = std::fs::read_dir(&dir)
+                .unwrap_or_else(|e| panic!("read {}: {e}", dir.display()))
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| {
+                    p.is_file()
+                        && p.extension().and_then(|e| e.to_str()) == Some("rs")
+                        && p.file_name().and_then(|n| n.to_str()) != Some("main.rs")
+                })
+                .collect();
+            modules.sort();
+            for path in modules {
+                test_files += 1;
+                let src = std::fs::read_to_string(&path)
+                    .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+                let gated_on_feature = src.lines().any(|l| {
+                    let t = l.trim();
+                    t.starts_with("#![cfg(") && !features_named(t).is_empty()
+                });
+                if gated_on_feature {
+                    grouped_gated.push(path.display().to_string());
+                }
+            }
+        }
 
         for path in files {
             test_files += 1;
@@ -380,6 +423,7 @@ fn scan() -> Scan {
 
     Scan {
         gated,
+        grouped_gated,
         crates_with_tests: crates.len(),
         test_files,
     }
@@ -459,6 +503,45 @@ fn the_scan_is_not_vacuous() {
              It is not measuring what it claims to measure."
         );
     }
+}
+
+/// A module inside a grouped test binary cannot declare `required-features`
+/// (that is a property of the cargo target, i.e. of the whole group), so a
+/// feature-gated file placed there would compile to nothing in a default build
+/// and report green with its tests silently absent from the group. Such a file
+/// must stay a top-level `tests/<name>.rs` with its own `[[test]]` block.
+#[test]
+fn grouped_modules_are_never_feature_gated() {
+    let scan = scan();
+    assert!(
+        scan.grouped_gated.is_empty(),
+        "these files sit inside a grouped integration-test binary \
+         (tests/<group>/main.rs) but are gated by an inner \
+         `#![cfg(feature = ...)]`:\n  {}\n\nA group is one cargo target and \
+         cannot carry `required-features` per file, so without the feature \
+         these tests vanish from the group and nothing says so. Move each file \
+         back to crates/core/tests/<name>.rs and give it a `[[test]]` block \
+         with `required-features` in Cargo.toml.",
+        scan.grouped_gated.join("\n  ")
+    );
+}
+
+/// The grouped layout must actually be present and scanned: a mis-rooted walk
+/// or a flattened layout would make the check above pass over nothing.
+#[test]
+fn the_scan_sees_grouped_test_binaries() {
+    let tests_dir = repo_root().join("crates/core/tests");
+    let groups = std::fs::read_dir(&tests_dir)
+        .expect("read crates/core/tests")
+        .flatten()
+        .filter(|e| e.path().is_dir() && e.path().join("main.rs").is_file())
+        .count();
+    assert!(
+        groups >= 10,
+        "found only {groups} grouped test binaries (tests/<group>/main.rs) under \
+         crates/core/tests; the consolidated layout is gone or the walk is \
+         looking in the wrong place"
+    );
 }
 
 /// The gate itself.

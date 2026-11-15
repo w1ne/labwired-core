@@ -1,0 +1,9 @@
+# Narrow UART0 profile for the buyable ESP32-C61-DevKitC-1-N8R2.
+# J3 TX/RX map to GPIO11/GPIO10 in Espressif's v2.0 guide. The simulator
+# captures UART0 internally and does not model GPIO, IO_MUX or the USB bridge.
+
+name: "esp32c61-devkitc-1-n8r2"
+chip: "../chips/esp32c61.yaml"
+cpu_hz: 160_000_000
+debug_uart: "uart0"
+external_devices: []

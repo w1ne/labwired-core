@@ -10,7 +10,7 @@
  * The program runs a fixed sequence of MAC-class instructions whose inputs
  * are the DS70000157G worked examples (example 1 of MAC/MPY/SAC/SAC.R), then
  * clamps ACCA with normal saturation and writes a completion marker to
- * 0x0E00. `crates/core/tests/pic24_xc16_dsp.rs` steps until the marker
+ * 0x0E00. `crates/core/tests/pic/pic24_xc16_dsp.rs` steps until the marker
  * appears and checks the accumulators, W13 (write-back), the prefetch
  * registers and the SR flags.
  *

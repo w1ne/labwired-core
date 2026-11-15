@@ -64,10 +64,18 @@ impl SystemBus {
     /// wider path into the peripheral table.
     ///
     /// Early-outs on a bus with no such device, which is almost every bus.
+    #[inline]
     pub(crate) fn service_device_pin_drives(&mut self) {
-        if self.device_pin_pads.is_empty() {
-            return;
+        if !self.device_pin_pads.is_empty() {
+            self.service_bound_device_pin_drives();
         }
+    }
+
+    // Keep the common path for systems without device-output bindings small.
+    // Bound systems still service their outputs on every tick.
+    #[cold]
+    #[inline(never)]
+    fn service_bound_device_pin_drives(&mut self) {
         let mut drives: Vec<(String, String, bool)> = Vec::new();
         for entry in self.peripherals.iter_mut() {
             entry.dev.drain_attached_pin_drives(&mut drives);
@@ -75,24 +83,33 @@ impl SystemBus {
         if drives.is_empty() {
             return;
         }
-        for (device_id, role, level) in drives {
-            let Some(pad) = self
+        for (device_id, role, raw_level) in drives {
+            // One source can feed several pads. Resolve each destination
+            // independently; the source level also remains available unchanged
+            // for a future direct device-output observer.
+            let pads: Vec<_> = self
                 .device_pin_pads
                 .iter()
-                .find(|p| p.device_id == device_id && p.role == role)
+                .filter(|p| p.device_id == device_id && p.role == role)
                 .cloned()
-            else {
-                // A role with no pad is a part wired for an interrupt line the
-                // placement did not connect. That is a real board, not a bug:
-                // the rule still ran, the line simply goes nowhere.
-                continue;
-            };
-            // ⚠️ BOTH SEAMS — see `rotary_encoder.rs`. `drive_idr_bit` lands
-            // only where a store to the input register lands (STM32);
-            // `drive_input_bit` is the external-world seam the read-only-IN
-            // models (EFR32, SAM, ESP32-C3) actually sample.
-            let _ = crate::bus::DevicePins::drive_input_bit(self, pad.addr, pad.bit, level);
-            crate::bus::DevicePins::drive_idr_bit(self, pad.addr, pad.bit, level);
+                .collect();
+            let driver = crate::bus::open_drain::OpenDrainDriver { device_id, role };
+            for pad in pads {
+                let pad_level = if self
+                    .device_open_drain_nets
+                    .contains_pad((pad.addr, pad.bit))
+                {
+                    self.device_open_drain_nets
+                        .drive((pad.addr, pad.bit), &driver, raw_level)
+                        .expect("open-drain pad bindings register every driver")
+                } else {
+                    raw_level
+                };
+                // BOTH SEAMS: STM32 samples its input register; the read-only-IN
+                // models (EFR32, SAM, ESP32-C3) sample the external input seam.
+                let _ = crate::bus::DevicePins::drive_input_bit(self, pad.addr, pad.bit, pad_level);
+                crate::bus::DevicePins::drive_idr_bit(self, pad.addr, pad.bit, pad_level);
+            }
         }
     }
 
@@ -312,8 +329,15 @@ impl SystemBus {
         }
         let now = self.current_cycle;
         let mut devices = std::mem::take(&mut self.gpio_devices);
+        // Edge/stimulus-clocked residents (`needs_per_cycle_service == false`)
+        // already run from the MMIO write hook and from `flush_gpio_device_inputs`.
+        // Re-servicing them every tick was pure host cost with no behavioural
+        // effect (displays, pybadge buttons). Open-drain matrix parts (keypad)
+        // stay on this walk.
         for device in &mut devices {
-            device.service(self, now);
+            if device.needs_per_cycle_service() {
+                device.service(self, now);
+            }
         }
         self.gpio_devices = devices;
     }
