@@ -1965,10 +1965,17 @@ impl CortexM {
 
     /// CP10 and CP11 must both permit the current privilege level. Reserved
     /// access value `0b10` is treated as denied; it is not a usable grant.
+    ///
+    /// Only a chip that declares the FP extension (`cortex_m_fpu`) gets the
+    /// CPACR check. Many FPU parts (STM32L476, H563, U575, WBA52, ...) do not
+    /// declare that block, and their firmware enables CPACR through an SCB
+    /// that then has no CPACR state; denying VFP there faulted real firmware
+    /// at its first FP instruction. Such cores keep the earlier contract: VFP
+    /// executes. Known gap: an FPU-less core (M0/M3) is not faulted either.
     #[inline]
     fn fp_access_allowed(&self) -> bool {
         if self.fp_ctx.is_none() {
-            return false;
+            return true;
         }
         let Some(cpacr) = self.cpacr.as_ref() else {
             return false;
