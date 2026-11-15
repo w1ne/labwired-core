@@ -177,9 +177,9 @@ fn required_library_worker_bodies(ci: &str) -> Result<Vec<String>, String> {
     let normalize = |text: &str| text.split_whitespace().collect::<String>();
     let condition = normalize(aggregate["if"].as_str().unwrap_or_default());
     if condition
-        != "always()&&(github.event_name=='pull_request'||github.event_name=='workflow_dispatch')"
+        != "always()&&!(github.event_name=='pull_request'&&github.event.pull_request.draft)&&(github.event_name=='pull_request'||github.event_name=='workflow_dispatch')"
     {
-        return Err("library aggregate must always check both results on pull requests".into());
+        return Err("library aggregate must always check both results on non-draft pull requests".into());
     }
     let advisory = |node: &serde_yaml::Value| {
         !node["continue-on-error"].is_null() && node["continue-on-error"].as_bool() != Some(false)
@@ -215,7 +215,7 @@ fn required_library_worker_bodies(ci: &str) -> Result<Vec<String>, String> {
         let worker = &jobs[*job];
         if advisory(worker)
             || normalize(worker["if"].as_str().unwrap_or_default())
-                != "github.event_name=='pull_request'||github.event_name=='workflow_dispatch'"
+                != "!(github.event_name=='pull_request'&&github.event.pull_request.draft)&&(github.event_name=='pull_request'||github.event_name=='workflow_dispatch')"
         {
             return Err(format!(
                 "{job} must run on every pull request without allowing failure"
