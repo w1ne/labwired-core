@@ -681,11 +681,14 @@ pub fn try_build(
         "systick" | "arm_generictimer" => {
             // CALIB is implementation-defined per chip; the yaml can
             // supply the silicon value via `config: { calib: ... }`.
-            match p_cfg.config.get("calib").and_then(|v| v.as_u64()) {
-                Some(calib) => Box::new(crate::peripherals::systick::Systick::with_calib(
-                    calib as u32,
-                )),
-                None => Box::new(crate::peripherals::systick::Systick::new()),
+            let st = match p_cfg.config.get("calib").and_then(|v| v.as_u64()) {
+                Some(calib) => crate::peripherals::systick::Systick::with_calib(calib as u32),
+                None => crate::peripherals::systick::Systick::new(),
+            };
+            // `external_ref_hz`: the reference clock CLKSOURCE = 0 selects.
+            match p_cfg.config.get("external_ref_hz").and_then(|v| v.as_u64()) {
+                Some(hz) => Box::new(st.with_external_ref_hz(hz)),
+                None => Box::new(st),
             }
         }
         // Silicon Labs Series-2 GPIO external interrupts — the `attachInterrupt`
@@ -884,6 +887,7 @@ pub fn try_build(
                 let pad_map = match p_cfg.config.get("pad_map").and_then(|v| v.as_str()) {
                     None => None,
                     Some("stm32g0") => Some("stm32g0"),
+                    Some("stm32c0") => Some("stm32c0"),
                     Some("stm32g4") => Some("stm32g4"),
                     Some("stm32l0") => Some("stm32l0"),
                     Some("stm32l4") => Some("stm32l4"),
@@ -893,7 +897,7 @@ pub fn try_build(
                     Some("stm32h5") => Some("stm32h5"),
                     Some(other) => {
                         return Err(anyhow::anyhow!(
-                            "timer '{}': unknown pad_map '{other}' (supported: stm32g0, stm32g4, stm32l0, stm32l4, stm32wb, stm32wba, stm32u5, stm32h5)",
+                            "timer '{}': unknown pad_map '{other}' (supported: stm32g0, stm32c0, stm32g4, stm32l0, stm32l4, stm32wb, stm32wba, stm32u5, stm32h5)",
                             p_cfg.id
                         ))
                     }
@@ -1821,6 +1825,14 @@ pub fn try_build(
             // `host: false` leaves the port unplugged (no enumeration).
             if p_cfg.config.get("host").and_then(|v| v.as_bool()) == Some(false) {
                 usb.set_host_enabled(false);
+            }
+            // `host_steps:` run after enumeration (usb_host::parse_host_steps),
+            // e.g. the CDC SET_LINE_CODING / SET_CONTROL_LINE_STATE a terminal
+            // sends when it opens the port.
+            if let Some(steps) = p_cfg.config.get("host_steps") {
+                let steps = crate::peripherals::usb_host::parse_host_steps(steps)
+                    .map_err(|e| anyhow::anyhow!("imxrt_usb host_steps: {e}"))?;
+                usb.queue_host_steps(steps);
             }
             Box::new(usb)
         }

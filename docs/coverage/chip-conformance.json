@@ -637,6 +637,13 @@
     "reg_match": 0
   },
   {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "stm32c031c6",
+    "reg_match": 0
+  },
+  {
     "behavior": true,
     "excluded": 6,
     "level": 2,
@@ -704,6 +711,13 @@
     "excluded": 0,
     "level": 1,
     "name": "atmega2561",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "mimxrt1062-teensy41",
     "reg_match": 0
   },
   {

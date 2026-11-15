@@ -856,6 +856,16 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: Some("firmware_survival::test_stm32h735_tier1_survival"),
     },
+    // NUCLEO-C031C6, the first STM32C0 part (G0-derived RCC without a PLL).
+    // SIM-DERIVED: no silicon capture. Its stock-stm32duino Arduino matrix
+    // row runs through PlatformIO and the CLI, not as a Rust test, so no
+    // behavior_gate resolves.
+    ChipConf {
+        name: "stm32c031c6",
+        yaml: "configs/chips/stm32c031c6.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
     ChipConf {
         name: "stm32l073",
         yaml: "configs/chips/stm32l073.yaml",
@@ -961,6 +971,15 @@ const CHIPS: &[ChipConf] = &[
         yaml: "configs/chips/atmega2561.yaml",
         reset_oracle: None,
         behavior_gate: Some("avr_atmega2561::atmega2561_boots_and_prints"),
+    },
+    // PJRC Teensy 4.1 (MIMXRT1062DVJ6B). SIM-DERIVED from the SVD/Teensy
+    // headers: no silicon capture. Its Arduino matrix row runs through
+    // PlatformIO and the CLI, not as a Rust test, so no behavior_gate resolves.
+    ChipConf {
+        name: "mimxrt1062-teensy41",
+        yaml: "configs/chips/mimxrt1062-teensy41.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
     },
     // 64-pin ATmega1281. The committed AVR-GCC image exercises the exact
     // two-byte-PC profile, USART0 output and PB5 package pin. No silicon
