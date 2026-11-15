@@ -23,15 +23,22 @@
 //! | Current source | `I<name> n+ n- <source>` |
 //! | Switch | `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` or `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0\|1] ron=<r> roff=<r>` |
 //! | Voltage switch | `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0|1] ron=<r> roff=<r>` |
-//! | Diode | `D<name> n+ n- <model> [<area>] [pj=<perimeter>]` |
-//! | BJT | `Q<name> nc nb ne [ns] <model> [temp=<°C>]` |
-//! | MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>]` |
-//! | JFET | `J<name> nd ng ns <model> [temp=<°C>]` |
+//! | Diode | `D<name> n+ n- <model> [<area>] [pj=<perimeter>] [off]` |
+//! | BJT | `Q<name> nc nb ne [ns] <model> [temp=<°C>] [off]` |
+//! | MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>] [off]` |
+//! | JFET | `J<name> nd ng ns <model> [temp=<°C>] [off]` |
 //! | VCVS | `E<name> n+ n- nc+ nc- <gain>` |
 //! | VCCS | `G<name> n+ n- nc+ nc- <transconductance>` |
 //! | CCCS | `F<name> n+ n- <vsource> <gain>` |
 //! | CCVS | `H<name> n+ n- <vsource> <transresistance>` |
 //! | Op-amp / comparator | `X<name> in+ in- v+ v- out <model>` |
+//!
+//! A semiconductor's bare `off` flag is SPICE's: the operating point holds
+//! that device cut off until the rest of the circuit converges, then releases
+//! it. It picks one state of a latch or other bistable circuit and changes
+//! nothing where the operating point is unique. Instance `ic=` on a
+//! semiconductor is refused: SPICE applies it only under `uic`, which this
+//! engine does not have.
 //!
 //! The four dependent sources are SPICE's linear ones and nothing more: `POLY`,
 //! `VALUE={...}` and `TABLE` forms are refused by name. `E` and `H` each add a
@@ -2275,6 +2282,12 @@ pub struct Diode {
     /// stamps, including its terminal resistances and GMIN, is scaled by it,
     /// as ngspice's `*load.c` does. `1` for a single device.
     pub multiplier: f64,
+    /// SPICE `off`: the operating point starts with this junction at 0 V and
+    /// holds it there until the rest of the circuit has converged, then
+    /// releases it (ngspice's `MODEINITFIX`). It selects one state of a
+    /// circuit with more than one operating point and changes nothing in a
+    /// circuit with one. Ignored after the operating point.
+    pub off: bool,
     /// Anode, the terminal the netlist names first.
     pub anode: NodeRef,
     /// Cathode.
@@ -2436,6 +2449,10 @@ pub struct Bjt {
     /// stamps, including its terminal resistances and GMIN, is scaled by it,
     /// as ngspice's `*load.c` does. `1` for a single device.
     pub multiplier: f64,
+    /// SPICE `off`: the operating point starts with both junctions at 0 V
+    /// and holds them there until the rest of the circuit has converged
+    /// (ngspice's `MODEINITFIX`). See [`Diode::off`].
+    pub off: bool,
     /// Collector.
     pub c: NodeRef,
     /// Base.
@@ -2483,6 +2500,10 @@ pub struct Mosfet {
     /// stamps, including its terminal resistances and GMIN, is scaled by it,
     /// as ngspice's `*load.c` does. `1` for a single device.
     pub multiplier: f64,
+    /// SPICE `off`: the operating point starts with `Vgs`, `Vds` and the
+    /// bulk junctions at 0 V and holds them there until the rest of the
+    /// circuit has converged (ngspice's `MODEINITFIX`). See [`Diode::off`].
+    pub off: bool,
     /// Drain.
     pub d: NodeRef,
     /// Gate.
@@ -2623,6 +2644,10 @@ pub struct Jfet {
     /// stamps, including its terminal resistances and GMIN, is scaled by it,
     /// as ngspice's `*load.c` does. `1` for a single device.
     pub multiplier: f64,
+    /// SPICE `off`: the operating point starts with both gate junctions at
+    /// 0 V and holds them there until the rest of the circuit has converged
+    /// (ngspice's `MODEINITFIX`). See [`Diode::off`].
+    pub off: bool,
     /// Drain.
     pub d: NodeRef,
     /// Gate.
@@ -2871,6 +2896,14 @@ impl Circuit {
             || !self.slew_limited_vccs.is_empty()
     }
 
+    /// Whether any semiconductor carries SPICE's `off` flag.
+    pub fn has_off_devices(&self) -> bool {
+        self.diodes.iter().any(|device| device.off)
+            || self.bjts.iter().any(|device| device.off)
+            || self.mosfets.iter().any(|device| device.off)
+            || self.jfets.iter().any(|device| device.off)
+    }
+
     /// True when any independent source carries a transient function, so the
     /// solver has to re-evaluate sources against the clock each step.
     pub fn has_waveforms(&self) -> bool {
@@ -3014,6 +3047,8 @@ struct PendingDevice {
     area: f64,
     /// Diode junction perimeter `pj=`; `None` uses the model `PJ`.
     perimeter: Option<f64>,
+    /// SPICE `off`: start the operating point with this device cut off.
+    off: bool,
 }
 
 /// A K line held until all its L elements have been parsed.
@@ -3341,16 +3376,16 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
             }
             'D' | 'Q' | 'M' | 'J' => {
                 let (terminals, shape) = match letter {
-                    'D' => (2, "D<name> n+ n- <model> [<area>] [area=<factor>] [pj=<perimeter>] [m=<count>] [temp=<°C>]"),
+                    'D' => (2, "D<name> n+ n- <model> [<area>] [area=<factor>] [pj=<perimeter>] [m=<count>] [temp=<°C>] [off]"),
                     'Q' => (
                         if tokens.len() > 5 && !names_model(tokens[4]) { 4 } else { 3 },
-                        "Q<name> nc nb ne [ns] <model> [<area>] [area=<factor>] [m=<count>] [temp=<°C>]",
+                        "Q<name> nc nb ne [ns] <model> [<area>] [area=<factor>] [m=<count>] [temp=<°C>] [off]",
                     ),
                     'M' => (
                         4,
-                        "M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>] [m=<count>] [temp=<°C>]",
+                        "M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>] [m=<count>] [temp=<°C>] [off]",
                     ),
-                    _ => (3, "J<name> nd ng ns <model> [<area>] [area=<factor>] [m=<count>] [temp=<°C>]"),
+                    _ => (3, "J<name> nd ng ns <model> [<area>] [area=<factor>] [m=<count>] [temp=<°C>] [off]"),
                 };
                 let rest = &tokens[1..];
                 if rest.len() < terminals + 1 {
@@ -3368,7 +3403,18 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 let mut multiplier = None;
                 let mut area = None;
                 let mut perimeter = None;
-                let mut options = &rest[terminals + 1..];
+                // SPICE's bare `off` flag may stand anywhere among the
+                // options; it is the only option without a value.
+                let mut off = false;
+                let mut options = Vec::with_capacity(rest.len() - terminals - 1);
+                for token in &rest[terminals + 1..] {
+                    if token.eq_ignore_ascii_case("off") {
+                        off = true;
+                    } else {
+                        options.push(*token);
+                    }
+                }
+                let mut options = options.as_slice();
                 // SPICE writes a D, Q or J area as a bare number straight
                 // after the model name; `area=` is the keyword spelling.
                 if letter != 'M' {
@@ -3461,6 +3507,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     multiplier: multiplier.unwrap_or(1.0),
                     area: area.unwrap_or(1.0),
                     perimeter,
+                    off,
                 });
             }
             'E' | 'G' => {
@@ -3570,6 +3617,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     multiplier: 1.0,
                     area: 1.0,
                     perimeter: None,
+                    off: false,
                 });
             }
             'S' => {
@@ -4062,6 +4110,7 @@ fn bind_models(
                 circuit.diodes.push(Diode {
                     name: device.name,
                     multiplier: device.multiplier,
+                    off: device.off,
                     anode: device.nodes[0],
                     cathode: device.nodes[1],
                     junction_anode,
@@ -4384,6 +4433,7 @@ fn bind_models(
                     circuit.diodes.push(Diode {
                         name: internal_name,
                         multiplier: device.multiplier,
+                        off: device.off,
                         anode,
                         cathode,
                         junction_anode: anode,
@@ -4398,6 +4448,7 @@ fn bind_models(
                 circuit.bjts.push(Bjt {
                     name: device.name,
                     multiplier: device.multiplier,
+                    off: device.off,
                     c: device.nodes[0],
                     b: device.nodes[1],
                     e: device.nodes[2],
@@ -4658,6 +4709,7 @@ fn bind_models(
                 circuit.mosfets.push(Mosfet {
                     name: device.name,
                     multiplier: device.multiplier,
+                    off: device.off,
                     d: device.nodes[0],
                     g: device.nodes[1],
                     s: device.nodes[2],
@@ -4770,6 +4822,7 @@ fn bind_models(
                 circuit.jfets.push(Jfet {
                     name: device.name,
                     multiplier: device.multiplier,
+                    off: device.off,
                     d: device.nodes[0],
                     g: device.nodes[1],
                     s: device.nodes[2],
@@ -5468,6 +5521,7 @@ impl Lowering<'_> {
         self.circuit.diodes.push(Diode {
             name,
             multiplier: 1.0,
+            off: false,
             anode,
             cathode,
             junction_anode: anode,
@@ -5851,6 +5905,7 @@ fn lower_comparator(
             lower.circuit.mosfets.push(Mosfet {
                 name,
                 multiplier: 1.0,
+                off: false,
                 d: out,
                 g: q,
                 s: vee,
@@ -6020,6 +6075,7 @@ fn lower_regulator(
     lower.circuit.diodes.push(Diode {
         name,
         multiplier: 1.0,
+        off: false,
         anode: a,
         cathode: l1,
         junction_anode: a,

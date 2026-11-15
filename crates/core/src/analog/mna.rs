@@ -610,6 +610,10 @@ pub struct Solver {
     /// The next internal step must not trust the stored derivatives: a source
     /// or switch changed, or the state was just set by the operating point.
     restart: bool,
+
+    /// The operating point is in its first phase, where every `off` device is
+    /// held cut off (ngspice's `MODEINITFIX`).
+    holding_off: bool,
 }
 
 impl Solver {
@@ -730,6 +734,7 @@ impl Solver {
             cached_stamp: None,
             settled: false,
             restart: true,
+            holding_off: false,
         };
         solver.solve_operating_point()?;
         Ok(solver)
@@ -999,7 +1004,7 @@ impl Solver {
             self.settled = false;
             if self.nonlinear {
                 self.save_linearisation();
-                if let Err(error) = self.newton(Stamp::OperatingPoint, None, self.time) {
+                if let Err(error) = self.operating_point_newton() {
                     self.restore_linearisation();
                     self.gmin_stepping().map_err(|_| error)?;
                 }
@@ -1791,10 +1796,16 @@ impl Solver {
     /// the states. Only reached after plain Newton failed, so an operating
     /// point that converged before converges exactly as before.
     fn gmin_stepping(&mut self) -> Result<(), AnalogError> {
+        let off = self.circuit.has_off_devices();
+        if off {
+            self.hold_off_devices();
+        }
         let mut shunt = 1.0;
         while shunt >= 1e-12 {
             self.node_shunt = shunt;
+            self.holding_off = off;
             let stage = self.newton(Stamp::OperatingPoint, None, self.time);
+            self.holding_off = false;
             if stage.is_err() {
                 self.node_shunt = 0.0;
                 return stage;
@@ -1803,6 +1814,56 @@ impl Solver {
         }
         self.node_shunt = 0.0;
         self.newton(Stamp::OperatingPoint, None, self.time)
+    }
+
+    /// The operating-point Newton solve. With an `off` device it runs twice,
+    /// as ngspice's `MODEINITFIX` then `MODEINITFLOAT`: first with every
+    /// `off` device held cut off until the rest of the circuit converges,
+    /// then with it released, starting from that solution. A circuit with one
+    /// operating point reaches it either way; a bistable one keeps the state
+    /// the held device chose. Without an `off` device this is one plain solve,
+    /// so every other netlist's trajectory is unchanged.
+    fn operating_point_newton(&mut self) -> Result<(), AnalogError> {
+        if self.circuit.has_off_devices() {
+            self.hold_off_devices();
+            self.holding_off = true;
+            let held = self.newton(Stamp::OperatingPoint, None, self.time);
+            self.holding_off = false;
+            held?;
+        }
+        self.newton(Stamp::OperatingPoint, None, self.time)
+    }
+
+    /// Put every `off` device's linearisation point at 0 V, where ngspice's
+    /// `MODEINITJCT` puts it.
+    fn hold_off_devices(&mut self) {
+        for (index, diode) in self.circuit.diodes.iter().enumerate() {
+            if diode.off {
+                self.diode_vj[index] = 0.0;
+            }
+        }
+        for (index, bjt) in self.circuit.bjts.iter().enumerate() {
+            if bjt.off {
+                self.bjt_vbe[index] = 0.0;
+                self.bjt_vbc[index] = 0.0;
+                self.bjt_vbcx[index] = 0.0;
+            }
+        }
+        for (index, mosfet) in self.circuit.mosfets.iter().enumerate() {
+            if mosfet.off {
+                self.mos_vgs[index] = 0.0;
+                self.mos_vds[index] = 0.0;
+                self.mos_vbd[index] = 0.0;
+                self.mos_vbs[index] = 0.0;
+            }
+        }
+        for (index, jfet) in self.circuit.jfets.iter().enumerate() {
+            if jfet.off {
+                self.jfet_vgs[index] = 0.0;
+                self.jfet_vgd[index] = 0.0;
+                self.jfet_vds[index] = 0.0;
+            }
+        }
     }
 
     /// Stamp the four linear dependent sources. All of them are constant
@@ -2099,6 +2160,9 @@ impl Solver {
 
         for index in 0..self.circuit.diodes.len() {
             let diode = &self.circuit.diodes[index];
+            if self.holding_off && diode.off {
+                continue;
+            }
             let raw = node_diff(
                 &self.solution[..self.nodes],
                 diode.junction_anode,
@@ -2141,6 +2205,9 @@ impl Solver {
 
         for index in 0..self.circuit.bjts.len() {
             let bjt = &self.circuit.bjts[index];
+            if self.holding_off && bjt.off {
+                continue;
+            }
             let sign = bjt.model.polarity.sign();
             let nodes = &self.solution[..self.nodes];
             let raw_be = sign * node_diff(nodes, bjt.junction_b, bjt.junction_e);
@@ -2176,6 +2243,9 @@ impl Solver {
 
         for index in 0..self.circuit.mosfets.len() {
             let mosfet = &self.circuit.mosfets[index];
+            if self.holding_off && mosfet.off {
+                continue;
+            }
             let sign = mosfet.operating_model.polarity.sign();
             let nodes = &self.solution[..self.nodes];
             let raw_gs = sign * node_diff(nodes, mosfet.g, mosfet.junction_s);
@@ -2233,6 +2303,9 @@ impl Solver {
 
         for index in 0..self.circuit.jfets.len() {
             let jfet = &self.circuit.jfets[index];
+            if self.holding_off && jfet.off {
+                continue;
+            }
             let sign = jfet.model.polarity.sign();
             let nodes = &self.solution[..self.nodes];
             let raw_gs = sign * node_diff(nodes, jfet.g, jfet.junction_s);

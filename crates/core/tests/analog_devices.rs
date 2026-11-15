@@ -9171,4 +9171,127 @@ mod analog {
             );
         }
     }
+
+    /// SPICE's `off` flag selects the state of a bistable circuit the way
+    /// ngspice-42 does: the operating point holds the flagged device cut off
+    /// until the rest of the circuit converges, then releases it. Both a
+    /// cross-coupled NPN latch and a cross-coupled NMOS latch sit at their
+    /// symmetric metastable point without `off`, and fall into the state that
+    /// the flagged device chose with it. A diode flagged `off` in a circuit
+    /// with one operating point solves exactly as without the flag. Reference
+    /// values are ngspice-42 `.op` (`.temp 26.85`, `tnom=26.85`) with
+    /// `reltol=1e-7`: at the default `reltol=1e-3` ngspice's released diode
+    /// stops 2.1 mV short of its own flag-free answer. An ignored
+    /// `off` leaves every latch row at the metastable point, more than 3 V
+    /// away for the BJT and 1.7 V for the MOSFET.
+    #[test]
+    fn off_flag_selects_bistable_operating_point_as_ngspice() {
+        let bjt_latch = |q1: &str, q2: &str| {
+            format!(
+                "Vcc vcc 0 dc 5\nRc1 vcc c1 1k\nRc2 vcc c2 1k\n\
+                 Rb1 c2 b1 10k\nRb2 c1 b2 10k\n\
+                 Q1 c1 b1 0 QN {q1}\nQ2 c2 b2 0 QN {q2}\n\
+                 .model QN NPN(IS=1e-15 BF=100 BR=1)\n"
+            )
+        };
+        let mos_latch = |m1: &str, m2: &str, d1: &str| {
+            format!(
+                "Vdd vdd 0 dc 3.3\nRd1 vdd d1 10k\nRd2 vdd d2 10k\n\
+                 M1 d1 d2 0 0 NM w=10u l=1u {m1}\nM2 d2 d1 0 0 NM w=10u l=1u {m2}\n\
+                 D1 vdd dx DX {d1}\nRx dx 0 1k\n\
+                 .model NM NMOS(LEVEL=1 VTO=0.7 KP=50u LAMBDA=0.02)\n\
+                 .model DX D(IS=1e-14 N=1.1)\n"
+            )
+        };
+        let check = |netlist: &str, rows: &[(&str, f64)]| {
+            let solver = build(netlist);
+            for &(node, ngspice) in rows {
+                let got = solver.node_voltage(solver.circuit().node(node).expect("node exists"));
+                assert!(
+                    (got - ngspice).abs() < 1e-4,
+                    "V({node}): ngspice-42 {ngspice}, got {got}\n{netlist}"
+                );
+            }
+            solver
+        };
+
+        // BJT latch: metastable without `off`, Q1 or Q2 cut off with it.
+        check(
+            &bjt_latch("", ""),
+            &[
+                ("c1", 1.132_000_845),
+                ("c2", 1.132_000_845),
+                ("b1", 0.749_030_628),
+            ],
+        );
+        check(
+            &bjt_latch("off", ""),
+            &[
+                ("c1", 4.614_435_472),
+                ("c2", 0.073_157_863),
+                ("b1", 0.073_157_908),
+                ("b2", 0.758_790_285),
+            ],
+        );
+        check(
+            &bjt_latch("", "OFF"),
+            &[
+                ("c1", 0.073_157_863),
+                ("c2", 4.614_435_472),
+                ("b1", 0.758_790_285),
+                ("b2", 0.073_157_908),
+            ],
+        );
+
+        // MOSFET latch, with `off` after the geometry, and a diode whose
+        // operating point is unique whatever its flag says.
+        check(
+            &mos_latch("", "", ""),
+            &[
+                ("d1", 1.529_067_450),
+                ("d2", 1.529_067_450),
+                ("dx", 2.553_076_198),
+            ],
+        );
+        let held = check(
+            &mos_latch("off", "", "off"),
+            &[
+                ("d1", 3.299_999_967),
+                ("d2", 0.245_402_665),
+                ("dx", 2.553_076_198),
+            ],
+        );
+        check(
+            &mos_latch("", "off", ""),
+            &[
+                ("d1", 0.245_402_665),
+                ("d2", 3.299_999_967),
+                ("dx", 2.553_076_198),
+            ],
+        );
+        let free = build(&mos_latch("off", "", ""));
+        let dx = free.circuit().node("dx").expect("node exists");
+        assert_eq!(
+            held.node_voltage(dx),
+            free.node_voltage(dx),
+            "`off` on a diode with one operating point must not move it"
+        );
+
+        // The flag stands anywhere among the options; `ic=` needs `uic`,
+        // which the engine does not have, so it is refused by name.
+        let placed = build(
+            "V1 a 0 dc 5\nR1 a c 1k\nRb a b 100k\nQ1 c b 0 QN off 2 temp=27\n\
+             J1 a b 0 JN off\n.model QN NPN(IS=1e-15 BF=100)\n.model JN NJF(VTO=-2 BETA=1m)\n",
+        );
+        assert!(placed.circuit().bjts[0].off && placed.circuit().jfets[0].off);
+        assert_eq!(
+            placed.circuit().bjts[0].model.is,
+            2e-15,
+            "area must survive `off`"
+        );
+        let error = parse_netlist("V1 a 0 1\nD1 a 0 DX ic=0.7\n.model DX D(IS=1e-14)\n")
+            .expect_err("a semiconductor ic= must be refused")
+            .to_string();
+        assert!(error.contains("`ic`"), "unexpected error {error}");
+    }
 }
