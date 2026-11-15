@@ -407,6 +407,10 @@
       "expect": "1/1 checks",
       "note": "64-pin ATmega2561 on the shared public AVR core. The committed tiny ELF prints `2561 OK` through USART0 and drives PB5; the script verdict is asserted because `labwired test` does not echo the AVR console."
     },
+    "atmega32u4": {
+      "how": "needs-build",
+      "why": "The ATmega32U4 profile (Arduino Leonardo) prints over native USB CDC on the CPU's USB device model with a scripted host, which is newer than the installed v0.25.0 CLI this gate checks. The arduino-matrix arduino-leonardo row (L0-L7) passes from source; switch this row after a release carries the atmega32u4 descriptor."
+    },
     "atmega2560": {
       "how": "example",
       "script": "examples/arduino-mega-2560-io/io-smoke.yaml",

@@ -564,6 +564,10 @@ _No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware th
 
 _No tier-1 target. Firmware that runs: the PR-gated `avr_mega2560_io` integration test boots the committed Arduino-core ELF (tests/fixtures/avr/arduino-mega-2560-io.elf, built for arduino:avr:mega from examples/arduino-mega-2560-io) and asserts the 12 LED pins on ports E/G/F/B/H, analogRead(A8)/(A9) through ADCSRB.MUX5, millis() against simulated time, USART0 Serial and an EICALL through a function pointer. The descriptor reuses the 328P rubric classes (`avr_gpio` ports A..L, `avr_adc` with 16 channels, the parking `spi`/`i2c` controllers and the `usart0` peer host), so nothing beyond the rubric is declared and the lists below are empty._
 
+### `atmega32u4`
+
+_No tier-1 target. The Arduino Leonardo matrix row (validation/arduino-matrix/boards/arduino-leonardo.yaml) builds the stock ArduinoCore-avr sketches and runs L0-L7 on the model (8 pass, 1 skip: no CAN); `Serial` is native USB CDC on the CPU's USB device model with a scripted host that enumerates it, and the CPU-owned SPI, TWI and ADC (ADCSRB.MUX5) serve the L3/L4/L5 sensor kits. That lane needs PlatformIO and runs on the nightly/main matrix, not on pull requests; cpu::avr::usb unit tests are the PR-gated evidence. Timer3, the high-speed Timer4, INTn/PCINT and EEPROM are not modelled. No beyond-rubric behavior or physical acceptance is claimed and the lists below are empty._
+
 ### `atmega1281`
 
 _No tier-1 target. The PR-gated avr_atmega1281_firmware integration test boots the AVR-GCC image built from examples/atmega1281-io/src/main.c and asserts 1281 OK on USART0 plus PB5 high; examples/atmega1281-io/io-smoke.yaml runs the same ELF through labwired test. The exact descriptor exposes 54 GPIO pads on ports A..G and eight ADC inputs. EEPROM, USART1, Timer3 and PWM are present on silicon but not modeled or declared. No beyond-rubric behavior or physical acceptance is claimed._

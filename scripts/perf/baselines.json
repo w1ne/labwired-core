@@ -11,6 +11,10 @@
     "batch": 7.6,
     "step": 1026.4
   },
+  "atmega32u4": {
+    "batch": 7.7,
+    "step": 1020.0
+  },
   "atsamd21": {
     "batch": 1.4,
     "step": 895.0

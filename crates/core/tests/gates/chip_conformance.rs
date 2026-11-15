@@ -972,6 +972,16 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: Some("avr_atmega2561::atmega2561_boots_and_prints"),
     },
+    // ATmega32U4 (Arduino Leonardo / Micro). SIM-DERIVED from DS7766: no
+    // silicon capture. The USB device model is unit-tested in
+    // cpu::avr::usb::tests and its Arduino matrix row runs through PlatformIO
+    // and the CLI, so no behavior_gate resolves.
+    ChipConf {
+        name: "atmega32u4",
+        yaml: "configs/chips/atmega32u4.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
     // PJRC Teensy 4.1 (MIMXRT1062DVJ6B). SIM-DERIVED from the SVD/Teensy
     // headers: no silicon capture. Its Arduino matrix row runs through
     // PlatformIO and the CLI, not as a Rust test, so no behavior_gate resolves.
