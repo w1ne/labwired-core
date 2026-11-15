@@ -32,6 +32,15 @@ name: pic24f16ka101
 arch: pic24
 core: pic24f
 cpu_hz: 32000000
+# GPIO pad supply and input thresholds (ratios of io_voltage_v).
+# DS39927C (PIC24F16KA102 family), Table 29-9 (I/O pin input specifications, 1.8-3.6 V): DI10 VIL max
+# 0.2*VDD and DI20 VIH min 0.8*VDD for I/O pins, both with and without analog
+# functions (Schmitt-trigger buffers). 3.3 V is the board rail; a board at
+# another VDD scales both. https://ww1.microchip.com/downloads/en/DeviceDoc/39927c.pdf
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.2
+  vih: 0.8
 flash:
   base: 0x000000
   size: "16KB"

@@ -64,6 +64,21 @@ fn datasheet_transcriptions() {
         ("stm32f411ceu6", 3.3, 0.3, 0.7),
         // DS10198 Table 70, 1.62 V < VDDIOx < 3.6 V, all I/Os except BOOT0.
         ("stm32l476", 3.3, 0.3, 0.7),
+        // DS39927C Table 29-9 DI10/DI20 (I/O pins, with and without analog).
+        ("pic24f08ka101", 3.3, 0.2, 0.8),
+        ("pic24f08ka102", 3.3, 0.2, 0.8),
+        ("pic24f16ka101", 3.3, 0.2, 0.8),
+        ("pic24f16ka102", 3.3, 0.2, 0.8),
+        // DS30009937C Table 26-9 DI10/DI20.
+        ("pic24f04ka200", 3.3, 0.2, 0.8),
+        ("pic24f04ka201", 3.3, 0.2, 0.8),
+        // RP2040 Table 625 / RP2350 Table 1683 at IOVDD = 3.3 V: VIL 0.8 V,
+        // VIH 2.0 V (absolute volts, so the ratios hold at 3.3 V only).
+        ("rp2040", 3.3, 0.2424, 0.6061),
+        ("rp2350", 3.3, 0.2424, 0.6061),
+        // ESP32-C6 / ESP32-S3 Series Datasheets, Table 5-4.
+        ("esp32c6", 3.3, 0.25, 0.75),
+        ("esp32s3-zero", 3.3, 0.25, 0.75),
     ] {
         let desc = load(chip);
         assert_eq!(desc.io_voltage_v, Some(volts), "{chip}");
@@ -80,7 +95,7 @@ fn datasheet_transcriptions() {
 #[test]
 fn an_untranscribed_chip_declares_nothing() {
     // rv1103 now has explicit test-only thresholds for its generic input bank.
-    for chip in ["rp2040", "nrf54l15"] {
+    for chip in ["nrf52832", "nrf54l15"] {
         let desc = load(chip);
         assert_eq!(desc.io_voltage_v, None, "{chip}");
         assert_eq!(desc.gpio_input_thresholds, None, "{chip}");
