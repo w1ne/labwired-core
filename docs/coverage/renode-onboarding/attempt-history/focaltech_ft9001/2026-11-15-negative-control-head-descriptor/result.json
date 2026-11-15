@@ -1,0 +1,285 @@
+{
+  "result_schema_version": "1.0",
+  "status": "fail",
+  "steps_executed": 4000000,
+  "cycles": 4000000,
+  "instructions": 4000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 4000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 4000000
+    }
+  },
+  "limits": {
+    "max_steps": 4000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_regex": "^FT9001 SMOKE\r\n"
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "uart_ordered": [
+          "cpu=cortex-m4f uart=usart2",
+          "cr2=0c cr1=00 bdh=01 bdl=56 brdf=1a fcr=c0",
+          "rx fsr=64 drl=A fsr=64",
+          "rxfclr fsr=45 drl=00 fcr2=00",
+          "late drl=Z fsr=45",
+          "te=off|te=on",
+          "cpm ocsr=0000ff00 csw=00000201 src0=osc8m ocsr=0000ff08 csw=00000201 cder=00000001",
+          "trng ctrl=00ff093b w=e124b63a w=8b9a74ab w=64e1b3ac distinct=1",
+          "rsr=08 por=1 softrst",
+          "boot2 rsr=20 rcr=00000000 csw=00000201 cder=00000000 trng=00000800",
+          "trng ctrl=00ff093b w=00174626 w=f2adbbaf w=fed75123 distinct=1",
+          "FT9001 SMOKE DONE"
+        ]
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      536870912,
+      536870912,
+      268447456,
+      0,
+      0,
+      0,
+      0,
+      537100232,
+      1073750016,
+      0,
+      0,
+      0,
+      0,
+      537100232,
+      4294967289,
+      268447394
+    ],
+    "pc": 268447394,
+    "xpsr": 1627389952,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 268435456,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "13c25e4c056e23bc585b816dd78ad52be75fce9275c48ff60c7ef33f71473dcf",
+  "config": {
+    "firmware": "/data/build-targets/renode/thumbv7em-none-eabi/release/firmware-ft9001-smoke",
+    "system": "/tmp/rn668/neg/examples/renode-onboarding/../../configs/systems/onboarding/focaltech_ft9001.yaml",
+    "script": "/tmp/rn668/neg/examples/renode-onboarding/focaltech_ft9001-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "systick",
+        "kind": "native",
+        "base": 3758153744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart2",
+        "kind": "native",
+        "base": 1073823744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "read"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "read"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x40002007",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "read"
+    },
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "fault_verdict": {
+    "summary": "HardFault escalated from a precise BusFault: data access at 0x4000_2007 (BFAR valid), at PC 0x1000_0CFC in `core::ptr::read_volatile` (mod.rs:2091), called from `main`.",
+    "kind": "hard_fault",
+    "escalated": true,
+    "origin": "bus_fault",
+    "causes": [
+      {
+        "register": "HFSR",
+        "flag": "FORCED",
+        "meaning": "a configurable fault escalated to HardFault"
+      },
+      {
+        "register": "BFSR",
+        "flag": "PRECISERR",
+        "meaning": "data access"
+      }
+    ],
+    "precise": true,
+    "fault_address": "0x40002007",
+    "fault_address_source": "BFAR",
+    "pc": "0x10000CFC",
+    "lr": "0x10002E9F",
+    "exc_return": {
+      "value": "0xFFFFFFF9",
+      "return_to": "thread",
+      "stack": "msp",
+      "fp_frame": false
+    },
+    "frame": {
+      "sp": "0x20037FD0",
+      "r0": "0x20000000",
+      "r1": "0x20000000",
+      "r2": "0x10002EE0",
+      "r3": "0x00000000",
+      "r12": "0x00000000",
+      "lr": "0x10002E9F",
+      "pc": "0x10000CFC",
+      "xpsr": "0x61000000"
+    },
+    "location": {
+      "function": "core::ptr::read_volatile",
+      "file": "/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ptr/mod.rs",
+      "line": 2091
+    },
+    "caller": {
+      "function": "main",
+      "file": "/data/worktrees/legacy-migrated/labwired-renode/crates/firmware-ft9001-smoke/src/main.rs",
+      "line": 193
+    },
+    "registers": {
+      "hfsr": "0x40000000",
+      "cfsr": "0x00008200",
+      "mmfsr": "0x00",
+      "bfsr": "0x82",
+      "ufsr": "0x0000",
+      "mmfar": "0x00000000",
+      "bfar": "0x40002007"
+    }
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 12000,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 12000,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 2097152,
+    "ram_total_bytes": 229376,
+    "flash_used_pct": 0.57,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 229376,
+    "main_stack_high_water_bytes": 56,
+    "main_stack_free_min_bytes": 229320,
+    "main_stack_base": 536870912,
+    "main_stack_top": 537100288,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 229376,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 229320,
+    "heap_base": 536870912,
+    "heap_top": 537100288
+  },
+  "metrics": {
+    "cycles": 4000000,
+    "instructions": 4000000,
+    "steps_executed": 4000000,
+    "memory_reads": 40,
+    "memory_writes": 16,
+    "peripheral_accesses": 0,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 268447394,
+        "count": 15625,
+        "symbol": "HardFault_"
+      }
+    ]
+  }
+}

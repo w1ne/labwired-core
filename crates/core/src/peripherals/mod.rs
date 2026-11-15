@@ -53,6 +53,7 @@ pub mod exti;
 pub mod fdcan;
 pub mod flash;
 pub mod fmc;
+pub mod ft9001_sys;
 pub mod generic_factory;
 pub mod gpdma;
 pub mod gpio;

@@ -5,4 +5,9 @@ rx fsr=64 drl=A fsr=64
 rxfclr fsr=45 drl=00 fcr2=00
 late drl=Z fsr=45
 te=off|te=on
+cpm ocsr=0000ff00 csw=00000201 src0=osc8m ocsr=0000ff08 csw=00000201 cder=00000001
+trng ctrl=00ff093b w=e124b63a w=8b9a74ab w=64e1b3ac distinct=1
+rsr=08 por=1 softrst
+boot2 rsr=20 rcr=00000000 csw=00000201 cder=00000000 trng=00000800
+trng ctrl=00ff093b w=00174626 w=f2adbbaf w=fed75123 distinct=1
 FT9001 SMOKE DONE

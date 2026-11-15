@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/focaltech_ft9001-smoke.yaml",
   "system": "configs/systems/onboarding/focaltech_ft9001.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-06T16:14:41Z",
-  "finished_at_utc": "2026-11-06T16:16:08Z",
-  "elapsed_seconds": 87,
-  "elapsed_ms": 86395,
+  "started_at_utc": "2026-11-15T21:04:38Z",
+  "finished_at_utc": "2026-11-15T21:04:39Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1090,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 85.79,
-    "build_firmware": 0.182,
-    "run_smoke": 0.412
+    "build_cli": 0.332,
+    "build_firmware": 0.238,
+    "run_smoke": 0.473
   },
   "stages_ms": {
-    "build_cli": 85790,
-    "build_firmware": 182,
-    "run_smoke": 412
+    "build_cli": 332,
+    "build_firmware": 238,
+    "run_smoke": 473
   }
 }

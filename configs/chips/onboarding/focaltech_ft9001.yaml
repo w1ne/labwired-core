@@ -14,12 +14,16 @@
 #
 # Memory map and USART2 follow Renode's platforms/cpus/focaltech_ft9001.repl
 # and the UART.FT9001_USART model, as read on 2026-11-06. The profile claims
-# only the Cortex-M4F core, SysTick, these memories and USART2's polled
-# register path, which examples/renode-onboarding/focaltech_ft9001-smoke.yaml
-# exercises. USART2 interrupts, baud/framing behavior, RX-enable gating,
-# FSR2 error flags, CPM, reset, TRNG, and the blocks Renode
-# itself only tags (pinctrl, CCM, flash controller, WDT, timers, EPORT,
-# USART3, USB, caches, MPU) are not modelled.
+# only the Cortex-M4F core, SysTick, these memories, USART2's polled
+# register path, and the CPM, reset controller and TRNG register models in
+# crates/core/src/peripherals/ft9001_sys.rs (see that file for what each
+# one stores and computes), which
+# examples/renode-onboarding/focaltech_ft9001-smoke.yaml exercises. CPM
+# clock settings have no effect on other models; TRNG words are a
+# deterministic sequence, not entropy. USART2 interrupts, baud/framing
+# behavior, RX-enable gating, FSR2 error flags, the TRNG interrupt, and the
+# blocks Renode itself only tags (pinctrl, CCM, flash controller, WDT,
+# timers, EPORT, USART3, USB, caches, MPU) are not modelled.
 #
 # Nothing in the Renode platform sits at 0x0, so the flash boot alias is
 # off. Renode sets the SysTick reference to 160 MHz (and the DWT to 72 MHz);
@@ -54,4 +58,16 @@ peripherals:
   - id: usart2
     type: ft9001_usart
     base_address: 0x40014000
+    size: 256B
+  - id: rst
+    type: ft9001_reset
+    base_address: 0x40002000
+    size: 4KB
+  - id: cpm
+    type: ft9001_cpm
+    base_address: 0x40004000
+    size: 4KB
+  - id: trng
+    type: ft9001_trng
+    base_address: 0x4003B000
     size: 256B
