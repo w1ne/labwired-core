@@ -773,7 +773,7 @@ impl Adc {
         let bits = l4_resolution_bits(cfgr);
         self.dr = match self.channel_inputs_mv.get(channel).copied().flatten() {
             Some(millivolts) => scaled_input_code(
-                Self::code_for_mv(f64::from(millivolts), self.reference_millivolts),
+                self.code_for_mv(f64::from(millivolts), self.reference_millivolts),
                 bits,
             ),
             None => l4_adc_code(bits),
