@@ -471,6 +471,17 @@ _SIM-DERIVED first G0 port: its committed tier-1 fixture drives all 12 declared 
 - `WWDG` (configs/chips/stm32g071.yaml:349 (type: wwdg; crates/core/src/peripherals/wwdg.rs:63)) — CLOSABLE: inert register bank — tick() is the trait-default no-op, so an armed watchdog never fires; no behavioural test and no gated firmware drives it (unlike the L476, no misc fingerprint reads its CR/CFR/SR).
 - `SYSCFG` (configs/chips/stm32g071.yaml:375 (type: syscfg; crates/core/src/peripherals/generic_factory.rs:739)) — CLOSABLE: hardcoded StubPeripheral — reads return 0 (plus a canned CCCSR=READY at 0x20 that is an H7-HAL seed, meaningless on G0) and writes are dropped, so EXTI source-select is not modelled; the tier-1 fixture pends its NVIC line via ISPR0 and nothing reads the window back.
 
+### `stm32c031c6`
+
+_No tier-1 target. First STM32C0 part: the stock-STM32duino Arduino matrix row (core-arduino-matrix-smoke, board stm32c031c6) runs USART2 console, SysTick, LD4 GPIO, Wire/I2C1 (INA219 CONFIG/BUS read back exactly), SPI1 (MAX31855 frame) and TIM1_CH1 PWM measured on the PA5 pad. Those are rubric classes. Beyond the rubric nothing runs: CRC, PWR, DBGMCU and the DMAMUX are family models no firmware drives, the ADC is a register file the C0 HAL talks to without a conversion (matrix L5 is skipped, not passed), and SYSCFG is the shared stub._
+
+**Advanced peripherals — unit-tested only** (no firmware drives them): `CRC`
+
+**Dead** (2 modeled, never exercised): `PWR`, `DBGMCU`
+
+**Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- `SYSCFG` (configs/chips/stm32c031c6.yaml (type: syscfg); crates/core/src/peripherals/generic_factory.rs (syscfg arm)) — CLOSABLE: StubPeripheral returns zero except a canned H7-style CCCSR readiness bit at 0x20, and drops writes. GPIO source selection lives in the G0-style EXTI EXTICR registers, not here.
+
 ### `stm32g0b1re`
 
 _No tier-1 target. This is the narrow IO-Link customer firmware descriptor: the PR-triggered iolinki-reference workflow builds pinned STM32G0B1RE/TIOL112 sources and requires g0_reference_firmware in both execution modes, asserting TIM2 at 1 MHz, the actual falling-edge WAKE ISR clearing FPR, and USART1 configured for COM2. GPIO mux/polarity/W1C and AF1 UART pad routing have separate regressions. This proves startup and interrupt prerequisites, not electrical C/Q, master exchange or physical hardware. No beyond-rubric functional device read or advanced peripheral is modeled by this slice; SYSCFG is the only declared non-rubric block and remains a stub._
@@ -656,6 +667,22 @@ _No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware th
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `iomuxc` (configs/chips/imxrt1064.yaml:37-41 (type imx_iomuxc; crates/core/src/peripherals/imx_iomuxc.rs:7-11)) — CLOSABLE: sticky register stub — every SW_MUX_CTL/SW_PAD_CTL/SELECT_INPUT word is stored and read back (2 unit tests pin only that read-back), but no alternate-function routing follows; the smoke never opens the window and a DTCM-linked image cannot reveal a pin-mux mistake.
 - `flexspi` (configs/chips/imxrt1064.yaml:59-62 (type stub; no schema)) — CLOSABLE: zero window at 0x402A8000 — the FlexSPI controller and XIP are not modelled and the descriptor claims no 4 MiB SiP flash; firmware is linked into DTCM because XIP cannot boot here, and nothing opens the window.
+
+### `mimxrt1062-teensy41`
+
+_No tier-1 target. Stock Teensyduino (PJRC core, PlatformIO teensy@6.0.0) boots the Teensy 4.1 profile from the FlexSPI NOR IVT (FlexRAM, PLLs, DCDC, SysTick on the 100 kHz reference, USB1 device controller) and prints through USB CDC to a scripted host; the arduino-matrix row validation/arduino-matrix/boards/teensy41.yaml runs L0-L3, L5 and L7 on it (6 pass, 3 skip: no LPSPI, QuadTimer or FlexCAN model). That lane needs PlatformIO and runs on the nightly/main matrix, not on pull requests. LPI2C1 is a real model (an INA219 is read through stock Wire); the declared stubs are listed as shims. No physical acceptance is claimed._
+
+**Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- `iomuxc_gpr` (configs/chips/mimxrt1062-teensy41.yaml:150-152 (type stub)) — CLOSABLE: declared stub (reads 0, writes dropped), documented in the chip header; the Teensyduino startup writes it and the model does not act on it.
+- `flexram` (configs/chips/mimxrt1062-teensy41.yaml:153 (type stub)) — CLOSABLE: declared stub (reads 0, writes dropped), documented in the chip header; the Teensyduino startup writes it and the model does not act on it.
+- `snvs` (configs/chips/mimxrt1062-teensy41.yaml:154 (type stub)) — CLOSABLE: declared stub (reads 0, writes dropped), documented in the chip header; the Teensyduino startup writes it and the model does not act on it.
+- `pit` (configs/chips/mimxrt1062-teensy41.yaml:155 (type stub)) — CLOSABLE: declared stub (reads 0, writes dropped), documented in the chip header; the Teensyduino startup writes it and the model does not act on it.
+- `ocotp` (configs/chips/mimxrt1062-teensy41.yaml:156 (type stub)) — CLOSABLE: declared stub (reads 0, writes dropped), documented in the chip header; the Teensyduino startup writes it and the model does not act on it.
+- `src` (configs/chips/mimxrt1062-teensy41.yaml:157 (type stub)) — CLOSABLE: declared stub (reads 0, writes dropped), documented in the chip header; the Teensyduino startup writes it and the model does not act on it.
+- `gpc` (configs/chips/mimxrt1062-teensy41.yaml:158 (type stub)) — CLOSABLE: declared stub (reads 0, writes dropped), documented in the chip header; the Teensyduino startup writes it and the model does not act on it.
+- `tmr1..tmr4 (QuadTimer1-4)` (configs/chips/mimxrt1062-teensy41.yaml:159-162 (type stub)) — CLOSABLE: declared stub (reads 0, writes dropped), documented in the chip header; the Teensyduino startup writes it and the model does not act on it.
+- `pwm1..pwm4 (eFlexPWM1-4)` (configs/chips/mimxrt1062-teensy41.yaml:163-166 (type stub)) — CLOSABLE: declared stub (reads 0, writes dropped), documented in the chip header; the Teensyduino startup writes it and the model does not act on it.
+- `scs_debug (CoreDebug DHCSR..DEMCR)` (configs/chips/mimxrt1062-teensy41.yaml:174 (type stub)) — CLOSABLE: declared stub (reads 0, writes dropped), documented in the chip header; the Teensyduino startup writes it and the model does not act on it.
 
 ### `mkw41z4`
 
