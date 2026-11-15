@@ -330,6 +330,11 @@ impl PinPort for LpcGpio {
         PINS as u8
     }
 
+    fn multi_port_pin(&self, port: crate::pins::PortId, pin: u8) -> Option<u8> {
+        let index = 32 * usize::from(port.0) + usize::from(pin);
+        (pin < 32 && index < PINS).then_some(index as u8)
+    }
+
     fn driver(&self, pin: u8) -> Option<PadDriver> {
         let pin = pin as usize;
         if pin >= PINS {

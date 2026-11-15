@@ -761,7 +761,9 @@ impl SignalRouter {
                         level,
                     });
                 }
-                if let Some((peripheral, pin)) = resolve_peripheral_input_pin(bus, pad) {
+                if let Some((peripheral, pin)) = resolve_peripheral_input_pin(bus, pad)
+                    .or_else(|| resolve_labelled_input_pin(bus, pad))
+                {
                     let level = bus.peripherals[peripheral]
                         .dev
                         .read_gpio_input(pin)
@@ -1111,6 +1113,15 @@ fn resolve_chip_mapped_input_pin(bus: &SystemBus, pad: &str) -> Option<(usize, u
     let port = dev.pins()?;
     (*pin < port.pin_count() && dev.read_gpio_is_output(*pin) == Some(false))
         .then_some((index, *pin))
+}
+
+/// Resolve a pad the descriptor's `pins:` does not list by its label shape
+/// (`PA08`, `PTB0`, `RB2`, `P014`, `P4_18`, `GP26`) to an input on its pin
+/// port. This is what lets `board.gpio_in.<pad>` reach every pad a chip's
+/// `analog_pins:` names, on every family, without a per-chip pin table.
+fn resolve_labelled_input_pin(bus: &SystemBus, pad: &str) -> Option<(usize, u8)> {
+    let (index, pin) = SystemBus::resolve_labelled_pad(bus, pad)?;
+    (bus.peripherals[index].dev.read_gpio_is_output(pin) == Some(false)).then_some((index, pin))
 }
 
 /// Refuse an ADC route the converter cannot take: a peripheral the bus does

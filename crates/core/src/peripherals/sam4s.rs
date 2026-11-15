@@ -310,6 +310,11 @@ impl PinPort for Sam4sPio {
         PINS as u8
     }
 
+    /// PIO controllers are `pioA`, `pioB`, … in the chip yamls.
+    fn port_name_prefix(&self) -> &'static str {
+        "pio"
+    }
+
     fn driver(&self, pin: u8) -> Option<PadDriver> {
         let pin = pin as usize;
         if pin >= PINS {

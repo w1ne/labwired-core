@@ -232,6 +232,72 @@ impl PortId {
     }
 }
 
+/// Split a datasheet pad label into the port it names and its pin within that
+/// port, case-insensitive. `None` port: the label names no port (`GP26`), so
+/// it belongs to a chip with one pin port.
+///
+/// One rule per label SHAPE, not per chip:
+///
+/// | shape | port | used by |
+/// |---|---|---|
+/// | `P<letter><n>` | letter (`PA08` = port A) | STM32, SAM, CC2538 |
+/// | `PT<letter><n>` | letter (`PTB0` = port B) | Kinetis, S32K |
+/// | `R<letter><n>` | letter (`RB2` = port B) | PIC24, dsPIC |
+/// | `P<hex><nn>` | hex digit (`P014` = port 0, pin 14) | Renesas RA |
+/// | `P<n>_<m>` | decimal (`P4_18` = port 4) | LPC, i.MX RT |
+/// | `GP<n>`, `GPIO<n>` | none | RP2040, RP2350 |
+///
+/// The port is the chip's own numbering, port A = 0, which is how
+/// [`PinPort::port_id`] numbers the bus's ports. A chip whose pads carry
+/// another label lists them under the descriptor's `pins:`.
+pub fn parse_pad_label(label: &str) -> Option<(Option<PortId>, u8)> {
+    let upper = label.trim().to_ascii_uppercase();
+    let letter_port = |rest: &str| -> Option<(Option<PortId>, u8)> {
+        let letter = *rest.as_bytes().first()?;
+        if !letter.is_ascii_uppercase() || letter - b'A' >= 16 {
+            return None;
+        }
+        Some((Some(PortId(letter - b'A')), decimal(&rest[1..])?))
+    };
+    if let Some(rest) = upper
+        .strip_prefix("GPIO")
+        .or_else(|| upper.strip_prefix("GP"))
+    {
+        return Some((None, decimal(rest)?));
+    }
+    if let Some(rest) = upper.strip_prefix("PT") {
+        if let Some(parsed) = letter_port(rest) {
+            return Some(parsed);
+        }
+    }
+    if let Some(rest) = upper.strip_prefix('R') {
+        return letter_port(rest);
+    }
+    let rest = upper.strip_prefix('P')?;
+    if let Some((port, pin)) = rest.split_once('_') {
+        let port = decimal(port)?;
+        return (port < 16).then_some((Some(PortId(port)), decimal(pin)?));
+    }
+    let first = *rest.as_bytes().first()?;
+    if first.is_ascii_digit() {
+        // Renesas RA: one hex port digit, then two pin digits.
+        if rest.len() != 3 {
+            return None;
+        }
+        let port = (first as char).to_digit(16)? as u8;
+        return Some((Some(PortId(port)), decimal(&rest[1..])?));
+    }
+    letter_port(rest)
+}
+
+/// An all-digit pin number; a sign, a space or an empty string is not one.
+fn decimal(digits: &str) -> Option<u8> {
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    digits.parse().ok()
+}
+
 /// The one interface between a chip's pads and the world. Implemented by
 /// every GPIO model, and by anything else that owns pads.
 ///
@@ -253,6 +319,14 @@ pub trait PinPort {
     /// plus one letter.
     fn port_id(&self, name: &str) -> Option<PortId> {
         PortId::from_prefixed_name(name, self.port_name_prefix())
+    }
+
+    /// The pin number of pad `pin` of chip port `port`, for a block that owns
+    /// several of the chip's ports in one numbering (i.MX RT `gpio`, S32K3
+    /// SIUL2: `32 * port + pin`). `None`, the default, for a block that owns
+    /// one port, or when this block has no such pad.
+    fn multi_port_pin(&self, _port: PortId, _pin: u8) -> Option<u8> {
+        None
     }
 
     /// The chip's own drive on `pin`, decoded from registers only, `None`
@@ -591,6 +665,31 @@ pub fn set_level(port: &mut dyn PinPort, pin: u8, level: bool) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pad_labels_split_by_shape_not_by_chip() {
+        let port = |n| Some(PortId(n));
+        for (label, want) in [
+            ("PA08", Some((port(0), 8))),
+            ("pb31", Some((port(1), 31))),
+            ("PTB10", Some((port(1), 10))),
+            ("RB2", Some((port(1), 2))),
+            ("P014", Some((port(0), 14))),
+            ("P100", Some((port(1), 0))),
+            ("P4_18", Some((port(4), 18))),
+            ("GP26", Some((None, 26))),
+            ("GPIO5", Some((None, 5))),
+            // Not a pad label this rule may guess at.
+            ("P0.13", None), // Nordic: resolved by its own rule first
+            ("P14", None),   // RA needs the two-digit pin
+            ("PZ1", None),   // port past P
+            ("PA", None),
+            ("PA-1", None),
+            ("ADC0", None),
+        ] {
+            assert_eq!(parse_pad_label(label), want, "{label}");
+        }
+    }
 
     #[test]
     fn resolve_covers_every_side() {

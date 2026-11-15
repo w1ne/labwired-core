@@ -322,6 +322,56 @@ impl SystemBus {
         None
     }
 
+    /// Resolve a pad label by its shape alone ([`crate::pins::parse_pad_label`])
+    /// to `(pin-port bus index, pin)`, for a pad the descriptor's `pins:` does
+    /// not list. The port is the one the bus numbered from its id
+    /// ([`PinPort::port_id`](crate::pins::PinPort::port_id)), or a block that
+    /// owns several ports and maps the pad itself
+    /// ([`multi_port_pin`](crate::pins::PinPort::multi_port_pin)). A label
+    /// that names no port resolves only on a chip with ONE pin port.
+    ///
+    /// A `pins:` entry spelling the same pad with other zero padding (`PA2`
+    /// for `PA02`) is the silicon truth and wins over the port the id implies.
+    /// Only the padding may differ: a KW41Z's `PB1` is a board label for
+    /// PTC4, so it never stands in for `PTB1`.
+    pub(crate) fn resolve_labelled_pad(bus: &SystemBus, label: &str) -> Option<(usize, u8)> {
+        let parsed = crate::pins::parse_pad_label(label)?;
+        let letters = |l: &str| -> String {
+            l.trim()
+                .chars()
+                .take_while(|c| !c.is_ascii_digit())
+                .collect::<String>()
+                .to_ascii_uppercase()
+        };
+        let listed = bus.pin_map.iter().find_map(|(other, (gpio, bit))| {
+            (letters(other) == letters(label)
+                && crate::pins::parse_pad_label(other) == Some(parsed))
+            .then_some((gpio, *bit))
+        });
+        if let Some((gpio, bit)) = listed {
+            let index = bus.find_peripheral_index_by_name(gpio)?;
+            let owner = bus.peripherals[index].dev.pins()?;
+            return (bit < owner.pin_count()).then_some((index, bit));
+        }
+        let (port, pin) = parsed;
+        let mut ports = bus
+            .peripherals
+            .iter()
+            .enumerate()
+            .filter_map(|(index, p)| Some((index, p.dev.pins()?)));
+        let Some(port) = port else {
+            let (index, owner) = ports.next()?;
+            return (ports.next().is_none() && pin < owner.pin_count()).then_some((index, pin));
+        };
+        ports.find_map(|(index, owner)| {
+            if bus.pin_port_id(index) == Some(port) {
+                (pin < owner.pin_count()).then_some((index, pin))
+            } else {
+                owner.multi_port_pin(port, pin).map(|flat| (index, flat))
+            }
+        })
+    }
+
     pub(crate) fn is_peripheral_addr(p: &PeripheralEntry, addr: u64) -> bool {
         addr >= p.base && addr < p.base + p.size
     }

@@ -364,6 +364,13 @@ impl PinPort for S32k3Siul2 {
         PINS as u8
     }
 
+    /// PTA0 is pad 0, PTB0 pad 32, PTF17 pad 177 (S32K3 RM, SIUL2 MSCR
+    /// numbering).
+    fn multi_port_pin(&self, port: crate::pins::PortId, pin: u8) -> Option<u8> {
+        let index = 32 * usize::from(port.0) + usize::from(pin);
+        (pin < 32 && has_pad(index)).then_some(index as u8)
+    }
+
     fn driver(&self, pin: u8) -> Option<PadDriver> {
         let pin = pin as usize;
         if !has_pad(pin) {
