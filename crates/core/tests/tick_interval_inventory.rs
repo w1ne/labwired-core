@@ -5,7 +5,9 @@
 //! `bus/policy.rs`). H5 `flash_models_ops` still forces CPU quantum 1 via
 //! `requires_cycle_accurate` but no longer pins the peripheral tick interval.
 //! Under `event-scheduler`, walk deletion auto-derives when every peripheral is
-//! `uses_scheduler() || !needs_legacy_walk()`.
+//! `uses_scheduler() || !needs_legacy_walk() || !legacy_tick_active()`: a
+//! dynamic legacy-walk model that is idle (not yet enabled by firmware) does
+//! not hold the walk on, and the bus restores the walk when it becomes active.
 //!
 //! This test builds each family's real chip+system bus with `walk_deleted =
 //! None` (auto-derive), prints the walk-forcing set and non-forcer blockers,
@@ -27,6 +29,9 @@ struct ForcerRow {
     name: String,
     needs_legacy_walk: bool,
     uses_scheduler: bool,
+    /// `legacy_tick_active()` at inventory time. A forcer that is idle here
+    /// does not stop walk deletion (see `derive_walk_deletable`).
+    legacy_tick_active: bool,
 }
 
 struct Inventory {
@@ -78,6 +83,7 @@ fn inventory(chip: &'static str, bus: &SystemBus) -> Inventory {
             name: p.name.clone(),
             needs_legacy_walk: p.dev.needs_legacy_walk(),
             uses_scheduler: p.dev.uses_scheduler(),
+            legacy_tick_active: p.dev.legacy_tick_active(),
         })
         .collect();
     let forcers: Vec<ForcerRow> = peripherals
@@ -85,8 +91,10 @@ fn inventory(chip: &'static str, bus: &SystemBus) -> Inventory {
         .filter(|p| p.needs_legacy_walk && !p.uses_scheduler)
         .cloned()
         .collect();
-    // walk_deletable ≡ empty forcer set (same predicate as derive_walk_deletable).
-    let walk_deletable = forcers.is_empty();
+    // walk_deletable ≡ no forcer is currently active (same predicate as
+    // derive_walk_deletable). Forcers that are idle at reset are still listed
+    // below, so the migration ratchet keeps seeing them by name.
+    let walk_deletable = forcers.iter().all(|f| !f.legacy_tick_active);
     Inventory {
         chip,
         walk_deletable,
@@ -107,7 +115,10 @@ fn inventory(chip: &'static str, bus: &SystemBus) -> Inventory {
 fn print_inventory(inv: &Inventory) {
     let forcer_names: Vec<&str> = inv.forcers.iter().map(|f| f.name.as_str()).collect();
     println!("=== {} ===", inv.chip);
-    println!("  walk_deletable (empty forcers): {}", inv.walk_deletable);
+    println!(
+        "  walk_deletable (no active forcer): {}",
+        inv.walk_deletable
+    );
     println!(
         "  legacy_walk_disabled:           {}",
         inv.legacy_walk_disabled
@@ -125,8 +136,8 @@ fn print_inventory(inv: &Inventory) {
     println!("  forcers ({}): {:?}", forcer_names.len(), forcer_names);
     for f in &inv.forcers {
         println!(
-            "    - {}  needs_legacy_walk={} uses_scheduler={}",
-            f.name, f.needs_legacy_walk, f.uses_scheduler
+            "    - {}  needs_legacy_walk={} uses_scheduler={} active={}",
+            f.name, f.needs_legacy_walk, f.uses_scheduler, f.legacy_tick_active
         );
     }
     if inv.forcers.is_empty() {
@@ -683,11 +694,14 @@ fn tick_interval_inventory_all_families() {
             // nrf54lm20a has no `twi22` instance — listing one would be a
             // vacuously-satisfied absence, not a check.
             ("nrf54lm20a", &["clock", "uart20", "uart30", "twi21"][..]),
+            // SERCOM3 is not listed: since #1739 the Arduino Zero runs Wire on
+            // it, so the slot holds the I2C master model (`sercom_i2cm`), a
+            // dynamic legacy-walk model that never was on the scheduler. It
+            // stays visible above as a forcer, and the sanity check requires
+            // it to be idle whenever the walk is deleted.
             (
                 "atsamd21g18a",
-                &[
-                    "sercom0", "sercom1", "sercom2", "sercom3", "sercom4", "sercom5",
-                ][..],
+                &["sercom0", "sercom1", "sercom2", "sercom4", "sercom5"][..],
             ),
         ] {
             let Some(inv) = inventories.iter().find(|i| i.chip == chip) else {
