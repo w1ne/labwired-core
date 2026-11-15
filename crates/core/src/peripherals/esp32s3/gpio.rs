@@ -1570,6 +1570,24 @@ impl Peripheral for Esp32s3Gpio {
         )
     }
 
+    /// The ESP32-S2 RMT's channel outputs, the same way LEDC's are bound
+    /// ([`Self::bind_ledc_lines`]): every pad, live while `FUNCn_OUT_SEL`
+    /// selects the line's signal. The pad, not the `GPIO_OUT` latch, carries
+    /// the waveform, as on silicon.
+    fn bind_matrix_output_lines(
+        &mut self,
+        first_signal: u32,
+        lines: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
+    ) -> bool {
+        for pin in 0..PAD_COUNT {
+            for (line, func) in lines.names().iter().enumerate() {
+                self.pad_routes
+                    .bind(lines, pin, Some(first_signal + line as u32), line, func);
+            }
+        }
+        true
+    }
+
     fn gpio_routing(&self, pin: u8) -> Option<crate::peripherals::gpio::GpioRouting> {
         use crate::peripherals::gpio::{GpioMode, GpioRouting};
         if pin >= PAD_COUNT {

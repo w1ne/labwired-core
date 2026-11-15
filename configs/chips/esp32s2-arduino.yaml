@@ -5,13 +5,18 @@
 # genuine ESP32-S2 mask ROM (crates/core/roms/esp32s2). Modelled: the S2
 # memory map, external flash behind the MMU-translated cache windows and SPI1
 # (crates/core/src/system/xtensa/esp32s2.rs), UART0, SYSTIMER, TIMG0/1, the
-# interrupt matrix + FROM_CPU doorbells, the WDEV RNG and the EXTMEM cache
-# controller. Blocks marked "register file" below store what is written and
-# read it back; they carry no behaviour, and nothing that depends on them
-# (clock tree, RF, eFuse values, IO_MUX pad function) is claimed.
+# interrupt matrix + FROM_CPU doorbells, the WDEV RNG, the EXTMEM cache
+# controller, RMT transmit (symbols played out through the GPIO matrix),
+# LEDC PWM (channel waveforms on the pads the matrix routes them to), the
+# I2C0 master command list (classic-ESP32 I2C design) and the GP-SPI2/3
+# CPU-driven master data phase (no DMA, no pad waveform, no interrupt) and
+# the TWAI controller's register-level self-reception (no CAN bus).
+# Blocks marked "register file" below store what is written and read it
+# back; they carry no behaviour, and nothing that depends on them (clock tree,
+# RF, eFuse values, IO_MUX pad function) is claimed.
 #
-# Not modelled: Wi-Fi, USB OTG, PSRAM, I2C, GP-SPI, RMT, LEDC, ADC, TWAI, touch.
-# The narrow freestanding DevKitM-1 smoke profile is configs/chips/esp32s2.yaml.
+# Not modelled: Wi-Fi, USB OTG, PSRAM, I2C1, I2C slave mode, GP-SPI DMA/slave, RMT RX, ADC, TWAI bus traffic, touch.
+# The narrow freestanding DevKitC-1-N8R2 smoke profile is configs/chips/esp32s2.yaml.
 #
 # Addresses: ESP-IDF components/soc/esp32s2/include/soc/reg_base.h and
 # ext_mem_defs.h. Memory map: ESP32-S2 TRM, "System and Memory".
@@ -67,6 +72,11 @@ memory_regions:
     size: "768KB"
     alias_of: 0x3F400000
 
+# Only the pad this profile's tests exercise: the WS2812 data line of the
+# Saola-1 / DevKitM-1 RGB pixel (RMT ch0 through the GPIO matrix).
+pins:
+  GPIO18: { gpio: "gpio", bit: 18 }
+
 peripherals:
   - id: "uart0"
     type: "esp32s2_uart"
@@ -92,6 +102,51 @@ peripherals:
     base_address: 0x3F423000
     size: "4KB"
     irq: 71 # ETS_SYSTIMER_TARGET0_INTR_SOURCE
+  # Classic-ESP32 RMT design with 4 channels; RMTMEM at +0x400 is inside
+  # this window. TX plays out through the GPIO matrix (signals 87..90).
+  - id: "rmt"
+    type: "esp32s2_rmt"
+    base_address: 0x3F416000
+    size: "4KB"
+    irq: 50 # ETS_RMT_INTR_SOURCE
+  # LEDC: the S3 block (same ledc_reg.h map), 8 low-speed channels whose
+  # outputs reach pads through the GPIO matrix (signals 79..86).
+  - id: "ledc"
+    type: "esp32s2_ledc"
+    base_address: 0x3F419000
+    size: "4KB"
+    irq: 45 # ETS_LEDC_INTR_SOURCE
+  # I2C0: the classic-ESP32 design (16 COMD slots, original opcodes,
+  # I2CEXT0 matrix signals 29/30). IDF's i2c_ll reaches the FIFO through
+  # PeriBus2 (0x6001_301C), which the peribus2 alias above maps here.
+  - id: "i2c0"
+    type: "esp32s2_i2c"
+    base_address: 0x3F413000
+    size: "4KB"
+    irq: 52 # ETS_I2C_EXT0_INTR_SOURCE
+  # GP-SPI2 (FSPI, Arduino's default SPI) and SPI3: the S2's own register
+  # file (USR at CMD bit 24, split MOSI/MISO DLEN, W0 at 0x98). Polled data
+  # phase only; ETS_SPI2/3_INTR_SOURCE (33/34) are never raised.
+  - id: "spi2"
+    type: "esp32s2_spi"
+    base_address: 0x3F424000
+    size: "4KB"
+    irq: 33 # ETS_SPI2_INTR_SOURCE
+  - id: "spi3"
+    type: "esp32s2_spi"
+    base_address: 0x3F425000
+    size: "4KB"
+    irq: 34 # ETS_SPI3_INTR_SOURCE
+  # TWAI (SJA1000-style CAN): soc/esp32s2/register/soc/twai_struct.h is the
+  # S3 struct field for field (only BRP is 14 bits instead of 13, and
+  # BUS_TIMING_0 stores 16), so the S3 model runs here with the S2 source.
+  # Base from esp32s2.peripherals.ld (TWAI = 0x3f42B000). No bus attached:
+  # TX completes at once and only self-reception produces an RX frame.
+  - id: "twai"
+    type: "esp32s3_twai"
+    base_address: 0x3F42B000
+    size: "4KB"
+    irq: 47 # ETS_TWAI_INTR_SOURCE
   - id: "rng"
     type: "esp32s2_rng"
     base_address: 0x3F435000
@@ -127,11 +182,30 @@ peripherals:
     type: "esp32s3_system_stub"
     base_address: 0x3F406000
     size: "4KB"
-  # RTC_CNTL, RTCIO, SENS and RTC_I2C share this 4 KiB page.
+  # RTC_CNTL (+0x000) and RTCIO (+0x400) share the first half of this page;
+  # SENS (+0x800) and RTC_I2C (+0xC00) are their own windows below.
   - id: "rtc_cntl"
     type: "esp32s3_system_stub"
     base_address: 0x3F408000
-    size: "4KB"
+    size: "2KB"
+  # SENS: the RTC-domain SAR controller IDF's oneshot ADC driver uses on the
+  # S2. Boot's adc_hw_calibration constructor polls MEAS1_DONE_SAR here, and
+  # analogRead() reads MEAS1_DATA_SAR. Oneshot completes at once with a fixed
+  # 0x800 (or the injected channel input). No analog cells, touch, or ULP.
+  - id: "sens"
+    type: "esp32s2_sens"
+    base_address: 0x3F408800
+    size: "1KB"
+  - id: "rtc_i2c"
+    type: "esp32s3_system_stub"
+    base_address: 0x3F408C00
+    size: "1KB"
+  # APB_SARADC (digital controller): register file only. The S2 oneshot
+  # path converts in SENS and just configures CTRL/ARB_CTRL here.
+  - id: "apb_saradc"
+    type: "esp32s2_apb_saradc"
+    base_address: 0x3F440000
+    size: "1KB"
   - id: "io_mux"
     type: "esp32s3_system_stub"
     base_address: 0x3F409000

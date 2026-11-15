@@ -604,7 +604,7 @@ fn every_shipped_descriptor_is_ratcheted() {
         "atsamd21j18a",
         // ESP32-S2 (Xtensa LX7) on its genuine mask ROM: stock Arduino-ESP32
         // runs in the Arduino matrix (`esp32s2` row) and
-        // tests/esp32s2_arduino_boot.rs; no Playground catalog board or
+        // tests/esp/esp32s2_arduino_boot.rs; no Playground catalog board or
         // physical-silicon differential.
         "esp32s2-arduino",
         "esp32",         // classic Xtensa, separate e2e lane, not a catalog board

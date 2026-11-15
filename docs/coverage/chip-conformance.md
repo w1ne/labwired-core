@@ -136,6 +136,7 @@ This page covers the public models. For every chip we model — public and priva
 | nrf54l10 | **L0** | ✓ | 6 | — | — | — |
 | esp32p4 | **L0** | ✓ | 1 | — | — | — |
 | esp32s2 | **L0** | ✓ | 1 | — | — | — |
+| esp32s2-arduino | **L1** | ✓ | 32 | — | — | esp32s2_arduino_boot::stock_arduino_l0_prints_over_uart0 |
 | rp2040-feather | **L0** | ✓ | 24 | — | — | — |
 | rp2350-feather | **L0** | ✓ | 27 | — | — | — |
 | stm32h723zg | **L0** | ✓ | 7 | — | — | — |

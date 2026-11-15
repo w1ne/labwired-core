@@ -1181,6 +1181,16 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: None,
     },
+    // Arduino matrix profile of the same S2 die on its genuine mask ROM.
+    // SIM-DERIVED: no silicon capture. Stock Arduino-ESP32 L0 boots through
+    // ESP-IDF and FreeRTOS and prints over UART0; the test has an
+    // erased-partition-table negative control.
+    ChipConf {
+        name: "esp32s2-arduino",
+        yaml: "configs/chips/esp32s2-arduino.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("esp32s2_arduino_boot::stock_arduino_l0_prints_over_uart0"),
+    },
     // Adafruit Feather RP2040 variant of the rp2040 die. Its BME280 I2C1 smoke
     // runs as a CLI script in core-onboarding-smoke, not as a Rust test.
     ChipConf {

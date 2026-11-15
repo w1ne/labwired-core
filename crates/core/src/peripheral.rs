@@ -671,6 +671,26 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// subsequent [`Self::drive_pad_output`] edge is timestamped. Default is
     /// a no-op.
     fn sync_observer_cycle(&mut self, _now: u64) {}
+    /// Espressif GPIO-matrix output peripheral: the wire cell its outputs are
+    /// published on, and the matrix signal of line 0 (line n is signal
+    /// `first + n`). The bus hands it to the GPIO matrix through
+    /// [`Self::bind_matrix_output_lines`]. Default: publishes no wire.
+    fn matrix_output_lines(
+        &mut self,
+    ) -> Option<(u32, std::sync::Arc<crate::peripherals::pad_lines::PadLines>)> {
+        None
+    }
+    /// Espressif GPIO matrix: carry `lines` (line n = output signal
+    /// `first_signal + n`) on whichever pad `FUNCn_OUT_SEL` routes it to, so
+    /// pad reads and the logic analyzer see the peripheral's waveform.
+    /// `false`: this port does not route peripheral wires.
+    fn bind_matrix_output_lines(
+        &mut self,
+        _first_signal: u32,
+        _lines: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
+    ) -> bool {
+        false
+    }
 
     /// GPIO capability: the pad level a logic probe clipped to `pin` would
     /// see. Shim over [`pins::PinPort::level`] (kept because many callers

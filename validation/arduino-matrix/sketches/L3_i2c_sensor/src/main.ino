@@ -49,6 +49,10 @@ static void wireBegin() {
 #elif defined(CONFIG_IDF_TARGET_ESP32C6)
   // esp32c6 variant SDA/SCL. GPIO21 (the classic SDA below) is not the kit.
   Wire.begin(23, 22);
+#elif defined(CONFIG_IDF_TARGET_ESP32S2)
+  // The S2 variant's SDA/SCL (variants/esp32s2/pins_arduino.h); the S2 has
+  // no GPIO22 for the classic pair below.
+  Wire.begin(8, 9);
 #elif defined(ARDUINO_ARCH_ESP32)
   Wire.begin(21, 22);
 #elif defined(ARDUINO_ARCH_RP2040)

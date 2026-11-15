@@ -59,6 +59,11 @@
 // ATmega328P, so analogWrite(13, 128) is digitalWrite(HIGH). Use D9 = PB1 =
 // OC1A (Timer1, phase-correct 8-bit, 16 MHz / 64 / 510 = 490 Hz).
 #    define LW_PWM_PIN 9
+#  elif defined(ARDUINO_ESP32S2_DEV)
+// Saola-1 / DevKitM-1: LED_BUILTIN is the WS2812's virtual pin 64
+// (SOC_GPIO_PIN_COUNT + 18), and stock analogWrite ignores pins
+// >= SOC_GPIO_PIN_COUNT. Use a plain header GPIO so LEDC really runs.
+#    define LW_PWM_PIN 2
 #  elif defined(LED_BUILTIN)
 #    define LW_PWM_PIN LED_BUILTIN
 #  elif defined(ARDUINO_ARCH_ESP32)

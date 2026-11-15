@@ -132,6 +132,9 @@ pub const MODEL_TYPES: &[&str] = &[
     // would resolve them to the STM32 maps.
     "esp32c6_uart",
     "esp32c6_gpio",
+    "esp32s2_rmt",
+    "esp32s2_i2c",
+    "esp32s2_spi",
     // C6-only behavioral blocks: PCR (clock/reset, full SVD register map) and
     // GDMA (3 channels, C6 register layout). The fuzzy `contains("dma")`
     // fallback would otherwise coerce `esp32c6_gdma` onto the STM32 DMA
@@ -282,10 +285,13 @@ pub const MODEL_TYPES: &[&str] = &[
     "esp32s3_usb_serial_jtag",
     "esp32s3_wifi_mac",
     // ESP32-S2 layouts of the shared S3 models (Arduino profile).
+    "esp32s2_apb_saradc",
     "esp32s2_crosscore_ipi",
     "esp32s2_gpio",
     "esp32s2_intmatrix",
+    "esp32s2_ledc",
     "esp32s2_rng",
+    "esp32s2_sens",
     "esp32s2_systimer",
     "esp32s2_uart",
     // nRF52 behavioral models the factory builds but this table never named.
