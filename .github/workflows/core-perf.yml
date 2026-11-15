@@ -65,7 +65,7 @@ on:
 
 concurrency:
   group: core-perf-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
