@@ -567,6 +567,10 @@ jobs:
           - id: ch32v005f6p6-blink
             script: examples/ch32v005f6p6/io-smoke.yaml
             system: examples/ch32v005f6p6/system.yaml
+          # CH32X035C8T6 (LQFP48, RV32IMAC): blinks PB12 through GPIOB_CFGHR.
+          - id: ch32x035c8t6-blink
+            script: examples/ch32x035c8t6/io-smoke.yaml
+            system: examples/ch32x035c8t6/system.yaml
           # CH32V006K8U6 (QFN32, RV32EmC): blinks PB0 on GPIOB.
           - id: ch32v006k8u6-blink
             script: examples/ch32v006k8u6/io-smoke.yaml

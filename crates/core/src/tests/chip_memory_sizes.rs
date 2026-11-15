@@ -241,8 +241,11 @@ fn ram_geometry_is_valid(chip: &ChipDescriptor) -> bool {
 /// Flash that is not a whole number of 4 KiB sectors is real on exactly these
 /// parts. WCH's CH32V006 CodeFlash is 62 KB (CH32V006DS0 V2.0 product table;
 /// openwch ch32v002_004_005_006_007 Link.ld `LENGTH = 62K`) and erases in
-/// 256 B pages (CH32V00XRM), so 62 KiB is a part size, not a typo.
-const NON_SECTOR_FLASH_PARTS: &[(&str, u64)] = &[("ch32v006k8u6", 62 * 1024)];
+/// 256 B pages (CH32V00XRM), so 62 KiB is a part size, not a typo. The
+/// CH32X035 CodeFlash is also 62 KB (CH32X035/X033 DS V2.3 product table;
+/// openwch ch32x035 Link.ld `LENGTH = 62K`).
+const NON_SECTOR_FLASH_PARTS: &[(&str, u64)] =
+    &[("ch32v006k8u6", 62 * 1024), ("ch32x035c8t6", 62 * 1024)];
 
 /// Zero is an honest absence of internal flash only for this declared SoC.
 /// The base must also be zero: the placeholder must not imply a storage map.

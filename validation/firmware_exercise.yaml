@@ -180,6 +180,14 @@ chips:
     advanced_dead: []
     shim: []
 
+  - id: ch32x035c8t6
+    arch: riscv32imac
+    headline: "No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs a committed RV32IMAC ELF that blinks PB12 through GPIOB_CFGHR (negative control: PB0 stays idle), and a second ELF that checks MUL/DIVU/AMOADD.W results and then prints an exact string on USART1 (PB10); a negative control moves the USART1 clock gate and requires silence. A datasheet test pins memory, clock and the 34 modelled LQFP48 GPIOs (pins 16..23 are not modelled). This local simulator evidence does not cover WCH-Link, PFIC, SysTick, timers, ADC, OPA, CMP, PIOC, I2C, SPI, DMA, USB FS or USB PD, and is not hosted model_verified or hardware confirmation."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
   - id: ch32v006k8u6
     arch: riscv32ec
     headline: "No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs a committed RV32E ELF that blinks PB0 on GPIOB, the port the CH32V003 lacks (negative control: PC0 stays idle), and a second RV32EC+Zmmul ELF that checks a MUL result and then prints an exact string on USART1 (PD5); a negative control moves the USART1 clock gate and requires silence. A DS0 test pins memory, clock and the 31 QFN32 GPIOs. This local simulator evidence does not cover WCH-Link, PFIC, SysTick, timers, ADC, OPA, I2C, SPI, DMA or USART2, and is not hosted model_verified or hardware confirmation."

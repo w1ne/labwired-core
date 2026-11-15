@@ -2832,6 +2832,18 @@ impl SystemBus {
         // The remap pads need AFIO_PCFR1, which nothing decodes, so they are
         // left unbound.
         const WCH: &[(u8, char, u8, usize, &str)] = &[(1, 'd', 5, LINE_TX, "USART1_TX")];
+        // WCH CH32X035 (`pad_map: wch_x035` on the UART): F1-style CFGLR/CFGHR,
+        // but the default TX pads differ from the STM32F1. CH32X035/X033
+        // Datasheet V2.3 Table 2-1, "Default alternate function" column:
+        // PB10 = `TX1/T1C2`, PA2 = `TX2/T2C3/O2O1/C3N0/A2`, PB3 = `TX3/C3O/O2P1`.
+        // None of these pads carries an I2C or SPI default function. The
+        // remap pads need AFIO_PCFR1, which nothing decodes, so they stay
+        // unbound.
+        const WCH_X035: &[(u8, char, u8, usize, &str)] = &[
+            (1, 'b', 10, LINE_TX, "USART1_TX"),
+            (2, 'a', 2, LINE_TX, "USART2_TX"),
+            (3, 'b', 3, LINE_TX, "USART3_TX"),
+        ];
 
         for instance in 1u8..=3 {
             // Chip configs name these both ways — `uart2` on the L4/F1 configs,
@@ -2849,6 +2861,11 @@ impl SystemBus {
             // nothing reads. A chip with no row for this instance therefore
             // must not reach `pad_lines_arc` at all.
             let mut plan: Vec<(char, u8, Option<u8>, usize, &'static str)> = Vec::new();
+            let wch_x035 = self.peripherals[uart_idx]
+                .dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<Uart>())
+                .is_some_and(Uart::is_wch_x035_pad_map);
             for port in ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'] {
                 let Some(gpio_idx) = self.find_peripheral_index_by_name(&format!("gpio{port}"))
                 else {
@@ -2884,7 +2901,9 @@ impl SystemBus {
                         }
                     }
                     GpioRegisterLayout::Stm32F1 | GpioRegisterLayout::Wch => {
-                        let table = if gpio_layout == GpioRegisterLayout::Wch {
+                        let table = if wch_x035 {
+                            WCH_X035
+                        } else if gpio_layout == GpioRegisterLayout::Wch {
                             WCH
                         } else {
                             F1

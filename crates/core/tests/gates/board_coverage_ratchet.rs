@@ -892,6 +892,11 @@ fn every_shipped_descriptor_is_ratcheted() {
         // Booted by committed ELFs. No catalog board, no silicon oracle, no
         // differential.
         "ch32v005f6p6",
+        // CH32X035C8T6: RV32IMAC descriptor with F1-layout RCC, GPIO A..C
+        // (pins 0..15) and polled USART1 TX (no PFIC, timers, ADC, OPA, PIOC,
+        // I2C, SPI, DMA or USB). Booted by committed ELFs. No catalog board,
+        // no silicon oracle, no differential.
+        "ch32x035c8t6",
         // CH32V006K8U6: RV32EmC descriptor with the CH32V003 RCC/GPIO layout
         // plus GPIOB, and polled USART1 TX (no PFIC, timers, ADC, OPA, I2C,
         // SPI or DMA). Booted by committed ELFs. No catalog board, no silicon
