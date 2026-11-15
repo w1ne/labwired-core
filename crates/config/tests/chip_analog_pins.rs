@@ -65,7 +65,12 @@ fn analog_pin_problems(chip: &str, desc: &ChipDescriptor) -> Vec<String> {
             None => problems.push(format!(
                 "{chip}: {pad} names ADC '{peripheral}', not declared"
             )),
-            Some(p) if !matches!(p.r#type.as_str(), "adc" | "avr_adc" | "nrf52840_saadc") => {
+            Some(p)
+                if !matches!(
+                    p.r#type.as_str(),
+                    "adc" | "avr_adc" | "nrf52840_saadc" | "pic24_adc_pads"
+                ) =>
+            {
                 problems.push(format!(
                     "{chip}: {pad} names '{peripheral}', which is type '{}', not adc",
                     p.r#type
@@ -83,11 +88,28 @@ fn analog_pin_problems(chip: &str, desc: &ChipDescriptor) -> Vec<String> {
             .peripherals
             .iter()
             .any(|p| &p.id == peripheral && p.r#type == "avr_adc");
-        match pad_port_and_bit(pad, nordic, avr) {
+        // Microchip PIC24 pads are R<port><bit> (RA0, RB14).
+        let pic24 = desc
+            .peripherals
+            .iter()
+            .any(|p| &p.id == peripheral && p.r#type == "pic24_adc_pads");
+        match pad_port_and_bit(pad, nordic, avr, pic24) {
             Some((port, bit)) => match desc.peripherals.iter().find(|p| {
-                p.id == port && matches!(p.r#type.as_str(), "gpio" | "avr_gpio" | "stm32f4_gpio")
+                p.id == port
+                    && matches!(
+                        p.r#type.as_str(),
+                        "gpio" | "avr_gpio" | "stm32f4_gpio" | "pic24_gpio"
+                    )
             }) {
                 Some(p) => {
+                    // A PIC24 port's `mask` holds the bits the package bonds.
+                    if let Some(mask) = p.config.get("mask").and_then(serde_yaml::Value::as_u64) {
+                        if bit >= 16 || mask & (1 << bit) == 0 {
+                            problems.push(format!(
+                                "{chip}: {pad} is not bonded ({port} mask {mask:#06x})"
+                            ));
+                        }
+                    }
                     let count = p
                         .config
                         .get("num_pins")
@@ -118,9 +140,9 @@ fn analog_pin_problems(chip: &str, desc: &ChipDescriptor) -> Vec<String> {
     problems
 }
 
-fn pad_port_and_bit(pad: &str, nordic: bool, avr: bool) -> Option<(String, u8)> {
+fn pad_port_and_bit(pad: &str, nordic: bool, avr: bool, pic24: bool) -> Option<(String, u8)> {
     let upper = pad.to_ascii_uppercase();
-    let rest = upper.strip_prefix('P')?;
+    let rest = upper.strip_prefix(if pic24 { 'R' } else { 'P' })?;
     if nordic {
         let (port, bit) = rest.split_once('.')?;
         if port.len() != 1
