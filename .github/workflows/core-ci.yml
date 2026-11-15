@@ -14,6 +14,9 @@ on:
   pull_request:
     branches:
       - main
+    # ready_for_review: a draft run is the LIGHT lane (see `draft-light` names
+    # below); marking the PR ready must start the full lane.
+    types: [opened, synchronize, reopened, ready_for_review]
   schedule:
     # Nightly full integrity + feature gates (02:30 UTC).
     - cron: "30 2 * * *"
@@ -368,7 +371,12 @@ jobs:
   # still asserted — it just is not a merge gate. Do not re-add a `--check`
   # step here.
   pr-gate:
-    name: pr-gate
+    # Draft runs do LESS work than a full run, so they must never report the
+    # required context name `pr-gate` (a stale green would survive
+    # ready_for_review until the full run finishes). A draft renders a
+    # different name; the required context stays "Expected" on a draft, and a
+    # draft cannot merge anyway.
+    name: ${{ (github.event_name == 'pull_request' && github.event.pull_request.draft) && 'pr-gate (draft-light)' || 'pr-gate' }}
     # `workflow_dispatch` too, and this is not a convenience — it is the only
     # way out of a specific deadlock. `pr-gate` is one of the two REQUIRED
     # contexts on main, and required contexts are reported against the PR's
@@ -555,6 +563,7 @@ jobs:
       # renders the report for the job summary + artifact below. The docs site
       # publishes it from main (deploy-docs.yml).
       - name: Validation status — integrity gates + rendered report
+        if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
         run: |
           python -m pip install --quiet pyyaml
           # One-file-per-entry registries: file name == id, no duplicate ids,
@@ -621,6 +630,7 @@ jobs:
         run: python3 scripts/ci/check_test_target_refs.py --check
 
       - name: Perf gate — every chip covered or waived
+        if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
         run: |
           python -m pip install --quiet pytest
           python3 scripts/perf/board_perf.py --check-coverage
@@ -654,6 +664,7 @@ jobs:
           python3 -m unittest discover -s examples/nrf52840-secure-boot-lab -p test_make_packages.py
 
       - name: Rerun-on-runner-loss classifier unit tests
+        if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
         run: node --test scripts/ci/rerun-on-runner-loss.test.mjs
 
       # Mixed-signal co-sim: the ngspice wrapper (tools/cosim) is pure Python
@@ -661,6 +672,7 @@ jobs:
       # separate step so a missing libngspice shows up as THIS step, not as a
       # perf-gate failure.
       - name: Co-sim — ngspice wrapper steps an RC circuit in lockstep
+        if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
         run: |
           sudo apt-get install -y --no-install-recommends libngspice0 >/dev/null
           python3 -m pytest -q tools/cosim/test_labwired_ngspice.py
@@ -680,6 +692,7 @@ jobs:
       # uncovered chip is an error, so a new descriptor reddens this on the PR
       # that adds it. Pure Python, seconds.
       - name: Chip coverage — every chip executed by a CLI gate, or a written reason
+        if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
         run: python3 scripts/ci/chip_coverage.py --report
 
       # The same question for PARTS. Every configs/devices/*.yaml is offered in
@@ -692,6 +705,7 @@ jobs:
       # on the PR that adds it, and `min_lab_exercised:` stops a lab deletion
       # from quietly dropping a part out of the Playground. Pure Python, seconds.
       - name: Part coverage — every onboarded part exercised, or a written reason
+        if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
         run: python3 scripts/ci/part_coverage.py --report
 
       # Universal staleness gate. Regenerates EVERY committed artifact derived
@@ -709,6 +723,7 @@ jobs:
       # pr-gate's 15 minutes. The full regen-all drift check, cargo included,
       # runs on every push to main in `core-integrity`.
       - name: Generated artifacts — regenerate and assert no drift (no cargo)
+        if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
         run: |
           python -m pip install --quiet pyyaml
           ./scripts/regen-all.sh --no-cargo
@@ -759,14 +774,20 @@ jobs:
       - name: Native ARM backend remains inert without its opt-in feature
         run: |
           cargo clippy --locked -p labwired-arm-system --all-targets -- -D warnings
-          scripts/ci/cargo-test-nonvacuous.sh --locked -p labwired-arm-system --lib
+
+      - name: Native ARM backend unit tests
+        if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
+        run: scripts/ci/cargo-test-nonvacuous.sh --locked -p labwired-arm-system --lib
 
   # Separate feature graphs compile independently so neither displaces the
   # other's tests at the 20-minute execution wall. The protected aggregate
   # below requires both jobs to succeed, including this bare workspace command.
   pr-default-members-lib:
     name: pr-default-members-lib
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    # Heavy test lane: skipped on draft PRs, runs on ready_for_review.
+    if: >
+      !(github.event_name == 'pull_request' && github.event.pull_request.draft) &&
+      (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -828,7 +849,10 @@ jobs:
   # lib suites passed, before the guest/survival tail could run.
   pr-core-feature-off-tests:
     name: pr-core-feature-off-tests
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    # Heavy test lane: skipped on draft PRs, runs on ready_for_review.
+    if: >
+      !(github.event_name == 'pull_request' && github.event.pull_request.draft) &&
+      (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -1075,10 +1099,13 @@ jobs:
   # cancelled, or skipped prerequisite from turning this gate into a skip.
   # Both exact feature configurations must actually finish successfully.
   pr-core-feature-off:
-    name: pr-core-feature-off
+    # Skipped on drafts (both test jobs it aggregates are skipped there); the
+    # name differs so no draft run ever reports the required context.
+    name: ${{ (github.event_name == 'pull_request' && github.event.pull_request.draft) && 'pr-core-feature-off (draft-light)' || 'pr-core-feature-off' }}
     needs: [pr-default-members-lib, pr-core-feature-off-tests]
     if: >
       always() &&
+      !(github.event_name == 'pull_request' && github.event.pull_request.draft) &&
       (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -1243,7 +1270,8 @@ jobs:
   # browser never builds — this lane is the faithful one. It does not replace
   # the integrity run; both stay.
   browser-layer:
-    name: browser-layer
+    # Lightened on drafts => different name (see pr-gate).
+    name: ${{ (github.event_name == 'pull_request' && github.event.pull_request.draft) && 'browser-layer (draft-light)' || 'browser-layer' }}
     # Split out of `pr-gate` on 2026-08-21, which is what the note above that
     # job's `timeout-minutes` had been asking for. The measurement that forced
     # it: pr-gate ran 12m15s against a 12-minute wall and died inside its LAST
@@ -1410,6 +1438,7 @@ jobs:
       - name: Add ARM target (secure-boot lab firmware for the browser repro)
         run: rustup target add thumbv7em-none-eabi
       - name: Unit tests (browser layer)
+        if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
         run: cargo test -p labwired-wasm --lib
 
       # ── THE BROWSER JIT GATE ─────────────────────────────────────────────
@@ -1440,17 +1469,21 @@ jobs:
       # Cargo.lock (0.2.121), the version the crate already pins. `node` is
       # preinstalled on ubuntu-latest (v20); the test is plain ESM + BigInt.
       - name: Install wasm-pack (pinned by the installer, v0.13.1)
+        if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
       - name: Build the browser artifact (wasm-pack, nodejs target)
+        if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
         run: wasm-pack build --target nodejs --dev --out-dir pkg
         working-directory: crates/wasm
       - name: Browser Cortex-M JIT end-to-end (JIT off vs on)
+        if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
         run: node scripts/test_browser_cortex_m_jit.mjs
       # Snapshot/restore, fault experiments and coverage through the same
       # artifact the playground loads: restore-then-run must equal a straight
       # run, the fault verdicts must repeat, and coverage must map the run to
       # functions. Committed smart-ring ELF, no skip path.
       - name: Browser snapshot, fault injection and coverage end-to-end
+        if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
         run: node scripts/test_browser_fault_coverage_snapshot.mjs
       # CAN bridge through the same artifact, on the committed H563 FDCAN/UDS
       # ECU: record a UDS session, replay it twice (match, identical) and a
@@ -1458,6 +1491,7 @@ jobs:
       # multi-frame ISO-TP transfer (timeout -> retry -> recovery), and
       # snapshot/restore over bridge calls. No skip path.
       - name: Browser CAN bridge (pause modes, record/replay, faults) end-to-end
+        if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
         run: node scripts/test_browser_can_bridge.mjs
 
       # The analog engine's op-amp/comparator macros, zener/TVS breakdown and
@@ -1471,6 +1505,7 @@ jobs:
       # — the supply supervisor's resets and the firmware's own boot log must
       # match the native run too.
       - name: Browser analog macros and regulated supply (wasm == native, bit for bit)
+        if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
         run: node scripts/test_browser_analog_macros.mjs
 
   # Post-merge since 2026-11-13 (the job id keeps its old name so the

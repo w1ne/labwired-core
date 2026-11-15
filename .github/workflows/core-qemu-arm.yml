@@ -2,6 +2,7 @@ name: Native QEMU-derived ARM core
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     # Lean PR gate (2026-11-13): on pull requests this lane runs only when
     # its own files change. Shared engine paths (crates/core, crates/cli,
     # Cargo.*) trigger it on push to main instead.
@@ -61,7 +62,7 @@ concurrency:
 
 jobs:
   native-arm:
-    if: ${{ github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core' }}
+    if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) && (github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core') }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -85,7 +86,7 @@ jobs:
           /usr/bin/python3 -m pytest tools/cosim/test_smart_basket_power.py tools/cosim/test_labwired_ngspice.py -q
           /usr/bin/python3 examples/smart-basket-power/run_scenarios.py --output "$RUNNER_TEMP/smart-basket-power"
   default-cli:
-    if: ${{ github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core' }}
+    if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) && (github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core') }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -115,7 +116,7 @@ jobs:
         run: 'cargo test --locked -p labwired-core --test rv1103 -- rv1103_linux_loader:: rv1103_devices:: rv1103_basket_loader:: rv1103_rk3x_i2c:: rv1103_uart4_esp_at:: && cargo test --locked -p labwired-core --test session -- cpu_runtime_snapshot_honesty::'
 
   native-system:
-    if: ${{ github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core' }}
+    if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) && (github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
