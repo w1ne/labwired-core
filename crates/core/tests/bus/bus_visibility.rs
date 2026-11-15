@@ -149,6 +149,27 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this \
          harness yet; bytes are proven by ch32v003_compiled_firmware",
     ),
+    // F4U6 (QFN20), A4M6 (SOP16) and J4M6 (SOP8) are package variants of the
+    // F4P6 die with the same pad-gated USART1 on PD5. Bytes are proven by
+    // ch32v003_compiled_firmware::ch32v003_package_variants_print_on_usart1_pd5.
+    (
+        "ch32v003f4u6",
+        BusKind::Uart,
+        "F4P6-die package variant: same pad-gated USART1 (TX=PD5) gap; bytes \
+         are proven by ch32v003_compiled_firmware",
+    ),
+    (
+        "ch32v003a4m6",
+        BusKind::Uart,
+        "F4P6-die package variant: same pad-gated USART1 (TX=PD5) gap; bytes \
+         are proven by ch32v003_compiled_firmware",
+    ),
+    (
+        "ch32v003j4m6",
+        BusKind::Uart,
+        "F4P6-die package variant: same pad-gated USART1 (TX=PD5) gap; bytes \
+         are proven by ch32v003_compiled_firmware",
+    ),
     // nRF51822: the bring-up drives the nRF52 EasyDMA personalities (UARTE
     // ENABLE=8, TWIM), which the nRF51 does not have; its UART0 is the legacy
     // UART (ENABLE=4, TXD + EVENTS_TXDRDY) and its TWI is the legacy TWI. No

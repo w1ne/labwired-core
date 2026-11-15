@@ -19,6 +19,18 @@
       "how": "needs-build",
       "why": "Requires unreleased CH32V003/RV32E core support from PR #1698; the installed LabWired CLI v0.25.0 cannot run this branch-only model yet."
     },
+    "ch32v003f4u6": {
+      "how": "needs-build",
+      "why": "Package variant of ch32v003f4p6 (same die); requires the same unreleased CH32V003/RV32E core support, which the installed LabWired CLI v0.25.0 cannot run yet."
+    },
+    "ch32v003a4m6": {
+      "how": "needs-build",
+      "why": "Package variant of ch32v003f4p6 (same die); requires the same unreleased CH32V003/RV32E core support, which the installed LabWired CLI v0.25.0 cannot run yet."
+    },
+    "ch32v003j4m6": {
+      "how": "needs-build",
+      "why": "Package variant of ch32v003f4p6 (same die); requires the same unreleased CH32V003/RV32E core support, which the installed LabWired CLI v0.25.0 cannot run yet."
+    },
     "dspic33fj32mc204": {
       "how": "committed",
       "firmware": "examples/dspic33fj32mc204/firmware/dspic33fj32mc204-uart-smoke.elf",
