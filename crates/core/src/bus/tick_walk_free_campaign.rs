@@ -40,52 +40,53 @@ use crate::system::cortex_m::configure_cortex_m;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use std::path::PathBuf;
 
-/// Walk-forcing ids on the runtime invaders bus after the I2C migration
-/// (event-scheduler builds): the prior 6 (B2/B3 timers minus the 2 `dma*`,
-/// with the DWT lazy-CYCCNT migration from #522) minus the 3 `i2c*` = 2.
-/// The 3 `i2c*` NOW migrate: the STM32 F1/L4 transaction engine is self-paced
-/// by the SAME held-level, delay-1 self-perpetuating event chain the Kinetis
-/// variant uses. The chain runs `F1I2c::tick()`/`L4I2c::tick()` every cycle
-/// while a transfer is *active* (countdown in flight OR SR2.BUSY set), so the
-/// `&self`-read side effects (`rxne_consumed` / device byte pulls) are
-/// observed by the already-live chain's next `on_event` exactly as the walk's
-/// next `tick()` would — no event needs arming from the read path. Proven
-/// byte-identical (registers + read bytes + NVIC-pend cycles) by the
-/// `kinetis_scheduler` differential module (`f1_*`/`l4_*` cases). Remaining
-/// plan Class-B on this bus: adc + exti.
-///
-/// bxCAN (`can1`) NO LONGER forces the walk: its `tick()` only drains a
-/// `CanBus` mpsc interconnect, so `needs_legacy_walk()` now reports
-/// `bus_rx.is_some()` — false on this bus (no multi-node CanBus is wired;
-/// can-player replay is pushed by `service_can_log_players`, not the tick).
-///
-/// EXTI (`exti`) NO LONGER forces the walk: its held-level `explicit_irqs`
-/// re-emission is driven by a delay-1 self-perpetuating event chain (armed on
-/// the MMIO write that raises a masked pending line, stopping when firmware
-/// clears PR). Byte-identical proof: `exti::scheduler_diff`.
-///
-/// ADC (`adc1`) NO LONGER forces the walk: its F1 conversion countdown is
-/// event-scheduled (delay-1 chain armed on SWSTART, perpetuating through
-/// continuous mode), and the legacy `cycles: 1` per-converting-tick cost is
-/// normalized to zero in BOTH modes (SysTick B1 pattern) so `total_cycles`
-/// agrees. Byte-identical proof: `adc::scheduler_diff`.
-///
-/// The forcing set is now EMPTY — with every Class-B walker migrated the
-/// runtime invaders (L476) bus derives walk-deletion with no hand flag: the
-/// campaign's full STM32 board flip.
+// Walk-forcing ids on the runtime invaders bus after the I2C migration
+// (event-scheduler builds): the prior 6 (B2/B3 timers minus the 2 `dma*`,
+// with the DWT lazy-CYCCNT migration from #522) minus the 3 `i2c*` = 2.
+// The 3 `i2c*` NOW migrate: the STM32 F1/L4 transaction engine is self-paced
+// by the SAME held-level, delay-1 self-perpetuating event chain the Kinetis
+// variant uses. The chain runs `F1I2c::tick()`/`L4I2c::tick()` every cycle
+// while a transfer is *active* (countdown in flight OR SR2.BUSY set), so the
+// `&self`-read side effects (`rxne_consumed` / device byte pulls) are
+// observed by the already-live chain's next `on_event` exactly as the walk's
+// next `tick()` would — no event needs arming from the read path. Proven
+// byte-identical (registers + read bytes + NVIC-pend cycles) by the
+// `kinetis_scheduler` differential module (`f1_*`/`l4_*` cases). Remaining
+// plan Class-B on this bus: adc + exti.
+//
+// bxCAN (`can1`) NO LONGER forces the walk: its `tick()` only drains a
+// `CanBus` mpsc interconnect, so `needs_legacy_walk()` now reports
+// `bus_rx.is_some()` — false on this bus (no multi-node CanBus is wired;
+// can-player replay is pushed by `service_can_log_players`, not the tick).
+//
+// EXTI (`exti`) NO LONGER forces the walk: its held-level `explicit_irqs`
+// re-emission is driven by a delay-1 self-perpetuating event chain (armed on
+// the MMIO write that raises a masked pending line, stopping when firmware
+// clears PR). Byte-identical proof: `exti::scheduler_diff`.
+//
+// ADC (`adc1`) NO LONGER forces the walk: its F1 conversion countdown is
+// event-scheduled (delay-1 chain armed on SWSTART, perpetuating through
+// continuous mode), and the legacy `cycles: 1` per-converting-tick cost is
+// normalized to zero in BOTH modes (SysTick B1 pattern) so `total_cycles`
+// agrees. Byte-identical proof: `adc::scheduler_diff`.
+//
+// The forcing set is now EMPTY — with every Class-B walker migrated the
+// runtime invaders (L476) bus derives walk-deletion with no hand flag: the
+// campaign's full STM32 board flip.
 
-/// Featureless builds: the scheduler does not exist, so SysTick and SCB
-/// stay on the legacy walk. bxCAN (`can1`) is excluded regardless of the
-/// feature — its walk-forcing is gated on an attached interconnect, not the
-/// scheduler.
-///
-/// There is no hand-copied name list for this configuration any more. The
-/// expectation is DERIVED from the source of each model on the bus, by the
-/// parser `walk_starvation_contract` already uses: see
-/// [`featureless_expected_forcing`]. A model whose `needs_legacy_walk()` /
-/// `uses_scheduler()` bodies change changes the expectation with it, so the
-/// observed set (read off a real bus) and the expected set (read off the
-/// source) can no longer be edited in lockstep from one place.
+// Featureless builds: the scheduler does not exist, so SysTick and SCB
+// stay on the legacy walk. bxCAN (`can1`) is excluded regardless of the
+// feature — its walk-forcing is gated on an attached interconnect, not the
+// scheduler.
+//
+// There is no hand-copied name list for this configuration any more. The
+// expectation is DERIVED from the source of each model on the bus, by the
+// parser `walk_starvation_contract` already uses: see
+// [`featureless_expected_forcing`]. A model whose `needs_legacy_walk()` /
+// `uses_scheduler()` bodies change changes the expectation with it, so the
+// observed set (read off a real bus) and the expected set (read off the
+// source) can no longer be edited in lockstep from one place.
+
 /// Bus peripherals whose `Debug` output does not begin with the Rust type that
 /// implements them (their model is an enum, and `Debug` prints the variant), so
 /// the source lookup cannot resolve them. Each carries its expectation by hand
