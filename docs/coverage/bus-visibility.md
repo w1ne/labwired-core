@@ -211,6 +211,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | s32k388 | — | — | — |
 | sam4s16c | — | — | — |
 | same70q21b | — | — | — |
+| stm32c031c6 | ✓ | ✓ | ✓ |
 | stm32f072 | ✓ | ✓ | — |
 | stm32f103 | ✓ | ✓ | ✓ |
 | stm32f103c4 | ✓ | ✓ | ✓ |
