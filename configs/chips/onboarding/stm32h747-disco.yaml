@@ -1,7 +1,7 @@
 # Bounded STM32H747I-DISCO profile for the imported Cortex-M7 register smoke.
 # The MCU has Cortex-M7 and Cortex-M4 cores, 2 MiB flash, and 1 MiB total RAM
 # (ST UM2411 / DS12930). This profile runs only M7 and maps only the 128 KiB
-# DTCM window and H7 RCC, GPIOB/GPIOD, and USART3 exercised by the smoke.
+# DTCM window and H7 RCC, GPIOB/GPIOD, USART3 and TIM2 exercised by the smoke.
 # Other cores and peripherals from the Renode import are intentionally omitted.
 name: stm32h747-disco
 arch: arm
@@ -37,3 +37,20 @@ peripherals:
     size: 1KB
     config:
       profile: stm32v2
+  # RM0399 (STM32H745/755/747/757): TIM2 is the 32-bit general-purpose timer
+  # at 0x40000000 with NVIC position 28 on both cores, clocked by
+  # RCC_APB1LENR.TIM2EN (bit 0, offset 0x0E8; the Cortex-M7 view of
+  # RCC_C1_APB1LENR at 0x148). Second source: embassy stm32-data STM32H747XI.
+  # The smoke covers the gate, 32-bit CNT/ARR, UG, UIF, the update interrupt
+  # in up-counting mode, and one-pulse mode (CR1.OPM). Not modelled: CR1.DIR
+  # and CMS are stored without effect, and a software UG does not end a
+  # one-pulse run. Channels, pads, the count rate, and the Cortex-M4 side
+  # are not exercised.
+  - id: tim2
+    type: timer
+    base_address: 0x40000000
+    size: 1KB
+    irq: 28
+    clock: { reg: apb1lenr, bit: 0 }
+    config:
+      width: 32
