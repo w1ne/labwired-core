@@ -26,3 +26,18 @@ peripherals:
       clock_hz: 80000000
       lp_flexcomm: true
       lp_flexcomm_present: 112
+  # OS event timer, CPU0 non-secure view. MIMXRT798S_cm33_core0_COMMON.h:
+  # OSTIMER_CPU0_BASE_NS 0x40207000, OS_EVENT_IRQn 34; PERI_OSTIMER.h gives
+  # the RT500 register layout (EVTIMERL/H, CAPTURE_L/H, MATCH_L/H,
+  # OSEVENT_CTRL @ 0x1C with INTRFLAG/INTENA/MATCH_WR_RDY), Gray-coded count
+  # and match. Renode mimxrt798s.repl maps NXP_OsTimer at the same base,
+  # frequency 1000000, IRQ nvic0@34. The model is the RT500 OSTIMER: a 42-bit
+  # count, DEBUG_EN (bit 3) not stored, CAPTURE reads 0, no CPU1 view.
+  - id: ostimer
+    type: rt5xx_ostimer
+    base_address: 0x40207000
+    size: 4KB
+    irq: 34
+    config:
+      clock_hz: 237500000
+      tick_hz: 1000000

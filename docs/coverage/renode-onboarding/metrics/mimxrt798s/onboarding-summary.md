@@ -4,8 +4,8 @@
 - run_attempted: `True`
 - booted: `True`
 - smoke_passed: `True`
-- elapsed_seconds: `58`
-- elapsed_ms: `57262`
+- elapsed_seconds: `311`
+- elapsed_ms: `310523`
 - threshold_seconds: `3600`
 - threshold_met: `True`
 - failure_stage: `n/a`
