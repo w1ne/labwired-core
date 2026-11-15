@@ -52,6 +52,23 @@ ram:
 # The SAM E70 boots from flash at 0x00400000, not from an alias at 0.
 flash_boot_alias: false
 
+# GPIO supply and digital input thresholds. DS60001527J Table 58-4 "DC
+# Characteristics" (Electrical Characteristics for SAM E70/S70; VDDIO 3.3 V
+# on the SAM E70 Xplained): GPIO, GPIO_AD and GPIO_CLK pads VIL max
+# 0.3·VDDIO, VIH min 0.7·VDDIO. The GPIO_MLB pads (Table 6-1 signal type
+# column, which the 144-lead table prints as "GPIO_ML": PB4, PB5, PD10) have fixed limits, VIL max 0.7 V and VIH min
+# 1.80 V. The 0.8 V / 2.0 V GPIO_AD row is Table 57-4, the SAM V70/V71
+# chapter, and does not apply to this part.
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7
+  pad_classes:
+    - name: GPIO_MLB
+      pads: [PB4, PB5, PD10]
+      vil_v: 0.7
+      vih_v: 1.8
+
 pins:
   # Board-relevant pads (SAM E70 Xplained: LED0 on PC8, SW0 on PA11, the EDBG
   # virtual COM port on USART1 RXD1 PA21 / TXD1 PB4). EXT1 exposes PC31 as

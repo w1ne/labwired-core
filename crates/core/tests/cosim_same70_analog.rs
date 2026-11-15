@@ -79,7 +79,7 @@ fn sam_e70_xplained_ntc_and_diode_netlists_reach_ext1_pio_inputs() {
     let mut chip = ChipDescriptor::from_file(&chip_path).expect("load ATSAME70Q21B descriptor");
     // Simulation-only digital thresholds; no SAM E70 threshold data is claimed.
     chip.io_voltage_v = Some(3.3);
-    chip.gpio_input_thresholds = Some(GpioInputThresholds { vil: 0.3, vih: 0.7 });
+    chip.gpio_input_thresholds = Some(GpioInputThresholds::uniform(0.3, 0.7));
 
     let mut bus = SystemBus::from_config(&chip, &profile).expect("build SAM E70 Xplained bus");
     for (base, pin) in [(PIOC_BASE, PC31), (PIOA_BASE, PA19)] {

@@ -72,7 +72,7 @@ fn nucleo_wba52cg_ntc_and_diode_netlists_reach_pa0_pa1_gpio_inputs() {
     let mut chip = ChipDescriptor::from_file(&chip_path).expect("load STM32WBA52 descriptor");
     // Test-only assumptions; these are not asserted as WBA52 silicon thresholds.
     chip.io_voltage_v = Some(3.3);
-    chip.gpio_input_thresholds = Some(GpioInputThresholds { vil: 0.3, vih: 0.7 });
+    chip.gpio_input_thresholds = Some(GpioInputThresholds::uniform(0.3, 0.7));
 
     let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-WBA52CG bus");
     assert_eq!(

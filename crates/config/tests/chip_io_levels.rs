@@ -11,7 +11,9 @@
 //! shape every descriptor must keep: the two keys come together, because a
 //! ratio without the rail it is a ratio of has no voltage.
 
-use labwired_config::{ChipDescriptor, GpioInputThresholds};
+use labwired_config::{
+    ChipDescriptor, GpioInputThresholds, GpioPadThresholdClass, PadThresholdLimits,
+};
 use std::path::PathBuf;
 
 fn chips_dir() -> PathBuf {
@@ -48,8 +50,6 @@ fn every_descriptor_declares_both_keys_or_neither() {
 #[test]
 fn datasheet_transcriptions() {
     for (chip, volts, vil, vih) in [
-        // DS40002061B Table 30-1, VCC 2.4-5.5 V.
-        ("atmega328p", 5.0, 0.3, 0.6),
         // Espressif ESP32 Series Datasheet v5.3, Tables 5-2 and 5-3.
         ("esp32", 3.3, 0.25, 0.75),
         // DS5319 Table 36, "All I/Os except BOOT0".
@@ -84,7 +84,7 @@ fn datasheet_transcriptions() {
         assert_eq!(desc.io_voltage_v, Some(volts), "{chip}");
         assert_eq!(
             desc.gpio_input_thresholds,
-            Some(GpioInputThresholds { vil, vih }),
+            Some(GpioInputThresholds::uniform(vil, vih)),
             "{chip}"
         );
     }
@@ -143,4 +143,98 @@ fn malformed_levels_are_refused_when_the_descriptor_loads() {
     let text = serde_yaml::to_string(&ok).unwrap();
     assert!(text.contains("io_voltage_v: 3.3"), "{text}");
     assert!(text.contains("vih: 0.7"), "{text}");
+}
+
+/// Pad classes: datasheet rows that give some pads limits other than the chip
+/// default. One in each limit form, on two unrelated families.
+#[test]
+fn pad_class_transcriptions() {
+    for (chip, volts, vil, vih, classes) in [
+        // DS40002061B Table 30-1, VCC 2.4-5.5 V: default VIL/VIH, XTAL1
+        // VIL1/VIH1. RESET as I/O (VIL3/VIH3) equals the default.
+        (
+            "atmega328p",
+            5.0,
+            0.3,
+            0.6,
+            vec![GpioPadThresholdClass {
+                name: "XTAL1".into(),
+                pads: vec!["PB6".into()],
+                limits: PadThresholdLimits::Ratios { vil: 0.1, vih: 0.7 },
+            }],
+        ),
+        // DS60001527J Table 58-4 (SAM E70/S70): GPIO, GPIO_AD, GPIO_CLK
+        // 0.3/0.7 VDDIO; GPIO_MLB fixed 0.7 V / 1.80 V.
+        (
+            "same70q21b",
+            3.3,
+            0.3,
+            0.7,
+            vec![GpioPadThresholdClass {
+                name: "GPIO_MLB".into(),
+                pads: vec!["PB4".into(), "PB5".into(), "PD10".into()],
+                limits: PadThresholdLimits::Volts {
+                    vil_v: 0.7,
+                    vih_v: 1.8,
+                },
+            }],
+        ),
+    ] {
+        let desc = load(chip);
+        assert_eq!(desc.io_voltage_v, Some(volts), "{chip}");
+        assert_eq!(
+            desc.gpio_input_thresholds,
+            Some(GpioInputThresholds {
+                vil,
+                vih,
+                pad_classes: classes
+            }),
+            "{chip}"
+        );
+    }
+}
+
+#[test]
+fn malformed_pad_classes_are_refused_when_the_descriptor_loads() {
+    let class = |body: &str| {
+        format!("gpio_input_thresholds:\n  vil: 0.3\n  vih: 0.7\n  pad_classes:\n{body}")
+    };
+    for (body, expected) in [
+        (
+            "    - { name: X, pads: [PB6], vil: 0.1, vih: 0.7, vil_v: 0.5, vih_v: 3.5 }\n",
+            "not a mix",
+        ),
+        ("    - { name: X, pads: [PB6], vil: 0.1 }\n", "not a mix"),
+        ("    - { name: X, pads: [PB6] }\n", "not a mix"),
+        ("    - { name: X, pads: [], vil: 0.1, vih: 0.7 }\n", "names no pads"),
+        ("    - { name: X, pads: [PB6], vil: 0.7, vih: 0.1 }\n", "0 < vil < vih < 1"),
+        ("    - { name: X, pads: [PB6], vil_v: 1.8, vih_v: 0.7 }\n", "0 < vil_v < vih_v"),
+        (
+            "    - { name: X, pads: [PB6], vil: 0.1, vih: 0.7 }\n    - { name: Y, pads: [pb6], vil_v: 0.5, vih_v: 3.5 }\n",
+            "in both 'X' and 'Y'",
+        ),
+        (
+            "    - { name: X, pads: [PB6], vil: 0.1, vih: 0.7, schmitt: true }\n",
+            "schmitt",
+        ),
+    ] {
+        let err = parse_levels(&class(body)).expect_err(body).to_string();
+        assert!(err.contains(expected), "{body}: {err}");
+    }
+
+    // Both forms load and round-trip through serialization.
+    let ok = parse_levels(&format!(
+        "io_voltage_v: 3.3\n{}",
+        class(
+            "    - { name: XTAL1, pads: [PB6], vil: 0.1, vih: 0.7 }\n    - { name: GPIO_MLB, pads: [PB4], vil_v: 0.7, vih_v: 1.8 }\n"
+        )
+    ))
+    .expect("well-formed classes load");
+    let text = serde_yaml::to_string(&ok).unwrap();
+    let back: ChipDescriptor = serde_yaml::from_str(&text).expect("round-trip");
+    assert_eq!(
+        back.gpio_input_thresholds, ok.gpio_input_thresholds,
+        "{text}"
+    );
+    assert_eq!(ok.gpio_input_thresholds.unwrap().pad_classes.len(), 2);
 }

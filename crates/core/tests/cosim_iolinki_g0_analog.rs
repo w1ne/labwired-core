@@ -70,7 +70,10 @@ fn iolinki_g0_startup_routes_generic_ntc_and_diode_to_gpio_thresholds() {
     let chip_path = system_path.parent().unwrap().join(&profile.chip);
     let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32G0B1 descriptor");
     assert_eq!(chip.io_voltage_v, Some(3.3));
-    let thresholds = chip.gpio_input_thresholds.expect("G0 datasheet thresholds");
+    let thresholds = chip
+        .gpio_input_thresholds
+        .clone()
+        .expect("G0 datasheet thresholds");
     assert_eq!(thresholds.vil, 0.3);
     assert_eq!(thresholds.vih, 0.7);
 

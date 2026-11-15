@@ -78,6 +78,7 @@ fn assert_input_bank_profile(
     assert_eq!(chip.io_voltage_v, Some(3.3));
     let thresholds = chip
         .gpio_input_thresholds
+        .clone()
         .expect("simulation threshold assumptions are declared");
     assert_eq!(thresholds.vil, 0.3);
     assert_eq!(thresholds.vih, 0.7);

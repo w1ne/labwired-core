@@ -391,7 +391,7 @@ fn nucleo_g071rb_ntc_and_diode_netlists_reach_pa0_pa1_gpio_inputs() {
     let mut chip = ChipDescriptor::from_file(&chip_path).expect("load STM32G071 descriptor");
     // Simulation assumptions only: no G071 threshold values are claimed here.
     chip.io_voltage_v = Some(3.3);
-    chip.gpio_input_thresholds = Some(GpioInputThresholds { vil: 0.3, vih: 0.7 });
+    chip.gpio_input_thresholds = Some(GpioInputThresholds::uniform(0.3, 0.7));
 
     let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-G071RB bus");
     assert_eq!(
@@ -485,7 +485,7 @@ fn nucleo_g071rb_bjt_early_effect_reaches_pa2_pa3_gpio_inputs() {
     let mut chip = ChipDescriptor::from_file(&chip_path).expect("load STM32G071 descriptor");
     // Simulation assumptions only: no G071 threshold values are claimed.
     chip.io_voltage_v = Some(3.3);
-    chip.gpio_input_thresholds = Some(GpioInputThresholds { vil: 0.3, vih: 0.7 });
+    chip.gpio_input_thresholds = Some(GpioInputThresholds::uniform(0.3, 0.7));
 
     let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-G071RB bus");
     for (pad, bit) in [("PA0", 0), ("PA1", 1), ("PA2", 2), ("PA3", 3)] {

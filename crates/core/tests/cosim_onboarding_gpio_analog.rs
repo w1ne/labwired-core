@@ -1029,7 +1029,7 @@ fn load_onboarding_board(
     // silicon threshold is claimed.
     chip.io_voltage_v.get_or_insert(3.3);
     chip.gpio_input_thresholds
-        .get_or_insert(GpioInputThresholds { vil: 0.3, vih: 0.7 });
+        .get_or_insert(GpioInputThresholds::uniform(0.3, 0.7));
     let probe = SystemBus::from_config(&chip, &profile)
         .unwrap_or_else(|e| panic!("build {board} bus: {e}"));
     (board, chip, profile, probe)

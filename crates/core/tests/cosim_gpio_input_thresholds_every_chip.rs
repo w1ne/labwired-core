@@ -40,7 +40,6 @@ const NOT_TRANSCRIBED: &[&str] = &[
     "ra4m1",
     "s32k388",
     "sam4s16c",
-    "same70q21b",
     "stm32f746",
     "stm32f767",
     "stm32g071",
@@ -117,6 +116,46 @@ const DATASHEET_VOLTS: &[(&str, f64, f64, &str)] = &[
         0.825,
         2.475,
         "ESP32-S3 datasheet Table 5-4 at 3.3 V",
+    ),
+    (
+        "same70q21b",
+        0.99,
+        2.31,
+        "DS60001527J Table 58-4 GPIO/GPIO_AD at VDDIO = 3.3 V",
+    ),
+];
+
+/// Datasheet anchors for pads in a descriptor `pad_classes` entry, whose limits
+/// differ from the chip default: (chip, pad, VIL max volts, VIH min volts,
+/// source). Every class pad of every descriptor must be listed here.
+const CLASS_VOLTS: &[(&str, &str, f64, f64, &str)] = &[
+    (
+        "atmega328p",
+        "PB6",
+        0.5,
+        3.5,
+        "DS40002061B Table 30-1 VIL1/VIH1 (XTAL1) at VCC = 5 V",
+    ),
+    (
+        "same70q21b",
+        "PB4",
+        0.7,
+        1.8,
+        "DS60001527J Table 58-4 GPIO_MLB",
+    ),
+    (
+        "same70q21b",
+        "PB5",
+        0.7,
+        1.8,
+        "DS60001527J Table 58-4 GPIO_MLB",
+    ),
+    (
+        "same70q21b",
+        "PD10",
+        0.7,
+        1.8,
+        "DS60001527J Table 58-4 GPIO_MLB",
     ),
 ];
 
@@ -231,6 +270,18 @@ enum Outcome {
 
 fn sweep_chip(chip: &str, desc: &ChipDescriptor) -> Result<Outcome, String> {
     for pad in candidate_pads(chip, desc) {
+        if let Some(outcome) = sweep_pad(chip, desc, &pad)? {
+            return Ok(outcome);
+        }
+    }
+    Ok(Outcome::NoPad)
+}
+
+/// Sweep one pad about the thresholds the engine applies to it. `None` when
+/// the label does not resolve on this chip.
+fn sweep_pad(chip: &str, desc: &ChipDescriptor, pad: &str) -> Result<Option<Outcome>, String> {
+    let pad = pad.to_string();
+    {
         let mut bus = chip_bus(chip, desc)?;
         let models = source_on_pad(&pad);
         let mut session = match CosimSession::new(&models, std::path::Path::new("."), &bus) {
@@ -241,13 +292,14 @@ fn sweep_chip(chip: &str, desc: &ChipDescriptor) -> Result<Outcome, String> {
         match session.binding_errors() {
             [] => {}
             [RoutingError::NoInputThresholds { key, .. }] => {
-                return Ok(Outcome::Refused { key });
+                return Ok(Some(Outcome::Refused { key }));
             }
-            [RoutingError::UnknownPad { .. }] => continue,
+            [RoutingError::UnknownPad { .. }] => return Ok(None),
             other => return Err(format!("{pad}: bind: {other:?}")),
         }
-        let thresholds =
-            InputThresholds::for_bus(&bus).map_err(|k| format!("bound without {k}"))?;
+        let thresholds = InputThresholds::for_pad(&bus, &pad)
+            .ok_or_else(|| format!("{pad}: bound but does not resolve"))?
+            .map_err(|k| format!("bound without {k}"))?;
         let (vil, vih) = (thresholds.vil_volts, thresholds.vih_volts);
         // The first point sets a known low: inside the band a Schmitt input
         // keeps its previous level, and a pad's reset level may be high.
@@ -305,9 +357,8 @@ fn sweep_chip(chip: &str, desc: &ChipDescriptor) -> Result<Outcome, String> {
                 ));
             }
         }
-        return Ok(Outcome::Swept { pad, thresholds });
+        Ok(Some(Outcome::Swept { pad, thresholds }))
     }
-    Ok(Outcome::NoPad)
 }
 
 #[test]
@@ -363,4 +414,85 @@ fn every_transcribed_chip_turns_a_solved_pad_voltage_into_its_datasheet_level() 
         );
     }
     eprintln!("{} chips swept: {}", swept.len(), swept.join(" "));
+}
+
+/// A pad in a datasheet pad class switches at the class limits, not the chip
+/// default, end to end through the solver.
+///
+/// The sweep steps 20 mV about each threshold. Every class here differs from
+/// its chip default by more than that at both edges (asserted), so a router
+/// that ignored the class and used the default would read the wrong level at
+/// some sweep point and fail. The class pads span two unrelated families and
+/// both limit forms: a ratio of VCC (ATmega328P XTAL1) and fixed volts
+/// (SAM E70 GPIO_MLB).
+#[test]
+fn every_pad_class_pad_switches_at_its_datasheet_limits() {
+    let mut problems = Vec::new();
+    let mut listed: Vec<(String, String)> = Vec::new();
+    for (chip, desc) in all_chips() {
+        let Some(t) = &desc.gpio_input_thresholds else {
+            continue;
+        };
+        let io = desc
+            .io_voltage_v
+            .expect("thresholds come with io_voltage_v");
+        let (default_vil, default_vih) = (t.vil * io, t.vih * io);
+        for class in &t.pad_classes {
+            for pad in &class.pads {
+                listed.push((chip.clone(), pad.clone()));
+                let Some((.., vil, vih, source)) =
+                    CLASS_VOLTS.iter().find(|(c, p, ..)| *c == chip && p == pad)
+                else {
+                    problems.push(format!(
+                        "{chip}:{pad} ({}) has no CLASS_VOLTS anchor",
+                        class.name
+                    ));
+                    continue;
+                };
+                if (vil - default_vil).abs() <= 0.04 && (vih - default_vih).abs() <= 0.04 {
+                    problems.push(format!(
+                        "{chip}:{pad}: class {vil}/{vih} V is within the sweep step of the \
+                         default {default_vil:.3}/{default_vih:.3} V, so the sweep cannot tell them apart"
+                    ));
+                }
+                // Lower case too: class membership is by resolved input, not
+                // by label spelling.
+                for label in [pad.clone(), pad.to_ascii_lowercase()] {
+                    match sweep_pad(&chip, &desc, &label) {
+                        Ok(Some(Outcome::Swept { thresholds, .. })) => {
+                            if (thresholds.vil_volts - vil).abs() > 0.005
+                                || (thresholds.vih_volts - vih).abs() > 0.005
+                            {
+                                problems.push(format!(
+                                    "{chip}:{label}: VIL/VIH {:.4}/{:.4} V, datasheet \
+                                     {vil}/{vih} V ({source})",
+                                    thresholds.vil_volts, thresholds.vih_volts
+                                ));
+                            }
+                        }
+                        Ok(Some(Outcome::Refused { key })) => {
+                            problems.push(format!("{chip}:{label}: refused for {key}"))
+                        }
+                        Ok(Some(Outcome::NoPad)) | Ok(None) => {
+                            problems.push(format!("{chip}:{label}: class pad does not resolve"))
+                        }
+                        Err(e) => problems.push(format!("{chip}:{label}: {e}")),
+                    }
+                }
+            }
+        }
+    }
+    for (chip, pad, ..) in CLASS_VOLTS {
+        if !listed.iter().any(|(c, p)| c == chip && p == pad) {
+            problems.push(format!(
+                "{chip}:{pad}: anchored but in no descriptor pad class"
+            ));
+        }
+    }
+    assert!(problems.is_empty(), "{}", problems.join("\n"));
+    let chips: std::collections::BTreeSet<_> = listed.iter().map(|(c, _)| c.as_str()).collect();
+    assert!(
+        chips.len() >= 2,
+        "pad classes must be proven on more than one chip family: {chips:?}"
+    );
 }

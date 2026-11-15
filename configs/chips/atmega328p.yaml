@@ -12,11 +12,18 @@ cpu_hz: 16_000_000
 # 5.0 V is the Arduino Nano/Uno rail. Microchip DS40002061B
 # (ATmega48A/PA/88A/PA/168A/PA/328/P), section 30.2, Table 30-1 "Common DC
 # characteristics", VCC = 2.4 V to 5.5 V, except XTAL1 and RESET:
-# VIL max 0.3·VCC, VIH min 0.6·VCC.
+# VIL max 0.3·VCC, VIH min 0.6·VCC. The same table gives XTAL1 (PB6) its own
+# limits, VIL1 max 0.1·VCC and VIH1 min 0.7·VCC (VCC 2.4-5.5 V). RESET used as
+# I/O (PC6, RSTDISBL) has the default limits (VIL3/VIH3), so it needs no class.
 io_voltage_v: 5.0
 gpio_input_thresholds:
   vil: 0.3
   vih: 0.6
+  pad_classes:
+    - name: XTAL1
+      pads: [PB6]
+      vil: 0.1
+      vih: 0.7
 
 flash:
   base: 0x00000000

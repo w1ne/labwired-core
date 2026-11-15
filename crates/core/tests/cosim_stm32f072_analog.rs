@@ -245,6 +245,7 @@ fn stm32f072b_disco_ntc_and_diode_netlists_reach_pa0_pa9_gpio_inputs() {
     assert_eq!(chip.pins["PA9"].gpio, "gpioa");
     let thresholds = chip
         .gpio_input_thresholds
+        .clone()
         .expect("F072 declares input thresholds");
     let io_voltage = chip.io_voltage_v.expect("F072 declares GPIO voltage");
     let vil_v = thresholds.vil * io_voltage;
@@ -366,6 +367,7 @@ fn stm32f072b_disco_bjt_early_effect_reaches_pa2_pa3_gpio_inputs() {
     let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F072 descriptor");
     let thresholds = chip
         .gpio_input_thresholds
+        .clone()
         .expect("F072 declares input thresholds");
     let io_voltage = chip.io_voltage_v.expect("F072 declares GPIO voltage");
     let vil_v = thresholds.vil * io_voltage;

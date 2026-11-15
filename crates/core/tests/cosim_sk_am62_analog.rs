@@ -66,6 +66,7 @@ fn sk_am62_ntc_and_diode_netlists_reach_simulated_input_thresholds() {
     assert_eq!(chip.io_voltage_v, Some(3.3));
     let thresholds = chip
         .gpio_input_thresholds
+        .clone()
         .expect("simulation endpoint threshold assumptions are declared");
     assert_eq!(thresholds.vil, 0.3);
     assert_eq!(thresholds.vih, 0.7);

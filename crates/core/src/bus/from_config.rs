@@ -193,7 +193,7 @@ impl SystemBus {
     /// Missing values stay absent so voltage routes fail instead of guessing.
     pub fn attach_chip_io_levels(&mut self, chip: &ChipDescriptor) {
         self.io_voltage_v = chip.io_voltage_v;
-        self.gpio_input_thresholds = chip.gpio_input_thresholds;
+        self.gpio_input_thresholds = chip.gpio_input_thresholds.clone();
     }
 
     pub fn from_config(chip: &ChipDescriptor, manifest: &SystemManifest) -> anyhow::Result<Self> {

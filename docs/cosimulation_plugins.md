@@ -230,8 +230,15 @@ gpio_input_thresholds:     # ratios of io_voltage_v
 In-tree they are declared for `atmega328p` (5.0 V, 0.3 / 0.6, Microchip
 DS40002061B Table 30-1), `stm32f103` (3.3 V, 0.35 / 0.65, DS5319 Table 36), and
 `stm32f401`, `stm32f401cdu6`, `stm32f405`, `stm32f407`, `stm32f411ceu6` (3.3 V,
-0.3 / 0.7, DS10086 Table 54, DS8626 Table 48, DS10314 Table 53). Each
-descriptor cites its table. On any other chip, volts routed to a pin fail when
+0.3 / 0.7, DS10086 Table 54, DS8626 Table 48, DS10314 Table 53), among
+others. Each descriptor cites its table.
+
+Some datasheets give a few pads their own limits. Those pads go in
+`pad_classes:`, as ratios or as fixed volts, and a volts route to such a pad
+switches at the class limits instead of the default: the ATmega328P XTAL1 pad
+(PB6, 0.1 / 0.7 VCC) and the SAM E70 GPIO_MLB pads (PB4, PB5, PD10, 0.7 V /
+1.80 V). `cosim_gpio_input_thresholds_every_chip.rs` sweeps every class pad
+through the solver at its datasheet limits. On a chip with no thresholds, volts routed to a pin fail when
 the session is built, naming the missing key:
 ``co-sim path 'board.gpio_in.pd2' is driven with volts, but the chip descriptor
 declares no `gpio_input_thresholds` …``. An `adapter: analog` model's outputs are
