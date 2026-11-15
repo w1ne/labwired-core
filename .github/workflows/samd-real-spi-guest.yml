@@ -22,7 +22,7 @@ permissions:
   contents: read
 concurrency:
   group: real-spi-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 env:
   LABWIRED_SPI_SOURCE: 490b6bd8286609109eb03ad8022862ff581108bd
 jobs:
