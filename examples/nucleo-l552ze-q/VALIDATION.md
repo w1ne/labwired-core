@@ -88,7 +88,7 @@ crates/firmware-l552ze-zephyr/build.sh      # needs a Zephyr v3.7.0 west workspa
 
 # Determinism: two runs with --output-dir; uart.log and snapshot.json cmp clean
 
-cargo test -p labwired-core --test firmware_survival l552
+cargo test -p labwired-core --test gates l552
 #   test_nucleo_l552ze_q_smoke_survival ... ok
 #   test_stm32l552_zephyr_survival ... ok
 

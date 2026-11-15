@@ -1,0 +1,26 @@
+{
+  "id": "esp32s3",
+  "in_boards": true,
+  "uart": {
+    "state": "proven",
+    "file": "validation/arduino-matrix/sketches/L0_serial_boot/src/main.ino",
+    "test": "LW_L0_OK",
+    "signal": "real PlatformIO-compiled Arduino firmware; the sim captures hardware UART0/USARTx bytes and a uart_contains oracle matches the LW_L0_OK marker printed from setup()",
+    "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)"
+  },
+  "spi": {
+    "state": "shallow",
+    "file": "crates/core/tests/esp/esp32s3_gpspi_oracle.rs",
+    "test": "gpspi_cpu_transfer_executes_and_latches_done",
+    "gap": "a synthetic register-level CPU-mode transfer with NO device attached (MISO reads the 0xFFFFFFFF idle); asserts USR auto-clear, TRANS_DONE latch and length-bounded fill. Not firmware-driven. examples/tier1-fixture/esp32s3 has no check_spi at all and docs/coverage/tier1-matrix.json records esp32s3/spi as 'na'; no manifest attaches an SPI device to an esp32s3 bus.",
+    "lane": "core-ci / core-full (nightly) via cargo test --workspace"
+  },
+  "i2c": {
+    "state": "proven",
+    "file": "crates/core/tests/e2e_i2c_tmp102.rs",
+    "test": "i2c_tmp102_firmware_runs_and_prints_temperature",
+    "signal": "real esp-hal firmware from examples/esp32s3-i2c-tmp102 talks to a real TMP102 model through the production manifest/factory path; the test asserts monotonically-drifting decoded 'T = ...' lines over the USB-Serial-JTAG sink AND a GPIO2 threshold crossing once the decoded temperature passes 30 C",
+    "lane": "core-nightly / esp32s3-fixtures-e2e (cron 03:05 UTC, --features esp32s3-fixtures)",
+    "note": "ensure_firmware_built() panics loudly if the +esp toolchain is absent - it does not skip. The arduino-matrix INA219 cell is a second, independent proof on this chip."
+  }
+}

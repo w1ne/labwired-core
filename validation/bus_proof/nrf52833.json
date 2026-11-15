@@ -1,0 +1,21 @@
+{
+  "id": "nrf52833",
+  "in_boards": false,
+  "uart": {
+    "state": "proven",
+    "file": "crates/core/tests/gates/firmware_survival.rs",
+    "test": "test_nrf52833_microbit_v2_smoke_survival",
+    "signal": "committed ELF fixture (crates/firmware-nrf52833-demo) booted in-sim; assert_uart_contains matches 'OK\\\\n' on a real bus.attach_uart_tx_sink capture. The stream is produced by UARTE0 EasyDMA on PSEL.TXD = P0.06 (the micro:bit v2 interface-MCU bridge) after BAUDRATE/ENABLE/STARTTX. Fixture absence is a hard assert!, not a skip.",
+    "lane": "core-ci / pr-workspace-tests: cargo test -p labwired-core --test gates firmware_survival::"
+  },
+  "spi": {
+    "state": "none",
+    "gap": "The descriptor declares SPIM2/SPIM3 (shared nRF52 SPIM model), but no firmware or harness on this chip drives SPI: no tier-1 fixture, no matrix sketch, no bus-level executing gate for nrf52833.",
+    "lane": "none"
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "The descriptor declares i2c0 (SPIM0/TWIM0 mux) and twi1 (shared nRF52 TWIM model), but no firmware or harness on this chip drives I2C: no tier-1 fixture, no matrix sketch, no bus-level executing gate for nrf52833.",
+    "lane": "none"
+  }
+}

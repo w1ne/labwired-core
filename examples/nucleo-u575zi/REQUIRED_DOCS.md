@@ -70,8 +70,8 @@ git -C .external/renode-stm32u5 checkout 9cef86b9a9d880c0fae0c7b6c92ff039ec8a0c8
 cmake -S .external/renode-stm32u5/firmware-tests -B .external/renode-stm32u5/build/firmware -G Ninja -DSTM32CUBE_FIRMWARE=ON
 cmake --build .external/renode-stm32u5/build/firmware --parallel 2
 export RENODE_U5_FIRMWARE="$PWD/.external/renode-stm32u5/build/firmware"
-cargo test --locked -p labwired-core --test stm32u575_60north -- --ignored --nocapture
-cargo test --locked -p labwired-core --test stm32u575_60north_registers --test u545_u575_drift_guard
+cargo test --locked -p labwired-core --test stm32 stm32u575_60north:: -- --ignored --nocapture
+cargo test --locked -p labwired-core --test stm32 -- stm32u575_60north_registers:: u545_u575_drift_guard::
 ```
 
 Configure requires network access for the pinned ST dependencies. Firmware

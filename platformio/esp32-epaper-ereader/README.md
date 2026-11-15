@@ -37,7 +37,7 @@ the Arduino `loopTask`, executes `setup()`, and asserts the panel paints:
 
 ```sh
 LABWIRED_EREADER_ELF=platformio/esp32-epaper-ereader/.pio/build/esp32dev/firmware.elf \
-  cargo test -p labwired-core --test e2e_labwired_ereader -- --ignored --nocapture
+  cargo test -p labwired-core --test esp e2e_labwired_ereader:: -- --ignored --nocapture
 # → panel refresh_gen >= 1 (the page rendered)
 ```
 

@@ -13,11 +13,11 @@ set and serial pins. There is no silicon capture.
 | Chip descriptor | ✅ | `configs/chips/dspic33fj32mc202.yaml` (DS70283H memory/UART facts) |
 | System manifest | ✅ | `configs/systems/dspic33fj32mc202-demo.yaml` |
 | Example package | ✅ | `examples/dspic33fj32mc202/{system.yaml,README.md,REQUIRED_DOCS.md,EXTERNAL_COMPONENTS.md,VALIDATION.md}` |
-| M0 boot + UART1 | ✅ | real XC16 v1.70 ELF; `crates/core/tests/pic24_xc16_202_smoke.rs` |
-| M1 28-pin package/GPIO | ✅ | pads RA0-4/RB0-15/no RC, real XC16 GPIO firmware; `crates/core/tests/pic24_xc16_202_m1.rs` |
+| M0 boot + UART1 | ✅ | real XC16 v1.70 ELF; `crates/core/tests/pic/pic24_xc16_202_smoke.rs` |
+| M1 28-pin package/GPIO | ✅ | pads RA0-4/RB0-15/no RC, real XC16 GPIO firmware; `crates/core/tests/pic/pic24_xc16_202_m1.rs` |
 | CLI / strict-onboarding path | ✅ | `labwired test --script examples/dspic33fj32mc202/io-smoke.yaml` |
-| M2 T1/PWM1/QEI1 on 202 pins | ✅ | real XC16 M2 ELF; `crates/core/tests/pic24_xc16_202_m2.rs` (PWM pads, quadrature, index reset, T1IF) |
-| M3 ADC1/SPI1/I2C1 on 202 pins | ✅ | real XC16 M3 ELF; `crates/core/tests/pic24_xc16_202_m3.rs` (AN4=RB2, AN0-AN5 only; SPI1 0xA5 loopback; TMP102 at 0x48; `M3 OK`, marker 0xBEEF) |
+| M2 T1/PWM1/QEI1 on 202 pins | ✅ | real XC16 M2 ELF; `crates/core/tests/pic/pic24_xc16_202_m2.rs` (PWM pads, quadrature, index reset, T1IF) |
+| M3 ADC1/SPI1/I2C1 on 202 pins | ✅ | real XC16 M3 ELF; `crates/core/tests/pic/pic24_xc16_202_m3.rs` (AN4=RB2, AN0-AN5 only; SPI1 0xA5 loopback; TMP102 at 0x48; `M3 OK`, marker 0xBEEF) |
 | M3 demo system | ✅ | `system-m3.yaml` — TMP102 on `i2c1`, loopback on `spi1` |
 | M0-M3 scope | ✅ complete | all four milestones evidenced below; nothing remains in M0-M3 |
 | Silicon capture / oracle | ❌ none | simulation-derived only |
@@ -26,7 +26,7 @@ set and serial pins. There is no silicon capture.
 
 ```bash
 # 1. Real XC16 firmware boots and transmits HI; LATB0 toggles
-cargo test -p labwired-core --test pic24_xc16_202_smoke
+cargo test -p labwired-core --test pic pic24_xc16_202_smoke::
 #   test result: ok. 2 passed; 0 failed
 
 # 2. The CLI path used by strict onboarding
@@ -35,23 +35,23 @@ cargo run -q -p labwired-cli -- test \
 #   PASS  2/2 checks · io-smoke · 400 steps
 
 # 2b. M1 package/GPIO: masks, direction registers and pad levels
-cargo test -p labwired-core --test pic24_xc16_202_m1
+cargo test -p labwired-core --test pic pic24_xc16_202_m1::
 #   test result: ok. 2 passed; 0 failed
 
 # 2c. M2 T1/PWM1/QEI1 on 202 pins
-cargo test -p labwired-core --test pic24_xc16_202_m2
+cargo test -p labwired-core --test pic pic24_xc16_202_m2::
 #   test result: ok. 1 passed; 0 failed
 
 # 2d. M3 ADC1/SPI1/I2C1 on 202 pins
-cargo test -p labwired-core --test pic24_xc16_202_m3
+cargo test -p labwired-core --test pic pic24_xc16_202_m3::
 #   test result: ok
 #   passes when the M3 ELF reaches 0xBEEF with ADC1BUF0 = 0x2AA (AN4),
 #   SPI1 = 0xA5 (loopback), TMP102 = 0x19/0x00 (25.0 °C) and "M3 OK\n" on UART1
 
 # 3. Conformance row + catalogue build
-cargo test -p labwired-core --test chip_conformance
+cargo test -p labwired-core --test gates chip_conformance::
 #   test result: ok. 8 passed; 0 failed
-cargo test -p labwired-core --test session_catalog
+cargo test -p labwired-core --test session session_catalog::
 #   test result: ok. 1 passed; 0 failed (52-chip catalogue incl. 202)
 ```
 

@@ -1,0 +1,21 @@
+{
+  "id": "ra4m1",
+  "in_boards": true,
+  "uart": {
+    "state": "proven",
+    "file": "crates/core/tests/gates/firmware_survival.rs",
+    "test": "test_ra4m1_uno_r4_smoke_survival",
+    "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'OK' on SCI2.",
+    "lane": "core-ci / pr-workspace-tests: cargo test -p labwired-core --test gates firmware_survival::"
+  },
+  "spi": {
+    "state": "none",
+    "gap": "Uno R4 Minima twin models SCI2 UART only; SPI is not modelled.",
+    "lane": "none"
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "Uno R4 Minima twin models SCI2 UART only; I2C is not modelled.",
+    "lane": "none"
+  }
+}

@@ -1,0 +1,6 @@
+2026-11-13T16:33:32.108501Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/esp32c6fh4.yaml
+2026-11-13T16:33:32.280670Z  INFO labwired_core::bus::from_config: loaded 327680 bytes into 'rom' region @ 0x40000000 from /data/worktrees/legacy-migrated/labwired-hw-onboarding/crates/core/roms/esp32c6/esp32c6_rom.bin
+2026-11-13T16:33:33.567976Z  INFO labwired_loader: ELF Entry Point: 0x42000000
+labwired-cli test: C6 MMU factory@0x10000 mapped 1 virt page(s) [0] → phys+1; VALID=0x200; free entries for PT mmap
+labwired-cli test: idle_ff=on (event_scheduler=on)
+PASS  1/1 checks · led-smoke · 200000 steps · 0.27s

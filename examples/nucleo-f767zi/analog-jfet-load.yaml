@@ -1,0 +1,26 @@
+# Generic level-1 NJF load driven by a co-simulation gate voltage.
+# The drain resolves through STM32F767 PA4 -> ADC1_IN4.
+name: "nucleo-f767zi-analog-jfet-load"
+chip: "../../configs/chips/stm32f767.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "jfet_low_side_load"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_voltage: "ui.jfet.gate_v"
+    outputs:
+      drain_voltage: "board.analog.pa4_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 3.3
+        Rload supply drain 1k
+        Vgate gate 0 dc 0
+        J1 drain gate 0 NJF_TEST
+        .model NJF_TEST NJF(VTO=-2 BETA=500u LAMBDA=0.025 B=0.8 PB=1 IS=1e-14)
+      probes:
+        drain_voltage: "v(drain)"
+      sources:
+        gate_voltage: "Vgate"
+      vdd: 3.3

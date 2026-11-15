@@ -1,0 +1,21 @@
+{
+  "id": "esp32h2",
+  "in_boards": false,
+  "uart": {
+    "state": "proven",
+    "file": "examples/esp32h2-devkitm-1-n4s/uart-smoke.yaml",
+    "test": "H2_N4S_UART_OK",
+    "signal": "firmware built from source boots in-sim on configs/systems/esp32h2-devkitm-1-n4s.yaml and writes 'H2_N4S_UART_OK' to the UART0 TX FIFO; the uart_contains assertion matches it on the host_console UART capture.",
+    "lane": "core-board-ci (every pull request): board esp32h2-devkitm-1-n4s from configs/ci/boards.yml; also core-onboarding-smoke (push to main + nightly cron): matrix id esp32h2-devkitm-1-n4s"
+  },
+  "spi": {
+    "state": "none",
+    "gap": "No SPI controller is declared on configs/chips/esp32h2.yaml; the profile is UART0-only.",
+    "lane": "none"
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "No I2C controller is declared on configs/chips/esp32h2.yaml; the profile is UART0-only.",
+    "lane": "none"
+  }
+}

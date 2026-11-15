@@ -854,8 +854,8 @@ fn call0_oracle() -> OracleCase {
 //   correct but not modelled in the Plan-1 sim.
 //
 // All encodings verified consistent with:
-//   crates/core/tests/xtensa_exec.rs test_exec_s32e_hw_oracle_bytes
-//   crates/core/tests/xtensa_decode.rs test_decode_s32e / test_decode_rotw / ...
+//   crates/core/tests/esp/xtensa_exec.rs test_exec_s32e_hw_oracle_bytes
+//   crates/core/tests/esp/xtensa_decode.rs test_decode_s32e / test_decode_rotw / ...
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // VECBASE SR ID (labwired_core::cpu::xtensa_sr::VECBASE = 231).

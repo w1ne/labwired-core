@@ -57,7 +57,7 @@ cargo build -p firmware-sam-e70-xplained-smoke --release --target thumbv7em-none
 cmp out/same70-run1/uart.log out/same70-run2/uart.log          # clean
 cmp out/same70-run1/snapshot.json out/same70-run2/snapshot.json  # clean
 
-cargo test -p labwired-core --test firmware_survival sam_e70
+cargo test -p labwired-core --test gates sam_e70
 #   1 passed (test_sam_e70_xplained_smoke_survival)
 
 python3 scripts/perf/board_perf.py --boards same70q21b
@@ -83,7 +83,7 @@ python3 scripts/perf/board_perf.py --boards same70q21b
 #   thread_b: Hello World from cpu 0 on sam_e70_xplained!
 #   PASS  2/2 checks · zephyr-sync · 50000000 steps
 
-cargo test -p labwired-core --test same70_zephyr_boot
+cargo test -p labwired-core --test samd same70_zephyr_boot::
 #   1 passed (zephyr_bring_up_walks_the_m7_caches_and_locks_the_plls)
 
 ./scripts/unsupported_instruction_audit.sh --firmware tests/fixtures/same70q21b-zephyr-sync.elf \

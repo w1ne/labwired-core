@@ -25,8 +25,8 @@ arithmetic subtraction with sign extension through 4160-bit operands. It
 rejects widths above 4160 bits.
 
 ```bash
-cargo test -p labwired-core --test stm32u5_exec_oracle -- --nocapture
-cargo test -p labwired-core --test stm32u5_reset_conformance -- --nocapture
+cargo test -p labwired-core --test stm32 stm32u5_exec_oracle:: -- --nocapture
+cargo test -p labwired-core --test stm32 stm32u5_reset_conformance:: -- --nocapture
 ```
 
 Pass criteria: the oracle tests and memory/reset conformance test pass. This
@@ -36,5 +36,5 @@ complete PKA mode coverage, or silicon parity.
 ## Validation record
 
 - 2026-10-26: simulator register-path and reset conformance checks are recorded
-  in `validation/manifest.yaml` and gated by the Core CI validation generator.
+  in `validation/boards/` and gated by the Core CI validation generator.
   Physical board acceptance remains pending.

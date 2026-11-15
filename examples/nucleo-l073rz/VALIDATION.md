@@ -181,7 +181,7 @@ clock:
 Both offsets and bit positions are from the vendored SVD. The gate is evaluated
 in exactly one place (`SystemBus::is_peripheral_clocked`) against the live RCC
 registers, so no peripheral model carries a clock check of its own. Regression
-test: `crates/core/tests/rcc_kernel_clock_gate.rs`.
+test: `crates/core/tests/bus/rcc_kernel_clock_gate.rs`.
 
 **Consequence for this demo, stated plainly:** the firmware constant is still
 wrong, so the simulator now does what the silicon did — the RNG stays dead and
@@ -287,7 +287,7 @@ and the UART byte stream. Still approximate / unverified against silicon:
 ## To extend coverage
 
 1. Author `examples/nucleo-l073rz/io-smoke.yaml` (turns `[SKIP]` → `[PASS]`).
-2. Add a case to `crates/core/tests/firmware_survival.rs` asserting the
+2. Add a case to `crates/core/tests/gates/firmware_survival.rs` asserting the
    captured byte stream above (regression-locks the L0 chip config + decoder).
 3. Validate I2C/SPI/ADC against silicon, replacing the L4 approximations
    where they diverge.

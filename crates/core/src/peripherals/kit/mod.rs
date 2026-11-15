@@ -129,6 +129,7 @@ pub enum ConfigType {
     Int,
     Bool,
     Float,
+    Object,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

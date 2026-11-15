@@ -35,7 +35,7 @@ cargo test -p labwired-core --lib logic_tap_sees -- --quiet
 # and validates fine, but breaks the onboarding contracts. These four suites are
 # the ones that caught it; they run in seconds once the test binaries exist.
 echo "Onboarding descriptor integrity (unknown types + curated-data contracts)..."
-cargo test -p labwired-core --test unknown_peripheral_type -- --quiet
+cargo test -p labwired-core --test bus -- --quiet unknown_peripheral_type::
 cargo test -p labwired-core --lib tests::nrf52 -- --quiet
 cargo test -p labwired-core --lib tests::peripheral_reachability -- --quiet
 cargo test -p labwired-core --lib tests::yaml_owned_base_contract -- --quiet

@@ -16,7 +16,7 @@
 | Baseband | Sequans Calliope (drives the AT% extension surface) |
 | Default UART | 115200 8N1, echo on (ATE1), CMEE off (CMEE=0) |
 | Source files | `crates/core/src/peripherals/components/bg770a.rs` (model) |
-|  | `crates/core/tests/bg770a_validation.rs` (integration) |
+|  | `crates/core/tests/misc/bg770a_validation.rs` (integration) |
 |  | `crates/core/tests/fixtures/quectel_bg770a/datasheet/` (manual V1.3 PDF) |
 |  | `crates/core/tests/fixtures/quectel_bg770a/at_harvest.log` (raw bench capture) |
 

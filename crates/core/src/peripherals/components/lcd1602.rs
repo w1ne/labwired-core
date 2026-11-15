@@ -359,9 +359,52 @@ impl Lcd1602 {
 
     const TEXTS_SEEN_CAP: usize = 32;
 
+    /// True when `next` only fills former whitespace in `prev` (keypad typing,
+    /// progressive `print` of a prompt). Callers replace the ring tail instead
+    /// of pushing so a 6-digit HH:MM:SS entry costs one slot, not twelve.
+    fn is_monotonic_fill(prev: &str, next: &str) -> bool {
+        if prev.len() != next.len() {
+            return false;
+        }
+        prev.chars()
+            .zip(next.chars())
+            .all(|(a, b)| a == b || a.is_whitespace())
+            && prev != next
+    }
+
+    /// True when the only cells that differ flip between `:` and ` ` — the
+    /// pet-feeder-style blink colon. Replace the ring tail; do not grow.
+    fn is_blink_only(prev: &str, next: &str) -> bool {
+        if prev.len() != next.len() {
+            return false;
+        }
+        let mut diffs = 0usize;
+        for (a, b) in prev.chars().zip(next.chars()) {
+            if a == b {
+                continue;
+            }
+            diffs += 1;
+            let blink = (a == ':' && b == ' ') || (a == ' ' && b == ':');
+            if !blink {
+                return false;
+            }
+        }
+        diffs > 0
+    }
+
+    /// Prefer the variant that still has `:` when two panels differ only by blink.
+    fn prefer_colon(existing: &str, candidate: &str) -> bool {
+        candidate.contains(':') && !existing.contains(':')
+    }
+
     /// Record the current visible text when it changes and is non-blank.
     /// Entries accumulate for the whole run (a clear does not wipe them) and
     /// the ring is capped at [`Self::TEXTS_SEEN_CAP`] (32).
+    ///
+    /// Progressive typing replaces the ring tail. Blink-colon frames and
+    /// clear+reprint sequences that only rebuild an existing panel (common on
+    /// HD44780 remaining-time UIs) do not grow the ring, so early panels
+    /// survive long runs.
     fn record_text_if_changed(&mut self) {
         if !self.display_on {
             return;
@@ -370,8 +413,30 @@ impl Lcd1602 {
         if text.chars().all(|c| c.is_whitespace()) {
             return;
         }
-        if self.texts_seen.back().map(|s| s.as_str()) == Some(text.as_str()) {
+        if let Some(prev) = self.texts_seen.back() {
+            if prev == &text {
+                return;
+            }
+        }
+        // Blink or clear+reprint of a panel already on the ring: keep one slot.
+        // `is_monotonic_fill(text, existing)` catches mid-repaint prefixes after
+        // a clear (`"T…"` toward `"Time Remainig 00:02"`).
+        if let Some(i) = self
+            .texts_seen
+            .iter()
+            .position(|p| Self::is_blink_only(p, &text) || Self::is_monotonic_fill(&text, p))
+        {
+            if Self::prefer_colon(&self.texts_seen[i], &text) {
+                self.texts_seen[i] = text;
+            }
             return;
+        }
+        if let Some(prev) = self.texts_seen.back() {
+            if Self::is_monotonic_fill(prev, &text) {
+                self.texts_seen.pop_back();
+                self.texts_seen.push_back(text);
+                return;
+            }
         }
         if self.texts_seen.len() >= Self::TEXTS_SEEN_CAP {
             self.texts_seen.pop_front();
@@ -606,6 +671,107 @@ mod tests {
         assert!(texts
             .iter()
             .any(|v| v.as_str().unwrap_or("").starts_with("Yo")));
+    }
+
+    #[test]
+    fn texts_seen_collapses_typing_into_one_slot() {
+        let mut dev = Lcd1602::new(0x27);
+        display_on(&mut dev);
+        for ch in b"Current Time" {
+            data(&mut dev, *ch);
+        }
+        assert_eq!(
+            dev.texts_seen.len(),
+            1,
+            "prompt should be one slot: {:?}",
+            dev.texts_seen
+        );
+        for ch in b"08" {
+            data(&mut dev, *ch);
+        }
+        data(&mut dev, b':');
+        for ch in b"00" {
+            data(&mut dev, *ch);
+        }
+        assert_eq!(
+            dev.texts_seen.len(),
+            1,
+            "typing must replace tail, not grow: {:?}",
+            dev.texts_seen
+        );
+        assert!(
+            dev.texts_seen[0].contains("Current Time") && dev.texts_seen[0].contains("08"),
+            "collapsed panel must keep prompt+digits: {:?}",
+            dev.texts_seen
+        );
+    }
+
+    #[test]
+    fn texts_seen_blink_colon_keeps_prior_panel() {
+        let mut dev = Lcd1602::new(0x27);
+        display_on(&mut dev);
+        for ch in b"Time Remainig" {
+            data(&mut dev, *ch);
+        }
+        command(&mut dev, 0xC0); // line 1
+        for ch in b"00:02" {
+            data(&mut dev, *ch);
+        }
+        assert_eq!(dev.texts_seen.len(), 1);
+        // Overwrite the colon on line 1 col 2 with a space (blink off).
+        command(&mut dev, 0xC0 + 2);
+        data(&mut dev, b' ');
+        assert_eq!(
+            dev.texts_seen.len(),
+            1,
+            "blink must not grow the ring: {:?}",
+            dev.texts_seen
+        );
+        let tail = &dev.texts_seen[0];
+        assert!(
+            tail.contains("Time Remainig") && tail.contains("00:02"),
+            "history must keep the colon frame for Acc needles: {tail:?}"
+        );
+        // Live text() still shows the blink-off glyph.
+        assert!(
+            !dev.text().contains(':'),
+            "live panel should show blink-off: {:?}",
+            dev.text()
+        );
+    }
+
+    #[test]
+    fn texts_seen_clear_reprint_blink_does_not_grow_ring() {
+        let mut dev = Lcd1602::new(0x27);
+        display_on(&mut dev);
+        for ch in b"Time Remainig" {
+            data(&mut dev, *ch);
+        }
+        command(&mut dev, 0xC0);
+        for ch in b"00:02" {
+            data(&mut dev, *ch);
+        }
+        assert_eq!(dev.texts_seen.len(), 1);
+        // Simulate clear + reprint with blink-off colon (firmware remaining-time loop).
+        command(&mut dev, 0x01); // clear display
+        for ch in b"Time Remainig" {
+            data(&mut dev, *ch);
+        }
+        command(&mut dev, 0xC0);
+        for ch in b"00 02" {
+            data(&mut dev, *ch);
+        }
+        assert_eq!(
+            dev.texts_seen.len(),
+            1,
+            "clear+reprint blink must not grow the ring: {:?}",
+            dev.texts_seen
+        );
+        assert!(
+            dev.texts_seen[0].contains("00:02"),
+            "colon frame must be retained: {:?}",
+            dev.texts_seen
+        );
     }
 
     #[test]

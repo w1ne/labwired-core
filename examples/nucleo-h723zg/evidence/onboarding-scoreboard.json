@@ -1,0 +1,42 @@
+{
+  "summary": {
+    "targets_total": 1,
+    "pass": 1,
+    "fail": 0,
+    "median_elapsed_ms": 921,
+    "threshold_seconds": 3600,
+    "threshold_met": 1,
+    "median_elapsed_seconds": 0.921
+  },
+  "targets": [
+    {
+      "target_id": "nucleo-h723zg",
+      "status": "pass",
+      "crate": "firmware-nucleo-h723zg-smoke",
+      "target_triple": "thumbv7em-none-eabi",
+      "script": "examples/nucleo-h723zg/io-smoke.yaml",
+      "system": "configs/systems/nucleo-h723zg.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-13T02:15:03Z",
+      "finished_at_utc": "2026-11-13T02:15:04Z",
+      "elapsed_seconds": 1,
+      "elapsed_ms": 921,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.236,
+        "build_firmware": 0.289,
+        "run_smoke": 0.359
+      },
+      "stages_ms": {
+        "build_cli": 236,
+        "build_firmware": 289,
+        "run_smoke": 359
+      },
+      "_artifact_path": "examples/nucleo-h723zg/evidence/run"
+    }
+  ]
+}

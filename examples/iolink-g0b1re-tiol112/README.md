@@ -28,10 +28,11 @@ COM3 runs use distinct ELF hashes and reports.
 ## Run the digital model tests
 
 ```bash
-cargo test -p labwired-core --test g0_tiol112 --test modern_uart_timing
-cargo test -p labwired-core --test iolink_master_config
-cargo test -p labwired-core --features event-scheduler --test g0_tiol112 --test modern_uart_timing
-cargo test -p labwired-core --features event-scheduler --test stm32g0_uart_dma --test stm32g0_dmamux_generators --test stm32_dma_walk_differential
+cargo test -p labwired-core --test stm32 -- g0_tiol112:: modern_uart_timing::
+cargo test -p labwired-core --test gpio_logic iolink_master_config::
+cargo test -p labwired-core --features event-scheduler --test stm32 -- g0_tiol112:: modern_uart_timing::
+cargo test -p labwired-core --features event-scheduler --test stm32 -- stm32g0_uart_dma:: stm32g0_dmamux_generators::
+cargo test -p labwired-core --features event-scheduler --test stm32_dma_walk_differential
 ```
 
 ## Run the one-action functional fixture
@@ -53,7 +54,7 @@ This same path is exercised against a real Cortex-M0+ ELF by:
 
 ```bash
 IOLINKI_G0_ELF=/absolute/path/protocol-rig-64mhz.elf \
-cargo test -p labwired-core --features event-scheduler --test iolink_master_config \
+cargo test -p labwired-core --features event-scheduler --test gpio_logic iolink_master_config:: \
   real_type2v_elf_runs_the_same_one_action_uart_fixture -- --ignored --nocapture
 ```
 
@@ -76,7 +77,7 @@ IOLINKI_G0_HZ=64000000 IOLINKI_G0_BAUD=230400 \
 IOLINKI_G0_PROFILE=type2v IOLINKI_G0_CYCLES=100 \
 IOLINKI_G0_DLL_TIMING_ENFORCED=0 \
 IOLINKI_G0_REPORT=out/type2v-cq-timing.json \
-cargo test -p labwired-core --test g0_customer_timing -- --ignored --nocapture
+cargo test -p labwired-core --test stm32 g0_customer_timing:: -- --ignored --nocapture
 ```
 
 The session performs GPIO WAKE, real TYPE0 startup and capability reads,

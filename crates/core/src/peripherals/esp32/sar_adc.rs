@@ -39,8 +39,42 @@
 //! is the 12-bit value shifted right by 3 — a declarative register file (which
 //! returns a constant `DATA` and never raises the RO `DONE` bit) cannot
 //! reproduce this behavior.
+//!
+//! ## Touch sensor (TRM §30, `soc/esp32/sens_reg.h`, `hal/touch_sensor_ll.h`)
+//!
+//! The ten capacitive touch channels also live in SENS. Arduino `touchRead()`
+//! (IDF `touch_pad_read_raw_data`) returns the IIR filter's raw slot, which an
+//! esp_timer callback fills by busy-waiting on `TOUCH_MEAS_DONE` and then
+//! reading `SAR_TOUCH_OUTn`. Before this model the SENS window was plain
+//! storage there: `TOUCH_MEAS_DONE` never rose and the first callback hung.
+//!
+//! * `SAR_TOUCH_CTRL1` (0x58) `TOUCH_MEAS_DELAY` [15:0] is the measurement
+//!   window in 8 MHz RTC_FAST cycles; `TOUCH_OUT_SEL` [24] picks the trigger
+//!   direction (0 = below threshold).
+//! * `SAR_TOUCH_THRES1..5` (0x5C..0x6C) and `SAR_TOUCH_OUT1..5` (0x70..0x80)
+//!   pack two channels per word: the even hardware channel in [31:16], the
+//!   odd one in [15:0].
+//! * `SAR_TOUCH_CTRL2` (0x84): `TOUCH_MEAS_DONE` [10] (RO) and
+//!   `TOUCH_MEAS_EN` [9:0] (RO, per-channel trigger status).
+//! * `SAR_TOUCH_ENABLE` (0x8C) `TOUCH_PAD_WORKEN` [9:0] enables a channel.
+//!
+//! Hardware channels 8 and 9 are swapped against the software pad numbers
+//! (`touch_ll_num_wrap`): Arduino `T8` is hardware channel 9. The stimulus
+//! channels `t0`..`t9` use the software (Arduino) numbering.
+//!
+//! The count is the number of charge/discharge cycles in the window,
+//! `t_meas * I / (2 * C * dV)`. The charge slope and the DREFH/DREFL rails are
+//! RTC_IO fields, outside this window, so the model uses the IDF defaults
+//! (slope 7, 2.7 V / 0.5 V). The charge current [`TOUCH_CHARGE_A`] is NOT a
+//! TRM figure: it is a model constant chosen so a bare 20 pF pad reads ~70 at
+//! Arduino's 0x1000-cycle window and a finger (+100 pF) reads ~12. The point is
+//! the direction and the dependence on capacitance and window, not
+//! silicon-exact counts. The touch interrupt (RTC_CNTL `rtc_touch`) is not
+//! raised, so `touchAttachInterrupt()` does not fire.
 
+use crate::sim_input::{InputChannel, SimInput, SimInputError};
 use crate::{Peripheral, PeripheralTickResult, SimResult};
+use std::borrow::Cow;
 
 /// SENS block base on the classic ESP32 (`DR_REG_SENS_BASE`).
 pub const SENS_BASE: u32 = 0x3FF4_8800;
@@ -80,6 +114,70 @@ fn channel_sample(channel: u32) -> u32 {
 const NO_INJECT: u16 = 0xFFFF;
 const CHANNEL_SLOTS: usize = 16;
 
+const SAR_TOUCH_CTRL1: u64 = 0x58;
+const SAR_TOUCH_THRES1: u64 = 0x5C;
+const SAR_TOUCH_OUT1: u64 = 0x70;
+const SAR_TOUCH_OUT5: u64 = 0x80;
+const SAR_TOUCH_CTRL2: u64 = 0x84;
+const SAR_TOUCH_ENABLE: u64 = 0x8C;
+
+/// `TOUCH_MEAS_DELAY` [15:0] of `SAR_TOUCH_CTRL1`, in 8 MHz cycles.
+const TOUCH_MEAS_DELAY_MASK: u32 = 0xFFFF;
+/// `TOUCH_OUT_SEL` [24] of `SAR_TOUCH_CTRL1`: 1 = trigger above threshold.
+const TOUCH_OUT_SEL: u32 = 1 << 24;
+/// `TOUCH_MEAS_DONE` [10] of `SAR_TOUCH_CTRL2` (RO).
+const TOUCH_MEAS_DONE: u32 = 1 << 10;
+/// `TOUCH_MEAS_EN` [9:0] of `SAR_TOUCH_CTRL2` (RO trigger status).
+const TOUCH_MEAS_EN_MASK: u32 = 0x3FF;
+/// `TOUCH_MEAS_EN_CLR` [30] of `SAR_TOUCH_CTRL2` (WO).
+const TOUCH_MEAS_EN_CLR: u32 = 1 << 30;
+/// `TOUCH_PAD_WORKEN` [9:0] of `SAR_TOUCH_ENABLE`.
+const TOUCH_WORKEN_MASK: u32 = 0x3FF;
+
+const TOUCH_CHANNELS: usize = 10;
+const TOUCH_RTC_FAST_HZ: f64 = 8_000_000.0;
+/// Model constant (see the module docs), not a TRM figure.
+const TOUCH_CHARGE_A: f64 = 12e-6;
+/// DREFH 2.7 V - DREFL 0.5 V, the IDF default rails.
+const TOUCH_SWING_V: f64 = 2.2;
+/// A bare pad with no finger on it.
+const TOUCH_BARE_PAD_PF: f64 = 20.0;
+
+/// Software pad number (Arduino `Tn`) -> hardware channel. Pads 8 and 9 are
+/// swapped (`touch_ll_num_wrap`).
+fn touch_hw_channel(pad: usize) -> usize {
+    match pad {
+        8 => 9,
+        9 => 8,
+        p => p,
+    }
+}
+
+const fn touch_input(key: &'static str, label: &'static str) -> InputChannel {
+    InputChannel {
+        key: Cow::Borrowed(key),
+        label: Cow::Borrowed(label),
+        unit: Cow::Borrowed("pF"),
+        min: 1.0,
+        max: 10_000.0,
+        default: Some(TOUCH_BARE_PAD_PF),
+    }
+}
+
+/// Pad capacitance per software touch pad, Arduino numbering.
+const TOUCH_INPUTS: &[InputChannel] = &[
+    touch_input("t0", "T0 (GPIO4) capacitance"),
+    touch_input("t1", "T1 (GPIO0) capacitance"),
+    touch_input("t2", "T2 (GPIO2) capacitance"),
+    touch_input("t3", "T3 (GPIO15) capacitance"),
+    touch_input("t4", "T4 (GPIO13) capacitance"),
+    touch_input("t5", "T5 (GPIO12) capacitance"),
+    touch_input("t6", "T6 (GPIO14) capacitance"),
+    touch_input("t7", "T7 (GPIO27) capacitance"),
+    touch_input("t8", "T8 (GPIO33) capacitance"),
+    touch_input("t9", "T9 (GPIO32) capacitance"),
+];
+
 /// One SAR unit's latched conversion state.
 #[derive(Default)]
 struct SarUnit {
@@ -97,6 +195,8 @@ pub struct Esp32SarAdc {
     sar2: SarUnit,
     /// Per-channel 12-bit counts from external analog sources (kits).
     channel_inputs: [u16; CHANNEL_SLOTS],
+    /// Touch pad capacitance in pF, indexed by HARDWARE channel.
+    touch_pf: [f64; TOUCH_CHANNELS],
 }
 
 impl Default for Esp32SarAdc {
@@ -127,7 +227,59 @@ impl Esp32SarAdc {
             sar1: SarUnit::default(),
             sar2: SarUnit::default(),
             channel_inputs: [NO_INJECT; CHANNEL_SLOTS],
+            touch_pf: [TOUCH_BARE_PAD_PF; TOUCH_CHANNELS],
         }
+    }
+
+    /// Set the capacitance on software touch pad `pad` (Arduino `Tn`).
+    pub fn set_touch_capacitance_pf(&mut self, pad: usize, pf: f64) {
+        if pad < TOUCH_CHANNELS && pf.is_finite() && pf > 0.0 {
+            self.touch_pf[touch_hw_channel(pad)] = pf;
+        }
+    }
+
+    /// The count hardware channel `hw` latches into `SAR_TOUCH_OUTn`. A
+    /// channel that is not in `TOUCH_PAD_WORKEN` is never measured and keeps
+    /// its reset value of 0.
+    fn touch_count(&self, hw: usize) -> u32 {
+        if self.reg(SAR_TOUCH_ENABLE) & TOUCH_WORKEN_MASK & (1 << hw) == 0 {
+            return 0;
+        }
+        let window_s =
+            (self.reg(SAR_TOUCH_CTRL1) & TOUCH_MEAS_DELAY_MASK) as f64 / TOUCH_RTC_FAST_HZ;
+        let cycle_s = 2.0 * self.touch_pf[hw] * 1e-12 * TOUCH_SWING_V / TOUCH_CHARGE_A;
+        ((window_s / cycle_s).round() as u32).min(0xFFFF)
+    }
+
+    /// The 16-bit threshold field of hardware channel `hw`.
+    fn touch_threshold(&self, hw: usize) -> u32 {
+        let word = self.reg(SAR_TOUCH_THRES1 + (hw as u64 / 2) * 4);
+        if hw % 2 == 0 {
+            word >> 16
+        } else {
+            word & 0xFFFF
+        }
+    }
+
+    /// `SAR_TOUCH_CTRL2` as firmware reads it: the stored control bits, plus
+    /// `TOUCH_MEAS_DONE` once a channel is enabled, plus the per-channel
+    /// trigger status. A threshold of 0 (the IDF "never touched" value) never
+    /// triggers below.
+    fn touch_ctrl2_read(&self) -> u32 {
+        let worken = self.reg(SAR_TOUCH_ENABLE) & TOUCH_WORKEN_MASK;
+        let above = self.reg(SAR_TOUCH_CTRL1) & TOUCH_OUT_SEL != 0;
+        let mut status = 0;
+        for hw in 0..TOUCH_CHANNELS {
+            if worken & (1 << hw) == 0 {
+                continue;
+            }
+            let (count, thresh) = (self.touch_count(hw), self.touch_threshold(hw));
+            if (above && count > thresh) || (!above && count < thresh) {
+                status |= 1 << hw;
+            }
+        }
+        let done = if worken != 0 { TOUCH_MEAS_DONE } else { 0 };
+        (self.reg(SAR_TOUCH_CTRL2) & !(TOUCH_MEAS_DONE | TOUCH_MEAS_EN_MASK)) | done | status
     }
 
     /// Inject a millivolt reading for a SAR channel. Next conversion on that
@@ -213,6 +365,11 @@ impl Peripheral for Esp32SarAdc {
         Ok(match offset & !3 {
             SAR_MEAS_START1 => self.meas_read(SAR_MEAS_START1, &self.sar1),
             SAR_MEAS_START2 => self.meas_read(SAR_MEAS_START2, &self.sar2),
+            o @ SAR_TOUCH_OUT1..=SAR_TOUCH_OUT5 => {
+                let even = ((o - SAR_TOUCH_OUT1) / 4 * 2) as usize;
+                (self.touch_count(even) << 16) | self.touch_count(even + 1)
+            }
+            SAR_TOUCH_CTRL2 => self.touch_ctrl2_read(),
             o => self.reg(o),
         })
     }
@@ -242,6 +399,14 @@ impl Peripheral for Esp32SarAdc {
                     }
                 }
             }
+            // The OUT words are RO counts.
+            SAR_TOUCH_OUT1..=SAR_TOUCH_OUT5 => {}
+            // DONE and the trigger status are RO; MEAS_EN_CLR is a strobe (the
+            // status is recomputed from the counts on every read).
+            SAR_TOUCH_CTRL2 => {
+                self.regs[(SAR_TOUCH_CTRL2 / 4) as usize] =
+                    value & !(TOUCH_MEAS_DONE | TOUCH_MEAS_EN_MASK | TOUCH_MEAS_EN_CLR);
+            }
             o => {
                 if let Some(slot) = self.regs.get_mut((o / 4) as usize) {
                     *slot = value;
@@ -255,12 +420,36 @@ impl Peripheral for Esp32SarAdc {
         PeripheralTickResult::default()
     }
 
+    /// The touch pads are this peripheral's own inputs (`t0`..`t9`, pF).
+    fn for_each_attached_sim_input(
+        &mut self,
+        f: &mut dyn FnMut(&mut dyn SimInput) -> bool,
+    ) -> bool {
+        f(self)
+    }
+
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }
 
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
+    }
+}
+
+impl SimInput for Esp32SarAdc {
+    fn input_channels(&self) -> &[InputChannel] {
+        TOUCH_INPUTS
+    }
+
+    fn set_input(&mut self, key: &str, value: f64) -> Result<(), SimInputError> {
+        self.require_channel(key, value)?;
+        let pad = TOUCH_INPUTS
+            .iter()
+            .position(|c| c.key == key)
+            .ok_or_else(|| SimInputError::UnknownChannel(key.to_string()))?;
+        self.set_touch_capacitance_pf(pad, value);
+        Ok(())
     }
 }
 
@@ -351,6 +540,84 @@ mod tests {
         a.write_u32(SAR_MEAS_START1, (1 << 18) | MEAS_START_SAR)
             .unwrap();
         assert_eq!(a.read_u32(SAR_MEAS_START1).unwrap() & MEAS_DONE_SAR, 0);
+    }
+
+    /// What the IDF does for `touch_pad_config(pad)` in timer mode, with
+    /// Arduino's 0x1000-cycle window.
+    fn enable_touch(a: &mut Esp32SarAdc, hw: u32) {
+        a.write_u32(SAR_TOUCH_CTRL1, 0x1000).unwrap();
+        let en = a.read_u32(SAR_TOUCH_ENABLE).unwrap();
+        a.write_u32(SAR_TOUCH_ENABLE, en | (1 << hw)).unwrap();
+    }
+
+    #[test]
+    fn touch_done_and_counts_stay_zero_until_a_pad_is_enabled() {
+        let mut a = Esp32SarAdc::new();
+        a.write_u32(SAR_TOUCH_CTRL1, 0x1000).unwrap();
+        assert_eq!(a.read_u32(SAR_TOUCH_CTRL2).unwrap() & TOUCH_MEAS_DONE, 0);
+        assert_eq!(a.read_u32(SAR_TOUCH_OUT1).unwrap(), 0);
+    }
+
+    #[test]
+    fn touch_count_drops_when_a_finger_adds_capacitance() {
+        let mut a = Esp32SarAdc::new();
+        enable_touch(&mut a, 0);
+        assert_ne!(a.read_u32(SAR_TOUCH_CTRL2).unwrap() & TOUCH_MEAS_DONE, 0);
+        // T0 is the even channel of OUT1: bits [31:16].
+        let bare = a.read_u32(SAR_TOUCH_OUT1).unwrap() >> 16;
+        assert_eq!(bare, 70, "20 pF bare pad at a 0x1000-cycle window");
+        a.set_input("t0", 120.0).unwrap();
+        let touched = a.read_u32(SAR_TOUCH_OUT1).unwrap() >> 16;
+        assert_eq!(touched, 12, "finger on T0");
+        // T1 (odd, [15:0]) is not enabled and stays 0.
+        assert_eq!(a.read_u32(SAR_TOUCH_OUT1).unwrap() & 0xFFFF, 0);
+    }
+
+    #[test]
+    fn touch_count_scales_with_the_measurement_window() {
+        let mut a = Esp32SarAdc::new();
+        enable_touch(&mut a, 3);
+        let short = a.read_u32(SAR_TOUCH_OUT1 + 4).unwrap() & 0xFFFF;
+        a.write_u32(SAR_TOUCH_CTRL1, 0x2000).unwrap();
+        let long = a.read_u32(SAR_TOUCH_OUT1 + 4).unwrap() & 0xFFFF;
+        assert_eq!(long, short * 2);
+    }
+
+    #[test]
+    fn touch_pads_8_and_9_are_swapped_in_hardware() {
+        let mut a = Esp32SarAdc::new();
+        enable_touch(&mut a, 8);
+        enable_touch(&mut a, 9);
+        a.set_input("t8", 120.0).unwrap();
+        let out5 = a.read_u32(SAR_TOUCH_OUT5).unwrap();
+        // Hardware channel 9 is the odd half of OUT5, and that is Arduino T8.
+        assert_eq!(out5 & 0xFFFF, 12);
+        assert_eq!(out5 >> 16, 70);
+    }
+
+    #[test]
+    fn touch_trigger_status_follows_threshold_and_direction() {
+        let mut a = Esp32SarAdc::new();
+        enable_touch(&mut a, 0);
+        // Threshold 0 (IDF "never touched") never triggers below.
+        assert_eq!(a.read_u32(SAR_TOUCH_CTRL2).unwrap() & TOUCH_MEAS_EN_MASK, 0);
+        a.write_u32(SAR_TOUCH_THRES1, 40 << 16).unwrap();
+        assert_eq!(a.read_u32(SAR_TOUCH_CTRL2).unwrap() & 1, 0, "70 >= 40");
+        a.set_input("t0", 120.0).unwrap();
+        assert_eq!(a.read_u32(SAR_TOUCH_CTRL2).unwrap() & 1, 1, "12 < 40");
+        a.write_u32(SAR_TOUCH_CTRL1, 0x1000 | TOUCH_OUT_SEL)
+            .unwrap();
+        assert_eq!(a.read_u32(SAR_TOUCH_CTRL2).unwrap() & 1, 0, "above mode");
+        // DONE / status writes do not stick.
+        a.write_u32(SAR_TOUCH_CTRL2, 0x7FF).unwrap();
+        assert_eq!(a.read_u32(SAR_TOUCH_CTRL2).unwrap() & TOUCH_MEAS_EN_MASK, 0);
+    }
+
+    #[test]
+    fn touch_input_rejects_unknown_and_out_of_range() {
+        let mut a = Esp32SarAdc::new();
+        assert!(a.set_input("t10", 50.0).is_err());
+        assert!(a.set_input("t0", 0.0).is_err());
     }
 
     #[test]

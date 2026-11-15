@@ -258,6 +258,14 @@ impl SpiSampling {
     }
 }
 
+/// One required supply and the model's supported operating envelope.
+#[derive(Debug, Clone, Copy)]
+pub struct DeviceSupplyRail {
+    pub name: &'static str,
+    pub min_v: f64,
+    pub max_v: f64,
+}
+
 /// Trait implemented by simulated SPI devices (peripherals attached to an SPI bus).
 ///
 /// For v1, CS-pin-aware routing is not implemented: all transfers are broadcast
@@ -265,6 +273,21 @@ impl SpiSampling {
 /// correct for single-device labs (MAX31855 alone).  CS-aware routing is noted
 /// as a Phase 2 follow-up.
 pub trait SpiDevice: Send {
+    /// Explicit capability for a generic routed supply gate. The model must
+    /// reset its volatile state on cutoff/restore and expose its actual power
+    /// state. Unimplemented devices refuse routed power at attachment.
+    fn supports_power_control(&self) -> bool {
+        false
+    }
+    /// Every required rail and its supported operating envelope. A routed
+    /// configuration must name all rails and cannot widen these limits.
+    fn required_supply_rails(&self) -> &[DeviceSupplyRail] {
+        &[]
+    }
+    fn power_state_changed(&mut self, _powered: bool) {}
+    /// Publish a routed domain transition at the boundary without advancing
+    /// device time or synthesizing a bus transaction.
+    fn sync_supply_state(&mut self) {}
     /// How this device latches the wire. Default [`SpiSampling::Byte`].
     fn sampling(&self) -> SpiSampling {
         SpiSampling::Byte
@@ -293,6 +316,31 @@ pub trait SpiDevice: Send {
     /// CS pin label this device is wired to (e.g. "PA4" or numeric pin ID). Used by the bus
     /// dispatcher to pick which device responds when the firmware drives a particular CS line.
     fn cs_pin(&self) -> &str;
+
+    /// Daisy-chain position along a shared CS: **0 = closest to MOSI** (first DIN).
+    /// Higher values are farther downstream (DOUT→DIN). Default 0 keeps every
+    /// existing single-device attach byte-identical. The bus clocks a chain
+    /// closest-first, feeding each device's DOUT into the next DIN.
+    fn chain_index(&self) -> u32 {
+        0
+    }
+
+    /// Record the configured [`chain_index`](Self::chain_index). No-op by
+    /// default so hand-written stubs and test doubles stay untouched.
+    fn set_chain_index(&mut self, _index: u32) {}
+
+    /// True while CS is held (after [`cs_select`](Self::cs_select), before
+    /// [`cs_release`](Self::cs_release)). Parts whose latch does not gate CLK
+    /// also declare [`clocks_when_deselected`](Self::clocks_when_deselected).
+    fn is_selected(&self) -> bool {
+        false
+    }
+
+    /// Whether the shift register accepts clocks while the latch pin is high.
+    /// MAX7219 LOAD only latches data; unlike MAX7221 CS, it does not gate CLK.
+    fn clocks_when_deselected(&self) -> bool {
+        false
+    }
 
     /// What this device can show of itself — its own inspect evidence.
     ///
@@ -341,11 +389,20 @@ pub trait SpiDevice: Send {
     }
     /// Bus-side setter recording the resolved D/C `(ODR address, bit)`.
     fn set_dc_source(&mut self, _odr_addr: u64, _bit: u8) {}
-    fn as_any(&self) -> Option<&dyn Any> {
+    /// Concrete readback through a transparent decorator. Transfers, mutable
+    /// simulation inputs and power gating remain owned by the decorator.
+    /// A leaf device keeps the default `None` unless it exposes readback.
+    fn wrapped_device(&self) -> Option<&dyn SpiDevice> {
         None
     }
-    fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+    fn wrapped_device_mut(&mut self) -> Option<&mut dyn SpiDevice> {
         None
+    }
+    fn as_any(&self) -> Option<&dyn Any> {
+        self.wrapped_device()?.as_any()
+    }
+    fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+        self.wrapped_device_mut()?.as_any_mut()
     }
     /// Runtime-drivable view of this device, if it accepts simulated input.
     /// Same contract as the hook on `I2cDevice`: input devices override it so

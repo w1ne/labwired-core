@@ -26,6 +26,22 @@ class PolicyControls(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertTrue(gate.select("pull_request", gate.OWNED_REPOSITORY, "fix/x", [path])[0])
 
+    def test_nested_engine_crate_sources_select_and_their_tests_skip(self):
+        # A crate split out of crates/core nests under it; the policy must not
+        # depend on the engine being a single `crates/core/src` directory.
+        for path in ["crates/core/chips/physics/src/lib.rs",
+                     "crates/core/kernel/src/bus/tick.rs",
+                     "crates/core/chips/physics/Cargo.toml",
+                     "crates/core/chips/physics/build.rs"]:
+            with self.subTest(path=path):
+                self.assertTrue(gate.hotpath(path))
+        for path in ["crates/core/kernel/src/tests/mod.rs",
+                     "crates/core/tests/fixtures/x/src/main.rs",
+                     "crates/core/examples/export_catalog_names.rs",
+                     "crates/core/chips/physics/README.md"]:
+            with self.subTest(path=path):
+                self.assertFalse(gate.hotpath(path))
+
     def test_docs_and_separately_compiled_tests_skip(self):
         paths = ["README.md", "docs/engineering/target-next-lanes.md", "crates/core/tests/example.rs",
                  "crates/core/src/tests/scb_reset.rs", "scripts/unrelated.py"]

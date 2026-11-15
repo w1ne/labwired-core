@@ -32,7 +32,7 @@ Pass criteria:
 ## 4) Run firmware survival gate
 
 ```bash
-cargo test -p labwired-core --test firmware_survival test_stm32f746_discovery_smoke_survival -- --nocapture
+cargo test -p labwired-core --test gates firmware_survival::test_stm32f746_discovery_smoke_survival -- --nocapture
 ```
 
 Pass criteria:
@@ -42,7 +42,7 @@ Pass criteria:
 ## 5) Run config-build gate
 
 ```bash
-cargo test -p labwired-core --test board_config_gates stm32f746_from_config_builds -- --nocapture
+cargo test -p labwired-core --test gates board_config_gates::stm32f746_from_config_builds -- --nocapture
 ```
 
 ## 6) Run direct simulation for PC/SP evidence

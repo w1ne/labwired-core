@@ -74,6 +74,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: None,
             supply_monitor: None,
             include: None,
         }
@@ -523,6 +524,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: None,
             supply_monitor: None,
             include: None,
         };
@@ -743,6 +745,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: None,
             supply_monitor: None,
             include: None,
         };
@@ -823,6 +826,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: None,
             supply_monitor: None,
             include: None,
         };
@@ -897,6 +901,7 @@ pub mod integration_tests {
         bus.attach_uart_tx_sink(sink.clone(), false);
 
         let base = 0x4000_4800;
+        bus.write_u32(base, (1 << 0) | (1 << 3)).unwrap(); // UE + TE
         bus.write_u8(base + 0x04, b'X').unwrap(); // legacy DR offset should not TX in v2 mode
         bus.write_u8(base + 0x28, b'Y').unwrap(); // TDR
         assert_eq!(bus.read_u8(base + 0x1C).unwrap(), 0xC0); // ISR ready flags
@@ -1037,6 +1042,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: None,
             supply_monitor: None,
             include: None,
             reset_vector_offset: 0,
@@ -2357,6 +2363,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: None,
             supply_monitor: None,
             include: None,
         };
@@ -2462,6 +2469,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: None,
             supply_monitor: None,
             include: None,
         };
@@ -2552,6 +2560,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: None,
             supply_monitor: None,
             include: None,
         };
@@ -2975,6 +2984,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: None,
             supply_monitor: None,
             include: None,
         };
@@ -3110,6 +3120,7 @@ pub mod integration_tests {
                 analog_pins: Default::default(),
                 io_voltage_v: None,
                 gpio_input_thresholds: None,
+                reset_input: None,
                 supply_monitor: None,
                 include: None,
             };
@@ -3192,6 +3203,7 @@ pub mod integration_tests {
                 analog_pins: Default::default(),
                 io_voltage_v: None,
                 gpio_input_thresholds: None,
+                reset_input: None,
                 supply_monitor: None,
                 include: None,
             };
@@ -3308,6 +3320,7 @@ pub mod integration_tests {
                 analog_pins: Default::default(),
                 io_voltage_v: None,
                 gpio_input_thresholds: None,
+                reset_input: None,
                 supply_monitor: None,
                 include: None,
             };
