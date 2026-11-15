@@ -1,14 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.001020">
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.002944">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="e00db0959dac160a0a0c15812b894e06743b4d4549805926589cc2315b91aa20"/>
+    <property name="firmware_hash" value="744f6d40fbddf5b1fef36065f21acb04b352667c52e4fd82b72047ccd3d03138"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.001020">
+  <testcase classname="labwired" name="run" time="0.002944">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: NPCX9 UART1 smoke" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 2: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 2: uart_contains: itim regs=1 en=1 run=1 stop=1 irq=3 sts_cleared=1 sts=1 masked=1 pend=1 rel=1 each=6 w64=1 borrow=1 lfcl…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>

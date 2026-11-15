@@ -1,23 +1,23 @@
 {
   "result_schema_version": "1.0",
   "status": "pass",
-  "steps_executed": 100000,
-  "cycles": 100000,
-  "instructions": 100000,
+  "steps_executed": 400000,
+  "cycles": 400000,
+  "instructions": 400000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 100000
+      "value": 400000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 100000
+      "value": 400000
     }
   },
   "limits": {
-    "max_steps": 100000,
+    "max_steps": 400000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -36,6 +36,12 @@
     },
     {
       "assertion": {
+        "uart_contains": "itim regs=1 en=1 run=1 stop=1 irq=3 sts_cleared=1 sts=1 masked=1 pend=1 rel=1 each=6 w64=1 borrow=1 lfclk=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "expected_stop_reason": "max_steps"
       },
       "passed": true
@@ -44,24 +50,24 @@
   "cpu_state": {
     "type": "arm",
     "registers": [
-      1074659332,
       10,
-      1740,
-      0,
-      0,
-      0,
-      0,
+      1,
+      49,
+      2147483648,
+      1,
+      6,
+      46,
       537753584,
-      0,
-      0,
-      0,
-      0,
-      0,
-      537753584,
-      1733,
-      1720
+      1,
+      1,
+      1074659332,
+      1,
+      5713,
+      537753504,
+      1074659332,
+      4524
     ],
-    "pc": 1720,
+    "pc": 4524,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -72,9 +78,9 @@
     ],
     "vtor": 0,
     "waiting_for_event": false,
-    "event_register": false
+    "event_register": true
   },
-  "firmware_hash": "e00db0959dac160a0a0c15812b894e06743b4d4549805926589cc2315b91aa20",
+  "firmware_hash": "744f6d40fbddf5b1fef36065f21acb04b352667c52e4fd82b72047ccd3d03138",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-nuvoton-npcx9-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/nuvoton_npcx9m6fb_evb.yaml",
@@ -86,6 +92,55 @@
         "name": "cr_uart1",
         "kind": "native",
         "base": 1074659328,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itim32_1",
+        "kind": "native",
+        "base": 1074462720,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itim32_2",
+        "kind": "native",
+        "base": 1074470912,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itim32_3",
+        "kind": "native",
+        "base": 1074479104,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itim32_4",
+        "kind": "native",
+        "base": 1074487296,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itim32_5",
+        "kind": "native",
+        "base": 1074495488,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itim32_6",
+        "kind": "native",
+        "base": 1074503680,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itim64",
+        "kind": "native",
+        "base": 1074520064,
         "registers": [],
         "artifacts": []
       },
@@ -136,21 +191,27 @@
         "cycle_lo": 0,
         "cycle": 10000,
         "end_cycle": 10000
+      },
+      {
+        "text": "itim regs=1 en=1 run=1 stop=1 irq=3 sts_cleared=1 sts=1 masked=1 pend=1 rel=1 each=6 w64=1 borrow=1 lfclk=1 ok",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
       }
     ],
     "dropped_lines": 0
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 1740,
+    "text_bytes": 5780,
     "data_bytes": 0,
-    "bss_bytes": 0,
-    "flash_used_bytes": 1740,
-    "ram_static_bytes": 0,
+    "bss_bytes": 8,
+    "flash_used_bytes": 5780,
+    "ram_static_bytes": 8,
     "flash_total_bytes": 65536,
     "ram_total_bytes": 96256,
-    "flash_used_pct": 2.66,
-    "ram_static_pct": 0.0,
+    "flash_used_pct": 8.82,
+    "ram_static_pct": 0.01,
     "notes": [
       "section_sum_not_bin_image",
       "totals_from_chip_catalog"
@@ -158,32 +219,37 @@
   },
   "memory": {
     "main_stack_method": "paint",
-    "main_stack_limit_bytes": 96256,
-    "main_stack_high_water_bytes": 16,
-    "main_stack_free_min_bytes": 96240,
-    "main_stack_base": 537657344,
+    "main_stack_limit_bytes": 96248,
+    "main_stack_high_water_bytes": 136,
+    "main_stack_free_min_bytes": 96112,
+    "main_stack_base": 537657352,
     "main_stack_top": 537753600,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
-    "heap_limit_bytes": 96256,
+    "heap_limit_bytes": 96248,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 96240,
-    "heap_base": 537657344,
+    "heap_free_min_bytes": 96112,
+    "heap_base": 537657352,
     "heap_top": 537753600
   },
   "metrics": {
-    "cycles": 100000,
-    "instructions": 100000,
-    "steps_executed": 100000,
-    "memory_reads": 152,
-    "memory_writes": 6,
-    "peripheral_accesses": 38,
+    "cycles": 400000,
+    "instructions": 400000,
+    "steps_executed": 400000,
+    "memory_reads": 3234,
+    "memory_writes": 230,
+    "peripheral_accesses": 449,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 1720,
-        "count": 390,
+        "pc": 4524,
+        "count": 1523,
         "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 3108,
+        "count": 39,
+        "symbol": "core::sync::atomic::atomic_load"
       }
     ]
   }

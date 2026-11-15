@@ -1,10 +1,11 @@
-# Cortex-M4F instruction and modeled NPCX UART1 smoke on the imported system.
+# Cortex-M4F UART1 and ITIM32_1..6 / ITIM64 smoke on the imported system.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv7em-none-eabi/release/firmware-nuvoton-npcx9-smoke"
   system: "../../configs/systems/onboarding/nuvoton_npcx9.yaml"
 limits:
-  max_steps: 100000
+  max_steps: 400000
 assertions:
   - uart_contains: "NPCX9 UART1 smoke"
+  - uart_contains: "itim regs=1 en=1 run=1 stop=1 irq=3 sts_cleared=1 sts=1 masked=1 pend=1 rel=1 each=6 w64=1 borrow=1 lfclk=1 ok"
   - expected_stop_reason: max_steps

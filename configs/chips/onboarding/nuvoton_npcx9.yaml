@@ -7,6 +7,9 @@
 name: nuvoton_npcx9
 arch: arm
 core: cortex-m4f
+# CORE_CLK 15 MHz: Zephyr dts/arm/nuvoton/npcx/npcx9.dtsi pcc (OFMCLK 90 MHz,
+# core-prescaler 6). The CDCG is not modelled, so firmware cannot change it.
+cpu_hz: 15000000
 flash:
   # LabWired's firmware loader uses the NPCX9 ROM mapped at zero as its
   # execution backing. Internal-flash boot-ROM handoff is not modeled here.
@@ -21,3 +24,46 @@ peripherals:
   type: npcx_uart
   bus: sysbus
   base_address: 0x400E0000
+# Internal timers. Bases and NVIC lines from Renode nuvoton_npcx9.repl
+# (NPCX_ITIM): ITIM32_1..6 at 0x400B0000 + n * 0x2000 on NVIC 28, 27, 17, 43,
+# 44, 45; ITIM64 at 0x400BE000 on NVIC 58. Zephyr npcx9.dtsi confirms ITIM32_1
+# (0x400B0000, IRQ 28) and ITIM64 (0x400BE000). Register layout: Zephyr
+# reg_def.h itim32_reg / itim64_reg. The APB2 tick clock is the 15 MHz CORE_CLK
+# (Zephyr apb2-prescaler 6; Renode's model defaults to 10 MHz). Windows are
+# 4 KiB (Renode Size 0x1000) so HFCG 0x400B5000 and MTC 0x400B7000 stay
+# unmapped. Not modelled: PWDWN_CTL gates, deep-sleep wake-up.
+- id: itim32_1
+  type: npcx_itim32
+  base_address: 0x400B0000
+  size: 4KB
+  irq: 28
+- id: itim32_2
+  type: npcx_itim32
+  base_address: 0x400B2000
+  size: 4KB
+  irq: 27
+- id: itim32_3
+  type: npcx_itim32
+  base_address: 0x400B4000
+  size: 4KB
+  irq: 17
+- id: itim32_4
+  type: npcx_itim32
+  base_address: 0x400B6000
+  size: 4KB
+  irq: 43
+- id: itim32_5
+  type: npcx_itim32
+  base_address: 0x400B8000
+  size: 4KB
+  irq: 44
+- id: itim32_6
+  type: npcx_itim32
+  base_address: 0x400BA000
+  size: 4KB
+  irq: 45
+- id: itim64
+  type: npcx_itim64
+  base_address: 0x400BE000
+  size: 4KB
+  irq: 58

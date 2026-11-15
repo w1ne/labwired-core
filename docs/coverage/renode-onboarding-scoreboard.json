@@ -11,10 +11,10 @@
     "pass_observable_assertions": 226,
     "pass_stop_reason_only": 0,
     "pass_depth_unknown": 0,
-    "pass_claimed_peripherals_total": 1526,
+    "pass_claimed_peripherals_total": 1540,
     "pass_claimed_peripherals_median": 3,
-    "median_elapsed_ms": 1444,
-    "median_elapsed_seconds": 1.444,
+    "median_elapsed_ms": 1468,
+    "median_elapsed_seconds": 1.468,
     "threshold_seconds": 3600,
     "threshold_met": 226,
     "descriptors_present": 245,
@@ -5577,7 +5577,7 @@
       "booted": true,
       "boot_evidence": {
         "result_path": "simulation-output/result.json",
-        "instructions": 100000,
+        "instructions": 400000,
         "stop_reason": "max_steps"
       },
       "smoke_passed": true,
@@ -5586,28 +5586,28 @@
       "script": "examples/renode-onboarding/nuvoton_npcx9-smoke.yaml",
       "system": "configs/systems/onboarding/nuvoton_npcx9.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T14:49:12Z",
-      "finished_at_utc": "2026-11-05T14:49:14Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1314,
+      "started_at_utc": "2026-11-15T19:51:37Z",
+      "finished_at_utc": "2026-11-15T19:55:01Z",
+      "elapsed_seconds": 205,
+      "elapsed_ms": 204164,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.343,
-        "build_firmware": 0.646,
-        "run_smoke": 0.314
+        "build_cli": 202.91,
+        "build_firmware": 0.47,
+        "run_smoke": 0.734
       },
       "stages_ms": {
-        "build_cli": 343,
-        "build_firmware": 646,
-        "run_smoke": 314
+        "build_cli": 202910,
+        "build_firmware": 470,
+        "run_smoke": 734
       },
       "_artifact_path": "nuvoton_npcx9",
       "zero_answering_windows": [],
-      "claimed_peripherals": 1,
+      "claimed_peripherals": 8,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"
@@ -5622,7 +5622,7 @@
       "booted": true,
       "boot_evidence": {
         "result_path": "simulation-output/result.json",
-        "instructions": 100000,
+        "instructions": 400000,
         "stop_reason": "max_steps"
       },
       "smoke_passed": true,
@@ -5631,28 +5631,28 @@
       "script": "examples/renode-onboarding/nuvoton_npcx9m6fb_evb-smoke.yaml",
       "system": "configs/systems/onboarding/nuvoton_npcx9m6fb_evb.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T14:49:14Z",
-      "finished_at_utc": "2026-11-05T14:49:14Z",
-      "elapsed_seconds": 1,
-      "elapsed_ms": 813,
+      "started_at_utc": "2026-11-15T19:55:13Z",
+      "finished_at_utc": "2026-11-15T19:55:15Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1352,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.298,
-        "build_firmware": 0.187,
-        "run_smoke": 0.319
+        "build_cli": 0.469,
+        "build_firmware": 0.417,
+        "run_smoke": 0.42
       },
       "stages_ms": {
-        "build_cli": 298,
-        "build_firmware": 187,
-        "run_smoke": 319
+        "build_cli": 469,
+        "build_firmware": 417,
+        "run_smoke": 420
       },
       "_artifact_path": "nuvoton_npcx9m6fb_evb",
       "zero_answering_windows": [],
-      "claimed_peripherals": 1,
+      "claimed_peripherals": 8,
       "smoke_assertion_kinds": [
         "uart_contains",
         "expected_stop_reason"

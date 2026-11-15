@@ -238,6 +238,10 @@ pub const MODEL_TYPES: &[&str] = &[
     // EFR32 Series-1 RTCC (`build_efm32_rtcc`): IRQ from the yaml, optional
     // `lfeclk_hz`.
     "efm32s1_rtcc",
+    // Nuvoton NPCX ITIM32 / ITIM64 (`build_npcx_itim`): IRQ from the yaml,
+    // optional `apb2_hz` / `lfclk_hz`.
+    "npcx_itim32",
+    "npcx_itim64",
     // Reserve the full name: never fuzzy-coerce an unqualified SAM DMAC to STM32.
     "sam_dmac",
     // ⚠️ Load-bearing. Without this entry the fuzzy `contains("spi")` heuristic
@@ -796,6 +800,39 @@ fn build_efm32_rtcc(p_cfg: &PeripheralConfig) -> anyhow::Result<Box<dyn Peripher
     Ok(Box::new(Efm32Rtcc::new(irq, hz)))
 }
 
+// Nuvoton NPCX ITIM32 / ITIM64: IRQ required; optional `apb2_hz` (default
+// the attached core clock) and `lfclk_hz` (default 32768, as Renode).
+#[cold]
+#[inline(never)]
+fn build_npcx_itim(ty: &str, p_cfg: &PeripheralConfig) -> anyhow::Result<Box<dyn Peripheral>> {
+    use crate::peripherals::npcx_itim::{NpcxItim, DEFAULT_LFCLK_HZ};
+    if let Some(k) = p_cfg
+        .config
+        .keys()
+        .find(|k| !matches!(k.as_str(), "apb2_hz" | "lfclk_hz"))
+    {
+        anyhow::bail!("{ty} admits only `apb2_hz` and `lfclk_hz`, not `{k}`");
+    }
+    if p_cfg.irq.is_none() {
+        anyhow::bail!("{ty} '{}' needs an `irq`", p_cfg.id);
+    }
+    let hz = |k: &str| -> anyhow::Result<Option<u64>> {
+        match p_cfg.config.get(k) {
+            None => Ok(None),
+            Some(v) => v
+                .as_u64()
+                .filter(|&hz| hz > 0)
+                .map(Some)
+                .ok_or_else(|| anyhow::anyhow!("{ty} `{k}` must be a positive integer")),
+        }
+    };
+    Ok(Box::new(NpcxItim::new(
+        ty == "npcx_itim64",
+        hz("apb2_hz")?,
+        hz("lfclk_hz")?.unwrap_or(DEFAULT_LFCLK_HZ),
+    )))
+}
+
 // SAM D21 RTC: base from the chip yaml, fixed IRQ; `gclk_hz` declares GCLK_RTC.
 #[cold]
 #[inline(never)]
@@ -1176,6 +1213,7 @@ pub fn try_build(
             build_efm32_timer(canonical_type, p_cfg)?
         }
         "efm32s1_rtcc" => build_efm32_rtcc(p_cfg)?,
+        "npcx_itim32" | "npcx_itim64" => build_npcx_itim(canonical_type, p_cfg)?,
         "samd51_sercom_usart" => {
             use crate::peripherals::sam::sercom_usart::{SamSercomUsart, UsartPads};
             let key = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());
