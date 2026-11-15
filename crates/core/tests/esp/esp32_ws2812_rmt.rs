@@ -86,3 +86,120 @@ fn classic_rmt_drives_ws2812_frame_decoded_end_to_end() {
         "classic RMT-driven WS2812 frame must decode to red, green, blue"
     );
 }
+
+// The vendor SVD (tests/fixtures/real_world/esp32.svd) marks STATUS/ADDR,
+// INT_RAW and INT_ST fields read-only, INT_CLR write-only, and DATE read-write.
+// Replacing the pre-841be9961 SystemStub removes 19 write-echo proxy credits:
+// offsets 0x60..=0x9c (16 words), 0xa0, 0xa4 and 0xac. The DATE reset is
+// 0x16022600 and must retain its credit. On b02de9b9121b533e99a706fd67d4ab8b68c94198,
+// the same 2,997-register probe measured 2,713 with the old stub versus 2,693
+// with the new model: DATE was one additional, unjustified loss. The baseline
+// was 2,701, leaving 12 credits of headroom; its eight-point deficit therefore
+// did not identify eight particular registers. These tests pin the actual
+// access contracts; they do not claim implemented STATUS/ADDR progress fields.
+fn runtime_rmt_bus() -> SystemBus {
+    let mut bus = SystemBus::new();
+    let _cpu = labwired_core::system::xtensa::configure_xtensa_esp32(&mut bus);
+    bus
+}
+
+#[test]
+fn classic_rmt_interrupt_registers_preserve_hardware_owned_state() {
+    use labwired_core::peripherals::esp32::gpio::RMT_SIG_OUT4;
+
+    let mut bus = runtime_rmt_bus();
+    // STATUS and APB address words are read-only, currently reset-zero
+    // placeholders. This checks access semantics without claiming TX progress.
+    for offset in (0x60..0xa0).step_by(4) {
+        assert_eq!(bus.read_u32(RMT_BASE + offset).unwrap(), 0);
+        bus.write_u32(RMT_BASE + offset, u32::MAX).unwrap();
+        assert_eq!(bus.read_u32(RMT_BASE + offset).unwrap(), 0);
+    }
+
+    // Drive real symbols on two routed channels. Their TX_END bits occupy
+    // different bytes, so selective word and byte clears are both observable.
+    let pending = (1 << 0) | (1 << 12);
+    bus.write_u32(ENABLE_W1TS, (1 << 16) | (1 << 17)).unwrap();
+    let mut cycle = 0;
+    for (channel, pin, signal) in [(0_u64, 16_u64, RMT_SIG_OUT0), (4, 17, RMT_SIG_OUT4)] {
+        bus.write_u32(GPIO_BASE + 0x530 + pin * 4, signal).unwrap();
+        let memory = RMTMEM + channel * 64 * 4;
+        bus.write_u32(memory, bit_symbol(false)).unwrap();
+        bus.write_u32(memory + 4, 0).unwrap();
+        bus.write_u32(RMT_BASE + 0x20 + channel * 8, 1 | (1 << 24))
+            .unwrap();
+        bus.write_u32(RMT_BASE + 0x24 + channel * 8, TX_START_BIT)
+            .unwrap();
+        for _ in 0..32 {
+            cycle += 1;
+            bus.set_current_cycle(cycle);
+            bus.tick_peripherals();
+        }
+    }
+    assert_eq!(
+        bus.read_u32(RMT_BASE + 0xa0).unwrap(),
+        pending,
+        "both routed TX streams must complete"
+    );
+    assert_eq!(
+        bus.read_u32(RMT_BASE + 0xa4).unwrap(),
+        0,
+        "disabled interrupts stay masked"
+    );
+    bus.write_u32(RMT_BASE + 0xa8, 1).unwrap();
+    assert_eq!(bus.read_u32(RMT_BASE + 0xa4).unwrap(), 1);
+    bus.write_u32(RMT_BASE + 0xa8, pending).unwrap();
+    assert_eq!(bus.read_u32(RMT_BASE + 0xa4).unwrap(), pending);
+
+    for offset in [0xa0, 0xa4] {
+        for value in [u32::MAX, 0] {
+            bus.write_u32(RMT_BASE + offset, value).unwrap();
+            assert_eq!(
+                bus.read_u32(RMT_BASE + 0xa0).unwrap(),
+                pending,
+                "read-only write must preserve RAW"
+            );
+            assert_eq!(
+                bus.read_u32(RMT_BASE + 0xa4).unwrap(),
+                pending,
+                "read-only write must preserve ST"
+            );
+        }
+        for byte in [0, 1] {
+            bus.write_u8(RMT_BASE + offset + byte, 0xff).unwrap();
+            assert_eq!(bus.read_u32(RMT_BASE + 0xa0).unwrap(), pending);
+            assert_eq!(bus.read_u32(RMT_BASE + 0xa4).unwrap(), pending);
+        }
+    }
+
+    bus.write_u32(RMT_BASE + 0xac, 0).unwrap();
+    assert_eq!(
+        bus.read_u32(RMT_BASE + 0xa0).unwrap(),
+        pending,
+        "zero cannot acknowledge interrupts"
+    );
+    bus.write_u32(RMT_BASE + 0xac, 1).unwrap();
+    assert_eq!(bus.read_u32(RMT_BASE + 0xa0).unwrap(), 1 << 12);
+    assert_eq!(bus.read_u32(RMT_BASE + 0xa4).unwrap(), 1 << 12);
+    assert_eq!(
+        bus.read_u32(RMT_BASE + 0xac).unwrap(),
+        0,
+        "INT_CLR is write-only"
+    );
+    bus.write_u8(RMT_BASE + 0xad, 1 << 4).unwrap();
+    assert_eq!(bus.read_u32(RMT_BASE + 0xa0).unwrap(), 0);
+    assert_eq!(bus.read_u32(RMT_BASE + 0xa4).unwrap(), 0);
+}
+
+#[test]
+fn classic_rmt_date_matches_vendor_reset_and_read_write_access() {
+    let mut bus = runtime_rmt_bus();
+    let date = RMT_BASE + 0xfc;
+    assert_eq!(bus.read_u32(date).unwrap(), 0x1602_2600);
+    for value in [u32::MAX, 0, 0x0123_4567] {
+        bus.write_u32(date, value).unwrap();
+        assert_eq!(bus.read_u32(date).unwrap(), value);
+    }
+    bus.write_u8(date + 2, 0xab).unwrap();
+    assert_eq!(bus.read_u32(date).unwrap(), 0x01ab_4567);
+}
