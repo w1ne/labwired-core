@@ -11,6 +11,10 @@
     "batch": 7.6,
     "step": 1026.4
   },
+  "atmega32u4": {
+    "batch": 7.7,
+    "step": 1020.0
+  },
   "atsamd21": {
     "batch": 1.4,
     "step": 895.0
@@ -204,6 +208,10 @@
   "same70q21b": {
     "batch": 1.4,
     "step": 892.0
+  },
+  "stm32c031c6": {
+    "batch": 1.6,
+    "step": 937.4
   },
   "stm32f072": {
     "batch": 1.6,

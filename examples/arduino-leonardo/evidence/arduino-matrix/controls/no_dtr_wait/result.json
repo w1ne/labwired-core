@@ -1,0 +1,273 @@
+{
+  "result_schema_version": "1.0",
+  "status": "fail",
+  "steps_executed": 2000000,
+  "cycles": 3973137,
+  "instructions": 1999499,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 2000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 2000000
+    }
+  },
+  "limits": {
+    "max_steps": 2000000,
+    "max_cycles": null,
+    "max_uart_bytes": 65536,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 1000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "LW_L0_OK"
+      },
+      "passed": false
+    }
+  ],
+  "cpu_state": {
+    "type": "avr",
+    "registers": [
+      19,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      248,
+      149,
+      2,
+      0,
+      46,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      58,
+      1
+    ],
+    "pc": 3406,
+    "sp": 2813,
+    "sreg": 130
+  },
+  "firmware_hash": "fd8ffd71bd9c12ecd45c46dc2247804058198a62b89f3a690fdf8ed1a23bf4c2",
+  "config": {
+    "firmware": "controls/no_dtr_wait/.pio/build/matrix/firmware.elf",
+    "system": "validation/arduino-matrix/systems/arduino-leonardo.yaml",
+    "script": "controls/no_dtr_wait/test.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "spi",
+        "kind": "native",
+        "base": 65536,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c",
+        "kind": "i2c",
+        "base": 65552,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portb",
+        "kind": "native",
+        "base": 65571,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portc",
+        "kind": "native",
+        "base": 65574,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portd",
+        "kind": "native",
+        "base": 65577,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "porte",
+        "kind": "native",
+        "base": 65580,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portf",
+        "kind": "native",
+        "base": 65583,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "adc",
+        "kind": "native",
+        "base": 66048,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "max31855",
+        "device_type": "max31855",
+        "declared": true,
+        "attachment": {
+          "transport": "spi",
+          "bus": "spi",
+          "cs_pin": "D17"
+        },
+        "artifacts": []
+      },
+      {
+        "id": "ina219",
+        "device_type": "ina219",
+        "declared": true,
+        "attachment": {
+          "transport": "i2c",
+          "bus": "i2c",
+          "address": 64
+        },
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "ina219",
+            "meta": {
+              "inputs": {
+                "bus_voltage": 3.3,
+                "current": 0.0
+              },
+              "powered": true,
+              "registers": {
+                "BUS_VOLTAGE": 6602,
+                "CALIBRATION": 4096,
+                "CONFIGURATION": 14751,
+                "CURRENT": 0,
+                "POWER": 0,
+                "SHUNT_VOLTAGE": 0
+              },
+              "supply_generation": null
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "derived_device_time",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "device time derived from cpu_hz (16000000 Hz); PLL reconfiguration is not tracked"
+    },
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal 5 V rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 3472,
+    "data_bytes": 50,
+    "bss_bytes": 111,
+    "flash_used_bytes": 3522,
+    "ram_static_bytes": 161,
+    "flash_total_bytes": 32768,
+    "ram_total_bytes": 2560,
+    "flash_used_pct": 10.75,
+    "ram_static_pct": 6.29,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 3973137,
+    "instructions": 1999499,
+    "steps_executed": 2000000,
+    "memory_reads": 0,
+    "memory_writes": 10235,
+    "peripheral_accesses": 16,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 3406,
+        "count": 4140
+      },
+      {
+        "pc": 3404,
+        "count": 3399
+      },
+      {
+        "pc": 572,
+        "count": 39
+      },
+      {
+        "pc": 634,
+        "count": 39
+      },
+      {
+        "pc": 708,
+        "count": 39
+      },
+      {
+        "pc": 710,
+        "count": 39
+      },
+      {
+        "pc": 874,
+        "count": 39
+      },
+      {
+        "pc": 1612,
+        "count": 39
+      },
+      {
+        "pc": 1828,
+        "count": 39
+      }
+    ]
+  }
+}

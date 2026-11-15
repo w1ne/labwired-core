@@ -1,0 +1,318 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 426072,
+  "cycles": 563379,
+  "instructions": 425992,
+  "stop_reason": "assertions_passed",
+  "stop_reason_details": {
+    "triggered_stop_condition": "assertions_passed",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 2000000,
+    "max_cycles": null,
+    "max_uart_bytes": 65536,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": true,
+    "stop_when_assertions_pass_settle_steps": 1000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "LW_L5_OK"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "avr",
+    "registers": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      2,
+      2,
+      0,
+      10,
+      0,
+      37,
+      1,
+      5,
+      0,
+      236,
+      10,
+      0,
+      0,
+      39,
+      1
+    ],
+    "pc": 4032,
+    "sp": 2813,
+    "sreg": 130
+  },
+  "firmware_hash": "d958d1f68c61cb28c453822be7c6c11a778ccfab850aa4acb4a74839ae6ec5a8",
+  "config": {
+    "firmware": "validation/arduino-matrix/out/arduino-leonardo/L5_adc/firmware.elf",
+    "system": "validation/arduino-matrix/systems/arduino-leonardo.yaml",
+    "script": "validation/arduino-matrix/out/arduino-leonardo/L5_adc/test.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "spi",
+        "kind": "native",
+        "base": 65536,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c",
+        "kind": "i2c",
+        "base": 65552,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portb",
+        "kind": "native",
+        "base": 65571,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portc",
+        "kind": "native",
+        "base": 65574,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portd",
+        "kind": "native",
+        "base": 65577,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "porte",
+        "kind": "native",
+        "base": 65580,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portf",
+        "kind": "native",
+        "base": 65583,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "adc",
+        "kind": "native",
+        "base": 66048,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "max31855",
+        "device_type": "max31855",
+        "declared": true,
+        "attachment": {
+          "transport": "spi",
+          "bus": "spi",
+          "cs_pin": "D17"
+        },
+        "artifacts": []
+      },
+      {
+        "id": "ina219",
+        "device_type": "ina219",
+        "declared": true,
+        "attachment": {
+          "transport": "i2c",
+          "bus": "i2c",
+          "address": 64
+        },
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "ina219",
+            "meta": {
+              "inputs": {
+                "bus_voltage": 3.3,
+                "current": 0.0
+              },
+              "powered": true,
+              "registers": {
+                "BUS_VOLTAGE": 6602,
+                "CALIBRATION": 4096,
+                "CONFIGURATION": 14751,
+                "CURRENT": 0,
+                "POWER": 0,
+                "SHUNT_VOLTAGE": 0
+              },
+              "supply_generation": null
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "derived_device_time",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "device time derived from cpu_hz (16000000 Hz); PLL reconfiguration is not tracked"
+    },
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal 5 V rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "LW_L5_BOOT",
+        "cycle_lo": 561706,
+        "cycle": 561708,
+        "end_cycle": 561708
+      },
+      {
+        "text": "LW_L5_OK",
+        "cycle_lo": 561706,
+        "cycle": 561708,
+        "end_cycle": 561708
+      },
+      {
+        "text": "LW_L5_VAL 512 512",
+        "cycle_lo": 561706,
+        "cycle": 561708,
+        "end_cycle": 561708
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 4202,
+    "data_bytes": 72,
+    "bss_bytes": 111,
+    "flash_used_bytes": 4274,
+    "ram_static_bytes": 183,
+    "flash_total_bytes": 32768,
+    "ram_total_bytes": 2560,
+    "flash_used_pct": 13.04,
+    "ram_static_pct": 7.15,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 563379,
+    "instructions": 425992,
+    "steps_executed": 426072,
+    "memory_reads": 0,
+    "memory_writes": 21909,
+    "peripheral_accesses": 39,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 700,
+        "count": 90
+      },
+      {
+        "pc": 696,
+        "count": 88
+      },
+      {
+        "pc": 704,
+        "count": 88
+      },
+      {
+        "pc": 748,
+        "count": 58
+      },
+      {
+        "pc": 638,
+        "count": 57
+      },
+      {
+        "pc": 672,
+        "count": 57
+      },
+      {
+        "pc": 654,
+        "count": 56
+      },
+      {
+        "pc": 702,
+        "count": 56
+      },
+      {
+        "pc": 740,
+        "count": 56
+      },
+      {
+        "pc": 680,
+        "count": 55
+      },
+      {
+        "pc": 756,
+        "count": 54
+      },
+      {
+        "pc": 694,
+        "count": 53
+      },
+      {
+        "pc": 698,
+        "count": 52
+      },
+      {
+        "pc": 688,
+        "count": 51
+      },
+      {
+        "pc": 658,
+        "count": 33
+      },
+      {
+        "pc": 646,
+        "count": 32
+      }
+    ]
+  }
+}

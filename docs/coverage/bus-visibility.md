@@ -36,6 +36,9 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * I2C: AVR from_config I2C is generic type:i2c without PadLines cell
   * SPI: AVR from_config SPI is generic type:spi without PadLines cell
   * UART: USART1 emits bytes in the CPU smoke, but this edge gate has no AVR UART waveform bring-up
+* **atmega32u4**
+  * I2C: AVR from_config I2C is generic type:i2c without PadLines cell
+  * SPI: AVR from_config SPI is generic type:spi without PadLines cell
 * **atsamd21**
   * UART: Nano 33 IoT twin uses generic type:uart (sercom layout); no UART bring-up for this chip family in the edge gate yet
 * **atsamd51**
@@ -140,6 +143,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | atmega2561 | — | — | — |
 | atmega328p | — | — | — |
 | atmega328pb | — | — | — |
+| atmega32u4 | — | — | — |
 | atsamd21 | — | — | — |
 | atsamd21e15a | — | — | — |
 | atsamd21e16a | — | — | — |
@@ -175,6 +179,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | esp32s3-zero | — | — | — |
 | imxrt1064 | — | — | — |
 | litex-vexriscv | — | — | — |
+| mimxrt1062-teensy41 | — | — | — |
 | mimxrt595s | — | — | — |
 | mk64f12 | — | — | — |
 | mkw41z4 | — | — | — |
@@ -210,6 +215,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | s32k388 | — | — | — |
 | sam4s16c | — | — | — |
 | same70q21b | — | — | — |
+| stm32c031c6 | ✓ | ✓ | ✓ |
 | stm32f072 | ✓ | ✓ | — |
 | stm32f103 | ✓ | ✓ | ✓ |
 | stm32f103c4 | ✓ | ✓ | ✓ |

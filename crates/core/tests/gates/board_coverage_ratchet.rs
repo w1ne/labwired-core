@@ -576,6 +576,19 @@ fn every_shipped_descriptor_is_ratcheted() {
         // bundled-configs.ts catalog board and no executing-fidelity
         // differential of its own. Promote when both exist.
         "atmega2561",
+        // Arduino Leonardo / Micro (ATmega32U4). Has a chip descriptor, a
+        // system manifest and an Arduino matrix row (stock ArduinoCore-avr
+        // L0-L7; Serial is native USB CDC on the CPU's USB device model) — but
+        // no bundled-configs.ts catalog board, no silicon oracle and no
+        // executing-fidelity differential. Timer3, Timer4 and EEPROM are not
+        // modelled.
+        "atmega32u4",
+        // PJRC Teensy 4.1 (MIMXRT1062DVJ6B). Has a chip descriptor, a system
+        // manifest and an Arduino matrix row (stock Teensyduino L0-L3, L5, L7;
+        // Serial is USB CDC on the scripted host) — but no bundled-configs.ts
+        // catalog board, no silicon oracle and no executing-fidelity
+        // differential. LPSPI, QuadTimer PWM and FlexCAN are not modelled.
+        "mimxrt1062-teensy41",
         // First Microchip part in the engine. Has a chip descriptor, an
         // io-smoke executed by the coverage matrix and the strict-onboarding
         // gate, and a peripheral-estate test — but it is NOT a
@@ -868,6 +881,11 @@ fn every_shipped_descriptor_is_ratcheted() {
         // silicon oracle, no executing-fidelity differential, and no
         // bundled-configs.ts catalog entry. Same bar as stm32g071 above.
         "stm32g0b1re",
+        // First STM32C0 part (NUCLEO-C031C6). Stock stm32duino Arduino matrix
+        // row (L0-L7 over USART2/I2C1/SPI1/ADC/TIM1 on the G0-derived IP), but
+        // no silicon oracle, no executing-fidelity differential and no
+        // bundled-configs.ts catalog entry. Same bar as stm32g071 above.
+        "stm32c031c6",
         // ESP32-C6 HP core. L1 smoke: UART0 console reaches the capture sink
         // through its own memory map (flash @ 0x4200_0000, HP SRAM @
         // 0x4080_0000) and its own clock/reset block (PCR); PCR gates and the

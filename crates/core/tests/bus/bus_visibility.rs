@@ -543,6 +543,16 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "AVR from_config SPI is generic type:spi without PadLines cell",
     ),
     (
+        "atmega32u4",
+        BusKind::I2c,
+        "AVR from_config I2C is generic type:i2c without PadLines cell",
+    ),
+    (
+        "atmega32u4",
+        BusKind::Spi,
+        "AVR from_config SPI is generic type:spi without PadLines cell",
+    ),
+    (
         "atmega1281",
         BusKind::I2c,
         "AVR from_config I2C is generic type:i2c without PadLines cell",
