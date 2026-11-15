@@ -30,7 +30,7 @@ permissions:
   contents: read
 concurrency:
   group: microbit-board-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   board:
     runs-on: ubuntu-24.04

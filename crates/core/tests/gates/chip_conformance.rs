@@ -972,6 +972,15 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: None,
     },
+    // PJRC Teensy 4.1 (MIMXRT1062DVJ6B). SIM-DERIVED from the SVD/Teensy
+    // headers: no silicon capture. Its Arduino matrix row runs through
+    // PlatformIO and the CLI, not as a Rust test, so no behavior_gate resolves.
+    ChipConf {
+        name: "mimxrt1062-teensy41",
+        yaml: "configs/chips/mimxrt1062-teensy41.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
     // 64-pin ATmega1281. The committed AVR-GCC image exercises the exact
     // two-byte-PC profile, USART0 output and PB5 package pin. No silicon
     // capture exists, so the behavior gate supports L1 only.

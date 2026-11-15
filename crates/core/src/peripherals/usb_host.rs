@@ -4,8 +4,8 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-//! The scripted USB host shared by the device-controller models
-//! ([`crate::peripherals::imxrt::usb`], [`crate::peripherals::wch_usbfs`]).
+//! The scripted USB host used by the device-controller models
+//! ([`crate::peripherals::imxrt::usb`]).
 //!
 //! A model owns the wire protocol of its controller; this module owns what
 //! the host asks for and what it learned: the control requests ([`Setup`]),
