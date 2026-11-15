@@ -13,7 +13,6 @@ workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
 package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/rp2040/Cargo.toml
 workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
-   Compiling firmware-stm32h743-smoke v0.1.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/firmware-stm32h743-smoke)
 warning: unnecessary `unsafe` block
    --> crates/firmware-stm32h743-smoke/src/main.rs:255:18
     |
@@ -85,4 +84,4 @@ warning: constant `TC` is never used
     |       ^^
 
 warning: `firmware-stm32h743-smoke` (bin "firmware-stm32h743-smoke") generated 11 warnings
-    Finished `release` profile [optimized + debuginfo] target(s) in 1.72s
+    Finished `release` profile [optimized + debuginfo] target(s) in 1.65s
