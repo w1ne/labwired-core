@@ -1,6 +1,6 @@
 # Bounded execution profile for the imported generic STM32H747 descriptor.
 # Exercise only the Cortex-M7, a bounded flash/DTCM window, H7 RCC, GPIOB/D,
-# and USART3 paths asserted by the exact-import firmware smoke. Other imported
+# USART3 and TIM2 paths asserted by the exact-import firmware smoke. Other imported
 # peripheral claims and the H747's second core are intentionally omitted.
 name: stm32h747
 arch: arm
@@ -36,3 +36,20 @@ peripherals:
     size: 1KB
     config:
       profile: stm32v2
+  # RM0399 (STM32H745/755/747/757): TIM2 is the 32-bit general-purpose timer
+  # at 0x40000000 with NVIC position 28 on both cores, clocked by
+  # RCC_APB1LENR.TIM2EN (bit 0, offset 0x0E8; the Cortex-M7 view of
+  # RCC_C1_APB1LENR at 0x148). Second source: embassy stm32-data STM32H747XI.
+  # The smoke covers the gate, 32-bit CNT/ARR, UG, UIF, the update interrupt
+  # in up-counting mode, and one-pulse mode (CR1.OPM). Not modelled: CR1.DIR
+  # and CMS are stored without effect, and a software UG does not end a
+  # one-pulse run. Channels, pads, the count rate, and the Cortex-M4 side
+  # are not exercised.
+  - id: tim2
+    type: timer
+    base_address: 0x40000000
+    size: 1KB
+    irq: 28
+    clock: { reg: apb1lenr, bit: 0 }
+    config:
+      width: 32
