@@ -36,7 +36,7 @@ smoke or silicon claims.
 - Smoke firmware: `crates/firmware-nucleo-f103rb-smoke/`
 - Runnable example: `examples/nucleo-f103rb/`
 - BME280 system: [`nucleo-f103rb-bme280.yaml`](../../configs/systems/nucleo-f103rb-bme280.yaml)
-- BME280 narrow chip profile: [`stm32f103rb-nucleo-bme280-smoke.yaml`](../../configs/chips/stm32f103rb-nucleo-bme280-smoke.yaml)
+- BME280 narrow chip profile: [`stm32f103rb-nucleo-bme280-smoke.yaml`](../../configs/chips/onboarding/stm32f103rb-nucleo-bme280-smoke.yaml)
 - BME280 firmware and evidence: `examples/nucleo-f103rb-bme280/`
 
 The model shares the family reference's medium-density F103 peripheral map.

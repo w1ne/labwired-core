@@ -433,7 +433,7 @@ const CHIPS: &[ChipConf] = &[
     },
     ChipConf {
         name: "esp32-devkitc-32e-gpio-smoke",
-        yaml: "configs/chips/esp32-devkitc-32e-gpio-smoke.yaml",
+        yaml: "configs/chips/onboarding/esp32-devkitc-32e-gpio-smoke.yaml",
         reset_oracle: None,
         // Narrow DevKitC-32E onboarding profile of the same LX6 SoC as `esp32`.
         // The committed Tier-1 fixture runs through this descriptor/system so a
@@ -443,7 +443,7 @@ const CHIPS: &[ChipConf] = &[
     },
     ChipConf {
         name: "esp32-devkitc-32e-uart1",
-        yaml: "configs/chips/esp32-devkitc-32e-uart1.yaml",
+        yaml: "configs/chips/onboarding/esp32-devkitc-32e-uart1.yaml",
         reset_oracle: None,
         // Narrow DevKitC-32E UART1 onboarding profile of the same LX6 SoC as
         // `esp32`. The boards.yml cell runs the committed Tier-1 ELF
@@ -547,7 +547,7 @@ const CHIPS: &[ChipConf] = &[
     },
     ChipConf {
         name: "stm32f103rb-nucleo-bme280-smoke",
-        yaml: "configs/chips/stm32f103rb-nucleo-bme280-smoke.yaml",
+        yaml: "configs/chips/onboarding/stm32f103rb-nucleo-bme280-smoke.yaml",
         reset_oracle: None,
         // Narrow NUCLEO-F103RB + external BME280 onboarding profile of the
         // same F103 map as `stm32f103rb`. The firmware crate is built and

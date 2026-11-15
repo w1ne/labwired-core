@@ -301,7 +301,7 @@ fn systick_irq_firmware_is_byte_identical_at_interval_1() {
 /// Load its exact descriptor and system; the generic family bus is not a proxy.
 #[test]
 fn nucleo_bme280_profile_systick_irq_is_byte_identical() {
-    let chip_path = common::root("configs/chips/stm32f103rb-nucleo-bme280-smoke.yaml");
+    let chip_path = common::root("configs/chips/onboarding/stm32f103rb-nucleo-bme280-smoke.yaml");
     let chip = ChipDescriptor::from_file(&chip_path).unwrap();
     assert_eq!(chip.arch, Arch::Arm);
     assert_eq!(chip.core.as_deref(), Some("cortex-m3"));

@@ -35,18 +35,18 @@ peripherals:
     base_address: 0x3FF40000
     size: "256B"
     config:
-      debug_schema: "../peripherals/esp32/uart0.yaml"
+      debug_schema: "../../peripherals/esp32/uart0.yaml"
 
   - id: "gpio"
     type: "esp32_gpio"
     base_address: 0x3FF44000
     size: "4KB"
     config:
-      debug_schema: "../peripherals/esp32/gpio.yaml"
+      debug_schema: "../../peripherals/esp32/gpio.yaml"
 
   - id: "i2c0"
     type: "esp32_i2c"
     base_address: 0x3FF53000
     size: "4KB"
     config:
-      debug_schema: "../peripherals/esp32/i2c0.yaml"
+      debug_schema: "../../peripherals/esp32/i2c0.yaml"

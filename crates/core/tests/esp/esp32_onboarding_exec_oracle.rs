@@ -119,7 +119,7 @@ fn assert_timer_oracle(chip: &str, system: &str) {
 #[test]
 fn devkitc_gpio_profile_core_timer_exec_oracle() {
     assert_timer_oracle(
-        "configs/chips/esp32-devkitc-32e-gpio-smoke.yaml",
+        "configs/chips/onboarding/esp32-devkitc-32e-gpio-smoke.yaml",
         "configs/systems/esp32-devkitc-32e-gpio-smoke.yaml",
     );
 }
@@ -127,7 +127,7 @@ fn devkitc_gpio_profile_core_timer_exec_oracle() {
 #[test]
 fn devkitc_uart1_profile_core_timer_exec_oracle() {
     assert_timer_oracle(
-        "configs/chips/esp32-devkitc-32e-uart1.yaml",
+        "configs/chips/onboarding/esp32-devkitc-32e-uart1.yaml",
         "configs/systems/esp32-devkitc-32e-uart1.yaml",
     );
 }

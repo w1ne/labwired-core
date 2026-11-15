@@ -1,6 +1,6 @@
 # ESP32-DevKitC-32E GPIO smoke (CLI proof)
 
-Onboarding profile for `configs/chips/esp32-devkitc-32e-gpio-smoke.yaml`.
+Onboarding profile for `configs/chips/onboarding/esp32-devkitc-32e-gpio-smoke.yaml`.
 This directory is the chip's CLI coverage cell: `ci/test.sh` runs the
 committed `tests/fixtures/tier1/esp32.elf` image (the same fixture parent
 `esp32` uses) against `configs/systems/esp32-devkitc-32e-gpio-smoke.yaml`

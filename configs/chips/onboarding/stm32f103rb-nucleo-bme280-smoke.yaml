@@ -49,7 +49,7 @@ peripherals:
     base_address: 0x40021000
     size: "1KB"
     config:
-      debug_schema: "../peripherals/stm32f103/rcc.yaml"
+      debug_schema: "../../peripherals/stm32f103/rcc.yaml"
 
   - id: "afio"
     type: "afio"
@@ -57,7 +57,7 @@ peripherals:
     size: "1KB"
     clock: { reg: "apb2enr", bit: 0 }
     config:
-      debug_schema: "../peripherals/stm32f103/afio.yaml"
+      debug_schema: "../../peripherals/stm32f103/afio.yaml"
 
   - id: "gpioa"
     type: "gpio"
@@ -65,7 +65,7 @@ peripherals:
     size: "1KB"
     clock: { reg: "apb2enr", bit: 2 }
     config:
-      debug_schema: "../peripherals/stm32f103/gpioa.yaml"
+      debug_schema: "../../peripherals/stm32f103/gpioa.yaml"
       profile: "stm32f1"
 
   - id: "gpiob"
@@ -74,7 +74,7 @@ peripherals:
     size: "1KB"
     clock: { reg: "apb2enr", bit: 3 }
     config:
-      debug_schema: "../peripherals/stm32f103/gpiob.yaml"
+      debug_schema: "../../peripherals/stm32f103/gpiob.yaml"
       profile: "stm32f1"
 
   - id: "uart2"
@@ -84,7 +84,7 @@ peripherals:
     irq: 38
     clock: { reg: "apb1enr", bit: 17 }
     config:
-      debug_schema: "../peripherals/stm32f103/usart2.yaml"
+      debug_schema: "../../peripherals/stm32f103/usart2.yaml"
 
   - id: "i2c1"
     type: "i2c"
@@ -94,4 +94,4 @@ peripherals:
     irq_error: 32
     clock: { reg: "apb1enr", bit: 21 }
     config:
-      debug_schema: "../peripherals/stm32f103/i2c1.yaml"
+      debug_schema: "../../peripherals/stm32f103/i2c1.yaml"

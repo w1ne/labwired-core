@@ -351,7 +351,7 @@ fn onboarding_profiles_require_their_own_executing_fidelity() {
             ("stm32f1_exec_oracle.rs".into(), "chips/stm32f103.yaml".into()),
             ("esp32_classic_walk_differential.rs".into(), "chips/esp32.yaml".into()),
             ("firmware_survival.rs".into(),
-                "chips/esp32-devkitc-32e-gpio-smoke.yaml chips/esp32-devkitc-32e-uart1.yaml chips/stm32f103rb-nucleo-bme280-smoke.yaml".into()),
+                "chips/onboarding/esp32-devkitc-32e-gpio-smoke.yaml chips/onboarding/esp32-devkitc-32e-uart1.yaml chips/onboarding/stm32f103rb-nucleo-bme280-smoke.yaml".into()),
         ],
     };
     for stem in [
