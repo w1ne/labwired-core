@@ -14,7 +14,7 @@ Aosong DHT20 I²C temperature and humidity module (AHT20 inside).
 | Address | 0x38 (fixed) |
 | Source | [`configs/devices/dht20.yaml`](../../configs/devices/dht20.yaml) (declarative, no Rust model) |
 | Datasheet | Aosong *DHT20 Humidity and Temperature Module* manual V1.0, §6 signal transformation, §7 sensor reading process |
-| Tier | smoke-proven (register-level tests: `crates/core/tests/everyday_sensor_set.rs`) |
+| Tier | smoke-proven (register-level tests: `crates/core/tests/misc/everyday_sensor_set.rs`) |
 
 ## Pins / attachment
 
@@ -48,7 +48,7 @@ Host inputs: `temperature` (°C), `humidity` (%RH).
        connection: "i2c0"   # the bus id your chip system uses
    ```
 2. Agent: `labwired_list` → `labwired_describe id=dht20` → wire → `labwired_validate` → `labwired_run` / `labwired_verify`.
-3. Register-level smoke: `cargo test -p labwired-core --test everyday_sensor_set` — 0x71 → 0x18; trigger + 80 ms → status 0x18, RH 0x80000, T 0x60000, CRC valid. The same file's negative control proves the check fails against a part that answers only 0x00 or only 0xFF.
+3. Register-level smoke: `cargo test -p labwired-core --test misc everyday_sensor_set::` — 0x71 → 0x18; trigger + 80 ms → status 0x18, RH 0x80000, T 0x60000, CRC valid. The same file's negative control proves the check fails against a part that answers only 0x00 or only 0xFF.
 
 ## Limitations
 

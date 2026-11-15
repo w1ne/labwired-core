@@ -171,6 +171,40 @@ jpeg-decoder = { version = "0.3", default-features = false }
 name = "qemu_arm_core"
 required-features = ["qemu-arm"]
 
+# ── INTEGRATION TESTS ARE GROUPED, NOT ONE BINARY PER FILE ──────────────────
+# Every integration-test binary links the whole core, so one binary per file
+# (483 of them) made linking the dominant cost of the test job. Ordinary test
+# files now live in `tests/<group>/<file>.rs` and are modules of one binary,
+# `tests/<group>/main.rs` (cargo auto-discovers it as the target `<group>`).
+# A test that was `<name>` in `--test <file>` is `<file>::<name>` in
+# `--test <group>`; run one former file with
+#   cargo test -p labwired-core --test <group> <file>::
+# A new top-level `tests/<name>.rs` still builds as its own binary (target
+# auto-discovery stays on), so add new files to a group by putting them in the
+# group directory and a `mod <name>;` line in its `main.rs`.
+#
+# These files stay top-level, as their own binaries, on purpose:
+#   * every file with `required-features` below: a feature is a property of the
+#     cargo target, so a feature-gated file cannot share a group
+#     (`no_vacuous_test_targets.rs::grouped_modules_are_never_feature_gated`);
+#   * files that change process-global state, which would leak into the other
+#     tests of a shared process:
+#       diag_esp32s3_boot: sets LABWIRED_ESP32S3_FASTBOOT (process env)
+#       diag_esp32s3_l2: sets LABWIRED_ESP32S3_FASTBOOT (process env)
+#       register_coverage: chdir into configs/chips (process cwd)
+#       rp2040_bootrom_lookup: chdir + sets/removes bootrom env and CARGO_MANIFEST_DIR
+#       rp2040_i2c_irq_delivery: sets LABWIRED_RP2040_BOOTROM
+#       rp2040_pio_onboarding: sets LABWIRED_RP2040_BOOTROM
+#       rp2040_timer_machine_gate: sets LABWIRED_RP2040_BOOTROM (process env)
+#       rp2350_arduino_boot: sets/removes LABWIRED_RP2350_BOOTROM
+#       rp2350_bootrom_lookup: sets/removes bootrom env
+#       rp2350_usb_cdc_serial: removes LABWIRED_RP2350_BOOTROM
+#       runtime_descriptor_lifetimes: #[global_allocator] and thread_local accounting
+#       tick_interval_inventory: sets LABWIRED_RP2040_BOOTROM
+#   * files named individually in scripts/ci/workspace-test-shards.json (the PR
+#     shard classification works per cargo target):
+#       capture_nokia5110_frames, e2e_epaper_tricolor, e2e_esp32_epaper, e2e_nokia5110_invaders, e2e_nrf52840_proximity, e2e_segger_rtt, e2e_stm32f407_i2c, e2e_swd_dp, nucleo_l476rg, strict_onboarding, world_multichip, world_station_services
+
 # ── ZERO-TEST TARGETS CANNOT REPORT GREEN ────────────────────────────────────
 # Every target below is an integration test whose ENTIRE body sits behind an
 # inner `#![cfg(feature = "...")]`. Built without the feature the file compiles

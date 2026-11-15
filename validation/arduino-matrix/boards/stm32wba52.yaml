@@ -1,0 +1,18 @@
+id: stm32wba52
+chip: stm32wba52
+system: systems/stm32wba52.yaml
+# ststm32 has no upstream board JSON; matrix supplies pio-boards/nucleo_wba52cg.json
+pio: { platform: ststm32, board: nucleo_wba52cg, framework: arduino }
+max_steps: 20000000
+budget_reason: "L0 light; L3 Wire.begin i2c_computeTiming needs multi-M steps"
+led_watch: "gpiob:4"
+led_min_edges: 2
+# L6 analogWrite(LED_BUILTIN): LD1/PB4 is TIM1_CH3 on AF1, routed by the
+# WBA timer AF table (pad_map: stm32wba), so L6 is proven on pad edges.
+pwm_watch: "gpiob:4"
+pwm_min_edges: 20
+family: stm32
+sketches_skip: [L5_adc, L8_can]
+sketches_skip_reason:
+  L5_adc: "No ADC model in stm32wba52 chip yaml yet"
+  L8_can: "No CAN model in matrix path"

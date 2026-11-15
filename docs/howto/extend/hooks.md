@@ -210,7 +210,7 @@ The in-tree test pins the decoded bytes, not just the transition count — four
 temperature/humidity seeds, exact and batched stepping, 5 ms peripheral ticks:
 
 ```bash
-cargo test -p labwired-core --test gpio_schedule_firmware busy_polled_dht
+cargo test -p labwired-core --test gpio_logic busy_polled_dht
 ```
 
 ```text
@@ -221,8 +221,8 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; fini
 ```
 
 Its expected bytes for 22.0 °C / 50 % are `[1, 244, 0, 220, 209]`
-(`crates/core/tests/gpio_schedule_firmware.rs:46`), with the raw pulse-width
-array decoded at `crates/core/tests/gpio_schedule_firmware.rs:65-72`.
+(`crates/core/tests/gpio_logic/gpio_schedule_firmware.rs:46`), with the raw pulse-width
+array decoded at `crates/core/tests/gpio_logic/gpio_schedule_firmware.rs:65-72`.
 
 ## 2. Host observation: bus trace, console stop, logic capture, Python frames
 
@@ -436,7 +436,7 @@ In-tree consumers to copy from:
 **Receipt — delivery to a bus observer and to a machine-registered observer:**
 
 ```bash
-cargo test -p labwired-core --test observer_store_visibility
+cargo test -p labwired-core --test session observer_store_visibility::
 ```
 
 ```text
@@ -455,7 +455,7 @@ test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 The test also pins the two registration traps that used to silently produce an
 empty trace: wide MMIO stores must publish one event per byte (no phantom
 bytes), and registering on the `Machine` must not evict a bus-only observer
-(`crates/core/tests/observer_store_visibility.rs:59-184`).
+(`crates/core/tests/session/observer_store_visibility.rs:59-184`).
 
 ### `Peripheral` — attach points and the tick seam
 

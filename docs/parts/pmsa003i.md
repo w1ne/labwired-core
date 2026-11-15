@@ -14,7 +14,7 @@ Plantower PMSA003I particulate-matter sensor, I²C variant (PM1.0 / PM2.5 / PM10
 | Address | 0x12 (fixed) |
 | Source | [`configs/devices/pmsa003i.yaml`](../../configs/devices/pmsa003i.yaml) (declarative, no Rust model) |
 | Datasheet | Plantower *PMSA003I series data manual*, I²C register table (0x00..0x1F) |
-| Tier | smoke-proven (register-level tests: `crates/core/tests/everyday_sensor_set.rs`) |
+| Tier | smoke-proven (register-level tests: `crates/core/tests/misc/everyday_sensor_set.rs`) |
 
 ## Pins / attachment
 
@@ -48,7 +48,7 @@ Host inputs: `pm1_0`, `pm2_5`, `pm10` (µg/m³); `n0_3` … `n10` (particles / 0
        connection: "i2c0"   # the bus id your chip system uses
    ```
 2. Agent: `labwired_list` → `labwired_describe id=pmsa003i` → wire → `labwired_validate` → `labwired_run` / `labwired_verify`.
-3. Register-level smoke: `cargo test -p labwired-core --test everyday_sensor_set` — Bare 32-byte read: 0x42 0x4D, length 28, PM2.5 = 8, >0.3 µm = 900, check code = byte sum. The same file's negative control proves the check fails against a part that answers only 0x00 or only 0xFF.
+3. Register-level smoke: `cargo test -p labwired-core --test misc everyday_sensor_set::` — Bare 32-byte read: 0x42 0x4D, length 28, PM2.5 = 8, >0.3 µm = 900, check code = byte sum. The same file's negative control proves the check fails against a part that answers only 0x00 or only 0xFF.
 
 ## Limitations
 

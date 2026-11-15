@@ -15,7 +15,7 @@ matches the upstream espressif/svd repository.
 
 ## Provenance of `tests/fixtures/real_world/*.svd`
 
-`crates/core/tests/svd_conformance.rs` treats these as the oracle for chip
+`crates/core/tests/gates/svd_conformance.rs` treats these as the oracle for chip
 peripheral base addresses and NVIC numbers, so where each came from matters:
 
 | File | Source |

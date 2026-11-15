@@ -24,17 +24,16 @@
 
 use super::source_text::strip_comments_and_strings;
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
 
 fn read(rel: &str) -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
+    let path = super::src_roots::core_src(rel);
     let src = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {path:?}: {e}"));
     strip_comments_and_strings(&src)
 }
 
 fn exec_sources() -> Vec<String> {
-    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/cpu/xtensa_lx7/exec");
-    let mut out = vec![read("src/cpu/xtensa_lx7.rs")];
+    let dir = super::src_roots::core_src("cpu/xtensa_lx7/exec");
+    let mut out = vec![read("cpu/xtensa_lx7.rs")];
     let mut entries: Vec<_> = std::fs::read_dir(&dir)
         .unwrap_or_else(|e| panic!("read_dir {dir:?}: {e}"))
         .map(|e| e.expect("dir entry").path())

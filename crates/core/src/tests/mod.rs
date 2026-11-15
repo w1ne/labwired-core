@@ -22,6 +22,9 @@ pub mod cortex_m_mpu_enforcement;
 pub mod device_identity_one_home;
 #[cfg(test)]
 pub mod device_time_derived;
+/// STM32 timers count the APB timer kernel clock (RCC_CFGR.PPREx), not HCLK.
+#[cfg(test)]
+pub mod stm32_timer_kernel_clock;
 /// STM32F103 timer outputs on pads, RCC gates, internal temperature sensor.
 #[cfg(test)]
 pub mod stm32f1_timer_outputs;
@@ -62,6 +65,7 @@ pub mod riscv_cycle_counter_pulse_in;
 pub mod bench_spi_engine;
 pub mod esp32_i2c_waveform;
 pub mod esp32_ledc_waveform;
+pub mod esp32_pcnt_inputs;
 pub mod esp32c3_s3_ledc_waveform;
 #[cfg(test)]
 pub mod esp32s3_i2c_waveform;
@@ -115,6 +119,11 @@ pub mod source_text;
 pub mod spi_byte_level_golden;
 #[cfg(test)]
 pub mod spi_edge_sampling_lab;
+/// The one place that knows where the engine's Rust source lives (shared with
+/// the integration tests, which include the same file).
+#[cfg(test)]
+#[path = "../../tests/common/src_roots.rs"]
+pub mod src_roots;
 #[cfg(test)]
 pub mod stm32_i2c_waveform;
 #[cfg(test)]

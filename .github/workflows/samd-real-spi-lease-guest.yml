@@ -1,7 +1,7 @@
 name: SAMD actual CODAL blocking SPI terminal-result lease guest
 on:
   pull_request:
-    paths: ['crates/core/tests/samd_real_spi_lease_guest.rs', '.github/workflows/samd-real-spi-lease-guest.yml']
+    paths: ['crates/core/tests/samd/samd_real_spi_lease_guest.rs', '.github/workflows/samd-real-spi-lease-guest.yml']
 permissions:
   contents: read
 concurrency:
@@ -49,8 +49,8 @@ jobs:
           bash runtime-services/build.sh ../owned-positive-core "$RUNNER_TEMP/spi-lease-8" 8
       - name: Nonvacuous blocking-lease and positive ordering controls
         run: |
-          cargo test --release --locked -p labwired-core --test samd_real_spi_lease_guest -- --nocapture
-          cargo test --release --locked -p labwired-core --test samd_real_spi_guest -- --nocapture
+          cargo test --release --locked -p labwired-core --test samd -- --nocapture samd_real_spi_lease_guest::
+          cargo test --release --locked -p labwired-core --test samd -- --nocapture samd_real_spi_guest::
       - name: Execute all four actual blocking-lease and positive cases
         run: |
           set -o pipefail
@@ -61,7 +61,7 @@ jobs:
             for profile in default scheduler; do
               feature_args=()
               if test "$profile" = scheduler; then feature_args=(--features event-scheduler); fi
-              if ! cargo test --release --locked -p labwired-core "${feature_args[@]}" --test "$fixture" -- --ignored --nocapture 2>&1 | tee "spi-lease-$mode-$profile.log"; then
+              if ! cargo test --release --locked -p labwired-core "${feature_args[@]}" --test samd -- --ignored --nocapture "$fixture::" 2>&1 | tee "spi-lease-$mode-$profile.log"; then
                 lease_failures=$((lease_failures + 1))
               fi
             done

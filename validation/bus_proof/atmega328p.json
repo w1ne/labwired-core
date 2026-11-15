@@ -1,0 +1,19 @@
+{
+  "id": "atmega328p",
+  "in_boards": true,
+  "uart": {
+    "state": "none",
+    "gap": "P0 AVR twin models USART0 TX into a host sink in unit tests (cpu::avr::tests) but no committed firmware_survival / tier1 ELF lane proves UART under labwired run yet.",
+    "lane": "none"
+  },
+  "spi": {
+    "state": "none",
+    "gap": "No SPI controller model on ATmega328P P0.",
+    "lane": "none"
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "No TWI model on ATmega328P P0.",
+    "lane": "none"
+  }
+}

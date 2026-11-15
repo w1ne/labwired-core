@@ -273,14 +273,13 @@ impl PadRoutes {
             // A conditional route can take the pad over WITHOUT a write to
             // this port (a timer enabling its channel output), and only a
             // port write re-syncs taps. So its line reports to the watch
-            // channel whenever the pad is handed to a peripheral at all; it
-            // publishes nothing while it does not drive.
-            if selector_of(pin).is_some() {
-                for r in self
-                    .routes
-                    .iter()
-                    .filter(|r| r.when_driving && r.pin == pin)
-                {
+            // channel whenever the pad selects it (any AF on an F1 port, whose
+            // routes carry no selector; the route's own AF nibble on a V2
+            // port); it publishes nothing while it does not drive.
+            if let Some(current) = selector_of(pin) {
+                for r in self.routes.iter().filter(|r| {
+                    r.when_driving && r.pin == pin && r.selector.is_none_or(|want| want == current)
+                }) {
                     if let Some(slot) = per_cell[r.cell].get_mut(r.line) {
                         if !slot.contains(&channel) {
                             slot.push(channel);

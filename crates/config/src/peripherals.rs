@@ -939,7 +939,7 @@ pub struct ZeroWhen {
 /// per-device trigger/action pair: a second part adopts it by naming its own
 /// registers, masks and conversion time in YAML.
 ///
-/// Lifecycle (`name` is for diagnostics only):
+/// Lifecycle (`name` can also be subscribed to by a `data_ready` rule event):
 ///  1. **idle** at power-on — the status bit reads clear.
 ///  2. A master write to `start_register` that leaves any `start_mask` bit set
 ///     (or, with `start_value`, leaves the masked bits equal to it) starts a
@@ -955,16 +955,15 @@ pub struct ZeroWhen {
 ///     idiom keep producing fresh results.
 ///
 /// **Holdout degradation.** `conversion_us` is measured on the honest µs source
-/// the bus master feeds in through `I2cDevice::advance_time_us` (ESP32
-/// SYSTIMER, nRF54L GRTC). On families with no absolute-µs counter — STM32,
-/// ESP32-classic, nRF52 — nothing ever advances that clock, and the status bit
-/// degrades to *always set*, i.e. exactly the always-ready constant these
-/// devices modelled before this primitive existed. The degradation is
-/// deliberate: fabricating a µs clock from a pinned core frequency would be a
-/// cheat, and a permanently-clear flag would hang firmware that is correct.
+/// the bus master feeds in through `I2cDevice::advance_time_us`. If a bus never
+/// advances that clock by a nonzero duration, the status bit remains *always
+/// set*, preserving the legacy always-ready behavior. Autonomous `data_ready`
+/// events require actual clock advancement; they do not use that fallback.
+/// Controller timing implementations determine the available clock source.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DataReady {
-    /// Diagnostic name for this conversion (e.g. `proximity`). Not addressable.
+    /// Name for this conversion (e.g. `proximity`), used by diagnostics and
+    /// optional `on: { data_ready: name }` rule subscriptions.
     pub name: String,
     /// Register whose bits the master writes to start a conversion.
     pub start_register: String,
@@ -989,6 +988,15 @@ pub struct DataReady {
     /// once the conversion completes.
     #[serde(default)]
     pub clear_on_read: Vec<String>,
+    /// Alternative acknowledgement: every enabled result must complete a read.
+    /// Entries are independently remembered until all have been read, in any
+    /// order. Enable bits are captured from start_register when a conversion
+    /// starts; an active start write rearms and clears acknowledgement memory.
+    /// Idle writes retain completed results and their enabled set. This is an
+    /// explicit internal retention contract; devices must scope reconfiguration
+    /// claims separately. Cannot combine with clear_on_read.
+    #[serde(default)]
+    pub clear_on_read_all: Vec<DataReadyRead>,
     /// Registers whose WRITE clears the status bit — the write-1-to-clear
     /// interrupt idiom.
     ///
@@ -1005,6 +1013,19 @@ pub struct DataReady {
     /// would be a guess about which encoding a given part uses.
     #[serde(default)]
     pub clear_on_write: Vec<String>,
+}
+
+/// One result in an all-enabled-result acknowledgement group.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DataReadyRead {
+    pub register: String,
+    /// ANY matching bit enables this result; zero means always enabled.
+    #[serde(default)]
+    pub enable_mask: u32,
+    /// Optional per-result ready bit, cleared when this result is read.
+    /// The parent ready_mask remains until the final enabled result is read.
+    #[serde(default)]
+    pub ready_mask: u32,
 }
 
 /// **Byte-addressable register file** for the `register_file` I²C mode: `size`

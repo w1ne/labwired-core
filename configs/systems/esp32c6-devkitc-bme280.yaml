@@ -1,0 +1,18 @@
+# ESP32-C6-DevKitC-1 + Adafruit BME280 breakout on I2C0.
+# GPIO6 is SDA and GPIO7 is SCL. The C6 board does not include a simple LED;
+# this smoke asserts the sensor's returned CHIP_ID instead of claiming its
+# addressable RGB LED is a plain GPIO LED.
+name: "esp32c6-devkitc-bme280"
+chip: "../chips/esp32c6.yaml"
+cpu_hz: 160_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GPIO6"
+      scl: "GPIO7"
+    config:
+      i2c_address: 0x77
+board_io: []

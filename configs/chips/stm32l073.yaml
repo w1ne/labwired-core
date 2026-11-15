@@ -283,6 +283,9 @@ peripherals:
     size: "1KB"
     irq: 15
     config:
+      # Channel outputs reach the pads through the L0 AF table
+      # (bus/attach.rs STM32L0_TIMER_PADS, from stm32duino PinMap_TIM).
+      pad_map: "stm32l0"
       debug_schema: "../peripherals/stm32l073/tim2.yaml"
       width: 16
     # TIM2 is clocked from RCC_APB1ENR.TIM2EN (bit 0). Unclocked out of reset
@@ -296,6 +299,9 @@ peripherals:
     size: "1KB"
     irq: 16
     config:
+      # Channel outputs reach the pads through the L0 AF table
+      # (bus/attach.rs STM32L0_TIMER_PADS, from stm32duino PinMap_TIM).
+      pad_map: "stm32l0"
       debug_schema: "../peripherals/stm32l073/tim3.yaml"
 
   # TIM6 / TIM7 — 16-bit basic timers (HAL time-base candidates).

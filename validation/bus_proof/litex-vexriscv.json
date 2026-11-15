@@ -1,0 +1,21 @@
+{
+  "id": "litex-vexriscv",
+  "in_boards": false,
+  "uart": {
+    "state": "proven",
+    "file": "crates/core/tests/gates/firmware_survival.rs",
+    "test": "test_litex_vexriscv_smoke_survival",
+    "signal": "committed ELF fixture tests/fixtures/litex-vexriscv-smoke.elf booted in-sim; the survival gate asserts 'LITEX VEXRISCV SMOKE\\n' on the LiteX UART TX sink. Fixture absence is a hard assert!, not a skip.",
+    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test gates firmware_survival::"
+  },
+  "spi": {
+    "state": "none",
+    "gap": "The LiteX SPI-flash controller is a declared `type: stub` (docs/boards/litex-vexriscv.md).",
+    "lane": "none"
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "No I2C controller is modelled on the LiteX VexRiscv SoC.",
+    "lane": "none"
+  }
+}

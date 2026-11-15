@@ -196,7 +196,7 @@ def run_image(row, args, core, output):
     })
     command = [args.cargo, "test", "--offline", "-p", "labwired-core",
                "--features", ",".join(CORE_FEATURES), "--test",
-               "g0_customer_timing", "--", TEST, "--exact", "--ignored", "--nocapture"]
+               "stm32", "--", f"g0_customer_timing::{TEST}", "--exact", "--ignored", "--nocapture"]
     result = {"id": row["id"], "backend": row["backend"], "baud": row["baud"],
               "elf_sha256": row["sha256"], "layout_sha256": row["layout_sha256"],
               "declared_artifact": row,

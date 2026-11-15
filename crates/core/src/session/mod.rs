@@ -59,6 +59,9 @@ pub struct OpenOptions {
     /// Fuel per advance batch; bounds how far past a UART match `expect` may
     /// overshoot.
     pub batch_fuel: u64,
+    /// Opt-in optimized scheduling. Mirrors the world-node fast execution
+    /// path, but is off by default to preserve existing trace semantics.
+    pub optimized_execution: bool,
     /// Echo the console to the host's stdout.
     pub echo_uart_stdout: bool,
     /// Record which instruction addresses execute (firmware coverage). Off by
@@ -75,6 +78,7 @@ impl Default for OpenOptions {
         Self {
             cpu_hz: None,
             batch_fuel: 20_000,
+            optimized_execution: false,
             echo_uart_stdout: false,
             coverage: false,
             cosim_base_dir: None,
@@ -280,6 +284,9 @@ impl Session {
         req.options.echo_uart_stdout |= opts.echo_uart_stdout;
         let build = OwnedBuild::from_request(&req);
         let mut built = build_machine(req)?;
+        built
+            .machine
+            .set_optimized_execution(opts.optimized_execution);
         let cosim = bind_cosim(&*built.machine, &build.system, &opts)?;
         let coverage = opts.coverage.then(|| {
             let obs = std::sync::Arc::new(crate::pc_coverage::PcCoverageObserver::new());
@@ -772,6 +779,9 @@ impl Session {
             obs.reset();
             built.machine.add_observer(obs.clone());
         }
+        built
+            .machine
+            .set_optimized_execution(self.opts.optimized_execution);
         self.machine = built.machine;
         self.uart = uart::UartStream::new(built.uart);
         self.board_io = built.board_io;

@@ -1,0 +1,31 @@
+{
+  "board": "adafruit-feather-esp32-v2",
+  "component": "bme280 at 0x77",
+  "firmware_source": "examples/adafruit-feather-esp32-v2/README.md BME280 Arduino example",
+  "oracle": "GPIO13 high; the sketch only sets it after the I2C read of register 0xD0 returns 0x60",
+  "status": "model_verified",
+  "proven": true,
+  "run_status": "pass",
+  "stop_reason": "max_steps",
+  "steps": 5000000,
+  "oracle_results": [
+    {
+      "kind": "gpio",
+      "passed": true,
+      "detail": "GPIO13 is high (gpio_pins pad)"
+    }
+  ],
+  "gaps": [
+    {
+      "scope": "model",
+      "detail": "MCU VDD is assumed to be an ideal 3.3 V rail; power-on and brown-out reset are not simulated."
+    }
+  ],
+  "unmodeled_faults": [
+    {
+      "access": "unpowered_rail_assumed",
+      "count": 1
+    }
+  ],
+  "limits": "This proves the sketch's modeled success path, not physical hardware operation. STEMMA QT power switching and analog pull-up behavior are not modeled."
+}

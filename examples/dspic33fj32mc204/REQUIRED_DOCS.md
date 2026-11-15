@@ -19,4 +19,4 @@ table in its module docs.
 The XC16 ELF layout is no longer provisional: it was verified against XC16
 v1.70 output (4-byte instruction slots, PC-unit addresses, reset GOTO at PC 0,
 IVT holding 24-bit ISR addresses as data) and is covered by
-`crates/core/tests/pic24_xc16_elf_boot.rs`.
+`crates/core/tests/pic/pic24_xc16_elf_boot.rs`.

@@ -13,6 +13,14 @@ registers_count: 50
 # esp32c3/i2c.rs CPU_CLK_HZ, esp32c3/rtc_timer.rs CPU_HZ) and the
 # `cpu_hz: 160_000_000` every in-tree C3 system manifest declares.
 cpu_hz: 160_000_000
+# GPIO pad thresholds for analog/digital co-simulation. Espressif
+# ESP32-C3 Series Datasheet v2.5, Table 5-4 "DC Characteristics"
+# (3.3 V, 25 °C): VIL max 0.25 * VDD, VIH min 0.75 * VDD.
+# https://documentation.espressif.com/esp32-c3_datasheet_en.html
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.25
+  vih: 0.75
 
 flash:
   base: 0x42000000

@@ -1,0 +1,1048 @@
+id: esp32c3
+# 2026-09-15 (#932): SPI edge sampling is opt-in (`SpiSampling::Byte` default). Byte-level golden pins the pre-feature path. Controllers without a bit engine reject opt-in at config time.
+doc: docs/boards/esp32c3.md
+chip: configs/chips/esp32c3.yaml
+tier: silicon-verified
+note: "Reset-state oracle, not behavioural. ~40 peripherals declared (NOT 6 as the prose doc says)."
+offline_tests:
+  # 89 until 2026-08-08. The "79" that stood here was stale by ten entries.
+  # Two of the 89 (WIFI_MAC 0x60035000, 0x6003507C) turned out to be
+  # free-running counters — they change on every read on live silicon, so a
+  # constant could never match — and moved to esp32c3_free_running_counters
+  # _are_mapped, which asserts the window maps and nothing about its value.
+  - "esp32c3_reset_conformance::esp32c3_reset_values_match_silicon (87 regs; 366/423 overlap matched silicon)"
+  - "esp32c3_reset_conformance::esp32c3_free_running_counters_are_mapped (2 WiFi MAC counter windows; mapping only, no equality claim)"
+silicon:
+  last_capture: 2026-08-09
+  probe: "USB-JTAG (built-in) + openocd-esp32 v0.12.0-esp32-20260703, board MAC 9c:cc:01:d0:98:e0 (QFN32 rev v0.4)"
+  result: "re-captured live 2026-08-09 on a SECOND physical C3 (MAC 9c:cc:01:d0:98:e0; the 2026-06-11 baseline came from 38:44:be:42:f5:58, same QFN32 rev v0.4) — cross-board corroboration, not a re-read of the same part. 1207 registers read in ONE state (21 estate windows + 43 control registers + the radio windows): 84/84 RESET_VALUES matched, 0 mismatched, and both FREE_RUNNING_COUNTERS windows mapped. Radio note: a JTAG `reset halt` on the C3 is a software CORE reset that does not cold-reset peripherals, so RADIO_FE/WIFI_MAC only read their cold baseline when no resident firmware has brought the PHY up — the board was temporarily flashed with crates/wasm/tests/fixtures/esp32c3-hello-world-flash.bin for the capture, then its original 4 MB image was restored and verified byte-identical (sha256 844abc88…8a910). Do NOT try to reach cold radio via RTC_CNTL SW_SYS_RST: it resets the USB-Serial-JTAG bridge too and drops the debug link mid-write (verified, LIBUSB_ERROR_IO). Artifacts: scripts/hw-oracle/captures/esp32c3/recapture-20260809T121824Z/."
+# 2026-08-10: rides the logic-analyzer wire-channel contract. This board's models gained ONLY
+# the two additive accessors line_names() and wire_lines() — the diff across
+# crates/core/src/peripherals/{esp32c3,esp32s3} is +32 lines and ZERO deletions, so no existing
+# code path was altered. Checked rather than argued: esp32c3_reset_conformance (2 passed) and
+# esp32s3_reset_conformance (1 passed) were executed on this branch. The source digest moved;
+# the model did not.
+# 2026-08-13 (#962): the chip descriptor now declares the clock its core
+# runs at (`ChipDescriptor::cpu_hz`), which moved every configs/chips/*.yaml
+# and this board's digest with them. NOTHING THIS CAPTURE PINS MOVED: the
+# field is declarative and no peripheral model reads it — the ESP/nRF
+# peripherals keep their own CPU_CLOCK_HZ constants, and a new test
+# (cpu_hz_single_source) asserts the descriptor agrees with them rather
+# than replacing them. What consumes the clock is the external-device
+# attach path (DHT22, HC-SR04, rotary encoder, WS2812), and no silicon
+# capture covers any of those. No live re-capture owed for this change;
+# any re-capture already owed above still is.
+# 2026-08-15 (#991): `Cpu::runtime_snapshot` returns `Option<(CpuKind,
+# Vec<u8>)>` instead of fabricating `(ArmCortexM, vec![])` for cores that
+# model no snapshot, and the `supports_runtime_snapshot()` predicate — a
+# second source of truth that could disagree with what a capture contained —
+# is deleted. NOTHING THIS CAPTURE PINS MOVED. Read the whole diff for the
+# two watched files rather than taking the summary: in
+# crates/core/src/cpu/riscv.rs the override that returned `true` is removed
+# and the return becomes `Some((CpuKind::RiscV, bytes))` — the SAME
+# `CpuKind` over the SAME bincode bytes, so a C3 resume restores exactly
+# what it restored before. In crates/core/src/peripherals/esp32c3/gpio.rs
+# the only change is inside `#[cfg(test)]`: `.expect(...)` to unwrap the new
+# Option. No register, reset value, or peripheral code path is touched, and
+# the 84/84 RESET_VALUES this capture pins cannot observe a Rust return
+# type. The source digest moved; the model did not. No live re-capture owed
+# for this change; any re-capture already owed above still is.
+# 2026-08-15: esp32c3/gpio.rs gained a side-effect-free `peek` that returns
+# the same already-modeled register bytes as `read`. This changes only the
+# debugger/twin inspection surface from `null` to the live GPIO value; no
+# MMIO read/write behavior, register layout, base, or reset value changed.
+# The focused GPIO peek regression and existing ESP32-C3 GPIO suite pass.
+# The reset-state silicon oracle is therefore unaffected; no live reset
+# re-capture is warranted for this observer-only fix.
+# 2026-08-21: `peripherals/esp32c3/bt.rs` changed in two ways, neither of
+# which alters a register, a bit position, a timing or a decode:
+#   1. `next_node_id()` moved to `peripherals/ble_air.rs` and is imported
+#      from there. It has to be ONE counter now that a second kind of BLE
+#      controller can share an air — two counters would both start at 1,
+#      the first controller of each kind would collide, and each would
+#      swallow the other's frames as "its own transmission".
+#   2. `set_air` is now also reachable as `Peripheral::attach_ble_air`, so
+#      `SystemBus::attach_lab_air` stops downcasting to this concrete type
+#      to find it. The body it runs is unchanged — it calls `set_air`.
+# The RW-BLE model itself is byte-identical. No live re-capture owed for
+# this change; any re-capture already owed above still is.
+#
+# 2026-08-22: `InterruptFabric` seam (ledger row 6.6). Eleven chip-specific
+# interrupt fields left `SystemBus` for one `irq_fabric` field, so every
+# reference to them changed PATH. The only watched file in this list that
+# moved is `crates/core/src/cpu/riscv.rs`, and its whole diff is:
+#   * two field ASSIGNMENTS in a `#[cfg(test)]` fn — `bus.riscv_irq_lines =`
+#     becomes `bus.irq_fabric.esp32c3.irq_lines =`, same u32, same values
+#     (`1 << 5` then `0`);
+#   * two comment lines naming the field.
+# No non-test line of riscv.rs changed, and the other three watched entries
+# (decoder/riscv.rs, peripherals/esp32c3, peripherals/esp_xtensa_common) are
+# byte-identical. `Bus::external_irq_lines` still
+# returns the same mask from the same computation (the assignment moved from
+# `self.riscv_irq_lines` to `self.irq_fabric.esp32c3.irq_lines`, one field to
+# one field). The INTERRUPT_CORE0 routing itself is untouched: MAP at
+# 0x600C_2000 + s*4, CPU_INT_ENABLE 0x104, CPU_INT_PRI_n 0x114 + n*4,
+# CPU_INT_THRESH 0x194, FROM_CPU doorbells as sources 50..53 — same offsets,
+# same gating order, same level semantics. No register, reset value, source
+# ID or interrupt number changed, so the 2026-08-09 reset-state capture (87
+# regs, 366/423 overlap) is unaffected and no live re-capture is owed for
+# this change. Re-captures already owed above still are.
+  # Re-stamped 2026-08-22 for the flash-size correction in this branch. The
+  # only model file that moved for this board is its chip descriptor, and the
+  # only field that changed is flash `size`, respelled from MB to KB because
+  # `parse_size` reads MB as 10^6 — the modelled part grows to the size of the
+  # real one. No register layout, reset value or peripheral behaviour is
+  # touched, which is what the silicon capture asserts, so the capture stands.
+#
+# Re-stamped 2026-08-22 for explicit wrapping ops on GUEST arithmetic.
+# `cortex_m.rs` and `riscv.rs` replace `+`/`<<` with `wrapping_add`/`wrapping_shl`
+# at sites where the guest ISA specifies modulo-2^32 behaviour: exception entry
+# and return stacking (`frame_ptr + 4..32`), branch target `pc + 4 + offset`,
+# `vtor + n*4`, the BL link address, and the RISC-V vectored trap base and
+# SLLI/SRLI/SRAI shifts (shamt is masked to 5 bits at decode).
+#
+# `a + b` and `a.wrapping_add(b)` differ ONLY when the op overflows, which under
+# `overflow-checks = true` was a PANIC, never a wrong value. So no silicon-anchored
+# register can have moved: every input that used to produce a number still produces
+# the same number. Four inputs that used to CRASH the simulator now wrap the way the
+# part does — see the four new tests (`armv7m_exception_entry/return_wraps_the_stack
+# _frame`, `armv7m_branch_wraps_at_the_signed_pc_boundary`,
+# `riscv_vectored_trap_wraps_at_the_top_of_the_address_space`). Confirmed by
+# restoring one site to `+`: it panics at cortex_m.rs:1367 `attempt to add with
+# overflow`.
+#
+# Ran: labwired-core --lib 3260 pass / 0 fail, and nrf52_timer_walk_differential,
+# stm32f401/stm32l476_walk_differential, kw41z_walk_free_differential. This is an
+# ack, not a capture — no live re-capture was made.
+# 2026-09-17 (#1142): no model change. The inline `#[cfg(test)] mod tests`
+# blocks were moved out of 13 model source files (spi.rs, i2c.rs, tick.rs,
+# cortex_m.rs, esp32c3/{i2c,bt,virtual_wifi}.rs, esp32s3/gdma.rs, ...) into
+# sibling `*_tests.rs` files. Production code is byte-identical apart from the
+# removed test block and a 3-line `#[path]` module declaration; per-file
+# `#[test]` counts before and after match exactly. The digest moves because
+# it hashes the whole file. This is an ACK, NOT A CAPTURE — a live
+# re-capture is still owed.
+  #
+  # Re-stamped 2026-08-22 for the EspI2cCore extraction in this branch: the ESP
+  # I2C models moved wholesale into a shared core, so every digest over them
+  # changes. Behaviour-preserving extraction, not a model correction —
+  # `pr-workspace-tests` green on all shards is what exercises this peripheral,
+  # so nothing the silicon capture asserts changed and the capture stands.
+# 2026-09-17 (perf/bus-scheduler-pass): per-instruction COST only, no model
+# change. Three edits: `CortexM::step_execute` asks "is anything pending"
+# before ranking exceptions (the ranking it now skips returned `None`, and
+# the `exception_num != 0` arm already made the block dead); `SystemBus`
+# negative-caches the hole between `extra_mem` windows, which an access
+# wholly inside provably misses; and `RiscV` remembers an aligned fetch
+# window base whose refill just failed instead of re-deriving the same
+# failure every instruction (the fetch still falls through to
+# `bus.read_u32`, the path it was already taking). No register map, reset
+# value, timing or IRQ route is touched.
+# EVIDENCE: seven runs of five firmwares at --max-steps 5000000 (nrf52840
+# Zephyr step+batch, nrf52840 tier1, stm32f405 tier1 step+batch, esp32c3
+# tier1, esp32c3 demo) hash 21/21 IDENTICAL over stdout, the cycle-stamped
+# `--bus-trace-out` event list and the `[batched]` summary, against a
+# binary built from 80c01390d. The digest moves because it hashes whole
+# files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+# 2026-09-20: recover bounded RISC-V ADDI/back-branch aggregation from the
+# fork, using the existing permission-vetted fetch window instead of a
+# persistent promotion cache. Reset and both CPU snapshot restore paths
+# now invalidate fetched code. The three stale-code regressions failed
+# before the repair; the optimized RISC-V unit group passes 37/37 after it.
+# IRQ-enabled, observer, logic-tap, and cycle-accurate execution remains
+# interpreted. This acknowledges CPU-source drift, NOT a silicon recapture.
+# 2026-09-28 (BLE connections + GATT): the RW-BLE baseband model
+# (`peripherals/esp32c3/bt.rs` + new `bt_link.rs`) gained connection events,
+# connectable advertising, active scan and the initiator; the vendored IROM
+# gained the 12-byte `.data_btdm` load image at 0x4005966C. No register
+# reset value the reset-conformance capture asserts is touched: the new
+# behaviour lives in exchange memory and the radio event path, which that
+# capture does not cover. This acknowledges model drift, NOT a recapture.
+# Re-stamped 2026-11-08 for the C6 LEDC split (shared esp32c3/ledc.rs +
+# gpio.rs): the C3 decodes with C3_LAYOUT, which is the previous constants,
+# and its LEDC unit/waveform tests are unchanged. Ack, not a recapture.
+# 2026-11-08 (round 342): twai0 moved from `declarative` to the S3 TWAI
+# behavioural model (esp32s3/twai.rs, irq 25), so the Arduino L8 self-RX
+# cell runs. esp32c3_reset_values_match_silicon asserts no TWAI register;
+# the live capture reads the clock-gated window as bus junk (0x0008fe10).
+# This acknowledges model drift, NOT a recapture.
+# Re-stamped 2026-11-08 (round 347) over both changes above after merging main.
+drift_ack_digest: afcf8ea391f732b54fbedeea7e983b71a7ca9cc41a2c4000073c9ab7b0f93971
+models:
+  - crates/core/src/peripherals/esp_ledc_wave.rs
+  - crates/core/src/cpu/riscv.rs
+  - crates/core/src/decoder/riscv.rs
+  - crates/core/src/peripherals/esp32c3
+  - crates/core/src/peripherals/esp_xtensa_common
+  # Shared TIMG model: hosts the C3 TIMG0 RTC_SLOW calibration feature
+  # (RTCCALICFG), part of the C3 clock contract since the 2026-07-24
+  # self-consistency fix.
+  - crates/core/src/peripherals/esp32/timg.rs
+  # Shared Espressif UART twin. Since 2026-07-28 the C3's uart0/uart1 are
+  # `type: "esp32c3_uart"`, and esp32c3/uart.rs is a thin binder over
+  # peripherals/esp_uart.rs — the register map itself lives there. Without
+  # this entry a change to the C3's real UART layout could not trip drift.
+  - crates/core/src/peripherals/esp_uart.rs
+  - crates/core/src/peripherals/esp_systimer.rs
+  # TWAI0 is `type: "esp32s3_twai"` since round 342: the S3 model reused
+  # (twai_struct.h identical on C3/S3). The drift gate must see it.
+  - crates/core/src/peripherals/esp32s3/twai.rs
+  # RISC-V core: listed at the top of this models list (cpu/riscv.rs +
+  # decoder/riscv.rs) so the digest sees the core, not only peripherals.
+  - configs/chips/esp32c3.yaml
+  # THE silicon anchor. The C3's tier is a reset-state oracle, not a
+  # behavioural diff: esp32c3_reset_values_match_silicon asserts descriptor
+  # `reset_value`s, and every one of the 29 declarative blocks the chip yaml
+  # wires comes from this directory. It was absent from this list until
+  # 2026-07-30, so the exact files the silicon claim rests on were the only
+  # ones the drift gate could not see.
+  - configs/peripherals/esp32c3
+# 2026-06-20: added behavioural I2C0 controller (esp32c3/i2c.rs) + external-device
+# slave-attach. Live I2C0 reset capture this date over USB-JTAG is byte-identical to
+# the model (CTR=0x20b, FIFO_CONF=0x408b, FIFO_ST=0, TO=0x10, INT_RAW=0x2). Full
+# 79-reg live re-capture tracked; this ack covers the model change in the interim.
+# 2026-06-27: added behavioural GP-SPI2 (esp32c3/spi.rs) + one-shot SAR ADC
+# (esp32c3/apb_saradc.rs), wired into esp32c3.yaml for tier-1 spi/adc cells.
+# Both are ADDITIVE behavioural engines whose reset values + register layout
+# were diffed against the committed spi2.yaml / apb_saradc.yaml SVD descriptors
+# (CLOCK=0x80003043, CTRL=0x3c0000, DMA_CONF reset 0 + DATE=0x2007220 for SPI;
+# ONETIME_SAMPLE/INT layout for ADC). They do not touch the asserted reset-oracle
+# set; this ack covers the new model files until the next full live re-capture.
+# 2026-06-28: added behavioural LEDC controller (esp32c3/ledc.rs), wired into
+# esp32c3.yaml for the tier-1 pwm cell. ADDITIVE: the four low-speed timers now
+# run as live up-counters that advance with elapsed cycles, wrap at 2^DUTY_RES,
+# and latch LSTIMERx_OVF (TIMERx_CONF/VALUE + INT_* layout diffed against the
+# committed ledc.yaml SVD descriptor). It does not touch the asserted reset-oracle
+# set; this ack covers the new model file until the next full live re-capture.
+# 2026-07-03: added Esp32c3I2c::attached_slaves() (esp32c3/i2c.rs) — a pure read
+# accessor exposing the attached I2C devices so the wasm framebuffer readback
+# (get_ssd1306_framebuffer) can reach an OLED on the C3 controller. No register,
+# timing, state, or reset-value change; purely additive getter. This ack covers
+# the model-file touch; no live re-capture warranted.
+# 2026-07-04: added the universal peripheral-inspect surface to esp32c3/i2c.rs
+# (register/field/artifact read accessors for the MachineInspect interface). Pure
+# read-only introspection; no register, timing, state, or reset-value change. This
+# ack covers the model-file touch; no live re-capture warranted.
+# 2026-07-05: added runtime-snapshot serialization to esp32c3/rtc_timer.rs +
+# cpu/riscv.rs (take/apply_runtime_snapshot for the app-entry boot cache). Pure
+# (de)serialization of existing counter/register state, invoked only on
+# snapshot/resume — normal-run register/timing/reset behaviour is byte-for-byte
+# unchanged; the reset-state silicon anchor is unaffected. Covers the model-file
+# touch; no live re-capture warranted.
+# 2026-07-06: C3 run-loop/peripheral optimizations cache bus-tick and IRQ
+# routing indices and dynamically trim idle legacy IRQ tick walks. They skip
+# redundant polling work but keep MMIO-visible register, IRQ-source, and
+# elapsed-cycle semantics intact; covered by offline C3 IRQ and browser OLED
+# ROM-boot tests. SSD1306 command parsing now preserves multi-byte command
+# state across split I2C transactions and consumes common init command
+# parameters, matching Arduino/Wire traffic; this is an attached device model,
+# not an ESP32-C3 silicon register/reset change. No live USB-JTAG re-capture
+# this session; re-capture remains pending.
+# 2026-07-07: C3 ROM-boot RTC and SYSTIMER stay on the legacy tick path under
+# event-scheduler because the current bus read API cannot sync scheduler-driven
+# peripherals before read-driven timer snapshots. This restores the same
+# per-cycle timer freshness as the non-scheduler path and is covered by the
+# generated Arduino OLED ROM-boot regression; no reset-register silicon change.
+# 2026-07-09: universal logic analyzer — additive read_gpio_pad pad probe (ENABLE-mask direction) + I2C controller wraps attached slaves in TracingI2cDevice (shared bus trace) and signals START to the selected slave at address match so traces carry decodable address frames. Register map/reset values byte-for-byte untouched; conformance/e2e unchanged. No live re-capture.
+# 2026-07-10: bus-trace single-choke-point refactor (attach wraps at SystemBus::attach_i2c_slave/attach_spi_device; no per-callsite set_bus_trace) + cycle stamp on trace events + gpio_routing/pin_routing metadata. Additive; oracle output unchanged.
+# 2026-07-10: I2C0 (esp32c3/i2c.rs) upgraded to a cycle-driven BIT-LEVEL engine: command lists now execute over simulated cycles with SCL/SDA timing derived from the real CLK_CONF / SCL_*_PERIOD / SDA_HOLD / START / STOP counters (TRM reg+1 semantics; datasheet reset values when firmware leaves them unprogrammed). TRANS_COMPLETE/END_DETECT/NACK and COMD command_done assert at the derived wire time (no longer instantly) and SR.BUS_BUSY reads 1 while on the wire. Register map, reset values, FIFO semantics and the byte-level traced-slave contract are unchanged — the reset oracle is unaffected. esp32c3/gpio.rs additionally reads the shared I2C line levels for pads matrix-routed to I2CEXT0_SDA/SCL so read_gpio_pad carries the real waveform (logic analyzer). Covered by analytic wire-time unit tests, the waveform-vs-bus-trace agreement test, and the leo e2e (OLED paints identically). No live re-capture this session.
+# 2026-07-11: RTC timer walk-free migration (lazy cycle-clock advance replacing
+# per-tick counting; TIME_UPDATE latch semantics unchanged; resume re-anchors to
+# the live clock) + write-choke C3 IRQ re-aggregation + per-load env-var trace
+# gate removal. Byte-identical to the walk path by committed differentials
+# (esp32c3_walk_differential, esp32c3_rtc_delay_loop); reset oracle unchanged.
+# No live re-capture this session.
+# 2026-07-11 (Class-A sweep): asserted needs_legacy_walk()==false on the
+# verified-inert C3 models (ana_i2c, cache, forced_status, reg_block, rng,
+# sar_adc cal window, sha) — each one's tick() is the trait-default no-op and
+# all work happens at the MMIO access, so the override is pure walk-scheduling
+# metadata. i2c0/ledc/spi2/apb_saradc/wifi_mac verified as REAL walk workers
+# and deliberately left pinning (endgame ledger asserts the exact set). No
+# register, reset-value, timing or IRQ change; reset oracle unaffected. No
+# live re-capture warranted.
+# 2026-07-12: I2C0 (esp32c3/i2c.rs) walk-free migration — the bit-level engine
+# now advances via the event scheduler (uses_scheduler + a single self-perpetuating
+# module-tick event + matrix_irq_sources level export) instead of the per-cycle
+# walk; the shared advance_engine keeps the num/den module-tick cadence intact so
+# wire timing stays interval-independent. Byte-identical to the walk path by the
+# committed differential (oled_lab_i2c0_walk_on_vs_scheduler_is_byte_identical:
+# serial + total_cycles + SSD1306 framebuffer at interval 1, framebuffer at
+# interval 64). Register map, reset values, FIFO semantics unchanged; reset oracle
+# unaffected. No live re-capture this session.
+# 2026-07-12: spi2 (esp32c3/spi.rs) + apb_saradc (esp32c3/apb_saradc.rs) walk-free
+# migration — the level-only pair. Both are one-shot LEVEL re-emitters whose int_raw
+# is write-armed by a transaction / conversion (no free-running counter), so they
+# migrate off the per-cycle walk with uses_scheduler + a matrix_irq_sources level
+# export and NO scheduled events (unlike i2c0). The walk-skipped level is re-derived
+# by the bus each aggregation (refresh_esp32c3_sched_sources), delivering the routed
+# RISC-V line identically to the legacy walk. Proven byte-identical: the direct
+# IRQ-delivery gate c3_level_peripheral_matrix_routing (walk vs scheduler produce the
+# same riscv_irq_lines for spi2 source 19 / apb_saradc source 43, and both de-assert
+# after INT_CLR) + the quiescent-lab differential
+# oled_lab_spi2_apb_saradc_walk_on_vs_scheduler_is_byte_identical (serial +
+# total_cycles + SSD1306 framebuffer at interval 1/64). Register map, reset values,
+# INT/one-shot semantics unchanged; reset oracle unaffected. No live re-capture.
+# 2026-07-12: ledc (esp32c3/ledc.rs) walk-free migration — the MEDIUM timer port.
+# Unlike the level-only pair, LEDC is a genuine timer: its four low-speed up-counters
+# advance and latch LSTIMERx_OVF over time. Migrated off the per-cycle walk with
+# uses_scheduler + attach_cycle_clock: the counters advance LAZILY in closed form off
+# the bus-published CycleClock (fresh on every &self read / write-path sync_to / level
+# poll) and each overflow rides a SCHEDULED event (take_scheduled_events arms the
+# nearest wrap; on_event materialises the latch at its exact cycle, re-arms the
+# successor, arm-token kills a stale chain on reconfig), with the level exported via
+# matrix_irq_sources. All model quirks preserved (RST/PAUSE freeze, 2^DUTY_RES wrap
+# clamped to 14 bits, integer CLK_DIV divider, sticky W1C OVF latch). Proven
+# byte-identical to the walk by committed differentials: the in-module scheduler_mode
+# walk-identity gates (all four counters + INT_RAW + OVF level-assert cycles at
+# interval 1, plus interval-64 batched + the no-poll event-delivery gate) and the
+# bus-level c3_ledc_matrix_routing (walk aggregation vs scheduler routing produce the
+# same riscv_irq_lines for LEDC source 23; force_legacy_walk re-emits the same source;
+# INT_CLR de-asserts). Register map, reset values and MMIO byte paths unchanged; reset
+# oracle unaffected. No live re-capture. Remaining C3 walk pinner: wifi_mac only.
+# 2026-07-12: wifi_mac (esp32c3/wifi_mac.rs) walk-free migration — the LAST C3 walk
+# pinner, on TWO axes. (1) The MAC interrupt LEVEL (matrix source 0, asserted while a
+# MAC event is pending) migrates off the walk with uses_scheduler + a matrix_irq_sources
+# export (the level-only pattern); on a walk-DELETED bus the write-armed EVENT_CLR
+# acknowledge is re-derived at the MMIO write choke (sync_esp32c3_irq_cache_write, gated
+# on legacy_walk_disabled) so the level de-asserts without a walk tick. (2) The
+# descriptor-ring PUMP (tick_with_bus) is honestly gated: needs_bus_tick() is now true
+# only while WiFi is up (rx_ring != 0 / a pending TX / medium mode) instead of
+# unconditionally, so an idle MAC (WiFi off — the OLED demo never enables WiFi) arms
+# nothing and the bus is walk-DELETABLE. No new event machinery: the pump rides the
+# existing write-armed, self-perpetuating bus-tick path (refresh_bus_tick_index). The
+# WiFi frame-moving model is byte-for-byte preserved (no thunk change). Proven
+# byte-identical to the walk by committed differentials: the WiFi-exercising pump
+# differential c3_wifi_mac_walk_differential (TX ring + RX ring delivery byte-identical
+# walk-vs-scheduler at interval 1 AND 64, non-vacuity = frames moved) + the direct
+# IRQ-delivery gate c3_wifi_mac_matrix_routing (walk aggregation vs scheduler routing
+# produce the same riscv_irq_lines for MAC source 0; force_legacy_walk re-emits the same
+# source; EVENT_CLR de-asserts at the write choke on a walk-deleted bus) + the OLED
+# rom-boot lab (serial + total_cycles + SSD1306 framebuffer byte-identical at interval 1
+# and the now-unlocked interval 64). THE UNLOCK: with wifi_mac migrated the C3 OLED
+# rom-boot bus derives walk-DELETED, EXPECTED_PINNERS is empty, and max_safe_tick_interval
+# rises to 64 (native OLED-lab throughput ~5.2 → ~16.2 MIPS). Register map, reset values
+# and MMIO byte paths unchanged; reset oracle unaffected. No live re-capture.
+# 2026-07-14: I2C0 (esp32c3/i2c.rs) TX-FIFO underrun correctness fix — begin_byte
+# no longer fabricates a 0x00 (pop_front().unwrap_or(0)) when the TX FIFO drains
+# mid-WRITE. It now models the real controller: hold SCL low (clock-stretch),
+# assert TXFIFO_WM, and resume with the real byte once firmware refills
+# (new EngineState::TxStall). This only changes behaviour on a TX-FIFO UNDERRUN;
+# firmware that keeps the FIFO fed (no underrun) is byte-for-byte identical, so
+# the reset-state oracle and every prior capture/differential are unaffected.
+# The bug corrupted multi-chunk bursts (e.g. a 128-byte SSD1306 page through the
+# 32-byte FIFO → black OLED). Register map, reset values, FIFO reset semantics and
+# the byte-level traced-slave contract are unchanged. A live USB-JTAG re-validation
+# of the underrun clock-stretch timing is recommended as follow-up (no bench board
+# this session); this ack covers the model-file change in the interim.
+# 2026-07-14: captured live CLOCK RATES over the built-in USB-JTAG
+# (openocd-esp32) via scripts/hw-capture-esp32c3.sh — SYSTIMER 16.013 MHz
+# (model 16 MHz, matches) and RTC_CNTL slow clock 136.72 kHz (RC_SLOW
+# oscillator, SYSTIMER-referenced so it's independent of JTAG/halt overhead).
+# Recorded the measured RTC rate as RTC_SLOW_HZ_MEASURED (136_700) + an opt-in
+# Esp32c3RtcTimer::set_slow_clock_hz in esp32c3/rtc_timer.rs; the DEFAULT stays
+# 1 tick per CPU cycle, so the reset-oracle set, the boot budget and every
+# prior capture/differential are byte-unchanged. This clock capture is an
+# OPTIONAL bench / weekly job (NOT a PR gate — hosted CI has no board); re-run
+# the script on a bench to refresh. Additive model touch, no reset-value change.
+# 2026-07-15: physical C3 OLED-lab fixture
+# crates/wasm/tests/fixtures/esp32c3-oled-demo-flash.bin
+# (SHA-256 d951cc06cdf615d4c6a2dc0197daf9c11509353529ebbe3ab7fbf6d75777dcd0)
+# was flashed at offset 0x0 with esptool verification on a USB-JTAG ESP32-C3.
+# USB serial logged `oled-lab app_main entered` and `OLED painted: LabWired`.
+# After reset-run/wait, live USB-JTAG reads found GPIO_ENABLE=0x00000030,
+# GPIO4/5 OUT_SEL=0x00000036/0x00000035 and I2CEXT0 SDA/SCL IN_SEL
+# (signals 54/53)=0x00000044/0x00000045: the active matrix route matches
+# the physical GPIO4/GPIO5 contract. This does not replace the reset-state
+# oracle or claim visible OLED photons/I2C ACK; visual or wire-level capture
+# remains pending.
+# 2026-07-18: bus access-method consolidation — deleted the stale duplicate
+# inherent SystemBus::{read,write}_u{16,32} shadow in bus/mmio_words.rs; all
+# direct-SystemBus callers now route through the single Bus-trait impl. Pure
+# refactor: byte-identical over 30M instructions on the C3 OLED differential
+# gate, register/IRQ/elapsed semantics unchanged. Additionally re-validated
+# LIVE on real C3 silicon this date (USB-JTAG/openocd + esptool): boot->paint
+# UART parity vs sim ("OLED painted: LabWired"), SYSTIMER 16.34 MHz and the
+# known RC_SLOW ~148 kHz board deviation captured — consistent with prior.
+# 2026-07-19: unified stimulus interface — every bus controller gained a
+# `for_each_attached_sim_input` impl (and TWIM/SPIM gained `as_any` +
+# attached-device accessors) so SimInput reaches devices without
+# downcasting. PURELY ADDITIVE: `git diff` over every model file listed
+# below shows 0 removed lines — no existing method body was modified, so
+# no register read/write path changed. Reset values, register layout and
+# byte paths are unchanged; the mmio/conformance diffs pass unchanged.
+# Drift is the shared-file commit date only. No live re-capture.
+# 2026-07-20: per-cycle-walk participation only. Six shared peripheral
+# models (gpio, stub, nrf52 timer/egu/temp/uarte) gained
+# `legacy_tick_active()` / `legacy_tick_dynamic()` overrides so peripherals
+# that do nothing are skipped by the legacy walk (nRF54L15 measured
+# 2.74M -> 5.09M IPS). PURELY ADDITIVE: `git diff origin/main..HEAD` over
+# those six files shows +12/+18 and **0 removed lines** — no existing method
+# body was touched, so no register read/write path, reset value or layout
+# changed. A peripheral is skipped ONLY in states where its `tick()` already
+# returned a default PeripheralTickResult (or where it overrides no tick at
+# all), and the bus re-arms the entry via `refresh_legacy_tick_index()` on
+# any MMIO write. GPIOTE was tried the same way and REVERTED — its tick()
+# detects IN edges rather than draining a queue, and
+# nrf52840_onboarding_gpiote_event_in_fires_on_edge caught it. Offline
+# oracle/mmio/conformance suites pass unchanged. No live re-capture.
+# 2026-07-22: WiFi virtual medium moved from a process-static (static MEDIUM)
+# to an injected VirtualWifiBus each Esp32c3WifiMac holds. Esp32c3WifiMac::new()
+# (the factory path) binds a transitional process-global bus, so existing
+# behaviour is byte-identical: medium_assoc_dhcp_and_routing passes (now
+# bus-owned) plus a new cross-bus isolation assertion. No register read/write
+# path, reset value or layout touched — the esp32c3 reset oracle
+# (esp32c3_reset_values_match_silicon) is unaffected. Drift is the shared
+# esp32c3 file commit date only. No live re-capture.
+# 2026-07-24: RTC_SLOW calibration made self-consistent (honesty fix). The
+# TIMG0 RTC-cal feature (peripherals/esp32/timg.rs, now on the C3 models
+# list) previously returned a hardcoded `max*533` ratio UNRELATED to the
+# RTC_CNTL counter's rate, and its C3 field layout was mis-read (MAX at
+# bits[29:13] instead of the real [30:16]); rtc_timer.rs separately pinned
+# RTC_SLOW at a stale 136_700 Hz. Both are now derived from ONE constant,
+# RTC_SLOW_HZ_MEASURED, so firmware measuring RTC_SLOW through the real
+# TIMG register protocol (`rtc_clk_cal`: count XTAL cycles over N slow
+# cycles) recovers exactly the rate the RTC_CNTL counter ticks at — no
+# second pin. LIVE bench this date over the built-in USB-JTAG (board
+# 9C:CC:01:D0:71:54): drove the TIMG0 RTCCALICFG protocol on silicon
+# (openocd-esp32, `capture{}` mdw) — counting XTAL(40 MHz) cycles over
+# 100/1024/3000 RTC_SLOW cycles gave 148.18/148.14/148.16 kHz (raw
+# SYSTIMER-referenced counter-delta cross-check 151.3 kHz). Updated the
+# model constant 136_700 → 148_150 Hz to match the calibration protocol
+# (retires the +8.4% stale-pin FAIL). ESP32-classic TIMG is untouched
+# (profile=None keeps the canned ratio byte-for-byte; classic_rtc_cali_
+# value_is_unchanged pins it). The C3 rom-boot runs its RTC_CNTL counter in
+# the documented 1:1 monotonic-only mode (boot budget), so the boot path is
+# unchanged — proven byte-identical: shipped_labs_keep_batching (real OLED
+# demo through the real 2nd-stage bootloader, which calls rtc_clk_cal) +
+# the four C3 walk/pinner differentials pass in release. Self-consistency
+# pinned by esp32c3_rtc_slow_calibration::timg_calibration_and_rtc_counter_
+# agree_on_one_slow_rate. Reset oracle (esp32c3_reset_values_match_silicon)
+# unaffected — RTCCALICFG/RTCCALICFG1 are dynamic cal registers, not in the
+# asserted reset set.
+# 2026-07-25: WiFi MAC medium keepalive under CPU idle fast-forward (#656,
+# esp32c3/wifi_mac.rs) — the medium-mode AP beacon is re-keyed from a
+# tick-call counter to device cycles (same 2,000,000-cycle cadence) and the
+# medium opts into bounded idle-poll bus ticks so association survives
+# fast-forward skip windows. Behavioural WiFi-medium timing only; register
+# map, reset values, and the asserted reset-oracle set are untouched. No
+# live re-capture warranted.
+# 2026-07-26: I2C0 wake CADENCE only (esp32c3/i2c.rs) — the bit engine now
+# arms its scheduler wake at the next wire-segment transition instead of
+# every module tick, plus an `arm_seq` arming token so a wake armed before a
+# CTR.FSM_RST / TRANS_START re-anchor is discarded on arrival rather than
+# clocking the next transaction. WHAT THIS DOES NOT TOUCH: no register in the
+# map, no reset value, no field layout, no FIFO semantic, no read/write path
+# — only WHEN the host is asked to run the engine forward. `advance_engine`
+# was already delta-based, so N ticks consumed in one call land on exactly
+# the state N single-tick calls would, and every MMIO access still catches up
+# through `sync_to` first. The asserted reset-oracle set is untouched, and
+# esp32c3_reset_conformance::esp32c3_reset_values_match_silicon passes.
+# PROVED BYTE-IDENTICAL against the LEGACY PER-CYCLE WALK (the reference with
+# no wakes at all, so it cannot be wrong about them):
+#   * esp32c3_walk_differential — 11 tests incl. the i2c0-pinned-to-walk case;
+#   * rearm_after_fsm_rst_matches_the_per_cycle_walk — per-cycle SCL/SDA
+#     comparison across the FSM_RST re-anchor (fails without the token fix);
+#   * every_attached_i2c_device_matches_the_per_cycle_walk — all 14 devices
+#     the C3 can attach, comparing waveform + SR + INT_RAW + RX FIFO;
+#   * esp32c3_shipped_lab_batch_gate — both shipped labs reproduce identical
+#     interpreted (3400255 / 3040236), lit_px (782 / 442) and final pc.
+# Wire TIMING on the pads is unchanged; only host wake scheduling moved. No
+# live USB-JTAG re-capture warranted.
+# 2026-07-27: walk-free / idle-FF / IRAM fetch-window / SYSTIMER word-path and
+# I2C segment-wake cadence work under event-scheduler (wasm real-time fidelity
+# stack). Reset-oracle registers and layout untouched; esp32c3_walk_differential
+# (incl. framebuffer @ tick 512) and reset conformance remain the offline gates.
+# No live USB-JTAG re-capture this session.
+# 2026-07-28: UART0/UART1 now use the real Espressif register map. The chip
+# yaml declared them as the vendor-neutral `type: "uart"`, which resolves to
+# the STM32 layout (SR@0x00, DR@0x04) — so the C3's FIFO writes landed on a
+# status register, STATUS@0x1C read back 0 (uart_ll_get_txfifo_len() saw all
+# 128 entries free, always), and NOTHING ever asserted the UART interrupt
+# (the 2026-07-18 note above already recorded "the ESP32-C3 ... declares
+# uart0 with NO irq:"). ESP-IDF's blocking `uart_tx_all()` fills the TX FIFO
+# and, for any write longer than it, enables UART_INTR_TXFIFO_EMPTY and
+# blocks on tx_fifo_sem — which was never given, so any `Serial.print` over
+# 128 bytes wedged the sketch forever (every task blocked, idle task in wfi).
+# Reproduced on the shipped stats lab: the 165-byte HTTP body truncated at
+# exactly 128 chars and the e-paper panel never left "FETCHING STATS".
+# Both UARTs now wire crates/core/src/peripherals/esp32c3/uart.rs, which
+# binds the shared Espressif twin (relocated esp32s3/uart.rs ->
+# peripherals/esp_uart.rs; same IP, chip-neutral now that two families use
+# it) with the C3's matrix sources (UART0=21, UART1=22) and 160 MHz core
+# clock. Reset-oracle UNAFFECTED: no UART register is in the asserted set —
+# the C3 UART console regs are explicitly excluded as ROM-touched/dynamic
+# (see esp32c3_reset_conformance module docs). Walk participation unchanged:
+# the twin is uses_scheduler() + matrix_irq_sources level export, so the
+# OLED rom-boot bus stays walk-deletable (EXPECTED_PINNERS still empty).
+# Serial RX injection keeps parity — the twin now exposes rx_buffer() and
+# attach_uart_rx_source[_named] resolve it, so `uart_injections:` still
+# works. No live USB-JTAG re-capture this session.
+# 2026-07-31: I2C transaction dispatch in esp32c3/i2c.rs gained `claims_address` /
+# `select_address` hooks so a bus switch (TCA9548A) can answer for addresses
+# reachable behind an enabled channel. The DEFAULT `claims_address` is
+# `self.address() == addr` — the exact predicate the previous
+# `position(|d| d.borrow().address() == addr)` lookup used — so every existing
+# device dispatches byte-identically; only the switch overrides it. No register
+# read/write path, reset value, layout or base address changed. Evidence re-run
+# on this commit: full `cargo test -p labwired-core` green, 82 test binaries, 0
+# failures. No live re-capture.
+# 2026-07-31: crates/core/src/peripherals/esp32c3/i2c.rs — slave resolution moved
+# from a flat `d.address() == addr` first-match to `d.claims_address(addr)` plus a
+# `select_address` hook at BOTH resolution sites, the command-list dispatch and
+# the `SLAVE_ADDR` fallback (#720), so a TCA9548A bus switch can route for itself.
+# DISPATCH ONLY: both hooks are defaulted on the `I2cDevice` trait —
+# `claims_address` defaults to `self.address() == addr` and `select_address` to a
+# no-op — so with no mux on the bus the resolution is byte-identical to the code
+# it replaces. The GPIO-matrix route gate is untouched. No I2C register layout,
+# base address or reset value moved, so the 2026-06-17 reset-state oracle
+# (1123/1123 static registers) cannot move. Evidence: the new per-family mux
+# coverage bit-clocks a real transaction through this controller and covers the
+# `SLAVE_ADDR` fallback specifically; passes unchanged. No live USB-JTAG
+# re-capture this session.
+# 2026-08-01: shared-path changes only, none of them a C3 peripheral.
+# (a) The classic-ESP32 boot ROM's UART console routines are now loaded as
+# real ROM code instead of nop thunks, and (b) `repin_loop_task` learned the
+# wide `movi` encoding. Both live on the Xtensa side; the C3 is RISC-V and
+# ROM-boots its own image. (c) The ILI9341 SPI panel now frames on its D/C
+# line — an external device model on the far side of the wire, not a chip
+# peripheral. No C3 register layout, base address or reset value moved, so
+# the 2026-06-17 reset-state oracle (1123/1123 static registers) cannot
+# move. Evidence: full `cargo test -p labwired-core --lib` green, 2509
+# tests. No live USB-JTAG re-capture this session.
+# 2026-08-02: the shared `esp32/timg.rs` gained LACT (the ESP32-classic
+# esp_timer time base). It is OPT-IN and the C3 does not opt in — the C3's
+# TIMGs are built in generic_factory.rs WITHOUT `with_lact()`, so every
+# LACT offset still falls through to the generic round-trip map exactly as
+# before. This matters: the C3 puts INT_ENA/INT_ST/INT_CLR_TIMERS and
+# RTCCALICFG2 at 0x70/0x78/0x7C/0x80, which is precisely where LACT lives
+# on classic ESP32, so an ungated version WOULD have latched a counter over
+# the C3's interrupt status. Two tests pin the split:
+# `lact_offsets_are_plain_storage_without_with_lact` writes C3-shaped values
+# and asserts they survive a latch attempt, and
+# `lact_counts_and_latches_when_declared` keeps that guard from passing
+# vacuously. No C3 register layout, base address or reset value moved, so
+# the 2026-06-17 reset-state oracle cannot move. No live re-capture.
+# 2026-08-03: mapped and modelled the BLE baseband window 0x6003_1000 (bt.rs)
+# plus the shared air (peripherals/ble_air.rs). The window was previously
+# UNMAPPED — the chip yaml jumped i2s0 0x6002_D000 -> aes 0x6003_A000 — so it is
+# not among the 29 declarative blocks the reset-state oracle asserts, and no
+# captured value can move. Silicon capture 2026-08-02 (C3 SuperMini
+# 38:44:be:42:f5:58, USB-JTAG) confirms the whole window reads 0x00000000 at
+# `reset halt` (clock-gated), which is what the model starts from; the non-zero
+# state only appears once firmware enables the controller. Seeded values are
+# evidenced, not chosen: VERSION 0x09001b00 is firmware-attested (the controller
+# asserts `lld.c 318, param 00000000 09001b00` when it reads 0), the 312.5 us
+# native tick is measured (3396 counts/1 s, 6559/2 s), and register semantics were
+# read from the ROM's own symbols in esp32c3_rev3_rom.elf — verified to BE this
+# silicon by reading 0x4002E64A back over JTAG and matching word for word.
+# Evidence re-run on this commit: lib 2645/0 with --features event-scheduler, and
+# the C3 heavy differentials 13/13 run the real way (--release --features
+# event-scheduler -- --ignored), including every walk-on-vs-scheduler byte-identity
+# gate and the walk-pinner ledger — kept empty by migrating the model to the event
+# scheduler, NOT by widening EXPECTED_PINNERS. No live reset re-capture; capturing
+# the window's post-enable state on a second board is owed and tracked.
+# 2026-08-03 (later): completed the BLE RECEIVE path in the same window (bt.rs) —
+# RX-descriptor ownership (`+0x00` bit15 RXDONE, `+0x02` bit15 released, `+0x0C`
+# link label), the `+0x2D0` buffer-jump handshake that raises interrupt bit 18, and
+# a scanning-format gate on which activity may receive. ADDITIVE to an already
+# UNMAPPED window: no declarative descriptor, base address or reset value moved, so
+# the 2026-06-17 reset-state oracle still cannot move. Semantics come from the same
+# verified mask-ROM image, not from new silicon: `r_lld_rxdesc_check` (0x4002022C),
+# `r_lld_rxdesc_free` (0x4001FFE8), `r_lld_update_rxbuf` (0x400213C0) and
+# `r_lld_scan_evt_start_cbk` (0x400268F8), cross-checked against the 2026-08-02
+# capture (the live advertiser's CS at EM 0x400 = index 0, and its RX descriptors
+# read link label 0). Where the ROM was silent — what `+0x02` bit 6 and `+0x0C`
+# bits[10:0] mean, what the buffer size/count actually reconfigure — nothing was
+# written. Evidence re-run on this commit: lib 2535/0 default and 2649/0 with
+# --features event-scheduler, C3 heavy differentials 13/13 the real way, clippy
+# clean both feature configs, and BOTH end-to-end BLE gates green (the advertising
+# gate unchanged at 362,274,341 steps / assertions_passed, and the new two-node
+# receive gate in 13.3 s). No live re-capture; the scanning-format value 0x0208 is
+# measured from firmware in the twin, NOT off the board, and is flagged as such in
+# the model.
+# 2026-08-03 (later still): made advertising re-publication survive repetition in
+# the same window (bt.rs). Two changes, both in the exchange-memory read/write
+# path, both ADDITIVE to the same UNMAPPED window — no declarative descriptor,
+# base address or reset value moved, so the 2026-06-17 reset-state oracle still
+# cannot move.
+#   1. Descriptor payload pointers are FULL 16-bit exchange-memory offsets. The
+#      model masked RX `+0x12`, TX `+0x4` and CS `+0x1C` with 0x7FFF on a bit15
+#      convention that the ROM only applies to RX `+0x0` (RXDONE). ROM evidence:
+#      r_lld_scan_process_pkt_rx_legacy_adv (0x400246EE) and
+#      r_lld_scan_process_pkt_rx_adv_rep (0x40024878) zero-extend the halfword with
+#      no mask; r_ble_util_buf_rx_free (0x4000315C) range-checks the RX pool as
+#      ((buf - 0x7805) >> 10) & 0xFF <= 8, i.e. nine buffers at 0x7805..0x9805 —
+#      five of them ABOVE 0x8000. The mask aliased those onto EM 0x0000..0x1FFF
+#      and the model wrote received payloads over the exchange table, the control
+#      structures and the RX descriptor ring. Only pointers >= 0x8000 change
+#      behaviour, so every previously-passing run is byte-identical.
+#   2. Every CORE-OWNED RX descriptor field is now written on each reception,
+#      including the ones the model has nothing to say about (`+0x6`, `+0xE`,
+#      `+0x10`), because a hardware-owned field left alone is stale, not
+#      unmodelled. `+0x6` is newly IDENTIFIED as the raw RSSI byte —
+#      r_lld_scan_process_pkt_rx_adv_rep at 0x400249C6 feeds
+#      lhu(rxdesc+6) & 0xFF to rf_api.rssi_convert — correcting the earlier
+#      "could be RSSI, nothing measured says so" note; there is no PHY here, so it
+#      is written 0 and that is stated as a choice. `+0xE` is the resolving-list
+#      pointer ESP-IDF's lld_adv_rep_ind handler dereferences when non-zero;
+#      address resolution is NOT modelled, so 0 is the honest value. `+0x10` is
+#      still unidentified and is zeroed for the same staleness reason, flagged as a
+#      choice.
+# NOT modelled and called out rather than invented: RWBLECNTL bit 25, which
+# r_lld_adv_stop (0x4001898A) sets alongside CS+0x20 = 1 when it aborts an
+# in-flight advertising event. What that does to an already-programmed event was
+# not determined; the measured cost of ignoring it is that the event runs its
+# programmed duration (<= 2.8 ms) before lld_adv_frm_isr completes the stop.
+# Evidence re-run on this commit: lib 2535/0 default and 2649/0 with --features
+# event-scheduler, C3 heavy differentials 13/13 the real way, clippy clean both
+# feature configs with --all-targets, cargo fmt clean, both existing BLE gates
+# green, and a new gate (e2e_esp32c3_ble_adv_republish) requiring five completed
+# loop() iterations per node and five different successive counter values read by
+# the peer's application, both ways, with NO firmware assertion in the serial.
+# No live re-capture.
+#
+# 2026-08-04: an attempt to model RWBLECNTL bit 25 (the advertising-event
+# abort) was merged and then REVERTED the same day, because the two-node run
+# 2026-08-04 CORRECTION (measured, supersedes the note below): the bit25
+# "regression" was a BUILD-FEATURE MISMATCH, not a model defect. A plain
+# `cargo build` CLI binary has NO event-scheduler feature, and in that
+# build the BLE radio engine never executes a single programmed event —
+# so every "fix build regresses vs baseline" comparison measured a dead
+# radio against a live one (the baseline binary had the feature via a
+# gate-test build). With matched --features event-scheduler builds, main
+# and the abort model produce byte-identical game runs. Furthermore the
+# "20 ms re-publication stall" itself is NOT a twin defect: both nodes
+# advertise fresh payloads continuously in the twin (traced: seq
+# advancing, ball positions on the air), and the guest's frozen ball is
+# the Arduino BLEScan default dedup-by-advertiser-address
+# (setAdvertisedDeviceCallbacks(cb, wantDuplicates=false)), which drops
+# every report after the first per address ON SILICON TOO. The game fix
+# is one line in the sketch (wantDuplicates=true); verified in the twin
+# on the unmodified core (guest tracked 89 distinct ball positions,
+# score coherent on both nodes) and flashed to both boards. The bit25
+# abort path never even fires for this game — every stop lands state 0
+# and completes synchronously, and init itself writes bit25, which
+# disarmed the reverted model's edge logic from boot. The rest of the
+# note below is kept as the record of the misdiagnosis.
+#
+# --- earlier note (VOID conclusions, kept for the record) ---
+# that would have justified it came back negative. Recorded so the next
+# attempt does not repeat it:
+#
+#   baseline (no bit25 model): node A takes the host role, ball sweeps
+#     x=4..122, score reaches 3:2 — one reception gets through and the
+#     host-side game runs.
+#   with the abort modelled:   no node ever takes the host role, the ball
+#     never moves, and only ~50 loop iterations happen where the baseline
+#     manages ~157. Strictly worse, same firmware image.
+#
+# Three scopings were tried and ALL regressed: abort any in-flight event;
+# abort only Running events; abort only Running legacy-ADVERTISING events
+# (CS_FORMAT gated). So the defect is not simply "the abort is missing" —
+# ending the event early through the ordinary ET_STATUS_END + sch_prog_end
+# path is not what the core does, or not all of it. The ROM evidence for the
+# bit stands (r_lld_adv_stop 0x4001898A sets it only when state byte [137]
+# == 1, then waits in state 2); what the CORE does in response is unknown.
+#
+# The bug it was chasing is real and still OPEN: at a 20 ms re-publication
+# cadence a node goes quiet after its first publish, while two real C3s
+# flashed with the identical image play correctly (live air capture
+# 2026-08-04: roles negotiated, ball bytes advancing, ~200 frames per node
+# per 20 s). Twin-only defect.
+    # 2026-08-05: construction-path change, not a register model change. The
+# external-device dispatch is now one shared implementation
+# (bus/external_devices.rs: parts -> kit registry -> declarative) called by
+# both from_config and the Xtensa attacher; unknown device types are now a
+# hard error (was warn+skip). For aht20/bme280/bmp280/ina219/mpu6050 the
+# kit now wins over the legacy factory on from_config chips (same model
+# either way; they used to resolve differently per family). No peripheral
+# register surface, reset value, or captured behavior changes. Evidence:
+# 2603 core lib tests + xtensa 57 + esp32_ili9341_attach 2/2 green.
+# 2026-08-06: universal I2C kits + external_devices attach path; nRF UARTE RX test style only.
+# No register map / base / reset change on silicon-asserted set. Offline gates unchanged.
+# 2026-08-07: BLE receive-cursor initialisation only. A controller binding
+# to a BleAirBus now joins at the air's current sequence instead of 0, so a
+# RESTART (which reuses the lab's air) stops replaying the previous run's
+# frames as live peer traffic. `rx_cursor` is internal twin state — a cursor
+# into the virtual air — not a hardware register: no register map, base,
+# reset value, or silicon-asserted behaviour changes, and the reset oracle
+# is untouched. Byte-identical for a normal run, where nothing has
+# transmitted before the controllers attach and the join point is 0 anyway.
+# Evidence: 2700 core lib tests green, 2816 with --features event-scheduler,
+# workspace clippy --all-targets -D warnings clean.
+# 2026-08-08: RWBLECNTL (+0x000) bits 25 and 24 are now consumed on
+# write, like bit31 already was. They are the RW-BLE core's advertising and
+# scanning ABORT REQUESTS. Every mask-ROM site that touches either only ever
+# ORs it in — r_lld_adv_stop 0x40018A2C, r_lld_per_adv_stop 0x40023E48,
+# r_lld_scan_end 0x40024634, r_lld_rpa_renew_evt_start_cbk 0x4001FF06 and
+# 0x4001FF18 — and no ROM site reads either bit back, so nothing in software
+# can clear them; every OpenOCD dump of the live advertising part reads
+# +0x000 = 0x0010_070f with both clear. This CORRECTS a divergence rather
+# than adding behaviour: latching them made the twin hand the firmware a
+# control word silicon cannot produce (LABWIRED_BT_TRACE, two-node BLE Pong,
+# both nodes at CLKN 37: 0x0210070f then 0x0310070f, where silicon's
+# read-modify-write yields 0x0110070f). No register is added, no base or
+# width changes, and +0x000 is not in the reset-oracle asserted set — the
+# block reads all-zero at reset either way. The abort's EFFECT (ending the
+# in-flight event) is still deliberately unmodelled; measured cost is 0-10
+# CLKN ticks (0-3.1 ms) per stop, 7 stops per 0.89 s across two nodes at the
+# published sketch's ~51 ms loop-bound cadence and ZERO at a 24 ms cadence
+# (the stop phase-locks ahead of the next programmed event and takes the
+# synchronous state-0 path). Neither cadence stalls: air frames sustained
+# over 400M cycles, host elected, score 7:6 agreed on both nodes at 24 ms.
+# Evidence: 2707 core lib tests green, two new bt.rs unit
+# tests derived from the ROM read-modify-write sequences (both watched fail
+# with the old mask), world_esp32c3_ble_pong 2/2 green, and the two-node air
+# frame counts identical bucket-for-bucket before and after the change.
+# 2026-08-08: BT radio wake cadence + idempotent comparator arm, and the
+# scheduler's dedup index made hybrid (#867). `take_scheduled_events` ran
+# after every MMIO write to this block and bumped `arm_seq` unconditionally,
+# so every arm minted a fresh (peripheral, token, deadline) key the
+# scheduler could not collapse and has no cancel for; each stayed live until
+# it fired and was rejected as stale. LIVE_HWM bt=789 -> 6, max_queued
+# 792 -> 9, live_event_ceiling_trips 3310 -> 0. Scheduler bookkeeping, not
+# silicon surface: no register in the asserted reset-oracle set changes
+# address, reset value or access, and configs/peripherals/esp32c3 — the
+# descriptors that oracle actually asserts — is untouched by this change.
+# Evidence: esp32c3_walk_differential 10/10 under --ignored, which is where
+# the five walk-vs-scheduler byte-identity proofs (systimer, i2c0, uart0,
+# spi2_apb_saradc, rtc-at-interval-1) and both framebuffer identity tests
+# live; esp32c3_clamped_full_state_differential 3/3;
+# world_esp32c3_ble_pong 2/2 with both nodes advancing off spawn; and the
+# three shipped labs still batching at mean 109-126 against floors of 8/8/40.
+# A live diff WAS run this date over USB-JTAG against two boards
+# (9c:cc:01:d0:98:e0 and 9c:cc:01:d0:5b:78), and it is recorded here as
+# supporting evidence only — it does NOT move silicon.last_capture. The
+# static estate matched 1063/1136 words with every delta accounted for: 17
+# per-chip efuse identity words (the committed baseline was captured on a
+# third chip, 38:44:be:42:f5:58, so these must differ), 48 words of a
+# clock-gated twai0 returning stale bus data, 8 live usb_device counters.
+# The asserted set matched 85/89. The four stragglers are radio windows that
+# were NOT observed cold — openocd `reset halt` is a software core reset and
+# leaves the PHY powered by whatever sketch is running — so a real
+# re-capture needs a physical power cycle. Nothing in the live diff lies on
+# this change's surface: it is scheduler arming, and the descriptors the
+# oracle asserts are untouched.
+# 2026-08-08: BEHAVIOURAL model of the PMS (permission control / memory
+# protection), which the twin did not model at all. New
+# crates/core/src/peripherals/esp32c3/pms.rs (split-line decode, four areas
+# per bus port, per-area permissions, latched violation status, write
+# locks) plus store and instruction-fetch checks in crates/core/src/bus/
+# and crates/core/src/cpu/riscv.rs. Closes a real divergence: a C3 running
+# the published BLE Pong sketch panicked on a bench with "Memory protection
+# fault" (mcause 26 = ETS_MEMPROT_ERR_INUM) while the same image ran clean
+# in the twin, because SENSITIVE's permission registers were inert storage.
+# NO LIVE RE-CAPTURE BACKS THIS, and no PMS violation has been reproduced
+# against silicon under instrumentation. The register map, offsets and reset
+# values come from the EXISTING silicon-captured sensitive.yaml descriptor,
+# which this change does not touch; the behaviour is derived from ESP-IDF
+# v5.3.1 (soc/esp32c3/memprot_defs.h, hal/esp32c3/memprot_ll.h,
+# esp_hw_support/port/esp32c3/esp_memprot.c). No register is added, no base,
+# width or reset value changes, and nothing in the reset-oracle asserted set
+# moves - the model is INERT at reset by construction (every
+# ..._PMS_CONSTRAIN_* reset value grants full permissions), which is
+# precisely why a reset capture cannot corroborate it.
+# Corroboration that is NOT self-referential: booting the frozen BLE Pong
+# image through the mask ROM, IDF's own startup programs split line
+# 0x40390C00 into all five split registers - the same address derived
+# independently from that build's app segments (IRAM text ends 0x40390A84,
+# .data starts 0x3FC90C00, gp = .data + 0x800) - sets IRAM areas R|X,R|X,
+# R|X,NONE and DRAM areas NONE,R|W,R|W,R|W, sets all five lock bits, and
+# routes matrix sources 56 and 57 to CPU line 26. That is asserted by
+# tests/esp32c3_pms_shipped_firmware.rs.
+# Evidence: 168 core suites / 3617 tests green; esp32c3_walk_differential
+# 10/10 under --ignored; esp32c3_clamped_full_state_differential 3/3;
+# world_esp32c3_ble_pong 2/2; the three shipped labs still batching at mean
+# 109-126 against floors of 8/8/40; register-modeling coverage for esp32c3
+# unchanged at 2545 with the baseline file untouched.
+# 2026-08-09: DATA-STRUCTURE ONLY change to the shared Espressif UART twin
+# (peripherals/esp_uart.rs): its register store moved from
+# `HashMap<u64, u32>` to a flat `[u32; 33]` indexed by `off/4`. Every
+# observable stays put by construction — the array is seeded from the same
+# reset values, and out-of-window/unaligned offsets still read 0 and swallow
+# writes exactly as the map's `unwrap_or(0)` did. No register was added,
+# removed, re-addressed or given a new reset value, so nothing in any
+# asserted capture set can move. Motivation is speed, not behaviour: the C3
+# ROM-boot workload went 9.31s -> 4.87s CPU (1.91x, with the NVMC index
+# fix), and the run artifacts are byte-identical pristine vs patched.
+#
+# ⚠ Recorded because it is load-bearing for reading this ack: THE TWO
+# OFFLINE TESTS LISTED ABOVE DO NOT COVER THIS FILE. Both C3 reset-
+# conformance tests were re-run green here, but that proves nothing about
+# esp_uart.rs — the asserted set is a hardcoded register list (RTC_CNTL,
+# SPI0/1, GPIO_SD, RADIO_FE) with NO UART entry, and a deliberate sabotage
+# (`RegFile::slot` forced to return None, so every UART register reads 0)
+# left both tests PASSING. The gate that does cover it is the model's own
+# unit suite: the same sabotage reddens 5 of `--lib esp_uart`'s 17 tests
+# (every_config_reg_offset_has_a_slot, config_registers_round_trip,
+# uart_config_register_write_mask, uart_config_registers_reset_values,
+# txfifo_empty_is_level_below_threshold). That suite is green on this tree,
+# and so is the C3 ROM-boot end-to-end test, which actually drives the UART.
+# This ack rests on those, not on the reset oracle. No live re-capture.
+#
+# 2026-08-09: the live re-capture the ack was standing in for HAS NOW RUN
+# (see silicon.result above). The ack that stood here was discharged by it.
+# Whether a NEW ack is needed depends on whether the pad-routing work that
+# landed the same day touched a listed model after the capture — the
+# generator decides that, not this comment. It reads FRESH.
+#
+# KNOWN LIMIT, stated rather than relied on: the pad-routing merge (#892)
+# DID move this board's model digest (7a687f78 -> c5064550) on the same
+# calendar day as the capture, and the gate compares DATES, not timestamps
+# — so a model edit made hours after the capture still reads as "not
+# newer". Two things make that acceptable rather than a hole: the capture
+# corroborates the RESET_VALUES table against real silicon, and CI
+# re-checks the MODEL against that table every run
+# (esp32c3_reset_values_match_silicon). A pad-routing change that broke a
+# reset value would go red there, not hide here.
+# 2026-09-20 (ESP32-C6 full-row branch): re-acked. The only watched
+# change is an ADDITIVE accessor on the shared C3 I2C model —
+# `Esp32c3I2c::intr_source_id()` (+6 lines, zero deletions) — so the C6
+# descriptor can declare its own interrupt-matrix source (50) while the
+# C3 keeps 29. No register behaviour moved: esp32c3 --lib 174/174, the
+# C3 tier-1 fixture transcript is unchanged, and the C3 silicon
+# conformance tests pass. This is an ACK, not a capture — a live
+# re-capture is still owed.
+# 2026-09-20 (merge of main's RISC-V spin-loop recovery, PR #1206):
+# re-acked. The watched CPU sources moved again — riscv.rs and
+# decoder/riscv.rs gain the recovered bounded ADDI/back-branch
+# aggregation (main's change, with its own tests) on top of this
+# branch's additive I2C accessor. Nothing the C3 reset capture pins
+# moved: esp32c3_reset_conformance and the C3 tier-1 fixture transcript
+# are unchanged. This is an ACK, not a capture — re-capture still owed.
+# 2026-09-21 (feat/c6-irq-wdt-depth): two watched SHARED ESP files moved.
+# `esp_uart.rs` gained `matrix_irq_source_id()` — an additive accessor that
+# returns the source id the descriptor already declared; no register map,
+# reset value, byte path or timing changed. `esp32/timg.rs` gained the MWDT
+# stage chain (WDTCONFIG1..5 holds, STG action encodings, per-stage INT_RAW
+# latching) plus SVD reset seeds for WDTCONFIG0..5 and WDTWPROTECT. The C3
+# reset-state oracle re-ran on this branch: esp32c3_reset_conformance 2/2
+# (87-reg reset oracle vs the 2026-08-09 capture) and the C3 tier-1 fixture
+# still passes every cell. ACK, NOT A CAPTURE — the live re-capture owed
+# above is still owed.
+# 2026-09-23 (#1226): mapped-flash instruction fetch windowing in riscv.rs
+# — resolve the mapped-flash peripheral window once per region instead of
+# once per fetch. Decode/execution/register state unchanged. Watched
+# cpu/riscv.rs digest moves; ACK, NOT A CAPTURE. The live re-capture owed
+# above is still owed.
+# 2026-09-25: Esp32c3Spi grows `spi_attached_devices` so the write path
+# stops probing TypeId. No register map, reset value, or SPI programming
+# model changed.
+# ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
+# 2026-09-27 (four-state pin trace, feat/timer-input-capture-hiz): watched
+# esp32c3/gpio.rs moved, TEST CODE ONLY: `PadEvent` gained a `drive` field,
+# so the `#[cfg(test)]` push-tap assertions spell `drive: None`. No model
+# line changed. Ran: cargo test -p labwired-core --lib.
+# ACK, NOT A CAPTURE.
+# 2026-09-30: RISC-V store-spin loops collapse into one plain RAM write, and
+# a stable UART status poll repeats without taking the lock. The recommended
+# scheduler interval is 1024. No register map or reset value changed.
+# ACK, NOT A CAPTURE. The live re-capture owed above is still owed.
+
+# 2026-10-01: C3 GPIO now latches configured rising/falling/any-edge
+# input events, gates PCPU status per pin and exports matrix source16.
+# Focused GPIO tests and actual ESP-IDF customer ROM boot/OL ISR/COM2
+# assertions pass. Level/NMI/light-sleep remain unsupported.
+# ACK, NOT A CAPTURE: physical re-capture and electrical IO-Link pending.
+# 2026-10-07 (#1326 GPIO nets): watched esp32c3/gpio.rs. A net-isolated pad
+# reports its own drive (matrix bypass, or open-drain release) and an
+# external edge latches the configured GPIO interrupt and arms one
+# scheduler event. FUNCn_OUT_SEL_CFG now resets to 0x80 (SIG_GPIO_OUT, the
+# matrix bypass, per esp32c3.svd) instead of 0, which had routed every
+# enabled pad to matrix signal 0. That register is not in the 2026-08-09
+# reset oracle. No physical probe connected. ACK, NOT A CAPTURE.
+# 2026-10-08 (I2C displays behind a TCA9548A): watched esp32c3/i2c.rs. Its
+# inspect() now folds the artifacts of devices behind an I2C bus switch
+# through the existing visit_i2c_device walk, so a panel behind a
+# TCA9548A is reported like one on the controller. Inspect output only;
+# register file, reset values and bus behaviour are unchanged. ACK, NOT
+# A CAPTURE.
+# 2026-10-08: watched cpu/riscv.rs and esp32c3/ledc.rs. The cycle CSRs
+# (PCCR 0x7E2/0x802) read `mtime`, one tick per CPU clock, instead of
+# `mtime * 256`, so Arduino `pulseIn` times against SYSTIMER correctly.
+# The C3 LEDC notifies duty observers on CONF1.DUTY_START (a servo
+# follows `ledcWrite`). No reset value or register layout moves. No
+# physical probe connected. ACK, NOT A CAPTURE.
+# 2026-10-09 (#1344): watched esp32c3/gpio.rs + io_mux.rs. GPIO_IN now shows
+# the driven level of a pad whose output driver is on and whose IO_MUX FUN_IE
+# is set (silicon samples the pad through its input buffer). Only reads of
+# driven output pads change; no register map or reset value changed. No
+# physical probe connected. ACK, NOT A CAPTURE.
+# 2026-10-09 (MCP audit P1-14): watched esp_uart.rs, usb_serial_jtag.rs,
+# i2c.rs and bus/*. UART0 and USB-Serial-JTAG can deliver TX bytes into one
+# merged console stream (host-side capture only), and the bus counts
+# back-to-back MMIO accesses (run diagnosis only). No register, reset
+# value or bus-visible behaviour changed. No physical probe connected.
+# ACK, NOT A CAPTURE.
+# 2026-10-10 (gpio gaps): watched esp32c3/gpio.rs. A pad's own OUT/ENABLE/
+# output-matrix write that moves its sampled level now latches GPIO_STATUS
+# per INT_TYPE when FUN_IE is set (TRM GPIO Interrupt: the interrupt logic
+# samples the pad through the input buffer); external-edge latching is
+# unchanged. No register map or reset value changed. No physical probe
+# connected. ACK, NOT A CAPTURE.
+# 2026-10-10 (#1355 PinPort): watched GPIO models moved onto one PinPort
+# interface (driver/set_external, generic PadWatch push capture, EXTI
+# fan-out by PortId). Register maps and reset values unchanged; pinned
+# by the pins::conformance suite and the existing net/EXTI/pin-trace
+# tests. Approved by the maintainer. ACK, NOT A CAPTURE.
+# 2026-10-11 (#1360 gpio-net scheduler): CPU batch loops (Cortex-M, RISC-V,
+# shared loop, AVR fill) now end a batch on a net-pad write so the world
+# scheduler can stop a node at its own drive change; logic capture and
+# machine world hooks gained a read-only idle query. No register map, reset
+# value or instruction semantics changed; pinned by the lockstep-vs-scheduler
+# equivalence tests. Approved by the maintainer. ACK, NOT A CAPTURE.
+# 2026-10-11 (C3 trigger CSRs + SYSTIMER): RISC-V debug trigger CSRs
+# 0x7A0-0x7A5 for the C3 profile (esp-hal stack-guard watchpoint); the C3 YAML
+# now uses the behavioural SYSTIMER instead of the register stub. VALUE_VALID
+# reads 0 until the first update, matching the C3 cold-reset capture. Pinned by
+# esp32c3_trigger_systimer and chip_conformance. Approved by the maintainer.
+# ACK, NOT A CAPTURE.
+# 2026-10-14 (esp32 LACT timebase): timg.rs is shared, but only the classic-only
+# LACT counter (with_lact) changed — it now converts CPU cycles to APB at 80/240.
+# C3/C6 TIMG/MWDT paths untouched. No register map or reset value changed. ACK, NOT A CAPTURE.
+# 2026-10-14 (classic BROM libgcc soft-float thunks): rom_thunks.rs gains
+# IEEE thunks registered only by the classic ESP32 builder; no thunk this
+# board registers changed. ACK, NOT A CAPTURE.
+# 2026-10-11 (#1366 FIFO SPI / F4 NSS / C3 trigger snapshot): spi.rs gains the
+# FIFO-type profile for G0/F7 (F1/F4/L0 classic unchanged), bus/attach.rs routes
+# F4 SPI NSS pads on nets, riscv.rs carries the C3 trigger module in snapshots.
+# No register map or reset value of this board changed. Pinned by spi_tests,
+# world_gpio_net_buses and esp32c3_trigger_systimer. Approved by the maintainer.
+# ACK, NOT A CAPTURE.
+# 2026-10-11 (#1368 ESP32-C3/C6 buses over nets): C3 GPIO/SPI/I2C hand lines to
+# chip-neutral net engines when firmware routes them through the GPIO matrix to a
+# pad on a net; off a net the byte-level behaviour is unchanged. No register map
+# or reset value changed. Pinned by world_gpio_net_buses. Approved by the
+# maintainer. ACK, NOT A CAPTURE.
+# 2026-10-15 (SPI DMA): watched esp32c3/spi.rs, the new esp32c3/gdma.rs and
+# the chip yaml. The GDMA at 0x6003F000 becomes a behavioral model
+# (esp32c3_gdma) over the same SVD register map and reset values the
+# declarative descriptor carried (pinned by reset_values_match_the_svd);
+# GP-SPI2 honours SPI_DMA_CONF.DMA_TX_ENA/DMA_RX_ENA through it. CPU-path
+# (W buffer) transactions are unchanged. No physical probe connected.
+# Approved by the maintainer. ACK, NOT A CAPTURE.
+# 2026-10-16 (GDMA descriptor errors): esp32c3/gdma.rs and esp_gdma.rs
+# raise IN_DSCR_ERR / OUT_DSCR_ERR (owner check, a descriptor, buffer or
+# next link outside the internal SRAM), IN_DSCR_EMPTY, and OUT_EOF /
+# OUT_TOTAL_EOF only for a suc_eof descriptor; lib.rs / bus tick.rs gain
+# the DMA issuer plumbing (Load / Store items, transfer-error notice).
+# Register map and reset values unchanged (reset_values_match_the_svd);
+# the C3 SPI DMA net tests pass unchanged. No physical probe connected.
+# Approved by the maintainer. ACK, NOT A CAPTURE.
+# 2026-10-17: test-suite trim — test-module-only edits inside this board's
+# listed model sources (consolidated shared suites/macros; no production-path
+# behaviour change). ACK, NOT A CAPTURE.
+# 2026-10-18, labwired-core#1423 read-only memory regions: shared bus and
+# Cortex-M core sources gained the `cpu_writes` store gate (chip YAML
+# `flash:`/`ram:` policy; default `allow` is byte-identical), violation
+# PC/cycle stamping, and a JIT refusal while a non-default RAM policy is in
+# force. No register map, reset value or default-config readback changes;
+# pinned by readonly_flash_e2e and the determinism guard.
+# ACK, NOT A CAPTURE — physical re-capture remains owed.
+# 2026-10-18, A3 (GDB conformance, follow-on to labwired-core#1423 round):
+# shared bus and Cortex-M/RISC-V sources gained the software debug-watch
+# latch (accessors; DMA and debugger transfers exempt; one branch while
+# disarmed), the watchpoint window clamp (armed watches pin the CPU window
+# to one instruction), StopReason::Watchpoint and the P single-register
+# packet. No register map, reset value or default-config readback changes;
+# pinned by the six RSP conformance scenarios, the debug_watch suites and
+# the determinism guard.
+# ACK, NOT A CAPTURE — physical re-capture remains owed.
+# 2026-10-19, round follow-ups (FU4): ESP32-C3 WiFi/BT exchange-memory
+# transfers and the shared GDMA walk are wrapped in
+# `with_device_write_bypass` (hardware-originated guest-memory transfers
+# only). CPU-visible register/reset paths are unchanged. ACK, NOT A CAPTURE.
+# 2026-10-19, first RISC-V soft-core promotion (LiteX VexRiscv):
+# `crates/core/src/cpu/riscv.rs` gained `RiscVCoreProfile::for_chip` — the
+# core profile is now selected from the chip descriptor instead of being
+# hardcoded to the C3 in `configure_riscv`. The C3's own selection is
+# unchanged by construction: the resolver returns Esp32C3 for any chip
+# whose name contains `esp32` (and for a descriptor with no `core:`), so
+# every ESP32 chip — C3 included — keeps exactly the profile it ran before.
+# Pinned by the profile-selection unit test and the C3 survival /
+# reset-conformance gates. No register map, reset value or default-config
+# readback changes.
+# ACK, NOT A CAPTURE — physical re-capture remains owed.
+# 2026-10-25 (perf/recover-step-overhead): per-step service fast paths
+# (device-time throttle, NVIC any-enabled cache, logic-capture guard,
+# plain-RAM store fast path, AVR timer/OC shortcuts). No register map,
+# reset value, IRQ route or byte path changed. ACK, NOT A CAPTURE.
+# 2026-10-25 (perf/recover-step-overhead): per-step service fast paths
+# (device-time throttle, NVIC any-enabled cache, logic-capture guard,
+# plain-RAM store fast path, AVR timer/OC shortcuts). No register map,
+# reset value, IRQ route or byte path changed. ACK, NOT A CAPTURE.
+# 2026-10-27 (port/esp32c3-s3-ledc-pads, from CrispStrobe 96b0ab6f9):
+# LEDC channel outputs drive the GPIO output matrix (signals 45..50), and
+# DUTY_START now latches DUTY into DUTY_R. No register map or reset value
+# change; the reset-state oracle is untouched. ACK, NOT A CAPTURE.
+# 2026-10-29 (#1534 feat/esp32c6-mmu-xip): watched cpu/riscv.rs and
+# esp_uart.rs. RISC-V Esp32C3 profile accepts mideleg/medeleg (0x302/0x303)
+# and Espressif PMA CSRs (0xBC0..=0xBDF) as RAZ/WI so C6 IDF early init
+# does not trap; side effects are not modelled. EspUart gains an opt-in
+# c6_reg_map that remaps offset 0x70 to idle UART_FSM_STATUS (ROM
+# uart_tx_wait_idle); C3 construction leaves the flag false so POSPULSE
+# reset/readback is unchanged. No C3 register map or reset-state oracle
+# change. ACK, NOT A CAPTURE.
+# 2026-10-29 (#1537 feat/esp32s3-rom-strcmp): watched esp_xtensa_common/
+# rom_thunks.rs. Adds rom_strcmp/strncmp/strcpy/strncpy thunks (S3 ROM
+# slots 0x40001230/123c/1218/1224). Shared thunk bank also listed on C3;
+# C3 register map and reset-oracle set are unchanged (C3 does not wire
+# these S3 slots). ACK, NOT A CAPTURE.
+# 2026-10-29 (#1536 feat/esp-uart-rx-inject-sched): watched esp_uart.rs.
+# EspUart wakes the event-scheduler when uart_injections deliver RX bytes,
+# and latches INT_RXFIFO_TOUT via an int_raw_sticky Cell so &self ingest
+# (shared RX source path) cannot drop the timeout bit. Register map and
+# reset values are unchanged; C3 UART is not in the asserted reset-oracle
+# set. ACK, NOT A CAPTURE.
+# 2026-11-01 (feat/ra-icu-irq-pins): gpio.rs gives the RA `ra_port`
+# layout a hex-numbered PortId (`port0`..`portb`) through a new
+# `PinPort::port_id` hook; pins/mod.rs adds `PortId::from_hex_numbered_name`
+# and routing.rs asks the port for its id. Every other family takes the
+# unchanged `port_name_prefix` + letter path, so STM32 ports get the same
+# PortId and edge fan-out as before. ACK, NOT A SILICON CAPTURE; live
+# re-capture remains pending.
+# 2026-11-06 (feat/ch32v003-rv32e-profile): the CH32V003 slice touched
+# three files on this board's watch list. Each change is provably
+# behaviour-preserving for THIS part, so no re-capture is owed:
+#
+#   riscv.rs — adds `RiscVCoreProfile::Rv32e` and an operand guard. The
+#     variant is only ever selected by a descriptor whose `core:` is
+#     `rv32e*`; every path is gated on `core_profile == Rv32e`. The two
+#     cycle-CSR arms changed from `== StandardRv32` to `StandardRv32 |
+#     Rv32e`, which is identity here. An `esp32*` chip keeps Esp32C3 and a
+#     generic `rv32*` chip keeps StandardRv32 — the old match is reproduced
+#     exactly, only re-ordered so the `rv32e` prefix is tested first.
+#   gpio.rs — the IDR-word fast path now loops to `pin_count()` instead of
+#     a literal 32, and `read_gpio_input` bounds on the same. For F1 and V2
+#     families `pin_count()` is 16, and `effective_idr()` already masks with
+#     `& 0xFFFF` (gpio.rs:224, :328), so bits 16..31 were — and remain —
+#     zero. The loop assembles the identical word. The WCH-only `+0x04`
+#     single-config-register short-circuit is behind `wch_single_config_register`,
+#     false on every port these boards construct.
+#   rcc.rs — adds `Rcc::Wch` and the `WchRcc` struct. No existing layout
+#     arm is modified; the only touched line outside the new type is the
+#     unsupported-layout error string.
+#
+# Evidence: labwired-core --lib 5429 pass / 0 fail on this head, including
+# stm32f1_bus_visibility, the F1 timer-output gates, h563 + L476 + L073
+# mmio/parity cases, and nordic_snapshot_matches_mmio_and_all_single_pin_reads
+# (the test that would catch a pin_count regression). ACK, NOT A SILICON
+# CAPTURE; live re-capture remains pending.
+# 2026-11-06 (#1708 fix/esp32-idf5-static-mutex): watched rom_thunks.rs.
+# xQueueCreateMutexStatic is no longer thunked to "return the buffer";
+# the real FreeRTOS routine runs so IDF5 tx_mux spinlocks are initialised.
+# Firmware-library thunk only: no peripheral register map, reset value
+# or captured reset-state window changes. ACK, NOT A CAPTURE.
+# 2026-11-09 (#1757 classic TIMG alarms): watched peripherals/esp32/timg.rs
+# (the shared TIMG model; the C3 uses it for RTCCALICFG calibration).
+# Alarms are opt-in via `with_alarms`, enabled only by the classic
+# esp32_timg factory at 0x3FF5_F000/0x3FF6_0000; the C3 factory in
+# generic_factory.rs does not opt in. On the merged tree: lib timg 44/44,
+# esp32c3_rtc_slow_calibration 1/1, esp32c3_reset_conformance 2/2.
+# ACK, NOT A CAPTURE.
+# 2026-11-10 (#1784 feat/esp32-deep-sleep): watched shared files moved
+# (classic ESP32 RTC_CNTL timer-wake sleep + Machine deep-sleep reboot
+# capture in lib.rs). The C3 factory does not use that classic sleep-reboot
+# path; no C3 register map or captured reset-state window changes.
+# ACK, NOT A CAPTURE.
+drift_ack: 2026-11-10

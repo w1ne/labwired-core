@@ -29,10 +29,10 @@ simulation-derived.
 cargo test -p labwired-core --lib cpu::pic16
 # test result: ok. 21 passed; 0 failed
 
-cargo test -p labwired-core --test pic16f877a_smoke
+cargo test -p labwired-core --test pic pic16f877a_smoke::
 # test result: ok. 5 passed; 0 failed
 
-cargo test -p labwired-core --test session_builder_pic16
+cargo test -p labwired-core --test session session_builder_pic16::
 # test result: ok. 3 passed; 0 failed
 
 cargo run -q -p labwired-cli -- test \

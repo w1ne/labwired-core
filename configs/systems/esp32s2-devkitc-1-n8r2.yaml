@@ -1,0 +1,10 @@
+# Espressif ESP32-S2-DevKitC-1-N8R2 (ESP32-S2-SOLO-2, 8 MiB flash, 2 MiB PSRAM).
+# This system profile wires only the board's USB-to-UART bridge to UART0.
+name: "esp32s2-devkitc-1-n8r2"
+chip: "../chips/esp32s2.yaml"
+external_devices: []
+
+connectors:
+  - type: "uart"
+    peripheral: "uart0"
+    endpoint: "host_console"

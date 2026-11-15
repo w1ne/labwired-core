@@ -80,7 +80,7 @@ src/main.c        LED + UARTE banner
 
 ## Validation
 
-- `crates/core/tests/nrf54l15_boot.rs` — 13 bus-level conformance tests
+- `crates/core/tests/nrf/nrf54l15_boot.rs` — 13 bus-level conformance tests
 - `firmware_survival::test_nrf54l15_smoke_survival` — boots this ELF, asserts the banner
 - `firmware_survival::test_nrf54l15_lights_dk_led0` — boots this ELF, asserts
   DIR and OUT **at the pin**, because the banner alone does not catch a GPIO
