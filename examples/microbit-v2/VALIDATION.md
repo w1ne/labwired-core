@@ -31,7 +31,7 @@ Pass criteria:
 ## 4) Run firmware survival gate
 
 ```bash
-cargo test -p labwired-core --test firmware_survival test_nrf52833_microbit_v2_smoke_survival -- --nocapture
+cargo test -p labwired-core --test gates firmware_survival::test_nrf52833_microbit_v2_smoke_survival -- --nocapture
 ```
 
 Pass criteria:
@@ -150,8 +150,8 @@ configurations, additionally at interval 64 with the scheduler, and checks
 exact ordered UART bytes and all guest counters:
 
 ```sh
-cargo test -p labwired-core --features event-scheduler --test microbit_v2_uarte_stack_guest -- --nocapture
-LABWIRED_UARTE_STACK_INTERVALS=1 cargo test -p labwired-core --no-default-features --test microbit_v2_uarte_stack_guest -- --nocapture
+cargo test -p labwired-core --features event-scheduler --test nrf microbit_v2_uarte_stack_guest:: -- --nocapture
+LABWIRED_UARTE_STACK_INTERVALS=1 cargo test -p labwired-core --no-default-features --test nrf microbit_v2_uarte_stack_guest:: -- --nocapture
 ```
 
 The model controls separately require that early capture publishes no bytes,

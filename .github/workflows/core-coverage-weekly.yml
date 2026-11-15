@@ -90,7 +90,12 @@ jobs:
           cargo build -p firmware-rp2040-pio-onboarding --release --target thumbv6m-none-eabi
 
       - name: Run coverage
+        env:
+          # llvm-cov instruments host tests in target/llvm-cov-target, while
+          # the ARM firmware fixture was built to target/ in the prior step.
+          LABWIRED_DEMO_BLINKY_ELF: ${{ github.workspace }}/target/thumbv7m-none-eabi/release/demo-blinky
         run: |
+          test -f "$LABWIRED_DEMO_BLINKY_ELF"
           mkdir -p out/coverage
           cargo llvm-cov -p labwired-core -p labwired-cli --summary-only --json > out/coverage/llvm-cov.json
 

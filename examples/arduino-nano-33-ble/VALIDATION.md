@@ -48,7 +48,7 @@ cargo build -p firmware-arduino-nano-33-ble-smoke --release --target thumbv7em-n
   --max-steps 200000 --out-dir out/unsupported-audit/arduino-nano-33-ble
 #   simulator exit 0 · Instructions executed: 200000 · Unsupported: 0
 
-cargo test -p labwired-core --test firmware_survival test_arduino_nano_33_ble_smoke_survival
+cargo test -p labwired-core --test gates firmware_survival::test_arduino_nano_33_ble_smoke_survival
 ```
 
 ## Notes

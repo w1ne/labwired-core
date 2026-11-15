@@ -1,0 +1,6 @@
+boot=1 cause=0 reset=1
+sleeping
+boot=2 cause=4 reset=8
+sleeping
+boot=3 cause=4 reset=8
+LW_DS_OK

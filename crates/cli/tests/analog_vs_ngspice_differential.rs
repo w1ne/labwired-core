@@ -283,7 +283,7 @@ fn an_unsupported_element_fails_manifest_validation() {
 /// The MOSFET deck is the weak one and is named as such: a level-1 FET has no
 /// thermal voltage, so that sabotage moves it by 1e-6 %. Its guard is the
 /// operating-point hand calculation in
-/// `crates/core/tests/analog_devices.rs`, which checks `VTO`, `KP` and
+/// `crates/core/tests/analog/analog_devices.rs`, which checks `VTO`, `KP` and
 /// `LAMBDA` against the closed form directly.
 const DEVICE_TOLERANCE: f64 = 5e-4;
 
@@ -491,7 +491,7 @@ fn nonlinear_devices_match_ngspice_on_the_same_deck() {
              device differential cannot run. Install it (macOS: `brew install ngspice`; \
              Debian/Ubuntu: `apt install ngspice`). The in-core engine solved all \
              {} decks and is covered on its own by \
-             `cargo test -p labwired-core --test analog_devices`.",
+             `cargo test -p labwired-core --test analog analog_devices::`.",
             DIFFERENTIALS.len()
         );
         return;

@@ -262,6 +262,20 @@
     "behavior": true,
     "excluded": 0,
     "level": 1,
+    "name": "esp32-devkitc-32e-gpio-smoke",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "esp32-devkitc-32e-uart1",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
     "name": "stm32f401cdu6",
     "reg_match": 0
   },
@@ -270,6 +284,13 @@
     "excluded": 0,
     "level": 1,
     "name": "stm32f411ceu6",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "stm32f446re",
     "reg_match": 0
   },
   {
@@ -326,6 +347,13 @@
     "excluded": 0,
     "level": 0,
     "name": "stm32f103rb",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "stm32f103rb-nucleo-bme280-smoke",
     "reg_match": 0
   },
   {
@@ -816,6 +844,83 @@
     "excluded": 0,
     "level": 1,
     "name": "ch32v003f4p6",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "esp32h2",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "esp32c5",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "esp32c61",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "nrf54l05",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "nrf54l10",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "esp32p4",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "esp32s2",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "rp2040-feather",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "rp2350-feather",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "stm32h723zg",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "esp32c6fh4",
     "reg_match": 0
   }
 ]

@@ -1,0 +1,10 @@
+# ESP32-C61-DevKitC-1-N8R2 UART0 FIFO smoke.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c61-demo"
+  system: "../../configs/systems/esp32c61-devkitc-1-n8r2.yaml"
+limits:
+  max_steps: 400000
+assertions:
+  - uart_contains: "C61_N8R2_OK"
+  - expected_stop_reason: max_steps

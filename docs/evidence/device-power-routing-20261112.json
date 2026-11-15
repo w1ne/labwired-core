@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "scope": "Generic external-device rail routing at native World analog boundaries; no native FC cold-power acceptance.",
+  "base": "de126cbb5c033989542d7446ee7735bd7c47f053",
+  "tests": {
+    "event_scheduler": {
+      "passed": 58,
+      "suites": {
+        "bmi270_spi_protocol": 17,
+        "device_supply_rails": 10,
+        "device_supply_routing": 8,
+        "world_analog": 17,
+        "world_circuit_bldc": 6
+      }
+    },
+    "default_scheduler": {
+      "passed": 8,
+      "suite": "device_supply_routing"
+    }
+  },
+  "source_sha256": {
+    "crates/core/src/cosim/routing.rs": "298c545868c37e29500777129a57256c80d1599ec8b5e4e9594dd0ea6522ce53",
+    "crates/core/src/peripherals/components/bmi270_spi.rs": "13fcc0d110b29ab45884e2a6f29011df0c79a9870699020cafdb03145c153b57",
+    "crates/core/src/world.rs": "39dd7ffd137d529d5abb2d603d0d92717e63ae40c03dd2660a9080ca54299576",
+    "crates/core/tests/device_supply_routing.rs": "07858d94aee652a9588ac036e34df7a63a8aa8a7e699ce9077c16b243b9af675"
+  },
+  "log_sha256": {
+    "event-tests.log": "51a496883429a8cd7d37ce0e7743f41ce2c6a48d267bf26096f96c385a830d6c",
+    "default-tests.log": "16e472a45ef83134fb1bee9c22ea8fb7c00fe7000aed7b027bdea30bca35f7b8"
+  },
+  "asserted_behavior": [
+    "Declared exact device and rail route resolution; no implicit registration.",
+    "Unknown/malformed/read-direction/duplicate-writer refusal.",
+    "All voltage values validated before any device power mutation.",
+    "Time-zero rails applied before CPU instructions.",
+    "Two-rail swaps do not create intermediate gate generations.",
+    "Separate node IDs retain independent sensor power states.",
+    "Off SPI transfers return parked response; model time does not advance.",
+    "CPU and shared MNA time continue while the off sensor clock remains parked."
+  ],
+  "limitations": [
+    "Tiny Cortex-M loops, not actual native FC firmware.",
+    "Operating availability and reset model, no current/inrush/damage model.",
+    "No sensor motion or accuracy qualification."
+  ],
+  "normal_gates": "The normal commit and push hooks run after these recorded focused checks; their results are recorded separately."
+}

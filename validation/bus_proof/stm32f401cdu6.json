@@ -1,0 +1,20 @@
+{
+  "id": "stm32f401cdu6",
+  "in_boards": true,
+  "uart": {
+    "state": "proven",
+    "file": "examples/stm32f401cdu6/uart-smoke.yaml",
+    "test": "uart_contains: \"OK\"",
+    "signal": "firmware-f401-demo writes 'O','K','\\n' straight to USART2->DR and the script runner's uart_contains oracle matches them on the captured sink, against configs/systems/stm32f401cdu6.yaml",
+    "lane": "core-onboarding-smoke / onboarding-stm32f401cdu6 (push to main + schedule; NOT on PRs)",
+    "note": "thin but real: a 3-byte bare DR write inside a 64-step budget, and it runs the GENERIC firmware-f401-demo crate, not the chip-specific firmware-f401cdu6-blackpill-demo."
+  },
+  "spi": {
+    "state": "none",
+    "gap": "nothing exercises SPI on this chip descriptor. It has no tier-1 fixture (absent from TIER1_TARGETS), is not in the arduino matrix, and is named in strict_onboarding.rs's SMOKE_LESS_ALLOWLIST so the generic onboarding gate skips it."
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "crates/firmware-f401cdu6-blackpill-demo/src/i2c_smoke.rs and examples/stm32f401cdu6-blackpill/i2c-smoke.yaml exist and do a real address+data write expecting an ACK - but that yaml is referenced by NO workflow and NO test, and its own system.yaml declares external_devices: [], so if it ever ran it would NACK. Dead code, not coverage."
+  }
+}

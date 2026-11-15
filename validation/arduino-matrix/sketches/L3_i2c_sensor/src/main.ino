@@ -46,6 +46,9 @@ static void wireBegin() {
   Wire.begin(4, 5);
 #elif defined(CONFIG_IDF_TARGET_ESP32S3) || defined(ARDUINO_ESP32S3_DEV)
   Wire.begin(8, 9);
+#elif defined(CONFIG_IDF_TARGET_ESP32C6)
+  // esp32c6 variant SDA/SCL. GPIO21 (the classic SDA below) is not the kit.
+  Wire.begin(23, 22);
 #elif defined(ARDUINO_ARCH_ESP32)
   Wire.begin(21, 22);
 #elif defined(ARDUINO_ARCH_RP2040)
@@ -88,9 +91,11 @@ void setup() {
   }
 
   // Tier-1: exact multi-byte register reads when master-receive works.
-#if !defined(STM32F4xx) && !defined(STM32F407xx) && !defined(ARDUINO_DISCO_F407VG)
+#if defined(STM32F446xx) || (!defined(STM32F4xx) && !defined(STM32F407xx) && !defined(ARDUINO_DISCO_F407VG))
   // F407 classic I2C master-receive can hang the Wire stack under sim; skip
-  // the read attempt there and keep ACK-only survival for that board.
+  // the read attempt there and keep ACK-only survival for that board. The
+  // NUCLEO-F446RE reads both registers exactly (measured 2026-11-09), so it
+  // takes the exact tier.
   uint16_t cfg = 0;
   uint16_t bus = 0;
   if (ina219_read_u16(INA219_REG_CONFIG, &cfg) && ina219_read_u16(INA219_REG_BUS, &bus)) {

@@ -79,7 +79,7 @@ NOT the nRF52 TWIM at a new base — see `src/nrf54l15.h` and
 
 ## Validation
 
-- `crates/core/tests/nrf54l15_smart_ring_probe.rs` — boots this ELF against
+- `crates/core/tests/nrf/nrf54l15_smart_ring_probe.rs` — boots this ELF against
   `smart-ring.yaml` and asserts each sensor's real WHO_AM_I byte(s) come back
   over I²C, with no NACK, no mismatch, and no surviving `0xEE` sentinel.
 

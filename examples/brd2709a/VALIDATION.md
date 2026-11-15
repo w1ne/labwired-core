@@ -252,11 +252,11 @@ sim behaviour; the line above is silicon's.
 ```bash
 cargo test -p labwired-core --lib uart                 # 149 passed (incl. Efr32s2 pins)
 cargo test -p labwired-core --lib gpio                 # 103 passed (incl. Efr32s2 port pins)
-cargo test -p labwired-core --test chip_conformance    # estate row for efr32mg26
-cargo test -p labwired-core --test board_coverage_ratchet
-cargo test -p labwired-core --test bus_visibility
-cargo test -p labwired-core --test cpu_hz_single_source
-cargo test -p labwired-core --test unknown_peripheral_type
+cargo test -p labwired-core --test gates chip_conformance::    # estate row for efr32mg26
+cargo test -p labwired-core --test gates board_coverage_ratchet::
+cargo test -p labwired-core --test bus bus_visibility::
+cargo test -p labwired-core --test bus cpu_hz_single_source::
+cargo test -p labwired-core --test bus unknown_peripheral_type::
 cargo test -p labwired-config --test chip_pins_ratchet
 python3 scripts/generate_validation_status.py --check --drift
 ```

@@ -1,0 +1,11 @@
+# LabWired - ESP32-H2-DevKitM-1-N4S narrow UART profile.
+#
+# Board source: ESP32-H2-DevKitM-1 User Guide. The user-visible smoke is the
+# H2 UART0 register/FIFO stream; capture goes directly to the host console.
+# The board's USB-to-UART bridge and physical IO_MUX route are not simulated.
+
+name: "esp32h2-devkitm-1-n4s"
+chip: "../chips/esp32h2.yaml"
+cpu_hz: 96_000_000
+debug_uart: "uart0"
+external_devices: []

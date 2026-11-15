@@ -195,6 +195,8 @@ pub struct GenericDisplay {
     // ── identity ────────────────────────────────────────────────────────
     address: u8,
     cs_pin: String,
+    /// External CS level; register resets and picture-only snapshots do not change it.
+    selected: bool,
     dc_pin: Option<String>,
     dc_source: Option<(u64, u8)>,
     dc_level: bool,
@@ -1032,6 +1034,7 @@ impl GenericDisplay {
             plane_names,
             address,
             cs_pin: String::new(),
+            selected: false,
             dc_pin: None,
             dc_source: None,
             dc_level: false,
@@ -2276,11 +2279,16 @@ impl SpiDevice for GenericDisplay {
         self.component_id.as_deref()
     }
 
+    fn is_selected(&self) -> bool {
+        self.cs_pin.is_empty() || self.selected
+    }
+
     /// What CS↓ does to a half-open stream is `cs_select:` in the descriptor,
     /// not a house rule: the ST7789 treats CS as the transaction boundary,
     /// while the ILI9341 lets a RAMWR pixel stream survive a deselect because a
     /// driver that chunks a large blit releases CS between bursts.
     fn cs_select(&mut self) {
+        self.selected = true;
         if self.spec.cs_select == DisplayCsSelect::KeepsStream {
             return;
         }
@@ -2289,6 +2297,10 @@ impl SpiDevice for GenericDisplay {
         self.param_have = 0;
         self.unit_have = 0;
         self.ram_remaining = None;
+    }
+
+    fn cs_release(&mut self) {
+        self.selected = false;
     }
 
     fn dc_pin(&self) -> Option<&str> {

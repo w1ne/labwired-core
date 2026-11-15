@@ -27,12 +27,14 @@
 #   * Data-ready is paced at 100 Hz (10 ms, the `data_ready:` rule below)
 #     whenever CTRL_REG1_A ODR[3:0] is non-zero, i.e. not power-down. The
 #     configured ODR is not decoded: 1 Hz or 400 Hz still paces at 100 Hz.
-#     Reading any OUT register clears ZYXDA/XDA/YDA/ZDA and starts the next
-#     period from that read, so the cadence drifts by the read latency where
+#     Reading each enabled output HIGH byte clears its axis-ready bit; after
+#     all enabled axes are read, ZYXDA clears and the next period starts from
+#     the final acknowledgement, so cadence drifts by read latency where
 #     silicon keeps a fixed grid. Overrun bits never set. BDU latching is not
 #     modelled; each read reports the live stimulus.
 #   * SUB7 = 0 still auto-increments (silicon would re-read the same register).
-#   * FIFO, interrupts, click detection, the temperature sensor and the
+#   * Only I1_DRDY1 data-ready routing and H_LACTIVE polarity are modelled.
+#     FIFO, threshold/click interrupts, the temperature sensor and the
 #     high-pass filter are not modelled. FIFO_SRC_REG_A reports an empty FIFO.
 type: lsm303agr_accel
 
@@ -72,19 +74,60 @@ behavior:
         start_register: CTRL_REG1_A
         start_mask: 0xF0        # ODR[3:0]; 0000 is power-down
         ready_register: STATUS_REG_A
-        ready_mask: 0x0F        # ZYXDA | ZDA | YDA | XDA
+        ready_mask: 0x08        # ZYXDA; per-axis bits below
         conversion_us: 10000    # 1 / 100 Hz
-        clear_on_read: [OUT_X_A, OUT_Y_A, OUT_Z_A]
+        clear_on_read_all:
+          - { register: OUT_X_A, enable_mask: 0x01, ready_mask: 0x01 }
+          - { register: OUT_Y_A, enable_mask: 0x02, ready_mask: 0x02 }
+          - { register: OUT_Z_A, enable_mask: 0x04, ready_mask: 0x04 }
+
+  # AN4825 Rev1 4.2.1: native INT1 data-ready clears only once the HIGH
+  # bytes of ALL enabled axes have been read. H_LACTIVE selects polarity.
+  outputs: [INT1]
+  output_pins: { INT1: int1_pin }
+  # The existing engine keeps an unread completed group over an idle write.
+  # Keep IRQ consistent with that group. Axis changes while going idle are an
+  # internal retention policy, not qualified silicon transition behavior.
+  vars: { pending: 0 }
+  rules:
+    - on: { data_ready: xyz }
+      do:
+        - { var: pending, value: "reg(CTRL_REG1_A) & 7" }
+        - { pin: INT1, level: "((var(pending) != 0) && ((reg(CTRL_REG3_A) & 0x10) != 0)) != ((reg(CTRL_REG6_A) & 2) != 0)" }
+    - on: { write: CTRL_REG1_A }
+      when: "(reg(CTRL_REG1_A) & 0xf0) != 0"
+      do:
+        - { var: pending, value: 0 }
+        - { pin: INT1, level: "((var(pending) != 0) && ((reg(CTRL_REG3_A) & 0x10) != 0)) != ((reg(CTRL_REG6_A) & 2) != 0)" }
+    - on: { write: CTRL_REG3_A }
+      do: [ { pin: INT1, level: "((var(pending) != 0) && ((reg(CTRL_REG3_A) & 0x10) != 0)) != ((reg(CTRL_REG6_A) & 2) != 0)" } ]
+    - on: { write: CTRL_REG6_A }
+      do: [ { pin: INT1, level: "((var(pending) != 0) && ((reg(CTRL_REG3_A) & 0x10) != 0)) != ((reg(CTRL_REG6_A) & 2) != 0)" } ]
+    - on: { read: OUT_X_A }
+      do:
+        - { var: pending, value: "var(pending) & 6" }
+        - { pin: INT1, level: "((var(pending) != 0) && ((reg(CTRL_REG3_A) & 0x10) != 0)) != ((reg(CTRL_REG6_A) & 2) != 0)" }
+    - on: { read: OUT_Y_A }
+      do:
+        - { var: pending, value: "var(pending) & 5" }
+        - { pin: INT1, level: "((var(pending) != 0) && ((reg(CTRL_REG3_A) & 0x10) != 0)) != ((reg(CTRL_REG6_A) & 2) != 0)" }
+    - on: { read: OUT_Z_A }
+      do:
+        - { var: pending, value: "var(pending) & 3" }
+        - { pin: INT1, level: "((var(pending) != 0) && ((reg(CTRL_REG3_A) & 0x10) != 0)) != ((reg(CTRL_REG6_A) & 2) != 0)" }
 
 metadata:
   label: "LSM303AGR accelerometer"
   summary: "ST LSM303AGR accelerometer half over I2C (address 0x19)."
-  detail: "micro:bit V2 motion sensor. Stimulus channels x/y/z in g, reported as left-justified 16-bit two's complement at the full scale CTRL_REG4_A selects. Sub-address bit 7 (auto-increment) is accepted. Data-ready paces at 100 Hz while ODR is non-zero (the ODR value is not decoded); BDU, FIFO, interrupts and temperature are not modelled."
+  detail: "micro:bit V2 motion sensor. Stimulus channels x/y/z in g, reported as left-justified 16-bit two's complement at the full scale CTRL_REG4_A selects. Sub-address bit 7 (auto-increment) is accepted. Data-ready paces at 100 Hz while ODR is non-zero (the ODR value is not decoded); Optional INT1 models DRDY1 routing, polarity and all-enabled-high-byte acknowledgement. BDU, FIFO, threshold interrupts and temperature are not modelled."
   category: i2c
   config_keys:
     - name: i2c_address
       ty: int
       doc: "7-bit slave address. Defaults to 0x19."
+    - name: int1_pin
+      ty: str
+      doc: "Optional native INT1 output; board collector inversion is separate."
   inputs:
     - { key: x, label: "X", unit: "g", min: -16.0, max: 16.0, default: 0.0 }
     - { key: y, label: "Y", unit: "g", min: -16.0, max: 16.0, default: 0.0 }

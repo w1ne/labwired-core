@@ -6,7 +6,7 @@
 #
 # dsPIC33FJ32MC204 M3 demo system: TMP102 on the CPU-internal I2C1 and a
 # wire loopback on SPI1. Use this file with the session builder / the M3
-# integration test (`crates/core/tests/pic24_xc16_m3.rs`), not with the
+# integration test (`crates/core/tests/pic/pic24_xc16_m3.rs`), not with the
 # generic CLI bus builder, which has no PIC24 I2C/SPI peripherals.
 name: "dspic33fj32mc204-m3-demo"
 chip: "../../configs/chips/dspic33fj32mc204.yaml"

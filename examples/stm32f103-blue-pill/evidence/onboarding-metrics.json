@@ -1,0 +1,28 @@
+{
+  "target_id": "stm32f103-blue-pill",
+  "status": "pass",
+  "crate": "firmware-stm32f103-bluepill-smoke",
+  "target_triple": "thumbv7m-none-eabi",
+  "script": "examples/stm32f103-blue-pill/io-smoke.yaml",
+  "system": "configs/systems/stm32f103-blue-pill.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-12T19:01:47Z",
+  "finished_at_utc": "2026-11-12T19:01:53Z",
+  "elapsed_seconds": 6,
+  "elapsed_ms": 5989,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 4.101,
+    "build_firmware": 1.464,
+    "run_smoke": 0.382
+  },
+  "stages_ms": {
+    "build_cli": 4101,
+    "build_firmware": 1464,
+    "run_smoke": 382
+  }
+}

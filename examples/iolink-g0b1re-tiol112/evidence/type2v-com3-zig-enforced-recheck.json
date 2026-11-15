@@ -160,7 +160,7 @@
     "crates/core/src/peripherals/rcc.rs": "5a76955e9670071fb1db07d44ef990e29b79491bdf9d0dd6c9395ce028125303",
     "crates/core/src/peripherals/uart.rs": "d40df6ad57aa7755840535b3d4232e7027f85ae55aca24dcd2f2a8d9f2caf96a",
     "crates/core/src/peripherals/uart/timed.rs": "b5e4903caa24865c50b49816f5b5a316b37b297c8de097b7cc8ec8b8c3c19b52",
-    "crates/core/tests/g0_customer_timing.rs": "97df4df82ddb69eafb3562e1b480628ff3c5120e29193753167b7b94963bd2fb"
+    "crates/core/tests/stm32/g0_customer_timing.rs": "97df4df82ddb69eafb3562e1b480628ff3c5120e29193753167b7b94963bd2fb"
   },
   "raw_report_sha256": "2f2ee4ff1f70dc3f3f43178eaf2aac95489874867f9909f718d26a3777037fdc",
   "cpu_hz": 64000000,

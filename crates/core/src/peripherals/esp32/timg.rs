@@ -12,11 +12,9 @@
 //! ESP-IDF init code happy:
 //!   * Register reads/writes are acknowledged at the correct offsets so
 //!     state probes don't fault.
-//!   * The 64-bit T0/T1 counters tick monotonically at a deterministic
-//!     one increment per CPU-cycle `tick()` (or elapsed cycle in `sync_to`).
-//!     Their functional counters do not model the hardware prescaler.
-//!     Classic LACT separately models the fixed 240 MHz CPU / 80 MHz APB
-//!     ratio and its programmed divider.
+//!   * The 64-bit T0/T1 counters model the classic ESP32's 80 MHz APB clock,
+//!     programmed divider (zero means 65536), count direction, and alarm
+//!     reload. LACT uses the same APB/CPU ratio and its own divider/alarm.
 //!   * `T0_UPDATE` / `T1_UPDATE` latches the live counter into LO/HI so
 //!     subsequent register reads return a consistent 64-bit snapshot —
 //!     real silicon also requires this strobe before reading LO/HI.
@@ -30,21 +28,20 @@
 //!     preserving the calibration-loop unblock semantics from the
 //!     pre-existing `TimgStub`. Without it, esp-idf's
 //!     `rtc_clk_wait_for_slow_cycle` spins forever.
-//!   * INT_ENA / INT_RAW / INT_ST / INT_CLR plumbing is byte-addressable
-//!     and round-trips — firmware can configure timer interrupt masks
-//!     even though we don't actually fire IRQs from this peripheral yet
-//!     (deferred to the interrupt-routing follow-up).
+//!   * Classic timer and LACT alarm status feeds the DPORT interrupt matrix.
+//!     The ESP32-C3 reuse of this model does not opt into this classic-only
+//!     behavior.
 //!
 //! ## Register map (per ESP32 TRM §16, both TIMG0 and TIMG1)
 //!
 //! | Offset | Name             | Semantics modeled                   |
 //! |-------:|------------------|-------------------------------------|
-//! | 0x00   | T0CONFIG         | Round-trip; bit 31 = T0_EN          |
+//! | 0x00   | T0CONFIG         | EN, direction, divider, alarm       |
 //! | 0x04   | T0LO             | Read: latched low 32 bits of t0     |
 //! | 0x08   | T0HI             | Read: latched high 32 bits of t0    |
 //! | 0x0C   | T0UPDATE         | Write triggers counter latch        |
-//! | 0x10   | T0ALARMLO        | Round-trip                          |
-//! | 0x14   | T0ALARMHI        | Round-trip                          |
+//! | 0x10   | T0ALARMLO        | Alarm compare low word              |
+//! | 0x14   | T0ALARMHI        | Alarm compare high word             |
 //! | 0x18   | T0LOADLO         | Round-trip                          |
 //! | 0x1C   | T0LOADHI         | Round-trip                          |
 //! | 0x20   | T0LOAD           | Write: preload counter from LOAD*   |
@@ -66,10 +63,10 @@
 //! | 0x60   | WDTWPROTECT      | Round-trip                          |
 //! | 0x68   | RTCCALICFG       | START bit latches RDY               |
 //! | 0x6C   | RTCCALICFG1      | Returns canned calibration value    |
-//! | 0x98   | INT_ENA          | Round-trip                          |
-//! | 0x9C   | INT_RAW          | Round-trip (no auto-set today)      |
-//! | 0xA0   | INT_ST           | Round-trip                          |
-//! | 0xA4   | INT_CLR          | Write clears matching INT_RAW bits  |
+//! | 0x98   | INT_ENA          | Interrupt enables                   |
+//! | 0x9C   | INT_RAW          | Sticky alarm status                 |
+//! | 0xA0   | INT_ST           | INT_RAW & INT_ENA                   |
+//! | 0xA4   | INT_CLR          | Write-one-to-clear; reads as zero   |
 //!
 //! Offsets we don't enumerate (e.g. NTIMG_DATE at 0xF8, CLK at 0xFC)
 //! fall through to a generic round-trip via the `regs` HashMap so RMW
@@ -78,17 +75,12 @@
 use crate::{Peripheral, PeripheralTickResult, SimResult};
 
 // Per-timer register offsets (T0 block starts at 0x00, T1 block at 0x24).
-// Some entries (`*_ALARM*`, `WDT_CONFIG0`, `INT_ENA`, `INT_ST`) aren't
-// referenced by the model today — they round-trip through the generic
-// `regs` HashMap. They're kept here for spec-completeness and to make
-// future "actually fire the alarm IRQ" work a name-only diff.
+// The C3 shares the T0/T1 offsets but does not opt into classic alarms.
 const T0_CONFIG: u64 = 0x00;
 const T0_LO: u64 = 0x04;
 const T0_HI: u64 = 0x08;
 const T0_UPDATE: u64 = 0x0C;
-#[allow(dead_code)]
 const T0_ALARMLO: u64 = 0x10;
-#[allow(dead_code)]
 const T0_ALARMHI: u64 = 0x14;
 const T0_LOADLO: u64 = 0x18;
 const T0_LOADHI: u64 = 0x1C;
@@ -98,9 +90,7 @@ const T1_CONFIG: u64 = 0x24;
 const T1_LO: u64 = 0x28;
 const T1_HI: u64 = 0x2C;
 const T1_UPDATE: u64 = 0x30;
-#[allow(dead_code)]
 const T1_ALARMLO: u64 = 0x34;
-#[allow(dead_code)]
 const T1_ALARMHI: u64 = 0x38;
 const T1_LOADLO: u64 = 0x3C;
 const T1_LOADHI: u64 = 0x40;
@@ -116,14 +106,10 @@ const T1_LOAD: u64 = 0x44;
 // 64-bit value >> 1, so LACT ticks at 2 MHz for a 1 µs result — which is
 // APB (80 MHz) / 40, the divider IDF programs.
 const LACT_CONFIG: u64 = 0x70;
-#[allow(dead_code)]
-const LACT_RTC: u64 = 0x74;
 const LACT_LO: u64 = 0x78;
 const LACT_HI: u64 = 0x7C;
 const LACT_UPDATE: u64 = 0x80;
-#[allow(dead_code)]
 const LACT_ALARMLO: u64 = 0x84;
-#[allow(dead_code)]
 const LACT_ALARMHI: u64 = 0x88;
 const LACT_LOADLO: u64 = 0x8C;
 const LACT_LOADHI: u64 = 0x90;
@@ -246,14 +232,25 @@ pub struct RtcCalProfile {
     pub slow_hz: u64,
 }
 
-// Interrupt plumbing. INT_ENA / INT_ST round-trip through `regs` — they're
-// declared here so the spec table in the module docstring stays grep-able.
-#[allow(dead_code)]
+// Timer-group interrupt status bits (ESP32 TRM / IDF timer_group_reg.h).
 const INT_ENA: u64 = 0x98;
 const INT_RAW: u64 = 0x9C;
-#[allow(dead_code)]
 const INT_ST: u64 = 0xA0;
 const INT_CLR: u64 = 0xA4;
+
+const T_CONFIG_INCREASE_BIT: u32 = 1 << 30;
+const T_CONFIG_AUTORELOAD_BIT: u32 = 1 << 29;
+const T_CONFIG_DIVIDER_SHIFT: u32 = 13;
+const T_CONFIG_DIVIDER_MASK: u32 = 0xFFFF << T_CONFIG_DIVIDER_SHIFT;
+const T_CONFIG_EDGE_INT_EN_BIT: u32 = 1 << 12;
+const T_CONFIG_LEVEL_INT_EN_BIT: u32 = 1 << 11;
+const T_CONFIG_ALARM_EN_BIT: u32 = 1 << 10;
+const INT_T0_BIT: u32 = 1 << 0;
+const INT_T1_BIT: u32 = 1 << 1;
+const INT_LACT_BIT: u32 = 1 << 3;
+
+const ALARM_EVENT_TOKEN: u32 = 0x5449_4D00;
+const ALARM_EVENT_HORIZON: u64 = 1u64 << 32;
 
 // CONFIG.EN is bit 31 on the ESP32-classic TIMG block.
 const T_CONFIG_EN_BIT: u32 = 1 << 31;
@@ -285,6 +282,10 @@ pub struct Timg {
     counter_lact: u64,
     /// Fractional LACT progress in APB cycles multiplied by LACT_CPU_MHZ.
     lact_rem: u32,
+    /// APB prescaler phase for T0/T1, in `80 MHz × CPU-cycle` units.
+    /// Cleared when that timer's divider changes.
+    t0_rem: u64,
+    t1_rem: u64,
     /// Is this a TIMG that HAS a LACT timer? Only ESP32-classic does.
     ///
     /// The ESP32-C3 reuses this model (see generic_factory.rs) but dropped
@@ -332,6 +333,13 @@ pub struct Timg {
     /// `apply_write_side_effects` runs after the register store, when the old
     /// bit is already gone.
     wdt_enabled: bool,
+    /// Classic-only interrupt-matrix source base: 14 for TIMG0 or 18 for
+    /// TIMG1. `None` preserves the C3/C6 register shape.
+    alarm_source_base: Option<u32>,
+    /// A timer-register write changed an alarm deadline or its interrupt level.
+    alarm_schedule_dirty: bool,
+    /// Invalidates older queued timer events when a guest reprograms TIMG.
+    alarm_event_token: u32,
 }
 
 impl Timg {
@@ -344,6 +352,8 @@ impl Timg {
             counter_t1: 0,
             counter_lact: 0,
             lact_rem: 0,
+            t0_rem: 0,
+            t1_rem: 0,
             lact_enabled: false,
             anchor_tick: 0,
             rtc_cal: None,
@@ -353,6 +363,9 @@ impl Timg {
             wdt_armed: false,
             wdt_pending: false,
             wdt_enabled: false,
+            alarm_source_base: None,
+            alarm_schedule_dirty: false,
+            alarm_event_token: ALARM_EVENT_TOKEN,
         }
     }
 
@@ -372,6 +385,17 @@ impl Timg {
     /// needs — see the note on `lact_enabled`.
     pub fn with_lact(mut self) -> Self {
         self.lact_enabled = true;
+        self
+    }
+
+    /// Opt into the classic ESP32 TIMG alarm and interrupt model.
+    ///
+    /// `source_base` is 14 for TIMG0 and 18 for TIMG1. Only the classic
+    /// factory supplies these values; the C3/C6 register aliases must not
+    /// acquire LACT or DPORT interrupt behavior.
+    pub fn with_alarms(mut self, source_base: u32) -> Self {
+        self.alarm_source_base = Some(source_base);
+        self.alarm_schedule_dirty = true;
         self
     }
 
@@ -461,6 +485,286 @@ impl Timg {
         self.word(T1_CONFIG) & T_CONFIG_EN_BIT != 0
     }
 
+    fn timer_config_off(timer: usize) -> u64 {
+        if timer == 0 {
+            T0_CONFIG
+        } else {
+            T1_CONFIG
+        }
+    }
+
+    fn timer_counter(&self, timer: usize) -> u64 {
+        if timer == 0 {
+            self.counter_t0
+        } else {
+            self.counter_t1
+        }
+    }
+
+    fn set_timer_counter(&mut self, timer: usize, value: u64) {
+        if timer == 0 {
+            self.counter_t0 = value;
+        } else {
+            self.counter_t1 = value;
+        }
+    }
+
+    fn timer_alarm_value(&self, timer: usize) -> u64 {
+        let (lo, hi) = if timer == 0 {
+            (T0_ALARMLO, T0_ALARMHI)
+        } else {
+            (T1_ALARMLO, T1_ALARMHI)
+        };
+        (u64::from(self.word(hi)) << 32) | u64::from(self.word(lo))
+    }
+
+    fn timer_load_value(&self, timer: usize) -> u64 {
+        let (lo, hi) = if timer == 0 {
+            (T0_LOADLO, T0_LOADHI)
+        } else {
+            (T1_LOADLO, T1_LOADHI)
+        };
+        (u64::from(self.word(hi)) << 32) | u64::from(self.word(lo))
+    }
+
+    fn timer_remainder(&self, timer: usize) -> u64 {
+        if timer == 0 {
+            self.t0_rem
+        } else {
+            self.t1_rem
+        }
+    }
+
+    fn set_timer_remainder(&mut self, timer: usize, value: u64) {
+        if timer == 0 {
+            self.t0_rem = value;
+        } else {
+            self.t1_rem = value;
+        }
+    }
+
+    fn timer_divider(config: u32) -> u64 {
+        let raw = u64::from((config & T_CONFIG_DIVIDER_MASK) >> T_CONFIG_DIVIDER_SHIFT);
+        if raw == 0 {
+            65_536
+        } else {
+            raw
+        }
+    }
+
+    fn timer_cycles_to_alarm(&self, timer: usize) -> Option<u64> {
+        self.alarm_source_base?;
+        let config = self.word(Self::timer_config_off(timer));
+        if config & (T_CONFIG_EN_BIT | T_CONFIG_ALARM_EN_BIT)
+            != (T_CONFIG_EN_BIT | T_CONFIG_ALARM_EN_BIT)
+        {
+            return None;
+        }
+        let counter = self.timer_counter(timer);
+        let alarm = self.timer_alarm_value(timer);
+        let distance = if config & T_CONFIG_INCREASE_BIT != 0 {
+            alarm.wrapping_sub(counter)
+        } else {
+            counter.wrapping_sub(alarm)
+        };
+        if distance == 0 {
+            return Some(0);
+        }
+        let period = u128::from(Self::timer_divider(config)) * u128::from(LACT_CPU_MHZ);
+        let needed = u128::from(distance) * period - u128::from(self.timer_remainder(timer));
+        let cycles = needed.div_ceil(u128::from(APB_MHZ));
+        Some(cycles.min(u128::from(ALARM_EVENT_HORIZON)) as u64)
+    }
+
+    fn lact_cycles_to_alarm(&self) -> Option<u64> {
+        if self.alarm_source_base.is_none() || !self.lact_enabled {
+            return None;
+        }
+        let config = self.word(LACT_CONFIG);
+        if config & (LACT_EN_BIT | T_CONFIG_ALARM_EN_BIT) != (LACT_EN_BIT | T_CONFIG_ALARM_EN_BIT) {
+            return None;
+        }
+        let divider = self.lact_divider()?;
+        let alarm = (u64::from(self.word(LACT_ALARMHI)) << 32) | u64::from(self.word(LACT_ALARMLO));
+        let distance = alarm.wrapping_sub(self.counter_lact);
+        if distance == 0 {
+            return Some(0);
+        }
+        let period = u128::from(divider) * u128::from(LACT_CPU_MHZ);
+        let needed = u128::from(distance) * period - u128::from(self.lact_rem);
+        let cycles = needed.div_ceil(u128::from(APB_MHZ));
+        Some(cycles.min(u128::from(ALARM_EVENT_HORIZON)) as u64)
+    }
+
+    fn next_alarm_delay(&self) -> Option<u64> {
+        [
+            self.timer_cycles_to_alarm(0),
+            self.timer_cycles_to_alarm(1),
+            self.lact_cycles_to_alarm(),
+        ]
+        .into_iter()
+        .flatten()
+        .min()
+    }
+
+    fn mark_alarm_schedule_dirty(&mut self) {
+        if self.alarm_source_base.is_some() {
+            self.alarm_schedule_dirty = true;
+        }
+    }
+
+    fn check_timer_alarm(&mut self, timer: usize, before: u64, steps: u64) -> bool {
+        let config_off = Self::timer_config_off(timer);
+        let config = self.word(config_off);
+        if self.alarm_source_base.is_none()
+            || config & (T_CONFIG_EN_BIT | T_CONFIG_ALARM_EN_BIT)
+                != (T_CONFIG_EN_BIT | T_CONFIG_ALARM_EN_BIT)
+        {
+            return false;
+        }
+        let alarm = self.timer_alarm_value(timer);
+        let increasing = config & T_CONFIG_INCREASE_BIT != 0;
+        let distance = if increasing {
+            alarm.wrapping_sub(before)
+        } else {
+            before.wrapping_sub(alarm)
+        };
+        let hit = if steps == 0 {
+            distance == 0
+        } else {
+            distance == 0 || distance <= steps
+        };
+        if !hit {
+            return false;
+        }
+
+        let int_bit = if timer == 0 { INT_T0_BIT } else { INT_T1_BIT };
+        self.regs.insert(INT_RAW, self.word(INT_RAW) | int_bit);
+        self.regs
+            .insert(config_off, config & !T_CONFIG_ALARM_EN_BIT);
+        let elapsed_after_match = steps.saturating_sub(distance);
+        let counter = if config & T_CONFIG_AUTORELOAD_BIT != 0 {
+            let load = self.timer_load_value(timer);
+            if increasing {
+                load.wrapping_add(elapsed_after_match)
+            } else {
+                load.wrapping_sub(elapsed_after_match)
+            }
+        } else if increasing {
+            before.wrapping_add(steps)
+        } else {
+            before.wrapping_sub(steps)
+        };
+        self.set_timer_counter(timer, counter);
+        true
+    }
+
+    fn advance_timer(&mut self, timer: usize, cpu_cycles: u64) {
+        let config = self.word(Self::timer_config_off(timer));
+        if config & T_CONFIG_EN_BIT == 0 {
+            self.set_timer_remainder(timer, 0);
+            return;
+        }
+        let divider = Self::timer_divider(config);
+        let threshold = divider * u64::from(LACT_CPU_MHZ);
+        let scaled =
+            u128::from(cpu_cycles) * u128::from(APB_MHZ) + u128::from(self.timer_remainder(timer));
+        let steps = (scaled / u128::from(threshold)) as u64;
+        self.set_timer_remainder(timer, (scaled % u128::from(threshold)) as u64);
+        let before = self.timer_counter(timer);
+        if !self.check_timer_alarm(timer, before, steps) {
+            self.set_timer_counter(
+                timer,
+                if config & T_CONFIG_INCREASE_BIT != 0 {
+                    before.wrapping_add(steps)
+                } else {
+                    before.wrapping_sub(steps)
+                },
+            );
+        }
+    }
+
+    fn advance_classic_timers(&mut self, cpu_cycles: u64) {
+        self.advance_timer(0, cpu_cycles);
+        self.advance_timer(1, cpu_cycles);
+    }
+
+    fn fire_due_alarms_at_current(&mut self) {
+        if self.alarm_source_base.is_none() {
+            return;
+        }
+        self.check_timer_alarm(0, self.counter_t0, 0);
+        self.check_timer_alarm(1, self.counter_t1, 0);
+        self.check_lact_alarm(self.counter_lact, 0);
+    }
+
+    fn current_alarm_sources(&self, out: &mut Vec<u32>) {
+        let Some(source_base) = self.alarm_source_base else {
+            return;
+        };
+        let enabled = self.word(INT_ENA);
+        let raw = self.word(INT_RAW);
+        for (timer, bit) in [(0usize, INT_T0_BIT), (1usize, INT_T1_BIT)] {
+            let config = self.word(Self::timer_config_off(timer));
+            if raw & enabled & bit != 0
+                && config & (T_CONFIG_LEVEL_INT_EN_BIT | T_CONFIG_EDGE_INT_EN_BIT) != 0
+            {
+                out.push(source_base + timer as u32);
+            }
+        }
+        let config = self.word(LACT_CONFIG);
+        if self.lact_enabled
+            && raw & enabled & INT_LACT_BIT != 0
+            && config & T_CONFIG_LEVEL_INT_EN_BIT != 0
+        {
+            out.push(source_base + 3);
+        }
+    }
+
+    fn check_lact_alarm(&mut self, before: u64, steps: u64) -> bool {
+        if self.alarm_source_base.is_none() || !self.lact_enabled {
+            return false;
+        }
+        let config = self.word(LACT_CONFIG);
+        if config & (LACT_EN_BIT | T_CONFIG_ALARM_EN_BIT) != (LACT_EN_BIT | T_CONFIG_ALARM_EN_BIT) {
+            return false;
+        }
+        let alarm = (u64::from(self.word(LACT_ALARMHI)) << 32) | u64::from(self.word(LACT_ALARMLO));
+        let distance = if config & T_CONFIG_INCREASE_BIT != 0 {
+            alarm.wrapping_sub(before)
+        } else {
+            before.wrapping_sub(alarm)
+        };
+        if !(if steps == 0 {
+            distance == 0
+        } else {
+            distance == 0 || distance <= steps
+        }) {
+            return false;
+        }
+
+        self.regs.insert(INT_RAW, self.word(INT_RAW) | INT_LACT_BIT);
+        self.regs
+            .insert(LACT_CONFIG, config & !T_CONFIG_ALARM_EN_BIT);
+        let elapsed_after_match = steps.saturating_sub(distance);
+        if config & T_CONFIG_AUTORELOAD_BIT != 0 {
+            let load =
+                (u64::from(self.word(LACT_LOADHI)) << 32) | u64::from(self.word(LACT_LOADLO));
+            self.counter_lact = if config & T_CONFIG_INCREASE_BIT != 0 {
+                load.wrapping_add(elapsed_after_match)
+            } else {
+                load.wrapping_sub(elapsed_after_match)
+            };
+        } else {
+            self.counter_lact = if config & T_CONFIG_INCREASE_BIT != 0 {
+                before.wrapping_add(steps)
+            } else {
+                before.wrapping_sub(steps)
+            };
+        }
+        true
+    }
+
     /// Live LACT counter (debug helper / test introspection).
     pub fn counter_lact(&self) -> u64 {
         self.counter_lact
@@ -495,12 +799,16 @@ impl Timg {
         let Some(div) = self.lact_divider() else {
             return;
         };
+        let before = self.counter_lact;
         // Widen before multiplying so even a full u64 span is exact and
         // partition-independent. Only the hardware counter wraps.
         let scaled = u128::from(cpu_cycles) * u128::from(APB_MHZ) + u128::from(self.lact_rem);
         let per_tick = u128::from(div) * u128::from(LACT_CPU_MHZ);
-        self.counter_lact = self.counter_lact.wrapping_add((scaled / per_tick) as u64);
+        let steps = (scaled / per_tick) as u64;
         self.lact_rem = (scaled % per_tick) as u32;
+        if !self.check_lact_alarm(before, steps) {
+            self.counter_lact = self.counter_lact.wrapping_add(steps);
+        }
     }
 
     /// Latch the live LACT counter into LACT_LO/LACT_HI. Real silicon
@@ -667,12 +975,53 @@ impl Timg {
     /// four times per word produces the same outcome.
     fn apply_write_side_effects(&mut self, word_off: u64) {
         match word_off {
-            T0_UPDATE => self.latch_t0(),
-            T1_UPDATE => self.latch_t1(),
-            T0_LOAD => self.preload_t0(),
-            T1_LOAD => self.preload_t1(),
-            LACT_UPDATE if self.lact_enabled => self.latch_lact(),
-            LACT_LOAD if self.lact_enabled => self.preload_lact(),
+            T0_UPDATE => {
+                self.latch_t0();
+                if self.alarm_source_base.is_some() {
+                    self.regs.insert(T0_UPDATE, 0);
+                }
+            }
+            T1_UPDATE => {
+                self.latch_t1();
+                if self.alarm_source_base.is_some() {
+                    self.regs.insert(T1_UPDATE, 0);
+                }
+            }
+            T0_LOAD => {
+                self.preload_t0();
+                self.mark_alarm_schedule_dirty();
+            }
+            T1_LOAD => {
+                self.preload_t1();
+                self.mark_alarm_schedule_dirty();
+            }
+            T0_CONFIG => {
+                self.t0_rem = 0;
+                self.mark_alarm_schedule_dirty();
+            }
+            T1_CONFIG => {
+                self.t1_rem = 0;
+                self.mark_alarm_schedule_dirty();
+            }
+            T0_ALARMLO | T0_ALARMHI | T1_ALARMLO | T1_ALARMHI | INT_ENA | INT_RAW => {
+                self.mark_alarm_schedule_dirty();
+            }
+            LACT_CONFIG if self.lact_enabled => {
+                self.mark_alarm_schedule_dirty();
+            }
+            LACT_ALARMLO | LACT_ALARMHI if self.lact_enabled => {
+                self.mark_alarm_schedule_dirty();
+            }
+            LACT_UPDATE if self.lact_enabled => {
+                self.latch_lact();
+                if self.alarm_source_base.is_some() {
+                    self.regs.insert(LACT_UPDATE, 0);
+                }
+            }
+            LACT_LOAD if self.lact_enabled => {
+                self.preload_lact();
+                self.mark_alarm_schedule_dirty();
+            }
             // ── C3/C6 MWDT (only under `with_mwdt`; offsets above) ──────────
             WDT_CONFIG0 if self.mwdt => self.on_mwdt_config0_write(),
             WDT_FEED_C3 if self.mwdt => self.mwdt_feed(),
@@ -692,6 +1041,16 @@ impl Timg {
                 let mask = self.word(INT_CLR);
                 let raw = self.word(INT_RAW);
                 self.regs.insert(INT_RAW, raw & !mask);
+                if self.alarm_source_base.is_some() {
+                    // This register is write-only. Firmware commonly uses a
+                    // read-modify-write expression, so reads must return 0.
+                    self.regs.insert(INT_CLR, 0);
+                    self.mark_alarm_schedule_dirty();
+                }
+            }
+            INT_ST if self.alarm_source_base.is_some() => {
+                // Computed from INT_RAW & INT_ENA; discard the software write.
+                self.regs.insert(INT_ST, 0);
             }
             RTCCALICFG => self.maybe_complete_rtc_calibration(),
             _ => {
@@ -770,6 +1129,10 @@ impl Peripheral for Timg {
         // we fall back to a live view of the in-RAM counter so they
         // still observe forward progress instead of a stuck zero.
         let word = match word_off {
+            T0_UPDATE | T1_UPDATE if self.alarm_source_base.is_some() => 0,
+            LACT_UPDATE if self.alarm_source_base.is_some() && self.lact_enabled => 0,
+            INT_CLR if self.alarm_source_base.is_some() => 0,
+            INT_ST if self.alarm_source_base.is_some() => self.word(INT_RAW) & self.word(INT_ENA),
             T0_LO => self
                 .regs
                 .get(&T0_LO)
@@ -834,6 +1197,10 @@ impl Peripheral for Timg {
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
         let word_off = offset & !3;
         let word = match word_off {
+            T0_UPDATE | T1_UPDATE if self.alarm_source_base.is_some() => 0,
+            LACT_UPDATE if self.alarm_source_base.is_some() && self.lact_enabled => 0,
+            INT_CLR if self.alarm_source_base.is_some() => 0,
+            INT_ST if self.alarm_source_base.is_some() => self.word(INT_RAW) & self.word(INT_ENA),
             T0_LO => self
                 .regs
                 .get(&T0_LO)
@@ -882,28 +1249,45 @@ impl Peripheral for Timg {
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
-        // Each legacy tick represents one CPU cycle. T0/T1 retain their
-        // functional one-increment-per-call behavior; LACT applies its
-        // CPU-to-APB conversion and programmed divider below.
-        if self.is_t0_enabled() {
-            self.counter_t0 = self.counter_t0.wrapping_add(1);
-        }
-        if self.is_t1_enabled() {
-            self.counter_t1 = self.counter_t1.wrapping_add(1);
+        if self.alarm_source_base.is_some() {
+            self.advance_classic_timers(1);
+        } else {
+            // Preserve the existing C3/C6 functional counter behavior.
+            if self.is_t0_enabled() {
+                self.counter_t0 = self.counter_t0.wrapping_add(1);
+            }
+            if self.is_t1_enabled() {
+                self.counter_t1 = self.counter_t1.wrapping_add(1);
+            }
         }
         self.advance_lact(1);
         self.advance_mwdt(1);
-        // No interrupt firing this round — see module docs. Routing is
-        // a separate task.
-        PeripheralTickResult::default()
+        let mut sources = Vec::new();
+        self.current_alarm_sources(&mut sources);
+        PeripheralTickResult {
+            explicit_irqs: (!sources.is_empty()).then_some(sources),
+            ..Default::default()
+        }
     }
 
     fn tick_elapsed(&mut self, cycles: u64) -> PeripheralTickResult {
-        // Preserve the legacy T0/T1 and MWDT callback cadence. LACT alone
-        // consumes the full CPU-cycle interval supplied by the bus.
-        let result = self.tick();
-        self.advance_lact(cycles.saturating_sub(1));
-        result
+        if self.alarm_source_base.is_some() {
+            self.advance_classic_timers(cycles);
+            self.advance_lact(cycles);
+            self.advance_mwdt(1);
+            let mut sources = Vec::new();
+            self.current_alarm_sources(&mut sources);
+            PeripheralTickResult {
+                explicit_irqs: (!sources.is_empty()).then_some(sources),
+                ..Default::default()
+            }
+        } else {
+            // Preserve the legacy T0/T1 and MWDT callback cadence. LACT alone
+            // consumes the full CPU-cycle interval supplied by the bus.
+            let result = self.tick();
+            self.advance_lact(cycles.saturating_sub(1));
+            result
+        }
     }
 
     /// Phase 2B.2 (issue #192): TIMG is the first peripheral to migrate to the
@@ -938,15 +1322,57 @@ impl Peripheral for Timg {
             return;
         }
         let delta = tick_now - self.anchor_tick;
-        if self.is_t0_enabled() {
-            self.counter_t0 = self.counter_t0.wrapping_add(delta);
-        }
-        if self.is_t1_enabled() {
-            self.counter_t1 = self.counter_t1.wrapping_add(delta);
+        if self.alarm_source_base.is_some() {
+            self.advance_classic_timers(delta);
+        } else {
+            if self.is_t0_enabled() {
+                self.counter_t0 = self.counter_t0.wrapping_add(delta);
+            }
+            if self.is_t1_enabled() {
+                self.counter_t1 = self.counter_t1.wrapping_add(delta);
+            }
         }
         self.advance_lact(delta);
         self.advance_mwdt(delta);
         self.anchor_tick = tick_now;
+    }
+
+    fn matrix_irq_sources_into(&self, out: &mut Vec<u32>) {
+        self.current_alarm_sources(out);
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if self.alarm_source_base.is_none() || !self.alarm_schedule_dirty {
+            return Vec::new();
+        }
+        self.alarm_schedule_dirty = false;
+        self.alarm_event_token = self.alarm_event_token.wrapping_add(1);
+        if self.alarm_event_token == 0 {
+            self.alarm_event_token = ALARM_EVENT_TOKEN;
+        }
+        vec![(0, self.alarm_event_token)]
+    }
+
+    fn on_event(
+        &mut self,
+        event_token: u32,
+        sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        if self.alarm_source_base.is_none() || event_token != self.alarm_event_token {
+            return crate::sched::EventResult::default();
+        }
+        self.sync_to(sched.now());
+        self.fire_due_alarms_at_current();
+        let source_base = self.alarm_source_base.unwrap();
+        crate::sched::EventResult {
+            // This is a wake for the DPORT level poll, including after INT_CLR
+            // removes the final asserted source. `matrix_irq_sources_into`
+            // supplies the current level; stale event tokens are ignored above.
+            explicit_irqs: vec![source_base, source_base + 1, source_base + 3],
+            reschedule_delay: self.next_alarm_delay(),
+            ..Default::default()
+        }
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {
@@ -1154,6 +1580,165 @@ mod tests {
         // Clear bit 0.
         write_u32(&mut t, INT_CLR, 0b01);
         assert_eq!(read_u32(&t, INT_RAW), 0b10);
+    }
+
+    #[test]
+    fn classic_t0_one_khz_alarm_reloads_after_apb_divider_cycles() {
+        let mut t = Timg::new(0x3FF5_F000).with_lact().with_alarms(14);
+        let divider_1mhz = 80 << T_CONFIG_DIVIDER_SHIFT;
+        write_u32(&mut t, T0_ALARMLO, 1000);
+        write_u32(&mut t, T0_LOAD, 0);
+        write_u32(&mut t, INT_ENA, INT_T0_BIT);
+        write_u32(
+            &mut t,
+            T0_CONFIG,
+            T_CONFIG_EN_BIT
+                | T_CONFIG_INCREASE_BIT
+                | T_CONFIG_AUTORELOAD_BIT
+                | T_CONFIG_LEVEL_INT_EN_BIT
+                | T_CONFIG_ALARM_EN_BIT
+                | divider_1mhz,
+        );
+
+        // 80 MHz APB / divider 80 = 1 MHz; the CPU clock is 240 MHz.
+        t.sync_to(239_999);
+        assert_eq!(read_u32(&t, INT_RAW) & INT_T0_BIT, 0);
+        t.sync_to(240_000);
+        assert_eq!(read_u32(&t, INT_RAW) & INT_T0_BIT, INT_T0_BIT);
+        assert_eq!(t.counter_t0(), 0);
+        assert_eq!(read_u32(&t, T0_CONFIG) & T_CONFIG_ALARM_EN_BIT, 0);
+        assert_eq!(read_u32(&t, INT_ST) & INT_T0_BIT, INT_T0_BIT);
+
+        // The timer ISR re-enables ALARM_EN for an autoreload timer. The
+        // next compare preserves the two prescaled ticks beyond its deadline.
+        write_u32(
+            &mut t,
+            T0_CONFIG,
+            T_CONFIG_EN_BIT
+                | T_CONFIG_INCREASE_BIT
+                | T_CONFIG_AUTORELOAD_BIT
+                | T_CONFIG_LEVEL_INT_EN_BIT
+                | T_CONFIG_ALARM_EN_BIT
+                | divider_1mhz,
+        );
+        t.sync_to(480_480);
+        assert_eq!(t.counter_t0(), 2);
+    }
+
+    #[test]
+    fn classic_timer_level_interrupt_requires_level_enable() {
+        let mut t = Timg::new(0x3FF5_F000).with_lact().with_alarms(14);
+        write_u32(&mut t, INT_RAW, INT_T0_BIT);
+        write_u32(&mut t, INT_ENA, INT_T0_BIT);
+        let mut sources = Vec::new();
+        t.matrix_irq_sources_into(&mut sources);
+        assert!(sources.is_empty());
+
+        write_u32(&mut t, T0_CONFIG, T_CONFIG_LEVEL_INT_EN_BIT);
+        t.matrix_irq_sources_into(&mut sources);
+        assert_eq!(sources, [14]);
+    }
+
+    #[test]
+    fn classic_t1_counts_down_to_its_alarm() {
+        let mut t = Timg::new(0x3FF5_F000).with_lact().with_alarms(14);
+        write_u32(&mut t, T1_LOADLO, 10);
+        write_u32(&mut t, T1_LOAD, 1);
+        write_u32(&mut t, T1_ALARMLO, 8);
+        write_u32(&mut t, INT_ENA, INT_T1_BIT);
+        write_u32(
+            &mut t,
+            T1_CONFIG,
+            T_CONFIG_EN_BIT | T_CONFIG_LEVEL_INT_EN_BIT | T_CONFIG_ALARM_EN_BIT | (1 << 13),
+        );
+
+        t.sync_to(5);
+        assert_eq!(t.counter_t1(), 9);
+        t.sync_to(6);
+        assert_eq!(read_u32(&t, INT_RAW) & INT_T1_BIT, INT_T1_BIT);
+        assert_eq!(t.counter_t1(), 8);
+    }
+
+    #[test]
+    fn lact_alarm_registers_use_the_lact_offsets() {
+        let mut t = Timg::new(0x3FF5_F000).with_lact().with_alarms(14);
+        write_u32(&mut t, T0_ALARMLO, 0x1111_2222);
+        write_u32(&mut t, LACT_ALARMLO, 0x3333_4444);
+        write_u32(&mut t, LACT_ALARMHI, 0x5555_6666);
+        assert_eq!(read_u32(&t, T0_ALARMLO), 0x1111_2222);
+        assert_eq!(read_u32(&t, LACT_ALARMLO), 0x3333_4444);
+        assert_eq!(read_u32(&t, LACT_ALARMHI), 0x5555_6666);
+    }
+
+    #[test]
+    fn classic_timg1_uses_its_own_interrupt_matrix_sources() {
+        let mut t = Timg::new(0x3FF6_0000).with_lact().with_alarms(18);
+        write_u32(&mut t, INT_RAW, INT_T0_BIT | INT_LACT_BIT);
+        write_u32(&mut t, INT_ENA, INT_T0_BIT | INT_LACT_BIT);
+        write_u32(&mut t, T0_CONFIG, T_CONFIG_LEVEL_INT_EN_BIT);
+        write_u32(&mut t, LACT_CONFIG, LACT_EN_BIT | T_CONFIG_LEVEL_INT_EN_BIT);
+        let mut sources = Vec::new();
+        t.matrix_irq_sources_into(&mut sources);
+        assert_eq!(sources, [18, 21]);
+    }
+
+    #[test]
+    fn classic_update_strobes_self_clear() {
+        let mut t = Timg::new(0x3FF5_F000).with_lact().with_alarms(14);
+        write_u32(&mut t, T0_LOADLO, 0x1234_5678);
+        write_u32(&mut t, T0_LOAD, 1);
+        write_u32(&mut t, T0_UPDATE, 1);
+        write_u32(&mut t, T1_UPDATE, 1);
+        write_u32(&mut t, LACT_UPDATE, 1);
+        assert_eq!(read_u32(&t, T0_UPDATE), 0);
+        assert_eq!(read_u32(&t, T1_UPDATE), 0);
+        assert_eq!(read_u32(&t, LACT_UPDATE), 0);
+        assert_eq!(read_u32(&t, T0_LO), 0x1234_5678);
+    }
+
+    #[test]
+    fn classic_int_clr_is_write_only_and_read_modify_write_safe() {
+        let mut t = Timg::new(0x3FF5_F000).with_lact().with_alarms(14);
+        write_u32(&mut t, INT_RAW, INT_T0_BIT | INT_T1_BIT);
+        write_u32(&mut t, INT_ENA, INT_T0_BIT | INT_T1_BIT);
+        assert_eq!(read_u32(&t, INT_CLR), 0);
+        write_u32(&mut t, INT_CLR, INT_T0_BIT);
+        assert_eq!(read_u32(&t, INT_RAW), INT_T1_BIT);
+        assert_eq!(read_u32(&t, INT_ST), INT_T1_BIT);
+        assert_eq!(read_u32(&t, INT_CLR), 0);
+    }
+
+    #[test]
+    fn classic_far_alarm_rearms_at_the_scheduler_horizon() {
+        let mut t = Timg::new(0x3FF5_F000).with_lact().with_alarms(14);
+        write_u32(&mut t, T0_ALARMLO, u32::MAX);
+        write_u32(&mut t, T0_ALARMHI, u32::MAX);
+        write_u32(
+            &mut t,
+            T0_CONFIG,
+            T_CONFIG_EN_BIT | T_CONFIG_INCREASE_BIT | T_CONFIG_ALARM_EN_BIT | (80 << 13),
+        );
+        assert_eq!(t.timer_cycles_to_alarm(0), Some(ALARM_EVENT_HORIZON));
+    }
+
+    #[test]
+    fn classic_irq_level_changes_arm_a_fresh_scheduler_wake() {
+        let mut t = Timg::new(0x3FF5_F000).with_lact().with_alarms(14);
+        let first = t.take_scheduled_events();
+        assert_eq!(first.len(), 1);
+        write_u32(&mut t, INT_RAW, INT_T0_BIT);
+        write_u32(&mut t, INT_ENA, INT_T0_BIT);
+        write_u32(&mut t, T0_CONFIG, T_CONFIG_LEVEL_INT_EN_BIT);
+        let asserted_wake = t.take_scheduled_events();
+        assert_eq!(asserted_wake.len(), 1);
+        assert_ne!(first[0].1, asserted_wake[0].1);
+        write_u32(&mut t, INT_CLR, INT_T0_BIT);
+        let cleared_wake = t.take_scheduled_events();
+        assert_eq!(cleared_wake.len(), 1);
+        assert_ne!(asserted_wake[0].1, cleared_wake[0].1);
+        let mut sources = Vec::new();
+        t.matrix_irq_sources_into(&mut sources);
+        assert!(sources.is_empty());
     }
 
     #[test]

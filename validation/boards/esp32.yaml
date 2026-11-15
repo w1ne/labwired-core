@@ -1,0 +1,44 @@
+id: esp32
+doc: docs/boards/esp32.md
+chip: configs/chips/esp32.yaml
+tier: structural
+note: "Original ESP32 (dual-core Xtensa LX6). Exercised via the tier-1 fast-boot fixture (tests/fixtures/tier1/esp32.elf) and a dedicated PR-run gate firmware_survival::test_esp32_tier1_survival (classes PASS with the documented dma gap esp32-no-mem2mem-dma, then `TIER1 done`). No silicon bench."
+models:
+  - crates/core/src/peripherals/esp_ledc_wave.rs
+  - crates/core/src/cpu/xtensa_lx7.rs
+  - crates/core/src/decoder/xtensa.rs
+  - configs/chips/esp32.yaml
+  # 2026-09-21, model_paths_drift_gate: models this board REGISTERS that
+  # its list omitted, so they were invisible to the drift digest. This
+  # board records no silicon capture, so there is no "silicon-verified"
+  # claim for the corrected digest to invalidate — no ack is implied.
+  - crates/core/src/peripherals/esp32/efuse.rs
+  - crates/core/src/peripherals/esp32/gpio.rs
+  - crates/core/src/peripherals/esp32/i2c.rs
+  - crates/core/src/peripherals/esp32/ledc.rs
+  - crates/core/src/peripherals/esp32/mcpwm.rs
+  # 2026-11-08: the PCNT pulse counter (was a round-trip stub), inputs from
+  # the GPIO input matrix. No silicon capture on this board.
+  - crates/core/src/peripherals/esp32/pcnt.rs
+  # 2026-11-10: classic RMT TX → GPIO (was a system_stub). This board
+  # records no silicon capture, so there is no silicon-verified claim
+  # for the digest to invalidate — no ack is implied.
+  - crates/core/src/peripherals/esp32/rmt.rs
+  # 2026-11-09: RTC_CNTL light/deep sleep on the RTC timer (deep sleep
+  # reboots the app with RTC memory kept). No silicon capture on this board.
+  - crates/core/src/peripherals/esp32/rtc_cntl.rs
+  - crates/core/src/peripherals/esp32/sar_adc.rs
+  - crates/core/src/peripherals/esp32/sdio_stub.rs
+  - crates/core/src/peripherals/esp32/sha.rs
+  - crates/core/src/peripherals/esp32/spi.rs
+  - crates/core/src/peripherals/esp32/syscon.rs
+  - crates/core/src/peripherals/esp32/timg.rs
+  - crates/core/src/peripherals/esp32/twai.rs
+  - crates/core/src/peripherals/esp32/uart.rs
+  # 2026-10-16: the RTC IO MUX / RTC GPIO model (`rtcio`, was a round-trip
+  # stub), shared with the S3. No silicon capture on this board.
+  - crates/core/src/peripherals/esp_rtc_io.rs
+  - crates/core/src/peripherals/stub.rs
+  - crates/core/src/peripherals/timer.rs
+  - crates/core/src/peripherals/timer_output.rs
+  - crates/core/src/peripherals/uart.rs

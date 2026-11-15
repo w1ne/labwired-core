@@ -1,0 +1,42 @@
+# Narrow ESP32-C5 HP-core profile for the ESP32-C5-DevKitC-1-N8R8.
+#
+# This is a fast-boot UART profile. The simulator loads a bare ELF at its entry
+# point; it does not execute the C5 mask ROM or the Espressif bootloader.
+# Only UART0's FIFO/status register head is modeled. GPIO, PCR clock control,
+# UART1, USB, PSRAM, Wi-Fi, Bluetooth, 802.15.4, LP core and RGB LED are not
+# claimed by this descriptor.
+#
+# Sources checked 2026-11-12:
+#   ESP32-C5 product page:
+#     https://www.espressif.com/en/products/socs/esp32-c5
+#   ESP32-C5-DevKitC-1 v1.2 guide:
+#     https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c5/esp32-c5-devkitc-1/user_guide.html
+#   ESP-IDF C5 memory map and register definitions:
+#     https://github.com/espressif/esp-idf/tree/master/components/soc/esp32c5
+
+name: "esp32c5"
+arch: "riscv"
+core: "rv32imac"
+registers_count: 31
+cpu_hz: 240_000_000
+
+# The N8R8 board carries 8 MiB flash. ESP-IDF maps IROM/DROM through the
+# unified 0x4200_0000 window. The 8 MiB PSRAM is deliberately not mapped.
+flash:
+  base: 0x42000000
+  size: "8192KB"
+ram:
+  base: 0x40800000
+  size: "384KB"
+
+peripherals:
+  # C5 UART FIFO/status head (FIFO@0x00, STATUS@0x1C) matches the shared
+  # Espressif UART model. The descriptor ends at STATUS, before the C5-specific
+  # tail registers. IRQ 47 is ETS_UART0_INTR_SOURCE in C5 interrupts.h.
+  - id: "uart0"
+    type: "esp32c5_uart"
+    irq: 47
+    base_address: 0x60000000
+    size: "32B"
+    config:
+      echo_stdout: true
