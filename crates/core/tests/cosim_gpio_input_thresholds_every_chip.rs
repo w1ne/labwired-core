@@ -48,7 +48,6 @@ const NOT_TRANSCRIBED: &[&str] = &[
     "nrf52832",
     "nrf52833",
     "nrf52840",
-    "nrf5340",
     "nrf54l15",
     "nrf54lm20a",
     "r7fa6m5bh",
