@@ -132,6 +132,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | pic24f16ka101 | open | L1 | 3 | — | — | ≥1× (CI) | — |
 | pic24f16ka102 | open | L1 | 3 | — | — | ≥1× (CI) | — |
 | ch32v003f4p6 | open | L1 | 5 | — | — | ≥1× (CI) | — |
+| ch32l103c8t6 | open | L1 | 7 | — | — | ≥1× (CI) | — |
 | esp32h2 | open | L0 | 3 | — | 2.4 | ≥1× (CI) | — |
 | esp32c5 | open | L0 | 1 | — | 2.2 | ≥1× (CI) | — |
 | esp32c61 | open | L0 | 1 | — | 2.2 | ≥1× (CI) | — |
