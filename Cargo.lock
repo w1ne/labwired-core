@@ -1151,6 +1151,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-adafruit-feather-rp2350-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-andes-ae350-n25-smoke"
 version = "0.1.0"
 
@@ -1476,6 +1485,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-esp32c5-demo"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv 0.10.1",
+ "riscv-rt",
+]
+
+[[package]]
 name = "firmware-esp32c6-demo"
 version = "0.1.0"
 dependencies = [
@@ -1489,6 +1507,33 @@ name = "firmware-esp32c6-devkitc-bme280-smoke"
 version = "0.1.0"
 dependencies = [
  "panic-halt",
+ "riscv-rt",
+]
+
+[[package]]
+name = "firmware-esp32c61-demo"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv 0.10.1",
+ "riscv-rt",
+]
+
+[[package]]
+name = "firmware-esp32h2-demo"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv 0.10.1",
+ "riscv-rt",
+]
+
+[[package]]
+name = "firmware-esp32p4-demo"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv 0.10.1",
  "riscv-rt",
 ]
 
@@ -2066,6 +2111,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-nucleo-h723zg-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-nucleo-wb55rg-demo"
 version = "0.1.0"
 dependencies = [
@@ -2394,6 +2447,14 @@ dependencies = [
 
 [[package]]
 name = "firmware-stm32f072b-disco-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-stm32f103-bluepill-smoke"
 version = "0.1.0"
 dependencies = [
  "cortex-m-rt",

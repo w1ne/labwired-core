@@ -1214,8 +1214,13 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
                 // minimum-steps floor: assertions that satisfy trivially early
                 // (e.g. a token already present at reset) don't short-circuit
                 // the run before real execution has happened.
+                // Nor while a scheduled input is still pending: stopping here
+                // would leave it unfired, and a proof that depends on it
+                // (stimulus-then-marker) could never pass.
                 if assertions_first_passed_at.is_none()
                     && step >= ctx.resolved_limits.stop_when_assertions_pass_min_steps
+                    && pending_stimuli.iter().all(|(_, fired)| *fired)
+                    && pending_uart_injections.iter().all(|(_, fired)| *fired)
                 {
                     assertions_first_passed_at = Some(step);
                     // Settle is "N more instructions" (print-then-bkpt). Leave

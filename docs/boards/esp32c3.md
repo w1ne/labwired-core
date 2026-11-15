@@ -158,6 +158,17 @@ Details: [First agent run](../agent/first-run.md) · [Tools](../agent/tools.md).
 
 ---
 
+## Board system smoke: Seeed Studio XIAO ESP32C3 + BME280
+
+The live XIAO ESP32C3 (USD 4.90, in stock) is a rank-1 ESP32-family board. The
+[XIAO + BME280 profile](../../examples/xiao-esp32c3-bme280/README.md) connects
+an Adafruit BME280 breakout to I2C0 on the board's default Wire pins
+(D4/GPIO6, D5/GPIO7). The committed fixture is the stock XIAO Arduino build;
+the smoke boots the full Arduino-ESP32 startup and asserts the sensor ID,
+calibration, raw temperature and compensated 25.00 degC on the USB-Serial/JTAG
+console. The profile reuses the existing C3 model and does not claim radio,
+buttons, battery charging, board power or physical sensor behavior.
+
 ## Related systems & examples
 
 | Path | What |

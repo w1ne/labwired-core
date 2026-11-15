@@ -1132,6 +1132,91 @@ const CHIPS: &[ChipConf] = &[
             "ch32v003_compiled_firmware::ch32v003_compiled_rv32e_firmware_toggles_pc0",
         ),
     },
+    // ESP32-H2/C5/C61/P4/S2 UART0-only board profiles. SIM-DERIVED: no silicon
+    // capture, so no reset_oracle. Their board smokes run as CLI scripts in
+    // core-board-ci / core-onboarding-smoke, not as Rust integration tests, so
+    // no behavior_gate can resolve yet.
+    ChipConf {
+        name: "esp32h2",
+        yaml: "configs/chips/esp32h2.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "esp32c5",
+        yaml: "configs/chips/esp32c5.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "esp32c61",
+        yaml: "configs/chips/esp32c61.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    // nRF54L05 / nRF54L10 application-core subsets (#1865). SIM-DERIVED: no
+    // silicon capture. Their UARTE20 + P2.09 smokes run as CLI scripts
+    // (examples/nrf54l05-l10), not as Rust tests, so no behavior_gate
+    // resolves.
+    ChipConf {
+        name: "nrf54l05",
+        yaml: "configs/chips/nrf54l05.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "nrf54l10",
+        yaml: "configs/chips/nrf54l10.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "esp32p4",
+        yaml: "configs/chips/esp32p4.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
+        name: "esp32s2",
+        yaml: "configs/chips/esp32s2.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    // Adafruit Feather RP2040 variant of the rp2040 die. Its BME280 I2C1 smoke
+    // runs as a CLI script in core-onboarding-smoke, not as a Rust test.
+    ChipConf {
+        name: "rp2040-feather",
+        yaml: "configs/chips/rp2040-feather.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    // Adafruit Feather RP2350 variant of the rp2350 die. Its D13/GPIO7 +
+    // UART0 smoke runs as a CLI script in core-onboarding-smoke, not as a
+    // Rust test.
+    ChipConf {
+        name: "rp2350-feather",
+        yaml: "configs/chips/rp2350-feather.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    // NUCLEO-H723ZG slice (RCC, SysTick, GPIO B/C/D/E, USART3). SIM-DERIVED:
+    // no silicon capture. Its LD1 + USART3 smoke runs as a CLI script in
+    // core-onboarding-smoke, not as a Rust test, so no behavior_gate resolves.
+    ChipConf {
+        name: "stm32h723zg",
+        yaml: "configs/chips/stm32h723zg.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    // XIAO ESP32-C6 package variant (copy of esp32c6.yaml, 4 MB flash).
+    // SIM-DERIVED: no silicon capture. Its GPIO15 LED smoke runs as a CLI
+    // script in core-onboarding-smoke, not as a Rust test.
+    ChipConf {
+        name: "esp32c6fh4",
+        yaml: "configs/chips/esp32c6fh4.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
 ];
 
 /// Registers a cold-reset sim model can *never* reproduce from a `reset_halt`
