@@ -137,7 +137,9 @@ jobs:
             # stays on the 7.0.1 build it was green on.
             esp32c6)     platform=espressif32@8.0.0 ;;
             esp32*)      platform=espressif32@7.0.1 ;;
-            atmega328p)  platform=atmelavr@5.3.0 ;;
+            atmega328p|atmega2560) platform=atmelavr@5.3.0 ;;
+            # The Zero row was measured on atmelsam 9.0.0 (ArduinoCore-samd).
+            arduino-zero) platform=atmelsam@9.0.0 ;;
             # Not in the registry; same pin as boards/ch32v003.yaml (fixture revision).
             ch32v003)    platform=https://github.com/Community-PIO-CH32V/platform-ch32v.git#f26b06a375c5a8b4dd58af5265538e88aa2a68c7 ;;
             *)
