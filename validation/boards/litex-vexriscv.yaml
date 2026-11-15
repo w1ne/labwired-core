@@ -25,3 +25,4 @@ models:
   - crates/firmware-litex-vexriscv-smoke
   - configs/chips/litex-vexriscv.yaml
   - configs/systems/litex-vexriscv.yaml
+  - crates/core/src/peripherals/litex_spi_flash.rs

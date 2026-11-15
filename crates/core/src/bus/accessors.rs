@@ -1882,7 +1882,12 @@ impl crate::Bus for SystemBus {
                 let idx = (irq / 32) as usize;
                 let bit = irq % 32;
                 if idx < 8 {
-                    nvic.clear_pending(idx, 1 << bit);
+                    // Exception entry clears the pending bit outright. A level
+                    // source that is still asserted re-pends through the bus
+                    // level sampling, as the NVIC does at exception return;
+                    // re-pending here re-entered the handler before it could
+                    // clear the source (USART RXNE storm under the scheduler).
+                    nvic.ispr[idx].fetch_and(!(1 << bit), Ordering::SeqCst);
                 }
             }
         }

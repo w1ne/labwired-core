@@ -1502,13 +1502,17 @@ impl Avr {
         if self.is_avrxt() {
             return self.avrxt_data_read(addr, bus);
         }
+        // A classic USART alias lands on its 328P register (0xC0..0xC6),
+        // which is low SRAM on a part whose SRAM starts at 0x0060; the alias
+        // must reach the USART arm, not that SRAM.
+        let aliased = self.classic_usart_alias(addr).is_some();
         let addr = match self.classic_route(addr) {
             Ok(a) => a,
             Err(()) => return self.classic_data_read(addr, bus),
         };
         match addr {
             0x0000..=0x001F => Ok(self.r[addr as usize]),
-            a if self.is_low_sram(a) => Ok(self.sram[(a - self.sram_start) as usize]),
+            a if !aliased && self.is_low_sram(a) => Ok(self.sram[(a - self.sram_start) as usize]),
             // PINB/PINC/PIND — the registers on this part whose value the
             // OUTSIDE WORLD moves, so they are the ones the IO shadow cannot
             // answer alone.
@@ -1651,6 +1655,10 @@ impl Avr {
         if self.is_avrxt() {
             return self.avrxt_data_write(addr, value, bus);
         }
+        // A classic USART alias lands on its 328P register (0xC0..0xC6),
+        // which is low SRAM on a part whose SRAM starts at 0x0060; the alias
+        // must reach the USART arm, not that SRAM.
+        let aliased = self.classic_usart_alias(addr).is_some();
         let addr = match self.classic_route(addr) {
             Ok(a) => a,
             Err(()) => return self.classic_data_write(addr, value, bus),
@@ -1660,7 +1668,7 @@ impl Avr {
                 self.r[addr as usize] = value;
                 Ok(())
             }
-            a if self.is_low_sram(a) => {
+            a if !aliased && self.is_low_sram(a) => {
                 self.sram[(a - self.sram_start) as usize] = value;
                 bus.write_u8(a as u64, value)?;
                 Ok(())
@@ -4848,12 +4856,9 @@ mod tests {
             ("at90usb1286", 128 * 1024, 0x0100, 0x20FF),
         ];
         for &(name, flash, sram_start, ramend) in cases {
+            // Parts with a model of their own (ATmega8/16/32/128, the x8 and
+            // x4 families, ATmega169) must still match the datasheet geometry.
             let cpu = Avr::for_chip_name(name);
-            assert_eq!(
-                cpu.model,
-                AvrModel::Atmega328p,
-                "{name} keeps the 328P model"
-            );
             assert_eq!(cpu.flash.len(), flash, "{name} flash size");
             assert_eq!(cpu.sram_start, sram_start, "{name} SRAM start");
             assert_eq!(cpu.ramend, ramend, "{name} RAMEND");
@@ -4879,6 +4884,10 @@ mod tests {
                 "{name:?} not in table"
             );
             let cpu = Avr::for_chip_name(name);
+            // `atmega1280` has the 1281 model of its own (128 KB).
+            if cpu.model != AvrModel::Atmega328p {
+                continue;
+            }
             assert_eq!(cpu.flash.len(), FLASH_SIZE, "{name:?} flash size");
             assert_eq!(
                 (cpu.sram_start, cpu.ramend),

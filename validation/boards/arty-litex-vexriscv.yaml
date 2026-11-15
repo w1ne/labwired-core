@@ -26,3 +26,4 @@ models:
   - crates/firmware-arty-litex-smoke
   - configs/chips/arty-litex-vexriscv.yaml
   - configs/systems/arty-litex-vexriscv.yaml
+  - crates/core/src/peripherals/litex_spi_flash.rs

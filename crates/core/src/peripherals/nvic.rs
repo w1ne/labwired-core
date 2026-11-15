@@ -113,8 +113,9 @@ impl Nvic {
             let idx = ((irq - 16) / 32) as usize;
             let bit = (irq - 16) % 32;
             if idx < 8 {
-                // Clear pending, set active
-                self.state.clear_pending(idx, 1 << bit);
+                // Clear pending, set active. Entry does not re-pend a level
+                // source; see `SystemBus::clear_nvic_pending`.
+                self.state.ispr[idx].fetch_and(!(1 << bit), Ordering::SeqCst);
                 self.state.iabr[idx].fetch_or(1 << bit, Ordering::SeqCst);
             }
         }
@@ -269,6 +270,23 @@ mod tests {
 
         assert_eq!(state.ispr[0].load(Ordering::SeqCst) & mask, mask);
         assert_eq!(state.level_pended[0].load(Ordering::SeqCst) & mask, mask);
+    }
+
+    /// Exception entry clears pending even while the level source is still
+    /// asserted: the handler has not cleared the flag yet. Re-pending here
+    /// re-entered a USART RX handler 102,067 times in the uart-chain world.
+    #[test]
+    fn entry_clears_pending_of_an_asserted_level_source() {
+        let state = Arc::new(NvicState::default());
+        let nvic = Nvic::new(Arc::clone(&state));
+        let mask = 1 << 5;
+        state.pend(0, mask);
+        state.level_pended[0].store(mask, Ordering::SeqCst);
+
+        nvic.acknowledge_interrupt(16 + 5);
+
+        assert_eq!(state.ispr[0].load(Ordering::SeqCst) & mask, 0);
+        assert_eq!(state.iabr[0].load(Ordering::SeqCst) & mask, mask);
     }
 
     #[test]
