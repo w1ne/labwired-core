@@ -40,7 +40,7 @@ on:
   # Rule: a PR that changes the interpreter or bus hot paths gets the `perf`
   # label and its board-throughput job must be green before merge.
   pull_request:
-    types: [opened, synchronize, reopened, labeled]
+    types: [opened, synchronize, reopened, labeled, ready_for_review]
     branches:
       - main
     paths:
@@ -120,7 +120,8 @@ jobs:
   board-throughput:
     name: board-throughput
     needs: perf-scope
-    if: ${{ needs.perf-scope.outputs.required == 'true' }}
+    # Draft PRs skip the heavy perf lane; ready_for_review re-runs it.
+    if: ${{ needs.perf-scope.outputs.required == 'true' && !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
     # Keep absolute RTx and relative Ir/step receipts on one stable image.
     # `ubuntu-latest` moves to Ubuntu 26 on 2026-10-19, which would silently
     # change both the compiler output and host throughput under our baselines.
@@ -364,7 +365,7 @@ jobs:
   perf-verdict:
     name: perf-verdict
     needs: [perf-scope, board-throughput]
-    if: ${{ always() && (github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core') }}
+    if: ${{ always() && !(github.event_name == 'pull_request' && github.event.pull_request.draft) && (github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core') }}
     permissions:
       contents: read
     runs-on: ubuntu-24.04
