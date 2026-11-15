@@ -1131,6 +1131,35 @@ const CHIPS: &[ChipConf] = &[
             "ch32v003_compiled_firmware::ch32v003_compiled_rv32e_firmware_toggles_pc0",
         ),
     },
+    // CH32V003 package variants (QFN20 F4U6, SOP16 A4M6, SOP8 J4M6). Same
+    // die and SIM-DERIVED status as the F4P6 above; each descriptor differs
+    // only in package and bonded pins (CH32V003DS0 V1.8 Table 2-1), which
+    // ch32v003_package_variants_match_ds0_bonding_on_the_f4p6_die pins. The
+    // gate boots a real ELF per variant on a GPIOC pin that package bonds.
+    ChipConf {
+        name: "ch32v003f4u6",
+        yaml: "configs/chips/ch32v003f4u6.yaml",
+        reset_oracle: None,
+        behavior_gate: Some(
+            "ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin",
+        ),
+    },
+    ChipConf {
+        name: "ch32v003a4m6",
+        yaml: "configs/chips/ch32v003a4m6.yaml",
+        reset_oracle: None,
+        behavior_gate: Some(
+            "ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin",
+        ),
+    },
+    ChipConf {
+        name: "ch32v003j4m6",
+        yaml: "configs/chips/ch32v003j4m6.yaml",
+        reset_oracle: None,
+        behavior_gate: Some(
+            "ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin",
+        ),
+    },
     // ESP32-H2/C5/C61/P4/S2 UART0-only board profiles. SIM-DERIVED: no silicon
     // capture, so no reset_oracle. Their board smokes run as CLI scripts in
     // core-board-ci / core-onboarding-smoke, not as Rust integration tests, so
