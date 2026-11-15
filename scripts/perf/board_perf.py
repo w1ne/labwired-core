@@ -353,6 +353,12 @@ WAIVED: dict[str, str] = {
         "throughput claim is made for this part "
         "(examples/esp32s2-devkitc-1-n8r2)."
     ),
+    "esp32s2-arduino": (
+        "ESP32-S2 stock Arduino-ESP32 profile: genuine mask ROM plus external "
+        "flash through the S2 MMU (flash 0x40080000, RAM 0x3FFB0000), proven by "
+        "the Arduino matrix row. Same LX7 map as esp32s2, for which no Xtensa "
+        "perf-spin build exists, so no throughput claim is made for this part."
+    ),
     "atmega1281": (
         "The committed -mmcu=atmega1281 firmware validates boot, USART0 and GPIO, "
         "but no representative AVR6 throughput fixture is built. The available "
