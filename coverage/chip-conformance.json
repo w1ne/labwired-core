@@ -717,6 +717,13 @@
     "behavior": false,
     "excluded": 0,
     "level": 0,
+    "name": "atmega32u4",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
     "name": "mimxrt1062-teensy41",
     "reg_match": 0
   },

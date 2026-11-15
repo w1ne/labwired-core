@@ -33,6 +33,10 @@
   },
   {
     "buses": [],
+    "name": "atmega32u4"
+  },
+  {
+    "buses": [],
     "name": "atsamd21"
   },
   {

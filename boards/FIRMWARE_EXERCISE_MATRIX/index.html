@@ -5781,6 +5781,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#atmega32u4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        atmega32u4
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#atmega1281" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -7125,6 +7136,8 @@
 <p><em>No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware that runs: the PR-gated AVR golden <code>avr_nano_golden_survival::arduino_nano_golden_prints_and_blinks</code> (core-ci.yml:688) boots the committed PlatformIO blink ELF and asserts <code>nano-ok</code> on USART0 plus a PB5 toggle (avr_nano_golden_survival.rs:100-102); strict_onboarding boots the same ELF through examples/arduino-nano-blinky/io-smoke.yaml in the nightly core-full job (cross-build-excluded from the PR shards, workspace-test-shards.json:44-48; discovery documented at strict_onboarding.rs:369), and the nightly Arduino matrix drives L0–L7 on the part — L8 CAN is skipped, the chip has no CAN controller (validation/arduino-matrix/boards.yaml:306-322); its L3/L4 cells are raw register/frame oracles (INA219 config 0x399F + bus 0x19CA, validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino:20-21,92; MAX31855 frame 0x01901600, validation/arduino-matrix/sketches/L4_spi_sensor/src/main.ino:66-67), not decoded physical values, so <code>functional</code> stays empty. Every peripheral the descriptor declares is a rubric class or kit-attach plumbing: the <code>spi</code>/<code>i2c</code> instances are parking controllers that exist only to drain attached slaves into the AVR CPU, which owns the real SPCR/SPSR/SPDR and TWI (configs/chips/atmega328p.yaml:28-39; crates/core/src/cpu/avr.rs:91-106), PORTB/C/D are <code>avr_gpio</code> and the ADC input side is <code>avr_adc</code> — so nothing beyond the rubric is declared and the lists below are empty.</em></p>
 <h3 id="atmega2560"><code>atmega2560</code></h3>
 <p><em>No tier-1 target. Firmware that runs: the PR-gated <code>avr_mega2560_io</code> integration test boots the committed Arduino-core ELF (tests/fixtures/avr/arduino-mega-2560-io.elf, built for arduino:avr:mega from examples/arduino-mega-2560-io) and asserts the 12 LED pins on ports E/G/F/B/H, analogRead(A8)/(A9) through ADCSRB.MUX5, millis() against simulated time, USART0 Serial and an EICALL through a function pointer. The descriptor reuses the 328P rubric classes (<code>avr_gpio</code> ports A..L, <code>avr_adc</code> with 16 channels, the parking <code>spi</code>/<code>i2c</code> controllers and the <code>usart0</code> peer host), so nothing beyond the rubric is declared and the lists below are empty.</em></p>
+<h3 id="atmega32u4"><code>atmega32u4</code></h3>
+<p><em>No tier-1 target. The Arduino Leonardo matrix row (validation/arduino-matrix/boards/arduino-leonardo.yaml) builds the stock ArduinoCore-avr sketches and runs L0-L7 on the model (8 pass, 1 skip: no CAN); <code>Serial</code> is native USB CDC on the CPU's USB device model with a scripted host that enumerates it, and the CPU-owned SPI, TWI and ADC (ADCSRB.MUX5) serve the L3/L4/L5 sensor kits. That lane needs PlatformIO and runs on the nightly/main matrix, not on pull requests; cpu::avr::usb unit tests are the PR-gated evidence. Timer3, the high-speed Timer4, INTn/PCINT and EEPROM are not modelled. No beyond-rubric behavior or physical acceptance is claimed and the lists below are empty.</em></p>
 <h3 id="atmega1281"><code>atmega1281</code></h3>
 <p><em>No tier-1 target. The PR-gated avr_atmega1281_firmware integration test boots the AVR-GCC image built from examples/atmega1281-io/src/main.c and asserts 1281 OK on USART0 plus PB5 high; examples/atmega1281-io/io-smoke.yaml runs the same ELF through labwired test. The exact descriptor exposes 54 GPIO pads on ports A..G and eight ADC inputs. EEPROM, USART1, Timer3 and PWM are present on silicon but not modeled or declared. No beyond-rubric behavior or physical acceptance is claimed.</em></p>
 <h3 id="atmega2561"><code>atmega2561</code></h3>
