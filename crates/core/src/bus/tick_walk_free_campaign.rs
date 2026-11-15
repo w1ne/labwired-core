@@ -80,11 +80,135 @@ const EXPECTED_WALK_FORCING: &[&str] = &[];
 /// stay on the legacy walk. bxCAN (`can1`) is excluded regardless of the
 /// feature — its walk-forcing is gated on an attached interconnect, not the
 /// scheduler.
+///
+/// There is no hand-copied name list for this configuration any more. The
+/// expectation is DERIVED from the source of each model on the bus, by the
+/// parser `walk_starvation_contract` already uses: see
+/// [`featureless_expected_forcing`]. A model whose `needs_legacy_walk()` /
+/// `uses_scheduler()` bodies change changes the expectation with it, so the
+/// observed set (read off a real bus) and the expected set (read off the
+/// source) can no longer be edited in lockstep from one place.
+/// Bus peripherals whose `Debug` output does not begin with the Rust type that
+/// implements them (their model is an enum, and `Debug` prints the variant), so
+/// the source lookup cannot resolve them. Each carries its expectation by hand
+/// and a reason. A name here that CAN now be resolved fails the test, so the
+/// list only shrinks.
 #[cfg(not(feature = "event-scheduler"))]
-const EXPECTED_WALK_FORCING: &[&str] = &[
-    "systick", "tim1", "tim2", "tim3", "tim4", "tim5", "tim6", "tim7", "tim8", "tim15", "tim16",
-    "tim17", "dma1", "dma2", "i2c1", "i2c2", "i2c3", "adc1", "exti", "scb", "dwt",
+const UNRESOLVED_BY_DEBUG_NAME: &[(&str, bool, &str)] = &[
+    (
+        "rcc",
+        false,
+        "enum model (Debug prints the variant `Stm32L4`); no walk work",
+    ),
+    (
+        "exti",
+        true,
+        "enum model (Debug prints the variant `Stm32L4`); `peripherals/exti.rs` keeps the \
+         walk without the scheduler",
+    ),
 ];
+
+/// What a featureless build says about one impl, from its source bodies.
+#[cfg(not(feature = "event-scheduler"))]
+fn impl_forces_walk_featureless(
+    needs_legacy_walk: Option<&str>,
+    uses_scheduler: Option<&str>,
+) -> Option<bool> {
+    // A literal `false` never forces the walk.
+    if needs_legacy_walk == Some("false") {
+        return Some(false);
+    }
+    match uses_scheduler {
+        // Always on the scheduler, or on it unless explicitly forced back
+        // (UART): leaves the walk regardless of the feature in this bus.
+        Some("true") | Some("!self.legacy_walk_forced") => Some(false),
+        // Joins the scheduler only when `scheduler_mode()` is true, which is
+        // false without the feature, so the default/negated
+        // `needs_legacy_walk()` keeps it on the walk.
+        Some("self.scheduler_mode()") => match needs_legacy_walk {
+            None | Some("!self.scheduler_mode()") => Some(true),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Expected featureless forcing set, derived from model source. Returns the
+/// sorted peripheral names and panics on a shape it cannot classify, so a new
+/// shape needs a deliberate classifier change rather than a silent default.
+#[cfg(not(feature = "event-scheduler"))]
+fn featureless_expected_forcing(bus: &SystemBus) -> Vec<String> {
+    use crate::tests::walk_starvation_contract::parse_peripheral_impls;
+    let impls = parse_peripheral_impls();
+    let mut out = Vec::new();
+    let mut unresolved = Vec::new();
+    for p in bus.peripherals.iter() {
+        let dbg = format!("{:?}", p.dev);
+        let ty: String = dbg
+            .chars()
+            .take_while(|c| c.is_alphanumeric() || *c == '_')
+            .collect();
+        let found: Vec<_> = impls.iter().filter(|i| i.ty == ty).collect();
+        if found.is_empty() {
+            unresolved.push(p.name.clone());
+            continue;
+        }
+        // bxCAN's predicate depends on runtime state (an attached interconnect),
+        // which the walk_starvation_contract allowlist already justifies; it is
+        // not walk-forcing on this bus (no CanBus attached).
+        if ty == "BxCan" {
+            continue;
+        }
+        let verdicts: Vec<Option<bool>> = found
+            .iter()
+            .map(|i| {
+                impl_forces_walk_featureless(i.body("needs_legacy_walk"), i.body("uses_scheduler"))
+            })
+            .collect();
+        let first = verdicts[0].unwrap_or_else(|| {
+            panic!(
+                "peripheral `{}` ({ty}): needs_legacy_walk/uses_scheduler bodies have a shape \
+                 this derivation does not classify: {:?}",
+                p.name,
+                found
+                    .iter()
+                    .map(|i| (
+                        i.file.clone(),
+                        i.body("needs_legacy_walk"),
+                        i.body("uses_scheduler")
+                    ))
+                    .collect::<Vec<_>>()
+            )
+        });
+        assert!(
+            verdicts.iter().all(|v| *v == Some(first)),
+            "peripheral `{}` ({ty}) has several impls that disagree",
+            p.name
+        );
+        if first {
+            out.push(p.name.clone());
+        }
+    }
+    unresolved.sort();
+    let mut declared: Vec<&str> = UNRESOLVED_BY_DEBUG_NAME
+        .iter()
+        .map(|(n, _, _)| *n)
+        .collect();
+    declared.sort();
+    assert_eq!(
+        unresolved.iter().map(String::as_str).collect::<Vec<_>>(),
+        declared,
+        "peripherals whose model cannot be resolved from source drifted from \
+         UNRESOLVED_BY_DEBUG_NAME (a name that now resolves must be removed)"
+    );
+    for (name, forces, _) in UNRESOLVED_BY_DEBUG_NAME {
+        if *forces {
+            out.push((*name).to_string());
+        }
+    }
+    out.sort();
+    out
+}
 
 fn invaders_bus_walk_stripped() -> SystemBus {
     let system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -105,16 +229,29 @@ fn invaders_bus_walk_stripped() -> SystemBus {
 fn remaining_walk_forcing_set_matches_campaign_inventory() {
     let bus = invaders_bus_walk_stripped();
 
-    let mut forcing: Vec<&str> = bus
+    let mut forcing: Vec<String> = bus
         .peripherals
         .iter()
         .filter(|p| p.dev.needs_legacy_walk() && !p.dev.uses_scheduler())
-        .map(|p| p.name.as_str())
+        .map(|p| p.name.clone())
         .collect();
     forcing.sort_unstable();
 
-    let mut expected: Vec<&str> = EXPECTED_WALK_FORCING.to_vec();
+    #[cfg(feature = "event-scheduler")]
+    let mut expected: Vec<String> = EXPECTED_WALK_FORCING
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    #[cfg(not(feature = "event-scheduler"))]
+    let mut expected: Vec<String> = featureless_expected_forcing(&bus);
     expected.sort_unstable();
+    // Anti-vacuity: the featureless expectation is derived, so prove the
+    // derivation found real forcing models rather than an empty set.
+    #[cfg(not(feature = "event-scheduler"))]
+    assert!(
+        expected.len() >= 10,
+        "derived featureless walk-forcing set is implausibly small: {expected:?}"
+    );
 
     assert_eq!(
             forcing,
@@ -122,7 +259,7 @@ fn remaining_walk_forcing_set_matches_campaign_inventory() {
             "walk-forcing set (needs_legacy_walk && !uses_scheduler) drifted from the \
              campaign inventory (currently: post-B1).\n  got ({}):      {:?}\n  expected ({}): {:?}\n\
              A model newly (un)marked `needs_legacy_walk()` or migrated to the scheduler \
-             must update EXPECTED_WALK_FORCING to match the campaign's remaining surface.",
+             must update EXPECTED_WALK_FORCING (event-scheduler) or its source bodies (featureless, derived).",
             forcing.len(),
             forcing,
             expected.len(),
