@@ -938,6 +938,31 @@ jobs:
       - name: Firmware survival (committed ELF fixtures, ~50 chips)
         run: 'cargo test -p labwired-core --test gates -- firmware_survival::'
 
+      # THE ONE-HOME GUARDS THAT ONLY FIRED AFTER A MERGE.
+      #
+      # docs/architecture/one-home.md names these as the strongest guards over
+      # concepts that have each had two homes and a production incident:
+      # `record_external_devices_has_one_home` and
+      # `attached_device_walk_covers_every_bus_collection` (device binding),
+      # `panel_artifact_evidence` (display evidence), `chip_conformance_ratchet`
+      # and `board_coverage_ratchet`. Their only runs were `core-integrity` (push)
+      # and `core-full` (nightly), so a PR that re-introduced a second home went
+      # green and turned main red afterwards.
+      #
+      # COST, MEASURED (CI-like: CARGO_INCREMENTAL=0, 4 threads, warm lib build):
+      #   * `gates` is the binary the step above already built, so its two
+      #     modules add no compile at all and run in ~1.2 s together;
+      #   * `session` and `display` are the only new test binaries: 3.2 s and
+      #     2.2 s to compile and link, 0.1 s each to run.
+      # No toolchain, no firmware build, no fixtures beyond what is checked in.
+      # Filters are whole modules (`<file>::`), so a guard added next to these
+      # is picked up without editing this line.
+      - name: One-home guards (device binding, display evidence, chip and board ratchets)
+        run: |
+          cargo test -p labwired-core --test gates -- chip_conformance:: board_coverage_ratchet::
+          cargo test -p labwired-core --test session -- inspect_external_devices:: inspect_device_binding_universal::
+          cargo test -p labwired-core --test display -- panel_artifact_evidence::
+
       # The SoftDevice HLE (crates/nrf-softdevice-hle) sits outside
       # `default-members`, so `--lib` above never reaches it. Its unit tests
       # (the Core Spec c1/s1 samples, keyset/GATT/indication regressions) and
