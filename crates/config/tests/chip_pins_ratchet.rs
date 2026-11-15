@@ -113,9 +113,6 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     // resolves to gpio3 bit 4, and the chip declares gpio3.
     "nrf54lm20a",
     "rp2350",
-    // NUCLEO-C031C6 (#1756): PA5/PC13-style labels parse directly onto
-    // gpio<port>/bit, the same reasoning as the STM32 peers below.
-    "stm32c031c6",
     "stm32f103",
     "stm32f401",
     "stm32f401cdu6",
@@ -130,6 +127,9 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     // directly onto gpio<port>/bit; no alternate package-label scheme exists
     // to transcribe a `pins:` override from (same reasoning as the peers above).
     "stm32g071",
+    // The C031C6 uses the same PA5/PB6 STM32 labels (DS13867); the parse maps
+    // them onto gpio<port>/bit exactly, as for the G0 it shares IP blocks with.
+    "stm32c031c6",
     "stm32h563",
     "stm32h735",
     "stm32l073",
