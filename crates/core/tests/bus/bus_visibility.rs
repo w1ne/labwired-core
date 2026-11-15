@@ -149,6 +149,15 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this \
          harness yet; bytes are proven by ch32v003_compiled_firmware",
     ),
+    // CH32V006K8U6: same pad-gated USART1 (TX=PD5) as the CH32V003. USART1
+    // bytes are proven by
+    // ch32v006_compiled_firmware::ch32v006_compiled_rv32ec_zmmul_firmware_prints_on_usart1.
+    (
+        "ch32v006k8u6",
+        BusKind::Uart,
+        "pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this \
+         harness yet; bytes are proven by ch32v006_compiled_firmware",
+    ),
     // nRF51822: the bring-up drives the nRF52 EasyDMA personalities (UARTE
     // ENABLE=8, TWIM), which the nRF51 does not have; its UART0 is the legacy
     // UART (ENABLE=4, TXD + EVENTS_TXDRDY) and its TWI is the legacy TWI. No

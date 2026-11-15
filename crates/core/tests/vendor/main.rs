@@ -21,6 +21,7 @@ mod common;
 mod cc2538_rom;
 mod cc2538_sleep_timer_irq;
 mod ch32v003_compiled_firmware;
+mod ch32v006_compiled_firmware;
 mod efr32_deck_behavior;
 mod efr32_msc_persistence;
 mod efr32_onboarded_parts;

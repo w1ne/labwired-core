@@ -19,6 +19,10 @@
       "how": "needs-build",
       "why": "Requires unreleased CH32V003/RV32E core support from PR #1698; the installed LabWired CLI v0.25.0 cannot run this branch-only model yet."
     },
+    "ch32v006k8u6": {
+      "how": "needs-build",
+      "why": "New CH32V006 descriptor on this branch; the installed LabWired CLI v0.25.0 does not ship it yet. Committed ELFs under tests/fixtures run with a source build."
+    },
     "dspic33fj32mc204": {
       "how": "committed",
       "firmware": "examples/dspic33fj32mc204/firmware/dspic33fj32mc204-uart-smoke.elf",
