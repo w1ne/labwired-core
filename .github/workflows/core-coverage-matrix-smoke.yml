@@ -7,20 +7,11 @@ name: Core Coverage Matrix Smoke
 # about a run they can neither see nor stop. Pushes and manual dispatch are
 # untouched — a fork still gets this workflow on its own changes.
 on:
-  # Slow gates: nightly + main tip + manual. Not on PRs (PR merge target <1 min).
+  # CI cut O11: nightly + manual only. Push-to-main ran this on every merge
+  # touching crates/core or configs; nothing blocks on it, and the nightly run
+  # names the offending range. Not on PRs.
   schedule:
     - cron: "0 2 * * *"
-  push:
-    branches:
-      - main
-    paths:
-      - "configs/chips/**"
-      - "configs/systems/**"
-      - "examples/**"
-      - "crates/core/**"
-      - "crates/cli/**"
-      - "crates/labwired-models-**"
-      - ".github/workflows/core-coverage-matrix-smoke.yml"
   workflow_dispatch:
 
 concurrency:
