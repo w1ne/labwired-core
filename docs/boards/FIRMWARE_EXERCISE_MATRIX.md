@@ -424,6 +424,13 @@ _Minimal real-register firmware smoke: reset/stack, RCC, GPIO PA5 LED and USART2
 
 **Dead** (2 modeled, never exercised): `PWR`, `FLASH_CTRL`
 
+### `stm32l432kc`
+
+_NUCLEO-L432KC. PR-gated raw-register smoke (examples/nucleo-l432kc/io-smoke.yaml): reset/stack, RCC, GPIOA/GPIOB, USART2 banner and PB3 LED edges. Stock stm32duino also runs the Arduino matrix row L0-L8 (INA219 over I2C1, MAX31855 over SPI1, ADC1_IN5 at a board-held 1650 mV, TIM2_CH2 PWM on PB3, bxCAN1 loopback), but that lane runs nightly and on main, not on PRs, so nothing is recorded as functional here. No physical silicon run exists._
+
+**Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- `SYSCFG` (configs/chips/stm32l432kc.yaml (type: stub; configs/peripherals/stm32l476/syscfg.yaml)) — CLOSABLE: author-declared stub shared with the L476 — read 0, writes dropped, so EXTI source-select is not modelled.
+
 ### `stm32f411ceu6`
 
 _WeAct Black Pill. Its tier-1 fixture (PR-gated `firmware_survival::test_stm32f411_tier1_survival`; nightly coverage-matrix cell examples/stm32f411ceu6-blackpill/io-smoke.yaml) drives clock/gpio/timer/i2c/spi (SPI1+SPI5)/adc/wdt/rtc over USART2, leaving dma unrecorded (the fixture never attempts it, and both stream controllers are zero stubs) and irq/pwm n/a (the fixture does not attempt either class). PWR is a real stm32f4-profile model no firmware drives; the descriptor's remaining stub windows are listed below._
