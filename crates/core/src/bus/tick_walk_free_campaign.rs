@@ -40,51 +40,171 @@ use crate::system::cortex_m::configure_cortex_m;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use std::path::PathBuf;
 
-/// Walk-forcing ids on the runtime invaders bus after the I2C migration
-/// (event-scheduler builds): the prior 6 (B2/B3 timers minus the 2 `dma*`,
-/// with the DWT lazy-CYCCNT migration from #522) minus the 3 `i2c*` = 2.
-/// The 3 `i2c*` NOW migrate: the STM32 F1/L4 transaction engine is self-paced
-/// by the SAME held-level, delay-1 self-perpetuating event chain the Kinetis
-/// variant uses. The chain runs `F1I2c::tick()`/`L4I2c::tick()` every cycle
-/// while a transfer is *active* (countdown in flight OR SR2.BUSY set), so the
-/// `&self`-read side effects (`rxne_consumed` / device byte pulls) are
-/// observed by the already-live chain's next `on_event` exactly as the walk's
-/// next `tick()` would — no event needs arming from the read path. Proven
-/// byte-identical (registers + read bytes + NVIC-pend cycles) by the
-/// `kinetis_scheduler` differential module (`f1_*`/`l4_*` cases). Remaining
-/// plan Class-B on this bus: adc + exti.
-///
-/// bxCAN (`can1`) NO LONGER forces the walk: its `tick()` only drains a
-/// `CanBus` mpsc interconnect, so `needs_legacy_walk()` now reports
-/// `bus_rx.is_some()` — false on this bus (no multi-node CanBus is wired;
-/// can-player replay is pushed by `service_can_log_players`, not the tick).
-///
-/// EXTI (`exti`) NO LONGER forces the walk: its held-level `explicit_irqs`
-/// re-emission is driven by a delay-1 self-perpetuating event chain (armed on
-/// the MMIO write that raises a masked pending line, stopping when firmware
-/// clears PR). Byte-identical proof: `exti::scheduler_diff`.
-///
-/// ADC (`adc1`) NO LONGER forces the walk: its F1 conversion countdown is
-/// event-scheduled (delay-1 chain armed on SWSTART, perpetuating through
-/// continuous mode), and the legacy `cycles: 1` per-converting-tick cost is
-/// normalized to zero in BOTH modes (SysTick B1 pattern) so `total_cycles`
-/// agrees. Byte-identical proof: `adc::scheduler_diff`.
-///
-/// The forcing set is now EMPTY — with every Class-B walker migrated the
-/// runtime invaders (L476) bus derives walk-deletion with no hand flag: the
-/// campaign's full STM32 board flip.
-#[cfg(feature = "event-scheduler")]
-const EXPECTED_WALK_FORCING: &[&str] = &[];
+// Walk-forcing ids on the runtime invaders bus after the I2C migration
+// (event-scheduler builds): the prior 6 (B2/B3 timers minus the 2 `dma*`,
+// with the DWT lazy-CYCCNT migration from #522) minus the 3 `i2c*` = 2.
+// The 3 `i2c*` NOW migrate: the STM32 F1/L4 transaction engine is self-paced
+// by the SAME held-level, delay-1 self-perpetuating event chain the Kinetis
+// variant uses. The chain runs `F1I2c::tick()`/`L4I2c::tick()` every cycle
+// while a transfer is *active* (countdown in flight OR SR2.BUSY set), so the
+// `&self`-read side effects (`rxne_consumed` / device byte pulls) are
+// observed by the already-live chain's next `on_event` exactly as the walk's
+// next `tick()` would — no event needs arming from the read path. Proven
+// byte-identical (registers + read bytes + NVIC-pend cycles) by the
+// `kinetis_scheduler` differential module (`f1_*`/`l4_*` cases). Remaining
+// plan Class-B on this bus: adc + exti.
+//
+// bxCAN (`can1`) NO LONGER forces the walk: its `tick()` only drains a
+// `CanBus` mpsc interconnect, so `needs_legacy_walk()` now reports
+// `bus_rx.is_some()` — false on this bus (no multi-node CanBus is wired;
+// can-player replay is pushed by `service_can_log_players`, not the tick).
+//
+// EXTI (`exti`) NO LONGER forces the walk: its held-level `explicit_irqs`
+// re-emission is driven by a delay-1 self-perpetuating event chain (armed on
+// the MMIO write that raises a masked pending line, stopping when firmware
+// clears PR). Byte-identical proof: `exti::scheduler_diff`.
+//
+// ADC (`adc1`) NO LONGER forces the walk: its F1 conversion countdown is
+// event-scheduled (delay-1 chain armed on SWSTART, perpetuating through
+// continuous mode), and the legacy `cycles: 1` per-converting-tick cost is
+// normalized to zero in BOTH modes (SysTick B1 pattern) so `total_cycles`
+// agrees. Byte-identical proof: `adc::scheduler_diff`.
+//
+// The forcing set is now EMPTY — with every Class-B walker migrated the
+// runtime invaders (L476) bus derives walk-deletion with no hand flag: the
+// campaign's full STM32 board flip.
 
-/// Featureless builds: the scheduler does not exist, so SysTick and SCB
-/// stay on the legacy walk. bxCAN (`can1`) is excluded regardless of the
-/// feature — its walk-forcing is gated on an attached interconnect, not the
-/// scheduler.
-#[cfg(not(feature = "event-scheduler"))]
-const EXPECTED_WALK_FORCING: &[&str] = &[
-    "systick", "tim1", "tim2", "tim3", "tim4", "tim5", "tim6", "tim7", "tim8", "tim15", "tim16",
-    "tim17", "dma1", "dma2", "i2c1", "i2c2", "i2c3", "adc1", "exti", "scb", "dwt",
+// Featureless builds: the scheduler does not exist, so SysTick and SCB
+// stay on the legacy walk. bxCAN (`can1`) is excluded regardless of the
+// feature — its walk-forcing is gated on an attached interconnect, not the
+// scheduler.
+//
+// There is no hand-copied name list for this configuration any more. The
+// expectation is DERIVED from the source of each model on the bus, by the
+// parser `walk_starvation_contract` already uses: see
+// [`featureless_expected_forcing`]. A model whose `needs_legacy_walk()` /
+// `uses_scheduler()` bodies change changes the expectation with it, so the
+// observed set (read off a real bus) and the expected set (read off the
+// source) can no longer be edited in lockstep from one place.
+
+/// Bus peripherals whose `Debug` output does not begin with the Rust type that
+/// implements them (their model is an enum, and `Debug` prints the variant), so
+/// the source lookup cannot resolve them. Each carries its expectation by hand
+/// and a reason. A name here that CAN now be resolved fails the test, so the
+/// list only shrinks.
+const UNRESOLVED_BY_DEBUG_NAME: &[(&str, bool, &str)] = &[
+    (
+        "rcc",
+        false,
+        "enum model (Debug prints the variant `Stm32L4`); no walk work",
+    ),
+    (
+        "exti",
+        true,
+        "enum model (Debug prints the variant `Stm32L4`); `peripherals/exti.rs` keeps the \
+         walk without the scheduler",
+    ),
 ];
+
+/// What a featureless build says about one impl, from its source bodies.
+fn impl_forces_walk_featureless(
+    needs_legacy_walk: Option<&str>,
+    uses_scheduler: Option<&str>,
+) -> Option<bool> {
+    // A literal `false` never forces the walk.
+    if needs_legacy_walk == Some("false") {
+        return Some(false);
+    }
+    match uses_scheduler {
+        // Always on the scheduler, or on it unless explicitly forced back
+        // (UART): leaves the walk regardless of the feature in this bus.
+        Some("true") | Some("!self.legacy_walk_forced") => Some(false),
+        // Joins the scheduler only when `scheduler_mode()` is true, which is
+        // false without the feature, so the default/negated
+        // `needs_legacy_walk()` keeps it on the walk.
+        Some("self.scheduler_mode()") => match needs_legacy_walk {
+            None | Some("!self.scheduler_mode()") => Some(true),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Expected featureless forcing set, derived from model source. Returns the
+/// sorted peripheral names and panics on a shape it cannot classify, so a new
+/// shape needs a deliberate classifier change rather than a silent default.
+fn featureless_expected_forcing(bus: &SystemBus) -> Vec<String> {
+    use crate::tests::walk_starvation_contract::parse_peripheral_impls;
+    let impls = parse_peripheral_impls();
+    let mut out = Vec::new();
+    let mut unresolved = Vec::new();
+    for p in bus.peripherals.iter() {
+        let dbg = format!("{:?}", p.dev);
+        let ty: String = dbg
+            .chars()
+            .take_while(|c| c.is_alphanumeric() || *c == '_')
+            .collect();
+        let found: Vec<_> = impls.iter().filter(|i| i.ty == ty).collect();
+        if found.is_empty() {
+            unresolved.push(p.name.clone());
+            continue;
+        }
+        // bxCAN's predicate depends on runtime state (an attached interconnect),
+        // which the walk_starvation_contract allowlist already justifies; it is
+        // not walk-forcing on this bus (no CanBus attached).
+        if ty == "BxCan" {
+            continue;
+        }
+        let verdicts: Vec<Option<bool>> = found
+            .iter()
+            .map(|i| {
+                impl_forces_walk_featureless(i.body("needs_legacy_walk"), i.body("uses_scheduler"))
+            })
+            .collect();
+        let first = verdicts[0].unwrap_or_else(|| {
+            panic!(
+                "peripheral `{}` ({ty}): needs_legacy_walk/uses_scheduler bodies have a shape \
+                 this derivation does not classify: {:?}",
+                p.name,
+                found
+                    .iter()
+                    .map(|i| (
+                        i.file.clone(),
+                        i.body("needs_legacy_walk"),
+                        i.body("uses_scheduler")
+                    ))
+                    .collect::<Vec<_>>()
+            )
+        });
+        assert!(
+            verdicts.iter().all(|v| *v == Some(first)),
+            "peripheral `{}` ({ty}) has several impls that disagree",
+            p.name
+        );
+        if first {
+            out.push(p.name.clone());
+        }
+    }
+    unresolved.sort();
+    let mut declared: Vec<&str> = UNRESOLVED_BY_DEBUG_NAME
+        .iter()
+        .map(|(n, _, _)| *n)
+        .collect();
+    declared.sort();
+    assert_eq!(
+        unresolved.iter().map(String::as_str).collect::<Vec<_>>(),
+        declared,
+        "peripherals whose model cannot be resolved from source drifted from \
+         UNRESOLVED_BY_DEBUG_NAME (a name that now resolves must be removed)"
+    );
+    for (name, forces, _) in UNRESOLVED_BY_DEBUG_NAME {
+        if *forces {
+            out.push((*name).to_string());
+        }
+    }
+    out.sort();
+    out
+}
 
 fn invaders_bus_walk_stripped() -> SystemBus {
     let system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -105,15 +225,28 @@ fn invaders_bus_walk_stripped() -> SystemBus {
 fn remaining_walk_forcing_set_matches_campaign_inventory() {
     let bus = invaders_bus_walk_stripped();
 
-    let mut forcing: Vec<&str> = bus
+    let mut forcing: Vec<String> = bus
         .peripherals
         .iter()
         .filter(|p| p.dev.needs_legacy_walk() && !p.dev.uses_scheduler())
-        .map(|p| p.name.as_str())
+        .map(|p| p.name.clone())
         .collect();
     forcing.sort_unstable();
 
-    let mut expected: Vec<&str> = EXPECTED_WALK_FORCING.to_vec();
+    // With the scheduler compiled in, every Class-B walker has migrated and the
+    // forcing set is EMPTY. Without it nothing joins the scheduler, and the set
+    // is derived from model source (see `featureless_expected_forcing`).
+    let mut expected: Vec<String> = if cfg!(feature = "event-scheduler") {
+        Vec::new()
+    } else {
+        let derived = featureless_expected_forcing(&bus);
+        // Anti-vacuity: prove the derivation found real forcing models.
+        assert!(
+            derived.len() >= 10,
+            "derived featureless walk-forcing set is implausibly small: {derived:?}"
+        );
+        derived
+    };
     expected.sort_unstable();
 
     assert_eq!(
@@ -122,7 +255,8 @@ fn remaining_walk_forcing_set_matches_campaign_inventory() {
             "walk-forcing set (needs_legacy_walk && !uses_scheduler) drifted from the \
              campaign inventory (currently: post-B1).\n  got ({}):      {:?}\n  expected ({}): {:?}\n\
              A model newly (un)marked `needs_legacy_walk()` or migrated to the scheduler \
-             must update EXPECTED_WALK_FORCING to match the campaign's remaining surface.",
+             must update the model's `needs_legacy_walk()` / `uses_scheduler()` bodies (featureless, derived) \
+             or this test's empty event-scheduler expectation.",
             forcing.len(),
             forcing,
             expected.len(),
