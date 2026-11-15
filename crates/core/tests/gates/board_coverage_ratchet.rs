@@ -884,8 +884,11 @@ fn every_shipped_descriptor_is_ratcheted() {
         // polled USART1 TX. It carries no bundled-configs.ts catalog board,
         // no silicon oracle (no CH32V003 has been diffed over SDI), and no
         // executing-fidelity differential of its own. The slice models RCC,
-        // GPIO A/C/D, and polled USART1 TX only (no PFIC, ADC, I2C, SPI, or
-        // timers). Promote when the catalog board and a differential exist.
+        // GPIO A/C/D, polled USART1, the STK, the PFIC and the ADC/I2C/TIM2
+        // blocks stock WCH Arduino core needs (enough for it to boot and run
+        // the L0-L6 matrix sketches); SPI is not modelled, so there is no
+        // SPI bus to diff yet. Promote when the catalog board and a
+        // differential exist.
         "ch32v003f4p6",
         // ESP32-H2/C5/P4/S2 UART0-only board profiles. Each has a descriptor,
         // a system manifest and a board smoke that asserts a UART0 token, but

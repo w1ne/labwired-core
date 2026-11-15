@@ -14,6 +14,8 @@
 #   https://github.com/openwch/ch32v003/blob/main/EVT/EXAM/SRC/Peripheral/inc/ch32v00x.h
 #   https://github.com/openwch/ch32v003/blob/main/EVT/EXAM/SRC/Peripheral/inc/ch32v00x_rcc.h
 #   https://github.com/openwch/ch32v003/blob/main/EVT/EXAM/SRC/Peripheral/src/ch32v00x_usart.c
+#   https://github.com/openwch/ch32v003/blob/main/EVT/EXAM/SRC/Core/core_riscv.h
+#   https://github.com/openwch/ch32v003/blob/main/EVT/EXAM/SRC/Debug/debug.c
 #   https://www.wch-ic.com/downloads/CH32V003DS0_PDF.html
 #   https://www.lcsc.com/product-detail/microcontrollers-mcu-mpu-soc_wch-jiangsu-qin-heng-ch32v003f4p6_C5187096.html
 
@@ -90,10 +92,113 @@ peripherals:
   # USART1 (ch32v00x.h): USART1_BASE = APB2PERIPH_BASE + 0x3800, RCC_USART1EN =
   # APB2PCENR bit 14. USART_TypeDef is STATR, DATAR, BRR, CTLR1, CTLR2, CTLR3,
   # GPR at 4-byte strides, the same layout as the STM32F1 USART, so the default
-  # `stm32f1` UART layout serves it. No `irq`: the PFIC is not modelled, so
-  # USART1_IRQn (32) has no controller to reach. TX is polled only.
+  # `stm32f1` UART layout serves it. No `irq` yet: USART1_IRQn (32) is not
+  # wired to the PFIC in this slice, so TX is polled only.
   - id: "usart1"
     type: "uart"
     base_address: 0x40013800
     size: "1KB"
     clock: { reg: "apb2pcenr", bit: 14 }
+
+  # ADC1 (ch32v00x.h): ADC1_BASE = APB2PERIPH_BASE + 0x2400, RCC_ADC1EN =
+  # APB2PCENR bit 9, ADC_IRQn = 29. ADC_TypeDef is the F1 block (STATR, CTLR1,
+  # CTLR2, SAMPTR1-2, IOFR1-4, WDHTR, WDLTR, RSQR1-3, ISQR, IDATAR1-4, RDATAR)
+  # plus DLYR; the `ch32v00x` profile runs the F1 engine with a 10-bit
+  # converter and 10 channels. IN0..IN7 = PA2, PA1, PC4, PD2, PD3, PD5, PD6,
+  # PD4 (arduino_core_ch32 variant_CH32V003F4 PinMap_ADC). Unseeded pads
+  # convert 0; IN8 V_REFINT / IN9 V_CAL are not modelled.
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x40012400
+    size: "1KB"
+    irq: 29
+    clock: { reg: "apb2pcenr", bit: 9 }
+    config:
+      profile: "ch32v00x"
+
+  # SPI1 (ch32v00x.h): SPI1_BASE = APB2PERIPH_BASE + 0x3000, RCC_APB2Periph_SPI1
+  # = APB2PCENR bit 12 (ch32v00x_rcc.h), SPI1_IRQn = 33. SPI_TypeDef is CTLR1,
+  # CTLR2, STATR, DATAR, CRCR, RCRCR, TCRCR at the F1 offsets, then HSCR at
+  # 0x24 (no I2S words), so the classic `stm32` layout serves it. HSCR
+  # (high-speed read mode) is not modelled and reads 0. Pads: SCK PC5,
+  # MOSI PC6, MISO PC7 (arduino_core_ch32 variant_CH32V003F4 PinMap_SPI_*).
+  - id: "spi1"
+    type: "spi"
+    base_address: 0x40013000
+    size: "1KB"
+    irq: 33
+    clock: { reg: "apb2pcenr", bit: 12 }
+
+  # I2C1 (ch32v00x.h): I2C1_BASE = APB1PERIPH_BASE + 0x5400,
+  # RCC_APB1Periph_I2C1 = APB1PCENR bit 21 (ch32v00x_rcc.h), I2C1_EV_IRQn = 30,
+  # I2C1_ER_IRQn = 31. I2C_TypeDef is CTLR1, CTLR2, OADDR1, OADDR2, DATAR,
+  # STAR1, STAR2, CKCFGR: the STM32F1 I2C block (CR1..CCR) at the F1 offsets,
+  # without TRISE at 0x20, so the F1 `i2c` engine serves it. WCH's Wire
+  # (libraries/Wire/src/utility/twi.c) is interrupt-driven on both lines.
+  # Pads: SDA PC1, SCL PC2 (arduino_core_ch32 variant_CH32V003F4 PinMap_I2C_*).
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 30
+    clock: { reg: "apb1pcenr", bit: 21 }
+    config:
+      irq_error: 31
+
+  # AFIO (ch32v00x.h): AFIO_BASE = APB2PERIPH_BASE + 0x0000, RCC_APB2Periph_AFIO
+  # = APB2PCENR bit 0. AFIO_TypeDef is RESERVED0, PCFR1, EXTICR, so the
+  # `wch` profile, not the F1 map. WCH's pinmap calls GPIO_PinRemapConfig
+  # (a PCFR1 read-modify-write) on every TIM/USART pin it configures.
+  - id: "afio"
+    type: "afio"
+    base_address: 0x40010000
+    size: "1KB"
+    clock: { reg: "apb2pcenr", bit: 0 }
+    config:
+      profile: "wch"
+
+  # TIM2 (ch32v00x.h): TIM2_BASE = APB1PERIPH_BASE + 0x0000, RCC_APB1Periph_TIM2
+  # = APB1PCENR bit 0, TIM2_IRQn = 38. TIM_TypeDef is CTLR1, CTLR2, SMCFGR,
+  # DMAINTENR, INTFR, SWEVGR, CHCTLR1-2, CCER, CNT, PSC, ATRLR, RPTCR,
+  # CH1CVR-CH4CVR, BDTR, DMACFGR, DMAADR: the STM32F1 TIMx block at the F1
+  # offsets, so the 16-bit general-purpose `timer` serves it. Default
+  # (no-remap) CH1-4 pads PD4/PD3/PC0/PD7 are wired in
+  # `wire_stm32_timer_output_pads`; AFIO_PCFR1 remaps are not decoded.
+  - id: "tim2"
+    type: "timer"
+    base_address: 0x40000000
+    size: "1KB"
+    irq: 38
+    clock: { reg: "apb1pcenr", bit: 0 }
+
+  # FLASH interface (ch32v00x.h): FLASH_R_BASE = AHBPERIPH_BASE + 0x2000.
+  # FLASH_TypeDef is ACTLR, KEYR, OBKEYR, STATR, CTLR, ADDR, -, OBR, WPR at
+  # 4-byte strides, the STM32F1 FLASH layout (ACR, KEYR, OPTKEYR, SR, CR, AR,
+  # -, OBR, WRPR), so the `stm32f1` profile serves it. WCH `SystemInit` sets
+  # ACTLR.LATENCY here before switching SYSCLK; the latency is stored, not timed.
+  - id: "flash_ctrl"
+    type: "flash"
+    base_address: 0x40022000
+    size: "1KB"
+    config:
+      profile: "stm32f1"
+
+  # QingKe V2 PFIC, WCH core_riscv.h `PFIC` at 0xE000E000 (`PFIC_Type`:
+  # ISR, IPR, ITHRESDR, CFGR, GISR, VTF*, then IENR/IRER/IPSR/IPRR/IACTR at
+  # +0x100 steps, IPRIOR at 0x400, SCTLR at 0xD10). A bit position is the
+  # interrupt number (ch32v00x.h IRQn_Type), so a peripheral's `irq:` below is
+  # that number. Priority threshold, VTF fast vectoring and nesting are not
+  # applied; see crates/core/src/peripherals/wch_pfic.rs.
+  - id: "pfic"
+    type: "wch_pfic"
+    base_address: 0xE000E000
+    size: "4KB"
+
+  # QingKe V2 STK, WCH core_riscv.h `SysTick` at 0xE000F000. It sits on the
+  # core, outside RCC, so it has no clock gate. CNTIF with CTLR.STIE raises
+  # `SysTicK_IRQn = 12` (ch32v00x.h) through the PFIC.
+  - id: "stk"
+    type: "wch_stk"
+    base_address: 0xE000F000
+    size: "256B"
+    irq: 12

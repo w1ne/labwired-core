@@ -14,6 +14,9 @@ pub struct Afio {
     pub mapr: u32,
     pub exticr: [u32; 4], // EXTICR1, EXTICR2, EXTICR3, EXTICR4
     pub mapr2: u32,
+    /// WCH CH32V003 register map (`config: { profile: wch }`), see
+    /// [`Afio::new_wch`].
+    pub wch: bool,
 }
 
 impl Afio {
@@ -21,8 +24,28 @@ impl Afio {
         Self::default()
     }
 
+    /// WCH CH32V003 AFIO. `AFIO_TypeDef` in WCH's ch32v00x.h is a reserved
+    /// word, PCFR1 at +0x04 and a single EXTICR at +0x08, nothing else. The SPL
+    /// `GPIO_EXTILineConfig` (ch32v00x_gpio.c) writes EXTICR as eight 2-bit
+    /// fields at `pin << 1`, port codes PA=0, PC=2, PD=3 (the F1 numbering).
+    /// PCFR1 is stored as written: WCH's header carries the F1 remap names,
+    /// many of which this part lacks, and no silicon read-back of its mask
+    /// exists here, so no mask is guessed. Remaps are stored, not decoded.
+    pub fn new_wch() -> Self {
+        Self {
+            wch: true,
+            ..Self::default()
+        }
+    }
+
     /// Returns the GPIO port index (0=A, 1=B, etc.) for a given EXTI line (0-15)
     pub fn get_exti_mapping(&self, line: u8) -> u8 {
+        if self.wch {
+            if line >= 8 {
+                return 0;
+            }
+            return ((self.exticr[0] >> (line * 2)) & 0x3) as u8;
+        }
         if line >= 16 {
             return 0;
         }
@@ -32,6 +55,17 @@ impl Afio {
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
+        if self.wch {
+            return match offset {
+                0x00 => 0,
+                0x04 => self.mapr,
+                0x08 => self.exticr[0],
+                _ => {
+                    crate::census_reg!("afio:Afio", offset, "read");
+                    0
+                }
+            };
+        }
         match offset {
             0x00 => self.evcr,
             0x04 => self.mapr,
@@ -48,6 +82,17 @@ impl Afio {
     }
 
     fn write_reg(&mut self, offset: u64, value: u32) {
+        if self.wch {
+            match offset {
+                0x00 => {}
+                0x04 => self.mapr = value,
+                0x08 => self.exticr[0] = value & 0xFFFF,
+                _ => {
+                    crate::census_reg!("afio:Afio", offset, "write");
+                }
+            }
+            return;
+        }
         // Writable masks silicon-confirmed on the bench F103 via the address
         // sweep (stm32f1_mmio_diff). AFIO is an F1-only peripheral (F4+ use
         // SYSCFG) and F103 is the only F1 chip, so these are exact, not gated.
@@ -94,9 +139,10 @@ impl Peripheral for Afio {
         Ok(())
     }
 
-    /// AFIO_EXTICRx is the F1's EXTI line-source mux.
+    /// AFIO_EXTICRx is the F1's EXTI line-source mux (WCH: lines 0-7).
     fn exti_line_source(&self, line: u8) -> Option<u8> {
-        (line < 16).then(|| self.get_exti_mapping(line))
+        let lines = if self.wch { 8 } else { 16 };
+        (line < lines).then(|| self.get_exti_mapping(line))
     }
 
     fn needs_legacy_walk(&self) -> bool {
@@ -170,5 +216,24 @@ mod tests {
         assert_eq!(a.exti_line_source(5), Some(2));
         assert_eq!(a.exti_line_source(4), Some(0), "reset: port A");
         assert_eq!(a.exti_line_source(16), None);
+    }
+
+    #[test]
+    fn wch_map_is_pcfr1_and_one_exticr() {
+        let mut a = Afio::new_wch();
+        // +0x00 is RESERVED0 in WCH's AFIO_TypeDef: no EVCR behind it.
+        a.write_u32(0x00, 0xFF).unwrap();
+        assert_eq!(rd32(&a, 0x00), 0);
+        // PCFR1 keeps a TIM2 remap value as written (no F1 16-bit mask).
+        a.write_u32(0x04, 0x0400_0300).unwrap();
+        assert_eq!(rd32(&a, 0x04), 0x0400_0300);
+        // GPIO_EXTILineConfig(GPIO_PortSourceGPIOD, 4): 3 << (4 << 1).
+        a.write_u32(0x08, 3 << 8).unwrap();
+        assert_eq!(a.exti_line_source(4), Some(3), "line 4 -> PD");
+        assert_eq!(a.exti_line_source(0), Some(0), "reset: PA");
+        assert_eq!(a.exti_line_source(8), None, "8 lines only");
+        // No EXTICR2..4 on this part.
+        a.write_u32(0x0C, 0xFFFF).unwrap();
+        assert_eq!(rd32(&a, 0x0C), 0);
     }
 }

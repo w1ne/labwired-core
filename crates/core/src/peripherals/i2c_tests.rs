@@ -182,6 +182,53 @@ fn f1_write_address_sets_tra_and_level_ev_stays_asserted() {
     assert!(i2c.tick().irq, "TXE keeps EV high after ADDR clear");
 }
 
+/// EV5 after START is BUSY|MSL|SB (RM0008 §26.3.3), not SB alone. SPL
+/// `I2C_CheckEvent(I2C_EVENT_MASTER_MODE_SELECT)` (STM32 SPL, WCH's Arduino
+/// Wire on CH32V003) compares SR2<<16|SR1 against 0x0003_0001 exactly. STOP
+/// releases MSL/BUSY again.
+#[test]
+fn f1_start_sets_msl_busy_for_spl_ev5() {
+    let mut i2c = I2c::new_with_layout(super::I2cRegisterLayout::Stm32F1);
+    i2c.write_u16(0x00, 0x0101).unwrap(); // CR1 = START | PE
+    let ev = (i2c.read_u16(0x14).unwrap() as u32) | ((i2c.read_u16(0x18).unwrap() as u32) << 16);
+    assert_eq!(ev & 0x00FF_FFFF, 0x0003_0001, "EV5 = BUSY|MSL|SB");
+    i2c.write_u16(0x00, 0x0201).unwrap(); // CR1 = STOP | PE
+    assert_eq!(
+        i2c.read_u16(0x18).unwrap() & 0x0003,
+        0,
+        "STOP clears MSL|BUSY"
+    );
+}
+
+/// The F1 block's registers are 16 bits wide; WCH declares them `uint16_t`, so
+/// firmware stores DATAR with `sh`. One halfword store is one DR write: the
+/// slave gets exactly the one data byte, not a second, stray one from the
+/// upper half of the store.
+#[test]
+fn f1_halfword_dr_store_sends_one_byte() {
+    let writes = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let mut i2c = I2c::new_with_layout(super::I2cRegisterLayout::Stm32F1);
+    i2c.push_slave(Box::new(WriteSink {
+        address: 0x40,
+        writes: writes.clone(),
+    }));
+    i2c.write_u16(0x00, 0x0101).unwrap(); // START
+    i2c.write_u16(0x10, 0x0080).unwrap(); // address 0x40, write
+    let _ = i2c.read_u16(0x14).unwrap();
+    let _ = i2c.read_u16(0x18).unwrap(); // clear ADDR
+    assert_eq!(
+        writes.load(Ordering::SeqCst),
+        0,
+        "address phase is not data"
+    );
+    i2c.write_u16(0x10, 0x0002).unwrap(); // one data byte
+    assert_eq!(
+        writes.load(Ordering::SeqCst),
+        1,
+        "one halfword store, one byte"
+    );
+}
+
 /// Legacy master receiver, silicon order (RM0090 §27.3.3): clear ADDR by
 /// reading SR1 then SR2, then wait RXNE before each DR read. `ack_last` is
 /// how the final byte is acknowledged; ACK is cleared while it is on the wire.

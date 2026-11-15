@@ -162,7 +162,8 @@ impl SystemBus {
         }
         // Silicon Labs Series-2 IADC. Intercepted BEFORE the generic `adc`
         // bin, which means "an STM32-shaped ADC" and would resolve this
-        // through `AdcRegisterLayout` — every variant of which is an STM32.
+        // through `AdcRegisterLayout` — every variant of which is an STM32 (or,
+        // for CH32V00x, a register-for-register clone of the F1 block).
         if t == "efr32s2_iadc" || t == "efr32_iadc" {
             return "efr32s2_iadc".to_string();
         }

@@ -3151,6 +3151,10 @@ impl crate::Peripheral for GpioPort {
         })
     }
 
+    fn gpio_register_layout(&self) -> Option<GpioRegisterLayout> {
+        Some(self.register_layout())
+    }
+
     fn read_gpio_output(&self, pin: u8) -> Option<bool> {
         if pin >= self.pin_count() {
             return None;
