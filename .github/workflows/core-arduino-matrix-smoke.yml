@@ -138,7 +138,9 @@ jobs:
             esp32c6)     platform=espressif32@8.0.0 ;;
             esp32*)      platform=espressif32@7.0.1 ;;
             # The Leonardo row was measured on the same pin (ArduinoCore-avr 5.4.0).
-            atmega328p|arduino-leonardo) platform=atmelavr@5.3.0 ;;
+            atmega328p|atmega2560|arduino-leonardo) platform=atmelavr@5.3.0 ;;
+            # The Zero row was measured on atmelsam 9.0.0 (ArduinoCore-samd).
+            arduino-zero) platform=atmelsam@9.0.0 ;;
             *)
               echo "::error::no PlatformIO platform mapped for board '${{ matrix.board }}'"
               exit 1
