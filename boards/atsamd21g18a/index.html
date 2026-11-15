@@ -5219,9 +5219,9 @@ the run fails with <code>expected 0x3, got 0x22</code> while every UART line sti
 <td>8N1, TX/RX, DRE/TXC/RXC, IRQ on the enabled-flag edge</td>
 </tr>
 <tr>
-<td>SERCOM SPI / I²C modes</td>
-<td>❌</td>
-<td>Instance goes inert rather than answering wrongly</td>
+<td>SERCOM3 I²C master, SERCOM4 SPI master</td>
+<td>✅ behavioural</td>
+<td>The Zero variant roles (Wire, SPI); other instances are USART-only and go inert in SPI/I²C mode</td>
 </tr>
 <tr>
 <td>SYSCTRL, GCLK, PM, WDT, NVMCTRL</td>
@@ -5239,9 +5239,19 @@ the run fails with <code>expected 0x3, got 0x22</code> while every UART line sti
 <td>A sketch whose console is <code>SerialUSB</code> prints nothing yet</td>
 </tr>
 <tr>
-<td>TCC0–2, TC3–5, ADC, DAC, AC, I²S, DMAC, EVSYS, RTC, DSU</td>
+<td>ADC</td>
+<td>✅ behavioural</td>
+<td>Single-ended software conversions, 8/10/12-bit, gain, internal references (<code>samd21_adc</code>)</td>
+</tr>
+<tr>
+<td>TCC0–2</td>
+<td>✅ behavioural</td>
+<td>Counter, compare IRQs, CCB/PERB buffering, single-slope NPWM on the PMUX E/F pads (<code>samd21_tcc</code>); counts at the CPU clock (GCLK not checked)</td>
+</tr>
+<tr>
+<td>TC3–5, DAC, AC, I²S, DMAC, EVSYS, RTC, DSU</td>
 <td>❌</td>
-<td>Declared not modelled in the chip yaml</td>
+<td>Declared not modelled in the chip yaml (DAC is a register bank)</td>
 </tr>
 </tbody>
 </table>
