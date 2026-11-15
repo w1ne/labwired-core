@@ -7,7 +7,7 @@
 # The imported H7 profile claimed external flash and SDRAM as executable
 # memory and included many unrelated peripheral models. Renode's stm32h7.repl
 # uses a Cortex-M7, 1 MiB code flash, and 128 KiB DTCM. Keep only the model
-# backed H7 RCC, GPIOB/GPIOD, and USART3 surfaces exercised by this smoke.
+# backed H7 RCC, GPIOB/GPIOD, USART3, and TIM2 surfaces exercised by this smoke.
 name: stm32h7
 arch: arm
 core: cortex-m7
@@ -42,3 +42,19 @@ peripherals:
     size: 1KB
     config:
       profile: stm32v2
+  # RM0433 (STM32H742/743/753/750): TIM2 is the 32-bit general-purpose timer
+  # at 0x40000000 with NVIC position 28, clocked by RCC_APB1LENR.TIM2EN
+  # (bit 0, offset 0x0E8). Second source: Renode stm32h7.repl timer2
+  # (sysbus 0x40000000, initialLimit 0xffffffff, nvic@28).
+  # The smoke covers the gate, 32-bit CNT/ARR, UG, UIF, the update interrupt
+  # in up-counting mode, and one-pulse mode (CR1.OPM). Not modelled: CR1.DIR
+  # and CMS are stored without effect, and a software UG does not end a
+  # one-pulse run. Channels, pads, and the count rate are not exercised.
+  - id: tim2
+    type: timer
+    base_address: 0x40000000
+    size: 1KB
+    irq: 28
+    clock: { reg: apb1lenr, bit: 0 }
+    config:
+      width: 32
