@@ -73,8 +73,6 @@ use std::path::PathBuf;
 /// The forcing set is now EMPTY — with every Class-B walker migrated the
 /// runtime invaders (L476) bus derives walk-deletion with no hand flag: the
 /// campaign's full STM32 board flip.
-#[cfg(feature = "event-scheduler")]
-const EXPECTED_WALK_FORCING: &[&str] = &[];
 
 /// Featureless builds: the scheduler does not exist, so SysTick and SCB
 /// stay on the legacy walk. bxCAN (`can1`) is excluded regardless of the
@@ -93,7 +91,6 @@ const EXPECTED_WALK_FORCING: &[&str] = &[];
 /// the source lookup cannot resolve them. Each carries its expectation by hand
 /// and a reason. A name here that CAN now be resolved fails the test, so the
 /// list only shrinks.
-#[cfg(not(feature = "event-scheduler"))]
 const UNRESOLVED_BY_DEBUG_NAME: &[(&str, bool, &str)] = &[
     (
         "rcc",
@@ -109,7 +106,6 @@ const UNRESOLVED_BY_DEBUG_NAME: &[(&str, bool, &str)] = &[
 ];
 
 /// What a featureless build says about one impl, from its source bodies.
-#[cfg(not(feature = "event-scheduler"))]
 fn impl_forces_walk_featureless(
     needs_legacy_walk: Option<&str>,
     uses_scheduler: Option<&str>,
@@ -136,7 +132,6 @@ fn impl_forces_walk_featureless(
 /// Expected featureless forcing set, derived from model source. Returns the
 /// sorted peripheral names and panics on a shape it cannot classify, so a new
 /// shape needs a deliberate classifier change rather than a silent default.
-#[cfg(not(feature = "event-scheduler"))]
 fn featureless_expected_forcing(bus: &SystemBus) -> Vec<String> {
     use crate::tests::walk_starvation_contract::parse_peripheral_impls;
     let impls = parse_peripheral_impls();
@@ -237,21 +232,21 @@ fn remaining_walk_forcing_set_matches_campaign_inventory() {
         .collect();
     forcing.sort_unstable();
 
-    #[cfg(feature = "event-scheduler")]
-    let mut expected: Vec<String> = EXPECTED_WALK_FORCING
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
-    #[cfg(not(feature = "event-scheduler"))]
-    let mut expected: Vec<String> = featureless_expected_forcing(&bus);
+    // With the scheduler compiled in, every Class-B walker has migrated and the
+    // forcing set is EMPTY. Without it nothing joins the scheduler, and the set
+    // is derived from model source (see `featureless_expected_forcing`).
+    let mut expected: Vec<String> = if cfg!(feature = "event-scheduler") {
+        Vec::new()
+    } else {
+        let derived = featureless_expected_forcing(&bus);
+        // Anti-vacuity: prove the derivation found real forcing models.
+        assert!(
+            derived.len() >= 10,
+            "derived featureless walk-forcing set is implausibly small: {derived:?}"
+        );
+        derived
+    };
     expected.sort_unstable();
-    // Anti-vacuity: the featureless expectation is derived, so prove the
-    // derivation found real forcing models rather than an empty set.
-    #[cfg(not(feature = "event-scheduler"))]
-    assert!(
-        expected.len() >= 10,
-        "derived featureless walk-forcing set is implausibly small: {expected:?}"
-    );
 
     assert_eq!(
             forcing,
@@ -259,7 +254,8 @@ fn remaining_walk_forcing_set_matches_campaign_inventory() {
             "walk-forcing set (needs_legacy_walk && !uses_scheduler) drifted from the \
              campaign inventory (currently: post-B1).\n  got ({}):      {:?}\n  expected ({}): {:?}\n\
              A model newly (un)marked `needs_legacy_walk()` or migrated to the scheduler \
-             must update EXPECTED_WALK_FORCING (event-scheduler) or its source bodies (featureless, derived).",
+             must update the model's `needs_legacy_walk()` / `uses_scheduler()` bodies (featureless, derived) \
+             or this test's empty event-scheduler expectation.",
             forcing.len(),
             forcing,
             expected.len(),
