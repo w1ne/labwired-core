@@ -2,8 +2,8 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Generic analog netlists reach the PIC24F16KA102-family ADC1 through the
-//! same `pic24_adc_pads` seam the dsPIC33F boards use.
+//! Generic analog netlists reach the PIC24F16KA102- and PIC24F04KA201-family
+//! ADC1 through the same `pic24_adc_pads` seam the dsPIC33F boards use.
 //!
 //! The family's 10-bit ADC1 has the dsPIC33F register map without AD12B,
 //! CHPS and AD1CHS123 (DS39927C Table 4-15), but bonds a different channel
@@ -11,6 +11,11 @@
 //! (DS39927C Table 1-2). The dsPIC port-mask layout would put AN4 on RB2 and
 //! drop AN10-AN12, so these tests prove the channel set comes from the
 //! descriptor's `analog_pins`.
+//!
+//! The PIC24F04KA201 family (DS30009937C Table 4-15, §19) has the same ADC1
+//! map and channel numbers, but its 14-pin PIC24F04KA200 bonds AN2/AN3 on
+//! RB4/RA4 and has no AN11/AN12 (Table 1-2, Table 4-15 note 1). No code
+//! changes for it: the descriptor's `analog_pins` alone moves the channels.
 //!
 //! No XC16 toolchain is available to this lane, so the firmware is a
 //! hand-encoded PIC24 instruction stream (DS70000157G encodings): it sets
@@ -36,8 +41,10 @@ const AD1PCFG: u16 = 0x032C;
 const AD1CSSL: u16 = 0x0330;
 const ADC1BUF0: u16 = 0x0300;
 
-/// AN0-AN5 and AN10-AN12.
+/// AN0-AN5 and AN10-AN12 (all 20/28-pin KA parts).
 const KA10X_CHANNELS: u16 = 0x1C3F;
+/// AN0-AN5 and AN10 (14-pin PIC24F04KA200).
+const KA200_CHANNELS: u16 = 0x043F;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -59,14 +66,14 @@ fn mov_f_to_w(f: u16, wn: u32) -> u32 {
 }
 
 /// One manual 10-bit conversion of AN`channel`, unsigned integer format.
-fn convert_program(channel: u16) -> Vec<u32> {
+fn convert_program(channels: u16, channel: u16) -> Vec<u32> {
     let mut words = Vec::new();
     let write = |words: &mut Vec<u32>, f: u16, val: u16| {
         words.push(mov_lit(val, 0));
         words.push(mov_w_to_f(0, f));
     };
     // PCFG = 1 is digital: leave only AN`channel` analog.
-    write(&mut words, AD1PCFG, KA10X_CHANNELS & !(1 << channel));
+    write(&mut words, AD1PCFG, channels & !(1 << channel));
     write(&mut words, AD1CON1, 0x0000); // SSRC = 000, FORM = 00
     write(&mut words, AD1CON2, 0x0000); // AVDD/AVSS, MUX A, one buffer
     write(&mut words, AD1CON3, 0x0001); // ADCS = 1: TAD = 2 TCY
@@ -102,12 +109,17 @@ fn board_bus(chip: &str, analog: &str) -> (SystemBus, SystemManifest, ChipDescri
 /// and returns ADC1BUF0.
 fn convert(chip: &ChipDescriptor, channel: u16, bus: &mut SystemBus) -> u16 {
     let channels = pic24_adc_channels(chip).expect("KA descriptor declares analog_pins");
-    assert_eq!(channels, KA10X_CHANNELS, "DS39927C Table 1-2 channel set");
+    let expected = if chip.name == "pic24f04ka200" {
+        KA200_CHANNELS
+    } else {
+        KA10X_CHANNELS
+    };
+    assert_eq!(channels, expected, "Table 1-2 channel set of {}", chip.name);
     let mut cpu = Pic24::new();
     cpu.set_port_masks(pic24_port_masks(chip));
     cpu.set_adc_channels(channels);
     cpu.set_adc_pad_window(true);
-    cpu.load_words(&convert_program(channel));
+    cpu.load_words(&convert_program(channels, channel));
     cpu.reset(bus).expect("reset");
     cpu.set_pc(0);
     for _ in 0..10_000 {
@@ -116,8 +128,8 @@ fn convert(chip: &ChipDescriptor, channel: u16, bus: &mut SystemBus) -> u16 {
         if cpu.data_read(MARKER).unwrap() == 0xBEEF {
             assert_eq!(
                 cpu.data_read(AD1PCFG).unwrap(),
-                KA10X_CHANNELS & !(1 << channel),
-                "AD1PCFG implements PCFG12:10 and PCFG5:0 only"
+                channels & !(1 << channel),
+                "AD1PCFG implements only the bonded PCFG bits"
             );
             return cpu.data_read(ADC_RESULT).unwrap();
         }
@@ -343,5 +355,235 @@ fn pic24f_ka10x_refuses_adc_routes_outside_its_channel_set() {
         1,
         "RB2 has no AN function on the 20-pin package: {:?}",
         session.binding_errors()
+    );
+}
+
+/// Gummel-Poon emitter follower with only IS, BF and BR set (qb = 1): the
+/// emitter current `Ve / Re` is `Ibe - Ibc + Ibe / BF`. The `Ibc / BR` terms
+/// of the collector and base currents cancel in the emitter current.
+fn npn_follower_volts(vcc: f64, vb: f64, re: f64) -> f64 {
+    const IS: f64 = 1e-15;
+    const BF: f64 = 100.0;
+    let vt = labwired_core::analog::device::THERMAL_VOLTAGE;
+    let residual = |ve: f64| {
+        let i_be = IS * (((vb - ve) / vt).exp() - 1.0);
+        let i_bc = IS * (((vb - vcc) / vt).exp() - 1.0);
+        i_be - i_bc + i_be / BF - ve / re
+    };
+    let (mut low, mut high) = (0.0, vb);
+    for _ in 0..200 {
+        let mid = (low + high) / 2.0;
+        if residual(mid) > 0.0 {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    (low + high) / 2.0
+}
+
+/// The 14-pin PIC24F04KA200 bonds AN2 on RB4 and AN3 on RA4 (DS30009937C
+/// Table 1-2). An NPN emitter follower on RB4 converts as AN2; the 20-pin
+/// layout would have put AN2 on RB0, which this package does not bond.
+#[test]
+fn pic24f04ka200_adc1_converts_an_npn_follower_on_rb4_as_an2() {
+    const ANALOG: &str = r#"
+- id: "npn_follower"
+  adapter: "analog"
+  step_ns: 1000
+  inputs:
+    base: "ui.npn.base_v"
+  outputs:
+    v_out: "board.analog.RB4_volts"
+  config:
+    netlist_text: |
+      Vcc vcc 0 dc 3.3
+      Vb base 0 dc 1.5
+      Q1 vcc base out QN
+      Re out 0 10k
+      .model QN NPN(IS=1e-15 BF=100 BR=1)
+    probes:
+      v_out: "v(out)"
+    sources:
+      base: "Vb"
+    vdd: 3.3
+"#;
+    let (mut bus, profile, chip) = board_bus("pic24f04ka200", ANALOG);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries an analog model");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "RB4 is AN2 on the 14-pin KA200"
+    );
+
+    let mut cycles = 0;
+    let mut codes = Vec::new();
+    for base_v in [1.2_f64, 1.8, 2.6] {
+        session.set_signal_number("ui.npn.base_v", base_v).unwrap();
+        solve_session(&mut session, &mut cycles, &mut bus);
+        let v = signal_voltage(&session, "board.analog.RB4_volts");
+        let expected_v = npn_follower_volts(3.3, base_v, 10_000.0);
+        assert!(
+            (v - expected_v).abs() < 1e-5,
+            "NPN follower at Vb = {base_v} V: expected {expected_v} V, got {v} V"
+        );
+        let code = convert(&chip, 2, &mut bus);
+        assert_eq!(code, ideal_code(v, 3.3), "ADC1BUF0 at Vb = {base_v} V");
+        codes.push(code);
+    }
+    assert!(
+        codes.windows(2).all(|w| w[0] < w[1]),
+        "AN2 codes follow the base drive: {codes:?}"
+    );
+    // RA4 (AN3) carries no route and stays at the harness code.
+    assert_eq!(convert(&chip, 3, &mut bus), 0, "AN3 (RA4) carries no route");
+}
+
+/// The 14-pin KA200 refuses the 20-pin AN pads (RB0/AN2 and RB12/AN12 are
+/// not bonded) and AN11 (PCFG11 not implemented: Table 4-15 note 1) when the
+/// session is built: the window's channel count ends at AN10. AN6 sits inside
+/// that count, so the window refuses it on every solve instead.
+#[test]
+fn pic24f04ka200_refuses_the_20_pin_analog_inputs() {
+    const ANALOG: &str = r#"
+- id: "divider"
+  adapter: "analog"
+  step_ns: 1000
+  outputs:
+    rb0: "board.analog.RB0_volts"
+    rb12: "board.analog.RB12_volts"
+    an11: "adc.adc1.11_volts"
+  config:
+    netlist_text: |
+      V1 a 0 dc 1.0
+      R1 a 0 1k
+    probes:
+      rb0: "v(a)"
+      rb12: "v(a)"
+      an11: "v(a)"
+    vdd: 3.3
+"#;
+    let (bus, profile, _) = board_bus("pic24f04ka200", ANALOG);
+    let session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries an analog model");
+    assert_eq!(
+        session.binding_errors().len(),
+        3,
+        "RB0, RB12 and AN11 do not exist on the 14-pin package: {:?}",
+        session.binding_errors()
+    );
+
+    const AN6: &str = r#"
+- id: "divider"
+  adapter: "analog"
+  step_ns: 1000
+  outputs:
+    an6: "adc.adc1.6_volts"
+  config:
+    netlist_text: |
+      V1 a 0 dc 1.0
+      R1 a 0 1k
+    probes:
+      an6: "v(a)"
+    vdd: 3.3
+"#;
+    let (mut bus, profile, _) = board_bus("pic24f04ka200", AN6);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries an analog model");
+    assert_eq!(session.binding_errors(), &[] as &[RoutingError]);
+    let cycles = session.cycles_until_boundary(0);
+    let (_, errors) = session.advance_to(cycles, &mut bus).expect("solve");
+    assert!(
+        !errors.is_empty(),
+        "the AN6 route must not land silently: {errors:?}"
+    );
+}
+
+/// Level-1 NJF drain voltage against a 1 kΩ load (no terminal resistances).
+fn njf_drain_volts(vdd: f64, vgs: f64) -> f64 {
+    const VTO: f64 = -2.0;
+    const BETA: f64 = 500e-6;
+    const LAMBDA: f64 = 0.025;
+    const RLOAD: f64 = 1_000.0;
+    let channel = |vds: f64| {
+        let vgst = vgs - VTO;
+        if vgst <= 0.0 {
+            0.0
+        } else if vds < vgst {
+            BETA * (1.0 + LAMBDA * vds) * vds * (2.0 * vgst - vds)
+        } else {
+            BETA * (1.0 + LAMBDA * vds) * vgst * vgst
+        }
+    };
+    let (mut low, mut high) = (0.0, vdd);
+    for _ in 0..200 {
+        let vds = (low + high) / 2.0;
+        if channel(vds) > (vdd - vds) / RLOAD {
+            high = vds;
+        } else {
+            low = vds;
+        }
+    }
+    (low + high) / 2.0
+}
+
+/// A third device class on the 20-pin PIC24F04KA201: a level-1 N-JFET load
+/// line on RB13, which is AN11 on this family. The gate sweep moves the
+/// drain through saturation into the linear region.
+#[test]
+fn pic24f04ka201_adc1_converts_a_jfet_load_line_on_an11() {
+    const ANALOG: &str = r#"
+- id: "jfet_load_line"
+  adapter: "analog"
+  step_ns: 1000
+  inputs:
+    gate: "ui.jfet.gate_v"
+  outputs:
+    v_drain: "board.analog.RB13_volts"
+  config:
+    netlist_text: |
+      Vdd vdd 0 dc 3.3
+      Vg gate 0 dc 0
+      Rload vdd drain 1k
+      J1 drain gate 0 NJ
+      .model NJ NJF(VTO=-2 BETA=500u LAMBDA=0.025 B=1 PB=1 IS=1e-30)
+    probes:
+      v_drain: "v(drain)"
+    sources:
+      gate: "Vg"
+    vdd: 3.3
+"#;
+    let (mut bus, profile, chip) = board_bus("pic24f04ka201", ANALOG);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries an analog model");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "RB13 is AN11 on the 20-pin KA201"
+    );
+
+    let mut cycles = 0;
+    let mut codes = Vec::new();
+    for gate_v in [-1.8_f64, -1.2, 0.0] {
+        session.set_signal_number("ui.jfet.gate_v", gate_v).unwrap();
+        solve_session(&mut session, &mut cycles, &mut bus);
+        let v = signal_voltage(&session, "board.analog.RB13_volts");
+        let expected_v = njf_drain_volts(3.3, gate_v);
+        assert!(
+            (v - expected_v).abs() < 1e-6,
+            "NJF load line at Vgs = {gate_v} V: expected {expected_v} V, got {v} V"
+        );
+        let code = convert(&chip, 11, &mut bus);
+        assert_eq!(code, ideal_code(v, 3.3), "ADC1BUF0 at Vgs = {gate_v} V");
+        codes.push(code);
+    }
+    assert!(
+        codes.windows(2).all(|w| w[0] > w[1]),
+        "AN11 codes fall as the JFET opens: {codes:?}"
     );
 }
