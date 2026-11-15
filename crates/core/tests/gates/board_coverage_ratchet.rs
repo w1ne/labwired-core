@@ -576,6 +576,12 @@ fn every_shipped_descriptor_is_ratcheted() {
         // bundled-configs.ts catalog board and no executing-fidelity
         // differential of its own. Promote when both exist.
         "atmega2561",
+        // PJRC Teensy 4.1 (MIMXRT1062DVJ6B). Has a chip descriptor, a system
+        // manifest and an Arduino matrix row (stock Teensyduino L0-L3, L5, L7;
+        // Serial is USB CDC on the scripted host) — but no bundled-configs.ts
+        // catalog board, no silicon oracle and no executing-fidelity
+        // differential. LPSPI, QuadTimer PWM and FlexCAN are not modelled.
+        "mimxrt1062-teensy41",
         // First Microchip part in the engine. Has a chip descriptor, an
         // io-smoke executed by the coverage matrix and the strict-onboarding
         // gate, and a peripheral-estate test — but it is NOT a

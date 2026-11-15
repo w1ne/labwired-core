@@ -505,6 +505,10 @@
       "expect": "OK",
       "note": "Teensy 4.1 UART/LED smoke. Serial1 is LPUART6. Image is DTCM-linked."
     },
+    "mimxrt1062-teensy41": {
+      "how": "needs-build",
+      "why": "The Teensy 4.1 profile boots stock Teensyduino from the FlexSPI NOR IVT and prints over a USB CDC scripted host; both are newer than the installed v0.25.0 CLI this gate checks. The arduino-matrix teensy41 row (L0-L3, L5, L7) passes from source; switch this row after a release carries the mimxrt1062-teensy41 descriptor."
+    },
     "stm32f746": {
       "how": "committed",
       "firmware": "tests/fixtures/stm32f746-discovery-smoke.elf",
