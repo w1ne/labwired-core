@@ -145,6 +145,21 @@ impl SystemBus {
             {
                 self.collect_scheduled_events(edge.timer);
             }
+            self.route_taken_dma_signals(edge.timer);
+        }
+    }
+
+    /// Route the DMA signals the peripheral at `idx` raised outside its tick
+    /// ([`crate::Peripheral::take_dma_signals`]), by its bus name.
+    pub(crate) fn route_taken_dma_signals(&mut self, idx: usize) {
+        let mut signals = Vec::new();
+        self.peripherals[idx].dev.take_dma_signals(&mut signals);
+        if signals.is_empty() {
+            return;
+        }
+        let name = self.peripherals[idx].name.clone();
+        for signal in signals {
+            self.route_dma_signal(&name, signal);
         }
     }
 

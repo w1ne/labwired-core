@@ -66,8 +66,8 @@ pub use machine::{
 };
 pub use peripheral::{
     AnalogProbe, DmaDirection, DmaRequest, DmaRoute, DmaUnitTransform, FlashStoreOutcome,
-    MmioAccessClass, Peripheral, PeripheralResetCause, PeripheralTickResult, DMA_SIGNAL_RX,
-    DMA_SIGNAL_TX,
+    MmioAccessClass, Peripheral, PeripheralResetCause, PeripheralTickResult, DMA_SIGNAL_CH1,
+    DMA_SIGNAL_CH2, DMA_SIGNAL_CH3, DMA_SIGNAL_CH4, DMA_SIGNAL_RX, DMA_SIGNAL_TX,
 };
 
 use std::collections::HashSet;
