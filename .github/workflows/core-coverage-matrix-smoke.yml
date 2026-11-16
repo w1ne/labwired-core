@@ -562,6 +562,10 @@ jobs:
           - id: ch32v006k8u6-blink
             script: examples/ch32v006k8u6/io-smoke.yaml
             system: examples/ch32v006k8u6/system.yaml
+          # CH32V203C8T6 (LQFP48, RV32IMAC): blinks PC13 through GPIOC_CFGHR.
+          - id: ch32v203c8t6-blink
+            script: examples/ch32v203c8t6/io-smoke.yaml
+            system: examples/ch32v203c8t6/system.yaml
           # CH32V003J4M6 (SOP-8). PC0 has no pad on this package, so the
           # committed examples/ch32v003j4m6 fixture blinks PC4 (pin 7).
           - id: ch32v003j4m6-blink

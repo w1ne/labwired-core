@@ -167,6 +167,15 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this \
          harness yet; bytes are proven by ch32v006_compiled_firmware",
     ),
+    // CH32V203C8T6: the bring-up has no UART drive for the WCH V20x family.
+    // USART1 bytes are proven by
+    // ch32v203_compiled_firmware::ch32v203_compiled_rv32imac_firmware_prints_on_usart1.
+    (
+        "ch32v203c8t6",
+        BusKind::Uart,
+        "no UART bring-up for the WCH V20x family in this harness yet; USART1 \
+         bytes are proven by ch32v203_compiled_firmware",
+    ),
     // F4U6 (QFN20), A4M6 (SOP16) and J4M6 (SOP8) are package variants of the
     // F4P6 die with the same pad-gated USART1 on PD5. Bytes are proven by
     // ch32v003_compiled_firmware::ch32v003_package_variants_print_on_usart1_pd5.
