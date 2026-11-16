@@ -87,7 +87,11 @@ pub struct DecodeCacheEntry {
 }
 
 const T16_FAST_BLOCK_MAX: usize = 16;
-const T16_DISCOVERY_MISS_SLOTS: usize = 64;
+/// Decode-cache slots on either side of a PC whose contents can change that
+/// PC's block discovery: the backward search starts at most
+/// `T16_FAST_BLOCK_MAX - 1` halfwords behind it and each candidate scans at
+/// most that many halfwords forward.
+const T16_DISCOVERY_REACH: usize = T16_FAST_BLOCK_MAX - 1;
 
 #[derive(Debug, Clone, Copy)]
 struct T16FastBlock {
@@ -245,9 +249,13 @@ pub struct CortexM {
     /// Loop-head detection and the last proven fixed-point poll loop
     /// (`poll_loop.rs`).
     poll: poll_loop::PollDetector,
-    // Bounded 1 KiB, direct-mapped (PC, generation) discovery-only memo.
+    // Discovery-only miss memo, one slot per decode-cache slot, holding
+    // `pc | 1` of a PC whose block discovery failed. Discovery reads only the
+    // decode-cache slots within `T16_DISCOVERY_REACH` of the PC's slot, so an
+    // insert clears exactly the memo slots that reach it (see
+    // `insert_decoded_entry`); unrelated decodes leave a miss valid.
     // Register-dependent execution failures MUST NOT be recorded here.
-    t16_discovery_misses: [(u32, u64); T16_DISCOVERY_MISS_SLOTS],
+    t16_discovery_misses: Box<[u32; 4096]>,
     /// Last observer-free Thumb-1 RAM loop admitted by the generic block
     /// executor. This is derived execution state, never part of a snapshot.
     t16_fast_block: Option<T16FastBlock>,
@@ -361,7 +369,7 @@ impl Default for CortexM {
             decode_cache: Box::new([None; 4096]),
             decode_generation: 1,
             poll: poll_loop::PollDetector::default(),
-            t16_discovery_misses: [(0, 0); T16_DISCOVERY_MISS_SLOTS],
+            t16_discovery_misses: Box::new([0; 4096]),
             t16_fast_block: None,
             fpu_s: [0u32; 32],
             fpscr: 0,
@@ -1668,27 +1676,36 @@ impl CortexM {
     }
 
     fn advance_decode_generation(&mut self) {
-        self.decode_generation = self.decode_generation.wrapping_add(1);
-        if self.decode_generation == 0 {
-            self.t16_discovery_misses.fill((0, 0));
-            self.decode_generation = 1;
-        }
+        self.decode_generation = self.decode_generation.wrapping_add(1).max(1);
     }
 
     fn insert_decoded_entry(&mut self, entry: DecodeCacheEntry) {
         self.advance_decode_generation();
-        self.decode_cache[((entry.tag >> 1) & 0x0fff) as usize] = Some(entry);
+        let slot = ((entry.tag >> 1) & 0x0fff) as usize;
+        self.decode_cache[slot] = Some(entry);
+        // A new entry can make discovery succeed for any PC whose window
+        // reaches this slot; forget exactly those misses. Removing an entry
+        // (store invalidation) can only turn a success into a failure, so it
+        // needs no memo update.
+        for d in 0..=2 * T16_DISCOVERY_REACH {
+            self.t16_discovery_misses[(slot + 4096 - T16_DISCOVERY_REACH + d) & 0x0fff] = 0;
+        }
     }
 
     fn clear_decoded_state(&mut self) {
         self.advance_decode_generation();
         self.decode_cache.fill(None);
+        self.t16_discovery_misses.fill(0);
         self.t16_fast_block = None;
     }
 
+    #[inline(always)]
+    fn t16_discovery_memoized(&self, pc: u32) -> bool {
+        self.t16_discovery_misses[((pc >> 1) & 0x0fff) as usize] == pc | 1
+    }
+
     fn memoize_t16_discovery_miss(&mut self) {
-        let index = ((self.pc >> 1) as usize) % T16_DISCOVERY_MISS_SLOTS;
-        self.t16_discovery_misses[index] = (self.pc, self.decode_generation);
+        self.t16_discovery_misses[((self.pc >> 1) & 0x0fff) as usize] = self.pc | 1;
     }
 
     fn run_t16_fast_block(&mut self, bus: &mut SystemBus, max_count: u32) -> u32 {
@@ -1701,8 +1718,7 @@ impl CortexM {
             // Do not copy the payload of Option::None on the common rejection
             // path. Only successful discovery materializes a block.
             self.t16_fast_block = None;
-            let miss_index = ((self.pc >> 1) as usize) % T16_DISCOVERY_MISS_SLOTS;
-            if self.t16_discovery_misses[miss_index] == (self.pc, self.decode_generation) {
+            if self.t16_discovery_memoized(self.pc) {
                 return 0;
             }
             if !self.t16_block_entry_admitted(self.pc) {
@@ -3563,12 +3579,15 @@ impl CortexM {
         ];
         for pc in candidates {
             let idx = ((pc >> 1) & 0x0fff) as usize;
-            if let Some(entry) = self.decode_cache[idx] {
+            // Borrow the tag and width; copying the whole entry out of the
+            // slot costs more than the check on every store.
+            let overlaps = self.decode_cache[idx].as_ref().is_some_and(|entry| {
                 let start = entry.tag & !1;
                 let inst_end = start.wrapping_add(u32::from(entry.pc_increment));
-                if store_overlaps(start, inst_end, addr, end) {
-                    self.decode_cache[idx] = None;
-                }
+                store_overlaps(start, inst_end, addr, end)
+            });
+            if overlaps {
+                self.decode_cache[idx] = None;
             }
         }
         if let Some(block) = self.t16_fast_block {

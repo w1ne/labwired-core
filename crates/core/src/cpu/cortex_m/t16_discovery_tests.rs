@@ -436,7 +436,7 @@ fn admitted_load_falls_back_for_mmio_without_side_effects_then_accepts_ram() {
     let before = (cpu.pc, cpu.r0, bus.access_counts());
     assert_eq!(cpu.run_t16_fast_block(&mut bus, 2), 0);
     assert_eq!((cpu.pc, cpu.r0, bus.access_counts()), before);
-    assert_ne!(cpu.t16_discovery_misses[0], (cpu.pc, cpu.decode_generation));
+    assert!(!cpu.t16_discovery_memoized(cpu.pc));
     cpu.r1 = 0x20000100;
     assert_eq!(cpu.run_t16_fast_block(&mut bus, 2), 2);
 }
@@ -465,7 +465,7 @@ fn forward_and_wrong_target_terminal_branches_reject_without_retiring() {
         let before = (cpu.pc, cpu.r0, cpu.xpsr, bus.access_counts());
         assert_eq!(cpu.run_t16_fast_block(&mut bus, 64), 0);
         assert_eq!((cpu.pc, cpu.r0, cpu.xpsr, bus.access_counts()), before);
-        assert_eq!(cpu.t16_discovery_misses[0], (cpu.pc, cpu.decode_generation));
+        assert!(cpu.t16_discovery_memoized(cpu.pc));
         assert_eq!(cpu.run_t16_fast_block(&mut bus, 64), 0);
         assert_eq!((cpu.pc, cpu.r0, cpu.xpsr, bus.access_counts()), before);
         cache(&mut cpu, 0x102, 0xd1fd);
@@ -541,7 +541,7 @@ fn discovery_memo_is_stable_until_real_decoder_warms_the_window() {
     assert!(bus.flash.write_u16(0x102, 0xd1fd));
     let generation = cpu.decode_generation;
     assert_eq!(cpu.run_t16_fast_block(&mut bus, 9), 0);
-    assert_eq!(cpu.t16_discovery_misses[0], (0x100, generation));
+    assert!(cpu.t16_discovery_memoized(0x100));
     let before = (cpu.pc, cpu.r0, cpu.xpsr, bus.access_counts());
     for _ in 0..4 {
         assert_eq!(cpu.run_t16_fast_block(&mut bus, 9), 0);
@@ -569,17 +569,18 @@ fn fast_fetch_insertion_and_decode_tag_collision_invalidate_discovery_misses() {
 }
 
 #[test]
-fn memo_slot_aliases_require_exact_pc_and_generation() {
+fn memo_slot_aliases_require_exact_pc() {
     let mut cpu = CortexM::new();
     let mut bus = SystemBus::new();
     cpu.pc = 0x100;
     assert_eq!(cpu.run_t16_fast_block(&mut bus, 1), 0);
-    cpu.pc = 0x180; // same bounded memo slot, not same PC
+    cpu.pc = 0x2100; // same decode/memo slot, not same PC
     assert_eq!(cpu.run_t16_fast_block(&mut bus, 1), 0);
-    assert_eq!(cpu.t16_discovery_misses[0], (0x180, cpu.decode_generation));
+    assert!(cpu.t16_discovery_memoized(0x2100));
+    assert!(!cpu.t16_discovery_memoized(0x100));
     cpu.pc = 0x100;
     assert_eq!(cpu.run_t16_fast_block(&mut bus, 1), 0);
-    assert_eq!(cpu.t16_discovery_misses[0], (0x100, cpu.decode_generation));
+    assert!(cpu.t16_discovery_memoized(0x100));
 }
 
 #[test]
@@ -620,16 +621,25 @@ fn invalidate_reset_and_snapshot_restore_drop_positive_and_negative_state() {
 }
 
 #[test]
-fn generation_wrap_clears_old_misses_before_reusing_generation_one() {
-    let mut cpu = CortexM::new();
-    cpu.t16_discovery_misses.fill((0x100, 1));
-    cpu.decode_generation = u64::MAX;
-    cache(&mut cpu, 0x100, 0xbf00);
-    assert_eq!(cpu.decode_generation, 1);
-    assert!(cpu
-        .t16_discovery_misses
-        .iter()
-        .all(|entry| *entry == (0, 0)));
+fn insert_clears_only_misses_whose_discovery_window_reaches_it() {
+    let reach = T16_DISCOVERY_REACH as u32 * 2;
+    // Outside the window on either side (including a far decode-slot alias
+    // of an in-window PC's neighbour), the miss survives.
+    for (pc, cleared) in [
+        (0x100 - reach - 2, false),
+        (0x100 - reach, true),
+        (0x100, true),
+        (0x100 + reach, true),
+        (0x100 + reach + 2, false),
+        (0x400, false),
+        (0x2100 + reach, true), // aliases slot of 0x100 + reach
+    ] {
+        let mut cpu = CortexM::new();
+        cpu.pc = 0x100;
+        cpu.memoize_t16_discovery_miss();
+        cache(&mut cpu, pc, 0xbf00);
+        assert_eq!(!cpu.t16_discovery_memoized(0x100), cleared, "{pc:#x}");
+    }
 }
 
 #[test]
