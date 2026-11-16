@@ -53,9 +53,10 @@ pub const SRAM_START: u16 = 0x0100;
 ///
 /// Timer0/1/2 output-compare pads use the mega pins (OC0A = PB7, OC0B = PG5,
 /// OC1A/OC1B = PB5/PB6, OC2A = PB4, OC2B = PH6; see `avr/oc_pins.rs`).
-/// Not modelled on the ATmega2560: INTn/PCINT (its pins differ from the
-/// 328P's; the registers are stored only), OC1C, Timer3/4/5 and USART1..3
-/// (registers stored only).
+/// INT0..7 and PCINT0..23 on the mega pins (`avr/mega_ext_int.rs`), the
+/// timed, auto-triggered ADC (`avr/mega_adc.rs`) and the timed SPI block
+/// (`avr/mega_spi.rs`) are the mega's own. Not modelled on the ATmega2560:
+/// OC1C, Timer3/4/5 and USART1..3 (registers stored only).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AvrModel {
     #[default]
@@ -639,6 +640,11 @@ pub struct Avr {
     /// Data EEPROM and `EECR`/`EEDR`/`EEAR` (`avr/eeprom.rs`). Empty on the
     /// parts whose EEPROM is not modelled.
     eeprom: eeprom::Eeprom,
+    /// ATmega2560 family: INT0..7 / PCINT0..23 (`avr/mega_ext_int.rs`), the
+    /// timed ADC (`avr/mega_adc.rs`) and the timed SPI (`avr/mega_spi.rs`).
+    mx: mega_ext_int::MegaExt,
+    madc: mega_adc::MegaAdc,
+    mspi: mega_spi::MegaSpi,
 }
 
 impl std::fmt::Debug for Avr {
@@ -976,6 +982,9 @@ impl Avr {
             usb: usb::UsbDevice::default(),
             wdt: wdt::Wdt::new(model.has_wdtcsr()),
             eeprom: eeprom::Eeprom::new(model.eeprom_size()),
+            mx: mega_ext_int::MegaExt::default(),
+            madc: mega_adc::MegaAdc::default(),
+            mspi: mega_spi::MegaSpi::default(),
         }
     }
 
@@ -1423,6 +1432,9 @@ impl Avr {
                     Ok(0)
                 }
             }
+            a if self.is_mega() && mega_spi::handles(a) => Ok(self.mega_spi_read(a)),
+            a if self.is_mega() && mega_adc::handles(a) => Ok(self.mega_adc_read(a)),
+            a if self.is_mega() && mega_ext_int::handles(a) => Ok(self.mega_ext_read(a)),
             // SPI: SPCR/SPSR/SPDR (ATmega328P data space)
             0x004C => Ok(self.spcr),
             0x004D => Ok(self.spsr),
@@ -1666,6 +1678,12 @@ impl Avr {
                 }
                 Ok(())
             }
+            a if self.is_mega() && mega_spi::handles(a) => self.mega_spi_write(a, value, bus),
+            a if self.is_mega() && mega_adc::handles(a) => self.mega_adc_write(a, value, bus),
+            a if self.is_mega() && mega_ext_int::handles(a) => {
+                self.mega_ext_write(a, value, bus);
+                Ok(())
+            }
             0x004C => {
                 self.spcr = value;
                 Ok(())
@@ -1677,47 +1695,7 @@ impl Avr {
             }
             0x004E => {
                 // SPI data: master clocks one byte through attached slaves.
-                self.sync_spi_cs(bus);
-                // Sample D/C for every device that declares a `dc_source`
-                // (same semantics as SystemBus::maybe_latch_dc) — generic for
-                // any SPI panel with a DC line, not device-specific.
-                let mosi = value;
-                let mut miso = 0u8;
-                {
-                    let sources: Vec<(usize, u64, u8)> = self
-                        .spi_devices
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(i, d)| d.dc_source().map(|(a, b)| (i, a, b)))
-                        .collect();
-                    for (i, addr, bit) in sources {
-                        let level = bus
-                            .read_u32(addr)
-                            .map(|v| (v >> bit) & 1 != 0)
-                            .unwrap_or(false);
-                        self.spi_devices[i].set_dc_level(level);
-                    }
-                }
-                // Clock selected devices and continuous shift registers.
-                // An inactive LOAD may clock DOUT, but it does not select
-                // that chain as the source of the controller's MISO byte.
-                for dev in &mut self.spi_devices {
-                    if !dev.is_selected() && !dev.clocks_when_deselected() {
-                        continue;
-                    }
-                    let resp = dev.transfer(mosi);
-                    if dev.is_selected() && resp != 0 {
-                        miso = resp;
-                    }
-                }
-                // Kits left on the parking SPI controller (not taken): latch
-                // D/C and clock them so inspect / display_artifact still see
-                // the panel. Bus::clock_parking_spi — no SystemBus downcast.
-                let bus_miso = bus.clock_parking_spi(mosi);
-                if bus_miso != 0 {
-                    miso = bus_miso;
-                }
-                self.spdr = miso;
+                self.spdr = self.spi_exchange(bus, value);
                 self.spsr |= 1 << 7; // SPIF
                 Ok(())
             }
@@ -1924,9 +1902,7 @@ impl Avr {
     /// REFS selects the reference: 11 is the internal 1.1 V, anything else is
     /// taken as 5 V AVcc (AREF is not a modelled pin).
     ///
-    /// ATmega2560: MUX5 (ADCSRB bit 3) with ADMUX MUX4:0 makes a 6-bit code;
-    /// 0x00..0x07 are ADC0..7, 0x20..0x27 are ADC8..15 (Arduino A8..A15),
-    /// 0x1E is the 1.1 V bandgap. Differential/gain codes read 0.
+    /// The ATmega2560 family has its own converter (`avr/mega_adc.rs`).
     fn adc_convert(&self, bus: &dyn Bus) -> SimResult<u16> {
         let channel: Option<u8> = if self.is_32u4() {
             // DS7766 Table 24-4: MUX5 is ADCSRB bit 5. 0x00..0x07 are
@@ -1937,14 +1913,6 @@ impl Avr {
             match (self.admux & 0x1F) | if mux5 { 0x20 } else { 0 } {
                 m @ 0x00..=0x07 => Some(m),
                 m @ 0x20..=0x25 => Some(m - 0x18),
-                0x1E => None,
-                _ => Some(0xFF),
-            }
-        } else if self.is_mega() {
-            let mux5 = self.io[(0x7B - 0x20) as usize] & (1 << 3) != 0;
-            match (self.admux & 0x1F) | if mux5 { 0x20 } else { 0 } {
-                m @ 0x00..=0x07 => Some(m),
-                m @ 0x20..=0x27 => Some(m - 0x18),
                 0x1E => None,
                 _ => Some(0xFF),
             }
@@ -2194,7 +2162,9 @@ impl Avr {
     /// pending. This is also what wakes a sleeping core.
     #[inline]
     fn wake_pending(&self) -> bool {
-        self.flag_i() && self.pending_irq & 0xFFFF_FFFE != 0
+        self.flag_i()
+            && (self.pending_irq & 0xFFFF_FFFE != 0
+                || (self.is_mega() && self.pending_irq >> mega_ext_int::NATIVE_BASE != 0))
     }
 
     pub fn portb(&self) -> u8 {
@@ -2475,6 +2445,15 @@ impl Avr {
         if !self.flag_i() || self.pending_irq == 0 {
             return Ok(false);
         }
+        // ATmega2560 INT2..INT7: native vector numbers (`avr/mega_ext_int.rs`).
+        if self.pending_irq >> mega_ext_int::NATIVE_BASE != 0 && self.is_mega() {
+            if let Some(slot) = self.mega_take_native_irq() {
+                self.set_flag_i(false);
+                self.push_pc(bus)?;
+                self.pc = (slot - 1) * 4;
+                return Ok(true);
+            }
+        }
         let vec = self.pending_irq.trailing_zeros();
         if vec == 0 || vec > 31 {
             return Ok(false);
@@ -2500,6 +2479,13 @@ impl Avr {
         }
         // ... and the INTn / PCIFn flag of an external or pin-change vector.
         self.ext_vector_entered(vec);
+        if self.is_mega() {
+            match vec {
+                mega_adc::VEC_ADC => self.mega_adc_vector_entered(),
+                mega_spi::VEC_SPI_STC => self.mega_spi_vector_entered(),
+                _ => {}
+            }
+        }
         self.push_pc(bus)?;
         let slot = if self.is_mega() {
             mega2560_vector(vec)
@@ -2762,6 +2748,8 @@ impl Cpu for Avr {
                 self.usb.wake_cycles(self.cycles),
                 self.wdt.wake_cycles(self.cycles),
                 self.eeprom.ready_wake_cycles(self.cycles),
+                self.mega_adc_wake_cycles(),
+                self.mega_spi_wake_cycles(),
             ]
             .into_iter()
             .flatten()
@@ -2845,6 +2833,11 @@ impl Cpu for Avr {
         self.twi_phase = TwiPhase::Idle;
         self.twi_slave = None;
         self.ext_reset();
+        self.mx = mega_ext_int::MegaExt::default();
+        if self.is_mega() {
+            self.mega_adc_reset();
+            self.mega_spi_reset();
+        }
         self.wdt_after_reset();
         self.eeprom.reset();
         self.irq_shadow = false;
@@ -2935,6 +2928,16 @@ impl Cpu for Avr {
         if self.ext_watch != 0 {
             self.sample_ext_pins(bus);
         }
+        // ATmega2560 family: ADC conversions, triggers and SPI transfers due
+        // at this boundary.
+        if self.is_mega() {
+            if self.madc.active(self.adcsra) {
+                self.mega_adc_poll(bus)?;
+            }
+            if self.mega_spi_active() {
+                self.mega_spi_poll(bus);
+            }
+        }
 
         if self.sleeping {
             if !self.wake_pending() {
@@ -3021,6 +3024,9 @@ impl Cpu for Avr {
         // So does an attached USB device: its frames come on cycle deadlines.
         let irq_takeable =
             irq_takeable || self.sleeping || self.ext_watch != 0 || self.usb.active();
+        // So do an ATmega2560 ADC conversion or SPI transfer in flight.
+        let irq_takeable = irq_takeable
+            || (self.is_mega() && (self.madc.active(self.adcsra) || self.mega_spi_active()));
         // The INC/RJMP spin touches no bus, so it can never push a pad edge:
         // it stays available under push capture, as long as the tap clock is
         // carried across the cycles it retires.
@@ -3143,6 +3149,12 @@ mod eeprom;
 mod exec;
 #[path = "avr/ext_int.rs"]
 mod ext_int;
+#[path = "avr/mega_adc.rs"]
+mod mega_adc;
+#[path = "avr/mega_ext_int.rs"]
+mod mega_ext_int;
+#[path = "avr/mega_spi.rs"]
+mod mega_spi;
 #[path = "avr/oc_pins.rs"]
 mod oc_pins;
 #[path = "avr/timer1.rs"]
@@ -4829,6 +4841,9 @@ mod tests {
                 .unwrap();
             cpu.data_write(0x7C, 0x40 | mux, bus).unwrap();
             cpu.data_write(0x7A, 0xC0, bus).unwrap();
+            // ADPS = 0 (/2): the first conversion is 25 ADC clocks, 50 cycles.
+            cpu.cycles += 64;
+            cpu.mega_adc_poll(bus).unwrap();
             u16::from(cpu.adch) << 8 | u16::from(cpu.adcl)
         };
         assert_eq!(convert(&mut cpu, &mut bus, false, 0), 204, "A0 = ADC0");
