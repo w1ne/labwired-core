@@ -788,6 +788,21 @@ pub fn try_build(
                 m("rcc_apb1enr_mask"),
                 m("rcc_apb2enr_mask"),
             );
+            // F1 ENR writable masks are per-density. YAML: `config: {
+            // rcc_ahbenr_mask, rcc_apb1enr_mask, rcc_apb2enr_mask }`; an
+            // absent key keeps the medium-density default.
+            let f1 = |k: &str| -> Option<u32> {
+                p_cfg
+                    .config
+                    .get(k)
+                    .and_then(|v| v.as_u64())
+                    .map(|n| n as u32)
+            };
+            rcc.set_f1_enr_masks(
+                f1("rcc_ahbenr_mask"),
+                f1("rcc_apb1enr_mask"),
+                f1("rcc_apb2enr_mask"),
+            );
             // F42x/F446 PLLSAI + DCKCFGR/DCKCFGR2 (`pllsai: true`).
             if p_cfg.config.get("pllsai").and_then(|v| v.as_bool()) == Some(true) {
                 rcc.set_f4_pllsai(true);
