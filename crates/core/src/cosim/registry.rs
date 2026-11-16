@@ -29,6 +29,26 @@ pub fn build_cosim_adapter_with_base(
             let model = model.to_string_lossy();
             let (program, args) = external_process_command(&model);
             let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+            if wants_shm(config)? {
+                let mut in_names: Vec<String> = config.inputs.keys().cloned().collect();
+                let mut out_names: Vec<String> = config.outputs.keys().cloned().collect();
+                in_names.sort();
+                out_names.sort();
+                let handshake_ms = config
+                    .config
+                    .get("shm_handshake_ms")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(1000)
+                    .clamp(10, 30_000);
+                return Ok(Box::new(ExternalProcessCosimAdapter::spawn_shm(
+                    &program,
+                    &arg_refs,
+                    Default::default(),
+                    &in_names,
+                    &out_names,
+                    std::time::Duration::from_millis(handshake_ms),
+                )?));
+            }
             Ok(Box::new(ExternalProcessCosimAdapter::spawn(
                 &program, &arg_refs,
             )?))
@@ -68,6 +88,24 @@ pub fn validate_analog_models(configs: &[CosimModelConfig], base_dir: &Path) -> 
         }
     }
     issues
+}
+
+/// `config.transport: shm` (or `protocol: shm`) offers the shared-memory
+/// transport; anything else, or nothing, is the JSONL pipe protocol.
+fn wants_shm(config: &CosimModelConfig) -> SimResult<bool> {
+    let value = config
+        .config
+        .get("transport")
+        .or_else(|| config.config.get("protocol"));
+    match value.map(Value::as_str) {
+        None => Ok(false),
+        Some(Some("jsonl")) => Ok(false),
+        Some(Some("shm")) => Ok(true),
+        _ => Err(SimulationError::Other(format!(
+            "co-sim model '{}': config.transport must be `jsonl` or `shm`",
+            config.id
+        ))),
+    }
 }
 
 fn resolve_model_path(model: &str, base_dir: &Path) -> PathBuf {
@@ -139,16 +177,79 @@ pub struct CosimRunnerModel {
     config: CosimModelConfig,
     adapter: Box<dyn CosimAdapter>,
     next_step_ns: u64,
+    /// `(model input name, store path)`, resolved once from the manifest map.
+    in_routes: Vec<(String, String)>,
+    /// `(model output name, store path)`, sorted by model output name so the
+    /// last of two outputs routed to one path wins, as it always has.
+    out_routes: Vec<(String, String)>,
+    /// Reused per step: the routed inputs handed to the adapter.
+    inputs_buf: CosimSignals,
+    /// Reused per step: the adapter's outputs.
+    outputs_buf: CosimSignals,
 }
 
 impl CosimRunnerModel {
     pub fn new(config: CosimModelConfig, adapter: Box<dyn CosimAdapter>) -> Self {
         let next_step_ns = config.step_ns;
+        let in_routes = config
+            .inputs
+            .iter()
+            .map(|(name, path)| (name.clone(), path.clone()))
+            .collect();
+        let mut out_routes: Vec<(String, String)> = config
+            .outputs
+            .iter()
+            .map(|(name, path)| (name.clone(), path.clone()))
+            .collect();
+        out_routes.sort();
         Self {
             config,
             adapter,
             next_step_ns,
+            in_routes,
+            out_routes,
+            inputs_buf: CosimSignals::new(),
+            outputs_buf: CosimSignals::new(),
         }
+    }
+
+    /// Fill `inputs_buf` from the store: no allocation once the buffer holds
+    /// every routed name.
+    fn gather_inputs(&mut self, signals: &CosimSignals) {
+        for (model_signal, source_path) in &self.in_routes {
+            match signals.get(source_path.as_str()) {
+                Some(value) => match self.inputs_buf.get_mut(model_signal.as_str()) {
+                    Some(slot) => slot.clone_from(value),
+                    None => {
+                        self.inputs_buf.insert(model_signal.clone(), value.clone());
+                    }
+                },
+                None => {
+                    self.inputs_buf.remove(model_signal.as_str());
+                }
+            }
+        }
+    }
+
+    /// Write the adapter's routed outputs into the store. When `record` is
+    /// set, also return them keyed by store path.
+    fn scatter_outputs(&self, signals: &mut CosimSignals, record: bool) -> Option<CosimSignals> {
+        let mut routed = record.then(CosimSignals::new);
+        for (model_signal, target_path) in &self.out_routes {
+            let Some(value) = self.outputs_buf.get(model_signal.as_str()) else {
+                continue;
+            };
+            match signals.get_mut(target_path.as_str()) {
+                Some(slot) => slot.clone_from(value),
+                None => {
+                    signals.insert(target_path.clone(), value.clone());
+                }
+            }
+            if let Some(routed) = routed.as_mut() {
+                routed.insert(target_path.clone(), value.clone());
+            }
+        }
+        routed
     }
 }
 
@@ -168,6 +269,11 @@ pub struct CosimRoutedModelStep {
 pub struct CosimRunner {
     models: Vec<CosimRunnerModel>,
     analog_trace: AnalogTraceRegistry,
+    /// Whether [`Self::step_until_with_signals`] builds the per-step report.
+    /// Off, the step makes no allocation; the signal store is still updated.
+    record_routed: bool,
+    /// Indices of the models due at the boundary being stepped.
+    due_scratch: Vec<usize>,
 }
 
 impl CosimRunner {
@@ -186,7 +292,17 @@ impl CosimRunner {
         Self {
             models,
             analog_trace,
+            record_routed: true,
+            due_scratch: Vec::new(),
         }
+    }
+
+    /// Choose whether [`Self::step_until_with_signals`] returns the per-step
+    /// routed outputs (default) or an empty list. The signal store receives the
+    /// same values either way; skipping the report removes its allocations from
+    /// the hot path for a caller that never reads it.
+    pub fn set_record_routed(&mut self, record: bool) {
+        self.record_routed = record;
     }
 
     pub fn from_configs(configs: &[CosimModelConfig]) -> SimResult<Self> {
@@ -303,23 +419,25 @@ impl CosimRunner {
     /// Read the declared initial operating point before any world CPU runs.
     /// This does not advance model time or consume the first scheduled step.
     pub(crate) fn prime_with_signals(&mut self, signals: &mut CosimSignals) -> SimResult<()> {
-        let snapshot = signals.clone();
-        let mut pending = Vec::new();
-        for (index, model) in self.models.iter_mut().enumerate() {
+        // Every model reads the store as it was before any of them answered;
+        // outputs are written back only after all have stepped.
+        for model in self.models.iter_mut() {
             if model.next_step_ns != model.config.step_ns {
                 return Err(SimulationError::Other(
                     "co-sim initialization after time advanced".to_string(),
                 ));
             }
-            let result = model.adapter.step(CosimStep {
-                time_ns: 0,
-                dt_ns: 0,
-                inputs: routed_inputs(&model.config, &snapshot),
-            })?;
-            pending.push((index, result.outputs));
+            model.gather_inputs(signals);
+            let CosimRunnerModel {
+                adapter,
+                inputs_buf,
+                outputs_buf,
+                ..
+            } = model;
+            adapter.step_into(0, 0, inputs_buf, outputs_buf)?;
         }
-        for (index, outputs) in pending {
-            route_outputs(&self.models[index].config, outputs, signals);
+        for model in &self.models {
+            model.scatter_outputs(signals, false);
         }
         Ok(())
     }
@@ -331,7 +449,9 @@ impl CosimRunner {
     ) -> SimResult<Vec<CosimModelStep>> {
         let mut results = Vec::new();
         while let Some(step_time) = next_due_time(&self.models, time_ns) {
-            for index in due_models_at(&self.models, step_time) {
+            let mut due = Vec::new();
+            due_models_at(&self.models, step_time, &mut due);
+            for index in due {
                 let model = &mut self.models[index];
                 let next = next_model_time(model)?;
                 let result = model.adapter.step(CosimStep {
@@ -355,28 +475,41 @@ impl CosimRunner {
         signals: &mut CosimSignals,
     ) -> SimResult<Vec<CosimRoutedModelStep>> {
         let mut results = Vec::new();
-        while let Some(step_time) = next_due_time(&self.models, time_ns) {
-            let due = due_models_at(&self.models, step_time);
-            let snapshot = signals.clone();
-            let mut pending = Vec::with_capacity(due.len());
-            for index in due {
-                let model = &mut self.models[index];
-                let next = next_model_time(model)?;
-                let inputs = routed_inputs(&model.config, &snapshot);
-                let result = model.adapter.step(CosimStep {
-                    time_ns: step_time,
-                    dt_ns: model.config.step_ns,
-                    inputs,
-                })?;
-                pending.push((index, model.config.id.clone(), result.outputs));
-                model.next_step_ns = next;
+        let mut due = std::mem::take(&mut self.due_scratch);
+        let outcome = (|| {
+            while let Some(step_time) = next_due_time(&self.models, time_ns) {
+                due_models_at(&self.models, step_time, &mut due);
+                // Outputs are written back only after every due model has
+                // stepped, so each reads the store as it stood before any of
+                // them answered; no snapshot copy is needed for that.
+                for &index in &due {
+                    let model = &mut self.models[index];
+                    let next = next_model_time(model)?;
+                    model.gather_inputs(signals);
+                    let dt_ns = model.config.step_ns;
+                    let CosimRunnerModel {
+                        adapter,
+                        inputs_buf,
+                        outputs_buf,
+                        ..
+                    } = model;
+                    adapter.step_into(step_time, dt_ns, inputs_buf, outputs_buf)?;
+                    model.next_step_ns = next;
+                }
+                for &index in &due {
+                    let model = &self.models[index];
+                    if let Some(outputs) = model.scatter_outputs(signals, self.record_routed) {
+                        results.push(CosimRoutedModelStep {
+                            model_id: model.config.id.clone(),
+                            outputs,
+                        });
+                    }
+                }
             }
-            for (index, model_id, model_outputs) in pending {
-                let outputs = route_outputs(&self.models[index].config, model_outputs, signals);
-                results.push(CosimRoutedModelStep { model_id, outputs });
-            }
-        }
-        Ok(results)
+            Ok(())
+        })();
+        self.due_scratch = due;
+        outcome.map(|()| results)
     }
 }
 
@@ -388,12 +521,14 @@ fn next_due_time(models: &[CosimRunnerModel], time_ns: u64) -> Option<u64> {
         .min()
 }
 
-fn due_models_at(models: &[CosimRunnerModel], time_ns: u64) -> Vec<usize> {
-    models
-        .iter()
-        .enumerate()
-        .filter_map(|(index, model)| (model.next_step_ns == time_ns).then_some(index))
-        .collect()
+fn due_models_at(models: &[CosimRunnerModel], time_ns: u64, due: &mut Vec<usize>) {
+    due.clear();
+    due.extend(
+        models
+            .iter()
+            .enumerate()
+            .filter_map(|(index, model)| (model.next_step_ns == time_ns).then_some(index)),
+    );
 }
 
 fn next_model_time(model: &CosimRunnerModel) -> SimResult<u64> {
@@ -409,29 +544,4 @@ fn next_model_time(model: &CosimRunnerModel) -> SimResult<u64> {
         .ok_or_else(|| {
             SimulationError::Other(format!("co-sim model {} time overflow", model.config.id))
         })
-}
-
-fn routed_inputs(config: &CosimModelConfig, signals: &CosimSignals) -> CosimSignals {
-    let mut inputs = CosimSignals::new();
-    for (model_signal, source_path) in &config.inputs {
-        if let Some(value) = signals.get(source_path) {
-            inputs.insert(model_signal.clone(), value.clone());
-        }
-    }
-    inputs
-}
-
-fn route_outputs(
-    config: &CosimModelConfig,
-    outputs: CosimSignals,
-    signals: &mut CosimSignals,
-) -> CosimSignals {
-    let mut routed = CosimSignals::new();
-    for (model_signal, value) in outputs {
-        if let Some(target_path) = config.outputs.get(&model_signal) {
-            signals.insert(target_path.clone(), value.clone());
-            routed.insert(target_path.clone(), value);
-        }
-    }
-    routed
 }
