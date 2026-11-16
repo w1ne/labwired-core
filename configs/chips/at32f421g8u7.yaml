@@ -161,7 +161,7 @@ peripherals:
     config:
       profile: stm32g0
       channels: 5
-      requests: { usart1_tx: 2, usart1_rx: 3, usart2_tx: 4, usart2_rx: 5 }
+      requests: { adc1: 1, usart1_tx: 2, usart1_rx: 3, usart2_tx: 4, usart2_rx: 5 }
     clock: { reg: ahben, bit: 0 }
   - id: adc1
     type: adc
