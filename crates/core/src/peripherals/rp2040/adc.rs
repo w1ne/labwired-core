@@ -8,7 +8,8 @@
 //!
 //! A 12-bit SAR converter with five inputs — 0..3 are GPIO26..29, input 4 is
 //! the on-die temperature sensor — an 8-entry sample FIFO, a round-robin
-//! sequencer and one interrupt, `ADC_IRQ_FIFO` (NVIC 22). Nine registers:
+//! sequencer and one interrupt, `ADC_IRQ_FIFO` (NVIC 22 on the RP2040, 35 on
+//! the RP2350 — taken from the descriptor `irq:`). Nine registers:
 //! `CS`, `RESULT`, `FCS`, `FIFO`, `DIV`, `INTR`, `INTE`, `INTF`, `INTS`.
 //! Offsets, field positions and the interrupt number are taken from the
 //! vendored SVD (`tests/fixtures/real_world/rp2040.svd`).
@@ -107,7 +108,9 @@ const FCS_LEVEL_SHIFT: u32 = 16;
 const FCS_THRESH_SHIFT: u32 = 24;
 const FCS_THRESH_MASK: u32 = 0xF;
 
-/// `ADC_IRQ_FIFO` (SVD interrupt table).
+/// RP2040 `ADC_IRQ_FIFO` (RP2040 datasheet 2.3.2) — the default when the
+/// descriptor names no line. The RP2350 line is 35 (RP2350 datasheet 3.2,
+/// interrupt table) and arrives through [`Rp2040Adc::with_irq`].
 const ADC_IRQ_FIFO: u32 = 22;
 
 /// Inputs 0..3 (GPIO26..29) plus the on-die temperature sensor on input 4.
@@ -178,6 +181,8 @@ pub struct Rp2040Adc {
     clock: Option<CycleClock>,
     /// Bumped each arm so stale conversion events die on arrival.
     arm_seq: u32,
+    /// NVIC line of `ADC_IRQ_FIFO`.
+    irq: u32,
 }
 
 impl Default for Rp2040Adc {
@@ -205,7 +210,14 @@ impl Rp2040Adc {
             inputs_uv,
             clock: None,
             arm_seq: 0,
+            irq: ADC_IRQ_FIFO,
         }
+    }
+
+    /// Raise `ADC_IRQ_FIFO` on `irq` (the chip descriptor line).
+    pub fn with_irq(mut self, irq: u32) -> Self {
+        self.irq = irq;
+        self
     }
 
     crate::cycle_clock::scheduler_mode!();
@@ -230,7 +242,7 @@ impl Rp2040Adc {
                 self.convert();
             }
         }
-        let explicit_irqs = (self.ints() != 0).then(|| vec![ADC_IRQ_FIFO]);
+        let explicit_irqs = (self.ints() != 0).then(|| vec![self.irq]);
         PeripheralTickResult {
             explicit_irqs,
             ..Default::default()
