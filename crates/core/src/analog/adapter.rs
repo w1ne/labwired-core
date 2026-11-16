@@ -61,7 +61,9 @@ use std::sync::{Arc, Mutex};
 
 use serde_yaml::Value;
 
-use crate::cosim::{CosimAdapter, CosimInputKind, CosimSignalValue, CosimStep, CosimStepResult};
+use crate::cosim::{
+    CosimAdapter, CosimInputKind, CosimSignalValue, CosimSignals, CosimStep, CosimStepResult,
+};
 use crate::{SimResult, SimulationError};
 
 use super::mna::Solver;
@@ -501,7 +503,8 @@ impl AnalogCosimAdapter {
     }
 
     fn apply_input(&mut self, name: &str, value: &CosimSignalValue) -> SimResult<()> {
-        let Some(target) = self.inputs.get(name).cloned() else {
+        let vdd = self.vdd;
+        let Some(target) = self.inputs.get(name) else {
             // Routed into the model but not a circuit source: ignore, exactly
             // like the ngspice wrapper. Manifests routinely route one signal
             // bundle into several models.
@@ -509,35 +512,39 @@ impl AnalogCosimAdapter {
         };
         match target {
             InputTarget::VoltageSource(index) => {
-                let volts = self.numeric(name, value, "volts")?;
+                let index = *index;
+                let volts = numeric(vdd, name, value, "volts")?;
                 self.solver.set_voltage_source(index, volts);
             }
             InputTarget::CurrentSource(index) => {
+                let index = *index;
                 if matches!(value, CosimSignalValue::Bool(_)) {
                     return Err(SimulationError::Other(format!(
                         "analog input `{name}` drives a current source; a boolean has no \
                          current to map to — route a number in amps"
                     )));
                 }
-                let amps = self.numeric(name, value, "amps")?;
+                let amps = numeric(vdd, name, value, "amps")?;
                 self.solver.set_current_source(index, amps);
             }
             InputTarget::Resistance(index) => {
+                let index = *index;
                 if matches!(value, CosimSignalValue::Bool(_)) {
                     return Err(SimulationError::Other(format!(
                         "analog input `{name}` drives a resistor; a boolean has no resistance in ohms"
                     )));
                 }
-                let ohms = self.numeric(name, value, "ohms")?;
+                let ohms = numeric(vdd, name, value, "ohms")?;
                 self.solver.set_resistance(index, ohms).map_err(|error| {
                     SimulationError::Other(format!("analog input `{name}`: {error}"))
                 })?;
             }
             InputTarget::Thermistor(index, model) => {
+                let index = *index;
                 if matches!(value, CosimSignalValue::Bool(_)) {
                     return Err(SimulationError::Other(format!("analog input `{name}` drives a thermistor; temperature must be numeric Celsius")));
                 }
-                let celsius = self.numeric(name, value, "Celsius")?;
+                let celsius = numeric(vdd, name, value, "Celsius")?;
                 let ohms = model.resistance(celsius).map_err(|error| {
                     SimulationError::Other(format!("analog input `{name}`: {error}"))
                 })?;
@@ -546,13 +553,14 @@ impl AnalogCosimAdapter {
                 })?;
             }
             InputTarget::TemperatureDependentResistor(index) => {
+                let index = *index;
                 if matches!(value, CosimSignalValue::Bool(_)) {
                     return Err(SimulationError::Other(format!(
                         "analog input `{name}` drives a resistor temperature; a boolean has no \
                          temperature to map to — route a number in degrees Celsius"
                     )));
                 }
-                let celsius = self.numeric(name, value, "degrees Celsius")?;
+                let celsius = numeric(vdd, name, value, "degrees Celsius")?;
                 if !self.solver.set_resistor_temperature(index, celsius) {
                     return Err(SimulationError::Other(format!(
                         "analog input `{name}` is not a finite resistor temperature above absolute zero"
@@ -565,65 +573,82 @@ impl AnalogCosimAdapter {
                     other => {
                         // A numeric control is read as a logic level against
                         // half of Vdd, so an analog signal can gate a switch.
-                        self.numeric(name, other, "volts")? >= self.vdd / 2.0
+                        numeric(vdd, name, other, "volts")? >= vdd / 2.0
                     }
                 };
-                for index in indices {
+                for &index in indices {
                     self.solver.set_switch(index, closed);
                 }
             }
         }
         Ok(())
     }
+}
 
-    fn numeric(&self, name: &str, value: &CosimSignalValue, unit: &str) -> SimResult<f64> {
-        match value {
-            CosimSignalValue::Bool(true) => Ok(self.vdd),
-            CosimSignalValue::Bool(false) => Ok(0.0),
-            CosimSignalValue::F64(value) => Ok(*value),
-            CosimSignalValue::I64(value) => Ok(*value as f64),
-            CosimSignalValue::Text(text) => text.trim().parse::<f64>().map_err(|_| {
-                SimulationError::Other(format!(
-                    "analog input `{name}`: cannot read `{text}` as {unit}"
-                ))
-            }),
-        }
+fn numeric(vdd: f64, name: &str, value: &CosimSignalValue, unit: &str) -> SimResult<f64> {
+    match value {
+        CosimSignalValue::Bool(true) => Ok(vdd),
+        CosimSignalValue::Bool(false) => Ok(0.0),
+        CosimSignalValue::F64(value) => Ok(*value),
+        CosimSignalValue::I64(value) => Ok(*value as f64),
+        CosimSignalValue::Text(text) => text.trim().parse::<f64>().map_err(|_| {
+            SimulationError::Other(format!(
+                "analog input `{name}`: cannot read `{text}` as {unit}"
+            ))
+        }),
     }
 }
 
 impl CosimAdapter for AnalogCosimAdapter {
     fn step(&mut self, step: CosimStep) -> SimResult<CosimStepResult> {
-        for (name, value) in &step.inputs {
+        let mut outputs = BTreeMap::new();
+        self.step_into(step.time_ns, step.dt_ns, &step.inputs, &mut outputs)?;
+        Ok(CosimStepResult { outputs })
+    }
+
+    fn step_into(
+        &mut self,
+        time_ns: u64,
+        dt_ns: u64,
+        inputs: &CosimSignals,
+        outputs: &mut CosimSignals,
+    ) -> SimResult<()> {
+        for (name, value) in inputs {
             self.apply_input(name, value)?;
         }
 
         // `time_ns` is the END of the step. A boundary already passed (a model
         // whose `step_ns` divides another's) re-reads the probes rather than
         // integrating backwards.
-        if step.time_ns > self.time_ns {
-            let span = (step.time_ns - self.time_ns) as f64 * 1e-9;
+        if time_ns > self.time_ns {
+            let span = (time_ns - self.time_ns) as f64 * 1e-9;
             let h = span / f64::from(self.substeps);
             for _ in 0..self.substeps {
                 self.solver
                     .advance(h)
                     .map_err(|err| SimulationError::Other(err.to_string()))?;
             }
-            self.time_ns = step.time_ns;
+            self.time_ns = time_ns;
         }
 
         // A world reads the declared operating point before its first CPU
         // instruction. That initial read is not an integration step and must
         // not duplicate the t=0 trace row or advance its step counter.
-        if step.time_ns != 0 || step.dt_ns != 0 || self.time_ns != 0 {
+        if time_ns != 0 || dt_ns != 0 || self.time_ns != 0 {
             self.step_index += 1;
             self.record_sample();
         }
 
-        let mut outputs = BTreeMap::new();
         for (name, probe) in &self.probes {
-            outputs.insert(name.clone(), CosimSignalValue::F64(self.read_probe(probe)));
+            let value = CosimSignalValue::F64(self.read_probe(probe));
+            match outputs.get_mut(name.as_str()) {
+                Some(slot) => *slot = value,
+                None => {
+                    outputs.insert(name.clone(), value);
+                }
+            }
         }
-        Ok(CosimStepResult { outputs })
+        Ok(())
     }
 
     fn input_initial_value(&self, name: &str) -> Option<CosimSignalValue> {

@@ -22,4 +22,5 @@ mod cosim_canonical_basket;
 mod cosim_contract;
 mod cosim_external_process_bounds;
 mod cosim_pin_routing;
+mod cosim_runner_hot_path;
 mod cosim_session_advance;

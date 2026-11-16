@@ -373,6 +373,10 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         }
         None => None,
     };
+    if let Some(session) = cosim.as_mut() {
+        // The per-step routed report only feeds the debug trace below.
+        session.set_record_routed(tracing::enabled!(target: "cosim", tracing::Level::DEBUG));
+    }
     if let Some(session) = &cosim {
         // An unresolvable path fails the run rather than degrading it. The
         // whole point of routing a pin into a model is that the model sees the
