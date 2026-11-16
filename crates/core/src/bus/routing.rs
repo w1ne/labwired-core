@@ -372,6 +372,12 @@ impl SystemBus {
             .enumerate()
             .filter_map(|(index, p)| p.dev.uses_scheduler().then_some(index))
             .collect();
+        self.exti_line_driver_indices = self
+            .peripherals
+            .iter()
+            .enumerate()
+            .filter_map(|(index, p)| p.dev.drives_exti_lines().then_some(index))
+            .collect();
         self.peripheral_hint.set(None);
         self.last_route.set(None);
         self.prev_route.set(None);

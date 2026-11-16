@@ -531,6 +531,10 @@ pub struct SystemBus {
     /// `rebuild_peripheral_ranges` so IRQ-level re-derivation on MMIO write
     /// can poll only those models (not the full bus).
     scheduler_driver_indices: Vec<usize>,
+    /// Indices of peripherals that drive internal EXTI lines
+    /// ([`crate::Peripheral::drives_exti_lines`]). Empty on most chips, which
+    /// keeps the per-write delivery check to one length test.
+    exti_line_driver_indices: Vec<usize>,
     /// Retained scratch for `poll_scheduler_matrix_sources`: each scheduler-driven
     /// peripheral fills this buffer via `Peripheral::matrix_irq_sources_into`
     /// instead of returning a freshly-allocated `Vec` per poll. Cleared before

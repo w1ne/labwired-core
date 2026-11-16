@@ -6,6 +6,7 @@
 
 pub mod adc;
 pub mod afio;
+pub mod analog_comparator;
 pub mod apollo4;
 pub mod armv7;
 pub mod avr_adc;

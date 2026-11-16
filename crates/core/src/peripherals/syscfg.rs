@@ -261,6 +261,144 @@ impl Peripheral for Stm32L0Syscfg {
     }
 }
 
+/// AT32F421 system configuration controller (RM_AT32F421 V2.05 §7.2):
+/// `SCFG_CFG1` at 0x00 and the `SCFG_EXINTC1..4` line-source mux at
+/// 0x08..0x14, the STM32F0 SYSCFG placement. The comparator that shares the
+/// 1 KiB SCFG/CMP window from 0x1C is its own peripheral
+/// ([`crate::peripherals::analog_comparator`]).
+///
+/// `CFG1.MEM_MAP_SEL` reads 00 (boot from main flash, the only boot this
+/// model has). The DMA request remaps (bits 12:8), the infrared output
+/// controls (7:5) and the PA11/PA12 remap (4) are refused when set: the DMA
+/// request map is fixed at its no-remap routing and IR_OUT is not modelled.
+/// EXINTCx select the port per line (0 = A, 1 = B, 2 = C, 5 = F).
+#[derive(Debug, Default, serde::Serialize)]
+pub struct At32F421Scfg {
+    cfg1: u32,
+    exintc: [u32; 4],
+}
+
+impl At32F421Scfg {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    fn read_reg(&self, offset: u64) -> SimResult<u32> {
+        Ok(match offset {
+            0x00 => self.cfg1,
+            0x08 => self.exintc[0],
+            0x0C => self.exintc[1],
+            0x10 => self.exintc[2],
+            0x14 => self.exintc[3],
+            _ => {
+                return Err(crate::SimulationError::Other(format!(
+                    "AT32F421 SCFG: no register at {offset:#x}"
+                )))
+            }
+        })
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        match offset {
+            0x00 => {
+                if value & 0x1FF0 != 0 {
+                    return Err(crate::SimulationError::Other(format!(
+                        "AT32F421 SCFG: CFG1 bits {:#x} (DMA/IR/PA11_12 remap) are not modelled",
+                        value & 0x1FF0
+                    )));
+                }
+                self.cfg1 = 0;
+            }
+            0x08 | 0x0C | 0x10 | 0x14 => {
+                self.exintc[((offset - 0x08) / 4) as usize] = value & 0xFFFF;
+            }
+            _ => self.read_reg(offset).map(|_| ())?,
+        }
+        Ok(())
+    }
+}
+
+impl Peripheral for At32F421Scfg {
+    fn read(&self, offset: u64) -> SimResult<u8> {
+        let reg = self.read_reg(offset & !3)?;
+        Ok(((reg >> ((offset % 4) * 8)) & 0xFF) as u8)
+    }
+
+    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        let reg_offset = offset & !3;
+        let shift = (offset % 4) * 8;
+        let mut reg = self.read_reg(reg_offset)?;
+        reg &= !(0xFF << shift);
+        reg |= u32::from(value) << shift;
+        self.write_reg(reg_offset, reg)
+    }
+
+    fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        self.read_reg(offset & !3)
+    }
+
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        self.write_reg(offset & !3, value)
+    }
+
+    fn exti_line_source(&self, line: u8) -> Option<u8> {
+        (line < 16).then(|| {
+            let word = self.exintc[usize::from(line / 4)];
+            ((word >> (u32::from(line % 4) * 4)) & 0xF) as u8
+        })
+    }
+
+    fn on_node_reset(&mut self) {
+        *self = Self::new();
+    }
+
+    fn on_system_reset(&mut self) {
+        *self = Self::new();
+    }
+
+    /// A configuration register bank: no `tick`, nothing to walk.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn snapshot(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
+#[cfg(test)]
+mod at32_tests {
+    use super::At32F421Scfg;
+    use crate::Peripheral;
+
+    #[test]
+    fn exintc_selects_the_port_per_line() {
+        let mut s = At32F421Scfg::new();
+        assert_eq!(s.exti_line_source(15), Some(0), "reset: port A");
+        // EXINTC4: EXINT15 -> PB15.
+        s.write_u32(0x14, 1 << 12).unwrap();
+        assert_eq!(s.exti_line_source(15), Some(1));
+        // EXINTC1: EXINT1 -> PF1 (0101).
+        s.write_u32(0x08, 5 << 4).unwrap();
+        assert_eq!(s.exti_line_source(1), Some(5));
+        assert_eq!(s.exti_line_source(21), None);
+    }
+
+    #[test]
+    fn remaps_and_holes_refuse() {
+        let mut s = At32F421Scfg::new();
+        assert!(s.write_u32(0x00, 1 << 8).is_err(), "ADC DMA remap");
+        assert!(s.write_u32(0x00, 0x3).is_ok(), "MEM_MAP_SEL is read-only");
+        assert_eq!(s.read_u32(0x00).unwrap(), 0);
+        assert!(s.read_u32(0x04).is_err());
+        assert!(s.write_u32(0x18, 0).is_err());
+        s.write_u32(0x0C, 0xFFFF_FFFF).unwrap();
+        assert_eq!(s.read_u32(0x0C).unwrap(), 0xFFFF);
+        s.on_node_reset();
+        assert_eq!(s.read_u32(0x0C).unwrap(), 0);
+    }
+}
+
 #[cfg(test)]
 mod l0_tests {
     use super::Stm32L0Syscfg;
