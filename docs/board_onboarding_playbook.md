@@ -4,6 +4,12 @@ Add a **new MCU or board** to LabWired: chip YAML, system YAML, smoke firmware, 
 
 For **sensors, SPI chips, and actuators**, start with [Onboard a part](howto/onboard-part.md) instead.
 
+For an existing KiCad design, the [PCB import and circuit simulation guide](https://labwired.com/kicad-pcb-simulation/)
+explains which source artifacts can be imported and where component behavior
+models remain missing. Import or catalog mapping alone is not a whole-board
+simulation result; check the pin/net mapping and run observable positive and
+negative controls before claiming verification.
+
 ---
 
 ## Gold reference
