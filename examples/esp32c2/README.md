@@ -30,13 +30,14 @@ This writes `tests/fixtures/esp32c2-smoke.elf`.
 
 ## esp-hal examples
 
-Two esp-hal 1.2 applications run on the same descriptor, on the vendored mask
+Three esp-hal 1.2 applications run on the same descriptor, on the vendored mask
 ROM (the fast boot replays the ROM `.data` unpack):
 
 | Example | Smoke | What it shows |
 | :--- | :--- | :--- |
 | `esp-hal/` | `esp-hal-smoke.yaml` | `esp_hal::init`, UART0 console, GPIO8 output, `Delay` on SYSTIMER |
 | `esp-hal-irq/` | `esp-hal-irq-smoke.yaml` | `#[handler]` for a FROM_CPU software interrupt and a 1 ms SYSTIMER alarm |
+| `esp-hal-gpio-irq/` | `esp-hal-gpio-irq-smoke.yaml` | `Io` `#[handler]` for GPIO2 rising/any-edge interrupts on a self-driven pad, and none after `unlisten()` |
 
 ```sh
 labwired test --script examples/esp32c2/esp-hal-irq-smoke.yaml

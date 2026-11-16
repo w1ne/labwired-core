@@ -264,19 +264,19 @@ fn esp32c2_from_cpu_doorbell_reaches_its_cpu_line_and_intr_status() {
 }
 
 const ESP_HAL_IRQ_FIXTURE: &str = "tests/fixtures/esp32c2-esp-hal-irq.elf";
+const ESP_HAL_GPIO_IRQ_FIXTURE: &str = "tests/fixtures/esp32c2-esp-hal-gpio-irq.elf";
 
-/// Runs the esp-hal interrupt fixture (examples/esp32c2/esp-hal-irq) with the
-/// C2 fast-boot CPU state and ROM unpack, with or without the interrupt matrix
-/// armed. Returns the UART0 text once the app prints its verdict or `steps`
-/// run out.
-fn run_esp_hal_irq(arm_matrix: bool, steps: usize) -> String {
+/// Runs an esp-hal interrupt fixture (examples/esp32c2/esp-hal-irq or
+/// esp-hal-gpio-irq) with the C2 fast-boot CPU state and ROM unpack, with or
+/// without the interrupt matrix armed. Returns the UART0 text once the app
+/// prints its `irq PASS`/`irq FAIL` verdict or `steps` run out.
+fn run_esp_hal_irq(fixture: &str, arm_matrix: bool, steps: usize) -> String {
     let chip = descriptor();
     let mut bus =
         SystemBus::from_config(&chip, &SystemManifest::default()).expect("ESP32-C2 peripherals");
     let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     bus.attach_uart_tx_sink(sink.clone(), false);
-    let image =
-        labwired_loader::load_elf(&root().join(ESP_HAL_IRQ_FIXTURE)).expect("esp-hal irq ELF");
+    let image = labwired_loader::load_elf(&root().join(fixture)).expect("esp-hal irq ELF");
     let mut cpu = configure_riscv(&mut bus);
     labwired_core::boot::esp32c2_rom::prepare_fast_boot_cpu(&mut cpu);
     let mut machine = Machine::new(cpu, bus);
@@ -293,7 +293,7 @@ fn run_esp_hal_irq(arm_matrix: bool, steps: usize) -> String {
                 .unwrap_or_else(|e| panic!("step {chunk}: {e:?}; UART {:?}", uart()));
         }
         let text = uart();
-        if text.contains("LW-C2 irq PASS") || text.contains("LW-C2 irq FAIL") {
+        if text.contains("irq PASS\n") || text.contains("irq FAIL\n") {
             return text;
         }
     }
@@ -304,7 +304,7 @@ fn run_esp_hal_irq(arm_matrix: bool, steps: usize) -> String {
 fn esp32c2_esp_hal_software_interrupt_and_systimer_alarm_handlers_run() {
     // Three FROM_CPU raises run the handler three times; a 1 ms periodic
     // SYSTIMER alarm fires 4..6 times during a 5 ms delay (5 measured).
-    let uart = run_esp_hal_irq(true, 4_000_000);
+    let uart = run_esp_hal_irq(ESP_HAL_IRQ_FIXTURE, true, 4_000_000);
     assert!(uart.contains("LW-C2 swi hits 3\n"), "{uart:?}");
     let alarms: u32 = uart
         .lines()
@@ -321,6 +321,27 @@ fn esp32c2_esp_hal_raise_without_matrix_routing_never_returns() {
     // Negative control: with the matrix not armed nothing mirrors the
     // doorbell into INTR_STATUS, so `SoftwareInterrupt::raise` spins on its
     // pending check and the app never gets past the boot line.
-    let uart = run_esp_hal_irq(false, 2_000_000);
+    let uart = run_esp_hal_irq(ESP_HAL_IRQ_FIXTURE, false, 2_000_000);
     assert_eq!(uart, "LW-C2 irq boot\n");
+}
+
+#[test]
+fn esp32c2_esp_hal_gpio_edge_interrupts_reach_the_io_handler() {
+    // GPIO2 drives its own input buffer. Three pulses with RisingEdge run the
+    // Io handler three times, two with AnyEdge four times, and two after
+    // unlisten not at all (GPIO_STATUS latches nothing without INT_TYPE).
+    let uart = run_esp_hal_irq(ESP_HAL_GPIO_IRQ_FIXTURE, true, 4_000_000);
+    assert!(uart.contains("LW-C2 rising hits 3\n"), "{uart:?}");
+    assert!(uart.contains("LW-C2 any-edge hits 4\n"), "{uart:?}");
+    assert!(uart.contains("LW-C2 unlistened hits 0\n"), "{uart:?}");
+    assert!(uart.contains("LW-C2 gpio-irq PASS"), "{uart:?}");
+}
+
+#[test]
+fn esp32c2_esp_hal_gpio_edges_without_matrix_routing_run_no_handler() {
+    // Negative control: GPIO_STATUS still latches, but with the matrix not
+    // armed source 13 never reaches a CPU line, so the handler count stays 0.
+    let uart = run_esp_hal_irq(ESP_HAL_GPIO_IRQ_FIXTURE, false, 4_000_000);
+    assert!(uart.contains("LW-C2 rising hits 0\n"), "{uart:?}");
+    assert!(uart.contains("LW-C2 gpio-irq FAIL"), "{uart:?}");
 }
