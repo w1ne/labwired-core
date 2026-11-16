@@ -992,6 +992,16 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: Some("avr_atmega2561::atmega2561_boots_and_prints"),
     },
+    // ATmega4809 (megaAVR 0-series, Arduino Nano Every). SIM-DERIVED from the
+    // Microchip ATDF: no silicon capture. Its Arduino matrix row and
+    // examples/arduino-nano-every/io-smoke.yaml run through PlatformIO and the
+    // CLI, not as a Rust test, so no behavior_gate resolves.
+    ChipConf {
+        name: "atmega4809",
+        yaml: "configs/chips/atmega4809.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
     // ATmega32U4 (Arduino Leonardo / Micro). SIM-DERIVED from DS7766: no
     // silicon capture. The USB device model is unit-tested in
     // cpu::avr::usb::tests and its Arduino matrix row runs through PlatformIO

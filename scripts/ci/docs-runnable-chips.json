@@ -455,6 +455,10 @@
       "expect": null,
       "note": "AVR runs through a system manifest, not `labwired run`. The script asserts the sketch's `nano-ok` banner on USART0 and that it then executes its whole step budget without faulting."
     },
+    "atmega4809": {
+      "how": "needs-build",
+      "why": "The ATmega4809 (Arduino Nano Every) model and its AVRxt core are newer than the installed v0.25.0 CLI this gate checks. The arduino-matrix arduino-nano-every row (L0/L1/L2/L5/L7) passes from source on stock ArduinoCore-megaavr; switch this row after a release carries the atmega4809 descriptor."
+    },
     "atmega328pb": {
       "how": "needs-build",
       "why": "The ATmega328PB USART1 model is being added to core; the released clean-install CLI does not contain it yet. Promote to a runnable smoke after a release includes this model."

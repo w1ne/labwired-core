@@ -128,6 +128,9 @@ jobs:
             esp32*)      platform=espressif32@7.0.1 ;;
             # The Leonardo row was measured on the same pin (ArduinoCore-avr 5.4.0).
             atmega328p|atmega2560|arduino-leonardo) platform=atmelavr@5.3.0 ;;
+            # The Nano Every row was measured on atmelmegaavr 1.10.0
+            # (ArduinoCore-megaavr 1.8.8).
+            arduino-nano-every) platform=atmelmegaavr@1.10.0 ;;
             # The Zero row was measured on atmelsam 9.0.0 (ArduinoCore-samd).
             arduino-zero) platform=atmelsam@9.0.0 ;;
             # The Teensy 4.1 row was measured on teensy 6.0.0 (Teensyduino 1.62).
