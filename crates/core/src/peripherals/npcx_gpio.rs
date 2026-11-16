@@ -147,6 +147,19 @@ impl crate::Peripheral for NpcxGpio {
         Ok(())
     }
 
+    /// Not in the per-cycle walk: no `tick()`, and no IRQ (the MIWU is not
+    /// modelled). With the default `true`, sixteen ports kept the bus from
+    /// ever skipping a WFI idle window on the NPCX9.
+    fn legacy_tick_active(&self) -> bool {
+        false
+    }
+
+    // Inert walk: pure register + pad bank; pin edges are surfaced by the bus
+    // GPIO-diff pass, not tick().
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     /// A node reset clears the registers. The external levels stay: those
     /// are the world's connections, not register state.
     fn on_node_reset(&mut self) {

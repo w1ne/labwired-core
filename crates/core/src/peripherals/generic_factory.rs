@@ -242,6 +242,9 @@ pub const MODEL_TYPES: &[&str] = &[
     // optional `apb2_hz` / `lfclk_hz`.
     "npcx_itim32",
     "npcx_itim64",
+    // Nuvoton NPCX MTC (`build_npcx_mtc`): IRQ from the yaml, optional
+    // `tick_hz`.
+    "npcx_mtc",
     // Nuvoton NPCX GPIO port (byte registers PDOUT..PLOCK_CTL). MUST be
     // listed: the fuzzy `contains("gpio")` fallback would map it onto the
     // STM32 GPIO register layout.
@@ -845,6 +848,27 @@ fn build_npcx_itim(ty: &str, p_cfg: &PeripheralConfig) -> anyhow::Result<Box<dyn
     )))
 }
 
+// Nuvoton NPCX MTC: IRQ required; optional `tick_hz` (default 1, as Renode).
+#[cold]
+#[inline(never)]
+fn build_npcx_mtc(p_cfg: &PeripheralConfig) -> anyhow::Result<Box<dyn Peripheral>> {
+    use crate::peripherals::npcx_mtc::{NpcxMtc, DEFAULT_TICK_HZ};
+    if let Some(k) = p_cfg.config.keys().find(|k| k.as_str() != "tick_hz") {
+        anyhow::bail!("npcx_mtc admits only `tick_hz`, not `{k}`");
+    }
+    if p_cfg.irq.is_none() {
+        anyhow::bail!("npcx_mtc '{}' needs an `irq`", p_cfg.id);
+    }
+    let hz = match p_cfg.config.get("tick_hz") {
+        None => DEFAULT_TICK_HZ,
+        Some(v) => v
+            .as_u64()
+            .filter(|&hz| hz > 0)
+            .ok_or_else(|| anyhow::anyhow!("npcx_mtc `tick_hz` must be a positive integer"))?,
+    };
+    Ok(Box::new(NpcxMtc::new(hz)))
+}
+
 // SAM D21 RTC: base from the chip yaml, fixed IRQ; `gclk_hz` declares GCLK_RTC.
 #[cold]
 #[inline(never)]
@@ -1226,6 +1250,7 @@ pub fn try_build(
         }
         "efm32s1_rtcc" => build_efm32_rtcc(p_cfg)?,
         "npcx_itim32" | "npcx_itim64" => build_npcx_itim(canonical_type, p_cfg)?,
+        "npcx_mtc" => build_npcx_mtc(p_cfg)?,
         "npcx_gpio" => Box::new(crate::peripherals::npcx_gpio::NpcxGpio::new()),
         "samd51_sercom_usart" => {
             use crate::peripherals::sam::sercom_usart::{SamSercomUsart, UsartPads};

@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="10" failures="0" errors="0" time="0.258456">
+<testsuite name="labwired" tests="11" failures="0" errors="0" time="0.004840">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="317a070b8d7d79453a51a977169e142e282efe8191ee2152dff11b77a1d1af39"/>
+    <property name="firmware_hash" value="85e272a65f6bcc187b74b65d78714b7a432538c3a21ad70253e81ecd2b9b46a4"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.258456">
+  <testcase classname="labwired" name="run" time="0.004840">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: NPCX9 UART1 smoke" time="0.000000">
   </testcase>
@@ -17,12 +17,14 @@
   </testcase>
   <testcase classname="labwired" name="assertion 5: uart_contains: uart irq fts=4 txp=4 txrel=4 frs=3 rx=3 hits=3 drained=3 ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 6: uart_contains: cr_uart2 tx" time="0.000000">
+  <testcase classname="labwired" name="assertion 6: uart_contains: mtc ttc=1 pt=1 irq=3 steps=1 ms1=1000 ms2=1000 ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 7: uart_contains: cr_uart3 tx" time="0.000000">
+  <testcase classname="labwired" name="assertion 7: uart_contains: cr_uart2 tx" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 8: uart_contains: cr_uart4 tx" time="0.000000">
+  <testcase classname="labwired" name="assertion 8: uart_contains: cr_uart3 tx" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 9: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 9: uart_contains: cr_uart4 tx" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 10: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>

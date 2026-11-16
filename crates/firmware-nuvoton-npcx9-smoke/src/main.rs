@@ -39,6 +39,13 @@
 //     takes the IRQ, the handler reads that byte from URBUF, the read drops
 //     the level (no re-pend) and RBF clears.
 //
+// Then the MTC at 0x400B7000 on NVIC 5 (Renode Timers.NPCX_MTC): TTC +0x00,
+// WTC +0x04 with PT bits 0..24, PTO bit 30 (W1C), WIE bit 31.
+// 16. TTC takes a written value; WTC holds a 25-bit PT with WIE clear and no
+//     PTO. With WIE and PT = TTC + 1, the core idles in WFI; three IRQs arrive
+//     on NVIC 5, each one TTC increment apart, and the handler clears PTO and
+//     moves PT on. ITIM64 at 1 MHz times the gaps: 1000 ms each.
+//
 // Bare-register, no HAL.
 
 #![no_std]
@@ -82,6 +89,18 @@ const UART_LINES: [(usize, u32); 4] = [
 /// Byte the RX IRQ handler read from UART2..4 (index 0..2).
 static UART_RX: [AtomicU32; 3] = [AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0)];
 static UART_IRQS: AtomicU32 = AtomicU32::new(0);
+
+const MTC: usize = 0x400B_7000;
+const MTC_LINE: u32 = 5;
+const TTC: usize = 0x00;
+const WTC: usize = 0x04;
+const WTC_WIE: u32 = 1 << 31;
+const WTC_PTO: u32 = 1 << 30;
+const PT_MASK: u32 = (1 << 25) - 1;
+static MTC_IRQS: AtomicU32 = AtomicU32::new(0);
+/// TTC and ITIM64 ITCNT (1 MHz down-count) at each MTC IRQ.
+static MTC_TTC: [AtomicU32; 3] = [AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0)];
+static MTC_US: [AtomicU32; 3] = [AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0)];
 
 const ITPRE: usize = 0x01;
 const ITCTS: usize = 0x04;
@@ -212,6 +231,20 @@ unsafe fn DefaultHandler(irqn: i16) {
             }
             SEEN.fetch_or(1 << n, Ordering::SeqCst);
         }
+    }
+    // MTC: record TTC and the ITIM64 time, clear PTO, move PT on.
+    if irqn as u32 == MTC_LINE {
+        let n = MTC_IRQS.fetch_add(1, Ordering::SeqCst) as usize;
+        let ttc = rd32(MTC, TTC);
+        if n < 3 {
+            MTC_TTC[n].store(ttc, Ordering::SeqCst);
+            MTC_US[n].store(rd32(ITIM64, ITCNT), Ordering::SeqCst);
+        }
+        wr32(
+            MTC,
+            WTC,
+            WTC_WIE | WTC_PTO | (ttc.wrapping_add(1) & PT_MASK),
+        );
     }
     // UART2..4 RX: read URBUF, as uart_npcx_fifo_read does.
     for (n, &(base, line)) in UART_LINES[1..].iter().enumerate() {
@@ -482,7 +515,52 @@ fn main() -> ! {
         fts == 4 && txp == 4 && txrel == 4 && frs == 3 && rxirq == 3 && hits == 3 && drained == 3;
     puts(if irq_ok { b" ok\r\n" } else { b" FAIL\r\n" });
 
+    // 16. MTC.
+    wr32(MTC, TTC, 0x1000_0000);
+    let ttc_rw = (rd32(MTC, TTC).wrapping_sub(0x1000_0000) <= 1) as u32;
+    wr32(MTC, WTC, 0xFFFF_FFFF & !(WTC_WIE | WTC_PTO));
+    let pt_rw = (rd32(MTC, WTC) == PT_MASK) as u32;
+    // ITIM64 free-running at 1 MHz, no IRQ.
+    wr8(ITIM64, ITCTS, 0);
+    wr8(ITIM64, ITPRE, PRE_1MHZ);
+    wr32(ITIM64, ITCNT, 0xFFFF_FFFF);
+    wr32(ITIM64, ITCNT64H, 0);
+    wr8(ITIM64, ITCTS, ITEN);
+    nvic_set(NVIC_ICPR, MTC_LINE);
+    nvic_set(NVIC_ISER, MTC_LINE);
+    let ttc0 = rd32(MTC, TTC);
+    wr32(
+        MTC,
+        WTC,
+        WTC_WIE | WTC_PTO | (ttc0.wrapping_add(1) & PT_MASK),
+    );
+    let mut guard = 0u32;
+    while MTC_IRQS.load(Ordering::SeqCst) < 3 && guard < 10 {
+        unsafe { core::arch::asm!("wfi") };
+        guard += 1;
+    }
+    wr32(MTC, WTC, 0);
+    nvic_set(NVIC_ICER, MTC_LINE);
+    wr8(ITIM64, ITCTS, 0);
+    let mtc_irqs = MTC_IRQS.load(Ordering::SeqCst);
+    let t = |n: usize| MTC_TTC[n].load(Ordering::SeqCst);
+    let us = |n: usize| MTC_US[n].load(Ordering::SeqCst);
+    let steps = (t(0) == ttc0.wrapping_add(1) && t(1) == t(0) + 1 && t(2) == t(1) + 1) as u32;
+    let ms1 = (us(0).wrapping_sub(us(1)) + 500) / 1000;
+    let ms2 = (us(1).wrapping_sub(us(2)) + 500) / 1000;
+    puts(b"mtc");
+    put_kv(b"ttc", ttc_rw);
+    put_kv(b"pt", pt_rw);
+    put_kv(b"irq", mtc_irqs);
+    put_kv(b"steps", steps);
+    put_kv(b"ms1", ms1);
+    put_kv(b"ms2", ms2);
+    let mtc_ok =
+        ttc_rw == 1 && pt_rw == 1 && mtc_irqs == 3 && steps == 1 && ms1 == 1000 && ms2 == 1000;
+    puts(if mtc_ok { b" ok\r\n" } else { b" FAIL\r\n" });
+
+    // Idle: no IRQ is enabled, so the run fast-forwards to max_steps.
     loop {
-        core::hint::spin_loop();
+        unsafe { core::arch::asm!("wfi") };
     }
 }

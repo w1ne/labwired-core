@@ -5,22 +5,22 @@
     "registers": [
       10,
       1074659332,
-      51,
+      1,
       2147483648,
       3,
-      4,
-      3,
+      274877907,
+      1000000,
       537753584,
-      3,
-      4,
-      1074683904,
-      3,
-      13506,
+      1,
+      1,
+      1,
+      1000000,
+      429496730,
       537753496,
       1074659332,
-      11656
+      12744
     ],
-    "pc": 11656,
+    "pc": 12744,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -34,7 +34,7 @@
     "event_register": true
   },
   "steps_executed": 400000,
-  "cycles": 400000,
+  "cycles": 60136189,
   "instructions": 400000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "317a070b8d7d79453a51a977169e142e282efe8191ee2152dff11b77a1d1af39",
+  "firmware_hash": "85e272a65f6bcc187b74b65d78714b7a432538c3a21ad70253e81ecd2b9b46a4",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-nuvoton-npcx9-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/nuvoton_npcx9.yaml",

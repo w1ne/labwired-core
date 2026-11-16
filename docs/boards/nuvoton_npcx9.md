@@ -3,8 +3,8 @@
 ## Current measurement (2026-11-16)
 
 The imported NPCX9 system booted `firmware-nuvoton-npcx9-smoke` for
-**400,000 instructions** and passed **9/9 smoke assertions**. Firmware
-SHA-256 `317a070b8d7d79453a51a977169e142e282efe8191ee2152dff11b77a1d1af39`.
+**400,000 instructions** and passed **10/10 smoke assertions**. Firmware
+SHA-256 `85e272a65f6bcc187b74b65d78714b7a432538c3a21ad70253e81ecd2b9b46a4`.
 UART capture (UART1..4 share one capture stream):
 
 ```text
@@ -16,6 +16,7 @@ cr_uart3 tx
 cr_uart4 tx
 uarts tbe=3 rx=3 isolated=1 ok
 uart irq fts=4 txp=4 txrel=4 frs=3 rx=3 hits=3 drained=3 ok
+mtc ttc=1 pt=1 irq=3 steps=1 ms1=1000 ms2=1000 ok
 ```
 
 The result, UART capture, JUnit assertions, snapshot and build/run logs are
@@ -54,6 +55,12 @@ Checks (source: `crates/firmware-nuvoton-npcx9-smoke/src/main.rs`):
     RFULL_LVL_SEL reset value 1). UFRCTL.RNEMPTY_EN takes exactly one IRQ per
     port; the handler reads the upper-case byte from URBUF, which drops the
     level, and RBF / RFIFO_NEMPTY_STS then read clear.
+16. MTC at 0x400B7000 on NVIC 5: TTC takes a written value; WTC holds a
+    25-bit PT with WIE clear. With WIE set and PT = TTC + 1 the core idles in
+    WFI; three IRQs arrive, each one TTC increment after the last, and the
+    handler clears PTO and moves PT on. ITIM64 at 1 MHz measures both gaps
+    as 1000 ms (Renode's 1 Hz tick). The run reaches the 45 M cycles through
+    WFI idle fast-forward; it executes 400,000 instructions.
 
 ## Claimed peripherals
 
@@ -63,12 +70,13 @@ Checks (source: `crates/firmware-nuvoton-npcx9-smoke/src/main.rs`):
 | `port0`..`portf` | `npcx_gpio` | PDOUT latch, PDIN pad level (own drive, external level, pull), PDIR, PPULL/PPUD pulls, PTYPE open-drain, PLOCK_CTL PDOUT lock, PENVDD storage. |
 | `itim32_1`..`itim32_6` | `npcx_itim32` | Down-counter, prescaler, APB2/LFCLK, TO_STS level IRQ on NVIC 28, 27, 17, 43, 44, 45. |
 | `itim64` | `npcx_itim64` | 64-bit down-counter, IRQ on NVIC 58. |
+| `mtc` | `npcx_mtc` | TTC 1 Hz count (read/write, survives system reset), WTC PT / PTO (W1C) / WIE; level IRQ WIE && PTO on NVIC 5. |
 
 GPIO ids are `port0`..`portf`, not Zephyr's `gpio0`..`gpiof`: a `gpio0` or
 `gpio1` id switches on the bus's Nordic GPIOTE pass.
 
 Sources: Renode `platforms/cpus/nuvoton_npcx9.repl`, `NPCX_GPIO.cs`,
-`NPCX_ITIM.cs` and `NPCX_UART.cs`; Zephyr `drivers/serial/uart_npcx.c`; Zephyr `soc/nuvoton/npcx/common/reg/reg_def.h`
+`NPCX_ITIM.cs`, `NPCX_MTC.cs` and `NPCX_UART.cs`; Zephyr `drivers/serial/uart_npcx.c`; Zephyr `soc/nuvoton/npcx/common/reg/reg_def.h`
 (`gpio_reg`, `itim32_reg`, `itim64_reg`), `drivers/gpio/gpio_npcx.c` and
 `dts/arm/nuvoton/npcx/npcx.dtsi` / `npcx9.dtsi`.
 
@@ -88,8 +96,10 @@ Not modelled:
   PLOCK_CTL stickiness (the lock bits are plain read/write, as in Renode).
 - ITIM: deep-sleep wake-up, ITEN sync delay, PWDWN_CTL gates, CDCG/LFCG
   clock trees.
+- MTC: deep-sleep wake-up (WIE only gates the NVIC line), LFCG clock
+  selection (the tick is fixed at 1 Hz).
 
-Not declared (no model in this engine): TWD, MTC, MDMA, SPIP,
+Not declared (no model in this engine): TWD, MDMA, SPIP,
 HFCG, LFCG, FIU, SMBus, and the other Renode NPCX blocks.
 
 ## Negative controls
@@ -110,6 +120,9 @@ HFCG, LFCG, FIU, SMBus, and the other Renode NPCX blocks.
   the UART `irq` lines; `uart irq fts=4 txp=0 txrel=4 frs=3 rx=0 hits=0
   drained=0 FAIL`, FAIL 8/9. The FIFO registers read correctly; only the
   NVIC wiring is missing.
+- [`attempt-history/nuvoton_npcx9/2026-11-16-negative-control-no-mtc/`](../coverage/renode-onboarding/attempt-history/nuvoton_npcx9/2026-11-16-negative-control-no-mtc/):
+  same CLI and firmware (SHA-256 `85e272a6…`), previous descriptor without
+  the `mtc` entry; BusFault at 0x400B7000 (TTC), FAIL 9/10.
 
 The profile's `verified` field remains false. This result is limited to the
 local model behaviour; it is not datasheet validation or hardware

@@ -122,8 +122,8 @@ peripherals:
 # (0x400B0000, IRQ 28) and ITIM64 (0x400BE000). Register layout: Zephyr
 # reg_def.h itim32_reg / itim64_reg. The APB2 tick clock is the 15 MHz CORE_CLK
 # (Zephyr apb2-prescaler 6; Renode's model defaults to 10 MHz). Windows are
-# 4 KiB (Renode Size 0x1000) so HFCG 0x400B5000 and MTC 0x400B7000 stay
-# unmapped. Not modelled: PWDWN_CTL gates, deep-sleep wake-up.
+# 4 KiB (Renode Size 0x1000) and do not reach HFCG 0x400B5000 (unmapped) or
+# the MTC at 0x400B7000 (below). Not modelled: PWDWN_CTL gates, deep-sleep wake-up.
 - id: itim32_1
   type: npcx_itim32
   base_address: 0x400B0000
@@ -159,3 +159,14 @@ peripherals:
   base_address: 0x400BE000
   size: 4KB
   irq: 58
+# Miniature Timer Counter. Base and NVIC line from Renode nuvoton_npcx9.repl
+# (Timers.NPCX_MTC at 0x400B7000, -> nvic@5); register map, 1 Hz tick and
+# 25-bit predefined time from Renode NPCX_MTC.cs. TTC (+0x00) counts once per
+# second; WTC (+0x04) holds PT, PTO (W1C) and WIE; the IRQ is the level
+# WIE && PTO. The window is 8 bytes (Renode Size 0x08). Not modelled: deep-sleep
+# wake-up, LFCG clock selection.
+- id: mtc
+  type: npcx_mtc
+  base_address: 0x400B7000
+  size: 8B
+  irq: 5
