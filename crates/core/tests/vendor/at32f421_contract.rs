@@ -453,18 +453,11 @@ fn adc_sequence_mode_moves_every_conversion_through_dma_channel1() {
     let mut b = bus();
     let spin = 0x2000_0100u64;
     b.write_u16(spin, 0xe7fe).unwrap(); // b .
-    let adc = b.find_peripheral_index_by_name("adc1").unwrap();
-    {
-        let a = b.peripherals[adc]
-            .dev
-            .as_any_mut()
-            .unwrap()
-            .downcast_mut::<labwired_core::peripherals::adc::Adc>()
-            .unwrap();
-        a.set_channel_input(1, 1650); // PA1
-        a.set_channel_input(3, 3000); // PA3
-        a.set_channel_input(5, 600); // PA5
-    }
+
+    // Pad levels through the bus: each pad's `analog_pins:` ADC channel.
+    assert!(b.set_analog_pad_mv("PA1", 1650)); // IN1
+    assert!(b.set_analog_pad_mv("PA3", 3000)); // IN3
+    assert!(b.set_analog_pad_mv("PA5", 600)); // IN5
     let (cpu, _) = labwired_core::system::cortex_m::configure_cortex_m(&mut b);
     let mut m = Machine::new(cpu, b);
     m.cpu.set_pc(spin as u32);
@@ -508,13 +501,7 @@ fn adc_sequence_mode_moves_every_conversion_through_dma_channel1() {
         "OCCE at group end"
     );
     // A second trigger converts the sequence again from OSN1.
-    m.bus.peripherals[adc]
-        .dev
-        .as_any_mut()
-        .unwrap()
-        .downcast_mut::<labwired_core::peripherals::adc::Adc>()
-        .unwrap()
-        .set_channel_input(1, 3300);
+    assert!(m.bus.set_analog_pad_mv("PA1", 3300));
     w(&mut m, 0x40012408, ctrl2 | (1 << 22));
     m.advance(AdvanceRequest::run(Some(500))).unwrap();
     assert_eq!(m.bus.read_u16(0x2000_1000).unwrap(), 4095);
@@ -577,11 +564,20 @@ fn scfg_and_comparator_registers_answer_from_the_shared_window() {
 /// polarity EXINT_POLCFG1/2 select.
 #[test]
 fn comparator_output_edges_raise_exint21_on_the_selected_polarity() {
+    use labwired_core::{AdvanceRequest, Cpu, Machine};
     let mut b = bus();
+    let spin = 0x2000_0100u64;
+    b.write_u16(spin, 0xe7fe).unwrap(); // b .
+    let (cpu, _) = labwired_core::system::cortex_m::configure_cortex_m(&mut b);
+    let mut m = Machine::new(cpu, b);
+    m.cpu.set_pc(spin as u32);
+    m.cpu.set_sp(0x2000_3ff0);
+    let b = &mut m.bus;
     b.write_u32(0x40021018, 1).unwrap(); // CRM APB2EN SCFGCMPEN.
     b.write_u32(0x40010400, 1 << 21).unwrap(); // EXINT_INTEN line 21.
     b.write_u32(0x40010408, 1 << 21).unwrap(); // POLCFG1: rising.
-                                               // AM32 COMP_PA0: CMPEN, CMPINVSEL=110 (PA0), CMPNINVSEL=00 (PA5).
+
+    // AM32 COMP_PA0: CMPEN, CMPINVSEL=110 (PA0), CMPNINVSEL=00 (PA5).
     b.write_u32(0x4001001c, 0b110_0001).unwrap();
     assert!(b.set_analog_pad_mv("PA0", 1500));
     assert!(b.set_analog_pad_mv("PA5", 1000));
@@ -593,13 +589,15 @@ fn comparator_output_edges_raise_exint21_on_the_selected_polarity() {
         0,
         "EXINT21 pending"
     );
-    let exti = b.find_peripheral_index_by_name("exti").unwrap();
-    let irqs = b.peripherals[exti]
-        .dev
-        .tick()
-        .explicit_irqs
-        .unwrap_or_default();
-    assert_eq!(irqs, vec![12], "ADC1_CMP vector");
+    // The pending line reaches its vector (ADC1_CMP, IRQ 12) through the
+    // walk or the scheduler, whichever drives EXINT in this build.
+    m.advance(AdvanceRequest::run(Some(16))).unwrap();
+    assert_ne!(
+        m.bus.read_u32(0xE000E200).unwrap() & (1 << 12),
+        0,
+        "ADC1_CMP vector pended"
+    );
+    let b = &mut m.bus;
     b.write_u32(0x40010414, 1 << 21).unwrap(); // Clear INTSTS.
     assert!(b.set_analog_pad_mv("PA5", 900)); // Falling: not selected.
     assert_eq!(b.read_u32(0x40010414).unwrap() & (1 << 21), 0);
