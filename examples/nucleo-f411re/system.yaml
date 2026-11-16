@@ -1,0 +1,5 @@
+name: "nucleo-f411re-smoke"
+chip: "../../configs/chips/stm32f411re.yaml"
+external_devices: []
+board_io:
+  - { id: "ld2_pa5", kind: "led", peripheral: "gpioa", pin: 5, signal: "output", active_high: true }
