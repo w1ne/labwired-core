@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: MIT
 
 //! SiFive FE310 smoke: RV32IM execution, M-mode ecall/ebreak and MRET status
-//! paths, CLINT machine timer and software interrupts, UART0 TX, and HiFive1
-//! Rev B GPIO.
+//! paths, CLINT machine timer and software interrupts, the PLIC routing the
+//! uart0 interrupt to MEIP, UART0 TX, and HiFive1 Rev B GPIO.
 //!
 //! The ELF is loaded into the FE310's QSPI XIP window and entered directly.
 //! It checks the imported system's RISC-V core, uart0, and GPIO software path
@@ -12,8 +12,11 @@
 //! architectural synchronous-trap/mret paths. The CLINT probes check the
 //! `mtime` rate against the 32 768 Hz lfclk, an MTIP wake from WFI, an MSIP
 //! interrupt taken after the `msip` store, and MSIP held pending while
-//! `mstatus.MIE` is clear. It does not exercise the mask-ROM boot flow, GPIO
-//! interrupts/IO functions, PLIC or uart1.
+//! `mstatus.MIE` is clear. The PLIC probes raise uart0's TX-watermark
+//! interrupt (source 3) and check pending, enable, priority and threshold
+//! gating of MEIP, then take the external interrupt and claim/complete it.
+//! It does not exercise the mask-ROM boot flow, GPIO interrupts/IO functions,
+//! the uart0 RX watermark or uart1.
 
 #![no_std]
 #![no_main]
@@ -34,6 +37,9 @@ static mut TRAP_MEPC: u32 = 0;
 #[no_mangle]
 #[used]
 static mut TRAP_MSTATUS: u32 = 0;
+#[no_mangle]
+#[used]
+static mut TRAP_CLAIM: u32 = 0;
 
 core::arch::global_asm!(
     ".section .text.trap_entry, \"ax\"",
@@ -54,9 +60,22 @@ core::arch::global_asm!(
     "lw t0, 0(t1)",
     "addi t0, t0, 1",
     "sw t0, 0(t1)",
-    // Interrupt: clear msip, disarm mtimecmp (high word first), resume at mepc.
     "csrr t0, mcause",
     "bgez t0, 1f",
+    // External interrupt: claim, mask uart0's interrupt enables, complete.
+    "li t1, 0x8000000b",
+    "bne t0, t1, 3f",
+    "li t1, 0x0C200004",
+    "lw t0, 0(t1)",
+    "la t1, TRAP_CLAIM",
+    "sw t0, 0(t1)",
+    "li t1, 0x10013010",
+    "sw zero, 0(t1)",
+    "li t1, 0x0C200004",
+    "sw t0, 0(t1)",
+    "mret",
+    // Other interrupts: clear msip, disarm mtimecmp (high word first).
+    "3:",
     "li t1, 0x02000000",
     "sw zero, 0(t1)",
     "li t0, -1",
@@ -498,6 +517,138 @@ fn clint_msip_masked_probe() -> bool {
     pass
 }
 
+const PLIC_UART0_PRIORITY: *mut u32 = 0x0C00_000C as *mut u32;
+const PLIC_PENDING: *const u32 = 0x0C00_1000 as *const u32;
+const PLIC_ENABLE: *mut u32 = 0x0C00_2000 as *mut u32;
+const PLIC_THRESHOLD: *mut u32 = 0x0C20_0000 as *mut u32;
+const PLIC_CLAIM: *mut u32 = 0x0C20_0004 as *mut u32;
+const UART0_TXCTRL: *mut u32 = 0x1001_3008 as *mut u32;
+const UART0_IE: *mut u32 = 0x1001_3010 as *mut u32;
+const UART0_IP: *const u32 = 0x1001_3014 as *const u32;
+const UART0_SOURCE: u32 = 3;
+const MIP_MEIP: u32 = 1 << 11;
+
+/// Poll `mip` until MEIP reaches `level`, for at most `tries` reads.
+fn wait_meip(level: bool, tries: u32) -> bool {
+    for _ in 0..tries {
+        if (read_mip() & MIP_MEIP != 0) == level {
+            return true;
+        }
+    }
+    false
+}
+
+/// Arm uart0's TX watermark (`txcnt = 1`: the empty FIFO is below it) with
+/// `mstatus.MIE` clear. The PLIC latches source 3, and MEIP follows the
+/// enable, priority and threshold gates without a trap.
+fn plic_uart0_masked_probe() -> bool {
+    reset_trap_record();
+    let (ip, pending, disabled_low, meip, masked, unmasked, prio_warl) = unsafe {
+        core::ptr::write_volatile(PLIC_THRESHOLD, 0);
+        core::ptr::write_volatile(PLIC_UART0_PRIORITY, 1);
+        core::ptr::write_volatile(UART0_TXCTRL, 1 | (1 << 16));
+        core::ptr::write_volatile(UART0_IE, 1);
+        let ip = core::ptr::read_volatile(UART0_IP);
+        // The source latches in the gateway while its enable is clear.
+        let mut pending = false;
+        for _ in 0..1000 {
+            if core::ptr::read_volatile(PLIC_PENDING) & (1 << UART0_SOURCE) != 0 {
+                pending = true;
+                break;
+            }
+        }
+        let disabled_low = read_mip() & MIP_MEIP == 0;
+        core::ptr::write_volatile(PLIC_ENABLE, 1 << UART0_SOURCE);
+        let meip = wait_meip(true, 1000);
+        core::ptr::write_volatile(PLIC_THRESHOLD, 1);
+        let masked = read_mip() & MIP_MEIP == 0;
+        core::ptr::write_volatile(PLIC_THRESHOLD, 0);
+        let unmasked = read_mip() & MIP_MEIP != 0;
+        core::ptr::write_volatile(PLIC_UART0_PRIORITY, 0xFF);
+        let prio_warl = core::ptr::read_volatile(PLIC_UART0_PRIORITY) == 7;
+        core::ptr::write_volatile(PLIC_UART0_PRIORITY, 1);
+        (ip, pending, disabled_low, meip, masked, unmasked, prio_warl)
+    };
+    let (count, _, _) = trap_record();
+    let pass = ip & 1 != 0
+        && pending
+        && disabled_low
+        && meip
+        && masked
+        && unmasked
+        && prio_warl
+        && count == 0;
+    puts("plic uart0 ip=");
+    put_hex32(ip);
+    flag(" pending=", pending);
+    flag(" disabled_low=", disabled_low);
+    flag(" meip=", meip);
+    flag(" threshold_masks=", masked);
+    flag(" unmasked=", unmasked);
+    flag(" prio_warl=", prio_warl);
+    puts(" traps=");
+    put_hex32(count);
+    puts(if pass { " ok\n" } else { " FAIL\n" });
+    pass
+}
+
+/// Take the pending uart0 interrupt as a machine external interrupt. The
+/// handler claims source 3, clears uart0 `ie` and completes; afterwards the
+/// source is neither pending nor claimable and MEIP is low.
+fn plic_uart0_trap_probe() -> bool {
+    reset_trap_record();
+    unsafe {
+        core::ptr::write_volatile(core::ptr::addr_of_mut!(TRAP_CLAIM), 0);
+        core::arch::asm!(
+            "la t0, trap_entry",
+            "csrw mtvec, t0",
+            "csrs mie, {meie}",
+            "csrs mstatus, {mie}",
+            "2: la t1, TRAP_COUNT",
+            "lw t0, 0(t1)",
+            "beqz t0, 2b",
+            "csrc mstatus, {mie}",
+            "csrc mie, {meie}",
+            meie = in(reg) MIP_MEIP,
+            mie = in(reg) 1u32 << 3,
+            out("t0") _,
+            out("t1") _,
+            options(nostack),
+        );
+    }
+    let (count, cause, _) = trap_record();
+    let claim = unsafe { core::ptr::read_volatile(core::ptr::addr_of!(TRAP_CLAIM)) };
+    let (ie, pending, reclaim) = unsafe {
+        (
+            core::ptr::read_volatile(UART0_IE),
+            core::ptr::read_volatile(PLIC_PENDING) & (1 << UART0_SOURCE),
+            core::ptr::read_volatile(PLIC_CLAIM),
+        )
+    };
+    let meip_low = read_mip() & MIP_MEIP == 0;
+    unsafe { core::ptr::write_volatile(PLIC_ENABLE, 0) };
+    let pass = count == 1
+        && cause == 0x8000_000B
+        && claim == UART0_SOURCE
+        && ie == 0
+        && pending == 0
+        && reclaim == 0
+        && meip_low;
+    puts("plic uart0 mcause=");
+    put_hex32(cause);
+    puts(" count=");
+    put_hex32(count);
+    puts(" claim=");
+    put_hex32(claim);
+    flag(" ie_cleared=", ie == 0);
+    flag(" pending_clear=", pending == 0);
+    puts(" reclaim=");
+    put_hex32(reclaim);
+    flag(" meip_low=", meip_low);
+    puts(if pass { " ok\n" } else { " FAIL\n" });
+    pass
+}
+
 #[inline(never)]
 fn multiply(left: u32, right: u32) -> u32 {
     let result: u32;
@@ -528,6 +679,8 @@ fn main() -> ! {
     let _clint_mtip_pass = clint_mtip_probe();
     let _clint_msip_pass = clint_msip_probe();
     let _clint_masked_pass = clint_msip_masked_probe();
+    let _plic_masked_pass = plic_uart0_masked_probe();
+    let _plic_trap_pass = plic_uart0_trap_probe();
 
     let gpio_pass = unsafe {
         core::ptr::write_volatile(GPIO_INPUT_EN, GREEN_LED);

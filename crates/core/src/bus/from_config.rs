@@ -442,6 +442,7 @@ impl SystemBus {
             cpu_hz: manifest.cpu_hz.unwrap_or(chip.cpu_hz),
             riscv_profile: crate::cpu::RiscVCoreProfile::for_chip(chip),
             riscv_clint: crate::cpu::riscv::Rv32Clint::for_chip(chip),
+            riscv_plic: crate::cpu::riscv::Rv32Clint::plic_for_chip(chip),
             bit_band_enabled: Self::chip_has_bit_band(chip),
             armv6m: Self::chip_is_armv6m(chip),
             armv8m_baseline: Self::chip_is_armv8m_baseline(chip),

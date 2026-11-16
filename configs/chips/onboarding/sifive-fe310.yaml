@@ -7,7 +7,10 @@
 # path used by the smoke. The CLINT at 0x02000000 (msip, mtimecmp, mtime at
 # the 32 768 Hz lfclk) belongs to the core complex: the RV32 core decodes it
 # for this chip name (`Rv32Clint::for_chip`), so it is not a peripheral entry.
-# UART1, PLIC, mask ROM and OTP are not claimed.
+# The PLIC at 0x0C000000 (52 sources, 3-bit priorities, one M-mode context)
+# is decoded the same way (`Rv32Clint::plic_for_chip`); a peripheral `irq:` is
+# its PLIC source ID (uart0 = 3, Renode `IRQ -> plic@3`).
+# UART1, GPIO interrupts, mask ROM and OTP are not claimed.
 
 name: "sifive-fe310"
 arch: "riscv"

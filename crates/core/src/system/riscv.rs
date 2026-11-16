@@ -17,5 +17,8 @@ pub fn configure_riscv(bus: &mut SystemBus) -> RiscV {
     if let Some(clint) = bus.riscv_clint {
         cpu.attach_clint(clint);
     }
+    if let Some(plic) = bus.riscv_plic {
+        cpu.attach_plic(plic);
+    }
     cpu
 }

@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="5" failures="0" errors="0" time="0.175922">
+<testsuite name="labwired" tests="5" failures="0" errors="0" time="0.191671">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="b88ae8f40908179eef521a8d98f72e1b216a19d316c60e6c476b975cbdadc570"/>
+    <property name="firmware_hash" value="d059fb122ea7850807813d8c77463edb9be0ed40dc00b64f4e031db14034444c"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.175922">
+  <testcase classname="labwired" name="run" time="0.191671">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: SIFIVE FE310 SMOKE" time="0.000000">
   </testcase>

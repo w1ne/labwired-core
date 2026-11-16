@@ -4,6 +4,7 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
+use super::riscv64_plic::{Plic, PlicParams};
 use crate::decoder::riscv::{decode_rv32, Instruction};
 use crate::{Bus, Cpu, SimResult, SimulationObserver};
 use std::sync::Arc;
@@ -119,6 +120,29 @@ impl Rv32Clint {
             // the 32 768 Hz lfclk (Zephyr `soc/sifive/sifive_freedom/fe300`
             // Kconfig.defconfig). Renode clocks it at 62 MHz instead.
             return Some(Self::new(0x0200_0000, 32_768, chip.cpu_hz));
+        }
+        None
+    }
+
+    /// The PLIC a chip descriptor's core complex carries, if any. Keyed by
+    /// chip name, as [`Self::for_chip`] is. The bus forwards a peripheral's
+    /// raw `irq:` number, which on these chips is its PLIC source ID.
+    pub fn plic_for_chip(chip: &labwired_config::ChipDescriptor) -> Option<PlicParams> {
+        let name = chip.name.to_ascii_lowercase();
+        if name == "sifive-fe310" {
+            // FE310-G002: PLIC at 0x0C00_0000 with sources 1..52, 7 priority
+            // levels (3-bit fields) and one context, hart 0 M-mode (FE310-G002
+            // Manual v1p1 Ch. 8; Zephyr `riscv32-fe310.dtsi`
+            // `interrupt-controller@c000000` `riscv,ndev = <52>`; Renode
+            // `sifive-fe310.repl` `numberOfSources: 52`, `numberOfContexts: 1`,
+            // uart0 `IRQ -> plic@3`).
+            return Some(PlicParams {
+                base: 0x0C00_0000,
+                num_sources: 53, // Plic stores the one-past-last ID.
+                num_contexts: 1,
+                priority_bits: 3,
+                context: 0,
+            });
         }
         None
     }
@@ -248,6 +272,10 @@ pub struct RiscV {
     pub mtimecmp: u64,
     /// Memory-mapped CLINT of a chip that declares one ([`Rv32Clint::for_chip`]).
     pub clint: Option<Rv32Clint>,
+    /// Memory-mapped PLIC of a chip that declares one
+    /// ([`Rv32Clint::plic_for_chip`]). It drives `mip.MEIP`; peripheral IRQs
+    /// pend its sources through [`Cpu::set_exception_pending`].
+    pub plic: Option<Plic>,
 
     /// Active LR/SC reservation address. `None` means no outstanding
     /// reservation; the next SC.W to any address will fail. On a single
@@ -339,6 +367,7 @@ impl RiscV {
             mtime: 0,
             mtimecmp: 0,
             clint: None,
+            plic: None,
             reservation: None,
             triggers: trigger::TriggerModule::default(),
             waiting_for_interrupt: false,
@@ -546,6 +575,67 @@ impl RiscV {
         self.refresh_timer_lines();
     }
 
+    /// Map a PLIC. Every source resets disabled at priority 0, so MEIP stays
+    /// low until firmware enables a source.
+    pub fn attach_plic(&mut self, params: PlicParams) {
+        self.plic = Some(Plic::new(params));
+        self.refresh_meip();
+    }
+
+    /// Drive `mip.MEIP` from the PLIC's notification to this hart's context.
+    fn refresh_meip(&mut self) {
+        if let Some(plic) = &self.plic {
+            if plic.meip() {
+                self.mip |= 1 << 11;
+            } else {
+                self.mip &= !(1 << 11);
+            }
+        }
+    }
+
+    /// True when the core decodes a memory-mapped window itself (CLINT or
+    /// PLIC), so bus-only fast paths would miss its accesses.
+    #[inline]
+    fn decodes_core_mmio(&self) -> bool {
+        self.clint.is_some() || self.plic.is_some()
+    }
+
+    #[inline]
+    fn plic_offset(&self, addr: u32) -> Option<u64> {
+        self.plic.as_ref()?.offset(u64::from(addr))
+    }
+
+    /// PLIC load: its registers are 32-bit, so a narrower load returns the
+    /// addressed lanes of the containing word. A claim read is a side effect.
+    fn plic_read(&mut self, off: u64, size: u32) -> u32 {
+        let Some(plic) = self.plic.as_mut() else {
+            return 0;
+        };
+        let word = plic.read_u32(off & !3);
+        self.refresh_meip();
+        let v = word >> ((off & 3) * 8);
+        if size >= 4 {
+            v
+        } else {
+            v & ((1u32 << (size * 8)) - 1)
+        }
+    }
+
+    /// PLIC store. Narrower stores write the zero-extended value to the
+    /// containing word, as SiFive's 32-bit-only register file does.
+    fn plic_write(&mut self, off: u64, size: u32, value: u32) {
+        let Some(plic) = self.plic.as_mut() else {
+            return;
+        };
+        let v = if size >= 4 {
+            value
+        } else {
+            (value & ((1u32 << (size * 8)) - 1)) << ((off & 3) * 8)
+        };
+        plic.write_u32(off & !3, v);
+        self.refresh_meip();
+    }
+
     fn update_mtime_after_elapsed_cycles(&mut self, cycles: u64) {
         self.mtime = self.mtime.wrapping_add(cycles);
         self.refresh_timer_lines();
@@ -642,11 +732,15 @@ impl RiscV {
         self.refresh_timer_lines();
     }
 
-    /// Data load of `size` bytes, decoding the CLINT window before the bus.
+    /// Data load of `size` bytes, decoding the CLINT and PLIC windows before
+    /// the bus.
     #[inline]
-    fn load(&self, bus: &mut dyn Bus, addr: u32, size: u32) -> SimResult<u32> {
+    fn load(&mut self, bus: &mut dyn Bus, addr: u32, size: u32) -> SimResult<u32> {
         if let Some(off) = self.clint_offset(addr) {
             return Ok(self.clint_read(off, size));
+        }
+        if let Some(off) = self.plic_offset(addr) {
+            return Ok(self.plic_read(off, size));
         }
         Ok(match size {
             1 => u32::from(bus.read_u8(u64::from(addr))?),
@@ -655,11 +749,16 @@ impl RiscV {
         })
     }
 
-    /// Data store of `size` bytes, decoding the CLINT window before the bus.
+    /// Data store of `size` bytes, decoding the CLINT and PLIC windows before
+    /// the bus.
     #[inline]
     fn store(&mut self, bus: &mut dyn Bus, addr: u32, size: u32, value: u32) -> SimResult<()> {
         if let Some(off) = self.clint_offset(addr) {
             self.clint_write(off, size, value);
+            return Ok(());
+        }
+        if let Some(off) = self.plic_offset(addr) {
+            self.plic_write(off, size, value);
             return Ok(());
         }
         match size {
@@ -736,9 +835,9 @@ impl RiscV {
         const LOOP_INSNS: u32 = 4;
         if budget < LOOP_INSNS
             // An armed trigger must see every access and fetch individually.
-            // CLINT accesses are decoded by the core, not by the bus reads
-            // and writes these windows replay.
-            || self.clint.is_some()
+            // CLINT and PLIC accesses are decoded by the core, not by the
+            // bus reads and writes these windows replay.
+            || self.decodes_core_mmio()
             || self.triggers.armed()
             || self.waiting_for_interrupt
             || (self.mstatus & (1 << 3)) != 0
@@ -865,9 +964,9 @@ impl RiscV {
     fn try_store_spin_window(&mut self, bus: &mut dyn Bus, budget: u32) -> u32 {
         if budget < 6
             // An armed trigger must see every access and fetch individually.
-            // CLINT accesses are decoded by the core, not by the bus reads
-            // and writes these windows replay.
-            || self.clint.is_some()
+            // CLINT and PLIC accesses are decoded by the core, not by the
+            // bus reads and writes these windows replay.
+            || self.decodes_core_mmio()
             || self.triggers.armed()
             || self.waiting_for_interrupt
             || (self.mstatus & (1 << 3)) != 0
@@ -1083,7 +1182,11 @@ impl RiscV {
             // See read_csr: medeleg/mideleg RAZ/WI on Esp32C3 profile.
             0x302 | 0x303 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
             0x304 => self.mie = val,
-            0x344 => self.mip = val,
+            0x344 => {
+                // MEIP is read-only: the PLIC drives it.
+                self.mip = val;
+                self.refresh_meip();
+            }
             0x305 => self.mtvec = val,
             0x340 => self.mscratch = val,
             0x341 => self.mepc = val,
@@ -1216,8 +1319,8 @@ impl RiscV {
     /// observers and push-mode logic taps.
     fn jit_gate_allows(&self, bus: &dyn Bus, observers: &[Arc<dyn SimulationObserver>]) -> bool {
         // Compiled blocks access memory through the bus; they would miss the
-        // core-decoded CLINT window.
-        if !observers.is_empty() || self.clint.is_some() {
+        // core-decoded CLINT and PLIC windows.
+        if !observers.is_empty() || self.decodes_core_mmio() {
             return false;
         }
         if bus.logic_tap().is_some_and(|t| t.push_armed()) {
@@ -2287,11 +2390,16 @@ impl Cpu for RiscV {
     fn set_sp(&mut self, val: u32) {
         self.write_reg(2, val); // x2 is SP
     }
-    fn set_exception_pending(&mut self, _exception_num: u32) {
-        // For RISC-V Machine mode, external interrupts are routed to MEIP (bit 11).
-        // The specific 'exception_num' (IRQ) would be tracked by a PLIC.
-        // Since we don't have a PLIC yet, we pend a generic external interrupt.
-        self.mip |= 1 << 11;
+    fn set_exception_pending(&mut self, exception_num: u32) {
+        // Without an NVIC the bus forwards a peripheral's raw IRQ number,
+        // which on a chip with a PLIC is its source ID. Without a PLIC the
+        // line pends a generic, sticky machine external interrupt.
+        if let Some(plic) = self.plic.as_mut() {
+            plic.raise(exception_num);
+            self.refresh_meip();
+        } else {
+            self.mip |= 1 << 11;
+        }
     }
 
     fn idle_fast_forward_budget(&self, bus: &dyn Bus) -> Option<u64> {

@@ -462,6 +462,8 @@ pub struct SystemBus {
     /// by [`crate::system::riscv::configure_riscv`]. `None` keeps the core's
     /// internal, unmapped timer.
     pub riscv_clint: Option<crate::cpu::riscv::Rv32Clint>,
+    /// PLIC geometry of an RV32 chip whose core complex carries one.
+    pub riscv_plic: Option<crate::cpu::riscv64_plic::PlicParams>,
     /// Stable allocation-unique identity for native instruction translators
     /// that execute directly against this bus without an ARMv7 fabric.
     pub(crate) native_code_identity: u64,

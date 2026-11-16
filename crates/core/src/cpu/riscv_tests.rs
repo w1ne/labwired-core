@@ -1974,3 +1974,114 @@ fn rv32_clint_is_resolved_for_fe310_only() {
     chip.name = "litex_vexriscv".into();
     assert_eq!(Rv32Clint::for_chip(&chip), None);
 }
+
+const FE310_PLIC: u32 = 0x0C00_0000;
+const FE310_UART0_SRC: u32 = 3;
+
+fn fe310_plic_cpu() -> RiscV {
+    let chip: labwired_config::ChipDescriptor = serde_yaml::from_str(
+        "name: sifive-fe310\narch: riscv\ncore: rv32imac\ncpu_hz: 62000000\nflash: { base: 0x20000000, size: 4MiB }\nram: { base: 0x80000000, size: 16KiB }\nperipherals: []\n",
+    )
+    .unwrap();
+    let mut cpu = fe310_clint_cpu();
+    cpu.attach_plic(Rv32Clint::plic_for_chip(&chip).expect("FE310 has a PLIC"));
+    cpu
+}
+
+/// Priority 1 and enable for source `id` on context 0.
+fn fe310_plic_arm(cpu: &mut RiscV, id: u32) {
+    let mut bus = SystemBus::new();
+    cpu.store(&mut bus, FE310_PLIC + 4 * id, 4, 1).unwrap();
+    cpu.store(&mut bus, FE310_PLIC + 0x2000, 4, 1 << id)
+        .unwrap();
+}
+
+#[test]
+fn rv32_plic_is_resolved_for_fe310_only() {
+    let mut chip: labwired_config::ChipDescriptor = serde_yaml::from_str(
+        "name: sifive-fe310\narch: riscv\ncore: rv32imac\ncpu_hz: 62000000\nflash: { base: 0x20000000, size: 4MiB }\nram: { base: 0x80000000, size: 16KiB }\nperipherals: []\n",
+    )
+    .unwrap();
+    let p = Rv32Clint::plic_for_chip(&chip).expect("FE310 has a PLIC");
+    assert_eq!(
+        (
+            p.base,
+            p.num_sources,
+            p.num_contexts,
+            p.priority_bits,
+            p.context
+        ),
+        (0x0C00_0000, 53, 1, 3, 0)
+    );
+    chip.name = "litex_vexriscv".into();
+    assert_eq!(Rv32Clint::plic_for_chip(&chip), None);
+}
+
+#[test]
+fn rv32_plic_gates_meip_on_enable_and_priority() {
+    let mut cpu = fe310_plic_cpu();
+    let mut bus = SystemBus::new();
+    cpu.set_exception_pending(FE310_UART0_SRC);
+    assert_eq!(cpu.mip & (1 << 11), 0, "disabled source does not notify");
+    assert_eq!(
+        cpu.load(&mut bus, FE310_PLIC + 0x1000, 4).unwrap(),
+        1 << FE310_UART0_SRC,
+        "the gateway still latches it"
+    );
+    fe310_plic_arm(&mut cpu, FE310_UART0_SRC);
+    assert_ne!(cpu.mip & (1 << 11), 0, "enabled, priority 1 > threshold 0");
+    cpu.store(&mut bus, FE310_PLIC + 0x20_0000, 4, 1).unwrap();
+    assert_eq!(cpu.mip & (1 << 11), 0, "threshold 1 masks priority 1");
+    assert_eq!(
+        cpu.load(&mut bus, FE310_PLIC + 0x4 * FE310_UART0_SRC, 4)
+            .unwrap(),
+        1
+    );
+    cpu.store(&mut bus, FE310_PLIC + 0x4 * FE310_UART0_SRC, 4, 0xFF)
+        .unwrap();
+    assert_eq!(
+        cpu.load(&mut bus, FE310_PLIC + 0x4 * FE310_UART0_SRC, 4)
+            .unwrap(),
+        7,
+        "priority is a 3-bit WARL field"
+    );
+    assert_ne!(cpu.mip & (1 << 11), 0, "priority 7 > threshold 1");
+}
+
+#[test]
+fn rv32_plic_claim_complete_drives_meip_and_survives_mip_writes() {
+    let mut cpu = fe310_plic_cpu();
+    let mut bus = SystemBus::new();
+    fe310_plic_arm(&mut cpu, FE310_UART0_SRC);
+    cpu.set_exception_pending(FE310_UART0_SRC);
+    cpu.write_csr(0x344, 0);
+    assert_ne!(cpu.mip & (1 << 11), 0, "MEIP is read-only to csrw mip");
+    let claim = FE310_PLIC + 0x20_0004;
+    assert_eq!(cpu.load(&mut bus, claim, 4).unwrap(), FE310_UART0_SRC);
+    assert_eq!(cpu.mip & (1 << 11), 0, "the claim drops MEIP");
+    assert_eq!(cpu.load(&mut bus, claim, 4).unwrap(), 0, "nothing else");
+    cpu.set_exception_pending(FE310_UART0_SRC);
+    assert_eq!(cpu.mip & (1 << 11), 0, "in service: the gateway is closed");
+    cpu.store(&mut bus, claim, 4, FE310_UART0_SRC).unwrap();
+    cpu.set_exception_pending(FE310_UART0_SRC);
+    assert_ne!(cpu.mip & (1 << 11), 0, "re-pends after complete");
+}
+
+#[test]
+fn rv32_plic_meip_takes_the_external_interrupt() {
+    let mut bus = SystemBus::new();
+    // addi x0, x0, 0
+    bus.flash.data = 0x0000_0013u32.to_le_bytes().to_vec();
+    let mut cpu = fe310_plic_cpu();
+    fe310_plic_arm(&mut cpu, FE310_UART0_SRC);
+    cpu.pc = 0;
+    cpu.mtvec = 0x100;
+    cpu.mstatus = 1 << 3;
+    cpu.mie = 1 << 11;
+    cpu.set_exception_pending(FE310_UART0_SRC);
+    let mut machine = Machine::new(cpu, bus);
+    machine.step().unwrap();
+    assert_eq!(machine.cpu.mcause, 0x8000_000B);
+    assert_eq!(machine.cpu.mepc, 4);
+    assert_eq!(machine.cpu.pc, 0x100);
+}

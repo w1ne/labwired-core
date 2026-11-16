@@ -17,6 +17,8 @@ assertions:
       - "clint mtip mcause=80000007 count=00000001 armed_low=1 wfi_wake=1 disarmed=1 ok"
       - "clint msip mcause=80000003 count=00000001 mepc_next=1 cleared=1 ok"
       - "clint msip masked pending=1 released=1 traps=00000000 ok"
+      - "plic uart0 ip=00000001 pending=1 disabled_low=1 meip=1 threshold_masks=1 unmasked=1 prio_warl=1 traps=00000000 ok"
+      - "plic uart0 mcause=8000000b count=00000001 claim=00000003 ie_cleared=1 pending_clear=1 reclaim=00000000 meip_low=1 ok"
       - "gpio=PASS input_en=00080000 output_en=00080000 output_val=00080000 input_val=00080000"
   - gpio_edges:
       pin: "gpio:19"

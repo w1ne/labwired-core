@@ -77,6 +77,7 @@ impl SystemBus {
             // profile is the ESP32-C3's (the engine's `RiscV::new` default).
             riscv_profile: crate::cpu::RiscVCoreProfile::Esp32C3,
             riscv_clint: None,
+            riscv_plic: None,
             native_code_identity: next_native_code_identity(),
             bit_band_enabled: true,
             armv6m: false,
@@ -201,6 +202,7 @@ impl SystemBus {
             cpu_hz: 0,
             riscv_profile: crate::cpu::RiscVCoreProfile::Esp32C3,
             riscv_clint: None,
+            riscv_plic: None,
             native_code_identity: next_native_code_identity(),
             bit_band_enabled: false,
             armv6m: false,
