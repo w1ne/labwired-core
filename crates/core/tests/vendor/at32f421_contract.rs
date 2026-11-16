@@ -453,7 +453,8 @@ fn adc_sequence_mode_moves_every_conversion_through_dma_channel1() {
     let mut b = bus();
     let spin = 0x2000_0100u64;
     b.write_u16(spin, 0xe7fe).unwrap(); // b .
-                                        // Pad levels through the bus: each pad's `analog_pins:` ADC channel.
+
+    // Pad levels through the bus: each pad's `analog_pins:` ADC channel.
     assert!(b.set_analog_pad_mv("PA1", 1650)); // IN1
     assert!(b.set_analog_pad_mv("PA3", 3000)); // IN3
     assert!(b.set_analog_pad_mv("PA5", 600)); // IN5
