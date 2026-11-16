@@ -21,6 +21,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 mod chip;
+mod chip_merge;
 mod cosim;
 mod display;
 mod embedded;

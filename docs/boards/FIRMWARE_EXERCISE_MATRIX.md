@@ -253,7 +253,7 @@ _Board variant of the rp2350 die with the Feather's 8 MiB flash; it reuses the r
 
 ### `rp2354b`
 
-_Package variant of the rp2350 die (QFN80, 48 GPIO, 2 MiB stacked flash): the yaml copies rp2350.yaml, changes the flash size and SYSINFO.PACKAGE_SEL, and puts IO_BANK0, SIO and ADC on their rp2350b profiles. No beyond-rubric peripheral is exercised under this name: the smoke (tests/fixtures/rp2354b-smoke.elf) brings up XOSC/PLL_SYS, writes UART0 and toggles GPIO47 through SIO GPIO_HI_OUT_XOR; all rubric classes. PIO, USB, DMA and the QMI/stacked flash are not exercised on this chip._
+_Package variant of the rp2350 die (QFN80, 48 GPIO, 2 MiB stacked flash): the yaml includes rp2350.yaml and overlays only the flash size, the 48 pad labels, SYSINFO.PACKAGE_SEL and the rp2350b profiles of IO_BANK0, SIO and ADC. No beyond-rubric peripheral is exercised under this name: the smoke (tests/fixtures/rp2354b-smoke.elf) brings up XOSC/PLL_SYS, writes UART0 and toggles GPIO47 through SIO GPIO_HI_OUT_XOR; all rubric classes. PIO, USB, DMA and the QMI/stacked flash are not exercised on this chip._
 
 ### `esp32c6fh4`
 

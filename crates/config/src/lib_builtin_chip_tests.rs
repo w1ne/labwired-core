@@ -146,3 +146,101 @@ fn the_synthetic_manifest_has_nothing_attached() {
     assert!(m.board_io.is_empty());
     assert!(!m.schema_version.is_empty());
 }
+
+/// A chip resolved by bare name is the descriptor its file loads by path,
+/// including a package variant that `include:`s its base die (build.rs
+/// flattens those before embedding). Before that, a built-in `include:` was
+/// parsed without expansion and silently lost the base's peripherals.
+#[test]
+fn every_builtin_resolves_to_the_same_descriptor_as_its_file() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../configs/chips");
+    for name in BUILTIN_CHIP_NAMES {
+        let by_name = ChipDescriptor::resolve(name, Path::new("/nonexistent"))
+            .unwrap_or_else(|e| panic!("built-in '{name}': {e:#}"));
+        let by_path = ChipDescriptor::from_file(dir.join(format!("{name}.yaml")))
+            .unwrap_or_else(|e| panic!("file '{name}': {e:#}"));
+        assert!(
+            by_name.include.is_none(),
+            "{name}: include survived expansion"
+        );
+        assert_eq!(
+            serde_json::to_value(&by_name).unwrap(),
+            serde_json::to_value(&by_path).unwrap(),
+            "built-in '{name}' differs from configs/chips/{name}.yaml"
+        );
+    }
+}
+
+/// The include overlay: base keys survive, local scalars win, `peripherals`
+/// replace by `id` (keeping the base order) and `pins` merge by label.
+#[test]
+fn an_included_base_is_overlaid_not_replaced() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("base.yaml"),
+        r#"name: base
+arch: arm
+core: cortex-m33
+cpu_hz: 1000
+flash: { base: 0x10000000, size: "4096KB" }
+ram: { base: 0x20000000, size: "8KB" }
+pins:
+  P0: { gpio: sio, bit: 0 }
+peripherals:
+  - { id: a, type: stub, base_address: 0x1000, size: 4096 }
+  - { id: b, type: stub, base_address: 0x2000, size: "4KB", config: { profile: x } }
+"#,
+    )
+    .unwrap();
+    std::fs::write(
+        dir.path().join("variant.yaml"),
+        r#"include: base.yaml
+name: variant
+flash: { base: 0x10000000, size: "2048KB" }
+pins:
+  P1: { gpio: sio, bit: 33 }
+peripherals:
+  - { id: b, type: stub, base_address: 0x2000, size: "4KB", config: { profile: y } }
+"#,
+    )
+    .unwrap();
+    let chip = ChipDescriptor::from_file(dir.path().join("variant.yaml")).unwrap();
+    assert_eq!(chip.name, "variant");
+    assert_eq!(chip.core.as_deref(), Some("cortex-m33"));
+    assert_eq!(chip.cpu_hz, 1000);
+    assert_eq!(chip.flash.size, 2048 * 1024);
+    assert_eq!(chip.pins.len(), 2);
+    assert_eq!(chip.pins["P1"].bit, 33);
+    let ids: Vec<_> = chip.peripherals.iter().map(|p| p.id.as_str()).collect();
+    assert_eq!(ids, ["a", "b"]);
+    assert_eq!(
+        chip.peripherals[1]
+            .config
+            .get("profile")
+            .and_then(|v| v.as_str()),
+        Some("y")
+    );
+}
+
+/// Text consumers (the CLI's `run` arch dispatch) get the whole chip for a
+/// variant, not its overlay: the flattened text names the base's arch and
+/// parses to the same descriptor `from_file` builds.
+#[test]
+fn flattened_yaml_of_a_variant_is_the_whole_chip() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../configs/chips/rp2354b.yaml");
+    let raw = std::fs::read_to_string(&path).unwrap();
+    assert!(raw.contains("include:") && !raw.contains("arch:"));
+    let text = ChipDescriptor::flattened_yaml(&path).unwrap();
+    assert!(text.contains("arch: arm"), "{text}");
+    let parsed: ChipDescriptor = serde_yaml::from_str(&text).unwrap();
+    assert_eq!(
+        serde_json::to_value(&parsed).unwrap(),
+        serde_json::to_value(ChipDescriptor::from_file(&path).unwrap()).unwrap()
+    );
+    // A self-contained chip comes back verbatim, comments and all.
+    let base = path.with_file_name("rp2350.yaml");
+    assert_eq!(
+        ChipDescriptor::flattened_yaml(&base).unwrap(),
+        std::fs::read_to_string(&base).unwrap()
+    );
+}
