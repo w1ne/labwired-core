@@ -4327,3 +4327,26 @@ fn tt_reports_the_mpu_region() {
     run_test_instr(&mut plain, &mut bus, 0xE840_F300, true);
     assert_eq!(plain.r3 & (1 << 16), 0);
 }
+
+#[test]
+fn register_numbers_map_to_their_fields() {
+    let mut cpu = CortexM::new();
+    for n in 0..=16u8 {
+        cpu.write_reg(n, 0x1000 + u32::from(n));
+    }
+    let fields = [
+        cpu.r0, cpu.r1, cpu.r2, cpu.r3, cpu.r4, cpu.r5, cpu.r6, cpu.r7, cpu.r8, cpu.r9, cpu.r10,
+        cpu.r11, cpu.r12, cpu.sp, cpu.lr, cpu.pc, cpu.xpsr,
+    ];
+    for (n, value) in fields.into_iter().enumerate() {
+        assert_eq!(value, 0x1000 + n as u32, "r{n}");
+        assert_eq!(cpu.read_reg(n as u8), value, "r{n}");
+    }
+    // Out-of-range numbers read as zero and write nothing.
+    let before = (cpu.msp, cpu.psp, cpu.control);
+    cpu.write_reg(17, 0xdead_beef);
+    cpu.write_reg(255, 0xdead_beef);
+    assert_eq!((cpu.msp, cpu.psp, cpu.control), before);
+    assert_eq!(cpu.read_reg(17), 0);
+    assert_eq!(cpu.read_reg(255), 0);
+}
