@@ -554,6 +554,19 @@ jobs:
           - id: ch32v003f4p6-blink
             script: examples/ch32v003f4p6/io-smoke.yaml
             system: examples/ch32v003f4p6/system.yaml
+          # CH32V003J4M6 (SOP-8). PC0 has no pad on this package, so the
+          # committed examples/ch32v003j4m6 fixture blinks PC4 (pin 7).
+          - id: ch32v003j4m6-blink
+            script: examples/ch32v003j4m6/io-smoke.yaml
+            system: examples/ch32v003j4m6/system.yaml
+          # CH32V003F4U6 (QFN20) and CH32V003A4M6 (SOP16) bond PC0, so the
+          # F4P6 blink fixture runs unchanged on each descriptor.
+          - id: ch32v003f4u6-blink
+            script: examples/ch32v003f4u6/io-smoke.yaml
+            system: examples/ch32v003f4u6/system.yaml
+          - id: ch32v003a4m6-blink
+            script: examples/ch32v003a4m6/io-smoke.yaml
+            system: examples/ch32v003a4m6/system.yaml
 
     steps:
       - uses: actions/checkout@v4

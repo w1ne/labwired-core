@@ -7,9 +7,10 @@
 
 static void logBegin() {
   Serial.begin(115200);
-#if defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)
-  // arduino-pico (Pico 2): Serial is native USB CDC and drops writes until
-  // the host opens the port (DTR), on silicon and on the twin alike.
+#if (defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)) || defined(__AVR_ATmega32U4__)
+  // arduino-pico (Pico 2) and the ATmega32U4 (Leonardo): Serial is native USB
+  // CDC and drops writes until the host opens the port (DTR), on silicon and
+  // on the twin alike.
   while (!Serial) delay(1);
 #endif
 #if defined(ARDUINO_USB_CDC_ON_BOOT) && (ARDUINO_USB_CDC_ON_BOOT)
@@ -96,7 +97,9 @@ static bool lw_can_probe() {
 }
 #define LW_HAS_CAN 1
 
-#elif defined(ARDUINO_NUCLEO_L476RG) || defined(STM32L476xx)
+#elif defined(ARDUINO_NUCLEO_L476RG) || defined(STM32L476xx) || defined(STM32L432xx)
+// STM32L432 (RM0394) has the same bxCAN1 at 0x40006400 and CAN1EN at
+// RCC_APB1ENR1 bit 25 as the L476 (stm32l432xx.h CAN1_BASE, RCC_APB1ENR1_CAN1EN).
 static bool lw_can_probe() {
   const uint32_t can = 0x40006400u;
   const uint32_t rcc = 0x40021000u;

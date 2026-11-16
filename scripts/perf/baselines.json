@@ -11,6 +11,10 @@
     "batch": 7.6,
     "step": 1026.4
   },
+  "atmega32u4": {
+    "batch": 7.7,
+    "step": 1020.0
+  },
   "atsamd21": {
     "batch": 1.4,
     "step": 895.0
@@ -400,6 +404,10 @@
   "stm32l073": {
     "batch": 1.6,
     "step": 939.5
+  },
+  "stm32l432kc": {
+    "batch": 1.6,
+    "step": 937.1
   },
   "stm32l476": {
     "batch": 1.6,

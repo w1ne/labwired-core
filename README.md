@@ -77,7 +77,7 @@ Clone the repository, install the CLI, run a firmware. No cross-toolchain needed
 
 ```sh
 git clone https://github.com/w1ne/labwired-core && cd labwired-core
-curl -fsSL https://labwired.com/install.sh | LABWIRED_VERSION=v0.25.0 sh
+curl -fsSL https://labwired.com/install.sh | LABWIRED_VERSION=v0.26.0 sh
 labwired test --script examples/nrf54l15-dk/io-smoke.yaml
 ```
 
@@ -111,7 +111,7 @@ UART output and `--json` stay on stdout, so pipes keep working.
 The install script covers Linux, macOS, and Windows via WSL2.
 
 ```sh
-curl -fsSL https://labwired.com/install.sh | LABWIRED_VERSION=v0.25.0 sh
+curl -fsSL https://labwired.com/install.sh | LABWIRED_VERSION=v0.26.0 sh
 ```
 
 | Variable | Effect |
@@ -129,12 +129,16 @@ sh install.sh
 
 ### Windows
 
-There is a native Windows build — `labwired.exe` and `labwired-dap.exe` — but
-no install script for it; the archive is unpacked by hand. PowerShell 5.1 and
-later have `tar` built in.
+The native Windows archive contains `labwired.exe` and `labwired-dap.exe`.
+Install the current [x64 Microsoft Visual C++ v14 Redistributable](https://aka.ms/vc14/vc_redist.x64.exe)
+first; both executables require `VCRUNTIME140.dll`. See Microsoft's
+[runtime requirements](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)
+for supported Windows versions.
+
+Download and extract the archive in PowerShell with `tar` available:
 
 ```powershell
-$v = "v0.25.0"
+$v = "v0.26.0"
 Invoke-WebRequest "https://github.com/w1ne/labwired-core/releases/download/$v/labwired-$v-windows-x86_64.tar.gz" -OutFile labwired.tar.gz
 mkdir $env:LOCALAPPDATA\LabWired -Force
 tar -xzf labwired.tar.gz -C $env:LOCALAPPDATA\LabWired
@@ -171,6 +175,12 @@ See the [CLI reference](docs/cli_reference.md) and the
 
 ### From Python
 
+Install the SDK from PyPI with Python 3.9 or later:
+
+```sh
+python -m pip install 'labwired[test]==0.26.0'
+```
+
 Use `labwired.Sim` to run an ELF, wait for UART output, and write pytest checks:
 
 ```python
@@ -181,9 +191,9 @@ with Sim("tests/fixtures/uart-ok-thumbv7m.elf",
     sim.expect("OK", timeout="1ms")
 ```
 
-The SDK runs the Rust engine in your Python process. Start with the
-[Python SDK quickstart](docs/python-sdk.md) for source installation and a runnable
-pytest test. This SDK is not yet published to PyPI.
+The SDK runs the Rust engine in your Python process. See the
+[Python SDK quickstart](docs/python-sdk.md) for source-build instructions and a
+runnable pytest test using the repository's firmware fixture.
 
 ### In CI
 
