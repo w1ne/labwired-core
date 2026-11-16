@@ -4,11 +4,11 @@ name: Core Perf (simulator throughput)
 #
 # The gate measures host instructions retired per simulated CPU step, per
 # board, under callgrind — see scripts/perf/board_perf.py for why that metric
-# and not wall clock. Main pushes and nightly runs keep the full unchanged
-# gate. Owned-repository PRs affecting the engine's hot paths, build settings
-# or perf inputs run the same gate before merge; docs-only PRs pay only the
-# cheap selection check. A main regression is tracked in a single issue, so a
-# slowdown is noticed the day it lands rather than months later when someone
+# and not wall clock. Nightly runs on main keep the full unchanged gate.
+# Owned-repository PRs run the same gate only when they carry the `perf` label
+# AND change the engine's hot paths, build settings or perf inputs; every
+# other PR pays only the cheap selection check. A main regression is tracked in a single issue, so a
+# slowdown is noticed the next night rather than months later when someone
 # reports "the blinky looks frozen".
 #
 # The issue is a live status page, not a log: each run rewrites its body with
@@ -30,7 +30,17 @@ name: Core Perf (simulator throughput)
 # full run is skipped/fails. Make `perf-verdict` (not `board-throughput`) the
 # required check if this lane should block merges.
 on:
-  push:
+  # CI cut O11: no push-to-main trigger. It ran 50 min per merge, 62% of runs
+  # were cancelled by the next merge, and it was never a required check.
+  # Perf is verified (1) nightly on main, (2) on demand for a PR carrying the
+  # `perf` label when the PR touches the interpreter/bus/config hot paths
+  # (the path filter below is the real input set; perf-scope re-checks the
+  # actual tested diff with scripts/perf/pr_hotpath_gate.py), and (3) by
+  # `gh workflow run core-perf.yml --ref <branch>`.
+  # Rule: a PR that changes the interpreter or bus hot paths gets the `perf`
+  # label and its board-throughput job must be green before merge.
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, ready_for_review]
     branches:
       - main
     paths:
@@ -55,16 +65,14 @@ on:
       - "Cargo.lock"
       - "rust-toolchain*"
       - ".cargo/**"
-  # Lean PR gate (2026-11-13): no pull_request trigger. This lane runs on
-  # push to main (and on demand via workflow_dispatch, e.g.
-  # `gh workflow run core-perf.yml --ref <branch>` for a PR that needs it).
   schedule:
     # Nightly, after core-ci's 02:30 slot.
     - cron: "45 3 * * *"
   workflow_dispatch:
 
 concurrency:
-  group: core-perf-${{ github.ref }}
+  # Adding an unrelated label must not cancel a running perf measurement.
+  group: core-perf-${{ github.ref }}${{ github.event.action == 'labeled' && github.event.label.name != 'perf' && '-other-label' || '' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -98,15 +106,22 @@ jobs:
           TESTED: ${{ github.sha }}
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
+          PERF_LABELED: ${{ contains(github.event.pull_request.labels.*.name, 'perf') }}
         run: |
           python3 scripts/perf/pr_hotpath_gate.py \
             --event "$EVENT" --repository "$REPOSITORY" --head-ref "$HEAD_REF" \
             --tested "$TESTED" --base "$BASE" --head "$HEAD" --output "$GITHUB_OUTPUT"
+          # PRs measure only on request. A later key in $GITHUB_OUTPUT wins.
+          if [[ "$EVENT" == pull_request && "$PERF_LABELED" != true ]]; then
+            echo "required=false" >> "$GITHUB_OUTPUT"
+            echo "perf not requested: add the 'perf' label to run board-throughput"
+          fi
 
   board-throughput:
     name: board-throughput
     needs: perf-scope
-    if: ${{ needs.perf-scope.outputs.required == 'true' }}
+    # Draft PRs skip the heavy perf lane; ready_for_review re-runs it.
+    if: ${{ needs.perf-scope.outputs.required == 'true' && !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
     # Keep absolute RTx and relative Ir/step receipts on one stable image.
     # `ubuntu-latest` moves to Ubuntu 26 on 2026-10-19, which would silently
     # change both the compiler output and host throughput under our baselines.
@@ -350,7 +365,7 @@ jobs:
   perf-verdict:
     name: perf-verdict
     needs: [perf-scope, board-throughput]
-    if: ${{ always() && (github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core') }}
+    if: ${{ always() && !(github.event_name == 'pull_request' && github.event.pull_request.draft) && (github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core') }}
     permissions:
       contents: read
     runs-on: ubuntu-24.04

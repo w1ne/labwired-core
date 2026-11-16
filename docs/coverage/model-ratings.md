@@ -102,6 +102,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | stm32h735 | open | L1 | 40 | 936.2 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32h735.md) |
 | stm32c031c6 | open | L0 | 29 | 937.4 | 1.6 | ≥1× (CI) | — |
 | stm32l073 | open | L2 | 42 | 939.5 | 1.6 | ≥1× (CI) | — |
+| stm32l432kc | open | L0 | 42 | 937.1 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32l432kc.md) |
 | stm32l476 | open | L1 | 58 | 937.6 | 1.6 | ≥1× (CI) | — |
 | stm32wb55 | open | L1 | 22 | 936.9 | 1.5 | ≥1× (CI) | [doc](docs/boards/stm32wb55.md) |
 | stm32wba52 | open | L1 | 21 | 936.6 | 1.5 | ≥1× (CI) | [doc](docs/boards/stm32wba52.md) |
@@ -111,6 +112,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | atmega328pb | open | L1 | 8 | 1026.4 | 7.6 | ≥1× (CI) | — |
 | atmega2560 | open | L1 | 15 | — | — | ≥1× (CI) | — |
 | atmega2561 | open | L1 | 11 | — | — | ≥1× (CI) | [doc](docs/boards/atmega2561.md) |
+| atmega32u4 | open | L0 | 8 | 1020.0 | 7.7 | ≥1× (CI) | — |
 | mimxrt1062-teensy41 | open | L0 | 50 | — | — | ≥1× (CI) | — |
 | atmega1281 | open | L1 | 11 | — | — | ≥1× (CI) | [doc](docs/boards/atmega1281.md) |
 | atsamd21 | open | L1 | 7 | 895.0 | 1.4 | ≥1× (CI) | — |
@@ -133,6 +135,9 @@ same fields but never their source, chip YAML, binary or build paths.
 | pic24f16ka102 | open | L1 | 3 | — | — | ≥1× (CI) | — |
 | ch32v003f4p6 | open | L1 | 5 | — | — | ≥1× (CI) | — |
 | ch32l103c8t6 | open | L1 | 7 | — | — | ≥1× (CI) | — |
+| ch32v003f4u6 | open | L1 | 5 | — | — | ≥1× (CI) | — |
+| ch32v003a4m6 | open | L1 | 5 | — | — | ≥1× (CI) | — |
+| ch32v003j4m6 | open | L1 | 5 | — | — | ≥1× (CI) | — |
 | esp32h2 | open | L0 | 3 | — | 2.4 | ≥1× (CI) | — |
 | esp32c5 | open | L0 | 1 | — | 2.2 | ≥1× (CI) | — |
 | esp32c61 | open | L0 | 1 | — | 2.2 | ≥1× (CI) | — |

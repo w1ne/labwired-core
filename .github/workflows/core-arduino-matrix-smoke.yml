@@ -11,22 +11,11 @@ name: Core Arduino Matrix Smoke
 # about a run they can neither see nor stop. Pushes and manual dispatch are
 # untouched — a fork still gets this workflow on its own changes.
 on:
-  # Slow fleet: nightly + main tip + manual. Not on PRs (PR merge target <1 min).
+  # CI cut O11: nightly + manual only. Push-to-main ran this on every merge
+  # touching crates/core or configs; nothing blocks on it, and the nightly run
+  # names the offending range. Not on PRs.
   schedule:
     - cron: "20 2 * * *"
-  push:
-    branches:
-      - main
-    paths:
-      - "validation/arduino-matrix/**"
-      - "validation/registry_dir.py"
-      - "scripts/ci/arduino_matrix_plan.py"
-      - "validation/matrix_lib/**"
-      - "configs/chips/**"
-      - "configs/systems/**"
-      - "crates/core/**"
-      - "crates/cli/**"
-      - ".github/workflows/core-arduino-matrix-smoke.yml"
   workflow_dispatch:
 
 concurrency:
@@ -137,7 +126,8 @@ jobs:
             # stays on the 7.0.1 build it was green on.
             esp32c6)     platform=espressif32@8.0.0 ;;
             esp32*)      platform=espressif32@7.0.1 ;;
-            atmega328p|atmega2560) platform=atmelavr@5.3.0 ;;
+            # The Leonardo row was measured on the same pin (ArduinoCore-avr 5.4.0).
+            atmega328p|atmega2560|arduino-leonardo) platform=atmelavr@5.3.0 ;;
             # The Zero row was measured on atmelsam 9.0.0 (ArduinoCore-samd).
             arduino-zero) platform=atmelsam@9.0.0 ;;
             # The Teensy 4.1 row was measured on teensy 6.0.0 (Teensyduino 1.62).

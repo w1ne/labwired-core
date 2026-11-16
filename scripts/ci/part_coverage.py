@@ -186,11 +186,33 @@ def _named_types(text: str) -> set[str]:
     return set(QUOTED_RE.findall(text)) | set(TYPE_VALUE_RE.findall(text))
 
 
+# Directories that are never a crate's own parent: a `tests` below one of these is
+# a unit-test module, an example's tests, or a fixture, not an integration suite.
+_NOT_CRATE_PARENTS = {"src", "tests", "examples", "benches", "fixtures", "target"}
+
+
+def integration_test_dirs() -> list[Path]:
+    """Every crate's `tests/` directory, at any depth under `crates/`.
+
+    `crates/*/tests` today. A module group split into its own crate
+    (`crates/core/<group>/<crate>/tests`) must be scanned without an edit here,
+    so the walk is over `crates/**/tests` minus trees that only look like one.
+    """
+    base = REPO_ROOT / "crates"
+    return sorted(
+        d
+        for d in base.glob("**/tests")
+        if d.is_dir()
+        and not _NOT_CRATE_PARENTS & set(d.relative_to(base).parts[:-1])
+    )
+
+
 def integration_sources() -> list[Path]:
-    """Integration-test sources and their fixtures, under `crates/*/tests/`."""
+    """Integration-test sources and their fixtures, under every crate's `tests/`."""
     return sorted(
         p
-        for p in REPO_ROOT.glob("crates/*/tests/**/*")
+        for d in integration_test_dirs()
+        for p in d.glob("**/*")
         if p.is_file() and p.suffix in (".rs", ".yaml", ".yml")
     )
 

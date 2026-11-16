@@ -576,6 +576,13 @@ fn every_shipped_descriptor_is_ratcheted() {
         // bundled-configs.ts catalog board and no executing-fidelity
         // differential of its own. Promote when both exist.
         "atmega2561",
+        // Arduino Leonardo / Micro (ATmega32U4). Has a chip descriptor, a
+        // system manifest and an Arduino matrix row (stock ArduinoCore-avr
+        // L0-L7; Serial is native USB CDC on the CPU's USB device model) — but
+        // no bundled-configs.ts catalog board, no silicon oracle and no
+        // executing-fidelity differential. Timer3, Timer4 and EEPROM are not
+        // modelled.
+        "atmega32u4",
         // PJRC Teensy 4.1 (MIMXRT1062DVJ6B). Has a chip descriptor, a system
         // manifest and an Arduino matrix row (stock Teensyduino L0-L3, L5, L7;
         // Serial is USB CDC on the scripted host) — but no bundled-configs.ts
@@ -794,6 +801,12 @@ fn every_shipped_descriptor_is_ratcheted() {
         // and has no silicon oracle or executing-fidelity differential of its
         // own. Same bar as stm32f411ceu6 above.
         "stm32f446re",
+        // NUCLEO-L432KC (STM32L432KC, RM0394 L43x). Runs the stock stm32duino
+        // Arduino matrix row (L0-L8) and a PR-gated raw-register smoke on the
+        // shared STM32L4 models, but it is not a bundled-configs.ts catalog
+        // board and has no silicon oracle or executing-fidelity differential.
+        // Same bar as stm32f446re above.
+        "stm32l432kc",
         "stm32g474re", // G4 peripheral models in progress, not shipped
         "stm32wb55",   // BLE not modelled, not shipped
         "stm32wba52",  // WBA early onboarding, not shipped
@@ -903,6 +916,13 @@ fn every_shipped_descriptor_is_ratcheted() {
         // no differential.
         "ch32l103c8t6",
         "ch32v003f4p6",
+        // CH32V003 package variants (F4U6 QFN20, A4M6 SOP16, J4M6 SOP8): the
+        // F4P6 descriptor with its own package bonding, booted by the same
+        // fixtures (J4M6 blinks PC4). No catalog board, no silicon oracle,
+        // no differential. Promote with the F4P6.
+        "ch32v003f4u6",
+        "ch32v003a4m6",
+        "ch32v003j4m6",
         // ESP32-H2/C5/P4/S2 UART0-only board profiles. Each has a descriptor,
         // a system manifest and a board smoke that asserts a UART0 token, but
         // no bundled-configs.ts catalog board, no silicon oracle and no

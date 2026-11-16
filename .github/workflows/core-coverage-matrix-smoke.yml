@@ -7,20 +7,11 @@ name: Core Coverage Matrix Smoke
 # about a run they can neither see nor stop. Pushes and manual dispatch are
 # untouched — a fork still gets this workflow on its own changes.
 on:
-  # Slow gates: nightly + main tip + manual. Not on PRs (PR merge target <1 min).
+  # CI cut O11: nightly + manual only. Push-to-main ran this on every merge
+  # touching crates/core or configs; nothing blocks on it, and the nightly run
+  # names the offending range. Not on PRs.
   schedule:
     - cron: "0 2 * * *"
-  push:
-    branches:
-      - main
-    paths:
-      - "configs/chips/**"
-      - "configs/systems/**"
-      - "examples/**"
-      - "crates/core/**"
-      - "crates/cli/**"
-      - "crates/labwired-models-**"
-      - ".github/workflows/core-coverage-matrix-smoke.yml"
   workflow_dispatch:
 
 concurrency:
@@ -567,6 +558,19 @@ jobs:
           - id: ch32l103c8t6-blink
             script: examples/ch32l103c8t6/io-smoke.yaml
             system: examples/ch32l103c8t6/system.yaml
+          # CH32V003J4M6 (SOP-8). PC0 has no pad on this package, so the
+          # committed examples/ch32v003j4m6 fixture blinks PC4 (pin 7).
+          - id: ch32v003j4m6-blink
+            script: examples/ch32v003j4m6/io-smoke.yaml
+            system: examples/ch32v003j4m6/system.yaml
+          # CH32V003F4U6 (QFN20) and CH32V003A4M6 (SOP16) bond PC0, so the
+          # F4P6 blink fixture runs unchanged on each descriptor.
+          - id: ch32v003f4u6-blink
+            script: examples/ch32v003f4u6/io-smoke.yaml
+            system: examples/ch32v003f4u6/system.yaml
+          - id: ch32v003a4m6-blink
+            script: examples/ch32v003a4m6/io-smoke.yaml
+            system: examples/ch32v003a4m6/system.yaml
 
     steps:
       - uses: actions/checkout@v4

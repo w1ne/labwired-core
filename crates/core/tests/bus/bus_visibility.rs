@@ -158,6 +158,27 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "no UART bring-up for the WCH L103 family in this harness yet; USART1 \
          bytes are proven by ch32l103_compiled_firmware",
     ),
+    // F4U6 (QFN20), A4M6 (SOP16) and J4M6 (SOP8) are package variants of the
+    // F4P6 die with the same pad-gated USART1 on PD5. Bytes are proven by
+    // ch32v003_compiled_firmware::ch32v003_package_variants_print_on_usart1_pd5.
+    (
+        "ch32v003f4u6",
+        BusKind::Uart,
+        "F4P6-die package variant: same pad-gated USART1 (TX=PD5) gap; bytes \
+         are proven by ch32v003_compiled_firmware",
+    ),
+    (
+        "ch32v003a4m6",
+        BusKind::Uart,
+        "F4P6-die package variant: same pad-gated USART1 (TX=PD5) gap; bytes \
+         are proven by ch32v003_compiled_firmware",
+    ),
+    (
+        "ch32v003j4m6",
+        BusKind::Uart,
+        "F4P6-die package variant: same pad-gated USART1 (TX=PD5) gap; bytes \
+         are proven by ch32v003_compiled_firmware",
+    ),
     // nRF51822: the bring-up drives the nRF52 EasyDMA personalities (UARTE
     // ENABLE=8, TWIM), which the nRF51 does not have; its UART0 is the legacy
     // UART (ENABLE=4, TXD + EVENTS_TXDRDY) and its TWI is the legacy TWI. No
@@ -548,6 +569,16 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
     ),
     (
         "atmega2561",
+        BusKind::Spi,
+        "AVR from_config SPI is generic type:spi without PadLines cell",
+    ),
+    (
+        "atmega32u4",
+        BusKind::I2c,
+        "AVR from_config I2C is generic type:i2c without PadLines cell",
+    ),
+    (
+        "atmega32u4",
         BusKind::Spi,
         "AVR from_config SPI is generic type:spi without PadLines cell",
     ),
