@@ -1,0 +1,16 @@
+{
+  "id": "esp32s3-devkitc-1-n16r8-adc",
+  "in_boards": false,
+  "uart": {
+    "state": "none",
+    "gap": "the ADC smoke prints one UART0 marker line as its pass signal, but no test loads configs/chips/esp32s3-devkitc-1-n16r8-adc.yaml and checks UART byte movement or framing. The esp32s3 evidence does not transfer: it loads configs/chips/esp32s3.yaml."
+  },
+  "spi": {
+    "state": "none",
+    "gap": "the profile declares no SPI peripheral and nothing drives an SPI bus on it."
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "the profile declares no I2C peripheral and nothing drives an I2C bus on it."
+  }
+}
