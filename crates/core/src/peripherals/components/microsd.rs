@@ -487,6 +487,12 @@ impl SpiDevice for MicroSd {
         self.selected
     }
 
+    /// The head of the response queue: `transfer` pops it before looking at
+    /// MOSI, as the card's output does not depend on the byte coming in.
+    fn next_miso(&self) -> Option<u8> {
+        Some(self.out.front().copied().unwrap_or(0xFF))
+    }
+
     fn transfer(&mut self, mosi: u8) -> u8 {
         let miso = self.out.pop_front().unwrap_or(0xFF);
 

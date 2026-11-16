@@ -585,6 +585,44 @@ Beyond the catalog and those two, any `type:` is valid if the manifest's own
 `parts:` defines it — see [Part packs](part-packs.md) for the
 `labwired.part/v1` contract and the `behavior:` primitive reference.
 
+### SPI on GPIO pins (`connection: spi_gpio`)
+
+Any SPI device type can sit on arbitrary GPIO pads instead of a controller.
+A decoder watches the MCU's output latch for SCK, MOSI and CS, samples MOSI on
+the mode's sampling edge, assembles bytes and hands them to the device through
+the same interface a hardware SPI uses; MISO is driven onto the input pad bit
+by bit. It works whether the firmware bit-bangs the pads or (with
+`controller:`) uses the hardware SPI on them.
+
+```yaml
+external_devices:
+  - id: lcd
+    type: st7920
+    connection: spi_gpio
+    config:
+      sck: PA1          # required
+      mosi: PA2         # required
+      cs: PA0           # optional; absent = always selected
+      cs_active: high   # high | low; default: the device's own polarity
+      mode: 0           # 0..3 (bit 1 = CPOL, bit 0 = CPHA); default 0
+      bit_order: msb    # msb | lsb; default msb
+      miso: PA3         # optional read-back pad
+      controller: spi   # optional: the hardware SPI that also reaches it
+```
+
+- A CS edge drops a partial byte and calls the device's select/release, as a
+  hardware CS does. Clocks while CS is inactive are ignored.
+- `miso` needs a device that knows its next answer before the frame
+  (`SpiDevice::next_miso`; the microSD model does). Other devices are refused
+  with `miso` set rather than answered wrongly. A deselected device releases
+  MISO, which then reads high.
+- A store that moves MOSI together with the sampling edge latches the old
+  MOSI level (setup violation), as the controller bit engine does.
+- With `controller:`, the device is shared: hardware transfers on that
+  controller and decoded GPIO traffic reach the same model and CS state, and
+  inspect lists it once. Routed supplies (`supply_rails`) are not supported on
+  `spi_gpio`.
+
 ### Device descriptors (external parts as data)
 
 Every model in the catalog is a device descriptor: the in-tree ones live in
