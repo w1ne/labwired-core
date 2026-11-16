@@ -1210,6 +1210,16 @@ const CHIPS: &[ChipConf] = &[
             "ch32v005_compiled_firmware::ch32v005_compiled_rv32e_firmware_toggles_pc0",
         ),
     },
+    // CH32X035C8T6 (QingKe V4C, RV32IMAC). SIM-DERIVED: no silicon capture,
+    // so no reset_oracle. The gate boots a committed ELF that blinks PB12.
+    ChipConf {
+        name: "ch32x035c8t6",
+        yaml: "configs/chips/ch32x035c8t6.yaml",
+        reset_oracle: None,
+        behavior_gate: Some(
+            "ch32x035_compiled_firmware::ch32x035_compiled_rv32imac_firmware_toggles_pb12",
+        ),
+    },
     // CH32V006K8U6 (QingKe V2C, RV32EmC). SIM-DERIVED: no silicon capture,
     // so no reset_oracle. The gate boots a committed ELF that blinks PB0.
     ChipConf {
