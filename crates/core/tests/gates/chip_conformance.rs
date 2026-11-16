@@ -431,6 +431,16 @@ const CHIPS: &[ChipConf] = &[
         // descriptor's flash/RAM geometry is not pinned by this gate.)
         behavior_gate: Some("firmware_survival::test_esp32s3_zero_tier1_survival"),
     },
+    // ESP32-S3-DevKitC-1 N16R8 narrow UART0 + GPIO4/ADC1_CH3 profile of the same
+    // LX7 SoC as `esp32s3`. SIM-DERIVED: no silicon capture. The ADC smoke
+    // (examples/esp32-s3-devkitc-1-n16r8/adc-smoke.yaml) runs in the onboarding
+    // smoke workflow through the CLI, not as a Rust test, so no behavior_gate.
+    ChipConf {
+        name: "esp32s3-devkitc-1-n16r8-adc",
+        yaml: "configs/chips/esp32s3-devkitc-1-n16r8-adc.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
     ChipConf {
         name: "esp32-devkitc-32e-gpio-smoke",
         yaml: "configs/chips/esp32-devkitc-32e-gpio-smoke.yaml",

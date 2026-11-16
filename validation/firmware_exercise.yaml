@@ -372,6 +372,14 @@ chips:
       - {p: rtc_cntl_stub, ev: "crates/core/src/system/xtensa/esp32s3.rs:640 (esp_xtensa_common/system_stub.rs:203; configs/chips/esp32s3-zero.yaml:66)", note: "CLOSABLE: register round-trip plus three canned behaviours — PLL_LOCK seeded, TIME_UPDATE snapshot handshake, APP_CPU un-stall. The RTC clock tree, SWD_CONF super-watchdog and sleep domains are not modelled."}
       - {p: wifi_thunks, ev: "esp32s3/wifi_thunks.rs:8 (CHEAT(THUNK-LIB))", note: "IRREDUCIBLE: the ESP32 WiFi MAC/PHY is a closed RF-coprocessor blob with NO executable image — there is no firmware to run, so it can never be firmware-exercised. The lwIP/socket layer above is routed to a real SimNet. (Same shim as the esp32s3 entry.)"}
 
+  - id: esp32s3-devkitc-1-n16r8-adc
+    arch: xtensa-lx7
+    headline: "Narrow DevKitC-1 v1.1 N16R8 board profile over the esp32s3 die, with no beyond-rubric content of its own: its register-level firmware starts one SENS ADC1 one-shot conversion on GPIO4 / ADC1_CH3 and asserts code 2047 for the centered 1650 mV input (the ADC rubric cell and the family shims stay as listed on the esp32s3 entry). The local analog model is deterministic; no noise, calibration or attenuation curve is modelled."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
   # ── STM32 F1/F4 batch: the F103 BluePill and the F4 family. F401 and F407
   # ── have tier-1 rows; F405 does not appear in tier1-matrix.json at all, so
   # ── its entry is the only record of what firmware actually runs on it.

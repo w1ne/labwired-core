@@ -79,6 +79,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * I2C: esp32s3.yaml is an address-map stub; from_config has no S3 I2C model
   * SPI: esp32s3.yaml is an address-map stub; from_config has no S3 SPI model
   * UART: esp32s3.yaml is an address-map stub; from_config has no S3 UART model
+* **esp32s3-devkitc-1-n16r8-adc**
+  * UART: narrow N16R8 ADC profile of the S3 address-map stub; no UART bring-up for this family in the harness yet
 * **esp32s3-zero**
   * I2C: esp32s3-zero.yaml inherits the S3 address-map stub
   * SPI: esp32s3-zero.yaml inherits the S3 address-map stub
@@ -195,6 +197,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | esp32p4 | — | — | — |
 | esp32s2 | — | — | — |
 | esp32s3 | — | — | — |
+| esp32s3-devkitc-1-n16r8-adc | — | — | — |
 | esp32s3-zero | — | — | — |
 | imxrt1064 | — | — | — |
 | litex-vexriscv | — | — | — |

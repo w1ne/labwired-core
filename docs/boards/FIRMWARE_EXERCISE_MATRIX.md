@@ -270,6 +270,10 @@ _Board variant of the esp32s3 die: same configure_xtensa_esp32s3 wiring and the 
 - `rtc_cntl_stub` (crates/core/src/system/xtensa/esp32s3.rs:640 (esp_xtensa_common/system_stub.rs:203; configs/chips/esp32s3-zero.yaml:66)) — CLOSABLE: register round-trip plus three canned behaviours — PLL_LOCK seeded, TIME_UPDATE snapshot handshake, APP_CPU un-stall. The RTC clock tree, SWD_CONF super-watchdog and sleep domains are not modelled.
 - `wifi_thunks` (esp32s3/wifi_thunks.rs:8 (CHEAT(THUNK-LIB))) — IRREDUCIBLE: the ESP32 WiFi MAC/PHY is a closed RF-coprocessor blob with NO executable image — there is no firmware to run, so it can never be firmware-exercised. The lwIP/socket layer above is routed to a real SimNet. (Same shim as the esp32s3 entry.)
 
+### `esp32s3-devkitc-1-n16r8-adc`
+
+_Narrow DevKitC-1 v1.1 N16R8 board profile over the esp32s3 die, with no beyond-rubric content of its own: its register-level firmware starts one SENS ADC1 one-shot conversion on GPIO4 / ADC1_CH3 and asserts code 2047 for the centered 1650 mV input (the ADC rubric cell and the family shims stay as listed on the esp32s3 entry). The local analog model is deterministic; no noise, calibration or attenuation curve is modelled._
+
 ### `stm32f103`
 
 _Drives 10 rubric classes via its tier-1 fixture, and the nightly J1939 monitor drives bxCAN1 end to end (per-SA BAM reassembly + engine-speed decode); AFIO and DBGMCU are exercised by the PR-gated Zephyr hello (pinctrl remap, debug-init) and PWR by the Arduino startup; beyond the rubric, the shared CRC engine's always-run coverage is the H563 bench oracle (h563_conformance.rs:144) plus IDR-width masking (crc.rs:204), and the F103 polynomial is additionally pinned by the sim-only thumb oracle (stm32f1_exec_oracle.rs:300) and the conformance digest, which CI skips without its prebuilt ELF — while WWDG is an inert shim rather than a dead model, and the USB-device and BKP windows also resolve to zero stubs._
