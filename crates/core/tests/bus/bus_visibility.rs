@@ -388,7 +388,8 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "USART0 registers live on the AVR CPU and are forwarded to the bus-side host; \
          this harness drives bus MMIO, not the CPU, so no bring-up exists here",
     ),
-    // ATmega2560: same USART0 model and addresses as the 328P.
+    // ATmega2560: USART0..3 live on the AVR CPU (cpu/avr/usart.rs), which hands
+    // finished frames to the bus-side hosts; the harness drives bus MMIO only.
     (
         "atmega2560",
         BusKind::Uart,
