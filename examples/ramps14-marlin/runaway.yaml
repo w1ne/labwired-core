@@ -1,0 +1,21 @@
+# Rung 8: the hotend thermistor has fallen out of the block, so the heater
+# runs but the sensed temperature never rises. Stock Marlin's heating watch
+# (WATCH_TEMP_PERIOD 40 s, WATCH_TEMP_INCREASE 2 C) must stop the printer.
+schema_version: "1.2"
+inputs:
+  firmware: "./firmware.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 3000000000
+  max_cycles: 880000000   # 55 s at 16 MHz
+  wall_time_ms: 3000000
+stimuli:
+  - cosim_signal: { path: ui.hotend.probe_detached, value: 1 }
+uart_injections:
+  - uart: "usart0"
+    bytes: "M104 S200\n"
+    trigger: !after_cycles { cycles: 72000000 }    # 4.5 s
+assertions:
+  - uart_contains: "start"
+  - uart_contains: "Heating failed"
+  - uart_contains: "Printer halted"

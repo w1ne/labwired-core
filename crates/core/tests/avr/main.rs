@@ -28,6 +28,7 @@ mod avr_capture_temp;
 mod avr_cpu_held_i2c_inspect;
 mod avr_logic_capture_differential;
 mod avr_machine_clock;
+mod avr_marlin_probe;
 mod avr_max7219_cascade;
 mod avr_mega2560_io;
 mod avr_mega2560_irq_adc_spi;

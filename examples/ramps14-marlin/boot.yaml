@@ -1,0 +1,20 @@
+# Rungs 1-3: boot to `start`, answer M115, report temperatures with M105.
+schema_version: "1.2"
+inputs:
+  firmware: "./firmware.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 200000000
+  max_cycles: 112000000   # 7 s at 16 MHz
+  wall_time_ms: 900000
+uart_injections:
+  - uart: "usart0"
+    bytes: "M115\n"
+    trigger: !after_cycles { cycles: 72000000 }   # 4.5 s
+  - uart: "usart0"
+    bytes: "M105\n"
+    trigger: !after_cycles { cycles: 88000000 }   # 5.5 s
+assertions:
+  - uart_contains: "start"
+  - uart_contains: "FIRMWARE_NAME:Marlin 2.1.2.10"
+  - uart_regex: "ok T:2[0-9]\\.[0-9]+ /0\\.00 B:2[0-9]\\.[0-9]+ /0\\.00"

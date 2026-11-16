@@ -1,0 +1,29 @@
+# Rung 6: after G28, G1 moves produce exact STEP counts on the drivers:
+# X10 at 80 steps/mm = 800, Y10 = 800 (inverted DIR), Z1 at 400 steps/mm =
+# 400, E5 at 500 steps/mm = 2500 (cold extrusion allowed with M302 P1).
+# The counts are read from each STEP/DIR twin (result.json `motors`) and
+# cross-checked against Marlin's own M114 step counters.
+schema_version: "1.2"
+inputs:
+  firmware: "./firmware.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 600000000
+  max_cycles: 304000000   # 19 s at 16 MHz
+  wall_time_ms: 1200000
+uart_injections:
+  - uart: "usart0"
+    bytes: "G28\n"
+    trigger: !after_cycles { cycles: 72000000 }   # 4.5 s
+  - uart: "usart0"
+    bytes: "M114\nG1 X10 Y10 F3000\n"
+    trigger: !after_cycles { cycles: 73600000 }
+  - uart: "usart0"
+    bytes: "G1 Z1 F240\nM302 P1\n"
+    trigger: !after_cycles { cycles: 75200000 }
+  - uart: "usart0"
+    bytes: "G1 E5 F600\nM400\nM114\n"
+    trigger: !after_cycles { cycles: 76800000 }
+assertions:
+  - uart_contains: "start"
+  - uart_regex: "X:10\\.00 Y:10\\.00 Z:1\\.00 E:5\\.00 Count X:800 Y:800 Z:400"

@@ -1,0 +1,23 @@
+# Rung 9: the controller's LCD paints from Marlin's bit-banged U8glib stream
+# (ST7920 framebuffer ink, checked in result.json) and, with the card-detect
+# switch closed, Marlin initialises the SD card over hardware SPI, mounts the
+# FAT16 volume and lists its file.
+schema_version: "1.2"
+inputs:
+  firmware: "./firmware.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 400000000
+  max_cycles: 160000000   # 10 s at 16 MHz
+  wall_time_ms: 1200000
+stimuli:
+  - target: { component: "sd_detect", channel: "pressed" }
+    value: 1
+uart_injections:
+  - uart: "usart0"
+    bytes: "M20\n"
+    trigger: !after_cycles { cycles: 96000000 }   # 6 s
+assertions:
+  - uart_contains: "start"
+  - uart_contains: "SD card ok"
+  - uart_regex: "Begin file list\\r?\\nTEST\\.GCO 50\\r?\\nEnd file list"

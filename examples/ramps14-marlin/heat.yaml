@@ -1,0 +1,23 @@
+# Rung 7: M104 S200 / M140 S60 heat the hotend (PID) and the bed (bang-bang)
+# through models/thermal_plant.py and hold there. M155 S5 autoreports the
+# temperatures every 5 s; the last reports must sit at the targets.
+schema_version: "1.2"
+inputs:
+  firmware: "./firmware.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 3000000000
+  max_cycles: 1440000000   # 90 s at 16 MHz
+  wall_time_ms: 3000000
+uart_injections:
+  - uart: "usart0"
+    bytes: "M155 S5\nM140 S60\nM104 S200\n"
+    trigger: !after_cycles { cycles: 72000000 }    # 4.5 s
+  - uart: "usart0"
+    bytes: "M105\n"
+    trigger: !after_cycles { cycles: 1424000000 }  # 89 s
+assertions:
+  - uart_contains: "start"
+  # Hotend PID within 2 C of 200; bed bang-bang (BED_CHECK_INTERVAL 5 s,
+  # BED_HYSTERESIS 2) within 3 C of 60.
+  - uart_regex: "ok T:(19[89]|20[0-2])\\.[0-9]+ /200\\.00 B:(5[7-9]|6[0-3])\\.[0-9]+ /60\\.00"

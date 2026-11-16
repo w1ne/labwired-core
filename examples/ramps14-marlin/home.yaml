@@ -1,0 +1,29 @@
+# Rung 5: G28 homes X, Y and Z. Each carriage starts away from its MIN switch
+# (X 20 mm, Y 20 mm, Z 2 mm); the switch closes only when the STEP/DIR twin
+# reaches its travel stop, so Marlin has to drive every axis onto it.
+schema_version: "1.2"
+inputs:
+  firmware: "./firmware.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 400000000
+  max_cycles: 256000000   # 16 s at 16 MHz
+  wall_time_ms: 900000
+uart_injections:
+  - uart: "usart0"
+    bytes: "M114\n"
+    trigger: !after_cycles { cycles: 64000000 }   # 4.0 s
+  - uart: "usart0"
+    bytes: "G28\n"
+    trigger: !after_cycles { cycles: 72000000 }   # 4.5 s
+  - uart: "usart0"
+    bytes: "M114\n"
+    trigger: !after_cycles { cycles: 73600000 }   # queued behind G28
+  - uart: "usart0"
+    bytes: "M119\n"
+    trigger: !after_cycles { cycles: 75200000 }
+assertions:
+  - uart_contains: "start"
+  - uart_regex: "X:0\\.00 Y:0\\.00 Z:0\\.00 E:0\\.00 Count X:0 Y:0 Z:0"
+  # Before G28 every switch is open; after it each carriage rests on its switch.
+  - uart_regex: "x_min: TRIGGERED\\r?\\ny_min: TRIGGERED\\r?\\nz_min: TRIGGERED"
