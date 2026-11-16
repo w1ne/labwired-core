@@ -1307,7 +1307,9 @@ pub fn try_build(
             };
             Box::new(crate::peripherals::rp2040::pwm::Rp2040Pwm::new().with_layout(layout))
         }
-        "rp2040_adc" => Box::new(crate::peripherals::rp2040::adc::Rp2040Adc::new()),
+        "rp2040_adc" => Box::new(
+            crate::peripherals::rp2040::adc::Rp2040Adc::new().with_irq(p_cfg.irq.unwrap_or(22)),
+        ),
         "rp2040_rtc" => Box::new(crate::peripherals::rp2040::rtc::Rp2040Rtc::new()),
         "rp2040_watchdog" => Box::new(crate::peripherals::rp2040::watchdog::Rp2040Watchdog::new()),
         "rp2040_xip_ssi" => Box::new(crate::peripherals::rp2040::xip_ssi::Rp2040XipSsi::new()),
