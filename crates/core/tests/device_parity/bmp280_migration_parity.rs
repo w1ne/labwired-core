@@ -136,7 +136,7 @@ fn chip_id_is_identical() {
 
 /// The 20-bit word a driver reassembles from three left-justified bytes.
 fn word(b: &[u8]) -> i32 {
-    ((i32::from(b[0]) << 12) | (i32::from(b[1]) << 4) | (i32::from(b[2]) >> 4)) as i32
+    (i32::from(b[0]) << 12) | (i32::from(b[1]) << 4) | (i32::from(b[2]) >> 4)
 }
 
 /// Bosch BMP280 datasheet (BST-BMP280-DS001) §8.2: `bmp280_compensate_T_int32`
@@ -203,10 +203,16 @@ fn driven_pressure_and_temperature_read_back_through_the_registers() {
         dev.set_input("temperature", t_in).unwrap();
         dev.set_input("pressure", p_in).unwrap();
         let (t, p) = firmware_reading(&mut dev);
-        assert!((t - t_in).abs() < 0.005, "set {t_in} °C, firmware reads {t} °C");
+        assert!(
+            (t - t_in).abs() < 0.005,
+            "set {t_in} °C, firmware reads {t} °C"
+        );
         // Q24.8 Pa: the compensation resolves 1/256 Pa; one ADC count is
         // ~0.16 Pa at these coefficients, so the inverse lands within 0.2 Pa.
-        assert!((p - p_in).abs() * 100.0 < 0.2, "set {p_in} hPa, firmware reads {p} hPa");
+        assert!(
+            (p - p_in).abs() * 100.0 < 0.2,
+            "set {p_in} hPa, firmware reads {p} hPa"
+        );
     }
 }
 
@@ -223,7 +229,10 @@ fn pressure_and_temperature_are_independent_channels() {
     assert_eq!(before[3..], after_p[3..], "temperature word must not move");
     dev.set_input("temperature", 0.0).unwrap();
     let (t, p) = firmware_reading(&mut dev);
-    assert!((t - 0.0).abs() < 0.005 && (p - 850.0).abs() * 100.0 < 0.2, "{t} °C {p} hPa");
+    assert!(
+        (t - 0.0).abs() < 0.005 && (p - 850.0).abs() * 100.0 < 0.2,
+        "{t} °C {p} hPa"
+    );
 }
 
 /// NEGATIVE control: the oracle's constant words are NOT what the descriptor
@@ -244,7 +253,10 @@ fn the_data_block_is_no_longer_the_oracles_constant() {
 fn nan_and_unknown_inputs_are_rejected() {
     let mut dev = declarative();
     assert!(dev.set_input("pressure", f64::NAN).is_err());
-    assert!(dev.set_input("humidity", 50.0).is_err(), "a BMP280 has no humidity channel");
+    assert!(
+        dev.set_input("humidity", 50.0).is_err(),
+        "a BMP280 has no humidity channel"
+    );
 }
 
 /// A mid-word pointer must land inside the same data registers a burst read
@@ -346,7 +358,10 @@ fn read_only_registers_drop_the_write_identically() {
     let before = run_i2c(&mut dev, &read_reg(0xF7, 6)).bytes;
     let after = run_i2c(
         &mut dev,
-        &script([write_reg(0xF7, &[0x11, 0x22, 0x33, 0x44, 0x55, 0x66]), read_reg(0xF7, 6)]),
+        &script([
+            write_reg(0xF7, &[0x11, 0x22, 0x33, 0x44, 0x55, 0x66]),
+            read_reg(0xF7, 6),
+        ]),
     )
     .bytes;
     assert_eq!(before, after, "a write to the data block is dropped");
