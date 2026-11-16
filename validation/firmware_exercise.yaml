@@ -319,6 +319,14 @@ chips:
     advanced_dead: []
     shim: []
 
+  - id: rp2354b
+    arch: cortex-m33
+    headline: "Package variant of the rp2350 die (QFN80, 48 GPIO, 2 MiB stacked flash): the yaml copies rp2350.yaml, changes the flash size and SYSINFO.PACKAGE_SEL, and puts IO_BANK0, SIO and ADC on their rp2350b profiles. No beyond-rubric peripheral is exercised under this name: the smoke (tests/fixtures/rp2354b-smoke.elf) brings up XOSC/PLL_SYS, writes UART0 and toggles GPIO47 through SIO GPIO_HI_OUT_XOR; all rubric classes. PIO, USB, DMA and the QMI/stacked flash are not exercised on this chip."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
   - id: esp32c6fh4
     arch: riscv32imac
     headline: "Package variant of the esp32c6 die for the Seeed XIAO ESP32-C6: the yaml copies esp32c6.yaml and changes only the flash size to 4 MB, so it reuses the esp32c6 models and shims. No beyond-rubric peripheral is exercised under this name: the XIAO smoke toggles the active-low user LED on GPIO15 through the C6 GPIO block, a rubric class. The radio, RF switch, USB-Serial/JTAG console and LP core are not exercised on this board."

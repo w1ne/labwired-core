@@ -89,6 +89,12 @@ impl SystemBus {
             // trait (Mi-V CoreGPIO, ATmega ports, …): pin bit N is register
             // bit N.
             let offsets = dev.gpio_port_offsets()?;
+            // A port word is 32 bits: a pad numbered 32 or higher is not bit
+            // N of it (the RP2350 QFN80 keeps GPIO32..47 in the separate
+            // GPIO_HI_* words). Refuse it rather than shift past the word.
+            if *bit >= 32 {
+                return None;
+            }
             return Some((base + offsets.output, *bit));
         }
         // 2. No chip pin map → standard STM32/Nordic label parse.
@@ -268,6 +274,10 @@ impl SystemBus {
                     return Some((base + idr_off, *bit));
                 }
                 let offsets = dev.gpio_port_offsets()?;
+                // Same 32-bit word bound as `resolve_pin_odr`.
+                if *bit >= 32 {
+                    return None;
+                }
                 return Some((base + offsets.input, *bit));
             }
             // Label not in map — fall through (ESP bare/GPIO labels, etc.).

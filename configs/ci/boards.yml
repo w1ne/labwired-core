@@ -83,6 +83,13 @@ boards:
     path: examples/adafruit-feather-rp2350
     rust_targets: [thumbv8m.main-none-eabi]
     gate: true
+  # RP2354B (RP2350 die, QFN80, 2 MiB stacked flash). Committed smoke ELF
+  # built from pico-sdk register headers; no cross-toolchain in CI. Proves
+  # the rp2354b descriptor through `labwired test` on every PR.
+  - id: rp2354b
+    kind: sim-validate
+    path: examples/rp2354b
+    gate: true
   # Narrow ESP32-DevKitC-32E onboarding profile. Committed TIER1 ELF, no
   # cross-toolchain, seconds to run. Proves the new chip descriptor through
   # `labwired test` on every PR (chip-coverage ceiling forbids another waiver).

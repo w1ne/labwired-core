@@ -1,0 +1,59 @@
+{
+  "sdk_commit": "079c6f39023649b154152db30f1d781e884879bc",
+  "sdk_version": "2.3.1",
+  "unmodified_headers": true,
+  "headers": [
+    {
+      "path": "src/rp2350/hardware_regs/include/hardware/regs/addressmap.h",
+      "sha256": "1cbb8830274b7db50e8da2780b67def9e3347135fc46ff1fb1784fa7941eecbb",
+      "url": "https://github.com/raspberrypi/pico-sdk/blob/079c6f39023649b154152db30f1d781e884879bc/src/rp2350/hardware_regs/include/hardware/regs/addressmap.h"
+    },
+    {
+      "path": "src/rp2350/hardware_regs/include/hardware/regs/clocks.h",
+      "sha256": "8170680e446f4b0bdad6f410489f85d5d0e15da770698ac50bd3185aa8e4eb72",
+      "url": "https://github.com/raspberrypi/pico-sdk/blob/079c6f39023649b154152db30f1d781e884879bc/src/rp2350/hardware_regs/include/hardware/regs/clocks.h"
+    },
+    {
+      "path": "src/rp2350/hardware_regs/include/hardware/regs/io_bank0.h",
+      "sha256": "47897d9a32238301b2f3dc6afea68a6b54e1801dd916c1343e69d6f60536f961",
+      "url": "https://github.com/raspberrypi/pico-sdk/blob/079c6f39023649b154152db30f1d781e884879bc/src/rp2350/hardware_regs/include/hardware/regs/io_bank0.h"
+    },
+    {
+      "path": "src/rp2350/hardware_regs/include/hardware/regs/pads_bank0.h",
+      "sha256": "a3d9315b1ed8c5bb2d579c00bda28221c938bd790a70f3257ec24b7d01703837",
+      "url": "https://github.com/raspberrypi/pico-sdk/blob/079c6f39023649b154152db30f1d781e884879bc/src/rp2350/hardware_regs/include/hardware/regs/pads_bank0.h"
+    },
+    {
+      "path": "src/rp2350/hardware_regs/include/hardware/regs/pll.h",
+      "sha256": "3ecc401ee1bb9ccabc6b7f8f4287735af3c8c238dc9aa8efb3880201ff7d09a2",
+      "url": "https://github.com/raspberrypi/pico-sdk/blob/079c6f39023649b154152db30f1d781e884879bc/src/rp2350/hardware_regs/include/hardware/regs/pll.h"
+    },
+    {
+      "path": "src/rp2350/hardware_regs/include/hardware/regs/resets.h",
+      "sha256": "74849c00838e5d935f63037ead6bfde5f0af27275bd1151fa8058ad4f7d6ae95",
+      "url": "https://github.com/raspberrypi/pico-sdk/blob/079c6f39023649b154152db30f1d781e884879bc/src/rp2350/hardware_regs/include/hardware/regs/resets.h"
+    },
+    {
+      "path": "src/rp2350/hardware_regs/include/hardware/regs/sio.h",
+      "sha256": "1d8f56470a556b6ef10208cfd4da1ef97866bfb089202922669a1e6555dfa647",
+      "url": "https://github.com/raspberrypi/pico-sdk/blob/079c6f39023649b154152db30f1d781e884879bc/src/rp2350/hardware_regs/include/hardware/regs/sio.h"
+    },
+    {
+      "path": "src/rp2350/hardware_regs/include/hardware/regs/uart.h",
+      "sha256": "832109496b289ca182d54d2b6cdc633f929d7a5ed46c60a5d47e9eae30b0549c",
+      "url": "https://github.com/raspberrypi/pico-sdk/blob/079c6f39023649b154152db30f1d781e884879bc/src/rp2350/hardware_regs/include/hardware/regs/uart.h"
+    },
+    {
+      "path": "src/rp2350/hardware_regs/include/hardware/regs/xosc.h",
+      "sha256": "063925dcb05d74d731f476e9b8f9289f1a9964714e1f956bce490a48a0232906",
+      "url": "https://github.com/raspberrypi/pico-sdk/blob/079c6f39023649b154152db30f1d781e884879bc/src/rp2350/hardware_regs/include/hardware/regs/xosc.h"
+    }
+  ],
+  "compiler": "arm-none-eabi-gcc (15:13.2.rel1-2) 13.2.1 20231009",
+  "elf_sha256": "5557cf668cbf2ada5dcaf7027684bb12d7ce25a07510a747f3729343a1207204",
+  "text_bytes": 472,
+  "data_bytes": 0,
+  "bss_bytes": 0,
+  "fixture_scope": "UART0 + GPIO47 smoke for configs/chips/rp2354b.yaml; asserted by examples/rp2354b/io-smoke.yaml and crates/core/tests/rp/rp2354b_contract.rs.",
+  "output": "tests/fixtures/rp2354b-smoke.elf"
+}

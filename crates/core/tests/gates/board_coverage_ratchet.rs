@@ -943,6 +943,10 @@ fn every_shipped_descriptor_is_ratcheted() {
         // Its D13/GPIO7 + UART0 smoke runs in core-onboarding-smoke, but it
         // has no catalog board and no differential of its own.
         "rp2350-feather",
+        // RP2354B: the rp2350 die in the QFN80 package (48 GPIO, 2 MiB
+        // stacked flash). Its UART0 + GPIO47 smoke runs in the PR lane, but
+        // it has no catalog board, no silicon oracle and no differential.
+        "rp2354b",
         // NUCLEO-H723ZG slice of the STM32H723ZG (Cortex-M7, RM0468). The
         // descriptor models RCC, SysTick, GPIO B/C/D/E and USART3 only; its
         // LD1 + USART3 smoke runs in core-onboarding-smoke. No catalog board,
