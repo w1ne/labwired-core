@@ -1,0 +1,22 @@
+# A generic SPICE EXP source drives an RC network whose sense node routes to
+# the NUCLEO-F407 ADC1. The source rises after 1 us, then decays after 3 us.
+name: "nucleo-f407-exp-rc"
+chip: "../../configs/chips/stm32f407.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "exp_rc"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_sense: "board.analog.pa3_volts"
+    config:
+      substeps: 1
+      integration: "be"
+      netlist_text: |
+        Vdrive drive 0 EXP(0 3.3 1u 1u 3u 1u)
+        Rseries drive sense 1k
+        Csense sense 0 1n
+      probes:
+        v_sense: "v(sense)"
+      vdd: 3.3

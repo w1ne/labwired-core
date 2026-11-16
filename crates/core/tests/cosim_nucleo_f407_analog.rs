@@ -1888,7 +1888,7 @@ fn nucleo_f407_bjt_high_injection_reaches_adc1_alongside_ntc_and_diode() {
 }
 
 #[test]
-fn nucleo_f407_pwl_rc_transient_reaches_adc1_with_ntc_and_diode() {
+fn nucleo_f407_pwl_and_exp_rc_transients_reach_adc1_with_ntc_and_diode() {
     let system_path = root("configs/systems/nucleo-f407.yaml");
     let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F407 profile");
     let generic =
@@ -1896,23 +1896,26 @@ fn nucleo_f407_pwl_rc_transient_reaches_adc1_with_ntc_and_diode() {
             .expect("load unrelated generic NTC and diode netlists");
     let pwl = SystemManifest::from_file(root("examples/nucleo-f407/analog-pwl-rc.yaml"))
         .expect("load generic PWL-driven RC netlist");
+    let exp = SystemManifest::from_file(root("examples/nucleo-f407/analog-exp-rc.yaml"))
+        .expect("load generic EXP-driven RC netlist");
     profile.cosim_models = generic.cosim_models;
     profile.cosim_models.extend(pwl.cosim_models);
+    profile.cosim_models.extend(exp.cosim_models);
 
     let chip_path = system_path.parent().unwrap().join(&profile.chip);
     let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F407 descriptor");
-    for (pad, channel) in [("PA0", 0), ("PA1", 1), ("PA2", 2)] {
+    for (pad, channel) in [("PA0", 0), ("PA1", 1), ("PA2", 2), ("PA3", 3)] {
         assert_eq!(chip.analog_pins[pad].channel, channel);
     }
 
     let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F407 bus");
     let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
         .expect("build analog co-simulation")
-        .expect("profile has NTC, diode, and PWL-driven RC netlists");
+        .expect("profile has NTC, diode, and PWL/EXP-driven RC netlists");
     assert_eq!(
         session.binding_errors(),
         &[] as &[RoutingError],
-        "the generic PWL transient must route through the ordinary ADC pin path"
+        "the generic PWL and EXP transients must route through the ordinary ADC pin path"
     );
     session
         .set_signal_number("ui.ntc.temperature_c", 25.0)
@@ -1929,17 +1932,14 @@ fn nucleo_f407_pwl_rc_transient_reaches_adc1_with_ntc_and_diode() {
     let expected_ntc_v = 1.65;
     let expected_diode_v = diode_load_line_voltage();
     let mut expected_rc_v = 0.0;
+    let mut expected_exp_rc_v = 0.0;
     let mut cycles = 0;
     for time_step in 1..=3 {
         cycles += session.cycles_until_boundary(cycles);
         let (steps, errors) = session
             .advance_to(cycles, &mut bus)
-            .expect("solve and route all three analog netlists");
-        assert_eq!(
-            steps.len(),
-            3,
-            "all three netlists cross each 1 us boundary"
-        );
+            .expect("solve and route all four analog netlists");
+        assert_eq!(steps.len(), 4, "all four netlists cross each 1 us boundary");
         assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
 
         // The source is zero at 1 us, then rises to 3.3 V between 1 us and
@@ -1954,6 +1954,26 @@ fn nucleo_f407_pwl_rc_transient_reaches_adc1_with_ntc_and_diode() {
             time_step
         );
 
+        // ngspice EXP(0 3.3 1u 1u 3u 1u): the first exponential rises from
+        // TD1, then the second exponential term returns it toward zero at TD2.
+        // The 1 kΩ × 1 nF RC uses backward Euler at each 1 us boundary.
+        let time_s = time_step as f64 * 1e-6;
+        let rising = 3.3 * (1.0 - (-(time_s - 1e-6) / 1e-6).exp());
+        let exp_source_v = if time_s < 1e-6 {
+            0.0
+        } else if time_s < 3e-6 {
+            rising
+        } else {
+            rising - 3.3 * (1.0 - (-(time_s - 3e-6) / 1e-6).exp())
+        };
+        expected_exp_rc_v = (expected_exp_rc_v + exp_source_v) / 2.0;
+        let exp_rc_v = signal_voltage(&session, "board.analog.pa3_volts");
+        assert!(
+            (exp_rc_v - expected_exp_rc_v).abs() < 2e-8,
+            "EXP-driven RC node at {} us should follow the ngspice source equation and independent backward-Euler recurrence: expected {expected_exp_rc_v} V, got {exp_rc_v} V",
+            time_step
+        );
+
         let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
         let diode_v = signal_voltage(&session, "board.analog.pa1_volts");
         assert!(
@@ -1965,7 +1985,7 @@ fn nucleo_f407_pwl_rc_transient_reaches_adc1_with_ntc_and_diode() {
             "diode route stays isolated"
         );
 
-        for (channel, voltage_v) in [(0, ntc_v), (1, diode_v), (2, rc_v)] {
+        for (channel, voltage_v) in [(0, ntc_v), (1, diode_v), (2, rc_v), (3, exp_rc_v)] {
             let expected_count = expected_adc_count(voltage_v);
             assert_eq!(
                 adc_channel_count(&mut bus, channel),
@@ -1978,10 +1998,5 @@ fn nucleo_f407_pwl_rc_transient_reaches_adc1_with_ntc_and_diode() {
                 "firmware-visible ADC1 conversion follows channel {channel}"
             );
         }
-        assert_eq!(
-            adc_channel_count(&mut bus, 3),
-            u16::MAX,
-            "neighboring ADC1 channel 3 remains undriven"
-        );
     }
 }

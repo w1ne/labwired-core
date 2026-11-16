@@ -145,7 +145,7 @@
 //! [`OpAmpModel`] and [`ComparatorModel`] for exactly what it becomes.
 //!
 //! `<source>` is `[dc] <value>`, `SIN(vo va freq [td [theta]])`,
-//! `PULSE(v1 v2 [td [tr [tf [pw [per]]]]])`, or
+//! `EXP(v1 v2 td1 tau1 td2 tau2)`, `PULSE(v1 v2 [td [tr [tf [pw [per]]]]])`, or
 //! `PWL(t1 v1 ... tn vn) [r=repeat_time] [td=delay]`, spelled as in SPICE. A source that
 //! carries a function is driven by the clock, so it cannot also be a routed
 //! input — [`super::adapter`] rejects a manifest that wires one.
@@ -645,6 +645,22 @@ pub enum Waveform {
         /// Exponential damping factor, 1/s.
         theta: f64,
     },
+    /// `EXP(v1 v2 td1 tau1 td2 tau2)` — exponential rise toward `v2` after
+    /// `td1`, then a second exponential term returns toward `v1` after `td2`.
+    Exp {
+        /// Initial value before the rise delay.
+        v1: f64,
+        /// Rise target.
+        v2: f64,
+        /// Rise delay, seconds.
+        td1: f64,
+        /// Rise time constant, seconds.
+        tau1: f64,
+        /// Fall delay, seconds.
+        td2: f64,
+        /// Fall time constant, seconds.
+        tau2: f64,
+    },
     /// `PULSE(v1 v2 [td [tr [tf [pw [per]]]]])` — a trapezoidal pulse train.
     Pulse {
         /// Initial (and resting) value.
@@ -704,6 +720,25 @@ impl Waveform {
                         + *amplitude
                             * envelope
                             * libm::sin(2.0 * core::f64::consts::PI * *frequency * elapsed)
+                }
+            }
+            Self::Exp {
+                v1,
+                v2,
+                td1,
+                tau1,
+                td2,
+                tau2,
+            } => {
+                if t < *td1 {
+                    return *v1;
+                }
+                let rise = (*v2 - *v1) * (1.0 - libm::exp(-(t - *td1) / *tau1));
+                if t < *td2 {
+                    *v1 + rise
+                } else {
+                    let fall = (*v1 - *v2) * (1.0 - libm::exp(-(t - *td2) / *tau2));
+                    *v1 + rise + fall
                 }
             }
             Self::Pulse {
@@ -6980,7 +7015,7 @@ fn bind_models(
 }
 
 /// Parse the value part of a `V`/`I` line: `[dc] <value>`, `SIN(...)`,
-/// `PULSE(...)`, or `PWL(...)`.
+/// `EXP(...)`, `PULSE(...)`, or `PWL(...)`.
 ///
 /// SPICE allows the argument list to be written with or without commas and
 /// with the parenthesis detached from the keyword (`SIN (0 5 1k)`), so the
@@ -7063,7 +7098,7 @@ fn parse_source(ctx: &LineCtx<'_>, tokens: &[&str], shape: &str) -> Result<Wavef
         }
     }
 
-    for keyword in ["SIN", "PULSE"] {
+    for keyword in ["SIN", "EXP", "PULSE"] {
         let Some(rest) = upper.strip_prefix(keyword) else {
             continue;
         };
@@ -7093,6 +7128,29 @@ fn parse_source(ctx: &LineCtx<'_>, tokens: &[&str], shape: &str) -> Result<Wavef
                 frequency: args[2],
                 delay: arg(3, 0.0),
                 theta: arg(4, 0.0),
+            });
+        }
+        if keyword == "EXP" {
+            if args.len() != 6 {
+                return Err(ctx.parse_err("expected `EXP(v1 v2 td1 tau1 td2 tau2)`"));
+            }
+            let [td1, tau1, td2, tau2] = [args[2], args[3], args[4], args[5]];
+            if td1 < 0.0 || td2 < 0.0 {
+                return Err(ctx.parse_err("EXP delay times TD1 and TD2 must not be negative"));
+            }
+            if tau1 <= 0.0 || tau2 <= 0.0 {
+                return Err(ctx.parse_err("EXP time constants TAU1 and TAU2 must be positive"));
+            }
+            if td2 < td1 {
+                return Err(ctx.parse_err("EXP fall delay TD2 must be at or after rise delay TD1"));
+            }
+            return Ok(Waveform::Exp {
+                v1: args[0],
+                v2: args[1],
+                td1,
+                tau1,
+                td2,
+                tau2,
             });
         }
         if args.len() < 2 || args.len() > 7 {
@@ -7128,7 +7186,7 @@ fn parse_source(ctx: &LineCtx<'_>, tokens: &[&str], shape: &str) -> Result<Wavef
         _ => {
             return Err(ctx.parse_err(format!(
                 "expected `{shape}`, where `<source>` is `[dc] <value>`, \
-                 `SIN(vo va freq [td [theta]])`, \
+                 `SIN(vo va freq [td [theta]])`, `EXP(v1 v2 td1 tau1 td2 tau2)`, \
                  `PULSE(v1 v2 [td [tr [tf [pw [per]]]]])`, or \
                  `PWL(t1 v1 ... tn vn) [r=repeat_time] [td=delay]`"
             )))

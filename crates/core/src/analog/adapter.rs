@@ -243,7 +243,7 @@ impl AnalogCosimAdapter {
         let mut inputs = BTreeMap::new();
         for (input, element) in &cfg.sources {
             let target = if let Some(index) = solver.voltage_source_index(element) {
-                // A source that carries SIN()/PULSE()/PWL() is driven by the clock.
+                // A source that carries a transient function is driven by the clock.
                 // Letting a routed input write to it too would give one element
                 // two owners, and which one you saw would depend on the order
                 // the co-simulation happened to call us in.

@@ -1222,7 +1222,7 @@ C1 out 0 100n $ dollar comment
     // Transient sources
     // -----------------------------------------------------------------------
 
-    /// `SIN` and `PULSE` with SPICE's own argument defaults, and the value at
+    /// `SIN`, `EXP`, and `PULSE` source semantics, including each value at
     /// `t = 0` that the operating point is solved with.
     #[test]
     fn transient_source_functions_parse_with_spice_semantics() {
@@ -1230,7 +1230,8 @@ C1 out 0 100n $ dollar comment
             "Vsin a 0 SIN(1 5 1k)\n\
              Vpulse b 0 PULSE(0 3.3 1u 10n 10n 5u 10u)\n\
              Vdc c 0 dc 2\n\
-             Vbare d 0 7\n",
+             Vbare d 0 7\n\
+             Vexp e 0 EXP(1 5 1u 2u 4u 1u)\n",
         )
         .expect("source functions parse");
 
@@ -1263,7 +1264,39 @@ C1 out 0 100n $ dollar comment
         assert!(circuit.voltage_sources[2].wave.is_constant());
         assert_eq!(circuit.voltage_sources[3].wave, Waveform::Dc(7.0));
         assert!(circuit.has_waveforms());
+        let exp = &circuit.voltage_sources[4].wave;
+        let near = |actual: f64, expected: f64| {
+            assert!(
+                (actual - expected).abs() < 1e-12,
+                "expected {expected}, got {actual}"
+            );
+        };
+        assert_eq!(circuit.voltage_sources[4].dc, 1.0, "EXP starts at V1");
+        assert_eq!(exp.at(0.5e-6), 1.0, "before TD1");
+        near(exp.at(2e-6), 1.0 + 4.0 * (1.0 - (-0.5_f64).exp()));
+        near(exp.at(4e-6), 1.0 + 4.0 * (1.0 - (-1.5_f64).exp()));
+        near(
+            exp.at(5e-6),
+            1.0 + 4.0 * (1.0 - (-2.0_f64).exp()) - 4.0 * (1.0 - (-1.0_f64).exp()),
+        );
+        near(exp.at(100e-6), 1.0);
         assert!(!parse_netlist("V1 a 0 dc 5\n").unwrap().has_waveforms());
+    }
+
+    #[test]
+    fn malformed_exponential_source_parameters_are_rejected() {
+        for (deck, expected) in [
+            (
+                "V1 a 0 EXP(0 1 1u 1u 2u)\n",
+                "expected `EXP(v1 v2 td1 tau1 td2 tau2)`",
+            ),
+            ("V1 a 0 EXP(0 1 -1u 1u 2u 1u)\n", "must not be negative"),
+            ("V1 a 0 EXP(0 1 1u 0 2u 1u)\n", "must be positive"),
+            ("V1 a 0 EXP(0 1 2u 1u 1u 1u)\n", "at or after"),
+        ] {
+            let error = parse_netlist(deck).expect_err("invalid EXP parameters are refused");
+            assert!(error.to_string().contains(expected), "{error}");
+        }
     }
 
     #[test]

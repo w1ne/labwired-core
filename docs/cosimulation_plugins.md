@@ -463,7 +463,11 @@ so a typo cannot quietly drop an element line.
 |---|---|
 | `[dc] <value>` | a constant |
 | `SIN(vo va freq [td [theta]])` | `vo + va·exp(−(t−td)·theta)·sin(2π·freq·(t−td))` after `td`, `vo` before |
+| `EXP(v1 v2 td1 tau1 td2 tau2)` | exponential rise and fall; all six values are required, delays must be nonnegative with `td2 ≥ td1`, and both time constants must be positive |
 | `PULSE(v1 v2 [td [tr [tf [pw [per]]]]])` | a trapezoidal pulse train |
+| `PWL(t1 v1 ... tn vn) [r=repeat_time] [td=delay]` | piecewise-linear interpolation with optional suffix repeat and delay |
+
+For `EXP`, the rising term is `(v2−v1)·(1−exp(−(t−td1)/tau1))` from `td1`; after `td2`, the falling term `(v1−v2)·(1−exp(−(t−td2)/tau2))` is added. The source begins at `v1` and tends back to `v1` after the fall.
 
 Sources are evaluated at the END of each internal step, which is the point the
 companion models are written about, and is what SPICE does. The operating point
