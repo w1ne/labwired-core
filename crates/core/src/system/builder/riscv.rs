@@ -157,6 +157,10 @@ fn build_program_image(
     if esp32c6_rom::is_esp32c6(chip) {
         esp32c6_rom::seed_rom_data(&mut machine.bus);
     }
+    // C2 fast-boot: replay the ROM's own `_rom_store_table` unpack.
+    if crate::boot::esp32c2_rom::is_esp32c2(chip) {
+        crate::boot::esp32c2_rom::seed_rom_data(&mut machine.bus);
+    }
 
     // C6: stay below ROM-reserved HP SRAM (see esp32c6_rom::APP_SRAM_END).
     let sp_top = if esp32c6_rom::is_esp32c6(chip) {

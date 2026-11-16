@@ -577,6 +577,9 @@ fn build_riscv_node(
             if crate::boot::esp32c6_rom::is_esp32c6(chip) {
                 crate::boot::esp32c6_rom::seed_rom_data(&mut machine.bus);
             }
+            if crate::boot::esp32c2_rom::is_esp32c2(chip) {
+                crate::boot::esp32c2_rom::seed_rom_data(&mut machine.bus);
+            }
             // Fast boot skips the ROM/2nd-stage bootloader that would normally
             // set the stack pointer, so seed it at the top of app SRAM (16-byte
             // aligned, RISC-V ABI) or the first prologue store faults.
