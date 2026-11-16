@@ -688,6 +688,7 @@ impl crate::Bus for SystemBus {
             let mmio_addr = self.resolve_ns_alias(addr);
             if let Some(idx) = self.find_peripheral_index(mmio_addr) {
                 if !self.is_peripheral_clocked(idx) {
+                    self.note_gated_read(idx, mmio_addr - self.peripherals[idx].base);
                     return Ok(0); // unclocked peripheral reads 0 (silicon gating)
                 }
                 let p = &self.peripherals[idx];
@@ -704,6 +705,7 @@ impl crate::Bus for SystemBus {
             let mmio_addr = self.resolve_ns_alias(addr);
             if let Some(idx) = self.find_peripheral_index(mmio_addr) {
                 if !self.is_peripheral_clocked(idx) {
+                    self.note_gated_read(idx, mmio_addr - self.peripherals[idx].base);
                     return Ok(0); // unclocked peripheral reads 0 (silicon gating)
                 }
                 let p = &self.peripherals[idx];
@@ -1022,6 +1024,7 @@ impl crate::Bus for SystemBus {
             let mmio_addr = self.resolve_ns_alias(addr);
             if let Some(idx) = self.find_peripheral_index(mmio_addr) {
                 if !self.is_peripheral_clocked(idx) {
+                    self.note_gated_read(idx, mmio_addr - self.peripherals[idx].base);
                     return Ok(0);
                 }
                 let off = mmio_addr - self.peripherals[idx].base;
@@ -1034,6 +1037,7 @@ impl crate::Bus for SystemBus {
             let mmio_addr = self.resolve_ns_alias(addr);
             if let Some(idx) = self.find_peripheral_index(mmio_addr) {
                 if !self.is_peripheral_clocked(idx) {
+                    self.note_gated_read(idx, mmio_addr - self.peripherals[idx].base);
                     return Ok(0);
                 }
                 let off = mmio_addr - self.peripherals[idx].base;
@@ -1151,6 +1155,7 @@ impl crate::Bus for SystemBus {
             let mmio_addr = self.resolve_ns_alias(addr);
             if let Some(idx) = self.find_peripheral_index(mmio_addr) {
                 if !self.is_peripheral_clocked(idx) {
+                    self.note_gated_read(idx, mmio_addr - self.peripherals[idx].base);
                     return Ok(0);
                 }
                 let off = mmio_addr - self.peripherals[idx].base;
@@ -1163,6 +1168,7 @@ impl crate::Bus for SystemBus {
             let mmio_addr = self.resolve_ns_alias(addr);
             if let Some(idx) = self.find_peripheral_index(mmio_addr) {
                 if !self.is_peripheral_clocked(idx) {
+                    self.note_gated_read(idx, mmio_addr - self.peripherals[idx].base);
                     return Ok(0);
                 }
                 let off = mmio_addr - self.peripherals[idx].base;
@@ -1205,6 +1211,7 @@ impl crate::Bus for SystemBus {
         let mmio_addr = self.resolve_ns_alias(addr);
         let idx = self.find_peripheral_index(mmio_addr)?;
         if !self.is_peripheral_clocked(idx) {
+            self.note_gated_read(idx, mmio_addr - self.peripherals[idx].base);
             return Some(Ok(0));
         }
         let off = mmio_addr - self.peripherals[idx].base;

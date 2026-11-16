@@ -3424,6 +3424,10 @@ impl Cpu for CortexM {
         self.poll_fast_forward(cycles)
     }
 
+    fn stalled_loop_loads(&mut self, bus: &dyn Bus) -> Option<Vec<u64>> {
+        self.stalled_loads(bus)
+    }
+
     fn idle_fast_forward_budget(&self, _bus: &dyn Bus) -> Option<u64> {
         if self.debug_batch_break() {
             return None;
