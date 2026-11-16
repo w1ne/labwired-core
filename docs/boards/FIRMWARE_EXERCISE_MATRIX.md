@@ -145,6 +145,18 @@ _Drives all 13 rubric classes (incl. FDCAN→can) via real firmware — the broa
 
 _No tier-1 fixture or hosted model-verification gate. The WCH-CH32V003EVT board profile maps its P4 LED1 through a configured jumper to PC0; committed RV32E/ILP32E bare-metal C firmware executes from flash and the PR-gated board smoke requires two GPIO edges. A second RV32EC (compressed) fixture clocks USART1 and prints a line through polled TX on PD5; the board smoke asserts the exact string. A negative control asserts silence when the USART1 clock gate is not set. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, timers, or USB, and is not hosted model_verified or hardware confirmation._
 
+### `ch32v003f4u6`
+
+_QFN20 package of the ch32v003f4p6 die. No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs the committed F4P6 RV32EC USART1 fixture unchanged and asserts the exact PD5 TX string, and runs the F4P6 blink fixture and requires GPIOC PC0 edges. A DS0 bonding test asserts the descriptor matches F4P6 except for package, pin count and bonded pins. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, timers, or USB, and is not hosted model_verified or hardware confirmation._
+
+### `ch32v003a4m6`
+
+_SOP16 package of the ch32v003f4p6 die. No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs the committed F4P6 RV32EC USART1 fixture unchanged and asserts the exact PD5 TX string, and runs the F4P6 blink fixture and requires GPIOC PC0 edges. A DS0 bonding test asserts the descriptor matches F4P6 except for package, pin count and bonded pins. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, timers, or USB, and is not hosted model_verified or hardware confirmation._
+
+### `ch32v003j4m6`
+
+_SOP8 package of the ch32v003f4p6 die. No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs the committed F4P6 RV32EC USART1 fixture unchanged and asserts the exact PD5 TX string. SOP8 has no PC0 pad, so a separate committed fixture blinks PC4 (package pin 7); the test requires PC4 edges and a negative control requires zero PC0 edges. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, timers, or USB, and is not hosted model_verified or hardware confirmation._
+
 ### `nrf5340`
 
 _No tier1 fixture. Unmodified Zephyr v3.7 hello_world boots end-to-end through CLOCK/UARTE0/RTC1. TWIM1 is a behavioural EasyDMA model; the PR-gated nrf5340_clock_boot test attaches the declarative BMI270 model and reads CHIP_ID 0x24 with a repeated-START transaction. Nine peripheral blocks remain benign boot stubs._

@@ -21,6 +21,18 @@
       "expect": "Hello from CH32V003",
       "note": "The CH32V003/RV32E support from #1698 is included in v0.26.0. The candidate runs this committed RV32EC UART fixture without a cross toolchain. This entry proves polled USART1 output, not full CH32V003 peripheral coverage."
     },
+    "ch32v003f4u6": {
+      "how": "needs-build",
+      "why": "Package variant of ch32v003f4p6 (same die); requires the same unreleased CH32V003/RV32E core support, which the installed LabWired CLI v0.25.0 cannot run yet."
+    },
+    "ch32v003a4m6": {
+      "how": "needs-build",
+      "why": "Package variant of ch32v003f4p6 (same die); requires the same unreleased CH32V003/RV32E core support, which the installed LabWired CLI v0.25.0 cannot run yet."
+    },
+    "ch32v003j4m6": {
+      "how": "needs-build",
+      "why": "Package variant of ch32v003f4p6 (same die); requires the same unreleased CH32V003/RV32E core support, which the installed LabWired CLI v0.25.0 cannot run yet."
+    },
     "dspic33fj32mc204": {
       "how": "committed",
       "firmware": "examples/dspic33fj32mc204/firmware/dspic33fj32mc204-uart-smoke.elf",

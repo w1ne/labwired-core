@@ -868,6 +868,27 @@
     "reg_match": 0
   },
   {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "ch32v003f4u6",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "ch32v003a4m6",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "ch32v003j4m6",
+    "reg_match": 0
+  },
+  {
     "behavior": false,
     "excluded": 0,
     "level": 0,

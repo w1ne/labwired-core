@@ -47,8 +47,14 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * UART: PyBadge variant of the atsamd51 twin: generic type:uart (sercom layout); no UART bring-up for this chip family in the edge gate yet
 * **cc2538sf53**
   * UART: no UART0 bring-up in this harness; bytes are proven by the cc2538dk survival smoke
+* **ch32v003a4m6**
+  * UART: F4P6-die package variant: same pad-gated USART1 (TX=PD5) gap; bytes are proven by ch32v003_compiled_firmware
 * **ch32v003f4p6**
   * UART: pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this harness yet; bytes are proven by ch32v003_compiled_firmware
+* **ch32v003f4u6**
+  * UART: F4P6-die package variant: same pad-gated USART1 (TX=PD5) gap; bytes are proven by ch32v003_compiled_firmware
+* **ch32v003j4m6**
+  * UART: F4P6-die package variant: same pad-gated USART1 (TX=PD5) gap; bytes are proven by ch32v003_compiled_firmware
 * **efr32mg26**
   * UART: the Efr32s2 layout models the console TX/RX byte path but captures no baud divisor (CLKDIV), so bit_time_cycles() is None and no wire waveform is narrated — there are no edges to decode
 * **esp32**
@@ -160,7 +166,10 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | atsamd51 | — | — | — |
 | atsamd51-pybadge | — | — | — |
 | cc2538sf53 | — | — | — |
+| ch32v003a4m6 | — | — | — |
 | ch32v003f4p6 | — | — | — |
+| ch32v003f4u6 | — | — | — |
+| ch32v003j4m6 | — | — | — |
 | dspic33fj32mc202 | — | — | — |
 | dspic33fj32mc204 | — | — | — |
 | efr32mg26 | ✓ | ✓ | — |

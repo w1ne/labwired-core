@@ -1,0 +1,99 @@
+# WCH CH32V003F4U6 in QFN-20 (3 x 3 mm, 0.4 mm pitch).
+#
+# Package variant of configs/chips/ch32v003f4p6.yaml. The die, memory map,
+# clock tree and peripheral register layouts are the CH32V003's and are
+# copied verbatim from that descriptor; only the package and its bonded pins
+# differ. Geometry, package and pin bonding: WCH CH32V003DS0 V1.8 (2025-10-17)
+# section 2.1 "Pinouts", Table 2-1 "Pin definitions" and Chapter 4 "Package
+# and Ordering Information". Peripheral sources are listed in the F4P6
+# descriptor.
+#
+# Buyability screen (2026-11-15): LCSC C5299908 listed this exact order code
+# in stock. WCH's product page has no explicit lifecycle field; this descriptor
+# is not a lifecycle claim and is not included in the Proteus parity gate.
+# Sources:
+#   https://www.wch-ic.com/downloads/CH32V003DS0_PDF.html
+#   https://www.lcsc.com/search?q=CH32V003F4U6
+
+name: "ch32v003f4u6"
+arch: "riscv"
+core: "rv32ec"
+cpu_hz: 48_000_000
+
+# WCH's flash view at 0x08000000 is also aliased at address 0 for reset fetch.
+flash:
+  base: 0x08000000
+  size: "16KB"
+ram:
+  base: 0x20000000
+  size: "2KB"
+flash_boot_alias: true
+
+# CH32V003F4U6 bonds the same 18 GPIOs as the F4P6: PA1/PA2, PC0..PC7 and
+# PD0..PD7 (DS0 Table 2-1, QFN20 column). Only the pad numbers differ; the
+# exposed pad (pin 0) is VSS.
+# PinLoc labels are the package pads' GPIO names, independent of pin number.
+package: "QFN20"
+pin_count: 20
+pins:
+  PA1: { gpio: "gpioa", bit: 1 }
+  PA2: { gpio: "gpioa", bit: 2 }
+  PC0: { gpio: "gpioc", bit: 0 }
+  PC1: { gpio: "gpioc", bit: 1 }
+  PC2: { gpio: "gpioc", bit: 2 }
+  PC3: { gpio: "gpioc", bit: 3 }
+  PC4: { gpio: "gpioc", bit: 4 }
+  PC5: { gpio: "gpioc", bit: 5 }
+  PC6: { gpio: "gpioc", bit: 6 }
+  PC7: { gpio: "gpioc", bit: 7 }
+  PD0: { gpio: "gpiod", bit: 0 }
+  PD1: { gpio: "gpiod", bit: 1 }
+  PD2: { gpio: "gpiod", bit: 2 }
+  PD3: { gpio: "gpiod", bit: 3 }
+  PD4: { gpio: "gpiod", bit: 4 }
+  PD5: { gpio: "gpiod", bit: 5 }
+  PD6: { gpio: "gpiod", bit: 6 }
+  PD7: { gpio: "gpiod", bit: 7 }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      profile: "wch"
+
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x40010800
+    size: "1KB"
+    clock: { reg: "apb2pcenr", bit: 2 }
+    config:
+      profile: "wch"
+
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x40011000
+    size: "1KB"
+    clock: { reg: "apb2pcenr", bit: 4 }
+    config:
+      profile: "wch"
+
+  - id: "gpiod"
+    type: "gpio"
+    base_address: 0x40011400
+    size: "1KB"
+    clock: { reg: "apb2pcenr", bit: 5 }
+    config:
+      profile: "wch"
+
+  # USART1 (ch32v00x.h): USART1_BASE = APB2PERIPH_BASE + 0x3800, RCC_USART1EN =
+  # APB2PCENR bit 14. USART_TypeDef is STATR, DATAR, BRR, CTLR1, CTLR2, CTLR3,
+  # GPR at 4-byte strides, the same layout as the STM32F1 USART, so the default
+  # `stm32f1` UART layout serves it. No `irq`: the PFIC is not modelled, so
+  # USART1_IRQn (32) has no controller to reach. TX is polled only.
+  - id: "usart1"
+    type: "uart"
+    base_address: 0x40013800
+    size: "1KB"
+    clock: { reg: "apb2pcenr", bit: 14 }

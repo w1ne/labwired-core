@@ -905,6 +905,13 @@ fn every_shipped_descriptor_is_ratcheted() {
         // GPIO A/C/D, and polled USART1 TX only (no PFIC, ADC, I2C, SPI, or
         // timers). Promote when the catalog board and a differential exist.
         "ch32v003f4p6",
+        // CH32V003 package variants (F4U6 QFN20, A4M6 SOP16, J4M6 SOP8): the
+        // F4P6 descriptor with its own package bonding, booted by the same
+        // fixtures (J4M6 blinks PC4). No catalog board, no silicon oracle,
+        // no differential. Promote with the F4P6.
+        "ch32v003f4u6",
+        "ch32v003a4m6",
+        "ch32v003j4m6",
         // ESP32-H2/C5/P4/S2 UART0-only board profiles. Each has a descriptor,
         // a system manifest and a board smoke that asserts a UART0 token, but
         // no bundled-configs.ts catalog board, no silicon oracle and no
