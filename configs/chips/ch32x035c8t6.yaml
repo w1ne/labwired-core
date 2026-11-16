@@ -1,0 +1,135 @@
+# WCH CH32X035C8T6 in LQFP48 (QingKe V4C, RV32IMAC).
+#
+# Geometry, package and maximum clock: WCH CH32X035/X033 Datasheet V2.3,
+# product table (C8T6: 62 KB CodeFlash, 20 KB SRAM, 46 GPIOs, LQFP48, 48 MHz
+# built-in HSI) and Table 2-1 (LQFP48 column). The openwch/ch32x035 Link.ld
+# gives the same 62 KB / 20 KB.
+#
+# Peripheral bases and register layouts: openwch/ch32x035 ch32x035.h and the
+# CH32X035 Reference Manual V1.9. RCC (0x40021000) keeps the STM32F1 offsets
+# (APB2PCENR at 0x18; RM Table 3-1). The GPIO port has the F1 words (CFGLR,
+# CFGHR, INDR, OUTDR, BSHR, BCR, LCKR; CFGLR/CFGHR reset 0x44444444) and the
+# F1 4-bit MODE/CNF encoding (ch32x035_gpio.c GPIO_Init), so the `stm32f1`
+# GPIO profile serves pins 0..15. USART_TypeDef is the F1 USART layout.
+# Reset clock: CFGR0 resets to 0x50 (HPRE = SYSCLK/6), so the 48 MHz HSI
+# gives an 8 MHz HCLK, the same reset clock as the STM32F1 RCC model.
+#
+# KNOWN LIMITATIONS, STATED PLAINLY:
+#   - Pins 16..23 are not modelled. The X035 adds CFGXR (0x1C) and BSXR
+#     (0x20) for them; the F1 GPIO model has 16 pins per port. This leaves
+#     PA16..PA23 and PC16..PC19 (USB UDM/UDP and the SDI debug pins) out of
+#     the pin map: 34 of the 46 LQFP48 GPIOs are modelled.
+#   - The F1 RCC model reports an 8 MHz HSI. Firmware that sets HPRE to 1
+#     runs at 48 MHz on silicon; the model clock tree does not follow it.
+#   - No PFIC, SysTick (64-bit), timers, ADC, OPA, CMP, PIOC, I2C, SPI, DMA,
+#     USB FS or USB PD. USART TX is polled only; no `irq` is wired because
+#     no interrupt controller exists.
+#
+# Buyability screen (2026-11-15): LCSC C29779902 lists CH32X035C8T6
+# "In Stock". WCH's product page has no lifecycle field; this descriptor is
+# not a lifecycle claim and is not included in the Proteus parity gate.
+# Sources:
+#   https://www.wch-ic.com/download/file?id=381  (CH32X035/X033 DS V2.3)
+#   https://www.wch-ic.com/download/file?id=382  (CH32X035 RM V1.9)
+#   https://github.com/openwch/ch32x035
+#   https://www.lcsc.com/search?q=CH32X035C8T6   (C29779902)
+
+name: "ch32x035c8t6"
+arch: "riscv"
+core: "rv32imac"
+cpu_hz: 48_000_000
+
+# Code flash at 0x08000000 is aliased at address 0 for reset fetch.
+flash:
+  base: 0x08000000
+  size: "62KB"
+ram:
+  base: 0x20000000
+  size: "20KB"
+flash_boot_alias: true
+
+package: "LQFP48"
+pin_count: 48
+gpio_pin_count: 46
+# Modelled GPIOs only (bits 0..15; see limitations). PinLoc labels are the
+# GPIO names.
+pins:
+  PA0: { gpio: "gpioa", bit: 0 }
+  PA1: { gpio: "gpioa", bit: 1 }
+  PA2: { gpio: "gpioa", bit: 2 }
+  PA3: { gpio: "gpioa", bit: 3 }
+  PA4: { gpio: "gpioa", bit: 4 }
+  PA5: { gpio: "gpioa", bit: 5 }
+  PA6: { gpio: "gpioa", bit: 6 }
+  PA7: { gpio: "gpioa", bit: 7 }
+  PA8: { gpio: "gpioa", bit: 8 }
+  PA9: { gpio: "gpioa", bit: 9 }
+  PA10: { gpio: "gpioa", bit: 10 }
+  PA11: { gpio: "gpioa", bit: 11 }
+  PA12: { gpio: "gpioa", bit: 12 }
+  PA13: { gpio: "gpioa", bit: 13 }
+  PA14: { gpio: "gpioa", bit: 14 }
+  PA15: { gpio: "gpioa", bit: 15 }
+  PB0: { gpio: "gpiob", bit: 0 }
+  PB1: { gpio: "gpiob", bit: 1 }
+  PB2: { gpio: "gpiob", bit: 2 }
+  PB3: { gpio: "gpiob", bit: 3 }
+  PB4: { gpio: "gpiob", bit: 4 }
+  PB5: { gpio: "gpiob", bit: 5 }
+  PB6: { gpio: "gpiob", bit: 6 }
+  PB7: { gpio: "gpiob", bit: 7 }
+  PB8: { gpio: "gpiob", bit: 8 }
+  PB9: { gpio: "gpiob", bit: 9 }
+  PB10: { gpio: "gpiob", bit: 10 }
+  PB11: { gpio: "gpiob", bit: 11 }
+  PB12: { gpio: "gpiob", bit: 12 }
+  PB13: { gpio: "gpiob", bit: 13 }
+  PC6: { gpio: "gpioc", bit: 6 }
+  PC7: { gpio: "gpioc", bit: 7 }
+  PC14: { gpio: "gpioc", bit: 14 }
+  PC15: { gpio: "gpioc", bit: 15 }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      profile: "stm32f1"
+
+  # RCC_APB2PCENR IOPAEN..IOPCEN = bits 2..4 (ch32x035_rcc.h). The X035 has
+  # no port D.
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x40010800
+    size: "1KB"
+    clock: { reg: "apb2enr", bit: 2 }
+    config:
+      profile: "stm32f1"
+
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x40010C00
+    size: "1KB"
+    clock: { reg: "apb2enr", bit: 3 }
+    config:
+      profile: "stm32f1"
+
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x40011000
+    size: "1KB"
+    clock: { reg: "apb2enr", bit: 4 }
+    config:
+      profile: "stm32f1"
+
+  # USART1EN = APB2PCENR bit 14 (ch32x035_rcc.h). USART2..4 are on APB1 and
+  # not modelled here. `pad_map: wch_x035` routes TX to the X035 default pad
+  # PB10 (DS Table 2-1), not the STM32F1 PA9.
+  - id: "usart1"
+    type: "uart"
+    base_address: 0x40013800
+    size: "1KB"
+    clock: { reg: "apb2enr", bit: 14 }
+    config:
+      pad_map: "wch_x035"
