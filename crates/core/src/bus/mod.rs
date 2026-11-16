@@ -225,6 +225,10 @@ pub struct ResolvedClockGate {
     /// Bus index of the GCLK peripheral, resolved at config-build when
     /// [`Self::gclk_id`] is `Some`. `None` when no GCLK channel is required.
     pub gclk_idx: Option<usize>,
+    /// Last observed reset hold from the controller
+    /// ([`crate::Peripheral::clock_gate_reset_asserted`]), so an assertion
+    /// is applied once, on its edge.
+    pub reset_asserted: bool,
 }
 
 /// The `peripheral_tick_interval` recommended for a fully scheduler-driven
@@ -859,7 +863,7 @@ pub struct SystemBus {
     /// pass. Lets `tick_peripherals_fully` decide in O(1) whether the walk-free
     /// per-cycle tick has any work at all (see `per_cycle_tick_is_trivial`)
     /// instead of scanning peripherals by name every cycle.
-    nordic_gpio_service: bool,
+    gpio_edge_observers: bool,
     /// Set by `wire_stm32_timer_capture_pads` when at least one GPIO pad can
     /// feed a timer input, so the post-write hook drains timer-input edges
     /// only on buses that have any. One predictable false branch elsewhere.

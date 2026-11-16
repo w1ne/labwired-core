@@ -18,6 +18,38 @@ pub(crate) enum Apb {
 }
 
 impl SystemBus {
+    /// After a write to the clock/reset controller, apply each newly asserted
+    /// peripheral reset to its target ([`crate::Peripheral::on_node_reset`]).
+    /// Only controllers that declare
+    /// [`crate::Peripheral::controls_peripheral_resets`] take this path.
+    pub(crate) fn sync_peripheral_reset_holds(&mut self, idx: usize) {
+        if self.rcc_idx != Some(idx) || !self.peripherals[idx].dev.controls_peripheral_resets() {
+            return;
+        }
+        for target in 0..self.peripherals.len() {
+            let Some(gate) = self.peripherals[target].clock_gate.as_ref() else {
+                continue;
+            };
+            let asserted = gate.requires.iter().any(|req| {
+                req.controller_idx == idx
+                    && self.peripherals[idx]
+                        .dev
+                        .clock_gate_reset_asserted(req.reg_offset, req.bit)
+            });
+            if asserted == gate.reset_asserted {
+                continue;
+            }
+            if let Some(gate) = self.peripherals[target].clock_gate.as_mut() {
+                gate.reset_asserted = asserted;
+            }
+            if asserted {
+                self.peripherals[target].dev.on_node_reset();
+                self.peripherals[target].ticks_remaining = 0;
+                self.reconcile_irq_levels_after_write(target);
+            }
+        }
+    }
+
     /// The divider RCC_CFGR.PPREx puts between HCLK and the APB bus `apb`, or
     /// `None` when the clock controller is not one of the STM32 families
     /// below (or there is none). The family is told apart by where its APB1

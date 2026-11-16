@@ -116,6 +116,11 @@ pub struct Pio {
     wired: bool,
     /// True while a delay-1 SM step event is live (event-scheduler).
     chain_live: bool,
+    /// Cycle of the last executed step when the chain went to sleep because
+    /// every enabled state machine was quiescent (see
+    /// [`Pio::all_enabled_sms_quiescent`]). The only state a skipped tick would
+    /// have advanced is each divider's phase; [`Pio::catch_up`] replays it.
+    sleep_anchor: Option<u64>,
     /// Bus cycle clock, handed over at `add_peripheral`/`push_peripheral` time.
     /// Its presence is the model's proof that it is attached to a bus whose
     /// owning `Machine` actually drains the event scheduler — see
@@ -158,6 +163,7 @@ impl Pio {
             lines: None,
             wired: false,
             chain_live: false,
+            sleep_anchor: None,
             clock: None,
         }
     }
@@ -182,24 +188,118 @@ impl Pio {
         self.sm.iter().any(|s| s.enabled)
     }
 
-    /// True when every enabled state machine is parked on an unconditional
-    /// `jmp` to its own address, with no delay pending and a 1.0 clock
-    /// divider. A tick then changes nothing: the pc, the divider counter, the
-    /// scratch registers and the FIFOs stay the same, so `fstat` recomputes to
-    /// the same value. The scheduler step chain may stop; any PIO write
-    /// re-arms it through `take_scheduled_events` at the same cycle the live
-    /// delay-1 chain would have ticked.
-    fn all_enabled_sms_parked(&self) -> bool {
-        self.sm.iter().filter(|s| s.enabled).all(|s| {
-            let instr = self.instruction_mem[(s.pc & 0x1F) as usize];
-            // JMP (opcode 0), condition "always" (0), delay/side-set 0.
-            instr & 0xFFE0 == 0
-                && (instr & 0x1F) as u8 == s.pc
-                && s.delay_cycles == 0
-                && !s.stalled
-                && s.clkdiv_int == 1
-                && s.clkdiv_frac == 0
-        })
+    /// True when `sm` is parked on an unconditional `jmp` to its own address,
+    /// with no delay pending and a 1.0 clock divider. A tick then changes
+    /// nothing: the pc, the divider counter, the scratch registers and the
+    /// FIFOs stay the same, so `fstat` recomputes to the same value.
+    fn sm_parked(&self, sm: &StateMachine) -> bool {
+        let instr = self.instruction_mem[(sm.pc & 0x1F) as usize];
+        // JMP (opcode 0), condition "always" (0), delay/side-set 0.
+        instr & 0xFFE0 == 0
+            && (instr & 0x1F) as u8 == sm.pc
+            && sm.delay_cycles == 0
+            && !sm.stalled
+            && sm.clkdiv_int == 1
+            && sm.clkdiv_frac == 0
+    }
+
+    /// `CLKDIV` as the divider accumulator sees it: 8.8 fixed point, with an
+    /// integer part of 0 meaning 65536.
+    fn div_total(sm: &StateMachine) -> u32 {
+        let div_int = if sm.clkdiv_int == 0 {
+            65536
+        } else {
+            u32::from(sm.clkdiv_int)
+        };
+        (div_int << 8) | u32::from(sm.clkdiv_frac)
+    }
+
+    /// A copy of the state `execute` reads and writes, with no pad wire and no
+    /// bus clock, to ask "would this instruction stall?" without disturbing
+    /// the live block.
+    fn scratch(&self) -> Pio {
+        let mut p = Pio::new();
+        p.instruction_mem = self.instruction_mem;
+        p.sm = self.sm.clone();
+        p.irq = self.irq;
+        p.pin_out = self.pin_out;
+        p.pin_dir = self.pin_dir;
+        p.tx_fifo = self.tx_fifo.clone();
+        p.rx_fifo = self.rx_fifo.clone();
+        p
+    }
+
+    /// True when state machine `i` is blocked on its current instruction
+    /// (empty TX FIFO under `pull`/autopull, full RX FIFO under `push`/
+    /// autopush, an unmet `wait`) and re-issuing it again would change
+    /// nothing: a stalled `execute` mutates no register, FIFO or flag, and the
+    /// side-set it re-applies is checked separately. Asked of `execute`
+    /// itself on a scratch copy, so it cannot drift from the real stall rules.
+    fn stalled_and_idle(&self, i: usize) -> bool {
+        let sm = &self.sm[i];
+        if !sm.stalled || sm.delay_cycles != 0 {
+            return false;
+        }
+        let instr = self.instruction_mem[(sm.pc & 0x1F) as usize];
+        // Re-applying the side-set must leave the pad state untouched, else
+        // an SM that issues a side-set while stalled still drives pins when
+        // another SM's write lands between two of its re-issues.
+        if let (Some((data, bits)), _) = Self::side_and_delay(sm, instr) {
+            let base = (sm.pin_ctrl >> 10) & 0x1F;
+            let (mut word, cur) = if sm.exec_ctrl & EXECCTRL_SIDE_PINDIR != 0 {
+                (self.pin_dir, self.pin_dir)
+            } else {
+                (self.pin_out, self.pin_out)
+            };
+            write_pin_field(&mut word, base, bits, data);
+            if word != cur {
+                return false;
+            }
+        }
+        let mut scratch = self.scratch();
+        let mut smc = sm.clone();
+        let (_, stalled) = scratch.execute(i, &mut smc, instr);
+        stalled
+    }
+
+    /// True when ticking again would change nothing observable except each
+    /// enabled divider's phase: every enabled state machine is either parked
+    /// (see [`Self::sm_parked`]) or blocked and idle
+    /// ([`Self::stalled_and_idle`]). Those can only be released by an MMIO
+    /// write (FIFO, IRQ, instruction, config) — which re-arms the chain through
+    /// `take_scheduled_events` — because the only input pad this block reads
+    /// is its own output. A divider accumulator at or past its period never
+    /// happens after a tick of a settled divider; it keeps the chain awake so
+    /// [`Self::catch_up`] can stay a closed form.
+    fn all_enabled_sms_quiescent(&self) -> bool {
+        let mut any = false;
+        for (i, sm) in self.sm.iter().enumerate() {
+            if !sm.enabled {
+                continue;
+            }
+            any = true;
+            if sm.clk_counter >= Self::div_total(sm) {
+                return false;
+            }
+            if !self.sm_parked(sm) && !self.stalled_and_idle(i) {
+                return false;
+            }
+        }
+        any
+    }
+
+    /// Replay `ticks` skipped ticks of the enabled state machines' clock
+    /// dividers. One tick adds 256 to the accumulator and takes one period off
+    /// when it reaches it; with the accumulator below the period and the period
+    /// at least 256 that is `(c + 256) mod period`, which composes.
+    fn catch_up(&mut self, ticks: u64) {
+        if ticks == 0 {
+            return;
+        }
+        for sm in self.sm.iter_mut().filter(|s| s.enabled) {
+            let total = u64::from(Self::div_total(sm));
+            sm.clk_counter = ((u64::from(sm.clk_counter) + 256 * ticks) % total) as u32;
+        }
     }
 
     /// TX FIFO depth of state machine `i`: 8 when RX is joined into it, 0
@@ -915,6 +1015,19 @@ impl Peripheral for Pio {
         !self.scheduler_mode()
     }
 
+    /// Settle the divider phase a sleeping chain skipped, up to `now_cycle`,
+    /// before an MMIO write can change the divider or the enabled set. The
+    /// ticks skipped are those at cycles `anchor+1..=now_cycle`; the re-armed
+    /// chain's first step then lands at `now_cycle + 1` with no gap.
+    fn sync_to(&mut self, now_cycle: u64) {
+        if let Some(anchor) = self.sleep_anchor {
+            if now_cycle > anchor {
+                self.catch_up(now_cycle - anchor);
+                self.sleep_anchor = Some(now_cycle);
+            }
+        }
+    }
+
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
         if !self.scheduler_mode() {
             return Vec::new();
@@ -936,6 +1049,11 @@ impl Peripheral for Pio {
         if !self.scheduler_mode() || event_token != EVT_SM_STEP {
             return crate::sched::EventResult::default();
         }
+        // Ticks at `anchor+1..now` were skipped while asleep; this event is the
+        // tick at `now` itself.
+        if let Some(anchor) = self.sleep_anchor.take() {
+            self.catch_up(sched.now().saturating_sub(anchor).saturating_sub(1));
+        }
         // Pin edges land at the cycle this step belongs to.
         if let Some(lines) = &self.lines {
             lines.set_stamp(Some(sched.now()));
@@ -944,10 +1062,14 @@ impl Peripheral for Pio {
         if let Some(lines) = &self.lines {
             lines.set_stamp(None);
         }
-        // A parked chain stops; the next PIO write re-arms it (see
-        // `all_enabled_sms_parked`). `LABWIRED_PIO_PARK=0` keeps it ticking.
-        let active = self.any_sm_enabled() && !(park_enabled() && self.all_enabled_sms_parked());
+        // A parked or blocked chain stops; the next PIO write re-arms it (see
+        // `all_enabled_sms_quiescent`). `LABWIRED_PIO_PARK=0` keeps it ticking.
+        let sleeps = park_enabled() && self.all_enabled_sms_quiescent();
+        let active = self.any_sm_enabled() && !sleeps;
         self.chain_live = active;
+        if sleeps {
+            self.sleep_anchor = Some(sched.now());
+        }
         crate::sched::EventResult {
             reschedule_delay: active.then_some(1),
             ..Default::default()
@@ -1005,6 +1127,228 @@ mod tests {
         pio.write_reg(0x048, 0x0100); // `jmp 0 [1]`: a delay is pending each loop
         let _ = pio.take_scheduled_events();
         assert_eq!(step(&mut pio), Some(1), "a delayed jmp keeps stepping");
+    }
+
+    /// Drives one `Pio` the way `Machine` does at tick interval 1: a write at
+    /// cycle `now` syncs the block, applies, and arms the wakes it asks for at
+    /// `now + 1 + delay`; a step advances to the next cycle and runs the events
+    /// that are due, rescheduling at `now + delay`.
+    struct Drive {
+        pio: Pio,
+        events: Vec<u64>,
+        now: u64,
+        sched: crate::sched::EventScheduler,
+        bus: crate::bus::SystemBus,
+        fired: u64,
+    }
+
+    impl Drive {
+        fn new() -> Self {
+            let mut pio = Pio::new();
+            pio.attach_cycle_clock(CycleClock::default());
+            Self {
+                pio,
+                events: Vec::new(),
+                now: 0,
+                sched: crate::sched::EventScheduler::new(),
+                bus: crate::bus::SystemBus::new(),
+                fired: 0,
+            }
+        }
+
+        fn write(&mut self, addr: u64, value: u32) {
+            self.pio.sync_to(self.now);
+            self.pio.write_reg(addr, value);
+            for (delay, token) in self.pio.take_scheduled_events() {
+                assert_eq!(token, EVT_SM_STEP);
+                self.events.push(self.now + 1 + delay);
+            }
+        }
+
+        fn step(&mut self) {
+            self.now += 1;
+            let due = self.events.iter().filter(|d| **d <= self.now).count();
+            self.events.retain(|d| *d > self.now);
+            self.sched.advance_to(self.now);
+            for _ in 0..due {
+                self.fired += 1;
+                let res = self
+                    .pio
+                    .on_event(EVT_SM_STEP, &mut self.sched, &mut self.bus);
+                if let Some(delay) = res.reschedule_delay {
+                    self.events.push(self.now + delay);
+                }
+            }
+        }
+    }
+
+    /// What firmware can observe of a block at a cycle.
+    fn observable(pio: &Pio) -> String {
+        format!(
+            "out={:08x} dir={:08x} irq={:02x} fstat={:08x} flevel={:08x} sm={:?}",
+            pio.pin_out,
+            pio.pin_dir,
+            pio.irq,
+            pio.fstat_value(),
+            pio.flevel_value(),
+            pio.sm
+                .iter()
+                .map(|s| (
+                    s.pc,
+                    s.x,
+                    s.y,
+                    s.osr,
+                    s.osr_count,
+                    s.isr,
+                    s.isr_count,
+                    s.delay_cycles
+                ))
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    /// Replay `script` on a per-cycle walk (`tick()`, no clock) and on the
+    /// event path, and require the same observable state at every cycle and
+    /// the same divider phase at the end. Returns how many events the event
+    /// path fired.
+    fn assert_walk_identical(script: &[(u64, u64, u32)], cycles: u64) -> u64 {
+        let mut walk = Pio::new();
+        let mut ev = Drive::new();
+        for c in 1..=cycles {
+            for &(at, addr, value) in script {
+                if at == c {
+                    walk.write_reg(addr, value);
+                    ev.now = c - 1;
+                    ev.write(addr, value);
+                }
+            }
+            ev.now = c - 1;
+            walk.tick();
+            ev.step();
+            assert_eq!(
+                observable(&walk),
+                observable(&ev.pio),
+                "diverged at cycle {c}"
+            );
+        }
+        ev.pio.sync_to(cycles);
+        for i in 0..4 {
+            assert_eq!(
+                walk.sm[i].clk_counter, ev.pio.sm[i].clk_counter,
+                "SM{i} divider phase after {cycles} cycles"
+            );
+        }
+        ev.fired
+    }
+
+    const PULL_BLOCK: u32 = 0x80A0;
+    const OUT_PINS_8: u32 = 0x6008;
+    const JMP_0: u32 = 0x0000;
+    const WAIT_1_IRQ_0: u32 = 0x20C0;
+    const SET_PINS_31: u32 = 0xE01F;
+    const SET_PINS_0: u32 = 0xE000;
+
+    /// `pull block; out pins, 8; jmp 0` with SM0 driving 8 pins.
+    fn pull_out_program(clkdiv: u32) -> Vec<(u64, u64, u32)> {
+        vec![
+            (1, 0x048, PULL_BLOCK),
+            (1, 0x04c, OUT_PINS_8),
+            (1, 0x050, JMP_0),
+            (1, 0x0dc, 8 << 20), // SM0_PINCTRL: OUT_COUNT = 8, base 0
+            (1, 0x0c8, clkdiv),
+            (1, 0x000, 1), // CTRL: SM0 on
+        ]
+    }
+
+    /// A state machine blocked on an empty TX FIFO sleeps instead of being
+    /// stepped every cycle, and a FIFO write wakes it on the next cycle.
+    #[test]
+    fn a_stalled_pull_sleeps_and_a_fifo_write_wakes_it() {
+        if !crate::cycle_clock::event_scheduler_enabled() {
+            return;
+        }
+        let mut d = Drive::new();
+        for (_, addr, value) in pull_out_program(0x0001_0000) {
+            d.write(addr, value);
+        }
+        for _ in 0..10_000 {
+            d.step();
+        }
+        assert!(
+            d.fired < 8,
+            "a blocked `pull` must not tick every cycle, fired {}",
+            d.fired
+        );
+        assert!(d.events.is_empty(), "nothing pending while blocked");
+        d.write(0x010, 0xA5);
+        let before = d.fired;
+        d.step(); // pull completes
+        d.step(); // out pins, 8
+        assert_eq!(d.pio.pin_out & 0xFF, 0xA5);
+        assert!(d.fired > before);
+    }
+
+    /// The divider phase a sleeping chain skipped is replayed exactly: a
+    /// fractional and an integer divider, writes landing at unaligned cycles,
+    /// a divider rewritten while asleep.
+    #[test]
+    fn a_sleeping_divided_pull_matches_the_per_cycle_walk() {
+        if !crate::cycle_clock::event_scheduler_enabled() {
+            return;
+        }
+        let mut script = pull_out_program(0x0003_8000); // 3.5
+        script.extend([
+            (500, 0x010, 0xA5),
+            (1337, 0x010, 0x3C),
+            (3001, 0x0c8, 0x0007_0000), // 7.0
+            (3500, 0x010, 0x55),
+            (4003, 0x0c8, 0x0087_4000), // 135.25
+            (4900, 0x010, 0x0F),
+            (6001, 0x010, 0xF0),
+        ]);
+        let fired = assert_walk_identical(&script, 7000);
+        assert!(fired < 3000, "asleep most of the run, fired {fired}");
+    }
+
+    /// `wait 1 irq 0` blocks until the flag is forced; the force wakes the
+    /// chain, the program runs, and it blocks again.
+    #[test]
+    fn a_sleeping_wait_on_irq_matches_the_per_cycle_walk() {
+        if !crate::cycle_clock::event_scheduler_enabled() {
+            return;
+        }
+        let script = vec![
+            (1, 0x048, WAIT_1_IRQ_0),
+            (1, 0x04c, SET_PINS_31),
+            (1, 0x050, SET_PINS_0),
+            (1, 0x054, JMP_0),
+            (1, 0x0c8, 0x0002_4000), // 2.25
+            (1, 0x000, 1),
+            (900, 0x034, 1), // IRQ_FORCE
+            (2501, 0x034, 1),
+        ];
+        let fired = assert_walk_identical(&script, 4000);
+        assert!(fired < 1500, "asleep most of the run, fired {fired}");
+    }
+
+    /// SM0 blocked on an empty FIFO while SM1 ping-pongs between two jumps:
+    /// the running machine needs every cycle, so the chain stays awake, and it
+    /// still matches the walk.
+    #[test]
+    fn a_running_state_machine_keeps_the_chain_awake() {
+        if !crate::cycle_clock::event_scheduler_enabled() {
+            return;
+        }
+        let script = vec![
+            (1, 0x048, PULL_BLOCK),
+            (1, 0x05c, 0x0004), // INSTR_MEM5: jmp 4
+            (1, 0x058, 0x0005), // INSTR_MEM4: jmp 5
+            (1, 0x0ec, 4),      // SM1_ADDR = 4
+            (1, 0x000, 0b11),
+            (300, 0x010, 7),
+        ];
+        let fired = assert_walk_identical(&script, 600);
+        assert!(fired >= 590, "SM1 never sleeps, fired {fired}");
     }
 
     #[test]

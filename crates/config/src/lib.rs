@@ -51,6 +51,7 @@ pub use size::*;
 pub use test_script::*;
 pub use uart_network::*;
 
+pub mod base64;
 pub mod expr;
 pub mod rules;
 pub mod uart;

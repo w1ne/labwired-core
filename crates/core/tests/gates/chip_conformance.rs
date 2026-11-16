@@ -1271,6 +1271,18 @@ const CHIPS: &[ChipConf] = &[
             "ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin",
         ),
     },
+    // AT32F421G8U7 (Artery). SIM-DERIVED from RM_AT32F421 V2.05 and the
+    // Artery BSP 2.1.9 headers: no silicon capture, so no reset_oracle. The
+    // gate runs the committed BSP smoke (PLL, flash program/erase, DMA copy,
+    // TMR6 IRQ on PA5) through the machine.
+    ChipConf {
+        name: "at32f421g8u7",
+        yaml: "configs/chips/at32f421g8u7.yaml",
+        reset_oracle: None,
+        behavior_gate: Some(
+            "at32f421_contract::vendor_sdk_smoke_runs_flash_dma_and_timer_irq_paths",
+        ),
+    },
     ChipConf {
         name: "ch32v003j4m6",
         yaml: "configs/chips/ch32v003j4m6.yaml",
