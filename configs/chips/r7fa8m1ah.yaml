@@ -114,6 +114,18 @@ core: "cortex-m85"
 # BSP_FEATURE_CGC_ICLK_DIV_RESET = DIV_1). The EK-RA8M1 smoke never starts
 # HOCO or the PLLs.
 cpu_hz: 8_000_000
+# GPIO input thresholds: R01DS0417EJ0140 (RA8M1 Datasheet Rev.1.40), Table 2.5
+# I/O VIH, VIL of Schmitt trigger input pins, Ports: 5 V-tolerant ports and
+# the other VCC, VCC2 and AVCC0 input pins all have VIL max 0.2 x supply and
+# VIH min 0.8 x supply. 3.3 V is the EK-RA8M1 VCC rail; a VCC2 pad run at
+# another voltage would need its own pad class.
+# Peripheral levels (IIC/I3C 0.3/0.7, SD, MMC, ETHERC) apply only while that
+# function owns the pad, so they are not pad classes.
+# https://www.renesas.com/us/en/document/dst/ra8m1-group-datasheet
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.2
+  vih: 0.8
 flash:
   base: 0x02000000
   size: "2048KB"

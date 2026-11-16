@@ -14,6 +14,16 @@ name: "r7fa4m1ab"
 arch: "arm"
 core: "cortex-m4"
 cpu_hz: 48_000_000
+# GPIO input thresholds: R01DS0355EJ0110 (RA4M1 Group Datasheet Rev.1.10),
+# Table 2.4 I/O VIH, VIL (1), VCC = AVCC0 = 2.7-5.5 V: every port input
+# (5 V-tolerant ports, P000-P015 on AVCC0, the other input ports) has VIL max
+# 0.2*VCC and VIH min 0.8*VCC. 5.0 V is the Uno R4 Minima rail (VCC = AVCC0).
+# The IIC Schmitt levels (0.3/0.7) apply only in IIC mode, so they are not a pad class.
+# https://www.renesas.com/us/en/document/dst/ra4m1-group-datasheet
+io_voltage_v: 5.0
+gpio_input_thresholds:
+  vil: 0.2
+  vih: 0.8
 flash:
   base: 0x00000000
   size: "256KB"
