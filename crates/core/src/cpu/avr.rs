@@ -1542,6 +1542,14 @@ impl Avr {
                 Ok(())
             }
             0x005F => {
+                // A write that sets I, like SEI, lets the next instruction
+                // run before a pending interrupt (DS2549 section 7.8).
+                // avr-gcc's `out SPH ; out SREG ; out SPL` relies on it: an
+                // interrupt between the two SP halves would push onto a
+                // half-updated stack pointer.
+                if self.sreg & 0x80 == 0 && value & 0x80 != 0 {
+                    self.irq_shadow = true;
+                }
                 self.sreg = value;
                 Ok(())
             }
@@ -3910,6 +3918,66 @@ mod tests {
         cpu.timsk0 = TIMSK_TOIE0;
         cpu.tick_timer0(16384);
         assert!(cpu.pending_irq & (1 << VEC_TIMER0_OVF) != 0);
+    }
+    /// Setting SREG.I with OUT or STS has the same one-instruction latency as
+    /// SEI: the instruction after the write runs before a pending interrupt
+    /// (DS2549 section 7.8; avr-gcc's frame setup and teardown rely on it).
+    #[test]
+    fn sreg_write_that_sets_i_runs_one_more_instruction_first() {
+        // OUT 0x3F,r0 ; NOP ; NOP and STS 0x005F,r0 ; NOP ; NOP
+        for (name, prog, after) in [
+            ("OUT", &[0xBE0F, 0x0000, 0x0000][..], 0x202u32),
+            ("STS", &[0x9200, 0x005F, 0x0000, 0x0000][..], 0x204),
+        ] {
+            let mut cpu = Avr::for_chip_name("atmega328p");
+            let mut bus = MockBus::new();
+            cpu.timsk0 = TIMSK_TOIE0;
+            cpu.tifr0 = TIFR_TOV0;
+            cpu.pending_irq |= 1 << VEC_TIMER0_OVF;
+            cpu.r[0] = 0x80;
+            cpu.load_words(0x200, prog);
+            cpu.pc = 0x200;
+            cpu.step(&mut bus, &[], &SimulationConfig::default())
+                .unwrap();
+            assert_eq!(cpu.pc, after, "{name} SREG retired");
+            cpu.step(&mut bus, &[], &SimulationConfig::default())
+                .unwrap();
+            assert_eq!(cpu.pc, after + 2, "{name}: the next instruction runs first");
+            cpu.step(&mut bus, &[], &SimulationConfig::default())
+                .unwrap();
+            assert_eq!(cpu.pc, (VEC_TIMER0_OVF - 1) * 4, "{name}: then the vector");
+        }
+    }
+
+    /// avr-gcc's epilogue `out SPH,r29 ; out SREG,r0 ; out SPL,r28` with an
+    /// interrupt pending: the ISR must push below the complete new SP, never
+    /// at new SPH : old SPL (here 0x21F0, inside the caller's live frames).
+    #[test]
+    fn gcc_sp_update_is_not_interrupted_between_sph_and_spl() {
+        let mut cpu = Avr::for_chip_name("atmega2560");
+        let mut bus = MockBus::new();
+        cpu.sp = 0x20F0;
+        cpu.r[29] = 0x21;
+        cpu.r[28] = 0x05;
+        cpu.r[0] = 0x80; // the SREG saved before CLI, I set
+        cpu.timsk0 = TIMSK_TOIE0;
+        cpu.tifr0 = TIFR_TOV0;
+        cpu.pending_irq |= 1 << VEC_TIMER0_OVF;
+        // OUT SPH,r29 ; OUT SREG,r0 ; OUT SPL,r28 ; NOP
+        cpu.load_words(0x200, &[0xBFDE, 0xBE0F, 0xBFCD, 0x0000]);
+        cpu.pc = 0x200;
+        for _ in 0..4 {
+            cpu.step(&mut bus, &[], &SimulationConfig::default())
+                .unwrap();
+        }
+        assert_eq!(cpu.pc, 0x5C, "TIMER0_OVF entered after OUT SPL");
+        assert_eq!(cpu.sp, 0x2105 - 3, "3-byte return address below SP 0x2105");
+        let at = |a: u16| cpu.sram[usize::from(a) - 0x200];
+        assert_eq!(
+            (at(0x21EE), at(0x21EF), at(0x21F0)),
+            (0, 0, 0),
+            "nothing pushed at SPH:old SPL"
+        );
     }
 
     // Timer0 output compare units A and B (ATmega328P DS40002061 §15.6-15.7,
