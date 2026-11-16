@@ -180,8 +180,10 @@ fn gpio_edges_are_raised_at_the_write_and_do_not_block_the_fast_path() {
     bus.add_peripheral("gpio0", 0x5000_0000, 0x1000, None, Box::new(Port(levels)));
     bus.add_peripheral("sink", 0x1000, 0x100, None, Box::new(Sink(seen.clone())));
     bus.legacy_walk_disabled = true;
-    assert!(
+    // Only meaningful where the scheduler can delete the walk.
+    assert_eq!(
         bus.per_cycle_tick_is_trivial(),
+        cfg!(feature = "event-scheduler"),
         "an edge observer must not pin the per-cycle tick"
     );
 
