@@ -349,6 +349,11 @@ WAIVED: dict[str, str] = {
         "perf-spin fixture or compiler. No throughput claim is made for this "
         "part yet."
     ),
+    "ch32v203c8t6": (
+        "The CH32V203 model runs RV32IMAC with WCH/F1-layout peripherals; CI "
+        "has no perf-spin fixture built for this memory map. No throughput "
+        "claim is made for this part yet."
+    ),
     "ch32v003a4m6": (
         "Package variant of the ch32v003f4p6 die (RV32EC); same waiver: CI "
         "has no RV32E-specific perf-spin fixture or compiler. No throughput "
@@ -388,6 +393,13 @@ WAIVED: dict[str, str] = {
         "but no representative AVR6 throughput fixture is built. The available "
         "AVR spin ELF is linked for atmega328p with SRAM at 0x100; this part's "
         "SRAM starts at 0x200. No separate throughput claim is made yet."
+    ),
+    "atmega4809": (
+        "AVRxt (megaAVR 0-series): same interpreter as atmega328p plus the "
+        "AVRxt CCP/CPUINT state, but the AVR spin fixture is linked with "
+        "-mmcu=atmega328p for RAM at 0x100 and the ATmega4809 has its flash "
+        "mapped at 0x8000 and SRAM at 0x2800, so no representative spin build "
+        "of it exists yet. No separate throughput claim is made."
     ),
     "mimxrt1062-teensy41": (
         "Boots from the 8 MB FlexSPI NOR at 0x60000000 behind an FCB and an "

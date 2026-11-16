@@ -259,6 +259,13 @@
     "reg_match": 0
   },
   {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "esp32s3-devkitc-1-n16r8-adc",
+    "reg_match": 0
+  },
+  {
     "behavior": true,
     "excluded": 0,
     "level": 1,
@@ -284,6 +291,13 @@
     "excluded": 0,
     "level": 1,
     "name": "stm32f411ceu6",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "stm32f411re",
     "reg_match": 0
   },
   {
@@ -724,6 +738,13 @@
     "behavior": false,
     "excluded": 0,
     "level": 0,
+    "name": "atmega4809",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
     "name": "atmega32u4",
     "reg_match": 0
   },
@@ -893,6 +914,13 @@
     "excluded": 0,
     "level": 1,
     "name": "ch32v006k8u6",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "ch32v203c8t6",
     "reg_match": 0
   },
   {

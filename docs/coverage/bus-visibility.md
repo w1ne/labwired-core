@@ -59,6 +59,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * UART: pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this harness yet; bytes are proven by ch32v005_compiled_firmware
 * **ch32v006k8u6**
   * UART: pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this harness yet; bytes are proven by ch32v006_compiled_firmware
+* **ch32v203c8t6**
+  * UART: no UART bring-up for the WCH V20x family in this harness yet; USART1 bytes are proven by ch32v203_compiled_firmware
 * **ch32x035c8t6**
   * UART: no UART bring-up for the WCH X035 family in this harness yet; USART1 bytes are proven by ch32x035_compiled_firmware
 * **efr32mg26**
@@ -79,6 +81,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * I2C: esp32s3.yaml is an address-map stub; from_config has no S3 I2C model
   * SPI: esp32s3.yaml is an address-map stub; from_config has no S3 SPI model
   * UART: esp32s3.yaml is an address-map stub; from_config has no S3 UART model
+* **esp32s3-devkitc-1-n16r8-adc**
+  * UART: narrow N16R8 ADC profile of the S3 address-map stub; no UART bring-up for this family in the harness yet
 * **esp32s3-zero**
   * I2C: esp32s3-zero.yaml inherits the S3 address-map stub
   * SPI: esp32s3-zero.yaml inherits the S3 address-map stub
@@ -156,6 +160,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | atmega328p | — | — | — |
 | atmega328pb | — | — | — |
 | atmega32u4 | — | — | — |
+| atmega4809 | — | — | — |
 | atsamd21 | — | — | — |
 | atsamd21e15a | — | — | — |
 | atsamd21e16a | — | — | — |
@@ -178,6 +183,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | ch32v003j4m6 | — | — | — |
 | ch32v005f6p6 | — | — | — |
 | ch32v006k8u6 | — | — | — |
+| ch32v203c8t6 | — | — | — |
 | ch32x035c8t6 | — | — | — |
 | dspic33fj32mc202 | — | — | — |
 | dspic33fj32mc204 | — | — | — |
@@ -194,6 +200,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | esp32p4 | — | — | — |
 | esp32s2 | — | — | — |
 | esp32s3 | — | — | — |
+| esp32s3-devkitc-1-n16r8-adc | — | — | — |
 | esp32s3-zero | — | — | — |
 | imxrt1064 | — | — | — |
 | litex-vexriscv | — | — | — |
@@ -270,6 +277,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | stm32f407ze | ✓ | ✓ | ✓ |
 | stm32f407zg | ✓ | ✓ | ✓ |
 | stm32f411ceu6 | ✓ | ✓ | ✓ |
+| stm32f411re | ✓ | ✓ | ✓ |
 | stm32f446re | ✓ | ✓ | ✓ |
 | stm32f746 | — | — | ✓ |
 | stm32f767 | ✓ | ✓ | ✓ |
