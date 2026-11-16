@@ -1123,6 +1123,18 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// Route the CDC data a USB device controller sends to its scripted host
+    /// into a console capture sink (`None` detaches). A controller that
+    /// accepts it reads the device's bulk IN endpoints once its host has
+    /// enumerated and opened the port, as a terminal would. Returns false for
+    /// a peripheral that is not such a controller. Default false.
+    fn attach_usb_cdc_console(
+        &mut self,
+        _sink: Option<std::sync::Arc<std::sync::Mutex<Vec<u8>>>>,
+    ) -> bool {
+        false
+    }
+
     /// Deliver this console's TX bytes into a merged console stream as channel
     /// `ch` (see [`crate::console::ConsoleMerge`]). Returns false for a
     /// peripheral that is not a console that can be merged. Default false.

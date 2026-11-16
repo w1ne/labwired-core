@@ -576,6 +576,11 @@ impl SystemBus {
             {
                 continue;
             }
+            // A USB device controller with a scripted host (ESP32-S3 USB-OTG,
+            // TinyUSB CDC `Serial`): the console is its bulk IN data.
+            if p.dev.attach_usb_cdc_console(Some(sink.clone())) {
+                continue;
+            }
             let Some(any) = p.dev.as_any_mut() else {
                 continue;
             };
@@ -1009,6 +1014,8 @@ impl SystemBus {
         echo_stdout: bool,
     ) -> bool {
         for p in &mut self.peripherals {
+            // A named UART is the console: no USB CDC data joins it.
+            p.dev.attach_usb_cdc_console(None);
             if p.dev
                 .as_uart_stream_host()
                 .is_some_and(|u| u.attach_console_sink(None, false))
