@@ -259,15 +259,15 @@ S1 a b sense+ sense- vt=3.75 vh=3.25 invert=1 ron=0.1 roff=1meg
     fn unknown_element_letters_point_at_ngspice() {
         // `D`, `Q`, `M` and `J` used to be on this list and are now in the subset,
         // and so are the four LINEAR controlled sources, `B` and `E`/`G`
-        // `VALUE=` behavioural sources, and an `X` whose model is an OPAMP/COMP
-        // card. What is left is what still has no in-core term: a call to a
-        // subcircuit the deck never defines, a model library needs a file
-        // loader, a MESFET and a POLY controlled source need equations
-        // nobody has written here.
+        // `VALUE=` behavioural sources, SPICE2 `POLY(n)` sources, and an `X`
+        // whose model is an OPAMP/COMP card. What is left is what still has no
+        // in-core term: a call to a subcircuit the deck never defines, a model
+        // library needs a file loader, a MESFET and a TABLE controlled source
+        // need equations nobody has written here.
         for line in [
             "X1 a b subckt",
             "Z1 d g s mesfet",
-            "E1 a b POLY(2) c 0 d 0 0 1 1",
+            "E1 a b TABLE {V(c)} = (0,0) (1,1)",
             ".include models/bsim.lib",
             ".lib vendor.lib tt",
         ] {

@@ -192,7 +192,7 @@ fn validate_system(path: &PathBuf, plugins: &[&dyn labwired_core::plugin::ChipPl
     // `adapter: analog` circuits are checked by actually parsing the netlist,
     // which only the core crate can do, with its `.include`/`.lib` files read
     // relative to the netlist. An element outside the in-core subset (a
-    // MESFET, a `POLY` source) or a library file that cannot be read is a
+    // MESFET, a `TABLE` source) or a library file that cannot be read is a
     // manifest error here, naming the line and the adapter that does support
     // it.
     let manifest_dir = path.parent().unwrap_or_else(|| std::path::Path::new("."));

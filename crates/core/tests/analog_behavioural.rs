@@ -216,8 +216,8 @@ Rleak c 0 1g
         refused("B1 a 0 V=temper\n", "not a behavioural quantity");
         refused("B1 a 0 V=foo(V(a))\n", "function `foo`");
         refused("R1 a 0 1\nB1 a 0 V=1\nB1 a 0 V=2\n", "declared twice");
-        // POLY and TABLE stay outside the subset.
-        refused("V1 a 0 1\nE1 b 0 POLY(1) a 0 0 1\n", "");
+        // TABLE stays outside the subset; POLY is in `analog_poly.rs`.
+        refused("V1 a 0 1\nE1 b 0 TABLE {V(a)} = (0,0) (1,1)\n", "");
     }
 
     #[test]

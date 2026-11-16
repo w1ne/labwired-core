@@ -52,6 +52,7 @@
 //! | CCVS | `H<name> n+ n- <vsource> <transresistance>` |
 //! | Behavioural source | `B<name> n+ n- V=<expr>` or `B<name> n+ n- I=<expr>` |
 //! | Behavioural VCVS / VCCS | `E<name> n+ n- VALUE={<expr>}` / `G<name> n+ n- VALUE={<expr>}` |
+//! | Polynomial E / G / F / H | `E<name> n+ n- POLY(<n>) <n node pairs> <p0> <p1> ...`, `F<name> n+ n- POLY(<n>) <n elements> <p0> ...` |
 //! | Op-amp / comparator | `X<name> in+ in- v+ v- out <model>` |
 //!
 //! A semiconductor's bare `off` flag is SPICE's: the operating point holds
@@ -83,7 +84,8 @@
 //! and nominal parameters.
 //!
 //! The four dependent sources are SPICE's linear ones, plus `E`/`G`
-//! `VALUE={<expr>}`, which is a behavioural source: `POLY`, `TABLE` and
+//! `VALUE={<expr>}`, which is a behavioural source, and SPICE2's
+//! `POLY(n)` form of all four, which lowers to one (see below). `TABLE` and
 //! `LAPLACE` forms are refused by name. `E` and `H` each add a
 //! branch current, numbered after every voltage source and inductor; `F` and
 //! `H` read the branch current of the element they name, which must be one that
@@ -97,6 +99,14 @@
 //! use `.param` and subcircuit parameters; a `.subckt` body may hold
 //! behavioural sources, whose `V(...)` and `I(...)` names are flattened like
 //! every other node and element name.
+//!
+//! `E|G<name> n+ n- POLY(n) nc1+ nc1- ... ncn+ ncn- p0 p1 ...` and
+//! `F|H<name> n+ n- POLY(n) <elem1> ... <elemn> p0 p1 ...` are SPICE2
+//! polynomial sources. A node pair may be written `(a,b)`. The polynomial
+//! becomes the behavioural source `p0 + p1·x1 + ... + pn·xn + pn+1·x1² +
+//! pn+2·x1·x2 + ...` over the controlling voltages or branch currents, with
+//! the higher-degree terms in SPICE2's order. As in ngspice-42, a single
+//! coefficient is the constant `p0`; SPICE2 read it as `p1`.
 //!
 //! A `K` element couples two inductors with signed mutual inductance
 //! `M = k·sqrt(L1·L2)`. Each inductor's terminal order defines its dot
@@ -4118,6 +4128,28 @@ fn expand_call(
             continue;
         }
 
+        if matches!(letter, 'E' | 'G' | 'F' | 'H')
+            && tokens.get(3).is_some_and(|token| is_poly_keyword(token))
+        {
+            let poly =
+                PolySource::parse(letter, &tokens[3..]).map_err(|message| AnalogError::Parse {
+                    line: line.number,
+                    text: line.text.clone(),
+                    message,
+                })?;
+            out.push(LogicalLine {
+                number: line.number,
+                text: format!(
+                    "{}.{path}.{head} {} {} {}",
+                    first_char(head),
+                    node(tokens[1]),
+                    node(tokens[2]),
+                    poly.rename(&node, &element)
+                ),
+            });
+            continue;
+        }
+
         if letter == 'X' {
             let positional = positional_call_tokens(&tokens);
             if let Some(callee) = positional
@@ -4909,6 +4941,36 @@ fn parse_lines(lines: Vec<LogicalLine>) -> Result<Circuit, AnalogError> {
                     body,
                 )?;
             }
+            'E' | 'G' | 'F' | 'H' if tokens.len() > 3 && is_poly_keyword(tokens[3]) => {
+                let poly = PolySource::parse(letter, &tokens[3..])
+                    .map_err(|message| ctx.parse_err(message))?;
+                let atoms: Vec<String> = poly
+                    .controls
+                    .iter()
+                    .map(|control| match control {
+                        PolyControl::Voltage(p, n) => format!("V({p}, {n})"),
+                        PolyControl::Current(element) => format!("I({element})"),
+                    })
+                    .collect();
+                let mut coefficients = Vec::with_capacity(poly.coefficients.len());
+                for raw in &poly.coefficients {
+                    coefficients.push(ctx.value(raw, "POLY coefficient")?);
+                }
+                let kind = if matches!(letter, 'E' | 'H') {
+                    BehaviouralKind::Voltage
+                } else {
+                    BehaviouralKind::Current
+                };
+                push_behavioural(
+                    &mut circuit,
+                    &mut behavioural_lines,
+                    &ctx,
+                    head,
+                    [tokens[1], tokens[2]],
+                    kind,
+                    &poly_expression(&atoms, &coefficients),
+                )?;
+            }
             'E' | 'G'
                 if tokens.len() > 3 && {
                     let key = tokens[3].split('=').next().unwrap_or("");
@@ -5254,6 +5316,139 @@ fn bind_behavioural(
         }
     }
     Ok(())
+}
+
+/// True for the `POLY` keyword of a SPICE2 polynomial source, written
+/// `POLY(2)`, `POLY (2)` or `POLY`.
+fn is_poly_keyword(token: &str) -> bool {
+    let upper = token.to_ascii_uppercase();
+    upper == "POLY" || upper.starts_with("POLY(")
+}
+
+/// One controlling quantity of a `POLY` source.
+#[derive(Debug, Clone, PartialEq)]
+enum PolyControl {
+    /// `nc+ nc-` of an `E` or `G` source.
+    Voltage(String, String),
+    /// The element whose branch current an `F` or `H` source reads.
+    Current(String),
+}
+
+/// A SPICE2 polynomial dependent source, after the two output nodes:
+/// `POLY(nd) <controls> <p0> <p1> ...`.
+///
+/// `E`/`G` name `nd` node pairs, `F`/`H` name `nd` elements. A pair may be
+/// written `a b`, `(a,b)` or `(a, b)`, as in ngspice.
+#[derive(Debug, Clone, PartialEq)]
+struct PolySource {
+    controls: Vec<PolyControl>,
+    /// Coefficients as written; the caller reads their values.
+    coefficients: Vec<String>,
+}
+
+impl PolySource {
+    /// Parse `tokens`, which start at the `POLY` keyword.
+    fn parse(letter: char, tokens: &[&str]) -> Result<Self, String> {
+        let text = tokens.join(" ");
+        let text = text[4..].replace(['(', ')', ','], " ");
+        let mut words = text.split_whitespace();
+        let dimensions = words
+            .next()
+            .and_then(|word| word.parse::<usize>().ok())
+            .filter(|count| *count >= 1)
+            .ok_or("expected `POLY(<n>)` with a whole number of controls n >= 1")?;
+        let words: Vec<&str> = words.collect();
+        if let Some(option) = words.iter().find(|word| word.contains('=')) {
+            return Err(format!(
+                "`{option}`: POLY initial-condition guesses are outside the supported subset"
+            ));
+        }
+        let per_control = if matches!(letter, 'E' | 'G') { 2 } else { 1 };
+        let control_words = dimensions * per_control;
+        if words.len() <= control_words {
+            return Err(format!(
+                "POLY({dimensions}) needs {control_words} control {} and at least one coefficient",
+                if per_control == 2 {
+                    "nodes"
+                } else {
+                    "elements"
+                }
+            ));
+        }
+        let controls = words[..control_words]
+            .chunks(per_control)
+            .map(|chunk| match chunk {
+                [p, n] => PolyControl::Voltage(p.to_string(), n.to_string()),
+                [element] => PolyControl::Current(element.to_string()),
+                _ => unreachable!("chunks of one or two"),
+            })
+            .collect();
+        let coefficients = words[control_words..]
+            .iter()
+            .map(|word| word.to_string())
+            .collect();
+        Ok(Self {
+            controls,
+            coefficients,
+        })
+    }
+
+    /// The same source with each control renamed, in canonical
+    /// `POLY(n) a b ... p0 p1 ...` text, for a subcircuit body.
+    fn rename(&self, node: &dyn Fn(&str) -> String, element: &dyn Fn(&str) -> String) -> String {
+        let mut words = vec![format!("POLY({})", self.controls.len())];
+        for control in &self.controls {
+            match control {
+                PolyControl::Voltage(p, n) => {
+                    words.push(node(p));
+                    words.push(node(n));
+                }
+                PolyControl::Current(name) => words.push(element(name)),
+            }
+        }
+        words.extend(self.coefficients.iter().cloned());
+        words.join(" ")
+    }
+}
+
+/// The behavioural expression of a SPICE2 polynomial over `atoms`.
+///
+/// Coefficients follow SPICE2's order: `p0`, the `n` linear terms, then each
+/// higher degree with its control indices non-decreasing in lexicographic
+/// order (`x1², x1·x2, x2²`, then `x1³, x1²·x2, ...`), for as many terms as
+/// coefficients are given. A single coefficient is the constant `p0`, which
+/// is what ngspice-42 does; SPICE2 read it as `p1`.
+fn poly_expression(atoms: &[String], coefficients: &[f64]) -> String {
+    let mut terms = Vec::with_capacity(coefficients.len());
+    let mut indices: Vec<usize> = Vec::new();
+    for &coefficient in coefficients {
+        let mut term = format!("({coefficient:e})");
+        for &index in &indices {
+            term.push_str(&format!("*{}", atoms[index]));
+        }
+        terms.push(term);
+        indices = next_monomial(indices, atoms.len());
+    }
+    terms.join(" + ")
+}
+
+/// The monomial after `indices` (non-decreasing control indices) in SPICE2
+/// order; after the last monomial of a degree comes the first of the next.
+fn next_monomial(mut indices: Vec<usize>, dimensions: usize) -> Vec<usize> {
+    // Raise the rightmost index that can still grow and reset the ones after
+    // it to that value; when none can, start the next degree at all zeros.
+    if let Some(at) = (0..indices.len())
+        .rev()
+        .find(|&at| indices[at] + 1 < dimensions)
+    {
+        let value = indices[at] + 1;
+        for index in &mut indices[at..] {
+            *index = value;
+        }
+        indices
+    } else {
+        vec![0; indices.len() + 1]
+    }
 }
 
 /// Refuse the nonlinear dependent-source forms by name, so they read as
