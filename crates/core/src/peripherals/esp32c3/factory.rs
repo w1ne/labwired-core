@@ -54,6 +54,9 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         // Arduino `Serial` console and echoes to stdout; UART1 is
         // capture-only. Source id defaults from the base address (see
         // `super::uart::default_source_id`) and an explicit `irq:` wins.
+        // `cpu_clock_hz` / `uart_sclk_hz` (default C3: 160 MHz core, 80 MHz
+        // APB source) set the baud pacing for a part with other clocks; the
+        // ESP32-C2 is a 120 MHz core with a 40 MHz UART source.
         "esp32c3_uart" => {
             let source_id = p_cfg
                 .irq
@@ -63,7 +66,15 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
                 .get("echo_stdout")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(source_id == super::uart::UART0_INTR_SOURCE_ID);
-            Box::new(super::uart::new(echo, source_id))
+            let mut uart = super::uart::new(echo, source_id);
+            if let Some(hz) = p_cfg.config.get("cpu_clock_hz").and_then(|v| v.as_u64()) {
+                uart =
+                    crate::peripherals::esp_uart::EspUart::new_with_cpu_clock(echo, source_id, hz);
+            }
+            if let Some(hz) = p_cfg.config.get("uart_sclk_hz").and_then(|v| v.as_u64()) {
+                uart = uart.with_uart_sclk_hz(hz);
+            }
+            Box::new(uart)
         }
         _ => return None,
     };

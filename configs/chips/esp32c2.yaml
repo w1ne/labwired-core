@@ -79,6 +79,9 @@ peripherals:
   # Espressif UART IP. esp-idf v5.3 esp32c2 and esp32c3 uart_reg.h declare
   # the same 33 registers at the same offsets. Interrupt sources from
   # esp32c2 interrupts.h: ETS_UART0_INTR_SOURCE = 17, ETS_UART1 = 18.
+  # Clocks: 120 MHz core; UART source PLL_F40M = 40 MHz (esp-hal 1.2
+  # uart/clocks/v1.rs selects UartFunctionClockSclk::PllF40m on esp32c2),
+  # not the C3's 80 MHz APB.
   - id: "uart0"
     type: "esp32c3_uart"
     irq: 17 # ETS_UART0_INTR_SOURCE (C2)
@@ -86,6 +89,8 @@ peripherals:
     size: "512B"
     config:
       debug_schema: "../peripherals/esp32c3/uart0.yaml"
+      cpu_clock_hz: 120000000
+      uart_sclk_hz: 40000000
   - id: "uart1"
     type: "esp32c3_uart"
     irq: 18 # ETS_UART1_INTR_SOURCE (C2)
@@ -93,6 +98,8 @@ peripherals:
     size: "512B"
     config:
       debug_schema: "../peripherals/esp32c3/uart1.yaml"
+      cpu_clock_hz: 120000000
+      uart_sclk_hz: 40000000
   # GPIO: the C2 gpio_reg.h is the C3 register set less the GPIO21 pin and
   # GPIO_FUNC21 output-select registers (same offsets for every register both
   # declare). The C3 model carries 22 pads; the ESP8684 bonds GPIO0..10 and
@@ -114,6 +121,8 @@ peripherals:
     config:
       path: "../peripherals/esp32c3/systimer.yaml"
       debug_schema: "../peripherals/esp32c3/systimer.yaml"
+      # 16 MHz counter on a 120 MHz core: 7.5 cycles per tick.
+      cpu_clock_hz: 120000000
   - id: "timg0"
     type: "esp32_timg"
     base_address: 0x6001F000

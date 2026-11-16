@@ -22,7 +22,7 @@ vendor test):
 
 ```
 LW-C2 embassy boot
-LW-C2 ticks 3 elapsed_us 3029
+LW-C2 ticks 3 elapsed_us 3039
 LW-C2 timeout fired true
 LW-C2 embassy PASS
 ```

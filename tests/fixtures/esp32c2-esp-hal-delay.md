@@ -15,13 +15,15 @@ What it exercises on the bare-ELF fast boot:
 * esp-println on UART0, GPIO8 output toggles, and `Delay::delay_millis(2)`
   measured with `Instant` on SYSTIMER.
 
-Expected UART0 output (measured 2026-11-16):
+Expected UART0 output (measured 2026-11-16, after the C2 clock fix:
+120 MHz core, SYSTIMER 7.5 cycles per tick, UART0 at 115200 on the 40 MHz
+source; before it the ticks read 2117/2052/2115 us):
 
 ```
 LW-C2 boot
-LW-C2 tick 0 2117us
-LW-C2 tick 1 2052us
-LW-C2 tick 2 2115us
+LW-C2 tick 0 2001us
+LW-C2 tick 1 2001us
+LW-C2 tick 2 2001us
 LW-C2 done
 ```
 

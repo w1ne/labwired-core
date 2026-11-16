@@ -21,10 +21,10 @@ Expected UART0 output (measured 2026-11-16, vendor test, `Machine::step`):
 
 ```
 LW-C2 gpio-async boot
-LW-C2 edge wait_us 1024
-LW-C2 edge wait_us 1026
-LW-C2 edge wait_us 1026
-LW-C2 rising edges 3 min_wait_us 1024
+LW-C2 edge wait_us 1033
+LW-C2 edge wait_us 1035
+LW-C2 edge wait_us 1035
+LW-C2 rising edges 3 min_wait_us 1033
 LW-C2 idle wait timed out true
 LW-C2 gpio-async PASS
 ```
@@ -33,11 +33,13 @@ With the interrupt matrix not armed, no edge wait ends and the app prints
 only the boot line (the vendor negative control).
 
 Known divergence: `labwired test` with idle fast-forward on (the default)
-prints waits of 1464, 2707 and 4259 us. The timer-poll coalesce
+prints waits of 1287, 4968 and 6347 us. The timer-poll coalesce
 (`take_timer_poll_coalesce_eligible`) counts the four SYSTIMER snapshot
 accesses of one `Instant::now()` as a busy-poll and moves time to the next
 scheduler event (here a UART0 byte drain, about 87 us away). With
-`LABWIRED_IDLE_FAST_FORWARD=0` the CLI prints the values above. The CLI
+`LABWIRED_IDLE_FAST_FORWARD=0` the CLI prints the values above.
+(Before the C2 clock fix the core ran on C3 timing and the waits read
+1024/1026/1026 us; the 9 us more is the same instruction count at 120 MHz.) The CLI
 smoke checks only the verdict, which holds in both modes; the vendor test
 checks the per-wait timing.
 

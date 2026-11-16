@@ -82,6 +82,24 @@ pub fn arm_interrupt_matrix(bus: &mut SystemBus) {
     bus.refresh_peripheral_index();
 }
 
+/// UART0 CLKDIV (`DR_REG_UART_BASE` 0x6000_0000 + 0x14).
+const UART0_CLKDIV: u64 = 0x6000_0014;
+/// The ROM console rate and the C2 UART source clock (PLL_F40M).
+const ROM_CONSOLE_BAUD: u64 = 115_200;
+const UART_SCLK_HZ: u64 = 40_000_000;
+
+/// Set the UART0 console to 115200 baud, as the C2 ROM does before the app
+/// runs. The divider is `(sclk << 4) / baud` = 5555: CLKDIV[11:0] = 347,
+/// FRAG[23:20] = 3. Without it UART0 keeps the reset CLKDIV 0x2B6 (694),
+/// which on the 40 MHz source is 57600 baud, and every console line takes
+/// twice as long as on silicon.
+pub fn seed_console_uart(bus: &mut SystemBus) {
+    use crate::Bus;
+    let div = (UART_SCLK_HZ << 4) / ROM_CONSOLE_BAUD;
+    let value = ((div >> 4) & 0xFFF) | ((div & 0xF) << 20);
+    let _ = bus.write_u32(UART0_CLKDIV, value as u32);
+}
+
 /// `mstatus.MIE`.
 const MSTATUS_MIE: u32 = 1 << 3;
 
@@ -124,6 +142,15 @@ mod tests {
         let src = bus.read_u32(0x4008_2628 + 0x1F0).unwrap();
         assert_ne!(src, 0);
         assert_eq!(bus.read_u32(0x3FCD_F978).unwrap(), src);
+    }
+
+    #[test]
+    fn console_uart_is_seeded_to_115200_on_the_40mhz_source() {
+        let mut bus = c2_bus();
+        assert_eq!(bus.read_u32(UART0_CLKDIV).unwrap() & 0xFFF, 0x2B6, "reset");
+        seed_console_uart(&mut bus);
+        // 40 MHz / (347 + 3/16) = 115_207 baud.
+        assert_eq!(bus.read_u32(UART0_CLKDIV).unwrap(), 347 | (3 << 20));
     }
 
     #[test]

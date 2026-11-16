@@ -166,6 +166,7 @@ fn build_program_image(
     if crate::boot::esp32c2_rom::is_esp32c2(chip) {
         crate::boot::esp32c2_rom::seed_rom_data(&mut machine.bus);
         crate::boot::esp32c2_rom::arm_interrupt_matrix(&mut machine.bus);
+        crate::boot::esp32c2_rom::seed_console_uart(&mut machine.bus);
     }
 
     // C6: stay below ROM-reserved HP SRAM (see esp32c6_rom::APP_SRAM_END).

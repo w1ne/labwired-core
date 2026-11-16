@@ -1998,13 +1998,15 @@ pub(crate) fn run_test(
                 std::path::Path::new(&firmware_path),
             );
         }
-        // ESP32-C2: interrupt routing through the matrix, as the shared
-        // builder's fast boot arms it (`boot::esp32c2_rom`).
+        // ESP32-C2: interrupt routing through the matrix and the ROM's
+        // UART0 console rate, as the shared builder's fast boot sets them
+        // (`boot::esp32c2_rom`).
         if fast_boot_chip
             .as_deref()
             .is_some_and(|name| name.eq_ignore_ascii_case("esp32c2"))
         {
             labwired_core::boot::esp32c2_rom::arm_interrupt_matrix(&mut bus);
+            labwired_core::boot::esp32c2_rom::seed_console_uart(&mut bus);
         }
         // ESP32-C6: SPI_MEM + partition seed + ROM .data pointers (CLI RISC-V
         // path does not go through builder/riscv.rs).

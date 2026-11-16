@@ -40,6 +40,7 @@ ROM (the fast boot replays the ROM `.data` unpack):
 | `esp-hal-gpio-irq/` | `esp-hal-gpio-irq-smoke.yaml` | `Io` `#[handler]` for GPIO2 rising/any-edge interrupts on a self-driven pad, and none after `unlisten()` |
 | `esp-hal-embassy/` | `esp-hal-embassy-smoke.yaml` | Embassy on esp-rtos 0.4: a spawned task awaits three 1 ms `Timer`s (SYSTIMER alarm 0), a `Signal` wakes main, `with_timeout` expires |
 | `esp-hal-gpio-async/` | `esp-hal-gpio-async-smoke.yaml` | Embassy async GPIO: `wait_for_rising_edge` on GPIO2 is woken by a pulse a second task drives on the same pad; an idle wait times out |
+| `esp-hal-uart-async/` | `esp-hal-uart-async-smoke.yaml` | Embassy async UART: UART1 in loopback (CONF0 bit 14); a task sends 16-byte frames with `write_async`, main receives them with `read_exact_async` (UART1 source 18); an idle read times out |
 
 ```sh
 labwired test --script examples/esp32c2/esp-hal-irq-smoke.yaml

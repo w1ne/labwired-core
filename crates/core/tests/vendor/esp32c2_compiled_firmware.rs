@@ -136,6 +136,7 @@ fn run_esp_hal(seed_rom_data: bool, steps: usize) -> HalRun {
     machine.load_firmware(&image).expect("load esp-hal ELF");
     if seed_rom_data {
         labwired_core::boot::esp32c2_rom::seed_rom_data(&mut machine.bus);
+        labwired_core::boot::esp32c2_rom::seed_console_uart(&mut machine.bus);
     }
     let gpio = machine
         .bus
@@ -284,6 +285,7 @@ fn run_esp_hal_irq(fixture: &str, arm_matrix: bool, steps: usize) -> String {
     let mut machine = Machine::new(cpu, bus);
     machine.load_firmware(&image).expect("load esp-hal irq ELF");
     labwired_core::boot::esp32c2_rom::seed_rom_data(&mut machine.bus);
+    labwired_core::boot::esp32c2_rom::seed_console_uart(&mut machine.bus);
     if arm_matrix {
         labwired_core::boot::esp32c2_rom::arm_interrupt_matrix(&mut machine.bus);
     }
@@ -386,7 +388,7 @@ fn esp32c2_embassy_gpio_wait_for_rising_edge_wakes_on_the_pulse() {
     // GPIO2 is split into Input and Output drivers. A task raises the pad
     // 1 ms after each request; main's `wait_for_rising_edge` is woken by the
     // esp-hal default GPIO handler (source 13). Each wait ends 1 ms plus the
-    // wake-up latency after the request (1024..1026 us measured). With no
+    // wake-up latency after the request (1033..1035 us measured). With no
     // pulse requested, a 2 ms `with_timeout` wait expires.
     let uart = run_esp_hal_irq(ESP_HAL_GPIO_ASYNC_FIXTURE, true, 6_000_000);
     let waits: Vec<u64> = uart
@@ -411,4 +413,48 @@ fn esp32c2_embassy_gpio_wait_without_matrix_routing_never_completes() {
     // driver nor the GPIO source reaches a CPU line, so no edge wait ends.
     let uart = run_esp_hal_irq(ESP_HAL_GPIO_ASYNC_FIXTURE, false, 2_000_000);
     assert_eq!(uart, "LW-C2 gpio-async boot\n");
+}
+
+const ESP_HAL_UART_ASYNC_FIXTURE: &str = "tests/fixtures/esp32c2-esp-hal-uart-async.elf";
+
+#[test]
+fn esp32c2_embassy_uart_loopback_read_exact_async_gets_each_frame() {
+    // UART1 in loopback (CONF0 bit 14). A task writes a 16-byte frame with
+    // `write_async` 1 ms after each request; main's `read_exact_async` is
+    // woken by the esp-hal UART1 handler (source 18). Each wait is 1 ms
+    // plus 16 frames of 10 bits at 115200 baud (1389 us) plus the wake-up
+    // latency: 2428..2430 us measured. With nothing sent, a 2 ms
+    // `with_timeout` read expires. The sink also captures UART1, so the
+    // printable frame bytes sit in front of each "frame" line.
+    let uart = run_esp_hal_irq(ESP_HAL_UART_ASYNC_FIXTURE, true, 8_000_000);
+    let frames: Vec<&str> = uart
+        .lines()
+        .filter_map(|l| l.split_once("LW-C2 frame ").map(|(_, rest)| rest))
+        .collect();
+    assert_eq!(frames.len(), 3, "{uart:?}");
+    for (seq, frame) in frames.iter().enumerate() {
+        let (head, verdict) = frame.split_once(" match ").expect("match field");
+        assert_eq!(verdict, "true", "{uart:?}");
+        let (got_seq, wait) = head.split_once(" wait_us ").expect("wait field");
+        assert_eq!(got_seq, seq.to_string());
+        let wait: u64 = wait.parse().expect("microseconds");
+        assert!((2_389..2_500).contains(&wait), "wait {wait} us: {uart:?}");
+    }
+    // The loopback bytes themselves reach the capture: frame 0 is
+    // b'a' + (i * 3) % 26 for i in 0..16.
+    assert!(uart.contains("adgjmpsvybehknqt"), "{uart:?}");
+    assert!(
+        uart.contains("LW-C2 idle read timed out true\n"),
+        "{uart:?}"
+    );
+    assert!(uart.contains("LW-C2 uart-async PASS"), "{uart:?}");
+}
+
+#[test]
+fn esp32c2_embassy_uart_read_without_matrix_routing_never_completes() {
+    // Negative control: with the matrix not armed neither the Embassy time
+    // driver nor the UART1 source reaches a CPU line, so main never gets
+    // past its first 5 ms settle timer.
+    let uart = run_esp_hal_irq(ESP_HAL_UART_ASYNC_FIXTURE, false, 2_000_000);
+    assert_eq!(uart, "LW-C2 uart-async boot\n");
 }
