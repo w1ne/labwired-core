@@ -37,8 +37,12 @@
 //! that device cut off until the rest of the circuit converges, then releases
 //! it. It picks one state of a latch or other bistable circuit and changes
 //! nothing where the operating point is unique. Instance `ic=` on a
-//! semiconductor is refused: SPICE applies it only under `uic`, which this
-//! engine does not have.
+//! semiconductor is refused: SPICE applies it only under `uic`, and this
+//! engine's `uic` seeds capacitors, inductors and `.ic` nodes only.
+//!
+//! `.tran ... uic` skips the operating point, as SPICE does: every node starts
+//! at 0 V unless `.ic` sets it, a capacitor starts at its `ic=` (else the
+//! voltage across its nodes), and an inductor at its `ic=` (else 0 A).
 //!
 //! The four dependent sources are SPICE's linear ones and nothing more: `POLY`,
 //! `VALUE={...}` and `TABLE` forms are refused by name. `E` and `H` each add a
@@ -2879,6 +2883,10 @@ pub struct Circuit {
     pub slew_limited_vccs: Vec<SlewLimitedVccs>,
     /// `.ic V(node)=value` entries, in netlist order.
     pub node_ic: Vec<(usize, f64)>,
+    /// `.tran ... uic`: start the transient from the initial conditions
+    /// instead of from a solved operating point (see
+    /// [`crate::analog::Solver::solve_operating_point`]).
+    pub uic: bool,
 }
 
 impl Circuit {
@@ -3225,6 +3233,11 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
             match directive.to_ascii_lowercase().as_str() {
                 "end" => ended = true,
                 "ic" => parse_ic(&mut circuit, &ctx, &tokens[1..])?,
+                // The run length and step still come from the manifest; only
+                // the `uic` flag changes how the run starts.
+                "tran" => {
+                    circuit.uic |= tokens[1..].iter().any(|t| t.eq_ignore_ascii_case("uic"));
+                }
                 "model" => parse_model(&mut models, &ctx, &tokens[1..])?,
                 "control" => in_control = true,
                 // Analysis and housekeeping cards. This engine's run length,
@@ -3232,8 +3245,8 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 // nothing it can act on — but rejecting them would mean a deck
                 // cannot be shared with ngspice, which is the whole point of
                 // spelling the subset in SPICE.
-                "options" | "option" | "tran" | "op" | "print" | "plot" | "save" | "probe"
-                | "width" | "temp" | "nodeset" | "title" | "endc" => {}
+                "options" | "option" | "op" | "print" | "plot" | "save" | "probe" | "width"
+                | "temp" | "nodeset" | "title" | "endc" => {}
                 _ => return Err(ctx.unsupported()),
             }
             continue;

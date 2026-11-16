@@ -1021,10 +1021,21 @@ impl Solver {
     }
 
     /// Solve the DC operating point and reset the reactive state to it.
+    ///
+    /// Under `.tran ... uic` there is no operating point: like SPICE's
+    /// `MODEUIC`, every node and branch starts at zero and only the `.ic` /
+    /// `ic=` overrides seed the reactive state.
     pub fn solve_operating_point(&mut self) -> Result<(), AnalogError> {
-        // Voltage-controlled contacts depend on the solved node voltages, so
-        // the OP may need a few passes until the contacts stop flipping.
-        for _ in 0..8 {
+        let passes = if self.circuit.uic {
+            self.node_v.fill(0.0);
+            self.branch_i.fill(0.0);
+            0
+        } else {
+            // Voltage-controlled contacts depend on the solved node voltages,
+            // so the OP may need a few passes until the contacts stop flipping.
+            8
+        };
+        for _ in 0..passes {
             self.cached_stamp = None;
             self.settled = false;
             if self.nonlinear {

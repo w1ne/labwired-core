@@ -116,6 +116,120 @@ mod analog {
         }
     }
 
+    /// Value of node `name` after running `deck` to each time in `at`, in
+    /// trapezoidal steps of `h` seconds.
+    fn uic_samples(deck: &str, name: &str, at: &[f64], h: f64) -> Vec<f64> {
+        let circuit = parse_netlist(deck).expect("deck parses");
+        let mut solver = Solver::new(circuit, Integration::Trapezoidal).expect("solver builds");
+        let node = solver.circuit().node(name).expect("probe node exists");
+        let mut t = 0.0;
+        at.iter()
+            .map(|&target| {
+                let steps = ((target - t) / h).round() as usize;
+                run_to(&mut solver, target - t, steps);
+                t = target;
+                solver.node_voltage(node)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn tran_uic_starts_an_rc_from_its_dot_ic_not_its_operating_point() {
+        // 1 kΩ / 1 µF from a 5 V rail, tau = 1 ms. The operating point holds
+        // `out` at 5 V; under `uic` it starts at the `.ic` 2 V and charges as
+        // 5 − 3·e^(−t/tau). ngspice 45 `.tran 1u 3m uic` gives 3.896362 V at
+        // 1 ms and 4.593994 V at 2 ms, the same as the closed form.
+        let body = "V1 in 0 dc 5\nR1 in out 1k\nC1 out 0 1u\n.ic V(out)=2\n";
+        let uic = format!("* rc\n{body}.tran 1u 3m UIC\n.end\n");
+        assert!(
+            parse_netlist(&uic).unwrap().uic,
+            "`UIC` is case-insensitive"
+        );
+        assert!(!parse_netlist(&uic.replace(" UIC", "")).unwrap().uic);
+
+        let at = [0.0, 1e-3, 2e-3];
+        let got = uic_samples(&uic, "out", &at, 1e-6);
+        assert!(
+            (got[0] - 2.0).abs() < 1e-12,
+            "uic starts at .ic: {}",
+            got[0]
+        );
+        for (index, &t) in at.iter().enumerate().skip(1) {
+            let expected = 5.0 - 3.0 * (-t / 1e-3).exp();
+            assert!(
+                (got[index] - expected).abs() < 1e-4,
+                "uic RC at {t} s: {} V vs closed form {expected} V",
+                got[index]
+            );
+        }
+
+        // With no `.ic` at all the two modes split: the operating point
+        // starts the RC charged, `uic` starts it empty.
+        let bare = "V1 in 0 dc 5\nR1 in out 1k\nC1 out 0 1u\n";
+        let held = uic_samples(
+            &format!("* rc\n{bare}.tran 1u 3m\n.end\n"),
+            "out",
+            &[0.0],
+            1e-6,
+        );
+        let empty = uic_samples(
+            &format!("* rc\n{bare}.tran 1u 3m uic\n.end\n"),
+            "out",
+            &[0.0],
+            1e-6,
+        );
+        assert!(
+            (held[0] - 5.0).abs() < 1e-9,
+            "no uic: charged ({} V)",
+            held[0]
+        );
+        assert!(empty[0].abs() < 1e-12, "uic: empty ({} V)", empty[0]);
+    }
+
+    #[test]
+    fn tran_uic_rings_a_series_rlc_from_rest() {
+        // 20 Ω, 10 mH, 1 µF from a 5 V step: alpha = 1000 /s, omega_d ≈ 9950
+        // rad/s. Under `uic` both reactive elements start at zero with no `ic=`
+        // anywhere, so the capacitor overshoots and rings. ngspice 45 gives
+        // 6.290332, 4.507278, 6.684280 V at 0.2, 0.5, 1 ms.
+        let deck = "* rlc\nV1 in 0 dc 5\nR1 in a 20\nL1 a out 10m\nC1 out 0 1u\n\
+                    .tran 0.5u 2m uic\n.end\n";
+        let (alpha, w0) = (20.0 / (2.0 * 10e-3), 1.0 / (10e-3f64 * 1e-6).sqrt());
+        let wd = (w0 * w0 - alpha * alpha).sqrt();
+        let at = [0.2e-3, 0.5e-3, 1e-3];
+        let got = uic_samples(deck, "out", &at, 0.25e-6);
+        for (index, &t) in at.iter().enumerate() {
+            let expected =
+                5.0 * (1.0 - (-alpha * t).exp() * ((wd * t).cos() + alpha / wd * (wd * t).sin()));
+            assert!(
+                (got[index] - expected).abs() < 1e-3,
+                "uic RLC at {t} s: {} V vs closed form {expected} V",
+                got[index]
+            );
+        }
+    }
+
+    #[test]
+    fn tran_uic_charges_through_a_diode_like_ngspice() {
+        // Nonlinear: the Newton for the first step starts from the all-zero
+        // `uic` state rather than an operating point. Values are ngspice 45
+        // `.tran 0.1u 1m uic` on this deck.
+        let deck = "* d\nV1 in 0 dc 5\nR1 in a 100\nD1 a out DMOD\nC1 out 0 1u\n\
+                    R2 out 0 10k\n.model DMOD D(IS=1e-14 N=1)\n.tran 0.1u 1m uic\n.end\n";
+        let at = [50e-6, 200e-6, 1e-3];
+        let ngspice = [1.670324, 3.676337, 4.321201];
+        let got = uic_samples(deck, "out", &at, 0.1e-6);
+        for index in 0..at.len() {
+            assert!(
+                (got[index] - ngspice[index]).abs() < 2e-3,
+                "uic diode charge at {} s: {} V vs ngspice {} V",
+                at[index],
+                got[index],
+                ngspice[index]
+            );
+        }
+    }
+
     #[test]
     fn mutually_coupled_inductors_match_the_be_and_trapezoidal_companions() {
         const L1: f64 = 4e-3;
