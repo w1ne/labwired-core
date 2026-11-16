@@ -4,10 +4,12 @@
 
 The imported NPCX9M6F EVB system uses the same chip surface as
 [`nuvoton_npcx9`](nuvoton_npcx9.md) (UART1..4, GPIO0..GPIOF,
-ITIM32_1..6, ITIM64, MTC, TWD, HFCG, LFCG). It booted `firmware-nuvoton-npcx9-smoke`
-(SHA-256 `54805aef9850fbdc3a52b2a7c94951ae8f706d6a34b236a1b4632e857dc05f3b`),
+ITIM32_1..6, ITIM64, MTC, TWD, HFCG, LFCG, and the code RAM, data RAM view,
+battery-backed RAM, image_type and PM1..4 memory windows). It booted
+`firmware-nuvoton-npcx9-smoke`
+(SHA-256 `4e7b49d914b058a184c73b0417631dc14cb8f0e3348031b50137a470dd1d80b6`),
 rebooted once through the TWD watchdog, ran to **100,000,000 cycles**
-(565,313 instructions) and passed **13/13 smoke assertions**, with the same
+(566,001 instructions) and passed **15/15 smoke assertions**, with the same
 UART capture (UART1..4 share one capture stream):
 
 ```text
@@ -22,7 +24,9 @@ uart irq fts=4 txp=4 txrel=4 frs=3 rx=3 hits=3 drained=3 ok
 mtc ttc=1 pt=1 irq=3 steps=1 ms1=1000 ms2=1000 ok
 twd regs=1 t0=1 irq=3 ms1=1000 ms2=1000 tc=1 lock=1 unlock=1 run=1 touch=1 dec=1 stop=1 ok
 cdcg load=1 div=1 hlock=1 lf=1 llock=1 ok
+mem code=1 data=1 image=1 pm=4 bb=1 ok
 twd expire .........|twd reboot wdrst=1 stopped=1 clr=1 t0=1 ok
+bbram kept=1 ok
 ```
 
 Evidence:

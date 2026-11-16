@@ -70,6 +70,14 @@
 //     later HFCGML write. LFCG: HFRDI keeps 12 bits, LFCGCTL2.XT_OSC_SL_EN
 //     reads back, LFLOC drops a later LFCGCTL2 write.
 //
+// Then the plain memory windows of Renode nuvoton_npcx9.repl. Check 19 runs
+// before the watchdog expiry; its BBRAM part ends on the second boot.
+// 19. code_ram at 0x10058000 and its view at 0x20058000 share bytes (both
+//     ends); data_ram's view at 0x100C0000 shares bytes with 0x200C0000;
+//     image_type (1 byte at 0x4000C009) and PM1..4 (+0x00 and +0xFF) read
+//     back. A signature in battery-backed RAM (0x400AF000, last word at
+//     +0x7C) reads back on the second boot, after the watchdog reset.
+//
 // Bare-register, no HAL.
 
 #![no_std]
@@ -198,6 +206,17 @@ const HFCBCD: usize = 0x10;
 const HFCBCD1: usize = 0x12;
 const HFCBCD2: usize = 0x14;
 const HFCBCD3: usize = 0x1D;
+const CODE_RAM: usize = 0x1005_8000;
+const CODE_RAM_ALIAS: usize = 0x2005_8000;
+const CODE_RAM_LAST: usize = 0x6_7FFC;
+const DATA_RAM_ALIAS: usize = 0x100C_0000;
+const DATA_RAM: usize = 0x200C_0000;
+const BBRAM: usize = 0x400A_F000;
+const BBRAM_LAST: usize = 0x7C;
+const BBRAM_SIG: u32 = 0xB0BA_CAFE;
+const IMAGE_TYPE: usize = 0x4000_C009;
+const PM_BASES: [usize; 4] = [0x400C_9000, 0x400C_B000, 0x400C_D000, 0x400C_F000];
+
 const HFCGCTRL_LOAD: u8 = 1 << 0;
 const HFCGCTRL_LOCK: u8 = 1 << 2;
 const HFCGCTRL_CLK_CHNG: u8 = 1 << 7;
@@ -355,6 +374,11 @@ fn main() -> ! {
         } else {
             b" FAIL\r\n"
         });
+        // 19, second boot: the BBRAM signature survived the reset.
+        let kept = (rd32(BBRAM, 0) == BBRAM_SIG && rd32(BBRAM, BBRAM_LAST) == !BBRAM_SIG) as u32;
+        puts(b"bbram");
+        put_kv(b"kept", kept);
+        puts(if kept == 1 { b" ok\r\n" } else { b" FAIL\r\n" });
         loop {
             unsafe { core::arch::asm!("wfi") };
         }
@@ -795,6 +819,37 @@ fn main() -> ! {
     put_kv(b"llock", llock);
     let cdcg_ok = load == 1 && div == 1 && hlock == 1 && lf == 1 && llock == 1;
     puts(if cdcg_ok { b" ok\r\n" } else { b" FAIL\r\n" });
+
+    // 19. Memory windows.
+    wr32(CODE_RAM, 0, 0x1357_9BDF);
+    wr32(CODE_RAM_ALIAS, CODE_RAM_LAST, 0x2468_ACE0);
+    let code = (rd32(CODE_RAM_ALIAS, 0) == 0x1357_9BDF
+        && rd32(CODE_RAM, CODE_RAM_LAST) == 0x2468_ACE0) as u32;
+    // 64 KiB into data RAM: clear of .data/.bss below and the stack above.
+    let probe = 0x1_0000;
+    wr32(DATA_RAM_ALIAS, probe, 0x5A5A_A5A5);
+    let data = (rd32(DATA_RAM, probe) == 0x5A5A_A5A5) as u32;
+    wr8(IMAGE_TYPE, 0, 0x3C);
+    let image = (rd8(IMAGE_TYPE, 0) == 0x3C) as u32;
+    let mut pm = 0u32;
+    for (i, &base) in PM_BASES.iter().enumerate() {
+        wr8(base, 0, 0x10 + i as u8);
+        wr8(base, 0xFF, 0x20 + i as u8);
+        if rd8(base, 0) == 0x10 + i as u8 && rd8(base, 0xFF) == 0x20 + i as u8 {
+            pm += 1;
+        }
+    }
+    wr32(BBRAM, 0, BBRAM_SIG);
+    wr32(BBRAM, BBRAM_LAST, !BBRAM_SIG);
+    let bb = (rd32(BBRAM, 0) == BBRAM_SIG && rd32(BBRAM, BBRAM_LAST) == !BBRAM_SIG) as u32;
+    puts(b"mem");
+    put_kv(b"code", code);
+    put_kv(b"data", data);
+    put_kv(b"image", image);
+    put_kv(b"pm", pm);
+    put_kv(b"bb", bb);
+    let mem_ok = code == 1 && data == 1 && image == 1 && pm == 4 && bb == 1;
+    puts(if mem_ok { b" ok\r\n" } else { b" FAIL\r\n" });
 
     // Expiry: no touch; the watchdog resets the chip on the 10th period.
     puts(b"twd expire ");

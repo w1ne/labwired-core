@@ -4,8 +4,8 @@
 
 The imported NPCX9 system booted `firmware-nuvoton-npcx9-smoke`, rebooted
 once through the TWD watchdog, and ran to **100,000,000 cycles**
-(565,313 instructions). It passed **13/13 smoke assertions**. Firmware
-SHA-256 `54805aef9850fbdc3a52b2a7c94951ae8f706d6a34b236a1b4632e857dc05f3b`.
+(566,001 instructions). It passed **15/15 smoke assertions**. Firmware
+SHA-256 `4e7b49d914b058a184c73b0417631dc14cb8f0e3348031b50137a470dd1d80b6`.
 UART capture (UART1..4 share one capture stream):
 
 ```text
@@ -20,7 +20,9 @@ uart irq fts=4 txp=4 txrel=4 frs=3 rx=3 hits=3 drained=3 ok
 mtc ttc=1 pt=1 irq=3 steps=1 ms1=1000 ms2=1000 ok
 twd regs=1 t0=1 irq=3 ms1=1000 ms2=1000 tc=1 lock=1 unlock=1 run=1 touch=1 dec=1 stop=1 ok
 cdcg load=1 div=1 hlock=1 lf=1 llock=1 ok
+mem code=1 data=1 image=1 pm=4 bb=1 ok
 twd expire .........|twd reboot wdrst=1 stopped=1 clr=1 t0=1 ok
+bbram kept=1 ok
 ```
 
 The result, UART capture, JUnit assertions, snapshot and build/run logs are
@@ -86,6 +88,14 @@ Checks (source: `crates/firmware-nuvoton-npcx9-smoke/src/main.rs`):
     HFCGML write. LFCG HFRDI keeps 12 bits (0xFFFF -> 0x0FFF),
     LFCGCTL2.XT_OSC_SL_EN reads back, and LFLOC drops a later LFCGCTL2
     write.
+19. Memory windows (runs before the watchdog expiry of check 17): a word
+    written at code_ram 0x10058000 reads back through 0x20058000, and a word
+    written through 0x20058000 + 0x67FFC reads back at 0x10058000 + 0x67FFC;
+    a word written through the data RAM view 0x100D0000 reads back at
+    0x200D0000; image_type (0x4000C009) and PM1..4 (+0x00 and +0xFF) read
+    back. A signature in battery-backed RAM (0x400AF000 and +0x7C) reads
+    back at once, and again on the second boot after the watchdog reset
+    (`bbram kept=1`).
 
 ## Claimed peripherals
 
@@ -99,6 +109,22 @@ Checks (source: `crates/firmware-nuvoton-npcx9-smoke/src/main.rs`):
 | `twd` | `npcx_twd` | T0 at 32768 Hz / 2^MDIV, TWDT0 period, TC (read clears), pulse IRQ per terminal count on NVIC 31; watchdog WDCNT / TWMWD / WDCP, WDCT0I clock select, 87h/61h/63h stop and unlock, 5Ch touch (WDSDME), bad service byte reset, lock bits, system reset with WDRST_STS. |
 | `hfcg` | `npcx_hfcg` | HFCGCTRL LOAD (reads 0, latches M / N), CLK_CHNG (reads 0), LOCK (set-only, drops HFCG writes); HFCGML / HFCGMH / HFCGN / HFCGP / HFCBCD / HFCBCD1..3 / HFCGPIDL read back with reserved bits clear. Register file only. |
 | `lfcg` | `npcx_lfcg` | LFCGCTL LREFEN, UDCP (reads 0), LFLOC (set-only, drops LFCG writes); HFRDI (12 bits), HFRDF, FRCDIV, DIVCOR1/2, LFCGCTL2 read back. Register file only. |
+
+## Memory windows
+
+| name | base | size | scope |
+|---|---|---|---|
+| `ram` | 0x200C0000 | 0x17800 | Renode `data_ram`. |
+| `data_ram_alias` | 0x100C0000 | 0x17800 | Mirror of `ram` (Renode's second `data_ram` view). |
+| `code_ram` | 0x10058000 | 0x68000 | Renode `code_ram`. |
+| `code_ram_alias` | 0x20058000 | 0x68000 | Mirror of `code_ram`. |
+| `battery_backed_ram` | 0x400AF000 | 0x80 | Size from Zephyr `npcx9.dtsi` `bbram` (Renode maps 0x400 and notes it is too large). Kept across a system reset. |
+| `image_type` | 0x4000C009 | 1 | Renode `image_type` ArrayMemory. |
+| `pm1`..`pm4` | 0x400C9000 + n * 0x2000 | 0x100 each | Renode's read/write memory mock of the PMCH registers. |
+
+Not modelled in these windows: VBAT loss and the BBRAM status byte at
+0x400AF100 (unmapped), PMCH host-interface behaviour (OBF / IBF, host IRQs),
+and the internal flash at 0x64000000 (Renode reaches it through the FIU).
 
 GPIO ids are `port0`..`portf`, not Zephyr's `gpio0`..`gpiof`: a `gpio0` or
 `gpio1` id switches on the bus's Nordic GPIOTE pass.
@@ -148,8 +174,9 @@ WDRST_STS survives the watchdog reset it records (Renode clears it in the
 machine reset); a completed 87h/61h/63h sequence returns to idle, so a second
 sequence is accepted (Renode resets on the next 87h).
 
-Not declared (no model in this engine): MDMA, SPIP, FIU, SMBus, and the
-other Renode NPCX blocks.
+Not declared (no model in this engine): MDMA, SPIP, FIU and internal
+flash, SMBus, the DEV_CTL4 / SWRST_CTL4 Python peripherals, and the other
+Renode NPCX blocks.
 
 ## Negative controls
 
@@ -179,6 +206,9 @@ other Renode NPCX blocks.
   same CLI and firmware (SHA-256 `54805aef…`), previous descriptor without
   the `hfcg` / `lfcg` entries; BusFault at 0x400B5006 (HFCGN write), FAIL
   10/13.
+- [`attempt-history/nuvoton_npcx9/2026-11-16-negative-control-no-memory-windows/`](../coverage/renode-onboarding/attempt-history/nuvoton_npcx9/2026-11-16-negative-control-no-memory-windows/):
+  same CLI and firmware (SHA-256 `4e7b49d9…`), previous descriptor without
+  `memory_regions`; BusFault at 0x10058000 (code_ram write), FAIL 11/15.
 
 The profile's `verified` field remains false. This result is limited to the
 local model behaviour; it is not datasheet validation or hardware

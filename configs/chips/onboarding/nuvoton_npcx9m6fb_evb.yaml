@@ -17,9 +17,53 @@ flash:
   base: 0
   size: 65536B
 ram:
-  # NPCX9 data RAM; other SRAM aliases and internal flash are omitted.
+  # NPCX9 data RAM (Renode data_ram, size 0x17800).
   base: 0x200C0000
   size: 96256B
+# Plain memory windows from Renode nuvoton_npcx9.repl. Not mapped: the
+# internal flash at 0x64000000 (Renode reaches it through the FIU / SPI flash
+# model, which is not modelled here).
+memory_regions:
+# Renode data_ram second view: the same bytes as `ram` above.
+- name: data_ram_alias
+  base: 0x100C0000
+  size: 96256B
+  alias_of: 0x200C0000
+# Renode code_ram at 0x10058000 and 0x20058000 (size 0x68000): one backing,
+# two views. Zephyr npcx9 links code at 0x10058000.
+- name: code_ram
+  base: 0x10058000
+  size: 425984B
+- name: code_ram_alias
+  base: 0x20058000
+  size: 425984B
+  alias_of: 0x10058000
+# Battery-backed RAM. Size 0x80 from Zephyr npcx9.dtsi bbram "memory" reg
+# (Renode maps 0x400 and notes the real size is smaller). The BBRAM status
+# byte at 0x400AF100 is not mapped. Contents survive a system reset because
+# memory regions are not cleared on reboot; VBAT loss is not modelled.
+- name: battery_backed_ram
+  base: 0x400AF000
+  size: 128B
+# Renode image_type: one byte of ArrayMemory at 0x4000C009 (inside the MDC).
+- name: image_type
+  base: 0x4000C009
+  size: 1B
+# Power Management Channel 1..4 registers. Renode mocks each as 0x100 bytes of
+# read/write memory; so does this map. No host-interface behaviour (OBF / IBF
+# flags, host IRQs) is modelled.
+- name: pm1
+  base: 0x400C9000
+  size: 256B
+- name: pm2
+  base: 0x400CB000
+  size: 256B
+- name: pm3
+  base: 0x400CD000
+  size: 256B
+- name: pm4
+  base: 0x400CF000
+  size: 256B
 peripherals:
 # UART1..4. Bases and NVIC lines from Renode nuvoton_npcx9.repl
 # (UART.NPCX_UART, IRQ -> nvicIrq33 / 32 / 38 / 39) and Zephyr npcx9.dtsi.
