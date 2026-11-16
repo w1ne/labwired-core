@@ -1,0 +1,28 @@
+{
+  "id": "stm32l432kc",
+  "in_boards": false,
+  "uart": {
+    "state": "proven",
+    "file": "examples/nucleo-l432kc/io-smoke.yaml",
+    "test": "STM32L432KC_OK",
+    "signal": "a raw-register firmware (examples/nucleo-l432kc/firmware/main.c) enables RCC AHB2ENR/APB1ENR1, puts PA2 on AF7 and writes USART2 TDR; the sim captures the banner and a uart_contains oracle matches it. A negative control that moves the USART2 clock gate to the wrong APB1ENR1 bit captures zero bytes. Stock stm32duino NUCLEO_L432KC also prints LW_L0_OK on USART2 in the Arduino matrix",
+    "lane": "core-ci board lane (configs/ci/boards.yml nucleo-l432kc, gate: true) + core-arduino-matrix-smoke (nightly 02:20 UTC + push to main)",
+    "note": "examples/nucleo-l432kc/evidence/, 2026-11-15"
+  },
+  "spi": {
+    "state": "proven",
+    "file": "validation/arduino-matrix/sketches/L4_spi_sensor/src/main.ino",
+    "test": "LW_L4_OK",
+    "signal": "stock stm32duino SPI = SPI1 (PB3/PB4/PB5) clocks the MAX31855 device model and accepts ONLY the exact default kit frame 0x01901600; any other word prints LW_L4_FAIL frame=0x...; the verdict returns on USART2",
+    "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
+    "note": "needs ststm32@19.7.1 (the CI pin): 20.0.0 makes SPI.begin() a no-op. Evidence examples/nucleo-l432kc/evidence/arduino-matrix/L4_spi_sensor, 2026-11-15"
+  },
+  "i2c": {
+    "state": "proven",
+    "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
+    "test": "LW_L3_OK",
+    "signal": "stock stm32duino Wire = I2C1 (PB6/PB7) reads the INA219 model's config register 0x399F and bus-voltage register 0x19CA; LW_L3_OK prints only on that exact pair (the L4 takes the exact tier, not the ACK-only one)",
+    "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
+    "note": "a full run to 12M steps prints no LW_L3_PARTIAL_NO_RX (examples/nucleo-l432kc/evidence/arduino-matrix/L3_i2c_sensor/uart-full-run.log), 2026-11-15"
+  }
+}

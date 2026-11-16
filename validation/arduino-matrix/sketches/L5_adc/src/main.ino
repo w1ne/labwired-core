@@ -73,6 +73,14 @@ static bool samples_ok(int v0, int v1) {
   // handed to the ADC.
   return v0 == 512 && v1 == 512;
 
+#elif defined(STM32L432xx)
+  // NUCLEO-L432KC: the matrix system holds A0 = PA0 = ADC1_IN5 at 1650 mV.
+  // floor(1650 * 4095 / 3300) = 2047 at 12 bits; analogRead's default
+  // 10 bits is 2047 >> 2 = 511. Exact; 0 means no conversion, and 930 is
+  // the model's fixed internal source, i.e. the board level never reached
+  // the selected channel.
+  return v0 == 511 && v1 == 511;
+
 #elif defined(ARDUINO_ARCH_RP2040)
   // rp2040/adc.rs: unseeded GPIO inputs convert 0 (no fabricated mid-scale).
   return v0 == 0 && v1 == 0;

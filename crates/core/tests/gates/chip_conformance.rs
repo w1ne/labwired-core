@@ -873,6 +873,16 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_nucleo_l073rz_smoke_survival"),
     },
     ChipConf {
+        // NUCLEO-L432KC: the raw-register smoke (examples/nucleo-l432kc) runs
+        // in the PR board lane and the stock stm32duino row in the Arduino
+        // matrix, but no PR-run Rust survival gate or reset oracle exists for
+        // this exact part.
+        name: "stm32l432kc",
+        yaml: "configs/chips/stm32l432kc.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
         name: "stm32l476",
         yaml: "configs/chips/stm32l476.yaml",
         reset_oracle: None,
