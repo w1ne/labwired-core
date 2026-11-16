@@ -1180,6 +1180,16 @@ const CHIPS: &[ChipConf] = &[
             "ch32v003_compiled_firmware::ch32v003_compiled_rv32e_firmware_toggles_pc0",
         ),
     },
+    // CH32V203C8T6 (QingKe V4B, RV32IMAC). SIM-DERIVED: no silicon capture,
+    // so no reset_oracle. The gate boots a committed ELF that blinks PC13.
+    ChipConf {
+        name: "ch32v203c8t6",
+        yaml: "configs/chips/ch32v203c8t6.yaml",
+        reset_oracle: None,
+        behavior_gate: Some(
+            "ch32v203_compiled_firmware::ch32v203_compiled_rv32imac_firmware_toggles_pc13",
+        ),
+    },
     // CH32V003 package variants (QFN20 F4U6, SOP16 A4M6, SOP8 J4M6). Same
     // die and SIM-DERIVED status as the F4P6 above; each descriptor differs
     // only in package and bonded pins (CH32V003DS0 V1.8 Table 2-1), which

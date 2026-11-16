@@ -145,6 +145,10 @@ _Drives all 13 rubric classes (incl. FDCAN→can) via real firmware — the broa
 
 _No tier-1 fixture or hosted model-verification gate. The WCH-CH32V003EVT board profile maps its P4 LED1 through a configured jumper to PC0; committed RV32E/ILP32E bare-metal C firmware executes from flash and the PR-gated board smoke requires two GPIO edges. A second RV32EC (compressed) fixture clocks USART1 and prints a line through polled TX on PD5; the board smoke asserts the exact string. A negative control asserts silence when the USART1 clock gate is not set. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, timers, or USB, and is not hosted model_verified or hardware confirmation._
 
+### `ch32v203c8t6`
+
+_No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs a committed RV32IMAC ELF that blinks PC13 through GPIOC_CFGHR (negative control: PC0 stays idle), and a second ELF that checks MUL/DIVU/AMOADD.W results and then prints an exact string on USART1 (PA9); a negative control moves the USART1 clock gate and requires silence. A DS0 Table 2-1 test pins memory, clock and the 37 LQFP48 GPIOs. This local simulator evidence does not cover WCH-Link, PFIC, SysTick, timers, ADC, I2C, SPI, CAN or USB, and is not hosted model_verified or hardware confirmation._
+
 ### `ch32v003f4u6`
 
 _QFN20 package of the ch32v003f4p6 die. No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs the committed F4P6 RV32EC USART1 fixture unchanged and asserts the exact PD5 TX string, and runs the F4P6 blink fixture and requires GPIOC PC0 edges. A DS0 bonding test asserts the descriptor matches F4P6 except for package, pin count and bonded pins. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, timers, or USB, and is not hosted model_verified or hardware confirmation._
