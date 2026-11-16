@@ -148,6 +148,15 @@ const HARDCODED_BASE_ALLOWLIST: &[(&str, &str, &str)] = &[
          ChipMap to resolve.",
     ),
     (
+        "peripherals/components/cyw43439.rs",
+        "CHIPCOMMON_BASE_ADDRESS",
+        "NOT A HOST MMIO BASE. 0x1800_0000 is the CHIPCOMMON core in the \
+         CYW43439's OWN backplane address space (pico-sdk cyw43_ll.c). The host \
+         reaches it only through the chip's gSPI F1 backplane window, never \
+         through the RP2040 bus; no chip YAML declares it and there is nothing \
+         for ChipMap to resolve.",
+    ),
+    (
         "peripherals/esp32c3/pms.rs",
         "IRAM0_STATUS_ADDR_BASE",
         "NOT A PERIPHERAL BASE. `IRAM0_VIOLATE_STATUS_ADDR_OFFSET` from IDF's \
