@@ -65,9 +65,47 @@ fn probe() {
         .map(|s| u32::from_str_radix(s.trim_start_matches("0x"), 16).unwrap())
         .collect();
     let mut hits = vec![0u64; watch.len()];
+    // LABWIRED_PROBE_UART="72000000:G28\n;73600000:M114\n" (cycles:text).
+    let mut uart: Vec<(u64, Vec<u8>)> = std::env::var("LABWIRED_PROBE_UART")
+        .unwrap_or_default()
+        .split(';')
+        .filter(|s| !s.is_empty())
+        .map(|s| {
+            let (c, t) = s.split_once(':').unwrap();
+            (c.parse().unwrap(), t.replace("\\n", "\n").into_bytes())
+        })
+        .collect();
+    uart.reverse();
+    let mut ring = std::collections::VecDeque::with_capacity(256);
     let mut steps = 0u64;
     while m.total_cycles < end {
-        m.step().expect("step");
+        if let Some((at, _)) = uart.last() {
+            if m.total_cycles >= *at {
+                let (_, bytes) = uart.pop().unwrap();
+                m.bus
+                    .deliver_uart_rx_named("usart0", &bytes)
+                    .expect("inject");
+            }
+        }
+        if ring.len() == 256 {
+            ring.pop_front();
+        }
+        ring.push_back((m.cpu.pc, m.cpu.sp, m.total_cycles));
+        if let Err(e) = m.step() {
+            eprintln!("step error at cycle {}: {e:?}", m.total_cycles);
+            for (pc, sp, c) in &ring {
+                eprintln!("  pc={pc:#07x} sp={sp:#06x} cyc={c}");
+            }
+            let sp = m.cpu.sp as usize;
+            let lo = sp.saturating_sub(0x200).max(0x200);
+            eprintln!(
+                "stack {:#x}..: {:02x?}",
+                sp,
+                &m.cpu.sram[sp + 1 - 0x200..(sp + 17 - 0x200).min(m.cpu.sram.len())]
+            );
+            let _ = lo;
+            break;
+        }
         steps += 1;
         let pc_bytes = m.cpu.pc * 2;
         for (i, &w) in watch.iter().enumerate() {
