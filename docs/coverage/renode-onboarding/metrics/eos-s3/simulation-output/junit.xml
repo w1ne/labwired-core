@@ -1,22 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="7" failures="0" errors="0" time="0.001881">
+<testsuite name="labwired" tests="8" failures="0" errors="0" time="0.009067">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="7fec78d30a7d10861d803a2264edb20dded508528409e1af718230ecdbdd86e1"/>
+    <property name="firmware_hash" value="af5bed156746e9b8ad97554e81eda2eab3afc6000acae6946cc33d2d3718bbab"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.001881">
+  <testcase classname="labwired" name="run" time="0.009067">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: PL011 IRQ7 status=00000002 rx=00000052 cleared=00000000" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 2: uart_contains: EOS S3 Cortex-M4F PL011 smoke" time="0.000000">
+  <testcase classname="labwired" name="assertion 2: uart_contains: SPT ms=00000007" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 3: uart_contains: EOS S3 checks PPPPPPPPPPP DONE" time="0.000000">
+  <testcase classname="labwired" name="assertion 3: uart_contains: EOS S3 Cortex-M4F PL011 smoke" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 4: memory_value: @0x2007ff00=0xe05307ff" time="0.000000">
+  <testcase classname="labwired" name="assertion 4: uart_contains: EOS S3 checks PPPPPPPPPPPP DONE" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 5: gpio_edges: gpio:4 &gt;= 6 edges" time="0.000000">
+  <testcase classname="labwired" name="assertion 5: memory_value: @0x2007ff00=0xe0530fff" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 6: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 6: gpio_edges: gpio:4 &gt;= 6 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>

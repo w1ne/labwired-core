@@ -12,10 +12,10 @@
 - pass_observable_assertions: `226/226`
 - pass_stop_reason_only: `0/226`
 - pass_depth_unknown: `0/226`
-- pass_claimed_peripherals_total: `1562`
+- pass_claimed_peripherals_total: `1568`
 - pass_claimed_peripherals_median: `4`
-- median_elapsed_ms: `1499`
-- median_elapsed_seconds: `1.499`
+- median_elapsed_ms: `1524`
+- median_elapsed_seconds: `1.524`
 - threshold_seconds: `3600`
 - threshold_met: `226/226`
 
@@ -84,9 +84,9 @@
 | `efr32mg26` | `pass` | `True` | `yes` | `yes` | `296701` | `296.701` | `True` | `observable` | `4` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `efr32xg22` | `pass` | `True` | `yes` | `yes` | `115495` | `115.495` | `True` | `observable` | `5` | `uart_contains`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `egis_et171` | `pass` | `True` | `yes` | `yes` | `1200` | `1.2` | `True` | `observable` | `1` | `memory_value`, `uart_contains` | 0 | `n/a` | n/a | n/a |
-| `eos-s3` | `pass` | `True` | `yes` | `yes` | `106516` | `106.516` | `True` | `observable` | `3` | `uart_contains`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
-| `eos-s3-qomu` | `pass` | `True` | `yes` | `yes` | `870` | `0.87` | `True` | `observable` | `3` | `uart_contains`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
-| `eos-s3-quickfeather` | `pass` | `True` | `yes` | `yes` | `1941` | `1.941` | `True` | `observable` | `3` | `uart_contains`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
+| `eos-s3` | `pass` | `True` | `yes` | `yes` | `307873` | `307.873` | `True` | `observable` | `5` | `uart_contains`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
+| `eos-s3-qomu` | `pass` | `True` | `yes` | `yes` | `1611` | `1.611` | `True` | `observable` | `5` | `uart_contains`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
+| `eos-s3-quickfeather` | `pass` | `True` | `yes` | `yes` | `5785` | `5.785` | `True` | `observable` | `5` | `uart_contains`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `ezr32hg320` | `pass` | `True` | `yes` | `yes` | `877` | `0.877` | `True` | `observable` | `10` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `ezr32lg330` | `pass` | `True` | `yes` | `yes` | `2297` | `2.297` | `True` | `observable` | `14` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `ezr32wg330` | `pass` | `True` | `yes` | `yes` | `1133` | `1.133` | `True` | `observable` | `14` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |

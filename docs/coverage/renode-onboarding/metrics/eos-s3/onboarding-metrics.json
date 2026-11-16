@@ -6,7 +6,7 @@
   "booted": true,
   "boot_evidence": {
     "result_path": "simulation-output/result.json",
-    "instructions": 100000,
+    "instructions": 600000,
     "stop_reason": "max_steps"
   },
   "smoke_passed": true,
@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/eos-s3-smoke.yaml",
   "system": "configs/systems/onboarding/eos-s3.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-15T23:35:36Z",
-  "finished_at_utc": "2026-11-15T23:37:23Z",
-  "elapsed_seconds": 107,
-  "elapsed_ms": 106516,
+  "started_at_utc": "2026-11-16T06:26:08Z",
+  "finished_at_utc": "2026-11-16T06:31:16Z",
+  "elapsed_seconds": 308,
+  "elapsed_ms": 307873,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 106.014,
-    "build_firmware": 0.196,
-    "run_smoke": 0.271
+    "build_cli": 305.265,
+    "build_firmware": 0.672,
+    "run_smoke": 1.896
   },
   "stages_ms": {
-    "build_cli": 106014,
-    "build_firmware": 196,
-    "run_smoke": 271
+    "build_cli": 305265,
+    "build_firmware": 672,
+    "run_smoke": 1896
   }
 }

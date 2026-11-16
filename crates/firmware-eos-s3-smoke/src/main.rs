@@ -30,6 +30,17 @@ const SW_INTR_2_EN_M4: *mut u32 = (INTR_CTRL + 0x58) as *mut u32;
 // NVIC ISER0 / ISPR0. SwInt2_IRQn = 0, SwInt1_IRQn = 1.
 const NVIC_ISER0: *mut u32 = 0xE000_E100 as *mut u32;
 const NVIC_ISPR0: *mut u32 = 0xE000_E200 as *mut u32;
+// qorc-sdk eoss3_dev.h SPT_BASE = AON_PERIPH_BASE + 0x5C00 (SPT_REGS_TypeDef).
+const SPT: u32 = 0x4000_5C00;
+const SPT_CFG: *mut u32 = SPT as *mut u32;
+const SPT_UPDATE_TMR_VAL: *mut u32 = (SPT + 0x2C) as *mut u32;
+const SPT_TIMER_VAL: *mut u32 = (SPT + 0x34) as *mut u32;
+const SPT_EVENT_CNT_VAL: *mut u32 = (SPT + 0x38) as *mut u32;
+const SPT_MS_CNT_VAL: *mut u32 = (SPT + 0x3C) as *mut u32;
+// SysTick on the core clock: the reference for one SPT millisecond.
+const SYST_CSR: *mut u32 = 0xE000_E010 as *mut u32;
+const SYST_RVR: *mut u32 = 0xE000_E014 as *mut u32;
+const SYST_CVR: *mut u32 = 0xE000_E018 as *mut u32;
 // Smoke summary: 0xE0530000 | pass bits.
 const SUMMARY: *mut u32 = 0x2007_FF00 as *mut u32;
 
@@ -43,6 +54,8 @@ static UART_OTHER_AFTER: AtomicU32 = AtomicU32::new(0);
 static UART_RIS_BEFORE: AtomicU32 = AtomicU32::new(0);
 static UART_RX_BYTE: AtomicU32 = AtomicU32::new(0);
 static OTHER_HITS: AtomicU32 = AtomicU32::new(0);
+static SPT_MS: AtomicU32 = AtomicU32::new(0);
+static SPT_CYCLES: AtomicU32 = AtomicU32::new(0);
 
 // Every IRQ lands here; the handler clears the software request it serves.
 #[exception]
@@ -97,7 +110,7 @@ fn put_hex32(mut value: u32) {
 #[entry]
 fn main() -> ! {
     let mut pass = 0u32;
-    let mut marks = [b'F'; 11];
+    let mut marks = [b'F'; 12];
     let mut check = |i: usize, ok: bool| {
         if ok {
             pass |= 1 << i;
@@ -223,7 +236,67 @@ fn main() -> ! {
                 && read_volatile(NVIC_ISPR0) & (1 << 7) == 0
                 && OTHER_HITS.load(Ordering::Relaxed) == 0,
         );
+
+        // 11: SPT. Disabled, UPDATE_TMR_VAL loads TIMER_VAL and it holds.
+        // Enabled, it counts 1 ms at the 61.44 MHz core clock (SysTick
+        // reference). Disabled again, it freezes.
+        write_volatile(SPT_CFG, 0x10 << 10); // FFE_TO_PERIOD = 0x10, SPT_EN = 0
+        let reset_ok = read_volatile(SPT_TIMER_VAL) == 0
+            && read_volatile(SPT_MS_CNT_VAL) == 0x40
+            && read_volatile(SPT_EVENT_CNT_VAL) == 0x10
+            && read_volatile(SPT_CFG) == 0x10 << 10;
+        write_volatile(SPT_UPDATE_TMR_VAL, 5);
+        let loaded = read_volatile(SPT_TIMER_VAL);
+        for _ in 0..20_000 {
+            core::hint::spin_loop();
+        }
+        let held = read_volatile(SPT_TIMER_VAL);
+        write_volatile(SYST_RVR, 0x00FF_FFFF);
+        write_volatile(SYST_CVR, 0);
+        write_volatile(SYST_CSR, 0b101); // ENABLE | CLKSOURCE = core
+        write_volatile(SPT_CFG, (0x10 << 10) | 1);
+        let start = read_volatile(SPT_TIMER_VAL);
+        let mut edge = start;
+        let mut guard = 0u32;
+        while edge == start && guard < 200_000 {
+            edge = read_volatile(SPT_TIMER_VAL);
+            guard += 1;
+        }
+        let t0 = read_volatile(SYST_CVR);
+        let mut next = edge;
+        while next == edge && guard < 400_000 {
+            next = read_volatile(SPT_TIMER_VAL);
+            guard += 1;
+        }
+        let t1 = read_volatile(SYST_CVR);
+        let cycles = t0.wrapping_sub(t1) & 0x00FF_FFFF;
+        write_volatile(SPT_CFG, 0x10 << 10);
+        let frozen = read_volatile(SPT_TIMER_VAL);
+        for _ in 0..20_000 {
+            core::hint::spin_loop();
+        }
+        let still = read_volatile(SPT_TIMER_VAL);
+        SPT_MS.store(next, Ordering::Relaxed);
+        SPT_CYCLES.store(cycles, Ordering::Relaxed);
+        check(
+            11,
+            reset_ok
+                && loaded == 5
+                && held == 5
+                && start == 5
+                && edge == 6
+                && next == 7
+                && (55_000..68_000).contains(&cycles)
+                && frozen == still
+                && still == 7,
+        );
     }
+
+    puts(b"SPT ms=");
+    put_hex32(SPT_MS.load(Ordering::Relaxed));
+    puts(b" cycles=");
+    put_hex32(SPT_CYCLES.load(Ordering::Relaxed));
+    puts(b"\r\n");
 
     puts(b"PL011 IRQ7 status=");
     put_hex32(UART_OTHER_BEFORE.load(Ordering::Relaxed));

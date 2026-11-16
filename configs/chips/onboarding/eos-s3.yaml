@@ -13,7 +13,8 @@
 # 0x20000000+n. (The import mapped two separate 512 KiB stores, so a write
 # through one view never showed in the other.)
 #
-# Declared: PL011 UART (RX level on source IRQ 7 reaches INTR_CTRL OTHER_INTR
+# Declared: SysTick (part of the Renode NVIC, systickFrequency 61.44 MHz),
+# PL011 UART (RX level on source IRQ 7 reaches INTR_CTRL OTHER_INTR
 # bit 1 and the M4 output is gated by OTHER_INTR_EN_M4 bit 1), the
 # eight M4 GPIOs in MISC_CTRL (IO_INPUT 0x40005100 / IO_OUTPUT 0x40005104;
 # qorc-sdk HAL/inc/eoss3_dev.h, HAL/src/eoss3_hal_gpio.c), the 4 KiB SDMA
@@ -22,7 +23,11 @@
 # each gated by its EN_M4 bit). OTHER_INTR bit 1 models PL011 RX only. Its
 # GPIO/FFE/FB status words read 0; timer, watchdog and other sources are not
 # routed through it.
-# Not declared (no model): IO_MUX pad controls, simple periodic timer, ADC,
+# SPT at 0x40005C00 (Renode EOSS3_SimplePeriodicTimer, size 0x200): the
+# 30-bit TIMER_VAL counts once per ms of simulated time while SPT_EN is set,
+# at cpu_hz (default 61.44 MHz, the repl systickFrequency); UPDATE_TMR_VAL
+# loads it. No FFE kick-off output, no timestamps, no error compensation.
+# Not declared (no model): IO_MUX pad controls, ADC,
 # DesignWare SPI + SPI DMA, packet FIFO, uDMA + bridge, FFE and its I2C
 # masters, voice block, PMU, CRU.
 name: eos-s3
@@ -44,6 +49,10 @@ memory_regions:
   base: 0x4000F000
   size: 4KB
 peripherals:
+- id: systick
+  type: systick
+  base_address: 0xE000E010
+  size: 16B
 - id: uart
   type: pl011
   base_address: 0x40010000
@@ -58,3 +67,7 @@ peripherals:
   size: 8B
   config:
     profile: eos_s3
+- id: spt
+  type: eos_s3_spt
+  base_address: 0x40005C00
+  size: 512B

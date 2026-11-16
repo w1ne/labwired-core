@@ -1,10 +1,10 @@
 # EOS S3 QuickFeather validation status
 
-## Current measurement (2026-11-09)
+## Current measurement (2026-11-16)
 
-The QuickFeather system booted `firmware-eos-s3-smoke` for **100,000
-instructions** and passed **6/6 smoke assertions** (`EOS S3 checks PPPPPP
-DONE`, summary 0xE053003F, 6 edges on GPIO 4). Evidence:
+The QuickFeather system booted `firmware-eos-s3-smoke` for **600,000
+instructions** and passed **7/7 smoke assertions** (`EOS S3 checks
+PPPPPPPPPPPP DONE`, summary 0xE0530FFF, `SPT ms=00000007`, 6 edges on GPIO 4). Evidence:
 [`docs/coverage/renode-onboarding/metrics/eos-s3-quickfeather/`](../coverage/renode-onboarding/metrics/eos-s3-quickfeather/).
 
 The chip descriptor includes the `eos-s3` profile whole; the checks, the

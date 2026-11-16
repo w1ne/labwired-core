@@ -3,25 +3,25 @@
   "cpu": {
     "type": "arm",
     "registers": [
+      99,
       78,
-      79,
-      1073807360,
-      104,
-      537394944,
-      10,
-      69,
-      537394928,
-      51,
-      32,
-      115,
-      107,
-      13,
-      537394880,
       101,
-      3690
+      107,
+      79,
+      51,
+      537394944,
+      537394928,
+      32,
+      13,
+      10,
+      115,
+      1073807360,
+      537394864,
+      69,
+      4896
     ],
-    "pc": 3690,
-    "xpsr": 16778240,
+    "pc": 4896,
+    "xpsr": 16779264,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -33,23 +33,23 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "steps_executed": 100000,
-  "cycles": 100000,
-  "instructions": 100000,
+  "steps_executed": 600000,
+  "cycles": 600000,
+  "instructions": 600000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 100000
+      "value": 600000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 100000
+      "value": 600000
     }
   },
   "limits": {
-    "max_steps": 100000,
+    "max_steps": 600000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "7fec78d30a7d10861d803a2264edb20dded508528409e1af718230ecdbdd86e1",
+  "firmware_hash": "af5bed156746e9b8ad97554e81eda2eab3afc6000acae6946cc33d2d3718bbab",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-eos-s3-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/eos-s3.yaml",

@@ -519,6 +519,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "ft9001_trng",
     // QuickLogic EOS S3 INTR_CTRL (peripherals/eos_s3_intr.rs).
     "eos_s3_intr_ctrl",
+    // QuickLogic EOS S3 simple periodic timer (peripherals/eos_s3_spt.rs).
+    "eos_s3_spt",
 ];
 
 /// True if `t` is already a canonical model-type name (see [`MODEL_TYPES`]).
@@ -1887,6 +1889,9 @@ pub fn try_build(
         "ft9001_reset" => Box::new(crate::peripherals::ft9001_sys::Ft9001Reset::new()),
         "ft9001_trng" => Box::new(crate::peripherals::ft9001_sys::Ft9001Trng::new()),
         "eos_s3_intr_ctrl" => Box::new(crate::peripherals::eos_s3_intr::EosS3IntrCtrl::new()),
+        "eos_s3_spt" => Box::new(crate::peripherals::eos_s3_spt::EosS3Spt::new(
+            p_cfg.config.get("clock_hz").and_then(|v| v.as_u64()),
+        )),
         "sam_pm" => Box::new(crate::peripherals::sam_clock::SamPm::new()),
         "sam_gclk" => Box::new(crate::peripherals::sam_clock::SamGclk::new()),
         "sam_mclk" => Box::new(crate::peripherals::sam_clock::SamMclk::new()),

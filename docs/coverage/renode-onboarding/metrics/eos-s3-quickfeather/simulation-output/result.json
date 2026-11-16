@@ -1,23 +1,23 @@
 {
   "result_schema_version": "1.0",
   "status": "pass",
-  "steps_executed": 100000,
-  "cycles": 100000,
-  "instructions": 100000,
+  "steps_executed": 600000,
+  "cycles": 600000,
+  "instructions": 600000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 100000
+      "value": 600000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 100000
+      "value": 600000
     }
   },
   "limits": {
-    "max_steps": 100000,
+    "max_steps": 600000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -36,13 +36,19 @@
     },
     {
       "assertion": {
+        "uart_contains": "SPT ms=00000007"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "uart_contains": "EOS S3 Cortex-M4F PL011 smoke"
       },
       "passed": true
     },
     {
       "assertion": {
-        "uart_contains": "EOS S3 checks PPPPPPPPPPP DONE"
+        "uart_contains": "EOS S3 checks PPPPPPPPPPPP DONE"
       },
       "passed": true
     },
@@ -50,7 +56,7 @@
       "assertion": {
         "memory_value": {
           "address": 537394944,
-          "expected_value": 3763537919,
+          "expected_value": 3763539967,
           "mask": null,
           "size": 4
         }
@@ -76,25 +82,25 @@
   "cpu_state": {
     "type": "arm",
     "registers": [
+      99,
       78,
-      79,
-      1073807360,
-      104,
-      537394944,
-      10,
-      69,
-      537394928,
-      51,
-      32,
-      115,
-      107,
-      13,
-      537394880,
       101,
-      3690
+      107,
+      79,
+      51,
+      537394944,
+      537394928,
+      32,
+      13,
+      10,
+      115,
+      1073807360,
+      537394864,
+      69,
+      4896
     ],
-    "pc": 3690,
-    "xpsr": 16778240,
+    "pc": 4896,
+    "xpsr": 16779264,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -106,7 +112,7 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "firmware_hash": "7fec78d30a7d10861d803a2264edb20dded508528409e1af718230ecdbdd86e1",
+  "firmware_hash": "af5bed156746e9b8ad97554e81eda2eab3afc6000acae6946cc33d2d3718bbab",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-eos-s3-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/eos-s3-quickfeather.yaml",
@@ -114,6 +120,13 @@
   },
   "inspect": {
     "peripherals": [
+      {
+        "name": "systick",
+        "kind": "native",
+        "base": 3758153744,
+        "registers": [],
+        "artifacts": []
+      },
       {
         "name": "uart",
         "kind": "native",
@@ -132,6 +145,13 @@
         "name": "gpio",
         "kind": "native",
         "base": 1073762560,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "spt",
+        "kind": "native",
+        "base": 1073765376,
         "registers": [],
         "artifacts": []
       },
@@ -177,7 +197,7 @@
   ],
   "logic_edges": {
     "dropped": 0,
-    "now_cycle": 100000,
+    "now_cycle": 600000,
     "channels": [
       {
         "ch": 0,
@@ -187,43 +207,43 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 132,
+            "cycle": 141,
             "value": 1
           },
           {
-            "cycle": 135,
+            "cycle": 144,
             "value": 0
           },
           {
-            "cycle": 148,
+            "cycle": 157,
             "value": 1
           },
           {
-            "cycle": 152,
+            "cycle": 161,
             "value": 0
           },
           {
-            "cycle": 10478,
+            "cycle": 175178,
             "value": 1
           },
           {
-            "cycle": 10481,
+            "cycle": 175181,
             "value": 0
           },
           {
-            "cycle": 10484,
+            "cycle": 175184,
             "value": 1
           },
           {
-            "cycle": 10487,
+            "cycle": 175187,
             "value": 0
           },
           {
-            "cycle": 10490,
+            "cycle": 175190,
             "value": 1
           },
           {
-            "cycle": 10493,
+            "cycle": 175193,
             "value": 0
           }
         ],
@@ -231,43 +251,43 @@
         "initial_state": "0",
         "states": [
           {
-            "cycle": 132,
+            "cycle": 141,
             "state": "1"
           },
           {
-            "cycle": 135,
+            "cycle": 144,
             "state": "0"
           },
           {
-            "cycle": 148,
+            "cycle": 157,
             "state": "1"
           },
           {
-            "cycle": 152,
+            "cycle": 161,
             "state": "0"
           },
           {
-            "cycle": 10478,
+            "cycle": 175178,
             "state": "1"
           },
           {
-            "cycle": 10481,
+            "cycle": 175181,
             "state": "0"
           },
           {
-            "cycle": 10484,
+            "cycle": 175184,
             "state": "1"
           },
           {
-            "cycle": 10487,
+            "cycle": 175187,
             "state": "0"
           },
           {
-            "cycle": 10490,
+            "cycle": 175190,
             "state": "1"
           },
           {
-            "cycle": 10493,
+            "cycle": 175193,
             "state": "0"
           }
         ],
@@ -292,33 +312,39 @@
   "uart_lines": {
     "lines": [
       {
+        "text": "SPT ms=00000007 cycles=0000EFFF",
+        "cycle_lo": 170000,
+        "cycle": 180000,
+        "end_cycle": 180000
+      },
+      {
         "text": "PL011 IRQ7 status=00000002 rx=00000052 cleared=00000000 ris=00000010 hits=00000001",
-        "cycle_lo": 10000,
-        "cycle": 20000,
-        "end_cycle": 20000
+        "cycle_lo": 170000,
+        "cycle": 180000,
+        "end_cycle": 180000
       },
       {
         "text": "EOS S3 Cortex-M4F PL011 smoke",
-        "cycle_lo": 10000,
-        "cycle": 20000,
-        "end_cycle": 20000
+        "cycle_lo": 170000,
+        "cycle": 180000,
+        "end_cycle": 180000
       },
       {
-        "text": "EOS S3 checks PPPPPPPPPPP DONE",
-        "cycle_lo": 10000,
-        "cycle": 20000,
-        "end_cycle": 20000
+        "text": "EOS S3 checks PPPPPPPPPPPP DONE",
+        "cycle_lo": 170000,
+        "cycle": 180000,
+        "end_cycle": 180000
       }
     ],
     "dropped_lines": 0
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 3984,
+    "text_bytes": 5212,
     "data_bytes": 0,
-    "bss_bytes": 36,
-    "flash_used_bytes": 3984,
-    "ram_static_bytes": 36,
+    "bss_bytes": 44,
+    "flash_used_bytes": 5212,
+    "ram_static_bytes": 44,
     "flash_total_bytes": 0,
     "ram_total_bytes": 524288,
     "flash_used_pct": 0.0,
@@ -330,36 +356,66 @@
   },
   "memory": {
     "main_stack_method": "paint",
-    "main_stack_limit_bytes": 261852,
-    "main_stack_high_water_bytes": 104,
-    "main_stack_free_min_bytes": 261748,
-    "main_stack_base": 537133092,
+    "main_stack_limit_bytes": 261844,
+    "main_stack_high_water_bytes": 76,
+    "main_stack_free_min_bytes": 261728,
+    "main_stack_base": 537133100,
     "main_stack_top": 537394944,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
-    "heap_limit_bytes": 261852,
+    "heap_limit_bytes": 261844,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 261748,
-    "heap_base": 537133092,
+    "heap_free_min_bytes": 261728,
+    "heap_base": 537133100,
     "heap_top": 537394944
   },
   "metrics": {
-    "cycles": 100000,
-    "instructions": 100000,
-    "steps_executed": 100000,
-    "memory_reads": 3779,
-    "memory_writes": 87,
-    "peripheral_accesses": 201,
+    "cycles": 600000,
+    "instructions": 600000,
+    "steps_executed": 600000,
+    "memory_reads": 4389,
+    "memory_writes": 95,
+    "peripheral_accesses": 25444,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 2058,
+        "pc": 2468,
+        "count": 234,
+        "symbol": "firmware_eos_s3_smoke::__cortex_m_rt_main"
+      },
+      {
+        "pc": 2558,
+        "count": 234,
+        "symbol": "firmware_eos_s3_smoke::__cortex_m_rt_main"
+      },
+      {
+        "pc": 2630,
+        "count": 40,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 2028,
+        "count": 39,
+        "symbol": "core::sync::atomic::atomic_load"
+      },
+      {
+        "pc": 2362,
         "count": 39,
         "symbol": "core::core_arch::arm_shared::hints::__yield"
       },
       {
-        "pc": 3690,
-        "count": 2,
+        "pc": 2394,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 2662,
+        "count": 39,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 4896,
+        "count": 21,
         "symbol": "core::core_arch::arm_shared::hints::__yield"
       }
     ]

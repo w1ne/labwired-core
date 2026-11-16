@@ -11,10 +11,10 @@
     "pass_observable_assertions": 226,
     "pass_stop_reason_only": 0,
     "pass_depth_unknown": 0,
-    "pass_claimed_peripherals_total": 1562,
+    "pass_claimed_peripherals_total": 1568,
     "pass_claimed_peripherals_median": 4,
-    "median_elapsed_ms": 1499,
-    "median_elapsed_seconds": 1.499,
+    "median_elapsed_ms": 1524,
+    "median_elapsed_seconds": 1.524,
     "threshold_seconds": 3600,
     "threshold_met": 226,
     "descriptors_present": 245,
@@ -2872,7 +2872,7 @@
       "booted": true,
       "boot_evidence": {
         "result_path": "simulation-output/result.json",
-        "instructions": 100000,
+        "instructions": 600000,
         "stop_reason": "max_steps"
       },
       "smoke_passed": true,
@@ -2881,28 +2881,28 @@
       "script": "examples/renode-onboarding/eos-s3-smoke.yaml",
       "system": "configs/systems/onboarding/eos-s3.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-15T23:35:36Z",
-      "finished_at_utc": "2026-11-15T23:37:23Z",
-      "elapsed_seconds": 107,
-      "elapsed_ms": 106516,
+      "started_at_utc": "2026-11-16T06:26:08Z",
+      "finished_at_utc": "2026-11-16T06:31:16Z",
+      "elapsed_seconds": 308,
+      "elapsed_ms": 307873,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 106.014,
-        "build_firmware": 0.196,
-        "run_smoke": 0.271
+        "build_cli": 305.265,
+        "build_firmware": 0.672,
+        "run_smoke": 1.896
       },
       "stages_ms": {
-        "build_cli": 106014,
-        "build_firmware": 196,
-        "run_smoke": 271
+        "build_cli": 305265,
+        "build_firmware": 672,
+        "run_smoke": 1896
       },
       "_artifact_path": "eos-s3",
       "zero_answering_windows": [],
-      "claimed_peripherals": 3,
+      "claimed_peripherals": 5,
       "smoke_assertion_kinds": [
         "uart_contains",
         "memory_value",
@@ -2919,7 +2919,7 @@
       "booted": true,
       "boot_evidence": {
         "result_path": "simulation-output/result.json",
-        "instructions": 100000,
+        "instructions": 600000,
         "stop_reason": "max_steps"
       },
       "smoke_passed": true,
@@ -2928,28 +2928,28 @@
       "script": "examples/renode-onboarding/eos-s3-qomu-smoke.yaml",
       "system": "configs/systems/onboarding/eos-s3-qomu.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-15T23:37:27Z",
-      "finished_at_utc": "2026-11-15T23:37:28Z",
-      "elapsed_seconds": 1,
-      "elapsed_ms": 870,
+      "started_at_utc": "2026-11-16T06:31:18Z",
+      "finished_at_utc": "2026-11-16T06:31:20Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1611,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.339,
-        "build_firmware": 0.209,
-        "run_smoke": 0.28
+        "build_cli": 0.313,
+        "build_firmware": 0.956,
+        "run_smoke": 0.308
       },
       "stages_ms": {
-        "build_cli": 339,
-        "build_firmware": 209,
-        "run_smoke": 280
+        "build_cli": 313,
+        "build_firmware": 956,
+        "run_smoke": 308
       },
       "_artifact_path": "eos-s3-qomu",
       "zero_answering_windows": [],
-      "claimed_peripherals": 3,
+      "claimed_peripherals": 5,
       "smoke_assertion_kinds": [
         "uart_contains",
         "memory_value",
@@ -2966,7 +2966,7 @@
       "booted": true,
       "boot_evidence": {
         "result_path": "simulation-output/result.json",
-        "instructions": 100000,
+        "instructions": 600000,
         "stop_reason": "max_steps"
       },
       "smoke_passed": true,
@@ -2975,28 +2975,28 @@
       "script": "examples/renode-onboarding/eos-s3-quickfeather-smoke.yaml",
       "system": "configs/systems/onboarding/eos-s3-quickfeather.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-15T23:37:32Z",
-      "finished_at_utc": "2026-11-15T23:37:34Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1941,
+      "started_at_utc": "2026-11-16T06:31:24Z",
+      "finished_at_utc": "2026-11-16T06:31:29Z",
+      "elapsed_seconds": 6,
+      "elapsed_ms": 5785,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 1.244,
-        "build_firmware": 0.226,
-        "run_smoke": 0.425
+        "build_cli": 3.246,
+        "build_firmware": 1.752,
+        "run_smoke": 0.751
       },
       "stages_ms": {
-        "build_cli": 1244,
-        "build_firmware": 226,
-        "run_smoke": 425
+        "build_cli": 3246,
+        "build_firmware": 1752,
+        "run_smoke": 751
       },
       "_artifact_path": "eos-s3-quickfeather",
       "zero_answering_windows": [],
-      "claimed_peripherals": 3,
+      "claimed_peripherals": 5,
       "smoke_assertion_kinds": [
         "uart_contains",
         "memory_value",

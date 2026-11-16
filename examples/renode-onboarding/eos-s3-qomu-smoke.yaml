@@ -1,23 +1,24 @@
 # EOS S3 smoke against the imported eos-s3-qomu system: SRAM mirror at 0x0 in both
 # directions, SDMA SRAM, MISC IO_OUTPUT/IO_INPUT, INTR_CTRL software interrupts
-# (NVIC 1 and 0), GPIO 4 pulses, PL011 output.
+# (NVIC 1 and 0), GPIO 4 pulses, PL011 output, SPT 1 ms count.
 schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv7em-none-eabi/release/firmware-eos-s3-smoke"
   system: "../../configs/systems/onboarding/eos-s3-qomu.yaml"
 limits:
-  max_steps: 100000
+  max_steps: 600000
 uart_injections:
   - uart: "uart"
     bytes: "R"
     trigger: !after_cycles { cycles: 10000 }
 assertions:
   - uart_contains: "PL011 IRQ7 status=00000002 rx=00000052 cleared=00000000"
+  - uart_contains: "SPT ms=00000007"
   - uart_contains: "EOS S3 Cortex-M4F PL011 smoke"
-  - uart_contains: "EOS S3 checks PPPPPPPPPPP DONE"
+  - uart_contains: "EOS S3 checks PPPPPPPPPPPP DONE"
   - memory_value:
       address: 0x2007FF00
-      expected_value: 0xE05307FF
+      expected_value: 0xE0530FFF
       size: 4
   - gpio_edges:
       pin: "gpio:4"
