@@ -1,0 +1,12 @@
+# LabWired - Raspberry Pi Pico 2 W
+#
+# RP2350 + CYW43439. Wi-Fi/BT unmodelled. Onboard LED is WL_GPIO0 (wireless
+# GPIO, also unmodelled) — no board_io LED stand-in. Same 40-pin Pico header
+# as Pico / Pico W; GP23/24/25/29 reserved for wireless.
+#
+# Sources: Raspberry Pi Pico 2 W datasheet RP-008304; pico-sdk
+# boards/pico2_w.h (CYW43_PIN_WL_GPIO0 / PICO_DEFAULT_WS2812_PIN unset).
+name: "rpi-pico-2-w"
+chip: "../chips/rp2350.yaml"
+external_devices: []
+board_io: []

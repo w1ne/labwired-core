@@ -45,10 +45,11 @@ pub const SRAM_START: u16 = 0x0100;
 /// TWI sit at the same data addresses as on the 328P, so they are shared; their
 /// vector numbers are remapped on entry ([`mega2560_vector`]).
 ///
-/// The tinyAVR 0-series uses an AVRxt data map: the register file is separate,
-/// I/O occupies data addresses 0x0000..=0x0FFF, and SRAM begins at a device-
-/// specific address below 0x4000. Its common instruction execution is shared,
-/// but its peripherals and interrupt controller are not yet modelled.
+/// The ATmega4809 and tinyAVR 0-series use an AVRxt data map: I/O occupies data
+/// addresses 0x0000..=0x0FFF and SRAM begins at a device-specific address.
+/// Their common instruction execution is shared, but peripherals beyond
+/// explicitly configured GPIO windows and their interrupt controllers are not
+/// yet modelled.
 ///
 /// Timer0/1/2 output-compare pads use the mega pins (OC0A = PB7, OC0B = PG5,
 /// OC1A/OC1B = PB5/PB6, OC2A = PB4, OC2B = PH6; see `avr/oc_pins.rs`).
@@ -61,6 +62,9 @@ pub enum AvrModel {
     Atmega328p,
     /// ATmega328PB shares the 328P core geometry and adds a second USART.
     Atmega328pb,
+    /// ATmega4809 (Arduino Nano Every): AVRxt data map, 48 KB flash and
+    /// 6 KB SRAM at 0x2800..=0x3FFF.
+    Atmega4809,
     Atmega1281,
     Atmega2560,
     /// ATmega32U4 (Arduino Leonardo / Micro): the classic mega core with
@@ -174,6 +178,8 @@ impl AvrModel {
             AvrModel::Atmega2560
         } else if n.contains("328pb") {
             AvrModel::Atmega328pb
+        } else if n.contains("4809") {
+            AvrModel::Atmega4809
         } else if n.contains("32u4") {
             AvrModel::Atmega32u4
         } else {
@@ -183,6 +189,7 @@ impl AvrModel {
     pub fn flash_size(self) -> usize {
         match self {
             AvrModel::Atmega328p | AvrModel::Atmega328pb | AvrModel::Atmega32u4 => FLASH_SIZE,
+            AvrModel::Atmega4809 => 48 * 1024,
             AvrModel::Atmega1281 => 128 * 1024,
             AvrModel::Atmega2560 => 256 * 1024,
             AvrModel::Attiny202 | AvrModel::Attiny204 => 2 * 1024,
@@ -204,6 +211,7 @@ impl AvrModel {
     pub fn sram_start(self) -> u16 {
         match self {
             AvrModel::Atmega328p | AvrModel::Atmega328pb | AvrModel::Atmega32u4 => SRAM_START,
+            AvrModel::Atmega4809 => 0x2800,
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x0200,
             AvrModel::Attiny202 | AvrModel::Attiny204 => 0x3F80,
             AvrModel::Attiny402 | AvrModel::Attiny404 | AvrModel::Attiny406 => 0x3F00,
@@ -233,7 +241,8 @@ impl AvrModel {
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => 0x21FF,
             // 2.5 KB at 0x0100 (DS7766 section 5.2, Figure 5-2).
             AvrModel::Atmega32u4 => 0x0AFF,
-            AvrModel::Attiny202
+            AvrModel::Atmega4809
+            | AvrModel::Attiny202
             | AvrModel::Attiny204
             | AvrModel::Attiny402
             | AvrModel::Attiny404
@@ -264,7 +273,8 @@ impl AvrModel {
             AvrModel::Atmega1281 | AvrModel::Atmega2560 | AvrModel::Atmega32u4 => {
                 AVR_MEGA_ADC_INPUT_BASE
             }
-            AvrModel::Attiny202
+            AvrModel::Atmega4809
+            | AvrModel::Attiny202
             | AvrModel::Attiny204
             | AvrModel::Attiny402
             | AvrModel::Attiny404
@@ -333,7 +343,8 @@ impl AvrModel {
     pub fn uses_avrxt_data_map(self) -> bool {
         matches!(
             self,
-            AvrModel::Attiny202
+            AvrModel::Atmega4809
+                | AvrModel::Attiny202
                 | AvrModel::Attiny204
                 | AvrModel::Attiny402
                 | AvrModel::Attiny404
@@ -619,6 +630,8 @@ pub struct Avr {
     /// Ports sampled at every boundary (bit 0 = B, 1 = C, 2 = D); zero while
     /// no INT/PCINT is configured, which keeps the step cost unchanged.
     ext_watch: u8,
+    /// AVRxt CCP window and CPUINT (`avr/avrxt.rs`).
+    xt: avrxt::XtState,
     /// ATmega32U4 USB device controller and its host (`avr/usb.rs`).
     usb: usb::UsbDevice,
     /// Watchdog timer: `WDTCSR` and `WDR` (`avr/wdt.rs`).
@@ -958,6 +971,7 @@ impl Avr {
             sleeping: false,
             ext_last: [0; 3],
             ext_watch: 0,
+            xt: avrxt::XtState::default(),
             irq_shadow: false,
             usb: usb::UsbDevice::default(),
             wdt: wdt::Wdt::new(model.has_wdtcsr()),
@@ -1046,6 +1060,7 @@ impl Avr {
             }
             AvrModel::Atmega1281 | AvrModel::Atmega2560 => MEGA2560_PIN_ADDRS.contains(&addr),
             AvrModel::Atmega32u4 => M32U4_PIN_ADDRS.contains(&addr),
+            AvrModel::Atmega4809 => false,
             AvrModel::Attiny202 | AvrModel::Attiny204 => false,
             AvrModel::Attiny402
             | AvrModel::Attiny404
@@ -1105,6 +1120,7 @@ impl Avr {
                 (0x20..=0x34).contains(&addr) || (0x100..=0x10B).contains(&addr)
             }
             AvrModel::Atmega32u4 => (0x23..=0x31).contains(&addr),
+            AvrModel::Atmega4809 => false,
             AvrModel::Attiny202 | AvrModel::Attiny204 => false,
             AvrModel::Attiny402
             | AvrModel::Attiny404
@@ -1834,70 +1850,6 @@ impl Avr {
         }
     }
 
-    /// AVRxt data-space read. The CPU register file is separate from data
-    /// memory; low addresses are I/O, SRAM starts at the selected device's
-    /// geometry, and flash is visible to LD/ST at 0x8000.
-    fn avrxt_data_read(&self, addr: u16, bus: &dyn Bus) -> SimResult<u8> {
-        match addr {
-            0x0000..=0x0FFF => match addr {
-                // CPU peripheral block starts at 0x30; SP is at 0x3D/0x3E
-                // and SREG at 0x3F (datasheet §8.6).
-                0x003D => Ok(self.sp as u8),
-                0x003E => Ok((self.sp >> 8) as u8),
-                0x003F => Ok(self.sreg),
-                _ => {
-                    let mirror = AVR_IO_MIRROR_BASE + u64::from(addr);
-                    if bus.has_mmio_window(mirror) {
-                        bus.read_u8(mirror)
-                    } else {
-                        Ok(self.tiny_io[addr as usize])
-                    }
-                }
-            },
-            a if (self.sram_start..=self.ramend).contains(&a) => {
-                Ok(self.sram[(a - self.sram_start) as usize])
-            }
-            a if a >= 0x8000 && usize::from(a - 0x8000) < self.flash.len() => {
-                Ok(self.flash[usize::from(a - 0x8000)])
-            }
-            _ => Err(SimulationError::MemoryViolation(u64::from(addr))),
-        }
-    }
-
-    /// AVRxt data-space write. I/O writes are retained locally and mirrored to
-    /// an explicitly mapped peripheral window; SRAM writes update both the
-    /// CPU's backing store and the system bus.
-    fn avrxt_data_write(&mut self, addr: u16, value: u8, bus: &mut dyn Bus) -> SimResult<()> {
-        match addr {
-            0x003D => {
-                self.sp = (self.sp & 0xFF00) | u16::from(value);
-                Ok(())
-            }
-            0x003E => {
-                self.sp = (self.sp & 0x00FF) | (u16::from(value & 0x3F) << 8);
-                Ok(())
-            }
-            0x003F => {
-                self.sreg = value;
-                Ok(())
-            }
-            0x0000..=0x0FFF => {
-                self.tiny_io[addr as usize] = value;
-                let mirror = AVR_IO_MIRROR_BASE + u64::from(addr);
-                if bus.has_mmio_window(mirror) {
-                    bus.write_u8(mirror, value)?;
-                }
-                Ok(())
-            }
-            a if (self.sram_start..=self.ramend).contains(&a) => {
-                self.sram[(a - self.sram_start) as usize] = value;
-                bus.write_u8(u64::from(a), value)?;
-                Ok(())
-            }
-            _ => Err(SimulationError::MemoryViolation(u64::from(addr))),
-        }
-    }
-
     /// AVRrc data-space read (ATtiny4/5/9/10 datasheet Figure 6-1): I/O at
     /// 0x00..=0x3F, SRAM, then flash mapped read-only at 0x4000. The NVM
     /// lock, configuration, calibration and device-ID bytes at 0x3F00..0x3FFF
@@ -2517,6 +2469,9 @@ impl Avr {
     }
 
     fn try_take_irq(&mut self, bus: &mut dyn Bus) -> SimResult<bool> {
+        if self.is_avrxt() {
+            return self.try_take_irq_avrxt(bus);
+        }
         if !self.flag_i() || self.pending_irq == 0 {
             return Ok(false);
         }
@@ -2838,6 +2793,7 @@ impl Cpu for Avr {
             self.cycles = 0;
             self.sleeping = false;
             self.irq_shadow = false;
+            self.reset_avrxt();
             let _ = bus;
             return Ok(());
         }
@@ -2962,7 +2918,8 @@ impl Cpu for Avr {
         // The flag was true when it was latched; an ISR that ran in between may
         // have read the byte. Vectoring then would hand the firmware a phantom
         // 0x00 from an empty UDR0, so check again at the moment of entry.
-        if self.pending_irq & (1u64 << VEC_USART_RX) != 0
+        if !self.is_avrxt()
+            && self.pending_irq & (1u64 << VEC_USART_RX) != 0
             && self.flag_i()
             && bus.read_u8(AVR_IO_MIRROR_BASE + 0xC0)? & UCSRA_RXC == 0
         {
@@ -3021,6 +2978,7 @@ impl Cpu for Avr {
         }
 
         self.step_inner(bus, observers, config)?;
+        self.xt.retire();
 
         let delta = self.cycles.saturating_sub(before) as u32;
 
@@ -3177,6 +3135,8 @@ impl Cpu for Avr {
     }
 }
 
+#[path = "avr/avrxt.rs"]
+mod avrxt;
 #[path = "avr/eeprom.rs"]
 mod eeprom;
 #[path = "avr/exec/mod.rs"]

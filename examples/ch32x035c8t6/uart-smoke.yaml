@@ -1,0 +1,8 @@
+schema_version: "1.0"
+inputs:
+  firmware: ../../tests/fixtures/ch32x035c8t6-uart-hello.elf
+  system: ./system.yaml
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "Hello from CH32X035"

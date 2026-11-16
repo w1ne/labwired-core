@@ -1,0 +1,116 @@
+# WCH CH32V005F6P6 in TSSOP20 (QingKe V2C, RV32EmC).
+#
+# Geometry, package and maximum clock: WCH CH32V006/005 DS0 V2.0, product
+# table (V005F6P6: 32 KB flash, 6 KB SRAM, 18 GPIOs, TSSOP20, 48 MHz max) and
+# the CH32V005F6P6 pinout (pins: PA1, PA2, PC0..PC7, PD0..PD7; pin 4 also
+# bonds PA4 to PD7/NRST). The openwch Link.ld gives the same 32 KB / 6 KB for
+# CH32V004/CH32V005.
+#
+# Peripheral bases and register layouts: WCH's
+# openwch/ch32v002_004_005_006_007 ch32v00X.h and ch32v00X_rcc.h, shared by
+# the whole CH32V00X family (see ch32v006k8u6.yaml). The die carries GPIOB
+# (ch32v00X_gpio.c pulls the unbonded PB0/PB1/PB3 of the F6P package low),
+# so the GPIOB port is modelled although no PB pin reaches this package.
+#
+# Core: QingKe V2C is RV32E with compressed instructions and Zmmul
+# (multiply, no divide). The simulator does not trap on DIV/REM.
+#
+# KNOWN LIMITATIONS, STATED PLAINLY:
+#   - No PFIC, SysTick, timers, ADC, OPA, I2C, SPI, DMA or USART2. USART1 TX
+#     is polled only; no `irq` is wired because no interrupt controller exists.
+#
+# Buyability screen (2026-11-15): LCSC search lists CH32V005F6P6 "In Stock".
+# WCH's product page has no lifecycle field; this descriptor is not a
+# lifecycle claim and is not included in the Proteus parity gate.
+# Sources:
+#   https://github.com/openwch/ch32v002_004_005_006_007
+#   https://www.wch-ic.com/downloads/CH32V006DS0_PDF.html
+#   https://www.wch-ic.com/downloads/CH32V00XRM_PDF.html
+#   https://www.lcsc.com/search?q=CH32V005F6P6
+
+name: "ch32v005f6p6"
+arch: "riscv"
+core: "rv32emc"
+cpu_hz: 48_000_000
+
+# WCH's flash view at 0x08000000 is also aliased at address 0 for reset fetch.
+flash:
+  base: 0x08000000
+  size: "32KB"
+ram:
+  base: 0x20000000
+  size: "6KB"
+flash_boot_alias: true
+
+# TSSOP20 bonds 18 GPIOs (DS0 CH32V005F6P6 pinout). PinLoc labels are the
+# GPIO names.
+package: "TSSOP20"
+pin_count: 20
+pins:
+  PA1: { gpio: "gpioa", bit: 1 }
+  PA2: { gpio: "gpioa", bit: 2 }
+  PC0: { gpio: "gpioc", bit: 0 }
+  PC1: { gpio: "gpioc", bit: 1 }
+  PC2: { gpio: "gpioc", bit: 2 }
+  PC3: { gpio: "gpioc", bit: 3 }
+  PC4: { gpio: "gpioc", bit: 4 }
+  PC5: { gpio: "gpioc", bit: 5 }
+  PC6: { gpio: "gpioc", bit: 6 }
+  PC7: { gpio: "gpioc", bit: 7 }
+  PD0: { gpio: "gpiod", bit: 0 }
+  PD1: { gpio: "gpiod", bit: 1 }
+  PD2: { gpio: "gpiod", bit: 2 }
+  PD3: { gpio: "gpiod", bit: 3 }
+  PD4: { gpio: "gpiod", bit: 4 }
+  PD5: { gpio: "gpiod", bit: 5 }
+  PD6: { gpio: "gpiod", bit: 6 }
+  PD7: { gpio: "gpiod", bit: 7 }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      profile: "wch"
+
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x40010800
+    size: "1KB"
+    clock: { reg: "apb2pcenr", bit: 2 }
+    config:
+      profile: "wch"
+
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x40010C00
+    size: "1KB"
+    clock: { reg: "apb2pcenr", bit: 3 }
+    config:
+      profile: "wch"
+
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x40011000
+    size: "1KB"
+    clock: { reg: "apb2pcenr", bit: 4 }
+    config:
+      profile: "wch"
+
+  - id: "gpiod"
+    type: "gpio"
+    base_address: 0x40011400
+    size: "1KB"
+    clock: { reg: "apb2pcenr", bit: 5 }
+    config:
+      profile: "wch"
+
+  # USART1 (ch32v00X.h): USART1_BASE = PB2PERIPH_BASE + 0x3800, RCC_USART1EN =
+  # PB2PCENR bit 14. USART_TypeDef is the STM32F1 USART layout, so the default
+  # `stm32f1` UART layout serves it. No `irq`: the PFIC is not modelled.
+  - id: "usart1"
+    type: "uart"
+    base_address: 0x40013800
+    size: "1KB"
+    clock: { reg: "apb2pcenr", bit: 14 }

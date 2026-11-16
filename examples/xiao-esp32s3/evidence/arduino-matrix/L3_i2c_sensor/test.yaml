@@ -1,0 +1,12 @@
+schema_version: '1.0'
+inputs:
+  firmware: /tmp/xiao-full/xiao_esp32s3/L3_i2c_sensor/firmware.elf
+  system: /data/worktrees/legacy-migrated/labwired-hw-onboarding/validation/arduino-matrix/systems/xiao_esp32s3.yaml
+limits:
+  max_steps: 50000000
+  max_uart_bytes: 65536
+  stop_when_assertions_pass: true
+  stop_when_assertions_pass_settle_steps: 1000
+  stop_when_assertions_pass_min_steps: 0
+assertions:
+- uart_contains: LW_L3_OK
